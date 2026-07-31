@@ -25,6 +25,7 @@
 #include "types/container/simd/aes_encryption_helpers.h"
 #include "types/math/vec8i_sse.h"
 #include "types/base/endianness.h"
+#include <immintrin.h>
 
 __forceinline__ static I32x8 AESEncryptionContext_ghashReduceClMul2(I32x8 clmul00, I32x8 clmulFused, I32x8 clmul11) {
 

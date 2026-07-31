@@ -1684,6 +1684,10 @@ extern "C" Bool Compiler_processSPIRV(
 	SpvReflectShaderModule spvMod{};
 	Bool isRt = !!(toCompile->extensions & ESHExtension_RayQuery);
 
+	//Mesh/task shaders also need the >= 1.4 optimizer (SPV_EXT_mesh_shader). Detected from the execution model below.
+
+	Bool isMeshTask = false;
+
 	//Linalg (cooperative vectors) is compiled at vulkan1.3 (SPIR-V 1.6) so its storage buffers get the StorageBuffer
 	//class the matmul requires, so its optimizer must run at a matching (>= 1.6) environment.
 
@@ -1786,8 +1790,7 @@ extern "C" Bool Compiler_processSPIRV(
 		switch (entrypoint.spirv_execution_model) {
 
 			case SpvExecutionModelIntersectionKHR:
-				searchIntersection = true;
-				searchPayload = true;
+				searchIntersection = true;        //Intersection shaders carry only a hit attribute (ReportHit), never a ray payload.
 				stage = ESHPipelineStage_IntersectionExt;
 				break;
 
@@ -1816,9 +1819,9 @@ extern "C" Bool Compiler_processSPIRV(
 			case SpvExecutionModelGLCompute: {
 
 				switch (entrypoint.spirv_execution_model) {
-					case SpvExecutionModelMeshEXT:  stage = ESHPipelineStage_MeshExt;  break;
-					case SpvExecutionModelTaskEXT:  stage = ESHPipelineStage_TaskExt;  break;
-					default:                        stage = ESHPipelineStage_Compute;  break;
+					case SpvExecutionModelMeshEXT:  stage = ESHPipelineStage_MeshExt;  isMeshTask = true;  break;
+					case SpvExecutionModelTaskEXT:  stage = ESHPipelineStage_TaskExt;  isMeshTask = true;  break;
+					default:                        stage = ESHPipelineStage_Compute;                      break;
 
 				}
 
@@ -1847,7 +1850,13 @@ extern "C" Bool Compiler_processSPIRV(
 
 				SpvReflectInterfaceVariable var = entrypoint.interface_variables[j];
 
-				Bool isPayload = var.storage_class == SpvStorageClassIncomingRayPayloadKHR;
+				//Hit/miss shaders carry an IncomingRayPayload; callable shaders carry IncomingCallableData instead.
+				//Both are reflected as the entry's payloadSize.
+
+				Bool isPayload =
+					var.storage_class == SpvStorageClassIncomingRayPayloadKHR ||
+					var.storage_class == SpvStorageClassIncomingCallableDataKHR;
+
 				Bool isIntersection = var.storage_class == SpvStorageClassHitAttributeKHR;
 
 				if(!isPayload && !isIntersection)
@@ -2102,7 +2111,9 @@ extern "C" Bool Compiler_processSPIRV(
 	//Strip debug and optimize
 
 	{
-		spvtools::Optimizer &optimizer = isLinalg ? optimizerLinalg : (isRt ? optimizerRt : optimizerNoRt);
+		ESpirvVersion spvVer = Compiler_requiredSpirvVersion(isRt, isLinalg, isMeshTask);
+		spvtools::Optimizer &optimizer =
+			spvVer == ESpirvVersion_1_6 ? optimizerLinalg : (spvVer == ESpirvVersion_1_4 ? optimizerRt : optimizerNoRt);
 
 		optimizer.SetMessageConsumer(
 			[alloc, errors, &s_uccess, e_rr](
@@ -2336,7 +2347,12 @@ extern "C" Bool Compiler_linkSPIRV(
 	//Compiler_processSPIRV). 1.6 is a superset of 1.4, so RT + coop is safe too.
 	Bool isLinalg = !!(exts & (ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining));
 
-	spv_target_env env = isLinalg ? SPV_ENV_UNIVERSAL_1_6 : (isRt ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3);
+	Bool isMeshTask = stage == ESHPipelineStage_MeshExt || stage == ESHPipelineStage_TaskExt;
+
+	ESpirvVersion spvVer = Compiler_requiredSpirvVersion(isRt, isLinalg, isMeshTask);
+	spv_target_env env =
+		spvVer == ESpirvVersion_1_6 ? SPV_ENV_UNIVERSAL_1_6 :
+		(spvVer == ESpirvVersion_1_4 ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3);
 
 	spvtools::Optimizer opt(env);
 

@@ -685,8 +685,22 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 			//DXR 1.2 natively supports SER (shader execution reordering, dx::HitObject) and opacity micromaps,
 			//vendor-neutrally.
-			if(opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2)
+			if(opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2) {
+
 				caps.features |= EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayMicromapOpacity;
+
+				//RayReorder above only means the SER API is available (it can be a no-op). OPTIONS22 reports whether the
+				//device actually reorders, which is the bit apps care about when deciding to restructure a shader for SER.
+				D3D12_FEATURE_DATA_D3D12_OPTIONS22 opt22 = (D3D12_FEATURE_DATA_D3D12_OPTIONS22) { 0 };
+
+				if(
+					SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
+						device, D3D12_FEATURE_D3D12_OPTIONS22, &opt22, sizeof(opt22)
+					)) &&
+					opt22.ShaderExecutionReorderingActuallyReorders
+				)
+					caps.features2 |= EGraphicsFeatures2_RayReorderActual;
+			}
 		}
 
 		if(

@@ -26,6 +26,7 @@
 #if !_FORCE_FLOAT_FALLBACK && _SIMD == SIMD_SSE
 	#include "types/math/vec4i.h"
 	#include "types/math/vec4f.h"
+	#include <immintrin.h>
 #endif
 
 static inline U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2, Bool *carry) {

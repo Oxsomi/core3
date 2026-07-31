@@ -64,7 +64,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_ray_query as RayQuery
   - VK_KHR_acceleration_structure && (RaytracingPipeline || RaytracingQuery) as Raytracing
   - VK_NV_ray_tracing_motion_blur as RayMotionBlur
-  - VK_NV_ray_tracing_invocation_reorder as RayReorder
+  - VK_NV_ray_tracing_invocation_reorder (.rayTracingInvocationReorder) as RayReorder; if .rayTracingInvocationReorderReorderingHint is also set, RayReorderActual (features2) - the device actually reorders rather than exposing a no-op API
   - VK_KHR_ray_tracing_position_fetch as RayTriPosition (covers both the RayQuery and ray-pipeline shader forms)
   - VK_NV_cooperative_vector as CoopVec (cooperative vectors; .cooperativeVectorTraining as CoopVecTraining)
   - VK_KHR_cooperative_matrix as CoopMat (cooperative matrix / GEMM)
@@ -360,7 +360,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - VariableShadingRateTier as EGraphicsFeatures_VariableRateShading.
 - RaytracingTier>1_0 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline
 - RaytracingTier>1_1 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline + EGraphicsFeatures_RayQuery.
-- RaytracingTier>=1_2 (DXR 1.2) as EGraphicsFeatures_RayMicromapOpacity + EGraphicsFeatures_RayReorder.
+- RaytracingTier>=1_2 (DXR 1.2) as EGraphicsFeatures_RayMicromapOpacity + EGraphicsFeatures_RayReorder. Additionally OPTIONS22.ShaderExecutionReorderingActuallyReorders as RayReorderActual (features2) - RayReorder only means the SER API is available (can be a no-op), RayReorderActual means the device really reorders.
 - Native16BitShaderOpsSupported as EGraphicsDataTypes_F16 and EGraphicsDataTypes_I16.
 - DoublePrecisionFloatShaderOps as EGraphicsDataTypes_F64.
 - EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally), D32S8 is always available.

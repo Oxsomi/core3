@@ -135,7 +135,7 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 
 - experimentalFeatures: the subset of `features` that is experimental/preview on this device+build (not final; may change or be removed across SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled best-effort via the preview Agility SDK + D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions so this stays empty. Check it if you want to opt into preview features knowingly.
   - RayValidation: extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot.
-- features2: reserved for future usage.
+- features2: RayReorderActual. SER (RayReorder) means the shader-execution-reordering API is available (always valid to call, but may be a no-op); RayReorderActual means the device actually performs the reordering, so it's worth restructuring shaders around it.
 - dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
   - MSAA4 and MSAA1 (off) are supported by default.
 - featuresExt: API dependent features that aren't expected to be standardized in the same way.

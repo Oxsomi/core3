@@ -1452,8 +1452,16 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					)
 						capabilities.features &= ~EGraphicsFeatures_RayMotionBlur;
 
-					if(rayReorderFeat.rayTracingInvocationReorder && rayReorderProp.rayTracingInvocationReorderReorderingHint)
+					//RayReorder = the SER API is available (valid to call, possibly a no-op).
+					//RayReorderActual = the driver hints it actually reorders, so it's worth restructuring shaders for.
+
+					if(rayReorderFeat.rayTracingInvocationReorder) {
+
 						capabilities.features |= EGraphicsFeatures_RayReorder;
+
+						if(rayReorderProp.rayTracingInvocationReorderReorderingHint)
+							capabilities.features2 |= EGraphicsFeatures2_RayReorderActual;
+					}
 
 					if(rayOpacityMicroFeat.micromap)
 						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;

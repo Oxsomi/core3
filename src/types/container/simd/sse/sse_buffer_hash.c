@@ -30,6 +30,7 @@
 #include "types/base/mathi.h"
 
 #include <nmmintrin.h>
+#include <immintrin.h>
 
 #define SIMD_CRC32C_U64 _mm_crc32_u64
 #define SIMD_CRC32C_U32 _mm_crc32_u32

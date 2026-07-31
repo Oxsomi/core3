@@ -111,7 +111,10 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			Log_debugLnx("\t\tRaytracing motion blur");
 
 		if(feat & EGraphicsFeatures_RayReorder)
-			Log_debugLnx("\t\tRay reorder");
+			Log_debugLnx(
+				cap.features2 & EGraphicsFeatures2_RayReorderActual ?
+				"\t\tRay reorder (actually reorders)" : "\t\tRay reorder (API only, no-op on this device)"
+			);
 
 		if(feat & EGraphicsFeatures_RayValidation)
 			Log_debugLnx("\t\tRay validation");

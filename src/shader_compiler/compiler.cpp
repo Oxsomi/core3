@@ -1062,20 +1062,24 @@ Bool Compiler_compile(
 			if(settings->debug)
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-debug=vulkan-with-source", alloc, e_rr));
 
-			if(!isRt) {
+			ESHExtension vk13 = (ESHExtension) (
+				ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining
+			);
 
-				ESHExtension vk13 = (ESHExtension) (
-					ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining
-				);
+			Bool isCoop = !!(toCompile->extensions & vk13);
+			Bool isMeshTask =
+				toCompile->stageType == ESHPipelineStage_MeshExt ||
+				toCompile->stageType == ESHPipelineStage_TaskExt;
 
-				if(toCompile->extensions & vk13) {
-					gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.3", alloc, e_rr));
-				}
+			const C8 *targetEnvArg;
 
-				else gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1", alloc, e_rr));
+			switch(Compiler_requiredSpirvVersion(isRt, isCoop, isMeshTask)) {
+				case ESpirvVersion_1_6:    targetEnvArg = "-fspv-target-env=vulkan1.3";          break;    //SPIR-V 1.6
+				case ESpirvVersion_1_4:    targetEnvArg = "-fspv-target-env=vulkan1.1spirv1.4";  break;    //SPIR-V 1.4
+				default:                   targetEnvArg = "-fspv-target-env=vulkan1.1";          break;    //SPIR-V 1.3
 			}
 
-			else gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1spirv1.4", alloc, e_rr));
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, targetEnvArg, alloc, e_rr));
 				
 			if(
 				toCompile->stageType == ESHPipelineStage_Vertex ||
@@ -1503,6 +1507,13 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL, NULL) == C8x8('o', 's', 'e', 's', 't', 'h', 'i', 't'))
 				return ESHPipelineStage_ClosestHitExt;
+
+			break;
+
+		case C8x4('c', 'a', 'l', 'l'):        //callable
+
+			if(stageNameLen == 8 && Buffer_readU32(buf, 4, NULL, NULL) == C8x4('a', 'b', 'l', 'e'))
+				return ESHPipelineStage_CallableExt;
 
 			break;
 

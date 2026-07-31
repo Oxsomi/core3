@@ -26,6 +26,7 @@
 #include "types/math/vec8i_sse.h"
 #include "types/math/vec16i_sse.h"
 #include "types/base/endianness.h"
+#include <immintrin.h>
 
 __forceinline__ static I32x16 AESEncryptionContext_ghashReduceClMul4(I32x16 clmul00, I32x16 clmulFused, I32x16 clmul11) {
 

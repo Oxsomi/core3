@@ -22,6 +22,7 @@
 
 #include "types/container/buffer.h"
 #include "types/base/time.h"
+#include "types/base/platform_types.h"
 
 #if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
 	#include <Security/SecRandom.h>

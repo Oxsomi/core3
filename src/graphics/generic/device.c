@@ -369,7 +369,7 @@ Bool GraphicsDeviceRef_create(
 	device->flags = flags;
 	device->framesInFlight = (U8) bufferMode;
 
-	if(device->flags & EGraphicsDeviceFlags_DisableRt)
+	if(device->flags & EGraphicsDeviceFlags_DisableRt) {
 		device->info.capabilities.features &=~ (
 			EGraphicsFeatures_Raytracing         |
 			EGraphicsFeatures_RayPipeline        |
@@ -379,6 +379,8 @@ Bool GraphicsDeviceRef_create(
 			EGraphicsFeatures_RayReorder         |
 			EGraphicsFeatures_RayValidation
 		);
+		device->info.capabilities.features2 &=~ EGraphicsFeatures2_RayReorderActual;
+	}
 
 	Bool isDebugInstance = instance->flags & EGraphicsInstanceFlags_IsDebug;
 

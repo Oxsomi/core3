@@ -169,17 +169,19 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 	if(entry->groupZ > 64)
 		retError(clean, Error_invalidOperation(2, "SHFile_addEntrypoint() group count z out of bounds (64)"));
 
+	//Intersection shaders are deliberately excluded: they carry only a hit attribute (the struct passed to ReportHit),
+	//never an incoming ray payload, so a non-zero payloadSize is invalid for them (checked by the else-if below).
+
 	if(
 		entry->stage == ESHPipelineStage_ClosestHitExt ||
 		entry->stage == ESHPipelineStage_AnyHitExt ||
-		entry->stage == ESHPipelineStage_IntersectionExt ||
 		entry->stage == ESHPipelineStage_MissExt ||
 		entry->stage == ESHPipelineStage_CallableExt
 	) {
 
 		if(!entry->payloadSize)
 			retError(clean, Error_invalidOperation(
-				2, "SHFile_addEntrypoint() payloadSize is required for hit/callable/intersection/miss shaders"
+				2, "SHFile_addEntrypoint() payloadSize is required for hit/callable/miss shaders"
 			));
 
 		if(entry->payloadSize > 128)
@@ -190,18 +192,21 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 
 	else if(entry->payloadSize)
 		retError(clean, Error_invalidOperation(
-			2, "SHFile_addEntrypoint() payloadSize is only required for hit/intersection/miss shaders"
+			2, "SHFile_addEntrypoint() payloadSize is only allowed for hit/callable/miss shaders"
 		));
+
+	//intersectionSize (hit attribute size) is required for the hit shaders that RECEIVE the attribute (closesthit/anyhit
+	//- both backends reflect it). It's optional for intersection: DXC's DXIL reflection reports AttributeSize 0 for an
+	//intersection shader (it produces the attribute via ReportHit rather than receiving it), while SPIR-V does expose it.
 
 	if(!entry->intersectionSize) {
 
 		if(
-			entry->stage == ESHPipelineStage_IntersectionExt ||
 			entry->stage == ESHPipelineStage_ClosestHitExt ||
 			entry->stage == ESHPipelineStage_AnyHitExt
 		)
 			retError(clean, Error_invalidOperation(
-				2, "SHFile_addEntrypoint() intersectionSize is required for intersection/hit shaders"
+				2, "SHFile_addEntrypoint() intersectionSize is required for hit shaders"
 			));
 	}
 
@@ -211,7 +216,7 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 		entry->stage != ESHPipelineStage_AnyHitExt
 	) {
 		retError(clean, Error_invalidOperation(
-			2, "SHFile_addEntrypoint() intersectionSize is only required for intersection/hit shaders"
+			2, "SHFile_addEntrypoint() intersectionSize is only allowed for intersection/hit shaders"
 		));
 	}
 

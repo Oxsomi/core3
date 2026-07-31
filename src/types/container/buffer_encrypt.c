@@ -31,6 +31,10 @@
 #include "types/math/type_cast.h"
 #include "types/base/endianness.h"
 
+#if _ARCH == ARCH_X86_64
+	#include <immintrin.h>
+#endif
+
 //-1: Uninitialized
 //0: No support (No fallback yet though)
 //1: Support for AES-NI (or AESE with NEON)

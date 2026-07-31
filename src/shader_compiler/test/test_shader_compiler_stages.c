@@ -34,16 +34,20 @@
 
 //One shader per pipeline stage (from test/stages/), each a minimal-but-valid entrypoint for that stage.
 //The case compiles it and asserts the reflected SHEntry carries the expected stage (SHEntry_stageName).
-//Graphics + compute + raytracing (raygen/closesthit/anyhit/miss) stages are covered here.
+//Graphics + compute + mesh/task + raytracing (raygen/closesthit/anyhit/miss/intersection/callable) stages are covered.
 //
-//Stages the bundled DXC / current OxC3 pipeline does NOT yet compile+reflect are parked as
-//*.hlsl.disabled in test/stages (kept as attempts, not asserted): mesh + task ("unknown is required for
-//MeshShader but not permitted to use"), intersection (process fails), callable (precompile fails), and
-//node (workgraph / SM6.8).
+//Most stages run on BOTH backends. Work-graph nodes are DXIL-only: DXC has no SPIR-V lowering for HLSL work graphs,
+//so `node` is gated to DXIL via the `backends` mask. The only remaining parked stage is inheritance (an upstream DXC
+//SPIR-V assert on multi-base-class structs, unrelated to a specific stage).
+
+#define ST_SPIRV (1 << ESHBinaryType_SPIRV)
+#define ST_DXIL  (1 << ESHBinaryType_DXIL)
+#define ST_BOTH  (ST_SPIRV | ST_DXIL)
 
 typedef struct StageCase {
 	const C8 *file;
 	const C8 *stageName;    //Expected SHEntry_stageName (identical on both backends)
+	U8 backends;            //Bitmask of (1 << ESHBinaryType_*) this stage is expected to compile on
 } StageCase;
 
 void Test_shaderCompilerStages(Test *t) {
@@ -54,15 +58,20 @@ void Test_shaderCompilerStages(Test *t) {
 	Error err = Error_none();
 
 	static const StageCase stages[] = {
-		{ "stages/vertex.hlsl",        "vertex"        },
-		{ "stages/pixel.hlsl",         "pixel"         },
-		{ "stages/geometry.hlsl",      "geometry"      },
-		{ "stages/hull.hlsl",          "hull"          },
-		{ "stages/domain.hlsl",        "domain"        },
-		{ "stages/raygeneration.hlsl", "raygeneration" },
-		{ "stages/closesthit.hlsl",    "closesthit"    },
-		{ "stages/anyhit.hlsl",        "anyhit"        },
-		{ "stages/miss.hlsl",          "miss"          }
+		{ "stages/vertex.hlsl",        "vertex",        ST_BOTH },
+		{ "stages/pixel.hlsl",         "pixel",         ST_BOTH },
+		{ "stages/geometry.hlsl",      "geometry",      ST_BOTH },
+		{ "stages/hull.hlsl",          "hull",          ST_BOTH },
+		{ "stages/domain.hlsl",        "domain",        ST_BOTH },
+		{ "stages/mesh.hlsl",          "mesh",          ST_BOTH },
+		{ "stages/task.hlsl",          "task",          ST_BOTH },
+		{ "stages/raygeneration.hlsl", "raygeneration", ST_BOTH },
+		{ "stages/closesthit.hlsl",    "closesthit",    ST_BOTH },
+		{ "stages/anyhit.hlsl",        "anyhit",        ST_BOTH },
+		{ "stages/miss.hlsl",          "miss",          ST_BOTH },
+		{ "stages/intersection.hlsl",  "intersection",  ST_BOTH },
+		{ "stages/callable.hlsl",      "callable",      ST_BOTH },
+		{ "stages/node.hlsl",          "node",          ST_DXIL }        //DXC has no SPIR-V lowering for work graphs
 	};
 
 	//Each stage is exercised on BOTH backends: the reflected stage must be identical on SPIRV and DXIL.
@@ -73,6 +82,9 @@ void Test_shaderCompilerStages(Test *t) {
 
 	for (U64 i = 0; i < sizeof(stages) / sizeof(stages[0]); ++i)
 		for (U64 tg = 0; tg < sizeof(targets) / sizeof(targets[0]); ++tg) {
+
+			if(!(stages[i].backends & (1 << targets[tg].mode)))        //Stage not expected to compile on this backend
+				continue;
 
 			const C8 *file = stages[i].file;
 			ListBuffer out = (ListBuffer) { 0 };

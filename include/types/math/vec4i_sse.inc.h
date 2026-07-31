@@ -21,7 +21,6 @@
 //types/math/vec4i_sse.inc.h
 
 #pragma once
-#include <immintrin.h>
 #include <smmintrin.h>
 #include <tmmintrin.h>
 
@@ -63,6 +62,9 @@ static inline I32x4 I32x4_sub(I32x4 a, I32x4 b) { return _mm_sub_epi32(a, b); }
 static inline I32x4 I32x4_mul(I32x4 a, I32x4 b) { return _mm_mullo_epi32(a, b); }
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
+
+	#include <immintrin.h>
+
 	static inline I32x4 I32x4_div(I32x4 a, I32x4 b) { return _mm_div_epi32(a, b); }
 #endif
 

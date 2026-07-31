@@ -35,6 +35,29 @@ typedef enum ECompilerFormat {
 	ECompilerFormat_Count
 } ECompilerFormat;
 
+//The SPIR-V version a shader must target, driven purely by the features it uses.
+//Kept in one place so the DXC compile target-env, the spirv-opt optimizer and the linker all stay in sync.
+//- Cooperative vectors/matrix (linalg) need SPIR-V 1.6 (vulkan1.3): StorageBuffer storage class + Vulkan memory model.
+//- Raytracing and mesh/task shaders need SPIR-V 1.4: SPV_KHR_ray_tracing / SPV_EXT_mesh_shader emit >= 1.4 opcodes.
+//- Everything else is fine at SPIR-V 1.3 (vulkan1.1).
+
+typedef enum ESpirvVersion {
+	ESpirvVersion_1_3,
+	ESpirvVersion_1_4,
+	ESpirvVersion_1_6
+} ESpirvVersion;
+
+static inline ESpirvVersion Compiler_requiredSpirvVersion(Bool isRt, Bool isCoop, Bool isMeshTask) {
+
+	if(isCoop)
+		return ESpirvVersion_1_6;
+
+	if(isRt || isMeshTask)
+		return ESpirvVersion_1_4;
+
+	return ESpirvVersion_1_3;
+}
+
 //Each compiler
 
 typedef struct Compiler {

@@ -192,7 +192,17 @@ typedef enum EGraphicsFeatures {
 } EGraphicsFeatures;
 
 typedef enum EGraphicsFeatures2 {
-	EGraphicsFeatures2_None
+
+	EGraphicsFeatures2_None                     = 0,
+
+	//SER (shader execution reordering) is exposed as two separate capabilities.
+	//EGraphicsFeatures_RayReorder means the API (dx::HitObject / ReorderThread) is available.
+	//It's always valid to call, but may be a no-op on some hardware.
+	//This bit means the device actually PERFORMS the reordering, so it's worth restructuring shaders around it.
+	//D3D12: OPTIONS22.ShaderExecutionReorderingActuallyReorders; Vulkan: rayTracingInvocationReorderReorderingHint.
+
+	EGraphicsFeatures2_RayReorderActual         = 1 << 0
+
 } EGraphicsFeatures2;
 
 typedef enum EGraphicsDataTypes {
