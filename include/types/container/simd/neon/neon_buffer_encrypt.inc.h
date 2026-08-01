@@ -88,10 +88,10 @@ static inline I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 static inline I32x4 AES_encodeBlock(I32x4 state, I32x4 rk) {
 	uint8x16_t block = AES_block(state);
 	block = vaesmcq_u8(block);        //mixColumns
-	return I32x4_xor(block, rk);
+	return I32x4_xor(vreinterpretq_s32_u8(block), rk);
 }
 
 static inline I32x4 AES_encodeBlockLast(I32x4 state, I32x4 rk) {
 	uint8x16_t block = AES_block(state);
-	return I32x4_xor(block, rk);
+	return I32x4_xor(vreinterpretq_s32_u8(block), rk);
 }

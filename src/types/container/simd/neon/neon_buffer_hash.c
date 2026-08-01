@@ -46,6 +46,7 @@
 #endif
 
 #include <arm_neon.h>
+#include <arm_acle.h> //__crc32c* (GCC only declares these here; clang exposes them as builtins too)
 
 #define SIMD_CRC32C_U64 __crc32cd
 #define SIMD_CRC32C_U32 __crc32cw

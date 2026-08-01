@@ -329,16 +329,29 @@ void Test_SHFileAddEntryHitStageSizes(Test *t) {
 
 	for (U8 i = 0; i < 3; ++i) {
 
+		Bool isIntersection = hitStages[i] == ESHPipelineStage_IntersectionExt;
+
 		SHEntry e = (SHEntry) { 0 };
 		e.name        = CharString_createRefCStrConst("hit");
 		e.stage       = hitStages[i];
-		e.payloadSize = 16;
+
+		//Intersection shaders never receive a ray payload (they only produce a hit attribute via ReportHit),
+		//so payloadSize must be 0 there and non-zero is rejected.
+
+		e.payloadSize = isIntersection ? 0 : 16;
 
 		U16 binId = 0;
 		e.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
 
-		//Missing intersectionSize
-		Test_assert(t, "no intersectionSize rejected",   !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
+		if (isIntersection) {
+			e.payloadSize = 16;
+			Test_assert(t, "payloadSize on intersection rejected", !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
+			e.payloadSize = 0;
+		}
+
+		//Missing intersectionSize (required for closesthit/anyhit, optional for intersection)
+		if (!isIntersection)
+			Test_assert(t, "no intersectionSize rejected", !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
 
 		//intersectionSize > 32
 		e.intersectionSize = 64;

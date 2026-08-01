@@ -139,12 +139,14 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 
 			else {
 
+				realLen &= 63; //Always true here (len < 64), but helps GCC's -Warray-bounds prove it
+
 				Buffer_memcpy(
 					Buffer_createRef(block, 64),
 					Buffer_createRefConst((const void*)realPtr, realLen)
 				);
 
-				*((U8*)(void*)block + realLen) = 0x80;
+				block[realLen] = 0x80;
 
 				if(realLen <= 62)
 					Buffer_unsetAllBits(Buffer_createRef(block + realLen + 1, 64 - realLen - 1), NULL);

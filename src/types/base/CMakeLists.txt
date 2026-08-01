@@ -52,7 +52,7 @@ if(MSVC AND ARM)
 	target_sources(OxC3_types_base PRIVATE ${armAsmWin})
 	set_source_files_properties(
 		${armAsmWin}
-		PROPERTY LANGUAGE ASM_MASM
+		PROPERTY LANGUAGE ASM_MARMASM
 	)
 endif()
 

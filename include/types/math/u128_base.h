@@ -240,12 +240,14 @@ static inline I32x4 I32x4_clmul64Fallback(I32x4 avec, I32x4 bvec, U8 imm) {
 		return vreinterpretq_s32_p128(vmull_p64(vreinterpret_u64_p64(halfa), vreinterpret_u64_p64(halfb)));
 	}
 #else
+	#include <wmmintrin.h>
+	
 	static inline I32x4 I32x4_clmul64(I32x4 a, I32x4 b, U8 imm) {
 		switch(imm) {
 			case 0x00:    return _mm_clmulepi64_si128(a, b, 0x00);
 			case 0x01:    return _mm_clmulepi64_si128(a, b, 0x01);
 			case 0x10:    return _mm_clmulepi64_si128(a, b, 0x10);
-			default:    return _mm_clmulepi64_si128(a, b, 0x11);
+			default:      return _mm_clmulepi64_si128(a, b, 0x11);
 		}
 	}
 #endif

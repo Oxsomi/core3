@@ -83,7 +83,7 @@ if(MSVC)
 	# Whole-program optimization (MSVC LTO): /GL to compile, /LTCG to link. lib.exe needs /LTCG told separately
 	# via the static-linker flags or every archive step warns (LNK4075/D9035). /LTCG makes the link the
 	# bottleneck, so this is gated to Release only - a ship/CI config, keeping local Debug/RelWithDebInfo fast.
-	add_compile_options("$<$<CONFIG:Release>:/GL>")
+	add_compile_options("$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C,CXX>>:/GL>")
 	add_link_options("$<$<CONFIG:Release>:/LTCG>")
 	string(APPEND CMAKE_STATIC_LINKER_FLAGS_RELEASE " /LTCG")
 
@@ -91,7 +91,7 @@ else()
 
 	if(ARM)
 		if(EnableSIMD)
-			add_compile_options(-march=armv8-a+simd)
+			add_compile_options(-march=armv8-a+simd+crypto+crc)
 		else()
 			add_compile_options(-march=armv8-a)
 		endif()

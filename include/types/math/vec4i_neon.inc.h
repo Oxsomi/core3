@@ -84,13 +84,13 @@ static inline I32x4 I32x4_max(I32x4 a, I32x4 b) { return vmaxq_s32(a, b); }
 
 //Comparison
 
-static inline I32x4 I32x4_eq(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vandq_s32(vceqq_s32(a, b), vdupq_n_s32(1))); }
-static inline I32x4 I32x4_geq(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vandq_s32(vcgeq_s32(a, b), vdupq_n_s32(1))); }
-static inline I32x4 I32x4_gt(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vandq_s32(vcgtq_s32(a, b), vdupq_n_s32(1))); }
-static inline I32x4 I32x4_leq(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vandq_s32(vcleq_s32(a, b), vdupq_n_s32(1))); }
-static inline I32x4 I32x4_lt(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vandq_s32(vcltq_s32(a, b), vdupq_n_s32(1))); }
+static inline I32x4 I32x4_eq(I32x4 a, I32x4 b) { return vandq_s32(vreinterpretq_s32_u32(vceqq_s32(a, b)), vdupq_n_s32(1)); }
+static inline I32x4 I32x4_geq(I32x4 a, I32x4 b) { return vandq_s32(vreinterpretq_s32_u32(vcgeq_s32(a, b)), vdupq_n_s32(1)); }
+static inline I32x4 I32x4_gt(I32x4 a, I32x4 b) { return vandq_s32(vreinterpretq_s32_u32(vcgtq_s32(a, b)), vdupq_n_s32(1)); }
+static inline I32x4 I32x4_leq(I32x4 a, I32x4 b) { return vandq_s32(vreinterpretq_s32_u32(vcleq_s32(a, b)), vdupq_n_s32(1)); }
+static inline I32x4 I32x4_lt(I32x4 a, I32x4 b) { return vandq_s32(vreinterpretq_s32_u32(vcltq_s32(a, b)), vdupq_n_s32(1)); }
 static inline I32x4 I32x4_neq(I32x4 a, I32x4 b) {
-	return vreinterpretq_s32_u32(vandq_s32(vmvnq_u32(vceqq_f32(a, b)), vdupq_n_s32(1)));
+	return vandq_s32(vreinterpretq_s32_u32(vmvnq_u32(vceqq_s32(a, b))), vdupq_n_s32(1));
 }
 
 //Bitwise
@@ -124,13 +124,13 @@ static inline I32x4 I32x4_rshElements(I32x4 a, U8 elements) {
 static inline I32x4 I32x4_lsh32(I32x4 a, U8 bits) {
 	if (!bits) return a;
 	if (bits >= 32) return I32x4_zero();
-	return vshlq_u32(a, vdupq_n_s32(bits));
+	return vreinterpretq_s32_u32(vshlq_u32(vreinterpretq_u32_s32(a), vdupq_n_s32(bits)));
 }
 
 static inline I32x4 I32x4_rsh32(I32x4 a, U8 bits) {
 	if (!bits) return a;
 	if (bits >= 32) return I32x4_zero();
-	return vshlq_u32(a, vdupq_n_s32(-(I32)bits));
+	return vreinterpretq_s32_u32(vshlq_u32(vreinterpretq_u32_s32(a), vdupq_n_s32(-(I32)bits)));
 }
 
 static inline I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
