@@ -164,9 +164,15 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 				SHRegisterRuntime rega = c.registers.ptr[k];
 
 				U64 l = 0;
-				for(; l < bi.registers.length; ++l)
+				for(; l < bi.registers.length; ++l) {
+
+					//nameHash-equal is necessary (not sufficient) for name-equal, so this only skips guaranteed mismatches
+					if(bi.registers.ptr[l].nameHash != rega.nameHash)
+						continue;
+
 					if(CharString_equalsStringSensitive(&bi.registers.ptr[l].name, &rega.name))
 						break;
+				}
 
 				//Not found
 
@@ -192,6 +198,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 				//Copy name
 
 				gotoIfError3(clean, CharString_createCopy(rega.name, alloc, &tmpReg.name, e_rr));
+				tmpReg.nameHash = rega.nameHash;
 
 				//Merge array
 
@@ -385,9 +392,15 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 				SHRegisterRuntime regb = bi.registers.ptr[k];
 
 				U64 l = 0;
-				for(; l < ai.registers.length; ++l)
+				for(; l < ai.registers.length; ++l) {
+
+					//nameHash-equal is necessary (not sufficient) for name-equal, so this only skips guaranteed mismatches
+					if(ai.registers.ptr[l].nameHash != regb.nameHash)
+						continue;
+
 					if(CharString_equalsStringSensitive(&ai.registers.ptr[l].name, &regb.name))
 						break;
+				}
 
 				//Not found
 

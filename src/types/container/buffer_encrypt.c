@@ -1515,6 +1515,7 @@ static inline Bool AESEncryptionContext_create(
 		}
 
 clean:
+	Buffer_clearAllSecure(Buffer_createRef(&key, sizeof(key)));
 	return s_uccess;
 }
 

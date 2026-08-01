@@ -389,38 +389,14 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 	U32 encryptionKeyV[8] = { 0 };
 	U32 *encryptionKey = NULL;            //Only if we have aes should encryption key be set.
+	Bool hasKey = false;
 
-	if (args->parameters & EOperationHasParameter_AES) {
+	//Parse encryption key (-aes / -aes-file / -aes-stdin)
 
-		CharString key = CharString_createNull();
+	gotoIfError3(clean, CLI_getAesKey(args, encryptionKeyV, &hasKey, e_rr));
 
-		if (
-			!ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key, NULL) ||
-			!CharString_isHex(key)
-		) {
-			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
-			return false;
-		}
-
-		const CharString prefix0x = CharString_createRefCStrConst("0x");
-		U64 off = CharString_startsWithStringInsensitive(&key, &prefix0x, 0) ? 2 : 0;
-
-		if (CharString_length(key) - off != 64) {
-			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
-			return false;
-		}
-
-		for (U64 i = off; i + 1 < CharString_length(key); ++i) {
-
-			U8 v0 = C8_hex(key.ptr[i]);
-			U8 v1 = C8_hex(key.ptr[++i]);
-
-			v0 = (v0 << 4) | v1;
-			*((U8*)encryptionKeyV + ((i - off) >> 1)) = v0;
-		}
-
+	if(hasKey)
 		encryptionKey = encryptionKeyV;
-	}
 
 	U32 magic = *(const U32*)buf.ptr;
 

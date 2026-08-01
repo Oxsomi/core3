@@ -144,6 +144,11 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 		.operationFlags        = opVal.operationFlags
 	};
 
+	//An operation that accepts a -aes / -aes-file key parameter also accepts the --aes-stdin key flag; list it too.
+
+	if((format.requiredParameters | format.optionalParameters) & EOperationHasParameter_AnyAES)
+		format.operationFlags |= EOperationFlags_AESStdin;
+
 	if(format.requiredParameters | format.optionalParameters) {
 
 		Log_debugx(ELogOptions_None, "With the following parameters:\n\n");
@@ -477,6 +482,11 @@ Bool CLI_execute(ListCharString argList) {
 	EOperationHasParameter reqParam = format.requiredParameters;
 	EOperationHasParameter optParam = format.optionalParameters;
 	EOperationFlags opFlags            = format.operationFlags;
+
+	//An operation that accepts a -aes / -aes-file key parameter also accepts the --aes-stdin key flag.
+
+	if((reqParam | optParam) & EOperationHasParameter_AnyAES)
+		opFlags |= EOperationFlags_AESStdin;
 
 	//It must have all required params
 

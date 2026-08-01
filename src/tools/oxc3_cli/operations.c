@@ -83,7 +83,8 @@ const C8 *EOperationHasParameter_names[] = {
 	"-input2",
 	"-graphics-api",
 	"-type",
-	"-oiCA"
+	"-oiCA",
+	"-aes-file"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -105,7 +106,8 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Input file to merge with",
 	"Graphics api to use. Default is either all or the native one depending on command.",
 	"Numeric type (e.g. a float format: F8, F16, F32, F64, BF16, TF19, PXR24, FP24).",
-	"Operate inside the given oiCA archive instead of the working directory."
+	"Operate inside the given oiCA archive instead of the working directory.",
+	"Read the 32-byte AES key from a file (64/66-char hex or a raw 32-byte binary) instead of a plaintext argument."
 };
 
 //Flags
@@ -136,12 +138,13 @@ const C8 *EOperationFlags_names[EOperationFlags_Count] = {
 	"--warn-unused-constants",
 	"--warn-buffer-padding",
 	"--verbose",
-	"--fixed"
+	"--fixed",
+	"--aes-stdin"
 };
 
 const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
 	"Includes 256-bit hashes instead of 32-bit ones into file if applicable.",
-	"Keep the data uncompressed (default is compressed).",
+	"Store data uncompressed (the current default; compression is a work in progress and not supported yet).",
 	"Indicates the input files should be treated as ASCII. If 1 file; splits by enter, otherwise 1 entry/file.",
 	"Indicates the input files should be treated as UTF8. If 1 file; splits by enter, otherwise 1 entry/file.",
 	"Includes full file timestamp (Ns)",
@@ -164,7 +167,9 @@ const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
 	"Warn when unused registers are present in the final binary.",
 	"Warn when unused constants are present in the final binary.",
 	"Warn when buffer padding is present in the final binary.",
-	"Print full information to the console."
+	"Print full information to the console.",
+	"Emit a fixed-point value instead of a float format (float convert).",
+	"Read the 32-byte AES key (hex) from one line of stdin instead of a plaintext argument."
 };
 
 //Operations
@@ -230,7 +235,9 @@ void Operations_init() {
 		.name = "oiCA",
 		.desc = "Oxsomi Compressed Archive; a file table with file data.",
 		.operationFlags = EOperationFlags_Default | EOperationFlags_Date | EOperationFlags_FullDate,
-		.optionalParameters = EOperationHasParameter_AES | EOperationHasParameter_Input2,
+		.optionalParameters =
+			EOperationHasParameter_AES | EOperationHasParameter_AESFile |
+			EOperationHasParameter_Input2,
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
 		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
 		.supportedCategories = { EOperationCategory_File }
@@ -240,7 +247,9 @@ void Operations_init() {
 		.name = "oiDL",
 		.desc = "Oxsomi Data List; an indexed list of data, can be text (ASCII/UTF8) or binary data.",
 		.operationFlags = EOperationFlags_Default | EOperationFlags_Ascii | EOperationFlags_UTF8,
-		.optionalParameters = EOperationHasParameter_AES | EOperationHasParameter_SplitBy | EOperationHasParameter_Input2,
+		.optionalParameters =
+			EOperationHasParameter_AES | EOperationHasParameter_AESFile |
+			EOperationHasParameter_SplitBy | EOperationHasParameter_Input2,
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
 		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
 		.supportedCategories = { EOperationCategory_File }
@@ -287,8 +296,10 @@ void Operations_init() {
 
 		.isFormatLess = true,
 
-		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_AES,
-		.optionalParameters = EOperationHasParameter_Output
+		.requiredParameters = EOperationHasParameter_Input,
+		.optionalParameters =
+			EOperationHasParameter_Output | EOperationHasParameter_AES |
+			EOperationHasParameter_AESFile
 	};
 
 	Operation_values[EOperation_FileDecr] = (Operation) {
@@ -300,7 +311,9 @@ void Operations_init() {
 
 		.isFormatLess = true,
 
-		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_AES | EOperationHasParameter_Output
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
+		.optionalParameters =
+			EOperationHasParameter_AES | EOperationHasParameter_AESFile
 	};
 
 	//Inspection
@@ -327,7 +340,8 @@ void Operations_init() {
 		.operationFlags = EOperationFlags_Bin | EOperationFlags_Includes | EOperationFlags_Verbose,
 		.requiredParameters = EOperationHasParameter_Input,
 		.optionalParameters =
-			EOperationHasParameter_AES | EOperationHasParameter_Output |
+			EOperationHasParameter_AES | EOperationHasParameter_AESFile |
+			EOperationHasParameter_Output |
 			EOperationHasParameter_Entry | EOperationHasParameter_StartOffset | EOperationHasParameter_Length |
 			EOperationHasParameter_ShaderOutputMode
 	};
@@ -338,14 +352,18 @@ void Operations_init() {
 		.category = EOperationCategory_File,
 		.name = "list", .desc = "List the entries of a directory (defaults to the working directory).",
 		.func = &CLI_fileList, .isFormatLess = true,
-		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA | EOperationHasParameter_AES
+		.optionalParameters =
+			EOperationHasParameter_Input | EOperationHasParameter_oiCA |
+			EOperationHasParameter_AES | EOperationHasParameter_AESFile
 	};
 
 	Operation_values[EOperation_FileTree] = (Operation) {
 		.category = EOperationCategory_File,
 		.name = "tree", .desc = "List the entries of a directory recursively (defaults to the working directory).",
 		.func = &CLI_fileTree, .isFormatLess = true,
-		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA | EOperationHasParameter_AES
+		.optionalParameters =
+			EOperationHasParameter_Input | EOperationHasParameter_oiCA |
+			EOperationHasParameter_AES | EOperationHasParameter_AESFile
 	};
 
 	Operation_values[EOperation_FileStat] = (Operation) {
@@ -353,7 +371,9 @@ void Operations_init() {
 		.name = "stat", .desc = "Show type, size, access and modified time of a file or folder.",
 		.func = &CLI_fileStat, .isFormatLess = true,
 		.requiredParameters = EOperationHasParameter_Input,
-		.optionalParameters = EOperationHasParameter_oiCA | EOperationHasParameter_AES
+		.optionalParameters =
+			EOperationHasParameter_oiCA |
+			EOperationHasParameter_AES | EOperationHasParameter_AESFile
 	};
 
 	Operation_values[EOperation_FileCount] = (Operation) {
@@ -361,7 +381,9 @@ void Operations_init() {
 		.name = "count", .desc = "Count the files and folders under a path (defaults to the working directory).",
 		.func = &CLI_fileCount, .isFormatLess = true,
 		.operationFlags = EOperationFlags_NonRecursive,
-		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA | EOperationHasParameter_AES
+		.optionalParameters =
+			EOperationHasParameter_Input | EOperationHasParameter_oiCA |
+			EOperationHasParameter_AES | EOperationHasParameter_AESFile
 	};
 
 	Operation_values[EOperation_FileCopy] = (Operation) {
@@ -369,7 +391,9 @@ void Operations_init() {
 		.name = "copy", .desc = "Copy a file to a new location.",
 		.func = &CLI_fileCopy, .isFormatLess = true,
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
-		.optionalParameters = EOperationHasParameter_oiCA | EOperationHasParameter_AES
+		.optionalParameters =
+			EOperationHasParameter_oiCA |
+			EOperationHasParameter_AES | EOperationHasParameter_AESFile
 	};
 
 	Operation_values[EOperation_FileMove] = (Operation) {
@@ -384,7 +408,9 @@ void Operations_init() {
 		.name = "del", .desc = "Delete a file or folder (recursive for folders).",
 		.func = &CLI_fileDelete, .isFormatLess = true,
 		.requiredParameters = EOperationHasParameter_Input,
-		.optionalParameters = EOperationHasParameter_oiCA | EOperationHasParameter_Output | EOperationHasParameter_AES
+		.optionalParameters =
+			EOperationHasParameter_oiCA | EOperationHasParameter_Output |
+			EOperationHasParameter_AES | EOperationHasParameter_AESFile
 	};
 
 	Operation_values[EOperation_FileMkdir] = (Operation) {
@@ -432,9 +458,11 @@ void Operations_init() {
 
 	Operation_values[EOperation_FileGmac] = (Operation) {
 		.category = EOperationCategory_File,
-		.name = "gmac", .desc = "Compute an AES-GMAC authentication tag over a file (-aes key).",
+		.name = "gmac", .desc = "Compute an AES-GMAC authentication tag over a file (-aes / -aes-file / --aes-stdin key).",
 		.func = &CLI_fileGmac, .isFormatLess = true,
-		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_AES
+		.requiredParameters = EOperationHasParameter_Input,
+		.optionalParameters =
+			EOperationHasParameter_AES | EOperationHasParameter_AESFile
 	};
 
 	//Hash category
@@ -576,7 +604,8 @@ void Operations_init() {
 
 			.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
 			.optionalParameters =
-				EOperationHasParameter_AES | EOperationHasParameter_ThreadCount |
+				EOperationHasParameter_AES | EOperationHasParameter_AESFile |
+				EOperationHasParameter_ThreadCount |
 				EOperationHasParameter_IncludeDir | EOperationHasParameter_ShaderOutputMode,
 
 			.operationFlags =

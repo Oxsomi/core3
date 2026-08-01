@@ -237,12 +237,22 @@ static inline I32x4 I32x4_clmul64Fallback(I32x4 avec, I32x4 bvec, U8 imm) {
 			default:       halfa = vget_high_u64(va); halfb = vget_high_u64(vb); break;
 		}
 
-		//vmull_p64 takes scalar poly64_t operands, so extract the selected lane as poly64_t.
-		//(vreinterpret_u64_p64 was the wrong direction and produces uint64x1_t, which vmull_p64 rejects.)
+		#if defined(_MSC_VER) && !defined(__clang__)
 
-		const poly64_t pa = vget_lane_p64(vreinterpret_p64_u64(halfa), 0);
-		const poly64_t pb = vget_lane_p64(vreinterpret_p64_u64(halfb), 0);
-		return vreinterpretq_s32_p128(vmull_p64(pa, pb));
+			//MSVC's vmull_p64 (neon_pmull_64) takes the 64-bit NEON vector operands (__n64) directly, not the ACLE
+			//scalar poly64_t; uint64x1_t is __n64 on MSVC so the selected halves pass through unchanged (hardware PMULL).
+
+			return vreinterpretq_s32_p128(vmull_p64(halfa, halfb));
+
+		#else
+
+			//GCC/Clang follow ACLE: vmull_p64 takes scalar poly64_t operands, so extract the selected lane.
+
+			const poly64_t pa = vget_lane_p64(vreinterpret_p64_u64(halfa), 0);
+			const poly64_t pb = vget_lane_p64(vreinterpret_p64_u64(halfb), 0);
+			return vreinterpretq_s32_p128(vmull_p64(pa, pb));
+
+		#endif
 	}
 #else
 	#include <wmmintrin.h>

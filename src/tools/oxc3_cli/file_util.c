@@ -51,6 +51,12 @@
 #include "types/base/constants.h"
 #include "types/base/string_base.h"
 
+//-aes-file reads the key via File_read, so it obeys the same working-directory sandbox as every other path argument.
+//--aes-stdin reads one line from stdin; there's no File_ helper for a stdin stream, so fgets is used there (only).
+
+#include <stdio.h>
+#include <string.h>
+
 //Streaming chunk size. Multiple of 64 so it's block-aligned for AES-GMAC's chunked AAD and 16-aligned for hexdump lines.
 
 #define CLI_FILE_CHUNK (1024 * 1024)
@@ -62,41 +68,152 @@ static Bool CLI_fileArg(const ParsedArgs *args, EOperationHasParameter shift, Ch
 	return ParsedArgs_getArg(args, shift, out, NULL);
 }
 
-//Helper: parse the optional -aes <32-byte hex> key.
-//Sets *hasKey and fills key[8] only when -aes is present.
+//Decode a 32-byte AES-256 key from hex text (optionally "0x"-prefixed, exactly 64 hex chars).
+//Writes 8 U32 (32 bytes) into outKey. The caller is responsible for wiping the source text.
 
-static Bool CLI_fileParseAes(const ParsedArgs *args, U32 key[8], Bool *hasKey, Error *e_rr) {
+static Bool CLI_aesDecodeHex(CharString hex, U32 outKey[8], Error *e_rr) {
 
 	Bool s_uccess = true;
-	*hasKey = false;
-
-	if(!(args->parameters & EOperationHasParameter_AES))
-		goto clean;
-
-	CharString keyStr = CharString_createNull();
-
-	if(!CLI_fileArg(args, EOperationHasParameter_AESShift, &keyStr))
-		retError(clean, Error_invalidState(0, "-aes requires a 32-byte hex key."));
 
 	const CharString ox = CharString_createRefCStrConst("0x");
 
-	if(!CharString_isHex(keyStr))
-		retError(clean, Error_invalidState(1, "-aes must be a hex key (32 bytes)."));
+	if(!CharString_isHex(hex))
+		retError(clean, Error_invalidState(0, "AES key must be a hex key (32 bytes / 64 hex chars)."));
 
-	const U64 off = CharString_startsWithStringInsensitive(&keyStr, &ox, 0) ? 2 : 0;
+	const U64 off = CharString_startsWithStringInsensitive(&hex, &ox, 0) ? 2 : 0;
 
-	if(CharString_length(keyStr) - off != 64)
-		retError(clean, Error_invalidState(2, "-aes must be exactly 32 bytes (64 hex chars)."));
+	if(CharString_length(hex) - off != 64)
+		retError(clean, Error_invalidState(1, "AES key must be exactly 32 bytes (64 hex chars)."));
 
-	for(U64 i = off; i + 1 < CharString_length(keyStr); ++i) {
-		const U8 v0 = C8_hex(keyStr.ptr[i]);
-		const U8 v1 = C8_hex(keyStr.ptr[++i]);
-		*((U8*)key + ((i - off) >> 1)) = (U8)((v0 << 4) | v1);
+	for(U64 i = off; i + 1 < CharString_length(hex); ++i) {
+		const U8 v0 = C8_hex(hex.ptr[i]);
+		const U8 v1 = C8_hex(hex.ptr[++i]);
+		*((U8*)outKey + ((i - off) >> 1)) = (U8)((v0 << 4) | v1);
 	}
 
-	*hasKey = true;
+clean:
+	return s_uccess;
+}
+
+//Trim leading and trailing ASCII whitespace (space/tab/CR/LF) from [ptr, ptr+len), returning the trimmed slice.
+
+static CharString CLI_trimWhitespace(const C8 *ptr, U64 len) {
+
+	U64 start = 0;
+
+	while(start < len && (ptr[start] == ' ' || ptr[start] == '\t' || ptr[start] == '\r' || ptr[start] == '\n'))
+		++start;
+
+	while(len > start && (ptr[len - 1] == ' ' || ptr[len - 1] == '\t' || ptr[len - 1] == '\r' || ptr[len - 1] == '\n'))
+		--len;
+
+	return CharString_createRefSizedConst(ptr + start, len - start, false);
+}
+
+//Read the AES key from a file: either a raw 32-byte binary key, or the same hex form -aes accepts.
+//Detection is by content length: exactly 32 bytes = raw, otherwise the (whitespace-trimmed) text is decoded as hex.
+
+static Bool CLI_aesFromFile(CharString path, U32 outKey[8], Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = Platform_instance->alloc;
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	Buffer file = Buffer_createNull();
+
+	//File_read applies the CLI's working-directory sandbox, same as any other path argument.
+
+	gotoIfError3(clean, File_read(&path, U64_MAX, 0, 0, &fileHandleType, &file, e_rr));
+
+	const U64 read = Buffer_length(file);
+
+	//A raw key is exactly 32 bytes; anything else (hex, possibly with a trailing newline) is decoded as text.
+
+	if(read == 32)
+		Buffer_memcpy(Buffer_createRef(outKey, 32), file);
+
+	else {
+		const CharString hex = CLI_trimWhitespace((const C8*) file.ptr, read);
+		gotoIfError3(clean, CLI_aesDecodeHex(hex, outKey, e_rr));
+	}
 
 clean:
+	Buffer_clearAllSecure(file);        //file held key material
+	Buffer_free(&file, alloc);
+	return s_uccess;
+}
+
+//Read the AES key (hex) from a single line of stdin.
+
+static Bool CLI_aesFromStdin(U32 outKey[8], Error *e_rr) {
+
+	Bool s_uccess = true;
+	C8 line[256];
+
+	if(!fgets(line, (int) sizeof(line), stdin))
+		retError(clean, Error_invalidState(0, "-aes-stdin: couldn't read a key line from stdin."));
+
+	const CharString hex = CLI_trimWhitespace(line, (U64) CharString_calcStrLen(line, U64_MAX));
+	gotoIfError3(clean, CLI_aesDecodeHex(hex, outKey, e_rr));
+
+clean:
+	Buffer_clearAllSecure(Buffer_createRef(line, sizeof(line)));        //line held key material
+	return s_uccess;
+}
+
+//Shared AES-256 key fetch for every CLI operation that accepts a key.
+//Accepts at most one of -aes / -aes-file / -aes-stdin; fills outKey and sets *hasKey when a source is present.
+
+Bool CLI_getAesKey(const ParsedArgs *args, U32 outKey[8], Bool *hasKey, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(hasKey)
+		*hasKey = false;
+
+	if(!args)
+		retError(clean, Error_nullPointer(0, "CLI_getAesKey()::args is required"));
+
+	const Bool hasArg = (args->parameters & EOperationHasParameter_AES) != 0;
+	const Bool hasFile = (args->parameters & EOperationHasParameter_AESFile) != 0;
+	const Bool hasStdin = (args->flags & EOperationFlags_AESStdin) != 0;
+
+	const U32 sources = (U32) hasArg + (U32) hasFile + (U32) hasStdin;
+
+	if(!sources)
+		goto clean;
+
+	if(sources > 1)
+		retError(clean, Error_invalidState(0, "Only one of -aes, -aes-file or --aes-stdin may be specified."));
+
+	if(hasArg) {
+
+		CharString keyStr = CharString_createNull();
+
+		if(!CLI_fileArg(args, EOperationHasParameter_AESShift, &keyStr))
+			retError(clean, Error_invalidState(1, "-aes requires a 32-byte hex key."));
+
+		gotoIfError3(clean, CLI_aesDecodeHex(keyStr, outKey, e_rr));
+	}
+
+	else if(hasFile) {
+
+		CharString path = CharString_createNull();
+
+		if(!CLI_fileArg(args, EOperationHasParameter_AESFileShift, &path))
+			retError(clean, Error_invalidState(2, "-aes-file requires a path."));
+
+		gotoIfError3(clean, CLI_aesFromFile(path, outKey, e_rr));
+	}
+
+	else gotoIfError3(clean, CLI_aesFromStdin(outKey, e_rr));
+
+	if(hasKey)
+		*hasKey = true;
+
+clean:
+	if(!s_uccess)        //Never leave partially-decoded key material behind on failure
+		Buffer_clearAllSecure(Buffer_createRef(outKey, 32));
+
 	return s_uccess;
 }
 
@@ -216,7 +333,7 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 	//An encrypted archive needs its -aes key both to decrypt on read and to re-encrypt if we rewrite it (copy/del).
 	//CAFile_read stores the key into caFile.settings, so CAFile_write re-encrypts automatically.
 
-	gotoIfError3(clean, CLI_fileParseAes(args, keyV, &hasKey, e_rr));
+	gotoIfError3(clean, CLI_getAesKey(args, keyV, &hasKey, e_rr));
 
 	//Read from the archive file via a stream so we never pull the whole (possibly huge) oiCA into memory.
 
@@ -1255,12 +1372,9 @@ Bool CLI_fileGmac(const ParsedArgs *args) {
 	const Allocator *alloc = Platform_instance->alloc;
 	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
-	CharString input = CharString_createNull(), key = CharString_createNull();
-	if(
-		!CLI_fileArg(args, EOperationHasParameter_InputShift, &input) ||
-		!CLI_fileArg(args, EOperationHasParameter_AESShift, &key)
-	) {
-		Log_errorLnx("file gmac requires -input <file> and -aes <32-byte hex key>.");
+	CharString input = CharString_createNull();
+	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
+		Log_errorLnx("file gmac requires -input <file>.");
 		return false;
 	}
 
@@ -1271,28 +1385,17 @@ Bool CLI_fileGmac(const ParsedArgs *args) {
 	StreamCursor cur = (StreamCursor) { 0 };
 	FileInfo info = (FileInfo) { 0 };
 	AESEncryptionContext ctx = (AESEncryptionContext) { 0 };
+	U32 keyV[8] = { 0 };
+	Bool hasKey = false;
 	Bool s_uccess = true;
 	Error err = Error_none(), *e_rr = &err;
 
-	//Parse the 32-byte (256-bit) hex key, same rules as -aes elsewhere
+	//Fetch the 32-byte (256-bit) key from -aes / -aes-file / -aes-stdin (a key is required for gmac).
 
-	const CharString ox = CharString_createRefCStrConst("0x");
+	gotoIfError3(clean, CLI_getAesKey(args, keyV, &hasKey, e_rr));
 
-	if(!CharString_isHex(key))
-		retError(clean, Error_invalidState(0, "file gmac -aes must be a hex key (32 bytes)."));
-
-	const U64 off = CharString_startsWithStringInsensitive(&key, &ox, 0) ? 2 : 0;
-
-	if(CharString_length(key) - off != 64)
-		retError(clean, Error_invalidState(1, "file gmac -aes must be exactly 32 bytes (64 hex chars)."));
-
-	U32 keyV[8] = { 0 };
-
-	for(U64 i = off; i + 1 < CharString_length(key); ++i) {
-		const U8 v0 = C8_hex(key.ptr[i]);
-		const U8 v1 = C8_hex(key.ptr[++i]);
-		*((U8*)keyV + ((i - off) >> 1)) = (U8)((v0 << 4) | v1);
-	}
+	if(!hasKey)
+		retError(clean, Error_invalidState(0, "file gmac requires a key via -aes, -aes-file or --aes-stdin."));
 
 	//Stream the whole file as GCM additional-data with a fixed zero IV, so the tag is a deterministic MAC (GMAC).
 
@@ -1348,6 +1451,7 @@ clean:
 	if(err.genericError)
 		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 
+	Buffer_clearAllSecure(Buffer_createRef(keyV, sizeof(keyV)));
 	StreamCursor_close(&cur, alloc);
 	RefPtr_dec(&stream);
 	Buffer_free(&buf, alloc);

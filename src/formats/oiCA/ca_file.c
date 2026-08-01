@@ -118,6 +118,10 @@ Bool CAFile_create(
 
 clean:
 
+	//These local copies hold the secret encryption key, so wipe them before returning
+	Buffer_clearAllSecure(Buffer_createRef(nameSettings.encryptionKey, sizeof(nameSettings.encryptionKey)));
+	Buffer_clearAllSecure(Buffer_createRef(contentSettings.encryptionKey, sizeof(contentSettings.encryptionKey)));
+
 	if (!s_uccess)
 		CAFile_free(caFile, alloc);
 
@@ -157,6 +161,9 @@ void CAFile_free(CAFile *caFile, const Allocator *alloc) {
 	DLFile_free(&caFile->content, alloc);
 	ListCAFolderInfo_free(&caFile->folders, alloc);
 	ListCAFileInfo_free(&caFile->files, alloc);
+
+	//The encryption key is secret, so wipe it before freeing the struct
+	Buffer_clearAllSecure(Buffer_createRef(caFile->settings.encryptionKey, sizeof(caFile->settings.encryptionKey)));
 
 	*caFile = (CAFile) { 0 };
 }

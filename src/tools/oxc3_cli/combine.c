@@ -83,37 +83,15 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 
 	gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputArg, e_rr));
 
-	//Parse encryption key
+	//Parse encryption key (-aes / -aes-file / -aes-stdin)
 
 	U32 encryptionKeyV[8] = { 0 };
+	Bool hasKey = false;
 
-	if (args->parameters & EOperationHasParameter_AES) {
+	gotoIfError3(clean, CLI_getAesKey(args, encryptionKeyV, &hasKey, e_rr));
 
-		CharString key = CharString_createNull();
-
-		if (
-			!ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key, NULL) ||
-			!CharString_isHex(key)
-		)
-			retError(clean, Error_invalidState( 2, "CLI_convert() Invalid parameter sent to -aes. Expecting key in hex (32 bytes)" ));
-
-		const CharString ox = CharString_createRefCStrConst("0x");
-		U64 off = CharString_startsWithStringInsensitive(&key, &ox, 0) ? 2 : 0;
-
-		if (CharString_length(key) - off != 64)
-			retError(clean, Error_invalidState( 3, "CLI_convert() Invalid parameter sent to -aes. Expecting key in hex (32 bytes)" ));
-
-		for (U64 i = off; i + 1 < CharString_length(key); ++i) {
-
-			U8 v0 = C8_hex(key.ptr[i]);
-			U8 v1 = C8_hex(key.ptr[++i]);
-
-			v0 = (v0 << 4) | v1;
-			*((U8*)encryptionKeyV + ((i - off) >> 1)) = v0;
-		}
-
+	if(hasKey)
 		encryptionKey = encryptionKeyV;
-	}
 
 	//Parse input2
 

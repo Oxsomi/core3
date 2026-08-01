@@ -149,8 +149,14 @@ Bool File_resolve(
 
 			//Move to left
 
-			for (U64 k = fakeSplitLen - 1; k > i; --k)
-				res.ptrNonConst[k - 1] = res.ptr[k];            //This is OK, we're dealing with refs from split
+			//This is OK, we're dealing with refs from split
+			const U64 moveCount = fakeSplitLen - 1 - i;
+
+			if(moveCount)
+				Buffer_memmove(
+					Buffer_createRef(&res.ptrNonConst[i], moveCount * sizeof(res.ptr[0])),
+					Buffer_createRef(&res.ptrNonConst[i + 1], moveCount * sizeof(res.ptr[0]))
+				);
 
 			--i;            //Ensure we keep track of the removed element
 			--fakeSplitLen;
@@ -166,8 +172,14 @@ Bool File_resolve(
 					0, 0, "File_resolve()::loc tried to exit working directory, this is not allowed for security reasons"
 				));
 
-			for (U64 k = i - 1; k < fakeSplitLen - 2; ++k)
-				res.ptrNonConst[k] = res.ptr[k + 2];            //This is OK, we're dealing with refs from split
+			//This is OK, we're dealing with refs from split
+			const U64 moveCount = fakeSplitLen - 1 - i;
+
+			if(moveCount)
+				Buffer_memmove(
+					Buffer_createRef(&res.ptrNonConst[i - 1], moveCount * sizeof(res.ptr[0])),
+					Buffer_createRef(&res.ptrNonConst[i + 1], moveCount * sizeof(res.ptr[0]))
+				);
 
 			i -= 2;                                                //Ensure we keep track of the removed element
 			fakeSplitLen -= 2;

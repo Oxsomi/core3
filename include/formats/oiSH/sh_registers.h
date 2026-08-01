@@ -178,6 +178,7 @@ typedef struct SHRegisterRuntime {
 	ListU32 arrays;
 	SBFile shaderBuffer;
 	U64 hash;                          //Only for identical, not for compatible!
+	U64 nameHash;                      //Hash of the register name only, for fast name matching (combine)
 } SHRegisterRuntime;
 
 TList(SHRegister);

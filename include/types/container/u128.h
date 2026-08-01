@@ -57,17 +57,21 @@
 #else
 
 	static inline U8 U128_bitScan(U128 a) {
-		U64 arr[2] = { a & U64_MAX, a >> 64 };
-		BigInt b = { 0 };
-		BigInt_createRefConst(arr, 2, &b, NULL);
-		return (U8) BigInt_bitScan(b);
+		const U64 hi = (U64)(a >> 64);
+		const U64 lo = (U64)a;
+		if (hi)
+			return (U8)(127 - __builtin_clzll(hi));
+		return lo ? (U8)(63 - __builtin_clzll(lo)) : U8_MAX;
 	}
 
 	static inline U8 U128_bitScanReverse(U128 a) {
-		U64 arr[2] = { a & U64_MAX, a >> 64 };
-		BigInt b = { 0 };
-		BigInt_createRefConst(arr, 2, &b, NULL);
-		return (U8) BigInt_bitScanReverse(b);
+		const U64 hi = (U64)(a >> 64);
+		const U64 lo = (U64)a;
+		if (lo)
+			return (U8)__builtin_ctzll(lo);
+		if (hi)
+			return (U8)(64 + __builtin_ctzll(hi));
+		return U8_MAX;
 	}
 
 #endif

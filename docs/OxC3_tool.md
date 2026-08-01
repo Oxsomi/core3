@@ -7,10 +7,10 @@ The OxC3 tool is intended to handle all operations required for Oxsomi core3. Th
 - Conversions between file formats.
 - Packaging a project.
 - Compiling shaders.
-- **TODO**: Show GPU/graphics device info.
+- Showing CPU, GPU and audio device info.
 - Inspecting a file (printing the header and other important information).
 - Encryption.
-- **TODO**: Compression.
+- Compression *(planned, not supported yet; data is currently always stored uncompressed)*.
 
 And might include more functionality in the future.
 
@@ -42,7 +42,7 @@ Generates random chars; 32 by default. `-length <charCount>` can be used to cust
 
 `OxC3 rand num`
 
-Is just shorthand for `OxC3 rand char -chars <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. Decimal is the default (0-9). `-length <charCount>` can be used to set a limit by character count and `-bits <bitCount>` can be used to limit how many bits the number can have (for decimal output this can only be used with 64-bit numbers and below).
+Is just shorthand for `OxC3 rand char -chars <numberKeyset>`. If --hex is used, it'll use 0-9A-F, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. Decimal is the default (0-9). `-length <charCount>` can be used to set a limit by character count and `-bits <bitCount>` can be used to limit how many bits the number can have (for decimal output this can only be used with 64-bit numbers and below).
 
 `OxC3 rand data -length 16 -output myFile.bin`
 
@@ -68,15 +68,14 @@ To unpackage this (losing the file names of course):
 
 The following flags are commonly used in any format:
 
-- --sha256: Includes 256-bit hashes instead of 32-bit ones into file if applicable.
-  - If a file is compressed or encrypted, a hash is used to detect if it hasn't been corrupted or tempered with. A CRC32 (if this option is turned off) is insufficient if dealing with smart intermediates instead of uncompression/unencryption errors. 256-bit hash is sufficient at minimizing this risk (possible issue with quantum computers in the future).
-- --uncompressed: Keep the data uncompressed (default is compressed).
-  - By default, the data stored in the native format is compressed. If you're testing a custom file parser or want to inspect the data generated, it could be nice to test it like this.
-- --fast-compress: Picks the compression algorithm that takes the least time to compress.
-  - If a lot of files are compressed and need to be available quickly, then this option can be used. It's off by default, because this does impact how compact the file will be. Normally it optimizes for storage rather than speed. For example offline asset baking is when you don't want this turned on. If this is not present, it'll use brotli:11, otherwise brotli:1 will be used.
-- --not-recursive: If folder is selected, blocks recursive file searching. Can be handy if only the direct directory should be included.
-- **TODO**: --v: Verbose.
-- **TODO**: --q: Quiet.
+- `--sha256`: Includes 256-bit hashes instead of 32-bit ones into file if applicable.
+  - If a file is encrypted (or, in the future, compressed), a hash is used to detect if it hasn't been corrupted or tampered with. A CRC32 (if this option is turned off) is insufficient if dealing with smart intermediates instead of decryption errors. 256-bit hash is sufficient at minimizing this risk (possible issue with quantum computers in the future).
+- `--uncompressed`: Store the data uncompressed (currently the default, and always applied).
+  - Compression is a work in progress and isn't supported yet, so the native formats always store data uncompressed for now (readers reject compressed files).
+- `--not-recursive`: If folder is selected, blocks recursive file searching. Can be handy if only the direct directory should be included.
+- `--verbose`: Print full information to the console. Used by `file data`, `shader entrypoints` and `graphics devices`.
+- `--includes`: Display includes. Used by `file data` to request the include list of an oiSH.
+- `--aes-stdin`: Read the 32-byte AES key (hex) from one line of stdin instead of a plaintext argument.
 
 The following parameters are commonly used in any format:
 
@@ -89,13 +88,19 @@ The following parameters are commonly used in any format:
   - See -input.
 - `-aes <key>`: Encryption key (32-byte hex)
   - A key should be generated using a good key generator. This key could for example be specified as: `0x00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000` in hex (64 characters). Can include spaces or tabs, as long as after that it's a valid hex number.
+  - Passing the key on the command line leaks it into shell history, `ps` / `/proc/<pid>/cmdline` and CI logs, so prefer `-aes-file` or `--aes-stdin` for anything sensitive.
+- `-aes-file <path>`: Read the 32-byte AES key from a file instead of a plaintext argument. The file may hold the same hex form as `-aes` (64/66 characters, optional `0x`), or a raw 32-byte binary key (detected by a file length of exactly 32 bytes).
+  - `-aes`, `-aes-file` and `--aes-stdin` are mutually exclusive; supply exactly one wherever a key is needed (`file encr`/`decr`, `file gmac`, `file data`, `file to`/`from` oiCA/oiDL, `combine`, `package`, and the `file` operations on an encrypted archive).
+- `-oiCA <archive>`: Operate inside the given oiCA archive instead of the working directory.
+  - Used by `file list`/`tree`/`stat`/`count`/`copy`/`del`, so several file utilities can browse or modify entries inside an oiCA (encrypted archives also need the key).
+- `-type <type>`: Numeric type (e.g. a float format: F8, F16, F32, F64, BF16, TF19, PXR24, FP24).
 
 ### oiDL format
 
 Since a DL (Data List) file can include either binary files or strings, you'll have to specify what.
 
-- --ascii: Indicates the input files should be threated as ascii. If a file; splits by enter, otherwise 1 entry/file.
-- --utf8: Indicates the input files should be threated as UTF8. If a file; splits by enter, otherwise 1 entry/file.
+- `--ascii`: Indicates the input files should be threated as ascii. If a file; splits by enter, otherwise 1 entry/file.
+- `--utf8`: Indicates the input files should be threated as UTF8. If a file; splits by enter, otherwise 1 entry/file.
 - `-split <string>`: If the input is a string, allows you to split the file by a different string than an endline character / string.
 
 If these are absent; it'll use binary format by default. When either ascii or utf8 is used, file(s) should be encoded using the proper format that is requested. If only one file is used, multiple strings will be created by splitting by the newline character(s) or the split string if overriden. Recombining an ascii oiDL will resolve to a .txt if split is available or the final destination ends with .txt.
@@ -110,9 +115,9 @@ If these are absent; it'll use binary format by default. When either ascii or ut
 
 A CA (Compressed Archive) file can include either no, partial or full timestamps, you'll have to specify if you want that:
 
-- --full-date: Includes full file timestamp (Ns).
+- `--full-date`: Includes full file timestamp (Ns).
   - Creates a full 64-bit timestamp in nanoseconds of the file (in the resolution that the underlying filesystem supports).
-- --date: Includes MS-DOS timestamp (YYYY-MM-dd HH-mm-ss (each two seconds)).
+- `--date`: Includes MS-DOS timestamp (YYYY-MM-dd HH-mm-ss (each two seconds)).
   - Creates a 2x 16-bit (32-bit) timestamp with 2s accuracy. This is nice for optimization, but keep in mind that the resolution is limited. This date will run out in 2107 and can only support 1980 and up. Full 64-bit has up to nanosecond precision and can support 1970-2553.
 
 These are left out by default, because often, file timestamps aren't very important when dealing with things like packaging for apps. The option is still left there for specific use cases.
@@ -120,6 +125,10 @@ These are left out by default, because often, file timestamps aren't very import
 *Example usage:*
 
 `OxC3 file to -format oiCA -input myFolder -output myFolder.oiCA --full-date`
+
+### oiSH format
+
+An oiSH (Oxsomi SHader) file holds compiled shader binaries by entrypoint and metadata. Most oiSH files come from the shader compiler (see `shader compile` / `compile shaders`) rather than `file to`. When produced through `file to -format oiSH`, all three of `-input`, `-output` and `-input2` are required (the two shader inputs are merged into a single oiSH).
 
 ### Combine
 
@@ -131,13 +140,23 @@ This is only supported if it can logically be merged:
 - **TODO**: For oiCA, this would mean combining two archives into one. This can only succeed if the two have similar settings and if the archive files don't overlap (archiveA/a.txt and archiveB/a.txt would conflict, unless the crc is the same).
 - **TODO**: For oiDL, this simply means the second entries are appended to the other, provided the two oiDL settings are the same (UTF8, ascii, data).
 
-### TODO: Split
+### File utilities
 
-`OxC3 file split -format oiSH -input combined.oiSH -output lean.spv.oiSH -compile-output spv` can be used to split the bulky oiSH into a single one.
+Several lightweight, format-less file operations are available directly. They act on the working directory by default, and many of them can also operate inside an oiCA archive via `-oiCA` (see the parameter list above; encrypted archives need the key):
 
-- oiSH is supported with the `-compile-output` argument to determine which shader output(s) are included for final write.
-- oiDL allows specifying `entry` and `offset` to remove everything except a section.
-- oiCA allows specifying a folder to extract.
+- `OxC3 file list -input <dir>`: List the entries of a directory (defaults to the working directory).
+- `OxC3 file tree -input <dir>`: List the entries of a directory recursively (defaults to the working directory).
+- `OxC3 file stat -input <path>`: Show type, size, access and modified time of a file or folder.
+- `OxC3 file count -input <dir>`: Count the files and folders under a path (defaults to the working directory). Use `--not-recursive` to count only the direct directory.
+- `OxC3 file copy -input <src> -output <dst>`: Copy a file to a new location.
+- `OxC3 file move -input <src> -output <dir>`: Move a file into a destination directory.
+- `OxC3 file del -input <path>`: Delete a file or folder (recursive for folders).
+- `OxC3 file mkdir -input <dir>`: Create a folder (creating parent folders as needed).
+- `OxC3 file touch -input <file>`: Create an empty file.
+- `OxC3 file cmp -input <a> -input2 <b>`: Byte-compare two files and report the first difference.
+- `OxC3 file diff -input <a> -input2 <b>`: Structurally compare two archives (oiCA or oiDL): added / removed / modified entries.
+- `OxC3 file wipe -input <file>`: Overwrite a file's contents with zeros.
+- `OxC3 file hexdump -input <file>`: Print a hex + ASCII dump of a file or region (`-start` / `-length` select the region).
 
 ## Packaging a project
 
@@ -167,7 +186,7 @@ When operating on a folder, it will attempt to find `.hlsl` files and then proce
 
 `-threads` can be used to limit thread count. Such as `-threads 0` = default , `-threads 50%` = 50% of all threads, `-threads 4` = 4 threads. Default behavior is that all cores will be used for threading.
 
-`-compile-output` is the outputs that are enabled. If this mode is multiple and --split is enabled then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future). By default (if the argument isn't present) it compiles as `all`, so the shader is usable by all backends. Without --split, it will include the output modes as specified into a single oiSH file.
+`-compile-output` is the outputs that are enabled. If this mode is multiple and `--split` is enabled then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future). By default (if the argument isn't present) it compiles as `all`, so the shader is usable by all backends. Without --split, it will include the output modes as specified into a single oiSH file.
 
 `-compile-type` is the compile type. Can currently only be `compile`.
 
@@ -225,7 +244,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
 - `[[oxc::uniforms(U32 x = 45, F32 y = 90.f)]]` Creates either 2 spec constants (spv) or 2 library exports (dxil) that contain these values. These are only accessible as functions and not as static const at compile time, but they will be fossilized in a subsequent linking step internally to reduce compile time (but keep runtime performance).
   - Please try to use uniforms if possible and avoid defines, since defines cause a full HLSL compile, while uniforms will only cause DXIL/SPV to be fossilized into the right shader. Each unique uniform combo will cause DXIL/SPV linking to happen.
   - The types are `((U/I/F)(8/16/32/64)/B1)`. Matrices and scalars aren't supported but can be made manually by making multiple scalars. Other types are not supported, because the uniforms have to be passed from the application like this to match the entrypoint.
-    - Even though GPUs generally don't support these types natively, we support them for packing reasons, allowing less data to be stored in the shaders. So U8x4 is valid, even though there's no real type for it in HLSL, it'll get expanded to uint4 (or uint16_t4 if enabled) automatically. Though it will try to keep the native type if possible (e.g. U16x4 will turn into uint16_t4 if 16-bit types are enabled, otherwise it will become U32x4). As a note; B1 (Bool) is a single bit (though is expanded to 32 on GPU).
+    - Even though GPUs generally don't support these types natively, we support them for packing reasons, allowing less data to be stored in the shaders on disk. So U8x4 is valid, even though there's no real type for it in HLSL, it'll get expanded to uint4 (or uint16_t4 if enabled) automatically. Though it will try to keep the native type if possible (e.g. U16x4 will turn into uint16_t4 if 16-bit types are enabled, otherwise it will become U32x4). As a note; B1 (Bool) is a single bit (though is expanded to 32 on GPU).
   - Reserved syntax for defining vectors is `(1, 2, 3, 4)` for example and matrices are `((1, 2, 3), (4, 5, 6), (7, 8, 9))`.
   - Since the uniform becomes a function or variable, it must not include symbols or spaces (excluding _). 
   - The application is in charge of picking the uniform & define combo for the entire lib or each entrypoint. So it is possible to switch between defines based on what the app wants, unlike models which is handled by the runtime; though extensions can be explicitly required or disabled at runtime.
@@ -271,6 +290,18 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
 - `--warn-unused-registers` registers that were unused spawn a compile warning. Off by default because techniques like bindless might expose lots of registers that are unused.
 - `--warn-unused-constants` variables that are unused in a constant buffer cause a compile warning. Off by default because constant buffers might be re-used and might require a specific buffer layout to be compatible. Only goes 1 level deep (doesn't go inside of structs, unless it's a structured buffer).
 - `--warn-buffer-padding`  warns about padding being introduced between variables that the user might not be expecting. Useful when debugging mismatching buffer layouts between C/C++ and HLSL or other languages.
+
+## Shader category
+
+Alongside the older `OxC3 compile shaders` operation (which still exists and is documented above), a dedicated `shader` category groups per-shader compile, reflect, inspect and (dis)assemble operations. All are format-less; where a source is compiled, the source format is detected from the input extension.
+
+- `OxC3 shader compile -input <src> -output <file.oiSH>`: Compile a shader to an oiSH; the source format is detected from the input extension (.hlsl). Accepts `-threads`, `-include-dir`, `-compile-type` and `-compile-output`.
+- `OxC3 shader reflect -input <src> -output <file.oiSH>`: Produce a reflection-only oiSH from a shader source (no compiled binary; not usable for a pipeline). Accepts `-threads` and `-include-dir`.
+- `OxC3 shader entrypoints -input <file.oiSH>`: List the entrypoints (name + stage) declared in an oiSH shader. `--verbose` prints full details.
+- `OxC3 shader includes -input <file.oiSH>`: List the include files (relative path + CRC32C) an oiSH shader was compiled from.
+- `OxC3 shader feature_set -input <file.oiSH>`: Show the extensions, shader models and binary types used across an oiSH shader's binaries.
+- `OxC3 shader disassemble -input <file.spv|.dxil>`: Disassemble a standalone .spv or .dxil binary to text (stdout, or `-output <file>`).
+- `OxC3 shader assemble -input <file.spv.txt> -output <file.spv>`: Assemble SPIR-V text (.spv.txt) into a .spv binary. DXIL assembly isn't supported yet.
 
 ## Show GPU/graphics device info
 
@@ -323,13 +354,13 @@ Data allows you to actually inspect the data section of certain parts of the fil
 
 `file header -input test.oiCA` would print the information about the file header.
 
-`file data -input test.oiCA` would tell about the file table for example. File data also needs to provide `-aes` if the source is encrypted. If entry is absent, it will provide a general view of the file.
+`file data -input test.oiCA` would tell about the file table for example. File data also needs a key (`-aes` / `-aes-file` / `--aes-stdin`) if the source is encrypted. If entry is absent, it will provide a general view of the file.
 
 With `-entry <offset or path>` a specific entry can be viewed. If an entry is specified, the `-output` can be used to extract that one entry into a single file (or folder). If this is not specified, it will show the file as either a hexdump or plain text (if it's ascii) or the folder's subdirectories.
 
 `file data` also allows the `-length` specifier for how many entries are shown. Normally in the log it limits to 64 lines (so for data that'd mean 64 * 64 / 2 (hex) = 2KiB per view). The `-start` argument can be used to set an offset of what it should show. An example: we have an oiCA with 128 entries but want to show the last 32; `file data -input our.oiCA -start 96 -length 32`. For a file entry, it would specify the byte offset and length (length is defaulted to 2KiB). If `-output` is used, it will binary dump the entire remainder of the file if `-length` is not specified (the remainder is the entire file size if `-start` is not specified).
 
-For oiSH files, it is possible to supply `--bin` can be used  to fetch the binary instead of the entrypoints. Since an oiSH file can have more than one binary embedded in it. Not supplying an entry offset will behave as usual; showing all binaries. Supplying an entry offset and --binary will show that specific binary. To see the actual compiled binary, `-compile-output` can be used to obtain the specific information (for example DXIL or SPV binary). Example: `file data -input test.oiSH --bin -compile-output DXIL -entry 0` will show the DXIL binary at compiled entry 0 if available. This can still be used with `-start`, `-length` and `-output` to easily read & export binaries from an oiSH file.
+For oiSH files, it is possible to supply `--bin` can be used  to fetch the binary instead of the entrypoints. Since an oiSH file can have more than one binary embedded in it. Not supplying an entry offset will behave as usual; showing all binaries. Supplying an entry offset and --bin will show that specific binary. To see the actual compiled binary, `-compile-output` can be used to obtain the specific information (for example DXIL or SPV binary). Example: `file data -input test.oiSH --bin -compile-output DXIL -entry 0` will show the DXIL binary at compiled entry 0 if available. This can still be used with `-start`, `-length` and `-output` to easily read & export binaries from an oiSH file.
 
 #### View device specific assembly
 
@@ -345,21 +376,34 @@ The following can be compiled through special offline compiler tools:
 
 ## Encrypt
 
-`OxC3 file encr -format <encryptionType> -input <file> -aes <key in hex> (optional: -output output)`
+`OxC3 file encr -input <file> (-aes <key> | -aes-file <path> | --aes-stdin) (optional: -output <output>)`
 
-`OxC3 file decr -format <encryptionType> -input <file> -output <file> -k <key in hex> `
+`OxC3 file decr -input <file> -output <file> (-aes <key> | -aes-file <path> | --aes-stdin)`
 
-Generates an encrypted oiCA file. Works on files and folders. oiCA doesn't support AES128GCM, so AES256GCM is used by default.
+Generates an encrypted oiCA file (`encr`) or restores the original (`decr`). Works on files and folders. oiCA doesn't support AES128GCM, so AES256GCM is used by default. A key is required and may come from any one of `-aes` / `-aes-file` / `--aes-stdin` (see the parameter list above); if none is given the command fails rather than writing an unencrypted file.
 
-## TODO: Compress
+`OxC3 file gmac -input <file> (-aes <key> | -aes-file <path> | --aes-stdin)` computes an AES-GMAC authentication tag over the input (zero IV) without producing an encrypted file.
 
-`OxC3 file pack -input <file> (optional: --fast-compress, --k <key in hex>)`
+## Devices
 
-`OxC3 file unpack -input <file> (optional: --aes <key in hex>)`
+The `devices` category reports this machine's hardware (distinct from the `graphics` category, which enumerates graphics APIs and adapters):
 
-Generates a compressed oiCA file. Can be encrypted. Works on files and folders.
+- `OxC3 devices cpu`: Shows this machine's CPU: logical cores, physical memory and hardware capability flags.
+- `OxC3 devices all`: Dumps CPU + graphics devices + audio devices in one go (handy for support / bug reports).
 
-*Note: Currently unimplemented.*
+## Float
+
+Float format conversion and inspection:
+
+- `OxC3 float convert -input <value>`: Convert a decimal value to a float format (`-type F8/F16/F32/F64/BF16/TF19/PXR24/FP24`) or, with `--fixed`, emit a fixed-point value instead of a float format.
+- `OxC3 float dissect -input <value>`: Show sign/exponent/mantissa/class of a value (decimal or 0x bits) in a float format (`-type`).
+
+## Time
+
+Time conversion (epoch nanoseconds <-> ISO 8601):
+
+- `OxC3 time now`: Print the current UTC time as ISO 8601 and Unix-epoch nanoseconds.
+- `OxC3 time convert -input <value>`: Convert between Unix-epoch nanoseconds and ISO 8601 (auto-detected from `-input`).
 
 ## Profile
 
@@ -372,6 +416,12 @@ Profiles the speed of important operations that might be happening a lot or oper
 - `OxC3 profile fnv1a64`: profiles how much time a Buffer FNV1A64 is.
 - `OxC3 profile sha256`: profiles how fast a Buffer SHA256 is.
 - `OxC3 profile aes256/aes128`: how fast AES encryption is. AES256 should be preferred though for legacy reasons the other might be used (It's about the same speed). The encryption mode is always GCM.
+- `OxC3 profile memcpy`: Profiles memory copy bandwidth (Buffer_memcpy).
+- `OxC3 profile memset`: Profiles memory clear bandwidth (Buffer_unsetAllBits).
+- `OxC3 profile vec`: Profiles 128-bit float SIMD throughput (vec4f add / mul / fma).
+- `OxC3 profile all`: Runs every profile in sequence (cast, rng, hashes, aes, memcpy, memset, vec).
+
+Every profile operation accepts `-threads` (thread count) and `-length` (work size per run).
 
 ## Helper functions
 

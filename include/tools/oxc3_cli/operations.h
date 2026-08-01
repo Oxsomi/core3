@@ -62,6 +62,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_TypeShift,
 	EOperationHasParameter_oiCAShift,
 
+	EOperationHasParameter_AESFileShift,             //-aes-file: read the AES key from a file instead of argv
+
 	EOperationHasParameter_CountEnum,                //How many enums there are
 
 	EOperationHasParameter_Start                     = EOperationHasParameter_FileFormatShift,
@@ -97,7 +99,15 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_Type                      = 1 << EOperationHasParameter_TypeShift,
 
-	EOperationHasParameter_oiCA                      = 1 << EOperationHasParameter_oiCAShift
+	EOperationHasParameter_oiCA                      = 1 << EOperationHasParameter_oiCAShift,
+
+	EOperationHasParameter_AESFile                   = 1 << EOperationHasParameter_AESFileShift,
+
+	//The two parameter key sources (-aes / -aes-file); --aes-stdin is a flag (EOperationFlags_AESStdin), so a
+	//"any key source present" test must also check that flag separately.
+
+	EOperationHasParameter_AnyAES                    =
+		EOperationHasParameter_AES | EOperationHasParameter_AESFile
 
 } EOperationHasParameter;
 
@@ -172,7 +182,9 @@ typedef enum EOperationFlags {
 
 	EOperationFlags_Fixed               = 1 << 25,        //float convert: emit fixed-point instead of a float format
 
-	EOperationFlags_Count               = 26
+	EOperationFlags_AESStdin            = 1 << 26,        //--aes-stdin: read the AES-256 key (hex) from one line of stdin
+
+	EOperationFlags_Count               = 27
 
 } EOperationFlags;
 

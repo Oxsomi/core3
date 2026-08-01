@@ -50,9 +50,18 @@ def oxc3(bindir: str) -> str:
 	return os.path.join(bindir, "OxC3" + (".exe" if platform.system() == "Windows" else ""))
 
 
-def call(exe, args):
-	r = subprocess.run([exe] + args, capture_output=True, text=True)
+def call(exe, args, stdin=None):
+	r = subprocess.run([exe] + args, capture_output=True, text=True, input=stdin)
 	return r.returncode, (r.stdout or "") + (r.stderr or "")
+
+
+def gmac_tag(exe, args, stdin=None):
+	"""Run 'file gmac ...' and return the hex tag (the token after 'Tag:'), or None if none was printed."""
+	_, out = call(exe, args, stdin=stdin)
+	for line in out.splitlines():
+		if "Tag:" in line:
+			return line.split("Tag:", 1)[1].strip()
+	return None
 
 
 def run(exe, args, contains=None, want_fail=False, xfail=None):
@@ -222,6 +231,45 @@ def main():
 		out = run(exe, ["file", "data", "-input", combined])
 		check(out.count("length =") == 5, "oiDL combine (3 + 2) -> exactly 5 entries")
 
+		# ---- aes key input: -aes / -aes-file / --aes-stdin -----------------------------------------
+		# The GMAC tag depends only on (input, key), so the same key supplied three ways must produce the
+		# identical tag. Exercises the shared CLI_getAesKey decoder (hex arg, hex file, raw file, stdin).
+		section("aes key input (-aes / -aes-file / --aes-stdin)")
+
+		keyhex = p("key.hex")
+		write(keyhex, AES_KEY)                                          # 64-char hex, no trailing newline
+		t_arg  = gmac_tag(exe, ["file", "gmac", "-input", hello, "-aes", AES_KEY])
+		t_file = gmac_tag(exe, ["file", "gmac", "-input", hello, "-aes-file", keyhex])
+		t_pipe = gmac_tag(exe, ["file", "gmac", "-input", hello, "--aes-stdin"], stdin=AES_KEY)
+		check(t_arg is not None and t_arg == t_file, "-aes-file matches -aes (identical GMAC tag)")
+		check(t_arg is not None and t_arg == t_pipe, "--aes-stdin matches -aes (identical GMAC tag)")
+
+		# a raw 32-byte binary key file decodes to the same key as its hex form
+		keyraw = p("key.raw")
+		with open(keyraw, "wb") as f:
+			f.write(bytes(range(32)))                                  # 00 01 .. 1f
+		t_raw   = gmac_tag(exe, ["file", "gmac", "-input", hello, "-aes-file", keyraw])
+		t_rawhx = gmac_tag(exe, ["file", "gmac", "-input", hello, "-aes", bytes(range(32)).hex()])
+		check(t_raw is not None and t_raw == t_rawhx, "raw 32-byte key file matches its hex form")
+
+		# only one key source may be given
+		run(exe, ["file", "gmac", "-input", hello, "-aes", AES_KEY, "-aes-file", keyhex],
+			want_fail=True, contains=["Only one of"])
+
+		# -aes-file also enables encryption on a convert (convert tests AnyAES, not just the -aes bit)
+		kfCA = p("kf.oiCA")
+		run(exe, ["file", "to", "-format", "oiCA", "-input", src, "-output", kfCA, "-aes-file", keyhex],
+			contains=["Converted"])
+		run(exe, ["file", "list", "-oiCA", kfCA, "-aes-file", keyhex], contains=["a.txt"])
+		check(call(exe, ["file", "list", "-oiCA", kfCA])[0] != 0, "archive made with -aes-file is encrypted (needs a key)")
+
+		# encr/decr accept the key from a file too (round-trip); encr must refuse to run with no key at all
+		encf, decf = p("plain.encf"), p("plain.decf")
+		run(exe, ["file", "encr", "-input", plain, "-output", encf, "-aes-file", keyhex], contains=["Converted"])
+		run(exe, ["file", "decr", "-input", encf, "-output", decf, "-aes-file", keyhex], contains=["Converted"])
+		check(read_bytes(decf) == read_bytes(plain) and read_bytes(decf) != b"", "encr/decr round-trip via -aes-file")
+		run(exe, ["file", "encr", "-input", plain, "-output", p("plain.nokey")], want_fail=True)
+
 		# ---- file utilities -----------------------------------------------------------------------
 		section("file utilities")
 		run(exe, ["file", "stat", "-input", hello], contains=["Type:", "file"])
@@ -386,7 +434,9 @@ def main():
 		section("graphics")
 		if available(exe, "graphics", "devices"):
 			run(exe, ["graphics", "devices"], contains=["device"])
-			run(exe, ["graphics", "create"], xfail="prebuilt embedded shader binary not ready yet")
+			# create passes on a real GPU (creates + destroys each device) and on headless CI (no interface/driver ->
+			# nothing to create, still success); a genuine device-create failure on a machine that HAS a GPU still fails.
+			run(exe, ["graphics", "create"])
 		else:
 			skip("graphics", "graphics not in this build")
 

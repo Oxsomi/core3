@@ -81,7 +81,7 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 
 	//Encryption type and hash type
 
-	if(convert->args->parameters & EOperationHasParameter_AES)
+	if(convert->args->parameters & EOperationHasParameter_AnyAES)
 		settings.encryptionType = EXXEncryptionType_AES256GCM;
 
 	//Data type
@@ -328,7 +328,7 @@ Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr) {
 
 	{
 		U64 readOffset = 0;
-		Bool hasEncryption = (convert->args->parameters & EOperationHasParameter_AES) != 0;
+		Bool hasEncryption = (convert->args->parameters & EOperationHasParameter_AnyAES) != 0;
 		gotoIfError3(clean, DLFile_read(
 			inStream, &readOffset, hasEncryption ? convert->encKey : NULL, I32x4_zero(), false, false, alloc,
 			hasEncryption ? &encStreamType : NULL, &file, e_rr

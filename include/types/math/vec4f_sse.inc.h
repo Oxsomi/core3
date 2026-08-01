@@ -32,10 +32,10 @@ static inline F32x4 F32x4_fromI32x4(I32x4 a) { return _mm_cvtepi32_ps(a); }
 
 //Swizzles
 
-static inline F32 F32x4_x(F32x4 a) { return F32_fromU32Bits((U32)_mm_extract_ps(a, 0)); }
-static inline F32 F32x4_y(F32x4 a) { return F32_fromU32Bits((U32)_mm_extract_ps(a, 1)); }
-static inline F32 F32x4_z(F32x4 a) { return F32_fromU32Bits((U32)_mm_extract_ps(a, 2)); }
-static inline F32 F32x4_w(F32x4 a) { return F32_fromU32Bits((U32)_mm_extract_ps(a, 3)); }
+static inline F32 F32x4_x(F32x4 a) { return _mm_cvtss_f32(a); }
+static inline F32 F32x4_y(F32x4 a) { return _mm_cvtss_f32(_mm_shuffle_ps(a, a, _MM_SHUFFLE(1, 1, 1, 1))); }
+static inline F32 F32x4_z(F32x4 a) { return _mm_cvtss_f32(_mm_movehl_ps(a, a)); }
+static inline F32 F32x4_w(F32x4 a) { return _mm_cvtss_f32(_mm_shuffle_ps(a, a, _MM_SHUFFLE(3, 3, 3, 3))); }
 
 static inline F32x4 F32x4_setXCopy(F32x4 a, F32 v) { return _mm_blend_ps(a, _mm_set_ps1(v), 0x1); }
 static inline F32x4 F32x4_setYCopy(F32x4 a, F32 v) { return _mm_blend_ps(a, _mm_set_ps1(v), 0x2); }
@@ -52,7 +52,11 @@ static inline F32x4 F32x4_trunc3(F32x4 a) {
 }
 
 static inline F32 F32x4_reduce(F32x4 a) {
-	return F32x4_x(_mm_hadd_ps(_mm_hadd_ps(a, F32x4_zero()), F32x4_zero()));
+	__m128 shuf = _mm_movehdup_ps(a);
+	__m128 sums = _mm_add_ps(a, shuf);
+	shuf = _mm_movehl_ps(shuf, sums);
+	sums = _mm_add_ss(sums, shuf);
+	return _mm_cvtss_f32(sums);
 }
 
 //Arithmetic

@@ -143,7 +143,7 @@ Bool CLI_convertToCA(const CLIConvert *convert, Error *e_rr) {
 
 	//Encryption type and hash type
 
-	if(convert->args->parameters & EOperationHasParameter_AES)
+	if(convert->args->parameters & EOperationHasParameter_AnyAES)
 		settings.encryptionType = EXXEncryptionType_AES256GCM;
 
 	//Compression type
@@ -337,7 +337,7 @@ Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr) {
 	//valid pointer), so passing it unconditionally makes reading a plaintext archive fail with
 	//"encryptionKey is provided but no encryption is used".
 
-	const Bool hasAES = convert->args && (convert->args->parameters & EOperationHasParameter_AES);
+	const Bool hasAES = convert->args && (convert->args->parameters & EOperationHasParameter_AnyAES);
 
 	//Read file
 

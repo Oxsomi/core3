@@ -45,7 +45,13 @@
 		GraphicsDeviceRef *deviceRef = NULL;
 		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
 
-		gotoIfError3(clean, GraphicsInterface_create(e_rr));
+		//A missing graphics stack (headless CI, no driver/ICD) means there's simply nothing to create; not fatal.
+
+		if(!GraphicsInterface_create(&err)) {
+			Log_debugLnx("No graphics interface available (headless / no driver); nothing to create");
+			err = Error_none();
+			goto clean;
+		}
 
 		U64 queried = CLI_parseGraphicsAPIs(args);
 
@@ -76,17 +82,31 @@
 				.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 			};
 
-			gotoIfError3(clean, GraphicsInstance_create(
+			//A driverless API on this machine (e.g. no Vulkan ICD in headless CI) shouldn't abort; skip it.
+
+			if(!GraphicsInstance_create(
 				&applicationInfo,
 				api,
 				EGraphicsInstanceFlags_None,
 				alloc,
 				&instanceType,
 				&instanceRef,
-				e_rr
-			));
+				&err
+			)) {
+				Log_debugLnx("Couldn't create a %s instance (headless / no driver); skipping", EGraphicsApi_name[api]);
+				err = Error_none();
+				continue;
+			}
 
-			gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr));
+			//Enumeration can fail per-API on headless CI; like instance creation, that shouldn't abort the whole run.
+
+			if(!GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, &err)) {
+				Log_debugLnx("Couldn't enumerate %s devices (driver error / headless); skipping", EGraphicsApi_name[api]);
+				err = Error_none();
+				ListGraphicsDeviceInfo_free(&infos, alloc);
+				RefPtr_dec(&instanceRef);
+				continue;
+			}
 			
 			U64 entry = 0;
 

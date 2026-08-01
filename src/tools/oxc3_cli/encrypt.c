@@ -32,6 +32,15 @@ Bool CLI_encryptDo(const ParsedArgs *args) {
 
 	if(!args) return false;
 
+	//A key is required, but it may come from any of -aes / -aes-file (params) or --aes-stdin (a flag), validated by
+	//CLI_getAesKey later. The required-parameter bitmask can't express "one of", so enforce it here; else convert
+	//would silently write a plaintext archive when no key was given.
+
+	if(!(args->parameters & EOperationHasParameter_AnyAES) && !(args->flags & EOperationFlags_AESStdin)) {
+		Log_errorLnx("CLI_encryptDo requires a key via -aes, -aes-file or --aes-stdin.");
+		return false;
+	}
+
 	ParsedArgs argsMut = *args;
 
 	const Bool generateOutput = !(argsMut.parameters & EOperationHasParameter_Output);
@@ -77,6 +86,13 @@ clean:
 Bool CLI_encryptUndo(const ParsedArgs *args) {
 
 	if(!args) return false;
+
+	//A key is required, but it may come from any of -aes / -aes-file (params) or --aes-stdin (a flag).
+
+	if(!(args->parameters & EOperationHasParameter_AnyAES) && !(args->flags & EOperationFlags_AESStdin)) {
+		Log_errorLnx("CLI_encryptUndo requires a key via -aes, -aes-file or --aes-stdin.");
+		return false;
+	}
 
 	const ParsedArgs caArgs = (ParsedArgs) {
 		.operation = EOperation_FileFrom,

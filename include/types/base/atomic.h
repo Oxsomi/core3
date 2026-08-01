@@ -82,7 +82,17 @@ impl static inline I64 AtomicI64_dec(AtomicI64 *ptr);
 	}
 
 	static inline I64 AtomicI64_load(AtomicI64 *ptr) {
-		return AtomicI64_add(ptr, 0);
+		//Cheap acquire load instead of a locked read-modify-write.
+		I64 v = (I64) __iso_volatile_load64((volatile __int64*)&ptr->atomic);
+		#if defined(_M_ARM64)
+			//A plain volatile load is NOT ordered on ARM64 under MSVC /volatile:iso.
+			//Emit a load-acquire barrier after the load (inner shareable, load side).
+			__dmb(_ARM64_BARRIER_ISHLD);
+		#else
+			//x86/x64 volatile load is already acquire under TSO; only block compiler reordering.
+			_ReadWriteBarrier();
+		#endif
+		return v;
 	}
 
 	static inline I64 AtomicI64_add(AtomicI64 *ptr, I64 value) {
@@ -128,7 +138,13 @@ impl static inline I64 AtomicI64_dec(AtomicI64 *ptr);
 	}
 
 	static inline I64 AtomicI64_load(AtomicI64 *ptr) {
-		return AtomicI64_add(ptr, 0);
+		//Cheap acquire load instead of a locked read-modify-write.
+		#ifdef __cplusplus
+			//memory_order_acquire lives in namespace std in C++ (no ADL for a bare enumerator).
+			return atomic_load_explicit(&ptr->atomic, std::memory_order_acquire);
+		#else
+			return atomic_load_explicit(&ptr->atomic, memory_order_acquire);
+		#endif
 	}
 
 	static inline I64 AtomicI64_add(AtomicI64 *ptr, I64 value) {

@@ -115,6 +115,9 @@ void DLFile_free(DLFile *dlFile, const Allocator *alloc) {
 
 	Buffer_free(&dlFile->cache, alloc);
 
+	//The encryption key is secret, so wipe it before freeing the struct
+	Buffer_clearAllSecure(Buffer_createRef(dlFile->settings.encryptionKey, sizeof(dlFile->settings.encryptionKey)));
+
 	*dlFile = (DLFile) { 0 };
 }
 

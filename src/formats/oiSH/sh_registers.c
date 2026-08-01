@@ -258,6 +258,7 @@ Bool SHRegisterRuntime_createCopy(const SHRegisterRuntime *reg, const Allocator 
 		retError(clean, Error_nullPointer(2, "SHRegisterRuntime_createCopy()::res already defined, could indicate memleak"));
 
 	res->reg = reg->reg;
+	res->nameHash = reg->nameHash;
 	gotoIfError3(clean, CharString_createCopy(reg->name, alloc, &res->name, e_rr));
 	gotoIfError3(clean, ListU32_createCopy(reg->arrays, alloc, &res->arrays, e_rr));
 	gotoIfError3(clean, SBFile_createCopy(&reg->shaderBuffer, alloc, &res->shaderBuffer, e_rr));
@@ -321,6 +322,9 @@ Bool SHBinaryInfo_addRegisterBase(
 		tmp.shaderBuffer = *sbFile;
 
 	tmp.hash = hash;
+
+	//Name-only hash lets combine pre-filter name matches with a U64 compare instead of a string compare
+	tmp.nameHash = Buffer_fnv1a64(CharString_bufferConst(*name), Buffer_fnv1a64Offset);
 
 	gotoIfError3(clean, ListSHRegisterRuntime_pushBack(registers, tmp, alloc, e_rr));
 
