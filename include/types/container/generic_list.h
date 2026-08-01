@@ -131,7 +131,7 @@ static inline Bool GenericList_neq(const GenericList *a, const GenericList *b) {
 }
 
 static inline GenericList GenericList_createEmpty(U64 stride) {
-	GenericList empty = { 0 };
+	GenericList empty = { { 0 } };
 	empty.stride = stride;
 	return empty;
 }
@@ -159,7 +159,7 @@ static inline Bool GenericList_createCopySubset(
 	Error *e_rr
 ) {
 	Bool s_uccess = true;
-	GenericList tmp = { 0 };
+	GenericList tmp = { { 0 } };
 	gotoIfError3(clean, GenericList_createSubset(list, off, len, &tmp, e_rr));
 	gotoIfError3(clean, GenericList_createCopy(tmp, allocator, result, e_rr));
 
@@ -336,7 +336,7 @@ static inline Bool GenericList_eraseAll(
 ) {
 
 	Bool s_uccess = true;
-	ListU64 indices = { 0 };
+	ListU64 indices = { { 0 } };
 
 	if (!list)
 		retError(clean, Error_nullPointer(0, "GenericList_eraseAll()::list is required"));

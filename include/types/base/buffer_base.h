@@ -56,7 +56,7 @@ static inline Bool Buffer_isConstRef(const Buffer buf) {
 }
 
 static inline Buffer Buffer_createNull() {
-	Buffer buf = { 0 };
+	Buffer buf = { { 0 } };
 	return buf;
 }
 
@@ -149,7 +149,7 @@ static inline Bool Buffer_neq(const Buffer buf0, const Buffer buf1) { return !Bu
 //If it needs to be refcounted, RefPtr should be used.
 static inline Buffer Buffer_createRefFromBuffer(const Buffer buf, Bool isConst) {
 
-	Buffer copy = { 0 };
+	Buffer copy = { { 0 } };
 
 	if (!buf.ptr || (!isConst && Buffer_isConstRef(buf)))
 		return copy;

@@ -58,10 +58,10 @@ static inline Bool EDataType_isSigned(EDataType type) { return type & EDataType_
 //U3 dataType (EDataType)
 
 #define makeTypeId(libId, typeId, width, height, dataTypeStride, dataType)                                                \
-	((U32)(                                                                                                               \
+	(                                                                                                                     \
 		((libId) << 19) | ((typeId) << 9) |                                                                               \
 		(((width) - 1) << 7) | (((height) - 1) << 5) | ((dataTypeStride) << 3) | (dataType)                               \
-	))
+	)
 
 #define makeObjectId(libId, typeId, properties) \
 	(((libId) << 19) | ((typeId) << 9) | ((properties) << 3) | EDataType_Object)
@@ -73,7 +73,7 @@ static inline Bool EDataType_isSigned(EDataType type) { return type & EDataType_
 #define ETIDAsg(...) = __VA_ARGS__
 
 #define ETypeIdXIntVec(prefix, dataType, w)                                                                               \
-ETypeId_##prefix##8##x##w    ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, EDataTypeStride_8 , dataType)),               \
+ETypeId_##prefix##8##x##w     ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, EDataTypeStride_8 , dataType)),              \
 ETypeId_##prefix##16##x##w    ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, EDataTypeStride_16, dataType)),              \
 ETypeId_##prefix##32##x##w    ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, EDataTypeStride_32, dataType)),              \
 ETypeId_##prefix##64##x##w    ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, EDataTypeStride_64, dataType))
@@ -86,7 +86,7 @@ ETypeIdXIntVec(prefix, dataType, 4)
 //Matrix expands for floats
 
 #define ETypeIdXIntMatWH(prefix, dataType, w, h)                                                                          \
-ETypeId_##prefix##8##x##w##x##h        ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, h, EDataTypeStride_8 , dataType)),     \
+ETypeId_##prefix##8##x##w##x##h     ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, h, EDataTypeStride_8 , dataType)),        \
 ETypeId_##prefix##16##x##w##x##h    ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, h, EDataTypeStride_16, dataType)),        \
 ETypeId_##prefix##32##x##w##x##h    ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, h, EDataTypeStride_32, dataType)),        \
 ETypeId_##prefix##64##x##w##x##h    ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, h, EDataTypeStride_64, dataType))
@@ -105,7 +105,7 @@ ETypeIdXIntMatW(prefix, dataType, 4)
 //Int expand
 
 #define ETypeIdXInt(prefix, dataType)                                                                                     \
-ETypeId_##prefix##8        ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, EDataTypeStride_8 , dataType)),                 \
+ETypeId_##prefix##8     ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, EDataTypeStride_8 , dataType)),                    \
 ETypeId_##prefix##16    ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, EDataTypeStride_16, dataType)),                    \
 ETypeId_##prefix##32    ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, EDataTypeStride_32, dataType)),                    \
 ETypeId_##prefix##64    ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, EDataTypeStride_64, dataType))
