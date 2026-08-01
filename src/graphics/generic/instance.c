@@ -172,7 +172,7 @@ RefPtrType GraphicsInstance_makeType(EGraphicsApi api, const Allocator *alloc) {
 	api = EGraphicsApi_resolve(api);
 
 	return (RefPtrType) {
-		.typeId = (ETypeId) EGraphicsTypeId_GraphicsInstance,
+		.typeId = (TypeId) EGraphicsTypeId_GraphicsInstance,
 		.length = (U32)(sizeof(GraphicsInstance) + GraphicsInterface_getObjectSizes(api)->instance),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc) GraphicsInstance_freeExt
@@ -210,35 +210,35 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 	return (GraphicsObjectTypes) {
 
 		.device = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_GraphicsDevice,
+			.typeId = (TypeId) EGraphicsTypeId_GraphicsDevice,
 			.length = (U32)(sizeof(GraphicsDevice) + sizes->device),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) GraphicsDevice_free
 		},
 
 		.buffer = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_DeviceBuffer,
+			.typeId = (TypeId) EGraphicsTypeId_DeviceBuffer,
 			.length = (U32)(sizeof(DeviceBuffer) + sizes->buffer),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) DeviceBuffer_free
 		},
 
 		.deviceTexture = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_DeviceTexture,
+			.typeId = (TypeId) EGraphicsTypeId_DeviceTexture,
 			.length = (U32)(sizeof(DeviceTexture) + imageSize),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) DeviceTexture_free
 		},
 
 		.renderTexture = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_RenderTexture,
+			.typeId = (TypeId) EGraphicsTypeId_RenderTexture,
 			.length = (U32)(sizeof(RenderTexture) + imageSize),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) GraphicsDevice_freeRenderTexture
 		},
 
 		.depthStencil = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_DepthStencil,
+			.typeId = (TypeId) EGraphicsTypeId_DepthStencil,
 			.length = (U32)(sizeof(DepthStencil) + imageSize),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) GraphicsDevice_freeDepthStencil
@@ -251,70 +251,70 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 			//https://github.com/googlesamples/vulkan-basic-samples/issues/24#issuecomment-442626040
 			//Unfortunately we still have to allocate up to (48 + 16) * 2 = 128 bytes extra, not too bad though.
 
-			.typeId = (ETypeId) EGraphicsTypeId_Swapchain,
+			.typeId = (TypeId) EGraphicsTypeId_Swapchain,
 			.length = (U32)(sizeof(Swapchain) + imageSize * SWAPCHAIN_MAX_IMAGES + sizes->swapchain),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) Swapchain_free
 		},
 
 		.pipeline = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_Pipeline,
+			.typeId = (TypeId) EGraphicsTypeId_Pipeline,
 			.length = (U32)(sizeof(Pipeline) + sizes->pipeline),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) Pipeline_free
 		},
 
 		.sampler = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_Sampler,
+			.typeId = (TypeId) EGraphicsTypeId_Sampler,
 			.length = (U32)(sizeof(Sampler) + sizes->sampler),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) Sampler_free
 		},
 
 		.blas = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_BLASExt,
+			.typeId = (TypeId) EGraphicsTypeId_BLASExt,
 			.length = (U32)(sizeof(BLAS) + sizes->blas),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) BLAS_free
 		},
 
 		.tlas = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_TLASExt,
+			.typeId = (TypeId) EGraphicsTypeId_TLASExt,
 			.length = (U32)(sizeof(TLAS) + sizes->tlas),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) TLAS_free
 		},
 
 		.descriptorLayout = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_DescriptorLayout,
+			.typeId = (TypeId) EGraphicsTypeId_DescriptorLayout,
 			.length = (U32)(sizeof(DescriptorLayout) + sizes->descriptorLayout),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) DescriptorLayout_free
 		},
 
 		.descriptorTable = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_DescriptorTable,
+			.typeId = (TypeId) EGraphicsTypeId_DescriptorTable,
 			.length = (U32)(sizeof(DescriptorTable) + sizes->descriptorTable),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) DescriptorTable_free
 		},
 
 		.descriptorHeap = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_DescriptorHeap,
+			.typeId = (TypeId) EGraphicsTypeId_DescriptorHeap,
 			.length = (U32)(sizeof(DescriptorHeap) + sizes->descriptorHeap),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) DescriptorHeap_free
 		},
 
 		.pipelineLayout = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_PipelineLayout,
+			.typeId = (TypeId) EGraphicsTypeId_PipelineLayout,
 			.length = (U32)(sizeof(PipelineLayout) + sizes->pipelineLayout),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) PipelineLayout_free
 		},
 
 		.commandList = (RefPtrType) {
-			.typeId = (ETypeId) EGraphicsTypeId_CommandList,
+			.typeId = (TypeId) EGraphicsTypeId_CommandList,
 			.length = (U32) sizeof(CommandList),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) CommandList_free
@@ -340,7 +340,7 @@ Bool GraphicsInstance_create(
 
 	if(
 		!type ||
-		type->typeId != (ETypeId) EGraphicsTypeId_GraphicsInstance ||
+		type->typeId != (TypeId) EGraphicsTypeId_GraphicsInstance ||
 		type->length != (U32)(sizeof(GraphicsInstance) + GraphicsInterface_getObjectSizes(api)->instance) ||
 		type->free != (ObjectFreeFunc) GraphicsInstance_freeExt ||
 		type->alloc != alloc

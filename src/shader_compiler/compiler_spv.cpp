@@ -2408,7 +2408,7 @@ extern "C" Bool Compiler_linkSPIRV(
 				if(uniform.typeIdShort >= ETypeId_Max)
 					retError(clean, Error_invalidState(2, "Compiler_linkSPIRV() typeIdShort out of bounds"));
 
-				ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
+				TypeId typeId = ETypeId_arr[uniform.typeIdShort];
 				U64 len = ETypeId_getBytes(typeId);
 			
 				if(uniform.dataOffset + len > Buffer_length(uniformData))

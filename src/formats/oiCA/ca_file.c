@@ -64,6 +64,7 @@ Bool CAFile_create(
 		retError(clean, Error_invalidParameter(0, 2, "CAFile_create()::flags is invalid"));
 
 	caFile->settings = *settings;
+	caFile->version = 0;        //Debug generation counter starts at 0; add/move/remove bump it (see CAHandle note)
 
 	//Names
 

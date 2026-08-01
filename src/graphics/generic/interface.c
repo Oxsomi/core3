@@ -29,6 +29,7 @@
 	#include "graphics/generic/descriptor_heap.h"
 	#include "graphics/generic/descriptor_table.h"
 	#include "graphics/generic/pipeline_layout.h"
+	#include "graphics/generic/command_structs.h"
 	#include "platforms/file.h"
 	#include "platforms/logx.h"
 	#include "platforms/dynamic_library.h"
@@ -41,7 +42,7 @@
 
 const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *deviceRef) {
 
-	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		return NULL;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);

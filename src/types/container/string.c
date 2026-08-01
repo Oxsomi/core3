@@ -786,7 +786,7 @@ clean:
 	return s_uccess;
 }
 
-Bool CharString_createFromETypeId(ETypeId type, const Allocator *alloc, CharString *result, Error *e_rr) {
+Bool CharString_createFromETypeId(TypeId type, const Allocator *alloc, CharString *result, Error *e_rr) {
 
 	EDataType dataType = ETypeId_getDataType(type);
 	EDataTypeStride dataTypeStride = ETypeId_getDataTypeStride(type);
@@ -847,7 +847,7 @@ clean:
 }
 
 Bool CharString_createFromETypeIdHLSL(
-	ETypeId type,
+	TypeId type,
 	EHLSLStringifyFlags flags,
 	const Allocator *alloc,
 	CharString *result,
@@ -963,17 +963,17 @@ clean:
 	return s_uccess;
 }
 
-ETypeId ETypeId_parseVecOrMat(CharString str, U8 off, EDataType type, EDataTypeStride stride) {
+TypeId ETypeId_parseVecOrMat(CharString str, U8 off, EDataType type, EDataTypeStride stride) {
 
 	U64 strl = CharString_length(str);
 
 	if(str.ptr[off] != 'x' || (strl != ((U64)off + 2) && strl != ((U64)off + 4)))
-		return ETypeId_Undefined;
+		return (TypeId) ETypeId_Undefined;
 
 	U8 w = C8_dec(str.ptr[off + 1]);
 
 	if(w == U8_MAX || !w || w > 4)
-		return ETypeId_Undefined;
+		return (TypeId) ETypeId_Undefined;
 
 	Bool needsMatrix = w == 1;
 
@@ -983,26 +983,26 @@ ETypeId ETypeId_parseVecOrMat(CharString str, U8 off, EDataType type, EDataTypeS
 	if (isMatrix) {
 
 		if(str.ptr[off + 2] != 'x')
-			return ETypeId_Undefined;
+			return (TypeId) ETypeId_Undefined;
 
 		h = C8_dec(str.ptr[off + 3]);
 
 		if(h == U8_MAX || h <= 1 || h > 4)
-			return ETypeId_Undefined;
+			return (TypeId) ETypeId_Undefined;
 	}
 
 	if(needsMatrix && !isMatrix)
-		return ETypeId_Undefined;
+		return (TypeId) ETypeId_Undefined;
 
 	return makeTypeId(LIBRARYID_DEFAULT, 0, w, h, stride, type);
 }
 
-ETypeId ETypeId_parse(const CharString str) {
+TypeId ETypeId_parse(const CharString str) {
 
 	U64 strl = CharString_length(str);
 
 	if(!strl)
-		return ETypeId_Undefined;
+		return (TypeId) ETypeId_Undefined;
 
 	switch (str.ptr[0]) {
 
@@ -1014,17 +1014,17 @@ ETypeId ETypeId_parse(const CharString str) {
 		case 'I': {
 
 			if (strl < 2)
-				return ETypeId_Undefined;
+				return (TypeId) ETypeId_Undefined;
 
 			U8 v = C8_dec(str.ptr[1]);
 
 			switch (v) {
 				case 8: case 1: case 3: case 6:        break;    //8, 16, 32, 64
-				default:                            return ETypeId_Undefined;
+				default:                            return (TypeId) ETypeId_Undefined;
 			}
 
 			if (v != 8 && strl == 2)
-				return ETypeId_Undefined;
+				return (TypeId) ETypeId_Undefined;
 
 			U8 start = 2;
 
@@ -1034,21 +1034,21 @@ ETypeId ETypeId_parse(const CharString str) {
 
 				switch (v2) {
 					case 6: case 2: case 4:            break;
-					default:                        return ETypeId_Undefined;
+					default:                        return (TypeId) ETypeId_Undefined;
 				}
 
 				v = v * 10 + v2;
 
 				switch (v) {
 					case 16: case 32: case 64:        break;
-					default:                        return ETypeId_Undefined;
+					default:                        return (TypeId) ETypeId_Undefined;
 				}
 
 				++start;
 			}
 
 			else if (str.ptr[0] == 'F')
-				return ETypeId_Undefined;
+				return (TypeId) ETypeId_Undefined;
 
 			EDataType dataType;
 
@@ -1077,12 +1077,12 @@ ETypeId ETypeId_parse(const CharString str) {
 		case 'B':
 
 			if(strl == 1 || str.ptr[1] != '1')
-				return ETypeId_Undefined;
+				return (TypeId) ETypeId_Undefined;
 
 			return strl == 2 ? ETypeId_B1 : ETypeId_parseVecOrMat(str, 2, EDataType_Bool, EDataTypeStride_8);
 
 		default:
-			return ETypeId_Undefined;
+			return (TypeId) ETypeId_Undefined;
 	}
 }
 

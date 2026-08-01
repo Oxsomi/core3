@@ -96,7 +96,7 @@ namespace oxc {
 
 	public:
 
-		JobQueue() noexcept : initialized(false) {
+		JobQueue() noexcept : initialized(false), pad{} {
 
 			//Zero state expected by JobQueue_create.
 			//Byte-wise (not C++ assignment) since the struct contains std::atomic members when compiled as C++.

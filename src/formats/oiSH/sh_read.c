@@ -64,7 +64,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	if (!streamRef || !offset)
 		retError(clean, Error_nullPointer(!streamRef ? 0 : 1, "SHFile_read()::streamRef and offset are required"));
 
-	if (streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (streamRef->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_invalidOperation(0, "SHFile_read()::streamRef invalid type"));
 
 	if (*offset & 15)

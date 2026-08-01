@@ -42,7 +42,7 @@ RefPtrType Stream_inheritType(const Allocator *alloc, U32 extraSize) {
 		return (RefPtrType) { 0 };
 
 	return (RefPtrType) {
-		.typeId = (ETypeId)EContainerTypeId_Stream,
+		.typeId = (TypeId)EContainerTypeId_Stream,
 		.length = (U32)(sizeof(OxStream) + extraSize),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc) Stream_close
@@ -68,7 +68,7 @@ Bool Stream_create(
 
 	if (
 		!type ||
-		type->typeId != (ETypeId)EContainerTypeId_Stream ||
+		type->typeId != (TypeId)EContainerTypeId_Stream ||
 		type->length < sizeof(OxStream) ||
 		type->free != (ObjectFreeFunc)Stream_close
 	)
@@ -129,7 +129,7 @@ Bool StreamCursor_createWithCache(
 	if (!cursor || !cache)
 		retError(clean, Error_nullPointer(!cache ? 1 : 4, "StreamCursor_createWithCache()::cursor is required"));
 
-	if(!stream || stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if(!stream || stream->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(3, "StreamCursor_createWithCache()::stream is required"));
 
 	OxStream *streamPtr = RefPtr_data(stream, OxStream);
@@ -219,7 +219,7 @@ Bool StreamCursor_flush(StreamCursor *cursor, const Allocator *alloc, Error *e_r
 	
 	OxStream *stream = RefPtr_data(cursor->stream, OxStream);
 
-	if (!stream || cursor->stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (!stream || cursor->stream->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(0, "StreamCursor_flush()::input/output->stream is required"));
 
 	//Only flush if we have pending writes
@@ -332,8 +332,8 @@ Bool StreamCursor_copyStream(
 
 	if (
 		!streamIn || !streamOut ||
-		input->stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream ||
-		output->stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream
+		input->stream->refPtrType->typeId != (TypeId)EContainerTypeId_Stream ||
+		output->stream->refPtrType->typeId != (TypeId)EContainerTypeId_Stream
 	)
 		retError(clean, Error_nullPointer(0, "StreamCursor_copyStream()::input/output->stream is required"));
 
@@ -405,7 +405,7 @@ Bool StreamCursor_write(
 
 	OxStream *stream = RefPtr_data(cursor->stream, OxStream);
 
-	if (!stream || cursor->stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream || !stream->write)
+	if (!stream || cursor->stream->refPtrType->typeId != (TypeId)EContainerTypeId_Stream || !stream->write)
 		retError(clean, Error_nullPointer(0, "StreamCursor_write()::cursor->stream is required"));
 
 	if (!StreamCursor_canWrite(cursor))
@@ -539,7 +539,7 @@ Bool StreamCursor_read(
 
 	OxStream *stream = RefPtr_data(cursor->stream, OxStream);
 
-	if (!stream || cursor->stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream || !stream->read)
+	if (!stream || cursor->stream->refPtrType->typeId != (TypeId)EContainerTypeId_Stream || !stream->read)
 		retError(clean, Error_nullPointer(0, "StreamCursor_read()::cursor->stream is required"));
 
 	if (!StreamCursor_canRead(cursor))

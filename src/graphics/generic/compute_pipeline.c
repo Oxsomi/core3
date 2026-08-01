@@ -52,7 +52,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 			"GraphicsDeviceRef_createPipelineCompute()::deviceRef, shaderBinary and pipeline are required"
 		));
 
-	if(deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_invalidParameter(
 			0, 0, "GraphicsDeviceRef_createPipelineCompute()::deviceRef is an invalid type"
 		));
@@ -82,7 +82,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 			"GraphicsDeviceRef_createPipelineCompute() entry binaryId out of bounds"
 		));
 
-	if(layout && layout->refPtrType->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
+	if(layout && layout->refPtrType->typeId != (TypeId) EGraphicsTypeId_PipelineLayout)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute() pipeline layout is invalid"

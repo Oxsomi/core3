@@ -87,7 +87,7 @@ Bool CAFile_read(
 	DLFile names = (DLFile) { 0 };
 	DLFile content = (DLFile) { 0 };
 
-	if (!file || file->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (!file || file->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(0, "CAFile_read()::file must be a valid StreamRef"));
 
 	if (!caFile)

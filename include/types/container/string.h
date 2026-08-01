@@ -160,9 +160,9 @@ Bool ListCharString_concatString(const ListCharStringConcat *concat, const CharS
 Bool CharString_formatVariadic(const Allocator *alloc, CharString *result, Error *e_rr, const C8 *format, va_list args);
 Bool CharString_format(const Allocator *alloc, CharString *result, Error *e_rr, const C8 *format, ...);
 
-//Parsing and stringifying ETypeId (as long as it's a basic OxC3 base type)
+//Parsing and stringifying TypeId (as long as it's a basic OxC3 base type)
 
-Bool CharString_createFromETypeId(ETypeId type, const Allocator *alloc, CharString *result, Error *e_rr);
+Bool CharString_createFromETypeId(TypeId type, const Allocator *alloc, CharString *result, Error *e_rr);
 
 typedef enum EHLSLStringifyFlags {
 	EHLSLStringifyFlags_None            = 0,
@@ -173,14 +173,14 @@ typedef enum EHLSLStringifyFlags {
 } EHLSLStringifyFlags;
 
 Bool CharString_createFromETypeIdHLSL(
-	ETypeId type,
+	TypeId type,
 	EHLSLStringifyFlags stringifyFlags,
 	const Allocator *alloc,
 	CharString *result,
 	Error *e_rr
 );
 
-ETypeId ETypeId_parse(const CharString str);
+TypeId ETypeId_parse(const CharString str);
 
 #ifdef __cplusplus
 	}

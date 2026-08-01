@@ -44,6 +44,7 @@ int main() {
 
 	Test_CACounts(&t);
 	Test_CAGetInfo(&t);
+	Test_CAVersion(&t);
 	Test_CACompare(&t);
 	Test_CACombine(&t);
 

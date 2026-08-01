@@ -297,12 +297,12 @@ void Test_BMPRoundTripStridePadding(Test *t) {
 	}
 }
 
-//Verify that BMP_write emits compression = 3 and compressedSize = expectedLen in the raw header.
+//Verify that BMP_write emits compression = 0 (BI_RGB) and compressedSize = expectedLen in the raw header.
 //These fields are written by BMP_write but not surfaced through BMPInfo, so we inspect the
 //raw stream bytes directly using offsetof rather than relying solely on the read-back path.
 void Test_BMPRoundTripHeaderFields(Test *t) {
 
-	Test_setModule(t, "BMP round-trip: raw header has compression=3 and compressedSize=expectedLen");
+	Test_setModule(t, "BMP round-trip: raw header has compression=0 and compressedSize=expectedLen");
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
 	{
@@ -342,7 +342,8 @@ void Test_BMPRoundTripHeaderFields(Test *t) {
 		//4x4 BGRA8: stride = 16, expectedLen = 64
 		const U64 expectedLen = 16 * 4;
 
-		Test_assert(t, "compression == 3",          hdr.info.compression    == 3);
+		//BI_RGB (0); BI_BITFIELDS (3) would require channel masks the writer never emitted
+		Test_assert(t, "compression == 0 (BI_RGB)", hdr.info.compression    == 0);
 		Test_assert(t, "compressedSize == 64",       hdr.info.compressedSize == (U32)expectedLen);
 		Test_assert(t, "fileSize == header + data",  hdr.header.fileSize     == sizeof(BMPHeadersCombined) + expectedLen);
 

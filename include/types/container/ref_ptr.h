@@ -33,10 +33,10 @@
 
 typedef void (*ObjectFreeFunc)(void *ptr, const Allocator *allocator);
 
-typedef U32 ETypeId;
+typedef U32 TypeId;
 
 typedef struct RefPtrType {
-	ETypeId typeId;
+	TypeId typeId;
 	U32 length;
 	const Allocator *alloc;
 	ObjectFreeFunc free;

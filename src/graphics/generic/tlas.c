@@ -221,7 +221,7 @@ Bool GraphicsDeviceRef_createTLAS(
 
 	//Validate
 
-	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createTLAS()::dev is required"));
 
 	if(!tlas)
@@ -230,7 +230,7 @@ Bool GraphicsDeviceRef_createTLAS(
 	if(bindlessDescriptorTable && tlas->disallowBindlessDescriptor)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_createTLAS() bindlessDescriptorTable is set, but disallowed"));
 
-	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
 		retError(clean, Error_nullPointer(
 			0,
 			"GraphicsDeviceRef_createTLAS()::bindlessDescriptorTable should be valid if non NULL"
@@ -247,7 +247,7 @@ Bool GraphicsDeviceRef_createTLAS(
 			3, 0, "GraphicsDeviceRef_createTLAS()::*tlasRef not NULL, indicates memleak"
 		));
 
-	if(tlas->base.parent && tlas->base.parent->refPtrType->typeId != (ETypeId) EGraphicsTypeId_TLASExt)
+	if(tlas->base.parent && tlas->base.parent->refPtrType->typeId != (TypeId) EGraphicsTypeId_TLASExt)
 		retError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createTLAS()::parent is invalid"));
 
 	if(tlas->base.parent && TLASRef_ptr(tlas->base.parent)->base.device != dev)
@@ -316,7 +316,7 @@ Bool GraphicsDeviceRef_createTLAS(
 
 				if(dat.blasCpu) {
 
-					if(dat.blasCpu->refPtrType->typeId != (ETypeId) EGraphicsTypeId_BLASExt)
+					if(dat.blasCpu->refPtrType->typeId != (TypeId) EGraphicsTypeId_BLASExt)
 						retError(clean, Error_invalidOperation(12, "GraphicsDeviceRef_createTLAS() invalid BLAS type"));
 
 					if(BLASRef_ptr(dat.blasCpu)->base.device != dev)

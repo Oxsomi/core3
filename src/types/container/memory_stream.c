@@ -289,7 +289,7 @@ Bool MemoryStream_move(MemoryStreamRef **streamRef, Buffer *output, Error *e_rr)
 
 	Bool s_uccess = true;
 
-	if (!streamRef || !*streamRef || (*streamRef)->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (!streamRef || !*streamRef || (*streamRef)->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(0, "MemoryStream_move()::streamRef is required"));
 
 	if (!output)

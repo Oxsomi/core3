@@ -526,7 +526,7 @@ void FileHandle_close(FileHandle *handle, const Allocator *alloc) {
 
 RefPtrType FileHandle_makeType(const Allocator *alloc) {
 	return (RefPtrType) {
-		.typeId = (ETypeId) EPlatformsTypeId_FileHandle,
+		.typeId = (TypeId) EPlatformsTypeId_FileHandle,
 		.length = (U32) sizeof(FileHandle),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc) FileHandle_close
@@ -549,7 +549,7 @@ Bool File_open(
 	if(!loc || !CharString_isValidFilePath(*loc))
 		retError(clean, Error_invalidParameter(0, 0, "File_open()::loc must be a valid file path"));
 
-	if(!ptrType || ptrType->length != sizeof(FileHandle) || ptrType->typeId != (ETypeId) EPlatformsTypeId_FileHandle)
+	if(!ptrType || ptrType->length != sizeof(FileHandle) || ptrType->typeId != (TypeId) EPlatformsTypeId_FileHandle)
 		retError(clean, Error_invalidParameter(1, 0, "File_open()::ptrType is invalid"));
 
 	if(!handle)
@@ -594,7 +594,7 @@ Bool FileHandleRef_write(FileHandleRef *handleRef, U64 offset, U64 length, const
 	if(!handleRef || !buf)
 		retError(clean, Error_nullPointer(!handleRef ? 0 : 3, "FileHandleRef_write()::handle and buf are required"));
 
-	if(!handleRef->refPtrType || handleRef->refPtrType->typeId != (ETypeId) EPlatformsTypeId_FileHandle)
+	if(!handleRef->refPtrType || handleRef->refPtrType->typeId != (TypeId) EPlatformsTypeId_FileHandle)
 		retError(clean, Error_invalidOperation(0, "FileHandleRef_write()::handle is an invalid type"));
 
 	FileHandle *handle = RefPtr_data(handleRef, FileHandle);
@@ -627,7 +627,7 @@ Bool FileHandleRef_read(const FileHandleRef *handleRef, U64 off, U64 len, Buffer
 	if(!handleRef || !output)
 		retError(clean, Error_nullPointer(!handleRef ? 0 : 3, "FileHandleRef_read()::handle and output are required"));
 
-	if(!handleRef->refPtrType || handleRef->refPtrType->typeId != (ETypeId) EPlatformsTypeId_FileHandle)
+	if(!handleRef->refPtrType || handleRef->refPtrType->typeId != (TypeId) EPlatformsTypeId_FileHandle)
 		retError(clean, Error_invalidOperation(0, "FileHandleRef_read()::handle is an invalid type"));
 
 	FileHandle *handle = RefPtr_data(handleRef, FileHandle);
@@ -681,7 +681,7 @@ Bool File_write(
 	if(!loc || !CharString_isValidFilePath(*loc))
 		retError(clean, Error_invalidParameter(0, 0, "File_write()::loc must be a valid file path"));
 
-	if(!ptrType || ptrType->length != sizeof(FileHandle) || ptrType->typeId != (ETypeId) EPlatformsTypeId_FileHandle)
+	if(!ptrType || ptrType->length != sizeof(FileHandle) || ptrType->typeId != (TypeId) EPlatformsTypeId_FileHandle)
 		retError(clean, Error_invalidParameter(1, 0, "File_write()::ptrType is invalid"));
 
 	if(File_isVirtual(*loc)) {
@@ -714,7 +714,7 @@ Bool File_read(
 	if(!loc || !CharString_isValidFilePath(*loc))
 		retError(clean, Error_invalidParameter(0, 0, "File_read()::loc must be a valid file path"));
 
-	if(!ptrType || ptrType->length != sizeof(FileHandle) || ptrType->typeId != (ETypeId) EPlatformsTypeId_FileHandle)
+	if(!ptrType || ptrType->length != sizeof(FileHandle) || ptrType->typeId != (TypeId) EPlatformsTypeId_FileHandle)
 		retError(clean, Error_invalidParameter(1, 0, "File_read()::ptrType is invalid"));
 
 	if(!output)

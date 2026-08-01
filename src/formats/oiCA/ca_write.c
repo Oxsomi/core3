@@ -64,7 +64,7 @@ Bool CAFile_write(
 			!result ? 2 : (!startOffset ? 3 : 0), "CAFile_write()::caFile and startOffset are required"
 		));
 
-	if (result && result->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (result && result->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(2, "CAFile_write()::result must be a valid StreamRef"));
 
 	const CASettings *settings = &caFile->settings;

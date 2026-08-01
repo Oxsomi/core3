@@ -38,7 +38,7 @@
 //GenericList[] can be useful when handling lots of arrays of different types (though it adds a U64 for the stride each).
 		
 static inline GenericList ListVoid_toList(const ListVoid v, U64 stride) {
-	GenericList list = { 0 };
+	GenericList list = { { 0 } };
 	list.ptr = v.ptr;
 	list.length = v.length;
 	list.stride = stride;

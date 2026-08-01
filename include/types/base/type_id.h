@@ -141,7 +141,7 @@ ETypeIdFloatMatW(2), ETypeIdFloatMatW(3), ETypeIdFloatMatW(4)
 
 //All possible types
 
-typedef enum ETypeId_ {
+typedef enum ETypeId {
 
 	ETypeId_C8                                    = makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, EDataTypeStride_8, EDataType_Char),
 	ETypeId_B1                                    = makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, EDataTypeStride_8, EDataType_Bool),
@@ -182,13 +182,19 @@ typedef enum ETypeId_ {
 
 	ETypeId_Undefined    = 0xFFFFFFFF
 
-} ETypeId_;             //Needs all bits, but upper bit isn't always considered the same when casting due to enum shenanigans
+} ETypeId;              //Only defines the named constants; never use as a storage type (see TypeId below)
 
-typedef U32 ETypeId;    //Exception to the 'enum is ETypeId and value is TypeId' rule, for compatibility only
+//Storage/parameter type for type ids.
+//The enum needs all 32 bits, but an enum with the upper bit set silently sign extends on some compilers,
+// breaking compares (e.g. against ETypeId_Undefined), so values always travel as a plain U32.
+typedef U32 TypeId;
 
 #undef ETIDAsg
 #define ETIDAsg(...)
 
+//Deliberately typed as the enum: brace-initializing a TypeId array from the enum constants is a narrowing
+// conversion in C++ on MSVC (the constants are negative ints there), while enum -> enum never converts.
+//Reads convert to TypeId at the use site instead (a runtime conversion, which no compiler flags).
 static const ETypeId ETypeId_arr[ETypeId_Max] = {
 
 	ETypeId_C8, ETypeId_B1,
@@ -217,15 +223,15 @@ static const ETypeId ETypeId_arr[ETypeId_Max] = {
 
 typedef U8 TypeIdShort;
 
-TypeIdShort ETypeId_toShortId(ETypeId id);
+TypeIdShort ETypeId_toShortId(TypeId id);
 
 #undef ETIDAsg
 
-static inline EDataType ETypeId_getDataType(ETypeId id) { return (EDataType)(id & 7); }
-static inline EDataTypeStride ETypeId_getDataTypeStride(ETypeId id) { return (EDataTypeStride)((id >> 3) & 3); }
-static inline Bool ETypeId_isObject(ETypeId id) { return ETypeId_getDataType(id) == EDataType_Object; }
+static inline EDataType ETypeId_getDataType(TypeId id) { return (EDataType)(id & 7); }
+static inline EDataTypeStride ETypeId_getDataTypeStride(TypeId id) { return (EDataTypeStride)((id >> 3) & 3); }
+static inline Bool ETypeId_isObject(TypeId id) { return ETypeId_getDataType(id) == EDataType_Object; }
 
-static inline U8 ETypeId_getDataTypeBytes(ETypeId id) {
+static inline U8 ETypeId_getDataTypeBytes(TypeId id) {
 
 	EDataType type = ETypeId_getDataType(id);
 
@@ -235,14 +241,14 @@ static inline U8 ETypeId_getDataTypeBytes(ETypeId id) {
 	return ETypeId_isObject(id) ? 0 : (1 << type);
 }
 
-static inline U8 ETypeId_getHeight(ETypeId id) { return ETypeId_isObject(id) ? 0 : (((id >> 5) & 3) + 1); }
-static inline U8 ETypeId_getWidth(ETypeId id) { return ETypeId_isObject(id) ? 0 : (((id >> 7) & 3) + 1); }
+static inline U8 ETypeId_getHeight(TypeId id) { return ETypeId_isObject(id) ? 0 : (((id >> 5) & 3) + 1); }
+static inline U8 ETypeId_getWidth(TypeId id) { return ETypeId_isObject(id) ? 0 : (((id >> 7) & 3) + 1); }
 
-static inline U8 ETypeId_getElements(ETypeId id) {
+static inline U8 ETypeId_getElements(TypeId id) {
 	return ETypeId_isObject(id) ? 0 : ETypeId_getWidth(id) * ETypeId_getHeight(id);
 }
 
-static inline U64 ETypeId_getBytes(ETypeId id) {
+static inline U64 ETypeId_getBytes(TypeId id) {
 
 	U64 siz = ETypeId_isObject(id) ? 0 : (U64)ETypeId_getDataTypeBytes(id) * ETypeId_getElements(id);
 
@@ -252,8 +258,8 @@ static inline U64 ETypeId_getBytes(ETypeId id) {
 	return siz;
 }
 
-static inline U16 ETypeId_getLibraryId(ETypeId id) { return (U16)(id >> 19); }
-static inline U16 ETypeId_getLibraryTypeId(ETypeId id) { return (U16)((id >> 9) & ((1 << 10) - 1)); }
+static inline U16 ETypeId_getLibraryId(TypeId id) { return (U16)(id >> 19); }
+static inline U16 ETypeId_getLibraryTypeId(TypeId id) { return (U16)((id >> 9) & ((1 << 10) - 1)); }
 
 #ifdef __cplusplus
 	}

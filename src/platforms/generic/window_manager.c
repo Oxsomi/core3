@@ -65,13 +65,13 @@ Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize
 		.callbacks = callbacks,
 		.extendedData = extendedData,
 		.windowTypePhysical = (RefPtrType) {
-			.typeId = (ETypeId) EPlatformsTypeId_Window,
+			.typeId = (TypeId) EPlatformsTypeId_Window,
 			.length = sizeof(Window) + Window_extSize,
 			.alloc = Platform_instance->alloc,
 			.free = (ObjectFreeFunc) Window_free
 		},
 		.windowTypeVirtual = (RefPtrType) {
-			.typeId = (ETypeId) EPlatformsTypeId_Window,
+			.typeId = (TypeId) EPlatformsTypeId_Window,
 			.length = sizeof(Window),
 			.alloc = Platform_instance->alloc,
 			.free = (ObjectFreeFunc) Window_free

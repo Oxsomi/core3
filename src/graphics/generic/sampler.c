@@ -58,7 +58,7 @@ Bool GraphicsDeviceRef_createSampler(
 
 	Bool s_uccess = true;
 
-	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createSampler()::dev is required"));
 
 	if(bindlessDescriptorTable && disallowBindlessDescriptor)
@@ -67,7 +67,7 @@ Bool GraphicsDeviceRef_createSampler(
 			"GraphicsDeviceRef_createSampler() bindlessDescriptorTable is set, but disallowed"
 		));
 
-	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
 		retError(clean, Error_nullPointer(
 			0,
 			"GraphicsDeviceRef_createSampler()::bindlessDescriptorTable should be valid if non NULL"

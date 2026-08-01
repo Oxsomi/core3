@@ -823,7 +823,7 @@ void SHEntryRuntime_print(const SHEntryRuntime *entry, const Allocator *alloc) {
 
 			SHUniformRuntime uniform = entry->uniforms.ptr[j];
 
-			ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
+			TypeId typeId = ETypeId_arr[uniform.typeIdShort];
 
 			SHValue value = (SHValue) { 0 };
 			Buffer_memcpy(

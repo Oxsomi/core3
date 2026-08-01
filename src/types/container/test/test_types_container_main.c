@@ -47,6 +47,7 @@ int main() {
 	Test_hpp(&t);
 	Test_memoryStream(&t);
 	Test_encryptionStream(&t);
+	Test_logOOM(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 

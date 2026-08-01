@@ -45,7 +45,10 @@ static inline U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType
 	const U64 discardedMantissa = mantissa & (((U64)1 << (mbit1 - mbit2)) - 1);
 	const U64 halfMantissa = (U64)1 << (mbit1 - mbit2 - 1);
 
-	U8 round = discardedMantissa > halfMantissa;    //Yes, rounding for some reason ignores 0.5 and only works >0.5
+	//Ties (discarded == half) truncate here instead of rounding up, so this is round-half-toward-zero, not IEEE-754
+	// round-to-nearest-even. The F16C / NEON hardware fast paths below use RNE, so an exact tie can differ by 1 ULP
+	// between this scalar fallback and the hardware path (noted in STATUS.md).
+	U8 round = discardedMantissa > halfMantissa;
 
 	if (!EFloatType_isFinite(type1, v))                //Rounding is only for real numbers
 		round = 0;

@@ -56,7 +56,7 @@ Bool DLFile_write(
 	if(!startOffset)
 		retError(clean, Error_nullPointer(2, "DLFile_write()::startOffset is required"));
 
-	if(streamRef && streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if(streamRef && streamRef->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(2, "DLFile_write()::streamRef is required"));
 
 	OxStream *stream = RefPtr_data(streamRef, OxStream);

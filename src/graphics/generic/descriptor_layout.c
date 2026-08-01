@@ -105,7 +105,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			"DescriptorLayoutInfo_detect()::info, binary and entrypoints are required"
 		));
 
-	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "DescriptorLayoutInfo_detect()::dev is required"));
 
 	if(info->bindings.ptr)
@@ -499,7 +499,7 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
 	Bool allocated = false;
 
-	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createDescriptorLayout()::dev is required"));
 
 	if(!info)

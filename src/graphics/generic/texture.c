@@ -210,13 +210,13 @@ U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource) {
 
 Bool TextureRef_isTexture(RefPtr *tex) { return TextureRef_getUnifiedTexture(tex, NULL).resource.device; }
 Bool TextureRef_isDepthStencil(TextureRef *tex) {
-	return tex && tex->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DepthStencil;
+	return tex && tex->refPtrType->typeId == (TypeId) EGraphicsTypeId_DepthStencil;
 }
 
 Bool TextureRef_isRenderTargetWritable(TextureRef *tex) {
 	return tex && (
-		tex->refPtrType->typeId == (ETypeId) EGraphicsTypeId_RenderTexture ||
-		tex->refPtrType->typeId == (ETypeId) EGraphicsTypeId_Swapchain
+		tex->refPtrType->typeId == (TypeId) EGraphicsTypeId_RenderTexture ||
+		tex->refPtrType->typeId == (TypeId) EGraphicsTypeId_Swapchain
 	);
 }
 
@@ -259,13 +259,13 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 			0, "UnifiedTexture_create()::texturePtr contains initialized resource, possible memleak"
 		));
 
-	if(!texture.resource.device || texture.resource.device->refPtrType->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
+	if(!texture.resource.device || texture.resource.device->refPtrType->typeId != (TypeId)EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "UnifiedTexture_create()::texturePtr->resource.device is required"));
 
 	if(bindlessDescriptorTable && !(texture.resource.flags & EGraphicsResourceFlag_ExposeBindless))
 		retError(clean, Error_invalidState(0, "UnifiedTexture_create() bindlessDescriptorTable is set, but disallowed"));
 
-	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
 		retError(clean, Error_nullPointer(0, "UnifiedTexture_create()::bindlessDescriptorTable should be valid if non NULL"));
 
 	if ((texture.resource.flags & EGraphicsResourceFlag_ExposeBindless) && !bindlessDescriptorTable)

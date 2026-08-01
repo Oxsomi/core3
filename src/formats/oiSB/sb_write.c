@@ -41,7 +41,7 @@ Bool SBFile_write(const SBFile *sbFile, const Allocator *alloc, StreamRef *strea
 	if(!offset)
 		retError(clean, Error_nullPointer(!streamRef ? 2 : 3, "SBFile_write()::offset is required"));
 
-	if(streamRef && streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if(streamRef && streamRef->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_invalidOperation(0, "SBFile_write()::streamRef invalid type"));
 
 	if(sbFile->arrays.length > (U16)I16_MAX)

@@ -36,7 +36,7 @@ impl void AudioInterface_freeExt(AudioInterface *interf, const Allocator *alloc)
 
 RefPtrType AudioInterface_makeType(const Allocator *alloc) {
 	return (RefPtrType) {
-		.typeId = (ETypeId)EAudioTypeId_AudioInterface,
+		.typeId = (TypeId)EAudioTypeId_AudioInterface,
 		.length = (U32)(sizeof(AudioInterface) + AudioInterface_sizeExt),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc)AudioInterface_freeExt
@@ -50,7 +50,7 @@ Bool AudioInterface_create(AudioInterfaceRef **interf, const Allocator *alloc, c
 
 	if(
 		!type ||
-		type->typeId != (ETypeId)EAudioTypeId_AudioInterface ||
+		type->typeId != (TypeId)EAudioTypeId_AudioInterface ||
 		type->length != (U32)(sizeof(AudioInterface) + AudioInterface_sizeExt) ||
 		type->free != (ObjectFreeFunc)AudioInterface_freeExt ||
 		type->alloc != alloc

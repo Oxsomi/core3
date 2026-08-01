@@ -115,7 +115,7 @@ void Test_audioInterfaceInvalidType(Test *t) {
 	AudioInterfaceRef *interf = NULL;
  
 	RefPtrType type = AudioInterface_makeType(t->alloc);
-	type.typeId = (ETypeId)0xDEAD;
+	type.typeId = (TypeId)0xDEAD;
  
 	Test_assert(t, "create fails on bad typeId", !AudioInterface_create(&interf, t->alloc, &type, &err));
 	Test_assert(t, "no allocation on failure", interf == NULL);
@@ -274,7 +274,7 @@ void Test_audioDeviceInvalidType(Test *t) {
 	);
  
 	RefPtrType devType = AudioDevice_makeType(t->alloc);
-	devType.typeId = (ETypeId)0xDEAD;
+	devType.typeId = (TypeId)0xDEAD;
  
 	Test_assert(t, "create fails on bad typeId",
 		!AudioDeviceRef_create(interf, &info, false, t->alloc, &devType, &device, &err)

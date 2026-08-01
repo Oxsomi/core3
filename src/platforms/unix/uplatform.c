@@ -163,8 +163,9 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 
 				buf[n] = 0;
 
-				const C8 *impl = strstr(buf, "CPU implementer");
-				const C8 *hex = impl ? strstr(impl, "0x") : NULL;
+				//Can't be named "impl"; that's the implementation-dependent marker macro from types.h
+				const C8 *implLine = strstr(buf, "CPU implementer");
+				const C8 *hex = implLine ? strstr(implLine, "0x") : NULL;
 
 				if(hex)
 					switch((unsigned) strtoul(hex, NULL, 16)) {

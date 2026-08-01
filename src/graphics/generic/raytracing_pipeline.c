@@ -64,7 +64,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelineRaytracing()::device, binaries, stages, groups and pipelineRef are required"
 		));
 
-	if(deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_invalidParameter(
 			0, 0, "GraphicsDeviceRef_createPipelineRaytracing()::deviceRef is an invalid type"
 		));
@@ -304,7 +304,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			1, 0, "GraphicsDeviceRef_createPipelineRaytracing() can't enable motion blur if the feature isn't supported"
 		));
 
-	if(layout && layout->refPtrType->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
+	if(layout && layout->refPtrType->typeId != (TypeId) EGraphicsTypeId_PipelineLayout)
 		retError(clean, Error_invalidParameter(
 			3, 0, "GraphicsDeviceRef_createPipelineRaytracing() pipeline layout is invalid"
 		));

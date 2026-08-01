@@ -22,7 +22,7 @@
 
 #include "types/base/type_id.h"
 
-TypeIdShort ETypeId_toShortId(ETypeId typeId) {
+TypeIdShort ETypeId_toShortId(TypeId typeId) {
 	
 	EDataType type = ETypeId_getDataType(typeId);
 

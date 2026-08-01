@@ -72,7 +72,7 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 	ESHExtension require
 ) {
 
-	if(!deviceRef || !shaderBinary || deviceRef->refPtrType->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || !shaderBinary || deviceRef->refPtrType->typeId != (TypeId)EGraphicsTypeId_GraphicsDevice)
 		return U32_MAX;
 
 	for (U64 i = 0; i < shaderBinary->entries.length; ++i) {
@@ -149,7 +149,7 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 					if (!CharString_equalsString(&u.name, &reqName, EStringCase_Sensitive))
 						continue;
 
-					const ETypeId typeId = ETypeId_arr[u.typeIdShort];
+					const TypeId typeId = ETypeId_arr[u.typeIdShort];
 
 					SHValue value = (SHValue) { 0 };
 					Buffer_memcpy(

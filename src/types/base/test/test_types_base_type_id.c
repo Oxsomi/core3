@@ -29,7 +29,7 @@ void Test_typeId(Test *test) {
 
 	for (U64 i = 0; i < ETypeId_Max; ++i) {
 
-		ETypeId typeId = ETypeId_arr[i];
+		TypeId typeId = ETypeId_arr[i];
 		TypeIdShort shortTypeId = ETypeId_toShortId(typeId);
 
 		Test_assert(test, "ETypeId_toShortId", shortTypeId == i);

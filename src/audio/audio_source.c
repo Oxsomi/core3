@@ -45,7 +45,7 @@ void AudioSource_free(AudioSource *source, const Allocator *alloc) {
 
 RefPtrType AudioSource_makeType(const Allocator *alloc) {
 	return (RefPtrType) {
-		.typeId = (ETypeId)EAudioTypeId_AudioSource,
+		.typeId = (TypeId)EAudioTypeId_AudioSource,
 		.length = (U32)(sizeof(AudioSource) + AudioSource_sizeExt),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc)AudioSource_free
@@ -71,22 +71,22 @@ Bool AudioDeviceRef_createSourceGeneric(
 
 	if(
 		!type ||
-		type->typeId != (ETypeId)EAudioTypeId_AudioSource ||
+		type->typeId != (TypeId)EAudioTypeId_AudioSource ||
 		type->length != (U32)(sizeof(AudioSource) + AudioSource_sizeExt) ||
 		type->free != (ObjectFreeFunc)AudioSource_free ||
 		type->alloc != alloc
 	)
 		retError(clean, Error_invalidParameter(4, 0, "AudioDeviceRef_createSourceGeneric()::type is invalid"));
 
-	if (!deviceRef || deviceRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioDevice)
+	if (!deviceRef || deviceRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioDevice)
 		retError(clean, Error_nullPointer(0, "AudioDeviceRef_createSourceGeneric()::deviceRef is required"));
 
 	dev = AudioDeviceRef_ptr(deviceRef);
 
-	if(!soundRef || soundRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioStream)
+	if(!soundRef || soundRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioStream)
 		retError(clean, Error_nullPointer(1, "AudioDeviceRef_createSourceGeneric()::soundRef is required"));
 
-	Bool isStream = soundRef && soundRef->refPtrType->typeId == (ETypeId)EAudioTypeId_AudioStream;
+	Bool isStream = soundRef && soundRef->refPtrType->typeId == (TypeId)EAudioTypeId_AudioStream;
 	AudioStream *stream = AudioStreamRef_ptr(soundRef);
 
 	if(!modifier.pitch)
@@ -244,7 +244,7 @@ Bool AudioSourceRef_updateGain(AudioSourceRef *sourceRef, F32 gain, const Alloca
 	
 	Bool s_uccess = true;
 
-	if (!sourceRef || sourceRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioSource)
+	if (!sourceRef || sourceRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioSource)
 		retError(clean, Error_nullPointer(0, "AudioSourceRef_updateGain()::sourceRef is required"));
 
 	AudioSource *source = AudioSourceRef_ptr(sourceRef);
@@ -263,13 +263,13 @@ Bool AudioSourceRef_updatePitchExt(AudioSourceRef *sourceRef, F32 pitch, const A
 	
 	Bool s_uccess = true;
 
-	if (!sourceRef || sourceRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioSource)
+	if (!sourceRef || sourceRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioSource)
 		retError(clean, Error_nullPointer(0, "AudioSourceRef_updatePitchExt()::sourceRef is required"));
 
 	AudioSource *source = AudioSourceRef_ptr(sourceRef);
 
 	//TODO: updating pitch on the stream itself
-	if (sourceRef && sourceRef->refPtrType->typeId == (ETypeId)EAudioTypeId_AudioStream)
+	if (sourceRef && sourceRef->refPtrType->typeId == (TypeId)EAudioTypeId_AudioStream)
 		retError(clean, Error_nullPointer(
 			0, "AudioSourceRef_updatePitchExt() is only allowed on sources with an AudioBuffer"
 		));
@@ -298,7 +298,7 @@ Bool AudioSourceRef_updatePosition3D(AudioSourceRef *sourceRef, F32x4 pos, const
 
 	Bool s_uccess = true;
 
-	if (!sourceRef || sourceRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioSource)
+	if (!sourceRef || sourceRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioSource)
 		retError(clean, Error_nullPointer(0, "AudioSourceRef_updatePosition3D()::sourceRef is required"));
 
 	AudioSource *source = AudioSourceRef_ptr(sourceRef);
@@ -320,7 +320,7 @@ Bool AudioSourceRef_updateVelocity3D(AudioSourceRef *sourceRef, F32x4 velocity, 
 
 	Bool s_uccess = true;
 
-	if (!sourceRef || sourceRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioSource)
+	if (!sourceRef || sourceRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioSource)
 		retError(clean, Error_nullPointer(0, "AudioSourceRef_updateVelocity3D()::sourceRef is required"));
 
 	AudioSource *source = AudioSourceRef_ptr(sourceRef);

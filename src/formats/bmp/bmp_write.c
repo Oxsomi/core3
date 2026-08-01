@@ -104,7 +104,9 @@ Bool BMP_write(
 			.height = (I32) info->h * (info->isFlipped ? 1 : -1),
 			.planes = 1,
 			.bitCount = info->discardAlpha ? 24 : 32,
-			.compression = 3,
+			//BI_RGB (0): standard BGRA (32bpp) / BGR (24bpp) layout needs no channel-mask block after the header.
+			//BI_BITFIELDS (3) would require 3-4 DWORD masks the writer never emitted, which violated the BMP spec.
+			.compression = 0,
 			.compressedSize = (U32) expectedLen,
 			.xPixPerM = info->xPixPerM,
 			.yPixPerM = info->yPixPerM

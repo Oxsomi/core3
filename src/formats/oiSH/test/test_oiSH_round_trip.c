@@ -395,13 +395,13 @@ void Test_SHFileRoundTripUniforms(Test *t) {
 
 	SHUniformRuntime u0 = (SHUniformRuntime) {
 		.name        = CharString_createRefCStrConst("uScale"),
-		.typeIdShort = ETypeId_toShortId(ETypeId_F32),
+		.typeIdShort = ETypeId_toShortId((TypeId) ETypeId_F32),
 		.dataOffset  = 0
 	};
 
 	SHUniformRuntime u1 = (SHUniformRuntime) {
 		.name        = CharString_createRefCStrConst("uCount"),
-		.typeIdShort = ETypeId_toShortId(ETypeId_U32),
+		.typeIdShort = ETypeId_toShortId((TypeId) ETypeId_U32),
 		.dataOffset  = 4
 	};
 

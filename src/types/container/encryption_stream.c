@@ -392,13 +392,13 @@ Bool EncryptionStream_create(
 	if(chunkSize >> 32)
 		retError(clean, Error_invalidParameter(4, 0, "EncryptionStream_create()::chunkSize is too big"));
 
-	if (!dataStream || dataStream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (!dataStream || dataStream->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(0, "EncryptionStream_create()::underlyingStream is required"));
 
 	if (!encryptionKey)
 		retError(clean, Error_nullPointer(2, "EncryptionStream_create()::encryptionKey is required"));
 
-	if (!type || type->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (!type || type->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(6, "EncryptionStream_create()::type is required"));
 
 	U8 chunkSizeShift = (U8)F64_log2((F64)chunkSize);

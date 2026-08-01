@@ -59,7 +59,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 	OxStream *stream = RefPtr_data(streamRef, OxStream);
 
-	if (streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream || !stream->write)
+	if (streamRef->refPtrType->typeId != (TypeId)EContainerTypeId_Stream || !stream->write)
 		retError(clean, Error_invalidOperation(0, "SHFile_write()::streamRef invalid type"));
 
 	if (*offset & 15)

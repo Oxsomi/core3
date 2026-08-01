@@ -43,7 +43,7 @@ Bool DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count, Erro
 	ELockAcquire acq0 = ELockAcquire_Invalid;
 	ELockAcquire acq1 = ELockAcquire_Invalid;
 
-	if(!buf || buf->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
+	if(!buf || buf->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer)
 		retError(clean, Error_nullPointer(0, "DeviceBufferRef_markDirty()::buf is required"));
 
 	buffer = DeviceBufferRef_ptr(buf);
@@ -217,7 +217,7 @@ Bool GraphicsDeviceRef_createBufferIntern(
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
-	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"));
 
 	if(bindlessDescriptorTable && !(resourceFlags & EGraphicsResourceFlag_ExposeBindless))
@@ -225,7 +225,7 @@ Bool GraphicsDeviceRef_createBufferIntern(
 			0, "GraphicsDeviceRef_createBufferIntern() bindlessDescriptorTable is set, but disallowed"
 		));
 
-	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
 		retError(clean, Error_nullPointer(
 			0, "GraphicsDeviceRef_createBufferIntern()::bindlessDescriptorTable should be valid if non NULL"
 		));

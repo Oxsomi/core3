@@ -186,10 +186,10 @@ Bool DescriptorHeapRef_createDescriptorTable(
 
 	(void) flags;
 
-	if(!parent || parent->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorHeap)
+	if(!parent || parent->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorHeap)
 		retError(clean, Error_nullPointer(0, "DescriptorHeapRef_createDescriptorTable()::parent is required"));
 
-	if(!layout || layout->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
+	if(!layout || layout->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorLayout)
 		retError(clean, Error_nullPointer(0, "DescriptorHeapRef_createDescriptorTable()::layout is required"));
 
 	DescriptorHeap *parentPtr = DescriptorHeapRef_ptr(parent);
@@ -413,7 +413,7 @@ Bool DescriptorTableRef_unsetDescriptors(
 	ELockAcquire acq = ELockAcquire_Invalid;
 	SpinLock *lock = NULL;
 
-	if(!table || table->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+	if(!table || table->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
 		retError(clean, Error_nullPointer(0, "DescriptorTableRef_unsetDescriptors()::table is required"));
 
 	DescriptorTable *tablePtr = DescriptorTableRef_ptr(table);
@@ -461,7 +461,7 @@ Bool DescriptorTableRef_unsetDescriptors(
 			WeakRefPtr *ref = binding->multiple.resources.ptr[i];
 			binding->multiple.activeList.ptrNonConst[i >> 6] &=~ ((U64)1 << (i & 63));
 
-			if(ref && ref->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer) {
+			if(ref && ref->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer) {
 				gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, binding->multiple.buffers.ptr[i].counter, e_rr));
 				binding->multiple.buffers.ptrNonConst[i].counter = NULL;
 			}
@@ -475,7 +475,7 @@ Bool DescriptorTableRef_unsetDescriptors(
 	else {
 		WeakRefPtr *ref = binding->single.resource;
 
-		if(ref && ref->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer) {
+		if(ref && ref->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer) {
 			gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, binding->single.buffer.counter, e_rr));
 			binding->single.buffer.counter = NULL;
 		}
@@ -534,7 +534,7 @@ Bool DescriptorTableRef_setDescriptors(
 	ELockAcquire acq = ELockAcquire_Invalid;
 	SpinLock *lock = NULL;
 
-	if(!table || table->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+	if(!table || table->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
 		retError(clean, Error_nullPointer(0, "DescriptorTableRef_setDescriptors()::table is required"));
 
 	if(!darr)
@@ -610,7 +610,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 				if (d.buffer.counter) {
 
-					if(d.buffer.counter->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
+					if(d.buffer.counter->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer)
 						retError(clean, Error_invalidParameter(
 							3, 0, "DescriptorTableRef_setDescriptors() counter must be a buffer"
 						));
@@ -812,7 +812,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 				Bool isArray = b->registerType & ESHRegisterType_IsArray;
 				Bool isWrite = b->registerType & ESHRegisterType_IsWrite;
-				Bool isDepthBuffer = d.resource->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DepthStencil;
+				Bool isDepthBuffer = d.resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DepthStencil;
 				Bool hasStencil = false;
 
 				if(isDepthBuffer)
@@ -981,7 +981,7 @@ Bool DescriptorTableRef_setDescriptors(
 		for(U64 j = 0; j < darr->length; ++j) {
 
 			RefPtr *res = darr->ptr[j].resource;
-			Bool isBuffer = res && res->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer;
+			Bool isBuffer = res && res->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer;
 
 			Bool addRes = DescriptorTable_addRef(tablePtr, res, e_rr);
 			Bool addCounter = !isBuffer ? true : addRes && DescriptorTable_addRef(tablePtr, darr->ptr[j].buffer.counter, e_rr);
@@ -993,7 +993,7 @@ Bool DescriptorTableRef_setDescriptors(
 					RefPtr *resk = darr->ptr[k].resource;
 					DescriptorTable_loseRef(tablePtr, resk, e_rr);
 
-					if(resk && resk->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer)
+					if(resk && resk->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer)
 						DescriptorTable_loseRef(tablePtr, darr->ptr[k].buffer.counter, e_rr);
 				}
 
@@ -1071,7 +1071,7 @@ clean:
 
 U64 DescriptorTableRef_resolveRegisterName(DescriptorTableRef *table, const CharString *registerName) {
 
-	if(!table || table->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+	if(!table || table->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
 		return U64_MAX;
 
 	const DescriptorLayoutInfo *info = &DescriptorLayoutRef_ptr(DescriptorTableRef_ptr(table)->layout)->info;
@@ -1185,7 +1185,7 @@ Bool DescriptorTableRef_findBindlessRegister(
 
 	if(!table || !bindId || !bindlessTypeId || !resource)
 		retError(clean, Error_nullPointer(
-			!table || table->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable ? 0 : (
+			!table || table->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable ? 0 : (
 				!bindId ? 3 : (!bindlessTypeId ? 4 : 5)
 			),
 			"DescriptorTableRef_findBindlessRegister() requires table, bindId and resource"
@@ -1203,7 +1203,7 @@ Bool DescriptorTableRef_findBindlessRegister(
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device);
 
 	U8 resourceType = 0;
-	Bool isDepthStencil = resource->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DepthStencil;
+	Bool isDepthStencil = resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DepthStencil;
 
 	if(TextureRef_isTexture(resource)) {
 
@@ -1230,13 +1230,13 @@ Bool DescriptorTableRef_findBindlessRegister(
 		resourceType = 0;
 	}
 
-	else if(resource->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer)
+	else if(resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer)
 		resourceType = 1;
 
-	else if(resource->refPtrType->typeId == (ETypeId) EGraphicsTypeId_Sampler)
+	else if(resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_Sampler)
 		resourceType = 2;
 
-	else if(resource->refPtrType->typeId == (ETypeId) EGraphicsTypeId_TLASExt)
+	else if(resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_TLASExt)
 		resourceType = 3;
 
 	else {
@@ -1365,7 +1365,7 @@ Bool DescriptorTableRef_allocDescriptor(
 	ELockAcquire acq = ELockAcquire_Invalid;
 	SpinLock *lock = NULL;
 
-	if(!table || table->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+	if(!table || table->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
 		retError(clean, Error_nullPointer(0, "DescriptorTableRef_allocDescriptor()::table is required"));
 
 	if(!arrayId)

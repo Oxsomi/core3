@@ -827,9 +827,9 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				//If it's on the GPU then we have to rely on manual RTAS transitions
 
-				Bool isTLAS = transition.resource->refPtrType->typeId == (ETypeId)EGraphicsTypeId_TLASExt;
+				Bool isTLAS = transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_TLASExt;
 
-				if (isTLAS || transition.resource->refPtrType->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
+				if (isTLAS || transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_BLASExt) {
 
 					RTAS rtas = isTLAS ? TLASRef_ptr(transition.resource)->base : BLASRef_ptr(transition.resource)->base;
 

@@ -171,7 +171,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] has an invalid type"
 			));
 
-		ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
+		TypeId typeId = ETypeId_arr[uniform.typeIdShort];
 
 		if((U32)uniform.dataOffset + ETypeId_getBytes(typeId) > binaries->identifier.uniformData.length)
 			retError(clean, Error_invalidParameter(
@@ -768,7 +768,7 @@ void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Alloca
 			CharString tmp = CharString_createNull();
 			CharString tmp1 = CharString_createNull();
 
-			ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
+			TypeId typeId = ETypeId_arr[uniform.typeIdShort];
 
 			if(!CharString_createFromETypeId(typeId, alloc, &tmp, NULL))
 				tmp = CharString_createRefCStrConst("unknown");

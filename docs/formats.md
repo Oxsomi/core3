@@ -9,6 +9,8 @@ OxC3 formats contains only the following:
 - [oiXX](oiXX.md) basic definitions for allowing providing a base for custom OxC3 file formats (such as oiCA and oiDL).
 - Texture formats for providing information about what type of data a CPU-sided texture buffer contains.
 
+> **Maturity:** for which formats are stable vs. have caveats vs. spec-only (read / write / encryption support), see the [Formats table in STATUS.md](../STATUS.md#formats). Compression is reserved in the oiXX headers but not implemented yet, readers reject compressed files.
+
 ## BMP
 
 BMP support is very basic, it restricts usage to the following:
@@ -39,7 +41,7 @@ DDS support is also very basic, it restricts usage to the following:
 - Video textures aren't supported (e.g. YUV textures).
 - Exotic packed textures aren't supported (e.g. RGB9E5).
 - Legacy formats aren't supported (e.g. D3DFMT formats that aren't present anymore in DXGI_FORMAT). This includes luminance textures.
-- Compression textures for very uncommon formats aren't supported (BC1, BC2, BC3). Though of course normal DXT formats such as BC4-BC7 are supported.
+- The classic DXT block-compressed formats aren't supported: BC1 (DXT1), BC2 (DXT3) and BC3 (DXT5). The modern block formats BC4, BC5, BC6H and BC7 are supported.
 - Depth stencils aren't supported.
 
 Usage via:

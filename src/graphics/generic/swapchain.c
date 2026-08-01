@@ -35,7 +35,7 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 	Swapchain *swapchain = NULL;
 	ELockAcquire acqSwapchain = ELockAcquire_Invalid;
 
-	if(!swapchainRef || swapchainRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_Swapchain)
+	if(!swapchainRef || swapchainRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_Swapchain)
 		retError(clean, Error_nullPointer(0, "Swapchain_resize()::swapchain is required"));
 
 	swapchain = SwapchainRef_ptr(swapchainRef);

@@ -50,7 +50,7 @@ Bool DDS_read(
 	if (!streamRef || !streamOff)
 		retError(clean, Error_nullPointer(!streamRef ? 0 : 1, "DDS_read()::streamRef and streamOff are required"));
 
-	if (streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (streamRef->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_invalidParameter(3, 0, "DDS_read()::streamRef is of invalid type"));
 
 	OxStream *stream = RefPtr_data(streamRef, OxStream);

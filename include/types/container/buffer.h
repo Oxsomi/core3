@@ -139,32 +139,6 @@ void Buffer_sha256Fallback(const Buffer buf, U32 *output);        //In case of n
 
 Bool Buffer_csprng(const Buffer target);
 
-/*
-//Compression
-
-typedef enum EBufferCompressionType {
-	EBufferCompressionType_Brotli11,
-	//EBufferCompressionType_Brotli1,
-	EBufferCompressionType_Count
-} EBufferCompressionType;
-
-typedef enum EBufferCompressionHint {
-	EBufferCompressionHint_None,
-	EBufferCompressionHint_UTF8,
-	EBufferCompressionHint_Font,
-	EBufferCompressionHint_Count    //Auto detect
-} EBufferCompressionHint;
-
-typedef struct BufferCompress {
-	Buffer *target;
-	EBufferCompressionType type;
-	const Allocator *allocator;
-	Buffer *output;
-} BufferCompress;
-
-Bool Buffer_compress(const BufferCompress *compress, EBufferCompressionHint hint, Error *e_rr);
-Bool Buffer_decompress(const BufferCompress *compress, Error *e_rr);*/
-
 #ifdef __cplusplus
 	}
 #endif

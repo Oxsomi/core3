@@ -398,6 +398,73 @@ void Test_CACounts(Test *t) {
 	}
 }
 
+void Test_CAVersion(Test *t) {
+
+	Test_setModule(t, "CAFile_version");
+
+	CAFile ca     = { 0 };
+	CAHandle root = CAHandle_Root;
+
+	if (!CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err)) {
+		Test_assert(t, "Create ca for version", false);
+		goto doneVersion;
+	}
+
+	//Fresh archive starts at generation 0
+
+	Test_assert(t, "fresh version 0",           CAFile_version(&ca) == 0);
+
+	//add shifts indices, so it must bump the counter
+
+	CAHandle hf = addFile(t, &ca, root, "a.txt", 0, false);
+	Test_assert(t, "add file bumps",            CAFile_version(&ca) == 1);
+
+	CAHandle hd = addFolder(t, &ca, root, "sub", false);
+	Test_assert(t, "add folder bumps",          CAFile_version(&ca) == 2);
+
+	//Live handles resolve; invalid / out-of-bounds ones don't
+
+	Test_assert(t, "file handle valid",         CAHandle_isValid(&ca, hf));
+	Test_assert(t, "folder handle valid",       CAHandle_isValid(&ca, hd));
+	Test_assert(t, "root valid",                CAHandle_isValid(&ca, root));
+	Test_assert(t, "invalid handle invalid",   !CAHandle_isValid(&ca, CAHandle_Invalid));
+	Test_assert(t, "oob file invalid",         !CAHandle_isValid(&ca, CAHandle_makeFile(999)));
+	Test_assert(t, "oob folder invalid",       !CAHandle_isValid(&ca, CAHandle_makeFolder(999)));
+
+	//A failed add (duplicate name) doesn't mutate, so it must not bump
+
+	addFile(t, &ca, root, "a.txt", 0, true);
+	Test_assert(t, "failed add no bump",        CAFile_version(&ca) == 2);
+
+	//Rename keeps indices, so it must not bump and the handle stays valid
+
+	CharString newName = CharString_createRefCStrConst("b.txt");
+	Test_assert(t, "rename ok",                 CAFile_rename(&ca, hf, t->alloc, &newName, &t->err));
+	Test_assert(t, "rename no bump",            CAFile_version(&ca) == 2);
+	Test_assert(t, "renamed handle valid",      CAHandle_isValid(&ca, hf));
+
+	//A no-op move (into the same parent) doesn't shift indices, so it must not bump
+
+	Test_assert(t, "noop move ok",              CAFile_move(&ca, hf, root, t->alloc, &t->err));
+	Test_assert(t, "noop move no bump",         CAFile_version(&ca) == 2);
+
+	//A real move shifts indices, so it must bump
+
+	Test_assert(t, "real move ok",              CAFile_move(&ca, hf, hd, t->alloc, &t->err));
+	Test_assert(t, "real move bumps",           CAFile_version(&ca) == 3);
+
+	//Remove shifts indices (bump) and drops the removed handle out of bounds
+
+	U32 before = CAFile_version(&ca);
+	Test_assert(t, "remove ok",                 CAFile_remove(&ca, hf, t->alloc, &t->err));
+	Test_assert(t, "remove bumps",              CAFile_version(&ca) == before + 1);
+	Test_assert(t, "no files left",             ca.files.length == 0);
+	Test_assert(t, "stale handle invalid",     !CAHandle_isValid(&ca, hf));
+
+doneVersion:
+	CAFile_free(&ca, t->alloc);
+}
+
 extern const CASettings kCASettingsDate;
 
 void Test_CAGetInfo(Test *t) {

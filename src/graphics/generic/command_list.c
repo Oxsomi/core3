@@ -54,7 +54,7 @@ TListImpl(CopyImageRegion);
 																												\
 	CommandList *commandList = NULL;                                                                            \
 																												\
-	if(!(v) || (v)->refPtrType->typeId != (ETypeId)EGraphicsTypeId_CommandList)                                 \
+	if(!(v) || (v)->refPtrType->typeId != (TypeId)EGraphicsTypeId_CommandList)                                 \
 		retError(clean, Error_nullPointer(0, "CommandListRef_validate() cmdlist is invalid"));                  \
 																												\
 	commandList = CommandListRef_ptr(v);                                                                        \
@@ -99,7 +99,7 @@ Bool CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 lock
 	Bool s_uccess = true;
 	CommandList *commandList = NULL;
 
-	if(!commandListRef || commandListRef->refPtrType->typeId != (ETypeId)EGraphicsTypeId_CommandList)
+	if(!commandListRef || commandListRef->refPtrType->typeId != (TypeId)EGraphicsTypeId_CommandList)
 		retError(clean, Error_nullPointer(0, "CommandListRef_begin()::commandListRef invalid"));
 
 	commandList = CommandListRef_ptr(commandListRef);
@@ -280,7 +280,7 @@ Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, Resource
 			}
 		}
 
-		else if(resource->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer) {
+		else if(resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer) {
 			if(CommandListRef_bufferRangeConflicts(
 				resource, range.buffer, transition.resource, transition.range.buffer
 			)) {
@@ -410,7 +410,7 @@ Bool CommandListRef_transitionRTAS(
 	if(!rtasPtr)
 		return s_uccess;
 
-	Bool isTLAS = rtasPtr->refPtrType->typeId == (ETypeId) EGraphicsTypeId_TLASExt;
+	Bool isTLAS = rtasPtr->refPtrType->typeId == (TypeId) EGraphicsTypeId_TLASExt;
 	RTAS rtas = isTLAS ? TLASRef_ptr(rtasPtr)->base : BLASRef_ptr(rtasPtr)->base;
 
 	if(stage == EPipelineStage_RTASBuild && type == ETransitionType_ShaderWrite) {
@@ -994,14 +994,14 @@ Bool CommandListRef_startScope(
 			retError(clean, Error_nullPointer(1, "CommandListRef_startScope()::transitions[i].resource is NULL"));
 
 		UnifiedTexture tex = TextureRef_getUnifiedTexture(res, NULL);
-		Bool isSampler = res->refPtrType->typeId == (ETypeId) EGraphicsTypeId_Sampler;
+		Bool isSampler = res->refPtrType->typeId == (TypeId) EGraphicsTypeId_Sampler;
 
 		GraphicsResource resource = tex.resource;
 
 		if (tex.resource.device)
 			resource = tex.resource;
 
-		else if (res->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer)
+		else if (res->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer)
 			resource = DeviceBufferRef_ptr(res)->resource;
 
 		else if(isSampler)
@@ -1009,7 +1009,7 @@ Bool CommandListRef_startScope(
 
 		//Get device and mark as readonly
 
-		else if (res->refPtrType->typeId == (ETypeId) EGraphicsTypeId_TLASExt) {
+		else if (res->refPtrType->typeId == (TypeId) EGraphicsTypeId_TLASExt) {
 
 			TLAS *tlas = TLASRef_ptr(res);
 
@@ -1034,7 +1034,7 @@ Bool CommandListRef_startScope(
 
 		//Get device and mark as readonly
 
-		else if (res->refPtrType->typeId == (ETypeId) EGraphicsTypeId_BLASExt)
+		else if (res->refPtrType->typeId == (TypeId) EGraphicsTypeId_BLASExt)
 			resource = (GraphicsResource) {
 				.device = BLASRef_ptr(res)->base.device, .flags = EGraphicsResourceFlag_ShaderRead
 			};
@@ -1231,7 +1231,7 @@ Bool CommandListRef_setPipeline(CommandListRef *commandListRef, PipelineRef *pip
 
 	CommandListRef_validateScope(commandListRef, clean)
 
-	if (!pipelineRef || pipelineRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_Pipeline)
+	if (!pipelineRef || pipelineRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_Pipeline)
 		retError(clean, Error_nullPointer(1, "CommandListRef_setPipeline()::pipelineRef is required"));
 
 	const Pipeline *pipeline = PipelineRef_ptr(pipelineRef);
@@ -1300,7 +1300,7 @@ Bool CommandListRef_validateBufferDesc(
 	if(!buffer)
 		return s_uccess;
 
-	if(buffer->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
+	if(buffer->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer)
 		retError(clean, Error_unsupportedOperation(0, "CommandListRef_validateBufferDesc()::buffer has invalid type"));
 
 	DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
@@ -1606,7 +1606,7 @@ Bool CommandListRef_checkDispatchBuffer(GraphicsDeviceRef *device, DeviceBufferR
 
 	Bool s_uccess = true;
 
-	if(!buffer || buffer->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
+	if(!buffer || buffer->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer)
 		retError(clean, Error_nullPointer(1, "CommandListRef_checkDispatchBuffer()::buffer is required"));
 
 	const DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
@@ -1824,7 +1824,7 @@ Bool CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas,
 			"CommandListRef_updateRTASExt() is disallowed during render calls, as flushing might cause invalid render state"
 		));
 
-	if(!rtas || rtas->refPtrType->typeId != (ETypeId)(isBLAS ? EGraphicsTypeId_BLASExt : EGraphicsTypeId_TLASExt))
+	if(!rtas || rtas->refPtrType->typeId != (TypeId)(isBLAS ? EGraphicsTypeId_BLASExt : EGraphicsTypeId_TLASExt))
 		retError(clean, Error_unsupportedOperation(0, "CommandListRef_updateRTASExt() requires BLAS or TLAS"));
 
 	gotoIfError3(clean, CommandListRef_transitionRTAS(

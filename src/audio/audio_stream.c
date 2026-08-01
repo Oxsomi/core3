@@ -35,7 +35,7 @@ Bool AudioStreamRef_seekTime(AudioStreamRef *streamRef, Ns offset, Error *e_rr) 
 
 	Bool s_uccess = true;
 
-	if (!streamRef || streamRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioStream)
+	if (!streamRef || streamRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioStream)
 		retError(clean, Error_nullPointer(0, "AudioStreamRef_seekTime()::stream is required"));
 
 	AudioStream *stream = AudioStreamRef_ptr(streamRef);
@@ -64,7 +64,7 @@ Bool AudioStreamRef_play(AudioStreamRef *streamRef, const Allocator *alloc, Erro
 	ELockAcquire acq = ELockAcquire_Invalid;
 	AudioDevice *dev = NULL;
 
-	if (!streamRef || streamRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioStream)
+	if (!streamRef || streamRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioStream)
 		retError(clean, Error_nullPointer(0, "AudioStreamRef_play()::stream is required"));
 		
 	AudioStream *stream = AudioStreamRef_ptr(streamRef);
@@ -98,7 +98,7 @@ Bool AudioStreamRef_stop(AudioStreamRef *streamRef, Error *e_rr) {
 	ELockAcquire acq = ELockAcquire_Invalid;
 	AudioDevice *dev = NULL;
 
-	if (!streamRef || streamRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioStream)
+	if (!streamRef || streamRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioStream)
 		retError(clean, Error_nullPointer(0, "AudioStreamRef_stop()::stream is required"));
 		
 	AudioStream *stream = AudioStreamRef_ptr(streamRef);
@@ -164,7 +164,7 @@ void AudioStream_free(AudioStream *stream, const Allocator *alloc) {
 
 RefPtrType AudioStream_makeType(const Allocator *alloc) {
 	return (RefPtrType) {
-		.typeId = (ETypeId) EAudioTypeId_AudioStream,
+		.typeId = (TypeId) EAudioTypeId_AudioStream,
 		.length = (U32)(sizeof(AudioStream) + AudioStream_sizeExt),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc)AudioStream_free
@@ -184,7 +184,7 @@ Bool AudioDeviceRef_createStream(
 	Bool s_uccess = true;
 	Bool madeRef = false;
 
-	if (!device || device->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioDevice)
+	if (!device || device->refPtrType->typeId != (TypeId)EAudioTypeId_AudioDevice)
 		retError(clean, Error_nullPointer(0, "AudioDeviceRef_createStream()::device is required"));
 
 	if(!info)
@@ -238,7 +238,7 @@ Bool AudioDeviceRef_createStream(
 		
 	if(
 		!type ||
-		type->typeId != (ETypeId)EAudioTypeId_AudioStream ||
+		type->typeId != (TypeId)EAudioTypeId_AudioStream ||
 		type->length != sizeof(AudioStream) + AudioStream_sizeExt ||
 		type->free != (ObjectFreeFunc)AudioStream_free ||
 		type->alloc != alloc
@@ -289,7 +289,7 @@ Bool AudioDeviceRef_createFromFile(
 	if (pitch < 0)
 		retError(clean, Error_invalidState(0, "AudioDeviceRef_createFileStream() negative pitch not supported yet"));    //TODO:
 
-	if (!inputStream || inputStream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (!inputStream || inputStream->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(0, "AudioDeviceRef_createFileStream()::inputStream is required"));
 
 	OxStream *stream = RefPtr_data(inputStream, OxStream);

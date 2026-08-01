@@ -71,6 +71,9 @@ TList(CAFileInfo);
 
 static inline CAFileInfo CAFileInfo_create(U16 parent, Ns timestamp) {
 
+	//Truncate ns -> ms; CAFileInfo packs a 48-bit millisecond timestamp (the top 16 bits hold the parent index).
+	//This is the fine-grained per-file timestamp; the optional --date / --full-date archive dates (2-second FAT /
+	// OxC3 Ns) are a separate mechanism (see CAFile_storeDate).
 	Ns timestampTrunc = timestamp / MS;
 
 	if (timestampTrunc >> 48) {
@@ -104,6 +107,8 @@ typedef struct CAFile {
 	ListCAFolderInfo folders;   //0th is reserved as root folder
 	ListCAFileInfo files;
 	CASettings settings;        //Must remain 8-byte aligned
+	U32 version;                //Debug generation counter; bumped whenever an add/move/remove shifts list indices.
+	U32 padding;
 } CAFile;
 
 TList(CAFile);
@@ -144,6 +149,8 @@ Bool CAFile_read(
 // (U64)-1 = invalid,
 // 0 = root (if folder)
 //NOTE: CAHandle can be invalidated when files are added/removed/moved, so make sure to re-calculate when applicable.
+// For debugging, snapshot CAFile_version() when a handle is obtained and compare it before reuse; a changed
+// version means an add/move/remove happened and the handle may now point at a different (or no) entry.
 typedef U64 CAHandle;
 
 static const U64 CAHandle_Invalid = (U64)-1;
@@ -184,6 +191,15 @@ static inline const CAFileInfo *CAFile_getFileInfoPtr(const CAFile *caFile, CAHa
 		return NULL;
 
 	return &caFile->files.ptr[id];
+}
+
+//Debug generation counter; changes whenever an add/move/remove shifts list indices (see CAHandle note above).
+static inline U32 CAFile_version(const CAFile *caFile) { return caFile ? caFile->version : 0; }
+
+//Whether a handle still points at an in-bounds entry.
+//This can't detect a handle that now aliases a *different* entry after a shift; compare CAFile_version() for that.
+static inline Bool CAHandle_isValid(const CAFile *caFile, CAHandle handle) {
+	return CAHandle_isFolder(handle) ? !!CAFile_getFolderInfoPtr(caFile, handle) : !!CAFile_getFileInfoPtr(caFile, handle);
 }
 
 #ifdef __cplusplus

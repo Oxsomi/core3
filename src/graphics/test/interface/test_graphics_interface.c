@@ -92,7 +92,7 @@ static void Test_graphicsInstanceType(Test *t) {
 	const Allocator *alloc = Platform_instance->alloc;
 	RefPtrType type = GraphicsInstance_makeType(EGraphicsApi_Count, alloc);
 
-	Test_assert(t, "typeId", type.typeId == (ETypeId) EGraphicsTypeId_GraphicsInstance);
+	Test_assert(t, "typeId", type.typeId == (TypeId) EGraphicsTypeId_GraphicsInstance);
 	Test_assert(t, "length", type.length >= sizeof(GraphicsInstance));
 	Test_assert(t, "alloc", type.alloc == alloc);
 	Test_assert(t, "freeFunc", type.free);
@@ -101,7 +101,7 @@ static void Test_graphicsInstanceType(Test *t) {
 // -- 3/4. Instance create / free + object type table ---------------------------
 
 static void Test_checkObjectType(
-	Test *t, const C8 *name, const RefPtrType *type, ETypeId typeId, U64 minLen, const Allocator *alloc
+	Test *t, const C8 *name, const RefPtrType *type, TypeId typeId, U64 minLen, const Allocator *alloc
 ) {
 	Test_assert(t, name, type->typeId == typeId && type->length >= minLen && type->alloc == alloc && type->free);
 }
@@ -145,7 +145,7 @@ static void Test_graphicsInstance(Test *t) {
 	Test_assert(t, "instNotNull", inst != NULL);
 	Test_assert(t, "apiResolved", inst && inst->api == EGraphicsApi_resolve(EGraphicsApi_Count));
 	Test_assert(t, "allocStored", inst && inst->alloc == alloc);
-	Test_assert(t, "refTypeId", instRef->refPtrType->typeId == (ETypeId) EGraphicsTypeId_GraphicsInstance);
+	Test_assert(t, "refTypeId", instRef->refPtrType->typeId == (TypeId) EGraphicsTypeId_GraphicsInstance);
 
 	//Object type table invariants: correct typeIds, length can hold the base struct, same alloc, free func set.
 	//These types live in the instance so they're guaranteed to outlive the objects created with them.
@@ -154,53 +154,53 @@ static void Test_graphicsInstance(Test *t) {
 
 		const GraphicsObjectTypes *types = &inst->types;
 
-		Test_checkObjectType(t, "device", &types->device, (ETypeId)EGraphicsTypeId_GraphicsDevice, sizeof(GraphicsDevice), alloc);
-		Test_checkObjectType(t, "buffer", &types->buffer, (ETypeId)EGraphicsTypeId_DeviceBuffer, sizeof(DeviceBuffer), alloc);
+		Test_checkObjectType(t, "device", &types->device, (TypeId)EGraphicsTypeId_GraphicsDevice, sizeof(GraphicsDevice), alloc);
+		Test_checkObjectType(t, "buffer", &types->buffer, (TypeId)EGraphicsTypeId_DeviceBuffer, sizeof(DeviceBuffer), alloc);
 
 		Test_checkObjectType(
 			t, "deviceTexture", &types->deviceTexture,
-			(ETypeId)EGraphicsTypeId_DeviceTexture, sizeof(DeviceTexture), alloc
+			(TypeId)EGraphicsTypeId_DeviceTexture, sizeof(DeviceTexture), alloc
 		);
 
 		Test_checkObjectType(
 			t, "renderTexture", &types->renderTexture,
-			(ETypeId)EGraphicsTypeId_RenderTexture, sizeof(RenderTexture), alloc
+			(TypeId)EGraphicsTypeId_RenderTexture, sizeof(RenderTexture), alloc
 		);
 
 		Test_checkObjectType(
 			t, "depthStencil", &types->depthStencil,
-			(ETypeId)EGraphicsTypeId_DepthStencil, sizeof(DepthStencil), alloc
+			(TypeId)EGraphicsTypeId_DepthStencil, sizeof(DepthStencil), alloc
 		);
 
-		Test_checkObjectType(t, "swapchain", &types->swapchain, (ETypeId)EGraphicsTypeId_Swapchain, sizeof(Swapchain), alloc);
-		Test_checkObjectType(t, "pipeline", &types->pipeline, (ETypeId)EGraphicsTypeId_Pipeline, sizeof(Pipeline), alloc);
-		Test_checkObjectType(t, "sampler", &types->sampler, (ETypeId)EGraphicsTypeId_Sampler, sizeof(Sampler), alloc);
-		Test_checkObjectType(t, "blas", &types->blas, (ETypeId)EGraphicsTypeId_BLASExt, sizeof(BLAS), alloc);
-		Test_checkObjectType(t, "tlas", &types->tlas, (ETypeId)EGraphicsTypeId_TLASExt, sizeof(TLAS), alloc);
+		Test_checkObjectType(t, "swapchain", &types->swapchain, (TypeId)EGraphicsTypeId_Swapchain, sizeof(Swapchain), alloc);
+		Test_checkObjectType(t, "pipeline", &types->pipeline, (TypeId)EGraphicsTypeId_Pipeline, sizeof(Pipeline), alloc);
+		Test_checkObjectType(t, "sampler", &types->sampler, (TypeId)EGraphicsTypeId_Sampler, sizeof(Sampler), alloc);
+		Test_checkObjectType(t, "blas", &types->blas, (TypeId)EGraphicsTypeId_BLASExt, sizeof(BLAS), alloc);
+		Test_checkObjectType(t, "tlas", &types->tlas, (TypeId)EGraphicsTypeId_TLASExt, sizeof(TLAS), alloc);
 
 		Test_checkObjectType(
 			t, "descriptorLayout", &types->descriptorLayout,
-			(ETypeId)EGraphicsTypeId_DescriptorLayout, sizeof(DescriptorLayout), alloc
+			(TypeId)EGraphicsTypeId_DescriptorLayout, sizeof(DescriptorLayout), alloc
 		);
 
 		Test_checkObjectType(
 			t, "descriptorTable", &types->descriptorTable,
-			(ETypeId)EGraphicsTypeId_DescriptorTable, sizeof(DescriptorTable), alloc
+			(TypeId)EGraphicsTypeId_DescriptorTable, sizeof(DescriptorTable), alloc
 		);
 
 		Test_checkObjectType(
 			t, "descriptorHeap", &types->descriptorHeap,
-			(ETypeId)EGraphicsTypeId_DescriptorHeap, sizeof(DescriptorHeap), alloc
+			(TypeId)EGraphicsTypeId_DescriptorHeap, sizeof(DescriptorHeap), alloc
 		);
 
 		Test_checkObjectType(
 			t, "pipelineLayout", &types->pipelineLayout,
-			(ETypeId)EGraphicsTypeId_PipelineLayout, sizeof(PipelineLayout), alloc
+			(TypeId)EGraphicsTypeId_PipelineLayout, sizeof(PipelineLayout), alloc
 		);
 
 		Test_checkObjectType(
 			t, "commandList", &types->commandList,
-			(ETypeId)EGraphicsTypeId_CommandList, sizeof(CommandList), alloc
+			(TypeId)EGraphicsTypeId_CommandList, sizeof(CommandList), alloc
 		);
 	}
 
@@ -314,7 +314,7 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	)))
 		goto clean;
 
-	Test_assert(t, "deviceTypeId", deviceRef->refPtrType->typeId == (ETypeId) EGraphicsTypeId_GraphicsDevice);
+	Test_assert(t, "deviceTypeId", deviceRef->refPtrType->typeId == (TypeId) EGraphicsTypeId_GraphicsDevice);
 	Test_assert(t, "deviceAlloc", GraphicsDeviceRef_getAlloc(deviceRef) == alloc);
 	Test_assert(t, "deviceTypes", GraphicsDeviceRef_getTypes(deviceRef) == &inst->types);
 	Test_assert(t, "deviceWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
@@ -328,7 +328,7 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 		&testVertexBuffer, 256, &buffer, &t->err
 	));
 
-	Test_assert(t, "bufferTypeId", buffer && buffer->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer);
+	Test_assert(t, "bufferTypeId", buffer && buffer->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer);
 	Test_assert(t, "bufferSize", buffer && DeviceBufferRef_ptr(buffer)->resource.size == 256);
 
 	//markDirty requires a CPU-backed buffer; the vertex buffer above isn't
@@ -356,7 +356,7 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 
 	Test_assert(
 		t, "commandListTypeId",
-		commandList && commandList->refPtrType->typeId == (ETypeId) EGraphicsTypeId_CommandList
+		commandList && commandList->refPtrType->typeId == (TypeId) EGraphicsTypeId_CommandList
 	);
 
 	//10. Swapchain requires a physical window; NULL must be rejected

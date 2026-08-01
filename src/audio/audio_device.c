@@ -52,7 +52,7 @@ void AudioDevice_free(AudioDevice *dev, const Allocator *alloc) {
 
 RefPtrType AudioDevice_makeType(const Allocator *alloc) {
 	return (RefPtrType) {
-		.typeId = (ETypeId) EAudioTypeId_AudioDevice,
+		.typeId = (TypeId) EAudioTypeId_AudioDevice,
 		.length = (U32)(sizeof(AudioDevice) + AudioDevice_sizeExt),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc)AudioDevice_free
@@ -76,7 +76,7 @@ Bool AudioDeviceRef_create(
 		retError(clean, Error_nullPointer(!info ? 1 : 4, "AudioDeviceRef_create()::info and type are required"));
 
 	if(
-		type->typeId != (ETypeId)EAudioTypeId_AudioDevice ||
+		type->typeId != (TypeId)EAudioTypeId_AudioDevice ||
 		type->length != sizeof(AudioDevice) + AudioDevice_sizeExt ||
 		type->free != (ObjectFreeFunc)AudioDevice_free ||
 		type->alloc != alloc
@@ -86,7 +86,7 @@ Bool AudioDeviceRef_create(
 	gotoIfError3(clean, RefPtr_create(type, device, e_rr));
 	allocated = true;
 
-	if(!interfRef || interfRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioInterface || !RefPtr_inc(interfRef))
+	if(!interfRef || interfRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioInterface || !RefPtr_inc(interfRef))
 		retError(clean, Error_invalidParameter(0, 0, "AudioDeviceRef_create()::interfRef is invalid"));
 
 	AudioDevice *audioDev = AudioDeviceRef_ptr(*device);
@@ -150,7 +150,7 @@ Bool AudioDeviceRef_updateListenerTransform(
 
 	Bool s_uccess = true;
 
-	if (!devRef || devRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioDevice)
+	if (!devRef || devRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioDevice)
 		retError(clean, Error_nullPointer(0, "AudioDeviceRef_updateListenerTransform()::dev is required"));
 
 	AudioDevice *dev = AudioDeviceRef_ptr(devRef);
@@ -192,7 +192,7 @@ Bool AudioDeviceRef_update(AudioDeviceRef *devRef, const Allocator *alloc, Error
 	ELockAcquire acq = ELockAcquire_Invalid;
 	AudioDevice *dev = NULL;
 
-	if (!devRef || devRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioDevice)
+	if (!devRef || devRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioDevice)
 		retError(clean, Error_nullPointer(0, "AudioDeviceRef_update()::devRef is required"));
 
 	dev = AudioDeviceRef_ptr(devRef);
@@ -232,7 +232,7 @@ Bool AudioDeviceRef_wait(AudioDeviceRef *devRef, Bool waitForLoopingStream, cons
 	ELockAcquire acq = ELockAcquire_Invalid;
 	AudioDevice *dev = NULL;
 
-	if (!devRef || devRef->refPtrType->typeId != (ETypeId)EAudioTypeId_AudioDevice)
+	if (!devRef || devRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioDevice)
 		retError(clean, Error_nullPointer(0, "AudioDeviceRef_wait()::devRef is required"));
 
 	dev = AudioDeviceRef_ptr(devRef);

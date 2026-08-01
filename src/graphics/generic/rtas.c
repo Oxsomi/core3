@@ -29,7 +29,7 @@ Bool RTAS_validateDeviceBuffer(DeviceData *bufPtr, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(!bufPtr || !bufPtr->buffer || bufPtr->buffer->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
+	if(!bufPtr || !bufPtr->buffer || bufPtr->buffer->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer)
 		retError(clean, Error_nullPointer(0, "BLAS_validateDeviceBuffer()::bufPtr/bufPtr->buffer is required"));
 
 	DeviceBuffer *buf = DeviceBufferRef_ptr(bufPtr->buffer);

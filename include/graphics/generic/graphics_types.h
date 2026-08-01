@@ -27,7 +27,7 @@
 	extern "C" {
 #endif
 
-//ETypeId but for graphics objects.
+//TypeId but for graphics objects.
 
 typedef enum EGraphicsTypeId {
 

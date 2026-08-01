@@ -51,7 +51,7 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 
 	Bool s_uccess = true;
 
-	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createPipelineLayout()::dev is required"));
 
 	if(!info)
@@ -59,12 +59,12 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
-	if(info->bindings && info->bindings->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
+	if(info->bindings && info->bindings->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorLayout)
 		retError(clean, Error_nullPointer(
 			1, "GraphicsDeviceRef_createPipelineLayout()::info->bindings must be DescriptorLayout if present"
 		));
 
-	if(info->pushDescriptors && info->pushDescriptors->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
+	if(info->pushDescriptors && info->pushDescriptors->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorLayout)
 		retError(clean, Error_nullPointer(
 			1, "GraphicsDeviceRef_createPipelineLayout()::info->pushDescriptors must be DescriptorLayout if present"
 		));

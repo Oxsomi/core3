@@ -37,6 +37,7 @@ void Test_CAGetFullName(Test *t);
 
 void Test_CACounts(Test *t);
 void Test_CAGetInfo(Test *t);
+void Test_CAVersion(Test *t);
 
 void Test_CARename(Test *t);
 void Test_CAMove(Test *t);

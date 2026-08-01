@@ -497,11 +497,12 @@ Bool Compiler_create(const Allocator *alloc, Compiler *comp, Error *e_rr) {
 
 	try {
 
-		//TODO: Call DxcCreateInstance2 with custom IMalloc.
-		//Problem; we don't know the size of any allocation.
-		//Would require each allocation to lock and push in ListDebugAllocation, even in Release mode!
-
-		//IMalloc *malloc = ...;
+		//Note: DxcCreateInstance2 with a custom IMalloc was tried (size-prefixed blocks so Free can recover {ptr, len}).
+		//It instantly hard-crashes inside DxcReflector::FromSource (unordered_map in dxcreflection_from_ast).
+		//DXC routes global new/delete through the thread-local IMalloc, but some allocations cross allocator
+		// boundaries (allocated under the default CRT allocator, freed under the custom one or vice versa),
+		// so any pointer-rewriting IMalloc corrupts the heap.
+		//Until the DXC fork guarantees symmetric alloc/free through a single IMalloc this can't be tracked.
 
 		//Create utils
 
@@ -1243,7 +1244,7 @@ Bool Compiler_compile(
 			for (U64 i = 0; i < toCompile->uniforms.length; ++i) {
 
 				SHUniformRuntime uniform = toCompile->uniforms.ptr[i];
-				ETypeId type = ETypeId_arr[uniform.typeIdShort];
+				TypeId type = ETypeId_arr[uniform.typeIdShort];
 
 				gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, flags, alloc, &tempStr, e_rr));
 
@@ -2604,7 +2605,7 @@ clean1:
 Bool Compiler_parseValue(
 	SHValue *value,
 	U64 &dstOff,
-	ETypeId typeId,
+	TypeId typeId,
 	const C8 *&str,
 	Error *e_rr
 ) {
@@ -2613,7 +2614,7 @@ Bool Compiler_parseValue(
 	EDataTypeStride typeStride = ETypeId_getDataTypeStride(typeId);
 	U32 w = ETypeId_getWidth(typeId);
 	U32 h = ETypeId_getHeight(typeId);
-	ETypeId vecType = ETypeId_Undefined;
+	TypeId vecType = (TypeId) ETypeId_Undefined;
 	C8 next = '\0';
 
 	Bool s_uccess = true;
@@ -2840,7 +2841,7 @@ Bool Compiler_parseValue(
 
 		++str;
 
-		ETypeId singleType = ETypeId(makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, typeStride, type));
+		TypeId singleType = TypeId(makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, typeStride, type));
 
 		for (U64 i = 0; i < w; ++i) {
 
@@ -2875,7 +2876,7 @@ Bool Compiler_parseValue(
 	//((0, 1), (2, 3), (4, 5))
 	//^
 	
-	vecType = ETypeId(makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, typeStride, type));
+	vecType = TypeId(makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, typeStride, type));
 
 	if (next != '(')
 		retError(clean, Error_invalidState(0, "Compiler_parseValue() expected ("));
@@ -2931,7 +2932,7 @@ Bool Compiler_registerUniform(
 	U64 valLen = 0;
 	U64 uniformDatLen = entry.uniformData.length;
 
-	ETypeId typeId = ETypeId_Undefined;
+	TypeId typeId = (TypeId) ETypeId_Undefined;
 
 	Bool didInit = entry.isInitializedFlags & 2;
 	Bool contains = false;
@@ -3027,7 +3028,7 @@ Bool Compiler_registerUniform(
 			.dataOffset = (U16)uniformDatLen
 		};
 
-		ETypeId val = ETypeId_arr[uniform.typeIdShort];
+		TypeId val = ETypeId_arr[uniform.typeIdShort];
 
 		if(val != typeId)
 			retError(clean, Error_invalidState(0, "Compiler_registerUniform() ETypeId_toShortId misfunctioning"));

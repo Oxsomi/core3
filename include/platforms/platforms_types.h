@@ -27,7 +27,7 @@
 	extern "C" {
 #endif
 
-//ETypeId but for platform types.
+//TypeId but for platform types.
 
 typedef enum EPlatformsTypeId {
 	EPlatformsTypeId_FileHandle        = makeObjectId(0x1C32,  0, 0),

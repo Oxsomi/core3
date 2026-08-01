@@ -50,7 +50,7 @@ Bool DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 
 	ELockAcquire acq0 = ELockAcquire_Invalid;
 	ELockAcquire acq1 = ELockAcquire_Invalid;
 
-	if(!tex || tex->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DeviceTexture)
+	if(!tex || tex->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceTexture)
 		retError(clean, Error_nullPointer(0, "DeviceTextureRef_markDirty()::tex is required"));
 
 	texture = DeviceTextureRef_ptr(tex);

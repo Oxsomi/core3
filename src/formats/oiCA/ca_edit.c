@@ -335,6 +335,9 @@ Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const 
 		}
 	}
 
+	//A completed move shifts list indices, so bump the debug generation counter to mark prior CAHandles stale.
+	++caFile->version;
+
 clean:
 	RefPtr_dec(&tmpStream.stream);
 	RefPtr_dec(&tmpStreamStr.stream);
@@ -479,6 +482,9 @@ CAHandle CAFile_add(
 		result = CAHandle_makeFolder(insertAt);
 	}
 
+	//A completed add shifts list indices, so bump the debug generation counter to mark prior CAHandles stale.
+	++caFile->version;
+
 clean:
 	return s_uccess ? result : CAHandle_Invalid;
 }
@@ -563,6 +569,9 @@ Bool CAFile_remove(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, 
 			if (caFile->folders.ptr[i].fileOffset > id)
 				--caFile->folders.ptrNonConst[i].fileOffset;
 	}
+
+	//A completed remove shifts list indices, so bump the debug generation counter to mark prior CAHandles stale.
+	++caFile->version;
 
 clean:
 	return s_uccess;

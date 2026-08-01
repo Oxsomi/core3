@@ -179,7 +179,7 @@ typedef enum EStringifyFlavor {
 
 static Bool SHValue_stringifyOne(
 	const SHValue *value,
-	ETypeId typeId,
+	TypeId typeId,
 	U64 *counter,
 	U8 *localCounter,
 	EStringifyFlavor flavor,
@@ -301,7 +301,7 @@ static Bool SHValue_stringifyOne(
 			CharString_free(&tmp, alloc);
 		}
 
-		ETypeId single = makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, stride, type);
+		TypeId single = makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, stride, type);
 
 		gotoIfError3(clean, CharString_append(val, '(', alloc, e_rr));
 		U8 localCounteri = 0;
@@ -327,7 +327,7 @@ static Bool SHValue_stringifyOne(
 		CharString_free(&tmp, alloc);
 	}
 	
-	ETypeId vec = makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, stride, type);
+	TypeId vec = makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, stride, type);
 
 	gotoIfError3(clean, CharString_append(val, '(', alloc, e_rr));
 
@@ -345,7 +345,7 @@ clean:
 
 static inline Bool SHValue_stringifyWithFlavor(
 	const SHValue *value,
-	ETypeId typeId,
+	TypeId typeId,
 	EStringifyFlavor flavor,
 	EHLSLStringifyFlags flags,
 	const Allocator *alloc,
@@ -366,13 +366,13 @@ clean:
 	return s_uccess;
 }
 
-Bool SHValue_stringify(const SHValue *value, ETypeId typeId, const Allocator *alloc, CharString *val, Error *e_rr) {
+Bool SHValue_stringify(const SHValue *value, TypeId typeId, const Allocator *alloc, CharString *val, Error *e_rr) {
 	return SHValue_stringifyWithFlavor(value, typeId, EStringifyFlavor_OxC3, 0, alloc, val, e_rr);
 }
 
 Bool SHValue_stringifyHLSL(
 	const SHValue *value,
-	ETypeId typeId,
+	TypeId typeId,
 	EHLSLStringifyFlags flags,
 	const Allocator *alloc,
 	CharString *val,

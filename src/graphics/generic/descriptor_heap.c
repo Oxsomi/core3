@@ -46,7 +46,7 @@ Bool GraphicsDeviceRef_createDescriptorHeap(
 
 	Bool s_uccess = true;
 
-	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createDescriptorHeap()::dev is required"));
 
 	if(!info)

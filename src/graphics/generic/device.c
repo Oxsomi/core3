@@ -340,7 +340,7 @@ Bool GraphicsDeviceRef_create(
 			"GraphicsDeviceRef_create()::instanceRef, info and deviceRef are required"
 		));
 
-	if(instanceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsInstance)
+	if(instanceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsInstance)
 		retError(clean, Error_invalidParameter(
 			0, 0, "GraphicsDeviceRef_create()::instanceRef was an invalid type"
 		));
@@ -740,7 +740,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	Bool s_uccess = true;
 
-	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_checkShaderFeatures()::deviceRef is required"));
 
 	if(!bin || !entry)
@@ -832,7 +832,7 @@ clean:
 
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource) {
 
-	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		return false;
 
 	Bool supported = false;
@@ -886,7 +886,7 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 
 	Bool s_uccess = true;
 
-	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_handleNextFrame()::deviceRef is required"));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -947,7 +947,7 @@ Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 new
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
-	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_resizeStagingBuffer()::deviceRef is required"));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -1012,7 +1012,7 @@ Bool GraphicsDeviceRef_submitCommands(
 
 	//Validation
 
-	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_submitCommands()::deviceRef is required"));
 
 	if((!swapchains || !swapchains->length) && (!commandLists || !commandLists->length))
@@ -1049,7 +1049,7 @@ Bool GraphicsDeviceRef_submitCommands(
 
 		CommandListRef *cmdRef = commandLists->ptr[i];
 
-		if(!cmdRef || cmdRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_CommandList)
+		if(!cmdRef || cmdRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_CommandList)
 			retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_submitCommands()::commandLists[i] is required"));
 
 		CommandList *cmd = CommandListRef_ptr(cmdRef);
@@ -1087,7 +1087,7 @@ Bool GraphicsDeviceRef_submitCommands(
 					2, 2, "GraphicsDeviceRef_submitCommands()::swapchains[i] is duplicated"
 				));
 
-		if(!swapchainRef || swapchainRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_Swapchain)
+		if(!swapchainRef || swapchainRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_Swapchain)
 			retError(clean, Error_nullPointer(2, "GraphicsDeviceRef_submitCommands()::swapchains[i] is required"));
 
 		Swapchain *swapchaini = SwapchainRef_ptr(swapchainRef);
@@ -1250,7 +1250,7 @@ clean:
 
 U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal) {
 
-	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId)EGraphicsTypeId_GraphicsDevice)
 		return U64_MAX;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -1268,7 +1268,7 @@ Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 	GraphicsDevice *device = NULL;
 	ELockAcquire acq = ELockAcquire_Invalid;
 
-	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId)EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_wait()::deviceRef is required"));
 
 	device = GraphicsDeviceRef_ptr(deviceRef);

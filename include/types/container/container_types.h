@@ -27,7 +27,7 @@
 	extern "C" {
 #endif
 
-//ETypeId but for container objects.
+//TypeId but for container objects.
 
 typedef enum EContainerTypeId {
 	EContainerTypeId_Stream        = makeObjectId(0x1C31,  0, 0),

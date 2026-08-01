@@ -64,7 +64,7 @@ Bool DDS_write(
 	if(!streamOffset)
 		retError(clean, Error_nullPointer(1, "DDS_write()::streamOffset are required"));
 
-	if(streamRef && streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if(streamRef && streamRef->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::streamRef is of invalid type"));
 
 	OxStream *stream = RefPtr_data(streamRef, OxStream);
@@ -194,10 +194,15 @@ Bool DDS_write(
 	U8 alignY = 1;
 	ETextureFormat_getAlignment(formatOxC, NULL, &alignY);
 
-	const U64 stride = ETextureFormat_getSize(formatOxC, info->w, alignY, 1);
+	//For an uncompressed format DDS wants the row pitch; for a compressed format (EDDSFlag_LinearSize) it wants the
+	//full base-mip surface size, not a single block row. Compute both and pick per-format below.
 
-	if(stride >> 32)
-		retError(clean, Error_overflow(0, stride, U32_MAX, "DDS_write() pitch overflow"));
+	const U64 stride = ETextureFormat_getSize(formatOxC, info->w, alignY, 1);
+	const U64 linearSize = ETextureFormat_getSize(formatOxC, info->w, info->h, 1);
+	const U64 pitchOrLinear = isCompressed ? linearSize : stride;
+
+	if(pitchOrLinear >> 32)
+		retError(clean, Error_overflow(0, pitchOrLinear, U32_MAX, "DDS_write() pitch/linear size overflow"));
 
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 
@@ -238,6 +243,10 @@ Bool DDS_write(
 
 				break;
 
+			//BC4/BC5 have no DX9-era FourCC in the DDS spec (they're DX10 formats); these de-facto legacy codes
+			//(BC4U / BC4S / ATI2 / BC5S) keep us backwards-compatible without forcing a DXT10 header and are widely
+			//accepted, but a reader that only understands DXT10 would need the DXT10 path instead.
+
 			case ETextureFormat_BC4:        pixelFormat.magicNumber = EDDSFormatMagic_BC4;        break;
 			case ETextureFormat_BC4s:        pixelFormat.magicNumber = EDDSFormatMagic_BC4s;        break;
 			case ETextureFormat_BC5:        pixelFormat.magicNumber = EDDSFormatMagic_BC5;        break;
@@ -266,7 +275,7 @@ Bool DDS_write(
 			(isCompressed ? EDDSFlag_LinearSize : EDDSFlag_Pitch),
 		.width = info->w,
 		.height = info->h,
-		.pitchOrLinearSize = (U32) stride,
+		.pitchOrLinearSize = (U32) pitchOrLinear,
 		.depth = info->l,
 		.mips = info->mips,
 		.format = pixelFormat,

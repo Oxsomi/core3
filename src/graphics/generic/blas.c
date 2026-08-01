@@ -63,7 +63,7 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	//Validate
 
-	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBLAS()::dev is required"));
 
 	if(!blas)
@@ -77,7 +77,7 @@ Bool GraphicsDeviceRef_createBLAS(
 			3, 0, "GraphicsDeviceRef_createBLAS()::*blasRef not NULL, indicates memleak"
 		));
 
-	if(blas->base.parent && blas->base.parent->refPtrType->typeId != (ETypeId) EGraphicsTypeId_BLASExt)
+	if(blas->base.parent && blas->base.parent->refPtrType->typeId != (TypeId) EGraphicsTypeId_BLASExt)
 		retError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createBLAS()::parent is invalid"));
 
 	if(blas->base.parent && BLASRef_ptr(blas->base.parent)->base.device != dev)

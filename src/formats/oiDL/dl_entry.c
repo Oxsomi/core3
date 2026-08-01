@@ -99,7 +99,7 @@ Bool DLFile_addEntryStream(
 	if (!DLFile_isAllocated(dlFile))
 		retError(clean, Error_nullPointer(0, "DLFile_addEntryStream()::dlFile is required"));
 
-	if (!stream || !*stream || (*stream)->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (!stream || !*stream || (*stream)->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(1, "DLFile_addEntryStream()::stream is required"));
 
 	U64 siz = RefPtr_data(*stream, OxStream)->size;
@@ -353,7 +353,7 @@ Bool DLFile_setStream(DLFile *dlFile, U64 id, StreamRef **stream, U64 dataOff, U
 	
 	if (*stream) {
 
-		if ((*stream)->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+		if ((*stream)->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 			retError(clean, Error_nullPointer(1, "DLFile_setStream() type of stream is invalid"));
 
 		U64 siz = RefPtr_data(*stream, OxStream)->size;
