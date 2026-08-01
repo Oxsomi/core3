@@ -35,10 +35,13 @@ ECompareResult SubResourceData_sort(const SubResourceData *a, const SubResourceD
 	if (a->layerId != b->layerId)
 		return a->layerId < b->layerId ? ECompareResult_Lt : ECompareResult_Gt;
 
-	if (a->z != b->z)
-		return a->z < b->z ? ECompareResult_Lt : ECompareResult_Gt;
+	//Mip must sort before Z to match the DDS on-disk layout (layer major, then mip, then depth slice).
+	//This is also the order DDS_read produces and the write validation loop asserts.
 
-	return a->mipId < b->mipId ? ECompareResult_Lt : ECompareResult_Gt;
+	if (a->mipId != b->mipId)
+		return a->mipId < b->mipId ? ECompareResult_Lt : ECompareResult_Gt;
+
+	return a->z < b->z ? ECompareResult_Lt : ECompareResult_Gt;
 }
 
 Bool DDS_write(
@@ -81,7 +84,17 @@ Bool DDS_write(
 	if(info->mips > mips)
 		retError(clean, Error_invalidParameter(1, 0, "DDS_write()::info.mips out of bounds"));
 
-	const U64 totalSubResources = (U64)info->mips * info->l * info->layers;
+	//For a 3D texture the depth halves each mip (like width/height), so the subresource count is the sum of the
+	//per-mip depths, not mips * l. This must match the per-mip-reduced iteration below and in DDS_read.
+
+	U64 totalSubResources = 0;
+
+	for (U32 j = 0, currL = info->l; j < info->mips; ++j) {
+		totalSubResources += currL;
+		currL = U32_max(1, currL >> 1);
+	}
+
+	totalSubResources *= info->layers;
 
 	if(totalSubResources != buf->length)
 		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info's subresource count and buf.length mismatched"));

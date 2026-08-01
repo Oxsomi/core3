@@ -22,6 +22,7 @@
 
 #include "test_types_base_shared.h"
 #include "types/base/mathi.h"
+#include "types/base/constants.h"
 
 void Test_mathu(Test *test) {
 
@@ -131,6 +132,10 @@ void Test_mathi(Test *test) {
 	Test_assert(test, "I32_abs", I32_abs(-5) == 5);
 	Test_assert(test, "I32_abs", I32_abs(-100) == 100);
 
+	//abs(T_MIN) has no representable positive result, so it must wrap back to T_MIN (defined, not UB).
+
+	Test_assert(test, "I32_abs I32_MIN", I32_abs(I32_MIN) == I32_MIN);
+
 	//Safe div
 	
 	Test_assert(test, "I32_safeDiv", I32_safeDiv(9, 3) == 3);
@@ -155,6 +160,7 @@ void Test_mathi(Test *test) {
 	Test_assert(test, "I64_abs", I64_abs(1) == 1);
 	Test_assert(test, "I64_abs", I64_abs(-1) == 1);
 	Test_assert(test, "I64_abs", I64_abs(-1000000000) == 1000000000);
+	Test_assert(test, "I64_abs I64_MIN", I64_abs(I64_MIN) == I64_MIN);
 
 	Test_assert(test, "I64_safeDiv", I64_safeDiv(100, 7) == 14);
 	Test_assert(test, "I64_safeDiv", I64_safeDiv(100, 0) == 0);
@@ -174,6 +180,7 @@ void Test_mathi(Test *test) {
 	Test_assert(test, "I16_abs", I16_abs(0) == 0);
 	Test_assert(test, "I16_abs", I16_abs(32767) == 32767);
 	Test_assert(test, "I16_abs", I16_abs(-32767) == 32767);
+	Test_assert(test, "I16_abs I16_MIN", I16_abs(I16_MIN) == I16_MIN);
 	Test_assert(test, "I16_safeDiv", I16_safeDiv(100, 5) == 20);
 	Test_assert(test, "I16_safeDiv", I16_safeDiv(100, 0) == 0);
 
@@ -192,6 +199,7 @@ void Test_mathi(Test *test) {
 	Test_assert(test, "I8_abs", I8_abs(0) == 0);
 	Test_assert(test, "I8_abs", I8_abs(127) == 127);
 	Test_assert(test, "I8_abs", I8_abs(-127) == 127);
+	Test_assert(test, "I8_abs I8_MIN", I8_abs(I8_MIN) == I8_MIN);
 	Test_assert(test, "I8_safeDiv", I8_safeDiv(100, 5) == 20);
 	Test_assert(test, "I8_safeDiv", I8_safeDiv(100, 0) == 0);
 }

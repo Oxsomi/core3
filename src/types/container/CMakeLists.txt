@@ -131,4 +131,13 @@ if(EnableOxC3CLI)
 	target_link_libraries(OxC3_types_container_perf PUBLIC OxC3_types_container_perf_lib)
 	set_target_properties(OxC3_types_container_perf PROPERTIES FOLDER Oxsomi/perf)
 
+	# Under LTO (non-Debug builds use -flto=auto) Log_debug gets a constprop clone whose reference to the
+	# platform-provided Log_log only materializes after static-archive member selection, so the object that
+	# defines Log_log (ulog.c/wlog.c) is never extracted -> "undefined reference to Log_log". This is the only
+	# standalone exe linking just the container lib, so nothing else forces the symbol. Force it here.
+	# GNU/Clang ld only; MSVC (WIN32) and Apple ld don't exhibit this.
+	if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" AND NOT APPLE AND NOT WIN32)
+		target_link_options(OxC3_types_container_perf PRIVATE "-Wl,-u,Log_log")
+	endif()
+
 endif()

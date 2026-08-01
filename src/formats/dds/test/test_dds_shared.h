@@ -28,6 +28,7 @@ void Test_DDSRoundTripMipChain(Test *t);
 void Test_DDSRoundTripCubemap(Test *t);
 void Test_DDSRoundTripBC5Legacy(Test *t);
 void Test_DDSRoundTrip3D(Test *t);
+void Test_DDSRoundTrip3DMipChain(Test *t);
 void Test_DDSWriteInvalidMipCount(Test *t);
 void Test_DDSReadInvalidMagic(Test *t);
 void Test_DDSWriteSubresourceMismatch(Test *t);

@@ -46,7 +46,11 @@
 #endif
 
 #include <arm_neon.h>
-#include <arm_acle.h> //__crc32c* (GCC only declares these here; clang exposes them as builtins too)
+#if defined(_MSC_VER)
+	#include <intrin.h>        //MSVC ARM64 declares __crc32c* here and ships no arm_acle.h
+#else
+	#include <arm_acle.h>      //__crc32c* (GCC only declares these here; clang exposes them as builtins too)
+#endif
 
 #define SIMD_CRC32C_U64 __crc32cd
 #define SIMD_CRC32C_U32 __crc32cw
@@ -113,7 +117,9 @@ static inline I32x4 I32x4_msg2(I32x4 a, I32x4 b, I32x4 c) {
 #define SIMD_SHA256_SUFFIX(x) x##Simd
 #include "types/container/simd/buffer_simd_sha.inc.h"
 
-static I8 hasSHA256 = -1;
+#ifndef _CRYPTO_ALWAYS
+	static I8 hasSHA256 = -1;        //Only used when SHA support isn't statically guaranteed (see below)
+#endif
 
 void Buffer_sha256(const Buffer buf, U32 output[8]) {
 

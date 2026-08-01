@@ -237,7 +237,12 @@ static inline I32x4 I32x4_clmul64Fallback(I32x4 avec, I32x4 bvec, U8 imm) {
 			default:       halfa = vget_high_u64(va); halfb = vget_high_u64(vb); break;
 		}
 
-		return vreinterpretq_s32_p128(vmull_p64(vreinterpret_u64_p64(halfa), vreinterpret_u64_p64(halfb)));
+		//vmull_p64 takes scalar poly64_t operands, so extract the selected lane as poly64_t.
+		//(vreinterpret_u64_p64 was the wrong direction and produces uint64x1_t, which vmull_p64 rejects.)
+
+		const poly64_t pa = vget_lane_p64(vreinterpret_p64_u64(halfa), 0);
+		const poly64_t pb = vget_lane_p64(vreinterpret_p64_u64(halfb), 0);
+		return vreinterpretq_s32_p128(vmull_p64(pa, pb));
 	}
 #else
 	#include <wmmintrin.h>

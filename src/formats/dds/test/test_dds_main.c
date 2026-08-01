@@ -35,6 +35,7 @@ int main() {
 	Test_DDSRoundTripCubemap(&t);
 	Test_DDSRoundTripBC5Legacy(&t);
 	Test_DDSRoundTrip3D(&t);
+	Test_DDSRoundTrip3DMipChain(&t);
 	Test_DDSWriteInvalidMipCount(&t);
 	Test_DDSReadInvalidMagic(&t);
 	Test_DDSWriteSubresourceMismatch(&t);

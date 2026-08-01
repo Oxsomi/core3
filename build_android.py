@@ -94,8 +94,10 @@ def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, generatorValid
 def main():
 
 	# Check environment
-	
-	for var in ("VULKAN_SDK", "ANDROID_SDK", "ANDROID_NDK"):
+	# Vulkan headers now come from the conan vulkan_headers package (see doBuild), which masquerades as
+	# find_package(Vulkan), so a system VULKAN_SDK is no longer required. ANDROID_SDK/ANDROID_NDK are still used.
+
+	for var in ("ANDROID_SDK", "ANDROID_NDK"):
 		if var not in os.environ:
 			print(f"{var} not found", file=sys.stderr)
 			sys.exit(1)

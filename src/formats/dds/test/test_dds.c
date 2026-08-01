@@ -374,6 +374,76 @@ void Test_DDSRoundTrip3D(Test *t) {
 	}
 }
 
+//4x4x4 RGBA8 3D texture with a full mip chain (3 mips: 4x4x4, 2x2x2, 1x1x1 => 4+2+1 = 7 subresources).
+//This is the case that regressed when the write comparator sorted Layer->Z->Mip instead of Layer->Mip->Z:
+//multi-mip volumes are the only layout where Z and Mip both vary, so a wrong order made DDS_write reject
+//its own valid input ("contained duplicate data"). Guards against that by asserting the round-trip and the
+//exact Layer->Mip->Z subresource sequence.
+void Test_DDSRoundTrip3DMipChain(Test *t) {
+
+	Test_setModule(t, "DDS round-trip: RGBA8 3D full mip chain");
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+
+	{
+		StreamRef *dataSr    = NULL;
+		StreamRef *archiveSr = NULL;
+		ListSubResourceData subs   = { 0 };
+		ListSubResourceData result = { 0 };
+		DDSInfo readInfo = { 0 };
+
+		const ETextureFormatId fmtId = ETextureFormatId_RGBA8;
+		const ETextureFormat   fmt   = ETextureFormatId_unpack[fmtId];
+		const U32 W = 4, H = 4, L = 4, numMips = 3;
+
+		DDSInfo info = {
+			.w = W, .h = H, .l = L, .mips = numMips, .layers = 1,
+			.type = ETextureType_3D, .textureFormatId = fmtId
+		};
+
+		if (!buildSubResources(t, W, H, L, numMips, 1, fmtId, &dataSr, &subs, &type)) {
+			Test_assert(t, "build 3D mip chain", false);
+			goto done3DMips;
+		}
+
+		Test_assert(t, "3D mip chain round-trip", roundTrip(t, &subs, &info, &archiveSr, &readInfo, &result, &type));
+		Test_assert(t, "3D mip chain type",       readInfo.type == ETextureType_3D);
+		Test_assert(t, "3D mip chain l",          readInfo.l    == L);
+		Test_assert(t, "3D mip chain mips",       readInfo.mips == numMips);
+		Test_assert(t, "3D mip chain sub count",  result.length == 4 + 2 + 1);
+
+		//Rebuild the expected Layer->Mip->Z sequence and verify the read-back order matches element for element.
+
+		U32 mw = W, mh = H, ml = L, idx = 0;
+
+		for (U32 m = 0; m < numMips; ++m) {
+
+			const U64 sliceLen = ETextureFormat_getSize(fmt, mw, mh, 1);
+
+			for (U32 z = 0; z < ml; ++z) {
+
+				if (idx >= (U32)result.length)
+					break;
+
+				Test_assert(t, "3D mip chain mipId",     result.ptr[idx].mipId     == m);
+				Test_assert(t, "3D mip chain z",         result.ptr[idx].z         == z);
+				Test_assert(t, "3D mip chain layerId",   result.ptr[idx].layerId   == 0);
+				Test_assert(t, "3D mip chain streamLen", result.ptr[idx].streamLen == sliceLen);
+				++idx;
+			}
+
+			mw = U32_max(1, mw >> 1);
+			mh = U32_max(1, mh >> 1);
+			ml = U32_max(1, ml >> 1);
+		}
+
+	done3DMips:
+		RefPtr_dec(&dataSr);
+		RefPtr_dec(&archiveSr);
+		ListSubResourceData_freeUnderlying(&subs,   t->alloc);
+		ListSubResourceData_freeUnderlying(&result, t->alloc);
+	}
+}
+
 //Claim more mips than dimensions allow (5 mips for a 4x4 texture, max is 3).
 //DDS_write must reject this.
 void Test_DDSWriteInvalidMipCount(Test *t) {

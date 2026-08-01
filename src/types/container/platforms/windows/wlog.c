@@ -243,7 +243,10 @@ static inline Bool isConsole(HANDLE stdOut) {
 	
 	U32 fileType = GetFileType(stdOut) &~ FILE_TYPE_REMOTE;
 
-	if(fileType != FILE_TYPE_CHAR || FAILED(GetLastError()))
+	//A console is a FILE_TYPE_CHAR device.
+	//GetFileType returning FILE_TYPE_UNKNOWN on failure already fails this check, so no GetLastError is needed.
+
+	if(fileType != FILE_TYPE_CHAR)
 		return false;
 
 	DWORD mode;
