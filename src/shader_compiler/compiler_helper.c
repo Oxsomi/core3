@@ -67,21 +67,19 @@ const C8 *oiSHSuffixes[] = {
 	".dxil.oiSH"
 };
 
-Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) {
+Bool registerFile(const FileInfo *file, ShaderFileRecursion *shaderFiles, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString copy = CharString_createNull();
 	CharString tempStr = CharString_createNull();
 
-	const Allocator *alloc = shaderFiles->alloc;
-
-	if (file.type == EFileType_File) {
+	if (file->type == EFileType_File) {
 
 		CharString hlsl = CharString_createRefCStrConst(".hlsl");
 
-		if (CharString_endsWithStringInsensitive(&file.path, &hlsl, 0)) {
+		if (CharString_endsWithStringInsensitive(&file->path, &hlsl, 0)) {
 
-			gotoIfError3(clean, CharString_createCopy(file.path, alloc, &copy, e_rr));
+			gotoIfError3(clean, CharString_createCopy(file->path, alloc, &copy, e_rr));
 
 			//Move to allShaders
 
@@ -92,7 +90,7 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 
 			CharString subPath = CharString_createNull();
 
-			if(!CharString_cut(&file.path, CharString_length(shaderFiles->base), 0, &subPath))
+			if(!CharString_cut(&file->path, CharString_length(shaderFiles->base), 0, &subPath))
 				retError(clean, Error_invalidState(0, "registerFile() couldn't get subPath"));
 
 			//Copy subPath

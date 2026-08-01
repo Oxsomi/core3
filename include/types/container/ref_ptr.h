@@ -33,7 +33,7 @@
 
 typedef void (*ObjectFreeFunc)(void *ptr, const Allocator *allocator);
 
-typedef enum ETypeId ETypeId;
+typedef U32 ETypeId;
 
 typedef struct RefPtrType {
 	ETypeId typeId;

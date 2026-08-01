@@ -127,7 +127,7 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2026.07.30")
+			self.requires("dxc/2026.08.01")
 			self.requires("spirv_reflect/2026.07.29")
 
 		if self.settings.os == "Linux":
