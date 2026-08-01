@@ -28,18 +28,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-//Under LTO (non-Debug) Log_debug/Log_logFormat/Error_print can be cloned (*.constprop.N), and the clone's call to the
-// platform-provided Log_log only materializes after the linker has already chosen which static-archive members to
-// extract, so the platform log TU (ulog/wlog/alog) that defines Log_log is never pulled in.
-//That surfaces as "undefined reference to Log_log" (Linux/macOS arm64, linking OxC3_types_container_perf).
-//A plain data reference to Log_log can't be constant-propagated away like the calls are, so it keeps the symbol
-// undefined in this always-linked TU at member-selection time and forces the definer to be extracted; marked used so
-// LTO can't drop it as dead.
-#ifndef _MSC_VER
-	__attribute__((used))
-#endif
-void (*const Log_logKeepAlive)(const Allocator*, ELogLevel, ELogOptions, const CharString*) = Log_log;
-
 void Log_printCapturedStackTrace(const Allocator *alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
 	Log_printCapturedStackTraceCustom(alloc, (const void**) stackTrace, STACKTRACE_SIZE, lvl, options);
 }
