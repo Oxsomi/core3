@@ -72,19 +72,6 @@ elseif(ANDROID)
 	target_link_libraries(OxC3_types_container PUBLIC android log)
 endif()
 
-# Under LTO (non-Debug uses -flto=auto) Log_debug gets constprop-cloned and its reference to the platform-provided
-# Log_log only materializes after static-archive member selection, so the platform log TU (ulog/wlog/alog) is never
-# extracted -> "undefined reference to Log_log". This bit the perf exe and the test exes on Linux and macOS-arm64.
-# Force the symbol for every executable that links this library (INTERFACE propagation) so its definer is pulled in.
-# GNU/Clang/Apple ld only (MSVC LTCG doesn't exhibit this); Apple mangles the C symbol with a leading underscore.
-if(NOT MSVC)
-	if(APPLE)
-		target_link_options(OxC3_types_container INTERFACE "-Wl,-u,_Log_log")
-	else()
-		target_link_options(OxC3_types_container INTERFACE "-Wl,-u,Log_log")
-	endif()
-endif()
-
 if(EnableTests)
 
 	file(GLOB typesContainerTestfH CONFIGURE_DEPENDS "../../../include/types/container/test/*.h")
