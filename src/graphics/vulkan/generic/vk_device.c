@@ -90,6 +90,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	(void)instanceExt;
 
 	EGraphicsFeatures feat = physicalDevice->capabilities.features;
+	EGraphicsFeatures2 feat2 = physicalDevice->capabilities.features2;
 	EVkGraphicsFeatures featEx = physicalDevice->capabilities.featuresExt;
 	EGraphicsDataTypes types = physicalDevice->capabilities.dataTypes;
 
@@ -233,7 +234,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
 			.accelerationStructure = true,
-			.descriptorBindingAccelerationStructureUpdateAfterBind = true
+			.descriptorBindingAccelerationStructureUpdateAfterBind = true,
+			.accelerationStructureIndirectBuild = !!(feat2 & EGraphicsFeatures2_RayIndirectASBuild)
 		}
 	)
 
@@ -333,6 +335,33 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
+		VkPhysicalDeviceDescriptorHeapFeaturesEXT,
+		feat2 & EGraphicsFeatures2_DescriptorHeap,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
+			.descriptorHeap = true
+		}
+	)
+
+	bindNextVkStruct(
+		VkPhysicalDeviceClusterAccelerationStructureFeaturesNV,
+		feat2 & EGraphicsFeatures2_RayClusterAS,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CLUSTER_ACCELERATION_STRUCTURE_FEATURES_NV,
+			.clusterAccelerationStructure = true
+		}
+	)
+
+	bindNextVkStruct(
+		VkPhysicalDevicePartitionedAccelerationStructureFeaturesNV,
+		feat2 & EGraphicsFeatures2_RayPartitionedTLAS,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PARTITIONED_ACCELERATION_STRUCTURE_FEATURES_NV,
+			.partitionedAccelerationStructure = true
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceShaderAtomicInt64Features,
 		types & EGraphicsDataTypes_AtomicI64,
 		{
@@ -422,6 +451,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_CooperativeMatrix:          on = feat & EGraphicsFeatures_CoopMat;                  break;
 			case EOptExtensions_ShaderFloat8:               on = feat & EGraphicsFeatures_CoopFP8;                  break;
 			case EOptExtensions_RayTriPosition:             on = feat & EGraphicsFeatures_RayTriPosition;           break;
+			case EOptExtensions_DescriptorHeap:             on = feat2 & EGraphicsFeatures2_DescriptorHeap;         break;
+			case EOptExtensions_RayClusterAS:               on = feat2 & EGraphicsFeatures2_RayClusterAS;           break;
+			case EOptExtensions_RayPartitionedTLAS:         on = feat2 & EGraphicsFeatures2_RayPartitionedTLAS;     break;
 
 			default:
 				continue;

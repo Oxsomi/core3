@@ -236,7 +236,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
 - `[[oxc::extension("16BitTypes")]]` which extensions to enable. For example 16BitTypes will enable 16-bit types for that entrypoint.
   - Do keep in mind that extensions might introduce another recompile for entrypoints that don't have the same extensions. For example with raytracing shaders. In their case, it will introduce two compiles if one entrypoint doesn't support 16-bit ints and another does.
   - `__OXC_EXT_<X>` can be used to see which extension is enabled. For example `__OXC_EXT_ATOMICI64`.
-  - Extension must be one of F64, I64, 16BitTypes, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayTriPosition, RayMotionBlur, RayReorder, Multiview, ComputeDeriv, PAQ, MeshTaskTexDeriv, WriteMSTexture, Bindless, UnboundArraySize, SubgroupOperations, CoopVec, CoopMat, CoopFP8, CoopVecTraining.
+  - Extension must be one of F64, I64, 16BitTypes, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayTriPosition, RayMotionBlur, RayReorder, Multiview, ComputeDeriv, PAQ, MeshTaskTexDeriv, WriteMSTexture, Bindless, UnboundArraySize, SubgroupOperations, CoopVec, CoopMat, CoopFP8, CoopVecTraining, DescriptorHeap.
     - **Note**: RayReorder is currently only available for raygeneration shaders.
     - **Note**: Multiple extension annotations will indicate there will be a separate compile with each. For example: `[[extension()]]` and `[[extension("16BitTypes")]]` in front of the same function will indicate the function will be compiled with 16-bit types on and off. 16-bit off would for example run on <=Pascal (GTX 10xx). This will allow the same entrypoint to be ran with different functionality. This could aid for example in unpacking vertex/texture data with native support (rather than manual f16tof32).
       - Another good example could be RayReorder, which could give substantial boosts in path tracing workloads. Lovelace would need `[[extension("RayReorder")]]` while the rest such as non NV and Pascal, Turing, Ampere would need `[[extension()]]`. This will force a recompile.
@@ -265,6 +265,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
     - Workgraphs, and WaveSize with 2 or 3 arguments (min, max, recommended), require SM6.8.
     - WriteMSTexture (writable multisampled textures) requires SM6.7.
     - RayReorder (Shader Execution Reordering / SER) and RayMicromapOpacity (Opacity Micromaps / OMM) require SM6.9.
+    - DescriptorHeap requires SM6.6 (dynamic resources).
     - CoopVec, CoopMat, CoopFP8, CoopVecTraining and RayTriPosition require SM6.10.
     - Stage type always has to be compatible with specified models.
     - If extensions are defined, one of the pair of extensions/models has to be compatible with the minimum requirement. If this is the case, that one is used as fallback.
@@ -287,6 +288,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
 - `--debug` is used to toggle debug info in the binary.
 - `--ignore-empty-files` is used to hide the error when no entrypoints are found to compile. This is off by default because include files should be named as .hlsli, but to support both use cases, this can be used to silence the error.
 - `--split` is used to split up every oiSH file into its own file. This is very useful when building for 1 dedicated target. By default this is turned off, to make sure every shader can be ran with every backend.
+- `--keep-registers` keeps declared but unused resources bound and reflected (DXIL `-fhlsl-unused-resource-bindings=keep-all`, SPIRV additionally `-fspv-preserve-bindings`). Useful for stable register layouts across shader variants; off by default so unused resources are stripped (their slots are still reserved via reserve-all).
 - `--warn-unused-registers` registers that were unused spawn a compile warning. Off by default because techniques like bindless might expose lots of registers that are unused.
 - `--warn-unused-constants` variables that are unused in a constant buffer cause a compile warning. Off by default because constant buffers might be re-used and might require a specific buffer layout to be compatible. Only goes 1 level deep (doesn't go inside of structs, unless it's a structured buffer).
 - `--warn-buffer-padding`  warns about padding being introduced between variables that the user might not be expecting. Useful when debugging mismatching buffer layouts between C/C++ and HLSL or other languages.

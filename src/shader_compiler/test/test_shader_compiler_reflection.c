@@ -83,7 +83,7 @@ void Test_shaderCompilerReflection(Test *t) {
 		CharString label = CharString_createNull();
 
 		Bool ok =
-			compileFileShader(alloc, "reflection/resources.hlsl", mode, true, &out, &err) &&
+			compileFileShader(alloc, "reflection/resources.hlsl", mode, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) &&
 			readOiSH(alloc, out.ptr[0], &sh, &err) && sh.binaries.length >= 1;
 

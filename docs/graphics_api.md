@@ -135,7 +135,11 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 
 - experimentalFeatures: the subset of `features` that is experimental/preview on this device+build (not final; may change or be removed across SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled best-effort via the preview Agility SDK + D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions so this stays empty. Check it if you want to opt into preview features knowingly.
   - RayValidation: extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot.
-- features2: RayReorderActual. SER (RayReorder) means the shader-execution-reordering API is available (always valid to call, but may be a no-op); RayReorderActual means the device actually performs the reordering, so it's worth restructuring shaders around it.
+- features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild.
+  - RayReorderActual: SER (RayReorder) means the shader-execution-reordering API is available (always valid to call, but may be a no-op); RayReorderActual means the device actually performs the reordering, so it's worth restructuring shaders around it.
+  - DescriptorHeap: full bindless; shaders index the descriptor heap directly without a fixed descriptor layout. D3D12: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) + resource binding tier 3; Vulkan: VK_EXT_descriptor_heap. Always implies Bindless on both APIs.
+  - RayClusterAS + RayPartitionedTLAS: mega geometry (RTXMG), split the way Vulkan splits it: cluster acceleration structures (CLAS/cluster BLAS) and partitioned TLAS. Vulkan: VK_NV_cluster_acceleration_structure / VK_NV_partitioned_acceleration_structure; D3D12: NVAPI raytracing caps (cluster operations / partitioned TLAS).
+  - RayIndirectASBuild: GPU-driven acceleration structure builds. Vulkan: accelerationStructureIndirectBuild (vkCmdBuildAccelerationStructuresIndirectKHR for classic AS); D3D12: implied by either mega geometry bit, since those builds are indirect by design.
 - dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
   - MSAA4 and MSAA1 (off) are supported by default.
 - featuresExt: API dependent features that aren't expected to be standardized in the same way.

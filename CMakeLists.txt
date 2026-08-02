@@ -65,7 +65,9 @@ endif()
 
 if(MSVC)
 
-	set(BUILD_FLAGS "/MP" "/GR" "/D_CRT_SECURE_NO_WARNINGS" "/Gy" "/W4" "/WX" "/fp:strict")
+	# /wd4201: anonymous struct/union members are standard in C11 but an extension in C++; OxC3 uses them
+	# throughout (e.g. sh_entries.h), and gcc/clang get the same via -fms-extensions below.
+	set(BUILD_FLAGS "/MP" "/GR" "/D_CRT_SECURE_NO_WARNINGS" "/Gy" "/W4" "/WX" "/wd4201" "/fp:strict")
 
 	if(EnableSIMD)
 		if(NOT ARM)

@@ -379,7 +379,12 @@ Bool GraphicsDeviceRef_create(
 			EGraphicsFeatures_RayReorder         |
 			EGraphicsFeatures_RayValidation
 		);
-		device->info.capabilities.features2 &=~ EGraphicsFeatures2_RayReorderActual;
+		device->info.capabilities.features2 &=~ (
+			EGraphicsFeatures2_RayReorderActual   |
+			EGraphicsFeatures2_RayClusterAS       |
+			EGraphicsFeatures2_RayPartitionedTLAS |
+			EGraphicsFeatures2_RayIndirectASBuild
+		);
 	}
 
 	Bool isDebugInstance = instance->flags & EGraphicsInstanceFlags_IsDebug;
@@ -753,6 +758,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	ESHExtension extensions = (bin->identifier.extensions &~ bin->dormantExtensions) & ESHExtension_All;
 
 	EGraphicsFeatures features = EGraphicsFeatures_None;
+	EGraphicsFeatures2 features2 = EGraphicsFeatures2_None;
 	EDxGraphicsFeatures featuresDx = EDxGraphicsFeatures_None;
 	EGraphicsDataTypes dataTypes = EGraphicsDataTypes_None;
 
@@ -773,6 +779,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	if(extensions & ESHExtension_WriteMSTexture)            features |= EGraphicsFeatures_WriteMSTexture;
 
 	if(extensions & ESHExtension_Bindless)                  features |= EGraphicsFeatures_Bindless;
+	if(extensions & ESHExtension_DescriptorHeap)            features2 |= EGraphicsFeatures2_DescriptorHeap;
 
 	if(extensions & ESHExtension_F64)                       dataTypes |= EGraphicsDataTypes_F64;
 	if(extensions & ESHExtension_I64)                       dataTypes |= EGraphicsDataTypes_I64;
@@ -800,6 +807,9 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	if((device->info.capabilities.features & features) != features)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features is missing"));
+
+	if((device->info.capabilities.features2 & features2) != features2)
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features2 is missing"));
 
 	if((device->info.capabilities.dataTypes & dataTypes) != dataTypes)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the dataTypes is missing"));

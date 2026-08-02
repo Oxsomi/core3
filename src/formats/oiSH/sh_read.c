@@ -93,6 +93,9 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	if (header.version != ESHVersion_V1_2)
 		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() header.version is invalid"));
 
+	if(!header.extensionCount || header.extensionCount > 32)
+		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() header.extensionCount is invalid"));
+
 	if (!header.stageCount)
 		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() header.stageCount is invalid"));
 
@@ -258,6 +261,14 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		if (binary.extensions >> ESHExtension_Count)
 			retError(clean, Error_invalidState(1, "SHFile_read() binary had invalid extensions"));
 
+		//Native extensions added after this file was written can't have been reflected by its compiler,
+		// so mark them dormant automatically (matches what a fresh compile of the same shader would produce).
+
+		ESHExtension autoDormant = (ESHExtension) (
+			(ESHExtension_DxilNative | ESHExtension_SpirvNative) &
+			(header.extensionCount >= 32 ? 0 : ~(((U32)1 << header.extensionCount) - 1))
+		);
+
 		binaryInfo = (SHBinaryInfo){
 
 			.identifier = (SHBinaryIdentifier) {
@@ -266,7 +277,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 				.stageType = binary.entrypointType
 			},
 
-			.dormantExtensions = binary.dormantExt,
+			.dormantExtensions = (ESHExtension) (binary.dormantExt | autoDormant),
 			.vendorMask = binary.vendorMask,
 			.hasShaderAnnotation = binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation
 		};

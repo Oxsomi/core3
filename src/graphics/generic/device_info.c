@@ -122,6 +122,15 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_RayTriPosition)
 			Log_debugLnx("\t\tRay triangle vertex position fetch");
 
+		if(cap.features2 & EGraphicsFeatures2_RayClusterAS)
+			Log_debugLnx("\t\tRaytracing cluster acceleration structures (mega geometry)");
+
+		if(cap.features2 & EGraphicsFeatures2_RayPartitionedTLAS)
+			Log_debugLnx("\t\tRaytracing partitioned TLAS (mega geometry)");
+
+		if(cap.features2 & EGraphicsFeatures2_RayIndirectASBuild)
+			Log_debugLnx("\t\tRaytracing indirect acceleration structure builds");
+
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
 
@@ -148,6 +157,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(feat & EGraphicsFeatures_Bindless)
 			Log_debugLnx("\t\tBindless");
+
+		if(cap.features2 & EGraphicsFeatures2_DescriptorHeap)
+			Log_debugLnx("\t\tDescriptor heap (full bindless)");
 
 		if(feat & EGraphicsFeatures_SubgroupOperations)
 			Log_debugLnx("\t\tSubgroup operations");

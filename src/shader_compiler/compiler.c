@@ -875,6 +875,7 @@ Bool Compiler_processSPIRV(
 	Buffer *result,                      //Required; input & output SPIRV (will be optimized)
 	ListSHRegisterRuntime *registers,    //Required; Output registers
 	Bool isDebug,
+	Bool keepRegisters,                  //Keep declared but unused resources bound and reflected
 	const SHBinaryIdentifier *toCompile,
 	SpinLock *lock,                      //If not NULL will be used before writing into entries
 	const ListSHEntryRuntime *entries,   //Array contains the current buffer's reflection for the entry & compatibility checks
@@ -905,6 +906,7 @@ Bool Compiler_process(
 	Buffer *result,
 	ListSHRegisterRuntime *registers,
 	Bool isDebug,
+	Bool keepRegisters,
 	const SHBinaryIdentifier *toCompile,
 	SpinLock *lock,
 	const ListSHEntryRuntime *entries,
@@ -914,7 +916,7 @@ Bool Compiler_process(
 	const Allocator *alloc,
 	Error *e_rr
 ) {
-	
+
 	Bool s_uccess = true;
 
 	switch (type) {
@@ -922,7 +924,7 @@ Bool Compiler_process(
 		case ESHBinaryType_SPIRV:
 
 			gotoIfError3(clean, Compiler_processSPIRV(
-				result, registers, isDebug, toCompile, lock, entries, isLib, demotions, errors, alloc, e_rr
+				result, registers, isDebug, keepRegisters, toCompile, lock, entries, isLib, demotions, errors, alloc, e_rr
 			));
 
 			break;

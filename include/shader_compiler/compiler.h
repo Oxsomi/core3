@@ -84,7 +84,8 @@ typedef struct CompilerSettings {
 	Bool isLib;
 	Bool containsGfxOrComp;
 	Bool isRt;
-	U8 padding[3];
+	Bool keepUnusedRegisters;   //Keep declared but unused resources bound and reflected (stable layouts across variants)
+	U8 padding[2];
 
 } CompilerSettings;
 
@@ -238,6 +239,7 @@ Bool Compiler_process(
 	Buffer *result,                     //Required; input & output binary
 	ListSHRegisterRuntime *registers,   //Required; Output registers
 	Bool isDebug,
+	Bool keepRegisters,                 //Keep declared but unused resources bound and reflected
 	const SHBinaryIdentifier *toCompile,
 	SpinLock *lock,                     //If not NULL will be used before writing into entries
 	const ListSHEntryRuntime *entries,  //Array contains the current buffer's reflection for the entry and compatibility checks
@@ -355,6 +357,7 @@ Bool Compiler_compileShaders(
 	const ListU8 *allCompileOutputs,
 	U64 threadCount,
 	Bool isDebug,
+	Bool keepRegisters,               //Keep declared but unused resources bound and reflected
 	ECompilerWarning extraWarnings,
 	Bool ignoreEmptyFiles,
 	ECompileType type,

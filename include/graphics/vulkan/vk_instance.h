@@ -60,7 +60,10 @@ typedef enum EOptExtensions {
 	EOptExtensions_CooperativeVector,
 	EOptExtensions_CooperativeMatrix,
 	EOptExtensions_ShaderFloat8,
-	EOptExtensions_RayTriPosition
+	EOptExtensions_RayTriPosition,
+	EOptExtensions_DescriptorHeap,
+	EOptExtensions_RayClusterAS,
+	EOptExtensions_RayPartitionedTLAS
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];

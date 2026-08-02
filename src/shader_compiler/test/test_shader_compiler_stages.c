@@ -91,7 +91,7 @@ void Test_shaderCompilerStages(Test *t) {
 			SHFile shFile = (SHFile) { 0 };
 			CharString label = CharString_createNull();
 
-			Bool compiled = compileFileShader(alloc, file, targets[tg].mode, true, &out, &err);
+			Bool compiled = compileFileShader(alloc, file, targets[tg].mode, true, false, &out, &err);
 
 			Bool hasEntry =
 				compiled && out.length == 1 && Buffer_length(out.ptr[0]) &&

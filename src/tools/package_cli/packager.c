@@ -218,6 +218,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 				&allFiles, &allShaderText, &allOutputs, &allCompileOutputs,
 				settings->threadCount,
 				settings->isDebug,
+				false,                            //keepRegisters; engine shaders keep the default (strip-friendly) mode
 				settings->extraWarnings,
 				settings->ignoreEmptyFiles,
 				ECompileType_Compile,

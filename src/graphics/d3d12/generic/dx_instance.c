@@ -785,8 +785,15 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_6;
 		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
+
 			caps.featuresExt |= EDxGraphicsFeatures_WaveSize | EDxGraphicsFeatures_PAQ | EDxGraphicsFeatures_SM6_6;
 			caps.features |= EGraphicsFeatures_ComputeDeriv;
+
+			//Full bindless: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap).
+			//Requires binding tier 3 (EGraphicsFeatures_Bindless, set from OPTIONS above) on top of the shader model.
+
+			if(caps.features & EGraphicsFeatures_Bindless)
+				caps.features2 |= EGraphicsFeatures2_DescriptorHeap;
 		}
 
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_7;
@@ -1104,6 +1111,46 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					info->capabilities.features |= EGraphicsFeatures_RayValidation;
 
 				//SER and opacity micromaps are detected vendor-neutrally via D3D12_RAYTRACING_TIER_1_2 (see above).
+
+				//Mega geometry (RTXMG) has no vendor-neutral D3D12 query, so it goes through NVAPI raytracing caps.
+				//Two separate bits to match the Vulkan split (cluster acceleration structures vs partitioned TLAS).
+
+				if(info->capabilities.features & EGraphicsFeatures_Raytracing) {
+
+					NVAPI_D3D12_RAYTRACING_CLUSTER_OPERATIONS_CAPS clusterCaps =
+						NVAPI_D3D12_RAYTRACING_CLUSTER_OPERATIONS_CAP_NONE;
+
+					if(
+						NvAPI_D3D12_GetRaytracingCaps(
+							(ID3D12Device*)device,
+							NVAPI_D3D12_RAYTRACING_CAPS_TYPE_CLUSTER_OPERATIONS,
+							&clusterCaps, sizeof(clusterCaps)
+						) == NVAPI_OK &&
+						(clusterCaps & NVAPI_D3D12_RAYTRACING_CLUSTER_OPERATIONS_CAP_STANDARD)
+					)
+						info->capabilities.features2 |= EGraphicsFeatures2_RayClusterAS;
+
+					NVAPI_D3D12_RAYTRACING_PARTITIONED_TLAS_CAPS ptlasCaps =
+						NVAPI_D3D12_RAYTRACING_PARTITIONED_TLAS_CAP_NONE;
+
+					if(
+						NvAPI_D3D12_GetRaytracingCaps(
+							(ID3D12Device*)device,
+							NVAPI_D3D12_RAYTRACING_CAPS_TYPE_PARTITIONED_TLAS,
+							&ptlasCaps, sizeof(ptlasCaps)
+						) == NVAPI_OK &&
+						(ptlasCaps & NVAPI_D3D12_RAYTRACING_PARTITIONED_TLAS_CAP_STANDARD)
+					)
+						info->capabilities.features2 |= EGraphicsFeatures2_RayPartitionedTLAS;
+
+					//Indirect AS builds are inherent to the mega geometry APIs, so either implies the bit
+
+					if(
+						info->capabilities.features2 &
+						(EGraphicsFeatures2_RayClusterAS | EGraphicsFeatures2_RayPartitionedTLAS)
+					)
+						info->capabilities.features2 |= EGraphicsFeatures2_RayIndirectASBuild;
+				}
 
 			#endif
 		}

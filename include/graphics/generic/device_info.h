@@ -201,7 +201,29 @@ typedef enum EGraphicsFeatures2 {
 	//This bit means the device actually PERFORMS the reordering, so it's worth restructuring shaders around it.
 	//D3D12: OPTIONS22.ShaderExecutionReorderingActuallyReorders; Vulkan: rayTracingInvocationReorderReorderingHint.
 
-	EGraphicsFeatures2_RayReorderActual         = 1 << 0
+	EGraphicsFeatures2_RayReorderActual         = 1 << 0,
+
+	//Full bindless: shaders index the descriptor heap directly, without a fixed descriptor layout.
+	//D3D12: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) + resource binding tier 3.
+	//Vulkan: VK_EXT_descriptor_heap (also requires EGraphicsFeatures_Bindless for parity with D3D12).
+
+	EGraphicsFeatures2_DescriptorHeap           = 1 << 1,
+
+	//Mega geometry (RTXMG); Vulkan splits it into two extensions, so OxC3 exposes two bits.
+	//RayClusterAS: cluster acceleration structures (CLAS/cluster BLAS).
+	// D3D12: NVAPI cluster operations caps; Vulkan: VK_NV_cluster_acceleration_structure.
+	//RayPartitionedTLAS: partitioned top level acceleration structures (PTLAS).
+	// D3D12: NVAPI partitioned TLAS caps; Vulkan: VK_NV_partitioned_acceleration_structure.
+
+	EGraphicsFeatures2_RayClusterAS             = 1 << 2,
+	EGraphicsFeatures2_RayPartitionedTLAS       = 1 << 3,
+
+	//GPU-driven acceleration structure builds.
+	//Vulkan: vkCmdBuildAccelerationStructuresIndirectKHR (classic AS builds).
+	//D3D12: set when mega geometry is, since those builds are indirect by design
+	// (BUILD_BLAS_FROM_CLAS cluster op / NvAPI_D3D12_BuildRaytracingPartitionedTlasIndirect).
+
+	EGraphicsFeatures2_RayIndirectASBuild       = 1 << 4
 
 } EGraphicsFeatures2;
 

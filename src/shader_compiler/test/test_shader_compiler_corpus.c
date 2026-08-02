@@ -347,6 +347,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 		&allFiles, &allShaderText, &allOutputs, &allCompileModes,
 		1,                                  //threadCount (single-threaded, deterministic)
 		false,                              //isDebug
+		false,                              //keepRegisters
 		(ECompilerWarning) 0,               //no extra warnings
 		true,                               //ignoreEmptyFiles
 		ECompileType_Compile,
@@ -435,7 +436,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 				alloc, &dxFolder, NULL, &dxFiles, &dxText, &dxOutputs, &dxModes
 			) &&
 			Compiler_compileShaders(
-				&dxFiles, &dxText, &dxOutputs, &dxModes, 1, false, (ECompilerWarning) 0, true,
+				&dxFiles, &dxText, &dxOutputs, &dxModes, 1, false, false, (ECompilerWarning) 0, true,
 				ECompileType_Compile, &includeDirs, true, alloc, &dxBuffers, &dxErr
 			);
 

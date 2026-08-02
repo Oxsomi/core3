@@ -184,7 +184,9 @@ typedef enum EOperationFlags {
 
 	EOperationFlags_AESStdin            = 1 << 26,        //--aes-stdin: read the AES-256 key (hex) from one line of stdin
 
-	EOperationFlags_Count               = 27
+	EOperationFlags_KeepRegisters       = 1 << 27,        //--keep-registers: unused resources stay bound and reflected
+
+	EOperationFlags_Count               = 28
 
 } EOperationFlags;
 

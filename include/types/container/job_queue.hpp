@@ -102,6 +102,7 @@ namespace oxc {
 			//Byte-wise (not C++ assignment) since the struct contains std::atomic members when compiled as C++.
 
 			(void) c::Buffer_unsetAllBits(c::Buffer_createRef(&queue, sizeof(queue)), nullptr);
+			(void) pad;        //Padding only; silences clang's -Wunused-private-field
 		}
 		
 		~JobQueue() noexcept { release(); }

@@ -87,6 +87,12 @@ typedef enum ESHExtension {
 	//(a real capability) but kept out of the Native sets so adding it doesn't churn every oiSH's dormant mask.
 	ESHExtension_CoopVecTraining             = 1 << 24,
 
+	//Full bindless: direct descriptor heap indexing from shaders (requires the DescriptorHeap device feature).
+	//DXIL: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap), detected via the
+	// RESOURCE/SAMPLER_DESCRIPTOR_HEAP_INDEXING requires flags.
+	//SPIRV: SPV_EXT_descriptor_heap (DescriptorHeapEXT capability).
+	ESHExtension_DescriptorHeap              = 1 << 25,
+
 	ESHExtension_DxilNative =                                  //Extensions that can be found from DXIL natively
 		ESHExtension_RayQuery |
 		ESHExtension_16BitTypes |
@@ -96,7 +102,8 @@ typedef enum ESHExtension {
 		ESHExtension_AtomicI64 |
 		ESHExtension_MeshTaskTexDeriv |
 		ESHExtension_WriteMSTexture |
-		ESHExtension_SubgroupOperations,
+		ESHExtension_SubgroupOperations |
+		ESHExtension_DescriptorHeap,
 
 	ESHExtension_SpirvNative =                                 //Extensions that map directly to SPIRV capabilities
 		ESHExtension_RayMicromapOpacity |
@@ -117,7 +124,8 @@ typedef enum ESHExtension {
 		ESHExtension_ComputeDeriv |
 		ESHExtension_WriteMSTexture |
 		ESHExtension_CoopVec |
-		ESHExtension_CoopMat,
+		ESHExtension_CoopMat |
+		ESHExtension_DescriptorHeap,
 
 	//Which backend DXC can *compile* an extension to, as opposed to the DxilNative / SpirvNative sets above which
 	// say which backend it can be *detected* (reflected) from.
@@ -140,7 +148,7 @@ typedef enum ESHExtension {
 	ESHExtension_NoSpirvCompile =                             //DXIL-only to compile: no SPIR-V intrinsic or inline op
 		ESHExtension_MeshTaskTexDeriv,
 
-	ESHExtension_Count                       = 25,
+	ESHExtension_Count                       = 26,
 
 	ESHExtension_All                         = (1 << ESHExtension_Count) - 1
 

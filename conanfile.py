@@ -117,7 +117,7 @@ class oxc3(ConanFile):
 
 		# NVAPI is only needed for the D3D12 backend (RT validation, and future cluster / mega geometry).
 		if hasD3D12:
-			self.requires("nvapi/2026.07.29")
+			self.requires("nvapi/2026.08.02")
 
 		# agility_sdk ships d3d12shader.h, which DXC's dxcreflect.h includes.
 		if hasD3D12 or self.options.enableShaderCompiler:

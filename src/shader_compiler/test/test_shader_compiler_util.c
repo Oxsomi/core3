@@ -78,6 +78,7 @@ Bool compileInlineShaders(
 		&allFiles, &allShaderText, &allOutputs, &allCompileModes,
 		threadCount,
 		false,                              //isDebug
+		false,                              //keepRegisters
 		(ECompilerWarning) 0,
 		false,                              //ignoreEmptyFiles: we expect real output
 		ECompileType_Compile,
@@ -103,6 +104,7 @@ Bool compileFileShader(
 	const C8 *path,
 	U8 mode,
 	Bool enableLogging,
+	Bool keepRegisters,
 	ListBuffer *out,
 	Error *e_rr
 ) {
@@ -142,7 +144,8 @@ Bool compileFileShader(
 
 	gotoIfError3(clean, Compiler_compileShaders(
 		&allFiles, &allShaderText, &allOutputs, &allCompileModes,
-		1, false, (ECompilerWarning) 0, false, ECompileType_Compile, &includeDirs, enableLogging, alloc, out, e_rr
+		1, false, keepRegisters, (ECompilerWarning) 0, false, ECompileType_Compile, &includeDirs, enableLogging, alloc,
+		out, e_rr
 	));
 
 clean:

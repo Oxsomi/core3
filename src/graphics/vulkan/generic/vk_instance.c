@@ -552,7 +552,9 @@ const C8 *optExtensionsName[] = {
 
 	"VK_KHR_maintenance4",        "VK_KHR_buffer_device_address", "VK_EXT_descriptor_indexing", "VK_KHR_driver_properties",
 	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8",   "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget",
-	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",      "VK_KHR_ray_tracing_position_fetch"
+	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",      "VK_KHR_ray_tracing_position_fetch",
+
+	"VK_EXT_descriptor_heap", "VK_NV_cluster_acceleration_structure", "VK_NV_partitioned_acceleration_structure"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -963,6 +965,27 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR,
 			rayPositionFetchFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_POSITION_FETCH_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_DescriptorHeap],
+			VkPhysicalDeviceDescriptorHeapFeaturesEXT,
+			descriptorHeapFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayClusterAS],
+			VkPhysicalDeviceClusterAccelerationStructureFeaturesNV,
+			rayClusterASFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CLUSTER_ACCELERATION_STRUCTURE_FEATURES_NV
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayPartitionedTLAS],
+			VkPhysicalDevicePartitionedAccelerationStructureFeaturesNV,
+			rayPartitionedTLASFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PARTITIONED_ACCELERATION_STRUCTURE_FEATURES_NV
 		);
 
 		getDeviceFeatures(
@@ -1468,6 +1491,19 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 					if(rayPositionFetchFeat.rayTracingPositionFetch)
 						capabilities.features |= EGraphicsFeatures_RayTriPosition;
+
+					//Mega geometry (RTXMG); Vulkan splits it into cluster acceleration structures and partitioned TLAS
+
+					if(rayClusterASFeat.clusterAccelerationStructure)
+						capabilities.features2 |= EGraphicsFeatures2_RayClusterAS;
+
+					if(rayPartitionedTLASFeat.partitionedAccelerationStructure)
+						capabilities.features2 |= EGraphicsFeatures2_RayPartitionedTLAS;
+
+					//GPU-driven AS builds; Vulkan only (see EGraphicsFeatures2_RayIndirectASBuild)
+
+					if(rtasFeat.accelerationStructureIndirectBuild)
+						capabilities.features2 |= EGraphicsFeatures2_RayIndirectASBuild;
 				}
 			}
 		}
@@ -1563,6 +1599,15 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			limits.maxDescriptorSetStorageImages >= 250 * KIBI
 		)
 			capabilities.features |= EGraphicsFeatures_Bindless;
+
+		//Full bindless (descriptor heap); requires regular bindless too so the feature implies the same on both APIs
+
+		if(
+			(capabilities.features & EGraphicsFeatures_Bindless) &&
+			optExtensions[EOptExtensions_DescriptorHeap] &&
+			descriptorHeapFeat.descriptorHeap
+		)
+			capabilities.features2 |= EGraphicsFeatures2_DescriptorHeap;
 
 		//Enforce format support
 		//We don't enforce VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT because the standard guarantees it.

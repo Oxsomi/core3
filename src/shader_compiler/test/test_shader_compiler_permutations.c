@@ -72,7 +72,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 		SHFile sh = (SHFile) { 0 };
 
 		Bool ok =
-			compileFileShader(alloc, "permutations/mixed_extensions.hlsl", ESHBinaryType_SPIRV, true, &out, &err) &&
+			compileFileShader(alloc, "permutations/mixed_extensions.hlsl", ESHBinaryType_SPIRV, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) && readOiSH(alloc, out.ptr[0], &sh, &err);
 
 		Test_assert(t, "per-entrypoint extension isolation (only 1 of 2 binaries has 16BitTypes)",
@@ -92,7 +92,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 		SHFile sh = (SHFile) { 0 };
 
 		Bool ok =
-			compileFileShader(alloc, "permutations/mixed_models.hlsl", ESHBinaryType_SPIRV, true, &out, &err) &&
+			compileFileShader(alloc, "permutations/mixed_models.hlsl", ESHBinaryType_SPIRV, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) && readOiSH(alloc, out.ptr[0], &sh, &err);
 
 		Bool has67 = false, has65 = false;
@@ -121,7 +121,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 		SHFile ssh = (SHFile) { 0 }, dsh = (SHFile) { 0 };
 
 		Bool spvOk =
-			compileFileShader(alloc, "permutations/mixed_binary_lib.hlsl", ESHBinaryType_SPIRV, true, &spv, &err) &&
+			compileFileShader(alloc, "permutations/mixed_binary_lib.hlsl", ESHBinaryType_SPIRV, true, false, &spv, &err) &&
 			spv.length == 1 && Buffer_length(spv.ptr[0]) && readOiSH(alloc, spv.ptr[0], &ssh, &err);
 
 		Test_assert(t, "SPIRV keeps raygen + spv-only miss, drops dxil-only closesthit",
@@ -129,7 +129,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 			hasEntry(&ssh, "mainRaygen") && hasEntry(&ssh, "mainMiss") && !hasEntry(&ssh, "mainCH"));
 
 		Bool dxOk =
-			compileFileShader(alloc, "permutations/mixed_binary_lib.hlsl", ESHBinaryType_DXIL, true, &dx, &err) &&
+			compileFileShader(alloc, "permutations/mixed_binary_lib.hlsl", ESHBinaryType_DXIL, true, false, &dx, &err) &&
 			dx.length == 1 && Buffer_length(dx.ptr[0]) && readOiSH(alloc, dx.ptr[0], &dsh, &err);
 
 		Test_assert(t, "DXIL keeps raygen + dxil-only closesthit, drops spv-only miss",
@@ -151,7 +151,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 		Error e2 = Error_none();
 
 		//enableLogging=false: the failure is expected and asserted on, so keep the compiler quiet.
-		Bool compiled = compileFileShader(alloc, "permutations/mixed_uniforms.hlsl", ESHBinaryType_SPIRV, false, &out, &e2);
+		Bool compiled = compileFileShader(alloc, "permutations/mixed_uniforms.hlsl", ESHBinaryType_SPIRV, false, false, &out, &e2);
 
 		Test_assert(t, "mismatched uniforms across entrypoints rejected", !compiled);
 

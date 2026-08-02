@@ -53,6 +53,9 @@ typedef struct SHHeader {		//4-byte aligned
 	U16 uniformNameCount;
 	U16 flags;					//Persisted ESHSettingsFlags (see below); HideMagicNumber is derived, not persisted
 
+	U16 extensionCount;			//ESHExtension_Count of the writer, so newer readers can fix up dormant extensions
+	U16 padding;
+
 } SHHeader;
 
 //Settings that are persisted in SHHeader::flags (the low 16 bits are stored; the rest must be 0)
@@ -164,7 +167,8 @@ typedef enum ESHExtension {
 	ESHExtension_CoopVec					= 1 << 21		//SM6.10 cooperative vectors (matvec, SPV_NV_cooperative_vector)
 	ESHExtension_CoopMat					= 1 << 22		//SM6.10 cooperative matrix (GEMM, SPV_KHR_cooperative_matrix)
 	ESHExtension_CoopFP8					= 1 << 23		//FP8 (e4m3/e5m2) cooperative tier (additive gate; base is FP16 + INT8)
-	ESHExtension_CoopVecTraining			= 1 << 24		//Cooperative-vector training (outer-product / reduce-sum accumulate; Tier 1.1)
+	ESHExtension_CoopVecTraining			= 1 << 24,		//Cooperative-vector training (outer-product / reduce-sum accumulate; Tier 1.1)
+	ESHExtension_DescriptorHeap				= 1 << 25		//Full bindless: SM6.6 dynamic resources / SPV_EXT_descriptor_heap
 
 } ESHExtension;
 
@@ -296,7 +300,7 @@ typedef struct SHRegister {
 
 typedef struct SHUniform {
 	U16 bufferOffset;
-	U8 typeIdShort;					//ETypeId_arr[typeIdShort] = ETypeId
+	U8 typeIdShort;					//ETypeId_arr[typeIdShort] = TypeId
 	U8 nameId;
 } SHUniform;
 
@@ -585,6 +589,8 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 1.2(.3): No major bump, no oiSH files exist in the wild yet. Added uniforms, which are like defines except they're not strings; they're a type, name and value. These are a replacement for defines and will allow the linker to take care of the shader variants rather than the defines. They're comparable to specialization constants (Vulkan) or linking library functions (DirectX). They will still store duplicate shader binaries, but will be quicker to compile.
 
 1.2(.4): No major bump, no oiSH files exist in the wild yet. Optimized allocations when reading, fixed bug with callable shaders and added binary de-duplication.
+
+1.2(.5): No major bump, no oiSH files exist in the wild yet. Added SHHeader::extensionCount (the writer's ESHExtension_Count), so readers that know about newer native extensions can automatically mark them dormant for files written before those extensions existed. Added the DescriptorHeap extension (full bindless: SM6.6 dynamic resources on DXIL, SPV_EXT_descriptor_heap on SPIRV), natively detected on both backends.
 
 1.2(.5): No major bump, no oiSH files exist in the wild yet. Added the `[[oxc::binary("spv", "dxil")]]` entrypoint annotation for per-entrypoint backend selection (see OxC3_tool.md); absent = all supported backends, and it AND's with the backends the stage + extensions can be expressed on (e.g. workgraph is DXIL-only, ComputeDeriv/AtomicF32 are SPIRV-only). No format change: which backends an entrypoint targets is already expressed by which binaries its referenced SHBinaryInfo carry (ESHBinaryFlags). Also fixed DXIL reflection of opaque non-struct structured-buffer elements (RWStructuredBuffer&lt;float4&gt; whose $Element DXC leaves as D3D_SVT_VOID) and folded D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS into WriteMSTexture.
 

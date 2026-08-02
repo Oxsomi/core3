@@ -125,7 +125,7 @@ void Test_shaderCompilerDriver(Test *t) {
 		ListBuffer d = (ListBuffer) { 0 };
 		SHFile sd = (SHFile) { 0 };
 		Bool onDxil =
-			compileFileShader(alloc, "driver/binary_rt_lib.hlsl", ESHBinaryType_DXIL, true, &d, &err) &&
+			compileFileShader(alloc, "driver/binary_rt_lib.hlsl", ESHBinaryType_DXIL, true, false, &d, &err) &&
 			d.length == 1 && Buffer_length(d.ptr[0]) &&
 			readOiSH(alloc, d.ptr[0], &sd, &err) && sd.entries.length == 2;
 
@@ -139,7 +139,7 @@ void Test_shaderCompilerDriver(Test *t) {
 		ListBuffer s = (ListBuffer) { 0 };
 		SHFile ss = (SHFile) { 0 };
 		Bool onSpirv =
-			compileFileShader(alloc, "driver/binary_rt_lib.hlsl", ESHBinaryType_SPIRV, true, &s, &err) &&
+			compileFileShader(alloc, "driver/binary_rt_lib.hlsl", ESHBinaryType_SPIRV, true, false, &s, &err) &&
 			s.length == 1 && Buffer_length(s.ptr[0]) &&
 			readOiSH(alloc, s.ptr[0], &ss, &err) && ss.entries.length == 1;
 

@@ -74,9 +74,11 @@ apply_dependencies(OxC3)
 
 if(UNIX AND TARGET OxC3_graphics_vk)
 
+	# $<TARGET_FILE_DIR:OxC3> instead of CMAKE_RUNTIME_OUTPUT_DIRECTORY; the latter can be empty when only the
+	# per-config variables are set, which turned the command into "cmake -E copy <file>" (no destination).
 	add_custom_command(
 		TARGET OxC3 POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:OxC3_graphics_vk> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+		COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:OxC3_graphics_vk> $<TARGET_FILE_DIR:OxC3>
 	)
 
 endif()

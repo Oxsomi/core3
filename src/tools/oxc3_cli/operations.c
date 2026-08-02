@@ -139,7 +139,8 @@ const C8 *EOperationFlags_names[EOperationFlags_Count] = {
 	"--warn-buffer-padding",
 	"--verbose",
 	"--fixed",
-	"--aes-stdin"
+	"--aes-stdin",
+	"--keep-registers"
 };
 
 const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
@@ -169,7 +170,8 @@ const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
 	"Warn when buffer padding is present in the final binary.",
 	"Print full information to the console.",
 	"Emit a fixed-point value instead of a float format (float convert).",
-	"Read the 32-byte AES key (hex) from one line of stdin instead of a plaintext argument."
+	"Read the 32-byte AES key (hex) from one line of stdin instead of a plaintext argument.",
+	"Keep declared but unused resources bound and reflected (stable register layouts across shader variants)."
 };
 
 //Operations
@@ -621,7 +623,7 @@ void Operations_init() {
 			.desc = "High Level Shading Language; Microsoft's shading language for DirectX and Vulkan.",
 
 			.operationFlags =
-				EOperationFlags_Debug | EOperationFlags_Split |
+				EOperationFlags_Debug | EOperationFlags_Split | EOperationFlags_KeepRegisters |
 				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles,
 
 			.requiredParameters =
@@ -655,7 +657,7 @@ void Operations_init() {
 				EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir |
 				EOperationHasParameter_ShaderCompileMode | EOperationHasParameter_ShaderOutputMode,
 			.operationFlags =
-				EOperationFlags_Debug | EOperationFlags_Split |
+				EOperationFlags_Debug | EOperationFlags_Split | EOperationFlags_KeepRegisters |
 				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
 		};
 
@@ -668,7 +670,8 @@ void Operations_init() {
 			.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
 			.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir,
 			.operationFlags =
-				EOperationFlags_Debug | EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
+				EOperationFlags_Debug | EOperationFlags_KeepRegisters |
+				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
 		};
 
 		Operation_values[EOperation_ShaderEntrypoints] = (Operation) {

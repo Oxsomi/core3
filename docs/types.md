@@ -736,7 +736,7 @@ As expected, this would generate 6 members; one that's part of myMember4 and the
 
 **BufferLayoutMember** contains the following info (header):
 
-- **typeId** or **structId**. If offsetHiAndIsStruct >> 15 (**isStruct**()), this will include a struct id that represents this member (**getStructId**()). Otherwise, this member is represented with an ETypeId (**getTypeId**()), which can be matrices, vectors, floats, ints, etc. Currently, only POD type ids are supported here. It'd be invalid to use extended type ids or non pod types.
+- **typeId** or **structId**. If offsetHiAndIsStruct >> 15 (**isStruct**()), this will include a struct id that represents this member (**getStructId**()). Otherwise, this member is represented with a TypeId (**getTypeId**()), which can be matrices, vectors, floats, ints, etc. Currently, only POD type ids are supported here. It'd be invalid to use extended type ids or non pod types.
 - **offset**: U64 stored in both offsetLo and offsetHiAndIsStruct, acquired through **getOffset**(). Represents the offset in the struct it's in. Since this offset is explicitly referenced, it is possible to use a union here.
 - **arrayIndices**: Up to 255 dimensional arrays, though less dimensional should be used when possible due to better performance (less lookups). Mostly useful as 1D, 2D or 3D arrays. Can be 0 if it's not an array.
 - **nameLength**: How long the name of the member is (up to 255).
@@ -756,7 +756,7 @@ The reason this is not just the same as BufferLayoutMember, is because that is u
 
 It can be created through the following:
 
-- **create**(ETypeId typeId, CharString name, U64 offset, U32 stride): Creates a member as a POD type (such as matrix, vector, float, int, Bool, etc.).
+- **create**(TypeId typeId, CharString name, U64 offset, U32 stride): Creates a member as a POD type (such as matrix, vector, float, int, Bool, etc.).
   - **createArray** can be used to turn it into an array. With ListU32 arraySizes passed after the name.
 - **createStruct**(U32 structId, CharString name, U64 offset, U32 stride): Creates member as a struct type.
   - **createStructArray** can be used to turn it into an array. With ListU32 arraySizes passed after the name.
@@ -1020,6 +1020,8 @@ For ease of use, these printf-like functions have been added. They use the same 
 - void **Log_debug/Log_performance/Log_warn/Log_error**(Allocator alloc, ELogOptions options, ...): Log in printf like fashion. Example: Log_debug(alloc, ELogOptions_Default, "Hello world %"PRIu64"\n", (U64)1 << 48).
 - void **Log_debugLn/Log_performanceLn/Log_warnLn/Log_errorLn**(Allocator alloc, ...): Log in printf fashion; always with ELogOptions_NewLine. Log_debugLn(alloc, "Hello world %"PRIu64, (U64)1 << 48).
 
+Logging still works when the allocator is failing (e.g. the process is out of memory): the printf-like functions and Error_print fall back to a small reserved static pool (reset per fallback print), so errors remain visible under OOM instead of being dropped silently.
+
 ## RefPtr
 
 A RefPtr is essentially just an object that has type information, a ref counter and the object it represents directly allocated after it.
@@ -1027,7 +1029,7 @@ A RefPtr is essentially just an object that has type information, a ref counter 
 A RefPtr contains the following properties:
 
 - refCount: AtomicI64. When it reaches 0 it will destroy the data allocated for the RefPtr as well as calling the free function. To avoid this, increase the RefPtr using RefPtr_inc before "copying" it (e.g. adding a reference in a different library or to keep it alive). When done using it, make sure to use RefPtr_dec.
-- typeId: ETypeId. Can be any type defined by any library. The library has to follow the standard as specified in the type_id.h documentation.
+- typeId: TypeId (a plain U32; the ETypeId enum only names the constants, since enum storage sign extends on some compilers). Can be any type defined by any library. The library has to follow the standard as specified in the type_id.h documentation.
 - length: U32. Defines how long the object is in memory. If the object is bigger than this, it should dynamically allocate through the free and alloc functions.
 - alloc: Allocator. Defines how the memory is freed/allocated.
 - free: ObjectFreeFunc; called before freeing the memory.
@@ -1040,6 +1042,6 @@ The following helper functions exist for a RefPtr:
 
 The RefPtr can be created through the following functions:
 
-- Error **RefPtr_create**(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result): Create the RefPtr with a struct of objectLength allocated after it. The free function will be called after it's done. 'result' needs to be NULL to ensure that no object is leaked. ETypeId and objectLength should match what the library wants the object to represent.
+- Error **RefPtr_create**(U32 objectLength, Allocator alloc, ObjectFreeFunc free, TypeId type, RefPtr **result): Create the RefPtr with a struct of objectLength allocated after it. The free function will be called after it's done. 'result' needs to be NULL to ensure that no object is leaked. The type id and objectLength should match what the library wants the object to represent.
 
 A WeakRefPtr is just a normal RefPtr, except it indicates to the user that it shouldn't be increased/decreased when using it. Care should be taken to get rid of the WeakRefPtr itself to ensure it doesn't dangle (without using dec or inc on it; just by NULLing the pointer itself).

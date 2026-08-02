@@ -66,6 +66,10 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_NV_ray_tracing_motion_blur as RayMotionBlur
   - VK_NV_ray_tracing_invocation_reorder (.rayTracingInvocationReorder) as RayReorder; if .rayTracingInvocationReorderReorderingHint is also set, RayReorderActual (features2) - the device actually reorders rather than exposing a no-op API
   - VK_KHR_ray_tracing_position_fetch as RayTriPosition (covers both the RayQuery and ray-pipeline shader forms)
+  - VK_NV_cluster_acceleration_structure (.clusterAccelerationStructure) as RayClusterAS (features2; mega geometry cluster BLAS/CLAS)
+  - VK_NV_partitioned_acceleration_structure (.partitionedAccelerationStructure) as RayPartitionedTLAS (features2; mega geometry PTLAS)
+  - VK_KHR_acceleration_structure .accelerationStructureIndirectBuild as RayIndirectASBuild (features2; GPU-driven classic AS builds)
+  - VK_EXT_descriptor_heap (.descriptorHeap) as DescriptorHeap (features2); only reported when Bindless also passed, so the feature implies the same baseline on both APIs
   - VK_NV_cooperative_vector as CoopVec (cooperative vectors; .cooperativeVectorTraining as CoopVecTraining)
   - VK_KHR_cooperative_matrix as CoopMat (cooperative matrix / GEMM)
   - VK_EXT_shader_float8 as CoopFP8 (.shaderFloat8 - the additive FP8 e4m3/e5m2 cooperative tier)
@@ -124,7 +128,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 
 #### Bindless
 
-Bindless is defined as having a large amount of descriptors bound that reduce the need to switch states (such as bindings or descriptor tables). There are generally three ways of bindless; statically sized arrays with a predefined size (placed at either different offsets or at the same position), dynamically sized arrays that get their size set by the engine or full bindless (a full buffer of descriptors exposed that can get cast to whatever descriptor). The first two will be supported, the third won't be due to portability concerns on other platforms (mainly mobile) as well as limitations with validation layers and debugging.
+Bindless is defined as having a large amount of descriptors bound that reduce the need to switch states (such as bindings or descriptor tables). There are generally three ways of bindless; statically sized arrays with a predefined size (placed at either different offsets or at the same position), dynamically sized arrays that get their size set by the engine or full bindless (a full buffer of descriptors exposed that can get cast to whatever descriptor). The first two are supported everywhere Bindless is. The third (full bindless / descriptor heaps) used to be D3D12-only, but VK_EXT_descriptor_heap now standardizes it on Vulkan too, so it's exposed as the separate DescriptorHeap feature (features2) + the DescriptorHeap shader extension (SM6.6 dynamic resources on DXIL, SPV_EXT_descriptor_heap on SPIRV); it stays optional since mobile support will lag.
 
 The shader side will expose these two versions of bindless as two different extensions; `Bindless` and `UnboundArraySize`.
 
@@ -370,6 +374,8 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - AtomicInt64OnTypedResourceSupported, AtomicInt64OnGroupSharedSupported as EGraphicsDataTypes_AtomicI64.
 - DerivativesInMeshAndAmplificationShadersSupported as MeshTaskTexDeriv.
 - ShaderModel 6.6 support as ComputeDeriv.
+- ShaderModel 6.6 support + resource binding tier 3 as DescriptorHeap (features2) - SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) on top of Bindless.
+- NVAPI NvAPI_D3D12_GetRaytracingCaps cluster operations as RayClusterAS and partitioned TLAS as RayPartitionedTLAS (features2, mega geometry; NVAPI only until a vendor-neutral query exists). Either one also implies RayIndirectASBuild (features2): the mega geometry builds (BUILD_BLAS_FROM_CLAS cluster op, NvAPI_D3D12_BuildRaytracingPartitionedTlasIndirect) are GPU-driven by design, while classic BuildRaytracingAccelerationStructure(Ex) has no indirect variant on D3D12.
 - ShaderModel 6.10 support as EGraphicsFeatures_CoopVec + CoopMat + CoopFP8 + CoopVecTraining + RayTriPosition (D3D12 has no separate caps query; SM6.10 is the proxy - the cooperative-vector TIER_1_0 Minimum Support Set already includes FP16/INT8/FP8; TIER_1_1 not yet a real query). These are gated on enabling D3D12ExperimentalShaderModels on both device factories at instance creation (best-effort: needs the preview Agility SDK + Windows Developer Mode; on failure they're simply not reported). Because they're preview, they're also flagged in GraphicsDeviceCapabilities.experimentalFeatures (a subset of `features` that isn't final); on Vulkan they're real extensions so experimentalFeatures stays empty.
 - D3D12_FEATURE_ASYNC_COMMANDS Supported (Agility 1.720-preview) as EDxGraphicsFeatures_BatchedAsyncCommandList.
 

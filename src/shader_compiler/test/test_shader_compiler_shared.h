@@ -62,11 +62,13 @@ Bool compileInlineShaders(
 
 //Compile a single HLSL shader loaded from `path` (relative to the working dir) into an oiSH of binary type
 //`mode`. Self-contained shaders only (@virtual includes). Fills `out` with one oiSH buffer. Caller frees.
+//keepRegisters keeps declared but unused resources bound and reflected (--keep-registers).
 Bool compileFileShader(
 	const Allocator *alloc,
 	const C8 *path,
 	U8 mode,                //ESHBinaryType
 	Bool enableLogging,
+	Bool keepRegisters,
 	ListBuffer *out,
 	Error *e_rr
 );

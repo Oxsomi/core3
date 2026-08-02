@@ -267,6 +267,7 @@
 			&allFiles, &allShaderText, &allOutputs, &allCompileModes,
 			threadCount,
 			args->flags & EOperationFlags_Debug,
+			args->flags & EOperationFlags_KeepRegisters,
 			extraWarnings,
 			args->flags & EOperationFlags_IgnoreEmptyFiles,
 			ECompileType_Compile,

@@ -84,6 +84,12 @@ typedef struct SHHeader {
 	U16 uniformNameCount;
 	U16 flags;                  //Persisted ESHSettingsFlags (currently just ReflectionOnly; HideMagicNumber is derived)
 
+	//ESHExtension_Count of the writer.
+	//Extensions added after a file was written can't have been reflected by its compiler, so the reader marks the
+	// native ones at or above this count dormant automatically (see SHFile_read).
+	U16 extensionCount;
+	U16 padding;
+
 } SHHeader;
 
 typedef struct SHGroups {
