@@ -36,9 +36,10 @@ U32 Window_extSize = 0;
 
 Bool OWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 	(void)w; (void)size; (void) e_rr;
+	Bool s_uccess = true;
 	retError(clean, Error_unimplemented(0, "OWindow_initSize() is unimplemented"));        //TODO:
 clean:
-	return true;
+	return s_uccess;
 }
 
 /*
