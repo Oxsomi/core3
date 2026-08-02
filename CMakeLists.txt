@@ -63,6 +63,14 @@ if(ANDROID AND DynamicLinkingGraphics)
 	message(FATAL_ERROR "-- FATAL configuration (dynamic linking graphics) not compatible with Android")
 endif()
 
+# Dynamic linking folds the static OxC3 libs into shared objects (libOxC3_graphics_vk.so).
+# On ELF (Linux) every object linked into a .so must be PIC, or ld fails with
+# "relocation R_X86_64_PC32 / R_AARCH64_ADR_PREL_PG_HI21 ... recompile with -fPIC".
+# No-op on MSVC, effectively no-op on Apple. Off for static builds to keep non-PIC codegen.
+if(DynamicLinkingGraphics)
+	set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 if(MSVC)
 
 	# /wd4201: anonymous struct/union members are standard in C11 but an extension in C++; OxC3 uses them

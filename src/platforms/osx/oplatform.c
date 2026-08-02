@@ -63,7 +63,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find app base path"));
 
 	CharString appDir = CharString_createRefSizedConst(exeName, (U64)exeNameLen, false);
-	gotoIfError3(clean, CharString_createCopyx(appDir, Platform_instance->alloc, &Platform_instance->appDirectory, e_rr));
+	gotoIfError3(clean, CharString_createCopy(appDir, Platform_instance->alloc, &Platform_instance->appDirectory, e_rr));
 
 	//Try to open the main executable within 1s, if it fails we can't init
 
