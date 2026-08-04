@@ -36,4 +36,10 @@ Bool WindowManager_freeNative(WindowManager *w) {
 	return true;
 }
 
+Bool WindowManager_updateMonitors(WindowManager *manager, Error *e_rr) {
+	(void) manager; (void) e_rr;
+	//TODO: Query monitors via CoreGraphics (CGGetActiveDisplayList).
+	return true;
+}
+
 void WindowManager_updateExt(WindowManager *manager) { (void) manager; }

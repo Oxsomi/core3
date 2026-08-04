@@ -873,6 +873,33 @@ clean:
 	return s_uccess;
 }
 
+Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format) {
+	(void) manager;
+	//TODO: HDR / wide color gamut via Metal.
+	return format == EWindowFormat_BGRA8;
+}
+
+void WindowManager_freePhysical(Window *w) {
+	(void) w;
+	//TODO: Destroy the NSWindow once macOS windowing is implemented.
+}
+
+Bool Window_presentPhysical(Window *w, Error *e_rr) {
+	(void) w;
+	Bool s_uccess = true;
+	retError(clean, Error_unimplemented(0, "Window_presentPhysical() is unimplemented"));        //TODO:
+clean:
+	return s_uccess;
+}
+
+Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
+	(void) w;
+	Bool s_uccess = true;
+	retError(clean, Error_unimplemented(0, "WindowManager_createWindowPhysical() is unimplemented"));        //TODO:
+clean:
+	return s_uccess;
+}
+
 /*
 Error Window_presentPhysical(Window *w) {
 
