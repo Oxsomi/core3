@@ -108,31 +108,18 @@ void AESEncryptionContext_ghashN4(I32x4 *restrict a, const I32x4 *restrict H, U8
 			clmulFused_16[left] = I32x16_xor(clmulFused_16[left], clmulFused_16[left | 1]);
 		}
 
-		if (N4 > 2) {
+		//The reduction stops here: the accumulators are I32x16[4] (and the loop above already indexes them
+		//with i < N4), so N4 <= 4 is a precondition. Callers hold to it, AESEncryptionContext_updateTagN
+		//passes at most N = 16 blocks and N4 = N >> 2. A further `if (N4 > 8)` step used to sit below with a
+		//literal [8] index in it; it was unreachable and clang rejects it outright under -Warray-bounds.
 
+		if (N4 > 2)
 			for (U32 i = 0; i < (U32)(N4 >> 2); ++i) {
 				U32 left = i << 2;
 				clmul00_16[left] = I32x16_xor(clmul00_16[left], clmul00_16[left | 2]);
 				clmul11_16[left] = I32x16_xor(clmul11_16[left], clmul11_16[left | 2]);
 				clmulFused_16[left] = I32x16_xor(clmulFused_16[left], clmulFused_16[left | 2]);
 			}
-
-			if (N4 > 4) {
-
-				for (U32 i = 0; i < (U32)(N4 >> 3); ++i) {
-					U32 left = i << 3;
-					clmul00_16[left] = I32x16_xor(clmul00_16[left], clmul00_16[left | 4]);
-					clmul11_16[left] = I32x16_xor(clmul11_16[left], clmul11_16[left | 4]);
-					clmulFused_16[left] = I32x16_xor(clmulFused_16[left], clmulFused_16[left | 4]);
-				}
-
-				if (N4 > 8) {
-					clmul00_16[0] = I32x16_xor(clmul00_16[0], clmul00_16[8]);
-					clmul11_16[0] = I32x16_xor(clmul11_16[0], clmul11_16[8]);
-					clmulFused_16[0] = I32x16_xor(clmulFused_16[0], clmulFused_16[8]);
-				}
-			}
-		}
 	}
 
 	I32x8 clmul00_8 = I32x8_xor(I32x16_getI32x8(clmul00_16[0], 0), I32x16_getI32x8(clmul00_16[0], 1));

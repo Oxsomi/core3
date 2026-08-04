@@ -20,16 +20,15 @@
 
 //platforms/android/awindow.c
 
-#include "platforms/ext/listx_impl.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/errorx.h"
 #include "platforms/logx.h"
 #include "platforms/window.h"
 #include "platforms/window_manager.h"
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
 #include "platforms/platform.h"
-#include "types/math/math.h"
+#include "types/container/buffer.h"
+#include "types/container/log.h"
+#include "types/base/mathf.h"
 
 #include <android_native_app_glue.h>
 #include <android/configuration.h>
@@ -38,23 +37,37 @@ U32 Window_extSize = 0;
 
 void AWindow_onUpdateSize(Window *w) {
 
-	if(
-		(w->hint & EWindowHint_ProvideCPUBuffer) &&
-		!Buffer_resizex(&w->cpuVisibleBuffer, 4 * I32x2_x(w->size) * I32x2_y(w->size), false, true, NULL)
-	) {
-		Log_debugLnx("AWindow_onUpdateSize() couldn't update cpuVisibleBuffer size, removing the provide cpu buffer flag");
-		Buffer_freex(&w->cpuVisibleBuffer);
-		w->hint &=~ EWindowHint_ProvideCPUBuffer;
+	Error err = Error_none();
+
+	//Window_resizeCPUBuffer is a no-op here; it early outs when w->size already matches (the caller assigns it
+	//before calling us) and it can't be told what the OS-side stride is. Android composites through a plain
+	//heap buffer that Window_presentPhysical memcpy's into the locked ANativeWindow, so size it directly.
+
+	if(w->hint & EWindowHint_ProvideCPUBuffer) {
+
+		const U64 linSiz = ETextureFormat_getSize(
+			(ETextureFormat) w->format, I32x2_x(w->size), I32x2_y(w->size), 1
+		);
+
+		if(!linSiz || !Buffer_resize(&w->cpuVisibleBuffer, linSiz, false, true, Platform_instance->alloc, &err)) {
+
+			Log_debugLnx(
+				"AWindow_onUpdateSize() couldn't update cpuVisibleBuffer size, removing the provide cpu buffer flag"
+			);
+
+			Buffer_free(&w->cpuVisibleBuffer, Platform_instance->alloc);
+			w->hint &=~ EWindowHint_ProvideCPUBuffer;
+		}
 	}
-	
+
 	//TODO: Query monitors
 
 	if (w->callbacks.onMonitorChange)
 		w->callbacks.onMonitorChange(w);
 
-	if (w->callbacks.onResize)
-		w->callbacks.onResize(w);
-		
+	if (w->callbacks.onResize && !w->callbacks.onResize(w, &err))
+		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
 	if (w->callbacks.onUpdateOrientation)
 		w->callbacks.onUpdateOrientation(w);
 
@@ -80,12 +93,12 @@ I32 APlatform_getDeviceOrientation() {
 	jclass cls = (*env)->GetObjectClass(env, app->activity->clazz);
 
 	if(!cls)
-		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity"))
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity"));
 
 	jmethodID methodId = (*env)->GetMethodID(env, cls, "getDeviceOrientation", "()I");
 
 	if (!methodId)
-		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity.getDeviceOrientation"))
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity.getDeviceOrientation"));
 
 	orientation = (*env)->CallIntMethod(env, app->activity->clazz, methodId);
 
@@ -95,7 +108,7 @@ clean:
 		(*env)->DeleteLocalRef(env, cls);
 
 	if(!s_uccess)
-		Error_printLnx(err);
+		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 
 	if(attached)
 		(*vm)->DetachCurrentThread(vm);
@@ -181,9 +194,12 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 			case APP_CMD_RESUME:
 				
 				if (app->savedState && w->callbacks.onLoad) {
-					Buffer buf = Buffer_createManagedPtr(app->savedState, app->savedStateSize);
+
+					//savedState stays owned by the glue (android_app_post_exec_cmd frees it right after this
+					//returns), so hand the callback a ref rather than taking ownership of it here.
+
+					Buffer buf = Buffer_createRefConst(app->savedState, app->savedStateSize);
 					w->callbacks.onLoad(w, buf);
-					Buffer_freex(&buf);
 				}
 
 				break;
@@ -197,8 +213,8 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 				if (w->callbacks.onSave) {
 
 					if (app->savedState) {
-						Buffer buf = Buffer_createManagedPtr(app->savedState, app->savedStateSize);
-						Buffer_freex(&buf);
+						Buffer old = Buffer_createManagedPtr(app->savedState, app->savedStateSize);
+						Buffer_free(&old, Platform_instance->alloc);
 					}
 
 					Buffer buf = Buffer_createNull();
@@ -218,9 +234,12 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 							
 				w->flags |= EWindowFlags_IsActive;
 
-				if(w->callbacks.onCreate)
-					w->callbacks.onCreate(w);
-		
+				if(w->callbacks.onCreate) {
+					Error err = Error_none();
+					if(!w->callbacks.onCreate(w, &err))
+						Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+				}
+
 				AWindow_onUpdateSize(w);
 
 				break;
@@ -267,7 +286,9 @@ EKey AWindow_mapKey(I32 keyCode) {
 		case AKEYCODE_F7: case AKEYCODE_F8: case AKEYCODE_F9: case AKEYCODE_F10: case AKEYCODE_F11: case AKEYCODE_F12:
 			return EKey_F1 + (keyCode - AKEYCODE_F1);
 
-		case AKEYCODE_SCREENSHOT:        return EKey_PrintScreen;
+		//AKEYCODE_SCREENSHOT isn't exposed by the NDK (it's a framework-internal key), AKEYCODE_SYSRQ is
+		//documented as the "System Request / Print Screen" key and is what an attached keyboard reports.
+		case AKEYCODE_SYSRQ:            return EKey_PrintScreen;
 		case AKEYCODE_DEL:                return EKey_Backspace;
 		case AKEYCODE_SPACE:            return EKey_Space;
 		case AKEYCODE_TAB:                return EKey_Tab;
@@ -347,9 +368,12 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 
 	if(!w || !(w->flags & EWindowFlags_IsFinalized) || (w->flags & EWindowFlags_ShouldTerminate))
 		return 0;
-	
-	Keyboard *keyboard = w->devices.ptrNonConst;
-	Mouse *mouse = w->devices.ptrNonConst + 1;
+
+	if(w->devices.length <= w->defaultKeyboardId || w->devices.length <= w->defaultMouseId)
+		return 0;
+
+	Keyboard *keyboard = w->devices.ptrNonConst + w->defaultKeyboardId;
+	Mouse *mouse = w->devices.ptrNonConst + w->defaultMouseId;
 
 	Bool isDown = (AKeyEvent_getAction(event) & AMOTION_EVENT_ACTION_MASK) == AKEY_EVENT_ACTION_DOWN;
 	
@@ -371,27 +395,27 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 					F32 x = AMotionEvent_getRawX(event, 0);
 					F32 y = AMotionEvent_getRawY(event, 0);
 
-					F32 prevAbsX = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp0);
-					F32 prevAbsY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp1);
+					F32 prevAbsX = InputDevice_getCurrentAxis(dev, EMouseAxis_Temp0);
+					F32 prevAbsY = InputDevice_getCurrentAxis(dev, EMouseAxis_Temp1);
 
 					F32 nextX = F32_ceil(F32_clamp((F32) (x - prevAbsX), -1, 1));
 					F32 nextY = F32_ceil(F32_clamp((F32) (y - prevAbsY), -1, 1));
 
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp0, x);
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp1, y);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_Temp0, x);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_Temp1, y);
 
 					I32x2 oldCursor = w->cursor;
-					w->cursor = I32x2_create2(x, y);
+					w->cursor = I32x2_create2((I32) x, (I32) y);
 
 					if (w->callbacks.onCursorMove && I32x2_neq2(oldCursor, w->cursor))
 						w->callbacks.onCursorMove(w);
 
-					F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_RX);
-					F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_RY);
+					F32 prevX = InputDevice_getCurrentAxis(dev, EMouseAxis_RX);
+					F32 prevY = InputDevice_getCurrentAxis(dev, EMouseAxis_RY);
 
 					if (nextX != prevX) {
 
-						InputDevice_setCurrentAxis(*dev, EMouseAxis_RX, nextX);
+						InputDevice_setCurrentAxis(dev, EMouseAxis_RX, nextX);
 
 						if (w->callbacks.onDeviceAxis)
 							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_RX, nextX);
@@ -399,7 +423,7 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 
 					if (nextY != prevY) {
 
-						InputDevice_setCurrentAxis(*dev, EMouseAxis_RY, nextY);
+						InputDevice_setCurrentAxis(dev, EMouseAxis_RY, nextY);
 
 						if (w->callbacks.onDeviceAxis)
 							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_RY, nextY);
@@ -413,12 +437,12 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 					nextX = F32_clamp(F32_ceil(nextX), -1, 1);
 					nextY = F32_clamp(F32_ceil(nextY), -1, 1);
 
-					F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_ScrollWheel_X);
-					F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_ScrollWheel_Y);
+					F32 prevX = InputDevice_getCurrentAxis(dev, EMouseAxis_ScrollWheel_X);
+					F32 prevY = InputDevice_getCurrentAxis(dev, EMouseAxis_ScrollWheel_Y);
 
 					if (nextX != prevX) {
 
-						InputDevice_setCurrentAxis(*dev, EMouseAxis_ScrollWheel_X, nextX);
+						InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_X, nextX);
 
 						if (w->callbacks.onDeviceAxis)
 							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_X, nextX);
@@ -426,7 +450,7 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 
 					if (nextY != prevY) {
 
-						InputDevice_setCurrentAxis(*dev, EMouseAxis_ScrollWheel_Y, nextY);
+						InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_Y, nextY);
 
 						if (w->callbacks.onDeviceAxis)
 							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_Y, nextY);
@@ -455,10 +479,10 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 						//Send keys through interface and update input device
 
 						InputHandle handle = buttons[i];
-						EInputState prevState = InputDevice_getState(*dev, handle);
+						EInputState prevState = InputDevice_getState(dev, handle);
 
-						InputDevice_setCurrentState(*dev, handle, states[i]);
-						EInputState newState = InputDevice_getState(*dev, handle);
+						InputDevice_setCurrentState(dev, handle, states[i]);
+						EInputState newState = InputDevice_getState(dev, handle);
 
 						if(prevState != newState && w->callbacks.onDeviceButton)
 							w->callbacks.onDeviceButton(w, dev, handle, states[i]);
@@ -470,10 +494,10 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 				) {
 					
 					InputHandle handle = EMouseButton_Left;
-					EInputState prevState = InputDevice_getState(*dev, handle);
+					EInputState prevState = InputDevice_getState(dev, handle);
 
-					InputDevice_setCurrentState(*dev, handle, isDown);
-					EInputState newState = InputDevice_getState(*dev, handle);
+					InputDevice_setCurrentState(dev, handle, isDown);
+					EInputState newState = InputDevice_getState(dev, handle);
 
 					if(prevState != newState && w->callbacks.onDeviceButton)
 						w->callbacks.onDeviceButton(w, dev, handle, isDown);
@@ -501,10 +525,10 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 				//Send keys through interface and update input device
 
 				InputHandle handle = (InputHandle) mappedKey;
-				EInputState prevState = InputDevice_getState(*dev, handle);
+				EInputState prevState = InputDevice_getState(dev, handle);
 
-				InputDevice_setCurrentState(*dev, handle, isDown);
-				EInputState newState = InputDevice_getState(*dev, handle);
+				InputDevice_setCurrentState(dev, handle, isDown);
+				EInputState newState = InputDevice_getState(dev, handle);
 
 				if(prevState != newState && w->callbacks.onDeviceButton)
 					w->callbacks.onDeviceButton(w, dev, handle, isDown);
@@ -540,7 +564,7 @@ Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
 	if(!w || !I32x2_any(w->size) || !title.ptr || !CharString_length(title) || w->type != EWindowType_Physical)
 		retError(clean, Error_nullPointer(
 			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
-		))
+		));
 
 	if(!(w->flags & EWindowFlags_IsActive)) {
 		Log_warnLnx("Window_updatePhysicalTitle()::w triggered on inactive window. Ignored");
@@ -558,12 +582,12 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 	Bool s_uccess = true;
 
 	if(!w || !I32x2_any(w->size) || w->type != EWindowType_Physical)
-		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"))
+		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"));
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))
 		retError(clean, Error_unsupportedOperation(
 			0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"
-		))
+		));
 
 	if(!(w->flags & EWindowFlags_IsActive)) {
 		Log_warnLnx("Window_updatePhysicalTitle()::w triggered on inactive window. Ignored");
@@ -581,10 +605,10 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 	Bool s_uccess = true;
 
 	if(!w || !I32x2_any(w->size))
-		retError(clean, Error_nullPointer(0, "Window_presentPhysical()::w is required"))
+		retError(clean, Error_nullPointer(0, "Window_presentPhysical()::w is required"));
 
 	if(!(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
-		retError(clean, Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer"))
+		retError(clean, Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer"));
 
 	ANativeWindow *nativeWindow = ((struct android_app*) Platform_instance->data)->window;
 
@@ -592,7 +616,7 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 	ARect rect = (ARect) { .right = I32x2_x(w->size), .bottom = I32x2_y(w->size) };
 
 	if (ANativeWindow_lock(nativeWindow, &buffer, &rect))
-		retError(clean, Error_invalidState(0, "Window_presentPhysical() couldn't lock window"))
+		retError(clean, Error_invalidState(0, "Window_presentPhysical() couldn't lock window"));
 
 	enum AHardwareBuffer_Format format[2] = { 0 };
 	U8 formats = 0;
@@ -623,12 +647,12 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 
 	if(!supported) {
 		ANativeWindow_unlockAndPost(nativeWindow);
-		retError(clean, Error_invalidState(0, "Window_presentPhysical() couldn't write to window; mismatching formats"))
+		retError(clean, Error_invalidState(0, "Window_presentPhysical() couldn't write to window; mismatching formats"));
 	}
 
 	if(buffer.width != I32x2_x(w->size) ||  buffer.height != I32x2_y(w->size)) {
 		ANativeWindow_unlockAndPost(nativeWindow);
-		retError(clean, Error_invalidState(0, "Window_presentPhysical() couldn't write to window; mismatching dimensions"))
+		retError(clean, Error_invalidState(0, "Window_presentPhysical() couldn't write to window; mismatching dimensions"));
 	}
 
 	Buffer_memcpy(Buffer_createRef(buffer.bits, Buffer_length(w->cpuVisibleBuffer)), w->cpuVisibleBuffer);
@@ -641,26 +665,38 @@ clean:
 Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Keyboard builtinKeyboard = (Keyboard) { 0 };
+	Mouse builtinMouse = (Mouse) { 0 };
 
 	for(U64 i = 0; i < w->owner->windows.length; ++i) {
 
-		Window *wi = w->owner->windows.ptr[i];
+		Window *wi = RefPtr_data(w->owner->windows.ptr[i], Window);
 
 		if(wi != w && wi->type == EWindowType_Physical)
-			retError(clean, Error_invalidState(0, "WindowManager_createWindow() there can be only one window on Android"))
+			retError(clean, Error_invalidState(0, "WindowManager_createWindow() there can be only one window on Android"));
 	}
 
 	if(w->format == EWindowFormat_RGBA32f)
-		retError(clean, Error_invalidState(0, "WindowManager_createWindow() RGBA32f format not natively supported on Android"))
+		retError(clean, Error_invalidState(0, "WindowManager_createWindow() RGBA32f format not natively supported on Android"));
 
 	if(w->format == EWindowFormat_BGRA8)
-		retError(clean, Error_invalidState(0, "WindowManager_createWindow() BGRA8 format not natively supported on Android"))
+		retError(clean, Error_invalidState(0, "WindowManager_createWindow() BGRA8 format not natively supported on Android"));
 
-	gotoIfError2(clean, ListMonitor_reservex(&w->monitors, 16))
+	//Register the built-in keyboard and mouse, matching the other backends which always have
+	// defaultKeyboardId / defaultMouseId available from creation onwards.
 
-	gotoIfError2(clean, ListInputDevice_resizex(&w->devices, 2))
-	gotoIfError2(clean, Keyboard_create(w->devices.ptrNonConst))
-	gotoIfError2(clean, Mouse_create(w->devices.ptrNonConst + 1))
+	gotoIfError3(clean, ListMonitor_reserve(&w->monitors, 16, Platform_instance->alloc, e_rr));
+	gotoIfError3(clean, ListInputDevice_reserve(&w->devices, 2, Platform_instance->alloc, e_rr));
+
+	w->defaultKeyboardId = (U32) w->devices.length;
+	gotoIfError3(clean, Keyboard_create(&builtinKeyboard, Platform_instance->alloc, e_rr));
+	gotoIfError3(clean, ListInputDevice_pushBack(&w->devices, builtinKeyboard, Platform_instance->alloc, e_rr));
+	builtinKeyboard = (Keyboard) { 0 };
+
+	w->defaultMouseId = (U32) w->devices.length;
+	gotoIfError3(clean, Mouse_create(&builtinMouse, Platform_instance->alloc, e_rr));
+	gotoIfError3(clean, ListInputDevice_pushBack(&w->devices, builtinMouse, Platform_instance->alloc, e_rr));
+	builtinMouse = (Mouse) { 0 };
 
 	struct android_app *app = (struct android_app*) Platform_instance->data;
 	app->userData = w;
@@ -668,5 +704,18 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	app->onInputEvent = AWindow_onInput;
 
 clean:
+
+	if(!s_uccess) {
+
+		InputDevice_free(&builtinKeyboard, Platform_instance->alloc);
+		InputDevice_free(&builtinMouse, Platform_instance->alloc);
+
+		for(U64 i = 0; i < w->devices.length; ++i)
+			InputDevice_free(&w->devices.ptrNonConst[i], Platform_instance->alloc);
+
+		ListInputDevice_free(&w->devices, Platform_instance->alloc);
+		ListMonitor_free(&w->monitors, Platform_instance->alloc);
+	}
+
 	return s_uccess;
 }

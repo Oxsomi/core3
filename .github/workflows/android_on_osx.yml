@@ -1,17 +1,17 @@
-name: Android Vulkan (Windows host)
+name: Android Vulkan (macOS host)
 on: [push]
 
 jobs:
   build:
     uses: ./.github/workflows/_build.yml
     with:
-      name: Android Vulkan (Windows host)
-      runner: windows-2022
+      name: Android Vulkan (macOS host)
+      runner: macos-26
       os: android
       build_flags: ''
       python_cmd: python
-      setup_python: false
-      python_version: ''
-      hook_name: Android-Windows-static
+      setup_python: true
+      python_version: '3.10'
+      hook_name: Android-macOS-static
     secrets:
       WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

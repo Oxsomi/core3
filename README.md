@@ -6,7 +6,7 @@
 | Mac OS X  | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/osx.yml/badge.svg) | **Metal**: **TBD** | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/osx_dynamic.yml/badge.svg) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/osx_arm.yml/badge.svg) | **Metal**: **TBD** | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/osx_arm_dynamic.yml/badge.svg) |
 | Linux     | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux.yml/badge.svg) | N/A | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/linux_dynamic.yml/badge.svg) | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm.yml/badge.svg)** | N/A | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_dynamic.yml/badge.svg)** |
 | SteamOS   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/steamos.yml/badge.svg) | N/A | See linux, but not recommended | N/A | N/A | N/A |
-| Android   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/android_on_windows.yml/badge.svg) | N/A | N/A, no dynamic linking | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/android_on_windows.yml/badge.svg) | N/A | N/A, no dynamic linking |
+| Android   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/android_on_windows.yml/badge.svg) ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/android_on_linux.yml/badge.svg) ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/android_on_osx.yml/badge.svg) | N/A | N/A, no dynamic linking | (same jobs; both ABIs are built together) | N/A | N/A, no dynamic linking |
 | iOS       | **TBD** | **Metal**: **TBD** | N/A, no dynamic linking | **TBD** | **Metal**: **TBD** | N/A, no dynamic linking |
 | Xbox UWP  | N/A | **D3D12**: TBD | N/A | N/A | N/A | N/A |
 
@@ -41,7 +41,7 @@ For per-module maturity, see [STATUS.md](STATUS.md). For how the modules fit tog
 - **Windows on ARM64**: ARMASM64 (install the ARM64 build tools via the VS installer) when using MSVC.
 - **OS X**: `brew install llvm` for llvm-objcopy. If using the Vulkan SDK with bindless, export `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1` and set `VULKAN_SDK` (e.g. in `~/.bash_profile`).
 - **Linux**: Wayland is the window backend, `sudo apt install libwayland-dev libxkbcommon-dev -y` (plus wayland-scanner). For audio deps: `sudo apt install libasound2-dev libpipewire-0.3-dev -y`. For the windowed functional tests: `sudo apt install xdotool -y`. *X11-only sessions are currently unsupported for windowing.*
-- **Android**: SDK + NDK installed with `ANDROID_SDK`/`ANDROID_NDK` set; Android 10 (API 29)+ on device (Vulkan 1.1+). On Windows, msys2 or Ninja can drive the build (Ninja required for Debug builds due to the Vulkan validation layers). *(Optional)* JDK for keystore creation.
+- **Android**: NDK installed with `ANDROID_NDK` set (plus `ANDROID_SDK` when building an apk); Android 10 (API 29)+ on device (Vulkan 1.1+). Cross compiles from Windows, Linux and macOS. Ninja or make can drive the build (Ninja required for Debug builds due to the Vulkan validation layers). Since the packaging tool is built for the host too, the host's own prerequisites (above) apply as well. *(Optional)* JDK for keystore creation.
 
 ## Getting started
 
@@ -66,15 +66,35 @@ python build.py -mode Release -tests True
 
 ### Android
 
+Cross compiled from Windows, Linux or macOS; the host half goes through the same code as `build.py`
+(see `build_common.py`), so the same conan profiles apply.
+
 ```bash
 python3 build_android.py -mode Debug
 ```
 
-- `-api 29` (default): target API level; `-arch` defaults to arm64 **and** x64; `-simd False` by default; `-generator` defaults to "MinGW Makefiles" on Windows.
+An android build can't run its own packager: the shader compiler is off there, and the resulting
+binaries wouldn't be runnable on the build machine anyway. So it `tool_requires` a *host* OxC3 that has
+`OxC3_package` in it, which `add_virtual_files()` then finds via `find_program`. `build_android.py`
+builds and exports that host package from your working tree before cross compiling. The option set it's
+built with lives in `HOST_TOOL_OPTIONS` in `conanfile.py` and is deliberately fixed, so one host package
+serves every android configuration.
+
+- `-api 31` (default): target API level; `-arch` defaults to arm64 **and** x64; `-simd True` by default;
+  `-generator` defaults to "MinGW Makefiles" on Windows and "Unix Makefiles" elsewhere (Ninja is a good
+  choice on every host, and is required for Debug builds because of the Vulkan validation layers).
+- `--host_package_only` builds just the host `OxC3_package` and stops; `--skip_host_package` assumes it's
+  already in the conan cache. CI uses the pair so the three android configurations share one host build.
 - `--apk -package net.osomi.test -version 0.1.0 -lib myLibName -name "My test app"` builds an APK (same arch/mode/api/simd/generator settings must match prebuilt binaries when combined with `--skip_build`).
+- `-packages <dir>` (repeatable) adds another folder of oiCA archives to the apk, for when the app that's
+  being packaged has virtual files of its own next to OxC3's.
 - `--sign` signs the APK: provide `-keystore` (and optionally `-keystore_password`), or have `JAVA_HOME` set to create a temporary keystore.
 - `--run` installs and runs on a connected device in developer mode (requires `-package` and `-lib` if no apk step).
-- `-category game` (default) sets the app category; `--install` for use as a dependency; `--shader_compiler` to include runtime shader compilation (off by default — large build-time cost); `--skip_build` to reuse prebuilt binaries.
+- `-category game` (default) sets the app category; `--install` exports the android package so a dependent
+  project can `requires()` it; `--skip_build` reuses prebuilt binaries.
+
+Only `ANDROID_NDK` is needed to build the libraries; `ANDROID_SDK` is additionally required for `--apk`
+and `--run` (aapt/d8/zipalign/adb).
 
 ### Using the virtual file system from your app
 

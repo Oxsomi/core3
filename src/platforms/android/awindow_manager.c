@@ -60,6 +60,12 @@ repeat:
 			source->process(app, source);
 	}
 
+	//WindowManager_step runs even when no physical window was created (userData is only set by
+	//WindowManager_createWindowPhysical), so everything below this point is window dependent.
+
+	if(!w)
+		return;
+
 	//It's possible our last update was successful but suboptimal.
 	//This happens when the device is rotated in landscape mode which won't trigger any config change or resize.
 	//In this case, the compositor will happily rotate for us, but we should still resize to ensure optimal performance.

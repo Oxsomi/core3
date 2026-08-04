@@ -32,12 +32,24 @@ on:
         type: string
         required: false
         default: ''
+      android_api:
+        type: string
+        required: false
+        default: '31'
+      android_ndk:
+        type: string
+        required: false
+        default: '29.0.13113456'
       hook_name:
         type: string
         required: true
     secrets:
       WEBHOOK_URL:
         required: true
+
+# `inputs.os` selects *what* is built (android vs. a host build), `runner.os` selects the host toolchain
+# to install. They're independent: android is cross compiled from all three hosts, and the android job
+# still needs a full host toolchain because it builds OxC3_package to package virtual files with.
 
 jobs:
   build:
@@ -56,15 +68,11 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
-      # ── Ninja (Android only) ───────────────────────────────────────────────
+      # ── Ninja (Android only; used as the CMake generator on every host) ────
       - uses: seanmiddleditch/gha-setup-ninja@master
         if: inputs.os == 'android'
 
       # ── Conan ──────────────────────────────────────────────────────────────
-      - name: Install Conan
-        if: (inputs.os != 'linux' && inputs.os != 'steamos')
-        uses: turtlebrowser/get-conan@main
-
       # SteamOS container doesn't have pip by default
       - name: Install Conan (SteamOS)
         if: inputs.os == 'steamos'
@@ -74,24 +82,28 @@ jobs:
           pip3 install conan --break-system-packages
 
       - name: Install Conan (Linux)
-        if: inputs.os == 'linux'
+        if: inputs.os != 'steamos' && runner.os == 'Linux'
         run: |
           sudo apt-get update -y
           sudo apt-get install -y python3-pip
           sudo pip3 install conan --break-system-packages
 
-      # ── Linux platform deps ────────────────────────────────────────────────
+      - name: Install Conan
+        if: inputs.os != 'steamos' && runner.os != 'Linux'
+        uses: turtlebrowser/get-conan@main
+
+      # ── Host platform deps ─────────────────────────────────────────────────
+      # Needed by every build that produces host binaries, including the android job's OxC3_package.
       - name: Install Wayland deps
-        if: inputs.os == 'linux'
+        if: inputs.os != 'steamos' && runner.os == 'Linux'
         run: sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev
 
-      # ── macOS platform deps ────────────────────────────────────────────────
       - name: Set up Homebrew
-        if: inputs.os == 'macos'
+        if: runner.os == 'macOS'
         uses: Homebrew/actions/setup-homebrew@master
 
       - name: Setup LLVM
-        if: inputs.os == 'macos'
+        if: runner.os == 'macOS'
         uses: ZhongRuoyu/setup-llvm@v0
         with:
           llvm-version: 17
@@ -99,7 +111,7 @@ jobs:
       # ── Android platform deps ──────────────────────────────────────────────
       - name: Set up JDK 17
         if: inputs.os == 'android'
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -108,13 +120,15 @@ jobs:
         if: inputs.os == 'android'
         uses: android-actions/setup-android@v3
 
+      # setup-android exports ANDROID_SDK_ROOT for whichever runner we're on; derive ours from that
+      # instead of hardcoding a Windows path, so the same job works on linux/macos/windows.
       - name: Setup Android NDK
         if: inputs.os == 'android'
-        run: sdkmanager "platforms;android-29" "ndk;29.0.13113456"
-
-      - name: Setup msys2
-        if: inputs.os == 'android'
-        uses: msys2/setup-msys2@v2
+        shell: bash
+        run: |
+          sdkmanager "platforms;android-${{ inputs.android_api }}" "ndk;${{ inputs.android_ndk }}"
+          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ inputs.android_ndk }}" >> "$GITHUB_ENV"
 
       # ── Conan package cache ────────────────────────────────────────────────
       - name: Cache Conan packages
@@ -124,26 +138,25 @@ jobs:
           key: ${{ inputs.os }}-${{ inputs.runner }}-${{ hashFiles('**/conanfile.py', '**/conanfile.txt') }}
 
       # ── Build: Android ─────────────────────────────────────────────────────
+      # An android build can't run its own packager, so it tool_requires a host oxc3 that has
+      # OxC3_package in it (see conanfile.py's build_requirements). Build that once up front; the
+      # three android configs below then share it, which is why HOST_TOOL_OPTIONS is fixed rather
+      # than derived from the target's options.
+      - name: Build host OxC3 package (tooling)
+        if: inputs.os == 'android'
+        run: ${{ inputs.python_cmd }} build_android.py --host_package_only
+
       - name: Build Android Debug
         if: inputs.os == 'android'
-        env:
-          ANDROID_SDK: C:\Android\android-sdk
-          ANDROID_NDK: C:\Android\android-sdk\ndk\29.0.13113456
-        run: ${{ inputs.python_cmd }} build_android.py -mode Debug
+        run: ${{ inputs.python_cmd }} build_android.py -mode Debug -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
 
       - name: Build Android Debug (SIMD fallback)
         if: inputs.os == 'android'
-        env:
-          ANDROID_SDK: C:\Android\android-sdk
-          ANDROID_NDK: C:\Android\android-sdk\ndk\29.0.13113456
-        run: ${{ inputs.python_cmd }} build_android.py -mode Debug -simd False
+        run: ${{ inputs.python_cmd }} build_android.py -mode Debug -simd False -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
 
       - name: Build Android Release
         if: inputs.os == 'android'
-        env:
-          ANDROID_SDK: C:\Android\android-sdk
-          ANDROID_NDK: C:\Android\android-sdk\ndk\29.0.13113456
-        run: ${{ inputs.python_cmd }} build_android.py -mode Release
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
 
       # ── Build: everything else ─────────────────────────────────────────────
       - name: Build Release

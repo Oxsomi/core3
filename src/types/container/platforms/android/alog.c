@@ -55,10 +55,13 @@ void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const C
 	const C8 *newLine = options & ELogOptions_NewLine ? "\n" : "";
 
 	if(options & ELogOptions_Thread)
-		__android_log_print(androidLvl, "OxC3", "[%"PRIu64"]: %.*s%s", thread, (int)CharString_length(arg), arg.ptr, newLine);
+		__android_log_print(
+			androidLvl, "OxC3", "[%"PRIu64"]: %.*s%s",
+			thread, !arg ? 0 : (int)CharString_length(*arg), !arg ? "" : arg->ptr, newLine
+		);
 
 	else __android_log_print(
-		androidLvl, "OxC3", "%.*s%s", !arg ? 0 : (int)CharString_length(arg), !arg ? "" : arg.ptr, newLine
+		androidLvl, "OxC3", "%.*s%s", !arg ? 0 : (int)CharString_length(*arg), !arg ? "" : arg->ptr, newLine
 	);
 }
 

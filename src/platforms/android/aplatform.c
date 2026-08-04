@@ -27,6 +27,7 @@
 #include "platforms/logx.h"
 #include "types/container/string.h"
 #include "types/base/string_read_helper.h"
+#include "types/base/string_mut.h"
 #include "types/base/error.h"
 
 #include <android/asset_manager.h>
@@ -81,7 +82,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		CharString sectionName = CharString_createRefCStrConst(nameSection);
 		CharString section = CharString_createRefCStrConst("section_");
 
-		if(!CharString_startsWithStringSensitive(sectionName, &section, 0))
+		if(!CharString_startsWithStringSensitive(&sectionName, &section, 0))
 			continue;
 
 		//Now we can open the section directly and find the files through there
@@ -92,7 +93,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		gotoIfError3(clean, CharString_createCopy(sectionName, Platform_instance->alloc, &tmpStr, e_rr));
 
 		CharString packages = CharString_createRefCStrConst("packages/");
-		gotoIfError3(clean, CharString_insertString(&tmpStr, packages, 0, Platform_instance->alloc, e_rr));
+		gotoIfError3(clean, CharString_insertString(&tmpStr, &packages, 0, Platform_instance->alloc, e_rr));
 
 		subDir = AAssetManager_openDir(assetManager, tmpStr.ptr);
 
@@ -113,7 +114,9 @@ Bool Platform_initUnixExt(Error *e_rr) {
 			gotoIfError3(clean, CharString_append(&tmpStr2, '/', Platform_instance->alloc, e_rr));
 			gotoIfError3(clean, CharString_appendString(&tmpStr2, &subSectStr, Platform_instance->alloc, e_rr));
 
-			if(CharString_endsWithStringInsensitive(tmpStr2, CharString_createRefCStrConst(".oiCA"), 0))
+			CharString oiCA = CharString_createRefCStrConst(".oiCA");
+
+			if(CharString_endsWithStringInsensitive(&tmpStr2, &oiCA, 0))
 				gotoIfError3(clean, CharString_popEndCount(&tmpStr2, sizeof("oiCA"), e_rr));    //sizeof("oiCA") == 5
 
 			asset = AAssetManager_open(assetManager, tmpStr1.ptr, AASSET_MODE_STREAMING);
@@ -121,11 +124,14 @@ Bool Platform_initUnixExt(Error *e_rr) {
 			if(!asset)
 				retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed, couldn't open asset"));
 
-			VirtualSection section = (VirtualSection) { .path = tmpStr2 };
-			section.lenExt = AAsset_getLength64(asset);
+			//afile.c reconstructs "packages/<path>.oiCA" from this, so path stays extension-less and matches
+			//how the ELF/MACH section name is stored on the other unices (see lplatform.c / oplatform.c).
+
+			VirtualSection virtualSection = (VirtualSection) { .path = tmpStr2 };
+			virtualSection.lenExt = (U64) AAsset_getLength64(asset);
 
 			gotoIfError3(clean, ListVirtualSection_pushBack(
-				Platform_instance->alloc, &Platform_instance->virtualSections, section
+				&Platform_instance->virtualSections, virtualSection, Platform_instance->alloc, e_rr
 			));
 
 			tmpStr2 = CharString_createNull();
@@ -159,6 +165,7 @@ void Platform_cleanupUnixExt() { }
 
 Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, CharString *result, Error *e_rr) {
 
+	(void)alloc;        //The name is a static string owned by the InputDevice, so nothing gets allocated
 	Bool s_uccess = true;
 
 	if(!keyboard || key >= keyboard->buttons)
@@ -174,7 +181,7 @@ Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, 
 	//Because nobody is crazy enough to use keyboards on Android.
 	//+ sizeof(EKey) == substr("EKey_".size())
 
-	*result = CharString_createRefCStrConst(InputDevice_getButton(*keyboard, key)->name + sizeof("EKey"));
+	*result = CharString_createRefCStrConst(InputDevice_getButton(keyboard, key)->name + sizeof("EKey"));
 
 clean:
 	return s_uccess;

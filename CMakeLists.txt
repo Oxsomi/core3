@@ -90,6 +90,12 @@ if(MSVC)
 		"$<$<COMPILE_LANGUAGE:CXX>:${BUILD_FLAGS}>"
 	)
 
+	# MSVC's legacy preprocessor mis-expands nested __VA_ARGS__, which vec4f_swizzle.h's generators rely on
+	# (F32x4_expand -> expand2 -> expand3 -> expand4). C doesn't hit it because C17 mode already implies the
+	# conformant preprocessor; C++ still defaults to the legacy one, so the oxc:: wrappers, which pull the
+	# vector headers into oxc::c, fail to compile without this. gcc/clang are conformant either way.
+	add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>")
+
 	# Whole-program optimization (MSVC LTO): /GL to compile, /LTCG to link. lib.exe needs /LTCG told separately
 	# via the static-linker flags or every archive step warns (LNK4075/D9035). /LTCG makes the link the
 	# bottleneck, so this is gated to Release only - a ship/CI config, keeping local Debug/RelWithDebInfo fast.
@@ -126,6 +132,14 @@ else()
 	# -Wextra's -Wmissing-field-initializers still flags it when the C headers are compiled as C++
 	# (the oxc::c compat layer), where `{}` would be needed but isn't valid C. The idiom is intentional, so silence this one.
 	add_compile_options(-Wno-missing-field-initializers)
+
+	# TList(T) expands to a full set of `static inline` accessors and a TU only ever uses a handful of them.
+	# gcc and MSVC don't mind, but clang reports every leftover under -Wunused-function whenever the macro is
+	# expanded in a .c instead of a header, which is the case for platform.c, the vulkan/d3d12 backends and the shader compiler.
+	# Keep the warning on for gcc, which still catches genuinely dead static functions.
+	if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+		add_compile_options(-Wno-unused-function)
+	endif()
 
 	# Fix for certain GCC versions misbehaving with struct copies.
 	# (Yes, I did run into this, but it seems fixed in 14.3, 13.4)

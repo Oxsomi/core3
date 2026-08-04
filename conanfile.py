@@ -7,6 +7,27 @@ import shutil
 
 required_conan_version = ">=2.0"
 
+# Options oxc3 is built with when it's consumed as a host *tool* rather than as a library; this is the
+# OxC3_package packager that add_virtual_files() shells out to (see cmake/oxc3.cmake).
+#
+# Deliberately constant instead of forwarded from self.options: it's a host binary that only turns files
+# into oiCA archives, so nothing about the target (SIMD level, graphics backend, ...) should change it.
+# Keeping it fixed also means a single prebuilt package serves every android configuration.
+#
+# build_common.py reads this dict straight out of this file so build_android.py can prebuild exactly the
+# binary tool_requires below is going to ask for.
+
+HOST_TOOL_OPTIONS = {
+	"forceVulkan": False,
+	"enableSIMD": True,
+	"enableTests": False,
+	"enableOxC3CLI": True,
+	"forceFloatFallback": False,
+	"enableShaderCompiler": True,
+	"cliGraphics": False,
+	"dynamicLinkingGraphics": True
+}
+
 class oxc3(ConanFile):
 
 	name = "oxc3"
@@ -80,11 +101,23 @@ class oxc3(ConanFile):
 		git.checkout(self.conan_data["sources"][self.version]["checkout"])
 		git.run("submodule update --init --recursive")
 
+	# Where CMakeLists.txt lives. `conan build`/`export-pkg` run against a working tree so that's the recipe
+	# folder itself, while `conan create` calls source() first which clones the repo into ./core3.
+
+	def _cmakeRoot(self):
+
+		cloned = os.path.join(self.source_folder, "core3")
+
+		if os.path.isfile(os.path.join(cloned, "CMakeLists.txt")):
+			return cloned
+
+		return self.source_folder
+
 	def build(self):
 
 		cmake = CMake(self)
 
-		if os.path.isdir("../core3"):
+		if self._cmakeRoot() != self.source_folder:
 			cmake.configure(build_script_folder="core3")
 		else:
 			cmake.configure()
@@ -94,19 +127,15 @@ class oxc3(ConanFile):
 	# In case we don't have the shader compiler (and OxC3 package) enabled, we will have to depend on a previously built
 	# OxC3 with shader compiler enabled.
 	# This happens for example with Android, where shader compilation is disabled by default.
+	#
+	# It's a tool_requires, so conan resolves it against the *build* profile and puts its bin/ on PATH;
+	# that's how add_virtual_files()'s find_program(OxC3_package) resolves while cross compiling.
+	# build_android.py prebuilds this from the working tree, otherwise conan falls back to building oxc3
+	# from github (see source()), which is almost never what you want locally.
 
 	def build_requirements(self):
 		if not self.options.enableShaderCompiler:
-			self.tool_requires("oxc3/0.2.103", options = {
-				"forceVulkan": self.options.forceVulkan,
-				"enableSIMD": self.options.enableSIMD,
-				"enableTests": False,
-				"enableOxC3CLI": True,
-				"forceFloatFallback": False,
-				"enableShaderCompiler": True,
-				"cliGraphics": False,
-				"dynamicLinkingGraphics": True
-			})
+			self.tool_requires(f"{self.name}/{self.version}", options = HOST_TOOL_OPTIONS)
 
 	def requirements(self):
 
@@ -177,29 +206,17 @@ class oxc3(ConanFile):
 		else:
 			platform = "linux"
 
-		# Android always appends <configPath>/build/Debug (etc.) for our package dir since we park our config there.
-		# Windows it stays build/
-		# Linux will keep it relative to core3/build/Debug and so we just append platform/archName
+		# Artifacts don't land in the conan build folder: CMakeLists.txt redirects ARCHIVE/LIBRARY/RUNTIME
+		# output to <cmake root>/build/<config>/<platform>/<arch>/{lib,bin}, and add_virtual_files() writes
+		# its oiCA archives to <cmake root>/build/<config>/<platform>/packages (see cmake/oxc3.cmake).
+		# So derive both from the source tree rather than guessing from build_folder, which moves around
+		# depending on -of, the generator and whether the recipe was created or built in place.
 
-		if self.build_folder.replace("\\", "/").endswith("core3/build/" + str(self.settings.build_type)):
-			input_dir = os.path.join(self.build_folder, platform + "/" + archName)
+		cmake_root = self._cmakeRoot()
+		out_root   = os.path.join(cmake_root, "build", str(self.settings.build_type), platform)
 
-		elif self.build_folder.replace("\\", "/").endswith("/build/" + str(self.settings.build_type)):
-			input_dir = self.build_folder + "/../../"
-
-		else:
-			input_dir = os.path.join(self.build_folder, str(self.settings.build_type) + "/" + platform + "/" + archName)
-
-		# Package dir where our oiCA files are output
-		
-		if self.build_folder.replace("\\", "/").endswith("core3/build/" + str(self.settings.build_type)):
-			OxC3_package_dir = os.path.join(self.build_folder, "../" + platform + "/packages")
-
-		elif self.build_folder.replace("\\", "/").endswith("/build/" + str(self.settings.build_type)):
-			OxC3_package_dir = os.path.join(self.build_folder, "/../../../" + platform + "/packages")
-
-		else:
-			OxC3_package_dir = os.path.join(self.build_folder, platform + "/packages")
+		input_dir        = os.path.join(out_root, archName)
+		OxC3_package_dir = os.path.join(out_root, "packages")
 
 		input_lib_dir = os.path.join(input_dir, "lib")
 		input_bin_dir = os.path.join(input_dir, "bin")
