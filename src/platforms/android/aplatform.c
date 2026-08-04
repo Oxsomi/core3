@@ -20,17 +20,19 @@
 
 //platforms/android/aplatform.c
 
-#include "types/container/list_impl.h"
 #include "platforms/platform.h"
 #include "platforms/keyboard.h"
 #include "platforms/input_device.h"
 #include "platforms/logx.h"
 #include "types/container/string.h"
+#include "types/container/string_unicode.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/string_mut.h"
+#include "types/base/atomic.h"
 #include "types/base/error.h"
 
 #include <android/asset_manager.h>
+#include <android/keycodes.h>
 #include <android_native_app_glue.h>
 #include <jni.h>
 
@@ -163,13 +165,30 @@ clean:
 
 void Platform_cleanupUnixExt() { }
 
+//Defined in awindow.c, next to the AKEYCODE -> EKey switch it mirrors
+
+extern const I32 EKey_toAndroidKeyCode[EKey_Count];
+extern AtomicI64 AWindow_lastKeyboardDeviceId;
+
 Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, CharString *result, Error *e_rr) {
 
-	(void)alloc;        //The name is a static string owned by the InputDevice, so nothing gets allocated
 	Bool s_uccess = true;
+	Bool attached = false;
+	struct android_app *app = NULL;
+	JavaVM *vm = NULL;
+	JNIEnv *env = NULL;
+	jclass cls = NULL;
+	jmethodID methodId = NULL;
+	jstring label = NULL;
+	const jchar *labelPtr = NULL;
+	I32 keyCode = AKEYCODE_UNKNOWN;
+	I32 deviceId = -1;        //KeyCharacterMap.VIRTUAL_KEYBOARD, overwritten below
 
-	if(!keyboard || key >= keyboard->buttons)
-		retError(clean, Error_nullPointer(0, "Keyboard_remap()::keyboard is NULL, or key out of bounds"));
+	if(!keyboard)
+		retError(clean, Error_nullPointer(0, "Keyboard_remap()::keyboard is required"));
+
+	if((U32) key >= EKey_Count)
+		retError(clean, Error_outOfBounds(1, (U64) key, EKey_Count, "Keyboard_remap()::key out of range"));
 
 	if(!result)
 		retError(clean, Error_nullPointer(3, "Keyboard_remap()::result is required"));
@@ -177,13 +196,75 @@ Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, 
 	if(result->ptr)
 		retError(clean, Error_invalidParameter(3, 0, "Keyboard_remap()::result is non empty, indicating possible memleak"));
 
-	//There's no better way to remap keys on Android that is safe for different localizations,
-	//Because nobody is crazy enough to use keyboards on Android.
-	//+ sizeof(EKey) == substr("EKey_".size())
+	//The NDK has no key -> label API (AKeyEvent_* stops at the raw keycode), so the localized label has to
+	//come from the framework's KeyCharacterMap through OxC3Activity.getKeyLabel.
+	//Note EKey is positional (scan code) on desktop but android hands us already layout-translated keycodes,
+	//so the label is right for the layout even though the EKey a physical key produces differs from desktop.
 
-	*result = CharString_createRefCStrConst(InputDevice_getButton(keyboard, key)->name + sizeof("EKey"));
+	keyCode = EKey_toAndroidKeyCode[key];
+
+	if(keyCode == AKEYCODE_UNKNOWN)
+		retError(clean, Error_notFound(0, 0, "Keyboard_remap() key doesn't exist on android"));
+
+	app = (struct android_app*) Platform_instance->data;
+	vm = app->activity->vm;
+	env = app->activity->env;
+
+	if((*vm)->GetEnv(vm, (void**) &env, JNI_VERSION_1_6) != JNI_OK) {
+		(*vm)->AttachCurrentThread(vm, &env, NULL);
+		attached = true;
+	}
+
+	cls = (*env)->GetObjectClass(env, app->activity->clazz);
+
+	if(!cls)
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity"));
+
+	methodId = (*env)->GetMethodID(env, cls, "getKeyLabel", "(II)Ljava/lang/String;");
+
+	if(!methodId)
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity.getKeyLabel"));
+
+	deviceId = (I32) AtomicI64_load(&AWindow_lastKeyboardDeviceId);
+
+	label = (jstring) (*env)->CallObjectMethod(env, app->activity->clazz, methodId, keyCode, deviceId);
+
+	if((*env)->ExceptionCheck(env)) {
+		(*env)->ExceptionClear(env);
+		retError(clean, Error_invalidState(0, "OxC3Activity.getKeyLabel threw"));
+	}
+
+	if(!label || !(*env)->GetStringLength(env, label))
+		retError(clean, Error_notFound(0, 0, "Keyboard_remap() couldn't be translated"));
+
+	//UTF-16 rather than GetStringUTFChars: the latter hands back modified UTF-8, which encodes anything
+	//outside the BMP as a surrogate pair (CESU-8) that our UTF-8 reader would reject.
+
+	labelPtr = (*env)->GetStringChars(env, label, NULL);
+
+	if(!labelPtr)
+		retError(clean, Error_outOfMemory(0, "Keyboard_remap() couldn't read the label"));
+
+	//Owned copy, matching windows/linux; the caller frees it
+
+	gotoIfError3(clean, CharString_createFromUTF16(
+		(const U16*) labelPtr, (U64) (*env)->GetStringLength(env, label), alloc, result, e_rr
+	));
 
 clean:
+
+	if(labelPtr)
+		(*env)->ReleaseStringChars(env, label, labelPtr);
+
+	if(label)
+		(*env)->DeleteLocalRef(env, label);
+
+	if(cls)
+		(*env)->DeleteLocalRef(env, cls);
+
+	if(attached)
+		(*vm)->DetachCurrentThread(vm);
+
 	return s_uccess;
 }
 

@@ -22,8 +22,7 @@
 
 #include "types/container/log.h"
 #include "types/base/thread.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
+#include "types/base/string_base.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 
@@ -46,9 +45,9 @@ void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const C
 
 	switch(lvl) {
 		default:                        androidLvl = ANDROID_LOG_DEBUG;     break;
-		case ELogLevel_Performance:         androidLvl = ANDROID_LOG_INFO;      break;
+		case ELogLevel_Performance:     androidLvl = ANDROID_LOG_INFO;      break;
 		case ELogLevel_Warn:            androidLvl = ANDROID_LOG_WARN;      break;
-		case ELogLevel_Error:               androidLvl = ANDROID_LOG_ERROR;     break;
+		case ELogLevel_Error:           androidLvl = ANDROID_LOG_ERROR;     break;
 	}
 	
 	U64 thread = Thread_getId();

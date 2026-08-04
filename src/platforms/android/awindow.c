@@ -28,6 +28,10 @@
 #include "platforms/platform.h"
 #include "types/container/buffer.h"
 #include "types/container/log.h"
+#include "types/container/string.h"
+#include "types/container/string_unicode.h"
+#include "types/base/atomic.h"
+#include "types/base/lock.h"
 #include "types/base/mathf.h"
 
 #include <android_native_app_glue.h>
@@ -114,6 +118,176 @@ clean:
 		(*vm)->DetachCurrentThread(vm);
 
 	return orientation;
+}
+
+//Unicode a physical key produces, via OxC3Activity.getKeyUnicode -> KeyCharacterMap.
+//The NDK stops at the raw keycode (AKeyEvent_* has no unicode accessor), so this has to go through JNI.
+//Returns 0 when the key produces nothing printable.
+
+I32 APlatform_getKeyUnicode(I32 keyCode, I32 metaState, I32 deviceId) {
+
+	struct android_app *app = (struct android_app*)Platform_instance->data;
+	JavaVM *vm = app->activity->vm;
+	JNIEnv *env = app->activity->env;
+
+	Bool attached = false;
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+	I32 unicode = 0;
+
+	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+		(*vm)->AttachCurrentThread(vm, &env, NULL);
+		attached = true;
+	}
+
+	jclass cls = (*env)->GetObjectClass(env, app->activity->clazz);
+
+	if(!cls)
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity"));
+
+	jmethodID methodId = (*env)->GetMethodID(env, cls, "getKeyUnicode", "(III)I");
+
+	if (!methodId)
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity.getKeyUnicode"));
+
+	unicode = (*env)->CallIntMethod(env, app->activity->clazz, methodId, keyCode, metaState, deviceId);
+
+clean:
+
+	if(cls)
+		(*env)->DeleteLocalRef(env, cls);
+
+	if(!s_uccess)
+		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	if(attached)
+		(*vm)->DetachCurrentThread(vm);
+
+	return unicode;
+}
+
+//Refresh rate of the display, via OxC3Activity.getRefreshRate.
+//The NDK only has ANativeWindow_setFrameRate (a setter, API 30+), so this needs JNI too.
+
+F32 APlatform_getRefreshRate() {
+
+	struct android_app *app = (struct android_app*)Platform_instance->data;
+	JavaVM *vm = app->activity->vm;
+	JNIEnv *env = app->activity->env;
+
+	Bool attached = false;
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+	F32 refreshRate = 0;
+
+	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+		(*vm)->AttachCurrentThread(vm, &env, NULL);
+		attached = true;
+	}
+
+	jclass cls = (*env)->GetObjectClass(env, app->activity->clazz);
+
+	if(!cls)
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity"));
+
+	jmethodID methodId = (*env)->GetMethodID(env, cls, "getRefreshRate", "()F");
+
+	if (!methodId)
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity.getRefreshRate"));
+
+	refreshRate = (F32) (*env)->CallFloatMethod(env, app->activity->clazz, methodId);
+
+clean:
+
+	if(cls)
+		(*env)->DeleteLocalRef(env, cls);
+
+	if(!s_uccess)
+		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	if(attached)
+		(*vm)->DetachCurrentThread(vm);
+
+	return refreshRate;
+}
+
+//Soft keyboard text arrives on the android UI thread (OxC3Activity's TextWatcher), but every other
+//callback runs on the app thread. So the JNI side only queues, and AWindow_flushTypeChar drains it
+//from WindowManager_updateExt, where the rest of the input pump already runs.
+
+static SpinLock AWindow_typeCharLock = { 0 };
+static ListCharString AWindow_typeCharQueue = { 0 };
+
+//OxC3Activity.java declares this `native void onTypeChar(String)` and calls it on every character;
+//without an implementation here the Java side throws UnsatisfiedLinkError on the first keystroke.
+
+JNIEXPORT void JNICALL Java_net_osomi_nativeactivity_OxC3Activity_onTypeChar(
+	JNIEnv *env, jobject thiz, jstring input
+) {
+	(void) thiz;
+
+	if(!input || !Platform_instance)
+		return;
+
+	const jsize len = (*env)->GetStringLength(env, input);
+
+	if(!len)
+		return;
+
+	//UTF-16 rather than GetStringUTFChars, which returns modified UTF-8; that encodes anything
+	//outside the BMP (emoji, which a soft keyboard produces readily) as CESU-8 surrogate pairs.
+
+	const jchar *utf16 = (*env)->GetStringChars(env, input, NULL);
+
+	if(utf16) {
+
+		CharString str = CharString_createNull();
+		Error err = Error_none();
+
+		if(CharString_createFromUTF16((const U16*) utf16, (U64) len, Platform_instance->alloc, &str, &err)) {
+
+			const ELockAcquire acq = SpinLock_lock(&AWindow_typeCharLock, U64_MAX);
+
+			if(acq >= ELockAcquire_Success) {
+
+				if(ListCharString_pushBack(&AWindow_typeCharQueue, str, Platform_instance->alloc, &err))
+					str = CharString_createNull();        //The queue owns it now
+
+				if(acq == ELockAcquire_Acquired)
+					SpinLock_unlock(&AWindow_typeCharLock);
+			}
+		}
+
+		CharString_free(&str, Platform_instance->alloc);
+		(*env)->ReleaseStringChars(env, input, utf16);
+	}
+}
+
+//Called on the app thread. Swaps the queue out under the lock so onTypeChar runs unlocked and the UI
+//thread never blocks on user code. Drains even without a window, so nothing accumulates forever.
+
+void AWindow_flushTypeChar(Window *w) {
+
+	//Move the queue into a local and hand the global a fresh empty one; the struct copy carries
+	//capacityAndRefInfo along, so the local owns the buffer and the global no longer refers to it.
+
+	ListCharString queue = (ListCharString) { 0 };
+	const ELockAcquire acq = SpinLock_lock(&AWindow_typeCharLock, U64_MAX);
+
+	if(acq >= ELockAcquire_Success) {
+
+		queue = AWindow_typeCharQueue;
+		AWindow_typeCharQueue = (ListCharString) { 0 };
+
+		if(acq == ELockAcquire_Acquired)
+			SpinLock_unlock(&AWindow_typeCharLock);
+	}
+
+	for(U64 i = 0; i < queue.length; ++i)
+		if(w && w->callbacks.onTypeChar && (w->flags & EWindowFlags_IsFinalized))
+			w->callbacks.onTypeChar(w, queue.ptr[i]);
+
+	ListCharString_freeUnderlying(&queue, Platform_instance->alloc);
 }
 
 void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
@@ -362,6 +536,148 @@ EKey AWindow_mapKey(I32 keyCode) {
 	}
 }
 
+//Inverse of AWindow_mapKey, for Keyboard_remap (aplatform.c). Kept next to the switch above on purpose:
+//the two have to agree, and nothing enforces that but proximity.
+//AWindow_mapKey stays a switch because it's on the input hot path and compiles to a jump table.
+//AKEYCODE_UNKNOWN (0) means the key doesn't exist on android and can't be remapped.
+
+const I32 EKey_toAndroidKeyCode[EKey_Count] = {
+
+	/* EKey_0 */            AKEYCODE_0,
+	/* EKey_1 */            AKEYCODE_1,
+	/* EKey_2 */            AKEYCODE_2,
+	/* EKey_3 */            AKEYCODE_3,
+	/* EKey_4 */            AKEYCODE_4,
+	/* EKey_5 */            AKEYCODE_5,
+	/* EKey_6 */            AKEYCODE_6,
+	/* EKey_7 */            AKEYCODE_7,
+	/* EKey_8 */            AKEYCODE_8,
+	/* EKey_9 */            AKEYCODE_9,
+
+	/* EKey_A */            AKEYCODE_A,
+	/* EKey_B */            AKEYCODE_B,
+	/* EKey_C */            AKEYCODE_C,
+	/* EKey_D */            AKEYCODE_D,
+	/* EKey_E */            AKEYCODE_E,
+	/* EKey_F */            AKEYCODE_F,
+	/* EKey_G */            AKEYCODE_G,
+	/* EKey_H */            AKEYCODE_H,
+	/* EKey_I */            AKEYCODE_I,
+	/* EKey_J */            AKEYCODE_J,
+	/* EKey_K */            AKEYCODE_K,
+	/* EKey_L */            AKEYCODE_L,
+	/* EKey_M */            AKEYCODE_M,
+	/* EKey_N */            AKEYCODE_N,
+	/* EKey_O */            AKEYCODE_O,
+	/* EKey_P */            AKEYCODE_P,
+	/* EKey_Q */            AKEYCODE_Q,
+	/* EKey_R */            AKEYCODE_R,
+	/* EKey_S */            AKEYCODE_S,
+	/* EKey_T */            AKEYCODE_T,
+	/* EKey_U */            AKEYCODE_U,
+	/* EKey_V */            AKEYCODE_V,
+	/* EKey_W */            AKEYCODE_W,
+	/* EKey_X */            AKEYCODE_X,
+	/* EKey_Y */            AKEYCODE_Y,
+	/* EKey_Z */            AKEYCODE_Z,
+
+	/* EKey_Backspace */    AKEYCODE_DEL,
+	/* EKey_Space */        AKEYCODE_SPACE,
+	/* EKey_Tab */          AKEYCODE_TAB,
+
+	/* EKey_LShift */       AKEYCODE_SHIFT_LEFT,
+	/* EKey_LCtrl */        AKEYCODE_CTRL_LEFT,
+	/* EKey_LAlt */         AKEYCODE_ALT_LEFT,
+	/* EKey_LMenu */        AKEYCODE_META_LEFT,
+	/* EKey_RShift */       AKEYCODE_SHIFT_RIGHT,
+	/* EKey_RCtrl */        AKEYCODE_CTRL_RIGHT,
+	/* EKey_RAlt */         AKEYCODE_ALT_RIGHT,
+	/* EKey_RMenu */        AKEYCODE_META_RIGHT,
+
+	/* EKey_Pause */        AKEYCODE_MEDIA_PLAY_PAUSE,
+	/* EKey_Caps */         AKEYCODE_CAPS_LOCK,
+	/* EKey_Escape */       AKEYCODE_ESCAPE,
+	/* EKey_PageUp */       AKEYCODE_PAGE_UP,
+	/* EKey_PageDown */     AKEYCODE_PAGE_DOWN,
+	/* EKey_End */          AKEYCODE_MOVE_END,
+	/* EKey_Home */         AKEYCODE_MOVE_HOME,
+	/* EKey_PrintScreen */  AKEYCODE_SYSRQ,
+	/* EKey_Insert */       AKEYCODE_INSERT,
+	/* EKey_Enter */        AKEYCODE_ENTER,
+	/* EKey_Delete */       AKEYCODE_FORWARD_DEL,
+	/* EKey_NumLock */      AKEYCODE_NUM_LOCK,
+	/* EKey_ScrollLock */   AKEYCODE_SCROLL_LOCK,
+
+	/* EKey_Back */         AKEYCODE_BACK,
+	/* EKey_Forward */      AKEYCODE_FORWARD,
+	/* EKey_Sleep */        AKEYCODE_SLEEP,
+	/* EKey_Refresh */      AKEYCODE_REFRESH,
+	/* EKey_Search */       AKEYCODE_SEARCH,
+	/* EKey_Mute */         AKEYCODE_VOLUME_MUTE,
+	/* EKey_VolumeDown */   AKEYCODE_VOLUME_DOWN,
+	/* EKey_VolumeUp */     AKEYCODE_VOLUME_UP,
+	/* EKey_Skip */         AKEYCODE_MEDIA_NEXT,
+	/* EKey_Previous */     AKEYCODE_MEDIA_PREVIOUS,
+	/* EKey_Clear */        AKEYCODE_CLEAR,
+	/* EKey_Help */         AKEYCODE_HELP,
+
+	/* EKey_Left */         AKEYCODE_DPAD_LEFT,
+	/* EKey_Up */           AKEYCODE_DPAD_UP,
+	/* EKey_Right */        AKEYCODE_DPAD_RIGHT,
+	/* EKey_Down */         AKEYCODE_DPAD_DOWN,
+
+	/* EKey_Numpad0 */      AKEYCODE_NUMPAD_0,
+	/* EKey_Numpad1 */      AKEYCODE_NUMPAD_1,
+	/* EKey_Numpad2 */      AKEYCODE_NUMPAD_2,
+	/* EKey_Numpad3 */      AKEYCODE_NUMPAD_3,
+	/* EKey_Numpad4 */      AKEYCODE_NUMPAD_4,
+	/* EKey_Numpad5 */      AKEYCODE_NUMPAD_5,
+	/* EKey_Numpad6 */      AKEYCODE_NUMPAD_6,
+	/* EKey_Numpad7 */      AKEYCODE_NUMPAD_7,
+	/* EKey_Numpad8 */      AKEYCODE_NUMPAD_8,
+	/* EKey_Numpad9 */      AKEYCODE_NUMPAD_9,
+
+	/* EKey_NumpadMul */    AKEYCODE_NUMPAD_MULTIPLY,
+	/* EKey_NumpadAdd */    AKEYCODE_NUMPAD_ADD,
+	/* EKey_NumpadDot */    AKEYCODE_NUMPAD_DOT,
+	/* EKey_NumpadDiv */    AKEYCODE_NUMPAD_DIVIDE,
+	/* EKey_NumpadSub */    AKEYCODE_NUMPAD_SUBTRACT,
+
+	/* EKey_F1 */           AKEYCODE_F1,
+	/* EKey_F2 */           AKEYCODE_F2,
+	/* EKey_F3 */           AKEYCODE_F3,
+	/* EKey_F4 */           AKEYCODE_F4,
+	/* EKey_F5 */           AKEYCODE_F5,
+	/* EKey_F6 */           AKEYCODE_F6,
+	/* EKey_F7 */           AKEYCODE_F7,
+	/* EKey_F8 */           AKEYCODE_F8,
+	/* EKey_F9 */           AKEYCODE_F9,
+	/* EKey_F10 */          AKEYCODE_F10,
+	/* EKey_F11 */          AKEYCODE_F11,
+	/* EKey_F12 */          AKEYCODE_F12,
+
+	/* EKey_Bar */          AKEYCODE_UNKNOWN,    //Scancode 56; android has no keycode for it
+	/* EKey_Options */      AKEYCODE_MENU,
+
+	/* EKey_Equals */       AKEYCODE_EQUALS,
+	/* EKey_Comma */        AKEYCODE_COMMA,
+	/* EKey_Minus */        AKEYCODE_MINUS,
+	/* EKey_Period */       AKEYCODE_PERIOD,
+	/* EKey_Slash */        AKEYCODE_SLASH,
+	/* EKey_Backtick */     AKEYCODE_GRAVE,
+	/* EKey_Semicolon */    AKEYCODE_SEMICOLON,
+	/* EKey_LBracket */     AKEYCODE_LEFT_BRACKET,
+	/* EKey_RBracket */     AKEYCODE_RIGHT_BRACKET,
+	/* EKey_Backslash */    AKEYCODE_BACKSLASH,
+	/* EKey_Quote */        AKEYCODE_APOSTROPHE
+};
+
+//KeyCharacterMap is per input device, so remapping needs to know which keyboard we're talking about.
+//Set from the input thread, read from wherever Keyboard_remap is called, hence the atomic.
+//KeyCharacterMap.VIRTUAL_KEYBOARD (-1) is the documented fallback and yields a US QWERTY map.
+
+AtomicI64 AWindow_lastKeyboardDeviceId = { -1 };
+
 I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 
 	Window *w = (Window*) app->userData;
@@ -509,18 +825,46 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 
 		case AINPUT_EVENT_TYPE_KEY: {
 
-			//TODO: Android, send unicode events :(
-
 			I32 keyCode = AKeyEvent_getKeyCode(event);
+			I32 metaState = AKeyEvent_getMetaState(event);
+			I32 deviceId = AInputEvent_getDeviceId(event);
 			EKey mappedKey = AWindow_mapKey(keyCode);
-			
+
+			//Remember which keyboard this came from so Keyboard_remap can load its KeyCharacterMap.
+			//Stored even for keys we don't map, since the device is valid regardless.
+
+			AtomicI64_store(&AWindow_lastKeyboardDeviceId, deviceId);
+
+			//Text input for physical keyboards.
+			//The EditText only has focus while the soft keyboard is up (see Platform_setKeyboardVisible),
+			// so these never reach the TextWatcher and would otherwise produce no text at all.
+			//Control characters are filtered to match WM_CHAR/linux.
+
+			if (isDown && w->callbacks.onTypeChar) {
+
+				I32 unicode = APlatform_getKeyUnicode(keyCode, metaState, deviceId);
+
+				if (unicode >= 0x20 && unicode != 0x7F) {
+
+					CharString str = CharString_createNull();
+					Error err = Error_none();
+					const U32 codepoint = (U32) unicode;
+
+					if(CharString_createFromUTF32(&codepoint, 1, Platform_instance->alloc, &str, &err))
+						w->callbacks.onTypeChar(w, str);
+
+					CharString_free(&str, Platform_instance->alloc);
+				}
+			}
+
 			if (mappedKey != EKey_Count) {
 
 				InputDevice *dev = keyboard;
-		
-				U32 flags = 0;        //TODO: Caps, numlock, scroll lock
-				
-				dev->flags = flags;
+
+				dev->flags =
+					((U32)((metaState & AMETA_CAPS_LOCK_ON) != 0)   << EKeyboardFlags_Caps) |
+					((U32)((metaState & AMETA_NUM_LOCK_ON) != 0)    << EKeyboardFlags_NumLock) |
+					((U32)((metaState & AMETA_SCROLL_LOCK_ON) != 0) << EKeyboardFlags_ScrollLock);
 
 				//Send keys through interface and update input device
 
@@ -532,7 +876,7 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 
 				if(prevState != newState && w->callbacks.onDeviceButton)
 					w->callbacks.onDeviceButton(w, dev, handle, isDown);
-					
+
 				return 1;
 			}
 

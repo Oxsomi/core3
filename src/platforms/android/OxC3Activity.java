@@ -28,6 +28,7 @@ import android.os.Bundle;
 import android.app.NativeActivity;
 import android.content.Context;
 import android.util.Log;
+import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
@@ -95,6 +96,79 @@ public class OxC3Activity extends NativeActivity {
 
 	public int getDeviceOrientation() {
 		return getWindowManager().getDefaultDisplay().getRotation() * 90;
+	}
+
+	//The NDK only has ANativeWindow_setFrameRate (a setter), so the monitor's refresh rate needs this
+
+	public float getRefreshRate() {
+		return getWindowManager().getDefaultDisplay().getRefreshRate();
+	}
+
+	//Localized label for a key, used by Keyboard_remap (option screens, "press a key" prompts).
+	//The NDK has no equivalent; AKeyEvent_* only exposes the raw keycode, so this has to go through
+	// the framework's KeyCharacterMap.
+	//deviceId is the id of the keyboard that last sent a key event,
+	// or KeyCharacterMap.VIRTUAL_KEYBOARD (-1) when nothing physical has been seen yet.
+	//Returns "" when the key has no printable representation (modifiers, arrows, F-keys, ...).
+
+	public String getKeyLabel(int keyCode, int deviceId) {
+
+		try {
+
+			KeyCharacterMap map = KeyCharacterMap.load(deviceId);
+
+			if(map == null)
+				return "";
+
+			//What's physically printed on the key; this is what an option screen wants to show
+
+			char label = map.getDisplayLabel(keyCode);
+
+			if(label != 0)
+				return String.valueOf(label);
+
+			//Keys with no printed glyph can still produce a character; fall back to the unmodified one.
+			//Dead keys report their accent with the COMBINING_ACCENT bit set, so mask it off.
+
+			int unicode = map.get(keyCode, 0);
+
+			if((unicode & KeyCharacterMap.COMBINING_ACCENT) != 0)
+				unicode &= KeyCharacterMap.COMBINING_ACCENT_MASK;
+
+			return unicode == 0 ? "" : new String(Character.toChars(unicode));
+		}
+
+		//load() throws UnavailableException if the id is unknown (keyboard unplugged between the
+		//key event and the remap call). An empty label is the documented "no remap available".
+
+		catch(Exception ex) {
+			return "";
+		}
+	}
+
+	//Character a key produces for the current layout and modifier state, for the onTypeChar callback.
+	//Physical keys don't go through the EditText (it only has focus while the soft keyboard is up),
+	// so they'd otherwise produce no text at all. 0 means the key produces nothing printable.
+
+	public int getKeyUnicode(int keyCode, int metaState, int deviceId) {
+
+		try {
+
+			KeyCharacterMap map = KeyCharacterMap.load(deviceId);
+
+			if(map == null)
+				return 0;
+
+			int unicode = map.get(keyCode, metaState);
+
+			//Dead keys (accents) only resolve once combined with the next key, so there's nothing to type yet
+
+			return (unicode & KeyCharacterMap.COMBINING_ACCENT) != 0 ? 0 : unicode;
+		}
+
+		catch(Exception ex) {
+			return 0;
+		}
 	}
 
 	public void toggleKeyboard(boolean show) {

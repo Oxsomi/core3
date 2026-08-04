@@ -24,10 +24,13 @@
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
+#include "platforms/monitor.h"
 #include "types/base/error.h"
 #include "types/base/thread.h"
 
 #include <android_native_app_glue.h>
+#include <android/configuration.h>
+#include <android/native_window.h>
 
 void *Platform_getDataImpl(void *ptr) { (void) ptr; return (struct android_app*) Platform_instance->data; }
 
@@ -43,25 +46,84 @@ Bool WindowManager_freeNative(WindowManager *w) {
 }
 
 I32 APlatform_getDeviceOrientation();
+F32 APlatform_getRefreshRate();
 void AWindow_onUpdateSize(Window *w);
+void AWindow_flushTypeChar(Window *w);
+
+//Android shows the app on exactly one display and the NDK has no enumeration API,
+// so there's a single monitor to report.
+//The surface only exists after APP_CMD_INIT_WINDOW; until then there's nothing to
+// measure, and WindowManager_step calls us again once it's up.
+
+Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr) {
+
+	Bool s_uccess = true;
+	struct android_app *app = (struct android_app*) Platform_instance->data;
+
+	if(!wm)
+		retError(clean, Error_nullPointer(0, "WindowManager_updateMonitors()::wm is required"));
+
+	ListMonitor_clear(&wm->monitors, NULL);
+
+	if(!app || !app->window)
+		goto clean;
+
+	const I32 width = ANativeWindow_getWidth(app->window);
+	const I32 height = ANativeWindow_getHeight(app->window);
+
+	if(width <= 0 || height <= 0)
+		goto clean;
+
+	//AConfiguration density is already in dpi (the ACONFIGURATION_DENSITY_* values are dpi buckets),
+	// so physical size is px / dpi * 25.4.
+	//Fall back to mdpi, android's reference density.
+
+	I32 density = app->config ? (I32) AConfiguration_getDensity(app->config) : 0;
+
+	if(density <= 0 || density == ACONFIGURATION_DENSITY_NONE || density == ACONFIGURATION_DENSITY_ANY)
+		density = 160;
+
+	const I32 orientation = APlatform_getDeviceOrientation();
+
+	const Monitor monitor = (Monitor) {
+		.offsetPixels = I32x2_zero,
+		.sizePixels   = I32x2_create2(width, height),
+		.sizeMm       = I32x2_create2(
+			(I32)(width * 25.4f / (F32)density), (I32)(height * 25.4f / (F32)density)
+		),
+		.orientation  = (EMonitorOrientation)(orientation < 0 ? 0 : orientation),
+		.refreshRate  = APlatform_getRefreshRate()
+	};
+
+	gotoIfError3(clean, ListMonitor_pushBack(&wm->monitors, monitor, Platform_instance->alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
 
 void WindowManager_updateExt(WindowManager *manager) {
 
 	(void) manager;
-	
+
 	int ident, events;
 	struct android_poll_source *source;
 	struct android_app *app = (struct android_app*) Platform_instance->data;
 	Window *w = (Window*)app->userData;
-	
+
 repeat:
 	while((ident = ALooper_pollOnce(0, NULL, &events, (void**)&source)) >= 0) {
 		if(source)
 			source->process(app, source);
 	}
 
-	//WindowManager_step runs even when no physical window was created (userData is only set by
-	//WindowManager_createWindowPhysical), so everything below this point is window dependent.
+	//Soft keyboard text queued from the UI thread;
+	// run it here so onTypeChar sees the app thread like every other callback.
+	//Flushed before the !w early out so the queue can't grow without a window.
+
+	AWindow_flushTypeChar(w);
+
+	//WindowManager_step runs even when no physical window was created
+	// (userData is only set by WindowManager_createWindowPhysical), so everything below this point is window dependent.
 
 	if(!w)
 		return;
