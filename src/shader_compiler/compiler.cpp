@@ -61,6 +61,29 @@ const C8 *types =
 	#include "shader_compiler/shaders/types.hlsli"
 	;
 
+//Split out of types.hlsli / resources.hlsli; the umbrella headers include them, so a shader that only
+//says #include "@types.hlsli" still sees everything it used to.
+
+const C8 *matHlsli =
+	#include "shader_compiler/shaders/mat.hlsli"
+	;
+
+const C8 *indirectHlsli =
+	#include "shader_compiler/shaders/indirect.hlsli"
+	;
+
+const C8 *fixedPointHlsli =
+	#include "shader_compiler/shaders/fixed_point.hlsli"
+	;
+
+const C8 *bufferHlsli =
+	#include "shader_compiler/shaders/buffer.hlsli"
+	;
+
+const C8 *appDataHlsli =
+	#include "shader_compiler/shaders/appdata.hlsli"
+	;
+
 const C8 *extensionsHlsli =
 	#include "shader_compiler/shaders/extensions.hlsli"
 	;
@@ -354,6 +377,21 @@ public:
 
 				else if(CharString_equalsCStringInsensitive(&resolved, "@extensions.hlsli"))
 					tmpTmp = CharString_createRefCStrConst(extensionsHlsli);
+
+				else if(CharString_equalsCStringInsensitive(&resolved, "@mat.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(matHlsli);
+
+				else if(CharString_equalsCStringInsensitive(&resolved, "@indirect.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(indirectHlsli);
+
+				else if(CharString_equalsCStringInsensitive(&resolved, "@fixed_point.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(fixedPointHlsli);
+
+				else if(CharString_equalsCStringInsensitive(&resolved, "@buffer.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(bufferHlsli);
+
+				else if(CharString_equalsCStringInsensitive(&resolved, "@appdata.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(appDataHlsli);
 
 				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.RayReorder.hlsli"))
 					tmpTmp = CharString_createRefCStrConst(extensionRayReorderHlsl);

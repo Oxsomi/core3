@@ -181,6 +181,25 @@ else()
 	message("-- Disabling OxC3 unit tests (-DEnableTests=Off)")
 endif()
 
+# Can a test suite be its own executable that ctest runs?
+#
+# Not everywhere:
+# android loads a .so through a NativeActivity and has no exec at all,
+#  so those targets
+#  can't even link (Platform_defineEntrypoint gives android_main, not main).
+# wasm and iOS will be the same shape.
+# Those platforms bundle every suite into a single module instead,
+# one per platform under src/test/<platform>; see src/test/android for the reference implementation.
+#
+# Test *libraries* (OxC3_types_test and friends) are still built everywhere, since the bundle links them.
+
+if(ANDROID OR EMSCRIPTEN OR IOS)
+	set(OxC3TestExecutables OFF)
+	message("-- Test suites bundle into one module (no exec on this platform)")
+else()
+	set(OxC3TestExecutables ON)
+endif()
+
 if(EnableShaderCompiler)
 	message("-- Enabling OxC3 compile shaders (-DEnableShaderCompiler=On)")
 else()

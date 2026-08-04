@@ -139,7 +139,7 @@ void Test_chimera(Test *t) {
 	}
 }
 
-int main() {
+OXC3_TEST_MAIN(formats_oiBC) {
 	Test t = (Test) { 0 };
 	Test_chimera(&t);
 	return Test_end(&t);

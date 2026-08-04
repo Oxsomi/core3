@@ -20,6 +20,7 @@
 
 //audio/test/functional/test_audio_functional_main.c
 
+#include "types/test/test.h"
 #include "audio/audio_interface.h"
 #include "audio/audio_device.h"
 #include "audio/audio_stream.h"
@@ -782,7 +783,7 @@ clean:
 	RefPtr_dec(&source); RefPtr_dec(&as); RefPtr_dec(&fs);
 }
 
-int main() {
+OXC3_TEST_MAIN(audio_functional) {
 
 	const Allocator *alloc = &BasicAllocator_instance;
 	AudioFuncCtx ctx = (AudioFuncCtx){ 0 };

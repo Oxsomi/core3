@@ -20,11 +20,12 @@
 
 //shader_compiler/test/test_shader_compiler_main.c
 
+#include "types/test/test.h"
 #include "test_shader_compiler_shared.h"
 #include "platforms/platform.h"
 #include "types/base/error.h"
 
-Platform_defineEntrypoint() {
+OXC3_TEST_ENTRY(shader_compiler) {
 
 	Error err = Error_none();
 	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err))

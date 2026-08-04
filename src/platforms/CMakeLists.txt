@@ -68,8 +68,25 @@ endif()
 
 if(EnableTests)
 
+	# The dummy library Test_dynamicLibrary loads. Built on every platform, including the ones that bundle
+	# their suites instead of building executables: the bundle needs it too, and on android it just rides
+	# along in the apk's lib/<abi>/ where the loader can find it by bare name.
+
+	file(GLOB testsDylibC CONFIGURE_DEPENDS "test/dylib/*.c")
+	add_library(OxC3_platforms_interface_dylib_test SHARED
+		${testsDylibC}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_platforms_interface_dylib_test PUBLIC OxC3_platforms)
+	set_target_properties(OxC3_platforms_interface_dylib_test PROPERTIES FOLDER Oxsomi/test/platforms)
+
+endif()
+
+if(EnableTests AND OxC3TestExecutables)
+
 	# Functional test is standalone, but can't be run by CI, needs someone to manually re-run and approve.
-	
+
 	file(GLOB testsFunctionalH CONFIGURE_DEPENDS "test/functional/*.h")
 	file(GLOB testsFunctionalC CONFIGURE_DEPENDS "test/functional/*.c")
 
@@ -82,17 +99,6 @@ if(EnableTests)
 
 	target_link_libraries(OxC3_platforms_functional_test PUBLIC OxC3_platforms OxC3_types_test)
 	set_target_properties(OxC3_platforms_functional_test PROPERTIES FOLDER Oxsomi/test/platforms)
-
-	# Interface test needs a dummy dylib, virtual files and interface test
-
-	file(GLOB testsDylibC CONFIGURE_DEPENDS "test/dylib/*.c")
-	add_library(OxC3_platforms_interface_dylib_test SHARED
-		${testsDylibC}
-		CMakeLists.txt
-	)
-	
-	target_link_libraries(OxC3_platforms_interface_dylib_test PUBLIC OxC3_platforms)
-	set_target_properties(OxC3_platforms_interface_dylib_test PROPERTIES FOLDER Oxsomi/test/platforms)
 
 	include(../../cmake/oxc3.cmake)
 	file(GLOB testsInterfaceC CONFIGURE_DEPENDS "test/interface/*.c")

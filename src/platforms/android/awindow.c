@@ -27,7 +27,6 @@
 #include "platforms/mouse.h"
 #include "platforms/platform.h"
 #include "types/container/buffer.h"
-#include "types/container/log.h"
 #include "types/container/string.h"
 #include "types/container/string_unicode.h"
 #include "types/base/atomic.h"
@@ -43,9 +42,10 @@ void AWindow_onUpdateSize(Window *w) {
 
 	Error err = Error_none();
 
-	//Window_resizeCPUBuffer is a no-op here; it early outs when w->size already matches (the caller assigns it
-	//before calling us) and it can't be told what the OS-side stride is. Android composites through a plain
-	//heap buffer that Window_presentPhysical memcpy's into the locked ANativeWindow, so size it directly.
+	//Window_resizeCPUBuffer is a no-op here; it early outs when w->size already matches (the caller assigns it before calling us)
+	// and it can't be told what the OS-side stride is.
+	//Android composites through a plain heap buffer that Window_presentPhysical memcpy's into the
+	// locked ANativeWindow, so size it directly.
 
 	if(w->hint & EWindowHint_ProvideCPUBuffer) {
 
@@ -218,49 +218,34 @@ clean:
 static SpinLock AWindow_typeCharLock = { 0 };
 static ListCharString AWindow_typeCharQueue = { 0 };
 
-//OxC3Activity.java declares this `native void onTypeChar(String)` and calls it on every character;
-//without an implementation here the Java side throws UnsatisfiedLinkError on the first keystroke.
+//Called from the JNI export in include/platforms/android/aoxc3_activity_glue.c, which is where the
+//OxC3Activity.onTypeChar binding lives (consumers compile that file into their own .so).
+//UTF-16 in, because GetStringUTFChars hands back modified UTF-8, which encodes anything outside the
+//BMP (emoji, which a soft keyboard produces readily) as CESU-8 surrogate pairs our reader would reject.
 
-JNIEXPORT void JNICALL Java_net_osomi_nativeactivity_OxC3Activity_onTypeChar(
-	JNIEnv *env, jobject thiz, jstring input
-) {
-	(void) thiz;
+void AWindow_queueTypeChar(const U16 *utf16, U64 len) {
 
-	if(!input || !Platform_instance)
+	if(!utf16 || !len || !Platform_instance)
 		return;
 
-	const jsize len = (*env)->GetStringLength(env, input);
+	CharString str = CharString_createNull();
+	Error err = Error_none();
 
-	if(!len)
-		return;
+	if(CharString_createFromUTF16(utf16, len, Platform_instance->alloc, &str, &err)) {
 
-	//UTF-16 rather than GetStringUTFChars, which returns modified UTF-8; that encodes anything
-	//outside the BMP (emoji, which a soft keyboard produces readily) as CESU-8 surrogate pairs.
+		const ELockAcquire acq = SpinLock_lock(&AWindow_typeCharLock, U64_MAX);
 
-	const jchar *utf16 = (*env)->GetStringChars(env, input, NULL);
+		if(acq >= ELockAcquire_Success) {
 
-	if(utf16) {
+			if(ListCharString_pushBack(&AWindow_typeCharQueue, str, Platform_instance->alloc, &err))
+				str = CharString_createNull();        //The queue owns it now
 
-		CharString str = CharString_createNull();
-		Error err = Error_none();
-
-		if(CharString_createFromUTF16((const U16*) utf16, (U64) len, Platform_instance->alloc, &str, &err)) {
-
-			const ELockAcquire acq = SpinLock_lock(&AWindow_typeCharLock, U64_MAX);
-
-			if(acq >= ELockAcquire_Success) {
-
-				if(ListCharString_pushBack(&AWindow_typeCharQueue, str, Platform_instance->alloc, &err))
-					str = CharString_createNull();        //The queue owns it now
-
-				if(acq == ELockAcquire_Acquired)
-					SpinLock_unlock(&AWindow_typeCharLock);
-			}
+			if(acq == ELockAcquire_Acquired)
+				SpinLock_unlock(&AWindow_typeCharLock);
 		}
-
-		CharString_free(&str, Platform_instance->alloc);
-		(*env)->ReleaseStringChars(env, input, utf16);
 	}
+
+	CharString_free(&str, Platform_instance->alloc);
 }
 
 //Called on the app thread. Swaps the queue out under the lock so onTypeChar runs unlocked and the UI
@@ -369,8 +354,8 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 				
 				if (app->savedState && w->callbacks.onLoad) {
 
-					//savedState stays owned by the glue (android_app_post_exec_cmd frees it right after this
-					//returns), so hand the callback a ref rather than taking ownership of it here.
+					//savedState stays owned by the glue (android_app_post_exec_cmd frees it right after this returns),
+					// so hand the callback a ref rather than taking ownership of it here.
 
 					Buffer buf = Buffer_createRefConst(app->savedState, app->savedStateSize);
 					w->callbacks.onLoad(w, buf);
@@ -463,76 +448,76 @@ EKey AWindow_mapKey(I32 keyCode) {
 		//AKEYCODE_SCREENSHOT isn't exposed by the NDK (it's a framework-internal key), AKEYCODE_SYSRQ is
 		//documented as the "System Request / Print Screen" key and is what an attached keyboard reports.
 		case AKEYCODE_SYSRQ:            return EKey_PrintScreen;
-		case AKEYCODE_DEL:                return EKey_Backspace;
+		case AKEYCODE_DEL:              return EKey_Backspace;
 		case AKEYCODE_SPACE:            return EKey_Space;
-		case AKEYCODE_TAB:                return EKey_Tab;
+		case AKEYCODE_TAB:              return EKey_Tab;
 
-		case AKEYCODE_SHIFT_LEFT:        return EKey_LShift;
-		case AKEYCODE_SHIFT_RIGHT:        return EKey_RShift;
-		case AKEYCODE_ALT_LEFT:            return EKey_LAlt;
+		case AKEYCODE_SHIFT_LEFT:       return EKey_LShift;
+		case AKEYCODE_SHIFT_RIGHT:      return EKey_RShift;
+		case AKEYCODE_ALT_LEFT:         return EKey_LAlt;
 		case AKEYCODE_ALT_RIGHT:        return EKey_RAlt;
 		case AKEYCODE_CTRL_LEFT:        return EKey_LCtrl;
-		case AKEYCODE_CTRL_RIGHT:        return EKey_RCtrl;
+		case AKEYCODE_CTRL_RIGHT:       return EKey_RCtrl;
 		case AKEYCODE_META_LEFT:        return EKey_LMenu;
-		case AKEYCODE_META_RIGHT:        return EKey_RMenu;
+		case AKEYCODE_META_RIGHT:       return EKey_RMenu;
 
 		case AKEYCODE_CAPS_LOCK:        return EKey_Caps;
-		case AKEYCODE_SCROLL_LOCK:        return EKey_ScrollLock;
-		case AKEYCODE_NUM_LOCK:            return EKey_NumLock;
+		case AKEYCODE_SCROLL_LOCK:      return EKey_ScrollLock;
+		case AKEYCODE_NUM_LOCK:         return EKey_NumLock;
 
 		case AKEYCODE_COMMA:            return EKey_Comma;
 		case AKEYCODE_MINUS:            return EKey_Minus;
-		case AKEYCODE_EQUALS:            return EKey_Equals;
-		case AKEYCODE_PERIOD:            return EKey_Period;
-		case AKEYCODE_REFRESH:            return EKey_Refresh;
+		case AKEYCODE_EQUALS:           return EKey_Equals;
+		case AKEYCODE_PERIOD:           return EKey_Period;
+		case AKEYCODE_REFRESH:          return EKey_Refresh;
 		case AKEYCODE_MOVE_HOME:        return EKey_Home;
-		case AKEYCODE_MOVE_END:             return EKey_End;
+		case AKEYCODE_MOVE_END:         return EKey_End;
 		case AKEYCODE_ENTER:            return EKey_Enter;
 		case AKEYCODE_GRAVE:            return EKey_Backtick;
 		case AKEYCODE_BACKSLASH:        return EKey_Backslash;
 		case AKEYCODE_SEMICOLON:        return EKey_Semicolon;
-		case AKEYCODE_APOSTROPHE:        return EKey_Quote;
+		case AKEYCODE_APOSTROPHE:       return EKey_Quote;
 		case AKEYCODE_SLASH:            return EKey_Slash;
 
-		case AKEYCODE_LEFT_BRACKET:        return EKey_LBracket;
+		case AKEYCODE_LEFT_BRACKET:     return EKey_LBracket;
 		case AKEYCODE_RIGHT_BRACKET:    return EKey_RBracket;
 
 		case AKEYCODE_NUMPAD_DIVIDE:    return EKey_NumpadDiv;
 		case AKEYCODE_NUMPAD_MULTIPLY:  return EKey_NumpadMul;
 		case AKEYCODE_NUMPAD_SUBTRACT:  return EKey_NumpadSub;
-		case AKEYCODE_NUMPAD_ADD:        return EKey_NumpadAdd;
+		case AKEYCODE_NUMPAD_ADD:       return EKey_NumpadAdd;
 
-		case AKEYCODE_NUMPAD_DOT:        return EKey_NumpadDot;
-		case AKEYCODE_NUMPAD_COMMA:        return EKey_NumpadDot;
+		case AKEYCODE_NUMPAD_DOT:       return EKey_NumpadDot;
+		case AKEYCODE_NUMPAD_COMMA:     return EKey_NumpadDot;
 
 		case AKEYCODE_VOLUME_UP:        return EKey_VolumeUp;
-		case AKEYCODE_VOLUME_DOWN:        return EKey_VolumeDown;
+		case AKEYCODE_VOLUME_DOWN:      return EKey_VolumeDown;
 
-		case AKEYCODE_PAGE_UP:            return EKey_PageUp;
+		case AKEYCODE_PAGE_UP:          return EKey_PageUp;
 		case AKEYCODE_PAGE_DOWN:        return EKey_PageDown;
 		
-		case AKEYCODE_VOLUME_MUTE:        return EKey_Mute;
+		case AKEYCODE_VOLUME_MUTE:      return EKey_Mute;
 		case AKEYCODE_CLEAR:            return EKey_Clear;
-		case AKEYCODE_ESCAPE:            return EKey_Escape;
-		case AKEYCODE_INSERT:            return EKey_Insert;
+		case AKEYCODE_ESCAPE:           return EKey_Escape;
+		case AKEYCODE_INSERT:           return EKey_Insert;
 		case AKEYCODE_MEDIA_PLAY_PAUSE: return EKey_Pause;
-		case AKEYCODE_FORWARD_DEL:        return EKey_Delete;
+		case AKEYCODE_FORWARD_DEL:      return EKey_Delete;
 
 		case AKEYCODE_SLEEP:            return EKey_Sleep;
-		case AKEYCODE_HELP:                return EKey_Help;
-		case AKEYCODE_SEARCH:            return EKey_Search;
-		case AKEYCODE_MENU:                 return EKey_Options;
+		case AKEYCODE_HELP:             return EKey_Help;
+		case AKEYCODE_SEARCH:           return EKey_Search;
+		case AKEYCODE_MENU:             return EKey_Options;
 
 		case AKEYCODE_DPAD_DOWN:        return EKey_Down;
-		case AKEYCODE_DPAD_UP:            return EKey_Up;
+		case AKEYCODE_DPAD_UP:          return EKey_Up;
 		case AKEYCODE_DPAD_LEFT:        return EKey_Left;
-		case AKEYCODE_DPAD_RIGHT:        return EKey_Right;
+		case AKEYCODE_DPAD_RIGHT:       return EKey_Right;
 
-		case AKEYCODE_BACK:                 return EKey_Back;
-		case AKEYCODE_FORWARD:             return EKey_Forward;
+		case AKEYCODE_BACK:             return EKey_Back;
+		case AKEYCODE_FORWARD:          return EKey_Forward;
 
-		case AKEYCODE_MEDIA_NEXT:        return EKey_Skip;
-		case AKEYCODE_MEDIA_PREVIOUS:    return EKey_Previous;
+		case AKEYCODE_MEDIA_NEXT:       return EKey_Skip;
+		case AKEYCODE_MEDIA_PREVIOUS:   return EKey_Previous;
 	}
 }
 
@@ -678,7 +663,175 @@ const I32 EKey_toAndroidKeyCode[EKey_Count] = {
 
 AtomicI64 AWindow_lastKeyboardDeviceId = { -1 };
 
-I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
+//Touch emulates the mouse: the first finger down drives the cursor and the left button,
+// and any other finger is ignored until it lifts.
+//Same model as the wayland/SteamOS path in lwindow_input.c, which is the reference for the semantics here.
+//Multi-touch would need an InputDevice type of its own.
+//Android is single-window (WindowManager_createNative sets isSingleWindow), so one id is enough.
+
+static I32 AWindow_primaryTouchId = -1;
+
+//Contact ended, by lift-off or by the system taking the gesture away.
+//Settle RX/RY back to zero so nothing reads a stale "still moving" delta, and release the button.
+//Temp0/Temp1 are deliberately left alone: "last known position" stays meaningful after lift-off.
+
+static void AWindow_touchEnd(Window *w, Mouse *mouse) {
+
+	AWindow_primaryTouchId = -1;
+
+	const F32 prevRelX = InputDevice_getCurrentAxis(mouse, EMouseAxis_RX);
+	const F32 prevRelY = InputDevice_getCurrentAxis(mouse, EMouseAxis_RY);
+
+	if(prevRelX != 0) {
+
+		InputDevice_setCurrentAxis(mouse, EMouseAxis_RX, 0);
+
+		if(w->callbacks.onDeviceAxis)
+			w->callbacks.onDeviceAxis(w, mouse, EMouseAxis_RX, 0);
+	}
+
+	if(prevRelY != 0) {
+
+		InputDevice_setCurrentAxis(mouse, EMouseAxis_RY, 0);
+
+		if(w->callbacks.onDeviceAxis)
+			w->callbacks.onDeviceAxis(w, mouse, EMouseAxis_RY, 0);
+	}
+
+	if(InputDevice_getState(mouse, EMouseButton_Left) & EInputState_Curr) {
+
+		InputDevice_setCurrentState(mouse, EMouseButton_Left, false);
+
+		if(w->callbacks.onDeviceButton)
+			w->callbacks.onDeviceButton(w, mouse, EMouseButton_Left, false);
+	}
+}
+
+static void AWindow_onTouch(Window *w, Mouse *mouse, AInputEvent *event) {
+
+	const I32 action = AMotionEvent_getAction(event);
+	const I32 masked = action & AMOTION_EVENT_ACTION_MASK;
+
+	const size_t changed =
+		(size_t)((action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT);
+
+	switch(masked) {
+
+		case AMOTION_EVENT_ACTION_DOWN:
+		case AMOTION_EVENT_ACTION_POINTER_DOWN: {
+
+			if(AWindow_primaryTouchId != -1)        //Already tracking a finger, ignore the rest
+				break;
+
+			if(changed >= AMotionEvent_getPointerCount(event))
+				break;
+
+			AWindow_primaryTouchId = AMotionEvent_getPointerId(event, changed);
+
+			const F32 x = AMotionEvent_getRawX(event, changed);
+			const F32 y = AMotionEvent_getRawY(event, changed);
+
+			//Fresh contact point: seed the absolute position and zero the relative axes. There's no
+			//previous position yet, so RX/RY must not carry a delta over from the last gesture.
+			//No onDeviceAxis here, deliberately: where a finger lands isn't motion, just the baseline.
+
+			InputDevice_setCurrentAxis(mouse, EMouseAxis_Temp0, x);
+			InputDevice_setCurrentAxis(mouse, EMouseAxis_Temp1, y);
+			InputDevice_setCurrentAxis(mouse, EMouseAxis_RX, 0);
+			InputDevice_setCurrentAxis(mouse, EMouseAxis_RY, 0);
+
+			const I32x2 oldCursor = w->cursor;
+			w->cursor = I32x2_create2((I32) x, (I32) y);
+
+			if(w->callbacks.onCursorMove && I32x2_neq2(oldCursor, w->cursor))
+				w->callbacks.onCursorMove(w);
+
+			InputDevice_setCurrentState(mouse, EMouseButton_Left, true);
+
+			if(w->callbacks.onDeviceButton)
+				w->callbacks.onDeviceButton(w, mouse, EMouseButton_Left, true);
+
+			break;
+		}
+
+		case AMOTION_EVENT_ACTION_MOVE: {
+
+			if(AWindow_primaryTouchId == -1)
+				break;
+
+			//A move event carries every active pointer, so find the one we're tracking rather than
+			//assuming index 0; a second finger going down would otherwise hijack the cursor.
+
+			const size_t count = AMotionEvent_getPointerCount(event);
+			size_t index = count;
+
+			for(size_t i = 0; i < count; ++i)
+				if(AMotionEvent_getPointerId(event, i) == AWindow_primaryTouchId) {
+					index = i;
+					break;
+				}
+
+			if(index == count)
+				break;
+
+			const F32 x = AMotionEvent_getRawX(event, index);
+			const F32 y = AMotionEvent_getRawY(event, index);
+
+			const F32 relX = x - InputDevice_getCurrentAxis(mouse, EMouseAxis_Temp0);
+			const F32 relY = y - InputDevice_getCurrentAxis(mouse, EMouseAxis_Temp1);
+
+			InputDevice_setCurrentAxis(mouse, EMouseAxis_Temp0, x);
+			InputDevice_setCurrentAxis(mouse, EMouseAxis_Temp1, y);
+			InputDevice_setCurrentAxis(mouse, EMouseAxis_RX, relX);
+			InputDevice_setCurrentAxis(mouse, EMouseAxis_RY, relY);
+
+			const I32x2 oldCursor = w->cursor;
+			w->cursor = I32x2_create2((I32) x, (I32) y);
+
+			if(w->callbacks.onCursorMove && I32x2_neq2(oldCursor, w->cursor))
+				w->callbacks.onCursorMove(w);
+
+			if(w->callbacks.onDeviceAxis) {
+
+				if(relX != 0) {
+					w->callbacks.onDeviceAxis(w, mouse, EMouseAxis_Temp0, x);
+					w->callbacks.onDeviceAxis(w, mouse, EMouseAxis_RX, relX);
+				}
+
+				if(relY != 0) {
+					w->callbacks.onDeviceAxis(w, mouse, EMouseAxis_Temp1, y);
+					w->callbacks.onDeviceAxis(w, mouse, EMouseAxis_RY, relY);
+				}
+			}
+
+			break;
+		}
+
+		case AMOTION_EVENT_ACTION_UP:
+		case AMOTION_EVENT_ACTION_POINTER_UP:
+
+			if(
+				AWindow_primaryTouchId != -1 &&
+				changed < AMotionEvent_getPointerCount(event) &&
+				AMotionEvent_getPointerId(event, changed) == AWindow_primaryTouchId
+			)
+				AWindow_touchEnd(w, mouse);
+
+			break;
+
+		case AMOTION_EVENT_ACTION_CANCEL:
+
+			if(AWindow_primaryTouchId != -1)
+				AWindow_touchEnd(w, mouse);
+
+			break;
+
+		default:
+			break;
+	}
+}
+
+I32 AWindow_onInput(struct android_app *app, AInputEvent *event) {
 
 	Window *w = (Window*) app->userData;
 
@@ -701,8 +854,16 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 		case AINPUT_EVENT_TYPE_MOTION: {
 
 			I32 action = AMotionEvent_getAction(event);
-			
-			if (source & (AINPUT_SOURCE_TOUCHSCREEN | AINPUT_SOURCE_MOUSE)) {
+
+			//Touch is pointer-id tracked and has no hover,
+			// so it gets its own handler rather than sharing the mouse's index-0 path (see AWindow_onTouch).
+
+			if (source & AINPUT_SOURCE_TOUCHSCREEN) {
+				AWindow_onTouch(w, mouse, event);
+				return 1;
+			}
+
+			if (source & AINPUT_SOURCE_MOUSE) {
 
 				InputDevice *dev = mouse;
 				

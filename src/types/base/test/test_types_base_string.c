@@ -23,7 +23,7 @@
 #include "test_types_base_shared.h"
 #include "types/base/string_base.h"
 
-void Test_string(Test *test) {
+void Test_baseString(Test *test) {
 
 	Test_setModule(test, "String");
 

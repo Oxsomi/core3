@@ -47,6 +47,29 @@ void Test_setModule(Test *test, const C8 *moduleName);
 
 int Test_end(Test *test);
 
+//Every suite is its own executable on desktop, but android has no exec: the whole set runs as one .so inside an APK.
+//Under _OXC3_TEST_BUNDLED each "main" becomes a named int (*)(void*) that the bundle's android_main calls in turn;
+// otherwise it's the entry point it has always been.
+//OXC3_TEST_MAIN is for suites that only need an allocator,
+//OXC3_TEST_ENTRY for the ones that bring up a Platform and therefore need the entry argument android_native_app_glue hands us.
+
+#ifdef _OXC3_TEST_BUNDLED
+
+	//A MAIN suite doesn't take the entry argument, so it gets a trampoline that discards it; that keeps
+	//every bundled suite the same shape and leaves the body below the macro untouched.
+
+	#define OXC3_TEST_MAIN(name)                                                                      \
+		static int OxC3_testBody_##name();                                                            \
+		int OxC3_test_##name(void *state) { (void) state; return OxC3_testBody_##name(); }            \
+		static int OxC3_testBody_##name()
+
+	#define OXC3_TEST_ENTRY(name) int OxC3_test_##name(void *state)
+
+#else
+	#define OXC3_TEST_MAIN(name) int main()
+	#define OXC3_TEST_ENTRY(name) Platform_defineEntrypoint()
+#endif
+
 #ifdef __cplusplus
 	}
 #endif

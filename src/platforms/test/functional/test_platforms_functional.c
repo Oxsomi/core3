@@ -29,7 +29,7 @@ void Test_functionalWindowState(Test *t);
 void Test_functionalInput(Test *t);
 void Test_functionalCSD(Test *t);
 
-Platform_defineEntrypoint() {
+OXC3_TEST_ENTRY(platforms_functional) {
 
 	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, false, NULL))
 		Platform_return(1);

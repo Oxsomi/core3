@@ -20,10 +20,11 @@
 
 //formats/oiCA/test/test_oiCA_main.c
 
+#include "types/test/test.h"
 #include "test_oiCA_shared.h"
 #include "types/container/test/basic_alloc.h"
 
-int main() {
+OXC3_TEST_MAIN(formats_oiCA) {
 
 	const Allocator alloc = BasicAllocator_instance;
 

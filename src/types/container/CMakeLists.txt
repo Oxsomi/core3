@@ -87,21 +87,29 @@ if(EnableTests)
 	target_link_libraries(OxC3_types_container_test_util PUBLIC OxC3_types_container OxC3_types_test)
 	set_target_properties(OxC3_types_container_test_util PROPERTIES FOLDER Oxsomi/test/types)
 
-	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
-	file(GLOB testsCpp CONFIGURE_DEPENDS "test/*.cpp")    #C++ TUs (e.g. hpp wrapper tests)
-	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
+	# Executables can't link on android (Platform_defineEntrypoint gives android_main, not main), and an
+	# APK can't run one regardless; src/CMakeLists.txt bundles the suites into OxC3_atest instead, which
+	# still links the util library above.
 
-	add_executable(
-		OxC3_types_container_test
-		${testsC}
-		${testsCpp}
-		${testsH}
-		CMakeLists.txt
-	)
+	if(OxC3TestExecutables)
 
-	target_link_libraries(OxC3_types_container_test PUBLIC OxC3_types_container_test_util)
-	set_target_properties(OxC3_types_container_test PROPERTIES FOLDER Oxsomi/test/types)
-	add_test(NAME OxC3_types_container_test COMMAND OxC3_types_container_test)
+		file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+		file(GLOB testsCpp CONFIGURE_DEPENDS "test/*.cpp")    #C++ TUs (e.g. hpp wrapper tests)
+		file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
+
+		add_executable(
+			OxC3_types_container_test
+			${testsC}
+			${testsCpp}
+			${testsH}
+			CMakeLists.txt
+		)
+
+		target_link_libraries(OxC3_types_container_test PUBLIC OxC3_types_container_test_util)
+		set_target_properties(OxC3_types_container_test PROPERTIES FOLDER Oxsomi/test/types)
+		add_test(NAME OxC3_types_container_test COMMAND OxC3_types_container_test)
+
+	endif()
 
 endif()
 

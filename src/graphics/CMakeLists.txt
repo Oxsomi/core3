@@ -87,7 +87,7 @@ if(graphicsAllowD3D12)
 	add_subdirectory(d3d12)
 endif()
 
-if(EnableTests)
+if(EnableTests AND OxC3TestExecutables)
 
 	# Interface test: headless-safe checks always run, device tests skip without an adapter.
 	# add_virtual_dependencies is required so device creation can load the //OxC3_graphics prebuilt shaders.

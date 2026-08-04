@@ -20,9 +20,10 @@
 
 //types/base/test/test_types_base_main.c
 
+#include "types/test/test.h"
 #include "test_types_base_shared.h"
 
-int main() {
+OXC3_TEST_MAIN(types_base) {
 
 	Test t = (Test) { 0 };
 
@@ -38,7 +39,7 @@ int main() {
 
 	Test_buffer(&t);
 
-	Test_string(&t);
+	Test_baseString(&t);
 	Test_stringMut(&t);
 	Test_stringRead(&t);
 

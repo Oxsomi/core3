@@ -141,7 +141,16 @@ impl void *Platform_getDataImpl(void *ptr);
 	#define Platform_getData() (state)
 	#define Platform_argc (0)
 	#define Platform_argv (NULL)
-	#define Platform_return(x) return
+
+	//android_main returns nothing, so the exit code is normally dropped. A test bundled into the
+	//android test APK (see OXC3_TEST_ENTRY in types/test/test.h) isn't the entry point though; it
+	//hands its result back to the runner, which is what reports pass/fail.
+
+	#ifdef _OXC3_TEST_BUNDLED
+		#define Platform_return(...) return __VA_ARGS__
+	#else
+		#define Platform_return(x) return
+	#endif
 #else
 	#define Platform_defineEntrypoint() int main(int argc, const char *argv[])
 	#define Platform_getData() Platform_getDataImpl(NULL)

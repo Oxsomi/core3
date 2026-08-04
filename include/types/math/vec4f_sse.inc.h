@@ -130,3 +130,19 @@ static inline F32x4 F32x4_geq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInte
 static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmpgt_ps(a, b)); }
 static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmple_ps(a, b)); }
 static inline F32x4 F32x4_lt(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmplt_ps(a, b)); }
+
+//4x4 transpose. Sits here rather than in mat.h because it's the one matrix operation with a genuine
+//per-SIMD implementation, and per-SIMD code belongs in these files. Safe when in == out.
+
+static inline void F32x4_transpose4(const F32x4 *in, F32x4 *out) {
+
+	const F32x4 t0 = _mm_unpacklo_ps(in[0], in[1]);        //x0 x1 y0 y1
+	const F32x4 t1 = _mm_unpackhi_ps(in[0], in[1]);        //z0 z1 w0 w1
+	const F32x4 t2 = _mm_unpacklo_ps(in[2], in[3]);        //x2 x3 y2 y3
+	const F32x4 t3 = _mm_unpackhi_ps(in[2], in[3]);        //z2 z3 w2 w3
+
+	out[0] = _mm_movelh_ps(t0, t2);
+	out[1] = _mm_movehl_ps(t2, t0);
+	out[2] = _mm_movelh_ps(t1, t3);
+	out[3] = _mm_movehl_ps(t3, t1);
+}

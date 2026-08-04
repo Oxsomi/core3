@@ -29,8 +29,10 @@
 	  android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
 	  android:appCategory="{APP_CATEGORY}">
 	  
+    <!-- Exported in Debug, and for a test apk in any mode: `adb shell am start` can't launch an
+         activity that isn't, and a test apk exists to be launched by a harness. -->
     <activity android:name="net.osomi.nativeactivity.OxC3Activity"
-	  			android:exported="{APP_DEBUGGABLE}"
+	  			android:exported="{APP_EXPORTED}"
             	android:configChanges="orientation|keyboard|keyboardHidden|screenLayout|fontScale|locale|touchscreen|density|uiMode|colorMode|layoutDirection|navigation">
 			  
       <meta-data android:name="android.app.lib_name"

@@ -41,7 +41,7 @@ For per-module maturity, see [STATUS.md](STATUS.md). For how the modules fit tog
 - **Windows on ARM64**: ARMASM64 (install the ARM64 build tools via the VS installer) when using MSVC.
 - **OS X**: `brew install llvm` for llvm-objcopy. If using the Vulkan SDK with bindless, export `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1` and set `VULKAN_SDK` (e.g. in `~/.bash_profile`).
 - **Linux**: Wayland is the window backend, `sudo apt install libwayland-dev libxkbcommon-dev -y` (plus wayland-scanner). For audio deps: `sudo apt install libasound2-dev libpipewire-0.3-dev -y`. For the windowed functional tests: `sudo apt install xdotool -y`. *X11-only sessions are currently unsupported for windowing.*
-- **Android**: NDK installed with `ANDROID_NDK` set (plus `ANDROID_SDK` when building an apk); Android 10 (API 29)+ on device (Vulkan 1.1+). Cross compiles from Windows, Linux and macOS. Ninja or make can drive the build (Ninja required for Debug builds due to the Vulkan validation layers). Since the packaging tool is built for the host too, the host's own prerequisites (above) apply as well. *(Optional)* JDK for keystore creation.
+- **Android**: NDK installed with `ANDROID_NDK` set (plus `ANDROID_SDK` + a JDK when building an apk); Android 10 (API 29)+ on device (Vulkan 1.1+). Cross compiles from Windows, Linux and macOS. Ninja or make can drive the build (Ninja required for Debug builds due to the Vulkan validation layers). Since the packaging tool is built for the host too, the host's own prerequisites (above) apply as well. See [Android SDK setup](#android-sdk-setup).
 
 ## Getting started
 
@@ -95,6 +95,67 @@ serves every android configuration.
 
 Only `ANDROID_NDK` is needed to build the libraries; `ANDROID_SDK` is additionally required for `--apk`
 and `--run` (aapt/d8/zipalign/adb).
+
+#### Running the unit tests on device
+
+Android has no exec, so the per-suite executables ctest runs elsewhere don't exist there. `-tests True`
+builds `OxC3_atest` instead: one `.so` with every suite, loaded by a NativeActivity
+(see [src/test/android](src/test/android)). One command builds, packages, installs, launches and reports:
+
+```bash
+python build_android.py -mode Release -arch arm64 -generator Ninja -tests True --apk --sign --run \
+  -keystore_password <pw> -package net.osomi.oxc3test -version 0.1.0 -lib OxC3_atest -name "OxC3 tests"
+```
+
+`--run` streams the device log and exits non-zero if any suite fails; it waits for the `OXC3_TEST_END`
+line the runner emits, since `am start` gives back no exit code (`-test_timeout`, default 600s, bounds
+the wait). Test apks are marked `android:exported` in every mode, because a non-exported activity can't
+be launched by `am start` at all.
+
+Add `--interactive` to also run the functional suites (window/input/audio); they need a human watching
+the device, so they're skipped otherwise. That sets `debug.oxc3.interactive`, which you can also flip by
+hand with `adb shell setprop`. Interactive runs aren't timed out.
+
+Every suite is bundled except **shader_compiler**, since DXC isn't built for android.
+
+#### Android SDK setup
+
+**Android Studio is not needed.** Four standalone downloads, ~400 MB total:
+
+1. **JDK 11+** ([Temurin](https://adoptium.net)). `sdkmanager` is itself a Java program, so this comes first.
+   Set `JAVA_HOME`; `--sign` calls `keytool` through it.
+2. **[Command line tools only](https://developer.android.com/studio#command-line-tools-only)**. Unzip so
+   you end up with `<sdk>/cmdline-tools/latest/bin/sdkmanager`. The zip's own top folder is named
+   `cmdline-tools`, so the inner one has to be moved into `latest/`, sdkmanager refuses to run with
+   *"Could not determine SDK root"* if it isn't in a `latest`/version subdirectory.
+3. **SDK packages.** `<sdk>` is the parent directory, and becomes `ANDROID_SDK`:
+   ```bash
+   sdkmanager --licenses
+   sdkmanager "platforms;android-31" "build-tools;30.0.3"
+   ```
+   Add **[platform-tools](https://developer.android.com/tools/releases/platform-tools)** (adb) if you want
+   `--run`; it unzips straight into `<sdk>/platform-tools`.
+4. **[NDK](https://developer.android.com/ndk/downloads)**, a plain zip, unpack anywhere and point
+   `ANDROID_NDK` at it. r27 is what CI uses.
+
+Two things that will bite you otherwise:
+
+- **build-tools version matters.** The apk step uses `aapt` (v1, not aapt2), which newer build-tools no
+  longer ship, and `buildToolsDir()` always picks the newest installed. Keep an `aapt`-bearing version
+  (30.0.3) as the newest one you have. Its `d8` warns that API 31 isn't supported and dexes anyway;
+  that's cosmetic, it only affects desugaring, not `minSdkVersion`.
+- **The legacy `tools` package is not required**, despite build-tools' `d8` wrapper looking for
+  `find_java` inside it. `build_android.py` runs `d8.jar` directly to avoid that (the wrapper otherwise
+  exits 0 having produced no `classes.dex`, and the build fails much later in aapt).
+
+Expected layout:
+
+```
+<sdk>/cmdline-tools/latest/bin/sdkmanager
+<sdk>/build-tools/30.0.3/{aapt,d8,zipalign}
+<sdk>/platforms/android-31/android.jar
+<sdk>/platform-tools/adb                     # only for --run/--install
+```
 
 ### Using the virtual file system from your app
 

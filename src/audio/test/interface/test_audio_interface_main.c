@@ -475,7 +475,7 @@ void Test_audioDeviceListenerPositionSteps(Test *t) {
 	AudioIfCtx_free(&ctx);
 }
 
-int main() {
+OXC3_TEST_MAIN(audio_interface) {
 
 	const Allocator alloc = BasicAllocator_instance;
 

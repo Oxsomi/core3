@@ -138,7 +138,7 @@ void Test_u128Rsh(Test *test) {
 	}
 }
 
-void Test_u128(Test *test) {
+void Test_mathU128(Test *test) {
 	Test_u128Mul(test);
 	Test_u128Add(test);
 	Test_u128Sub(test);

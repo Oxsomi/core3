@@ -25,17 +25,33 @@
 
 #include <android_native_app_glue.h>
 
+void AWindow_queueTypeChar(const U16 *utf16, U64 len);
+
+//Soft keyboard text from OxC3Activity's TextWatcher. This runs on the android UI thread, so it only
+//queues; AWindow_flushTypeChar drains it from WindowManager_updateExt on the app thread, where every
+//other input callback already runs.
+
 JNIEXPORT void JNICALL
-Java_net_osomi_nativeactivity_OxC3Activity_onTypeChar(JNIEnv *env, jclass clazz, jstring input) {
+Java_net_osomi_nativeactivity_OxC3Activity_onTypeChar(JNIEnv *env, jobject thiz, jstring input) {
 
-	(void) clazz;
+	(void) thiz;
 
-	const C8 *nativeString = (*env)->GetStringUTFChars(env, input, NULL);
-	
-	Window *window = (Window*)((struct android_app*)Platform_instance->data)->userData;
+	if(!input)
+		return;
 
-	if(window->callbacks.onTypeChar)
-		window->callbacks.onTypeChar(window, CharString_createRefCStrConst(nativeString));
+	const jsize len = (*env)->GetStringLength(env, input);
 
-	(*env)->ReleaseStringUTFChars(env, input, nativeString);
+	if(!len)
+		return;
+
+	//UTF-16 rather than GetStringUTFChars: the latter returns modified UTF-8, which encodes anything
+	//outside the BMP (emoji) as CESU-8 surrogate pairs.
+
+	const jchar *utf16 = (*env)->GetStringChars(env, input, NULL);
+
+	if(!utf16)
+		return;
+
+	AWindow_queueTypeChar((const U16*) utf16, (U64) len);
+	(*env)->ReleaseStringChars(env, input, utf16);
 }

@@ -29,6 +29,19 @@ add_custom_target(check_style ALL
 
 set_target_properties(check_style PROPERTIES FOLDER Oxsomi/tools)
 
+# The generated oxc:: wrappers are committed, so nobody needs the generator to read them. This catches
+# the case where the C header they're derived from changed and they weren't regenerated.
+
+add_custom_target(check_generated_hpp ALL
+    COMMAND ${CMAKE_COMMAND} -E echo "-- Checking generated C++ wrappers are up to date..."
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/generate_hpp.py --check
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "OxC3 generated header check"
+    VERBATIM
+)
+
+set_target_properties(check_generated_hpp PROPERTIES FOLDER Oxsomi/tools)
+
 if(EnableOxC3CLI)
     add_subdirectory(oxc3_cli)
 endif()

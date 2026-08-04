@@ -1,0 +1,54 @@
+[
+	{
+		"header": "include/types/base/time.h",
+		"output": "include/types/base/time.hpp",
+		"type": "Time",
+		"staticOnly": true,
+		"doc": [
+			"Time has no instance state in C - every function is a free function over Ns - so this is a",
+			"namespace, not a class."
+		],
+		"extraCIncludes": [
+			"types/base/string_base.h"
+		]
+	},
+	{
+		"header": "include/types/base/c8.h",
+		"output": "include/types/base/c8.hpp",
+		"type": "C8",
+		"staticOnly": true,
+		"doc": [
+			"Character classification and conversion; C8 is a typedef for a char, not a struct."
+		]
+	},
+	{
+		"header": "include/types/container/texture_format.h",
+		"output": "include/types/container/texture_format.hpp",
+		"type": "ETextureFormat",
+		"staticOnly": true,
+		"doc": [
+			"Pure enum queries over ETextureFormat, no state."
+		]
+	},
+	{
+		"header": "include/types/container/buffer.h",
+		"output": "include/types/container/buffer.hpp",
+		"type": "Buffer",
+		"allocator": "alloc",
+		"free": "Buffer_free",
+		"doc": [
+			"RAII around the C Buffer. Only the allocating half is owned; the createRef* helpers in",
+			"buffer_base.h deliberately aren't wrapped, since a ref must not be freed and that distinction",
+			"is exactly what this type is for. Use handle() to build one and hand it to C."
+		],
+		"skip": [
+			"free",
+			"createSubset",
+			"createCopy"
+		],
+		"extraCIncludes": [
+			"types/base/error.h",
+			"types/base/allocator.h"
+		]
+	}
+]

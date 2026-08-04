@@ -34,6 +34,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import build_common as common
@@ -122,18 +123,21 @@ def ensureProfile(conanHome, binDir, conanArch, level, generator):
 # Cross build
 # ---------------------------------------------------------------------------------------------------
 
-def androidOptionArgs(simd):
+def androidOptionArgs(simd, tests=False):
 	"""Options for the android target itself.
 
 	enableShaderCompiler=False is what makes conanfile.py tool_requires the host packager; DXC doesn't
 	cross compile to android and we wouldn't be able to run it there anyway.
+
+	enableTests builds OxC3_atest, one .so holding every suite (see src/CMakeLists.txt); android
+	has no exec, so that's the only way to run them on device.
 	"""
 
 	options = {
 		"cliGraphics": "False",
 		"enableOxC3CLI": "False",
 		"forceFloatFallback": "False",
-		"enableTests": "False",
+		"enableTests": "True" if tests else "False",
 		"dynamicLinkingGraphics": "False",
 		"enableShaderCompiler": "False",
 		"enableSIMD": simd
@@ -141,7 +145,7 @@ def androidOptionArgs(simd):
 
 	return " ".join(f"-o \"&:{k}={v}\"" for k, v in options.items())
 
-def doBuild(mode, conanHome, binDir, conanArch, level, generator, generatorValidationLayer, simd, doInstall, cache):
+def doBuild(mode, conanHome, binDir, conanArch, level, generator, generatorValidationLayer, simd, doInstall, tests, cache):
 
 	profile     = profileName(conanArch, level, generator)
 	profilePath = ensureProfile(conanHome, binDir, conanArch, level, generator)
@@ -171,7 +175,7 @@ def doBuild(mode, conanHome, binDir, conanArch, level, generator, generatorValid
 		)
 
 	outputFolder = f"\"build/{mode}/android/{archName(conanArch)}\""
-	options      = androidOptionArgs(simd)
+	options      = androidOptionArgs(simd, tests)
 
 	common.run(
 		f"conan build . -of {outputFolder} {options} -s build_type={mode} {profileArgs} --build=missing"
@@ -208,6 +212,26 @@ def buildTool(name):
 
 	return f"\"{base}\""
 
+def d8Command():
+	"""d8 run straight from its jar, rather than through the build-tools wrapper.
+
+	build-tools' d8.bat/d8 sources find_java from the legacy `tools` package, which cmdline-tools
+	replaced and which a modern SDK install doesn't have. When it's missing the wrapper hits
+	`if not defined java_exe goto :EOF`, so it exits 0 having produced nothing, and the failure only
+	surfaces later as aapt reporting "Unable to add 'classes.dex': file not found".
+	The jar is the same compiler without the host-specific wrapper, so this also drops the .bat/.sh split.
+	apksigner is fine as-is: its wrapper tries java from PATH before falling back to JAVA_HOME.
+	"""
+
+	jar = os.path.join(buildToolsDir(), "lib", "d8.jar")
+
+	if not os.path.isfile(jar):
+		print(f"-- No d8.jar in {buildToolsDir()}/lib, install build-tools through sdkmanager", file=sys.stderr)
+		sys.exit(1)
+
+	java = os.path.join(os.environ["JAVA_HOME"], "bin", "java") if "JAVA_HOME" in os.environ else "java"
+	return f"\"{java}\" -cp \"{jar}\" com.android.tools.r8.D8"
+
 def makeApk(args, packageDirs):
 
 	if args.package is None or args.version is None or args.lib is None or args.name is None:
@@ -227,7 +251,8 @@ def makeApk(args, packageDirs):
 	manifest = manifest.format(
 		APP_PACKAGE=args.package, APP_VERSION=args.version, APP_API_LEVEL=str(args.api), APP_NAME=args.name,
 		APP_DEBUGGABLE="false" if args.mode == "Release" else "true", APP_CATEGORY=args.category,
-		APP_LIB_NAME=args.lib
+		APP_LIB_NAME=args.lib,
+		APP_EXPORTED="true" if (args.mode != "Release" or args.tests == "True") else "false"
 	)
 
 	apkFolder = f"build/{args.mode}/android/apk"
@@ -249,8 +274,20 @@ def makeApk(args, packageDirs):
 
 		Path(libFolder + "/" + abi).mkdir(parents=True, exist_ok=True)
 
-		for f in glob.glob(f"build/{args.mode}/android/{arch}/lib/*.so"):
-			shutil.copy2(f, libFolder + "/" + abi)
+		# Shared objects land in bin/, lib/ holds the static .a archives. Both are globbed because which
+		# one a .so ends up in depends on the generator, and a missing .so here shows up as a
+		# dlopen/UnsatisfiedLinkError on device rather than as a build failure.
+
+		found = set()
+
+		for folder in ("bin", "lib"):
+			for f in glob.glob(f"build/{args.mode}/android/{arch}/{folder}/*.so"):
+				if os.path.basename(f) not in found:
+					found.add(os.path.basename(f))
+					shutil.copy2(f, libFolder + "/" + abi)
+
+		if not found:
+			print(f"-- Warning: no .so found for {abi}, the apk will have no native code", file=sys.stderr)
 
 	# Copy packages (the oiCA archives add_virtual_files produced)
 
@@ -294,7 +331,12 @@ def makeApk(args, packageDirs):
 
 	print("-- Compiling .java file")
 	javaFiles = " ".join(f"\"{f}\"" for f in sorted(glob.glob(os.path.join(common.ROOT, "src", "platforms", "android", "*.java"))))
-	common.run(f"javac -Xlint:deprecation -cp {androidJar} -d \"{apkFolder}/bin/\" {javaFiles}")
+	# --release pins the class file version so the installed JDK doesn't decide it. Without it javac
+	# targets its own latest, and d8 rejects anything newer than it understands ("Unsupported class
+	# file major version"), which made the build depend on which JDK happened to be on PATH.
+	# 11 is the floor every d8 accepts, and our .java is plain Java 8 anyway.
+
+	common.run(f"javac --release 11 -Xlint:deprecation -cp {androidJar} -d \"{apkFolder}/bin/\" {javaFiles}")
 
 	# Compile .class files to .dex
 
@@ -304,7 +346,7 @@ def makeApk(args, packageDirs):
 
 	try:
 		classFiles = " ".join(f"\"{f}\"" for f in sorted(glob.glob("bin/net/osomi/nativeactivity/*.class")))
-		common.run(f"{buildTool('d8')} {classFiles} --min-api {args.api}")
+		common.run(f"{d8Command()} {classFiles} --min-api {args.api}")
 	finally:
 		os.chdir(cwd)
 
@@ -344,6 +386,18 @@ def makeApk(args, packageDirs):
 
 def signApk(args, apkFolder):
 
+	# Resolved before the keystore is generated, because generating one needs the same password.
+
+	if args.keystore_password is None:
+		print("-- Sign apk, please enter keystore password")
+		pwd = str(input())
+	else:
+		pwd = args.keystore_password
+
+	if len(pwd) < 6:
+		print("-- Keystore password has to be at least 6 characters", file=sys.stderr)
+		sys.exit(1)
+
 	if args.keystore is None:
 
 		args.keystore = apkFolder + "/.keystore"
@@ -356,16 +410,16 @@ def signApk(args, apkFolder):
 				print("JAVA_HOME not found", file=sys.stderr)
 				return
 
+			# -storepass/-keypass/-dname are passed explicitly: keytool prompts for all of them
+			# otherwise, so an unattended --sign would silently produce no keystore at all and only
+			# fail later, in apksigner, as a confusing FileNotFoundException.
+
 			keytool = os.path.join(os.environ["JAVA_HOME"], "bin", "keytool")
 			common.run(
-				f"\"{keytool}\" -genkeypair -v -keystore \"{args.keystore}\" -keyalg RSA -keysize 2048 -validity 10000"
+				f"\"{keytool}\" -genkeypair -v -keystore \"{args.keystore}\" -keyalg RSA -keysize 2048 "
+				f"-validity 10000 -alias oxc3 -storepass \"{pwd}\" -keypass \"{pwd}\" "
+				f"-dname \"CN=OxC3, OU=Dev, O=Oxsomi, C=NL\""
 			)
-
-	if args.keystore_password is None:
-		print("-- Sign apk, please enter keystore password")
-		pwd = str(input())
-	else:
-		pwd = args.keystore_password
 
 	common.run(
 		f"{buildTool('apksigner')} sign --ks \"{args.keystore}\" --ks-pass \"pass:{pwd}\" "
@@ -395,16 +449,74 @@ def runApk(args):
 	else:
 		common.run(f"{adb} install -t -r {apkFile}")
 
-	if args.mode == "Release":
+	if args.mode == "Release" and args.tests != "True":
 		print("-- Installed apk file, but Release mode has android:exported turned off for security reasons, please manually launch the app")
 		return
+
+	# The two functional suites need someone watching the device, so OxC3_atest skips them unless asked.
+	# A system property rather than an intent extra, so it needs no JNI and no OxC3Activity change.
+
+	if args.tests == "True":
+		common.run(f"{adb} shell setprop debug.oxc3.interactive {'1' if args.interactive else '0'}")
 
 	print("-- Running apk file")
 	common.run(f"{adb} logcat -c")		# Clear log first
 	subprocess.run(f"{adb} shell am start -n {args.package}/net.osomi.nativeactivity.OxC3Activity", shell=True)
 
-	print("-- Starting logcat")
-	print(f"-- Failed, run it manually: {adb} logcat -s OxC3")
+	if args.tests != "True":
+		print("-- Starting logcat")
+		print(f"-- Failed, run it manually: {adb} logcat -s OxC3")
+		return
+
+	return tailTestRun(adb, args)
+
+def tailTestRun(adb, args):
+	"""Stream the app's log until OxC3_atest reports it's finished, and turn that into an exit code.
+
+	`am start` doesn't give one back, so atest_main brackets the run with OXC3_TEST_BEGIN/OXC3_TEST_END
+	and this looks for the latter. Interactive runs get no timeout, a human is driving them.
+	"""
+
+	print("-- Waiting for the test run (OXC3_TEST_END)")
+
+	timeout = None if args.interactive else args.test_timeout
+	deadline = None if timeout is None else time.monotonic() + timeout
+
+	process = subprocess.Popen(
+		f"{adb} logcat -s OxC3:V", shell=True,
+		stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1
+	)
+
+	result = None
+
+	try:
+		for line in process.stdout:
+
+			line = line.rstrip()
+
+			if line:
+				print(line)
+
+			if "OXC3_TEST_END" in line:
+				result = "result=PASSED" in line
+				break
+
+			if deadline is not None and time.monotonic() > deadline:
+				print(f"-- No result after {timeout}s, giving up", file=sys.stderr)
+				break
+
+	finally:
+		process.kill()
+
+	if result is None:
+		print("-- Test run didn't report a result (crash, or the app never started)", file=sys.stderr)
+		sys.exit(1)
+
+	if not result:
+		print("-- Tests FAILED", file=sys.stderr)
+		sys.exit(1)
+
+	print("-- Tests passed")
 
 # ---------------------------------------------------------------------------------------------------
 
@@ -418,6 +530,18 @@ def main():
 	parser.add_argument("-api", type=int, default=31, help="Android api level (e.g. 31 = Android 12)")
 	parser.add_argument("-arch", type=str, default="all", choices=["arm64", "x64", "all"], help="Architecture")
 	parser.add_argument("-simd", type=str, default="True", choices=["True", "False"], help="EnableSIMD (True by default)")
+	parser.add_argument(
+		"--interactive", action="store_true",
+		help="With --run -tests True, also run the functional suites (they need a human watching the device)"
+	)
+	parser.add_argument(
+		"-test_timeout", type=int, default=600,
+		help="Seconds to wait for a non-interactive test run to report a result (default 600)"
+	)
+	parser.add_argument(
+		"-tests", type=str, default="False", choices=["True", "False"],
+		help="Build OxC3_atest, one .so with every unit test suite (android has no exec to run them separately)"
+	)
 	parser.add_argument("-generator", type=str, help="CMake Generator")
 	parser.add_argument("--skip_build", help="Run full build, if false, can be used to package an already built project", action="store_true")
 
@@ -497,7 +621,7 @@ def main():
 
 			doBuild(
 				args.mode, conanHome, binDir, conanArch, str(args.api), args.generator,
-				generatorValidationLayer, args.simd, args.install, cache
+				generatorValidationLayer, args.simd, args.install, args.tests == "True", cache
 			)
 
 		common.saveHashCache(cache)

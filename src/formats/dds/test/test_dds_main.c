@@ -20,10 +20,11 @@
 
 //formats/dds/test/test_dds_main.c
 
+#include "types/test/test.h"
 #include "test_dds_shared.h"
 #include "types/container/test/basic_alloc.h"
 
-int main() {
+OXC3_TEST_MAIN(formats_dds) {
 
 	const Allocator alloc = BasicAllocator_instance;
 

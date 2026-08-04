@@ -88,3 +88,17 @@ static inline F32x4 F32x4_geq(F32x4 a, F32x4 b) { return F32x4_recastI32x4Intern
 static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vcgtq_f32(a, b)); }
 static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vcleq_f32(a, b)); }
 static inline F32x4 F32x4_lt(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vcltq_f32(a, b)); }
+
+//4x4 transpose. Sits here rather than in mat.h because it's the one matrix operation with a genuine
+//per-SIMD implementation, and per-SIMD code belongs in these files. Safe when in == out.
+
+static inline void F32x4_transpose4(const F32x4 *in, F32x4 *out) {
+
+	const float32x4x2_t t0 = vtrnq_f32(in[0], in[1]);
+	const float32x4x2_t t1 = vtrnq_f32(in[2], in[3]);
+
+	out[0] = vcombine_f32(vget_low_f32(t0.val[0]), vget_low_f32(t1.val[0]));
+	out[1] = vcombine_f32(vget_low_f32(t0.val[1]), vget_low_f32(t1.val[1]));
+	out[2] = vcombine_f32(vget_high_f32(t0.val[0]), vget_high_f32(t1.val[0]));
+	out[3] = vcombine_f32(vget_high_f32(t0.val[1]), vget_high_f32(t1.val[1]));
+}

@@ -407,7 +407,7 @@ static void Test_graphicsDevice(Test *t) {
 
 // -- entry point ---------------------------------------------------------------
 
-Platform_defineEntrypoint() {
+OXC3_TEST_ENTRY(graphics_interface) {
 
 	Error err = Error_none();
 	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err))

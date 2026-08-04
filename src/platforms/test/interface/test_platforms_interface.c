@@ -975,7 +975,16 @@ static void Test_dynamicLibrary(Test *t) {
 	#endif
 
 	DynamicLibrary dl = NULL;
-	Test_assert(t, "load", DynamicLibrary_load(rtLib, true, &dl, &err));
+
+	//Android puts an apk's native libraries in a loader-managed directory, not the app data dir that
+	//isAppDir resolves against, so a bare name (which the linker resolves against it) is the way in.
+
+	#if _PLATFORM_TYPE == PLATFORM_ANDROID
+		Test_assert(t, "load", DynamicLibrary_loadSystem(rtLib, &dl, &err));
+	#else
+		Test_assert(t, "load", DynamicLibrary_load(rtLib, true, &dl, &err));
+	#endif
+
 	Test_assert(t, "nonNull", dl != NULL);
 
 	//Load a known symbol that exists in all C runtimes
@@ -1069,7 +1078,7 @@ static void Test_windowNullguards(Test *t) {
 
 // -- entry point ---------------------------------------------------------------
 
-Platform_defineEntrypoint() {
+OXC3_TEST_ENTRY(platforms_interface) {
 
 	Error err = Error_none();
 	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err)) {

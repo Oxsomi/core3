@@ -46,7 +46,7 @@ if(NOT WIN32)
 	target_link_libraries(OxC3_shader_compiler PUBLIC agility_sdk::agility_sdk)
 endif()
 
-if(EnableTests)
+if(EnableTests AND OxC3TestExecutables)
 
 	# Compiles HLSL through the real DXC/SPIRV pipeline and validates parsing, reflection,
 	# oxc:: annotations, extensions and disassembly. The test/hlsl corpus is exposed to the

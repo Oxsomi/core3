@@ -20,9 +20,10 @@
 
 //types/math/test/test_types_math_main.c
 
+#include "types/test/test.h"
 #include "test_types_math_shared.h"
 
-int main() {
+OXC3_TEST_MAIN(types_math) {
 
 	Test t = (Test) { 0 };
 
@@ -32,13 +33,15 @@ int main() {
 	Test_flpF64(&t);
 	Test_flpRoundTrip(&t);
 
-	Test_u128(&t);
+	Test_mathU128(&t);
 
 	Test_quat(&t);
 	Test_vec2f(&t);
 	Test_vec2i(&t);
 	Test_vec4i(&t);
 	Test_vec4f(&t);
+	Test_hppVec(&t);
+	Test_mat(&t);
 
 	Test_pack(&t);
 	Test_rand(&t);

@@ -77,18 +77,26 @@ if(EnableTests)
 	set_target_properties(OxC3_types_test PROPERTIES FOLDER Oxsomi/test/types)
 	target_include_directories(OxC3_types_test PUBLIC "../../../include")
 
-	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
-	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
+	# The per-suite executables can't link on android: Platform_defineEntrypoint gives android_main
+	# rather than main, and an APK can't run an exec anyway. src/CMakeLists.txt builds the suites into
+	# OxC3_atest instead, which still links the test library above.
 
-	add_executable(
-		OxC3_types_base_test
-		${testsC}
-		${testsH}
-		CMakeLists.txt
-	)
+	if(OxC3TestExecutables)
 
-	target_link_libraries(OxC3_types_base_test PUBLIC OxC3_types_base OxC3_types_test)
-	set_target_properties(OxC3_types_base_test PROPERTIES FOLDER Oxsomi/test/types)
-	add_test(NAME OxC3_types_base_test COMMAND OxC3_types_base_test)
+		file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+		file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
+
+		add_executable(
+			OxC3_types_base_test
+			${testsC}
+			${testsH}
+			CMakeLists.txt
+		)
+
+		target_link_libraries(OxC3_types_base_test PUBLIC OxC3_types_base OxC3_types_test)
+		set_target_properties(OxC3_types_base_test PROPERTIES FOLDER Oxsomi/test/types)
+		add_test(NAME OxC3_types_base_test COMMAND OxC3_types_base_test)
+
+	endif()
 
 endif()

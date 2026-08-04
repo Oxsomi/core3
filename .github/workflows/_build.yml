@@ -122,13 +122,28 @@ jobs:
 
       # setup-android exports ANDROID_SDK_ROOT for whichever runner we're on; derive ours from that
       # instead of hardcoding a Windows path, so the same job works on linux/macos/windows.
+      # sdkmanager is resolved by path rather than by name: on the windows runner it's only on PATH as
+      # sdkmanager.bat, which bash won't find (no PATHEXT resolution), and the cmdline-tools directory
+      # is versioned rather than always being "latest".
       - name: Setup Android NDK
         if: inputs.os == 'android'
         shell: bash
         run: |
-          sdkmanager "platforms;android-${{ inputs.android_api }}" "ndk;${{ inputs.android_ndk }}"
-          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ inputs.android_ndk }}" >> "$GITHUB_ENV"
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [ -z "$SDK" ]; then echo "Neither ANDROID_SDK_ROOT nor ANDROID_HOME is set"; exit 1; fi
+
+          SDKMANAGER=""
+          for d in "$SDK"/cmdline-tools/*/bin "$SDK"/tools/bin; do
+            for exe in "$d/sdkmanager" "$d/sdkmanager.bat"; do
+              if [ -f "$exe" ]; then SDKMANAGER="$exe"; break 2; fi
+            done
+          done
+
+          if [ -z "$SDKMANAGER" ]; then echo "No sdkmanager under $SDK"; ls -R "$SDK" | head -50; exit 1; fi
+
+          "$SDKMANAGER" "platforms;android-${{ inputs.android_api }}" "ndk;${{ inputs.android_ndk }}"
+          echo "ANDROID_SDK=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK=$SDK/ndk/${{ inputs.android_ndk }}" >> "$GITHUB_ENV"
 
       # ── Conan package cache ────────────────────────────────────────────────
       - name: Cache Conan packages

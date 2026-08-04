@@ -87,7 +87,7 @@ endif()
 # asserting on real command output (known hashes, round-trips, virtual "//" files, -oiCA operations, negative cases).
 # Runs from the binary directory so embedded virtual sections resolve.
 
-if(EnableTests)
+if(EnableTests AND OxC3TestExecutables)
 
 	if(NOT Python3_EXECUTABLE)
 		find_package(Python3 COMPONENTS Interpreter)

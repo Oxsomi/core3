@@ -27,7 +27,7 @@ void Test_time(Test *test);
 void Test_typeId(Test *test);
 void Test_endianness(Test *test);
 void Test_fixedPoint(Test *test);
-void Test_string(Test *test);
+void Test_baseString(Test *test);
 void Test_stringMut(Test *test);
 void Test_stringRead(Test *test);
 void Test_buffer(Test *test);
