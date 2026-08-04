@@ -22,7 +22,10 @@
 
 #include "types/container/list_impl.h"
 #include "platforms/platform.h"
+#include "platforms/keyboard.h"
+#include "platforms/input_device.h"
 #include "platforms/logx.h"
+#include "types/container/string.h"
 #include "types/base/error.h"
 #include "types/base/thread.h"
 #include "types/base/atomic.h"
@@ -155,4 +158,28 @@ void Platform_cleanupUnixExt() {
 		munmap(Platform_instance->data1, Platform_instance->size1);
 		close((I32)(U64) Platform_instance->data);
 	}
+}
+
+Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, CharString *result, Error *e_rr) {
+
+	Bool s_uccess = true;
+	(void) alloc;
+
+	if(!keyboard || key >= keyboard->buttons)
+		retError(clean, Error_nullPointer(0, "Keyboard_remap()::keyboard is NULL, or key out of bounds"));
+
+	if(!result)
+		retError(clean, Error_nullPointer(3, "Keyboard_remap()::result is required"));
+
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(3, 0, "Keyboard_remap()::result is non empty, indicating possible memleak"));
+
+	//TODO: Query the real macOS keyboard layout (TISCopyCurrentKeyboardLayoutInputSource).
+	//For now fall back to the ASCII EKey name, matching the Android stub.
+	//+ sizeof("EKey") skips the "EKey_" prefix.
+
+	*result = CharString_createRefCStrConst(InputDevice_getButton(keyboard, key)->name + sizeof("EKey"));
+
+clean:
+	return s_uccess;
 }
