@@ -31,6 +31,7 @@
 #include "types/base/string_read.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"
+#include "types/base/platform_types.h"
 
 //Absolute directory everything is resolved against.
 //Windows wants a drive, unix wants a leading slash.
