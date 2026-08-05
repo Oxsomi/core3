@@ -61,15 +61,6 @@ Bool File_loadVirtualInternal1(
 	const Allocator *streamAlloc = NULL;
 	AAssetManager *assetManager = ((struct android_app*)Platform_instance->data)->activity->assetManager;
 
-	if(!memoryStreamType || !memoryStreamType->alloc)
-		retError(clean, Error_nullPointer(3, "File_loadVirtualInternal1()::memoryStreamType is required"));
-
-	//MemoryStream frees the buffer it took ownership of through the allocator its type was made with,
-	// and the stream can outlive this call (CAFile_read keeps entries larger than DLFile_smallLen stream backed),
-	// so the read buffer has to come from that same allocator rather than from alloc.
-
-	streamAlloc = memoryStreamType->alloc;
-
 	gotoIfError3(clean, CharString_createCopy(*loc, alloc, &isChild, e_rr));
 
 	if(CharString_length(isChild))
@@ -109,6 +100,20 @@ Bool File_loadVirtualInternal1(
 
 		if(!allowLoad)
 			retError(clean, Error_notFound(0, 0, "File_loadVirtualInternal1() was queried but none was found"));
+
+		//Only required from here on, where bytes are actually read.
+		//File_isVirtualLoaded queries with a null memoryStreamType because it just reads loadedAndId,
+		// so rejecting it up front (as this used to) made every isVirtualLoaded call
+		// fail on android while working everywhere else.
+
+		if(!memoryStreamType || !memoryStreamType->alloc)
+			retError(clean, Error_nullPointer(3, "File_loadVirtualInternal1()::memoryStreamType is required"));
+
+		//MemoryStream frees the buffer it took ownership of through the allocator its type was made with,
+		// and the stream can outlive this call (CAFile_read keeps entries larger than DLFile_smallLen stream backed),
+		// so the read buffer has to come from that same allocator rather than from alloc.
+
+		streamAlloc = memoryStreamType->alloc;
 
 		//Platform_initUnixExt only recorded the section name and length, so re-open the asset by name.
 		//section->path is "<target>/<name>" (see aplatform.c), the asset is "packages/<target>/<name>.oiCA".

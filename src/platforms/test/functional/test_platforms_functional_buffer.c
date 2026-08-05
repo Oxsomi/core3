@@ -166,13 +166,21 @@ static void F6_onDraw(Window *w) {
 	if (!px)
 		return;
 
-	//pixel i -> R = (i & 0xFF), G = ((i >> 1) & 0xFF), B = 42, A = 255
-	for (U32 i = 0; i < W * H; ++i) {
-		px[i * 4 + 0] = (U8)(i & 0xFF);
-		px[i * 4 + 1] = (U8)((i >> 1) & 0xFF);
-		px[i * 4 + 2] = 42;
-		px[i * 4 + 3] = 255;
-	}
+	//R ramps along x, G along y, so the result is the same picture whatever resolution the device hands us.
+	//A linear index instead (R = i & 0xFF) shifts by (W % 256) every row, which is diagonal stripes on anything but a
+	// multiple of 256 wide, and that's indistinguishable by eye from a backend copying rows at the wrong stride.
+	//Pixels 0 and 1 keep the values the read-back below checks for, since they only differ in x.
+
+	for (U32 y = 0; y < H; ++y)
+		for (U32 x = 0; x < W; ++x) {
+
+			const U64 i = (U64) y * W + x;
+
+			px[i * 4 + 0] = (U8)(x & 0xFF);
+			px[i * 4 + 1] = (U8)(y & 0xFF);
+			px[i * 4 + 2] = 42;
+			px[i * 4 + 3] = 255;
+		}
 
 	f6.drawn = true;
 }

@@ -77,7 +77,20 @@ static inline F32x4 F32x4_round(F32x4 a) { return vrndnq_f32(a); }
 //Transcendentals
 
 static inline F32x4 F32x4_sqrt(F32x4 a) { return vsqrtq_f32(a); }
-static inline F32x4 F32x4_rsqrt(F32x4 a) { return vrsqrteq_f32(a); }
+
+//vrsqrteq_f32 on its own is only an ~8 bit estimate, half of what SSE's _mm_rsqrt_ps delivers,
+// and the callers are written against the SSE accuracy:
+// F32x4_normalize* is rsqrt(sqLen) * v, so the estimate's ~4e-3 relative error lands directly in the result.
+//That's enough to make F32x4x4_lookAt's basis non-orthonormal and stop it preserving distances.
+//vrsqrtsq_f32(x, y) computes (3 - x * y) / 2, so one Newton-Raphson step (r *= (3 - a*r*r) / 2)
+// takes it to ~16 bits, past SSE.
+//Note a == 0 now yields NaN rather than the estimate's +inf;
+// normalizing a zero vector was already NaN on both (0 * inf), so nothing that uses this can tell the difference.
+
+static inline F32x4 F32x4_rsqrt(F32x4 a) {
+	const F32x4 estimate = vrsqrteq_f32(a);
+	return vmulq_f32(estimate, vrsqrtsq_f32(vmulq_f32(a, estimate), estimate));
+}
 
 //Boolean
 		

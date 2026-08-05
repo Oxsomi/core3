@@ -30,6 +30,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -40,6 +41,9 @@ ROOT = os.path.dirname(os.path.realpath(__file__))
 HASH_CACHE_FILE = os.path.join(ROOT, ".dep_hashes.json")
 
 ALL_MODES = [ "Release", "Debug", "RelWithDebInfo", "MinSizeRel" ]
+
+# Matches the floor documented in README.md. dirs_exist_ok (the apk step) is what actually needs 3.8
+MIN_PYTHON = (3, 8)
 
 # The host OxC3_package tool is always built optimized; nothing about the target changes it, and a cross
 # build's *build* context has to be pinned to this same mode or conan computes a different package id for
@@ -106,9 +110,52 @@ def isSteamOS():
 	except FileNotFoundError:
 		return False
 
+def ensurePythonVersion():
+	"""Refuse to start on an interpreter older than the scripts need.
+
+	Checked up front because the failure otherwise arrives very late and unrecognisably. Everything here
+	parses on 3.7 and the only newer thing we use is shutil.copytree's dirs_exist_ok, in the apk step - so
+	an old interpreter cheerfully runs the entire cross build, then dies minutes later on a bare TypeError
+	that says nothing about python versions. Windows makes this easy to hit by accident: Visual Studio puts
+	a 3.7 on PATH as `python`, ahead of whatever newer one is installed as `python3`.
+	"""
+
+	if sys.version_info >= MIN_PYTHON:
+		return
+
+	wanted  = ".".join(str(v) for v in MIN_PYTHON)
+	current = ".".join(str(v) for v in sys.version_info[:3])
+
+	print(f"-- Python {wanted}+ required, this is {current} ({sys.executable})", file=sys.stderr)
+
+	# Usually the machine already has a new enough one under a different name, so name it rather than
+	# leaving the reader to go looking
+
+	for name in ("python3", "py"):
+
+		found = shutil.which(name)
+
+		if not found or os.path.realpath(found) == os.path.realpath(sys.executable):
+			continue
+
+		version = subprocess.run(
+			[ found, "-c", "import sys; print('.'.join(str(v) for v in sys.version_info[:3]))" ],
+			capture_output=True, text=True
+		)
+
+		if version.returncode or tuple(int(v) for v in version.stdout.strip().split(".")) < MIN_PYTHON:
+			continue
+
+		print(f"-- {name} is {version.stdout.strip()}, run: {name} {os.path.basename(sys.argv[0])} ...", file=sys.stderr)
+		break
+
+	sys.exit(1)
+
 def ensureCorrectEnvironment(script):
 	"""On SteamOS, re-exec `script` inside the steamrt4-sdk distrobox, escaping the flatpak sandbox
 	first if VSCode itself is sandboxed. No-op on Windows / macOS / plain Linux."""
+
+	ensurePythonVersion()
 
 	if "--already-escaped" in sys.argv:
 		sys.argv.remove("--already-escaped")
@@ -210,6 +257,81 @@ def ensureDefaultProfile():
 
 	if not os.path.isfile(default):
 		run("conan profile detect")
+
+def conanKnownCompilerVersions(compiler):
+	"""The compiler.version values this conan install accepts, oldest first.
+
+	Read out of the cache's settings.yml rather than asked of conan, which only exposes [conf] through
+	`conan config`. settings_user.yml is read after it because it *replaces* the list it names rather than
+	extending it (the `version+:` append form isn't in conan 2.11), so a user who already widened the list
+	by hand is respected. Returns [] if either file isn't there or doesn't parse, which callers treat as
+	"don't second guess conan".
+	"""
+
+	versions = []
+
+	# `^\s+clang:$` can't match `apple-clang:`, since a '-' isn't whitespace. version is the first key
+	# under the compiler, so the next one in the file is the one we're after; it wraps across lines.
+
+	header = re.compile(r"^\s+" + re.escape(compiler) + r":\s*$", re.MULTILINE)
+	values = re.compile(r"version:\s*\[(.*?)\]", re.DOTALL)
+
+	for name in ("settings.yml", "settings_user.yml"):
+
+		path = os.path.join(capture("conan config home"), name)
+
+		if not os.path.isfile(path):
+			continue
+
+		with open(path, encoding="utf-8") as f:
+			settings = f.read()
+
+		start = header.search(settings)
+
+		if not start:
+			continue
+
+		found = values.search(settings, start.end())
+
+		if not found:
+			continue
+
+		versions = [ v.strip().strip("\"'") for v in found.group(1).split(",") if v.strip() ]
+
+	return versions
+
+def conanCompilerVersion(compiler, version):
+	"""`version`, or the newest one conan accepts if it's never heard of it.
+
+	NDKs ship clang well ahead of conan's settings.yml (NDK 29 is clang 20, which conan only learned in
+	2.12), and an unknown value is a hard error rather than a warning - "Invalid setting '20' is not a
+	valid 'settings.compiler.version' value" - which kills the first dependency build. Nothing here reads
+	the number back, so reporting the newest conan knows keeps a current NDK working on an older conan
+	instead of making every NDK bump a conan bump too.
+
+	The alternative, widening the list in settings_user.yml, is worse: it has to restate every version
+	conan already ships (there's no append), and it edits global config to fix one repo's build.
+	"""
+
+	known = conanKnownCompilerVersions(compiler)
+
+	if not known or version in known:
+		return version
+
+	def asTuple(value):
+		return tuple(int(part) for part in value.split(".") if part.isdigit())
+
+	older = [ v for v in known if asTuple(v) and asTuple(v) <= asTuple(version) ]
+
+	if not older:
+		return version                                     # nothing sane to fall back to, let conan object
+
+	fallback = max(older, key=asTuple)
+
+	print(f"-- conan doesn't know {compiler} {version}, building as {compiler} {fallback}")
+	print(f"-- Upgrade conan if you want the real version in the package id")
+
+	return fallback
 
 # ---------------------------------------------------------------------------------------------------
 # Recipe introspection

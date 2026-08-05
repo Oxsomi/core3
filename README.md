@@ -90,6 +90,10 @@ serves every android configuration.
   being packaged has virtual files of its own next to OxC3's.
 - `--sign` signs the APK: provide `-keystore` (and optionally `-keystore_password`), or have `JAVA_HOME` set to create a temporary keystore.
 - `--run` installs and runs on a connected device in developer mode (requires `-package` and `-lib` if no apk step).
+- `-ip 192.168.2.93` runs over the network instead of usb (port defaults to 5555, give `host:port` in full for
+  android's Wireless debugging, which picks its own). Enable it first with `adb tcpip 5555` over usb. Every adb
+  call then goes through `-s`, which is needed anyway once a usb and a wireless transport are both attached, since
+  adb otherwise refuses with *"more than one device/emulator"*.
 - `-category game` (default) sets the app category; `--install` exports the android package so a dependent
   project can `requires()` it; `--skip_build` reuses prebuilt binaries.
 
@@ -115,6 +119,17 @@ be launched by `am start` at all.
 Add `--interactive` to also run the functional suites (window/input/audio); they need a human watching
 the device, so they're skipped otherwise. That sets `debug.oxc3.interactive`, which you can also flip by
 hand with `adb shell setprop`. Interactive runs aren't timed out.
+
+The functional suites want a keyboard and mouse, which a phone doesn't have. Pairing them over Bluetooth is the
+least painful route: it needs no USB OTG, no powered hub, and leaves the port free. Otherwise run over the network
+so the usb port is available for a hub, and note android blocks new usb peripherals while the screen is locked:
+
+```bash
+adb tcpip 5555                        # over usb, once; doesn't survive a reboot
+python build_android.py -mode Release -arch arm64 -generator Ninja -tests True --apk --sign --run --interactive \
+  -ip 192.168.2.93 -keystore_password <pw> \
+  -package net.osomi.oxc3test -version 0.1.0 -lib OxC3_atest -name "OxC3 tests"
+```
 
 Every suite is bundled except **shader_compiler**, since DXC isn't built for android.
 

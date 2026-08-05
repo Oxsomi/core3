@@ -1346,9 +1346,31 @@ Bool File_unloadVirtualInternal(void *userData, const CharString *loc, const All
 			continue;
 
 		if(section->loadedAndId) {
-			CAFile_free(&Platform_instance->archives.ptrNonConst[section->loadedAndId << 1 >> 1], alloc);
-			ListCAFile_erase(&Platform_instance->archives, section->loadedAndId << 1 >> 1, NULL);
+
+			const U64 id = section->loadedAndId << 1 >> 1;
+
+			CAFile_free(&Platform_instance->archives.ptrNonConst[id], alloc);
+			ListCAFile_erase(&Platform_instance->archives, id, NULL);
 			section->loadedAndId = 0;
+
+			//loadedAndId is an index into archives, and erase shifts everything after id down one.
+			//Every other loaded section therefore points one slot too high from here on.
+			//Unloading a parent path matches more than one section (root matches all of them), so without this the next
+			// iteration frees a slot past the end, a double free of the archive that just moved down.
+			//It only shows up once two sections are loaded, which is why a single section target never tripped it.
+
+			for (U64 j = 0; j < Platform_instance->virtualSections.length; ++j) {
+
+				VirtualSection *other = Platform_instance->virtualSections.ptrNonConst + j;
+
+				if(!other->loadedAndId)
+					continue;
+
+				const U64 otherId = other->loadedAndId << 1 >> 1;
+
+				if(otherId > id)
+					other->loadedAndId = (otherId - 1) | ((U64)1 << 63);
+			}
 		}
 	}
 

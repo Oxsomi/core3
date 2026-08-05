@@ -66,17 +66,24 @@ static inline T T##_exp2(T v) {                                                 
 																										\
 static inline T T##_safeDiv(T a, T b) { return b == 0 ? 0 : a / b; }
 
+//rol/ror below mask the second shift as well as the first.
+//With bits == 0 the complement is the full width, and shifting a T by sizeof(T) * 8 is undefined.
+//U8/U16 escape that by promoting to int, U32/U64 don't.
+//x86 gave the right answer anyway, but on arm64 the poisoned value reaches the caller and the optimizer does as it
+// likes with it, which is how rol(x, 0) != x got through.
+//Masking both is the idiom compilers pattern match, so it still comes out as a single rotate instruction.
+
 #define UINT_OP(T)                                                                                      \
 XINT_OP(T, T, (U64)(T)-1, 0);                                                                           \
 																										\
 static inline T T##_rol(T a, U8 bits) {                                                                 \
 	bits &= sizeof(T) * 8 - 1;                                                                          \
-	return (a << bits) | (a >> (sizeof(T) * 8 - bits));                                                 \
+	return (a << bits) | (a >> ((sizeof(T) * 8 - bits) & (sizeof(T) * 8 - 1)));                         \
 }                                                                                                       \
 																										\
 static inline T T##_ror(T a, U8 bits) {                                                                 \
 	bits &= sizeof(T) * 8 - 1;                                                                          \
-	return (a >> bits) | (a << (sizeof(T) * 8 - bits));                                                 \
+	return (a >> bits) | (a << ((sizeof(T) * 8 - bits) & (sizeof(T) * 8 - 1)));                         \
 }
 
 UINT_OP(U64);

@@ -38,6 +38,10 @@
 
 U32 Window_extSize = 0;
 
+//awindow_manager.c owns the display query, since that's where WindowManager_updateMonitors needs it too
+
+Bool AWindowManager_getMonitor(Monitor *monitor);
+
 void AWindow_onUpdateSize(Window *w) {
 
 	Error err = Error_none();
@@ -64,7 +68,19 @@ void AWindow_onUpdateSize(Window *w) {
 		}
 	}
 
-	//TODO: Query monitors
+	//A window always covers the whole display here, so its monitor list is the display's single entry.
+	//monitorsDirty is what gets the manager's own list refreshed on the next step, the way the other backends do it
+	// from their monitor change handlers.
+
+	Monitor monitor = (Monitor) { 0 };
+	ListMonitor_clear(&w->monitors, NULL);
+
+	if(AWindowManager_getMonitor(&monitor))
+		if(!ListMonitor_pushBack(&w->monitors, monitor, Platform_instance->alloc, &err))
+			Log_debugLnx("AWindow_onUpdateSize() couldn't store the monitor");
+
+	if(w->owner)
+		w->owner->monitorsDirty = true;
 
 	if (w->callbacks.onMonitorChange)
 		w->callbacks.onMonitorChange(w);
@@ -275,8 +291,66 @@ void AWindow_flushTypeChar(Window *w) {
 	ListCharString_freeUnderlying(&queue, Platform_instance->alloc);
 }
 
+//Bind a window to the surface that's already up.
+//Normally driven by APP_CMD_INIT_WINDOW, but android only sends that when the surface itself appears, so a window
+// created while one is already alive (the previous one having been freed) would never hear it, and
+// WindowManager_updateExt would spin waiting to be finalized.
+//WindowManager_createWindowPhysical calls this directly in that case.
+
+void AWindow_finalize(Window *w) {
+
+	struct android_app *app = (struct android_app*) Platform_instance->data;
+
+	if(!app || !app->window || (w->flags & EWindowFlags_IsFinalized))
+		return;
+
+	w->nativeHandle = app->window;
+	w->flags |= EWindowFlags_IsFinalized;
+
+	//A NativeActivity surface keeps whatever format the system handed it until asked otherwise, and that's regularly
+	// one ANativeWindow_lock won't produce, so Window_presentPhysical either fails to lock or gets a format it
+	// rejects - silently, since the draw loop passes no Error.
+	//0, 0 keeps the surface's own dimensions and pins only the format.
+	//Only for windows that asked for a cpu buffer: a vulkan swapchain configures this surface itself, and its
+	// preTransform is how rotation gets handled there.
+
+	if(w->hint & EWindowHint_ProvideCPUBuffer) {
+
+		I32 nativeFormat = WINDOW_FORMAT_RGBA_8888;
+
+		switch(w->format) {
+
+			case EWindowFormat_BGR10A2:
+				nativeFormat = AHARDWAREBUFFER_FORMAT_R10G10B10A2_UNORM;
+				break;
+
+			case EWindowFormat_RGBA16f:
+				nativeFormat = AHARDWAREBUFFER_FORMAT_R16G16B16A16_FLOAT;
+				break;
+
+			default:
+				break;
+		}
+
+		if(ANativeWindow_setBuffersGeometry(app->window, 0, 0, nativeFormat))
+			Log_debugLnx("AWindow_finalize() couldn't set the surface format, present may not reach the screen");
+	}
+
+	w->size = I32x2_create2(ANativeWindow_getWidth(app->window), ANativeWindow_getHeight(app->window));
+
+	w->flags |= EWindowFlags_IsActive;
+
+	if(w->callbacks.onCreate) {
+		Error err = Error_none();
+		if(!w->callbacks.onCreate(w, &err))
+			Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+	}
+
+	AWindow_onUpdateSize(w);
+}
+
 void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
-	
+
 	Window *w = (Window*) app->userData;
 
 	if(!w)
@@ -364,6 +438,15 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 				break;
 
 			case APP_CMD_TERM_WINDOW:
+
+				//The surface is already gone by the time this arrives, and the glue has nulled app->window.
+				//Clearing IsFinalized is what keeps the generic step from drawing and presenting into it, since its
+				// ShouldTerminate check only runs after the present.
+				//AWindow_finalize binds the window again if another surface shows up (resume sends INIT_WINDOW).
+
+				w->flags &= ~(EWindowFlags_IsFinalized | EWindowFlags_IsActive);
+				w->nativeHandle = NULL;
+
 				w->flags |= EWindowFlags_ShouldTerminate;
 				break;
 			
@@ -385,22 +468,7 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 				break;
 			
 			case APP_CMD_INIT_WINDOW:
-
-				w->nativeHandle = ((struct android_app*) Platform_instance->data)->window;
-				w->flags |= EWindowFlags_IsFinalized;
-
-				w->size = I32x2_create2(ANativeWindow_getWidth(app->window), ANativeWindow_getHeight(app->window));
-							
-				w->flags |= EWindowFlags_IsActive;
-
-				if(w->callbacks.onCreate) {
-					Error err = Error_none();
-					if(!w->callbacks.onCreate(w, &err))
-						Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
-				}
-
-				AWindow_onUpdateSize(w);
-
+				AWindow_finalize(w);
 				break;
 
 			//On config change can be a lot of things, orientation is already handled by onUpdateSize.
@@ -1115,10 +1183,26 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 	if(!(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
 		retError(clean, Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer"));
 
-	ANativeWindow *nativeWindow = ((struct android_app*) Platform_instance->data)->window;
+	struct android_app *app = (struct android_app*) Platform_instance->data;
+	ANativeWindow *nativeWindow = app ? app->window : NULL;
+
+	//Teardown races the draw loop: the surface can go away between a step deciding to present and getting here, and
+	// ANativeWindow_lock segfaults on a null window rather than returning an error.
+
+	if(!nativeWindow)
+		retError(clean, Error_invalidState(0, "Window_presentPhysical() the surface is gone"));
+
+	//w->size stays in the unrotated orientation on purpose (see APP_CMD_WINDOW_RESIZED), because the vulkan swapchain
+	// hands rotation to the display controller through preTransform and reads w->orientation to do it.
+	//The surface itself is rotated though, so the region we lock is w->size turned to match it.
+
+	const Bool quarterTurn = w->orientation == 90 || w->orientation == 270;
+
+	const I32 surfaceW = quarterTurn ? I32x2_y(w->size) : I32x2_x(w->size);
+	const I32 surfaceH = quarterTurn ? I32x2_x(w->size) : I32x2_y(w->size);
 
 	ANativeWindow_Buffer buffer = (ANativeWindow_Buffer) { 0 };
-	ARect rect = (ARect) { .right = I32x2_x(w->size), .bottom = I32x2_y(w->size) };
+	ARect rect = (ARect) { .right = surfaceW, .bottom = surfaceH };
 
 	if (ANativeWindow_lock(nativeWindow, &buffer, &rect))
 		retError(clean, Error_invalidState(0, "Window_presentPhysical() couldn't lock window"));
@@ -1155,12 +1239,59 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 		retError(clean, Error_invalidState(0, "Window_presentPhysical() couldn't write to window; mismatching formats"));
 	}
 
-	if(buffer.width != I32x2_x(w->size) ||  buffer.height != I32x2_y(w->size)) {
+	if(buffer.width != surfaceW || buffer.height != surfaceH) {
 		ANativeWindow_unlockAndPost(nativeWindow);
 		retError(clean, Error_invalidState(0, "Window_presentPhysical() couldn't write to window; mismatching dimensions"));
 	}
 
-	Buffer_memcpy(Buffer_createRef(buffer.bits, Buffer_length(w->cpuVisibleBuffer)), w->cpuVisibleBuffer);
+	//The compositor picks the stride, and it's regularly wider than the window (1088 for a 1080px display, say).
+	//ANativeWindow_Buffer::stride counts pixels, not bytes, and only matches the width when the width happens to suit
+	// the GPU's alignment, so the rows can't go across as one block or each one lands progressively further left.
+
+	const U64 bytesPerPixel = ETextureFormat_getSize((ETextureFormat) w->format, 1, 1, 1);
+	const U64 srcStride = (U64) I32x2_x(w->size) * bytesPerPixel;
+	const U64 dstStride = (U64) buffer.stride * bytesPerPixel;
+
+	const I32 srcW = I32x2_x(w->size), srcH = I32x2_y(w->size);
+
+	U8 *dst = (U8*) buffer.bits;
+	const U8 *src = w->cpuVisibleBuffer.ptr;
+
+	//Upright: rows go across whole, or one block when the strides already agree.
+	//Rotated: the buffer is turned into the surface a pixel at a time, since no run of source pixels is contiguous in
+	// the destination. That's only for the cpu present path; vulkan gets this free from the swapchain's preTransform,
+	// so nothing that actually renders pays for it.
+
+	if(!quarterTurn && w->orientation != 180) {
+
+		if(srcStride == dstStride)
+			Buffer_memcpy(Buffer_createRef(dst, Buffer_length(w->cpuVisibleBuffer)), w->cpuVisibleBuffer);
+
+		else for(I32 y = 0; y < srcH; ++y)
+			Buffer_memcpy(
+				Buffer_createRef(dst + (U64) y * dstStride, srcStride),
+				Buffer_createRefConst(src + (U64) y * srcStride, srcStride)
+			);
+	}
+
+	else for(I32 y = 0; y < surfaceH; ++y)
+		for(I32 x = 0; x < surfaceW; ++x) {
+
+			I32 sx, sy;
+
+			switch(w->orientation) {
+
+				case 90:     sx = y;                sy = srcH - 1 - x;    break;
+				case 270:    sx = srcW - 1 - y;     sy = x;               break;
+				default:     sx = srcW - 1 - x;     sy = srcH - 1 - y;    break;    //180
+			}
+
+			Buffer_memcpy(
+				Buffer_createRef(dst + (U64) y * dstStride + (U64) x * bytesPerPixel, bytesPerPixel),
+				Buffer_createRefConst(src + (U64) sy * srcStride + (U64) sx * bytesPerPixel, bytesPerPixel)
+			);
+		}
+
 	ANativeWindow_unlockAndPost(nativeWindow);
 
 clean:
@@ -1207,6 +1338,11 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	app->userData = w;
 	app->onAppCmd = AWindow_onAppCmd;
 	app->onInputEvent = AWindow_onInput;
+
+	//The surface is already up whenever this isn't the first window of the run, and APP_CMD_INIT_WINDOW won't come a
+	// second time, so bind to it now rather than waiting for a command that will never arrive.
+
+	AWindow_finalize(w);
 
 clean:
 

@@ -118,6 +118,14 @@ function(apply_dependencies target)
 				CONTENT "${res2}"
 			)
 			set_source_files_properties("${_rc_file}" PROPERTIES GENERATED TRUE)
+
+			# The .rc only names the .oiCA files, so its own text is identical no matter what's inside them.
+			# Without this the resource compiler isn't rerun when a package is rebuilt and the binary silently keeps
+			#  embedding the previous archive, surfacing much later as a missing shader binary nowhere near the build.
+			# The other platforms don't need it, they embed through a POST_BUILD objcopy that runs every build.
+
+			set_source_files_properties("${_rc_file}" PROPERTIES OBJECT_DEPENDS "${res}")
+
 			target_sources(${target} PRIVATE "${_rc_file}")
 		endif()
 	endif()

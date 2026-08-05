@@ -25,6 +25,7 @@
 #include "platforms/platform.h"
 #include "platforms/logx.h"
 #include "platforms/monitor.h"
+#include "types/container/buffer.h"
 #include "types/base/error.h"
 #include "types/base/thread.h"
 
@@ -34,10 +35,28 @@
 
 void *Platform_getDataImpl(void *ptr) { (void) ptr; return (struct android_app*) Platform_instance->data; }
 
+//Android keeps no per manager native state of its own, everything hangs off Platform_instance->data.
+//The generic layer still uses platformData.ptr as its "there's a real windowing system here" test though, and refuses
+// physical windows as headless without it (see window_manager.c), so the app pointer lives here the way linux keeps
+// its display in LWindowManager.
+//Freeing is the generic WindowManager_free's job, same as the other backends.
+
+typedef struct AWindowManager {
+	struct android_app *app;
+} AWindowManager;
+
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
-	(void) e_rr;
+
+	Bool s_uccess = true;
+
+	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(AWindowManager), Platform_instance->alloc, &w->platformData, e_rr));
+
+	((AWindowManager*) w->platformData.ptrNonConst)->app = (struct android_app*) Platform_instance->data;
+
 	w->isSingleWindow = true;
-	return true;
+
+clean:
+	return s_uccess;
 }
 
 Bool WindowManager_freeNative(WindowManager *w) {
@@ -55,24 +74,21 @@ void AWindow_flushTypeChar(Window *w);
 //The surface only exists after APP_CMD_INIT_WINDOW; until then there's nothing to
 // measure, and WindowManager_step calls us again once it's up.
 
-Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr) {
+//The one display, or false when the surface isn't up yet and there's nothing to measure.
+//A window here always covers the whole display, so its monitor list is the same single entry.
 
-	Bool s_uccess = true;
+Bool AWindowManager_getMonitor(Monitor *monitor) {
+
 	struct android_app *app = (struct android_app*) Platform_instance->data;
 
-	if(!wm)
-		retError(clean, Error_nullPointer(0, "WindowManager_updateMonitors()::wm is required"));
-
-	ListMonitor_clear(&wm->monitors, NULL);
-
-	if(!app || !app->window)
-		goto clean;
+	if(!monitor || !app || !app->window)
+		return false;
 
 	const I32 width = ANativeWindow_getWidth(app->window);
 	const I32 height = ANativeWindow_getHeight(app->window);
 
 	if(width <= 0 || height <= 0)
-		goto clean;
+		return false;
 
 	//AConfiguration density is already in dpi (the ACONFIGURATION_DENSITY_* values are dpi buckets),
 	// so physical size is px / dpi * 25.4.
@@ -85,7 +101,7 @@ Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr) {
 
 	const I32 orientation = APlatform_getDeviceOrientation();
 
-	const Monitor monitor = (Monitor) {
+	*monitor = (Monitor) {
 		.offsetPixels = I32x2_zero,
 		.sizePixels   = I32x2_create2(width, height),
 		.sizeMm       = I32x2_create2(
@@ -94,6 +110,22 @@ Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr) {
 		.orientation  = (EMonitorOrientation)(orientation < 0 ? 0 : orientation),
 		.refreshRate  = APlatform_getRefreshRate()
 	};
+
+	return true;
+}
+
+Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Monitor monitor = (Monitor) { 0 };
+
+	if(!wm)
+		retError(clean, Error_nullPointer(0, "WindowManager_updateMonitors()::wm is required"));
+
+	ListMonitor_clear(&wm->monitors, NULL);
+
+	if(!AWindowManager_getMonitor(&monitor))
+		goto clean;
 
 	gotoIfError3(clean, ListMonitor_pushBack(&wm->monitors, monitor, Platform_instance->alloc, e_rr));
 
@@ -145,7 +177,14 @@ repeat:
 	//In case of initialization, we have to wait until the surface is ready.
 	//Afterwards, we can continue
 
-	if(ident == ALOOPER_POLL_TIMEOUT && !(w->flags & EWindowFlags_IsFinalized)) {
+	//ShouldTerminate is checked too: APP_CMD_TERM_WINDOW clears IsFinalized, and without this a window on its way out
+	// would spin here forever waiting for a surface that isn't coming back.
+
+	if(
+		ident == ALOOPER_POLL_TIMEOUT &&
+		!(w->flags & EWindowFlags_IsFinalized) &&
+		!(w->flags & EWindowFlags_ShouldTerminate)
+	) {
 		Thread_sleep(100 * MU);
 		goto repeat;
 	}
