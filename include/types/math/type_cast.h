@@ -30,34 +30,50 @@
 
 //Conversions
 
+//Bit casts go through a union, not a pointer cast.
+//Reading a float out of storage that was written as an integer aliases two incompatible types, which C leaves undefined.
+//gcc then sees no float was ever stored there and reports "'bits' is used uninitialized", an error under -Werror.
+//Union punning is well defined in C99 and is already what the vector headers do, see I32x4_U64x2.
+
+typedef union F32_U32 {
+	F32 f;
+	U32 u;
+} F32_U32;
+
+typedef union F64_U64 {
+	F64 f;
+	U64 u;
+} F64_U64;
+
 static inline U32 U32_fromF32Bits(F32 v) {
-	const void *vptr = &v;
-	U32 u = *(const U32*)vptr;
-	return u;
+	F32_U32 bits;
+	bits.f = v;
+	return bits.u;
 }
 
 static inline U64 U64_fromF64Bits(F64 v) {
-	const void *vptr = &v;
-	return *(const U64*) vptr;
+	F64_U64 bits;
+	bits.f = v;
+	return bits.u;
 }
 
 static inline F32 F32_fromU32Bits(U32 v) {
-	const void *vptr = &v;
-	return *(const F32*) vptr;
+	F32_U32 bits;
+	bits.u = v;
+	return bits.f;
 }
 
 static inline F64 F64_fromU64Bits(U64 v) {
-	const void *vptr = &v;
-	return *(const F64*) vptr;
+	F64_U64 bits;
+	bits.u = v;
+	return bits.f;
 }
 
 #define FLP_FROMBITS(T, TInt)                                                                               \
 static inline Bool T##_from##TInt##BitsSafe(TInt v, T *res, Bool assertFinite, Error *e_rr) {               \
 																											\
 	Bool s_uccess = true;                                                                                   \
-	TInt bits = (TInt) v;                                                                                   \
-	const void *bitsPtr = &bits;                                                                            \
-	T r = *(const T*) bitsPtr;                                                                              \
+	const T r = T##_from##TInt##Bits(v);                                                                    \
 																											\
 	if(!res)                                                                                                \
 		retError(clean, Error_nullPointer(1, #T "_from" #TInt "Bits()::res is required"));                  \

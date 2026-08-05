@@ -84,7 +84,10 @@ def clangMajorVersion(binDir):
 		print(f"-- Couldn't parse clang version out of:\n{version}", file=sys.stderr)
 		sys.exit(1)
 
-	return found.group(1)
+	# An NDK's clang is routinely newer than the conan you have knows about, and conan rejects a version
+	# it doesn't list outright rather than warning, so ask what it'll actually accept.
+
+	return common.conanCompilerVersion("clang", found.group(1))
 
 def profileName(conanArch, level, generator):
 	return "android_" + conanArch + "_" + str(level) + "_" + generator.replace(" ", "_")
@@ -112,12 +115,12 @@ def makeProfile(conanHome, binDir, conanArch, level, generator):
 
 def ensureProfile(conanHome, binDir, conanArch, level, generator):
 
-	path = os.path.join(conanHome, "profiles", profileName(conanArch, level, generator))
+	# Always rewritten rather than reused when present. The name only encodes arch/level/generator, but the
+	# contents also depend on the NDK path, its clang version and which versions conan accepts - all of
+	# which change under an existing profile (an NDK upgrade, a conan upgrade), leaving a stale one that
+	# fails in ways pointing nowhere near the profile. Writing a small file every build is cheaper than that.
 
-	if not os.path.isfile(path):
-		return makeProfile(conanHome, binDir, conanArch, level, generator)
-
-	return path
+	return makeProfile(conanHome, binDir, conanArch, level, generator)
 
 # ---------------------------------------------------------------------------------------------------
 # Cross build
@@ -443,6 +446,15 @@ def runApk(args):
 
 	adb = "\"" + os.path.join(os.environ["ANDROID_SDK"], "platform-tools", "adb") + "\""
 
+	# -ip targets a device over the network, which frees the usb port for a keyboard/mouse hub during the
+	#  interactive suites.
+	# connect is idempotent (it just reports "already connected"), and -s is needed either way: adb refuses every
+	#  command with "more than one device/emulator" as soon as a usb and a wireless transport are both attached.
+
+	if args.ip:
+		common.run(f"{adb} connect {args.ip}")
+		adb = f"{adb} -s {args.ip}"
+
 	print(f"-- Installing apk file ({apkFile}) using adb ({adb})")
 
 	if args.mode == "Release":
@@ -556,6 +568,13 @@ def main():
 	parser.add_argument("-keystore", type=str, help="Sign an apk with a certain keystore, if empty, will require JAVA_HOME to be set (will generate)", default=None)
 	parser.add_argument("-keystore_password", type=str, help="Keystore password, if not entered, will ask it when signing", default=None)
 
+	parser.add_argument(
+		"-ip", type=str, default=None,
+		help="Run on a device over the network rather than usb, e.g. 192.168.2.93 (port defaults to 5555). "
+			"Frees the usb port for a keyboard/mouse hub during --interactive. "
+			"Enable it first with `adb tcpip 5555` over usb, or android's Wireless debugging"
+	)
+
 	parser.add_argument("--sign", help="Sign apk if built", action="store_true")
 	parser.add_argument("--run", help="Run apk if built", action="store_true")
 	parser.add_argument("--apk", help="Build apk (requires -package, -version, -lib and -name)", action="store_true")
@@ -571,6 +590,12 @@ def main():
 	parser.add_argument("--force_deps", help="Ignore hash cache and rebuild all dependencies", action="store_true")
 
 	args = parser.parse_args()
+
+	# adb wants host:port, but the port is 5555 for `adb tcpip` in practice, so only the address is worth typing.
+	# Wireless debugging picks a random port instead, and that one has to be given in full.
+
+	if args.ip and ":" not in args.ip:
+		args.ip += ":5555"
 
 	# Grab generator; on Windows, this is likely MinGW Makefiles while otherwise it's probably Unix Makefiles
 

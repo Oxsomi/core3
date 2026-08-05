@@ -528,6 +528,20 @@ def generate(spec):
 
 	return "\n".join(out), skipped
 
+def isUpToDate(existing, content):
+	"""Whether a generated header on disk already holds `content`, line endings aside.
+
+	The generated headers are committed with LF, but a Windows checkout with core.autocrlf=true (git's
+	default there, and the repo has no .gitattributes pinning eol) hands them back as CRLF. A byte
+	compare then calls every one of them stale on a clean tree, which fails check_generated_hpp for
+	reasons that have nothing to do with the C headers having changed.
+	"""
+
+	if existing is None:
+		return False
+
+	return existing.replace("\r\n", "\n") == content
+
 def main():
 
 	parser = argparse.ArgumentParser(description="Generate oxc:: C++ wrappers for C headers")
@@ -553,13 +567,16 @@ def main():
 
 		if args.check:
 
-			if existing != content:
+			if not isUpToDate(existing, content):
 				stale.append(spec["output"])
 				print(f"-- STALE: {spec['output']}", file=sys.stderr)
 
 			continue
 
-		if existing == content:
+		# Written with LF regardless of host, since that's what's committed; an existing CRLF copy that
+		# already matches is left alone rather than rewritten, so a Windows tree doesn't churn.
+
+		if isUpToDate(existing, content):
 			print(f"-- Unchanged: {spec['output']}")
 		else:
 			os.makedirs(os.path.dirname(outPath), exist_ok=True)

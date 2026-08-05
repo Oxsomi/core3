@@ -737,13 +737,24 @@ static void F18_onDraw(Window *w) {
 	for (U64 i = 0; i < len; ++i)
 		px[i] = F18_INIT_COLOR;
 
+	//Scale the brush with the surface, a single pixel is invisible on a phone (~0.05mm on a 1080x2237 panel) so the
+	// test looks like it did nothing even when it passes.
+	//Stays 1px on a small desktop window, a handful on a high dpi display.
+
+	I32 brush = (W < H ? W : H) / 128;
+
+	if(brush < 1)
+		brush = 1;
+
 	for (U32 i = 0; i < f18.pointCount; ++i) {
 
-		I32 cx = I32x2_x(f18.points[i]);
-		I32 cy = I32x2_y(f18.points[i]);
+		const I32 cx = I32x2_x(f18.points[i]);
+		const I32 cy = I32x2_y(f18.points[i]);
 
-		if (cx >= 0 && cx < W && cy >= 0 && cy < H)
-			*(U32*)(px + (cy * W + cx) * 4) = 0xFFFF00FF;
+		for (I32 y = cy - brush + 1; y < cy + brush; ++y)
+			for (I32 x = cx - brush + 1; x < cx + brush; ++x)
+				if (x >= 0 && x < W && y >= 0 && y < H)
+					*(U32*)(px + (y * W + x) * 4) = 0xFFFF00FF;
 	}
 }
 

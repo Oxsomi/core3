@@ -84,8 +84,10 @@ static const ATestSuite ATest_suites[] = {
 	{ "platforms_interface",  OxC3_test_platforms_interface,  false },
 	{ "graphics_interface",   OxC3_test_graphics_interface,   false },
 
-	{ "audio_functional",     OxC3_test_audio_functional,     true  },
-	{ "platforms_functional", OxC3_test_platforms_functional, true  }
+	//platforms_functional first: it's the one worth watching, and audio_functional takes minutes of listening
+
+	{ "platforms_functional", OxC3_test_platforms_functional, true  },
+	{ "audio_functional",     OxC3_test_audio_functional,     true  }
 
 };
 
@@ -93,31 +95,59 @@ static const ATestSuite ATest_suites[] = {
 //stdout goes nowhere on android, so pump it into logcat; that makes every existing test print visible
 //through `adb logcat -s OxC3` without touching the suites themselves.
 
+static pthread_t ATest_logThread;
+static Bool ATest_logThreadStarted = false;
+
 static void *ATest_logPump(void *arg) {
 
 	const int readFd = (int)(U64) arg;
 	C8 line[512];
 	U64 len = 0;
 
+	//Read in blocks rather than a byte at a time.
+	//A suite emits its results in one burst (types_base is ~1000 lines in a few ms) and a syscall per byte can't keep
+	// up, so the pump falls behind and whatever is still in the pipe when the process exits is simply lost.
+
 	for(;;) {
 
-		C8 c;
-		const ssize_t got = read(readFd, &c, 1);
+		C8 chunk[4096];
+		const ssize_t got = read(readFd, chunk, sizeof(chunk));
 
 		if(got <= 0)
 			break;
 
-		if(c == '\n' || len + 1 == sizeof(line)) {
-			line[len] = '\0';
-			__android_log_write(ANDROID_LOG_INFO, ATEST_TAG, line);
-			len = 0;
-			continue;
-		}
+		for(ssize_t i = 0; i < got; ++i) {
 
-		if(c != '\r')
+			const C8 c = chunk[i];
+
+			if(c == '\r')
+				continue;
+
+			if(c == '\n') {
+				line[len] = '\0';
+				__android_log_write(ANDROID_LOG_INFO, ATEST_TAG, line);
+				len = 0;
+				continue;
+			}
+
 			line[len++] = c;
+
+			if(len + 1 == sizeof(line)) {                //Longer than one log line, split it
+				line[len] = '\0';
+				__android_log_write(ANDROID_LOG_INFO, ATEST_TAG, line);
+				len = 0;
+			}
+		}
 	}
 
+	//A last line without a trailing newline is still worth seeing
+
+	if(len) {
+		line[len] = '\0';
+		__android_log_write(ANDROID_LOG_INFO, ATEST_TAG, line);
+	}
+
+	close(readFd);
 	return NULL;
 }
 
@@ -136,13 +166,35 @@ static Bool ATest_redirectStdio() {
 	if(dup2(fds[1], STDOUT_FILENO) < 0 || dup2(fds[1], STDERR_FILENO) < 0)
 		return false;
 
-	pthread_t thread;
+	//STDOUT/STDERR are the only write ends from here on, so closing those two is enough to signal EOF
 
-	if(pthread_create(&thread, NULL, ATest_logPump, (void*)(U64) fds[0]))
+	close(fds[1]);
+
+	if(pthread_create(&ATest_logThread, NULL, ATest_logPump, (void*)(U64) fds[0]))
 		return false;
 
-	pthread_detach(thread);
+	//Joinable, not detached: the run ends by finishing the activity, which would otherwise kill the pump
+	// mid pipe and drop the tail of the last suite that ran.
+
+	ATest_logThreadStarted = true;
 	return true;
+}
+
+static void ATest_drainStdio() {
+
+	if(!ATest_logThreadStarted)
+		return;
+
+	fflush(stdout);
+	fflush(stderr);
+
+	//Dropping every write end makes the pump's read() return 0, so it emits what's left and returns
+
+	close(STDOUT_FILENO);
+	close(STDERR_FILENO);
+
+	pthread_join(ATest_logThread, NULL);
+	ATest_logThreadStarted = false;
 }
 
 //`adb shell setprop debug.oxc3.interactive 1` opts into the suites that need someone pressing keys.
@@ -159,6 +211,13 @@ static Bool ATest_wantsInteractive() {
 }
 
 Platform_defineEntrypoint() {
+
+	//First thing, so nothing a suite prints is lost.
+	//Test_print/Test_assert2 report through printf and android sends stdout nowhere, so without this every suite runs
+	// silently and a failure shows up as an exit code with no indication of which assert went.
+
+	if(!ATest_redirectStdio())
+		__android_log_write(ANDROID_LOG_WARN, ATEST_TAG, "Couldn't redirect stdio, suite output will be missing");
 
 	//Without this android_native_app_glue can strip the glue and the activity never attaches
 
@@ -194,6 +253,10 @@ Platform_defineEntrypoint() {
 
 		else __android_log_print(ANDROID_LOG_INFO, ATEST_TAG, "PASS %s", suite->name);
 	}
+
+	//Before the sentinel, so every suite's output is in the log by the time the runner stops reading
+
+	ATest_drainStdio();
 
 	//Sentinel: `am start` gives no exit code back, so the runner greps logcat for this line.
 

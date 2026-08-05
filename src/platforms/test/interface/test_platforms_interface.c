@@ -56,10 +56,19 @@ static const char *testFileRenamed = "data_renamed.bin";
 static const char *testFile2       = "platform_test_tmp/move_src.bin";
 static const char *testMoveDir     = "platform_test_tmp/subdir";
 
-//Virtual section name registered by CMake
-static const char *vSection        = "//OxC3_plinttst/testdata";
-static const char *vFileHello      = "//OxC3_plinttst/testdata/hello.txt";
-static const char *vFileSub        = "//OxC3_plinttst/testdata/sub/world.txt";
+//Virtual section name registered by CMake.
+//A section lives under the target that packaged it, and this suite is compiled into two of them:
+// OxC3_plinttst on desktop, OxC3_atest in the android bundle (android has no exec, see src/test/android).
+//CMake passes the name so the paths follow whichever one is building.
+
+#ifndef _OXC3_TEST_VFS_TARGET
+	#define _OXC3_TEST_VFS_TARGET "OxC3_plinttst"
+#endif
+
+static const char *vLibrary        = "//" _OXC3_TEST_VFS_TARGET;
+static const char *vSection        = "//" _OXC3_TEST_VFS_TARGET "/testdata";
+static const char *vFileHello      = "//" _OXC3_TEST_VFS_TARGET "/testdata/hello.txt";
+static const char *vFileSub        = "//" _OXC3_TEST_VFS_TARGET "/testdata/sub/world.txt";
 
 // -- 1. WindowManager lifecycle ------------------------------------------------
 
@@ -743,11 +752,14 @@ static void Test_fileCaseAndUtf8(Test *t) {
 	CharString lowerFile = CharString_createRefCStrConst("platform_test_caseutf8/foo.txt");
 	Test_assert(t, "addUpper", File_add(&upperFile, EFileType_File, false, t->alloc, &t->err));
 
-	#if _PLATFORM_TYPE == PLATFORM_WINDOWS || _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
-		//Windows/macOS: case-insensitive by default
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS || _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS || \
+		_PLATFORM_TYPE == PLATFORM_ANDROID
+		//Windows/macOS: case-insensitive by default.
+		//Android belongs here too even though its kernel is Linux: the working directory is externalDataPath
+		//(see aplatform.c), and external storage is FUSE emulated, which preserves case but matches without it.
 		Test_assert(t, "hasLower", File_hasFile(&lowerFile, t->alloc));
 	#else
-		//Linux/Android: case-sensitive
+		//Linux: case-sensitive
 		Test_assert(t, "notHasLower", !File_hasFile(&lowerFile, t->alloc));
 	#endif
 
@@ -898,9 +910,9 @@ static void Test_virtualEdgeCases(Test *t) {
 
 	const RefPtrType memStreamType = MemoryStream_makeType(t->alloc);
 	CharString vRoot   = CharString_createRefCStrConst("//.");
-	CharString libRoot = CharString_createRefCStrConst("//OxC3_plinttst");
-	CharString sec     = CharString_createRefCStrConst("//OxC3_plinttst/testdata");
-	CharString child   = CharString_createRefCStrConst("//OxC3_plinttst/testdata/hello.txt");
+	CharString libRoot = CharString_createRefCStrConst(vLibrary);
+	CharString sec     = CharString_createRefCStrConst(vSection);
+	CharString child   = CharString_createRefCStrConst(vFileHello);
 
 	//1. Load at section level (baseline)
 	Test_assert(t, "loadSec", File_loadVirtual(&sec, &memStreamType, NULL, NULL, t->alloc, &t->err));

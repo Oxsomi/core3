@@ -43,9 +43,30 @@
 	#include "types/container/log.h"
 #endif
 
+//An apk has no working directory to fopen a wav out of, so the bundled build reads them through the virtual file system;
+//File_open refuses virtual paths, hence File_read into a MemoryStream.
+//Only the short_* clips are packaged, see src/test/android/CMakeLists.txt for why and hasLongTracks below for what that costs.
+
+#ifdef _OXC3_TEST_BUNDLED
+	#include "platforms/file.h"
+	#include "platforms/platform.h"
+	#include "types/container/memory_stream.h"
+	#include "types/container/string.h"
+	#define AUDIO_TEST_VIRTUAL_SECTION "//OxC3_atest/audiodata"
+	#define AUDIO_TEST_VIRTUAL_DIR AUDIO_TEST_VIRTUAL_SECTION "/"
+	static const Bool hasLongTracks = false;
+#else
+	static const Bool hasLongTracks = true;
+#endif
+
 //Minimal fopen-backed OxStream (can't use OxC3_platforms)
 //Follows the same pattern as MemoryStream: OxStream is the base,
 //FileStream embeds it as 'parent' and appends its own data after.
+//
+//The bundled build reads through the virtual file system instead, so none of this is used there.
+//It would clash anyway, since platforms/file.h has a FileStream (and a FileStreamRef) of its own.
+
+#ifndef _OXC3_TEST_BUNDLED
 
 typedef struct FileStream {
 	OxStream parent;
@@ -128,14 +149,22 @@ clean:
 	return s_uccess;
 }
 
+#endif
+
 //Shared context
 
 typedef struct Types {
-	RefPtrType fsType;
+	#ifndef _OXC3_TEST_BUNDLED
+		RefPtrType fsType;
+	#endif
 	RefPtrType ifType;
 	RefPtrType devType;
 	RefPtrType streamType;
 	RefPtrType sourceType;
+	#ifdef _OXC3_TEST_BUNDLED
+		RefPtrType fhType;         //File_read needs a FileHandle type
+		RefPtrType memType;        //Clips are handed to the audio device as a MemoryStream
+	#endif
 } Types;
 
 typedef struct AudioFuncCtx {
@@ -164,19 +193,49 @@ static Bool AudioFuncCtx_create(
 		ctx->interf, &info, false, alloc, &ctx->types->devType, &ctx->device, e_rr
 	));
 
+	#ifdef _OXC3_TEST_BUNDLED
+
+		//aplatform registers the apk's sections at init but leaves them unloaded, so nothing under
+		// //OxC3_atest/audiodata can be read until this asks for it, same as device.c does for its shaders.
+
+		const CharString audioSection = CharString_createRefCStrConst(AUDIO_TEST_VIRTUAL_SECTION);
+		gotoIfError3(clean, File_loadVirtual(
+			&audioSection, &ctx->types->memType, NULL, NULL, Platform_instance->alloc, e_rr
+		));
+
+	#endif
+
 clean:
 	return s_uccess;
 }
 
 void Types_create(Types *types, const Allocator *alloc) {
-	types->fsType = Stream_inheritType(alloc, sizeof(FileStream) - sizeof(OxStream));
+	#ifndef _OXC3_TEST_BUNDLED
+		types->fsType = Stream_inheritType(alloc, sizeof(FileStream) - sizeof(OxStream));
+	#endif
 	types->ifType = AudioInterface_makeType(alloc);
 	types->devType = AudioDevice_makeType(alloc);
 	types->streamType = AudioStream_makeType(alloc);
 	types->sourceType = AudioSource_makeType(alloc);
+
+	//Platform_instance->archives is global state that every suite in the bundle loads into, each with its own
+	// allocator, and the list is grown and freed by whoever touches it next.
+	//Mixing this test's malloc based allocator into that corrupts the heap, so anything that reaches the virtual
+	// file system uses the platform's allocator like the rest of the bundle does.
+
+	#ifdef _OXC3_TEST_BUNDLED
+		types->fhType = FileHandle_makeType(Platform_instance->alloc);
+		types->memType = MemoryStream_makeType(Platform_instance->alloc);
+	#endif
 }
 
 static void AudioFuncCtx_free(AudioFuncCtx *ctx) {
+
+	#ifdef _OXC3_TEST_BUNDLED
+		const CharString audioSection = CharString_createRefCStrConst(AUDIO_TEST_VIRTUAL_SECTION);
+		File_unloadVirtual(&audioSection, Platform_instance->alloc, NULL);
+	#endif
+
 	RefPtr_dec(&ctx->device);
 	RefPtr_dec(&ctx->interf);
 }
@@ -197,7 +256,27 @@ static Bool openWav(
 ) {
 	Bool s_uccess = true;
 
-	gotoIfError3(clean, FileStream_open(path, fileStream, &ctx->types->fsType, e_rr));
+	#ifdef _OXC3_TEST_BUNDLED
+
+		//Read the whole clip out of the apk and hand it over as a MemoryStream, fine since only short_* ones are here.
+		//AudioDeviceRef_createFromFile takes any StreamRef, so nothing downstream changes.
+
+		Buffer wav = Buffer_createNull();
+		CharString virtualPath = CharString_createNull();
+
+		gotoIfError3(clean, CharString_format(
+			ctx->alloc, &virtualPath, e_rr, AUDIO_TEST_VIRTUAL_DIR "%s", path
+		));
+
+		gotoIfError3(clean, File_read(&virtualPath, U64_MAX, 0, 0, &ctx->types->fhType, &wav, e_rr));
+
+		gotoIfError3(clean, MemoryStream_createFromBuffer(
+			&wav, EMemoryStreamFlags_None, &ctx->types->memType, (MemoryStreamRef**) fileStream, e_rr
+		));
+
+	#else
+		gotoIfError3(clean, FileStream_open(path, fileStream, &ctx->types->fsType, e_rr));
+	#endif
 
 	gotoIfError3(clean, AudioDeviceRef_createFromFile(
 		ctx->device,
@@ -223,6 +302,13 @@ static Bool openWav(
 	}
 
 clean:
+
+	#ifdef _OXC3_TEST_BUNDLED
+		//MemoryStream_createFromBuffer takes the buffer over and nulls it, so this only bites on failure
+		Buffer_free(&wav, ctx->alloc);
+		CharString_free(&virtualPath, ctx->alloc);
+	#endif
+
 	return s_uccess;
 }
 
@@ -240,6 +326,14 @@ static const C8 *shortTracks[] = {
 	"short_64f_mono.wav",
 	"short_64f_stereo.wav"
 };
+
+//The sweeps below only need something audible while they step a parameter, and they all open with loops = 0 (infinite).
+//A short clip therefore does the job exactly as well as a long one, it just wraps round more often.
+//Only the long_* clips are left out of the android bundle, so fall back to the short equivalent rather than skip.
+
+static const C8 *Test_sweepTrack(const C8 *longTrack, const C8 *shortTrack) {
+	return hasLongTracks ? longTrack : shortTrack;
+}
 
 static const C8 *longTracks[] = {
 	"long_8b_mono.wav",
@@ -358,7 +452,7 @@ void Test_audioSourceGainSweep(AudioFuncCtx *ctx) {
 	AudioStreamRef *as = NULL;
 	AudioSourceRef *source = NULL;
 
-	if (!openWav(ctx, "long_64f_stereo.wav", 0, false, &fs, &as, &source, &err))
+	if (!openWav(ctx, Test_sweepTrack("long_64f_stereo.wav", "short_64f_stereo.wav"), 0, false, &fs, &as, &source, &err))
 		goto fail;
 
 	if (!AudioStreamRef_play(as, ctx->alloc, &err))
@@ -452,7 +546,12 @@ void Test_audioSourceSpatialSweep(AudioFuncCtx *ctx, Bool stereo) {
 	AudioSourceRef *source = NULL;
 
 	//Open without default source so we can create a 3D source ourselves
-	if (!openWav(ctx, stereo ? "long_16b_stereo.wav" : "long_16b_mono.wav", 0, stereo, &fs, &as, NULL, &err))
+	const C8 *track = Test_sweepTrack(
+		stereo ? "long_16b_stereo.wav" : "long_16b_mono.wav",
+		stereo ? "short_16b_stereo.wav" : "short_16b_mono.wav"
+	);
+
+	if (!openWav(ctx, track, 0, stereo, &fs, &as, NULL, &err))
 		goto fail;
 
 	AudioModifier modifier = (AudioModifier){ .gain = 1 };
@@ -502,7 +601,7 @@ void Test_audioListenerPositionSweep(AudioFuncCtx *ctx) {
 	AudioStreamRef *as = NULL;
 	AudioSourceRef *source = NULL;
 
-	if (!openWav(ctx, "long_16b_mono.wav", 0, false, &fs, &as, NULL, &err))
+	if (!openWav(ctx, Test_sweepTrack("long_16b_mono.wav", "short_16b_mono.wav"), 0, false, &fs, &as, NULL, &err))
 		goto fail;
 
 	AudioModifier modifier = (AudioModifier){ .gain = 1 };
@@ -552,7 +651,7 @@ void Test_audioListenerOrientationSweep(AudioFuncCtx *ctx) {
 	AudioStreamRef *as = NULL;
 	AudioSourceRef *source = NULL;
 
-	if (!openWav(ctx, "long_16b_mono.wav", 0, false, &fs, &as, NULL, &err))
+	if (!openWav(ctx, Test_sweepTrack("long_16b_mono.wav", "short_16b_mono.wav"), 0, false, &fs, &as, NULL, &err))
 		goto fail;
 
 	AudioModifier modifier = (AudioModifier) { .gain = 1 };
@@ -682,8 +781,10 @@ void Test_audioMultipleSources(AudioFuncCtx *ctx) {
 	AudioStreamRef *as0 = NULL, *as1 = NULL;
 	AudioSourceRef *src0 = NULL, *src1 = NULL;
 
-	//Open without default source so we can set different gains
-	if (!openWav(ctx, "long_16b_mono.wav", 0, false, &fs0, &as0, NULL, &err))
+	//Open without default source so we can set different gains, two distinct clips so the pair stays distinguishable.
+	//short_16b_stereo stands in for the long one when that isn't bundled, since both sources loop forever anyway.
+
+	if (!openWav(ctx, Test_sweepTrack("long_16b_mono.wav", "short_16b_stereo.wav"), 0, false, &fs0, &as0, NULL, &err))
 		goto fail;
 
 	if (!openWav(ctx, "short_16b_mono.wav", 0, false, &fs1, &as1, NULL, &err))
@@ -793,18 +894,35 @@ OXC3_TEST_MAIN(audio_functional) {
 	Log_debugLn(alloc, "Verify audio quality manually by listening.");
 	Log_debugLn(alloc, "");
 
+	//Every platform using suite in the bundle brackets itself with Platform_create/Platform_cleanup, and graphics_interface
+	// runs right before this one, so by now Platform_instance is NULL again.
+	//This has to come before Types_create, which needs the platform's allocator for the virtual file system types.
+
+	#ifdef _OXC3_TEST_BUNDLED
+		if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, false, &err)) {
+			Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+			return 1;
+		}
+	#endif
+
 	Types types;
 	Types_create(&types, alloc);
 	ctx.types = &types;
 
-	#ifdef AUDIO_TEST_DEBUG
+	#if defined(AUDIO_TEST_DEBUG) && !defined(_OXC3_TEST_BUNDLED)
 		if(!Platform_create(0, NULL, NULL, NULL, false, NULL))
 			Log_errorLn(alloc, "Couldn't create platform for debug utils");
 		else Log_debugLn(alloc, "Created platform for debug utils");
 	#endif
 
 	if (!AudioFuncCtx_create(&ctx, alloc, &err)) {
+
 		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+		#ifdef _OXC3_TEST_BUNDLED
+			Platform_cleanup();
+		#endif
+
 		return 1;
 	}
 
@@ -812,26 +930,21 @@ OXC3_TEST_MAIN(audio_functional) {
 	for (U64 i = 0; i < sizeof(shortTracks) / sizeof(*shortTracks); ++i)
 		Test_audioPlayOnce(&ctx, shortTracks[i]);
 
-	//Long tracks
-	for (U64 i = 0; i < sizeof(longTracks) / sizeof(*longTracks); ++i)
-		Test_audioPlayOnce(&ctx, longTracks[i]);
-
 	//Loop each short track thrice
 	for (U64 i = 0; i < sizeof(shortTracks) / sizeof(*shortTracks); ++i)
 		Test_audioPlayLoop(&ctx, shortTracks[i], 3);
 
-	//Loop each long track once
-	for (U64 i = 0; i < sizeof(longTracks) / sizeof(*longTracks); ++i)
-		Test_audioPlayLoop(&ctx, longTracks[i], 2);
-
-	//Seek (plays second half of long track)
-	Test_audioSeekMidTrack(&ctx);
-
-	//Gain sweep (listener + source)
-	Test_audioSourceGainSweep(&ctx);
+	//Doppler
+	Test_audioDoppler(&ctx);
 
 	//Gain of 0 (silence)
 	Test_audioGainZero(&ctx);
+
+	//Stop and restart
+	Test_audioStopAndRestart(&ctx);
+
+	//Gain sweep (listener + source)
+	Test_audioSourceGainSweep(&ctx);
 
 	//Spatial sweeps
 	Test_audioSourceSpatialSweep(&ctx, false);    //Mono
@@ -841,18 +954,40 @@ OXC3_TEST_MAIN(audio_functional) {
 	Test_audioListenerPositionSweep(&ctx);
 	Test_audioListenerOrientationSweep(&ctx);
 
-	//Doppler
-	Test_audioDoppler(&ctx);
-
 	//Multiple simultaneous sources
 	Test_audioMultipleSources(&ctx);
 
-	//Stop and restart
-	Test_audioStopAndRestart(&ctx);
+	//The rest genuinely wants a long clip, playing one end to end is the point and seeking halfway into a clip that
+	// lasts under a second proves nothing.
+	//Those aren't bundled into the apk (79 of their 88 MB), so say what's left out rather than quietly running less.
+
+	if (!hasLongTracks)
+		Log_debugLn(alloc, "SKIP: long track play/loop and mid-track seek, long_*.wav isn't bundled here");
+
+	else {
+
+		//Long tracks
+		for (U64 i = 0; i < sizeof(longTracks) / sizeof(*longTracks); ++i)
+			Test_audioPlayOnce(&ctx, longTracks[i]);
+
+		//Loop each long track once
+		for (U64 i = 0; i < sizeof(longTracks) / sizeof(*longTracks); ++i)
+			Test_audioPlayLoop(&ctx, longTracks[i], 2);
+
+		//Seek (plays second half of long track)
+		Test_audioSeekMidTrack(&ctx);
+	}
 
 	Log_debugLn(alloc, "");
 	Log_debugLn(alloc, "=== Done ===");
 
 	AudioFuncCtx_free(&ctx);
+
+	//Matches the Platform_create above, so platforms_functional gets to bring up its own like the rest of them
+
+	#ifdef _OXC3_TEST_BUNDLED
+		Platform_cleanup();
+	#endif
+
 	return 0;
 }

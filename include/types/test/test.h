@@ -55,13 +55,18 @@ int Test_end(Test *test);
 
 #ifdef _OXC3_TEST_BUNDLED
 
-	//A MAIN suite doesn't take the entry argument, so it gets a trampoline that discards it; that keeps
-	//every bundled suite the same shape and leaves the body below the macro untouched.
+	//A MAIN suite is written without the entry argument, so it gets a trampoline that forwards it under the same
+	// name the ENTRY suites use.
+	//It has to reach the body rather than be discarded: every suite here brackets itself with Platform_create and
+	// Platform_cleanup, so one running after another has no platform left, and on android Platform_getData() is the
+	// entry argument - it's the only way back to the android_app.
+	//Marked unused because most suites never look at it, and the bundle builds with -Wextra -Werror.
+	//This branch is android only (only src/test/android defines _OXC3_TEST_BUNDLED), so the attribute is safe.
 
 	#define OXC3_TEST_MAIN(name)                                                                      \
-		static int OxC3_testBody_##name();                                                            \
-		int OxC3_test_##name(void *state) { (void) state; return OxC3_testBody_##name(); }            \
-		static int OxC3_testBody_##name()
+		static int OxC3_testBody_##name(void *state);                                                 \
+		int OxC3_test_##name(void *state) { return OxC3_testBody_##name(state); }                     \
+		static int OxC3_testBody_##name(void *state __attribute__((unused)))
 
 	#define OXC3_TEST_ENTRY(name) int OxC3_test_##name(void *state)
 

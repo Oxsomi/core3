@@ -106,6 +106,33 @@ WindowRef *createWindowCallback(
 			Test_print(t, "[fallback] using virtual window");
 	}
 
+	//Windows and linux finalize inside createWindow, so a returned window is immediately usable and every test here
+	// reads w->size and w->cpuVisibleBuffer straight away.
+	//Android can't do that: the surface only shows up with APP_CMD_INIT_WINDOW, which needs the loop pumped, so until
+	// then the size is whatever was requested and there's no cpu buffer yet.
+	//Pump until it's ready so the window means the same thing everywhere. No-op where creation is already synchronous.
+
+	if (s_uccess && wRef && windowManagerReady) {
+
+		Window *w = RefPtr_data(wRef, Window);
+
+		for (Ns waited = 0; waited < 2 * SECOND; waited += 16 * MS) {
+
+			if (w->type != EWindowType_Physical || (w->flags & EWindowFlags_IsFinalized))
+				break;
+
+			WindowManager_step(&windowManager, NULL, NULL);
+
+			if (!windowManager.windows.length)
+				break;
+
+			Thread_sleep(16 * MS);
+		}
+
+		if (w->type == EWindowType_Physical && !(w->flags & EWindowFlags_IsFinalized))
+			Test_print(t, "WARN: window wasn't ready in time, size and cpu buffer may not be valid yet");
+	}
+
 	return wRef;
 }
 

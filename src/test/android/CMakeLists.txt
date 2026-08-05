@@ -52,7 +52,11 @@ add_library(OxC3_atest SHARED
 	CMakeLists.txt
 )
 
-target_compile_definitions(OxC3_atest PRIVATE _OXC3_TEST_BUNDLED)
+# _OXC3_TEST_VFS_TARGET: platforms_interface reaches its test data through the virtual file system, and a
+# section is namespaced by the target that packaged it. add_virtual_files below registers it under
+# OxC3_atest, not OxC3_plinttst as the desktop build does, so the suite is told which name to expect.
+
+target_compile_definitions(OxC3_atest PRIVATE _OXC3_TEST_BUNDLED _OXC3_TEST_VFS_TARGET="OxC3_atest")
 
 target_link_libraries(OxC3_atest PUBLIC
 	OxC3_platforms
@@ -77,6 +81,23 @@ add_virtual_files(
 	TARGET  OxC3_atest
 	NAME    testdata
 	ROOT    ${testRoot}/platforms/test/interface/res
+	SELF    ${testRoot}/..
+	FORCE_PACKAGER
+)
+
+# audio_functional reads its wavs through the virtual file system here, since an apk has no working directory to fopen out of.
+# Only the short_* clips are bundled, the long_* ones are 79 of the 88 MB and would turn a ~11 MB test apk into a ~99 MB one.
+# The sweeps fall back to a looping short clip, only the tests that genuinely need a long one are skipped (and say so).
+# They're staged into a separate folder because add_virtual_files packages a whole directory, and theirs holds .c/.h too.
+
+set(audioRes ${CMAKE_CURRENT_BINARY_DIR}/audiodata)
+file(GLOB audioShortWavs CONFIGURE_DEPENDS "${testRoot}/audio/test/functional/short_*.wav")
+file(COPY ${audioShortWavs} DESTINATION ${audioRes})
+
+add_virtual_files(
+	TARGET  OxC3_atest
+	NAME    audiodata
+	ROOT    ${audioRes}
 	SELF    ${testRoot}/..
 	FORCE_PACKAGER
 )
