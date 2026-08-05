@@ -31,6 +31,28 @@
 		]
 	},
 	{
+		"header": "include/types/math/flp.h",
+		"output": "include/types/math/flp.hpp",
+		"type": "EFloatType",
+		"staticOnly": true,
+		"doc": [
+			"Queries over the packed EFloatType enum (exponent/mantissa widths, shifts, masks).",
+			"Pure arithmetic on the enum value, so this is a namespace like Time and ETextureFormat."
+		]
+	},
+	{
+		"header": "include/types/base/error.h",
+		"output": "include/types/base/error.hpp",
+		"type": "Error",
+		"staticOnly": true,
+		"doc": [
+			"Factories for the C Error struct.",
+			"A namespace rather than a class: Error is a plain value that the C API fills in by pointer,",
+			"so there's nothing to own and no invariant to protect.",
+			"Construct one here and pass handle() to C, or take one back from a C call and inspect it."
+		]
+	},
+	{
 		"header": "include/types/container/buffer.h",
 		"output": "include/types/container/buffer.hpp",
 		"type": "Buffer",

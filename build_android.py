@@ -139,6 +139,7 @@ def androidOptionArgs(simd, tests=False):
 		"forceFloatFallback": "False",
 		"enableTests": "True" if tests else "False",
 		"dynamicLinkingGraphics": "False",
+		"dynamicLinkingShaderCompiler": "False",
 		"enableShaderCompiler": "False",
 		"enableSIMD": simd
 	}

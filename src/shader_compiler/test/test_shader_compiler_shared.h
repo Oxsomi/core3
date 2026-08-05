@@ -31,14 +31,15 @@ typedef struct SHFile SHFile;
 //They compile HLSL through the real DXC/SPIRV pipeline, so they require a live Platform_instance.
 //Declared in invocation order (see test_shader_compiler_main.c).
 
-void Test_shaderCompilerParse(Test *t);         //Parse annotations -> SHEntryRuntime reflection
-void Test_shaderCompilerAnnotations(Test *t);   //oxc:: extensions / model / vendor / defines / uniforms / stages / binary
-void Test_shaderCompilerFeatures(Test *t);      //Shaders *using* extension features -> compiled + reflected
-void Test_shaderCompilerStages(Test *t);        //One shader per pipeline stage -> reflected stage matches
-void Test_shaderCompilerReflection(Test *t);    //Resource registers reflect with correct type/write/array/stride
-void Test_shaderCompilerDriver(Test *t);        //compiler_helper compile driver: threads / modes / errors / round-trip
-void Test_shaderCompilerPermutations(Test *t);  //Multi-entrypoint files with disagreeing oxc:: annotations
-void Test_shaderCompilerCorpus(Test *t);        //Compile the whole test/hlsl corpus (SPIRV snapshot + DXIL coverage)
+void Test_shaderCompilerParse(Test *t);           //Parse annotations -> SHEntryRuntime reflection
+void Test_shaderCompilerBuiltInIncludes(Test *t); //The enumerable @-prefixed built-in include table
+void Test_shaderCompilerAnnotations(Test *t);     //oxc:: extensions / model / vendor / defines / uniforms / stages / binary
+void Test_shaderCompilerFeatures(Test *t);        //Shaders *using* extension features -> compiled + reflected
+void Test_shaderCompilerStages(Test *t);          //One shader per pipeline stage -> reflected stage matches
+void Test_shaderCompilerReflection(Test *t);      //Resource registers reflect with correct type/write/array/stride
+void Test_shaderCompilerDriver(Test *t);          //compiler_helper compile driver: threads / modes / errors / round-trip
+void Test_shaderCompilerPermutations(Test *t);    //Multi-entrypoint files with disagreeing oxc:: annotations
+void Test_shaderCompilerCorpus(Test *t);          //Compile the whole test/hlsl corpus (SPIRV snapshot + DXIL coverage)
 
 //--- Shared helpers (test_shader_compiler_util.c) ---
 

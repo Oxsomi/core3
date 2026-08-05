@@ -331,10 +331,20 @@ Bool File_makeRelative(
 			5, 0, "File_makeRelative() one of base or subFile is virtual while the other isn't"
 		));
 
+	//Strip the absolute directory back off, so what's compared is the part inside it.
+	//A virtual path never had it prepended (File_resolve leaves those as "section/rest"), so cutting there would eat the start
+	//of the path itself.
+	//A trailing slash on absoluteDir isn't counted either, since File_resolve trims one before prepending.
+
+	if(absDirLen && CharString_getAt(absoluteDir, absDirLen - 1) == '/')
+		--absDirLen;
+
+	const U64 stripLen = isVirtualBase ? 0 : absDirLen;
+
 	CharString baseAbsDir = CharString_createNull();
 	CharString subFileAbsDir = CharString_createNull();
-	CharString_cut(&resolvedBase, absDirLen, 0, &baseAbsDir);
-	CharString_cut(&resolvedSubFile, absDirLen, 0, &subFileAbsDir);
+	CharString_cut(&resolvedBase, stripLen, 0, &baseAbsDir);
+	CharString_cut(&resolvedSubFile, stripLen, 0, &subFileAbsDir);
 
 	U64 it        = 0;
 	U64 baseLen    = CharString_length(baseAbsDir);
@@ -371,26 +381,15 @@ Bool File_makeRelative(
 	U64 reserveSize = 3 * remainingBaseSlashes + (subLen > commonEnd ? subLen - commonEnd : 0);
 	gotoIfError3(clean, CharString_reserve(&relPath, reserveSize, alloc, e_rr));
 
-	//Append ../ as much as needed until we're back to the common folder
+	//Append ../ as much as needed until we're back to the common folder.
+	//One per remaining separator, which is exactly what reserveSize above already assumed: base names a file, so its last
+	//segment is that file's name, not a directory to step out of.
+	//Walking segments instead counted that trailing name too and produced one ../ too many for every input.
 
 	const CharString dotDotSlash = CharString_createRefCStrConst("../");
 
-	U64 j = commonEnd;
-	while (j < baseLen) {
-
-		U64 nextNonSlash = CharString_findFirstSensitive(&baseAbsDir, '/', j, 0);
-
-		if (nextNonSlash == j) {
-			++j;
-			continue;
-		}
-
-		if (nextNonSlash == U64_MAX)
-			nextNonSlash = baseLen;
-
+	for (U64 j = 0; j < remainingBaseSlashes; ++j)
 		gotoIfError3(clean, CharString_appendString(&relPath, &dotDotSlash, alloc, e_rr));
-		j = nextNonSlash + 1;
-	}
 
 	//Append the last part that's different
 

@@ -35,6 +35,8 @@
 #include "types/container/texture_format.hpp"
 #include "types/base/time.hpp"
 #include "types/base/c8.hpp"
+#include "types/base/error.hpp"
+#include "types/math/flp.hpp"
 
 //The C test framework carries an extern "C" guard, so include it inside oxc::c (after the wrappers,
 //which already pulled its C-header deps into oxc::c). See test_types_container_hpp.cpp for why.
@@ -295,11 +297,28 @@ extern "C" void Test_hppWrappers(oxc::c::Test *t) {
 		Test_assert(t, "ETextureFormat: alpha bits", ETextureFormat::getAlphaBits(c::ETextureFormat_RGBA8) == 8);
 		Test_assert(t, "ETextureFormat: not compressed", !ETextureFormat::getIsCompressed(c::ETextureFormat_RGBA8));
 
+		//EFloatType: packed enum queries, so the widths have to come back out intact
+		Test_assert(t, "EFloatType: F32 exponent bits", EFloatType::exponentBits(c::EFloatType_F32) == 8);
+		Test_assert(t, "EFloatType: F32 mantissa bits", EFloatType::mantissaBits(c::EFloatType_F32) == 23);
+		Test_assert(t, "EFloatType: F32 bytes", EFloatType::bytes(c::EFloatType_F32) == 4);
+		Test_assert(t, "EFloatType: F16 bytes", EFloatType::bytes(c::EFloatType_F16) == 2);
+
+		//Error: factories return a value, so the fields are checkable straight away
+		{
+			const c::Error err = Error::nullPointer(3, "test");
+			Test_assert(t, "Error: genericError", err.genericError == c::EGenericError_NullPointer);
+			Test_assert(t, "Error: paramId", err.paramId == 3);
+
+			const c::Error none = Error::none();
+			Test_assert(t, "Error: none is None", none.genericError == c::EGenericError_None);
+		}
+
 		//Same answer as calling the C directly, which is the whole contract
 		Test_assert(t, "generated wrappers forward verbatim", (
 			ETextureFormat::getBits(c::ETextureFormat_RGBA8) == c::ETextureFormat_getBits(c::ETextureFormat_RGBA8) &&
 			C8::toLower('Q') == c::C8_toLower('Q') &&
-			Time::dns(1, 2) == c::Time_dns(1, 2)
+			Time::dns(1, 2) == c::Time_dns(1, 2) &&
+			EFloatType::bytes(c::EFloatType_F64) == c::EFloatType_bytes(c::EFloatType_F64)
 		));
 	}
 }

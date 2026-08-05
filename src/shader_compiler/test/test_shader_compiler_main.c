@@ -24,6 +24,7 @@
 #include "test_shader_compiler_shared.h"
 #include "platforms/platform.h"
 #include "types/base/error.h"
+#include "shader_compiler/compiler.h"
 
 OXC3_TEST_ENTRY(shader_compiler) {
 
@@ -31,10 +32,14 @@ OXC3_TEST_ENTRY(shader_compiler) {
 	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err))
 		Platform_return(1);
 
+	//No-op unless the shader compiler is a shared module, which has its own Platform_instance
+	Compiler_setPlatform(Platform_instance);
+
 	Test t = (Test) { 0 };
 	t.alloc = Platform_instance->alloc;
 
 	Test_shaderCompilerParse(&t);
+	Test_shaderCompilerBuiltInIncludes(&t);
 	Test_shaderCompilerAnnotations(&t);
 	Test_shaderCompilerFeatures(&t);
 	Test_shaderCompilerStages(&t);

@@ -26,15 +26,50 @@ file(GLOB_RECURSE compilerHeaders CONFIGURE_DEPENDS "../../include/shader_compil
 file(GLOB_RECURSE compilerSources CONFIGURE_DEPENDS "*.c" "*.cpp")	# Some CPP to interface with DXC
 list(FILTER compilerSources EXCLUDE REGEX "/test/")	# Test TUs build into their own target, not the lib
 
+# SHARED folds DXC and SPIRV-Tools into one module instead of into every executable that links this.
+# There's no runtime selection here (unlike graphics, which loads a backend and asks it for a table), so consumers link it the
+# same way either way and nothing above this line changes.
+
+if(DynamicLinkingShaderCompiler)
+	set(shaderCompilerLinkage SHARED)
+else()
+	set(shaderCompilerLinkage STATIC)
+endif()
+
 add_library(
 	OxC3_shader_compiler
-	STATIC
+	${shaderCompilerLinkage}
 	${compilerHeaders}
 	${compilerSources}
 	CMakeLists.txt
 )
 
 set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi/graphics)
+
+if(DynamicLinkingShaderCompiler)
+
+	# The public API is ~40 free functions and no exported data, so letting CMake write the .def is enough
+	# and keeps __declspec out of the headers.
+	# Everything else already defaults to visible; nothing here sets -fvisibility=hidden.
+
+	set_target_properties(OxC3_shader_compiler PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+	target_compile_definitions(OxC3_shader_compiler PUBLIC -DSHADER_COMPILER_DYNAMIC)
+
+	if(MSVC)
+
+		# WINDOWS_EXPORT_ALL_SYMBOLS reads the .obj files to write the .def, and /GL objects aren't COFF
+		# ("unrecognized file format"), so whole-program optimisation has to go for this one target.
+		# /GL- overrides the directory-level /GL because target options come later on the command line.
+		# The cost is small: /GL only ever applied to our ~16 wrapper TUs, never to prebuilt DXC.
+
+		target_compile_options(OxC3_shader_compiler PRIVATE
+			"$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C,CXX>>:/GL->"
+		)
+
+		target_link_options(OxC3_shader_compiler PRIVATE "$<$<CONFIG:Release>:/LTCG:OFF>")
+	endif()
+
+endif()
 target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH)
 target_link_libraries(OxC3_shader_compiler PUBLIC dxc::dxc spirv_reflect::spirv_reflect)
 

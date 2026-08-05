@@ -25,7 +25,13 @@ HOST_TOOL_OPTIONS = {
 	"forceFloatFallback": False,
 	"enableShaderCompiler": True,
 	"cliGraphics": False,
-	"dynamicLinkingGraphics": True
+	"dynamicLinkingGraphics": True,
+
+	# Static on purpose, unlike the default.
+	# This one is invoked by CMake through find_program during other people's builds, so a single self-contained exe beats an exe
+	# plus a DLL to locate.
+
+	"dynamicLinkingShaderCompiler": False
 }
 
 class oxc3(ConanFile):
@@ -51,7 +57,9 @@ class oxc3(ConanFile):
 		"forceFloatFallback": [ True, False ],
 		"enableShaderCompiler": [ True, False ],
 		"cliGraphics": [ True, False ],
-		"dynamicLinkingGraphics": [ True, False ]
+		"dynamicLinkingGraphics": [ True, False ],
+		"dynamicLinkingShaderCompiler": [ True, False ],
+		"debugShaderCompiler": [ True, False ]
 	}
 
 	default_options = {
@@ -62,7 +70,20 @@ class oxc3(ConanFile):
 		"forceFloatFallback": False,
 		"enableShaderCompiler": True,
 		"cliGraphics": True,
-		"dynamicLinkingGraphics": False
+
+		# DXC and SPIRV-Reflect are big, slow to build and almost never what you're actually debugging,
+		# so they stay Release even in a Debug build.
+		# Turn this on to build and consume them in the current mode instead,
+		# which is what you want when stepping into the shader compiler itself.
+
+		"dynamicLinkingGraphics": False,
+
+		# Separate from dynamicLinkingGraphics: that one exists so Vulkan/D3D12 can be picked at runtime,
+		# this one so DXC's ~28 MB lives in one shared module rather than in every consumer.
+		# On by default on desktop; CMakeLists coerces it off where it can't apply (android, or no shader compiler at all).
+
+		"dynamicLinkingShaderCompiler": True,
+		"debugShaderCompiler": False
 	}
 
 	exports_sources = [ "include/*", "cmake/*" ]
@@ -85,6 +106,8 @@ class oxc3(ConanFile):
 		tc.cache_variables["EnableOxC3CLI"] = self.options.enableOxC3CLI
 		tc.cache_variables["EnableSIMD"] = self.options.enableSIMD
 		tc.cache_variables["ForceVulkan"] = self.options.forceVulkan
+		tc.cache_variables["DynamicLinkingShaderCompiler"] = self.options.dynamicLinkingShaderCompiler
+		tc.cache_variables["DebugShaderCompiler"] = self.options.debugShaderCompiler
 		tc.cache_variables["EnableShaderCompiler"] = self.options.enableShaderCompiler
 		tc.cache_variables["CLIGraphics"] = self.options.cliGraphics
 		tc.cache_variables["DynamicLinkingGraphics"] = self.options.dynamicLinkingGraphics

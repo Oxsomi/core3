@@ -44,6 +44,8 @@ OXC3_TEST_MAIN(types_container) {
 	Test_u128(&t);
 	Test_string(&t);
 	Test_stringOps(&t);
+	Test_containerBuffer(&t);
+	Test_filePaths(&t);
 	Test_list(&t);
 	Test_jobQueue(&t);
 	Test_hpp(&t);

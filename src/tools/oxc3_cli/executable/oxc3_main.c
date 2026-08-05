@@ -23,6 +23,10 @@
 #include "tools/oxc3_cli/cli.h"
 #include "platforms/platform.h"
 
+#ifdef CLI_SHADER_COMPILER
+	#include "shader_compiler/compiler.h"
+#endif
+
 Platform_defineEntrypoint() {
 
 	int status = 0;
@@ -31,6 +35,11 @@ Platform_defineEntrypoint() {
 
 	if(!s_uccess)        //Can't print
 		Platform_return(-2);
+
+	#ifdef CLI_SHADER_COMPILER
+		//No-op unless the shader compiler is a shared module, which has its own Platform_instance
+		Compiler_setPlatform(Platform_instance);
+	#endif
 
 	CLI_init();
 

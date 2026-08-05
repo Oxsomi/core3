@@ -25,6 +25,8 @@
 
 void Test_string(Test *test);
 void Test_stringOps(Test *test);   //CharString beyond number conversion
+void Test_containerBuffer(Test *test);
+void Test_filePaths(Test *test);    //File_resolve / File_makeRelative
 void Test_list(Test *test);
 void Test_jobQueue(Test *test);
 void Test_hpp(Test *test);          //Defined in the C++ TU test_types_container_hpp.cpp
