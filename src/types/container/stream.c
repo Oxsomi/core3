@@ -66,13 +66,20 @@ Bool Stream_create(
 	if ((!write && !read) || !streamRef)
 		retError(clean, Error_nullPointer(!streamRef ? 5 : 0, "Stream_create()::stream and read or write are required"));
 
+	//`type` is expected to come from Stream_inheritType(), but that can't be verified by comparing free to &Stream_close.
+	//Whenever a module is built shared (the shader compiler on OS X/Linux, graphics with DynamicLinkingGraphics) the core
+	// static libs are linked into both that module and the executable, so each side carries its own Stream_close.
+	//ELF collapses those duplicate definitions into one at load time, Mach-O's two-level namespace keeps them separate,
+	// which is why only OS X rejected a type that Stream_inheritType() had just produced.
+	//typeId, length and free-is-set are plain data and stay meaningful across a module boundary, so they carry the check.
+
 	if (
 		!type ||
 		type->typeId != (TypeId)EContainerTypeId_Stream ||
 		type->length < sizeof(OxStream) ||
-		type->free != (ObjectFreeFunc)Stream_close
+		!type->free
 	)
-		retError(clean, Error_invalidParameter(4, 0, "Stream_create()::type is invalid"));
+		retError(clean, Error_invalidParameter(6, 0, "Stream_create()::type is invalid"));
 
 	if (streamSize >> 48)
 		retError(clean, Error_invalidParameter(5, 0, "Stream_create()::streamSize too big"));

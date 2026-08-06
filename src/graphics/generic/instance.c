@@ -338,11 +338,16 @@ Bool GraphicsInstance_create(
 
 	api = EGraphicsApi_resolve(api);
 
+	//type->free deliberately isn't matched against &GraphicsInstance_freeExt, for the reason spelled out in Stream_create().
+	//With DynamicLinkingGraphics the backend is a shared lib that links OxC3_graphics PUBLIC, so the app links that static
+	// lib as well and both modules end up with their own GraphicsInstance_freeExt, which Mach-O keeps separate.
+	//typeId, the exact length for this api and alloc still pin the type down to a GraphicsInstance_makeType() result.
+
 	if(
 		!type ||
 		type->typeId != (TypeId) EGraphicsTypeId_GraphicsInstance ||
 		type->length != (U32)(sizeof(GraphicsInstance) + GraphicsInterface_getObjectSizes(api)->instance) ||
-		type->free != (ObjectFreeFunc) GraphicsInstance_freeExt ||
+		!type->free ||
 		type->alloc != alloc
 	)
 		retError(clean, Error_invalidParameter(
