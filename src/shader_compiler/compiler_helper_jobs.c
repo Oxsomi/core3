@@ -228,6 +228,8 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 	const Allocator *alloc = job->alloc;
 	const Compiler *compiler = &job->compilers.ptr[threadId];
 
+	const Bool ownsThread = Compiler_enterThread();
+
 	Error errTmp = Error_none(), *e_rr = &errTmp;
 	Bool s_uccess = true;
 	Bool locked = false;
@@ -387,6 +389,7 @@ clean:
 	Error e3 = Error_none();
 	JobGroup_leave(&combo->group, &e3);         //Release this leaf's combination token (may fire the combo finalize)
 
+	Compiler_leaveThread(ownsThread);
 	return s_uccess;
 }
 
@@ -431,6 +434,8 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 
 	const Allocator *alloc = job->alloc;
 	const Compiler *compiler = &job->compilers.ptr[threadId];
+
+	const Bool ownsThread = Compiler_enterThread();
 
 	Error errTmp = Error_none(), *e_rr = &errTmp;
 	Bool s_uccess = true;
@@ -524,6 +529,7 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		Error e2 = Error_none();
 		JobGroup_leave(&ctx->group, &e2);           //Release the self token
 	}
+	Compiler_leaveThread(ownsThread);
 	return true;
 
 cleanSpawn:
@@ -539,6 +545,7 @@ cleanSpawn:
 		if(spawning)
 			JobGroup_leave(&ctx->group, &e2);
 	}
+	Compiler_leaveThread(ownsThread);
 	return false;
 
 clean:
@@ -555,6 +562,7 @@ clean:
 		JobGroup_fail(&file->group, &e2);
 		JobGroup_leave(&file->group, &e2);
 	}
+	Compiler_leaveThread(ownsThread);
 	return false;
 }
 
@@ -777,12 +785,15 @@ Bool Compiler_compileShaderFileJob(void *data, U64 threadId, JobQueue *queue) {
 	if(!job)
 		return false;
 
+	const Bool ownsThread = Compiler_enterThread();
+
 	Error errTmp = Error_none();
 	Bool spawned = Compiler_compileShaderFile(job, queue, threadId, &errTmp);
 
 	if(!spawned && job->enableLogging)
 		Error_print(job->alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
 
+	Compiler_leaveThread(ownsThread);
 	return spawned;
 }
 

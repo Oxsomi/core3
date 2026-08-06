@@ -31,6 +31,17 @@
 //Internal declarations shared between the compiler_helper*.c translation units.
 //These were file-local to compiler_helper.c before it was split and are not part of the public API.
 
+//DXC keeps its allocator in thread local storage, and DxcInitialize() clears it again on the thread that ran it,
+// so every thread (including that one) starts out with none installed.
+//DxcNew/DxcDelete silently fall back to CoTaskMemAlloc/Free when it's unset, so a block allocated on a thread that
+// has one and released on a thread that doesn't goes back to the wrong allocator, and the entry points that take an
+// IMalloc outright (hlsl::CreateMemoryStream, reached through DxcReflector::FromSource) dereference null instead.
+//Any job that drives DXC therefore has to install it first; enter returns whether it took ownership, since an outer
+// scope may already hold one, and leave must only be called with that result.
+
+Bool Compiler_enterThread();
+void Compiler_leaveThread(Bool owned);
+
 Bool Compiler_precompileShader(
 	const Compiler *compiler,
 	ESHBinaryType outputType,

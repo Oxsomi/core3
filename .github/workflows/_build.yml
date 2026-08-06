@@ -174,6 +174,16 @@ jobs:
         run: ${{ inputs.python_cmd }} build_android.py -mode Release -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
 
       # ── Build: everything else ─────────────────────────────────────────────
+      # Debug goes first because a failing step aborts the job, so whichever config runs first is the
+      # only one whose failure gets reported. Debug is the config worth having that from: it's the one
+      # without -flto=auto, so a crash prints real stack frames instead of collapsing into main+<offset>.
+      # Each build.py call resolves its own dependencies, so the order carries no other cost than which
+      # run pays for building them.
+
+      - name: Build Debug
+        if: inputs.os != 'android'
+        run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True ${{ inputs.build_flags }}
+
       - name: Build Release
         if: inputs.os != 'android'
         run: ${{ inputs.python_cmd }} build.py -mode Release -tests True ${{ inputs.build_flags }}
@@ -181,10 +191,6 @@ jobs:
       - name: Build Release (SIMD fallback)
         if: inputs.os != 'android'
         run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True ${{ inputs.build_flags }}
-
-      - name: Build Debug
-        if: inputs.os != 'android'
-        run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True ${{ inputs.build_flags }}
 
       # ── Cleanup before cache save ──────────────────────────────────────────
       - name: Prune Conan build dirs
