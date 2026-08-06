@@ -54,6 +54,13 @@ clean:                                                                          
 // This results in either >= 0x100, 0x10000 and with
 // float/int (due to float precision) it'll produce 4Gi + 1 = 4Gi so it'll work.
 
+//Which is why the order below matters and every check before the store stays in the float domain.
+//The integral check used to run first and it converts, so it re-introduced the exact UB the range check exists to
+// avoid, and it did so on the values most likely to hit it: NaN, Inf and anything out of range.
+//That isn't merely arch dependent, it's poison in LLVM IR, so branching on it lets the optimizer drop the whole
+// function as unreachable; on arm64 mach-o that lowers to a trap and the process dies with no diagnostic at all.
+//By the time we convert, v is finite and within [type_MIN, type_MAX], so (type)v is fully defined.
+
 #define CastFromUForF(type, toBits, floatType, ...)                                                             \
 																												\
 	Bool s_uccess = true;                                                                                       \
@@ -61,17 +68,23 @@ clean:                                                                          
 	if(!res)                                                                                                    \
 		retError(clean, Error_nullPointer(1, "CastFromUForF()::res is required"));                              \
 																												\
+	if(!floatType##_isValid(v))                                                                                 \
+		retError(clean, Error_NaN(0, "CastFromUForF()::v isn't finite"));                                       \
+																												\
 	__VA_ARGS__                                                                                                 \
 																												\
 	if(v >= ((floatType)type##_MAX + 1))                                                                        \
 		retError(clean, Error_overflow(0, toBits, (U64) type##_MAX, "CastFromUForF()::v out of bounds"));       \
 																												\
+	if(v != (type) v)                                                                                           \
+		retError(clean, Error_notFound(0, 0, "CastFromUForF()::v isn't integral"));                             \
+																												\
 	*res = (type) v;                                                                                            \
 clean:                                                                                                          \
 	return s_uccess
 
-#define CastFromIForF(type, castType, toBits, floatType, ...)                                                   \
-	CastFromUForF(type, toBits, floatType, __VA_ARGS__                                                          \
+#define CastFromIForF(type, castType, toBits, floatType)                                                        \
+	CastFromUForF(type, toBits, floatType,                                                                      \
 		if(v < type##_MIN)                                                                                      \
 			retError(clean, Error_underflow(                                                                    \
 				0, toBits, (castType) type##_MIN, "CastFromIForF()::v is out of bounds"                         \
@@ -80,17 +93,11 @@ clean:                                                                          
 
 #define CastFromF(type)                                                                                         \
 	const void *vptr = &v;                                                                                      \
-	CastFromIForF(type, type, *(const U32*)vptr, F32,                                                           \
-		if(v != (type)v)                                                                                        \
-			retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));                     \
-)
+	CastFromIForF(type, type, *(const U32*)vptr, F32)
 
 #define CastFromD(type)                                                                                         \
 	const void *vptr = &v;                                                                                      \
-	CastFromIForF(type, type, *(const U64*)vptr, F64,                                                           \
-		if(v != (type)v)                                                                                        \
-			retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));                     \
-)
+	CastFromIForF(type, type, *(const U64*)vptr, F64)
 
 #define ITOF(T, TUint)                                                                                          \
 Bool T##_fromUInt(U64 v, T *res, Error *e_rr){                                                                  \

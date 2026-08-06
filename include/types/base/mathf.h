@@ -27,10 +27,10 @@
 	extern "C" {
 #endif
 
-#define FLP_CONSTS(T, suffix)                                                                        \
-static const T T##_E                = 2.718281828459045##suffix;                                    \
-static const T T##_PI                = 3.141592653589793##suffix;                                    \
-static const T T##_RAD_TO_DEG        = 57.29577951308232##suffix;                                    \
+#define FLP_CONSTS(T, suffix)                                                                           \
+static const T T##_E                = 2.718281828459045##suffix;                                        \
+static const T T##_PI                = 3.141592653589793##suffix;                                       \
+static const T T##_RAD_TO_DEG        = 57.29577951308232##suffix;                                       \
 static const T T##_DEG_TO_RAD        = 0.017453292519943295##suffix;
 
 FLP_CONSTS(F32, f);
@@ -38,48 +38,57 @@ FLP_CONSTS(F64, );
 
 #undef FLP_CONSTS
 
-#define FLP_OP(T, suffix)                                                                            \
-																									\
-ARIT_OP(T);                                                                                            \
-																									\
-static inline T T##_saturate(T v) { return T##_clamp(v, 0, 1); }                                    \
-																									\
-static inline T T##_lerp(T a, T b, T perc) { return a + (b - a) * perc; }                            \
-static inline T T##_abs(T v) { return v < 0 ? -v : v; }                                                \
-T T##_sqrt(T v);                                                                                    \
-																									\
-Bool T##_isNaN(T v);                                                                                \
-Bool T##_isInf(T v);                                                                                \
-Bool T##_isValid(T v);                                                                                \
-																									\
-T T##_pow(T v, T exp);                                                                                \
-																									\
-static inline T T##_expe(T v) { return T##_pow(T##_E, v); }                                            \
-static inline T T##_exp2(T v) { return T##_pow(2, v); }                                                \
-static inline T T##_exp10(T v) { return T##_pow(10, v); }                                            \
-																									\
-T T##_log10(T v);                                                                                    \
-T T##_loge(T v);                                                                                    \
-T T##_log2(T v);                                                                                    \
-																									\
-T T##_asin(T v);                                                                                    \
-T T##_sin(T v);                                                                                        \
-T T##_cos(T v);                                                                                        \
-T T##_acos(T v);                                                                                    \
-T T##_tan(T v);                                                                                        \
-T T##_atan(T v);                                                                                    \
-T T##_atan2(T y, T x);                                                                                \
-																									\
-T T##_round(T v);                                                                                    \
-T T##_ceil(T v);                                                                                    \
-T T##_floor(T v);                                                                                    \
-T T##_fract(T v);                                                                                    \
-																									\
-T T##_mod(T v, T mod);                                                                                \
-																									\
-static inline T T##_sign(T v) { return v < 0 ? -1.##suffix : (v > 0 ? 1.##suffix : 0.##suffix); }    \
-static inline T T##_signInc(T v) { return v < 0 ? -1.##suffix : 1.##suffix; }                        \
-static inline Bool T##_approxEq(T a, T b, T eps) { return T##_abs(a - b) <= eps; }
+#define FLP_OP(T, suffix)                                                                               \
+																										\
+ARIT_OP(T);                                                                                             \
+																										\
+static inline T T##_saturate(T v) { return T##_clamp(v, 0, 1); }                                        \
+																										\
+static inline T T##_lerp(T a, T b, T perc) { return a + (b - a) * perc; }                               \
+static inline T T##_abs(T v) { return v < 0 ? -v : v; }                                                 \
+T T##_sqrt(T v);                                                                                        \
+																										\
+Bool T##_isNaN(T v);                                                                                    \
+Bool T##_isInf(T v);                                                                                    \
+Bool T##_isValid(T v);                                                                                  \
+																										\
+T T##_pow(T v, T exp);                                                                                  \
+																										\
+static inline T T##_expe(T v) { return T##_pow(T##_E, v); }                                             \
+static inline T T##_exp2(T v) { return T##_pow(2, v); }                                                 \
+static inline T T##_exp10(T v) { return T##_pow(10, v); }                                               \
+																										\
+T T##_log10(T v);                                                                                       \
+T T##_loge(T v);                                                                                        \
+T T##_log2(T v);                                                                                        \
+																										\
+T T##_asin(T v);                                                                                        \
+T T##_sin(T v);                                                                                         \
+T T##_cos(T v);                                                                                         \
+T T##_acos(T v);                                                                                        \
+T T##_tan(T v);                                                                                         \
+T T##_atan(T v);                                                                                        \
+T T##_atan2(T y, T x);                                                                                  \
+																										\
+T T##_round(T v);                                                                                       \
+T T##_ceil(T v);                                                                                        \
+T T##_floor(T v);                                                                                       \
+T T##_fract(T v);                                                                                       \
+																										\
+T T##_mod(T v, T mod);                                                                                  \
+																										\
+static inline T T##_sign(T v) { return v < 0 ? -1.##suffix : (v > 0 ? 1.##suffix : 0.##suffix); }       \
+static inline T T##_signInc(T v) { return v < 0 ? -1.##suffix : 1.##suffix; }                           \
+static inline Bool T##_approxEq(T a, T b, T eps) { return T##_abs(a - b) <= eps; }                      \
+																										\
+/* Same, but eps is scaled by magnitude so it keeps meaning the same number of ULP as values grow. */   \
+/* A fixed eps silently tightens: 1e-7f is already under one ULP of an F32 at 1.5, so comparing */      \
+/* results around PI against it is really demanding the two agree bit for bit. */                       \
+																										\
+static inline Bool T##_approxEqRel(T a, T b, T eps) {                                                   \
+	const T scale = T##_max(1, T##_max(T##_abs(a), T##_abs(b)));                                        \
+	return T##_abs(a - b) <= eps * scale;                                                               \
+}
 
 FLP_OP(F32, f);
 FLP_OP(F64, );

@@ -35,9 +35,6 @@ typedef struct F32x4 {
 	alignas(16) F32 v[4];
 } F32x4;
 
-#define vecShufflei(a, x, y, z, w) (I32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
-#define vecShufflef(a, x, y, z, w) (F32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
-
 static inline F32x4 F32x4_create4(F32 x, F32 y, F32 z, F32 w) { F32x4 v = { { x, y, z, w } }; return v; }
 static inline F32x4 F32x4_xxxx4(F32 x) { return F32x4_create4(x, x, x, x); }
 static inline F32x4 F32x4_zero() { return F32x4_xxxx4(0); }
@@ -53,3 +50,10 @@ static inline I32x4 I32x4_create1(I32 x) { return I32x4_create4(x, 0, 0, 0); }
 
 static inline I32x4 I32x4_xxxx4(I32 x) { return I32x4_create4(x, x, x, x); }
 static inline I32x4 I32x4_zero() { return I32x4_xxxx4(0); }
+
+//Built through create4 rather than a compound literal, like the NEON backend does.
+//A compound literal is C only; MSVC reports C4576 for it in C++, which the swizzle headers hit because
+// test_types_math_hpp.cpp includes them, so the -simd False build failed on windows.
+
+#define vecShufflei(a, x, y, z, w) I32x4_create4(a.v[x], a.v[y], a.v[z], a.v[w])
+#define vecShufflef(a, x, y, z, w) F32x4_create4(a.v[x], a.v[y], a.v[z], a.v[w])
