@@ -171,9 +171,18 @@ RefPtrType GraphicsInstance_makeType(EGraphicsApi api, const Allocator *alloc) {
 
 	api = EGraphicsApi_resolve(api);
 
+	//With GRAPHICS_API_DYNAMIC the backend is a separate module that may not have registered, in which case there's no
+	// instance size to add and nothing valid to hand out.
+	//A zeroed type is rejected by GraphicsInstance_create() below, so this surfaces as an ordinary error, not a crash.
+
+	const GraphicsObjectSizes *sizes = GraphicsInterface_getObjectSizes(api);
+
+	if(!sizes)
+		return (RefPtrType) { 0 };
+
 	return (RefPtrType) {
 		.typeId = (TypeId) EGraphicsTypeId_GraphicsInstance,
-		.length = (U32)(sizeof(GraphicsInstance) + GraphicsInterface_getObjectSizes(api)->instance),
+		.length = (U32)(sizeof(GraphicsInstance) + sizes->instance),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc) GraphicsInstance_freeExt
 	};
@@ -338,6 +347,15 @@ Bool GraphicsInstance_create(
 
 	api = EGraphicsApi_resolve(api);
 
+	//GraphicsInstance_createExt dispatches straight through tables[api].instanceCreate without a null check, and on
+	// non-Windows EGraphicsApi_resolve() falls back to Vulkan without consulting the registry.
+	//An api whose backend never registered would therefore call a null pointer; report it as unsupported instead.
+
+	if(!GraphicsInterface_supportsApi(api))
+		retError(clean, Error_unsupportedOperation(0, "GraphicsInstance_create()::api has no backend available"));
+
+	const GraphicsObjectSizes *sizes = GraphicsInterface_getObjectSizes(api);
+
 	//type->free deliberately isn't matched against &GraphicsInstance_freeExt, for the reason spelled out in Stream_create().
 	//With DynamicLinkingGraphics the backend is a shared lib that links OxC3_graphics PUBLIC, so the app links that static
 	// lib as well and both modules end up with their own GraphicsInstance_freeExt, which Mach-O keeps separate.
@@ -345,8 +363,9 @@ Bool GraphicsInstance_create(
 
 	if(
 		!type ||
+		!sizes ||
 		type->typeId != (TypeId) EGraphicsTypeId_GraphicsInstance ||
-		type->length != (U32)(sizeof(GraphicsInstance) + GraphicsInterface_getObjectSizes(api)->instance) ||
+		type->length != (U32)(sizeof(GraphicsInstance) + sizes->instance) ||
 		!type->free ||
 		type->alloc != alloc
 	)

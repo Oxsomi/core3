@@ -390,7 +390,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	}
 
 	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api) {
-		return api >= EGraphicsApi_Count ? NULL : &GraphicsInterface_instance->tables[api].objectSizes;
+		return api >= EGraphicsApi_Count || !GraphicsInterface_instance ?
+			NULL : &GraphicsInterface_instance->tables[api].objectSizes;
 	}
 
 #else

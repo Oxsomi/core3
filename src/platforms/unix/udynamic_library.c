@@ -29,8 +29,18 @@
 #include <dlfcn.h>
 
 Bool DynamicLibrary_isValidPath(CharString str) {
-	const CharString so = CharString_createRefCStrConst(".so");
-	return CharString_endsWithStringInsensitive(&str, &so, 0);
+
+	//Apple platforms name shared libraries .dylib, every other unix uses .so.
+	//This gates the app directory scan that discovers dynamically linked modules (e.g. the graphics backends),
+	// so getting it wrong silently leaves them unregistered rather than reporting anything.
+
+	#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+		const CharString ext = CharString_createRefCStrConst(".dylib");
+	#else
+		const CharString ext = CharString_createRefCStrConst(".so");
+	#endif
+
+	return CharString_endsWithStringInsensitive(&str, &ext, 0);
 }
 
 #ifdef SUPPORTS_DYNAMIC_LINKING
