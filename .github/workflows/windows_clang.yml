@@ -1,0 +1,22 @@
+name: Windows x64 Vulkan static (clang-cl)
+on: [push]
+
+# clang-cl is clang's frontend behind MSVC's driver, so it targets the same ABI and CRT as the msvc job
+# and links the same dependencies -- what differs is the warning set and which MSVC-only extensions are
+# accepted. packages/conan/profiles/windows_clang_x64_* pin the compiler version for conan's package ids;
+# bump it when the runner image's bundled LLVM moves.
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Windows x64 Vulkan static (clang-cl)
+      runner: windows-2022
+      os: windows
+      build_flags: '-compiler clang -o forceVulkan=True -o cliGraphics=False'
+      python_cmd: python
+      setup_python: false
+      python_version: ''
+      hook_name: Windows-x64-vk-static-clang
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

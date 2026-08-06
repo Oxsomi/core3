@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2026.08.06.01"
+	version = "2026.08.06.03"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -21,6 +21,63 @@ class dxc(ConanFile):
 
 	# Binary configuration
 	settings = "os", "compiler", "build_type", "arch"
+	options = { "enableASAN": [ True, False ], "enableUBSAN": [ True, False ] }
+	default_options = { "enableASAN": False, "enableUBSAN": False }
+
+	# A sanitized consumer can't link unsanitized dependencies, so the flags have to reach these too.
+	# MSVC's STL records its ASan container annotation state per object and lld-link rejects the mix,
+	# hence disabling the annotations rather than instrumenting the STL.
+
+	def _sanitizerFlags(self):
+
+		flags = []
+
+		if self.options.enableASAN:
+			flags += [ "/fsanitize=address", "/Oy-", "-D_DISABLE_STRING_ANNOTATION=1", "-D_DISABLE_VECTOR_ANNOTATION=1" ]
+
+		if self.options.enableUBSAN:
+			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr", "/Oy-" ]
+
+		return flags
+
+	# The compile side flags alone aren't enough: CMake drives lld-link directly, so the /defaultlib
+	# directives clang-cl embeds for the sanitizer runtimes never reach it.
+	# Point the linker at clang's own runtime directory and name the libraries here too.
+
+	def _sanitizerLinkFlags(self):
+
+		if not (self.options.enableASAN or self.options.enableUBSAN):
+			return []
+
+		if self.settings.os != "Windows":
+			return []
+
+		import glob as _glob
+		import shutil as _shutil
+
+		executables = self.conf.get("tools.build:compiler_executables", default={}, check_type=dict)
+		cc = executables.get("c") or "clang-cl"
+		resolved = cc if os.path.isabs(cc) else (_shutil.which(cc) or "")
+
+		if not resolved:
+			return []
+
+		binDir = os.path.dirname(resolved)
+		found = _glob.glob(os.path.join(binDir, "..", "lib", "clang", "*", "lib", "windows"))
+
+		if not found:
+			return []
+
+		flags = [ "-libpath:%s" % os.path.normpath(found[0]) ]
+
+		if self.options.enableASAN:
+			flags += [ "clang_rt.asan_dynamic-x86_64.lib", "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" ]
+
+		if self.options.enableUBSAN:
+			flags += [ "clang_rt.ubsan_standalone-x86_64.lib" ]
+
+		return flags
+
 
 	exports_sources = [ "include/dxc/*", "external/SPIRV-Tools/include/*", "external/DirectX-Headers/include/*" ]
 
@@ -122,6 +179,31 @@ class dxc(ConanFile):
 		if self.settings.compiler == "gcc" and self._real_compiler_version() in [ (14, 1), (14, 2) ]:
 			tc.extra_cflags.append("-fno-if-conversion")
 			tc.extra_cxxflags.append("-fno-if-conversion")
+
+		# DXC builds its own sources and its vendored SPIRV-Tools with -Werror, and those have only ever
+		# been compiled with MSVC on Windows. clang-cl warns where MSVC doesn't, so the build dies on third
+		# party code we don't own: -Wmissing-field-initializers in SPIRV-Tools' binary.cpp/text.cpp and
+		# -Wunused-private-field on a padding member. Demote just those two rather than dropping -Werror,
+		# so a real diagnostic in the rest of the tree still stops the build.
+
+		if self.settings.compiler == "clang" and self.settings.os == "Windows":
+			for flag in ("-Wno-missing-field-initializers", "-Wno-unused-private-field"):
+				tc.extra_cflags.append(flag)
+				tc.extra_cxxflags.append(flag)
+
+		for flag in self._sanitizerLinkFlags():
+			tc.extra_exelinkflags.append(flag)
+			tc.extra_sharedlinkflags.append(flag)
+
+		for flag in self._sanitizerFlags():
+			tc.extra_cflags.append(flag)
+			tc.extra_cxxflags.append(flag)
+
+		# ASan intercepts operator new, and DXC replaces it (dxcmem.cpp), which lld-link rejects outright.
+		# Upstream added this option for exactly that case.
+
+		if self.options.enableASAN:
+			tc.variables["DXC_DISABLE_ALLOCATOR_OVERRIDES"] = True
 
 		tc.generate()
 

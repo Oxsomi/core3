@@ -99,6 +99,24 @@ namespace oxc {
 			return c::Buffer_createUninitializedBytes(length, alloc, &self, e_rr);
 		}
 
+		[[nodiscard]] c::Bool createUninitializedBytesAligned(
+			c::U64 length, c::U64 alignment, c::U64 headerOffset, c::Error *e_rr = nullptr
+		) noexcept {
+			release();
+			return c::Buffer_createUninitializedBytesAligned(length, alignment, headerOffset, alloc, &self, e_rr);
+		}
+
+		[[nodiscard]] c::Bool createEmptyBytesAligned(
+			c::U64 length, c::U64 alignment, c::U64 headerOffset, c::Error *e_rr = nullptr
+		) noexcept {
+			release();
+			return c::Buffer_createEmptyBytesAligned(length, alignment, headerOffset, alloc, &self, e_rr);
+		}
+
+		void freeAligned() noexcept {
+			c::Buffer_freeAligned(&self, alloc);
+		}
+
 		[[nodiscard]] c::Bool resize(
 			c::U64 newLen, c::Bool preserveContents, c::Bool clearUnsetContents, c::Error *e_rr = nullptr
 		) noexcept {

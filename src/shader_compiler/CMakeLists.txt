@@ -57,16 +57,13 @@ if(DynamicLinkingShaderCompiler)
 
 	if(MSVC)
 
-		# WINDOWS_EXPORT_ALL_SYMBOLS reads the .obj files to write the .def, and /GL objects aren't COFF
-		# ("unrecognized file format"), so whole-program optimisation has to go for this one target.
-		# /GL- overrides the directory-level /GL because target options come later on the command line.
-		# The cost is small: /GL only ever applied to our ~16 wrapper TUs, never to prebuilt DXC.
+		# WINDOWS_EXPORT_ALL_SYMBOLS reads the .obj files to write the .def, and neither MSVC's /GL nor
+		# clang-cl's -flto leaves COFF there ("unrecognized file format"), so whole program optimisation
+		# has to go for this one target. The root CMakeLists reads this property and simply doesn't add
+		# the flag, rather than us overriding it afterwards with /GL-, which earns a D9025 per TU.
+		# The cost is small: it only ever applied to our ~16 wrapper TUs, never to prebuilt DXC.
 
-		target_compile_options(OxC3_shader_compiler PRIVATE
-			"$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C,CXX>>:/GL->"
-		)
-
-		target_link_options(OxC3_shader_compiler PRIVATE "$<$<CONFIG:Release>:/LTCG:OFF>")
+		set_target_properties(OxC3_shader_compiler PROPERTIES OXC3_NO_WHOLE_PROGRAM ON)
 	endif()
 
 endif()

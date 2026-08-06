@@ -25,6 +25,10 @@
 #include "types/base/algorithm.h"
 #include "types/math/vec4i.h"
 
+#ifdef _MSC_VER
+	#include <intrin.h>        //_umul128/__umulh; MSVC resolves those without this, clang-cl needs the declaration
+#endif
+
 #ifdef __cplusplus
 	extern "C" {
 #endif

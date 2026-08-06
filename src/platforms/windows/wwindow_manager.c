@@ -380,6 +380,7 @@ void WindowManager_updateExt(WindowManager *manager) {
 	}
 
 clean:
+	(void) s_uccess;        //retError sets it, but a void function has nothing to hand it to
 	ListU64_free(&seenWindowsLarge, Platform_instance->alloc);
 	Error_print(Platform_instance->alloc, e_rr, ELogLevel_Error, ELogOptions_NewLine);
 }

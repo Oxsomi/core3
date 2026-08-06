@@ -796,8 +796,8 @@ static void AWindow_onTouch(Window *w, Mouse *mouse, AInputEvent *event) {
 
 			AWindow_primaryTouchId = AMotionEvent_getPointerId(event, changed);
 
-			const F32 x = AMotionEvent_getRawX(event, changed);
-			const F32 y = AMotionEvent_getRawY(event, changed);
+			const F32 x = AMotionEvent_getX(event, changed);
+			const F32 y = AMotionEvent_getY(event, changed);
 
 			//Fresh contact point: seed the absolute position and zero the relative axes. There's no
 			//previous position yet, so RX/RY must not carry a delta over from the last gesture.
@@ -842,8 +842,8 @@ static void AWindow_onTouch(Window *w, Mouse *mouse, AInputEvent *event) {
 			if(index == count)
 				break;
 
-			const F32 x = AMotionEvent_getRawX(event, index);
-			const F32 y = AMotionEvent_getRawY(event, index);
+			const F32 x = AMotionEvent_getX(event, index);
+			const F32 y = AMotionEvent_getY(event, index);
 
 			const F32 relX = x - InputDevice_getCurrentAxis(mouse, EMouseAxis_Temp0);
 			const F32 relY = y - InputDevice_getCurrentAxis(mouse, EMouseAxis_Temp1);
@@ -926,19 +926,31 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event) {
 			//Touch is pointer-id tracked and has no hover,
 			// so it gets its own handler rather than sharing the mouse's index-0 path (see AWindow_onTouch).
 
-			if (source & AINPUT_SOURCE_TOUCHSCREEN) {
+			//Both of these are a class plus a device bit: TOUCHSCREEN is 0x1002 and MOUSE is 0x2002,
+			//and the 0x2 they share is AINPUT_SOURCE_CLASS_POINTER.
+			//A plain & against either therefore matches both, which sent every mouse event into the
+			//touch handler and left the branch below unreachable: no hover, and no scroll at all,
+			//since touch has no wheel to handle.
+			//Masking and comparing to the whole value is what actually distinguishes them.
+
+			if ((source & AINPUT_SOURCE_TOUCHSCREEN) == AINPUT_SOURCE_TOUCHSCREEN) {
 				AWindow_onTouch(w, mouse, event);
 				return 1;
 			}
 
-			if (source & AINPUT_SOURCE_MOUSE) {
+			if ((source & AINPUT_SOURCE_MOUSE) == AINPUT_SOURCE_MOUSE) {
 
 				InputDevice *dev = mouse;
 				
 				if (action == AMOTION_EVENT_ACTION_MOVE || action == AMOTION_EVENT_ACTION_HOVER_MOVE) {
 					
-					F32 x = AMotionEvent_getRawX(event, 0);
-					F32 y = AMotionEvent_getRawY(event, 0);
+					//Window relative, not getRaw*: raw is display space, and the surface sits below the
+					//status bar, so a raw Y reports the cursor that many pixels under the real pointer.
+					//The win32 backend reports client coordinates for the same reason.
+					//Only the absolute position cares; RX/RY below are differences, so the offset cancels.
+
+					F32 x = AMotionEvent_getX(event, 0);
+					F32 y = AMotionEvent_getY(event, 0);
 
 					F32 prevAbsX = InputDevice_getCurrentAxis(dev, EMouseAxis_Temp0);
 					F32 prevAbsY = InputDevice_getCurrentAxis(dev, EMouseAxis_Temp1);
@@ -976,29 +988,32 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event) {
 					
 				} else if (action == AMOTION_EVENT_ACTION_SCROLL) {
 
-					F32 nextX = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_HSCROLL, 0);
-					F32 nextY = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_VSCROLL, 0);
+					//A wheel notch is an impulse, not a position, so it has to fire every time rather
+					//than only when it differs from the last one.
+					//Comparing against the previous value meant the axis stayed at 1 after the first
+					//notch and every further notch in that direction was dropped, which reads as the
+					//wheel not working at all.
+					//The magnitude is passed through for the same reason win32 divides by WHEEL_DELTA
+					//instead of clamping: ceil() to +-1 turned a partial notch into no scroll.
+					//Zero is skipped because a SCROLL event carries both axes and usually only moves one.
 
-					nextX = F32_clamp(F32_ceil(nextX), -1, 1);
-					nextY = F32_clamp(F32_ceil(nextY), -1, 1);
+					const F32 deltaX = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_HSCROLL, 0);
+					const F32 deltaY = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_VSCROLL, 0);
 
-					F32 prevX = InputDevice_getCurrentAxis(dev, EMouseAxis_ScrollWheel_X);
-					F32 prevY = InputDevice_getCurrentAxis(dev, EMouseAxis_ScrollWheel_Y);
+					if (deltaX != 0) {
 
-					if (nextX != prevX) {
-
-						InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_X, nextX);
+						InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_X, deltaX);
 
 						if (w->callbacks.onDeviceAxis)
-							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_X, nextX);
+							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_X, deltaX);
 					}
 
-					if (nextY != prevY) {
+					if (deltaY != 0) {
 
-						InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_Y, nextY);
+						InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_Y, deltaY);
 
 						if (w->callbacks.onDeviceAxis)
-							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_Y, nextY);
+							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_Y, deltaY);
 					}
 
 				} else if(

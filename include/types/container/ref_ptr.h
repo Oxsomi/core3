@@ -26,6 +26,7 @@
 #include "types/base/allocator.h"
 #include "types/base/type_id.h"
 #include "types/base/atomic.h"
+#include <stdalign.h>
 
 #ifdef __cplusplus
 	extern "C" {
@@ -37,10 +38,33 @@ typedef U32 TypeId;
 
 typedef struct RefPtrType {
 	TypeId typeId;
-	U32 length;
+	U32 lengthAndAlignment;        //Pack with RefPtrType_pack, read with RefPtrType_length / _alignment
 	const Allocator *alloc;
 	ObjectFreeFunc free;
 } RefPtrType;
+
+//Alignment goes in the upper U8 as its log2, so it costs nothing next to the length rather than another
+//field. That leaves 24 bits of length, which is 16MiB; nothing reference counted comes close.
+//
+//The alignment is the one RefPtr_data has to satisfy, not the allocation's. RefPtr sits in front of the
+//object, so those are different addresses and it's the object that has the type with the requirement.
+//Pass alignof(T) and anything at or below what the allocator already gives costs nothing.
+
+static inline U32 RefPtrType_pack(U64 length, U64 alignment) {
+
+	U32 log2Alignment = 0;
+
+	while(((U64)1 << log2Alignment) < alignment)
+		++log2Alignment;
+
+	return (U32) length | ((U32) log2Alignment << 24);
+}
+
+static inline U32 RefPtrType_length(const RefPtrType *type) { return type->lengthAndAlignment & 0xFFFFFF; }
+
+static inline U64 RefPtrType_alignment(const RefPtrType *type) {
+	return (U64)1 << (type->lengthAndAlignment >> 24);
+}
 
 typedef struct RefPtr {
 	AtomicI64 refCount;

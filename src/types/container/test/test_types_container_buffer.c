@@ -368,5 +368,64 @@ void Test_containerBuffer(Test *t) {
 		Buffer_free(&secret, alloc);
 	}
 
+	// -- Aligned allocation -------------------------------------------------------------------------
+
+	Test_setModule(t, "BufferAligned");
+
+	{
+		//A run of them, because a single one lands on an aligned address often enough by luck to pass.
+
+		for (U64 alignment = 1; alignment <= BUFFER_ALIGN_MAX; alignment <<= 1) {
+
+			Buffer allocs[8];
+			Bool aligned = true, zeroed = true;
+
+			for (U64 i = 0; i < 8; ++i) {
+
+				allocs[i] = Buffer_createNull();
+
+				Test_assert(t, "aligned alloc", Buffer_createEmptyBytesAligned(
+					1 + i * 13, alignment, 0, alloc, &allocs[i], e_rr
+				));
+
+				aligned &= !((U64)allocs[i].ptr & (alignment - 1));
+				zeroed &= !allocs[i].ptr[0];
+
+				allocs[i].ptrNonConst[0] = 0xAB;        //Catch a free that hands back the wrong base
+			}
+
+			Test_assert(t, "aligned to request", aligned);
+			Test_assert(t, "aligned alloc is zeroed", zeroed);
+
+			for (U64 i = 0; i < 8; ++i)
+				Buffer_freeAligned(&allocs[i], alloc);
+
+			Test_assert(t, "freeAligned clears", !allocs[7].ptr && !Buffer_length(allocs[7]));
+		}
+
+		//headerOffset aligns what comes after the reserved bytes, not the pointer itself.
+
+		Buffer offset = Buffer_createNull();
+
+		Test_assert(t, "aligned alloc with header", Buffer_createUninitializedBytesAligned(
+			256, 64, 24, alloc, &offset, e_rr
+		));
+
+		Test_assert(t, "header offset lands aligned", !((U64)(offset.ptr + 24) & 63));
+		Buffer_freeAligned(&offset, alloc);
+
+		//Rejected up front rather than silently rounded
+
+		Buffer bad = Buffer_createNull();
+		Test_assert(t, "rejects non power of two", !Buffer_createEmptyBytesAligned(16, 24, 0, alloc, &bad, NULL));
+		Test_assert(t, "rejects zero alignment", !Buffer_createEmptyBytesAligned(16, 0, 0, alloc, &bad, NULL));
+
+		Test_assert(t, "rejects alignment over the max", !Buffer_createEmptyBytesAligned(
+			16, BUFFER_ALIGN_MAX << 1, 0, alloc, &bad, NULL
+		));
+
+		Test_assert(t, "nothing leaked on rejection", !bad.ptr);
+	}
+
 	Test_setModule(t, NULL);
 }

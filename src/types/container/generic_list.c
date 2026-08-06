@@ -48,6 +48,44 @@ clean:
 	return s_uccess;
 }
 
+//The allocator only promises BUFFER_DEFAULT_ALIGNMENT, which isn't enough once an element type declares
+//more than that, and every element after the first sits at ptr + i * stride so they'd all be off.
+//sizeof(T) is always a multiple of alignof(T), so the lowest set bit of the stride is at least the
+//alignment the elements want. Deriving it that way keeps the alignment out of GenericList entirely, at the
+//cost of occasionally overshooting (a 32 byte struct that only wants 8), which is a little memory and
+//nothing else.
+
+static U64 GenericList_alignment(const U64 stride) {
+	const U64 lowestBit = stride & (~stride + 1);
+	return lowestBit > BUFFER_ALIGN_MAX ? BUFFER_ALIGN_MAX : lowestBit;
+}
+
+//The two below have to agree on which allocator ran, since only one of the frees can undo either.
+
+static Bool GenericList_alloc(
+	U64 bytes, U64 stride, Bool zeroed, const Allocator *allocator, Buffer *result, Error *e_rr
+) {
+
+	const U64 alignment = GenericList_alignment(stride);
+
+	if(alignment <= BUFFER_DEFAULT_ALIGNMENT)
+		return zeroed ?
+			Buffer_createEmptyBytes(bytes, allocator, result, e_rr) :
+			Buffer_createUninitializedBytes(bytes, allocator, result, e_rr);
+
+	return zeroed ?
+		Buffer_createEmptyBytesAligned(bytes, alignment, 0, allocator, result, e_rr) :
+		Buffer_createUninitializedBytesAligned(bytes, alignment, 0, allocator, result, e_rr);
+}
+
+static void GenericList_dealloc(Buffer *buf, U64 stride, const Allocator *allocator) {
+
+	if(GenericList_alignment(stride) <= BUFFER_DEFAULT_ALIGNMENT)
+		Buffer_free(buf, allocator);
+
+	else Buffer_freeAligned(buf, allocator);
+}
+
 Bool GenericList_create(U64 length, U64 stride, const Allocator *allocator, GenericList *result, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -70,7 +108,7 @@ Bool GenericList_create(U64 length, U64 stride, const Allocator *allocator, Gene
 		retError(clean, Error_overflow(0, length * stride, U64_MAX, "GenericList_create() overflow"));
 
 	Buffer buf = Buffer_createNull();
-	gotoIfError3(clean, Buffer_createEmptyBytes(length * stride, allocator, &buf, e_rr));
+	gotoIfError3(clean, GenericList_alloc(length * stride, stride, true, allocator, &buf, e_rr));
 
 	*result = (GenericList) {
 		.ptr = buf.ptr,
@@ -112,7 +150,7 @@ Bool GenericList_createRepeated(
 	if(length * stride / stride != length)
 		retError(clean, Error_overflow(0, length * stride, U64_MAX, "GenericList_createRepeated() overflow"));
 
-	gotoIfError3(clean, Buffer_createUninitializedBytes(length * stride, allocator, &buf, e_rr));
+	gotoIfError3(clean, GenericList_alloc(length * stride, stride, false, allocator, &buf, e_rr));
 	alloc = true;
 
 	*result = (GenericList) {
@@ -128,7 +166,7 @@ Bool GenericList_createRepeated(
 clean:
 
 	if (!s_uccess && alloc) {
-		Buffer_free(&buf, allocator);
+		GenericList_dealloc(&buf, stride, allocator);
 		*result = (GenericList){ 0 };
 	}
 
@@ -737,14 +775,14 @@ Bool GenericList_reserve(GenericList *list, U64 capacity, const Allocator *alloc
 		goto clean;
 
 	Buffer buffer = Buffer_createNull();
-	gotoIfError3(clean, Buffer_createUninitializedBytes(capacity * list->stride, allocator, &buffer, e_rr));
+	gotoIfError3(clean, GenericList_alloc(capacity * list->stride, list->stride, false, allocator, &buffer, e_rr));
 
 	Buffer_memcpy(buffer, GenericList_bufferConst(*list));
 
 	Buffer curr = Buffer_createManagedPtr((U8*)list->ptrNonConst, GenericList_allocatedBytes(*list));
 
 	if(Buffer_length(curr))
-		Buffer_free(&curr, allocator);
+		GenericList_dealloc(&curr, list->stride, allocator);
 
 	list->ptr = buffer.ptr;
 	list->capacityAndRefInfo = capacity;
@@ -1037,7 +1075,7 @@ void GenericList_free(GenericList *result, const Allocator *allocator) {
 
 	if (!GenericList_isRef(*result) && result->capacityAndRefInfo) {
 		Buffer buf = Buffer_createManagedPtr(result->ptrNonConst, GenericList_allocatedBytes(*result));
-		Buffer_free(&buf, allocator);
+		GenericList_dealloc(&buf, result->stride, allocator);
 	}
 
 	*result = GenericList_createEmpty(result->stride);

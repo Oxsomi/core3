@@ -213,7 +213,7 @@ typedef struct EnumerateFiles {
 
 BOOL enumerateFiles(HMODULE mod, LPWSTR unused, LPWSTR name, EnumerateFiles *sections) {
 
-	mod; unused;
+	(void) mod; (void) unused;
 
 	CharString str = CharString_createNull();
 	Bool s_uccess = true;

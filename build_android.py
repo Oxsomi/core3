@@ -41,6 +41,9 @@ import build_common as common
 
 ANDROID_ARCHES = { "x64": "x86_64", "arm64": "armv8" }
 
+# The single .so -tests True produces, holding every suite; see src/CMakeLists.txt.
+TEST_LIB = "OxC3_atest"
+
 def archName(conanArch):
 	return "x64" if conanArch == "x86_64" else "arm64"
 
@@ -149,7 +152,7 @@ def androidOptionArgs(simd, tests=False):
 
 	return " ".join(f"-o \"&:{k}={v}\"" for k, v in options.items())
 
-def doBuild(mode, conanHome, binDir, conanArch, level, generator, generatorValidationLayer, simd, doInstall, tests, cache):
+def doBuild(mode, conanHome, binDir, conanArch, level, generator, generatorValidationLayer, simd, doInstall, tests, cache, hostCompiler=None):
 
 	profile     = profileName(conanArch, level, generator)
 	profilePath = ensureProfile(conanHome, binDir, conanArch, level, generator)
@@ -157,7 +160,7 @@ def doBuild(mode, conanHome, binDir, conanArch, level, generator, generatorValid
 	# --profile:host targets android, --profile:build stays on the host toolchain so the OxC3_package
 	# tool_requires resolves to the package build_common already exported (see crossBuildProfileArgs).
 
-	buildProfile = common.crossBuildProfileArgs()
+	buildProfile = common.crossBuildProfileArgs(hostCompiler)
 	profileArgs  = f"--profile:host={profile} {buildProfile}"
 
 	# Build dependencies for the target. Keyed per profile so x64 and arm64 don't invalidate each other.
@@ -404,7 +407,14 @@ def signApk(args, apkFolder):
 
 	if args.keystore is None:
 
-		args.keystore = apkFolder + "/.keystore"
+		# Deliberately not in apkFolder: makeApk wipes that on every build, so a keystore kept there is
+		# regenerated each time and every apk ends up signed by a different key.
+		# adb then refuses to update an already installed build with INSTALL_FAILED_UPDATE_INCOMPATIBLE
+		# and the only way forward is uninstalling by hand.
+		# One key per checkout, shared across modes, so Debug and Release can replace each other too.
+
+		os.makedirs("build/android", exist_ok=True)
+		args.keystore = "build/android/.keystore"
 
 		if not os.path.isfile(args.keystore):
 
@@ -555,6 +565,13 @@ def main():
 		"-tests", type=str, default="False", choices=["True", "False"],
 		help="Build OxC3_atest, one .so with every unit test suite (android has no exec to run them separately)"
 	)
+	parser.add_argument(
+		"-host_compiler", type=str, default=None,
+		help="Toolchain for the *host* half of the build: the OxC3_package tool that packages virtual files, "
+		     "and its dependencies. Defaults to the platform's usual one. The android target itself is always "
+		     "built with the NDK's clang and is unaffected"
+	)
+
 	parser.add_argument("-generator", type=str, help="CMake Generator")
 	parser.add_argument("--skip_build", help="Run full build, if false, can be used to package an already built project", action="store_true")
 
@@ -597,6 +614,18 @@ def main():
 	if args.ip and ":" not in args.ip:
 		args.ip += ":5555"
 
+	# -tests True builds one .so called OxC3_atest and no app library, so that's the only thing
+	# android.app.lib_name can point at.
+	# Left to the caller this silently produces an apk that installs and then dies in NativeActivity with
+	# "Unable to find native library", which reads like a crash in the app rather than a wrong flag.
+
+	if args.tests == "True" and args.lib != TEST_LIB:
+
+		if args.lib is not None:
+			print(f"-- -tests True builds {TEST_LIB}, ignoring -lib {args.lib}")
+
+		args.lib = TEST_LIB
+
 	# Grab generator; on Windows, this is likely MinGW Makefiles while otherwise it's probably Unix Makefiles
 
 	if args.generator is None:
@@ -608,7 +637,7 @@ def main():
 	# Host tooling. Doesn't need the NDK, so it comes before the environment check.
 
 	if args.host_package_only:
-		common.buildHostToolPackage(forceDeps=args.force_deps)
+		common.buildHostToolPackage(forceDeps=args.force_deps, compiler=args.host_compiler)
 		return
 
 	# Vulkan headers now come from the conan vulkan_headers package (see doBuild), which masquerades as
@@ -628,7 +657,7 @@ def main():
 	if not args.skip_build:
 
 		if not args.skip_host_package:
-			common.buildHostToolPackage(forceDeps=args.force_deps)
+			common.buildHostToolPackage(forceDeps=args.force_deps, compiler=args.host_compiler)
 
 		common.ensureDefaultProfile()
 
@@ -647,7 +676,8 @@ def main():
 
 			doBuild(
 				args.mode, conanHome, binDir, conanArch, str(args.api), args.generator,
-				generatorValidationLayer, args.simd, args.install, args.tests == "True", cache
+				generatorValidationLayer, args.simd, args.install, args.tests == "True", cache,
+				args.host_compiler
 			)
 
 		common.saveHashCache(cache)

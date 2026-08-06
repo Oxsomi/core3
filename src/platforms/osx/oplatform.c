@@ -51,10 +51,10 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	if (_NSGetExecutablePath(exeName, &exeNameLen) != 0)
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() exePath exceeds maximum"));
 
-	//Unlike readlink, _NSGetExecutablePath only writes exeNameLen back when the buffer was too small; on success it
-	// leaves it at the size that went in, so the length has to come from the terminator it wrote.
-	//Taking it at face value sends the scan below backwards through uninitialised stack before it ever reaches the
-	// path, and any '/' still lying there becomes the app directory instead of the real one.
+	//Unlike readlink, _NSGetExecutablePath only writes exeNameLen back when the buffer was too small.
+	//On success it leaves it at the size that went in, so the length has to come from the terminator it wrote.
+	//Taking it at face value sends the scan below backwards through uninitialised stack before it reaches the path,
+	// and any '/' still lying there becomes the app directory instead of the real one.
 
 	exeName[sizeof(exeName) - 1] = '\0';
 	exeNameLen = (U32) CharString_calcStrLen(exeName, sizeof(exeName) - 1);

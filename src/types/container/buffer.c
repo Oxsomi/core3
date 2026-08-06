@@ -126,6 +126,102 @@ Bool Buffer_createUninitializedBytes(U64 length, const Allocator *alloc, Buffer 
 	return Buffer_allocBitsInternal(length >> 61 ? U64_MAX : length << 3, alloc, result, e_rr);
 }
 
+//A single U8 immediately before the aligned pointer, holding how far we stepped forward from the real
+//allocation. That's all Buffer_freeAligned needs to find the base again, and a byte is aligned anywhere,
+//so it needs no padding of its own.
+//
+//The over-allocation is a fixed BUFFER_ALIGN_MAX rather than the requested alignment, which is what keeps
+//the header down to that one byte: the size is then always length + BUFFER_ALIGN_MAX, so it follows from
+//the length the Buffer already carries and never has to be stored.
+//The offset lands in [1, alignment], so BUFFER_ALIGN_MAX is what makes it fit in a U8.
+
+static Bool Buffer_createBytesAlignedInternal(
+	U64 length, U64 alignment, U64 headerOffset, Bool zeroed, const Allocator *alloc, Buffer *result, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Buffer base = Buffer_createNull();
+
+	if(!result)
+		retError(clean, Error_nullPointer(4, "Buffer_createBytesAlignedInternal()::result is required"));
+
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(
+			4, 0, "Buffer_createBytesAlignedInternal()::result->ptr is non zero, could indicate memleak"
+		));
+
+	if(!alignment || (alignment & (alignment - 1)))
+		retError(clean, Error_invalidParameter(
+			1, 0, "Buffer_createBytesAlignedInternal()::alignment must be a non zero power of two"
+		));
+
+	if(alignment > BUFFER_ALIGN_MAX)
+		retError(clean, Error_invalidParameter(
+			1, 0, "Buffer_createBytesAlignedInternal()::alignment exceeds BUFFER_ALIGN_MAX"
+		));
+
+	if(!length)
+		goto clean;
+
+	const U64 total = length + BUFFER_ALIGN_MAX;
+
+	if(zeroed) {
+		gotoIfError3(clean, Buffer_createEmptyBytes(total, alloc, &base, e_rr));
+	}
+
+	else {
+		gotoIfError3(clean, Buffer_createUninitializedBytes(total, alloc, &base, e_rr));
+	}
+
+	//From start + 1 so there's always a byte in front of the result to put the offset in.
+	//headerOffset shifts what gets aligned: RefPtr wants its payload aligned, not the header before it.
+
+	U8 *const start = base.ptrNonConst;
+
+	const U64 misaligned = (U64)(start + 1 + headerOffset) & (alignment - 1);
+	U8 *const aligned = start + 1 + (misaligned ? alignment - misaligned : 0);
+
+	aligned[-1] = (U8) (aligned - start);
+
+	*result = Buffer_createManagedPtr(aligned, length);
+	base = Buffer_createNull();        //Ownership moved into result
+
+clean:
+	Buffer_free(&base, alloc);
+	return s_uccess;
+}
+
+Bool Buffer_createUninitializedBytesAligned(
+	U64 length, U64 alignment, U64 headerOffset, const Allocator *alloc, Buffer *result, Error *e_rr
+) {
+	return Buffer_createBytesAlignedInternal(length, alignment, headerOffset, false, alloc, result, e_rr);
+}
+
+Bool Buffer_createEmptyBytesAligned(
+	U64 length, U64 alignment, U64 headerOffset, const Allocator *alloc, Buffer *result, Error *e_rr
+) {
+	return Buffer_createBytesAlignedInternal(length, alignment, headerOffset, true, alloc, result, e_rr);
+}
+
+void Buffer_freeAligned(Buffer *buf, const Allocator *alloc) {
+
+	if(!buf || !Buffer_length(*buf))
+		return;
+
+	//Same contract as Buffer_free: a ref isn't ours to release.
+
+	if (Buffer_isRef(*buf)) {
+		*buf = Buffer_createNull();
+		return;
+	}
+
+	const U64 offset = ((const U8*) buf->ptr)[-1];
+	Buffer whole = Buffer_createManagedPtr(buf->ptrNonConst - offset, Buffer_length(*buf) + BUFFER_ALIGN_MAX);
+
+	Buffer_free(&whole, alloc);
+	*buf = Buffer_createNull();
+}
+
 void Buffer_free(Buffer *buf, const Allocator *alloc) {
 
 	if(!buf || !Buffer_length(*buf))

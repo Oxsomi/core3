@@ -93,7 +93,7 @@ static void Test_graphicsInstanceType(Test *t) {
 	RefPtrType type = GraphicsInstance_makeType(EGraphicsApi_Count, alloc);
 
 	Test_assert(t, "typeId", type.typeId == (TypeId) EGraphicsTypeId_GraphicsInstance);
-	Test_assert(t, "length", type.length >= sizeof(GraphicsInstance));
+	Test_assert(t, "length", RefPtrType_length(&type) >= sizeof(GraphicsInstance));
 	Test_assert(t, "alloc", type.alloc == alloc);
 	Test_assert(t, "freeFunc", type.free);
 }
@@ -103,7 +103,7 @@ static void Test_graphicsInstanceType(Test *t) {
 static void Test_checkObjectType(
 	Test *t, const C8 *name, const RefPtrType *type, TypeId typeId, U64 minLen, const Allocator *alloc
 ) {
-	Test_assert(t, name, type->typeId == typeId && type->length >= minLen && type->alloc == alloc && type->free);
+	Test_assert(t, name, type->typeId == typeId && RefPtrType_length(type) >= minLen && type->alloc == alloc && type->free);
 }
 
 static void Test_graphicsInstance(Test *t) {

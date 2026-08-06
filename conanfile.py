@@ -59,7 +59,9 @@ class oxc3(ConanFile):
 		"cliGraphics": [ True, False ],
 		"dynamicLinkingGraphics": [ True, False ],
 		"dynamicLinkingShaderCompiler": [ True, False ],
-		"debugShaderCompiler": [ True, False ]
+		"debugShaderCompiler": [ True, False ],
+		"enableASAN": [ True, False ],
+		"enableUBSAN": [ True, False ]
 	}
 
 	default_options = {
@@ -83,7 +85,13 @@ class oxc3(ConanFile):
 		# On by default on desktop; CMakeLists coerces it off where it can't apply (android, or no shader compiler at all).
 
 		"dynamicLinkingShaderCompiler": True,
-		"debugShaderCompiler": False
+		"debugShaderCompiler": False,
+
+		# Diagnostic only, and clang/gcc only.
+		# CMakeLists turns a request under MSVC into a hard error rather than ignoring it.
+
+		"enableASAN": False,
+		"enableUBSAN": False
 	}
 
 	exports_sources = [ "include/*", "cmake/*" ]
@@ -111,6 +119,8 @@ class oxc3(ConanFile):
 		tc.cache_variables["EnableShaderCompiler"] = self.options.enableShaderCompiler
 		tc.cache_variables["CLIGraphics"] = self.options.cliGraphics
 		tc.cache_variables["DynamicLinkingGraphics"] = self.options.dynamicLinkingGraphics
+		tc.cache_variables["EnableASAN"] = self.options.enableASAN
+		tc.cache_variables["EnableUBSAN"] = self.options.enableUBSAN
 
 		if not self.settings.os == "Windows":
 			tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
@@ -179,8 +189,8 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2026.08.06.01")
-			self.requires("spirv_reflect/2026.07.29")
+			self.requires("dxc/2026.08.06.03")
+			self.requires("spirv_reflect/2026.08.06")
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")
@@ -197,7 +207,7 @@ class oxc3(ConanFile):
 		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
 			self.requires("vulkan_validation_layers/2025.01.25")
 
-		self.requires("openal_soft/2026.06.04")
+		self.requires("openal_soft/2026.08.06")
 
 	def package(self):
 

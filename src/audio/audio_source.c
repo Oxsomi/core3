@@ -46,7 +46,7 @@ void AudioSource_free(AudioSource *source, const Allocator *alloc) {
 RefPtrType AudioSource_makeType(const Allocator *alloc) {
 	return (RefPtrType) {
 		.typeId = (TypeId)EAudioTypeId_AudioSource,
-		.length = (U32)(sizeof(AudioSource) + AudioSource_sizeExt),
+		.lengthAndAlignment = RefPtrType_pack(sizeof(AudioSource) + AudioSource_sizeExt, alignof(AudioSource)),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc)AudioSource_free
 	};
@@ -72,7 +72,7 @@ Bool AudioDeviceRef_createSourceGeneric(
 	if(
 		!type ||
 		type->typeId != (TypeId)EAudioTypeId_AudioSource ||
-		type->length != (U32)(sizeof(AudioSource) + AudioSource_sizeExt) ||
+		RefPtrType_length(type) != (U32)(sizeof(AudioSource) + AudioSource_sizeExt) ||
 		type->free != (ObjectFreeFunc)AudioSource_free ||
 		type->alloc != alloc
 	)

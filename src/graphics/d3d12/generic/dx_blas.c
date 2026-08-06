@@ -130,7 +130,7 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		if (blas->indexFormatId) {
 			tri->IndexFormat = ETextureFormatId_toDXFormat(blas->indexFormatId);
 			tri->IndexBuffer = getDxLocation(blas->indexBuffer, 0);
-			tri->IndexCount = (U32)(blas->indexBuffer.len / (blas->indexFormatId == ETextureFormat_R32u ? 4 : 2));
+			tri->IndexCount = (U32)(blas->indexBuffer.len / (blas->indexFormatId == ETextureFormatId_R32u ? 4 : 2));
 		}
 	}
 

@@ -45,6 +45,24 @@ def main():
 		     "they dominate build time and are rarely the thing being debugged"
 	)
 
+	parser.add_argument(
+		"-compiler", type=str, default=None,
+		help="Toolchain to build with; defaults to the platform's usual one (msvc on Windows, clang on macOS, "
+		     "gcc on Linux). 'clang' on Windows means clang-cl, which uses MSVC's ABI and CRT"
+	)
+
+	parser.add_argument(
+		"-asan", type=str, default="False", choices=["True", "False"],
+		help="Build with AddressSanitizer. clang/gcc only, and RelWithDebInfo is the mode you want: "
+		     "ASan needs optimized code with frame pointers and symbols"
+	)
+
+	parser.add_argument(
+		"-ubsan", type=str, default="False", choices=["True", "False"],
+		help="Build with UndefinedBehaviorSanitizer. clang/gcc only. On Windows it traps into the crash "
+		     "handler rather than using UBSan's own reporting runtime"
+	)
+
 	parser.add_argument("--force_deps", action="store_true", help="Ignore hash cache and rebuild all dependencies")
 
 	args, remainder = parser.parse_known_args()
@@ -61,12 +79,18 @@ def main():
 
 	# Decide which modes to build deps for
 
+	# A CMake cache is tied to the compiler that configured it, so a non-default toolchain gets its own
+	# tree rather than fighting over the default one's.
+
+	compiler = args.compiler or common.defaultCompiler()
+	suffix   = "" if compiler == common.defaultCompiler() else f"_{compiler}"
+
 	if system == "Windows":
 		dep_modes = common.ALL_MODES if args.mode is None else [ args.mode ]
-		build_dir = f"build/{platform_name}/{arch}"
+		build_dir = f"build/{platform_name}/{arch}{suffix}"
 	else:
 		dep_modes = [ args.mode ]
-		build_dir = f"build/{args.mode}/{platform_name}/{arch}"
+		build_dir = f"build/{args.mode}/{platform_name}/{arch}{suffix}"
 
 	# Build dependencies (skipped when hash unchanged)
 
@@ -76,7 +100,9 @@ def main():
 	cache = common.loadHashCache()
 	debugShaderCompiler = args.debug_shader_compiler == "True"
 
-	common.buildHostDependencies(dep_modes, cache, debugShaderCompiler)
+	common.buildHostDependencies(
+		dep_modes, cache, debugShaderCompiler, compiler, args.asan == "True", args.ubsan == "True"
+	)
 	common.saveHashCache(cache)
 
 	# Build project, use the mode that was requested, or Release as the
@@ -90,13 +116,15 @@ def main():
 		common.run(
 			f"conan build . "
 			f"-of {build_dir} "
-			f"{common.hostProfileArgs(mode)} "
+			f"{common.hostProfileArgs(mode, compiler)} "
 			f"-s build_type={mode} "
 			f"-o enableSIMD={args.simd} "
 			f"-o enableTests={args.tests} "
 			f"-o dynamicLinkingGraphics={args.dynamic_linking} "
 			f"-o dynamicLinkingShaderCompiler={args.dynamic_linking_shader_compiler} "
 			f"-o debugShaderCompiler={args.debug_shader_compiler} "
+			f"-o enableASAN={args.asan} "
+			f"-o enableUBSAN={args.ubsan} "
 			f"{common.shaderCompilerDepArgs(debugShaderCompiler)} "
 			f"{extra}"
 		)

@@ -30,6 +30,8 @@ import android.content.Context;
 import android.util.Log;
 import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.PointerIcon;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.text.*;
@@ -45,7 +47,18 @@ public class OxC3Activity extends NativeActivity {
 
 		super.onCreate(savedInstanceState);
 
-		inputField = new EditText(this);
+		//This EditText exists purely so the IME has somewhere to type; the app draws its own content.
+		//TextView answers the framework with an I-beam for anything editable, so the pointer turns into a
+		//text caret over the whole window even though there's no text to select.
+		//setPointerIcon can't fix that: TextView returns the caret before ever consulting it.
+
+		inputField = new EditText(this) {
+
+			@Override
+			public PointerIcon onResolvePointerIcon(MotionEvent event, int pointerIndex) {
+				return PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_ARROW);
+			}
+		};
 
 		//Allow keyboard
 

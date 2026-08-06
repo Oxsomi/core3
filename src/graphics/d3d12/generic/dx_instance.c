@@ -197,7 +197,10 @@ Bool DX_WRAP_FUNC(GraphicsInstance_create)(
 	CharString locationD3D12 = CharString_createNull();
 	Bool isVirtual = false;
 
-	if (instance->flags & EGraphicsInstanceFlags_IsDebug)
+	//Braced so the else unambiguously belongs to the FAILED check, which is what it always meant.
+	//A debug factory that came up fine skips the non-debug creation below.
+
+	if (instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
 		if (FAILED(CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory6, (void**)&instanceExt->factory))) {
 			Log_warnLnx(
@@ -209,6 +212,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_create)(
 		}
 
 		else goto setup;
+	}
 
 	gotoIfError3(clean, dxCheck(CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->factory), e_rr));
 

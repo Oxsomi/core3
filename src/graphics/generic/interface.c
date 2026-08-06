@@ -103,10 +103,10 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		if(GraphicsInterface_instance)        //Already initialized
 			goto clean;
 
-		//This is the host's half of the init: it discovers backends and hands them the host's globals through
-		// GraphicsInterface_getTable, so it has to run in the host.
-		//A backend links the generic layer too and carries its own Platform_instance, null until that hand-off,
-		// so if this ever executes there it would dereference null before the hand-off could happen.
+		//This is the host's half of the init: it discovers backends and hands them the host's globals
+		// through GraphicsInterface_getTable, so it has to run in the host.
+		//A backend links the generic layer too and carries its own Platform_instance, null until that hand-off.
+		//If this ever executes there it would dereference null before the hand-off could happen.
 
 		if(!Platform_instance)
 			retError(clean, Error_invalidState(

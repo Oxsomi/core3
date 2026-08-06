@@ -88,7 +88,7 @@ static inline F32 F32x4_get(F32x4 a, U8 i) {
 
 //Fallbacks for transcendentals
 
-#if _PLATFORM_TYPE != PLATFORM_WINDOWS || _SIMD != SIMD_SSE
+#if !_SIMD_HAS_SVML
 
 	static inline F32x4 F32x4_pow(F32x4 a, F32x4 e) { NONE_OP4F(F32_pow(F32x4_get(a, i), F32x4_get(e, i))); }
 	static inline F32x4 F32x4_loge(F32x4 a) { NONE_OP4F(F32_loge(F32x4_get(a, i))); }

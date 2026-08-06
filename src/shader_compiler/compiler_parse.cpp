@@ -654,7 +654,7 @@ Bool Compiler_registerUniform(
 	uniformType = CharString_createRefSizedConst(idenStart, str - idenStart, false);
 	typeId = ETypeId_parse(uniformType);
 
-	if (typeId == ETypeId_Undefined || typeId == (TypeId) ETypeId_C8)
+	if (typeId == (TypeId) ETypeId_Undefined || typeId == (TypeId) ETypeId_C8)
 		retError(clean, Error_invalidState(
 			0,
 			"Compiler_registerUniform() invalid syntax, expected type = ((U/I/F)(8/16/32/64)/B)"

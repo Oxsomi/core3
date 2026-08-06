@@ -68,6 +68,7 @@ void WWindow_updateMonitors(Window *w) {
 	return;
 
 clean:
+	(void) s_uccess;        //retError sets it, but a void function has nothing to hand it to
 	Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 }
 

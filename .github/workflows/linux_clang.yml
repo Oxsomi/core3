@@ -1,0 +1,21 @@
+name: Linux x64 Vulkan static (clang)
+on: [push]
+
+# Second toolchain on the same platform code the gcc job builds, so anything it catches is a real
+# portability issue rather than an OS difference. packages/conan/profiles/linux_clang_x64 pins the
+# compiler version for conan's package ids; bump it when the runner image moves to a newer clang.
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Linux x64 Vulkan static (clang)
+      runner: ubuntu-latest
+      os: linux
+      build_flags: '-compiler clang -o cliGraphics=False'
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      hook_name: Linux-x64-static-clang
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

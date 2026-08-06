@@ -1113,7 +1113,7 @@ Bool ParsedArgs_getArg(const ParsedArgs *args, EOperationHasParameter parameterI
 
 	U64 ourLoc = 0;
 
-	for(U64 j = EOperationHasParameter_InputShift; j < parameterId; ++j)
+	for(U64 j = EOperationHasParameter_InputShift; j < (U64) parameterId; ++j)
 		if((args->parameters >> j) & 1)
 			++ourLoc;
 

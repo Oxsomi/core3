@@ -24,7 +24,9 @@
 
 #if _ARCH == ARCH_X86_64
 
-	#ifndef _MSC_VER
+	#ifdef _MSC_VER
+		#include <intrin.h>        //__cpuid; MSVC resolves it without this, clang-cl needs the declaration
+	#else
 		#include <cpuid.h>
 	#endif
 
@@ -34,7 +36,7 @@
 			return;
 
 		#ifdef _MSC_VER
-			__cpuid(result, leaf);
+			__cpuid((int*) result, leaf);        //Takes int[4]; the leaves we read are bit fields either way
 		#else
 			if(leaf == 7)
 				__get_cpuid_count(7, 0, &result[0], &result[1], &result[2], &result[3]);

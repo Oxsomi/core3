@@ -177,7 +177,8 @@ void CompilerFileCtx_free(void *ptr) {
 	ListSHEntryRuntime_freeUnderlying(&ctx->runtimeEntries, alloc);
 	ListU32_free(&ctx->compileCombinations, alloc);
 
-	alloc->free(alloc->ptr, Buffer_createManagedPtr(ctx, sizeof(*ctx)));
+	Buffer buf = Buffer_createManagedPtr(ctx, sizeof(*ctx));
+	Buffer_freeAligned(&buf, alloc);
 }
 
 //Frees a combination context and everything it owns (its compiled binary included).
@@ -657,8 +658,14 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 
 	//Move the accumulators into a heap file context shared by the whole fan-out tree.
 
+	//Aligned rather than plain: SpinLock is alignas(64) and this struct embeds one, which malloc's 16
+	//bytes don't satisfy. clang stores the initializer below with aligned AVX moves and faults otherwise.
+
 	Buffer buf = Buffer_createNull();
-	gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(CompilerFileCtx), alloc, &buf, e_rr));
+
+	gotoIfError3(clean, Buffer_createUninitializedBytesAligned(
+		sizeof(CompilerFileCtx), alignof(CompilerFileCtx), 0, alloc, &buf, e_rr
+	));
 
 	ctx = (CompilerFileCtx*) buf.ptrNonConst;
 	*ctx = (CompilerFileCtx) {

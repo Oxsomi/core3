@@ -120,7 +120,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.DepthFunc = mapDxCompareOp(info->depthStencil.depthCompare),
 			.StencilEnable = (Bool) (info->depthStencil.flags & EDepthStencilFlags_StencilTest),
 			.StencilReadMask = info->depthStencil.stencilReadMask,
-			.StencilReadMask = info->depthStencil.stencilWriteMask
+			.StencilWriteMask = info->depthStencil.stencilWriteMask
 		},
 
 		.InputLayout = (D3D12_INPUT_LAYOUT_DESC ) { .pInputElementDescs = elements },

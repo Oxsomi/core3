@@ -91,7 +91,7 @@ static inline F32x4 F32x4_rsqrt(F32x4 a) { return _mm_rsqrt_ps(a); }
 //These are intel extended instructions
 // TODO: Should add a proper SIMD fallback, for now this is actually handled later with naive fallback
 
-#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+#if _SIMD_HAS_SVML
 
 	#include <immintrin.h>
 

@@ -10,6 +10,20 @@
 | iOS       | **TBD** | **Metal**: **TBD** | N/A, no dynamic linking | **TBD** | **Metal**: **TBD** | N/A, no dynamic linking |
 | Xbox UWP  | N/A | **D3D12**: TBD | N/A | N/A | N/A | N/A |
 
+The matrix above builds each platform with its usual toolchain (MSVC on Windows, AppleClang on OS X, GCC on
+Linux, NDK clang on Android). A second toolchain is covered where it's a genuinely different compiler on the
+same platform code, since that's what catches portability problems rather than OS differences:
+
+| Platform | Default | Alternate |
+| -------- | ------- | --------- |
+| Windows  | MSVC | clang-cl: ![clang-cl](https://github.com/Oxsomi/core3/actions/workflows/windows_clang.yml/badge.svg) |
+| Linux    | GCC | clang: ![clang](https://github.com/Oxsomi/core3/actions/workflows/linux_clang.yml/badge.svg) |
+| OS X     | AppleClang | N/A, |
+| Android  | NDK clang | N/A |
+
+MinGW GCC isn't supported on Windows: it's a different CRT and ABI, so it would be a new target rather than
+a new compiler, and the prebuilt dependencies (DXC among them) are MSVC.
+
 **OxC3** (0xC3, Oxsomi core 3) is a cross-platform C11 framework for applications, tools and games. It is the successor to O(x)somi core v2/v1, merging ostlc (standard template library), owc (window core) and ogc (graphics core) into one coherent, layered codebase. It is written in C so it stays fast to build, easy to parse for reflection/codegen, and straightforward to wrap from other languages (bindings or a future VM); a C++20 convenience layer is possible on top.
 
 For per-module maturity, see [STATUS.md](STATUS.md). For how the modules fit together (and the error-handling idiom used everywhere), see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -37,7 +51,7 @@ For per-module maturity, see [STATUS.md](STATUS.md). For how the modules fit tog
 
 - **Python 3.8.10+** and **Conan 2.7.1+** (avoids huge build times for DXC/LLVM/SPIRV deps).
 - **CMake 3.13+**.
-- A C11/C++ compiler (MSVC, clang, gcc). C++ is only used to interface with C++ deps such as DXC (and a C++ layer for samples or complex work is exposed).
+- A C11/C++ compiler (MSVC, clang, gcc); see the toolchain table above for what's covered per platform, and `-compiler` under [build.py syntax](#getting-started) to pick one. C++ is only used to interface with C++ deps such as DXC (and a C++ layer for samples or complex work is exposed).
 - **Windows on ARM64**: ARMASM64 (install the ARM64 build tools via the VS installer) when using MSVC.
 - **OS X**: `brew install llvm` for llvm-objcopy. If using the Vulkan SDK with bindless, export `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1` and set `VULKAN_SDK` (e.g. in `~/.bash_profile`).
 - **Linux**: Wayland is the window backend, `sudo apt install libwayland-dev libxkbcommon-dev -y` (plus wayland-scanner). For audio deps: `sudo apt install libasound2-dev libpipewire-0.3-dev -y`. For the windowed functional tests: `sudo apt install xdotool -y`. *X11-only sessions are currently unsupported for windowing.*
@@ -57,6 +71,17 @@ python build.py -mode Release -tests True
   - `simd`: use SIMD (vectors, AES, SHA, CRC). Keep on (default); off exists for porting/fallback validation.
   - `tests`: build + run the unit tests.
   - `dynamic_linking`: desktop-only; allows multiple graphics APIs in one process.
+  - `compiler`: toolchain to build with, defaulting to the platform's usual one (`msvc` on Windows, `clang`
+    on OS X, `gcc` on Linux). `-compiler clang` on Windows means clang-cl, which keeps MSVC's ABI and CRT.
+    A non-default toolchain gets its own build tree, since a CMake cache belongs to the compiler that
+    configured it, and its own dependencies, since conan derives package ids from the compiler; expect the
+    first build with one to rebuild DXC.
+  - `asan` / `ubsan`: build with AddressSanitizer / UndefinedBehaviorSanitizer. Diagnostic only, and
+    supported on clang and gcc alone; asking for either under MSVC is a hard configure error rather than a
+    silent no-op, since a sanitizer that quietly does nothing reads as proof that nothing is wrong.
+    Use `-mode RelWithDebInfo`: they want optimized code with frame pointers and symbols, not a Debug build.
+    On Windows (clang-cl) UBSan traps into OxC3's crash handler instead of relying on its own reporting
+    runtime, which is the least dependable part of UBSan there.
 - Extra flags via `-o flag=Bool`:
   - `forceVulkan`: prefer Vulkan over the native API (e.g. over D3D12 on Windows). Off by default.
   - `enableOxC3CLI`: build the OxC3 CLI. On by default.

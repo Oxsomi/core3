@@ -211,30 +211,49 @@ def hostPlatformName():
 
 	return "linux"
 
-def hostProfileBase():
+# Compiler each platform uses when -compiler isn't given. These are the combinations that have always
+# been built; the alternatives exist so CI can cover a second toolchain, not to change anyone's default.
+DEFAULT_COMPILERS = { "Windows": "msvc", "Darwin": "clang", "Linux": "gcc" }
+
+# What each platform can actually be built with. Deliberately excludes combinations that would be a new
+# target rather than a new compiler: MinGW gcc doesn't share Windows' CRT or ABI, and `gcc` on macOS is a
+# clang symlink, so a gcc job there would silently retest clang.
+SUPPORTED_COMPILERS = { "Windows": ("msvc", "clang"), "Darwin": ("clang",), "Linux": ("gcc", "clang") }
+
+def defaultCompiler():
+	return DEFAULT_COMPILERS[hostSystem()]
+
+def hostProfileBase(compiler = None):
 
 	arch = hostArch()[0]
 	system = hostSystem()
+	compiler = compiler or defaultCompiler()
+
+	supported = SUPPORTED_COMPILERS[system]
+
+	if compiler not in supported:
+		print(f"Unsupported compiler '{compiler}' on {system}; expected one of {', '.join(supported)}", file=sys.stderr)
+		sys.exit(1)
 
 	if system == "Windows":
-		return f"packages/conan/profiles/windows_msvc_{arch}"
+		return f"packages/conan/profiles/windows_{compiler}_{arch}"
 
 	if system == "Darwin":
-		return f"packages/conan/profiles/osx_clang_{arch}"
+		return f"packages/conan/profiles/osx_{compiler}_{arch}"
 
-	return f"packages/conan/profiles/linux_gcc_{arch}"
+	return f"packages/conan/profiles/linux_{compiler}_{arch}"
 
-def hostProfileForMode(mode):
-	"""On Windows the profile is per-mode (the MSVC debug/release CRT differs), elsewhere one covers all."""
+def hostProfileForMode(mode, compiler = None):
+	"""On Windows the profile is per-mode (the debug/release CRT differs), elsewhere one covers all."""
 
-	base = hostProfileBase()
+	base = hostProfileBase(compiler)
 	return f"{base}_{mode}" if hostSystem() == "Windows" else base
 
-def hostProfileArgs(mode):
-	p = hostProfileForMode(mode)
+def hostProfileArgs(mode, compiler = None):
+	p = hostProfileForMode(mode, compiler)
 	return f"--profile:build={p} --profile:host={p}"
 
-def crossBuildProfileArgs():
+def crossBuildProfileArgs(compiler = None):
 	"""Profile args for the *build* context of a cross build (android).
 
 	conan derives a tool_requires' package id from the consumer's build profile, so this has to be exactly
@@ -243,7 +262,7 @@ def crossBuildProfileArgs():
 	profile, whose cppstd/runtime differ from the checked-in ones.
 	"""
 
-	return f"--profile:build={hostProfileForMode(HOST_TOOL_MODE)} -s:b build_type={HOST_TOOL_MODE}"
+	return f"--profile:build={hostProfileForMode(HOST_TOOL_MODE, compiler)} -s:b build_type={HOST_TOOL_MODE}"
 
 def ensureDefaultProfile():
 	"""Make sure conan has a `default` profile.
@@ -415,14 +434,17 @@ def saveHashCache(cache):
 	with open(HASH_CACHE_FILE, "w") as f:
 		json.dump(cache, f, indent=2)
 
-def conanCreateIfChanged(packagePath, profile, mode, profileArgs, cache, key=None):
+def conanCreateIfChanged(packagePath, profile, mode, profileArgs, cache, key=None, options=""):
 	"""conan create a dependency, skipping it when neither the recipe nor the profile changed.
 
 	`key` disambiguates the same recipe built for different targets (host vs android) in one cache.
 	Paths are resolved against the repo so this works no matter what the caller's cwd is.
 	"""
 
-	key         = f"{key or packagePath}::{mode}"
+	# options is part of the identity: the same recipe and profile built with and without a sanitizer are
+	# different binaries, and without this the cache would hand back the wrong one.
+
+	key         = f"{key or packagePath}::{mode}{('::' + options) if options else ''}"
 	resolved    = packagePath if os.path.isabs(packagePath) else os.path.join(ROOT, packagePath)
 	profilePath = profile if os.path.isabs(profile) else os.path.join(ROOT, profile)
 	currentHash = hashPackage(resolved, profilePath, mode)
@@ -431,7 +453,7 @@ def conanCreateIfChanged(packagePath, profile, mode, profileArgs, cache, key=Non
 		print(f"-- Skipping {packagePath} ({mode}), unchanged")
 		return
 
-	run(f"conan create \"{resolved}\" {profileArgs} -s build_type={mode} --build=missing", cwd=ROOT)
+	run(f"conan create \"{resolved}\" {profileArgs} {options} -s build_type={mode} --build=missing", cwd=ROOT)
 
 	cache[key] = currentHash
 
@@ -465,15 +487,25 @@ def shaderCompilerDepArgs(debugShaderCompiler):
 
 	return " ".join(args)
 
-def buildHostDependencies(modes, cache, debugShaderCompiler=False):
+def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None, asan=False, ubsan=False):
 	"""Create everything oxc3 needs for a *host* build (which includes the OxC3_package tool build)."""
 
 	system = hostSystem()
 
+	# Only the packages that actually compile C/C++ take these; the rest are headers or prebuilt binaries.
+	# A sanitized consumer can't link unsanitized dependencies: MSVC's STL records its ASan container
+	# annotation state per object and lld-link rejects the mix, and ASan has to own operator new, which
+	# DXC otherwise replaces.
+
+	sanitizerOptions = ""
+
+	if asan or ubsan:
+		sanitizerOptions = f"-o enableASAN={asan} -o enableUBSAN={ubsan}"
+
 	for mode in modes:
 
-		profile     = hostProfileForMode(mode)
-		profileArgs = hostProfileArgs(mode)
+		profile     = hostProfileForMode(mode, compiler)
+		profileArgs = hostProfileArgs(mode, compiler)
 
 		if system == "Windows":
 			conanCreateIfChanged("packages/amd_ags",        profile, mode, profileArgs, cache)
@@ -484,12 +516,12 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False):
 		# These two follow shaderCompilerDepMode rather than the requested mode
 
 		shaderMode = shaderCompilerDepMode(mode, debugShaderCompiler)
-		shaderProfile = hostProfileForMode(shaderMode)
-		shaderArgs = hostProfileArgs(shaderMode)
+		shaderProfile = hostProfileForMode(shaderMode, compiler)
+		shaderArgs = hostProfileArgs(shaderMode, compiler)
 
 		for package in SHADER_COMPILER_DEPS:
-			conanCreateIfChanged(package, shaderProfile, shaderMode, shaderArgs, cache)
-		conanCreateIfChanged("packages/openal_soft",        profile, mode, profileArgs, cache)
+			conanCreateIfChanged(package, shaderProfile, shaderMode, shaderArgs, cache, options=sanitizerOptions)
+		conanCreateIfChanged("packages/openal_soft",        profile, mode, profileArgs, cache, options=sanitizerOptions)
 
 		if system == "Linux":
 			conanCreateIfChanged("packages/xdg_shell",      profile, mode, profileArgs, cache)
@@ -499,7 +531,7 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False):
 # The host tool package
 # ---------------------------------------------------------------------------------------------------
 
-def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False):
+def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False, compiler=None):
 	"""Build and export oxc3 for the host with the shader compiler + CLI enabled, so that a build which
 	can't run its own packager (android, or any cross build) can tool_requires it.
 
@@ -512,12 +544,22 @@ def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False):
 		os.remove(HASH_CACHE_FILE)
 
 	cache = loadHashCache()
-	buildHostDependencies([ mode ], cache)
+	buildHostDependencies([ mode ], cache, compiler=compiler)
 	saveHashCache(cache)
 
-	profileArgs = hostProfileArgs(mode)
+	profileArgs = hostProfileArgs(mode, compiler)
 	options     = hostToolOptionArgs()
 	reference   = f"{recipeName()}/{recipeVersion()}"
+
+	# A CMake cache is tied to the compiler that configured it, the same reason build.py gives each
+	# toolchain its own tree.
+	# Sharing one folder here means -host_compiler silently reuses whatever configured it last, and the
+	# cache keeps the old toolset while the new profile picks the flags: MSVC then gets handed clang's
+	# -Wno-* and dies on D8021, or the reverse.
+	# The default compiler keeps `build` so existing trees stay valid; anything else nests beside it.
+
+	suffix       = "" if (compiler or defaultCompiler()) == defaultCompiler() else f"/host_{compiler}"
+	outputFolder = f"build{suffix}"
 
 	print(f"-- Building {reference} for the host ({hostPlatformName()}/{hostArch()[0]}, {mode}) to package virtual files")
 
@@ -537,5 +579,5 @@ def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False):
 			print(f"-- Removing stale {name} before packaging the static host tool")
 			os.remove(stale)
 
-	run(f"conan build . {profileArgs} -s build_type={mode} {options} --build=missing", cwd=ROOT)
-	run(f"conan export-pkg . {profileArgs} -s build_type={mode} {options}", cwd=ROOT)
+	run(f"conan build . -of {outputFolder} {profileArgs} -s build_type={mode} {options} --build=missing", cwd=ROOT)
+	run(f"conan export-pkg . -of {outputFolder} {profileArgs} -s build_type={mode} {options}", cwd=ROOT)
