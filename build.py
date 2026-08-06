@@ -107,10 +107,18 @@ def main():
 
 		test_mode = args.mode if args.mode is not None else "Release"
 
+		# Per-test wall clock cap. The slowest test (the shader compiler corpus, in Debug on a CI runner)
+		# lands well under a minute, so anything reaching this is wedged rather than slow, and without the
+		# cap a deadlocked JobQueue just burns the whole job's time budget before anyone finds out.
+
+		test_timeout = 300
+
+		flags = f"-C {test_mode} --output-on-failure --timeout {test_timeout}"
+
 		if system != "Windows":
-			common.run(f"ctest --test-dir {build_dir}/build/{test_mode} -C {test_mode} --output-on-failure", cwd=os.getcwd())
+			common.run(f"ctest --test-dir {build_dir}/build/{test_mode} {flags}", cwd=os.getcwd())
 		else:
-			common.run(f"ctest --test-dir {build_dir}/build -C {test_mode} --output-on-failure", cwd=os.getcwd())
+			common.run(f"ctest --test-dir {build_dir}/build {flags}", cwd=os.getcwd())
 
 if __name__ == "__main__":
 	main()

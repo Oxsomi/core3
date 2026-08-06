@@ -6,7 +6,7 @@ jobs:
     uses: ./.github/workflows/_build.yml
     with:
       name: macOS x64 Vulkan dynamic
-      runner: macos-26
+      runner: macos-26-intel
       os: macos
       build_flags: '-dynamic_linking True -o cliGraphics=False'
       python_cmd: python
