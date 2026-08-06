@@ -65,8 +65,21 @@ Bool isSingleWindow();
 
 #define TEST_KEY      EKey_1
 #define TEST_KEY_NAME "1"
+#define TEST_KEY_CHAR '1'
 
 static volatile Bool keyPressed = false;
+
+//An on screen keyboard produces no key events: android routes IME input through the EditText's
+//TextWatcher, so it arrives as text rather than through onDeviceButton.
+//Accepting either path lets the one assertion cover a hardware keyboard and a soft one.
+
+static void onTypeKey(Window *w, CharString str) {
+
+	(void)w;
+
+	if(CharString_length(str) && str.ptr[0] == TEST_KEY_CHAR)
+		keyPressed = true;
+}
 
 static void onDeviceButton(Window *w, InputDevice *dev, InputHandle h, Bool down) {
 	(void)w;
@@ -85,6 +98,7 @@ static void Test_keyboard(Test *t) {
 
 	WindowCallbacks wcbs = (WindowCallbacks) { 0 };
 	wcbs.onDeviceButton = onDeviceButton;
+	wcbs.onTypeChar = onTypeKey;
 
 	CharString title = CharString_createRefCStrConst("F5b: Press " TEST_KEY_NAME " to pass");
 	I32x2 pos = I32x2_create2(200, 200);
@@ -148,6 +162,11 @@ static void Test_keyboard(Test *t) {
 		Test_print(t, "SendInput not available on this platform, skipping synthetic OS injection");
 	#endif
 
+	//Not forced: with a hardware keyboard attached this stays down and the operator uses that one,
+	//which is also what the device does when there's nothing to type on but the screen.
+
+	Platform_setKeyboardVisible(true);
+
 	Test_print(t, ">>> INTERACTIVE: Press " TEST_KEY_NAME " in the window (5s timeout) <<<");
 	Ns waited = 0;
 	while (!keyPressed && waited < 5 * SECOND) {
@@ -160,6 +179,8 @@ static void Test_keyboard(Test *t) {
 		Thread_sleep(16 * MS);
 		waited += 16 * MS;
 	}
+
+	Platform_setKeyboardVisible(false);
 
 	if (!keyPressed)
 		Test_print(t, "WARN: " TEST_KEY_NAME " not received within timeout");
@@ -428,6 +449,11 @@ static void Test_typeChar(Test *t) {
 	#endif
 
 	// -- Interactive -----------------------------------------------------------
+
+	//Without this there's nothing to type on where the on screen keyboard is the only keyboard.
+
+	Platform_setKeyboardVisible(true);
+
 	Test_print(t, ">>> INTERACTIVE: Click the window and type \"Hello world\" (8s timeout) <<<");
 
 	Ns waited = 0;
@@ -446,6 +472,8 @@ static void Test_typeChar(Test *t) {
 		if (CharString_containsStringSensitive(&typedText, &hello, 0, 0))
 			break;
 	}
+
+	Platform_setKeyboardVisible(false);
 
 	Bool gotHello = CharString_containsStringSensitive(&typedText, &hello, 0, 0);
 
@@ -572,6 +600,12 @@ static const EKey F15_keys[F15_KEY_COUNT] = {
 
 static volatile U32 f15_pressed;   // bitmask, bit i set when F15_keys[i] received
 
+//First character of each key's layout label, filled in once Keyboard_remap has resolved them below.
+//An on screen keyboard sends text rather than key events, so that label is the only thing the two
+//paths have in common; matching against it is also exactly what this test asserts.
+
+static C8 f15_labels[F15_KEY_COUNT];
+
 static void F15_onDeviceButton(Window *w, InputDevice *dev, InputHandle h, Bool down) {
 
 	(void)w;
@@ -584,14 +618,28 @@ static void F15_onDeviceButton(Window *w, InputDevice *dev, InputHandle h, Bool 
 			f15_pressed |= (1u << i);
 }
 
+static void F15_onTypeChar(Window *w, CharString str) {
+
+	(void)w;
+
+	for (U64 c = 0; c < CharString_length(str); ++c)
+		for (U32 i = 0; i < F15_KEY_COUNT; ++i)
+			if (f15_labels[i] && C8_toLower(str.ptr[c]) == C8_toLower(f15_labels[i]))
+				f15_pressed |= (1u << i);
+}
+
 static void Test_keyboardRemap(Test *t) {
 
 	Test_setModule(t, "F15/KeyboardRemap");
 
 	f15_pressed = 0;
 
+	for (U32 i = 0; i < F15_KEY_COUNT; ++i)
+		f15_labels[i] = 0;
+
 	WindowCallbacks cbs = (WindowCallbacks) { 0 };
 	cbs.onDeviceButton = F15_onDeviceButton;
+	cbs.onTypeChar = F15_onTypeChar;
 
 	WindowRef *wRef = createWindowCallback(
 		t, "F15: Keyboard remap",
@@ -635,6 +683,8 @@ static void Test_keyboardRemap(Test *t) {
 
 			if (ok && CharString_length(label) && k + CharString_length(label) + 2 < sizeof(prompt)) {
 
+				f15_labels[i] = label.ptr[0];
+
 				for (U64 j = 0; j < CharString_length(label); ++j)
 					prompt[k++] = label.ptr[j];
 
@@ -664,6 +714,11 @@ static void Test_keyboardRemap(Test *t) {
 	}
 
 	//Interactive only, see comment at top of function.
+	//Raised for the same reason F5 does it: where the screen is the only keyboard there's otherwise
+	//nothing to press. Stays down when a hardware keyboard is attached.
+
+	Platform_setKeyboardVisible(true);
+
 	Test_print(t, ">>> INTERACTIVE: Press each key shown above (10s timeout) <<<");
 
 	U32 allBits = (1u << F15_KEY_COUNT) - 1;
@@ -679,6 +734,8 @@ static void Test_keyboardRemap(Test *t) {
 		Thread_sleep(16 * MS);
 		waited += 16 * MS;
 	}
+
+	Platform_setKeyboardVisible(false);
 
 	Bool allPressed = (f15_pressed & allBits) == allBits;
 
