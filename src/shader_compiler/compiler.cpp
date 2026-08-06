@@ -52,32 +52,6 @@
 #include "dxcompiler/dxcreflect.h"
 #include <exception>
 #include "compiler_private.hpp"
-#include "compiler_helper_internal.h"
-
-//Declared rather than included: dxcompiler/Support/Global.h, which owns these, reaches for dxc/Support/exception.h,
-// and the package doesn't ship its headers under that root.
-//Signatures are copied verbatim from Global.h; exception specifications aren't mangled, so these link either way.
-
-void DxcSetThreadMallocToDefault() throw();
-void DxcClearThreadMalloc() throw();
-IMalloc *DxcGetThreadMallocNoRef() throw();
-
-//See compiler_helper_internal.h for why every thread that touches DXC needs its thread local allocator installed.
-
-extern "C" Bool Compiler_enterThread() {
-
-	if(DxcGetThreadMallocNoRef())        //An outer scope already owns one, leave it be
-		return false;
-
-	DxcSetThreadMallocToDefault();
-	return true;
-}
-
-extern "C" void Compiler_leaveThread(Bool owned) {
-
-	if(owned)
-		DxcClearThreadMalloc();
-}
 
 const C8 *resources =
 	#include "shader_compiler/shaders/resources.hlsli"

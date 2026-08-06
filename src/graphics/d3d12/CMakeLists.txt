@@ -50,7 +50,12 @@ else()
 	target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container)
 
 	target_link_libraries(OxC3_graphics_d3d12 PUBLIC OxC3_graphics)
-	target_link_libraries(OxC3_graphics_target INTERFACE OxC3_graphics_d3d12)
+
+	# See the matching note in ../vulkan/CMakeLists.txt: consumers link the generic layer, never the backend,
+	# so there's exactly one copy of it (and of Platform_instance) in the process.
+
+	target_link_libraries(OxC3_graphics_target INTERFACE OxC3_graphics)
+	add_dependencies(OxC3_graphics_target OxC3_graphics_d3d12)
 
 endif()
 
