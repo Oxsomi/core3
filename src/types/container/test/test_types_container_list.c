@@ -147,4 +147,165 @@ void Test_list(Test *t) {
 
 	ListU32_free(&list, alloc);
 	Test_assert(t, "free resets ptr and length", list.ptr == NULL && list.length == 0);
+
+	//Ref semantics: a ref points at someone else's memory, so it can't be resized or freed, and a const ref can't be written
+	//through either.
+	//That's the safety story the whole TList API leans on.
+
+	Test_setModule(t, "ListRefs");
+
+	{
+		U32 backing[4] = { 1, 2, 3, 4 };
+
+		ListU32 mutRef = (ListU32) { 0 };
+		Test_assert(t, "createRef", ListU32_createRef(backing, 4, &mutRef, e_rr));
+		Test_assert(t, "createRef isRef", ListU32_isRef(mutRef));
+		Test_assert(t, "createRef not const", !ListU32_isConstRef(mutRef));
+		Test_assert(t, "createRef aliases", mutRef.ptr == backing && mutRef.length == 4);
+
+		Test_assert(t, "set through mut ref", ListU32_set(mutRef, 0, 42, e_rr));
+		Test_assert(t, "set landed in backing", backing[0] == 42);
+
+		//Growing a ref would have to reallocate memory it doesn't own
+
+		Test_assert(t, "pushBack on ref rejected", !ListU32_pushBack(&mutRef, 5, alloc, NULL));
+		Test_assert(t, "resize on ref rejected", !ListU32_resize(&mutRef, 8, alloc, NULL));
+
+		ListU32 constRef = (ListU32) { 0 };
+		Test_assert(t, "createRefConst", ListU32_createRefConst(backing, 4, &constRef, e_rr));
+		Test_assert(t, "createRefConst isConstRef", ListU32_isConstRef(constRef));
+		Test_assert(t, "set through const ref rejected", !ListU32_set(constRef, 0, 1, NULL));
+
+		//Freeing a ref is a no-op that must leave the backing store alone
+
+		ListU32_free(&mutRef, alloc);
+		ListU32_free(&constRef, alloc);
+		Test_assert(t, "backing survives ref free", backing[0] == 42 && backing[3] == 4);
+	}
+
+	//empty/any, and get/set bounds
+
+	Test_setModule(t, "ListAccess");
+
+	{
+		ListU32 l = (ListU32) { 0 };
+		Test_assert(t, "empty on null list", ListU32_empty(l) && !ListU32_any(l));
+
+		Test_assert(t, "create", ListU32_create(3, alloc, &l, e_rr));
+		Test_assert(t, "any after create", ListU32_any(l) && !ListU32_empty(l));
+		Test_assert(t, "create zeroes", l.ptr[0] == 0 && l.ptr[1] == 0 && l.ptr[2] == 0);
+
+		Test_assert(t, "set", ListU32_set(l, 1, 55, e_rr));
+
+		U32 got = 0;
+		Test_assert(t, "get", ListU32_get(l, 1, &got, e_rr) && got == 55);
+
+		Test_assert(t, "get out of bounds", !ListU32_get(l, 3, &got, NULL));
+		Test_assert(t, "set out of bounds", !ListU32_set(l, 3, 1, NULL));
+
+		ListU32_free(&l, alloc);
+	}
+
+	//Copies: createCopy is a deep copy, copy() moves a range between existing lists
+
+	Test_setModule(t, "ListCopy");
+
+	{
+		ListU32 src = (ListU32) { 0 };
+
+		for(U32 i = 0; i < 5; ++i)
+			ListU32_pushBack(&src, i, alloc, e_rr);
+
+		ListU32 deep = (ListU32) { 0 };
+		Test_assert(t, "createCopy", ListU32_createCopy(src, alloc, &deep, e_rr));
+		Test_assert(t, "createCopy equal", ListU32_eq(src, deep));
+		Test_assert(t, "createCopy owns its own memory", deep.ptr != src.ptr && !ListU32_isRef(deep));
+
+		src.ptrNonConst[0] = 99;
+		Test_assert(t, "copy is independent", deep.ptr[0] == 0);
+
+		ListU32 sub = (ListU32) { 0 };
+		Test_assert(t, "createCopySubset", ListU32_createCopySubset(src, 1, 3, alloc, &sub, e_rr));
+		Test_assert(t, "createCopySubset content", sub.length == 3 && sub.ptr && sub.ptr[0] == 1 && sub.ptr[2] == 3);
+
+		ListU32 rev = (ListU32) { 0 };
+		Test_assert(t, "createReverse", ListU32_createReverse(sub, alloc, &rev, e_rr));
+		Test_assert(t, "createReverse content", rev.length == 3 && rev.ptr && rev.ptr[0] == 3 && rev.ptr[2] == 1);
+
+		//copy() writes into an existing list rather than allocating
+
+		Test_assert(t, "copy range", ListU32_copy(sub, 0, deep, 0, 3, e_rr));
+		Test_assert(t, "copy landed", deep.ptr[0] == 1 && deep.ptr[2] == 3 && deep.ptr[3] == 3);
+		Test_assert(t, "copy past end rejected", !ListU32_copy(sub, 0, deep, 4, 3, NULL));
+
+		ListU32_free(&src, alloc);
+		ListU32_free(&deep, alloc);
+		ListU32_free(&sub, alloc);
+		ListU32_free(&rev, alloc);
+	}
+
+	//Bulk insert, targeted erase and shrink
+
+	Test_setModule(t, "ListBulk");
+
+	{
+		ListU32 l = (ListU32) { 0 }, other = (ListU32) { 0 };
+
+		for(U32 i = 0; i < 3; ++i)
+			ListU32_pushBack(&l, i, alloc, e_rr);            //0 1 2
+
+		for(U32 i = 10; i < 13; ++i)
+			ListU32_pushBack(&other, i, alloc, e_rr);        //10 11 12
+
+		Test_assert(t, "pushAll", ListU32_pushAll(&l, other, alloc, e_rr));
+		Test_assert(t, "pushAll appended", l.length == 6 && l.ptr[3] == 10 && l.ptr[5] == 12);
+
+		Test_assert(t, "insertAll", ListU32_insertAll(&l, other, 1, alloc, e_rr));
+		Test_assert(t, "insertAll spliced", l.length == 9 && l.ptr[1] == 10 && l.ptr[3] == 12 && l.ptr[4] == 1);
+
+		//eraseFirst/eraseLast remove one occurrence from the given side; NULL means raw compare
+
+		Test_assert(t, "eraseFirst", ListU32_eraseFirst(&l, 10, 0, NULL, e_rr));
+		Test_assert(t, "eraseFirst removed the first", l.length == 8 && l.ptr[1] == 11);
+
+		Test_assert(t, "eraseLast", ListU32_eraseLast(&l, 12, 0, NULL, e_rr));
+		Test_assert(t, "eraseLast removed the last", l.length == 7);
+
+		//find returns every index of a value; the list holds 11 twice by this point
+
+		ListU64 found = (ListU64) { 0 };
+		Test_assert(t, "find", ListU32_find(l, 11, NULL, alloc, &found, e_rr));
+		Test_assert(t, "find count", found.length == 2);
+
+		Test_assert(t, "eraseAllIndices", ListU32_eraseAllIndices(&l, &found, e_rr));
+
+		//find rejects a non-empty result (it would leak), so the previous one has to go first
+
+		ListU64_free(&found, alloc);
+		Test_assert(t, "eraseAllIndices removed both", ListU32_find(l, 11, NULL, alloc, &found, e_rr) && !found.length);
+		ListU64_free(&found, alloc);
+
+		//popLocation hands the removed element back
+
+		const U64 before = l.length;
+		U32 tail = 0;
+		Test_assert(t, "popLocation", ListU32_popLocation(&l, 0, &tail, e_rr));
+		Test_assert(t, "popLocation shrank", l.length == before - 1);
+		Test_assert(t, "popLocation out of bounds", !ListU32_popLocation(&l, l.length, &tail, NULL));
+
+		//shrinkToFit drops spare capacity without changing contents
+
+		ListU32_reserve(&l, 128, alloc, e_rr);
+		ListU32 snapshot = (ListU32) { 0 };
+		ListU32_createCopy(l, alloc, &snapshot, e_rr);
+
+		Test_assert(t, "shrinkToFit", ListU32_shrinkToFit(&l, alloc, e_rr));
+		Test_assert(t, "shrinkToFit keeps contents", ListU32_eq(l, snapshot));
+
+		ListU32_free(&l, alloc);
+		ListU32_free(&other, alloc);
+		ListU32_free(&snapshot, alloc);
+	}
+
+	Test_setModule(t, NULL);
 }

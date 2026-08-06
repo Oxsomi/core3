@@ -38,6 +38,11 @@ Platform_defineEntrypoint() {
 	if(!s_uccess)        //Can't print
 		Platform_return(-2);
 
+	#ifdef CLI_SHADER_COMPILER
+		//No-op unless the shader compiler is a shared module, which has its own Platform_instance
+		Compiler_setPlatform(Platform_instance);
+	#endif
+
 	ListCharString args = Platform_instance->args;
 
 	#ifdef PACKAGE_SIMPLE

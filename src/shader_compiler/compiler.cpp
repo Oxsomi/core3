@@ -116,6 +116,71 @@ const C8 *extensionCoopMatHlsl =
 	#include "shader_compiler/shaders/extension.CoopMat.hlsli"
 	;
 
+static const CompilerBuiltInInclude CompilerBuiltInIncludes[] = {
+
+	{ "resources.hlsli",                    resources                    },
+	{ "types.hlsli",                        types                        },
+	{ "extensions.hlsli",                   extensionsHlsli              },
+
+	//Split out of types.hlsli / resources.hlsli
+
+	{ "mat.hlsli",                          matHlsli                     },
+	{ "indirect.hlsli",                     indirectHlsli                },
+	{ "fixed_point.hlsli",                  fixedPointHlsli              },
+	{ "buffer.hlsli",                       bufferHlsli                  },
+	{ "appdata.hlsli",                      appDataHlsli                 },
+
+	//Opt in per extension, so a shader only pays for what it asks for
+
+	{ "extension.RayReorder.hlsli",         extensionRayReorderHlsl      },
+	{ "extension.RayTriPosition.hlsli",     extensionRayTriPositionHlsl  },
+	{ "extension.RayMicromapOpacity.hlsli", extensionRayMicromapOpacityHlsl },
+	{ "extension.AtomicF32.hlsli",          extensionAtomicF32Hlsl       },
+	{ "extension.AtomicF64.hlsli",          extensionAtomicF64Hlsl       },
+	{ "extension.CoopVec.hlsli",            extensionCoopVecHlsl         },
+	{ "extension.CoopMat.hlsli",            extensionCoopMatHlsl         }
+};
+
+extern "C" {
+
+	#ifdef SHADER_COMPILER_DYNAMIC
+
+		//See compiler.h: a shared build has its own Platform_instance, NULL until the host hands its own across.
+		//Mirrors what GraphicsInterface_getTable does for a graphics backend.
+
+		void Compiler_setPlatform(Platform *instance) {
+			Platform_instance = instance;
+		}
+
+	#endif
+
+	U64 Compiler_builtInIncludeCount() {
+		return sizeof(CompilerBuiltInIncludes) / sizeof(CompilerBuiltInIncludes[0]);
+	}
+
+	const CompilerBuiltInInclude *Compiler_builtInIncludeAt(U64 i) {
+		return i < Compiler_builtInIncludeCount() ? &CompilerBuiltInIncludes[i] : NULL;
+	}
+
+	const CompilerBuiltInInclude *Compiler_findBuiltInInclude(CharString name) {
+
+		//The @ is how a shader spells "built-in", but it isn't part of the name
+
+		if(CharString_getAt(name, 0) == '@')
+			name = CharString_createRefSizedConst(name.ptr + 1, CharString_length(name) - 1, false);
+
+		for(U64 i = 0; i < Compiler_builtInIncludeCount(); ++i) {
+
+			const CharString entry = CharString_createRefCStrConst(CompilerBuiltInIncludes[i].name);
+
+			if(CharString_equalsStringInsensitive(&name, &entry))
+				return &CompilerBuiltInIncludes[i];
+		}
+
+		return NULL;
+	}
+}
+
 //This file is only because DXC doesn't have a C interface.
 //So we need to wrap C++ in C, so we can call it from C.
 
@@ -369,52 +434,12 @@ public:
 
 				CharString tmpTmp = CharString_createNull();
 
-				if(CharString_equalsCStringInsensitive(&resolved, "@resources.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(resources);
+				const CompilerBuiltInInclude *builtIn = Compiler_findBuiltInInclude(resolved);
 
-				else if(CharString_equalsCStringInsensitive(&resolved, "@types.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(types);
+				if(!builtIn)
+					retError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"));
 
-				else if(CharString_equalsCStringInsensitive(&resolved, "@extensions.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(extensionsHlsli);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@mat.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(matHlsli);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@indirect.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(indirectHlsli);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@fixed_point.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(fixedPointHlsli);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@buffer.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(bufferHlsli);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@appdata.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(appDataHlsli);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.RayReorder.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(extensionRayReorderHlsl);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.RayTriPosition.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(extensionRayTriPositionHlsl);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.RayMicromapOpacity.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(extensionRayMicromapOpacityHlsl);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.AtomicF32.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(extensionAtomicF32Hlsl);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.AtomicF64.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(extensionAtomicF64Hlsl);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.CoopVec.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(extensionCoopVecHlsl);
-
-				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.CoopMat.hlsli"))
-					tmpTmp = CharString_createRefCStrConst(extensionCoopMatHlsl);
-
-				else retError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"));
+				tmpTmp = CharString_createRefCStrConst(builtIn->source);
 
 				if(tmpTmp.ptr)
 					gotoIfError3(clean, CharString_createCopy(tmpTmp, alloc, &tempFile, e_rr));

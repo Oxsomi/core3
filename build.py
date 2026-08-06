@@ -33,6 +33,17 @@ def main():
 	parser.add_argument("-simd",            type=str, default="True",  choices=["True", "False"], help="Enable SIMD")
 	parser.add_argument("-tests",           type=str, default="False", choices=["True", "False"], help="Enable tests")
 	parser.add_argument("-dynamic_linking", type=str, default="False", choices=["True", "False"], help="Dynamic linking graphics")
+	parser.add_argument(
+		"-dynamic_linking_shader_compiler", type=str, default="True", choices=["True", "False"],
+		help="Build the shader compiler as a shared library, so DXC lives in one module instead of "
+		     "in every executable that links it. On by default; independent of -dynamic_linking"
+	)
+
+	parser.add_argument(
+		"-debug_shader_compiler", type=str, default="False", choices=["True", "False"],
+		help="Build and consume DXC/SPIRV-Reflect in the current mode instead of Release. Off by default: "
+		     "they dominate build time and are rarely the thing being debugged"
+	)
 
 	parser.add_argument("--force_deps", action="store_true", help="Ignore hash cache and rebuild all dependencies")
 
@@ -63,7 +74,9 @@ def main():
 		os.remove(common.HASH_CACHE_FILE)
 
 	cache = common.loadHashCache()
-	common.buildHostDependencies(dep_modes, cache)
+	debugShaderCompiler = args.debug_shader_compiler == "True"
+
+	common.buildHostDependencies(dep_modes, cache, debugShaderCompiler)
 	common.saveHashCache(cache)
 
 	# Build project, use the mode that was requested, or Release as the
@@ -82,6 +95,9 @@ def main():
 			f"-o enableSIMD={args.simd} "
 			f"-o enableTests={args.tests} "
 			f"-o dynamicLinkingGraphics={args.dynamic_linking} "
+			f"-o dynamicLinkingShaderCompiler={args.dynamic_linking_shader_compiler} "
+			f"-o debugShaderCompiler={args.debug_shader_compiler} "
+			f"{common.shaderCompilerDepArgs(debugShaderCompiler)} "
 			f"{extra}"
 		)
 

@@ -199,7 +199,7 @@ Bool GenericList_createSubsetReverse(
 	Bool s_uccess = true;
 	Bool alloc = false;
 
-	if(result || !length)
+	if(!result || !length)
 		retError(clean, Error_nullPointer(
 			!length ? 2 : 4, "GenericList_createSubsetReverse()::result and length are required"
 		));

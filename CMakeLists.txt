@@ -43,9 +43,33 @@ set(EnableSIMD ON CACHE BOOL "Enables SIMD")
 set(CLIGraphics ON CACHE BOOL "Turn off/on OxC3 graphics CLI (might be unsupported on device)")
 set(EnableShaderCompiler OFF CACHE BOOL "Turn off/on shader compiler + OxC3 compile shaders CLI (increases compile time)")
 
+# DXC and SPIRV-Reflect are the bulk of a from-scratch build and are almost never what's being debugged, so build.py keeps them
+# in Release even for a Debug build.
+# Turn this on (-debug_shader_compiler True) to build and consume them in the current mode, at the cost of a much slower first
+# build.
+# Off keeps CI fast; it's the reason a Debug build doesn't pay for a Debug DXC.
+
+set(DebugShaderCompiler OFF CACHE BOOL "Build/consume the shader compiler's dependencies in the current mode rather than Release")
+
 set(EnableTests ON CACHE BOOL "Turn off/on OxC3 tests")
 set(EnableOxC3CLI OFF CACHE BOOL "Turn on/off OxC3 CLI")
 set(DynamicLinkingGraphics OFF CACHE BOOL "Turn on/off OxC3 graphics dynamic linking")
+
+# Independent of DynamicLinkingGraphics on purpose: they solve different problems.
+# Graphics dynamic linking exists so Vulkan and D3D12 can sit side by side and be picked at runtime:
+# Each backend is its own module exporting one factory (GraphicsInterface_getTable).
+# This one is about size and deployment: OxC3_shader_compiler statically links DXC and SPIRV-Tools,
+# so every executable that touches it grows by ~28 MB.
+# As a shared library that bulk exists once and can be shipped, or left out, separately.
+# There's no runtime selection, so it's an ordinary link-time shared library rather than a loaded interface table.
+# (Though could also support different shader compilers in the future)
+# Wanting dynamic graphics with a static shader compiler (or no shader compiler at all) is normal.
+#
+# On by default on desktop: it's smaller, it builds faster (DXC gets linked once instead of once per executable)
+# and it keeps the compiler behind a module boundary, so a different backend (Slang, clang)
+# could be dropped in without relinking consumers, as long as it keeps the ABI.
+
+set(DynamicLinkingShaderCompiler ON CACHE BOOL "Turn on/off OxC3 shader compiler dynamic linking")
 
 # Set general compile options
 
@@ -63,11 +87,23 @@ if(ANDROID AND DynamicLinkingGraphics)
 	message(FATAL_ERROR "-- FATAL configuration (dynamic linking graphics) not compatible with Android")
 endif()
 
+# Coerced rather than fatal, because this defaults to ON: a platform that can't do it, or a build with
+# no shader compiler to share, shouldn't fail on a value nobody asked for.
+
+if(DynamicLinkingShaderCompiler AND ANDROID)
+	message("-- Shader compiler dynamic linking off: not supported on Android")
+	set(DynamicLinkingShaderCompiler OFF)
+endif()
+
+if(DynamicLinkingShaderCompiler AND NOT EnableShaderCompiler)
+	set(DynamicLinkingShaderCompiler OFF)
+endif()
+
 # Dynamic linking folds the static OxC3 libs into shared objects (libOxC3_graphics_vk.so).
 # On ELF (Linux) every object linked into a .so must be PIC, or ld fails with
 # "relocation R_X86_64_PC32 / R_AARCH64_ADR_PREL_PG_HI21 ... recompile with -fPIC".
 # No-op on MSVC, effectively no-op on Apple. Off for static builds to keep non-PIC codegen.
-if(DynamicLinkingGraphics)
+if(DynamicLinkingGraphics OR DynamicLinkingShaderCompiler)
 	set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
@@ -181,6 +217,14 @@ else()
 	message("-- Disabling OxC3 unit tests (-DEnableTests=Off)")
 endif()
 
+if(EnableShaderCompiler)
+	if(DebugShaderCompiler)
+		message("-- Shader compiler dependencies follow the build mode (-DDebugShaderCompiler=On)")
+	else()
+		message("-- Shader compiler dependencies pinned to Release (-DDebugShaderCompiler=Off)")
+	endif()
+endif()
+
 # Can a test suite be its own executable that ctest runs?
 #
 # Not everywhere:
@@ -201,7 +245,15 @@ else()
 endif()
 
 if(EnableShaderCompiler)
+
 	message("-- Enabling OxC3 compile shaders (-DEnableShaderCompiler=On)")
+
+	if(DynamicLinkingShaderCompiler)
+		message("-- Enabling OxC3 shader compiler dynamic linking (-DDynamicLinkingShaderCompiler=On)")
+	else()
+		message("-- Disabling OxC3 shader compiler dynamic linking (-DDynamicLinkingShaderCompiler=Off)")
+	endif()
+
 else()
 	message("-- Disabling OxC3 compile shaders (-DEnableShaderCompiler=Off)")
 endif()

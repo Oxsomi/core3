@@ -435,7 +435,37 @@ def conanCreateIfChanged(packagePath, profile, mode, profileArgs, cache, key=Non
 
 	cache[key] = currentHash
 
-def buildHostDependencies(modes, cache):
+# DXC and SPIRV-Reflect dominate a from-scratch build and are almost never the thing being debugged,
+# so they're pinned to Release unless -debug_shader_compiler asks otherwise.
+# Both the package build and the consuming build have to agree, hence shaderCompilerDepArgs() below.
+
+SHADER_COMPILER_DEPS = ( "packages/dxc", "packages/spirv_reflect" )
+
+def shaderCompilerDepMode(mode, debugShaderCompiler):
+	return mode if debugShaderCompiler else "Release"
+
+def shaderCompilerDepArgs(debugShaderCompiler):
+	"""Per-package settings so a Debug consumer still resolves the Release dxc/spirv_reflect packages."""
+
+	if debugShaderCompiler:
+		return ""
+
+	args = []
+
+	for package in ("dxc", "spirv_reflect"):
+
+		args.append(f"-s {package}/*:build_type=Release")
+
+		# build_type alone doesn't move compiler.runtime_type, so the package_id still wouldn't match the Release build.
+		# Pinning it is safe rather than an ABI mismatch because CMakeLists.txt sets CMAKE_MSVC_RUNTIME_LIBRARY to the static
+		# release CRT for every config anyway.
+
+		if hostSystem() == "Windows":
+			args.append(f"-s {package}/*:compiler.runtime_type=Release")
+
+	return " ".join(args)
+
+def buildHostDependencies(modes, cache, debugShaderCompiler=False):
 	"""Create everything oxc3 needs for a *host* build (which includes the OxC3_package tool build)."""
 
 	system = hostSystem()
@@ -451,8 +481,14 @@ def buildHostDependencies(modes, cache):
 		conanCreateIfChanged("packages/agility_sdk",        profile, mode, profileArgs, cache)
 		conanCreateIfChanged("packages/nvapi",              profile, mode, profileArgs, cache)
 		conanCreateIfChanged("packages/vulkan_headers",     profile, mode, profileArgs, cache)
-		conanCreateIfChanged("packages/spirv_reflect",      profile, mode, profileArgs, cache)
-		conanCreateIfChanged("packages/dxc",                profile, mode, profileArgs, cache)
+		# These two follow shaderCompilerDepMode rather than the requested mode
+
+		shaderMode = shaderCompilerDepMode(mode, debugShaderCompiler)
+		shaderProfile = hostProfileForMode(shaderMode)
+		shaderArgs = hostProfileArgs(shaderMode)
+
+		for package in SHADER_COMPILER_DEPS:
+			conanCreateIfChanged(package, shaderProfile, shaderMode, shaderArgs, cache)
 		conanCreateIfChanged("packages/openal_soft",        profile, mode, profileArgs, cache)
 
 		if system == "Linux":
@@ -484,6 +520,22 @@ def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False):
 	reference   = f"{recipeName()}/{recipeVersion()}"
 
 	print(f"-- Building {reference} for the host ({hostPlatformName()}/{hostArch()[0]}, {mode}) to package virtual files")
+
+	# export-pkg packages whatever is sitting in bin/, and CMakeLists pins the output directory to a source-relative path,
+	# so every configuration shares it regardless of the build folder.
+	# A normal build.py run leaves OxC3_shader_compiler.dll there; the host tool is static (HOST_TOOL_OPTIONS) and would ship a
+	#~29 MB DLL it never built, and that nothing loads.
+	# Clear it first so what gets exported is a function of the options rather than of whatever was built here last.
+
+	binDir = os.path.join(ROOT, "build", mode, hostPlatformName(), hostArch()[0], "bin")
+
+	for name in ("OxC3_shader_compiler.dll", "libOxC3_shader_compiler.so", "libOxC3_shader_compiler.dylib"):
+
+		stale = os.path.join(binDir, name)
+
+		if os.path.isfile(stale):
+			print(f"-- Removing stale {name} before packaging the static host tool")
+			os.remove(stale)
 
 	run(f"conan build . {profileArgs} -s build_type={mode} {options} --build=missing", cwd=ROOT)
 	run(f"conan export-pkg . {profileArgs} -s build_type={mode} {options}", cwd=ROOT)

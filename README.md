@@ -62,6 +62,19 @@ python build.py -mode Release -tests True
   - `enableOxC3CLI`: build the OxC3 CLI. On by default.
   - `forceFloatFallback`: software half↔float casts. Off by default.
   - `enableShaderCompiler`: include the shader compiler (longer build). On by default.
+  - `dynamicLinkingShaderCompiler`: build the shader compiler as a shared library. **On by default** on
+    Windows/Linux/OS X; coerced off on Android and when `enableShaderCompiler` is off. Independent of
+    `dynamicLinkingGraphics`, which exists for a different reason (runtime Vulkan/D3D12 selection).
+    DXC is statically linked, so every executable touching the shader compiler otherwise carries ~28 MB
+    of it; shared, that bulk exists once and links once, so builds are faster too, and it can be
+    shipped or omitted separately.
+    It also puts the compiler behind a module boundary, so a different backend could be swapped in
+    without relinking consumers as long as it keeps the ABI.
+    Callers must call `Compiler_setPlatform(Platform_instance)` once after `Platform_create` (an inline
+    no-op in static builds), since the module has its own `Platform_instance`.
+  - `debugShaderCompiler`: build/consume DXC and SPIRV-Reflect in the current mode instead of Release.
+    Off by default, so a Debug build doesn't pay for a Debug DXC; those two dominate a from-scratch
+    build and are rarely what you're stepping into. Also available as `-debug_shader_compiler True`.
   - `cliGraphics`: allow CLI operations that need OxC3_graphics; turn off for headless or to avoid shipping graphics dlls.
 
 ### Android

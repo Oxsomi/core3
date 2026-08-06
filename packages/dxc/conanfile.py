@@ -3,13 +3,14 @@ from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 from conan.tools.scm import Git
 from conan.tools.files import collect_libs, copy, rename
 import os
+import subprocess
 
 required_conan_version = ">=2.0"
 
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2026.08.01"
+	version = "2026.08.06"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -29,6 +30,33 @@ class dxc(ConanFile):
 	def configure(self):
 		self.settings.rm_safe("compiler.cppstd")
 		self.settings.rm_safe("compiler.libcxx")
+
+	# (major, minor) of the C++ compiler cmake will actually invoke, or None if it can't be probed.
+	# settings.compiler.version isn't usable for this; it comes from the conan profile and is
+	# regularly stale (the profile that produced the miscompiled dxc packages said gcc 11 while
+	# the cc it ran was 14.2), so a version check against it would test the wrong compiler.
+
+	def _real_compiler_version(self):
+
+		executables = self.conf.get("tools.build:compiler_executables", default={}, check_type=dict)
+		cxx = executables.get("cpp") or executables.get("cxx") or os.environ.get("CXX") or "c++"
+
+		try:
+			probe = subprocess.run(
+				[cxx, "-dumpfullversion", "-dumpversion"], capture_output=True, text=True, timeout=10
+			)
+		except Exception:
+			return None
+
+		if probe.returncode:
+			return None
+
+		version = probe.stdout.strip().split(".")
+
+		try:
+			return (int(version[0]), int(version[1]) if len(version) > 1 else 0)
+		except ValueError:
+			return None
 
 	def generate(self):
 
@@ -79,6 +107,21 @@ class dxc(ConanFile):
 		tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
 
 		tc.variables["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreaded"
+
+		# GCC 14.1 and 14.2 miscompile the component type remap in CGMSHLSLRuntime::SetUAVSRV at
+		# -O2/-O3; they emit the bt/cmov select with inverted polarity, so every typed SRV/UAV ends
+		# up with ComponentType U32. Texture2D<float4> becomes Texture2D<4xU32>, which makes every
+		# sample_* fail DXIL validation below SM 6.7 ("sample_* instructions require resource to be
+		# declared to return UNORM, SNORM or FLOAT") and makes reflection report uint for float
+		# textures. -fno-if-conversion (or -fno-tree-vrp) stops GCC forming that select.
+		# Fixed in GCC 14.3; 12.x, 13.x and 15+ are unaffected, as are -O0/-O1/-Os and clang
+		# (which is why Microsoft's own clang-built DXC binaries are fine).
+		# This is not the GCC 13 -funswitch-loops miscompile (PR109934 / DXC #7364); that one is
+		# already handled inside DXC's own HandleLLVMOptions.cmake, and its guard stops at < 14.0.
+
+		if self.settings.compiler == "gcc" and self._real_compiler_version() in [ (14, 1), (14, 2) ]:
+			tc.extra_cflags.append("-fno-if-conversion")
+			tc.extra_cxxflags.append("-fno-if-conversion")
 
 		tc.generate()
 

@@ -56,6 +56,30 @@ Two further limits worth knowing before extending the spec:
     destructor frees a `self` the static factories never filled. AllocationBuffer was dropped from
     the spec for exactly this. Any type whose creation goes through a config struct needs a human.
 
+WHY THE SPEC IS SHORT
+---------------------
+Not because the classifier rejects things. Running classify() over every header in include/ and taking
+the dominant type prefix in each, the skip count is zero almost everywhere - GenericList (69 accepted),
+F32x2 (69), CLI (68), CharString (64 in one header alone), CommandListRef (44) all pass cleanly. The
+tool would happily emit a wrapper for any of them.
+
+It emits a *compiling* wrapper for far fewer, and a *good* one for fewer still. Accepting a declaration
+only means the signature is shaped right; it says nothing about whether the resulting class models the
+type. The three filters above (handles, arithmetic types, config-struct creation) are what actually
+decide, and none of them are visible to the classifier:
+
+  * CommandListRef and friends classify as 100% static members, because `RefPtr` isn't the spec type,
+    so every function looks like a free function. It compiles and it is useless.
+  * BigInt creates through BigIntCreate, the config-struct idiom - the same trap AllocationBuffer fell
+    into, and the reason it isn't in the spec despite 32 clean declarations.
+  * F32x2/I32x2 would generate methods without operators, which is the opposite of what vec4f.hpp does
+    for their 4-wide siblings. Generating them would make the math layer inconsistent, not larger.
+
+So the short spec is a judgement about which types are *worth* generating, not a capability limit.
+Growing it means picking off leaf types by hand and checking the output, which is what was done for
+EFloatType and Error. The lever that would actually widen coverage is oxc::RefPtr<T>, since handles are
+the single biggest slice of real consumer code.
+
 So this is a labour saver for the leaf/POD corner of the API, not a route to a C++ binding for OxC3.
 Anything reference counted, arithmetic, or platform-touching is hand-written on purpose.
 
