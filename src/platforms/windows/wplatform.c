@@ -196,8 +196,13 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 		out->numaNodes = 1;
 }
 
-Bool Platform_setKeyboardVisible(Bool isVisible) {
+//No on screen keyboard here, so there's nothing a hardware one would have to be weighed against.
+
+Bool Platform_hasPhysicalKeyboard() { return true; }
+
+Bool Platform_setKeyboardVisibleForced(Bool isVisible, Bool force) {
 	(void) isVisible;
+	(void) force;
 	return true;
 }
 

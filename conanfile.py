@@ -189,7 +189,7 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2026.08.06.03")
+			self.requires("dxc/2026.08.07")
 			self.requires("spirv_reflect/2026.08.06")
 
 		if self.settings.os == "Linux":
@@ -247,6 +247,15 @@ class oxc3(ConanFile):
 
 		cmake_root = self._cmakeRoot()
 		out_root   = os.path.join(cmake_root, "build", str(self.settings.build_type), platform)
+
+		# CMakeLists gives a non default toolchain its own output directory so two compilers can't
+		# inherit each other's archives; see the note there. Same rule, or package() collects nothing.
+
+		if platform == "windows" and str(self.settings.compiler) != "msvc":
+			archName += "_clang"
+
+		elif platform == "linux" and str(self.settings.compiler) != "gcc":
+			archName += "_clang"
 
 		input_dir        = os.path.join(out_root, archName)
 		OxC3_package_dir = os.path.join(out_root, "packages")

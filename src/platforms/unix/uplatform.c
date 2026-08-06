@@ -50,8 +50,13 @@ void Platform_cleanupExt() {
 
 	void *Platform_getDataImpl(void *ptr) { (void) ptr; return NULL; }
 	
-	Bool Platform_setKeyboardVisible(Bool isVisible) {
+	//No on screen keyboard here, so there's nothing a hardware one would have to be weighed against.
+
+	Bool Platform_hasPhysicalKeyboard() { return true; }
+
+	Bool Platform_setKeyboardVisibleForced(Bool isVisible, Bool force) {
 		(void) isVisible;
+		(void) force;
 		return true;
 	}
 

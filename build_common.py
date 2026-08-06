@@ -569,7 +569,15 @@ def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False, compiler=None):
 	#~29 MB DLL it never built, and that nothing loads.
 	# Clear it first so what gets exported is a function of the options rather than of whatever was built here last.
 
-	binDir = os.path.join(ROOT, "build", mode, hostPlatformName(), hostArch()[0], "bin")
+	# Matches the suffix CMakeLists puts on the output directory for a non default toolchain; without it
+	# this would clean the default compiler's bin/ and leave the real stale DLL in place.
+
+	archName = hostArch()[0]
+
+	if (compiler or defaultCompiler()) != defaultCompiler():
+		archName += f"_{compiler}"
+
+	binDir = os.path.join(ROOT, "build", mode, hostPlatformName(), archName, "bin")
 
 	for name in ("OxC3_shader_compiler.dll", "libOxC3_shader_compiler.so", "libOxC3_shader_compiler.dylib"):
 

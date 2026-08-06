@@ -1,0 +1,19 @@
+name: Linux ARM64 Vulkan dynamic (clang)
+on: [push]
+
+# Dynamic linking on arm64 under clang, so the NEON paths get built into dlopen'd modules too.
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Linux ARM64 Vulkan dynamic (clang)
+      runner: ubuntu-24.04-arm
+      os: linux
+      build_flags: '-compiler clang -dynamic_linking True -o cliGraphics=False'
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      hook_name: Linux-arm64-dynamic-clang
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

@@ -23,6 +23,7 @@
 package net.osomi.nativeactivity;
 
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.app.NativeActivity;
@@ -109,6 +110,21 @@ public class OxC3Activity extends NativeActivity {
 
 	public int getDeviceOrientation() {
 		return getWindowManager().getDefaultDisplay().getRotation() * 90;
+	}
+
+	//Whether there's a hardware keyboard the user can actually type on right now.
+	//Configuration rather than walking InputDevice.getDeviceIds() on purpose: android has a "Show on-screen
+	//keyboard" setting for people who want both, and it reports the hard keyboard as hidden while that's on.
+	//Enumerating devices ignores that preference and would take the IME away from them.
+	//It also avoids having to filter the soft keyboard itself back out, which enumerating does not.
+
+	public boolean hasPhysicalKeyboard() {
+
+		Configuration config = getResources().getConfiguration();
+
+		return
+			config.keyboard != Configuration.KEYBOARD_NOKEYS &&
+			config.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO;
 	}
 
 	//The NDK only has ANativeWindow_setFrameRate (a setter), so the monitor's refresh rate needs this

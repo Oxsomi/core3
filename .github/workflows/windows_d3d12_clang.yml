@@ -1,0 +1,20 @@
+name: Windows x64 D3D12 static (clang-cl)
+on: [push]
+
+# The d3d12 backend is the half the clang-cl vulkan job never compiles: it's the larger of the two
+# and the one with the COM and HLSL heavy code, so clang's warning set has more to say about it.
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Windows x64 D3D12 static (clang-cl)
+      runner: windows-2022
+      os: windows
+      build_flags: '-compiler clang -o cliGraphics=False'
+      python_cmd: python
+      setup_python: false
+      python_version: ''
+      hook_name: Windows-x64-d3d12-static-clang
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

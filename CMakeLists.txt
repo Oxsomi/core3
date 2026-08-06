@@ -463,18 +463,41 @@ else()
 	set(platform linux)
 endif()
 
+# These directories are shared by every build folder, so a second toolchain writing into them is what
+# makes builds pick up each other's artifacts: MSBuild's up to date check compares against the output
+# file, sees the other compiler's newer one, skips the target and links the foreign archive.
+# That's fatal rather than merely wrong, since MSVC Release compiles with /GL and only its own linker
+# reads those objects; lld-link rejects them with "is not a native COFF file".
+# So each non default toolchain gets its own directory, matching the separate build trees build.py
+# already hands them.
+# Default toolchains keep the bare path so existing trees stay valid, and android is left alone entirely
+# because build_android.py packages the apk straight out of it.
+#
+# conanfile.py's package() and build_common.py's buildHostToolPackage rebuild this same path; keep the
+# three in step.
+
+set(archDir "${target}")
+
+if(NOT ANDROID)
+	if(WIN32 AND CMAKE_C_COMPILER_ID MATCHES "Clang")
+		set(archDir "${target}_clang")
+	elseif(UNIX AND NOT APPLE AND NOT CMAKE_C_COMPILER_ID STREQUAL "GNU")
+		set(archDir "${target}_clang")
+	endif()
+endif()
+
 # Single-config generators (Makefile, Ninja)
 
 if(NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${target}/lib")
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${target}/bin")
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${target}/bin")
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${archDir}/lib")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${archDir}/bin")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${archDir}/bin")
 else()                                            # Multi-config generators (Visual Studio, Xcode)
     foreach(config ${CMAKE_CONFIGURATION_TYPES})
         string(TOUPPER ${config} CONFIG)
-        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${target}/lib")
-        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${target}/bin")
-        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${target}/bin")
+        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${archDir}/lib")
+        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${archDir}/bin")
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${archDir}/bin")
     endforeach()
 endif()
 

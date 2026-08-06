@@ -20,7 +20,7 @@
 
 //platforms/test/functional/test_platforms_functional_input.c
 //
-//F5.  Keyboard input, OS layer   (interactive: operator presses ESC)
+//F5.  Keyboard input, OS layer   (interactive: operator presses 1)
 //F8.  Mouse, OS layer            (interactive: operator left-clicks)
 //F10. onTypeChar callback        (interactive: operator types "Hello world")
 //F11. Input, focus lost reset
@@ -58,14 +58,22 @@ Bool isSingleWindow();
 
 // -- F5. Keyboard - OS layer (interactive) -----------------------------------
 
-static volatile Bool escPressed = false;
+//A key the operator can be expected to have, which rules out ESC: compact bluetooth keyboards often
+//don't carry one, and android hands ESC to the system as BACK, so the press would close the window
+//instead of ever reaching us.
+//The digit row is on every layout, so 1 works everywhere the suite runs.
+
+#define TEST_KEY      EKey_1
+#define TEST_KEY_NAME "1"
+
+static volatile Bool keyPressed = false;
 
 static void onDeviceButton(Window *w, InputDevice *dev, InputHandle h, Bool down) {
 	(void)w;
 	if (dev->type == EInputDeviceType_Keyboard && down) {
 		U16 local = InputDevice_getLocalHandle(dev, h);
-		if (local == (U32)EKey_Escape)
-			escPressed = true;
+		if (local == (U32)TEST_KEY)
+			keyPressed = true;
 	}
 }
 
@@ -78,7 +86,7 @@ static void Test_keyboard(Test *t) {
 	WindowCallbacks wcbs = (WindowCallbacks) { 0 };
 	wcbs.onDeviceButton = onDeviceButton;
 
-	CharString title = CharString_createRefCStrConst("F5b: Press ESC to pass");
+	CharString title = CharString_createRefCStrConst("F5b: Press " TEST_KEY_NAME " to pass");
 	I32x2 pos = I32x2_create2(200, 200);
 	I32x2 sz = I32x2_create2(640, 100);
 	I32x2 minSize = EResolution_get(EResolution_SD);
@@ -101,14 +109,16 @@ static void Test_keyboard(Test *t) {
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 
 		{
+			//No VK_1 macro exists; the digit keys' virtual key codes are their ASCII values.
+
 			INPUT input[2] = { 0 };
-			input[0].type = INPUT_KEYBOARD; input[0].ki.wVk = VK_ESCAPE;
-			input[1].type = INPUT_KEYBOARD; input[1].ki.wVk = VK_ESCAPE;
+			input[0].type = INPUT_KEYBOARD; input[0].ki.wVk = '1';
+			input[1].type = INPUT_KEYBOARD; input[1].ki.wVk = '1';
 			input[1].ki.dwFlags = KEYEVENTF_KEYUP;
 			SendInput(2, input, sizeof(INPUT));
 
 			Ns waited = 0;
-			while (!escPressed && waited < 1 * SECOND) {
+			while (!keyPressed && waited < 1 * SECOND) {
 
 				WindowManager_step(&windowManager, NULL, NULL);
 
@@ -118,8 +128,8 @@ static void Test_keyboard(Test *t) {
 				Thread_sleep(16 * MS);
 				waited += 16 * MS;
 			}
-			Test_assert(t, "syntheticESC", escPressed);
-			escPressed = false;
+			Test_assert(t, "synthetic" TEST_KEY_NAME, keyPressed);
+			keyPressed = false;
 		}
 
 	#elif _PLATFORM_TYPE == PLATFORM_LINUX
@@ -138,9 +148,9 @@ static void Test_keyboard(Test *t) {
 		Test_print(t, "SendInput not available on this platform, skipping synthetic OS injection");
 	#endif
 
-	Test_print(t, ">>> INTERACTIVE: Press ESC in the window (5s timeout) <<<");
+	Test_print(t, ">>> INTERACTIVE: Press " TEST_KEY_NAME " in the window (5s timeout) <<<");
 	Ns waited = 0;
-	while (!escPressed && waited < 5 * SECOND) {
+	while (!keyPressed && waited < 5 * SECOND) {
 
 		WindowManager_step(&windowManager, NULL, NULL);
 
@@ -151,10 +161,10 @@ static void Test_keyboard(Test *t) {
 		waited += 16 * MS;
 	}
 
-	if (!escPressed)
-		Test_print(t, "WARN: ESC not received within timeout");
+	if (!keyPressed)
+		Test_print(t, "WARN: " TEST_KEY_NAME " not received within timeout");
 
-	Test_assert(t, "operatorESC", escPressed);
+	Test_assert(t, "operator" TEST_KEY_NAME, keyPressed);
 
 clean:
 	RefPtr_dec(&wRef);

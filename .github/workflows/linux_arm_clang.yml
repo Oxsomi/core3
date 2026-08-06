@@ -1,0 +1,20 @@
+name: Linux ARM64 Vulkan static (clang)
+on: [push]
+
+# The NEON paths under clang on a non Windows ABI; the gcc arm job builds the same code with the
+# other compiler, so a difference between the two is the toolchain rather than the platform.
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Linux ARM64 Vulkan static (clang)
+      runner: ubuntu-24.04-arm
+      os: linux
+      build_flags: '-compiler clang -o cliGraphics=False'
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      hook_name: Linux-arm64-static-clang
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

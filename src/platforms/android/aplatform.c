@@ -268,7 +268,51 @@ clean:
 	return s_uccess;
 }
 
-Bool Platform_setKeyboardVisible(Bool isVisible) {
+//Asks OxC3Activity, which reads it off Configuration; see the comment there for why not InputDevice.
+//Failing to reach the method reports no physical keyboard, so a broken JNI lookup leaves the on screen
+//keyboard working rather than silently suppressing it.
+
+Bool Platform_hasPhysicalKeyboard() {
+
+	struct android_app *app = (struct android_app*)Platform_instance->data;
+	JavaVM *vm = app->activity->vm;
+	JNIEnv *env = app->activity->env;
+
+	Bool attached = false;
+	Bool hasKeyboard = false;
+	jclass cls = NULL;
+
+	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+		(*vm)->AttachCurrentThread(vm, &env, NULL);
+		attached = true;
+	}
+
+	cls = (*env)->GetObjectClass(env, app->activity->clazz);
+
+	if(cls) {
+
+		jmethodID methodId = (*env)->GetMethodID(env, cls, "hasPhysicalKeyboard", "()Z");
+
+		if(methodId)
+			hasKeyboard = (*env)->CallBooleanMethod(env, app->activity->clazz, methodId);
+
+		(*env)->DeleteLocalRef(env, cls);
+	}
+
+	if(attached)
+		(*vm)->DetachCurrentThread(vm);
+
+	return hasKeyboard;
+}
+
+Bool Platform_setKeyboardVisibleForced(Bool isVisible, Bool force) {
+
+	//Nothing to show when the user already has keys under their fingers, and the on screen one would eat
+	//half the screen to duplicate them.
+	//Hiding is never skipped, so a keyboard connected between show and hide can't strand it on screen.
+
+	if(isVisible && !force && Platform_hasPhysicalKeyboard())
+		return true;
 
 	struct android_app *app = (struct android_app*)Platform_instance->data;
 	JavaVM *vm = app->activity->vm;

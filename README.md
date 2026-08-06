@@ -16,10 +16,19 @@ same platform code, since that's what catches portability problems rather than O
 
 | Platform | Default | Alternate |
 | -------- | ------- | --------- |
-| Windows  | MSVC | clang-cl: ![clang-cl](https://github.com/Oxsomi/core3/actions/workflows/windows_clang.yml/badge.svg) |
-| Linux    | GCC | clang: ![clang](https://github.com/Oxsomi/core3/actions/workflows/linux_clang.yml/badge.svg) |
-| OS X     | AppleClang | N/A, |
+| Windows  | MSVC | clang-cl |
+| Linux    | GCC | clang |
+| OS X     | AppleClang | N/A, gcc there is a clang symlink and would retest the same compiler |
 | Android  | NDK clang | N/A |
+
+The alternate toolchain is built across the same axes as the default one rather than in a single
+configuration, since a compiler difference tends to show up in one corner (arm64 intrinsics, a dynamic
+link's symbol visibility) rather than everywhere at once:
+
+| Alternate | x64 -> Vulkan | x64 -> Native API | x64 dynamic (Vk + Native) | ARM -> Vulkan | ARM -> Native API | ARM dynamic (Vk + Native) |
+| --------- | ------------- | ----------------- | ------------------------- | ------------- | ----------------- | ------------------------- |
+| Windows (clang-cl) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows_clang.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12_clang.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_dynamic_clang.yml/badge.svg) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows_arm_clang.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12_arm_clang.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_arm_dynamic_clang.yml/badge.svg) |
+| Linux (clang) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_clang.yml/badge.svg) | N/A | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/linux_dynamic_clang.yml/badge.svg) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_clang.yml/badge.svg) | N/A | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_dynamic_clang.yml/badge.svg) |
 
 MinGW GCC isn't supported on Windows: it's a different CRT and ABI, so it would be a new target rather than
 a new compiler, and the prebuilt dependencies (DXC among them) are MSVC.
