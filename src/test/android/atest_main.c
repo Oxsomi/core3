@@ -36,7 +36,9 @@
 #define ATEST_TAG "OxC3"
 
 //Suites bundled into this .so. Interactive ones need a human at the device, so they're off unless asked
-//for; everything else runs unattended. shader_compiler is absent on purpose, DXC isn't built for android.
+//for; everything else runs unattended.
+//shader_compiler is only here when it was built (-shader_compiler True); DXC is off by default on
+//android, so the entry point wouldn't resolve otherwise.
 
 typedef int (*ATestFn)(void *state);
 
@@ -56,6 +58,11 @@ ATEST_SUITE(formats_wav);
 ATEST_SUITE(audio_interface);
 ATEST_SUITE(platforms_interface);
 ATEST_SUITE(graphics_interface);
+
+#ifdef _OXC3_TEST_SHADER_COMPILER
+	ATEST_SUITE(shader_compiler);
+#endif
+
 ATEST_SUITE(audio_functional);
 ATEST_SUITE(platforms_functional);
 
@@ -83,6 +90,13 @@ static const ATestSuite ATest_suites[] = {
 	{ "audio_interface",      OxC3_test_audio_interface,      false },
 	{ "platforms_interface",  OxC3_test_platforms_interface,  false },
 	{ "graphics_interface",   OxC3_test_graphics_interface,   false },
+
+	//Before the interactive ones, like every other unattended suite: those wait on a human and would
+	//otherwise hold up the one suite that takes real work to get onto the device.
+
+	#ifdef _OXC3_TEST_SHADER_COMPILER
+		{ "shader_compiler",  OxC3_test_shader_compiler,      false },
+	#endif
 
 	//platforms_functional first: it's the one worth watching, and audio_functional takes minutes of listening
 

@@ -58,10 +58,14 @@ Ns Time_now() {
 	//To support this anyways, we have time_clocks_arm64.s
 	//This will then turn into time_clocks_arm64.obj and we will link this.
 	
-	#ifndef _WIN32
+	//clang reads the register inline on windows too, which MSVC can't do; only MSVC needs the .asm.
+	//That matters beyond tidiness: the ClangCL toolset preprocesses .asm before handing it to armasm64,
+	//which only understands #line and rejects the result outright.
+
+	#if !defined(_WIN32) || defined(__clang__)
 		U64 Time_clocks() {
 			U64 result;
-			asm volatile("mrs %0, cntvct_el0" : "=r"(result));
+			__asm__ __volatile__("mrs %0, cntvct_el0" : "=r"(result));
 			return result;
 		}
 	#else

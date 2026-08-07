@@ -313,8 +313,36 @@ else()
 
 	# LTO only for optimized configs, on both compile and link. Debug stays fast (LTO makes the link the
 	# bottleneck). -flto=auto parallelizes the link-time work across cores.
-	add_compile_options("$<$<NOT:$<CONFIG:Debug>>:-flto=auto>")
-	add_link_options("$<$<NOT:$<CONFIG:Debug>>:-flto=auto>")
+	#
+	# clang emits LLVM bitcode, and GNU ld only reads that through LLVMgold.so, which distros build
+	# against whatever LLVM the *system* has rather than the clang you're compiling with. One major
+	# version apart is enough to fail the link with "Unknown attribute kind ... (Producer: LLVM 18,
+	# Reader: LLVM 17)", after which every archive looks empty and every symbol comes back undefined.
+	# lld reads its own bitcode, so point clang at it, and drop LTO when it isn't installed: a slightly
+	# slower binary beats a build that can't link.
+	#
+	# gcc is unaffected (its plugin ships with the compiler), and so are apple and android, which already
+	# default to a linker that matches their toolchain.
+
+	set(useLTO TRUE)
+
+	if(CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT APPLE AND NOT ANDROID)
+
+		find_program(OXC3_LLD NAMES ld.lld lld)
+
+		if(OXC3_LLD)
+			add_link_options("$<$<NOT:$<CONFIG:Debug>>:-fuse-ld=lld>")
+		else()
+			message("-- LTO disabled: clang needs lld to link its own bitcode and ld.lld wasn't found")
+			set(useLTO FALSE)
+		endif()
+
+	endif()
+
+	if(useLTO)
+		add_compile_options("$<$<NOT:$<CONFIG:Debug>>:-flto=auto>")
+		add_link_options("$<$<NOT:$<CONFIG:Debug>>:-flto=auto>")
+	endif()
 
 	# `{ 0 }` is OxC3's idiomatic zero-initializer (every field ends up zeroed).
 	# -Wextra's -Wmissing-field-initializers still flags it when the C headers are compiled as C++

@@ -20,6 +20,7 @@
     android:required="true" />
 		  
   <application
+    android:extractNativeLibs="false"
     android:icon="@mipmap/ic_launcher"
     android:label="{APP_NAME}"
 	  android:debuggable="{APP_DEBUGGABLE}"

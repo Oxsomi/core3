@@ -1,8 +1,10 @@
 from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
+from conan.tools.build import cross_building
 from conan.tools.scm import Git
-from conan.tools.files import collect_libs, copy, rename
+from conan.tools.files import collect_libs, copy, rename, replace_in_file
 import os
+import platform
 import subprocess
 
 required_conan_version = ">=2.0"
@@ -10,7 +12,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2026.08.07"
+	version = "2026.08.07.03"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -148,7 +150,12 @@ class dxc(ConanFile):
 		tc.variables["ENABLE_SPIRV_CODEGEN"] = True
 		tc.variables["CMAKE_EXPORT_COMPILE_COMMANDS"] = True
 		tc.variables["DXC_USE_LIT"] = True
-		tc.variables["LLVM_ENABLE_ASSERTIONS"] = True
+		# Debug only. A Release build is what ships, where an assert firing aborts the app rather than
+		# helping anyone, and it also drops the android test .so from 547 to 490 MB.
+		# That's ~11%, not the bulk: statically linked LLVM/clang/SPIRV-Tools plus an unstripped symbol
+		# table is what actually makes it that size.
+
+		tc.variables["LLVM_ENABLE_ASSERTIONS"] = self.settings.build_type == "Debug"
 		tc.variables["ENABLE_DXC_STATIC_LINKING"] = True
 
 		tc.variables["LLVM_LIT_ARGS"] = "-v"
@@ -160,6 +167,44 @@ class dxc(ConanFile):
 				tc.variables["LLVM_INFERRED_HOST_TRIPLE"] = "x86_64-linux-android"
 			else:
 				tc.variables["LLVM_INFERRED_HOST_TRIPLE"] = "aarch64-linux-android"
+
+		# TableGen runs during the build, so a cross build needs one built for the *build* machine.
+		# LLVM's answer is the NATIVE sub build, but it configures itself with default options
+		# (LLVM_ENABLE_EH=OFF) and then can't compile this fork's LLVMSupport, and it inherits
+		# CMAKE_GENERATOR from us, which for a cross build is a generator pointed at a compiler that
+		# isn't the build machine's.
+		# Upstream 37ccb7a9 made -DLLVM_USE_HOST_TOOLS=OFF stick for exactly this case, so hand it the
+		# ones a host build of this same recipe already produced and packaged.
+		#
+		# Keyed on the conf rather than on a target, because nothing here is specific to one: android
+		# and wasm need it for the same reason, and so would any future cross target.
+		# Say nothing without it and the old NATIVE path runs, which is the previous behaviour rather
+		# than a new failure.
+
+		tablegenDir = self.conf.get("user.dxc:tablegen_dir", check_type=str)
+
+		if tablegenDir:
+
+			# The build machine runs these, so the suffix follows it rather than settings.os.
+
+			exe = ".exe" if platform.system() == "Windows" else ""
+
+			tc.variables["LLVM_USE_HOST_TOOLS"] = False
+			tc.variables["LLVM_TABLEGEN"] = os.path.join(tablegenDir, "llvm-tblgen" + exe).replace("\\", "/")
+			tc.variables["CLANG_TABLEGEN"] = os.path.join(tablegenDir, "clang-tblgen" + exe).replace("\\", "/")
+
+		elif cross_building(self):
+
+			# Any target that isn't the build machine lands here: android, ios, wasm, or a plain
+			# x64 -> arm64 build. The NATIVE fallback is going to fail, and it fails deep inside a
+			# sub configure where the reason isn't visible, so name it here instead.
+
+			self.output.warning(
+				"Cross building without user.dxc:tablegen_dir, so LLVM's NATIVE sub build has to "
+				"produce TableGen. That configures itself with LLVM_ENABLE_EH=OFF and can't compile "
+				"this fork. Pass the bin/ of a host build of this recipe instead "
+				"(build_common.hostTablegenDir gives you the path)."
+			)
 
 		tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
 
@@ -214,7 +259,40 @@ class dxc(ConanFile):
 		git.checkout(self.conan_data["sources"][self.version]["checkout"])
 		git.run("submodule update --init --recursive")
 
+	def _relaxAssertOnlyWarnings(self):
+		"""Let dxcreflection compile LLVM headers with assertions off.
+
+		A lot of LLVM only reads a variable inside an assert, so NDEBUG turns those into
+		-Wunused-parameter / -Wunused-but-set-variable (WinAdapter.h's ScopedLocale CodePage, DenseMap.h's
+		NumEntries, and more behind them). dxcreflection and dxcreflectioncontainer compile those headers
+		with -Wall -Wextra -Werror, which only ever held up because assertions were on.
+
+		Suppressed on the targets rather than through the toolchain: their options are PRIVATE, so they
+		land after anything CMakeToolchain sets and the later -Wextra would just re-enable it. Upstream
+		already keeps a -Wno-unused-template here for the same reason, so this rides along with it.
+		"""
+
+		extra = "-Wno-unused-template -Wno-unused-parameter -Wno-unused-but-set-variable"
+
+		for tool in ("dxcreflection", "dxcreflectioncontainer"):
+
+			path = os.path.join(
+				self.source_folder, "DirectXShaderCompiler/tools/clang/tools", tool, "CMakeLists.txt"
+			)
+
+			if not os.path.isfile(path):
+				continue
+
+			replace_in_file(
+				self, path,
+				f"target_compile_options({tool} PRIVATE -Wno-unused-template)",
+				f"target_compile_options({tool} PRIVATE {extra})",
+				strict=False
+			)
+
 	def build(self):
+
+		self._relaxAssertOnlyWarnings()
 
 		cmake = CMake(self)
 
@@ -262,6 +340,21 @@ class dxc(ConanFile):
 
 			wsl_stubs_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include/wsl/stubs")
 			copy(self, "*.h", wsl_stubs_src, include_dir)
+
+		# Host builds carry the tablegens so a cross build of this same recipe can borrow them rather
+		# than running LLVM's NATIVE sub build; see the LLVM_USE_HOST_TOOLS note in generate().
+		# They're build machine executables, so they're only useful out of a package built for the
+		# machine doing the building.
+
+		bin_dst = os.path.join(self.package_folder, "bin")
+
+		for config in ("", "Debug", "Release", "MinSizeRel", "RelWithDebInfo"):
+
+			tablegen_src = os.path.join(self.build_folder, config, "bin") if config else os.path.join(self.build_folder, "bin")
+
+			for name in ("llvm-tblgen", "clang-tblgen"):
+				copy(self, name, tablegen_src, bin_dst)
+				copy(self, name + ".exe", tablegen_src, bin_dst)
 
 		lib_src = os.path.join(self.build_folder, "lib")
 		lib_dst = os.path.join(self.package_folder, "lib")

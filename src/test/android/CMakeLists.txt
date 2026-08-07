@@ -25,7 +25,8 @@
 # in turn. Compiling them twice is deliberate: every module's own test target stays untouched, so this
 # can't affect the host build.
 #
-# Not bundled: shader_compiler, since DXC isn't built for android.
+# shader_compiler is bundled only when it was built (-shader_compiler True), since DXC is off by
+# default on android; its corpus test skips itself there, see test_shader_compiler_main.c.
 #
 # The functional suites ARE bundled: they need a human at the device, so atest_main only runs them when
 # debug.oxc3.interactive is set.
@@ -46,6 +47,11 @@ file(GLOB_RECURSE androidTestSources CONFIGURE_DEPENDS
 	"${testRoot}/platforms/test/interface/*.c"
 )
 
+if(EnableShaderCompiler)
+	file(GLOB shaderCompilerTestSources CONFIGURE_DEPENDS "${testRoot}/shader_compiler/test/*.c")
+	list(APPEND androidTestSources ${shaderCompilerTestSources})
+endif()
+
 add_library(OxC3_atest SHARED
 	${androidTestSources}
 	atest_main.c
@@ -57,6 +63,11 @@ add_library(OxC3_atest SHARED
 # OxC3_atest, not OxC3_plinttst as the desktop build does, so the suite is told which name to expect.
 
 target_compile_definitions(OxC3_atest PRIVATE _OXC3_TEST_BUNDLED _OXC3_TEST_VFS_TARGET="OxC3_atest")
+
+if(EnableShaderCompiler)
+	target_link_libraries(OxC3_atest PUBLIC OxC3_shader_compiler)
+	target_compile_definitions(OxC3_atest PRIVATE _OXC3_TEST_SHADER_COMPILER)
+endif()
 
 target_link_libraries(OxC3_atest PUBLIC
 	OxC3_platforms
@@ -84,6 +95,38 @@ add_virtual_files(
 	SELF    ${testRoot}/..
 	FORCE_PACKAGER
 )
+
+# shader_compiler reads its HLSL off disk when ctest runs it from src/shader_compiler/test; an apk has no
+# such working directory, so the same tree is bundled and the suite reads it back through //OxC3_atest.
+# -raw is what keeps it readable: the packager otherwise compiles .hlsl into oiSH, and these tests want
+# the source (they drive the compiler themselves).
+# The .c/.h next to it aren't staged, since add_virtual_files packages a whole directory.
+
+if(EnableShaderCompiler)
+
+	set(shaderRes ${CMAKE_CURRENT_BINARY_DIR}/shaderdata)
+
+	file(GLOB_RECURSE shaderTestData CONFIGURE_DEPENDS
+		"${testRoot}/shader_compiler/test/*/*.hlsl"
+		"${testRoot}/shader_compiler/test/*/*.hlsli"
+	)
+
+	foreach(f ${shaderTestData})
+		file(RELATIVE_PATH rel "${testRoot}/shader_compiler/test" "${f}")
+		get_filename_component(relDir "${rel}" DIRECTORY)
+		file(COPY "${f}" DESTINATION "${shaderRes}/${relDir}")
+	endforeach()
+
+	add_virtual_files(
+		TARGET  OxC3_atest
+		NAME    shaderdata
+		ROOT    ${shaderRes}
+		SELF    ${testRoot}/..
+		FORCE_PACKAGER
+		ARGS    -raw
+	)
+
+endif()
 
 # audio_functional reads its wavs through the virtual file system here, since an apk has no working directory to fopen out of.
 # Only the short_* clips are bundled, the long_* ones are 79 of the 88 MB and would turn a ~11 MB test apk into a ~99 MB one.

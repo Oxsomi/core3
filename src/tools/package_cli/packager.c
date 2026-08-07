@@ -42,6 +42,7 @@ typedef struct CAFileRecursion {
 	CAFile *archive;
 	CharString root;
 	const RefPtrType *fileHandleType;
+	Bool keepShaderSource;        //See PackageSettings; stores .hlsl as-is rather than compiling it
 } CAFileRecursion;
 
 Bool packageFile(const FileInfo *file, CAFileRecursion *pkgFile, const Allocator *alloc, Error *e_rr) {
@@ -87,8 +88,10 @@ Bool packageFile(const FileInfo *file, CAFileRecursion *pkgFile, const Allocator
 			const CharString hlsli = CharString_createRefCStrConst(".hlsli");
 
 			if (
-				CharString_endsWithStringSensitive(&file->path, &hlsl, 0) ||
-				CharString_endsWithStringSensitive(&file->path, &hlsli, 0)
+				!pkgFile->keepShaderSource && (
+					CharString_endsWithStringSensitive(&file->path, &hlsl, 0) ||
+					CharString_endsWithStringSensitive(&file->path, &hlsli, 0)
+				)
 			)
 				goto clean;
 		#endif
@@ -158,22 +161,26 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 	//Grab all files that need compilation
 
+	//keepShaderSource stores the .hlsl instead, so there's nothing to compile and the enumeration below
+	//would only find shaders it must not touch.
+
 	#ifdef CLI_SHADER_COMPILER
-		gotoIfError3(clean, Compiler_getTargetsFromFile(
-			settings->input,
-			ECompileType_Compile,
-			settings->compileMode,
-			settings->multipleModes,
-			settings->merge,
-			settings->enableLogging,
-			alloc,
-			NULL,
-			NULL,        //Don't write to output, write to Buffer[] instead
-			&allFiles,
-			&allShaderText,
-			&allOutputs,
-			&allCompileOutputs
-		));
+		if(!settings->keepShaderSource)
+			gotoIfError3(clean, Compiler_getTargetsFromFile(
+				settings->input,
+				ECompileType_Compile,
+				settings->compileMode,
+				settings->multipleModes,
+				settings->merge,
+				settings->enableLogging,
+				alloc,
+				NULL,
+				NULL,        //Don't write to output, write to Buffer[] instead
+				&allFiles,
+				&allShaderText,
+				&allOutputs,
+				&allCompileOutputs
+			));
 	#endif
 
 	//Make archive
@@ -186,7 +193,8 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 	CAFileRecursion caFileRecursion = (CAFileRecursion) {
 		.archive = &archive,
 		.root = resolved,
-		.fileHandleType = &fileHandleType
+		.fileHandleType = &fileHandleType,
+		.keepShaderSource = settings->keepShaderSource
 	};
 
 	gotoIfError3(clean, File_foreach(

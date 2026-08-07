@@ -46,7 +46,10 @@ if(UNIX AND NOT APPLE)
 	target_link_libraries(OxC3_types_base PUBLIC m)
 endif()
 
-if(MSVC AND ARM)
+# Not for clang-cl: it reads cntvct_el0 inline (see time.c), and the ClangCL toolset preprocesses .asm
+# before armasm64 sees it, which armasm64 rejects since it only accepts #line.
+
+if(MSVC AND ARM AND NOT isClangCl)
 	enable_language(ASM_MARMASM)
 	file(GLOB_RECURSE armAsmWin CONFIGURE_DEPENDS "platforms/windows/arm/*.asm")
 	target_sources(OxC3_types_base PRIVATE ${armAsmWin})

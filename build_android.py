@@ -35,6 +35,7 @@ import shutil
 import subprocess
 import sys
 import time
+import zipfile
 from pathlib import Path
 
 import build_common as common
@@ -129,11 +130,12 @@ def ensureProfile(conanHome, binDir, conanArch, level, generator):
 # Cross build
 # ---------------------------------------------------------------------------------------------------
 
-def androidOptionArgs(simd, tests=False):
+def androidOptionArgs(simd, tests=False, shaderCompiler=False):
 	"""Options for the android target itself.
 
-	enableShaderCompiler=False is what makes conanfile.py tool_requires the host packager; DXC doesn't
-	cross compile to android and we wouldn't be able to run it there anyway.
+	enableShaderCompiler is off by default: it more than doubles the build (DXC is the bulk of it) and
+	an app that ships precompiled shaders never needs it on device. Off is also what makes conanfile.py
+	tool_requires the host packager, which is how virtual files get packaged either way.
 
 	enableTests builds OxC3_atest, one .so holding every suite (see src/CMakeLists.txt); android
 	has no exec, so that's the only way to run them on device.
@@ -146,13 +148,16 @@ def androidOptionArgs(simd, tests=False):
 		"enableTests": "True" if tests else "False",
 		"dynamicLinkingGraphics": "False",
 		"dynamicLinkingShaderCompiler": "False",
-		"enableShaderCompiler": "False",
+		"enableShaderCompiler": "True" if shaderCompiler else "False",
 		"enableSIMD": simd
 	}
 
 	return " ".join(f"-o \"&:{k}={v}\"" for k, v in options.items())
 
-def doBuild(mode, conanHome, binDir, conanArch, level, generator, generatorValidationLayer, simd, doInstall, tests, cache, hostCompiler=None):
+def doBuild(
+	mode, conanHome, binDir, conanArch, level, generator, generatorValidationLayer, simd, doInstall, tests, cache,
+	hostCompiler=None, shaderCompiler=False
+):
 
 	profile     = profileName(conanArch, level, generator)
 	profilePath = ensureProfile(conanHome, binDir, conanArch, level, generator)
@@ -170,6 +175,30 @@ def doBuild(mode, conanHome, binDir, conanArch, level, generator, generatorValid
 			package, profilePath, mode, profileArgs, cache, key=f"{package}::{profile}"
 		)
 
+	# The shader compiler's dependencies. DXC needs a tablegen it can run on the machine doing the
+	# building, which only a host build of the same recipe has; see hostTablegenDir.
+	# Pinned to Release for the same reason the host build pins them: they dominate the build and are
+	# rarely what's being debugged.
+
+	if shaderCompiler:
+
+		tablegenDir = common.hostTablegenDir(compiler=hostCompiler)
+
+		if not tablegenDir:
+			print(
+				"-- No host dxc package to take llvm-tblgen/clang-tblgen from; build the host tooling "
+				"first (build.py, or build_android.py --host_package_only)", file=sys.stderr
+			)
+			sys.exit(1)
+
+		tablegenConf = f"-c:h user.dxc:tablegen_dir=\"{tablegenDir}\""
+
+		for package in ("packages/dxc", "packages/spirv_reflect"):
+			common.conanCreateIfChanged(
+				package, profilePath, common.HOST_TOOL_MODE, profileArgs, cache,
+				key=f"{package}::{profile}", options=tablegenConf
+			)
+
 	if mode == "Debug":
 
 		profile2      = profileName(conanArch, level, generatorValidationLayer)
@@ -182,7 +211,7 @@ def doBuild(mode, conanHome, binDir, conanArch, level, generator, generatorValid
 		)
 
 	outputFolder = f"\"build/{mode}/android/{archName(conanArch)}\""
-	options      = androidOptionArgs(simd, tests)
+	options      = androidOptionArgs(simd, tests, shaderCompiler)
 
 	common.run(
 		f"conan build . -of {outputFolder} {options} -s build_type={mode} {profileArgs} --build=missing"
@@ -372,21 +401,33 @@ def makeApk(args, packageDirs):
 	cwd = os.getcwd()
 	os.chdir(apkFolder)
 
-	try:
-		for f in glob.glob("lib/*"):
-			for f0 in glob.glob(f + "/*.so"):
-				# aapt stores the path verbatim, and an apk's entries are always /-separated
-				entry = f0.replace(os.sep, "/")
-				common.run(f"{buildTool('aapt')} add \"app-unsigned.apk\" \"{entry}\"")
+	# Not `aapt add`: it rewrites the whole archive per invocation and always deflates, and with the
+	# shader compiler in, the test .so alone is hundreds of megabytes. Compressing it was the entire
+	# cost of this step (zipalign over the same archive is a fifth of a second).
+	#
+	# Native libraries are stored rather than deflated, which is what android wants anyway: paired with
+	# extractNativeLibs=false and zipalign -p, the loader maps them straight out of the apk instead of
+	# unpacking a second copy at install time. So this is faster to build *and* to install.
+	# classes.dex still compresses; it's small and gains nothing from being stored.
 
-		common.run(f"{buildTool('aapt')} add \"app-unsigned.apk\" classes.dex")
+	try:
+
+		# An apk's entries are always /-separated, whatever the host uses
+
+		with zipfile.ZipFile("app-unsigned.apk", "a", zipfile.ZIP_DEFLATED) as apk:
+
+			for f in sorted(glob.glob("lib/*/*.so")):
+				apk.write(f, f.replace(os.sep, "/"), compress_type=zipfile.ZIP_STORED)
+
+			apk.write("classes.dex", "classes.dex", compress_type=zipfile.ZIP_DEFLATED)
+
 	finally:
 		os.chdir(cwd)
 
 	# Zip align and sign
 
 	print("-- Zipalign apk")
-	common.run(f"{buildTool('zipalign')} -v -f 4 \"{apkFolder}/app-unsigned.apk\" \"{apkFolder}/app.apk\"")
+	common.run(f"{buildTool('zipalign')} -v -p -f 4 \"{apkFolder}/app-unsigned.apk\" \"{apkFolder}/app.apk\"")
 
 	if args.sign:
 		signApk(args, apkFolder)
@@ -505,9 +546,14 @@ def tailTestRun(adb, args):
 	timeout = None if args.interactive else args.test_timeout
 	deadline = None if timeout is None else time.monotonic() + timeout
 
+	# encoding is named rather than left to the locale: logcat is UTF-8 and the suites print non-ASCII
+	# (the unicode tests), while text=True on its own decodes with the console codepage, which on windows
+	# is cp1252 and dies partway through a run.
+
 	process = subprocess.Popen(
 		f"{adb} logcat -s OxC3:V", shell=True,
-		stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1
+		stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+		text=True, encoding="utf-8", errors="replace", bufsize=1
 	)
 
 	result = None
@@ -564,6 +610,13 @@ def main():
 	parser.add_argument(
 		"-tests", type=str, default="False", choices=["True", "False"],
 		help="Build OxC3_atest, one .so with every unit test suite (android has no exec to run them separately)"
+	)
+	parser.add_argument(
+		"-shader_compiler", type=str, default="False", choices=["True", "False"],
+		help="Build the shader compiler (DXC) into the android target so shaders can be compiled on "
+		     "device. Off by default: DXC dominates the build and an app shipping precompiled shaders "
+		     "never needs it. Requires the host tooling to have been built first, since the cross build "
+		     "borrows its llvm-tblgen/clang-tblgen"
 	)
 	parser.add_argument(
 		"-host_compiler", type=str, default=None,
@@ -677,7 +730,7 @@ def main():
 			doBuild(
 				args.mode, conanHome, binDir, conanArch, str(args.api), args.generator,
 				generatorValidationLayer, args.simd, args.install, args.tests == "True", cache,
-				args.host_compiler
+				args.host_compiler, args.shader_compiler == "True"
 			)
 
 		common.saveHashCache(cache)

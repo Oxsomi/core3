@@ -50,7 +50,13 @@ typedef struct PackageSettings {
 
 	Bool ignoreEmptyFiles;
 	Bool multipleModes;
-	U8 pad[2];
+
+	//Store .hlsl/.hlsli verbatim instead of compiling them into oiSH.
+	//For test data that has to be read back as source; a shader the app actually renders with wants the
+	//compiled form, which is why this is off by default.
+
+	Bool keepShaderSource;
+	U8 pad[1];
 
 } PackageSettings;
 

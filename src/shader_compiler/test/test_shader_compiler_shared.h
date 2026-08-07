@@ -64,6 +64,20 @@ Bool compileInlineShaders(
 //Compile a single HLSL shader loaded from `path` (relative to the working dir) into an oiSH of binary type
 //`mode`. Self-contained shaders only (@virtual includes). Fills `out` with one oiSH buffer. Caller frees.
 //keepRegisters keeps declared but unused resources bound and reflected (--keep-registers).
+//Where the HLSL the tests compile actually lives.
+//ctest runs these from src/shader_compiler/test, so a plain relative path finds it. An apk has no
+//working directory to be relative to, so the same tree is bundled as an oiCA and read back through the
+//virtual file system instead (see src/test/android/CMakeLists.txt).
+//Both go through File_read either way, and an include inside a virtual shader resolves virtually too,
+//so only the root differs.
+
+#if defined(_OXC3_TEST_BUNDLED) && defined(_OXC3_TEST_VFS_TARGET)
+	#define TEST_SHADER_SECTION "//" _OXC3_TEST_VFS_TARGET "/shaderdata"
+	#define TEST_SHADER_ROOT    TEST_SHADER_SECTION "/"
+#else
+	#define TEST_SHADER_ROOT    ""
+#endif
+
 Bool compileFileShader(
 	const Allocator *alloc,
 	const C8 *path,

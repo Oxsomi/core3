@@ -457,6 +457,69 @@ def conanCreateIfChanged(packagePath, profile, mode, profileArgs, cache, key=Non
 
 	cache[key] = currentHash
 
+def hostTablegenDir(mode=HOST_TOOL_MODE, compiler=None):
+	"""Where a host build of packages/dxc left llvm-tblgen / clang-tblgen.
+
+	A cross build can't run the tablegens it would produce itself, and DXC's NATIVE sub build can't
+	compile them either (see the LLVM_USE_HOST_TOOLS note in packages/dxc/conanfile.py). The host
+	package ships them, so this finds that package and hands back its bin/.
+
+	Returns None when there's no host dxc in the cache yet; the caller then says nothing and the build
+	falls back to whatever it did before rather than failing on a missing path.
+	"""
+
+	profile = hostProfileForMode(mode, compiler)
+	profile = profile if os.path.isabs(profile) else os.path.join(ROOT, profile)
+
+	result = subprocess.run(
+		f"conan graph info --requires=dxc/{dxcVersion()} "
+		f"--profile:host=\"{profile}\" --profile:build=\"{profile}\" "
+		f"-s build_type={mode} --format=json",
+		shell=True, capture_output=True, text=True, cwd=ROOT
+	)
+
+	if result.returncode:
+		return None
+
+	try:
+		graph = json.loads(result.stdout)
+	except json.JSONDecodeError:
+		return None
+
+	# graph info reports what the binary *is* but not where it lives, so resolve the folder separately.
+	# ref already carries the recipe revision, and package_id + prev pin the exact binary, which is what
+	# `conan cache path` wants.
+
+	for node in graph.get("graph", {}).get("nodes", {}).values():
+
+		ref = str(node.get("ref", ""))
+
+		if not ref.startswith("dxc/") or not node.get("package_id") or not node.get("prev"):
+			continue
+
+		located = subprocess.run(
+			f"conan cache path {ref}:{node['package_id']}#{node['prev']}",
+			shell=True, capture_output=True, text=True, cwd=ROOT
+		)
+
+		if located.returncode:
+			continue
+
+		folder = os.path.join(located.stdout.strip(), "bin")
+
+		if os.path.isdir(folder):
+			return folder
+
+	return None
+
+def dxcVersion():
+	"""The dxc version the root recipe pins, so the two can't drift."""
+
+	text = open(os.path.join(ROOT, "conanfile.py"), encoding="utf-8").read()
+	found = re.search(r'"dxc/([^"]+)"', text)
+
+	return found.group(1) if found else None
+
 # DXC and SPIRV-Reflect dominate a from-scratch build and are almost never the thing being debugged,
 # so they're pinned to Release unless -debug_shader_compiler asks otherwise.
 # Both the package build and the consuming build have to agree, hence shaderCompilerDepArgs() below.

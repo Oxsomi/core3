@@ -1,4 +1,5 @@
 from conan import ConanFile
+from conan.tools.build import cross_building
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 from conan.tools.scm import Git
 from conan.tools.files import collect_libs, copy
@@ -167,7 +168,14 @@ class oxc3(ConanFile):
 	# from github (see source()), which is almost never what you want locally.
 
 	def build_requirements(self):
-		if not self.options.enableShaderCompiler:
+
+		# Cross building needs it regardless of enableShaderCompiler: what matters is being able to *run*
+		# the packager, and a cross build's binaries target the device. Android can't even produce the
+		# executable (Platform_defineEntrypoint gives android_main, not main), so without this
+		# add_virtual_files' find_program picks up whatever OxC3_package happens to be on PATH, which is
+		# how a months-old one out of the conan cache ended up packaging the shader tests.
+
+		if not self.options.enableShaderCompiler or cross_building(self):
 			self.tool_requires(f"{self.name}/{self.version}", options = HOST_TOOL_OPTIONS)
 
 	def requirements(self):
@@ -189,7 +197,7 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2026.08.07")
+			self.requires("dxc/2026.08.07.03")
 			self.requires("spirv_reflect/2026.08.06")
 
 		if self.settings.os == "Linux":

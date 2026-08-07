@@ -40,6 +40,14 @@ on:
         type: string
         required: false
         default: '29.0.13113456'
+      android_shader_compiler:
+        type: boolean
+        required: false
+        default: false
+      android_run:
+        type: boolean
+        required: false
+        default: false
       hook_name:
         type: string
         required: true
@@ -162,16 +170,60 @@ jobs:
         run: ${{ inputs.python_cmd }} build_android.py --host_package_only
 
       - name: Build Android Debug
-        if: inputs.os == 'android'
+        if: inputs.os == 'android' && !inputs.android_shader_compiler && !inputs.android_run
         run: ${{ inputs.python_cmd }} build_android.py -mode Debug -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
 
       - name: Build Android Debug (SIMD fallback)
-        if: inputs.os == 'android'
+        if: inputs.os == 'android' && !inputs.android_shader_compiler && !inputs.android_run
         run: ${{ inputs.python_cmd }} build_android.py -mode Debug -simd False -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
 
       - name: Build Android Release
-        if: inputs.os == 'android'
+        if: inputs.os == 'android' && !inputs.android_shader_compiler && !inputs.android_run
         run: ${{ inputs.python_cmd }} build_android.py -mode Release -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+
+      # DXC cross compiled to android, which is the expensive half of this: the host build has to produce
+      # llvm-tblgen/clang-tblgen for the cross build to borrow (see packages/dxc/conanfile.py), so both
+      # halves get built from scratch the first time.
+      # One arch and one config on purpose; the point is that the path still works, and repeating it per
+      # config would multiply an already long build for no extra coverage.
+
+      - name: Build Android Release (shader compiler)
+        if: inputs.os == 'android' && inputs.android_shader_compiler
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch arm64 -tests True -shader_compiler True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+
+      # x64 rather than arm64: the emulator below runs on an x86_64 host, and an arm64 image there is
+      # software emulated and far too slow to finish a test run.
+
+      - name: Build Android Release (x64, for the emulator)
+        if: inputs.os == 'android' && inputs.android_run
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch x64 -tests True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+
+      # The emulator needs KVM, which the runner exposes but doesn't make writable by default.
+
+      - name: Enable KVM
+        if: inputs.os == 'android' && inputs.android_run
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # Everything up to here only proves it builds. This is the part that catches a build that installs
+      # and then dies on startup, which has happened more than once and looks identical to a pass from
+      # the outside.
+      # The two functional suites need someone at the device, so they skip themselves without
+      # debug.oxc3.interactive; the rest run unattended.
+
+      - name: Run test suite on an emulator
+        if: inputs.os == 'android' && inputs.android_run
+        uses: reactivecircus/android-emulator-runner@v2.33.0
+        with:
+          api-level: ${{ inputs.android_api }}
+          arch: x86_64
+          target: default
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: ${{ inputs.python_cmd }} build_android.py --skip_build --apk --sign --run -mode Release -arch x64 -tests True -package net.osomi.test -version 0.1.0 -name "OxC3 test" -keystore_password oxc3ci -test_timeout 900
 
       # ── Build: everything else ─────────────────────────────────────────────
       # Debug goes first because a failing step aborts the job, so whichever config runs first is the
