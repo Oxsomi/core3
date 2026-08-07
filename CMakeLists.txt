@@ -167,6 +167,15 @@ if(MSVC)
 			else()
 				list(APPEND BUILD_FLAGS "/d2archSSE42")		#  Require SSE4.2
 			endif()
+		elseif(isClangCl)
+
+			# Same features the gcc/clang branch below asks for on arm64: clang gates each NEON crypto
+			# intrinsic (vaeseq_u8, vmull_p64, the sha2 set) behind its target feature and errors at the
+			# always_inline call site without it, while MSVC declares every intrinsic unconditionally.
+			# clang-cl has no -march spelling of its own, so /clang: hands the flag to the GCC-style
+			# driver underneath.
+
+			list(APPEND BUILD_FLAGS "/clang:-march=armv8-a+simd+crypto+crc")
 		endif()
 	endif()
 

@@ -214,7 +214,9 @@ clean:
 //and, only when the disassembly actually differs, write <ref>.ref.<ext> / <ref>.new.<ext> so it can be diffed
 //(`git diff --no-index`). Identical disassembly (e.g. only the binary header's generator-version word churned,
 //as a DXC update does) writes nothing and is just logged - so this stays quiet on benign version bumps.
-static void dumpDisasmDiff(const Allocator *alloc, Compiler *comp, Buffer produced, Buffer golden, CharString ref) {
+static void dumpDisasmDiff(
+	const Allocator *alloc, Compiler *comp, Buffer produced, Buffer golden, CharString ref, Bool allowWrite
+) {
 
 	SHFile fp = (SHFile) { 0 }, fg = (SHFile) { 0 };
 	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
@@ -245,6 +247,9 @@ static void dumpDisasmDiff(const Allocator *alloc, Compiler *comp, Buffer produc
 		) {
 			if(CharString_equalsStringSensitive(&gDis, &pDis))
 				Log_debugLn(alloc, "\t%s disassembly identical - only the binary header (generator version) churned", exts[k]);
+
+			else if (!allowWrite)
+				Log_warnLn(alloc, "\t%s disassembly differs (dump skipped, the bundled corpus is read only)", exts[k]);
 
 			else {
 
@@ -301,7 +306,22 @@ void Test_shaderCompilerCorpus(Test *t) {
 	Bool isFolder = false;
 
 	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	const CharString here = CharString_createRefCStrConst("hlsl");     //Named folder under the working dir (test/)
+
+	//Rooted via TEST_SHADER_ROOT so the same corpus runs from the working directory (desktop ctest) and
+	//from the virtual file system when bundled; see test_shader_compiler_shared.h.
+
+	const CharString here = CharString_createRefCStrConst(TEST_SHADER_ROOT "hlsl");
+
+	//Bundled, the corpus lives in the read only virtual file system: compare, never regenerate.
+	//References are only written on desktop, where they sit in the repo to be reviewed and committed.
+
+	#ifdef TEST_SHADER_SECTION
+		const Bool corpusWritable = false;
+	#else
+		const Bool corpusWritable = true;
+	#endif
+
+	CharString refPath = CharString_createNull();
 
 	//A disassembler used only to emit before/after SPIRV text on a byte-snapshot mismatch (see below).
 	Compiler disasmComp = (Compiler) { 0 };
@@ -370,7 +390,18 @@ void Test_shaderCompilerCorpus(Test *t) {
 		if (!Buffer_length(produced))       //Include-only / ignored empty files produce nothing
 			continue;
 
-		const CharString ref = allOutputs.ptr[i];
+		//allOutputs entries are bare names ("dummy.oiSH") relative to the corpus folder's parent, which
+		//is the working directory on desktop. Bundled, a bare name would resolve into the app's writable
+		//storage instead of the virtual file system, so the reference is re-rooted explicitly.
+
+		CharString_free(&refPath, alloc);
+
+		gotoIfError3(clean, CharString_format(
+			alloc, &refPath, e_rr, "%s%.*s",
+			TEST_SHADER_ROOT, (int) CharString_length(allOutputs.ptr[i]), allOutputs.ptr[i].ptr
+		));
+
+		const CharString ref = CharString_createRefStrConst(refPath);
 
 		if (File_has(&ref, alloc)) {
 
@@ -390,13 +421,18 @@ void Test_shaderCompilerCorpus(Test *t) {
 				//DXC update introduced. If reflection *also* differs, that's a real change - the dumps above show it.
 				if(disasmCompCreated && shReflectionMatches(alloc, produced, golden)) {
 					Log_warnLn(alloc, "\treflection unchanged - only bytecode differs; comparing disassembly");
-					dumpDisasmDiff(alloc, &disasmComp, produced, golden, ref);
+					dumpDisasmDiff(alloc, &disasmComp, produced, golden, ref, corpusWritable);
 				}
 
 				else Log_warnLn(alloc, "\treflection ALSO differs (not just bytecode) - inspect the reflection dumps above");
 			}
 
 			Test_assert(t, ref.ptr, matches);
+		}
+
+		else if (!corpusWritable) {
+			Log_errorLn(alloc, "Reference %.*s is missing from the bundled corpus", (int) CharString_length(ref), ref.ptr);
+			Test_assert(t, ref.ptr, false);         //Can't regenerate from a read only bundle; fix on desktop
 		}
 
 		else {
@@ -474,6 +510,7 @@ clean:
 		Compiler_free(&disasmComp, alloc);
 
 	Buffer_free(&golden, alloc);
+	CharString_free(&refPath, alloc);
 	ListBuffer_freeUnderlying(&allBuffers, alloc);
 	ListCharString_freeUnderlying(&allFiles, alloc);
 	ListCharString_freeUnderlying(&allShaderText, alloc);

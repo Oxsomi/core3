@@ -189,8 +189,20 @@ Bool Compiler_getTargetsFromFile(
 		gotoIfError3(clean, File_resolve(&input, &isVirtual, 128, &Platform_instance->defaultDir, alloc, &resolved, e_rr));
 		gotoIfError3(clean, CharString_append(&resolved, '/', alloc, e_rr));
 
+		//Foreach reports full virtual paths ("//section/...") while resolve strips the marker; re-add it
+		//so the base cut in registerFile lines up and allShaders entries stay valid File_read inputs.
+
+		if(isVirtual) {
+			const CharString virtualPrefix = CharString_createRefCStrConst("//");
+			gotoIfError3(clean, CharString_insertString(&resolved, &virtualPrefix, 0, alloc, e_rr));
+		}
+
+		//A separate flag on purpose: reusing isVirtual would clobber the input's virtualness with the
+		//output's, and it's the input that decides how registerFile stores paths.
+
 		if(output) {
-			gotoIfError3(clean, File_resolve(output, &isVirtual, 128, &Platform_instance->defaultDir, alloc, &resolved2, e_rr));
+			Bool isVirtualOut;
+			gotoIfError3(clean, File_resolve(output, &isVirtualOut, 128, &Platform_instance->defaultDir, alloc, &resolved2, e_rr));
 			gotoIfError3(clean, CharString_append(&resolved2, '/', alloc, e_rr));
 		}
 

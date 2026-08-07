@@ -62,16 +62,12 @@ OXC3_TEST_ENTRY(shader_compiler) {
 	Test_shaderCompilerReflection(&t);
 	Test_shaderCompilerDriver(&t);
 	Test_shaderCompilerPermutations(&t);
-	//The corpus enumerates test/hlsl relative to the working directory, which is how ctest runs it.
-	//An apk has no such layout: the files would have to come through the virtual file system, and the
-	//corpus is a byte snapshot that also writes its reference oiSH back out.
-	//Everything above already drives real DXC compilation, so android still exercises the compiler.
+	//Runs bundled too: the corpus and its committed reference oiSHs ship in the virtual file system
+	//(see TEST_SHADER_ROOT), where the test compares byte for byte but never regenerates, since the
+	//bundle is read only. A byte level difference between desktop and device DXC is exactly the kind
+	//of thing worth failing loudly on.
 
-	#if _PLATFORM_TYPE != PLATFORM_ANDROID
-		Test_shaderCompilerCorpus(&t);
-	#else
-		Test_print(&t, "Corpus skipped: needs the test/hlsl working directory, which an apk has no equivalent of");
-	#endif
+	Test_shaderCompilerCorpus(&t);
 
 	int status = Test_end(&t);
 

@@ -280,9 +280,44 @@ public:
 			gotoIfError3(clean, CharString_createCopy(tmp, alloc, &resolved, e_rr));
 		}
 
-		else gotoIfError3(clean, File_resolve(
-			&fileName, &isVirtual, 256, &Platform_instance->defaultDir, alloc, &resolved, e_rr
-		));
+		else {
+
+			gotoIfError3(clean, File_resolve(
+				&fileName, &isVirtual, 256, &Platform_instance->defaultDir, alloc, &resolved, e_rr
+			));
+
+			//File_resolve strips the // marker virtual paths carry, but everything below (the dedup
+			//compare, File_getInfo, File_read) routes virtual vs physical on exactly that prefix.
+			//Restore it so an include inside a virtual shader resolves back into the virtual file system.
+
+			if(isVirtual) {
+				const CharString virtualPrefix = CharString_createRefCStrConst("//");
+				gotoIfError3(clean, CharString_insertString(&resolved, &virtualPrefix, 0, alloc, e_rr));
+			}
+
+			//DXC normalizes paths while building include candidates, which collapses the leading //
+			//marker ("//a/b.hlsli" arrives here as "a/b.hlsli"), so an include living in the virtual
+			//file system can show up disguised as a physical path that doesn't exist.
+			//Only when the physical interpretation is absent and re-marking the raw name hits a loaded
+			//virtual file is the virtual reading taken, so a real physical include always wins.
+
+			else if (!File_has(&resolved, alloc)) {
+
+				CharString virtualized = CharString_createNull();
+
+				gotoIfError3(clean, CharString_format(
+					alloc, &virtualized, e_rr, "//%.*s", (int) CharString_length(fileName), fileName.ptr
+				));
+
+				if (File_has(&virtualized, alloc)) {
+					CharString_free(&resolved, alloc);
+					resolved = virtualized;
+					isVirtual = true;
+				}
+
+				else CharString_free(&virtualized, alloc);
+			}
+		}
 
 		for (; i < includedFiles.length; ++i)
 			if(CharString_equalsStringSensitive(&resolved, &includedFiles.ptr[i].includeInfo.file))

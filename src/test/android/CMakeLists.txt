@@ -109,6 +109,7 @@ if(EnableShaderCompiler)
 	file(GLOB_RECURSE shaderTestData CONFIGURE_DEPENDS
 		"${testRoot}/shader_compiler/test/*/*.hlsl"
 		"${testRoot}/shader_compiler/test/*/*.hlsli"
+		"${testRoot}/shader_compiler/test/*.oiSH"
 	)
 
 	foreach(f ${shaderTestData})

@@ -31,6 +31,7 @@ import argparse
 import glob
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -381,7 +382,16 @@ def makeApk(args, packageDirs):
 	os.chdir(apkFolder)
 
 	try:
-		classFiles = " ".join(f"\"{f}\"" for f in sorted(glob.glob("bin/net/osomi/nativeactivity/*.class")))
+		# Inner classes are named OxC3Activity$1.class, and on POSIX hosts sh expands $1 inside double
+		# quotes to an (empty) positional parameter, collapsing every inner class into OxC3Activity.class.
+		# d8 then dies with "type defined multiple times". Single quotes keep $ literal there; cmd.exe
+		# doesn't expand $ and doesn't understand single quotes, so it keeps the double-quoted form.
+
+		if os.name == "nt":
+			classFiles = " ".join(f"\"{f}\"" for f in sorted(glob.glob("bin/net/osomi/nativeactivity/*.class")))
+		else:
+			classFiles = " ".join(shlex.quote(f) for f in sorted(glob.glob("bin/net/osomi/nativeactivity/*.class")))
+
 		common.run(f"{d8Command()} {classFiles} --min-api {args.api}")
 	finally:
 		os.chdir(cwd)

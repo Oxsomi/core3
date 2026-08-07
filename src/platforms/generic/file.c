@@ -997,9 +997,15 @@ Bool File_getInfoVirtualInternal(FileInfo *info, const CharString *loc, const Al
 	//loc is root or a parent directory of a section, always a folder
 	if(!section) {
 
-		const CharString display = CharString_length(*loc) ? *loc : CharString_createRefCStrConst("//.");
+		//Re-qualified with the // marker resolve stripped, so info->path is itself a valid virtual path
+
 		CharString path = CharString_createNull();
-		gotoIfError3(clean, CharString_createCopy(display, alloc, &path, e_rr));
+
+		if(CharString_length(*loc)) {
+			gotoIfError3(clean, CharString_format(alloc, &path, e_rr, "//%.*s", (int) CharString_length(*loc), loc->ptr));
+		}
+
+		else gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst("//."), alloc, &path, e_rr));
 		*info = (FileInfo) {
 			.path   = path,
 			.type   = EFileType_Folder,
@@ -1013,10 +1019,10 @@ Bool File_getInfoVirtualInternal(FileInfo *info, const CharString *loc, const Al
 		const CAFile *caFile = &Platform_instance->archives.ptr[section->loadedAndId << 1 >> 1];
 		CAHandle handle = CAFile_resolve(caFile, subPath);
 
-		//Full path is just loc since it's already resolved and normalized
+		//Re-qualified with the // marker resolve stripped, so info->path is itself a valid virtual path
 
 		CharString path = CharString_createNull();
-		gotoIfError3(clean, CharString_createCopy(*loc, alloc, &path, e_rr));
+		gotoIfError3(clean, CharString_format(alloc, &path, e_rr, "//%.*s", (int) CharString_length(*loc), loc->ptr));
 
 		*info = (FileInfo) {
 			.path      = path,
@@ -1069,11 +1075,38 @@ typedef struct ForeachFile {
 	CharString currentPath;
 } ForeachFile;
 
+//Re-qualifies an archive internal name ("hlsl/foo.hlsl") as a full virtual path
+//("//<section>/hlsl/foo.hlsl") before forwarding to the user's callback. The archive only knows its own
+//names, but foreach's contract is that every reported path is itself a valid input for the other File_*
+//functions, matching the absolute paths the physical foreach reports.
+
+static Bool File_virtualForeachCallback(const FileInfo *info, ForeachFile *foreach, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	CharString path = CharString_createNull();
+
+	gotoIfError3(clean, CharString_format(
+		alloc, &path, e_rr, "//%.*s%.*s",
+		(int) CharString_length(foreach->currentPath), foreach->currentPath.ptr,
+		(int) CharString_length(info->path), info->path.ptr
+	));
+
+	FileInfo prefixed = *info;
+	prefixed.path = path;
+
+	gotoIfError3(clean, foreach->callback(&prefixed, foreach->userData, alloc, e_rr));
+
+clean:
+	CharString_free(&path, alloc);
+	return s_uccess;
+}
+
 Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	ForeachFile *foreach     = (ForeachFile*)userData;
+	CharString prefixed      = CharString_createNull();
 	CharString resolvedLower = CharString_createNull();
 	CharString resolvedSlash = CharString_createNull();
 	CharString secLower      = CharString_createNull();
@@ -1156,8 +1189,17 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 				gotoIfError3(clean, CharString_createCopy(parent, alloc, &parentCopy, e_rr));
 				gotoIfError3(clean, ListCharString_pushBack(&visited, parentCopy, alloc, e_rr));
 
+				//Emitted with the // marker so the callback can hand the path straight back to File_*;
+				//the visited dedup above stays on the unprefixed form.
+
+				CharString_free(&prefixed, alloc);
+
+				gotoIfError3(clean, CharString_format(
+					alloc, &prefixed, e_rr, "//%.*s", (int) CharString_length(parent), parent.ptr
+				));
+
 				FileInfo info = (FileInfo) {
-					.path   = parentCopy,
+					.path   = prefixed,
 					.type   = EFileType_Folder,
 					.access = EFileAccess_Read
 				};
@@ -1171,8 +1213,14 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 
 		if(emitSection) {
 
+			CharString_free(&prefixed, alloc);
+
+			gotoIfError3(clean, CharString_format(
+				alloc, &prefixed, e_rr, "//%.*s", (int) CharString_length(secLower), secLower.ptr
+			));
+
 			FileInfo info = (FileInfo) {
-				.path   = secLower,
+				.path   = prefixed,
 				.type   = EFileType_Folder,
 				.access = EFileAccess_Read
 			};
@@ -1190,7 +1238,7 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 			if(queryInsideSection)
 				CharString_cut(&resolvedLower, CharString_length(secSlash), 0, &child);
 
-			//currentPath is used by File_virtualCallback to prepend section prefix
+			//currentPath is what File_virtualForeachCallback prepends to each archive internal name
 			foreach->currentPath = secSlash;
 
 			CAHandle handle = CAFile_resolve(caFile, child);
@@ -1201,8 +1249,8 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 			gotoIfError3(clean, CAFile_foreach(
 				caFile,
 				handle,
-				foreach->callback,
-				foreach->userData,
+				(FileCallback) File_virtualForeachCallback,
+				foreach,
 				foreach->isRecursive,
 				alloc,
 				e_rr
@@ -1220,6 +1268,7 @@ clean:
 		SpinLock_unlock(&Platform_instance->virtualSectionsLock);
 
 	ListCharString_freeUnderlying(&visited, alloc);        //visited holds owned copies of the top-level dir names
+	CharString_free(&prefixed, alloc);
 	CharString_free(&resolvedLower, alloc);
 	CharString_free(&resolvedSlash, alloc);
 	CharString_free(&secLower, alloc);

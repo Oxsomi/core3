@@ -51,6 +51,12 @@ Bool packageFile(const FileInfo *file, CAFileRecursion *pkgFile, const Allocator
 	CharString subPath = CharString_createNull();
 	Buffer data = Buffer_createNull();
 
+	//Virtual foreach also echoes the queried folder itself ("//section" for a root of "//section/"),
+	//where physical foreach only reports children. There's nothing to cut there; it IS the root.
+
+	if(CharString_length(file->path) < CharString_length(pkgFile->root))
+		goto clean;
+
 	if(!CharString_cut(&file->path, CharString_length(pkgFile->root), 0, &subPath))
 		retError(clean, Error_invalidState(0, "packageFile()::file.path cut failed"));
 
@@ -189,6 +195,14 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 	gotoIfError3(clean, File_resolve(&settings->input, &isVirtual, 0, &Platform_instance->defaultDir, alloc, &resolved, e_rr));
 
 	gotoIfError3(clean, CharString_append(&resolved, '/', alloc, e_rr));
+
+	//Foreach reports full virtual paths ("//section/...") while resolve strips the marker; re-add it so
+	//the root cut in packageFile lines up when a virtual folder is being packaged.
+
+	if(isVirtual) {
+		const CharString virtualPrefix = CharString_createRefCStrConst("//");
+		gotoIfError3(clean, CharString_insertString(&resolved, &virtualPrefix, 0, alloc, e_rr));
+	}
 
 	CAFileRecursion caFileRecursion = (CAFileRecursion) {
 		.archive = &archive,
