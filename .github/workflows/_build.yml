@@ -236,7 +236,16 @@ jobs:
           arch: x86_64
           target: default
           force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # -cpu host, because the emulator's default CPU model reports an Ivy Bridge era feature set (no FMA, no
+          # BMI, empty cpuid leaf 7) while KVM runs every instruction straight on the runner's silicon. The guest
+          # therefore executes the FMA and BMI2 code we compile with just fine -- types_math and types_container
+          # pass -- but Platform_checkCPUSupport reads cpuid, believes the model, and refuses to start.
+          # Passing the host's cpuid through makes the two agree. Must stay last: -qemu hands everything after it
+          # to qemu.
+          # If a runner image ever ships an emulator that won't take it, the fallback is to build this job with
+          # -simd False (Platform_checkCPUSupport is unconditional there); x86_64 SIMD is already covered natively
+          # by the Linux x64 jobs, this job exists for the android platform layer.
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -qemu -cpu host
           disable-animations: true
           script: ${{ inputs.python_cmd }} build_android.py --skip_build --apk --sign --run -mode Release -arch x64 -tests True -package net.osomi.test -version 0.1.0 -name "OxC3 test" -keystore_password oxc3ci -test_timeout 900
 

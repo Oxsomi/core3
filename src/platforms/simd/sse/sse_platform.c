@@ -43,10 +43,14 @@ Bool Platform_checkCPUSupport() {
 	U32 mask2 =
 		(1 << 0) | (1 << 1) | (1 << 9) | (1 << 12) | (1 << 19) | (1 << 20) | (1 << 25) | (1 << 27) | (1 << 28);
 
-	U32 cpuInfo[4];
+	//Zeroed because cpuid leaves the array untouched when the leaf is above the CPU's maximum, which leaf 7 can be
+	// on pre-2012 parts and on VM CPU models that report an older family; reading it uninitialized decides support
+	// from stack garbage.
+
+	U32 cpuInfo[4] = { 0 };
 	Platform_getCPUId(1, cpuInfo);
 
-	U32 cpuInfo1[4];
+	U32 cpuInfo1[4] = { 0 };
 	Platform_getCPUId(7, cpuInfo1);
 
 	U32 mask1_1 = 1 << 3;                //BMI1
