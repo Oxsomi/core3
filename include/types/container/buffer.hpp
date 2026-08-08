@@ -37,10 +37,9 @@ namespace oxc {
 	}
 
 	//Generated wrapper around the C Buffer.
-	//RAII around the C Buffer.
-	//Only the allocating half is owned; the createRef* helpers in buffer_base.h deliberately aren't wrapped,
-	// since a ref must not be freed and that distinction is exactly what this type is for.
-	//Use handle() to build one and hand it to C.
+	//RAII around the C Buffer. Only the allocating half is owned; the createRef* helpers in
+	//buffer_base.h deliberately aren't wrapped, since a ref must not be freed and that distinction
+	//is exactly what this type is for. Use handle() to build one and hand it to C.
 	class Buffer {
 
 		c::Buffer self;
