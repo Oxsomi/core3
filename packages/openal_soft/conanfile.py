@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class openal_soft(ConanFile):
 
 	name = "openal_soft"
-	version = "2024.11.04.01"
+	version = "2026.08.06"
 
 	# Optional metadata
 	license = "BSD-3 License"
@@ -20,6 +20,63 @@ class openal_soft(ConanFile):
 
 	# Binary configuration
 	settings = "os", "compiler", "build_type", "arch"
+	options = { "enableASAN": [ True, False ], "enableUBSAN": [ True, False ] }
+	default_options = { "enableASAN": False, "enableUBSAN": False }
+
+	# A sanitized consumer can't link unsanitized dependencies, so the flags have to reach these too.
+	# MSVC's STL records its ASan container annotation state per object and lld-link rejects the mix,
+	# hence disabling the annotations rather than instrumenting the STL.
+
+	def _sanitizerFlags(self):
+
+		flags = []
+
+		if self.options.enableASAN:
+			flags += [ "/fsanitize=address", "/Oy-", "-D_DISABLE_STRING_ANNOTATION=1", "-D_DISABLE_VECTOR_ANNOTATION=1" ]
+
+		if self.options.enableUBSAN:
+			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr", "/Oy-" ]
+
+		return flags
+
+	# The compile side flags alone aren't enough: CMake drives lld-link directly, so the /defaultlib
+	# directives clang-cl embeds for the sanitizer runtimes never reach it.
+	# Point the linker at clang's own runtime directory and name the libraries here too.
+
+	def _sanitizerLinkFlags(self):
+
+		if not (self.options.enableASAN or self.options.enableUBSAN):
+			return []
+
+		if self.settings.os != "Windows":
+			return []
+
+		import glob as _glob
+		import shutil as _shutil
+
+		executables = self.conf.get("tools.build:compiler_executables", default={}, check_type=dict)
+		cc = executables.get("c") or "clang-cl"
+		resolved = cc if os.path.isabs(cc) else (_shutil.which(cc) or "")
+
+		if not resolved:
+			return []
+
+		binDir = os.path.dirname(resolved)
+		found = _glob.glob(os.path.join(binDir, "..", "lib", "clang", "*", "lib", "windows"))
+
+		if not found:
+			return []
+
+		flags = [ "-libpath:%s" % os.path.normpath(found[0]) ]
+
+		if self.options.enableASAN:
+			flags += [ "clang_rt.asan_dynamic-x86_64.lib", "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" ]
+
+		if self.options.enableUBSAN:
+			flags += [ "clang_rt.ubsan_standalone-x86_64.lib" ]
+
+		return flags
+
 
 	exports_sources = [ "include/*" ]
 
@@ -31,13 +88,40 @@ class openal_soft(ConanFile):
 		self.settings.rm_safe("compiler.libcxx")
 
 	def generate(self):
-
 		deps = CMakeDeps(self)
 		deps.generate()
 
 		tc = CMakeToolchain(self)
 		tc.cppstd = "20"
-		tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
+
+		if self.settings.os == "Linux":
+			tc.cache_variables["ALSOFT_BACKEND_ALSA"]      = True
+			tc.cache_variables["ALSOFT_BACKEND_PIPEWIRE"]  = True
+			tc.cache_variables["ALSOFT_BACKEND_OSS"]       = False
+			tc.cache_variables["ALSOFT_BACKEND_WAVE"]      = False
+		elif self.settings.os == "Windows":
+			tc.cache_variables["ALSOFT_BACKEND_WASAPI"]    = True
+			tc.cache_variables["ALSOFT_BACKEND_DSOUND"]    = True
+			tc.cache_variables["ALSOFT_BACKEND_WINMM"]     = False
+			tc.cache_variables["ALSOFT_BACKEND_WAVE"]      = False
+		elif self.settings.os == "Macos":
+			tc.cache_variables["ALSOFT_BACKEND_COREAUDIO"] = True
+			tc.cache_variables["ALSOFT_BACKEND_WAVE"]      = False
+
+		# On Windows the VS generator is already multi-config by default;
+		# overriding CMAKE_CONFIGURATION_TYPES would collapse it to a single config.
+		# On single-config generators (Ninja, Makefiles) we must pin the build type.
+		if self.settings.os != "Windows":
+			tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
+
+		for flag in self._sanitizerLinkFlags():
+			tc.extra_exelinkflags.append(flag)
+			tc.extra_sharedlinkflags.append(flag)
+
+		for flag in self._sanitizerFlags():
+			tc.extra_cflags.append(flag)
+			tc.extra_cxxflags.append(flag)
+
 		tc.generate()
 
 	def source(self):
@@ -53,7 +137,6 @@ class openal_soft(ConanFile):
 		cmake.build()
 
 	def package(self):
-
 		cmake = CMake(self)
 		cmake.build(target="OpenAL")
 
@@ -61,54 +144,43 @@ class openal_soft(ConanFile):
 		headers_dst = os.path.join(self.package_folder, "include/AL")
 		copy(self, "*.h", headers_src, headers_dst)
 
-		lib_src = os.path.join(self.build_folder, "lib")
 		lib_dst = os.path.join(self.package_folder, "lib")
 		bin_dst = os.path.join(self.package_folder, "bin")
 
-		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
-		if not self.settings.os == "Windows":
-		
-			if self.settings.os == "Linux":
-				copy(self, "*.so", self.build_folder, lib_dst)
-				copy(self, "*.so", self.build_folder, bin_dst)
-				copy(self, "*.so.*", self.build_folder, lib_dst)
-				copy(self, "*.so.*", self.build_folder, bin_dst)
+		if self.settings.os != "Windows":
+
+			if self.settings.os in ("Linux", "Android"):
+				copy(self, "*.so",       self.build_folder, lib_dst)
+				copy(self, "*.so",       self.build_folder, bin_dst)
+				copy(self, "*.so.*",     self.build_folder, lib_dst)
+				copy(self, "*.so.*",     self.build_folder, bin_dst)
 				copy(self, "*.so.*.*.*", self.build_folder, lib_dst)
 				copy(self, "*.so.*.*.*", self.build_folder, bin_dst)
-				
 			else:
 				copy(self, "*.dylib", self.build_folder, lib_dst)
 				copy(self, "*.dylib", self.build_folder, bin_dst)
-			
+
 			copy(self, "*.a", self.build_folder, lib_dst)
-			
-		# Windows uses more complicated setups
+
 		else:
-
-			lib_dbg_src = os.path.join(self.build_folder, "Debug")
-
-			copy(self, "*.lib", lib_dbg_src, lib_dst)
-			copy(self, "*.pdb", lib_dbg_src, lib_dst)
-			copy(self, "*.exp", lib_dbg_src, lib_dst)
-			copy(self, "*.dll", lib_dbg_src, bin_dst)
-
-			# Copy release libs
-			
-			lib_rel_src = os.path.join(self.build_folder, "Release")
-
-			copy(self, "*.lib", lib_rel_src, lib_dst)
-			copy(self, "*.pdb", lib_rel_src, lib_dst)
-			copy(self, "*.exp", lib_rel_src, lib_dst)
-			copy(self, "*.dll", lib_rel_src, bin_dst)
+			# Copy per-config subdirs; only the config we built will be populated
+			for config in ("Debug", "Release", "RelWithDebInfo", "MinSizeRel"):
+				src = os.path.join(self.build_folder, config)
+				if not os.path.isdir(src):
+					continue
+				copy(self, "*.lib", src, lib_dst)
+				copy(self, "*.pdb", src, lib_dst)
+				copy(self, "*.exp", src, lib_dst)
+				copy(self, "*.dll", src, bin_dst)
 
 	def package_info(self):
-
 		self.cpp_info.set_property("cmake_file_name", "openal_soft")
 		self.cpp_info.set_property("cmake_target_name", "openal_soft::openal_soft")
 		self.cpp_info.set_property("pkg_config_name", "openal_soft")
-		
-		if not self.settings.os == "Windows":
-			self.cpp_info.libs = [ "alsoft.common", "alsoft.excommon", "openal" ]
 
+		# Only expose the final linked library; alsoft.common and alsoft.excommon
+		# are internal static libs merged into it and must not be listed here.
+		if self.settings.os == "Windows":
+			self.cpp_info.libs = ["OpenAL32"]
 		else:
-			self.cpp_info.libs = [ "alsoft.common", "alsoft.excommon", "OpenAL32" ]
+			self.cpp_info.libs = ["openal"]

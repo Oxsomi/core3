@@ -1,5 +1,5 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-# Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+# Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,38 +19,44 @@
 
 message("-- Enabling Direct3D12 support...")
 
-file(GLOB_RECURSE graphicsApiHeaders "../../../inc/graphics/d3d12/*.h")
-file(GLOB_RECURSE graphicsApiSources "generic/*.c")
+file(GLOB_RECURSE graphicsApiHeaders CONFIGURE_DEPENDS "../../../include/graphics/d3d12/*.h")
+file(GLOB_RECURSE graphicsApiSources CONFIGURE_DEPENDS "generic/*.c")
 
 set(TARGET_NAME OxC3_graphics_d3d12)
 
 if(NOT DynamicLinkingGraphics)
 
-    set(TARGET_NAME OxC3_graphics)
-    message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
+	set(TARGET_NAME OxC3_graphics)
+	message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
 
-    target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=GRAPHICS_API_D3D12)
+	target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=GRAPHICS_API_D3D12)
 
-    target_sources(OxC3_graphics PUBLIC ${graphicsApiHeaders})
-    target_sources(OxC3_graphics PRIVATE ${graphicsApiSources})
-    
-    source_group("Source Files (${graphicsApi})" FILES ${graphicsApiSources})
-    source_group("Header Files (${graphicsApi})" FILES ${graphicsApiSources})
+	target_sources(OxC3_graphics PUBLIC ${graphicsApiHeaders})
+	target_sources(OxC3_graphics PRIVATE ${graphicsApiSources})
+	
+	source_group("Source Files (${graphicsApi})" FILES ${graphicsApiSources})
+	source_group("Header Files (${graphicsApi})" FILES ${graphicsApiSources})
 
 else()
-    add_library(
-        OxC3_graphics_d3d12
-        SHARED
-        ${graphicsApiHeaders}
-        ${graphicsApiSources}
-        CMakeLists.txt
-    )
-endif()
 
-target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container)
+	add_library(
+		OxC3_graphics_d3d12
+		SHARED
+		${graphicsApiHeaders}
+		${graphicsApiSources}
+		CMakeLists.txt
+	)
 
-if(DynamicLinkingGraphics)
-    target_link_libraries(OxC3_graphics_d3d12 PUBLIC OxC3_graphics)
+	target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container)
+
+	target_link_libraries(OxC3_graphics_d3d12 PUBLIC OxC3_graphics)
+
+	# See the matching note in ../vulkan/CMakeLists.txt: consumers link the generic layer, never the backend,
+	# so there's exactly one copy of it (and of Platform_instance) in the process.
+
+	target_link_libraries(OxC3_graphics_target INTERFACE OxC3_graphics)
+	add_dependencies(OxC3_graphics_target OxC3_graphics_d3d12)
+
 endif()
 
 set_target_properties(${TARGET_NAME} PROPERTIES FOLDER Oxsomi/graphics)
@@ -62,15 +68,23 @@ target_include_directories(${TARGET_NAME} PUBLIC "${CMAKE_BINARY_DIR}/external/a
 
 if(NOT ${ARM})
 
-    # AMD AGS and NVAPI are required because Direct3D12 was apparently not good enough :/
-    # These are not supported for ARM, so don't include them there
+	# AMD AGS and NVAPI are required because Direct3D12 was apparently not good enough :/
+	# These are not supported for ARM, so don't include them there
 
-    # NVAPI, used for NV extensions and getting driver version
+	# NVAPI, used for NV extensions and getting driver version
 
-    find_package(ags REQUIRED)
-    find_package(nvapi REQUIRED)
+	find_package(ags)
+	find_package(nvapi)
 
-    target_link_libraries(${TARGET_NAME} PUBLIC ags::ags nvapi::nvapi)
+	if (ags_FOUND)
+		target_link_libraries(${TARGET_NAME} PUBLIC ags::ags)
+		target_compile_definitions(${TARGET_NAME} PUBLIC -D_HAS_AMD_AGS)
+	endif()
+
+	if (nvapi_FOUND)
+		target_link_libraries(${TARGET_NAME} PUBLIC nvapi::nvapi)
+		target_compile_definitions(${TARGET_NAME} PUBLIC -D_HAS_NV_API)
+	endif()
 
 endif()
 

@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/platforms/windows/wbuffer_random.c
+
 #include "types/container/buffer.h"
 #include "types/base/time.h"
 
@@ -28,7 +30,7 @@
 #include <Windows.h>
 #include <bcrypt.h>
 
-Bool Buffer_csprng(Buffer target) {
+Bool Buffer_csprng(const Buffer target) {
 
 	if(!Buffer_length(target) || Buffer_isConstRef(target))
 		return false;

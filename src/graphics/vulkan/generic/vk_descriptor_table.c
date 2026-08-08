@@ -1,0 +1,611 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//graphics/vulkan/generic/vk_descriptor_table.c
+
+#include "graphics/vulkan/vk_device.h"
+#include "graphics/vulkan/vk_instance.h"
+#include "graphics/vulkan/vk_buffer.h"
+#include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/descriptor_heap.h"
+#include "graphics/generic/descriptor_layout.h"
+#include "graphics/generic/texture.h"
+#include "graphics/generic/sampler.h"
+#include "graphics/generic/tlas.h"
+#include "graphics/generic/device_buffer.h"
+#include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
+#include "types/container/string.h"
+#include "platforms/logx.h"
+#include "types/base/constants.h"
+
+void VkDescriptor_loseRef(RefPtr *resource, TextureDescriptorRange texture) {
+
+	Bool s_uccess = true;
+
+	if(!resource)
+		return;
+
+	UnifiedTexture tex = TextureRef_getUnifiedTexture(resource, NULL);
+	VkUnifiedTexture *texExt = TextureRef_getImgExtT(resource, Vk, 0, texture.imageId);
+
+	SpinLock *lock = &texExt->lock;
+	ELockAcquire acq = SpinLock_lock(lock, 1 * SECOND);
+	Error *e_rr = NULL;
+
+	if(acq < ELockAcquire_Success)
+		retError(clean, Error_invalidState(0, "VkDescriptor_loseRef() couldn't acquire lock"));
+
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(tex.resource.device), Vk);
+
+	U64 dat = 0;
+	Buffer_memcpy(Buffer_createRef(&dat, sizeof(dat)), Buffer_createRefConst(&texture, sizeof(texture)));
+
+	for (U64 viewId = 0; viewId < texExt->views.length; ++viewId)
+		if (texExt->views.ptr[viewId].textureDescU64 == dat) {
+
+			U64 refCnt = --texExt->views.ptrNonConst[viewId].refCount;
+
+			if (!refCnt) {
+				deviceExt->destroyImageView(deviceExt->device, texExt->views.ptr[viewId].view, NULL);
+				texExt->views.ptrNonConst[viewId].view = NULL;        //Can't pop it, others might reference beyond this
+			}
+
+			break;
+		}
+
+clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(lock);
+
+	(void) s_uccess;
+}
+
+void VkDescriptorTable_loseRef(DescriptorTable *table, U64 i, U64 j) {
+
+	DescriptorLayout *layout = DescriptorLayoutRef_ptr(table->layout);
+
+	DescriptorBinding layoutBind = layout->info.bindings.ptr[i];
+	DescriptorTableBinding tableBind = table->bindings.ptr[i];
+
+	ESHRegisterType type = layoutBind.registerType & ESHRegisterType_TypeMask;
+
+	//Clean up the views
+
+	if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd) {
+
+		if(layoutBind.count > 1)
+			VkDescriptor_loseRef(tableBind.multiple.resources.ptr[j], tableBind.multiple.textures.ptr[j]);
+
+		else VkDescriptor_loseRef(tableBind.single.resource, tableBind.single.texture);
+	}
+}
+
+void VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, const Allocator *alloc) {
+
+	(void) alloc;
+
+	DescriptorHeap *heap = DescriptorHeapRef_ptr(table->parent);
+	VkDescriptorHeap *heapExt = DescriptorHeap_ext(heap, Vk);
+	VkDescriptorTable *tableExt = DescriptorTable_ext(table, Vk);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(heap->device), Vk);
+	DescriptorLayout *layout = DescriptorLayoutRef_ptr(table->layout);
+
+	U32 count = 0;
+
+	for(; count < 4 && tableExt->sets[count]; ++count)
+		;
+
+	if(count)
+		deviceExt->freeDescriptorSets(deviceExt->device, heapExt->pool, count, tableExt->sets);
+
+	for (U64 i = 0; i < tableExt->ranges.length; ++i) {
+
+		VkDescriptorTableRange *range = &tableExt->ranges.ptrNonConst[i];
+
+		ESHRegisterType type = layout->info.bindings.ptr[i].registerType & ESHRegisterType_TypeMask;
+
+		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+			ListVkDescriptorImageInfo_free(&range->updateImages, alloc);
+
+		else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
+			ListVkDescriptorBufferInfo_free(&range->updateBuffers, alloc);
+
+		else if(type == ESHRegisterType_AccelerationStructure)
+			ListVkAccelerationStructureKHR_free(&range->tlases, alloc);
+
+		else if(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState)
+			ListVkDescriptorImageInfo_free(&range->updateImages, alloc);
+
+		for(U64 j = 0; j < range->views.length; ++j) {
+
+			U64 oldLoc = range->views.ptr[j];
+
+			if (oldLoc)
+				VkDescriptorTable_loseRef(table, i, j);
+		}
+
+		ListU32_free(&range->views, alloc);
+		ListU32_free(&range->newViews, alloc);
+	}
+
+	ListVkDescriptorTableRange_free(&tableExt->ranges, alloc);
+}
+
+Bool VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(
+	DescriptorHeapRef *heapRef,
+	DescriptorTable *table,
+	const CharString *name,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = heapRef ? GraphicsDeviceRef_getAlloc(DescriptorHeapRef_ptr(heapRef)->device) : NULL;
+
+	CharString tmpName = CharString_createNull();
+
+	const DescriptorHeap *heap = DescriptorHeapRef_ptr(heapRef);
+	VkDescriptorHeap *heapExt = DescriptorHeap_ext(heap, Vk);
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(heap->device);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	DescriptorLayout *layout = DescriptorLayoutRef_ptr(table->layout);
+
+	VkDescriptorTable *tableExt = DescriptorTable_ext(table, Vk);
+	VkDescriptorLayout *layoutExt = DescriptorLayout_ext(layout, Vk);
+
+	U32 count = 1;
+
+	for(; count < 4 && layoutExt->layouts[count]; ++count)
+		;
+
+	VkDescriptorSetAllocateInfo allocInfo = (VkDescriptorSetAllocateInfo) {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = heapExt->pool,
+		.descriptorSetCount = count,
+		.pSetLayouts = layoutExt->layouts
+	};
+
+	gotoIfError3(clean, checkVkError(deviceExt->allocateDescriptorSets(deviceExt->device, &allocInfo, tableExt->sets), e_rr));
+	gotoIfError3(clean, ListVkDescriptorTableRange_resize(&tableExt->ranges, layout->info.bindings.length, alloc, e_rr));
+
+	for (U64 i = 0; i < tableExt->ranges.length; ++i) {
+
+		ESHRegisterType type = layout->info.bindings.ptr[i].registerType & ESHRegisterType_TypeMask;
+
+		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+			gotoIfError3(clean, ListU32_resize(
+				&tableExt->ranges.ptrNonConst[i].views,
+				layout->info.bindings.ptr[i].count,
+				alloc,
+				e_rr
+			));
+	}
+
+	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
+
+	for (U8 i = 0; i < count; ++i)
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name) && instanceExt->debugSetName) {
+
+			gotoIfError3(clean, CharString_format(
+				alloc,
+				&tmpName,
+				e_rr,
+				"%.*s set %"PRIu8,
+				(int) CharString_length(*name),
+				name->ptr,
+				i
+			));
+
+			const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+				.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET,
+				.pObjectName = tmpName.ptr,
+				.objectHandle = (U64) tableExt->sets[i]
+			};
+
+			gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
+			CharString_free(&tmpName, alloc);
+		}
+
+	//Prepare bind command(s)
+	//We should sort the set ids, just in case it's 0,2,1 for example (that'd generate 2 bind commands)
+
+	U32 sets[4] = { layoutExt->setIds[0], layoutExt->setIds[1], layoutExt->setIds[2], layoutExt->setIds[3] };
+	ListU32 sortSets = (ListU32) { 0 };
+	gotoIfError3(clean, ListU32_createRef(sets, count, &sortSets, e_rr));
+	GenericList_sortU32(ListU32_toList(sortSets));
+
+	U32 prevSetId = U32_MAX;
+
+	for(U8 i = 0; i < count; ++i) {
+
+		//If we're a subsequent id, we can simply increase that bind command
+
+		U32 nextSetId = sets[i];
+
+		if (prevSetId == U32_MAX || nextSetId != prevSetId + 1) {
+			tableExt->offsets[tableExt->bindCommands] = nextSetId;
+			++tableExt->bindCommands;
+		}
+
+		++tableExt->counts[tableExt->bindCommands - 1];
+		prevSetId = nextSetId;
+	}
+
+clean:
+	CharString_free(&tmpName, alloc);
+	return s_uccess;
+}
+
+Bool VK_WRAP_FUNC(DescriptorTable_unsetDescriptors)(
+	DescriptorTable *table,
+	U64 bindId,
+	U64 arrayId,
+	U64 count,
+	Error *e_rr
+) {
+
+	(void) e_rr;
+
+	DescriptorLayout *layout = DescriptorLayoutRef_ptr(table->layout);
+	ESHRegisterType type = layout->info.bindings.ptr[bindId].registerType & ESHRegisterType_TypeMask;
+
+	//unsetDescriptors can free views, but only textures have views
+
+	if(!(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd))
+		return true;
+
+	VkDescriptorTable *tableExt = DescriptorTable_ext(table, Vk);
+
+	for(U64 i = 0; i < count; ++i) {
+		VkDescriptorTable_loseRef(table, bindId, arrayId + i);
+		tableExt->ranges.ptr[bindId].views.ptrNonConst[arrayId + i] = 0;        //Mark as never set again
+	}
+
+	return true;
+}
+
+Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
+	DescriptorTable *table,
+	U64 bindId,
+	U64 arrayId,
+	const ListDescriptor *darr,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	const DescriptorHeap *heap = DescriptorHeapRef_ptr(table->parent);
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(heap->device);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(heap->device), Vk);
+
+	VkDescriptorTable *tableExt = DescriptorTable_ext(table, Vk);
+	DescriptorLayout *layout = DescriptorLayoutRef_ptr(table->layout);
+	VkDescriptorLayout *layoutExt = DescriptorLayout_ext(layout, Vk);
+	ListDescriptorBinding bindings = layout->info.bindings;
+	DescriptorBinding binding = bindings.ptr[bindId];
+
+	ESHRegisterType type = binding.registerType & ESHRegisterType_TypeMask;
+	Bool isWrite = binding.registerType & ESHRegisterType_IsWrite;
+	Bool isArrayType = binding.registerType & ESHRegisterType_IsArray;
+
+	VkDescriptorSet set = NULL;
+	CharString temp = CharString_createNull();
+	Bool allocatedNewViews = false;
+
+	for(U8 i = 0; i < 4; ++i)
+		if (layoutExt->setIds[i] == binding.binding.space) {
+			set = tableExt->sets[i];
+			break;
+		}
+
+	VkWriteDescriptorSet descriptor = (VkWriteDescriptorSet) {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstBinding = binding.binding.binding,
+		.dstArrayElement = (U32) arrayId,
+		.dstSet = set,
+		.descriptorCount = (U32) darr->length
+	};
+
+	VkWriteDescriptorSetAccelerationStructureKHR tlasDesc = (VkWriteDescriptorSetAccelerationStructureKHR) {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR
+	};
+
+	VkDescriptorTableRange *range = &tableExt->ranges.ptrNonConst[bindId];
+
+	union {
+		VkDescriptorBufferInfo buffer;
+		VkDescriptorImageInfo image;
+		VkAccelerationStructureKHR tlas;
+	} tmpDesc;
+
+	U32 newViewId = 0;
+
+	//Note: even though d.resource is properly guarded everywhere, it can only be used with robustness.
+	//        This extension is poorly supported everywhere, so can't use that. Maybe some day.
+
+	switch (type) {
+
+		case ESHRegisterType_ConstantBuffer: {
+
+			if(darr->length > 1)
+				gotoIfError3(clean, ListVkDescriptorBufferInfo_resize(&range->updateBuffers, darr->length, alloc, e_rr));
+
+			VkDescriptorBufferInfo *buf = darr->length > 1 ? range->updateBuffers.ptrNonConst : &tmpDesc.buffer;
+
+			for(U64 i = 0; i < darr->length; ++i) {
+
+				Descriptor d = darr->ptr[i];
+
+				if(d.resource && !Descriptor_endBuffer(&d)) {
+					U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
+					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(&d);
+				}
+
+				if (d.resource)
+					buf[i] = (VkDescriptorBufferInfo) {
+						.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Vk)->buffer,
+						.offset = Descriptor_startBuffer(&d),
+						.range = Descriptor_bufferLength(&d)
+					};
+
+				else buf[i] = (VkDescriptorBufferInfo) { 0 };
+			}
+
+			descriptor.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptor.pBufferInfo = buf;
+			break;
+		}
+
+		case ESHRegisterType_Sampler:
+		case ESHRegisterType_SamplerComparisonState: {
+
+			if(darr->length > 1)
+				gotoIfError3(clean, ListVkDescriptorImageInfo_resize(&range->updateImages, darr->length, alloc, e_rr));
+
+			VkDescriptorImageInfo *img = darr->length > 1 ? range->updateImages.ptrNonConst : &tmpDesc.image;
+
+			for(U64 i = 0; i < darr->length; ++i) {
+
+				const Descriptor *d = &darr->ptr[i];
+
+				if (d->resource)
+					img[i] = (VkDescriptorImageInfo) { .sampler = *Sampler_ext(SamplerRef_ptr(d->resource), Vk) };
+
+				else img[i] = (VkDescriptorImageInfo) { 0 };
+			}
+
+			descriptor.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+			descriptor.pImageInfo = img;
+			break;
+		}
+
+		case ESHRegisterType_AccelerationStructure: {
+
+			if(darr->length > 1)
+				gotoIfError3(clean, ListVkAccelerationStructureKHR_resize(&range->tlases, darr->length, alloc, e_rr));
+
+			VkAccelerationStructureKHR *tlas = darr->length > 1 ? range->tlases.ptrNonConst : &tmpDesc.tlas;
+
+			for(U64 i = 0; i < darr->length; ++i) {
+
+				const Descriptor *d = &darr->ptr[i];
+
+				if (d->resource)
+					tlas[i] = (VkAccelerationStructureKHR) { TLAS_ext(TLASRef_ptr(d->resource), Vk)->as };
+
+				else tlas[i] = (VkAccelerationStructureKHR) { 0 };
+			}
+
+			tlasDesc.accelerationStructureCount = (U32) darr->length;
+			tlasDesc.pAccelerationStructures = tlas;
+
+			descriptor.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+			descriptor.pNext = &tlasDesc;
+			break;
+		}
+
+		case ESHRegisterType_ByteAddressBuffer:
+		case ESHRegisterType_StorageBuffer:
+		case ESHRegisterType_StorageBufferAtomic:
+		case ESHRegisterType_StructuredBuffer:
+		case ESHRegisterType_StructuredBufferAtomic: {
+
+			if(darr->length > 1)
+				gotoIfError3(clean, ListVkDescriptorBufferInfo_resize(&range->updateBuffers, darr->length, alloc, e_rr));
+
+			VkDescriptorBufferInfo *buf = darr->length > 1 ? range->updateBuffers.ptrNonConst : &tmpDesc.buffer;
+
+			for(U64 i = 0; i < darr->length; ++i) {
+
+				Descriptor d = darr->ptr[i];
+
+				if(d.resource && !Descriptor_endBuffer(&d)) {
+					U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
+					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(&d);
+				}
+
+				if(d.buffer.counter)
+					retError(clean, Error_unimplemented(
+						0, "DescriptorTable_setDescriptor: No support for vulkan atomic storage buffers yet"
+					));
+
+				if (d.resource)
+					buf[i] = (VkDescriptorBufferInfo) {
+						.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Vk)->buffer,
+						.offset = Descriptor_startBuffer(&d),
+						.range = Descriptor_bufferLength(&d)
+					};
+
+				else buf[i] = (VkDescriptorBufferInfo) { 0 };
+			}
+
+			descriptor.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			descriptor.pBufferInfo = buf;
+			break;
+		}
+
+		case ESHRegisterType_Texture1D:
+		case ESHRegisterType_Texture2D:
+		case ESHRegisterType_Texture3D:
+		case ESHRegisterType_TextureCube:
+		case ESHRegisterType_Texture2DMS: {
+
+			if(darr->length > 1) {
+				gotoIfError3(clean, ListVkDescriptorImageInfo_resize(&range->updateImages, darr->length, alloc, e_rr));
+				gotoIfError3(clean, ListU32_resize(&range->newViews, darr->length, alloc, e_rr));
+			}
+
+			VkDescriptorImageInfo *img = darr->length > 1 ? range->updateImages.ptrNonConst : &tmpDesc.image;
+			U32 *newViews = darr->length > 1 ? range->newViews.ptrNonConst : &newViewId;
+
+			for(U64 i = 0; i < darr->length; ++i)
+				newViews[i] = U32_MAX;
+
+			allocatedNewViews = true;
+
+			for(U64 i = 0; i < darr->length; ++i) {
+
+				Descriptor d = darr->ptr[i];
+
+				if(d.resource) {
+
+					UnifiedTexture tex = TextureRef_getUnifiedTexture(d.resource, NULL);
+
+					if(isArrayType && !d.texture.arrayCount)
+						d.texture.arrayCount = tex.length - d.texture.arrayId;
+
+					else if(!isArrayType)
+						d.texture.arrayCount = 1;
+
+					if (!isWrite) {
+						if(!d.texture.mipCount)
+							d.texture.mipCount = tex.levels - d.texture.mipId;
+					}
+
+					else if(!d.texture.mipCount)
+						d.texture.mipCount = 1;
+				}
+
+				VkImageView view = NULL;
+				gotoIfError3(clean, VkUnifiedTexture_getView(d, binding.registerType, &view, &newViews[i], e_rr));
+
+				//Turn view into descriptor
+
+				if (d.resource)
+					img[i] = (VkDescriptorImageInfo) {
+						.imageView = view,
+						.imageLayout = isWrite ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+					};
+
+				else img[i] = (VkDescriptorImageInfo) { 0 };
+			}
+
+			descriptor.descriptorType = isWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+			descriptor.pImageInfo = img;
+
+			allocatedNewViews = false;        //Success, no need to free the views
+
+			//Stored as viewId + 1: the value is only used as a "was set" flag
+			//(free re-derives the view from the texture descriptor), but viewId 0 is valid
+			//(first view of a texture), so 0 is reserved to mean "never set".
+
+			for(U64 i = 0; i < darr->length; ++i)
+				tableExt->ranges.ptr[bindId].views.ptrNonConst[arrayId + i] = newViews[i] + 1;
+
+			break;
+		}
+
+		case ESHRegisterType_SubpassInput:                //Doesn't do anything
+		case ESHRegisterType_PushConstants:
+		default:
+			descriptor.descriptorCount = 0;
+			break;
+	}
+
+	if(descriptor.descriptorCount)
+		deviceExt->updateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
+
+clean:
+
+	if (allocatedNewViews) {        //Release temporary views if invalid
+
+		U32 *newViews = darr->length > 1 ? range->newViews.ptrNonConst : &newViewId;
+
+		ELockAcquire acq = ELockAcquire_Invalid;
+		SpinLock *lock = NULL;
+
+		for(U64 i = 0; i < darr->length; ++i) {
+
+			const Descriptor *d = &darr->ptr[i];
+
+			if (!d->resource)
+				continue;
+
+			VkUnifiedTexture *texExt = TextureRef_getImgExtT(d->resource, Vk, 0, d->texture.imageId);
+			Bool canFree = true;
+
+			if(!lock) {
+
+				lock = &texExt->lock;
+				acq = SpinLock_lock(lock, 1 * SECOND);
+
+				if(acq < ELockAcquire_Success) {
+					Log_warnLnx("Couldn't free view while cleaning up (%"PRIu64")", i);
+					lock = NULL;
+					canFree = false;
+				}
+			}
+
+			if (canFree && newViews[i] != U32_MAX) {
+
+				U64 refCnt = --texExt->views.ptrNonConst[newViews[i]].refCount;
+
+				if (!refCnt) {
+					deviceExt->destroyImageView(deviceExt->device, texExt->views.ptr[newViews[i]].view, NULL);
+					texExt->views.ptrNonConst[newViews[i]].view = NULL;
+				}
+			}
+
+			//The lock release decision has to run for every entry
+			//(even skipped ones), otherwise a held lock could be reused for the next texture.
+
+			Bool releaseLock = true;
+
+			if (i + 1 < darr->length) {
+				Descriptor dnext = darr->ptr[i + 1];
+				releaseLock = dnext.resource != d->resource || dnext.texture.imageId != d->texture.imageId;
+			}
+
+			if(releaseLock && lock) {
+
+				if(acq == ELockAcquire_Acquired)
+					SpinLock_unlock(lock);
+
+				acq = ELockAcquire_Invalid;
+				lock = NULL;
+			}
+		}
+	}
+
+	CharString_free(&temp, alloc);
+	return s_uccess;
+}

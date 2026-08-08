@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,31 +18,34 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//graphics/generic/resource.c
+
+#include "types/container/list_impl.h"
 #include "graphics/generic/resource.h"
-#include "graphics/generic/allocator.h"
+#include "graphics/generic/device_allocator.h"
 #include "graphics/generic/device.h"
 
 TListImpl(DeviceResourceVersion);
+
+const C8 *EResourceType_names[EResourceType_Count] = {
+	"Undefined", "DeviceTexture", "RenderTargetOrDepthStencil", "DeviceBuffer", "Swapchain"
+};
 
 U16 TextureRange_width(TextureRange r) { return r.endRange[0] - r.startRange[0]; }
 U16 TextureRange_height(TextureRange r) { return r.endRange[1] - r.startRange[1]; }
 U16 TextureRange_length(TextureRange r) { return r.endRange[2] - r.startRange[2]; }
 
-Bool GraphicsResource_free(GraphicsResource *resource, RefPtr *resourceRef) {
+void GraphicsResource_free(GraphicsResource *resource, RefPtr *resourceRef) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(resource->device);
-	Bool success = true;
 
 	if(resource->allocated) {
-		success &= DeviceMemoryAllocator_freeAllocation(&device->allocator, resource->blockId, resource->blockOffset);
+		DeviceMemoryAllocator_freeAllocation(&device->allocator, resource->blockId, resource->blockOffset);
 		resource->allocated = false;
 	}
 
-	success &= GraphicsDeviceRef_removePending(resource->device, resourceRef);
+	GraphicsDeviceRef_removePending(resource->device, resourceRef);
 
 	if(!(resource->flags & EGraphicsResourceFlag_InternalWeakDeviceRef))
-		success &= !GraphicsDeviceRef_dec(&resource->device).genericError;
-
-	return success;
+		RefPtr_dec(&resource->device);
 }

@@ -7,10 +7,10 @@ The OxC3 tool is intended to handle all operations required for Oxsomi core3. Th
 - Conversions between file formats.
 - Packaging a project.
 - Compiling shaders.
-- **TODO**: Show GPU/graphics device info.
+- Showing CPU, GPU and audio device info.
 - Inspecting a file (printing the header and other important information).
 - Encryption.
-- **TODO**: Compression.
+- Compression *(planned, not supported yet; data is currently always stored uncompressed)*.
 
 And might include more functionality in the future.
 
@@ -42,7 +42,7 @@ Generates random chars; 32 by default. `-length <charCount>` can be used to cust
 
 `OxC3 rand num`
 
-Is just shorthand for `OxC3 rand char -chars <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. Decimal is the default (0-9). `-length <charCount>` can be used to set a limit by character count and `-bits <bitCount>` can be used to limit how many bits the number can have (for decimal output this can only be used with 64-bit numbers and below).
+Is just shorthand for `OxC3 rand char -chars <numberKeyset>`. If --hex is used, it'll use 0-9A-F, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. Decimal is the default (0-9). `-length <charCount>` can be used to set a limit by character count and `-bits <bitCount>` can be used to limit how many bits the number can have (for decimal output this can only be used with 64-bit numbers and below).
 
 `OxC3 rand data -length 16 -output myFile.bin`
 
@@ -68,15 +68,14 @@ To unpackage this (losing the file names of course):
 
 The following flags are commonly used in any format:
 
-- --sha256: Includes 256-bit hashes instead of 32-bit ones into file if applicable.
-  - If a file is compressed or encrypted, a hash is used to detect if it hasn't been corrupted or tempered with. A CRC32 (if this option is turned off) is insufficient if dealing with smart intermediates instead of uncompression/unencryption errors. 256-bit hash is sufficient at minimizing this risk (possible issue with quantum computers in the future).
-- --uncompressed: Keep the data uncompressed (default is compressed).
-  - By default, the data stored in the native format is compressed. If you're testing a custom file parser or want to inspect the data generated, it could be nice to test it like this.
-- --fast-compress: Picks the compression algorithm that takes the least time to compress.
-  - If a lot of files are compressed and need to be available quickly, then this option can be used. It's off by default, because this does impact how compact the file will be. Normally it optimizes for storage rather than speed. For example offline asset baking is when you don't want this turned on. If this is not present, it'll use brotli:11, otherwise brotli:1 will be used.
-- --not-recursive: If folder is selected, blocks recursive file searching. Can be handy if only the direct directory should be included.
-- **TODO**: --v: Verbose.
-- **TODO**: --q: Quiet.
+- `--sha256`: Includes 256-bit hashes instead of 32-bit ones into file if applicable.
+  - If a file is encrypted (or, in the future, compressed), a hash is used to detect if it hasn't been corrupted or tampered with. A CRC32 (if this option is turned off) is insufficient if dealing with smart intermediates instead of decryption errors. 256-bit hash is sufficient at minimizing this risk (possible issue with quantum computers in the future).
+- `--uncompressed`: Store the data uncompressed (currently the default, and always applied).
+  - Compression is a work in progress and isn't supported yet, so the native formats always store data uncompressed for now (readers reject compressed files).
+- `--not-recursive`: If folder is selected, blocks recursive file searching. Can be handy if only the direct directory should be included.
+- `--verbose`: Print full information to the console. Used by `file data`, `shader entrypoints` and `graphics devices`.
+- `--includes`: Display includes. Used by `file data` to request the include list of an oiSH.
+- `--aes-stdin`: Read the 32-byte AES key (hex) from one line of stdin instead of a plaintext argument.
 
 The following parameters are commonly used in any format:
 
@@ -89,13 +88,19 @@ The following parameters are commonly used in any format:
   - See -input.
 - `-aes <key>`: Encryption key (32-byte hex)
   - A key should be generated using a good key generator. This key could for example be specified as: `0x00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000` in hex (64 characters). Can include spaces or tabs, as long as after that it's a valid hex number.
+  - Passing the key on the command line leaks it into shell history, `ps` / `/proc/<pid>/cmdline` and CI logs, so prefer `-aes-file` or `--aes-stdin` for anything sensitive.
+- `-aes-file <path>`: Read the 32-byte AES key from a file instead of a plaintext argument. The file may hold the same hex form as `-aes` (64/66 characters, optional `0x`), or a raw 32-byte binary key (detected by a file length of exactly 32 bytes).
+  - `-aes`, `-aes-file` and `--aes-stdin` are mutually exclusive; supply exactly one wherever a key is needed (`file encr`/`decr`, `file gmac`, `file data`, `file to`/`from` oiCA/oiDL, `combine`, `package`, and the `file` operations on an encrypted archive).
+- `-oiCA <archive>`: Operate inside the given oiCA archive instead of the working directory.
+  - Used by `file list`/`tree`/`stat`/`count`/`copy`/`del`, so several file utilities can browse or modify entries inside an oiCA (encrypted archives also need the key).
+- `-type <type>`: Numeric type (e.g. a float format: F8, F16, F32, F64, BF16, TF19, PXR24, FP24).
 
 ### oiDL format
 
 Since a DL (Data List) file can include either binary files or strings, you'll have to specify what.
 
-- --ascii: Indicates the input files should be threated as ascii. If a file; splits by enter, otherwise 1 entry/file.
-- --utf8: Indicates the input files should be threated as UTF8. If a file; splits by enter, otherwise 1 entry/file.
+- `--ascii`: Indicates the input files should be threated as ascii. If a file; splits by enter, otherwise 1 entry/file.
+- `--utf8`: Indicates the input files should be threated as UTF8. If a file; splits by enter, otherwise 1 entry/file.
 - `-split <string>`: If the input is a string, allows you to split the file by a different string than an endline character / string.
 
 If these are absent; it'll use binary format by default. When either ascii or utf8 is used, file(s) should be encoded using the proper format that is requested. If only one file is used, multiple strings will be created by splitting by the newline character(s) or the split string if overriden. Recombining an ascii oiDL will resolve to a .txt if split is available or the final destination ends with .txt.
@@ -110,9 +115,9 @@ If these are absent; it'll use binary format by default. When either ascii or ut
 
 A CA (Compressed Archive) file can include either no, partial or full timestamps, you'll have to specify if you want that:
 
-- --full-date: Includes full file timestamp (Ns).
+- `--full-date`: Includes full file timestamp (Ns).
   - Creates a full 64-bit timestamp in nanoseconds of the file (in the resolution that the underlying filesystem supports).
-- --date: Includes MS-DOS timestamp (YYYY-MM-dd HH-mm-ss (each two seconds)).
+- `--date`: Includes MS-DOS timestamp (YYYY-MM-dd HH-mm-ss (each two seconds)).
   - Creates a 2x 16-bit (32-bit) timestamp with 2s accuracy. This is nice for optimization, but keep in mind that the resolution is limited. This date will run out in 2107 and can only support 1980 and up. Full 64-bit has up to nanosecond precision and can support 1970-2553.
 
 These are left out by default, because often, file timestamps aren't very important when dealing with things like packaging for apps. The option is still left there for specific use cases.
@@ -120,6 +125,10 @@ These are left out by default, because often, file timestamps aren't very import
 *Example usage:*
 
 `OxC3 file to -format oiCA -input myFolder -output myFolder.oiCA --full-date`
+
+### oiSH format
+
+An oiSH (Oxsomi SHader) file holds compiled shader binaries by entrypoint and metadata. Most oiSH files come from the shader compiler (see `shader compile` / `compile shaders`) rather than `file to`. When produced through `file to -format oiSH`, all three of `-input`, `-output` and `-input2` are required (the two shader inputs are merged into a single oiSH).
 
 ### Combine
 
@@ -131,13 +140,23 @@ This is only supported if it can logically be merged:
 - **TODO**: For oiCA, this would mean combining two archives into one. This can only succeed if the two have similar settings and if the archive files don't overlap (archiveA/a.txt and archiveB/a.txt would conflict, unless the crc is the same).
 - **TODO**: For oiDL, this simply means the second entries are appended to the other, provided the two oiDL settings are the same (UTF8, ascii, data).
 
-### TODO: Split
+### File utilities
 
-`OxC3 file split -format oiSH -input combined.oiSH -output lean.spv.oiSH -compile-output spv` can be used to split the bulky oiSH into a single one.
+Several lightweight, format-less file operations are available directly. They act on the working directory by default, and many of them can also operate inside an oiCA archive via `-oiCA` (see the parameter list above; encrypted archives need the key):
 
-- oiSH is supported with the `-compile-output` argument to determine which shader output(s) are included for final write.
-- oiDL allows specifying `entry` and `offset` to remove everything except a section.
-- oiCA allows specifying a folder to extract.
+- `OxC3 file list -input <dir>`: List the entries of a directory (defaults to the working directory).
+- `OxC3 file tree -input <dir>`: List the entries of a directory recursively (defaults to the working directory).
+- `OxC3 file stat -input <path>`: Show type, size, access and modified time of a file or folder.
+- `OxC3 file count -input <dir>`: Count the files and folders under a path (defaults to the working directory). Use `--not-recursive` to count only the direct directory.
+- `OxC3 file copy -input <src> -output <dst>`: Copy a file to a new location.
+- `OxC3 file move -input <src> -output <dir>`: Move a file into a destination directory.
+- `OxC3 file del -input <path>`: Delete a file or folder (recursive for folders).
+- `OxC3 file mkdir -input <dir>`: Create a folder (creating parent folders as needed).
+- `OxC3 file touch -input <file>`: Create an empty file.
+- `OxC3 file cmp -input <a> -input2 <b>`: Byte-compare two files and report the first difference.
+- `OxC3 file diff -input <a> -input2 <b>`: Structurally compare two archives (oiCA or oiDL): added / removed / modified entries.
+- `OxC3 file wipe -input <file>`: Overwrite a file's contents with zeros.
+- `OxC3 file hexdump -input <file>`: Print a hex + ASCII dump of a file or region (`-start` / `-length` select the region).
 
 ## Packaging a project
 
@@ -151,6 +170,14 @@ The current file types that will be preprocessed include the following:
 
 `-threads` can be overriden to change how many threads are spun up during baking process (default is 1 to avoid interfering with other build processes). Other extra warnings (using commandline arguments) regarding shader compilation are also accessible through OxC3 file package.
 
+### OxC3_package
+
+OxC3_package is an executable which allows it to be used by OxC3 graphics itself. Since OxC3CLI has a (potential) dependency on OxC3 graphics, it can't be used to bake shaders and other data that is essential to OxC3 graphics (default fonts, LUTs, placeholder images). Including a hardcoded binary file is not great for maintainability, so OxC3 graphics uses OxC3_package instead. It is also optimized to build only for the current graphics API target (e.g. Vulkan or D3D12) to minimize compile times when possible. To be inline with this, encryption is disabled to save compile time (and because these packages generally are used by other dependencies that would need the same key). To simplify, OxC3_package is essentially the following command (to avoid having to use the CLI system):
+
+`OxC3_package input/ output/ <optional: include-dir/>` = `OxC3 package -input input/ -output output/ -compile-output <depends on build settings> <-include-dir if not empty> -threads 100%`.
+
+The compile-output is automatically `dxil` if D3D12 is statically linked, while `spv` is available in Vulkan is statically linked. In the case of dynamic linking, dxil is only included if D3D12 is available. This ensures the minimum amount of compiles for the target system, minimizing storage and compile time. In the case of WIndows both dxil and spv are included if dynamic linking is used.
+
 ## Compiling shaders
 
 `OxC3 compile shaders` is used to compile text shaders to application ready shaders. This could mean preprocessing text shaders to inline all includes for graphics APIs/platforms that take text only or compiling to an actual binary (DXIL or SPIRV).
@@ -159,105 +186,30 @@ When operating on a folder, it will attempt to find `.hlsl` files and then proce
 
 `-threads` can be used to limit thread count. Such as `-threads 0` = default , `-threads 50%` = 50% of all threads, `-threads 4` = 4 threads. Default behavior is that all cores will be used for threading.
 
-`-compile-output` is the outputs that are enabled. If this mode is multiple and --split is enabled then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future). By default (if the argument isn't present) it compiles as `all`, so the shader is usable by all backends. Without --split, it will include the output modes as specified into a single oiSH file.
+`-compile-output` is the outputs that are enabled. If this mode is multiple and `--split` is enabled then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future). By default (if the argument isn't present) it compiles as `all`, so the shader is usable by all backends. Without --split, it will include the output modes as specified into a single oiSH file.
 
-`-compile-type` is the compile type. Can be one of the following: `preprocess`, `includes` and `compile`. Each compile mode has their own info section. By default (if the argument isn't present) the mode is `compile`.
+`-compile-type` is the compile type. Can currently only be `compile`.
 
 `-include-dir` can be used to add only a single include directory to search for includes (aside from relative includes).
 
 `@myFile.hlsl` specifies builtin shaders, such as `@types.hlsl` and `@resources.hlsl` which are bindings to be compatible with OxC3. This can also access NV specific HLSL extensions when DXIL is used as a target and the `extension` annotation is used.
 
-### Preprocess
+### Compile
 
-The `-compile-type preprocess` will turn the .hlsl into an HLSL ready for parsing (without includes and defines) and is used internally automatically when other compile modes are used; the option to do it can still prove useful if there's another compiler or parser or if it's important that only a single shader file is shipped rather than multiple includes.
+Compile mode (default) will turn the text into shaders ready for consumption by a graphics API. This could be DXIL, SPIRV or even text representations (MSL, WGSL or even GLSL in the future). These are then stored in an oiSH file, which contains information about the defines, inputs/outputs, basic reflection info and entrypoint binary/name as well as other metadata. These oiSH files can be either bulky (works for every backend) or lean (works only for the target(s)).
 
-`OxC3 compile shaders -format HLSL -compile-output spv -compile-type preprocess -input a.hlsl -output a.preprocessed.hlsl`
-
-### Includes
-
-The `-compile-type includes` will turn the .hlsl into an include list and can be used to determine the heaviest include dependencies. Each include will have their own counter and either a file or a folder can be used to determine how many times an include is referenced by other includes or source files.
-
-`OxC3 compile shaders -format HLSL -compile-output spv -compile-type includes -input a.hlsl -output a.preprocessed.hlsl`
-
-Will show something like this:
-
-```
-Includes:
-123 reference(s): <hash> <fileSize> <optional: timestamp> //types.hlsl
-<hash> <fileSize> <optional: timestamp> /shaders/mySimpleInclude.hlsl
-
-Sources:
-<hash> <fileSize> /shaders/mySimpleFile.comp.hlsl
-```
-
-This tool can be useful to determine if the includes should be re-examined because they might trigger to many recompiles on change for example. Timestamp is in `Time_format` (0000-00-00T00:00:00.000000000Z), hash is CRC32c and fileSize is in bytes.
-
-Reference count is optional if reference count is 1, since it's a common case for single include files (since #pragma once is almost always used).
-
-When toggled on a folder, it will make a .txt file per file that it processes, so individual files can be inspected. It also makes a root.txt file which contains a merged version that  is easier to read if it's about getting all of them in one place. Example:
-
-```
-Includes:
-022 reference(s): fe9ec6b9 10219 types.hlsl
-022 reference(s): cc0a2ce9 08839 resources.hlsl
-012 reference(s): bb15afc7 01860 2024-05-04T14:32:55.000000000Z D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
-008 reference(s): c36476d2 87746 nvHLSLExtns.h
-008 reference(s): a78d6265 01329 2024-05-04T14:33:08.000000000Z D:/programming/repos/rt_core/res/shaders/ray_basics.hlsl
-008 reference(s): 32fdc427 10554 nvShaderExtnEnums.h
-008 reference(s): 10398840 29623 nvHLSLExtnsInternal.h
-004 reference(s): 916fbecd 03174 2024-05-04T14:33:14.000000000Z D:/programming/repos/rt_core/res/shaders/primitive.hlsl
-002 reference(s): 70055f36 01630 2024-05-04T21:10:48.000000000Z D:/programming/repos/rt_core/res/shaders/camera.hlsl
-002 reference(s): 4470bdfa 07490 2024-05-07T21:36:53.000000000Z D:/programming/repos/rt_core/res/shaders/atmosphere.hlsl
-
-Sources:
-4470bdfa 07490 D:/programming/repos/rt_core/res/shaders/atmosphere.hlsl
-70055f36 01630 D:/programming/repos/rt_core/res/shaders/camera.hlsl
-31e8a279 02363 D:/programming/repos/rt_core/res/shaders/depth_test.hlsl
-3acc8620 01888 D:/programming/repos/rt_core/res/shaders/graphics_test.hlsl
-bcc2bb61 01373 D:/programming/repos/rt_core/res/shaders/indirect_compute.hlsl
-0b762523 02790 D:/programming/repos/rt_core/res/shaders/indirect_prepare.hlsl
-916fbecd 03174 D:/programming/repos/rt_core/res/shaders/primitive.hlsl
-db3878c9 03860 D:/programming/repos/rt_core/res/shaders/raytracing_pipeline_test.hlsl
-aeb6a491 02528 D:/programming/repos/rt_core/res/shaders/raytracing_test.hlsl
-a78d6265 01329 D:/programming/repos/rt_core/res/shaders/ray_basics.hlsl
-bb15afc7 01860 D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
-```
-
-#### Limits
-
+#### Include limits
 Includes use OxC3 file paths, as such, escaping out of the working directory is prohibited. Any resolved file path that doesn't start with the working directory is illegal. And any tool that may read these includes (such as a file watcher) should have a similar protection mechanism.
 This gives a logical limit to how far back an include can go. Such a limit is also very useful to prevent any tooling from reading into files that weren't intentional or don't exist within the scope of the program (such as embedding a fictional include file which could read any file the program has access to). It will also enforce relative files, rather than allowing absolute files in the includes for some reason.
 
-### Symbols
-
-The `-compile-type symbols` will turn the .hlsl into a list of symbols and can be used to determine where certain functions/variables/structs are located. This can be very useful for refactoring to see if there's any function/variable that should be elsewhere. It could also be useful for better search options as well as debugging the parser. This mode is and likely will always be experimental, since DXC can't output this info and the parser likely will never be able to handle more complex syntax.
-
-`OxC3 compile shaders -format HLSL -compile-output dxil -compile-type symbols -input a.hlsl -output a.symbols.hlsl`
-
-Will show something like this:
-
-```
-Struct Camera at L#26:1
-	Variable v at L#28:10
-	Variable p at L#28:13
-	Variable vp at L#28:16
-	Variable vInv at L#29:10
-	Variable pInv at L#29:16
-	Variable vpInv at L#29:22
-	Function getRay at L#31:2
-		Parameter id at L#31:17
-		Parameter dims at L#31:27
-```
-
-### Compile
-
-Compile mode (default) will turn the text into shaders ready for consumption by a graphics API. This could be DXIL, SPIRV or even text representations (MSL, WGSL or even GLSL in the future). These are then stored in an oiSH file, which contains information about the uniforms, inputs/outputs, basic reflection info and entrypoint binary/name as well as other metadata. These oiSH files can be either bulky (works for every backend) or lean (works only for the target(s)).
-
 #### Built-in defines
 
-The following defines are set by OxC3 during compilation:
+The following defines are set by OxC3 during compilation or preprocess:
 
 - `__OXC` to indicate that OxC3 is compiling or parsing the shader.
+- `__OXC_PREPROCESS` to indicate that OxC3 is parsing the entrypoints (useful for ensuring OxC3 sees all entrypoints even if some get hidden in other compilations).
+  - When this happens, all extensions are turned on but no uniforms or defines are set. This means that your shader should gracefully handle a uniform or define not being present. As well as too many extensions being available while `__OXC_PREPROCESS` is used; these extensions won't make it into the final binary. For example, defines should check `#ifdef $$UNIFORM` before using them, just like normal defines.
+
 - `__OXC_MAJOR`, `__OXC_MINOR` and `__OXC_PATCH` to indicate OxC3 version. For 0.2.0 these would be 0, 2 and 0 respectively.
 - `__OXC_VERSION` same layout as `OXC3_MAKE_VERSION` aka (major << 22) | (minor << 12) | patch.
 - `__OXC_EXT_<X>` foreach extension that's enabled by the current compilation. For example: `__OXC_EXT_F16`, `__OXC_EXT_F64`, `__OXC_EXT_RAYQUERY`, etc.
@@ -274,52 +226,84 @@ Semantics for input(s) and output(s) for shaders get parsed and have the followi
 
 Each entrypoint can have annotations on top of the ones used by DXC (have to be before the DXC annotations). The ones introduced in OxC3's pre-processor are the following:
 
-- `[[oxc::stage("vertex")]]` similar to DXC's [shader("vertex")] but instead of implying a library compilation (for use in StateObjects), it signals a standalone compilation for this entrypoint. Essentially allowing pixel and vertex shaders to be compiled and packaged as a single oiSH file.
+- `[[oxc::stage("vertex")]]` similar to DXC's `[shader("vertex")]` but instead of implying a library compilation (for use in StateObjects), it signals a standalone compilation for this entrypoint. Essentially allowing pixel and vertex shaders to be compiled and packaged as a single oiSH file.
   - Defining stages is only allowed for stages that have to be separately compiled. For raytracing shaders and workgraphs, the shader annotation should still be used.
   - Type must be one of vertex, pixel, compute, geometry, hull, domain, mesh, task.
   - Do keep in mind that each stage needs a full compile. It might be beneficial to bundle them as a single lib using the "shader" type, when this feature becomes available with workgraphs.
   - If not defined, the compiler will ignore the functions if they don't have either a `stage` or `shader` annotation.
-- `[[oxc::vendor("NV", "AMD", "QCOM")]]` which vendors are allowed to run this entrypoint. There could be a reason to restrict this, for example when NV specific instructions are used (specifically together with DXIL). Must be one of: NV, AMD, ARM, QCOM, INTC, IMGT, MSFT. If not defined, will assume all vendors are applicable. Multiple annotations for vendor is illegal to clarify that it won't induce a new compile for each vendor.
+  - Note: Please prefer the use of `[shader("type")]` since stage is deprecated. It's there to support backwards compatibility, but introduces extra compile time compared to the 'shader' annotation. This is required for oxc::uniforms.
+- `[[oxc::vendor("NV", "AMD", "QCOM")]]` which vendors are allowed to run this entrypoint. There could be a reason to restrict this, for example when NV specific instructions are used (specifically together with DXIL). Must be one of: NV, AMD, ARM, QCOM, INTC, IMGT, MSFT, APPL, SMSG, HWEI. If not defined, will assume all vendors are applicable. Multiple annotations for vendor is illegal to clarify that it won't induce a new compile for each vendor.
 - `[[oxc::extension("16BitTypes")]]` which extensions to enable. For example 16BitTypes will enable 16-bit types for that entrypoint.
   - Do keep in mind that extensions might introduce another recompile for entrypoints that don't have the same extensions. For example with raytracing shaders. In their case, it will introduce two compiles if one entrypoint doesn't support 16-bit ints and another does.
-  - `__OXC3_EXT_<X>` can be used to see which extension is enabled. For example `__OXC3_EXT_ATOMICI64`.
-  - Extension must be one of F64, I64, 16BitTypes, AtomicI64, AtomicF32, AtomicF64, SubgroupOperations, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, Multiview, ComputeDeriv, PAQ.
+  - `__OXC_EXT_<X>` can be used to see which extension is enabled. For example `__OXC_EXT_ATOMICI64`.
+  - Extension must be one of F64, I64, 16BitTypes, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayTriPosition, RayMotionBlur, RayReorder, Multiview, ComputeDeriv, PAQ, MeshTaskTexDeriv, WriteMSTexture, Bindless, UnboundArraySize, SubgroupOperations, CoopVec, CoopMat, CoopFP8, CoopVecTraining, DescriptorHeap.
     - **Note**: RayReorder is currently only available for raygeneration shaders.
     - **Note**: Multiple extension annotations will indicate there will be a separate compile with each. For example: `[[extension()]]` and `[[extension("16BitTypes")]]` in front of the same function will indicate the function will be compiled with 16-bit types on and off. 16-bit off would for example run on <=Pascal (GTX 10xx). This will allow the same entrypoint to be ran with different functionality. This could aid for example in unpacking vertex/texture data with native support (rather than manual f16tof32).
       - Another good example could be RayReorder, which could give substantial boosts in path tracing workloads. Lovelace would need `[[extension("RayReorder")]]` while the rest such as non NV and Pascal, Turing, Ampere would need `[[extension()]]`. This will force a recompile.
       - If multiple extensions are available, it will pick from top to bottom if they're all available. So `[[extension("16BitTypes")]]` and `[[extension("RayReorder")]]` would for example only pick the second one if the first one isn't available.
-- `[[oxc::uniforms("X" = "F32x3(1, 0, 0)", "Y" = "F32x3(0, 1, 0)")]]` Introduces one subtype of the stage that has the defines `$X` and `$Y` set to the relevant values of `(F32x3(1, 0, 0))` and `(F32x3(0, 1, 0))`.
+- `[[oxc::uniforms(U32 x = 45, F32 y = 90.f)]]` Creates either 2 spec constants (spv) or 2 library exports (dxil) that contain these values. These are only accessible as functions and not as static const at compile time, but they will be fossilized in a subsequent linking step internally to reduce compile time (but keep runtime performance).
+  - Please try to use uniforms if possible and avoid defines, since defines cause a full HLSL compile, while uniforms will only cause DXIL/SPV to be fossilized into the right shader. Each unique uniform combo will cause DXIL/SPV linking to happen.
+  - The types are `((U/I/F)(8/16/32/64)/B1)`. Matrices and scalars aren't supported but can be made manually by making multiple scalars. Other types are not supported, because the uniforms have to be passed from the application like this to match the entrypoint.
+    - Even though GPUs generally don't support these types natively, we support them for packing reasons, allowing less data to be stored in the shaders on disk. So U8x4 is valid, even though there's no real type for it in HLSL, it'll get expanded to uint4 (or uint16_t4 if enabled) automatically. Though it will try to keep the native type if possible (e.g. U16x4 will turn into uint16_t4 if 16-bit types are enabled, otherwise it will become U32x4). As a note; B1 (Bool) is a single bit (though is expanded to 32 on GPU).
+  - Reserved syntax for defining vectors is `(1, 2, 3, 4)` for example and matrices are `((1, 2, 3), (4, 5, 6), (7, 8, 9))`.
+  - Since the uniform becomes a function or variable, it must not include symbols or spaces (excluding _). 
+  - The application is in charge of picking the uniform & define combo for the entire lib or each entrypoint. So it is possible to switch between defines based on what the app wants, unlike models which is handled by the runtime; though extensions can be explicitly required or disabled at runtime.
+  - Uniforms types, ordering and names must stay the same for the same compilation unit (source file). This ensures consistent behavior between compiles and clearly defines values of uniforms (rather than assuming they'd be defined as zero). For example: `[[oxc::uniforms(B1 value = true)]] [[oxc::uniforms()]]` this would be invalid, as the first one defines B1 value but the 2nd doesn't. Another invalid would be if the uniform is defined, but the type mismatches; only the value can change. Another would be if the order isn't consistent between others.
+  - Uniforms require the use of the DXC `[shader("type")]` intrinsics (lib compilation), whereafter this will be turned into a specialized shader afterwards.
+  - If a compilation unit has uniforms that are used by only one entrypoint, it still has to be available and they can't change types. This is because every compilation unit is only compiled once per combination (defines, shader models, extensions).
+- `[[oxc::defines("X" = "F32x3(1, 0, 0)", "Y" = "F32x3(0, 1, 0)")]]` Introduces one subtype of the stage that has the defines `$X` and `$Y` set to the relevant values of `(F32x3(1, 0, 0))` and `(F32x3(0, 1, 0))`.
+  - Try to avoid defines in favor of uniforms to reduce compilation time (each unique define combo will cause an additional full HLSL compile).
   - This attribute can be used multiple times to compile the same entrypoint with different defines. It will try to bundle compiles wherever possible (try to keep defines similar).
-  - Only defining the uniform but no assign will just see it as a define that can be checked with #ifdef.
-  - Uniform name must not indicate symbols or spaces.
-  - The application is in charge of picking the uniform combo for the entire lib or each entrypoint. So it is possible to switch between uniforms based on what the app wants, unlike models and extensions which are handled by the runtime.
-
-- `[[oxc::model(6.8)]]`
+  - Only defining the define but no assign will just see it as a define that can be checked with #ifdef.
+  - Define name must not indicate symbols or spaces (excluding _).
+- The application is in charge of picking the define combo for the entire lib or each entrypoint. So it is possible to switch between defines based on what the app wants, unlike models and extensions which are handled by the runtime.
+- `[[oxc::model("6.8")]]`
   - Which shader model to use. If this annotation is present multiple times, it indicates multiple compiles with different shader models.
-    - Minimum must be 6.5+ since that's the minimum OxC3 supports.
-    - Workgraphs require SM6.8.
-    - AtomicI64 requires SM6.6.
-    - ComputeDeriv requires SM6.6.
+    - Minimum must be 6.5+ since that's the minimum OxC3 supports (the maximum is 6.10).
+    - AtomicI64, ComputeDeriv and PAQ (Payload Access Qualifiers) require SM6.6.
     - WaveSize requires SM6.6.
-    - WaveSize with 2 or 3 arguments (min, max, recommended) requires SM6.8.
-    - PAQ (Payload Access Qualifiers) requires SM6.6.
+    - Workgraphs, and WaveSize with 2 or 3 arguments (min, max, recommended), require SM6.8.
+    - WriteMSTexture (writable multisampled textures) requires SM6.7.
+    - RayReorder (Shader Execution Reordering / SER) and RayMicromapOpacity (Opacity Micromaps / OMM) require SM6.9.
+    - DescriptorHeap requires SM6.6 (dynamic resources).
+    - CoopVec, CoopMat, CoopFP8, CoopVecTraining and RayTriPosition require SM6.10.
     - Stage type always has to be compatible with specified models.
     - If extensions are defined, one of the pair of extensions/models has to be compatible with the minimum requirement. If this is the case, that one is used as fallback.
-      - Example: `[[model(6.2)]]` and `[[model(6.0)]]` is possible with `[[extensions("16BitTypes")]]` only if there's another `[[extensions()]]` available. Otherwise it knows that model 6.0 can't be compatible with I16 and F16. In this case, there would only be 3 binaries: 6.0 16-bit off, 6.2 16-bit off, 6.2 16-bit on. Without model specified, it would determine minimum featureset for those extensions and push them. So specifying the two extensions separately (without models) will just make two binaries (6.0 16-bit off, 6.2 16-bit on).
+      - Example: `[[model("6.2")]]` and `[[model("6.0")]]` is possible with `[[extensions("16BitTypes")]]` only if there's another `[[extensions()]]` available. Otherwise it knows that model 6.0 can't be compatible with I16 and F16. In this case, there would only be 3 binaries: 6.0 16-bit off, 6.2 16-bit off, 6.2 16-bit on. Without model specified, it would determine minimum featureset for those extensions and push them. So specifying the two extensions separately (without models) will just make two binaries (6.0 16-bit off, 6.2 16-bit on). Do note that OxC3's minimum is 6.5, so 6.0 and 6.2 are unsupported.
     - If multiple models are available, the runtime will choose from highest shader model to lowest shader model available.
   - If not defined, will use minimum for the detected feature set.
   - `__SHADER_TARGET_MAJOR` and `__SHADER_TARGET_MINOR` can be used to distinguish which one is being compiled.
+- `[[oxc::binary("spv", "dxil")]]`
+  - Restricts which binary backends this entrypoint is emitted for. Accepts `spv` (or `spirv`) and `dxil` (case insensitive). Unlike models/defines/extensions this does **not** introduce extra compiles; it only narrows which of the already-requested backends this entrypoint ends up in.
+  - If not defined, the entrypoint is emitted for every requested backend its stage + extensions can actually be expressed on.
+  - The effective set is an AND of three things: the backends passed to `-compile-output`, this annotation (or all backends if it's absent), and the backends the entrypoint's stage + extensions support. Example: compiling with `all` a shader whose entrypoint can only be expressed in SPIRV will only emit SPIRV for it.
+  - Stage / extension support is auto-restricted even without the annotation: workgraphs are DXIL-only; ComputeDeriv, AtomicF32/F64, SubgroupArithmetic/Shuffle, RayMicromapOpacity and RayReorder are SPIRV-only; MeshTaskTexDeriv is DXIL-only. Listing a backend the stage/extension can't target simply drops it (that's the AND) rather than erroring.
+  - A single annotation lists the full set (e.g. `[[oxc::binary("spv", "dxil")]]`); duplicate binary types within one annotation are rejected.
+  - **NOTE** (current limitation): this only filters the oiSH *reflection*, an excluded entrypoint is not reported for that backend, but when it shares a library compile with a kept entrypoint the emitted DXIL/SPIRV blob can still physically contain its code. Explicitly stripping the entrypoint and re-running DCE per backend is planned, after which reflection and the binary will fully agree.
 
-**NOTE**: Since multiple models, uniforms and extensions can cause multiple compiles, be very careful that you don't use too many of these decorations (2 different sets of uniforms + 2 different extensions + 2 models = 2^3 or 8 compiles). Even though the compiler will do everything in parallel, it will still be slower to do multiple configurations that will never be used. So keep duplicate annotations in check wherever possible. The compiler will also try to combine compiles if it notices that they can be shared (for example with lib compiles where one compile might expose multiple entrypoints).
+**NOTE**: Since multiple models, defines and extensions can cause multiple compiles, be very careful that you don't use too many of these decorations (2 different sets of defines + 2 different extensions + 2 models = 2^3 or 8 compiles). Even though the compiler will do everything in parallel, it will still be slower to do multiple configurations that will never be used. So keep duplicate annotations in check wherever possible. The compiler will also try to combine compiles if it notices that they can be shared (for example with lib compiles where one compile might expose multiple entrypoints). Please prefer uniforms rather than defines to keep compile times low, this is because uniforms are specialization constants under the hood (or libraries in DXIL) and this in turn means that they get fossilized after HLSL has been compiled to DXIL/SPIRV, which is way cheaper than processing the entire file.
 
 #### Special flags
 
 - `--debug` is used to toggle debug info in the binary.
 - `--ignore-empty-files` is used to hide the error when no entrypoints are found to compile. This is off by default because include files should be named as .hlsli, but to support both use cases, this can be used to silence the error.
 - `--split` is used to split up every oiSH file into its own file. This is very useful when building for 1 dedicated target. By default this is turned off, to make sure every shader can be ran with every backend.
+- `--keep-registers` keeps declared but unused resources bound and reflected (DXIL `-fhlsl-unused-resource-bindings=keep-all`, SPIRV additionally `-fspv-preserve-bindings`). Useful for stable register layouts across shader variants; off by default so unused resources are stripped (their slots are still reserved via reserve-all).
 - `--warn-unused-registers` registers that were unused spawn a compile warning. Off by default because techniques like bindless might expose lots of registers that are unused.
 - `--warn-unused-constants` variables that are unused in a constant buffer cause a compile warning. Off by default because constant buffers might be re-used and might require a specific buffer layout to be compatible. Only goes 1 level deep (doesn't go inside of structs, unless it's a structured buffer).
 - `--warn-buffer-padding`  warns about padding being introduced between variables that the user might not be expecting. Useful when debugging mismatching buffer layouts between C/C++ and HLSL or other languages.
+
+## Shader category
+
+Alongside the older `OxC3 compile shaders` operation (which still exists and is documented above), a dedicated `shader` category groups per-shader compile, reflect, inspect and (dis)assemble operations. All are format-less; where a source is compiled, the source format is detected from the input extension.
+
+- `OxC3 shader compile -input <src> -output <file.oiSH>`: Compile a shader to an oiSH; the source format is detected from the input extension (.hlsl). Accepts `-threads`, `-include-dir`, `-compile-type` and `-compile-output`.
+- `OxC3 shader reflect -input <src> -output <file.oiSH>`: Produce a reflection-only oiSH from a shader source (no compiled binary; not usable for a pipeline). Accepts `-threads` and `-include-dir`.
+- `OxC3 shader entrypoints -input <file.oiSH>`: List the entrypoints (name + stage) declared in an oiSH shader. `--verbose` prints full details.
+- `OxC3 shader includes -input <file.oiSH>`: List the include files (relative path + CRC32C) an oiSH shader was compiled from.
+- `OxC3 shader feature_set -input <file.oiSH>`: Show the extensions, shader models and binary types used across an oiSH shader's binaries.
+- `OxC3 shader disassemble -input <file.spv|.dxil>`: Disassemble a standalone .spv or .dxil binary to text (stdout, or `-output <file>`).
+- `OxC3 shader assemble -input <file.spv.txt> -output <file.spv>`: Assemble SPIR-V text (.spv.txt) into a .spv binary. DXIL assembly isn't supported yet.
 
 ## Show GPU/graphics device info
 
@@ -333,6 +317,14 @@ It can also be used to print GPU info regarding devices that support OxC3 and wh
 `--verbose` can be used to show the full details of all GPU devices.
 
 When dynamically linked, `-graphics-api X` can be used to show only the devices for a certain api, for example `vulkan` or `d3d12`. It can also be combined for example `vulkan,d3d12` or `all`. `native` can also be used to specify the one that's native on the current system (Windows = d3d12, otherwise vulkan).
+
+### Create graphics device
+
+For testing purposes, it is also possible to create a device on the specified device to be able to test if there's any problem with device creation on the system (for example due to a driver bug).
+
+`OxC3 graphics create` where `-graphics-api` is the same as with the `devices` command, though both `-count` and `-entry` are available too.
+
+On success, it will print success, otherwise it might not print anything at all or print that it failed to create a device. This is also useful to see if the graphics device has any leaks (as such, it is a debug device if on debug mode).
 
 ## Audio
 
@@ -364,13 +356,13 @@ Data allows you to actually inspect the data section of certain parts of the fil
 
 `file header -input test.oiCA` would print the information about the file header.
 
-`file data -input test.oiCA` would tell about the file table for example. File data also needs to provide `-aes` if the source is encrypted. If entry is absent, it will provide a general view of the file.
+`file data -input test.oiCA` would tell about the file table for example. File data also needs a key (`-aes` / `-aes-file` / `--aes-stdin`) if the source is encrypted. If entry is absent, it will provide a general view of the file.
 
 With `-entry <offset or path>` a specific entry can be viewed. If an entry is specified, the `-output` can be used to extract that one entry into a single file (or folder). If this is not specified, it will show the file as either a hexdump or plain text (if it's ascii) or the folder's subdirectories.
 
 `file data` also allows the `-length` specifier for how many entries are shown. Normally in the log it limits to 64 lines (so for data that'd mean 64 * 64 / 2 (hex) = 2KiB per view). The `-start` argument can be used to set an offset of what it should show. An example: we have an oiCA with 128 entries but want to show the last 32; `file data -input our.oiCA -start 96 -length 32`. For a file entry, it would specify the byte offset and length (length is defaulted to 2KiB). If `-output` is used, it will binary dump the entire remainder of the file if `-length` is not specified (the remainder is the entire file size if `-start` is not specified).
 
-For oiSH files, it is possible to supply `--bin` can be used  to fetch the binary instead of the entrypoints. Since an oiSH file can have more than one binary embedded in it. Not supplying an entry offset will behave as usual; showing all binaries. Supplying an entry offset and --binary will show that specific binary. To see the actual compiled binary, `-compile-output` can be used to obtain the specific information (for example DXIL or SPV binary). Example: `file data -input test.oiSH --bin -compile-output DXIL -entry 0` will show the DXIL binary at compiled entry 0 if available. This can still be used with `-start`, `-length` and `-output` to easily read & export binaries from an oiSH file.
+For oiSH files, it is possible to supply `--bin` can be used  to fetch the binary instead of the entrypoints. Since an oiSH file can have more than one binary embedded in it. Not supplying an entry offset will behave as usual; showing all binaries. Supplying an entry offset and --bin will show that specific binary. To see the actual compiled binary, `-compile-output` can be used to obtain the specific information (for example DXIL or SPV binary). Example: `file data -input test.oiSH --bin -compile-output DXIL -entry 0` will show the DXIL binary at compiled entry 0 if available. This can still be used with `-start`, `-length` and `-output` to easily read & export binaries from an oiSH file.
 
 #### View device specific assembly
 
@@ -384,27 +376,36 @@ The following can be compiled through special offline compiler tools:
 
 - Intel's shader compiler: doesn't support SM6+, so not supported. However, the Intel profiler itself does have a view for the new assembly.
 
-The following vendors don't have (publicly available) support for this as far as is known to me:
-
-- Nvidia, ImgTec.
-
 ## Encrypt
 
-`OxC3 file encr -format <encryptionType> -input <file> -aes <key in hex> (optional: -output output)`
+`OxC3 file encr -input <file> (-aes <key> | -aes-file <path> | --aes-stdin) (optional: -output <output>)`
 
-`OxC3 file decr -format <encryptionType> -input <file> -output <file> -k <key in hex> `
+`OxC3 file decr -input <file> -output <file> (-aes <key> | -aes-file <path> | --aes-stdin)`
 
-Generates an encrypted oiCA file. Works on files and folders. oiCA doesn't support AES128GCM, so AES256GCM is used by default.
+Generates an encrypted oiCA file (`encr`) or restores the original (`decr`). Works on files and folders. oiCA doesn't support AES128GCM, so AES256GCM is used by default. A key is required and may come from any one of `-aes` / `-aes-file` / `--aes-stdin` (see the parameter list above); if none is given the command fails rather than writing an unencrypted file.
 
-## TODO: Compress
+`OxC3 file gmac -input <file> (-aes <key> | -aes-file <path> | --aes-stdin)` computes an AES-GMAC authentication tag over the input (zero IV) without producing an encrypted file.
 
-`OxC3 file pack -input <file> (optional: --fast-compress, --k <key in hex>)`
+## Devices
 
-`OxC3 file unpack -input <file> (optional: --aes <key in hex>)`
+The `devices` category reports this machine's hardware (distinct from the `graphics` category, which enumerates graphics APIs and adapters):
 
-Generates a compressed oiCA file. Can be encrypted. Works on files and folders.
+- `OxC3 devices cpu`: Shows this machine's CPU: logical cores, physical memory and hardware capability flags.
+- `OxC3 devices all`: Dumps CPU + graphics devices + audio devices in one go (handy for support / bug reports).
 
-*Note: Currently unimplemented.*
+## Float
+
+Float format conversion and inspection:
+
+- `OxC3 float convert -input <value>`: Convert a decimal value to a float format (`-type F8/F16/F32/F64/BF16/TF19/PXR24/FP24`) or, with `--fixed`, emit a fixed-point value instead of a float format.
+- `OxC3 float dissect -input <value>`: Show sign/exponent/mantissa/class of a value (decimal or 0x bits) in a float format (`-type`).
+
+## Time
+
+Time conversion (epoch nanoseconds <-> ISO 8601):
+
+- `OxC3 time now`: Print the current UTC time as ISO 8601 and Unix-epoch nanoseconds.
+- `OxC3 time convert -input <value>`: Convert between Unix-epoch nanoseconds and ISO 8601 (auto-detected from `-input`).
 
 ## Profile
 
@@ -417,6 +418,12 @@ Profiles the speed of important operations that might be happening a lot or oper
 - `OxC3 profile fnv1a64`: profiles how much time a Buffer FNV1A64 is.
 - `OxC3 profile sha256`: profiles how fast a Buffer SHA256 is.
 - `OxC3 profile aes256/aes128`: how fast AES encryption is. AES256 should be preferred though for legacy reasons the other might be used (It's about the same speed). The encryption mode is always GCM.
+- `OxC3 profile memcpy`: Profiles memory copy bandwidth (Buffer_memcpy).
+- `OxC3 profile memset`: Profiles memory clear bandwidth (Buffer_unsetAllBits).
+- `OxC3 profile vec`: Profiles 128-bit float SIMD throughput (vec4f add / mul / fma).
+- `OxC3 profile all`: Runs every profile in sequence (cast, rng, hashes, aes, memcpy, memset, vec).
+
+Every profile operation accepts `-threads` (thread count) and `-length` (work size per run).
 
 ## Helper functions
 

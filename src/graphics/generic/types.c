@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,7 +18,9 @@
 *  This is called dual licensing.
 */
 
-#include "graphics/generic/types.h"
+//graphics/generic/types.c
+
+#include "graphics/generic/graphics_types.h"
 
 EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
 
@@ -36,6 +38,11 @@ EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
 	EGraphicsTypeId_Pipeline,
 	EGraphicsTypeId_Sampler,
 	EGraphicsTypeId_DepthStencil,
+
+	EGraphicsTypeId_DescriptorLayout,
+	EGraphicsTypeId_PipelineLayout,
+	EGraphicsTypeId_DescriptorTable,
+	EGraphicsTypeId_DescriptorHeap,
 
 	EGraphicsTypeId_BLASExt,
 	EGraphicsTypeId_TLASExt

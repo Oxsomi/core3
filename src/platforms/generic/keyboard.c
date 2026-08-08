@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,22 +18,20 @@
 *  This is called dual licensing.
 */
 
+//platforms/generic/keyboard.c
+
 #include "platforms/keyboard.h"
 #include "platforms/input_device.h"
 #include "types/base/error.h"
 
-#define KEY(name)																						\
-	if ((err = InputDevice_createButton(*result, EKey_##name, "EKey_" #name, &res)).genericError) {		\
-		InputDevice_free(result);																		\
-		return err;																						\
-	}
+#define KEY(name) gotoIfError3(clean, InputDevice_createButton(result, EKey_##name, "EKey_" #name, &res, e_rr))
 
-Error Keyboard_create(Keyboard *result) {
+Bool Keyboard_create(Keyboard *result, const Allocator *alloc, Error *e_rr) {
 
-	Error err = InputDevice_create(EKey_Count, 0, EInputDeviceType_Keyboard, result);
+	Bool s_uccess = InputDevice_create(EKey_Count, 0, EInputDeviceType_Keyboard, result, alloc, e_rr);
 
-	if(err.genericError)
-		return err;
+	if(!s_uccess)
+		return false;
 
 	InputHandle res = 0;
 
@@ -43,39 +41,44 @@ Error Keyboard_create(Keyboard *result) {
 	KEY(K); KEY(L); KEY(M); KEY(N); KEY(O); KEY(P); KEY(Q); KEY(R); KEY(S); KEY(T);
 	KEY(U); KEY(V); KEY(W); KEY(X); KEY(Y); KEY(Z);
 
-	KEY(Backspace);		KEY(Space);			KEY(Tab);
+	KEY(Backspace);        KEY(Space);            KEY(Tab);
 
-	KEY(LShift);		KEY(LCtrl);			KEY(LAlt);			KEY(LMenu);
-	KEY(RShift);		KEY(RCtrl);			KEY(RAlt);			KEY(RMenu);
+	KEY(LShift);        KEY(LCtrl);            KEY(LAlt);            KEY(LMenu);
+	KEY(RShift);        KEY(RCtrl);            KEY(RAlt);            KEY(RMenu);
 
-	KEY(Pause);			KEY(Caps);			KEY(Escape);		KEY(PageUp);
-	KEY(PageDown);		KEY(End);			KEY(Home);			KEY(PrintScreen);
-	KEY(Insert);		KEY(Enter);			KEY(Delete);		KEY(NumLock);		KEY(ScrollLock);
+	KEY(Pause);            KEY(Caps);            KEY(Escape);        KEY(PageUp);
+	KEY(PageDown);        KEY(End);            KEY(Home);            KEY(PrintScreen);
+	KEY(Insert);        KEY(Enter);            KEY(Delete);        KEY(NumLock);        KEY(ScrollLock);
 
-	KEY(Select);		KEY(Print);			KEY(Execute);		KEY(Back);			KEY(Forward);
-	KEY(Sleep);			KEY(Refresh);		KEY(Stop);			KEY(Search);		KEY(Favorites);
-	KEY(Start);			KEY(Mute);			KEY(VolumeDown);	KEY(VolumeUp);		KEY(Skip);
-	KEY(Previous);		KEY(Clear);			KEY(Zoom);			KEY(Help);			KEY(Apps);
+	KEY(Back);            KEY(Forward);
+	KEY(Sleep);            KEY(Refresh);        KEY(Search);
+	KEY(Mute);            KEY(VolumeDown);    KEY(VolumeUp);        KEY(Skip);
+	KEY(Previous);        KEY(Clear);            KEY(Help);
 
-	KEY(Left);			KEY(Up);			KEY(Right);			KEY(Down);
+	KEY(Left);            KEY(Up);            KEY(Right);            KEY(Down);
 
 	KEY(Numpad0);
-	KEY(Numpad1);		KEY(Numpad2);		KEY(Numpad3);
-	KEY(Numpad4);		KEY(Numpad5);		KEY(Numpad6);
-	KEY(Numpad7);		KEY(Numpad8);		KEY(Numpad9);
+	KEY(Numpad1);        KEY(Numpad2);        KEY(Numpad3);
+	KEY(Numpad4);        KEY(Numpad5);        KEY(Numpad6);
+	KEY(Numpad7);        KEY(Numpad8);        KEY(Numpad9);
 
-	KEY(NumpadMul);		KEY(NumpadAdd);		KEY(NumpadDot);
-	KEY(NumpadDiv);		KEY(NumpadSub);
+	KEY(NumpadMul);        KEY(NumpadAdd);        KEY(NumpadDot);
+	KEY(NumpadDiv);        KEY(NumpadSub);
 
-	KEY(F1);			KEY(F2);			KEY(F3);			KEY(F4);			KEY(F5);
-	KEY(F6);			KEY(F7);			KEY(F8);			KEY(F9);			KEY(F10);
-	KEY(F11);			KEY(F12);
+	KEY(F1);            KEY(F2);            KEY(F3);            KEY(F4);            KEY(F5);
+	KEY(F6);            KEY(F7);            KEY(F8);            KEY(F9);            KEY(F10);
+	KEY(F11);            KEY(F12);
 
-	KEY(Bar);			KEY(Options);
+	KEY(Bar);            KEY(Options);
 
-	KEY(Equals);		KEY(Comma);			KEY(Minus);			KEY(Period);
-	KEY(Slash);			KEY(Backtick);		KEY(Semicolon);		KEY(LBracket);		KEY(RBracket);
-	KEY(Backslash);		KEY(Quote);
+	KEY(Equals);        KEY(Comma);            KEY(Minus);            KEY(Period);
+	KEY(Slash);            KEY(Backtick);        KEY(Semicolon);        KEY(LBracket);        KEY(RBracket);
+	KEY(Backslash);        KEY(Quote);
 
-	return Error_none();
+clean:
+
+	if(!s_uccess)
+		InputDevice_free(result, alloc);
+
+	return s_uccess;
 }

@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class spirv_reflect(ConanFile):
 
 	name = "spirv_reflect"
-	version = "2024.09.22"
+	version = "2026.08.06"
 
 	license = "Apache License 2.0"
 	author = "KhronosGroup"
@@ -20,6 +20,63 @@ class spirv_reflect(ConanFile):
 	exports_sources = [ "*.h", "include/*", "LICENSE" ]
 
 	settings = "os", "compiler", "build_type", "arch"
+	options = { "enableASAN": [ True, False ], "enableUBSAN": [ True, False ] }
+	default_options = { "enableASAN": False, "enableUBSAN": False }
+
+	# A sanitized consumer can't link unsanitized dependencies, so the flags have to reach these too.
+	# MSVC's STL records its ASan container annotation state per object and lld-link rejects the mix,
+	# hence disabling the annotations rather than instrumenting the STL.
+
+	def _sanitizerFlags(self):
+
+		flags = []
+
+		if self.options.enableASAN:
+			flags += [ "/fsanitize=address", "/Oy-", "-D_DISABLE_STRING_ANNOTATION=1", "-D_DISABLE_VECTOR_ANNOTATION=1" ]
+
+		if self.options.enableUBSAN:
+			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr", "/Oy-" ]
+
+		return flags
+
+	# The compile side flags alone aren't enough: CMake drives lld-link directly, so the /defaultlib
+	# directives clang-cl embeds for the sanitizer runtimes never reach it.
+	# Point the linker at clang's own runtime directory and name the libraries here too.
+
+	def _sanitizerLinkFlags(self):
+
+		if not (self.options.enableASAN or self.options.enableUBSAN):
+			return []
+
+		if self.settings.os != "Windows":
+			return []
+
+		import glob as _glob
+		import shutil as _shutil
+
+		executables = self.conf.get("tools.build:compiler_executables", default={}, check_type=dict)
+		cc = executables.get("c") or "clang-cl"
+		resolved = cc if os.path.isabs(cc) else (_shutil.which(cc) or "")
+
+		if not resolved:
+			return []
+
+		binDir = os.path.dirname(resolved)
+		found = _glob.glob(os.path.join(binDir, "..", "lib", "clang", "*", "lib", "windows"))
+
+		if not found:
+			return []
+
+		flags = [ "-libpath:%s" % os.path.normpath(found[0]) ]
+
+		if self.options.enableASAN:
+			flags += [ "clang_rt.asan_dynamic-x86_64.lib", "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" ]
+
+		if self.options.enableUBSAN:
+			flags += [ "clang_rt.ubsan_standalone-x86_64.lib" ]
+
+		return flags
+
 
 	def layout(self):
 		cmake_layout(self)
@@ -39,6 +96,14 @@ class spirv_reflect(ConanFile):
 		tc.variables["SPIRV_REFLECT_STATIC_LIB"] = True
 		tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
 		tc.variables["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreaded"
+		for flag in self._sanitizerLinkFlags():
+			tc.extra_exelinkflags.append(flag)
+			tc.extra_sharedlinkflags.append(flag)
+
+		for flag in self._sanitizerFlags():
+			tc.extra_cflags.append(flag)
+			tc.extra_cxxflags.append(flag)
+
 		tc.generate()
 
 	def source(self):
@@ -65,18 +130,16 @@ class spirv_reflect(ConanFile):
 
 		copy(self, "*.h", os.path.join(self.source_folder, "SPIRV-Reflect/include"), os.path.join(self.package_folder, "include/include"))
 
-		lib_src = os.path.join(self.build_folder, "lib")
 		lib_dst = os.path.join(self.package_folder, "lib")
-		lib_deb_src = os.path.join(self.build_folder, "Debug")
-		lib_rel_src = os.path.join(self.build_folder, "Release")
 
+		# Linux (single-config) writes the archive directly under the build folder; MSVC (multi-config) writes the
+		# lib into a <BuildType> subfolder. Copy from the config that was actually built (build_type), so
+		# RelWithDebInfo / MinSizeRel work too rather than only Debug / Release.
 		copy(self, "*.a", self.build_folder, lib_dst)
 
-		copy(self, "*.lib", lib_deb_src, lib_dst)
-		copy(self, "*.pdb", lib_deb_src, lib_dst)
-
-		copy(self, "*.lib", lib_rel_src, lib_dst)
-		copy(self, "*.pdb", lib_rel_src, lib_dst)
+		lib_cfg_src = os.path.join(self.build_folder, str(self.settings.build_type))
+		copy(self, "*.lib", lib_cfg_src, lib_dst)
+		copy(self, "*.pdb", lib_cfg_src, lib_dst)
 
 	def package_info(self):
 		self.cpp_info.set_property("cmake_file_name", "spirv_reflect")

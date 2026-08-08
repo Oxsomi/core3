@@ -1,5 +1,5 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-# Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+# Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB formatsBCHeaders "../../../inc/formats/oiBC/*.h")
-file(GLOB formatsBCSources "*.c")
+file(GLOB formatsBCHeaders CONFIGURE_DEPENDS "../../../include/formats/oiBC/*.h")
+file(GLOB formatsBCSources CONFIGURE_DEPENDS "*.c")
 
 add_library(
 	OxC3_formats_oiBC
@@ -30,3 +30,21 @@ add_library(
 
 set_target_properties(OxC3_formats_oiBC PROPERTIES FOLDER Oxsomi/formats)
 target_link_libraries(OxC3_formats_oiBC PUBLIC OxC3_types_base OxC3_types_math OxC3_formats_oiXX)
+
+if(EnableTests AND OxC3TestExecutables)
+
+	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
+
+	add_executable(
+		OxC3_formats_oiBC_test
+		${testsC}
+		${testsH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_formats_oiBC_test PUBLIC OxC3_formats_oiBC OxC3_types_test)
+	set_target_properties(OxC3_formats_oiBC_test PROPERTIES FOLDER Oxsomi/test/formats)
+	add_test(NAME OxC3_formats_oiBC_test COMMAND OxC3_formats_oiBC_test)
+
+endif()

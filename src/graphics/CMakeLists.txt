@@ -1,5 +1,5 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-# Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+# Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,21 +17,23 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
+find_package(Vulkan QUIET)
+
 set(graphicsAllowD3D12 OFF)
 set(graphicsAllowVk OFF)
 
 if(WIN32)
 	if(DynamicLinkingGraphics)
 		set(graphicsAllowD3D12 ON)
-		if(DEFINED ENV{VULKAN_SDK})
+		if(Vulkan_FOUND)
 			set(graphicsAllowVk ON)
 		endif()
 	elseif(NOT ForceVulkan)
 		set(graphicsAllowD3D12 ON)
-	elseif(DEFINED ENV{VULKAN_SDK})
+	elseif(Vulkan_FOUND)
 		set(graphicsAllowVk ON)
 	endif()
-elseif(DEFINED ENV{VULKAN_SDK})
+elseif(Vulkan_FOUND)
 	set(graphicsAllowVk ON)
 endif()
 
@@ -39,8 +41,8 @@ if(NOT graphicsAllowVk AND NOT graphicsAllowD3D12)
 	message(FATAL_ERROR "-- No valid graphics API found, aborting...")
 endif()
 
-file(GLOB_RECURSE graphicsHeaders "../../inc/graphics/generic/*.h")
-file(GLOB_RECURSE graphicsSources "generic/*.c")
+file(GLOB_RECURSE graphicsHeaders CONFIGURE_DEPENDS "../../include/graphics/generic/*.h")
+file(GLOB_RECURSE graphicsSources CONFIGURE_DEPENDS "generic/*.c")
 
 add_library(
 	OxC3_graphics
@@ -58,14 +60,53 @@ endif()
 set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi/graphics)
 target_link_libraries(OxC3_graphics PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH)
 
+include(../../cmake/oxc3.cmake)
+add_virtual_files(
+	TARGET OxC3_graphics NAME shaders
+	ROOT ${CMAKE_CURRENT_SOURCE_DIR}/generic/shaders
+	SELF ${CMAKE_CURRENT_SOURCE_DIR}/../..
+	FORCE_PACKAGER
+)
+
 source_group("Shaders" FILES ${shaders})
 
-add_library(OxC3_graphics_target INTERFACE)
+add_library(
+	OxC3_graphics_target		# Since dynamic linking might not define dependencies correctly
+	INTERFACE
+)
+
+if(NOT DynamicLinkingGraphics)
+	target_link_libraries(OxC3_graphics_target INTERFACE OxC3_graphics)
+endif()
 
 if(graphicsAllowVk)
-    add_subdirectory(vulkan)
+	add_subdirectory(vulkan)
 endif()
 
 if(graphicsAllowD3D12)
-    add_subdirectory(d3d12)
+	add_subdirectory(d3d12)
+endif()
+
+if(EnableTests AND OxC3TestExecutables)
+
+	# Interface test: headless-safe checks always run, device tests skip without an adapter.
+	# add_virtual_dependencies is required so device creation can load the //OxC3_graphics prebuilt shaders.
+
+	include(../../cmake/oxc3.cmake)
+	file(GLOB testsInterfaceC CONFIGURE_DEPENDS "test/interface/*.c")
+
+	add_executable(
+		OxC3_graphics_interface_test
+		${testsInterfaceC}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_graphics_interface_test PUBLIC OxC3_graphics_target OxC3_platforms OxC3_types_test)
+	set_target_properties(OxC3_graphics_interface_test PROPERTIES FOLDER Oxsomi/test/graphics)
+
+	add_virtual_dependencies(TARGET OxC3_graphics_interface_test DEPENDENCIES OxC3_graphics)
+
+	apply_dependencies(OxC3_graphics_interface_test)
+	add_test(NAME OxC3_graphics_interface_test COMMAND OxC3_graphics_interface_test)
+
 endif()

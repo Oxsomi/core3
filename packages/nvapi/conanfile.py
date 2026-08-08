@@ -8,7 +8,7 @@ required_conan_version = ">=2.0"
 class nvapi(ConanFile):
 
 	name = "nvapi"
-	version = "2024.09.21"
+	version = "2026.08.02"
 
 	license = "NVIDIA custom license"
 	author = "NVIDIA (original) & Oxsomi (modifications only)"
@@ -31,8 +31,8 @@ class nvapi(ConanFile):
 		copy(self, "*.h", os.path.join(self.source_folder, "nvapi"), os.path.join(self.package_folder, "include"))
 		copy(self, "License.txt", os.path.join(self.source_folder, "nvapi"), self.package_folder)
 
-		# We'll only have a link target for windows x64 (D3D12 release),
-		# otherwise it's just shader includes for the shader compiler
+		# We'll only have a link target for windows x64 (D3D12 release); otherwise it's just the headers.
+		# NVAPI is used by the D3D12 backend only.
 
 		if self.settings.os == "Windows" and self.settings.arch == "x86_64":
 			copy(self, "nvapi64.lib", os.path.join(self.source_folder, "nvapi/amd64"), os.path.join(self.package_folder, "lib"))

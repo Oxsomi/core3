@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,36 +18,36 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "platforms/ext/stringx.h"
+//graphics/vulkan/generic/vk_tlas.c
+
 #include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_buffer.h"
 #include "graphics/vulkan/vulkan.h"
+#include "types/container/string.h"
+#include "types/base/constants.h"
 
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
 
-Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
+Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = tlas ? GraphicsDeviceRef_getAlloc(tlas->base.device) : NULL;
 
 	GraphicsDeviceRef *deviceRef = tlas->base.device;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
 	VkTLAS *tlasExt = TLAS_ext(tlas, Vk);
 
-	Error err = Error_none();
 	CharString tmp = CharString_createNull();
+	ELockAcquire acq = ELockAcquire_Invalid;
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
-		return Error_unsupportedOperation(0, "VkTLAS_init()::serialized not supported yet");		//TODO:
+		retError(clean, Error_unsupportedOperation(0, "VkTLAS_init()::serialized not supported yet"));        //TODO:
 
 	U64 instancesU64 = 0;
 	U64 stride = tlas->base.isMotionBlurExt ? sizeof(TLASInstanceMotion) : sizeof(TLASInstanceStatic);
@@ -55,12 +55,11 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 	if (tlas->useDeviceMemory)
 		instancesU64 = tlas->deviceData.len / stride;
 
-	else instancesU64 = tlas->cpuInstancesStatic.length;		//Both static and motion length are at the same loc
+	else instancesU64 = tlas->cpuInstancesStatic.length;        //Both static and motion length are at the same loc
 
 	if(instancesU64 >> 24)
-		gotoIfError(clean, Error_outOfBounds(
-			0, instancesU64, 1 << 24, "VkTLAS_init() only instance count of <U24_MAX is supported"
-		))
+		retError(clean, Error_outOfBounds(
+			0, instancesU64, 1 << 24, "VkTLAS_init() only instance count of <U24_MAX is supported"));
 
 	//Convert to Vulkan dependent version
 
@@ -76,20 +75,26 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 
 		if (!tlas->useDeviceMemory) {
 
-			gotoIfError(clean, CharString_formatx(
-				&tmp, "%.*s instances buffer", CharString_length(tlas->base.name), tlas->base.name.ptr
-			))
+			gotoIfError3(clean, CharString_format(
+				alloc,
+				&tmp,
+				e_rr,
+				"%.*s instances buffer",
+				CharString_length(tlas->base.name),
+				tlas->base.name.ptr
+			));
 
-			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+			gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef,
 				EDeviceBufferUsage_ASReadExt,
 				EGraphicsResourceFlag_CPUAllocatedBit,
-				tmp,
+				NULL,
+				&tmp,
 				stride * instancesU64,
-				&tlas->tempInstanceBuffer
-			))
+				&tlas->tempInstanceBuffer, e_rr
+			));
 
-			CharString_freex(&tmp);
+			CharString_free(&tmp, alloc);
 
 			//Directly copy the data is allowed, because it's not in flight and it's on the CPU
 
@@ -98,7 +103,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 
 			Buffer_memcpy(
 				Buffer_createRef(mem, stride * instancesU64),
-				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)	//static, motion same pos
+				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)    //static, motion same pos
 			);
 
 			//We have to transform the CPU-sided buffer to a GPU buffer address
@@ -119,7 +124,15 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 				});
 			}
 
+			acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
 			DeviceMemoryBlock block = device->allocator.blocks.ptr[tempInstanceBuf->resource.blockId];
+
+			if(acq == ELockAcquire_Acquired)
+				SpinLock_unlock(&device->allocator.lock);
+
+			acq = ELockAcquire_Invalid;
+
 			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			if(incoherent) {
@@ -131,7 +144,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 					.size = stride * instancesU64
 				};
 
-				gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(deviceExt->device, 1, &mappedRange)))
+				gotoIfError3(clean, checkVkError(deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &mappedRange), e_rr));
 			}
 
 			instances = (DeviceData) { .buffer = tlas->tempInstanceBuffer, .len = stride * instancesU64 };
@@ -184,7 +197,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 
 	tlasExt->range = (VkAccelerationStructureBuildRangeInfoKHR) { .primitiveCount = instancesU32 };
 
-	instanceExt->getAccelerationStructureBuildSizes(
+	deviceExt->getAccelerationStructureBuildSizes(
 		deviceExt->device,
 		VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
 		&tlasExt->geometries,
@@ -194,29 +207,37 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 
 	//Allocate scratch and final buffer
 
-	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
-		tlas->base.name,
+		NULL,
+		&tlas->base.name,
 		sizes.accelerationStructureSize,
-		&tlas->base.asBuffer
-	))
+		&tlas->base.asBuffer, e_rr
+	));
 
-	gotoIfError(clean, CharString_formatx(
-		&tmp, "%.*s scratch buffer", CharString_length(tlas->base.name), tlas->base.name.ptr
-	))
+	gotoIfError3(clean, CharString_format(
+		alloc,
+		&tmp,
+		e_rr,
+		"%.*s scratch buffer",
+		CharString_length(tlas->base.name),
+		tlas->base.name.ptr
+	));
 
-	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
-		tmp,
+		NULL,
+		&tmp,
 		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.updateScratchSize : sizes.buildScratchSize,
-		&tlas->base.tempScratchBuffer
-	))
+		&tlas->base.tempScratchBuffer,
+		e_rr
+	));
 
-	CharString_freex(&tmp);
+	CharString_free(&tmp, alloc);
 
 	VkAccelerationStructureCreateInfoKHR createInfo = (VkAccelerationStructureCreateInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
@@ -225,7 +246,10 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		.size = sizes.accelerationStructureSize
 	};
 
-	gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(deviceExt->device, &createInfo, NULL, &tlasExt->as)))
+	gotoIfError3(clean, checkVkError(
+		deviceExt->createAccelerationStructure(deviceExt->device, &createInfo, NULL, &tlasExt->as),
+		e_rr
+	));
 
 	//Queue build
 
@@ -241,47 +265,29 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 	if(tlas->base.flags & ERTASBuildFlags_IsUpdate)
 		tlasExt->geometries.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
 
-	//Add as descriptor
-
-	VkWriteDescriptorSetAccelerationStructureKHR tlasDesc = (VkWriteDescriptorSetAccelerationStructureKHR) {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
-		.accelerationStructureCount = 1,
-		.pAccelerationStructures = &tlasExt->geometries.dstAccelerationStructure
-	};
-
-	VkWriteDescriptorSet descriptor = (VkWriteDescriptorSet) {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstBinding = EDescriptorType_TLASExt - 1,				//Sampler is skipped
-		.dstArrayElement = ResourceHandle_getId(tlas->handle),
-		.dstSet = deviceExt->sets[EDescriptorSetType_Resources],
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
-		.pNext = &tlasDesc
-	};
-
-	vkUpdateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
-
 clean:
-	return err;
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->allocator.lock);
+
+	return s_uccess;
 }
 
-Bool VK_WRAP_FUNC(TLAS_free)(TLAS *tlas) {
+void VK_WRAP_FUNC(TLAS_free)(TLAS *tlas) {
 
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	const GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
 	const VkAccelerationStructureKHR as = TLAS_ext(tlas, Vk)->as;
 
 	if(as)
-		instanceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
-
-	return true;
+		deviceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
 }
 
-Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending) {
+Bool VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
 
@@ -289,18 +295,16 @@ Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	VkTLAS *tlasExt = TLAS_ext(tlas, Vk);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
-
-	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
-		return Error_none();
+	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
+		return s_uccess;
 
 	const VkAccelerationStructureBuildRangeInfoKHR *range = &tlasExt->range;
 
-	instanceExt->cmdBuildAccelerationStructures(
+	deviceExt->cmdBuildAccelerationStructures(
 		commandBuffer->buffer,
 		1,
 		&tlasExt->geometries,
@@ -309,10 +313,8 @@ Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 	//Add as flight (keep alive extra)
 
-	Error err = Error_none();
-
 	if(!ListRefPtr_contains(*currentFlight, pending, 0, NULL)) {
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
 		RefPtr_inc(pending);
 	}
 
@@ -320,24 +322,28 @@ Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	//And losing the reference from our object
 	//We do the same thing on the tempInstances, since it's CPU mem only
 
-	if(!ListRefPtr_contains(*currentFlight, tlas->base.tempScratchBuffer, 0, NULL))
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->base.tempScratchBuffer))
+	if(!ListRefPtr_contains(*currentFlight, tlas->base.tempScratchBuffer, 0, NULL)) {
 
-	if(tlas->tempInstanceBuffer && !ListRefPtr_contains(*currentFlight, tlas->tempInstanceBuffer, 0, NULL))
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->tempInstanceBuffer))
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, tlas->base.tempScratchBuffer, alloc, e_rr));
 
-	if(!(tlas->base.flags & ERTASBuildFlags_AllowUpdate)) {
-		tlas->base.tempScratchBuffer = NULL;
-		tlas->tempInstanceBuffer = NULL;
+		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)        //Maintain reference, rather than clear
+			RefPtr_inc(tlas->base.tempScratchBuffer);
+
+		else tlas->base.tempScratchBuffer = NULL;
 	}
 
-	else {
-		RefPtr_inc(tlas->base.tempScratchBuffer);
-		RefPtr_inc(tlas->tempInstanceBuffer);
+	if(tlas->tempInstanceBuffer && !ListRefPtr_contains(*currentFlight, tlas->tempInstanceBuffer, 0, NULL)) {
+
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, tlas->tempInstanceBuffer, alloc, e_rr));
+
+		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)        //Maintain reference, rather than clear
+			RefPtr_inc(tlas->tempInstanceBuffer);
+
+		else tlas->tempInstanceBuffer = NULL;
 	}
 
 	tlas->base.isCompleted = true;
 
 clean:
-	return err;
+	return s_uccess;
 }

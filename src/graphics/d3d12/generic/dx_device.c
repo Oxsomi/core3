@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,9 +18,12 @@
 *  This is called dual licensing.
 */
 
+//graphics/d3d12/generic/dx_device.c
+
 #define INITGUID
 #include <guiddef.h>
-#include "platforms/ext/listx_impl.h"
+#include "types/base/platform_types.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/d3d12/direct3d12.h"
 #include "graphics/d3d12/dx_device.h"
@@ -31,11 +34,18 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device_buffer.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/log.h"
-#include "types/math/math.h"
+#include "graphics/generic/descriptor_heap.h"
+#include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/pipeline_layout.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
+#include "platforms/platform.h"
+#include "platforms/logx.h"
+#include "types/base/mathi.h"
+#include "types/base/mathf.h"
 #include "types/base/thread.h"
+#include "types/base/constants.h"
+#include "types/container/string_unicode.h"
 
 #if _ARCH == ARCH_X86_64
 	#include <nvapi.h>
@@ -54,18 +64,18 @@ void onDebugReport(
 	const C8 *categoryStr = "Undefined";
 
 	switch(category) {
-		default:																					break;
-		case D3D12_MESSAGE_CATEGORY_APPLICATION_DEFINED:	categoryStr = "Application defined";	break;
-		case D3D12_MESSAGE_CATEGORY_MISCELLANEOUS:			categoryStr = "Misc";					break;
-		case D3D12_MESSAGE_CATEGORY_INITIALIZATION:			categoryStr = "Initialization";			break;
-		case D3D12_MESSAGE_CATEGORY_CLEANUP:				categoryStr = "Cleanup";				break;
-		case D3D12_MESSAGE_CATEGORY_COMPILATION:			categoryStr = "Compilation";			break;
-		case D3D12_MESSAGE_CATEGORY_STATE_CREATION:			categoryStr = "State creation";			break;
-		case D3D12_MESSAGE_CATEGORY_STATE_SETTING:			categoryStr = "State setting";			break;
-		case D3D12_MESSAGE_CATEGORY_STATE_GETTING:			categoryStr = "State getting";			break;
-		case D3D12_MESSAGE_CATEGORY_RESOURCE_MANIPULATION:	categoryStr = "Resource manipulation";	break;
-		case D3D12_MESSAGE_CATEGORY_EXECUTION:				categoryStr = "Execution";				break;
-		case D3D12_MESSAGE_CATEGORY_SHADER:					categoryStr = "Shader";					break;
+		default:                                                                                    break;
+		case D3D12_MESSAGE_CATEGORY_APPLICATION_DEFINED:    categoryStr = "Application defined";    break;
+		case D3D12_MESSAGE_CATEGORY_MISCELLANEOUS:          categoryStr = "Misc";                   break;
+		case D3D12_MESSAGE_CATEGORY_INITIALIZATION:         categoryStr = "Initialization";         break;
+		case D3D12_MESSAGE_CATEGORY_CLEANUP:                categoryStr = "Cleanup";                break;
+		case D3D12_MESSAGE_CATEGORY_COMPILATION:            categoryStr = "Compilation";            break;
+		case D3D12_MESSAGE_CATEGORY_STATE_CREATION:         categoryStr = "State creation";         break;
+		case D3D12_MESSAGE_CATEGORY_STATE_SETTING:          categoryStr = "State setting";          break;
+		case D3D12_MESSAGE_CATEGORY_STATE_GETTING:          categoryStr = "State getting";          break;
+		case D3D12_MESSAGE_CATEGORY_RESOURCE_MANIPULATION:  categoryStr = "Resource manipulation";  break;
+		case D3D12_MESSAGE_CATEGORY_EXECUTION:              categoryStr = "Execution";              break;
+		case D3D12_MESSAGE_CATEGORY_SHADER:                 categoryStr = "Shader";                 break;
 	}
 
 	switch(severity) {
@@ -114,44 +124,106 @@ void onDebugReport(
 TListImpl(DxCommandAllocator);
 TListNamedImpl(ListID3D12Fence);
 
-Error DX_WRAP_FUNC(GraphicsDevice_init)(
+Bool DxGraphicsDevice_createDescriptorHeapSingle(
+	DxGraphicsDevice *deviceExt,
+	D3D12_DESCRIPTOR_HEAP_DESC desc,
+	CharString *name,
+	DxDescriptorHeapSingle *heap,
+	Bool reqGpuHandle,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	ListU16 tmpName16 = (ListU16) { 0 };
+
+	if(name && name->ptr)
+		gotoIfError3(clean, CharString_toUTF16(*name, alloc, &tmpName16, e_rr));
+
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
+		deviceExt->device,
+		&desc,
+		&IID_ID3D12DescriptorHeap,
+		(void**) &heap->heap
+	), e_rr));
+
+	if(tmpName16.ptr)
+		gotoIfError3(clean, dxCheck(heap->heap->lpVtbl->SetName(heap->heap, tmpName16.ptr), e_rr));
+
+	heap->cpuIncrement = deviceExt->device->lpVtbl->GetDescriptorHandleIncrementSize(deviceExt->device, desc.Type);
+
+	if(!heap->heap->lpVtbl->GetCPUDescriptorHandleForHeapStart(heap->heap, &heap->cpuHandle))
+		retError(clean, Error_nullPointer(0, "D3D12: GetCPUDescriptorHandleForHeapStart() returned NULL"));
+
+	if(!reqGpuHandle)
+		goto clean;
+
+	heap->gpuIncrement = heap->cpuIncrement;
+
+	if(!heap->heap->lpVtbl->GetGPUDescriptorHandleForHeapStart(heap->heap, &heap->gpuHandle))
+		retError(clean, Error_nullPointer(0, "D3D12: GetGPUDescriptorHandleForHeapStart() returned NULL"));
+
+clean:
+	CharString_free(name, alloc);
+	ListU16_free(&tmpName16, alloc);
+	return s_uccess;
+}
+
+Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 	const GraphicsInstance *instance,
 	const GraphicsDeviceInfo *physicalDevice,
-	GraphicsDeviceRef **deviceRef
+	GraphicsDeviceRef **deviceRef,
+	Error *e_rr
 ) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = instance ? instance->alloc : NULL;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
-	Error err = Error_none();
 	ID3DBlob *errBlob = NULL, *rootSigBlob = NULL;
 
 	//Create device
 
 	const DxGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Dx);
 
-	gotoIfError(clean, dxCheck(instanceExt->factory->lpVtbl->EnumAdapterByLuid(
+	gotoIfError3(clean, dxCheck(instanceExt->factory->lpVtbl->EnumAdapterByLuid(
 		instanceExt->factory, *(const LUID*)&physicalDevice->luid,
 		&IID_IDXGIAdapter4, (void**)&deviceExt->adapter4
-	)))
+	), e_rr));
 
-	gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->CreateDevice(
-		instanceExt->deviceFactory,
-		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_11_1,
-		&IID_ID3D12Device10, (void**) &deviceExt->device
-	)))
+	if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_IndependentDevices)
+	{
+		gotoIfError3(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->CreateDevice(
+			instanceExt->deviceFactoryNoSingleton,
+			(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_11_0,
+			&IID_ID3D12Device10, (void**) &deviceExt->device
+		), e_rr));
+	}
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->QueryInterface(
+	else gotoIfError3(clean, dxCheck(
+		instanceExt->deviceFactorySingleton->lpVtbl->CreateDevice(
+			instanceExt->deviceFactorySingleton,
+			(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_11_0,
+			&IID_ID3D12Device10, (void**) &deviceExt->device
+		),
+		e_rr
+	));
+
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->QueryInterface(
 		deviceExt->device, &IID_ID3D12DeviceConfiguration1, (void**) &deviceExt->deviceConfig
-	)))
+	), e_rr));
 
 	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
+	(void) isNv;
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
-		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->QueryInterface(
+		gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->QueryInterface(
 			deviceExt->device,
 			&IID_ID3D12DebugDevice, (void**) &deviceExt->debugDevice
-		)))
+		), e_rr));
 
 		//Get infoQueue0 to disable some bogus validation messages
 
@@ -160,17 +232,26 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 			&IID_ID3D12InfoQueue, (void**) &deviceExt->infoQueue0
 		))) {
 
-			gotoIfError(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->SetBreakOnSeverity(
-				deviceExt->infoQueue0, D3D12_MESSAGE_SEVERITY_CORRUPTION, true
-			)))
+			//Only break into the debugger on validation errors when one is actually attached.
+			//The D3D12 debug layer implements "break on severity" via a RaiseException.
+			//With no debugger present that becomes an unhandled second-chance exception and hard-crashes the process.
+			//Without the break the failing HRESULT just propagates as an Error, like the Vulkan backend does.
 
-			gotoIfError(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->SetBreakOnSeverity(
-				deviceExt->infoQueue0, D3D12_MESSAGE_SEVERITY_ERROR, true
-			)))
+			if(IsDebuggerPresent()) {
+
+				gotoIfError3(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->SetBreakOnSeverity(
+					deviceExt->infoQueue0, D3D12_MESSAGE_SEVERITY_CORRUPTION, true
+				), e_rr));
+
+				gotoIfError3(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->SetBreakOnSeverity(
+					deviceExt->infoQueue0, D3D12_MESSAGE_SEVERITY_ERROR, true
+				), e_rr));
+			}
 
 			D3D12_MESSAGE_ID hide[] = {
 				D3D12_MESSAGE_ID_CREATEDEVICE_DEBUG_LAYER_STARTUP_OPTIONS,
-				D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE
+				D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+				D3D12_MESSAGE_ID_CREATERESOURCE_INVALIDALIGNMENT    //To check if we allow small alignment
 			};
 
 			D3D12_INFO_QUEUE_FILTER filter = (D3D12_INFO_QUEUE_FILTER) {
@@ -180,9 +261,9 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 				}
 			};
 
-			gotoIfError(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->AddStorageFilterEntries(
+			gotoIfError3(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->AddStorageFilterEntries(
 				deviceExt->infoQueue0, &filter
-			)))
+			), e_rr));
 		}
 
 		//Get info queue 1 for validation errors in the console on Win11
@@ -194,13 +275,13 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 
 			DWORD callbackCookie = 0;
 
-			gotoIfError(clean, dxCheck(deviceExt->infoQueue1->lpVtbl->RegisterMessageCallback(
+			gotoIfError3(clean, dxCheck(deviceExt->infoQueue1->lpVtbl->RegisterMessageCallback(
 				deviceExt->infoQueue1,
 				onDebugReport,
 				D3D12_MESSAGE_CALLBACK_FLAG_NONE,
 				NULL,
 				&callbackCookie
-			)))
+			), e_rr));
 		}
 
 		#if _ARCH == ARCH_X86_64
@@ -223,33 +304,14 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 					);
 
 					if(status != NVAPI_OK)
-						gotoIfError(clean, Error_invalidState(
+						retError(clean, Error_invalidState(
 							0, "NvAPI_D3D12_RegisterRaytracingValidationMessageCallback couldn't be called"
-						))
+						));
 				}
 			}
 
 		#endif
 	}
-
-	#if _ARCH == ARCH_X86_64
-
-		//Enable NV extensions
-
-		static const U32 nvExtSlot = 99999;		//space and u slot
-		EGraphicsFeatures nvExt =
-			EGraphicsFeatures_RayMicromapOpacity | EGraphicsFeatures_RayMicromapDisplacement |
-			EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayValidation;
-
-		if(isNv && (device->info.capabilities.features & nvExt)) {
-
-			NvAPI_Status status = NvAPI_D3D12_SetNvShaderExtnSlotSpace((IUnknown*)deviceExt->device, nvExtSlot, nvExtSlot);
-
-			if(status != NVAPI_OK)
-				gotoIfError(clean, Error_invalidState(0, "NvAPI_D3D12_SetNvShaderExtnSlotSpace couldn't be called"))
-		}
-
-	#endif
 
 	//Get queues
 
@@ -262,11 +324,11 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 		.Type = D3D12_COMMAND_LIST_TYPE_COPY
 	};
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandQueue(
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandQueue(
 		deviceExt->device,
 		&queueInfo,
 		&IID_ID3D12CommandQueue, (void**) &deviceExt->queues[EDxCommandQueue_Copy].queue
-	)))
+	), e_rr));
 
 	deviceExt->queues[EDxCommandQueue_Compute] = (DxCommandQueue) {
 		.type = EDxCommandQueue_Compute,
@@ -275,11 +337,11 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	queueInfo.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandQueue(
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandQueue(
 		deviceExt->device,
 		&queueInfo,
 		&IID_ID3D12CommandQueue, (void**) &deviceExt->queues[EDxCommandQueue_Compute].queue
-	)))
+	), e_rr));
 
 	deviceExt->queues[EDxCommandQueue_Graphics] = (DxCommandQueue) {
 		.type = EDxCommandQueue_Graphics,
@@ -288,236 +350,59 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	queueInfo.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandQueue(
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandQueue(
 		deviceExt->device,
 		&queueInfo,
 		&IID_ID3D12CommandQueue, (void**) &deviceExt->queues[EDxCommandQueue_Graphics].queue
-	)))
+	), e_rr));
 
 	//Create command recorder per queue per thread per backbuffer.
 	//We only allow triple buffering, so allocate for triple buffers.
 	//These will be initialized JIT because we don't know what thread will be accessing them.
 
 	U64 threads = Platform_getThreads();
-	gotoIfError(clean, ListDxCommandAllocator_resizex(&deviceExt->commandPools, 3 * threads * 3))
+	gotoIfError3(clean, ListDxCommandAllocator_resize(&deviceExt->commandPools, 3 * threads * 3, alloc, e_rr));
 
 	//Create fence
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateFence(
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateFence(
 		deviceExt->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void**) &deviceExt->commitSemaphore
-	)))
-
-	//Create root signature
-
-	D3D12_DESCRIPTOR_RANGE descRanges[17] = {
-
-		//Unused register, but nv wants it
-
-		(D3D12_DESCRIPTOR_RANGE) {
-			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-			.BaseShaderRegister = nvExtSlot,
-			.RegisterSpace = nvExtSlot,
-			.NumDescriptors = 1,
-			.OffsetInDescriptorsFromTableStart = EDescriptorTypeOffsets_UAVEnd
-		}
-	};
-
-	for(U32 i = 0; i < 16; ++i) {
-
-		EDescriptorType type = i == 15 ? EDescriptorType_TLASExt : i;
-		U32 offset = EDescriptorTypeOffsets_values[type];
-		Bool isSrv = offset >= EDescriptorTypeOffsets_SRVStart && offset < EDescriptorTypeOffsets_SRVEnd;
-
-		descRanges[i + 1] = (D3D12_DESCRIPTOR_RANGE) {
-			.RangeType = isSrv ? D3D12_DESCRIPTOR_RANGE_TYPE_SRV : D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-			.NumDescriptors = descriptorTypeCount[type],
-			.OffsetInDescriptorsFromTableStart = offset,
-			.RegisterSpace = i
-		};
-	}
-
-	D3D12_DESCRIPTOR_RANGE samplerRange = (D3D12_DESCRIPTOR_RANGE) {
-		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
-		.NumDescriptors = EDescriptorTypeOffsets_SamplerCount,
-		.OffsetInDescriptorsFromTableStart = EDescriptorTypeOffsets_Sampler
-	};
-
-	D3D12_ROOT_PARAMETER rootParam[] = {
-
-		//All other SRV/UAVs are bound through a descriptor table
-
-		(D3D12_ROOT_PARAMETER) {
-			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-			.DescriptorTable = (D3D12_ROOT_DESCRIPTOR_TABLE) {
-				.NumDescriptorRanges = (U32)(sizeof(descRanges) / sizeof(descRanges[0])),
-				.pDescriptorRanges = descRanges
-			}
-		},
-
-		//Samplers are bound through another descriptor table
-
-		(D3D12_ROOT_PARAMETER) {
-			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-			.DescriptorTable = (D3D12_ROOT_DESCRIPTOR_TABLE) {
-				.NumDescriptorRanges = 1,
-				.pDescriptorRanges = &samplerRange
-			}
-		},
-
-		//CBV at b0, space0
-
-		(D3D12_ROOT_PARAMETER) {
-			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
-			.Descriptor = (D3D12_ROOT_DESCRIPTOR) { 0 }
-		}
-	};
-
-	D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSig = (D3D12_VERSIONED_ROOT_SIGNATURE_DESC) {
-		.Version = D3D_ROOT_SIGNATURE_VERSION_1,
-		.Desc_1_0 = (D3D12_ROOT_SIGNATURE_DESC) {
-			.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
-			.NumParameters = (U32)(sizeof(rootParam) / sizeof(rootParam[0])),
-			.pParameters = rootParam
-		}
-	};
-
-	err = dxCheck(deviceExt->deviceConfig->lpVtbl->SerializeVersionedRootSignature(
-		deviceExt->deviceConfig, &rootSig, &rootSigBlob, &errBlob
-	));
-
-	if(err.genericError) {
-
-		if(errBlob)
-			Log_errorLnx("D3D12: Create root signature failed: %s", (const C8*) errBlob->lpVtbl->GetBufferPointer(errBlob));
-
-		goto clean;
-	}
-
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateRootSignature(
-		deviceExt->device,
-		0, rootSigBlob->lpVtbl->GetBufferPointer(rootSigBlob), rootSigBlob->lpVtbl->GetBufferSize(rootSigBlob),
-		&IID_ID3D12RootSignature, (void**) &deviceExt->defaultLayout
-	)))
-
-	//Create samplers
-
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
-		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-		.NumDescriptors = EDescriptorTypeOffsets_SamplerCount,
-		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-	};
-
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
-		deviceExt->device,
-		&heapDesc,
-		&IID_ID3D12DescriptorHeap,
-		(void**) &deviceExt->heaps[EDescriptorHeapType_Sampler].heap
-	)))
-
-	//Create resources
-
-	heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
-		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-		.NumDescriptors = EDescriptorTypeOffsets_ResourceCount,
-		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-	};
-
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
-		deviceExt->device,
-		&heapDesc,
-		&IID_ID3D12DescriptorHeap,
-		(void**) &deviceExt->heaps[EDescriptorHeapType_Resources].heap
-	)))
+	), e_rr));
 
 	//Create DSVs
 
-	heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-		.NumDescriptors = EDescriptorTypeOffsets_DSVCount
+		.NumDescriptors = 1
 	};
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
-		deviceExt->device,
-		&heapDesc,
-		&IID_ID3D12DescriptorHeap,
-		(void**) &deviceExt->heaps[EDescriptorHeapType_DSV].heap
-	)))
+	CharString tmpName = CharString_createNull();
+
+	if(device->flags & EGraphicsDeviceFlags_IsDebug)
+		tmpName = CharString_createRefCStrConst("DSV heap");
+
+	gotoIfError3(clean, DxGraphicsDevice_createDescriptorHeapSingle(
+		deviceExt, heapDesc, &tmpName, &deviceExt->cpuHeaps[ECPUDescriptorHeapType_DSV], false, alloc, e_rr
+	));
 
 	//Create RTVs
 
 	heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-		.NumDescriptors = EDescriptorTypeOffsets_RTVCount
+		.NumDescriptors = 8
 	};
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
-		deviceExt->device,
-		&heapDesc,
-		&IID_ID3D12DescriptorHeap,
-		(void**) &deviceExt->heaps[EDescriptorHeapType_RTV].heap
-	)))
+	if(device->flags & EGraphicsDeviceFlags_IsDebug)
+		tmpName = CharString_createRefCStrConst("RTV heap");
 
-	for (U32 i = 0; i < EDescriptorHeapType_Count; ++i) {
-
-		DxHeap *heap = &deviceExt->heaps[i];
-
-		if(device->flags & EGraphicsDeviceFlags_IsDebug) {
-
-			static const wchar_t *debugNames[] = {
-				L"Descriptor heap (0: Samplers)",
-				L"Descriptor heap (1: Resources)",
-				L"Descriptor heap (2: DSV)",
-				L"Descriptor heap (3: RTV)"
-			};
-
-			gotoIfError(clean, dxCheck(heap->heap->lpVtbl->SetName(heap->heap, debugNames[i])))
-		}
-
-		D3D12_DESCRIPTOR_HEAP_TYPE type;
-
-		switch(i) {
-			case EDescriptorHeapType_Sampler:	type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;		break;
-			default:							type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;	break;
-			case EDescriptorHeapType_DSV:		type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;			break;
-			case EDescriptorHeapType_RTV:		type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;			break;
-		}
-
-		heap->cpuIncrement = deviceExt->device->lpVtbl->GetDescriptorHandleIncrementSize(deviceExt->device, type);
-
-		if(!heap->heap->lpVtbl->GetCPUDescriptorHandleForHeapStart(heap->heap, &heap->cpuHandle))
-			gotoIfError(clean, Error_nullPointer(0, "D3D12: GetCPUDescriptorHandleForHeapStart() returned NULL"))
-
-		if(i >= EDescriptorHeapType_DSV)		//No GPU descriptor handle offsets
-			continue;
-
-		heap->gpuIncrement = heap->cpuIncrement;
-
-		if(!heap->heap->lpVtbl->GetGPUDescriptorHandleForHeapStart(heap->heap, &heap->gpuHandle))
-			gotoIfError(clean, Error_nullPointer(0, "D3D12: GetGPUDescriptorHandleForHeapStart() returned NULL"))
-	}
-
-	//Determine when we need to flush.
-	//As a rule of thumb I decided for 20% occupied mem by just copies.
-	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too
-	// (as long as it doesn't exceed 33%).
-	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
-
-	const Bool isDistinct = device->info.type == EGraphicsDeviceType_Dedicated;
-	const U64 cpuHeapSize = device->info.capabilities.sharedMemory;
-	const U64 gpuHeapSize = device->info.capabilities.dedicatedMemory;
-
-	device->flushThreshold = U64_min(
-		4 * GIBI,
-		isDistinct ? U64_min(gpuHeapSize / 3, cpuHeapSize / 10 + gpuHeapSize / 5) :
-		cpuHeapSize / 5
-	);
-
-	device->flushThresholdPrimitives = 20 * MIBI / 3;		//20M vertices per frame limit
+	gotoIfError3(clean, DxGraphicsDevice_createDescriptorHeapSingle(
+		deviceExt, heapDesc, &tmpName, &deviceExt->cpuHeaps[ECPUDescriptorHeapType_RTV], false, alloc, e_rr
+	));
 
 	//Allocate temp storage for transitions
 
-	gotoIfError(clean, ListD3D12_BUFFER_BARRIER_reservex(&deviceExt->bufferTransitions, 17))
-	gotoIfError(clean, ListD3D12_TEXTURE_BARRIER_reservex(&deviceExt->imageTransitions, 16))
+	gotoIfError3(clean, ListD3D12_BUFFER_BARRIER_reserve(&deviceExt->bufferTransitions, 17, alloc, e_rr));
+	gotoIfError3(clean, ListD3D12_TEXTURE_BARRIER_reserve(&deviceExt->imageTransitions, 16, alloc, e_rr));
 
 	//Create command signatures for ExecuteIndirect
 
@@ -529,10 +414,10 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 	};
 
 	D3D12_COMMAND_SIGNATURE_DESC signatures[] = {
-		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DispatchIndirectCmd), .pArgumentDescs = &sigDesc[0] },
+		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DispatchIndirectCmd),       .pArgumentDescs = &sigDesc[0] },
 		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(D3D12DispatchRaysIndirect), .pArgumentDescs = &sigDesc[1] },
-		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallIndexed), .pArgumentDescs = &sigDesc[2] },
-		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallUnindexed), .pArgumentDescs = &sigDesc[3] }
+		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallIndexed),           .pArgumentDescs = &sigDesc[2] },
+		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallUnindexed),         .pArgumentDescs = &sigDesc[3] }
 	};
 
 	for(U64 i = 0; i < EExecuteIndirectCommand_Count; ++i) {
@@ -542,12 +427,12 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 
 		signatures[i].NumArgumentDescs = 1;
 
-		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandSignature(
+		gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandSignature(
 			deviceExt->device,
 			&signatures[i],
 			NULL,
 			&IID_ID3D12CommandSignature, (void**) &deviceExt->commandSigs[i]
-		)))
+		), e_rr));
 	}
 
 clean:
@@ -558,20 +443,36 @@ clean:
 	if(rootSigBlob)
 		rootSigBlob->lpVtbl->Release(rootSigBlob);
 
-	if(err.genericError)
-		GraphicsDeviceRef_dec(deviceRef);
+	if(!s_uccess)
+		RefPtr_dec(deviceRef);
 
-	return err;
+	return s_uccess;
 }
 
-void DX_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {		//No-op in D3D12, CBV can be made/bound at runtime :)
-	(void)device;
+U64 DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool isDeviceLocal) {
+
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+
+	DXGI_QUERY_VIDEO_MEMORY_INFO vidMem = (DXGI_QUERY_VIDEO_MEMORY_INFO) { 0 };
+	HRESULT hr = deviceExt->adapter4->lpVtbl->QueryVideoMemoryInfo(
+		deviceExt->adapter4,
+		0,
+		isDeviceLocal ? DXGI_MEMORY_SEGMENT_GROUP_LOCAL : DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,
+		&vidMem
+	);
+
+	if(FAILED(hr))
+		return U64_MAX;
+
+	return vidMem.CurrentUsage;
 }
 
-Bool DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
+void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
 
 	if(!instance || !ext)
-		return instance;
+		return;
+
+	const Allocator *alloc = instance->alloc;
 
 	DxGraphicsDevice *deviceExt = (DxGraphicsDevice*)ext;
 
@@ -579,13 +480,13 @@ Bool DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 		for(U64 i = 0; i < deviceExt->commandPools.length; ++i) {
 
-			const DxCommandAllocator alloc = deviceExt->commandPools.ptr[i];
+			const DxCommandAllocator commandAlloc = deviceExt->commandPools.ptr[i];
 
-			if(alloc.cmd)
-				alloc.cmd->lpVtbl->Release(alloc.cmd);
+			if(commandAlloc.cmd)
+				commandAlloc.cmd->lpVtbl->Release(commandAlloc.cmd);
 
-			if(alloc.pool)
-				alloc.pool->lpVtbl->Release(alloc.pool);
+			if(commandAlloc.pool)
+				commandAlloc.pool->lpVtbl->Release(commandAlloc.pool);
 		}
 
 		if(deviceExt->commitSemaphore)
@@ -595,12 +496,9 @@ Bool DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 			if(deviceExt->commandSigs[i])
 				deviceExt->commandSigs[i]->lpVtbl->Release(deviceExt->commandSigs[i]);
 
-		for(U64 i = 0; i < EDescriptorHeapType_Count; ++i)
-			if(deviceExt->heaps[i].heap)
-				deviceExt->heaps[i].heap->lpVtbl->Release(deviceExt->heaps[i].heap);
-
-		if(deviceExt->defaultLayout)
-			deviceExt->defaultLayout->lpVtbl->Release(deviceExt->defaultLayout);
+		for(U64 i = 0; i < ECPUDescriptorHeapType_Count; ++i)
+			if(deviceExt->cpuHeaps[i].heap)
+				deviceExt->cpuHeaps[i].heap->lpVtbl->Release(deviceExt->cpuHeaps[i].heap);
 
 		for(U64 i = 0; i < EDxCommandQueue_Count; ++i)
 			if(deviceExt->queues[i].queue)
@@ -632,19 +530,19 @@ Bool DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 		deviceExt->debugDevice->lpVtbl->Release(deviceExt->debugDevice);
 	}
 
-	ListDxCommandAllocator_freex(&deviceExt->commandPools);
+	ListDxCommandAllocator_free(&deviceExt->commandPools, alloc);
 
 	//Free temp storage
 
-	ListD3D12_BUFFER_BARRIER_freex(&deviceExt->bufferTransitions);
-	ListD3D12_TEXTURE_BARRIER_freex(&deviceExt->imageTransitions);
-
-	return true;
+	ListD3D12_BUFFER_BARRIER_free(&deviceExt->bufferTransitions, alloc);
+	ListD3D12_TEXTURE_BARRIER_free(&deviceExt->imageTransitions, alloc);
 }
 
 //Executing commands
 
-Error DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef) {
+Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -652,20 +550,19 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef) {
 	U64 completedValue = deviceExt->commitSemaphore->lpVtbl->GetCompletedValue(deviceExt->commitSemaphore);
 
 	if (completedValue >= deviceExt->fenceId)
-		return Error_none();
+		return s_uccess;
 
-	const HANDLE eventHandle = CreateEventEx(NULL, NULL, 0, EVENT_ALL_ACCESS);
-	Error err;
+	const HANDLE eventHandle = CreateEventExA(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
-	gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
+	gotoIfError3(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
 		deviceExt->commitSemaphore, deviceExt->fenceId, eventHandle
-	)))
+	), e_rr));
 
 	WaitForSingleObject(eventHandle, INFINITE);
 
 clean:
 	CloseHandle(eventHandle);
-	return err;
+	return s_uccess;
 }
 
 DxCommandAllocator *DxGraphicsDevice_getCommandAllocator(
@@ -682,24 +579,73 @@ DxCommandAllocator *DxGraphicsDevice_getCommandAllocator(
 
 	const U64 id = resolvedQueueId + (backBufferId * threadCount + threadId) * 3;
 
+	if(id >= device->commandPools.length)    //This can technically happen if thread count changes at runtime (servers?)
+		return NULL;
+
 	return device->commandPools.ptrNonConst + id;
 }
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
+void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *commandBuffer) {
+
+	//Bind descriptor heaps, root signature and descriptor tables since they stay the same for the entire frame.
+	//For every bind point.
+
+	DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(device->defaultDescriptorHeaps), Dx);
+
+	ID3D12DescriptorHeap *descriptorHeaps[2] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };
+
+	DxDescriptorTable *table = DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Dx);
+	//Each heap's increment comes from GetDescriptorHandleIncrementSize for its own descriptor type,
+	//and sampler descriptors are not the same size as CBV/SRV/UAV ones on every adapter.
+	//So the sampler offset has to scale by the sampler heap's stride.
+	//Using the resource heap's happens to work only where the two coincide,
+	// and lands somewhere else entirely on hardware where they don't.
+
+	D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[2] = {
+		{ heap->samplerHeap.gpuHandle.ptr + table->allocationLocations[1] * heap->samplerHeap.gpuIncrement },
+		{ heap->resourcesHeap.gpuHandle.ptr + table->allocationLocations[0] * heap->resourcesHeap.gpuIncrement }
+	};
+
+	commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, 2, descriptorHeaps);
+
+	PipelineLayout *defaultLayout = PipelineLayoutRef_ptr(device->defaultPipelineLayout);
+	DxPipelineLayout *defaultLayoutExt = PipelineLayout_ext(defaultLayout, Dx);
+
+	commandBuffer->lpVtbl->SetComputeRootSignature(commandBuffer, defaultLayoutExt->rootSig);
+	commandBuffer->lpVtbl->SetGraphicsRootSignature(commandBuffer, defaultLayoutExt->rootSig);
+
+	for(U32 i = 0; i < 2; ++i) {
+		commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
+		commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
+	}
+
+	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
+	D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
+
+	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
+
+	commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2 + isNv, cbvLoc);
+	commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2 + isNv, cbvLoc);
+}
+
+Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	GraphicsDeviceRef *deviceRef,
-	ListCommandListRef commandLists,
-	ListSwapchainRef swapchains,
-	CBufferData cbufferData
+	const ListCommandListRef *commandLists,
+	const ListSwapchainRef *swapchains,
+	CBufferData *cbufferData,
+	Error *e_rr
 ) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	//Unpack ext
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	Error err = Error_none();
 	HANDLE eventHandle = NULL;
 	CharString temp = CharString_createNull();
 	ListU16 temp16 = (ListU16) { 0 };
@@ -708,45 +654,40 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	++deviceExt->fenceId;
 
-	if (deviceExt->fenceId > 3) {
+	if (deviceExt->fenceId > device->framesInFlight) {
 
-		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
+		eventHandle = CreateEventExA(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
-		gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
-			deviceExt->commitSemaphore, deviceExt->fenceId - 3, eventHandle
-		)))
+		gotoIfError3(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
+			deviceExt->commitSemaphore, deviceExt->fenceId - device->framesInFlight, eventHandle
+		), e_rr));
 
 		WaitForSingleObject(eventHandle, INFINITE);
 		CloseHandle(eventHandle);
 		eventHandle = NULL;
 	}
 
-	//Acquire swapchain images in D3D12 is just a simple sequential id.
-	//No mailbox, so no problem.
-
-	for(U64 i = 0; i < swapchains.length; ++i) {
-		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
-		unifiedTexture->currentImageId = (device->submitId - 1) % 3;
-	}
-
 	//Prepare per frame cbuffer
 
-	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
+	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
 
-	for (U32 i = 0; i < swapchains.length; ++i) {
+	for (U32 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
 
-		SwapchainRef *swapchainRef = swapchains.ptr[i];
+		SwapchainRef *swapchainRef = swapchains->ptr[i];
 		Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 
 		Bool allowComputeExt = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
 
 		UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
 
-		cbufferData.swapchains[i * 2 + 0] = managedImage.readHandle;
-		cbufferData.swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
+		if(cbufferData) {
+			cbufferData->swapchains[i * 2 + 0] = managedImage.readHandle;
+			cbufferData->swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
+		}
 	}
 
-	*(CBufferData*)frameData->resource.mappedMemoryExt = cbufferData;
+	if(cbufferData)
+		*(CBufferData*)frameData->resource.mappedMemoryExt = *cbufferData;
 
 	//Record command list
 
@@ -754,18 +695,18 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
-	if (commandLists.length) {
+	if (commandLists && commandLists->length) {
 
 		U32 threadId = 0;
 
 		DxCommandAllocator *allocator = DxGraphicsDevice_getCommandAllocator(
-			deviceExt, queue.resolvedQueueId, threadId, (device->submitId - 1) % 3
+			deviceExt, queue.resolvedQueueId, threadId, device->fifId
 		);
 
 		if(!allocator)
-			gotoIfError(clean, Error_nullPointer(0, "D3D12GraphicsDevice_submitCommands() command allocator is NULL"))
+			retError(clean, Error_nullPointer(0, "D3D12GraphicsDevice_submitCommands() command allocator is NULL"));
 
 		//We create command pools only the first 3 frames, after that they're cached.
 		//This is because we have space for [queues][threads][3] command pools.
@@ -776,30 +717,26 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 			//TODO: Multi thread command recording
 
-			gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandAllocator(
+			gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandAllocator(
 				deviceExt->device,
 				D3D12_COMMAND_LIST_TYPE_DIRECT,
 				&IID_ID3D12CommandAllocator,
 				(void**) &allocator->pool
-			)))
+			), e_rr));
 
 			if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
-				gotoIfError(clean, CharString_formatx(
-					&temp,
-					"%s command pool (thread: %"PRIu32", frame id: %"PRIu32")",
+				gotoIfError3(clean, CharString_format(
+					alloc, &temp, e_rr, "%s command pool (thread: %"PRIu32", frame id: %"PRIu32")",
 					queue.type == EDxCommandQueue_Graphics ? "Graphics" : (
 						queue.type == EDxCommandQueue_Compute ? "Compute" : "Copy"
-					),
-					threadId,
-					(device->submitId - 1) % 3
-				))
+					), threadId, device->fifId));
 
-				gotoIfError(clean, CharString_toUTF16x(temp, &temp16))
+				gotoIfError3(clean, CharString_toUTF16(temp, alloc, &temp16, e_rr));
 
-				gotoIfError(clean, dxCheck(allocator->pool->lpVtbl->SetName(allocator->pool, temp16.ptr)))
-				CharString_freex(&temp);
-				ListU16_freex(&temp16);
+				gotoIfError3(clean, dxCheck(allocator->pool->lpVtbl->SetName(allocator->pool, temp16.ptr), e_rr));
+				CharString_free(&temp, alloc);
+				ListU16_free(&temp16, alloc);
 			}
 		}
 
@@ -809,7 +746,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		if (isNew) {
 
-			gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandList(
+			gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandList(
 				deviceExt->device,
 				0,
 				D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -817,24 +754,21 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				NULL,
 				&IID_ID3D12GraphicsCommandList10,
 				(void**) &allocator->cmd
-			)))
+			), e_rr));
 
 			if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
-				gotoIfError(clean, CharString_formatx(
-					&temp,
-					"%s command buffer (thread: %"PRIu32", frame id: %"PRIu32")",
+				gotoIfError3(clean, CharString_format(
+					alloc, &temp, e_rr, "%s command buffer (thread: %"PRIu32", frame id: %"PRIu32")",
 					queue.type == EDxCommandQueue_Graphics ? "Graphics" : (
 						queue.type == EDxCommandQueue_Compute ? "Compute" : "Copy"
-					),
-					threadId,
-					(device->submitId - 1) % 3
-				))
+					), threadId, device->fifId
+				));
 
-				gotoIfError(clean, CharString_toUTF16x(temp, &temp16))
-				gotoIfError(clean, dxCheck(allocator->cmd->lpVtbl->SetName(allocator->cmd, temp16.ptr)))
-				CharString_freex(&temp);
-				ListU16_freex(&temp16);
+				gotoIfError3(clean, CharString_toUTF16(temp, alloc, &temp16, e_rr));
+				gotoIfError3(clean, dxCheck(allocator->cmd->lpVtbl->SetName(allocator->cmd, temp16.ptr), e_rr));
+				CharString_free(&temp, alloc);
+				ListU16_free(&temp16, alloc);
 			}
 		}
 
@@ -843,8 +777,8 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		commandBuffer = allocator->cmd;
 
 		if(!isNew) {
-			gotoIfError(clean, dxCheck(allocator->pool->lpVtbl->Reset(allocator->pool)))
-			gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->Reset(commandBuffer, allocator->pool, NULL)))
+			gotoIfError3(clean, dxCheck(allocator->pool->lpVtbl->Reset(allocator->pool), e_rr));
+			gotoIfError3(clean, dxCheck(commandBuffer->lpVtbl->Reset(commandBuffer, allocator->pool, NULL), e_rr));
 		}
 
 		//Start copies
@@ -852,7 +786,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		DxCommandBufferState state = (DxCommandBufferState) { .buffer = commandBuffer };
 		state.boundPrimitiveTopology = U8_MAX;
 
-		gotoIfError(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, &state))
+		gotoIfError3(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, &state, e_rr));
 
 		//Ensure ubo and staging buffer are the correct states
 
@@ -860,53 +794,27 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		DxDeviceBuffer *uboExt = DeviceBuffer_ext(frameData, Dx);
 
-		gotoIfError(clean, DxDeviceBuffer_transition(
+		gotoIfError3(clean, DxDeviceBuffer_transition(
 			uboExt,
 			D3D12_BARRIER_SYNC_VERTEX_SHADING,
 			D3D12_BARRIER_ACCESS_CONSTANT_BUFFER,
 			&deviceExt->bufferTransitions,
-			&dependency
-		))
+			&dependency, alloc, e_rr
+		));
 
 		if(dependency.NumBarriers)
 			commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dependency);
 
-		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
+		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
 
-		//Bind descriptor heaps, root signature and descriptor tables since they stay the same for the entire frame.
-		//For every bind point.
-
-		ID3D12DescriptorHeap *descriptorHeaps[] = {
-			deviceExt->heaps[EDescriptorHeapType_Resources].heap,
-			deviceExt->heaps[EDescriptorHeapType_Sampler].heap
-		};
-
-		D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[] = {
-			deviceExt->heaps[EDescriptorHeapType_Resources].gpuHandle,
-			deviceExt->heaps[EDescriptorHeapType_Sampler].gpuHandle
-		};
-
-		commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, 2, descriptorHeaps);
-
-		commandBuffer->lpVtbl->SetComputeRootSignature(commandBuffer, deviceExt->defaultLayout);
-		commandBuffer->lpVtbl->SetGraphicsRootSignature(commandBuffer, deviceExt->defaultLayout);
-
-		for(U32 i = 0; i < 2; ++i) {
-			commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
-			commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
-		}
-
-		D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
-
-		commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2, cbvLoc);
-		commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2, cbvLoc);
+		GraphicsDevice_rebindDescriptors(device, commandBuffer);
 
 		//Record commands
 
-		for (U64 i = 0; i < commandLists.length; ++i) {
+		for (U64 i = 0; i < (commandLists ? commandLists->length : 0); ++i) {
 
 			state.scopeCounter = 0;
-			CommandList *commandList = CommandListRef_ptr(commandLists.ptr[i]);
+			CommandList *commandList = CommandListRef_ptr(commandLists->ptr[i]);
 			const U8 *ptr = commandList->data.ptr;
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
@@ -922,9 +830,9 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE };
 
-		for (U64 i = 0; i < swapchains.length; ++i) {
+		for (U64 i = 0; i < (swapchains ? swapchains->length : 0); ++i) {
 
-			SwapchainRef *swapchainRef = swapchains.ptr[i];
+			SwapchainRef *swapchainRef = swapchains->ptr[i];
 			DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(swapchainRef, Dx, 0);
 
 			D3D12_BARRIER_SUBRESOURCE_RANGE range = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
@@ -933,28 +841,28 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				.NumPlanes = 1
 			};
 
-			gotoIfError(clean, DxUnifiedTexture_transition(
+			gotoIfError3(clean, DxUnifiedTexture_transition(
 				imageExt,
 				D3D12_BARRIER_SYNC_RENDER_TARGET,
 				D3D12_BARRIER_ACCESS_COMMON,
 				D3D12_BARRIER_LAYOUT_PRESENT,
 				&range,
 				&deviceExt->imageTransitions,
-				&dependency
-			))
+				&dependency, alloc, e_rr
+			));
 
 			if(RefPtr_inc(swapchainRef))
-				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, swapchainRef))
+				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, swapchainRef, alloc, e_rr));
 		}
 
 		if(dependency.NumBarriers)
 			commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dependency);
 
-		ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
+		ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions, e_rr);
 
 		//End buffer
 
-		gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->Close(commandBuffer)))
+		gotoIfError3(clean, dxCheck(commandBuffer->lpVtbl->Close(commandBuffer), e_rr));
 	}
 
 	//Submit queue
@@ -964,26 +872,31 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	//Presents
 
-	for(U64 i = 0; i < swapchains.length; ++i) {
+	for(U64 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
 
-		Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
-		DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchains.ptr[i]);
-
-		Bool allowTearing = swapchain->presentMode == ESwapchainPresentMode_Immediate;
+		Swapchain *swapchain = SwapchainRef_ptr(swapchains->ptr[i]);
+		DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchains->ptr[i]);
 
 		DXGI_PRESENT_PARAMETERS regions = (DXGI_PRESENT_PARAMETERS) { 0 };
 
-		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->Present1(
+		gotoIfError3(clean, dxCheck(swapchainExt->swapchain->lpVtbl->Present1(
 			swapchainExt->swapchain,
-			allowTearing ? 0 : 1,
-			allowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0,
+			swapchain->presentMode == ESwapchainPresentMode_Fifo ? 1 : 0,
+			swapchain->presentMode == ESwapchainPresentMode_Immediate ? DXGI_PRESENT_ALLOW_TEARING : 0,
 			&regions
-		)))
+		), e_rr));
+
+		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains->ptr[i], NULL);
+		++unifiedTexture->currentImageId;
+		unifiedTexture->currentImageId %= 3;        //Always triple buffering, %3
 	}
 
 	//Fence value after present
 
-	gotoIfError(clean, dxCheck(queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId)))
+	gotoIfError3(clean, dxCheck(
+		queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId),
+		e_rr
+	));
 
 clean:
 
@@ -999,7 +912,7 @@ clean:
 			NvAPI_Status status = NvAPI_D3D12_FlushRaytracingValidationMessages((ID3D12Device5*)deviceExt->device);
 
 			if(status != NVAPI_OK)
-				gotoIfError(clean, Error_invalidState(0, "D3D12GraphicsDevice_submitCommands() flush RT val msgs failed"));
+				retError(clean, Error_invalidState(0, "D3D12GraphicsDevice_submitCommands() flush RT val msgs failed"));
 		}
 
 	#endif
@@ -1007,60 +920,51 @@ clean:
 	if(eventHandle)
 		CloseHandle(eventHandle);
 
-	ListU16_freex(&temp16);
-	CharString_freex(&temp);
-	return err;
+	ListU16_free(&temp16, alloc);
+	CharString_free(&temp, alloc);
+	return s_uccess;
 }
 
-Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer) {
+Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer, Error *e_rr) {
+
+	Bool s_uccess = true;
+	HANDLE eventHandle = NULL;
 
 	if(commandBuffer->inRender)
-		return Error_invalidState(
+		retError(clean, Error_invalidState(
 			0, "DxGraphicsDevice_flush() can't flush while in render, because it can't efficiently be split up"
-		);
+		));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	//End current command list
 
-	HANDLE eventHandle = NULL;
-	Error err;
-	gotoIfError(clean, dxCheck(commandBuffer->buffer->lpVtbl->Close(commandBuffer->buffer)))
+	gotoIfError3(clean, dxCheck(commandBuffer->buffer->lpVtbl->Close(commandBuffer->buffer), e_rr));
 
 	//Submit only the copy command list
-
-	if(deviceExt->fenceId) {		//Ensure GPU is complete, so we don't override anything
-
-		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
-
-		gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
-			deviceExt->commitSemaphore, deviceExt->fenceId, eventHandle
-		)))
-
-		WaitForSingleObject(eventHandle, INFINITE);
-		CloseHandle(eventHandle);
-		eventHandle = NULL;
-	}
 
 	++deviceExt->fenceId;
 	const DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
 	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, (ID3D12CommandList**) &commandBuffer->buffer);
-	gotoIfError(clean, dxCheck(queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId)))
+	gotoIfError3(clean, dxCheck(
+		queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId),
+		e_rr
+	));
 
 	//Wait for the device
 
-	gotoIfError(clean, GraphicsDeviceRef_wait(deviceRef))
+	gotoIfError3(clean, GraphicsDeviceRef_wait(deviceRef, e_rr));
 
 	//Reset command list
 
 	const U32 threadId = 0;
 
 	const DxCommandAllocator *allocator = DxGraphicsDevice_getCommandAllocator(
-		deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % 3)
+		deviceExt, queue.resolvedQueueId, threadId, (U8) device->fifId
 	);
 
-	gotoIfError(clean, dxCheck(commandBuffer->buffer->lpVtbl->Reset(commandBuffer->buffer, allocator->pool, NULL)))
+	gotoIfError3(clean, dxCheck(commandBuffer->buffer->lpVtbl->Reset(commandBuffer->buffer, allocator->pool, NULL), e_rr));
 
 	commandBuffer->pipeline = NULL;
 	commandBuffer->boundScissor = (D3D12_RECT) { 0 };
@@ -1070,10 +974,12 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState 
 	commandBuffer->stencilRef = 0;
 	commandBuffer->blendConstants = F32x4_zero();
 
+	GraphicsDevice_rebindDescriptors(device, commandBuffer->buffer);
+
 clean:
 
 	if(eventHandle)
 		CloseHandle(eventHandle);
 
-	return err;
+	return s_uccess;
 }

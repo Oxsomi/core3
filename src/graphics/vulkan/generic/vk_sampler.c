@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,52 +18,53 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_sampler.c
+
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "types/container/string.h"
 
-Bool VK_WRAP_FUNC(Sampler_free)(Sampler *sampler) {
+void VK_WRAP_FUNC(Sampler_free)(Sampler *sampler) {
 
-	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(sampler->device), Vk);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(sampler->device);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	const VkSampler *samplerExt = Sampler_ext(sampler, Vk);
 
 	if(*samplerExt)
-		vkDestroySampler(deviceExt->device, *samplerExt, NULL);
-
-	return true;
+		deviceExt->destroySampler(deviceExt->device, *samplerExt, NULL);
 }
 
 VkSamplerAddressMode mapVkAddressMode(ESamplerAddressMode addressMode) {
 	switch (addressMode) {
-		case ESamplerAddressMode_MirrorRepeat:		return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-		case ESamplerAddressMode_ClampToEdge:		return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		case ESamplerAddressMode_ClampToBorder:		return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-		default:									return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		case ESamplerAddressMode_MirrorRepeat:       return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+		case ESamplerAddressMode_ClampToEdge:        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		case ESamplerAddressMode_ClampToBorder:      return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+		default:                                     return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	}
 }
 
 VkBorderColor mapVkBorderColor(ESamplerBorderColor borderColor) {
 	switch (borderColor) {
-		case ESamplerBorderColor_OpaqueBlackFloat:		return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-		case ESamplerBorderColor_OpaqueBlackInt:		return VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		case ESamplerBorderColor_OpaqueWhiteFloat:		return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-		case ESamplerBorderColor_OpaqueWhiteInt:		return VK_BORDER_COLOR_INT_OPAQUE_WHITE;
-		default:										return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+		case ESamplerBorderColor_OpaqueBlackFloat:   return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+		case ESamplerBorderColor_OpaqueBlackInt:     return VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		case ESamplerBorderColor_OpaqueWhiteFloat:   return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+		case ESamplerBorderColor_OpaqueWhiteInt:     return VK_BORDER_COLOR_INT_OPAQUE_WHITE;
+		default:                                     return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 	}
 }
 
-Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Sampler *sampler, CharString name) {
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(
+	GraphicsDeviceRef *dev, Sampler *sampler, const CharString *name, Error *e_rr
+) {
 
-	Error err = Error_none();
+	Bool s_uccess = true;
 
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	const VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
-	(void)instance;
+	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	VkSampler *samplerExt = Sampler_ext(sampler, Vk);
 
@@ -85,7 +86,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 
 		.mipLodBias = F16_castF32(sinfo.mipBias),
 
-		.anisotropyEnable = !!sinfo.aniso,
+		.anisotropyEnable = (Bool) sinfo.aniso,
 		.maxAnisotropy = sinfo.aniso,
 
 		.compareEnable = sinfo.enableComparison,
@@ -97,35 +98,20 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 		.borderColor = mapVkBorderColor(sinfo.borderColor)
 	};
 
-	gotoIfError(clean, vkCheck(vkCreateSampler(deviceExt->device, &samplerInfo, NULL, samplerExt)))
+	gotoIfError3(clean, checkVkError(deviceExt->createSampler(deviceExt->device, &samplerInfo, NULL, samplerExt), e_rr));
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instance->debugSetName) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name) && instanceExt->debugSetName) {
 
 		const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_SAMPLER,
-			.pObjectName = name.ptr,
+			.pObjectName = name->ptr,
 			.objectHandle = (U64) *samplerExt
 		};
 
-		gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
 	}
 
-	//Allocate descriptor
-
-	const VkDescriptorImageInfo imageInfo = (VkDescriptorImageInfo) { .sampler = *samplerExt };
-
-	const VkWriteDescriptorSet descriptor = (VkWriteDescriptorSet) {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-		.dstSet = deviceExt->sets[EDescriptorSetType_Sampler],
-		.dstArrayElement = ResourceHandle_getId(sampler->samplerLocation),
-		.pImageInfo = &imageInfo
-	};
-
-	vkUpdateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
-
 clean:
-	return err;
+	return s_uccess;
 }

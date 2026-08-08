@@ -21,7 +21,7 @@ typedef struct SBHeader {		//Should be aligned to 4-byte
 
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
     U8 flags;					//& 1 = isTightlyPacked
-    U16 arrays;
+    U16 arrays;					//Multi dimensional arrays or 1D arrays geq 32Ki
 
     U16 structs;
     U16 vars;					//Should always contain at least 1
@@ -76,7 +76,13 @@ typedef enum ESBVarFlag {
 typedef struct SBVar {
 
     U16 structId;		//If not U16_MAX, ESBType needs to be 0 and this should be a valid struct
-    U16 arrayIndex;		//U16_MAX identifies "none"
+    
+    //Either arrayIndex or arrayDim depending on highest bit (>>15).
+    // Limiting inline 1D arrays to 32767 (require an arrayIndex to represent them)
+    union {
+	    U16 arrayIndexAndTrue;		//(>> 15) = arrayIndex used, requires valid array referenced
+        U16 arrayDimAndFalse;		//!(>> 15) = array dimension used (can be 0 to turn off arrays)
+    };
 
     U32 offset;
 
@@ -90,16 +96,9 @@ typedef struct SBVar {
 //Verify if everything's in bounds.
 //Verify if SBFile includes any invalid data.
 
-SBFile {
+SBFile {		//Has to be 16-byte aligned
 
     SBHeader header;
-
-    //No magic number, no encryption/compression/SHA256 (see oiDL.md).
-    //[0, 			structs]  		= structNames
-    //[structs, 	structs + vars] = varNames
-    //Empty strings are valid, as nameless vars/structs exist.
-    //Duplicates are also allowed, as one struct can have multiple layouts.
-    DLFile strings;
 
     SBStruct structs[header.structs];
     SBVar vars[header.vars];				//Last variable is the root
@@ -107,6 +106,16 @@ SBFile {
 
     for i < header.arrays:
     	U32 dimensions[arrayDimCount[i]]
+
+    U8[N] pad;	//Padding to align to 16-byte
+    
+    //No magic number, no encryption/compression/SHA256 (see oiDL.md).
+    //[0, 			structs]  		= structNames
+    //[structs, 	structs + vars] = varNames
+    //Empty strings are valid, as nameless vars/structs exist.
+    //Duplicates are also allowed, as one struct can have multiple layouts.
+    //Needs to be leq 128 bytes per string and all strings must fit into 1 MiB max (all loaded at DLFile_read time).
+    DLFile strings;
 }
 ```
 

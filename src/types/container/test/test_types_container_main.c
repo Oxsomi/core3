@@ -1,0 +1,60 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//types/container/test/test_types_container_main.c
+
+#include "types/test/test.h"
+#include "test_types_container_shared.h"
+#include "types/container/test/basic_alloc.h"
+
+OXC3_TEST_MAIN(types_container) {
+
+	const Allocator alloc = BasicAllocator_instance;
+
+	Test t = (Test) { 0 };
+	t.alloc = &alloc;
+
+	Test_aes128gcm(&t);
+	Test_aes256gcm(&t);
+	Test_md5(&t);
+	Test_crc32c(&t);
+	Test_sha256(&t);
+
+	Test_textureFormat(&t);
+
+	Test_allocationBuffer(&t);
+	Test_bigInt(&t);
+	Test_u128(&t);
+	Test_string(&t);
+	Test_stringOps(&t);
+	Test_containerBuffer(&t);
+	Test_filePaths(&t);
+	Test_list(&t);
+	Test_jobQueue(&t);
+	Test_hpp(&t);
+	Test_hppWrappers(&t);
+	Test_memoryStream(&t);
+	Test_encryptionStream(&t);
+	Test_logOOM(&t);
+
+	BasicAllocator_checkLeakedMem(&t);
+
+	return Test_end(&t);
+}

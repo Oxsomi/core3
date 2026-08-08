@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/osx/owindow_manager.c
+
 #include "platforms/window_manager.h"
 #include "types/base/error.h"
 
@@ -31,6 +33,12 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 
 Bool WindowManager_freeNative(WindowManager *w) {
 	(void)w;
+	return true;
+}
+
+Bool WindowManager_updateMonitors(WindowManager *manager, Error *e_rr) {
+	(void) manager; (void) e_rr;
+	//TODO: Query monitors via CoreGraphics (CGGetActiveDisplayList).
 	return true;
 }
 

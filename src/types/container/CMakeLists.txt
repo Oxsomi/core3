@@ -1,5 +1,5 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-# Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+# Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -12,24 +12,28 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program. If not, see https://github.com/Oxsomi/rt_core/blob/main/LICENSE.
+# along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 # Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB_RECURSE typesContainerHeaders "../../../inc/types/container/*.h")
-file(GLOB typesContainerSources "*.c")
-file(GLOB_RECURSE typesContainerPlatformSources "platforms/${platform}/*.c")
-file(GLOB_RECURSE typesContainerSIMDSources "simd/${simd}/*.c")
+file(GLOB typesContainerHeaders CONFIGURE_DEPENDS "../../../include/types/container/*.h")
+file(GLOB typesContainerHeadersSimd CONFIGURE_DEPENDS "../../../include/types/container/simd/*.h")
+file(GLOB typesContainerHeadersSimdTarg CONFIGURE_DEPENDS "../../../include/types/container/simd/${SIMD}/*.h")
+file(GLOB typesContainerSources CONFIGURE_DEPENDS "*.c")
+file(GLOB_RECURSE typesContainerPlatformSources CONFIGURE_DEPENDS "platforms/${platform}/*.c")
+file(GLOB_RECURSE typesContainerSIMDSources CONFIGURE_DEPENDS "simd/${simd}/*.c")
 
 if(UNIX)
-	file(GLOB_RECURSE typesContainerUnixSources "platforms/unix/*.c")
+	file(GLOB_RECURSE typesContainerUnixSources CONFIGURE_DEPENDS "platforms/unix/*.c")
 endif()
 
 add_library(
 	OxC3_types_container
 	STATIC
 	${typesContainerHeaders}
+	${typesContainerHeadersSimd}
+	${typesContainerHeadersSimdTarg}
 	${typesContainerSources}
 	${typesContainerPlatformSources}
 	${typesContainerSIMDSources}
@@ -37,17 +41,102 @@ add_library(
 	CMakeLists.txt
 )
 
+if("${simd}" STREQUAL "sse")
+	if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+		set_source_files_properties(
+			simd/sse/buffer_encrypt_avx256.c
+			PROPERTIES
+				COMPILE_OPTIONS "-maes;-mpclmul;-mavx2;-mvaes;-mvpclmulqdq;-mavx512vl"
+		)
+		set_source_files_properties(
+			simd/sse/buffer_encrypt_avx512.c
+			PROPERTIES
+				COMPILE_OPTIONS "-mavx512f;-mavx512dq;-mavx512bw;-mvaes;-mvpclmulqdq;-mavx512vl"
+		)
+	endif()
+endif()
+
 source_group("Source Files (${platform})" FILES ${typesContainerPlatformSources})
 source_group("Source Files (simd: ${simd})" FILES ${typesContainerSIMDSources})
 source_group("Source Files (unix)" FILES ${typesContainerUnixSources})
+source_group("Header Files (simd: ${simd})" FILES ${typesContainerHeadersSimdTarg})
 
 set_target_properties(OxC3_types_container PROPERTIES FOLDER Oxsomi/types)
 target_link_libraries(OxC3_types_container PUBLIC OxC3_types_base OxC3_types_math)
-
-target_compile_definitions(OxC3_types_container PUBLIC -D_ENABLE_SIMD=${SIMD})
 
 if(WIN32)
 	target_link_libraries(OxC3_types_container PUBLIC Bcrypt.lib)
 elseif(APPLE)
 	target_link_libraries(OxC3_types_container PUBLIC "-framework Security")
+elseif(ANDROID)
+	target_link_libraries(OxC3_types_container PUBLIC android log)
+endif()
+
+if(EnableTests)
+
+	file(GLOB typesContainerTestfH CONFIGURE_DEPENDS "../../../include/types/container/test/*.h")
+	file(GLOB typesContainerTestfC CONFIGURE_DEPENDS "test/shared/*.c")
+
+	add_library(
+		OxC3_types_container_test_util STATIC
+		${typesContainerTestfH}
+		${typesContainerTestfC}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_types_container_test_util PUBLIC OxC3_types_container OxC3_types_test)
+	set_target_properties(OxC3_types_container_test_util PROPERTIES FOLDER Oxsomi/test/types)
+
+	# Executables can't link on android (Platform_defineEntrypoint gives android_main, not main), and an
+	# APK can't run one regardless; src/CMakeLists.txt bundles the suites into OxC3_atest instead, which
+	# still links the util library above.
+
+	if(OxC3TestExecutables)
+
+		file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+		file(GLOB testsCpp CONFIGURE_DEPENDS "test/*.cpp")    #C++ TUs (e.g. hpp wrapper tests)
+		file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
+
+		add_executable(
+			OxC3_types_container_test
+			${testsC}
+			${testsCpp}
+			${testsH}
+			CMakeLists.txt
+		)
+
+		target_link_libraries(OxC3_types_container_test PUBLIC OxC3_types_container_test_util)
+		set_target_properties(OxC3_types_container_test PROPERTIES FOLDER Oxsomi/test/types)
+		add_test(NAME OxC3_types_container_test COMMAND OxC3_types_container_test)
+
+	endif()
+
+endif()
+
+if(EnableOxC3CLI)
+
+	file(GLOB typesContainerPerfH CONFIGURE_DEPENDS "../../../include/types/container/perf/*.h")
+	file(GLOB typesContainerPerfC CONFIGURE_DEPENDS "perf/*.c")
+
+	add_library(
+		OxC3_types_container_perf_lib STATIC
+		${typesContainerPerfH}
+		${typesContainerPerfC}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_types_container_perf_lib PUBLIC OxC3_types_container)
+	set_target_properties(OxC3_types_container_perf_lib PROPERTIES FOLDER Oxsomi/perf)
+
+	file(GLOB testsExecC CONFIGURE_DEPENDS "perf/exec/*.c")
+
+	add_executable(
+		OxC3_types_container_perf
+		${testsExecC}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_types_container_perf PUBLIC OxC3_types_container_perf_lib)
+	set_target_properties(OxC3_types_container_perf PROPERTIES FOLDER Oxsomi/perf)
+
 endif()

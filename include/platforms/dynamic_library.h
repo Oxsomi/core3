@@ -1,0 +1,54 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//platforms/dynamic_library.h
+
+#pragma once
+#include "types/base/platform_types.h"
+#include "types/container/string.h"
+
+typedef void *DynamicLibrary;
+
+//These functions are optional on systems that don't support dynamic linking,
+//In which case, only isValidPath will be defined.
+//It can be checked via SUPPORTS_DYNAMIC_LINKING.
+
+#define SUPPORTS_DYNAMIC_LINKING
+
+impl Bool DynamicLibrary_isValidPath(CharString str);
+
+#ifdef SUPPORTS_DYNAMIC_LINKING
+	impl Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicLib, Error *e_rr);
+
+	//Load a SYSTEM library by bare name (e.g. "vulkan-1.dll" / "libvulkan.so.1"), resolved via the OS's standard
+	//library search path rather than the app/working directory. str must be null-terminated.
+	impl Bool DynamicLibrary_loadSystem(CharString str, DynamicLibrary *dynamicLib, Error *e_rr);
+
+	impl Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void **ptr, Error *e_rr);
+	impl void DynamicLibrary_free(DynamicLibrary dynamicLib);
+#endif
+
+#ifdef _MSC_VER
+	#define EXPORT_SYMBOL __declspec(dllexport)
+	#define IMPORT_SYMBOL __declspec(dllimport)
+#else
+	#define EXPORT_SYMBOL __attribute__((visibility("default")))
+	#define IMPORT_SYMBOL
+#endif

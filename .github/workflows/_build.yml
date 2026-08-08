@@ -1,0 +1,304 @@
+name: _build (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        type: string
+        required: true
+      runner:
+        type: string
+        required: true
+      os:
+        type: string
+        required: true
+      container:
+        type: string
+        required: false
+        default: ''
+      build_flags:
+        type: string
+        required: false
+        default: ''
+      python_cmd:
+        type: string
+        required: false
+        default: python
+      setup_python:
+        type: boolean
+        required: false
+        default: false
+      python_version:
+        type: string
+        required: false
+        default: ''
+      android_api:
+        type: string
+        required: false
+        default: '31'
+      android_ndk:
+        type: string
+        required: false
+        default: '29.0.13113456'
+      android_shader_compiler:
+        type: boolean
+        required: false
+        default: false
+      android_run:
+        type: boolean
+        required: false
+        default: false
+      # Conan cache group. Jobs with the same (os, runner, cache_name) share one cache; only the first of
+      # them to finish gets to save it, so a group must only contain jobs whose expensive dependencies are
+      # identical. Anything that builds with a different toolchain (or builds different dxc flavors, like
+      # the android shader compiler / emulator jobs) must name its own group or it inherits a cache that
+      # misses everything it needs and can never save its own.
+      cache_name:
+        type: string
+        required: false
+        default: default
+      hook_name:
+        type: string
+        required: true
+    secrets:
+      WEBHOOK_URL:
+        required: true
+
+# `inputs.os` selects *what* is built (android vs. a host build), `runner.os` selects the host toolchain
+# to install. They're independent: android is cross compiled from all three hosts, and the android job
+# still needs a full host toolchain because it builds OxC3_package to package virtual files with.
+
+jobs:
+  build:
+    name: ${{ inputs.name }}
+    runs-on: ${{ inputs.runner }}
+    container: ${{ inputs.container }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ── Python setup (only where the runner doesn't ship the right version) ──
+      - uses: actions/setup-python@v5
+        if: inputs.setup_python
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      # ── Ninja (Android only; used as the CMake generator on every host) ────
+      - uses: seanmiddleditch/gha-setup-ninja@master
+        if: inputs.os == 'android'
+
+      # ── Conan ──────────────────────────────────────────────────────────────
+      # SteamOS container doesn't have pip by default
+      - name: Install Conan (SteamOS)
+        if: inputs.os == 'steamos'
+        run: |
+          apt-get update -y
+          apt-get install -y python3-pip
+          pip3 install conan --break-system-packages
+
+      - name: Install Conan (Linux)
+        if: inputs.os != 'steamos' && runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y python3-pip
+          sudo pip3 install conan --break-system-packages
+
+      - name: Install Conan
+        if: inputs.os != 'steamos' && runner.os != 'Linux'
+        uses: turtlebrowser/get-conan@main
+
+      # ── Host platform deps ─────────────────────────────────────────────────
+      # Needed by every build that produces host binaries, including the android job's OxC3_package.
+      - name: Install Wayland deps
+        if: inputs.os != 'steamos' && runner.os == 'Linux'
+        run: sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev
+
+      - name: Set up Homebrew
+        if: runner.os == 'macOS'
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Setup LLVM
+        if: runner.os == 'macOS'
+        uses: ZhongRuoyu/setup-llvm@v0
+        with:
+          llvm-version: 17
+
+      # ── Android platform deps ──────────────────────────────────────────────
+      - name: Set up JDK 17
+        if: inputs.os == 'android'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        if: inputs.os == 'android'
+        uses: android-actions/setup-android@v3
+
+      # setup-android exports ANDROID_SDK_ROOT for whichever runner we're on; derive ours from that
+      # instead of hardcoding a Windows path, so the same job works on linux/macos/windows.
+      # sdkmanager is resolved by path rather than by name: on the windows runner it's only on PATH as
+      # sdkmanager.bat, which bash won't find (no PATHEXT resolution), and the cmdline-tools directory
+      # is versioned rather than always being "latest".
+      - name: Setup Android NDK
+        if: inputs.os == 'android'
+        shell: bash
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [ -z "$SDK" ]; then echo "Neither ANDROID_SDK_ROOT nor ANDROID_HOME is set"; exit 1; fi
+
+          SDKMANAGER=""
+          for d in "$SDK"/cmdline-tools/*/bin "$SDK"/tools/bin; do
+            for exe in "$d/sdkmanager" "$d/sdkmanager.bat"; do
+              if [ -f "$exe" ]; then SDKMANAGER="$exe"; break 2; fi
+            done
+          done
+
+          if [ -z "$SDKMANAGER" ]; then echo "No sdkmanager under $SDK"; ls -R "$SDK" | head -50; exit 1; fi
+
+          "$SDKMANAGER" "platforms;android-${{ inputs.android_api }}" "ndk;${{ inputs.android_ndk }}"
+          echo "ANDROID_SDK=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK=$SDK/ndk/${{ inputs.android_ndk }}" >> "$GITHUB_ENV"
+
+      # ── Conan package cache ────────────────────────────────────────────────
+      # cache_name keeps toolchains apart: without it every job on the same runner image raced for one
+      # key, the first finisher (usually the default toolchain) won, and e.g. the clang jobs then
+      # restored an msvc/gcc-only store, missed everything, rebuilt dxc from source each run and could
+      # never save the result. restore-keys stays inside the same group on purpose; falling back across
+      # groups would seed the save with another toolchain's packages and grow every cache with junk.
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: ${{ inputs.os }}-${{ inputs.runner }}-${{ inputs.cache_name }}-${{ hashFiles('**/conanfile.py', '**/conanfile.txt') }}
+          restore-keys: ${{ inputs.os }}-${{ inputs.runner }}-${{ inputs.cache_name }}-
+
+      # ── Build: Android ─────────────────────────────────────────────────────
+      # An android build can't run its own packager, so it tool_requires a host oxc3 that has
+      # OxC3_package in it (see conanfile.py's build_requirements). Build that once up front; the
+      # three android configs below then share it, which is why HOST_TOOL_OPTIONS is fixed rather
+      # than derived from the target's options.
+      - name: Build host OxC3 package (tooling)
+        if: inputs.os == 'android'
+        run: ${{ inputs.python_cmd }} build_android.py --host_package_only
+
+      - name: Build Android Debug
+        if: inputs.os == 'android' && !inputs.android_shader_compiler && !inputs.android_run
+        run: ${{ inputs.python_cmd }} build_android.py -mode Debug -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+
+      - name: Build Android Debug (SIMD fallback)
+        if: inputs.os == 'android' && !inputs.android_shader_compiler && !inputs.android_run
+        run: ${{ inputs.python_cmd }} build_android.py -mode Debug -simd False -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+
+      - name: Build Android Release
+        if: inputs.os == 'android' && !inputs.android_shader_compiler && !inputs.android_run
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+
+      # DXC cross compiled to android, which is the expensive half of this: the host build has to produce
+      # llvm-tblgen/clang-tblgen for the cross build to borrow (see packages/dxc/conanfile.py), so both
+      # halves get built from scratch the first time.
+      # One arch and one config on purpose; the point is that the path still works, and repeating it per
+      # config would multiply an already long build for no extra coverage.
+
+      - name: Build Android Release (shader compiler)
+        if: inputs.os == 'android' && inputs.android_shader_compiler
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch arm64 -tests True -shader_compiler True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+
+      # x64 rather than arm64: the emulator below runs on an x86_64 host, and an arm64 image there is
+      # software emulated and far too slow to finish a test run.
+
+      - name: Build Android Release (x64, for the emulator)
+        if: inputs.os == 'android' && inputs.android_run
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch x64 -tests True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+
+      # The emulator needs KVM, which the runner exposes but doesn't make writable by default.
+
+      - name: Enable KVM
+        if: inputs.os == 'android' && inputs.android_run
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # Everything up to here only proves it builds. This is the part that catches a build that installs
+      # and then dies on startup, which has happened more than once and looks identical to a pass from
+      # the outside.
+      # The two functional suites need someone at the device, so they skip themselves without
+      # debug.oxc3.interactive; the rest run unattended.
+
+      - name: Run test suite on an emulator
+        if: inputs.os == 'android' && inputs.android_run
+        uses: reactivecircus/android-emulator-runner@v2.33.0
+        with:
+          api-level: ${{ inputs.android_api }}
+          arch: x86_64
+          target: default
+          force-avd-creation: false
+          # -cpu host, because the emulator's default CPU model reports an Ivy Bridge era feature set (no FMA, no
+          # BMI, empty cpuid leaf 7) while KVM runs every instruction straight on the runner's silicon. The guest
+          # therefore executes the FMA and BMI2 code we compile with just fine -- types_math and types_container
+          # pass -- but Platform_checkCPUSupport reads cpuid, believes the model, and refuses to start.
+          # Passing the host's cpuid through makes the two agree. Must stay last: -qemu hands everything after it
+          # to qemu.
+          # If a runner image ever ships an emulator that won't take it, the fallback is to build this job with
+          # -simd False (Platform_checkCPUSupport is unconditional there); x86_64 SIMD is already covered natively
+          # by the Linux x64 jobs, this job exists for the android platform layer.
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -qemu -cpu host
+          disable-animations: true
+          script: ${{ inputs.python_cmd }} build_android.py --skip_build --apk --sign --run -mode Release -arch x64 -tests True -package net.osomi.test -version 0.1.0 -name "OxC3 test" -keystore_password oxc3ci -test_timeout 900
+
+      # ── Build: everything else ─────────────────────────────────────────────
+      # Debug goes first because a failing step aborts the job, so whichever config runs first is the
+      # only one whose failure gets reported. Debug is the config worth having that from: it's the one
+      # without -flto=auto, so a crash prints real stack frames instead of collapsing into main+<offset>.
+      # Each build.py call resolves its own dependencies, so the order carries no other cost than which
+      # run pays for building them.
+
+      - name: Build Debug
+        if: inputs.os != 'android'
+        run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True ${{ inputs.build_flags }}
+
+      - name: Build Release
+        if: inputs.os != 'android'
+        run: ${{ inputs.python_cmd }} build.py -mode Release -tests True ${{ inputs.build_flags }}
+
+      - name: Build Release (SIMD fallback)
+        if: inputs.os != 'android'
+        run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True ${{ inputs.build_flags }}
+
+      # ── Cleanup before cache save ──────────────────────────────────────────
+      # The LRU pass matters because restore-keys chains caches across conanfile changes: without it every
+      # superseded dxc build would ride along in each newly saved cache forever. Anything this run used is
+      # by definition recent, so it only drops leftovers.
+      - name: Prune Conan build dirs
+        if: always()
+        shell: bash
+        run: |
+          conan remove "*" --lru=4w -c || true
+          rm -rf ~/.conan2/p/b/*/b
+
+      # ── Discord notification ───────────────────────────────────────────────
+      # continue-on-error: ~25 jobs fire this at once on every push, so Discord throttles some of them
+      # (503/429); a notification hiccup must never turn a green build red. The curl retries with
+      # backoff first, the step gives up gracefully after that.
+      - name: Send Webhook Notification
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          HOOK_OS_NAME: ${{ inputs.hook_name }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+        run: |
+          # Post directly to the Discord webhook
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "WEBHOOK_URL not set; skipping Discord notification"
+            exit 0
+          fi
+          COLOR=$([ "$JOB_STATUS" = "success" ] && echo 3066993 || echo 15158332)
+          curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -H "Content-Type: application/json" \
+            -d "{\"embeds\":[{\"title\":\"${WORKFLOW_NAME} (${HOOK_OS_NAME})\",\"description\":\"Status: ${JOB_STATUS}\",\"color\":${COLOR}}]}" \
+            "$WEBHOOK_URL"

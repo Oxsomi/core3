@@ -1,5 +1,5 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-# Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+# Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,9 +17,9 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB_RECURSE typesMathHeaders "../../../inc/types/math/*.h")
-file(GLOB typesMathSources "*.c")
-file(GLOB_RECURSE typesMathSIMDSources "simd/${simd}/*.c")
+file(GLOB_RECURSE typesMathHeaders CONFIGURE_DEPENDS "../../../include/types/math/*.h")
+file(GLOB typesMathSources CONFIGURE_DEPENDS "*.c")
+file(GLOB_RECURSE typesMathSIMDSources CONFIGURE_DEPENDS "simd/${simd}/*.c")
 
 add_library(
 	OxC3_types_math
@@ -39,6 +39,22 @@ target_link_libraries(OxC3_types_math PUBLIC OxC3_types_base)
 
 target_compile_definitions(OxC3_types_math PUBLIC -D_ENABLE_SIMD=${SIMD} -D_FORCE_FLOAT_FALLBACK=${_FORCE_FLOAT_FALLBACK})
 
-if(UNIX AND NOT APPLE)
-	target_link_libraries(OxC3_types_math PUBLIC m)
+if(EnableTests AND OxC3TestExecutables)
+
+	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+	file(GLOB testsCpp CONFIGURE_DEPENDS "test/*.cpp")    #C++ TUs (e.g. hpp wrapper tests)
+	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
+
+	add_executable(
+		OxC3_types_math_test
+		${testsC}
+		${testsCpp}
+		${testsH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_types_math_test PUBLIC OxC3_types_math OxC3_types_test)
+	set_target_properties(OxC3_types_math_test PROPERTIES FOLDER Oxsomi/test/types)
+	add_test(NAME OxC3_types_math_test COMMAND OxC3_types_math_test)
+
 endif()

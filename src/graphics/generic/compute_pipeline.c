@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,88 +18,115 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//graphics/generic/compute_pipeline.c
+
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/texture.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/ref_ptr.h"
 #include "formats/oiSH/sh_file.h"
 
 Bool GraphicsDeviceRef_createPipelineCompute(
 	GraphicsDeviceRef *deviceRef,
-	SHFile shaderBinary,
-	CharString name,			//Temporary name for debugging
+	const SHFile *shaderBinary,
+	const CharString *name,
 	U32 entryId,
+	const CharString *entryName,
+	EPipelineFlags flags,
+	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
 	U16 entrypointId = (U16) entryId;
 	U16 binaryId = (U16) (entryId >> 16);
+	Bool allocated = false;
 
-	if(!deviceRef || entrypointId >= shaderBinary.entries.length || !pipeline)
+	if(!deviceRef || !shaderBinary || entrypointId >= shaderBinary->entries.length || !pipeline)
 		retError(clean, Error_nullPointer(
 			!deviceRef ? 0 : (!pipeline ? 2 : 1),
 			"GraphicsDeviceRef_createPipelineCompute()::deviceRef, shaderBinary and pipeline are required"
-		))
+		));
 
-	if(deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_invalidParameter(
 			0, 0, "GraphicsDeviceRef_createPipelineCompute()::deviceRef is an invalid type"
-		))
+		));
 
 	if(*pipeline)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute()::*pipeline is non NULL, indicating a possible memleak"
-		))
+		));
 
-	SHEntry entry = shaderBinary.entries.ptr[entrypointId];
+	if(!SHFile_isComplete(shaderBinary))
+		retError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createPipelineCompute()::shaderBinary is reflection-only (has no compiled binary)"
+		));
 
-	if(entry.stage != ESHPipelineStage_Compute)
+	const SHEntry *entry = &shaderBinary->entries.ptr[entrypointId];
+
+	if(entry->stage != ESHPipelineStage_Compute)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute() entry is not a compute shader"
-		))
+		));
 
-	if(binaryId >= entry.binaryIds.length)
+	if(binaryId >= entry->binaryIds.length)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute() entry binaryId out of bounds"
-		))
+		));
 
-	U32 finalBinaryId = entry.binaryIds.ptr[binaryId];
-	SHBinaryInfo binary = shaderBinary.binaries.ptr[finalBinaryId];
+	if(layout && layout->refPtrType->typeId != (TypeId) EGraphicsTypeId_PipelineLayout)
+		retError(clean, Error_invalidParameter(
+			3, 0,
+			"GraphicsDeviceRef_createPipelineCompute() pipeline layout is invalid"
+		));
 
-	gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, binary, entry, e_rr))
+	U32 finalBinaryId = entry->binaryIds.ptr[binaryId];
+	const SHBinaryInfo *binary = &shaderBinary->binaries.ptr[finalBinaryId];
+
+	gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, binary, entry, e_rr));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	gotoIfError2(clean, RefPtr_createx(
-		(U32)(sizeof(Pipeline) + GraphicsDeviceRef_getObjectSizes(deviceRef)->pipeline),
-		(ObjectFreeFunc) Pipeline_free,
-		(ETypeId) EGraphicsTypeId_Pipeline,
-		pipeline
-	))
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->pipeline, pipeline, e_rr));
+	allocated = true;
 
 	Pipeline *pipelinePtr = PipelineRef_ptr(*pipeline);
 
-	GraphicsDeviceRef_inc(deviceRef);
+	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
+		gotoIfError3(clean, RefPtr_inc(deviceRef));
 
-	*pipelinePtr = (Pipeline) { .device = deviceRef, .type = EPipelineType_Compute };
+	*pipelinePtr = (Pipeline) {
+		.device = deviceRef,
+		.type = EPipelineType_Compute,
+		.flags = flags
+	};
 
-	gotoIfError2(clean, ListPipelineStage_resizex(&pipelinePtr->stages, 1))
+	if(!layout)
+		layout = device->defaultPipelineLayout;
+
+	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
+		gotoIfError3(clean, RefPtr_inc(layout));
+
+	pipelinePtr->layout = layout;
+
+	gotoIfError3(clean, ListPipelineStage_resize(&pipelinePtr->stages, 1, alloc, e_rr));
 	pipelinePtr->stages.ptrNonConst[0] = (PipelineStage) { .stageType = EPipelineStage_Compute, .binaryId = entryId };
 
-	gotoIfError3(clean, GraphicsDevice_createPipelineComputeExt(device, name, pipelinePtr, binary, e_rr))
+	gotoIfError3(clean, GraphicsDevice_createPipelineComputeExt(device, name, entryName, pipelinePtr, binary, e_rr));
 
 	goto success;
 
 clean:
-	RefPtr_dec(pipeline);
+	if(allocated)
+		RefPtr_dec(pipeline);
 
 success:
 	return s_uccess;

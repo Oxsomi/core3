@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,12 +18,17 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/device_info.c
+
+#include "types/container/list_impl.h"
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/pipeline_structs.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/texture_format.h"
 #include "graphics/generic/instance.h"
 #include "types/math/type_cast.h"
+#include "formats/oiSH/sh_binaries.h"
+#include "types/base/endianness.h"
 
 void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities) {
 
@@ -32,8 +37,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 	Log_debugLnx(
 		"%s: %s (%s): %"PRIu64" bytes shared memory, %"PRIu64" bytes %s memory\n\t"
-		"Max buffer size: %"PRIu64" bytes, max allocation size: %"PRIu64" bytes\r\t"
-		"%s %"PRIu64"\n\tLUID %016"PRIx64"\n\tUUID %016"PRIx64"%016"PRIx64,
+		"Max buffer size: %"PRIu64" bytes, max allocation size: %"PRIu64" bytes\n\t"
+		"%s %"PRIu64"\n\tLUID %016"PRIx64"\n\tUUID %016"PRIx64"%016"PRIx64"\n\t"
+		"Vendor: %s",
 		api == EGraphicsApi_Direct3D12 ? "D3D12" : (api == EGraphicsApi_Vulkan ? "Vulkan" : "Unknown"),
 		deviceInfo->name,
 		deviceInfo->driverInfo,
@@ -50,7 +56,8 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		deviceInfo->id,
 		deviceInfo->capabilities.features & EGraphicsFeatures_LUID ? U64_swapEndianness(deviceInfo->luid) : 0,
 		U64_swapEndianness(deviceInfo->uuid[0]),
-		U64_swapEndianness(deviceInfo->uuid[1])
+		U64_swapEndianness(deviceInfo->uuid[1]),
+		ESHVendor_names[deviceInfo->vendor]
 	);
 
 	if (printCapabilities) {
@@ -100,17 +107,29 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_RayMicromapOpacity)
 			Log_debugLnx("\t\tRaytracing opacity micromap");
 
-		if(feat & EGraphicsFeatures_RayMicromapDisplacement)
-			Log_debugLnx("\t\tRaytracing displacement micromap");
-
 		if(feat & EGraphicsFeatures_RayMotionBlur)
 			Log_debugLnx("\t\tRaytracing motion blur");
 
 		if(feat & EGraphicsFeatures_RayReorder)
-			Log_debugLnx("\t\tRay reorder");
+			Log_debugLnx(
+				cap.features2 & EGraphicsFeatures2_RayReorderActual ?
+				"\t\tRay reorder (actually reorders)" : "\t\tRay reorder (API only, no-op on this device)"
+			);
 
 		if(feat & EGraphicsFeatures_RayValidation)
 			Log_debugLnx("\t\tRay validation");
+
+		if(feat & EGraphicsFeatures_RayTriPosition)
+			Log_debugLnx("\t\tRay triangle vertex position fetch");
+
+		if(cap.features2 & EGraphicsFeatures2_RayClusterAS)
+			Log_debugLnx("\t\tRaytracing cluster acceleration structures (mega geometry)");
+
+		if(cap.features2 & EGraphicsFeatures2_RayPartitionedTLAS)
+			Log_debugLnx("\t\tRaytracing partitioned TLAS (mega geometry)");
+
+		if(cap.features2 & EGraphicsFeatures2_RayIndirectASBuild)
+			Log_debugLnx("\t\tRaytracing indirect acceleration structure builds");
 
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
@@ -139,8 +158,26 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_Bindless)
 			Log_debugLnx("\t\tBindless");
 
+		if(cap.features2 & EGraphicsFeatures2_DescriptorHeap)
+			Log_debugLnx("\t\tDescriptor heap (full bindless)");
+
 		if(feat & EGraphicsFeatures_SubgroupOperations)
 			Log_debugLnx("\t\tSubgroup operations");
+
+		if(feat & EGraphicsFeatures_CoopVec)
+			Log_debugLnx("\t\tCooperative vectors (matvec)");
+
+		if(feat & EGraphicsFeatures_CoopMat)
+			Log_debugLnx("\t\tCooperative matrix (GEMM)");
+
+		if(feat & EGraphicsFeatures_CoopFP8)
+			Log_debugLnx("\t\tCooperative FP8 (e4m3/e5m2)");
+
+		if(feat & EGraphicsFeatures_CoopVecTraining)
+			Log_debugLnx("\t\tCooperative vector training");
+
+		if(cap.experimentalFeatures)
+			Log_debugLnx("\t\t(some of the features above are experimental preview)");
 
 		//Data types
 
@@ -228,6 +265,24 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.featuresExt & EDxGraphicsFeatures_PAQ)
 				Log_debugLnx("\t\tPAQ (Payload Access Qualifiers)");
 
+			if(cap.featuresExt & EDxGraphicsFeatures_ReportReBARWrites)
+				Log_debugLnx("\t\tReport ReBAR writes (tool)");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_TightAlignment)
+				Log_debugLnx("\t\tTight resource alignment");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps)
+				Log_debugLnx("\t\tAllow combine heaps");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_IndependentDevices)
+				Log_debugLnx("\t\tIndependent devices");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_BatchedAsyncCommandList)
+				Log_debugLnx("\t\tBatched async command list");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_RGBX32fMSAA)
+				Log_debugLnx("\t\tRGB(A)32f supports MSAA");
+
 			if(cap.featuresExt & EDxGraphicsFeatures_SM6_6)
 				Log_debugLnx("\t\tShader model 6.6");
 
@@ -239,6 +294,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EDxGraphicsFeatures_SM6_9)
 				Log_debugLnx("\t\tShader model 6.9");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_SM6_10)
+				Log_debugLnx("\t\tShader model 6.10");
 		}
 
 		else if(api == EGraphicsApi_Vulkan) {
@@ -251,6 +309,15 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EVkGraphicsFeatures_Maintenance4)
 				Log_debugLnx("\t\tMaintenance4");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress)
+				Log_debugLnx("\t\tBuffer device address");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_DriverProperties)
+				Log_debugLnx("\t\tDriver properties");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_MemoryBudget)
+				Log_debugLnx("\t\tMemory budget");
 		}
 	}
 }
@@ -269,10 +336,10 @@ Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETe
 		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_BCn;
 
 	switch (format) {
-		case ETextureFormat_RGB32f:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32f;
-		case ETextureFormat_RGB32i:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32i;
-		case ETextureFormat_RGB32u:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32u;
-		default:						return true;
+		case ETextureFormat_RGB32f:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32f;
+		case ETextureFormat_RGB32i:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32i;
+		case ETextureFormat_RGB32u:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32u;
+		default:                           return true;
 	}
 }
 
@@ -292,9 +359,9 @@ Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format) {
 
 Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format) {
 	switch(format) {
-		case EDepthStencilFormat_D24S8Ext:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D24S8;
-		case EDepthStencilFormat_D32S8X24Ext:	return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D32S8;
-		case EDepthStencilFormat_S8X24Ext:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_S8;
-		default:								return true;
+		case EDepthStencilFormat_D24S8Ext:      return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D24S8;
+		case EDepthStencilFormat_D32S8X24Ext:   return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D32S8;
+		case EDepthStencilFormat_S8X24Ext:      return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_S8;
+		default:                                return true;
 	}
 }

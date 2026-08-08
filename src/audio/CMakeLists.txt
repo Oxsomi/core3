@@ -1,5 +1,5 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-# Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+# Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,11 +20,11 @@
 message("-- Targeting audio API: OpenAL")
 find_package(openal_soft REQUIRED)
 
-file(GLOB_RECURSE graphicsHeaders "../../inc/audio/*.h")
-file(GLOB graphicsSources "*.c")
+file(GLOB_RECURSE graphicsHeaders CONFIGURE_DEPENDS "../../include/audio/*.h")
+file(GLOB graphicsSources CONFIGURE_DEPENDS "*.c")
 
-file(GLOB_RECURSE apiPlatformSources "openal_soft/*.c")
-file(GLOB_RECURSE apiPlatformIncludes "../../inc/audio/openal_soft/*.h")
+file(GLOB_RECURSE apiPlatformSources CONFIGURE_DEPENDS "openal_soft/*.c")
+file(GLOB_RECURSE apiPlatformIncludes CONFIGURE_DEPENDS "../../include/audio/openal_soft/*.h")
 
 add_library(
 	OxC3_audio
@@ -40,4 +40,42 @@ source_group("Source Files (openal_soft)" FILES ${apiPlatformSources})
 source_group("Header Files (openal_soft)" FILES ${apiPlatformIncludes})
 
 set_target_properties(OxC3_audio PROPERTIES FOLDER Oxsomi)
-target_link_libraries(OxC3_audio PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms openal_soft::openal_soft OxC3_formats_wav)
+target_link_libraries(OxC3_audio PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container openal_soft::openal_soft OxC3_formats_wav)
+
+set(AUDIO_TEST_DEBUG OFF)
+
+if(AUDIO_TEST_DEBUG)
+	target_link_libraries(OxC3_audio PUBLIC OxC3_platforms)
+	target_compile_definitions(OxC3_audio PUBLIC AUDIO_TEST_DEBUG)
+endif()
+
+if(EnableTests AND OxC3TestExecutables)
+
+	file(GLOB testsInterfaceC CONFIGURE_DEPENDS "test/interface/*.c")
+	file(GLOB testsInterfaceH CONFIGURE_DEPENDS "test/interface/*.h")
+
+	add_executable(
+		OxC3_audio_interface_test
+		${testsInterfaceC}
+		${testsInterfaceH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_audio_interface_test PUBLIC OxC3_audio OxC3_types_container_test_util)
+	set_target_properties(OxC3_audio_interface_test PROPERTIES FOLDER Oxsomi/test/audio)
+	add_test(NAME OxC3_audio_interface_test COMMAND OxC3_audio_interface_test)
+
+	file(GLOB testsFunctionalC CONFIGURE_DEPENDS "test/functional/*.c")
+	file(GLOB testsFunctionalH CONFIGURE_DEPENDS "test/functional/*.h")
+
+	add_executable(
+		OxC3_audio_functional_test
+		${testsFunctionalC}
+		${testsFunctionalH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_audio_functional_test PUBLIC OxC3_audio OxC3_types_container_test_util)
+	set_target_properties(OxC3_audio_functional_test PROPERTIES FOLDER Oxsomi/test/audio)
+
+endif()

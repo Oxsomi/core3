@@ -69,3 +69,6 @@ Module.symvers
 Mkfile.old
 dkms.conf
 inc/cfg/config.h
+.dep_hashes.json
+__pycache__/
+

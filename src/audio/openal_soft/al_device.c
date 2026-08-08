@@ -1,0 +1,128 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//audio/openal_soft/al_device.c
+
+#include "audio/openal_soft/openal_soft.h"
+#include "audio/audio_device.h"
+#include "types/math/vec4f.h"
+#include "types/base/allocator.h"
+#include "types/base/error.h"
+
+U32 AudioDevice_sizeExt = sizeof(ALAudioDevice);
+
+static inline void alListener3fv(ALenum e, F32x4 v) {
+	alListener3f(e, F32x4_x(v), F32x4_y(v), F32x4_z(v));
+}
+
+static inline void alListener3f2v(ALenum e, F32x4 a, F32x4 b) {
+
+	F32 v[6] = {
+		F32x4_x(a), F32x4_y(a), F32x4_z(a),
+		F32x4_x(b), F32x4_y(b), F32x4_z(b)
+	};
+
+	alListenerfv(e, v);
+}
+
+Bool AudioDevice_updateListenerTransformExt(AudioDevice *dev, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	ALAudioDevice *devExt = AudioDevice_ext(dev, AL);
+	
+	U8 dirtyMask = dev->pendingDirtyMask;
+
+	if (dirtyMask & 31)
+		ALC_PROCESS_ERROR(devExt->device, alcMakeContextCurrent(devExt->context));
+
+	if(dirtyMask & 1)
+		AL_PROCESS_ERROR(alListener3fv(AL_POSITION, dev->info.position));
+
+	if(dirtyMask & 6)
+		AL_PROCESS_ERROR(alListener3f2v(AL_ORIENTATION, dev->info.forward, dev->info.up));
+
+	if(dirtyMask & 8)
+		AL_PROCESS_ERROR(alListener3fv(AL_VELOCITY, dev->info.velocity));
+
+	if (dirtyMask & 16)
+		AL_PROCESS_ERROR(alListenerf(AL_GAIN, dev->info.gain));
+
+	dev->pendingDirtyMask = 0;
+
+clean:
+	return s_uccess;
+}
+
+Bool AudioDevice_createExt(Bool isDebug, AudioDevice *dev, Error *e_rr) {
+
+	Bool s_uccess = true;
+	ALAudioDevice *devExt = AudioDevice_ext(dev, AL);
+
+	ALC_PROCESS_ERROR(NULL, devExt->device = alcOpenDevice(dev->info.name));
+
+	if (!devExt->device)
+		retError(clean, Error_invalidState(0, "AudioDevice_createExt() alcOpenDevice returned NULL"));
+
+	//ALC_CONTEXT_FLAGS_EXT is only valid if ALC_EXT_debug is present on this device.
+	// Even if enumeration flagged it, verify here before passing the attribute.
+	Bool hasDebugExt = isDebug && alcIsExtensionPresent(devExt->device, "ALC_EXT_debug") == ALC_TRUE;
+
+	if (isDebug && !hasDebugExt)
+		retError(clean, Error_invalidState(
+			0, "AudioDevice_createExt() debug requested but ALC_EXT_debug not available on device"
+		));
+
+	ALCint ints[] = {
+		hasDebugExt ? ALC_CONTEXT_FLAGS_EXT : 0,
+		hasDebugExt ? ALC_CONTEXT_DEBUG_BIT_EXT : 0,
+		0, 0
+	};
+
+	ALC_PROCESS_ERROR(devExt->device, devExt->context = alcCreateContext(devExt->device, ints));
+
+	if (!devExt->context)
+		retError(clean, Error_invalidState(0, "AudioDevice_createExt() alcCreateContext returned NULL"));
+
+	ALC_PROCESS_ERROR(devExt->device, alcMakeContextCurrent(devExt->context));
+	dev->info.gain = 1.f;
+	dev->pendingDirtyMask = 0x1F;
+
+clean:
+	return s_uccess;
+}
+
+void AudioDevice_freeExt(AudioDevice *dev, const Allocator *alloc) {
+
+	(void) alloc;
+
+	ALAudioDevice *devExt = AudioDevice_ext(dev, AL);
+
+	if(devExt->context) {
+
+		if(alcGetCurrentContext() == devExt->context)
+			alcMakeContextCurrent(NULL);
+
+		alcDestroyContext(devExt->context);
+	}
+
+	if(devExt->device)
+		alcCloseDevice(devExt->device);
+}

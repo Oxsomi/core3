@@ -1,0 +1,17 @@
+name: Linux ARM64 Vulkan static
+on: [push]
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Linux ARM64 Vulkan static
+      runner: ubuntu-24.04-arm
+      os: linux
+      build_flags: '-o cliGraphics=False'
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      hook_name: Linux-arm64-static
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

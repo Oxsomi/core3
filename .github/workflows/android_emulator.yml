@@ -1,0 +1,27 @@
+name: Android Vulkan (emulator run)
+on: [push]
+
+# The other android jobs only prove it compiles. This one installs the apk on an emulator and runs the
+# suite, which is the only way to catch a build that starts and immediately dies; from the outside that
+# looks exactly like a job that passed.
+#
+# x86_64 because the runner is: an arm64 image would be software emulated and never finish. That means
+# the arm64 NEON paths aren't what gets exercised here, so this complements the arm64 build jobs rather
+# than replacing them.
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Android Vulkan (emulator run)
+      runner: ubuntu-latest
+      os: android
+      build_flags: ''
+      cache_name: emulator
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      android_run: true
+      hook_name: Android-emulator-run
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

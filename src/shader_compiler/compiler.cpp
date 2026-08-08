@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,12 +18,26 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//shader_compiler/compiler.cpp
+
+#include "types/container/list_impl.h"
+#include "types/container/list_basic_types.h"
+#include "types/container/string.h"
+#include "types/container/string_unicode.h"
+#include "types/container/log.h"
+#include "types/container/buffer.h"
+#include "types/container/ref_ptr.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/string_mut_helper.h"
+#include "types/base/allocator.h"
+#include "types/base/c8.h"
+#include "types/base/mathi.h"
+#include "types/math/flp.h"
+#include "types/base/constants.h"
 #include "platforms/file.h"
+#include "types/container/file_base.h"
 #include "platforms/platform.h"
 #include "shader_compiler/compiler.h"
-#include "types/container/file.h"
-#include "types/math/math.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
@@ -35,7 +49,9 @@
 
 #define ENABLE_DXC_STATIC_LINKING
 #include "dxcompiler/dxcapi.h"
+#include "dxcompiler/dxcreflect.h"
 #include <exception>
+#include "compiler_private.hpp"
 
 const C8 *resources =
 	#include "shader_compiler/shaders/resources.hlsli"
@@ -45,31 +61,136 @@ const C8 *types =
 	#include "shader_compiler/shaders/types.hlsli"
 	;
 
-const C8 *nvHLSLExtns =
-	#include "nvHLSLExtns.h"
+//Split out of types.hlsli / resources.hlsli; the umbrella headers include them, so a shader that only
+//says #include "@types.hlsli" still sees everything it used to.
+
+const C8 *matHlsli =
+	#include "shader_compiler/shaders/mat.hlsli"
 	;
 
-const C8 *nvHLSLExtns2 =
-	#include "nvHLSLExtns2.h"
+const C8 *indirectHlsli =
+	#include "shader_compiler/shaders/indirect.hlsli"
 	;
 
-const C8 *nvShaderExtnEnums =
-	#include "nvShaderExtnEnums.h"
+const C8 *fixedPointHlsli =
+	#include "shader_compiler/shaders/fixed_point.hlsli"
 	;
 
-const C8 *nvHLSLExtnsInternal =
-	#include "nvHLSLExtnsInternal.h"
+const C8 *bufferHlsli =
+	#include "shader_compiler/shaders/buffer.hlsli"
 	;
+
+const C8 *appDataHlsli =
+	#include "shader_compiler/shaders/appdata.hlsli"
+	;
+
+const C8 *extensionsHlsli =
+	#include "shader_compiler/shaders/extensions.hlsli"
+	;
+
+const C8 *extensionRayReorderHlsl =
+	#include "shader_compiler/shaders/extension.RayReorder.hlsli"
+	;
+
+const C8 *extensionRayTriPositionHlsl =
+	#include "shader_compiler/shaders/extension.RayTriPosition.hlsli"
+	;
+
+const C8 *extensionRayMicromapOpacityHlsl =
+	#include "shader_compiler/shaders/extension.RayMicromapOpacity.hlsli"
+	;
+
+const C8 *extensionAtomicF32Hlsl =
+	#include "shader_compiler/shaders/extension.AtomicF32.hlsli"
+	;
+
+const C8 *extensionAtomicF64Hlsl =
+	#include "shader_compiler/shaders/extension.AtomicF64.hlsli"
+	;
+
+const C8 *extensionCoopVecHlsl =
+	#include "shader_compiler/shaders/extension.CoopVec.hlsli"
+	;
+
+const C8 *extensionCoopMatHlsl =
+	#include "shader_compiler/shaders/extension.CoopMat.hlsli"
+	;
+
+static const CompilerBuiltInInclude CompilerBuiltInIncludes[] = {
+
+	{ "resources.hlsli",                    resources                    },
+	{ "types.hlsli",                        types                        },
+	{ "extensions.hlsli",                   extensionsHlsli              },
+
+	//Split out of types.hlsli / resources.hlsli
+
+	{ "mat.hlsli",                          matHlsli                     },
+	{ "indirect.hlsli",                     indirectHlsli                },
+	{ "fixed_point.hlsli",                  fixedPointHlsli              },
+	{ "buffer.hlsli",                       bufferHlsli                  },
+	{ "appdata.hlsli",                      appDataHlsli                 },
+
+	//Opt in per extension, so a shader only pays for what it asks for
+
+	{ "extension.RayReorder.hlsli",         extensionRayReorderHlsl      },
+	{ "extension.RayTriPosition.hlsli",     extensionRayTriPositionHlsl  },
+	{ "extension.RayMicromapOpacity.hlsli", extensionRayMicromapOpacityHlsl },
+	{ "extension.AtomicF32.hlsli",          extensionAtomicF32Hlsl       },
+	{ "extension.AtomicF64.hlsli",          extensionAtomicF64Hlsl       },
+	{ "extension.CoopVec.hlsli",            extensionCoopVecHlsl         },
+	{ "extension.CoopMat.hlsli",            extensionCoopMatHlsl         }
+};
+
+extern "C" {
+
+	#ifdef SHADER_COMPILER_DYNAMIC
+
+		//See compiler.h: a shared build has its own Platform_instance, NULL until the host hands its own across.
+		//Mirrors what GraphicsInterface_getTable does for a graphics backend.
+
+		void Compiler_setPlatform(Platform *instance) {
+			Platform_instance = instance;
+		}
+
+	#endif
+
+	U64 Compiler_builtInIncludeCount() {
+		return sizeof(CompilerBuiltInIncludes) / sizeof(CompilerBuiltInIncludes[0]);
+	}
+
+	const CompilerBuiltInInclude *Compiler_builtInIncludeAt(U64 i) {
+		return i < Compiler_builtInIncludeCount() ? &CompilerBuiltInIncludes[i] : NULL;
+	}
+
+	const CompilerBuiltInInclude *Compiler_findBuiltInInclude(CharString name) {
+
+		//The @ is how a shader spells "built-in", but it isn't part of the name
+
+		if(CharString_getAt(name, 0) == '@')
+			name = CharString_createRefSizedConst(name.ptr + 1, CharString_length(name) - 1, false);
+
+		for(U64 i = 0; i < Compiler_builtInIncludeCount(); ++i) {
+
+			const CharString entry = CharString_createRefCStrConst(CompilerBuiltInIncludes[i].name);
+
+			if(CharString_equalsStringInsensitive(&name, &entry))
+				return &CompilerBuiltInIncludes[i];
+		}
+
+		return NULL;
+	}
+}
 
 //This file is only because DXC doesn't have a C interface.
 //So we need to wrap C++ in C, so we can call it from C.
 
 typedef class IncludeHandler IncludeHandler;
 
-typedef struct CompilerInterfaces {		//Also defined in compiler_dxil
+typedef struct CompilerInterfaces {        //Also defined in compiler_dxil
 	IDxcUtils *utils;
 	IDxcCompiler3 *compiler;
 	IncludeHandler *includeHandler;
+	IHLSLReflector *reflector;
 } CompilerInterfaces;
 
 class IncludeHandler : public IDxcIncludeHandler {
@@ -77,12 +198,12 @@ class IncludeHandler : public IDxcIncludeHandler {
 	IDxcUtils *utils;
 	ListIncludedFile includedFiles{};
 	ListU64 isPresent{};
-	Allocator alloc;
-	U64 counter{};			//Unique file counter in the current file
+	const Allocator *alloc;
+	U64 counter{};            //Unique file counter in the current file
 
 public:
 
-	inline IncludeHandler(IDxcUtils *utils, Allocator alloc): utils(utils), alloc(alloc) { }
+	inline IncludeHandler(IDxcUtils *utils, const Allocator *alloc): utils(utils), alloc(alloc) {}
 
 	//Useful so includes can be cached instead of re-fetched from file each time.
 	//This has to be called in between compiles to ensure the include handler knows it's the first time re-using.
@@ -93,13 +214,13 @@ public:
 		for (U64 i = 0; i < includedFiles.length; ++i)
 			includedFiles.ptrNonConst[i].includeInfo.counter = 0;
 
-		Buffer_unsetAllBits(ListU64_buffer(isPresent));
+		Buffer_unsetAllBits(ListU64_buffer(isPresent), NULL);
 	}
 
 	inline U64 getCounter() const { return counter; }
 	inline ListIncludedFile getIncludedFiles() const {
 		ListIncludedFile res = ListIncludedFile{};
-		ListIncludedFile_createRefConst(includedFiles.ptr, includedFiles.length, &res);
+		ListIncludedFile_createRefConst(includedFiles.ptr, includedFiles.length, &res, NULL);
 		return res;
 	}
 
@@ -120,6 +241,7 @@ public:
 		Error *e_rr = NULL;
 		Bool s_uccess = true;
 
+		const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 		HRESULT hr = S_OK;
 		Buffer tempBuffer = Buffer_createNull();
 		CharString tempFile = CharString_createNull();
@@ -130,32 +252,75 @@ public:
 		U64 lastAt = U64_MAX;
 
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			gotoIfError2(clean, CharString_createFromUTF16((const U16*)fileNameStr, U64_MAX, alloc, &fileName))
+			gotoIfError3(clean, CharString_createFromUTF16((const U16*)fileNameStr, U64_MAX, alloc, &fileName, e_rr));
 		#else
-			gotoIfError2(clean, CharString_createFromUTF32((const U32*)fileNameStr, U64_MAX, alloc, &fileName))
+			gotoIfError3(clean, CharString_createFromUTF32((const U32*)fileNameStr, U64_MAX, alloc, &fileName, e_rr));
 		#endif
+
+		//DXC's own builtin headers (dx/linalg.h and the <enable_if> / <type_traits> it pulls in) are served by
+		//DXC's compiled-in header fallback, which only triggers for angled includes it can't otherwise resolve.
+		//We let those fall through as not-found here so that fallback serves them (see linalg.hlsl).
 
 		//Little hack to handle builtin shaders, by using "virtual files" //myTest.hlsli
 
-		lastAt = CharString_findLastStringSensitive(fileName, CharString_createRefCStrConst("@"), 0, 0);
+		//Braced so the earlier gotoIfError3(clean, ...) doesn't jump across atStr's initializer (GCC C++).
+		{
+			const CharString atStr = CharString_createRefCStrConst("@");
+			lastAt = CharString_findLastStringSensitive(&fileName, &atStr, 0, 0);
+		}
 		isBuiltin = lastAt != U64_MAX;
 
 		if (isBuiltin) {
 
 			CharString tmp = CharString_createNull();
 
-			if(!CharString_cut(fileName, lastAt, 0, &tmp) || !CharString_length(tmp))
-				retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource expected source after @"))
+			if(!CharString_cut(&fileName, lastAt, 0, &tmp) || !CharString_length(tmp))
+				retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource expected source after @"));
 
-			gotoIfError2(clean, CharString_createCopy(tmp, alloc, &resolved))
+			gotoIfError3(clean, CharString_createCopy(tmp, alloc, &resolved, e_rr));
 		}
 
-		else gotoIfError3(clean, File_resolve(
-			fileName, &isVirtual, 256, Platform_instance->defaultDir, alloc, &resolved, e_rr
-		))
+		else {
+
+			gotoIfError3(clean, File_resolve(
+				&fileName, &isVirtual, 256, &Platform_instance->defaultDir, alloc, &resolved, e_rr
+			));
+
+			//File_resolve strips the // marker virtual paths carry, but everything below (the dedup
+			//compare, File_getInfo, File_read) routes virtual vs physical on exactly that prefix.
+			//Restore it so an include inside a virtual shader resolves back into the virtual file system.
+
+			if(isVirtual) {
+				const CharString virtualPrefix = CharString_createRefCStrConst("//");
+				gotoIfError3(clean, CharString_insertString(&resolved, &virtualPrefix, 0, alloc, e_rr));
+			}
+
+			//DXC normalizes paths while building include candidates, which collapses the leading //
+			//marker ("//a/b.hlsli" arrives here as "a/b.hlsli"), so an include living in the virtual
+			//file system can show up disguised as a physical path that doesn't exist.
+			//Only when the physical interpretation is absent and re-marking the raw name hits a loaded
+			//virtual file is the virtual reading taken, so a real physical include always wins.
+
+			else if (!File_has(&resolved, alloc)) {
+
+				CharString virtualized = CharString_createNull();
+
+				gotoIfError3(clean, CharString_format(
+					alloc, &virtualized, e_rr, "//%.*s", (int) CharString_length(fileName), fileName.ptr
+				));
+
+				if (File_has(&virtualized, alloc)) {
+					CharString_free(&resolved, alloc);
+					resolved = virtualized;
+					isVirtual = true;
+				}
+
+				else CharString_free(&virtualized, alloc);
+			}
+		}
 
 		for (; i < includedFiles.length; ++i)
-			if(CharString_equalsStringSensitive(resolved, includedFiles.ptr[i].includeInfo.file))
+			if(CharString_equalsStringSensitive(&resolved, &includedFiles.ptr[i].includeInfo.file))
 				break;
 
 		//We already included it in an earlier run.
@@ -168,9 +333,9 @@ public:
 
 			Bool validCache = true;
 
-			if(!isBuiltin) {		//Builtins don't exist on disk, so they can't really be hot reloaded
+			if(!isBuiltin) {        //Builtins don't exist on disk, so they can't really be hot reloaded
 
-				gotoIfError3(clean, File_getInfo(resolved, &fileInfo, alloc, e_rr))
+				gotoIfError3(clean, File_getInfo(&resolved, &fileInfo, alloc, e_rr));
 
 				IncludeInfo prevInclude = includedFiles.ptr[i].includeInfo;
 
@@ -184,18 +349,19 @@ public:
 
 					if (fileInfo.fileSize == prevInclude.fileSize) {
 
-						gotoIfError3(clean, File_read(resolved, 100 * MS, 0, 0, alloc, &tempBuffer, e_rr))
+						gotoIfError3(clean, File_read(&resolved, 100 * MS, 0, 0, &fileHandleType, &tempBuffer, e_rr));
 
-						gotoIfError2(clean, CharString_createCopy(
+						gotoIfError3(clean, CharString_createCopy(
 							CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
 							alloc,
-							&tempFile
-						))
+							&tempFile,
+							e_rr
+						));
 
 						Buffer_free(&tempBuffer, alloc);
 
 						if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
-							retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource couldn't erase \\rs"))
+							retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource couldn't erase \\rs"));
 
 						U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
 						CharString_free(&tempFile, alloc);
@@ -215,7 +381,7 @@ public:
 			if(!validCache) {
 
 				IncludedFile includedFile = IncludedFile{};
-				gotoIfError2(clean, ListIncludedFile_popLocation(&includedFiles, i, &includedFile))
+				gotoIfError3(clean, ListIncludedFile_popLocation(&includedFiles, i, &includedFile, e_rr));
 
 				IncludedFile_free(&includedFile, alloc);
 
@@ -253,8 +419,8 @@ public:
 
 			if(!isBuiltin) {
 
-				gotoIfError3(clean, File_getInfo(resolved, &fileInfo, alloc, e_rr))
-				gotoIfError3(clean, File_read(resolved, 100 * MS, 0, 0, alloc, &tempBuffer, e_rr))
+				gotoIfError3(clean, File_getInfo(&resolved, &fileInfo, alloc, e_rr));
+				gotoIfError3(clean, File_read(&resolved, 100 * MS, 0, 0, &fileHandleType, &tempBuffer, e_rr));
 
 				Ns timestamp = fileInfo.timestamp;
 				FileInfo_free(&fileInfo, alloc);
@@ -263,16 +429,17 @@ public:
 					retError(clean, Error_outOfBounds(
 						0, Buffer_length(tempBuffer), U32_MAX,
 						"IncludeHandler::LoadSource CreateBlobFromPinned requires 32-bit buffers max"
-					))
+					));
 
-				gotoIfError2(clean, CharString_createCopy(
+				gotoIfError3(clean, CharString_createCopy(
 					CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
 					alloc,
-					&tempFile
-				))
+					&tempFile,
+					e_rr
+				));
 
 				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
-					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"))
+					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"));
 
 				U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
 
@@ -294,7 +461,7 @@ public:
 				inc.includeInfo.file = resolved;
 				inc.data = tempFile;
 
-				gotoIfError2(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc))
+				gotoIfError3(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc, e_rr));
 				resolved = CharString_createNull();
 				tempFile = CharString_createNull();
 
@@ -302,36 +469,18 @@ public:
 
 				CharString tmpTmp = CharString_createNull();
 
-				if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@resources.hlsli")))
-					tmpTmp = CharString_createRefCStrConst(resources);
+				const CompilerBuiltInInclude *builtIn = Compiler_findBuiltInInclude(resolved);
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@types.hlsli")))
-					tmpTmp = CharString_createRefCStrConst(types);
+				if(!builtIn)
+					retError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"));
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvShaderExtnEnums.h")))
-					tmpTmp = CharString_createRefCStrConst(nvShaderExtnEnums);
-
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtnsInternal.h")))
-					tmpTmp = CharString_createRefCStrConst(nvHLSLExtnsInternal);
-
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtns.h"))) {
-
-					//Because of the C limit of 64KiB per string constant, we need two string constants and merge them
-
-					CharString tmp = CharString_createRefCStrConst(nvHLSLExtns);
-					gotoIfError2(clean, CharString_createCopy(tmp, alloc, &tempFile))
-
-					tmp = CharString_createRefCStrConst(nvHLSLExtns2);
-					gotoIfError2(clean, CharString_appendString(&tempFile, tmp, alloc))
-				}
-
-				else retError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"))
+				tmpTmp = CharString_createRefCStrConst(builtIn->source);
 
 				if(tmpTmp.ptr)
-					gotoIfError2(clean, CharString_createCopy(tmpTmp, alloc, &tempFile))
+					gotoIfError3(clean, CharString_createCopy(tmpTmp, alloc, &tempFile, e_rr));
 
 				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
-					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"))
+					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"));
 
 				U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
 
@@ -348,13 +497,13 @@ public:
 				inc.globalCounter = 1;
 				inc.data = tempFile;
 
-				gotoIfError2(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc))
+				gotoIfError3(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc, e_rr));
 				resolved = CharString_createNull();
 				tempFile = CharString_createNull();
 			}
 
 			if((i >> 6) >= isPresent.length)
-				gotoIfError2(clean, ListU64_pushBack(&isPresent, 0, alloc))
+				gotoIfError3(clean, ListU64_pushBack(&isPresent, 0, alloc, e_rr));
 
 			hr = utils->CreateBlobFromPinned(
 				includedFiles.ptr[i].data.ptr, (U32) CharString_length(includedFiles.ptr[i].data), DXC_CP_UTF8, &encoding
@@ -390,7 +539,7 @@ public:
 		return E_NOINTERFACE;
 	}
 
-	ULONG STDMETHODCALLTYPE AddRef() override {	return 0; }
+	ULONG STDMETHODCALLTYPE AddRef() override {    return 0; }
 	ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
@@ -402,7 +551,7 @@ Bool Compiler_setup(Error *e_rr) {
 	Bool s_uccess = true;
 	ELockAcquire acq = SpinLock_lock(&lockThread, 0);
 
-	if (acq >= ELockAcquire_Success) {		//First to lock is first to initialize
+	if (acq >= ELockAcquire_Success) {        //First to lock is first to initialize
 
 		if(!hasInitialized) {
 
@@ -420,7 +569,7 @@ Bool Compiler_setup(Error *e_rr) {
 	else acq = SpinLock_lock(&lockThread, U64_MAX);
 
 	if(!hasInitialized)
-		retError(clean, Error_invalidState(0, "Compiler_setup() one of the other threads couldn't initialize DXC"))
+		retError(clean, Error_invalidState(0, "Compiler_setup() one of the other threads couldn't initialize DXC"));
 
 clean:
 
@@ -430,35 +579,43 @@ clean:
 	return s_uccess;
 }
 
-Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr) {
+Bool Compiler_create(const Allocator *alloc, Compiler *comp, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CompilerInterfaces *interfaces = NULL;
 
-	gotoIfError3(clean, Compiler_setup(e_rr))
+	gotoIfError3(clean, Compiler_setup(e_rr));
 
 	if(!comp)
-		retError(clean, Error_nullPointer(1, "Compiler_create()::comp is required"))
+		retError(clean, Error_nullPointer(1, "Compiler_create()::comp is required"));
 
 	interfaces = (CompilerInterfaces*) comp->interfaces;
 
 	if(interfaces->utils)
-		retError(clean, Error_alreadyDefined(1, "Compiler_create()::comp must be empty"))
+		retError(clean, Error_alreadyDefined(1, "Compiler_create()::comp must be empty"));
 
 	try {
 
-		//TODO: Call DxcCreateInstance2 with custom IMalloc.
-		//Problem; we don't know the size of any allocation.
-		//Would require each allocation to lock and push in ListDebugAllocation, even in Release mode!
-
-		//IMalloc *malloc = ...;
+		//Note: DxcCreateInstance2 with a custom IMalloc was tried (size-prefixed blocks so Free can recover {ptr, len}).
+		//It instantly hard-crashes inside DxcReflector::FromSource (unordered_map in dxcreflection_from_ast).
+		//DXC routes global new/delete through the thread-local IMalloc, but some allocations cross allocator
+		// boundaries (allocated under the default CRT allocator, freed under the custom one or vice versa),
+		// so any pointer-rewriting IMalloc corrupts the heap.
+		//Until the DXC fork guarantees symmetric alloc/free through a single IMalloc this can't be tracked.
 
 		//Create utils
 
 		HRESULT hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&interfaces->utils));
 
 		if(FAILED(hr))
-			retError(clean, Error_invalidState(0, "Compiler_create() IDxcUtils couldn't be created. Missing DLL?"))
+			retError(clean, Error_invalidState(0, "Compiler_create() IDxcUtils couldn't be created"));
+
+		//Create reflector
+
+		hr = DxcCreateInstance(CLSID_DxcReflector, IID_PPV_ARGS(&interfaces->reflector));
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(0, "Compiler_create() IHLSLReflector couldn't be created"));
 
 		//Create include handler
 
@@ -469,10 +626,10 @@ Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr) {
 		hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&interfaces->compiler));
 
 		if(FAILED(hr))
-			retError(clean, Error_invalidState(2, "Compiler_create() IDxcCompiler3 couldn't be created"))
+			retError(clean, Error_invalidState(2, "Compiler_create() IDxcCompiler3 couldn't be created"));
 
-	} catch (std::exception&) {
-		retError(clean, Error_invalidState(1, "Compiler_create() raised an internal exception"))
+	} catch (...) {
+		retError(clean, Error_invalidState(1, "Compiler_create() raised an internal exception"));
 	}
 
 clean:
@@ -483,7 +640,7 @@ clean:
 	return s_uccess;
 }
 
-void Compiler_free(Compiler *comp, Allocator alloc) {
+void Compiler_free(Compiler *comp, const Allocator *alloc) {
 
 	(void)alloc;
 
@@ -495,6 +652,9 @@ void Compiler_free(Compiler *comp, Allocator alloc) {
 	if(interfaces->utils)
 		interfaces->utils->Release();
 
+	if(interfaces->reflector)
+		interfaces->reflector->Release();
+
 	if(interfaces->compiler)
 		interfaces->compiler->Release();
 
@@ -504,7 +664,7 @@ void Compiler_free(Compiler *comp, Allocator alloc) {
 	*comp = Compiler{};
 }
 
-Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo *infos, Error *e_rr) {
+Bool Compiler_mergeIncludeInfo(Compiler *comp, const Allocator *alloc, ListIncludeInfo *infos, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CompilerInterfaces *interfaces = NULL;
@@ -513,14 +673,14 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 	ListIncludedFile files = ListIncludedFile{};
 
 	if(!comp || !infos)
-		retError(clean, Error_nullPointer(!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp and infos are required"))
+		retError(clean, Error_nullPointer(!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp and infos are required"));
 
 	interfaces = (CompilerInterfaces*) comp->interfaces;
 
 	if(!interfaces->includeHandler)
 		retError(clean, Error_nullPointer(
 			!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp->interfaces includeHandler is missing"
-		))
+		));
 
 	files = interfaces->includeHandler->getIncludedFiles();
 
@@ -535,7 +695,7 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 
 		for(; j < infos->length; ++j)
 			if(
-				CharString_equalsStringSensitive(infos->ptr[j].file, info.includeInfo.file) &&
+				CharString_equalsStringSensitive(&infos->ptr[j].file, &info.includeInfo.file) &&
 				infos->ptr[j].crc32c == info.includeInfo.crc32c && infos->ptr[j].fileSize == info.includeInfo.fileSize
 			)
 				break;
@@ -544,11 +704,11 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 
 		if(j == infos->length) {
 
-			gotoIfError2(clean, CharString_createCopy(info.includeInfo.file, alloc, &tmp))
+			gotoIfError3(clean, CharString_createCopy(info.includeInfo.file, alloc, &tmp, e_rr));
 
 			info.includeInfo.counter = info.globalCounter;
 			info.includeInfo.file = tmp;
-			gotoIfError2(clean, ListIncludeInfo_pushBack(infos, info.includeInfo, alloc))
+			gotoIfError3(clean, ListIncludeInfo_pushBack(infos, info.includeInfo, alloc, e_rr));
 			tmp = CharString_createNull();
 		}
 
@@ -577,8 +737,8 @@ void Compiler_shutdown() {
 		goto clean;
 
 	try {
-		DxcShutdown(true);
-	} catch(std::exception&){}
+		DxcShutdown();
+	} catch(...){}
 
 	hasInitialized = false;
 
@@ -587,83 +747,47 @@ clean:
 		SpinLock_unlock(&lockThread);
 }
 
-//What's wrong with UTF8?
-
-#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-
-	#define Compiler_defineStrings																		\
-		ListU16 tempStrUTF16 = ListU16{};																\
-		ListListU16 stringsUTF16 = ListListU16{};														\
-		ListU16PtrConst strings = ListU16PtrConst{}
-
-	#define Compiler_freeStrings																		\
-		ListU16_free(&tempStrUTF16, alloc);																\
-		ListListU16_freeUnderlying(&stringsUTF16, alloc);												\
-		ListU16PtrConst_free(&strings, alloc)
-
-	#define Compiler_convertToWString(strs, label) 														\
-		for(U64 ii = 0; ii < strs.length; ++ii) {														\
-			gotoIfError2(label, CharString_toUTF16(strs.ptr[ii], alloc, &tempStrUTF16))					\
-			gotoIfError2(label, ListU16PtrConst_pushBack(&strings, tempStrUTF16.ptr, alloc))			\
-			gotoIfError2(label, ListListU16_pushBack(&stringsUTF16, tempStrUTF16, alloc))				\
-			tempStrUTF16 = ListU16{};																	\
-		}
-#else
-	#define Compiler_defineStrings																		\
-		ListU32 tempStrUTF32 = ListU32{};																\
-		ListListU32 stringsUTF32 = ListListU32{};														\
-		ListU32PtrConst strings = ListU32PtrConst{}
-
-	#define Compiler_freeStrings																		\
-		ListU32_free(&tempStrUTF32, alloc);																\
-		ListListU32_freeUnderlying(&stringsUTF32, alloc);												\
-		ListU32PtrConst_free(&strings, alloc)
-
-	#define Compiler_convertToWString(strs, label) 														\
-		for(U64 ii = 0; ii < strs.length; ++ii) {														\
-			gotoIfError2(label, CharString_toUTF32(strs.ptr[ii], alloc, &tempStrUTF32))					\
-			gotoIfError2(label, ListU32PtrConst_pushBack(&strings, tempStrUTF32.ptr, alloc))			\
-			gotoIfError2(label, ListListU32_pushBack(&stringsUTF32, tempStrUTF32, alloc))				\
-			tempStrUTF32 = ListU32{};																	\
-		}
-#endif
-
-Bool Compiler_setupIncludePaths(ListCharString *dst, CompilerSettings settings, Allocator alloc, Error *e_rr) {
+Bool Compiler_setupIncludePaths(ListCharString *dst, const CompilerSettings *settings, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString tempStr = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
 	Bool isVirtual = false;
 
-	//-I x for include dir
+	//-I x per include dir
 
-	if(CharString_length(settings.includeDir)) {
+	for(U64 i = 0; i < settings->includeDirs.length; ++i) {
+
+		CharString includeDir = settings->includeDirs.ptr[i];
+
+		if(!CharString_length(includeDir))
+			continue;
 
 		gotoIfError3(clean, File_resolve(
-			settings.includeDir, &isVirtual, 256, Platform_instance->defaultDir, alloc, &tempStr, e_rr
-		))
+			&includeDir, &isVirtual, 256, &Platform_instance->defaultDir, alloc, &tempStr, e_rr
+		));
 
-		gotoIfError2(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), alloc))
-		gotoIfError2(clean, ListCharString_pushBack(dst, tempStr, alloc))
+		gotoIfError3(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), alloc, e_rr));
+		gotoIfError3(clean, ListCharString_pushBack(dst, tempStr, alloc, e_rr));
 		tempStr = CharString_createNull();
 	}
 
 	//<file> -I <file's parent> to resolve errors to the origin file and use relative includes
 
-	if(CharString_length(settings.path)) {
+	if(CharString_length(settings->path)) {
 
 		gotoIfError3(clean, File_resolve(
-			settings.path, &isVirtual, 256, Platform_instance->defaultDir, alloc, &tempStr, e_rr
-		))
+			&settings->path, &isVirtual, 256, &Platform_instance->defaultDir, alloc, &tempStr, e_rr
+		));
 
-		gotoIfError2(clean, ListCharString_pushBack(dst, tempStr, alloc))
+		gotoIfError3(clean, ListCharString_pushBack(dst, tempStr, alloc, e_rr));
 		tempStr = CharString_createRefStrConst(tempStr);
 
-		if(!CharString_cutAfterLastSensitive(tempStr, '/', &tempStr2))
-			retError(clean, Error_invalidState(0, "Compiler_setupIncludePaths() can't find parent directory"))
+		if(!CharString_cutAfterLastSensitive(&tempStr, '/', &tempStr2))
+			retError(clean, Error_invalidState(0, "Compiler_setupIncludePaths() can't find parent directory"));
 
-		gotoIfError2(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), alloc))
-		gotoIfError2(clean, ListCharString_pushBack(dst, tempStr2, alloc))
+		gotoIfError3(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), alloc, e_rr));
+		gotoIfError3(clean, ListCharString_pushBack(dst, tempStr2, alloc, e_rr));
 		tempStr2 = tempStr = CharString_createNull();
 	}
 
@@ -673,21 +797,21 @@ clean:
 	return s_uccess;
 }
 
-Bool Compiler_copyIncludes(CompileResult *result, IncludeHandler *includeHandler, Allocator alloc, Error *e_rr) {
+Bool Compiler_copyIncludes(CompileResult *result, IncludeHandler *includeHandler, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString tempStr = CharString_createNull();
 	ListIncludedFile files = ListIncludedFile{};
 
-	gotoIfError2(clean, ListIncludeInfo_resize(&result->includeInfo, includeHandler->getCounter(), alloc))
+	gotoIfError3(clean, ListIncludeInfo_resize(&result->includeInfo, includeHandler->getCounter(), alloc, e_rr));
 
 	files = includeHandler->getIncludedFiles();
 
 	for(U64 i = 0, j = 0; i < files.length; ++i)
-		if (files.ptr[i].includeInfo.counter) {		//Exclude inactive includes
+		if (files.ptr[i].includeInfo.counter) {        //Exclude inactive includes
 
 			IncludeInfo copy = files.ptr[i].includeInfo;
-			gotoIfError2(clean, CharString_createCopy(copy.file, alloc, &tempStr))
+			gotoIfError3(clean, CharString_createCopy(copy.file, alloc, &tempStr, e_rr));
 
 			copy.file = tempStr;
 			result->includeInfo.ptrNonConst[j] = copy;
@@ -701,728 +825,28 @@ clean:
 	return s_uccess;
 }
 
-Bool Compiler_registerArgStr(ListCharString *strings, CharString str, Allocator alloc, Error *e_rr) {
+//Helpers so other TUs can use the include handler without seeing the class definition.
+
+void Compiler_resetIncludeHandler(IncludeHandler *includeHandler) {
+	includeHandler->reset();
+}
+
+IDxcIncludeHandler *Compiler_getIncludeHandler(IncludeHandler *includeHandler) {
+	return includeHandler;
+}
+
+Bool Compiler_registerArgStr(ListCharString *strings, CharString str, const Allocator *alloc, Error *e_rr) {
 	Bool s_uccess = true;
-	gotoIfError2(clean, ListCharString_pushBack(strings, str, alloc))
+	gotoIfError3(clean, ListCharString_pushBack(strings, str, alloc, e_rr));
 clean:
 	return s_uccess;
 }
 
-Bool Compiler_registerArgStrConst(ListCharString *strings, CharString str, Allocator alloc, Error *e_rr) {
+Bool Compiler_registerArgStrConst(ListCharString *strings, CharString str, const Allocator *alloc, Error *e_rr) {
 	return Compiler_registerArgStr(strings, CharString_createRefStrConst(str), alloc, e_rr);
 }
 
 //Only with const C8* that will always be in mem
-Bool Compiler_registerArgCStr(ListCharString *strings, const C8 *str, Allocator alloc, Error *e_rr) {
+Bool Compiler_registerArgCStr(ListCharString *strings, const C8 *str, const Allocator *alloc, Error *e_rr) {
 	return Compiler_registerArgStr(strings, CharString_createRefCStrConst(str), alloc, e_rr);
-}
-
-Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {
-
-	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp.interfaces;
-
-	Bool s_uccess = true;
-	IDxcResult *dxcResult = NULL;
-	IDxcBlobUtf8 *error = NULL;
-	Bool hasErrors = false;
-	CharString tempStr = CharString_createNull();
-	CharString tempStr2 = CharString_createNull();
-	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
-
-	Compiler_defineStrings;
-
-	if(!interfaces->utils || !result)
-		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_preprocess()::comp is required"))
-
-	if(!CharString_length(settings.string))
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_preprocess()::settings.string is required"))
-
-	if(settings.outputType >= ESHBinaryType_Count || settings.format >= ECompilerFormat_Count)
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_preprocess()::settings contains invalid format or outputType"))
-
-	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr))
-
-	try {
-
-		interfaces->includeHandler->reset();		//Ensure we don't reuse stale caches
-
-		result->isSuccess = false;
-
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-P", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr))
-
-		if (settings.outputType == ESHBinaryType_SPIRV)		//-spirv
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr))
-
-		//Format major, minor, patch and version
-
-		const C8 *formats[] = {
-			"-D__OXC_MAJOR=%" PRIu64,
-			"-D__OXC_MINOR=%" PRIu64,
-			"-D__OXC_PATCH=%" PRIu64,
-			"-D__OXC_VERSION=%" PRIu64,
-		};
-
-		const U64 formatInts[] = {
-			OXC3_MAJOR,
-			OXC3_MINOR,
-			OXC3_PATCH,
-			OXC3_VERSION
-		};
-
-		for(U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
-			gotoIfError2(clean, CharString_format(alloc, &tempStr, formats[i], formatInts[i]))
-			gotoIfError2(clean, ListCharString_pushBack(&stringsUTF8, tempStr, alloc))
-			tempStr = CharString_createNull();
-		}
-
-		Compiler_convertToWString(stringsUTF8, clean)
-
-		//Compile
-
-		DxcBuffer buffer{
-			.Ptr = settings.string.ptr,
-			.Size = CharString_length(settings.string),
-			.Encoding = DXC_CP_UTF8
-		};
-
-		HRESULT hr = interfaces->compiler->Compile(
-			&buffer,
-			(LPCWSTR*) strings.ptr, (int) strings.length,
-			interfaces->includeHandler,
-			IID_PPV_ARGS(&dxcResult)
-		);
-
-		if(FAILED(hr))
-			retError(clean, Error_invalidState(0, "Compiler_preprocess() \"Compile\" failed"))
-
-		hr = dxcResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), NULL);
-
-		if(FAILED(hr))
-			retError(clean, Error_invalidState(1, "Compiler_preprocess() fetch errors failed"))
-
-		if(error && error->GetStringLength()) {
-			CharString errs = CharString_createRefSizedConst(error->GetStringPointer(), error->GetStringLength(), false);
-			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr))
-		}
-
-		if(error) {
-			error->Release();
-			error = NULL;
-		}
-
-		if (settings.infoAboutIncludes)
-			gotoIfError3(clean, Compiler_copyIncludes(result, interfaces->includeHandler, alloc, e_rr))
-
-		if (hasErrors)
-			goto clean;
-
-		hr = dxcResult->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(&error), NULL);
-
-		if(FAILED(hr))
-			retError(clean, Error_invalidState(2, "Compiler_preprocess() fetch hlsl failed"))
-
-		gotoIfError2(clean, CharString_createCopy(
-			CharString_createRefSizedConst(error->GetStringPointer(), error->GetBufferSize(), false),
-			alloc,
-			&result->text
-		))
-
-		result->type = ECompileResultType_Text;
-		result->isSuccess = true;
-
-	} catch (std::exception&) {
-		retError(clean, Error_invalidState(1, "Compiler_preprocess() raised an internal exception"))
-	}
-
-clean:
-
-	if(!s_uccess)
-		CompileResult_free(result, alloc);
-
-	if(dxcResult)
-		dxcResult->Release();
-
-	if(error)
-		error->Release();
-
-	Compiler_freeStrings;
-	CharString_free(&tempStr, alloc);
-	CharString_free(&tempStr2, alloc);
-	ListCharString_freeUnderlying(&stringsUTF8, alloc);
-	return s_uccess;
-}
-
-Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr) {
-
-	Bool s_uccess = true;
-	U64 totalGroup = 0;
-
-	if(!threads)
-		retError(clean, Error_nullPointer(0, "Compiler_validateGroupSize() invalid threads"))
-
-	totalGroup = (U64)threads[0] * threads[1] * threads[2];
-
-	if(!totalGroup)
-		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() needs group size for compute"))
-
-	if(totalGroup > 512)
-		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count out of bounds (512)"))
-
-	if(U32_max(threads[0], threads[1]) > 512)
-		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count x or y out of bounds (512)"))
-
-	if(threads[2] > 64)
-		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count z out of bounds (64)"))
-
-clean:
-	return s_uccess;
-}
-
-typedef union TempInOutput {
-	U64 aU64[2];
-	U8 a[16];
-} TempInOutput;
-
-Bool Compiler_findEntry(ListSHEntryRuntime entry, CharString name, SHEntryRuntime **ptr, Error *e_rr) {
-
-	for(U64 i = 0; i < entry.length; ++i)
-		if (CharString_equalsStringSensitive(entry.ptr[i].entry.name, name)) {
-			*ptr = entry.ptrNonConst + i;
-			return true;
-		}
-
-	if(e_rr)
-		*e_rr = Error_notFound(0, 1, "Compiler_findEntry()::name not found");
-
-	return false;
-}
-
-Bool Compiler_finalizeEntrypoint(
-	U32 localSize[3],
-	U8 payloadSize,
-	U8 intersectSize,
-	U16 waveSize,
-	ESBType inputs[16],
-	ESBType outputs[16],
-	U8 uniqueInputSemantics,
-	ListCharString *uniqueSemantics,
-	U8 inputSemantics[16],
-	U8 outputSemantics[16],
-	CharString entryName,
-	SpinLock *lock,
-	ListSHEntryRuntime entries,
-	Allocator alloc,
-	Error *e_rr
-) {
-
-	Bool s_uccess = true;
-	ELockAcquire acq = ELockAcquire_Invalid;
-	SHEntryRuntime *entry = NULL;
-	Bool didInit = false;
-
-	if(!localSize || !inputs || !outputs || !uniqueSemantics || !inputSemantics || !outputSemantics)
-		retError(clean, Error_nullPointer(
-			0, "Compiler_finalizeEntrypoint() localSize, inputs, outputs, unique/output/inputSemantics are required"
-		))
-
-	if(payloadSize > 128)
-		retError(clean, Error_outOfBounds(0, payloadSize, 128, "Compiler_finalizeEntrypoint() payload out of bounds"))
-
-	if(intersectSize > 32)
-		retError(clean, Error_outOfBounds(0, intersectSize, 32, "Compiler_finalizeEntrypoint() attribute out of bounds"))
-
-	if(localSize[0] || localSize[1] || localSize[2])
-		gotoIfError3(clean, Compiler_validateGroupSize(localSize, e_rr))
-
-	TempInOutput input, output;
-	TempInOutput inputSemantic, outputSemantic;
-
-	for(U8 i = 0; i < 16; ++i) {
-		input.a[i] = (U8) inputs[i];
-		output.a[i] = (U8) outputs[i];
-		inputSemantic.a[i] = (U8) inputSemantics[i];
-		outputSemantic.a[i] = (U8) outputSemantics[i];
-	}
-
-	gotoIfError3(clean, Compiler_findEntry(entries, entryName, &entry, e_rr))
-
-	if(lock) {
-		acq = SpinLock_lock(lock, 1 * SECOND);
-		if(acq < ELockAcquire_Success)
-			retError(clean, Error_invalidState(0, "Compiler_finalizeEntrypoint() couldn't acquire spin lock"))
-	}
-
-	didInit = !entry->isInitialized;
-
-	if (!entry->isInitialized) {
-
-		//Store payloadSize, intersectionSize, localSize, inputs, outputs
-
-		entry->entry.groupX = (U16) localSize[0];
-		entry->entry.groupY = (U16) localSize[1];
-		entry->entry.groupZ = (U16) localSize[2];
-
-		entry->entry.payloadSize = payloadSize;
-		entry->entry.intersectionSize = intersectSize;
-		entry->entry.waveSize = waveSize;
-
-		entry->entry.inputsU64[0] = input.aU64[0];
-		entry->entry.inputsU64[1] = input.aU64[1];
-
-		entry->entry.outputsU64[0] = output.aU64[0];
-		entry->entry.outputsU64[1] = output.aU64[1];
-
-		entry->entry.uniqueInputSemantics = uniqueInputSemantics;
-
-		entry->entry.inputSemanticNamesU64[0] = inputSemantic.aU64[0];
-		entry->entry.inputSemanticNamesU64[1] = inputSemantic.aU64[1];
-
-		entry->entry.outputSemanticNamesU64[0] = outputSemantic.aU64[0];
-		entry->entry.outputSemanticNamesU64[1] = outputSemantic.aU64[1];
-
-		gotoIfError3(clean, ListCharString_move(uniqueSemantics, alloc, &entry->entry.semanticNames, e_rr))
-
-		entry->isInitialized = true;
-	}
-
-	//Compare to ensure we have the exact same properties
-
-	else if(
-		entry->entry.groupX != localSize[0] ||
-		entry->entry.groupY != localSize[1] ||
-		entry->entry.groupZ != localSize[2] ||
-		entry->entry.payloadSize != payloadSize ||
-		entry->entry.intersectionSize != intersectSize ||
-		entry->entry.waveSize != waveSize ||
-		entry->entry.inputsU64[0] != input.aU64[0] ||
-		entry->entry.inputsU64[1] != input.aU64[1] ||
-		entry->entry.outputsU64[0] != output.aU64[0] ||
-		entry->entry.outputsU64[1] != output.aU64[1] ||
-		entry->entry.uniqueInputSemantics != uniqueInputSemantics ||
-		entry->entry.inputSemanticNamesU64[0] != inputSemantic.aU64[0] ||
-		entry->entry.inputSemanticNamesU64[1] != inputSemantic.aU64[1] ||
-		entry->entry.outputSemanticNamesU64[0] != outputSemantic.aU64[0] ||
-		entry->entry.outputSemanticNamesU64[1] != outputSemantic.aU64[1] ||
-		entry->entry.semanticNames.length != uniqueSemantics->length
-	)
-		retError(clean, Error_invalidState(
-			0,
-			"Compiler_finalizeEntrypoint() had two mismatching inputs from reflection:\n"
-			"numthreads, payloadSize, intersectSize, waveSize, inputs or outputs"
-		))
-
-	//More thorough compare with semantics
-
-	else {
-
-		//TODO: Semantics could be ordered differently, might still be okay to merge?
-
-		for(U64 i = 0; i < entry->entry.semanticNames.length; ++i)
-			if(!CharString_equalsStringSensitive(entry->entry.semanticNames.ptr[i], uniqueSemantics->ptr[i]))
-				retError(clean, Error_invalidState(
-					0,
-					"Compiler_finalizeEntrypoint() had two mismatching semantic names"
-				))
-	}
-
-
-clean:
-	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(lock);
-
-	if(!didInit && s_uccess)		//Avoid memleak
-		ListCharString_freeUnderlying(uniqueSemantics, alloc);
-
-	return s_uccess;
-}
-
-Bool Compiler_compile(
-	Compiler comp,
-	CompilerSettings settings,
-	SHBinaryIdentifier toCompile,
-	SpinLock *lock,
-	ListSHEntryRuntime entries,
-	Allocator alloc,
-	CompileResult *result,
-	Error *e_rr
-) {
-
-	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp.interfaces;
-
-	Bool s_uccess = true;
-	IDxcResult *dxcResult = NULL;
-	IDxcBlobUtf8 *error = NULL;
-	IDxcBlob *resultBlob = NULL;
-	Bool hasErrors = false;
-	CharString tempStr = CharString_createNull();
-	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
-
-	Compiler_defineStrings;
-
-	if(!interfaces->utils || !result)
-		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_compile()::comp is required"))
-
-	if(!CharString_length(settings.string))
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings.string is required"))
-
-	if(toCompile.uniforms.length & 1)
-		retError(clean, Error_invalidParameter(2, 0, "Compiler_compile()::toCompile.uniforms.length should be aligned to 2"))
-
-	if(settings.outputType >= ESHBinaryType_Count || settings.format >= ECompilerFormat_Count)
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings contains invalid format or outputType"))
-
-	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr))
-
-	try {
-
-		interfaces->includeHandler->reset();		//Ensure we don't reuse stale caches
-
-		result->isSuccess = false;
-
-		U32 lastExtension = 0;
-
-		for(U32 i = 0; i < ESHExtension_Count; ++i)
-			if ((toCompile.extensions >> i) & 1)
-				lastExtension = i + 1;
-
-		if(toCompile.stageType >= ESHPipelineStage_RtStartExt && toCompile.stageType <= ESHPipelineStage_RtEndExt)
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_EXT_RAYTRACING", alloc, e_rr))
-
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, settings.debug ? "-Od" : "-O3", alloc, e_rr))
-
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr))
-
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wconversion", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wdouble-promotion", alloc, e_rr))
-
-		if(settings.debug)
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zi", alloc, e_rr))
-
-		if(toCompile.extensions & ESHExtension_16BitTypes)
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr))
-
-		if(
-			settings.outputType == ESHBinaryType_SPIRV &&
-			(toCompile.extensions & ESHExtension_F64) &&
-			!(toCompile.extensions & ESHExtension_I64)
-		)
-			retError(clean, Error_invalidState(
-				0,
-				"Compiler_compile() a bug is present in DXC->SPIRV where "
-				"F64 might also secretly emit I64 instructions, please enable it explicitly"
-			))
-
-		if (settings.outputType == ESHBinaryType_SPIRV) {
-
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-layout", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.2", alloc, e_rr))
-
-			if(
-				toCompile.stageType == ESHPipelineStage_Vertex ||
-				toCompile.stageType == ESHPipelineStage_Domain ||
-				toCompile.stageType == ESHPipelineStage_GeometryExt ||
-				toCompile.stageType == ESHPipelineStage_MeshExt
-			)
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-invert-y", alloc, e_rr))
-
-			else if(toCompile.stageType == ESHPipelineStage_Pixel)
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-position-w", alloc, e_rr))
-
-			if(CharString_length(toCompile.entrypoint))
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-entrypoint-name=main", alloc, e_rr))
-
-			gotoIfError3(clean, Compiler_registerArgCStr(
-				&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_indexing", alloc, e_rr
-			))
-
-			if(
-				toCompile.stageType >= ESHPipelineStage_RtStartExt &&
-				toCompile.stageType <= ESHPipelineStage_RtEndExt
-			)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_tracing", alloc, e_rr
-				))
-
-			if(
-				toCompile.stageType == ESHPipelineStage_MeshExt ||
-				toCompile.stageType == ESHPipelineStage_TaskExt
-			)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_EXT_mesh_shader", alloc, e_rr
-				))
-
-			if(toCompile.extensions & ESHExtension_ComputeDeriv)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_NV_compute_shader_derivatives", alloc, e_rr
-				))
-
-			if(toCompile.extensions & ESHExtension_16BitTypes)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_KHR_16bit_storage", alloc, e_rr
-				))
-
-			if(toCompile.extensions & ESHExtension_Multiview)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_KHR_multiview", alloc, e_rr
-				))
-
-			if(toCompile.extensions & ESHExtension_RayReorder)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_NV_shader_invocation_reorder", alloc, e_rr
-				))
-
-			if(toCompile.extensions & ESHExtension_RayMotionBlur)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_NV_ray_tracing_motion_blur", alloc, e_rr
-				))
-
-			if(toCompile.extensions & ESHExtension_RayQuery)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_query", alloc, e_rr
-				))
-
-			if(toCompile.extensions & ESHExtension_RayMicromapOpacity)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_EXT_opacity_micromap", alloc, e_rr
-				))
-
-			if(toCompile.extensions & ESHExtension_RayMicromapDisplacement)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_NV_displacement_micromap", alloc, e_rr
-				))
-
-			if(toCompile.extensions & (ESHExtension_AtomicF32 | ESHExtension_AtomicF64)) {
-
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_EXT_shader_atomic_float_add", alloc, e_rr
-				))
-
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_EXT_shader_atomic_float_min_max", alloc, e_rr
-				))
-			}
-		}
-
-		else {
-
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qstrip_debug", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qstrip_reflect", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-auto-binding-space", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "0", alloc, e_rr))
-
-			if(toCompile.extensions & ESHExtension_PAQ)
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-payload-qualifiers", alloc, e_rr))
-		}
-
-		//-E <entrypointName>
-
-		if (CharString_length(toCompile.entrypoint)) {
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-E", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgStrConst(&stringsUTF8, toCompile.entrypoint, alloc, e_rr))
-		}
-
-		//-T <target>
-
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr))
-
-		const C8 *targetPrefix = ESHPipelineStage_getStagePrefix((ESHPipelineStage) toCompile.stageType);
-
-		U32 major = toCompile.shaderVersion >> 8;
-		U32 minor = (U8)toCompile.shaderVersion;
-
-		gotoIfError2(clean, CharString_format(alloc, &tempStr, "%s_%" PRIu32"_%" PRIu32, targetPrefix, major, minor))
-		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
-		tempStr = CharString_createNull();
-
-		//$<X> foreach uniform
-
-		for(U32 i = 0; i < toCompile.uniforms.length; i += 2) {
-
-			CharString uniformName  = toCompile.uniforms.ptr[i];
-			CharString uniformValue = toCompile.uniforms.ptr[i + 1];
-
-			gotoIfError2(clean, CharString_format(
-
-				alloc, &tempStr,
-
-				!CharString_length(uniformValue) ? "-D$%.*s" : "-D$%.*s=%.*s",
-
-				(int) CharString_length(uniformName),
-				uniformName.ptr,
-
-				(int) CharString_length(uniformValue),
-				uniformValue.ptr
-			))
-
-			gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
-			tempStr = CharString_createNull();
-		}
-
-		//__OXC_EXT_<X> foreach extension
-
-		for(U32 i = 0; i < lastExtension; ++i)
-			if ((toCompile.extensions >> i) & 1) {
-				gotoIfError2(clean, CharString_format(alloc, &tempStr, "-D__OXC_EXT_%s", ESHExtension_defines[i]))
-				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
-				tempStr = CharString_createNull();
-			}
-
-		//Format major, minor, patch and version
-
-		const C8 *formats[] = {
-			"-D__OXC_MAJOR=%" PRIu64,
-			"-D__OXC_MINOR=%" PRIu64,
-			"-D__OXC_PATCH=%" PRIu64,
-			"-D__OXC_VERSION=%" PRIu64,
-		};
-
-		const U64 formatInts[] = {
-			OXC3_MAJOR,
-			OXC3_MINOR,
-			OXC3_PATCH,
-			OXC3_VERSION
-		};
-
-		for(U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
-			gotoIfError2(clean, CharString_format(alloc, &tempStr, formats[i], formatInts[i]))
-			gotoIfError2(clean, ListCharString_pushBack(&stringsUTF8, tempStr, alloc))
-			tempStr = CharString_createNull();
-		}
-
-		Compiler_convertToWString(stringsUTF8, clean)
-
-		//Compile
-
-		DxcBuffer buffer{
-			.Ptr = settings.string.ptr,
-			.Size = CharString_length(settings.string),
-			.Encoding = DXC_CP_UTF8
-		};
-
-		HRESULT hr = interfaces->compiler->Compile(
-			&buffer,
-			(LPCWSTR*) strings.ptr, (int) strings.length,
-			interfaces->includeHandler,
-			IID_PPV_ARGS(&dxcResult)
-		);
-
-		if(FAILED(hr))
-			retError(clean, Error_invalidState(0, "Compiler_compile() \"Compile\" failed"))
-
-		hr = dxcResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), NULL);
-
-		if(FAILED(hr))
-			retError(clean, Error_invalidState(1, "Compiler_compile() fetch errors failed"))
-
-		if(error && error->GetStringLength()) {
-			CharString errs = CharString_createRefSizedConst(error->GetStringPointer(), error->GetStringLength(), false);
-			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr))
-		}
-
-		if(error) {
-			error->Release();
-			error = NULL;
-		}
-
-		if (hasErrors)
-			goto clean;
-
-		hr = dxcResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&resultBlob), NULL);
-
-		if(FAILED(hr))
-			retError(clean, Error_invalidState(2, "Compiler_compile() fetch hlsl failed"))
-
-		gotoIfError2(clean, Buffer_createCopy(
-			Buffer_createRefConst(resultBlob->GetBufferPointer(), resultBlob->GetBufferSize()),
-			alloc,
-			&result->binary
-		))
-
-		if (settings.outputType == ESHBinaryType_DXIL) {
-
-			resultBlob->Release();
-			resultBlob = NULL;
-			hr = dxcResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&resultBlob), NULL);
-
-			if (FAILED(hr) || !resultBlob)
-				retError(clean, Error_invalidState(0, "Compiler_processDXIL() fetch reflection failed"))
-
-			gotoIfError3(clean, Compiler_processDXIL(
-				comp,
-				&result->binary,
-				&result->registers,
-				Buffer_createRefConst(resultBlob->GetBufferPointer(), resultBlob->GetBufferSize()),
-				toCompile,
-				lock,
-				entries,
-				&result->demotion,
-				alloc,
-				e_rr
-			))
-		}
-
-		else if (settings.outputType == ESHBinaryType_SPIRV)
-			gotoIfError3(clean, Compiler_processSPIRV(
-				&result->binary, &result->registers, settings, toCompile, lock, entries, &result->demotion, alloc, e_rr
-			))
-
-		else retError(clean, Error_invalidState(2, "Compiler_compile() unsupported type. Only supporting DXIL and SPIRV"))
-
-		if (settings.infoAboutIncludes)
-			gotoIfError3(clean, Compiler_copyIncludes(result, interfaces->includeHandler, alloc, e_rr))
-
-		result->type = ECompileResultType_Binary;
-		result->isSuccess = true;
-
-	} catch (std::exception&) {
-		retError(clean, Error_invalidState(1, "Compiler_compile() raised an internal exception"))
-	}
-
-clean:
-
-	if(!s_uccess && result)
-		CompileResult_free(result, alloc);
-
-	if(resultBlob)
-		resultBlob->Release();
-
-	if(dxcResult)
-		dxcResult->Release();
-
-	if(error)
-		error->Release();
-
-	Compiler_freeStrings;
-	CharString_free(&tempStr, alloc);
-	ListCharString_freeUnderlying(&stringsUTF8, alloc);
-	return s_uccess;
-}
-
-Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *result, Error *e_rr) {
-
-	Bool s_uccess = true;
-
-	switch (type) {
-
-		case ESHBinaryType_SPIRV: 
-			gotoIfError3(clean, Compiler_disassembleSPIRV(buf, alloc, result, e_rr))
-			break;
-
-		case ESHBinaryType_DXIL:
-			gotoIfError3(clean, Compiler_disassembleDXIL(comp, buf, alloc, result, e_rr))
-				break;
-
-		default:
-			retError(clean, Error_unimplemented(0, "Compiler_createDisassembly() has invalid type"))
-	}
-
-clean:
-	return s_uccess;
 }

@@ -1,0 +1,145 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//graphics/generic/blas.h
+
+#pragma once
+#include "graphics/generic/acceleration_structure.h"
+#include "graphics/generic/device_buffer.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
+typedef enum EBLASFlag {
+	EBLASFlag_None                     = 0,
+	EBLASFlag_AvoidDuplicateAnyHit     = 1 << 0,        //Don't run the same anyHit twice on the same triangle/AABB
+	EBLASFlag_DisableAnyHit            = 1 << 1,        //Force anyHit off for the geometry's triangles/AABBs
+	EBLASFlag_Count                    = 2
+} EBLASFlag;
+
+typedef enum EBLASConstructionType {
+	EBLASConstructionType_Geometry,            //Triangles
+	EBLASConstructionType_Procedural,          //AABBs
+	EBLASConstructionType_Serialized,
+	EBLASConstructionType_Count
+} EBLASConstructionType;
+
+typedef struct BLAS {
+
+	RTAS base;
+
+	union {
+
+		//If EBLASConstructionType_Geometry
+		struct {
+
+			U8 positionFormatId;                        //ETextureFormatId: RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
+			U8 indexFormatId;                           //ETextureFormatId: R16u, R32u or Undefined
+			U16 positionBufferStride;                   //<= 2048
+
+			U16 positionOffset, padding;
+
+			DeviceData positionBuffer;
+
+			//TODO: For motion vectors: nextPositionBufferDevice, nextPositionBufferCpu
+
+			DeviceData indexBuffer;                     //Only if indexFormatId
+		};
+
+		//If EBLASConstructionType_Procedural
+		struct {
+			U32 aabbStride, aabbOffset;
+			DeviceData aabbBuffer;
+		};
+
+		//If EBLASConstructionType_Serialized
+		Buffer cpuData;
+	};
+
+} BLAS;
+
+typedef RefPtr BLASRef;
+
+#define BLAS_ext(ptr, T) (!ptr ? NULL : (T##BLAS*)(ptr + 1))        //impl
+#define BLASRef_ptr(ptr) RefPtr_data(ptr, BLAS)
+
+//Creating BLASes;
+//If cpu memory is used:
+//    It internally allocates a staging buffer to build from.
+//BLAS recording has to be done manually during command list recording.
+//    This is done through the buildBLASExt command which allows both generating BLAS from compute as well.
+//If the BLAS is deleted before submitting any commands then it won't exist.
+//    Submitting an empty/unfinished BLAS to a TLAS will hide the instance.
+//    It has to re-create a TLAS if the BLAS is finished to ensure the BLAS is shown.
+
+//Creating BLAS from triangle geometry
+
+Bool GraphicsDeviceRef_createBLASExt(
+	GraphicsDeviceRef *dev,
+	ERTASBuildFlags buildFlags,
+	EBLASFlag blasFlags,
+	ETextureFormatId positionFormat,    //RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
+	U16 positionOffset,                 //Offset into first position for first vertex
+	ETextureFormatId indexFormat,       //R16u, R32u, Undefined
+	U16 positionBufferStride,           //<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
+	DeviceData positionBuffer,          //Required
+	DeviceData indexBuffer,             //Optional if indexFormat == Undefined
+	BLASRef *parent,                    //If specified, indicates refit
+	const CharString *name,
+	BLASRef **blas,
+	Error *e_rr
+);
+
+Bool GraphicsDeviceRef_createBLASUnindexedExt(
+	GraphicsDeviceRef *dev,
+	ERTASBuildFlags buildFlags,
+	EBLASFlag blasFlags,
+	ETextureFormatId positionFormat,    //RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
+	U16 positionOffset,                 //Offset into first position for first vertex
+	U16 positionBufferStride,           //<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
+	DeviceData positionBuffer,          //Required
+	BLASRef *parent,                    //If specified, indicates refit
+	const CharString *name,
+	BLASRef **blas,
+	Error *e_rr
+);
+
+//Creating BLAS from AABBs
+
+Bool GraphicsDeviceRef_createBLASProceduralExt(
+	GraphicsDeviceRef *dev,
+	ERTASBuildFlags buildFlags,
+	EBLASFlag blasFlags,
+	U32 aabbStride,                     //Alignment: 8
+	U32 aabbOffset,                     //Offset into the aabb array
+	DeviceData buffer,                  //Required
+	BLASRef *parent,                    //If specified, indicates refit
+	const CharString *name,
+	BLASRef **blas,
+	Error *e_rr
+);
+
+//Creating BLAS from cache TODO:
+//Error GraphicsDeviceRef_createBLASFromCacheExt(GraphicsDeviceRef *dev, Buffer cache, CharString name, BLASRef **blas);
+
+#ifdef __cplusplus
+	}
+#endif

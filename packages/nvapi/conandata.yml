@@ -1,4 +1,4 @@
 sources:
-  "2024.09.21":
+  "2026.08.02":
     url: "https://github.com/Oxsomi/nvapi.git"
-    checkout: "main"
+    checkout: "d867296ff0c9ff6bc9c41a7b5117e96a74a9418a"

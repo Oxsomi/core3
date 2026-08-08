@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,30 +18,33 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "platforms/ext/stringx.h"
+//graphics/d3d12/generic/dx_blas.c
+
 #include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/d3d12/direct3d12.h"
+#include "types/container/string.h"
+#include "types/base/constants.h"
 
-Bool DX_WRAP_FUNC(BLAS_free)(BLAS *blas) { (void) blas; return true; }		//No-op
+void DX_WRAP_FUNC(BLAS_free)(BLAS *blas) { (void) blas; }        //No-op
 
-Error DX_WRAP_FUNC(BLAS_init)(BLAS *blas) {
+Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = blas ? GraphicsDeviceRef_getAlloc(blas->base.device) : NULL;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	DxBLAS *blasExt = BLAS_ext(blas, Dx);
 
-	Error err = Error_none();
 	CharString tmp = CharString_createNull();
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
-		gotoIfError(clean, Error_unsupportedOperation(0, "D3D12BLAS_init()::serialized not supported yet"))		//TODO:
+		retError(clean, Error_unsupportedOperation(0, "D3D12BLAS_init()::serialized not supported yet"));        //TODO:
 
 	U64 primitives = 0;
 	EBLASConstructionType type = (EBLASConstructionType) blas->base.asConstructionType;
@@ -49,6 +52,10 @@ Error DX_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 	U64 vertexCount = 0;
 
 	switch (type) {
+
+		case EBLASConstructionType_Serialized:
+			primitives = Buffer_length(blas->cpuData) / 12;        //Conservative estimate
+			break;
 
 		case EBLASConstructionType_Procedural:
 			primitives = blas->aabbBuffer.len / (sizeof(F32) * 3 * 2);
@@ -69,9 +76,9 @@ Error DX_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 	}
 
 	if(primitives >> 32)
-		gotoIfError(clean, Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			0, primitives, U32_MAX, "D3D12BLAS_init() only primitive count of <U32_MAX is supported"
-		))
+		));
 
 	blasExt->primitives = (U32) primitives;
 
@@ -123,7 +130,7 @@ Error DX_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 		if (blas->indexFormatId) {
 			tri->IndexFormat = ETextureFormatId_toDXFormat(blas->indexFormatId);
 			tri->IndexBuffer = getDxLocation(blas->indexBuffer, 0);
-			tri->IndexCount = (U32)(blas->indexBuffer.len / (blas->indexFormatId == ETextureFormat_R32u ? 4 : 2));
+			tri->IndexCount = (U32)(blas->indexBuffer.len / (blas->indexFormatId == ETextureFormatId_R32u ? 4 : 2));
 		}
 	}
 
@@ -157,47 +164,58 @@ Error DX_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 
 	//Allocate scratch and final buffer
 
-	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 		blas->base.device,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
-		blas->base.name,
+		NULL,
+		&blas->base.name,
 		sizes.ResultDataMaxSizeInBytes,
-		&blas->base.asBuffer
-	))
+		&blas->base.asBuffer,
+		e_rr
+	));
 
-	gotoIfError(clean, CharString_formatx(
-		&tmp, "%.*s scratch buffer", CharString_length(blas->base.name), blas->base.name.ptr
-	))
+	gotoIfError3(clean, CharString_format(
+		alloc,
+		&tmp,
+		e_rr,
+		"%.*s scratch buffer",
+		CharString_length(blas->base.name),
+		blas->base.name.ptr
+	));
 
-	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 		blas->base.device,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
-		tmp,
+		NULL,
+		&tmp,
 		blas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
-		&blas->base.tempScratchBuffer
-	))
+		&blas->base.tempScratchBuffer,
+		e_rr
+	));
 
 clean:
-	CharString_freex(&tmp);
-	return err;
+	CharString_free(&tmp, alloc);
+	return s_uccess;
 }
 
-Error DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending) {
+Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
 	BLAS *blas = BLASRef_ptr(pending);
 	DxBLAS *blasExt = BLAS_ext(blas, Dx);
-	Error err = Error_none();
 
-	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
-		return Error_none();
+	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
+		return s_uccess;
 
 	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(blas->base.asBuffer)->resource.deviceAddress;
 
@@ -219,7 +237,7 @@ Error DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	device->pendingPrimitives += blasExt->primitives;
 
 	if(!ListRefPtr_contains(*currentFlight, pending, 0, NULL)) {
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
 		RefPtr_inc(pending);
 	}
 
@@ -228,7 +246,7 @@ Error DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 	if(!ListRefPtr_contains(*currentFlight, blas->base.tempScratchBuffer, 0, NULL)) {
 
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, blas->base.tempScratchBuffer))
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, blas->base.tempScratchBuffer, alloc, e_rr));
 
 		if(!(blas->base.flags & ERTASBuildFlags_AllowUpdate))
 			blas->base.tempScratchBuffer = NULL;
@@ -239,10 +257,10 @@ Error DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	//Ensure we don't exceed a maximum amount of time spent on the GPU
 
 	if (device->pendingPrimitives >= device->flushThresholdPrimitives)
-		gotoIfError(clean, DxGraphicsDevice_flush(deviceRef, commandBuffer))
+		gotoIfError3(clean, DxGraphicsDevice_flush(deviceRef, commandBuffer, e_rr));
 
 	blas->base.isCompleted = true;
 
 clean:
-	return err;
+	return s_uccess;
 }

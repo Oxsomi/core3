@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,9 +18,14 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "graphics/generic/interface.h"
+//graphics/vulkan/generic/vk_command_list.c
+
 #include "graphics/vulkan/vk_interface.h"
+#include "graphics/vulkan/vulkan.h"
+#include "graphics/vulkan/vk_device.h"
+#include "graphics/vulkan/vk_instance.h"
+#include "graphics/vulkan/vk_buffer.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -30,28 +35,34 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
-#include "graphics/vulkan/vulkan.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
-#include "graphics/vulkan/vk_buffer.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/log.h"
-#include "types/container/buffer.h"
+#include "platforms/logx.h"
+#include "formats/oiSH/sh_registers.h"
+#include "types/base/buffer_base.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
-void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
+static inline Bool addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
 
 	VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachment.resolveImage, Vk, 0);
 
 	switch (attachment.resolveMode) {
-		default:						result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;	break;
-		case EMSAAResolveMode_Min:		result->resolveMode = VK_RESOLVE_MODE_MIN_BIT;		break;
-		case EMSAAResolveMode_Max:		result->resolveMode = VK_RESOLVE_MODE_MAX_BIT;		break;
+		default:                    result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;  break;
+		case EMSAAResolveMode_Min:  result->resolveMode = VK_RESOLVE_MODE_MIN_BIT;      break;
+		case EMSAAResolveMode_Max:  result->resolveMode = VK_RESOLVE_MODE_MAX_BIT;      break;
 	}
 
-	result->resolveImageView = imageExt->view;
+	U32 viewId = U32_MAX;
+	VkImageView view = NULL;
+
+	Descriptor descriptor = (Descriptor) { .resource = attachment.resolveImage };
+	ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
+
+	if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL))
+		return false;
+
+	result->resolveImageView = view;
 	result->resolveImageLayout = imageExt->lastLayout;
+	return true;
 }
 
 void VK_WRAP_FUNC(CommandList_process)(
@@ -61,6 +72,13 @@ void VK_WRAP_FUNC(CommandList_process)(
 	const U8 *data,
 	void *commandListExt
 ) {
+
+	//CommandList_process can't fail upward; errors are printed and the op is skipped.
+
+	Bool s_uccess = true;
+	Error err = Error_none();
+	Error *e_rr = &err;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -135,7 +153,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					.layerCount = 1
 				};
 
-				vkCmdClearColorImage(
+				deviceExt->cmdClearColorImage(
 					buffer,
 					imageExt->image,
 					imageExt->lastLayout,
@@ -157,17 +175,6 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			UnifiedTexture src = TextureRef_getUnifiedTexture(copyImage.src, NULL);
 
-			if(src.depthFormat) {
-
-				if(copyImage.copyType == ECopyType_DepthOnly)
-					aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-				else if(copyImage.copyType == ECopyType_StencilOnly)
-					aspectFlags = VK_IMAGE_ASPECT_STENCIL_BIT;
-
-				else aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-			}
-
 			for(U64 i = 0; i < copyImage.regionCount; ++i) {
 
 				CopyImageRegion image = copyImageRegions[i];
@@ -186,9 +193,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					.layerCount = 1
 				};
 
-				Error err = Error_none();
-
-				gotoIfError(next, ListVkImageCopy_pushBackx(&deviceExt->imageCopyRanges, (VkImageCopy) {
+				gotoIfError3(next, ListVkImageCopy_pushBack(&deviceExt->imageCopyRanges, (VkImageCopy) {
 					.srcSubresource = subResource,
 					.srcOffset = (VkOffset3D) {
 						.x = (I32) image.srcX,
@@ -206,12 +211,12 @@ void VK_WRAP_FUNC(CommandList_process)(
 						.height = image.height,
 						.depth = image.length
 					}
-				}))
+				}, alloc, e_rr));
 
 			next:
 
-				if(err.genericError) {
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+				if(!s_uccess) {
+					Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 					break;
 				}
 			}
@@ -219,7 +224,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 			VkUnifiedTexture *srcExt = TextureRef_getCurrImgExtT(copyImage.src, Vk, 0);
 			VkUnifiedTexture *dstExt = TextureRef_getCurrImgExtT(copyImage.dst, Vk, 0);
 
-			vkCmdCopyImage(
+			deviceExt->cmdCopyImage(
 				buffer,
 				srcExt->image,
 				srcExt->lastLayout,
@@ -229,7 +234,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				deviceExt->imageCopyRanges.ptr
 			);
 
-			ListVkImageCopy_clear(&deviceExt->imageCopyRanges);
+			ListVkImageCopy_clear(&deviceExt->imageCopyRanges, e_rr);
 			break;
 		}
 
@@ -270,10 +275,25 @@ void VK_WRAP_FUNC(CommandList_process)(
 				else if((startRender->preserveMask >> i) & 1)
 					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
+				//Even though this adds a new view that we don't clean up it should be okay.
+				//Likely this view will get accessed again in the same way.
+				//If we don't, we still clean it up during destruction of the resource.
+
+				U32 viewId = U32_MAX;
+				VkImageView view = NULL;
+
+				Descriptor descriptor = (Descriptor) { .resource = attachmentsj->image };
+				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
+
+				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
+					Log_errorLnx("VkUnifiedTexture_getView color at ECommandOp_StartRenderingExt, this is problematic!");
+					break;
+				}
+
 				attachmentsExt[i] = (VkRenderingAttachmentInfoKHR) {
 
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = imageExt->view,
+					.imageView = view,
 					.imageLayout = imageExt->lastLayout,
 					.loadOp = loadOp,
 
@@ -293,8 +313,10 @@ void VK_WRAP_FUNC(CommandList_process)(
 					}
 				};
 
-				if(attachmentsj->resolveImage)
-					addResolveImage(*attachmentsj, &attachmentsExt[i]);
+				if(attachmentsj->resolveImage && !addResolveImage(*attachmentsj, &attachmentsExt[i])) {
+					Log_errorLnx("addResolveImage failed during ECommandOp_StartRenderingExt, this is problematic!");
+					break;
+				}
 			}
 
 			//Send begin render command
@@ -316,9 +338,22 @@ void VK_WRAP_FUNC(CommandList_process)(
 				else if(startRender->flags & EStartRenderFlags_PreserveDepth)
 					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
+				//See the comment during attachmentsExt[i] setup above about view creation.
+
+				U32 viewId = U32_MAX;
+				VkImageView view = NULL;
+
+				Descriptor descriptor = (Descriptor) { .resource = startRender->depthStencil };
+				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
+
+				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
+					Log_errorLnx("VkUnifiedTexture_getView depth at ECommandOp_StartRenderingExt, this is problematic!");
+					break;
+				}
+
 				depthAttachment = (VkRenderingAttachmentInfoKHR) {
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = depthExt->view,
+					.imageView = view,
 					.imageLayout = depthExt->lastLayout,
 					.loadOp = loadOp,
 					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
@@ -352,9 +387,26 @@ void VK_WRAP_FUNC(CommandList_process)(
 				else if(startRender->flags & EStartRenderFlags_PreserveStencil)
 					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
+				//See the comment during attachmentsExt[i] setup above about view creation.
+
+				U32 viewId = U32_MAX;
+				VkImageView view = NULL;
+
+				Descriptor descriptor = (Descriptor) {
+					.resource = startRender->depthStencil,
+					.texture = (TextureDescriptorRange) { .planeId = 1 }
+				};
+
+				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
+
+				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
+					Log_errorLnx("VkUnifiedTexture_getView stencil at ECommandOp_StartRenderingExt, this is problematic!");
+					break;
+				}
+
 				stencilAttachment = (VkRenderingAttachmentInfoKHR) {
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = stencilExt->view,
+					.imageView = view,
 					.imageLayout = stencilExt->lastLayout,
 					.loadOp = loadOp,
 					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
@@ -393,12 +445,12 @@ void VK_WRAP_FUNC(CommandList_process)(
 				.pStencilAttachment = startRender->flags & EStartRenderFlags_Stencil ? &stencilAttachment : NULL
 			};
 
-			instanceExt->cmdBeginRendering(buffer, &renderInfo);
+			deviceExt->cmdBeginRendering(buffer, &renderInfo);
 			break;
 		}
 
 		case ECommandOp_EndRenderingExt:
-			instanceExt->cmdEndRendering(buffer);
+			deviceExt->cmdEndRendering(buffer);
 			break;
 
 		//Draws
@@ -432,7 +484,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			if(!eq) {
 				temp->boundViewport = temp->tempViewport;
-				vkCmdSetViewport(buffer, 0, 1, &temp->boundViewport);
+				deviceExt->cmdSetViewport(buffer, 0, 1, &temp->boundViewport);
 			}
 
 			eq = Buffer_eq(
@@ -442,19 +494,19 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			if(!eq) {
 				temp->boundScissor = temp->tempScissor;
-				vkCmdSetScissor(buffer, 0, 1, &temp->boundScissor);
+				deviceExt->cmdSetScissor(buffer, 0, 1, &temp->boundScissor);
 			}
 
 			//Bind blend constants and/or stencil ref
 
-			if (F32x4_neq4(temp->tempBlendConstants, temp->blendConstants)) {
+			if (F32x4_neqExact4(temp->tempBlendConstants, temp->blendConstants)) {
 				temp->blendConstants = temp->tempBlendConstants;
-				vkCmdSetBlendConstants(buffer, (const float*) &temp->blendConstants);
+				deviceExt->cmdSetBlendConstants(buffer, (const float*) &temp->blendConstants);
 			}
 
 			if (temp->tempStencilRef != temp->stencilRef) {
 				temp->stencilRef = temp->tempStencilRef;
-				vkCmdSetStencilReference(buffer, VK_STENCIL_FACE_FRONT_AND_BACK, temp->stencilRef);
+				deviceExt->cmdSetStencilReference(buffer, VK_STENCIL_FACE_FRONT_AND_BACK, temp->stencilRef);
 			}
 
 			//Bind pipeline
@@ -463,7 +515,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				temp->pipelines[EPipelineType_Graphics] = temp->tempPipelines[EPipelineType_Graphics];
 
-				vkCmdBindPipeline(
+				deviceExt->cmdBindPipeline(
 					temp->buffer,
 					VK_PIPELINE_BIND_POINT_GRAPHICS,
 					*Pipeline_ext(PipelineRef_ptr(temp->pipelines[EPipelineType_Graphics]), Vk)
@@ -483,7 +535,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				temp->boundBuffers.indexBuffer = temp->tempBoundBuffers.indexBuffer;
 				temp->boundBuffers.isIndex32Bit = temp->tempBoundBuffers.isIndex32Bit;
 
-				vkCmdBindIndexBuffer(
+				deviceExt->cmdBindIndexBuffer(
 					temp->buffer,
 					DeviceBuffer_ext(DeviceBufferRef_ptr(temp->boundBuffers.indexBuffer), Vk)->buffer,
 					0,
@@ -523,7 +575,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				}
 
 				if(end > start)
-					vkCmdBindVertexBuffers(
+					deviceExt->cmdBindVertexBuffers(
 						temp->buffer,
 						start,
 						end - start,
@@ -539,14 +591,14 @@ void VK_WRAP_FUNC(CommandList_process)(
 				DrawCmd draw = *(const DrawCmd*)data;
 
 				if(draw.isIndexed)
-					vkCmdDrawIndexed(
+					deviceExt->cmdDrawIndexed(
 						buffer,
 						draw.count, draw.instanceCount,
 						draw.indexOffset, draw.vertexOffset,
 						draw.instanceOffset
 					);
 
-				else vkCmdDraw(
+				else deviceExt->cmdDraw(
 					buffer,
 					draw.count, draw.instanceCount,
 					draw.vertexOffset, draw.instanceOffset
@@ -568,14 +620,14 @@ void VK_WRAP_FUNC(CommandList_process)(
 					VkDeviceBuffer *counterExt = DeviceBuffer_ext(counterBuffer, Vk);
 
 					if(drawIndirect.isIndexed)
-						vkCmdDrawIndexedIndirectCount(
+						deviceExt->cmdDrawIndexedIndirectCount(
 							buffer,
 							bufferExt->buffer, drawIndirect.bufferOffset,
 							counterExt->buffer, drawIndirect.countOffsetExt,
 							drawIndirect.drawCalls, sizeof(DrawCallIndexed)
 						);
 
-					else vkCmdDrawIndirectCount(
+					else deviceExt->cmdDrawIndirectCount(
 						buffer,
 						bufferExt->buffer, drawIndirect.bufferOffset,
 						counterExt->buffer, drawIndirect.countOffsetExt,
@@ -588,13 +640,13 @@ void VK_WRAP_FUNC(CommandList_process)(
 				else {
 
 					if(drawIndirect.isIndexed)
-						vkCmdDrawIndexedIndirect(
+						deviceExt->cmdDrawIndexedIndirect(
 							buffer,
 							bufferExt->buffer, drawIndirect.bufferOffset,
 							drawIndirect.drawCalls, sizeof(DrawCallIndexed)
 						);
 
-					else vkCmdDrawIndirect(
+					else deviceExt->cmdDrawIndirect(
 						buffer, bufferExt->buffer, drawIndirect.bufferOffset,
 						drawIndirect.drawCalls, sizeof(DrawCallUnindexed)
 					);
@@ -611,7 +663,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				temp->pipelines[EPipelineType_Compute] = temp->tempPipelines[EPipelineType_Compute];
 
-				vkCmdBindPipeline(
+				deviceExt->cmdBindPipeline(
 					temp->buffer,
 					VK_PIPELINE_BIND_POINT_COMPUTE,
 					*Pipeline_ext(PipelineRef_ptr(temp->pipelines[EPipelineType_Compute]), Vk)
@@ -620,7 +672,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			if(op == ECommandOp_Dispatch) {
 				DispatchCmd dispatch = *(const DispatchCmd*)data;
-				vkCmdDispatch(
+				deviceExt->cmdDispatch(
 					buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]
 				);
 			}
@@ -628,7 +680,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 			else {
 				DispatchIndirectCmd dispatch = *(const DispatchIndirectCmd*)data;
 				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Vk);
-				vkCmdDispatchIndirect(buffer, bufferExt->buffer, dispatch.offset);
+				deviceExt->cmdDispatchIndirect(buffer, bufferExt->buffer, dispatch.offset);
 			}
 
 			break;
@@ -636,11 +688,17 @@ void VK_WRAP_FUNC(CommandList_process)(
 		//JIT RTAS updates in case they are on the GPU (e.g. compute updates)
 
 		case ECommandOp_UpdateBLASExt:
-			(VK_WRAP_FUNC(BLASRef_flush))(temp, deviceRef, *(BLASRef**)data);
+
+			if(!(VK_WRAP_FUNC(BLASRef_flush))(temp, deviceRef, *(BLASRef**)data, e_rr))
+				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
 			break;
 
 		case ECommandOp_UpdateTLASExt:
-			(VK_WRAP_FUNC(TLASRef_flush))(temp, deviceRef, *(TLASRef**)data);
+
+			if(!(VK_WRAP_FUNC(TLASRef_flush))(temp, deviceRef, *(TLASRef**)data, e_rr))
+				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
 			break;
 
 		//case ECommandOp_DispatchRaysIndirect:
@@ -652,7 +710,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				temp->pipelines[EPipelineType_RaytracingExt] = temp->tempPipelines[EPipelineType_RaytracingExt];
 
-				vkCmdBindPipeline(
+				deviceExt->cmdBindPipeline(
 					temp->buffer,
 					VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
 					*Pipeline_ext(raytracingPipeline, Vk)
@@ -697,7 +755,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 			if(op == ECommandOp_DispatchRaysExt) {
 				DispatchRaysExt dispatch = *(const DispatchRaysExt*)data;
 				raygen.deviceAddress += raygen.stride * dispatch.raygenId;
-				instanceExt->traceRays(
+				deviceExt->traceRays(
 					buffer,
 					&raygen, &miss, &hit, &callable,
 					dispatch.x, dispatch.y, dispatch.z
@@ -707,7 +765,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 			else {
 				DispatchRaysIndirectExt dispatch = *(const DispatchRaysIndirectExt*)data;
 				raygen.deviceAddress += raygen.stride * dispatch.raygenId;
-				instanceExt->traceRaysIndirect(
+				deviceExt->traceRaysIndirect(
 					buffer,
 					&raygen, &miss, &hit, &callable,
 					DeviceBufferRef_ptr(dispatch.buffer)->resource.deviceAddress + dispatch.offset
@@ -729,24 +787,22 @@ void VK_WRAP_FUNC(CommandList_process)(
 			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
 			++temp->scopeCounter;
 
-			Error err = Error_none();
-
 			for (U64 i = scope.transitionOffset; i < scope.transitionOffset + scope.transitionCount; ++i) {
 
 				TransitionInternal transition = commandList->transitions.ptr[i];
 
-				if(transition.type == ETransitionType_KeepAlive)		//TODO: Residency management
+				if(transition.type == ETransitionType_KeepAlive)        //TODO: Residency management
 					continue;
 
 				VkPipelineStageFlags2 pipelineStage = 0;
 
 				switch (transition.stage) {
 
-					default:																						break;
-					case EPipelineStage_Compute:		pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;		break;
-					case EPipelineStage_Vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
-					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
-					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
+					default:                                                                                    break;
+					case EPipelineStage_Compute:      pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;   break;
+					case EPipelineStage_Vertex:       pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;    break;
+					case EPipelineStage_Pixel:        pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;  break;
+					case EPipelineStage_GeometryExt:  pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;  break;
 
 					case EPipelineStage_Hull:
 						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
@@ -771,9 +827,9 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				//If it's on the GPU then we have to rely on manual RTAS transitions
 
-				Bool isTLAS = transition.resource->typeId == (ETypeId)EGraphicsTypeId_TLASExt;
+				Bool isTLAS = transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_TLASExt;
 
-				if (isTLAS || transition.resource->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
+				if (isTLAS || transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_BLASExt) {
 
 					RTAS rtas = isTLAS ? TLASRef_ptr(transition.resource)->base : BLASRef_ptr(transition.resource)->base;
 
@@ -783,7 +839,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					if (!rtas.isCompleted && transition.type != ETransitionType_ShaderWrite)
 						continue;
 
-					gotoIfError(nextTransition, VkDeviceBuffer_transition(
+					gotoIfError3(nextTransition, VkDeviceBuffer_transition(
 
 						DeviceBuffer_ext(DeviceBufferRef_ptr(rtas.asBuffer), Vk),
 						pipelineStage,
@@ -794,8 +850,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 						graphicsQueueId,
 						0, 0,
 						&deviceExt->bufferTransitions,
-						&dependency
-					))
+						&dependency, alloc, e_rr));
 
 					continue;
 				}
@@ -819,8 +874,10 @@ void VK_WRAP_FUNC(CommandList_process)(
 						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
 						VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
-				if(transition.stage == EPipelineStage_RTASBuild && !isShaderRead)	//Scratch buffer is AS write
-					access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+				if(transition.stage == EPipelineStage_RTASBuild)    //RTASBuild inputs/outputs are AS read/write
+					access =
+						isShaderRead ? VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR :
+						VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
 
 				if(!pipelineStage)
 					switch ((ETransitionType) transition.type) {
@@ -841,7 +898,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 							break;
 
-						case ETransitionType_ResolveTargetWrite:		//No distinction in Vulkan
+						case ETransitionType_ResolveTargetWrite:        //No distinction in Vulkan
 						case ETransitionType_RenderTargetWrite:
 
 							pipelineStage =
@@ -904,7 +961,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					const UnifiedTexture utex = TextureRef_getUnifiedTexture(transition.resource, NULL);
 					VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(transition.resource, Vk, 0);
 
-					VkImageSubresourceRange range = (VkImageSubresourceRange) {		//TODO:
+					VkImageSubresourceRange range = (VkImageSubresourceRange) {        //TODO:
 						.aspectMask = isDepthStencil ? 0 : VK_IMAGE_ASPECT_COLOR_BIT,
 						.levelCount = 1,
 						.layerCount = 1
@@ -919,7 +976,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 							range.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
 					}
 
-					gotoIfError(nextTransition, VkUnifiedTexture_transition(
+					gotoIfError3(nextTransition, VkUnifiedTexture_transition(
 
 						imageExt,
 						pipelineStage,
@@ -929,8 +986,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 						&range,
 
 						&deviceExt->imageTransitions,
-						&dependency
-					))
+						&dependency, alloc, e_rr));
 				}
 
 				else {
@@ -938,29 +994,28 @@ void VK_WRAP_FUNC(CommandList_process)(
 					DeviceBuffer *devBuffer = DeviceBufferRef_ptr(transition.resource);
 					VkDeviceBuffer *bufferExt = DeviceBuffer_ext(devBuffer, Vk);
 
-					gotoIfError(nextTransition, VkDeviceBuffer_transition(
+					gotoIfError3(nextTransition, VkDeviceBuffer_transition(
 						bufferExt,
 						pipelineStage,
 						access,
 						graphicsQueueId,
-						0,						//TODO: range
+						0,                        //TODO: range
 						devBuffer->resource.size,
 						&deviceExt->bufferTransitions,
-						&dependency
-					))
+						&dependency, alloc, e_rr));
 				}
 
 			nextTransition:
 
-				if(err.genericError)
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+				if(!s_uccess)
+					Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 			}
 
 			if(dependency.imageMemoryBarrierCount || dependency.bufferMemoryBarrierCount)
-				instanceExt->cmdPipelineBarrier2(buffer, &dependency);
+				deviceExt->cmdPipelineBarrier2(buffer, &dependency);
 
-			ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
-			ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
+			ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
+			ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions, e_rr);
 			break;
 		}
 
@@ -976,9 +1031,9 @@ void VK_WRAP_FUNC(CommandList_process)(
 		case ECommandOp_AddMarkerDebugExt:
 		case ECommandOp_StartRegionDebugExt: {
 
-			VkDebugMarkerMarkerInfoEXT markerInfo = (VkDebugMarkerMarkerInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT,
-				.pMarkerName = (const char*) data + sizeof(F32x4),
+			VkDebugUtilsLabelEXT markerInfo = (VkDebugUtilsLabelEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+				.pLabelName = (const char*) data + sizeof(F32x4),
 			};
 
 			Buffer_memcpy(
@@ -986,7 +1041,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				Buffer_createRefConst(data, sizeof(F32x4))
 			);
 
-			if(!instanceExt->cmdDebugMarkerInsert)		//No debug markers
+			if(!instanceExt->cmdDebugMarkerInsert)        //No debug markers
 				break;
 
 			if(op == ECommandOp_AddMarkerDebugExt)

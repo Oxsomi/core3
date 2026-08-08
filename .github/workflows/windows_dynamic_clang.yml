@@ -1,0 +1,21 @@
+name: Windows x64 D3D12+Vulkan dynamic (clang-cl)
+on: [push]
+
+# Dynamic linking is a different link entirely: the backends become dlopen'd modules and the symbol
+# visibility rules start mattering, which is exactly where the osx dynamic builds kept breaking.
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Windows x64 D3D12+Vulkan dynamic (clang-cl)
+      runner: windows-2022
+      os: windows
+      build_flags: '-compiler clang -dynamic_linking True -o forceVulkan=True -o cliGraphics=False'
+      cache_name: clang
+      python_cmd: python
+      setup_python: false
+      python_version: ''
+      hook_name: Windows-x64-dynamic-clang
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

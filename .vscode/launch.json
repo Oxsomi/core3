@@ -2,17 +2,69 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "g++ build and debug active file",
+            "name": "Debug (Linux)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Release/bin/OxC3_test",
+            "program": "${workspaceFolder}/build/Debug/linux/x64/bin/OxC3_platforms_functional_test",
             "args": [],
-            "stopAtEntry": true,
-            "cwd": "${workspaceFolder}/build/Release/bin",
-            "environment": [],
-            "externalConsole": false,
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/Debug/linux/x64/bin",
             "MIMode": "gdb",
-            // Refers to the "label" field in tasks.json.
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build"
+        },
+        {
+            "name": "Debug (SteamOS)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/linux/x64/bin/OxC3_platforms_functional_test",
+            "cwd": "${workspaceFolder}/build/Debug/linux/x64/bin",
+            "MIMode": "gdb",
+            "miDebuggerServerAddress": "localhost:2345",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build and launch"
+        },
+        {
+            "name": "Debug (macOS)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/macos/x64/bin/OxC3_platforms_functional_test",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/Debug/macos/x64/bin",
+            "MIMode": "lldb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build"
+        },
+        {
+            "name": "Debug (Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/windows/x64/bin/OxC3_platforms_functional_test.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/Debug/windows/x64/bin",
+            "console": "integratedTerminal",
             "preLaunchTask": "build"
         }
     ]

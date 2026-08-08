@@ -1,0 +1,17 @@
+name: Windows ARM64 D3D12 static
+on: [push]
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Windows ARM64 D3D12 static
+      runner: windows-11-arm
+      os: windows
+      build_flags: '-o cliGraphics=False'
+      python_cmd: python
+      setup_python: true
+      python_version: '3.13'
+      hook_name: Windows-arm64-d3d12-static
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

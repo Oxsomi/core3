@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,31 +18,23 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/render_texture.c
+
 #include "graphics/generic/interface.h"
 #include "graphics/generic/render_texture.h"
+#include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/ref_ptr.h"
 #include "types/container/texture_format.h"
 #include "types/base/error.h"
-#include "types/container/string.h"
 
-Error RenderTextureRef_dec(RenderTextureRef **renderTexture) {
-	return !RefPtr_dec(renderTexture) ?
-		Error_invalidOperation(0, "RenderTextureRef_dec()::renderTexture is invalid") : Error_none();
-}
-
-Error RenderTextureRef_inc(RenderTextureRef *renderTexture) {
-	return !RefPtr_inc(renderTexture) ?
-		Error_invalidOperation(0, "RenderTextureRef_inc()::renderTexture is invalid") : Error_none();
-}
-
-Bool GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, Allocator alloc) {
+void GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, const Allocator *alloc) {
 	(void)alloc;
-	return UnifiedTexture_free((TextureRef*)((U8*)renderTexture - sizeof(RefPtr)));
+	UnifiedTexture_free((TextureRef*)((U8*)renderTexture - sizeof(RefPtr)));
 }
 
-Error GraphicsDeviceRef_createRenderTexture(
+Bool GraphicsDeviceRef_createRenderTexture(
 	GraphicsDeviceRef *deviceRef,
 	ETextureType type,
 	U16 width,
@@ -51,21 +43,19 @@ Error GraphicsDeviceRef_createRenderTexture(
 	ETextureFormatId formatId,
 	EGraphicsResourceFlag flag,
 	EMSAASamples msaa,
-	CharString name,
-	RenderTextureRef **renderTextureRef
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	RenderTextureRef **renderTextureRef,
+	Error *e_rr
 ) {
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(RenderTexture) + GraphicsDeviceRef_getObjectSizes(deviceRef)->image + sizeof(UnifiedTextureImage)),
-		(ObjectFreeFunc) GraphicsDevice_freeRenderTexture,
-		(ETypeId) EGraphicsTypeId_RenderTexture,
-		renderTextureRef
-	);
+	Bool s_uccess = true;
+	Bool allocated = false;
 
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->renderTexture, renderTextureRef, e_rr));
+	allocated = true;
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef))
+	gotoIfError3(clean, RefPtr_inc(deviceRef));
 
 	*RenderTextureRef_ptr(*renderTextureRef) = (UnifiedTexture) {
 		.resource = (GraphicsResource) {
@@ -83,12 +73,12 @@ Error GraphicsDeviceRef_createRenderTexture(
 		.images = 1
 	};
 
-	gotoIfError(clean, UnifiedTexture_create(*renderTextureRef, name))
+	gotoIfError3(clean, UnifiedTexture_create(*renderTextureRef, bindlessDescriptorTable, name, e_rr));
 
 clean:
 
-	if(err.genericError)
-		RenderTextureRef_dec(renderTextureRef);
+	if(!s_uccess && allocated)
+		RefPtr_dec(renderTextureRef);
 
-	return err;
+	return s_uccess;
 }

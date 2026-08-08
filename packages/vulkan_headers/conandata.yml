@@ -1,0 +1,4 @@
+sources:
+  "2026.07.28":
+    url: "https://github.com/Oxsomi/Vulkan-Headers.git"
+    checkout: "d314eae73fdc90847bb8304a86ee7c6a8ee023b6"

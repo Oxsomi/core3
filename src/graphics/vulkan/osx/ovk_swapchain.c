@@ -1,5 +1,5 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/osx/ovk_swapchain.c
+
 #define VK_USE_PLATFORM_MACOS_MVK
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -28,23 +30,39 @@
 #include "platforms/platform.h"
 #include "types/base/error.h"
 
-Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface) {
+Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!device || !window || !surface)
-		return Error_nullPointer(!device ? 0 : (!window ? 0 : 1), "VkSurface_create()::device, window or surface is NULL");
+		retError(clean, Error_nullPointer(
+			!device ? 0 : (!window ? 1 : 2),
+			"VkSurface_create()::device, window or surface is NULL"
+		));
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
-	VkMacOSSurfaceCreateInfoMVK surfaceInfo = (VkMacOSSurfaceCreateInfoMVK) {
+	const VkMacOSSurfaceCreateInfoMVK surfaceInfo = (VkMacOSSurfaceCreateInfoMVK) {
 		.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK,
 		.pView = window->nativeData
 	};
 
-	if (!instanceExt->createSurfaceExt)
-		instanceExt->createSurfaceExt = (void*) vkGetInstanceProcAddr(instanceExt->instance, "vkCreateWin32SurfaceKHR");
+	//VK_MVK_macos_surface is what the instance enables on osx (see _VK_SURFACE_EXT), so this is the entry point here.
+	//Asking for the win32 one only ever returned NULL.
 
-	return vkCheck(
-		((PFN_vkCreateMacOSSurfaceMVK)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
-	);
+	if (!instanceExt->createSurfaceExt)
+		instanceExt->createSurfaceExt =
+			(void*) instanceExt->getInstanceProcAddr(instanceExt->instance, "vkCreateMacOSSurfaceMVK");
+
+	if (!instanceExt->createSurfaceExt)
+		retError(clean, Error_nullPointer(0, "VkSurface_create()::createSurfaceExt is NULL!"));
+
+	gotoIfError3(clean, checkVkError(
+		((PFN_vkCreateMacOSSurfaceMVK)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface),
+		e_rr
+	));
+
+clean:
+	return s_uccess;
 }

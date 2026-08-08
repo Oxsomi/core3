@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,7 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//graphics/d3d12/generic/dx_swapchain.c
+
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -27,52 +28,58 @@
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "types/container/ref_ptr.h"
-#include "platforms/ext/bufferx.h"
 
-Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef) {
+UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
+
+Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 	SwapchainInfo *info = &swapchain->info;
 
 	//Prepare temporary free-ables and extended data.
 
-	Error err;
-
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchainRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	DxGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Dx);
 
-	const Window *window = info->window;
+	const Window *window = info->window ? (const Window*)(info->window + 1) : NULL;
 
-	Bool containsValid = false;
-	Bool isFifo = false;
+	ESwapchainPresentMode mode = ESwapchainPresentMode_Count;
 
-	for(U32 i = 0; i < sizeof(info->presentModePriorities); ++i)
+	for (U64 i = 0; i < ESwapchainPresentMode_Count - 1; ++i) {
 
-		if(info->presentModePriorities[i] == ESwapchainPresentMode_Fifo) {
-			isFifo = true;
-			containsValid = true;
+		ESwapchainPresentMode modei = info->presentModePriorities[i];
+
+		if(!modei)
 			break;
+
+		switch (modei) {
+
+			default:
+				break;
+
+			case ESwapchainPresentMode_Fifo:
+			case ESwapchainPresentMode_Immediate:
+				mode = modei;
+				break;
 		}
 
-		else if(info->presentModePriorities[i] == ESwapchainPresentMode_Immediate) {
-			isFifo = false;
-			containsValid = true;
+		if(mode != ESwapchainPresentMode_Count)
 			break;
-		}
+	}
 
-	if(!containsValid)
-		gotoIfError(clean, Error_unsupportedOperation(
-			0, "D3D12GraphicsDeviceRef_createSwapchain() only fifo and immediate are supported in D3D12"
-		))
+	if(mode == ESwapchainPresentMode_Count)
+		retError(clean, Error_unsupportedOperation(
+			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support the current write mode"));
 
 	if(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite)
-		gotoIfError(clean, Error_unsupportedOperation(
-			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support writable swapchains"
-		))
+		retError(clean, Error_unsupportedOperation(
+			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support writable swapchains"));
 
-	DXGI_SWAP_CHAIN_FLAG flags = !isFifo ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+	DXGI_SWAP_CHAIN_FLAG flags = mode == ESwapchainPresentMode_Immediate ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
 	if(!swapchainExt->swapchain) {
 
@@ -82,14 +89,14 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 		switch(window->format) {
 
-			default:						format = DXGI_FORMAT_B8G8R8A8_UNORM;		break;
-			case EWindowFormat_RGBA16f:		format = DXGI_FORMAT_R16G16B16A16_FLOAT;	break;
-			case EWindowFormat_BGR10A2:		format = DXGI_FORMAT_R10G10B10A2_UNORM;		break;
+			default:                           format = DXGI_FORMAT_B8G8R8A8_UNORM;        break;
+			case EWindowFormat_RGBA16f:        format = DXGI_FORMAT_R16G16B16A16_FLOAT;    break;
+			case EWindowFormat_BGR10A2:        format = DXGI_FORMAT_R10G10B10A2_UNORM;     break;
 
 			case EWindowFormat_RGBA32f:
-				gotoIfError(clean, Error_unsupportedOperation(
+				retError(clean, Error_unsupportedOperation(
 					1, "D3D12GraphicsDeviceRef_createSwapchain() RGBA32f isn't supported"
-				))
+				));
 		}
 
 		DXGI_SWAP_CHAIN_DESC1 desc1 = (DXGI_SWAP_CHAIN_DESC1) {
@@ -98,12 +105,12 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			.BufferUsage = usage,
 			.BufferCount = 3,
 			.Scaling = DXGI_SCALING_NONE,
-			.SwapEffect = isFifo ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT_FLIP_DISCARD,
+			.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
 			.AlphaMode = DXGI_ALPHA_MODE_IGNORE,
 			.Flags = flags
 		};
 
-		gotoIfError(clean, dxCheck(instance->factory->lpVtbl->CreateSwapChainForHwnd(
+		gotoIfError3(clean, dxCheck(instance->factory->lpVtbl->CreateSwapChainForHwnd(
 			instance->factory,
 			(IUnknown*) deviceExt->queues[EDxCommandQueue_Graphics].queue,
 			window->nativeHandle,
@@ -111,15 +118,18 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			NULL,
 			NULL,
 			&swapchainExt->swapchain
-		)))
+		), e_rr));
 
 		swapchain->requiresManualComposite = false;
-		swapchain->presentMode = isFifo ? ESwapchainPresentMode_Fifo : ESwapchainPresentMode_Immediate;
+		swapchain->presentMode = mode;
 	}
 
 	else {
 
 		for(U8 i = 0; i < swapchain->base.images; ++i) {
+
+			UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchainRef, NULL);
+			unifiedTexture->currentImageId = 0;
 
 			DxUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Dx, 0, i);
 			managedImage->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;
@@ -132,27 +142,26 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 				img->lpVtbl->Release(img);
 		}
 
-		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->ResizeBuffers(
+		gotoIfError3(clean, dxCheck(swapchainExt->swapchain->lpVtbl->ResizeBuffers(
 			swapchainExt->swapchain,
-			3,
-			0, 0, DXGI_FORMAT_UNKNOWN,		//Update to current w/h and keep format
+			3, 0, 0, DXGI_FORMAT_UNKNOWN,
 			flags
-		)))
+		), e_rr));
 	}
 
 	//Acquire images
 
 	for(U8 i = 0; i < swapchain->base.images; ++i)
-		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->GetBuffer(
+		gotoIfError3(clean, dxCheck(swapchainExt->swapchain->lpVtbl->GetBuffer(
 			swapchainExt->swapchain, i,
 			&IID_ID3D12Resource, (void**) &TextureRef_getImgExtT(swapchainRef, Dx, 0, i)->image
-		)))
+		), e_rr));
 
 clean:
-	return err;
+	return s_uccess;
 }
 
-Bool DX_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
+void DX_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, const Allocator *alloc) {
 
 	(void)alloc;
 
@@ -169,6 +178,4 @@ Bool DX_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
 
 	if(swapchainExt->swapchain)
 		swapchainExt->swapchain->lpVtbl->Release(swapchainExt->swapchain);
-
-	return true;
 }

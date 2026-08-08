@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,34 +18,55 @@
 *  This is called dual licensing.
 */
 
+//platforms/simd/sse/sse_platform.c
+
 #include "platforms/platform.h"
+#include "platforms/logx.h"
 
 Bool Platform_checkCPUSupport() {
 
 	U16 v = 1;
 
-	if(!*(const U8*)&v)		//Little endian only
+	if(!*(const U8*)&v)        //Little endian only
 		return false;
 
 	//We need to double check that our CPU supports
-	//SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES, PCLMULQDQ, BMI1 and RDRAND
+	//SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES, PCLMULQDQ, BMI1, AVX, FMA
+	//AVX + FMA (Haswell 2013 / Zen) are required because we compile with -mavx -mfma and F32x4_fma is unconditional;
+	//they're already implied by the -mbmi2 / -mf16c compile flags, so this excludes no CPU we didn't already exclude.
 	//https://gist.github.com/hi2p-perim/7855506
 	//https://en.wikipedia.org/wiki/CPUID
 
-	U32 mask3 = (1 << 25) | (1 << 26);										//SSE, SSE2
+	U32 mask3 = (1 << 25) | (1 << 26);                                        //SSE, SSE2
 
-	//SSE3, PCLMULQDQ, SSSE3, SSE4.1, SSE4.2, AES, RDRAND
-	U32 mask2 = (1 << 0) | (1 << 1) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25) | (1 << 30);
+	//SSE3, PCLMULQDQ, SSSE3, FMA, SSE4.1, SSE4.2, AES, OSXSAVE, AVX
+	U32 mask2 =
+		(1 << 0) | (1 << 1) | (1 << 9) | (1 << 12) | (1 << 19) | (1 << 20) | (1 << 25) | (1 << 27) | (1 << 28);
 
-	U32 cpuInfo[4];
+	//Zeroed because cpuid leaves the array untouched when the leaf is above the CPU's maximum, which leaf 7 can be
+	// on pre-2012 parts and on VM CPU models that report an older family; reading it uninitialized decides support
+	// from stack garbage.
+
+	U32 cpuInfo[4] = { 0 };
 	Platform_getCPUId(1, cpuInfo);
 
-	U32 cpuInfo1[4];
+	U32 cpuInfo1[4] = { 0 };
 	Platform_getCPUId(7, cpuInfo1);
 
-	U32 mask1_1 = 1 << 3;				//BMI1
+	U32 mask1_1 = 1 << 3;                //BMI1
 
-	//Unsupported CPU
+	const Bool ok = (cpuInfo[3] & mask3) == mask3 && (cpuInfo[2] & mask2) == mask2 && (cpuInfo1[1] & mask1_1) == mask1_1;
 
-	return (cpuInfo[3] & mask3) == mask3 && (cpuInfo[2] & mask2) == mask2 && (cpuInfo1[1] & mask1_1) == mask1_1;
+	//Which bits are missing is the whole diagnosis on emulator/VM guests whose CPUID model masks features the host
+	// happily executes anyway.
+	//Log needs the platform allocator, so Platform_create only runs this check once Platform_instance exists;
+	// the guard keeps the standalone pre-create use of this function safe, it just reports less then.
+
+	if(!ok && Platform_instance)
+		Log_errorLnx(
+			"Unsupported CPU, missing features: leaf1 edx %08X (need %08X), ecx %08X (need %08X), leaf7 ebx %08X (need %08X)",
+			cpuInfo[3], mask3, cpuInfo[2], mask2, cpuInfo1[1], mask1_1
+		);
+
+	return ok;
 }

@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,66 +18,22 @@
 *  This is called dual licensing.
 */
 
-#include "types/math/math.h"
+//types/base/constants.c
+
+#include "types/base/constants.h"
 #include <float.h>
+#include <limits.h>
 
-#define CONST_IMPL(T, suffix)								\
-const T T##_E				= 2.718281828459045##suffix;	\
-const T T##_PI				= 3.141592653589793##suffix;	\
-const T T##_RAD_TO_DEG		= 57.2957795131##suffix;		\
-const T T##_DEG_TO_RAD		= 0.01745329251##suffix;
+const C8  C8_MIN  = (C8) CHAR_MIN;
 
-CONST_IMPL(F32, f);
-CONST_IMPL(F64, );
+const U64 KIBI    = 1 << 10;
+const U64 MIBI    = 1 << 20;
+const U64 GIBI    = 1 << 30;
+const U64 TIBI    = (U64)1 << 40;
+const U64 PEBI    = (U64)1 << 50;
 
-const U64 KIBI			= 1 << 10;
-const U64 MIBI			= 1 << 20;
-const U64 GIBI			= 1 << 30;
-const U64 TIBI			= (U64)1 << 40;
-const U64 PEBI			= (U64)1 << 50;
+const F32 F32_MAX = FLT_MAX;
+const F32 F32_MIN = -FLT_MAX;
 
-const U64 KILO			= 1000;
-const U64 MEGA			= 1000000;
-const U64 GIGA			= 1000000000;
-const U64 TERA			= 1000000000000;
-const U64 PETA			= 1000000000000000;
-
-const Ns MU				= 1000;
-const Ns MS				= 1000000;
-const Ns SECOND			= 1000000000;
-const Ns MIN			= 60000000000;
-const Ns HOUR			= 3600000000000;
-const Ns DAY			= 86400000000000;
-const Ns WEEK			= 604800000000000;
-
-const U8 U8_MIN			= 0;
-const U16 U16_MIN		= 0;
-const U32 U24_MIN		= 0;
-const U32 U32_MIN		= 0;
-const U64 U64_MIN		= 0;
-
-const I8  I8_MIN		= 0x80;
-const C8  C8_MIN		= 0x80;
-const I16 I16_MIN		= 0x8000;
-const U32 I24_MIN		= 0x800000;
-const I32 I32_MIN		= 0x80000000;
-const I64 I64_MIN		= 0x8000000000000000;
-
-const U8  U8_MAX		= 0xFF;
-const U16 U16_MAX		= 0xFFFF;
-const U32 U24_MAX		= 0xFFFFFF;
-const U32 U32_MAX		= 0xFFFFFFFF;
-const U64 U64_MAX		= 0xFFFFFFFFFFFFFFFF;
-
-const C8  C8_MAX		= 0x7F;
-const I8  I8_MAX		= 0x7F;
-const I16 I16_MAX		= 0x7FFF;
-const U32 I24_MAX		= 0x7FFFFF;
-const I32 I32_MAX		= 0x7FFFFFFF;
-const I64 I64_MAX		= 0x7FFFFFFFFFFFFFFF;
-
-const F32 F32_MAX		= FLT_MAX;
-const F32 F32_MIN		= -FLT_MAX;
-
-const F64 F64_MAX		= DBL_MAX;
-const F64 F64_MIN		= -DBL_MAX;
+const F64 F64_MAX = DBL_MAX;
+const F64 F64_MIN = -DBL_MAX;

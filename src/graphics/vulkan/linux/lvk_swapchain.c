@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/linux/lvk_swapchain.c
+
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -30,10 +32,15 @@
 #include "platforms/linux/lwindow_structs.h"
 #include "types/base/error.h"
 
-Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface) {
+Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!device || !window || !surface)
-		return Error_nullPointer(!device ? 0 : (!window ? 0 : 1), "VkSurface_create()::device, window or surface is NULL");
+		retError(clean, Error_nullPointer(
+			!device ? 0 : (!window ? 0 : 1),
+			"VkSurface_create()::device, window or surface is NULL"
+		));
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
@@ -45,9 +52,16 @@ Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKH
 	};
 
 	if (!instanceExt->createSurfaceExt)
-		instanceExt->createSurfaceExt = (void*) vkGetInstanceProcAddr(instanceExt->instance, "vkCreateWaylandSurfaceKHR");
+		instanceExt->createSurfaceExt =
+			(void*) instanceExt->getInstanceProcAddr(instanceExt->instance, "vkCreateWaylandSurfaceKHR");
 
-	return vkCheck(
+	if (!instanceExt->createSurfaceExt)
+		retError(clean, Error_nullPointer(0, "VkSurface_create()::createSurfaceExt is NULL!"));
+
+	gotoIfError3(clean, checkVkError(
 		((PFN_vkCreateWaylandSurfaceKHR)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
-	);
+	, e_rr));
+
+clean:
+	return s_uccess;
 }

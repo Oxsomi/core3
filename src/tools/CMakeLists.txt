@@ -1,5 +1,5 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-# Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+# Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -12,71 +12,36 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program. If not, see https://github.com/Oxsomi/rt_core/blob/main/LICENSE.
+# along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 # Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-# CLI, useful for manually calling CLI utility functions
+find_package(Python3)
 
-file(GLOB headers "../../inc/tools/*.h")
-file(GLOB sources "*.c")
-
-add_library(
-	OxC3CLI STATIC
-	${headers}
-	${sources}
-	CMakeLists.txt
+add_custom_target(check_style ALL
+    COMMAND ${CMAKE_COMMAND} -E echo "-- Running OxC3 style check..."
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_style.py ${CMAKE_SOURCE_DIR} --no-todo-report
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "OxC3 style check"
+    VERBATIM
 )
 
-set_target_properties(OxC3CLI PROPERTIES FOLDER Oxsomi/CLI)
-target_link_libraries(
-	OxC3CLI PUBLIC
-	OxC3_types_base OxC3_types_math OxC3_types_container
-	OxC3_platforms
-	OxC3_formats_oiSH OxC3_formats_oiSB OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_wav
-	OxC3_audio
+set_target_properties(check_style PROPERTIES FOLDER Oxsomi/tools)
+
+# The generated oxc:: wrappers are committed, so nobody needs the generator to read them. This catches
+# the case where the C header they're derived from changed and they weren't regenerated.
+
+add_custom_target(check_generated_hpp ALL
+    COMMAND ${CMAKE_COMMAND} -E echo "-- Checking generated C++ wrappers are up to date..."
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/generate_hpp.py --check
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "OxC3 generated header check"
+    VERBATIM
 )
 
-if(CLIGraphics)
-	target_link_libraries(OxC3CLI PUBLIC OxC3_graphics_target)
-	target_compile_definitions(OxC3CLI PUBLIC -DCLI_GRAPHICS)
+set_target_properties(check_generated_hpp PROPERTIES FOLDER Oxsomi/tools)
+
+if(EnableOxC3CLI)
+    add_subdirectory(oxc3_cli)
 endif()
-
-if(EnableShaderCompiler)
-	target_link_libraries(OxC3CLI PUBLIC OxC3_shader_compiler)
-	target_compile_definitions(OxC3CLI PUBLIC -DCLI_SHADER_COMPILER)
-endif()
-
-target_include_directories(OxC3CLI PUBLIC inc/tools)
-
-# OxC3 executable, for easily executing OxC3CLI commands
-
-file(GLOB sources "executable/*.c")
-
-add_executable(
-	OxC3
-	${sources}
-	CMakeLists.txt
-)
-
-set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi/CLI)
-target_link_libraries(OxC3 PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3CLI)
-
-include(../../cmake/oxc3.cmake)
-configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
-configure_virtual_files(OxC3)
-apply_dependencies(OxC3)
-
-# Done automatically by apply_dependencies in things that use OxC3 as a conan package
-# However, OxC3 itself has to manually copy .so file to avoid this problem
-
-if(UNIX AND TARGET OxC3_graphics_vk)
-
-	add_custom_command(
-		TARGET OxC3 POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:OxC3_graphics_vk> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-	)
-
-endif()
-

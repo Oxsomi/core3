@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,42 +18,40 @@
 *  This is called dual licensing.
 */
 
+//platforms/generic/mouse.c
+
 #include "platforms/mouse.h"
 #include "platforms/input_device.h"
 #include "types/base/error.h"
 
-#define BUTTON(name)																					\
-	if ((err = InputDevice_createButton(																\
-		*result, EMouseButton_##name  - EMouseButton_Begin, "EMouseButton_" #name, &res					\
-	)).genericError) {																					\
-		InputDevice_free(result);																		\
-		return err;																						\
-	}
+#define BUTTON(name) gotoIfError3(clean, InputDevice_createButton(                                                \
+		result, EMouseButton_##name  - EMouseButton_Begin, "EMouseButton_" #name, &res, e_rr                    \
+	))
 
-#define AXIS(name, resetOnUnfocus)																		\
-	if ((err = InputDevice_createAxis(																	\
-		*result, EMouseAxis_##name - EMouseAxis_Begin, "EMouseAxis_" #name, 0, resetOnUnfocus, &res		\
-	)).genericError) {																					\
-		InputDevice_free(result);																		\
-		return err;																						\
-	}
+#define AXIS(name, resetOnUnfocus) gotoIfError3(clean, InputDevice_createAxis(                                    \
+		result, EMouseAxis_##name - EMouseAxis_Begin, "EMouseAxis_" #name, 0, resetOnUnfocus, &res, e_rr        \
+	))
 
-Error Mouse_create(Mouse *result) {
+Bool Mouse_create(Mouse *result, const Allocator *alloc, Error *e_rr) {
 
-	Error err = InputDevice_create(
-		EMouseButton_Count, EMouseAxis_Count, EInputDeviceType_Mouse, result
-	);
+	Bool s_uccess = InputDevice_create(EMouseButton_Count, EMouseAxis_Count, EInputDeviceType_Mouse, result, alloc, e_rr);
 
-	if(err.genericError)
-		return err;
+	if(!s_uccess)
+		return false;
 
 	InputHandle res = 0;
 
-	BUTTON(Left);				BUTTON(Middle);			BUTTON(Right);
-	BUTTON(Back);				BUTTON(Forward);
+	BUTTON(Left);                BUTTON(Middle);            BUTTON(Right);
+	BUTTON(Back);                BUTTON(Forward);
 
-	AXIS(X, false);				AXIS(Y, false);
-	AXIS(ScrollWheel_X, true);	AXIS(ScrollWheel_Y, true);
+	AXIS(RX, false);             AXIS(RY, false);
+	AXIS(ScrollWheel_X, true);   AXIS(ScrollWheel_Y, true);
+	AXIS(Temp0, false);          AXIS(Temp1, false);
 
-	return Error_none();
+clean:
+
+	if(!s_uccess)
+		InputDevice_free(result, alloc);
+
+	return s_uccess;
 }

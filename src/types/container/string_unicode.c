@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,19 +18,20 @@
 *  This is called dual licensing.
 */
 
+//types/container/string_unicode.c
+
 #include "types/container/string.h"
-#include "types/container/buffer.h"
-#include "types/base/allocator.h"
-#include "types/base/error.h"
+#include "types/container/list_basic_types.h"
 
-Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator, CharString *result) {
+Bool CharString_createFromUTF16(const U16 *ptr, U64 limit, const Allocator *allocator, CharString *result, Error *e_rr) {
 
-	Error err = CharString_reserve(result, limit == U64_MAX ? 16 : (limit * 4 + 1), allocator);
+	Bool s_uccess = true;
+	Bool alloc = false;
 
-	if (err.genericError)
-		return err;
+	gotoIfError3(clean, CharString_reserve(result, limit == U64_MAX ? 16 : (limit * 4 + 1), allocator, e_rr));
+	alloc = true;
 
-	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+	UnicodeCodePointInfo codepoint = { 0 };
 	U64 j = 0;
 
 	const Buffer buf = Buffer_createRefConst(ptr, limit == U64_MAX ? ((U64)1 << 48) - 1 : limit * sizeof(U16));
@@ -40,22 +41,24 @@ Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator,
 
 		U16 c = ptr[i >> 1];
 
-		if (!c)
+		if (!c) {
+			result->lenAndNullTerminated = j | ((U64)1 << 63);
 			break;
+		}
 
 		if(limit == U64_MAX) {
-			gotoIfError(clean, CharString_reserve(result, j + 5, allocator))
+			gotoIfError3(clean, CharString_reserve(result, j + 5, allocator, e_rr));
 			buf0 = CharString_allocatedBuffer(*result);
 		}
 
 		//Read as UTF16 encoding
 
-		gotoIfError(clean, Buffer_readAsUTF16(buf, i, &codepoint))
+		gotoIfError3(clean, Buffer_readAsUTF16(buf, i, &codepoint, e_rr));
 		i += codepoint.bytes;
 
 		//Write as UTF8 encoding
 
-		gotoIfError(clean, Buffer_writeAsUTF8(buf0, j, codepoint.index, &codepoint.bytes))
+		gotoIfError3(clean, Buffer_writeAsUTF8(buf0, j, codepoint.index, &codepoint.bytes, e_rr));
 		j += codepoint.bytes;
 		result->lenAndNullTerminated = j | ((U64)1 << 63);
 	}
@@ -64,20 +67,21 @@ Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator,
 
 clean:
 
-	if(err.genericError)
+	if(!s_uccess && alloc)
 		CharString_free(result, allocator);
 
-	return err;
+	return s_uccess;
 }
 
-Error CharString_createFromUTF32(const U32 *ptr, U64 limit, Allocator allocator, CharString *result) {
+Bool CharString_createFromUTF32(const U32 *ptr, U64 limit, const Allocator *allocator, CharString *result, Error *e_rr) {
 
-	Error err = CharString_reserve(result, limit == U64_MAX ? 16 : (limit * 4 + 1), allocator);
+	Bool s_uccess = true;
+	Bool alloc = false;
 
-	if (err.genericError)
-		return err;
+	gotoIfError3(clean, CharString_reserve(result, limit == U64_MAX ? 16 : (limit * 4 + 1), allocator, e_rr));
+	alloc = true;
 
-	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+	UnicodeCodePointInfo codepoint = { 0 };
 	U64 j = 0;
 
 	Buffer buf0 = CharString_allocatedBuffer(*result);
@@ -86,17 +90,19 @@ Error CharString_createFromUTF32(const U32 *ptr, U64 limit, Allocator allocator,
 
 		U32 c = ptr[i];
 
-		if (!c)
+		if (!c) {
+			result->lenAndNullTerminated = j | ((U64)1 << 63);
 			break;
+		}
 
 		if(limit == U64_MAX) {
-			gotoIfError(clean, CharString_reserve(result, j + 5, allocator))
+			gotoIfError3(clean, CharString_reserve(result, j + 5, allocator, e_rr));
 			buf0 = CharString_allocatedBuffer(*result);
 		}
 
 		//Write as UTF8 encoding
 
-		gotoIfError(clean, Buffer_writeAsUTF8(buf0, j, c, &codepoint.bytes))
+		gotoIfError3(clean, Buffer_writeAsUTF8(buf0, j, c, &codepoint.bytes, e_rr));
 		j += codepoint.bytes;
 		result->lenAndNullTerminated = j | ((U64)1 << 63);
 	}
@@ -105,23 +111,35 @@ Error CharString_createFromUTF32(const U32 *ptr, U64 limit, Allocator allocator,
 
 clean:
 
-	if(err.genericError)
+	if (!s_uccess && alloc)
 		CharString_free(result, allocator);
 
-	return err;
+	return s_uccess;
 }
 
-Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr) {
+Bool CharString_toUTF16(const CharString s, const Allocator *allocator, ListU16 *arr, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Bool alloc = false;
 
 	const U64 len = CharString_length(s);
-	Error err = ListU16_reserve(arr, len + 1, allocator);
 
-	if (err.genericError)
-		return err;
+	if(!arr)
+		retError(clean, Error_nullPointer(0, "CharString_toUTF16()::arr is required"));
 
-	const Buffer buf0 = ListU16_allocatedBuffer(*arr);
+	Bool isRef = arr->length && ListU16_isRef(*arr);
+
+	if(!isRef) {
+		gotoIfError3(clean, ListU16_reserve(arr, len + 1, allocator, e_rr));
+		alloc = true;
+	}
+
+	else if(ListU16_isConstRef(*arr))
+		retError(clean, Error_constData(0, 0, "CharString_toUTF16()::arr should be writable"));
+
+	const Buffer buf0 = isRef ? ListU16_buffer(*arr) : ListU16_allocatedBuffer(*arr);
 	const Buffer buf = CharString_bufferConst(s);
-	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+	UnicodeCodePointInfo codepoint = { 0 };
 
 	U64 j = 0;
 
@@ -129,36 +147,40 @@ Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr) {
 
 		//Read as UTF8 encoding
 
-		gotoIfError(clean, Buffer_readAsUTF8(buf, i, &codepoint))
+		gotoIfError3(clean, Buffer_readAsUTF8(buf, i, &codepoint, e_rr));
 		i += codepoint.bytes;
 
 		//Write as UTF16 encoding
 
-		gotoIfError(clean, Buffer_writeAsUTF16(buf0, j, codepoint.index, &codepoint.bytes))
+		gotoIfError3(clean, Buffer_writeAsUTF16(buf0, j, codepoint.index, &codepoint.bytes, e_rr));
 		j += codepoint.bytes;
 	}
+
+	if(j + 2 > Buffer_length(buf0))
+		retError(clean, Error_outOfBounds(0, j + 1, Buffer_length(buf0), "CharString_toUTF16() no space for null terminator"));
 
 	arr->ptrNonConst[j / 2] = 0;
 	arr->length = j / 2 + 1;
 
 clean:
 
-	if (err.genericError)
+	if (!s_uccess && alloc)
 		ListU16_free(arr, allocator);
 
-	return err;
+	return s_uccess;
 }
 
-Error CharString_toUTF32(CharString s, Allocator allocator, ListU32 *arr) {
+Bool CharString_toUTF32(const CharString s, const Allocator *allocator, ListU32 *arr, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Bool alloc = false;
 
 	const U64 len = CharString_length(s);
-	Error err = ListU32_reserve(arr, len + 1, allocator);
-
-	if (err.genericError)
-		return err;
+	gotoIfError3(clean, ListU32_reserve(arr, len + 1, allocator, e_rr));
+	alloc = true;
 
 	const Buffer buf = CharString_bufferConst(s);
-	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+	UnicodeCodePointInfo codepoint = { 0 };
 
 	U32 *buf0 = arr->ptrNonConst;
 
@@ -166,10 +188,10 @@ Error CharString_toUTF32(CharString s, Allocator allocator, ListU32 *arr) {
 
 	for (U64 i = 0; i < len; ) {
 
-		gotoIfError(clean, Buffer_readAsUTF8(buf, i, &codepoint))	//Read as UTF8 encoding
+		gotoIfError3(clean, Buffer_readAsUTF8(buf, i, &codepoint, e_rr));    //Read as UTF8 encoding
 		i += codepoint.bytes;
 
-		buf0[j++] = codepoint.index;								//Write as UTF32 encoding
+		buf0[j++] = codepoint.index;                                        //Write as UTF32 encoding
 	}
 
 	arr->ptrNonConst[j] = 0;
@@ -177,13 +199,13 @@ Error CharString_toUTF32(CharString s, Allocator allocator, ListU32 *arr) {
 
 clean:
 
-	if (err.genericError)
+	if (!s_uccess && alloc)
 		ListU32_free(arr, allocator);
 
-	return err;
+	return s_uccess;
 }
 
-U64 CharString_unicodeCodepoints(CharString str) {
+U64 CharString_unicodeCodepoints(const CharString str) {
 
 	U64 i = 0, j = 0;
 	Buffer buf = CharString_bufferConst(str);
@@ -192,7 +214,7 @@ U64 CharString_unicodeCodepoints(CharString str) {
 
 		UnicodeCodePointInfo codePoint = (UnicodeCodePointInfo) { 0 };
 
-		if(Buffer_readAsUTF8(buf, i, &codePoint).genericError)
+		if(!Buffer_readAsUTF8(buf, i, &codePoint, NULL))
 			return U64_MAX;
 
 		i += codePoint.bytes;
@@ -200,8 +222,4 @@ U64 CharString_unicodeCodepoints(CharString str) {
 	}
 
 	return j;
-}
-
-Bool CharString_isValidUTF8(CharString str) {
-	return Buffer_isUTF8(CharString_bufferConst(str), 1);
 }

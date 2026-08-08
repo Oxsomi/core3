@@ -1,0 +1,14 @@
+include(default)
+
+[settings]
+os=Android
+os.api_level={level}
+arch={arch}
+compiler=clang
+compiler.version={clangVersion}
+compiler.libcxx=c++_static
+compiler.cppstd=17
+
+[conf]
+tools.android:ndk_path={androidNdk}
+tools.cmake.cmaketoolchain:generator={generator}

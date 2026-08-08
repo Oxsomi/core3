@@ -1,0 +1,147 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//tools/oxc3_cli/convert.c
+
+#include "tools/oxc3_cli/cli.h"
+#include "types/base/time.h"
+#include "types/base/c8.h"
+#include "types/container/file_base.h"
+#include "types/container/buffer.h"
+#include "types/base/string_read.h"
+#include "types/base/string_read_helper.h"
+#include "platforms/logx.h"
+#include "platforms/platform.h"
+#include "platforms/file.h"
+#include "types/base/error.h"
+#include "types/base/constants.h"
+
+Bool CLI_convert(const ParsedArgs *args, Bool isTo) {
+
+	if(!args) return false;
+
+	Bool s_uccess = true;
+	Ns start = Time_now();
+
+	//Prepare for convert to/from
+
+	Format f = Format_values[args->format];
+
+	FileInfo info = (FileInfo) { 0 };
+
+	U32 *encryptionKey = NULL;            //Only if we have aes should encryption key be set.
+
+	Error err = Error_none(), *e_rr = &err;
+
+	CharString inputArg = CharString_createNull();
+	gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &inputArg, e_rr));
+
+	//Check if output is valid
+
+	CharString outputArg = CharString_createNull();
+	gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputArg, e_rr));
+
+	//TODO: Support multiple files
+
+	//Check if input is valid
+
+	//Check if input file and file type are valid
+
+	gotoIfError3(clean, File_getInfo(&inputArg, &info, Platform_instance->alloc, e_rr));
+
+	if (!(f.flags & EFormatFlags_SupportFiles) && info.type == EFileType_File)
+		retError(clean, Error_invalidState(0, "CLI_convert() Invalid file passed to convertTo. Only accepting folders."));
+
+	if (!(f.flags & EFormatFlags_SupportFolders) && info.type == EFileType_Folder)
+		retError(clean, Error_invalidState(1, "CLI_convert() Invalid file passed to convertTo. Only accepting files."));
+
+	if(args->parameters & EOperationHasParameter_Input2)
+		retError(clean, Error_invalidState(1, "CLI_convert() Doesn't support -input2."));
+
+	//Parse encryption key (-aes / -aes-file / -aes-stdin)
+
+	U32 encryptionKeyV[8] = { 0 };
+	Bool hasKey = false;
+
+	gotoIfError3(clean, CLI_getAesKey(args, encryptionKeyV, &hasKey, e_rr));
+
+	if(hasKey)
+		encryptionKey = encryptionKeyV;
+
+	//Now convert it
+
+	CLIConvert convert = { .args = args, .input = &inputArg, .inputInfo = &info, .output = &outputArg };
+
+	if(encryptionKey)
+		Buffer_memcpy(
+			Buffer_createRef(convert.encKey, sizeof(convert.encKey)),
+			Buffer_createRefConst(encryptionKey, sizeof(convert.encKey))
+		);
+
+	switch (args->format) {
+
+		case EFormat_oiDL:
+
+			if(isTo)
+				{ gotoIfError3(clean, CLI_convertToDL(&convert, e_rr)); }
+
+			else gotoIfError3(clean, CLI_convertFromDL(&convert, e_rr));
+
+			break;
+
+		case EFormat_oiCA:
+
+			if(isTo)
+				{ gotoIfError3(clean, CLI_convertToCA(&convert, e_rr)); }
+
+			else gotoIfError3(clean, CLI_convertFromCA(&convert, e_rr));
+
+			break;
+
+		default:
+			retError(clean, Error_invalidOperation(0, "CLI_convert() Unsupported format"));
+	}
+
+	//Tell CLI users
+
+	Log_debugLnx("Converted file oiXX format in %"PRIu64"ms", (Time_now() - start + MS - 1) / MS);
+
+clean:
+
+	if(encryptionKey)
+		Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
+
+	if (!s_uccess)
+		Log_errorLnx("File conversion failed!");
+
+	FileInfo_free(&info, Platform_instance->alloc);
+	Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
+	return s_uccess;
+}
+
+Bool CLI_convertTo(const ParsedArgs *args) {
+	if(!args) return false;
+	return CLI_convert(args, true);
+}
+
+Bool CLI_convertFrom(const ParsedArgs *args) {
+	if(!args) return false;
+	return CLI_convert(args, false);
+}

@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,10 +18,16 @@
 *  This is called dual licensing.
 */
 
+//types/container/string.c
+
 #include "types/container/list_impl.h"
 #include "types/container/string.h"
-#include "types/math/math.h"
+#include "types/container/list_basic_types.h"
+#include "types/base/allocator.h"
+#include "types/base/string_read.h"
+#include "types/base/mathi.h"
 #include "types/base/c8.h"
+#include "types/base/constants.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -29,360 +35,31 @@
 TListImpl(CharString);
 TListNamedImpl(ListConstC8);
 
-Bool ListCharString_sort(ListCharString list, EStringCase stringCase) {
-	return GenericList_sortString(ListCharString_toList(list), stringCase);
-}
-
-Bool ListCharString_sortSensitive(ListCharString list) {
-	return GenericList_sortStringSensitive(ListCharString_toList(list));
-}
-
-Bool ListCharString_sortInsensitive(ListCharString list) {
-	return GenericList_sortStringInsensitive(ListCharString_toList(list));
-}
-
-Bool CharString_isConstRef(CharString str) { return str.capacityAndRefInfo == U64_MAX; }
-Bool CharString_isRef(CharString str) { return !str.capacityAndRefInfo || CharString_isConstRef(str); }
-U64  CharString_bytes(CharString str) { return str.lenAndNullTerminated << 1 >> 1; }
-U64  CharString_length(CharString str) { return CharString_bytes(str); }
-U64  CharString_capacity(CharString str) { return CharString_isRef(str) ? 0 : str.capacityAndRefInfo; }
-Bool CharString_isEmpty(CharString str) { return !CharString_bytes(str); }
-Bool CharString_isNullTerminated(CharString str) { return str.lenAndNullTerminated >> 63; }
-
-Buffer CharString_buffer(CharString str) {
-	return CharString_isConstRef(str) ? Buffer_createNull() : Buffer_createRef(str.ptrNonConst, CharString_bytes(str));
-}
-
-Buffer CharString_bufferConst(CharString str) {
-	return Buffer_createRefConst(str.ptr, CharString_bytes(str));
-}
-
-Buffer CharString_allocatedBuffer(CharString str) {
-	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRef(str.ptrNonConst, CharString_capacity(str));
-}
-
-Buffer CharString_allocatedBufferConst(CharString str) {
-	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRefConst(str.ptr, CharString_capacity(str));
-}
-
-//Iteration
-
-C8 *CharString_begin(CharString str) { return CharString_isConstRef(str) ? NULL : str.ptrNonConst; }
-const C8 *CharString_beginConst(CharString str) { return str.ptr; }
-
-C8 *CharString_end(CharString str) { return CharString_isConstRef(str) ? NULL : str.ptrNonConst + CharString_length(str); }
-const C8 *CharString_endConst(CharString str) { return str.ptr + CharString_length(str); }
-
-C8 *CharString_charAt(CharString str, U64 off) {
-	return CharString_isConstRef(str) || off >= CharString_length(str) ? NULL : str.ptrNonConst + off;
-}
-
-const C8 *CharString_charAtConst(CharString str, U64 off) {
-	return off >= CharString_length(str) ? NULL : str.ptr + off;
-}
-
-Bool CharString_isValidAscii(CharString str) {
-
-	for(U64 i = 0; i < CharString_length(str); ++i)
-		if(!C8_isValidAscii(str.ptr[i]))
-			return false;
-
-	return true;
-}
-
-Bool CharString_isValidFileName(CharString str) {
-
-	//TODO: Understand UTF8
-
-	for(U64 i = 0; i < CharString_length(str); ++i)
-		if(!C8_isValidFileName(str.ptr[i]))
-			return false;
-
-	//Trailing or leading space is illegal
-
-	if(CharString_endsWithSensitive(str, ' ', 0))
-		return false;
-
-	if(CharString_startsWithSensitive(str, ' ', 0))
-		return false;
-
-	//Validation to make sure we're not using weird legacy MS DOS keywords
-	//Because these will not be writable correctly!
-
-	U64 illegalStart = 0;
-	const U64 strl = CharString_length(str);
-
-	if (strl >= 3) {
-
-		if(
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("CON"), 0) ||
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("AUX"), 0) ||
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("NUL"), 0) ||
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("PRN"), 0)
-		)
-			illegalStart = 3;
-
-		else if (strl >= 4) {
-
-			if(
-				(
-					CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("COM"), 0) ||
-					CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("LPT"), 0)
-				) &&
-				C8_isDec(str.ptr[3])
-			)
-				illegalStart = 4;
-		}
-	}
-
-	//PRNtscreen.pdf is valid, but PRN.pdf isn't.
-	///NULlpointer.txt is valid, NUL.txt isn't.
-
-	if(illegalStart && (strl == illegalStart || CharString_getAt(str, illegalStart) == '.'))
-		return false;
-
-	//Can't end with trailing . (so . and .. are illegal)
-
-	if (strl && str.ptr[strl - 1] == '.')
-		return false;
-
-	//If string is not empty then it's a valid string
-
-	return strl;
-}
-
-//We support valid file names or ., .. in file path parts.
-
-Bool CharString_isSupportedInFilePath(CharString str) {
-	return
-		CharString_isValidFileName(str) ||
-		(CharString_getAt(str, 0) == '.' && (
-			CharString_length(str) == 1 || (CharString_getAt(str, 1) == '.' && CharString_length(str) == 2)
-		));
-}
-
-//File_resolve but without validating if it'd be a valid (permitted) path on disk.
-
-Bool CharString_isValidFilePath(CharString str) {
-
-	//TODO: Understand UTF8
-
-	//myTest/ <-- or myTest\ to myTest
-
-	str = CharString_createRefStrConst(str);
-
-	if(CharString_getAt(str, CharString_length(str) - 1) == '/' || CharString_getAt(str, CharString_length(str) - 1) == '\\')
-		str.lenAndNullTerminated = CharString_length(str) - 1;
-
-	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
-	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
-	//We also obviously don't support 0:\ and such or A:/ on unix
-
-	Bool hasPrefix = false;
-
-	#ifdef _WIN32
-
-		if(
-			CharString_length(str) >= 3 &&
-			str.ptr[1] == ':' && ((str.ptr[2] != '/' && str.ptr[2] != '\\') || !C8_isAlpha(str.ptr[0]))
-		)
-			return false;
-
-		//Absolute
-
-		if(CharString_length(str) >= 2 && str.ptr[1] == ':') {
-			str.ptr += 3;
-			str.lenAndNullTerminated -= 3;
-			hasPrefix = true;
-		}
-
-	#else
-
-		if(CharString_length(str) >= 2 && str.ptr[1] == ':')
-			return false;
-
-	#endif
-
-	//Virtual files
-
-	if(CharString_getAt(str, 0) == '/' && CharString_getAt(str, 1) == '/') {
-
-		if(hasPrefix)
-			return false;
-
-		str.ptr += 2;
-		str.lenAndNullTerminated -= 2;
-	}
-
-	//Absolute path
-
-	if(CharString_getAt(str, 0) == '/' || CharString_getAt(str, 0) == '\\') {
-
-		if(hasPrefix)
-			return false;
-
-		++str.ptr;
-		--str.lenAndNullTerminated;
-		hasPrefix = true;
-	}
-
-	//Windows network paths, this is unsupported currently
-
-	if(CharString_getAt(str, 0) == '\\' && CharString_getAt(str, 1) == '\\')
-		return false;
-
-	//Split by / or \.
-
-	U64 prev = 0;
-	U64 strl = CharString_length(str);
-
-	for (U64 i = 0; i < strl; ++i) {
-
-		const C8 c = str.ptr[i];
-
-		//Push previous
-
-		if (c == '/' || c == '\\') {
-
-			if(!(i - prev))
-				return false;
-
-			const CharString part = CharString_createRefSizedConst(str.ptr + prev, i - prev, false);
-
-			if(!CharString_isSupportedInFilePath(part))
-				return false;
-
-			prev = i + 1;
-		}
-	}
-
-	//Validate ending
-
-	const CharString part = CharString_createRefSizedConst(str.ptr + prev, strl - prev, CharString_isNullTerminated(str));
-
-	if(!CharString_isSupportedInFilePath(part))
-		return false;
-
-	return strl;
-}
-
-Bool CharString_clear(CharString *str) {
-
-	if(!str || CharString_isRef(*str) || !str->capacityAndRefInfo)
-		return false;
-
-	if(str->lenAndNullTerminated >> 63)					//If null terminated, we want to keep it null terminated
-		((C8*)str->ptr)[0] = '\0';
-
-	str->lenAndNullTerminated &= ~(((U64)1 << 63) - 1);		//Clear size
-	return true;
-}
-
-C8 CharString_getAt(CharString str, U64 i) {
-	return i < CharString_length(str) ? str.ptr[i] : C8_MAX;
-}
-
-CharString CharString_createNull() { return (CharString) { 0 }; }
-
-CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize) {
-
-	if(!ptr)
-		return CharString_createNull();
-
-	const U64 strl = CharString_calcStrLen(ptr, maxSize);
-
-	return (CharString) {
-		.lenAndNullTerminated = strl | ((U64)(strl != maxSize) << 63),
-		.ptr = ptr,
-		.capacityAndRefInfo = U64_MAX		//Flag as const
-	};
-}
-
-CharString CharString_createRefCStrConst(const C8 *ptr) {
-	return CharString_createRefAutoConst(ptr, U64_MAX);
-}
-
-CharString CharString_createRefAuto(C8 *ptr, U64 maxSize) {
-	CharString str = CharString_createRefAutoConst(ptr, maxSize);
-	str.capacityAndRefInfo = 0;		//Flag as mutable
-	return str;
-}
-
-CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTerminated) {
-
-	if(!ptr || (size >> 48))
-		return CharString_createNull();
-
-	if(isNullTerminated && ptr[size])	//Invalid!
-		return CharString_createNull();
-
-	if(!isNullTerminated && size) {
-
-		isNullTerminated = !ptr[size - 1];
-
-		if(isNullTerminated)
-			--size;
-	}
-
-	return (CharString) {
-		.lenAndNullTerminated = size | ((U64)isNullTerminated << 63),
-		.ptr = ptr,
-		.capacityAndRefInfo = U64_MAX		//Flag as const
-	};
-}
-
-CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated) {
-	CharString str = CharString_createRefSizedConst(ptr, size, isNullTerminated);
-	str.capacityAndRefInfo = 0;		//Flag as mutable
-	return str;
-}
-
-CharString CharString_createRefStrConst(CharString str) {
-	return CharString_createRefSizedConst(str.ptr, CharString_length(str), CharString_isNullTerminated(str));
-}
-
-CharString CharString_createRefShortStringConst(const ShortString str) {
-	return CharString_createRefAutoConst(str, SHORTSTRING_LEN);
-}
-
-CharString CharString_createRefLongStringConst(const LongString str) {
-	return CharString_createRefAutoConst(str, LONGSTRING_LEN);
-}
-
-CharString CharString_createRefShortString(ShortString str) {
-	return CharString_createRefAuto(str, SHORTSTRING_LEN);
-}
-
-CharString CharString_createRefLongString(LongString str) {
-	return CharString_createRefAuto(str, LONGSTRING_LEN);
-}
-
 //Simple checks (consts)
 
-Error CharString_create(C8 c, U64 size, Allocator alloc, CharString *result) {
+Bool CharString_create(C8 c, U64 size, const Allocator *alloc, CharString *result, Error *e_rr) {
 
-	if (!alloc.alloc)
-		return Error_nullPointer(2, "CharString_create()::alloc is required");
+	Bool s_uccess = true;
+
+	if (!alloc || !alloc->alloc)
+		retError(clean, Error_nullPointer(2, "CharString_create()::alloc is required"));
 
 	if (!result)
-		return Error_nullPointer(3, "CharString_create()::result is required");
+		retError(clean, Error_nullPointer(3, "CharString_create()::result is required"));
 
 	if (result->ptr)
-		return Error_invalidOperation(0, "CharString_create()::result isn't empty, might indicate memleak");
+		retError(clean, Error_invalidOperation(0, "CharString_create()::result isn't empty, might indicate memleak"));
 
 	if (size >> 48)
-		return Error_invalidOperation(1, "CharString_create()::size must be 48-bit");
+		retError(clean, Error_invalidOperation(1, "CharString_create()::size must be 48-bit"));
 
 	if (!size) {
 		*result = CharString_createNull();
-		return Error_none();
+		goto clean;
 	}
 
 	Buffer b = Buffer_createNull();
-	const Error err = alloc.alloc(alloc.ptr, size + 1, &b);
-
-	if (err.genericError)
-		return err;
+	gotoIfError3(clean, alloc->alloc(alloc->ptr, size + 1, &b, e_rr));
 
 	const U64 realSize = size;
 
@@ -418,29 +95,29 @@ Error CharString_create(C8 c, U64 size, Allocator alloc, CharString *result) {
 		.ptrNonConst = (C8*)b.ptr
 	};
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error CharString_createCopy(CharString str, Allocator alloc, CharString *result) {
+Bool CharString_createCopy(const CharString str, const Allocator *alloc, CharString *result, Error *e_rr) {
 
-	if (!alloc.alloc || !result)
-		return Error_nullPointer(!result ? 2 : 1, "CharString_createCopy()::alloc and result are required");
+	Bool s_uccess = true;
+
+	if (!alloc || !alloc->alloc || !result)
+		retError(clean, Error_nullPointer(!result ? 2 : 1, "CharString_createCopy()::alloc and result are required"));
 
 	if (result->ptr)
-		return Error_invalidOperation(0, "CharString_createCopy()::result wasn't empty, might indicate a memleak");
+		retError(clean, Error_invalidOperation(0, "CharString_createCopy()::result wasn't empty, might indicate a memleak"));
 
 	const U64 strl = CharString_length(str);
 
 	if (!strl) {
 		*result = CharString_createNull();
-		return Error_none();
+		goto clean;
 	}
 
 	Buffer b = Buffer_createNull();
-	const Error err = alloc.alloc(alloc.ptr, strl + 1, &b);
-
-	if (err.genericError)
-		return err;
+	gotoIfError3(clean, alloc->alloc(alloc->ptr, strl + 1, &b, e_rr));
 
 	Buffer_memcpy(b, CharString_bufferConst(str));
 	b.ptrNonConst[strl] = '\0';
@@ -451,106 +128,107 @@ Error CharString_createCopy(CharString str, Allocator alloc, CharString *result)
 		.capacityAndRefInfo = strl + 1
 	};
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Bool CharString_free(CharString *str, Allocator alloc) {
+void CharString_free(CharString *str, const Allocator *alloc) {
 
-	if (!str)
-		return true;
-
-	if(!alloc.free)
-		return false;
-
-	Bool freed = true;
+	if (!str || !alloc || !alloc->free)
+		return;
 
 	if(!CharString_isRef(*str))
-		freed = alloc.free(alloc.ptr, Buffer_createManagedPtr((U8*)str->ptr, str->capacityAndRefInfo));
+		alloc->free(alloc->ptr, Buffer_createManagedPtr((U8*)str->ptr, str->capacityAndRefInfo));
 
 	*str = CharString_createNull();
-	return freed;
 }
 
-Error CharString_split(
-	CharString s,
-	C8 c,
-	EStringCase casing,
-	Allocator allocator,
-	ListCharString *result
-) {
+Bool CharString_split(const CharStringSplit *split, C8 c, EStringCase casing, Error *e_rr) {
 
-	const U64 length = CharString_countAll(s, c, casing, 0);
+	Bool s_uccess = true;
 
-	const Error err = ListCharString_create(length + 1, allocator, result);
+	if (!split || !split->s)
+		retError(clean, Error_nullPointer(!split ? 0 : 1, "CharString_split()::split and split->s are required"));
 
-	if (err.genericError)
-		return err;
+	const CharStringSensOff countAll = { split->s, casing, 0 };
 
-	const U64 strl = CharString_length(s);
+	const CharString *s = split->s;
+	const U64 length = CharString_countAll(&countAll, c);
+
+	gotoIfError3(clean, ListCharString_create(length + 1, split->allocator, split->result, e_rr));
+
+	const U64 strl = CharString_length(*s);
+	const Bool b = CharString_isNullTerminated(*s);
+	const Bool isConstRef = CharString_isConstRef(*s);
+	const C8 *sPtr = s->ptr;
+	C8 *sPtrNonConst = s->ptrNonConst;
+
+	const ListCharString str = *split->result;
+	EStringTransform transform = (EStringTransform) casing;
 
 	if (!length) {
 
-		const Bool b = CharString_isNullTerminated(s);
+		str.ptrNonConst[0] = isConstRef ? CharString_createRefSizedConst(sPtr, strl, b) :
+			CharString_createRefSized(sPtrNonConst, strl, b);
 
-		result->ptrNonConst[0] = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
-			CharString_createRefSized(s.ptrNonConst, strl, b);
-
-		return Error_none();
+		goto clean;
 	}
 
-	const ListCharString str = *result;
-
-	c = C8_transform(c, (EStringTransform) casing);
+	c = C8_transform(c, transform);
 
 	U64 count = 0, last = 0;
 
 	for (U64 i = 0; i < strl; ++i)
-		if (C8_transform(s.ptr[i], (EStringTransform) casing) == c) {
+		if (C8_transform(sPtr[i], transform) == c) {
 
 			str.ptrNonConst[count++] =
-				CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, i - last, false) :
-				CharString_createRefSized(s.ptrNonConst + last, i - last, false);
+				isConstRef ? CharString_createRefSizedConst(sPtr + last, i - last, false) :
+				CharString_createRefSized(sPtrNonConst + last, i - last, false);
 
 			last = i + 1;
 		}
 
-	const Bool b = CharString_isNullTerminated(s);
-
 	str.ptrNonConst[count++] =
-		CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, strl - last, b) :
-		CharString_createRefSized(s.ptrNonConst + last, strl - last, b);
+		isConstRef ? CharString_createRefSizedConst(sPtr + last, strl - last, b) :
+		CharString_createRefSized(sPtrNonConst + last, strl - last, b);
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error CharString_splitString(
-	CharString s,
-	CharString other,
-	EStringCase casing,
-	Allocator allocator,
-	ListCharString *result
-) {
+Bool CharString_splitString(const CharStringSplit *split, const CharString *other, EStringCase casing, Error *e_rr) {
 
-	const U64 length = CharString_countAllString(s, other, casing, 0);
+	Bool s_uccess = true;
 
-	const Error err = ListCharString_create(length + 1, allocator, result);
+	if (!split || !split->s || !other)
+		retError(clean, Error_nullPointer(!split || !split->s ? 0 : 1, "CharString_splitString()::s and other are required"));
 
-	if (err.genericError)
-		return err;
+	const CharStringSensOff countAll = { split->s, casing, 0 };
 
-	const Bool b = CharString_isNullTerminated(s);
-	const U64 strl = CharString_length(s);
-	const U64 otherl = CharString_length(other);
+	const CharString *s = split->s;
+	const U64 length = CharString_countAllString(&countAll, other);
+
+	gotoIfError3(clean, ListCharString_create(length + 1, split->allocator, split->result, e_rr));
+
+	const Bool b = CharString_isNullTerminated(*s);
+	const U64 strl = CharString_length(*s);
+	const U64 otherl = CharString_length(*other);
+	const Bool isConstRef = CharString_isConstRef(*s);
+
+	const C8 *otherPtr = other->ptr;
+	const C8 *sPtr = s->ptr;
+	C8 *sPtrNonConst = s->ptrNonConst;
+
+	EStringTransform transform = (EStringTransform) casing;
+	const ListCharString str = *split->result;
 
 	if (!length) {
 
-		*result->ptrNonConst = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
-			CharString_createRefSized(s.ptrNonConst, strl, b);
+		str.ptrNonConst[0] = isConstRef ? CharString_createRefSizedConst(sPtr, strl, b) :
+			CharString_createRefSized(sPtrNonConst, strl, b);
 
-		return Error_none();
+		goto clean;
 	}
-
-	const ListCharString str = *result;
 
 	U64 count = 0, last = 0;
 
@@ -559,10 +237,7 @@ Error CharString_splitString(
 		Bool match = true;
 
 		for (U64 j = i, k = 0; j < strl && k < otherl; ++j, ++k)
-			if (
-				C8_transform(s.ptr[j], (EStringTransform)casing) !=
-				C8_transform(other.ptr[k], (EStringTransform)casing)
-			) {
+			if (C8_transform(sPtr[j], transform) != C8_transform(otherPtr[k], transform)) {
 				match = false;
 				break;
 			}
@@ -570,8 +245,8 @@ Error CharString_splitString(
 		if (match) {
 
 			str.ptrNonConst[count++] =
-				CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, i - last, false) :
-				CharString_createRefSized(s.ptrNonConst + last, i - last, false);
+				isConstRef ? CharString_createRefSizedConst(sPtr + last, i - last, false) :
+				CharString_createRefSized(sPtrNonConst + last, i - last, false);
 
 			last = i + otherl;
 			i += otherl - 1;
@@ -579,34 +254,37 @@ Error CharString_splitString(
 	}
 
 	str.ptrNonConst[count++] =
-		CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, strl - last, b) :
-		CharString_createRefSized(s.ptrNonConst + last, strl - last, b);
+		isConstRef ? CharString_createRefSizedConst(sPtr + last, strl - last, b) :
+		CharString_createRefSized(sPtrNonConst + last, strl - last, b);
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error CharString_splitLine(CharString s, Allocator alloc, ListCharString *result) {
+Bool CharString_splitLine(const CharString s, const Allocator *alloc, ListCharString *result, Error *e_rr) {
 
-	if(!result)
-		return Error_nullPointer(2, "CharString_splitLine()::result is invalid");
+	Bool s_uccess = true;
 
-	if(result->ptr)
-		return Error_invalidParameter(2, 1, "CharString_splitLine()::result wasn't empty, might indicate memleak");
+	if (!result)
+		retError(clean, Error_nullPointer(2, "CharString_splitLine()::result is invalid"));
+
+	if (result->ptr)
+		retError(clean, Error_invalidParameter(2, 1, "CharString_splitLine()::result wasn't empty, might indicate memleak"));
 
 	U64 v = 0, lastLineEnd = U64_MAX;
 	const U64 strl = CharString_length(s);
 
 	for(U64 i = 0; i < strl; ++i)
 
-		if (s.ptr[i] == '\n') {			//Unix line endings
+		if (s.ptr[i] == '\n') {            //Unix line endings
 			++v;
 			lastLineEnd = i;
 			continue;
 		}
 
-		else if (s.ptr[i] == '\r') {	//Windows/Legacy Mac line endings
+		else if (s.ptr[i] == '\r') {    //Windows/Legacy Mac line endings
 
-			if(i + 1 < strl && s.ptr[i + 1] == '\n')		//Windows
+			if(i + 1 < strl && s.ptr[i + 1] == '\n')        //Windows
 				++i;
 
 			++v;
@@ -617,10 +295,7 @@ Error CharString_splitLine(CharString s, Allocator alloc, ListCharString *result
 	if(lastLineEnd != strl)
 		++v;
 
-	const Error err = ListCharString_create(v, alloc, result);
-
-	if (err.genericError)
-		return err;
+	gotoIfError3(clean, ListCharString_create(v, alloc, result, e_rr));
 
 	v = 0;
 	lastLineEnd = 0;
@@ -631,12 +306,12 @@ Error CharString_splitLine(CharString s, Allocator alloc, ListCharString *result
 
 		const U64 iOld = i;
 
-		if (s.ptr[i] == '\n')			//Unix line endings
+		if (s.ptr[i] == '\n')            //Unix line endings
 			isLineEnd = true;
 
-		else if (s.ptr[i] == '\r') {	//Windows/Legacy Mac line endings
+		else if (s.ptr[i] == '\r') {    //Windows/Legacy Mac line endings
 
-			if(i + 1 < strl && s.ptr[i + 1] == '\n')		//Windows
+			if(i + 1 < strl && s.ptr[i + 1] == '\n')        //Windows
 				++i;
 
 			isLineEnd = true;
@@ -657,85 +332,81 @@ Error CharString_splitLine(CharString s, Allocator alloc, ListCharString *result
 			CharString_createRefSizedConst(s.ptr + lastLineEnd, strl - lastLineEnd, CharString_isNullTerminated(s)) :
 			CharString_createRefSized(s.ptrNonConst + lastLineEnd, strl - lastLineEnd, CharString_isNullTerminated(s));
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error CharString_reserve(CharString *str, U64 length, Allocator alloc) {
+Bool CharString_reserve(CharString *str, U64 length, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if (!str)
-		return Error_nullPointer(0, "CharString_reserve()::str is required");
+		retError(clean, Error_nullPointer(0, "CharString_reserve()::str is required"));
 
 	if (CharString_isRef(*str) && CharString_length(*str))
-		return Error_invalidOperation(0, "CharString_reserve()::str has to be managed memory");
+		retError(clean, Error_invalidOperation(0, "CharString_reserve()::str has to be managed memory"));
 
 	if (length >> 48)
-		return Error_invalidOperation(1, "CharString_reserve()::length should be 48-bit");
+		retError(clean, Error_invalidOperation(1, "CharString_reserve()::length should be 48-bit"));
 
-	if (!alloc.alloc || !alloc.free)
-		return Error_nullPointer(2, "CharString_reserve()::alloc is required");
+	if (!alloc || !alloc->alloc || !alloc->free)
+		retError(clean, Error_nullPointer(2, "CharString_reserve()::alloc is required"));
 
 	if (length + 1 <= str->capacityAndRefInfo)
-		return Error_none();
+		goto clean;
 
 	Buffer b = Buffer_createNull();
-	Error err = alloc.alloc(alloc.ptr, length + 1, &b);
-
-	if (err.genericError)
-		return err;
+	gotoIfError3(clean, alloc->alloc(alloc->ptr, length + 1, &b, e_rr));
 
 	Buffer_memcpy(b, CharString_bufferConst(*str));
 
 	b.ptrNonConst[length] = '\0';
 	str->lenAndNullTerminated |= (U64)1 << 63;
 
-	if(str->capacityAndRefInfo)
-		err =
-			alloc.free(alloc.ptr, Buffer_createManagedPtr(str->ptrNonConst, str->capacityAndRefInfo)) ?
-			Error_none() : Error_invalidOperation(0, "CharString_reserve() free failed");
+	if (str->capacityAndRefInfo)
+		alloc->free(alloc->ptr, Buffer_createManagedPtr(str->ptrNonConst, str->capacityAndRefInfo));
 
 	str->capacityAndRefInfo = Buffer_length(b);
 	str->ptr = (const C8*) b.ptr;
-	return err;
+
+clean:
+	return s_uccess;
 }
 
-Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator alloc) {
+Bool CharString_resize(CharString *str, U64 length, C8 defaultChar, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if (!str)
-		return Error_nullPointer(0, "CharString_resize()::str is required");
+		retError(clean, Error_nullPointer(0, "CharString_resize()::str is required"));
 
 	const U64 strl = CharString_length(*str);
 
 	if (CharString_isRef(*str) && strl)
-		return Error_invalidOperation(0, "CharString_resize()::str needs to be managed memory");
+		retError(clean, Error_invalidOperation(0, "CharString_resize()::str needs to be managed memory"));
 
 	if (length >> 48)
-		return Error_invalidOperation(1, "CharString_resize()::length should be 48-bit");
+		retError(clean, Error_invalidOperation(1, "CharString_resize()::length should be 48-bit"));
 
-	if (!alloc.alloc || !alloc.free)
-		return Error_nullPointer(3, "CharString_resize()::alloc is required");
+	if (!alloc || !alloc->alloc)
+		retError(clean, Error_nullPointer(3, "CharString_resize()::alloc is required"));
 
 	if (length == strl && CharString_isNullTerminated(*str))
-		return Error_none();
+		goto clean;
 
 	//Simple resize; we cut off the tail
 
 	if (length < strl) {
 		str->lenAndNullTerminated = ((U64)1 << 63) | length;
 		str->ptrNonConst[length] = '\0';
-		return Error_none();
+		goto clean;
 	}
 
 	//Resize that triggers buffer resize
+	//Reserve 50% more to ensure we don't resize too many times
 
-	if (length + 1 > str->capacityAndRefInfo) {
-
-		//Reserve 50% more to ensure we don't resize too many times
-
-		const Error err = CharString_reserve(str, U64_max(64, length * 3 / 2) + 1, alloc);
-
-		if (err.genericError)
-			return err;
-	}
+	if (length + 1 > str->capacityAndRefInfo)
+		gotoIfError3(clean, CharString_reserve(str, U64_max(64, length * 3 / 2) + 1, alloc, e_rr));
 
 	//Our capacity is big enough to handle it:
 
@@ -744,189 +415,82 @@ Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator a
 
 	str->ptrNonConst[length] = '\0';
 	str->lenAndNullTerminated = length | ((U64)1 << 63);
-	return Error_none();
+
+clean:
+	return s_uccess;
 }
 
-CharString CharString_newLine() { return CharString_createRefCStrConst("\n"); }
+Bool CharString_findAll(const CharStringFind *find, C8 c, EStringCase caseSensitive, Error *e_rr) {
 
-Bool CharString_startsWith(CharString str, C8 c, EStringCase caseSensitive, U64 off) {
-	return
-		CharString_length(str) > off && str.ptr &&
-		C8_transform(str.ptr[off], (EStringTransform)caseSensitive) ==
-		C8_transform(c, (EStringTransform) caseSensitive);
-}
+	Bool s_uccess = true;
+	const Allocator *alloc = NULL;
 
-Bool CharString_endsWith(CharString str, C8 c, EStringCase caseSensitive, U64 off) {
-	return
-		CharString_length(str) > off && str.ptr &&
-		C8_transform(str.ptr[CharString_length(str) - 1 - off], (EStringTransform) caseSensitive) ==
-		C8_transform(c, (EStringTransform) caseSensitive);
-}
+	if (!find || !find->result)
+		retError(clean, Error_nullPointer(0, "CharString_findAll()::find and find->result are required"));
 
-Bool CharString_startsWithString(CharString str, CharString other, EStringCase caseSensitive, U64 off) {
+	if(find->result->ptr)
+		retError(clean, Error_invalidParameter(6, 0, "CharString_findAll()::result wasn't empty, might indicate memleak"));
 
-	const U64 otherl = CharString_length(other);
-	U64 strl = CharString_length(str);
+	U64 strl = !find->s ? 0 : CharString_length(*find->s);
+	const U64 off = find->off;
+	const U64 len = find->len;
 
-	if(off > strl)
-		return false;
+	if(off >= strl || off + len > strl)
+		retError(clean, Error_invalidParameter(4, 0, "CharString_findAll()::off or len out of bounds"));
 
-	strl -= off;
-
-	if(!otherl)
-		return true;
-
-	if (otherl > strl)
-		return false;
-
-	for (U64 i = off; i < off + otherl; ++i)
-		if (
-			C8_transform(str.ptr[i], (EStringTransform)caseSensitive) !=
-			C8_transform(other.ptr[i - off], (EStringTransform)caseSensitive)
-		)
-			return false;
-
-	return true;
-}
-
-Bool CharString_endsWithString(CharString str, CharString other, EStringCase caseSensitive, U64 off) {
-
-	const U64 otherl = CharString_length(other);
-	U64 strl = CharString_length(str);
-
-	if(off > strl)
-		return false;
-
-	strl -= off;
-
-	if(!otherl)
-		return true;
-
-	if (otherl > strl)
-		return false;
-
-	for (U64 i = strl - otherl; i < strl; ++i)
-		if (
-			C8_transform(str.ptr[i], (EStringTransform)caseSensitive) !=
-			C8_transform(other.ptr[i - (strl - otherl)], (EStringTransform)caseSensitive)
-		)
-			return false;
-
-	return true;
-}
-
-U64 CharString_countAll(CharString s, C8 c, EStringCase caseSensitive, U64 off) {
-
-	c = C8_transform(c, (EStringTransform)caseSensitive);
-
-	U64 count = 0;
-
-	for (U64 i = off; i < CharString_length(s); ++i)
-		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
-			++count;
-
-	return count;
-}
-
-U64 CharString_countAllString(CharString s, CharString other, EStringCase caseSensitive, U64 off) {
-
-	const U64 otherl = CharString_length(other);
-	const U64 strl = CharString_length(s);
-
-	if(!otherl || strl < otherl)
-		return 0;
-
-	U64 j = 0;
-
-	for (U64 i = off; i < strl - otherl + 1; ++i) {
-
-		Bool match = true;
-
-		for (U64 l = i, k = 0; l < strl && k < otherl; ++l, ++k)
-			if (
-				C8_transform(s.ptr[l], (EStringTransform)caseSensitive) !=
-				C8_transform(other.ptr[k], (EStringTransform)caseSensitive)
-			) {
-				match = false;
-				break;
-			}
-
-		if (match) {
-			i += otherl - 1;
-			++j;
-		}
-	}
-
-	return j;
-}
-
-Error CharString_findAll(
-	CharString s,
-	C8 c,
-	Allocator alloc,
-	EStringCase caseSensitive,
-	U64 off,
-	U64 len,
-	ListU64 *result
-) {
-
-	if(!result)
-		return Error_nullPointer(6, "CharString_findAll()::result is required");
-
-	if(result->ptr)
-		return Error_invalidParameter(6, 0, "CharString_findAll()::result wasn't empty, might indicate memleak");
-
-	U64 strl = CharString_length(s);
-
-	if(off >= strl || (off + len) > strl)
-		return Error_invalidParameter(4, 0, "CharString_findAll()::off or len out of bounds");
+	const C8 *sPtr = find->s->ptr;
 
 	if(len)
 		strl = off + len;
 
 	ListU64 l = (ListU64) { 0 };
-	Error err = ListU64_reserve(&l, (strl - off) / 25 + 16, alloc);
+	gotoIfError3(clean, ListU64_reserve(&l, (strl - off) / 25 + 16, find->alloc, e_rr));
+	alloc = find->alloc;
 
-	if (err.genericError)
-		return err;
+	EStringTransform transform = (EStringTransform) caseSensitive;
 
-	c = C8_transform(c, (EStringTransform) caseSensitive);
+	c = C8_transform(c, transform);
 
 	for (U64 i = off; i < strl; ++i)
-		if (c == C8_transform(s.ptr[i], (EStringTransform)caseSensitive))
-			if ((err = ListU64_pushBack(&l, i, alloc)).genericError) {
-				ListU64_free(&l, alloc);
-				return err;
-			}
+		if (c == C8_transform(sPtr[i], transform))
+			gotoIfError3(clean, ListU64_pushBack(&l, i, alloc, e_rr));
 
-	*result = l;
-	return Error_none();
+	*find->result = l;
+
+clean:
+
+	if(!s_uccess && alloc)
+		ListU64_free(&l, alloc);
+
+	return s_uccess;
 }
 
-Error CharString_findAllString(
-	CharString s,
-	CharString other,
-	Allocator alloc,
-	EStringCase caseSensitive,
-	U64 off,
-	U64 len,
-	ListU64 *result
-) {
+Bool CharString_findAllString(const CharStringFind *find, const CharString *other, EStringCase caseSensitive, Error *e_rr) {
 
-	if(!result)
-		return Error_nullPointer(6, "CharString_findAllString()::result is required");
+	Bool s_uccess = true;
+	const Allocator *alloc = NULL;
 
-	if(result->ptr)
-		return Error_invalidParameter(6, 0, "CharString_findAllString()::result wasn't empty, might indicate memleak");
+	if (!find || !find->result)
+		retError(clean, Error_nullPointer(0, "CharString_findAllString()::find and find->result are required"));
 
-	const U64 otherl = CharString_length(other);
-	U64 strl = CharString_length(s);
+	if(find->result->ptr)
+		retError(clean, Error_invalidParameter(
+			6, 0, "CharString_findAllString()::result wasn't empty, might indicate memleak"
+		));
+
+	const U64 otherl = !other ? 0 : CharString_length(*other);
+	U64 strl = !find->s ? 0 : CharString_length(*find->s);
+	const U64 off = find->off;
+	const U64 len = find->len;
 
 	if(!otherl)
-		return Error_invalidParameter(1, 0, "CharString_findAllString()::other is empty");
+		retError(clean, Error_invalidParameter(1, 0, "CharString_findAllString()::other is empty"));
 
 	if(off >= strl || off + len > strl)
-		return Error_invalidParameter(4, 0, "CharString_findAllString()::off or len is out of bounds");
+		retError(clean, Error_invalidParameter(4, 0, "CharString_findAllString()::off or len is out of bounds"));
+
+	const C8 *sPtr = find->s->ptr;
+	const C8 *otherPtr = other->ptr;
 
 	if(len)
 		strl = off + len;
@@ -934,236 +498,104 @@ Error CharString_findAllString(
 	ListU64 l = (ListU64) { 0 };
 
 	if((strl - off) < otherl) {
-		*result = l;
-		return Error_none();
+		*find->result = l;
+		goto clean;
 	}
 
-	Error err = ListU64_reserve(&l, (strl - off) / otherl / 25 + 16, alloc);
+	gotoIfError3(clean, ListU64_reserve(&l, (strl - off) / otherl / 25 + 16, find->alloc, e_rr));
+	alloc = find->alloc;
 
-	if (err.genericError)
-		return err;
+	EStringTransform transform = (EStringTransform) caseSensitive;
 
 	for (U64 i = off; i < strl; ++i) {
 
 		Bool match = true;
 
 		for (U64 j = i, k = 0; j < strl && k < otherl; ++j, ++k)
-			if (
-				C8_transform(s.ptr[j], (EStringTransform)caseSensitive) !=
-				C8_transform(other.ptr[k], (EStringTransform)caseSensitive)
-			) {
+			if (C8_transform(sPtr[j], transform) != C8_transform(otherPtr[k], transform)) {
 				match = false;
 				break;
 			}
 
 		if (match) {
-
-			if ((err = ListU64_pushBack(&l, i, alloc)).genericError) {
-				ListU64_free(&l, alloc);
-				return err;
-			}
-
+			gotoIfError3(clean, ListU64_pushBack(&l, i, alloc, e_rr));
 			i += otherl - 1;
 		}
 	}
 
-	*result = l;
-	return Error_none();
+	*find->result = l;
+
+clean:
+
+	if (!s_uccess && alloc)
+		ListU64_free(&l, alloc);
+
+	return s_uccess;
 }
 
-U64 CharString_findFirst(CharString s, C8 c, EStringCase caseSensitive, U64 off, U64 len) {
-
-	c = C8_transform(c, (EStringTransform)caseSensitive);
-
-	if(off >= CharString_length(s) || off + len > CharString_length(s))
-		return U64_MAX;
-
-	if(!len)
-		len = CharString_length(s) - off;
-
-	for (U64 i = off; i < off + len; ++i)
-		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
-			return i;
-
-	return U64_MAX;
-}
-
-U64 CharString_findLast(CharString s, C8 c, EStringCase caseSensitive, U64 off, U64 len) {
-
-	c = C8_transform(c, (EStringTransform)caseSensitive);
-
-	if(off >= CharString_length(s) || off + len > CharString_length(s))
-		return U64_MAX;
-
-	if(!len)
-		len = CharString_length(s) - off;
-
-	for (U64 i = (off + len) - 1; i != U64_MAX && i >= off; --i)
-		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
-			return i;
-
-	return U64_MAX;
-}
-
-U64 CharString_findFirstString(CharString s, CharString other, EStringCase caseSensitive, U64 off, U64 len) {
-
-	const U64 otherl = CharString_length(other);
-	U64 strl = CharString_length(s);
-
-	if(!otherl || strl < otherl)
-		return U64_MAX;
-
-	if(off >= CharString_length(s) || off + len > CharString_length(s))
-		return U64_MAX;
-
-	if(len)
-		strl = off + len;
-
-	U64 i = off;
-
-	for (; i < strl; ++i) {
-
-		Bool match = true;
-		U64 k = 0;
-
-		for (U64 j = i; j < strl && k < otherl; ++j, ++k)
-			if (
-				C8_transform(s.ptr[j], (EStringTransform)caseSensitive) !=
-				C8_transform(other.ptr[k], (EStringTransform)caseSensitive)
-			) {
-				match = false;
-				break;
-			}
-
-		if (match && k == otherl)
-			break;
-	}
-
-	return i >= strl ? U64_MAX : i;
-}
-
-U64 CharString_findLastString(CharString s, CharString other, EStringCase caseSensitive, U64 off, U64 len) {
-
-	U64 strl = CharString_length(s);
-	const U64 otherl = CharString_length(other);
-
-	if(!otherl || strl < otherl)
-		return U64_MAX;
-
-	if(off >= CharString_length(s) || off + len > CharString_length(s))
-		return U64_MAX;
-
-	if(len)
-		strl = off + len;
-
-	U64 i = strl - 1;
-
-	for (; i != U64_MAX && i >= off; --i) {
-
-		Bool match = true;
-
-		for (U64 j = i, k = otherl - 1; j != U64_MAX && k != U64_MAX; --j, --k)
-			if (
-				C8_transform(s.ptr[j], (EStringTransform)caseSensitive) !=
-				C8_transform(other.ptr[k], (EStringTransform)caseSensitive)
-			) {
-				match = false;
-				break;
-			}
-
-		if (match) {
-			i -= otherl - 1;
-			break;
-		}
-	}
-
-	return i;
-}
-
-Bool CharString_equalsString(CharString s, CharString other, EStringCase caseSensitive) {
-
-	const U64 strl = CharString_length(s);
-	const U64 otherl = CharString_length(other);
-
-	if (strl != otherl)
-		return false;
-
-	if (caseSensitive == EStringCase_Sensitive)
-		return Buffer_eq(CharString_bufferConst(s), CharString_bufferConst(other));
-
-	for (U64 i = 0; i < strl; ++i)
-		if (C8_toLower(s.ptr[i]) != C8_toLower(other.ptr[i]))
-			return false;
-
-	return true;
-}
-
-Bool CharString_equals(CharString s, C8 c, EStringCase caseSensitive) {
-	return CharString_length(s) == 1 && s.ptr &&
-		C8_transform(s.ptr[0], (EStringTransform) caseSensitive) ==
-		C8_transform(c, (EStringTransform) caseSensitive);
-}
-
-Bool ListCharString_freeUnderlying(ListCharString *arr, Allocator alloc) {
+void ListCharString_freeUnderlying(ListCharString *arr, const Allocator *alloc) {
 
 	if(!arr || !ListCharString_allocatedBytes(*arr))
-		return true;
-
-	Bool freed = true;
+		return;
 
 	for(U64 i = 0; i < arr->length; ++i) {
 		CharString *str = arr->ptrNonConst + i;
-		freed &= CharString_free(str, alloc);
+		CharString_free(str, alloc);
 	}
 
-	freed &= ListCharString_free(arr, alloc);
-	return freed;
+	ListCharString_free(arr, alloc);
 }
 
-Error ListCharString_createCopyUnderlying(ListCharString toCopy, Allocator alloc, ListCharString *arr) {
-
-	if(!toCopy.length) {
-
-		if(!arr)
-			return Error_nullPointer(3, "ListCharString_createCopyUnderlying()::arr is required");
-
-		if (arr->ptr)
-			return Error_invalidOperation(
-				0, "ListCharString_createCopyUnderlying()::arr wasn't empty, which might indicate memleak"
-			);
-
-		*arr = (ListCharString) { 0 };
-		return Error_none();
-	}
-
-	Error err = ListCharString_create(toCopy.length, alloc, arr);
-
-	if (err.genericError)
-		return err;
-
-	for (U64 i = 0; i < toCopy.length; ++i) {
-
-		err = CharString_createCopy(toCopy.ptr[i], alloc, arr->ptrNonConst + i);
-
-		if (err.genericError) {
-			ListCharString_freeUnderlying(arr, alloc);
-			return err;
-		}
-	}
-
-	return Error_none();
-}
-
-Bool ListCharString_move(ListCharString *src, Allocator alloc, ListCharString *dst, Error *e_rr) {
+Bool ListCharString_createCopyUnderlying(
+	const ListCharString *toCopy, const Allocator *alloc, ListCharString *arr, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 	Bool allocated = false;
 
-	if(!src || !dst)
-		retError(clean, Error_nullPointer(!src ? 0 : 2, "ListCharString_move()::src and dst are required"))
+	if (!toCopy)
+		retError(clean, Error_nullPointer(0, "ListCharString_createCopyUnderlying()::toCopy is required"));
+
+	U64 toCopyl = toCopy->length;
+
+	if(!toCopyl) {
+
+		if(!arr)
+			retError(clean, Error_nullPointer(3, "ListCharString_createCopyUnderlying()::arr is required"));
+
+		if (arr->ptr)
+			retError(clean, Error_invalidOperation(
+				0, "ListCharString_createCopyUnderlying()::arr wasn't empty, which might indicate memleak"
+			));
+
+		*arr = (ListCharString) { 0 };
+		goto clean;
+	}
+
+	gotoIfError3(clean, ListCharString_create(toCopyl, alloc, arr, e_rr));
+	allocated = true;
+
+	for (U64 i = 0; i < toCopyl; ++i)
+		gotoIfError3(clean, CharString_createCopy(toCopy->ptr[i], alloc, arr->ptrNonConst + i, e_rr));
+
+clean:
+
+	if(!s_uccess && allocated)
+		ListCharString_freeUnderlying(arr, alloc);
+
+	return s_uccess;
+}
+
+Bool ListCharString_move(ListCharString *src, const Allocator *alloc, ListCharString *dst, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Bool allocated = false;
+
+	if (!src || !dst)
+		retError(clean, Error_nullPointer(!src ? 0 : 2, "ListCharString_move()::src and dst are required"));
 
 	if(dst->ptr)
-		retError(clean, Error_invalidParameter(2, 0, "ListCharString_move()::dst contained data, might indicate memleak"))
+		retError(clean, Error_invalidParameter(2, 0, "ListCharString_move()::dst contained data, might indicate memleak"));
 
 	allocated = true;
 	Bool isListRef = ListCharString_isRef(*src);
@@ -1181,14 +613,15 @@ Bool ListCharString_move(ListCharString *src, Allocator alloc, ListCharString *d
 
 	else {
 
-		gotoIfError2(clean, ListCharString_resize(dst, src->length, alloc))
+		gotoIfError3(clean, ListCharString_resize(dst, src->length, alloc, e_rr));
 
 		for(U64 i = 0; i < src->length; ++i) {
 
-			if(isListRef || CharString_isRef(src->ptr[i]))
-				gotoIfError2(clean, CharString_createCopy(
-					src->ptr[i], alloc, &dst->ptrNonConst[i]
-				))
+			if (isListRef || CharString_isRef(src->ptr[i])) {
+				gotoIfError3(clean, CharString_createCopy(
+					src->ptr[i], alloc, &dst->ptrNonConst[i], e_rr
+				));
+			}
 
 			else {
 				dst->ptrNonConst[i] = src->ptr[i];
@@ -1210,133 +643,81 @@ clean:
 	return s_uccess;
 }
 
-U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize) {
-
-	U64 i = 0;
-
-	if(ptr)
-		for(; i < maxSize && ptr[i]; ++i)
-			;
-
-	return i;
-}
-
-U64 CharString_hash(CharString s) {
+U64 CharString_hash(const CharString s) {
 	U64 hash = Buffer_fnv1a64Single(CharString_length(s), Buffer_fnv1a64Offset);
 	return Buffer_fnv1a64(CharString_bufferConst(s), hash);
 }
 
-CharString CharString_getFilePath(CharString *str) {
+Bool ListCharString_concat(const ListCharStringConcat *conc, C8 between, Error *e_rr) {
 
-	if(!CharString_formatPath(str))
-		return CharString_createNull();
+	Bool s_uccess = true;
 
-	CharString res = CharString_createNull();
-	CharString_cutBefore(*str, '/', EStringCase_Sensitive, false, &res);
-	return res;
-}
+	if (!conc || !conc->arr)
+		retError(clean, Error_nullPointer(0, "ListCharString_concat()::conc and conc->arr are required"));
 
-CharString CharString_getBasePath(CharString *str) {
+	const U64 arrl = conc->arr->length;
+	const CharString *arrPtr = conc->arr->ptr;
 
-	if(!CharString_formatPath(str))
-		return CharString_createNull();
-
-	CharString res = CharString_createNull();
-	CharString_cutAfter(*str, '/', EStringCase_Sensitive, false, &res);
-	return res;
-}
-
-Error ListCharString_concat(ListCharString arr, C8 between, Allocator alloc, CharString *result) {
+	CharString *result = conc->result;
 
 	U64 length = 0;
 
-	for(U64 i = 0; i < arr.length; ++i)
-		length += CharString_length(arr.ptr[i]);
+	for(U64 i = 0; i < arrl; ++i)
+		length += CharString_length(arrPtr[i]);
 
-	if(arr.length > 1)
-		length += arr.length - 1;
+	if(arrl > 1)
+		length += arrl - 1;
 
-	const Error err = CharString_create(' ', length, alloc, result);
+	gotoIfError3(clean, CharString_create(' ', length, conc->alloc, result, e_rr));
 
-	if(err.genericError)
-		return err;
+	for(U64 i = 0, j = 0; i < arrl; ++i) {
 
-	for(U64 i = 0, j = 0; i < arr.length; ++i) {
+		for(U64 k = 0, l = CharString_length(arrPtr[i]); k < l; ++k)
+			result->ptrNonConst[j++] = arrPtr[i].ptr[k];
 
-		for(U64 k = 0, l = CharString_length(arr.ptr[i]); k < l; ++k)
-			result->ptrNonConst[j++] = arr.ptr[i].ptr[k];
-
-		if (i != arr.length - 1)
+		if (i != arrl - 1)
 			result->ptrNonConst[j++] = between;
 	}
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error ListCharString_concatString(ListCharString arr, CharString between, Allocator alloc, CharString *result) {
+Bool ListCharString_concatString(const ListCharStringConcat *conc, const CharString *between, Error *e_rr) {
 
+	Bool s_uccess = true;
+
+	if (!conc || !conc->arr)
+		retError(clean, Error_nullPointer(0, "ListCharString_concatString()::conc and conc->arr are required"));
+
+	const U64 betweenl = !between ? 0 : CharString_length(*between);
+	const U64 arrl = conc->arr->length;
+	const CharString *arrPtr = conc->arr->ptr;
+	const C8 *betweenPtr = !between ? NULL : between->ptr;
 	U64 length = 0;
 
-	for(U64 i = 0; i < arr.length; ++i)
-		length += CharString_length(arr.ptr[i]);
+	CharString *result = conc->result;
 
-	if(arr.length > 1)
-		length += (arr.length - 1) * CharString_length(between);
+	for(U64 i = 0; i < arrl; ++i)
+		length += CharString_length(arrPtr[i]);
 
-	const Error err = CharString_create(' ', length, alloc, result);
+	if(arrl > 1)
+		length += (arrl - 1) * betweenl;
 
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, CharString_create(' ', length, conc->alloc, result, e_rr));
 
-	for(U64 i = 0, j = 0; i < arr.length; ++i) {
+	for(U64 i = 0, j = 0; i < arrl; ++i) {
 
-		for(U64 k = 0, l = CharString_length(arr.ptr[i]); k < l; ++k)
-			result->ptrNonConst[j++] = arr.ptr[i].ptr[k];
+		for(U64 k = 0, l = CharString_length(arrPtr[i]); k < l; ++k)
+			result->ptrNonConst[j++] = arrPtr[i].ptr[k];
 
-		if (i != arr.length - 1)
-			for(U64 k = 0; k < CharString_length(between); ++k)
-				result->ptrNonConst[j++] = between.ptr[k];
+		if (i != arrl - 1)
+			for(U64 k = 0; k < betweenl; ++k)
+				result->ptrNonConst[j++] = betweenPtr[k];
 	}
 
-	return Error_none();
-}
-
-//Simple file utils
-
-Bool CharString_formatPath(CharString *str) {
-	return CharString_replaceAllSensitive(str, '\\', '/', 0, 0);
-}
-
-ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSensitive) {
-
-	const U64 al = CharString_length(a);
-	const U64 bl = CharString_length(b);
-
-	//We want to sort on contents
-	//Provided it's the same level of parenting.
-	//This ensures things with the same parent also stay at the same location
-
-	for (U64 i = 0; i < al && i < bl; ++i) {
-
-		const C8 ai = C8_transform(a.ptr[i], (EStringTransform) caseSensitive);
-		const C8 bi = C8_transform(b.ptr[i], (EStringTransform) caseSensitive);
-
-		if (ai < bi)
-			return ECompareResult_Lt;
-
-		if (ai > bi)
-			return ECompareResult_Gt;
-	}
-
-	//If they start with the same thing, we want to sort on length
-
-	if (al < bl)
-		return ECompareResult_Lt;
-
-	if (al > bl)
-		return ECompareResult_Gt;
-
-	return ECompareResult_Eq;
+clean:
+	return s_uccess;
 }
 
 //Format
@@ -1345,7 +726,7 @@ ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSe
 #ifdef _WIN32
 	#define calcFormatLen _vscprintf
 #else
-	int calcFormatLen(const char * format, va_list pargs) {
+	int calcFormatLen(const char *format, va_list pargs) {
 		int retval;
 		va_list argcopy;
 		va_copy(argcopy, pargs);
@@ -1355,10 +736,12 @@ ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSe
 	}
 #endif
 
-Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *format, va_list args) {
+Bool CharString_formatVariadic(const Allocator *alloc, CharString *result, Error *e_rr, const C8 *format, va_list args) {
+
+	Bool s_uccess = true;
 
 	if(!result || !format)
-		return Error_nullPointer(!result ? 1 : 2, "CharString_formatVariadic()::result and format are required");
+		retError(clean, Error_nullPointer(!result ? 1 : 2, "CharString_formatVariadic()::result and format are required"));
 
 	va_list arg2;
 	va_copy(arg2, args);
@@ -1366,38 +749,414 @@ Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *f
 	const int len = calcFormatLen(format, arg2);
 
 	if(len < 0)
-		return Error_stderr(0, "CharString_formatVariadic() len can't be <0");
+		retError(clean, Error_stderr(0, "CharString_formatVariadic() len can't be <0"));
 
 	if (result->ptr)
-		return Error_invalidOperation(0, "CharString_formatVariadic()::result isn't empty, could indicate memleak");
+		retError(clean, Error_invalidOperation(0, "CharString_formatVariadic()::result isn't empty, could indicate memleak"));
 
 	if (len == 0) {
 		*result = CharString_createNull();
-		return Error_none();
+		goto clean;
 	}
 
-	const Error err = CharString_create('\0', (U64) len, alloc, result);
-
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, CharString_create('\0', (U64) len, alloc, result, e_rr));
 
 	if(vsnprintf((C8*)result->ptr, len + 1, format, args) < 0) {
 		CharString_free(result, alloc);
-		return Error_stderr(0, "CharString_formatVariadic() vsnprintf failed");
+		retError(clean, Error_stderr(0, "CharString_formatVariadic() vsnprintf failed"));
 	}
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error CharString_format(Allocator alloc, CharString *result, const C8 *format, ...) {
+Bool CharString_format(const Allocator *alloc, CharString *result, Error *e_rr, const C8 *format, ...) {
+
+	Bool s_uccess = true;
 
 	if(!result || !format)
-		return Error_nullPointer(!result ? 1 : 2, "CharString_format()::result and format are required");
+		retError(clean, Error_nullPointer(!result ? 1 : 2, "CharString_format()::result and format are required"));
 
 	va_list arg1;
 	va_start(arg1, format);
-	const Error err = CharString_formatVariadic(alloc, result, format, arg1);
+	gotoIfError3(clean, CharString_formatVariadic(alloc, result, e_rr, format, arg1));
 	va_end(arg1);
 
-	return err;
+clean:
+	return s_uccess;
+}
+
+Bool CharString_createFromETypeId(TypeId type, const Allocator *alloc, CharString *result, Error *e_rr) {
+
+	EDataType dataType = ETypeId_getDataType(type);
+	EDataTypeStride dataTypeStride = ETypeId_getDataTypeStride(type);
+	U8 w = ETypeId_getWidth(type);
+	U8 h = ETypeId_getHeight(type);
+
+	Bool s_uccess = true;
+	const C8 *ptr = NULL;
+	Bool createString = false;
+
+	switch (dataType) {
+
+		default:
+			gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst("C8"), alloc, result, e_rr));
+			createString = true;
+			goto clean;
+
+		case EDataType_Bool:            ptr = "B1";        break;
+		case EDataType_UInt:            ptr = "U";        break;
+		case EDataType_Int:                ptr = "I";        break;
+		case EDataType_Float:            ptr = "F";        break;
+	}
+
+	gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(ptr), alloc, result, e_rr));
+	createString = true;
+
+	if(dataType != EDataType_Bool) {
+
+		switch(dataTypeStride) {
+			default:                    ptr = "8";        break;
+			case EDataTypeStride_16:    ptr = "16";        break;
+			case EDataTypeStride_32:    ptr = "32";        break;
+			case EDataTypeStride_64:    ptr = "64";        break;
+		}
+
+		CharString other = CharString_createRefCStrConst(ptr);
+		gotoIfError3(clean, CharString_appendString(result, &other, alloc, e_rr));
+	}
+
+	if(w == 1 && h == 1)
+		goto clean;
+
+	gotoIfError3(clean, CharString_append(result, 'x', alloc, e_rr));
+	gotoIfError3(clean, CharString_append(result, C8_createDec(w), alloc, e_rr));
+
+	if(h == 1)
+		goto clean;
+
+	gotoIfError3(clean, CharString_append(result, 'x', alloc, e_rr));
+	gotoIfError3(clean, CharString_append(result, C8_createDec(h), alloc, e_rr));
+
+clean:
+
+	if (createString && !s_uccess)
+		CharString_free(result, alloc);
+
+	return s_uccess;
+}
+
+Bool CharString_createFromETypeIdHLSL(
+	TypeId type,
+	EHLSLStringifyFlags flags,
+	const Allocator *alloc,
+	CharString *result,
+	Error *e_rr
+) {
+
+	EDataType dataType = ETypeId_getDataType(type);
+	EDataTypeStride dataTypeStride = ETypeId_getDataTypeStride(type);
+	U8 w = ETypeId_getWidth(type);
+	U8 h = ETypeId_getHeight(type);
+
+	Bool has16Bit    = flags & EHLSLStringifyFlags_Has16Bit;
+	Bool hasF64        = flags & EHLSLStringifyFlags_HasF64;
+	Bool hasInt64    = flags & EHLSLStringifyFlags_HasI64;
+	Bool isStrict    = flags & EHLSLStringifyFlags_IsStrict;
+
+	Bool s_uccess = true;
+	const C8 *ptr = NULL;
+
+	switch (dataType) {
+
+		default:
+			retError(clean, Error_invalidState(0, "CharString_createFromETypeIdHLSL() HLSL doesn't have a type for a char"));
+
+		case EDataType_Bool:            ptr = "bool";    break;
+
+		case EDataType_UInt:
+		case EDataType_Int:
+			
+			switch(dataTypeStride) {
+
+				default:
+
+					if(isStrict)
+						retError(clean, Error_invalidState(0, "CharString_createFromETypeIdHLSL() HLSL doesn't have xint8_t"));
+
+					ptr = dataType == EDataType_UInt ? (has16Bit ? "uint16_t" : "uint") : (has16Bit ? "int16_t" : "int");
+					break;
+
+				case EDataTypeStride_16:
+
+					if (isStrict && !has16Bit)
+						retError(clean, Error_invalidState(
+							0, "CharString_createFromETypeIdHLSL() HLSL doesn't have xint16_t enabled"
+						));
+
+					ptr = dataType == EDataType_UInt ? (has16Bit ? "uint16_t" : "uint") : (has16Bit ? "int16_t" : "int");
+					break;
+
+				case EDataTypeStride_32:
+					ptr = dataType == EDataType_UInt ? "uint" : "int";
+					break;
+
+				case EDataTypeStride_64:
+
+					if (!hasInt64)
+						retError(clean, Error_invalidState(
+							0, "CharString_createFromETypeIdHLSL() HLSL doesn't have xint64_t enabled"
+						));
+
+					ptr = dataType == EDataType_UInt ? "uint64_t" : "int64_t";
+					break;
+			}
+
+			break;
+
+		case EDataType_Float:
+			
+			switch(dataTypeStride) {
+
+				default:
+					ptr = "float";
+					break;
+
+				case EDataTypeStride_16:
+
+					if (isStrict && !has16Bit)
+						retError(clean, Error_invalidState(
+							0, "CharString_createFromETypeIdHLSL() HLSL doesn't have float16_t enabled"
+						));
+
+					ptr = has16Bit ? "float16_t" : "float";
+					break;
+
+				case EDataTypeStride_64:
+
+					if (!hasF64)
+						retError(clean, Error_invalidState(
+							0, "CharString_createFromETypeIdHLSL() HLSL doesn't have double enabled"
+						));
+
+					ptr = "double";
+					break;
+			}
+			
+			break;
+	}
+
+	gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(ptr), alloc, result, e_rr));
+
+	if(w == 1 && h == 1)
+		goto clean;
+
+	gotoIfError3(clean, CharString_append(result, C8_createDec(w), alloc, e_rr));
+
+	if(h == 1)
+		goto clean;
+
+	gotoIfError3(clean, CharString_append(result, 'x', alloc, e_rr));
+	gotoIfError3(clean, CharString_append(result, C8_createDec(h), alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+TypeId ETypeId_parseVecOrMat(CharString str, U8 off, EDataType type, EDataTypeStride stride) {
+
+	U64 strl = CharString_length(str);
+
+	if(str.ptr[off] != 'x' || (strl != ((U64)off + 2) && strl != ((U64)off + 4)))
+		return (TypeId) ETypeId_Undefined;
+
+	U8 w = C8_dec(str.ptr[off + 1]);
+
+	if(w == U8_MAX || !w || w > 4)
+		return (TypeId) ETypeId_Undefined;
+
+	Bool needsMatrix = w == 1;
+
+	Bool isMatrix = strl == ((U64)off + 4);
+	U8 h = 1;
+
+	if (isMatrix) {
+
+		if(str.ptr[off + 2] != 'x')
+			return (TypeId) ETypeId_Undefined;
+
+		h = C8_dec(str.ptr[off + 3]);
+
+		if(h == U8_MAX || h <= 1 || h > 4)
+			return (TypeId) ETypeId_Undefined;
+	}
+
+	if(needsMatrix && !isMatrix)
+		return (TypeId) ETypeId_Undefined;
+
+	return makeTypeId(LIBRARYID_DEFAULT, 0, w, h, stride, type);
+}
+
+TypeId ETypeId_parse(const CharString str) {
+
+	U64 strl = CharString_length(str);
+
+	if(!strl)
+		return (TypeId) ETypeId_Undefined;
+
+	switch (str.ptr[0]) {
+
+		case 'C':
+			return strl != 2 || str.ptr[1] != '8' ? ETypeId_Undefined : ETypeId_C8;
+
+		case 'F':
+		case 'U':
+		case 'I': {
+
+			if (strl < 2)
+				return (TypeId) ETypeId_Undefined;
+
+			U8 v = C8_dec(str.ptr[1]);
+
+			switch (v) {
+				case 8: case 1: case 3: case 6:        break;    //8, 16, 32, 64
+				default:                            return (TypeId) ETypeId_Undefined;
+			}
+
+			if (v != 8 && strl == 2)
+				return (TypeId) ETypeId_Undefined;
+
+			U8 start = 2;
+
+			if (v != 8) {
+
+				U8 v2 = C8_dec(str.ptr[2]);
+
+				switch (v2) {
+					case 6: case 2: case 4:            break;
+					default:                        return (TypeId) ETypeId_Undefined;
+				}
+
+				v = v * 10 + v2;
+
+				switch (v) {
+					case 16: case 32: case 64:        break;
+					default:                        return (TypeId) ETypeId_Undefined;
+				}
+
+				++start;
+			}
+
+			else if (str.ptr[0] == 'F')
+				return (TypeId) ETypeId_Undefined;
+
+			EDataType dataType;
+
+			switch (str.ptr[0]) {
+				default:    dataType = EDataType_Float;        break;
+				case 'U':    dataType = EDataType_UInt;        break;
+				case 'I':    dataType = EDataType_Int;        break;
+			}
+
+			EDataTypeStride stride;
+
+			switch (v) {
+				default:    stride = EDataTypeStride_8;        break;
+				case 16:    stride = EDataTypeStride_16;    break;
+				case 32:    stride = EDataTypeStride_32;    break;
+				case 64:    stride = EDataTypeStride_64;    break;
+			}
+
+			if(strl == start)
+				return makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, stride, dataType);
+
+			return ETypeId_parseVecOrMat(str, start, dataType, stride);
+		}
+
+		//B1, B1xN, B1xWxH
+		case 'B':
+
+			if(strl == 1 || str.ptr[1] != '1')
+				return (TypeId) ETypeId_Undefined;
+
+			return strl == 2 ? ETypeId_B1 : ETypeId_parseVecOrMat(str, 2, EDataType_Bool, EDataTypeStride_8);
+
+		default:
+			return (TypeId) ETypeId_Undefined;
+	}
+}
+
+Bool ListCharString_combine(const ListCharStringConcat *concat, Error *e_rr) {
+	return ListCharString_concatString(concat, NULL, e_rr);
+}
+
+//TODO: Clean this somehow..
+
+#define CharString_createNum(maxVal, func, prefixRaw, ...)                                                                    \
+																															\
+	Bool s_uccess = true;                                                                                                    \
+	const Allocator *allocator = NULL;                                                                                        \
+	CharString *result = NULL;                                                                                                \
+																															\
+	if (!number || !number->result)                                                                                            \
+		retError(clean, Error_nullPointer(3, "CharString_createNum()::number and number->result are required"));            \
+																															\
+	result = number->result;                                                                                                \
+	CharString prefix = CharString_createRefCStrConst(prefixRaw);                                                            \
+																															\
+	if (result->ptr)                                                                                                        \
+		retError(clean, Error_invalidOperation(0, "CharString_createNum()::result wasn't empty, might indicate memleak"));    \
+																															\
+	gotoIfError3(clean, CharString_reserve(                                                                                    \
+		result, maxVal + CharString_length(prefix) + 1, number->allocator, e_rr                                                \
+	));                                                                                                                        \
+																															\
+	allocator = number->allocator;                                                                                            \
+																															\
+	gotoIfError3(clean, CharString_appendString(result, &prefix, allocator, e_rr));                                            \
+																															\
+	U64 v = number->v;                                                                                                        \
+	U8 leadingZeros = number->leadingZeros;                                                                                    \
+																															\
+	Bool foundFirstNonZero = false;                                                                                            \
+																															\
+	for (U64 i = maxVal - 1; i != U64_MAX; --i) {                                                                            \
+																															\
+		C8 c = C8_create##func(__VA_ARGS__);                                                                                \
+																															\
+		if (!foundFirstNonZero)                                                                                                \
+			foundFirstNonZero = c != '0' || i < leadingZeros;                                                                \
+																															\
+		if (foundFirstNonZero)                                                                                                \
+			gotoIfError3(clean, CharString_append(result, c, allocator, e_rr));                                                \
+	}                                                                                                                        \
+																															\
+	/* Ensure we don't return an empty string on 0 */                                                                        \
+																															\
+	if (!v && !foundFirstNonZero)                                                                                            \
+		gotoIfError3(clean, CharString_append(result, '0', allocator, e_rr));                                                \
+																															\
+	result->ptrNonConst[CharString_length(*result)] = '\0';                                                                    \
+clean:                                                                                                                        \
+	if(allocator && !s_uccess) CharString_free(result, allocator);                                                            \
+	return s_uccess;
+
+Bool CharString_createNyto(const CharStringCreateNumber *number, Error *e_rr) {
+	CharString_createNum(11, Nyto, "0n", (v >> (6 * i)) & 63);
+}
+
+Bool CharString_createHex(const CharStringCreateNumber *number, Error *e_rr) {
+	CharString_createNum(16, Hex, "0x", (v >> (4 * i)) & 15);
+}
+
+Bool CharString_createDec(const CharStringCreateNumber *number, Error *e_rr) {
+	CharString_createNum(20, Dec, "", (v / U64_exp10(i)) % 10);
+}
+
+Bool CharString_createOct(const CharStringCreateNumber *number, Error *e_rr) {
+	CharString_createNum(22, Oct, "0o", (v >> (3 * i)) & 7);
+}
+
+Bool CharString_createBin(const CharStringCreateNumber *number, Error *e_rr) {
+	CharString_createNum(64, Bin, "0b", (v >> i) & 1);
 }

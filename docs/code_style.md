@@ -6,7 +6,7 @@ The following project structure should be used:
 
 ```cmake
 src/*.c 			# Source files
-inc/*.h 			# Header files
+include/<project>/*.h
 tst/*.c 			# (Unit) Test files
 docs/*.md			# Documentation markdown files
 tools/*.h,*.c		# Tools used to build the project
@@ -18,7 +18,7 @@ LICENSE				# How the project may be used
 .gitignore			# Things like builds files to ignore
 ```
 
-the files should be lower_snake_case and of course src, inc, tst, docs, tools can all have subdirectories, named the same way.
+the files should be lower_snake_case and of course src, include, tst, docs, tools can all have subdirectories, named the same way.
 
 ## Forward declaring / includes
 
@@ -26,11 +26,13 @@ All types that aren't used in struct definitions should be forward declared inst
 
 Only big types (more than ~32 functions) should have their own include file. Smaller helper functions can be included in other files, but can also have their own include file if future functionality might push it over this limit, or if it has no other include file it could logically belong to.
 
+Use `#pragma once` unless there is a clear reason not to do so (such as unsupported in tooling for .hlsli, or a specific compiler path). If #pragma once can't be used, use clear and consistent names (e.g. PROJECT_HEADER_NAME_H) and don't mix the two.
+
 ## Types
 
 Structs/types should be PascalCase, while enums should be EPascalCase (e.g. EMyValues).
 
-Our standard types such as `Bool, U<x>, I<x>, F<x>` should be used instead of C types (e.g. U32 = unsigned 32 bit int, I32 = signed 32-bit int, F32 = IEEE754 single precision float). This is because the sizes of C datatypes aren't standardized; a long is 32-bit on windows but isn't on certain platforms. Even though Bool works the same on the various platforms, it is named to be in line with the rest of the project. This is of course also true for all other types, since they might have platform specific optimizations (such as custom hash functions per platform, etc.).
+Our standard types such as `Bool, U<x>, I<x>, F<x>` should be used instead of C types (e.g. U32 = unsigned 32 bit int, I32 = signed 32-bit int, F32 = IEEE754 single precision float). With exclusion of library code that is required to use custom typedefs/C types. This is because the sizes of C datatypes aren't standardized; a long is 32-bit on windows but isn't on certain platforms. Even though Bool works the same on the various platforms, it is named to be in line with the rest of the project. This is of course also true for all other types, since they might have platform specific optimizations (such as custom hash functions per platform, etc.).
 
 Structs should use the syntax `typedef struct T { } T;` to ensure clean code.
 
@@ -40,11 +42,11 @@ _malloc_ and _free_ shouldn't be used if the goal is a cross platform applicatio
 
 ## Functions
 
-No inline should be used, headers are only for documentation, types and function declarations. This is useful to provide a clean overview of the functionality. Since we use link time code generation, it should properly inline anyways. This also makes the file significantly easier to be parsed.
+No inline should be used; aside from short two/four liners. This is useful to provide a clean overview of the functionality and reduce compile time.
 
-"Member functions" should be using ClassName_functionName. This makes it clear that it's either a helper function or a member function. Using direct structs `T t` instead of `const T *t` is recommended only if the struct isn't too big (~64+ bytes) to be copied, though the compiler might inline. Data passed that is const should be marked as such.
+C "Member functions" should be using ClassName_functionName. This makes it clear that it's either a helper function or a member function. Using direct structs `T t` instead of `const T *t` is recommended only if the struct isn't too big (16+ bytes) to be copied, though the compiler might inline. Data passed that is const should be marked as such. The only exception is for example string (24-byte or <=32 bytes) where extremely simple helper functions are allowed to pass by value.
 
-If a function has more than 4 parameters, consider if it should have a struct as initializer. If not, make sure to reserve a newline per parameter to make the function easier to read:
+If a function has more than 4 parameters (excluding Error/Allocator), consider if it should have a struct as initializer. If not, make sure to reserve a newline per parameter to make the function easier to read:
 
 ```c++
 void myFunction(U8 x, U16 y, U32 z, U32 w);		// Correct
@@ -79,20 +81,20 @@ If a function is swapped out based on architecture or platform, it should be mar
 
 ## Variables
 
-Both struct and local variables should use lowerCamelCase. Constants/externs and statics should use UPPER_SNAKE_CASE (though if it belongs to a type (enum or struct) it can have the typename prefixed before the constant name.
+Both struct and local variables should use lowerCamelCase. Constants/externs and statics should use UPPER_SNAKE_CASE (though if it belongs to a type (enum or struct) it can have the typename prefixed before the constant name (e.g. EMyEnum_A).
 
 ## Error handling
 
 Always validate inputs to a function if that function is going to be generic or you're dealing with user input.
 
-Error is the standard struct that holds the error code, parameters and callstack. This allows us to sort of handle C++-like exceptions in a more secure way; where it's very clear that a function can return an error and what type of error it is. As well as providing an (extended) function for printing the function and stacktrace. It also allows easy "rethrowing" by just returning the error and not messing with the stack trace. As well as the ability to ignore an error if it's not important (ex. a file check might want to figure out if Error_notFound is returned and might want to handle that in a custom way).
+Error is the standard struct that holds the error code and optionally callstack. This allows us to sort of handle C++-like exceptions in a more secure way; where it's very clear that a function can return an error and what type of error it is. As well as providing an (extended) function for printing the function and stacktrace. It also allows easy "rethrowing" by just returning the error and not messing with the stack trace. As well as the ability to ignore an error if it's not important (ex. a file check might want to figure out if Error_notFound is returned and might want to handle that in a custom way).
 
 To handle cleanup code, use the following:
 
 ```c
 	... //Init default structs and pointers to NULL or empty struct. Init Error err = Error_none()
 
-	gotoIfError(fail, myFunctionThatReturnsError(x, &myResult));
+	gotoIfError3(fail, myFunctionThatReturnsErrorx(x, &myResult));
 
 	... //Other code
 
@@ -142,8 +144,6 @@ Defines should use `_UPPER_CASE` (e.g. `_SIMD`) while macros can use `_<function
 
 Functions should be preferred over macros, unless macros greatly reduce copy + paste and even then, a function should be preferred when possible. Sometimes this is not possible though.
 
-Only impl defines can use the lower_snake_casing. This is because it's kind of seen as a function keyword. Another exception is if swapping out a function that is defined on both platforms, but one platform uses a non standard name for the function (Windows's unix-like file function calls) or if a define needs a certain formatting because of a library/api.
-
 Macros should try to align the `\` required to do multi-line macros on the same column.
 
 ## Comments
@@ -151,77 +151,3 @@ Macros should try to align the `\` required to do multi-line macros on the same 
 If using code snippets from other places, make sure to reference the link to ensure the original source can be compared or an explanation can be found if needed in the future and to provide credits to the original author.
 
 `//` should be preferred when dealing with small comments, unless a large section is commented out or for documentation; in that case `/*` and `*/` should be used. Another reason for `/**/` is if the current formatting doesn't support it or if in a macro definition (since these don't support normal comments).
-
-## Documentation
-
-### Sections
-
-To add an an extensive section to the documentation, you can use the following syntax (example):
-
-```C
-/*
-	@entry: FileSystem
-	@authors: [ Nielsbishere ]
-	@types: [ FileType, FileAccess, FileInfo, FileCallback, File ]
-	<myMarkDown>
-*/
-```
-
-This would add an entry for FileSystem. You could also add functions using `@functions: [ ]`, though if you include types that one automatically links to all functions that are available. To add subsections (and subsections for those), you could use `FileSystem/<subSectionName>`.
-
-This assumes indentation of 1 tab and will remove that on every line, so your markdown has to be indented by 1 tab.
-
-This kind of section is for extra details about a combination of classes and functions. Single functions or types can also be documented of course.
-
-### Functions
-
-```C
-/*
-	@short: Removes a file from the {FileSystem}.
-	@params[loc]: File path using {FileSystem/Oxsomi notation}.
-	@params[maxTimeout]: How long the file request can wait for a lock before it times out.
-	@returns: [ Error ]
-	@access: [ Any ]
-	@error: [ InvalidParameter, Unauthorized, ... ]
-	<myMarkDown (if a long description is needed)>
-*/
-Error File_remove(String loc, Ns maxTimeout);
-```
-
-@error indicates what errors are returned by this function. If it calls other functions that can return errors, it should use `...` to indicate more error types.
-
-@access indicates who is allowed to access this function. There's nothing to enforce this in C, but it's a useful to indicate to the programmer. Keyword "Platform" could mean that only the Windows/Linux runtime is allowed to access this function. If this is absent or uses "Any" then it'll assume anybody can use it for any purpose (and it'll be missing from the documentation).
-
-`{}` indicates a link to a documentation section, while `[]` links to a type. Keep in mind that sections can contain spaces and types/functions can't. E.g. `[File]` links to the File class, while `{File}` would link to an article named File (if it exists).
-
-@returns can include multiple types. `[ Error (main, return type doesn't have name but can include it),  U64 result ]` an example would be File read: `[ Error, Buffer output ]`. This would require a `Buffer *output` parameter in the function. @params[output] would be used for the description there.
-
-### Types & Static variable
-
-```c
-/*
-	@short: <Short description>
-	@access: [ Any ]
-	<myMarkDown (if a long description is needed)>
-*/
-```
-
-*See Functions for more info on the annotation types.*
-
-### Struct member
-
-```c
-/*
-	@short: <Short description>
-	@access: [ PrivateSet ]
-	<myMarkDown (if a long description is needed)>
-*/
-```
-
-Access here is extended from *Function's annotation types* and contains `PrivateSet` and `Private`. PrivateSet means that changing the variable should only be done by the type itself, while Private means that it's only for usage of the struct's functions.
-
-### Enums
-
-Enum fields use the same as struct members. An enum can be marked as a flag by using @usage: Flag.
-
-Enums don't need comments per enum value, but could if the enum value isn't self explanatory.

@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,12 +18,17 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//platforms/windows/wplatform.c
+
+#include "types/container/list_impl.h"
 #include "platforms/platform.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/keyboard.h"
-#include "types/container/string.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/string_unicode.h"
+#include "types/container/file_base.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/string_mut_helper.h"
+#include "types/base/constants.h"
 
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN
@@ -33,10 +38,172 @@
 
 #include <stdlib.h>
 
+#if _ARCH == ARCH_ARM64
+
+	#include <string.h>
+
+	//Map a registry VendorIdentifier / brand string to a vendor (Windows-on-ARM has no cpuid).
+	static ECPUVendor Platform_cpuVendorFromString(const C8 *s) {
+		if(!s)                                               return ECPUVendor_Unknown;
+		if(strstr(s, "Qualcomm") || strstr(s, "Snapdragon")) return ECPUVendor_Qualcomm;
+		if(strstr(s, "NVIDIA")   || strstr(s, "Nvidia"))     return ECPUVendor_Nvidia;
+		if(strstr(s, "Ampere"))                              return ECPUVendor_Ampere;
+		if(strstr(s, "Samsung"))                             return ECPUVendor_Samsung;
+		if(strstr(s, "Apple"))                               return ECPUVendor_Apple;
+		if(strstr(s, "ARM")      || strstr(s, "Arm"))        return ECPUVendor_Arm;
+		return ECPUVendor_Unknown;
+	}
+
+#endif
+
 U64 Platform_getThreads() {
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
 	return systemInfo.dwNumberOfProcessors;
+}
+
+U64 Platform_getPhysicalRAM() {
+	MEMORYSTATUSEX status = (MEMORYSTATUSEX) { 0 };
+	status.dwLength = sizeof(status);
+	return GlobalMemoryStatusEx(&status) ? status.ullTotalPhys : 0;
+}
+
+U64 Platform_getAvailableRAM() {
+	MEMORYSTATUSEX status = (MEMORYSTATUSEX) { 0 };
+	status.dwLength = sizeof(status);
+	return GlobalMemoryStatusEx(&status) ? status.ullAvailPhys : 0;
+}
+
+void Platform_detectCPUInfo(PlatformCPUInfo *out) {
+
+	if(!out)
+		return;
+
+	*out = (PlatformCPUInfo) { 0 };
+	out->logicalCores = (U32) Platform_getThreads();
+
+	//Vendor + brand string via cpuid (x86 only; compare the vendor registers as raw U32s to avoid <string.h>)
+
+	#if _ARCH == ARCH_X86_64
+
+		U32 reg[4] = { 0 };
+		Platform_getCPUId(0, reg);
+
+		if(reg[1] == 0x756E6547 && reg[3] == 0x49656E69 && reg[2] == 0x6C65746E)        //"GenuineIntel"
+			out->vendor = ECPUVendor_Intel;
+		else if(reg[1] == 0x68747541 && reg[3] == 0x69746E65 && reg[2] == 0x444D4163)   //"AuthenticAMD"
+			out->vendor = ECPUVendor_AMD;
+
+		U32 brand[12] = { 0 };
+		Platform_getCPUId((int) 0x80000002, &brand[0]);
+		Platform_getCPUId((int) 0x80000003, &brand[4]);
+		Platform_getCPUId((int) 0x80000004, &brand[8]);
+
+		for(U64 i = 0; i < sizeof(brand) && i < sizeof(out->brand) - 1; ++i)
+			out->brand[i] = ((const C8*) brand)[i];
+
+	#else
+
+		//Windows-on-ARM has no cpuid; the brand + vendor live in the registry instead.
+
+		HKEY key;
+
+		if(RegOpenKeyExA(
+			HKEY_LOCAL_MACHINE, "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", 0, KEY_READ, &key
+		) == ERROR_SUCCESS) {
+
+			DWORD size = (DWORD) sizeof(out->brand);
+			RegQueryValueExA(key, "ProcessorNameString", NULL, NULL, (LPBYTE) out->brand, &size);
+			out->brand[sizeof(out->brand) - 1] = 0;
+
+			C8 vendorId[64] = { 0 };
+			size = (DWORD) sizeof(vendorId) - 1;
+
+			if(RegQueryValueExA(key, "VendorIdentifier", NULL, NULL, (LPBYTE) vendorId, &size) == ERROR_SUCCESS)
+				out->vendor = Platform_cpuVendorFromString(vendorId);
+
+			//VendorIdentifier is often generic ("ARM Limited"), so fall back to the marketing brand string
+			if(out->vendor == ECPUVendor_Unknown || out->vendor == ECPUVendor_Arm)
+				out->vendor = Platform_cpuVendorFromString(out->brand);
+
+			RegCloseKey(key);
+		}
+
+		if(out->vendor == ECPUVendor_Unknown)
+			out->vendor = ECPUVendor_Arm;
+
+	#endif
+
+	//Topology (physical cores, hybrid P/E split, cache sizes, NUMA nodes) via GetLogicalProcessorInformationEx
+
+	DWORD len = 0;
+	GetLogicalProcessorInformationEx(RelationAll, NULL, &len);
+
+	if(len) {
+
+		U8 *buffer = (U8*) malloc(len);
+
+		if(buffer && GetLogicalProcessorInformationEx(RelationAll, (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) buffer, &len)) {
+
+			U32 perfCores = 0;
+
+			for(U8 *ptr = buffer; ptr < buffer + len; ) {
+
+				const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *info = (const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*) ptr;
+
+				switch(info->Relationship) {
+
+					case RelationProcessorCore:
+						++out->physicalCores;
+						if(info->Processor.EfficiencyClass > 0)        //Higher class = performance core
+							++perfCores;
+						break;
+
+					case RelationCache: {
+						const CACHE_RELATIONSHIP *c = &info->Cache;
+						if(c->Level == 1 && (c->Type == CacheData || c->Type == CacheUnified))
+							out->l1DataCacheBytes = c->CacheSize;
+						else if(c->Level == 2)
+							out->l2CacheBytes = c->CacheSize;
+						else if(c->Level == 3)
+							out->l3CacheBytes = c->CacheSize;
+						break;
+					}
+
+					case RelationNumaNode:
+						++out->numaNodes;
+						break;
+
+					default:
+						break;
+				}
+
+				ptr += info->Size;
+			}
+
+			//Only report a hybrid split when there genuinely is one (P-cores present but not all cores)
+
+			if(perfCores > 0 && perfCores < out->physicalCores) {
+				out->performanceCores = perfCores;
+				out->efficiencyCores  = out->physicalCores - perfCores;
+			}
+		}
+
+		free(buffer);
+	}
+
+	if(!out->numaNodes)
+		out->numaNodes = 1;
+}
+
+//No on screen keyboard here, so there's nothing a hardware one would have to be weighed against.
+
+Bool Platform_hasPhysicalKeyboard() { return true; }
+
+Bool Platform_setKeyboardVisibleForced(Bool isVisible, Bool force) {
+	(void) isVisible;
+	(void) force;
+	return true;
 }
 
 void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
@@ -49,30 +216,38 @@ typedef struct EnumerateFiles {
 	Bool b;
 } EnumerateFiles;
 
-BOOL enumerateFiles(HMODULE mod, LPWSTR unused, LPWSTR name, EnumerateFiles *sections) {
+//Signature matches ENUMRESNAMEPROCW exactly rather than taking the EnumerateFiles* directly.
+//Calling a function through a pointer of a different type is undefined however well it works in
+//practice, and newer clang rejects the cast outright under -Wcast-function-type-mismatch.
 
-	mod; unused;
+BOOL enumerateFiles(HMODULE mod, LPCWSTR unused, LPWSTR name, LONG_PTR param) {
+
+	(void) mod; (void) unused;
+
+	EnumerateFiles *sections = (EnumerateFiles*) param;
 
 	CharString str = CharString_createNull();
-	Error err = Error_none();
-	gotoIfError(clean, CharString_createFromUTF16x((const U16*)name, U64_MAX, &str))
+	Bool s_uccess = true;
+	gotoIfError3(clean, CharString_createFromUTF16((const U16*)name, MAX_OXC_PATH, Platform_instance->alloc, &str, NULL));
 
-	if(CharString_countAllSensitive(str, '/', 0) != 1)
+	if(CharString_countAllSensitive(&str, '/', 0) != 1) {
 		Log_warnLnx("Executable contained unrecognized RCDATA. Ignoring it...");
+		CharString_free(&str, Platform_instance->alloc);
+	}
 
 	else {
 		const VirtualSection section = (VirtualSection) { .path = str };
-		gotoIfError(clean, ListVirtualSection_pushBackx(sections->sections, section))
+		gotoIfError3(clean, ListVirtualSection_pushBack(sections->sections, section, Platform_instance->alloc, NULL));
 	}
 
 clean:
 
-	if(err.genericError) {
-		sections->b = true;			//Signal that we failed
-		CharString_freex(&str);
+	if(!s_uccess) {
+		sections->b = true;            //Signal that we failed
+		CharString_free(&str, Platform_instance->alloc);
 	}
 
-	return !err.genericError;
+	return s_uccess;
 }
 
 void *Platform_getDataImpl(void *ptr) {
@@ -86,13 +261,11 @@ Bool Platform_initExt(Error *e_rr) {
 
 	//Init app dir
 
-	wchar_t buff[MAX_PATH + 1];
-	U32 chars = GetModuleFileNameW(NULL, buff, MAX_PATH);
+	wchar_t buff[MAX_OXC_PATH + 1];
+	U32 chars = GetModuleFileNameW(NULL, buff, MAX_OXC_PATH);
 
-	if(!chars || chars >= MAX_PATH)
-		retError(clean, Error_platformError(
-			0, GetLastError(), "Platform_initExt() GetModuleFileName failed"
-		))
+	if(!chars || chars > MAX_OXC_PATH)
+		retError(clean, Error_platformError(0, GetLastError(), "Platform_initExt() GetModuleFileName failed"));
 
 	buff[chars] = 0;
 
@@ -113,28 +286,30 @@ Bool Platform_initExt(Error *e_rr) {
 	}
 
 	if(lastSlash == U64_MAX)
-		retError(clean, Error_invalidState(0, "Platform_initExt() couldn't find exe name"))
+		retError(clean, Error_invalidState(0, "Platform_initExt() couldn't find exe name"));
 
 	buff[lastSlash + 1] = '\0';
-	gotoIfError2(clean, CharString_createFromUTF16x((const U16*)buff, lastSlash + 1, &Platform_instance->appDirectory))
+	gotoIfError3(clean, CharString_createFromUTF16(
+		(const U16*)buff, lastSlash + 1, Platform_instance->alloc, &Platform_instance->appDirectory, e_rr
+	));
 
 	SetDllDirectoryW(buff);
 
 	//Init working dir
 
-	chars = GetCurrentDirectoryW(MAX_PATH + 1, buff);
+	chars = GetCurrentDirectoryW(MAX_OXC_PATH + 1, buff);
 
-	if(!chars || chars >= MAX_PATH)
-		retError(clean, Error_platformError(
-			0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"
-		))
+	if(!chars || chars > MAX_OXC_PATH)
+		retError(clean, Error_platformError(0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"));
 
 	buff[chars] = 0;
 
-	gotoIfError2(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance->workDirectory))
+	gotoIfError3(clean, CharString_createFromUTF16(
+		(const U16*)buff, chars, Platform_instance->alloc, &Platform_instance->workDirectory, e_rr
+	));
 
 	CharString_replaceAllSensitive(&Platform_instance->workDirectory, '\\', '/', 0, 0);
-	gotoIfError2(clean, CharString_appendx(&Platform_instance->workDirectory, '/'))
+	gotoIfError3(clean, CharString_append(&Platform_instance->workDirectory, '/', Platform_instance->alloc, e_rr));
 
 	//Make default path
 
@@ -146,186 +321,185 @@ Bool Platform_initExt(Error *e_rr) {
 
 	EnumerateFiles files = (EnumerateFiles) { .sections = &Platform_instance->virtualSections };
 
-	if (!EnumResourceNamesW(
-		NULL, RT_RCDATA,
-		(ENUMRESNAMEPROCW)enumerateFiles,
-		(LONG_PTR)&files
-	)) {
+	if (!EnumResourceNamesW(NULL, RT_RCDATA, enumerateFiles, (LONG_PTR)&files)) {
 
 		//Enum resource names also fails if we don't have any resources.
-		//To counter this, enumerateFiles sets stride to 0 if the reason it returned false was because of the function.
+		//To counter this, enumerateFiles sets b if the reason it returned false was because of the function.
 
 		if(files.b)
-			retError(clean, Error_invalidState(1, "Platform_initExt() EnumResourceNames failed"))
+			retError(clean, Error_invalidState(1, "Platform_initExt() EnumResourceNames failed"));
 	}
 
 clean:
 	return s_uccess;
 }
 
-CharString Keyboard_remap(EKey key) {
+Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, CharString *result, Error *e_rr) {
 
+	(void) keyboard;
+
+	Bool s_uccess = true;
 	U32 vkey = 0, scanCode = 0;
 	const C8 *raw = NULL;
 
+	if(!result)
+		retError(clean, Error_nullPointer(3, "Keyboard_remap()::result is required"));
+
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(3, 0, "Keyboard_remap()::result is non empty, indicating memleak"));
+
 	switch(key) {
 
-		case EKey_PrintScreen:	raw = "Print screen";			break;		//TODO: Weird behavior
-		case EKey_ScrollLock:	vkey = VK_SCROLL;				break;
-		case EKey_NumLock:		vkey = VK_NUMLOCK;				break;
-		case EKey_Pause:		raw = "Break";					break;		//TODO: Weird behavior
-		case EKey_Insert:		vkey = VK_INSERT;				break;
-		case EKey_Home:			vkey = VK_HOME;					break;
-		case EKey_PageUp:		vkey = VK_PRIOR;				break;
-		case EKey_PageDown:		vkey = VK_NEXT;					break;
-		case EKey_Delete:		vkey = VK_DELETE;				break;
-		case EKey_End:			vkey = VK_END;					break;
+		case EKey_PrintScreen:    raw = "Print screen";            break;        //TODO: Weird behavior
+		case EKey_ScrollLock:    vkey = VK_SCROLL;                break;
+		case EKey_NumLock:        vkey = VK_NUMLOCK;                break;
+		case EKey_Pause:        raw = "Break";                    break;        //TODO: Weird behavior
+		case EKey_Insert:        vkey = VK_INSERT;                break;
+		case EKey_Home:            vkey = VK_HOME;                    break;
+		case EKey_PageUp:        vkey = VK_PRIOR;                break;
+		case EKey_PageDown:        vkey = VK_NEXT;                    break;
+		case EKey_Delete:        vkey = VK_DELETE;                break;
+		case EKey_End:            vkey = VK_END;                    break;
 
-		case EKey_Up:			vkey = VK_UP;					break;
-		case EKey_Left:			vkey = VK_LEFT;					break;
-		case EKey_Down:			vkey = VK_DOWN;					break;
-		case EKey_Right:		vkey = VK_RIGHT;				break;
+		case EKey_Up:            vkey = VK_UP;                    break;
+		case EKey_Left:            vkey = VK_LEFT;                    break;
+		case EKey_Down:            vkey = VK_DOWN;                    break;
+		case EKey_Right:        vkey = VK_RIGHT;                break;
 
-		case EKey_Select:		vkey = VK_SELECT;				break;
-		case EKey_Print:		vkey = VK_PRINT;				break;
-		case EKey_Execute:		vkey = VK_EXECUTE;				break;
-		case EKey_Back:			vkey = VK_BROWSER_BACK;			break;
-		case EKey_Forward:		vkey = VK_BROWSER_FORWARD;		break;
-		case EKey_Sleep:		vkey = VK_SLEEP;				break;
-		case EKey_Refresh:		vkey = VK_BROWSER_REFRESH;		break;
-		case EKey_Stop:			vkey = VK_BROWSER_STOP;			break;
-		case EKey_Search:		vkey = VK_BROWSER_SEARCH;		break;
-		case EKey_Favorites:	vkey = VK_BROWSER_FAVORITES;	break;
-		case EKey_Start:		vkey = VK_BROWSER_HOME;			break;
-		case EKey_Mute:			vkey = VK_VOLUME_MUTE;			break;
-		case EKey_VolumeDown:	vkey = VK_VOLUME_DOWN;			break;
-		case EKey_VolumeUp:		vkey = VK_VOLUME_UP;			break;
-		case EKey_Skip:			vkey = VK_MEDIA_NEXT_TRACK;		break;
-		case EKey_Previous:		vkey = VK_MEDIA_PREV_TRACK;		break;
-		case EKey_Clear:		vkey = VK_CLEAR;				break;
-		case EKey_Zoom:			vkey = VK_ZOOM;					break;
-		case EKey_Enter:		vkey = VK_RETURN;				break;
-		case EKey_Help:			vkey = VK_HELP;					break;
-		case EKey_Apps:			vkey = VK_APPS;					break;
+		case EKey_Back:            vkey = VK_BROWSER_BACK;            break;
+		case EKey_Forward:        vkey = VK_BROWSER_FORWARD;        break;
+		case EKey_Sleep:        vkey = VK_SLEEP;                break;
+		case EKey_Refresh:        vkey = VK_BROWSER_REFRESH;        break;
+		case EKey_Search:        vkey = VK_BROWSER_SEARCH;        break;
+		case EKey_Mute:            vkey = VK_VOLUME_MUTE;            break;
+		case EKey_VolumeDown:    vkey = VK_VOLUME_DOWN;            break;
+		case EKey_VolumeUp:        vkey = VK_VOLUME_UP;            break;
+		case EKey_Skip:            vkey = VK_MEDIA_NEXT_TRACK;        break;
+		case EKey_Previous:        vkey = VK_MEDIA_PREV_TRACK;        break;
+		case EKey_Clear:        vkey = VK_CLEAR;                break;
+		case EKey_Enter:        vkey = VK_RETURN;                break;
+		case EKey_Help:            vkey = VK_HELP;                    break;
 
-		case EKey_NumpadMul:	vkey = VK_MULTIPLY;				break;
-		case EKey_NumpadAdd:	vkey = VK_ADD;					break;
-		case EKey_NumpadDot:	vkey = VK_DECIMAL;				break;
-		case EKey_NumpadDiv:	vkey = VK_DIVIDE;				break;
-		case EKey_NumpadSub:	vkey = VK_SUBTRACT;				break;
+		case EKey_NumpadMul:    vkey = VK_MULTIPLY;                break;
+		case EKey_NumpadAdd:    vkey = VK_ADD;                    break;
+		case EKey_NumpadDot:    vkey = VK_DECIMAL;                break;
+		case EKey_NumpadDiv:    vkey = VK_DIVIDE;                break;
+		case EKey_NumpadSub:    vkey = VK_SUBTRACT;                break;
 
-		case EKey_Numpad0:		vkey = VK_NUMPAD0;				break;
-		case EKey_Numpad1:		vkey = VK_NUMPAD1;				break;
-		case EKey_Numpad2:		vkey = VK_NUMPAD2;				break;
-		case EKey_Numpad3:		vkey = VK_NUMPAD3;				break;
-		case EKey_Numpad4:		vkey = VK_NUMPAD4;				break;
-		case EKey_Numpad5:		vkey = VK_NUMPAD5;				break;
-		case EKey_Numpad6:		vkey = VK_NUMPAD6;				break;
-		case EKey_Numpad7:		vkey = VK_NUMPAD7;				break;
-		case EKey_Numpad8:		vkey = VK_NUMPAD8;				break;
-		case EKey_Numpad9:		vkey = VK_NUMPAD9;				break;
+		case EKey_Numpad0:        vkey = VK_NUMPAD0;                break;
+		case EKey_Numpad1:        vkey = VK_NUMPAD1;                break;
+		case EKey_Numpad2:        vkey = VK_NUMPAD2;                break;
+		case EKey_Numpad3:        vkey = VK_NUMPAD3;                break;
+		case EKey_Numpad4:        vkey = VK_NUMPAD4;                break;
+		case EKey_Numpad5:        vkey = VK_NUMPAD5;                break;
+		case EKey_Numpad6:        vkey = VK_NUMPAD6;                break;
+		case EKey_Numpad7:        vkey = VK_NUMPAD7;                break;
+		case EKey_Numpad8:        vkey = VK_NUMPAD8;                break;
+		case EKey_Numpad9:        vkey = VK_NUMPAD9;                break;
 
 		//Row 0
 
-		case EKey_Escape:		scanCode = 0x01;				break;
+		case EKey_Escape:        scanCode = 0x01;                break;
 
-		case EKey_F1:			scanCode = 0x3B;				break;
-		case EKey_F2:			scanCode = 0x3C;				break;
-		case EKey_F3:			scanCode = 0x3D;				break;
-		case EKey_F4:			scanCode = 0x3E;				break;
-		case EKey_F5:			scanCode = 0x3F;				break;
-		case EKey_F6:			scanCode = 0x40;				break;
-		case EKey_F7:			scanCode = 0x41;				break;
-		case EKey_F8:			scanCode = 0x42;				break;
-		case EKey_F9:			scanCode = 0x43;				break;
-		case EKey_F10:			scanCode = 0x44;				break;
-		case EKey_F11:			scanCode = 0x57;				break;
-		case EKey_F12:			scanCode = 0x58;				break;
+		case EKey_F1:            scanCode = 0x3B;                break;
+		case EKey_F2:            scanCode = 0x3C;                break;
+		case EKey_F3:            scanCode = 0x3D;                break;
+		case EKey_F4:            scanCode = 0x3E;                break;
+		case EKey_F5:            scanCode = 0x3F;                break;
+		case EKey_F6:            scanCode = 0x40;                break;
+		case EKey_F7:            scanCode = 0x41;                break;
+		case EKey_F8:            scanCode = 0x42;                break;
+		case EKey_F9:            scanCode = 0x43;                break;
+		case EKey_F10:            scanCode = 0x44;                break;
+		case EKey_F11:            scanCode = 0x57;                break;
+		case EKey_F12:            scanCode = 0x58;                break;
 
 		//Row 1
 
-		case EKey_Backtick:		scanCode = 0x29;				break;
-		case EKey_1:			scanCode = 0x02;				break;
-		case EKey_2:			scanCode = 0x03;				break;
-		case EKey_3:			scanCode = 0x04;				break;
-		case EKey_4:			scanCode = 0x05;				break;
-		case EKey_5:			scanCode = 0x06;				break;
-		case EKey_6:			scanCode = 0x07;				break;
-		case EKey_7:			scanCode = 0x08;				break;
-		case EKey_8:			scanCode = 0x09;				break;
-		case EKey_9:			scanCode = 0x0A;				break;
+		case EKey_Backtick:        scanCode = 0x29;                break;
+		case EKey_1:            scanCode = 0x02;                break;
+		case EKey_2:            scanCode = 0x03;                break;
+		case EKey_3:            scanCode = 0x04;                break;
+		case EKey_4:            scanCode = 0x05;                break;
+		case EKey_5:            scanCode = 0x06;                break;
+		case EKey_6:            scanCode = 0x07;                break;
+		case EKey_7:            scanCode = 0x08;                break;
+		case EKey_8:            scanCode = 0x09;                break;
+		case EKey_9:            scanCode = 0x0A;                break;
 
-		case EKey_0:			scanCode = 0xB;					break;
-		case EKey_Minus:		scanCode = 0xC;					break;
-		case EKey_Equals:		scanCode = 0xD;					break;
-		case EKey_Backspace:	scanCode = 0xE;					break;
+		case EKey_0:            scanCode = 0xB;                    break;
+		case EKey_Minus:        scanCode = 0xC;                    break;
+		case EKey_Equals:        scanCode = 0xD;                    break;
+		case EKey_Backspace:    scanCode = 0xE;                    break;
 
 		//Row 2
 
-		case EKey_Tab:			scanCode = 0x0F;				break;
-		case EKey_Q:			scanCode = 0x10;				break;
-		case EKey_W:			scanCode = 0x11;				break;
-		case EKey_E:			scanCode = 0x12;				break;
-		case EKey_R:			scanCode = 0x13;				break;
-		case EKey_T:			scanCode = 0x14;				break;
-		case EKey_Y:			scanCode = 0x15;				break;
-		case EKey_U:			scanCode = 0x16;				break;
-		case EKey_I:			scanCode = 0x17;				break;
-		case EKey_O:			scanCode = 0x18;				break;
-		case EKey_P:			scanCode = 0x19;				break;
-		case EKey_LBracket:		scanCode = 0x1A;				break;
-		case EKey_RBracket:		scanCode = 0x1B;				break;
+		case EKey_Tab:            scanCode = 0x0F;                break;
+		case EKey_Q:            scanCode = 0x10;                break;
+		case EKey_W:            scanCode = 0x11;                break;
+		case EKey_E:            scanCode = 0x12;                break;
+		case EKey_R:            scanCode = 0x13;                break;
+		case EKey_T:            scanCode = 0x14;                break;
+		case EKey_Y:            scanCode = 0x15;                break;
+		case EKey_U:            scanCode = 0x16;                break;
+		case EKey_I:            scanCode = 0x17;                break;
+		case EKey_O:            scanCode = 0x18;                break;
+		case EKey_P:            scanCode = 0x19;                break;
+		case EKey_LBracket:        scanCode = 0x1A;                break;
+		case EKey_RBracket:        scanCode = 0x1B;                break;
 
 		//Row 3
 
-		case EKey_Caps:			scanCode = 0x3A;				break;
-		case EKey_A:			scanCode = 0x1E;				break;
-		case EKey_S:			scanCode = 0x1F;				break;
-		case EKey_D:			scanCode = 0x20;				break;
-		case EKey_F:			scanCode = 0x21;				break;
-		case EKey_G:			scanCode = 0x22;				break;
-		case EKey_H:			scanCode = 0x23;				break;
-		case EKey_J:			scanCode = 0x24;				break;
-		case EKey_K:			scanCode = 0x25;				break;
-		case EKey_L:			scanCode = 0x26;				break;
-		case EKey_Semicolon:	scanCode = 0x27;				break;
-		case EKey_Quote:		scanCode = 0x28;				break;
-		case EKey_Backslash:	scanCode = 0x2B;				break;
+		case EKey_Caps:            scanCode = 0x3A;                break;
+		case EKey_A:            scanCode = 0x1E;                break;
+		case EKey_S:            scanCode = 0x1F;                break;
+		case EKey_D:            scanCode = 0x20;                break;
+		case EKey_F:            scanCode = 0x21;                break;
+		case EKey_G:            scanCode = 0x22;                break;
+		case EKey_H:            scanCode = 0x23;                break;
+		case EKey_J:            scanCode = 0x24;                break;
+		case EKey_K:            scanCode = 0x25;                break;
+		case EKey_L:            scanCode = 0x26;                break;
+		case EKey_Semicolon:    scanCode = 0x27;                break;
+		case EKey_Quote:        scanCode = 0x28;                break;
+		case EKey_Backslash:    scanCode = 0x2B;                break;
 
 		//Row 4
 
-		case EKey_LShift:		scanCode = 0x2A;				break;
-		case EKey_Bar:			scanCode = 0x56;				break;
-		case EKey_Z:			scanCode = 0x2C;				break;
-		case EKey_X:			scanCode = 0x2D;				break;
-		case EKey_C:			scanCode = 0x2E;				break;
-		case EKey_V:			scanCode = 0x2F;				break;
-		case EKey_B:			scanCode = 0x30;				break;
-		case EKey_N:			scanCode = 0x31;				break;
-		case EKey_M:			scanCode = 0x32;				break;
-		case EKey_Comma:		scanCode = 0x33;				break;
-		case EKey_Period:		scanCode = 0x34;				break;
-		case EKey_Slash:		scanCode = 0x35;				break;
-		case EKey_RShift:		scanCode = 0x36;				break;
+		case EKey_LShift:        scanCode = 0x2A;                break;
+		case EKey_Bar:            scanCode = 0x56;                break;
+		case EKey_Z:            scanCode = 0x2C;                break;
+		case EKey_X:            scanCode = 0x2D;                break;
+		case EKey_C:            scanCode = 0x2E;                break;
+		case EKey_V:            scanCode = 0x2F;                break;
+		case EKey_B:            scanCode = 0x30;                break;
+		case EKey_N:            scanCode = 0x31;                break;
+		case EKey_M:            scanCode = 0x32;                break;
+		case EKey_Comma:        scanCode = 0x33;                break;
+		case EKey_Period:        scanCode = 0x34;                break;
+		case EKey_Slash:        scanCode = 0x35;                break;
+		case EKey_RShift:        scanCode = 0x36;                break;
 
 		//Row 5
 
-		case EKey_LCtrl:		scanCode = 0x1D;				break;
-		case EKey_LMenu:		scanCode = 0xE05B;				break;
-		case EKey_LAlt:			scanCode = 0x38;				break;
-		case EKey_Space:		scanCode = 0x39;				break;
-		case EKey_RAlt:			scanCode = 0xE038;				break;
-		case EKey_RMenu:		scanCode = 0xE05C;				break;
-		case EKey_Options:		scanCode = 0xE05D;				break;
-		case EKey_RCtrl:		scanCode = 0xE01D;				break;
+		case EKey_LCtrl:        scanCode = 0x1D;                break;
+		case EKey_LMenu:        scanCode = 0xE05B;                break;
+		case EKey_LAlt:            scanCode = 0x38;                break;
+		case EKey_Space:        scanCode = 0x39;                break;
+		case EKey_RAlt:            scanCode = 0xE038;                break;
+		case EKey_RMenu:        scanCode = 0xE05C;                break;
+		case EKey_Options:        scanCode = 0xE05D;                break;
+		case EKey_RCtrl:        scanCode = 0xE01D;                break;
 
 		//Unknown key
 
-		default:				break;
+		default:                break;
 	}
 
-	if(raw)
-		return CharString_createRefCStrConst(raw);
+	if(raw) {
+		*result = CharString_createRefCStrConst(raw);
+		goto clean;
+	}
 
 	if(!scanCode && vkey)
 		scanCode = MapVirtualKeyExW(vkey, MAPVK_VK_TO_VSC_EX, 0);
@@ -348,19 +522,18 @@ CharString Keyboard_remap(EKey key) {
 	}
 
 	if(!scanCode)
-		return CharString_createNull();
+		retError(clean, Error_notFound(0, 0, "Keyboard_remap() scancode not found"));
 
 	wchar_t name[32];
 	I32 res = GetKeyNameTextW(scanCode << 16, name, sizeof(name));
 
 	if(res > 0) {
-
-		CharString tmp = CharString_createNull();
-		Error err = CharString_createFromUTF16x((const U16*)name, res, &tmp);
-
-		if(!err.genericError)
-			return tmp;
+		gotoIfError3(clean, CharString_createFromUTF16((const U16*)name, res, alloc, result, e_rr));
+		goto clean;
 	}
 
-	return CharString_createNull();
+	retError(clean, Error_notFound(0, 0, "Keyboard_remap() key not found"));
+
+clean:
+	return s_uccess;
 }

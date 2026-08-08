@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,14 +18,21 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/log.h"
+//types/container/platforms/windows/wlog.c
+
 #include "types/container/string.h"
+#include "types/container/log.h"
+#include "types/container/file_base.h"
+#include "types/container/buffer.h"
+#include "types/container/list_basic_types.h"
+#include "types/container/string_unicode.h"
 #include "types/base/thread.h"
 #include "types/base/time.h"
-#include "types/container/buffer.h"
+#include "types/base/string_mut.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 #include "types/base/lock.h"
+#include "types/base/constants.h"
 
 //Unfortunately before Windows 10 it doesn't support printing colors into console using printf
 //We also use Windows dependent stack tracing
@@ -41,12 +48,7 @@
 
 #pragma comment(lib, "DbgHelp.lib")
 
-//Carried over from core2
-
-void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skip) {
-	(void) alloc;
-	RtlCaptureStackBackTrace((DWORD)(1 + (U32)skip), (DWORD) stackSize, stack, NULL);
-}
+//Carried over from OxC2
 
 typedef struct CapturedStackTrace {
 
@@ -62,190 +64,212 @@ typedef struct CapturedStackTrace {
 } CapturedStackTrace;
 
 static const WORD COLORS[] = {
-	2,	/* green */
-	3,	/* cyan */
-	14,	/* yellow */
-	4	/* red */
+	2,    //green
+	3,    //cyan
+	14,    //yellow
+	4    //red
 };
 
+SpinLock LogInitLock = { 0 };
+I8 LogInitStatus = -1;
+
 void Log_printCapturedStackTraceCustom(
-	Allocator alloc,
+	const Allocator *alloc,
 	const void **stackTrace,
 	U64 stackSize,
 	ELogLevel lvl,
 	ELogOptions opt
 ) {
-
-	if(!stackTrace)
+	if(!stackTrace || lvl >= ELogLevel_Count)
 		return;
 
-	if(lvl >= ELogLevel_Count)
-		return;
+	const CharString outOfStackSize = CharString_createRefCStrConst("DEV ERROR: Maximum stackSize exceeded, truncating!");
+	if(stackSize > STACKTRACE_SIZE)
+		Log_log(alloc, lvl, opt, &outOfStackSize);
 
 	CapturedStackTrace captured[STACKTRACE_SIZE] = { 0 };
+	U64 captureCount = 0;
 
-	U64 stackCount = 0;
+	Bool hasSymbols = false;
+	HANDLE process = GetCurrentProcess();
 
-	//Obtain process
+	ELockAcquire acq = SpinLock_lock(&LogInitLock, 1 * MS);
+	if(acq >= ELockAcquire_Success) {
 
-	const HANDLE process = GetCurrentProcess();
+		if(LogInitStatus < 0)
+			LogInitStatus = (I8)SymInitialize(process, NULL, TRUE);
+
+		hasSymbols = LogInitStatus;
+
+		if(acq == ELockAcquire_Acquired)
+			SpinLock_unlock(&LogInitLock);
+	}
+
 	CharString tmp = CharString_createNull();
-
-	const Bool hasSymbols = SymInitialize(process, NULL, TRUE);
 	Bool anySymbol = false;
+	Bool allocFailed = false;
 
-	if(hasSymbols)
-		for (
+	if(hasSymbols) {
+		for(
 			U64 i = 0;
 			i < stackSize && i < STACKTRACE_SIZE &&
 			stackTrace[i] && stackTrace[i] != (void*)0xCCCCCCCCCCCCCCCC;
-			++i, ++stackCount
+			++i
 		) {
-
-			const U64 addr = (U64) stackTrace[i];
+			const U64 addr = (U64)stackTrace[i];
 
 			//Get module name
-
-			const U64 moduleBase = SymGetModuleBase(process, addr);
-
-			wchar_t modulePath[MAX_PATH + 1] = { 0 };
-			if (!moduleBase || !GetModuleFileNameW((HINSTANCE)moduleBase, modulePath, MAX_PATH))
+			const U64 moduleBase = SymGetModuleBase64(process, addr);
+			wchar_t modulePath[MAX_OXC_PATH + 1] = { 0 };
+			if(!moduleBase || !GetModuleFileNameW((HINSTANCE)moduleBase, modulePath, MAX_OXC_PATH))
 				continue;
 
 			anySymbol = true;
 
-			U32 symbolData[(sizeof(IMAGEHLP_SYMBOL) + MAX_PATH + 1 + 3) &~ 3] = { 0 };
+			//Get symbol name, stored in a stack buffer, must be copied before end of iteration
+			U32 symbolData[(sizeof(IMAGEHLP_SYMBOL64) + MAX_OXC_PATH + 1 + 3) &~ 3] = { 0 };
+			PIMAGEHLP_SYMBOL64 symbol = (PIMAGEHLP_SYMBOL64)symbolData;
+			symbol->SizeOfStruct  = sizeof(IMAGEHLP_SYMBOL64);
+			symbol->MaxNameLength = MAX_OXC_PATH;
 
-			PIMAGEHLP_SYMBOL symbol = (PIMAGEHLP_SYMBOL)symbolData;
-			symbol->SizeOfStruct = sizeof(symbolData);
-			symbol->MaxNameLength = MAX_PATH;
-
-			C8 *symbolName = symbol->Name;
-
-			if (!SymGetSymFromAddr(process, addr, NULL, symbol))
+			if(!SymGetSymFromAddr64(process, addr, NULL, symbol))
 				continue;
 
-			DWORD offset = 0;
-			IMAGEHLP_LINE line = { 0 };
-			line.SizeOfStruct = sizeof(line);
+			DWORD lineOffset = 0;
+			IMAGEHLP_LINEW64 line = { .SizeOfStruct = sizeof(IMAGEHLP_LINEW64) };
+			SymGetLineFromAddrW64(process, addr, &lineOffset, &line);    //Can fail, line stays zeroed
 
-			SymGetLineFromAddr(process, addr, &offset, &line);	//Can fail, meaning that line is null
+			CapturedStackTrace *capture = &captured[captureCount];
 
-			if (line.FileName && strlen(line.FileName) > MAX_PATH)
-				continue;
+			//Copy symbol name, it lives in symbolData which goes out of scope
 
-			CapturedStackTrace *capture = captured + i;
-			capture->sym = CharString_createRefAuto(symbolName, MAX_PATH);
+			CharString symRef = CharString_createRefAuto(symbol->Name, MAX_OXC_PATH);
+			CharString_formatPath(&symRef);
 
-			CharString_formatPath(&capture->sym);
+			if(!CharString_createCopy(symRef, alloc, &capture->sym, NULL)) {
+				allocFailed = true;
+				break;
+			}
 
-			if(line.FileName)
-				capture->fil = CharString_createRefAutoConst(line.FileName, MAX_PATH);
-
-			//Copy strings to heap, since they'll go out of scope
-
-			Error err;
+			//Copy module & file path, UTF-16 to UTF-8
 
 			if(modulePath[0])
-				gotoIfError(cleanup, CharString_createFromUTF16((const U16*) modulePath, MAX_PATH, alloc, &capture->mod))
+				if(!CharString_createFromUTF16((const U16*)modulePath, MAX_OXC_PATH, alloc, &capture->mod, NULL)) {
+					allocFailed = true;
+					break;
+				}
 
-			if(CharString_length(capture->sym)) {
-				gotoIfError(cleanup, CharString_createCopy(capture->sym, alloc, &tmp))
-				capture->sym = tmp;
-				tmp = CharString_createNull();
-			}
-
-			if(CharString_length(capture->fil)) {
-				gotoIfError(cleanup, CharString_createCopy(capture->fil, alloc, &tmp))
-				capture->fil = tmp;
-				tmp = CharString_createNull();
-			}
+			if(line.FileName)
+				if(!CharString_createFromUTF16((const U16*)line.FileName, MAX_OXC_PATH, alloc, &capture->fil, NULL)) {
+					allocFailed = true;
+					break;
+				}
 
 			capture->lin = line.LineNumber;
-			continue;
-
-			//Cleanup the stack if we can't move anything to heap anymore
-
-		cleanup:
-
-			for (U64 j = 0; j < i; ++j) {
-				CharString_free(&captured[j].fil, alloc);
-				CharString_free(&captured[j].sym, alloc);
-				CharString_free(&captured[j].mod, alloc);
-			}
-
-			Log_log(alloc, lvl, opt, CharString_createRefCStrConst("Failed to print stacktrace:"));
-			return;
+			++captureCount;
 		}
+	}
+
+	if(allocFailed) {
+
+		//Free whatever we managed to capture
+		for(U64 j = 0; j < captureCount; ++j) {
+			CharString_free(&captured[j].fil, alloc);
+			CharString_free(&captured[j].sym, alloc);
+			CharString_free(&captured[j].mod, alloc);
+		}
+
+		const CharString failedPrintStack = CharString_createRefCStrConst("Failed to print stacktrace:");
+		Log_log(alloc, lvl, opt, &failedPrintStack);
+		return;
+	}
 
 	opt |= ELogOptions_NoBreak | ELogOptions_NewLine;
 
-	if(hasSymbols && anySymbol)
-		Log_log(alloc, lvl, opt, CharString_createRefCStrConst("Stacktrace:"));
+	const CharString stackTraceMsg    = CharString_createRefCStrConst("Stacktrace:");
+	const CharString stackTraceNoSyms = CharString_createRefCStrConst("Stacktrace: (No symbols)");
 
-	else Log_log(alloc, lvl, opt, CharString_createRefCStrConst("Stacktrace: (No symbols)"));
+	Log_log(alloc, lvl, opt, hasSymbols && anySymbol ? &stackTraceMsg : &stackTraceNoSyms);
 
 	Bool panic = false;
 
-	for (U64 i = 0; i < stackCount; ++i) {
-
+	for(U64 i = 0; i < captureCount; ++i) {
 		CapturedStackTrace capture = captured[i];
 
+		Error formatErr = Error_none();
+
 		if(!CharString_length(capture.sym))
-			panic |= CharString_format(alloc, &tmp, "%p\n", stackTrace[i]).genericError;
+			CharString_format(alloc, &tmp, &formatErr, "%p\n", stackTrace[i]);
 
 		else if(capture.lin)
-			panic |= CharString_format(alloc, &tmp,
+			CharString_format(alloc, &tmp, &formatErr,
 				"%p: %.*s!%.*s (%.*s, Line %"PRIu32")\n",
 				stackTrace[i],
-				(int) CharString_length(capture.mod), capture.mod.ptr,
-				(int) CharString_length(capture.sym), capture.sym.ptr,
-				(int) CharString_length(capture.fil), capture.fil.ptr,
+				(int)CharString_length(capture.mod), capture.mod.ptr,
+				(int)CharString_length(capture.sym), capture.sym.ptr,
+				(int)CharString_length(capture.fil), capture.fil.ptr,
 				capture.lin
-			).genericError;
+			);
 
-		else panic |= CharString_format(alloc, &tmp,
-			"%p: %.*s!%.*s\n",
-			stackTrace[i],
-			(int) CharString_length(capture.mod), capture.mod.ptr,
-			(int) CharString_length(capture.sym), capture.sym.ptr
-		).genericError;
+		else
+			CharString_format(alloc, &tmp, &formatErr,
+				"%p: %.*s!%.*s\n",
+				stackTrace[i],
+				(int)CharString_length(capture.mod), capture.mod.ptr,
+				(int)CharString_length(capture.sym), capture.sym.ptr
+			);
 
-		Log_log(alloc, lvl, opt &~ ELogOptions_Default, tmp);
-		CharString_free(&tmp, alloc);
-
-		//We now don't need the strings anymore
+		if(formatErr.genericError)
+			panic = true;
+		else {
+			Log_log(alloc, lvl, opt &~ ELogOptions_Default, &tmp);
+			CharString_free(&tmp, alloc);
+		}
 
 		CharString_free(&capture.fil, alloc);
 		CharString_free(&capture.sym, alloc);
 		CharString_free(&capture.mod, alloc);
 	}
 
+	const CharString panicMsg = CharString_createRefCStrConst("PANIC: Failed to format one of the stacktraces");
 	if(panic)
-		Log_log(alloc, lvl, opt, CharString_createRefCStrConst("PANIC: Failed to format one of the stacktraces"));
-
-	SymCleanup(process);
+		Log_log(alloc, lvl, opt, &panicMsg);
 }
 
-SpinLock lock;
+static inline Bool isConsole(HANDLE stdOut) {
 
-void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
+	if(stdOut == INVALID_HANDLE_VALUE)
+		return false;
+	
+	U32 fileType = GetFileType(stdOut) &~ FILE_TYPE_REMOTE;
+
+	//A console is a FILE_TYPE_CHAR device.
+	//GetFileType returning FILE_TYPE_UNKNOWN on failure already fails this check, so no GetLastError is needed.
+
+	if(fileType != FILE_TYPE_CHAR)
+		return false;
+
+	DWORD mode;
+	return GetConsoleMode(stdOut, &mode);
+}
+
+SpinLock LogPrettyPrintLock;
+
+void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const CharString *arg) {
 
 	if(lvl >= ELogLevel_Count)
 		return;
 
-	const Ns t = Time_now();
-	const U64 thread = Thread_getId();
-
 	TimeFormat tf;
 
 	if (options & ELogOptions_Timestamp)
-		Time_format(t, tf, true);
+		Time_format(Time_now(), tf, true);
 
 	const Bool debugger = IsDebuggerPresent();
 
-	CharString copy = (CharString) { 0 };
-	ListU16 tmp = (ListU16) { 0 };
+	CharString copy = { 0 };
+	ListU16 tmp = { 0 };
+	ELockAcquire acq = ELockAcquire_Invalid;
 
 	Bool panic = false;
 
@@ -254,71 +278,75 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 		case ELogOptions_None:
 		case ELogOptions_NewLine:
 
-			panic = CharString_createCopy(arg, alloc, &copy).genericError;
+			if (!arg)
+				break;
+
+			panic = !CharString_createCopy(*arg, alloc, &copy, NULL);
 
 			if((options & ELogOptions_NewLine) && !panic)
-				panic |= CharString_append(&copy, '\n', alloc).genericError;
+				panic |= !CharString_append(&copy, '\n', alloc, NULL);
 
 			break;
 
 		case ELogOptions_Thread:
 		case ELogOptions_Thread | ELogOptions_NewLine:
 
-			panic = CharString_format(
-				alloc, &copy,
+			panic = !CharString_format(
+				alloc, &copy, NULL,
 				"[%"PRIu64"]: %.*s%s",
-				thread,
-				(int) CharString_length(arg), arg.ptr,
+				Thread_getId(),
+				!arg ? 0 : (int) CharString_length(*arg), !arg ? "" : arg->ptr,
 				options & ELogOptions_NewLine ? "\n" : ""
-			).genericError;
+			);
 
 			break;
 
 		case ELogOptions_Timestamp:
 		case ELogOptions_Timestamp | ELogOptions_NewLine:
 
-			panic = CharString_format(
-				alloc, &copy,
+			panic = !CharString_format(
+				alloc, &copy, NULL,
 				"[%s]: %.*s%s",
 				tf,
-				(int) CharString_length(arg), arg.ptr,
+				!arg ? 0 : (int) CharString_length(*arg), !arg ? "" : arg->ptr,
 				options & ELogOptions_NewLine ? "\n" : ""
-			).genericError;
+			);
 
 			break;
 
 		case ELogOptions_Timestamp | ELogOptions_Thread:
-		case ELogOptions_Timestamp | ELogOptions_Thread| ELogOptions_NewLine:
+		case ELogOptions_Timestamp | ELogOptions_Thread | ELogOptions_NewLine:
 
-			panic = CharString_format(
-				alloc, &copy,
+			panic = !CharString_format(
+				alloc, &copy, NULL,
 				"[%"PRIu64"%s]: %.*s%s",
-				thread, tf,
-				(int) CharString_length(arg), arg.ptr,
+				Thread_getId(), tf,
+				!arg ? 0 : (int) CharString_length(*arg), !arg ? "" : arg->ptr,
 				options & ELogOptions_NewLine ? "\n" : ""
-			).genericError;
+			);
 
 			break;
 	}
 
-	panic |= CharString_toUTF16(copy, alloc, &tmp).genericError;
+	HANDLE stdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	Bool hasConsole = isConsole(stdOut);
 
-	if(debugger) {
+	if(hasConsole || debugger)
+		panic |= !CharString_toUTF16(copy, alloc, &tmp, NULL);
 
+	if(CharString_length(copy) >= U32_MAX)
+		goto skipConsole;
+
+	if(debugger)
 		OutputDebugStringW(tmp.ptr);
 
-		if(panic)
-			OutputDebugStringW(
-				L"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
-				L"This is normally okay, as long as a new string can be allocated.\n"
-				L"In this case, allocation failed, which suggests corruption or out of memory.\n"
-			);
-	}
+	if(!stdOut)
+		goto skipConsole;
 
 	//We have to lock to ensure that the console text is the right color.
 	//Otherwise if #1 logs green, #2 logs red, it might change color in-between.
 
-	ELockAcquire acq = SpinLock_lock(&lock, 1 * SECOND);
+	acq = SpinLock_lock(&LogPrettyPrintLock, 1 * SECOND);
 
 	if(acq < ELockAcquire_Success) {
 
@@ -331,23 +359,37 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	//Remember old to ensure we can reset
 
 	CONSOLE_SCREEN_BUFFER_INFO info;
-	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
+	GetConsoleScreenBufferInfo(stdOut, &info);
 	const WORD oldColor = info.wAttributes;
 
 	//Prepare for message
+	//https://archives.miloush.net/michkap/archive/2010/10/07/10072032.html
+	//We can't use printf because we need colors.
+	//We can't just use WriteConsole because our message might be redirected to a file!
+	// This also happens when we are being executed by visual studio, git bash or on a runner or something.
 
-	const HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleTextAttribute(handle, COLORS[lvl]);
+	if (!panic) {
 
-	if (!panic)
-		WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), (const wchar_t*) tmp.ptr, (int) tmp.length, NULL, NULL);
+		SetConsoleTextAttribute(stdOut, COLORS[lvl]);
+		
+		if(hasConsole)
+			WriteConsoleW(stdOut, (const wchar_t*) tmp.ptr, (int) tmp.length, NULL, NULL);
 
-	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
+		else if(!WriteFile(stdOut, copy.ptr, (DWORD) CharString_length(copy), NULL, NULL)) {
+			panic = true;
+			goto skipConsole;
+		}
+
+		SetConsoleTextAttribute(stdOut, oldColor);
+	}
 
 skipConsole:
 
+	if(panic && debugger)
+		OutputDebugStringW(L"PANIC! Internal error occurred during wlog.c::Log_log, such as allocation or WriteFile");
+
 	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(&lock);
+		SpinLock_unlock(&LogPrettyPrintLock);
 
 	CharString_free(&copy, alloc);
 	ListU16_free(&tmp, alloc);
@@ -356,29 +398,20 @@ skipConsole:
 		DebugBreak();
 }
 
-CharString Error_formatPlatformError(Allocator alloc, Error err) {
+CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) {
 
-	if(err.genericError != EGenericError_PlatformError)
-		return CharString_createNull();
-
-	if(!FAILED(err.paramValue0))
+	if(e_rr->paramValue0 == ERROR_SUCCESS)
 		return CharString_createNull();
 
 	wchar_t *lpBuffer = NULL;
 
 	const DWORD f = FormatMessageW(
-
-		FORMAT_MESSAGE_ALLOCATE_BUFFER |
-		FORMAT_MESSAGE_FROM_SYSTEM,
-
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 		NULL,
-		(DWORD) err.paramValue0,
-
+		(DWORD) e_rr->paramValue0,
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
-
 		(LPWSTR) &lpBuffer,
 		0,
-
 		NULL
 	);
 
@@ -387,11 +420,8 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 	if(!f)
 		return CharString_createNull();
 
-	CharString res;
-	if((err = CharString_createFromUTF16((const U16*)lpBuffer, U64_MAX, alloc, &res)).genericError) {
-		LocalFree(lpBuffer);
-		return CharString_createNull();
-	}
+	CharString res = CharString_createNull();
+	CharString_createFromUTF16((const U16*)lpBuffer, U64_MAX, alloc, &res, NULL);
 
 	LocalFree(lpBuffer);
 	return res;

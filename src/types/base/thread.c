@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,33 +18,39 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/list_impl.h"
+//types/base/thread.c
+
 #include "types/base/thread.h"
 #include "types/base/error.h"
+#include "types/base/allocator.h"
+#include "types/base/buffer_base.h"
 #include "types/container/buffer.h"
 
-TListNamedImpl(ListThread);
+impl void Thread_freeExt(Thread *thread);
 
-Bool Thread_free(Allocator alloc, Thread **thread) {
+void Thread_free(const Allocator *alloc, Thread **thread) {
 
 	if(!thread || !*thread)
-		return true;
+		return;
 
-	const Bool freed = alloc.free(alloc.ptr, Buffer_createManagedPtr(*thread, sizeof(Thread)));
+	Thread_freeExt(*thread);
+	alloc->free(alloc->ptr, Buffer_createManagedPtr(*thread, sizeof(Thread)));
 	*thread = NULL;
-	return freed;
 }
 
-Error Thread_waitAndCleanup(Allocator alloc, Thread **thread) {
+Bool Thread_waitAndCleanup(const Allocator *alloc, Thread **thread, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!thread || !*thread)
-		return Error_nullPointer(0, "Thread_waitAndCleanup()::thread and *thread are required");
+		retError(clean, Error_nullPointer(0, "Thread_waitAndCleanup()::thread and *thread are required"));
 
-	const Error err = Thread_wait(*thread);
+	if(!alloc || !alloc->free)
+		retError(clean, Error_nullPointer(0, "Thread_waitAndCleanup()::alloc and alloc->free are required"));
 
-	if(err.genericError == EGenericError_TimedOut)
-		return err;
-
+	gotoIfError3(clean, Thread_wait(*thread, e_rr));
 	Thread_free(alloc, thread);
-	return err;
+
+clean:
+	return s_uccess;
 }

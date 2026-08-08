@@ -1,0 +1,17 @@
+name: Android Vulkan (Windows host)
+on: [push]
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Android Vulkan (Windows host)
+      runner: windows-2022
+      os: android
+      build_flags: ''
+      python_cmd: python
+      setup_python: false
+      python_version: ''
+      hook_name: Android-Windows-static
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

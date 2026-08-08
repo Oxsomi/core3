@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,7 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//graphics/vulkan/generic/vk_device_texture.c
+
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
@@ -28,28 +29,33 @@
 #include "graphics/vulkan/vk_buffer.h"
 #include "types/container/texture_format.h"
 #include "types/container/ref_ptr.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
+#include "types/container/buffer.h"
+#include "types/base/string_base.h"
+#include "types/base/constants.h"
 
-Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
+Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
+	void *commandBufferExt,
+	GraphicsDeviceRef *deviceRef,
+	DeviceTextureRef *pending,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
 	U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
 	DeviceTexture *texture = DeviceTextureRef_ptr(pending);
 	VkUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(pending, Vk, 0);
 
-	Error err = Error_none();
-
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 	DeviceBufferRef *tempStagingResource = NULL;
+	ELockAcquire acq = ELockAcquire_Invalid;
 
 	ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
 	Bool compressed = ETextureFormat_getIsCompressed(format);
@@ -78,30 +84,51 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 	device->pendingBytes += allocRange;
 
-	gotoIfError(clean, ListVkBufferImageCopy_resizex(&deviceExt->bufferImageCopyRanges, texture->pendingChanges.length))
+	gotoIfError3(clean, ListVkBufferImageCopy_resize(
+		&deviceExt->bufferImageCopyRanges,
+		texture->pendingChanges.length,
+		alloc,
+		e_rr
+	));
 
 	VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
-	gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&deviceExt->bufferTransitions, 2 + texture->pendingChanges.length))
+	gotoIfError3(clean, ListVkBufferMemoryBarrier2_reserve(
+		&deviceExt->bufferTransitions,
+		2 + texture->pendingChanges.length,
+		alloc,
+		e_rr
+	));
 
 	U8 alignmentX = 1, alignmentY = 1;
 	ETextureFormat_getAlignment(format, &alignmentX, &alignmentY);
 
 	VkImageSubresourceLayers range = (VkImageSubresourceLayers) { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT };
 
-	if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
+	if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
 
-		gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+		CharString dedicatedStagingName = CharString_createRefCStrConst("Dedicated staging buffer");
+
+		gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 			deviceRef,
 			EDeviceBufferUsage_None, EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
-			CharString_createRefCStrConst("Dedicated staging buffer"),
-			allocRange, &tempStagingResource
-		))
+			NULL,
+			&dedicatedStagingName,
+			allocRange, &tempStagingResource, e_rr
+		));
 
 		DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
 		VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);
 		U8 *location = stagingResource->resource.mappedMemoryExt;
 
+		acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[stagingResource->resource.blockId];
+
+		if(acq == ELockAcquire_Acquired)
+			SpinLock_unlock(&device->allocator.lock);
+
+		acq = ELockAcquire_Invalid;
+
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		//Copy into our buffer
@@ -169,10 +196,10 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 				.size = allocRange
 			};
 
-			vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
+			deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 		}
 
-		gotoIfError(clean, VkDeviceBuffer_transition(
+		gotoIfError3(clean, VkDeviceBuffer_transition(
 			stagingResourceExt,
 			VK_PIPELINE_STAGE_2_COPY_BIT,
 			VK_ACCESS_2_TRANSFER_READ_BIT,
@@ -180,16 +207,15 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			0,
 			allocRange,
 			&deviceExt->bufferTransitions,
-			&dependency
-		))
+			&dependency, alloc, e_rr));
 
-		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {		//TODO: Add range
+		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {        //TODO: Add range
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.levelCount = 1,
 			.layerCount = 1
 		};
 
-		gotoIfError(clean, VkUnifiedTexture_transition(
+		gotoIfError3(clean, VkUnifiedTexture_transition(
 			textureExt,
 			VK_PIPELINE_STAGE_2_COPY_BIT,
 			VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -197,13 +223,13 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			graphicsQueueId,
 			&range2,
 			&deviceExt->imageTransitions,
-			&dependency
-		))
+			&dependency, alloc, e_rr
+		));
 
 		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
+			deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
-		vkCmdCopyBufferToImage(
+		deviceExt->cmdCopyBufferToImage(
 			commandBuffer->buffer,
 			stagingResourceExt->buffer,
 			textureExt->image,
@@ -214,7 +240,7 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 		//When staging resource is committed to current in flight then we can relinquish ownership.
 
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempStagingResource))
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, tempStagingResource, alloc, e_rr));
 		tempStagingResource = NULL;
 	}
 
@@ -222,37 +248,66 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 	else {
 
-		gotoIfError(clean, ListVkBufferImageCopy_resizex(&deviceExt->bufferImageCopyRanges, texture->pendingChanges.length))
+		gotoIfError3(clean, ListVkBufferImageCopy_resize(
+			&deviceExt->bufferImageCopyRanges,
+			texture->pendingChanges.length,
+			alloc,
+			e_rr
+		));
 
-		AllocationBuffer *stagingBuffer = &device->stagingAllocations[(device->submitId - 1) % 3];
+		AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->fifId];
 		DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 		VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
 
 		U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
-		Error temp = AllocationBuffer_allocateBlockx(
-			stagingBuffer, allocRange, compressed ? 16 : 4, (const U8**) &location
-		);
+		Error temp = Error_none();
 
-		if(temp.genericError && location == defaultLocation)		//Something major went wrong
-			gotoIfError(clean, temp)
+		AllocationBufferAllocate allocBuffer = (AllocationBufferAllocate) {
+			.allocationBuffer = stagingBuffer,
+			.alignment = compressed ? 16 : 4,
+			.alloc = alloc
+		};
+
+		Bool allocated = AllocationBuffer_allocateBlock(&allocBuffer, allocRange, (const U8**) &location, &temp);
+
+		if(!allocated && location == defaultLocation) {        //Something major went wrong
+			if(e_rr) *e_rr = temp;
+			s_uccess = false;
+			goto clean;
+		}
 
 		//We re-create the staging buffer to fit the new allocation.
 
-		if (temp.genericError) {
+		if (!allocated) {
 
 			U64 prevSize = DeviceBufferRef_ptr(device->staging)->resource.size;
 
 			//Allocate new staging buffer.
 
 			U64 newSize = prevSize * 2 + allocRange * 3;
-			gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize))
-			gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location))
+			gotoIfError3(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize, e_rr));
+
+			allocBuffer = (AllocationBufferAllocate) {
+				.allocationBuffer = stagingBuffer,
+				.alignment = compressed ? 16 : 4,
+				.alloc = alloc
+			};
+
+			gotoIfError3(clean, AllocationBuffer_allocateBlock(&allocBuffer, allocRange, (const U8**) &location, e_rr));
 
 			staging = DeviceBufferRef_ptr(device->staging);
 			stagingExt = DeviceBuffer_ext(staging, Vk);
 		}
 
+		acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[staging->resource.blockId];
+
+		if(acq == ELockAcquire_Acquired)
+			SpinLock_unlock(&device->allocator.lock);
+
+		acq = ELockAcquire_Invalid;
+
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		//Copy into our buffer
@@ -321,33 +376,33 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 				.size = allocRange
 			};
 
-			vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
+			deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 		}
 
 		if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
 
-			gotoIfError(clean, VkDeviceBuffer_transition(						//Ensure resource is transitioned
+			gotoIfError3(clean, VkDeviceBuffer_transition(                        //Ensure resource is transitioned
 				stagingExt,
 				VK_PIPELINE_STAGE_2_COPY_BIT,
 				VK_ACCESS_2_TRANSFER_READ_BIT,
 				graphicsQueueId,
-				((device->submitId - 1) % 3) * (staging->resource.size / 3),
-				staging->resource.size / 3,
+				device->fifId * (staging->resource.size / device->framesInFlight),
+				staging->resource.size / device->framesInFlight,
 				&deviceExt->bufferTransitions,
-				&dependency
-			))
+				&dependency, alloc, e_rr
+			));
 
 			RefPtr_inc(device->staging);
-			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
+			gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, device->staging, alloc, e_rr));        //Add to in flight
 		}
 
-		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {		//TODO: Add range
+		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {        //TODO: Add range
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.levelCount = 1,
 			.layerCount = 1
 		};
 
-		gotoIfError(clean, VkUnifiedTexture_transition(
+		gotoIfError3(clean, VkUnifiedTexture_transition(
 			textureExt,
 			VK_PIPELINE_STAGE_2_COPY_BIT,
 			VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -355,13 +410,12 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			graphicsQueueId,
 			&range2,
 			&deviceExt->imageTransitions,
-			&dependency
-		))
+			&dependency, alloc, e_rr));
 
 		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
+			deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
-		vkCmdCopyBufferToImage(
+		deviceExt->cmdCopyBufferToImage(
 			commandBuffer->buffer,
 			stagingExt->buffer,
 			textureExt->image,
@@ -372,21 +426,25 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 	}
 
 	if(!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked))
-		Buffer_freex(&texture->cpuData);
+		Buffer_free(&texture->cpuData, alloc);
 
 	texture->isFirstFrame = texture->isPending = texture->isPendingFullCopy = false;
-	gotoIfError(clean, ListDevicePendingRange_clear(&texture->pendingChanges))
+	gotoIfError3(clean, ListDevicePendingRange_clear(&texture->pendingChanges, e_rr));
 
 	if(RefPtr_inc(pending))
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
 
 	if (device->pendingBytes >= device->flushThreshold)
-		gotoIfError(clean, VkGraphicsDevice_flush(deviceRef, commandBuffer))
+		gotoIfError3(clean, VkGraphicsDevice_flush(deviceRef, commandBuffer, e_rr));
 
 clean:
-	DeviceBufferRef_dec(&tempStagingResource);
-	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
-	ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
-	ListVkBufferImageCopy_clear(&deviceExt->bufferImageCopyRanges);
-	return err;
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->allocator.lock);
+
+	RefPtr_dec(&tempStagingResource);
+	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
+	ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions, e_rr);
+	ListVkBufferImageCopy_clear(&deviceExt->bufferImageCopyRanges, e_rr);
+	return s_uccess;
 }

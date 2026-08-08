@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,9 +18,12 @@
 *  This is called dual licensing.
 */
 
+//formats/oiBC/chimera.c
+
 #include "formats/oiBC/chimera.h"
+#include "types/math/vec4f.h"
 #include "types/base/error.h"
-#include "types/math/math.h"
+#include "types/base/mathf.h"
 
 void Chimera_swapF32(F32 *a, F32 *b) {
 	const F32 tmp = *a;
@@ -43,15 +46,7 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 	if(!chim)
 		return;
 
-	//NaN for invalid operations (all exponent bits are set, and first mantissa bit)
-
-	const U32 NaNu =
-		(((U32)EFloatType_exponentMask(EFloatType_F32) << 1) | 1) <<
-		((U32)EFloatType_exponentShift(EFloatType_F32) - 1);
-
-	const void *NaNuptr = &NaNu;
-	const F32 NaN = *(const F32*) NaNuptr;
-	const U8 reg = op & 3;					//Doesn't always operate on this register though
+	const U8 reg = op & 3;                    //Doesn't always operate on this register though
 
 	//Simple float and vector operations
 
@@ -95,10 +90,7 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 			return;
 
 		case EFidiA_mod:
-
-			if(F32_mod(chim->f[4], chim->f[0], &chim->f[4]).genericError)
-				chim->f[4] = NaN;
-
+			chim->f[4] = F32_mod(chim->f[4], chim->f[0]);
 			return;
 
 		case EFidiA_max:
@@ -129,7 +121,6 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 
 		//Trig, some arithmetic, rounding and some misc ops
 		//All operating on hardcoded registers, such as Af, f0, f1 and Afv.
-
 
 		//More advanced vector operations as well as control flow
 	}

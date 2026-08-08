@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,51 +18,43 @@
 *  This is called dual licensing.
 */
 
-#include "graphics/generic/interface.h"
+//graphics/generic/depth_stencil.c
+
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/device.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "graphics/generic/instance.h"
+#include "graphics/generic/texture.h"
+#include "graphics/generic/pipeline_structs.h"
+#include "types/container/ref_ptr.h"
 #include "types/container/texture_format.h"
+#include "types/base/string_base.h"
 #include "types/base/error.h"
-#include "types/container/string.h"
 
-Error DepthStencilRef_dec(DepthStencilRef **depth) {
-	return !RefPtr_dec(depth) ?
-		Error_invalidOperation(0, "DepthStencilRef_dec()::depth is invalid") : Error_none();
-}
-
-Error DepthStencilRef_inc(DepthStencilRef *depth) {
-	return !RefPtr_inc(depth) ?
-		Error_invalidOperation(0, "DepthStencilRef_inc()::depth is invalid") : Error_none();
-}
-
-Bool GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, Allocator alloc) {
+void GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, const Allocator *alloc) {
 	(void)alloc;
-	return UnifiedTexture_free((TextureRef*)((U8*)depthStencil - sizeof(RefPtr)));
+	UnifiedTexture_free((TextureRef*)((U8*)depthStencil - sizeof(RefPtr)));
 }
 
-Error GraphicsDeviceRef_createDepthStencil(
+Bool GraphicsDeviceRef_createDepthStencil(
 	GraphicsDeviceRef *deviceRef,
 	U16 width,
 	U16 height,
 	EDepthStencilFormat format,
 	Bool allowShaderRead,
 	EMSAASamples msaa,
-	CharString name,
-	DepthStencilRef **depthStencilRef
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	DepthStencilRef **depthStencilRef,
+	Error *e_rr
 ) {
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(DepthStencil) + GraphicsDeviceRef_getObjectSizes(deviceRef)->image + sizeof(UnifiedTextureImage)),
-		(ObjectFreeFunc) GraphicsDevice_freeDepthStencil,
-		(ETypeId) EGraphicsTypeId_DepthStencil,
-		depthStencilRef
-	);
+	Bool s_uccess = true;
+	Bool alloc = false;
 
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->depthStencil, depthStencilRef, e_rr));
+	alloc = true;
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef))
+	gotoIfError3(clean, RefPtr_inc(deviceRef));
 
 	*DepthStencilRef_ptr(*depthStencilRef) = (UnifiedTexture) {
 		.resource = (GraphicsResource) {
@@ -80,12 +72,12 @@ Error GraphicsDeviceRef_createDepthStencil(
 		.images = 1
 	};
 
-	gotoIfError(clean, UnifiedTexture_create(*depthStencilRef, name))
+	gotoIfError3(clean, UnifiedTexture_create(*depthStencilRef, bindlessDescriptorTable, name, e_rr));
 
 clean:
 
-	if(err.genericError)
-		DepthStencilRef_dec(depthStencilRef);
+	if(!s_uccess && alloc)
+		RefPtr_dec(depthStencilRef);
 
-	return err;
+	return s_uccess;
 }

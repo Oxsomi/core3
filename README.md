@@ -1,205 +1,292 @@
-# OxC3 (Oxsomi core 3.2.093)
-| Platforms | x64 -> Vulkan                                                | x64 -> Native API                                            | x64 dynamic (Vk + Native)                                    | ARM -> Vulkan                                                | ARM -> Native API  | ARM dynamic (Vk + Native)                                    |
-| --------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------ | ------------------------------------------------------------ |
-| Windows   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_dynamic.yml/badge.svg) | **?**                                                        | **D3D12**: **?**   | **?**                                                        |
-| Mac OS X  | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/osx.yml/badge.svg) | **Metal**: **TBD**                                           | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/osx_dynamic.yml/badge.svg) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/osx_arm.yml/badge.svg) | **Metal**: **TBD** | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/osx_arm_dynamic.yml/badge.svg) |
-| Linux     | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux.yml/badge.svg) | N/A                                                          | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/linux_dynamic.yml/badge.svg) | **?**                                                        | N/A                | **?**                                                        |
-| Android   | **TBD**                                                      | N/A                                                          | **TBD**                                                      | **TBD**                                                      | N/A                | **TBD**                                                      |
-| iOS       | **TBD**                                                      | **Metal**: **TBD**                                           | **TBD**                                                      | **TBD**                                                      | **Metal**: **TBD** | **TBD**                                                      |
+# OxC3 (Oxsomi core 3.2.103)
 
-OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
+| Platforms | x64 -> Vulkan | x64 -> Native API | x64 dynamic (Vk + Native) | ARM -> Vulkan | ARM -> Native API | ARM dynamic (Vk + Native) |
+| --------- | ------------- | ----------------- | ------------------------- | ------------- | ----------------- | ------------------------- |
+| Windows   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_dynamic.yml/badge.svg) | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows_arm.yml/badge.svg)** | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12_arm.yml/badge.svg) | **![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_arm_dynamic.yml/badge.svg)** |
+| Mac OS X  | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/osx.yml/badge.svg) | **Metal**: **TBD** | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/osx_dynamic.yml/badge.svg) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/osx_arm.yml/badge.svg) | **Metal**: **TBD** | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/osx_arm_dynamic.yml/badge.svg) |
+| Linux     | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux.yml/badge.svg) | N/A | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/linux_dynamic.yml/badge.svg) | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm.yml/badge.svg)** | N/A | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_dynamic.yml/badge.svg)** |
+| SteamOS   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/steamos.yml/badge.svg) | N/A | See linux, but not recommended | N/A | N/A | N/A |
+| Android   | *host:* ![windows host](https://github.com/Oxsomi/core3/actions/workflows/android_on_windows.yml/badge.svg) ![linux host](https://github.com/Oxsomi/core3/actions/workflows/android_on_linux.yml/badge.svg) ![macos host](https://github.com/Oxsomi/core3/actions/workflows/android_on_osx.yml/badge.svg) *+ shader compiler:* ![shader compiler](https://github.com/Oxsomi/core3/actions/workflows/android_shader_compiler.yml/badge.svg) *emulator run:* ![emulator](https://github.com/Oxsomi/core3/actions/workflows/android_emulator.yml/badge.svg) | N/A | N/A, no dynamic linking | (same jobs; both ABIs are built together) | N/A | N/A, no dynamic linking |
+| iOS       | **TBD** | **Metal**: **TBD** | N/A, no dynamic linking | **TBD** | **Metal**: **TBD** | N/A, no dynamic linking |
+| Xbox UWP  | N/A | **D3D12**: TBD | N/A | N/A | N/A | N/A |
 
-- OxC3_types
-  - The basic types that you might need and useful utilities.
-  - Archive for managing zip-file like entries.
-  - 16-bit float casts and arbitrary floating point formats.
-  - 128-bit and bigger unsigned ints (U128 and BigInt).
-  - AllocationBuffer for managing block allocations.
-  - Buffer manipulation such as compares, copies, bit manipulation,
-    - Encryption (aes256gcm), hashing (sha256, crc32c, md5), cryptographically secure random (CSPRNG).
-    - Buffer layouts for manipulating buffers using struct metadata and a path.
-  - GenericList, CharString, TList (Makes Lists such as ListCharString, ListU32, etc.) and CDFList.
-  - Error type including stacktrace option.
-  - Time utility.
-  - Vectors (mathematical) such as F32x2, F32x4, I32x2, I32x4.
-  - SpinLock, Atomics and Thread for multi threading purposes.
-  - Log for colored and proper cross platform logging.
-  - For more info check the [documentation](docs/types.md).
-- OxC3_formats
-  - A library for reading/writing files. Currently only for BMP, DDS and oiCA/oiDL (proprietary zip-style formats) and oiSH (wrapping compiled shaders into one for use in different graphics APIs).
-  - For more info check the [documentation](docs/formats.md).
-- OxC3_platforms
-  - For everything that's platform dependent (excluding some exceptions for OxC3_types).
-  - Helpers for default allocator to simplify OxC3_types functions that require allocators.
-  - File manipulation (in working or app dir only) such as read, write, move, rename, delete, create, info, foreach, checking.
-  - Virtual file system; for accessing files included into the exe, apk, etc. Which are built through CMake.
-  - Input devices: multiple mice and keyboards.
-  - Window for physical (OS-backed) and virtual (in memory) windows.
-  - Allocator that detects memory leaks, free without alloc (or double free) and allocation stacktraces.
-  - For more info check the [documentation](docs/platforms.md).
-- OxC3_graphics
-  - Abstraction layer possible to port to newer graphics APIs such as D3D12, Vulkan, Metal and WebGPU. Currently, only Vulkan and D3D12 are supported.
-  - Ability to create both D3D12 and Vulkan context side-by-side to allow switching API at runtime and/or better support for existing applications which might determine that at runtime.
-  - For more info check the [documentation](docs/graphics_api.md).
-- OxC3_shader_compiler
-  - Abstraction layer around DXC to make it possible to statically link, execute on other platforms and sign DXIL even on non Windows PCs. This also allows being able to find symbols in shaders, preprocess files (transform to without includes + defines) and output include info. OxC3SC currently supports DXIL and SPIRV with multi threading support. Shaders have custom annotation syntax to be able to parse entrypoints and being able to compile them in parallel.
-- OxC3(CLI)
-  - Command line tool that exposes useful functions from OxC3.
-  - File manipulation:
-    - Conversions between oiCA/oiDL and raw files (zip-like).
-    - Encryption/decryption.
-    - File inspection for oiCA/oiDL/oiSH files.
-  - Hash tool for files and strings (supporting sha256, crc32c, md5).
-  - Random key, char, data and number generator.
-  - Profile tool for testing speed of float casts, csprng, crc32c, sha256, md5 and aes256 (encryption and decryption).
-  - Shader preprocessing, viewing includes, viewing symbols, multi threaded compilation to DXIL/SPIRV and reflection (TBD).
-  - Iterating graphics devices (Vulkan or Direct3D12).
-  - For more info check the [documentation](docs/OxC3_tool.md).
+The matrix above builds each platform with its usual toolchain (MSVC on Windows, AppleClang on OS X, GCC on
+Linux, NDK clang on Android). A second toolchain is covered where it's a genuinely different compiler on the
+same platform code, since that's what catches portability problems rather than OS differences:
 
-One of the useful things about C is that files are incredibly easy to compile and parse compared to C++; resulting in reduced build times and allowing easy parsing for reflection or even auto generated documentation for things like types, function signatures and errors a function might return.
+| Platform | Default | Alternate |
+| -------- | ------- | --------- |
+| Windows  | MSVC | clang-cl |
+| Linux    | GCC | clang |
+| OS X     | AppleClang | N/A, gcc there is a clang symlink and would retest the same compiler |
+| Android  | NDK clang | N/A |
+
+The alternate toolchain is built across the same axes as the default one rather than in a single
+configuration, since a compiler difference tends to show up in one corner (arm64 intrinsics, a dynamic
+link's symbol visibility) rather than everywhere at once:
+
+| Alternate | x64 -> Vulkan | x64 -> Native API | x64 dynamic (Vk + Native) | ARM -> Vulkan | ARM -> Native API | ARM dynamic (Vk + Native) |
+| --------- | ------------- | ----------------- | ------------------------- | ------------- | ----------------- | ------------------------- |
+| Windows (clang-cl) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows_clang.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12_clang.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_dynamic_clang.yml/badge.svg) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows_arm_clang.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12_arm_clang.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_arm_dynamic_clang.yml/badge.svg) |
+| Linux (clang) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_clang.yml/badge.svg) | N/A | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/linux_dynamic_clang.yml/badge.svg) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_clang.yml/badge.svg) | N/A | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_dynamic_clang.yml/badge.svg) |
+
+MinGW GCC isn't supported on Windows: it's a different CRT and ABI, so it would be a new target rather than
+a new compiler, and the prebuilt dependencies (DXC among them) are MSVC.
+
+**OxC3** (0xC3, Oxsomi core 3) is a cross-platform C11 framework for applications, tools and games. It is the successor to O(x)somi core v2/v1, merging ostlc (standard template library), owc (window core) and ogc (graphics core) into one coherent, layered codebase. It is written in C so it stays fast to build, easy to parse for reflection/codegen, and straightforward to wrap from other languages (bindings or a future VM); a C++20 convenience layer is possible on top.
+
+For per-module maturity, see [STATUS.md](STATUS.md). For how the modules fit together (and the error-handling idiom used everywhere), see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Modules
+
+- **OxC3_types**, the foundation, split in three:
+  - *base*: fixed-width types, `Error` + stacktraces, `Allocator` interface, `Buffer` views with const/ref safety, `CharString` basics, atomics, `SpinLock`, `Thread`, `Time` (ISO-8601, cycle counters), fixed point, endianness, `ETypeId` reflection ids. Allocation-free.
+  - *math*: SIMD vectors (`F32x4`, `I32x4`, `F32x2`, `I32x2`) with SSE/NEON/scalar backends, quaternions, arbitrary IEEE-754 float format casts (F16/BF16/TF19/PXR24/FP24/…), checked numeric casts, bit packing, PRNG helpers.
+  - *container*: `TList(T)` typed lists over one `GenericList` core, owning strings + full UTF-8/16/32 interop, `Archive`, `BigInt`/`U128`, `AllocationBuffer` (GPU-style suballocator), `RefPtr`, streams, `JobQueue`, `Log`, `Buffer` hashing (SHA256, CRC32C, MD5), AES256/128-GCM encryption (AES-NI/VAES/AVX512 and ARM crypto paths) and CSPRNG.
+  - Docs: [docs/types.md](docs/types.md).
+- **OxC3_formats_***, file format read/write, all input-validated:
+  - Standard: BMP (BGRA8), DDS (modern DXGI subset), WAV.
+  - Oxsomi ([oiXX](docs/oiXX.md) family, sharing encryption/endianness conventions): [oiCA](docs/oiCA.md) archives (zip-like, AES-GCM capable, streamable), [oiDL](docs/oiDL.md) data lists, [oiSH](docs/oiSH.md) shader containers (DXIL+SPIR-V + reflection), [oiSB](docs/oiSB.md) shader buffer layouts, [oiBC](docs/oiBC_chimera.md) bytecode (*spec draft; not implemented yet*).
+  - Docs: [docs/formats.md](docs/formats.md).
+- **OxC3_platforms**, everything OS-dependent: default/tracked allocators (leak reports with per-allocation stacktraces in debug), sandboxed file IO (app/working dir only) + `FileStream`, virtual file system for assets embedded in the exe/apk (oiCA-backed), windows (physical + virtual), monitors, keyboard/mouse multi-device input, dynamic library loading. Backends: Windows, Linux (Wayland), OS X (partial), Android.
+  - Docs: [docs/platforms.md](docs/platforms.md).
+- **OxC3_graphics**, modern-only GPU abstraction over **Vulkan** and **Direct3D12** (Metal/WebGPU reserved): refcounted objects, *virtual command lists* with automatic resource transitions, descriptor heap/layout/table model, bindless, compute/graphics/raytracing pipelines, BLAS/TLAS, mesh shaders, VRS, swapchains. Vulkan and D3D12 can be loaded side-by-side via dynamic linking and selected at runtime.
+  - Docs: [docs/graphics_api.md](docs/graphics_api.md), minimum spec: [docs/graphics_spec.md](docs/graphics_spec.md).
+- **OxC3_shader_compiler**, statically linked DXC wrapper: HLSL → DXIL and/or SPIR-V on all target platforms, multithreaded batch compilation, `[[oxc::...]]` annotations (stage/model/vendor/extensions/uniforms/binary masks), reflection + include tracking for incremental builds and hot reload, output to oiSH.
+- **OxC3(CLI)**, the `OxC3` command line tool: oiCA/oiDL ↔ raw conversion, encrypt/decrypt, file inspection, hashing (sha256/crc32c/md5), random generation, profiling (float casts, CSPRNG, hashes, AES), multithreaded shader compilation, graphics device enumeration, and the asset packager used by the CMake integration.
+  - Docs: [docs/OxC3_tool.md](docs/OxC3_tool.md).
 
 ## Requirements
 
-- CMake >=3.13.
-- (Optional on Windows): Vulkan SDK (latest preferred, but at least 1.3.226).
-- If using Vulkan SDK on OSX, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
-- (Optional): Git or any tool that can work with GitHub.
-- C++ and C compiler such as MSVC, clang or g++/gcc. C++ is only used to interface with some deps not using C such as DXC.
-- Conan to avoid huge build times due to DXC/Clang/LLVM/SPIRV.
+- **Python 3.8.10+** and **Conan 2.7.1+** (avoids huge build times for DXC/LLVM/SPIRV deps).
+- **CMake 3.13+**.
+- A C11/C++ compiler (MSVC, clang, gcc); see the toolchain table above for what's covered per platform, and `-compiler` under [build.py syntax](#getting-started) to pick one. C++ is only used to interface with C++ deps such as DXC (and a C++ layer for samples or complex work is exposed).
+- **Windows on ARM64**: ARMASM64 (install the ARM64 build tools via the VS installer) when using MSVC.
+- **OS X**: `brew install llvm` for llvm-objcopy. If using the Vulkan SDK with bindless, export `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1` and set `VULKAN_SDK` (e.g. in `~/.bash_profile`).
+- **Linux**: Wayland is the window backend, `sudo apt install libwayland-dev libxkbcommon-dev -y` (plus wayland-scanner). For audio deps: `sudo apt install libasound2-dev libpipewire-0.3-dev -y`. For the windowed functional tests: `sudo apt install xdotool -y`. *X11-only sessions are currently unsupported for windowing.*
+- **Android**: NDK installed with `ANDROID_NDK` set (plus `ANDROID_SDK` + a JDK when building an apk); Android 10 (API 29)+ on device (Vulkan 1.1+). Cross compiles from Windows, Linux and macOS. Ninja or make can drive the build (Ninja required for Debug builds due to the Vulkan validation layers). Since the packaging tool is built for the host too, the host's own prerequisites (above) apply as well. See [Android SDK setup](#android-sdk-setup).
 
-## Running requirements
-
-- Windows (full support).
-- Linux / OS X (**partial** support: no virtual files, nor window support).
-- A 64-bit CPU.
-  - Currently only x64 (AMD64) is supported. Though ARM could be supported too, by turning off shader compilation and SIMD (**not recommended for production builds!!**). The shader compiler currently is the only thing that doesn't support ARM if SIMD is turned off.
-  - Even though SSE4.2+ is recommended, this can be explicitly turned off. SSE can only be turned off if relax float is turned off; this is because normal floats (without SSE) aren't always IEEE754 compliant. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
-  - Recommended CPUs are AMD Zen, Intel Rocket lake (Gen 11) and up. This is because SHA256 is natively supported on them. These CPUs are faster and more secure. Minimum requirements for SSE build is Intel Broadwell+ (Gen 6+) and AMD Zen+ (1xxx+). **The SSE-less build doesn't have any security guarantees for encryption, as these are software based instead of hardware based. Making them less secure, since no time and effort was put into preventing cache timing attacks.** SSE-less build only exists for emulation purposes or for debugging, it's also notoriously slow since it doesn't use any intrinsics (SHA, AES, CRC, SIMD, etc.). The SSE-less build is also meant for easily porting to a new system without having to support the entire SIMD there first, before finally supporting SIMD after the base has been ported.
-
-## Installing OxC3
+## Getting started
 
 ```bash
 git clone --recurse-submodules -j8 https://github.com/Oxsomi/core3
+cd core3
+python build.py -mode Release -tests True
 ```
 
-## Building OxC3
+`build.py` syntax:
 
-The build command has the following syntax:
+- `python build.py -mode [Release/Debug/MinSizeRel/RelWithDebInfo/(empty; Windows multi config)] -simd [True/False] -tests [True/False] -dynamic_linking [True/False]`
+  - `simd`: use SIMD (vectors, AES, SHA, CRC). Keep on (default); off exists for porting/fallback validation.
+  - `tests`: build + run the unit tests.
+  - `dynamic_linking`: desktop-only; allows multiple graphics APIs in one process.
+  - `compiler`: toolchain to build with, defaulting to the platform's usual one (`msvc` on Windows, `clang`
+    on OS X, `gcc` on Linux). `-compiler clang` on Windows means clang-cl, which keeps MSVC's ABI and CRT.
+    A non-default toolchain gets its own build tree, since a CMake cache belongs to the compiler that
+    configured it, and its own dependencies, since conan derives package ids from the compiler; expect the
+    first build with one to rebuild DXC.
+  - `asan` / `ubsan`: build with AddressSanitizer / UndefinedBehaviorSanitizer. Diagnostic only, and
+    supported on clang and gcc alone; asking for either under MSVC is a hard configure error rather than a
+    silent no-op, since a sanitizer that quietly does nothing reads as proof that nothing is wrong.
+    Use `-mode RelWithDebInfo`: they want optimized code with frame pointers and symbols, not a Debug build.
+    On Windows (clang-cl) UBSan traps into OxC3's crash handler instead of relying on its own reporting
+    runtime, which is the least dependable part of UBSan there.
+- Extra flags via `-o flag=Bool`:
+  - `forceVulkan`: prefer Vulkan over the native API (e.g. over D3D12 on Windows). Off by default.
+  - `enableOxC3CLI`: build the OxC3 CLI. On by default.
+  - `forceFloatFallback`: software half↔float casts. Off by default.
+  - `enableShaderCompiler`: include the shader compiler (longer build). On by default.
+  - `dynamicLinkingShaderCompiler`: build the shader compiler as a shared library. **On by default** on
+    Windows/Linux/OS X; coerced off on Android and when `enableShaderCompiler` is off. Independent of
+    `dynamicLinkingGraphics`, which exists for a different reason (runtime Vulkan/D3D12 selection).
+    DXC is statically linked, so every executable touching the shader compiler otherwise carries ~28 MB
+    of it; shared, that bulk exists once and links once, so builds are faster too, and it can be
+    shipped or omitted separately.
+    It also puts the compiler behind a module boundary, so a different backend could be swapped in
+    without relinking consumers as long as it keeps the ABI.
+    Callers must call `Compiler_setPlatform(Platform_instance)` once after `Platform_create` (an inline
+    no-op in static builds), since the module has its own `Platform_instance`.
+  - `debugShaderCompiler`: build/consume DXC and SPIRV-Reflect in the current mode instead of Release.
+    Off by default, so a Debug build doesn't pay for a Debug DXC; those two dominate a from-scratch
+    build and are rarely what you're stepping into. Also available as `-debug_shader_compiler True`.
+  - `cliGraphics`: allow CLI operations that need OxC3_graphics; turn off for headless or to avoid shipping graphics dlls.
 
-- `buildCmd [Release/Debug] [EnableSIMD: True/False] [EnableTests: True/False]`
-  - EnableSIMD: If SIMD extensions should be used to accelerate vector operations or things like encryption/hashing/etc. Recommended to always keep this on, unless not possible. On for Windows, off on other platforms (not supported yet).
-  - EnableTests: Enable the unit tests that run afterwards.
-- Extra flags can be controlled via `-o flag=Bool` such as:
-  - forceVulkan: If there's a native API available on the target machine, it will attempt to use that by default. If instead it should try to use Vulkan, this flag should be set. An example is on Windows you have D3D12 and/or Vulkan; D3D12 is the default, but Vulkan can be turned on like this. Off by default.
-  - enableOxC3CLI: Enable the OxC3CLI project along with the OxC3 executable. On by default.
-  - forceFloatFallback: Forces half -> float casts to use software rather than hardware. Off by default.
-  - enableShaderCompiler: If the shader compiler should be included. This will take longer to build, but is useful for tools or applications that need realtime shader compilation. On by default.
-  - cliGraphics: If the OxC3 CLI tool allows operations that require graphics (OxC3 graphics). This can be turned off to exclude shipping dlls required for OxC3 graphics or to allow running on headless systems.
+### Android
 
-### Windows
+Cross compiled from Windows, Linux or macOS; the host half goes through the same code as `build.py`
+(see `build_common.py`), so the same conan profiles apply.
 
-```batch
-build Release True False
+```bash
+python3 build_android.py -mode Debug
 ```
 
-The Windows implementation supports SSE.
+An android build can't run its own packager: the shader compiler is off there, and the resulting
+binaries wouldn't be runnable on the build machine anyway. So it `tool_requires` a *host* OxC3 that has
+`OxC3_package` in it, which `add_virtual_files()` then finds via `find_program`. `build_android.py`
+builds and exports that host package from your working tree before cross compiling. The option set it's
+built with lives in `HOST_TOOL_OPTIONS` in `conanfile.py` and is deliberately fixed, so one host package
+serves every android configuration.
 
-### Mac OS X
+- `-api 31` (default): target API level; `-arch` defaults to arm64 **and** x64; `-simd True` by default;
+  `-generator` defaults to "MinGW Makefiles" on Windows and "Unix Makefiles" elsewhere (Ninja is a good
+  choice on every host, and is required for Debug builds because of the Vulkan validation layers).
+- `--host_package_only` builds just the host `OxC3_package` and stops; `--skip_host_package` assumes it's
+  already in the conan cache. CI uses the pair so the three android configurations share one host build.
+- `--apk -package net.osomi.test -version 0.1.0 -lib myLibName -name "My test app"` builds an APK (same arch/mode/api/simd/generator settings must match prebuilt binaries when combined with `--skip_build`).
+- `-packages <dir>` (repeatable) adds another folder of oiCA archives to the apk, for when the app that's
+  being packaged has virtual files of its own next to OxC3's.
+- `--sign` signs the APK: provide `-keystore` (and optionally `-keystore_password`), or have `JAVA_HOME` set to create a temporary keystore.
+- `--run` installs and runs on a connected device in developer mode (requires `-package` and `-lib` if no apk step).
+- `-ip 192.168.2.93` runs over the network instead of usb (port defaults to 5555, give `host:port` in full for
+  android's Wireless debugging, which picks its own). Enable it first with `adb tcpip 5555` over usb. Every adb
+  call then goes through `-s`, which is needed anyway once a usb and a wireless transport are both attached, since
+  adb otherwise refuses with *"more than one device/emulator"*.
+- `-category game` (default) sets the app category; `--install` exports the android package so a dependent
+  project can `requires()` it; `--skip_build` reuses prebuilt binaries.
 
-```c
-bash build.sh Release False False
+Only `ANDROID_NDK` is needed to build the libraries; `ANDROID_SDK` is additionally required for `--apk`
+and `--run` (aapt/d8/zipalign/adb).
+
+#### Running the unit tests on device
+
+Android has no exec, so the per-suite executables ctest runs elsewhere don't exist there. `-tests True`
+builds `OxC3_atest` instead: one `.so` with every suite, loaded by a NativeActivity
+(see [src/test/android](src/test/android)). One command builds, packages, installs, launches and reports:
+
+```bash
+python build_android.py -mode Release -arch arm64 -generator Ninja -tests True --apk --sign --run \
+  -keystore_password <pw> -package net.osomi.oxc3test -version 0.1.0 -lib OxC3_atest -name "OxC3 tests"
 ```
 
-Currently the Mac implementation doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet (no virtual filesystem + window management).
+`--run` streams the device log and exits non-zero if any suite fails; it waits for the `OXC3_TEST_END`
+line the runner emits, since `am start` gives back no exit code (`-test_timeout`, default 600s, bounds
+the wait). Test apks are marked `android:exported` in every mode, because a non-exported activity can't
+be launched by `am start` at all.
 
-### Linux
+Add `--interactive` to also run the functional suites (window/input/audio); they need a human watching
+the device, so they're skipped otherwise. That sets `debug.oxc3.interactive`, which you can also flip by
+hand with `adb shell setprop`. Interactive runs aren't timed out.
 
-```c
-bash build.sh Release False
+The functional suites want a keyboard and mouse, which a phone doesn't have. Pairing them over Bluetooth is the
+least painful route: it needs no USB OTG, no powered hub, and leaves the port free. Otherwise run over the network
+so the usb port is available for a hub, and note android blocks new usb peripherals while the screen is locked:
+
+```bash
+adb tcpip 5555                        # over usb, once; doesn't survive a reboot
+python build_android.py -mode Release -arch arm64 -generator Ninja -tests True --apk --sign --run --interactive \
+  -ip 192.168.2.93 -keystore_password <pw> \
+  -package net.osomi.oxc3test -version 0.1.0 -lib OxC3_atest -name "OxC3 tests"
 ```
 
-Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet (no virtual filesystem + window management).
+Every suite is bundled except **shader_compiler**, since DXC isn't built for android.
 
-For window support, Wayland is used (along with wayland-scanner to generate the XDG header/source files) and so it has to be installed via `sudo apt install libwayland-dev -y`. Along with this, you might want to enable Wayland if you're on Ubuntu if it's not enabled by default.
+#### Android SDK setup
 
-### Other platforms
+**Android Studio is not needed.** Four standalone downloads, ~400 MB total:
 
-Other platforms like Android and iOS are coming in the future.
+1. **JDK 11+** ([Temurin](https://adoptium.net)). `sdkmanager` is itself a Java program, so this comes first.
+   Set `JAVA_HOME`; `--sign` calls `keytool` through it.
+2. **[Command line tools only](https://developer.android.com/studio#command-line-tools-only)**. Unzip so
+   you end up with `<sdk>/cmdline-tools/latest/bin/sdkmanager`. The zip's own top folder is named
+   `cmdline-tools`, so the inner one has to be moved into `latest/`, sdkmanager refuses to run with
+   *"Could not determine SDK root"* if it isn't in a `latest`/version subdirectory.
+3. **SDK packages.** `<sdk>` is the parent directory, and becomes `ANDROID_SDK`:
+   ```bash
+   sdkmanager --licenses
+   sdkmanager "platforms;android-31" "build-tools;30.0.3"
+   ```
+   Add **[platform-tools](https://developer.android.com/tools/releases/platform-tools)** (adb) if you want
+   `--run`; it unzips straight into `<sdk>/platform-tools`.
+4. **[NDK](https://developer.android.com/ndk/downloads)**, a plain zip, unpack anywhere and point
+   `ANDROID_NDK` at it. r27 is what CI uses.
 
-## Graphics
+Two things that will bite you otherwise:
 
-The graphics API is built around modern APIs. So it won't be supporting OpenGL, DirectX11-, old Metal/Vulkan versions or WebGL. To keep Vulkan, Direct3D12 and Metal usable, it will keep on bumping the minimum specs every so often in a release.
+- **build-tools version matters.** The apk step uses `aapt` (v1, not aapt2), which newer build-tools no
+  longer ship, and `buildToolsDir()` always picks the newest installed. Keep an `aapt`-bearing version
+  (30.0.3) as the newest one you have. Its `d8` warns that API 31 isn't supported and dexes anyway;
+  that's cosmetic, it only affects desugaring, not `minSdkVersion`.
+- **The legacy `tools` package is not required**, despite build-tools' `d8` wrapper looking for
+  `find_java` inside it. `build_android.py` runs `d8.jar` directly to avoid that (the wrapper otherwise
+  exits 0 having produced no `classes.dex`, and the build fails much later in aapt).
 
-For the graphics minimum spec check the [minimum spec](graphics_spec.md). When unsure if a device is capable, please run `OxC3 graphics devices` to see if your device is supported.
+Expected layout:
 
-## Contributions
+```
+<sdk>/cmdline-tools/latest/bin/sdkmanager
+<sdk>/build-tools/30.0.3/{aapt,d8,zipalign}
+<sdk>/platforms/android-31/android.jar
+<sdk>/platform-tools/adb                     # only for --run/--install
+```
 
-To contribute to this repository, you agree to the [contribution guidelines](FOR_CONTRIBUTORS.md). Before merging a PR as an external party, you have to sign a contributor license agreement.
+### Using the virtual file system from your app
 
-## License
+Graphics apps must embed the OxC3_graphics oiCA file(s) (built-in shaders, fonts, future LUTs):
 
-This repository is available under two licenses:
+```cmake
+# Optional: configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
+add_virtual_dependencies_external(TARGET Target DEPENDENCIES OxC3)
+apply_dependencies(Target)
+```
 
-- LGPL3 open source license.
-- Commercial license.
+## Platform & instruction set support
 
-Any company not wanting to adhere to the LGPL3 license can contact us as contact@osomi.net.
+| Platform | Status |
+| -------- | ------ |
+| Windows | **Full** |
+| Linux | **Full** (Wayland sessions) |
+| SteamOS | **Full** (a few gamescope bugs left) |
+| OS X | **Partial**, no window support or input yet |
+| Android | **Okay**, close to full; missing render passes and bindful |
+| Xbox UWP / iOS | Planned |
+| Web | Not for a while |
+| GDK Xbox / Playstation / Switch | Not planned |
+
+| ISA | Status |
+| --- | ------ |
+| x64 | **Decent**, full on Windows; SSE transcendentals (sin/exp/…) not yet efficient elsewhere |
+| arm64 | **Okay**, same transcendental caveat |
+| scalar fallback | **Full**, used to bring up new platforms before their SIMD backend exists |
+| risc-v / wasm | None / not yet |
+
+64-bit CPUs only. The SIMD build requires SSE4.2/AES/PCLMULQDQ/BMI1+2/F16C/AVX/FMA (Intel Haswell 2013 / AMD Zen and up); Intel Gen 11+ / AMD Zen are recommended for hardware SHA256. The SIMD-less build exists for porting, emulation and debugging, it is markedly slower (no AES/SHA/CRC/SIMD intrinsics).
 
 ## Deployables
 
-For a full OxC3 build (including all projects), a build typically contains the following:
+A full build typically ships:
 
 ```
 D3D12:
-	D3D12/*.dll
-	D3D12/*.pdb
+	D3D12/*.dll, D3D12/*.pdb
 	(debug only) d3d10warp.dll
 	(optional) OxC3.exe
 	yourExecutable.exe
 
 Vulkan:
-	(optional) OxC3.exe or OxC3
-	yourExecutable(,.exe,.apk,.ipa,etc.)
+	(optional) OxC3 / OxC3.exe
+	yourExecutable(.exe/.apk/.ipa/…)
 
-Dynamic linking:
-	Windows only:
-		D3D12/*.dll
-		D3D12/*.pdb
-		OxC3_graphics_d3d12.dll
-		(debug only) d3d10warp.dll
-	OxC3_graphics_vk (Almost everywhere else, .so, .dll, etc)
-	(optional) OxC3.exe or OxC3
-	yourExecutable
+Dynamic linking additionally:
+	OxC3_graphics_d3d12.dll (Windows) and/or OxC3_graphics_vk(.dll/.so)
 ```
 
-To ship anything that uses OxC3_shader_compiler it doesn't require any additional binaries (DXC is linked statically). For graphics: d3d10warp.dll is optional and should only be used for testing. D3D12/*.dll is required when OxC3 graphics is used with Direct3D12 (cliGraphics=True and forceVulkan=False and on Windows).
-
-OxC3 is optional and doesn't have to be distributed with the application, though it provides nice functionality such as shader compilation, viewing graphics device capabilities and a few others.
-
-The "renderer" directory is present if dynamic linking is used. In this case, there may be 1 or more graphics APIs that are compatible and this can be useful for switching at runtime or using multiple backends at once. For example, some extensions might only be supported via Vulkan or DirectX on desktop and using both might be the only way to use them. Or one of the backends is more stable for your application but the other provides more features. It also allows more easily updating by simply updating a single dll (if the interface didn't change) or adding a new graphics API. Static linking provides benefits such as easier distribution and less overhead for API calls.
+The shader compiler needs no extra binaries (DXC is statically linked). `d3d10warp.dll` is testing-only. The `OxC3` CLI is optional at runtime but handy (shader compilation, `OxC3 graphics devices` capability checks, and more). Dynamic linking enables per-API dlls: runtime API switching, side-by-side Vulkan+D3D12 (some extensions are only reachable on one), and drop-in dll updates; static linking gives easier distribution and lower call overhead.
 
 ## Dependencies
 
-- OxC3(CLI).
-  - (optional): OxC3_shader_compiler.
-  - (optional): OxC3_graphics.
-  - OxC3_platforms, OxC3_formats.
-    - By extension OxC3_types.
-- OxC3_shader_compiler.
-  - *DXC* (and by extension LLVM, clang, DirectX-Headers, SPIRV-Headers, SPIRV-Tools): Compiling HLSL to DXIL and SPIRV.
-  - *SPIRV-Tools*: Stripping, optimizing and disassembling spirv binaries.
-  - *SPIRV-Reflect*: Reflecting SPIRV.
-  - *DirectX-Headers*: Reflecting DXIL.
-  - (**TODO**): *SPIRV-Cross*: Cross compiling SPIRV to MSL (and WGSL?).
-- OxC3_graphics.
-  - *Vulkan*.
-  - and/or *D3D12*.
-    - *NVAPI*.
-    - *AMD_AGS*.
-    - *AgilitySDK*.
-    - (Optional): *Warp*.
-- OxC3_platforms and OxC3_formats.
-  - OxC3_types.
-  - No other dependencies, except OS.
-- OxC3_types.
-  - No other dependencies, except OS.
+- **OxC3_types**: none (OS only).
+- **OxC3_formats / OxC3_platforms**: OxC3_types only. *(Note: platforms depends on formats for its oiCA-backed virtual file system.)*
+- **OxC3_graphics**: Vulkan and/or D3D12 (+ NVAPI, AMD_AGS, AgilitySDK; optional WARP).
+- **OxC3_shader_compiler**: DXC (LLVM/clang, DirectX-Headers, SPIRV-Headers/Tools), SPIRV-Reflect; SPIRV-Cross planned for MSL.
+- **OxC3(CLI)**: platforms + formats (+ optional shader_compiler, graphics).
+
+## Contributing
+
+See [FOR_CONTRIBUTORS.md](FOR_CONTRIBUTORS.md) (code style: [docs/code_style.md](docs/code_style.md)). External PRs require signing a CLA before merge.
+
+## License
+
+This repository is dual-licensed:
+
+- **GPL3** open source license (see [LICENSE](LICENSE)). Note that GPL3 is a strong copyleft license: distributing a product that links OxC3 (statically or dynamically) requires that product to be GPL3 as well, with source available.
+- **Commercial license** — for closed-source use, contact us at contact@osomi.net.

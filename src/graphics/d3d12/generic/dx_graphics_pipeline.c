@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,78 +18,79 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//graphics/d3d12/generic/dx_graphics_pipeline.c
+
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_device.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
 #include "types/container/texture_format.h"
+#include "types/container/string_unicode.h"
 #include "formats/oiSH/sh_file.h"
-#include "types/container/string.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
-D3D12_STENCIL_OP mapDxStencilOp(EStencilOp op) {
+static inline D3D12_STENCIL_OP mapDxStencilOp(EStencilOp op) {
 	switch (op) {
-		default:								return D3D12_STENCIL_OP_KEEP;
-		case EStencilOp_Zero:					return D3D12_STENCIL_OP_ZERO;
-		case EStencilOp_Replace:				return D3D12_STENCIL_OP_REPLACE;
-		case EStencilOp_IncClamp:				return D3D12_STENCIL_OP_INCR_SAT;
-		case EStencilOp_DecClamp:				return D3D12_STENCIL_OP_DECR_SAT;
-		case EStencilOp_Invert:					return D3D12_STENCIL_OP_INVERT;
-		case EStencilOp_IncWrap:				return D3D12_STENCIL_OP_INCR;
-		case EStencilOp_DecWrap:				return D3D12_STENCIL_OP_DECR;
+		default:                                return D3D12_STENCIL_OP_KEEP;
+		case EStencilOp_Zero:                   return D3D12_STENCIL_OP_ZERO;
+		case EStencilOp_Replace:                return D3D12_STENCIL_OP_REPLACE;
+		case EStencilOp_IncClamp:               return D3D12_STENCIL_OP_INCR_SAT;
+		case EStencilOp_DecClamp:               return D3D12_STENCIL_OP_DECR_SAT;
+		case EStencilOp_Invert:                 return D3D12_STENCIL_OP_INVERT;
+		case EStencilOp_IncWrap:                return D3D12_STENCIL_OP_INCR;
+		case EStencilOp_DecWrap:                return D3D12_STENCIL_OP_DECR;
 	}
 }
 
-D3D12_BLEND_OP mapDxBlendOp(EBlendOp op) {
+static inline D3D12_BLEND_OP mapDxBlendOp(EBlendOp op) {
 	switch (op) {
-		default:								return D3D12_BLEND_OP_ADD;
-		case EBlendOp_Subtract:					return D3D12_BLEND_OP_SUBTRACT;
-		case EBlendOp_ReverseSubtract:			return D3D12_BLEND_OP_REV_SUBTRACT;
-		case EBlendOp_Min:						return D3D12_BLEND_OP_MIN;
-		case EBlendOp_Max:						return D3D12_BLEND_OP_MAX;
+		default:                                return D3D12_BLEND_OP_ADD;
+		case EBlendOp_Subtract:                 return D3D12_BLEND_OP_SUBTRACT;
+		case EBlendOp_ReverseSubtract:          return D3D12_BLEND_OP_REV_SUBTRACT;
+		case EBlendOp_Min:                      return D3D12_BLEND_OP_MIN;
+		case EBlendOp_Max:                      return D3D12_BLEND_OP_MAX;
 	}
 }
 
-D3D12_BLEND mapDxBlend(EBlend op) {
+static inline D3D12_BLEND mapDxBlend(EBlend op) {
 
 	switch (op) {
 
-		default:								return D3D12_BLEND_ZERO;
-		case EBlend_One:						return D3D12_BLEND_ONE;
-		case EBlend_SrcColor:					return D3D12_BLEND_SRC_COLOR;
-		case EBlend_InvSrcColor:				return D3D12_BLEND_INV_SRC_COLOR;
-		case EBlend_DstColor:					return D3D12_BLEND_DEST_COLOR;
-		case EBlend_InvDstColor:				return D3D12_BLEND_INV_DEST_COLOR;
-		case EBlend_SrcAlpha:					return D3D12_BLEND_SRC_ALPHA;
-		case EBlend_InvSrcAlpha:				return D3D12_BLEND_INV_SRC_ALPHA;
-		case EBlend_DstAlpha:					return D3D12_BLEND_DEST_ALPHA;
-		case EBlend_InvDstAlpha:				return D3D12_BLEND_INV_DEST_ALPHA;
-		case EBlend_BlendFactor:				return D3D12_BLEND_BLEND_FACTOR;
-		case EBlend_InvBlendFactor:				return D3D12_BLEND_INV_BLEND_FACTOR;
-		case EBlend_AlphaFactor:				return D3D12_BLEND_ALPHA_FACTOR;
-		case EBlend_InvAlphaFactor:				return D3D12_BLEND_INV_ALPHA_FACTOR;
-		case EBlend_SrcAlphaSat:				return D3D12_BLEND_SRC_ALPHA_SAT;
+		default:                                return D3D12_BLEND_ZERO;
+		case EBlend_One:                        return D3D12_BLEND_ONE;
+		case EBlend_SrcColor:                   return D3D12_BLEND_SRC_COLOR;
+		case EBlend_InvSrcColor:                return D3D12_BLEND_INV_SRC_COLOR;
+		case EBlend_DstColor:                   return D3D12_BLEND_DEST_COLOR;
+		case EBlend_InvDstColor:                return D3D12_BLEND_INV_DEST_COLOR;
+		case EBlend_SrcAlpha:                   return D3D12_BLEND_SRC_ALPHA;
+		case EBlend_InvSrcAlpha:                return D3D12_BLEND_INV_SRC_ALPHA;
+		case EBlend_DstAlpha:                   return D3D12_BLEND_DEST_ALPHA;
+		case EBlend_InvDstAlpha:                return D3D12_BLEND_INV_DEST_ALPHA;
+		case EBlend_BlendFactor:                return D3D12_BLEND_BLEND_FACTOR;
+		case EBlend_InvBlendFactor:             return D3D12_BLEND_INV_BLEND_FACTOR;
+		case EBlend_AlphaFactor:                return D3D12_BLEND_ALPHA_FACTOR;
+		case EBlend_InvAlphaFactor:             return D3D12_BLEND_INV_ALPHA_FACTOR;
+		case EBlend_SrcAlphaSat:                return D3D12_BLEND_SRC_ALPHA_SAT;
 
-		case EBlend_Src1ColorExt:				return D3D12_BLEND_SRC1_COLOR;
-		case EBlend_Src1AlphaExt:				return D3D12_BLEND_SRC1_ALPHA;
-		case EBlend_InvSrc1ColorExt:			return D3D12_BLEND_INV_SRC1_COLOR;
-		case EBlend_InvSrc1AlphaExt:			return D3D12_BLEND_INV_SRC1_ALPHA;
+		case EBlend_Src1ColorExt:               return D3D12_BLEND_SRC1_COLOR;
+		case EBlend_Src1AlphaExt:               return D3D12_BLEND_SRC1_ALPHA;
+		case EBlend_InvSrc1ColorExt:            return D3D12_BLEND_INV_SRC1_COLOR;
+		case EBlend_InvSrc1AlphaExt:            return D3D12_BLEND_INV_SRC1_ALPHA;
 	}
 }
 
 Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	GraphicsDevice *device,
-	ListSHFile binaries,
-	CharString name,
+	const ListSHFile *binaries,
+	const CharString *name,
 	Pipeline *pipeline,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDevice_getAlloc(device);
 
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	ListU16 tmp = (ListU16) { 0 };
@@ -102,7 +103,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC graphics = (D3D12_GRAPHICS_PIPELINE_STATE_DESC) {
 
-		.pRootSignature = deviceExt->defaultLayout,
+		.pRootSignature = PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Dx)->rootSig,
 
 		.BlendState = (D3D12_BLEND_DESC) { .IndependentBlendEnable = info->blendState.allowIndependentBlend },
 
@@ -110,16 +111,16 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_BACK,
 			.FrontCounterClockwise = !(info->rasterizer.flags & ERasterizerFlags_IsClockWise),
-			.MultisampleEnable = !!info->msaa
+			.MultisampleEnable = (Bool) info->msaa
 		},
 
 		.DepthStencilState = (D3D12_DEPTH_STENCIL_DESC) {
-			.DepthEnable = !!(info->depthStencil.flags & EDepthStencilFlags_DepthTest),
-			.DepthWriteMask = !!(info->depthStencil.flags & EDepthStencilFlags_DepthWrite),
+			.DepthEnable = (Bool) (info->depthStencil.flags & EDepthStencilFlags_DepthTest),
+			.DepthWriteMask = (Bool) (info->depthStencil.flags & EDepthStencilFlags_DepthWrite),
 			.DepthFunc = mapDxCompareOp(info->depthStencil.depthCompare),
-			.StencilEnable = !!(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
+			.StencilEnable = (Bool) (info->depthStencil.flags & EDepthStencilFlags_StencilTest),
 			.StencilReadMask = info->depthStencil.stencilReadMask,
-			.StencilReadMask = info->depthStencil.stencilWriteMask
+			.StencilWriteMask = info->depthStencil.stencilWriteMask
 		},
 
 		.InputLayout = (D3D12_INPUT_LAYOUT_DESC ) { .pInputElementDescs = elements },
@@ -129,7 +130,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		.NumRenderTargets = info->attachmentCountExt,
 		.DSVFormat = EDepthStencilFormat_toDXFormat(info->depthFormatExt),
 
-		.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1 }
+		.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1 << info->msaa }
 	};
 
 	//Rasterizer
@@ -146,9 +147,9 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		graphics.RasterizerState.DepthBiasClamp = info->rasterizer.depthBiasClamp;
 
 	switch(info->rasterizer.cullMode) {
-		default:																			break;
-		case ECullMode_None:	graphics.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;	break;
-		case ECullMode_Front:	graphics.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;	break;
+		default:                                                                            break;
+		case ECullMode_None:    graphics.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;   break;
+		case ECullMode_Front:    graphics.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT; break;
 	}
 
 	//Depth stencil
@@ -177,37 +178,37 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 		*dst = (D3D12_RENDER_TARGET_BLEND_DESC) {
 
-			.BlendEnable			= (info->blendState.renderTargetMask >> realJ) & 1,
-			.LogicOpEnable			= !!info->blendState.logicOpExt,
-			.RenderTargetWriteMask	= info->blendState.writeMask[realJ],
+			.BlendEnable            = (info->blendState.renderTargetMask >> realJ) & 1,
+			.LogicOpEnable          = (Bool) info->blendState.logicOpExt,
+			.RenderTargetWriteMask  = info->blendState.writeMask[realJ],
 
-			.BlendOp				= mapDxBlendOp(src.blendOp),
-			.SrcBlend				= mapDxBlend(src.srcBlend),
-			.DestBlend				= mapDxBlend(src.dstBlend),
+			.BlendOp                = mapDxBlendOp(src.blendOp),
+			.SrcBlend               = mapDxBlend(src.srcBlend),
+			.DestBlend              = mapDxBlend(src.dstBlend),
 
-			.BlendOpAlpha			= mapDxBlendOp(src.blendOpAlpha),
-			.SrcBlendAlpha			= mapDxBlend(src.srcBlendAlpha),
-			.DestBlendAlpha			= mapDxBlend(src.dstBlendAlpha)
+			.BlendOpAlpha           = mapDxBlendOp(src.blendOpAlpha),
+			.SrcBlendAlpha          = mapDxBlend(src.srcBlendAlpha),
+			.DestBlendAlpha         = mapDxBlend(src.dstBlendAlpha)
 		};
 
 		switch(info->blendState.logicOpExt) {
-			case ELogicOpExt_Clear:			dst->LogicOp = D3D12_LOGIC_OP_CLEAR;			break;
-			case ELogicOpExt_Set:			dst->LogicOp = D3D12_LOGIC_OP_SET;				break;
-			case ELogicOpExt_Copy:			dst->LogicOp = D3D12_LOGIC_OP_COPY;				break;
-			case ELogicOpExt_CopyInvert:	dst->LogicOp = D3D12_LOGIC_OP_COPY_INVERTED;	break;
-			case ELogicOpExt_None:			dst->LogicOp = D3D12_LOGIC_OP_NOOP;				break;
-			case ELogicOpExt_Invert:		dst->LogicOp = D3D12_LOGIC_OP_INVERT;			break;
-			case ELogicOpExt_And:			dst->LogicOp = D3D12_LOGIC_OP_AND;				break;
-			case ELogicOpExt_Nand:			dst->LogicOp = D3D12_LOGIC_OP_NAND;				break;
-			case ELogicOpExt_Or:			dst->LogicOp = D3D12_LOGIC_OP_OR;				break;
-			case ELogicOpExt_Nor:			dst->LogicOp = D3D12_LOGIC_OP_NOR;				break;
-			case ELogicOpExt_Xor:			dst->LogicOp = D3D12_LOGIC_OP_XOR;				break;
-			case ELogicOpExt_Equiv:			dst->LogicOp = D3D12_LOGIC_OP_EQUIV;			break;
-			case ELogicOpExt_AndReverse:	dst->LogicOp = D3D12_LOGIC_OP_AND_REVERSE;		break;
-			case ELogicOpExt_AndInvert:		dst->LogicOp = D3D12_LOGIC_OP_AND_INVERTED;		break;
-			case ELogicOpExt_OrReverse:		dst->LogicOp = D3D12_LOGIC_OP_OR_REVERSE;		break;
-			case ELogicOpExt_OrInvert:		dst->LogicOp = D3D12_LOGIC_OP_OR_INVERTED;		break;
-			default:																		break;
+			case ELogicOpExt_Clear:           dst->LogicOp = D3D12_LOGIC_OP_CLEAR;             break;
+			case ELogicOpExt_Set:             dst->LogicOp = D3D12_LOGIC_OP_SET;               break;
+			case ELogicOpExt_Copy:            dst->LogicOp = D3D12_LOGIC_OP_COPY;              break;
+			case ELogicOpExt_CopyInvert:      dst->LogicOp = D3D12_LOGIC_OP_COPY_INVERTED;     break;
+			case ELogicOpExt_None:            dst->LogicOp = D3D12_LOGIC_OP_NOOP;              break;
+			case ELogicOpExt_Invert:          dst->LogicOp = D3D12_LOGIC_OP_INVERT;            break;
+			case ELogicOpExt_And:             dst->LogicOp = D3D12_LOGIC_OP_AND;               break;
+			case ELogicOpExt_Nand:            dst->LogicOp = D3D12_LOGIC_OP_NAND;              break;
+			case ELogicOpExt_Or:              dst->LogicOp = D3D12_LOGIC_OP_OR;                break;
+			case ELogicOpExt_Nor:             dst->LogicOp = D3D12_LOGIC_OP_NOR;               break;
+			case ELogicOpExt_Xor:             dst->LogicOp = D3D12_LOGIC_OP_XOR;               break;
+			case ELogicOpExt_Equiv:           dst->LogicOp = D3D12_LOGIC_OP_EQUIV;             break;
+			case ELogicOpExt_AndReverse:      dst->LogicOp = D3D12_LOGIC_OP_AND_REVERSE;       break;
+			case ELogicOpExt_AndInvert:       dst->LogicOp = D3D12_LOGIC_OP_AND_INVERTED;      break;
+			case ELogicOpExt_OrReverse:       dst->LogicOp = D3D12_LOGIC_OP_OR_REVERSE;        break;
+			case ELogicOpExt_OrInvert:        dst->LogicOp = D3D12_LOGIC_OP_OR_INVERTED;       break;
+			default:                                                                           break;
 		}
 	}
 
@@ -223,7 +224,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		U32 k = graphics.InputLayout.NumElements++;
 		D3D12_INPUT_ELEMENT_DESC *desc = (D3D12_INPUT_ELEMENT_DESC*) &graphics.InputLayout.pInputElementDescs[k];
 		*desc = (D3D12_INPUT_ELEMENT_DESC) {
-			.SemanticName = "TEXCOORD",		//Everything is a texcoord		TODO:
+			.SemanticName = "TEXCOORD",        //Everything is a texcoord        TODO:
 			.SemanticIndex = j,
 			.Format = ETextureFormatId_toDXFormat(attrib.format),
 			.InputSlot = attrib.bufferId4 & 0xF,
@@ -276,9 +277,9 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		U16 entrypointId = (U16) stage.binaryId;
 		U16 binaryId = (U16) (stage.binaryId >> 16);
 
-		SHFile binary = binaries.ptr[stage.shFileId];
-		SHBinaryInfo binj = binary.binaries.ptr[binary.entries.ptr[entrypointId].binaryIds.ptr[binaryId]];
-		Buffer bin = binj.binaries[ESHBinaryType_DXIL];
+		const SHFile *binary = &binaries->ptr[stage.shFileId];
+		const SHBinaryInfo *binj = &binary->binaries.ptr[binary->entries.ptr[entrypointId].binaryIds.ptr[binaryId]];
+		Buffer bin = binj->binaries[ESHBinaryType_DXIL];
 
 		D3D12_SHADER_BYTECODE bytecode = (D3D12_SHADER_BYTECODE) {
 			.pShaderBytecode = bin.ptr,
@@ -286,11 +287,11 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		};
 
 		switch(stage.stageType) {
-			default:							graphics.PS = bytecode;		break;
-			case EPipelineStage_Vertex:			graphics.VS = bytecode;		break;
-			case EPipelineStage_Domain:			graphics.DS = bytecode;		break;
-			case EPipelineStage_Hull:			graphics.HS = bytecode;		break;
-			case EPipelineStage_GeometryExt:	graphics.GS = bytecode;		break;
+			default:                            graphics.PS = bytecode;        break;
+			case EPipelineStage_Vertex:         graphics.VS = bytecode;        break;
+			case EPipelineStage_Domain:         graphics.DS = bytecode;        break;
+			case EPipelineStage_Hull:           graphics.HS = bytecode;        break;
+			case EPipelineStage_GeometryExt:    graphics.GS = bytecode;        break;
 		}
 	}
 
@@ -298,19 +299,19 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 	ID3D12PipelineState **pipelinei = &Pipeline_ext(pipeline, Dx)->pso;
 
-	gotoIfError2(clean, dxCheck(deviceExt->device->lpVtbl->CreateGraphicsPipelineState(
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateGraphicsPipelineState(
 		deviceExt->device,
 		&graphics,
 		&IID_ID3D12PipelineState,
 		(void**) pipelinei
-	)))
+	), e_rr));
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
-		gotoIfError2(clean, CharString_toUTF16x(name, &tmp))
-		gotoIfError2(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr)))
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name)) {
+		gotoIfError3(clean, CharString_toUTF16(*name, alloc, &tmp, e_rr));
+		gotoIfError3(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr), e_rr));
 	}
 
 clean:
-	ListU16_freex(&tmp);
+	ListU16_free(&tmp, alloc);
 	return s_uccess;
 }

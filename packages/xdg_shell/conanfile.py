@@ -36,7 +36,20 @@ class xdg_shell(ConanFile):
 		tc.generate()
 
 	def source(self):
-		download(self, "https://cgit.freedesktop.org/wayland/wayland-protocols/plain/stable/xdg-shell/xdg-shell.xml", "xdg_shell.xml")
+
+		# cgit.freedesktop.org rate-limits (HTTP 418) and freedesktop is intermittently unreachable in CI, so try the
+		# current canonical gitlab raw URL first and fall back to cgit, with retries. Pinned to a stable tag so the
+		# xdg-shell protocol content is reproducible. TODO: vendor xdg-shell.xml in-repo to drop the network dependency.
+		download(
+			self,
+			[
+				"https://gitlab.freedesktop.org/wayland/wayland-protocols/-/raw/1.38/stable/xdg-shell/xdg-shell.xml",
+				"https://cgit.freedesktop.org/wayland/wayland-protocols/plain/stable/xdg-shell/xdg-shell.xml",
+			],
+			"xdg_shell.xml",
+			retry=3,
+			retry_wait=5,
+		)
 
 		self.run("wayland-scanner private-code xdg_shell.xml xdg_shell_protocol.c")
 		self.run("wayland-scanner client-header xdg_shell.xml xdg_shell_client_protocol.h")

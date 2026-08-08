@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,35 +18,21 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//platforms/generic/window.c
+
+#include "types/container/list_impl.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "platforms/file.h"
+#include "formats/dds/dds_file.h"
 #include "types/container/string.h"
 #include "types/container/texture_format.h"
-#include "formats/dds/dds.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/formatx.h"
-#include "types/math/math.h"
+#include "types/container/memory_stream.h"
+#include "types/base/mathi.h"
+#include "types/base/constants.h"
 
 TListImpl(InputDevice);
 TListImpl(Monitor);
-
-I32x2 EResolution_get(EResolution r) { return I32x2_create2(r >> 16, r & U16_MAX); }
-
-EResolution EResolution_create(I32x2 v) {
-
-	if(I32x2_neq2(I32x2_clamp(v, I32x2_zero(), I32x2_xx2(U16_MAX)), v))
-		return EResolution_Undefined;
-
-	return _RESOLUTION(I32x2_x(v), I32x2_y(v));
-}
-
-Bool Window_isMinimized(const Window *w) { return w && w->flags & EWindowFlags_IsMinimized; }
-Bool Window_isFocussed(const Window *w) { return w && w->flags & EWindowFlags_IsFocussed; }
-Bool Window_isFullScreen(const Window *w) { return w && w->flags & EWindowFlags_IsFullscreen; }
-
-Bool Window_doesAllowFullScreen(const Window *w) { return w && w->hint & EWindowHint_AllowFullscreen; }
 
 //TODO: Move this to texture class
 
@@ -58,21 +44,23 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 	Buffer neo = Buffer_createNull();
 
 	if (!w)
-		retError(clean, Error_nullPointer(0, "Window_resizeCPUBuffer()::w is required"))
+		retError(clean, Error_nullPointer(0, "Window_resizeCPUBuffer()::w is required"));
 
 	if(w->type >= EWindowType_Extended)
-		retError(clean, Error_unsupportedOperation(0, "Window_resizeCPUBuffer() isn't supported for extended windows"))
+		retError(clean, Error_unsupportedOperation(0, "Window_resizeCPUBuffer() isn't supported for extended windows"));
 
 	if(w->type == EWindowType_Physical && !(w->hint & EWindowHint_ProvideCPUBuffer))
 		retError(clean, Error_invalidParameter(
 			0, 0, "Window_resizeCPUBuffer()::w must be a virtual window or have EWindowHint_ProvideCPUBuffer"
-		))
+		));
+	
+	newSiz = I32x2_clamp(newSiz, w->minSize, w->maxSize);
 
 	if(I32x2_eq2(w->size, newSiz))
 		goto clean;
 
-	if(I32x2_any(I32x2_leq(newSiz, I32x2_zero())))
-		retError(clean, Error_invalidParameter(2, 0, "Window_resizeCPUBuffer()::newSiz should be >0"))
+	if(I32x2_any(I32x2_leq(newSiz, I32x2_zero)))
+		retError(clean, Error_invalidParameter(2, 0, "Window_resizeCPUBuffer()::newSiz should be >0"));
 
 	//Because we're resizing, we assume we will be resizing more often
 	//To combat constantly reallocating, we will allocate 25% more memory than is needed.
@@ -86,7 +74,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 	const U64 linSiz = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(newSiz), I32x2_y(newSiz), 1);
 
 	if(linSizOld * 5 < linSizOld)
-		retError(clean, Error_overflow(2, linSizOld * 5, U64_MAX, "Window_resizeCPUBuffer() overflow"))
+		retError(clean, Error_overflow(2, linSizOld * 5, U64_MAX, "Window_resizeCPUBuffer() overflow"));
 
 	//We need to grow; we're out of bounds
 
@@ -94,7 +82,8 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 
 	if (linSiz >= oldLen) {
 		const U64 toAllocate = linSiz * 5 / 4;
-		gotoIfError2(clean, Buffer_createUninitializedBytesx(toAllocate, &neo))
+		neo = Buffer_createNull();
+		gotoIfError3(clean, Buffer_createUninitializedBytes(toAllocate, Platform_instance->alloc, &neo, e_rr));
 		resize = true;
 	}
 
@@ -102,7 +91,8 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 
 	else if (oldLen > linSiz * 3 / 2) {
 		const U64 toAllocate = linSiz * 5 / 4;
-		gotoIfError2(clean, Buffer_createUninitializedBytesx(toAllocate, &neo))
+		neo = Buffer_createNull();
+		gotoIfError3(clean, Buffer_createUninitializedBytes(toAllocate, Platform_instance->alloc, &neo, e_rr));
 		resize = true;
 	}
 
@@ -123,9 +113,9 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 			//If we added size, we need to clear those pixels
 
 			if(I32x2_y(newSiz) > I32x2_y(w->size))
-				gotoIfError2(clean, Buffer_unsetAllBits(
-					Buffer_createRef(neo.ptrNonConst + linSizOld, linSiz - linSizOld)
-				))
+				gotoIfError3(clean, Buffer_unsetAllBits(
+					Buffer_createRef(neo.ptrNonConst + linSizOld, linSiz - linSizOld), e_rr
+				));
 		}
 
 		//Row changed; we have to unfortunately copy this over
@@ -138,10 +128,10 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 			//Grab buffers for simple copies later
 
 			Buffer src = Buffer_createNull();
-			gotoIfError2(clean, Buffer_createSubset(old, 0, rowSizOld, false, &src))
+			gotoIfError3(clean, Buffer_createSubset(old, 0, rowSizOld, false, &src, e_rr));
 
 			Buffer dst = Buffer_createNull();
-			gotoIfError2(clean, Buffer_createSubset(neo, 0, rowSiz, false, &dst))
+			gotoIfError3(clean, Buffer_createSubset(neo, 0, rowSiz, false, &dst, e_rr));
 
 			//First we ensure everything is copied to the right location
 
@@ -165,12 +155,12 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 					//Clear remainder of row
 
 					Buffer toClear = Buffer_createNull();
-					gotoIfError2(clean, Buffer_createSubset(dst, linSizOld, sizDif, false, &toClear))
-					Buffer_unsetAllBits(toClear);
+					gotoIfError3(clean, Buffer_createSubset(dst, linSizOld, sizDif, false, &toClear, e_rr));
+					gotoIfError3(clean, Buffer_unsetAllBits(toClear, e_rr));
 
 					//Copy part
 
-					Buffer_memmove(dst, src);		//Automatically truncates src
+					Buffer_memmove(dst, src);        //Automatically truncates src
 
 					//Jump backwards
 
@@ -186,7 +176,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 				if (!i && !resize)
 					continue;
 
-				Buffer_memmove(dst, src);		//Automatically truncates src
+				Buffer_memmove(dst, src);        //Automatically truncates src
 				dst.ptr += rowSiz;
 				src.ptr += rowSizOld;
 			}
@@ -195,12 +185,12 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 
 	//Ensure it's all properly cleared
 
-	else Buffer_unsetAllBits(Buffer_createRef(neo.ptrNonConst, linSiz));
+	else gotoIfError3(clean, Buffer_unsetAllBits(Buffer_createRef(neo.ptrNonConst, linSiz), e_rr));
 
 	//Get rid of our old data
 
 	if (resize)
-		Buffer_freex(&old);
+		Buffer_free(&old, Platform_instance->alloc);
 
 	w->cpuVisibleBuffer = neo;
 	w->size = newSiz;
@@ -209,24 +199,28 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 clean:
 
 	if(resize)
-		Buffer_freex(&neo);
+		Buffer_free(&neo, Platform_instance->alloc);
 
 	return s_uccess;
 }
 
-Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout, Error *e_rr) {
+Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
+	FileStreamRef *stream = NULL;
+	MemoryStreamRef *memStream = NULL;
+	RefPtrType memStreamType = MemoryStream_makeType(alloc);
+
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	const RefPtrType streamType = FileStream_makeType(alloc);
 
 	if (!w)
-		retError(clean, Error_nullPointer(0, "Window_storeCPUBufferToDisk()::w is required"))
+		retError(clean, Error_nullPointer(0, "Window_storeCPUBufferToDisk()::w is required"));
 
 	if(!Buffer_length(w->cpuVisibleBuffer))
 		retError(clean, Error_invalidOperation(
 			0, "Window_storeCPUBufferToDisk()::w must be a virtual window or have EWindowHint_ProvideCPUBuffer"
-		))
-
-	Buffer file = Buffer_createNull();
+		));
 
 	DDSInfo info = (DDSInfo) {
 
@@ -239,29 +233,29 @@ Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTim
 	};
 
 	switch (w->format) {
-		default:						info.textureFormatId = ETextureFormatId_BGRA8;		break;
-		case EWindowFormat_BGR10A2:		info.textureFormatId = ETextureFormatId_BGR10A2;	break;
-		case EWindowFormat_RGBA16f:		info.textureFormatId = ETextureFormatId_RGBA16f;	break;
-		case EWindowFormat_RGBA32f:		info.textureFormatId = ETextureFormatId_RGBA32f;	break;
+		default:                        info.textureFormatId = ETextureFormatId_BGRA8;        break;
+		case EWindowFormat_BGR10A2:        info.textureFormatId = ETextureFormatId_BGR10A2;    break;
+		case EWindowFormat_RGBA16f:        info.textureFormatId = ETextureFormatId_RGBA16f;    break;
+		case EWindowFormat_RGBA32f:        info.textureFormatId = ETextureFormatId_RGBA32f;    break;
 	}
 
-	SubResourceData subResource = (SubResourceData) { .data = w->cpuVisibleBuffer };
-	ListSubResourceData buf = (ListSubResourceData) { 0 };
-	gotoIfError2(clean, ListSubResourceData_createRefConst(&subResource, 1, &buf))
-	gotoIfError2(clean, DDS_writex(buf, info, &file))
+	gotoIfError3(clean, File_openStream(
+		&filePath, maxTimeout, EFileOpenType_Write, true, &fileHandleType, &streamType, &stream, e_rr
+	));
 
-	gotoIfError3(clean, File_writex(file, filePath, 0, 0, maxTimeout, true, e_rr))
-	Buffer_freex(&file);
+	Buffer buf = Buffer_createRefFromBuffer(w->cpuVisibleBuffer, true);
+	U64 len = Buffer_length(buf);
+	gotoIfError3(clean, MemoryStream_createFromBuffer(&buf, EMemoryStreamFlags_None, &memStreamType, &memStream, e_rr));
+
+	SubResourceData subResource = (SubResourceData) { .stream = memStream, .streamLen = len };
+	ListSubResourceData resources = (ListSubResourceData) { 0 };
+	gotoIfError3(clean, ListSubResourceData_createRefConst(&subResource, 1, &resources, e_rr));
+
+	U64 streamOff = 0;
+	gotoIfError3(clean, DDS_write(stream, &streamOff, &resources, &info, alloc, e_rr));
 
 clean:
+	RefPtr_dec(&stream);
+	RefPtr_dec(&memStream);
 	return s_uccess;
-}
-
-Bool Window_terminate(Window *w) {
-
-	if(!w)
-		return false;
-
-	w->flags |= EWindowFlags_ShouldTerminate;		//Mark thread for destroy
-	return true;
 }

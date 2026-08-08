@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,33 +18,23 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//graphics/generic/tlas.c
+
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "graphics/generic/device.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/bindless_descriptor.h"
+#include "graphics/generic/descriptor_table.h"
+#include "formats/oiSH/sh_registers.h"
+#include "types/container/string.h"
 #include "types/container/buffer.h"
+#include "types/container/ref_ptr.h"
+#include "types/base/constants.h"
 
-TLASTransformSRT TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing) {
-	TLASTransformSRT srt = TLASTransformSRT_createSimple(scale, translate, quat);
-	TLASTransformSRT_setPivot(&srt, pivot);
-	TLASTransformSRT_setShearing(&srt, shearing);
-	return srt;
-
-}
-
-TLASTransformSRT TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat) {
-	TLASTransformSRT srt = (TLASTransformSRT) { 0 };
-	TLASTransformSRT_setScale(&srt, scale);
-	TLASTransformSRT_setTranslate(&srt, translate);
-	TLASTransformSRT_setQuat(&srt, quat);
-	return srt;
-}
-
-F32x4 TLASTransformSRT_getScale(TLASTransformSRT srt) {
-	return F32x4_create3(srt.sx, srt.sy, srt.sz);
+F32x4 TLASTransformSRT_getScale(const TLASTransformSRT *srt) {
+	return !srt ? F32x4_zero() : F32x4_create3(srt->sx, srt->sy, srt->sz);
 }
 
 Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value) {
@@ -58,8 +48,8 @@ Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value) {
 	return true;
 }
 
-F32x4 TLASTransformSRT_getPivot(TLASTransformSRT srt) {
-	return F32x4_create3(srt.pvx, srt.pvy, srt.pvz);
+F32x4 TLASTransformSRT_getPivot(const TLASTransformSRT *srt) {
+	return !srt ? F32x4_zero() : F32x4_create3(srt->pvx, srt->pvy, srt->pvz);
 }
 
 Bool TLASTransformSRT_setPivot(TLASTransformSRT *srt, F32x4 value) {
@@ -73,8 +63,8 @@ Bool TLASTransformSRT_setPivot(TLASTransformSRT *srt, F32x4 value) {
 	return true;
 }
 
-F32x4 TLASTransformSRT_getTranslate(TLASTransformSRT srt) {
-	return F32x4_create3(srt.tx, srt.ty, srt.tz);
+F32x4 TLASTransformSRT_getTranslate(const TLASTransformSRT *srt) {
+	return !srt ? F32x4_zero() : F32x4_create3(srt->tx, srt->ty, srt->tz);
 }
 
 Bool TLASTransformSRT_setTranslate(TLASTransformSRT *srt, F32x4 value) {
@@ -88,8 +78,8 @@ Bool TLASTransformSRT_setTranslate(TLASTransformSRT *srt, F32x4 value) {
 	return true;
 }
 
-QuatF32 TLASTransformSRT_getQuat(TLASTransformSRT srt) {
-	return QuatF32_create(srt.q0, srt.q1, srt.q2, srt.q3);
+QuatF32 TLASTransformSRT_getQuat(const TLASTransformSRT *srt) {
+	return !srt ? QuatF32_identity() : QuatF32_create(srt->q0, srt->q1, srt->q2, srt->q3);
 }
 
 Bool TLASTransformSRT_setQuat(TLASTransformSRT *srt, QuatF32 value) {
@@ -104,8 +94,8 @@ Bool TLASTransformSRT_setQuat(TLASTransformSRT *srt, QuatF32 value) {
 	return true;
 }
 
-F32x4 TLASTransformSRT_getShearing(TLASTransformSRT srt) {
-	return F32x4_create3(srt.a, srt.b, srt.c);
+F32x4 TLASTransformSRT_getShearing(const TLASTransformSRT *srt) {
+	return !srt ? F32x4_zero() : F32x4_create3(srt->a, srt->b, srt->c);
 }
 
 Bool TLASTransformSRT_setShearing(TLASTransformSRT *srt, F32x4 value) {
@@ -124,22 +114,14 @@ TListImpl(TLASInstanceStatic);
 
 TLASInstanceData *TLASInstanceMotion_getDataInternal(TLASInstanceMotion *mot) {
 	switch (mot->type) {
-		default:							return &mot->staticInst.data;
-		case ETLASInstanceType_Matrix:		return &mot->matrixInst.data;
-		case ETLASInstanceType_SRT:			return &mot->srtInst.data;
+		default:                            return &mot->staticInst.data;
+		case ETLASInstanceType_Matrix:      return &mot->matrixInst.data;
+		case ETLASInstanceType_SRT:         return &mot->srtInst.data;
 	}
 }
 
-TLASInstanceData TLASInstanceMotion_getData(TLASInstanceMotion mot) {
-	return *TLASInstanceMotion_getDataInternal(&mot);
-}
-
-Error TLASRef_dec(TLASRef **tlas) {
-	return !RefPtr_dec(tlas) ? Error_invalidOperation(0, "TLASRef_dec()::tlas is required") : Error_none();
-}
-
-Error TLASRef_inc(TLASRef *tlas) {
-	return !RefPtr_inc(tlas) ? Error_invalidOperation(0, "TLASRef_inc()::tlas is required") : Error_none();
+TLASInstanceData TLASInstanceMotion_getData(const TLASInstanceMotion *mot) {
+	return *TLASInstanceMotion_getDataInternal((TLASInstanceMotion*)mot);
 }
 
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result) {
@@ -180,231 +162,256 @@ Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result) 
 	return true;
 }
 
-Bool TLAS_free(TLAS *tlas, Allocator allocator) {
+void TLAS_free(TLAS *tlas, const Allocator *alloc) {
 
-	(void)allocator;
+	(void)alloc;
 
 	SpinLock_lock(&tlas->base.lock, U64_MAX);
 
-	Bool success = TLAS_freeExt(tlas);
-	success &= CharString_freex(&tlas->base.name);
+	TLAS_freeExt(tlas);
+	CharString_free(&tlas->base.name, alloc);
 
-	success &= !DeviceBufferRef_dec(&tlas->base.asBuffer).genericError;
-	success &= !DeviceBufferRef_dec(&tlas->base.tempScratchBuffer).genericError;
-	success &= !DeviceBufferRef_dec(&tlas->tempInstanceBuffer).genericError;
+	RefPtr_dec(&tlas->base.asBuffer);
+	RefPtr_dec(&tlas->base.tempScratchBuffer);
+	RefPtr_dec(&tlas->tempInstanceBuffer);
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
-		success &= Buffer_freex(&tlas->cpuData);
+		Buffer_free(&tlas->cpuData, alloc);
 
 	else if (tlas->base.asConstructionType == ETLASConstructionType_Instances) {
 
 		if(tlas->useDeviceMemory)
-			success &= !DeviceBufferRef_dec(&tlas->deviceData.buffer).genericError;
+			RefPtr_dec(&tlas->deviceData.buffer);
 
 		else {
 
 			for(U64 i = 0; i < tlas->cpuInstancesStatic.length; ++i) {
 				TLASInstanceData *result = NULL;
 				TLAS_getInstanceDataCpuInternal(tlas, i, &result);
-				BLASRef_dec(&result->blasCpu);
+				RefPtr_dec(&result->blasCpu);
 			}
 
 			if(tlas->base.isMotionBlurExt)
-				success &= ListTLASInstanceMotion_freex(&tlas->cpuInstancesMotion);
+				ListTLASInstanceMotion_free(&tlas->cpuInstancesMotion, alloc);
 
-			else success &= ListTLASInstanceStatic_freex(&tlas->cpuInstancesStatic);
+			else ListTLASInstanceStatic_free(&tlas->cpuInstancesStatic, alloc);
 		}
 	}
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
-	const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
-
-	if (acq >= ELockAcquire_Success) {
-
-		ListU32 allocations = (ListU32) { 0 };
-		ListU32_createRefConst(&tlas->handle, 1, &allocations);
-		GraphicsDeviceRef_freeDescriptors(tlas->base.device, &allocations);
-
-		if(acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&device->descriptorLock);
+	if(tlas->bindlessDescriptorTable) {
+		GraphicsDeviceRef_freeDescriptorBindless(tlas->base.device, tlas->bindlessDescriptorTable, tlas->handle, NULL);
+		RefPtr_dec(&tlas->bindlessDescriptorTable);
 	}
 
-	success &= !GraphicsDeviceRef_dec(&tlas->base.device).genericError;
-	return success;
+	RefPtr_dec(&tlas->base.device);
 }
 
-Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString name, TLASRef **tlasRef) {
+Bool GraphicsDeviceRef_createTLAS(
+	GraphicsDeviceRef *dev,
+	const TLAS *tlas,
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	TLASRef **tlasRef,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
+	Bool allocated = false;
 
 	//Validate
 
-	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
-		return Error_nullPointer(0, "GraphicsDeviceRef_createTLAS()::dev is required");
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createTLAS()::dev is required"));
+
+	if(!tlas)
+		retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_createTLAS()::tlas is required"));
+
+	if(bindlessDescriptorTable && tlas->disallowBindlessDescriptor)
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_createTLAS() bindlessDescriptorTable is set, but disallowed"));
+
+	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
+		retError(clean, Error_nullPointer(
+			0,
+			"GraphicsDeviceRef_createTLAS()::bindlessDescriptorTable should be valid if non NULL"
+		));
+
+	if (!tlas->disallowBindlessDescriptor && !bindlessDescriptorTable)
+		bindlessDescriptorTable = GraphicsDeviceRef_ptr(dev)->defaultDescriptorTable;
 
 	if(!tlasRef)
-		return Error_nullPointer(3, "GraphicsDeviceRef_createTLAS()::tlasRef is required");
+		retError(clean, Error_nullPointer(3, "GraphicsDeviceRef_createTLAS()::tlasRef is required"));
 
 	if(*tlasRef)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			3, 0, "GraphicsDeviceRef_createTLAS()::*tlasRef not NULL, indicates memleak"
-		);
+		));
 
-	if(tlas.base.parent && tlas.base.parent->typeId != (ETypeId) EGraphicsTypeId_TLASExt)
-		return Error_invalidOperation(1, "GraphicsDeviceRef_createTLAS()::parent is invalid");
+	if(tlas->base.parent && tlas->base.parent->refPtrType->typeId != (TypeId) EGraphicsTypeId_TLASExt)
+		retError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createTLAS()::parent is invalid"));
 
-	if(tlas.base.parent && TLASRef_ptr(tlas.base.parent)->base.device != dev)
-		return Error_invalidOperation(
+	if(tlas->base.parent && TLASRef_ptr(tlas->base.parent)->base.device != dev)
+		retError(clean, Error_invalidOperation(
 			1, "GraphicsDeviceRef_createTLAS()::parent and TLAS device need to share device"
-		);
+		));
 
-	if(tlas.base.parent)
-		tlas.base.flags |= ERTASBuildFlags_IsUpdate;
-
-	else if(tlas.base.flags & ERTASBuildFlags_IsUpdate)
-		return Error_invalidOperation(
+	if(!tlas->base.parent && (tlas->base.flags & ERTASBuildFlags_IsUpdate))
+		retError(clean, Error_invalidOperation(
 			7, "GraphicsDeviceRef_createTLAS()::parent is required if IsUpdate is present"
-		);
+		));
 
-	if(!(tlas.base.flags & ERTASBuildFlags_AllowUpdate) && (tlas.base.flags & ERTASBuildFlags_IsUpdate))
-		return Error_invalidOperation(
+	const Bool isUpdate = tlas->base.parent || (tlas->base.flags & ERTASBuildFlags_IsUpdate);
+
+	if(!(tlas->base.flags & ERTASBuildFlags_AllowUpdate) && isUpdate)
+		retError(clean, Error_invalidOperation(
 			8, "GraphicsDeviceRef_createTLAS() is update is not possible if AllowUpdate is false"
-		);
+		));
 
 	EGraphicsFeatures feat = GraphicsDeviceRef_ptr(dev)->info.capabilities.features;
 
 	if(!(feat & EGraphicsFeatures_Raytracing))
-		return Error_unsupportedOperation(
+		retError(clean, Error_unsupportedOperation(
 			0, "GraphicsDeviceRef_createTLAS() is unsupported without raytracing support"
-		);
+		));
 
-	if(tlas.base.isMotionBlurExt && !(feat & EGraphicsFeatures_RayMotionBlur))
-		return Error_unsupportedOperation(
+	if(tlas->base.isMotionBlurExt && !(feat & EGraphicsFeatures_RayMotionBlur))
+		retError(clean, Error_unsupportedOperation(
 			0, "GraphicsDeviceRef_createTLAS() uses motion blur, but it's unsupported"
-		);
+		));
+
+	//RTAS_validateDeviceBuffer may normalize len, so validate a local copy;
+	//it's committed to the new TLAS below
+
+	DeviceData deviceData = (DeviceData) { 0 };
 
 	//Validate TLAS
 
-	if(tlas.base.asConstructionType == ETLASConstructionType_Instances) {
+	if(tlas->base.asConstructionType == ETLASConstructionType_Instances) {
 
-		if (tlas.useDeviceMemory) {
+		if (tlas->useDeviceMemory) {
 
-			Error err = RTAS_validateDeviceBuffer(&tlas.deviceData);
+			deviceData = tlas->deviceData;
+			gotoIfError3(clean, RTAS_validateDeviceBuffer(&deviceData, e_rr));
 
-			if(err.genericError)
-				return err;
+			U64 stride = tlas->base.isMotionBlurExt ? sizeof(TLASInstanceMotion) : sizeof(TLASInstanceStatic);
 
-			U64 stride = tlas.base.isMotionBlurExt ? sizeof(TLASInstanceMotion) : sizeof(TLASInstanceStatic);
-
-			if(tlas.deviceData.len < stride || tlas.deviceData.len % stride)
-				return Error_invalidOperation(9, "GraphicsDeviceRef_createTLAS() invalid AS buffer size");
+			if(deviceData.len < stride || deviceData.len % stride)
+				retError(clean, Error_invalidOperation(9, "GraphicsDeviceRef_createTLAS() invalid AS buffer size"));
 		}
 
 		else {
 
-			U64 length = tlas.cpuInstancesMotion.length;		//instancesMotion and instancesStatic are at the same loc
+			U64 length = tlas->cpuInstancesMotion.length;        //instancesMotion and instancesStatic are at the same loc
 
 			if(!length)
-				return Error_invalidOperation(10, "GraphicsDeviceRef_createTLAS() is missing instance list");
+				retError(clean, Error_invalidOperation(10, "GraphicsDeviceRef_createTLAS() is missing instance list"));
 
 			for (U64 i = 0; i < length; ++i) {
 
 				TLASInstanceData dat = (TLASInstanceData) { 0 };
-				if(!TLAS_getInstanceDataCpu(&tlas, i, &dat))
-					return Error_invalidOperation(
+				if(!TLAS_getInstanceDataCpu(tlas, i, &dat))
+					retError(clean, Error_invalidOperation(
 						11, "GraphicsDeviceRef_createTLAS() can't get instance data cpu"
-					);
+					));
 
 				if(dat.blasCpu) {
 
-					if(dat.blasCpu->typeId != (ETypeId) EGraphicsTypeId_BLASExt)
-						return Error_invalidOperation(12, "GraphicsDeviceRef_createTLAS() invalid BLAS type");
+					if(dat.blasCpu->refPtrType->typeId != (TypeId) EGraphicsTypeId_BLASExt)
+						retError(clean, Error_invalidOperation(12, "GraphicsDeviceRef_createTLAS() invalid BLAS type"));
 
 					if(BLASRef_ptr(dat.blasCpu)->base.device != dev)
-						return Error_invalidOperation(
+						retError(clean, Error_invalidOperation(
 							13, "GraphicsDeviceRef_createTLAS() BLAS device is incompatible"
-						);
+						));
 				}
 
 				if(!(dat.instanceId24_mask8 >> 24))
-					return Error_invalidOperation(
+					retError(clean, Error_invalidOperation(
 						14,
 						"GraphicsDeviceRef_createTLAS() BLAS mask is 0, this might be unintended. "
 						"Set blasCpu to NULL instead to explicitly hide the instance."
-					);
+					));
 			}
 		}
 	}
 
 	//Validate serialized
 
-	else if(!Buffer_length(tlas.cpuData))
-		return Error_unsupportedOperation(
+	else if(!Buffer_length(tlas->cpuData))
+		retError(clean, Error_unsupportedOperation(
 			1, "GraphicsDeviceRef_createTLAS()::cpuData should be valid if serialized construction is used"
-		);
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
-	Error err = Error_none();
-	ELockAcquire acq0 = ELockAcquire_Invalid;
+		));
 
 	//Allocate refPtr
 
-	gotoIfError(clean, RefPtr_createx(
-		(U32) (sizeof(TLAS) + GraphicsDeviceRef_getObjectSizes(dev)->tlas),
-		(ObjectFreeFunc) TLAS_free,
-		(ETypeId) EGraphicsTypeId_TLASExt,
-		tlasRef
-	))
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->tlas, tlasRef, e_rr));
+	allocated = true;
 
 	//Fill ptr
 
 	TLAS *tlasPtr = TLASRef_ptr(*tlasRef);
 
-	if(tlas.base.parent)
-		gotoIfError(clean, TLASRef_inc(tlas.base.parent))
+	if(tlas->base.parent)
+		gotoIfError3(clean, RefPtr_inc(tlas->base.parent));
 
-	*tlasPtr = tlas;
+	*tlasPtr = *tlas;
 	tlasPtr->base.name = CharString_createNull();
 
-	if (tlas.base.asConstructionType == ETLASConstructionType_Serialized) {
+	if(isUpdate)
+		tlasPtr->base.flags |= ERTASBuildFlags_IsUpdate;
+
+	if (tlas->base.asConstructionType == ETLASConstructionType_Serialized) {
 		tlasPtr->cpuData = Buffer_createNull();
-		gotoIfError(clean, Buffer_createCopyx(tlas.cpuData, &tlasPtr->cpuData))
+		gotoIfError3(clean, Buffer_createCopy(tlas->cpuData, alloc, &tlasPtr->cpuData, e_rr));
 	}
+
 	else {
 
-		if (tlas.useDeviceMemory) {
+		if (tlas->useDeviceMemory) {
 			tlasPtr->deviceData = (DeviceData) { 0 };
-			gotoIfError(clean, DeviceBufferRef_inc(tlas.deviceData.buffer))
-			tlasPtr->deviceData = tlas.deviceData;
+			gotoIfError3(clean, RefPtr_inc(deviceData.buffer));
+			tlasPtr->deviceData = deviceData;
 		}
 
 		else {
 
 			//Copy buffers
 
-			if (tlas.base.isMotionBlurExt) {
+			if (tlas->base.isMotionBlurExt) {
 				tlasPtr->cpuInstancesMotion = (ListTLASInstanceMotion) { 0 };
-				gotoIfError(clean, ListTLASInstanceMotion_createCopyx(tlas.cpuInstancesMotion, &tlasPtr->cpuInstancesMotion))
+				gotoIfError3(clean, ListTLASInstanceMotion_createCopy(
+					tlas->cpuInstancesMotion,
+					alloc,
+					&tlasPtr->cpuInstancesMotion,
+					e_rr
+				));
 			}
 
 			else {
 				tlasPtr->cpuInstancesStatic = (ListTLASInstanceStatic) { 0 };
-				gotoIfError(clean, ListTLASInstanceStatic_createCopyx(tlas.cpuInstancesStatic, &tlasPtr->cpuInstancesStatic))
+				gotoIfError3(clean, ListTLASInstanceStatic_createCopy(
+					tlas->cpuInstancesStatic,
+					alloc,
+					&tlasPtr->cpuInstancesStatic,
+					e_rr
+				));
 			}
 
 			//Add refs to BLASes
 
-			U64 length = tlas.cpuInstancesMotion.length;		//instancesMotion and instancesStatic are at the same loc
+			U64 length = tlas->cpuInstancesMotion.length;        //instancesMotion and instancesStatic are at the same loc
 
 			Bool invalidData = false;
 
 			for (U64 i = 0; i < length; ++i) {
 
 				TLASInstanceData *dat = NULL;
-				TLAS_getInstanceDataCpuInternal(&tlas, i, &dat);
+				TLAS_getInstanceDataCpuInternal(tlasPtr, i, &dat);
 
 				if(!dat->blasCpu)
 					continue;
 
-				if(BLASRef_inc(dat->blasCpu).genericError)
+				if(!RefPtr_inc(dat->blasCpu))
 					invalidData = true;
 
 				if(invalidData) {
@@ -414,7 +421,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 						//Ensure we don't dec refs that don't belong to us yet
 
 						if(j < i)
-							BLASRef_dec(&dat->blasCpu);
+							RefPtr_dec(&dat->blasCpu);
 
 						else dat->blasCpu = NULL;
 					}
@@ -424,100 +431,118 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 			}
 
 			if(invalidData)
-				gotoIfError(clean, Error_invalidOperation(
+				retError(clean, Error_invalidOperation(
 					15,
 					"GraphicsDeviceRef_createTLAS() One of the BLASes couldn't be found or couldn't be increased"
-				))
+				));
 		}
 	}
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(dev))
+	gotoIfError3(clean, RefPtr_inc(dev));
 	tlasPtr->base.device = dev;
 
-	gotoIfError(clean, CharString_createCopyx(name, &tlasPtr->base.name))
+	if(bindlessDescriptorTable) {
+		gotoIfError3(clean, RefPtr_inc(bindlessDescriptorTable));
+		tlasPtr->bindlessDescriptorTable = bindlessDescriptorTable;
+	}
 
-	//Reserve TLAS in array
+	if(name)
+		gotoIfError3(clean, CharString_createCopy(*name, alloc, &tlasPtr->base.name, e_rr));
 
-	acq0 = SpinLock_lock(&device->descriptorLock, U64_MAX);
+	gotoIfError3(clean, TLAS_initExt(tlasPtr, e_rr));
 
-	if(acq0 < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(
-			0, "GraphicsDeviceRef_createTLAS() couldn't acquire descriptor lock"
-		))
+	Descriptor tlasDesc = Descriptor_tlas(*tlasRef);
 
-	//Create images
-
-	tlasPtr->handle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_TLASExt);
-
-	if(tlasPtr->handle == U32_MAX)
-		gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createTLAS() couldn't allocate AS descriptor"))
-
-	gotoIfError(clean, TLAS_initExt(tlasPtr));
+	if(bindlessDescriptorTable && !GraphicsDeviceRef_allocateDescriptorBindless(
+		dev,
+		bindlessDescriptorTable,
+		ESHRegisterType_AccelerationStructure,
+		0,
+		false,
+		&tlasDesc,
+		&tlasPtr->handle,
+		e_rr
+	)) {
+		s_uccess = false;
+		goto clean;
+	}
 
 clean:
 
-	if(acq0 == ELockAcquire_Acquired)
-		SpinLock_unlock(&device->descriptorLock);
+	if(!s_uccess && allocated)
+		RefPtr_dec(tlasRef);
 
-	if(err.genericError)
-		TLASRef_dec(tlasRef);
-
-	return err;
+	return s_uccess;
 }
 
-Error GraphicsDeviceRef_createTLASExt(
+Bool GraphicsDeviceRef_createTLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	TLASRef *parent,					//If specified, indicates refit
-	ListTLASInstanceStatic instances,
-	CharString name,
-	TLASRef **tlas
+	TLASRef *parent,                    //If specified, indicates refit
+	const ListTLASInstanceStatic *instances,
+	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	TLASRef **tlas,
+	Error *e_rr
 ) {
 
-	const TLAS tlasInfo = (TLAS) {
+	TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
 			.flags = (U8) buildFlags,
 			.parent = parent
 		},
-		.cpuInstancesStatic = instances
+		.disallowBindlessDescriptor = disallowBindlessDescriptor
 	};
 
-	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas);
+	if(instances)
+		tlasInfo.cpuInstancesStatic = *instances;
+
+	return GraphicsDeviceRef_createTLAS(dev, &tlasInfo, bindlessDescriptorTable, name, tlas, e_rr);
 }
 
-Error GraphicsDeviceRef_createTLASMotionExt(
+Bool GraphicsDeviceRef_createTLASMotionExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	TLASRef *parent,					//If specified, indicates refit
-	ListTLASInstanceMotion instances,
-	CharString name,
-	TLASRef **tlas
+	TLASRef *parent,
+	const ListTLASInstanceMotion *instances,
+	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	TLASRef **tlas,
+	Error *e_rr
 ) {
 
-	const TLAS tlasInfo = (TLAS) {
+	TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
 			.flags = (U8) buildFlags,
 			.parent = parent
 		},
-		.cpuInstancesMotion = instances
+		.disallowBindlessDescriptor = disallowBindlessDescriptor
 	};
 
-	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas);
+	if(instances)
+		tlasInfo.cpuInstancesMotion = *instances;
+
+	return GraphicsDeviceRef_createTLAS(dev, &tlasInfo, bindlessDescriptorTable, name, tlas, e_rr);
 }
 
-Error GraphicsDeviceRef_createTLASDeviceExt(
+Bool GraphicsDeviceRef_createTLASDeviceExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	Bool isMotionBlurExt,				//Requires extension
-	TLASRef *parent,					//If specified, indicates refit
-	DeviceData instancesDevice,			//Instances on the GPU, should be sized correctly
-	CharString name,
-	TLASRef **tlas
+	Bool isMotionBlurExt,
+	TLASRef *parent,
+	const DeviceData *instancesDevice,
+	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	TLASRef **tlas,
+	Error *e_rr
 ) {
 
-	const TLAS tlasInfo = (TLAS) {
+	TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
 			.flags = (U8) buildFlags,
@@ -525,20 +550,26 @@ Error GraphicsDeviceRef_createTLASDeviceExt(
 			.parent = parent
 		},
 		.useDeviceMemory = true,
-		.deviceData = instancesDevice
+		.disallowBindlessDescriptor = disallowBindlessDescriptor
 	};
 
-	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas);
+	if(instancesDevice)
+		tlasInfo.deviceData = *instancesDevice;
+
+	return GraphicsDeviceRef_createTLAS(dev, &tlasInfo, bindlessDescriptorTable, name, tlas, e_rr);
 }
 
 //Creating TLAS from cache
 
-//Error GraphicsDeviceRef_createTLASFromCacheExt(GraphicsDeviceRef *dev, Buffer cache, CharString name, TLASRef **tlas) {
+//Bool GraphicsDeviceRef_createTLASFromCacheExt(
+// GraphicsDeviceRef *dev, Buffer cache, Bool disallowBindlessDescriptor, CharString name, TLASRef **tlas, Error *e_rr
+//) {
 //
-//	TLAS tlasInfo = (TLAS) {
-//		.base = (RTAS) { .asConstructionType = (U8) ETLASConstructionType_Serialized, },
-//		.cpuData = cache
-//	};
+//    TLAS tlasInfo = (TLAS) {
+//        .base = (RTAS) { .asConstructionType = (U8) ETLASConstructionType_Serialized, },
+//        .cpuData = cache,
+//        .disallowBindlessDescriptor = disallowBindlessDescriptor
+//    };
 //
-//	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas);
+//    return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas, e_rr);
 //}

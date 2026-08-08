@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -17,6 +17,8 @@
 *  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 *  This is called dual licensing.
 */
+
+//types/base/error.c
 
 #include "types/base/error.h"
 #include "types/container/string.h"
@@ -53,6 +55,14 @@ const C8 *EGenericError_TO_STRING[] = {
 	"Unimplemented",
 	"Std error"
 };
+
+void Error_fillStackTrace(Error *err) {
+
+	//Skip Error_fillStackTrace (skip=1), Error_x (skip=2)
+
+	if(err)
+		Error_captureStackTrace(err->stackTrace, ERROR_STACKTRACE, 2);
+}
 
 Error Error_platformError(U32 subId, U64 platformError, const C8 *errorStr) {
 	Error_base(

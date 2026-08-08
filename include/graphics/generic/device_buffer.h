@@ -1,0 +1,125 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//graphics/generic/device_buffer.h
+
+#pragma once
+#include "types/base/lock.h"
+#include "graphics/generic/resource.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
+typedef struct CharString CharString;
+
+typedef RefPtr GraphicsDeviceRef;
+
+typedef enum EDeviceBufferUsage {
+
+	EDeviceBufferUsage_None                 = 0,
+
+	EDeviceBufferUsage_Vertex               = 1 << 0,        //Allow for use as vertex buffer
+	EDeviceBufferUsage_Index                = 1 << 1,        //Allow for use as index buffer
+	EDeviceBufferUsage_Indirect             = 1 << 2,        //Allow for use in indirect draw/dispatch calls
+	EDeviceBufferUsage_Uniform              = 1 << 3,        //Allow use as a UBO/constant buffer
+
+	//Raytracing types (internal)
+
+	EDeviceBufferUsage_ScratchExt           = 1 << 4,        //Allow for internal use as scratch buffer
+	EDeviceBufferUsage_ASExt                = 1 << 5,        //Allow for internal use as acceleration structure
+	EDeviceBufferUsage_ASReadExt            = 1 << 6,        //Allow buffer to be read by AS creation
+	EDeviceBufferUsage_SBTExt               = 1 << 7         //Allow for internal use as shader binding table
+
+} EDeviceBufferUsage;
+
+typedef RefPtr DeviceBufferRef;
+typedef RefPtr DescriptorTableRef;
+
+TList(DevicePendingRange);
+
+typedef struct DeviceData {
+	DeviceBufferRef *buffer;
+	U64 offset, len;
+} DeviceData;
+
+typedef struct DeviceBuffer {
+
+	GraphicsResource resource;
+
+	EDeviceBufferUsage usage;
+	Bool isPendingFullCopy, isPending, isFirstFrame;
+	U8 padding0;
+
+	DescriptorTableRef *bindlessDescriptorTable;
+
+	Buffer cpuData;                           //Null if not cpu backed & uploaded. If not cpu backed this will free post upload
+
+	ListDevicePendingRange pendingChanges;
+
+	U32 readHandle, writeHandle;
+
+	SpinLock lock;
+
+} DeviceBuffer;
+
+//TODO: Ability to query allocation size (inc alignment)
+//TODO: Ability to say resource won't need upload / or only clear.
+
+#define DeviceBuffer_ext(ptr, T) (!ptr ? NULL : (T##DeviceBuffer*)(ptr + 1))        //impl
+#define DeviceBufferRef_ptr(ptr) RefPtr_data(ptr, DeviceBuffer)
+
+//Create empty buffer or initialized with data.
+//Initializing to non-zero isn't free due to copies.
+//    Initializing to non-zero will move the buffer to created DeviceBuffer, unless it's a ref (then it will create a new one)
+
+Bool GraphicsDeviceRef_createBuffer(
+	GraphicsDeviceRef *dev,
+	EDeviceBufferUsage usage,
+	EGraphicsResourceFlag resourceFlags,
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	U64 len,
+	DeviceBufferRef **buf,
+	Error *e_rr
+);
+
+Bool GraphicsDeviceRef_createBufferData(
+	GraphicsDeviceRef *dev,
+	EDeviceBufferUsage usage,
+	EGraphicsResourceFlag resourceFlags,
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	Buffer *dat,
+	DeviceBufferRef **buf,
+	Error *e_rr
+);
+
+//Mark the underlying data for the DeviceBuffer as dirty.
+//Count 0 indicates rest of the buffer starting at offset.
+//Each region that doesn't intersect will be considered as 1 copy (otherwise it will be merged).
+//Call this as little as possible while still not copying too much data.
+//Only possible if buffer has a backed CPU buffer.
+
+Bool DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count, Error *e_rr);
+
+#ifdef __cplusplus
+	}
+#endif

@@ -1,5 +1,7 @@
 # Chimera (.oiBC format)
 
+> **Status: 📄 spec / design only — not implemented.** This documents a draft format: the oiBC reader/writer are stubs and the Brotli compression it relies on is a disabled work in progress (see the [Formats table in STATUS.md](../STATUS.md#formats)). Don't build against it yet.
+
 *The oiBC format is an [oiXX format](oiXX.md), as such it inherits the properties from that such as compression, encryption and endianness.*
 
 oiBC (Chimera format) is a compiled intermediate binary format.

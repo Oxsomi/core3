@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,211 +18,233 @@
 *  This is called dual licensing.
 */
 
-#include "types/math/quat.h"
-#include "types/base/error.h"
-#include "types/math/math.h"
+//types/math/quat.c
 
-#define QUAT_IMPL(T, suffix)																							\
+#include "types/math/quat.h"
+#include "types/math/vec4f_swizzle.h"
+#include "types/base/error.h"
+#include "types/base/mathf.h"
+
+#define QUAT_IMPL(T, suffix)                                                                                            \
 																														\
-Quat##T Quat##T##_create(T x, T y, T z, T w) { return T##x4_create4(x, y, z, w); }										\
+/* Rotate around an axis with an angle */                                                                                \
+/*  https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Definition */                            \
 																														\
-Quat##T Quat##T##_identity() { return Quat##T##_create(0, 0, 0, 1); }													\
+Quat##T Quat##T##_angleAxis(T##x4 axis, T angle) {                                                                        \
 																														\
-Quat##T Quat##T##_conj(Quat##T q) { return Quat##T##_create(-T##x4_x(q), -T##x4_y(q), -T##x4_z(q), T##x4_w(q)); }		\
-Quat##T Quat##T##_normalize(Quat##T q) { return T##x4_normalize4(q); }													\
-Quat##T Quat##T##_inverse(Quat##T q) { return Quat##T##_normalize(Quat##T##_conj(q)); }									\
+	axis = T##x4_normalize3(axis);                                                                                        \
 																														\
-Bool Quat##T##_eq(Quat##T a, Quat##T b) { return T##x4_eq4(a, b); }														\
-Bool Quat##T##_neq(Quat##T a, Quat##T b) { return T##x4_neq4(a, b); }													\
+	angle *= 0.5##suffix;                                                                                                \
 																														\
-T Quat##T##_x(Quat##T a) { return T##x4_x(a); }																			\
-T Quat##T##_y(Quat##T a) { return T##x4_y(a); }																			\
-T Quat##T##_z(Quat##T a) { return T##x4_z(a); }																			\
-T Quat##T##_w(Quat##T a) { return T##x4_w(a); }																			\
-T Quat##T##_get(Quat##T a, U8 i) { return T##x4_get(a, i); }															\
+	T sinA2 = T##_sin(angle);                                                                                            \
+	T cosA2 = T##_cos(angle);                                                                                            \
 																														\
-void Quat##T##_setX(Quat##T *a, T v) { T##x4_setX(a, v); }																\
-void Quat##T##_setY(Quat##T *a, T v) { T##x4_setY(a, v); }																\
-void Quat##T##_setZ(Quat##T *a, T v) { T##x4_setZ(a, v); }																\
-void Quat##T##_setW(Quat##T *a, T v) { T##x4_setW(a, v); }																\
-void Quat##T##_set(Quat##T *a, U8 i, T v) { T##x4_set(a, i, v); }														\
+	T##x4 q = T##x4_mul(axis, T##x4_xxxx4(sinA2));                                                                        \
 																														\
-Quat##T Quat##T##_lerp(Quat##T a, Quat##T b, T perc) { return T##x4_lerp(a, b, perc); }									\
+	return T##x4_setWCopy(q, cosA2);                                                                                    \
+}                                                                                                                        \
 																														\
-/* Rotate normal by quaternion */																						\
-/*  https://math.stackexchange.com/questions/40164/how-do-you-rotate-a-vector-by-a-unit-quaternion */					\
+Quat##T Quat##T##_fromEuler(T##x4 eulerXYZDeg) {                                                                        \
 																														\
-T##x4 Quat##T##_applyToNormal(Quat##T R, T##x4 P) {																		\
-	return Quat##T##_mul(Quat##T##_mul(R, P), Quat##T##_conj(R));														\
-}																														\
+	T##x4 halfRad = T##x4_mul(eulerXYZDeg, T##x4_xxxx4(T##_DEG_TO_RAD * .5##suffix));                                    \
 																														\
-/* Rotate around an axis with an angle */																				\
-/*  https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Definition */							\
+	T##x4 c = T##x4_cos(halfRad);                                                                                        \
+	T##x4 s = T##x4_sin(halfRad);                                                                                        \
 																														\
-Quat##T Quat##T##_angleAxis(T##x4 axis, T angle) {																		\
+	T cx = T##x4_x(c);                                                                                                    \
+	T cy = T##x4_y(c);                                                                                                    \
+	T cz = T##x4_z(c);                                                                                                    \
 																														\
-	angle *= 0.5##suffix;																								\
+	T sx = T##x4_x(s);                                                                                                    \
+	T sy = T##x4_y(s);                                                                                                    \
+	T sz = T##x4_z(s);                                                                                                    \
 																														\
-	T sinA2 = T##_sin(angle);																							\
-	T cosA2 = T##_cos(angle);																							\
+	return Quat##T##_normalize(Quat##T##_create(                                                                        \
+		sx * cy * cz + cx * sy * sz,                                                                                    \
+		cx * sy * cz - sx * cy * sz,                                                                                    \
+		cx * cy * sz + sx * sy * cz,                                                                                    \
+		cx * cy * cz - sx * sy * sz                                                                                        \
+	));                                                                                                                    \
+}                                                                                                                        \
 																														\
-	T##x4 cosB = T##x4_cos(axis);																						\
-	T##x4 q = T##x4_mul(cosB, T##x4_xxxx4(sinA2));																		\
+T##x4 Quat##T##_toEuler(Quat##T q) {                                                                                    \
 																														\
-	T##x4_setW(&q, cosA2);																								\
-	return q;																											\
-}																														\
+	q = Quat##T##_normalize(q);                                                                                            \
+	T qx = Quat##T##_x(q);                                                                                                \
+	T qy = Quat##T##_y(q);                                                                                                \
+	T qz = Quat##T##_z(q);                                                                                                \
+	T qw = Quat##T##_w(q);                                                                                                \
 																														\
-Quat##T Quat##T##_fromEuler(T##x4 pitchYawRollDeg) {																	\
+	/* For intrinsic XYZ: R = Rx * Ry * Rz */                                                                            \
+	/* Extract from matrix elements */                                                                                    \
+	T r12 = 2 * (qy * qz - qw * qx);                                                                                    \
+	T r22 = 1 - 2 * (qx * qx + qy * qy);                                                                                \
+	T r02 = 2 * (qx * qz + qw * qy);                                                                                    \
+	T r01 = 2 * (qx * qy - qw * qz);                                                                                    \
+	T r00 = 1 - 2 * (qy * qy + qz * qz);                                                                                \
 																														\
-	T##x4 pitchYawRollRad = T##x4_mul(pitchYawRollDeg, T##x4_xxxx4(T##_DEG_TO_RAD * .5##suffix));						\
+	T roll, pitch, yaw;                                                                                                    \
 																														\
-	T##x4 c = T##x4_cos(pitchYawRollRad);																				\
-	T##x4 s = T##x4_sin(pitchYawRollRad);																				\
+	/* Check for gimbal lock */                                                                                            \
+	if (T##_abs(r02) >= (T)0.996) {                                                                                        \
+		/* Gimbal lock: pitch = +-90deg */                                                                                \
+		pitch = T##_signInc(r02) * T##_PI * (T)0.5;                                                                        \
+		yaw = 0;  /* Set yaw to 0 by convention */                                                                        \
 																														\
-	T cp = T##x4_x(c);																									\
-	T cy = T##x4_y(c);																									\
-	T cr = T##x4_z(c);																									\
+		/* Compute additional matrix elements for gimbal lock resolution */                                                \
+		T r10 = 2 * (qx * qy + qw * qz);                                                                                \
+		T r11 = 1 - 2 * (qx * qx + qz * qz);                                                                            \
 																														\
-	T sp = T##x4_x(s);																									\
-	T sy = T##x4_y(s);																									\
-	T sr = T##x4_z(s);																									\
+		/* roll = atan2(pitch == -90deg ? -r10 : r10, r11) */                                                            \
+		roll = T##_atan2(r10 * T##_signInc(r02), r11);                                                                    \
+	} else {                                                                                                            \
+		pitch = T##_asin(r02);                                                                                            \
+		roll = T##_atan2(-r12, r22);                                                                                    \
+		yaw = T##_atan2(-r01, r00);                                                                                        \
+	}                                                                                                                    \
 																														\
-	T cpsr = sr * cp;																									\
-	T cpcr = cr * cp;																									\
-	T spsy = sp * sy;																									\
-	T spcy = sp * cy;																									\
+	return T##x4_mul(T##x4_create3(roll, pitch, yaw), T##x4_xxxx4(T##_RAD_TO_DEG));                                        \
+}                                                                                                                        \
 																														\
-	return Quat##T##_create(																							\
-		cpsr * cy - cr * spsy,																							\
-		cr * spcy + cpsr * sy,																							\
-		cpcr * sy - sr * spcy,																							\
-		cpcr * cy + sr * spsy																							\
-	);																													\
-}																														\
+/* Combine two quaternions */                                                                                            \
+/*  https://stackoverflow.com/questions/19956555/how-to-multiply-two-quaternions */                                        \
 																														\
-T##x4 Quat##T##_toEuler(Quat##T q) {																					\
+Quat##T Quat##T##_mul(Quat##T a, Quat##T b) {                                                                            \
 																														\
-	T##x4 q2	= T##x4_pow2(q);																						\
+	T##x4 axXb = T##x4_mul(b, T##x4_xxxx(a));                                                                            \
+	T##x4 ayXb = T##x4_mul(b, T##x4_yyyy(a));                                                                            \
+	T##x4 azXb = T##x4_mul(b, T##x4_zzzz(a));                                                                            \
+	T##x4 awXb = T##x4_mul(b, T##x4_wwww(a));                                                                            \
 																														\
-	T q2_x		= T##x4_x(q2);																							\
-	T q2_y		= T##x4_y(q2);																							\
-	T q2_z		= T##x4_z(q2);																							\
+	T axXb_x = T##x4_x(axXb),    axXb_y = T##x4_y(axXb),    axXb_z = T##x4_z(axXb),    axXb_w = T##x4_w(axXb);                    \
+	T ayXb_x = T##x4_x(ayXb),    ayXb_y = T##x4_y(ayXb),    ayXb_z = T##x4_z(ayXb),    ayXb_w = T##x4_w(ayXb);                    \
+	T azXb_x = T##x4_x(azXb),    azXb_y = T##x4_y(azXb),    azXb_z = T##x4_z(azXb),    azXb_w = T##x4_w(azXb);                    \
+	T awXb_x = T##x4_x(awXb),    awXb_y = T##x4_y(awXb),    awXb_z = T##x4_z(awXb),    awXb_w = T##x4_w(awXb);                    \
 																														\
-	/* Calculate roll */																								\
+	return Quat##T##_create(                                                                                            \
+		awXb_x + axXb_w + ayXb_z - azXb_y,                                                                                \
+		awXb_y - axXb_z + ayXb_w + azXb_x,                                                                                \
+		awXb_z + axXb_y - ayXb_x + azXb_w,                                                                                \
+		awXb_w - axXb_x - ayXb_y - azXb_z                                                                                \
+	);                                                                                                                    \
+}                                                                                                                        \
 																														\
-	T##x4 qXzw	= T##x4_mul(q, T##x4_wz4(q));																			\
+Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target, T##x4 up) {                                                \
 																														\
-	T qXzw_x = T##x4_x(qXzw);																							\
-	T qXzw_y = T##x4_y(qXzw);																							\
+	/* fwd */                                                                                                            \
+	T##x4 forward = T##x4_sub(target, origin);                                                                            \
+	T forwardLen = T##x4_len3(forward);                                                                                    \
+	if (forwardLen < 1e-6##suffix)                                                                                        \
+		return Quat##T##_identity();                                                                                    \
 																														\
-	T cpsr = 2 * (qXzw_x + qXzw_y);																						\
-	T cpcr = 1 - 2 * (q2_x + q2_y);																						\
-	T r = T##_atan2(cpsr, cpcr);																						\
+	T invForward = 1.0##suffix / forwardLen;                                                                            \
+	forward = T##x4_mul(forward, T##x4_xxxx4(invForward));                                                                \
 																														\
-	/* Calculate pitch */																								\
+	/* right */                                                                                                            \
+	T##x4 right = T##x4_cross3(up, forward);                                                                            \
+	T rightLen = T##x4_len3(right);                                                                                        \
+	if (rightLen < 1e-6##suffix) {                                                                                        \
+		T##x4 tempUp = T##x4_create3(0, 1, 0);                                                                            \
+		right = T##x4_cross3(tempUp, forward);                                                                            \
+		rightLen = T##x4_len3(right);                                                                                    \
+		if (rightLen < 1e-6##suffix)                                                                                    \
+			right = T##x4_create3(1, 0, 0);                                                                                \
+	}                                                                                                                    \
+	T invRight = 1.0##suffix / rightLen;                                                                                \
+	right = T##x4_mul(right, T##x4_xxxx4(invRight));                                                                    \
 																														\
-	T sp = 2 * (qXzw_y - qXzw_x);																						\
-	T p;																												\
+	/* up */                                                                                                            \
+	T##x4 trueUp = T##x4_cross3(forward, right);                                                                        \
+	return Quat##T##_fromOrientation(right, trueUp, forward);                                                            \
+}                                                                                                                        \
 																														\
-	if (T##_abs(sp) >= 1)		/* 90_deg if out of range */															\
-		p = T##_PI * 0.5##suffix * T##_signInc(sp);																		\
+Quat##T Quat##T##_fromOrientation(T##x4 right, T##x4 trueUp, T##x4 forward) {                                            \
 																														\
-	else p = T##_asin(sp);																								\
+	/* Compute the trace of the rotation matrix */                                                                        \
+	T trace = T##x4_x(right) + T##x4_y(trueUp) + T##x4_z(forward);                                                        \
 																														\
-	/* Calculate yaw */																									\
+	T x, y, z, w;                                                                                                        \
 																														\
-	T##x4 xzXyw = T##x4_mul(T##x4_xz4(q), T##x4_yw4(q));																\
+	/* Case 1: trace positive */                                                                                        \
+	if (trace > 0) {                                                                                                    \
+		T s = T##_sqrt(trace + 1.0##suffix) * 2.0##suffix;                                                                \
 																														\
-	T xzXyw_x = T##x4_x(xzXyw);																							\
-	T xzXyw_y = T##x4_y(xzXyw);																							\
+		/* Off-diagonal differences for column-major matrix */                                                            \
+		x = T##x4_y(forward) - T##x4_z(trueUp);  /* m21 - m12 */                                                        \
+		y = T##x4_z(right) - T##x4_x(forward); /* m02 - m20 */                                                            \
+		z = T##x4_x(trueUp) - T##x4_y(right);   /* m10 - m01 */                                                            \
+		x /= s; y /= s; z /= s;                                                                                            \
+		w = 0.25##suffix * s;                                                                                            \
+	}                                                                                                                    \
+	/* Case 2: largest diagonal is m00 (right.x) */                                                                        \
+	else if (T##x4_x(right) > T##x4_y(trueUp) && T##x4_x(right) > T##x4_z(forward)) {                                    \
+		T s = T##_sqrt(1.0##suffix + T##x4_x(right) - T##x4_y(trueUp) - T##x4_z(forward)) * 2.0##suffix;                \
+		T invS = 1.0##suffix / s;                                                                                        \
 																														\
-	T siny_cosp = 2 * (xzXyw_y + xzXyw_x);																				\
-	T cosy_cosp = 1 - 2 * (q2_y + q2_z);																				\
-	T y = T##_atan2(siny_cosp, cosy_cosp);																				\
+		x = 0.25##suffix * s;                                                                                            \
+		y = (T##x4_x(trueUp) + T##x4_y(right)) * invS;                                                                    \
+		z = (T##x4_x(forward) + T##x4_z(right)) * invS;                                                                    \
+		w = (T##x4_y(forward) - T##x4_z(trueUp)) * invS;                                                                \
+	}                                                                                                                    \
+	/* Case 3: largest diagonal is m11 (trueUp.y) */                                                                    \
+	else if (T##x4_y(trueUp) > T##x4_z(forward)) {                                                                        \
+		T s = T##_sqrt(1.0##suffix + T##x4_y(trueUp) - T##x4_x(right) - T##x4_z(forward)) * 2.0##suffix;                \
+		T invS = 1.0##suffix / s;                                                                                        \
 																														\
-	return T##x4_mul(T##x4_create3(p, y, r), T##x4_xxxx4(T##_RAD_TO_DEG));												\
-}																														\
+		x = (T##x4_y(right) + T##x4_x(trueUp)) * invS;                                                                    \
+		y = 0.25##suffix * s;                                                                                            \
+		z = (T##x4_z(forward) + T##x4_y(trueUp)) * invS;                                                                \
+		w = (T##x4_z(right) - T##x4_x(forward)) * invS;                                                                    \
+	}                                                                                                                    \
+	/* Case 4: largest diagonal is m22 (forward.z) */                                                                    \
+	else {                                                                                                                \
+		T s = T##_sqrt(1.0##suffix + T##x4_z(forward) - T##x4_x(right) - T##x4_y(trueUp)) * 2.0##suffix;                \
+		T invS = 1.0##suffix / s;                                                                                        \
 																														\
-/* Combine two quaternions */																							\
-/*  https://stackoverflow.com/questions/19956555/how-to-multiply-two-quaternions */										\
+		x = (T##x4_x(forward) + T##x4_z(right)) * invS;                                                                    \
+		y = (T##x4_y(forward) + T##x4_z(trueUp)) * invS;                                                                \
+		z = 0.25##suffix * s;                                                                                            \
+		w = (T##x4_y(right) - T##x4_x(trueUp)) * invS;                                                                    \
+	}                                                                                                                    \
 																														\
-Quat##T Quat##T##_mul(Quat##T a, Quat##T b) {																			\
+	/* Normalize the quaternion and return */                                                                            \
+	return Quat##T##_normalize(Quat##T##_create(x, y, z, w));                                                            \
+}                                                                                                                        \
 																														\
-	T##x4 axXb = T##x4_mul(b, T##x4_xxxx(a));																			\
-	T##x4 ayXb = T##x4_mul(b, T##x4_yyyy(a));																			\
-	T##x4 azXb = T##x4_mul(b, T##x4_zzzz(a));																			\
-	T##x4 awXb = T##x4_mul(b, T##x4_wwww(a));																			\
+/* Lerp between a and b using percentage (or extrapolate if perc > 1 or < 0) */                                            \
+/*  https://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/slerp/index.htm */                        \
 																														\
-	T axXb_x = T##x4_x(axXb),	axXb_y = T##x4_y(axXb),	axXb_z = T##x4_z(axXb),	axXb_w = T##x4_w(axXb);					\
-	T ayXb_x = T##x4_x(ayXb),	ayXb_y = T##x4_y(ayXb),	ayXb_z = T##x4_z(ayXb),	ayXb_w = T##x4_w(ayXb);					\
-	T azXb_x = T##x4_x(azXb),	azXb_y = T##x4_y(azXb),	azXb_z = T##x4_z(azXb),	azXb_w = T##x4_w(azXb);					\
-	T awXb_x = T##x4_x(awXb),	awXb_y = T##x4_y(awXb),	awXb_z = T##x4_z(awXb),	awXb_w = T##x4_w(awXb);					\
+Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc) {                                                                    \
 																														\
-	return Quat##T##_create(																							\
-		awXb_x + axXb_w + ayXb_z - azXb_y,																				\
-		awXb_y - axXb_z + ayXb_w + azXb_x,																				\
-		awXb_z + axXb_y - ayXb_x + azXb_w,																				\
-		awXb_w - axXb_x - ayXb_y - azXb_z																				\
-	);																													\
-}																														\
+	a = Quat##T##_normalize(a);                                                                                            \
+	b = Quat##T##_normalize(b);                                                                                            \
 																														\
-/* Get shortest arc quaternion from origin to target																	\
-*  https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another	\
-*/																														\
-Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target) {															\
+	T cosTheta = T##x4_dot4(a, b);                                                                                        \
+	if (cosTheta < 0) {                                                                                                    \
+		b = T##x4_negate(b);                                                                                            \
+		cosTheta = -cosTheta;                                                                                            \
+	}                                                                                                                    \
 																														\
-	T leno = T##x4_len3(origin), lent = T##x4_len3(target);																\
+	if (cosTheta >= 1)                                                                                                    \
+		return a;                                                                                                        \
 																														\
-	T leno2 = 0, lent2 = 0;																								\
-	Error err;																											\
+	T theta = T##_acos(cosTheta);                                                                                        \
+	T sinTheta2 = T##_sqrt(1 - cosTheta * cosTheta);                                                                    \
 																														\
-	if((err = T##_pow2(leno, &leno2)).genericError || (err = T##_pow2(lent, &lent2)).genericError)						\
-		return Quat##T##_identity();																					\
+	if(T##_abs(sinTheta2) > 1 - 5e-4)                                                                                    \
+		return Quat##T##_normalize(T##x4_lerp(a, b, perc));                                                                \
 																														\
-	T w = T##_sqrt(leno2 * lent2) + T##x4_dot3(origin, target);															\
+	T invSinTheta2 = 1 / sinTheta2;                                                                                        \
 																														\
-	T##x4 cross = T##x4_cross3(origin, target);																			\
+	T ratioA = T##_sin(theta * (1 - perc)) * invSinTheta2;                                                                \
+	T ratioB = T##_sin(theta * perc) * invSinTheta2;                                                                     \
 																														\
-	return Quat##T##_normalize(Quat##T##_create(																		\
-		T##x4_x(cross), T##x4_y(cross), T##x4_z(cross),																	\
-		w																												\
-	));																													\
-}																														\
+	a = T##x4_mul(a, T##x4_xxxx4(ratioA));                                                                                \
+	b = T##x4_mul(b, T##x4_xxxx4(ratioB));                                                                                \
 																														\
-/* Lerp between a and b using percentage (or extrapolate if perc > 1 or < 0) */											\
-/*  https://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/slerp/index.htm */						\
- 																														\
-Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc) {																	\
-																														\
-	T cosTheta2 = T##x4_dot4(a, b);																						\
-																														\
-	if (T##_abs(cosTheta2) >= 1)																						\
-		return a;																										\
-																														\
-	T cosTheta2Pow = 0;																									\
-																														\
-	Error err = T##_pow2(cosTheta2, &cosTheta2Pow);																		\
-																														\
-	if(err.genericError)																								\
-		return b;																										\
-																														\
-	T halfTheta = T##_acos(cosTheta2);																					\
-	T sinTheta2 = T##_sqrt(1 - cosTheta2Pow);																			\
-																														\
-	if(T##_abs(sinTheta2) < 1e-3##suffix)		/* Theta 180deg isn't defined, so define as 50/50 */					\
-		return T##x4_lerp(a, b, .5##suffix);																			\
-																														\
-	T invSinTheta2 = 1 / sinTheta2;																						\
-																														\
-	T ratioA = T##_sin(halfTheta * (1 - perc)) * invSinTheta2;															\
-	T ratioB = T##_sin(halfTheta * perc) * invSinTheta2; 																\
-																														\
-	a = T##x4_mul(a, T##x4_xxxx4(ratioA));																				\
-	b = T##x4_mul(b, T##x4_xxxx4(ratioB));																				\
-																														\
-	return T##x4_add(a, b);																								\
+	return Quat##T##_normalize(T##x4_add(a, b));                                                                        \
 }
 
 QUAT_IMPL(F32, f);
+
 //_QUAT_IMPL(F64, );

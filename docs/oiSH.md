@@ -8,8 +8,9 @@ oSH is a single shader represented in a single or multiple binary/text format(s)
 
 - SPIRV
 - DXIL
-- (**unsupported for now**): MetalIR (Metal IR)
-- (**unsupported for now**): WGSL
+- (**unsupported for now**): AIR (Apple IR)
+- (**unsupported**): WGSL
+- (**unsupported forever**): GLSL, HLSL, DXBC
 
 It includes the shader binary/text along with the extensions it uses, so it can easily be validated if the shader binary can be loaded by the runtime.
 
@@ -32,24 +33,39 @@ typedef struct SHHeader {		//4-byte aligned
 
     U32 compilerVersion;
 
-	U32 hash;					//CRC32C of contents starting at uniqueUniforms
+	U32 hash;					//CRC32C of contents starting at uniqueDefines
 
     U32 sourceHash;				//CRC32C of source(s), for determining if it's dirty. See CRC32C section.
 
-	U16 uniqueUniforms;
+	U16 uniqueDefines;
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
     U8 sizeTypes;				//Every 2 bits size type of spirv, dxil
 
     U16 binaryCount;			//How many unique binaries are stored
     U16 stageCount;				//How many stages reference into the binaries
 
-    U16 includeFileCount;
+    U16 includeFileCount;		//Number of (recursive) include files
     U16 semanticCount;
 
     U16 arrayDimCount;
     U16 registerNameCount;
 
+	U16 uniformNameCount;
+	U16 flags;					//Persisted ESHSettingsFlags (see below); HideMagicNumber is derived, not persisted
+
+	U16 extensionCount;			//ESHExtension_Count of the writer, so newer readers can fix up dormant extensions
+	U16 padding;
+
 } SHHeader;
+
+//Settings that are persisted in SHHeader::flags (the low 16 bits are stored; the rest must be 0)
+
+typedef enum ESHSettingsFlags {
+	ESHSettingsFlags_None				= 0,
+	ESHSettingsFlags_HideMagicNumber	= 1 << 0,	//Derived on read from whether we're a subfile; never written into flags
+	ESHSettingsFlags_ReflectionOnly		= 1 << 1,	//Carries reflection but no compiled binaries (SHFile_isComplete is false)
+	ESHSettingsFlags_Invalid			= 0xFFFFFFFF << 2
+} ESHSettingsFlags;
 
 //Loosely maps to EPipelineStage in OxC3 graphics
 
@@ -60,7 +76,7 @@ typedef enum ESHPipelineStage {
 	ESHPipelineStage_Compute,
 	ESHPipelineStage_GeometryExt,		//GeometryShader extension is required
 	ESHPipelineStage_Hull,
-	EPSHipelineStage_Domain,
+	ESHPipelineStage_Domain,
 
 	//RayPipeline extension is required
 
@@ -98,13 +114,13 @@ typedef enum ESHBinaryFlags {
 	ESHBinaryFlags_HasDXIL					= 1 << 1,
 
 	//Reserved
-	//ESHBinaryFlags_HasMetalIR				= 1 << 2,
+	//ESHBinaryFlags_HasAIR					= 1 << 2,
 	//ESHBinaryFlags_HasWGSL				= 1 << 3
 
 	ESHBinaryFlags_HasShaderAnnotation		= 1 << 4,
 
-	ESHBinaryFlags_HasBinary				= ESHBinaryFlags_HasSPIRV | ESHBinaryFlags_HasDXIL,
-	//ESHBinaryFlags_HasText				= ESHBinaryFlags_HasMSL | ESHBinaryFlags_HasWGSL
+	ESHBinaryFlags_HasBinary				= ESHBinaryFlags_HasSPIRV | ESHBinaryFlags_HasDXIL,		//| ESHBinaryFlags_HasAIR
+	//ESHBinaryFlags_HasText				= ESHBinaryFlags_HasWGSL,
 	ESHBinaryFlags_HasSource				= ESHBinaryFlags_HasBinary // | ESHBinaryFlags_HasText
 
 } ESHBinaryFlags;
@@ -130,7 +146,7 @@ typedef enum ESHExtension {
 
 	ESHExtension_RayQuery					= 1 << 8,
 	ESHExtension_RayMicromapOpacity			= 1 << 9,
-	ESHExtension_RayMicromapDisplacement	= 1 << 10,
+	ESHExtension_RayTriPosition				= 1 << 10,		//SM6.10 tri vertex position fetch (RayQuery + ray-pipeline)
 	ESHExtension_RayMotionBlur				= 1 << 11,
 	ESHExtension_RayReorder					= 1 << 12,
 
@@ -144,7 +160,15 @@ typedef enum ESHExtension {
 	ESHExtension_WriteMSTexture				= 1 << 17,
 
 	ESHExtension_Bindless					= 1 << 18,
-	ESHExtension_UnboundArraySize			= 1 << 19
+	ESHExtension_UnboundArraySize			= 1 << 19,
+    
+	ESHExtension_SubgroupOperations			= 1 << 20,
+
+	ESHExtension_CoopVec					= 1 << 21		//SM6.10 cooperative vectors (matvec, SPV_NV_cooperative_vector)
+	ESHExtension_CoopMat					= 1 << 22		//SM6.10 cooperative matrix (GEMM, SPV_KHR_cooperative_matrix)
+	ESHExtension_CoopFP8					= 1 << 23		//FP8 (e4m3/e5m2) cooperative tier (additive gate; base is FP16 + INT8)
+	ESHExtension_CoopVecTraining			= 1 << 24,		//Cooperative-vector training (outer-product / reduce-sum accumulate; Tier 1.1)
+	ESHExtension_DescriptorHeap				= 1 << 25		//Full bindless: SM6.6 dynamic resources / SPV_EXT_descriptor_heap
 
 } ESHExtension;
 
@@ -157,6 +181,9 @@ typedef enum ESHVendor {
 	ESHVendor_INTC,
 	ESHVendor_IMGT,
 	ESHVendor_MSFT,
+	ESHVendor_APPL,
+	ESHVendor_SMSG,
+	ESHVendor_HWEI,
 	ESHVendor_Count
 } ESHVendor;
 
@@ -167,7 +194,7 @@ typedef struct BinaryInfoFixedSize {
 	U16 entrypoint;				//U16_MAX if library, otherwise index into stageNames
 
 	U16 vendorMask;				//Bitset of ESHVendor
-	U8 uniformCount;
+	U8 defineCount;
 	U8 binaryFlags;				//ESHBinaryFlags
 
 	ESHExtension extensions;	//&~ dormantExt = used extensions, this is what the shader was compiled with
@@ -175,7 +202,8 @@ typedef struct BinaryInfoFixedSize {
 	ESHExtension dormantExt;	//Dormant extensions (not detected in final executable)
 
 	U16 registerCount;
-	U16 padding;
+    U8 uniformCount;
+	U8 padding;
 
 } BinaryInfoFixedSize;
 
@@ -184,6 +212,7 @@ typedef enum ESHRegisterType {
 	ESHRegisterType_Sampler,
 
 	ESHRegisterType_ConstantBuffer,					//UBO or CBuffer
+	ESHRegisterType_PushConstants,					//Push constants or CBuffer (DXIL)
 	ESHRegisterType_ByteAddressBuffer,
 	ESHRegisterType_StructuredBuffer,
 	ESHRegisterType_StructuredBufferAtomic,			//SBuffer + atomic counter
@@ -202,7 +231,7 @@ typedef enum ESHRegisterType {
 
 	ESHRegisterType_TypeMask			= 0xF,
 	ESHRegisterType_IsArray				= 1 << 4,	//Only valid on textures
-	ESHRegisterType_IsCombinedSampler	= 1 << 5,	//^
+	ESHRegisterType_IsCombinedSampler	= 1 << 5,	//Only valid on textures
 
 	//Invalid on samplers, AS and CBuffer
 	//Required on append/consume buffer
@@ -242,7 +271,7 @@ typedef struct SHBindings {
 	SHBinding arr[ESHBinaryType_Count];
 } SHBindings;
 
-typedef struct SHTextureFormat {	//Primitive is set for DXIL always and formatId is only for SPIRV (only when RW)
+typedef struct SHTextureFormat {	//Primitive is set for DXIL always and formatId can be set only for SPIRV (only when RW)
 	U8 primitive;					//Optional for readonly registers: ESHTexturePrimitive must match format approximately
 	U8 formatId;					//Optional for write registers: ETextureFormatId Must match formatPrimitive and uncompressed
 } SHTextureFormat;
@@ -261,28 +290,43 @@ typedef struct SHRegister {
 		SHTextureFormat texture;	//Read/write textures
 	};
 
-	U16 arrayId;					//Used at serialization time only, can't be used on subpass inputs
+    //Used at serialization time only, can't be used on subpass inputs
+    //0 if no array, <=32767 if 1D array, >=32768 for ND arrays or 32Ki+ 1D arrays
+	U16 arrayDimOrId;
+    
 	U16 nameId;
 
 } SHRegister;
+
+typedef struct SHUniform {
+	U16 bufferOffset;
+	U8 typeIdShort;					//ETypeId_arr[typeIdShort] = TypeId
+	U8 nameId;
+} SHUniform;
 
 //Final file format; please manually parse the members.
 //Verify if everything's in bounds.
 //Verify if SHFile includes any invalid data.
 
-SHFile {
+SHFile {		//Must be 16-byte aligned
 
     SHHeader header;
+    
+    U8[N] pad;	//Padding to align to 16-byte
 
-    //No magic number, no encryption/compression/SHA256 (see oiDL.md).
+    //No magic number, no encryption/compression (see oiDL.md).
     //strings[len - semanticCount,  len] contains semantics for inputs/outputs.
     //strings[^ - stageCount,       ^ - semanticCount] contains entrypoint names.
     //strings[^ - includeFileCount, ^ - stageCount] contains (relative) include names.
     //strings[^ - stageCount, 		^ - includeFileCount] contains unique register names.
-    //strings[0,                    ^ - registerNameCount] contains uniform values & names and register names.
+	//strings[^ - registerNameCount, ^ - stageCount] contains register names
+	//strings[^ - uniformNameCount, ^ - registerNameCount] contains uniform names
+    //strings[0,                    ^ - uniformNameCount] contains define values & names.
     DLFile strings;
+    
+    U8[N] pad;	//Padding to align to 16-byte
 
-    //No magic number, no encryption/compression/SHA256 (see oiDL.md).
+    //No magic number, no encryption/compression (see oiDL.md).
     //Each entry includes a oiSB file (see oiSB.md) that describes the shader buffer.
     //Each shader buffer has to be referenced by a register.
     //Each oiSB is a subfile, so doesn't preserve oiSB magic number.
@@ -298,10 +342,17 @@ SHFile {
 
     for i < binaryCount:
 
-    	U16 uniformNames[binaryInfos[i].uniformCount];	//offset to strings[0]
-    	U16 uniformValues[binaryInfos[i].uniformCount];	//^ [uniformCount]
+    	U16 defineNames[binaryInfos[i].defineCount];		//offset to strings[0]
+    	U16 defineValues[binaryInfos[i].defineCount];		//^ [defineCount]
+    
+    	SHUniform uniforms[binaryInfo[i].uniformCount];
 
-    	SHRegister registers[binaryInfos[i].registerCount];	//Name starts after all uniform names & values
+	    //Name starts after all define values & define/uniform names
+    	SHRegister registers[binaryInfos[i].registerCount];
+    
+    	U8 uniformData[
+            max(uniforms[i].bufferOffset + ETypeId_getBytes(ETypeId_arr[uniforms[i].typeId]))
+       	];
 
         if binary[i] has SPIRV:
             EXXDataSizeType<spirvType> spirvLength;
@@ -342,7 +393,7 @@ SHFile {
     	if closestHit, anyHit or intersection:
     	    U8 intersectionSize;
 
-	    if miss,closestHit,anyHit or intersection
+	    if miss,callable,closestHit,anyHit or intersection
    	 		U8 payloadSize;
 
     	U16 binaryIds[pipelineStages[i].binaryCount];
@@ -352,6 +403,14 @@ SHFile {
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer.
 
 The magic number in the header can only be absent if embedded in another file. An example is when embedded in an oiSC file.
+
+## Header flags
+
+`SHHeader::flags` persists an `ESHSettingsFlags` value. Only the low 16 bits are stored; the `ESHSettingsFlags_Invalid` range must be zero, and a reader rejects the file if any invalid bit is set.
+
+`ESHSettingsFlags_HideMagicNumber` is never persisted here. It is a serialization detail derived on read from whether the file is embedded as a subfile (and thus has no leading magic number), so the writer masks it out of the stored value.
+
+`ESHSettingsFlags_ReflectionOnly` marks an oiSH that carries reflection metadata (entrypoints, registers, includes and feature information) while every binary's compiled code is empty. `SHFile_isComplete` returns false for such a file, so it cannot be used to create a pipeline; it can only be inspected (entrypoints, includes, feature set). This is what `OxC3 shader reflect` emits: it compiles the HLSL for reflection, then strips the binary blobs and sets this flag. Because the flag lives inside the header, and `SHHeader::hash` covers everything from `uniqueDefines` to the end of the file, the reflection-only state is integrity-checked like the rest of the contents.
 
 ## CRC32C
 
@@ -372,11 +431,14 @@ All includes must have reproducible hashes (regardless of OS) as noted in the CR
 The following define the requirements of binaries embedded in oiSH files.
 
 - All capabilities have to match the extensions known by oiSH, otherwise it is considered to be an incompatible binary and undefined behavior is imminent if produced by a non standard oiSH writer. As an example; if RayReorder is used in a SPIRV shader, it must be present as an extension for that binary too.
+- Graphics shaders and compute shader must only contain 1 entrypoint (in spirv with the name main). You can use the linker to satisfy this behavior.
+  - This is to minify the runtime to avoid it from having to include DXC or SPIRV-Tools for further processing of shaders.
 - Payload + intersection size must stay within <=128 and <=32 bytes respectively.
 
 ### SPIRV spec
 
 - Main entrypoint should be called "main" unless it's compiled as a lib file (raytracing, workgraphs, etc.).
+- SPV1.3 is used by default but SPV1.4 is used when RT is present (RT stage or RayQuery).
 - Capabilities:
   - Always supported:
     - Shader
@@ -405,6 +467,7 @@ The following define the requirements of binaries embedded in oiSH files.
     - Sampled1D
     - Image1D
     - ImageCubeArray
+    - StorageImage(Read/Write)WithoutFormat
   - Anything to do with kernels (OpenCL) is unsupported.
   - Int64Atomics as I64 | AtomicI64.
   - Int64 as I64.
@@ -420,13 +483,17 @@ The following define the requirements of binaries embedded in oiSH files.
     - GroupNonUniform
     - GroupNonUniformVote or SubgroupVoteKHR
     - GroupNonUniformBallot or SubgroupBallotKHR
-  - ShaderInvocationReorderNV as RayReorder.
+  - ShaderInvocationReorderEXT as RayReorder.
   - RayTracingMotionBlurNV as RayMotionBlur.
   - RayQueryKHR as RayQuery.
   - RayTracingOpacityMicromapEXT as RayMicromapOpacity.
+  - RayTracingPositionFetchKHR or RayQueryPositionFetchKHR as RayTriPosition.
+  - CooperativeVectorNV or CooperativeVectorTrainingNV as CoopVec.
+  - CooperativeMatrixKHR as CoopMat.
+  - Float8CooperativeMatrixEXT as CoopFP8 (cooperative-vector FP8 is an interpretation, not a capability, so it's annotation-driven).
   - AtomicFloat32AddEXT or AtomicFloat32MinMaxEXT as AtomicF32.
   - AtomicFloat64AddEXT or AtomicFloat64MinMaxEXT as AtomicF64.
-  - ComputeDerivativeGroupLinearNV as ComputeDeriv.
+  - ComputeDerivativeGroupLinearNV / ComputeDerivativeGroupQuadsNV as ComputeDeriv (DXC emits the Quads variant for ddx/ddy in even 2D compute groups).
   - GroupNonUniformArithmetic as SubgroupArithmetic.
   - GroupNonUniformShuffle as SubgroupShuffle.
   - ImageMSArray as WriteMSTexture.
@@ -438,7 +505,7 @@ The following define the requirements of binaries embedded in oiSH files.
 
 ### DXIL spec
 
-- Semantics should use TEXCOORD[N] rather than for example NORMAL, TANGENT, etc. To be compatible with SPIRV. Though of course SV_TARGET and other SVs are accepted.
+- HLSL Semantics should use TEXCOORD[N] rather than for example NORMAL, TANGENT, etc. Though of course SV_TARGET and other SVs are accepted. However, it is supported to just use semantics and let auto binding handle things, though this is generally less desirable.
 - Extensions available by default:
   - D3D_SHADER_REQUIRES_TYPED_UAV_LOAD_ADDITIONAL_FORMATS
   - D3D_SHADER_REQUIRES_STENCIL_REF
@@ -455,7 +522,9 @@ The following define the requirements of binaries embedded in oiSH files.
   - D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_TYPED_RESOURCE or D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_GROUP_SHARED as AtomicI64.
   - D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS as MeshTaskTexDeriv.
   - D3D_SHADER_REQUIRES_WAVE_OPS as SubgroupOperations.
-- NV extensions should be properly marked using annotations, or the oiSH is illegal. The OxC3 validator can't check this yet, since DXIL doesn't understand these; it's the driver which parses DXIL into these special opcodes.
+  - D3D_SHADER_REQUIRES_WRITEABLE_MSAA_TEXTURES or D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS as WriteMSTexture. An RWTexture2DMS write reports both flags; OxC3 has no dedicated bit for the parent AdvancedTextureOps feature, so it is folded into WriteMSTexture (the use case that trips it).
+- SER (dx::HitObject) and OMM (RayQuery opacity-micromap flags) are native (DXR 1.2 / SM6.9).
+- cooperative vectors/matrix (CoopVec/CoopMat/CoopFP8) and RayTriPosition (ray tri vertex position fetch) are SM6.10 features that can't be detected from DXIL flags; they must be marked with annotations (they only bump the target shader model), or the oiSH is illegal - the OxC3 validator can't verify this.
 
 ## ESHExtension_Bindless / ESHExtension_UnboundArraySize
 
@@ -502,7 +571,7 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 - In DXIL, samplers and textures are always separated, there exist no combined samplers. As such, they will be presented as two separate registers. When SPIRV is combined or used, it will merge the texture by name into a combined sampler. In this case, the separate sampler itself will not exist for SPIRV (only the texture ala combined sampler) but will for DXIL. In a DXIL+SPIRV merged binary, the texture is marked as combined sampler: ESHRegisterType_IsCombinedSampler and the separate sampler will only be available with DXIL bindings.
 - SPIRV has the concept of subpass inputs, but DXIL doesn't. This means the bindings of input attachments should only be valid for SPIRV.
 - DXIL has the concept of sampler comparison states, but SPIRV just sees them as samplers. If DXIL and SPIRV binaries are merged it will promote sampler register type to sampler comparison register type.
-- DXIL has more info about the texture primitive than SPIRV, though SPIRV has a format (which DXIL doesn't have). This means that formatId will always come from SPIRV and texture primitive from DXIL. SPIRV's texture primitive is unreliable for use for DXIL.
+- DXIL has more info about the texture primitive than SPIRV, though SPIRV can have a format (which DXIL doesn't have). This means that formatId will always come from SPIRV and texture primitive from DXIL. SPIRV's texture primitive is unreliable for use for DXIL.
 - When stripping SPIRV info from one that has both DXIL and SPIRV, it will keep the reflection data it gained from merging the two. This is intentional, as this would allow you to re-gain some reflection info that is missing from DXIL and keeps the reflection data consistent across two different splits.
 - Combining DXIL and SPIRV underestimates dormant extensions, it could be possible a certain extension isn't present in DXIL or SPIRV, however if it can't be queried by the underlying format then it's impossible to tell. In this case, it will assume the extension the shader was compiled with is leading and so remove it from being dormant.
   - Dormant extensions include all extensions that are supported by the shader mode (DXIL or SPIRV) but that weren't detected. This allows easy merging of dormant extensions by just bitwise ANDing them and getting an underestimated version of dormant extensions.
@@ -513,7 +582,16 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 
 1.2: Basic format specification. Added support for various extensions, stages and binary types. Maps closer to real binary formats.
 
-1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms. Also swapped binaries and stages. Added include files (relative paths) and CRC32Cs for dirty checking. Also added a better language spec about what is legal to be contained in a oiSH file (SPIRV and DXIL subsets). Various extensions and abilities to use HLSL or GLSL specific features for all backends.
+1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added defines. Also swapped binaries and stages. Added include files (relative paths) and CRC32Cs for dirty checking. Also added a better language spec about what is legal to be contained in a oiSH file (SPIRV and DXIL subsets). Various extensions and abilities to use HLSL or GLSL specific features for all backends.
 
 1.2(.2): No major bump, because no oiSH files exist in the wild yet. Added 'dormant' extension, which is an extension enabled by the shader compiler but isn't used by the final executable. If for example SPIRV and DXIL are merged, then only extensions present by both can be marked as dormant, because for example SER (Shader Execution Reordering) can be present in DXIL but is undetectable without writing custom code processing DXIL due to NVAPI hackery. Due to this it could be possible that for example SER is enabled but isn't present in DXIL or SPIRV but since both are merged it (DXIL can't detect) it can't be certain that this extension is dormant. Same is true for SPIRV only extensions that DXIL doesn't have or vice versa.
 
+1.2(.3): No major bump, no oiSH files exist in the wild yet. Added uniforms, which are like defines except they're not strings; they're a type, name and value. These are a replacement for defines and will allow the linker to take care of the shader variants rather than the defines. They're comparable to specialization constants (Vulkan) or linking library functions (DirectX). They will still store duplicate shader binaries, but will be quicker to compile.
+
+1.2(.4): No major bump, no oiSH files exist in the wild yet. Optimized allocations when reading, fixed bug with callable shaders and added binary de-duplication.
+
+1.2(.5): No major bump, no oiSH files exist in the wild yet. Added SHHeader::extensionCount (the writer's ESHExtension_Count), so readers that know about newer native extensions can automatically mark them dormant for files written before those extensions existed. Added the DescriptorHeap extension (full bindless: SM6.6 dynamic resources on DXIL, SPV_EXT_descriptor_heap on SPIRV), natively detected on both backends.
+
+1.2(.5): No major bump, no oiSH files exist in the wild yet. Added the `[[oxc::binary("spv", "dxil")]]` entrypoint annotation for per-entrypoint backend selection (see OxC3_tool.md); absent = all supported backends, and it AND's with the backends the stage + extensions can be expressed on (e.g. workgraph is DXIL-only, ComputeDeriv/AtomicF32 are SPIRV-only). No format change: which backends an entrypoint targets is already expressed by which binaries its referenced SHBinaryInfo carry (ESHBinaryFlags). Also fixed DXIL reflection of opaque non-struct structured-buffer elements (RWStructuredBuffer&lt;float4&gt; whose $Element DXC leaves as D3D_SVT_VOID) and folded D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS into WriteMSTexture.
+
+1.2(.6): No major bump, no oiSH files exist in the wild yet. Repurposed the trailing `SHHeader::padding` U16 as `flags`, persisting `ESHSettingsFlags` (see Header flags section). This adds `ESHSettingsFlags_ReflectionOnly`, marking an oiSH that carries reflection but no compiled binaries; it is what `OxC3 shader reflect` emits and what lets such a file load even though `SHFile_isComplete` is false. Backwards compatible: existing files wrote the padding as zero, which reads back as `ESHSettingsFlags_None`. The field is inside the hashed range, so the reflection-only state is integrity-checked.

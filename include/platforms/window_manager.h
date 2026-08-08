@@ -1,0 +1,116 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//platforms/window_manager.h
+
+#pragma once
+#include "types/container/list.h"
+#include "types/container/ref_ptr.h"
+#include "types/math/vec2.h"
+#include "platforms/monitor.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
+typedef struct RefPtr RefPtr;
+typedef RefPtr WindowRef;
+typedef struct Window Window;
+
+TListNamed(WindowRef*, ListWindowPtr);
+
+typedef struct CharString CharString;
+typedef struct WindowCallbacks WindowCallbacks;
+typedef enum EWindowHint EWindowHint;
+typedef enum EWindowFormat EWindowFormat;
+typedef enum EWindowType EWindowType;
+
+extern const U32 WindowManager_magic;
+
+typedef struct WindowManager WindowManager;
+
+typedef Bool (*WindowManagerCreateCallback)(WindowManager*, Error*);
+typedef void (*WindowManagerCallback)(WindowManager*);
+typedef void (*WindowManagerUpdateCallback)(WindowManager*, F64);
+
+typedef struct WindowManagerCallbacks {
+	WindowManagerCreateCallback onCreate;
+	WindowManagerCallback onDestroy, onDraw, onMonitorChange;
+	WindowManagerUpdateCallback onUpdate;
+} WindowManagerCallbacks;
+
+typedef struct WindowManager {
+
+	U64 owningThread;        //Only one thread can own a window manager at a time
+	U32 isActive;            //WindowManager_magic if active
+	Bool monitorsDirty;
+	Bool isSingleWindow;     //The WindowManager only supports 1 window; such as Android, iOS, console, steamOS
+	U8 pad[2];
+
+	ListWindowPtr windows;   //Weak ref ptrs to Window. Only the user maintains strong references to the Window they create.
+	ListMonitor monitors;
+
+	WindowManagerCallbacks callbacks;
+
+	Buffer extendedData;
+
+	Ns lastUpdate;
+
+	Buffer platformData;     //Can be empty if createNative failed (no physical window support available)
+
+	RefPtrType windowTypePhysical;
+	RefPtrType windowTypeVirtual;
+
+} WindowManager;
+
+Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedData, WindowManager *manager, Error *e_rr);
+Bool WindowManager_isAccessible(const WindowManager *manager);
+void WindowManager_free(WindowManager *manager);
+
+//If forcingUpdate window is set, won't update that
+Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_rr);
+
+Bool WindowManager_wait(WindowManager *manager, Error *e_rr);
+
+impl Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format);
+
+Bool WindowManager_createWindow(
+
+	WindowManager *manager,
+
+	EWindowType type,
+
+	I32x2 position,
+	I32x2 size,
+	I32x2 minSize,
+	I32x2 maxSize,
+
+	EWindowHint hint,
+	CharString title,
+	WindowCallbacks callbacks,
+	EWindowFormat format,
+	U64 extendedData,
+	WindowRef **result,
+	Error *e_rr
+);
+
+#ifdef __cplusplus
+	}
+#endif

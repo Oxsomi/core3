@@ -1,0 +1,4 @@
+sources:
+  "2025.01.25":
+    url: "https://github.com/Oxsomi/Vulkan-ValidationLayers.git"
+    checkout: "main"

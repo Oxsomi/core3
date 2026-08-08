@@ -1,5 +1,5 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-# Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+# Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,10 +17,8 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-set(AllowOxC3PlatformsBMP ON)
-
-file(GLOB formatsBMPHeaders "../../../inc/formats/bmp/*.h")
-file(GLOB formatsBMPSources "*.c")
+file(GLOB formatsBMPHeaders CONFIGURE_DEPENDS "../../../include/formats/bmp/*.h")
+file(GLOB formatsBMPSources CONFIGURE_DEPENDS "*.c")
 
 add_library(
 	OxC3_formats_bmp
@@ -33,8 +31,21 @@ add_library(
 set_target_properties(OxC3_formats_bmp PROPERTIES FOLDER Oxsomi/formats)
 target_link_libraries(OxC3_formats_bmp PUBLIC OxC3_types_base OxC3_types_container OxC3_formats_oiXX)
 
-if(AllowOxC3PlatformsBMP)
-	target_link_libraries(OxC3_formats_bmp PUBLIC OxC3_platforms)
-else()
-	target_compile_definitions(OxC3_formats_bmp PUBLIC -DDISALLOW_BMP_OXC3_PLATFORMS)
+if(EnableTests AND OxC3TestExecutables)
+
+	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
+
+	add_executable(
+		OxC3_formats_bmp_test
+		${testsC}
+		${testsH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_formats_bmp_test PUBLIC OxC3_types_container_test_util OxC3_formats_bmp)
+	set_target_properties(OxC3_formats_bmp_test PROPERTIES FOLDER Oxsomi/test/formats)
+	target_include_directories(OxC3_formats_bmp_test PUBLIC "../../../include")
+	add_test(NAME OxC3_formats_bmp_test COMMAND OxC3_formats_bmp_test)
+
 endif()

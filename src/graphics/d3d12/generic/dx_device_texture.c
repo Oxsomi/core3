@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,7 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//graphics/d3d12/generic/dx_device_texture.c
+
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
@@ -27,9 +28,18 @@
 #include "graphics/d3d12/dx_buffer.h"
 #include "types/container/texture_format.h"
 #include "types/container/ref_ptr.h"
-#include "platforms/ext/bufferx.h"
+#include "types/container/buffer.h"
+#include "types/base/string_base.h"
 
-Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
+Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
+	void *commandBufferExt,
+	GraphicsDeviceRef *deviceRef,
+	DeviceTextureRef *pending,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
@@ -39,9 +49,7 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 	DeviceTexture *texture = DeviceTextureRef_ptr(pending);
 	DxUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(pending, Dx, 0);
 
-	Error err = Error_none();
-
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 	DeviceBufferRef *tempStagingResource = NULL;
 
 	ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
@@ -76,14 +84,17 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 	D3D12_BARRIER_GROUP bufDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 	D3D12_BARRIER_GROUP imgDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE };
 
-	if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
+	if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
 
-		gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+		CharString dedicatedStaging = CharString_createRefCStrConst("Dedicated staging buffer");
+
+		gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 			deviceRef,
 			EDeviceBufferUsage_None, EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
-			CharString_createRefCStrConst("Dedicated staging buffer"),
-			allocRange, &tempStagingResource
-		))
+			NULL,
+			&dedicatedStaging,
+			allocRange, &tempStagingResource, e_rr
+		));
 
 		DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
 		DxDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Dx);
@@ -143,13 +154,13 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			U64 allocRangeStart = allocRange;
 			allocRange += len;
 
-			gotoIfError(clean, DxDeviceBuffer_transition(
+			gotoIfError3(clean, DxDeviceBuffer_transition(
 				stagingResourceExt,
 				D3D12_BARRIER_SYNC_COPY,
 				D3D12_BARRIER_ACCESS_COPY_SOURCE,
 				&deviceExt->bufferTransitions,
-				&bufDep
-			))
+				&bufDep, alloc, e_rr
+			));
 
 			D3D12_BARRIER_SUBRESOURCE_RANGE range2 = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
 				.NumMipLevels = 1,
@@ -157,15 +168,15 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 				.NumPlanes = 1
 			};
 
-			gotoIfError(clean, DxUnifiedTexture_transition(
+			gotoIfError3(clean, DxUnifiedTexture_transition(
 				textureExt,
 				D3D12_BARRIER_SYNC_COPY,
 				D3D12_BARRIER_ACCESS_COPY_DEST,
 				D3D12_BARRIER_LAYOUT_COPY_DEST,
 				&range2,
 				&deviceExt->imageTransitions,
-				&imgDep
-			))
+				&imgDep, alloc, e_rr
+			));
 
 			if(bufDep.NumBarriers || imgDep.NumBarriers) {
 
@@ -179,8 +190,8 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 					barriers
 				);
 
-				ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
-				ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
+				ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions, e_rr);
+				ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
 			}
 
 			D3D12_TEXTURE_COPY_LOCATION dst = (D3D12_TEXTURE_COPY_LOCATION) {
@@ -204,12 +215,12 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			};
 
 			D3D12_BOX srcBox = (D3D12_BOX) {
-				.left		= x,
-				.top		= y,
-				.front		= z,
-				.right		= x + w,
-				.bottom		= y + h,
-				.back		= z + l
+				.left   = x,
+				.top    = y,
+				.front  = z,
+				.right  = x + w,
+				.bottom = y + h,
+				.back   = z + l
 			};
 
 			commandBuffer->buffer->lpVtbl->CopyTextureRegion(
@@ -217,13 +228,13 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 				&dst,
 				x, y, z,
 				&src,
-				texture->isPendingFullCopy ? NULL : &srcBox		//Unaligned textures have a GPUBV bug in SDK version 613
+				texture->isPendingFullCopy ? NULL : &srcBox        //Unaligned textures have a GPUBV bug in SDK version 613
 			);
 		}
 
 		//When staging resource is committed to current in flight then we can relinquish ownership.
 
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempStagingResource))
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, tempStagingResource, alloc, e_rr));
 		tempStagingResource = NULL;
 	}
 
@@ -231,29 +242,45 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 	else {
 
-		AllocationBuffer *stagingBuffer = &device->stagingAllocations[(device->submitId - 1) % 3];
+		AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->fifId];
 		DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 		DxDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Dx);
 
 		U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
-		Error temp = AllocationBuffer_allocateBlockx(
-			stagingBuffer, allocRange, compressed ? 16 : 4, (const U8**) &location
-		);
 
-		if(temp.genericError && location == defaultLocation)		//Something major went wrong
-			gotoIfError(clean, temp)
+		AllocationBufferAllocate allocBuffer = (AllocationBufferAllocate) {
+			.allocationBuffer = stagingBuffer,
+			.alignment = compressed ? 16 : 4,
+			.alloc = alloc
+		};
+
+		Error temp = Error_none();
+		Bool allocated = AllocationBuffer_allocateBlock(&allocBuffer, allocRange, (const U8**) &location, &temp);
+
+		if(!allocated && location == defaultLocation) {        //Something major went wrong
+			if(e_rr) *e_rr = temp;
+			s_uccess = false;
+			goto clean;
+		}
 
 		//We re-create the staging buffer to fit the new allocation.
 
-		if (temp.genericError) {
+		if (!allocated) {
 
 			U64 prevSize = DeviceBufferRef_ptr(device->staging)->resource.size;
 
 			//Allocate new staging buffer.
 
 			U64 newSize = prevSize * 2 + allocRange * 3;
-			gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize))
-			gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location))
+			gotoIfError3(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize, e_rr));
+
+			allocBuffer = (AllocationBufferAllocate) {
+				.allocationBuffer = stagingBuffer,
+				.alignment = compressed ? 16 : 4,
+				.alloc = alloc
+			};
+
+			gotoIfError3(clean, AllocationBuffer_allocateBlock(&allocBuffer, allocRange, (const U8**) &location, e_rr));
 
 			staging = DeviceBufferRef_ptr(device->staging);
 			stagingExt = DeviceBuffer_ext(staging, Dx);
@@ -312,16 +339,15 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
 
-				gotoIfError(clean, DxDeviceBuffer_transition(						//Ensure resource is transitioned
+				gotoIfError3(clean, DxDeviceBuffer_transition(                        //Ensure resource is transitioned
 					stagingExt,
 					D3D12_BARRIER_SYNC_COPY,
 					D3D12_BARRIER_ACCESS_COPY_SOURCE,
 					&deviceExt->bufferTransitions,
-					&bufDep
-				))
+					&bufDep, alloc, e_rr));
 
 				RefPtr_inc(device->staging);
-				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
+				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, device->staging, alloc, e_rr));        //Add to in flight
 			}
 
 			D3D12_BARRIER_SUBRESOURCE_RANGE range2 = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
@@ -330,15 +356,14 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 				.NumPlanes = 1
 			};
 
-			gotoIfError(clean, DxUnifiedTexture_transition(
+			gotoIfError3(clean, DxUnifiedTexture_transition(
 				textureExt,
 				D3D12_BARRIER_SYNC_COPY,
 				D3D12_BARRIER_ACCESS_COPY_DEST,
 				D3D12_BARRIER_LAYOUT_COPY_DEST,
 				&range2,
 				&deviceExt->imageTransitions,
-				&imgDep
-			))
+				&imgDep, alloc, e_rr));
 
 			if(bufDep.NumBarriers || imgDep.NumBarriers) {
 
@@ -352,8 +377,8 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 					barriers
 				);
 
-				ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
-				ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
+				ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions, e_rr);
+				ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
 			}
 
 			U64 allocRangeStart = allocRange;
@@ -380,12 +405,12 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			};
 
 			D3D12_BOX srcBox = (D3D12_BOX) {
-				.left		= x,
-				.top		= y,
-				.front		= z,
-				.right		= x + w,
-				.bottom		= y + h,
-				.back		= z + l
+				.left   = x,
+				.top    = y,
+				.front  = z,
+				.right  = x + w,
+				.bottom = y + h,
+				.back   = z + l
 			};
 
 			commandBuffer->buffer->lpVtbl->CopyTextureRegion(
@@ -393,26 +418,26 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 				&dst,
 				x, y, z,
 				&src,
-				texture->isPendingFullCopy ? NULL : &srcBox		//Unaligned textures have a GPUBV bug in SDK version 613
+				texture->isPendingFullCopy ? NULL : &srcBox        //Unaligned textures have a GPUBV bug in SDK version 613
 			);
 		}
 	}
 
 	if(!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked))
-		Buffer_freex(&texture->cpuData);
+		Buffer_free(&texture->cpuData, alloc);
 
 	texture->isFirstFrame = texture->isPending = texture->isPendingFullCopy = false;
-	gotoIfError(clean, ListDevicePendingRange_clear(&texture->pendingChanges))
+	gotoIfError3(clean, ListDevicePendingRange_clear(&texture->pendingChanges, e_rr));
 
 	if(RefPtr_inc(pending))
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
 
 	if (device->pendingBytes >= device->flushThreshold)
-		gotoIfError(clean, DxGraphicsDevice_flush(deviceRef, commandBuffer))
+		gotoIfError3(clean, DxGraphicsDevice_flush(deviceRef, commandBuffer, e_rr));
 
 clean:
-	DeviceBufferRef_dec(&tempStagingResource);
-	ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
-	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
-	return err;
+	RefPtr_dec(&tempStagingResource);
+	ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions, e_rr);
+	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+	return s_uccess;
 }

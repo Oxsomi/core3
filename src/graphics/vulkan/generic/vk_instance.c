@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,7 +18,9 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//graphics/vulkan/generic/vk_instance.c
+
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/vulkan/vk_interface.h"
 #include "graphics/vulkan/vk_instance.h"
@@ -27,24 +29,47 @@
 #include "graphics/vulkan/vk_swapchain.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_info.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/log.h"
+#include "platforms/platform.h"
+#include "platforms/logx.h"
 #include "platforms/dynamic_library.h"
-#include "types/base/error.h"
 #include "types/container/buffer.h"
-#include "types/math/math.h"
+#include "types/container/string.h"
+#include "types/base/error.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/mathi.h"
+#include "types/base/constants.h"
+
+//The Vulkan loader (vkGetInstanceProcAddr / vkGetDeviceProcAddr) is loaded at runtime rather than statically linked,
+// so the build doesn't depend on an arch-specific vulkan-1.lib (which fails to link on e.g. Windows arm64).
+//Every other Vulkan entry point is then resolved through the loaded getInstanceProcAddr/getDeviceProcAddr.
+//The actual loading uses the platform-abstracted DynamicLibrary API; only the library name is platform-specific.
+
+static const C8 *VkGraphicsInstance_loaderName() {
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		return "vulkan-1.dll";
+	#elif _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+		return "libvulkan.dylib";
+	#elif _PLATFORM_TYPE == PLATFORM_ANDROID
+		return "libvulkan.so";
+	#else
+		return "libvulkan.so.1";
+	#endif
+}
 
 GraphicsObjectSizes VkGraphicsObjectSizes = {
 	.blas = sizeof(VkBLAS),
 	.tlas = sizeof(VkTLAS),
-	.pipeline = sizeof(VkPipeline) + 8,
-	.sampler = sizeof(VkSampler) + 8,
+	.pipeline = sizeof(VkPipeline) + 8,             //Align to 16
+	.sampler = sizeof(VkSampler) + 8,               //Align to 16
 	.buffer = sizeof(VkDeviceBuffer),
 	.image = sizeof(VkUnifiedTexture),
 	.swapchain = sizeof(VkSwapchain),
 	.device = sizeof(VkGraphicsDevice),
-	.instance = sizeof(VkGraphicsInstance)
+	.instance = sizeof(VkGraphicsInstance),
+	.descriptorLayout = sizeof(VkDescriptorLayout),
+	.descriptorTable = sizeof(VkDescriptorTable),
+	.descriptorHeap = sizeof(VkDescriptorHeap),
+	.pipelineLayout = sizeof(VkPipelineLayout) + 8  //Align to 16
 };
 
 #ifndef GRAPHICS_API_DYNAMIC
@@ -53,10 +78,10 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 		return &VkGraphicsObjectSizes;
 	}
 #else
-	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance, GraphicsInterface *interface) {
+	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance, GraphicsInterface *interf) {
 
 		Platform_instance = instance;
-		GraphicsInterface_instance = interface;
+		GraphicsInterface_instance = interf;
 
 		return (GraphicsInterfaceTable) {
 
@@ -90,14 +115,27 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 			.swapchainCreate = VkGraphicsDeviceRef_createSwapchain,
 			.swapchainFree = VkSwapchain_free,
 
+			.descriptorLayoutCreate = VkGraphicsDeviceRef_createDescriptorLayout,
+			.descriptorLayoutFree = VkDescriptorLayout_free,
+			.pipelineLayoutCreate = VkGraphicsDeviceRef_createPipelineLayout,
+			.pipelineLayoutFree = VkPipelineLayout_free,
+			.descriptorHeapCreate = VkGraphicsDeviceRef_createDescriptorHeap,
+			.descriptorHeapFree = VkDescriptorHeap_free,
+
+			.descriptorTableCreate = VkDescriptorHeap_createDescriptorTable,
+			.descriptorTableFree = VkDescriptorTable_free,
+			.descriptorTableSet = VkDescriptorTable_setDescriptors,
+			.descriptorTableUnset = VkDescriptorTable_unsetDescriptors,
+
 			.memoryAllocate = VkDeviceMemoryAllocator_allocate,
 			.memoryFree = VkDeviceMemoryAllocator_freeAllocation,
 
 			.deviceInit = VkGraphicsDevice_init,
-			.devicePostInit = VkGraphicsDevice_postInit,
 			.deviceWait = VkGraphicsDeviceRef_wait,
 			.deviceFree = VkGraphicsDevice_free,
 			.deviceSubmitCommands = VkGraphicsDevice_submitCommands,
+			.deviceGetMemoryBudget = VkGraphicsDevice_getMemoryBudget,
+
 			.commandListProcess = VkCommandList_process,
 
 			.instanceCreate = VkGraphicsInstance_create,
@@ -139,26 +177,30 @@ VkBool32 onDebugReport(
 	return VK_FALSE;
 }
 
-#define vkExtensionNoCheck(function, result) {													\
-	*(void**)&result = (void*) vkGetInstanceProcAddr(instanceExt->instance, #function);			\
-}
-
-#define vkExtension(label, function, result) {													\
+#define getVkFunction(label, function, result) {                                                \
 																								\
-	PFN_vkVoidFunction v = vkGetInstanceProcAddr(instanceExt->instance, #function); 			\
+	PFN_vkVoidFunction v = instanceExt->getInstanceProcAddr(instanceExt->instance, #function);  \
 																								\
-	if(!v)																						\
-		gotoIfError(clean, Error_nullPointer(0, "vkExtension() " #function " failed"))			\
+	if(!v)                                                                                      \
+		retError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"));          \
 																								\
-	*(void**)&result = (void*) v;																\
-}
+	*(void**)&result = (void*) v;                                                               \
+} (void) 0
 
 TList(VkExtensionProperties);
 TList(VkLayerProperties);
 TListImpl(VkExtensionProperties);
 TListImpl(VkLayerProperties);
 
-Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
+//#define _GRAPHICS_VERBOSE_DEBUGGING
+
+Bool VK_WRAP_FUNC(GraphicsInstance_create)(
+	const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr
+) {
+
+	const Allocator *alloc = GraphicsInstanceRef_ptr(*instanceRef)->alloc;
+
+	Bool s_uccess = true;
 
 	U32 layerCount = 0, extensionCount = 0;
 	CharString title = (CharString) { 0 };
@@ -170,47 +212,69 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-	Error err = Error_none();
 
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, NULL)))
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL)))
+	//Start with loading the functions
 
-	gotoIfError(clean, CharString_createCopyx(info.name, &title))
-	gotoIfError(clean, ListVkExtensionProperties_createx(extensionCount, &extensions))
-	gotoIfError(clean, ListVkLayerProperties_createx(layerCount, &layers))
+	//Load the Vulkan loader dynamically and grab vkGetInstanceProcAddr from it (system search, not the app dir).
 
-	gotoIfError(clean, ListConstC8_reservex(&enabledLayers, layerCount))
-	gotoIfError(clean, ListConstC8_reservex(&enabledExtensions, extensionCount))
+	gotoIfError3(clean, DynamicLibrary_loadSystem(
+		CharString_createRefCStrConst(VkGraphicsInstance_loaderName()), &instanceExt->vulkanLib, e_rr
+	));
 
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, layers.ptrNonConst)))
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.ptrNonConst)))
+	gotoIfError3(clean, DynamicLibrary_loadSymbol(
+		instanceExt->vulkanLib, CharString_createRefCStrConst("vkGetInstanceProcAddr"),
+		(void**) &instanceExt->getInstanceProcAddr, e_rr
+	));
+
+	//These instances are okay with using NULL as the instance
+
+	getVkFunction(clean, vkCreateInstance, instanceExt->createInstance);
+
+	getVkFunction(clean, vkEnumerateInstanceLayerProperties, instanceExt->enumerateInstanceLayerProperties);
+	getVkFunction(clean, vkEnumerateInstanceExtensionProperties, instanceExt->enumerateInstanceExtensionProperties);
+
+	//Enumerate instance info
+
+	gotoIfError3(clean, checkVkError(instanceExt->enumerateInstanceLayerProperties(&layerCount, NULL), e_rr));
+	gotoIfError3(clean, checkVkError(instanceExt->enumerateInstanceExtensionProperties(NULL, &extensionCount, NULL), e_rr));
+
+	gotoIfError3(clean, CharString_createCopy(info->name, alloc, &title, e_rr));
+	gotoIfError3(clean, ListVkExtensionProperties_create(extensionCount, alloc, &extensions, e_rr));
+	gotoIfError3(clean, ListVkLayerProperties_create(layerCount, alloc, &layers, e_rr));
+
+	gotoIfError3(clean, ListConstC8_reserve(&enabledLayers, layerCount, alloc, e_rr));
+	gotoIfError3(clean, ListConstC8_reserve(&enabledExtensions, extensionCount, alloc, e_rr));
+
+	gotoIfError3(clean, checkVkError(instanceExt->enumerateInstanceLayerProperties(&layerCount, layers.ptrNonConst), e_rr));
+	gotoIfError3(clean, checkVkError(
+		instanceExt->enumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.ptrNonConst), e_rr
+	));
 
 	Bool supportsDebug[2] = { 0 };
-
-	CharString debugReport = CharString_createRefCStrConst("VK_EXT_debug_report");
-	CharString debugUtils = CharString_createRefCStrConst("VK_EXT_debug_utils");
 
 	if(instance->flags & EGraphicsInstanceFlags_IsVerbose)
 		Log_debugLnx("Supported extensions:");
 
 	Bool supportsColorSpace = false;
 
-	CharString swapchainColorspace = CharString_createRefCStrConst("VK_EXT_swapchain_colorspace");
+	const CharString swapchainColorspace = CharString_createRefCStrConst("VK_EXT_swapchain_colorspace");
+	const CharString debugReport = CharString_createRefCStrConst("VK_EXT_debug_report");
+	const CharString debugUtils = CharString_createRefCStrConst("VK_EXT_debug_utils");
 
 	for(U64 i = 0; i < extensionCount; ++i) {
 
 		const C8 *name = extensions.ptr[i].extensionName;
 		CharString nameStr = CharString_createRefCStrConst(name);
 
-		if(CharString_equalsStringSensitive(nameStr, swapchainColorspace))
+		if(CharString_equalsStringSensitive(&nameStr, &swapchainColorspace))
 			supportsColorSpace = true;
 
 		else if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
-			if(CharString_equalsStringSensitive(nameStr, debugReport))
+			if(CharString_equalsStringSensitive(&nameStr, &debugReport))
 				supportsDebug[0] = true;
 
-			else if(CharString_equalsStringSensitive(nameStr, debugUtils))
+			else if(CharString_equalsStringSensitive(&nameStr, &debugUtils))
 				supportsDebug[1] = true;
 		}
 
@@ -227,42 +291,85 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	}
 
 	if(supportsDebug[0])
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugReport.ptr))
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, debugReport.ptr, alloc, e_rr));
 
 	if(supportsDebug[1])
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugUtils.ptr))
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, debugUtils.ptr, alloc, e_rr));
 
 	//Force physical device properties and external memory
 
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_get_physical_device_properties2"))
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_external_memory_capabilities"))
+	gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, "VK_KHR_get_physical_device_properties2", alloc, e_rr));
+	gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, "VK_KHR_external_memory_capabilities", alloc, e_rr));
 
 	//MoltenVK requires us to enable portability enumeration
 
 	Bool isMoltenVk = false;
 
 	#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_portability_enumeration"))
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, "VK_KHR_portability_enumeration", alloc, e_rr));
 		isMoltenVk = true;
 	#endif
 
 	//Enable so we can use swapchain khr
 
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_surface"))
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, _VK_SURFACE_EXT))
+	gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, "VK_KHR_surface", alloc, e_rr));
+	gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, _VK_SURFACE_EXT, alloc, e_rr));
 
 	if (supportsColorSpace)
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, swapchainColorspace.ptr))
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, swapchainColorspace.ptr, alloc, e_rr));
 
-	gotoIfError(clean, VkGraphicsInstance_getLayers(instance->flags & EGraphicsInstanceFlags_IsDebug, &enabledLayers))
+	U8 hasDebugLayer = 0;
+
+	if(instance->flags & EGraphicsInstanceFlags_IsDebug)
+		for(U64 i = 0; i < layerCount; ++i) {
+
+			CharString name = CharString_createRefCStrConst(layers.ptr[i].layerName);
+			U64 len = CharString_length(name);
+
+			switch(len ? name.ptr[len - 1] : ' ') {
+
+				case 'n':    //validatioN
+
+					if(CharString_equalsCStringSensitive(&name, "VK_LAYER_KHRONOS_validation"))
+						hasDebugLayer |= 1;
+
+					break;
+
+				#ifdef _GRAPHICS_VERBOSE_DEBUGGING
+
+					case 'p':    //dumP
+
+						if(CharString_equalsCStringSensitive(&name, "VK_LAYER_LUNARG_api_dump"))
+							hasDebugLayer |= 2;
+
+						break;
+
+				#endif
+
+				default:
+					break;
+			}
+
+			if(hasDebugLayer & 3)
+				break;
+		}
+
+	if (!hasDebugLayer && (instance->flags & EGraphicsInstanceFlags_IsDebug))
+		Log_warnLnx("VkGraphicsInstance_create tried to enable debug layer, but no debug layer was present");
+
+	if(hasDebugLayer & 1)
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledLayers, "VK_LAYER_KHRONOS_validation", alloc, e_rr));
+
+	if(hasDebugLayer & 2)
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledLayers, "VK_LAYER_LUNARG_api_dump", alloc, e_rr));
 
 	VkApplicationInfo application = (VkApplicationInfo) {
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
 		.pApplicationName = title.ptr,
-		.applicationVersion = info.version,
+		.applicationVersion = info->version,
 		.pEngineName = "OxC3",
 		.engineVersion = VK_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH),
-		.apiVersion = VK_MAKE_VERSION(1, 2, 0)
+		.apiVersion = VK_MAKE_VERSION(1, 1, 0)
 	};
 
 	VkInstanceCreateInfo instanceInfo = (VkInstanceCreateInfo) {
@@ -277,20 +384,22 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	if(isMoltenVk)
 		instanceInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 
-	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
+	if(hasDebugLayer & 1) {
 
 		//Maximum validation
 
 		VkValidationFeatureEnableEXT enables[] = {
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
 			VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
+			VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT
 		};
+
+		U32 count = instance->flags & EGraphicsInstanceFlags_DisableGPUBV ? 2 : 4;
 
 		VkValidationFeaturesEXT features = (VkValidationFeaturesEXT) {
 			.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
-			.enabledValidationFeatureCount = (U32) (sizeof(enables) / sizeof(enables[0])),
+			.enabledValidationFeatureCount = count,
 			.pEnabledValidationFeatures = enables
 		};
 
@@ -313,56 +422,49 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	//Create instance
 
-	gotoIfError(clean, vkCheck(vkCreateInstance(&instanceInfo, NULL, &instanceExt->instance)))
+	gotoIfError3(clean, checkVkError(instanceExt->createInstance(&instanceInfo, NULL, &instanceExt->instance), e_rr));
 
-	//Load functions
+	//Functions that aren't device dependent, but do need an instance
 
-	vkExtension(clean, vkGetPhysicalDeviceFeatures2KHR, instanceExt->getPhysicalDeviceFeatures2)
-	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2)
+	getVkFunction(clean, vkDestroyInstance, instanceExt->destroyInstance);
+	getVkFunction(clean, vkCreateDevice, instanceExt->createDevice);
+	getVkFunction(clean, vkDestroyDevice, instanceExt->destroyDevice);
 
-	vkExtension(clean, vkCmdPipelineBarrier2KHR, instanceExt->cmdPipelineBarrier2)
+	//Device-level entry points are resolved via vkGetDeviceProcAddr (also fetched through the loader).
+	getVkFunction(clean, vkGetDeviceProcAddr, instanceExt->getDeviceProcAddr);
 
-	vkExtension(clean, vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats)
-	vkExtension(clean, vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities)
-	vkExtension(clean, vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes)
-	vkExtension(clean, vkGetSwapchainImagesKHR, instanceExt->getSwapchainImages)
-	vkExtension(clean, vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport)
-
-	if(supportsDebug[1]) {
-		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName)
-		vkExtension(clean, vkCmdDebugMarkerBeginEXT, instanceExt->cmdDebugMarkerBegin)
-		vkExtension(clean, vkCmdDebugMarkerEndEXT, instanceExt->cmdDebugMarkerEnd)
-		vkExtension(clean, vkCmdDebugMarkerInsertEXT, instanceExt->cmdDebugMarkerInsert)
+	if (supportsDebug[0]) {
+		getVkFunction(clean, vkCreateDebugReportCallbackEXT, instanceExt->debugCreateReportCallback);
+		getVkFunction(clean, vkDestroyDebugReportCallbackEXT, instanceExt->debugDestroyReportCallback);
 	}
 
-	if(supportsDebug[0]) {
-		vkExtension(clean, vkCreateDebugReportCallbackEXT, instanceExt->debugCreateReportCallback)
-		vkExtension(clean, vkDestroyDebugReportCallbackEXT, instanceExt->debugDestroyReportCallback)
+	if (supportsDebug[1]) {
+		getVkFunction(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName);
+		getVkFunction(clean, vkCmdBeginDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerBegin);
+		getVkFunction(clean, vkCmdEndDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerEnd);
+		getVkFunction(clean, vkCmdInsertDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerInsert);
 	}
 
-	vkExtension(clean, vkAcquireNextImageKHR, instanceExt->acquireNextImage)
-	vkExtension(clean, vkCreateSwapchainKHR, instanceExt->createSwapchain)
-	vkExtension(clean, vkDestroySurfaceKHR, instanceExt->destroySurface)
-	vkExtension(clean, vkDestroySwapchainKHR, instanceExt->destroySwapchain)
+	getVkFunction(clean, vkEnumeratePhysicalDevices, instanceExt->enumeratePhysicalDevices);
+	getVkFunction(clean, vkEnumerateDeviceLayerProperties, instanceExt->enumerateDeviceLayerProperties);
+	getVkFunction(clean, vkEnumerateDeviceExtensionProperties, instanceExt->enumerateDeviceExtensionProperties);
+	getVkFunction(clean, vkGetPhysicalDeviceFormatProperties, instanceExt->getPhysicalDeviceFormatProperties);
+	getVkFunction(clean, vkGetPhysicalDeviceFeatures2KHR, instanceExt->getPhysicalDeviceFeatures2);
+	getVkFunction(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2);
+	getVkFunction(clean, vkGetPhysicalDeviceMemoryProperties, instanceExt->getPhysicalDeviceMemoryProperties);
+	getVkFunction(clean, vkGetPhysicalDeviceQueueFamilyProperties, instanceExt->getPhysicalDeviceQueueFamilyProperties);
 
-	vkExtensionNoCheck(vkCmdBuildAccelerationStructuresKHR, instanceExt->cmdBuildAccelerationStructures)
-	vkExtensionNoCheck(vkCreateAccelerationStructureKHR, instanceExt->createAccelerationStructure)
-	vkExtensionNoCheck(vkCmdCopyAccelerationStructureKHR, instanceExt->copyAccelerationStructure)
-	vkExtensionNoCheck(vkDestroyAccelerationStructureKHR, instanceExt->destroyAccelerationStructure)
-	vkExtensionNoCheck(vkGetAccelerationStructureBuildSizesKHR, instanceExt->getAccelerationStructureBuildSizes)
-	vkExtensionNoCheck(vkGetDeviceAccelerationStructureCompatibilityKHR, instanceExt->getAccelerationStructureCompatibility)
+	getVkFunction(clean, vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats);
+	getVkFunction(clean, vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities);
+	getVkFunction(clean, vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes);
+	getVkFunction(clean, vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport);
+	getVkFunction(clean, vkGetPhysicalDeviceMemoryProperties2, instanceExt->getPhysicalDeviceMemoryProperties2);
 
-	vkExtensionNoCheck(vkCmdTraceRaysKHR, instanceExt->traceRays)
-	vkExtensionNoCheck(vkCmdTraceRaysIndirectKHR, instanceExt->traceRaysIndirect)
-	vkExtensionNoCheck(vkCreateRayTracingPipelinesKHR, instanceExt->createRaytracingPipelines)
-	vkExtensionNoCheck(vkGetRayTracingShaderGroupHandlesKHR, instanceExt->getRayTracingShaderGroupHandles)
-
-	vkExtensionNoCheck(vkCmdBeginRenderingKHR, instanceExt->cmdBeginRendering)
-	vkExtensionNoCheck(vkCmdEndRenderingKHR, instanceExt->cmdEndRendering)
+	getVkFunction(clean, vkDestroySurfaceKHR, instanceExt->destroySurface);
 
 	//Add debug callback
 
-	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
+	if(supportsDebug[0]) {
 
 		VkDebugReportCallbackCreateInfoEXT callbackInfo = (VkDebugReportCallbackCreateInfoEXT) {
 
@@ -378,128 +480,175 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 			.pfnCallback = (PFN_vkDebugReportCallbackEXT) onDebugReport
 		};
 
-		gotoIfError(clean, vkCheck(instanceExt->debugCreateReportCallback(
+		gotoIfError3(clean, checkVkError(instanceExt->debugCreateReportCallback(
 			instanceExt->instance, &callbackInfo, NULL, &instanceExt->debugReportCallback
-		)))
+		), e_rr));
 	}
 
 	instance->api = EGraphicsApi_Vulkan;
 	instance->apiVersion = application.apiVersion;
 
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		if(FAILED(CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->dxgiFactory)))
+			retError(clean, Error_invalidState(0, "VkGraphicsInstance_create couldn't create DXGI factory"));
+	#endif
+
 clean:
 
-	CharString_freex(&title);
+	CharString_free(&title, alloc);
 
-	ListConstC8_freex(&enabledLayers);
-	ListConstC8_freex(&enabledExtensions);
+	ListConstC8_free(&enabledLayers, alloc);
+	ListConstC8_free(&enabledExtensions, alloc);
 
-	ListVkExtensionProperties_freex(&extensions);
-	ListVkLayerProperties_freex(&layers);
+	ListVkExtensionProperties_free(&extensions, alloc);
+	ListVkLayerProperties_free(&layers, alloc);
 
-	return err;
+	return s_uccess;
 }
 
-Bool VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, Allocator alloc) {
+void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, const Allocator *alloc) {
 
 	(void)alloc;
 
 	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Vk);
 
-	if(instanceExt->debugDestroyReportCallback)
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		if(instanceExt->dxgiFactory)
+			instanceExt->dxgiFactory->lpVtbl->Release(instanceExt->dxgiFactory);
+	#endif
+
+	if(instanceExt->debugDestroyReportCallback && instanceExt->debugReportCallback)
 		instanceExt->debugDestroyReportCallback(instanceExt->instance, instanceExt->debugReportCallback, NULL);
 
-	vkDestroyInstance(instanceExt->instance, NULL);
+	//Instance creation can fail partway (e.g. no compatible driver);
+	//in that case the RefPtr is still dec'd, so the ext might not be initialized yet.
 
-	return true;
+	if(instanceExt->destroyInstance && instanceExt->instance)
+		instanceExt->destroyInstance(instanceExt->instance, NULL);
+
+	if(instanceExt->vulkanLib)
+		DynamicLibrary_free(instanceExt->vulkanLib);
 }
 
 const C8 *reqExtensionsName[] = {
-	"VK_KHR_push_descriptor",
-	"VK_KHR_synchronization2",
-	"VK_KHR_swapchain"
+	"VK_KHR_push_descriptor", "VK_KHR_synchronization2", "VK_KHR_swapchain"
 };
 
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
 
 const C8 *optExtensionsName[] = {
-	"VK_KHR_performance_query",
-	"VK_KHR_ray_tracing_pipeline",
-	"VK_KHR_ray_query",
-	"VK_KHR_acceleration_structure",
-	"VK_NV_ray_tracing_motion_blur",
-	"VK_NV_ray_tracing_invocation_reorder",
-	"VK_EXT_mesh_shader",
-	"VK_KHR_fragment_shading_rate",
-	"VK_KHR_dynamic_rendering",
-	"VK_EXT_opacity_micromap",
-	"VK_NV_displacement_micromap",
-	"VK_EXT_shader_atomic_float",
-	"VK_KHR_deferred_host_operations",
+
+	"VK_KHR_performance_query",      "VK_KHR_ray_tracing_pipeline",   "VK_KHR_ray_query",
+	"VK_KHR_acceleration_structure", "VK_NV_ray_tracing_motion_blur", "VK_NV_ray_tracing_invocation_reorder",
+	"VK_EXT_mesh_shader",            "VK_KHR_fragment_shading_rate",  "VK_KHR_dynamic_rendering",
+	"VK_EXT_opacity_micromap",       "VK_EXT_shader_atomic_float",    "VK_KHR_deferred_host_operations",
 	"VK_NV_ray_tracing_validation",
-	"VK_NV_compute_shader_derivatives",
-	"VK_KHR_maintenance4"
+
+	#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME
+		"VK_KHR_compute_shader_derivatives",
+	#else
+		"VK_NV_compute_shader_derivatives",
+	#endif
+
+	"VK_KHR_maintenance4",        "VK_KHR_buffer_device_address", "VK_EXT_descriptor_indexing", "VK_KHR_driver_properties",
+	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8",   "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget",
+	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",      "VK_KHR_ray_tracing_position_fetch",
+
+	"VK_EXT_descriptor_heap", "VK_NV_cluster_acceleration_structure", "VK_NV_partitioned_acceleration_structure"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
 
-#define getDeviceProperties(Condition, StructName, Name, StructType)			\
-	StructName Name = (StructName) { .sType = StructType };						\
-	if(Condition) {																\
-		*propertiesNext = &Name;												\
-		propertiesNext = &Name.pNext;											\
-	}
+#define getDeviceProperties(Condition, StructName, Name, StructType)            \
+	StructName Name = (StructName) { .sType = StructType };                     \
+	if(Condition) {                                                             \
+		*propertiesNext = &Name;                                                \
+		propertiesNext = &Name.pNext;                                           \
+	} (void) 0
 
-#define getDeviceFeatures(Condition, StructName, Name, StructType)				\
-	StructName Name = (StructName) { .sType = StructType };						\
-	if(Condition) {																\
-		*featuresNext = &Name;													\
-		featuresNext = &Name.pNext;												\
-	}
+#define getDeviceFeatures(Condition, StructName, Name, StructType)              \
+	StructName Name = (StructName) { .sType = StructType };                     \
+	if(Condition) {                                                             \
+		*featuresNext = &Name;                                                  \
+		featuresNext = &Name.pNext;                                             \
+	}  (void) 0
 
 TList(VkPhysicalDevice);
 TListImpl(VkPhysicalDevice);
 
-Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result) {
+Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result, Error *e_rr) {
 
-	if(!inst || !result)
-		return Error_nullPointer(!inst ? 0 : 2, "VkGraphicsInstance_getDeviceInfos()::inst and result are required");
-
-	if(result->ptr)
-		return Error_invalidParameter(1, 0, "VkGraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak");
-
-	VkGraphicsInstance *graphicsExt = GraphicsInstance_ext(inst, Vk);
-
-	U32 deviceCount = 0;
-	Error err = vkCheck(vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, NULL));
-
-	if(err.genericError)
-		return err;
+	Bool s_uccess = true;
+	const Allocator *alloc = inst ? inst->alloc : NULL;
 
 	ListVkPhysicalDevice temp = (ListVkPhysicalDevice) { 0 };
 	ListGraphicsDeviceInfo temp2 = (ListGraphicsDeviceInfo) { 0 };
 	ListVkLayerProperties temp3 = (ListVkLayerProperties) { 0 };
 	ListVkExtensionProperties temp4 = (ListVkExtensionProperties) { 0 };
 
-	gotoIfError(clean, ListVkPhysicalDevice_createx(deviceCount, &temp))
-	gotoIfError(clean, ListGraphicsDeviceInfo_reservex(&temp2, deviceCount))
+	if(!inst || !result)
+		retError(clean, Error_nullPointer(!inst ? 0 : 2, "VkGraphicsInstance_getDeviceInfos()::inst and result are required"));
 
-	gotoIfError(clean, vkCheck(vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, temp.ptrNonConst)))
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(
+			1, 0, "VkGraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak"
+		));
+
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Vk);
+
+	U32 deviceCount = 0;
+	gotoIfError3(clean, checkVkError(instanceExt->enumeratePhysicalDevices(instanceExt->instance, &deviceCount, NULL), e_rr));
+
+	gotoIfError3(clean, ListVkPhysicalDevice_create(deviceCount, alloc, &temp, e_rr));
+	gotoIfError3(clean, ListGraphicsDeviceInfo_reserve(&temp2, deviceCount, alloc, e_rr));
+
+	gotoIfError3(clean, checkVkError(
+		instanceExt->enumeratePhysicalDevices(instanceExt->instance, &deviceCount, temp.ptrNonConst),
+		e_rr
+	));
 
 	for (U32 i = 0, j = 0; i < deviceCount; ++i) {
 
 		VkPhysicalDevice dev = temp.ptr[i];
 
+		//VkOnD3D12 might not match our feature set and it might cause confusion, because it shows 2 extra devices on QCOM
+		//Even though we only really have 1 physical device there (it exists only for emulating GL).
+
+		{
+			VkPhysicalDeviceProperties2 properties2 = (VkPhysicalDeviceProperties2) {
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2
+			};
+
+			instanceExt->getPhysicalDeviceProperties2(dev, &properties2);
+
+			CharString deviceName = CharString_createRefCStrConst(properties2.properties.deviceName);
+
+			const CharString d3d12Warp = CharString_createRefCStrConst("Microsoft Direct3D12");
+
+			if (CharString_startsWithStringSensitive(&deviceName, &d3d12Warp, 0))
+				continue;
+		}
+
 		//Get extensions and layers
 
 		U32 layerCount = 0, extensionCount = 0;
 
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceLayerProperties(dev, &layerCount, NULL)))
-		gotoIfError(clean, ListVkLayerProperties_resizex(&temp3, layerCount))
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceLayerProperties(dev, &layerCount, temp3.ptrNonConst)))
+		gotoIfError3(clean, checkVkError(instanceExt->enumerateDeviceLayerProperties(dev, &layerCount, NULL), e_rr));
+		gotoIfError3(clean, ListVkLayerProperties_resize(&temp3, layerCount, alloc, e_rr));
+		gotoIfError3(clean, checkVkError(
+			instanceExt->enumerateDeviceLayerProperties(dev, &layerCount, temp3.ptrNonConst),
+			e_rr
+		));
 
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceExtensionProperties(dev, NULL, &extensionCount, NULL)))
-		gotoIfError(clean, ListVkExtensionProperties_resizex(&temp4, extensionCount))
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceExtensionProperties(dev, NULL, &extensionCount, temp4.ptrNonConst)))
+		gotoIfError3(clean, checkVkError(
+			instanceExt->enumerateDeviceExtensionProperties(dev, NULL, &extensionCount, NULL),
+			e_rr
+		));
+
+		gotoIfError3(clean, ListVkExtensionProperties_resize(&temp4, extensionCount, alloc, e_rr));
+		gotoIfError3(clean, checkVkError(
+			instanceExt->enumerateDeviceExtensionProperties(dev, NULL, &extensionCount, temp4.ptrNonConst), e_rr
+		));
 
 		//Log device for debugging
 
@@ -529,27 +678,29 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 			Bool found = false;
 
-			for(U64 l = 0; l < sizeof(reqExtensions); ++l)
-				if (CharString_equalsStringSensitive(
-					CharString_createRefCStrConst(reqExtensionsName[l]),
-					CharString_createRefCStrConst(name)
-				)) {
+			for(U64 l = 0; l < sizeof(reqExtensions); ++l) {
+
+				const CharString reqExt = CharString_createRefCStrConst(reqExtensionsName[l]);
+
+				if (CharString_equalsCStringSensitive(&reqExt, name)) {
 					reqExtensions[l] = true;
 					found = true;
 					break;
 				}
+			}
 
 			//Check if optional extension
 
 			if (!found)
-				for(U64 l = 0; l < sizeof(optExtensions); ++l)
-					if (CharString_equalsStringSensitive(
-						CharString_createRefCStrConst(optExtensionsName[l]),
-						CharString_createRefCStrConst(name)
-					)) {
+				for(U64 l = 0; l < sizeof(optExtensions); ++l) {
+
+					const CharString optExt = CharString_createRefCStrConst(optExtensionsName[l]);
+
+					if (CharString_equalsCStringSensitive(&optExt, name)) {
 						optExtensions[l] = true;
 						break;
 					}
+				}
 		}
 
 		Bool supported = true;
@@ -584,67 +735,80 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		getDeviceProperties(
 			true, VkPhysicalDeviceSubgroupProperties, subgroup, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES
-		)
+		);
 
 		getDeviceProperties(
 			optExtensions[EOptExtensions_MeshShader],
 			VkPhysicalDeviceMeshShaderPropertiesEXT,
 			meshShaderProp,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT
-		)
+		);
 
 		getDeviceProperties(
 			true,
 			VkPhysicalDeviceMultiviewProperties,
 			multiViewProp,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES
-		)
+		);
 
 		getDeviceProperties(
 			optExtensions[EOptExtensions_VariableRateShading],
 			VkPhysicalDeviceFragmentShadingRatePropertiesKHR,
 			vrsProp,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_PROPERTIES_KHR
-		)
+		);
 
 		getDeviceProperties(
 			optExtensions[EOptExtensions_RayAcceleration],
 			VkPhysicalDeviceAccelerationStructurePropertiesKHR,
 			rtasProp,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR
-		)
+		);
 
 		getDeviceProperties(
 			optExtensions[EOptExtensions_RayPipeline],
 			VkPhysicalDeviceRayTracingPipelinePropertiesKHR,
 			rtpProp,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR
-		)
+		);
 
 		getDeviceProperties(
 			optExtensions[EOptExtensions_RayReorder],
 			VkPhysicalDeviceRayTracingInvocationReorderPropertiesNV,
 			rayReorderProp,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_NV
-		)
-
-		getDeviceProperties(true, VkPhysicalDeviceIDProperties, id, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES)
+		);
 
 		getDeviceProperties(
-			true, VkPhysicalDeviceDriverProperties, driver, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES
-		)
+			optExtensions[EOptExtensions_Bindless],
+			VkPhysicalDeviceDescriptorIndexingProperties,
+			bindlessProp,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES
+		);
+
+		getDeviceProperties(true, VkPhysicalDeviceIDProperties, id, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES);
+
+		getDeviceProperties(
+			optExtensions[EOptExtensions_DriverProperties], VkPhysicalDeviceDriverProperties, driver,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES
+		);
 
 		getDeviceProperties(
 			true, VkPhysicalDeviceMaintenance3Properties, memorySizeAndDescriptorSets,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_3_PROPERTIES
-		)
+		);
 
 		getDeviceProperties(
 			optExtensions[EOptExtensions_Maintenance4], VkPhysicalDeviceMaintenance4Properties, maxBufferSize,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_PROPERTIES
-		)
+		);
 
-		graphicsExt->getPhysicalDeviceProperties2(dev, &properties2);
+		getDeviceProperties(
+			true, VkPhysicalDevicePushDescriptorPropertiesKHR, pushDescriptor,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR
+		);
+
+		instanceExt->getPhysicalDeviceProperties2(dev, &properties2);
 
 		if(
 			optExtensions[EOptExtensions_Maintenance4] && (
@@ -652,6 +816,11 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			)
 		) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", maxBufferSize and maxAllocationSize should exceed 256MiB", i);
+			continue;        //This hack is because BAR aperture is 256 MiB, this is used to distinguish AMD APUs
+		}
+
+		if (pushDescriptor.maxPushDescriptors < 32) {
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", push descriptors >=32 is required", i);
 			continue;
 		}
 
@@ -664,162 +833,199 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		void **featuresNext = &features2.pNext;
 
 		getDeviceFeatures(
-			true,
+			optExtensions[EOptExtensions_Bindless],
 			VkPhysicalDeviceDescriptorIndexingFeatures,
 			descriptorIndexing,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_DynamicRendering],
 			VkPhysicalDeviceDynamicRenderingFeatures,
 			dynamicRendering,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
-		)
-
-		getDeviceFeatures(
-			true,
-			VkPhysicalDeviceTimelineSemaphoreFeatures,
-			semaphore,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES
-		)
+		);
 
 		getDeviceFeatures(
 			true,
 			VkPhysicalDeviceSynchronization2Features,
 			sync2,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_MeshShader],
 			VkPhysicalDeviceMeshShaderFeaturesEXT,
 			meshShader,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_RaytracingValidation],
 			VkPhysicalDeviceRayTracingValidationFeaturesNV,
 			rtValidation,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV
-		)
+		);
 
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_ComputeDeriv],
-			VkPhysicalDeviceComputeShaderDerivativesFeaturesNV ,
-			computeDeriv,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_NV
-		)
+		#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME        //Prevent failing for older SDK versions
+			getDeviceFeatures(
+				optExtensions[EOptExtensions_ComputeDeriv],
+				VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR,
+				computeDeriv,
+				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR
+			);
+		#else
+			getDeviceFeatures(
+				optExtensions[EOptExtensions_ComputeDeriv],
+				VkPhysicalDeviceComputeShaderDerivativesFeaturesNV,
+				computeDeriv,
+				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_NV
+			);
+		#endif
 
 		getDeviceFeatures(
 			true,
 			VkPhysicalDeviceMultiviewFeatures,
 			multiViewFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_VariableRateShading],
 			VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
 			vrsFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_RayAcceleration],
 			VkPhysicalDeviceAccelerationStructureFeaturesKHR,
 			rtasFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_RayPipeline],
 			VkPhysicalDeviceRayTracingPipelineFeaturesKHR,
 			rtpFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_RayQuery],
 			VkPhysicalDeviceRayQueryFeaturesKHR,
 			rayQueryFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_RayMotionBlur],
 			VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
 			rayMotionBlurFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_RayReorder],
 			VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV,
 			rayReorderFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_RayMicromapOpacity],
 			VkPhysicalDeviceOpacityMicromapFeaturesEXT,
 			rayOpacityMicroFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT
-		)
+		);
 
 		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayMicromapDisplacement],
-			VkPhysicalDeviceDisplacementMicromapFeaturesNV,
-			rayDispMicroFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DISPLACEMENT_MICROMAP_FEATURES_NV
-		)
+			optExtensions[EOptExtensions_CooperativeVector],
+			VkPhysicalDeviceCooperativeVectorFeaturesNV,
+			coopVectorFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV
+		);
 
 		getDeviceFeatures(
-			true,
+			optExtensions[EOptExtensions_CooperativeMatrix],
+			VkPhysicalDeviceCooperativeMatrixFeaturesKHR,
+			coopMatrixFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_ShaderFloat8],
+			VkPhysicalDeviceShaderFloat8FeaturesEXT,
+			shaderFloat8Feat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayTriPosition],
+			VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR,
+			rayPositionFetchFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_POSITION_FETCH_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_DescriptorHeap],
+			VkPhysicalDeviceDescriptorHeapFeaturesEXT,
+			descriptorHeapFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayClusterAS],
+			VkPhysicalDeviceClusterAccelerationStructureFeaturesNV,
+			rayClusterASFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CLUSTER_ACCELERATION_STRUCTURE_FEATURES_NV
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayPartitionedTLAS],
+			VkPhysicalDevicePartitionedAccelerationStructureFeaturesNV,
+			rayPartitionedTLASFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PARTITIONED_ACCELERATION_STRUCTURE_FEATURES_NV
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_F16],
 			VkPhysicalDeviceShaderFloat16Int8Features,
 			float16,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES
-		)
+		);
 
 		getDeviceFeatures(
-			true,
+			optExtensions[EOptExtensions_AtomicI64],
 			VkPhysicalDeviceShaderAtomicInt64Features,
 			atomics64,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_AtomicF32],
 			VkPhysicalDeviceShaderAtomicFloatFeaturesEXT,
 			atomicsF32,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT
-		)
+		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_PerfQuery],
 			VkPhysicalDevicePerformanceQueryFeaturesKHR,
 			perfQuery,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR
-		)
+		);
 
 		getDeviceFeatures(
-			true, VkPhysicalDeviceBufferDeviceAddressFeaturesKHR, deviceAddress,
+			optExtensions[EOptExtensions_BufferDeviceAddress], VkPhysicalDeviceBufferDeviceAddressFeaturesKHR, deviceAddress,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR
-		)
+		);
 
-		graphicsExt->getPhysicalDeviceFeatures2(dev, &features2);
-
-		//Query
+		instanceExt->getPhysicalDeviceFeatures2(dev, &features2);
 
 		VkPhysicalDeviceProperties properties = properties2.properties;
 		VkPhysicalDeviceFeatures features = features2.features;
 		VkPhysicalDeviceLimits limits = properties.limits;
-
-		if (limits.nonCoherentAtomSize > 256) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", nonCoherentAtomSize needs to be up to 256", i);
-			continue;
-		}
 
 		//Ensure device is compatible first
 
@@ -837,7 +1043,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			!features.depthBiasClamp ||
 			!(features.textureCompressionBC || features.textureCompressionASTC_LDR) ||
 			!features.multiDrawIndirect ||
-			!features.sampleRateShading
+			!features.sampleRateShading ||
+			!features.shaderStorageImageReadWithoutFormat ||
+			!features.shaderStorageImageWriteWithoutFormat
 		) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required features wasn't enabled", i);
 			continue;
@@ -883,7 +1091,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			limits.maxPushConstantsSize < 128 ||
 			limits.maxSamplerAllocationCount < 1024 ||
 			limits.maxSamplerAnisotropy < 16 ||
-			limits.maxStorageBufferRange < 250 * MEGA ||
+			limits.maxStorageBufferRange < 128 * MEGA ||
 			limits.maxSamplerLodBias < 4 ||
 			limits.maxUniformBufferRange < 64 * KIBI ||
 			limits.maxVertexInputAttributeOffset < 2047 ||
@@ -944,11 +1152,11 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		EGraphicsDeviceType type = EGraphicsDeviceType_Other;
 
 		switch (properties.deviceType) {
-			case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:		type = EGraphicsDeviceType_Dedicated;	break;
-			case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:	type = EGraphicsDeviceType_Integrated;	break;
-			case VK_PHYSICAL_DEVICE_TYPE_CPU:				type = EGraphicsDeviceType_CPU;			break;
-			case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:		type = EGraphicsDeviceType_Simulated;	break;
-			default:																				break;
+			case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:      type = EGraphicsDeviceType_Dedicated;   break;
+			case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:    type = EGraphicsDeviceType_Integrated;  break;
+			case VK_PHYSICAL_DEVICE_TYPE_CPU:               type = EGraphicsDeviceType_CPU;         break;
+			case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:       type = EGraphicsDeviceType_Simulated;   break;
+			default:                                                                                break;
 		}
 
 		//Vendor
@@ -956,14 +1164,17 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		EGraphicsVendorId vendor = EGraphicsVendorId_Unknown;
 
 		switch (properties.vendorID) {
-			case EGraphicsVendorPCIE_NV:					vendor = EGraphicsVendorId_NV;			break;
-			case EGraphicsVendorPCIE_AMD:					vendor = EGraphicsVendorId_AMD;			break;
-			case EGraphicsVendorPCIE_ARM:					vendor = EGraphicsVendorId_ARM;			break;
-			case EGraphicsVendorPCIE_QCOM:					vendor = EGraphicsVendorId_QCOM;		break;
-			case EGraphicsVendorPCIE_INTC:					vendor = EGraphicsVendorId_INTC;		break;
-			case EGraphicsVendorPCIE_IMGT:					vendor = EGraphicsVendorId_IMGT;		break;
-			case EGraphicsVendorPCIE_APPL:					vendor = EGraphicsVendorId_APPL;		break;
-			default:																				break;
+			case EGraphicsVendorPCIE_NV:                    vendor = EGraphicsVendorId_NV;          break;
+			case EGraphicsVendorPCIE_AMD:                   vendor = EGraphicsVendorId_AMD;         break;
+			case EGraphicsVendorPCIE_ARM:                   vendor = EGraphicsVendorId_ARM;         break;
+			case EGraphicsVendorPCIE_QCOM:                  vendor = EGraphicsVendorId_QCOM;        break;
+			case EGraphicsVendorPCIE_INTC:                  vendor = EGraphicsVendorId_INTC;        break;
+			case EGraphicsVendorPCIE_IMGT:                  vendor = EGraphicsVendorId_IMGT;        break;
+			case EGraphicsVendorPCIE_APPL:                  vendor = EGraphicsVendorId_APPL;        break;
+			case EGraphicsVendorPCIE_SMSG:                  vendor = EGraphicsVendorId_SMSG;        break;
+			case EGraphicsVendorPCIE_HWEI:                  vendor = EGraphicsVendorId_HWEI;        break;
+			default:
+				Log_debugLnx("Unrecognized vendor: %"PRIX32, properties.vendorID);                  break;
 		}
 
 		//Capabilities
@@ -984,20 +1195,16 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		if(features.fillModeNonSolid)
 			capabilities.features |= EGraphicsFeatures_Wireframe;
 
-		if(!deviceAddress.bufferDeviceAddress) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", buffer device address is missing!", i);
-			continue;
-		}
+		if(deviceAddress.bufferDeviceAddress)
+			capabilities.featuresExt |= EVkGraphicsFeatures_BufferDeviceAddress;
 
 		if(optExtensions[EOptExtensions_Maintenance4])
 			capabilities.featuresExt |= EVkGraphicsFeatures_Maintenance4;
 
-		//Force enable synchronization and timeline semaphores
+		if(optExtensions[EOptExtensions_MemoryBudget])
+			capabilities.featuresExt |= EVkGraphicsFeatures_MemoryBudget;
 
-		if (!semaphore.timelineSemaphore) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", Timeline semaphores unsupported!", i);
-			continue;
-		}
+		//Force enable synchronization
 
 		if (!sync2.synchronization2) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", Synchronization 2 unsupported!", i);
@@ -1006,61 +1213,58 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		//Check if indexing is properly supported
 
-		VkPhysicalDeviceDescriptorIndexingFeatures target = (VkPhysicalDeviceDescriptorIndexingFeatures) {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
-			.shaderUniformTexelBufferArrayDynamicIndexing = true,
-			.shaderStorageTexelBufferArrayDynamicIndexing = true,
-			.shaderUniformBufferArrayNonUniformIndexing = true,
-			.shaderSampledImageArrayNonUniformIndexing = true,
-			.shaderStorageBufferArrayNonUniformIndexing = true,
-			.shaderStorageImageArrayNonUniformIndexing = true,
-			.shaderUniformTexelBufferArrayNonUniformIndexing = true,
-			.shaderStorageTexelBufferArrayNonUniformIndexing = true,
-			.descriptorBindingSampledImageUpdateAfterBind = true,
-			.descriptorBindingStorageImageUpdateAfterBind = true,
-			.descriptorBindingStorageBufferUpdateAfterBind = true,
-			.descriptorBindingUniformTexelBufferUpdateAfterBind = true,
-			.descriptorBindingStorageTexelBufferUpdateAfterBind = true,
-			.descriptorBindingUpdateUnusedWhilePending = true,
-			.descriptorBindingPartiallyBound = true,
-			.descriptorBindingVariableDescriptorCount = true,
-			.runtimeDescriptorArray = true
-		};
+		if(optExtensions[EOptExtensions_Bindless]) {
 
-		Bool eq = false;
+			VkPhysicalDeviceDescriptorIndexingFeatures target = (VkPhysicalDeviceDescriptorIndexingFeatures) {
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+				.shaderUniformTexelBufferArrayDynamicIndexing = true,
+				.shaderStorageTexelBufferArrayDynamicIndexing = true,
+				.shaderUniformBufferArrayNonUniformIndexing = true,
+				.shaderSampledImageArrayNonUniformIndexing = true,
+				.shaderStorageBufferArrayNonUniformIndexing = true,
+				.shaderStorageImageArrayNonUniformIndexing = true,
+				.shaderUniformTexelBufferArrayNonUniformIndexing = true,
+				.shaderStorageTexelBufferArrayNonUniformIndexing = true,
+				.descriptorBindingSampledImageUpdateAfterBind = true,
+				.descriptorBindingStorageImageUpdateAfterBind = true,
+				.descriptorBindingStorageBufferUpdateAfterBind = true,
+				.descriptorBindingUniformTexelBufferUpdateAfterBind = true,
+				.descriptorBindingStorageTexelBufferUpdateAfterBind = true,
+				.descriptorBindingUpdateUnusedWhilePending = true,
+				.descriptorBindingPartiallyBound = true,
+				.descriptorBindingVariableDescriptorCount = true,
+				.runtimeDescriptorArray = true
+			};
 
-		for(U32 q = 0; q < 4; ++q) {
+			Bool eq = false;
 
-			target.shaderInputAttachmentArrayNonUniformIndexing = q & 1;
-			target.descriptorBindingUniformBufferUpdateAfterBind = q >> 1;
+			for(U32 q = 0; q < 4; ++q) {
 
-			//We skip shaderInputAttachmentArrayDynamicIndexing as well by not starting there.
+				target.shaderInputAttachmentArrayNonUniformIndexing = q & 1;
+				target.descriptorBindingUniformBufferUpdateAfterBind = q >> 1;
 
-			U64 sz = sizeof(target) - offsetof(
-				VkPhysicalDeviceDescriptorIndexingFeatures, shaderUniformTexelBufferArrayDynamicIndexing
-			);
+				//We skip shaderInputAttachmentArrayDynamicIndexing as well by not starting there.
 
-			eq = Buffer_eq(
-				Buffer_createRefConst(&target.shaderUniformTexelBufferArrayDynamicIndexing, sz),
-				Buffer_createRefConst(&descriptorIndexing.shaderUniformTexelBufferArrayDynamicIndexing, sz)
-			);
+				U64 sz = sizeof(target) - offsetof(
+					VkPhysicalDeviceDescriptorIndexingFeatures, shaderUniformTexelBufferArrayDynamicIndexing
+				);
 
-			if(eq)
-				break;
-		}
+				eq = Buffer_eq(
+					Buffer_createRefConst(&target.shaderUniformTexelBufferArrayDynamicIndexing, sz),
+					Buffer_createRefConst(&descriptorIndexing.shaderUniformTexelBufferArrayDynamicIndexing, sz)
+				);
 
-		if(!eq) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", descriptor indexing isn't properly supported.", i);
-			continue;
+				if(eq)
+					break;
+			}
+
+			if(!eq)
+				optExtensions[EOptExtensions_Bindless] = false;
 		}
 
 		//Direct rendering
 
-		if (
-			(vendor == EGraphicsVendorId_NV || vendor == EGraphicsVendorId_AMD || vendor == EGraphicsVendorId_INTC) &&
-			optExtensions[EOptExtensions_DynamicRendering] &&
-			dynamicRendering.dynamicRendering
-		)
+		if (optExtensions[EOptExtensions_DynamicRendering] && dynamicRendering.dynamicRendering)
 			capabilities.features |= EGraphicsFeatures_DirectRendering;
 
 		//Shader types
@@ -1070,7 +1274,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		//Multi draw
 
-		if(limits.maxDrawIndirectCount >= GIBI)
+		if(limits.maxDrawIndirectCount >= GIBI && optExtensions[EOptExtensions_MultiDrawIndirectCount])
 			capabilities.features |= EGraphicsFeatures_MultiDrawIndirectCount;
 
 		//Subgroup operations
@@ -1167,6 +1371,20 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		if(computeDeriv.computeDerivativeGroupLinear)
 			capabilities.features |= EGraphicsFeatures_ComputeDeriv;
 
+		//Cooperative vectors/matrix (linalg) aren't gated on raytracing, so set them here rather than in the RT block.
+		//Base tier of each is FP16 + INT8; CoopFP8 is the additive FP8 tier; training exposes the outer-product/reduce ops.
+		if(coopVectorFeat.cooperativeVector)
+			capabilities.features |= EGraphicsFeatures_CoopVec;
+
+		if(coopVectorFeat.cooperativeVectorTraining)
+			capabilities.features |= EGraphicsFeatures_CoopVecTraining;
+
+		if(coopMatrixFeat.cooperativeMatrix)
+			capabilities.features |= EGraphicsFeatures_CoopMat;
+
+		if(shaderFloat8Feat.shaderFloat8)
+			capabilities.features |= EGraphicsFeatures_CoopFP8;
+
 		if(!optExtensions[EOptExtensions_DeferredHostOperations])
 			optExtensions[EOptExtensions_RayAcceleration] = false;
 
@@ -1257,14 +1475,35 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 					)
 						capabilities.features &= ~EGraphicsFeatures_RayMotionBlur;
 
-					if(rayReorderFeat.rayTracingInvocationReorder && rayReorderProp.rayTracingInvocationReorderReorderingHint)
+					//RayReorder = the SER API is available (valid to call, possibly a no-op).
+					//RayReorderActual = the driver hints it actually reorders, so it's worth restructuring shaders for.
+
+					if(rayReorderFeat.rayTracingInvocationReorder) {
+
 						capabilities.features |= EGraphicsFeatures_RayReorder;
+
+						if(rayReorderProp.rayTracingInvocationReorderReorderingHint)
+							capabilities.features2 |= EGraphicsFeatures2_RayReorderActual;
+					}
 
 					if(rayOpacityMicroFeat.micromap)
 						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
 
-					if(rayDispMicroFeat.displacementMicromap)
-						capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
+					if(rayPositionFetchFeat.rayTracingPositionFetch)
+						capabilities.features |= EGraphicsFeatures_RayTriPosition;
+
+					//Mega geometry (RTXMG); Vulkan splits it into cluster acceleration structures and partitioned TLAS
+
+					if(rayClusterASFeat.clusterAccelerationStructure)
+						capabilities.features2 |= EGraphicsFeatures2_RayClusterAS;
+
+					if(rayPartitionedTLASFeat.partitionedAccelerationStructure)
+						capabilities.features2 |= EGraphicsFeatures2_RayPartitionedTLAS;
+
+					//GPU-driven AS builds; Vulkan only (see EGraphicsFeatures2_RayIndirectASBuild)
+
+					if(rtasFeat.accelerationStructureIndirectBuild)
+						capabilities.features2 |= EGraphicsFeatures2_RayIndirectASBuild;
 				}
 			}
 		}
@@ -1333,6 +1572,20 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		//Hopefully enable bindless
 
 		if(
+			optExtensions[EOptExtensions_Bindless] &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindInputAttachments >= 8 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindSampledImages >= 1000000 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindSamplers >= 1024 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindStorageBuffers >= 1000000 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindStorageImages >= 1000000 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindUniformBuffers >= 90 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindInputAttachments >= 8 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindSampledImages >= 1000000 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindSamplers >= 1024 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageBuffers >= 1000000 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageImages >= 1000000 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindUniformBuffers >= 15 &&
+			bindlessProp.maxPerStageUpdateAfterBindResources >= 1000000 &&
 			limits.maxPerStageDescriptorSamplers >= 2 * KIBI &&
 			limits.maxPerStageDescriptorUniformBuffers >= 12 &&
 			limits.maxPerStageDescriptorStorageBuffers >= 500 * KIBI &&
@@ -1346,6 +1599,15 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			limits.maxDescriptorSetStorageImages >= 250 * KIBI
 		)
 			capabilities.features |= EGraphicsFeatures_Bindless;
+
+		//Full bindless (descriptor heap); requires regular bindless too so the feature implies the same on both APIs
+
+		if(
+			(capabilities.features & EGraphicsFeatures_Bindless) &&
+			optExtensions[EOptExtensions_DescriptorHeap] &&
+			descriptorHeapFeat.descriptorHeap
+		)
+			capabilities.features2 |= EGraphicsFeatures2_DescriptorHeap;
 
 		//Enforce format support
 		//We don't enforce VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT because the standard guarantees it.
@@ -1421,7 +1683,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		for(U64 k = 0; k < sizeof(toSupport) / sizeof(VkFormat); ++k) {
 
 			VkFormatProperties formatInfo = (VkFormatProperties) { 0 };
-			vkGetPhysicalDeviceFormatProperties(dev, toSupport[k], &formatInfo);
+			instanceExt->getPhysicalDeviceFormatProperties(dev, toSupport[k], &formatInfo);
 
 			VkFormatFeatureFlags reqk = reqFormatFeatFlags[k];
 
@@ -1439,15 +1701,12 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		//Query for memory size
 
 		VkGraphicsDevice fakeDevice = (VkGraphicsDevice) { 0 };
-		vkGetPhysicalDeviceMemoryProperties(dev, &fakeDevice.memoryProperties);
+		instanceExt->getPhysicalDeviceMemoryProperties(dev, &fakeDevice.memoryProperties);
 
-		U64 cpuHeapSize = 0;
-		gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(&fakeDevice, true, U32_MAX, NULL, NULL, &cpuHeapSize))
-		cpuHeapSize &= (U64)I64_MAX;
+		gotoIfError3(clean, VkGraphicsDevice_findAllMemory(&fakeDevice, e_rr));
 
-		U64 gpuHeapSize = 0;
-		gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(&fakeDevice, false, U32_MAX, NULL, NULL, &gpuHeapSize))
-		gpuHeapSize &= (U64)I64_MAX;
+		U64 cpuHeapSize = fakeDevice.maxHeapSizes[0];
+		U64 gpuHeapSize = fakeDevice.maxHeapSizes[1];
 
 		if(cpuHeapSize < 512 * MIBI || gpuHeapSize < 512 * MIBI) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", not enough VRAM or RAM (requires 512MB each).", i);
@@ -1514,7 +1773,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		for(U64 k = 0; k < sizeof(optionalFormats) / sizeof(OptionalFormat); ++k) {
 
 			VkFormatProperties formatInfo = (VkFormatProperties) { 0 };
-			vkGetPhysicalDeviceFormatProperties(dev, optionalFormats[k].format, &formatInfo);
+			instanceExt->getPhysicalDeviceFormatProperties(dev, optionalFormats[k].format, &formatInfo);
 
 			if((formatInfo.optimalTilingFeatures & optionalFormats[k].flags) == optionalFormats[k].flags)
 				capabilities.dataTypes |= optionalFormats[k].optFormat;
@@ -1537,7 +1796,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		//Fully converted type
 
-		gotoIfError(clean, ListGraphicsDeviceInfo_resize(&temp2, temp2.length + 1, (Allocator){ 0 }))
+		gotoIfError3(clean, ListGraphicsDeviceInfo_resize(&temp2, temp2.length + 1, alloc, e_rr));
 
 		GraphicsDeviceInfo *info = temp2.ptrNonConst + j;
 
@@ -1556,26 +1815,31 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			Buffer_createRefConst(properties.deviceName, sizeof(properties.deviceName))
 		);
 
-		Buffer_memcpy(
-			Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)),
-			Buffer_createRefConst(driver.driverInfo, sizeof(driver.driverInfo))
-		);
+		if(optExtensions[EOptExtensions_DriverProperties]) {
+
+			Buffer_memcpy(
+				Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)),
+				Buffer_createRefConst(driver.driverInfo, sizeof(driver.driverInfo))
+			);
+
+			info->capabilities.featuresExt |= EVkGraphicsFeatures_DriverProperties;
+		}
 
 		++j;
 	}
 
 	if(!temp2.length)
-		gotoIfError(clean, Error_unsupportedOperation(0, "VkGraphicsInstance_getDeviceInfos() no supported OxC3 device found"))
+		retError(clean, Error_unsupportedOperation(0, "VkGraphicsInstance_getDeviceInfos() no supported OxC3 device found"));
 
 	*result = temp2;
 
 clean:
 
-	if(err.genericError)
-		ListGraphicsDeviceInfo_freex(&temp2);
+	if(!s_uccess)
+		ListGraphicsDeviceInfo_free(&temp2, alloc);
 
-	ListVkPhysicalDevice_freex(&temp);
-	ListVkLayerProperties_freex(&temp3);
-	ListVkExtensionProperties_freex(&temp4);
-	return err;
+	ListVkPhysicalDevice_free(&temp, alloc);
+	ListVkLayerProperties_free(&temp3, alloc);
+	ListVkExtensionProperties_free(&temp4, alloc);
+	return s_uccess;
 }

@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,23 +18,22 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//graphics/d3d12/generic/dx_pipeline.c
+
 #include "graphics/generic/pipeline.h"
-#include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_device.h"
-#include "platforms/ext/bufferx.h"
 
-Bool DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
+void DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 
-	(void)allocator;
+	(void)alloc;
 
 	if(!pipeline)
-		return true;
+		return;
 
 	const DxPipeline *dxPipeline = Pipeline_ext(pipeline, Dx);
 
 	if(!dxPipeline->pso)
-		return true;
+		return;
 
 	if(pipeline->type == EPipelineType_RaytracingExt) {
 
@@ -45,6 +44,4 @@ Bool DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
 	}
 
 	else dxPipeline->pso->lpVtbl->Release(dxPipeline->pso);
-
-	return true;
 }

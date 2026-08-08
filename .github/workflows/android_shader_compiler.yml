@@ -1,0 +1,24 @@
+name: Android Vulkan + shader compiler (Linux host)
+on: [push]
+
+# The other android jobs build with the shader compiler off, which is the default and what an app that
+# ships precompiled shaders uses. That leaves the whole DXC cross build untested, and it's the fragile
+# part: it needs a host built tablegen, and upstream's -Werror keeps finding assert-only variables.
+# One host and one arch is enough to notice it breaking; it's a long build.
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Android Vulkan + shader compiler (Linux host)
+      runner: ubuntu-latest
+      os: android
+      build_flags: ''
+      cache_name: shader-compiler
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      android_shader_compiler: true
+      hook_name: Android-Linux-shader-compiler
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

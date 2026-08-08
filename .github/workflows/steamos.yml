@@ -1,0 +1,18 @@
+name: SteamOS x64 static
+on: [push]
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: SteamOS x64 static
+      runner: ubuntu-latest
+      os: steamos
+      build_flags: '-o cliGraphics=False'
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      hook_name: steamos-steamrt4-x64-static
+      container: 'registry.gitlab.steamos.cloud/steamrt/steamrt4/sdk:latest'
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

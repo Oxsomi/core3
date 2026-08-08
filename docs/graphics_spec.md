@@ -30,7 +30,7 @@ We're mainly targeting the following systems in OxC3 0.2. Though older systems w
 
 Because of this, a device needs the following requirements to be OxC3 compatible:
 
-- Vulkan 1.2 or higher.
+- Vulkan 1.1 or higher.
 - Tessellation shaders are required, but geometry shaders are optional.
 - More than 512 MiB of CPU + GPU visible memory (At least 1GB total).
 - Required instance extensions:
@@ -44,12 +44,8 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_surface (and the variant of the platform such as VK_KHR_win32_surface)
   - VK_EXT_swapchain_colorspace
 - Required device extensions:
-  - VK_KHR_push_descriptor
-  - Descriptor indexing with all features true except shaderInputAttachmentArrayDynamicIndexing, descriptorBindingUniformBufferUpdateAfterBind and shaderInputAttachmentArrayNonUniformIndexing.
-    - on: shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
+  - VK_KHR_push_descriptor and maxPushDescriptors >= 32
   - VK_KHR_synchronization2
-  - Timeline semaphore with timelineSemaphore = true
-  - Buffer device address with bufferDeviceAddress = true
   - VK_KHR_swapchain
     - Requires at least 1 image layer.
     - Requires ability to make 3 images.
@@ -68,19 +64,29 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_ray_query as RayQuery
   - VK_KHR_acceleration_structure && (RaytracingPipeline || RaytracingQuery) as Raytracing
   - VK_NV_ray_tracing_motion_blur as RayMotionBlur
-  - VK_NV_ray_tracing_invocation_reorder as RayReorder
+  - VK_NV_ray_tracing_invocation_reorder (.rayTracingInvocationReorder) as RayReorder; if .rayTracingInvocationReorderReorderingHint is also set, RayReorderActual (features2) - the device actually reorders rather than exposing a no-op API
+  - VK_KHR_ray_tracing_position_fetch as RayTriPosition (covers both the RayQuery and ray-pipeline shader forms)
+  - VK_NV_cluster_acceleration_structure (.clusterAccelerationStructure) as RayClusterAS (features2; mega geometry cluster BLAS/CLAS)
+  - VK_NV_partitioned_acceleration_structure (.partitionedAccelerationStructure) as RayPartitionedTLAS (features2; mega geometry PTLAS)
+  - VK_KHR_acceleration_structure .accelerationStructureIndirectBuild as RayIndirectASBuild (features2; GPU-driven classic AS builds)
+  - VK_EXT_descriptor_heap (.descriptorHeap) as DescriptorHeap (features2); only reported when Bindless also passed, so the feature implies the same baseline on both APIs
+  - VK_NV_cooperative_vector as CoopVec (cooperative vectors; .cooperativeVectorTraining as CoopVecTraining)
+  - VK_KHR_cooperative_matrix as CoopMat (cooperative matrix / GEMM)
+  - VK_EXT_shader_float8 as CoopFP8 (.shaderFloat8 - the additive FP8 e4m3/e5m2 cooperative tier)
   - VK_EXT_mesh_shader as MeshShader
   - VK_EXT_opacity_micromap as RayMicromapOpacity
-  - VK_NV_displacement_micromap as RayMicromapDisplacement
   - VK_KHR_dynamic_rendering as DirectRendering
   - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
   - VK_KHR_multiview as Multiview.
   - VK_KHR_fragment_shading_rate as VariableRateShading
   - VK_NV_compute_shader_derivatives as ComputeDeriv as long as computeDerivativeGroupLinear is true.
   - VK_KHR_maintenance4 as Vk extension Maintainance4. Without this extension, max buffer size and allocation size is 256 MiB.
+  - VK_KHR_buffer_device_address as Vk extension BufferDeviceAddress. Without this extension the device buffer addresses are 0.
+  - VK_KHR_driver_properties as GraphicsDeviceInfo::driverInfo; empty if unsupported.
 - sampleRateShading of true.
 - maxMemoryAllocationSize and maxBufferSize of a minimum of 256MiB (ideally should use <=128MiB).
 - SubgroupOperations extension: subgroupSize of 4 - 128. subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
+- shaderStorageImageReadWithoutFormat and shaderStorageImageWriteWithoutFormat turned on.
 - shaderSampledImageArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, shaderUniformBufferArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, descriptorIndexing turned on.
 - samplerAnisotropy, drawIndirectFirstInstance, independentBlend, imageCubeArray, fullDrawIndexUint32, depthClamp, depthBiasClamp, multiDrawIndirect turned on.
 - Either BCn (textureCompressionBC) or ASTC (textureCompressionASTC_LDR) compression *must* be supported (can be both supported).
@@ -99,7 +105,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxPushConstantsSize of 128 or higher.
 - maxSamplerAllocationCount of 1024 or higher.
 - maxSamplerAnisotropy of 16 or higher.
-- maxStorageBufferRange of .25GiB or higher.
+- maxStorageBufferRange of 128MiB or higher.
 - maxSamplerLodBias of 4 or higher.
 - maxUniformBufferRange of 64KiB or higher.
 - maxVertexInputAttributeOffset of 2047 or higher.
@@ -110,7 +116,6 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxMemoryAllocationCount of 4096 or higher.
 - viewportBoundsRange[0] <= -32768.
 - viewportBoundsRange[1] >= 32767.
-- nonCoherentAtomSize of 0 -> 256 and has to be base2.
 - Requires UBO alignment of <=256.
 - Supported tesselation:
   - maxTessellationControlPerVertexInputComponents, maxTessellationControlPerVertexOutputComponents, maxTessellationEvaluationInputComponents, maxTessellationEvaluationOutputComponents of 124 or higher.
@@ -123,7 +128,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 
 #### Bindless
 
-Bindless is defined as having a large amount of descriptors bound that reduce the need to switch states (such as bindings or descriptor tables). There are generally three ways of bindless; statically sized arrays with a predefined size (placed at either different offsets or at the same position), dynamically sized arrays that get their size set by the engine or full bindless (a full buffer of descriptors exposed that can get cast to whatever descriptor). The first two will be supported, the third won't be due to portability concerns on other platforms (mainly mobile) as well as limitations with validation layers and debugging.
+Bindless is defined as having a large amount of descriptors bound that reduce the need to switch states (such as bindings or descriptor tables). There are generally three ways of bindless; statically sized arrays with a predefined size (placed at either different offsets or at the same position), dynamically sized arrays that get their size set by the engine or full bindless (a full buffer of descriptors exposed that can get cast to whatever descriptor). The first two are supported everywhere Bindless is. The third (full bindless / descriptor heaps) used to be D3D12-only, but VK_EXT_descriptor_heap now standardizes it on Vulkan too, so it's exposed as the separate DescriptorHeap feature (features2) + the DescriptorHeap shader extension (SM6.6 dynamic resources on DXIL, SPV_EXT_descriptor_heap on SPIRV); it stays optional since mobile support will lag.
 
 The shader side will expose these two versions of bindless as two different extensions; `Bindless` and `UnboundArraySize`.
 
@@ -144,6 +149,21 @@ Bindless is supported when the GPU has the following capabilities:
 - maxDescriptorSetSampledImages of 250k or higher.
 - maxDescriptorSetStorageImages of 250k or higher.
 - 16 acceleration structures if RT is supported.
+- VK_EXT_descriptor_indexing with all features true except shaderInputAttachmentArrayDynamicIndexing, descriptorBindingUniformBufferUpdateAfterBind and shaderInputAttachmentArrayNonUniformIndexing as Bindless.
+  - on: shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
+- maxDescriptorSetUpdateAfterBindInputAttachments 8
+- maxDescriptorSetUpdateAfterBindSampledImages 1000000
+- maxDescriptorSetUpdateAfterBindSamplers 1024
+- maxDescriptorSetUpdateAfterBindStorageBuffers 1000000
+- maxDescriptorSetUpdateAfterBindStorageImages 1000000
+- maxDescriptorSetUpdateAfterBindUniformBuffers 90
+- maxPerStageDescriptorUpdateAfterBindInputAttachments 8
+- maxPerStageDescriptorUpdateAfterBindSampledImages 1000000
+- maxPerStageDescriptorUpdateAfterBindSamplers 1024
+- maxPerStageDescriptorUpdateAfterBindStorageBuffers 1000000
+- maxPerStageDescriptorUpdateAfterBindStorageImages 1000000
+- maxPerStageDescriptorUpdateAfterBindUniformBuffers 15
+- maxPerStageUpdateAfterBindResources 1000000
 
 Without bindless, it should be guaranteed that at least the following are available (any higher would indicate bindless):
 
@@ -307,16 +327,14 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 ## List of Direct3D12 requirements
 
-- Direct3D12 Feature level 11_1.
+- Direct3D12 Feature level 11_0.
   - This also means the adapter should support DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES.
   - DXGI feature PRESENT_ALLOW_TEARING.
 - The following features:
   - Tiled resource tier 1 (Bindful) or 3 (Bindless).
-  - Conservative rasterization tier 2.
-  - Rasterizer-ordered views.
   - waveSize of 4 to 128.
   - Logical blend operations.
-  - OutputMergerLogicOp, TypedUAVLoadAdditionalFormats, ROVsSupported, ConservativeRasterizationTier >= tier3, HighestShaderModel of >= 6_5, WaveOps, Int64ShaderOps, EnhancedBarriersSupported, UnalignedBlockTexturesSupported.
+  - OutputMergerLogicOp, TypedUAVLoadAdditionalFormats, HighestShaderModel of >= 6_5, WaveOps, Int64ShaderOps, EnhancedBarriersSupported, UnalignedBlockTexturesSupported.
   - All standard ETextureFormat types have to be supported. Meaning float/snorm/unorm textures can be sampled and all texture formats have typed uav read/write. Non standard types include RGB32f/RGB32u/RGB32i which only requires usage as vertex attribute. All BCn formats have to be supported. BGRA8 doesn't need to be writable.
 - WDDM 2.7 and above.
 - More than 512 MiB of CPU + GPU visible memory (At least 1GB total).
@@ -341,22 +359,25 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 
 - Bindless is almost always supported (Resource binding tier 3), but if it's not then it's required to use resource binding tier 1 (11.1+ of 64 UAVs, 128 SRVs).
 - Writeable MSAA textures as EGraphicsFeatures_WriteMSTexture.
-- NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP as EGraphicsFeatures_RayMicromapOpacity.
-- NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP as EGraphicsFeatures_RayMicromapDisplacement.
-- NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING as EGraphicsFeatures_RayReorder.
 - WorkGraphsTier as EGraphicsFeatures_Workgraphs.
 - MeshShaderTier as EGraphicsFeatures_MeshShader.
 - VariableShadingRateTier as EGraphicsFeatures_VariableRateShading.
 - RaytracingTier>1_0 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline
 - RaytracingTier>1_1 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline + EGraphicsFeatures_RayQuery.
+- RaytracingTier>=1_2 (DXR 1.2) as EGraphicsFeatures_RayMicromapOpacity + EGraphicsFeatures_RayReorder. Additionally OPTIONS22.ShaderExecutionReorderingActuallyReorders as RayReorderActual (features2) - RayReorder only means the SER API is available (can be a no-op), RayReorderActual means the device really reorders.
 - Native16BitShaderOpsSupported as EGraphicsDataTypes_F16 and EGraphicsDataTypes_I16.
 - DoublePrecisionFloatShaderOps as EGraphicsDataTypes_F64.
 - EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally), D32S8 is always available.
 - For format RGB32(u/i) to be enabled, it has to support render target.
-- For format RGB32f to be enabled, it has to support render target, blend, shader sample, msaa 4x and 8x.
+- For format RGB32f to be enabled, it has to support render target, blend, shader sample.
+- If RGBA32f supports msaa 4x and 8x it will be exposed as EDxGraphicsFeatures_RGBX32fMSAA. However, it does also require RGB32f to also support it (if RGB32f textures are supported).
 - AtomicInt64OnTypedResourceSupported, AtomicInt64OnGroupSharedSupported as EGraphicsDataTypes_AtomicI64.
 - DerivativesInMeshAndAmplificationShadersSupported as MeshTaskTexDeriv.
 - ShaderModel 6.6 support as ComputeDeriv.
+- ShaderModel 6.6 support + resource binding tier 3 as DescriptorHeap (features2) - SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) on top of Bindless.
+- NVAPI NvAPI_D3D12_GetRaytracingCaps cluster operations as RayClusterAS and partitioned TLAS as RayPartitionedTLAS (features2, mega geometry; NVAPI only until a vendor-neutral query exists). Either one also implies RayIndirectASBuild (features2): the mega geometry builds (BUILD_BLAS_FROM_CLAS cluster op, NvAPI_D3D12_BuildRaytracingPartitionedTlasIndirect) are GPU-driven by design, while classic BuildRaytracingAccelerationStructure(Ex) has no indirect variant on D3D12.
+- ShaderModel 6.10 support as EGraphicsFeatures_CoopVec + CoopMat + CoopFP8 + CoopVecTraining + RayTriPosition (D3D12 has no separate caps query; SM6.10 is the proxy - the cooperative-vector TIER_1_0 Minimum Support Set already includes FP16/INT8/FP8; TIER_1_1 not yet a real query). These are gated on enabling D3D12ExperimentalShaderModels on both device factories at instance creation (best-effort: needs the preview Agility SDK + Windows Developer Mode; on failure they're simply not reported). Because they're preview, they're also flagged in GraphicsDeviceCapabilities.experimentalFeatures (a subset of `features` that isn't final); on Vulkan they're real extensions so experimentalFeatures stays empty.
+- D3D12_FEATURE_ASYNC_COMMANDS Supported (Agility 1.720-preview) as EDxGraphicsFeatures_BatchedAsyncCommandList.
 
 #### Direct3D12 specific extensions
 

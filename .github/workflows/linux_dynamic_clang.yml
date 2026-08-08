@@ -1,0 +1,21 @@
+name: Linux x64 Vulkan dynamic (clang)
+on: [push]
+
+# ELF collapses duplicate symbols across a dylib and its consumer where Mach-O doesn't, so this is
+# the cheap early warning for the linkage problems that only fail loudly on osx.
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Linux x64 Vulkan dynamic (clang)
+      runner: ubuntu-latest
+      os: linux
+      build_flags: '-compiler clang -dynamic_linking True -o cliGraphics=False'
+      cache_name: clang
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      hook_name: Linux-x64-dynamic-clang
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

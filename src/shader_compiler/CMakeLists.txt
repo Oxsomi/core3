@@ -1,5 +1,5 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-# Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+# Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,22 +18,102 @@
 # This is called dual licensing.
 
 find_package(dxc REQUIRED)
-find_package(nvapi REQUIRED)
 find_package(spirv_reflect REQUIRED)
 
 # Our parser & calling DXC and spirv-opt, spirv-reflect, DXIL reflect, etc.
 
-file(GLOB_RECURSE compilerHeaders "../../inc/shader_compiler/*.h")
-file(GLOB_RECURSE compilerSources "*.c" "*.cpp")	# Some CPP to interface with DXC
+file(GLOB_RECURSE compilerHeaders CONFIGURE_DEPENDS "../../include/shader_compiler/*.h")
+file(GLOB_RECURSE compilerSources CONFIGURE_DEPENDS "*.c" "*.cpp")	# Some CPP to interface with DXC
+list(FILTER compilerSources EXCLUDE REGEX "/test/")	# Test TUs build into their own target, not the lib
+
+# SHARED folds DXC and SPIRV-Tools into one module instead of into every executable that links this.
+# There's no runtime selection here (unlike graphics, which loads a backend and asks it for a table), so consumers link it the
+# same way either way and nothing above this line changes.
+
+if(DynamicLinkingShaderCompiler)
+	set(shaderCompilerLinkage SHARED)
+else()
+	set(shaderCompilerLinkage STATIC)
+endif()
 
 add_library(
 	OxC3_shader_compiler
-	STATIC
+	${shaderCompilerLinkage}
 	${compilerHeaders}
 	${compilerSources}
 	CMakeLists.txt
 )
 
 set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi/graphics)
+
+if(DynamicLinkingShaderCompiler)
+
+	# The public API is ~40 free functions and no exported data, so letting CMake write the .def is enough
+	# and keeps __declspec out of the headers.
+	# Everything else already defaults to visible; nothing here sets -fvisibility=hidden.
+
+	set_target_properties(OxC3_shader_compiler PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+	target_compile_definitions(OxC3_shader_compiler PUBLIC -DSHADER_COMPILER_DYNAMIC)
+
+	if(MSVC)
+
+		# WINDOWS_EXPORT_ALL_SYMBOLS reads the .obj files to write the .def, and neither MSVC's /GL nor
+		# clang-cl's -flto leaves COFF there ("unrecognized file format"), so whole program optimisation
+		# has to go for this one target. The root CMakeLists reads this property and simply doesn't add
+		# the flag, rather than us overriding it afterwards with /GL-, which earns a D9025 per TU.
+		# The cost is small: it only ever applied to our ~16 wrapper TUs, never to prebuilt DXC.
+
+		set_target_properties(OxC3_shader_compiler PROPERTIES OXC3_NO_WHOLE_PROGRAM ON)
+	endif()
+
+endif()
 target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH)
-target_link_libraries(OxC3_shader_compiler PUBLIC dxc::dxc spirv_reflect::spirv_reflect nvapi::nvapi)
+target_link_libraries(OxC3_shader_compiler PUBLIC dxc::dxc spirv_reflect::spirv_reflect)
+
+# On Windows d3d12shader.h (included by DXC's dxcreflect.h) comes from the Windows SDK.
+# Off Windows there is no such SDK, so pull it in headers-only from agility_sdk
+# (an include-only package there), matching conanfile.py.
+if(NOT WIN32)
+	find_package(agility_sdk REQUIRED)
+	target_link_libraries(OxC3_shader_compiler PUBLIC agility_sdk::agility_sdk)
+endif()
+
+if(EnableTests AND OxC3TestExecutables)
+
+	# Compiles HLSL through the real DXC/SPIRV pipeline and validates parsing, reflection,
+	# oxc:: annotations, extensions and disassembly. The test/hlsl corpus is exposed to the
+	# test at build time via OXC3_SHADER_COMPILER_TEST_HLSL_DIR.
+
+	file(GLOB shaderCompilerTestsC CONFIGURE_DEPENDS "test/*.c")
+
+	# The HLSL corpus is test data, not compiled by the build; mark it header-only so it shows up
+	# in the IDE (under an "hlsl" group) without CMake trying to invoke a shader compiler on it.
+	file(GLOB_RECURSE shaderCompilerTestHlsl CONFIGURE_DEPENDS "test/hlsl/*.hlsl" "test/hlsl/*.hlsli")
+	set_source_files_properties(${shaderCompilerTestHlsl} PROPERTIES HEADER_FILE_ONLY ON)
+	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/test/hlsl" PREFIX "hlsl" FILES ${shaderCompilerTestHlsl})
+
+	add_executable(
+		OxC3_shader_compiler_test
+		${shaderCompilerTestsC}
+		${shaderCompilerTestHlsl}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_shader_compiler_test PUBLIC OxC3_shader_compiler OxC3_platforms OxC3_types_test)
+
+	# The corpus test reads/writes shaders + their reference oiSH relative to the working directory, so
+	# run it from the corpus folder (OxC3 restricts file access to the working dir).
+	# Set it for both the VS debugger and ctest.
+
+	set_target_properties(OxC3_shader_compiler_test PROPERTIES
+		FOLDER Oxsomi/test/graphics
+		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/test"
+	)
+
+	add_test(
+		NAME OxC3_shader_compiler_test
+		COMMAND OxC3_shader_compiler_test
+		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/test"
+	)
+
+endif()

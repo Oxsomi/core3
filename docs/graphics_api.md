@@ -3,7 +3,7 @@
 The core pillars of the abstraction of this graphics library are the following:
 
 - Support feature sets as close as possible to Vulkan, Direct3D12 and Metal3.
-  - Limits from legacy graphics such as DirectX11 (and below), OpenGL, below Metal3, below Vulkan 1.2 and others like WebGL won't be considered for this spec. They'd add additional complexity for no gain.
+  - Limits from legacy graphics such as DirectX11 (and below), OpenGL, below Metal3, below Vulkan 1.1 and others like WebGL won't be considered for this spec. They'd add additional complexity for no gain.
 - Simplify usage for these APIs, as they're too verbose.
   - But don't oversimplify them to the point of being useless.
   - This does mean features not deemed important enough might not be included in the main specification. Though a branch could maintain support if needed.
@@ -11,17 +11,15 @@ The core pillars of the abstraction of this graphics library are the following:
 - Allow modern usage of these APIs such as raytracing and bindless.
 - Support various systems such as Android, Apple, Windows and Linux (console should be kept in mind, though not officially supported).
 
-## Getting started
-
-Before getting started, there needs to be a header file included in the main entrypoint. Not including this will result in linker errors. This is to prevent the user from running without the Agility SDK, which requires certain symbols to be injected into the main executable. This header file should only be included into the main exe/apk, it should not be linked into a dynamic or static lib!
-
-```c
-#include "graphics/generic/application.h" //Enables proper OxC3 graphics support
-```
-
 ## Ref counting
 
-OxC3 graphics works in a similar way as DirectX's ref counting system; everything is ref counted. This allows you to just call `RefPtr_dec` on the RefPtr to ensure it's properly released. If the command list is still in flight, it will maintain this resource until it's out of flight. It also allows you to safely share resources between user libraries without worrying about resource deletion. When sharing a resource, you simply increment the refptr by using `RefPtr_inc` and when the library is done using it can decrement it again. This concept was added in OxC3 platforms, but widely used in the graphics library.
+OxC3 graphics works in a similar way as DirectX's ref counting system; everything is ref counted. This allows you to just call `RefPtr_dec` on the RefPtr to ensure it's properly released. If the command list is still in flight, it will maintain this resource until it's out of flight. It also allows you to safely share resources between user libraries without worrying about resource deletion. When sharing a resource, you simply increment the refptr by using `RefPtr_inc` and when the library is done using it can decrement it again. This concept was added in OxC3 types, but widely used in the graphics library.
+
+`RefPtr_inc` and `RefPtr_dec` are the only way to manage graphics object lifetimes; the underlying `X_free` functions are internal (they're only used as the ObjectFreeFunc of the object's RefPtrType) and aren't exposed in the public headers.
+
+### Error handling
+
+All fallible graphics functions follow the OxC3 `Bool` convention: they return `Bool s_uccess` and take a trailing `Error *e_rr` which is filled on failure (pass `NULL` to ignore the details). `gotoIfError3(clean, ...)` can be used to jump to cleanup on failure. Allocations are done with the `const Allocator*` the instance was created with; every object created from a device uses `GraphicsDevice_getAlloc`/`GraphicsDeviceRef_getAlloc` internally, so only instance creation takes an allocator explicitly.
 
 ### Obtaining the real object
 
@@ -37,20 +35,35 @@ The graphics instance is the way you can query physical devices from D3D12, Vulk
 
 ```c
 GraphicsInstanceRef *instance = NULL;
+const Allocator *alloc = Platform_instance->alloc;        //Or any allocator that outlives the instance
 
-gotoIfError(clean, GraphicsInstance_create(
-	(GraphicsApplicationInfo) {
-	    .name = CharString_createConstRefCStr("Rt core test"),
-    	.version = OXC3_MAKE_VERSION(0, 2, 0)
-	},
-    EGraphicsInstanceFlags_None,
-    &instance
+//Prepare the interface (queries which APIs are supported; guards against multiple inits)
+
+gotoIfError3(clean, GraphicsInterface_create(e_rr));
+
+//The RefPtrType must outlive the instance (and thus everything created through it)
+
+RefPtrType instanceType = GraphicsInstance_makeType(EGraphicsApi_Count /* default api */, alloc);
+
+const GraphicsApplicationInfo appInfo = (GraphicsApplicationInfo) {
+	.name = CharString_createRefCStrConst("Rt core test"),
+	.version = OXC3_MAKE_VERSION(0, 2, 0)
+};
+
+gotoIfError3(clean, GraphicsInstance_create(
+	&appInfo,
+	EGraphicsApi_Count,                //Default api for this platform (or e.g. EGraphicsApi_Vulkan)
+	EGraphicsInstanceFlags_None,
+	alloc,
+	&instanceType,
+	&instance,
+	e_rr
 ));
 ```
 
 Once this instance is acquired, it can be used to query devices and to detect what API the runtime supports.
 
-*Note: Before creating a GraphicsInstance with shared linking, make sure to initialize the GraphicsInterface using GraphicsInterface_init. For dynamic libraries it is important to set GraphicsInterface_instance and Platform_instance correctly to the final exe/dll's instance to ensure the same exact settings and memory allocation is handled by the same instance.*
+*Note: GraphicsInterface_create must be called before GraphicsInstance_makeType/GraphicsInstance_create; it initializes the interface (and with dynamic linking, discovers the graphics API dylibs in the app directory). GraphicsInterface_supportsApi and EGraphicsApi_resolve can be used to query what's available. For dynamic libraries it is important that GraphicsInterface_instance and Platform_instance are set to the final exe/dll's instance (GraphicsInterface_getTable handles this) to ensure the same exact settings and memory allocation is handled by the same instance.*
 
 ### Properties
 
@@ -61,18 +74,18 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 ### (Member) Functions
 
 - ```c
-  Error getDeviceInfos(Bool isVerbose, ListGraphicsDeviceInfo *infos);
+  Bool getDeviceInfos(ListGraphicsDeviceInfo *infos, Error *e_rr);
   ```
 
   - Queries all physical devices to detect if they're supported and what features they have.
 
 - ```c
-  Error getPreferredDevice(
+  Bool getPreferredDevice(
   	GraphicsDeviceCapabilities requiredCapabilities,
   	U64 vendorMask,
   	U64 deviceTypeMask,
-  	Bool verbose,
-  	GraphicsDeviceInfo *deviceInfo
+  	GraphicsDeviceInfo *deviceInfo,
+  	Error *e_rr
   );
   ```
 
@@ -80,7 +93,7 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 
 ### Used functions and obtained
 
-- Obtained through `Error create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **inst);` see summary.
+- Obtained through `Bool GraphicsInstance_create(const GraphicsApplicationInfo *info, EGraphicsApi api, EGraphicsInstanceFlags flags, const Allocator *alloc, const RefPtrType *type, GraphicsInstanceRef **inst, Error *e_rr);` see summary.
 - Mostly used as `GraphicsInstanceRef` in `GraphicsDeviceRef_create` as well as GraphicsInstance's member functions.
 
 ## Graphics device info
@@ -94,19 +107,20 @@ GraphicsInstance's getPreferredDevice can be used to query if there's any graphi
 ```c
 GraphicsDeviceInfo deviceInfo = (GraphicsDeviceInfo) { 0 };
 
-gotoIfError(clean, GraphicsInstance_getPreferredDevice(
+gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
   GraphicsInstanceRef_ptr(instance),		//See "Graphics instance"
   (GraphicsDeviceCapabilities) { 0 },		//No required features or data types
   GraphicsInstance_vendorMaskAll,			//All vendors supported
   GraphicsInstance_deviceTypeAll,			//All device types supported
-  EGraphicsDeviceFlags_None,        		//Disallow debug, RT and/or verbose logging
-  &deviceInfo
+  &deviceInfo,
+  e_rr
 ));
 ```
 
 ### Properties
 
-- name, driverInfo; All null-terminated UTF-8 strings giving information about the device and driver.
+- name; null-terminated UTF-8 string giving information about the device.
+- driverInfo; might not be available (always available on D3D12, but sometimes available on Vk) or might give a UTF-8 string in arbitrary format that specifies info about the driver version. Generally this follows (x.y or x.y.z) but that is vendor specific (at least NV, AMD and INTC seem to agree on it on desktop).
 - type; what type this device is (dedicated GPU, integrated GPU, simulated GPU, CPU or other (unrecognized)).
 - vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Microsoft (MSFT) or unknown).
 - id; number in the list of supported devices.
@@ -117,14 +131,20 @@ gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 #### Capabilities
 
-- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, RayValidation, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend, Workgraphs, SwapchainCompute.
+- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayMotionBlur, RayReorder, RayTriPosition, RayValidation, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend, Workgraphs, SwapchainCompute, CoopVec, CoopMat, CoopFP8, CoopVecTraining.
+
+- experimentalFeatures: the subset of `features` that is experimental/preview on this device+build (not final; may change or be removed across SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled best-effort via the preview Agility SDK + D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions so this stays empty. Check it if you want to opt into preview features knowingly.
   - RayValidation: extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot.
-- features2: reserved for future usage.
+- features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild.
+  - RayReorderActual: SER (RayReorder) means the shader-execution-reordering API is available (always valid to call, but may be a no-op); RayReorderActual means the device actually performs the reordering, so it's worth restructuring shaders around it.
+  - DescriptorHeap: full bindless; shaders index the descriptor heap directly without a fixed descriptor layout. D3D12: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) + resource binding tier 3; Vulkan: VK_EXT_descriptor_heap. Always implies Bindless on both APIs.
+  - RayClusterAS + RayPartitionedTLAS: mega geometry (RTXMG), split the way Vulkan splits it: cluster acceleration structures (CLAS/cluster BLAS) and partitioned TLAS. Vulkan: VK_NV_cluster_acceleration_structure / VK_NV_partitioned_acceleration_structure; D3D12: NVAPI raytracing caps (cluster operations / partitioned TLAS).
+  - RayIndirectASBuild: GPU-driven acceleration structure builds. Vulkan: accelerationStructureIndirectBuild (vkCmdBuildAccelerationStructuresIndirectKHR for classic AS); D3D12: implied by either mega geometry bit, since those builds are indirect by design.
 - dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
   - MSAA4 and MSAA1 (off) are supported by default.
 - featuresExt: API dependent features that aren't expected to be standardized in the same way.
   - Vulkan: PerformanceQuery.
-  - Direct3D12: WriteBufferImmediate (for crash debugging), ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use).
+  - Direct3D12: WriteBufferImmediate (for crash debugging), ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use), BatchedAsyncCommandList (batched async command list submission, SM6.10 / Agility 1.720+).
 - maxBufferSize and maxAllocationSize: Device limit on how big a buffer or a single allocation may be.
 
 ### Functions
@@ -164,11 +184,13 @@ The graphics device is the logical device that is used to create objects and exe
 
 ```c
 GraphicsDeviceRef *device = NULL;
-gotoIfError(clean, GraphicsDeviceRef_create(
-    instance, 		//See "Graphics instance"
-    &deviceInfo, 	//See "Graphics device info"
-    false, /* isVerbose; extra logging about the device properties */
-    &device
+gotoIfError3(clean, GraphicsDeviceRef_create(
+    instance, 						//See "Graphics instance"
+    &deviceInfo, 					//See "Graphics device info"
+    EGraphicsDeviceFlags_None,		//IsVerbose, IsDebug, DisableRt, DisableDebug
+    EGraphicsBufferingMode_Default,	//Frames in flight: Default, Double or Triple
+    &device,
+    e_rr
 ));
 ```
 
@@ -189,7 +211,14 @@ gotoIfError(clean, GraphicsDeviceRef_create(
 ### Functions
 
 - ```c
-  Error submitCommands(ListCommandListRef commandLists, ListSwapchainRef swapchains, Buffer runtimeData, F32 deltaTime, F32 time);
+  Bool submitCommands(
+  	ListCommandListRef commandLists,
+  	ListSwapchainRef swapchains,
+  	Buffer appData,
+  	F32 deltaTime,		//< 0 = auto calculate time and deltaTime
+  	F32 time,
+  	Error *e_rr
+  );
   ```
 
   - Submits commands to the device and readies the swapchains to present if available. If the device doesn't have any swapchains, it can be used to just submit commands. This is useful for multi GPU rendering as well. If deltaTime is set to -1 it will automatically calculate deltaTime itself, but some applications might want to bypass this by manually passing deltaTime and time (for example when rendering a movie or a photo). The time argument is also ignored if deltaTime is -1 and will be calculated automatically.
@@ -199,130 +228,158 @@ gotoIfError(clean, GraphicsDeviceRef_create(
   - Runtime data is accessible from a CBuffer to all shaders and can be used for simple data such as resource handles. This buffer has a limit of 368 bytes.
 
 - ```c
-  wait();
+  Bool wait(Error *e_rr);
   ```
 
   - Waits for all currently queued commands on the device.
 
 - ```c
-  Error createSwapchain(SwapchainInfo info, Bool allowWrite, SwapchainRef **swapchain);
+  Bool createSwapchain(
+  	SwapchainInfo info,
+  	Bool allowComputeExt,
+  	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
+  	SwapchainRef **swapchain,
+  	Error *e_rr
+  );
   ```
 
   - Be aware that allowWrite doesn't work for all APIs and all devices. Compute to the swapchain is optional.
 
 - ```c
-  Error createCommandList(
+  Bool createCommandList(
   	U64 commandListLen,
   	U64 estimatedCommandCount,
   	U64 estimatedResources,
-      Bool allowResize,
-  	CommandListRef **commandList
+  	Bool allowResize,
+  	CommandListRef **commandList,
+  	Error *e_rr
   );
   ```
 
 - ```c
-  Error createPipelinesCompute(
-      ListBuffer computeBinaries,
-      ListCharString names,		//Empty = ignore, otherwise computeBinaries.length
-      PipelineRef **computeShaders
+  Bool createPipelineCompute(
+  	const SHFile *shaderBinary,
+  	const CharString *name,			//Temporary name for debugging
+  	U32 entryId,					//Identifier from getFirstShaderEntry
+  	EPipelineFlags flags,
+  	PipelineLayoutRef *layout,		//NULL = default bindless pipeline layout
+  	PipelineRef **pipeline,
+  	Error *e_rr
   );
-
   ```
 
 - ```c
-  Error createPipelinesGraphics(
-  	ListPipelineStage stages,
-  	ListPipelineGraphicsInfo infos,
-  	ListCharString names,			//Empty = ignore, otherwise info.length
-  	ListPipelineRef *pipelines
+  Bool createPipelineGraphics(
+  	const ListSHFile *shaderBinary,
+  	ListPipelineStage *stages,		//Will be moved
+  	const PipelineGraphicsInfo *info,
+  	const CharString *name,			//Temporary name for debugging
+  	EPipelineFlags flags,
+  	PipelineLayoutRef *layout,		//NULL = default bindless pipeline layout
+  	PipelineRef **pipelines,
+  	Error *e_rr
   );
   ```
 
 - ```C
-  Error createBuffer(
+  Bool createBuffer(
   	EDeviceBufferUsage usage,
-      EGraphicsResourceFlag flags,
-   	CharString name,
-      U64 len,
-      DeviceBufferRef **ref
+  	EGraphicsResourceFlag resourceFlags,
+  	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
+  	const CharString *name,
+  	U64 len,
+  	DeviceBufferRef **buf,
+  	Error *e_rr
   );
   ```
 
 - ```c
-    Error createBufferData(
+    Bool createBufferData(
     	EDeviceBufferUsage usage,
-    	EGraphicsResourceFlag flags,
-     	CharString name,
-        Buffer *data,					//Can move data to device buffer (doesn't always)
-        DeviceBufferRef **ref
+    	EGraphicsResourceFlag resourceFlags,
+    	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
+    	const CharString *name,
+    	Buffer *dat,			//Can move data to device buffer (doesn't always)
+    	DeviceBufferRef **buf,
+    	Error *e_rr
     );
     ```
-  ```
-
-  ```
 
 - ```c
-  Error createSampler(SamplerInfo info, CharString name, SamplerRef **ref));
-  ```
-
-- ```c
-  Error createRenderTexture(
-      ETextureType type,
-      U16 width,
-      U16 height,
-      U16 length,
-      ETextureFormatId format,
-      EGraphicsResourceFlag flags,
-      EMSAASamples samples,
-      CharString name,
-      RenderTextureRef **ref
+  Bool createSampler(
+  	SamplerInfo info,
+  	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
+  	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
+  	const CharString *name,
+  	SamplerRef **sampler,
+  	Error *e_rr
   );
   ```
 
 - ```c
-  Error createDepthStencil(
-        U16 width,
-        U16 height,
-        EDepthStencilFormat format,
-        Bool allowShaderRead,
-        EMSAASamples samples,
-        CharString name,
-        DepthStencilRef **ref
-    );
+  Bool createRenderTexture(
+  	ETextureType type,
+  	U16 width,
+  	U16 height,
+  	U16 length,
+  	ETextureFormatId format,
+  	EGraphicsResourceFlag flag,
+  	EMSAASamples msaa,
+  	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
+  	const CharString *name,
+  	RenderTextureRef **renderTexture,
+  	Error *e_rr
+  );
   ```
 
 - ```c
-  Error createBLASExt(
+  Bool createDepthStencil(
+  	U16 width,
+  	U16 height,
+  	EDepthStencilFormat format,
+  	Bool allowShaderRead,
+  	EMSAASamples msaa,
+  	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
+  	const CharString *name,
+  	DepthStencilRef **depthStencil,
+  	Error *e_rr
+  );
+  ```
+
+- ```c
+  Bool createBLASExt(
   	ERTASBuildFlags buildFlags,
   	EBLASFlag blasFlags,
-  	ETextureFormatId posFormat,		//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
-  	U16 positionOffset,				//Offset into first position for first vertex
-  	ETextureFormatId indexFormat,	//R16u, R32u, Undefined
-  	U16 positionBufferStride,		//<=2048 and multiple of 2 or 4 (RGBA32f, RG32f)
-  	DeviceData positionBuffer,		//Required
-  	DeviceData indexBuffer,			//Optional if indexFormat == Undefined
-  	BLASRef *parent,				//If specified, indicates refit
+  	ETextureFormatId positionFormat,	//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
+  	U16 positionOffset,					//Offset into first position for first vertex
+  	ETextureFormatId indexFormat,		//R16u, R32u, Undefined
+  	U16 positionBufferStride,			//<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
+  	DeviceData positionBuffer,			//Required
+  	DeviceData indexBuffer,				//Optional if indexFormat == Undefined
+  	BLASRef *parent,					//If specified, indicates refit
   	CharString name,
-  	BLASRef **blas
+  	BLASRef **blas,
+  	Error *e_rr
   );
   ```
 
 - ```c
-  Error createBLASUnindexedExt(
+  Bool createBLASUnindexedExt(
   	ERTASBuildFlags buildFlags,
   	EBLASFlag blasFlags,
-  	ETextureFormatId posFormat,		//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
-  	U16 positionOffset,				//Offset into first position for first vertex
-  	U16 positionBufferStride,		//<=2048 and multiple of 2 or 4 (RGBA32f, RG32f)
-  	DeviceData positionBuffer,		//Required
-  	BLASRef *parent,				//If specified, indicates refit
+  	ETextureFormatId positionFormat,	//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
+  	U16 positionOffset,					//Offset into first position for first vertex
+  	U16 positionBufferStride,			//<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
+  	DeviceData positionBuffer,			//Required
+  	BLASRef *parent,					//If specified, indicates refit
   	CharString name,
-  	BLASRef **blas
+  	BLASRef **blas,
+  	Error *e_rr
   );
   ```
 
 - ```c
-  Error createBLASProceduralExt(
+  Bool createBLASProceduralExt(
   	ERTASBuildFlags buildFlags,
   	EBLASFlag blasFlags,
   	U32 aabbStride,						//Alignment: 8
@@ -330,38 +387,48 @@ gotoIfError(clean, GraphicsDeviceRef_create(
   	DeviceData buffer,					//Required
   	BLASRef *parent,					//If specified, indicates refit
   	CharString name,
-  	BLASRef **blas
+  	BLASRef **blas,
+  	Error *e_rr
   );
   ```
 
 - ```c
-  Error createTLASExt(
+  Bool createTLASExt(
   	ERTASBuildFlags buildFlags,
   	TLASRef *parent,					//If specified, indicates refit
-  	ListTLASInstanceStatic instances,
-  	CharString name,
-  	TLASRef **tlas
+  	const ListTLASInstanceStatic *instances,
+  	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
+  	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
+  	const CharString *name,
+  	TLASRef **tlas,
+  	Error *e_rr
   );
   ```
 
 - ```c
-  Error createTLASMotionExt(
+  Bool createTLASMotionExt(
   	ERTASBuildFlags buildFlags,
   	TLASRef *parent,					//If specified, indicates refit
-  	ListTLASInstanceMotion instances,
-  	CharString name,
-  	TLASRef **tlas
+  	const ListTLASInstanceMotion *instances,
+  	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
+  	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
+  	const CharString *name,
+  	TLASRef **tlas,
+  	Error *e_rr
   );
   ```
 
 - ```c
-  Error createTLASDeviceExt(
+  Bool createTLASDeviceExt(
   	ERTASBuildFlags buildFlags,
   	Bool isMotionBlurExt,				//Requires extension
   	TLASRef *parent,					//If specified, indicates refit
-  	DeviceData instancesDevice,			//Instances on the GPU, correctly sized
-  	CharString name,
-  	TLASRef **tlas
+  	const DeviceData *instancesDevice,	//Instances on the GPU, should be sized correctly
+  	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
+  	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
+  	const CharString *name,
+  	TLASRef **tlas,
+  	Error *e_rr
   );
   ```
 
@@ -377,28 +444,31 @@ A command list in OxC3 is a virtual command list. The commands get recorded in a
 
 ```c
 CommandListRef *commandList = NULL;
-gotoIfError(clean, GraphicsDeviceRef_createCommandList(
+gotoIfError3(clean, GraphicsDeviceRef_createCommandList(
     device, 	//See "Graphics device"
     2 * KIBI, 	//Max command buffer size
     64, 		//Estimated command count (can auto resize)
     64, 		//Estimated resource count (can auto resize)
     true,		//Allow resize of command buffer data (the 2 KIBI in this example)
-    &commandList
+    &commandList,
+    e_rr
 ));
 ```
 
 #### Recording a command list
 
 ```c
-gotoIfError(clean, CommandListRef_begin(commandList, true /* clear previous */, U64_MAX /* long long timeout */));
+gotoIfError3(clean, CommandListRef_begin(commandList, true /* clear previous */, U64_MAX /* long timeout */, e_rr));
 
-gotoIfError(clean, CommandListRef_startScope(commandList, (ListTransition) { 0 }, 0, (ListCommandScopeDependency) { 0 }));
-gotoIfError(clean, CommandListRef_clearImagef(
-    commandList, F32x4_create4(1, 0, 0, 1), (ImageRange){ 0 }, swapchain
+gotoIfError3(clean, CommandListRef_startScope(
+    commandList, (ListTransition) { 0 }, 0, (ListCommandScopeDependency) { 0 }, e_rr
 ));
-gotoIfError(clean, CommandListRef_endScope(commandList));
+gotoIfError3(clean, CommandListRef_clearImagef(
+    commandList, F32x4_create4(1, 0, 0, 1), (ImageRange){ 0 }, swapchain, e_rr
+));
+gotoIfError3(clean, CommandListRef_endScope(commandList, e_rr));
 
-gotoIfError(clean, CommandListRef_end(commandList));
+gotoIfError3(clean, CommandListRef_end(commandList, e_rr));
 ```
 
 Every frame, this can be passed onto the submit commands call:
@@ -407,10 +477,12 @@ Every frame, this can be passed onto the submit commands call:
 ListCommandListRef commandLists = (ListCommandListRef) { 0 };
 ListSwapchainRef swapchains = (ListSwapchainRef) { 0 };
 
-gotoIfError(clean, ListCommandListRef_createRefConst(commandList, 1, &commandLists));
-gotoIfError(clean, ListSwapchainRef_createRefConst(swapchain, 1, &swapchains));
+gotoIfError3(clean, ListCommandListRef_createRefConst(&commandList, 1, &commandLists, e_rr));
+gotoIfError3(clean, ListSwapchainRef_createRefConst(&swapchain, 1, &swapchains, e_rr));
 
-gotoIfError(clean, GraphicsDeviceRef_submitCommands(device, commandLists, swapchains, -1, 0));
+gotoIfError3(clean, GraphicsDeviceRef_submitCommands(
+    device, commandLists, swapchains, Buffer_createNull() /* appData */, -1, 0, e_rr
+));
 ```
 
 For more info on commands check out the "Commands" section.
@@ -449,6 +521,8 @@ See the "Commands" section.
 ## GraphicsResource
 
 A GraphicsResource is defined as any object that has allocated memory on the GraphicsDevice. This includes two types of resources: DeviceBuffer and UnifiedTexture.
+
+By default, a GraphicsResource's data is uninitialized (of questionable state) and has to be cleared or written right away.
 
 A graphics resource consists of the following:
 
@@ -544,21 +618,35 @@ Other helpers are internal use only, such as getImgExtT and getImplExtT,
 A swapchain is the interface between the platform Window and the API-dependent way of handling the surface, swapchain and any synchronization methods that are required.
 
 ```c
-//onCreate
+//onCreate window callback ('w' is the Window* the callback was invoked with)
 
 SwapchainRef *swapchain = NULL;
-gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
-    device, 		//See "Graphics device"
-    (SwapchainInfo) { .window = w },
-    false,			//allowComputeExt
-    &swapchain
+gotoIfError3(clean, GraphicsDeviceRef_createSwapchain(
+	device, 		//See "Graphics device"
+	(SwapchainInfo) { .window = w },
+	false,			//allowComputeExt
+	NULL,			//bindlessDescriptorTable; NULL = device's default bindless table
+	&swapchain,
+	e_rr
 ));
 
 //onResize: Window callback to make sure format + size stays the same:
 
 if(!(w->flags & EWindowFlags_IsVirtual))
-    SwapchainRef_resize(swapchain);
+	SwapchainRef_resize(swapchain, e_rr);
+
+//onDestroy: Window callback; the swapchain MUST be released here (or earlier), see below.
+
+RefPtr_dec(&swapchain);
 ```
+
+### Window lifetime (weak reference)
+
+The swapchain only holds a **weak** reference to the window: it does **not** keep the window alive, and it has no way of knowing the window was destroyed other than through the window's own callbacks. This leads to a hard requirement:
+
+- The swapchain (and every command list / pending present that targets it) **must be destroyed from within the window's onDestroy callback** (or earlier). After onDestroy returns, the window's memory is gone and the swapchain's `info.window` is a dangling pointer; any use of it after that point (resize, present, submit) is undefined behavior.
+- The render loop should only touch the window (and thus the swapchain) from within the window's callbacks (onDraw/onResize/onDestroy); the window is guaranteed to be alive for the duration of those.
+- Since the window doesn't own the swapchain either, dropping the last swapchain reference outside of the window's lifetime callbacks is legal, as long as no GPU work that presents to it is still pending (wait on the device first).
 
 info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, immediate, fifo, fifoRelaxed ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported and the default is changed to [ fifo, fifoRelaxed, immediate] to conserve power. Immediate is always supported, so make sure to always request immediate as well otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.
 
@@ -577,7 +665,7 @@ By default the swapchain will use triple buffering to ensure best performance. E
 
 ### Properties
 
-- info.window: the Window handle created using OxC3 platforms.
+- info.window: the Window handle created using OxC3 platforms. This is a **weak** pointer: it's only valid while the window is alive (see Swapchain/Window lifetime); destroy the swapchain in the window's onDestroy callback.
 - info.requiresManualComposite: whether or not the application is requested to explicitly handle rotation from the device. For desktop this is generally false, for Android this is on to avoid the extra overhead of the compositor.
 - info.presentModePriorities: what present modes were requested on create.
 - device: the owning device.
@@ -589,7 +677,7 @@ By default the swapchain will use triple buffering to ensure best performance. E
 ### Functions
 
 - ```c
-  resize();
+  Bool SwapchainRef_resize(SwapchainRef *swapchain, Error *e_rr);
   ```
 
   - Updates the swapchain with the current information from OxC3 platforms. Both format and size are queried again to ensure it really needs to resize. After this, all recorded command lists that include it will be invalidated.
@@ -609,7 +697,9 @@ Once on the GPU, the sampler resource index can be passed to the GPU and the sam
 
 ```c
 SamplerInfo nearestSampler = (SamplerInfo) { .filter = ESamplerFilterMode_Nearest };
-gotoIfError(clean, GraphicsDeviceRef_createSampler(device, nearestSampler, samplerName, &nearest));
+gotoIfError3(clean, GraphicsDeviceRef_createSampler(
+    device, nearestSampler, false /* disallowBindlessDescriptor */, NULL, samplerName, &nearest, e_rr
+));
 ```
 
 If the sampler is used on the GPU, it should be passed as a transition; stage is unused so can be safely ignored. The most important part here is that the transition keeps the Sampler alive while the command list is in flight. The graphics implementation is also allowed to manage eviction behind the scenes if it is determined that the resource has not been in flight for too long and it might be hogging space.
@@ -642,15 +732,17 @@ If the sampler is used on the GPU, it should be passed as a transition; stage is
 A DeviceTexture is a texture that can be sent from the CPU to the device. It's essentially a UnifiedTexture that is allowed to be uploaded / downloaded from the device.
 
 ```c
-gotoIfError(clean, GraphicsDeviceRef_createTexture(
+gotoIfError3(clean, GraphicsDeviceRef_createTexture(
     twm->device,
     ETextureType_2D,
     ETextureFormatId_BGRA8,
     EGraphicsResourceFlag_ShaderRead,
 	128, 128, 1,
+    NULL,						//bindlessDescriptorTable; NULL = device's default bindless table
     CharString_createRefCStrConst("Test image"),
     &imageData,					//Is able to move the Buffer if it's not a ref
-    &twm->deviceTextureRef
+    &twm->deviceTextureRef,
+    e_rr
 ));
 ```
 
@@ -679,12 +771,14 @@ A DepthStencil is an object that holds the depth and stencil buffers as a 2D ima
 The depth stencil is quite straight forward; it has up to 3 stencil enabled formats (D24S8Ext, D32S8Ext, S8Ext) that can be used to provide a stencil attachment to startRenderExt and 2 non stencil enabled formats (D16, D32). D24S8Ext is optional, but is important for NV and Intel GPUs since it packs the depth and stencil into 32-bits. D24S8Ext and S8Ext support can be queried through the GraphicsDeviceInfo's capabilities. Whenever possible please use D16 or D32 since it doesn't waste any space for a stencil buffer if it isn't needed. D16 should only be used if depth precision isn't a great priority (performance and memory usage is prioritized). D16 can be used on mobile to save space and time. If allowShaderRead is on, the depth stencil can be accessed through shader logic by passing the resource handle to the GPU.
 
 ```c
-gotoIfError(clean, GraphicsDeviceRef_createDepthStencil(
+gotoIfError3(clean, GraphicsDeviceRef_createDepthStencil(
     twm->device,
     width, height, EDepthStencilFormat_D16, false /* allow shader access */,
     EMSAASamples_Off,
+    NULL,							//bindlessDescriptorTable; NULL = device's default bindless table
     CharString_createRefCStrConst("Test depth stencil"),
-    &tw->depthStencil
+    &tw->depthStencil,
+    e_rr
 ));
 ```
 
@@ -709,15 +803,17 @@ Some formats are optional such as RGB32f, RGB32i and RGB32u. These have to be qu
 A RenderTexture itself can currently only be 2D, but will be possible to be 3D or a TextureCube in the future. Currently no mip levels are supported and 2DArray and TextureCubeArray won't be supported (since array of textures should be sufficient).
 
 ```c
-gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
+gotoIfError3(clean, GraphicsDeviceRef_createRenderTexture(
 	twm->device,
 	ETextureType_2D, 				//2D is only supported currently
     width, height, 1, 				//x, y, z
     ETextureFormatId_BGRA8, 		//Non compressed texture format
     EGraphicsResourceFlag_ShaderRW, //Allow both shader writes and reads
     EMSAASamples_Off,				//No MSAA
+    NULL,							//bindlessDescriptorTable; NULL = device's default bindless table
 	CharString_createRefCStrConst("Virtual window backbuffer"),
-	&tw->swapchain
+	&tw->swapchain,
+	e_rr
 ));
 ```
 
@@ -733,6 +829,55 @@ gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
 - Can be written in (compute) shaders (if usage permits it) by passing the writeLocation to the shader and using rwTexture2D(format)Uniform() or rwTexture2D(format)() in the shader.
   - Where format is the type of primitive the texture uses. Such as: (none): unorm, (s): snorm, (i): int, (u): uint, (f): float. e.g. rwTexture2DfUniform(resourceId) would access the writeonly float texture at resourceId and rwTexture2DUniform would access a unorm RW texture.
 
+## DescriptorHeap
+
+### Summary
+
+A DescriptorHeap is the description of many resources are available max during the application. In Vulkan this would correspond to VkDescriptorPool while in D3D12 it'd be ID3D12DescriptorHeap. This can later be allocated into by a DescriptorSet, which will place descriptors at the location (in the case of D3D12) or will consume them from the descriptor pool (in the case of Vulkan).
+
+### Properties
+
+- device: ref to the graphics device that owns it.
+- info.flags
+  - If bindless is enabled which will enable use of bindless descriptors in descriptor sets.
+  - If it's owned by a graphics device or not, useful for internal use only.
+- info.max[T]: Defines the limits of each type of descriptor.
+  - maxAccelerationStructures
+  - maxSamplers
+  - maxInputAttachments
+  - maxCombinedSamplers
+  - maxTextures
+  - maxTexturesRW
+  - maxBuffersRW
+  - maxConstantBuffers
+- descriptorTableCount: how many descriptor tables have been created through it, useful for tracking and to enforce the limit in info.maxDescriptorTables.
+
+### Used functions and obtained
+
+- Obtained through GraphicsDeviceRef's createDescriptorHeap.
+- A DescriptorHeapInfo (to create the heap itself) has to be defined from the app or the device generally, this is to allow it to save memory or descriptors when it needs to.
+- Used when creating a DescriptorTable and can be bound together with the DescriptorTable by the command list.
+
+## DescriptorLayout
+
+### Summary
+
+A DescriptorLayout is the description of how the resources are bound to the pipeline. In Vulkan this would be VkDescriptorSetLayout[4] while in D3D12 it'd be D3D12_DESCRIPTOR_RANGE1[]. This would then later be able to be turned into a VkPipelineLayout or ID3D12RootSignature. When doing full bindless, there's only one descriptor set layout that is declared when creating a device, this descriptor layout can be used by setting the PipelineLayout's DescriptorLayout to NULL.
+
+### Properties
+
+- device: ref to the graphics device that owns it.
+- flags
+  - If bindless is enabled only on arrays or on everything in the DescriptorLayout. Enabling bindless means that the descriptors themselves might not be valid and are dynamically changed. Doing this only on an array is recommended, since an array is generally the thing that contains bindless resources. Only enable bindless if it makes sense (e.g. raytracing, complicated render pipelines) to ensure full combability and performance on all target devices. 
+  - If it's owned by a graphics device or not, useful for internal use only.
+- bindings: a list of descriptor bindings that specifies the count, register type, id, visibility and space of a specific resource binding. The definition of this depends on the API; in Vulkan there are other binding types than DirectX12, so the implementation will try to merge ranges together if possible. As such, try to put UAVs, SRVs and CBVs closely together and a similar recommendation for Vulkan register types (images, textures, subpass inputs, ssbo, ubo, RTAS). The implementation can determine it can't merge a range if for example visibility mismatches (Vulkan) or the two have mismatching bindless flags.
+
+### Used functions and obtained
+
+- Obtained through GraphicsDeviceRef's createDescriptorLayout.
+- A DescriptorLayoutInfo (to create the layout itself) can generally be obtained through the shader reflection by using `DescriptorLayout_detect`, though this might not be optimal if all shaders have a similar / the same DescriptorLayout (unless you manually avoid creating duplicates).
+- Used when creating a PipelineLayout.
+
 ## Pipeline
 
 ### Summary
@@ -743,6 +888,8 @@ A pipeline is a combination of the states and shader binaries that are required 
 
 - device: ref to the graphics device that owns it.
 - type: compute, graphics or raytracing pipeline type.
+- flags: if it's owned by a graphics device or not, useful for internal use only.
+- pipelineLayout: what kind of pipeline layout is used, can be NULL to indicate default bindless layout.
 - stages: `ListPipelineStage` the binaries that are used for the shader.
   - stageType: which stage the binary is for. This is not necessarily unique, but should be unique for graphics shaders and compute. For raytracing shaders there can be multiple for the same stage.
   - Non raytracing shaders (compute / graphics):
@@ -759,7 +906,7 @@ A pipeline is a combination of the states and shader binaries that are required 
 
 ### Used functions and obtained
 
-- Obtained through GraphicsDeviceRef's createPipelinesGraphics, createPipelinesCompute and createPipelineRaytracingExt.
+- Obtained through GraphicsDeviceRef's createPipelineGraphics, createPipelineCompute and createPipelineRaytracingExt.
 - Used in CommandListRef's setComputePipeline, setGraphicsPipeline and setRaytracingPipelineExt.
 
 ### Obtaining an extended Pipeline info
@@ -879,18 +1026,24 @@ Compilation spits out a single binary with HLSL, which means that only a single 
 ### Compute example
 
 ```c
-tempShader = ...;		//Buffer: Load from virtual file or hardcode.
+SHFile tempShader = ...;		//SHFile: Load from virtual file or hardcode.
+CharString name = CharString_createRefCStrConst("Test compute pipeline");
+CharString entrypoint = CharString_createRefCStrConst("main");
 
-CharString nameArr[] = {
-    CharString_createConstRefCStr("Test compute pipeline")
-};
+U32 entryId = GraphicsDeviceRef_getFirstShaderEntry(
+	device,
+	&tempShader,
+	&entrypoint,
+	NULL,						//Defines ([ key, value ][], NULL = none)
+	ESHExtension_None,			//Extensions to disallow
+	ESHExtension_None			//Extensions to require
+);
 
-ListBuffer computeBinaries = (ListBuffer) { 0 };
-gotoIfError(clean, ListBuffer_createRefConst(tempShader, 1, &computeBinaries));
-gotoIfError(clean, ListCharString_createConstRefConst(nameArr, 1, &names));
-gotoIfError(clean, GraphicsDeviceRef_createPipelinesCompute(device, &computeBinaries, names, &computeShaders));
+gotoIfError3(clean, GraphicsDeviceRef_createPipelineCompute(
+	device, &tempShader, &name, entryId, EPipelineFlags_None, NULL, &computeShaders, e_rr
+));
 
-tempShader = Buffer_createNull();
+SHFile_free(&tempShader, alloc);
 ```
 
 Create pipelines will take ownership of the buffers referenced in computeBinaries and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref that doesn't always stay active, be sure to manually copy the buffers to avoid referencing deleted memory.
@@ -900,46 +1053,41 @@ It is recommended to generate all pipelines that are needed in this one call at 
 ### Graphics example
 
 ```c
-//... Load shaders from virtual file system into tempShaders[0], [1]
+ListSHFile tempShaders = ...;		//SHFile: Load from virtual file or hardcode.
+
 //Define the entrypoints
 
+U32 mainVSDepth = GraphicsDeviceRef_getFirstShaderEntry(...);		//Check the compute example for more
+U32 mainPS = GraphicsDeviceRef_getFirstShaderEntry(...);
+
 PipelineStage stage[2] = {
-    (PipelineStage) {
-        .stageType = EPipelineStage_Vertex,
-        .shaderBinary = tempShaders[0]
-    },
-    (PipelineStage) {
-        .stageType = EPipelineStage_Pixel,
-        .shaderBinary = tempShaders[1]
-    }
+    (PipelineStage) { .binaryId = mainVSDepth, .shFileId = 1 },		//tempShaders[1] contains mainVSDepth entrypoint
+    (PipelineStage) { .binaryId = mainPS, .shFileId = 0 }			//tempShaders[0] contains mainPS entrypoint
 };
 
 ListPipelineStage stageInfos = (ListPipelineStage) { 0 };
-gotoIfError(clean, ListPipelineStage_createRefConst(stage, sizeof(stage) / sizeof(stage[0]), &stageInfos));
+gotoIfError3(clean, ListPipelineStage_createRefConst(stage, sizeof(stage) / sizeof(stage[0]), &stageInfos, e_rr));
 
 //Define all pipelines.
 //These pipelines require the graphics feature DirectRendering and will error otherwise!
 //Otherwise .attachmentCountExt, .attachmentFormatsExt and/or .depthStencilFormat
 //  need to be replaced with .renderPass = renderPass and/or .subPass = subPassId.
 
-PipelineGraphicsInfo info[1] = {
-    (PipelineGraphicsInfo) {
-        .stageCount = 2,
-        .attachmentCountExt = 1,
-        .attachmentFormatsExt = { ETextureFormat_BGRA8 }
-    }
+PipelineGraphicsInfo info = (PipelineGraphicsInfo) {
+	.stageCount = 2,
+	.attachmentCountExt = 1,
+	.attachmentFormatsExt = { ETextureFormat_BGRA8 }
 };
 
-//Create pipelines, this will take ownership of the binaries (if they're managed).
-//Make sure to release them after to avoid freeing twice!
+//Create pipelines
 
-ListPipelineGraphicsInfo infos = (ListPipelineGraphicsInfo) { 0 };
-gotoIfError(clean, ListPipelineGraphicsInfo_createConstRef(info, sizeof(info) / sizeof(info[0]), &infos));
-gotoIfError(clean, GraphicsDeviceRef_createPipelinesGraphics(
-    device, &stageInfos, &infos, ListCharString_createNull(), &graphicsShaders
+CharString name = CharString_createRefCStrConst("Test graphics pipeline");
+
+gotoIfError3(clean, GraphicsDeviceRef_createPipelineGraphics(
+	device, &tempShaders, &stageInfos, &info, &name, EPipelineFlags_None, NULL, &graphicsShaders, e_rr
 ));
 
-tempShaders[0] = tempShaders[1] = Buffer_createNull();
+...;	//Free binaries (tempShaders)
 ```
 
 Create pipelines will take ownership of the buffers referenced in stages and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref then the implementation will copy to avoid unsafe behavior.
@@ -949,81 +1097,64 @@ It is recommended to generate all pipelines that are needed in this one call at 
 ### Raytracing example
 
 ```c
-//... Load shaders from virtual file system into tempShaders[0]
+ListSHFile tempShaders = ...;		//SHFile: Load from virtual file or hardcode.
 
 //Define our entrypoints; a single compiled binary with specified entry points.
 
-PipelineStage stageArr[] = {
-    (PipelineStage) { .stageType = EPipelineStage_ClosestHitExt, .binaryId = 0 },
-    (PipelineStage) { .stageType = EPipelineStage_MissExt, .binaryId = 0 },
-    (PipelineStage) { .stageType = EPipelineStage_RaygenExt, .binaryId = 0 }
-};
+U32 mainClosestHit = GraphicsDeviceRef_getFirstShaderEntry(...);		//Check the compute example for more
+U32 mainMiss = GraphicsDeviceRef_getFirstShaderEntry(...);
+U32 mainRaygen = GraphicsDeviceRef_getFirstShaderEntry(...);
 
-CharString entrypointArr[] = {
-    CharString_createRefCStrConst("mainClosestHit"),
-    CharString_createRefCStrConst("mainMiss"),
-    CharString_createRefCStrConst("mainRaygen")
+PipelineStage stageArr[] = {
+	(PipelineStage) { .binaryId = mainClosestHit,	.shFileId = 0 },
+	(PipelineStage) { .binaryId = mainMiss,			.shFileId = 0 },
+	(PipelineStage) { .binaryId = mainRaygen,		.shFileId = 0 }
 };
 
 //Define a hit group
 
 PipelineRaytracingGroup hitArr[] = {
-    (PipelineRaytracingGroup) {
-        .closestHit = 0, .anyHit = U32_MAX, .intersection = U32_MAX
-    }
+	(PipelineRaytracingGroup) { .closestHit = 0, .anyHit = U32_MAX, .intersection = U32_MAX }
 };
 
 //Define the pipeline that links these together as one.
 //We can link multiple at the same time.
 //All ids (in hitArr, stageArr) are relative to the stage itself (no global binary id).
 
-CharString nameArr[] = {
-    CharString_createRefCStrConst("Raytracing pipeline test")
-};
-
-U64 count = sizeof(nameArr) / sizeof(nameArr[0]);
 U64 entrypointCount = sizeof(stageArr) / sizeof(stageArr[0]);
 U64 hitCount = sizeof(hitArr) / sizeof(hitArr[0]);
 
-PipelineRaytracingInfo infoArr[] = {
-    (PipelineRaytracingInfo) {
-
-        (U8) EPipelineRaytracingFlags_Default,	//No intersection shaders
-        16,										//Payload size
-        8,										//Attribute size
-        1,										//Recursion
-
-        (U32) entrypointCount,
-        (U32) count,
-        (U32) hitCount
-    }
+PipelineRaytracingInfo info = (PipelineRaytracingInfo) {
+	.flags = (U8) EPipelineRaytracingFlags_DefaultStrict,
+	.maxRecursionDepth = 1
 };
 
 //Turn into lists
 
-ListBuffer binaries = (ListBuffer) { 0 };
-ListCharString names = (ListCharString) { 0 };
 ListPipelineStage stages = (ListPipelineStage) { 0 };
-ListCharString entrypoints = (ListCharString) { 0 };
 ListPipelineRaytracingGroup hitGroups = (ListPipelineRaytracingGroup) { 0 };
-ListPipelineRaytracingInfo infos = (ListPipelineRaytracingInfo) { 0 };
 
-gotoIfError(clean, ListBuffer_createRefConst(tempBuffers, count, &binaries));
-gotoIfError(clean, ListCharString_createRefConst(nameArr, count, &names));
-gotoIfError(clean, ListPipelineRaytracingInfo_createRefConst(infoArr, count, &infos));
-
-gotoIfError(clean, ListPipelineStage_createRefConst(stageArr, entrypointCount, &stages));
-gotoIfError(clean, ListCharString_createRefConst(entrypointArr, entrypointCount, &entrypoints));
-
-gotoIfError(clean, ListPipelineRaytracingGroup_createRefConst(hitArr, hitCount, &hitGroups));
+gotoIfError3(clean, ListPipelineStage_createRefConst(stageArr, entrypointCount, &stages, e_rr));
+gotoIfError3(clean, ListPipelineRaytracingGroup_createRefConst(hitArr, hitCount, &hitGroups, e_rr));
 
 //Finalize into pipeline
 
-gotoIfError(clean, GraphicsDeviceRef_createPipelineRaytracingExt(
-    twm->device, stages, &binaries, hitGroups, infos, &entrypoints, names, &raytracingShaders
+const CharString rtName = CharString_createRefCStrConst("Raytracing pipeline test");
+
+gotoIfError3(clean, GraphicsDeviceRef_createPipelineRaytracingExt(
+	device,
+	&stages,
+	&tempShaders,
+	&hitGroups,
+	&info,
+	&rtName,
+	EPipelineFlags_None,
+	NULL,
+	&raytracingShaders,
+	e_rr
 ));
 
-tempBuffers[0] = tempBuffers[1] = tempBuffers[2] = Buffer_createNull();
+...;	//Free binaries (tempShaders)
 ```
 
 ## Shader binary types
@@ -1061,10 +1192,10 @@ VertexPosBuffer vertexPos[] = {
     (VertexPosBuffer) { { F32_castF16(-0.5f), F32_castF16(0.5f) } }
 };
 
-Buffer vertexData = Buffer_createConstRef(vertexPos, sizeof(vertexPos));
-CharString name = CharString_createConstRefCStr("Vertex position buffer");
-gotoIfError(clean, GraphicsDeviceRef_createBufferData(
-    device, EDeviceBufferUsage_Vertex, name, &vertexData, &vertexBuffers[0]
+Buffer vertexData = Buffer_createRefConst(vertexPos, sizeof(vertexPos));
+CharString name = CharString_createRefCStrConst("Vertex position buffer");
+gotoIfError3(clean, GraphicsDeviceRef_createBufferData(
+	device, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL, &name, &vertexData, &vertexBuffers[0], e_rr
 ));
 ```
 
@@ -1090,7 +1221,7 @@ gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 
 ### Functions
 
-- `markDirty(U64 offset, U64 length)` marks part or entire resource dirty. This means that next commit the implementation will decide on how to copy to the resource in an efficient way. For example if the resource isn't in flight and ReBAR is turned on or shared memory is in use then it can directly copy to CPU accessible memory. Otherwise it might have to use a copy queue or something similar. The region is merged with any other pending region 256 bytes on either side to avoid lots of fragmented copies. Please make sure to only call this when necessary as this might cause extra allocations or copies to a RingBuffer; a good strategy (if the buffer changes each frame) might be to make the buffer 3x as big as necessary and index based on frameId % 3 and make the buffer CPUAllocated to allow direct writes always and then copy from this buffer only when needed. The framework will try to optimize these copies as much as possible (to avoid having to do that manually), but more work might be needed from the developers using it instead.
+- `Bool DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count, Error *e_rr)` marks part or the entire resource dirty (count 0 = rest of the buffer starting at offset). This means that next commit the implementation will decide on how to copy to the resource in an efficient way. For example if the resource isn't in flight and ReBAR is turned on or shared memory is in use then it can directly copy to CPU accessible memory. Otherwise it might have to use a copy queue or something similar. The region is merged with any other pending region 256 bytes on either side to avoid lots of fragmented copies. Please make sure to only call this when necessary as this might cause extra allocations or copies to a RingBuffer; a good strategy (if the buffer changes each frame) might be to make the buffer 3x as big as necessary and index based on frameId % 3 and make the buffer CPUAllocated to allow direct writes always and then copy from this buffer only when needed. The framework will try to optimize these copies as much as possible (to avoid having to do that manually), but more work might be needed from the developers using it instead.
 
 ### Used functions and obtained
 
@@ -1155,7 +1286,7 @@ The latter can only be used through intersection shaders, while the former has w
 ##### Example: Triangle geometry
 
 ```c
-gotoIfError(clean, GraphicsDeviceRef_createBLASExt(
+gotoIfError3(clean, GraphicsDeviceRef_createBLASExt(
 	twm->device,
 	ERTASBuildFlags_DefaultBLAS,			//Fast trace & allow compaction
 	EBLASFlag_DisableAnyHit,				//No transparency needed, optimize for opaque
@@ -1171,7 +1302,8 @@ gotoIfError(clean, GraphicsDeviceRef_createBLASExt(
    	},
 	NULL,									//No refit
 	CharString_createRefCStrConst("BLAS"),	//Debug name
-	&twm->blas								//BLASRef*
+	&twm->blas,								//BLASRef*
+	e_rr
 ));
 ```
 
@@ -1197,13 +1329,13 @@ F32 aabbBuffer[] = {
 
 Buffer aabbData = Buffer_createRefConst(aabbBuffer, sizeof(aabbBuffer));
 name = CharString_createRefCStrConst("AABB buffer");
-gotoIfError(clean, GraphicsDeviceRef_createBufferData(
+gotoIfError3(clean, GraphicsDeviceRef_createBufferData(
 	twm->device,
-    EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None,
-    name, &aabbData, &twm->aabbs
+    EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+    name, &aabbData, &twm->aabbs, e_rr
 ));
 
-gotoIfError(clean, GraphicsDeviceRef_createBLASProceduralExt(
+gotoIfError3(clean, GraphicsDeviceRef_createBLASProceduralExt(
 	twm->device,
 	ERTASBuildFlags_DefaultBLAS,
 	EBLASFlag_DisableAnyHit,
@@ -1212,7 +1344,8 @@ gotoIfError(clean, GraphicsDeviceRef_createBLASProceduralExt(
 	(DeviceData) { .buffer = twm->aabbs },
 	NULL,
 	CharString_createRefCStrConst("Test BLAS AABB"),
-	&twm->blasAABB
+	&twm->blasAABB,
+	e_rr
 ));
 ```
 
@@ -1275,17 +1408,20 @@ TLASInstanceStatic instances[1] = {
 };
 
 ListTLASInstanceStatic instanceList = (ListTLASInstanceStatic) { 0 };
-gotoIfError(clean, ListTLASInstanceStatic_createRefConst(
-    instances, sizeof(instances) / sizeof(instances[0]), &instanceList
+gotoIfError3(clean, ListTLASInstanceStatic_createRefConst(
+    instances, sizeof(instances) / sizeof(instances[0]), &instanceList, e_rr
 ));
 
-gotoIfError(clean, GraphicsDeviceRef_createTLASExt(
+gotoIfError3(clean, GraphicsDeviceRef_createTLASExt(
     twm->device,
     ERTASBuildFlags_DefaultTLAS,
     NULL,
     instanceList,
+    false,				//disallowBindlessDescriptor
+    NULL,				//bindlessDescriptorTable; NULL = device's default bindless table
     CharString_createRefCStrConst("Test TLAS"),
-    &twm->tlas
+    &twm->tlas,
+    e_rr
 ));
 ```
 
@@ -1318,17 +1454,20 @@ TLASInstanceMotion instances[1] = {
 };
 
 ListTLASInstanceMotion instanceList = (ListTLASInstanceMotion) { 0 };
-gotoIfError(clean, ListTLASInstanceMotion_createRefConst(
-    instances, sizeof(instances) / sizeof(instances[0]), &instanceList
+gotoIfError3(clean, ListTLASInstanceMotion_createRefConst(
+    instances, sizeof(instances) / sizeof(instances[0]), &instanceList, e_rr
 ));
 
-gotoIfError(clean, GraphicsDeviceRef_createTLASMotionExt(
+gotoIfError3(clean, GraphicsDeviceRef_createTLASMotionExt(
     twm->device,
     ERTASBuildFlags_DefaultTLAS,
     NULL,
     instanceList,
+    false,				//disallowBindlessDescriptor
+    NULL,				//bindlessDescriptorTable; NULL = device's default bindless table
     CharString_createRefCStrConst("Test TLAS"),
-    &twm->tlas
+    &twm->tlas,
+    e_rr
 ));
 ```
 
@@ -1404,7 +1543,7 @@ To make sure a command list is ready for recording and submission it needs begin
 setViewport and setScissor are used to set viewport and scissor rects respectively. However, since in a lot of cases they are set at the same time, there's also a command that does both at once "setViewportAndScissor".
 
 ```c
-gotoIfError(clean, CommandListRef_setViewportAndScissor(
+gotoIfError3(clean, CommandListRef_setViewportAndScissor(
 	commandList,
     I32x2_create2(0, 0),	//Offset
     I32x2_create2(0, 0)		//Size
@@ -1420,14 +1559,14 @@ Since this is relative to a render target, it has to be called after binding one
 The stencil reference can be set using the setStencil command.
 
 ```c
-gotoIfError(clean, CommandListRef_setStencil(commandList, 0xFF));
+gotoIfError3(clean, CommandListRef_setStencil(commandList, 0xFF, e_rr));
 ```
 
 And the blend constants can be set like so:
 
 ```c
-gotoIfError(clean, CommandListRef_setBlendConstants(
-    commandList, F32x4_create4(1, 0, 0, 1)
+gotoIfError3(clean, CommandListRef_setBlendConstants(
+    commandList, F32x4_create4(1, 0, 0, 1), e_rr
 ));
 ```
 
@@ -1436,11 +1575,12 @@ gotoIfError(clean, CommandListRef_setBlendConstants(
 clearImagef/clearImageu/clearImagei and clearImages are actually the same command. They allow clearing one or multiple images. clearImages should be used whenever possible because it can batch clear commands in a better way. However, it is possible that only one image needs to be cleared and in that case clearImage(f/u/i) are perfectly fine. The f, u and i suffix are to allow clearing uint, int and float targets. In clearImages these are handled manually. The format should match the format of the underlying images. The images passed here are automatically transitioned to the correct state.
 
 ```c
-gotoIfError(clean, CommandListRef_clearImagef(
+gotoIfError3(clean, CommandListRef_clearImagef(
     commandList, 				//See "Command list"
     F32x4_create4(1, 0, 0, 1), 	//Clear red
     (ImageRange){ 0 }, 			//Clear layer and level 0
-    swapchain					//See "Swapchain" or "RenderTexture"
+    swapchain,					//See "Swapchain" or "RenderTexture"
+    e_rr
 ));
 ```
 
@@ -1455,12 +1595,12 @@ Clear image can currently only be called on a Swapchain or RenderTexture object.
 copyImage and copyImageRegions are actually the same command. They allow copying either one or multiple regions from the same image to another, as long as the two have the same format.
 
 ```c
-gotoIfError(clean, CommandListRef_copyImage(
+gotoIfError3(clean, CommandListRef_copyImage(
     commandList,
     tw->swapchain, 				//src (Swapchain, DepthStencil, RenderTexture)
     tw->renderTextureBackup, 	//dst (^)
-    ECopyType_All, 				//Copy depth & stencil or color
-    (CopyImageRegion) { 0 }		//Copy everything
+    (CopyImageRegion) { 0 },	//Copy everything
+    e_rr
 ));
 ```
 
@@ -1468,7 +1608,7 @@ Clearing multiple ranges at once can be done by calling copyImageRegions with a 
 
 If depth, width or height isn't defined, they are automatically set to res[i] - offset[i].
 
-DepthStencil is only compatible with depth stencil. If ECopyType_All is used, the depth stencil format has to be identical. If ECopyType_DepthOnly is used the depth has to be compatible (D32, D32S8). If ECopyType_StencilOnly is used the stencil has to be compatible.
+DepthStencil is only compatible with depth stencil and the formats have to be compatible.
 
 Copy image is only allowed on images which aren't currently bound as a render target or for a different use in this scope.
 
@@ -1479,9 +1619,9 @@ Copy image (ranges) can currently only be called on a Swapchain, DepthStencil or
 The set pipeline command does one of the following; bind a graphics pipeline, raytracing pipeline or a compute pipeline. These pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or dispatchRaysExt to ensure the shader is used.
 
 ```c
-gotoIfError(clean, CommandListRef_setComputePipeline(commandList, compPipeline));
-gotoIfError(clean, CommandListRef_setGraphicsPipeline(commandList, gfxPipeline));
-gotoIfError(clean, CommandListRef_setRaytracingPipeline(commandList, rtPipeline));
+gotoIfError3(clean, CommandListRef_setComputePipeline(commandList, compPipeline, e_rr));
+gotoIfError3(clean, CommandListRef_setGraphicsPipeline(commandList, gfxPipeline, e_rr));
+gotoIfError3(clean, CommandListRef_setRaytracingPipeline(commandList, rtPipeline, e_rr));
 ```
 
 ### draw
@@ -1492,13 +1632,13 @@ The draw command will simply draw the currently bound primitive buffer (optional
 //Non indexed draw call
 //Can also specify instanceOffset and vertexOffset if drawUnindexedAdv is used
 
-gotoIfError(clean, CommandListRef_drawUnindexed(commandList, 3, 1));
+gotoIfError3(clean, CommandListRef_drawUnindexed(commandList, 3, 1, e_rr));
 
 //Indexed draw call
 //Can also specify instanceOffset, indexOffset and vertexOffset
 //if drawIndexedAdv is used
 
-gotoIfError(clean, CommandListRef_drawIndexed(commandList, 3, 1));
+gotoIfError3(clean, CommandListRef_drawIndexed(commandList, 3, 1, e_rr));
 ```
 
 When issuing the draw, the state needs to be valid: a render has to be started (render pass or direct rendering), a primitive buffer needs to be bound if relevant, graphics pipeline has to be bound, viewport & scissor has to be set and all relevant transitions need to be done.
@@ -1563,7 +1703,7 @@ SetPrimitiveBuffersCmd primitiveBuffers = (SetPrimitiveBuffersCmd) {
     .isIndex32Bit = false
 };
 
-gotoIfError(clean, CommandListRef_setPrimitiveBuffers(commandList, primitiveBuffers));
+gotoIfError3(clean, CommandListRef_setPrimitiveBuffers(commandList, primitiveBuffers, e_rr));
 ```
 
 ### dispatch
@@ -1571,7 +1711,7 @@ gotoIfError(clean, CommandListRef_setPrimitiveBuffers(commandList, primitiveBuff
 Dispatch has some of the same requirements as draw calls as it needs a correct state of the resources and needs a compute pipeline bound as well. However, it doesn't need to be in an active render (render pass or direct rendering) and it also doesn't use the viewport/scissor. This makes compute one of the easiest to handle, though transitions are just as important as with graphics shaders (resources need to be transitioned through a scope).
 
 ```c
-gotoIfError(clean, CommandListRef_dispatch2D(commandList, tilesX, tilesY));
+gotoIfError3(clean, CommandListRef_dispatch2D(commandList, tilesX, tilesY, e_rr));
 ```
 
 dispatch2D, dispatch1D and dispatch3D are the easiest implementations. You dispatch in groups, so it has to be aligned to the thread count of the compute shader. This command is also generalized with the dispatch command which takes in a `Dispatch` struct.
@@ -1587,7 +1727,7 @@ dispatchIndirect transitions the input buffer to IndirectDraw. This means that t
 The DebugMarkers feature adds three commands: addMarkerDebugExt, startRegionDebugExt and endRegionDebugExt. If the DebugMarkers feature isn't present, these are safely ignored and won't be inserted into the virtual command list. This can be used to provide extra debugging info to tools such as RenderDoc, NSight, Pix, etc. to show where important events such as render calls happened and what they represented. A debug region or debug marker has a color and a name. A debug region is like a stack; you can only end the current region and push another region. Every region you start has to be ended in the same scope that is submitted.
 
 ```c
-gotoIfError(clean, CommandListRef_startRegionDebugExt(
+gotoIfError3(clean, CommandListRef_startRegionDebugExt(
     commandList, 							//See "Command list"
     F32x4_create4(1, 0, 0, 1), 				//Marker color
     CharString_createConstRefCStr("Test")	//Marker name
@@ -1595,7 +1735,7 @@ gotoIfError(clean, CommandListRef_startRegionDebugExt(
 
 //Insert operation that needs to be in the debug region
 
-gotoIfError(clean, CommandListRef_endRegionDebugExt(commandList));
+gotoIfError3(clean, CommandListRef_endRegionDebugExt(commandList, e_rr));
 ```
 
 The same syntax as startRegionDebugExt can be used for addMarkerDebugExt. Except a marker doesn't need any end, it's just 1 event on the timeline. Every end region needs to correspond with a start region and vice versa.
@@ -1621,19 +1761,20 @@ AttachmentInfo attachmentInfo = (AttachmentInfo) {
 };
 
 ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
-gotoIfError(clean, ListAttachmentInfo_createRefConst(attachmentInfo, 1, &colors));
+gotoIfError3(clean, ListAttachmentInfo_createRefConst(attachmentInfo, 1, &colors, e_rr));
 
-gotoIfError(clean, CommandListRef_startRenderExt(
+gotoIfError3(clean, CommandListRef_startRenderExt(
     commandList, 							//See "Command list"
     I32x2_zero(), 							//No offset
     I32x2_zero(), 							//Use attachment's size
     colors,
-    (DepthStencilAttachmentInfo) { 0 }		//No depth stencil attachment
+    (DepthStencilAttachmentInfo) { 0 },		//No depth stencil attachment
+    e_rr
 ));
 
 //Draw calls here
 
-gotoIfError(clean, CommandListRef_endRenderExt(commandList));
+gotoIfError3(clean, CommandListRef_endRenderExt(commandList, e_rr));
 ```
 
 *Keep in mind that during the scope, you can't transition the resources passed into the attachments of the active render call. They're not allowed to be used as a read (SRV) or write textures (UAV); they're only allowed to be output attachments (RTV). Doing otherwise will cause the command list to give an error and remove the current scope.*
@@ -1655,7 +1796,7 @@ Are used to force update TLAS and BLAS respectively. This is useful when the TLA
 dispatchRays has some of the same requirements as dispatch as it needs a correct state of the resources and needs a raytracing pipeline bound as well. It is similar to compute as it doesn't need to be in an active render (render pass or direct rendering) and it also doesn't use the viewport/scissor. Though transitions are just as important as with compute shaders (resources need to be transitioned through a scope).
 
 ```c
-gotoIfError(clean, CommandListRef_dispatch2DRaysExt(commandList, rtId, width, height));
+gotoIfError3(clean, CommandListRef_dispatch2DRaysExt(commandList, rtId, width, height, e_rr));
 ```
 
 dispatch2DRaysExt, dispatch1DRaysExt and dispatch3DRaysExt are the easiest implementations. This command is also generalized with the dispatchRaysExt command which takes in a `DispatchRaysExt` struct. rtId is the raygen shader id, this is relevant since multiple raygen shaders can be linked into a single raygen pipeline. Each raygen shader has an id that can be passed here to execute it.
@@ -1729,11 +1870,11 @@ Transition transitions[] = {
 };
 
 ListTransition transitionArr = (ListTransition) { 0 };
-gotoIfError(clean, ListTransition_createRefConst(&transitionArr, 1, transitions));
+gotoIfError3(clean, ListTransition_createRefConst(transitions, 1, &transitionArr, e_rr));
 
-gotoIfError(clean, CommandListRef_startScope(commandList, transitionArr, 0 /* id */, (ListCommandScopeDependency) { 0 } /* deps */));
+gotoIfError3(clean, CommandListRef_startScope(commandList, transitionArr, 0 /* id */, (ListCommandScopeDependency) { 0 } /* deps */, e_rr));
 //TODO: Bind compute shader(s) and dispatch
-gotoIfError(clean, CommandListRef_endScope(commandList));
+gotoIfError3(clean, CommandListRef_endScope(commandList, e_rr));
 ```
 
 Transitions can currently only be called on a Swapchain, DeviceTexture, RenderTexture, DepthStencil, Sampler or DeviceBuffer object.

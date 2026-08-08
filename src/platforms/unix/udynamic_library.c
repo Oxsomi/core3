@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,67 +18,114 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//platforms/unix/udynamic_library.c
+
 #include "platforms/dynamic_library.h"
-#include "platforms/ext/stringx.h"
-#include "types/container/string.h"
+#include "platforms/file.h"
+#include "platforms/platform.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 
 #include <dlfcn.h>
 
 Bool DynamicLibrary_isValidPath(CharString str) {
-	return CharString_endsWithStringInsensitive(str, CharString_createRefCStrConst(".so"), 0);
+
+	//Apple platforms name shared libraries .dylib, every other unix uses .so.
+	//This gates the app directory scan that discovers dynamically linked modules, such as the graphics backends.
+	//Getting it wrong silently leaves them unregistered rather than reporting anything.
+
+	#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+		const CharString ext = CharString_createRefCStrConst(".dylib");
+	#else
+		const CharString ext = CharString_createRefCStrConst(".so");
+	#endif
+
+	return CharString_endsWithStringInsensitive(&str, &ext, 0);
 }
 
-Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicLib, Error *e_rr) {
+#ifdef SUPPORTS_DYNAMIC_LINKING
 
-	Bool s_uccess = true;
-	CharString loc = CharString_createNull();
+	Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicLib, Error *e_rr) {
 
-	if(!dynamicLib)
-		retError(clean, Error_invalidState(0, "DynamicLibrary_load()::dynamicLib is required"))
+		Bool s_uccess = true;
+		CharString loc = CharString_createNull();
 
-	if(*dynamicLib)
-		retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_load()::dynamicLib was already set, indicates memleak"))
+		if(!dynamicLib)
+			retError(clean, Error_invalidState(0, "DynamicLibrary_load()::dynamicLib is required"));
 
-	Bool isVirtual = false;
+		if(*dynamicLib)
+			retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_load()::dynamicLib was already set, indicates memleak"));
 
-	if(isAppDir)
-		gotoIfError3(clean, File_resolve(
-			str, &isVirtual, 260, Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
-		))
+		Bool isVirtual = false;
 
-	else gotoIfError3(clean, File_resolve(
-		str, &isVirtual, 260, Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
-	))
+		if(isAppDir) {
+			gotoIfError3(clean, File_resolve(
+				&str, &isVirtual, 0, &Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
+			));
+		}
 
-	if(!(*dynamicLib = dlopen(loc.ptr, RTLD_LAZY)))
-		retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlopen failed"))
+		else gotoIfError3(clean, File_resolve(
+			&str, &isVirtual, 0, &Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
+		));
 
-clean:
-	CharString_freex(&loc);
-	return s_uccess;
-}
+		if(!(*dynamicLib = dlopen(loc.ptr, RTLD_LAZY)))
+			retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlopen failed"));
 
-Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void **ptr, Error *e_rr) {
+	clean:
+		CharString_free(&loc, Platform_instance->alloc);
+		return s_uccess;
+	}
 
-	Bool s_uccess = true;
-	CharString tmp = CharString_createNull();
+	Bool DynamicLibrary_loadSystem(CharString str, DynamicLibrary *dynamicLib, Error *e_rr) {
 
-	if(!dynamicLib || !ptr)
-		retError(clean, Error_invalidState(!dynamicLib ? 0 : 2, "DynamicLibrary_load()::dynamicLib and ptr are required"))
+		Bool s_uccess = true;
 
-	if(!CharString_isNullTerminated(str))
-		gotoIfError2(clean, CharString_createCopyx(str, &tmp))
+		if(!dynamicLib)
+			retError(clean, Error_invalidState(0, "DynamicLibrary_loadSystem()::dynamicLib is required"));
 
-	if(!(*ptr = dlsym(dynamicLib, tmp.ptr ? tmp.ptr : str.ptr)))
-		retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlsym failed"))
+		if(*dynamicLib)
+			retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_loadSystem()::dynamicLib was already set, indicates memleak"));
 
-clean:
-	CharString_freex(&tmp);
-	return s_uccess;
-}
+		if(!CharString_isNullTerminated(str))
+			retError(clean, Error_invalidParameter(0, 0, "DynamicLibrary_loadSystem()::str must be null-terminated"));
 
-void DynamicLibrary_free(DynamicLibrary dynamicLib) {
-	if(dynamicLib) dlclose(dynamicLib);
-}
+		//Only allow a bare library name so this can't be abused to load an arbitrary .so from a caller-chosen
+		//path; reject any path separator, leaving resolution to the loader's standard search path.
+		for(U64 i = 0; i < CharString_length(str); ++i)
+			if(str.ptr[i] == '/' || str.ptr[i] == '\\')
+				retError(clean, Error_invalidParameter(
+					0, 0, "DynamicLibrary_loadSystem()::str must be a bare library name (no path separators)"
+				));
+
+		//A bare name lets the loader resolve it via the standard search path (LD_LIBRARY_PATH, /usr/lib, ...).
+		if(!(*dynamicLib = dlopen(str.ptr, RTLD_LAZY)))
+			retError(clean, Error_invalidState(0, "DynamicLibrary_loadSystem() dlopen failed"));
+
+	clean:
+		return s_uccess;
+	}
+
+	Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void **ptr, Error *e_rr) {
+
+		Bool s_uccess = true;
+		CharString tmp = CharString_createNull();
+
+		if(!dynamicLib || !ptr)
+			retError(clean, Error_invalidState(!dynamicLib ? 0 : 2, "DynamicLibrary_load()::dynamicLib and ptr are required"));
+
+		if(!CharString_isNullTerminated(str))
+			gotoIfError3(clean, CharString_createCopy(str, Platform_instance->alloc, &tmp, e_rr));
+
+		if(!(*ptr = dlsym(dynamicLib, tmp.ptr ? tmp.ptr : str.ptr)))
+			retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlsym failed"));
+
+	clean:
+		CharString_free(&tmp, Platform_instance->alloc);
+		return s_uccess;
+	}
+
+	void DynamicLibrary_free(DynamicLibrary dynamicLib) {
+		if(dynamicLib) dlclose(dynamicLib);
+	}
+
+#endif

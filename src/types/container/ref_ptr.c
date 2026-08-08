@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,66 +18,76 @@
 *  This is called dual licensing.
 */
 
+//types/container/ref_ptr.c
+
 #include "types/container/list_impl.h"
 #include "types/container/ref_ptr.h"
-#include "types/base/type_id.h"
 
 TListNamedImpl(ListRefPtr);
 TListNamedImpl(ListWeakRefPtr);
 
-Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
+Bool RefPtr_create(const RefPtrType *type, RefPtr **result, Error *e_rr) {
 
-	if(!objectLength || !free || !result)
-		return Error_nullPointer(
-			!result ? 3 : (!free ? 2 : 0), "RefPtr_create()::objectLength, free and result are required"
-		);
+	Bool s_uccess = true;
+
+	if(!type || !RefPtrType_length(type) || !type->free || !type->alloc || !result)
+		retError(clean, Error_nullPointer(
+			!result ? 1 : 0, "RefPtr_create()::type, ->lengthAndAlignment, ->free, ->alloc and result are required"
+		));
 
 	if(*result)
-		return Error_invalidParameter(3, 0, "RefPtr_create()::result isn't empty, might indicate memleak");
+		retError(clean, Error_invalidParameter(3, 0, "RefPtr_create()::result isn't empty, might indicate memleak"));
+
+	//Only pay for the aligned allocator when the type asks for more than the allocator hands out anyway.
+	//It over-allocates and puts a byte in front of what it returns, so the free below has to match.
+
+	const U64 alignment = RefPtrType_alignment(type);
+	const U64 length = sizeof(RefPtr) + RefPtrType_length(type);
 
 	Buffer buf = Buffer_createNull();
-	const Error err = Buffer_createEmptyBytes(sizeof(RefPtr) + objectLength, alloc, &buf);
 
-	if(err.genericError)
-		return err;
+	if(alignment > BUFFER_DEFAULT_ALIGNMENT) {
+		gotoIfError3(clean, Buffer_createEmptyBytesAligned(length, alignment, sizeof(RefPtr), type->alloc, &buf, e_rr));
+	}
 
-	*(*result = (RefPtr*)buf.ptr) = (RefPtr) {
-		.refCount = (AtomicI64) { 1 },
-		.typeId = type,
-		.length = objectLength,
-		.alloc = alloc,
-		.free = free
-	};
+	else {
+		gotoIfError3(clean, Buffer_createEmptyBytes(length, type->alloc, &buf, e_rr));
+	}
 
-	return Error_none();
+	*(*result = (RefPtr*)buf.ptr) = (RefPtr) { .refCount = (AtomicI64) { 1 }, .refPtrType = type };
+
+clean:
+	return s_uccess;
 }
 
 Bool RefPtr_inc(RefPtr *ptr) {
 
-	if(!ptr || !ptr->free)
+	if(!ptr || !ptr->refPtrType)
 		return false;
 
 	AtomicI64_inc(&ptr->refCount);
 	return true;
 }
 
-Bool RefPtr_dec(RefPtr **pptr) {
+void RefPtr_dec(RefPtr **pptr) {
 
 	if(!pptr || !*pptr)
-		return true;
+		return;
 
 	RefPtr *ptr = *pptr;
 
-	Bool b = true;
-
 	if(!AtomicI64_dec(&ptr->refCount)) {
 
-		b = ptr->free(RefPtr_data(ptr, void), ptr->alloc);
+		ptr->refPtrType->free(RefPtr_data(ptr, void), ptr->refPtrType->alloc);
 
-		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr) + ptr->length);
-		b &= Buffer_free(&orig, ptr->alloc);
+		const RefPtrType *type = ptr->refPtrType;
+		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr) + RefPtrType_length(type));
+
+		if(RefPtrType_alignment(type) > BUFFER_DEFAULT_ALIGNMENT)
+			Buffer_freeAligned(&orig, type->alloc);
+
+		else Buffer_free(&orig, type->alloc);
 	}
 
 	*pptr = NULL;
-	return b;
 }

@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,28 +18,27 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//graphics/vulkan/generic/vk_compute_pipeline.c
+
+#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
-#include "graphics/generic/texture.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
-#include "types/container/texture_format.h"
 #include "formats/oiSH/sh_file.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
 #include "types/base/error.h"
 
-Error createShaderModule(
+Bool createShaderModule(
 	Buffer buf,
 	VkShaderModule *mod,
 	VkGraphicsDevice *device,
 	VkGraphicsInstance *instance,
-	CharString name,
-	EPipelineStage stage
+	const CharString *name,
+	EPipelineStage stage,
+	const Allocator *alloc,
+	Error *e_rr
 );
 
 TList(VkComputePipelineCreateInfo);
@@ -47,18 +46,47 @@ TListImpl(VkComputePipelineCreateInfo);
 
 Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	GraphicsDevice *device,
-	CharString name,
+	const CharString *name,
+	const CharString *entryName,
 	Pipeline *pipeline,
-	SHBinaryInfo buf,
+	const SHBinaryInfo *buf,
 	Error *e_rr
 ) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDevice_getAlloc(device);
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
-	Bool s_uccess = true;
 	VkPipeline pipelineHandle = NULL;
+	VkShaderModule shaderModule = NULL;
 	CharString temp = CharString_createNull();
+	CharString entryCopy = CharString_createNull();
+
+	//Pick the SPIR-V entrypoint to bind.
+	//Unlike DXIL, a SPIR-V module keeps its original entrypoint name, so use the caller's entryName (e.g. "mainSingle").
+	//Fall back to "main" only when none was given.
+	//vkCreateComputePipelines enforces validity: it fails if pName isn't an OpEntryPoint in the module.
+
+	const C8 *entryPoint = "main";
+
+	if(entryName && CharString_length(*entryName)) {
+
+		if(!CharString_isNullTerminated(*entryName))
+			gotoIfError3(clean, CharString_createCopy(*entryName, alloc, &entryCopy, e_rr));
+
+		entryPoint = entryCopy.ptr ? entryCopy.ptr : entryName->ptr;
+	}
+
+	gotoIfError3(clean, createShaderModule(
+		buf->binaries[ESHBinaryType_SPIRV],
+		&shaderModule,
+		deviceExt,
+		instanceExt,
+		name,
+		EPipelineStage_Compute, alloc, e_rr
+	));
 
 	//TODO: Push constants
 
@@ -67,42 +95,34 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 		.stage = (VkPipelineShaderStageCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			.pName = "main"
+			.module = shaderModule,
+			.pName = entryPoint
 		},
-		.layout = deviceExt->defaultLayout
+		.layout = *PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Vk)
 	};
 
-	gotoIfError2(clean, createShaderModule(
-		buf.binaries[ESHBinaryType_SPIRV],
-		&pipelineInfo.stage.module,
-		deviceExt,
-		instanceExt,
-		name,
-		EPipelineStage_Compute
-	))
-
-	gotoIfError2(clean, vkCheck(vkCreateComputePipelines(
+	gotoIfError3(clean, checkVkError(deviceExt->createComputePipelines(
 		deviceExt->device,
 		NULL,
 		1, &pipelineInfo,
 		NULL,
 		&pipelineHandle
-	)))
+	), e_rr));
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && CharString_length(name)) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && name && CharString_length(*name)) {
 
-		if(!CharString_isNullTerminated(name))
-			gotoIfError2(clean, CharString_createCopyx(name, &temp))
+		if(!CharString_isNullTerminated(*name))
+			gotoIfError3(clean, CharString_createCopy(*name, alloc, &temp, e_rr));
 
 		VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_PIPELINE,
 			.objectHandle = (U64) pipelineHandle,
-			.pObjectName = temp.ptr ? temp.ptr : name.ptr
+			.pObjectName = temp.ptr ? temp.ptr : name->ptr
 		};
 
-		gotoIfError2(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-		CharString_freex(&temp);
+		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2), e_rr));
+		CharString_free(&temp, alloc);
 	}
 
 	*Pipeline_ext(pipeline, Vk) = pipelineHandle;
@@ -111,13 +131,12 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 clean:
 
 	if(pipelineHandle)
-		vkDestroyPipeline(deviceExt->device, pipelineHandle, NULL);
+		deviceExt->destroyPipeline(deviceExt->device, pipelineHandle, NULL);
 
-	const VkShaderModule mod = pipelineInfo.stage.module;
+	if(shaderModule)
+		deviceExt->destroyShaderModule(deviceExt->device, shaderModule, NULL);
 
-	if(mod)
-		vkDestroyShaderModule(deviceExt->device, mod, NULL);
-
-	CharString_freex(&temp);
+	CharString_free(&entryCopy, alloc);
+	CharString_free(&temp, alloc);
 	return s_uccess;
 }
