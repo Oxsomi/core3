@@ -46,10 +46,11 @@ void AWindow_onUpdateSize(Window *w) {
 
 	Error err = Error_none();
 
-	//Window_resizeCPUBuffer is a no-op here; it early outs when w->size already matches (the caller assigns it before calling us)
+	//Window_resizeCPUBuffer is a no-op here.
+	//It early outs when w->size already matches (the caller assigns it before calling us),
 	// and it can't be told what the OS-side stride is.
-	//Android composites through a plain heap buffer that Window_presentPhysical memcpy's into the
-	// locked ANativeWindow, so size it directly.
+	//Android composites through a plain heap buffer that Window_presentPhysical memcpy's into the locked ANativeWindow,
+	// so size it directly.
 
 	if(w->hint & EWindowHint_ProvideCPUBuffer) {
 
@@ -227,17 +228,18 @@ clean:
 	return refreshRate;
 }
 
-//Soft keyboard text arrives on the android UI thread (OxC3Activity's TextWatcher), but every other
-//callback runs on the app thread. So the JNI side only queues, and AWindow_flushTypeChar drains it
-//from WindowManager_updateExt, where the rest of the input pump already runs.
+//Soft keyboard text arrives on the android UI thread (OxC3Activity's TextWatcher),
+// but every other callback runs on the app thread.
+//So the JNI side only queues, and AWindow_flushTypeChar drains it from WindowManager_updateExt,
+// where the rest of the input pump already runs.
 
 static SpinLock AWindow_typeCharLock = { 0 };
 static ListCharString AWindow_typeCharQueue = { 0 };
 
-//Called from the JNI export in include/platforms/android/aoxc3_activity_glue.c, which is where the
-//OxC3Activity.onTypeChar binding lives (consumers compile that file into their own .so).
-//UTF-16 in, because GetStringUTFChars hands back modified UTF-8, which encodes anything outside the
-//BMP (emoji, which a soft keyboard produces readily) as CESU-8 surrogate pairs our reader would reject.
+//Called from the JNI export in include/platforms/android/aoxc3_activity_glue.c,
+// which is where the OxC3Activity.onTypeChar binding lives (consumers compile that file into their own .so).
+//UTF-16 in, because GetStringUTFChars hands back modified UTF-8, which encodes anything outside the BMP
+// (emoji, which a soft keyboard produces readily) as CESU-8 surrogate pairs our reader would reject.
 
 void AWindow_queueTypeChar(const U16 *utf16, U64 len) {
 
@@ -264,13 +266,14 @@ void AWindow_queueTypeChar(const U16 *utf16, U64 len) {
 	CharString_free(&str, Platform_instance->alloc);
 }
 
-//Called on the app thread. Swaps the queue out under the lock so onTypeChar runs unlocked and the UI
-//thread never blocks on user code. Drains even without a window, so nothing accumulates forever.
+//Called on the app thread.
+//Swaps the queue out under the lock so onTypeChar runs unlocked and the UI thread never blocks on user code.
+//Drains even without a window, so nothing accumulates forever.
 
 void AWindow_flushTypeChar(Window *w) {
 
-	//Move the queue into a local and hand the global a fresh empty one; the struct copy carries
-	//capacityAndRefInfo along, so the local owns the buffer and the global no longer refers to it.
+	//Move the queue into a local and hand the global a fresh empty one; the struct copy carries capacityAndRefInfo along,
+	// so the local owns the buffer and the global no longer refers to it.
 
 	ListCharString queue = (ListCharString) { 0 };
 	const ELockAcquire acq = SpinLock_lock(&AWindow_typeCharLock, U64_MAX);
@@ -513,8 +516,8 @@ EKey AWindow_mapKey(I32 keyCode) {
 		case AKEYCODE_F7: case AKEYCODE_F8: case AKEYCODE_F9: case AKEYCODE_F10: case AKEYCODE_F11: case AKEYCODE_F12:
 			return EKey_F1 + (keyCode - AKEYCODE_F1);
 
-		//AKEYCODE_SCREENSHOT isn't exposed by the NDK (it's a framework-internal key), AKEYCODE_SYSRQ is
-		//documented as the "System Request / Print Screen" key and is what an attached keyboard reports.
+		//AKEYCODE_SCREENSHOT isn't exposed by the NDK (it's a framework-internal key),
+		// AKEYCODE_SYSRQ is documented as the "System Request / Print Screen" key and is what an attached keyboard reports.
 		case AKEYCODE_SYSRQ:            return EKey_PrintScreen;
 		case AKEYCODE_DEL:              return EKey_Backspace;
 		case AKEYCODE_SPACE:            return EKey_Space;
@@ -589,8 +592,8 @@ EKey AWindow_mapKey(I32 keyCode) {
 	}
 }
 
-//Inverse of AWindow_mapKey, for Keyboard_remap (aplatform.c). Kept next to the switch above on purpose:
-//the two have to agree, and nothing enforces that but proximity.
+//Inverse of AWindow_mapKey, for Keyboard_remap (aplatform.c).
+//Kept next to the switch above on purpose: the two have to agree, and nothing enforces that but proximity.
 //AWindow_mapKey stays a switch because it's on the input hot path and compiles to a jump table.
 //AKEYCODE_UNKNOWN (0) means the key doesn't exist on android and can't be remapped.
 
@@ -799,8 +802,8 @@ static void AWindow_onTouch(Window *w, Mouse *mouse, AInputEvent *event) {
 			const F32 x = AMotionEvent_getX(event, changed);
 			const F32 y = AMotionEvent_getY(event, changed);
 
-			//Fresh contact point: seed the absolute position and zero the relative axes. There's no
-			//previous position yet, so RX/RY must not carry a delta over from the last gesture.
+			//Fresh contact point: seed the absolute position and zero the relative axes.
+			//There's no previous position yet, so RX/RY must not carry a delta over from the last gesture.
 			//No onDeviceAxis here, deliberately: where a finger lands isn't motion, just the baseline.
 
 			InputDevice_setCurrentAxis(mouse, EMouseAxis_Temp0, x);
@@ -827,8 +830,8 @@ static void AWindow_onTouch(Window *w, Mouse *mouse, AInputEvent *event) {
 			if(AWindow_primaryTouchId == -1)
 				break;
 
-			//A move event carries every active pointer, so find the one we're tracking rather than
-			//assuming index 0; a second finger going down would otherwise hijack the cursor.
+			//A move event carries every active pointer, so find the one we're tracking rather than assuming index 0;
+			// a second finger going down would otherwise hijack the cursor.
 
 			const size_t count = AMotionEvent_getPointerCount(event);
 			size_t index = count;
@@ -927,10 +930,9 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event) {
 			// so it gets its own handler rather than sharing the mouse's index-0 path (see AWindow_onTouch).
 
 			//Both of these are a class plus a device bit: TOUCHSCREEN is 0x1002 and MOUSE is 0x2002,
-			//and the 0x2 they share is AINPUT_SOURCE_CLASS_POINTER.
-			//A plain & against either therefore matches both, which sent every mouse event into the
-			//touch handler and left the branch below unreachable: no hover, and no scroll at all,
-			//since touch has no wheel to handle.
+			// and the 0x2 they share is AINPUT_SOURCE_CLASS_POINTER.
+			//A plain & against either therefore matches both, which sent every mouse event into the touch handler
+			// and left the branch below unreachable: no hover, and no scroll at all, since touch has no wheel to handle.
 			//Masking and comparing to the whole value is what actually distinguishes them.
 
 			if ((source & AINPUT_SOURCE_TOUCHSCREEN) == AINPUT_SOURCE_TOUCHSCREEN) {
@@ -944,8 +946,8 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event) {
 				
 				if (action == AMOTION_EVENT_ACTION_MOVE || action == AMOTION_EVENT_ACTION_HOVER_MOVE) {
 					
-					//Window relative, not getRaw*: raw is display space, and the surface sits below the
-					//status bar, so a raw Y reports the cursor that many pixels under the real pointer.
+					//Window relative, not getRaw*: raw is display space, and the surface sits below the status bar,
+					// so a raw Y reports the cursor that many pixels under the real pointer.
 					//The win32 backend reports client coordinates for the same reason.
 					//Only the absolute position cares; RX/RY below are differences, so the offset cancels.
 
@@ -988,13 +990,12 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event) {
 					
 				} else if (action == AMOTION_EVENT_ACTION_SCROLL) {
 
-					//A wheel notch is an impulse, not a position, so it has to fire every time rather
-					//than only when it differs from the last one.
-					//Comparing against the previous value meant the axis stayed at 1 after the first
-					//notch and every further notch in that direction was dropped, which reads as the
-					//wheel not working at all.
+					//A wheel notch is an impulse, not a position, so it has to fire every time
+					// rather than only when it differs from the last one.
+					//Comparing against the previous value meant the axis stayed at 1 after the first notch
+					// and every further notch in that direction was dropped, which reads as the wheel not working at all.
 					//The magnitude is passed through for the same reason win32 divides by WHEEL_DELTA
-					//instead of clamping: ceil() to +-1 turned a partial notch into no scroll.
+					// instead of clamping: ceil() to +-1 turned a partial notch into no scroll.
 					//Zero is skipped because a SCROLL event carries both axes and usually only moves one.
 
 					const F32 deltaX = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_HSCROLL, 0);
@@ -1273,8 +1274,9 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 	const U8 *src = w->cpuVisibleBuffer.ptr;
 
 	//Upright: rows go across whole, or one block when the strides already agree.
-	//Rotated: the buffer is turned into the surface a pixel at a time, since no run of source pixels is contiguous in
-	// the destination. That's only for the cpu present path; vulkan gets this free from the swapchain's preTransform,
+	//Rotated: the buffer is turned into the surface a pixel at a time,
+	// since no run of source pixels is contiguous in the destination.
+	//That's only for the cpu present path; vulkan gets this free from the swapchain's preTransform,
 	// so nothing that actually renders pays for it.
 
 	if(!quarterTurn && w->orientation != 180) {

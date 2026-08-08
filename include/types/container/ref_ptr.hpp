@@ -41,8 +41,8 @@
 //  stream->parent.size;              //-> operator forwards to RefPtr_data
 //  c::CAFile_read(stream.handle(), ...);
 //
-//Unlike the other wrappers this one is copyable: copying is what a refcount is for. A copy increments,
-// a move doesn't, and both leave the source valid (empty after a move).
+//Unlike the other wrappers this one is copyable: copying is what a refcount is for.
+//A copy increments, a move doesn't, and both leave the source valid (empty after a move).
 //
 //The C API's WeakRefPtr is the same type with a promise attached
 // (the owner outlives the borrower, so no inc/dec is needed).
@@ -98,7 +98,8 @@ namespace oxc {
 			return *this;
 		}
 
-		//Allocates a new object of `type`. The type has to outlive every RefPtr made from it (see ref_ptr.h).
+		//Allocates a new object of `type`.
+		//The type has to outlive every RefPtr made from it (see ref_ptr.h).
 		[[nodiscard]] static c::Bool create(const c::RefPtrType *type, RefPtr &result, c::Error *e_rr = nullptr) noexcept {
 			result.release();
 			return c::RefPtr_create(type, &result.ptr, e_rr);
@@ -125,7 +126,8 @@ namespace oxc {
 			ptr = nullptr;
 		}
 
-		//Access. Mirrors the RefPtr_data macro: the payload sits directly behind the header.
+		//Access.
+		//Mirrors the RefPtr_data macro: the payload sits directly behind the header.
 
 		[[nodiscard]] T *data() const noexcept { return ptr ? (T*)(ptr + 1) : nullptr; }
 		[[nodiscard]] T *operator->() const noexcept { return data(); }

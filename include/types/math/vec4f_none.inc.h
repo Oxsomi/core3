@@ -105,7 +105,8 @@ static inline F32x4 F32x4_trunc3(F32x4 a) { return F32x4_create3(F32x4_x(a), F32
 
 static inline F32 F32x4_reduce(F32x4 a) { return F32x4_x(a) + F32x4_y(a) + F32x4_z(a) + F32x4_w(a); }
 
-//4x4 transpose; the scalar fallback of the SSE/NEON versions in the sibling headers. Safe when in == out.
+//4x4 transpose; the scalar fallback of the SSE/NEON versions in the sibling headers.
+//Safe when in == out.
 
 static inline void F32x4_transpose4(const F32x4 *in, F32x4 *out) {
 

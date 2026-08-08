@@ -132,9 +132,10 @@ class spirv_reflect(ConanFile):
 
 		lib_dst = os.path.join(self.package_folder, "lib")
 
-		# Linux (single-config) writes the archive directly under the build folder; MSVC (multi-config) writes the
-		# lib into a <BuildType> subfolder. Copy from the config that was actually built (build_type), so
-		# RelWithDebInfo / MinSizeRel work too rather than only Debug / Release.
+		# Linux (single-config) writes the archive directly under the build folder;
+		# MSVC (multi-config) writes the lib into a <BuildType> subfolder.
+		# Copy from the config that was actually built (build_type), so RelWithDebInfo / MinSizeRel work too
+		# rather than only Debug / Release.
 		copy(self, "*.a", self.build_folder, lib_dst)
 
 		lib_cfg_src = os.path.join(self.build_folder, str(self.settings.build_type))

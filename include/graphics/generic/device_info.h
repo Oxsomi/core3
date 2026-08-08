@@ -181,8 +181,9 @@ typedef enum EGraphicsFeatures {
 
 	//(bit 26 is EGraphicsFeatures_RayTriPosition, grouped with the raytracing features above)
 
-	//SM6.10 linalg, split to mirror the oiSH extensions (CoopVec/CoopMat/CoopFP8). FP16 + INT8 are the base tier of
-	//CoopVec/CoopMat; CoopFP8 is the additive FP8 tier; CoopVecTraining exposes the Tier-1.1 outer-product/reduce-sum ops.
+	//SM6.10 linalg, split to mirror the oiSH extensions (CoopVec/CoopMat/CoopFP8).
+	//FP16 + INT8 are the base tier of CoopVec/CoopMat; CoopFP8 is the additive FP8 tier.
+	//CoopVecTraining exposes the Tier-1.1 outer-product/reduce-sum ops.
 
 	EGraphicsFeatures_CoopVec                   = 1 << 27,        //Cooperative vectors (per-thread matvec)
 	EGraphicsFeatures_CoopMat                   = 1 << 28,        //Cooperative matrix (subgroup GEMM)
@@ -211,9 +212,9 @@ typedef enum EGraphicsFeatures2 {
 
 	//Mega geometry (RTXMG); Vulkan splits it into two extensions, so OxC3 exposes two bits.
 	//RayClusterAS: cluster acceleration structures (CLAS/cluster BLAS).
-	// D3D12: NVAPI cluster operations caps; Vulkan: VK_NV_cluster_acceleration_structure.
+	//D3D12: NVAPI cluster operations caps; Vulkan: VK_NV_cluster_acceleration_structure.
 	//RayPartitionedTLAS: partitioned top level acceleration structures (PTLAS).
-	// D3D12: NVAPI partitioned TLAS caps; Vulkan: VK_NV_partitioned_acceleration_structure.
+	//D3D12: NVAPI partitioned TLAS caps; Vulkan: VK_NV_partitioned_acceleration_structure.
 
 	EGraphicsFeatures2_RayClusterAS             = 1 << 2,
 	EGraphicsFeatures2_RayPartitionedTLAS       = 1 << 3,
@@ -275,9 +276,11 @@ typedef struct GraphicsDeviceCapabilities {
 	EGraphicsFeatures features;
 	EGraphicsFeatures2 features2;
 
-	//Subset of `features` that is experimental/preview on this device+build (not final; can change or be removed across
-	//SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled via the preview SDK +
-	//D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions, so this stays empty.
+	//Subset of `features` that is experimental/preview on this device+build
+	// (not final; can change or be removed across SDK/driver updates).
+	//On D3D12 the SM6.10-gated cooperative features land here
+	// (enabled via the preview SDK + D3D12ExperimentalShaderModels + Developer Mode).
+	//On Vulkan they're real extensions, so this stays empty.
 	EGraphicsFeatures experimentalFeatures;
 	EGraphicsFeatures2 experimentalFeatures2;
 

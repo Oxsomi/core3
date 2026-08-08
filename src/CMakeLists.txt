@@ -35,8 +35,9 @@ add_subdirectory(graphics)
 add_subdirectory(audio)
 add_subdirectory(tools)
 
-# Test bundles for platforms that have no exec, so the per-suite executables the other platforms run
-# through ctest can't be used there. Android today; wasm will want the same shape.
+# Test bundles for platforms that have no exec,
+# so the per-suite executables the other platforms run through ctest can't be used there.
+# Android today; wasm will want the same shape.
 
 if(EnableTests AND NOT OxC3TestExecutables)
 	if(ANDROID)

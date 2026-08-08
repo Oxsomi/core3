@@ -262,8 +262,8 @@ def classify(func, spec):
 	if spec.get("staticOnly"):
 		return "static", None
 
-	# Constructors: `X_createFoo(..., const Allocator*, X *result, Error *e_rr)`. The result out-param is
-	# what makes them unambiguous; they become a method that resets *this and fills it in.
+	# Constructors: `X_createFoo(..., const Allocator*, X *result, Error *e_rr)`.
+	# The result out-param is what makes them unambiguous; they become a method that resets *this and fills it in.
 	if short.startswith("create") and len(func.params) >= 2:
 
 		last = func.params[-1]
@@ -333,9 +333,9 @@ def emitClass(spec, funcs):
 		for docLine in spec["doc"]:
 			add(f"\t//{docLine}")
 
-	# A static-only type has no instance state in C, so it becomes a namespace rather than a class nobody
-	# can construct. Time::now() reads the same either way, but a namespace is honest about there being no
-	# object, stays open for extension, and avoids creating an oxc::Error that isn't a c::Error.
+	# A static-only type has no instance state in C, so it becomes a namespace rather than a class nobody can construct.
+	# Time::now() reads the same either way, but a namespace is honest about there being no object,
+	# stays open for extension, and avoids creating an oxc::Error that isn't a c::Error.
 
 	if spec.get("staticOnly"):
 		add(f"\tnamespace {cppName} {{")
@@ -475,9 +475,9 @@ def emitClass(spec, funcs):
 
 def generate(spec):
 
-	# A type's functions are routinely spread over several headers (CharString has six, CAFile four), so a
-	# class is assembled from all of them; the first is the one that gets included, the rest come along
-	# through it. Duplicate declarations across headers collapse to the first one seen.
+	# A type's functions are routinely spread over several headers (CharString has six, CAFile four),
+	# so a class is assembled from all of them; the first is the one that gets included, the rest come along through it.
+	# Duplicate declarations across headers collapse to the first one seen.
 
 	headers = [ spec["header"] ] + spec.get("alsoParse", [])
 	funcs = []

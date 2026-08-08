@@ -255,7 +255,8 @@ static inline void AESEncryptionContext_expandKey(
 	}
 }
 
-//AES block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
+//AES block encryption.
+//Don't use this plainly, it's a part of the larger AES256-CTR algorithm
 __forceinline__ static I32x4 AESEncryptionContext_blockHash(
 	I32x4 a,
 	const I32x4 *restrict k/*[15]*/,
@@ -957,12 +958,13 @@ static inline I32x4 AESEncryptionContext_ghashN(I32x4 *restrict a, const I32x4 *
 		I32x4 clmul11[16];
 
 		//Not using fused here because it seems the dependency chain will be too short otherwise to hide latency
-		// Maybe after merging ghash and aes?
+		//Maybe after merging ghash and aes?
 		I32x4 clmul01[16];
 		I32x4 clmul10[16];
 
 		//Looks a bit odd, but it's to allow multiple clmuls to run in parallel.
-		//Then, it'll be xored later. If we do clmulNN[i] ^= it creates a dependency, stalling everything.
+		//Then, it'll be xored later.
+		//If we do clmulNN[i] ^= it creates a dependency, stalling everything.
 
 		for (U32 i = 0; i < N; ++i) {
 			I32x4 Hi = H[N - 1 - i];
@@ -1525,7 +1527,7 @@ typedef union AESEncryptionContextLengths {
 } AESEncryptionContextLengths;
 
 //This ensures no expanded key, iv or anything else is leaked on the stack,
-//which might be possible to obtain after execution through for example a buffer overflow.
+// which might be possible to obtain after execution through for example a buffer overflow.
 static inline void AESEncryptionContext_clear(AESEncryptionContext *restrict ctx) {
 	Buffer_clearAllSecure(Buffer_createRef(ctx->key, sizeof(ctx->key)));
 	Buffer_clearAllSecure(Buffer_createRef(ctx->H, sizeof(ctx->H)));

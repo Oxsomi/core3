@@ -43,8 +43,9 @@ OXC3_TEST_ENTRY(shader_compiler) {
 	Test t = (Test) { 0 };
 	t.alloc = Platform_instance->alloc;
 
-	//Bundled builds read their HLSL out of the apk rather than a working directory, so the section CMake
-	//attached has to be mounted first. See TEST_SHADER_ROOT in test_shader_compiler_shared.h.
+	//Bundled builds read their HLSL out of the apk rather than a working directory,
+	// so the section CMake attached has to be mounted first.
+	//See TEST_SHADER_ROOT in test_shader_compiler_shared.h.
 
 	#ifdef TEST_SHADER_SECTION
 	{
@@ -65,9 +66,9 @@ OXC3_TEST_ENTRY(shader_compiler) {
 	Test_shaderCompilerDriver(&t);
 	Test_shaderCompilerPermutations(&t);
 	//Runs bundled too: the corpus and its committed reference oiSHs ship in the virtual file system
-	//(see TEST_SHADER_ROOT), where the test compares byte for byte but never regenerates, since the
-	//bundle is read only. A byte level difference between desktop and device DXC is exactly the kind
-	//of thing worth failing loudly on.
+	// (see TEST_SHADER_ROOT), where the test compares byte for byte but never regenerates,
+	// since the bundle is read only.
+	//A byte level difference between desktop and device DXC is exactly the kind of thing worth failing loudly on.
 
 	Test_shaderCompilerCorpus(&t);
 

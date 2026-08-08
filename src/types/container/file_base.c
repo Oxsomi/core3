@@ -99,7 +99,7 @@ Bool File_resolve(
 	//Network drives are a thing on windows and allow starting a path with "\\"
 	//We shouldn't be supporting this.
 	//The reason; you can access servers from an app with a file read instead of a https read,
-	//which can obfuscate the application's true intentions.
+	// which can obfuscate the application's true intentions.
 	//ex. \\0.0.0.0\ would make a file request to 0.0.0.0.
 	//Unix can map a folder to a webserver, but that link has to be created beforehand, not by an app.
 	//You can also read from hardware in a platform dependent way, which makes it harder to standardize.
@@ -113,7 +113,8 @@ Bool File_resolve(
 	if (!CharString_replaceAllSensitive(result, '\\', '/', 0, 0))
 		retError(clean, Error_invalidOperation(1, "File_resolve() can't replaceAll"));
 
-	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
+	//On Windows, it's possible to change drive but keep same relative path.
+	//We don't support it.
 	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
 	//We also obviously don't support 0:\ and such or A:/ on unix
 
@@ -125,7 +126,8 @@ Bool File_resolve(
 			retError(clean, Error_invalidOperation(6, "File_resolve() doesn't support Windows paths outside of Windows."));
 	#endif
 
-	//Now we have to discover the real directory it references to. This means resolving:
+	//Now we have to discover the real directory it references to.
+	//This means resolving:
 	//Empty filename and . to mean no difference and .. to step back
 
 	const CharStringSplit split = { .s = result, .allocator = alloc, .result = &res };
@@ -333,7 +335,7 @@ Bool File_makeRelative(
 
 	//Strip the absolute directory back off, so what's compared is the part inside it.
 	//A virtual path never had it prepended (File_resolve leaves those as "section/rest"), so cutting there would eat the start
-	//of the path itself.
+	// of the path itself.
 	//A trailing slash on absoluteDir isn't counted either, since File_resolve trims one before prepending.
 
 	if(absDirLen && CharString_getAt(absoluteDir, absDirLen - 1) == '/')

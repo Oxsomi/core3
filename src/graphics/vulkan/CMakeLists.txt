@@ -54,10 +54,12 @@ else()
 
 	target_compile_definitions(${TARGET_NAME} PUBLIC -DGRAPHICS_API_DYNAMIC)
 
-	# Consumers link the generic layer only; the backend is reached purely through GraphicsInterface_register's
-	# dlopen + GraphicsInterface_getTable. Linking OxC3_graphics_vk here instead would drag in its PUBLIC
-	# OxC3_graphics as well, leaving the consumer with a second copy of the generic layer. Mach-O keeps those
-	# copies apart, so GraphicsInterface_create would run inside the backend against its own Platform_instance,
+	# Consumers link the generic layer only;
+	# the backend is reached purely through GraphicsInterface_register's dlopen + GraphicsInterface_getTable.
+	# Linking OxC3_graphics_vk here instead would drag in its PUBLIC OxC3_graphics as well,
+	# leaving the consumer with a second copy of the generic layer.
+	# Mach-O keeps those copies apart,
+	# so GraphicsInterface_create would run inside the backend against its own Platform_instance,
 	# which is still null until getTable hands the host's across.
 	# add_dependencies only orders the build; nothing links the module.
 

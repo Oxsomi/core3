@@ -57,10 +57,11 @@ if(DynamicLinkingShaderCompiler)
 
 	if(MSVC)
 
-		# WINDOWS_EXPORT_ALL_SYMBOLS reads the .obj files to write the .def, and neither MSVC's /GL nor
-		# clang-cl's -flto leaves COFF there ("unrecognized file format"), so whole program optimisation
-		# has to go for this one target. The root CMakeLists reads this property and simply doesn't add
-		# the flag, rather than us overriding it afterwards with /GL-, which earns a D9025 per TU.
+		# WINDOWS_EXPORT_ALL_SYMBOLS reads the .obj files to write the .def,
+		# and neither MSVC's /GL nor clang-cl's -flto leaves COFF there ("unrecognized file format"),
+		# so whole program optimisation has to go for this one target.
+		# The root CMakeLists reads this property and simply doesn't add the flag,
+		# rather than us overriding it afterwards with /GL-, which earns a D9025 per TU.
 		# The cost is small: it only ever applied to our ~16 wrapper TUs, never to prebuilt DXC.
 
 		set_target_properties(OxC3_shader_compiler PROPERTIES OXC3_NO_WHOLE_PROGRAM ON)
@@ -81,8 +82,8 @@ endif()
 if(EnableTests AND OxC3TestExecutables)
 
 	# Compiles HLSL through the real DXC/SPIRV pipeline and validates parsing, reflection,
-	# oxc:: annotations, extensions and disassembly. The test/hlsl corpus is exposed to the
-	# test at build time via OXC3_SHADER_COMPILER_TEST_HLSL_DIR.
+	# oxc:: annotations, extensions and disassembly.
+	# The test/hlsl corpus is exposed to the test at build time via OXC3_SHADER_COMPILER_TEST_HLSL_DIR.
 
 	file(GLOB shaderCompilerTestsC CONFIGURE_DEPENDS "test/*.c")
 

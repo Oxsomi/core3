@@ -90,7 +90,7 @@ extern "C" void Test_hppVec(oxc::c::Test *t) {
 		Test_assert(t, "F32x4: cross3", F32x4(1, 0, 0, 0).cross3(F32x4(0, 1, 0, 0)).eqApprox(F32x4(0, 0, 1, 0)));
 
 		//normalize* goes through F32x4_rsqrt, which is the hardware's fast reciprocal sqrt (_mm_rsqrt_ps
-		//is ~12 bits), so the default 1e-5 relative tolerance is tighter than the operation can deliver
+		// is ~12 bits), so the default 1e-5 relative tolerance is tighter than the operation can deliver
 		Test_assert(t, "F32x4: normalize3", F32x4(0, 5, 0, 0).normalize3().eqApprox(F32x4(0, 1, 0, 0), 1e-3f, 1e-4f));
 
 		Test_assert(t, "F32x4: trunc3 zeroes w", F32x4(1, 2, 3, 4).trunc3() == F32x4(1, 2, 3, 0));

@@ -1,10 +1,11 @@
 name: Android Vulkan + shader compiler (Linux host)
 on: [push]
 
-# The other android jobs build with the shader compiler off, which is the default and what an app that
-# ships precompiled shaders uses. That leaves the whole DXC cross build untested, and it's the fragile
-# part: it needs a host built tablegen, and upstream's -Werror keeps finding assert-only variables.
-# One host and one arch is enough to notice it breaking; it's a long build.
+# The other android jobs build with the shader compiler off,
+# which is the default and what an app that ships precompiled shaders uses.
+# That leaves the whole DXC cross build untested, and it is the fragile part.
+# It needs a host built tablegen, and upstream's -Werror keeps finding assert-only variables.
+# One host and one arch is enough to notice it breaking, since it's a long build.
 
 jobs:
   build:

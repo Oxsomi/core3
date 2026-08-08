@@ -150,10 +150,11 @@ class dxc(ConanFile):
 		tc.variables["ENABLE_SPIRV_CODEGEN"] = True
 		tc.variables["CMAKE_EXPORT_COMPILE_COMMANDS"] = True
 		tc.variables["DXC_USE_LIT"] = True
-		# Debug only. A Release build is what ships, where an assert firing aborts the app rather than
-		# helping anyone, and it also drops the android test .so from 547 to 490 MB.
-		# That's ~11%, not the bulk: statically linked LLVM/clang/SPIRV-Tools plus an unstripped symbol
-		# table is what actually makes it that size.
+		# Debug only.
+		# A Release build is what ships, where an assert firing aborts the app rather than helping anyone,
+		# and it also drops the android test .so from 547 to 490 MB.
+		# That's ~11%, not the bulk:
+		# statically linked LLVM/clang/SPIRV-Tools plus an unstripped symbol table is what actually makes it that size.
 
 		tc.variables["LLVM_ENABLE_ASSERTIONS"] = self.settings.build_type == "Debug"
 		tc.variables["ENABLE_DXC_STATIC_LINKING"] = True
@@ -195,9 +196,9 @@ class dxc(ConanFile):
 
 		elif cross_building(self):
 
-			# Any target that isn't the build machine lands here: android, ios, wasm, or a plain
-			# x64 -> arm64 build. The NATIVE fallback is going to fail, and it fails deep inside a
-			# sub configure where the reason isn't visible, so name it here instead.
+			# Any target that isn't the build machine lands here: android, ios, wasm, or a plain x64 -> arm64 build.
+			# The NATIVE fallback is going to fail, and it fails deep inside a sub configure where the reason
+			# isn't visible, so name it here instead.
 
 			self.output.warning(
 				"Cross building without user.dxc:tablegen_dir, so LLVM's NATIVE sub build has to "
@@ -210,25 +211,26 @@ class dxc(ConanFile):
 
 		tc.variables["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreaded"
 
-		# GCC 14.1 and 14.2 miscompile the component type remap in CGMSHLSLRuntime::SetUAVSRV at
-		# -O2/-O3; they emit the bt/cmov select with inverted polarity, so every typed SRV/UAV ends
-		# up with ComponentType U32. Texture2D<float4> becomes Texture2D<4xU32>, which makes every
-		# sample_* fail DXIL validation below SM 6.7 ("sample_* instructions require resource to be
-		# declared to return UNORM, SNORM or FLOAT") and makes reflection report uint for float
-		# textures. -fno-if-conversion (or -fno-tree-vrp) stops GCC forming that select.
+		# GCC 14.1 and 14.2 miscompile the component type remap in CGMSHLSLRuntime::SetUAVSRV at -O2/-O3;
+		# they emit the bt/cmov select with inverted polarity, so every typed SRV/UAV ends up with ComponentType U32.
+		# Texture2D<float4> becomes Texture2D<4xU32>, which makes every sample_* fail DXIL validation below SM 6.7
+		# ("sample_* instructions require resource to be declared to return UNORM, SNORM or FLOAT")
+		# and makes reflection report uint for float textures.
+		# -fno-if-conversion (or -fno-tree-vrp) stops GCC forming that select.
 		# Fixed in GCC 14.3; 12.x, 13.x and 15+ are unaffected, as are -O0/-O1/-Os and clang
 		# (which is why Microsoft's own clang-built DXC binaries are fine).
-		# This is not the GCC 13 -funswitch-loops miscompile (PR109934 / DXC #7364); that one is
-		# already handled inside DXC's own HandleLLVMOptions.cmake, and its guard stops at < 14.0.
+		# This is not the GCC 13 -funswitch-loops miscompile (PR109934 / DXC #7364);
+		# that one is already handled inside DXC's own HandleLLVMOptions.cmake, and its guard stops at < 14.0.
 
 		if self.settings.compiler == "gcc" and self._real_compiler_version() in [ (14, 1), (14, 2) ]:
 			tc.extra_cflags.append("-fno-if-conversion")
 			tc.extra_cxxflags.append("-fno-if-conversion")
 
-		# DXC builds its own sources and its vendored SPIRV-Tools with -Werror, and those have only ever
-		# been compiled with MSVC on Windows. clang-cl warns where MSVC doesn't, so the build dies on third
-		# party code we don't own: -Wmissing-field-initializers in SPIRV-Tools' binary.cpp/text.cpp and
-		# -Wunused-private-field on a padding member. Demote just those two rather than dropping -Werror,
+		# DXC builds its own sources and its vendored SPIRV-Tools with -Werror,
+		# and those have only ever been compiled with MSVC on Windows.
+		# clang-cl warns where MSVC doesn't, so the build dies on third party code we don't own:
+		# -Wmissing-field-initializers in SPIRV-Tools' binary.cpp/text.cpp and -Wunused-private-field on a padding member.
+		# Demote just those two rather than dropping -Werror,
 		# so a real diagnostic in the rest of the tree still stops the build.
 
 		if self.settings.compiler == "clang" and self.settings.os == "Windows":
@@ -393,7 +395,8 @@ class dxc(ConanFile):
 
 		self.cpp_info.includedirs = [ "include", "include/spirv-tools" ]
 
-		# Important note. This is built by using the cmake dependency graph
+		# Important note.
+		# This is built by using the cmake dependency graph
 		# We have to order from most dependent to least dependent
 		# Since apparently only MSVC is ok with linking in an "invalid" order
 

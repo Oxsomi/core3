@@ -49,8 +49,8 @@ void sigFunc(int signal) {
 	}
 
 	//Outputting to console is not technically allowed by the Windows docs
-	//If this signal is triggered from the wrong thread it might cause stackoverflow,
-	//but what are you gonna do? Crash again?
+	//If this signal is triggered from the wrong thread it might cause stackoverflow, but what are you gonna do?
+	//Crash again?
 	//For debugging purposes however, this is very useful
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
@@ -222,7 +222,8 @@ Bool Platform_onFree(void *ptr, U64 len) {
 				break;
 			}
 
-			//Overlapping range, but likely by accident! Log it, but refuse to track it.
+			//Overlapping range, but likely by accident!
+			//Log it, but refuse to track it.
 
 			else if ((U64)ptr >= captured->location && (U64)ptr < captured->location + captured->length)
 				Log_errorLn(

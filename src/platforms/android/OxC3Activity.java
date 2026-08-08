@@ -49,8 +49,8 @@ public class OxC3Activity extends NativeActivity {
 		super.onCreate(savedInstanceState);
 
 		//This EditText exists purely so the IME has somewhere to type; the app draws its own content.
-		//TextView answers the framework with an I-beam for anything editable, so the pointer turns into a
-		//text caret over the whole window even though there's no text to select.
+		//TextView answers the framework with an I-beam for anything editable,
+		// so the pointer turns into a text caret over the whole window even though there's no text to select.
 		//setPointerIcon can't fix that: TextView returns the caret before ever consulting it.
 
 		inputField = new EditText(this) {
@@ -113,8 +113,9 @@ public class OxC3Activity extends NativeActivity {
 	}
 
 	//Whether there's a hardware keyboard the user can actually type on right now.
-	//Configuration rather than walking InputDevice.getDeviceIds() on purpose: android has a "Show on-screen
-	//keyboard" setting for people who want both, and it reports the hard keyboard as hidden while that's on.
+	//Configuration rather than walking InputDevice.getDeviceIds() on purpose:
+	// android has a "Show on-screen keyboard" setting for people who want both,
+	// and it reports the hard keyboard as hidden while that's on.
 	//Enumerating devices ignores that preference and would take the IME away from them.
 	//It also avoids having to filter the soft keyboard itself back out, which enumerating does not.
 
@@ -167,8 +168,9 @@ public class OxC3Activity extends NativeActivity {
 			return unicode == 0 ? "" : new String(Character.toChars(unicode));
 		}
 
-		//load() throws UnavailableException if the id is unknown (keyboard unplugged between the
-		//key event and the remap call). An empty label is the documented "no remap available".
+		//load() throws UnavailableException if the id is unknown
+		// (keyboard unplugged between the key event and the remap call).
+		//An empty label is the documented "no remap available".
 
 		catch(Exception ex) {
 			return "";
@@ -177,7 +179,8 @@ public class OxC3Activity extends NativeActivity {
 
 	//Character a key produces for the current layout and modifier state, for the onTypeChar callback.
 	//Physical keys don't go through the EditText (it only has focus while the soft keyboard is up),
-	// so they'd otherwise produce no text at all. 0 means the key produces nothing printable.
+	// so they'd otherwise produce no text at all.
+	//0 means the key produces nothing printable.
 
 	public int getKeyUnicode(int keyCode, int metaState, int deviceId) {
 

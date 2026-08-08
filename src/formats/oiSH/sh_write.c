@@ -294,7 +294,8 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 				U8 inputs = 0, outputs = 0;
 
-				//We align to 2 elements since we store U4s. So we store 4 bits too much, but who cares.
+				//We align to 2 elements since we store U4s.
+				//So we store 4 bits too much, but who cares.
 
 				for(; inputs < 16; ++inputs)
 					if(!entry.inputs[inputs])
@@ -453,8 +454,9 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			.registerNameCount = (U16) (includeStart - regNameStart),
 			.uniformNameCount = (U16) (regNameStart - uniNamesStart),
 
-			//Persist the settings flags. HideMagicNumber is a serialization detail derived from the magic on read,
-			//so it isn't stored; ReflectionOnly (and any future content flags) round-trips here.
+			//Persist the settings flags.
+			//HideMagicNumber is a serialization detail derived from the magic on read,
+			// so it isn't stored; ReflectionOnly (and any future content flags) round-trips here.
 
 			.flags = (U16) (shFile->flags & ~(ESHSettingsFlags) ESHSettingsFlags_HideMagicNumber)
 		}

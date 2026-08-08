@@ -267,7 +267,8 @@ void Test_mat(Test *test) {
 
 	//========================= projections =========================
 
-	//Left handed, [0, 1] depth. What matters is where the near and far planes land after the divide.
+	//Left handed, [0, 1] depth.
+	//What matters is where the near and far planes land after the divide.
 
 	{
 		const F32 nearPlane = 0.1f, farPlane = 100;

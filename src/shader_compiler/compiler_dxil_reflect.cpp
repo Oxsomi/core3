@@ -45,7 +45,7 @@
 #endif
 
 //dxcapi.h must precede d3d12shader.h: on non-Windows it pulls in the WinAdapter that defines IUnknown,
-//which directx/d3d12shader.h (via d3dcommon.h) needs before it declares its reflection interfaces.
+// which directx/d3d12shader.h (via d3dcommon.h) needs before it declares its reflection interfaces.
 //On Windows those COM types (IUnknown, REFCLSID, BOOL, LPCWSTR, ...) come from <Windows.h>/<Unknwn.h> above.
 #define ENABLE_DXC_STATIC_LINKING
 #include "dxcompiler/dxcapi.h"
@@ -111,9 +111,10 @@ Bool Compiler_convertMemberDXIL(
 			case D3D_SVT_INT64:    stride = ESBStride_X64;  prim = ESBPrimitive_Int;    break;
 
 			//Opaque element: on DXIL, DXC does not describe a non-struct structured-buffer element's type
-			//(e.g. RWStructuredBuffer<float4> reflects its "$Element" as D3D_SVT_VOID with no rows/cols),
-			//whereas SPIRV reflects the real type. Preserve the element *size* by reflecting it as a raw
-			//1..4-wide 32-bit block, so RT/structured-buffer shaders still reflect on DXIL.
+			// (e.g. RWStructuredBuffer<float4> reflects its "$Element" as D3D_SVT_VOID with no rows/cols),
+			// whereas SPIRV reflects the real type.
+			//Preserve the element *size* by reflecting it as a raw 1..4-wide 32-bit block,
+			// so RT/structured-buffer shaders still reflect on DXIL.
 			case D3D_SVT_VOID:
 
 				if(!size || (size & 3) || (size >> 2) > 4)

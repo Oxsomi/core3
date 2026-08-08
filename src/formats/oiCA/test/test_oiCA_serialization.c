@@ -241,7 +241,8 @@ void Test_CASerializeHierarchy(Test *t) {
 	}
 }
 
-//MS-DOS date has 2-second resolution. Write with IncludeDate, read back, verify the timestamp matches
+//MS-DOS date has 2-second resolution.
+//Write with IncludeDate, read back, verify the timestamp matches
 void Test_CASerializeMsDosDate(Test *t) {
 
 	const RefPtrType memType = MemoryStream_makeType(t->alloc);

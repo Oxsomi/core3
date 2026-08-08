@@ -138,7 +138,7 @@ Bool File_loadVirtualInternal1(
 		gotoIfError3(clean, Buffer_createUninitializedBytes(section->lenExt, streamAlloc, &buf, e_rr));
 
 		//AAsset_read caps at int and returns short reads for compressed assets (they're inflated in chunks),
-		//so keep going until the whole thing is in.
+		// so keep going until the whole thing is in.
 
 		for (U64 readOff = 0; readOff < section->lenExt; ) {
 

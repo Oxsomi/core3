@@ -34,6 +34,14 @@
 extern const C8 *reqExtensionsName[];
 extern U64 reqExtensionsNameCount;
 
+//Indexes the presence array built from reqExtensionsName, so the order has to match that table.
+
+typedef enum EReqExtensions {
+	EReqExtensions_PushDescriptor,
+	EReqExtensions_Synchronization2,
+	EReqExtensions_Swapchain
+} EReqExtensions;
+
 typedef enum EOptExtensions {
 	EOptExtensions_PerfQuery,
 	EOptExtensions_RayPipeline,

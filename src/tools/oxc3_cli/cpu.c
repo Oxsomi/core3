@@ -26,9 +26,10 @@
 #include "types/base/error.h"
 #include "types/base/constants.h"
 
-//Lists the current CPU: logical cores, physical memory, and the ECPUFeatures capability flags detected once
-//at Platform_create. This lets you see, at a glance, which operations have a hardware / wide-SIMD "full speed"
-//path on this machine (mirrors "OxC3 graphics devices" for the CPU side).
+//Lists the current CPU: logical cores, physical memory,
+// and the ECPUFeatures capability flags detected once at Platform_create.
+//This lets you see, at a glance, which operations have a hardware / wide-SIMD "full speed" path on this machine
+// (mirrors "OxC3 graphics devices" for the CPU side).
 
 Bool CLI_cpuDevices(const ParsedArgs *args) {
 

@@ -202,7 +202,7 @@ static void Test_stringReplace(Test *t) {
 	CharString_free(&s, t->alloc);
 
 	//String replacement has to handle a replacement that's longer and shorter than the needle,
-	//since both resize the buffer in opposite directions.
+	// since both resize the buffer in opposite directions.
 	{
 		Test_assert(t, "seed", CharString_createCopy(S("one two one"), t->alloc, &s, &t->err));
 

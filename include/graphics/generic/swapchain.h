@@ -46,15 +46,16 @@ typedef enum ESwapchainPresentMode {
 
 typedef struct SwapchainInfo {
 
-	//Window that this swapchain is created for. Call SwapchainRef_resize on resize.
+	//Window that this swapchain is created for.
+	//Call SwapchainRef_resize on resize.
 	//
 	//IMPORTANT: This is a WEAK reference; the swapchain does NOT keep the window alive.
 	//The swapchain only knows the window is gone through the window's onDestroy callback,
-	//so the swapchain (and everything presenting to it) MUST be destroyed (RefPtr_dec'd)
-	//from within that destroy callback (or earlier), before the window's memory is released.
+	// so the swapchain (and everything presenting to it) MUST be destroyed (RefPtr_dec'd)
+	// from within that destroy callback (or earlier), before the window's memory is released.
 	//Dereferencing this pointer after the window was destroyed is undefined behavior.
 	//The render loop should only touch the window from within the window's callbacks
-	//(onDraw/onResize/onDestroy), which guarantees the window is still alive.
+	// (onDraw/onResize/onDestroy), which guarantees the window is still alive.
 	Window *window;
 
 	//Priorities using ESwapchainPresentMode.

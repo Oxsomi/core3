@@ -144,8 +144,8 @@ impl void WindowManager_freePhysical(Window *w);
 impl Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr);
 
 //Forgetting a window will erase it from the manager if relevant and will free the physical surface.
-// Everything else will stay 'valid' until the last WindowRef is dropped, but the window is effectively gone.
-// This is to allow the WindowRef to say alive for checking (e.g. IsActive) until the app is done with it.
+//Everything else will stay 'valid' until the last WindowRef is dropped, but the window is effectively gone.
+//This is to allow the WindowRef to say alive for checking (e.g. IsActive) until the app is done with it.
 void WindowManager_forgetWindow(WindowManager *manager, WindowRef *wRef) {
 
 	ListWindowPtr_eraseFirst(&manager->windows, wRef, 0, NULL, NULL);
@@ -498,7 +498,8 @@ Bool WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep, Er
 	if(I32x2_any(I32x2_leq(size, I32x2_zero)))
 		retError(clean, Error_invalidParameter(2, 0, "WindowManager_adaptSizes()::*sizep should be >0"));
 
-	//Verify min size. By default should be 360p+.
+	//Verify min size.
+	//By default should be 360p+.
 	//Can't go below EResolution_SD.
 
 	if(I32x2_any(I32x2_eq(minSize, I32x2_zero)))

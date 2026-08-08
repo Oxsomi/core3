@@ -64,7 +64,7 @@ namespace oxc {
 
 	//Conversions between the two vector flavours.
 	//Free functions rather than members, so neither vec4f.hpp nor vec4i.hpp has to know about the other -
-	//the same reason the C keeps these in vec_cvt.h instead of vec4f.h / vec4i.h.
+	// the same reason the C keeps these in vec_cvt.h instead of vec4f.h / vec4i.h.
 	//
 	//  cast*  reinterprets the bits (F32 1.0f <-> I32 0x3F800000)
 	//  to*    converts the value    (F32 1.9f -> I32 1)

@@ -60,7 +60,7 @@ Ns Time_now() {
 	
 	//clang reads the register inline on windows too, which MSVC can't do; only MSVC needs the .asm.
 	//That matters beyond tidiness: the ClangCL toolset preprocesses .asm before handing it to armasm64,
-	//which only understands #line and rejects the result outright.
+	// which only understands #line and rejects the result outright.
 
 	#if !defined(_WIN32) || defined(__clang__)
 		U64 Time_clocks() {

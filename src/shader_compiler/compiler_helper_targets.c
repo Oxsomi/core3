@@ -190,7 +190,7 @@ Bool Compiler_getTargetsFromFile(
 		gotoIfError3(clean, CharString_append(&resolved, '/', alloc, e_rr));
 
 		//Foreach reports full virtual paths ("//section/...") while resolve strips the marker; re-add it
-		//so the base cut in registerFile lines up and allShaders entries stay valid File_read inputs.
+		// so the base cut in registerFile lines up and allShaders entries stay valid File_read inputs.
 
 		if(isVirtual) {
 			const CharString virtualPrefix = CharString_createRefCStrConst("//");
@@ -198,7 +198,7 @@ Bool Compiler_getTargetsFromFile(
 		}
 
 		//A separate flag on purpose: reusing isVirtual would clobber the input's virtualness with the
-		//output's, and it's the input that decides how registerFile stores paths.
+		// output's, and it's the input that decides how registerFile stores paths.
 
 		if(output) {
 			Bool isVirtualOut;

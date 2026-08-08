@@ -22,7 +22,7 @@
 
 //File_resolve and File_makeRelative.
 //The path sandbox lives here: resolve is what stops a path from escaping the app/working directory, so
-//the rejection cases matter as much as the happy ones.
+// the rejection cases matter as much as the happy ones.
 //CharString_isValidFileName / isValidFilePath are covered separately, in test_types_base_string_read.c.
 
 #include "test_types_container_shared.h"

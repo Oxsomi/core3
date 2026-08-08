@@ -28,7 +28,8 @@
 
 extern Bool sbRoundTrip(Test *t, const SBFile *src, StreamRef **archiveSr, SBFile *result, const RefPtrType *type);
 
-//1D array variable (inline dimension <= 32767). Verifies arrayDimOrArrayId encoding.
+//1D array variable (inline dimension <= 32767).
+//Verifies arrayDimOrArrayId encoding.
 void Test_SBFileRoundTripInlineArray(Test *t) {
 
 	Test_setModule(t, "SBFile arrays: inline 1D array (dim=4)");
@@ -183,7 +184,8 @@ void Test_SBFileRoundTripArrayDim32768(Test *t) {
 	}
 }
 
-//Multi-dimensional array (2D: [3][3]). Verifies full array table path (bit15 set).
+//Multi-dimensional array (2D: [3][3]).
+//Verifies full array table path (bit15 set).
 void Test_SBFileRoundTripNDArray(Test *t) {
 
 	Test_setModule(t, "SBFile arrays: multi-dimensional [3][3]");

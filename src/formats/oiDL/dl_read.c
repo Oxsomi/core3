@@ -261,7 +261,8 @@ Bool DLFile_read(
 	if (!chunkSize)
 		chunkSize = 32 * KIBI - sizeof(CryptoChunk);        //Ensure we get exactly 32 KiB cache size
 
-	//If we have any lazy entries we will need the encryption keys for later. Copy them.
+	//If we have any lazy entries we will need the encryption keys for later.
+	//Copy them.
 	//(Lazy entries are always possible if they span multiple chunks)
 
 	if (isEncrypted) {
@@ -313,7 +314,7 @@ Bool DLFile_read(
 
 		//Find seek offset
 
-		//We'll create a new cursor if our previous cursor is too small.
+		//We'll create a new cursor if our previous cursor is too small,
 		// because the previous cursor is constantly looking at entryStart + i * entryStride
 
 		Bool isInPrimaryCursor = !isEncrypted && StreamCursor_contains(&cursor, dataOff, entryLen);

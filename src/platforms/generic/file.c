@@ -130,7 +130,8 @@ Bool File_queryFileObjectCountAllVirtual(
 
 //Physical implementations
 //These all assume we pass them a null terminated string that has been fully resolved.
-//These make their way directly to the OS. They'll be limited to 1023 for portability reasons.
+//These make their way directly to the OS.
+//They'll be limited to 1023 for portability reasons.
 //    Windows: \\?\ need to be fully resolved; \\?\C:\programming\test (not //?/C:/test or //?C:test)
 //    Unix:    Null terminated string
 
@@ -1075,10 +1076,11 @@ typedef struct ForeachFile {
 	CharString currentPath;
 } ForeachFile;
 
-//Re-qualifies an archive internal name ("hlsl/foo.hlsl") as a full virtual path
-//("//<section>/hlsl/foo.hlsl") before forwarding to the user's callback. The archive only knows its own
-//names, but foreach's contract is that every reported path is itself a valid input for the other File_*
-//functions, matching the absolute paths the physical foreach reports.
+//Re-qualifies an archive internal name ("hlsl/foo.hlsl") as a full virtual path ("//<section>/hlsl/foo.hlsl")
+// before forwarding to the user's callback.
+//The archive only knows its own names,
+// but foreach's contract is that every reported path is itself a valid input for the other File_* functions,
+// matching the absolute paths the physical foreach reports.
 
 static Bool File_virtualForeachCallback(const FileInfo *info, ForeachFile *foreach, const Allocator *alloc, Error *e_rr) {
 
@@ -1132,8 +1134,10 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 	for(U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
 		const VirtualSection *section = Platform_instance->virtualSections.ptr + i;
 
-		//Only loaded sections are accessible. A registered-but-unloaded section is invisible (matching File_has),
-		//so the root listing/count stays empty when nothing is loaded. Callers load sections before walking them.
+		//Only loaded sections are accessible.
+		//A registered-but-unloaded section is invisible (matching File_has),
+		// so the root listing/count stays empty when nothing is loaded.
+		//Callers load sections before walking them.
 		if(!section->loadedAndId)
 			continue;
 
@@ -1151,8 +1155,9 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 		//- section equals query exactly
 		//- our path starts with section/ (query is inside section)
 
-		//At root the query is empty; every section is below it. startsWith(secLower, "/") is false because
-		//section paths carry no leading slash, so treat an empty query as matching all sections.
+		//At root the query is empty; every section is below it.
+		//startsWith(secLower, "/") is false because section paths carry no leading slash,
+		// so treat an empty query as matching all sections.
 		Bool sectionBelowQuery  = !CharString_length(resolvedLower) ||
 			CharString_startsWithStringInsensitive(&secLower, &resolvedSlash, 0);
 		Bool sectionIsQuery     = CharString_equalsStringInsensitive(&secLower,        &resolvedLower);
@@ -1165,9 +1170,9 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 
 		U64 secSlashCount = CharString_countAllSensitive(&secLower, '/', 0);
 
-		//When iterating root, emit the top-level ancestor directory of nested sections (a/b -> "a") as a
-		//virtual folder, de-duplicated since multiple sections may share it. Top-level (slashless) sections
-		//are emitted by the block below instead, so only nested sections need this.
+		//When iterating root, emit the top-level ancestor directory of nested sections (a/b -> "a") as a virtual folder,
+		// de-duplicated since multiple sections may share it.
+		//Top-level (slashless) sections are emitted by the block below instead, so only nested sections need this.
 		if(!CharString_length(resolvedLower) && secSlashCount) {
 
 			CharString parent = CharString_createNull();
@@ -1190,7 +1195,7 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 				gotoIfError3(clean, ListCharString_pushBack(&visited, parentCopy, alloc, e_rr));
 
 				//Emitted with the // marker so the callback can hand the path straight back to File_*;
-				//the visited dedup above stays on the unprefixed form.
+				// the visited dedup above stays on the unprefixed form.
 
 				CharString_free(&prefixed, alloc);
 

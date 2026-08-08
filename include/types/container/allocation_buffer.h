@@ -28,13 +28,13 @@
 	extern "C" {
 #endif
 
-//An allocation buffer functions mostly like a ring buffer, but it falls back to a
-//normal block buffer if it can't allocate in O(1) (e.g. space at back or front is unavailable).
+//An allocation buffer functions mostly like a ring buffer,
+// but it falls back to a normal block buffer if it can't allocate in O(1) (e.g. space at back or front is unavailable).
 //This means it can be used for both purposes.
 //
 //"Non linear" is a flag that can be used for Vulkan when textures and buffers are placed closely together.
 //In that case, the block's alignment isn't the only one that is important, but also the buffer's nonLinearAlignment is.
-// If a non linear buffer is next to a linear buffer it needs to introduce this extra padding.
+//If a non linear buffer is next to a linear buffer it needs to introduce this extra padding.
 
 typedef struct AllocationBufferBlock {
 	U64 startAndNonLinearAndFree;    //1 bit isFree, 1 bit isNonLinear, 62 bit start

@@ -29,9 +29,9 @@
 #endif
 
 //This will compare the two files at a and b.
-// Both files have to be buffers or streams that are seekable, otherwise it'll error.
-// Keep in mind that this is a full compare, which could take very long with big files.
-// As such, this should only be used in tools that are expected to take a long time.
+//Both files have to be buffers or streams that are seekable, otherwise it'll error.
+//Keep in mind that this is a full compare, which could take very long with big files.
+//As such, this should only be used in tools that are expected to take a long time.
 Bool CAFile_dataEqual(
 	const CAFile *a, CAHandle aFile,
 	const CAFile *b, CAHandle bFile,

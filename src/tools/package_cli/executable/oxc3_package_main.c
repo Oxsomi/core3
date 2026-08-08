@@ -46,8 +46,8 @@ Platform_defineEntrypoint() {
 
 	ListCharString args = Platform_instance->args;
 
-	//-raw keeps .hlsl/.hlsli as source instead of compiling them, for test data that gets read back as
-	//text. Stripped here so the positional arguments below still line up.
+	//-raw keeps .hlsl/.hlsli as source instead of compiling them, for test data that gets read back as text.
+	//Stripped here so the positional arguments below still line up.
 
 	Bool keepShaderSource = false;
 
@@ -87,8 +87,8 @@ Platform_defineEntrypoint() {
 
 		//Always both formats on Windows rather than whichever the packager's own graphics config prefers.
 		//The packaged oiCA outlives one configuration: a tree's four configs (and its bin/) share these
-		//outputs, so a DXIL-only package written by a static D3D12 packager eventually meets a runtime
-		//that can see Vulkan, which then dies at device create with "SPIRV binary is missing".
+		// outputs, so a DXIL-only package written by a static D3D12 packager eventually meets a runtime
+		// that can see Vulkan, which then dies at device create with "SPIRV binary is missing".
 		//Compiling the prebuilt shaders twice costs seconds; diagnosing that mismatch didn't.
 
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS

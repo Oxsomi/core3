@@ -33,9 +33,8 @@
 
 // -- F1. CPU buffer -> screen ---------------------------------------------------
 //
-//Gradient is written from onDraw (driven by WM_PAINT / the Wayland frame cycle),
-//not by the test body. The test only flips a flag in F1State and waits for the
-//callback to have actually run before inspecting the buffer.
+//Gradient is written from onDraw (driven by WM_PAINT / the Wayland frame cycle), not by the test body.
+//The test only flips a flag in F1State and waits for the callback to have actually run before inspecting the buffer.
 
 typedef struct F1State {
 	volatile Bool drawn;
@@ -148,8 +147,8 @@ clean:
 
 // -- F6. Window_storeCPUBufferToDisk -------------------------------------------
 //
-//Fills the buffer with a deterministic pattern from onDraw, then stores it to
-//a DDS file and reads it back to verify pixels round-trip correctly.
+//Fills the buffer with a deterministic pattern from onDraw,
+// then stores it to a DDS file and reads it back to verify pixels round-trip correctly.
 
 typedef struct F6State {
 	volatile Bool drawn;
@@ -271,7 +270,7 @@ static void Test_storeCPUBuffer(Test *t) {
 
 	//Pixel spot-check via the sub-resource stream
 	//DDS_read returns one SubResourceData per mip/layer.
-	// For a 512x 1-mip 1-layer image there is exactly one entry.
+	//For a 512x 1-mip 1-layer image there is exactly one entry.
 
 	Test_assert(t, "oneSubResource", subResources.length == 1);
 
@@ -286,8 +285,7 @@ static void Test_storeCPUBuffer(Test *t) {
 		OxStream *stream = RefPtr_data(sr->stream, OxStream);
 
 		//We wrote R = 0,G = 0,B = 42,A = 255 at pixel 0.
-		//storeCPUBufferToDisk maps the window format to BGRA8 by default,
-		//so on-disk order is B,G,R,A -> 42,0,0,255.
+		//storeCPUBufferToDisk maps the window format to BGRA8 by default, so on-disk order is B,G,R,A -> 42,0,0,255.
 		//If the format stayed RGBA8 the order is R,G,B,A -> 0,0,42,255.
 		//Accept either
 

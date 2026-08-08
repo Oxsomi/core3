@@ -447,7 +447,7 @@ static void Test_streamCompare(Test *t, StreamHarness *h) {
 	else Test_assert(t, "Different sizes symmetric: no error", false);
 
 	//Small chunkSize to exercise multi-chunk path (chunkSize < 32KiB will be clamped by StreamCursor_create,
-	//so use a valid minimum, but we can test the chunking logic is hit by using a tiny explicit chunk)
+	// so use a valid minimum, but we can test the chunking logic is hit by using a tiny explicit chunk)
 	//Recreate equal streams to verify chunked path gives same result
 
 	RefPtr_dec(&streamB);

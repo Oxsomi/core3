@@ -31,9 +31,9 @@
 #endif
 
 Bool File_getInfo(const CharString *loc, FileInfo *info, const Allocator *alloc, Error *e_rr);
-//Callbacks always receive fully qualified paths: absolute for physical entries, //-prefixed for virtual
-//ones. Either form is itself a valid input for the other File_* functions, so foreach output can be fed
-//straight back in (read, getInfo, ...) without the caller re-rooting anything.
+//Callbacks always receive fully qualified paths: absolute for physical entries, //-prefixed for virtual ones.
+//Either form is itself a valid input for the other File_* functions,
+// so foreach output can be fed straight back in (read, getInfo, ...) without the caller re-rooting anything.
 Bool File_foreach(
 	const CharString *loc,
 	Bool inAppDir, FileCallback callback,

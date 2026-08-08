@@ -68,7 +68,8 @@ void Log_printCapturedStackTrace(const Allocator *alloc, const StackTrace stackT
 void Log_printStackTrace(const Allocator *alloc, U8 skip, ELogLevel lvl, ELogOptions options);
 
 //IMPORTANT:
-//NEVER! Supply user generated content into format. Instead, use "%.*s".
+//NEVER! Supply user generated content into format.
+//Instead, use "%.*s".
 //When displaying strings, use "%.*s", (int) args.length, arg.ptr instead of args.ptr, because strings aren't null terminated.
 //(Only exception is if the strings are safely generated from code and are determined to be null terminated, then use %s)
 

@@ -187,7 +187,7 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 	#endif
 
 	//Without parsing /sys/devices/system/cpu topology we can't reliably separate SMT or P/E cores, so fall back
-	//to logical == physical (accurate on the no-SMT ARM parts this branch mostly targets).
+	// to logical == physical (accurate on the no-SMT ARM parts this branch mostly targets).
 	//TODO: parse /sys topology for true physical core count, hybrid P/E split and NUMA node count.
 
 	out->physicalCores = out->logicalCores;

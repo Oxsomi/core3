@@ -203,7 +203,8 @@ U32 Buffer_crc32cFallbackChained(const Buffer buf, U32 prevCrc) {
 }
 
 //Ported from https://github.com/krisprice/simd_md5/blob/master/simd_md5/md5_sse.c#L9
-//But removed SIMD, since it was incredibly (and I can't stress this enough!) badly done. Found locally that:
+//But removed SIMD, since it was incredibly (and I can't stress this enough!) badly done.
+//Found locally that:
 //    Their SIMD version does 1GiB in 52s (Debug) and 22s (Release)
 //    My non-SIMD version does 1GiB in 12s (Debug) and 4s (Release).
 //    It is clear that due to the data dependencies in MD5, it's just not a good fit for SSE.

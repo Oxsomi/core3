@@ -173,8 +173,9 @@
 		GraphicsDeviceRef *deviceRef = NULL;
 		Error err = Error_none();
 
-		//Querying live memory requires a real device. If creation fails (e.g. a build without embedded graphics
-		//shaders, or a driver issue) we just note it rather than dumping the full error/stacktrace per device.
+		//Querying live memory requires a real device.
+		//If creation fails (e.g. a build without embedded graphics shaders, or a driver issue) we just note it
+		// rather than dumping the full error/stacktrace per device.
 
 		if(!GraphicsDeviceRef_create(
 			instanceRef, info, EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, &deviceRef, &err

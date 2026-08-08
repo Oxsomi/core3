@@ -612,10 +612,10 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	struct wl_compositor *compositor = manager->compositor;
 
 	//Main surface, the handle passed to Vulkan / vkCreateWaylandSurfaceKHR.
-	// Note: Wayland does not expose the window's position in global compositor
-	// coordinates to clients (by design, for security). w->offset is always zero
-	// on this platform. Use w->monitors[i].offsetPixels for output origins, which
-	// is sufficient for subpixel rendering decisions.
+	//Note: Wayland does not expose the window's position in global compositor coordinates to clients
+	// (by design, for security).
+	//w->offset is always zero on this platform.
+	//Use w->monitors[i].offsetPixels for output origins, which is sufficient for subpixel rendering decisions.
 	struct wl_surface *surface = wl_compositor_create_surface(compositor);
 
 	if(!surface)

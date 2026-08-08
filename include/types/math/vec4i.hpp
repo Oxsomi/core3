@@ -35,7 +35,7 @@
 #endif
 
 //platform_types.h is what decides _SIMD,
-//so pull it into oxc::c first, its *types* belong there like every other C header's.
+// so pull it into oxc::c first, its *types* belong there like every other C header's.
 //The macros it defines are global regardless (macros don't see namespaces),
 // which is what lets the intrinsic header be picked below, at the global scope intrinsics require.
 

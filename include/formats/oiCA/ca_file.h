@@ -149,8 +149,8 @@ Bool CAFile_read(
 // (U64)-1 = invalid,
 // 0 = root (if folder)
 //NOTE: CAHandle can be invalidated when files are added/removed/moved, so make sure to re-calculate when applicable.
-// For debugging, snapshot CAFile_version() when a handle is obtained and compare it before reuse; a changed
-// version means an add/move/remove happened and the handle may now point at a different (or no) entry.
+//For debugging, snapshot CAFile_version() when a handle is obtained and compare it before reuse.
+//A changed version means an add/move/remove happened and the handle may now point at a different (or no) entry.
 typedef U64 CAHandle;
 
 static const U64 CAHandle_Invalid = (U64)-1;

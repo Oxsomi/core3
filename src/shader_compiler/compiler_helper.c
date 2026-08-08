@@ -185,7 +185,7 @@ Bool Compiler_getUniqueCompiles(
 
 		//Note: Since compiled combinations excludes uniforms, it'll "compile" for uniformId 0 which will later be
 		//        explicitly linked for the real uniform information.
-		//        This means the compiler will only do 1 compile step, but multiple linking steps for the uniforms.
+		//This means the compiler will only do 1 compile step, but multiple linking steps for the uniforms.
 
 		for (U64 j = 0; j < SHEntryRuntime_getCombinationsCompiled(&runtime); ++j) {
 

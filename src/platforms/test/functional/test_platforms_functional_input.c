@@ -59,8 +59,8 @@ Bool isSingleWindow();
 // -- F5. Keyboard - OS layer (interactive) -----------------------------------
 
 //A key the operator can be expected to have, which rules out ESC: compact bluetooth keyboards often
-//don't carry one, and android hands ESC to the system as BACK, so the press would close the window
-//instead of ever reaching us.
+// don't carry one, and android hands ESC to the system as BACK, so the press would close the window
+// instead of ever reaching us.
 //The digit row is on every layout, so 1 works everywhere the suite runs.
 
 #define TEST_KEY      EKey_1
@@ -163,7 +163,7 @@ static void Test_keyboard(Test *t) {
 	#endif
 
 	//Not forced: with a hardware keyboard attached this stays down and the operator uses that one,
-	//which is also what the device does when there's nothing to type on but the screen.
+	// which is also what the device does when there's nothing to type on but the screen.
 
 	Platform_setKeyboardVisible(true);
 
@@ -326,9 +326,8 @@ clean:
 //On Windows a synthetic round-trip is attempted first via SendInput VK codes
 // (Shift+H, e, l, l, o, ...) so the test is not purely interactive.
 //
-//NOTE: onTypeChar delivers OS-level text input (after IME / layout mapping),
-// not raw scancodes.  The 'H' therefore requires a Shift modifier injected
-// alongside it.
+//NOTE: onTypeChar delivers OS-level text input (after IME / layout mapping), not raw scancodes.
+//The 'H' therefore requires a Shift modifier injected alongside it.
 
 static CharString typedText;
 
@@ -558,7 +557,7 @@ static void Test_focusReset(Test *t) {
 				Test_assert(t, "stateSet", InputDevice_getCurrentState(kb, hEsc));
 
 				//Minimize triggers a compositor wl_keyboard::leave event which
-				//LWindow_kbLeave handles, clearing all held keys and firing onDeviceButton.
+				// LWindow_kbLeave handles, clearing all held keys and firing onDeviceButton.
 
 				LWindow *lwin = WindowExt(w, LWindow);
 				LWindowManager *manager = (LWindowManager *)w->owner->platformData.ptr;
@@ -584,14 +583,13 @@ static void Test_focusReset(Test *t) {
 // -- F15. Keyboard remap -------------------------------------------------------
 //
 //Calls Keyboard_remap for EKey_Q W E R T Y to get the layout-specific label
-// for each physical key, prints them, then waits for the operator to press
-// every one of them.  The EKey values received through the OS input path must
-// match exactly, proving that the scan-code -> EKey mapping and Keyboard_remap
-// agree for whatever physical layout the operator uses (QWERTY, AZERTY, etc.).
+// for each physical key, prints them, then waits for the operator to press every one of them.
+//The EKey values received through the OS input path must match exactly, proving that the scan-code -> EKey mapping
+// and Keyboard_remap agree for whatever physical layout the operator uses (QWERTY, AZERTY, etc.).
 //
 //Synthetic injection is intentionally absent: injecting fixed scancodes would
-// only test that 0x10-0x15 map to EKey_Q-Y, which F5 already covers. The value
-// here is the operator pressing the keys their layout labels show.
+// only test that 0x10-0x15 map to EKey_Q-Y, which F5 already covers.
+//The value here is the operator pressing the keys their layout labels show.
 
 #define F15_KEY_COUNT 6
 static const EKey F15_keys[F15_KEY_COUNT] = {
@@ -602,7 +600,7 @@ static volatile U32 f15_pressed;   // bitmask, bit i set when F15_keys[i] receiv
 
 //First character of each key's layout label, filled in once Keyboard_remap has resolved them below.
 //An on screen keyboard sends text rather than key events, so that label is the only thing the two
-//paths have in common; matching against it is also exactly what this test asserts.
+// paths have in common; matching against it is also exactly what this test asserts.
 
 static C8 f15_labels[F15_KEY_COUNT];
 
@@ -714,8 +712,8 @@ static void Test_keyboardRemap(Test *t) {
 	}
 
 	//Interactive only, see comment at top of function.
-	//Raised for the same reason F5 does it: where the screen is the only keyboard there's otherwise
-	//nothing to press. Stays down when a hardware keyboard is attached.
+	//Raised for the same reason F5 does it: where the screen is the only keyboard there's otherwise nothing to press.
+	//Stays down when a hardware keyboard is attached.
 
 	Platform_setKeyboardVisible(true);
 
@@ -752,18 +750,15 @@ clean:
 // -- F18. Mouse draw: paint into CPU buffer with left-button drag -------------
 //
 //Opens a 256x256 window with a CPU buffer, initialised to a solid gray.
-//The operator (or synthetic injection) holds left mouse button and drags
-// across the window.  The onDeviceAxis callback records the cursor position;
-// onDeviceButton records the pressed state. The actual painting now happens
-// in onDraw rather than inline in the input callbacks or the test body: input
-// callbacks only update f18's cursor/button state, onDraw is the single place
-// that touches cpuVisibleBuffer, and we request a repaint each time the mouse
-// moves while the button is held so onDraw gets a chance to run again.
+//The operator (or synthetic injection) holds left mouse button and drags across the window.
+//The onDeviceAxis callback records the cursor position; onDeviceButton records the pressed state.
+//The actual painting now happens in onDraw rather than inline in the input callbacks or the test body:
+// input callbacks only update f18's cursor/button state, onDraw is the single place that touches cpuVisibleBuffer,
+// and we request a repaint each time the mouse moves while the button is held so onDraw gets a chance to run again.
 //
-//After the drag we verify that at least one pixel changed from the initial
-// gray (0x80808080) to white (0xFFFFFFFF), proving the full path:
-//Pointer events -> Mouse InputDevice axes + button ->
-// application reads them -> onDraw paints into the CPU buffer -> present.
+//After the drag we verify that at least one pixel changed from the initial gray (0x80808080) to white (0xFFFFFFFF),
+// proving the full path:
+//Pointer events -> Mouse InputDevice axes + button -> application reads them -> onDraw paints into the CPU buffer -> present.
 
 #define F18_INIT_COLOR 0x80u   //Grey channel value
 
@@ -791,12 +786,11 @@ static void F18_onDraw(Window *w) {
 			f18.points[f18.pointCount++] = p;
 	}
 
-	//Re-establish a known background every frame -- a buffer we haven't
-	//drawn into yet (LWINDOW_BUFFER_COUNT rotation, or a fresh allocation
-	//from a resize) isn't guaranteed to already be grey -- then replay every
-	//recorded point on top, clipped to the *current* size. This keeps every
-	//presented buffer identical regardless of rotation, and stays correct
-	//across a resize since out-of-bounds points are just skipped.
+	//Re-establish a known background every frame -- a buffer we haven't drawn into yet
+	// (LWINDOW_BUFFER_COUNT rotation, or a fresh allocation from a resize) isn't guaranteed to already be grey
+	// -- then replay every recorded point on top, clipped to the *current* size.
+	//This keeps every presented buffer identical regardless of rotation, and stays correct across a resize
+	// since out-of-bounds points are just skipped.
 
 	U8 *px = w->cpuVisibleBuffer.ptrNonConst;
 	U64 len = Buffer_length(w->cpuVisibleBuffer);
@@ -1085,8 +1079,8 @@ static void Test_scrollWheel(Test *t) {
 
 	#if _PLATFORM_TYPE == PLATFORM_LINUX
 
-		//xdotool pointer injection uses the X11 XTEST extension and does not
-		// reach native Wayland surfaces. Scroll testing is interactive-only on Linux.
+		//xdotool pointer injection uses the X11 XTEST extension and does not reach native Wayland surfaces.
+		//Scroll testing is interactive-only on Linux.
 		Test_print(t, "Native Wayland: synthetic scroll injection unavailable, interactive-only");
 
 	#elif _PLATFORM_TYPE == PLATFORM_WINDOWS

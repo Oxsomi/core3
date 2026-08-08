@@ -52,7 +52,8 @@ Bool packageFile(const FileInfo *file, CAFileRecursion *pkgFile, const Allocator
 	Buffer data = Buffer_createNull();
 
 	//Virtual foreach also echoes the queried folder itself ("//section" for a root of "//section/"),
-	//where physical foreach only reports children. There's nothing to cut there; it IS the root.
+	// where physical foreach only reports children.
+	//There's nothing to cut there; it IS the root.
 
 	if(CharString_length(file->path) < CharString_length(pkgFile->root))
 		goto clean;
@@ -103,8 +104,7 @@ Bool packageFile(const FileInfo *file, CAFileRecursion *pkgFile, const Allocator
 		#endif
 
 		//We have to detect file type and process it here to a custom type.
-		//We don't have a custom file yet (besides oiSH), so for now
-		//this will just be identical to addFileToCAFile.
+		//We don't have a custom file yet (besides oiSH), so for now this will just be identical to addFileToCAFile.
 
 		CAHandle handle = CAFile_addFile(pkgFile->archive, parent, &subPath, 0, alloc, e_rr);
 
@@ -168,7 +168,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 	//Grab all files that need compilation
 
 	//keepShaderSource stores the .hlsl instead, so there's nothing to compile and the enumeration below
-	//would only find shaders it must not touch.
+	// would only find shaders it must not touch.
 
 	#ifdef CLI_SHADER_COMPILER
 		if(!settings->keepShaderSource)
@@ -197,7 +197,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 	gotoIfError3(clean, CharString_append(&resolved, '/', alloc, e_rr));
 
 	//Foreach reports full virtual paths ("//section/...") while resolve strips the marker; re-add it so
-	//the root cut in packageFile lines up when a virtual folder is being packaged.
+	// the root cut in packageFile lines up when a virtual folder is being packaged.
 
 	if(isVirtual) {
 		const CharString virtualPrefix = CharString_createRefCStrConst("//");
@@ -266,9 +266,10 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 				retError(clean, Error_invalidState(0, "Packager_package() one of the shaders didn't compile, aborting packaging"));
 			}
 
-			//allOutputs[i] is an archive-relative path (same rooting as packageFile's subPath), so split it into
-			//parent folder + leaf name, resolve the parent (already added during the file walk), add the leaf and
-			//attach the compiled buffer. CAFile_addFile moves the name and CAFile_setData moves the buffer out.
+			//allOutputs[i] is an archive-relative path (same rooting as packageFile's subPath),
+			// so split it into parent folder + leaf name, resolve the parent (already added during the file walk),
+			// add the leaf and attach the compiled buffer.
+			//CAFile_addFile moves the name and CAFile_setData moves the buffer out.
 
 			CharString outPath = allOutputs.ptr[i];
 

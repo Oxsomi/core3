@@ -598,7 +598,7 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 
 	DxDescriptorTable *table = DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Dx);
 	//Each heap's increment comes from GetDescriptorHandleIncrementSize for its own descriptor type,
-	//and sampler descriptors are not the same size as CBV/SRV/UAV ones on every adapter.
+	// and sampler descriptors are not the same size as CBV/SRV/UAV ones on every adapter.
 	//So the sampler offset has to scale by the sampler heap's stride.
 	//Using the resource heap's happens to work only where the two coincide,
 	// and lands somewhere else entirely on hardware where they don't.
@@ -903,8 +903,8 @@ clean:
 	#if _ARCH == ARCH_X86_64
 
 		//Regardless of device removal, we'll ask NV to report anything fishy to us.
-		//It's technically possible that a TDR/Device removal is caused during setup time,
-		//but it's very unlikely. As we do the bulk of D3D12 calls and all RT calls in submitCommands.
+		//It's technically possible that a TDR/Device removal is caused during setup time, but it's very unlikely.
+		//As we do the bulk of D3D12 calls and all RT calls in submitCommands.
 		//Otherwise we'd have to guard every dxCheck, which might not even have a device (could happen on an instance).
 
 		if(device->info.capabilities.features & EGraphicsFeatures_RayValidation) {

@@ -42,7 +42,8 @@ HASH_CACHE_FILE = os.path.join(ROOT, ".dep_hashes.json")
 
 ALL_MODES = [ "Release", "Debug", "RelWithDebInfo", "MinSizeRel" ]
 
-# Matches the floor documented in README.md. dirs_exist_ok (the apk step) is what actually needs 3.8
+# Matches the floor documented in README.md.
+# dirs_exist_ok (the apk step) is what actually needs 3.8
 MIN_PYTHON = (3, 8)
 
 # The host OxC3_package tool is always built optimized; nothing about the target changes it, and a cross
@@ -89,8 +90,8 @@ def python():
 
 def isSteamOS():
 
-	# Inside a flatpak sandbox /etc/os-release reflects the container, not the
-	# host. Use flatpak-spawn --host to read the real host OS file instead.
+	# Inside a flatpak sandbox /etc/os-release reflects the container, not the host.
+	# Use flatpak-spawn --host to read the real host OS file instead.
 
 	if shutil.which("flatpak-spawn"):
 		try:
@@ -211,13 +212,15 @@ def hostPlatformName():
 
 	return "linux"
 
-# Compiler each platform uses when -compiler isn't given. These are the combinations that have always
-# been built; the alternatives exist so CI can cover a second toolchain, not to change anyone's default.
+# Compiler each platform uses when -compiler isn't given.
+# These are the combinations that have always been built; the alternatives exist so CI can cover a second toolchain,
+# not to change anyone's default.
 DEFAULT_COMPILERS = { "Windows": "msvc", "Darwin": "clang", "Linux": "gcc" }
 
-# What each platform can actually be built with. Deliberately excludes combinations that would be a new
-# target rather than a new compiler: MinGW gcc doesn't share Windows' CRT or ABI, and `gcc` on macOS is a
-# clang symlink, so a gcc job there would silently retest clang.
+# What each platform can actually be built with.
+# Deliberately excludes combinations that would be a new target rather than a new compiler:
+# MinGW gcc doesn't share Windows' CRT or ABI, and `gcc` on macOS is a clang symlink,
+# so a gcc job there would silently retest clang.
 SUPPORTED_COMPILERS = { "Windows": ("msvc", "clang"), "Darwin": ("clang",), "Linux": ("gcc", "clang") }
 
 def defaultCompiler():
@@ -289,8 +292,8 @@ def conanKnownCompilerVersions(compiler):
 
 	versions = []
 
-	# `^\s+clang:$` can't match `apple-clang:`, since a '-' isn't whitespace. version is the first key
-	# under the compiler, so the next one in the file is the one we're after; it wraps across lines.
+	# `^\s+clang:$` can't match `apple-clang:`, since a '-' isn't whitespace.
+	# version is the first key under the compiler, so the next one in the file is the one we're after; it wraps across lines.
 
 	header = re.compile(r"^\s+" + re.escape(compiler) + r":\s*$", re.MULTILINE)
 	values = re.compile(r"version:\s*\[(.*?)\]", re.DOTALL)
@@ -355,9 +358,9 @@ def conanCompilerVersion(compiler, version):
 # ---------------------------------------------------------------------------------------------------
 # Recipe introspection
 #
-# Read constants straight out of conanfile.py rather than duplicating them here. Importing it isn't an
-# option (it needs the conan python package, which may live in a different interpreter than ours), so
-# parse the AST instead; these are plain literals.
+# Read constants straight out of conanfile.py rather than duplicating them here.
+# Importing it isn't an option (it needs the conan python package, which may live in a different interpreter than ours),
+# so parse the AST instead; these are plain literals.
 # ---------------------------------------------------------------------------------------------------
 
 def _recipeConstant(name, insideClass):

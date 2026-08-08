@@ -34,9 +34,10 @@
 	#include <TargetConditionals.h>            //platform_types.h reaches for this on apple
 #endif
 
-//platform_types.h is what decides _SIMD, so pull it into oxc::c first - its *types* belong there like
-//every other C header's. The macros it defines are global regardless (macros don't see namespaces),
-//which is what lets the intrinsic header be picked below, at the global scope intrinsics require.
+//platform_types.h is what decides _SIMD, so pull it into oxc::c first - its *types* belong there
+// like every other C header's.
+//The macros it defines are global regardless (macros don't see namespaces),
+// which is what lets the intrinsic header be picked below, at the global scope intrinsics require.
 
 namespace oxc { namespace c {
 	#include "types/base/platform_types.h"
@@ -52,8 +53,9 @@ namespace oxc { namespace c {
 
 //Operator sugar over the C F32x4.
 //
-//This is a value, not a resource: no allocator, no ownership, trivially copyable, and it compiles away
-//to the same intrinsics the C code emits. The point is only that
+//This is a value, not a resource: no allocator, no ownership, trivially copyable,
+// and it compiles away to the same intrinsics the C code emits.
+//The point is only that
 //
 //  F32x4_add(F32x4_mul(a, b), F32x4_xxxx4(2))
 //
@@ -61,11 +63,11 @@ namespace oxc { namespace c {
 //
 //  a * b + 2
 //
-//Split from I32x4 the same way vec4f.h is split from vec4i.h: neither needs the other, and the
-//conversions between them live in vec_cvt.hpp, mirroring vec_cvt.h.
+//Split from I32x4 the same way vec4f.h is split from vec4i.h: neither needs the other,
+// and the conversions between them live in vec_cvt.hpp, mirroring vec_cvt.h.
 //
-//Everything the C API has stays reachable through handle(); this deliberately doesn't mirror the ~300
-//generated swizzles, only the handful that come up constantly.
+//Everything the C API has stays reachable through handle();
+// this deliberately doesn't mirror the ~300 generated swizzles, only the handful that come up constantly.
 
 namespace oxc {
 
@@ -130,7 +132,8 @@ namespace oxc {
 			return c::F32x4_fma(a.v, b.v, add.v);
 		}
 
-		//Geometry. The 2/3/4 suffix is the component count taken part in, matching the C names.
+		//Geometry.
+		//The 2/3/4 suffix is the component count taken part in, matching the C names.
 
 		[[nodiscard]] c::F32 dot2(const F32x4 &o) const noexcept { return c::F32x4_dot2(v, o.v); }
 		[[nodiscard]] c::F32 dot3(const F32x4 &o) const noexcept { return c::F32x4_dot3(v, o.v); }

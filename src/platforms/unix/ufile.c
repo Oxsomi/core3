@@ -617,9 +617,8 @@ clean:
 			if(!allowLoad)
 				retError(clean, Error_notFound(0, 0, "File_loadVirtualInternal1() was queried but none was found"));
 
-			//The ELF/MACH section is already mmap'd by Platform_initUnixExt into
-			//section->dataExt / section->lenExt. Wrap in a read-only Buffer
-			//and parse the embedded CAFile, no FindResource needed unlike Windows.
+			//The ELF/MACH section is already mmap'd by Platform_initUnixExt into section->dataExt / section->lenExt.
+			//Wrap in a read-only Buffer and parse the embedded CAFile, no FindResource needed unlike Windows.
 
 			Buffer buf = Buffer_createRefConst(section->dataExt, section->lenExt);
 

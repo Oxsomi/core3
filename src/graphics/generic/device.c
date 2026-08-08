@@ -669,7 +669,8 @@ Bool GraphicsDeviceRef_create(
 	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
 	//TODO: Instead, we should base this on a quick PCIE benchmark,
 	// which is tricky because there might be other things using PCIE right now.
-	// Maybe we can read out this speed directly? It's more future proof than this (PCIE8 for example could be so much faster)
+	//Maybe we can read out this speed directly?
+	//It's more future proof than this (PCIE8 for example could be so much faster)
 
 	const Bool isDistinct = device->info.type == EGraphicsDeviceType_Dedicated;
 	U64 cpuHeapSize = device->info.capabilities.sharedMemory;

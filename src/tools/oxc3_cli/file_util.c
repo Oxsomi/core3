@@ -57,7 +57,8 @@
 #include <stdio.h>
 #include <string.h>
 
-//Streaming chunk size. Multiple of 64 so it's block-aligned for AES-GMAC's chunked AAD and 16-aligned for hexdump lines.
+//Streaming chunk size.
+//Multiple of 64 so it's block-aligned for AES-GMAC's chunked AAD and 16-aligned for hexdump lines.
 
 #define CLI_FILE_CHUNK (1024 * 1024)
 #define CLI_STREAM_CACHE (64 * 1024)        //Stream cursor cache; independent of the (bypass-cache) read/write chunk size
@@ -69,7 +70,8 @@ static Bool CLI_fileArg(const ParsedArgs *args, EOperationHasParameter shift, Ch
 }
 
 //Decode a 32-byte AES-256 key from hex text (optionally "0x"-prefixed, exactly 64 hex chars).
-//Writes 8 U32 (32 bytes) into outKey. The caller is responsible for wiping the source text.
+//Writes 8 U32 (32 bytes) into outKey.
+//The caller is responsible for wiping the source text.
 
 static Bool CLI_aesDecodeHex(CharString hex, U32 outKey[8], Error *e_rr) {
 
@@ -238,8 +240,9 @@ static Bool CLI_filePrintEntry(const FileInfo *info, void *userData, const Alloc
 }
 
 //If the path is a virtual "//section/..." path, make sure the containing section is loaded before we walk/read it.
-//(Sections are enumerated at startup but their archive contents only resolve once loaded.) The virtual root ("//" or
-//"//.") lists all sections and needs no load; only a real "//section" does. Shared with inspect_header / inspect_data.
+//(Sections are enumerated at startup but their archive contents only resolve once loaded.)
+//The virtual root ("//" or "//.") lists all sections and needs no load; only a real "//section" does.
+//Shared with inspect_header / inspect_data.
 
 void CLI_ensureVirtualLoaded(const CharString *path) {
 
@@ -259,14 +262,15 @@ void CLI_ensureVirtualLoaded(const CharString *path) {
 			break;
 		}
 
-	//The virtual root ("//", "//.", "//./") has no specific section. Rather than skip loading, load EVERY
-	//section so the root listing (file tree //) can enumerate them all. Passing the root path to
-	//File_loadVirtual matches all sections since every section path starts with the (empty) root.
+	//The virtual root ("//", "//.", "//./") has no specific section.
+	//Rather than skip loading, load EVERY section so the root listing (file tree //) can enumerate them all.
+	//Passing the root path to File_loadVirtual matches all sections since every section path starts with the (empty) root.
 
 	const Bool isRoot = slash <= 2 || (slash == 3 && path->ptr[2] == '.');
 
-	//The loaded section (and the memory stream backing it) outlives this call and stays in Platform_instance, so the
-	//RefPtrType its RefPtr points at must outlive it too. A local RefPtrType would dangle -> keep it program-lifetime.
+	//The loaded section (and the memory stream backing it) outlives this call and stays in Platform_instance,
+	// so the RefPtrType its RefPtr points at must outlive it too.
+	//A local RefPtrType would dangle -> keep it program-lifetime.
 
 	static RefPtrType memStreamType;
 	static Bool memStreamTypeInit = false;
@@ -667,8 +671,9 @@ Bool CLI_fileCopy(const ParsedArgs *args) {
 		return false;
 	}
 
-	//File_open(Stream) isn't supported on virtual files, so read the (in-memory, embedded) file into a buffer and write
-	//it out. Virtual files can't be huge (they're embedded), so buffering here is fine.
+	//File_open(Stream) isn't supported on virtual files,
+	// so read the (in-memory, embedded) file into a buffer and write it out.
+	//Virtual files can't be huge (they're embedded), so buffering here is fine.
 
 	if(File_isVirtual(input)) {
 
@@ -1072,7 +1077,8 @@ Bool CLI_fileDiff(const ParsedArgs *args) {
 	Bool s_uccess = true;
 	Error err = Error_none(), *e_rr = &err;
 
-	//Detect format from the magic number. Both inputs must be the same archive type.
+	//Detect format from the magic number.
+	//Both inputs must be the same archive type.
 
 	U32 magicA = 0, magicB = 0;
 	gotoIfError3(clean, CLI_peekMagic(&a, &fileHandleType, &streamType, alloc, &magicA, e_rr));
@@ -1266,7 +1272,8 @@ Bool CLI_fileHexdump(const ParsedArgs *args) {
 	Bool s_uccess = true;
 	Error err = Error_none(), *e_rr = &err;
 
-	//Optional -start / -length. Default dumps up to 2KiB; everything is clamped to the file size.
+	//Optional -start / -length.
+	//Default dumps up to 2KiB; everything is clamped to the file size.
 
 	U64 start = 0, length = 0;
 	const Bool hasLength = (args->parameters & EOperationHasParameter_Length) != 0;

@@ -46,7 +46,8 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 	if(acqSwapchain != ELockAcquire_Acquired)
 		retError(clean, Error_invalidState(0, "Swapchain_resize() couldn't lock swapchain"));
 
-	//Check if swapchain was in flight. If yes, warn that the user has to flush manually
+	//Check if swapchain was in flight.
+	//If yes, warn that the user has to flush manually
 
 	const ELockAcquire acq = SpinLock_lock(&device->lock, U64_MAX);
 

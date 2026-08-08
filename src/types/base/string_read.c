@@ -103,9 +103,9 @@ Bool CharString_isValidFilePath(CharString str) {
 
 	str = CharString_createRefStrConst(str);
 
-	//A bare virtual root ("//", "//.", "//./") is a valid path referring to the virtual root. It has no name
-	//component, so the general validation below (which requires a non-empty remainder) would reject it. Detect
-	//it up-front, before the trailing-slash trim collapses "//" into "/".
+	//A bare virtual root ("//", "//.", "//./") is a valid path referring to the virtual root.
+	//It has no name component, so the general validation below (which requires a non-empty remainder) would reject it.
+	//Detect it up-front, before the trailing-slash trim collapses "//" into "/".
 
 	if(CharString_getAt(str, 0) == '/' && CharString_getAt(str, 1) == '/') {
 
@@ -123,7 +123,8 @@ Bool CharString_isValidFilePath(CharString str) {
 	if(CharString_getAt(str, CharString_length(str) - 1) == '/' || CharString_getAt(str, CharString_length(str) - 1) == '\\')
 		str.lenAndNullTerminated = CharString_length(str) - 1;
 
-	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
+	//On Windows, it's possible to change drive but keep same relative path.
+	//We don't support it.
 	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
 	//We also obviously don't support 0:\ and such or A:/ on unix
 

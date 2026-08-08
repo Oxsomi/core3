@@ -39,7 +39,8 @@
 #include "types/math/flp.hpp"
 
 //The C test framework carries an extern "C" guard, so include it inside oxc::c (after the wrappers,
-//which already pulled its C-header deps into oxc::c). See test_types_container_hpp.cpp for why.
+// which already pulled its C-header deps into oxc::c).
+//See test_types_container_hpp.cpp for why.
 namespace oxc { namespace c {
 	#include "types/test/test.h"
 }}

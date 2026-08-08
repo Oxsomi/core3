@@ -97,8 +97,9 @@ Bool CharString_insert(CharString *s, C8 c, U64 i, const Allocator *allocator, E
 
 	if (i != strl) {
 
-		//Move the tail [i, strl) one to the right. The count is strl - i, not strl; the buffer only holds
-		//strl + 1 characters, so shifting strl of them from i read and wrote past the end for any i > 1.
+		//Move the tail [i, strl) one to the right.
+		//The count is strl - i, not strl; the buffer only holds strl + 1 characters,
+		// so shifting strl of them from i read and wrote past the end for any i > 1.
 		//CharString_insertString below has always done it this way.
 
 		Buffer_memmove(

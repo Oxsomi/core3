@@ -38,7 +38,7 @@ typedef struct CharString CharString;
 
 //BigInt allow up to 16320 bit ints but isn't well optimized.
 //For optimized versions please use U128 (and U256 in the future) since they don't dynamically allocate,
-//and because big int can be varying length so no SIMD optimizations are present.
+// and because big int can be varying length so no SIMD optimizations are present.
 typedef struct BigInt {
 
 	union {
@@ -96,7 +96,8 @@ Bool BigInt_base2(const BigIntStringify *stringify, EIntEncoding type, BigInt b,
 //Exists for the whole purpose of non base2 (like dec)
 Bool BigInt_toString(const BigIntStringify *stringify, EIntEncoding encoding, BigInt b, Error *e_rr);
 
-//Find highest bit that was on. Returns U16_MAX if 0
+//Find highest bit that was on.
+//Returns U16_MAX if 0
 static inline U16 BigInt_bitScan(BigInt a) {
 
 	for (U64 i = a.length - 1; i != U64_MAX; --i) {

@@ -68,9 +68,10 @@ endif()
 
 if(EnableTests)
 
-	# The dummy library Test_dynamicLibrary loads. Built on every platform, including the ones that bundle
-	# their suites instead of building executables: the bundle needs it too, and on android it just rides
-	# along in the apk's lib/<abi>/ where the loader can find it by bare name.
+	# The dummy library Test_dynamicLibrary loads.
+	# Built on every platform, including the ones that bundle their suites instead of building executables:
+	# the bundle needs it too, and on android it just rides along in the apk's lib/<abi>/
+	# where the loader can find it by bare name.
 
 	file(GLOB testsDylibC CONFIGURE_DEPENDS "test/dylib/*.c")
 	add_library(OxC3_platforms_interface_dylib_test SHARED

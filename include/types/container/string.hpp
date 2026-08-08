@@ -63,9 +63,9 @@ namespace oxc {
 
 	class String;
 
-	//Non-owning view over an existing string. Copyable and cheap; it never frees and never allocates,
-	//so the memory it points at has to outlive it. Everything that only reads lives here, and String /
-	//SmallString inherit that surface by converting.
+	//Non-owning view over an existing string.
+	//Copyable and cheap; it never frees and never allocates, so the memory it points at has to outlive it.
+	//Everything that only reads lives here, and String / SmallString inherit that surface by converting.
 
 	class StringView {
 
@@ -94,8 +94,9 @@ namespace oxc {
 
 		[[nodiscard]] c::C8 operator[](c::U64 i) const noexcept { return str.ptr[i]; }
 
-		//Comparison. Sensitive by default; the C API spells the casing out, so mirror that in the name
-		//rather than hiding it behind a default argument nobody reads.
+		//Comparison.
+		//Sensitive by default; the C API spells the casing out, so mirror that in the name
+		// rather than hiding it behind a default argument nobody reads.
 
 		[[nodiscard]] bool equals(const StringView &o) const noexcept {
 			return c::CharString_equalsStringSensitive(&str, &o.str);
@@ -168,7 +169,8 @@ namespace oxc {
 			return c::CharString_findLastStringSensitive(&str, &o.str, off, len);
 		}
 
-		//Sub-views. These are refs into the same memory, so they carry the same lifetime as *this.
+		//Sub-views.
+		//These are refs into the same memory, so they carry the same lifetime as *this.
 
 		[[nodiscard]] StringView substr(c::U64 off, c::U64 len = 0) const noexcept {
 			c::CharString out{};
@@ -189,8 +191,9 @@ namespace oxc {
 		[[nodiscard]] const c::CharString &handle() const noexcept { return str; }
 	};
 
-	//Owning string. Move only, like oxc::List, because a copy would need an allocator decision that the
-	//caller should be making explicitly (use copy()).
+	//Owning string.
+	//Move only, like oxc::List, because a copy would need an allocator decision
+	// that the caller should be making explicitly (use copy()).
 
 	class String {
 
@@ -226,7 +229,8 @@ namespace oxc {
 			return *this;
 		}
 
-		//Creation. Each resets *this first, so a String can be refilled without leaking.
+		//Creation.
+		//Each resets *this first, so a String can be refilled without leaking.
 
 		[[nodiscard]] c::Bool createCopy(const StringView &from, c::Error *e_rr = nullptr) noexcept {
 			release();

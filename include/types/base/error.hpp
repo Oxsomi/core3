@@ -37,7 +37,7 @@ namespace oxc {
 	//Generated wrapper around the C Error.
 	//Factories for the C Error struct.
 	//A namespace rather than a class: Error is a plain value that the C API fills in by pointer,
-	//so there's nothing to own and no invariant to protect.
+	// so there's nothing to own and no invariant to protect.
 	//Construct one here and pass handle() to C, or take one back from a C call and inspect it.
 	namespace Error {
 

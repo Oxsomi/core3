@@ -43,8 +43,9 @@ Bool Test_assert2(Test *test, const C8 *section, Bool value, const C8 *file, U64
 
 void Test_print(Test *test, const C8 *str);
 
-//For suite entries whose Platform_create fails: that used to exit 1 before the suite's first print, which on a device
-// shows up as an instant FAIL with zero context, so name the reason on stdout (which doesn't need a platform) first.
+//For suite entries whose Platform_create fails, which used to exit 1 before the suite printed anything at all.
+//On a device that shows up as an instant FAIL with zero context.
+//So name the reason on stdout first, which needs no platform to work.
 void Test_printPlatformCreateFail(const Error *e);
 
 void Test_setModule(Test *test, const C8 *moduleName);

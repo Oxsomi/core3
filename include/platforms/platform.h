@@ -62,9 +62,9 @@ typedef enum ECPUVendor {
 	ECPUVendor_Count
 } ECPUVendor;
 
-//Richer CPU topology, gathered once at Platform_create (see Platform_detectCPUInfo). Fields that couldn't be
-//determined on the current OS/arch are left 0. Cache sizes are in bytes; hybrid P/E counts are 0 when the CPU
-//isn't hybrid (or the split is unknown).
+//Richer CPU topology, gathered once at Platform_create (see Platform_detectCPUInfo).
+//Fields that couldn't be determined on the current OS/arch are left 0.
+//Cache sizes are in bytes; hybrid P/E counts are 0 when the CPU isn't hybrid (or the split is unknown).
 
 typedef struct PlatformCPUInfo {
 
@@ -155,9 +155,9 @@ impl void *Platform_getDataImpl(void *ptr);
 	#define Platform_argc (0)
 	#define Platform_argv (NULL)
 
-	//android_main returns nothing, so the exit code is normally dropped. A test bundled into the
-	//android test APK (see OXC3_TEST_ENTRY in types/test/test.h) isn't the entry point though; it
-	//hands its result back to the runner, which is what reports pass/fail.
+	//android_main returns nothing, so the exit code is normally dropped.
+	//A test bundled into the android test APK (see OXC3_TEST_ENTRY in types/test/test.h) isn't the entry point though;
+	// it hands its result back to the runner, which is what reports pass/fail.
 
 	#ifdef _OXC3_TEST_BUNDLED
 		#define Platform_return(...) return __VA_ARGS__

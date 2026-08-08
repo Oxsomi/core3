@@ -70,12 +70,14 @@ typedef enum EBCFlags {
 
 	EBCFlags_UseSHA256                    = 1 << 0,
 
-	//Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
+	//Chunk size of AES for multi threading.
+	//0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
 
 	EBCFlags_UseAESChunksA                = 1 << 1,
 	EBCFlags_UseAESChunksB                = 1 << 2,
 
-	//Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
+	//Indicates EXXDataSizeType.
+	//E.g. (EXXDataSizeType)((b0 << 1) | b1)
 	//This indicates the type for compression size if available.
 
 	EBCFlags_CompressedSizeType_Shift     = 3,

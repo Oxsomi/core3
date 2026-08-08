@@ -111,7 +111,7 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 
 //Runtime CPU capability flags, detected once and stored in Platform_instance->cpuFeatures.
 //These say whether a given operation has a hardware / wide-SIMD "full speed" path on this machine,
-//so the runtime (and CLI) can reason about how fast something should be without re-running cpuid.
+// so the runtime (and CLI) can reason about how fast something should be without re-running cpuid.
 
 typedef enum ECPUFeatures {
 

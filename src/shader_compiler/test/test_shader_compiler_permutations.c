@@ -34,12 +34,13 @@
 #include "types/base/string_read_helper.h"
 
 //The permutation system (multiple entrypoints in one file, each with its OWN oxc:: annotations that fan out
-//into distinct compiled binaries) is easy to get subtly wrong when entrypoints DON'T share annotations - one
-//entrypoint's extension / model / backend selection must not leak onto another's binary. These tests compile
-//multi-entrypoint files where the entrypoints deliberately disagree and assert each binary reflects only its
-//own annotations.
+// into distinct compiled binaries) is easy to get subtly wrong when entrypoints DON'T share annotations -
+// one entrypoint's extension / model / backend selection must not leak onto another's binary.
+//These tests compile multi-entrypoint files where the entrypoints deliberately disagree
+// and assert each binary reflects only its own annotations.
 
-//Does any produced binary carry `ext`? Returns how many of the binaries do.
+//Does any produced binary carry `ext`?
+//Returns how many of the binaries do.
 static U64 countBinariesWithExt(const SHFile *sh, ESHExtension ext) {
 	U64 n = 0;
 	for (U64 i = 0; i < sh->binaries.length; ++i)
@@ -64,8 +65,8 @@ void Test_shaderCompilerPermutations(Test *t) {
 	const Allocator *alloc = Platform_instance->alloc;
 	Error err = Error_none();
 
-	//--- Per-entrypoint extension isolation: two standalone stages in one file, only the vertex one enables
-	//--- 16BitTypes. Exactly one of the two produced binaries may carry that extension bit. ---
+	//--- Per-entrypoint extension isolation: two standalone stages in one file, only the vertex one enables 16BitTypes.
+	//--- Exactly one of the two produced binaries may carry that extension bit. ---
 
 	{
 		ListBuffer out = (ListBuffer) { 0 };
@@ -84,8 +85,8 @@ void Test_shaderCompilerPermutations(Test *t) {
 		err = Error_none();
 	}
 
-	//--- Per-entrypoint model isolation: two stages request different shader models; each binary must keep
-	//--- its own requested model rather than collapsing to one. ---
+	//--- Per-entrypoint model isolation: two stages request different shader models;
+	//--- each binary must keep its own requested model rather than collapsing to one. ---
 
 	{
 		ListBuffer out = (ListBuffer) { 0 };
@@ -111,10 +112,12 @@ void Test_shaderCompilerPermutations(Test *t) {
 		err = Error_none();
 	}
 
-	//--- Per-entrypoint backend selection inside one shared lib compile: three RT entrypoints, each restricted
-	//--- to a different backend set. This is the trickiest disagreement - all three share the lib's compile,
-	//--- so the driver must filter per entrypoint at link time. raygen = both; miss = spv only; closesthit =
-	//--- dxil only. So SPIRV keeps {raygen, miss}, DXIL keeps {raygen, closesthit}. ---
+	//--- Per-entrypoint backend selection inside one shared lib compile:
+	//--- three RT entrypoints, each restricted to a different backend set.
+	//--- This is the trickiest disagreement - all three share the lib's compile,
+	//--- so the driver must filter per entrypoint at link time.
+	//--- raygen = both; miss = spv only; closesthit = dxil only.
+	//--- So SPIRV keeps {raygen, miss}, DXIL keeps {raygen, closesthit}. ---
 
 	{
 		ListBuffer spv = (ListBuffer) { 0 }, dx = (ListBuffer) { 0 };
@@ -143,8 +146,8 @@ void Test_shaderCompilerPermutations(Test *t) {
 		err = Error_none();
 	}
 
-	//--- Uniforms must be identical across every entrypoint of a compilation unit (they specialize one shared
-	//--- linking step). Two entrypoints declaring DIFFERENT uniforms is illegal and must be rejected cleanly. ---
+	//--- Uniforms must be identical across every entrypoint of a compilation unit (they specialize one shared linking step).
+	//--- Two entrypoints declaring DIFFERENT uniforms is illegal and must be rejected cleanly. ---
 
 	{
 		ListBuffer out = (ListBuffer) { 0 };

@@ -48,12 +48,12 @@ clean:
 	return s_uccess;
 }
 
-//The allocator only promises BUFFER_DEFAULT_ALIGNMENT, which isn't enough once an element type declares
-//more than that, and every element after the first sits at ptr + i * stride so they'd all be off.
-//sizeof(T) is always a multiple of alignof(T), so the lowest set bit of the stride is at least the
-//alignment the elements want. Deriving it that way keeps the alignment out of GenericList entirely, at the
-//cost of occasionally overshooting (a 32 byte struct that only wants 8), which is a little memory and
-//nothing else.
+//The allocator only promises BUFFER_DEFAULT_ALIGNMENT, which isn't enough once an element type declares more than that,
+// and every element after the first sits at ptr + i * stride so they'd all be off.
+//sizeof(T) is always a multiple of alignof(T),
+// so the lowest set bit of the stride is at least the alignment the elements want.
+//Deriving it that way keeps the alignment out of GenericList entirely,
+// at the cost of occasionally overshooting (a 32 byte struct that only wants 8), which is a little memory and nothing else.
 
 static U64 GenericList_alignment(const U64 stride) {
 	const U64 lowestBit = stride & (~stride + 1);
@@ -525,7 +525,7 @@ Bool GenericList_eraseAllIndices(GenericList *list, const ListU64 *indices, Erro
 	}
 
 	//Since we're sorted from small to big,
-	//we can just easily fetch where our next block of memory should go and move it backwards
+	// we can just easily fetch where our next block of memory should go and move it backwards
 
 	U64 curr = 0;
 	const U64 stride = list->stride;
@@ -824,7 +824,8 @@ clean:
 
 static inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction func) {
 
-	//for U8[8192] -> U64[1024]. Fits neatly into cache.
+	//for U8[8192] -> U64[1024].
+	//Fits neatly into cache.
 	//For bigger objects, qsort should probably be used.
 
 	U8 sorted[8192];

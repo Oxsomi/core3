@@ -35,11 +35,12 @@
 #include "types/base/string_read_helper.h"
 #include "types/base/constants.h"
 
-//Everything else in the suite asserts extension bits (features) and stage names (stages) but never a single
-//reflected resource. This module compiles one resource-rich compute entrypoint and asserts the reflected
-//SHRegister set - register type, read/write, descriptor-array dimension, structured-buffer stride - on BOTH
-//backends, so a whole class of reflection regressions (a buffer misclassified, IsWrite dropped, a descriptor
-//array collapsed, a resource silently dropped) is caught semantically instead of as an opaque corpus byte diff.
+//Everything else in the suite asserts extension bits (features) and stage names (stages)
+// but never a single reflected resource.
+//This module compiles one resource-rich compute entrypoint and asserts the reflected SHRegister set
+// - register type, read/write, descriptor-array dimension, structured-buffer stride - on BOTH backends,
+// so a whole class of reflection regressions (a buffer misclassified, IsWrite dropped, a descriptor array collapsed,
+// a resource silently dropped) is caught semantically instead of as an opaque corpus byte diff.
 
 //The shader lives at reflection/resources.hlsl: one compute entrypoint with one of (almost) every
 //ESHRegisterType, each actually used so DXC keeps it (RayQuery yields the AccelerationStructure register).
@@ -87,8 +88,8 @@ void Test_shaderCompilerReflection(Test *t) {
 			out.length == 1 && Buffer_length(out.ptr[0]) &&
 			readOiSH(alloc, out.ptr[0], &sh, &err) && sh.binaries.length >= 1;
 
-		//Assert a register's base type (+ optionally the IsWrite bit) by name. Name-matched, so it's immune
-		//to register ordering differences between the SPIRV and DXIL reflectors.
+		//Assert a register's base type (+ optionally the IsWrite bit) by name.
+		//Name-matched, so it's immune to register ordering differences between the SPIRV and DXIL reflectors.
 		#define ASSERT_REG(nm, wantType, wantWrite) do {                                                  \
 			const SHRegisterRuntime *r = ok ? findReg(&sh, nm) : NULL;                                     \
 			const Bool isW = r && (r->reg.registerType & ESHRegisterType_IsWrite);                         \

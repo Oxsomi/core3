@@ -146,9 +146,9 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			stream.stream, &stream.dataOff, true, alloc, &parsedShaderBuffers.ptrNonConst[i], e_rr
 		));
 
-		//SBFile_read consumes the unpadded SBFile. Every shader buffer except the last is padded to 16-byte
-		//alignment when written (see sh_write.c), so the DLFile entry length rounds the consumed size up to
-		//16; the last entry is stored unpadded.
+		//SBFile_read consumes the unpadded SBFile.
+		//Every shader buffer except the last is padded to 16-byte alignment when written (see sh_write.c),
+		// so the DLFile entry length rounds the consumed size up to 16; the last entry is stored unpadded.
 
 		U64 consumed = stream.dataOff - oldDataOff;
 		Bool isLast = i + 1 == shaderBuffers.entryStreams.length;
@@ -304,7 +304,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			));
 
 		//Compute the total size of all fixed binary data excluding the variable-length binary blobs,
-		//then read it all in one shot.
+		// then read it all in one shot.
 
 		U64 binaryDataSize =
 			(U64)binary.defineCount * 2 * sizeof(U16) +
@@ -436,7 +436,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 				//Small 1D array: arrayDimOrId is the dimension directly.
 				//Copy into a U32 first -- casting the U16 field to (const U32*)
-				//would read the adjacent nameId into the high bits (
+				// would read the adjacent nameId into the high bits (
 				// e.g. a sampler with arrayDimOrId=1024, nameId=1 became 1024 | (1<<16) = 66560, overflowing the register cap
 				//).
 				

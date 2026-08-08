@@ -43,9 +43,9 @@ Bool Platform_checkCPUSupport() {
 	U32 mask2 =
 		(1 << 0) | (1 << 1) | (1 << 9) | (1 << 12) | (1 << 19) | (1 << 20) | (1 << 25) | (1 << 27) | (1 << 28);
 
-	//Zeroed because cpuid leaves the array untouched when the leaf is above the CPU's maximum, which leaf 7 can be
-	// on pre-2012 parts and on VM CPU models that report an older family; reading it uninitialized decides support
-	// from stack garbage.
+	//Zeroed because cpuid leaves the array untouched when the leaf is above the CPU's maximum.
+	//Leaf 7 can be above it on pre-2012 parts and on VM CPU models that report an older family.
+	//Reading it uninitialized decides CPU support from stack garbage.
 
 	U32 cpuInfo[4] = { 0 };
 	Platform_getCPUId(1, cpuInfo);
@@ -57,10 +57,10 @@ Bool Platform_checkCPUSupport() {
 
 	const Bool ok = (cpuInfo[3] & mask3) == mask3 && (cpuInfo[2] & mask2) == mask2 && (cpuInfo1[1] & mask1_1) == mask1_1;
 
-	//Which bits are missing is the whole diagnosis on emulator/VM guests whose CPUID model masks features the host
-	// happily executes anyway.
-	//Log needs the platform allocator, so Platform_create only runs this check once Platform_instance exists;
-	// the guard keeps the standalone pre-create use of this function safe, it just reports less then.
+	//Which bits are missing is the whole diagnosis on emulator and VM guests,
+	// whose CPUID model masks features the host happily executes anyway.
+	//Log needs the platform allocator, so Platform_create only runs this check once Platform_instance exists.
+	//The guard keeps the standalone pre-create use of this function safe, it just reports less then.
 
 	if(!ok && Platform_instance)
 		Log_errorLnx(

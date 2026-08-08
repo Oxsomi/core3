@@ -48,11 +48,12 @@ on:
         type: boolean
         required: false
         default: false
-      # Conan cache group. Jobs with the same (os, runner, cache_name) share one cache; only the first of
-      # them to finish gets to save it, so a group must only contain jobs whose expensive dependencies are
-      # identical. Anything that builds with a different toolchain (or builds different dxc flavors, like
-      # the android shader compiler / emulator jobs) must name its own group or it inherits a cache that
-      # misses everything it needs and can never save its own.
+      # Conan cache group.
+      # Jobs sharing an (os, runner, cache_name) share one cache, and only the first of them to finish saves it.
+      # A group must therefore only contain jobs whose expensive dependencies are identical.
+      # Anything on a different toolchain, or building a different dxc flavor like the android shader compiler
+      # and emulator jobs, needs its own group.
+      # Otherwise it inherits a cache that misses everything it needs and never gets to save its own.
       cache_name:
         type: string
         required: false
@@ -64,9 +65,9 @@ on:
       WEBHOOK_URL:
         required: true
 
-# `inputs.os` selects *what* is built (android vs. a host build), `runner.os` selects the host toolchain
-# to install. They're independent: android is cross compiled from all three hosts, and the android job
-# still needs a full host toolchain because it builds OxC3_package to package virtual files with.
+# `inputs.os` selects what is built (android vs. a host build), `runner.os` selects the host toolchain to install.
+# They're independent, because android is cross compiled from all three hosts.
+# The android job still needs a full host toolchain, since it builds OxC3_package to package virtual files with.
 
 jobs:
   build:
@@ -163,11 +164,13 @@ jobs:
           echo "ANDROID_NDK=$SDK/ndk/${{ inputs.android_ndk }}" >> "$GITHUB_ENV"
 
       # ── Conan package cache ────────────────────────────────────────────────
-      # cache_name keeps toolchains apart: without it every job on the same runner image raced for one
-      # key, the first finisher (usually the default toolchain) won, and e.g. the clang jobs then
-      # restored an msvc/gcc-only store, missed everything, rebuilt dxc from source each run and could
-      # never save the result. restore-keys stays inside the same group on purpose; falling back across
-      # groups would seed the save with another toolchain's packages and grow every cache with junk.
+      # cache_name keeps toolchains apart.
+      # Without it every job on the same runner image raced for one key and the first finisher won,
+      # which was usually the default toolchain.
+      # The clang jobs then restored an msvc or gcc only store, missed everything,
+      # rebuilt dxc from source each run and never got to save the result.
+      # restore-keys stays inside the same group on purpose.
+      # Falling back across groups would seed the save with another toolchain's packages.
       - name: Cache Conan packages
         uses: actions/cache@v4
         with:
@@ -176,10 +179,10 @@ jobs:
           restore-keys: ${{ inputs.os }}-${{ inputs.runner }}-${{ inputs.cache_name }}-
 
       # ── Build: Android ─────────────────────────────────────────────────────
-      # An android build can't run its own packager, so it tool_requires a host oxc3 that has
-      # OxC3_package in it (see conanfile.py's build_requirements). Build that once up front; the
-      # three android configs below then share it, which is why HOST_TOOL_OPTIONS is fixed rather
-      # than derived from the target's options.
+      # An android build can't run its own packager, so it tool_requires a host oxc3 that has OxC3_package in it,
+      # as set up by conanfile.py's build_requirements.
+      # Build that once up front, because the three android configs below then share it.
+      # That sharing is why HOST_TOOL_OPTIONS is fixed rather than derived from the target's options.
       - name: Build host OxC3 package (tooling)
         if: inputs.os == 'android'
         run: ${{ inputs.python_cmd }} build_android.py --host_package_only
@@ -222,11 +225,12 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # Everything up to here only proves it builds. This is the part that catches a build that installs
-      # and then dies on startup, which has happened more than once and looks identical to a pass from
-      # the outside.
+      # Everything up to here only proves it builds.
+      # This is the part that catches a build that installs and then dies on startup,
+      # which has happened more than once and looks identical to a pass from the outside.
       # The two functional suites need someone at the device, so they skip themselves without
-      # debug.oxc3.interactive; the rest run unattended.
+      # debug.oxc3.interactive.
+      # The rest run unattended.
 
       - name: Run test suite on an emulator
         if: inputs.os == 'android' && inputs.android_run
@@ -236,25 +240,26 @@ jobs:
           arch: x86_64
           target: default
           force-avd-creation: false
-          # -cpu host, because the emulator's default CPU model reports an Ivy Bridge era feature set (no FMA, no
-          # BMI, empty cpuid leaf 7) while KVM runs every instruction straight on the runner's silicon. The guest
-          # therefore executes the FMA and BMI2 code we compile with just fine -- types_math and types_container
-          # pass -- but Platform_checkCPUSupport reads cpuid, believes the model, and refuses to start.
-          # Passing the host's cpuid through makes the two agree. Must stay last: -qemu hands everything after it
-          # to qemu.
-          # If a runner image ever ships an emulator that won't take it, the fallback is to build this job with
-          # -simd False (Platform_checkCPUSupport is unconditional there); x86_64 SIMD is already covered natively
-          # by the Linux x64 jobs, this job exists for the android platform layer.
+          # -cpu host, because the emulator's default CPU model reports no FMA, no BMI and an empty cpuid leaf 7.
+          # KVM runs every instruction on the runner's silicon regardless,
+          # so the FMA and BMI2 code we compile with executes fine.
+          # types_math and types_container passing on this emulator already proved that.
+          # Only Platform_checkCPUSupport disagreed, because it reads cpuid and believed the model.
+          # Must stay last: -qemu hands everything after it to qemu.
+          # If a runner image ever ships an emulator that rejects it, the fallback is building this job with
+          # -simd False, where Platform_checkCPUSupport is unconditional.
+          # x86_64 SIMD is covered natively by the Linux x64 jobs anyway, this job exists for the android layer.
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -qemu -cpu host
           disable-animations: true
           script: ${{ inputs.python_cmd }} build_android.py --skip_build --apk --sign --run -mode Release -arch x64 -tests True -package net.osomi.test -version 0.1.0 -name "OxC3 test" -keystore_password oxc3ci -test_timeout 900
 
       # ── Build: everything else ─────────────────────────────────────────────
-      # Debug goes first because a failing step aborts the job, so whichever config runs first is the
-      # only one whose failure gets reported. Debug is the config worth having that from: it's the one
-      # without -flto=auto, so a crash prints real stack frames instead of collapsing into main+<offset>.
-      # Each build.py call resolves its own dependencies, so the order carries no other cost than which
-      # run pays for building them.
+      # Debug goes first because a failing step aborts the job,
+      # so whichever config runs first is the only one whose failure gets reported.
+      # Debug is the config worth having that from, being the one without -flto=auto,
+      # so a crash prints real stack frames instead of collapsing into main+<offset>.
+      # Each build.py call resolves its own dependencies,
+      # so the order carries no other cost than which run pays for building them.
 
       - name: Build Debug
         if: inputs.os != 'android'
@@ -269,9 +274,9 @@ jobs:
         run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True ${{ inputs.build_flags }}
 
       # ── Cleanup before cache save ──────────────────────────────────────────
-      # The LRU pass matters because restore-keys chains caches across conanfile changes: without it every
-      # superseded dxc build would ride along in each newly saved cache forever. Anything this run used is
-      # by definition recent, so it only drops leftovers.
+      # The LRU pass matters because restore-keys chains caches across conanfile changes.
+      # Without it every superseded dxc build would ride along in each newly saved cache forever.
+      # Anything this run used is by definition recent, so it only drops leftovers.
       - name: Prune Conan build dirs
         if: always()
         shell: bash
@@ -280,9 +285,9 @@ jobs:
           rm -rf ~/.conan2/p/b/*/b
 
       # ── Discord notification ───────────────────────────────────────────────
-      # continue-on-error: ~25 jobs fire this at once on every push, so Discord throttles some of them
-      # (503/429); a notification hiccup must never turn a green build red. The curl retries with
-      # backoff first, the step gives up gracefully after that.
+      # continue-on-error, because ~25 jobs fire this at once on every push and Discord throttles some of them.
+      # A notification hiccup must never turn a green build red.
+      # The curl retries with backoff first, then the step gives up gracefully.
       - name: Send Webhook Notification
         if: always()
         continue-on-error: true

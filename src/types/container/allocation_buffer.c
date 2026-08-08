@@ -212,7 +212,8 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 		));
 	}
 
-	//No allocations? We start at the front, it's always aligned
+	//No allocations?
+	//We start at the front, it's always aligned
 
 	if (ListAllocationBufferBlock_empty(allocationBuffer->allocations)) {
 
@@ -326,7 +327,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 			}
 
 			//Splitting the buffer, ideally if we're near the back of the buffer
-			//we want to put the empty buffer at the back too.
+			// we want to put the empty buffer at the back too.
 			//This will make it easier for blocks at the end to merge.
 
 			if (AllocationBufferBlock_getCenter(v) >= (len / 2)) {

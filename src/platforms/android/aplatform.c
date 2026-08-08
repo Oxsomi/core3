@@ -69,10 +69,10 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	//We applied a hack here; the NDK has a longstanding issue where getNextFileName will exclude directories.
 	//https://issuetracker.google.com/issues/37002833?pli=1
 	//There are ways around it with the jni, but I prefer not to use the JNI whenever possible.
-	// For other methods, see marcel303's approach in https://github.com/android/ndk-samples/issues/603.
+	//For other methods, see marcel303's approach in https://github.com/android/ndk-samples/issues/603.
 	//Instead, our packager will create files called "section_{section}" and we can scan those and opendir on the section.
 	//Alternatively, we could name files "{section}_{subSection}" and go through the flattened files.
-	// That however would break when the name contains an underscore, so this is more robust.
+	//That however would break when the name contains an underscore, so this is more robust.
 	
 	dir = AAssetManager_openDir(assetManager, "packages");
 
@@ -127,7 +127,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 				retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed, couldn't open asset"));
 
 			//afile.c reconstructs "packages/<path>.oiCA" from this, so path stays extension-less and matches
-			//how the ELF/MACH section name is stored on the other unices (see lplatform.c / oplatform.c).
+			// how the ELF/MACH section name is stored on the other unices (see lplatform.c / oplatform.c).
 
 			VirtualSection virtualSection = (VirtualSection) { .path = tmpStr2 };
 			virtualSection.lenExt = (U64) AAsset_getLength64(asset);
@@ -197,9 +197,9 @@ Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, 
 		retError(clean, Error_invalidParameter(3, 0, "Keyboard_remap()::result is non empty, indicating possible memleak"));
 
 	//The NDK has no key -> label API (AKeyEvent_* stops at the raw keycode), so the localized label has to
-	//come from the framework's KeyCharacterMap through OxC3Activity.getKeyLabel.
+	// come from the framework's KeyCharacterMap through OxC3Activity.getKeyLabel.
 	//Note EKey is positional (scan code) on desktop but android hands us already layout-translated keycodes,
-	//so the label is right for the layout even though the EKey a physical key produces differs from desktop.
+	// so the label is right for the layout even though the EKey a physical key produces differs from desktop.
 
 	keyCode = EKey_toAndroidKeyCode[key];
 
@@ -238,7 +238,7 @@ Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, 
 		retError(clean, Error_notFound(0, 0, "Keyboard_remap() couldn't be translated"));
 
 	//UTF-16 rather than GetStringUTFChars: the latter hands back modified UTF-8, which encodes anything
-	//outside the BMP as a surrogate pair (CESU-8) that our UTF-8 reader would reject.
+	// outside the BMP as a surrogate pair (CESU-8) that our UTF-8 reader would reject.
 
 	labelPtr = (*env)->GetStringChars(env, label, NULL);
 
@@ -270,7 +270,7 @@ clean:
 
 //Asks OxC3Activity, which reads it off Configuration; see the comment there for why not InputDevice.
 //Failing to reach the method reports no physical keyboard, so a broken JNI lookup leaves the on screen
-//keyboard working rather than silently suppressing it.
+// keyboard working rather than silently suppressing it.
 
 Bool Platform_hasPhysicalKeyboard() {
 
@@ -308,7 +308,7 @@ Bool Platform_hasPhysicalKeyboard() {
 Bool Platform_setKeyboardVisibleForced(Bool isVisible, Bool force) {
 
 	//Nothing to show when the user already has keys under their fingers, and the on screen one would eat
-	//half the screen to duplicate them.
+	// half the screen to duplicate them.
 	//Hiding is never skipped, so a keyboard connected between show and hide can't strand it on screen.
 
 	if(isVisible && !force && Platform_hasPhysicalKeyboard())

@@ -36,9 +36,11 @@
 //The case compiles it and asserts the reflected SHEntry carries the expected stage (SHEntry_stageName).
 //Graphics + compute + mesh/task + raytracing (raygen/closesthit/anyhit/miss/intersection/callable) stages are covered.
 //
-//Most stages run on BOTH backends. Work-graph nodes are DXIL-only: DXC has no SPIR-V lowering for HLSL work graphs,
-//so `node` is gated to DXIL via the `backends` mask. The only remaining parked stage is inheritance (an upstream DXC
-//SPIR-V assert on multi-base-class structs, unrelated to a specific stage).
+//Most stages run on BOTH backends.
+//Work-graph nodes are DXIL-only: DXC has no SPIR-V lowering for HLSL work graphs,
+// so `node` is gated to DXIL via the `backends` mask.
+//The only remaining parked stage is inheritance
+// (an upstream DXC SPIR-V assert on multi-base-class structs, unrelated to a specific stage).
 
 #define ST_SPIRV (1 << ESHBinaryType_SPIRV)
 #define ST_DXIL  (1 << ESHBinaryType_DXIL)

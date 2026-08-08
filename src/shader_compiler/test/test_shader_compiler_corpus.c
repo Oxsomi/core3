@@ -83,8 +83,9 @@ static Bool shReadFile(const Allocator *alloc, Buffer buf, SHFile *out) {
 	return ok;
 }
 
-//Resolve the semantic name for one I/O slot. A zero name index is the default (TEXCOORD for an input,
-// SV_TARGET for an output); otherwise it indexes semanticNames (inputs first, outputs after uniqueInputSemantics).
+//Resolve the semantic name for one I/O slot.
+//A zero name index is the default (TEXCOORD for an input, SV_TARGET for an output).
+//Otherwise it indexes semanticNames (inputs first, outputs after uniqueInputSemantics).
 static CharString shSemanticName(const SHEntry *e, Bool isOutput, U8 slot) {
 
 	const U8 v = isOutput ? e->outputSemanticNames[slot] : e->inputSemanticNames[slot];
@@ -107,7 +108,7 @@ static const SHEntry *shFindEntry(const SHFile *f, CharString name) {
 }
 
 //Cross-backend reflection check: the same shader compiled to SPIRV and DXIL must expose the same entrypoints
-//and, per entrypoint, the same input/output signature (type + semantic).
+// and, per entrypoint, the same input/output signature (type + semantic).
 //Resources are intentionally NOT compared here: bindings differ by backend, but so does the very representation
 // of some resources -- e.g. a push constant is a distinct PushConstants register in SPIRV but an ordinary cbuffer
 // ($Globals / ConstantBuffer) in DXIL, which has no push-constant concept -- so a resource comparison needs a
@@ -166,8 +167,9 @@ clean:
 	SHFile_free(&dx, alloc);
 }
 
-//True if two oiSH buffers carry the same reflection (entry signatures + extensions), i.e. only the compiled
-//SPIRV/DXIL bytecode differs. That's the benign case where a DXC update churns bytecode without changing meaning.
+//True if two oiSH buffers carry the same reflection (entry signatures + extensions),
+// i.e. only the compiled SPIRV/DXIL bytecode differs.
+//That's the benign case where a DXC update churns bytecode without changing meaning.
 static Bool shReflectionMatches(const Allocator *alloc, Buffer a, Buffer b) {
 
 	SHFile fa = (SHFile) { 0 }, fb = (SHFile) { 0 };
@@ -211,9 +213,10 @@ clean:
 }
 
 //For each binary type present in BOTH oiSH (SPIRV and/or DXIL), disassemble the reference and produced blobs
-//and, only when the disassembly actually differs, write <ref>.ref.<ext> / <ref>.new.<ext> so it can be diffed
-//(`git diff --no-index`). Identical disassembly (e.g. only the binary header's generator-version word churned,
-//as a DXC update does) writes nothing and is just logged - so this stays quiet on benign version bumps.
+// and, only when the disassembly actually differs, write <ref>.ref.<ext> / <ref>.new.<ext> so it can be diffed
+// (`git diff --no-index`).
+//Identical disassembly (e.g. only the binary header's generator-version word churned, as a DXC update does)
+// writes nothing and is just logged - so this stays quiet on benign version bumps.
 static void dumpDisasmDiff(
 	const Allocator *alloc, Compiler *comp, Buffer produced, Buffer golden, CharString ref, Bool allowWrite
 ) {
@@ -282,11 +285,12 @@ clean:
 }
 
 //End-to-end snapshot test: enumerate the whole test/hlsl corpus (relative to the working directory,
-//which CMake points at the corpus folder) and run it through the real pipeline (preprocess -> DXC
-//compile -> reflect -> link -> oiSH assembly) targeting SPIRV, entirely in memory. Each produced oiSH
-//must match its committed reference (allOutputs[i], e.g. dummy.oiSH) byte-for-byte, so any change in the
-//compiler output is caught. A missing reference is generated once and the assertion fails, so new
-//references are noticed, reviewed and committed rather than silently accepted.
+// which CMake points at the corpus folder) and run it through the real pipeline
+// (preprocess -> DXC compile -> reflect -> link -> oiSH assembly) targeting SPIRV, entirely in memory.
+//Each produced oiSH must match its committed reference (allOutputs[i], e.g. dummy.oiSH) byte-for-byte,
+// so any change in the compiler output is caught.
+//A missing reference is generated once and the assertion fails,
+// so new references are noticed, reviewed and committed rather than silently accepted.
 
 void Test_shaderCompilerCorpus(Test *t) {
 
@@ -308,7 +312,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 	//Rooted via TEST_SHADER_ROOT so the same corpus runs from the working directory (desktop ctest) and
-	//from the virtual file system when bundled; see test_shader_compiler_shared.h.
+	// from the virtual file system when bundled; see test_shader_compiler_shared.h.
 
 	const CharString here = CharString_createRefCStrConst(TEST_SHADER_ROOT "hlsl");
 
@@ -330,7 +334,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 	//Enumerate + resolve every .hlsl entrypoint in the corpus folder, targeting SPIRV for the byte-snapshot.
 	//(A separate DXIL compile+reflect coverage pass follows below; a combined SPIRV+DXIL snapshot is blocked
-	//on a driver issue when a folder is enumerated for both modes with combineFlag - see that pass.)
+	// on a driver issue when a folder is enumerated for both modes with combineFlag - see that pass.)
 
 	gotoIfError3(clean, Compiler_getTargetsFromFile(
 		here,
@@ -351,14 +355,16 @@ void Test_shaderCompilerCorpus(Test *t) {
 	Test_assert(t, "corpus folder enumerated .hlsl shaders", isFolder && allFiles.length >= 1);
 
 	//Shaders that can't be compiled here (e.g. inheritance, which provokes an uncatchable DXC assert on a
-	//multi-base-class StructuredBuffer element) are renamed to *.hlsl.disabled on disk so the .hlsl-only
-	//enumerator skips them, while keeping the source around as a repro. No in-test filtering needed.
+	// multi-base-class StructuredBuffer element) are renamed to *.hlsl.disabled on disk
+	// so the .hlsl-only enumerator skips them, while keeping the source around as a repro.
+	//No in-test filtering needed.
 
 	//Sibling .hlsli includes resolve relative to the corpus folder
 
 	gotoIfError3(clean, ListCharString_createRefConst(&here, 1, &includeDirs, e_rr));
 
-	//Compile the whole corpus into in-memory oiSH buffers. ignoreEmptyFiles tolerates include-only files.
+	//Compile the whole corpus into in-memory oiSH buffers.
+	//ignoreEmptyFiles tolerates include-only files.
 
 	//Don't abort on a single failing shader: assert the whole corpus compiled, but still snapshot every
 	//oiSH that was produced (failed entries come back as empty buffers and are skipped below).
@@ -390,9 +396,10 @@ void Test_shaderCompilerCorpus(Test *t) {
 		if (!Buffer_length(produced))       //Include-only / ignored empty files produce nothing
 			continue;
 
-		//allOutputs entries are bare names ("dummy.oiSH") relative to the corpus folder's parent, which
-		//is the working directory on desktop. Bundled, a bare name would resolve into the app's writable
-		//storage instead of the virtual file system, so the reference is re-rooted explicitly.
+		//allOutputs entries are bare names ("dummy.oiSH") relative to the corpus folder's parent,
+		// which is the working directory on desktop.
+		//Bundled, a bare name would resolve into the app's writable storage instead of the virtual file system,
+		// so the reference is re-rooted explicitly.
 
 		CharString_free(&refPath, alloc);
 
@@ -416,9 +423,10 @@ void Test_shaderCompilerCorpus(Test *t) {
 				printOiSH(alloc, produced, "produced");
 				printOiSH(alloc, golden, "reference");
 
-				//When only the bytecode changed (reflection identical), emit before/after SPIRV disassembly next
-				//to the reference (<ref>.ref.spvasm vs <ref>.new.spvasm) so `git diff --no-index` shows the delta a
-				//DXC update introduced. If reflection *also* differs, that's a real change - the dumps above show it.
+				//When only the bytecode changed (reflection identical),
+				// emit before/after SPIRV disassembly next to the reference (<ref>.ref.spvasm vs <ref>.new.spvasm)
+				// so `git diff --no-index` shows the delta a DXC update introduced.
+				//If reflection *also* differs, that's a real change - the dumps above show it.
 				if(disasmCompCreated && shReflectionMatches(alloc, produced, golden)) {
 					Log_warnLn(alloc, "\treflection unchanged - only bytecode differs; comparing disassembly");
 					dumpDisasmDiff(alloc, &disasmComp, produced, golden, ref, corpusWritable);
@@ -442,11 +450,11 @@ void Test_shaderCompilerCorpus(Test *t) {
 		}
 	}
 
-	//--- DXIL coverage: compile the same on-disk corpus for DXIL too, so it isn't SPIRV-only. There's no
-	//--- byte-snapshot here (the SPIRV pass above is the byte reference; DXIL is exercised for compile +
-	//--- reflection coverage) - this stays robust to benign DXIL output churn while still catching any
-	//--- DXIL-specific compile or reflection regression across the whole corpus. Every corpus shader that
-	//--- produced a SPIRV binary must also produce a DXIL one (none here are backend-restricted).
+	//--- DXIL coverage: compile the same on-disk corpus for DXIL too, so it isn't SPIRV-only.
+	//--- There's no byte-snapshot here (the SPIRV pass above is the byte reference; DXIL is exercised for compile +
+	//--- reflection coverage) - this stays robust to benign DXIL output churn while still catching any DXIL-specific
+	//--- compile or reflection regression across the whole corpus.
+	//--- Every corpus shader that produced a SPIRV binary must also produce a DXIL one (none here are backend-restricted).
 	//---
 	//--- NOTE: a single *combined* SPIRV+DXIL snapshot (one oiSH per shader carrying both) would be stronger,
 	//--- but enumerating a folder for both modes with combineFlag currently fails inside Compiler_compileShaders

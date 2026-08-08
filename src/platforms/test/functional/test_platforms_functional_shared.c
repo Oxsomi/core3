@@ -106,11 +106,12 @@ WindowRef *createWindowCallback(
 			Test_print(t, "[fallback] using virtual window");
 	}
 
-	//Windows and linux finalize inside createWindow, so a returned window is immediately usable and every test here
-	// reads w->size and w->cpuVisibleBuffer straight away.
-	//Android can't do that: the surface only shows up with APP_CMD_INIT_WINDOW, which needs the loop pumped, so until
-	// then the size is whatever was requested and there's no cpu buffer yet.
-	//Pump until it's ready so the window means the same thing everywhere. No-op where creation is already synchronous.
+	//Windows and linux finalize inside createWindow, so a returned window is immediately usable
+	// and every test here reads w->size and w->cpuVisibleBuffer straight away.
+	//Android can't do that: the surface only shows up with APP_CMD_INIT_WINDOW, which needs the loop pumped,
+	// so until then the size is whatever was requested and there's no cpu buffer yet.
+	//Pump until it's ready so the window means the same thing everywhere.
+	//No-op where creation is already synchronous.
 
 	if (s_uccess && wRef && windowManagerReady) {
 
@@ -166,13 +167,11 @@ void pump(Ns ns) {
 	#define NOMINMAX
 	#include <Windows.h>
 
-	//BeginPaint's clip region (inside Window_presentPhysical) is only as good
-	// as the window's current update region. CS_HREDRAW/CS_VREDRAW regenerates
-	// that on a real size change, but plenty of state changes we test here
-	// (fullscreen toggle without a size delta, a test bumping its own pattern
-	// color, etc) don't reliably produce one. Explicitly invalidating before
-	// every present is what guarantees onDraw -> presentPhysical actually
-	// see a non-empty paint rect every time, instead of only "most of the time".
+	//BeginPaint's clip region (inside Window_presentPhysical) is only as good as the window's current update region.
+	//CS_HREDRAW/CS_VREDRAW regenerates that on a real size change, but plenty of state changes we test here
+	// (fullscreen toggle without a size delta, a test bumping its own pattern color, etc) don't reliably produce one.
+	//Explicitly invalidating before every present is what guarantees
+	// onDraw -> presentPhysical actually see a non-empty paint rect every time, instead of only "most of the time".
 	void invalidateForRepaint(Window *w) {
 		InvalidateRect((HWND) w->nativeHandle, NULL, FALSE);
 	}

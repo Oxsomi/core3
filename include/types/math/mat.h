@@ -30,8 +30,8 @@
 //4x4 matrix over T##x4, so every operation is SIMD through the existing vector dispatch
 //(SSE / NEON / scalar fallback) without this file knowing which one it got.
 //
-//CONVENTIONS, these match include/shader_compiler/shaders/types.hlsli, which is where the same
-//helpers live for HLSL, so a matrix built here can be uploaded and used as-is:
+//CONVENTIONS, these match include/shader_compiler/shaders/types.hlsli, which is where the same helpers live for HLSL,
+// so a matrix built here can be uploaded and used as-is:
 //
 //  Storage      row major. v[i] is row i; v[3] of a translation is (x, y, z, 1).
 //               That's the order the HLSL F32x4x4(...) constructor takes its arguments in.

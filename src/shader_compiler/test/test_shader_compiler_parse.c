@@ -29,7 +29,7 @@
 
 //Parse a trivial compute shader with an oxc:: annotation and verify the reflection round-trips:
 // one entrypoint is discovered and marked as a compute stage.
-// This is the smallest end-to-end check of the DXC-backed parser and our annotation handling.
+//This is the smallest end-to-end check of the DXC-backed parser and our annotation handling.
 
 void Test_shaderCompilerParse(Test *t) {
 
@@ -78,7 +78,7 @@ clean:
 }
 
 //Built-in includes are enumerable so tools don't have to hardcode the list; verify the table and the
-//by-name lookup agree, since LoadSource resolves #include "@x.hlsli" through the same lookup.
+// by-name lookup agree, since LoadSource resolves #include "@x.hlsli" through the same lookup.
 
 void Test_shaderCompilerBuiltInIncludes(Test *t) {
 

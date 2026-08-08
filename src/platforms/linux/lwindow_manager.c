@@ -39,8 +39,8 @@ void LWindowManager_isAlive(void *data, struct xdg_wm_base *base, U32 serial) {
 }
  
 //wl_output geometry event, fires once per output on connect, and on change.
-//Gives us the output's position in global compositor space, physical size in mm,
-// and transform (orientation). The pixel mode dimensions come from the mode event
+//Gives us the output's position in global compositor space, physical size in mm, and transform (orientation).
+//The pixel mode dimensions come from the mode event
 static void LOutput_geometry(
 	void *data,
 	struct wl_output *output,
@@ -81,13 +81,13 @@ static void LOutput_mode(
 }
  
 //done event, compositor signals it has finished sending all properties for this output.
-// Nothing to do here; we've already updated info in-place
+//Nothing to do here; we've already updated info in-place
 static void LOutput_done(void *data, struct wl_output *output) {
 	(void) data; (void) output;
 }
  
 //scale event, integer HiDPI scale factor (e.g. 2 for 200% scaling).
-// Stored for future use; not wired into Monitor yet.
+//Stored for future use; not wired into Monitor yet.
 static void LOutput_scale(void *data, struct wl_output *output, I32 factor) {
 	(void) output;
 	LOutputInfo *info = (LOutputInfo*) data;
@@ -219,7 +219,8 @@ static inline Monitor LOutputInfo_toMonitor(const LOutputInfo *info) {
 
 	//Map Wayland wl_output_subpixel to per-channel pixel offsets.
 	//All-zero means subpixel rendering is disabled (unknown or no layout).
-	//Horizontal: offsets are along X. Vertical: along Y.
+	//Horizontal: offsets are along X.
+	//Vertical: along Y.
 	//RGB order: R is at -1, G at 0, B at 1 (offset in that direction).
 	//BGR order: R is at 1, G at 0, B at -1.
 	I32x2 spR = I32x2_zero, spG = I32x2_zero, spB = I32x2_zero;

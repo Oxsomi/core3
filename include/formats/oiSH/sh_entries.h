@@ -174,8 +174,8 @@ static inline Bool SHEntryRuntime_containsGfxOrComp(SHEntryRuntime runtime) {
 	return (runtime.runtimeFlags & ESHEntryRuntimeFlag_ContainsGfxOrComp) != 0;
 }
 
-//Backends (mask of 1 << ESHBinaryType) this entrypoint's stage + extensions can be expressed on, ignoring
-//the annotation. Uniform across all entrypoints sharing a compile, so it's safe to skip a whole compile with.
+//Backends (mask of 1 << ESHBinaryType) this entrypoint's stage + extensions can be expressed on, ignoring the annotation.
+//Uniform across all entrypoints sharing a compile, so it's safe to skip a whole compile with.
 U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime);
 
 //Full effective set of backends this entrypoint may be compiled for.

@@ -120,10 +120,11 @@ def makeProfile(conanHome, binDir, conanArch, level, generator):
 
 def ensureProfile(conanHome, binDir, conanArch, level, generator):
 
-	# Always rewritten rather than reused when present. The name only encodes arch/level/generator, but the
-	# contents also depend on the NDK path, its clang version and which versions conan accepts - all of
-	# which change under an existing profile (an NDK upgrade, a conan upgrade), leaving a stale one that
-	# fails in ways pointing nowhere near the profile. Writing a small file every build is cheaper than that.
+	# Always rewritten rather than reused when present.
+	# The name only encodes arch/level/generator, but the contents also depend on the NDK path,
+	# its clang version and which versions conan accepts - all of which change under an existing profile
+	# (an NDK upgrade, a conan upgrade), leaving a stale one that fails in ways pointing nowhere near the profile.
+	# Writing a small file every build is cheaper than that.
 
 	return makeProfile(conanHome, binDir, conanArch, level, generator)
 
@@ -169,17 +170,19 @@ def doBuild(
 	buildProfile = common.crossBuildProfileArgs(hostCompiler)
 	profileArgs  = f"--profile:host={profile} {buildProfile}"
 
-	# Build dependencies for the target. Keyed per profile so x64 and arm64 don't invalidate each other.
+	# Build dependencies for the target.
+	# Keyed per profile so x64 and arm64 don't invalidate each other.
 
 	for package in ("packages/openal_soft", "packages/vulkan_headers"):
 		common.conanCreateIfChanged(
 			package, profilePath, mode, profileArgs, cache, key=f"{package}::{profile}"
 		)
 
-	# The shader compiler's dependencies. DXC needs a tablegen it can run on the machine doing the
-	# building, which only a host build of the same recipe has; see hostTablegenDir.
-	# Pinned to Release for the same reason the host build pins them: they dominate the build and are
-	# rarely what's being debugged.
+	# The shader compiler's dependencies.
+	# DXC needs a tablegen it can run on the machine doing the building,
+	# which only a host build of the same recipe has; see hostTablegenDir.
+	# Pinned to Release for the same reason the host build pins them:
+	# they dominate the build and are rarely what's being debugged.
 
 	if shaderCompiler:
 
@@ -311,9 +314,9 @@ def makeApk(args, packageDirs):
 
 		Path(libFolder + "/" + abi).mkdir(parents=True, exist_ok=True)
 
-		# Shared objects land in bin/, lib/ holds the static .a archives. Both are globbed because which
-		# one a .so ends up in depends on the generator, and a missing .so here shows up as a
-		# dlopen/UnsatisfiedLinkError on device rather than as a build failure.
+		# Shared objects land in bin/, lib/ holds the static .a archives.
+		# Both are globbed because which one a .so ends up in depends on the generator,
+		# and a missing .so here shows up as a dlopen/UnsatisfiedLinkError on device rather than as a build failure.
 
 		found = set()
 
@@ -363,14 +366,14 @@ def makeApk(args, packageDirs):
 	shutil.copytree(inputPath, resFolder, dirs_exist_ok=True)
 
 	# Compile .java files.
-	# Wildcards are expanded here rather than handed to the shell: cmd.exe doesn't glob, so passing
-	# "*.java" / "*.class" through only ever worked on a posix shell.
+	# Wildcards are expanded here rather than handed to the shell: cmd.exe doesn't glob,
+	# so passing "*.java" / "*.class" through only ever worked on a posix shell.
 
 	print("-- Compiling .java file")
 	javaFiles = " ".join(f"\"{f}\"" for f in sorted(glob.glob(os.path.join(common.ROOT, "src", "platforms", "android", "*.java"))))
-	# --release pins the class file version so the installed JDK doesn't decide it. Without it javac
-	# targets its own latest, and d8 rejects anything newer than it understands ("Unsupported class
-	# file major version"), which made the build depend on which JDK happened to be on PATH.
+	# --release pins the class file version so the installed JDK doesn't decide it.
+	# Without it javac targets its own latest, and d8 rejects anything newer than it understands
+	# ("Unsupported class file major version"), which made the build depend on which JDK happened to be on PATH.
 	# 11 is the floor every d8 accepts, and our .java is plain Java 8 anyway.
 
 	common.run(f"javac --release 11 -Xlint:deprecation -cp {androidJar} -d \"{apkFolder}/bin/\" {javaFiles}")
@@ -382,10 +385,12 @@ def makeApk(args, packageDirs):
 	os.chdir(apkFolder)
 
 	try:
-		# Inner classes are named OxC3Activity$1.class, and on POSIX hosts sh expands $1 inside double
-		# quotes to an (empty) positional parameter, collapsing every inner class into OxC3Activity.class.
-		# d8 then dies with "type defined multiple times". Single quotes keep $ literal there; cmd.exe
-		# doesn't expand $ and doesn't understand single quotes, so it keeps the double-quoted form.
+		# Inner classes are named OxC3Activity$1.class,
+		# and on POSIX hosts sh expands $1 inside double quotes to an (empty) positional parameter,
+		# collapsing every inner class into OxC3Activity.class.
+		# d8 then dies with "type defined multiple times".
+		# Single quotes keep $ literal there; cmd.exe doesn't expand $ and doesn't understand single quotes,
+		# so it keeps the double-quoted form.
 
 		if os.name == "nt":
 			classFiles = " ".join(f"\"{f}\"" for f in sorted(glob.glob("bin/net/osomi/nativeactivity/*.class")))
@@ -411,13 +416,14 @@ def makeApk(args, packageDirs):
 	cwd = os.getcwd()
 	os.chdir(apkFolder)
 
-	# Not `aapt add`: it rewrites the whole archive per invocation and always deflates, and with the
-	# shader compiler in, the test .so alone is hundreds of megabytes. Compressing it was the entire
-	# cost of this step (zipalign over the same archive is a fifth of a second).
+	# Not `aapt add`: it rewrites the whole archive per invocation and always deflates,
+	# and with the shader compiler in, the test .so alone is hundreds of megabytes.
+	# Compressing it was the entire cost of this step (zipalign over the same archive is a fifth of a second).
 	#
-	# Native libraries are stored rather than deflated, which is what android wants anyway: paired with
-	# extractNativeLibs=false and zipalign -p, the loader maps them straight out of the apk instead of
-	# unpacking a second copy at install time. So this is faster to build *and* to install.
+	# Native libraries are stored rather than deflated, which is what android wants anyway:
+	# paired with extractNativeLibs=false and zipalign -p, the loader maps them straight out of the apk
+	# instead of unpacking a second copy at install time.
+	# So this is faster to build *and* to install.
 	# classes.dex still compresses; it's small and gains nothing from being stored.
 
 	try:
@@ -662,7 +668,8 @@ def main():
 	parser.add_argument("--install", help="Install package rather than build", action="store_true")
 
 	# The android build can't produce its own OxC3_package (no shader compiler, and it wouldn't run on the host),
-	# so it tool_requires a host build of oxc3. Built here by default so a clean checkout works;
+	# so it tool_requires a host build of oxc3.
+	# Built here by default so a clean checkout works;
 	# CI splits it out into its own step so the three android configs share one host package.
 
 	parser.add_argument("--skip_host_package", help="Assume a host oxc3 with OxC3_package is already in the conan cache", action="store_true")
@@ -697,7 +704,8 @@ def main():
 	else:
 		generatorValidationLayer = args.generator
 
-	# Host tooling. Doesn't need the NDK, so it comes before the environment check.
+	# Host tooling.
+	# Doesn't need the NDK, so it comes before the environment check.
 
 	if args.host_package_only:
 		common.buildHostToolPackage(forceDeps=args.force_deps, compiler=args.host_compiler)

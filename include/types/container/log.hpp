@@ -90,7 +90,8 @@ namespace oxc {
 			log(alloc, lvl, str, ELogOptions_NewLine);
 		}
 
-		//Format variants. Args go straight into the C varargs call.
+		//Format variants.
+		//Args go straight into the C varargs call.
 
 		template<typename... Args>
 		static void logFormat(

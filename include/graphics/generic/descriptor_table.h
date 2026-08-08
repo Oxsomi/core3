@@ -200,7 +200,7 @@ U32 Descriptor_counterOffset(const Descriptor *d);
 //Note: When setting descriptors, ensure all descriptors are valid (e.g. resource != NULL)
 //        not all implementations support null descriptors, as such, setting all descriptors in a range to NULL
 //        is unexpected behavior.
-//        For telling our front end that descriptors are free use unsetDescriptor(s)(byName).
+//For telling our front end that descriptors are free use unsetDescriptor(s)(byName).
 
 Bool DescriptorTableRef_setDescriptors(
 	DescriptorTableRef *table,

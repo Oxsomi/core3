@@ -195,9 +195,10 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 			2, "SHFile_addEntrypoint() payloadSize is only allowed for hit/callable/miss shaders"
 		));
 
-	//intersectionSize (hit attribute size) is required for the hit shaders that RECEIVE the attribute (closesthit/anyhit
-	//- both backends reflect it). It's optional for intersection: DXC's DXIL reflection reports AttributeSize 0 for an
-	//intersection shader (it produces the attribute via ReportHit rather than receiving it), while SPIR-V does expose it.
+	//intersectionSize (hit attribute size) is required for the hit shaders that RECEIVE the attribute
+	// (closesthit/anyhit - both backends reflect it).
+	//It's optional for intersection: DXC's DXIL reflection reports AttributeSize 0 for an intersection shader
+	// (it produces the attribute via ReportHit rather than receiving it), while SPIR-V does expose it.
 
 	if(!entry->intersectionSize) {
 
@@ -418,10 +419,11 @@ U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime) {
 	if (runtime->entry.stage == ESHPipelineStage_WorkgraphExt)
 		mask &= (U8)(1 << ESHBinaryType_DXIL);
 
-	//Extension compile support: a feature restricts to one backend only when the other has no path at all, per
-	//the ESHExtension_NoDxilCompile / ESHExtension_NoSpirvCompile sets in sh_binaries.h. Everything else stays
-	//dual - a DXIL-only intrinsic (OMM / SER / triangle position fetch / cooperative vectors) is still reachable
-	//on SPIRV via inline SPIR-V, so which backend a shader targets is left to the shader, not forced here.
+	//Extension compile support: a feature restricts to one backend only when the other has no path at all,
+	// per the ESHExtension_NoDxilCompile / ESHExtension_NoSpirvCompile sets in sh_binaries.h.
+	//Everything else stays dual - a DXIL-only intrinsic (OMM / SER / triangle position fetch / cooperative vectors)
+	// is still reachable on SPIRV via inline SPIR-V, so which backend a shader targets is left to the shader,
+	// not forced here.
 
 	ESHExtension used = ESHExtension_None;
 
@@ -442,8 +444,9 @@ U8 SHEntryRuntime_getBinaryTypes(const SHEntryRuntime *runtime) {
 	if (!runtime)
 		return 0;
 
-	//Full effective set: the [[oxc::binary(...)]] annotation (or all backends if unset) AND the backends the
-	//stage + extensions support. Applied per-entrypoint at link time.
+	//Full effective set: the [[oxc::binary(...)]] annotation (or all backends if unset)
+	// AND the backends the stage + extensions support.
+	//Applied per-entrypoint at link time.
 
 	U8 all = (U8)((1 << ESHBinaryType_Count) - 1);
 	U8 annotated = runtime->binaryTypes ? runtime->binaryTypes : all;

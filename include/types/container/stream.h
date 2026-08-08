@@ -169,7 +169,7 @@ Bool StreamCursor_read(
 );
 
 //Expensively compare the two streams, this is only valid if both streams are seekable.
-// As otherwise reading them might cause the stream to change.
+//As otherwise reading them might cause the stream to change.
 //Avoid using this in heavy paths, as this is a full stream compare.
 Bool Stream_compare(
 	StreamRef *a,

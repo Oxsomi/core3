@@ -84,8 +84,9 @@ Bool DDS_write(
 	if(info->mips > mips)
 		retError(clean, Error_invalidParameter(1, 0, "DDS_write()::info.mips out of bounds"));
 
-	//For a 3D texture the depth halves each mip (like width/height), so the subresource count is the sum of the
-	//per-mip depths, not mips * l. This must match the per-mip-reduced iteration below and in DDS_read.
+	//For a 3D texture the depth halves each mip (like width/height),
+	// so the subresource count is the sum of the per-mip depths, not mips * l.
+	//This must match the per-mip-reduced iteration below and in DDS_read.
 
 	U64 totalSubResources = 0;
 
@@ -194,8 +195,9 @@ Bool DDS_write(
 	U8 alignY = 1;
 	ETextureFormat_getAlignment(formatOxC, NULL, &alignY);
 
-	//For an uncompressed format DDS wants the row pitch; for a compressed format (EDDSFlag_LinearSize) it wants the
-	//full base-mip surface size, not a single block row. Compute both and pick per-format below.
+	//For an uncompressed format DDS wants the row pitch.
+	//For a compressed format (EDDSFlag_LinearSize) it wants the full base-mip surface size, not a single block row.
+	//Compute both and pick per-format below.
 
 	const U64 stride = ETextureFormat_getSize(formatOxC, info->w, alignY, 1);
 	const U64 linearSize = ETextureFormat_getSize(formatOxC, info->w, info->h, 1);
@@ -243,9 +245,10 @@ Bool DDS_write(
 
 				break;
 
-			//BC4/BC5 have no DX9-era FourCC in the DDS spec (they're DX10 formats); these de-facto legacy codes
-			//(BC4U / BC4S / ATI2 / BC5S) keep us backwards-compatible without forcing a DXT10 header and are widely
-			//accepted, but a reader that only understands DXT10 would need the DXT10 path instead.
+			//BC4/BC5 have no DX9-era FourCC in the DDS spec (they're DX10 formats).
+			//These de-facto legacy codes (BC4U / BC4S / ATI2 / BC5S) keep us backwards-compatible
+			// without forcing a DXT10 header and are widely accepted,
+			// but a reader that only understands DXT10 would need the DXT10 path instead.
 
 			case ETextureFormat_BC4:        pixelFormat.magicNumber = EDDSFormatMagic_BC4;        break;
 			case ETextureFormat_BC4s:        pixelFormat.magicNumber = EDDSFormatMagic_BC4s;        break;

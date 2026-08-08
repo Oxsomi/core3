@@ -86,7 +86,8 @@ function(apply_dependencies target)
 
 		# Differences in packaging:
 		# Windows you can embed using an .rc file; then this handle can be opened through FindResourceW
-		# Linux you can embed into the elf manually by using objcopy and manually read the section data to find where it's located
+		# Linux you can embed into the elf manually by using objcopy and manually read the section data
+		# to find where it's located
 		# Android has APKs which are just like zip files, so can be easily read (though the NDK can't access subfolders easily)
 		# iOS has IPA which is the same idea as APK.
 		# OS X we will manually link the section into it too.

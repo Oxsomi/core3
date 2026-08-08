@@ -35,10 +35,11 @@
 
 #define ATEST_TAG "OxC3"
 
-//Suites bundled into this .so. Interactive ones need a human at the device, so they're off unless asked
-//for; everything else runs unattended.
-//shader_compiler is only here when it was built (-shader_compiler True); DXC is off by default on
-//android, so the entry point wouldn't resolve otherwise.
+//Suites bundled into this .so.
+//Interactive ones need a human at the device, so they're off unless asked for.
+//Everything else runs unattended.
+//shader_compiler is only here when it was built (-shader_compiler True).
+//DXC is off by default on android, so the entry point wouldn't resolve otherwise.
 
 typedef int (*ATestFn)(void *state);
 

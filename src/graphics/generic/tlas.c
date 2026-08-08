@@ -279,8 +279,7 @@ Bool GraphicsDeviceRef_createTLAS(
 			0, "GraphicsDeviceRef_createTLAS() uses motion blur, but it's unsupported"
 		));
 
-	//RTAS_validateDeviceBuffer may normalize len, so validate a local copy;
-	//it's committed to the new TLAS below
+	//RTAS_validateDeviceBuffer may normalize len, so validate a local copy; it's committed to the new TLAS below
 
 	DeviceData deviceData = (DeviceData) { 0 };
 

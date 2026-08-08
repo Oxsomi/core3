@@ -590,8 +590,7 @@ Bool Compiler_consumeString(const C8 *&str, const C8 *&strStart, const C8 *&strE
 		if(!c)
 			retError(clean, Error_invalidParameter(0, 0, "Compiler_consumeString() unexpected end of token"));
 
-		//Because we reference a literal string when using defines/uniforms/etc.
-		// Rather than a copied/processed string.
+		//Because we reference a literal string when using defines/uniforms/etc. rather than a copied/processed string.
 
 		if (c == '\\')
 			retError(clean, Error_invalidParameter(0, 0, "Compiler_consumeString() escaping characters is unsupported"));

@@ -182,7 +182,8 @@
 		if (hasSHA)
 			f |= ECPUFeatures_HwSHA256;
 
-		//int8 dot-product (ARMv8.4 DotProd). Windows-on-ARM has no dedicated PF_ flag, so it's best-effort there.
+		//int8 dot-product (ARMv8.4 DotProd).
+		//Windows-on-ARM has no dedicated PF_ flag, so it's best-effort there.
 
 		#if _PLATFORM_TYPE == PLATFORM_IOS || _PLATFORM_TYPE == PLATFORM_OSX
 			f |= ECPUFeatures_Int8Dot;        //Apple silicon supports DotProd

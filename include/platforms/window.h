@@ -51,7 +51,8 @@ typedef enum EWindowHint {
 } EWindowHint;
 
 //Subset of formats that can be used for windows
-//These formats are dependent on the platform too. It's very possible they're not available.
+//These formats are dependent on the platform too.
+//It's very possible they're not available.
 typedef enum EWindowFormat {
 	EWindowFormat_AutoRGBA8              = 0,                            //BGRA8 or RGBA8, depending on platform
 	EWindowFormat_BGRA8                  = ETextureFormat_BGRA8,            //Most common format

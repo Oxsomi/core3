@@ -209,7 +209,7 @@ void CommandList_free(CommandList *cmd, const Allocator *alloc);
 
 //Fills the RefPtrTypes of all objects that can be created through this instance (or its devices).
 //They live in the GraphicsInstance so they're guaranteed to outlive the objects created with them,
-//since every graphics object holds a reference to the device and the device to the instance.
+// since every graphics object holds a reference to the device and the device to the instance.
 
 static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, const Allocator *alloc) {
 

@@ -132,7 +132,7 @@ static void Test_graphicsInstance(Test *t) {
 
 	//Real create.
 	//Instance creation legitimately fails on machines without a compatible driver/ICD;
-	//that's not a test failure, the device tests are simply skipped (like the adapter check below).
+	// that's not a test failure, the device tests are simply skipped (like the adapter check below).
 
 	if (!GraphicsInstance_create(&appInfo, EGraphicsApi_Count, 0, alloc, &type, &instRef, &t->err)) {
 		Test_print(t, "No compatible graphics driver, skipping instance tests");
@@ -284,10 +284,21 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 		inst, NULL, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, NULL, NULL
 	));
 
-	//A GPU (or software rasterizer like lavapipe) is never guaranteed here; skip if absent
+	//A GPU (or software rasterizer like lavapipe) is never guaranteed here, so a machine without one has to stay green.
+	//getDeviceInfos tells the two empty results apart through the error it returns.
+	//EGenericError_NotFound means the api enumerated no adapter at all, which is nothing this test can hold against it.
+	//Any other error means adapters were enumerated but every one of them failed OxC3's requirements.
+	//That is a real result to fail on, and the device selection log right above names each requirement that went unmet.
 
-	if (!GraphicsInstance_getDeviceInfos(inst, &infos, NULL) || !infos.length) {
-		Test_print(t, "No graphics adapter present, skipping device tests");
+	if (!GraphicsInstance_getDeviceInfos(inst, &infos, &t->err) || !infos.length) {
+
+		if (t->err.genericError == EGenericError_NotFound) {
+			Test_print(t, "No graphics adapter present, skipping device tests");
+			t->err = Error_none();
+			goto clean;
+		}
+
+		Test_assert(t, "deviceEnumeration", false);
 		goto clean;
 	}
 

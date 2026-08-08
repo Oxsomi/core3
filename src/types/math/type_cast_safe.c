@@ -47,12 +47,12 @@ clean:                                                                          
 )
 
 //We can't reuse CastFromU/CastFromI, since floats are a bit special:
-// U32_MAX will round to U32_MAX + 1 with a float, so the > check will actually fail for 4Gi.
-// This produces UB because (U32)f32_above_u32_max will depend on the arch.
-// On x64 this seems to work as you expect (0) but on aarch64 this seems to clamp (U32_MAX).
-// To prevent this issue, we instead compare it with >= (floatType)intLimit + 1.
-// This results in either >= 0x100, 0x10000 and with
-// float/int (due to float precision) it'll produce 4Gi + 1 = 4Gi so it'll work.
+//U32_MAX will round to U32_MAX + 1 with a float, so the > check will actually fail for 4Gi.
+//This produces UB because (U32)f32_above_u32_max will depend on the arch.
+//On x64 this seems to work as you expect (0) but on aarch64 this seems to clamp (U32_MAX).
+//To prevent this issue, we instead compare it with >= (floatType)intLimit + 1.
+//This results in either >= 0x100, 0x10000 and with float/int (due to float precision) it'll produce 4Gi + 1 = 4Gi
+// so it'll work.
 
 //Which is why the order below matters and every check before the store stays in the float domain.
 //The integral check used to run first and it converts, so it re-introduced the exact UB the range check exists to

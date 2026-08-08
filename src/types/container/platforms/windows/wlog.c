@@ -366,7 +366,7 @@ void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const C
 	//https://archives.miloush.net/michkap/archive/2010/10/07/10072032.html
 	//We can't use printf because we need colors.
 	//We can't just use WriteConsole because our message might be redirected to a file!
-	// This also happens when we are being executed by visual studio, git bash or on a runner or something.
+	//This also happens when we are being executed by visual studio, git bash or on a runner or something.
 
 	if (!panic) {
 

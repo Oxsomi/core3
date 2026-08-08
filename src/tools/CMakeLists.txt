@@ -29,8 +29,8 @@ add_custom_target(check_style ALL
 
 set_target_properties(check_style PROPERTIES FOLDER Oxsomi/tools)
 
-# The generated oxc:: wrappers are committed, so nobody needs the generator to read them. This catches
-# the case where the C header they're derived from changed and they weren't regenerated.
+# The generated oxc:: wrappers are committed, so nobody needs the generator to read them.
+# This catches the case where the C header they're derived from changed and they weren't regenerated.
 
 add_custom_target(check_generated_hpp ALL
     COMMAND ${CMAKE_COMMAND} -E echo "-- Checking generated C++ wrappers are up to date..."

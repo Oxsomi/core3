@@ -134,12 +134,14 @@ extern "C" Bool Compiler_processSPIRV(
 	SpvReflectShaderModule spvMod{};
 	Bool isRt = !!(toCompile->extensions & ESHExtension_RayQuery);
 
-	//Mesh/task shaders also need the >= 1.4 optimizer (SPV_EXT_mesh_shader). Detected from the execution model below.
+	//Mesh/task shaders also need the >= 1.4 optimizer (SPV_EXT_mesh_shader).
+	//Detected from the execution model below.
 
 	Bool isMeshTask = false;
 
-	//Linalg (cooperative vectors) is compiled at vulkan1.3 (SPIR-V 1.6) so its storage buffers get the StorageBuffer
-	//class the matmul requires, so its optimizer must run at a matching (>= 1.6) environment.
+	//Linalg (cooperative vectors) is compiled at vulkan1.3 (SPIR-V 1.6),
+	// so its storage buffers get the StorageBuffer class the matmul requires,
+	// so its optimizer must run at a matching (>= 1.6) environment.
 
 	ESHExtension linalg = (ESHExtension) (
 		ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining
@@ -822,8 +824,9 @@ extern "C" Bool Compiler_linkSPIRV(
 
 	isRt |= !!(exts & ESHExtension_RayQuery);
 
-	//Cooperative vectors/matrix compile at vulkan1.3 (SPIR-V 1.6), so their optimizer/validator must match (mirrors
-	//Compiler_processSPIRV). 1.6 is a superset of 1.4, so RT + coop is safe too.
+	//Cooperative vectors/matrix compile at vulkan1.3 (SPIR-V 1.6),
+	// so their optimizer/validator must match (mirrors Compiler_processSPIRV).
+	//1.6 is a superset of 1.4, so RT + coop is safe too.
 	Bool isLinalg = !!(exts & (ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining));
 
 	Bool isMeshTask = stage == ESHPipelineStage_MeshExt || stage == ESHPipelineStage_TaskExt;

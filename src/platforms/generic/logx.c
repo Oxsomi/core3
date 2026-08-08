@@ -45,7 +45,8 @@
 																				\
 	CharString_free(&res, alloc)
 
-//Default allocator. Sometimes they can't be safely used
+//Default allocator.
+//Sometimes they can't be safely used
 
 void Log_logFormatx(ELogLevel level, ELogOptions opt, const C8 *format, ...) {
 	const Allocator *alloc = Platform_instance->alloc;

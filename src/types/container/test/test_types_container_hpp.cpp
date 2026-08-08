@@ -28,9 +28,9 @@
 #include "types/container/job_queue.hpp"
 
 //The C test framework carries an extern "C" guard, so include it inside oxc::c (after the wrappers,
-//which already pulled its C-header deps into oxc::c). Its declarations then live in oxc::c with C
-//linkage, matching the C-compiled framework, and share the same oxc::c::Allocator / Error types,
-//so t->alloc is already an oxc::c::Allocator* (no cast, no shim).
+// which already pulled its C-header deps into oxc::c).
+//Its declarations then live in oxc::c with C linkage, matching the C-compiled framework,
+// and share the same oxc::c::Allocator / Error types, so t->alloc is already an oxc::c::Allocator* (no cast, no shim).
 namespace oxc { namespace c {
 	#include "types/test/test.h"
 }}

@@ -33,10 +33,11 @@ typedef struct Error Error;
 typedef struct Allocator Allocator;
 
 //EKey is remapped using scan codes for QWERTY iso layout (https://kbdlayout.info/kbdusx)
-// The main part of the keyboard uses scan codes, but the following don't:
+//The main part of the keyboard uses scan codes, but the following don't:
 // Extended keyboard (numpad, arrows, insert/page down/etc.)
-// These keystrokes use virtual keys on windows.
-//Don't assume for example Key_W is really the W key! (e.g. AZERTY would be Z instead of W. Might even be non latin char).
+//These keystrokes use virtual keys on windows.
+//Don't assume for example Key_W is really the W key!
+//(e.g. AZERTY would be Z instead of W. Might even be non latin char).
 //Use Keyboard_remap(keyboard, key) to get the localized keyboard unicode codepoint.
 //Only use Keyboard_remap for displaying what kind of key is pressed or in option screens.
 //When typing text, please rely on the typeChar callback.
@@ -96,7 +97,8 @@ typedef enum EKeyboardFlags {
 
 Bool Keyboard_create(Keyboard *result, const Allocator *alloc, Error *e_rr);
 
-//Remap key to unicode codepoint using current language. This is only for debugging keyboard mappings and GUI elements.
+//Remap key to unicode codepoint using current language.
+//This is only for debugging keyboard mappings and GUI elements.
 //For text boxes, use the typeChar callback of Window; this handles OS-level input such as IME (Japanese) and emojis.
 //If there's no remap available it will return an empty string.
 //The resulting string is only valid while the Keyboard is alive.

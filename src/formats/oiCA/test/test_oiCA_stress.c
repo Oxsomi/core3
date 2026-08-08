@@ -342,7 +342,7 @@ void Test_CAStress(Test *t) {
 
 		{
 			//We can assume dir as valid, since we checked before.
-			// Also, this dir handle will stay valid because we're only removing files.
+			//Also, this dir handle will stay valid because we're only removing files.
 			CAHandle dir = CAFile_resolveSubFolder(&ca, CAHandle_Root, CharString_createRefCStrConst("delta"));
 
 			for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {

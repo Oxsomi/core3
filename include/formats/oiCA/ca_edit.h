@@ -28,7 +28,7 @@
 #endif
 
 //Rename a file.
-// Moves name if not a ref, otherwise copies.
+//Moves name if not a ref, otherwise copies.
 Bool CAFile_rename(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, CharString *name, Error *e_rr);
 
 Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const Allocator *alloc, Error *e_rr);

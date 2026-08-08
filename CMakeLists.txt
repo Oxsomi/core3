@@ -112,7 +112,8 @@ endif()
 # Dynamic linking folds the static OxC3 libs into shared objects (libOxC3_graphics_vk.so).
 # On ELF (Linux) every object linked into a .so must be PIC, or ld fails with
 # "relocation R_X86_64_PC32 / R_AARCH64_ADR_PREL_PG_HI21 ... recompile with -fPIC".
-# No-op on MSVC, effectively no-op on Apple. Off for static builds to keep non-PIC codegen.
+# No-op on MSVC, effectively no-op on Apple.
+# Off for static builds to keep non-PIC codegen.
 if(DynamicLinkingGraphics OR DynamicLinkingShaderCompiler)
 	set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
@@ -261,10 +262,12 @@ if(MSVC)
 		"$<$<COMPILE_LANGUAGE:CXX>:${BUILD_FLAGS}>"
 	)
 
-	# MSVC's legacy preprocessor mis-expands nested __VA_ARGS__, which vec4f_swizzle.h's generators rely on
-	# (F32x4_expand -> expand2 -> expand3 -> expand4). C doesn't hit it because C17 mode already implies the
-	# conformant preprocessor; C++ still defaults to the legacy one, so the oxc:: wrappers, which pull the
-	# vector headers into oxc::c, fail to compile without this. gcc/clang are conformant either way.
+	# MSVC's legacy preprocessor mis-expands nested __VA_ARGS__,
+	# which vec4f_swizzle.h's generators rely on (F32x4_expand -> expand2 -> expand3 -> expand4).
+	# C doesn't hit it because C17 mode already implies the conformant preprocessor.
+	# C++ still defaults to the legacy one, so the oxc:: wrappers, which pull the vector headers into oxc::c,
+	# fail to compile without this.
+	# gcc/clang are conformant either way.
 	# clang-cl ignores the flag entirely, and gets the same result from -fno-ms-compatibility above.
 	if(NOT isClangCl)
 		add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>")
@@ -286,12 +289,12 @@ if(MSVC)
 		# ThinLTO would go here, and it does work when one LLVM does the whole build:
 		# add_compile_options("$<$<AND:${wholeProgram},$<COMPILE_LANGUAGE:C,CXX>>:-flto=thin>")
 		#
-		# It's off because the ClangCL toolset doesn't guarantee that. The compile runs the clang-cl
-		# CMake resolved, usually from PATH, while the link runs lld-link out of $(LLVMInstallDir),
-		# which defaults to the LLVM shipped with Visual Studio.
-		# Bitcode isn't readable across LLVM major versions, so the moment those two differ every link
-		# fails with "is not a native COFF file", and the build works or doesn't purely by which clang
-		# happens to be installed.
+		# It's off because the ClangCL toolset doesn't guarantee that.
+		# The compile runs the clang-cl CMake resolved, usually from PATH,
+		# while the link runs lld-link out of $(LLVMInstallDir), which defaults to the LLVM shipped with Visual Studio.
+		# Bitcode isn't readable across LLVM major versions,
+		# so the moment those two differ every link fails with "is not a native COFF file",
+		# and the build works or doesn't purely by which clang happens to be installed.
 		# Pinning both to one LLVM is what this needs before it can come back.
 
 	else()
@@ -320,15 +323,17 @@ else()
 	add_compile_options(-fms-extensions)
 	add_compile_options(-Wall -Wextra -Werror)
 
-	# LTO only for optimized configs, on both compile and link. Debug stays fast (LTO makes the link the
-	# bottleneck). -flto=auto parallelizes the link-time work across cores.
+	# LTO only for optimized configs, on both compile and link.
+	# Debug stays fast (LTO makes the link the bottleneck).
+	# -flto=auto parallelizes the link-time work across cores.
 	#
-	# clang emits LLVM bitcode, and GNU ld only reads that through LLVMgold.so, which distros build
-	# against whatever LLVM the *system* has rather than the clang you're compiling with. One major
-	# version apart is enough to fail the link with "Unknown attribute kind ... (Producer: LLVM 18,
-	# Reader: LLVM 17)", after which every archive looks empty and every symbol comes back undefined.
-	# lld reads its own bitcode, so point clang at it, and drop LTO when it isn't installed: a slightly
-	# slower binary beats a build that can't link.
+	# clang emits LLVM bitcode, and GNU ld only reads that through LLVMgold.so,
+	# which distros build against whatever LLVM the *system* has rather than the clang you're compiling with.
+	# One major version apart is enough to fail the link with
+	# "Unknown attribute kind ... (Producer: LLVM 18, Reader: LLVM 17)",
+	# after which every archive looks empty and every symbol comes back undefined.
+	# lld reads its own bitcode, so point clang at it, and drop LTO when it isn't installed:
+	# a slightly slower binary beats a build that can't link.
 	#
 	# gcc is unaffected (its plugin ships with the compiler), and so are apple and android, which already
 	# default to a linker that matches their toolchain.
@@ -354,8 +359,9 @@ else()
 	endif()
 
 	# `{ 0 }` is OxC3's idiomatic zero-initializer (every field ends up zeroed).
-	# -Wextra's -Wmissing-field-initializers still flags it when the C headers are compiled as C++
-	# (the oxc::c compat layer), where `{}` would be needed but isn't valid C. The idiom is intentional, so silence this one.
+	# -Wextra's -Wmissing-field-initializers still flags it when the C headers are compiled as C++ (the oxc::c compat layer),
+	# where `{}` would be needed but isn't valid C.
+	# The idiom is intentional, so silence this one.
 	add_compile_options(-Wno-missing-field-initializers)
 
 	# TList(T) expands to a full set of `static inline` accessors and a TU only ever uses a handful of them.

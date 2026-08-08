@@ -46,7 +46,7 @@ namespace oxc {
 	//RAII wrapper around the C JobQueue.
 	//This is syntax sugar only; all real work goes through the C API, keeping the ABI stable.
 	//On top of the raw C callbacks it allows pushing C++ callables (lambdas with captures),
-	//which are stored via the queue's own Allocator and destroyed after they ran.
+	// which are stored via the queue's own Allocator and destroyed after they ran.
 	//Callable signature: Bool(c::U64 threadId); returning false marks the queue as failed.
 
 	class JobQueue {
@@ -72,8 +72,9 @@ namespace oxc {
 				return res;
 			}
 
-			//Runs ~F and frees the storage. Used by run() after execution and, via JobDestructor,
-			//by JobQueue_free for jobs discarded on shutdown (so captures don't leak).
+			//Runs ~F and frees the storage.
+			//Used by run() after execution and, via JobDestructor, by JobQueue_free for jobs discarded on shutdown
+			// (so captures don't leak).
 
 			static void destroy(void *data) {
 				JobStorage *self = (JobStorage*) data;
@@ -127,7 +128,7 @@ namespace oxc {
 		}
 
 		//C++ style push; the callable (and its captures) is copied/moved into
-		//allocator-owned storage and destroyed after it ran.
+		// allocator-owned storage and destroyed after it ran.
 
 		template<typename F>
 		[[nodiscard]] c::Bool push(F &&f, c::Error *e_rr = nullptr) noexcept {

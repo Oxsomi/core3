@@ -86,7 +86,8 @@ void AESEncryptionContext_ghashN4(I32x4 *restrict a, const I32x4 *restrict H, U8
 		a16[i] = I32x16_swapEndianness(I32x16_load(&a[i << 2]));
 
 	//Looks a bit odd, but it's to allow multiple clmuls to run in parallel.
-	//Then, it'll be xored later. If we do clmulNN[i] ^= it creates a dependency, stalling everything.
+	//Then, it'll be xored later.
+	//If we do clmulNN[i] ^= it creates a dependency, stalling everything.
 
 	for (U32 i = 0; i < N4; ++i) {
 
@@ -108,10 +109,11 @@ void AESEncryptionContext_ghashN4(I32x4 *restrict a, const I32x4 *restrict H, U8
 			clmulFused_16[left] = I32x16_xor(clmulFused_16[left], clmulFused_16[left | 1]);
 		}
 
-		//The reduction stops here: the accumulators are I32x16[4] (and the loop above already indexes them
-		//with i < N4), so N4 <= 4 is a precondition. Callers hold to it, AESEncryptionContext_updateTagN
-		//passes at most N = 16 blocks and N4 = N >> 2. A further `if (N4 > 8)` step used to sit below with a
-		//literal [8] index in it; it was unreachable and clang rejects it outright under -Warray-bounds.
+		//The reduction stops here: the accumulators are I32x16[4] (and the loop above already indexes them with i < N4),
+		// so N4 <= 4 is a precondition.
+		//Callers hold to it, AESEncryptionContext_updateTagN passes at most N = 16 blocks and N4 = N >> 2.
+		//A further `if (N4 > 8)` step used to sit below with a literal [8] index in it.
+		//It was unreachable and clang rejects it outright under -Warray-bounds.
 
 		if (N4 > 2)
 			for (U32 i = 0; i < (U32)(N4 >> 2); ++i) {

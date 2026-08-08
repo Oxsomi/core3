@@ -518,7 +518,7 @@ Bool StreamCursor_write(
 	//This should be avoided by using File_read/FileHandle_read if the file is only accessed once and linearly.
 	//However, in some cases, the file isn't necessarily read like that and/or only parts are accessed.
 	//In that case, you don't want to load the entire file, but you might want to keep the next info ready just in case.
-	// It would minimize IO access at the cost of memory and potentially unnecessary copies.
+	//It would minimize IO access at the cost of memory and potentially unnecessary copies.
 
 	cursor->lastLocation = dstOff;
 	cursor->lastWriteLocation = dstOff + length;
@@ -603,9 +603,9 @@ Bool StreamCursor_read(
 				Buffer_createRefConst(cursor->cacheData.ptr + srcRel, bytesToCopy)
 			);
 
-		//If bufLen isn't present, the caller (e.g. StreamCursor_copyStream) needs the requested data to
-		//start at cacheData[0]. A cache hit at srcRel != 0 leaves it at cacheData[srcRel], so we must NOT
-		//consume here; falling through forces a reload from srcOff so the cache starts at this position.
+		//If bufLen isn't present, the caller (e.g. StreamCursor_copyStream) needs the requested data to start at cacheData[0].
+		//A cache hit at srcRel != 0 leaves it at cacheData[srcRel], so we must NOT consume here.
+		//Falling through forces a reload from srcOff so the cache starts at this position.
 		if (bufLen) {
 			srcOff += bytesToCopy;
 			dstOff += bytesToCopy;
@@ -644,7 +644,7 @@ Bool StreamCursor_read(
 	//This should be avoided by using File_read/FileHandle_read if the file is only accessed once and linearly.
 	//However, in some cases, the file isn't necessarily read like that and/or only parts are accessed.
 	//In that case, you don't want to load the entire file, but you might want to keep the next info ready just in case.
-	// It would minimize IO access at the cost of memory and potentially unnecessary copies.
+	//It would minimize IO access at the cost of memory and potentially unnecessary copies.
 
 	cursor->lastLocation = srcOff;
 

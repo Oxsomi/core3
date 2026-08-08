@@ -82,7 +82,7 @@ Bool AudioDevice_createExt(Bool isDebug, AudioDevice *dev, Error *e_rr) {
 		retError(clean, Error_invalidState(0, "AudioDevice_createExt() alcOpenDevice returned NULL"));
 
 	//ALC_CONTEXT_FLAGS_EXT is only valid if ALC_EXT_debug is present on this device.
-	// Even if enumeration flagged it, verify here before passing the attribute.
+	//Even if enumeration flagged it, verify here before passing the attribute.
 	Bool hasDebugExt = isDebug && alcIsExtensionPresent(devExt->device, "ALC_EXT_debug") == ALC_TRUE;
 
 	if (isDebug && !hasDebugExt)

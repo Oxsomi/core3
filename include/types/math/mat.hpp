@@ -23,8 +23,7 @@
 #pragma once
 #include "types/math/vec4f.hpp"
 
-//Operator sugar over the C F32x4x4; same deal as vec4f.hpp, a value with no ownership that compiles
-//away to the same calls.
+//Operator sugar over the C F32x4x4; same deal as vec4f.hpp, a value with no ownership that compiles away to the same calls.
 //
 //  F32x4x4_mul(F32x4x4_scale(s), F32x4x4_mul(F32x4x4_rotate(r), F32x4x4_translate(t)))
 //
@@ -32,9 +31,9 @@
 //
 //  scale(s) * rotate(r) * translate(t)
 //
-//operator* is the matrix product, so it keeps the C's ordering: a * b applies a first, then b, and
-//m * v transforms v by m. The conventions themselves (row major, row vectors, left handed, [0,1] depth)
-//are documented on the C side in mat.h and are not restated here so they can't drift.
+//operator* is the matrix product, so it keeps the C's ordering: a * b applies a first, then b, and m * v transforms v by m.
+//The conventions themselves (row major, row vectors, left handed, [0,1] depth) are documented on the C side in mat.h
+// and are not restated here so they can't drift.
 
 namespace oxc {
 

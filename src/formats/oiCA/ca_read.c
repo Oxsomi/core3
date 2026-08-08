@@ -349,7 +349,8 @@ Bool CAFile_read(
 	//Validate all name entries: must already be in memory (not stream-backed) and within the name size limit.
 	//Small entries are loaded into the DLFile cache by DLFile_read automatically, so if an entry is still
 	// stream-backed it means it exceeded DLFile_smallLen, which means it also exceeds CAFile_maxFileNameSize
-	// and is therefore invalid. We check both to be explicit.
+	// and is therefore invalid.
+	//We check both to be explicit.
 	//This can happen if we exceed 5MiB, which is rare with a max of 96 bytes per file name
 	// (54K files at max size, more realistically >327K)
 
@@ -414,7 +415,8 @@ Bool CAFile_read(
 			retError(clean, Error_invalidState(0, "CAFile_read()::CAFile_addFile failed"));
 
 		//Set file data, use the stream reference directly if the entry is still stream-backed,
-		//otherwise hand over the loaded buffer. This avoids an unnecessary copy for large files.
+		// otherwise hand over the loaded buffer.
+		//This avoids an unnecessary copy for large files.
 
 		DLEntryStream entryStream = content.entryStreams.ptr[i];
 

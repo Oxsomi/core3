@@ -529,7 +529,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	if(copyQueueId == U32_MAX)
 		copyQueueId = fallbackCopyQueueId;
 
-	//Ensure we have all queues. Should be impossible, but still.
+	//Ensure we have all queues.
+	//Should be impossible, but still.
 
 	if(copyQueueId == U32_MAX || computeQueueId == U32_MAX || graphicsQueueId == U32_MAX)
 		retError(clean, Error_invalidOperation(1, "VkGraphicsDevice_init() doesn't have copy, comp or gfx queue"));

@@ -135,9 +135,10 @@ def main():
 
 		test_mode = args.mode if args.mode is not None else "Release"
 
-		# Per-test wall clock cap. The slowest test (the shader compiler corpus, in Debug on a CI runner)
-		# lands well under a minute, so anything reaching this is wedged rather than slow, and without the
-		# cap a deadlocked JobQueue just burns the whole job's time budget before anyone finds out.
+		# Per-test wall clock cap.
+		# The slowest test (the shader compiler corpus, in Debug on a CI runner) lands well under a minute,
+		# so anything reaching this is wedged rather than slow,
+		# and without the cap a deadlocked JobQueue just burns the whole job's time budget before anyone finds out.
 
 		test_timeout = 300
 

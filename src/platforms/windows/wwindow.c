@@ -797,7 +797,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//We need to keep on popping the end of the array until we reach the next element that isn't invalid
 				//This is to keep the list as small as possible because we might be looping over it at some point
 				//We can of course have devices that aren't initialized in between valid ones,
-				//because our list isn't contiguous (to not invalidate handles)
+				// because our list isn't contiguous (to not invalidate handles)
 
 				if(ours == end - 1)
 					while(

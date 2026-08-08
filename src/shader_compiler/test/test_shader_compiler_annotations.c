@@ -32,9 +32,9 @@
 #include "types/base/string_base.h"
 #include "types/base/string_read_helper.h"
 
-//Parse `src` as HLSL (this runs real DXC reflection + our oxc:: annotation parser) and hand back the
-//reflection. The error is swallowed on purpose so the caller can assert on the boolean result and keep
-//iterating over many small shaders without aborting the whole module on the first expected failure.
+//Parse `src` as HLSL (this runs real DXC reflection + our oxc:: annotation parser) and hand back the reflection.
+//The error is swallowed on purpose so the caller can assert on the boolean result
+// and keep iterating over many small shaders without aborting the whole module on the first expected failure.
 static Bool parseShader(
 	const Compiler *comp, CharString src, const Allocator *alloc, CompileResult *result, Bool failIsOk
 ) {

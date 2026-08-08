@@ -126,13 +126,13 @@ Bool Buffer_createUninitializedBytes(U64 length, const Allocator *alloc, Buffer 
 	return Buffer_allocBitsInternal(length >> 61 ? U64_MAX : length << 3, alloc, result, e_rr);
 }
 
-//A single U8 immediately before the aligned pointer, holding how far we stepped forward from the real
-//allocation. That's all Buffer_freeAligned needs to find the base again, and a byte is aligned anywhere,
-//so it needs no padding of its own.
+//A single U8 immediately before the aligned pointer, holding how far we stepped forward from the real allocation.
+//That's all Buffer_freeAligned needs to find the base again, and a byte is aligned anywhere,
+// so it needs no padding of its own.
 //
-//The over-allocation is a fixed BUFFER_ALIGN_MAX rather than the requested alignment, which is what keeps
-//the header down to that one byte: the size is then always length + BUFFER_ALIGN_MAX, so it follows from
-//the length the Buffer already carries and never has to be stored.
+//The over-allocation is a fixed BUFFER_ALIGN_MAX rather than the requested alignment,
+// which is what keeps the header down to that one byte: the size is then always length + BUFFER_ALIGN_MAX,
+// so it follows from the length the Buffer already carries and never has to be stored.
 //The offset lands in [1, alignment], so BUFFER_ALIGN_MAX is what makes it fit in a U8.
 
 static Bool Buffer_createBytesAlignedInternal(

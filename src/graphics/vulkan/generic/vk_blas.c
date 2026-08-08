@@ -269,8 +269,9 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		RefPtr_inc(pending);
 	}
 
-	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource;
-	//And losing the reference from our object. However that's only if allow update is false.
+	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource,
+	// and losing the reference from our object.
+	//However that's only if allow update is false.
 
 	if(!ListRefPtr_contains(*currentFlight, blas->base.tempScratchBuffer, 0, NULL)) {
 

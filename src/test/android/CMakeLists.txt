@@ -19,17 +19,17 @@
 
 # One .so holding every unit test suite, loaded by a NativeActivity.
 #
-# Android has no exec, so the per-suite executables ctest runs elsewhere are useless here. This target
-# compiles the same test sources a second time with _OXC3_TEST_BUNDLED, which turns each suite's main()
-# into a named entry (see OXC3_TEST_MAIN / OXC3_TEST_ENTRY in types/test/test.h) that atest_main.c calls
-# in turn. Compiling them twice is deliberate: every module's own test target stays untouched, so this
-# can't affect the host build.
+# Android has no exec, so the per-suite executables ctest runs elsewhere are useless here.
+# This target compiles the same test sources a second time with _OXC3_TEST_BUNDLED,
+# which turns each suite's main() into a named entry (see OXC3_TEST_MAIN / OXC3_TEST_ENTRY in types/test/test.h)
+# that atest_main.c calls in turn.
+# Compiling them twice is deliberate: every module's own test target stays untouched, so this can't affect the host build.
 #
-# shader_compiler is bundled only when it was built (-shader_compiler True), since DXC is off by
-# default on android; its corpus test skips itself there, see test_shader_compiler_main.c.
+# shader_compiler is bundled only when it was built (-shader_compiler True), since DXC is off by default on android.
+# Its corpus test skips itself there, see test_shader_compiler_main.c.
 #
-# The functional suites ARE bundled: they need a human at the device, so atest_main only runs them when
-# debug.oxc3.interactive is set.
+# The functional suites ARE bundled: they need a human at the device,
+# so atest_main only runs them when debug.oxc3.interactive is set.
 
 set(testRoot ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 

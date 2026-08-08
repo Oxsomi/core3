@@ -172,7 +172,7 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 		//We need to first "unwrap" our array, this can either point to a real array or to an inline 15b array.
 		//DXIL will extremely likely just be a 15-bit array dimension,
 		// while SPIR-V could also be an ND array (but likely inline too).
-		// DXIL can still exceed 15-bit which will allocate a full size array description.
+		//DXIL can still exceed 15-bit which will allocate a full size array description.
 
 		U32 array1DA = original.arrayDimOrArrayId;
 		U32 array1DB = var.arrayDimOrArrayId;

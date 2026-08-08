@@ -257,7 +257,7 @@ Bool Buffer_setBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr) {
 	//Split into: leading partial byte, whole bytes in the middle, trailing partial byte.
 	//firstFull is the first byte entirely inside the range, lastFull one past the last such byte.
 	//When the range doesn't span a byte boundary at all there is no middle, and the two partial writes
-	//would overlap, so that case is handled on its own.
+	// would overlap, so that case is handled on its own.
 
 	const U64 end = dstOff + bits;
 	const U64 firstFull = (dstOff + 7) >> 3;

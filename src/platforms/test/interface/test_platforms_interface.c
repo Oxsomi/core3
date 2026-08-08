@@ -528,9 +528,9 @@ clean:
 }
 
 // -- 4c. File - long path tests ------------------------------------------------
-// Windows: verifies \\?\ long-path handling (paths > MAX_PATH = 260 chars).
-// All platforms: verifies deeply nested paths and names near the 255-byte
-// filename limit work correctly end-to-end through the platform abstraction.
+//Windows: verifies \\?\ long-path handling (paths > MAX_PATH = 260 chars).
+//All platforms: verifies deeply nested paths and names near the 255-byte filename limit work correctly end-to-end
+// through the platform abstraction.
  
 //Build a CharString from a stack buffer without allocation.
 //Only safe for string literals / compile-time-known content.
@@ -616,16 +616,15 @@ static void Test_fileLongPath(Test *t) {
 	CharString_free(&longFile, t->alloc);
  
 	// -- 2. Deep directory tree (total path > 260 chars on Windows) ------------
-	// Build a path that exceeds the legacy MAX_PATH of 260 characters so that
-	// CharString_toLongPath's \\?\ prefix is exercised on Windows.
-	// On POSIX systems this just tests a legitimately deep path.
+	//Build a path that exceeds the legacy MAX_PATH of 260 characters
+	// so that CharString_toLongPath's \\?\ prefix is exercised on Windows.
+	//On POSIX systems this just tests a legitimately deep path.
 	//
-	// Structure:
+	//Structure:
 	//   platform_test_longpath/
 	//     level_01/level_02/.../level_32/   (each component 8 chars + '/')
 	//
-	// 8 * 32 + 32 slashes = 288 chars just for levels, plus the 22-char root
-	// and a filename -> comfortably over 260.
+	//8 * 32 + 32 slashes = 288 chars just for levels, plus the 22-char root and a filename -> comfortably over 260.
  
 	{
 		//Build the deep dir path incrementally

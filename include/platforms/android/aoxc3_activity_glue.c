@@ -27,9 +27,10 @@
 
 void AWindow_queueTypeChar(const U16 *utf16, U64 len);
 
-//Soft keyboard text from OxC3Activity's TextWatcher. This runs on the android UI thread, so it only
-//queues; AWindow_flushTypeChar drains it from WindowManager_updateExt on the app thread, where every
-//other input callback already runs.
+//Soft keyboard text from OxC3Activity's TextWatcher.
+//This runs on the android UI thread, so it only queues;
+// AWindow_flushTypeChar drains it from WindowManager_updateExt on the app thread,
+// where every other input callback already runs.
 
 JNIEXPORT void JNICALL
 Java_net_osomi_nativeactivity_OxC3Activity_onTypeChar(JNIEnv *env, jobject thiz, jstring input) {

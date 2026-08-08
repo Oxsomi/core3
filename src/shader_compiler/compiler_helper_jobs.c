@@ -41,18 +41,18 @@
 
 //Per-file compile job.
 //
-//Each input file is compiled fully independently (precompile -> unique compiles -> compile ->
-//link -> reflection -> register into an SHFile), producing one SHFile per file.
-//Only combining SHFiles that share the same output (e.g. DXIL + SPIRV into one oiSH) and
-//writing them to disk happens afterwards on the owning thread, since that part is inherently
-//sequential and cheap compared to the compiles themselves.
+//Each input file is compiled fully independently
+// (precompile -> unique compiles -> compile -> link -> reflection -> register into an SHFile), producing one SHFile per file.
+//Only combining SHFiles that share the same output (e.g. DXIL + SPIRV into one oiSH)
+// and writing them to disk happens afterwards on the owning thread,
+// since that part is inherently sequential and cheap compared to the compiles themselves.
 //
-//Because every job only writes to its own CompilerShaderFileJob (result, success) no locking
-//is needed between jobs; the per thread Compiler instance is selected with the JobQueue's
-//threadId, which is guaranteed stable and unique per execution context.
+//Because every job only writes to its own CompilerShaderFileJob (result, success) no locking is needed between jobs.
+//The per thread Compiler instance is selected with the JobQueue's threadId,
+// which is guaranteed stable and unique per execution context.
 //
-//The same job also runs unmodified in the JobQueue's single threaded (inline) mode
-//(threadCount <= 1), which keeps a deterministic, easily debuggable flow around.
+//The same job also runs unmodified in the JobQueue's single threaded (inline) mode (threadCount <= 1),
+// which keeps a deterministic, easily debuggable flow around.
 
 typedef struct CompilerShaderFileJob {
 
@@ -104,19 +104,20 @@ Bool Compiler_registerShaderEntries(
 //A file's work runs as a 3-level JobGroup fan-out tree on the shared queue:
 //  file latch  ->  per-combination compile jobs  ->  per-linkEntry leaf jobs.
 //
-//Each combination holds one token of the file latch until *its* leaves drain (released in the
-//combination's finalize), so the file context - which owns the shared SHFile, its lock and the
-//binaryIndices every leaf writes - provably outlives every leaf. A combination's compiled binary
-//is freed the moment its own leaves finish (per-combination finalize), bounding peak memory to
-//in-flight combinations. The file latch's finalize assembles the oiSH (registerShaderEntries) and
-//moves it into job->result; on any failure the finalize is skipped and the context is reclaimed by
-//the group's dataDestructor. Every enter is matched by exactly one leave along the normal drain, so
-//a single JobQueue_wait completes the whole tree with balanced tokens and no leaks.
+//Each combination holds one token of the file latch until *its* leaves drain (released in the combination's finalize),
+// so the file context provably outlives every leaf.
+//That context owns the shared SHFile, its lock and the binaryIndices every leaf writes.
+//A combination's compiled binary is freed the moment its own leaves finish (per-combination finalize),
+// bounding peak memory to in-flight combinations.
+//The file latch's finalize assembles the oiSH (registerShaderEntries) and moves it into job->result.
+//On any failure the finalize is skipped and the context is reclaimed by the group's dataDestructor.
+//Every enter is matched by exactly one leave along the normal drain,
+// so a single JobQueue_wait completes the whole tree with balanced tokens and no leaks.
 //
-//Sub-jobs run on arbitrary execution contexts, so each selects its own Compiler via
-//job->compilers.ptr[threadId] (lock free, like the old per-file jobs). The only shared mutable
-//state is the file's SHFile + binaryIndices, guarded by file->lock; the reflection pass
-//(Compiler_processSingle) takes that same lock internally.
+//Sub-jobs run on arbitrary execution contexts,
+// so each selects its own Compiler via job->compilers.ptr[threadId] (lock free, like the old per-file jobs).
+//The only shared mutable state is the file's SHFile + binaryIndices, guarded by file->lock.
+//The reflection pass (Compiler_processSingle) takes that same lock internally.
 
 typedef struct CompilerFileCtx {
 
@@ -161,8 +162,9 @@ typedef struct CompilerLeafCtx {
 	U64 linkIndex;                          //Index into combo->linkEntries
 } CompilerLeafCtx;
 
-//Frees the file context and everything it still owns. shFile is moved out by finalize on the
-//success path (left null here). Doubles as the group dataDestructor for the shutdown-discard case.
+//Frees the file context and everything it still owns.
+//shFile is moved out by finalize on the success path (left null here).
+//Doubles as the group dataDestructor for the shutdown-discard case.
 void CompilerFileCtx_free(void *ptr) {
 
 	CompilerFileCtx *ctx = (CompilerFileCtx*) ptr;
@@ -199,7 +201,8 @@ void CompilerComboCtx_free(void *ptr) {
 	alloc->free(alloc->ptr, Buffer_createManagedPtr(ctx, sizeof(*ctx)));
 }
 
-//Frees a leaf context. Only used as the shutdown-discard destructor; a leaf that runs frees itself.
+//Frees a leaf context.
+//Only used as the shutdown-discard destructor; a leaf that runs frees itself.
 void CompilerLeafCtx_freeDiscarded(void *ptr) {
 
 	CompilerLeafCtx *leaf = (CompilerLeafCtx*) ptr;
@@ -236,8 +239,8 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 	CharString inputPath = job->allFiles.ptr[job->fileId];
 	CompileResult tempResult2 = (CompileResult) { 0 };
 
-	//runtimeEntry is a private shallow copy (refs into file->runtimeEntries, alive for the whole file);
-	//the annotation branch below mutates it, which is why each leaf needs its own.
+	//runtimeEntry is a private shallow copy (refs into file->runtimeEntries, alive for the whole file).
+	//The annotation branch below mutates it, which is why each leaf needs its own.
 
 	SHEntryRuntime runtimeEntry = file->runtimeEntries.ptr[combo->runtimeEntryId];
 	LinkEntry linkEntry = combo->linkEntries.ptr[leaf->linkIndex];
@@ -258,8 +261,8 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 
 		if (linkEntry.entrypointId != U16_MAX) {
 
-			//entrypointId doesn't map to uniqueEntrypoints as some might be missing there;
-			//it maps to our parsed runtimeEntries.
+			//entrypointId doesn't map to uniqueEntrypoints as some might be missing there.
+			//It maps to our parsed runtimeEntries.
 
 			CharString entrypointName = file->runtimeEntries.ptr[linkEntry.entrypointId].entry.name;
 
@@ -338,8 +341,9 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 	if (linkEntry.entrypointId == U16_MAX)
 		binaryIdentifier.stageType = combo->isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_WorkgraphExt;
 
-	//Register the binary and link its runtime entries to it. binaryId is derived from the current
-	//const SHFile *size, so the read + registerShaderBinary + binaryIndices push must be one atomic section.
+	//Register the binary and link its runtime entries to it.
+	//binaryId is derived from the current const SHFile *size,
+	// so the read + registerShaderBinary + binaryIndices push must be one atomic section.
 
 	if(SpinLock_lock(&file->lock, U64_MAX) < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "Compiler_compileLinkJob() couldn't lock SHFile"));
@@ -391,10 +395,10 @@ clean:
 	return s_uccess;
 }
 
-//Combination finalize: runs once all of this combination's leaves have drained. Frees the
-//combination (its compiled binary included) and releases the combination's file-latch token.
-//The combination group is never failed, so this always runs - a failing leaf fails the file latch
-//instead, letting the tree still drain and free itself cleanly.
+//Combination finalize: runs once all of this combination's leaves have drained.
+//Frees the combination (its compiled binary included) and releases the combination's file-latch token.
+//The combination group is never failed, so this always runs.
+//A failing leaf fails the file latch instead, letting the tree still drain and free itself cleanly.
 Bool Compiler_finalizeCombination(void *data, U64 threadId, JobQueue *queue) {
 
 	(void) threadId; (void) queue;
@@ -404,8 +408,8 @@ Bool Compiler_finalizeCombination(void *data, U64 threadId, JobQueue *queue) {
 	if(!ctx)
 		return false;
 
-	//Grab the file group before freeing ctx (which contains the back-ref). The file context stays
-	//alive because this token hasn't been released yet.
+	//Grab the file group before freeing ctx (which contains the back-ref).
+	//The file context stays alive because this token hasn't been released yet.
 
 	JobGroup *fileGroup = &ctx->file->group;
 
@@ -417,9 +421,9 @@ Bool Compiler_finalizeCombination(void *data, U64 threadId, JobQueue *queue) {
 	return true;
 }
 
-//Combination job: compile this combination's binary, discover its link entries, then fan out one
-//leaf job per link entry under a combination latch. Holds a self token while spawning so the latch
-//can't reach zero mid-spawn (the documented enter(1)/enter(k)/leave pattern).
+//Combination job: compile this combination's binary, discover its link entries,
+// then fan out one leaf job per link entry under a combination latch.
+//Holds a self token while spawning so the latch can't reach zero mid-spawn (the documented enter(1)/enter(k)/leave pattern).
 Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 
 	CompilerComboCtx *ctx = (CompilerComboCtx*) data;
@@ -488,9 +492,10 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		e_rr
 	));
 
-	//Activate the combination latch and fan out its leaves. From here cleanup is via the latch:
-	//we hold a self token, fail the file latch on error, then release the self token and let the
-	//already-pushed leaves drain into Compiler_finalizeCombination (which frees ctx + leaves the file).
+	//Activate the combination latch and fan out its leaves.
+	//From here cleanup is via the latch: we hold a self token, fail the file latch on error,
+	// then release the self token and let the already-pushed leaves drain into Compiler_finalizeCombination,
+	// which frees ctx + leaves the file.
 
 	gotoIfError3(clean, JobGroup_create(&ctx->group, queue, Compiler_finalizeCombination, ctx, CompilerComboCtx_free, e_rr));
 	gotoIfError3(clean, JobGroup_enter(&ctx->group, 1, e_rr));
@@ -529,8 +534,8 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 
 cleanSpawn:
 
-	//Error after the latch went active: fail the file, release the self token, let pushed leaves
-	//drain and free ctx via Compiler_finalizeCombination.
+	//Error after the latch went active: fail the file, release the self token,
+	// let pushed leaves drain and free ctx via Compiler_finalizeCombination.
 
 	if(job->enableLogging)
 		Error_print(alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
@@ -544,8 +549,8 @@ cleanSpawn:
 
 clean:
 
-	//Error before the latch went active (compile / link discovery / latch create). No combination
-	//tokens exist yet, so free ctx directly, fail the file and release this combination's file token.
+	//Error before the latch went active (compile / link discovery / latch create).
+	//No combination tokens exist yet, so free ctx directly, fail the file and release this combination's file token.
 
 	if(!s_uccess && job->enableLogging)
 		Error_print(alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
@@ -559,8 +564,8 @@ clean:
 	return false;
 }
 
-//File finalize: runs once every combination has drained and nothing failed. Sorts the binary
-//indices, links entrypoints to binaries and hands the finished SHFile to the job's output slot.
+//File finalize: runs once every combination has drained and nothing failed.
+//Sorts the binary indices, links entrypoints to binaries and hands the finished SHFile to the job's output slot.
 Bool Compiler_finalizeShaderFile(void *data, U64 threadId, JobQueue *queue) {
 
 	(void) threadId; (void) queue;
@@ -658,8 +663,8 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 
 	//Move the accumulators into a heap file context shared by the whole fan-out tree.
 
-	//Aligned rather than plain: SpinLock is alignas(64) and this struct embeds one, which malloc's 16
-	//bytes don't satisfy. clang stores the initializer below with aligned AVX moves and faults otherwise.
+	//Aligned rather than plain: SpinLock is alignas(64) and this struct embeds one, which malloc's 16 bytes don't satisfy.
+	//clang stores the initializer below with aligned AVX moves and faults otherwise.
 
 	Buffer buf = Buffer_createNull();
 
@@ -680,9 +685,9 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 	compileCombinations = (ListU32) { 0 };              //Moved
 	shFile = (SHFile) { 0 };                            //Moved
 
-	//From here the context is owned by the file latch: finalize frees it on success, dataDestructor
-	//(CompilerFileCtx_free) on failure or shutdown-discard. If create/enter fails no tokens exist
-	//yet, so free it directly (cleanCtx).
+	//From here the context is owned by the file latch: finalize frees it on success,
+	// dataDestructor (CompilerFileCtx_free) on failure or shutdown-discard.
+	//If create/enter fails no tokens exist yet, so free it directly (cleanCtx).
 
 	gotoIfError3(cleanCtx, JobGroup_create(
 		&ctx->group, queue, Compiler_finalizeShaderFile, ctx, CompilerFileCtx_free, e_rr
@@ -702,11 +707,12 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 		runtimeEntryId &= (U16) I16_MAX;
 		combinationId  &= (U16) I16_MAX;
 
-		//Skip compiling this combination entirely if the entry's stage / extensions can't be expressed on the
-		//backend we're compiling for (e.g. a workgraph on SPIRV, or an inline-SPIRV atomic on DXIL). This
-		//prevents a guaranteed compile failure. Only the stage/extension support is checked here (not the
-		//[[oxc::binary(...)]] annotation) because it's identical for every entrypoint sharing this compile;
-		//the annotation is applied per-entrypoint later at link time (Compiler_getLinkEntries).
+		//Skip compiling this combination entirely if the entry's stage / extensions can't be expressed
+		// on the backend we're compiling for (e.g. a workgraph on SPIRV, or an inline-SPIRV atomic on DXIL).
+		//This prevents a guaranteed compile failure.
+		//Only the stage/extension support is checked here (not the [[oxc::binary(...)]] annotation),
+		// because it's identical for every entrypoint sharing this compile.
+		//The annotation is applied per-entrypoint later at link time (Compiler_getLinkEntries).
 
 		if (!((SHEntryRuntime_getSupportedBinaryTypes(&ctx->runtimeEntries.ptr[runtimeEntryId]) >> binaryType) & 1))
 			continue;
@@ -749,8 +755,8 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 
 cleanSpawn:
 
-	//Error mid-spawn after the latch went active: fail it, release the self token, let the pushed
-	//combinations drain and reclaim the context via finalize/dataDestructor.
+	//Error mid-spawn after the latch went active: fail it, release the self token,
+	// let the pushed combinations drain and reclaim the context via finalize/dataDestructor.
 	{
 		Error e2 = Error_none();
 		JobGroup_fail(&ctx->group, &e2);
@@ -957,9 +963,9 @@ Bool Compiler_compileShaders(
 		gotoIfError3(clean, ListBuffer_resize(allBuffers, allOutputs->length, alloc, e_rr));
 
 	//All compiles run as per file jobs on a JobQueue.
-	//threadCount <= 1 puts the queue in single threaded mode: no threads are spawned and all
-	//jobs run inline (in push order) during JobQueue_wait, which keeps a deterministic flow
-	//around for debugging. Higher counts run the same jobs on threadCount execution contexts.
+	//threadCount <= 1 puts the queue in single threaded mode: no threads are spawned and all jobs run inline
+	// (in push order) during JobQueue_wait, which keeps a deterministic flow around for debugging.
+	//Higher counts run the same jobs on threadCount execution contexts.
 
 	gotoIfError3(clean, JobQueue_create(threadCount, alloc, &queue, e_rr));
 
@@ -972,7 +978,8 @@ Bool Compiler_compileShaders(
 	for(U64 i = 0; i < contexts; ++i)
 		gotoIfError3(clean, Compiler_create(alloc, &compilers.ptrNonConst[i], e_rr));
 
-	//Kick off one job per file. Jobs only write to their own slot, so no locking is needed.
+	//Kick off one job per file.
+	//Jobs only write to their own slot, so no locking is needed.
 	//The jobs list is stable for the queue's lifetime (resized up front, never touched after).
 
 	gotoIfError3(clean, ListCompilerShaderFileJob_resize(&jobs, allFiles->length, alloc, e_rr));
@@ -1003,8 +1010,8 @@ Bool Compiler_compileShaders(
 	if(!JobQueue_isSuccess(&queue))
 		s_uccess = false;       //Report failure, but still write the outputs that did succeed
 
-	//Combine SHFiles that share the same output (e.g. DXIL + SPIRV into a single oiSH)
-	//and write them to allBuffers or disk. Files with the same output are adjacent.
+	//Combine SHFiles that share the same output (e.g. DXIL + SPIRV into a single oiSH) and write them to allBuffers or disk.
+	//Files with the same output are adjacent.
 	//This stays sequential on purpose; it's cheap compared to compiling and merging is ordered.
 
 	for (U64 i = 0; i < allFiles->length; ++i) {

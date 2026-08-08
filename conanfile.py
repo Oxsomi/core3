@@ -29,8 +29,8 @@ HOST_TOOL_OPTIONS = {
 	"dynamicLinkingGraphics": True,
 
 	# Static on purpose, unlike the default.
-	# This one is invoked by CMake through find_program during other people's builds, so a single self-contained exe beats an exe
-	# plus a DLL to locate.
+	# This one is invoked by CMake through find_program during other people's builds,
+	# so a single self-contained exe beats an exe plus a DLL to locate.
 
 	"dynamicLinkingShaderCompiler": False
 }
@@ -169,11 +169,11 @@ class oxc3(ConanFile):
 
 	def build_requirements(self):
 
-		# Cross building needs it regardless of enableShaderCompiler: what matters is being able to *run*
-		# the packager, and a cross build's binaries target the device. Android can't even produce the
-		# executable (Platform_defineEntrypoint gives android_main, not main), so without this
-		# add_virtual_files' find_program picks up whatever OxC3_package happens to be on PATH, which is
-		# how a months-old one out of the conan cache ended up packaging the shader tests.
+		# Cross building needs it regardless of enableShaderCompiler: what matters is being able to *run* the packager,
+		# and a cross build's binaries target the device.
+		# Android can't even produce the executable (Platform_defineEntrypoint gives android_main, not main),
+		# so without this add_virtual_files' find_program picks up whatever OxC3_package happens to be on PATH,
+		# which is how a months-old one out of the conan cache ended up packaging the shader tests.
 
 		if not self.options.enableShaderCompiler or cross_building(self):
 			self.tool_requires(f"{self.name}/{self.version}", options = HOST_TOOL_OPTIONS)
@@ -205,7 +205,8 @@ class oxc3(ConanFile):
 			self.requires("xdg_decoration/2024.12.22")
 
 		# Vulkan headers come from the Oxsomi fork (headers-only), so building no longer needs a system VULKAN_SDK.
-		# The loader is still loaded dynamically at runtime. Required wherever the Vulkan backend is compiled.
+		# The loader is still loaded dynamically at runtime.
+		# Required wherever the Vulkan backend is compiled.
 		usesVulkan = self.settings.os != "Windows" or self.options.forceVulkan or self.options.dynamicLinkingGraphics
 
 		if usesVulkan:
@@ -257,7 +258,8 @@ class oxc3(ConanFile):
 		out_root   = os.path.join(cmake_root, "build", str(self.settings.build_type), platform)
 
 		# CMakeLists gives a non default toolchain its own output directory so two compilers can't
-		# inherit each other's archives; see the note there. Same rule, or package() collects nothing.
+		# inherit each other's archives; see the note there.
+		# Same rule, or package() collects nothing.
 
 		if platform == "windows" and str(self.settings.compiler) != "msvc":
 			archName += "_clang"

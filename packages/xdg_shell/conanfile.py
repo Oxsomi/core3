@@ -37,9 +37,10 @@ class xdg_shell(ConanFile):
 
 	def source(self):
 
-		# cgit.freedesktop.org rate-limits (HTTP 418) and freedesktop is intermittently unreachable in CI, so try the
-		# current canonical gitlab raw URL first and fall back to cgit, with retries. Pinned to a stable tag so the
-		# xdg-shell protocol content is reproducible. TODO: vendor xdg-shell.xml in-repo to drop the network dependency.
+		# cgit.freedesktop.org rate-limits (HTTP 418) and freedesktop is intermittently unreachable in CI,
+		# so try the current canonical gitlab raw URL first and fall back to cgit, with retries.
+		# Pinned to a stable tag so the xdg-shell protocol content is reproducible.
+		# TODO: vendor xdg-shell.xml in-repo to drop the network dependency.
 		download(
 			self,
 			[

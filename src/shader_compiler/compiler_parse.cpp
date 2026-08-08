@@ -980,10 +980,10 @@ Bool Compiler_parse(
 		tmp = CharString_createNull();
 	}
 
-	//Reflect at the highest shader model (a SM6.10 library) so every feature is available to the reflection
-	//parse, including the SM6.9/6.10 raytracing ops (SER / OMM / triangle position fetch). Reflection is
-	//stage-agnostic here (the oxc::stage / [shader(...)] annotation drives the real stage), so a lib target
-	//that can hold any stage is the right choice.
+	//Reflect at the highest shader model (a SM6.10 library) so every feature is available to the reflection parse,
+	// including the SM6.9/6.10 raytracing ops (SER / OMM / triangle position fetch).
+	//Reflection is stage-agnostic here (the oxc::stage / [shader(...)] annotation drives the real stage),
+	// so a lib target that can hold any stage is the right choice.
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "lib_6_10", alloc, e_rr));
 
@@ -1236,7 +1236,7 @@ Bool Compiler_parse(
 			//Defines reference parsedLiterals, which are owned by the Parser.
 			//The parser goes out of scope at the end of the function, so we have to copy it.
 			//We won't do this for other params, because they're references to the input string
-			//which will be alive after this function.
+			// which will be alive after this function.
 
 			if(runtimeEntry.defineNameValues.length) {
 				ListCharString tmpArr = ListCharString{};
