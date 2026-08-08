@@ -21,8 +21,7 @@
 //platforms/simd/sse/sse_platform.c
 
 #include "platforms/platform.h"
-
-#include <stdio.h>
+#include "platforms/logx.h"
 
 Bool Platform_checkCPUSupport() {
 
@@ -55,12 +54,13 @@ Bool Platform_checkCPUSupport() {
 	const Bool ok = (cpuInfo[3] & mask3) == mask3 && (cpuInfo[2] & mask2) == mask2 && (cpuInfo1[1] & mask1_1) == mask1_1;
 
 	//Which bits are missing is the whole diagnosis on emulator/VM guests whose CPUID model masks features the host
-	// happily executes anyway, and this runs before the platform (and therefore Log) exists, so raw printf is all there is.
+	// happily executes anyway.
+	//Log needs the platform allocator, so Platform_create only runs this check once Platform_instance exists;
+	// the guard keeps the standalone pre-create use of this function safe, it just reports less then.
 
-	if(!ok)
-		printf(
-			"-- Fatal: CPU is missing required features: leaf1 edx %08X (need %08X), ecx %08X (need %08X), "
-			"leaf7 ebx %08X (need %08X)\n",
+	if(!ok && Platform_instance)
+		Log_errorLnx(
+			"Unsupported CPU, missing features: leaf1 edx %08X (need %08X), ecx %08X (need %08X), leaf7 ebx %08X (need %08X)",
 			cpuInfo[3], mask3, cpuInfo[2], mask2, cpuInfo1[1], mask1_1
 		);
 

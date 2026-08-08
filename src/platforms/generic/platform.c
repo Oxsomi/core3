@@ -388,12 +388,6 @@ Platform *Platform_instance = 0, platformInstance = { 0 };
 Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir, Error *e_rr) {
 
 	Bool s_uccess = true;
-	const Bool isSupported = Platform_checkCPUSupport();
-
-	if(!isSupported)
-		retError(clean, Error_unsupportedOperation(
-			0, "Platform_create() failed: Unsupported CPU. Please look at the minimum requirements to run OxC3"
-		));
 
 	if(Platform_instance)
 		retError(clean, Error_invalidOperation(0, "Platform_create() failed, platform was already initialized"));
@@ -438,6 +432,14 @@ Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocat
 	};
 
 	Platform_detectCPUInfo(&Platform_instance->cpuInfo);
+
+	//After the instance exists on purpose: the SIMD backends diagnose a rejection through Log, which needs the
+	// platform allocator, and nothing done above this point depends on the verdict (the failure path cleans it all up).
+
+	if(!Platform_checkCPUSupport())
+		retError(clean, Error_unsupportedOperation(
+			0, "Platform_create() failed: Unsupported CPU. Please look at the minimum requirements to run OxC3"
+		));
 
 	ListCharString sl = (ListCharString) { 0 };
 
