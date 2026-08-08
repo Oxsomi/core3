@@ -22,6 +22,8 @@
 
 #include "platforms/platform.h"
 
+#include <stdio.h>
+
 Bool Platform_checkCPUSupport() {
 
 	U16 v = 1;
@@ -50,5 +52,17 @@ Bool Platform_checkCPUSupport() {
 
 	U32 mask1_1 = 1 << 3;                //BMI1
 
-	return (cpuInfo[3] & mask3) == mask3 && (cpuInfo[2] & mask2) == mask2 && (cpuInfo1[1] & mask1_1) == mask1_1;
+	const Bool ok = (cpuInfo[3] & mask3) == mask3 && (cpuInfo[2] & mask2) == mask2 && (cpuInfo1[1] & mask1_1) == mask1_1;
+
+	//Which bits are missing is the whole diagnosis on emulator/VM guests whose CPUID model masks features the host
+	// happily executes anyway, and this runs before the platform (and therefore Log) exists, so raw printf is all there is.
+
+	if(!ok)
+		printf(
+			"-- Fatal: CPU is missing required features: leaf1 edx %08X (need %08X), ecx %08X (need %08X), "
+			"leaf7 ebx %08X (need %08X)\n",
+			cpuInfo[3], mask3, cpuInfo[2], mask2, cpuInfo1[1], mask1_1
+		);
+
+	return ok;
 }

@@ -1094,7 +1094,7 @@ OXC3_TEST_ENTRY(platforms_interface) {
 
 	Error err = Error_none();
 	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err)) {
-		// Can't even set up the platform , hard fail
+		Test_printPlatformCreateFail(&err);        //Can't even set up the platform, hard fail (but say why first)
 		Platform_return(1);
 	}
 

@@ -32,8 +32,10 @@
 OXC3_TEST_ENTRY(shader_compiler) {
 
 	Error err = Error_none();
-	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err))
+	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err)) {
+		Test_printPlatformCreateFail(&err);
 		Platform_return(1);
+	}
 
 	//No-op unless the shader compiler is a shared module, which has its own Platform_instance
 	Compiler_setPlatform(Platform_instance);

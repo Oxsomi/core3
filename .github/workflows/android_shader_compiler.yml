@@ -14,6 +14,7 @@ jobs:
       runner: ubuntu-latest
       os: android
       build_flags: ''
+      cache_name: shader-compiler
       python_cmd: python3
       setup_python: false
       python_version: ''

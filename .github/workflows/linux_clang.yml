@@ -13,6 +13,7 @@ jobs:
       runner: ubuntu-latest
       os: linux
       build_flags: '-compiler clang -o cliGraphics=False'
+      cache_name: clang
       python_cmd: python3
       setup_python: false
       python_version: ''

@@ -31,8 +31,11 @@ void Test_functionalCSD(Test *t);
 
 OXC3_TEST_ENTRY(platforms_functional) {
 
-	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, false, NULL))
+	Error err = Error_none();
+	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, false, &err)) {
+		Test_printPlatformCreateFail(&err);
 		Platform_return(1);
+	}
 
 	Test t = (Test) { .alloc = Platform_instance->alloc };
 

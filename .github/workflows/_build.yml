@@ -48,6 +48,15 @@ on:
         type: boolean
         required: false
         default: false
+      # Conan cache group. Jobs with the same (os, runner, cache_name) share one cache; only the first of
+      # them to finish gets to save it, so a group must only contain jobs whose expensive dependencies are
+      # identical. Anything that builds with a different toolchain (or builds different dxc flavors, like
+      # the android shader compiler / emulator jobs) must name its own group or it inherits a cache that
+      # misses everything it needs and can never save its own.
+      cache_name:
+        type: string
+        required: false
+        default: default
       hook_name:
         type: string
         required: true
@@ -154,11 +163,17 @@ jobs:
           echo "ANDROID_NDK=$SDK/ndk/${{ inputs.android_ndk }}" >> "$GITHUB_ENV"
 
       # ── Conan package cache ────────────────────────────────────────────────
+      # cache_name keeps toolchains apart: without it every job on the same runner image raced for one
+      # key, the first finisher (usually the default toolchain) won, and e.g. the clang jobs then
+      # restored an msvc/gcc-only store, missed everything, rebuilt dxc from source each run and could
+      # never save the result. restore-keys stays inside the same group on purpose; falling back across
+      # groups would seed the save with another toolchain's packages and grow every cache with junk.
       - name: Cache Conan packages
         uses: actions/cache@v4
         with:
           path: ~/.conan2/p
-          key: ${{ inputs.os }}-${{ inputs.runner }}-${{ hashFiles('**/conanfile.py', '**/conanfile.txt') }}
+          key: ${{ inputs.os }}-${{ inputs.runner }}-${{ inputs.cache_name }}-${{ hashFiles('**/conanfile.py', '**/conanfile.txt') }}
+          restore-keys: ${{ inputs.os }}-${{ inputs.runner }}-${{ inputs.cache_name }}-
 
       # ── Build: Android ─────────────────────────────────────────────────────
       # An android build can't run its own packager, so it tool_requires a host oxc3 that has
@@ -245,10 +260,15 @@ jobs:
         run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True ${{ inputs.build_flags }}
 
       # ── Cleanup before cache save ──────────────────────────────────────────
+      # The LRU pass matters because restore-keys chains caches across conanfile changes: without it every
+      # superseded dxc build would ride along in each newly saved cache forever. Anything this run used is
+      # by definition recent, so it only drops leftovers.
       - name: Prune Conan build dirs
         if: always()
         shell: bash
-        run: rm -rf ~/.conan2/p/b/*/b
+        run: |
+          conan remove "*" --lru=4w -c || true
+          rm -rf ~/.conan2/p/b/*/b
 
       # ── Discord notification ───────────────────────────────────────────────
       # continue-on-error: ~25 jobs fire this at once on every push, so Discord throttles some of them

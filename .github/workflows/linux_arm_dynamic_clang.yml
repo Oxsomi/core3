@@ -11,6 +11,7 @@ jobs:
       runner: ubuntu-24.04-arm
       os: linux
       build_flags: '-compiler clang -dynamic_linking True -o cliGraphics=False'
+      cache_name: clang
       python_cmd: python3
       setup_python: false
       python_version: ''

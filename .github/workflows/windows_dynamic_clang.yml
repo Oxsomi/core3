@@ -12,6 +12,7 @@ jobs:
       runner: windows-2022
       os: windows
       build_flags: '-compiler clang -dynamic_linking True -o forceVulkan=True -o cliGraphics=False'
+      cache_name: clang
       python_cmd: python
       setup_python: false
       python_version: ''

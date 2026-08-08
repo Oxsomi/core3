@@ -11,6 +11,7 @@ jobs:
       runner: windows-11-arm
       os: windows
       build_flags: '-compiler clang -o cliGraphics=False'
+      cache_name: clang
       python_cmd: python
       setup_python: true
       python_version: '3.13'
