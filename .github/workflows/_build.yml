@@ -251,8 +251,12 @@ jobs:
         run: rm -rf ~/.conan2/p/b/*/b
 
       # ── Discord notification ───────────────────────────────────────────────
+      # continue-on-error: ~25 jobs fire this at once on every push, so Discord throttles some of them
+      # (503/429); a notification hiccup must never turn a green build red. The curl retries with
+      # backoff first, the step gives up gracefully after that.
       - name: Send Webhook Notification
         if: always()
+        continue-on-error: true
         shell: bash
         env:
           JOB_STATUS: ${{ job.status }}
@@ -266,6 +270,6 @@ jobs:
             exit 0
           fi
           COLOR=$([ "$JOB_STATUS" = "success" ] && echo 3066993 || echo 15158332)
-          curl -fsS -H "Content-Type: application/json" \
+          curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -H "Content-Type: application/json" \
             -d "{\"embeds\":[{\"title\":\"${WORKFLOW_NAME} (${HOOK_OS_NAME})\",\"description\":\"Status: ${JOB_STATUS}\",\"color\":${COLOR}}]}" \
             "$WEBHOOK_URL"

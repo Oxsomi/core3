@@ -46,10 +46,14 @@
 #endif
 
 #include <arm_neon.h>
-#if defined(_MSC_VER)
+//clang-cl defines _MSC_VER but its intrin.h doesn't declare the arm64 __crc32c* set; it does ship
+//arm_acle.h, whose wrappers appear once __ARM_FEATURE_CRC32 is set (the +crc in -march provides that).
+//Only genuine MSVC takes the intrin.h path.
+
+#if defined(_MSC_VER) && !defined(__clang__)
 	#include <intrin.h>        //MSVC ARM64 declares __crc32c* here and ships no arm_acle.h
 #else
-	#include <arm_acle.h>      //__crc32c* (GCC only declares these here; clang exposes them as builtins too)
+	#include <arm_acle.h>      //__crc32c* wrappers; gcc and clang (clang-cl included) ship this header
 #endif
 
 #define SIMD_CRC32C_U64 __crc32cd
