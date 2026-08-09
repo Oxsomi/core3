@@ -63,14 +63,19 @@ Platform_defineEntrypoint() {
 		break;
 	}
 
+	//Both of these set status before leaving, because exiting 0 here means add_virtual_files' custom target
+	// reports success with no oiCA written, or with a stale one left in place from an earlier build.
+
 	#ifdef PACKAGE_SIMPLE
 		if (args.length != 2) {
 			Log_debugLnx("Invalid arguments: Expected OxC3_package_simple input output");
+			status = -1;
 			goto clean;
 		}
 	#else
 		if (args.length < 2 || args.length > 3) {
 			Log_debugLnx("Invalid arguments: Expected OxC3_package input output (optional: includeDir)");
+			status = -1;
 			goto clean;
 		}
 	#endif

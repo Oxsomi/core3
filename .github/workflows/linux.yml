@@ -1,6 +1,11 @@
 name: Linux x64 Vulkan static
 on: [push]
 
+# The one job carrying a software Vulkan device (lavapipe), so the graphics suite actually creates a device
+# somewhere in CI instead of skipping everywhere for want of a driver.
+# Kept to a single job on purpose: the suite runs on all eight linux jobs already, so installing the driver on
+# each would buy the same signal eight times over and spread the blast radius when something there breaks.
+
 jobs:
   build:
     uses: ./.github/workflows/_build.yml
@@ -9,6 +14,7 @@ jobs:
       runner: ubuntu-latest
       os: linux
       build_flags: '-o cliGraphics=False'
+      vulkan_icd: true
       python_cmd: python3
       setup_python: false
       python_version: ''

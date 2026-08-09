@@ -37,22 +37,50 @@ typedef struct Buffer {
 		U8 *ptrNonConst;        //Requires !Buffer_isConstRef(buf)
 	};
 
-	U64 lengthAndRefBits;        //refBits: [ b63 isRef, b62 isConst ]. Length should be max 48 bits
+	U64 lengthAndRefBits;        //refBits: [ b63 isRef, b62 isConst, b61 isAligned ]. Length should be max 48 bits
 
 } Buffer;
 
 //Buffer (more functions in types/container/buffer.h)
 
 static inline U64 Buffer_length(const Buffer buf) {
-	return buf.lengthAndRefBits << 2 >> 2;
+	return buf.lengthAndRefBits << 3 >> 3;
 }
 
 static inline Bool Buffer_isRef(const Buffer buf) {
-	return buf.lengthAndRefBits >> 62;
+	return (buf.lengthAndRefBits >> 62) & 3;
 }
 
 static inline Bool Buffer_isConstRef(const Buffer buf) {
-	return (buf.lengthAndRefBits >> 62) == 3;
+	return ((buf.lengthAndRefBits >> 62) & 3) == 3;
+}
+
+//Allocated through Buffer_createUninitializedBytesAligned or its zeroed twin, which over-allocate and store the
+// distance back to the real base in the byte before ptr.
+//Buffer_free reads this so callers never have to remember which creator they used.
+
+static inline Bool Buffer_isAligned(const Buffer buf) {
+	return (buf.lengthAndRefBits >> 61) & 1;
+}
+
+//Only the aligned creators in buffer.c should call this, it is here so every use of the bit sits in one file.
+
+static inline void Buffer_markAligned(Buffer *buf) {
+
+	if(buf)
+		buf->lengthAndRefBits |= (U64)1 << 61;
+}
+
+//Replaces the length while leaving the ref, const and aligned bits alone.
+//Anything narrowing a buffer in place wants this rather than touching lengthAndRefBits,
+// which is easy to write in a way that silently drops whichever flag was added most recently.
+
+static inline void Buffer_setLength(Buffer *buf, U64 length) {
+
+	if(!buf || length >> 48)
+		return;
+
+	buf->lengthAndRefBits = length | (buf->lengthAndRefBits >> 61 << 61);
 }
 
 static inline Buffer Buffer_createNull() {
@@ -97,6 +125,20 @@ static inline Buffer Buffer_createRefConst(const void *v, U64 length) {
 
 	Buffer buf;
 	buf.ptr = (const U8*)v;
+	buf.lengthAndRefBits = length | ((U64)3 << 62);
+	return buf;
+}
+
+//A range with no memory behind it, for bookkeeping that tracks offsets into something it never touches.
+//AllocationBuffer uses it for virtual allocations, where the suballocator hands out addresses in a heap that
+// lives somewhere else entirely, so there is nothing to point at and nothing to free.
+
+static inline Buffer Buffer_createVirtualRefConst(U64 length) {
+
+	if (!length || length >> 48)
+		return Buffer_createNull();
+
+	Buffer buf = { { 0 } };
 	buf.lengthAndRefBits = length | ((U64)3 << 62);
 	return buf;
 }
@@ -154,7 +196,13 @@ static inline Buffer Buffer_createRefFromBuffer(const Buffer buf, Bool isConst) 
 	if (!buf.ptr || (!isConst && Buffer_isConstRef(buf)))
 		return copy;
 
+	//The aligned bit is cleared rather than inherited: it says "this pointer is the interior of a bigger
+	// allocation that I own", and a reference owns nothing.
+	//Buffer_free bails on refs before it ever looks, so this is about the flag meaning one thing rather than
+	// about preventing a free.
+
 	copy = buf;
+	copy.lengthAndRefBits &= ~((U64)1 << 61);
 	copy.lengthAndRefBits |= ((U64)1 << 63) | ((U64)isConst << 62);
 	return copy;
 }

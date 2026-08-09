@@ -1020,6 +1020,13 @@ Bool File_getInfoVirtualInternal(FileInfo *info, const CharString *loc, const Al
 		const CAFile *caFile = &Platform_instance->archives.ptr[section->loadedAndId << 1 >> 1];
 		CAHandle handle = CAFile_resolve(caFile, subPath);
 
+		//CAHandle_Invalid is (U64)-1, so its top bit is set and CAHandle_isFolder would call it a folder.
+		//Without this the function reports a phantom empty folder and succeeds for any name at all,
+		// which makes File_has and File_hasFolder answer true for paths that File_read then can't find.
+
+		if(handle == CAHandle_Invalid)
+			retError(clean, Error_notFound(0, 0, "File_getInfoVirtualInternal() file not found in section"));
+
 		//Re-qualified with the // marker resolve stripped, so info->path is itself a valid virtual path
 
 		CharString path = CharString_createNull();

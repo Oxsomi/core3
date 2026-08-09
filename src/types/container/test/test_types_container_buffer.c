@@ -398,9 +398,9 @@ void Test_containerBuffer(Test *t) {
 			Test_assert(t, "aligned alloc is zeroed", zeroed);
 
 			for (U64 i = 0; i < 8; ++i)
-				Buffer_freeAligned(&allocs[i], alloc);
+				Buffer_free(&allocs[i], alloc);
 
-			Test_assert(t, "freeAligned clears", !allocs[7].ptr && !Buffer_length(allocs[7]));
+			Test_assert(t, "aligned free clears", !allocs[7].ptr && !Buffer_length(allocs[7]));
 		}
 
 		//headerOffset aligns what comes after the reserved bytes, not the pointer itself.
@@ -412,7 +412,7 @@ void Test_containerBuffer(Test *t) {
 		));
 
 		Test_assert(t, "header offset lands aligned", !((U64)(offset.ptr + 24) & 63));
-		Buffer_freeAligned(&offset, alloc);
+		Buffer_free(&offset, alloc);
 
 		//Rejected up front rather than silently rounded
 

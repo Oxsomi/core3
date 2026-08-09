@@ -179,8 +179,12 @@ void CompilerFileCtx_free(void *ptr) {
 	ListSHEntryRuntime_freeUnderlying(&ctx->runtimeEntries, alloc);
 	ListU32_free(&ctx->compileCombinations, alloc);
 
+	//Rebuilt from the raw pointer, so the aligned bit the creator set is gone and has to be restored.
+	//This context is always allocated aligned, since it embeds an alignas(64) SpinLock.
+
 	Buffer buf = Buffer_createManagedPtr(ctx, sizeof(*ctx));
-	Buffer_freeAligned(&buf, alloc);
+	Buffer_markAligned(&buf);
+	Buffer_free(&buf, alloc);
 }
 
 //Frees a combination context and everything it owns (its compiled binary included).

@@ -390,8 +390,19 @@ Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocat
 
 	Bool s_uccess = true;
 
-	if(Platform_instance)
-		retError(clean, Error_invalidOperation(0, "Platform_create() failed, platform was already initialized"));
+	//Returns directly rather than through clean, which runs Platform_cleanup() on the way out.
+	//Every other failure below happens to a platform this call is building, so tearing it down is right;
+	// this one happens to a platform somebody else already owns, and freeing it is the opposite of refusing.
+	//platform.h documents dlls calling this defensively, and on android each suite creates and cleans its own,
+	// so the old behaviour moved the symptom to whichever suite ran next.
+
+	if(Platform_instance) {
+
+		if(e_rr)
+			*e_rr = Error_invalidOperation(0, "Platform_create() failed, platform was already initialized");
+
+		return false;
+	}
 
 	if(cmdArgc && !cmdArgs)
 		retError(clean, Error_invalidParameter(

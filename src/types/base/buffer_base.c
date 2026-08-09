@@ -187,7 +187,7 @@ Bool Buffer_offset(Buffer *buf, U64 length, Error *e_rr) {
 
 	//Maintain constness
 
-	buf->lengthAndRefBits = (bufLen - length) | (buf->lengthAndRefBits >> 62 << 62);
+	Buffer_setLength(buf, bufLen - length);
 
 	if(!bufLen)
 		*buf = Buffer_createNull();

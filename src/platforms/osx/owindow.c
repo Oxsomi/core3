@@ -89,7 +89,9 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 		//Manually set it to be a reference
 		//This makes it so we don't free it, because we don't own the memory
 
-		w->cpuVisibleBuffer.lengthAndRefBits = ((U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4) | ((U64)1 << 63);
+		w->cpuVisibleBuffer = Buffer_createRef(
+			w->cpuVisibleBuffer.ptrNonConst, (U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4
+		);
 
 		ReleaseDC(w->nativeHandle, screen);
 		screen = NULL;

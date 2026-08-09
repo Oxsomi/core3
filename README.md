@@ -249,7 +249,7 @@ apply_dependencies(Target)
 | scalar fallback | **Full**, used to bring up new platforms before their SIMD backend exists |
 | risc-v / wasm | None / not yet |
 
-64-bit CPUs only. The SIMD build requires SSE4.2/AES/PCLMULQDQ/BMI1+2/F16C/AVX/FMA (Intel Haswell 2013 / AMD Zen and up); Intel Gen 11+ / AMD Zen are recommended for hardware SHA256. The SIMD-less build exists for porting, emulation and debugging, it is markedly slower (no AES/SHA/CRC/SIMD intrinsics).
+64-bit CPUs only. The SIMD build requires SSE4.2/AES/PCLMULQDQ/BMI1+2/F16C/AVX/FMA (Intel Haswell 2013 / AMD Zen and up), and on arm64 the ARMv8 crypto (AES, PMULL) and CRC extensions; Intel Gen 11+ / AMD Zen are recommended for hardware SHA256. `Platform_checkCPUSupport` enforces both baselines at startup, including that the OS actually enabled AVX state, so an unsupported CPU is told why instead of faulting somewhere arbitrary. The SIMD-less build exists for porting, emulation and debugging, it is markedly slower (no AES/SHA/CRC/SIMD intrinsics).
 
 ## Deployables
 

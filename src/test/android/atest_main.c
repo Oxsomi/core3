@@ -67,42 +67,52 @@ ATEST_SUITE(graphics_interface);
 ATEST_SUITE(audio_functional);
 ATEST_SUITE(platforms_functional);
 
+//needsGpu marks a suite that requires an adapter meeting the OxC3 graphics spec.
+//A real phone has one, the emulator does not: its SwiftShader adapter misses 19 of our requirements.
+//Three of those are structural rather than a version behind.
+//SwiftShader reports tessellationShader as false with every tessellation limit at zero, it has never
+// implemented push descriptors, and its framebuffer and compute workgroup limits are half what OxC3 asks for,
+// in a file untouched since 2021.
+//So this is a permanent no rather than a bug to chase, and the emulator asks for these suites to be skipped
+// instead of failing every run, which would only teach everyone to ignore the job.
+
 typedef struct ATestSuite {
 	const C8 *name;
 	ATestFn fn;
 	Bool interactive;
+	Bool needsGpu;
 } ATestSuite;
 
 static const ATestSuite ATest_suites[] = {
 
-	{ "types_base",           OxC3_test_types_base,           false },
-	{ "types_math",           OxC3_test_types_math,           false },
-	{ "types_container",      OxC3_test_types_container,      false },
+	{ "types_base",           OxC3_test_types_base,           false, false },
+	{ "types_math",           OxC3_test_types_math,           false, false },
+	{ "types_container",      OxC3_test_types_container,      false, false },
 
-	{ "formats_bmp",          OxC3_test_formats_bmp,          false },
-	{ "formats_dds",          OxC3_test_formats_dds,          false },
-	{ "formats_oiBC",         OxC3_test_formats_oiBC,         false },
-	{ "formats_oiCA",         OxC3_test_formats_oiCA,         false },
-	{ "formats_oiDL",         OxC3_test_formats_oiDL,         false },
-	{ "formats_oiSB",         OxC3_test_formats_oiSB,         false },
-	{ "formats_oiSH",         OxC3_test_formats_oiSH,         false },
-	{ "formats_wav",          OxC3_test_formats_wav,          false },
+	{ "formats_bmp",          OxC3_test_formats_bmp,          false, false },
+	{ "formats_dds",          OxC3_test_formats_dds,          false, false },
+	{ "formats_oiBC",         OxC3_test_formats_oiBC,         false, false },
+	{ "formats_oiCA",         OxC3_test_formats_oiCA,         false, false },
+	{ "formats_oiDL",         OxC3_test_formats_oiDL,         false, false },
+	{ "formats_oiSB",         OxC3_test_formats_oiSB,         false, false },
+	{ "formats_oiSH",         OxC3_test_formats_oiSH,         false, false },
+	{ "formats_wav",          OxC3_test_formats_wav,          false, false },
 
-	{ "audio_interface",      OxC3_test_audio_interface,      false },
-	{ "platforms_interface",  OxC3_test_platforms_interface,  false },
-	{ "graphics_interface",   OxC3_test_graphics_interface,   false },
+	{ "audio_interface",      OxC3_test_audio_interface,      false, false },
+	{ "platforms_interface",  OxC3_test_platforms_interface,  false, false },
+	{ "graphics_interface",   OxC3_test_graphics_interface,   false, true  },
 
 	//Before the interactive ones, like every other unattended suite: those wait on a human and would
 	//otherwise hold up the one suite that takes real work to get onto the device.
 
 	#ifdef _OXC3_TEST_SHADER_COMPILER
-		{ "shader_compiler",  OxC3_test_shader_compiler,      false },
+		{ "shader_compiler",  OxC3_test_shader_compiler,      false, false },
 	#endif
 
 	//platforms_functional first: it's the one worth watching, and audio_functional takes minutes of listening
 
-	{ "platforms_functional", OxC3_test_platforms_functional, true  },
-	{ "audio_functional",     OxC3_test_audio_functional,     true  }
+	{ "platforms_functional", OxC3_test_platforms_functional, true,  false },
+	{ "audio_functional",     OxC3_test_audio_functional,     true,  false }
 
 };
 
@@ -215,14 +225,26 @@ static void ATest_drainStdio() {
 //`adb shell setprop debug.oxc3.interactive 1` opts into the suites that need someone pressing keys.
 //A system property rather than an intent extra so it needs no JNI and no change to OxC3Activity.
 
-static Bool ATest_wantsInteractive() {
+static Bool ATest_propertyIsSet(const C8 *name) {
 
 	C8 value[PROP_VALUE_MAX] = { 0 };
 
-	if(__system_property_get("debug.oxc3.interactive", value) <= 0)
+	if(__system_property_get(name, value) <= 0)
 		return false;
 
 	return value[0] == '1' || value[0] == 't' || value[0] == 'y';
+}
+
+static Bool ATest_wantsInteractive() {
+	return ATest_propertyIsSet("debug.oxc3.interactive");
+}
+
+//`adb shell setprop debug.oxc3.nogpu 1` says this device has no adapter OxC3 can drive, so skip the suites
+// that need one rather than failing them.
+//Opt out rather than opt in, so a real phone still runs them and only the emulator has to say so.
+
+static Bool ATest_hasNoUsableGpu() {
+	return ATest_propertyIsSet("debug.oxc3.nogpu");
 }
 
 Platform_defineEntrypoint() {
@@ -237,13 +259,14 @@ Platform_defineEntrypoint() {
 	//Without this android_native_app_glue can strip the glue and the activity never attaches
 
 	const Bool interactive = ATest_wantsInteractive();
+	const Bool noGpu = ATest_hasNoUsableGpu();
 	const U64 count = sizeof(ATest_suites) / sizeof(ATest_suites[0]);
 
 	U64 ran = 0, failed = 0, skipped = 0;
 
 	__android_log_print(
-		ANDROID_LOG_INFO, ATEST_TAG, "OXC3_TEST_BEGIN suites=%llu interactive=%s",
-		(unsigned long long) count, interactive ? "yes" : "no"
+		ANDROID_LOG_INFO, ATEST_TAG, "OXC3_TEST_BEGIN suites=%llu interactive=%s gpu=%s",
+		(unsigned long long) count, interactive ? "yes" : "no", noGpu ? "no" : "yes"
 	);
 
 	for(U64 i = 0; i < count; ++i) {
@@ -253,6 +276,15 @@ Platform_defineEntrypoint() {
 		if(suite->interactive && !interactive) {
 			++skipped;
 			__android_log_print(ANDROID_LOG_INFO, ATEST_TAG, "SKIP %s (interactive)", suite->name);
+			continue;
+		}
+
+		if(suite->needsGpu && noGpu) {
+			++skipped;
+			__android_log_print(
+				ANDROID_LOG_INFO, ATEST_TAG,
+				"SKIP %s (no adapter meeting the OxC3 graphics spec; SwiftShader is not supported)", suite->name
+			);
 			continue;
 		}
 

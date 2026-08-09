@@ -48,7 +48,13 @@ static I8 cryptoState = -1;
 		if (cryptoState >= 0)
 			return;
 
-		U32 cpuInfo[4];
+		//Zeroed, and leaf 7 gets an array of its own further down.
+		//cpuid leaves the output untouched when the leaf is above the CPU's maximum, so a shared array would
+		// have the leaf 1 values read back as leaf 7 feature bits on any part that stops before leaf 7.
+		//That reads SSSE3 as VAES and part of the initial APIC ID as AVX512VL, which differs per hardware
+		// thread, so the selected crypto path would depend on which thread got here first.
+
+		U32 cpuInfo[4] = { 0 };
 
 		Platform_getCPUId(1, cpuInfo);
 
@@ -66,15 +72,17 @@ static I8 cryptoState = -1;
 			return;
 		}
 
-		Platform_getCPUId(7, cpuInfo);
+		U32 cpuInfo7[4] = { 0 };
 
-		Bool hasAVX2 = (cpuInfo[1] & (1 << 5)) != 0;
-		Bool hasAVX512F = (cpuInfo[1] & (1 << 16)) != 0;
-		Bool hasAVX512BW = (cpuInfo[1] & (1 << 30)) != 0;
-		Bool hasAVX512DQ = (cpuInfo[1] & (1 << 17)) != 0;
-		Bool hasAVX512VL = (cpuInfo[1] & (1u << 31)) != 0;
-		Bool hasVAES = (cpuInfo[2] & (1 << 9)) != 0;
-		Bool hasVPCLMUL = (cpuInfo[2] & (1 << 10)) != 0;
+		Platform_getCPUId(7, cpuInfo7);
+
+		Bool hasAVX2 = (cpuInfo7[1] & (1 << 5)) != 0;
+		Bool hasAVX512F = (cpuInfo7[1] & (1 << 16)) != 0;
+		Bool hasAVX512BW = (cpuInfo7[1] & (1 << 30)) != 0;
+		Bool hasAVX512DQ = (cpuInfo7[1] & (1 << 17)) != 0;
+		Bool hasAVX512VL = (cpuInfo7[1] & (1u << 31)) != 0;
+		Bool hasVAES = (cpuInfo7[2] & (1 << 9)) != 0;
+		Bool hasVPCLMUL = (cpuInfo7[2] & (1 << 10)) != 0;
 
 		Bool osHasZMM = (_xgetbv(0) & 0xE0) == 0xE0;
 

@@ -50,9 +50,9 @@
 
 	#ifdef _MSC_VER
 		#include <intrin.h>
-		static U64 Platform_getXCR0() { return _xgetbv(0); }
+		U64 Platform_getXCR0() { return _xgetbv(0); }
 	#else
-		static U64 Platform_getXCR0() {
+		U64 Platform_getXCR0() {
 			U32 eax, edx;
 			__asm__ volatile("xgetbv" : "=a"(eax), "=d"(edx) : "c"(0));
 			return ((U64) edx << 32) | eax;

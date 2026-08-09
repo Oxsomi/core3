@@ -80,10 +80,15 @@ static Bool GenericList_alloc(
 
 static void GenericList_dealloc(Buffer *buf, U64 stride, const Allocator *allocator) {
 
-	if(GenericList_alignment(stride) <= BUFFER_DEFAULT_ALIGNMENT)
-		Buffer_free(buf, allocator);
+	//A GenericList keeps a raw pointer rather than the Buffer, so two of the three callers rebuild one with
+	// Buffer_createManagedPtr and the aligned bit the creator set is long gone by the time we get here.
+	//Stride is what decides it, exactly as it decided which allocator GenericList_alloc used, and marking is
+	// idempotent so the one caller that still holds the original buffer is unaffected.
 
-	else Buffer_freeAligned(buf, allocator);
+	if(GenericList_alignment(stride) > BUFFER_DEFAULT_ALIGNMENT)
+		Buffer_markAligned(buf);
+
+	Buffer_free(buf, allocator);
 }
 
 Bool GenericList_create(U64 length, U64 stride, const Allocator *allocator, GenericList *result, Error *e_rr) {

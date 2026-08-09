@@ -246,8 +246,6 @@ static inline U64 EFloatType_convertExponent(
 	return (U64)cvt;
 }
 
-static I8 hasF16C = -1;
-
 U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 	#if !_FORCE_FLOAT_FALLBACK
@@ -278,19 +276,16 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 			if (type == EFloatType_F16 || conversionType == EFloatType_F16) {
 
-				//Technically a race condition between multiple threads, but writes the same value.
-				//Worst case it just results in multiple threads checking cpu info and then writing the same value anyways.
-				//This is better than protecting hasF16C with a SpinLock,
-				// which would be slower for the common case than just reading a U8.
-				if (hasF16C < 0)        //Cached after first use; detection centralized in Platform_detectCPUFeatures
-					hasF16C = (Platform_detectCPUFeatures() & ECPUFeatures_F16C) != 0;
+				//No runtime F16C check: the SSE build compiles with -mf16c and Platform_checkCPUSupport requires
+				// the bit, which costs nothing because every CPU carrying the AVX and FMA we also require has it.
+				//Detecting it per call only bought a branch on the hot path.
 
 				const EFloatType targ = type == EFloatType_F16 ? conversionType : type;
 
 				const Bool anyFloat = targ == EFloatType_F32;
 				const Bool anyDouble = targ == EFloatType_F64;
 
-				if((anyFloat || anyDouble) && hasF16C >= 1) {
+				if(anyFloat || anyDouble) {
 
 					//Expanding from F16
 
@@ -320,8 +315,6 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 				}
 			}
 
-		#else
-			(void)hasF16C;
 		#endif
 
 	#endif

@@ -48,6 +48,15 @@ on:
         type: boolean
         required: false
         default: false
+      # Installs mesa-vulkan-drivers, which gives this job lavapipe as a software Vulkan device.
+      # Only worth setting on ONE linux job: the graphics suite already runs everywhere and quietly skips for
+      # want of an ICD, so switching it on arms every job it is set for at once.
+      # Lavapipe clears all 17 required features and all 58 required limits, twelve of them with no margin at
+      # all, so treat a red graphics_interface here as a real result rather than an environment problem.
+      vulkan_icd:
+        type: boolean
+        required: false
+        default: false
       # Conan cache group.
       # Jobs sharing an (os, runner, cache_name) share one cache, and only the first of them to finish saves it.
       # A group must therefore only contain jobs whose expensive dependencies are identical.
@@ -91,12 +100,15 @@ jobs:
         if: inputs.os == 'android'
 
       # ── Conan ──────────────────────────────────────────────────────────────
-      # SteamOS container doesn't have pip by default
+      # SteamOS container doesn't have pip by default.
+      # wayland-protocols is best effort here: the SDK image may already carry it, and the xdg packages fall
+      # back to downloading when it is missing, so a failure to install it must not fail the job.
       - name: Install Conan (SteamOS)
         if: inputs.os == 'steamos'
         run: |
           apt-get update -y
           apt-get install -y python3-pip
+          apt-get install -y wayland-protocols || true
           pip3 install conan --break-system-packages
 
       - name: Install Conan (Linux)
@@ -112,9 +124,19 @@ jobs:
 
       # ── Host platform deps ─────────────────────────────────────────────────
       # Needed by every build that produces host binaries, including the android job's OxC3_package.
+      # wayland-protocols supplies the protocol xml that packages/xdg_shell and packages/xdg_decoration used to
+      # download from freedesktop, which now answers CI with an Anubis challenge instead of the file.
       - name: Install Wayland deps
         if: inputs.os != 'steamos' && runner.os == 'Linux'
-        run: sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev
+        run: sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev wayland-protocols
+
+      # Deliberately no VK_ICD_FILENAMES: the loader finds /usr/share/vulkan/icd.d/lvp_icd.json on its own, and
+      # the arch-suffixed path most snippets use doesn't exist on Ubuntu, which fails looking like a missing driver.
+      - name: Install software Vulkan (lavapipe)
+        if: inputs.vulkan_icd && runner.os == 'Linux'
+        run: |
+          sudo apt-get install --no-install-recommends -y mesa-vulkan-drivers vulkan-tools
+          vulkaninfo --summary || echo "vulkaninfo failed; the graphics suite will report what it found"
 
       - name: Set up Homebrew
         if: runner.os == 'macOS'
@@ -230,6 +252,10 @@ jobs:
       # which has happened more than once and looks identical to a pass from the outside.
       # The two functional suites need someone at the device, so they skip themselves without
       # debug.oxc3.interactive.
+      # graphics_interface is left running here on purpose, so the log keeps reporting how close the emulator
+      # actually gets.
+      # build_android.py --no_gpu skips it when we want the job green instead, which is the switch to reach for
+      # if this stays red without telling us anything new.
       # The rest run unattended.
 
       - name: Run test suite on an emulator
@@ -249,7 +275,13 @@ jobs:
           # If a runner image ever ships an emulator that rejects it, the fallback is building this job with
           # -simd False, where Platform_checkCPUSupport is unconditional.
           # x86_64 SIMD is covered natively by the Linux x64 jobs anyway, this job exists for the android layer.
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -qemu -cpu host
+          # -gpu lavapipe rather than swiftshader_indirect, which is deprecated as of emulator 36.4.9 and is
+          # also the weaker driver: SwiftShader misses 19 of OxC3's requirements where lavapipe misses one.
+          # The emulator ships its own lavapipe, so this needs no package on the runner.
+          # It is slower to boot than SwiftShader, so raise the timeout below if this starts flaking.
+          # The one it can't fix is VK_KHR_push_descriptor, which gfxstream strips from the guest whatever the
+          # host driver supports, and on api 31 the guest ICD allowlist is old enough to cost us more than that.
+          emulator-options: -no-window -gpu lavapipe -noaudio -no-boot-anim -camera-back none -qemu -cpu host
           disable-animations: true
           script: ${{ inputs.python_cmd }} build_android.py --skip_build --apk --sign --run -mode Release -arch x64 -tests True -package net.osomi.test -version 0.1.0 -name "OxC3 test" -keystore_password oxc3ci -test_timeout 900
 

@@ -139,7 +139,15 @@ typedef enum ECPUFeatures {
 #endif
 
 #if _ARCH == ARCH_X86_64
+
 	void Platform_getCPUId(int leaf, U32 result[4]);
+
+	//Extended control register 0, which says which SIMD state the OS actually enabled.
+	//Only valid once leaf 1 ECX bit 27 (OSXSAVE) is known to be set, since xgetbv raises #UD otherwise.
+	//Bits 2:1 are XMM and YMM, so an AVX capable CPU whose OS never enabled them still can't run AVX code.
+
+	U64 Platform_getXCR0();
+
 #endif
 
 //Detects the ECPUFeatures above (cpuid + xgetbv on x86; ECPUFeatures_None on unsupported arch).

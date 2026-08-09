@@ -71,8 +71,10 @@ Bool Buffer_createUninitializedBytes(U64 length, const Allocator *alloc, Buffer 
 //RefPtr needs that, since it puts its own bookkeeping first and the object that wants the alignment after
 // it; pass 0 when the buffer itself is what has to be aligned.
 //
-//The result MUST be released with Buffer_freeAligned rather than Buffer_free.
-//The real allocation starts before the pointer handed back, and only Buffer_freeAligned knows how far.
+//Buffer_free releases the result like any other buffer: the aligned bit it carries is what tells it to walk
+// back to the real base first, so there is nothing for a caller to remember.
+//The one case that needs care is throwing the Buffer away and keeping only the pointer.
+//Rebuilding it later with Buffer_createManagedPtr loses the bit, so call Buffer_markAligned before freeing.
 
 Bool Buffer_createUninitializedBytesAligned(
 	U64 length, U64 alignment, U64 headerOffset, const Allocator *alloc, Buffer *result, Error *e_rr
@@ -81,8 +83,6 @@ Bool Buffer_createUninitializedBytesAligned(
 Bool Buffer_createEmptyBytesAligned(
 	U64 length, U64 alignment, U64 headerOffset, const Allocator *alloc, Buffer *result, Error *e_rr
 );
-
-void Buffer_freeAligned(Buffer *buf, const Allocator *alloc);
 Bool Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output, Error *e_rr);
 
 Bool Buffer_resize(

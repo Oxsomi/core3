@@ -901,6 +901,132 @@ clean:
 	File_unloadVirtual(&secPath, alloc, NULL);
 }
 
+// -- 5b. Virtual - foreach hands back paths that are valid inputs ----------------------------------
+
+//The contract documented above File_foreach: every path a callback receives is fully qualified and can be
+// fed straight back into another File_* call.
+//It is worth its own test because it broke once already, and it breaks silently: every in-tree consumer cuts
+// a known prefix off the reported path, so a regression corrupts packaged archive names instead of erroring.
+
+typedef struct ForeachRoundTrip {
+	Test *t;
+	U64 files, folders, badPrefix, unreadable, wrongSize;
+} ForeachRoundTrip;
+
+static Bool Test_foreachRoundTripCallback(const FileInfo *info, void *userData, const Allocator *alloc, Error *e_rr) {
+
+	(void) e_rr;
+
+	ForeachRoundTrip *ctx = (ForeachRoundTrip*) userData;
+
+	if(info->type == EFileType_Folder)
+		++ctx->folders;
+
+	else ++ctx->files;
+
+	//Fully qualified means // followed by the section for a virtual entry, and an absolute path otherwise.
+	//A third slash would mean the section got joined onto an already prefixed path.
+	//Either way the check has to keep going afterwards, since the read back below is the actual point.
+
+	if(File_isVirtual(info->path)) {
+
+		if(CharString_getAt(info->path, 2) == '/')
+			++ctx->badPrefix;
+	}
+
+	else if(!CharString_length(info->path) || CharString_getAt(info->path, 0) == '.')
+		++ctx->badPrefix;
+
+	//The load bearing half: hand the reported path straight back to the file api.
+	//getInfo has to agree it exists, and for a file the read has to produce exactly the size foreach reported.
+
+	FileInfo again = (FileInfo) { 0 };
+
+	if(!File_getInfo(&info->path, &again, alloc, NULL)) {
+		++ctx->unreadable;
+		return true;
+	}
+
+	if(again.type != info->type || again.fileSize != info->fileSize)
+		++ctx->wrongSize;
+
+	FileInfo_free(&again, alloc);
+
+	if(info->type == EFileType_Folder)
+		return true;
+
+	Buffer buf = Buffer_createNull();
+	RefPtrType fhType = FileHandle_makeType(alloc);
+
+	if(!File_read(&info->path, 50 * MS, 0, 0, &fhType, &buf, NULL))
+		++ctx->unreadable;
+
+	else if(Buffer_length(buf) != info->fileSize)
+		++ctx->wrongSize;
+
+	Buffer_free(&buf, alloc);
+	return true;
+}
+
+static void Test_virtualForeachRoundTrip(Test *t) {
+
+	Test_setModule(t, "File/ForeachRoundTrip");
+
+	const Allocator *alloc = Platform_instance->alloc;
+	const RefPtrType memStreamType = MemoryStream_makeType(alloc);
+
+	CharString secPath = CharString_createRefCStrConst(vSection);
+
+	if(!Test_assert(t, "loadVirtual", File_loadVirtual(&secPath, &memStreamType, NULL, NULL, alloc, &t->err)))
+		return;
+
+	ForeachRoundTrip ctx = (ForeachRoundTrip) { .t = t };
+
+	Test_assert(t, "foreachOk", File_foreach(
+		&secPath, !Platform_instance->useWorkingDir, Test_foreachRoundTripCallback, &ctx, true, alloc, &t->err
+	));
+
+	Test_assert(t, "sawFiles",       ctx.files >= 2);            //hello.txt and sub/world.txt
+	Test_assert(t, "allPrefixed",    !ctx.badPrefix);
+	Test_assert(t, "allReadBack",    !ctx.unreadable);
+	Test_assert(t, "sizesAgree",     !ctx.wrongSize);
+
+	File_unloadVirtual(&secPath, alloc, NULL);
+
+	//The same guarantee for physical paths, which report absolute rather than //-prefixed.
+	//This builds its own two entry directory rather than walking the working directory,
+	// since whatever happens to be lying there on a runner would make the read back assertions flaky.
+
+	ForeachRoundTrip phys = (ForeachRoundTrip) { .t = t };
+
+	CharString physDir  = CharString_createRefCStrConst("platform_foreach_tmp");
+	CharString physFile = CharString_createRefCStrConst("platform_foreach_tmp/entry.bin");
+	CharString physSub  = CharString_createRefCStrConst("platform_foreach_tmp/sub");
+
+	RefPtrType fhType = FileHandle_makeType(alloc);
+	Buffer payload = Buffer_createRefConst("foreach", 7);
+
+	File_remove(&physDir, 50 * MS, alloc, NULL);
+
+	if (
+		Test_assert(t, "physAddDir",  File_add(&physDir,  EFileType_Folder, false, alloc, &t->err)) &&
+		Test_assert(t, "physAddSub",  File_add(&physSub,  EFileType_Folder, false, alloc, &t->err)) &&
+		Test_assert(t, "physAddFile", File_add(&physFile, EFileType_File,   false, alloc, &t->err)) &&
+		Test_assert(t, "physWrite",   File_write(&payload, &physFile, 0, 0, 50 * MS, false, &fhType, &t->err))
+	) {
+		Test_assert(t, "physForeach", File_foreach(
+			&physDir, !Platform_instance->useWorkingDir, Test_foreachRoundTripCallback, &phys, true, alloc, &t->err
+		));
+
+		Test_assert(t, "physSawBoth",       phys.files >= 1 && phys.folders >= 1);
+		Test_assert(t, "physicalAbsolute",  !phys.badPrefix);
+		Test_assert(t, "physicalReadBack",  !phys.unreadable);
+		Test_assert(t, "physicalSizes",     !phys.wrongSize);
+	}
+
+	File_remove(&physDir, 50 * MS, alloc, NULL);
+}
+
 // -- 5a. Virtual - Double load, operations on root, library or section  ----------------------------
 
 static void Test_virtualEdgeCases(Test *t) {
@@ -1117,6 +1243,7 @@ OXC3_TEST_ENTRY(platforms_interface) {
 	Test_fileRepeatedOpenClose(&t);
 
 	Test_platformsFileVirtual(&t);
+	Test_virtualForeachRoundTrip(&t);
 	Test_virtualEdgeCases(&t);
 
 	Test_dynamicLibrary(&t);

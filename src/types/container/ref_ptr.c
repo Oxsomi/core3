@@ -83,10 +83,13 @@ void RefPtr_dec(RefPtr **pptr) {
 		const RefPtrType *type = ptr->refPtrType;
 		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr) + RefPtrType_length(type));
 
-		if(RefPtrType_alignment(type) > BUFFER_DEFAULT_ALIGNMENT)
-			Buffer_freeAligned(&orig, type->alloc);
+		//The Buffer that carried the aligned bit went away when only the pointer was kept, so it has to be put
+		// back before freeing, or Buffer_free hands the allocator the payload instead of the real base.
 
-		else Buffer_free(&orig, type->alloc);
+		if(RefPtrType_alignment(type) > BUFFER_DEFAULT_ALIGNMENT)
+			Buffer_markAligned(&orig);
+
+		Buffer_free(&orig, type->alloc);
 	}
 
 	*pptr = NULL;

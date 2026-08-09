@@ -1207,6 +1207,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			case EGraphicsVendorPCIE_APPL:                  vendor = EGraphicsVendorId_APPL;        break;
 			case EGraphicsVendorPCIE_SMSG:                  vendor = EGraphicsVendorId_SMSG;        break;
 			case EGraphicsVendorPCIE_HWEI:                  vendor = EGraphicsVendorId_HWEI;        break;
+			case EGraphicsVendorPCIE_GOGL:                  vendor = EGraphicsVendorId_GOGL;        break;
 			default:
 				Log_debugLnx("Unrecognized vendor: %"PRIX32, properties.vendorID);                  break;
 		}

@@ -233,8 +233,7 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		lwin->bufferBusy[1] = false;
 
 		//cpuVisibleBuffer points to the content area; user sees nothing of the bar.
-		w->cpuVisibleBuffer.ptr              = lwin->mainBufferPtr;
-		w->cpuVisibleBuffer.lengthAndRefBits = (stride * height) | ((U64)1 << 63);
+		w->cpuVisibleBuffer = Buffer_createRef(lwin->mainBufferPtr, stride * height);
 	}
 
 	w->size = I32x2_create2(totalWidth, totalHeight);

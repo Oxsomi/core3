@@ -8,8 +8,8 @@ OxC3 types contains a lot of very basic types; it's the STL of OxC3. All these t
   - *types/platform_types.h* defines these.
   - **_ENABLE_SIMD**: If the user has explicitly disabled SIMD using _ENABLE_SIMD == false or the SIMD toggle in OxC3 cmake, then everything that links to the lib should too.
   - **SIMD_NONE**: Indicates a fallback mode only, useful for validation, debugging and adding new platforms with a lot less effort (if they use a different SIMD setting that isn't supported yet).
-  - **SIMD_SSE**: Indicates the usage of SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND and the possible usage of SHA instructions. This allows quicker and/or safer encryption/hashing & computation.
-  - (**unsupported**): SIMD_NEON: Indicates the usage of ARM NEON intrinsics.
+  - **SIMD_SSE**: Indicates the usage of SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1+2, F16C, AVX and FMA, and the possible usage of SHA instructions. This allows quicker and/or safer encryption/hashing & computation. `Platform_checkCPUSupport` enforces exactly this set (SHA excluded, since its only use is gated at runtime), so it matches the baseline in the readme.
+  - **SIMD_NEON**: Indicates the usage of ARM NEON intrinsics, and requires the ARMv8 crypto (AES, PMULL) and CRC extensions. Unlike CRC32C and SHA-256, the NEON AES path has no runtime fallback, so `Platform_checkCPUSupport` rejects a CPU without those extensions rather than letting it fault later.
 - **_ARCH** is what type of architecture is used
   - *types/platform_types.h* defines these.
   - **ARCH_NONE**: Unknown architecture; likely abstracted away from regular assembly level.

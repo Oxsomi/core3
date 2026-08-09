@@ -113,10 +113,6 @@ namespace oxc {
 			return c::Buffer_createEmptyBytesAligned(length, alignment, headerOffset, alloc, &self, e_rr);
 		}
 
-		void freeAligned() noexcept {
-			c::Buffer_freeAligned(&self, alloc);
-		}
-
 		[[nodiscard]] c::Bool resize(
 			c::U64 newLen, c::Bool preserveContents, c::Bool clearUnsetContents, c::Error *e_rr = nullptr
 		) noexcept {

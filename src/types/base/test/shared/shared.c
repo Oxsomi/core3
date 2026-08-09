@@ -96,11 +96,16 @@ Bool Test_assert2(Test *test, const C8 *section, Bool value, const C8 *file, U64
 		!source ? "???" : source
 	);
 
+	//Guarded and newline terminated because this runs while a failure is already being reported.
+	//A NULL errorStr would otherwise crash the harness mid-report and take the rest of the suite's output
+	// with it, and without the newline android's log pump merges this into the next assert and truncates it.
+
 	if (test->err.genericError)
 		printf(
-			"-- Error: %s (%s)",
-			EGenericError_TO_STRING[test->err.genericError],
-			test->err.errorStr
+			"-- Error: %s (%s)\n",
+			test->err.genericError < EGenericError_Stderr + 1 ?
+				EGenericError_TO_STRING[test->err.genericError] : "???",
+			test->err.errorStr ? test->err.errorStr : "???"
 		);
 
 	test->err = Error_none();

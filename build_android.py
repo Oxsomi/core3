@@ -536,8 +536,15 @@ def runApk(args):
 	# The two functional suites need someone watching the device, so OxC3_atest skips them unless asked.
 	# A system property rather than an intent extra, so it needs no JNI and no OxC3Activity change.
 
+	# -no_gpu says this target can't provide an adapter meeting the OxC3 graphics spec, so the suites that need
+	#  one are skipped rather than failed.
+	#  That is the android emulator, whose SwiftShader adapter misses 19 requirements, three of them structural:
+	#  no tessellation stage, no push descriptors, and framebuffer and workgroup limits half of what we ask for.
+	#  Real devices leave it off and run the graphics suite normally.
+
 	if args.tests == "True":
 		common.run(f"{adb} shell setprop debug.oxc3.interactive {'1' if args.interactive else '0'}")
+		common.run(f"{adb} shell setprop debug.oxc3.nogpu {'1' if args.no_gpu else '0'}")
 
 	print("-- Running apk file")
 	common.run(f"{adb} logcat -c")		# Clear log first
@@ -618,6 +625,11 @@ def main():
 	parser.add_argument(
 		"--interactive", action="store_true",
 		help="With --run -tests True, also run the functional suites (they need a human watching the device)"
+	)
+	parser.add_argument(
+		"--no_gpu", action="store_true",
+		help="Skip the suites needing an adapter that meets the OxC3 graphics spec, which the emulator's "
+		     "SwiftShader does not (it lacks push descriptors, synchronization2 and tessellation)"
 	)
 	parser.add_argument(
 		"-test_timeout", type=int, default=600,

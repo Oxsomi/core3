@@ -576,6 +576,10 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			case EGraphicsVendorPCIE_INTC:   vendorId = EGraphicsVendorId_INTC;      break;
 			case EGraphicsVendorPCIE_IMGT:   vendorId = EGraphicsVendorId_IMGT;      break;
 			case EGraphicsVendorPCIE_MSFT:   vendorId = EGraphicsVendorId_MSFT;      break;
+			case EGraphicsVendorPCIE_APPL:   vendorId = EGraphicsVendorId_APPL;      break;
+			case EGraphicsVendorPCIE_SMSG:   vendorId = EGraphicsVendorId_SMSG;      break;
+			case EGraphicsVendorPCIE_HWEI:   vendorId = EGraphicsVendorId_HWEI;      break;
+			case EGraphicsVendorPCIE_GOGL:   vendorId = EGraphicsVendorId_GOGL;      break;
 			default: Log_debugLnx("Unrecognized vendor: %"PRIX32, desc.VendorId);    break;
 		}
 
