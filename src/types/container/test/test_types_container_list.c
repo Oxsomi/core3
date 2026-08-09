@@ -24,7 +24,22 @@
 
 #include "test_types_container_shared.h"
 #include "types/container/list_basic_types.h"
+#include "types/container/list_impl.h"
 #include "types/base/algorithm.h"
+
+//A 64 byte element, so GenericList_alignment derives 64 from the stride and the list goes through the aligned
+// allocator instead of the plain one.
+//That path is worth its own element type because a GenericList keeps a raw pointer rather than the Buffer it
+// was given, so growing or freeing one rebuilds the Buffer and has to restore the aligned marking itself.
+//Getting that wrong hands the allocator an interior pointer, which is heap corruption rather than a failed
+// assert, so nothing above this line would notice.
+
+typedef struct OverAligned {
+	U64 v[8];
+} OverAligned;
+
+TList(OverAligned);
+TListImpl(OverAligned);
 
 //Descending comparator for sortCustom (sortCustom orders ascending by comparator).
 
@@ -305,6 +320,40 @@ void Test_list(Test *t) {
 		ListU32_free(&l, alloc);
 		ListU32_free(&other, alloc);
 		ListU32_free(&snapshot, alloc);
+	}
+
+	// -- Over-aligned elements ------------------------------------------------------------------------
+
+	Test_setModule(t, "List/OverAligned");
+
+	{
+		ListOverAligned l = (ListOverAligned) { 0 };
+
+		Test_assert(t, "stride is over-aligned", sizeof(OverAligned) == 64);
+
+		//Grown one at a time so reserve reallocates repeatedly, which is the alloc-new then free-old pair.
+		//The old buffer is rebuilt from the list's raw pointer at that point, so this is the case that broke.
+
+		Bool alignedThroughout = true;
+
+		for (U64 i = 0; i < 64; ++i) {
+
+			const OverAligned e = (OverAligned) { .v = { i } };
+
+			if(!ListOverAligned_pushBack(&l, e, alloc, e_rr))
+				break;
+
+			alignedThroughout &= !((U64) l.ptr & 63);
+		}
+
+		Test_assert(t, "grew to full length", l.length == 64);
+		Test_assert(t, "stays aligned across reallocation", alignedThroughout);
+		Test_assert(t, "contents survived", l.length == 64 && l.ptr[0].v[0] == 0 && l.ptr[63].v[0] == 63);
+
+		//The free that has to walk back to the real base, rather than handing over the aligned pointer
+
+		ListOverAligned_free(&l, alloc);
+		Test_assert(t, "freed clean", !l.ptr && !l.length);
 	}
 
 	Test_setModule(t, NULL);

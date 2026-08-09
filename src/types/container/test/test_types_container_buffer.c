@@ -28,7 +28,42 @@
 #include "types/container/buffer.h"
 #include "types/base/buffer_base.h"
 #include "types/base/algorithm.h"
+#include "types/base/allocator.h"
 #include "types/base/error.h"
+
+//Wraps another allocator and remembers the last pointer it handed out and the last one it was asked to
+// release, so a test can assert those are the same rather than trusting that nothing crashed.
+
+typedef struct RecordingAllocator {
+	const Allocator *inner;
+	const void *allocPtr, *freedPtr;
+	U64 allocLength, freedLength;
+	I64 live;
+} RecordingAllocator;
+
+static Bool RecordingAllocator_alloc(void *allocator, U64 length, Buffer *output, Error *e_rr) {
+
+	RecordingAllocator *rec = (RecordingAllocator*) allocator;
+
+	if(!rec->inner->alloc(rec->inner->ptr, length, output, e_rr))
+		return false;
+
+	rec->allocPtr = output->ptr;
+	rec->allocLength = Buffer_length(*output);
+	++rec->live;
+	return true;
+}
+
+static void RecordingAllocator_free(void *allocator, Buffer buf) {
+
+	RecordingAllocator *rec = (RecordingAllocator*) allocator;
+
+	rec->freedPtr = buf.ptr;
+	rec->freedLength = Buffer_length(buf);
+	--rec->live;
+
+	rec->inner->free(rec->inner->ptr, buf);
+}
 
 void Test_containerBuffer(Test *t) {
 
@@ -425,6 +460,52 @@ void Test_containerBuffer(Test *t) {
 		));
 
 		Test_assert(t, "nothing leaked on rejection", !bad.ptr);
+	}
+
+	// -- Aligned allocation gives the allocator back exactly what it handed out ----------------------
+
+	//Everything above checks the pointer that comes out.
+	//This checks the one that goes back in, which is the half that actually corrupts the heap when it is wrong:
+	// an aligned buffer points into the middle of a bigger block, so freeing it at face value hands the
+	// allocator an interior pointer with the wrong length.
+	//The tracking allocator in Debug notices, a release build does not, and the damage is silent either way.
+
+	Test_setModule(t, "BufferAlignedFree");
+
+	{
+		RecordingAllocator rec = (RecordingAllocator) { .inner = alloc };
+
+		const Allocator recording = (Allocator) {
+			.ptr = &rec,
+			.alloc = RecordingAllocator_alloc,
+			.free = RecordingAllocator_free
+		};
+
+		//headerOffset varied too, since that shifts where the aligned pointer lands inside the block and so
+		// changes the offset byte that free has to read back.
+
+		const U64 headerOffsets[] = { 0, 16, 24 };
+
+		Bool balanced = true;
+
+		for (U64 alignment = 1; alignment <= BUFFER_ALIGN_MAX; alignment <<= 1)
+			for (U64 h = 0; h < sizeof(headerOffsets) / sizeof(headerOffsets[0]); ++h) {
+
+				Buffer buf = Buffer_createNull();
+
+				if(!Buffer_createEmptyBytesAligned(1 + alignment * 3, alignment, headerOffsets[h], &recording, &buf, NULL))
+					continue;
+
+				rec.freedPtr = NULL;
+				rec.freedLength = 0;
+
+				Buffer_free(&buf, &recording);
+
+				balanced &= rec.freedPtr == rec.allocPtr && rec.freedLength == rec.allocLength;
+			}
+
+		Test_assert(t, "aligned free returns the allocated pointer", balanced);
+		Test_assert(t, "no allocations outstanding", rec.live == 0);
 	}
 
 	Test_setModule(t, NULL);

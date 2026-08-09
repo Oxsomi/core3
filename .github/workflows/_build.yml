@@ -84,6 +84,15 @@ jobs:
     runs-on: ${{ inputs.runner }}
     container: ${{ inputs.container }}
 
+    # github.workflow resolves to the caller's name inside a reusable workflow, which the webhook step at the
+    # bottom already relies on, so this one block gives each of the 30 configurations its own group.
+    # Without it a superseded push leaves 30 jobs running to completion, each writing a cache entry, which is
+    # a large part of why the caches evict each other.
+
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -197,7 +206,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.conan2/p
-          key: ${{ inputs.os }}-${{ inputs.runner }}-${{ inputs.cache_name }}-${{ hashFiles('**/conanfile.py', '**/conanfile.txt') }}
+          # Keyed on the dependency recipes only.
+          # The root conanfile.py describes OxC3 itself and changes constantly, and including it threw away all
+          # 16 groups (~11 GB) on edits that cannot alter a single dependency package id.
+          # The profiles are in because they pin compiler versions: bumping one changes every package id, which
+          # would otherwise hit an unchanged key, find nothing useful, rebuild, and never save.
+          key: ${{ inputs.os }}-${{ inputs.runner }}-${{ inputs.cache_name }}-${{ hashFiles('packages/**/conanfile.py', 'packages/**/conandata.yml', 'packages/conan/profiles/**') }}
           restore-keys: ${{ inputs.os }}-${{ inputs.runner }}-${{ inputs.cache_name }}-
 
       # ── Build: Android ─────────────────────────────────────────────────────
@@ -293,6 +307,21 @@ jobs:
       # Each build.py call resolves its own dependencies,
       # so the order carries no other cost than which run pays for building them.
 
+      # packages/agility_sdk ships the preview Agility SDK, whose D3D12Core.dll is internally named
+      # D3D12CoreRequireDevMode.dll and exports only D3D12SDKVersion 721.
+      # Without Developer Mode CreateDeviceFactory fails for every version dx_instance.c tries, so
+      # GraphicsInstance_create gives up before enumerating a single adapter and the graphics suite skips.
+      # With it, the runner's Microsoft Basic Render Driver shows up and binds the WARP we already deploy next
+      # to the executables, which meets every D3D12 requirement OxC3 asks for.
+
+      - name: Enable Developer Mode (the preview Agility SDK requires it)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $k = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
+          New-Item -Path $k -Force | Out-Null
+          Set-ItemProperty -Path $k -Name AllowDevelopmentWithoutDevLicense -Value 1 -Type DWord
+
       - name: Build Debug
         if: inputs.os != 'android'
         run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True ${{ inputs.build_flags }}
@@ -314,7 +343,10 @@ jobs:
         shell: bash
         run: |
           conan remove "*" --lru=4w -c || true
-          rm -rf ~/.conan2/p/b/*/b
+          # rm -rf ~/.conan2/p/b/*/b only caught build folders.
+          # The dxc source clone under ~/.conan2/p/<recipe>/s is another ~292 MB per recipe revision and rode
+          # along in every save; conan's own command clears source, build, download and temp together.
+          conan cache clean "*" -s -b -d -t -bs || true
 
       # ── Discord notification ───────────────────────────────────────────────
       # continue-on-error, because ~25 jobs fire this at once on every push and Discord throttles some of them.

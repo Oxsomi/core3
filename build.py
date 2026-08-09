@@ -136,11 +136,14 @@ def main():
 		test_mode = args.mode if args.mode is not None else "Release"
 
 		# Per-test wall clock cap.
-		# The slowest test (the shader compiler corpus, in Debug on a CI runner) lands well under a minute,
-		# so anything reaching this is wedged rather than slow,
-		# and without the cap a deadlocked JobQueue just burns the whole job's time budget before anyone finds out.
+		# It used to be sized around the shader compiler corpus, which lands well under a minute, but the
+		# graphics suite now reaches a real device on CI: lavapipe on linux, WARP on windows.
+		# Both are CPU rasterizers on a four vCPU runner, and that suite goes on to create a device, buffers,
+		# command lists and load prebuilt oiSH, so it is now the slowest thing here by some margin.
+		# Anything reaching the cap is still wedged rather than slow, which is the point: without it a
+		# deadlocked JobQueue burns the whole job's time budget before anyone finds out.
 
-		test_timeout = 300
+		test_timeout = 900
 
 		flags = f"-C {test_mode} --output-on-failure --timeout {test_timeout}"
 
