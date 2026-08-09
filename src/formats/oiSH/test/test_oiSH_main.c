@@ -81,6 +81,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileAddBinZeroVendorMask(&t);
 	Test_SHFileAddBinVendorMaskNormalized(&t);
 	Test_SHFileAddBinVendorMaskOutOfBounds(&t);
+	Test_SHVendorMaskWidening(&t);
 	Test_SHFileAddBinInvalidExtensions(&t);
 	Test_SHFileAddBinInvalidStageType(&t);
 	Test_SHFileAddBinShaderVersionOutOfRange(&t);

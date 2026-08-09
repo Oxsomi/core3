@@ -815,7 +815,10 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	if((device->info.capabilities.dataTypes & dataTypes) != dataTypes)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the dataTypes is missing"));
 
-	if(bin->vendorMask != ((1 << ESHVendor_Count) - 1))
+	//Reading an oiSH widens a was-everything mask to today's everything, so this comparison stays exact
+	// however many vendors have been added since the binary was written.
+
+	if(bin->vendorMask != ESHVendor_allMask(ESHVendor_Count))
 		if(!((bin->vendorMask >> device->info.vendor) & 1))
 			retError(clean, Error_invalidState(
 				0, "GraphicsDeviceRef_checkShaderFeatures() binary is incompatible with vendor"

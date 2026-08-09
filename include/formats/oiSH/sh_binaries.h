@@ -176,6 +176,23 @@ typedef enum ESHVendor {
 	ESHVendor_Count
 } ESHVendor;
 
+//All bits below a count, which is how a vendorMask spells "any vendor".
+//writerCount comes from SHHeader::vendorCount, so this is the everything of whoever wrote the file.
+
+static inline U16 ESHVendor_allMask(U16 count) {
+	//0xFFFF spelled out rather than U16_MAX, which lives in constants.h and isn't reachable from here.
+	return count >= 16 ? (U16)0xFFFF : (U16)(((U32)1 << count) - 1);
+}
+
+//Restates an all-vendors mask in terms of the vendors that exist now.
+//A file written before a vendor was added spells everything with fewer bits, and left alone that mask would
+// quietly start excluding the new vendor, refusing a binary its author meant to run anywhere.
+//A mask naming specific vendors is returned untouched: it never claimed to cover ones that did not exist.
+
+static inline U16 ESHVendor_widenMask(U16 mask, U16 writerCount) {
+	return mask == ESHVendor_allMask(writerCount) ? ESHVendor_allMask(ESHVendor_Count) : mask;
+}
+
 typedef enum ESHBinaryFlags {
 
 	ESHBinaryFlags_None                     = 0,

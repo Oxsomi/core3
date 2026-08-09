@@ -54,7 +54,7 @@ typedef struct SHHeader {		//4-byte aligned
 	U16 flags;					//Persisted ESHSettingsFlags (see below); HideMagicNumber is derived, not persisted
 
 	U16 extensionCount;			//ESHExtension_Count of the writer, so newer readers can fix up dormant extensions
-	U16 padding;
+	U16 vendorCount;			//ESHVendor_Count of the writer, so newer readers can widen an all-vendors mask
 
 } SHHeader;
 
@@ -195,7 +195,7 @@ typedef struct BinaryInfoFixedSize {
 	U8 entrypointType;			//See entrypointType section
 	U16 entrypoint;				//U16_MAX if library, otherwise index into stageNames
 
-	U16 vendorMask;				//Bitset of ESHVendor
+	U16 vendorMask;				//Bitset of ESHVendor, all bits below SHHeader::vendorCount means any vendor
 	U8 defineCount;
 	U8 binaryFlags;				//ESHBinaryFlags
 

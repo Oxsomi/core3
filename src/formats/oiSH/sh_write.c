@@ -445,6 +445,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			.uniqueDefines = (U16) defineValStart,
 			.version = ESHVersion_V1_2,
 			.extensionCount = ESHExtension_Count,
+			.vendorCount = ESHVendor_Count,
 			.sizeTypes = sizeTypes,
 			.binaryCount = (U16) shFile->binaries.length,
 			.stageCount = (U16) shFile->entries.length,

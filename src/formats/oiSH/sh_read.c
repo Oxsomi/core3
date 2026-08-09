@@ -96,6 +96,13 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	if(!header.extensionCount || header.extensionCount > 32)
 		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() header.extensionCount is invalid"));
 
+	//Capped at 16 because vendorMask is a U16.
+	//Rejecting zero also catches a file written before this field replaced the header's padding, which would
+	// otherwise read as "the writer knew no vendors" and widen every mask to everything.
+
+	if(!header.vendorCount || header.vendorCount > 16)
+		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() header.vendorCount is invalid"));
+
 	if (!header.stageCount)
 		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() header.stageCount is invalid"));
 
@@ -269,6 +276,12 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			(header.extensionCount >= 32 ? 0 : ~(((U32)1 << header.extensionCount) - 1))
 		);
 
+		//A vendor the writer had never heard of can't have been meant by its mask, so bits above its count are
+		// a corrupt file rather than a forward looking one.
+
+		if (binary.vendorMask & ~ESHVendor_allMask(header.vendorCount))
+			retError(clean, Error_invalidState(1, "SHFile_read() binary had invalid vendorMask"));
+
 		binaryInfo = (SHBinaryInfo){
 
 			.identifier = (SHBinaryIdentifier) {
@@ -278,7 +291,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			},
 
 			.dormantExtensions = (ESHExtension) (binary.dormantExt | autoDormant),
-			.vendorMask = binary.vendorMask,
+			.vendorMask = ESHVendor_widenMask(binary.vendorMask, header.vendorCount),
 			.hasShaderAnnotation = binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation
 		};
 

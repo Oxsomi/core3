@@ -140,7 +140,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 		retError(clean, Error_nullPointer(!shFile ? 0 : 2, "SHFile_addBinary()::binaries->vendorMask is required"));
 
 	if(binaries->vendorMask == U16_MAX)
-		binaries->vendorMask &= (1 << ESHVendor_Count) - 1;
+		binaries->vendorMask &= ESHVendor_allMask(ESHVendor_Count);
 
 	if(binaries->vendorMask >> ESHVendor_Count)
 		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->vendorMask out of bounds"));
@@ -803,7 +803,7 @@ void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Alloca
 		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
-	U16 mask = (1 << ESHVendor_Count) - 1;
+	U16 mask = ESHVendor_allMask(ESHVendor_Count);
 
 	if ((binary->vendorMask & mask) == mask) {
 		if (isVerbose)
