@@ -106,6 +106,8 @@ const C8 *ESHVendor_names[ESHVendor_Count + 1] = {
 	"APPL",
 	"SMSG",
 	"HWEI",
+	"GOGL",
+	"MESA",
 	"Unknown"
 };
 

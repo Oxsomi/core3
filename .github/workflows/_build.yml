@@ -36,6 +36,16 @@ on:
         type: string
         required: false
         default: '31'
+      # The api level of the emulator IMAGE, which is separate from the api level the apk targets.
+      # The guest Vulkan driver ships with the system image, and an older one filters extensions out of
+      # the guest whatever the host driver supports: api 31 has no VK_KHR_synchronization2 for that reason,
+      # not because lavapipe lacks it.
+      # A minSdk 31 apk runs on a newer image quite happily, so this only has to move when the guest
+      # driver is what is holding us back.
+      android_emulator_api:
+        type: string
+        required: false
+        default: '36'
       android_ndk:
         type: string
         required: false
@@ -276,8 +286,10 @@ jobs:
         if: inputs.os == 'android' && inputs.android_run
         uses: reactivecircus/android-emulator-runner@v2.33.0
         with:
-          api-level: ${{ inputs.android_api }}
+          api-level: ${{ inputs.android_emulator_api }}
           arch: x86_64
+          # If the runner reports no such system image, this is the line to change: newer api levels do
+          # not always publish a 'default' variant and want 'google_apis' instead.
           target: default
           force-avd-creation: false
           # -cpu host, because the emulator's default CPU model reports no FMA, no BMI and an empty cpuid leaf 7.

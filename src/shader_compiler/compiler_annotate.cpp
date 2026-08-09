@@ -186,9 +186,9 @@ ESHVendor Compiler_parseVendor(CharString vendor) {
 				case C8x2('A', 'R'):    return vendor.ptr[2] == 'M' ? ESHVendor_ARM : ESHVendor_Count;
 			}
 
-		case 4:        //QCOM, INTC, IMGT, MSFT, APPL, SMSG, HWEI
+		case 4:        //QCOM, INTC, IMGT, MSFT, APPL, SMSG, HWEI, GOGL, MESA
 			switch (Buffer_readU32(buf, 0, NULL, NULL)) {
-				default:                            return ESHVendor_Count;
+				default:                              return ESHVendor_Count;
 				case C8x4('Q', 'C', 'O', 'M'):        return ESHVendor_QCOM;
 				case C8x4('I', 'N', 'T', 'C'):        return ESHVendor_INTC;
 				case C8x4('I', 'M', 'G', 'T'):        return ESHVendor_IMGT;
@@ -196,6 +196,8 @@ ESHVendor Compiler_parseVendor(CharString vendor) {
 				case C8x4('A', 'P', 'P', 'L'):        return ESHVendor_APPL;
 				case C8x4('S', 'M', 'S', 'G'):        return ESHVendor_SMSG;
 				case C8x4('H', 'W', 'E', 'I'):        return ESHVendor_HWEI;
+				case C8x4('G', 'O', 'G', 'L'):        return ESHVendor_GOGL;
+				case C8x4('M', 'E', 'S', 'A'):        return ESHVendor_MESA;
 			}
 	}
 }

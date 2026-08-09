@@ -184,6 +184,8 @@ typedef enum ESHVendor {
 	ESHVendor_APPL,
 	ESHVendor_SMSG,
 	ESHVendor_HWEI,
+	ESHVendor_GOGL,
+	ESHVendor_MESA,
 	ESHVendor_Count
 } ESHVendor;
 

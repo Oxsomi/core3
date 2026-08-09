@@ -377,14 +377,14 @@ class dxc(ConanFile):
 				copy(self, "*.lib", lib_cfg_src, lib_dst)
 				copy(self, "*.lib", alt_lib_cfg_src, lib_dst)
 
-				# Only Debug keeps its pdbs.
+				# Only the configs that exist to be debugged keep their pdbs.
 				# They are 310 of this package's 1085 MB, and with 16 cache groups on a 10 GB repo cap that
 				# difference is the margin between caches surviving and being evicted between pushes.
-				# Nothing steps through an optimized DXC anyway, and -debug_shader_compiler True still gives a
-				# Debug build that carries them.
+				# Release and MinSizeRel are dropped because nothing steps through an optimized DXC with no
+				# debug info asked for; RelWithDebInfo keeps them, since carrying debug info is its entire point.
 				# A missing pdb costs LNK4099, a warning, since /WX is compile-time only (see CMakeLists.txt).
 
-				if config == "Debug":
+				if config in ("Debug", "RelWithDebInfo"):
 					copy(self, "*.pdb", lib_cfg_src, lib_dst)
 					copy(self, "*.pdb", alt_lib_cfg_src, lib_dst)
 
