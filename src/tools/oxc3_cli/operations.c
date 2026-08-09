@@ -84,7 +84,8 @@ const C8 *EOperationHasParameter_names[] = {
 	"-graphics-api",
 	"-type",
 	"-oiCA",
-	"-aes-file"
+	"-aes-file",
+	"-asic"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -107,7 +108,9 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Graphics api to use. Default is either all or the native one depending on command.",
 	"Numeric type (e.g. a float format: F8, F16, F32, F64, BF16, TF19, PXR24, FP24).",
 	"Operate inside the given oiCA archive instead of the working directory.",
-	"Read the 32-byte AES key from a file (64/66-char hex or a raw 32-byte binary) instead of a plaintext argument."
+	"Read the 32-byte AES key from a file (64/66-char hex or a raw 32-byte binary) instead of a plaintext argument.",
+	"Target AMD GPU or architecture for ISA operations: a gfx target or (partial) marketing name, "
+	"e.g. gfx1100 or \"9070 XT\". Use '?' or 'isa devices' to list them."
 };
 
 //Flags
@@ -189,6 +192,10 @@ const C8 *EOperationCategory_names[] = {
 		"graphics",
 	#endif
 
+	#ifdef CLI_RGA
+		"isa",
+	#endif
+
 	"audio",
 
 	"hash",
@@ -212,6 +219,10 @@ const C8 *EOperationCategory_description[] = {
 
 	#ifdef CLI_GRAPHICS
 		"Graphics operations such as showing devices.",
+	#endif
+
+	#ifdef CLI_RGA
+		"AMD ISA analysis via the Radeon GPU Analyzer: list target GPUs and disassemble shaders to ISA.",
 	#endif
 
 	"Audio operations such as showing devices.",
@@ -346,6 +357,10 @@ void Operations_init() {
 			EOperationHasParameter_Output |
 			EOperationHasParameter_Entry | EOperationHasParameter_StartOffset | EOperationHasParameter_Length |
 			EOperationHasParameter_ShaderOutputMode
+			#ifdef CLI_RGA
+				//-asic views an oiSH's SPIR-V binary (-entry + --bin -compile-output spv) as AMD ISA instead
+				| EOperationHasParameter_ISAAsic
+			#endif
 	};
 
 	//File utilities (also work on virtual "//" paths)
@@ -674,6 +689,20 @@ void Operations_init() {
 				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
 		};
 
+		Operation_values[EOperation_ShaderReflectSymbols] = (Operation) {
+			.category = EOperationCategory_Shader,
+			.name = "reflect-symbols",
+			.desc =
+				"Reflect a shader source's frontend symbol AST (entrypoints, user types, resources, scopes) into an oiSR. "
+				"Prints the tree to stdout, or writes an .oiSR with -output.",
+			.func = &CLI_shaderReflectSymbols,
+			.isFormatLess = true,
+			.requiredParameters = EOperationHasParameter_Input,
+			.optionalParameters =
+				EOperationHasParameter_Output | EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir,
+			.operationFlags = EOperationFlags_Debug
+		};
+
 		Operation_values[EOperation_ShaderEntrypoints] = (Operation) {
 			.category = EOperationCategory_Shader,
 			.name = "entrypoints",
@@ -754,6 +783,46 @@ void Operations_init() {
 			.isFormatLess = true,
 
 			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg | EOperationHasParameter_GraphicsApi
+		};
+
+	#endif
+
+	//ISA operations (AMD Radeon GPU Analyzer)
+
+	#ifdef CLI_RGA
+
+		Operation_values[EOperation_ISADevices] = (Operation) {
+
+			.category = EOperationCategory_ISA,
+
+			.name = "devices",
+			.desc = "List the AMD GPUs and architectures the Radeon GPU Analyzer can target.",
+
+			.func = &CLI_isaDevices,
+
+			.isFormatLess = true
+		};
+
+		Operation_values[EOperation_ISADisassemble] = (Operation) {
+
+			.category = EOperationCategory_ISA,
+
+			.name = "disassemble",
+			.desc = "Disassemble a shader to AMD ISA (with VGPR/SGPR/LDS usage) for a chosen ASIC. Input may be "
+				"SPIR-V (.spv) or an oiSH (its SPIR-V binary is extracted; pass -entry to select one). Without "
+				"-output the ISA is printed. DXIL has no offline path here.",
+
+			.func = &CLI_isaDisassemble,
+
+			.isFormatLess = true,
+
+			.requiredParameters = EOperationHasParameter_Input,
+			.optionalParameters =
+				EOperationHasParameter_Output |
+				EOperationHasParameter_ISAAsic | EOperationHasParameter_Entry |
+				EOperationHasParameter_IncludeDir | EOperationHasParameter_ThreadCount,
+
+			.operationFlags = EOperationFlags_Debug | EOperationFlags_Verbose
 		};
 
 	#endif

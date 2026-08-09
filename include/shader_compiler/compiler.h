@@ -22,6 +22,7 @@
 
 #pragma once
 #include "formats/oiSH/sh_file.h"
+#include "formats/oiSR/sr_file.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -302,6 +303,18 @@ Bool Compiler_parse(
 	const CompilerSettings *settings,
 	const Allocator *alloc,
 	CompileResult *result,
+	Error *e_rr
+);
+
+//Walk the frontend HLSL reflection (source-level symbol AST) into a backend-neutral SRFile (oiSR).
+//Unlike Compiler_parse (which keeps only annotated entrypoints), this preserves the full node tree
+// with source locations, so it can drive editor intelligence (semantic highlighting, outline, go-to-definition).
+//Reflection runs on the preprocessed source, so settings->string / defines determine which code paths are visible.
+Bool Compiler_reflect(
+	const Compiler *comp,
+	const CompilerSettings *settings,
+	const Allocator *alloc,
+	SRFile *reflection,
 	Error *e_rr
 );
 

@@ -43,6 +43,7 @@
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiSH/sh_headers.h"
 #include "formats/oiSB/sb_file.h"
+#include "formats/oiSR/sr_file.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
@@ -319,6 +320,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 	CharString path = CharString_createNull();
 	CharString tmp = CharString_createNull();
 	CharString tmp1 = CharString_createNull();
+	Buffer isaText = Buffer_createNull();        //Only used by the oiSH '-asic' ISA view (CLI_RGA)
 
 	const Allocator *alloc = Platform_instance->alloc;
 	RefPtrType fileHandleType = FileHandle_makeType(alloc);
@@ -752,6 +754,32 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 				goto cleanSh;
 			}
 
+			#ifdef CLI_RGA
+
+				//-asic views a shader binary as AMD ISA. '?' just lists devices; a concrete ASIC implies viewing
+				//SPIR-V, so default to --bin + SPIR-V (no -compile-output needed) and let -entry pick the binary.
+
+				CharString isaAsic = CharString_createNull();
+				const Bool hasAsic =
+					ParsedArgs_getArg(args, EOperationHasParameter_ISAAsicShift, &isaAsic, NULL) &&
+					CharString_length(isaAsic);
+
+				if(hasAsic) {
+
+					Bool asicHandled = false;
+					gotoIfError3(cleanSh, CLI_isaResolveAsic(isaAsic, &asicHandled, alloc, e_rr));
+
+					if(asicHandled)        //'?' listed the devices; nothing more to do
+						goto cleanSh;
+
+					binaryMode = true;
+
+					if(binaryType == ESHBinaryType_Count)
+						binaryType = ESHBinaryType_SPIRV;
+				}
+
+			#endif
+
 			if((args->parameters & EOperationHasParameter_Output) && (
 				binaryType == ESHBinaryType_Count ||
 				!binaryMode ||
@@ -764,7 +792,17 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 			U64 count = includesMode ? file.includes.length : (binaryMode ? file.binaries.length : file.entries.length);
 			U64 end = 0;
 
-			if (!(args->parameters & EOperationHasParameter_Entry)) {
+			//A concrete -asic on a single-binary oiSH implies viewing that one binary, so treat it as -entry 0
+
+			Bool doEntry = (args->parameters & EOperationHasParameter_Entry) != 0;
+
+			#ifdef CLI_RGA
+				const Bool asicAutoEntry = hasAsic && !doEntry && binaryMode && count == 1;
+				if(asicAutoEntry)
+					doEntry = true;
+			#endif
+
+			if (!doEntry) {
 
 				if(!length && start < count)
 					length = U64_min(64, count - start);
@@ -772,9 +810,9 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 				end = start + length;
 			}
 
-			if (args->parameters & EOperationHasParameter_Entry) {
+			if (doEntry) {
 
-				//Grab entry
+				//Grab entry (an index into the binaries or entries)
 
 				U64 entryI = 0;
 
@@ -783,7 +821,14 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 					goto cleanSh;
 				}
 
-				if (!CharString_parseU64(entry, &entryI)) {
+				Bool needParse = true;
+
+				#ifdef CLI_RGA
+					if(asicAutoEntry)        //Synthesized entry 0, nothing to parse
+						needParse = false;
+				#endif
+
+				if (needParse && !CharString_parseU64(entry, &entryI)) {
 					Log_errorLnx("Invalid argument -entry <uint> expected.");
 					goto cleanSh;
 				}
@@ -808,6 +853,33 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 							Log_errorLnx("%s binary is missing at index %"PRIu64, ESHBinaryType_names[binaryType], entryI);
 							goto cleanSh;
 						}
+
+						#ifdef CLI_RGA
+
+							//-asic (already validated at the top of this case): SPIR-V has an offline ISA path (rga);
+							//DXIL doesn't (that's the live-AMD-device route), so warn and fall through to DXIL disasm.
+
+							if(hasAsic) {
+
+								if(binaryType != ESHBinaryType_SPIRV)
+									Log_warnLnx(
+										"-asic has no offline ISA path for %s (that needs the live AMD device via 'OxC3 isa'); "
+										"showing %s disassembly instead",
+										ESHBinaryType_names[binaryType], ESHBinaryType_names[binaryType]
+									);
+
+								else {
+
+									gotoIfError3(cleanSh, CLI_isaDisassembleSpirv(binary, isaAsic, &isaText, alloc, e_rr));
+
+									if(!CLI_showFile(args, isaText, start, length, true, true))
+										goto cleanSh;
+
+									goto cleanSh;
+								}
+							}
+
+						#endif
 
 						//Show as disassembly (DXIL or SPIRV disassembly) unless not available
 
@@ -935,6 +1007,37 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 			break;
 		}
 
+		//oiSR file (frontend symbol AST reflection)
+
+		case SRHeader_MAGIC: {
+
+			if(encryptionKey)
+				retError(clean, Error_invalidState(0, "CLI_inspectData() oiSR doesn't have aes support!"));
+
+			SRFile file = (SRFile) { 0 };
+
+			gotoIfError3(cleanSr, MemoryStream_createFromBufferRegion(
+				Buffer_createRefFromBuffer(buf, true), 0, Buffer_length(buf),
+				EMemoryStreamFlags_None, &memoryStreamType, &stream, e_rr
+			));
+
+			U64 srOff = 0;
+			gotoIfError3(cleanSr, SRFile_read(stream, &srOff, false, alloc, &file, e_rr));
+
+			SRFile_print(&file, 0, alloc);
+
+		cleanSr:
+
+			SRFile_free(&file, alloc);
+
+			RefPtr_dec(&stream);
+
+			if(err.genericError)
+				goto clean;
+
+			break;
+		}
+
 		//Invalid
 
 		default:
@@ -951,6 +1054,7 @@ clean:
 
 	RefPtr_dec(&stream);
 	CharString_free(&tmp, alloc);
+	Buffer_free(&isaText, alloc);
 	Buffer_free(&buf, alloc);
 	return s_uccess;
 }

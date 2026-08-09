@@ -34,6 +34,7 @@ Platform_defineEntrypoint() {
 	t.alloc = Platform_instance->alloc;
 
 	Test_shaderCompilerParse(&t);
+	Test_shaderCompilerReflectSR(&t);
 	Test_shaderCompilerAnnotations(&t);
 	Test_shaderCompilerFeatures(&t);
 	Test_shaderCompilerStages(&t);

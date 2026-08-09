@@ -131,6 +131,7 @@ Bool CLI_compileShader(const ParsedArgs *args);
 
 //shader category
 Bool CLI_shaderReflect(const ParsedArgs *args);
+Bool CLI_shaderReflectSymbols(const ParsedArgs *args);
 Bool CLI_shaderEntrypoints(const ParsedArgs *args);
 Bool CLI_shaderIncludes(const ParsedArgs *args);
 Bool CLI_shaderFeatureSet(const ParsedArgs *args);
@@ -139,6 +140,18 @@ Bool CLI_shaderAssemble(const ParsedArgs *args);
 
 Bool CLI_graphicsDevices(const ParsedArgs *args);
 Bool CLI_graphicsCreate(const ParsedArgs *args);
+
+#ifdef CLI_RGA
+	//ISA category (AMD Radeon GPU Analyzer)
+	Bool CLI_isaDevices(const ParsedArgs *args);
+	Bool CLI_isaDisassemble(const ParsedArgs *args);
+
+	//Reusable core so other paths (e.g. 'file data' on an oiSH) can view a SPIR-V blob as AMD ISA.
+	//CLI_isaResolveAsic prints the device list when `asic` is "?" (sets *handled) or unknown (errors).
+
+	Bool CLI_isaResolveAsic(CharString asic, Bool *handled, const Allocator *alloc, Error *e_rr);
+	Bool CLI_isaDisassembleSpirv(Buffer spirv, CharString asic, Buffer *isaOut, const Allocator *alloc, Error *e_rr);
+#endif
 
 Bool CLI_audioDevices(const ParsedArgs *args);
 Bool CLI_audioConvert(const ParsedArgs *args);

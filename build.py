@@ -209,6 +209,11 @@ def main():
 
 		conan_create_if_changed("packages/agility_sdk",        profile_for_mode(mode), mode, pa, cache)
 		conan_create_if_changed("packages/nvapi",              profile_for_mode(mode), mode, pa, cache)
+
+		# RGA is a tool package (settings = os/arch only), so it builds once regardless of mode;
+		# the hash cache makes the repeat calls free. Windows/Linux x64 only (vendored AMD compilers).
+		if system in ("Windows", "Linux") and conan_arch == "x86_64":
+			conan_create_if_changed("packages/radeon_gpu_analyzer", profile_for_mode(mode), mode, pa, cache)
 		conan_create_if_changed("packages/vulkan_headers",     profile_for_mode(mode), mode, pa, cache)
 		conan_create_if_changed("packages/spirv_reflect",      profile_for_mode(mode), mode, pa, cache)
 		conan_create_if_changed("packages/dxc",                profile_for_mode(mode), mode, pa, cache)

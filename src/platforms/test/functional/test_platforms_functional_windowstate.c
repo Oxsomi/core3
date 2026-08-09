@@ -620,6 +620,8 @@ static void Test_maximize(Test *t) {
 			I32x2_x(w->size) > I32x2_x(originalSize) ||
 			I32x2_y(w->size) > I32x2_y(originalSize)
 		);
+	#else
+		(void) originalSize;
 	#endif
 
 	pump(VISUAL_HOLD_NS);

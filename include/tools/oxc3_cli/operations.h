@@ -64,6 +64,8 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_AESFileShift,             //-aes-file: read the AES key from a file instead of argv
 
+	EOperationHasParameter_ISAAsicShift,             //-asic: target AMD GPU/architecture for RGA ISA operations
+
 	EOperationHasParameter_CountEnum,                //How many enums there are
 
 	EOperationHasParameter_Start                     = EOperationHasParameter_FileFormatShift,
@@ -102,6 +104,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_oiCA                      = 1 << EOperationHasParameter_oiCAShift,
 
 	EOperationHasParameter_AESFile                   = 1 << EOperationHasParameter_AESFileShift,
+
+	EOperationHasParameter_ISAAsic                   = 1 << EOperationHasParameter_ISAAsicShift,
 
 	//The two parameter key sources (-aes / -aes-file); --aes-stdin is a flag (EOperationFlags_AESStdin), so a
 	//"any key source present" test must also check that flag separately.
@@ -238,6 +242,7 @@ typedef enum EOperation {
 
 		EOperation_ShaderCompile,
 		EOperation_ShaderReflect,
+		EOperation_ShaderReflectSymbols,
 		EOperation_ShaderEntrypoints,
 		EOperation_ShaderIncludes,
 		EOperation_ShaderFeatureSet,
@@ -249,6 +254,9 @@ typedef enum EOperation {
 
 	EOperation_GraphicsDevices,
 	EOperation_GraphicsCreateDevice,        //Attempts to create a device for testing
+
+	EOperation_ISADevices,                  //List AMD GPUs/architectures RGA can target
+	EOperation_ISADisassemble,              //Disassemble SPIR-V (or HLSL) to AMD ISA for a chosen ASIC
 
 	EOperation_AudioDevices,
 	EOperation_AudioConvert,
@@ -299,6 +307,10 @@ typedef enum EOperationCategory {
 
 	#ifdef CLI_GRAPHICS
 		EOperationCategory_Graphics,
+	#endif
+
+	#ifdef CLI_RGA
+		EOperationCategory_ISA,             //AMD ISA analysis via the Radeon GPU Analyzer (RGA) tool
 	#endif
 
 	EOperationCategory_Audio,

@@ -634,7 +634,7 @@ Bool Compiler_registerUniform(
 	CharString uniformName = CharString_createNull();
 	CharString tmp = CharString_createNull();
 
-	SHValue value = SHValue{ 0 };
+	SHValue value = SHValue{ { 0 } };
 	U64 dstOff = 0;
 	U64 valLen = 0;
 	U64 uniformDatLen = entry.uniformData.length;
@@ -654,7 +654,7 @@ Bool Compiler_registerUniform(
 	uniformType = CharString_createRefSizedConst(idenStart, str - idenStart, false);
 	typeId = ETypeId_parse(uniformType);
 
-	if (typeId == ETypeId_Undefined || typeId == ETypeId_C8)
+	if (typeId == ETypeId_Undefined || typeId == (TypeId) ETypeId_C8)
 		retError(clean, Error_invalidState(
 			0,
 			"Compiler_registerUniform() invalid syntax, expected type = ((U/I/F)(8/16/32/64)/B)"
@@ -1259,7 +1259,327 @@ clean:
 		CompileResult_free(result, alloc);
 
 	SHEntryRuntime_free(&runtimeEntry, alloc);
-	
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		ListU16_free(&tmpWStr, alloc);
+	#else
+		ListU32_free(&tmpWStr, alloc);
+	#endif
+
+	Compiler_freeStrings;
+	CharString_free(&tmp, alloc);
+	ListCharString_freeUnderlying(&stringsUTF8, alloc);
+	return s_uccess;
+}
+
+//Map a single frontend AST node (and its symbol + annotations) into the neutral SRFile model.
+//The DXC node id and the SRFile node index are kept identical, so parent/child indices carry over directly.
+
+static Bool Compiler_reflectNode(
+	IHLSLReflectionData *reflectionData,
+	U32 nodeId,
+	U32 nodeCount,
+	Bool hasSymbols,
+	SRFile *reflection,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+	//All locals are declared up front: gotoIfError3 jumps to clean, and C++ forbids skipping initializers in scope there.
+
+	Bool s_uccess = true;
+	HRESULT hr = S_OK;
+
+	D3D12_HLSL_NODE nodeDesc;
+	D3D12_HLSL_NODE_SYMBOL symDesc;
+
+	U32 nameId = U32_MAX, semanticId = U32_MAX, fileNameId = U32_MAX;
+	U32 annotationStart = 0;
+
+	SRNode srNode = SRNode{};
+	SRSymbol srSym = SRSymbol{};
+
+	CharString nameStr = CharString_createNull();
+	CharString semStr = CharString_createNull();
+	CharString fileStr = CharString_createNull();
+
+	if (FAILED(hr = reflectionData->GetNodeDesc(nodeId, &nodeDesc)))
+		retError(clean, Error_invalidState(0, "Compiler_reflectNode() failed to get node desc"));
+
+	//Names come from the symbol tier, so they're empty strings when symbols are stripped (-> U32_MAX)
+
+	nameStr = CharString_createRefCStrConst(nodeDesc.Name ? nodeDesc.Name : "");
+	gotoIfError3(clean, SRFile_addString(reflection, &nameStr, alloc, &nameId, e_rr));
+
+	semStr = CharString_createRefCStrConst(nodeDesc.Semantic ? nodeDesc.Semantic : "");
+	gotoIfError3(clean, SRFile_addString(reflection, &semStr, alloc, &semanticId, e_rr));
+
+	//Annotations for this node, appended contiguously into the shared annotation table
+
+	annotationStart = (U32) reflection->annotations.length;
+
+	if (nodeDesc.AnnotationCount > U16_MAX)
+		retError(clean, Error_invalidState(0, "Compiler_reflectNode() node has too many annotations"));
+
+	for (U32 j = 0; j < nodeDesc.AnnotationCount; ++j) {
+
+		D3D12_HLSL_ANNOTATION annot;
+
+		if (FAILED(hr = reflectionData->GetAnnotationByIndex(nodeId, j, &annot)))
+			retError(clean, Error_invalidState(0, "Compiler_reflectNode() failed to get annotation"));
+
+		U32 annotNameId = U32_MAX;
+		CharString annotStr = CharString_createRefCStrConst(annot.Name ? annot.Name : "");
+		gotoIfError3(clean, SRFile_addString(reflection, &annotStr, alloc, &annotNameId, e_rr));
+
+		SRAnnotation srAnnot = SRAnnotation{};
+		srAnnot.nameId = annotNameId;
+		srAnnot.isBuiltin = annot.IsBuiltin ? 1 : 0;
+
+		gotoIfError3(clean, ListSRAnnotation_pushBack(&reflection->annotations, srAnnot, alloc, e_rr));
+	}
+
+	//Node itself. Root parent (0xFFFF) and "no fwd/back declare" (UINT_MAX) map to our U32_MAX sentinel.
+
+	srNode.nameId = nameId;
+	srNode.semanticId = semanticId;
+	srNode.localId = nodeDesc.LocalId;
+	srNode.parent = (nodeDesc.Parent == U16_MAX || nodeDesc.Parent >= nodeCount) ? U32_MAX : nodeDesc.Parent;
+	srNode.fwdBckDeclareNode = nodeDesc.FwdBckDeclareNode >= nodeCount ? U32_MAX : nodeDesc.FwdBckDeclareNode;
+	srNode.childCount = nodeDesc.ChildCount;
+	srNode.annotationStart = nodeDesc.AnnotationCount ? annotationStart : U32_MAX;
+	srNode.annotationCount = (U16) nodeDesc.AnnotationCount;
+	srNode.type = (U8)(nodeDesc.Type & 0x7F);        //Mask the fwd-declare reserved bit (1 << 7), tracked via flags below
+	srNode.interpolation =
+		(U32) nodeDesc.InterpolationMode < (U32) ESRInterpolation_Count ? (U8) nodeDesc.InterpolationMode : 0;
+	srNode.flags = (U8)(nodeDesc.IsFwdDeclare ? ESRNodeFlag_IsFwdDeclare : ESRNodeFlag_None);
+
+	if (srNode.type >= ESRNodeType_Count)
+		retError(clean, Error_invalidState(0, "Compiler_reflectNode() node had an unrecognized type"));
+
+	gotoIfError3(clean, ListSRNode_pushBack(&reflection->nodes, srNode, alloc, e_rr));
+
+	//Symbol (kept parallel to nodes)
+
+	if (hasSymbols) {
+
+		if (FAILED(hr = reflectionData->GetNodeSymbolDesc(nodeId, &symDesc)))
+			retError(clean, Error_invalidState(0, "Compiler_reflectNode() failed to get node symbol desc"));
+
+		fileStr = CharString_createRefCStrConst(symDesc.FileName ? symDesc.FileName : "");
+		gotoIfError3(clean, SRFile_addString(reflection, &fileStr, alloc, &fileNameId, e_rr));
+
+		srSym.fileNameId = fileNameId;
+		srSym.line = symDesc.LineId;
+		srSym.lineCount = symDesc.LineCount;
+		srSym.columnStart = symDesc.ColumnStart;
+		srSym.columnEnd = symDesc.ColumnEnd;
+
+		gotoIfError3(clean, ListSRSymbol_pushBack(&reflection->symbols, srSym, alloc, e_rr));
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_reflect(
+	const Compiler *comp,
+	const CompilerSettings *settings,
+	const Allocator *alloc,
+	SRFile *reflection,
+	Error *e_rr
+) {
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		ListU16 tmpWStr = ListU16{};
+	#else
+		ListU32 tmpWStr = ListU32{};
+	#endif
+
+	CharString tmp = CharString_createNull();
+	Bool s_uccess = true;
+	Bool allocatedSR = false;
+
+	CompilerInterfaces *interfaces = nullptr;
+
+	Bool hasErrors = false;
+	ListCompileError compileErrors = ListCompileError{};
+
+	OxComPtr<IDxcResult> hlslReflectRes;
+	OxComPtr<IDxcBlob> reflectBinary;
+	OxComPtr<IHLSLReflectionData> reflectionData;
+	OxComPtr<IDxcBlobEncoding> source;
+	D3D12_HLSL_REFLECTION_DESC reflDesc;
+	HRESULT hr = S_OK;
+
+	ListCharString stringsUTF8 = ListCharString{};
+	Compiler_defineStrings;
+
+	if (!reflection)
+		retError(clean, Error_nullPointer(3, "Compiler_reflect()::reflection is required"));
+
+	if (reflection->nodes.length || reflection->names.entryStrings.length)
+		retError(clean, Error_invalidOperation(0, "Compiler_reflect()::reflection isn't empty, might indicate memleak"));
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		gotoIfError3(clean, CharString_toUTF16(settings->path, alloc, &tmpWStr, e_rr));
+	#else
+		gotoIfError3(clean, CharString_toUTF32(settings->path, alloc, &tmpWStr, e_rr));
+	#endif
+
+	interfaces = (CompilerInterfaces*)comp->interfaces;
+
+	if (!interfaces->reflector || !interfaces->utils)
+		retError(clean, Error_nullPointer(3, "Compiler_reflect()::interfaces->reflector & utils are required"));
+
+	if (!CharString_length(settings->string))
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_reflect()::settings->string is required"));
+
+	if (CharString_length(settings->string) >> 32)
+		retError(clean, Error_invalidOperation(0, "Compiler_reflect() string out of bounds"));
+
+	hr = interfaces->utils->CreateBlobFromPinned(
+		settings->string.ptr, (U32) CharString_length(settings->string), DXC_CP_UTF8, &source
+	);
+
+	if (FAILED(hr))
+		retError(clean, Error_invalidState(0, "Compiler_reflect() source couldn't be wrapped into IDxcBlobEncoding"));
+
+	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr));
+
+	//Same reflection setup as Compiler_parse, but we deliberately DON'T pass -reflect-functions.
+	//That flag narrows the reflector to the functions-only feature mask; omitting every -reflect-* narrowing flag
+	// makes it default to the full mask (all node categories), and symbols (names + file/line/column) stay on.
+	//That full tree with locations is exactly what editor intelligence needs.
+
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-payload-qualifiers", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "lib_6_10", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_PREPROCESS", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_EXT_RAYTRACING", alloc, e_rr));
+
+	//Format major, minor, patch and version
+
+	{
+		static const C8 *formats[] = {
+			"-D__OXC_MAJOR=%" PRIu64,
+			"-D__OXC_MINOR=%" PRIu64,
+			"-D__OXC_PATCH=%" PRIu64,
+			"-D__OXC_VERSION=%" PRIu64,
+		};
+
+		static const U64 formatInts[] = {
+			OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH, OXC3_VERSION
+		};
+
+		for (U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
+			gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, formats[i], formatInts[i]));
+			gotoIfError3(clean, ListCharString_pushBack(&stringsUTF8, tmp, alloc, e_rr));
+			tmp = CharString_createNull();
+		}
+	}
+
+	//__OXC_EXT_<X> foreach extension
+
+	for (U32 i = 0; i < ESHExtension_Count; ++i) {
+		gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "-D__OXC_EXT_%s", ESHExtension_defines[i]));
+		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
+		tmp = CharString_createNull();
+	}
+
+	//Reflect at the highest shader model (a SM6.10 library) so every feature is available (see Compiler_parse)
+
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "lib_6_10", alloc, e_rr));
+
+	Compiler_convertToWString(stringsUTF8, clean);
+
+	Compiler_resetIncludeHandler(interfaces->includeHandler);
+
+	hr = interfaces->reflector->FromSource(
+		source,
+		(const wchar_t*)tmpWStr.ptr,
+		(LPCWSTR*) strings.ptr, U32(strings.length),
+		nullptr, 0,
+		Compiler_getIncludeHandler(interfaces->includeHandler),
+		&hlslReflectRes
+	);
+
+	if (hlslReflectRes) {
+
+		OxComPtr<IDxcBlobUtf8> err;
+		hr = hlslReflectRes->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&err), NULL);
+
+		if (FAILED(hr))
+			retError(clean, Error_invalidState(1, "Compiler_reflect() fetch errors failed"));
+
+		if (err && err->GetStringLength()) {
+			CharString errs = CharString_createRefSizedConst(err->GetStringPointer(), err->GetStringLength(), false);
+			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &compileErrors, &hasErrors, e_rr));
+		}
+	}
+
+	if (hasErrors)
+		retError(clean, Error_invalidState(0, "Compiler_reflect() source had compile errors"));
+
+	if (FAILED(hr) || !hlslReflectRes)
+		retError(clean, Error_invalidState(0, "Compiler_reflect() failed to call IHLSLReflector::FromSource"));
+
+	hr = hlslReflectRes->GetResult(&reflectBinary);
+
+	if (FAILED(hr) || !reflectBinary)
+		retError(clean, Error_invalidState(0, "Compiler_reflect() failed to get result binary"));
+
+	hr = interfaces->reflector->FromBlob(reflectBinary, &reflectionData);
+
+	if (FAILED(hr))
+		retError(clean, Error_invalidState(0, "Compiler_reflect() failed to deserialize result binary"));
+
+	if (FAILED(hr = reflectionData->GetDesc(&reflDesc)))
+		retError(clean, Error_invalidState(0, "Compiler_reflect() failed to get reflection desc"));
+
+	//Build the SRFile: the reflector's feature bits map bit-for-bit onto ESRFeature.
+
+	{
+		//The source-location tier (file/line/column via GetNodeSymbolDesc) is temporarily gated off.
+		//The fork's public GetNodeSymbolDesc dereferences Sources[GetFileSourceId()] without guarding the
+		// "no file" sentinel (uint16_t(-1)), so it access-violates on synthetic nodes (e.g. builtins).
+		//The fix is in the fork (dxcreflection/dxcreflector.cpp GetNodeSymbolDesc, now guarded by HasFileSource);
+		// once the dxc package is rebuilt with it, set reflectSymbols = (reflDesc.Features & ..._SYMBOL_INFO).
+		//Names/semantics/tree/annotations are unaffected: names come from GetNodeDesc, which is already safe.
+
+		Bool reflectSymbols = false;
+
+		U32 features = (U32) reflDesc.Features;
+
+		if (!reflectSymbols)
+			features &= ~(U32) ESRFeature_SymbolInfo;
+
+		gotoIfError3(clean, SRFile_create(
+			reflectSymbols ? ESRSettingsFlags_HasSymbols : ESRSettingsFlags_None,
+			features,
+			alloc, reflection, e_rr
+		));
+		allocatedSR = true;
+
+		for (U32 i = 0; i < reflDesc.NodeCount; ++i)
+			gotoIfError3(clean, Compiler_reflectNode(
+				reflectionData, i, reflDesc.NodeCount, reflectSymbols, reflection, alloc, e_rr
+			));
+
+		gotoIfError3(clean, SRFile_finalize(reflection, alloc, e_rr));
+	}
+
+clean:
+
+	if (!s_uccess && allocatedSR && reflection)
+		SRFile_free(reflection, alloc);
+
+	ListCompileError_freeUnderlying(&compileErrors, alloc);
+
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 		ListU16_free(&tmpWStr, alloc);
 	#else

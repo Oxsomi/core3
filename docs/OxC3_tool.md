@@ -7,6 +7,7 @@ The OxC3 tool is intended to handle all operations required for Oxsomi core3. Th
 - Conversions between file formats.
 - Packaging a project.
 - Compiling shaders.
+- Viewing device-specific shader assembly (AMD ISA via RGA).
 - Showing CPU, GPU and audio device info.
 - Inspecting a file (printing the header and other important information).
 - Encryption.
@@ -364,17 +365,27 @@ With `-entry <offset or path>` a specific entry can be viewed. If an entry is sp
 
 For oiSH files, it is possible to supply `--bin` can be used  to fetch the binary instead of the entrypoints. Since an oiSH file can have more than one binary embedded in it. Not supplying an entry offset will behave as usual; showing all binaries. Supplying an entry offset and --bin will show that specific binary. To see the actual compiled binary, `-compile-output` can be used to obtain the specific information (for example DXIL or SPV binary). Example: `file data -input test.oiSH --bin -compile-output DXIL -entry 0` will show the DXIL binary at compiled entry 0 if available. This can still be used with `-start`, `-length` and `-output` to easily read & export binaries from an oiSH file.
 
-#### View device specific assembly
+On a build with RGA (see the ISA section), `-asic <asic>` views an oiSH binary's SPIR-V as AMD ISA instead of the raw/disassembled binary: `file data -input test.oiSH -asic gfx1100`. `-asic` implies `--bin` + SPIR-V, so `-compile-output` isn't needed. `-entry <index>` picks the binary; it may be omitted when there's a single binary (and without it on a multi-binary oiSH the binaries are listed so you can choose an index). `-asic ?` lists devices, and a DXIL-only binary warns and falls back to DXIL disassembly.
 
-Some vendors allow viewing the intermediate shaders as device-dependent assembly. This can help view bottlenecks that might not be easy to figure out otherwise, as DXIL/SPIRV might hide these device dependent bottlenecks.
+## ISA (device-specific assembly)
 
-The following can be compiled through special offline compiler tools:
+Some vendors allow viewing the intermediate shader as device-dependent assembly. This can help spot bottlenecks that DXIL/SPIRV hide, since those are device-independent.
 
-- (spv or DXIL) + AMD: [Radeon GPU analyzer](https://github.com/GPUOpen-Tools/radeon_gpu_analyzer).
-- (spv or DXIL) + Qualcomm: [Qualcomm adreno GPU offline compiler](https://qpm.qualcomm.com/#/main/tools/details/Adreno_GPU_Offline_Compiler).
-- spv + Mali: [Mali offline compiler](https://developer.arm.com/documentation/101863/0804/Using-Mali-Offline-Compiler/Compiling-Vulkan-shaders).
+OxC3 integrates AMD's [Radeon GPU Analyzer](https://github.com/GPUOpen-Tools/radeon_gpu_analyzer) (RGA) for this, exposed under the `isa` category. It is only available when OxC3 is built with the shader compiler and on a platform where RGA ships (currently Windows/Linux x64). RGA is discovered next to OxC3 (an `rga/` folder placed there by the build) or on `PATH`, so a normal build needs no separate install step.
 
-- Intel's shader compiler: doesn't support SM6+, so not supported. However, the Intel profiler itself does have a view for the new assembly.
+- `OxC3 isa devices`: list the AMD ASICs RGA knows about, grouped by architecture (each `gfxNNNN (Arch)` line is followed by its marketing names). Either form can be used as an `-asic`.
+- `OxC3 isa disassemble -input <file.spv|.oiSH> -asic <asic>`: disassemble a shader to AMD ISA for `asic`, prepended with a register/resource-usage summary (VGPRs, SGPRs, LDS, scratch, spills, ISA size) parsed from RGA's analysis. Without `-output` the result is printed; with `-output <file>` it is written there.
+  - `-input` is a standalone SPIR-V (`.spv`) or an oiSH (its SPIR-V binary is extracted). When the oiSH holds more than one binary, pass `-entry <index>` to pick one; with a single SPIR-V binary `-entry` may be omitted. `-entry` is a **binary index**, not an entrypoint name — a name alone is ambiguous because the same name can occur several times with different uniforms/defines/extensions. List the indices with `OxC3 file data -input <oiSH> --bin`.
+  - `-asic` takes a gfx target or a (partial) marketing name, e.g. `gfx1100` or `"9070 XT"`. Pass `-asic ?` (or run `isa devices`) to list them; a missing or unrecognized ASIC also prints the list so you can pick a valid one.
+  - DXIL has no offline path here: offline AMD ISA is derived from SPIR-V only. DXIL requires a live AMD device (a future addition).
+
+The same ISA view is available inline from `file data` on an oiSH (see below): `file data -input <file.oiSH> -asic <asic>` shows a binary's SPIR-V as AMD ISA. Because `-asic` implies viewing SPIR-V, `--bin`/`-compile-output` aren't needed; with a single binary `-entry` is optional, otherwise pass `-entry <index>`. `-asic ?` lists devices; a DXIL-only binary warns and falls back to DXIL disassembly.
+
+Other vendors' offline compilers aren't integrated yet (view them manually for now):
+
+- (spv or DXIL) + Qualcomm: [Qualcomm Adreno GPU Offline Compiler](https://qpm.qualcomm.com/#/main/tools/details/Adreno_GPU_Offline_Compiler).
+- spv + Mali: [Mali Offline Compiler](https://developer.arm.com/documentation/101863/0804/Using-Mali-Offline-Compiler/Compiling-Vulkan-shaders).
+- Intel's shader compiler doesn't support SM6+, so it isn't supported; the Intel profiler itself does have a view for the new assembly.
 
 ## Encrypt
 

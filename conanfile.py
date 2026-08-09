@@ -130,6 +130,12 @@ class oxc3(ConanFile):
 			self.requires("dxc/2026.08.01")
 			self.requires("spirv_reflect/2026.07.29")
 
+			# RGA (CLI tool): offline shader-to-AMD-ISA analysis + device/architecture enumeration.
+			# Only exists where the vendored AMD offline compilers do (Windows/Linux x64); run=True so the
+			# tool's bin dir reaches the run environment (RGA_PATH/PATH) for tests and the OxC3 CLI.
+			if self.settings.os in ("Windows", "Linux") and self.settings.arch == "x86_64":
+				self.requires("radeon_gpu_analyzer/2026.08.02", run=True)
+
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")
 			self.requires("xdg_decoration/2024.12.22")
