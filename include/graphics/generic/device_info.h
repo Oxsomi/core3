@@ -70,7 +70,12 @@ typedef enum EGraphicsVendorPCIE {
 	EGraphicsVendorPCIE_MESA    = 0x10005
 } EGraphicsVendorPCIE;
 
-static const U16 EGraphicsVendor_PCIE[] = {        //The PCIE ids of the vendors, so they can be easily detected
+//The vendor ids, in EGraphicsVendorId order, so a reported id can be turned into one by index.
+//U32 rather than U16 because not every id is a PCI id: Khronos hands out its own above 0x10000 for vendors
+// with no PCI presence, and Mesa's 0x10005 truncates to 5 in 16 bits, which clang catches as an error.
+//QCOM2 is deliberately absent, being a second id for a vendor already listed rather than another vendor.
+
+static const U32 EGraphicsVendor_PCIE[] = {
 	EGraphicsVendorPCIE_NV,
 	EGraphicsVendorPCIE_AMD,
 	EGraphicsVendorPCIE_ARM,
