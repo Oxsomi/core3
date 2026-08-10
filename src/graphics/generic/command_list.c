@@ -143,6 +143,14 @@ Bool CommandListRef_end(CommandListRef *commandListRef, Error *e_rr) {
 	if (commandList->tempStateFlags & ECommandStateFlags_HasScope)
 		retError(clean, Error_invalidState(0, "CommandListRef_end() can't be called if a scope is open"));
 
+	//A failing startScope assigns InvalidState rather than or-ing it, so it clears HasScope as a side effect and the
+	// check above can't see a scope that broke instead of closing.
+	//That scope already appended its StartScope op and nothing rewinds it, so closing here would hand submit a
+	// recording with a StartScope that has no EndScope and never reached activeScopes.
+
+	if (commandList->tempStateFlags & ECommandStateFlags_InvalidState)
+		retError(clean, Error_invalidState(1, "CommandListRef_end() can't close a recording that was invalidated"));
+
 	gotoIfError3(clean, ListRefPtr_reserve(&commandList->resources, commandList->transitions.length, alloc, e_rr));
 
 	for (U64 i = 0; i < commandList->transitions.length; ++i) {

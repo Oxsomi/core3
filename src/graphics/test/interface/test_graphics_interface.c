@@ -43,8 +43,10 @@
 // 11. DescriptorLayout   - explicit binding set, layout/table invariants, parameter validation
 // 12. Bindless           - allocate / free / reuse a descriptor in the device's default table
 // 13. DeviceBuffer       - ExposeBindlessRead/Write only take a descriptor when asked
-// 14. CommandList        - create + free, parameter validation
 // 16. Submit             - begin/end state machine, empty frame submit (the only path that binds descriptors)
+//
+//CommandList lifecycle, recording and scopes live in test_graphics_command_list.c; they're the largest untested
+// surface in the module, so they get their own file to grow in.
 //
 //Numbering follows the order the modules were added, not the order they run in.
 //
@@ -79,6 +81,7 @@
 #include "types/container/buffer.h"
 #include "types/base/string_base.h"
 #include "types/base/error.h"
+#include "test_graphics_shared.h"
 
 // -- 1. GraphicsInterface ------------------------------------------------------
 
@@ -981,43 +984,6 @@ clean:
 	RefPtr_dec(&plain);
 }
 
-// -- 14. CommandList -------------------------------------------------------------
-
-//Recording is what the functional tests cover; this is lifecycle and parameter validation only.
-
-static void Test_graphicsCommandList(Test *t, GraphicsDeviceRef *deviceRef) {
-
-	Test_setModule(t, "CommandList");
-
-	CommandListRef *commandList = NULL;
-
-	Test_assert(t, "createNullDevice", !GraphicsDeviceRef_createCommandList(
-		NULL, 2 * KIBI, 128, 64, true, &commandList, NULL
-	));
-
-	Test_assert(t, "createNullOut", !GraphicsDeviceRef_createCommandList(deviceRef, 2 * KIBI, 128, 64, true, NULL, NULL));
-	Test_assert(t, "rejectedNothing", !commandList);
-
-	if(!Test_assert(t, "create", GraphicsDeviceRef_createCommandList(
-		deviceRef, 2 * KIBI, 128, 64, true, &commandList, &t->err
-	)))
-		return;
-
-	Test_assert(t, "typeId", commandList->refPtrType->typeId == (TypeId) EGraphicsTypeId_CommandList);
-
-	const CommandList *listPtr = CommandListRef_ptr(commandList);
-
-	Test_assert(t, "device", listPtr->device == deviceRef);
-	Test_assert(t, "size", Buffer_length(listPtr->data) == 2 * KIBI);
-	Test_assert(t, "allowResize", listPtr->allowResize);
-	Test_assert(t, "stateNew", listPtr->state == ECommandListState_New);
-	Test_assert(t, "noCommands", !listPtr->commandOps.length);
-	Test_assert(t, "noResources", !listPtr->resources.length);
-
-	RefPtr_dec(&commandList);
-	Test_assert(t, "freeNulled", !commandList);
-}
-
 // -- 16. Submit ------------------------------------------------------------------
 
 //Submit is the only path that reaches GraphicsDevice_rebindDescriptors, which binds the descriptor tables and the
@@ -1194,6 +1160,7 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	Test_graphicsBindlessDescriptor(t, deviceRef);
 	Test_graphicsBufferBindless(t, deviceRef);
 	Test_graphicsCommandList(t, deviceRef);
+	Test_graphicsCommandRecording(t, deviceRef);
 	Test_graphicsSubmit(t, deviceRef);
 
 clean:
@@ -1265,7 +1232,7 @@ static void Test_graphicsNullDevice(Test *t) {
 	));
 
 	Test_assert(t, "renderTexture", !GraphicsDeviceRef_createRenderTexture(
-		NULL, ETextureType_2D, 1, 1, 0, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		NULL, ETextureType_2D, 1, 1, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
 		EMSAASamples_Off, NULL, &name, &renderTexture, NULL
 	));
 

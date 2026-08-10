@@ -35,6 +35,7 @@
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "types/container/string.h"
+#include "types/base/string_read_helper.h"
 #include "platforms/logx.h"
 #include "platforms/platform.h"
 #include "platforms/window.h"
@@ -61,6 +62,10 @@ TList(VkQueueFamilyProperties);
 TListImpl(VkDeviceQueueCreateInfo);
 TListImpl(VkQueueFamilyProperties);
 
+//Declared only, since vk_instance.c in the same library provides the implementation.
+
+TList(VkExtensionProperties);
+
 TListImpl(VkDescriptorBufferInfo);
 TListImpl(VkDescriptorImageInfo);
 TListImpl(VkAccelerationStructureKHR);
@@ -75,6 +80,49 @@ TListImpl(VkDescriptorTableRange);
 																								\
 	*(void**)&result = (void*) v;                                                               \
 } (void) 0
+
+//Names the extensions vkCreateDevice refused, since it only reports that one of them was missing.
+//Most are requested because the device advertised them, but the raytracing, render pass and depth stencil resolve
+// ones are requested off a feature bit instead, so those can be asked for on a device that never offered them.
+
+static Bool VkGraphicsDevice_logMissingExtensions(
+	const VkGraphicsInstance *instanceExt,
+	VkPhysicalDevice physicalDevice,
+	const ListConstC8 *requested,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ListVkExtensionProperties supported = (ListVkExtensionProperties) { 0 };
+	U32 count = 0;
+
+	gotoIfError3(clean, checkVkError(
+		instanceExt->enumerateDeviceExtensionProperties(physicalDevice, NULL, &count, NULL), e_rr
+	));
+
+	gotoIfError3(clean, ListVkExtensionProperties_resize(&supported, count, alloc, e_rr));
+
+	gotoIfError3(clean, checkVkError(
+		instanceExt->enumerateDeviceExtensionProperties(physicalDevice, NULL, &count, supported.ptrNonConst), e_rr
+	));
+
+	for (U64 i = 0; i < requested->length; ++i) {
+
+		const CharString name = CharString_createRefCStrConst(requested->ptr[i]);
+		Bool found = false;
+
+		for (U64 j = 0; j < supported.length && !found; ++j)
+			found = CharString_equalsCStringSensitive(&name, supported.ptr[j].extensionName);
+
+		if(!found)
+			Log_errorLnx("Vulkan: vkCreateDevice() requires %s, which this device doesn't support", requested->ptr[i]);
+	}
+
+clean:
+	ListVkExtensionProperties_free(&supported, alloc);
+	return s_uccess;
+}
 
 Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	const GraphicsInstance *instance,
@@ -581,10 +629,17 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			Log_debugLnx("\t%s", extensions.ptr[i]);
 	}
 
-	gotoIfError3(clean, checkVkError(
-		instanceExt->createDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device),
-		e_rr
-	));
+	const VkResult createResult = instanceExt->createDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device);
+
+	//vkCreateDevice reports that an extension was missing but never which one.
+	//Four of them are requested from a feature bit rather than from the device's own extension list, so a device
+	// advertising the feature without the extension fails here with nothing to go on.
+	//Diagnostic only, so its own errors are swallowed and the original result is what propagates.
+
+	if(createResult == VK_ERROR_EXTENSION_NOT_PRESENT)
+		VkGraphicsDevice_logMissingExtensions(instanceExt, physicalDeviceExt, &extensions, alloc, NULL);
+
+	gotoIfError3(clean, checkVkError(createResult, e_rr));
 
 	//Load functions even generic 1.1 functionality;
 	//This is not done statically to prevent hard to track down issues if a function is missing.
