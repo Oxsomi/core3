@@ -210,15 +210,14 @@ Bool GraphicsDeviceRef_createBufferIntern(
 
 	Bool s_uccess = true;
 	Bool allocated = false;
-	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
 
-	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->buffer, ref, e_rr));
-	allocated = true;
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
+	//Checked first, since getTypes on a NULL device yields a non NULL member pointer that faults in RefPtr_create.
 
 	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"));
+
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
 	if(bindlessDescriptorTable && !(resourceFlags & EGraphicsResourceFlag_ExposeBindless))
 		retError(clean, Error_invalidState(
@@ -261,6 +260,13 @@ Bool GraphicsDeviceRef_createBufferIntern(
 		retError(clean, Error_invalidState(
 			2, "GraphicsDeviceRef_createBufferIntern() buffer length exceeds maxBufferSize"
 		));
+
+	//Allocated only now that every argument has been accepted.
+	//Creating the ref first meant a rejected argument freed a buffer whose resource.device was still NULL,
+	// and DeviceBuffer_freeExt dereferences exactly that to find the backend, so every rejection segfaulted.
+
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->buffer, ref, e_rr));
+	allocated = true;
 
 	DeviceBuffer *buf = DeviceBufferRef_ptr(*ref);
 

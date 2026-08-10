@@ -51,6 +51,11 @@ Bool GraphicsDeviceRef_createDepthStencil(
 	Bool s_uccess = true;
 	Bool alloc = false;
 
+	//Checked first, since getTypes on a NULL device yields a non NULL member pointer that faults in RefPtr_create.
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createDepthStencil()::deviceRef is required"));
+
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->depthStencil, depthStencilRef, e_rr));
 	alloc = true;
 

@@ -45,6 +45,7 @@
 #include "types/container/ref_ptr.h"
 #include "types/base/string_read.h"
 #include "formats/oiSH/sh_file.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/time.h"
 #include "types/base/mathi.h"
 #include "types/base/mathf.h"
@@ -1014,7 +1015,7 @@ static Bool GraphicsDevice_checkShaderBindless(
 
 			if(
 				nameMatch == U64_MAX && j < info->bindingNames.length &&
-				CharString_equalsString(&info->bindingNames.ptr[j], &reg->name, EStringCase_Sensitive)
+				CharString_equalsStringSensitive(&info->bindingNames.ptr[j], &reg->name)
 			)
 				nameMatch = j;
 

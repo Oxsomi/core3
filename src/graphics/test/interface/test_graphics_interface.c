@@ -29,6 +29,7 @@
 //  4. Object type table - RefPtrType invariants for all child object kinds
 //  5. Texture formats   - format helper sanity (types/device_info)
 //  6. Bindless packing  - BindlessDescriptor pack3/unpack3 and handle accessors (pure, no device needed)
+// 15. Null device       - every resource creator rejects a NULL device instead of faulting on it
 //
 //What is covered when an adapter is present (skipped with a message otherwise;
 //CI Linux may provide lavapipe, but a GPU is never guaranteed):
@@ -40,6 +41,8 @@
 // 12. Bindless           - allocate / free / reuse a descriptor in the device's default table
 // 13. DeviceBuffer       - ExposeBindlessRead/Write only take a descriptor when asked
 // 14. CommandList        - create + free, parameter validation
+//
+//Numbering follows the order the modules were added, not the order they run in.
 //
 //Run in CI, no display, no human interaction required.
 
@@ -976,6 +979,62 @@ static void Test_graphicsDevice(Test *t) {
 		Test_print(t, "No supported graphics api, skipping device tests");
 }
 
+// -- 15. Null device rejection ---------------------------------------------------
+
+//Every creator reaches its RefPtrType through GraphicsDeviceRef_getTypes, which returns NULL for a NULL device.
+//A member offset is then applied to that NULL, yielding a small non NULL pointer that RefPtr_create accepts
+// and faults on, so a creator missing its device check segfaults instead of returning an error.
+//Only the first member of GraphicsObjectTypes sits at offset 0, so every other creator is exposed.
+//None of these need a live device, which is why this runs even where no adapter is present.
+
+static void Test_graphicsNullDevice(Test *t) {
+
+	Test_setModule(t, "GraphicsDevice/nullDevice");
+
+	const CharString name = CharString_createRefCStrConst("Null device rejection");
+
+	DeviceBufferRef *buffer = NULL;
+	DeviceTextureRef *texture = NULL;
+	RenderTextureRef *renderTexture = NULL;
+	DepthStencilRef *depthStencil = NULL;
+	SwapchainRef *swapchain = NULL;
+	CommandListRef *commandList = NULL;
+
+	Buffer empty = Buffer_createNull();
+
+	Test_assert(t, "buffer", !GraphicsDeviceRef_createBuffer(
+		NULL, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL, &name, 256, &buffer, NULL
+	));
+
+	Test_assert(t, "texture", !GraphicsDeviceRef_createTexture(
+		NULL, ETextureType_2D, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		1, 1, 0, NULL, &name, &empty, &texture, NULL
+	));
+
+	Test_assert(t, "renderTexture", !GraphicsDeviceRef_createRenderTexture(
+		NULL, ETextureType_2D, 1, 1, 0, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		EMSAASamples_Off, NULL, &name, &renderTexture, NULL
+	));
+
+	Test_assert(t, "depthStencil", !GraphicsDeviceRef_createDepthStencil(
+		NULL, 1, 1, EDepthStencilFormat_D32, false, EMSAASamples_Off, NULL, &name, &depthStencil, NULL
+	));
+
+	Test_assert(t, "swapchain", !GraphicsDeviceRef_createSwapchain(
+		NULL, (SwapchainInfo) { 0 }, false, NULL, &swapchain, NULL
+	));
+
+	Test_assert(t, "commandList", !GraphicsDeviceRef_createCommandList(
+		NULL, 2 * KIBI, 128, 64, true, &commandList, NULL
+	));
+
+	//A rejection must not leave a half built object behind, since the caller has no way to free one.
+
+	Test_assert(t, "nothingAllocated",
+		!buffer && !texture && !renderTexture && !depthStencil && !swapchain && !commandList
+	);
+}
+
 // -- entry point ---------------------------------------------------------------
 
 OXC3_TEST_ENTRY(graphics_interface) {
@@ -995,6 +1054,7 @@ OXC3_TEST_ENTRY(graphics_interface) {
 	Test_graphicsInstance(&t);
 	Test_graphicsFormats(&t);
 	Test_bindlessDescriptorPacking(&t);
+	Test_graphicsNullDevice(&t);
 	Test_graphicsDevice(&t);
 
 	//We might have instantiated a list with some capacity, make sure we get rid of it so the counter doesn't false positive.

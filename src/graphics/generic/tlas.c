@@ -356,6 +356,13 @@ Bool GraphicsDeviceRef_createTLAS(
 	*tlasPtr = *tlas;
 	tlasPtr->base.name = CharString_createNull();
 
+	//Set as soon as the object exists rather than once it is fully built.
+	//TLAS_freeExt reads base.device to find the backend, so a rejection between here and there used to free
+	// a TLAS whose device was still NULL and segfault instead of reporting the error.
+
+	gotoIfError3(clean, RefPtr_inc(dev));
+	tlasPtr->base.device = dev;
+
 	if(isUpdate)
 		tlasPtr->base.flags |= ERTASBuildFlags_IsUpdate;
 
@@ -436,9 +443,6 @@ Bool GraphicsDeviceRef_createTLAS(
 				));
 		}
 	}
-
-	gotoIfError3(clean, RefPtr_inc(dev));
-	tlasPtr->base.device = dev;
 
 	if(bindlessDescriptorTable) {
 		gotoIfError3(clean, RefPtr_inc(bindlessDescriptorTable));

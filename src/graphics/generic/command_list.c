@@ -803,6 +803,12 @@ Bool GraphicsDeviceRef_createCommandList(
 ) {
 
 	Bool s_uccess = true;
+
+	//Checked first, since getTypes on a NULL device yields a non NULL member pointer that faults in RefPtr_create.
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createCommandList()::deviceRef is required"));
+
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->commandList, commandListRef, e_rr));

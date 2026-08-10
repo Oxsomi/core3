@@ -268,6 +268,12 @@ Bool GraphicsDeviceRef_createTexture(
 
 	Bool s_uccess = true;
 	Bool allocated = false;
+
+	//Checked first, since getTypes on a NULL device yields a non NULL member pointer that faults in RefPtr_create.
+
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createTexture()::dev is required"));
+
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
 
 	if(!formatId || formatId >= ETextureFormatId_Count)

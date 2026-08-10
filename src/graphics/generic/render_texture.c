@@ -52,6 +52,11 @@ Bool GraphicsDeviceRef_createRenderTexture(
 	Bool s_uccess = true;
 	Bool allocated = false;
 
+	//Checked first, since getTypes on a NULL device yields a non NULL member pointer that faults in RefPtr_create.
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createRenderTexture()::deviceRef is required"));
+
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->renderTexture, renderTextureRef, e_rr));
 	allocated = true;
 

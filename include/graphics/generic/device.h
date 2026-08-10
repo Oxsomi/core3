@@ -40,6 +40,7 @@ typedef RefPtr DescriptorLayoutRef;
 typedef RefPtr PipelineLayoutRef;
 typedef RefPtr DescriptorHeapRef;
 typedef RefPtr DescriptorTableRef;
+typedef enum ESHBinaryType ESHBinaryType;
 
 typedef struct CBufferData {        //TODO: Replace this entirely when we can.
 

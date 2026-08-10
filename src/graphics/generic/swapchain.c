@@ -138,9 +138,14 @@ Bool GraphicsDeviceRef_createSwapchain(
 
 	Window *window = info.window;
 
+	//Checked first, since getTypes on a NULL device yields a non NULL member pointer that faults in RefPtr_create.
+
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createSwapchain()::dev is required"));
+
 	if(!window || !window->nativeHandle)
 		retError(clean, Error_nullPointer(
-			0, "GraphicsDeviceRef_createSwapchain()::deviceRef and info.window (physical) are required"
+			1, "GraphicsDeviceRef_createSwapchain()::info.window (physical) is required"
 		));
 
 	//On some platforms the images we get back != the images we request.
