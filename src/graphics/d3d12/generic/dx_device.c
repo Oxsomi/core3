@@ -592,6 +592,12 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 	//Bind descriptor heaps, root signature and descriptor tables since they stay the same for the entire frame.
 	//For every bind point.
 
+	//Without bindless there's no default heap, table or root signature to bind.
+	//Every pipeline brings its own layout in that case, so there's nothing to do per frame.
+
+	if(!device->defaultPipelineLayout || !device->defaultDescriptorTable || !device->defaultDescriptorHeaps)
+		return;
+
 	DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(device->defaultDescriptorHeaps), Dx);
 
 	ID3D12DescriptorHeap *descriptorHeaps[2] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };

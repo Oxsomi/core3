@@ -33,6 +33,7 @@
 typedef RefPtr GraphicsInstanceRef;
 typedef struct Allocator Allocator;
 typedef struct GraphicsObjectTypes GraphicsObjectTypes;
+typedef struct DescriptorLayoutInfo DescriptorLayoutInfo;
 typedef RefPtr DeviceBufferRef;
 typedef RefPtr PipelineRef;
 typedef RefPtr DescriptorLayoutRef;
@@ -56,11 +57,12 @@ typedef struct CBufferData {        //TODO: Replace this entirely when we can.
 TListNamed(SpinLock*, ListSpinLockPtr);
 
 typedef enum EGraphicsDeviceFlags {
-	EGraphicsDeviceFlags_None           = 0,
-	EGraphicsDeviceFlags_IsVerbose      = 1 << 0,    //Device creation is verbose
-	EGraphicsDeviceFlags_IsDebug        = 1 << 1,    //Debug features such as API/RT validation, debug marker/names
-	EGraphicsDeviceFlags_DisableRt      = 1 << 2,    //Don't allow raytracing to be enabled (might reduce driver overhead)
-	EGraphicsDeviceFlags_DisableDebug   = 1 << 3     //Force disable debugging even on debug mode. NDEBUG is leading otherwise
+	EGraphicsDeviceFlags_None            = 0,
+	EGraphicsDeviceFlags_IsVerbose       = 1 << 0,    //Device creation is verbose
+	EGraphicsDeviceFlags_IsDebug         = 1 << 1,    //Debug features such as API/RT validation, debug marker/names
+	EGraphicsDeviceFlags_DisableRt       = 1 << 2,    //Don't allow raytracing to be enabled (might reduce driver overhead)
+	EGraphicsDeviceFlags_DisableDebug    = 1 << 3,    //Force disable debugging even on debug mode. NDEBUG is leading otherwise
+	EGraphicsDeviceFlags_DisableBindless = 1 << 4     //No bindless layout, even where the device supports it
 } EGraphicsDeviceFlags;
 
 typedef enum EGraphicsBufferingMode {
@@ -149,14 +151,47 @@ const Allocator *GraphicsDeviceRef_getAlloc(GraphicsDeviceRef *device);
 const GraphicsObjectTypes *GraphicsDevice_getTypes(const GraphicsDevice *device);
 const GraphicsObjectTypes *GraphicsDeviceRef_getTypes(GraphicsDeviceRef *device);
 
+//Fills info with the layout OxC3 uses by default, so a caller can start from it rather than from nothing.
+//The bindings own no memory the caller has to free beyond what DescriptorLayoutInfo_free releases.
+//isSpirv selects the SPIRV spaces and bindings (Vulkan) instead of the DXIL ones (D3D12),
+// so it has to match the api of the instance the device will be created on.
+//The raytracing binding is only present if info advertises EGraphicsFeatures_Raytracing.
+
+//binaryType picks which backend's binding numbers to emit, since a set/binding pair means something
+// different per backend and the counts are shared.
+//It refuses a type it has no numbers for, so adding AIR or WGSL to ESHBinaryType surfaces here as an
+// error rather than as silently reused DXIL registers.
+
+Bool GraphicsDevice_defaultBindlessLayout(
+	const GraphicsDeviceInfo *info,
+	ESHBinaryType binaryType,
+	DescriptorLayoutInfo *result,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+//bindlessLayout describes the device's bindless descriptor layout, table and pipeline layout.
+//NULL means GraphicsDevice_defaultBindlessLayout, which is what OxC3's own shaders are compiled against.
+//It is ignored if the device lacks EGraphicsFeatures_Bindless or if EGraphicsDeviceFlags_DisableBindless is set,
+// in which case there is no default table or pipeline layout and every pipeline has to bring its own.
+//The device copies it, so the caller keeps ownership and can free it right after.
+//Its flags are taken as given, so EDescriptorLayoutFlags_AllowBindlessOnArrays has to be set to allocate bindlessly.
+
 Bool GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef,
 	const GraphicsDeviceInfo *info,
 	EGraphicsDeviceFlags flags,
 	EGraphicsBufferingMode bufferingMode,
+	const DescriptorLayoutInfo *bindlessLayout,        //NULL for OxC3's default layout
 	GraphicsDeviceRef **device,
 	Error *e_rr
 );
+
+//Checks whether a shader binary can run on this device at all.
+//Besides features, data types, shader model and vendor, this also refuses a binary whose bindless registers don't
+// match the device's bindless layout, since the descriptor handles it indexes with would resolve to the wrong arrays.
+//Only binaries the oiSH marks as needing bindless are held to that, so a bindful shader with a pipeline layout of
+// its own is unaffected; the mismatch itself is logged with the register and what the layout has instead.
 
 Bool GraphicsDeviceRef_checkShaderFeatures(
 	GraphicsDeviceRef *device, const SHBinaryInfo *info, const SHEntry *entry, Error *e_rr

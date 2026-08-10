@@ -187,12 +187,17 @@ GraphicsDeviceRef *device = NULL;
 gotoIfError3(clean, GraphicsDeviceRef_create(
     instance, 						//See "Graphics instance"
     &deviceInfo, 					//See "Graphics device info"
-    EGraphicsDeviceFlags_None,		//IsVerbose, IsDebug, DisableRt, DisableDebug
+    EGraphicsDeviceFlags_None,		//IsVerbose, IsDebug, DisableRt, DisableDebug, DisableBindless
     EGraphicsBufferingMode_Default,	//Frames in flight: Default, Double or Triple
+    NULL,							//Bindless DescriptorLayoutInfo; NULL is OxC3's default layout
     &device,
     e_rr
 ));
 ```
+
+The bindless layout is what the default descriptor table and pipeline layout are built from. Passing NULL uses OxC3's own layout, which is what the prebuilt shaders and the oiSH files OxC3 ships are compiled against. A caller that wants a different one can obtain the default through `GraphicsDevice_defaultBindlessLayout`, modify it and pass it in (it is freed with `DescriptorLayoutInfo_free`, the device copies whatever it gets). `EGraphicsDeviceFlags_DisableBindless` drops bindless entirely, even on a device that supports it; the feature bit is then cleared from the device's capabilities, so there is no default descriptor table or pipeline layout and every pipeline has to supply its own layout.
+
+Whichever layout the device ends up with is the one every shader is held to. When a pipeline is created (or a binary is picked through `GraphicsDeviceRef_getFirstShaderEntry`), `GraphicsDeviceRef_checkShaderFeatures` walks the binary's reflected registers and refuses any bindless array that the device's layout doesn't have at the same space and binding, with an incompatible register type, or with fewer descriptors than the shader declares. A shader that wants bindless arrays on a device without a bindless layout is refused too. The offending register and what the layout has instead are logged, so an oiSH built against an older layout can be run again by recreating that layout and passing it to `GraphicsDeviceRef_create`. Only binaries the oiSH marks as needing bindless are checked; push constants, push descriptors and singular bound resources come from the pipeline layout the caller supplies and are left alone.
 
 ### Properties
 

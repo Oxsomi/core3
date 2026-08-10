@@ -454,6 +454,16 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 	if(!layout)
 		layout = device->defaultPipelineLayout;
 
+	//A device without bindless has no default pipeline layout, and the backends dereference it unconditionally.
+	//EGraphicsDeviceFlags_DisableBindless puts any device in that state, so the pipeline has to bring its own.
+
+	if(!layout)
+		retError(clean, Error_nullPointer(
+			6,
+			"GraphicsDeviceRef_createPipelineGraphics()::layout is required, "
+			"the device has no default pipeline layout because it has no bindless"
+		));
+
 	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
 		gotoIfError3(clean, RefPtr_inc(layout));
 

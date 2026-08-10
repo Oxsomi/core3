@@ -80,8 +80,13 @@ static inline U64 BindlessDescriptor_pack3(BindlessDescriptor a, BindlessDescrip
 	return U64_pack21x3(a, b, c);
 }
 
+//Has to unpack 21 bits per handle, since that's what pack3 puts in.
+//Unpacking 20 would return the first handle intact but shift the other two, so the round trip wouldn't hold.
+
 static inline I32x4 BindlessDescriptor_unpack3(U64 v) {
-	return I32x4_create3(U64_unpack20x3u4(v, 0), U64_unpack20x3u4(v, 1), U64_unpack20x3u4(v, 2));
+	return I32x4_create3(
+		(I32) U64_unpack21x3(v, 0), (I32) U64_unpack21x3(v, 1), (I32) U64_unpack21x3(v, 2)
+	);
 }
 
 static inline U8 BindlessDescriptor_getBindlessType(BindlessDescriptor handle) {

@@ -1076,6 +1076,12 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 
 void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer) {
 
+	//Without bindless there's no default pipeline layout, table or push descriptor set to bind.
+	//Every pipeline brings its own layout in that case, so there's nothing to do per frame.
+
+	if(!device->defaultPipelineLayout || !device->defaultDescriptorTable)
+		return;
+
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;

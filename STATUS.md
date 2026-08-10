@@ -77,4 +77,4 @@ Last updated: 2026-08-04 (branch `android`, v3.2.103). Update this table in the 
 | GLSL / Slang input | ❌ | HLSL-only by design (state in docs) |
 | MSL output | 📄 | Blocked on SPIRV-Cross/Shader translator integration |
 | CLI: convert/encrypt/hash/inspect/rand/profile/devices/package | ✅ | `-aes` key via argv only, stdin/env/file input wanted |
-| CI | 🚧 | Currently red (known; mid-refactor) |
+| CI | ✅ | Passing on all platforms and compilers |

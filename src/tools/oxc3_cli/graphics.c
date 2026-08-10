@@ -142,7 +142,8 @@
 			for (U64 i = entry; i < entry + count; ++i) {
 
 				gotoIfError3(clean, GraphicsDeviceRef_create(
-					instanceRef, &infos.ptr[i], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, &deviceRef, e_rr
+					instanceRef, &infos.ptr[i], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default,
+					NULL, &deviceRef, e_rr
 				));
 				
 				RefPtr_dec(&deviceRef);
@@ -178,7 +179,7 @@
 		// rather than dumping the full error/stacktrace per device.
 
 		if(!GraphicsDeviceRef_create(
-			instanceRef, info, EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, &deviceRef, &err
+			instanceRef, info, EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, NULL, &deviceRef, &err
 		)) {
 			Log_debugLnx("\tMemory in use: (unavailable, couldn't create a device to query)");
 			return;
