@@ -361,6 +361,10 @@ Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format) {
 }
 
 Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format) {
+
+	if(!deviceInfo)
+		return false;
+
 	switch(format) {
 		case EDepthStencilFormat_D24S8Ext:      return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D24S8;
 		case EDepthStencilFormat_D32S8X24Ext:   return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D32S8;
