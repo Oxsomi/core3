@@ -1013,6 +1013,17 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 		case ECommandOp_StartScope: {
 
+			//Stencil and blend constants belong to the scope that set them, so a scope that doesn't set them starts
+			// from the default rather than inheriting whatever the previous one left.
+			//Recording already forces the pipeline, viewport and scissor to be re-declared per scope; without this
+			// these two would be the only state that leaks across, which makes a scope depend on whether an
+			// unrelated earlier one happened to be hidden.
+			//Only the requested values reset, since stencilRef and blendConstants track what the GPU actually has;
+			// the flush before the next draw then sets them again only if they really differ.
+
+			temp->tempStencilRef = 0;
+			temp->tempBlendConstants = F32x4_zero();
+
 			D3D12_BARRIER_GROUP dep[2] = {
 				(D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE },
 				(D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER }

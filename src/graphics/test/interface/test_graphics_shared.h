@@ -29,3 +29,4 @@
 
 void Test_graphicsCommandList(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsCommandRecording(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsCommandValidation(Test *t, GraphicsDeviceRef *deviceRef);

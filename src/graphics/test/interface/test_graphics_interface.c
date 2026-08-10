@@ -1161,6 +1161,7 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	Test_graphicsBufferBindless(t, deviceRef);
 	Test_graphicsCommandList(t, deviceRef);
 	Test_graphicsCommandRecording(t, deviceRef);
+	Test_graphicsCommandValidation(t, deviceRef);
 	Test_graphicsSubmit(t, deviceRef);
 
 clean:

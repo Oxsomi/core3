@@ -28,8 +28,10 @@
 #include "types/container/string.h"
 #include "types/base/string_base.h"
 #include "types/base/constants.h"
+#include "types/math/vec2i.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/commands.h"
+#include "graphics/generic/device_buffer.h"
 #include "graphics/generic/render_texture.h"
 #include "graphics/generic/texture.h"
 #include "test_graphics_shared.h"
@@ -255,3 +257,188 @@ void Test_graphicsCommandRecording(Test *t, GraphicsDeviceRef *deviceRef) {
 	RefPtr_dec(&target);
 }
 
+// -- 21. Command argument validation ---------------------------------------------
+
+//What each command refuses, and how the list is left afterwards.
+//A failing command only raises InvalidState, which endScope consumes by hiding the scope and clearing the flags,
+// so one list can host many negative cases as long as it doesn't need a scope to survive in between.
+//Only endScope and end mark the whole list invalid, which is why those get lists of their own.
+
+void Test_graphicsCommandValidation(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "CommandList/commands");
+
+	CommandListRef *commandList = NULL;
+	RenderTextureRef *target = NULL;
+	DeviceBufferRef *buffer = NULL;
+
+	const CharString targetName = CharString_createRefCStrConst("Validation target");
+	const CharString bufferName = CharString_createRefCStrConst("Validation buffer");
+	const CharString regionName = CharString_createRefCStrConst("Region");
+
+	const ImageRange all = (ImageRange) { .levelId = U32_MAX, .layerId = U32_MAX };
+
+	if(!Test_assert(t, "createTarget", GraphicsDeviceRef_createRenderTexture(
+		deviceRef, ETextureType_2D, 16, 16, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		EMSAASamples_Off, NULL, &targetName, &target, &t->err
+	)))
+		return;
+
+	Test_assert(t, "createBuffer", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL, &bufferName, 256, &buffer, &t->err
+	));
+
+	//Anything that draws or sets viewport state needs a render pass, and dispatch needs a bound pipeline.
+	//None of those can be satisfied here, so this is the shape of the refusal that matters.
+
+	if((commandList = Test_beginList(t, deviceRef, "createNoRender"))) {
+
+		Test_assert(t, "scope", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+
+		Test_assert(t, "viewportNeedsRender",
+			!CommandListRef_setViewport(commandList, I32x2_zero, I32x2_create2(8, 8), NULL)
+		);
+
+		Test_assert(t, "scissorNeedsRender",
+			!CommandListRef_setScissor(commandList, I32x2_zero, I32x2_create2(8, 8), NULL)
+		);
+
+		Test_assert(t, "viewportAndScissorNeedsRender",
+			!CommandListRef_setViewportAndScissor(commandList, I32x2_zero, I32x2_create2(8, 8), NULL)
+		);
+
+		Test_assert(t, "drawNeedsRender", !CommandListRef_drawUnindexed(commandList, 3, 1, NULL));
+		Test_assert(t, "drawIndexedNeedsRender", !CommandListRef_drawIndexed(commandList, 3, 1, NULL));
+		Test_assert(t, "dispatchNeedsPipeline", !CommandListRef_dispatch1D(commandList, 1, NULL));
+
+		//Stencil and blend constants are pure state, so they record without a render pass...
+
+		Test_assert(t, "setStencil", CommandListRef_setStencil(commandList, 0x7F, &t->err));
+		Test_assert(t, "setBlendConstants", CommandListRef_setBlendConstants(commandList, F32x4_zero(), &t->err));
+
+		//...but state alone doesn't modify a resource, so the scope is still dropped
+
+		Test_assert(t, "endScope", CommandListRef_endScope(commandList, &t->err));
+		Test_assert(t, "stateOnlyHidden", !CommandListRef_ptr(commandList)->activeScopes.length);
+
+		//endScope consumed the invalid state, so the list is usable again
+
+		Test_assert(t, "flagsCleared", !CommandListRef_ptr(commandList)->tempStateFlags);
+		Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+		RefPtr_dec(&commandList);
+	}
+
+	//Clear rejects an empty batch, a resource that isn't a texture at all, and a range past what exists
+
+	if((commandList = Test_beginList(t, deviceRef, "createClear"))) {
+
+		const ListClearImageCmd empty = (ListClearImageCmd) { 0 };
+
+		Test_assert(t, "scope2", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+		Test_assert(t, "clearEmptyBatch", !CommandListRef_clearImages(commandList, empty, NULL));
+		Test_assert(t, "clearNullImage", !CommandListRef_clearImagef(commandList, F32x4_zero(), all, NULL, NULL));
+
+		//A buffer isn't a texture, so it resolves to no unified texture rather than being misread as one
+
+		Test_assert(t, "clearBufferAsImage",
+			!buffer || !CommandListRef_clearImagef(commandList, F32x4_zero(), all, buffer, NULL)
+		);
+
+		const ImageRange badLevel = (ImageRange) { .levelId = 1, .layerId = U32_MAX };
+		const ImageRange badLayer = (ImageRange) { .levelId = U32_MAX, .layerId = 1 };
+
+		Test_assert(t, "clearBadLevel", !CommandListRef_clearImagef(commandList, F32x4_zero(), badLevel, target, NULL));
+		Test_assert(t, "clearBadLayer", !CommandListRef_clearImagef(commandList, F32x4_zero(), badLayer, target, NULL));
+
+		RefPtr_dec(&commandList);
+	}
+
+	//Debug regions nest and have to be balanced within the scope that opened them
+
+	if((commandList = Test_beginList(t, deviceRef, "createDebug"))) {
+
+		const CommandList *ptr = CommandListRef_ptr(commandList);
+
+		Test_assert(t, "scope3", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+		Test_assert(t, "endRegionWithoutStart", !CommandListRef_endRegionDebugExt(commandList, NULL));
+		Test_assert(t, "startRegionNeedsName", !CommandListRef_startRegionDebugExt(commandList, F32x4_zero(), NULL, NULL));
+
+		Test_assert(t, "startRegion", CommandListRef_startRegionDebugExt(commandList, F32x4_zero(), &regionName, &t->err));
+		Test_assert(t, "regionDepth1", ptr->debugRegionStack == 1);
+
+		Test_assert(t, "startNested", CommandListRef_startRegionDebugExt(commandList, F32x4_zero(), &regionName, &t->err));
+		Test_assert(t, "regionDepth2", ptr->debugRegionStack == 2);
+
+		Test_assert(t, "marker", CommandListRef_addMarkerDebugExt(commandList, F32x4_zero(), &regionName, &t->err));
+
+		Test_assert(t, "endNested", CommandListRef_endRegionDebugExt(commandList, &t->err));
+		Test_assert(t, "endRegion", CommandListRef_endRegionDebugExt(commandList, &t->err));
+		Test_assert(t, "regionDepth0", !ptr->debugRegionStack);
+
+		RefPtr_dec(&commandList);
+	}
+
+	//A scope that modifies something and leaves a region open can't close, since the region would outlive it.
+	//Without the clear the scope would be hidden before the region is ever checked, so the modify op is load bearing.
+
+	if((commandList = Test_beginList(t, deviceRef, "createUnbalanced"))) {
+
+		Test_assert(t, "scope4", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+		Test_assert(t, "clear4", CommandListRef_clearImagef(commandList, F32x4_zero(), all, target, &t->err));
+		Test_assert(t, "openRegion", CommandListRef_startRegionDebugExt(commandList, F32x4_zero(), &regionName, &t->err));
+		Test_assert(t, "endScopeOpenRegion", !CommandListRef_endScope(commandList, NULL));
+		Test_assert(t, "invalidAfterRegion", CommandListRef_ptr(commandList)->state == ECommandListState_Invalid);
+
+		RefPtr_dec(&commandList);
+	}
+
+	//allowResize decides whether the command buffer grows or the recording is refused once it's full.
+	//setStencil writes exactly 16 bytes, so a 64 byte buffer takes four of them and refuses the fifth.
+
+	commandList = NULL;
+
+	if(Test_assert(t, "createFixed", GraphicsDeviceRef_createCommandList(
+		deviceRef, 64, 8, 4, false, &commandList, &t->err
+	))) {
+
+		Test_assert(t, "beginFixed", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+		Test_assert(t, "scope5", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+
+		Bool filled = true;
+
+		for(U64 i = 0; i < 4; ++i)
+			filled = filled && CommandListRef_setStencil(commandList, (U8) i, NULL);
+
+		Test_assert(t, "fixedFits", filled);
+		Test_assert(t, "fixedFull", CommandListRef_ptr(commandList)->next == 64);
+		Test_assert(t, "fixedOverflows", !CommandListRef_setStencil(commandList, 4, NULL));
+		Test_assert(t, "fixedNotGrown", Buffer_length(CommandListRef_ptr(commandList)->data) == 64);
+
+		RefPtr_dec(&commandList);
+	}
+
+	commandList = NULL;
+
+	if(Test_assert(t, "createResizable", GraphicsDeviceRef_createCommandList(
+		deviceRef, 64, 8, 4, true, &commandList, &t->err
+	))) {
+
+		Test_assert(t, "beginResizable", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+		Test_assert(t, "scope6", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+
+		Bool grew = true;
+
+		for(U64 i = 0; i < 8; ++i)
+			grew = grew && CommandListRef_setStencil(commandList, (U8) i, NULL);
+
+		Test_assert(t, "resizableAccepts", grew);
+		Test_assert(t, "resizableGrew", Buffer_length(CommandListRef_ptr(commandList)->data) > 64);
+		Test_assert(t, "resizableKeptAll", CommandListRef_ptr(commandList)->next == 8 * 16);
+
+		RefPtr_dec(&commandList);
+	}
+
+	RefPtr_dec(&buffer);
+	RefPtr_dec(&target);
+}
