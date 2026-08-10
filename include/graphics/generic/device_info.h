@@ -126,11 +126,24 @@ typedef enum EDxGraphicsFeatures {
 //If api type is Vulkan
 
 typedef enum EVkGraphicsFeatures {
-	EVkGraphicsFeatures_PerfQuery               = 1 << 0,
-	EVkGraphicsFeatures_Maintenance4            = 1 << 1,
-	EVkGraphicsFeatures_BufferDeviceAddress     = 1 << 2,
-	EVkGraphicsFeatures_DriverProperties        = 1 << 3,
-	EVkGraphicsFeatures_MemoryBudget            = 1 << 4
+	EVkGraphicsFeatures_PerfQuery                = 1 << 0,
+	EVkGraphicsFeatures_Maintenance4             = 1 << 1,
+	EVkGraphicsFeatures_BufferDeviceAddress      = 1 << 2,
+	EVkGraphicsFeatures_DriverProperties         = 1 << 3,
+	EVkGraphicsFeatures_MemoryBudget             = 1 << 4,
+
+	//VK_KHR_push_descriptor with at least 32 push descriptors, so the globals constant buffer can be pushed
+	// straight into the command buffer instead of being bound from a set allocated to hold it.
+	//Named for the performance, not the capability: pushing descriptors always works, this only says the device
+	// does it natively rather than through the emulation below.
+	//Vulkan only, because it's the only api where this isn't a given; D3D12 has root descriptors and Metal has
+	// argument buffers, so there's nothing for a caller to branch on outside of Vulkan.
+	//When it's absent OxC3 uses one descriptor set per frame in flight instead,
+	// which trades a push per frame for an allocation and a write at first submit.
+	//Android emulators are the common case, since gfxstream drops the extension from the guest even when the
+	// host driver exposes it.
+
+	EVkGraphicsFeatures_PerformantPushDescriptor = 1 << 5
 } EVkGraphicsFeatures;
 
 //Generic graphics features

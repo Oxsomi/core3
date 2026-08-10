@@ -41,6 +41,7 @@
 // 12. Bindless           - allocate / free / reuse a descriptor in the device's default table
 // 13. DeviceBuffer       - ExposeBindlessRead/Write only take a descriptor when asked
 // 14. CommandList        - create + free, parameter validation
+// 16. Submit             - begin/end state machine, empty frame submit (the only path that binds descriptors)
 //
 //Numbering follows the order the modules were added, not the order they run in.
 //
@@ -65,6 +66,7 @@
 #include "graphics/generic/bindless_descriptor.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/command_list.h"
+#include "graphics/generic/commands.h"
 #include "graphics/generic/graphics_types.h"
 #include "platforms/platform.h"
 #include "platforms/file.h"
@@ -809,6 +811,49 @@ static void Test_graphicsCommandList(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "freeNulled", !commandList);
 }
 
+// -- 16. Submit ------------------------------------------------------------------
+
+//Submit is the only path that reaches GraphicsDevice_rebindDescriptors, which binds the descriptor tables and the
+// globals constant buffer for the frame.
+//On Vulkan without VK_KHR_push_descriptor that's also the path that allocates and binds the emulated per frame set,
+// so nothing else in the suite exercises it.
+//An empty but closed command list is enough, since the descriptors are bound before any recorded command is replayed.
+
+static void Test_graphicsSubmit(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "GraphicsDevice/submit");
+
+	CommandListRef *commandList = NULL;
+	ListCommandListRef lists = (ListCommandListRef) { 0 };
+
+	if(!Test_assert(t, "create", GraphicsDeviceRef_createCommandList(
+		deviceRef, 2 * KIBI, 64, 16, true, &commandList, &t->err
+	)))
+		return;
+
+	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	Test_assert(t, "stateOpen", CommandListRef_ptr(commandList)->state == ECommandListState_Open);
+	Test_assert(t, "beginTwice", !CommandListRef_begin(commandList, true, U64_MAX, NULL));
+	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+	Test_assert(t, "stateClosed", CommandListRef_ptr(commandList)->state == ECommandListState_Closed);
+
+	//Nothing to submit at all is the one combination that has to be refused
+
+	Test_assert(t, "submitNothing", !GraphicsDeviceRef_submitCommands(deviceRef, NULL, NULL, NULL, 0, 0, NULL));
+	Test_assert(t, "submitNullDevice", !GraphicsDeviceRef_submitCommands(NULL, NULL, NULL, NULL, 0, 0, NULL));
+
+	if(Test_assert(t, "listRef", ListCommandListRef_createRefConst(&commandList, 1, &lists, &t->err))) {
+
+		//Submitted twice so a second frame in flight is used, which is what picks a different emulated set
+
+		Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
+		Test_assert(t, "submitAgain", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
+		Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+	}
+
+	RefPtr_dec(&commandList);
+}
+
 // -- 7-10. Device, DeviceBuffer and Swapchain ------------------------------------
 
 static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
@@ -942,6 +987,7 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	Test_graphicsBindlessDescriptor(t, deviceRef);
 	Test_graphicsBufferBindless(t, deviceRef);
 	Test_graphicsCommandList(t, deviceRef);
+	Test_graphicsSubmit(t, deviceRef);
 
 clean:
 

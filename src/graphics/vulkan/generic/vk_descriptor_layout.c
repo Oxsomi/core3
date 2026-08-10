@@ -279,7 +279,10 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 				setInfo[linkId].flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 			}
 
-			if(hasPushDescriptor)
+			//A push descriptor set layout can't have sets allocated from it, so when the extension is missing
+			// this stays a regular layout and the emulation allocates a set per frame in flight from it instead.
+
+			if(hasPushDescriptor && (device->info.capabilities.featuresExt & EVkGraphicsFeatures_PerformantPushDescriptor))
 				setInfo[linkId].flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
 
 			setPresent |= 1 << linkId;

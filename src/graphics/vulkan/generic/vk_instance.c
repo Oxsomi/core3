@@ -531,7 +531,7 @@ void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, const Allocator
 }
 
 const C8 *reqExtensionsName[] = {
-	"VK_KHR_push_descriptor", "VK_KHR_synchronization2", "VK_KHR_swapchain"
+	"VK_KHR_synchronization2", "VK_KHR_swapchain"
 };
 
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
@@ -554,7 +554,9 @@ const C8 *optExtensionsName[] = {
 	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8",   "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget",
 	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",      "VK_KHR_ray_tracing_position_fetch",
 
-	"VK_EXT_descriptor_heap", "VK_NV_cluster_acceleration_structure", "VK_NV_partitioned_acceleration_structure"
+	"VK_EXT_descriptor_heap", "VK_NV_cluster_acceleration_structure", "VK_NV_partitioned_acceleration_structure",
+
+	"VK_KHR_push_descriptor"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -826,13 +828,12 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//Gated on the extension rather than chained unconditionally, because the instance asks for Vulkan 1.1,
 		// where this struct only exists if VK_KHR_push_descriptor does.
-		//Now that a device missing it is reported instead of skipped, it reaches this query,
-		// and handing a driver a struct for an extension it never advertised is exactly what emulators mishandle.
-		//An accepted device has the extension, so its chain is unchanged;
-		// a device without it keeps a zeroed struct and reports the push descriptor minimum below anyway.
+		//Handing a driver a struct for an extension it never advertised is exactly what emulators mishandle.
+		//A device without the extension keeps a zeroed struct, which reads as no push descriptors and turns on
+		// the emulated path rather than rejecting the device.
 
 		getDeviceProperties(
-			reqExtensions[EReqExtensions_PushDescriptor], VkPhysicalDevicePushDescriptorPropertiesKHR, pushDescriptor,
+			optExtensions[EOptExtensions_PushDescriptor], VkPhysicalDevicePushDescriptorPropertiesKHR, pushDescriptor,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR
 		);
 
@@ -848,9 +849,6 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			deviceUnsupported(
 				"Vulkan: Unsupported device %"PRIu32", maxBufferSize and maxAllocationSize should exceed 256MiB", i
 			);
-
-		if (pushDescriptor.maxPushDescriptors < 32)
-			deviceUnsupported("Vulkan: Unsupported device %"PRIu32", push descriptors >=32 is required", i);
 
 		//Build up list of features
 
@@ -1637,6 +1635,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			descriptorHeapFeat.descriptorHeap
 		)
 			capabilities.features2 |= EGraphicsFeatures2_DescriptorHeap;
+
+		//Push descriptors are a fast path, not a requirement, so a device without them is emulated rather than rejected.
+		//Only the globals constant buffer is ever pushed, so the 32 minimum is far more than OxC3 asks for;
+		// it's kept as the threshold so a driver advertising a token amount takes the emulated path instead.
+
+		if(optExtensions[EOptExtensions_PushDescriptor] && pushDescriptor.maxPushDescriptors >= 32)
+			capabilities.featuresExt |= EVkGraphicsFeatures_PerformantPushDescriptor;
 
 		//Enforce format support
 		//We don't enforce VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT because the standard guarantees it.

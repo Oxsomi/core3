@@ -143,7 +143,8 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 - dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
   - MSAA4 and MSAA1 (off) are supported by default.
 - featuresExt: API dependent features that aren't expected to be standardized in the same way.
-  - Vulkan: PerformanceQuery.
+  - Vulkan: PerformanceQuery, PerformantPushDescriptor.
+    - PerformantPushDescriptor: VK_KHR_push_descriptor with at least 32 push descriptors, so the globals constant buffer is pushed straight into the command buffer instead of bound from a set allocated to hold it. Named for the performance rather than the capability, because pushing descriptors always works; the flag only says the device does it natively. It lives here rather than in `features2` because Vulkan is the only API where that isn't a given; D3D12 has root descriptors and Metal has argument buffers. Without it OxC3 allocates one descriptor set per frame in flight, writes each once to that frame's globals buffer and binds it unchanged afterwards, so there's no per-frame update and nothing is rewritten while in flight. A one-time performance warning is logged on the first submit that takes the emulated path. Android emulators are the usual case, since gfxstream drops the extension from the guest even where the host driver exposes it.
   - Direct3D12: WriteBufferImmediate (for crash debugging), ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use), BatchedAsyncCommandList (batched async command list submission, SM6.10 / Agility 1.720+).
 - maxBufferSize and maxAllocationSize: Device limit on how big a buffer or a single allocation may be.
 

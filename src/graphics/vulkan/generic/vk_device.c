@@ -33,6 +33,7 @@
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/descriptor_layout.h"
 #include "types/container/string.h"
 #include "platforms/logx.h"
 #include "platforms/platform.h"
@@ -454,6 +455,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_DescriptorHeap:             on = feat2 & EGraphicsFeatures2_DescriptorHeap;         break;
 			case EOptExtensions_RayClusterAS:               on = feat2 & EGraphicsFeatures2_RayClusterAS;           break;
 			case EOptExtensions_RayPartitionedTLAS:         on = feat2 & EGraphicsFeatures2_RayPartitionedTLAS;     break;
+			case EOptExtensions_PushDescriptor:             on = featEx & EVkGraphicsFeatures_PerformantPushDescriptor; break;
 
 			default:
 				continue;
@@ -635,7 +637,12 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkAllocateCommandBuffers, deviceExt->allocateCommandBuffers);
 	getVkFunctionDevice(clean, vkBeginCommandBuffer, deviceExt->beginCommandBuffer);
 	getVkFunctionDevice(clean, vkCmdBindDescriptorSets, deviceExt->cmdBindDescriptorSets);
-	getVkFunctionDevice(clean, vkCmdPushDescriptorSetKHR, deviceExt->cmdPushDescriptorSet);
+	//Only resolvable when the extension was enabled, so a device without it leaves this NULL.
+	//GraphicsDevice_rebindDescriptors reads that as "emulate" and binds a per frame set instead.
+
+	if(featEx & EVkGraphicsFeatures_PerformantPushDescriptor)
+		getVkFunctionDevice(clean, vkCmdPushDescriptorSetKHR, deviceExt->cmdPushDescriptorSet);
+
 	getVkFunctionDevice(clean, vkEndCommandBuffer, deviceExt->endCommandBuffer);
 	getVkFunctionDevice(clean, vkQueueSubmit, deviceExt->queueSubmit);
 	getVkFunctionDevice(clean, vkQueuePresentKHR, deviceExt->queuePresentKHR);
@@ -1013,6 +1020,11 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 			if(deviceExt->commitFence[i])
 				deviceExt->destroyFence(deviceExt->device, deviceExt->commitFence[i], NULL);
 
+		//Only set when push descriptors were emulated; destroying the pool frees the sets with it.
+
+		if(deviceExt->cbufferPool)
+			deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->cbufferPool, NULL);
+
 		instanceExt->destroyDevice(deviceExt->device, NULL);
 	}
 
@@ -1074,15 +1086,117 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer) {
+//Stands in for VK_KHR_push_descriptor on devices that don't have it.
+//Only the globals constant buffer is ever pushed, and each frame in flight has its own buffer that lives as long as
+// the device, so a set per frame can be written once here and bound unchanged from then on.
+//That is what makes the emulation cheap; there is no per frame update and so no risk of writing a set still in flight.
+//Nothing has bound these sets yet on the call that creates them, so writing all of them up front is safe.
+
+static Bool VkGraphicsDevice_createCBufferSets(GraphicsDevice *device, VkGraphicsDevice *deviceExt, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	const U32 count = device->framesInFlight;
+
+	VkDescriptorSetLayout layouts[MAX_FRAMES_IN_FLIGHT];
+	VkDescriptorBufferInfo bufferInfo[MAX_FRAMES_IN_FLIGHT];
+	VkWriteDescriptorSet writes[MAX_FRAMES_IN_FLIGHT];
+
+	const VkDescriptorLayout *cbufferLayout =
+		DescriptorLayout_ext(DescriptorLayoutRef_ptr(device->defaultCBufferLayout), Vk);
+
+	if(!cbufferLayout || !cbufferLayout->layouts[0])
+		retError(clean, Error_invalidState(0, "VkGraphicsDevice_createCBufferSets() missing constant buffer layout"));
+
+	for(U32 i = 0; i < count; ++i)
+		layouts[i] = cbufferLayout->layouts[0];
+
+	const VkDescriptorPoolSize poolSize = (VkDescriptorPoolSize) {
+		.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.descriptorCount = count
+	};
+
+	const VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.maxSets = count,
+		.poolSizeCount = 1,
+		.pPoolSizes = &poolSize
+	};
+
+	gotoIfError3(clean, checkVkError(
+		deviceExt->createDescriptorPool(deviceExt->device, &poolInfo, NULL, &deviceExt->cbufferPool), e_rr
+	));
+
+	const VkDescriptorSetAllocateInfo allocInfo = (VkDescriptorSetAllocateInfo) {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = deviceExt->cbufferPool,
+		.descriptorSetCount = count,
+		.pSetLayouts = layouts
+	};
+
+	gotoIfError3(clean, checkVkError(
+		deviceExt->allocateDescriptorSets(deviceExt->device, &allocInfo, deviceExt->cbufferSets), e_rr
+	));
+
+	for (U32 i = 0; i < count; ++i) {
+
+		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[i]);
+
+		bufferInfo[i] = (VkDescriptorBufferInfo) {
+			.buffer = DeviceBuffer_ext(frameData, Vk)->buffer,
+			.offset = 0,
+			.range = frameData->resource.size
+		};
+
+		writes[i] = (VkWriteDescriptorSet) {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = deviceExt->cbufferSets[i],
+			.dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.pBufferInfo = &bufferInfo[i]
+		};
+	}
+
+	deviceExt->updateDescriptorSets(deviceExt->device, count, writes, 0, NULL);
+
+clean:
+
+	//The pool doubles as the "already emulated" marker, so a half built one would be skipped on the next submit
+	// and leave unallocated sets to be bound.
+
+	if (!s_uccess && deviceExt->cbufferPool) {
+		deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->cbufferPool, NULL);
+		deviceExt->cbufferPool = NULL;
+	}
+
+	return s_uccess;
+}
+
+Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	//Without bindless there's no default pipeline layout, table or push descriptor set to bind.
 	//Every pipeline brings its own layout in that case, so there's nothing to do per frame.
 
 	if(!device->defaultPipelineLayout || !device->defaultDescriptorTable)
-		return;
+		return true;
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	//A device without the extension leaves cmdPushDescriptorSet NULL, so the sets are built on first submit.
+	//They can't be built at device creation because the globals buffers don't exist yet at that point.
+
+	if(!deviceExt->cmdPushDescriptorSet && !deviceExt->cbufferPool) {
+
+		Log_performanceLnx(
+			"Vulkan: VK_KHR_push_descriptor is unavailable, emulating it with one descriptor set per frame in flight"
+		);
+
+		gotoIfError3(clean, VkGraphicsDevice_createCBufferSets(device, deviceExt, e_rr));
+	}
 
 	U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
 
@@ -1107,6 +1221,21 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 			);
 
 			k += table->counts[j];
+		}
+
+		//The emulated path binds the set that was already written for this frame, so it costs one bind either way.
+
+		if (!deviceExt->cmdPushDescriptorSet) {
+
+			deviceExt->cmdBindDescriptorSets(
+				commandBuffer,
+				bindPoint,
+				*defaultLayoutExt,
+				2, 1, &deviceExt->cbufferSets[device->fifId],
+				0, NULL
+			);
+
+			continue;
 		}
 
 		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
@@ -1136,6 +1265,9 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 			&cbv
 		);
 	}
+
+clean:
+	return s_uccess;
 }
 
 Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
@@ -1419,7 +1551,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
 
-		GraphicsDevice_rebindDescriptors(device, commandBuffer);
+		gotoIfError3(clean, GraphicsDevice_rebindDescriptors(device, commandBuffer, e_rr));
 
 		//Record commands
 
@@ -1595,7 +1727,7 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 
 	gotoIfError3(clean, checkVkError(deviceExt->beginCommandBuffer(commandBuffer->buffer, &beginInfo), e_rr));
 
-	GraphicsDevice_rebindDescriptors(device, commandBuffer->buffer);
+	gotoIfError3(clean, GraphicsDevice_rebindDescriptors(device, commandBuffer->buffer, e_rr));
 
 	//Reset temporary variables to avoid invalid caching behavior
 
