@@ -49,6 +49,8 @@
 // 26. PipelineLayout     - push constant limits, push descriptor flag routing
 // 27. Shader reflection  - oiSH entry lookup, layout detection, checkShaderFeatures, compute pipeline creation
 // 28. Device memory      - budget queries, staging buffer resize, handleNextFrame lock contract
+// 29. GPU execution      - clear + cross scope copy + upload actually replayed on the device, twice
+// 30. Acceleration structures - BLAS/TLAS creation, instance plumbing, real builds via submit (rt devices only)
 //
 //CommandList lifecycle, recording and scopes live in test_graphics_command_list.c; they're the largest untested
 // surface in the module, so they get their own file to grow in.
@@ -1841,6 +1843,232 @@ static void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef) {
 	}
 }
 
+// -- 29. GPU execution -----------------------------------------------------------
+
+//Everything before this only ever submitted empty command lists, so the backend replay of clears, copies, scope
+// barriers and the initial data upload had never actually run on a device.
+//Results can't be asserted yet because pullRegion (the GPU to CPU readback the docs describe) isn't implemented,
+// so this verifies the recording executes and the device survives it, which is still the whole replay path.
+
+static void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "GraphicsDevice/execute");
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	RenderTextureRef *target = NULL;
+	DeviceTextureRef *texture = NULL;
+	CommandListRef *commandList = NULL;
+
+	const CharString targetName = CharString_createRefCStrConst("Execute target");
+	const CharString textureName = CharString_createRefCStrConst("Execute texture");
+
+	const ImageRange all = (ImageRange) { .levelId = U32_MAX, .layerId = U32_MAX };
+
+	if(!Test_assert(t, "createTarget", GraphicsDeviceRef_createRenderTexture(
+		deviceRef, ETextureType_2D, 4, 4, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		EMSAASamples_Off, NULL, &targetName, &target, &t->err
+	)))
+		return;
+
+	//With initial data, so the first submit also runs the staging upload for real
+
+	Buffer texData = Buffer_createNull();
+	Test_assert(t, "texData", Buffer_createEmptyBytes(4 * 4 * 4, alloc, &texData, &t->err));
+
+	Test_assert(t, "createTexture", GraphicsDeviceRef_createTexture(
+		deviceRef, ETextureType_2D, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		4, 4, 1, NULL, &textureName, &texData, &texture, &t->err
+	));
+
+	Buffer_free(&texData, alloc);
+
+	if(texture && Test_assert(t, "createList", GraphicsDeviceRef_createCommandList(
+		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
+	))) {
+
+		Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+
+		//Clear in one scope, copy in the next, so the cross scope barrier is replayed too
+
+		Test_assert(t, "clearScope", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+
+		Test_assert(t, "clear", CommandListRef_clearImagef(
+			commandList, F32x4_create4(1, 0, 0, 1), all, target, &t->err
+		));
+
+		Test_assert(t, "endClearScope", CommandListRef_endScope(commandList, &t->err));
+
+		Test_assert(t, "copyScope", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
+
+		Test_assert(t, "copy", CommandListRef_copyImage(
+			commandList, target, texture, (CopyImageRegion) { 0 }, &t->err
+		));
+
+		Test_assert(t, "endCopyScope", CommandListRef_endScope(commandList, &t->err));
+		Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+		ListCommandListRef lists = (ListCommandListRef) { 0 };
+		ListCommandListRef_createRefConst(&commandList, 1, &lists, NULL);
+
+		//Twice, so the second replay starts from state the first one left behind
+
+		Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
+		Test_assert(t, "submitAgain", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
+		Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+	}
+
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&texture);
+	RefPtr_dec(&target);
+}
+
+// -- 30. Acceleration structures -------------------------------------------------
+
+//BLAS and TLAS creation queue their build for the next submit, so submitting after recording the updates is what
+// actually builds them on the device.
+//Everything here needs the raytracing feature, so software adapters skip with a message rather than fail.
+
+static void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Raytracing/AS");
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(!(device->info.capabilities.features & EGraphicsFeatures_Raytracing)) {
+		Test_print(t, "Device lacks raytracing, skipping acceleration structure tests");
+		return;
+	}
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	DeviceBufferRef *positions = NULL;
+	DeviceBufferRef *plain = NULL;
+	BLASRef *blas = NULL;
+	BLASRef *badBlas = NULL;
+	TLASRef *tlas = NULL;
+	CommandListRef *commandList = NULL;
+
+	const CharString positionsName = CharString_createRefCStrConst("AS positions");
+	const CharString plainName = CharString_createRefCStrConst("AS plain buffer");
+	const CharString blasName = CharString_createRefCStrConst("Test BLAS");
+	const CharString tlasName = CharString_createRefCStrConst("Test TLAS");
+
+	//One triangle in RGBA32f, which every raytracing device accepts
+
+	const F32 triangle[12] = {
+		0, 0, 0, 1,
+		1, 0, 0, 1,
+		0, 1, 0, 1
+	};
+
+	Buffer triData = Buffer_createRefConst(triangle, sizeof(triangle));
+
+	if(!Test_assert(t, "createPositions", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&positionsName, &triData, &positions, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "createPlain", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL, &plainName, 48, &plain, &t->err
+	));
+
+	const DeviceData positionData = (DeviceData) { .buffer = positions };
+
+	//A buffer without ASReadExt usage can't feed an AS build, and a zero stride can't address vertices
+
+	if (plain) {
+
+		const DeviceData plainData = (DeviceData) { .buffer = plain };
+
+		Test_assert(t, "blasWrongUsage", !GraphicsDeviceRef_createBLASExt(
+			deviceRef, ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0,
+			ETextureFormatId_Undefined, 16, plainData, (DeviceData) { 0 }, NULL, &blasName, &badBlas, NULL
+		));
+	}
+
+	Test_assert(t, "blasZeroStride", !GraphicsDeviceRef_createBLASExt(
+		deviceRef, ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0,
+		ETextureFormatId_Undefined, 0, positionData, (DeviceData) { 0 }, NULL, &blasName, &badBlas, NULL
+	));
+
+	Test_assert(t, "blasRejectedNothing", !badBlas);
+
+	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(
+		deviceRef, ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0,
+		ETextureFormatId_Undefined, 16, positionData, (DeviceData) { 0 }, NULL, &blasName, &blas, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "blasTypeId", blas->refPtrType->typeId == (TypeId) EGraphicsTypeId_BLASExt);
+
+	//One instance at identity, pointing at the BLAS just made
+
+	TLASInstanceStatic instance = (TLASInstanceStatic) {
+		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
+		.data = (TLASInstanceData) {
+			.instanceId24_mask8 = 0xFF << 24,
+			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
+			.blasCpu = blas
+		}
+	};
+
+	ListTLASInstanceStatic instances = (ListTLASInstanceStatic) { 0 };
+	ListTLASInstanceStatic_createRefConst(&instance, 1, &instances, NULL);
+
+	if(!Test_assert(t, "createTlas", GraphicsDeviceRef_createTLASExt(
+		deviceRef, ERTASBuildFlags_DefaultTLAS, NULL, &instances, true, NULL, &tlasName, &tlas, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "tlasTypeId", tlas->refPtrType->typeId == (TypeId) EGraphicsTypeId_TLASExt);
+
+	//The CPU side instance plumbing hands back what went in
+
+	TLASInstanceData roundTrip = (TLASInstanceData) { 0 };
+
+	Test_assert(t, "instanceData", TLAS_getInstanceDataCpu(TLASRef_ptr(tlas), 0, &roundTrip));
+	Test_assert(t, "instanceBlas", roundTrip.blasCpu == blas);
+	Test_assert(t, "instanceOOB", !TLAS_getInstanceDataCpu(TLASRef_ptr(tlas), 1, &roundTrip));
+
+	//Recording the updates and submitting is what runs the actual builds on the device
+
+	if(Test_assert(t, "createList", GraphicsDeviceRef_createCommandList(
+		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
+	))) {
+
+		Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+		//The TLAS update transitions the BLASes it references, so it can't share a scope with the BLAS update;
+		// the split also expresses the real dependency between the two builds.
+
+		Test_assert(t, "scope", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+		Test_assert(t, "updateBlas", CommandListRef_updateBLASExt(commandList, blas, &t->err));
+		Test_assert(t, "endScope", CommandListRef_endScope(commandList, &t->err));
+
+		Test_assert(t, "scopeTlas", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
+		Test_assert(t, "updateTlas", CommandListRef_updateTLASExt(commandList, tlas, &t->err));
+		Test_assert(t, "endScopeTlas", CommandListRef_endScope(commandList, &t->err));
+		Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+		ListCommandListRef lists = (ListCommandListRef) { 0 };
+		ListCommandListRef_createRefConst(&commandList, 1, &lists, NULL);
+
+		Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
+		Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+	}
+
+clean:
+
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&tlas);
+	RefPtr_dec(&blas);
+	RefPtr_dec(&plain);
+	RefPtr_dec(&positions);
+
+	(void) alloc;
+}
+
 // -- 7-10. Device, DeviceBuffer and Swapchain ------------------------------------
 
 static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
@@ -1982,6 +2210,8 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	Test_graphicsPipelineLayout(t, deviceRef);
 	Test_graphicsShaderReflection(t, deviceRef);
 	Test_graphicsSubmit(t, deviceRef);
+	Test_graphicsGpuExecute(t, deviceRef);
+	Test_graphicsAccelerationStructures(t, deviceRef);
 	Test_graphicsDeviceMemory(t, deviceRef);
 
 clean:

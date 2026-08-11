@@ -410,15 +410,21 @@ Bool DxUnifiedTexture_transition(
 
 	//Handle image barrier
 
+	//The first use of a resource has SyncBefore NONE, and the spec demands AccessBefore NO_ACCESS with it;
+	// the zeroed initial access reads as ACCESS_COMMON, which is invalid in that combination.
+
 	const D3D12_TEXTURE_BARRIER imageBarrier = (D3D12_TEXTURE_BARRIER) {
 
 		.SyncBefore = image->lastSync,
 		.SyncAfter = sync,
 
-		.AccessBefore = image->lastAccess,
+		.AccessBefore = image->lastSync == D3D12_BARRIER_SYNC_NONE ? D3D12_BARRIER_ACCESS_NO_ACCESS : image->lastAccess,
 		.AccessAfter = access,
 
-		.LayoutBefore = image->lastLayout,
+		//First use also discards through LAYOUT_UNDEFINED, since nothing was written yet and the validator
+		// refuses LAYOUT_COMMON as the before layout of a NO_ACCESS barrier.
+
+		.LayoutBefore = image->lastSync == D3D12_BARRIER_SYNC_NONE ? D3D12_BARRIER_LAYOUT_UNDEFINED : image->lastLayout,
 		.LayoutAfter = layout,
 
 		.pResource = image->image,

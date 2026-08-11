@@ -630,10 +630,45 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
 	D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
 
-	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
+	const U32 globalsRootParam = defaultLayoutExt->rootParamPushDescriptors;
 
-	commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2 + isNv, cbvLoc);
-	commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2 + isNv, cbvLoc);
+	commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, globalsRootParam, cbvLoc);
+	commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, globalsRootParam, cbvLoc);
+}
+
+//The message callback route needs Win11, so on older Windows the stored messages sit unread in the info queue.
+//Draining them when something fails is what turns "invalid argument" into the layer's actual complaint.
+//GetMessageA is not a typo: windows.h's GetMessage macro was active when the vtbl struct was declared.
+
+static void DxGraphicsDevice_logDebugMessages(DxGraphicsDevice *deviceExt, const Allocator *alloc) {
+
+	if(!deviceExt || !deviceExt->infoQueue0)
+		return;
+
+	ID3D12InfoQueue1 *queue = deviceExt->infoQueue0;
+	const U64 count = queue->lpVtbl->GetNumStoredMessages(queue);
+
+	for (U64 i = 0; i < count; ++i) {
+
+		SIZE_T len = 0;
+
+		if(FAILED(queue->lpVtbl->GetMessageA(queue, i, NULL, &len)) || !len)
+			continue;
+
+		Buffer buf = Buffer_createNull();
+
+		if(!Buffer_createEmptyBytes(len, alloc, &buf, NULL))
+			continue;
+
+		D3D12_MESSAGE *msg = (D3D12_MESSAGE*) buf.ptrNonConst;
+
+		if(SUCCEEDED(queue->lpVtbl->GetMessageA(queue, i, msg, &len)) && msg->pDescription)
+			Log_errorLnx("D3D12: %s", msg->pDescription);
+
+		Buffer_free(&buf, alloc);
+	}
+
+	queue->lpVtbl->ClearStoredMessages(queue);
 }
 
 Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
@@ -905,6 +940,9 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	));
 
 clean:
+
+	if(!s_uccess)
+		DxGraphicsDevice_logDebugMessages(deviceExt, alloc);
 
 	#if _ARCH == ARCH_X86_64
 

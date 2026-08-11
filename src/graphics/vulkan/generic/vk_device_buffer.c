@@ -518,7 +518,8 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 				);
 
 				deviceExt->bufferCopies.ptrNonConst[j] = (VkBufferCopy) {
-					.srcOffset = allocRange + (location - stagingBuffer->buffer.ptr),
+					//Relative to the staging resource rather than the frame region, since the copy offset is resource based
+					.srcOffset = allocRange + (location - (const U8*)staging->resource.mappedMemoryExt),
 					.dstOffset = bufferj.startRange,
 					.size = len
 				};

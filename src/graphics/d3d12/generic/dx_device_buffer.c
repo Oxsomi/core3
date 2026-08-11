@@ -54,10 +54,12 @@ Bool DxDeviceBuffer_transition(
 
 	//Handle buffer barrier
 
+	//The first use has SyncBefore NONE, which the spec only allows together with AccessBefore NO_ACCESS
+
 	const D3D12_BUFFER_BARRIER bufferBarrier = (D3D12_BUFFER_BARRIER) {
 		.SyncBefore = buffer->lastSync,
 		.SyncAfter = sync,
-		.AccessBefore = buffer->lastAccess,
+		.AccessBefore = buffer->lastSync == D3D12_BARRIER_SYNC_NONE ? D3D12_BARRIER_ACCESS_NO_ACCESS : buffer->lastAccess,
 		.AccessAfter = access,
 		.pResource = buffer->buffer,
 		.Size = UINT64_MAX            //Sized barrier not allowed
@@ -124,11 +126,19 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(buf->usage & EDeviceBufferUsage_ScratchExt)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
+	//The spec requires UAV alongside, since builds write the AS through unordered access behind the scenes
+
 	if(buf->usage & EDeviceBufferUsage_ASExt)
-		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+	//Acceleration structure buffers don't honor the tight contract, so requesting it hands the allocator a tight
+	// offset while placement still demands the full alignment, which fails resource creation.
 
 	#if D3D12_SDK_VERSION >= 618
-		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment) {
+		if(
+			(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment) &&
+			!(buf->usage & EDeviceBufferUsage_ASExt)
+		) {
 			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT;
 
 			//Tight alignment lets D3D12 pick a smaller alignment; an explicit 64 KiB placement alignment is
@@ -572,7 +582,7 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 					bufferExt->buffer,
 					bufferj.startRange,
 					stagingExt->buffer,
-					allocRange + (location - stagingBuffer->buffer.ptr),
+					allocRange + (location - (const U8*)staging->resource.mappedMemoryExt),        //Resource relative
 					len
 				);
 

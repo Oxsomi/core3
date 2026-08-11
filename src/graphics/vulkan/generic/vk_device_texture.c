@@ -358,7 +358,8 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 			range.layerCount = l;
 
 			deviceExt->bufferImageCopyRanges.ptrNonConst[m] = (VkBufferImageCopy) {
-				.bufferOffset = allocRange + (location - stagingBuffer->buffer.ptr),
+				//Relative to the staging resource rather than the frame region, since the copy offset is resource based
+				.bufferOffset = allocRange + (location - (const U8*)staging->resource.mappedMemoryExt),
 				.imageSubresource = range,
 				.imageOffset = (VkOffset3D) { .x = x, .y = y, .z = z },
 				.imageExtent = (VkExtent3D) { .width = w, .height = h, .depth = l }

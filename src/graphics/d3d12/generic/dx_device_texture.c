@@ -53,7 +53,6 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 	DeviceBufferRef *tempStagingResource = NULL;
 
 	ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
-	Bool compressed = ETextureFormat_getIsCompressed(format);
 
 	DXGI_FORMAT dxFormat = ETextureFormatId_toDXFormat(texture->base.textureFormatId);
 
@@ -76,7 +75,9 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 
 		siz *= (TextureRange_height(texturej) / alignmentY) * TextureRange_length(texturej);
 
-		allocRange += siz;
+		//Every region begins at a placed footprint offset, which D3D12 requires to be 512 byte aligned
+
+		allocRange += (siz + D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1) &~ (D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1);
 	}
 
 	device->pendingBytes += allocRange;
@@ -152,7 +153,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 			}
 
 			U64 allocRangeStart = allocRange;
-			allocRange += len;
+			allocRange += (len + D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1) &~ (D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1);
 
 			gotoIfError3(clean, DxDeviceBuffer_transition(
 				stagingResourceExt,
@@ -250,7 +251,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 
 		AllocationBufferAllocate allocBuffer = (AllocationBufferAllocate) {
 			.allocationBuffer = stagingBuffer,
-			.alignment = compressed ? 16 : 4,
+			.alignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT,        //Placed footprint offsets must be 512 aligned
 			.alloc = alloc
 		};
 
@@ -276,7 +277,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 
 			allocBuffer = (AllocationBufferAllocate) {
 				.allocationBuffer = stagingBuffer,
-				.alignment = compressed ? 16 : 4,
+				.alignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT,        //Placed footprint offsets must be 512 aligned
 				.alloc = alloc
 			};
 
@@ -382,7 +383,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 			}
 
 			U64 allocRangeStart = allocRange;
-			allocRange += len;
+			allocRange += (len + D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1) &~ (D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1);
 
 			D3D12_TEXTURE_COPY_LOCATION dst = (D3D12_TEXTURE_COPY_LOCATION) {
 				.pResource = textureExt->image,
@@ -393,7 +394,8 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 				.pResource = stagingExt->buffer,
 				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
 				.PlacedFootprint = (D3D12_PLACED_SUBRESOURCE_FOOTPRINT) {
-					.Offset = allocRangeStart + (U64)(location - stagingBuffer->buffer.ptr),
+					//Relative to the staging resource rather than the frame region, since the footprint is resource based
+					.Offset = allocRangeStart + (U64)(location - (const U8*)staging->resource.mappedMemoryExt),
 					.Footprint = (D3D12_SUBRESOURCE_FOOTPRINT) {
 						.Format = dxFormat,
 						.Width = w,
