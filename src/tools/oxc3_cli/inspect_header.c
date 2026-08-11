@@ -343,12 +343,13 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 				Log_debugLnx("\tFlag: Has source locations (file/line/column)");
 
 			Log_debugLnx(
-				"With %"PRIu32" nodes, %"PRIu32" annotations, %"PRIu32" registers, %"PRIu32" enum values "
-				"and features 0x%08"PRIX32,
+				"With %"PRIu32" nodes, %"PRIu32" annotations, %"PRIu32" registers, %"PRIu32" enum values, "
+				"%"PRIu32" types and features 0x%08"PRIX32,
 				srHeader.nodeCount,
 				srHeader.annotationCount,
 				srHeader.registerCount,
 				srHeader.enumValueCount,
+				srHeader.typeCount,
 				srHeader.features
 			);
 

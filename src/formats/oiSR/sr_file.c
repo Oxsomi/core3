@@ -36,6 +36,7 @@ TListImpl(SRSymbol);
 TListImpl(SRAnnotation);
 TListImpl(SRRegister);
 TListImpl(SREnumValue);
+TListImpl(SRType);
 TListImpl(SRFile);
 
 const C8 *ESRNodeType_name(ESRNodeType type) {
@@ -74,6 +75,18 @@ const C8 *ESREnumType_name(ESREnumType type) {
 	static const C8 *names[] = { "uint", "int", "uint64_t", "int64_t", "uint16_t", "int16_t" };
 
 	if(type >= ESREnumType_Count)
+		return "Invalid";
+
+	return names[type];
+}
+
+const C8 *ESRTypeClass_name(ESRTypeClass type) {
+
+	static const C8 *names[] = {
+		"Scalar", "Vector", "MatrixRows", "MatrixColumns", "Object", "Struct", "InterfaceClass", "InterfacePointer"
+	};
+
+	if(type >= ESRTypeClass_Count)
 		return "Invalid";
 
 	return names[type];
@@ -156,6 +169,7 @@ Bool SRFile_createCopy(const SRFile *src, const Allocator *alloc, SRFile *srFile
 	gotoIfError3(clean, ListSRAnnotation_createCopy(src->annotations, alloc, &srFile->annotations, e_rr));
 	gotoIfError3(clean, ListSRRegister_createCopy(src->registers, alloc, &srFile->registers, e_rr));
 	gotoIfError3(clean, ListSREnumValue_createCopy(src->enumValues, alloc, &srFile->enumValues, e_rr));
+	gotoIfError3(clean, ListSRType_createCopy(src->types, alloc, &srFile->types, e_rr));
 
 	srFile->flags = src->flags;
 	srFile->features = src->features;
@@ -180,6 +194,7 @@ void SRFile_free(SRFile *srFile, const Allocator *alloc) {
 	ListSRAnnotation_free(&srFile->annotations, alloc);
 	ListSRRegister_free(&srFile->registers, alloc);
 	ListSREnumValue_free(&srFile->enumValues, alloc);
+	ListSRType_free(&srFile->types, alloc);
 
 	*srFile = (SRFile) { 0 };
 }
@@ -265,6 +280,7 @@ Bool SRFile_finalize(SRFile *srFile, const Allocator *alloc, Error *e_rr) {
 	hash = Buffer_fnv1a64(ListSRAnnotation_bufferConst(srFile->annotations), hash);
 	hash = Buffer_fnv1a64(ListSRRegister_bufferConst(srFile->registers), hash);
 	hash = Buffer_fnv1a64(ListSREnumValue_bufferConst(srFile->enumValues), hash);
+	hash = Buffer_fnv1a64(ListSRType_bufferConst(srFile->types), hash);
 
 	for(U64 i = 0; i < srFile->names.entryStrings.length; ++i)
 		hash = Buffer_fnv1a64(CharString_bufferConst(srFile->names.entryStrings.ptr[i]), hash);
@@ -426,6 +442,48 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 			(int) CharString_length(name),
 			name.ptr
 		);
+
+		//Resolved type of a value node (Variable/Parameter/Typedef/Struct/...), in parens: "(float3)", "(uint2[4])".
+		//Verbose adds the structured fields so a serialized oiSR can be reviewed exactly.
+
+		for(U64 tI = 0; tI < srFile->types.length; ++tI)
+			if(srFile->types.ptr[tI].nodeId == i) {
+
+				SRType ty = srFile->types.ptr[tI];
+
+				//Underlying (resolved) name; falls back to the type class for nameless struct/object parameters.
+
+				CharString under = ty.typeNameId != U32_MAX ?
+					srFile->names.entryStrings.ptr[ty.typeNameId] :
+					CharString_createRefCStrConst(ESRTypeClass_name((ESRTypeClass) ty.typeClass));
+
+				//Display name is the alias the user actually wrote (what a tooltip shows); falls back to the underlying.
+
+				CharString disp = ty.displayNameId != U32_MAX ?
+					srFile->names.entryStrings.ptr[ty.displayNameId] : under;
+
+				if(isVerbose && ty.displayNameId != U32_MAX)
+					Log_debug(
+						alloc, ELogOptions_None, " (%.*s : %s %"PRIu8"x%"PRIu8" elems=%"PRIu32" aka %.*s)",
+						(int) CharString_length(disp), disp.ptr,
+						ESRTypeClass_name((ESRTypeClass) ty.typeClass), ty.rows, ty.cols, ty.elements,
+						(int) CharString_length(under), under.ptr
+					);
+
+				else if(isVerbose)
+					Log_debug(
+						alloc, ELogOptions_None, " (%.*s : %s %"PRIu8"x%"PRIu8" elems=%"PRIu32")",
+						(int) CharString_length(under), under.ptr,
+						ESRTypeClass_name((ESRTypeClass) ty.typeClass), ty.rows, ty.cols, ty.elements
+					);
+
+				else if(ty.elements)
+					Log_debug(alloc, ELogOptions_None, " (%.*s[%"PRIu32"])", (int) CharString_length(disp), disp.ptr, ty.elements);
+
+				else Log_debug(alloc, ELogOptions_None, " (%.*s)", (int) CharString_length(disp), disp.ptr);
+
+				break;
+			}
 
 		if(node.semanticId != U32_MAX) {
 			CharString semantic = srFile->names.entryStrings.ptr[node.semanticId];

@@ -33,6 +33,8 @@ typedef struct SRHeader {		//Should be aligned to 4-byte
 	U32 registerCount;			//Frontend bind info records (for Register nodes)
 	U32 enumValueCount;			//Enumerator records (for EnumValue nodes)
 
+	U32 typeCount;				//Per-node type records (for Variable/Typedef/Struct/Union nodes)
+
 } SRHeader;					//Note: unlike SBHeader the magic + header aren't a single struct on disk;
 							// when magic is present it's a separate U32 written before SRHeader.
 
@@ -151,6 +153,27 @@ typedef struct SREnumValue {
 	I64 value;
 } SREnumValue;					//16 bytes
 
+//The resolved type of a value node. Keyed by node index; typeName is the underlying (resolved) spelling ("float3",
+// "Light", "Texture2D"), and typeClass/rows/cols/elements let a consumer tell scalar/vector/matrix/struct/object apart
+// without parsing the name. displayName is the alias the source actually wrote (the sugar a tooltip shows): for
+// "typedef float3 myvec; myvec v;" the variable v has typeName "float3" and displayName "myvec"; it is U32_MAX when it
+// equals the underlying name. Produced for Variable/Typedef/Struct/Union/StaticVariable/GroupsharedVariable nodes
+// (whose localId indexes the frontend type table, read via GetDesc1 for the display name) and for Parameter nodes
+// including the return slot (whose type comes from the function-parameter reflection instead of a type localId, so
+// only builtin scalar/vector/matrix names are reconstructed; struct/object parameters carry the class but no name).
+// typeClass mirrors D3D_SHADER_VARIABLE_CLASS (ESRTypeClass: scalar/vector/matrixRows/matrixColumns/object/
+// struct/interfaceClass/interfacePointer).
+typedef struct SRType {
+	U32 nodeId;					//The value node this type describes
+	U8 typeClass;				//ESRTypeClass
+	U8 rows;					//Matrix row count (1 for scalar/vector/object)
+	U8 cols;					//Vector width / matrix column count (1 for scalar/object)
+	U8 padding;
+	U32 elements;				//Array element count (0 = not an array)
+	U32 typeNameId;				//Underlying (resolved) type spelling into strings[], or U32_MAX
+	U32 displayNameId;			//Display/alias spelling into strings[] (for tooltips); U32_MAX = same as typeName
+} SRType;						//20 bytes
+
 //Final file format; please manually parse the members.
 //Verify if everything's in bounds.
 //Verify if SRFile includes any invalid data.
@@ -164,6 +187,7 @@ SRFile {		//Has to be 16-byte aligned
 	SRAnnotation annotations[header.annotationCount];
 	SRRegister registers[header.registerCount];
 	SREnumValue enumValues[header.enumValueCount];
+	SRType types[header.typeCount];
 
 	U8[N] pad;								//Padding to align to 16-byte
 
@@ -209,4 +233,4 @@ This hash is refreshed by `SRFile_finalize` (and on read). It can be used for qu
 
 ## Changelog
 
-1.1: Initial format specification. Carries the node tree (kinds, parent/child topology, names, semantics, forward-declaration links, annotations), the optional per-node source-location tier, and the detail tiers: per-Register frontend bind info, per-EnumValue enumerator values, a `HasReturn` flag on Function nodes, and per-Parameter direction (`ParamReturn`/`ParamIn`/`ParamOut`, `in`+`out` = `inout`). Deferred (localId still references them): the type graph (parameter/variable/member/return types), constant-buffer layouts, and resource array dims.
+1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Carries the node tree (kinds, parent/child topology, names, semantics, forward-declaration links, annotations), the optional per-node source-location tier, and the detail tiers: per-Register frontend bind info, per-EnumValue enumerator values, a `HasReturn` flag on Function nodes, per-Parameter direction (`ParamReturn`/`ParamIn`/`ParamOut`, `in`+`out` = `inout`), and the per-node type tier (`SRType`, `header.typeCount`) giving each value node a serialized type (underlying name + display/alias name + class + rows/cols + array elements; a tooltip shows the alias, e.g. `Variable pos (myvec)`, with verbose adding `aka float3`). Types are resolved for `Variable`/`Typedef`/`Struct`/`Union`/`StaticVariable`/`GroupsharedVariable` nodes (whose `localId` indexes the frontend type table) and for `Parameter` nodes including the return slot (typed from the function-parameter reflection; builtin scalar/vector/matrix names are reconstructed, struct/object parameters carry only their class). Deferred: the type graph's go-to-definition links (struct type -> defining node) and struct member/base-class/interface graph, multi-dimensional and resource array dims, constant-buffer byte layouts (by design -> oiSB).

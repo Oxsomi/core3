@@ -119,6 +119,70 @@ void Test_shaderCompilerReflectSR(Test *t) {
 	Test_assert(t, "register reflected", reflection.registers.length > 0);
 	Test_assert(t, "enum values reflected", reflection.enumValues.length >= 2);
 
+	//Type tier: Variable/Struct/Typedef/Union nodes carry a resolved type. Light's members (pos/color) are float3
+	//vectors, and the Light struct node resolves to its own "Light" struct type.
+
+	Test_assert(t, "types reflected", reflection.types.length > 0);
+
+	U32 posId = srFindNode(&reflection, ESRNodeType_Variable, "pos");
+	Test_assert(t, "member pos reflected", posId != U32_MAX);
+
+	if (posId != U32_MAX) {
+
+		const SRType *posTy = NULL;
+
+		for (U64 i = 0; i < reflection.types.length; ++i)
+			if (reflection.types.ptr[i].nodeId == posId) { posTy = &reflection.types.ptr[i]; break; }
+
+		Test_assert(t, "member pos has a type", posTy != NULL);
+
+		if (posTy) {
+
+			Test_assert(t, "member pos type is a 3-wide vector",
+				posTy->typeClass == ESRTypeClass_Vector && posTy->cols == 3);
+
+			CharString tn = posTy->typeNameId != U32_MAX ?
+				reflection.names.entryStrings.ptr[posTy->typeNameId] : CharString_createNull();
+			CharString f3 = CharString_createRefCStrConst("float3");
+			Test_assert(t, "member pos type name is float3", CharString_equalsStringSensitive(&tn, &f3));
+		}
+	}
+
+	if (lightId != U32_MAX) {
+
+		const SRType *lightTy = NULL;
+
+		for (U64 i = 0; i < reflection.types.length; ++i)
+			if (reflection.types.ptr[i].nodeId == lightId) { lightTy = &reflection.types.ptr[i]; break; }
+
+		Test_assert(t, "struct Light resolves to a struct type", lightTy && lightTy->typeClass == ESRTypeClass_Struct);
+	}
+
+	//Parameter types come from the function-parameter reflection (D3D12_PARAMETER_DESC), not a type localId. The
+	//entrypoint's "id" parameter is a uint scalar; verify the reconstructed builtin name.
+
+	U32 idParam = srFindNode(&reflection, ESRNodeType_Parameter, "id");
+	Test_assert(t, "parameter id reflected", idParam != U32_MAX);
+
+	if (idParam != U32_MAX) {
+
+		const SRType *idTy = NULL;
+
+		for (U64 i = 0; i < reflection.types.length; ++i)
+			if (reflection.types.ptr[i].nodeId == idParam) { idTy = &reflection.types.ptr[i]; break; }
+
+		Test_assert(t, "parameter id has a type", idTy != NULL);
+
+		if (idTy) {
+
+			CharString tn = idTy->typeNameId != U32_MAX ?
+				reflection.names.entryStrings.ptr[idTy->typeNameId] : CharString_createNull();
+			CharString u = CharString_createRefCStrConst("uint");
+			Test_assert(t, "parameter id type is uint",
+				idTy->typeClass == ESRTypeClass_Scalar && CharString_equalsStringSensitive(&tn, &u));
+		}
+	}
+
 	U32 dblId = srFindNode(&reflection, ESRNodeType_Function, "dbl");
 	Test_assert(t, "returning function reflected", dblId != U32_MAX);
 	if (dblId != U32_MAX)
@@ -146,6 +210,7 @@ void Test_shaderCompilerReflectSR(Test *t) {
 
 		Test_assert(t, "round-trip node count", roundTrip.nodes.length == reflection.nodes.length);
 		Test_assert(t, "round-trip annotation count", roundTrip.annotations.length == reflection.annotations.length);
+		Test_assert(t, "round-trip type count", roundTrip.types.length == reflection.types.length);
 		Test_assert(t, "round-trip hash matches", roundTrip.hash == reflection.hash);
 	}
 

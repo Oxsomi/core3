@@ -40,6 +40,7 @@ static Bool buildSample(Test *t, SRFile *sr) {
 		return false;
 
 	U32 nsName = 0, lightName = 0, posName = 0, colName = 0, mainName = 0, uvName = 0, sem = 0, anno = 0, file = 0;
+	U32 f3Name = 0, v3Name = 0;
 
 	CharString sNs    = CharString_createRefCStrConst("MyNS");
 	CharString sLight = CharString_createRefCStrConst("Light");
@@ -50,6 +51,8 @@ static Bool buildSample(Test *t, SRFile *sr) {
 	CharString sSem   = CharString_createRefCStrConst("TEXCOORD0");
 	CharString sAnno  = CharString_createRefCStrConst("shader");
 	CharString sFile  = CharString_createRefCStrConst("test.hlsl");
+	CharString sF3    = CharString_createRefCStrConst("float3");
+	CharString sV3    = CharString_createRefCStrConst("vec3");
 
 	Bool ok = true;
 	ok &= SRFile_addString(sr, &sNs,    t->alloc, &nsName,    &t->err);
@@ -61,6 +64,8 @@ static Bool buildSample(Test *t, SRFile *sr) {
 	ok &= SRFile_addString(sr, &sSem,   t->alloc, &sem,       &t->err);
 	ok &= SRFile_addString(sr, &sAnno,  t->alloc, &anno,      &t->err);
 	ok &= SRFile_addString(sr, &sFile,  t->alloc, &file,      &t->err);
+	ok &= SRFile_addString(sr, &sF3,    t->alloc, &f3Name,    &t->err);
+	ok &= SRFile_addString(sr, &sV3,    t->alloc, &v3Name,    &t->err);
 
 	if(!ok)
 		return false;
@@ -109,6 +114,17 @@ static Bool buildSample(Test *t, SRFile *sr) {
 		if(!ListSRSymbol_pushBack(&sr->symbols, sym, t->alloc, &t->err))
 			return false;
 	}
+
+	//A type record for the pos variable (node 2): underlying float3 (vector, 1 row x 3 cols) written as the alias vec3,
+	//so both the underlying-name and the distinct display-name (tooltip) paths round-trip.
+
+	SRType posType = (SRType) {
+		.nodeId = 2, .typeClass = ESRTypeClass_Vector, .rows = 1, .cols = 3, .elements = 0,
+		.typeNameId = f3Name, .displayNameId = v3Name
+	};
+
+	if(!ListSRType_pushBack(&sr->types, posType, t->alloc, &t->err))
+		return false;
 
 	return SRFile_finalize(sr, t->alloc, &t->err);
 }
@@ -174,6 +190,27 @@ static void assertSampleContent(Test *t, const SRFile *r) {
 
 	if(r->symbols.length == 6)
 		Test_assert(t, "node4 symbol line", r->symbols.ptr[4].line == 5);
+
+	//Type tier: the pos variable (node 2) round-tripped as float3 (vector 1x3)
+
+	Test_assert(t, "type count", r->types.length == 1);
+
+	if(r->types.length == 1) {
+
+		Test_assert(t, "type keys node 2", r->types.ptr[0].nodeId == 2);
+		Test_assert(t, "type is vector 1x3",
+			r->types.ptr[0].typeClass == ESRTypeClass_Vector && r->types.ptr[0].rows == 1 && r->types.ptr[0].cols == 3);
+
+		CharString f3 = CharString_createRefCStrConst("float3");
+		Test_assert(t, "underlying type name resolves to float3",
+			r->types.ptr[0].typeNameId < r->names.entryStrings.length &&
+			CharString_equalsStringSensitive(&r->names.entryStrings.ptr[r->types.ptr[0].typeNameId], &f3));
+
+		CharString v3 = CharString_createRefCStrConst("vec3");
+		Test_assert(t, "display type name resolves to vec3",
+			r->types.ptr[0].displayNameId < r->names.entryStrings.length &&
+			CharString_equalsStringSensitive(&r->names.entryStrings.ptr[r->types.ptr[0].displayNameId], &v3));
+	}
 }
 
 static void Test_SRFileRoundTrip(Test *t) {

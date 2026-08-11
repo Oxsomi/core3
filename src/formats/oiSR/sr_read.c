@@ -42,6 +42,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	ListSRAnnotation annotations = (ListSRAnnotation) { 0 };
 	ListSRRegister registers = (ListSRRegister) { 0 };
 	ListSREnumValue enumValues = (ListSREnumValue) { 0 };
+	ListSRType types = (ListSRType) { 0 };
 	DLFile names = (DLFile) { 0 };
 
 	if(!offset || !srFile)
@@ -101,9 +102,19 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	gotoIfError3(clean, ListSREnumValue_resize(&enumValues, header.enumValueCount, alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListSREnumValue_buffer(enumValues), alloc, e_rr));
 
-	//Align 16-byte then read the names oiDL
+	gotoIfError3(clean, ListSRType_resize(&types, header.typeCount, alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListSRType_buffer(types), alloc, e_rr));
 
-	*offset = (*offset + 15) & ~15;
+	//Align 16-byte then read the names oiDL. Consume the pad bytes through the cursor rather than only advancing the
+	//offset, so a forward-only stream (file data streaming straight off disk) moves past the padding too; otherwise
+	//DLFile_read would start reading inside the pad and reject the names as a bad DLFile header.
+
+	U64 aligned = (*offset + 15) & ~15;
+
+	if(aligned != *offset) {
+		U8 padDiscard[16];
+		gotoIfError3(clean, StreamCursor_consume(&cursor, offset, padDiscard, aligned - *offset, alloc, e_rr));
+	}
 
 	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, false, alloc, NULL, &names, e_rr));
 
@@ -276,6 +287,32 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			retError(clean, Error_invalidState(0, "SRFile_read() enumValue had an invalid enumType"));
 	}
 
+	//Types must reference a value node (variable-like) and carry a valid class + name reference
+
+	for(U64 i = 0; i < types.length; ++i) {
+
+		SRType ty = types.ptr[i];
+
+		if(ty.nodeId >= nodes.length)
+			retError(clean, Error_invalidState(0, "SRFile_read() type.nodeId out of bounds"));
+
+		U8 nt = nodes.ptr[ty.nodeId].type;
+
+		if(nt != ESRNodeType_Variable && nt != ESRNodeType_Parameter && nt != ESRNodeType_StaticVariable &&
+			nt != ESRNodeType_GroupsharedVariable && nt != ESRNodeType_Typedef && nt != ESRNodeType_Struct &&
+			nt != ESRNodeType_Union)
+			retError(clean, Error_invalidState(0, "SRFile_read() type.nodeId doesn't reference a value node"));
+
+		if(ty.typeClass >= ESRTypeClass_Count)
+			retError(clean, Error_invalidState(0, "SRFile_read() type had an invalid typeClass"));
+
+		if(ty.typeNameId != U32_MAX && ty.typeNameId >= nameCount)
+			retError(clean, Error_invalidState(0, "SRFile_read() type.typeNameId out of bounds"));
+
+		if(ty.displayNameId != U32_MAX && ty.displayNameId >= nameCount)
+			retError(clean, Error_invalidState(0, "SRFile_read() type.displayNameId out of bounds"));
+	}
+
 	if(!isSubFile && *offset != stream->size)
 		retError(clean, Error_invalidState(0, "SRFile_read() file had unrecognized data at the end"));
 
@@ -293,6 +330,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	srFile->annotations = annotations;
 	srFile->registers = registers;
 	srFile->enumValues = enumValues;
+	srFile->types = types;
 	srFile->flags = flags;
 	srFile->features = header.features;
 
@@ -302,6 +340,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	annotations = (ListSRAnnotation) { 0 };
 	registers = (ListSRRegister) { 0 };
 	enumValues = (ListSREnumValue) { 0 };
+	types = (ListSRType) { 0 };
 
 	gotoIfError3(clean, SRFile_finalize(srFile, alloc, e_rr));
 
@@ -316,6 +355,7 @@ clean:
 	ListSRAnnotation_free(&annotations, alloc);
 	ListSRRegister_free(&registers, alloc);
 	ListSREnumValue_free(&enumValues, alloc);
+	ListSRType_free(&types, alloc);
 	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
 }

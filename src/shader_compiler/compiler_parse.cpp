@@ -1382,6 +1382,97 @@ clean:
 }
 
 //Detail tiers on top of the node tree: function return, resource bind info and enum values.
+//A D3D scalar variable type -> its HLSL base spelling, or nullptr for non-scalar bases (struct/object/void) which
+//have no reconstructible builtin name. Used to name function-parameter types (params carry no type localId + no name).
+
+static const C8 *Compiler_svtBaseName(D3D_SHADER_VARIABLE_TYPE t) {
+	switch (t) {
+		case D3D_SVT_BOOL:    return "bool";
+		case D3D_SVT_INT:     return "int";
+		case D3D_SVT_UINT:    return "uint";
+		case D3D_SVT_UINT8:   return "uint8_t";
+		case D3D_SVT_FLOAT:   return "float";
+		case D3D_SVT_FLOAT16: return "float16_t";
+		case D3D_SVT_DOUBLE:  return "double";
+		case D3D_SVT_INT16:   return "int16_t";
+		case D3D_SVT_UINT16:  return "uint16_t";
+		case D3D_SVT_INT64:   return "int64_t";
+		case D3D_SVT_UINT64:  return "uint64_t";
+		default:              return nullptr;
+	}
+}
+
+//Builds + pushes one SRType record for a value node. underlyingName/displayName may be nullptr (no name); the display
+//name id is left U32_MAX when it equals the underlying (the string pool dedups them to the same id).
+
+static Bool Compiler_pushType(
+	SRFile *reflection, U32 nodeId, U32 typeClass, U32 rows, U32 cols, U32 elements,
+	const C8 *underlyingName, const C8 *displayName, const Allocator *alloc, Error *e_rr
+) {
+	Bool s_uccess = true;
+
+	SRType ty = SRType{};
+	ty.nodeId = nodeId;
+	ty.typeClass = (U32) typeClass < ESRTypeClass_Count ? (U8) typeClass : (U8) ESRTypeClass_Scalar;
+	ty.rows = rows > 0xFF ? 0xFF : (U8) rows;
+	ty.cols = cols > 0xFF ? 0xFF : (U8) cols;
+	ty.elements = elements;
+	ty.typeNameId = U32_MAX;
+	ty.displayNameId = U32_MAX;
+
+	if (underlyingName && underlyingName[0]) {
+		CharString s = CharString_createRefCStrConst(underlyingName);
+		gotoIfError3(clean, SRFile_addString(reflection, &s, alloc, &ty.typeNameId, e_rr));
+	}
+
+	if (displayName && displayName[0]) {
+		CharString s = CharString_createRefCStrConst(displayName);
+		U32 id = 0;
+		gotoIfError3(clean, SRFile_addString(reflection, &s, alloc, &id, e_rr));
+		ty.displayNameId = id == ty.typeNameId ? U32_MAX : id;
+	}
+
+	gotoIfError3(clean, ListSRType_pushBack(&reflection->types, ty, alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+//Reconstructs + pushes a function-parameter's type. Parameters carry no type localId, so builtin scalar/vector/matrix
+//names are rebuilt from the parameter desc (HLSL vector/matrix dims are 1..4); struct/object params keep only their
+//class, since D3D12_PARAMETER_DESC exposes no type name for them.
+
+static Bool Compiler_pushParamType(
+	SRFile *reflection, U32 nodeId, D3D_SHADER_VARIABLE_TYPE svt, U32 typeClass, U32 rows, U32 cols,
+	const Allocator *alloc, Error *e_rr
+) {
+	C8 buf[32];
+	const C8 *name = nullptr;
+	const C8 *base = Compiler_svtBaseName(svt);
+
+	if (base) {
+
+		U64 n = 0;
+
+		for (const C8 *b = base; *b && n < 24; ++b)
+			buf[n++] = *b;
+
+		if (rows > 1 && rows <= 4 && cols >= 1 && cols <= 4) {          //matrix "baseRxC"
+			buf[n++] = (C8) ('0' + rows);
+			buf[n++] = 'x';
+			buf[n++] = (C8) ('0' + cols);
+		}
+
+		else if (cols > 1 && cols <= 4)                                 //vector "baseN"
+			buf[n++] = (C8) ('0' + cols);
+
+		buf[n] = '\0';
+		name = buf;
+	}
+
+	return Compiler_pushType(reflection, nodeId, typeClass, rows, cols, 0, name, nullptr, alloc, e_rr);
+}
+
 //These use their own reflector index spaces (FunctionCount / ResourceCount via node.localId / EnumCount),
 // each carrying back the node it belongs to, so they attach to the already-built SRFile nodes.
 
@@ -1413,8 +1504,21 @@ static Bool Compiler_reflectDetails(
 
 			U64 retId = (U64) funcDesc.NodeId + 1 + funcDesc.FunctionParameterCount;
 
-			if (retId < reflection->nodes.length && reflection->nodes.ptr[retId].type == ESRNodeType_Parameter)
+			if (retId < reflection->nodes.length && reflection->nodes.ptr[retId].type == ESRNodeType_Parameter) {
+
 				reflection->nodes.ptrNonConst[retId].flags |= ESRNodeFlag_ParamReturn;
+
+				//The return slot's type comes from the special return-parameter reflection, not a type localId
+
+				ID3D12FunctionParameterReflection *retParam =
+					reflectionData->GetFunctionParameter(i, D3D_RETURN_PARAMETER_INDEX);
+
+				D3D12_PARAMETER_DESC rpd;
+
+				if (retParam && !FAILED(retParam->GetDesc(&rpd)))
+					gotoIfError3(clean, Compiler_pushParamType(
+						reflection, (U32) retId, rpd.Type, rpd.Class, rpd.Rows, rpd.Columns, alloc, e_rr));
+			}
 		}
 
 		//Parameter direction (in / out / inout) per real parameter; params are contiguous after the function node
@@ -1441,6 +1545,9 @@ static Bool Compiler_reflectDetails(
 
 			if (pd.Flags & D3D_PF_OUT)
 				reflection->nodes.ptrNonConst[pnode].flags |= ESRNodeFlag_ParamOut;
+
+			gotoIfError3(clean, Compiler_pushParamType(
+				reflection, (U32) pnode, pd.Type, pd.Class, pd.Rows, pd.Columns, alloc, e_rr));
 		}
 	}
 
@@ -1507,6 +1614,37 @@ static Bool Compiler_reflectDetails(
 
 			gotoIfError3(clean, ListSREnumValue_pushBack(&reflection->enumValues, ev, alloc, e_rr));
 		}
+	}
+
+	//Types: for these value nodes the localId indexes the reflector's frontend type table (GetTypeByIndex), which
+	//isn't otherwise serialized; resolve each into an SRType record so the localId stops dangling and hover can show
+	//"float3", "Light", "Texture2D". These are the kinds the fork guarantees carry a type localId (parameters carry
+	//their type in the function-parameter reflection instead, handled in the function loop above). GetTypeByIndex hands
+	//back a CHLSLReflectionType (an ID3D12ShaderReflectionType1), so GetDesc1 (which adds the display/alias spelling on
+	//top of the underlying name) is safe.
+
+	for (U64 i = 0; i < reflection->nodes.length; ++i) {
+
+		U8 nt = reflection->nodes.ptr[i].type;
+
+		if (nt != ESRNodeType_Variable && nt != ESRNodeType_Typedef && nt != ESRNodeType_Struct &&
+			nt != ESRNodeType_Union && nt != ESRNodeType_StaticVariable && nt != ESRNodeType_GroupsharedVariable)
+			continue;
+
+		ID3D12ShaderReflectionType *rt = nullptr;
+
+		if (reflectionData->GetTypeByIndex(reflection->nodes.ptr[i].localId, &rt) != S_OK || !rt)
+			continue;        //Node with no resolvable type: keep the node, skip the detail
+
+		D3D12_SHADER_TYPE_DESC1 d{};
+
+		if (FAILED(((ID3D12ShaderReflectionType1*) rt)->GetDesc1(&d)))
+			continue;
+
+		gotoIfError3(clean, Compiler_pushType(
+			reflection, (U32) i, d.Desc.Class, d.Desc.Rows, d.Desc.Columns, d.Desc.Elements,
+			d.Desc.Name, d.DisplayName, alloc, e_rr
+		));
 	}
 
 clean:

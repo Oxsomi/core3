@@ -204,6 +204,22 @@ typedef enum ESREnumType {
 
 const C8 *ESREnumType_name(ESREnumType type);
 
+//Type class of a value node's type (Variable/Parameter/Typedef/Struct/...), a mirror of D3D_SHADER_VARIABLE_CLASS.
+
+typedef enum ESRTypeClass {
+	ESRTypeClass_Scalar,
+	ESRTypeClass_Vector,
+	ESRTypeClass_MatrixRows,
+	ESRTypeClass_MatrixColumns,
+	ESRTypeClass_Object,               //Textures, samplers, buffers and other resource/handle types
+	ESRTypeClass_Struct,
+	ESRTypeClass_InterfaceClass,
+	ESRTypeClass_InterfacePointer,
+	ESRTypeClass_Count
+} ESRTypeClass;
+
+const C8 *ESRTypeClass_name(ESRTypeClass type);
+
 //Source location of a node, the strippable "SymbolInfo" tier.
 //Symbols, when present, are parallel to nodes (symbols[i] describes nodes[i]).
 
@@ -282,11 +298,34 @@ typedef struct SREnumValue {
 
 } SREnumValue;
 
+//The resolved type of a value node (Variable/Parameter/StaticVariable/GroupsharedVariable/Typedef/Struct/Union). Keyed
+//by node index; typeName is the frontend spelling ("float3", "Light", "Texture2D"), the class/rows/cols/elements let a
+//consumer distinguish scalar/vector/matrix/struct/object without parsing the name. This resolves the node localIds that
+//would otherwise dangle (a value node's localId indexes the frontend type table, which isn't serialized).
+
+typedef struct SRType {
+
+	U32 nodeId;                             //The value node this type describes
+
+	U8 typeClass;                           //ESRTypeClass
+	U8 rows;                                //Matrix row count (1 for scalar/vector/object)
+	U8 cols;                                //Vector width / matrix column count (1 for scalar/object)
+	U8 padding;
+
+	U32 elements;                           //Array element count (0 = not an array)
+
+	U32 typeNameId;                         //Underlying type spelling into names[] (resolved), or U32_MAX
+	U32 displayNameId;                      //Display type spelling into names[] (the alias the user wrote, for tooltips);
+	                                        //U32_MAX = same as typeName
+
+} SRType;
+
 TList(SRNode);
 TList(SRSymbol);
 TList(SRAnnotation);
 TList(SRRegister);
 TList(SREnumValue);
+TList(SRType);
 
 typedef enum ESRSettingsFlags {
 	ESRSettingsFlags_None             = 0,
@@ -306,6 +345,7 @@ typedef struct SRFile {
 
 	ListSRRegister registers;    //Frontend bind info for Register nodes
 	ListSREnumValue enumValues;  //Enumerators for Enum nodes
+	ListSRType types;            //Resolved types for value nodes (Variable/Parameter/Typedef/Struct/...)
 
 	ESRSettingsFlags flags;
 	U32 features;                //ESRFeature bitset: which reflection tiers this file carries
@@ -357,7 +397,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 
 typedef enum ESRVersion {
 	ESRVersion_Undefined,
-	ESRVersion_V1_1            //Current (on-disk version byte 1, displayed as major.minor 1.1)
+	ESRVersion_V1_1            //Current (on-disk version byte 1, displayed as major.minor 1.1); no shipped file predates it
 } ESRVersion;
 
 typedef enum ESRFlag {
@@ -379,6 +419,8 @@ typedef struct SRHeader {
 
 	U32 registerCount;
 	U32 enumValueCount;
+
+	U32 typeCount;             //Per-node type records (Variable/Typedef/Struct/Union)
 
 } SRHeader;
 
