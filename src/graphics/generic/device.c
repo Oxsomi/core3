@@ -1338,6 +1338,9 @@ Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 new
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
+	DeviceBufferRef *newStaging = NULL;
+	AllocationBuffer newAllocations[MAX_FRAMES_IN_FLIGHT] = { 0 };
+
 	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_resizeStagingBuffer()::deviceRef is required"));
 
@@ -1345,16 +1348,9 @@ Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 new
 
 	newSize = (((newSize + 2) / 3 + 4095) &~ 4095) * 3;            //Align to ensure we never get incompatible staging buffers
 
-	if (device->staging) {
-
-		//"Free" staging buffer.
-		//If the staging buffer was already in flight this won't do anything until it's out of flight.
-
-		for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
-			AllocationBuffer_free(&device->stagingAllocations[i], alloc);
-
-		RefPtr_dec(&device->staging);
-	}
+	//The replacement is built completely before the live one is touched, so a failure (typically out of memory)
+	// fails the resize and leaves the device on the staging buffer it already had.
+	//That briefly holds both buffers, which is the price of the next submit surviving a failed resize.
 
 	CharString stagingBufferName = CharString_createRefCStrConst("Staging buffer");
 
@@ -1364,24 +1360,49 @@ Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 new
 		EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
 		NULL,
 		&stagingBufferName,
-		newSize, &device->staging, e_rr
+		newSize, &newStaging, e_rr
 	));
 
-	const DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
+	const DeviceBuffer *staging = DeviceBufferRef_ptr(newStaging);
 	const Buffer stagingBuffer = Buffer_createRef(staging->resource.mappedMemoryExt, newSize);
 
-	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i) {
+	for(U64 i = 0; i < sizeof(newAllocations) / sizeof(newAllocations[0]); ++i) {
 
 		const AllocationBufferCreate create = (AllocationBufferCreate) {
 			.size = newSize / 3,
 			.alloc = alloc,
-			.allocationBuffer = &device->stagingAllocations[i]
+			.allocationBuffer = &newAllocations[i]
 		};
 
 		gotoIfError3(clean, AllocationBuffer_createRefFromRegion(&create, stagingBuffer, newSize / 3 * i, e_rr));
 	}
 
+	//Swap only happens once nothing can fail anymore.
+	//If the old staging buffer was still in flight, dec'ing it won't free it until it's out of flight.
+
+	if (device->staging) {
+
+		for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
+			AllocationBuffer_free(&device->stagingAllocations[i], alloc);
+
+		RefPtr_dec(&device->staging);
+	}
+
+	device->staging = newStaging;
+	newStaging = NULL;
+
+	for(U64 i = 0; i < sizeof(newAllocations) / sizeof(newAllocations[0]); ++i) {
+		device->stagingAllocations[i] = newAllocations[i];
+		newAllocations[i] = (AllocationBuffer) { 0 };
+	}
+
 clean:
+
+	for(U64 i = 0; i < sizeof(newAllocations) / sizeof(newAllocations[0]); ++i)
+		AllocationBuffer_free(&newAllocations[i], alloc);
+
+	RefPtr_dec(&newStaging);
+
 	return s_uccess;
 }
 

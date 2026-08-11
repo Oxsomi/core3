@@ -48,6 +48,7 @@
 // 25. Sampler/data       - sampler field validation, createBufferData move/copy split, texture markDirty
 // 26. PipelineLayout     - push constant limits, push descriptor flag routing
 // 27. Shader reflection  - oiSH entry lookup, layout detection, checkShaderFeatures, compute pipeline creation
+// 28. Device memory      - budget queries, staging buffer resize, handleNextFrame lock contract
 //
 //CommandList lifecycle, recording and scopes live in test_graphics_command_list.c; they're the largest untested
 // surface in the module, so they get their own file to grow in.
@@ -1244,6 +1245,53 @@ static void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "bufferHasNoTexture", !fromBuffer.resource.device && !fromBuffer.width);
 	Test_assert(t, "nullHasNoTexture", !fromNull.resource.device && !fromNull.width);
 
+	//Handles come from the per image bindless allocation, and nothing here was exposed
+
+	Test_assert(t, "noReadHandle", TextureRef_getReadHandle(renderTexture, 0, 0) == BindlessDescriptor_None);
+	Test_assert(t, "noWriteHandle", TextureRef_getWriteHandle(renderTexture, 0, 0) == BindlessDescriptor_None);
+
+	Test_assert(t, "currMatchesImage0",
+		TextureRef_getCurrReadHandle(renderTexture, 0) == TextureRef_getReadHandle(renderTexture, 0, 0)
+	);
+
+	//An out of range image, an unsupported subresource and a NULL ref all answer as nothing
+
+	Test_assert(t, "handleImageOOB", TextureRef_getReadHandle(renderTexture, 0, 5) == BindlessDescriptor_None);
+	Test_assert(t, "handleSubResource", TextureRef_getReadHandle(renderTexture, 1, 0) == BindlessDescriptor_None);
+	Test_assert(t, "handleNull", TextureRef_getReadHandle(NULL, 0, 0) == BindlessDescriptor_None);
+
+	const UnifiedTextureImage oob = TextureRef_getImage(renderTexture, 0, 5);
+	Test_assert(t, "imageOOBZero", !oob.readHandle && !oob.writeHandle);
+
+	//An exposed render target gets real, distinct handles that resolve in the default table
+
+	if (GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features & EGraphicsFeatures_Bindless) {
+
+		RenderTextureRef *exposed = NULL;
+		const CharString exposedName = CharString_createRefCStrConst("Predicate exposed target");
+
+		if(Test_assert(t, "createExposed", GraphicsDeviceRef_createRenderTexture(
+			deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8,
+			EGraphicsResourceFlag_ShaderRWBindless, EMSAASamples_Off, NULL, &exposedName, &exposed, &t->err
+		))) {
+
+			const BindlessDescriptor read = TextureRef_getReadHandle(exposed, 0, 0);
+			const BindlessDescriptor write = TextureRef_getWriteHandle(exposed, 0, 0);
+
+			Test_assert(t, "exposedRead",
+				read != BindlessDescriptor_None && BindlessDescriptor_isValid(deviceRef, NULL, read)
+			);
+
+			Test_assert(t, "exposedWrite",
+				write != BindlessDescriptor_None && BindlessDescriptor_isValid(deviceRef, NULL, write)
+			);
+
+			Test_assert(t, "exposedDistinct", read != write);
+		}
+
+		RefPtr_dec(&exposed);
+	}
+
 	RefPtr_dec(&buffer);
 	RefPtr_dec(&depthStencil);
 	RefPtr_dec(&renderTexture);
@@ -1720,6 +1768,79 @@ static void Test_graphicsSubmit(Test *t, GraphicsDeviceRef *deviceRef) {
 	RefPtr_dec(&commandList);
 }
 
+// -- 28. Memory budget, staging buffer and frame upkeep --------------------------
+
+//Runs after submit on purpose: pendingResources has been flushed by then, which is what makes calling
+// handleNextFrame without a real command buffer safe, and the staging buffer has actually seen use.
+
+static void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "GraphicsDevice/memory");
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	Test_assert(t, "budgetNullDevice", GraphicsDeviceRef_getMemoryBudget(NULL, false) == U64_MAX);
+
+	const U64 shared = GraphicsDeviceRef_getMemoryBudget(deviceRef, false);
+	const U64 local = GraphicsDeviceRef_getMemoryBudget(deviceRef, true);
+
+	Test_assert(t, "budgetShared", shared && shared != U64_MAX);
+
+	//Non dedicated devices report 0 device local by contract, since everything is the same memory
+
+	if(device->info.type == EGraphicsDeviceType_Dedicated)
+		Test_assert(t, "budgetLocalDedicated", local && local != U64_MAX);
+
+	else Test_assert(t, "budgetLocalShared", !local);
+
+	//The staging buffer can be resized at runtime; the size is aligned to three whole pages, one per frame
+
+	Test_assert(t, "stagingNullDevice", !GraphicsDeviceRef_resizeStagingBuffer(NULL, 12288, NULL));
+	Test_assert(t, "stagingExists", device->staging != NULL);
+
+	const U64 oldSize = device->staging ? DeviceBufferRef_ptr(device->staging)->resource.size : 0;
+
+	if(Test_assert(t, "stagingResize", GraphicsDeviceRef_resizeStagingBuffer(deviceRef, 12288, &t->err)))
+		Test_assert(t, "stagingResized",
+			device->staging && DeviceBufferRef_ptr(device->staging)->resource.size == 12288
+		);
+
+	//Restored so later frames keep the size the device was tuned with at creation
+
+	if(oldSize)
+		Test_assert(t, "stagingRestore", GraphicsDeviceRef_resizeStagingBuffer(deviceRef, oldSize, &t->err));
+
+	//A resize that can't be satisfied fails the resize, not the device: the replacement is built before the swap,
+	// so the old staging buffer has to still be there and still be its old size.
+	//A PiB stays comfortably impossible even on machines with TiBs of memory.
+
+	Test_assert(t, "stagingResizeFailsSafe", !GraphicsDeviceRef_resizeStagingBuffer(deviceRef, PEBI, NULL));
+
+	Test_assert(t, "stagingSurvivesFailure",
+		device->staging && DeviceBufferRef_ptr(device->staging)->resource.size == oldSize
+	);
+
+	//handleNextFrame is a frame step the submit path drives, so it demands the device lock is already held
+
+	Test_assert(t, "frameNullDevice", !GraphicsDeviceRef_handleNextFrame(NULL, NULL, NULL));
+	Test_assert(t, "frameNeedsLock", !GraphicsDeviceRef_handleNextFrame(deviceRef, NULL, NULL));
+
+	//After submit and wait nothing is pending, so no flush runs and no command buffer is needed
+
+	Test_assert(t, "nothingPending", !device->pendingResources.length);
+
+	if (!device->pendingResources.length) {
+
+		const ELockAcquire acq = SpinLock_lock(&device->lock, U64_MAX);
+
+		Test_assert(t, "frameLocked", GraphicsDeviceRef_handleNextFrame(deviceRef, NULL, &t->err));
+		Test_assert(t, "inFlightReleased", !device->resourcesInFlight[device->fifId].length);
+
+		if(acq == ELockAcquire_Acquired)
+			SpinLock_unlock(&device->lock);
+	}
+}
+
 // -- 7-10. Device, DeviceBuffer and Swapchain ------------------------------------
 
 static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
@@ -1861,6 +1982,7 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	Test_graphicsPipelineLayout(t, deviceRef);
 	Test_graphicsShaderReflection(t, deviceRef);
 	Test_graphicsSubmit(t, deviceRef);
+	Test_graphicsDeviceMemory(t, deviceRef);
 
 clean:
 
