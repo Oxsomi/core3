@@ -71,7 +71,16 @@ typedef enum EOptExtensions {
 	EOptExtensions_DescriptorHeap,
 	EOptExtensions_RayClusterAS,
 	EOptExtensions_RayPartitionedTLAS,
-	EOptExtensions_PushDescriptor
+	EOptExtensions_PushDescriptor,
+
+	//Dependencies of the features above rather than features of their own.
+	//They're listed here so they're only ever requested when the device actually advertised them; a device that
+	// offers a feature without its dependencies simply doesn't get the feature.
+
+	EOptExtensions_CreateRenderpass2,
+	EOptExtensions_DepthStencilResolve,
+	EOptExtensions_Spirv14,
+	EOptExtensions_ShaderFloatControls
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];

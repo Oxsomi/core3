@@ -556,7 +556,9 @@ const C8 *optExtensionsName[] = {
 
 	"VK_EXT_descriptor_heap", "VK_NV_cluster_acceleration_structure", "VK_NV_partitioned_acceleration_structure",
 
-	"VK_KHR_push_descriptor"
+	"VK_KHR_push_descriptor",
+
+	"VK_KHR_create_renderpass2", "VK_KHR_depth_stencil_resolve", "VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1296,7 +1298,17 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//Direct rendering
 
-		if (optExtensions[EOptExtensions_DynamicRendering] && dynamicRendering.dynamicRendering)
+		//Dynamic rendering only covers the attachments themselves; resolving a depth stencil one and the render pass
+		// objects it's built on come from the two extensions below.
+		//The spec makes those dependencies of dynamic rendering, but emulators advertise it without them, and
+		// requesting an extension the device never offered is what fails device creation with nothing to go on.
+
+		if (
+			optExtensions[EOptExtensions_DynamicRendering] &&
+			optExtensions[EOptExtensions_CreateRenderpass2] &&
+			optExtensions[EOptExtensions_DepthStencilResolve] &&
+			dynamicRendering.dynamicRendering
+		)
 			capabilities.features |= EGraphicsFeatures_DirectRendering;
 
 		//Shader types
@@ -1347,6 +1359,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(
 			optExtensions[EOptExtensions_VariableRateShading] &&
+			optExtensions[EOptExtensions_CreateRenderpass2] &&
 			vrsFeat.pipelineFragmentShadingRate &&
 			vrsFeat.attachmentFragmentShadingRate &&
 			vrsProp.maxFragmentSize.width >= 2 && vrsProp.maxFragmentSize.height >= 2 &&
@@ -1478,6 +1491,15 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 						(rtpProp.shaderGroupBaseAlignment != 32 && rtpProp.shaderGroupBaseAlignment != 64)
 					)
 				) {
+					optExtensions[EOptExtensions_RayQuery] = false;
+					optExtensions[EOptExtensions_RayPipeline] = false;
+				}
+
+				//Raytracing shaders are compiled against SPIRV 1.4, which brings the two below with it.
+				//Without them the device would advertise raytracing and then fail creation on the extensions it
+				// never offered, so the feature is dropped instead.
+
+				if(!optExtensions[EOptExtensions_Spirv14] || !optExtensions[EOptExtensions_ShaderFloatControls]) {
 					optExtensions[EOptExtensions_RayQuery] = false;
 					optExtensions[EOptExtensions_RayPipeline] = false;
 				}

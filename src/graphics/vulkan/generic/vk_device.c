@@ -456,16 +456,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	for(U64 i = 0; i < reqExtensionsNameCount; ++i)
 		gotoIfError3(clean, ListConstC8_pushBack(&extensions, reqExtensionsName[i], alloc, e_rr));
 
-	if(feat & (EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery)) {
-		gotoIfError3(clean, ListConstC8_pushBack(&extensions, "VK_KHR_spirv_1_4", alloc, e_rr));
-		gotoIfError3(clean, ListConstC8_pushBack(&extensions, "VK_KHR_shader_float_controls", alloc, e_rr));
-	}
-
-	if(feat & (EGraphicsFeatures_VariableRateShading | EGraphicsFeatures_DirectRendering))
-		gotoIfError3(clean, ListConstC8_pushBack(&extensions, "VK_KHR_create_renderpass2", alloc, e_rr));
-
-	if(feat & EGraphicsFeatures_DirectRendering)
-		gotoIfError3(clean, ListConstC8_pushBack(&extensions, "VK_KHR_depth_stencil_resolve", alloc, e_rr));
+	//Every extension below comes from the optional table, so nothing is ever requested that the device didn't
+	// advertise during enumeration.
+	//The dependency extensions used to be pushed here off a feature bit instead, which is how a device could be
+	// offered a feature it advertised and then refused for an extension it never had.
 
 	for (U64 i = 0; i < optExtensionsNameCount; ++i) {
 
@@ -504,6 +498,19 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_RayClusterAS:               on = feat2 & EGraphicsFeatures2_RayClusterAS;           break;
 			case EOptExtensions_RayPartitionedTLAS:         on = feat2 & EGraphicsFeatures2_RayPartitionedTLAS;     break;
 			case EOptExtensions_PushDescriptor:             on = featEx & EVkGraphicsFeatures_PerformantPushDescriptor; break;
+
+			//Dependencies, requested alongside whichever feature needs them
+
+			case EOptExtensions_DepthStencilResolve:        on = feat & EGraphicsFeatures_DirectRendering;          break;
+
+			case EOptExtensions_CreateRenderpass2:
+				on = feat & (EGraphicsFeatures_VariableRateShading | EGraphicsFeatures_DirectRendering);
+				break;
+
+			case EOptExtensions_Spirv14:
+			case EOptExtensions_ShaderFloatControls:
+				on = feat & (EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery);
+				break;
 
 			default:
 				continue;
