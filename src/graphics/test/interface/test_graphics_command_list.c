@@ -440,6 +440,90 @@ void Test_graphicsCommandValidation(Test *t, GraphicsDeviceRef *deviceRef) {
 		RefPtr_dec(&commandList);
 	}
 
+	//Copies are validated against what the images are, not just that they're images
+
+	RenderTextureRef *target2 = NULL;
+	RenderTextureRef *fmtOther = NULL;
+	DepthStencilRef *depth = NULL;
+	DeviceBufferRef *indirect = NULL;
+
+	const CharString target2Name = CharString_createRefCStrConst("Validation copy target");
+	const CharString fmtOtherName = CharString_createRefCStrConst("Validation format target");
+	const CharString depthName = CharString_createRefCStrConst("Validation depth");
+	const CharString indirectName = CharString_createRefCStrConst("Validation indirect buffer");
+
+	Test_assert(t, "createTarget2", GraphicsDeviceRef_createRenderTexture(
+		deviceRef, ETextureType_2D, 16, 16, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		EMSAASamples_Off, NULL, &target2Name, &target2, &t->err
+	));
+
+	Test_assert(t, "createFmtOther", GraphicsDeviceRef_createRenderTexture(
+		deviceRef, ETextureType_2D, 16, 16, 1, ETextureFormatId_RG16f, EGraphicsResourceFlag_None,
+		EMSAASamples_Off, NULL, &fmtOtherName, &fmtOther, &t->err
+	));
+
+	Test_assert(t, "createDepthCopy", GraphicsDeviceRef_createDepthStencil(
+		deviceRef, 16, 16, EDepthStencilFormat_D32, false, EMSAASamples_Off, NULL, &depthName, &depth, &t->err
+	));
+
+	Test_assert(t, "createIndirect", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_Indirect, EGraphicsResourceFlag_None, NULL, &indirectName, 256, &indirect, &t->err
+	));
+
+	if(target2 && fmtOther && depth && (commandList = Test_beginList(t, deviceRef, "createCopy"))) {
+
+		const ListCopyImageRegion noRegions = (ListCopyImageRegion) { 0 };
+		const CopyImageRegion whole = (CopyImageRegion) { 0 };
+
+		//Negatives share a scope, since a failing command invalidates the scope but never the list
+
+		Test_assert(t, "scopeCopy", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+
+		Test_assert(t, "copyNoRegions", !CommandListRef_copyImageRegions(commandList, target, target2, noRegions, NULL));
+		Test_assert(t, "copyNullSrc", !CommandListRef_copyImage(commandList, NULL, target2, whole, NULL));
+		Test_assert(t, "copyBufferAsSrc", !CommandListRef_copyImage(commandList, buffer, target2, whole, NULL));
+		Test_assert(t, "copyDepthColorMix", !CommandListRef_copyImage(commandList, depth, target2, whole, NULL));
+		Test_assert(t, "copyBothDepth", !CommandListRef_copyImage(commandList, depth, depth, whole, NULL));
+		Test_assert(t, "copyFormatMismatch", !CommandListRef_copyImage(commandList, target, fmtOther, whole, NULL));
+
+		const CopyImageRegion badLevel = (CopyImageRegion) { .srcLevelId = 1 };
+
+		Test_assert(t, "copyBadLevel", !CommandListRef_copyImage(commandList, target, target2, badLevel, NULL));
+
+		Test_assert(t, "endScopeCopyNeg", CommandListRef_endScope(commandList, &t->err));
+		Test_assert(t, "copyNegHidden", !CommandListRef_ptr(commandList)->activeScopes.length);
+
+		//A valid copy is a modify op, so its scope is the one that commits
+
+		Test_assert(t, "scopeCopyPos", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
+		Test_assert(t, "copyValid", CommandListRef_copyImage(commandList, target, target2, whole, &t->err));
+		Test_assert(t, "endScopeCopyPos", CommandListRef_endScope(commandList, &t->err));
+		Test_assert(t, "copyCommitted", CommandListRef_ptr(commandList)->activeScopes.length == 1);
+
+		RefPtr_dec(&commandList);
+	}
+
+	//Indirect draws validate their argument buffer before any render state, so the buffer rules are reachable
+	// without a pipeline; dispatchIndirect checks its pipeline first, so only that refusal is visible for it
+
+	if(indirect && (commandList = Test_beginList(t, deviceRef, "createIndirectList"))) {
+
+		Test_assert(t, "scopeIndirect", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+
+		Test_assert(t, "indirectNullBuffer", !CommandListRef_drawIndirect(commandList, NULL, 0, 1, false, NULL));
+		Test_assert(t, "indirectMisaligned", !CommandListRef_drawIndirect(commandList, indirect, 8, 1, false, NULL));
+		Test_assert(t, "indirectZeroCalls", !CommandListRef_drawIndirect(commandList, indirect, 0, 0, false, NULL));
+		Test_assert(t, "indirectWrongUsage", !CommandListRef_drawIndirect(commandList, buffer, 0, 1, false, NULL));
+		Test_assert(t, "indirectOOB", !CommandListRef_drawIndirect(commandList, indirect, 256, 1, false, NULL));
+		Test_assert(t, "dispatchIndirectNeedsPipeline", !CommandListRef_dispatchIndirect(commandList, indirect, 0, NULL));
+
+		RefPtr_dec(&commandList);
+	}
+
+	RefPtr_dec(&indirect);
+	RefPtr_dec(&depth);
+	RefPtr_dec(&fmtOther);
+	RefPtr_dec(&target2);
 	RefPtr_dec(&buffer);
 	RefPtr_dec(&target);
 }

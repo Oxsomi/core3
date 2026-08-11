@@ -33,6 +33,7 @@
 // 17. TLASTransformSRT  - interleaved VkSRTDataNV get/set round trip and pinned field layout
 // 18. Descriptor pack   - buffer region + counter offset bit packing, texture/tlas/sampler union
 // 19. TextureRange      - extent helpers
+// 24. Default layout    - the bindless layout OxC3 shaders compile against (DXIL chain law, SPIRV sets, rt gating)
 //
 //What is covered when an adapter is present (skipped with a message otherwise;
 //CI Linux may provide lavapipe, but a GPU is never guaranteed):
@@ -44,6 +45,7 @@
 // 12. Bindless           - allocate / free / reuse a descriptor in the device's default table
 // 13. DeviceBuffer       - ExposeBindlessRead/Write only take a descriptor when asked
 // 16. Submit             - begin/end state machine, empty frame submit (the only path that binds descriptors)
+// 25. Sampler/data       - sampler field validation, createBufferData move/copy split, texture markDirty
 //
 //CommandList lifecycle, recording and scopes live in test_graphics_command_list.c; they're the largest untested
 // surface in the module, so they get their own file to grow in.
@@ -80,6 +82,7 @@
 #include "types/container/texture_format.h"
 #include "types/container/buffer.h"
 #include "types/base/string_base.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 #include "test_graphics_shared.h"
 
@@ -506,6 +509,132 @@ static void Test_textureRange(Test *t) {
 	Test_assert(t, "emptyLength", !TextureRange_length(empty));
 }
 
+// -- 24. Default bindless layout (pure, no device) -------------------------------
+
+//What OxC3's own shaders are compiled against, so the numbers here are a contract with resources.hlsli rather
+// than an implementation detail that may drift.
+//The DXIL offsets form a chain where each register range starts exactly where the previous one ends, which pins
+// the exact numbers without this test needing the private count enums.
+
+static void Test_graphicsDefaultBindlessLayout(Test *t) {
+
+	Test_setModule(t, "GraphicsDevice/defaultLayout");
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	GraphicsDeviceInfo info = (GraphicsDeviceInfo) { 0 };
+	GraphicsDeviceInfo infoRt = (GraphicsDeviceInfo) { 0 };
+	infoRt.capabilities.features = EGraphicsFeatures_Raytracing;
+
+	DescriptorLayoutInfo result = (DescriptorLayoutInfo) { 0 };
+
+	Test_assert(t, "nullInfo", !GraphicsDevice_defaultBindlessLayout(NULL, ESHBinaryType_DXIL, &result, alloc, NULL));
+	Test_assert(t, "nullResult", !GraphicsDevice_defaultBindlessLayout(&info, ESHBinaryType_DXIL, NULL, alloc, NULL));
+
+	//A binary type without binding numbers is refused rather than silently handed DXIL's registers
+
+	Test_assert(t, "unknownBinary", !GraphicsDevice_defaultBindlessLayout(
+		&info, ESHBinaryType_Count, &result, alloc, NULL
+	));
+
+	Test_assert(t, "unknownLeftEmpty", !result.bindings.ptr && !result.bindingNames.ptr);
+
+	//SPIRV without raytracing: samplers alone in set 0, everything else packed into set 1 in declaration order
+
+	if(Test_assert(t, "spirv", GraphicsDevice_defaultBindlessLayout(
+		&info, ESHBinaryType_SPIRV, &result, alloc, &t->err
+	))) {
+
+		Test_assert(t, "spirvCount", result.bindings.length == 12 && result.bindingNames.length == 12);
+		Test_assert(t, "spirvFlags", result.flags == EDescriptorLayoutFlags_AllowBindlessOnArrays);
+
+		//A non empty result is a leak about to happen, so it's refused before anything is written
+
+		Test_assert(t, "nonEmptyRefused", !GraphicsDevice_defaultBindlessLayout(
+			&info, ESHBinaryType_SPIRV, &result, alloc, NULL
+		));
+
+		const DescriptorBinding *b = result.bindings.ptr;
+
+		Test_assert(t, "spirvSampler",
+			b[0].registerType == ESHRegisterType_Sampler && !b[0].binding.space && !b[0].binding.binding
+		);
+
+		Test_assert(t, "spirvSamplerName", CharString_equalsCStringSensitive(&result.bindingNames.ptr[0], "_samplers"));
+
+		Bool packed = true;
+		Bool hasTlas = false;
+
+		for(U64 i = 1; i < result.bindings.length; ++i) {
+			packed &= b[i].binding.space == 1 && b[i].binding.binding == i - 1 && b[i].visibility == U32_MAX && b[i].count;
+			hasTlas |= b[i].registerType == ESHRegisterType_AccelerationStructure;
+		}
+
+		Test_assert(t, "spirvPacked", packed);
+		Test_assert(t, "spirvNoTlas", !hasTlas);
+
+		DescriptorLayoutInfo_free(&result, alloc);
+	}
+
+	//Raytracing adds exactly one binding at the end rather than reshuffling anything before it
+
+	if(Test_assert(t, "spirvRt", GraphicsDevice_defaultBindlessLayout(
+		&infoRt, ESHBinaryType_SPIRV, &result, alloc, &t->err
+	))) {
+
+		Test_assert(t, "spirvRtCount", result.bindings.length == 13);
+
+		const DescriptorBinding last = result.bindings.ptr[12];
+
+		Test_assert(t, "spirvRtTlas",
+			last.registerType == ESHRegisterType_AccelerationStructure &&
+			last.binding.space == 1 && last.binding.binding == 11
+		);
+
+		Test_assert(t, "spirvRtTlasName", CharString_equalsCStringSensitive(&result.bindingNames.ptr[12], "_tlasExt"));
+
+		DescriptorLayoutInfo_free(&result, alloc);
+	}
+
+	//DXIL: everything lives in space 0 and the ranges chain, SRVs through t and UAVs through u
+
+	if(Test_assert(t, "dxil", GraphicsDevice_defaultBindlessLayout(
+		&infoRt, ESHBinaryType_DXIL, &result, alloc, &t->err
+	))) {
+
+		const DescriptorBinding *b = result.bindings.ptr;
+
+		Bool space0 = true;
+
+		for(U64 i = 0; i < result.bindings.length; ++i)
+			space0 &= !b[i].binding.space;
+
+		Test_assert(t, "dxilSpace0", space0 && result.bindings.length == 13);
+		Test_assert(t, "dxilSampler", !b[0].binding.binding);
+
+		//[1] textures2D, [2] cubes, [3] 3D, [4] buffer, [12] tlas share the t namespace
+
+		Test_assert(t, "dxilSrvChain",
+			!b[1].binding.binding &&
+			b[2].binding.binding == b[1].binding.binding + b[1].count &&
+			b[3].binding.binding == b[2].binding.binding + b[2].count &&
+			b[4].binding.binding == b[3].binding.binding + b[3].count &&
+			b[12].binding.binding == b[4].binding.binding + b[4].count
+		);
+
+		//[5] rwBuffer then the six rw textures share the u namespace
+
+		Bool uavChain = !b[5].binding.binding;
+
+		for(U64 i = 6; i <= 11; ++i)
+			uavChain &= b[i].binding.binding == b[i - 1].binding.binding + b[i - 1].count;
+
+		Test_assert(t, "dxilUavChain", uavChain);
+
+		DescriptorLayoutInfo_free(&result, alloc);
+	}
+}
+
 // -- Device dependent, skipped without an adapter --------------------------------
 
 //7 to 10 live in Test_graphicsDeviceForApi below, which brings up the device the rest of these run against.
@@ -761,6 +890,39 @@ static void Test_graphicsDescriptorTable(Test *t, GraphicsDeviceRef *deviceRef) 
 	Test_assert(t, "setSingleOOB", !DescriptorTableRef_setDescriptor(table, 2, 1, false, &desc, NULL));
 	Test_assert(t, "unsetSingle", DescriptorTableRef_unsetDescriptors(table, 2, 0, 1, &t->err));
 
+	//The by name variants resolve the register name first, so they're the same operations routed differently
+	// and an unknown name has to be refused everywhere rather than defaulting to binding 0.
+
+	Test_assert(t, "setByName", DescriptorTableRef_setDescriptorByName(table, &bindingNames[2], 0, false, &desc, &t->err));
+	Test_assert(t, "unsetByName", DescriptorTableRef_unsetDescriptorsByName(table, &bindingNames[2], 0, 1, &t->err));
+	Test_assert(t, "setByNameMissing", !DescriptorTableRef_setDescriptorByName(table, &missingName, 0, false, &desc, NULL));
+
+	ListDescriptor one = (ListDescriptor) { 0 };
+	ListDescriptor_createRefConst(&desc, 1, &one, NULL);
+
+	Test_assert(t, "setManyByName", DescriptorTableRef_setDescriptorsByName(
+		table, &bindingNames[0], 0, false, &one, &t->err
+	));
+
+	Test_assert(t, "unsetManyByName", DescriptorTableRef_unsetDescriptorsByName(table, &bindingNames[0], 0, 1, &t->err));
+
+	Test_assert(t, "unsetByNameMissing", !DescriptorTableRef_unsetDescriptorsByName(table, &missingName, 0, 1, NULL));
+
+	Test_assert(t, "allocByName", DescriptorTableRef_allocDescriptorByName(
+		table, &bindingNames[0], &arrayId, false, &desc, &t->err
+	));
+
+	Test_assert(t, "allocByNameId", arrayId < 4);
+	Test_assert(t, "unsetAllocByName", DescriptorTableRef_unsetDescriptorsByName(table, &bindingNames[0], arrayId, 1, &t->err));
+
+	Test_assert(t, "allocByNameNonArray", !DescriptorTableRef_allocDescriptorByName(
+		table, &bindingNames[2], &arrayId, false, &desc, NULL
+	));
+
+	Test_assert(t, "allocByNameMissing", !DescriptorTableRef_allocDescriptorByName(
+		table, &missingName, &arrayId, false, &desc, NULL
+	));
+
 	if (hasBindless) {
 
 		//A bindless allocation finds the array whose register type matches, which is the first binding here.
@@ -776,6 +938,21 @@ static void Test_graphicsDescriptorTable(Test *t, GraphicsDeviceRef *deviceRef) 
 		Test_assert(t, "allocBindlessType", !bindlessTypeId);
 		Test_assert(t, "allocBindlessArrayId", !arrayId);
 		Test_assert(t, "unsetBindless", DescriptorTableRef_unsetDescriptors(table, bindId, arrayId, 1, &t->err));
+
+		//findBindlessRegister answers "where would a resource like this go", so the type has to match a binding
+
+		U16 foundBind = U16_MAX;
+		U8 foundType = U8_MAX;
+
+		Test_assert(t, "findRegister", DescriptorTableRef_findBindlessRegister(
+			table, ESHRegisterType_ByteAddressBuffer, 0, &foundBind, &foundType, buffer, 0, &t->err
+		));
+
+		Test_assert(t, "findRegisterBinding", !foundBind && !foundType);
+
+		Test_assert(t, "findRegisterMissing", !DescriptorTableRef_findBindlessRegister(
+			table, ESHRegisterType_Sampler, 0, &foundBind, &foundType, buffer, 0, NULL
+		));
 
 		//Resources can be routed into a table of the caller's own, which is what every creator's
 		// bindlessDescriptorTable parameter is for.
@@ -1069,6 +1246,123 @@ static void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef) {
 	RefPtr_dec(&renderTexture);
 }
 
+// -- 25. Sampler and initial data uploads ----------------------------------------
+
+//createSampler validates every field before allocating, createBufferData either moves or copies its data based
+// on ownership, and a CPU backed texture is what markDirty is for.
+//None of these had any coverage, and the move/copy split is exactly the kind of contract that breaks silently.
+
+static void Test_graphicsSamplerAndData(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Sampler");
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	SamplerRef *sampler = NULL;
+	DeviceBufferRef *moved = NULL;
+	DeviceBufferRef *reffed = NULL;
+	DeviceTextureRef *texture = NULL;
+
+	CharString name = CharString_createRefCStrConst("Test sampler");
+
+	const SamplerInfo valid = (SamplerInfo) { 0 };
+	SamplerInfo bad;
+
+	Test_assert(t, "nullDevice", !GraphicsDeviceRef_createSampler(NULL, valid, true, NULL, &name, &sampler, NULL));
+
+	bad = valid;
+	bad.filter = 0xFF;
+	Test_assert(t, "badFilter", !GraphicsDeviceRef_createSampler(deviceRef, bad, true, NULL, &name, &sampler, NULL));
+
+	bad = valid;
+	bad.addressU = 0xFF;
+	Test_assert(t, "badAddress", !GraphicsDeviceRef_createSampler(deviceRef, bad, true, NULL, &name, &sampler, NULL));
+
+	bad = valid;
+	bad.aniso = 17;
+	Test_assert(t, "badAniso", !GraphicsDeviceRef_createSampler(deviceRef, bad, true, NULL, &name, &sampler, NULL));
+
+	bad = valid;
+	bad.borderColor = 0xFF;
+	Test_assert(t, "badBorder", !GraphicsDeviceRef_createSampler(deviceRef, bad, true, NULL, &name, &sampler, NULL));
+
+	bad = valid;
+	bad.comparisonFunction = 0xFF;
+	Test_assert(t, "badCompare", !GraphicsDeviceRef_createSampler(deviceRef, bad, true, NULL, &name, &sampler, NULL));
+
+	Test_assert(t, "rejectedNothing", !sampler);
+
+	//disallowBindlessDescriptor keeps this identical on devices with and without bindless
+
+	if(Test_assert(t, "create", GraphicsDeviceRef_createSampler(deviceRef, valid, true, NULL, &name, &sampler, &t->err))) {
+
+		const Sampler *samplerPtr = SamplerRef_ptr(sampler);
+
+		Test_assert(t, "device", samplerPtr->device == deviceRef);
+		Test_assert(t, "noBindless", !samplerPtr->bindlessDescriptorTable);
+
+		//A maxLod of 0 would make every sampler unusable, so it defaults to F16 max instead
+
+		Test_assert(t, "maxLodDefaulted", samplerPtr->info.maxLod);
+	}
+
+	//createBufferData moves an owned buffer but copies a ref, since a ref can't be taken over
+
+	Test_setModule(t, "DeviceBuffer/data");
+
+	name = CharString_createRefCStrConst("Test moved buffer");
+
+	Buffer owned = Buffer_createNull();
+	Test_assert(t, "ownedAlloc", Buffer_createEmptyBytes(64, alloc, &owned, &t->err));
+
+	if(Test_assert(t, "createMoved", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_None, NULL, &name, &owned, &moved, &t->err
+	))) {
+		Test_assert(t, "ownedMoved", !owned.ptr);
+		Test_assert(t, "movedSize", DeviceBufferRef_ptr(moved)->resource.size == 64);
+	}
+
+	U8 stack[32] = { 1, 2, 3, 4 };
+	Buffer dataRef = Buffer_createRefConst(stack, sizeof(stack));
+
+	name = CharString_createRefCStrConst("Test copied buffer");
+
+	if(Test_assert(t, "createRef", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_None, NULL, &name, &dataRef, &reffed, &t->err
+	))) {
+		Test_assert(t, "refIntact", dataRef.ptr == stack);
+		Test_assert(t, "refSize", DeviceBufferRef_ptr(reffed)->resource.size == 32);
+	}
+
+	Test_assert(t, "nullData", !GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_None, NULL, &name, NULL, &moved, NULL
+	));
+
+	//A CPU backed texture keeps its data around, which is what markDirty re-uploads from
+
+	Test_setModule(t, "DeviceTexture");
+
+	name = CharString_createRefCStrConst("Test texture");
+
+	Buffer texData = Buffer_createNull();
+	Test_assert(t, "texAlloc", Buffer_createEmptyBytes(4 * 4 * 4, alloc, &texData, &t->err));
+
+	if(Test_assert(t, "texCreate", GraphicsDeviceRef_createTexture(
+		deviceRef, ETextureType_2D, ETextureFormatId_RGBA8, EGraphicsResourceFlag_CPUBacked,
+		4, 4, 1, NULL, &name, &texData, &texture, &t->err
+	))) {
+		Test_assert(t, "texMarkDirty", DeviceTextureRef_markDirty(texture, 0, 0, 0, 2, 2, 1, &t->err));
+		Test_assert(t, "texMarkDirtyOOB", !DeviceTextureRef_markDirty(texture, 100, 0, 0, 1, 1, 1, NULL));
+	}
+
+	Buffer_free(&texData, alloc);
+
+	RefPtr_dec(&texture);
+	RefPtr_dec(&reffed);
+	RefPtr_dec(&moved);
+	RefPtr_dec(&sampler);
+}
+
 // -- 16. Submit ------------------------------------------------------------------
 
 //Submit is the only path that reaches GraphicsDevice_rebindDescriptors, which binds the descriptor tables and the
@@ -1249,6 +1543,7 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	Test_graphicsCommandValidation(t, deviceRef);
 	Test_graphicsRenderPass(t, deviceRef);
 	Test_graphicsTextureRef(t, deviceRef);
+	Test_graphicsSamplerAndData(t, deviceRef);
 	Test_graphicsSubmit(t, deviceRef);
 
 clean:
@@ -1365,6 +1660,7 @@ OXC3_TEST_ENTRY(graphics_interface) {
 	Test_tlasTransformSRT(&t);
 	Test_descriptorPacking(&t);
 	Test_textureRange(&t);
+	Test_graphicsDefaultBindlessLayout(&t);
 	Test_graphicsNullDevice(&t);
 	Test_graphicsDevice(&t);
 
