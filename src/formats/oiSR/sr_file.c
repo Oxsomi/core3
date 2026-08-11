@@ -170,6 +170,7 @@ Bool SRFile_createCopy(const SRFile *src, const Allocator *alloc, SRFile *srFile
 	gotoIfError3(clean, ListSRRegister_createCopy(src->registers, alloc, &srFile->registers, e_rr));
 	gotoIfError3(clean, ListSREnumValue_createCopy(src->enumValues, alloc, &srFile->enumValues, e_rr));
 	gotoIfError3(clean, ListSRType_createCopy(src->types, alloc, &srFile->types, e_rr));
+	gotoIfError3(clean, ListU32_createCopy(src->arrayDims, alloc, &srFile->arrayDims, e_rr));
 
 	srFile->flags = src->flags;
 	srFile->features = src->features;
@@ -195,6 +196,7 @@ void SRFile_free(SRFile *srFile, const Allocator *alloc) {
 	ListSRRegister_free(&srFile->registers, alloc);
 	ListSREnumValue_free(&srFile->enumValues, alloc);
 	ListSRType_free(&srFile->types, alloc);
+	ListU32_free(&srFile->arrayDims, alloc);
 
 	*srFile = (SRFile) { 0 };
 }
@@ -281,6 +283,7 @@ Bool SRFile_finalize(SRFile *srFile, const Allocator *alloc, Error *e_rr) {
 	hash = Buffer_fnv1a64(ListSRRegister_bufferConst(srFile->registers), hash);
 	hash = Buffer_fnv1a64(ListSREnumValue_bufferConst(srFile->enumValues), hash);
 	hash = Buffer_fnv1a64(ListSRType_bufferConst(srFile->types), hash);
+	hash = Buffer_fnv1a64(ListU32_bufferConst(srFile->arrayDims), hash);
 
 	for(U64 i = 0; i < srFile->names.entryStrings.length; ++i)
 		hash = Buffer_fnv1a64(CharString_bufferConst(srFile->names.entryStrings.ptr[i]), hash);
@@ -462,9 +465,16 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 				CharString disp = ty.displayNameId != U32_MAX ?
 					srFile->names.entryStrings.ptr[ty.displayNameId] : under;
 
+				//Multi-dimensional arrays list their per-dim lengths ("[2][3]"); single arrays fall back to the
+				//flattened `elements` ("[6]"). Bounds are re-checked here so a truncated file can't over-read.
+
+				Bool multiDim =
+					ty.arrayDimCount >= 2 && ty.arrayDimStart != U32_MAX &&
+					(U64) ty.arrayDimStart + ty.arrayDimCount <= srFile->arrayDims.length;
+
 				if(isVerbose && ty.displayNameId != U32_MAX)
 					Log_debug(
-						alloc, ELogOptions_None, " (%.*s : %s %"PRIu8"x%"PRIu8" elems=%"PRIu32" aka %.*s)",
+						alloc, ELogOptions_None, " (%.*s : %s %"PRIu8"x%"PRIu8" elems=%"PRIu32" aka %.*s",
 						(int) CharString_length(disp), disp.ptr,
 						ESRTypeClass_name((ESRTypeClass) ty.typeClass), ty.rows, ty.cols, ty.elements,
 						(int) CharString_length(under), under.ptr
@@ -472,15 +482,50 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 
 				else if(isVerbose)
 					Log_debug(
-						alloc, ELogOptions_None, " (%.*s : %s %"PRIu8"x%"PRIu8" elems=%"PRIu32")",
+						alloc, ELogOptions_None, " (%.*s : %s %"PRIu8"x%"PRIu8" elems=%"PRIu32,
 						(int) CharString_length(under), under.ptr,
 						ESRTypeClass_name((ESRTypeClass) ty.typeClass), ty.rows, ty.cols, ty.elements
 					);
 
-				else if(ty.elements)
-					Log_debug(alloc, ELogOptions_None, " (%.*s[%"PRIu32"])", (int) CharString_length(disp), disp.ptr, ty.elements);
+				else {
 
-				else Log_debug(alloc, ELogOptions_None, " (%.*s)", (int) CharString_length(disp), disp.ptr);
+					Log_debug(alloc, ELogOptions_None, " (%.*s", (int) CharString_length(disp), disp.ptr);
+
+					if(multiDim)
+						for(U8 k = 0; k < ty.arrayDimCount; ++k)
+							Log_debug(alloc, ELogOptions_None, "[%"PRIu32"]", srFile->arrayDims.ptr[ty.arrayDimStart + k]);
+
+					else if(ty.elements)
+						Log_debug(alloc, ELogOptions_None, "[%"PRIu32"]", ty.elements);
+
+					Log_debug(alloc, ELogOptions_None, ")");
+				}
+
+				//Verbose closes the paren after the array shape and the go-to-definition target node.
+
+				if(isVerbose) {
+
+					if(multiDim) {
+						Log_debug(alloc, ELogOptions_None, " dims=");
+						for(U8 k = 0; k < ty.arrayDimCount; ++k)
+							Log_debug(alloc, ELogOptions_None, "[%"PRIu32"]", srFile->arrayDims.ptr[ty.arrayDimStart + k]);
+					}
+
+					if(ty.defNodeId != U32_MAX)
+						Log_debug(alloc, ELogOptions_None, " def=#%"PRIu32, ty.defNodeId);
+
+					Log_debug(alloc, ELogOptions_None, ")");
+				}
+
+				//Base class (inheritance), shown in both modes after the type as ": BaseName".
+
+				if(ty.baseNodeId != U32_MAX && ty.baseNodeId < srFile->nodes.length) {
+					U32 baseName = srFile->nodes.ptr[ty.baseNodeId].nameId;
+					if(baseName != U32_MAX) {
+						CharString bn = srFile->names.entryStrings.ptr[baseName];
+						Log_debug(alloc, ELogOptions_None, " : %.*s", (int) CharString_length(bn), bn.ptr);
+					}
+				}
 
 				break;
 			}
@@ -499,13 +544,37 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 
 					SRRegister reg = srFile->registers.ptr[r];
 
-					if(isVerbose)
+					//Multi-dimensional resource arrays (Texture2D tex[4][2]) list their per-dim lengths; bindCount is the
+					//flattened total.
+
+					Bool multiDim =
+						reg.arrayDimCount >= 2 && reg.arrayDimStart != U32_MAX &&
+						(U64) reg.arrayDimStart + reg.arrayDimCount <= srFile->arrayDims.length;
+
+					if(isVerbose) {
+
 						Log_debug(
-							alloc, ELogOptions_None, " [%s dim=%"PRIu8" ret=%"PRIu8" count=%"PRIu32"]",
+							alloc, ELogOptions_None, " [%s dim=%"PRIu8" ret=%"PRIu8" count=%"PRIu32,
 							ESRResourceType_name((ESRResourceType) reg.type), reg.dimension, reg.returnType, reg.bindCount
 						);
 
-					else Log_debug(alloc, ELogOptions_None, " [%s]", ESRResourceType_name((ESRResourceType) reg.type));
+						if(multiDim) {
+							Log_debug(alloc, ELogOptions_None, " dims=");
+							for(U8 k = 0; k < reg.arrayDimCount; ++k)
+								Log_debug(alloc, ELogOptions_None, "[%"PRIu32"]", srFile->arrayDims.ptr[reg.arrayDimStart + k]);
+						}
+
+						Log_debug(alloc, ELogOptions_None, "]");
+					}
+
+					else {
+
+						Log_debug(alloc, ELogOptions_None, " [%s]", ESRResourceType_name((ESRResourceType) reg.type));
+
+						if(multiDim)
+							for(U8 k = 0; k < reg.arrayDimCount; ++k)
+								Log_debug(alloc, ELogOptions_None, "[%"PRIu32"]", srFile->arrayDims.ptr[reg.arrayDimStart + k]);
+					}
 
 					break;
 				}

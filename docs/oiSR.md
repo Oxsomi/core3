@@ -34,6 +34,7 @@ typedef struct SRHeader {		//Should be aligned to 4-byte
 	U32 enumValueCount;			//Enumerator records (for EnumValue nodes)
 
 	U32 typeCount;				//Per-node type records (for Variable/Typedef/Struct/Union nodes)
+	U32 arrayDimCount;			//Shared multi-dimensional array-length pool
 
 } SRHeader;					//Note: unlike SBHeader the magic + header aren't a single struct on disk;
 							// when magic is present it's a separate U32 written before SRHeader.
@@ -140,9 +141,10 @@ typedef struct SRRegister {
 	U8 type;					//ESRResourceType (cbuffer/Texture/SamplerState/RW.../RaytracingAccelerationStructure/...)
 	U8 dimension;				//ESRResourceDimension
 	U8 returnType;				//ESRResourceReturnType (0 = none)
-	U8 padding;
-	U32 bindCount;				//Descriptor count (array size); 0 = unbounded, 1 = single
-} SRRegister;					//12 bytes
+	U8 arrayDimCount;			//Resource-array dimension count in arrayDims[] (0/1 = use bindCount; >=2 = multi-dim)
+	U32 bindCount;				//Descriptor count (array size, flattened); 0 = unbounded, 1 = single
+	U32 arrayDimStart;			//Into SRFile::arrayDims when arrayDimCount >= 2, else U32_MAX
+} SRRegister;					//16 bytes
 
 //A single enumerator. Keyed by its EnumValue node; enumType is the parent enum's underlying type (ESREnumType,
 // mirror of D3D12_HLSL_ENUM_TYPE: uint/int/uint64_t/int64_t/uint16_t/int16_t).
@@ -161,18 +163,27 @@ typedef struct SREnumValue {
 // (whose localId indexes the frontend type table, read via GetDesc1 for the display name) and for Parameter nodes
 // including the return slot (whose type comes from the function-parameter reflection instead of a type localId, so
 // only builtin scalar/vector/matrix names are reconstructed; struct/object parameters carry the class but no name).
-// typeClass mirrors D3D_SHADER_VARIABLE_CLASS (ESRTypeClass: scalar/vector/matrixRows/matrixColumns/object/
-// struct/interfaceClass/interfacePointer).
+// defNodeId is the go-to-definition target: the Struct/Union node defining this type (resolved by name, since the
+// reflector reuses type indices across uses), U32_MAX for builtins. baseNodeId is the base-class struct node for single
+// inheritance. Members need no separate graph: a struct's members are its child nodes, each carrying its own SRType (so
+// member types + go-to-def come for free). typeClass mirrors D3D_SHADER_VARIABLE_CLASS (ESRTypeClass: scalar/vector/
+// matrixRows/matrixColumns/object/struct/interfaceClass/interfacePointer).
 typedef struct SRType {
 	U32 nodeId;					//The value node this type describes
 	U8 typeClass;				//ESRTypeClass
 	U8 rows;					//Matrix row count (1 for scalar/vector/object)
 	U8 cols;					//Vector width / matrix column count (1 for scalar/object)
-	U8 padding;
-	U32 elements;				//Array element count (0 = not an array)
+	U8 arrayDimCount;			//Array dimension count in arrayDims[] (0/1 = use `elements`; >=2 = multi-dim)
+	U32 elements;				//Total array element count (product of dims), 0 = not an array
 	U32 typeNameId;				//Underlying (resolved) type spelling into strings[], or U32_MAX
 	U32 displayNameId;			//Display/alias spelling into strings[] (for tooltips); U32_MAX = same as typeName
-} SRType;						//20 bytes
+	U32 defNodeId;				//Struct/Union node defining this type (go-to-definition), U32_MAX = builtin/none
+	U32 baseNodeId;				//Base-class struct node (inheritance), U32_MAX = none
+	U32 arrayDimStart;			//Into SRFile::arrayDims when arrayDimCount >= 2, else U32_MAX
+} SRType;						//32 bytes
+
+//Shared pool of multi-dimensional array lengths (a plain U32[]), referenced by SRType / SRRegister via
+//(arrayDimStart, arrayDimCount) for arrays of 2+ dimensions; the flattened total stays in elements / bindCount.
 
 //Final file format; please manually parse the members.
 //Verify if everything's in bounds.
@@ -188,6 +199,7 @@ SRFile {		//Has to be 16-byte aligned
 	SRRegister registers[header.registerCount];
 	SREnumValue enumValues[header.enumValueCount];
 	SRType types[header.typeCount];
+	U32 arrayDims[header.arrayDimCount];	//Shared multi-dimensional array-length pool
 
 	U8[N] pad;								//Padding to align to 16-byte
 
@@ -233,4 +245,4 @@ This hash is refreshed by `SRFile_finalize` (and on read). It can be used for qu
 
 ## Changelog
 
-1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Carries the node tree (kinds, parent/child topology, names, semantics, forward-declaration links, annotations), the optional per-node source-location tier, and the detail tiers: per-Register frontend bind info, per-EnumValue enumerator values, a `HasReturn` flag on Function nodes, per-Parameter direction (`ParamReturn`/`ParamIn`/`ParamOut`, `in`+`out` = `inout`), and the per-node type tier (`SRType`, `header.typeCount`) giving each value node a serialized type (underlying name + display/alias name + class + rows/cols + array elements; a tooltip shows the alias, e.g. `Variable pos (myvec)`, with verbose adding `aka float3`). Types are resolved for `Variable`/`Typedef`/`Struct`/`Union`/`StaticVariable`/`GroupsharedVariable` nodes (whose `localId` indexes the frontend type table) and for `Parameter` nodes including the return slot (typed from the function-parameter reflection; builtin scalar/vector/matrix names are reconstructed, struct/object parameters carry only their class). Deferred: the type graph's go-to-definition links (struct type -> defining node) and struct member/base-class/interface graph, multi-dimensional and resource array dims, constant-buffer byte layouts (by design -> oiSB).
+1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Carries the node tree (kinds, parent/child topology, names, semantics, forward-declaration links, annotations), the optional per-node source-location tier, and the detail tiers: per-Register frontend bind info, per-EnumValue enumerator values, a `HasReturn` flag on Function nodes, per-Parameter direction (`ParamReturn`/`ParamIn`/`ParamOut`, `in`+`out` = `inout`), and the per-node type tier (`SRType`, `header.typeCount`) giving each value node a serialized type (underlying name + display/alias name + class + rows/cols + array elements; a tooltip shows the alias, e.g. `Variable pos (myvec)`, with verbose adding `aka float3`). Types are resolved for `Variable`/`Typedef`/`Struct`/`Union`/`StaticVariable`/`GroupsharedVariable` nodes (whose `localId` indexes the frontend type table) and for `Parameter` nodes including the return slot (typed from the function-parameter reflection; builtin scalar/vector/matrix names are reconstructed, struct/object parameters carry only their class). Each `SRType` also carries the type graph: `defNodeId` links a value to the Struct/Union node defining its type (go-to-definition; members are child nodes so their types + go-to-def come for free), `baseNodeId` links a struct to its single base class (inheritance), and multi-dimensional value/resource arrays list their per-dim lengths in the shared `arrayDims` pool (`header.arrayDimCount`) referenced by `SRType`/`SRRegister`. Deferred: struct member/base-class *interface* implementations (niche), and constant-buffer byte layouts (by design -> oiSB).

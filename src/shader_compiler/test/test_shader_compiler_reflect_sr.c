@@ -72,10 +72,11 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		"struct Light { float3 pos; float3 color; };\n"
 		"enum Mode { ModeA, ModeB };\n"
 		"RWByteAddressBuffer buf;\n"
+		"StructuredBuffer<Light> lights;\n"
 		"uint dbl(uint x) { return x * 2; }\n"
 		"[[oxc::stage(\"compute\")]]\n"
 		"[numthreads(1, 1, 1)]\n"
-		"void main(uint id : SV_DispatchThreadID) { buf.Store<uint>(id * 4, dbl(id)); }\n";
+		"void main(uint id : SV_DispatchThreadID) { buf.Store<uint>(id * 4, dbl(id) + (uint) lights[0].pos.x); }\n";
 
 	gotoIfError3(clean, Compiler_create(alloc, &comp, e_rr));
 	created = true;
@@ -156,6 +157,23 @@ void Test_shaderCompilerReflectSR(Test *t) {
 			if (reflection.types.ptr[i].nodeId == lightId) { lightTy = &reflection.types.ptr[i]; break; }
 
 		Test_assert(t, "struct Light resolves to a struct type", lightTy && lightTy->typeClass == ESRTypeClass_Struct);
+	}
+
+	//Go-to-definition: the StructuredBuffer<Light> element is a value of struct type, so its type record links back to
+	//the Light struct's defining node (resolved by name, since the reflector reuses type indices across uses).
+
+	U32 elemId = srFindNode(&reflection, ESRNodeType_Variable, "$Element");
+	Test_assert(t, "structured-buffer element reflected", elemId != U32_MAX);
+
+	if (elemId != U32_MAX && lightId != U32_MAX) {
+
+		const SRType *elemTy = NULL;
+
+		for (U64 i = 0; i < reflection.types.length; ++i)
+			if (reflection.types.ptr[i].nodeId == elemId) { elemTy = &reflection.types.ptr[i]; break; }
+
+		Test_assert(t, "element has a type", elemTy != NULL);
+		Test_assert(t, "element type points at the Light definition", elemTy && elemTy->defNodeId == lightId);
 	}
 
 	//Parameter types come from the function-parameter reflection (D3D12_PARAMETER_DESC), not a type localId. The

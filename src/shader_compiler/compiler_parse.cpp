@@ -1402,21 +1402,69 @@ static const C8 *Compiler_svtBaseName(D3D_SHADER_VARIABLE_TYPE t) {
 	}
 }
 
-//Builds + pushes one SRType record for a value node. underlyingName/displayName may be nullptr (no name); the display
-//name id is left U32_MAX when it equals the underlying (the string pool dedups them to the same id).
+//A zero/none-initialised SRType with the structured fields filled + clamped; the caller sets go-to-def / base / array
+//fields as available, then hands it to Compiler_pushType which resolves the name ids.
 
-static Bool Compiler_pushType(
-	SRFile *reflection, U32 nodeId, U32 typeClass, U32 rows, U32 cols, U32 elements,
-	const C8 *underlyingName, const C8 *displayName, const Allocator *alloc, Error *e_rr
-) {
-	Bool s_uccess = true;
-
+static SRType Compiler_typeBase(U32 nodeId, U32 typeClass, U32 rows, U32 cols, U32 elements) {
 	SRType ty = SRType{};
 	ty.nodeId = nodeId;
 	ty.typeClass = (U32) typeClass < ESRTypeClass_Count ? (U8) typeClass : (U8) ESRTypeClass_Scalar;
 	ty.rows = rows > 0xFF ? 0xFF : (U8) rows;
 	ty.cols = cols > 0xFF ? 0xFF : (U8) cols;
 	ty.elements = elements;
+	ty.typeNameId = U32_MAX;
+	ty.displayNameId = U32_MAX;
+	ty.defNodeId = U32_MAX;
+	ty.baseNodeId = U32_MAX;
+	ty.arrayDimStart = U32_MAX;
+	ty.arrayDimCount = 0;
+	return ty;
+}
+
+//The Struct/Union node with the given name; used to resolve go-to-definition (a value's type) and base classes
+//(GetBaseClass reports a type, not a node). Names are matched because the reflector reuses type indices across uses.
+
+static U32 Compiler_findStructByName(const SRFile *reflection, const CharString *name) {
+	for (U64 i = 0; i < reflection->nodes.length; ++i) {
+		U8 t = reflection->nodes.ptr[i].type;
+		U32 nameId = reflection->nodes.ptr[i].nameId;
+		if ((t == ESRNodeType_Struct || t == ESRNodeType_Union) && nameId != U32_MAX &&
+			CharString_equalsStringSensitive(&reflection->names.entryStrings.ptr[nameId], name))
+			return (U32) i;
+	}
+	return U32_MAX;
+}
+
+//Pushes the individual lengths of a >=2-dimensional array into the shared pool + returns its (start, count). Single or
+//non-array types keep start = U32_MAX (the flattened count already lives in SRType.elements / SRRegister.bindCount).
+
+static Bool Compiler_pushArrayDims(
+	SRFile *reflection, const D3D12_ARRAY_DESC *ad, U32 *start, U8 *count, const Allocator *alloc, Error *e_rr
+) {
+	Bool s_uccess = true;
+	*start = U32_MAX;
+	*count = 0;
+
+	if (ad && ad->ArrayDims >= 2) {
+		U32 dims = ad->ArrayDims > 32 ? 32 : ad->ArrayDims;
+		*start = (U32) reflection->arrayDims.length;
+		*count = (U8) dims;
+		for (U32 k = 0; k < dims; ++k)
+			gotoIfError3(clean, ListU32_pushBack(&reflection->arrayDims, ad->ArrayLengths[k], alloc, e_rr));
+	}
+
+clean:
+	return s_uccess;
+}
+
+//Resolves the name ids of a prepared SRType (underlyingName/displayName may be nullptr) then pushes it. displayNameId is
+//left U32_MAX when it equals the underlying (the string pool dedups them to the same id).
+
+static Bool Compiler_pushType(
+	SRFile *reflection, SRType ty, const C8 *underlyingName, const C8 *displayName, const Allocator *alloc, Error *e_rr
+) {
+	Bool s_uccess = true;
+
 	ty.typeNameId = U32_MAX;
 	ty.displayNameId = U32_MAX;
 
@@ -1470,7 +1518,8 @@ static Bool Compiler_pushParamType(
 		name = buf;
 	}
 
-	return Compiler_pushType(reflection, nodeId, typeClass, rows, cols, 0, name, nullptr, alloc, e_rr);
+	SRType ty = Compiler_typeBase(nodeId, typeClass, rows, cols, 0);
+	return Compiler_pushType(reflection, ty, name, nullptr, alloc, e_rr);
 }
 
 //These use their own reflector index spaces (FunctionCount / ResourceCount via node.localId / EnumCount),
@@ -1576,6 +1625,14 @@ static Bool Compiler_reflectDetails(
 		reg.dimension = (U8) bindDesc.Desc.Dimension;
 		reg.returnType = (U8) bindDesc.Desc.ReturnType;
 		reg.bindCount = bindDesc.Desc.BindCount;
+		reg.arrayDimStart = U32_MAX;
+		reg.arrayDimCount = 0;
+
+		//Multi-dimensional resource arrays (Texture2D tex[a][b]): the flattened size is BindCount, the dims come from
+		//the DESC1 ArrayInfo.
+
+		gotoIfError3(clean, Compiler_pushArrayDims(
+			reflection, &bindDesc.ArrayInfo, &reg.arrayDimStart, &reg.arrayDimCount, alloc, e_rr));
 
 		gotoIfError3(clean, ListSRRegister_pushBack(&reflection->registers, reg, alloc, e_rr));
 	}
@@ -1641,10 +1698,40 @@ static Bool Compiler_reflectDetails(
 		if (FAILED(((ID3D12ShaderReflectionType1*) rt)->GetDesc1(&d)))
 			continue;
 
-		gotoIfError3(clean, Compiler_pushType(
-			reflection, (U32) i, d.Desc.Class, d.Desc.Rows, d.Desc.Columns, d.Desc.Elements,
-			d.Desc.Name, d.DisplayName, alloc, e_rr
-		));
+		SRType ty = Compiler_typeBase((U32) i, d.Desc.Class, d.Desc.Rows, d.Desc.Columns, d.Desc.Elements);
+
+		//Go-to-definition: resolve the type's underlying name to its defining Struct/Union node. Name matching (not the
+		//localId, which the reflector reuses across uses of the same struct) is what links a value to its definition;
+		//self links (a struct node pointing at itself) are dropped so defNodeId always means "jump elsewhere". Builtins
+		//("float3") have no struct node so this stays U32_MAX.
+
+		if (d.Desc.Name) {
+			CharString tn = CharString_createRefCStrConst(d.Desc.Name);
+			U32 defNode = Compiler_findStructByName(reflection, &tn);
+			ty.defNodeId = defNode == (U32) i ? U32_MAX : defNode;
+		}
+
+		//Base class (single inheritance): GetBaseClass reports a type, resolved to its defining node by name.
+
+		if (d.Desc.Class == D3D_SVC_STRUCT) {
+
+			ID3D12ShaderReflectionType *baseT = rt->GetBaseClass();
+			D3D12_SHADER_TYPE_DESC bd = {};
+
+			if (baseT && !FAILED(baseT->GetDesc(&bd)) && bd.Name) {
+				CharString bn = CharString_createRefCStrConst(bd.Name);
+				ty.baseNodeId = Compiler_findStructByName(reflection, &bn);
+			}
+		}
+
+		//Multi-dimensional arrays: elements already holds the flattened count, GetArrayDesc gives the per-dim lengths.
+
+		D3D12_ARRAY_DESC ad = {};
+
+		if (!FAILED(((ID3D12ShaderReflectionType1*) rt)->GetArrayDesc(&ad)))
+			gotoIfError3(clean, Compiler_pushArrayDims(reflection, &ad, &ty.arrayDimStart, &ty.arrayDimCount, alloc, e_rr));
+
+		gotoIfError3(clean, Compiler_pushType(reflection, ty, d.Desc.Name, d.DisplayName, alloc, e_rr));
 	}
 
 clean:

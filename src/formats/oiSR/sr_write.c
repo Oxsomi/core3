@@ -63,6 +63,9 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 	if(srFile->types.length >> 32)
 		retError(clean, Error_invalidOperation(0, "SRFile_write()::types out of bounds"));
 
+	if(srFile->arrayDims.length >> 32)
+		retError(clean, Error_invalidOperation(0, "SRFile_write()::arrayDims out of bounds"));
+
 	if(hasSymbols && srFile->symbols.length != srFile->nodes.length)
 		retError(clean, Error_invalidState(0, "SRFile_write() symbols must be parallel to nodes when HasSymbols is set"));
 
@@ -87,6 +90,7 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 	headerSize += ListSRRegister_bytes(srFile->registers);
 	headerSize += ListSREnumValue_bytes(srFile->enumValues);
 	headerSize += ListSRType_bytes(srFile->types);
+	headerSize += ListU32_bytes(srFile->arrayDims);
 
 	headerSize = (headerSize + 15) & ~15;
 
@@ -109,7 +113,8 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 		.annotationCount = (U32) srFile->annotations.length,
 		.registerCount = (U32) srFile->registers.length,
 		.enumValueCount = (U32) srFile->enumValues.length,
-		.typeCount = (U32) srFile->types.length
+		.typeCount = (U32) srFile->types.length,
+		.arrayDimCount = (U32) srFile->arrayDims.length
 	};
 
 	if(!(srFile->flags & ESRSettingsFlags_HideMagicNumber))
@@ -125,6 +130,7 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSRRegister_bufferConst(srFile->registers), alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSREnumValue_bufferConst(srFile->enumValues), alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSRType_bufferConst(srFile->types), alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListU32_bufferConst(srFile->arrayDims), alloc, e_rr));
 
 	//Need to make sure the names oiDL is 16-byte aligned
 

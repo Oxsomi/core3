@@ -23,6 +23,7 @@
 #pragma once
 #include "formats/oiDL/dl_file.h"
 #include "types/container/list.h"
+#include "types/container/list_basic_types.h"        //ListU32 (arrayDims pool)
 
 #ifdef __cplusplus
 	extern "C" {
@@ -280,9 +281,11 @@ typedef struct SRRegister {
 	U8 type;                                //ESRResourceType
 	U8 dimension;                           //ESRResourceDimension
 	U8 returnType;                          //ESRResourceReturnType
-	U8 padding;
+	U8 arrayDimCount;                       //Resource-array dimension count in arrayDims[] (0/1 = use bindCount; >=2 multi)
 
 	U32 bindCount;                          //Descriptor count (array size); 0 = unbounded, 1 = single
+
+	U32 arrayDimStart;                      //Into SRFile::arrayDims when arrayDimCount >= 2, else U32_MAX
 
 } SRRegister;
 
@@ -310,13 +313,17 @@ typedef struct SRType {
 	U8 typeClass;                           //ESRTypeClass
 	U8 rows;                                //Matrix row count (1 for scalar/vector/object)
 	U8 cols;                                //Vector width / matrix column count (1 for scalar/object)
-	U8 padding;
+	U8 arrayDimCount;                       //Array dimension count in arrayDims[] (0/1 = use `elements`; >=2 = multi-dim)
 
-	U32 elements;                           //Array element count (0 = not an array)
+	U32 elements;                           //Total array element count (product of dims), 0 = not an array
 
 	U32 typeNameId;                         //Underlying type spelling into names[] (resolved), or U32_MAX
 	U32 displayNameId;                      //Display type spelling into names[] (the alias the user wrote, for tooltips);
 	                                        //U32_MAX = same as typeName
+
+	U32 defNodeId;                          //Struct/Union node that DEFINES this type (go-to-definition), U32_MAX = none
+	U32 baseNodeId;                         //Base-class struct node (inheritance), U32_MAX = none
+	U32 arrayDimStart;                      //Into SRFile::arrayDims when arrayDimCount >= 2, else U32_MAX
 
 } SRType;
 
@@ -346,6 +353,7 @@ typedef struct SRFile {
 	ListSRRegister registers;    //Frontend bind info for Register nodes
 	ListSREnumValue enumValues;  //Enumerators for Enum nodes
 	ListSRType types;            //Resolved types for value nodes (Variable/Parameter/Typedef/Struct/...)
+	ListU32 arrayDims;           //Shared pool of multi-dimensional array lengths, referenced by SRType/SRRegister
 
 	ESRSettingsFlags flags;
 	U32 features;                //ESRFeature bitset: which reflection tiers this file carries
@@ -421,6 +429,7 @@ typedef struct SRHeader {
 	U32 enumValueCount;
 
 	U32 typeCount;             //Per-node type records (Variable/Typedef/Struct/Union)
+	U32 arrayDimCount;         //Shared multi-dimensional array-length pool
 
 } SRHeader;
 

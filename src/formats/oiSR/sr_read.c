@@ -43,6 +43,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	ListSRRegister registers = (ListSRRegister) { 0 };
 	ListSREnumValue enumValues = (ListSREnumValue) { 0 };
 	ListSRType types = (ListSRType) { 0 };
+	ListU32 arrayDims = (ListU32) { 0 };
 	DLFile names = (DLFile) { 0 };
 
 	if(!offset || !srFile)
@@ -104,6 +105,9 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	gotoIfError3(clean, ListSRType_resize(&types, header.typeCount, alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListSRType_buffer(types), alloc, e_rr));
+
+	gotoIfError3(clean, ListU32_resize(&arrayDims, header.arrayDimCount, alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListU32_buffer(arrayDims), alloc, e_rr));
 
 	//Align 16-byte then read the names oiDL. Consume the pad bytes through the cursor rather than only advancing the
 	//offset, so a forward-only stream (file data streaming straight off disk) moves past the padding too; otherwise
@@ -272,6 +276,12 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			reg.returnType >= ESRResourceReturnType_Count
 		)
 			retError(clean, Error_invalidState(0, "SRFile_read() register had an invalid type/dimension/returnType"));
+
+		if((reg.arrayDimStart != U32_MAX) != (reg.arrayDimCount >= 2))
+			retError(clean, Error_invalidState(0, "SRFile_read() register arrayDim start/count disagree"));
+
+		if(reg.arrayDimStart != U32_MAX && (U64) reg.arrayDimStart + reg.arrayDimCount > arrayDims.length)
+			retError(clean, Error_invalidState(0, "SRFile_read() register.arrayDim range out of bounds"));
 	}
 
 	//Validate enum value references (must point at an EnumValue node, with an in-range underlying type)
@@ -311,6 +321,24 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		if(ty.displayNameId != U32_MAX && ty.displayNameId >= nameCount)
 			retError(clean, Error_invalidState(0, "SRFile_read() type.displayNameId out of bounds"));
+
+		//Go-to-definition + base class must reference a Struct/Union node (or be absent)
+
+		if(ty.defNodeId != U32_MAX && (ty.defNodeId >= nodes.length ||
+			(nodes.ptr[ty.defNodeId].type != ESRNodeType_Struct && nodes.ptr[ty.defNodeId].type != ESRNodeType_Union)
+		))
+			retError(clean, Error_invalidState(0, "SRFile_read() type.defNodeId doesn't reference a Struct/Union node"));
+
+		if(ty.baseNodeId != U32_MAX && (ty.baseNodeId >= nodes.length ||
+			(nodes.ptr[ty.baseNodeId].type != ESRNodeType_Struct && nodes.ptr[ty.baseNodeId].type != ESRNodeType_Union)
+		))
+			retError(clean, Error_invalidState(0, "SRFile_read() type.baseNodeId doesn't reference a Struct/Union node"));
+
+		if((ty.arrayDimStart != U32_MAX) != (ty.arrayDimCount >= 2))
+			retError(clean, Error_invalidState(0, "SRFile_read() type arrayDim start/count disagree"));
+
+		if(ty.arrayDimStart != U32_MAX && (U64) ty.arrayDimStart + ty.arrayDimCount > arrayDims.length)
+			retError(clean, Error_invalidState(0, "SRFile_read() type.arrayDim range out of bounds"));
 	}
 
 	if(!isSubFile && *offset != stream->size)
@@ -331,6 +359,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	srFile->registers = registers;
 	srFile->enumValues = enumValues;
 	srFile->types = types;
+	srFile->arrayDims = arrayDims;
 	srFile->flags = flags;
 	srFile->features = header.features;
 
@@ -341,6 +370,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	registers = (ListSRRegister) { 0 };
 	enumValues = (ListSREnumValue) { 0 };
 	types = (ListSRType) { 0 };
+	arrayDims = (ListU32) { 0 };
 
 	gotoIfError3(clean, SRFile_finalize(srFile, alloc, e_rr));
 
@@ -356,6 +386,7 @@ clean:
 	ListSRRegister_free(&registers, alloc);
 	ListSREnumValue_free(&enumValues, alloc);
 	ListSRType_free(&types, alloc);
+	ListU32_free(&arrayDims, alloc);
 	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
 }

@@ -115,12 +115,20 @@ static Bool buildSample(Test *t, SRFile *sr) {
 			return false;
 	}
 
-	//A type record for the pos variable (node 2): underlying float3 (vector, 1 row x 3 cols) written as the alias vec3,
-	//so both the underlying-name and the distinct display-name (tooltip) paths round-trip.
+	//Two array-dimension lengths [2][3] shared by the type record below, so the arrayDims pool round-trips.
+
+	if(!ListU32_pushBack(&sr->arrayDims, 2, t->alloc, &t->err) || !ListU32_pushBack(&sr->arrayDims, 3, t->alloc, &t->err))
+		return false;
+
+	//A type record for the pos variable (node 2): underlying float3 written as the alias vec3 (so both name paths
+	//round-trip), shaped as a [2][3] array (elements = flattened 6, dims from the pool) and pointed at the Light struct
+	//(node 1) as its go-to-definition target, so the type-graph + array fields are all exercised through write/read.
 
 	SRType posType = (SRType) {
-		.nodeId = 2, .typeClass = ESRTypeClass_Vector, .rows = 1, .cols = 3, .elements = 0,
-		.typeNameId = f3Name, .displayNameId = v3Name
+		.nodeId = 2, .typeClass = ESRTypeClass_Vector, .rows = 1, .cols = 3,
+		.arrayDimCount = 2, .elements = 6,
+		.typeNameId = f3Name, .displayNameId = v3Name,
+		.defNodeId = 1, .baseNodeId = U32_MAX, .arrayDimStart = 0
 	};
 
 	if(!ListSRType_pushBack(&sr->types, posType, t->alloc, &t->err))
@@ -210,6 +218,17 @@ static void assertSampleContent(Test *t, const SRFile *r) {
 		Test_assert(t, "display type name resolves to vec3",
 			r->types.ptr[0].displayNameId < r->names.entryStrings.length &&
 			CharString_equalsStringSensitive(&r->names.entryStrings.ptr[r->types.ptr[0].displayNameId], &v3));
+
+		//Go-to-definition points at the Light struct (node 1)
+
+		Test_assert(t, "type def node is the struct", r->types.ptr[0].defNodeId == 1 &&
+			r->nodes.ptr[r->types.ptr[0].defNodeId].type == ESRNodeType_Struct);
+
+		//Multi-dimensional array [2][3] round-tripped through the shared pool
+
+		Test_assert(t, "type has 2 array dims", r->types.ptr[0].arrayDimCount == 2 && r->types.ptr[0].arrayDimStart == 0);
+		Test_assert(t, "array dims are [2][3]",
+			r->arrayDims.length == 2 && r->arrayDims.ptr[0] == 2 && r->arrayDims.ptr[1] == 3);
 	}
 }
 
