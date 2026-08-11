@@ -169,9 +169,19 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 	if(!(texture->resource.flags & EGraphicsResourceFlag_ShaderRead) && texture->depthFormat)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
+	//The tight alignment spec allows textures too; the driver just may ignore the request, unlike for buffers.
+	//The explicit 64 KiB Alignment above has to be cleared along with it, exactly like the buffer path does.
+	//GetResourceAllocationInfo2 honors the flag over the field and returns the driver's tight alignment, but
+	// CreatePlacedResource2 still validates the field, so leaving it demands a 64 KiB offset while the allocator
+	// correctly hands out the tight one the query returned.
+	//That mismatch only surfaces once earlier allocations leave the heap cursor unaligned, which is why it
+	// survived locally and failed CI, and only for textures, since buffers already cleared the field.
+
 	#if D3D12_SDK_VERSION >= 618
-		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment)
+		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment) {
 			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT;
+			resourceDesc.Alignment = 0;
+		}
 	#endif
 
 	//Allocate memory
