@@ -984,6 +984,91 @@ clean:
 	RefPtr_dec(&plain);
 }
 
+// -- 23. TextureRef predicates and accessors -------------------------------------
+
+//These decide what a resource is allowed to be used as, so they gate real behaviour rather than only describing it.
+//isRenderTargetWritable is what clearImages and the colour attachments check, and isDepthStencil is what tells a
+// depth attachment apart from a colour one, so getting either wrong silently misroutes a resource.
+
+static void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "TextureRef");
+
+	RenderTextureRef *renderTexture = NULL;
+	DepthStencilRef *depthStencil = NULL;
+	DeviceBufferRef *buffer = NULL;
+
+	const CharString renderName = CharString_createRefCStrConst("Predicate render texture");
+	const CharString depthName = CharString_createRefCStrConst("Predicate depth stencil");
+	const CharString bufferName = CharString_createRefCStrConst("Predicate buffer");
+
+	Test_assert(t, "createRenderTexture", GraphicsDeviceRef_createRenderTexture(
+		deviceRef, ETextureType_2D, 32, 16, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		EMSAASamples_Off, NULL, &renderName, &renderTexture, &t->err
+	));
+
+	Test_assert(t, "createDepthStencil", GraphicsDeviceRef_createDepthStencil(
+		deviceRef, 32, 16, EDepthStencilFormat_D32, false, EMSAASamples_Off, NULL, &depthName, &depthStencil, &t->err
+	));
+
+	Test_assert(t, "createBuffer", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL, &bufferName, 256, &buffer, &t->err
+	));
+
+	if(!renderTexture || !depthStencil || !buffer) {
+		RefPtr_dec(&buffer);
+		RefPtr_dec(&depthStencil);
+		RefPtr_dec(&renderTexture);
+		return;
+	}
+
+	//A texture is anything that resolves to a unified texture, which a buffer never does
+
+	Test_assert(t, "renderIsTexture", TextureRef_isTexture(renderTexture));
+	Test_assert(t, "depthIsTexture", TextureRef_isTexture(depthStencil));
+	Test_assert(t, "bufferIsNotTexture", !TextureRef_isTexture(buffer));
+	Test_assert(t, "nullIsNotTexture", !TextureRef_isTexture(NULL));
+
+	//Depth is decided by the object kind, not by the format it happens to carry
+
+	Test_assert(t, "depthIsDepthStencil", TextureRef_isDepthStencil(depthStencil));
+	Test_assert(t, "renderIsNotDepthStencil", !TextureRef_isDepthStencil(renderTexture));
+	Test_assert(t, "bufferIsNotDepthStencil", !TextureRef_isDepthStencil(buffer));
+	Test_assert(t, "nullIsNotDepthStencil", !TextureRef_isDepthStencil(NULL));
+
+	//Only render textures and swapchains can be written as a render target, so a depth stencil is excluded here
+	// even though it is a perfectly valid attachment
+
+	Test_assert(t, "renderIsWritable", TextureRef_isRenderTargetWritable(renderTexture));
+	Test_assert(t, "depthIsNotWritable", !TextureRef_isRenderTargetWritable(depthStencil));
+	Test_assert(t, "bufferIsNotWritable", !TextureRef_isRenderTargetWritable(buffer));
+	Test_assert(t, "nullIsNotWritable", !TextureRef_isRenderTargetWritable(NULL));
+
+	//The unified texture is what every command reads dimensions and ownership from
+
+	const UnifiedTexture render = TextureRef_getUnifiedTexture(renderTexture, NULL);
+	const UnifiedTexture depth = TextureRef_getUnifiedTexture(depthStencil, NULL);
+
+	Test_assert(t, "renderSize", render.width == 32 && render.height == 16);
+	Test_assert(t, "renderDevice", render.resource.device == deviceRef);
+	Test_assert(t, "renderFormat", render.textureFormatId == (U8) ETextureFormatId_RGBA8 && !render.depthFormat);
+
+	Test_assert(t, "depthSize", depth.width == 32 && depth.height == 16);
+	Test_assert(t, "depthFormat", depth.depthFormat == (U8) EDepthStencilFormat_D32);
+
+	//A resource that isn't a texture resolves to nothing rather than being reinterpreted as one
+
+	const UnifiedTexture fromBuffer = TextureRef_getUnifiedTexture(buffer, NULL);
+	const UnifiedTexture fromNull = TextureRef_getUnifiedTexture(NULL, NULL);
+
+	Test_assert(t, "bufferHasNoTexture", !fromBuffer.resource.device && !fromBuffer.width);
+	Test_assert(t, "nullHasNoTexture", !fromNull.resource.device && !fromNull.width);
+
+	RefPtr_dec(&buffer);
+	RefPtr_dec(&depthStencil);
+	RefPtr_dec(&renderTexture);
+}
+
 // -- 16. Submit ------------------------------------------------------------------
 
 //Submit is the only path that reaches GraphicsDevice_rebindDescriptors, which binds the descriptor tables and the
@@ -1162,6 +1247,8 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	Test_graphicsCommandList(t, deviceRef);
 	Test_graphicsCommandRecording(t, deviceRef);
 	Test_graphicsCommandValidation(t, deviceRef);
+	Test_graphicsRenderPass(t, deviceRef);
+	Test_graphicsTextureRef(t, deviceRef);
 	Test_graphicsSubmit(t, deviceRef);
 
 clean:

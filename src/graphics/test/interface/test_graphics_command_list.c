@@ -33,6 +33,7 @@
 #include "graphics/generic/commands.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/render_texture.h"
+#include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/texture.h"
 #include "test_graphics_shared.h"
 
@@ -440,5 +441,201 @@ void Test_graphicsCommandValidation(Test *t, GraphicsDeviceRef *deviceRef) {
 	}
 
 	RefPtr_dec(&buffer);
+	RefPtr_dec(&target);
+}
+
+// -- 22. Render passes -----------------------------------------------------------
+
+//startRenderExt is what gives a scope a render area, and viewport, scissor and every draw are gated on it.
+//That makes this the only place those can be exercised positively, and the place their gating can be shown to
+// actually lift and drop again.
+//Attachments take a concrete subresource rather than a whole image, so unlike clear, U32_MAX is out of range here.
+
+void Test_graphicsRenderPass(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "CommandList/render");
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering)) {
+		Test_print(t, "Device lacks direct rendering, skipping render pass tests");
+		return;
+	}
+
+	CommandListRef *commandList = NULL;
+	RenderTextureRef *target = NULL;
+	RenderTextureRef *smaller = NULL;
+	DepthStencilRef *depth = NULL;
+
+	const CharString targetName = CharString_createRefCStrConst("Render pass target");
+	const CharString smallerName = CharString_createRefCStrConst("Render pass smaller target");
+	const CharString depthName = CharString_createRefCStrConst("Render pass depth");
+
+	Test_assert(t, "createTarget", GraphicsDeviceRef_createRenderTexture(
+		deviceRef, ETextureType_2D, 16, 16, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		EMSAASamples_Off, NULL, &targetName, &target, &t->err
+	));
+
+	Test_assert(t, "createSmaller", GraphicsDeviceRef_createRenderTexture(
+		deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		EMSAASamples_Off, NULL, &smallerName, &smaller, &t->err
+	));
+
+	Test_assert(t, "createDepth", GraphicsDeviceRef_createDepthStencil(
+		deviceRef, 16, 16, EDepthStencilFormat_D32, false, EMSAASamples_Off, NULL, &depthName, &depth, &t->err
+	));
+
+	if(!target || !smaller || !depth) {
+		RefPtr_dec(&depth);
+		RefPtr_dec(&smaller);
+		RefPtr_dec(&target);
+		return;
+	}
+
+	if(!(commandList = Test_beginList(t, deviceRef, "createRender"))) {
+		RefPtr_dec(&depth);
+		RefPtr_dec(&smaller);
+		RefPtr_dec(&target);
+		return;
+	}
+
+	const CommandList *ptr = CommandListRef_ptr(commandList);
+
+	//A failing command only raises InvalidState, so every rejection below can share one scope
+
+	Test_assert(t, "scope", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+
+	const ListAttachmentInfo noColors = (ListAttachmentInfo) { 0 };
+
+	Test_assert(t, "renderNeedsTargets",
+		!CommandListRef_startRenderExt(commandList, I32x2_zero, I32x2_zero, &noColors, NULL, NULL)
+	);
+
+	AttachmentInfo color = (AttachmentInfo) { .image = target, .load = ELoadAttachmentType_Clear };
+	ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+	ListAttachmentInfo_createRefConst(&color, 1, &colors, NULL);
+
+	//A whole image range is what clear takes; an attachment has to name one subresource
+
+	AttachmentInfo wholeRange = color;
+	wholeRange.range = (ImageRange) { .levelId = U32_MAX, .layerId = U32_MAX };
+	ListAttachmentInfo wholeRangeList = (ListAttachmentInfo) { 0 };
+	ListAttachmentInfo_createRefConst(&wholeRange, 1, &wholeRangeList, NULL);
+
+	Test_assert(t, "renderRejectsWholeRange",
+		!CommandListRef_startRenderExt(commandList, I32x2_zero, I32x2_zero, &wholeRangeList, NULL, NULL)
+	);
+
+	//Clearing an attachment that is declared read only contradicts itself
+
+	AttachmentInfo readOnlyClear = color;
+	readOnlyClear.readOnly = true;
+	ListAttachmentInfo readOnlyList = (ListAttachmentInfo) { 0 };
+	ListAttachmentInfo_createRefConst(&readOnlyClear, 1, &readOnlyList, NULL);
+
+	Test_assert(t, "renderRejectsReadOnlyClear",
+		!CommandListRef_startRenderExt(commandList, I32x2_zero, I32x2_zero, &readOnlyList, NULL, NULL)
+	);
+
+	//A depth image is not a colour attachment, and the mismatch has to be caught rather than reinterpreted
+
+	AttachmentInfo depthAsColor = (AttachmentInfo) { .image = depth };
+	ListAttachmentInfo depthAsColorList = (ListAttachmentInfo) { 0 };
+	ListAttachmentInfo_createRefConst(&depthAsColor, 1, &depthAsColorList, NULL);
+
+	Test_assert(t, "renderRejectsDepthAsColor",
+		!CommandListRef_startRenderExt(commandList, I32x2_zero, I32x2_zero, &depthAsColorList, NULL, NULL)
+	);
+
+	//Resolving needs somewhere to resolve to
+
+	AttachmentInfo resolveNoImage = color;
+	resolveNoImage.resolveMode = 1;
+	ListAttachmentInfo resolveList = (ListAttachmentInfo) { 0 };
+	ListAttachmentInfo_createRefConst(&resolveNoImage, 1, &resolveList, NULL);
+
+	Test_assert(t, "renderRejectsResolveWithoutImage",
+		!CommandListRef_startRenderExt(commandList, I32x2_zero, I32x2_zero, &resolveList, NULL, NULL)
+	);
+
+	//Attachments share one render area, so a second target smaller than the first can't satisfy it
+
+	AttachmentInfo pair[2] = {
+		(AttachmentInfo) { .image = target },
+		(AttachmentInfo) { .image = smaller }
+	};
+
+	ListAttachmentInfo pairList = (ListAttachmentInfo) { 0 };
+	ListAttachmentInfo_createRefConst(pair, 2, &pairList, NULL);
+
+	Test_assert(t, "renderRejectsMismatchedSizes",
+		!CommandListRef_startRenderExt(commandList, I32x2_zero, I32x2_zero, &pairList, NULL, NULL)
+	);
+
+	//An offset outside the first attachment leaves no area to render into
+
+	Test_assert(t, "renderRejectsOffsetOutside",
+		!CommandListRef_startRenderExt(commandList, I32x2_create2(16, 16), I32x2_zero, &colors, NULL, NULL)
+	);
+
+	//None of that opened a render pass, so the state that depends on one is still refused
+
+	Test_assert(t, "noRenderAfterFailures", I32x2_eq2(ptr->currentSize, I32x2_zero));
+	Test_assert(t, "endRenderWithoutStart", !CommandListRef_endRenderExt(commandList, NULL));
+
+	Test_assert(t, "endScopeNegatives", CommandListRef_endScope(commandList, &t->err));
+
+	//A valid render pass sets the area, which is what lifts the gate on viewport, scissor and draws
+
+	Test_assert(t, "scope2", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
+
+	Test_assert(t, "startRender",
+		CommandListRef_startRenderExt(commandList, I32x2_zero, I32x2_zero, &colors, NULL, &t->err)
+	);
+
+	Test_assert(t, "renderAreaFromTarget", I32x2_eq2(ptr->currentSize, I32x2_create2(16, 16)));
+
+	//Zero size means the whole remaining area rather than an empty one
+
+	Test_assert(t, "viewportFull", CommandListRef_setViewport(commandList, I32x2_zero, I32x2_zero, &t->err));
+	Test_assert(t, "scissorPartial", CommandListRef_setScissor(commandList, I32x2_zero, I32x2_create2(8, 8), &t->err));
+
+	Test_assert(t, "viewportAndScissor",
+		CommandListRef_setViewportAndScissor(commandList, I32x2_create2(2, 2), I32x2_create2(4, 4), &t->err)
+	);
+
+	Test_assert(t, "viewportFlagsSet",
+		(ptr->tempStateFlags & (ECommandStateFlags_AnyViewport | ECommandStateFlags_AnyScissor)) ==
+		(ECommandStateFlags_AnyViewport | ECommandStateFlags_AnyScissor)
+	);
+
+	//An offset at or past the render area has nothing left to cover
+
+	Test_assert(t, "viewportOffsetOutside",
+		!CommandListRef_setViewport(commandList, I32x2_create2(16, 16), I32x2_create2(1, 1), NULL)
+	);
+
+	//A draw still needs a pipeline even once the render pass and viewport state are in place
+
+	Test_assert(t, "drawStillNeedsPipeline", !CommandListRef_drawUnindexed(commandList, 3, 1, NULL));
+
+	//Ending the pass takes the area away again, and with it the state that depended on it
+
+	Test_assert(t, "endRender", CommandListRef_endRenderExt(commandList, &t->err));
+	Test_assert(t, "renderAreaCleared", I32x2_eq2(ptr->currentSize, I32x2_zero));
+
+	Test_assert(t, "viewportFlagsCleared",
+		!(ptr->tempStateFlags & (ECommandStateFlags_AnyViewport | ECommandStateFlags_AnyScissor))
+	);
+
+	Test_assert(t, "viewportAfterEndRender",
+		!CommandListRef_setViewport(commandList, I32x2_zero, I32x2_create2(8, 8), NULL)
+	);
+
+	Test_assert(t, "endRenderTwice", !CommandListRef_endRenderExt(commandList, NULL));
+
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&depth);
+	RefPtr_dec(&smaller);
 	RefPtr_dec(&target);
 }
