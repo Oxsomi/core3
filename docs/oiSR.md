@@ -21,7 +21,7 @@ typedef struct SRHeader {		//Should be aligned to 4-byte
 
 	U32 magicNumber;			//oiSR (0x5253696F); optional if it's part of an oiSH.
 
-	U8 version;					//ESRVersion; at least 1 (1 = V1_0)
+	U8 version;					//ESRVersion; on-disk byte 1 (ESRVersion_V1_1), displayed as 1.1
 	U8 flags;					//ESRFlag: & 1 = HasSymbols (the symbols[] location array is present)
 	U16 padding;
 
@@ -29,6 +29,9 @@ typedef struct SRHeader {		//Should be aligned to 4-byte
 
 	U32 nodeCount;
 	U32 annotationCount;
+
+	U32 registerCount;			//Frontend bind info records (for Register nodes)
+	U32 enumValueCount;			//Enumerator records (for EnumValue nodes)
 
 } SRHeader;					//Note: unlike SBHeader the magic + header aren't a single struct on disk;
 							// when magic is present it's a separate U32 written before SRHeader.
@@ -72,7 +75,11 @@ typedef enum ESRInterpolation {
 
 typedef enum ESRNodeFlag {
 	ESRNodeFlag_None         = 0,
-	ESRNodeFlag_IsFwdDeclare = 1 << 0	//This node is a forward declaration; fwdBckDeclareNode has the definition
+	ESRNodeFlag_IsFwdDeclare = 1 << 0,	//This node is a forward declaration; fwdBckDeclareNode has the definition
+	ESRNodeFlag_HasReturn    = 1 << 1,	//Function nodes: the function returns a value (rather than void)
+	ESRNodeFlag_ParamReturn  = 1 << 2,	//Parameter nodes: the function's return-value slot (D3D_RETURN_PARAMETER_INDEX)
+	ESRNodeFlag_ParamIn      = 1 << 3,	//Parameter nodes: 'in'  (in + out = inout)
+	ESRNodeFlag_ParamOut     = 1 << 4	//Parameter nodes: 'out'
 } ESRNodeFlag;
 
 //A symbol AST node. POD and hashable (treated as a raw byte buffer).
@@ -123,6 +130,27 @@ typedef struct SRAnnotation {
 	U8 padding[3];
 } SRAnnotation;					//8 bytes
 
+//Frontend bind info for a Register node (kind/shape only; space/bindPoint are backend concerns, left invalid).
+//type/dimension/returnType mirror D3D_SHADER_INPUT_TYPE / D3D_SRV_DIMENSION / D3D_RESOURCE_RETURN_TYPE
+// (see ESRResourceType / ESRResourceDimension / ESRResourceReturnType).
+typedef struct SRRegister {
+	U32 nodeId;					//The Register node this describes
+	U8 type;					//ESRResourceType (cbuffer/Texture/SamplerState/RW.../RaytracingAccelerationStructure/...)
+	U8 dimension;				//ESRResourceDimension
+	U8 returnType;				//ESRResourceReturnType (0 = none)
+	U8 padding;
+	U32 bindCount;				//Descriptor count (array size); 0 = unbounded, 1 = single
+} SRRegister;					//12 bytes
+
+//A single enumerator. Keyed by its EnumValue node; enumType is the parent enum's underlying type (ESREnumType,
+// mirror of D3D12_HLSL_ENUM_TYPE: uint/int/uint64_t/int64_t/uint16_t/int16_t).
+typedef struct SREnumValue {
+	U32 nodeId;					//The EnumValue node this describes
+	U8 enumType;				//ESREnumType (the parent enum's underlying integer type)
+	U8 padding[3];
+	I64 value;
+} SREnumValue;					//16 bytes
+
 //Final file format; please manually parse the members.
 //Verify if everything's in bounds.
 //Verify if SRFile includes any invalid data.
@@ -134,6 +162,8 @@ SRFile {		//Has to be 16-byte aligned
 	SRNode nodes[header.nodeCount];
 	SRSymbol symbols[header.nodeCount];		//Only present if (header.flags & HasSymbols); else 0 bytes
 	SRAnnotation annotations[header.annotationCount];
+	SRRegister registers[header.registerCount];
+	SREnumValue enumValues[header.enumValueCount];
 
 	U8[N] pad;								//Padding to align to 16-byte
 
@@ -155,7 +185,10 @@ The magic number can only be absent if embedded in another file. The intended ho
 - `nameId == U32_MAX` means anonymous. **Names come from the SymbolInfo tier**, so when `ESRFeature_SymbolInfo` is absent every node's `nameId` is `U32_MAX`; `semanticId` is independent of that tier.
 - `parent == U32_MAX` is a root node. `fwdBckDeclareNode == U32_MAX` means no linked declaration. `annotationStart == U32_MAX` when `annotationCount == 0`.
 - `HasSymbols` (header flag) and `ESRFeature_SymbolInfo` (features) must agree, and when set `symbols[]` has exactly `nodeCount` entries. When clear, `symbols[]` is absent (0 bytes).
-- All `nameId`/`semanticId`/`fileNameId`/`annotation.nameId` must be `U32_MAX` or `< strings.length`; `parent`/`fwdBckDeclareNode` must be `U32_MAX` or `< nodeCount`; `type < ESRNodeType_Count`; `interpolation < ESRInterpolation_Count`.
+- All `nameId`/`semanticId`/`fileNameId`/`annotation.nameId` must be `U32_MAX` or `< strings.length`; `type < ESRNodeType_Count`; `interpolation < ESRInterpolation_Count`.
+- `parent` must be `U32_MAX` (root) or `< i` — parents strictly precede their children, so the tree is acyclic and topologically ordered (node 0 is always a root). `i + childCount <= nodeCount`.
+- `fwdBckDeclareNode` must be `U32_MAX` or reference a node of the same `type` and (when symbols present) the same name; a forward declaration (`IsFwdDeclare`) points forward to its non-forward definition, a definition's back-link points backward to its forward declaration. The `IsFwdDeclare` flag is only valid on Function/Enum/Struct/Union/Interface nodes.
+- Each `registers[k].nodeId` references a `Register` node; each `enumValues[k].nodeId` references an `EnumValue` node; their `type`/`dimension`/`returnType`/`enumType` are `< ` their respective `_Count`.
 
 ## Hashing & comparing
 
@@ -165,7 +198,7 @@ Hashes are generated like following:
 
 - FNV-1a64 is used (64-bit FNV-1a).
 - The seed is `(features << 32) | (flags & ~HideMagicNumber)` treated as a U64 and FNVed (HideMagicNumber is a serialization detail and never influences the hash).
-- The whole `nodes[]` byte buffer is FNVed, then the whole `symbols[]` byte buffer, then the whole `annotations[]` byte buffer.
+- The whole `nodes[]` byte buffer is FNVed, then `symbols[]`, then `annotations[]`, then `registers[]`, then `enumValues[]`.
 - Every string in the pool (in order) is FNVed by its bytes.
 
 This hash is refreshed by `SRFile_finalize` (and on read). It can be used for quick comparison (e.g. deduplicating identical reflection trees across entrypoint combinations in an oiSH) and is only available at runtime.
@@ -176,4 +209,4 @@ This hash is refreshed by `SRFile_finalize` (and on read). It can be used for qu
 
 ## Changelog
 
-1.0: Initial format specification.
+1.1: Initial format specification. Carries the node tree (kinds, parent/child topology, names, semantics, forward-declaration links, annotations), the optional per-node source-location tier, and the detail tiers: per-Register frontend bind info, per-EnumValue enumerator values, a `HasReturn` flag on Function nodes, and per-Parameter direction (`ParamReturn`/`ParamIn`/`ParamOut`, `in`+`out` = `inout`). Deferred (localId still references them): the type graph (parameter/variable/member/return types), constant-buffer layouts, and resource array dims.

@@ -139,7 +139,7 @@ void Test_SRReadNodeFieldBounds(Test *t) {
 	{ SRFile sr = { 0 }; if(srBuildMinimal(t, &sr)) { sr.nodes.ptrNonConst[1].interpolation = ESRInterpolation_Count;
 		srExpectReadFails(t, &sr, &type, "invalid interpolation rejected"); } SRFile_free(&sr, t->alloc); }
 
-	{ SRFile sr = { 0 }; if(srBuildMinimal(t, &sr)) { sr.nodes.ptrNonConst[1].flags = 0x02;    //an ESRNodeFlag_Invalid bit
+	{ SRFile sr = { 0 }; if(srBuildMinimal(t, &sr)) { sr.nodes.ptrNonConst[1].flags = 0x04;    //an ESRNodeFlag_Invalid bit
 		srExpectReadFails(t, &sr, &type, "invalid node flag rejected"); } SRFile_free(&sr, t->alloc); }
 
 	{ SRFile sr = { 0 }; if(srBuildMinimal(t, &sr)) { sr.nodes.ptrNonConst[1].nameId = 1;       //nameCount == 1
@@ -431,7 +431,7 @@ void Test_SRFileStructuralRoundTrips(Test *t) {
 			Bool ok = srRoundTrip(t, &sr, &type, &s, &result);
 			Test_assert(t, "anonymous node round-trips", ok);
 			Test_assert(t, "anonymous node stays anonymous", ok && result.nodes.length == 1 && result.nodes.ptr[0].nameId == U32_MAX);
-			SRFile_print(&result, 0, t->alloc);        //must not crash on (anonymous)
+			SRFile_print(&result, 0, true, true, t->alloc);        //verbose must not crash on (anonymous)
 		}
 		else Test_assert(t, "create anon", false);
 

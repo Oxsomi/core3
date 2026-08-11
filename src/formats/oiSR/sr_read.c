@@ -40,6 +40,8 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	ListSRNode nodes = (ListSRNode) { 0 };
 	ListSRSymbol symbols = (ListSRSymbol) { 0 };
 	ListSRAnnotation annotations = (ListSRAnnotation) { 0 };
+	ListSRRegister registers = (ListSRRegister) { 0 };
+	ListSREnumValue enumValues = (ListSREnumValue) { 0 };
 	DLFile names = (DLFile) { 0 };
 
 	if(!offset || !srFile)
@@ -67,7 +69,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	SRHeader header;
 	gotoIfError3(clean, StreamCursor_consume(&cursor, offset, &header, sizeof(header), alloc, e_rr));
 
-	if(header.version != ESRVersion_V1_0 || (header.flags & ESRFlag_Unsupported))
+	if(header.version != ESRVersion_V1_1 || (header.flags & ESRFlag_Unsupported))
 		retError(clean, Error_invalidState(0, "SRFile_read()::file didn't have the right version or flags"));
 
 	if(header.features & ~(U32)ESRFeature_All & ~(U32)ESRFeature_SymbolInfo)
@@ -92,6 +94,12 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	gotoIfError3(clean, ListSRAnnotation_resize(&annotations, header.annotationCount, alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListSRAnnotation_buffer(annotations), alloc, e_rr));
+
+	gotoIfError3(clean, ListSRRegister_resize(&registers, header.registerCount, alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListSRRegister_buffer(registers), alloc, e_rr));
+
+	gotoIfError3(clean, ListSREnumValue_resize(&enumValues, header.enumValueCount, alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListSREnumValue_buffer(enumValues), alloc, e_rr));
 
 	//Align 16-byte then read the names oiDL
 
@@ -164,6 +172,15 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		)
 			retError(clean, Error_invalidState(0, "SRFile_read() forward-declare flag on a non-declarable node type"));
 
+		if((node.flags & ESRNodeFlag_HasReturn) && node.type != ESRNodeType_Function)
+			retError(clean, Error_invalidState(0, "SRFile_read() HasReturn flag on a non-function node"));
+
+		if((node.flags & ESRNodeFlag_ParamReturn) && node.type != ESRNodeType_Parameter)
+			retError(clean, Error_invalidState(0, "SRFile_read() return-value flag on a non-parameter node"));
+
+		if((node.flags & (ESRNodeFlag_ParamIn | ESRNodeFlag_ParamOut)) && node.type != ESRNodeType_Parameter)
+			retError(clean, Error_invalidState(0, "SRFile_read() parameter-direction flag on a non-parameter node"));
+
 		if(node.annotationCount) {
 
 			if(node.annotationStart == U32_MAX || (U64)node.annotationStart + node.annotationCount > annotations.length)
@@ -229,6 +246,36 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		if(annotations.ptr[i].nameId >= nameCount)
 			retError(clean, Error_invalidState(0, "SRFile_read() annotation.nameId out of bounds"));
 
+	//Validate register references (must point at a Register node, with in-range enum fields)
+
+	for(U64 i = 0; i < registers.length; ++i) {
+
+		SRRegister reg = registers.ptr[i];
+
+		if(reg.nodeId >= nodes.length || nodes.ptr[reg.nodeId].type != ESRNodeType_Register)
+			retError(clean, Error_invalidState(0, "SRFile_read() register.nodeId doesn't reference a Register node"));
+
+		if(
+			reg.type >= ESRResourceType_Count ||
+			reg.dimension >= ESRResourceDimension_Count ||
+			reg.returnType >= ESRResourceReturnType_Count
+		)
+			retError(clean, Error_invalidState(0, "SRFile_read() register had an invalid type/dimension/returnType"));
+	}
+
+	//Validate enum value references (must point at an EnumValue node, with an in-range underlying type)
+
+	for(U64 i = 0; i < enumValues.length; ++i) {
+
+		SREnumValue ev = enumValues.ptr[i];
+
+		if(ev.nodeId >= nodes.length || nodes.ptr[ev.nodeId].type != ESRNodeType_EnumValue)
+			retError(clean, Error_invalidState(0, "SRFile_read() enumValue.nodeId doesn't reference an EnumValue node"));
+
+		if(ev.enumType >= ESREnumType_Count)
+			retError(clean, Error_invalidState(0, "SRFile_read() enumValue had an invalid enumType"));
+	}
+
 	if(!isSubFile && *offset != stream->size)
 		retError(clean, Error_invalidState(0, "SRFile_read() file had unrecognized data at the end"));
 
@@ -244,6 +291,8 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	srFile->nodes = nodes;
 	srFile->symbols = symbols;
 	srFile->annotations = annotations;
+	srFile->registers = registers;
+	srFile->enumValues = enumValues;
 	srFile->flags = flags;
 	srFile->features = header.features;
 
@@ -251,6 +300,8 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	nodes = (ListSRNode) { 0 };
 	symbols = (ListSRSymbol) { 0 };
 	annotations = (ListSRAnnotation) { 0 };
+	registers = (ListSRRegister) { 0 };
+	enumValues = (ListSREnumValue) { 0 };
 
 	gotoIfError3(clean, SRFile_finalize(srFile, alloc, e_rr));
 
@@ -263,6 +314,8 @@ clean:
 	ListSRNode_free(&nodes, alloc);
 	ListSRSymbol_free(&symbols, alloc);
 	ListSRAnnotation_free(&annotations, alloc);
+	ListSRRegister_free(&registers, alloc);
+	ListSREnumValue_free(&enumValues, alloc);
 	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
 }

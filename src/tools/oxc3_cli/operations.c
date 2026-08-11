@@ -700,7 +700,7 @@ void Operations_init() {
 			.requiredParameters = EOperationHasParameter_Input,
 			.optionalParameters =
 				EOperationHasParameter_Output | EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir,
-			.operationFlags = EOperationFlags_Debug
+			.operationFlags = EOperationFlags_Debug | EOperationFlags_Verbose
 		};
 
 		Operation_values[EOperation_ShaderEntrypoints] = (Operation) {

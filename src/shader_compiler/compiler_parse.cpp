@@ -1381,6 +1381,138 @@ clean:
 	return s_uccess;
 }
 
+//Detail tiers on top of the node tree: function return, resource bind info and enum values.
+//These use their own reflector index spaces (FunctionCount / ResourceCount via node.localId / EnumCount),
+// each carrying back the node it belongs to, so they attach to the already-built SRFile nodes.
+
+static Bool Compiler_reflectDetails(
+	IHLSLReflectionData *reflectionData,
+	const D3D12_HLSL_REFLECTION_DESC *reflDesc,
+	SRFile *reflection,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+	HRESULT hr = S_OK;
+
+	//Function return: mark Function nodes that return a value (rather than void)
+
+	for (U32 i = 0; i < reflDesc->FunctionCount; ++i) {
+
+		D3D12_HLSL_FUNCTION_DESC funcDesc;
+
+		if (FAILED(hr = reflectionData->GetFunctionDesc(i, &funcDesc)))
+			retError(clean, Error_invalidState(0, "Compiler_reflectDetails() failed to get function desc"));
+
+		if (funcDesc.HasReturn && funcDesc.NodeId < reflection->nodes.length) {
+
+			reflection->nodes.ptrNonConst[funcDesc.NodeId].flags |= ESRNodeFlag_HasReturn;
+
+			//The return value is an extra parameter child right after the real parameters (which are contiguous
+			//after the function node), so it's at funcNode + 1 + parameterCount. Tag it so it reads as (return).
+
+			U64 retId = (U64) funcDesc.NodeId + 1 + funcDesc.FunctionParameterCount;
+
+			if (retId < reflection->nodes.length && reflection->nodes.ptr[retId].type == ESRNodeType_Parameter)
+				reflection->nodes.ptrNonConst[retId].flags |= ESRNodeFlag_ParamReturn;
+		}
+
+		//Parameter direction (in / out / inout) per real parameter; params are contiguous after the function node
+
+		for (U32 p = 0; p < funcDesc.FunctionParameterCount; ++p) {
+
+			ID3D12FunctionParameterReflection *param = reflectionData->GetFunctionParameter(i, p);
+
+			if (!param)
+				continue;
+
+			D3D12_PARAMETER_DESC pd;
+
+			if (FAILED(param->GetDesc(&pd)))
+				continue;
+
+			U64 pnode = (U64) funcDesc.NodeId + 1 + p;
+
+			if (pnode >= reflection->nodes.length || reflection->nodes.ptr[pnode].type != ESRNodeType_Parameter)
+				continue;
+
+			if (pd.Flags & D3D_PF_IN)
+				reflection->nodes.ptrNonConst[pnode].flags |= ESRNodeFlag_ParamIn;
+
+			if (pd.Flags & D3D_PF_OUT)
+				reflection->nodes.ptrNonConst[pnode].flags |= ESRNodeFlag_ParamOut;
+		}
+	}
+
+	//Registers: frontend bind info per Register node (a Register node's localId indexes the resource table)
+
+	for (U64 i = 0; i < reflection->nodes.length; ++i) {
+
+		if (reflection->nodes.ptr[i].type != ESRNodeType_Register)
+			continue;
+
+		D3D12_SHADER_INPUT_BIND_DESC1 bindDesc;
+
+		if (FAILED(reflectionData->GetResourceBindingDesc(reflection->nodes.ptr[i].localId, &bindDesc)))
+			continue;        //Node with no resolvable binding: keep the node, skip the detail
+
+		if (
+			(U32) bindDesc.Desc.Type >= ESRResourceType_Count ||
+			(U32) bindDesc.Desc.Dimension >= ESRResourceDimension_Count ||
+			(U32) bindDesc.Desc.ReturnType >= ESRResourceReturnType_Count
+		)
+			continue;        //Out-of-range kind (shouldn't happen): skip rather than emit an invalid record
+
+		SRRegister reg = SRRegister{};
+		reg.nodeId = (U32) i;
+		reg.type = (U8) bindDesc.Desc.Type;
+		reg.dimension = (U8) bindDesc.Desc.Dimension;
+		reg.returnType = (U8) bindDesc.Desc.ReturnType;
+		reg.bindCount = bindDesc.Desc.BindCount;
+
+		gotoIfError3(clean, ListSRRegister_pushBack(&reflection->registers, reg, alloc, e_rr));
+	}
+
+	//Enum values: enumerators + the parent enum's underlying integer type
+
+	for (U32 i = 0; i < reflDesc->EnumCount; ++i) {
+
+		D3D12_HLSL_ENUM_DESC enumDesc;
+
+		if (FAILED(hr = reflectionData->GetEnumDesc(i, &enumDesc)))
+			retError(clean, Error_invalidState(0, "Compiler_reflectDetails() failed to get enum desc"));
+
+		U8 enumType = (U32) enumDesc.Type < ESREnumType_Count ? (U8) enumDesc.Type : 0;
+
+		for (U32 j = 0; j < enumDesc.ValueCount; ++j) {
+
+			D3D12_HLSL_ENUM_VALUE valDesc;
+
+			if (FAILED(hr = reflectionData->GetEnumValueByIndex(i, j, &valDesc)))
+				retError(clean, Error_invalidState(0, "Compiler_reflectDetails() failed to get enum value"));
+
+			//An enum's value nodes are laid out contiguously right after the enum node, so the j-th value is at
+			//enumNode + 1 + j. (D3D12_HLSL_ENUM_VALUE.NodeId reports the parent enum, not the value node.)
+
+			U64 valueNodeId = (U64) enumDesc.NodeId + 1 + j;
+
+			if (valueNodeId >= reflection->nodes.length ||
+				reflection->nodes.ptr[valueNodeId].type != ESRNodeType_EnumValue)
+				continue;
+
+			SREnumValue ev = SREnumValue{};
+			ev.nodeId = (U32) valueNodeId;
+			ev.enumType = enumType;
+			ev.value = valDesc.Value;
+
+			gotoIfError3(clean, ListSREnumValue_pushBack(&reflection->enumValues, ev, alloc, e_rr));
+		}
+	}
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_reflect(
 	const Compiler *comp,
 	const CompilerSettings *settings,
@@ -1544,14 +1676,12 @@ Bool Compiler_reflect(
 	//Build the SRFile: the reflector's feature bits map bit-for-bit onto ESRFeature.
 
 	{
-		//The source-location tier (file/line/column via GetNodeSymbolDesc) is temporarily gated off.
-		//The fork's public GetNodeSymbolDesc dereferences Sources[GetFileSourceId()] without guarding the
-		// "no file" sentinel (uint16_t(-1)), so it access-violates on synthetic nodes (e.g. builtins).
-		//The fix is in the fork (dxcreflection/dxcreflector.cpp GetNodeSymbolDesc, now guarded by HasFileSource);
-		// once the dxc package is rebuilt with it, set reflectSymbols = (reflDesc.Features & ..._SYMBOL_INFO).
-		//Names/semantics/tree/annotations are unaffected: names come from GetNodeDesc, which is already safe.
+		//Emit the source-location tier (file/line/column) whenever the reflector reports the SymbolInfo feature.
+		//GetNodeSymbolDesc guards the no-file sentinel (uint16_t(-1)), so synthetic/builtin nodes come back with an
+		//empty file name (-> fileNameId U32_MAX) rather than reading out of bounds. Names/tree/annotations are
+		//independent of this tier (names come from GetNodeDesc).
 
-		Bool reflectSymbols = false;
+		Bool reflectSymbols = (reflDesc.Features & D3D12_HLSL_REFLECTION_FEATURE_SYMBOL_INFO) != 0;
 
 		U32 features = (U32) reflDesc.Features;
 
@@ -1569,6 +1699,8 @@ Bool Compiler_reflect(
 			gotoIfError3(clean, Compiler_reflectNode(
 				reflectionData, i, reflDesc.NodeCount, reflectSymbols, reflection, alloc, e_rr
 			));
+
+		gotoIfError3(clean, Compiler_reflectDetails(reflectionData, &reflDesc, reflection, alloc, e_rr));
 
 		gotoIfError3(clean, SRFile_finalize(reflection, alloc, e_rr));
 	}

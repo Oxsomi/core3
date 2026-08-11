@@ -70,10 +70,12 @@ void Test_shaderCompilerReflectSR(Test *t) {
 
 	static const C8 *src =
 		"struct Light { float3 pos; float3 color; };\n"
+		"enum Mode { ModeA, ModeB };\n"
 		"RWByteAddressBuffer buf;\n"
+		"uint dbl(uint x) { return x * 2; }\n"
 		"[[oxc::stage(\"compute\")]]\n"
 		"[numthreads(1, 1, 1)]\n"
-		"void main(uint id : SV_DispatchThreadID) { buf.Store<uint>(id * 4, 1); }\n";
+		"void main(uint id : SV_DispatchThreadID) { buf.Store<uint>(id * 4, dbl(id)); }\n";
 
 	gotoIfError3(clean, Compiler_create(alloc, &comp, e_rr));
 	created = true;
@@ -89,10 +91,14 @@ void Test_shaderCompilerReflectSR(Test *t) {
 
 	Test_assert(t, "reflect produced nodes", reflection.nodes.length > 0);
 
-	//The source-location tier is currently gated off in Compiler_reflect (pending the fork's
-	//GetNodeSymbolDesc fix reaching the linked dxc), so no location array yet. Names/tree still work.
-	Test_assert(t, "location tier gated off for now", (reflection.flags & ESRSettingsFlags_HasSymbols) == 0);
-	Test_assert(t, "no location array yet", reflection.symbols.length == 0);
+	//The source-location tier is present only when the linked dxc guards GetNodeSymbolDesc. Accept either state:
+	//if present it must be parallel to nodes with the SymbolInfo feature; if absent there's no location array.
+
+	Bool hasSyms = (reflection.flags & ESRSettingsFlags_HasSymbols) != 0;
+	Test_assert(t, "symbol tier consistent",
+		hasSyms
+			? (reflection.symbols.length == reflection.nodes.length && (reflection.features & ESRFeature_SymbolInfo))
+			: (reflection.symbols.length == 0));
 
 	//The struct and its members should be present (USER_TYPES tier)
 
@@ -107,6 +113,16 @@ void Test_shaderCompilerReflectSR(Test *t) {
 
 	if (mainId != U32_MAX)
 		Test_assert(t, "main has annotations", reflection.nodes.ptr[mainId].annotationCount > 0);
+
+	//Detail tiers: resource bind info (buf), enum values (ModeA/ModeB), function return (dbl)
+
+	Test_assert(t, "register reflected", reflection.registers.length > 0);
+	Test_assert(t, "enum values reflected", reflection.enumValues.length >= 2);
+
+	U32 dblId = srFindNode(&reflection, ESRNodeType_Function, "dbl");
+	Test_assert(t, "returning function reflected", dblId != U32_MAX);
+	if (dblId != U32_MAX)
+		Test_assert(t, "returning function has HasReturn", (reflection.nodes.ptr[dblId].flags & ESRNodeFlag_HasReturn) != 0);
 
 	//Every node with a symbol should point at a valid line (basic sanity of the location tier)
 

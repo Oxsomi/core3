@@ -431,7 +431,7 @@
 			);
 		}
 
-		else SRFile_print(&reflection, 0, alloc);
+		else SRFile_print(&reflection, 0, (args->flags & EOperationFlags_Verbose) != 0, true, alloc);
 
 	clean:
 		RefPtr_dec(&writeStream);

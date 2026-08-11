@@ -34,6 +34,8 @@
 TListImpl(SRNode);
 TListImpl(SRSymbol);
 TListImpl(SRAnnotation);
+TListImpl(SRRegister);
+TListImpl(SREnumValue);
 TListImpl(SRFile);
 
 const C8 *ESRNodeType_name(ESRNodeType type) {
@@ -50,6 +52,44 @@ const C8 *ESRNodeType_name(ESRNodeType type) {
 		return "Invalid";
 
 	return names[type];
+}
+
+const C8 *ESRResourceType_name(ESRResourceType type) {
+
+	static const C8 *names[] = {
+		"cbuffer", "tbuffer", "Texture", "SamplerState", "RWTexture",
+		"StructuredBuffer", "RWStructuredBuffer", "ByteAddressBuffer", "RWByteAddressBuffer",
+		"AppendStructuredBuffer", "ConsumeStructuredBuffer", "RWStructuredBuffer(counter)",
+		"RaytracingAccelerationStructure", "FeedbackTexture"
+	};
+
+	if(type >= ESRResourceType_Count)
+		return "Invalid";
+
+	return names[type];
+}
+
+const C8 *ESREnumType_name(ESREnumType type) {
+
+	static const C8 *names[] = { "uint", "int", "uint64_t", "int64_t", "uint16_t", "int16_t" };
+
+	if(type >= ESREnumType_Count)
+		return "Invalid";
+
+	return names[type];
+}
+
+const C8 *ESRInterpolation_name(ESRInterpolation mode) {
+
+	static const C8 *names[] = {
+		"Undefined", "Constant", "Linear", "LinearCentroid", "LinearNoperspective",
+		"LinearNoperspectiveCentroid", "LinearSample", "LinearNoperspectiveSample"
+	};
+
+	if(mode >= ESRInterpolation_Count)
+		return "Invalid";
+
+	return names[mode];
 }
 
 Bool SRFile_create(ESRSettingsFlags flags, U32 features, const Allocator *alloc, SRFile *srFile, Error *e_rr) {
@@ -114,6 +154,8 @@ Bool SRFile_createCopy(const SRFile *src, const Allocator *alloc, SRFile *srFile
 	gotoIfError3(clean, ListSRNode_createCopy(src->nodes, alloc, &srFile->nodes, e_rr));
 	gotoIfError3(clean, ListSRSymbol_createCopy(src->symbols, alloc, &srFile->symbols, e_rr));
 	gotoIfError3(clean, ListSRAnnotation_createCopy(src->annotations, alloc, &srFile->annotations, e_rr));
+	gotoIfError3(clean, ListSRRegister_createCopy(src->registers, alloc, &srFile->registers, e_rr));
+	gotoIfError3(clean, ListSREnumValue_createCopy(src->enumValues, alloc, &srFile->enumValues, e_rr));
 
 	srFile->flags = src->flags;
 	srFile->features = src->features;
@@ -136,6 +178,8 @@ void SRFile_free(SRFile *srFile, const Allocator *alloc) {
 	ListSRNode_free(&srFile->nodes, alloc);
 	ListSRSymbol_free(&srFile->symbols, alloc);
 	ListSRAnnotation_free(&srFile->annotations, alloc);
+	ListSRRegister_free(&srFile->registers, alloc);
+	ListSREnumValue_free(&srFile->enumValues, alloc);
 
 	*srFile = (SRFile) { 0 };
 }
@@ -219,6 +263,8 @@ Bool SRFile_finalize(SRFile *srFile, const Allocator *alloc, Error *e_rr) {
 	hash = Buffer_fnv1a64(ListSRNode_bufferConst(srFile->nodes), hash);
 	hash = Buffer_fnv1a64(ListSRSymbol_bufferConst(srFile->symbols), hash);
 	hash = Buffer_fnv1a64(ListSRAnnotation_bufferConst(srFile->annotations), hash);
+	hash = Buffer_fnv1a64(ListSRRegister_bufferConst(srFile->registers), hash);
+	hash = Buffer_fnv1a64(ListSREnumValue_bufferConst(srFile->enumValues), hash);
 
 	for(U64 i = 0; i < srFile->names.entryStrings.length; ++i)
 		hash = Buffer_fnv1a64(CharString_bufferConst(srFile->names.entryStrings.ptr[i]), hash);
@@ -229,7 +275,48 @@ clean:
 	return s_uccess;
 }
 
-void SRFile_print(const SRFile *srFile, U64 indenting, const Allocator *alloc) {
+//A node is from a builtin include if its source file's basename starts with '@' (e.g. @types.hlsli).
+
+static Bool srFileIsBuiltin(CharString file) {
+
+	U64 len = CharString_length(file);
+	U64 base = 0;
+
+	for(U64 i = 0; i < len; ++i)
+		if(file.ptr[i] == '/' || file.ptr[i] == '\\')
+			base = i + 1;
+
+	return base < len && file.ptr[base] == '@';
+}
+
+//Prints a string with control characters (newline, carriage return, tab) escaped, so a multi-line value such as an
+//oxc::uniforms annotation stays on a single line and doesn't break the indented tree layout.
+
+static void srPrintEscaped(const Allocator *alloc, CharString str) {
+
+	U64 start = 0;
+	const U64 n = CharString_length(str);
+
+	for(U64 i = 0; i < n; ++i) {
+
+		const C8 c = str.ptr[i];
+		const C8 *esc = c == '\n' ? "\\n" : c == '\r' ? "\\r" : c == '\t' ? "\\t" : NULL;
+
+		if(!esc)
+			continue;
+
+		if(i > start)
+			Log_debug(alloc, ELogOptions_None, "%.*s", (int) (i - start), str.ptr + start);
+
+		Log_debug(alloc, ELogOptions_None, "%s", esc);
+		start = i + 1;
+	}
+
+	if(n > start)
+		Log_debug(alloc, ELogOptions_None, "%.*s", (int) (n - start), str.ptr + start);
+}
+
+void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool collapseBuiltins, const Allocator *alloc) {
 
 	if(!srFile) {
 		Log_debugLn(alloc, "SRFile_print() invalid srFile");
@@ -238,9 +325,69 @@ void SRFile_print(const SRFile *srFile, U64 indenting, const Allocator *alloc) {
 
 	Bool hasSymbols = srFile->flags & ESRSettingsFlags_HasSymbols;
 
+	//Collapse nodes from builtin includes (@types.hlsli etc.) into a per-file summary at the end, so the shader's
+	//own symbols aren't buried under the couple hundred builtin symbols the includes pull in. Needs source locations.
+
+	collapseBuiltins = collapseBuiltins && hasSymbols;
+
+	//collapsedMask[j] = node j was folded into the builtin summary (a builtin-include node, or a descendant of one)
+
+	Buffer collapsedMask = Buffer_createNull();
+
+	if(collapseBuiltins)
+		Buffer_createEmptyBytes(srFile->nodes.length, alloc, &collapsedMask, NULL);
+
+	U32 builtinFileIds[16];
+	U64 builtinCounts[16] = { 0 };
+	U64 builtinFileCount = 0, builtinTotal = 0;
+
 	for(U64 i = 0; i < srFile->nodes.length; ++i) {
 
 		SRNode node = srFile->nodes.ptr[i];
+
+		//Collapse builtin-include nodes (and their descendants) into a per-file summary, skipping the inline dump
+
+		if(collapseBuiltins && collapsedMask.ptr) {
+
+			Bool builtin = false;
+			U32 fileId = U32_MAX;
+
+			if(
+				i < srFile->symbols.length && srFile->symbols.ptr[i].fileNameId != U32_MAX &&
+				srFileIsBuiltin(srFile->names.entryStrings.ptr[srFile->symbols.ptr[i].fileNameId])
+			) {
+				builtin = true;
+				fileId = srFile->symbols.ptr[i].fileNameId;
+			}
+
+			else if(node.parent != U32_MAX && collapsedMask.ptr[node.parent])
+				builtin = true;        //A descendant of a collapsed builtin node (e.g. a builtin function's parameters)
+
+			if(builtin) {
+
+				collapsedMask.ptrNonConst[i] = 1;
+				++builtinTotal;
+
+				if(fileId != U32_MAX) {
+
+					U64 k = 0;
+
+					for(; k < builtinFileCount; ++k)
+						if(builtinFileIds[k] == fileId)
+							break;
+
+					if(k == builtinFileCount && builtinFileCount < 16) {
+						builtinFileIds[builtinFileCount] = fileId;
+						k = builtinFileCount++;
+					}
+
+					if(k < 16)
+						++builtinCounts[k];
+				}
+
+				continue;
+			}
+		}
 
 		//Walk parents to compute the indentation depth
 
@@ -257,14 +404,25 @@ void SRFile_print(const SRFile *srFile, U64 indenting, const Allocator *alloc) {
 		indent[depth < SHORTSTRING_LEN - 1 ? depth : SHORTSTRING_LEN - 1] = '\0';
 
 		CharString name =
+			node.flags & ESRNodeFlag_ParamReturn ? CharString_createRefCStrConst("(return)") :
 			node.nameId == U32_MAX ? CharString_createRefCStrConst("(anonymous)") :
 			srFile->names.entryStrings.ptr[node.nameId];
 
+		//Parameter direction (in / out / inout), printed like HLSL as a qualifier before the name
+
+		const C8 *dir = "";
+
+		if(node.type == ESRNodeType_Parameter) {
+			Bool pin = node.flags & ESRNodeFlag_ParamIn, pout = node.flags & ESRNodeFlag_ParamOut;
+			dir = pin && pout ? "inout " : pout ? "out " : pin ? "in " : "";
+		}
+
 		Log_debug(
 			alloc, ELogOptions_None,
-			"%s%s %.*s",
+			"%s%s %s%.*s",
 			indent,
 			ESRNodeType_name((ESRNodeType) node.type),
+			dir,
 			(int) CharString_length(name),
 			name.ptr
 		);
@@ -274,13 +432,65 @@ void SRFile_print(const SRFile *srFile, U64 indenting, const Allocator *alloc) {
 			Log_debug(alloc, ELogOptions_None, " : %.*s", (int) CharString_length(semantic), semantic.ptr);
 		}
 
+		//Detail for specific node kinds: resource kind, enum value, function return
+
+		if(node.type == ESRNodeType_Register) {
+
+			for(U64 r = 0; r < srFile->registers.length; ++r)
+				if(srFile->registers.ptr[r].nodeId == i) {
+
+					SRRegister reg = srFile->registers.ptr[r];
+
+					if(isVerbose)
+						Log_debug(
+							alloc, ELogOptions_None, " [%s dim=%"PRIu8" ret=%"PRIu8" count=%"PRIu32"]",
+							ESRResourceType_name((ESRResourceType) reg.type), reg.dimension, reg.returnType, reg.bindCount
+						);
+
+					else Log_debug(alloc, ELogOptions_None, " [%s]", ESRResourceType_name((ESRResourceType) reg.type));
+
+					break;
+				}
+		}
+
+		else if(node.type == ESRNodeType_EnumValue) {
+
+			for(U64 v = 0; v < srFile->enumValues.length; ++v)
+				if(srFile->enumValues.ptr[v].nodeId == i) {
+
+					SREnumValue ev = srFile->enumValues.ptr[v];
+
+					if(isVerbose)
+						Log_debug(
+							alloc, ELogOptions_None, " = %"PRIi64" (%s)",
+							ev.value, ESREnumType_name((ESREnumType) ev.enumType)
+						);
+
+					else Log_debug(alloc, ELogOptions_None, " = %"PRIi64, ev.value);
+
+					break;
+				}
+		}
+
+		else if(node.type == ESRNodeType_Function && (node.flags & ESRNodeFlag_HasReturn))
+			Log_debug(alloc, ELogOptions_None, " -> returns");
+
 		if(hasSymbols && i < srFile->symbols.length) {
 
 			SRSymbol sym = srFile->symbols.ptr[i];
 
 			if(sym.fileNameId != U32_MAX) {
+
 				CharString file = srFile->names.entryStrings.ptr[sym.fileNameId];
-				Log_debug(
+
+				if(isVerbose)
+					Log_debug(
+						alloc, ELogOptions_None,
+						" (%.*s:%"PRIu32"+%"PRIu32":%"PRIu32"-%"PRIu32")",
+						(int) CharString_length(file), file.ptr, sym.line, sym.lineCount, sym.columnStart, sym.columnEnd
+					);
+
+				else Log_debug(
 					alloc, ELogOptions_None,
 					" (%.*s:%"PRIu32":%"PRIu32")",
 					(int) CharString_length(file), file.ptr, sym.line, sym.columnStart
@@ -288,6 +498,61 @@ void SRFile_print(const SRFile *srFile, U64 indenting, const Allocator *alloc) {
 			}
 		}
 
+		//Verbose: dump every remaining field so a serialized oiSR can be reviewed exactly
+
+		if(isVerbose) {
+
+			Log_debug(
+				alloc, ELogOptions_None,
+				"  {#%"PRIu64" localId=0x%08"PRIx32" parent=%"PRIi64" children=%"PRIu32,
+				i, node.localId, node.parent == U32_MAX ? (I64)-1 : (I64)node.parent, node.childCount
+			);
+
+			if(node.flags & ESRNodeFlag_IsFwdDeclare)
+				Log_debug(alloc, ELogOptions_None, " fwdDeclare->%"PRIu32, node.fwdBckDeclareNode);
+
+			if(node.interpolation)
+				Log_debug(alloc, ELogOptions_None, " interp=%s", ESRInterpolation_name((ESRInterpolation) node.interpolation));
+
+			Log_debug(alloc, ELogOptions_None, "}");
+		}
+
 		Log_debug(alloc, ELogOptions_NewLine, "");
+
+		//Annotations render as indented pseudo-children (one per line) right under the node instead of trailing its
+		//header, so they're easy to spot and a multi-line value (e.g. oxc::uniforms) doesn't wreck the tree layout.
+
+		if(isVerbose && node.annotationCount) {
+
+			const U64 annDepth = depth + 1 < SHORTSTRING_LEN - 1 ? depth + 1 : SHORTSTRING_LEN - 1;
+
+			ShortString annIndent;
+			for(U64 j = 0; j < annDepth; ++j) annIndent[j] = '\t';
+			annIndent[annDepth] = '\0';
+
+			for(U16 a = 0; a < node.annotationCount; ++a) {
+
+				SRAnnotation an = srFile->annotations.ptr[node.annotationStart + a];
+				CharString anName = srFile->names.entryStrings.ptr[an.nameId];
+
+				Log_debug(alloc, ELogOptions_None, "%s%s", annIndent, an.isBuiltin ? "[" : "[[");
+				srPrintEscaped(alloc, anName);
+				Log_debug(alloc, ELogOptions_NewLine, "%s", an.isBuiltin ? "]" : "]]");
+			}
+		}
 	}
+
+	//Collapsed builtin-include subsection (verbose only)
+
+	if(builtinTotal) {
+
+		Log_debugLn(alloc, "\t... %"PRIu64" builtin-include symbols collapsed:", builtinTotal);
+
+		for(U64 k = 0; k < builtinFileCount; ++k) {
+			CharString f = srFile->names.entryStrings.ptr[builtinFileIds[k]];
+			Log_debugLn(alloc, "\t\t%.*s: %"PRIu64" symbols", (int) CharString_length(f), f.ptr, builtinCounts[k]);
+		}
+	}
+
+	Buffer_free(&collapsedMask, alloc);
 }

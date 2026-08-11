@@ -122,11 +122,87 @@ typedef enum ESRInterpolation {
 	ESRInterpolation_Count
 } ESRInterpolation;
 
+const C8 *ESRInterpolation_name(ESRInterpolation mode);
+
 typedef enum ESRNodeFlag {
 	ESRNodeFlag_None         = 0,
 	ESRNodeFlag_IsFwdDeclare = 1 << 0,      //This node is a forward declaration (its fwdBckDeclareNode has the definition)
-	ESRNodeFlag_Invalid      = 0xFF << 1
+	ESRNodeFlag_HasReturn    = 1 << 1,      //Function nodes: the function returns a value (rather than void)
+	ESRNodeFlag_ParamReturn  = 1 << 2,      //Parameter nodes: this is the return-value slot (D3D_RETURN_PARAMETER_INDEX)
+	ESRNodeFlag_ParamIn      = 1 << 3,      //Parameter nodes: has 'in'  (in + out = inout)
+	ESRNodeFlag_ParamOut     = 1 << 4,      //Parameter nodes: has 'out'
+	ESRNodeFlag_Invalid      = 0xFF << 5
 } ESRNodeFlag;
+
+//Resource kind of a Register node, a mirror of D3D_SHADER_INPUT_TYPE (frontend reflection: kind/shape only,
+// the space/bindPoint are backend concerns and left invalid here).
+
+typedef enum ESRResourceType {
+	ESRResourceType_CBuffer,
+	ESRResourceType_TBuffer,
+	ESRResourceType_Texture,
+	ESRResourceType_Sampler,
+	ESRResourceType_UAVRWTyped,
+	ESRResourceType_Structured,
+	ESRResourceType_UAVRWStructured,
+	ESRResourceType_ByteAddress,
+	ESRResourceType_UAVRWByteAddress,
+	ESRResourceType_UAVAppendStructured,
+	ESRResourceType_UAVConsumeStructured,
+	ESRResourceType_UAVRWStructuredWithCounter,
+	ESRResourceType_RaytracingAccelerationStructure,
+	ESRResourceType_UAVFeedbackTexture,
+	ESRResourceType_Count
+} ESRResourceType;
+
+const C8 *ESRResourceType_name(ESRResourceType type);
+
+//Resource dimension, a mirror of D3D_SRV_DIMENSION.
+
+typedef enum ESRResourceDimension {
+	ESRResourceDimension_Unknown,
+	ESRResourceDimension_Buffer,
+	ESRResourceDimension_Texture1D,
+	ESRResourceDimension_Texture1DArray,
+	ESRResourceDimension_Texture2D,
+	ESRResourceDimension_Texture2DArray,
+	ESRResourceDimension_Texture2DMS,
+	ESRResourceDimension_Texture2DMSArray,
+	ESRResourceDimension_Texture3D,
+	ESRResourceDimension_TextureCube,
+	ESRResourceDimension_TextureCubeArray,
+	ESRResourceDimension_BufferEx,
+	ESRResourceDimension_Count
+} ESRResourceDimension;
+
+//Component return type of a typed resource, a mirror of D3D_RESOURCE_RETURN_TYPE (0 = none/unknown).
+
+typedef enum ESRResourceReturnType {
+	ESRResourceReturnType_None,
+	ESRResourceReturnType_UNorm,
+	ESRResourceReturnType_SNorm,
+	ESRResourceReturnType_SInt,
+	ESRResourceReturnType_UInt,
+	ESRResourceReturnType_Float,
+	ESRResourceReturnType_Mixed,
+	ESRResourceReturnType_Double,
+	ESRResourceReturnType_Continued,
+	ESRResourceReturnType_Count
+} ESRResourceReturnType;
+
+//Underlying integer type of an enum, a mirror of D3D12_HLSL_ENUM_TYPE.
+
+typedef enum ESREnumType {
+	ESREnumType_U32,
+	ESREnumType_I32,
+	ESREnumType_U64,
+	ESREnumType_I64,
+	ESREnumType_U16,
+	ESREnumType_I16,
+	ESREnumType_Count
+} ESREnumType;
+
+const C8 *ESREnumType_name(ESREnumType type);
 
 //Source location of a node, the strippable "SymbolInfo" tier.
 //Symbols, when present, are parallel to nodes (symbols[i] describes nodes[i]).
@@ -179,9 +255,38 @@ typedef struct SRAnnotation {
 	U8 padding[3];
 } SRAnnotation;
 
+//Frontend bind info for a Register node (kind/shape). Keyed by node index; space/bindPoint are backend-only.
+
+typedef struct SRRegister {
+
+	U32 nodeId;                             //The Register node this describes
+
+	U8 type;                                //ESRResourceType
+	U8 dimension;                           //ESRResourceDimension
+	U8 returnType;                          //ESRResourceReturnType
+	U8 padding;
+
+	U32 bindCount;                          //Descriptor count (array size); 0 = unbounded, 1 = single
+
+} SRRegister;
+
+//A single enumerator value. Keyed by its EnumValue node; enumType is the parent enum's underlying type.
+
+typedef struct SREnumValue {
+
+	U32 nodeId;                             //The EnumValue node this describes
+	U8 enumType;                            //ESREnumType (the parent enum's underlying integer type)
+	U8 padding[3];
+
+	I64 value;
+
+} SREnumValue;
+
 TList(SRNode);
 TList(SRSymbol);
 TList(SRAnnotation);
+TList(SRRegister);
+TList(SREnumValue);
 
 typedef enum ESRSettingsFlags {
 	ESRSettingsFlags_None             = 0,
@@ -198,6 +303,9 @@ typedef struct SRFile {
 	ListSRNode nodes;
 	ListSRSymbol symbols;        //Empty if symbols weren't reflected, else parallel to nodes (length == nodes.length)
 	ListSRAnnotation annotations;
+
+	ListSRRegister registers;    //Frontend bind info for Register nodes
+	ListSREnumValue enumValues;  //Enumerators for Enum nodes
 
 	ESRSettingsFlags flags;
 	U32 features;                //ESRFeature bitset: which reflection tiers this file carries
@@ -239,14 +347,17 @@ Bool SRFile_write(
 
 Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Allocator *alloc, SRFile *srFile, Error *e_rr);
 
-//Logs a stringified SRFile tree directly
-void SRFile_print(const SRFile *srFile, U64 indenting, const Allocator *alloc);
+//Logs a stringified SRFile tree directly. isVerbose dumps every field (ids, localId, parent/child, flags,
+//full source spans, and the raw register/enum-value records) so a serialized oiSR can be reviewed exactly.
+//collapseBuiltins folds nodes from builtin includes (@types.hlsli etc.) and their descendants into a per-file
+//summary, so a shader's own symbols aren't buried under the couple hundred builtin symbols the includes pull in.
+void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool collapseBuiltins, const Allocator *alloc);
 
 //File headers (file spec: docs/oiSR.md)
 
 typedef enum ESRVersion {
 	ESRVersion_Undefined,
-	ESRVersion_V1_0            //Current
+	ESRVersion_V1_1            //Current (on-disk version byte 1, displayed as major.minor 1.1)
 } ESRVersion;
 
 typedef enum ESRFlag {
@@ -265,6 +376,9 @@ typedef struct SRHeader {
 
 	U32 nodeCount;
 	U32 annotationCount;
+
+	U32 registerCount;
+	U32 enumValueCount;
 
 } SRHeader;
 

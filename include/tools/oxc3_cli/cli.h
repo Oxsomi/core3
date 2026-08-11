@@ -150,7 +150,9 @@ Bool CLI_graphicsCreate(const ParsedArgs *args);
 	//CLI_isaResolveAsic prints the device list when `asic` is "?" (sets *handled) or unknown (errors).
 
 	Bool CLI_isaResolveAsic(CharString asic, Bool *handled, const Allocator *alloc, Error *e_rr);
-	Bool CLI_isaDisassembleSpirv(Buffer spirv, CharString asic, Buffer *isaOut, const Allocator *alloc, Error *e_rr);
+	Bool CLI_isaDisassembleSpirv(
+		Buffer spirv, CharString asic, CharString entrypoint, Buffer *isaOut, const Allocator *alloc, Error *e_rr
+	);
 #endif
 
 Bool CLI_audioDevices(const ParsedArgs *args);

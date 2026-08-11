@@ -1,0 +1,3 @@
+; gfx1100  SGPRs 2  VGPRs 1  code 4 B  instrs 1  scratch 0  lds 0
+_amdgpu_cs_main:
+	s_endpgm                                                   // 000000000000: BFB00000

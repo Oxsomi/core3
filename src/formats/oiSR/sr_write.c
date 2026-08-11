@@ -54,6 +54,12 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 	if(srFile->annotations.length >> 32)
 		retError(clean, Error_invalidOperation(0, "SRFile_write()::annotations out of bounds"));
 
+	if(srFile->registers.length >> 32)
+		retError(clean, Error_invalidOperation(0, "SRFile_write()::registers out of bounds"));
+
+	if(srFile->enumValues.length >> 32)
+		retError(clean, Error_invalidOperation(0, "SRFile_write()::enumValues out of bounds"));
+
 	if(hasSymbols && srFile->symbols.length != srFile->nodes.length)
 		retError(clean, Error_invalidState(0, "SRFile_write() symbols must be parallel to nodes when HasSymbols is set"));
 
@@ -75,6 +81,8 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 		headerSize += ListSRSymbol_bytes(srFile->symbols);
 
 	headerSize += ListSRAnnotation_bytes(srFile->annotations);
+	headerSize += ListSRRegister_bytes(srFile->registers);
+	headerSize += ListSREnumValue_bytes(srFile->enumValues);
 
 	headerSize = (headerSize + 15) & ~15;
 
@@ -90,11 +98,13 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 		gotoIfError3(clean, stream->reserve(stream, *offset + headerSize, alloc, e_rr));
 
 	SRHeader header = (SRHeader) {
-		.version = ESRVersion_V1_0,
+		.version = ESRVersion_V1_1,
 		.flags = hasSymbols ? ESRFlag_HasSymbols : ESRFlag_None,
 		.features = srFile->features,
 		.nodeCount = (U32) srFile->nodes.length,
-		.annotationCount = (U32) srFile->annotations.length
+		.annotationCount = (U32) srFile->annotations.length,
+		.registerCount = (U32) srFile->registers.length,
+		.enumValueCount = (U32) srFile->enumValues.length
 	};
 
 	if(!(srFile->flags & ESRSettingsFlags_HideMagicNumber))
@@ -107,6 +117,8 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 		gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSRSymbol_bufferConst(srFile->symbols), alloc, e_rr));
 
 	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSRAnnotation_bufferConst(srFile->annotations), alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSRRegister_bufferConst(srFile->registers), alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSREnumValue_bufferConst(srFile->enumValues), alloc, e_rr));
 
 	//Need to make sure the names oiDL is 16-byte aligned
 

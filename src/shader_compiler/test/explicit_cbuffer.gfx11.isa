@@ -1,0 +1,19 @@
+; gfx1100  SGPRs 17  VGPRs 2  code 92 B  instrs 17  scratch 0  lds 0
+_amdgpu_cs_main:
+	s_getpc_b64 s[2:3]                                         // 000000000000: BE824700
+	s_mov_b32 s0, s1                                           // 000000000004: BE800001
+	s_mov_b32 s1, s3                                           // 000000000008: BE810003
+	s_load_b256 s[0:7], s[0:1], null                           // 00000000000C: F40C0000 F8000000
+	s_waitcnt lgkmcnt(0)                                       // 000000000014: BF89FC07
+	s_clause 0x1                                               // 000000000018: BF850001
+	s_buffer_load_b128 s[8:11], s[4:7], null                   // 00000000001C: F4280202 F8000000
+	s_buffer_load_b32 s4, s[4:7], 0x10                         // 000000000024: F4200102 F8000010
+	s_waitcnt lgkmcnt(0)                                       // 00000000002C: BF89FC07
+	v_rcp_f32_e32 v0, s11                                      // 000000000030: 7E00540B
+	s_lshl_b32 s4, s4, 2                                       // 000000000034: 84048204
+	s_waitcnt_depctr 0xfff                                     // 000000000038: BF880FFF
+	v_dual_mov_b32 v1, s4 :: v_dual_mul_f32 v0, s10, v0        // 00000000003C: CA060004 0100000A
+	s_delay_alu instid0(VALU_DEP_1)                            // 000000000044: BF870001
+	v_fmac_f32_e64 v0, s9, s8                                  // 000000000048: D52B0000 00001009
+	buffer_store_b32 v0, v1, s[0:3], 0 offen                   // 000000000050: E0680000 80400001
+	s_endpgm                                                   // 000000000058: BFB00000
