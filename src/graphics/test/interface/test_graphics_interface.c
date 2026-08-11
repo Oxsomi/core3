@@ -46,6 +46,8 @@
 // 13. DeviceBuffer       - ExposeBindlessRead/Write only take a descriptor when asked
 // 16. Submit             - begin/end state machine, empty frame submit (the only path that binds descriptors)
 // 25. Sampler/data       - sampler field validation, createBufferData move/copy split, texture markDirty
+// 26. PipelineLayout     - push constant limits, push descriptor flag routing
+// 27. Shader reflection  - oiSH entry lookup, layout detection, checkShaderFeatures, compute pipeline creation
 //
 //CommandList lifecycle, recording and scopes live in test_graphics_command_list.c; they're the largest untested
 // surface in the module, so they get their own file to grow in.
@@ -77,6 +79,7 @@
 #include "graphics/generic/graphics_types.h"
 #include "platforms/platform.h"
 #include "platforms/file.h"
+#include "formats/oiSH/sh_file.h"
 #include "types/test/test.h"
 #include "types/container/memory_stream.h"
 #include "types/container/texture_format.h"
@@ -1363,6 +1366,317 @@ static void Test_graphicsSamplerAndData(Test *t, GraphicsDeviceRef *deviceRef) {
 	RefPtr_dec(&sampler);
 }
 
+// -- 26. PipelineLayout ----------------------------------------------------------
+
+//Push constants have hard limits (4-128 bytes, multiple of 4, at least one stage) and the two descriptor layout
+// slots each demand the opposite push descriptor flag, so handing a layout to the wrong slot has to be refused.
+
+static void Test_graphicsPipelineLayout(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "PipelineLayout");
+
+	PipelineLayoutRef *layout = NULL;
+	DescriptorLayoutRef *pushDescLayout = NULL;
+	DescriptorLayoutRef *plainLayout = NULL;
+
+	CharString name = CharString_createRefCStrConst("Test pipeline layout");
+
+	//PushConstants is the portable register type, since DXIL additionally accepts a constant buffer
+
+	const PipelineLayoutInfo pc = (PipelineLayoutInfo) {
+		.pushConstants = (DescriptorBinding) {
+			.registerType = ESHRegisterType_PushConstants,
+			.count = 1,
+			.constantBufferSize = 16,
+			.visibility = U32_MAX
+		}
+	};
+
+	PipelineLayoutInfo bad;
+
+	Test_assert(t, "nullDevice", !GraphicsDeviceRef_createPipelineLayout(NULL, &pc, &name, &layout, NULL));
+	Test_assert(t, "nullInfo", !GraphicsDeviceRef_createPipelineLayout(deviceRef, NULL, &name, &layout, NULL));
+
+	bad = pc;
+	bad.pushConstants.constantBufferSize = 0;
+	Test_assert(t, "pcZeroSize", !GraphicsDeviceRef_createPipelineLayout(deviceRef, &bad, &name, &layout, NULL));
+
+	bad = pc;
+	bad.pushConstants.constantBufferSize = 132;
+	Test_assert(t, "pcTooBig", !GraphicsDeviceRef_createPipelineLayout(deviceRef, &bad, &name, &layout, NULL));
+
+	bad = pc;
+	bad.pushConstants.constantBufferSize = 18;
+	Test_assert(t, "pcMisaligned", !GraphicsDeviceRef_createPipelineLayout(deviceRef, &bad, &name, &layout, NULL));
+
+	bad = pc;
+	bad.pushConstants.visibility = 0;
+	Test_assert(t, "pcNoVisibility", !GraphicsDeviceRef_createPipelineLayout(deviceRef, &bad, &name, &layout, NULL));
+
+	bad = pc;
+	bad.pushConstants.count = 2;
+	Test_assert(t, "pcTwoRanges", !GraphicsDeviceRef_createPipelineLayout(deviceRef, &bad, &name, &layout, NULL));
+
+	bad = pc;
+	bad.pushConstants.registerType = ESHRegisterType_Sampler;
+	Test_assert(t, "pcWrongType", !GraphicsDeviceRef_createPipelineLayout(deviceRef, &bad, &name, &layout, NULL));
+
+	Test_assert(t, "rejectedNothing", !layout);
+
+	if(Test_assert(t, "pcCreate", GraphicsDeviceRef_createPipelineLayout(deviceRef, &pc, &name, &layout, &t->err)))
+		RefPtr_dec(&layout);
+
+	//One push descriptor layout and one plain layout, so each can be offered to the slot meant for the other.
+	//Space 3 keeps the constant buffer clear of the default layouts on both apis.
+
+	DescriptorBinding cbv = (DescriptorBinding) {
+		.registerType = ESHRegisterType_ConstantBuffer,
+		.count = 1,
+		.binding = (SHBinding) { .space = 3, .binding = 0 },
+		.visibility = U32_MAX,
+		.constantBufferSize = 64
+	};
+
+	CharString cbvName = CharString_createRefCStrConst("testPushCBuffer");
+
+	DescriptorLayoutInfo pushInfo = (DescriptorLayoutInfo) { .flags = EDescriptorLayoutFlags_HasPushDescriptors };
+	ListDescriptorBinding_createRefConst(&cbv, 1, &pushInfo.bindings, NULL);
+	ListCharString_createRefConst(&cbvName, 1, &pushInfo.bindingNames, NULL);
+
+	DescriptorBinding bab = (DescriptorBinding) {
+		.registerType = ESHRegisterType_ByteAddressBuffer,
+		.count = 1,
+		.binding = (SHBinding) { .space = 0, .binding = 0 },
+		.visibility = 1 << ESHPipelineStage_Compute
+	};
+
+	CharString babName = CharString_createRefCStrConst("testPlainBuffer");
+
+	DescriptorLayoutInfo plainInfo = (DescriptorLayoutInfo) { 0 };
+	ListDescriptorBinding_createRefConst(&bab, 1, &plainInfo.bindings, NULL);
+	ListCharString_createRefConst(&babName, 1, &plainInfo.bindingNames, NULL);
+
+	name = CharString_createRefCStrConst("Test push descriptor layout");
+	Test_assert(t, "pushDescLayout", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &pushInfo, &name, &pushDescLayout, &t->err
+	));
+
+	name = CharString_createRefCStrConst("Test plain layout");
+	Test_assert(t, "plainLayout", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &plainInfo, &name, &plainLayout, &t->err
+	));
+
+	name = CharString_createRefCStrConst("Test pipeline layout combos");
+
+	if (pushDescLayout && plainLayout) {
+
+		bad = (PipelineLayoutInfo) { .bindings = pushDescLayout };
+		Test_assert(t, "pushAsBindings", !GraphicsDeviceRef_createPipelineLayout(deviceRef, &bad, &name, &layout, NULL));
+
+		bad = (PipelineLayoutInfo) { .pushDescriptors = plainLayout };
+		Test_assert(t, "plainAsPushDesc", !GraphicsDeviceRef_createPipelineLayout(deviceRef, &bad, &name, &layout, NULL));
+
+		Test_assert(t, "comboRejectedNothing", !layout);
+
+		const PipelineLayoutInfo good = (PipelineLayoutInfo) { .pushDescriptors = pushDescLayout };
+
+		if(Test_assert(t, "pushDescCreate", GraphicsDeviceRef_createPipelineLayout(
+			deviceRef, &good, &name, &layout, &t->err
+		)))
+			RefPtr_dec(&layout);
+	}
+
+	RefPtr_dec(&plainLayout);
+	RefPtr_dec(&pushDescLayout);
+}
+
+// -- 27. Shader reflection and pipeline creation ---------------------------------
+
+//The prebuilt image_copy.oiSH is the one shader every build with the compiler enabled ships, so it's what the
+// reflection api can be exercised against without compiling anything in the test itself.
+//This is the same route GraphicsDeviceRef_createPrebuiltShaders takes internally, but through the public api and
+// with the failure cases the internal path never hits.
+
+static void Test_graphicsShaderReflection(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "ShaderReflection");
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	Buffer data = Buffer_createNull();
+	MemoryStreamRef *stream = NULL;
+	SHFile file = (SHFile) { 0 };
+	DescriptorBinding pushConst = (DescriptorBinding) { 0 };
+	DescriptorLayoutInfo info = (DescriptorLayoutInfo) { 0 };
+	DescriptorLayoutInfo pushDesc = (DescriptorLayoutInfo) { 0 };
+	DescriptorLayoutRef *bindingsLayout = NULL;
+	DescriptorLayoutRef *pushDescLayout = NULL;
+	PipelineLayoutRef *pipelineLayout = NULL;
+	PipelineRef *pipeline = NULL;
+
+	const CharString path = CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	const RefPtrType memStreamType = MemoryStream_makeType(alloc);
+
+	//The same guard the device tests use; a build without the shader compiler has nothing to reflect
+
+	if (!File_hasFile(&path, alloc)) {
+		Test_print(t, "Prebuilt shaders unavailable, skipping shader reflection tests");
+		return;
+	}
+
+	if(!Test_assert(t, "readFile", File_read(&path, U64_MAX, 0, 0, &fileHandleType, &data, &t->err)))
+		return;
+
+	U64 streamOffset = 0;
+
+	Test_assert(t, "createStream", MemoryStream_createFromBufferRegion(
+		Buffer_createRefFromBuffer(data, true), 0, Buffer_length(data),
+		EMemoryStreamFlags_None, &memStreamType, &stream, &t->err
+	));
+
+	if(!stream || !Test_assert(t, "readSHFile", SHFile_read((StreamRef*)stream, &streamOffset, false, alloc, &file, &t->err)))
+		goto clean;
+
+	Test_assert(t, "hasEntries", file.entries.length && file.binaries.length);
+	Test_assert(t, "isComplete", SHFile_isComplete(&file));
+
+	//ROTATE is a uniform, so the two permutations are found by value and resolve to different binaries
+
+	const CharString entryName = CharString_createRefCStrConst("mainSingle");
+	const CharString missingName = CharString_createRefCStrConst("doesNotExist");
+
+	CharString uniformsFalse[2] = { CharString_createRefCStrConst("ROTATE"), CharString_createRefCStrConst("false") };
+	CharString uniformsTrue[2] = { CharString_createRefCStrConst("ROTATE"), CharString_createRefCStrConst("true") };
+
+	ListCharString listFalse = (ListCharString) { 0 };
+	ListCharString listTrue = (ListCharString) { 0 };
+	ListCharString_createRefConst(uniformsFalse, 2, &listFalse, NULL);
+	ListCharString_createRefConst(uniformsTrue, 2, &listTrue, NULL);
+
+	const U32 idFalse = GraphicsDeviceRef_getFirstShaderEntry(
+		deviceRef, &file, &entryName, NULL, &listFalse, ESHExtension_None, ESHExtension_None
+	);
+
+	const U32 idTrue = GraphicsDeviceRef_getFirstShaderEntry(
+		deviceRef, &file, &entryName, NULL, &listTrue, ESHExtension_None, ESHExtension_None
+	);
+
+	Test_assert(t, "entryFound", idFalse != U32_MAX);
+	Test_assert(t, "entryFoundTrue", idTrue != U32_MAX && idTrue != idFalse);
+
+	Test_assert(t, "entryMissing", GraphicsDeviceRef_getFirstShaderEntry(
+		deviceRef, &file, &missingName, NULL, &listFalse, ESHExtension_None, ESHExtension_None
+	) == U32_MAX);
+
+	//The copy shader doesn't use ray query, so requiring it can't find anything
+
+	Test_assert(t, "entryWrongExtension", GraphicsDeviceRef_getFirstShaderEntry(
+		deviceRef, &file, &entryName, NULL, &listFalse, ESHExtension_None, ESHExtension_RayQuery
+	) == U32_MAX);
+
+	Test_assert(t, "entryNullDevice", GraphicsDeviceRef_getFirstShaderEntry(
+		NULL, &file, &entryName, NULL, &listFalse, ESHExtension_None, ESHExtension_None
+	) == U32_MAX);
+
+	if(idFalse == U32_MAX)
+		goto clean;
+
+	//The copy shader is compiled with push constants and push descriptors, which is what detect has to find
+
+	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
+		deviceRef, &file, idFalse,
+		EDescriptorLayoutFlags_None,
+		EDetectDescriptorLayoutFlags_AssumePushDescriptors | EDetectDescriptorLayoutFlags_AssumePushConstants,
+		NULL, NULL,
+		&pushConst, &info, &pushDesc, &t->err
+	)))
+		goto clean;
+
+	//SPIRV reflects the settings as a real push constant register, DXIL reflects them as a constant buffer that
+	// AssumePushDescriptors routes into the push descriptors instead, so both shapes are legal here.
+
+	Test_assert(t, "detectedPushConstantsSane", pushConst.count <= 1);
+
+	if(pushConst.count)
+		Test_assert(t, "detectedPushConstantsSize",
+			pushConst.constantBufferSize && !(pushConst.constantBufferSize & 3) && pushConst.constantBufferSize <= 128
+		);
+
+	Test_assert(t, "detectedPushDescriptors", pushDesc.bindings.length >= 1);
+	Test_assert(t, "detectedPushFlag", pushDesc.flags & EDescriptorLayoutFlags_HasPushDescriptors);
+
+	//The detected layouts have to round trip through real creation, since that's what they're for
+
+	CharString name = CharString_createRefCStrConst("Reflected push descriptor layout");
+
+	if(!Test_assert(t, "createReflectedPushDesc", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &pushDesc, &name, &pushDescLayout, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Reflected descriptor layout");
+
+	if(info.bindings.length && !Test_assert(t, "createReflectedBindings", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &info, &name, &bindingsLayout, &t->err
+	)))
+		goto clean;
+
+	const PipelineLayoutInfo pipelineInfo = (PipelineLayoutInfo) {
+		.bindings = bindingsLayout,
+		.pushDescriptors = pushDescLayout,
+		.pushConstants = pushConst
+	};
+
+	name = CharString_createRefCStrConst("Reflected pipeline layout");
+
+	if(!Test_assert(t, "createReflectedPipelineLayout", GraphicsDeviceRef_createPipelineLayout(
+		deviceRef, &pipelineInfo, &name, &pipelineLayout, &t->err
+	)))
+		goto clean;
+
+	//checkShaderFeatures is what refuses an oiSH the device can't run, so the one the device does run has to pass
+
+	const SHEntry *entry = &file.entries.ptr[(U16) idFalse];
+	const SHBinaryInfo *binary = &file.binaries.ptr[entry->binaryIds.ptr[idFalse >> 16]];
+
+	Test_assert(t, "checkFeatures", GraphicsDeviceRef_checkShaderFeatures(deviceRef, binary, entry, &t->err));
+	Test_assert(t, "checkFeaturesNullDevice", !GraphicsDeviceRef_checkShaderFeatures(NULL, binary, entry, NULL));
+
+	//An actual compute pipeline out of the public api, which nothing in the suite created before
+
+	name = CharString_createRefCStrConst("Reflected compute pipeline");
+
+	if(Test_assert(t, "createPipeline", GraphicsDeviceRef_createPipelineCompute(
+		deviceRef, &file, &name, idFalse, &entryName, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	)))
+		Test_assert(t, "pipelineTypeId", pipeline->refPtrType->typeId == (TypeId) EGraphicsTypeId_Pipeline);
+
+	//An out of bounds entry id has to be refused rather than read
+
+	PipelineRef *badPipeline = NULL;
+
+	Test_assert(t, "createPipelineBadEntry", !GraphicsDeviceRef_createPipelineCompute(
+		deviceRef, &file, &name, 0xFFFF, &entryName, EPipelineFlags_None, pipelineLayout, &badPipeline, NULL
+	));
+
+	Test_assert(t, "badPipelineNothing", !badPipeline);
+
+clean:
+
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&pipelineLayout);
+	RefPtr_dec(&bindingsLayout);
+	RefPtr_dec(&pushDescLayout);
+
+	DescriptorLayoutInfo_free(&pushDesc, alloc);
+	DescriptorLayoutInfo_free(&info, alloc);
+
+	SHFile_free(&file, alloc);
+	RefPtr_dec(&stream);
+	Buffer_free(&data, alloc);
+}
+
 // -- 16. Submit ------------------------------------------------------------------
 
 //Submit is the only path that reaches GraphicsDevice_rebindDescriptors, which binds the descriptor tables and the
@@ -1544,6 +1858,8 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	Test_graphicsRenderPass(t, deviceRef);
 	Test_graphicsTextureRef(t, deviceRef);
 	Test_graphicsSamplerAndData(t, deviceRef);
+	Test_graphicsPipelineLayout(t, deviceRef);
+	Test_graphicsShaderReflection(t, deviceRef);
 	Test_graphicsSubmit(t, deviceRef);
 
 clean:

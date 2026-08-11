@@ -260,15 +260,26 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->pipelineLayout, layoutRef, e_rr));
 
-	if(!(info->flags & EPipelineLayoutFlags_InternalWeakDeviceRef))
-		gotoIfError3(clean, RefPtr_inc(dev));
-
 	PipelineLayout *layout = PipelineLayoutRef_ptr(*layoutRef);
 
 	*layout = (PipelineLayout) { .device = dev, .info = *info };
 
-	if(!(info->flags & EPipelineLayoutFlags_InternalWeakDeviceRef))
-		gotoIfError3(clean, RefPtr_inc(layout->info.bindings));
+	//The free decs device, bindings and pushDescriptors unconditionally for a strong layout, so all three have to
+	// be inc'd together or the optional ones get over released.
+	//Both layouts are optional, and RefPtr_inc reports a NULL as failure without setting an error, so a push
+	// constant only layout used to fail here silently rather than be created.
+	//None of these can fail (dev was validated and NULL is skipped), so a partial inc can't leak into the cleanup.
+
+	if(!(info->flags & EPipelineLayoutFlags_InternalWeakDeviceRef)) {
+
+		RefPtr_inc(dev);
+
+		if(layout->info.bindings)
+			RefPtr_inc(layout->info.bindings);
+
+		if(layout->info.pushDescriptors)
+			RefPtr_inc(layout->info.pushDescriptors);
+	}
 
 	gotoIfError3(clean, GraphicsDeviceRef_createPipelineLayoutExt(dev, layout, name, e_rr));
 
