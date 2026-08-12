@@ -162,14 +162,31 @@ VkBool32 onDebugReport(
 	(void)object;
 	(void)location;
 	(void)objectType;
-	(void)userData;
 	(void)layerPrefix;
 
-	if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
-		Log_errorLnx("Error: %s", message);
+	GraphicsInstance *instance = (GraphicsInstance*) userData;
 
-	else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
+	if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
+
+		if(instance)
+			AtomicI64_inc(&instance->validationErrors);
+
+		Log_errorLnx("Error: %s", message);
+	}
+
+	else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) {
+
+		//GPU assisted validation force enables the device features it needs and warns about doing so.
+		//That's an expected side effect of running maximum validation, not an app defect, so it's only logged.
+
+		const CharString messageStr = CharString_createRefCStrConst(message);
+		const CharString adjusting = CharString_createRefCStrConst("validation is adjusting settings");
+
+		if(instance && !CharString_containsStringInsensitive(&messageStr, &adjusting, 0, 0))
+			AtomicI64_inc(&instance->validationWarnings);
+
 		Log_warnLnx("Warning: %s", message);
+	}
 
 	else if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT)
 		Log_performanceLnx("Performance warning: %s", message);
@@ -479,7 +496,8 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 				VK_DEBUG_REPORT_WARNING_BIT_EXT |
 				VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
 
-			.pfnCallback = (PFN_vkDebugReportCallbackEXT) onDebugReport
+			.pfnCallback = (PFN_vkDebugReportCallbackEXT) onDebugReport,
+			.pUserData = instance
 		};
 
 		gotoIfError3(clean, checkVkError(instanceExt->debugCreateReportCallback(

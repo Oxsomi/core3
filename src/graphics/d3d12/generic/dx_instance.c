@@ -974,6 +974,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE))
 			type = !arch.UMA ? EGraphicsDeviceType_Dedicated : EGraphicsDeviceType_Integrated;
 
+		//Coherent UMA snoops the CPU caches for free, which flips what page property upload memory wants
+
+		if(hasArch && arch.CacheCoherentUMA)
+			caps.featuresExt |= EDxGraphicsFeatures_CacheCoherentUMA;
+
 		U64 sharedMem = desc.SharedSystemMemory;
 		U64 dedicatedMem = desc.DedicatedVideoMemory;
 

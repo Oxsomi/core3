@@ -32,7 +32,7 @@
 #include "types/base/constants.h"
 
 D3D12_HEAP_DESC getDxHeapDesc(
-	GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType, Bool readback
+	GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType, Bool readback, Bool asHeap
 ) {
 
 	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
@@ -94,11 +94,30 @@ D3D12_HEAP_DESC getDxHeapDesc(
 	if (!isGpu || hasReBAR)
 		heapDesc.Properties.Type = D3D12_HEAP_TYPE_CUSTOM;
 
+	//Coherent UMA snoops the CPU caches for free, so upload memory wants WRITE_BACK there;
+	// hardcoded WRITE_COMBINE is wrong on those and the debug layer rightly warns on every heap created with it.
+	//The ReBAR path above keeps its explicit L1 + WRITE_COMBINE, which is the point of ReBAR.
+
+	if (!isGpu && !readback && (device->info.capabilities.featuresExt & EDxGraphicsFeatures_CacheCoherentUMA))
+		heapDesc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
+
 	if (
 		(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
 		EDxGraphicsFeatures_ReallyReportReBARWrites
 	)
 		heapDesc.Flags |= D3D12_HEAP_FLAG_TOOLS_USE_MANUAL_WRITE_TRACKING;
+
+	//Acceleration structures must live in a DEFAULT heap (or its exact custom equivalent), which the shared
+	// memory and ReBAR paths above don't produce, so only the heap properties are overridden here.
+	//cpuSided stays untouched: on UMA the heap still occupies shared memory, it's just not CPU mappable.
+	//Write tracking is dropped along with it, since the CPU can never write this heap.
+
+	if (asHeap) {
+		heapDesc.Properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+		heapDesc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		heapDesc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		heapDesc.Flags &=~ D3D12_HEAP_FLAG_TOOLS_USE_MANUAL_WRITE_TRACKING;
+	}
 
 	return heapDesc;
 }
@@ -138,7 +157,8 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	DxBlockRequirements req = *(DxBlockRequirements*) requirementsExt;
 	const Bool readback = req.flags & EDxBlockFlags_Readback;
-	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment, resourceType, readback);
+	const Bool asHeap = req.flags & EDxBlockFlags_ASHeap;
+	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment, resourceType, readback, asHeap);
 
 	U64 maxAllocationSize = device->info.capabilities.maxAllocationSize;
 
@@ -162,6 +182,11 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	if(readback)
 		heapType |= 0x40;
+
+	//AS heaps have different heap properties (DEFAULT), so they can't reuse blocks made for CPU visible heaps
+
+	if(asHeap)
+		heapType |= 0x20;
 
 	//Find an existing allocation
 

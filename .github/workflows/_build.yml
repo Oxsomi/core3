@@ -157,6 +157,24 @@ jobs:
           sudo apt-get install --no-install-recommends -y mesa-vulkan-drivers vulkan-tools
           vulkaninfo --summary || echo "vulkaninfo failed; the graphics suite will report what it found"
 
+      # The Khronos validation layer, pinned to the same header version conanfile.py pins (vulkan_headers is
+      # 1.4.357 today; bump both together). Ubuntu's vulkan-validationlayers package is far too old and an old
+      # layer silently weakens validation, so the prebuilt Khronos release is used instead of apt.
+      # The graphics suite enables the layer by name in debug builds and counts every message it reports;
+      # a single validation error or warning turns the run red, which is the entire point of installing this.
+      # arm64 has no prebuilt asset, so this stays x64 only until the layer is built from source there.
+      - name: Install Vulkan validation layer (lavapipe)
+        if: inputs.vulkan_icd && runner.os == 'Linux' && runner.arch == 'X64'
+        run: |
+          VVL_TAG=vulkan-sdk-1.4.357.0
+          curl -fL -o vvl.zip "https://github.com/KhronosGroup/Vulkan-ValidationLayers/releases/download/${VVL_TAG}/VVL-Linux64.zip" \
+            || { echo "::error::VVL ${VVL_TAG} prebuilt missing; check the release's asset name"; exit 1; }
+          mkdir -p "$HOME/vvl"
+          unzip -q vvl.zip -d "$HOME/vvl"
+          MANIFEST=$(find "$HOME/vvl" -name 'VkLayer_khronos_validation.json' | head -n 1)
+          test -n "$MANIFEST" || { echo "::error::VVL zip layout changed, no layer manifest found"; exit 1; }
+          echo "VK_ADD_LAYER_PATH=$(dirname "$MANIFEST")" >> "$GITHUB_ENV"
+
       - name: Set up Homebrew
         if: runner.os == 'macOS'
         uses: Homebrew/actions/setup-homebrew@master

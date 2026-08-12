@@ -154,6 +154,19 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(!res || allocInfo.SizeInBytes == U64_MAX)
 		retError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() couldn't query allocInfo"));
 
+	//Tight alignment can hand out tiny alignments, but raytracing dictates minimums the allocation info
+	// doesn't always know about (WARP even returns less for the AS itself): acceleration structures and their
+	// scratch memory are addressed 256 byte aligned and shader binding tables 64 byte aligned
+
+	if(
+		(buf->usage & (EDeviceBufferUsage_ScratchExt | EDeviceBufferUsage_ASExt)) &&
+		allocInfo.Alignment < D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT
+	)
+		allocInfo.Alignment = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT;
+
+	if((buf->usage & EDeviceBufferUsage_SBTExt) && allocInfo.Alignment < D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT)
+		allocInfo.Alignment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+
 	Bool cpuSided = buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit;
 	const Bool readback = buf->resource.flags & EGraphicsResourceFlag_CPUReadBit;
 
@@ -217,7 +230,10 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 		acq = ELockAcquire_Invalid;
 
-		D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined, readback);
+		D3D12_HEAP_DESC heap = getDxHeapDesc(
+			device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined, readback,
+			!!(buf->usage & EDeviceBufferUsage_ASExt)
+		);
 
 		if(device->flags & EGraphicsDeviceFlags_IsDebug)
 			Log_debugLnx(
@@ -251,7 +267,9 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	else {
 
 		DxBlockRequirements req = (DxBlockRequirements) {
-			.flags = readback ? EDxBlockFlags_Readback : EDxBlockFlags_None,
+			.flags =
+				(readback ? EDxBlockFlags_Readback : EDxBlockFlags_None) |
+				(buf->usage & EDeviceBufferUsage_ASExt ? EDxBlockFlags_ASHeap : EDxBlockFlags_None),
 			.alignment = (U32) allocInfo.Alignment,
 			.length = allocInfo.SizeInBytes
 		};
@@ -284,7 +302,11 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 		), e_rr));
 	}
 
-	if (!(block.allocationTypeExt & 1) || (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR))
+	//AS buffers sit in a DEFAULT heap that the CPU can never map, even when ReBAR maps everything else
+
+	const Bool cpuAccessible = !(buf->usage & EDeviceBufferUsage_ASExt);
+
+	if (cpuAccessible && (!(block.allocationTypeExt & 1) || (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR)))
 		gotoIfError3(clean, dxCheck(bufExt->buffer->lpVtbl->Map(
 			bufExt->buffer, 0, NULL, (void**) &buf->resource.mappedMemoryExt
 		), e_rr));
@@ -297,6 +319,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 		retError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"));
 
 	if(
+		cpuAccessible &&
 		(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
 		EDxGraphicsFeatures_ReallyReportReBARWrites
 	)

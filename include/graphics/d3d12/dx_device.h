@@ -168,9 +168,14 @@ typedef struct DxGraphicsDevice {
 
 } DxGraphicsDevice;
 
+typedef struct GraphicsInstance GraphicsInstance;
+
 //Drains the info queue's stored validation messages into the log, so a failed HRESULT names the real complaint.
-//No op with infoQueue1 present (Win11), since the message callback already printed everything live.
-void DxGraphicsDevice_logDebugMessages(const DxGraphicsDevice *deviceExt, const Allocator *alloc);
+//No op with infoQueue1 present (Win11), since the message callback already printed (and counted) everything live.
+//The drained messages count into instance's validation counters when instance is non NULL.
+void DxGraphicsDevice_logDebugMessages(
+	const DxGraphicsDevice *deviceExt, GraphicsInstance *instance, const Allocator *alloc
+);
 
 typedef struct DxCommandBufferState {
 

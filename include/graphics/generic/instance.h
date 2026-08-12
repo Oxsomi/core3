@@ -22,6 +22,7 @@
 
 #pragma once
 #include "graphics/generic/device_info.h"
+#include "types/base/atomic.h"
 #include "types/container/string.h"
 #include "types/container/ref_ptr.h"
 
@@ -80,6 +81,12 @@ typedef struct GraphicsInstance {
 	EGraphicsInstanceFlags flags;
 	U32 padding;
 
+	//Validation messages the api's debug layers reported, so CI can hard fail when any slip through.
+	//They live on the instance because the backends run as their own DLLs and share it through this memory.
+
+	AtomicI64 validationErrors;
+	AtomicI64 validationWarnings;
+
 	const Allocator *alloc;             //Allocator all graphics objects of this instance are created with
 
 	GraphicsObjectTypes types;
@@ -114,6 +121,11 @@ Bool GraphicsInstance_create(
 );
 
 Bool GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr);
+
+//How many validation errors and warnings the api's debug layers reported so far (0 when validation is off).
+//Performance and info messages aren't counted, only real errors and warnings.
+U64 GraphicsInstance_getValidationErrors(GraphicsInstance *inst);
+U64 GraphicsInstance_getValidationWarnings(GraphicsInstance *inst);
 
 TList(GraphicsDeviceInfo);
 

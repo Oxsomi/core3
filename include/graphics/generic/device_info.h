@@ -113,6 +113,8 @@ typedef enum EDxGraphicsFeatures {
 
 	EDxGraphicsFeatures_BatchedAsyncCommandList = 1 << 11,        //ExecuteCommandLists batching across async queues
 
+	EDxGraphicsFeatures_CacheCoherentUMA        = 1 << 12,        //UMA that snoops CPU caches, upload wants WRITE_BACK
+
 	EDxGraphicsFeatures_ReallyReportReBARWrites = EDxGraphicsFeatures_ReportReBARWrites | EDxGraphicsFeatures_ReBAR,
 
 	EDxGraphicsFeatures_SM6_6                   = 1 << 16,        //Last bits are for shader model

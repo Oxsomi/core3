@@ -91,6 +91,13 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 
   - Select the physical device that has all specified extensions and is a supported vendor and/or device type.
 
+- ```c
+  U64 getValidationErrors();
+  U64 getValidationWarnings();
+  ```
+
+  - How many validation errors and warnings the api's debug layers reported so far across every device of this instance (0 when validation is off). Performance and info messages aren't counted. CI uses these to hard fail whenever a run isn't validation clean; deliberate exceptions are suppressed explicitly at the source (the D3D12 info queue deny list, GPU assisted validation's settings adjustment notice on Vulkan) rather than subtracted here.
+
 ### Used functions and obtained
 
 - Obtained through `Bool GraphicsInstance_create(const GraphicsApplicationInfo *info, EGraphicsApi api, EGraphicsInstanceFlags flags, const Allocator *alloc, const RefPtrType *type, GraphicsInstanceRef **inst, Error *e_rr);` see summary.
@@ -145,7 +152,7 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 - featuresExt: API dependent features that aren't expected to be standardized in the same way.
   - Vulkan: PerformanceQuery, PerformantPushDescriptor.
     - PerformantPushDescriptor: VK_KHR_push_descriptor with at least 32 push descriptors, so the globals constant buffer is pushed straight into the command buffer instead of bound from a set allocated to hold it. Named for the performance rather than the capability, because pushing descriptors always works; the flag only says the device does it natively. It lives here rather than in `features2` because Vulkan is the only API where that isn't a given; D3D12 has root descriptors and Metal has argument buffers. Without it OxC3 allocates one descriptor set per frame in flight, writes each once to that frame's globals buffer and binds it unchanged afterwards, so there's no per-frame update and nothing is rewritten while in flight. A one-time performance warning is logged on the first submit that takes the emulated path. Android emulators are the usual case, since gfxstream drops the extension from the guest even where the host driver exposes it.
-  - Direct3D12: WriteBufferImmediate (for crash debugging), ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use), BatchedAsyncCommandList (batched async command list submission, SM6.10 / Agility 1.720+).
+  - Direct3D12: WriteBufferImmediate (for crash debugging), ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use), BatchedAsyncCommandList (batched async command list submission, SM6.10 / Agility 1.720+), CacheCoherentUMA (UMA that snoops CPU caches; upload heaps then use WRITE_BACK instead of WRITE_COMBINE).
 - maxBufferSize and maxAllocationSize: Device limit on how big a buffer or a single allocation may be.
 
 ### Functions
@@ -535,10 +542,11 @@ A graphics resource consists of the following:
 - device: the owning graphics device.
 - size: CPU visible buffer size.
 - blockOffset/blockId/allocated: API dependent allocation information used to track the allocation.
-- flags: ShaderRead, ShaderWrite, InternalWeakDeviceRef, CPUBacked, CPUAllocated(Bit).
+- flags: ShaderRead, ShaderWrite, InternalWeakDeviceRef, CPUBacked, CPUAllocated(Bit), CPUReadBit.
   - ShaderRead: Whether the resource has a valid resource handle and can be accessed on the GPU through the descriptors. MSAA resources are incompatible with this flag, because there's no Texture2DMS[], it needs to be resolved before reading/writing the resource.
   - ShaderWrite: ^ but for write access. DepthStencil and MSAA disallows this always.
   - InternalWeakDeviceRef: Internal only; tells the resource it belongs to the device, so the device is the only one in charge of cleaning it up.
+  - CPUReadBit: Internal only; places the allocation in CPU readable memory (D3D12 readback heap) for the pullRegion staging buffer. It doesn't compose with user resources: readback heap buffers are limited to copy destination use, mappedMemoryExt isn't meant for direct access and nothing would report when the GPU's writes became visible. Use pullRegion, which handles all of that.
   - Only relevant for DeviceTexture and DeviceBuffer:
     - CPUBacked: The resource will have CPU backed memory to ensure it can continuously be pushed or pulled from the device whenever necessary. Without this flag, the upload data will only be available on first commit, after that the memory will be freed.
     - CPUAllocatedBit (Always use as CPUAllocated to force CPUBacked also): Indicates that the device memory with the resource should be CPU-sided whenever possible. This can free up more device memory if the resource is only rarely being accessed (because it's typically slower than local memory). In some cases, this flag won't do anything, because with shared memory models such as mobile or integrated GPUs the memory between CPU and GPU is shared anyways. This is generally not a useful flag, though it can be when consuming large amounts of memory.
@@ -569,6 +577,8 @@ DeviceTexture and DeviceBuffer can be marked dirty by their respective markDirty
 ### Pulling region (pullRegion)
 
 DeviceTexture and DeviceBuffer can be pulled back from GPU by their pullRegion functions. These functions run at the end of the next frame (next submitCommands end) and will then be pulled back async to the CPU when the operation is completed on the device. On completion, the callback function can be ran (this is 3 frames later). If the result is important right now, it can be stalled by calling wait after the submitCommands, *though that fully stalls the device and should be prevented at all costs*. If it's desired to copy the current state of the resource (if it gets modified after) then a manual copy resource should be created and manual copy should be done to ensure it won't be modified in between.
+
+The staging memory that carries pulls back to the CPU is created at the first pull and only ever grows. On D3D12 that first allocation can bring in a whole new CPU sided memory block mid frame, so latency sensitive applications can call GraphicsDeviceRef_reserveReadback(device, sizePerFrame, e_rr) during load time to move that cost to a predictable place. Underestimating (or passing 0) is fine, the buffers simply grow at the next pull that needs more.
 
 ## UnifiedTexture
 

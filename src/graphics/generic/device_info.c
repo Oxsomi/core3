@@ -280,6 +280,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.featuresExt & EDxGraphicsFeatures_BatchedAsyncCommandList)
 				Log_debugLnx("\t\tBatched async command list");
 
+			if(cap.featuresExt & EDxGraphicsFeatures_CacheCoherentUMA)
+				Log_debugLnx("\t\tCache coherent UMA");
+
 			if(cap.featuresExt & EDxGraphicsFeatures_RGBX32fMSAA)
 				Log_debugLnx("\t\tRGB(A)32f supports MSAA");
 

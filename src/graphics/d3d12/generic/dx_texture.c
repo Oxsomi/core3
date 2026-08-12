@@ -294,7 +294,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 			acq = ELockAcquire_Invalid;
 
-			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined, false);
+			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined, false, false);
 
 			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormatFullyQualified };
 

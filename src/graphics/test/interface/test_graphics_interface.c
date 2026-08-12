@@ -82,6 +82,7 @@
 #include "graphics/generic/graphics_types.h"
 #include "platforms/platform.h"
 #include "platforms/file.h"
+#include "platforms/logx.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/test/test.h"
 #include "types/container/memory_stream.h"
@@ -1786,16 +1787,27 @@ static void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef) {
 	const U64 shared = GraphicsDeviceRef_getMemoryBudget(deviceRef, false);
 	const U64 local = GraphicsDeviceRef_getMemoryBudget(deviceRef, true);
 
-	//WARP legitimately reports 0 in use, so only the error sentinel is wrong
+	//Vulkan needs VK_EXT_memory_budget to report usage; without it (e.g. the Android emulator) skip the checks
 
-	Test_assert(t, "budgetShared", shared != U64_MAX);
+	const Bool hasBudget =
+		GraphicsInstanceRef_ptr(device->instance)->api != EGraphicsApi_Vulkan ||
+		(device->info.capabilities.featuresExt & EVkGraphicsFeatures_MemoryBudget);
 
-	//Non dedicated devices report 0 device local by contract, since everything is the same memory
+	if (hasBudget) {
 
-	if(device->info.type == EGraphicsDeviceType_Dedicated)
-		Test_assert(t, "budgetLocalDedicated", local && local != U64_MAX);
+		//WARP legitimately reports 0 in use, so only the error sentinel is wrong
 
-	else Test_assert(t, "budgetLocalShared", !local);
+		Test_assert(t, "budgetShared", shared != U64_MAX);
+
+		//Non dedicated devices report 0 device local by contract, since everything is the same memory
+
+		if(device->info.type == EGraphicsDeviceType_Dedicated)
+			Test_assert(t, "budgetLocalDedicated", local && local != U64_MAX);
+
+		else Test_assert(t, "budgetLocalShared", !local);
+	}
+
+	else Log_debugLnx("-- GraphicsDevice/memory: Device can't report memory budget, skipping budget checks");
 
 	//The staging buffer can be resized at runtime; the size is aligned to three whole pages, one per frame
 
@@ -2163,86 +2175,27 @@ clean:
 
 // -- 7-10. Device, DeviceBuffer and Swapchain ------------------------------------
 
-static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
+//One adapter's full run: create the device, run every device scoped module, tear down again
+
+static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, const GraphicsDeviceInfo *info) {
 
 	Test_setModule(t, "GraphicsDevice");
-	Test_print(t, EGraphicsApi_name[api]);        //Marks which graphics API this device-test run targets
 
-	const Allocator *alloc = Platform_instance->alloc;
+	GraphicsInstance *inst = GraphicsInstanceRef_ptr(instRef);
+	const Allocator *alloc = inst->alloc;
 
-	GraphicsApplicationInfo appInfo = (GraphicsApplicationInfo) {
-		.name = CharString_createRefCStrConst("OxC3 graphics interface test"),
-		.version = 1
-	};
-
-	RefPtrType type = GraphicsInstance_makeType(api, alloc);
-	GraphicsInstanceRef *instRef = NULL;
 	GraphicsDeviceRef *deviceRef = NULL;
 	DeviceBufferRef *buffer = NULL;
 	DeviceBufferRef *cpuBuffer = NULL;
-	ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
 
-	if (!GraphicsInstance_create(&appInfo, api, 0, alloc, &type, &instRef, &t->err)) {
-		Test_print(t, "No compatible graphics driver, skipping device tests");
-		t->err = Error_none();
-		return;
-	}
-
-	GraphicsInstance *inst = GraphicsInstanceRef_ptr(instRef);
-
-	//getDeviceInfos validation
-
-	Test_assert(t, "getDeviceInfosNullResult", !GraphicsInstance_getDeviceInfos(inst, NULL, NULL));
-	Test_assert(t, "getDeviceInfosNullInst", !GraphicsInstance_getDeviceInfos(NULL, &infos, NULL));
-
-	//getPreferredDevice validation
-
-	GraphicsDeviceInfo preferred = (GraphicsDeviceInfo) { 0 };
-
-	Test_assert(t, "getPreferredNullInfo", !GraphicsInstance_getPreferredDevice(
-		inst, NULL, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, NULL, NULL
-	));
-
-	//A GPU (or software rasterizer like lavapipe) is never guaranteed here, so a machine without one has to stay green.
-	//getDeviceInfos tells the two empty results apart through the error it returns.
-	//EGenericError_NotFound means the api enumerated no adapter at all, which is nothing this test can hold against it.
-	//Any other error means adapters were enumerated but every one of them failed OxC3's requirements.
-	//That is a real result to fail on, and the device selection log right above names each requirement that went unmet.
-
-	if (!GraphicsInstance_getDeviceInfos(inst, &infos, &t->err) || !infos.length) {
-
-		if (t->err.genericError == EGenericError_NotFound) {
-			Test_print(t, "No graphics adapter present, skipping device tests");
-			t->err = Error_none();
-			goto clean;
-		}
-
-		Test_assert(t, "deviceEnumeration", false);
-		goto clean;
-	}
-
-	//Device creation loads the prebuilt shaders from the //OxC3_graphics section,
-	// which are only packaged when the build has the shader compiler enabled
-
-	const CharString graphicsSection = CharString_createRefCStrConst("//OxC3_graphics");
-	const CharString prebuiltShader = CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
-	const RefPtrType memStreamType = MemoryStream_makeType(alloc);
-
-	if (!File_loadVirtual(&graphicsSection, &memStreamType, NULL, NULL, alloc, NULL) || !File_hasFile(&prebuiltShader, alloc)) {
-		Test_print(t, "Prebuilt shaders unavailable (built without shader compiler), skipping device tests");
-		goto clean;
-	}
-
-	Test_assert(t, "getPreferredDevice", GraphicsInstance_getPreferredDevice(
-		inst, NULL, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, &preferred, &t->err
-	));
+	Log_debugLnx("-- GraphicsDevice: testing %s", info->name);
 
 	//8. Device create / wait
 
 	if(!Test_assert(t, "deviceCreate", GraphicsDeviceRef_create(
-		instRef, &preferred, EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, NULL, &deviceRef, &t->err
+		instRef, info, EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, NULL, &deviceRef, &t->err
 	)))
-		goto clean;
+		return;
 
 	Test_assert(t, "deviceTypeId", deviceRef->refPtrType->typeId == (TypeId) EGraphicsTypeId_GraphicsDevice);
 	Test_assert(t, "deviceAlloc", GraphicsDeviceRef_getAlloc(deviceRef) == alloc);
@@ -2306,17 +2259,101 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	Test_graphicsAccelerationStructures(t, deviceRef);
 	Test_graphicsDeviceMemory(t, deviceRef);
 
+	RefPtr_dec(&cpuBuffer);
+	RefPtr_dec(&buffer);
+
+	GraphicsDeviceRef_wait(deviceRef, NULL);
+	RefPtr_dec(&deviceRef);
+}
+
+static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
+
+	Test_setModule(t, "GraphicsDevice");
+	Test_print(t, EGraphicsApi_name[api]);        //Marks which graphics API this device-test run targets
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	GraphicsApplicationInfo appInfo = (GraphicsApplicationInfo) {
+		.name = CharString_createRefCStrConst("OxC3 graphics interface test"),
+		.version = 1
+	};
+
+	RefPtrType type = GraphicsInstance_makeType(api, alloc);
+	GraphicsInstanceRef *instRef = NULL;
+	ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
+
+	if (!GraphicsInstance_create(&appInfo, api, 0, alloc, &type, &instRef, &t->err)) {
+		Test_print(t, "No compatible graphics driver, skipping device tests");
+		t->err = Error_none();
+		return;
+	}
+
+	GraphicsInstance *inst = GraphicsInstanceRef_ptr(instRef);
+
+	//getDeviceInfos validation
+
+	Test_assert(t, "getDeviceInfosNullResult", !GraphicsInstance_getDeviceInfos(inst, NULL, NULL));
+	Test_assert(t, "getDeviceInfosNullInst", !GraphicsInstance_getDeviceInfos(NULL, &infos, NULL));
+
+	//getPreferredDevice validation
+
+	GraphicsDeviceInfo preferred = (GraphicsDeviceInfo) { 0 };
+
+	Test_assert(t, "getPreferredNullInfo", !GraphicsInstance_getPreferredDevice(
+		inst, NULL, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, NULL, NULL
+	));
+
+	//A GPU (or software rasterizer like lavapipe) is never guaranteed here, so a machine without one has to stay green.
+	//getDeviceInfos tells the two empty results apart through the error it returns.
+	//EGenericError_NotFound means the api enumerated no adapter at all, which is nothing this test can hold against it.
+	//Any other error means adapters were enumerated but every one of them failed OxC3's requirements.
+	//That is a real result to fail on, and the device selection log right above names each requirement that went unmet.
+
+	if (!GraphicsInstance_getDeviceInfos(inst, &infos, &t->err) || !infos.length) {
+
+		if (t->err.genericError == EGenericError_NotFound) {
+			Test_print(t, "No graphics adapter present, skipping device tests");
+			t->err = Error_none();
+			goto clean;
+		}
+
+		Test_assert(t, "deviceEnumeration", false);
+		goto clean;
+	}
+
+	//Device creation loads the prebuilt shaders from the //OxC3_graphics section,
+	// which are only packaged when the build has the shader compiler enabled
+
+	const CharString graphicsSection = CharString_createRefCStrConst("//OxC3_graphics");
+	const CharString prebuiltShader = CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
+	const RefPtrType memStreamType = MemoryStream_makeType(alloc);
+
+	if (!File_loadVirtual(&graphicsSection, &memStreamType, NULL, NULL, alloc, NULL) || !File_hasFile(&prebuiltShader, alloc)) {
+		Test_print(t, "Prebuilt shaders unavailable (built without shader compiler), skipping device tests");
+		goto clean;
+	}
+
+	Test_assert(t, "getPreferredDevice", GraphicsInstance_getPreferredDevice(
+		inst, NULL, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, &preferred, &t->err
+	));
+
+	//8-14. Every enumerated adapter gets the full battery, so integrated and software devices are exercised
+	// on machines that have them rather than only the preferred device
+
+	for(U64 i = 0; i < infos.length; ++i)
+		Test_graphicsDeviceSingle(t, instRef, &infos.ptr[i]);
+
 clean:
 
 	ListGraphicsDeviceInfo_free(&infos, alloc);
 
-	RefPtr_dec(&cpuBuffer);
-	RefPtr_dec(&buffer);
+	//After every device fully shut down, the whole api run has to be validation clean;
+	// any error or warning the debug layers reported is a real defect, which is what hard fails CI
 
-	if(deviceRef)
-		GraphicsDeviceRef_wait(deviceRef, NULL);
+	Test_setModule(t, "GraphicsDevice/validation");
+	Test_assert(t, "validationErrors", !GraphicsInstance_getValidationErrors(inst));
+	Test_assert(t, "validationWarnings", !GraphicsInstance_getValidationWarnings(inst));
 
-	RefPtr_dec(&deviceRef);
 	RefPtr_dec(&instRef);
 }
 

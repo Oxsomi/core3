@@ -23,6 +23,7 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/container/string_unicode.h"
@@ -75,7 +76,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 clean:
 
 	if(!s_uccess)
-		DxGraphicsDevice_logDebugMessages(deviceExt, alloc);
+		DxGraphicsDevice_logDebugMessages(deviceExt, GraphicsInstanceRef_ptr(device->instance), alloc);
 
 	ListU16_free(&tmp, alloc);
 	return s_uccess;

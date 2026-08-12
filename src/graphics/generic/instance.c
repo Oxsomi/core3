@@ -408,6 +408,14 @@ clean:
 	return s_uccess;
 }
 
+U64 GraphicsInstance_getValidationErrors(GraphicsInstance *inst) {
+	return !inst ? 0 : (U64) AtomicI64_load(&inst->validationErrors);
+}
+
+U64 GraphicsInstance_getValidationWarnings(GraphicsInstance *inst) {
+	return !inst ? 0 : (U64) AtomicI64_load(&inst->validationWarnings);
+}
+
 Bool GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr) {
 
 	Bool s_uccess = true;
