@@ -115,8 +115,14 @@ jobs:
           python-version: ${{ inputs.python_version }}
 
       # ── Ninja (Android only; used as the CMake generator on every host) ────
+      # The download occasionally arrives truncated ("No END header found"), so one failure gets one retry.
       - uses: seanmiddleditch/gha-setup-ninja@master
         if: inputs.os == 'android'
+        id: setup_ninja
+        continue-on-error: true
+
+      - uses: seanmiddleditch/gha-setup-ninja@master
+        if: inputs.os == 'android' && steps.setup_ninja.outcome == 'failure'
 
       # ── Conan ──────────────────────────────────────────────────────────────
       # SteamOS container doesn't have pip by default.
@@ -130,10 +136,13 @@ jobs:
           apt-get install -y wayland-protocols || true
           pip3 install conan --break-system-packages
 
+      # The update is best effort: unrelated preinstalled repos (e.g. Chrome) mid mirror-sync fail the whole
+      # command with exit 100 even though every index we need refreshed fine. One retry for real hiccups,
+      # then the installs below are the actual gate and fail loudly if a package can't be resolved.
       - name: Install Conan (Linux)
         if: inputs.os != 'steamos' && runner.os == 'Linux'
         run: |
-          sudo apt-get update -y
+          sudo apt-get update -y || (sleep 10 && sudo apt-get update -y) || true
           sudo apt-get install -y python3-pip
           sudo pip3 install conan --break-system-packages
 

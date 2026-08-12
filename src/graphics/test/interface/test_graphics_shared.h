@@ -24,10 +24,33 @@
 #include "types/test/test.h"
 #include "graphics/generic/device.h"
 
-//Modules that need a live device, called from the device test loop once per supported api.
+//Headless modules (pure, no device), called directly from the entry point.
+
+void Test_graphicsFormats(Test *t);
+void Test_bindlessDescriptorPacking(Test *t);
+void Test_tlasTransformSRT(Test *t);
+void Test_descriptorPacking(Test *t);
+void Test_textureRange(Test *t);
+void Test_graphicsDefaultBindlessLayout(Test *t);
+
+//Modules that need a live device, called from the device test loop once per adapter.
 //They own everything they create, so they can run in any order.
 
 void Test_graphicsCommandList(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsCommandRecording(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsCommandValidation(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsRenderPass(Test *t, GraphicsDeviceRef *deviceRef);
+
+void Test_graphicsDescriptorTable(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindlessDescriptor(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBufferBindless(Test *t, GraphicsDeviceRef *deviceRef);
+
+void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsSamplerAndData(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsPipelineLayout(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsShaderReflection(Test *t, GraphicsDeviceRef *deviceRef);
+
+void Test_graphicsSubmit(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef);

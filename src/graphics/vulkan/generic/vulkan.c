@@ -182,7 +182,9 @@ VkFormat mapVkFormat(ETextureFormat format) {
 		case ETextureFormat_BC5:                        return VK_FORMAT_BC5_UNORM_BLOCK;
 		case ETextureFormat_BC5s:                       return VK_FORMAT_BC5_SNORM_BLOCK;
 
-		case ETextureFormat_BC6H:                       return VK_FORMAT_BC6H_SFLOAT_BLOCK;
+		//Unsigned to match the D3D12 table (BC6H_UF16), so one asset means the same thing on both apis
+
+		case ETextureFormat_BC6H:                       return VK_FORMAT_BC6H_UFLOAT_BLOCK;
 
 		case ETextureFormat_BC7:                        return VK_FORMAT_BC7_UNORM_BLOCK;
 		case ETextureFormat_BC7_sRGB:                   return VK_FORMAT_BC7_SRGB_BLOCK;
