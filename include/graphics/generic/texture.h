@@ -81,6 +81,17 @@ Bool TextureRef_isRenderTargetWritable(TextureRef *tex);
 Bool TextureRef_isDepthStencil(TextureRef *tex);
 Bool TextureRef_isTexture(RefPtr *tex);
 
+//Read a region of a render target back from the GPU (RenderTexture, DepthStencil or Swapchain).
+//These have no cpuData, so the data arrives through the callback as a tight row buffer it may take over.
+//Same timing contract and region semantics as DeviceTextureRef_pullRegion.
+//MSAA has to be resolved before pulling and stencil bearing depth formats aren't supported yet.
+Bool TextureRef_pullRegion(
+	TextureRef *tex,
+	U16 x, U16 y, U16 z,
+	U16 w, U16 h, U16 l,
+	TexturePullCallback callback, void *context, Error *e_rr
+);
+
 UnifiedTextureImage TextureRef_getImage(TextureRef *tex, U32 subResource, U8 imageId);
 
 U32 TextureRef_getCurrReadHandle(TextureRef *tex, U32 subResource);

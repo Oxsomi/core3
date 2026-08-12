@@ -434,6 +434,17 @@ static inline ETextureCompressionAlgo ETextureFormat_getCompressionAlgo(ETexture
 	return (ETextureCompressionAlgo)((f >> 30) & 7);
 }
 
+//Bytes per texel of a depth format when read back to a buffer.
+//Stencil bearing formats return 0, since their planes have different sizes and packing rules;
+// anything that needs them has to handle the planes explicitly.
+static inline U8 EDepthStencilFormat_getBytes(EDepthStencilFormat f) {
+	switch(f) {
+		case EDepthStencilFormat_D16:    return 2;
+		case EDepthStencilFormat_D32:    return 4;
+		default:                         return 0;
+	}
+}
+
 //Get the alignments (x, y) of a texture format
 //Returns false if it doesn't need alignment (so alignment = 1x1)
 //The packing macro stores alignmentY at bit 15 and alignmentX at bit 21, so the reads mirror that;

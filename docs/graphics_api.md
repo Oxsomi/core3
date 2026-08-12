@@ -1843,7 +1843,7 @@ startScope		//Transitions resources
     setRaytracingPipelineExt
     	dispatchRaysExt						//Keeps scope alive
 
-    startRenderExt
+    startRenderExt							//Keeps scope alive if any attachment uses a Clear load
         setPrimitiveBuffers
         setViewport/Scissor
         setBlendConstants
@@ -1862,6 +1862,8 @@ startScope		//Transitions resources
 Because a scope hoists the transitions of operations such as clearImages, copyImages, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same (sub)resource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
 
 All startRenderExts in a scope should be ended and all startRegionDebugExts as well. Since a scope should be self contained.
+
+A scope that never records one of the "keeps scope alive" operations is rewound at endScope as if it never happened: its commands, transitions and scope id are all discarded and it won't appear in activeScopes or execute at submit. State setters (pipelines, viewport, primitive buffers, debug markers) never keep a scope alive on their own. A render pass counts as alive when any of its attachments uses a Clear load, since the clear is a side effect all by itself; a pass that only loads/preserves and never draws is dead weight and gets rewound with the rest.
 
 #### Transitions
 

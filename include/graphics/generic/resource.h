@@ -22,6 +22,7 @@
 
 #pragma once
 #include "types/base/types.h"
+#include "types/base/buffer_base.h"
 #include "types/math/vec2.h"
 #include "types/container/list.h"
 #include "types/container/texture_format.h"
@@ -123,17 +124,35 @@ typedef union DevicePendingRange {
 
 typedef void (*DevicePullCallback)(RefPtr *resource, void *context);
 
+//Same timing, but for textures without a cpuData to land in (RenderTexture, DepthStencil, Swapchain).
+//The data buffer holds the region in tight rows and belongs to the runtime; move it out to keep it,
+// anything left in it is freed right after the callback returns.
+//The buffer is allocated when the pull is queued, so by the time the callback fires it always holds data.
+
+typedef void (*TexturePullCallback)(RefPtr *resource, Buffer *data, void *context);
+
 typedef struct DevicePendingPull {
 
 	RefPtr *resource;                //Strong ref, released after the callback ran
 
-	DevicePullCallback callback;     //Optional
+	//Which member is live follows from the resource's type: resources that land in their own cpuData
+	// (DeviceBuffer, DeviceTexture) use callback, the rest hand their data over through textureCallback.
+
+	union {
+		DevicePullCallback callback;             //Optional
+		TexturePullCallback textureCallback;
+	};
+
 	void *context;
 
 	DevicePendingRange range;
 
 	U64 stagingOffset;               //Into stagingReadback, only valid once recorded
 	U64 rowPitch;                    //Row stride in readback memory for textures, byte count for buffers
+
+	//The tight destination for pulls without a cpuData, allocated when the pull is queued so completion can't fail
+
+	Buffer textureData;
 
 	//Strong ref to the readback buffer the pull was recorded into, only set once in flight.
 	//A grow (or reserveReadback) swaps the device's ring, so completion has to read the buffer the GPU wrote.

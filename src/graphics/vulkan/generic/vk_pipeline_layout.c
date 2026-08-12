@@ -88,7 +88,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 	if (layout->info.pushConstants.count) {
 
 		pushConstants = (VkPushConstantRange) {
-			.stageFlags = vkGetShaderStages(layout->info.pushConstants.visibility),
+			.stageFlags = vkGetShaderStagesDevice(device, layout->info.pushConstants.visibility),
 			.size = layout->info.pushConstants.constantBufferSize
 		};
 

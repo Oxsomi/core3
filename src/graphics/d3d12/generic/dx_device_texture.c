@@ -477,7 +477,9 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_pull)(
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	DeviceTexture *texture = DeviceTextureRef_ptr(resource);
+	//Any texture type can be pulled, so only the unified base is safe to use here
+
+	const UnifiedTexture utex = TextureRef_getUnifiedTexture(resource, NULL);
 	DxUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(resource, Dx, 0);
 	DxDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->stagingReadback), Dx);
 
@@ -521,11 +523,18 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_pull)(
 		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
 	}
 
-	const DXGI_FORMAT dxFormat = ETextureFormatId_toDXFormat(texture->base.textureFormatId);
-	const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
+	//Stencil bearing formats never get this far, so the depth format maps to a single plane copy
+
+	const DXGI_FORMAT dxFormat =
+		utex.depthFormat ? (DXGI_FORMAT) EDepthStencilFormat_toDXFormat((EDepthStencilFormat) utex.depthFormat) :
+		ETextureFormatId_toDXFormat(utex.textureFormatId);
 
 	U8 alignX = 1, alignY = 1;
-	ETextureFormat_getAlignment(format, &alignX, &alignY);
+
+	if(!utex.depthFormat) {
+		const ETextureFormat format = ETextureFormatId_unpack[utex.textureFormatId];
+		ETextureFormat_getAlignment(format, &alignX, &alignY);
+	}
 
 	const U16 x = range->startRange[0];
 	const U16 y = range->startRange[1];

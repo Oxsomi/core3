@@ -85,10 +85,13 @@ void GraphicsDevice_free(GraphicsDevice *device, const Allocator *alloc) {
 	RefPtr_dec(&device->staging);
 	RefPtr_dec(&device->stagingReadback);
 
-	//Unfinished pulls can't complete anymore, so only their refs are released (their callbacks never fire)
+	//Unfinished pulls can't complete anymore, so only their refs and buffers are released
+	// (their callbacks never fire)
 
-	for(U64 i = 0; i < device->pendingPulls.length; ++i)
+	for(U64 i = 0; i < device->pendingPulls.length; ++i) {
 		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].resource);
+		Buffer_free(&device->pendingPulls.ptrNonConst[i].textureData, alloc);
+	}
 
 	ListDevicePendingPull_free(&device->pendingPulls, alloc);
 
@@ -97,6 +100,7 @@ void GraphicsDevice_free(GraphicsDevice *device, const Allocator *alloc) {
 		for(U64 i = 0; i < device->pullsInFlight[j].length; ++i) {
 			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].resource);
 			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].stagingReadback);
+			Buffer_free(&device->pullsInFlight[j].ptrNonConst[i].textureData, alloc);
 		}
 
 		ListDevicePendingPull_free(&device->pullsInFlight[j], alloc);
@@ -685,9 +689,12 @@ Bool GraphicsDeviceRef_create(
 
 	//Clearing the feature is what actually turns bindless off, since layouts, heaps and shader checks all test it.
 	//Leaving it set would let a descriptor layout or an oiSH ask for bindless that the device no longer sets up.
+	//DescriptorHeap always implies Bindless, so it can't survive bindless being turned off either.
 
-	if(device->flags & EGraphicsDeviceFlags_DisableBindless)
+	if(device->flags & EGraphicsDeviceFlags_DisableBindless) {
 		device->info.capabilities.features &=~ EGraphicsFeatures_Bindless;
+		device->info.capabilities.features2 &=~ EGraphicsFeatures2_DescriptorHeap;
+	}
 
 	Bool isDebugInstance = instance->flags & EGraphicsInstanceFlags_IsDebug;
 
@@ -1539,6 +1546,65 @@ clean:
 	return s_uccess;
 }
 
+//Row measures of a pull region for any pullable texture type, in block rows for compressed formats.
+//Depth formats aren't representable as an ETextureFormat, which is why this can't just call getSize directly.
+
+static void GraphicsDevice_pullRowMeasures(
+	RefPtr *resource,
+	const TextureRange *range,
+	U64 *rowBytes,
+	U64 *rows,
+	U64 *fullRowBytes,
+	U64 *fullRows,
+	U64 *xOffBytes,
+	U64 *yRowOff
+) {
+
+	const UnifiedTexture utex = TextureRef_getUnifiedTexture(resource, NULL);
+
+	if (utex.depthFormat) {
+
+		const U8 texel = EDepthStencilFormat_getBytes((EDepthStencilFormat) utex.depthFormat);
+
+		*rowBytes = (U64) TextureRange_width(*range) * texel;
+		*rows = TextureRange_height(*range);
+
+		if(fullRowBytes)
+			*fullRowBytes = (U64) utex.width * texel;
+
+		if(fullRows)
+			*fullRows = utex.height;
+
+		if(xOffBytes)
+			*xOffBytes = (U64) range->startRange[0] * texel;
+
+		if(yRowOff)
+			*yRowOff = range->startRange[1];
+
+		return;
+	}
+
+	const ETextureFormat format = ETextureFormatId_unpack[utex.textureFormatId];
+
+	U8 alignY = 1;
+	ETextureFormat_getAlignment(format, NULL, &alignY);
+
+	*rowBytes = ETextureFormat_getSize(format, TextureRange_width(*range), alignY, 1);
+	*rows = ((U64)TextureRange_height(*range) + alignY - 1) / alignY;
+
+	if(fullRowBytes)
+		*fullRowBytes = ETextureFormat_getSize(format, utex.width, alignY, 1);
+
+	if(fullRows)
+		*fullRows = ((U64)utex.height + alignY - 1) / alignY;
+
+	if(xOffBytes)
+		*xOffBytes = ETextureFormat_getSize(format, range->startRange[0], alignY, 1);
+
+	if(yRowOff)
+		*yRowOff = range->startRange[1] / alignY;
+}
+
 //Completes the pulls recorded for this frame in flight by copying readback memory into cpuData and firing the
 // callbacks.
 //This never waits itself: both callers already hold proof the frame finished, handleNextFrame through the frame
@@ -1556,12 +1622,19 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 
 		DevicePendingPull *pull = &pulls->ptrNonConst[i];
 
+		//The union member that's live follows from this: cpuData owners use callback, the rest textureCallback
+
+		const TypeId typeId = pull->resource->refPtrType->typeId;
+
+		const Bool ownsCpuData =
+			typeId == (TypeId) EGraphicsTypeId_DeviceBuffer || typeId == (TypeId) EGraphicsTypeId_DeviceTexture;
+
 		//Each pull reads the ring it was recorded into, which isn't necessarily the device's current one
 
 		const U8 *mapped = DeviceBufferRef_ptr(pull->stagingReadback)->resource.mappedMemoryExt;
 		const U8 *src = mapped + pull->stagingOffset;
 
-		if(pull->resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer) {
+		if(typeId == (TypeId) EGraphicsTypeId_DeviceBuffer) {
 
 			DeviceBuffer *buffer = DeviceBufferRef_ptr(pull->resource);
 			const U64 start = pull->range.buffer.startRange;
@@ -1575,38 +1648,54 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 
 		else {
 
+			const TextureRange range = pull->range.texture;
+
+			U64 regionRow, rows, fullRow, fullRows, xOff, yRow;
+			GraphicsDevice_pullRowMeasures(pull->resource, &range, &regionRow, &rows, &fullRow, &fullRows, &xOff, &yRow);
+
+			const U16 z = range.startRange[2];
+
 			//De-pitch the backend's row stride back into the tight full texture rows cpuData uses,
 			// at the region's offsets; all row measures are block rows for compressed formats
 
-			DeviceTexture *texture = DeviceTextureRef_ptr(pull->resource);
-			const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
-			const TextureRange range = pull->range.texture;
+			if (ownsCpuData) {
 
-			U8 alignY = 1;
-			ETextureFormat_getAlignment(format, NULL, &alignY);
+				DeviceTexture *texture = DeviceTextureRef_ptr(pull->resource);
 
-			const U64 fullRow = ETextureFormat_getSize(format, texture->base.width, alignY, 1);
-			const U64 fullRows = ((U64)texture->base.height + alignY - 1) / alignY;
+				for(U64 k = 0; k < TextureRange_length(range); ++k)
+					for(U64 j = 0; j < rows; ++j)
+						Buffer_memcpy(
+							Buffer_createRef(
+								texture->cpuData.ptrNonConst + fullRow * (yRow + j + (z + k) * fullRows) + xOff,
+								regionRow
+							),
+							Buffer_createRefConst(src + pull->rowPitch * (j + k * rows), regionRow)
+						);
+			}
 
-			const U64 regionRow = ETextureFormat_getSize(format, TextureRange_width(range), alignY, 1);
-			const U64 rows = ((U64)TextureRange_height(range) + alignY - 1) / alignY;
+			//Render targets have no cpuData, so the region is handed to the callback as an owned tight buffer
 
-			const U64 xOff = ETextureFormat_getSize(format, range.startRange[0], alignY, 1);
-			const U64 yRow = range.startRange[1] / alignY;
-			const U16 z = range.startRange[2];
+			else {
 
-			for(U64 k = 0; k < TextureRange_length(range); ++k)
-				for(U64 j = 0; j < rows; ++j)
-					Buffer_memcpy(
-						Buffer_createRef(
-							texture->cpuData.ptrNonConst + fullRow * (yRow + j + (z + k) * fullRows) + xOff,
-							regionRow
-						),
-						Buffer_createRefConst(src + pull->rowPitch * (j + k * rows), regionRow)
-					);
+				//The destination was allocated when the pull was queued, so completion can't fail anymore
+
+				for(U64 k = 0; k < TextureRange_length(range); ++k)
+					for(U64 j = 0; j < rows; ++j)
+						Buffer_memcpy(
+							Buffer_createRef(pull->textureData.ptrNonConst + regionRow * (j + k * rows), regionRow),
+							Buffer_createRefConst(src + pull->rowPitch * (j + k * rows), regionRow)
+						);
+
+				if(pull->textureCallback)
+					pull->textureCallback(pull->resource, &pull->textureData, pull->context);
+
+				Buffer_free(&pull->textureData, GraphicsDevice_getAlloc(device));
+			}
 		}
 
-		if(pull->callback)
+		//textureCallback shares the union and already fired inside the render target branch above
+
+		if(ownsCpuData && pull->callback)
 			pull->callback(pull->resource, pull->context);
 
 		RefPtr_dec(&pull->resource);
@@ -1645,16 +1734,11 @@ Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *com
 
 		else {
 
-			const DeviceTexture *texture = DeviceTextureRef_ptr(pull->resource);
-			const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
-			const TextureRange range = pull->range.texture;
+			U64 rowBytes, rows;
+			GraphicsDevice_pullRowMeasures(pull->resource, &pull->range.texture, &rowBytes, &rows, NULL, NULL, NULL, NULL);
 
-			U8 alignY = 1;
-			ETextureFormat_getAlignment(format, NULL, &alignY);
-
-			const U64 pitch = (ETextureFormat_getSize(format, TextureRange_width(range), alignY, 1) + 255) &~ 255;
-			const U64 rows = ((U64)TextureRange_height(range) + alignY - 1) / alignY;
-			len = pitch * rows * TextureRange_length(range);
+			const U64 pitch = (rowBytes + 255) &~ 255;
+			len = pitch * rows * TextureRange_length(pull->range.texture);
 		}
 
 		needed += ((len + 511) &~ 511) + 512;
@@ -1679,16 +1763,11 @@ Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *com
 
 		else {
 
-			const DeviceTexture *texture = DeviceTextureRef_ptr(pull.resource);
-			const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
-			const TextureRange range = pull.range.texture;
+			U64 rowBytes, rows;
+			GraphicsDevice_pullRowMeasures(pull.resource, &pull.range.texture, &rowBytes, &rows, NULL, NULL, NULL, NULL);
 
-			U8 alignY = 1;
-			ETextureFormat_getAlignment(format, NULL, &alignY);
-
-			pitch = (ETextureFormat_getSize(format, TextureRange_width(range), alignY, 1) + 255) &~ 255;
-			const U64 rows = ((U64)TextureRange_height(range) + alignY - 1) / alignY;
-			len = pitch * rows * TextureRange_length(range);
+			pitch = (rowBytes + 255) &~ 255;
+			len = pitch * rows * TextureRange_length(pull.range.texture);
 		}
 
 		const AllocationBufferAllocate allocation = (AllocationBufferAllocate) {
@@ -1746,15 +1825,20 @@ Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *com
 		gotoIfError3(clean, ListDevicePendingPull_pushBack(&device->pullsInFlight[device->fifId], pull, alloc, e_rr));
 		RefPtr_inc(device->stagingReadback);        //Owned by the in flight entry just pushed
 
-		device->pendingPulls.ptrNonConst[i].resource = NULL;        //Ownership moved to the in flight list
+		//Ownership of the ref and the destination buffer moved to the in flight list
+
+		device->pendingPulls.ptrNonConst[i].resource = NULL;
+		device->pendingPulls.ptrNonConst[i].textureData = Buffer_createNull();
 	}
 
 clean:
 
-	//Anything that didn't make it into the in flight list still owns its ref
+	//Anything that didn't make it into the in flight list still owns its ref and destination buffer
 
-	for(U64 i = 0; i < device->pendingPulls.length; ++i)
+	for(U64 i = 0; i < device->pendingPulls.length; ++i) {
 		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].resource);
+		Buffer_free(&device->pendingPulls.ptrNonConst[i].textureData, alloc);
+	}
 
 	ListDevicePendingPull_clear(&device->pendingPulls, NULL);
 	return s_uccess;

@@ -275,6 +275,13 @@ Bool CommandListRef_copyImageRegions(
 			1, 0, "CommandListRef_copyImage()::src and dst aren't allowed to be depth stencil"
 		));
 
+	//MSAA can't be copied texel by texel, it has to be resolved instead
+
+	if(src.sampleCount || dst.sampleCount)
+		retError(clean, Error_invalidParameter(
+			1, 7, "CommandListRef_copyImage()::src and dst can't be MSAA, resolve first"
+		));
+
 	//Ensure both formats are the same
 
 	if(src.textureFormatId != dst.textureFormatId)

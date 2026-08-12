@@ -482,14 +482,19 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	const U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
-	DeviceTexture *texture = DeviceTextureRef_ptr(resource);
+	//Any texture type can be pulled, so only the unified base is safe to use here.
+	//Stencil bearing formats never get this far, which is what makes the single DEPTH aspect correct.
+
+	const UnifiedTexture utex = TextureRef_getUnifiedTexture(resource, NULL);
 	VkUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(resource, Vk, 0);
 	VkDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->stagingReadback), Vk);
+
+	const VkImageAspectFlags aspect = utex.depthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 
 	VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
 
 	VkImageSubresourceRange subresourceRange = (VkImageSubresourceRange) {
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.aspectMask = aspect,
 		.levelCount = 1,
 		.layerCount = 1
 	};
@@ -524,12 +529,18 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
 	//The pitch the generic layer allocated with, so both backends fill the same layout;
 	// Vulkan expresses it in texels through bufferRowLength, which stays a block multiple for compressed formats
 
-	const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
-
+	U64 blockSize;
 	U8 alignX = 1, alignY = 1;
-	ETextureFormat_getAlignment(format, &alignX, &alignY);
 
-	const U64 blockSize = ETextureFormat_getSize(format, alignX, alignY, 1);
+	if(utex.depthFormat)
+		blockSize = EDepthStencilFormat_getBytes((EDepthStencilFormat) utex.depthFormat);
+
+	else {
+		const ETextureFormat format = ETextureFormatId_unpack[utex.textureFormatId];
+		ETextureFormat_getAlignment(format, &alignX, &alignY);
+		blockSize = ETextureFormat_getSize(format, alignX, alignY, 1);
+	}
+
 	const U64 pitchTexels = *rowPitch / blockSize * alignX;
 
 	const U16 h = TextureRange_height(*range);
@@ -539,7 +550,7 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
 		.bufferOffset = stagingOffset,
 		.bufferRowLength = (U32) pitchTexels,
 		.bufferImageHeight = imageHeight,
-		.imageSubresource = (VkImageSubresourceLayers) { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1 },
+		.imageSubresource = (VkImageSubresourceLayers) { .aspectMask = aspect, .layerCount = 1 },
 		.imageOffset = (VkOffset3D) { .x = range->startRange[0], .y = range->startRange[1], .z = range->startRange[2] },
 		.imageExtent = (VkExtent3D) {
 			TextureRange_width(*range), h, TextureRange_length(*range)

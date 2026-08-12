@@ -121,6 +121,25 @@ VkShaderStageFlags vkGetShaderStages(U32 vis) {
 	return stageFlags;
 }
 
+//The extension stage bits are only valid values when their extension is enabled on the device,
+// so a layout visible to "all stages" has to shrink to the stages the device actually has.
+
+VkShaderStageFlags vkGetShaderStagesDevice(const GraphicsDevice *device, U32 vis) {
+
+	VkShaderStageFlags stageFlags = vkGetShaderStages(vis);
+
+	if(!(device->info.capabilities.features & EGraphicsFeatures_RayPipeline))
+		stageFlags &=~ (
+			VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+			VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR | VK_SHADER_STAGE_CALLABLE_BIT_KHR
+		);
+
+	if(!(device->info.capabilities.features & EGraphicsFeatures_MeshShader))
+		stageFlags &=~ (VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT);
+
+	return stageFlags;
+}
+
 TList(VkDescriptorSetLayoutBinding);
 TListImpl(VkDescriptorSetLayoutBinding);
 
@@ -232,7 +251,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 		U32 count = binding->count;
 
-		VkShaderStageFlags stageFlags = vkGetShaderStages(binding->visibility);
+		VkShaderStageFlags stageFlags = vkGetShaderStagesDevice(device, binding->visibility);
 		VkDescriptorType type = vkGetDescriptorType(binding->registerType);
 
 		bindings.ptrNonConst[i] = (VkDescriptorSetLayoutBinding) {

@@ -213,8 +213,9 @@ class oxc3(ConanFile):
 			self.requires("vulkan_headers/2026.07.28")
 
 		# Validation layers must be built manually for Android; not needed elsewhere.
+		# Pinned near the vulkan_headers version, since an old layer silently weakens validation.
 		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
-			self.requires("vulkan_validation_layers/2025.01.25")
+			self.requires("vulkan_validation_layers/1.4.357.0")
 
 		self.requires("openal_soft/2026.08.06")
 

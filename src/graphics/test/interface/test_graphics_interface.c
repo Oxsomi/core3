@@ -1869,6 +1869,28 @@ static void Test_pullCallback(RefPtr *resource, void *context) {
 	++*(U32*)context;
 }
 
+//Render target pulls hand over an owned buffer; the callback inspects it without taking ownership
+
+typedef struct TestTexturePull {
+	U32 count;
+	U32 expected, matching;
+	U64 len;
+} TestTexturePull;
+
+static void Test_texturePullCallback(RefPtr *resource, Buffer *data, void *context) {
+
+	(void) resource;
+
+	TestTexturePull *result = (TestTexturePull*) context;
+
+	++result->count;
+	result->len = data ? Buffer_length(*data) : 0;
+	result->matching = 0;
+
+	for(U64 i = 0; data && (i + 1) * 4 <= Buffer_length(*data); ++i)
+		result->matching += ((const U32*)data->ptr)[i] == result->expected;
+}
+
 static void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_setModule(t, "GraphicsDevice/execute");
@@ -2160,6 +2182,142 @@ static void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 			}
 
 			else Test_print(t, "Device lacks BCn, skipping compressed readback tests");
+
+			//Render targets have no cpuData; their pulls hand the region to the callback as an owned buffer.
+			//The target still holds the clear color from the replay above, which is what proves the transport.
+
+			TestTexturePull targetPull = (TestTexturePull) { .expected = 0xFF0000FFu };
+
+			Test_assert(t, "targetPull", TextureRef_pullRegion(
+				target, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &targetPull, &t->err
+			));
+
+			Test_assert(t, "targetPullSubmit", GraphicsDeviceRef_submitCommands(
+				deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+			));
+
+			Test_assert(t, "targetPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+			Test_assert(t, "targetPullCompleted", targetPull.count == 1);
+			Test_assert(t, "targetPullLen", targetPull.len == 4 * 4 * 4);
+			Test_assert(t, "targetPullRed", targetPull.matching == 16);
+
+			//Depth has to be initialized before its first read (D3D12 demands a clear, discard or copy first),
+			// so a draw less render pass clears it; that same pass also regression tests that a clear load
+			// alone keeps its scope alive instead of being rewound as an empty scope
+
+			DepthStencilRef *depth = NULL;
+			const CharString depthName = CharString_createRefCStrConst("Execute depth");
+
+			Test_assert(t, "depthCreate", GraphicsDeviceRef_createDepthStencil(
+				deviceRef, 4, 4, EDepthStencilFormat_D32, false, EMSAASamples_Off, NULL, &depthName, &depth, &t->err
+			));
+
+			if (depth && (GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features & EGraphicsFeatures_DirectRendering)) {
+
+				CommandListRef *depthList = NULL;
+
+				if (Test_assert(t, "depthListCreate", GraphicsDeviceRef_createCommandList(
+					deviceRef, 4 * KIBI, 64, 16, true, &depthList, &t->err
+				))) {
+
+					Test_assert(t, "depthListBegin", CommandListRef_begin(depthList, true, U64_MAX, &t->err));
+					Test_assert(t, "depthScope", CommandListRef_startScope(depthList, NULL, 1, NULL, &t->err));
+
+					AttachmentInfo color = (AttachmentInfo) { .image = target, .load = ELoadAttachmentType_Clear };
+					ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+					ListAttachmentInfo_createRefConst(&color, 1, &colors, NULL);
+
+					const DepthStencilAttachmentInfo depthAttach = (DepthStencilAttachmentInfo) {
+						.image = depth,
+						.depthLoad = ELoadAttachmentType_Clear,
+						.clearDepth = 0.5f
+					};
+
+					Test_assert(t, "depthRenderStart", CommandListRef_startRenderExt(
+						depthList, I32x2_zero, I32x2_create2(4, 4), &colors, &depthAttach, &t->err
+					));
+
+					Test_assert(t, "depthRenderEnd", CommandListRef_endRenderExt(depthList, &t->err));
+					Test_assert(t, "depthScopeEnd", CommandListRef_endScope(depthList, &t->err));
+
+					//The clear only scope must survive endScope, or the clear silently never runs
+
+					Test_assert(t, "depthScopeKept", CommandListRef_ptr(depthList)->activeScopes.length == 1);
+
+					Test_assert(t, "depthListEnd", CommandListRef_end(depthList, &t->err));
+
+					ListCommandListRef depthLists = (ListCommandListRef) { 0 };
+					ListCommandListRef_createRefConst(&depthList, 1, &depthLists, NULL);
+
+					Test_assert(t, "depthClearSubmit", GraphicsDeviceRef_submitCommands(
+						deviceRef, &depthLists, NULL, NULL, 0, 0, &t->err
+					));
+
+					Test_assert(t, "depthClearWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+					//A 0.5f clear reads back as its exact bit pattern in every D32 texel
+
+					TestTexturePull depthPull = (TestTexturePull) { .expected = 0x3F000000u };
+
+					Test_assert(t, "depthPull", TextureRef_pullRegion(
+						depth, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &depthPull, &t->err
+					));
+
+					Test_assert(t, "depthPullSubmit", GraphicsDeviceRef_submitCommands(
+						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+					));
+
+					Test_assert(t, "depthPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+					Test_assert(t, "depthPullCompleted", depthPull.count == 1);
+					Test_assert(t, "depthPullLen", depthPull.len == 4 * 4 * 4);
+					Test_assert(t, "depthPullHalf", depthPull.matching == 16);
+				}
+
+				RefPtr_dec(&depthList);
+			}
+
+			else Test_print(t, "Device lacks direct rendering (or depth), skipping depth pull test");
+
+			RefPtr_dec(&depth);
+
+			//The refusals: wrong type, missing callback and MSAA (which also can't be copied, only resolved)
+
+			Test_assert(t, "pullDeviceTexRefused", !TextureRef_pullRegion(
+				texture, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &targetPull, NULL
+			));
+
+			Test_assert(t, "pullNoCallbackRefused", !TextureRef_pullRegion(target, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL));
+
+			RenderTextureRef *msaaTarget = NULL;
+			const CharString msaaName = CharString_createRefCStrConst("Execute MSAA target");
+
+			Test_assert(t, "msaaCreate", GraphicsDeviceRef_createRenderTexture(
+				deviceRef, ETextureType_2D, 4, 4, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+				EMSAASamples_x4, NULL, &msaaName, &msaaTarget, &t->err
+			));
+
+			if (msaaTarget) {
+
+				Test_assert(t, "pullMsaaRefused", !TextureRef_pullRegion(
+					msaaTarget, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &targetPull, NULL
+				));
+
+				//Copying MSAA is refused at record time now; the failed command invalidates the recording,
+				// which is why end isn't asserted and the list isn't reused afterwards
+
+				Test_assert(t, "msaaCopyBegin", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
+				Test_assert(t, "msaaCopyScope", CommandListRef_startScope(emptyList, NULL, 1, NULL, &t->err));
+
+				Test_assert(t, "copyMsaaRefused", !CommandListRef_copyImage(
+					emptyList, msaaTarget, target, (CopyImageRegion) { 0 }, NULL
+				));
+
+				CommandListRef_end(emptyList, NULL);
+			}
+
+			RefPtr_dec(&msaaTarget);
 		}
 	}
 
