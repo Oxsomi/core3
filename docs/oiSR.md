@@ -35,6 +35,7 @@ typedef struct SRHeader {		//Should be aligned to 4-byte
 
 	U32 typeCount;				//Per-node type records (for Variable/Typedef/Struct/Union nodes)
 	U32 arrayDimCount;			//Shared multi-dimensional array-length pool
+	U32 interfaceCount;			//Interface-implementation edges
 
 } SRHeader;					//Note: unlike SBHeader the magic + header aren't a single struct on disk;
 							// when magic is present it's a separate U32 written before SRHeader.
@@ -178,12 +179,20 @@ typedef struct SRType {
 	U32 typeNameId;				//Underlying (resolved) type spelling into strings[], or U32_MAX
 	U32 displayNameId;			//Display/alias spelling into strings[] (for tooltips); U32_MAX = same as typeName
 	U32 defNodeId;				//Struct/Union node defining this type (go-to-definition), U32_MAX = builtin/none
-	U32 baseNodeId;				//Base-class struct node (inheritance), U32_MAX = none
+	U32 baseNodeId;				//Base-class struct node (single inheritance), U32_MAX = none; set on the definition only
 	U32 arrayDimStart;			//Into SRFile::arrayDims when arrayDimCount >= 2, else U32_MAX
 } SRType;						//32 bytes
 
 //Shared pool of multi-dimensional array lengths (a plain U32[]), referenced by SRType / SRRegister via
 //(arrayDimStart, arrayDimCount) for arrays of 2+ dimensions; the flattened total stays in elements / bindCount.
+
+//One interface a struct/union implements. A struct can implement several, so these are edges in their own table keyed
+//by the implementing node (not a field on SRType). Like baseNodeId, they're recorded on the type DEFINITION only; a
+//variable of the type reaches its base/interfaces through defNodeId.
+typedef struct SRInterface {
+	U32 nodeId;					//The Struct/Union node that implements the interface
+	U32 interfaceNodeId;		//The Interface node it implements
+} SRInterface;					//8 bytes
 
 //Final file format; please manually parse the members.
 //Verify if everything's in bounds.
@@ -200,6 +209,7 @@ SRFile {		//Has to be 16-byte aligned
 	SREnumValue enumValues[header.enumValueCount];
 	SRType types[header.typeCount];
 	U32 arrayDims[header.arrayDimCount];	//Shared multi-dimensional array-length pool
+	SRInterface interfaces[header.interfaceCount];	//Interface-implementation edges
 
 	U8[N] pad;								//Padding to align to 16-byte
 
@@ -245,4 +255,4 @@ This hash is refreshed by `SRFile_finalize` (and on read). It can be used for qu
 
 ## Changelog
 
-1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Carries the node tree (kinds, parent/child topology, names, semantics, forward-declaration links, annotations), the optional per-node source-location tier, and the detail tiers: per-Register frontend bind info, per-EnumValue enumerator values, a `HasReturn` flag on Function nodes, per-Parameter direction (`ParamReturn`/`ParamIn`/`ParamOut`, `in`+`out` = `inout`), and the per-node type tier (`SRType`, `header.typeCount`) giving each value node a serialized type (underlying name + display/alias name + class + rows/cols + array elements; a tooltip shows the alias, e.g. `Variable pos (myvec)`, with verbose adding `aka float3`). Types are resolved for `Variable`/`Typedef`/`Struct`/`Union`/`StaticVariable`/`GroupsharedVariable` nodes (whose `localId` indexes the frontend type table) and for `Parameter` nodes including the return slot (typed from the function-parameter reflection; builtin scalar/vector/matrix names are reconstructed, struct/object parameters carry only their class). Each `SRType` also carries the type graph: `defNodeId` links a value to the Struct/Union node defining its type (go-to-definition; members are child nodes so their types + go-to-def come for free), `baseNodeId` links a struct to its single base class (inheritance), and multi-dimensional value/resource arrays list their per-dim lengths in the shared `arrayDims` pool (`header.arrayDimCount`) referenced by `SRType`/`SRRegister`. Deferred: struct member/base-class *interface* implementations (niche), and constant-buffer byte layouts (by design -> oiSB).
+1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Carries the node tree (kinds, parent/child topology, names, semantics, forward-declaration links, annotations), the optional per-node source-location tier, and the detail tiers: per-Register frontend bind info, per-EnumValue enumerator values, a `HasReturn` flag on Function nodes, per-Parameter direction (`ParamReturn`/`ParamIn`/`ParamOut`, `in`+`out` = `inout`), and the per-node type tier (`SRType`, `header.typeCount`) giving each value node a serialized type (underlying name + display/alias name + class + rows/cols + array elements; a tooltip shows the alias, e.g. `Variable pos (myvec)`, with verbose adding `aka float3`). Types are resolved for `Variable`/`Typedef`/`Struct`/`Union`/`StaticVariable`/`GroupsharedVariable` nodes (whose `localId` indexes the frontend type table) and for `Parameter` nodes including the return slot (typed from the function-parameter reflection; builtin scalar/vector/matrix names are reconstructed, struct/object parameters carry only their class). Each `SRType` also carries the type graph: `defNodeId` links a value to the Struct/Union node defining its type (go-to-definition; members are child nodes so their types + go-to-def come for free), `baseNodeId` links a struct to its single base class, and the separate `SRInterface` table (`header.interfaceCount`) records each interface a struct implements. Base class + interfaces are recorded on the type DEFINITION only (a variable reaches them via `defNodeId`). Multi-dimensional value/resource arrays list their per-dim lengths in the shared `arrayDims` pool (`header.arrayDimCount`) referenced by `SRType`/`SRRegister`. Deferred: constant-buffer byte layouts (backend-specific packing -> oiSH/oiSB), and struct/object parameter type names (`D3D12_PARAMETER_DESC` exposes only the class for them, no name).

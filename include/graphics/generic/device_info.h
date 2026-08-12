@@ -223,7 +223,13 @@ typedef enum EGraphicsFeatures2 {
 	//D3D12: set when mega geometry is, since those builds are indirect by design
 	// (BUILD_BLAS_FROM_CLAS cluster op / NvAPI_D3D12_BuildRaytracingPartitionedTlasIndirect).
 
-	EGraphicsFeatures2_RayIndirectASBuild       = 1 << 4
+	EGraphicsFeatures2_RayIndirectASBuild       = 1 << 4,
+
+	//Pipeline executable introspection: the driver can hand back per-pipeline ISA disassembly + VGPR/SGPR statistics.
+	//Vulkan: VK_KHR_pipeline_executable_properties (pipelineExecutableInfo). Used for live shader disassembly, not
+	//rendering; device+driver dependent so it isn't golden-pinnable.
+
+	EGraphicsFeatures2_PipelineExecutableInfo   = 1 << 5
 
 } EGraphicsFeatures2;
 

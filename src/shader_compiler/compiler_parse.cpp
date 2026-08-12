@@ -1421,20 +1421,6 @@ static SRType Compiler_typeBase(U32 nodeId, U32 typeClass, U32 rows, U32 cols, U
 	return ty;
 }
 
-//The Struct/Union node with the given name; used to resolve go-to-definition (a value's type) and base classes
-//(GetBaseClass reports a type, not a node). Names are matched because the reflector reuses type indices across uses.
-
-static U32 Compiler_findStructByName(const SRFile *reflection, const CharString *name) {
-	for (U64 i = 0; i < reflection->nodes.length; ++i) {
-		U8 t = reflection->nodes.ptr[i].type;
-		U32 nameId = reflection->nodes.ptr[i].nameId;
-		if ((t == ESRNodeType_Struct || t == ESRNodeType_Union) && nameId != U32_MAX &&
-			CharString_equalsStringSensitive(&reflection->names.entryStrings.ptr[nameId], name))
-			return (U32) i;
-	}
-	return U32_MAX;
-}
-
 //Pushes the individual lengths of a >=2-dimensional array into the shared pool + returns its (start, count). Single or
 //non-array types keep start = U32_MAX (the flattened count already lives in SRType.elements / SRRegister.bindCount).
 
@@ -1707,20 +1693,45 @@ static Bool Compiler_reflectDetails(
 
 		if (d.Desc.Name) {
 			CharString tn = CharString_createRefCStrConst(d.Desc.Name);
-			U32 defNode = Compiler_findStructByName(reflection, &tn);
+			U32 defNode = SRFile_findNodeByName(reflection, tn, ESRNodeType_Struct);
 			ty.defNodeId = defNode == (U32) i ? U32_MAX : defNode;
 		}
 
-		//Base class (single inheritance): GetBaseClass reports a type, resolved to its defining node by name.
+		//Base class (single inheritance) + implemented interfaces: GetBaseClass / GetInterfaceByIndex report types,
+		//resolved to their defining nodes by name. The concrete base goes on the SRType; each interface is an edge in
+		//the separate interfaces table (a struct can implement several). These are properties of the type DEFINITION,
+		//so only the Struct/Union node itself records them; a variable of the type reaches them through defNodeId.
 
-		if (d.Desc.Class == D3D_SVC_STRUCT) {
+		if ((nt == ESRNodeType_Struct || nt == ESRNodeType_Union) && d.Desc.Class == D3D_SVC_STRUCT) {
 
 			ID3D12ShaderReflectionType *baseT = rt->GetBaseClass();
 			D3D12_SHADER_TYPE_DESC bd = {};
 
 			if (baseT && !FAILED(baseT->GetDesc(&bd)) && bd.Name) {
 				CharString bn = CharString_createRefCStrConst(bd.Name);
-				ty.baseNodeId = Compiler_findStructByName(reflection, &bn);
+				ty.baseNodeId = SRFile_findNodeByName(reflection, bn, ESRNodeType_Struct);
+			}
+
+			UINT numInterfaces = rt->GetNumInterfaces();
+
+			for (UINT k = 0; k < numInterfaces; ++k) {
+
+				ID3D12ShaderReflectionType *it = rt->GetInterfaceByIndex(k);
+				D3D12_SHADER_TYPE_DESC id = {};
+
+				if (!it || FAILED(it->GetDesc(&id)) || !id.Name)
+					continue;
+
+				CharString in = CharString_createRefCStrConst(id.Name);
+				U32 ifaceNode = SRFile_findNodeByName(reflection, in, ESRNodeType_Interface);
+
+				if (ifaceNode == U32_MAX)
+					continue;
+
+				SRInterface itf = SRInterface{};
+				itf.nodeId = (U32) i;
+				itf.interfaceNodeId = ifaceNode;
+				gotoIfError3(clean, ListSRInterface_pushBack(&reflection->interfaces, itf, alloc, e_rr));
 			}
 		}
 

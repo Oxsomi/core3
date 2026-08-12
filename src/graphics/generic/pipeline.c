@@ -35,6 +35,8 @@ const C8 *EPipelineStage_names[] = {
 };
 
 TListImpl(PipelineStage);
+TListImpl(PipelineStatistic);
+TListImpl(PipelineExecutable);
 
 void *Pipeline_infoOffset(Pipeline *pipeline) {
 
@@ -60,6 +62,71 @@ void Pipeline_free(Pipeline *pipeline, const Allocator *alloc) {
 		RefPtr_dec(&pipeline->layout);
 		RefPtr_dec(&pipeline->device);
 	}
+}
+
+void PipelineExecutable_free(PipelineExecutable *exec, const Allocator *alloc) {
+
+	if(!exec)
+		return;
+
+	CharString_free(&exec->name, alloc);
+	CharString_free(&exec->description, alloc);
+	CharString_free(&exec->disassembly, alloc);
+
+	for(U64 i = 0; i < exec->statistics.length; ++i) {
+		CharString_free(&exec->statistics.ptrNonConst[i].name, alloc);
+		CharString_free(&exec->statistics.ptrNonConst[i].description, alloc);
+	}
+
+	ListPipelineStatistic_free(&exec->statistics, alloc);
+	*exec = (PipelineExecutable) { 0 };
+}
+
+void ListPipelineExecutable_freeUnderlying(ListPipelineExecutable *list, const Allocator *alloc) {
+
+	if(!list)
+		return;
+
+	for(U64 i = 0; i < list->length; ++i)
+		PipelineExecutable_free(&list->ptrNonConst[i], alloc);
+
+	ListPipelineExecutable_free(list, alloc);
+}
+
+Bool GraphicsDeviceRef_getPipelineExecutables(
+	PipelineRef *pipeline,
+	const Allocator *alloc,
+	ListPipelineExecutable *result,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+
+	if(!pipeline || !result)
+		retError(clean, Error_nullPointer(
+			!pipeline ? 0 : 2, "GraphicsDeviceRef_getPipelineExecutables()::pipeline and result are required"
+		));
+
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(
+			2, 0, "GraphicsDeviceRef_getPipelineExecutables()::result isn't empty, may indicate memleak"
+		));
+
+	Pipeline *pipelinePtr = PipelineRef_ptr(pipeline);
+
+	if(!(GraphicsDeviceRef_ptr(pipelinePtr->device)->info.capabilities.features2 & EGraphicsFeatures2_PipelineExecutableInfo))
+		retError(clean, Error_unsupportedOperation(
+			0, "GraphicsDeviceRef_getPipelineExecutables() device lacks EGraphicsFeatures2_PipelineExecutableInfo"
+		));
+
+	if(!(pipelinePtr->flags & EPipelineFlags_CaptureISA))
+		retError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_getPipelineExecutables() pipeline wasn't created with EPipelineFlags_CaptureISA"
+		));
+
+	gotoIfError3(clean, Pipeline_getExecutablesExt(pipelinePtr, alloc, result, e_rr));
+
+clean:
+	return s_uccess;
 }
 
 U32 GraphicsDeviceRef_getFirstShaderEntry(

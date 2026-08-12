@@ -29,6 +29,7 @@
 #include "formats/oiSR/sr_file.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
+#include "types/container/string_helper.h"
 #include "types/container/memory_stream.h"
 #include "types/base/error.h"
 #include "types/base/string_read_helper.h"
@@ -398,9 +399,25 @@
 		SRFile reflection = (SRFile) { 0 };
 		StreamRef *writeStream = NULL;
 		CharString input = (CharString) { 0 };
+		ListCharString includeDirs = (ListCharString) { 0 };
 
 		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, e_rr));
 		gotoIfError3(clean, CLI_shaderReadFile(input, &buf, e_rr));
+
+		//Split the ';'-delimited -include-dir arg (e.g. "a;b;c") so a shader with #includes resolves them; without this
+		//any shader that includes another file fails to reflect
+
+		CharString includeDir = (CharString) { 0 };
+
+		if (args->parameters & EOperationHasParameter_IncludeDir)
+			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir, e_rr));
+
+		if (CharString_length(includeDir)) {
+			CharStringSplit split = (CharStringSplit) {
+				.s = &includeDir, .allocator = alloc, .result = &includeDirs
+			};
+			gotoIfError3(clean, CharString_splitSensitive(&split, ';', e_rr));
+		}
 
 		gotoIfError3(clean, Compiler_create(alloc, &comp, e_rr));
 		hasCompiler = true;
@@ -409,7 +426,8 @@
 			.string = CharString_createRefSizedConst((const C8*) buf.ptr, Buffer_length(buf), false),
 			.path = input,
 			.format = ECompilerFormat_HLSL,
-			.outputType = ESHBinaryType_SPIRV
+			.outputType = ESHBinaryType_SPIRV,
+			.includeDirs = includeDirs
 		};
 
 		gotoIfError3(clean, Compiler_reflect(&comp, &settings, alloc, &reflection, e_rr));
@@ -440,6 +458,7 @@
 		if(hasCompiler)
 			Compiler_free(&comp, alloc);
 
+		ListCharString_free(&includeDirs, alloc);        //Elements are refs into includeDir; free the list only
 		Buffer_free(&outBuf, alloc);
 		Buffer_free(&buf, alloc);
 		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);

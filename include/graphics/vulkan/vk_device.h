@@ -144,6 +144,12 @@ typedef struct VkGraphicsDevice {
 
 	PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2;
 
+	//Pipeline executable introspection (VK_KHR_pipeline_executable_properties); only loaded when the capability is on.
+
+	PFN_vkGetPipelineExecutablePropertiesKHR getPipelineExecutableProperties;
+	PFN_vkGetPipelineExecutableStatisticsKHR getPipelineExecutableStatistics;
+	PFN_vkGetPipelineExecutableInternalRepresentationsKHR getPipelineExecutableInternalRepresentations;
+
 	//These functions are manually loaded because the runtime will load them anyways.
 	//However, some of these might not be present when statically linked or on the device itself.
 	//And so they're just manually loaded.

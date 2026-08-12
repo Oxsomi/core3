@@ -111,3 +111,178 @@ void VK_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 
 	deviceExt->destroyPipeline(deviceExt->device, *Pipeline_ext(pipeline, Vk), NULL);
 }
+
+Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
+	Pipeline *pipeline,
+	const Allocator *alloc,
+	ListPipelineExecutable *result,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+
+	Buffer propsBuf = Buffer_createNull();
+	Buffer statsBuf = Buffer_createNull();
+	Buffer irsBuf = Buffer_createNull();
+	Buffer irData = Buffer_createNull();
+	ListPipelineExecutable executables = (ListPipelineExecutable) { 0 };
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(pipeline->device);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	VkPipeline pipelineHandle = *Pipeline_ext(pipeline, Vk);
+
+	if(!deviceExt->getPipelineExecutableProperties)
+		retError(clean, Error_unsupportedOperation(0, "VkPipeline_getExecutables() query functions weren't loaded"));
+
+	VkPipelineInfoKHR pipelineInfo = (VkPipelineInfoKHR) {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INFO_KHR, .pipeline = pipelineHandle
+	};
+
+	//Executable properties (name / description / stages / subgroup size)
+
+	U32 execCount = 0;
+	gotoIfError3(clean, checkVkError(deviceExt->getPipelineExecutableProperties(
+		deviceExt->device, &pipelineInfo, &execCount, NULL
+	), e_rr));
+
+	if(!execCount)
+		goto clean;        //Nothing captured (e.g. pipeline wasn't created with the capture flags)
+
+	gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(VkPipelineExecutablePropertiesKHR) * execCount, alloc, &propsBuf, e_rr));
+	VkPipelineExecutablePropertiesKHR *props = (VkPipelineExecutablePropertiesKHR*) propsBuf.ptrNonConst;
+
+	for(U32 i = 0; i < execCount; ++i)
+		props[i] = (VkPipelineExecutablePropertiesKHR) { .sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_PROPERTIES_KHR };
+
+	gotoIfError3(clean, checkVkError(deviceExt->getPipelineExecutableProperties(
+		deviceExt->device, &pipelineInfo, &execCount, props
+	), e_rr));
+
+	gotoIfError3(clean, ListPipelineExecutable_resize(&executables, execCount, alloc, e_rr));
+
+	for(U32 i = 0; i < execCount; ++i) {
+
+		PipelineExecutable *exec = &executables.ptrNonConst[i];
+		exec->stages = (U32) props[i].stages;
+		exec->subgroupSize = props[i].subgroupSize;
+
+		CharString name = CharString_createRefCStrConst(props[i].name);
+		CharString desc = CharString_createRefCStrConst(props[i].description);
+		gotoIfError3(clean, CharString_createCopy(name, alloc, &exec->name, e_rr));
+		gotoIfError3(clean, CharString_createCopy(desc, alloc, &exec->description, e_rr));
+
+		VkPipelineExecutableInfoKHR execInfo = (VkPipelineExecutableInfoKHR) {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INFO_KHR, .pipeline = pipelineHandle, .executableIndex = i
+		};
+
+		//Numeric statistics (VGPRs, SGPRs, occupancy, ...)
+
+		U32 statCount = 0;
+		gotoIfError3(clean, checkVkError(deviceExt->getPipelineExecutableStatistics(
+			deviceExt->device, &execInfo, &statCount, NULL
+		), e_rr));
+
+		if(statCount) {
+
+			Buffer_free(&statsBuf, alloc);
+			gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(VkPipelineExecutableStatisticKHR) * statCount, alloc, &statsBuf, e_rr));
+			VkPipelineExecutableStatisticKHR *stats = (VkPipelineExecutableStatisticKHR*) statsBuf.ptrNonConst;
+
+			for(U32 j = 0; j < statCount; ++j)
+				stats[j] = (VkPipelineExecutableStatisticKHR) { .sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_STATISTIC_KHR };
+
+			gotoIfError3(clean, checkVkError(deviceExt->getPipelineExecutableStatistics(
+				deviceExt->device, &execInfo, &statCount, stats
+			), e_rr));
+
+			gotoIfError3(clean, ListPipelineStatistic_resize(&exec->statistics, statCount, alloc, e_rr));
+
+			for(U32 j = 0; j < statCount; ++j) {
+
+				PipelineStatistic *st = &exec->statistics.ptrNonConst[j];
+				gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(stats[j].name), alloc, &st->name, e_rr));
+				gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(stats[j].description), alloc, &st->description, e_rr));
+
+				switch(stats[j].format) {
+
+					default:
+					case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_BOOL32_KHR:
+						st->format = EPipelineStatisticFormat_Bool; st->value = stats[j].value.b32; break;
+
+					case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_INT64_KHR:
+						st->format = EPipelineStatisticFormat_I64; st->value = (U64) stats[j].value.i64; break;
+
+					case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_UINT64_KHR:
+						st->format = EPipelineStatisticFormat_U64; st->value = stats[j].value.u64; break;
+
+					case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_FLOAT64_KHR: {
+						st->format = EPipelineStatisticFormat_F64;
+						F64 d = stats[j].value.f64;
+						st->value = *(const U64*) &d;
+						break;
+					}
+				}
+			}
+		}
+
+		//Internal representations: first query the count + sizes/isText (pData = NULL), then fetch the first text one
+
+		U32 irCount = 0;
+		gotoIfError3(clean, checkVkError(deviceExt->getPipelineExecutableInternalRepresentations(
+			deviceExt->device, &execInfo, &irCount, NULL
+		), e_rr));
+
+		if(irCount) {
+
+			Buffer_free(&irsBuf, alloc);
+			gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(VkPipelineExecutableInternalRepresentationKHR) * irCount, alloc, &irsBuf, e_rr));
+			VkPipelineExecutableInternalRepresentationKHR *irs = (VkPipelineExecutableInternalRepresentationKHR*) irsBuf.ptrNonConst;
+
+			for(U32 j = 0; j < irCount; ++j)
+				irs[j] = (VkPipelineExecutableInternalRepresentationKHR) {
+					.sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INTERNAL_REPRESENTATION_KHR
+				};
+
+			gotoIfError3(clean, checkVkError(deviceExt->getPipelineExecutableInternalRepresentations(
+				deviceExt->device, &execInfo, &irCount, irs
+			), e_rr));
+
+			//Pick the first text representation (the human-readable ISA disassembly)
+
+			U32 chosen = irCount;
+
+			for(U32 j = 0; j < irCount; ++j)
+				if(irs[j].isText && irs[j].dataSize) { chosen = j; break; }
+
+			if(chosen < irCount) {
+
+				Buffer_free(&irData, alloc);
+				gotoIfError3(clean, Buffer_createEmptyBytes(irs[chosen].dataSize, alloc, &irData, e_rr));
+				irs[chosen].pData = irData.ptrNonConst;
+
+				gotoIfError3(clean, checkVkError(deviceExt->getPipelineExecutableInternalRepresentations(
+					deviceExt->device, &execInfo, &irCount, irs
+				), e_rr));
+
+				//Driver text is NUL-terminated; wrap without the trailing NUL then copy into the executable
+
+				U64 len = irs[chosen].dataSize;
+				while(len && ((const C8*) irData.ptr)[len - 1] == '\0')
+					--len;
+
+				CharString isa = CharString_createRefSizedConst((const C8*) irData.ptr, len, false);
+				gotoIfError3(clean, CharString_createCopy(isa, alloc, &exec->disassembly, e_rr));
+			}
+		}
+	}
+
+	*result = executables;
+	executables = (ListPipelineExecutable) { 0 };
+
+clean:
+	ListPipelineExecutable_freeUnderlying(&executables, alloc);
+	Buffer_free(&propsBuf, alloc);
+	Buffer_free(&statsBuf, alloc);
+	Buffer_free(&irsBuf, alloc);
+	Buffer_free(&irData, alloc);
+	return s_uccess;
+}

@@ -67,6 +67,7 @@
 	);
 
 	void VkPipeline_free(Pipeline *pipeline, const Allocator *alloc);
+	Bool VkPipeline_getExecutables(Pipeline *pipeline, const Allocator *alloc, ListPipelineExecutable *result, Error *e_rr);
 
 	//Sampler
 

@@ -161,6 +161,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(cap.features2 & EGraphicsFeatures2_DescriptorHeap)
 			Log_debugLnx("\t\tDescriptor heap (full bindless)");
 
+		if(cap.features2 & EGraphicsFeatures2_PipelineExecutableInfo)
+			Log_debugLnx("\t\tPipeline executable info (live ISA disassembly + statistics)");
+
 		if(feat & EGraphicsFeatures_SubgroupOperations)
 			Log_debugLnx("\t\tSubgroup operations");
 

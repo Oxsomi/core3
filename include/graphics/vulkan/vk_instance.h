@@ -63,7 +63,8 @@ typedef enum EOptExtensions {
 	EOptExtensions_RayTriPosition,
 	EOptExtensions_DescriptorHeap,
 	EOptExtensions_RayClusterAS,
-	EOptExtensions_RayPartitionedTLAS
+	EOptExtensions_RayPartitionedTLAS,
+	EOptExtensions_PipelineExecutableProperties
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];

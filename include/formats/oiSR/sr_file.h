@@ -322,10 +322,20 @@ typedef struct SRType {
 	                                        //U32_MAX = same as typeName
 
 	U32 defNodeId;                          //Struct/Union node that DEFINES this type (go-to-definition), U32_MAX = none
-	U32 baseNodeId;                         //Base-class struct node (inheritance), U32_MAX = none
+	U32 baseNodeId;                         //Base-class struct node (single inheritance), U32_MAX = none
 	U32 arrayDimStart;                      //Into SRFile::arrayDims when arrayDimCount >= 2, else U32_MAX
 
 } SRType;
+
+//One interface a struct/union implements. A struct can implement several, so these are edges in their own table (keyed
+//by the implementing node) rather than a field on SRType. The concrete base class stays on SRType.baseNodeId.
+
+typedef struct SRInterface {
+
+	U32 nodeId;                             //The Struct/Union node that implements the interface
+	U32 interfaceNodeId;                    //The Interface node it implements
+
+} SRInterface;
 
 TList(SRNode);
 TList(SRSymbol);
@@ -333,6 +343,7 @@ TList(SRAnnotation);
 TList(SRRegister);
 TList(SREnumValue);
 TList(SRType);
+TList(SRInterface);
 
 typedef enum ESRSettingsFlags {
 	ESRSettingsFlags_None             = 0,
@@ -354,6 +365,7 @@ typedef struct SRFile {
 	ListSREnumValue enumValues;  //Enumerators for Enum nodes
 	ListSRType types;            //Resolved types for value nodes (Variable/Parameter/Typedef/Struct/...)
 	ListU32 arrayDims;           //Shared pool of multi-dimensional array lengths, referenced by SRType/SRRegister
+	ListSRInterface interfaces;  //Interface-implementation edges (struct/union node -> interface node)
 
 	ESRSettingsFlags flags;
 	U32 features;                //ESRFeature bitset: which reflection tiers this file carries
@@ -381,6 +393,11 @@ void ListSRFile_freeUnderlying(ListSRFile *files, const Allocator *alloc);
 //Add a string to the pool (deduplicated), returning its id.
 //U32_MAX means "no string"; passing an empty/null CharString returns U32_MAX without adding.
 Bool SRFile_addString(SRFile *srFile, CharString *str, const Allocator *alloc, U32 *id, Error *e_rr);
+
+//Index of the first node named `name` whose type is `type` (Struct/Union both match ESRNodeType_Struct, they're the
+//record kinds), or U32_MAX. Resolves a type/base/interface name back to its defining node (references are by name
+//because the frontend reflector reuses type indices across uses of the same type).
+U32 SRFile_findNodeByName(const SRFile *srFile, CharString name, ESRNodeType type);
 
 //Recompute the content hash. Call once the nodes/symbols/annotations/strings are finalized.
 Bool SRFile_finalize(SRFile *srFile, const Allocator *alloc, Error *e_rr);
@@ -430,6 +447,7 @@ typedef struct SRHeader {
 
 	U32 typeCount;             //Per-node type records (Variable/Typedef/Struct/Union)
 	U32 arrayDimCount;         //Shared multi-dimensional array-length pool
+	U32 interfaceCount;        //Interface-implementation edges
 
 } SRHeader;
 

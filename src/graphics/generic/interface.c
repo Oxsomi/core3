@@ -183,6 +183,22 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		WrapperFunction(pipeline->device, pipelineFree)(pipeline, alloc);
 	}
 
+	Bool Pipeline_getExecutablesExt(Pipeline *pipeline, const Allocator *alloc, ListPipelineExecutable *result, Error *e_rr) {
+
+		Bool s_uccess = true;
+		Pipeline_getExecutablesImpl execFn = WrapperFunction(pipeline->device, pipelineGetExecutables);
+
+		if(!execFn)
+			retError(clean, Error_unsupportedOperation(
+				0, "Pipeline_getExecutablesExt() backend doesn't support pipeline executable introspection"
+			));
+
+		gotoIfError3(clean, execFn(pipeline, alloc, result, e_rr));
+
+	clean:
+		return s_uccess;
+	}
+
 	//Sampler
 
 	Bool GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, const CharString *name, Error *e_rr) {

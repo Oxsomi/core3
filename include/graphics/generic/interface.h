@@ -47,6 +47,7 @@ typedef struct Descriptor Descriptor;
 
 typedef struct ListDescriptor ListDescriptor;
 typedef struct ListSHFile ListSHFile;
+typedef struct ListPipelineExecutable ListPipelineExecutable;
 typedef struct ListCommandListRef ListCommandListRef;
 typedef struct ListSwapchainRef ListSwapchainRef;
 typedef struct DeviceMemoryBlock DeviceMemoryBlock;
@@ -126,6 +127,10 @@ typedef struct GraphicsObjectSizes {
 	);
 
 	typedef void (*Pipeline_freeImpl)(Pipeline *pipeline, const Allocator *alloc);
+
+	typedef Bool (*Pipeline_getExecutablesImpl)(
+		Pipeline *pipeline, const Allocator *alloc, ListPipelineExecutable *result, Error *e_rr
+	);
 
 	//Sampler
 
@@ -303,6 +308,7 @@ typedef struct GraphicsObjectSizes {
 		GraphicsDevice_createPipelineComputeImpl         pipelineCreateCompute;
 		GraphicsDevice_createPipelineRaytracingImpl      pipelineCreateRt;
 		Pipeline_freeImpl                                pipelineFree;
+		Pipeline_getExecutablesImpl                      pipelineGetExecutables;
 
 		GraphicsDeviceRef_createSamplerImpl              samplerCreate;
 		Sampler_freeImpl                                 samplerFree;
@@ -414,6 +420,7 @@ Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 );
 
 void Pipeline_freeExt(Pipeline *pipeline, const Allocator *alloc);
+Bool Pipeline_getExecutablesExt(Pipeline *pipeline, const Allocator *alloc, ListPipelineExecutable *result, Error *e_rr);
 
 //Sampler
 

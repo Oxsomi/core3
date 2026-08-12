@@ -100,6 +100,7 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 			.pipelineCreateCompute = VkGraphicsDevice_createPipelineCompute,
 			.pipelineCreateRt = VkGraphicsDevice_createPipelineRaytracingInternal,
 			.pipelineFree = VkPipeline_free,
+			.pipelineGetExecutables = VkPipeline_getExecutables,
 
 			.samplerCreate = VkGraphicsDeviceRef_createSampler,
 			.samplerFree = VkSampler_free,
@@ -554,7 +555,9 @@ const C8 *optExtensionsName[] = {
 	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8",   "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget",
 	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",      "VK_KHR_ray_tracing_position_fetch",
 
-	"VK_EXT_descriptor_heap", "VK_NV_cluster_acceleration_structure", "VK_NV_partitioned_acceleration_structure"
+	"VK_EXT_descriptor_heap", "VK_NV_cluster_acceleration_structure", "VK_NV_partitioned_acceleration_structure",
+
+	"VK_KHR_pipeline_executable_properties"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1019,6 +1022,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_BufferDeviceAddress], VkPhysicalDeviceBufferDeviceAddressFeaturesKHR, deviceAddress,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_PipelineExecutableProperties],
+			VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR,
+			pipelineExecutableProps,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR
 		);
 
 		instanceExt->getPhysicalDeviceFeatures2(dev, &features2);
@@ -1608,6 +1618,11 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			descriptorHeapFeat.descriptorHeap
 		)
 			capabilities.features2 |= EGraphicsFeatures2_DescriptorHeap;
+
+		//Pipeline executable introspection (live ISA disassembly + VGPR/SGPR statistics)
+
+		if(optExtensions[EOptExtensions_PipelineExecutableProperties] && pipelineExecutableProps.pipelineExecutableInfo)
+			capabilities.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
 
 		//Enforce format support
 		//We don't enforce VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT because the standard guarantees it.

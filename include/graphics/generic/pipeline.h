@@ -99,8 +99,51 @@ typedef enum EPipelineRaytracingFlags {
 
 typedef enum EPipelineFlags {
 	EPipelineFlags_None                               = 0,
-	EPipelineFlags_InternalWeakDeviceRef              = 1 << 0        //Internal use only
+	EPipelineFlags_InternalWeakDeviceRef              = 1 << 0,       //Internal use only
+
+	//Create the pipeline with driver introspection captured, so GraphicsDeviceRef_getPipelineExecutables can return the
+	//per-stage ISA disassembly + VGPR/SGPR statistics. Requires EGraphicsFeatures2_PipelineExecutableInfo on the device;
+	//ignored (no capture) otherwise. Only set it for inspection: capture can disable pipeline caching / cost extra.
+
+	EPipelineFlags_CaptureISA                         = 1 << 1
 } EPipelineFlags;
+
+//One numeric statistic the driver reports for a pipeline executable (e.g. "Used VGPRs" = 24). value holds the raw bits;
+//reinterpret it per format.
+
+typedef enum EPipelineStatisticFormat {
+	EPipelineStatisticFormat_Bool,
+	EPipelineStatisticFormat_I64,
+	EPipelineStatisticFormat_U64,
+	EPipelineStatisticFormat_F64
+} EPipelineStatisticFormat;
+
+typedef struct PipelineStatistic {
+	CharString name;
+	CharString description;
+	U64 value;                                  //Bit pattern; reinterpret per format
+	U8 format;                                  //EPipelineStatisticFormat
+	U8 padding[7];
+} PipelineStatistic;
+
+TList(PipelineStatistic);
+
+//One executable within a created pipeline (a compute pipeline has one; graphics/RT can have several). Carries the
+//driver's ISA disassembly + the numeric statistics. Owns its strings + statistics list.
+
+typedef struct PipelineExecutable {
+	CharString name;                            //Driver's name, e.g. "Compute Shader"
+	CharString description;
+	CharString disassembly;                     //ISA text (first text internal representation), or empty
+	U32 stages;                                 //ESHPipelineStageFlags this executable covers
+	U32 subgroupSize;
+	ListPipelineStatistic statistics;
+} PipelineExecutable;
+
+TList(PipelineExecutable);
+
+void PipelineExecutable_free(PipelineExecutable *exec, const Allocator *alloc);
+void ListPipelineExecutable_freeUnderlying(ListPipelineExecutable *list, const Allocator *alloc);
 
 typedef struct PipelineRaytracingGroup {
 
@@ -184,6 +227,18 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,
+	Error *e_rr
+);
+
+//Driver introspection for a created pipeline: per-executable ISA disassembly + VGPR/SGPR statistics. The pipeline must
+//have been created with EPipelineFlags_CaptureISA on a device with EGraphicsFeatures2_PipelineExecutableInfo. Backend:
+//Vulkan (VK_KHR_pipeline_executable_properties); unsupported backends/devices return an error. Caller frees *result via
+//ListPipelineExecutable_freeUnderlying.
+
+Bool GraphicsDeviceRef_getPipelineExecutables(
+	PipelineRef *pipeline,
+	const Allocator *alloc,
+	ListPipelineExecutable *result,
 	Error *e_rr
 );
 
