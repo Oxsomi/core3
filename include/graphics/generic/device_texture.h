@@ -84,7 +84,8 @@ Bool DeviceTextureRef_markDirty(DeviceTextureRef *texture, U16 x, U16 y, U16 z, 
 
 //Read the texture back from the device into cpuData (requires CPUBacked).
 //Same timing contract as DeviceBufferRef_pullRegion.
-//Only the full uncompressed texture is supported right now (pass zeroes), regions are TODO.
+//Same region semantics as markDirty: zero means the rest of that axis, and for compressed formats the
+// region snaps outward to whole blocks, so slightly more than asked can be refreshed.
 Bool DeviceTextureRef_pullRegion(
 	DeviceTextureRef *tex,
 	U16 x, U16 y, U16 z,

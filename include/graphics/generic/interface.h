@@ -35,6 +35,7 @@ typedef struct Pipeline Pipeline;
 typedef struct Swapchain Swapchain;
 typedef struct CommandList CommandList;
 typedef struct DeviceBuffer DeviceBuffer;
+typedef struct TextureRange TextureRange;
 typedef struct DescriptorLayout DescriptorLayout;
 typedef struct DescriptorTable DescriptorTable;
 typedef struct DescriptorHeap DescriptorHeap;
@@ -157,6 +158,7 @@ typedef struct GraphicsObjectSizes {
 		void *commandBuffer,
 		GraphicsDeviceRef *deviceRef,
 		DeviceTextureRef *resource,
+		const TextureRange *range,
 		U64 stagingOffset,
 		U64 *rowPitch,
 		Error *e_rr
@@ -460,7 +462,7 @@ Bool DeviceTextureRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef
 
 Bool DeviceTextureRef_pullExt(
 	void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *resource,
-	U64 stagingOffset, U64 *rowPitch, Error *e_rr
+	const TextureRange *range, U64 stagingOffset, U64 *rowPitch, Error *e_rr
 );
 
 void UnifiedTexture_freeExt(TextureRef *textureRef);

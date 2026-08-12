@@ -1575,19 +1575,35 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 
 		else {
 
-			//De-pitch the backend's row stride back into the tight rows cpuData uses
+			//De-pitch the backend's row stride back into the tight full texture rows cpuData uses,
+			// at the region's offsets; all row measures are block rows for compressed formats
 
 			DeviceTexture *texture = DeviceTextureRef_ptr(pull->resource);
 			const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
+			const TextureRange range = pull->range.texture;
 
-			const U64 tightRow = ETextureFormat_getSize(format, texture->base.width, 1, 1);
-			const U64 rows = (U64) texture->base.height * texture->base.length;
+			U8 alignY = 1;
+			ETextureFormat_getAlignment(format, NULL, &alignY);
 
-			for(U64 j = 0; j < rows; ++j)
-				Buffer_memcpy(
-					Buffer_createRef(texture->cpuData.ptrNonConst + tightRow * j, tightRow),
-					Buffer_createRefConst(src + pull->rowPitch * j, tightRow)
-				);
+			const U64 fullRow = ETextureFormat_getSize(format, texture->base.width, alignY, 1);
+			const U64 fullRows = ((U64)texture->base.height + alignY - 1) / alignY;
+
+			const U64 regionRow = ETextureFormat_getSize(format, TextureRange_width(range), alignY, 1);
+			const U64 rows = ((U64)TextureRange_height(range) + alignY - 1) / alignY;
+
+			const U64 xOff = ETextureFormat_getSize(format, range.startRange[0], alignY, 1);
+			const U64 yRow = range.startRange[1] / alignY;
+			const U16 z = range.startRange[2];
+
+			for(U64 k = 0; k < TextureRange_length(range); ++k)
+				for(U64 j = 0; j < rows; ++j)
+					Buffer_memcpy(
+						Buffer_createRef(
+							texture->cpuData.ptrNonConst + fullRow * (yRow + j + (z + k) * fullRows) + xOff,
+							regionRow
+						),
+						Buffer_createRefConst(src + pull->rowPitch * (j + k * rows), regionRow)
+					);
 		}
 
 		if(pull->callback)
@@ -1631,9 +1647,14 @@ Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *com
 
 			const DeviceTexture *texture = DeviceTextureRef_ptr(pull->resource);
 			const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
+			const TextureRange range = pull->range.texture;
 
-			const U64 pitch = (ETextureFormat_getSize(format, texture->base.width, 1, 1) + 255) &~ 255;
-			len = pitch * texture->base.height * texture->base.length;
+			U8 alignY = 1;
+			ETextureFormat_getAlignment(format, NULL, &alignY);
+
+			const U64 pitch = (ETextureFormat_getSize(format, TextureRange_width(range), alignY, 1) + 255) &~ 255;
+			const U64 rows = ((U64)TextureRange_height(range) + alignY - 1) / alignY;
+			len = pitch * rows * TextureRange_length(range);
 		}
 
 		needed += ((len + 511) &~ 511) + 512;
@@ -1660,9 +1681,14 @@ Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *com
 
 			const DeviceTexture *texture = DeviceTextureRef_ptr(pull.resource);
 			const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
+			const TextureRange range = pull.range.texture;
 
-			pitch = (ETextureFormat_getSize(format, texture->base.width, 1, 1) + 255) &~ 255;
-			len = pitch * texture->base.height * texture->base.length;
+			U8 alignY = 1;
+			ETextureFormat_getAlignment(format, NULL, &alignY);
+
+			pitch = (ETextureFormat_getSize(format, TextureRange_width(range), alignY, 1) + 255) &~ 255;
+			const U64 rows = ((U64)TextureRange_height(range) + alignY - 1) / alignY;
+			len = pitch * rows * TextureRange_length(range);
 		}
 
 		const AllocationBufferAllocate allocation = (AllocationBufferAllocate) {
@@ -1707,7 +1733,7 @@ Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *com
 			U64 backendPitch = pull.rowPitch;
 
 			gotoIfError3(clean, DeviceTextureRef_pullExt(
-				commandBuffer, deviceRef, pull.resource, pull.stagingOffset, &backendPitch, e_rr
+				commandBuffer, deviceRef, pull.resource, &pull.range.texture, pull.stagingOffset, &backendPitch, e_rr
 			));
 
 			pull.rowPitch = backendPitch;

@@ -91,7 +91,7 @@
 
 	Bool VkDeviceTextureRef_pull(
 		void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *resource,
-		U64 stagingOffset, U64 *rowPitch, Error *e_rr
+		const TextureRange *range, U64 stagingOffset, U64 *rowPitch, Error *e_rr
 	);
 	void  VkUnifiedTexture_free(TextureRef *textureRef);
 

@@ -232,9 +232,11 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	Bool DeviceTextureRef_pullExt(
 		void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *resource,
-		U64 stagingOffset, U64 *rowPitch, Error *e_rr
+		const TextureRange *range, U64 stagingOffset, U64 *rowPitch, Error *e_rr
 	) {
-		return WrapperFunction(deviceRef, texturePull)(commandBuffer, deviceRef, resource, stagingOffset, rowPitch, e_rr);
+		return WrapperFunction(deviceRef, texturePull)(
+			commandBuffer, deviceRef, resource, range, stagingOffset, rowPitch, e_rr
+		);
 	}
 
 	void UnifiedTexture_freeExt(TextureRef *texture) {

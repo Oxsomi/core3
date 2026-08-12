@@ -372,20 +372,38 @@ Bool DeviceTextureRef_pullRegion(
 	if(!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked))
 		retError(clean, Error_invalidOperation(0, "DeviceTextureRef_pullRegion() requires a CPUBacked texture"));
 
-	//Only the whole uncompressed texture for now; regions and block formats need the row math audited first
+	//Same region semantics as markDirty: zero means the rest of that axis and the region snaps outward
+	// to whole blocks for compressed formats, so pulling can refresh slightly more than was asked
 
-	if(ETextureFormat_getIsCompressed(ETextureFormatId_unpack[texture->base.textureFormatId]))
-		retError(clean, Error_unsupportedOperation(
-			0, "DeviceTextureRef_pullRegion() doesn't support compressed formats yet"
+	if(x >= texture->base.width || y >= texture->base.height || z >= texture->base.length)
+		retError(clean, Error_outOfBounds(
+			1, x, texture->base.width, "DeviceTextureRef_pullRegion()::x, y or z out of bounds"
 		));
 
-	if(
-		x || y || z ||
-		(w && w != texture->base.width) || (h && h != texture->base.height) || (l && l != texture->base.length)
-	)
-		retError(clean, Error_unsupportedOperation(
-			1, "DeviceTextureRef_pullRegion() only supports the full texture for now"
+	if(!w)
+		w = texture->base.width - x;
+
+	if(!h)
+		h = texture->base.height - y;
+
+	if(!l)
+		l = texture->base.length - z;
+
+	if(x + w > texture->base.width || y + h > texture->base.height || z + l > texture->base.length)
+		retError(clean, Error_outOfBounds(
+			4, x + w, texture->base.width, "DeviceTextureRef_pullRegion() region out of bounds"
 		));
+
+	const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
+
+	U8 alignX = 1, alignY = 1;
+	ETextureFormat_getAlignment(format, &alignX, &alignY);
+
+	const U16 startX = (U16) alignDown(x, alignX);
+	const U16 endX = (U16) U64_min(alignUp(x + w, alignX), texture->base.width);
+
+	const U16 startY = (U16) alignDown(y, alignY);
+	const U16 endY = (U16) U64_min(alignUp(y + h, alignY), texture->base.height);
 
 	device = GraphicsDeviceRef_ptr(texture->base.resource.device);
 
@@ -402,7 +420,8 @@ Bool DeviceTextureRef_pullRegion(
 		.callback = callback,
 		.context = context,
 		.range = (DevicePendingRange) { .texture = (TextureRange) {
-			.endRange = { texture->base.width, texture->base.height, texture->base.length }
+			.startRange = { startX, startY, z },
+			.endRange = { endX, endY, (U16)(z + l) }
 		} }
 	};
 

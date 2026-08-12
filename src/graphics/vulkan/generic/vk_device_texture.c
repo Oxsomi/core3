@@ -150,27 +150,34 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 			const U64 rowOff = ETextureFormat_getSize(format, x, alignmentY, 1);
 			const U64 rowLen = ETextureFormat_getSize(format, w, alignmentY, 1);
 			const U64 len = ETextureFormat_getSize(format, w, h, l);
-			const U64 start = rowLen * (y + z * h) + rowOff;
+			const U64 h2 = (h + alignmentY - 1) / alignmentY;
+
+			//cpuData is the tight full texture, so reading it strides by the full row length and slice height;
+			// the destination uses the region's measures, in block rows rather than texel rows
+
+			const U64 fullRowLen = ETextureFormat_getSize(format, texture->base.width, alignmentY, 1);
+			const U64 fullH2 = ((U64)texture->base.height + alignmentY - 1) / alignmentY;
+			const U64 start = fullRowLen * (y / alignmentY + z * fullH2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height)
 				Buffer_memcpy(
-					Buffer_createRef(location + allocRange, rowLen * h * l),
-					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h * l)
+					Buffer_createRef(location + allocRange, rowLen * h2 * l),
+					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h2 * l)
 				);
 
 			else for(U64 k = z; k < z + l; ++k) {
 
 				if(w == texture->base.width)
 					Buffer_memcpy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h, rowLen * h),
-						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (k - z) * h, rowLen * h)
+						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h2, rowLen * h2),
+						Buffer_createRefConst(texture->cpuData.ptr + start + fullRowLen * (k - z) * fullH2, rowLen * h2)
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
 					const U64 yOff = (j - y) / alignmentY;
 					Buffer_memcpy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h), rowLen),
-						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (yOff + (k - z) * h), rowLen)
+						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h2), rowLen),
+						Buffer_createRefConst(texture->cpuData.ptr + start + fullRowLen * (yOff + (k - z) * fullH2), rowLen)
 					);
 				}
 			}
@@ -329,8 +336,14 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 			U64 rowLen = ETextureFormat_getSize(format, w, alignmentY, 1);
 			U64 rowOff = ETextureFormat_getSize(format, x, alignmentY, 1);
 			U64 len = ETextureFormat_getSize(format, w, h, l);
-			U64 h2 = h / alignmentY;
-			U64 start = rowLen * (y + z * h2) + rowOff;
+			U64 h2 = (h + alignmentY - 1) / alignmentY;
+
+			//cpuData is the tight full texture, so reading it strides by the full row length and slice height;
+			// only the staging destination uses the region's measures
+
+			U64 fullRowLen = ETextureFormat_getSize(format, texture->base.width, alignmentY, 1);
+			U64 fullH2 = ((U64)texture->base.height + alignmentY - 1) / alignmentY;
+			U64 start = fullRowLen * (y / alignmentY + z * fullH2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height)
 				Buffer_memcpy(
@@ -343,14 +356,14 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 				if(w == texture->base.width)
 					Buffer_memcpy(
 						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h2, rowLen * h2),
-						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (k - z) * h2, rowLen * h2)
+						Buffer_createRefConst(texture->cpuData.ptr + start + fullRowLen * (k - z) * fullH2, rowLen * h2)
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
 					U64 yOff = (j - y) / alignmentY;
 					Buffer_memcpy(
 						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h2), rowLen),
-						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (yOff + (k - z) * h2), rowLen)
+						Buffer_createRefConst(texture->cpuData.ptr + start + fullRowLen * (yOff + (k - z) * fullH2), rowLen)
 					);
 				}
 			}
@@ -454,6 +467,7 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
 	void *commandBufferExt,
 	GraphicsDeviceRef *deviceRef,
 	DeviceTextureRef *resource,
+	const TextureRange *range,
 	U64 stagingOffset,
 	U64 *rowPitch,
 	Error *e_rr
@@ -474,7 +488,7 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
 
 	VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
 
-	VkImageSubresourceRange range = (VkImageSubresourceRange) {
+	VkImageSubresourceRange subresourceRange = (VkImageSubresourceRange) {
 		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 		.levelCount = 1,
 		.layerCount = 1
@@ -486,7 +500,7 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
 		VK_ACCESS_2_TRANSFER_READ_BIT,
 		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		graphicsQueueId,
-		&range,
+		&subresourceRange,
 		&deviceExt->imageTransitions,
 		&dependency, alloc, e_rr
 	));
@@ -508,18 +522,28 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
 	ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions, e_rr);
 
 	//The pitch the generic layer allocated with, so both backends fill the same layout;
-	// Vulkan expresses it in texels through bufferRowLength
+	// Vulkan expresses it in texels through bufferRowLength, which stays a block multiple for compressed formats
 
 	const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
-	const U64 texelSize = ETextureFormat_getSize(format, 1, 1, 1);
-	const U64 pitchTexels = *rowPitch / texelSize;
+
+	U8 alignX = 1, alignY = 1;
+	ETextureFormat_getAlignment(format, &alignX, &alignY);
+
+	const U64 blockSize = ETextureFormat_getSize(format, alignX, alignY, 1);
+	const U64 pitchTexels = *rowPitch / blockSize * alignX;
+
+	const U16 h = TextureRange_height(*range);
+	const U32 imageHeight = (U32)(h + alignY - 1) / alignY * alignY;
 
 	const VkBufferImageCopy copy = (VkBufferImageCopy) {
 		.bufferOffset = stagingOffset,
 		.bufferRowLength = (U32) pitchTexels,
-		.bufferImageHeight = texture->base.height,
+		.bufferImageHeight = imageHeight,
 		.imageSubresource = (VkImageSubresourceLayers) { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1 },
-		.imageExtent = (VkExtent3D) { texture->base.width, texture->base.height, texture->base.length }
+		.imageOffset = (VkOffset3D) { .x = range->startRange[0], .y = range->startRange[1], .z = range->startRange[2] },
+		.imageExtent = (VkExtent3D) {
+			TextureRange_width(*range), h, TextureRange_length(*range)
+		}
 	};
 
 	deviceExt->cmdCopyImageToBuffer(

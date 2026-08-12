@@ -1878,6 +1878,7 @@ static void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 	RenderTextureRef *target = NULL;
 	DeviceTextureRef *texture = NULL;
 	CommandListRef *commandList = NULL;
+	CommandListRef *emptyList = NULL;
 
 	const CharString targetName = CharString_createRefCStrConst("Execute target");
 	const CharString textureName = CharString_createRefCStrConst("Execute texture");
@@ -1974,11 +1975,11 @@ static void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 			texture, 0, 0, 0, 0, 0, 0, Test_pullCallback, &pulled, &t->err
 		));
 
-		//Wrong type, out of bounds and partial regions are refused before anything is queued
+		//Wrong type and out of bounds regions are refused before anything is queued
 
 		Test_assert(t, "pullWrongType", !DeviceTextureRef_pullRegion(target, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL));
 		Test_assert(t, "pullOOB", pattern && !DeviceBufferRef_pullRegion(pattern, 64, 0, NULL, NULL, NULL));
-		Test_assert(t, "pullPartial", !DeviceTextureRef_pullRegion(texture, 1, 0, 0, 2, 2, 1, NULL, NULL, NULL));
+		Test_assert(t, "pullOOBRegion", !DeviceTextureRef_pullRegion(texture, 1, 0, 0, 4, 0, 0, NULL, NULL, NULL));
 
 		//Nothing completes before the frame that carries the copies has provably finished
 
@@ -2019,8 +2020,150 @@ static void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "patternSurvivedRoundTrip", matches);
 		}
+
+		//An op-less list, so upload and readback rounds don't replay the clear and copy above
+
+		ListCommandListRef emptyLists = (ListCommandListRef) { 0 };
+
+		if(
+			Test_assert(t, "createEmptyList", GraphicsDeviceRef_createCommandList(
+				deviceRef, 4 * KIBI, 64, 16, true, &emptyList, &t->err
+			)) &&
+			Test_assert(t, "beginEmptyList", CommandListRef_begin(emptyList, true, U64_MAX, &t->err)) &&
+			Test_assert(t, "endEmptyList", CommandListRef_end(emptyList, &t->err))
+		) {
+
+			ListCommandListRef_createRefConst(&emptyList, 1, &emptyLists, NULL);
+
+			//A partial upload followed by a partial pull, so the region row math is proven in both directions
+
+			DeviceTexture *texPtr2 = DeviceTextureRef_ptr(texture);
+			U32 pulledRegion = 0;
+
+			for(U64 j = 0; j < 2; ++j)
+				for(U64 i = 0; i < 2; ++i)
+					((U32*)texPtr2->cpuData.ptrNonConst)[(1 + j) * 4 + (1 + i)] = 0xAABBCCDDu;
+
+			Test_assert(t, "regionMarkDirty", DeviceTextureRef_markDirty(texture, 1, 1, 0, 2, 2, 1, &t->err));
+
+			Test_assert(t, "regionUploadSubmit", GraphicsDeviceRef_submitCommands(
+				deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+			));
+
+			Test_assert(t, "regionUploadWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+			for(U64 i = 0; i < 16; ++i)
+				((U32*)texPtr2->cpuData.ptrNonConst)[i] = 0x5C5C5C5Cu;
+
+			Test_assert(t, "regionPull", DeviceTextureRef_pullRegion(
+				texture, 1, 1, 0, 2, 2, 1, Test_pullCallback, &pulledRegion, &t->err
+			));
+
+			Test_assert(t, "regionPullSubmit", GraphicsDeviceRef_submitCommands(
+				deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+			));
+
+			Test_assert(t, "regionPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+			Test_assert(t, "regionPullCompleted", pulledRegion == 1);
+
+			//The pulled region came back from the GPU while everything around it kept the scribble
+
+			Bool regionOk = true;
+
+			for(U64 j = 0; j < 4; ++j)
+				for(U64 i = 0; i < 4; ++i) {
+
+					const U32 got = ((const U32*)texPtr2->cpuData.ptr)[j * 4 + i];
+					const Bool inRegion = i >= 1 && i < 3 && j >= 1 && j < 3;
+
+					regionOk &= got == (inRegion ? 0xAABBCCDDu : 0x5C5C5C5Cu);
+				}
+
+			Test_assert(t, "regionRoundTrip", regionOk);
+
+			//Compressed formats go through the same math in block rows, proven end to end with BC7
+
+			if (GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.dataTypes & EGraphicsDataTypes_BCn) {
+
+				DeviceTextureRef *bcTex = NULL;
+				const CharString bcName = CharString_createRefCStrConst("Execute BC7 texture");
+
+				Buffer bcData = Buffer_createNull();
+				Test_assert(t, "bcData", Buffer_createEmptyBytes(64, alloc, &bcData, &t->err));
+
+				for(U8 i = 0; i < 64; ++i)
+					bcData.ptrNonConst[i] = (U8)(i * 3);
+
+				Test_assert(t, "bcCreate", GraphicsDeviceRef_createTexture(
+					deviceRef, ETextureType_2D, ETextureFormatId_BC7, EGraphicsResourceFlag_CPUBacked,
+					8, 8, 1, NULL, &bcName, &bcData, &bcTex, &t->err
+				));
+
+				Buffer_free(&bcData, alloc);
+
+				if (bcTex) {
+
+					U32 pulledBc = 0;
+					DeviceTexture *bcPtr = DeviceTextureRef_ptr(bcTex);
+
+					Test_assert(t, "bcUploadSubmit", GraphicsDeviceRef_submitCommands(
+						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+					));
+
+					Test_assert(t, "bcUploadWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+					for(U8 i = 0; i < 64; ++i)
+						bcPtr->cpuData.ptrNonConst[i] = 0xEE;
+
+					Test_assert(t, "bcPull", DeviceTextureRef_pullRegion(
+						bcTex, 0, 0, 0, 0, 0, 0, Test_pullCallback, &pulledBc, &t->err
+					));
+
+					Test_assert(t, "bcPullSubmit", GraphicsDeviceRef_submitCommands(
+						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+					));
+
+					Test_assert(t, "bcPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+					Test_assert(t, "bcPullCompleted", pulledBc == 1);
+
+					Bool bcMatches = true;
+
+					for(U8 i = 0; i < 64; ++i)
+						bcMatches &= bcPtr->cpuData.ptr[i] == (U8)(i * 3);
+
+					Test_assert(t, "bcRoundTrip", bcMatches);
+
+					//One block from the middle of the block grid; an 8x8 BC7 is 2x2 blocks of 16 bytes
+
+					for(U8 i = 0; i < 64; ++i)
+						bcPtr->cpuData.ptrNonConst[i] = 0xEE;
+
+					Test_assert(t, "bcPullBlock", DeviceTextureRef_pullRegion(
+						bcTex, 4, 4, 0, 4, 4, 1, Test_pullCallback, &pulledBc, &t->err
+					));
+
+					Test_assert(t, "bcPullBlockSubmit", GraphicsDeviceRef_submitCommands(
+						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+					));
+
+					Test_assert(t, "bcPullBlockWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+					Bool bcBlock = true;
+
+					for(U8 i = 0; i < 64; ++i)
+						bcBlock &= bcPtr->cpuData.ptr[i] == (i >= 48 ? (U8)(i * 3) : 0xEE);
+
+					Test_assert(t, "bcBlockRegion", bcBlock);
+				}
+
+				RefPtr_dec(&bcTex);
+			}
+
+			else Test_print(t, "Device lacks BCn, skipping compressed readback tests");
+		}
 	}
 
+	RefPtr_dec(&emptyList);
 	RefPtr_dec(&commandList);
 	RefPtr_dec(&pattern);
 	RefPtr_dec(&texture);

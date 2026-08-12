@@ -157,22 +157,26 @@ jobs:
           sudo apt-get install --no-install-recommends -y mesa-vulkan-drivers vulkan-tools
           vulkaninfo --summary || echo "vulkaninfo failed; the graphics suite will report what it found"
 
-      # The Khronos validation layer, pinned to the same header version conanfile.py pins (vulkan_headers is
+      # The Khronos validation layer, pinned near the header version conanfile.py pins (vulkan_headers is
       # 1.4.357 today; bump both together). Ubuntu's vulkan-validationlayers package is far too old and an old
-      # layer silently weakens validation, so the prebuilt Khronos release is used instead of apt.
+      # layer silently weakens validation. Khronos only publishes Android prebuilts, so the layer comes out of
+      # the LunarG SDK tarball; only the two layer files are extracted, the rest of the SDK stays untouched.
       # The graphics suite enables the layer by name in debug builds and counts every message it reports;
       # a single validation error or warning turns the run red, which is the entire point of installing this.
-      # arm64 has no prebuilt asset, so this stays x64 only until the layer is built from source there.
+      # arm64 has no LunarG tarball, so this stays x64 only until the layer is built from source there.
       - name: Install Vulkan validation layer (lavapipe)
         if: inputs.vulkan_icd && runner.os == 'Linux' && runner.arch == 'X64'
         run: |
-          VVL_TAG=vulkan-sdk-1.4.357.0
-          curl -fL -o vvl.zip "https://github.com/KhronosGroup/Vulkan-ValidationLayers/releases/download/${VVL_TAG}/VVL-Linux64.zip" \
-            || { echo "::error::VVL ${VVL_TAG} prebuilt missing; check the release's asset name"; exit 1; }
+          VVL_VERSION=1.4.357.1
+          curl -fL -o vvl.tar.xz "https://sdk.lunarg.com/sdk/download/${VVL_VERSION}/linux/vulkansdk-linux-x86_64-${VVL_VERSION}.tar.xz" \
+            || { echo "::error::LunarG SDK ${VVL_VERSION} download failed; check https://vulkan.lunarg.com/sdk/versions/linux.json"; exit 1; }
           mkdir -p "$HOME/vvl"
-          unzip -q vvl.zip -d "$HOME/vvl"
+          tar -xf vvl.tar.xz -C "$HOME/vvl" --wildcards \
+            '*/x86_64/lib/libVkLayer_khronos_validation.so' \
+            '*/x86_64/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json'
+          rm vvl.tar.xz
           MANIFEST=$(find "$HOME/vvl" -name 'VkLayer_khronos_validation.json' | head -n 1)
-          test -n "$MANIFEST" || { echo "::error::VVL zip layout changed, no layer manifest found"; exit 1; }
+          test -n "$MANIFEST" || { echo "::error::LunarG SDK layout changed, no layer manifest found"; exit 1; }
           echo "VK_ADD_LAYER_PATH=$(dirname "$MANIFEST")" >> "$GITHUB_ENV"
 
       - name: Set up Homebrew
