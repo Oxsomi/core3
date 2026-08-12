@@ -106,10 +106,12 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 
 			.bufferCreate = D3D12GraphicsDeviceRef_createBuffer,
 			.bufferFlush = D3D12DeviceBufferRef_flush,
+			.bufferPull = D3D12DeviceBufferRef_pull,
 			.bufferFree = D3D12DeviceBuffer_free,
 
 			.textureCreate = D3D12UnifiedTexture_create,
 			.textureFlush = D3D12DeviceTextureRef_flush,
+			.texturePull = D3D12DeviceTextureRef_pull,
 			.textureFree = D3D12UnifiedTexture_free,
 
 			.swapchainCreate = D3D12GraphicsDeviceRef_createSwapchain,

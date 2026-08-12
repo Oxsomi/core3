@@ -47,7 +47,7 @@ void VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 		VkUnifiedTexture *image = TextureRef_getImgExtT(textureRef, Vk, 0, i);
 
 		for (U64 j = 0; j < image->views.length; ++j)
-			deviceExt->destroyImageView(deviceExt->device, image->views.ptr[i].view, NULL);
+			deviceExt->destroyImageView(deviceExt->device, image->views.ptr[j].view, NULL);
 
 		ListVkImageViewMapping_free(&image->views, alloc);
 

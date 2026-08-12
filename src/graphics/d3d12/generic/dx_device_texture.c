@@ -443,3 +443,93 @@ clean:
 	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
 	return s_uccess;
 }
+
+Bool DX_WRAP_FUNC(DeviceTextureRef_pull)(
+	void *commandBufferExt,
+	GraphicsDeviceRef *deviceRef,
+	DeviceTextureRef *resource,
+	U64 stagingOffset,
+	U64 *rowPitch,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+
+	DeviceTexture *texture = DeviceTextureRef_ptr(resource);
+	DxUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(resource, Dx, 0);
+	DxDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->stagingReadback), Dx);
+
+	D3D12_BARRIER_GROUP bufDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+	D3D12_BARRIER_GROUP imgDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE };
+
+	gotoIfError3(clean, DxDeviceBuffer_transition(
+		stagingExt, D3D12_BARRIER_SYNC_COPY, D3D12_BARRIER_ACCESS_COPY_DEST,
+		&deviceExt->bufferTransitions, &bufDep, alloc, e_rr
+	));
+
+	D3D12_BARRIER_SUBRESOURCE_RANGE range = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
+		.NumMipLevels = 1,
+		.NumArraySlices = 1,
+		.NumPlanes = 1
+	};
+
+	gotoIfError3(clean, DxUnifiedTexture_transition(
+		textureExt,
+		D3D12_BARRIER_SYNC_COPY,
+		D3D12_BARRIER_ACCESS_COPY_SOURCE,
+		D3D12_BARRIER_LAYOUT_COPY_SOURCE,
+		&range,
+		&deviceExt->imageTransitions,
+		&imgDep, alloc, e_rr
+	));
+
+	if(bufDep.NumBarriers || imgDep.NumBarriers) {
+
+		D3D12_BARRIER_GROUP barriers[2];
+		barriers[0] = bufDep;
+		barriers[!!bufDep.NumBarriers] = imgDep;
+
+		commandBuffer->buffer->lpVtbl->Barrier(
+			commandBuffer->buffer,
+			!!bufDep.NumBarriers + !!imgDep.NumBarriers,
+			barriers
+		);
+
+		ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions, e_rr);
+		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+	}
+
+	const DXGI_FORMAT dxFormat = ETextureFormatId_toDXFormat(texture->base.textureFormatId);
+
+	const D3D12_TEXTURE_COPY_LOCATION src = (D3D12_TEXTURE_COPY_LOCATION) {
+		.pResource = textureExt->image,
+		.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+		.SubresourceIndex = 0
+	};
+
+	const D3D12_TEXTURE_COPY_LOCATION dst = (D3D12_TEXTURE_COPY_LOCATION) {
+		.pResource = stagingExt->buffer,
+		.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+		.PlacedFootprint = (D3D12_PLACED_SUBRESOURCE_FOOTPRINT) {
+			.Offset = stagingOffset,
+			.Footprint = (D3D12_SUBRESOURCE_FOOTPRINT) {
+				.Format = dxFormat,
+				.Width = texture->base.width,
+				.Height = texture->base.height,
+				.Depth = texture->base.length,
+				.RowPitch = (U32) *rowPitch
+			}
+		}
+	};
+
+	commandBuffer->buffer->lpVtbl->CopyTextureRegion(commandBuffer->buffer, &dst, 0, 0, 0, &src, NULL);
+
+clean:
+	return s_uccess;
+}

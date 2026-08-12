@@ -21,6 +21,7 @@
 //graphics/generic/device_texture.h
 
 #pragma once
+#include <stddef.h>
 #include "types/base/lock.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/texture.h"
@@ -43,9 +44,19 @@ typedef struct DeviceTexture {
 
 	SpinLock lock;
 
+	//The lock's 64-byte alignment would otherwise put tail padding after base, which has to be at the very end;
+	// the image and backend structs live directly behind it and tail padding would overlap them.
+
+	U8 pad1[32];
+
 	UnifiedTexture base;
 
 } DeviceTexture;
+
+static_assert(
+	sizeof(DeviceTexture) == offsetof(DeviceTexture, base) + sizeof(UnifiedTexture),
+	"UnifiedTexture has to end DeviceTexture exactly, the texture images are addressed relative to it"
+);
 
 #define DeviceTextureRef_ptr(ptr) RefPtr_data(ptr, DeviceTexture)
 
@@ -70,6 +81,16 @@ Bool GraphicsDeviceRef_createTexture(
 //Call this as little as possible while still not copying too much data.
 //Only possible if texture has a backed CPU texture.
 Bool DeviceTextureRef_markDirty(DeviceTextureRef *texture, U16 x, U16 y, U16 z, U16 w, U16 h, U16 l, Error *e_rr);
+
+//Read the texture back from the device into cpuData (requires CPUBacked).
+//Same timing contract as DeviceBufferRef_pullRegion.
+//Only the full uncompressed texture is supported right now (pass zeroes), regions are TODO.
+Bool DeviceTextureRef_pullRegion(
+	DeviceTextureRef *tex,
+	U16 x, U16 y, U16 z,
+	U16 w, U16 h, U16 l,
+	DevicePullCallback callback, void *context, Error *e_rr
+);
 
 #ifdef __cplusplus
 	}

@@ -312,6 +312,10 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	}
 
 clean:
+
+	if(!s_uccess)
+		DxGraphicsDevice_logDebugMessages(deviceExt, alloc);
+
 	ListU16_free(&tmp, alloc);
 	return s_uccess;
 }

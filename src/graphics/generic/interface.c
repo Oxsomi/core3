@@ -213,6 +213,13 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(deviceRef, bufferFlush)(commandBuffer, deviceRef, pending, e_rr);
 	}
 
+	Bool DeviceBufferRef_pullExt(
+		void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *resource,
+		U64 offset, U64 len, U64 stagingOffset, Error *e_rr
+	) {
+		return WrapperFunction(deviceRef, bufferPull)(commandBuffer, deviceRef, resource, offset, len, stagingOffset, e_rr);
+	}
+
 	//Device texture
 
 	Bool UnifiedTexture_createExt(TextureRef *texture, const CharString *name, Error *e_rr) {
@@ -221,6 +228,13 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	Bool DeviceTextureRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending, Error *e_rr) {
 		return WrapperFunction(deviceRef, textureFlush)(commandBuffer, deviceRef, pending, e_rr);
+	}
+
+	Bool DeviceTextureRef_pullExt(
+		void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *resource,
+		U64 stagingOffset, U64 *rowPitch, Error *e_rr
+	) {
+		return WrapperFunction(deviceRef, texturePull)(commandBuffer, deviceRef, resource, stagingOffset, rowPitch, e_rr);
 	}
 
 	void UnifiedTexture_freeExt(TextureRef *texture) {

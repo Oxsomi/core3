@@ -168,6 +168,10 @@ typedef struct DxGraphicsDevice {
 
 } DxGraphicsDevice;
 
+//Drains the info queue's stored validation messages into the log, so a failed HRESULT names the real complaint.
+//No op with infoQueue1 present (Win11), since the message callback already printed everything live.
+void DxGraphicsDevice_logDebugMessages(const DxGraphicsDevice *deviceExt, const Allocator *alloc);
+
 typedef struct DxCommandBufferState {
 
 	RefPtr *tempPipelines[EPipelineType_Count];       //Pipelines that were set via command, but not bound yet

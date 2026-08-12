@@ -346,3 +346,76 @@ clean:
 
 	return s_uccess;
 }
+
+Bool DeviceTextureRef_pullRegion(
+	DeviceTextureRef *tex,
+	U16 x, U16 y, U16 z,
+	U16 w, U16 h, U16 l,
+	DevicePullCallback callback, void *context, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = NULL;
+
+	GraphicsDevice *device = NULL;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	Bool owned = false;
+
+	//Validated before the pointer is reinterpreted, since a wrong type would read a garbage device
+
+	if(!tex || tex->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceTexture)
+		retError(clean, Error_nullPointer(0, "DeviceTextureRef_pullRegion()::tex is required"));
+
+	DeviceTexture *texture = DeviceTextureRef_ptr(tex);
+	alloc = GraphicsDeviceRef_getAlloc(texture->base.resource.device);
+
+	if(!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked))
+		retError(clean, Error_invalidOperation(0, "DeviceTextureRef_pullRegion() requires a CPUBacked texture"));
+
+	//Only the whole uncompressed texture for now; regions and block formats need the row math audited first
+
+	if(ETextureFormat_getIsCompressed(ETextureFormatId_unpack[texture->base.textureFormatId]))
+		retError(clean, Error_unsupportedOperation(
+			0, "DeviceTextureRef_pullRegion() doesn't support compressed formats yet"
+		));
+
+	if(
+		x || y || z ||
+		(w && w != texture->base.width) || (h && h != texture->base.height) || (l && l != texture->base.length)
+	)
+		retError(clean, Error_unsupportedOperation(
+			1, "DeviceTextureRef_pullRegion() only supports the full texture for now"
+		));
+
+	device = GraphicsDeviceRef_ptr(texture->base.resource.device);
+
+	acq = SpinLock_lock(&device->lock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		retError(clean, Error_invalidOperation(1, "DeviceTextureRef_pullRegion() couldn't acquire device lock"));
+
+	RefPtr_inc(tex);
+	owned = true;
+
+	const DevicePendingPull pull = (DevicePendingPull) {
+		.resource = tex,
+		.callback = callback,
+		.context = context,
+		.range = (DevicePendingRange) { .texture = (TextureRange) {
+			.endRange = { texture->base.width, texture->base.height, texture->base.length }
+		} }
+	};
+
+	gotoIfError3(clean, ListDevicePendingPull_pushBack(&device->pendingPulls, pull, alloc, e_rr));
+	owned = false;
+
+clean:
+
+	if(owned)
+		RefPtr_dec(&tex);
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->lock);
+
+	return s_uccess;
+}

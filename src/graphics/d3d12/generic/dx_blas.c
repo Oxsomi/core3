@@ -118,7 +118,7 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		geometry->Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 
 		//D3D12 has no four component 32 bit vertex position format; the w is padding the stride already covers,
-		// so the three component DXGI format reads the same memory (Vulkan accepts RGBA32f directly).
+		// so the three component DXGI format reads the same memory (Vulkan does the same, RGBA32f is optional there).
 
 		DXGI_FORMAT vertexFormat = ETextureFormatId_toDXFormat(blas->positionFormatId);
 

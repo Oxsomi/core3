@@ -120,7 +120,7 @@ void Test_graphicsCommandRecording(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Nothing may be recorded before begin, since the list isn't locked by this thread yet
 
-	if((commandList = Test_beginList(t, deviceRef, "createUnopened"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createUnopened")) != NULL) {
 
 		CommandListRef_end(commandList, NULL);        //Closed again, so the recording calls below have no lock
 
@@ -133,7 +133,7 @@ void Test_graphicsCommandRecording(Test *t, GraphicsDeviceRef *deviceRef) {
 	//An empty scope modifies nothing so it's rewound, a scope that clears an image is committed under its id,
 	// and end() collects everything the recording touched so the list keeps it alive
 
-	if((commandList = Test_beginList(t, deviceRef, "createHappy"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createHappy")) != NULL) {
 
 		const CommandList *ptr = CommandListRef_ptr(commandList);
 
@@ -162,7 +162,7 @@ void Test_graphicsCommandRecording(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//A command outside a scope has nothing to be ordered against
 
-	if((commandList = Test_beginList(t, deviceRef, "createOutside"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createOutside")) != NULL) {
 
 		Test_assert(t, "clearOutsideScope", !CommandListRef_clearImagef(commandList, F32x4_zero(), all, target, NULL));
 		RefPtr_dec(&commandList);
@@ -170,7 +170,7 @@ void Test_graphicsCommandRecording(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Closing a scope that was never opened invalidates the list rather than being ignored
 
-	if((commandList = Test_beginList(t, deviceRef, "createUnmatched"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createUnmatched")) != NULL) {
 
 		Test_assert(t, "endScopeWithoutScope", !CommandListRef_endScope(commandList, NULL));
 		Test_assert(t, "invalidAfterUnmatched", CommandListRef_ptr(commandList)->state == ECommandListState_Invalid);
@@ -179,7 +179,7 @@ void Test_graphicsCommandRecording(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Scopes don't nest, and a failed startScope leaves no half open scope behind
 
-	if((commandList = Test_beginList(t, deviceRef, "createNested"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createNested")) != NULL) {
 
 		Test_assert(t, "startOuter", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
 		Test_assert(t, "nestedScope", !CommandListRef_startScope(commandList, NULL, 2, NULL, NULL));
@@ -192,7 +192,7 @@ void Test_graphicsCommandRecording(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//An id may only be used once, and reuse has to be caught while recording rather than at submit
 
-	if((commandList = Test_beginList(t, deviceRef, "createDuplicate"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createDuplicate")) != NULL) {
 
 		Test_assert(t, "startFirst", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
 		Test_assert(t, "clearFirst", CommandListRef_clearImagef(commandList, F32x4_zero(), all, target, &t->err));
@@ -203,7 +203,7 @@ void Test_graphicsCommandRecording(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Dependencies are resolved against the scopes that survived, which is what makes a hidden one interesting
 
-	if((commandList = Test_beginList(t, deviceRef, "createDeps"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createDeps")) != NULL) {
 
 		const CommandList *ptr = CommandListRef_ptr(commandList);
 
@@ -292,7 +292,7 @@ void Test_graphicsCommandValidation(Test *t, GraphicsDeviceRef *deviceRef) {
 	//Anything that draws or sets viewport state needs a render pass, and dispatch needs a bound pipeline.
 	//None of those can be satisfied here, so this is the shape of the refusal that matters.
 
-	if((commandList = Test_beginList(t, deviceRef, "createNoRender"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createNoRender")) != NULL) {
 
 		Test_assert(t, "scope", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
 
@@ -332,7 +332,7 @@ void Test_graphicsCommandValidation(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Clear rejects an empty batch, a resource that isn't a texture at all, and a range past what exists
 
-	if((commandList = Test_beginList(t, deviceRef, "createClear"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createClear")) != NULL) {
 
 		const ListClearImageCmd empty = (ListClearImageCmd) { 0 };
 
@@ -357,7 +357,7 @@ void Test_graphicsCommandValidation(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Debug regions nest and have to be balanced within the scope that opened them
 
-	if((commandList = Test_beginList(t, deviceRef, "createDebug"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createDebug")) != NULL) {
 
 		const CommandList *ptr = CommandListRef_ptr(commandList);
 
@@ -383,7 +383,7 @@ void Test_graphicsCommandValidation(Test *t, GraphicsDeviceRef *deviceRef) {
 	//A scope that modifies something and leaves a region open can't close, since the region would outlive it.
 	//Without the clear the scope would be hidden before the region is ever checked, so the modify op is load bearing.
 
-	if((commandList = Test_beginList(t, deviceRef, "createUnbalanced"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createUnbalanced")) != NULL) {
 
 		Test_assert(t, "scope4", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
 		Test_assert(t, "clear4", CommandListRef_clearImagef(commandList, F32x4_zero(), all, target, &t->err));
@@ -470,7 +470,7 @@ void Test_graphicsCommandValidation(Test *t, GraphicsDeviceRef *deviceRef) {
 		deviceRef, EDeviceBufferUsage_Indirect, EGraphicsResourceFlag_None, NULL, &indirectName, 256, &indirect, &t->err
 	));
 
-	if(target2 && fmtOther && depth && (commandList = Test_beginList(t, deviceRef, "createCopy"))) {
+	if(target2 && fmtOther && depth && (commandList = Test_beginList(t, deviceRef, "createCopy")) != NULL) {
 
 		const ListCopyImageRegion noRegions = (ListCopyImageRegion) { 0 };
 		const CopyImageRegion whole = (CopyImageRegion) { 0 };
@@ -506,7 +506,7 @@ void Test_graphicsCommandValidation(Test *t, GraphicsDeviceRef *deviceRef) {
 	//Indirect draws validate their argument buffer before any render state, so the buffer rules are reachable
 	// without a pipeline; dispatchIndirect checks its pipeline first, so only that refusal is visible for it
 
-	if(indirect && (commandList = Test_beginList(t, deviceRef, "createIndirectList"))) {
+	if(indirect && (commandList = Test_beginList(t, deviceRef, "createIndirectList")) != NULL) {
 
 		Test_assert(t, "scopeIndirect", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
 
@@ -576,7 +576,7 @@ void Test_graphicsRenderPass(Test *t, GraphicsDeviceRef *deviceRef) {
 		return;
 	}
 
-	if(!(commandList = Test_beginList(t, deviceRef, "createRender"))) {
+	if((commandList = Test_beginList(t, deviceRef, "createRender")) == NULL) {
 		RefPtr_dec(&depth);
 		RefPtr_dec(&smaller);
 		RefPtr_dec(&target);

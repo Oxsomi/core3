@@ -143,6 +143,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkCmdCopyAccelerationStructureKHR copyAccelerationStructure;
 	PFN_vkDestroyAccelerationStructureKHR destroyAccelerationStructure;
 	PFN_vkGetAccelerationStructureBuildSizesKHR getAccelerationStructureBuildSizes;
+	PFN_vkGetAccelerationStructureDeviceAddressKHR getAccelerationStructureDeviceAddress;
 	PFN_vkGetDeviceAccelerationStructureCompatibilityKHR getAccelerationStructureCompatibility;
 
 	PFN_vkCmdTraceRaysKHR traceRays;
@@ -187,6 +188,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkUpdateDescriptorSets updateDescriptorSets;
 	PFN_vkFlushMappedMemoryRanges flushMappedMemoryRanges;
 	PFN_vkCmdCopyBuffer cmdCopyBuffer;
+	PFN_vkCmdCopyImageToBuffer cmdCopyImageToBuffer;
 	PFN_vkCmdCopyBufferToImage cmdCopyBufferToImage;
 	PFN_vkGetDeviceQueue getDeviceQueue;
 	PFN_vkCreateSemaphore createSemaphore;

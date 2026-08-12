@@ -640,9 +640,11 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 //Draining them when something fails is what turns "invalid argument" into the layer's actual complaint.
 //GetMessageA is not a typo: windows.h's GetMessage macro was active when the vtbl struct was declared.
 
-static void DxGraphicsDevice_logDebugMessages(DxGraphicsDevice *deviceExt, const Allocator *alloc) {
+void DxGraphicsDevice_logDebugMessages(const DxGraphicsDevice *deviceExt, const Allocator *alloc) {
 
-	if(!deviceExt || !deviceExt->infoQueue0)
+	//With infoQueue1 (Win11) the message callback already printed everything live, so draining would duplicate
+
+	if(!deviceExt || !deviceExt->infoQueue0 || deviceExt->infoQueue1)
 		return;
 
 	ID3D12InfoQueue1 *queue = deviceExt->infoQueue0;
@@ -691,6 +693,14 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	CharString temp = CharString_createNull();
 	ListU16 temp16 = (ListU16) { 0 };
 
+	//Error path bookkeeping, declared before the first goto so clean always reads initialized values.
+	//recordingAllocator tracks which allocator owns a list that is mid recording, so a poisoned list can be dropped.
+
+	DxCommandAllocator *recordingAllocator = NULL;
+	Bool executed = false;
+
+	DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
+
 	//Wait for previous frame semaphore
 
 	++deviceExt->fenceId;
@@ -733,8 +743,6 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	//Record command list
 
 	DxCommandBuffer *commandBuffer = NULL;
-
-	DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
@@ -822,6 +830,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			gotoIfError3(clean, dxCheck(commandBuffer->lpVtbl->Reset(commandBuffer, allocator->pool, NULL), e_rr));
 		}
 
+		recordingAllocator = allocator;
+
 		//Start copies
 
 		DxCommandBufferState state = (DxCommandBufferState) { .buffer = commandBuffer };
@@ -865,6 +875,10 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			}
 		}
 
+		//Readbacks are recorded after the frame's commands so they observe this frame's results
+
+		gotoIfError3(clean, GraphicsDeviceRef_flushPendingPulls(deviceRef, &state, e_rr));
+
 		//Transition back swapchains to present
 
 		//Combine transitions into one call.
@@ -904,12 +918,14 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		//End buffer
 
 		gotoIfError3(clean, dxCheck(commandBuffer->lpVtbl->Close(commandBuffer), e_rr));
+		recordingAllocator = NULL;
 	}
 
 	//Submit queue
 	//TODO: Multiple queues
 
 	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, (ID3D12CommandList**) &commandBuffer);
+	executed = true;
 
 	//Presents
 
@@ -943,6 +959,26 @@ clean:
 
 	if(!s_uccess)
 		DxGraphicsDevice_logDebugMessages(deviceExt, alloc);
+
+	//A list that failed during recording or Close is in an error state that Reset can't recover, so keeping it
+	// would poison every later submit that cycles back to this allocator with closed command list errors.
+
+	if(!s_uccess && recordingAllocator && recordingAllocator->cmd) {
+		recordingAllocator->cmd->lpVtbl->Close(recordingAllocator->cmd);        //Best effort, so the pool can Reset
+		recordingAllocator->cmd->lpVtbl->Release(recordingAllocator->cmd);
+		recordingAllocator->cmd = NULL;
+	}
+
+	//The frame's fence value has to signal even on failure, or every later wait on this device hangs forever.
+	//If nothing was submitted the CPU can signal it directly, otherwise the queue signals after the submitted work.
+
+	if(!s_uccess) {
+
+		if(!executed)
+			deviceExt->commitSemaphore->lpVtbl->Signal(deviceExt->commitSemaphore, deviceExt->fenceId);
+
+		else queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId);
+	}
 
 	#if _ARCH == ARCH_X86_64
 

@@ -449,3 +449,87 @@ clean:
 	ListVkBufferImageCopy_clear(&deviceExt->bufferImageCopyRanges, e_rr);
 	return s_uccess;
 }
+
+Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
+	void *commandBufferExt,
+	GraphicsDeviceRef *deviceRef,
+	DeviceTextureRef *resource,
+	U64 stagingOffset,
+	U64 *rowPitch,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	const U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+
+	DeviceTexture *texture = DeviceTextureRef_ptr(resource);
+	VkUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(resource, Vk, 0);
+	VkDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->stagingReadback), Vk);
+
+	VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+
+	VkImageSubresourceRange range = (VkImageSubresourceRange) {
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.levelCount = 1,
+		.layerCount = 1
+	};
+
+	gotoIfError3(clean, VkUnifiedTexture_transition(
+		textureExt,
+		VK_PIPELINE_STAGE_2_COPY_BIT,
+		VK_ACCESS_2_TRANSFER_READ_BIT,
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		graphicsQueueId,
+		&range,
+		&deviceExt->imageTransitions,
+		&dependency, alloc, e_rr
+	));
+
+	gotoIfError3(clean, VkDeviceBuffer_transition(
+		stagingExt,
+		VK_PIPELINE_STAGE_2_COPY_BIT,
+		VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		graphicsQueueId,
+		stagingOffset, 0,
+		&deviceExt->bufferTransitions,
+		&dependency, alloc, e_rr
+	));
+
+	if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
+		deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
+
+	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
+	ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions, e_rr);
+
+	//The pitch the generic layer allocated with, so both backends fill the same layout;
+	// Vulkan expresses it in texels through bufferRowLength
+
+	const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
+	const U64 texelSize = ETextureFormat_getSize(format, 1, 1, 1);
+	const U64 pitchTexels = *rowPitch / texelSize;
+
+	const VkBufferImageCopy copy = (VkBufferImageCopy) {
+		.bufferOffset = stagingOffset,
+		.bufferRowLength = (U32) pitchTexels,
+		.bufferImageHeight = texture->base.height,
+		.imageSubresource = (VkImageSubresourceLayers) { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1 },
+		.imageExtent = (VkExtent3D) { texture->base.width, texture->base.height, texture->base.length }
+	};
+
+	deviceExt->cmdCopyImageToBuffer(
+		commandBuffer->buffer,
+		textureExt->image,
+		textureExt->lastLayout,
+		stagingExt->buffer,
+		1, &copy
+	);
+
+clean:
+	return s_uccess;
+}

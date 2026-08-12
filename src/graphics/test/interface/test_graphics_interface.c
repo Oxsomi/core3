@@ -1786,7 +1786,9 @@ static void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef) {
 	const U64 shared = GraphicsDeviceRef_getMemoryBudget(deviceRef, false);
 	const U64 local = GraphicsDeviceRef_getMemoryBudget(deviceRef, true);
 
-	Test_assert(t, "budgetShared", shared && shared != U64_MAX);
+	//WARP legitimately reports 0 in use, so only the error sentinel is wrong
+
+	Test_assert(t, "budgetShared", shared != U64_MAX);
 
 	//Non dedicated devices report 0 device local by contract, since everything is the same memory
 
@@ -1850,6 +1852,11 @@ static void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef) {
 //Results can't be asserted yet because pullRegion (the GPU to CPU readback the docs describe) isn't implemented,
 // so this verifies the recording executes and the device survives it, which is still the whole replay path.
 
+static void Test_pullCallback(RefPtr *resource, void *context) {
+	(void) resource;
+	++*(U32*)context;
+}
+
 static void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_setModule(t, "GraphicsDevice/execute");
@@ -1877,11 +1884,28 @@ static void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "texData", Buffer_createEmptyBytes(4 * 4 * 4, alloc, &texData, &t->err));
 
 	Test_assert(t, "createTexture", GraphicsDeviceRef_createTexture(
-		deviceRef, ETextureType_2D, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		deviceRef, ETextureType_2D, ETextureFormatId_RGBA8, EGraphicsResourceFlag_CPUBacked,
 		4, 4, 1, NULL, &textureName, &texData, &texture, &t->err
 	));
 
 	Buffer_free(&texData, alloc);
+
+	//A CPU backed buffer with a known pattern, so the pull below can prove the bytes made a real GPU round trip
+
+	DeviceBufferRef *pattern = NULL;
+	const CharString patternName = CharString_createRefCStrConst("Execute pattern buffer");
+
+	U8 patternData[32];
+
+	for(U8 i = 0; i < 32; ++i)
+		patternData[i] = i;
+
+	Buffer patternRef = Buffer_createRefConst(patternData, sizeof(patternData));
+
+	Test_assert(t, "createPattern", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_CPUBacked, NULL,
+		&patternName, &patternRef, &pattern, &t->err
+	));
 
 	if(texture && Test_assert(t, "createList", GraphicsDeviceRef_createCommandList(
 		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
@@ -1916,9 +1940,77 @@ static void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 		Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
 		Test_assert(t, "submitAgain", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
 		Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+		//Read the results back: the copied texture has to hold the clear color and the pattern buffer its bytes.
+		//The buffer's cpuData is scribbled over first, so only a real GPU to CPU copy can make the assert pass.
+
+		U32 pulled = 0;
+
+		if (pattern) {
+
+			DeviceBuffer *patternPtr = DeviceBufferRef_ptr(pattern);
+
+			for(U8 i = 0; i < 32; ++i)
+				patternPtr->cpuData.ptrNonConst[i] = 0xCC;
+
+			Test_assert(t, "pullBuffer", DeviceBufferRef_pullRegion(
+				pattern, 0, 0, Test_pullCallback, &pulled, &t->err
+			));
+		}
+
+		Test_assert(t, "pullTexture", DeviceTextureRef_pullRegion(
+			texture, 0, 0, 0, 0, 0, 0, Test_pullCallback, &pulled, &t->err
+		));
+
+		//Wrong type, out of bounds and partial regions are refused before anything is queued
+
+		Test_assert(t, "pullWrongType", !DeviceTextureRef_pullRegion(target, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL));
+		Test_assert(t, "pullOOB", pattern && !DeviceBufferRef_pullRegion(pattern, 64, 0, NULL, NULL, NULL));
+		Test_assert(t, "pullPartial", !DeviceTextureRef_pullRegion(texture, 1, 0, 0, 2, 2, 1, NULL, NULL, NULL));
+
+		//Nothing completes before the frame that carries the copies has provably finished
+
+		Test_assert(t, "pullNotYet", !pulled);
+
+		Test_assert(t, "submitPull", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
+
+		//Growing the ring while pulls are in flight swaps the buffers; the pulls have to survive on the old one
+
+		Test_assert(t, "reserveWhileInFlight", GraphicsDeviceRef_reserveReadback(deviceRef, 64 * KIBI, &t->err));
+
+		Test_assert(t, "waitPull", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+		Test_assert(t, "pullCompleted", pulled == (pattern ? 2u : 1u));
+
+		//Reserving less than what's already there never shrinks, and a NULL device is refused
+
+		Test_assert(t, "reserveNoShrink", GraphicsDeviceRef_reserveReadback(deviceRef, 0, &t->err));
+		Test_assert(t, "reserveInvalid", !GraphicsDeviceRef_reserveReadback(NULL, 0, NULL));
+
+		//RGBA8 red is FF 00 00 FF in memory, 0xFF0000FF read as little endian
+
+		const DeviceTexture *texPtr = DeviceTextureRef_ptr(texture);
+		Bool allRed = Buffer_length(texPtr->cpuData) == 4 * 4 * 4;
+
+		for(U64 i = 0; i < 16 && allRed; ++i)
+			allRed &= ((const U32*)texPtr->cpuData.ptr)[i] == 0xFF0000FFu;
+
+		Test_assert(t, "pixelsMatchClear", allRed);
+
+		if (pattern) {
+
+			const DeviceBuffer *patternPtr = DeviceBufferRef_ptr(pattern);
+			Bool matches = true;
+
+			for(U8 i = 0; i < 32; ++i)
+				matches &= patternPtr->cpuData.ptr[i] == i;
+
+			Test_assert(t, "patternSurvivedRoundTrip", matches);
+		}
 	}
 
 	RefPtr_dec(&commandList);
+	RefPtr_dec(&pattern);
 	RefPtr_dec(&texture);
 	RefPtr_dec(&target);
 }
@@ -2008,7 +2100,7 @@ static void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *devi
 	TLASInstanceStatic instance = (TLASInstanceStatic) {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
 		.data = (TLASInstanceData) {
-			.instanceId24_mask8 = 0xFF << 24,
+			.instanceId24_mask8 = 0xFFu << 24,
 			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
 			.blasCpu = blas
 		}

@@ -23,6 +23,7 @@
 #pragma once
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/device_allocator.h"
+#include "graphics/generic/resource.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
 
@@ -104,6 +105,16 @@ typedef struct GraphicsDevice {
 
 	DeviceBufferRef *staging;                               //Staging buffer split by FRAMES_IN_FLIGHT
 	AllocationBuffer stagingAllocations[MAX_FRAMES_IN_FLIGHT];
+
+	//Readback (pullRegion) twin of the staging buffer, lazily created on the first pull.
+	//Pulls are recorded after the frame's commands, land in readback memory and are copied to cpuData plus
+	// reported through their callback once the frame provably completed on the device.
+
+	DeviceBufferRef *stagingReadback;
+	AllocationBuffer stagingReadbackAllocations[MAX_FRAMES_IN_FLIGHT];
+
+	ListDevicePendingPull pendingPulls;                     //Requested but not yet recorded
+	ListDevicePendingPull pullsInFlight[MAX_FRAMES_IN_FLIGHT];
 
 	//Graphics constants (globals) accessible by all shaders
 
@@ -233,9 +244,18 @@ Bool GraphicsDeviceRef_submitCommands(
 //Wait on previously submitted commands
 Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr);
 
+//Create the pullRegion readback buffers ahead of time, sized for sizePerFrame bytes of pulls per frame.
+//The readback memory is otherwise created at the first pull, which on D3D12 can bring in a whole new memory
+// block mid frame; reserving during load time moves that hitch to a predictable place.
+//Zero reserves the minimum, the buffers only ever grow and underestimating just re-grows at the next pull.
+Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePerFrame, Error *e_rr);
+
 //Private
 
 Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr);
+
+//Records the queued pullRegion reads into the command buffer; called by backends after the frame's commands.
+Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr);
 Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize, Error *e_rr);
 
 #ifdef __cplusplus

@@ -80,7 +80,8 @@ typedef enum EOptExtensions {
 	EOptExtensions_CreateRenderpass2,
 	EOptExtensions_DepthStencilResolve,
 	EOptExtensions_Spirv14,
-	EOptExtensions_ShaderFloatControls
+	EOptExtensions_ShaderFloatControls,
+	EOptExtensions_Maintenance5
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];

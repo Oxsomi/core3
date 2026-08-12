@@ -56,6 +56,9 @@
 TListNamedImpl(ListSpinLockPtr);
 TListNamedImpl(ListCommandListRef);
 TListNamedImpl(ListSwapchainRef);
+TListImpl(DevicePendingPull);
+
+static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId);
 
 void GraphicsDevice_free(GraphicsDevice *device, const Allocator *alloc) {
 
@@ -80,6 +83,25 @@ void GraphicsDevice_free(GraphicsDevice *device, const Allocator *alloc) {
 		RefPtr_dec(&device->frameData[i]);
 
 	RefPtr_dec(&device->staging);
+	RefPtr_dec(&device->stagingReadback);
+
+	//Unfinished pulls can't complete anymore, so only their refs are released (their callbacks never fire)
+
+	for(U64 i = 0; i < device->pendingPulls.length; ++i)
+		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].resource);
+
+	ListDevicePendingPull_free(&device->pendingPulls, alloc);
+
+	for(U64 j = 0; j < MAX_FRAMES_IN_FLIGHT; ++j) {
+
+		for(U64 i = 0; i < device->pullsInFlight[j].length; ++i) {
+			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].resource);
+			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].stagingReadback);
+		}
+
+		ListDevicePendingPull_free(&device->pullsInFlight[j], alloc);
+		AllocationBuffer_free(&device->stagingReadbackAllocations[j], alloc);
+	}
 
 	SpinLock_lock(&device->lock, U64_MAX);
 	SpinLock_lock(&device->allocator.lock, U64_MAX);
@@ -1302,6 +1324,10 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 
 	AllocationBuffer_freeAll(&device->stagingAllocations[device->fifId]);
 
+	//This frame in flight provably completed, so its readbacks can land in cpuData and report
+
+	GraphicsDevice_completePulls(device, device->fifId);
+
 	//Update buffer data
 
 	for(U64 i = 0; i < device->pendingResources.length; ++i) {
@@ -1403,6 +1429,308 @@ clean:
 
 	RefPtr_dec(&newStaging);
 
+	return s_uccess;
+}
+
+//Readback twin of the staging buffer; same thirds, same create then swap, but CPU readable memory.
+
+static Bool GraphicsDeviceRef_resizeStagingReadbackBuffer(GraphicsDeviceRef *deviceRef, U64 newSize, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	DeviceBufferRef *newStaging = NULL;
+	AllocationBuffer newAllocations[MAX_FRAMES_IN_FLIGHT] = { 0 };
+
+	newSize = (((newSize + 2) / 3 + 4095) &~ 4095) * 3;
+
+	CharString name = CharString_createRefCStrConst("Staging readback buffer");
+
+	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+		deviceRef,
+		EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit |
+		EGraphicsResourceFlag_CPUReadBit,
+		NULL,
+		&name,
+		newSize, &newStaging, e_rr
+	));
+
+	const DeviceBuffer *staging = DeviceBufferRef_ptr(newStaging);
+	const Buffer stagingBuffer = Buffer_createRef(staging->resource.mappedMemoryExt, newSize);
+
+	for(U64 i = 0; i < sizeof(newAllocations) / sizeof(newAllocations[0]); ++i) {
+
+		const AllocationBufferCreate create = (AllocationBufferCreate) {
+			.size = newSize / 3,
+			.alloc = alloc,
+			.allocationBuffer = &newAllocations[i]
+		};
+
+		gotoIfError3(clean, AllocationBuffer_createRefFromRegion(&create, stagingBuffer, newSize / 3 * i, e_rr));
+	}
+
+	if (device->stagingReadback) {
+
+		for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+			AllocationBuffer_free(&device->stagingReadbackAllocations[i], alloc);
+
+		RefPtr_dec(&device->stagingReadback);
+	}
+
+	device->stagingReadback = newStaging;
+	newStaging = NULL;
+
+	for(U64 i = 0; i < sizeof(newAllocations) / sizeof(newAllocations[0]); ++i) {
+		device->stagingReadbackAllocations[i] = newAllocations[i];
+		newAllocations[i] = (AllocationBuffer) { 0 };
+	}
+
+clean:
+
+	for(U64 i = 0; i < sizeof(newAllocations) / sizeof(newAllocations[0]); ++i)
+		AllocationBuffer_free(&newAllocations[i], alloc);
+
+	RefPtr_dec(&newStaging);
+
+	return s_uccess;
+}
+
+Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePerFrame, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	GraphicsDevice *device = NULL;
+	ELockAcquire acq = ELockAcquire_Invalid;
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_reserveReadback()::deviceRef is required"));
+
+	if(sizePerFrame > TIBI)
+		retError(clean, Error_outOfBounds(
+			1, sizePerFrame, TIBI, "GraphicsDeviceRef_reserveReadback()::sizePerFrame is limited to 1TiB"
+		));
+
+	if(!sizePerFrame)
+		sizePerFrame = 1;
+
+	device = GraphicsDeviceRef_ptr(deviceRef);
+
+	acq = SpinLock_lock(&device->lock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		retError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_reserveReadback() couldn't acquire device lock"));
+
+	//Only ever grow; a live ring may hold recorded pulls sized for the current buffer
+
+	if(
+		!device->stagingReadback ||
+		DeviceBufferRef_ptr(device->stagingReadback)->resource.size / 3 < sizePerFrame
+	)
+		gotoIfError3(clean, GraphicsDeviceRef_resizeStagingReadbackBuffer(deviceRef, sizePerFrame * 3, e_rr));
+
+clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->lock);
+
+	return s_uccess;
+}
+
+//Completes the pulls recorded for this frame in flight by copying readback memory into cpuData and firing the
+// callbacks.
+//This never waits itself: both callers already hold proof the frame finished, handleNextFrame through the frame
+// pacing fence wait that gates reusing this slot (~framesInFlight of latency) and wait() through the full stall
+// the caller explicitly asked for.
+
+static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
+
+	ListDevicePendingPull *pulls = &device->pullsInFlight[fifId];
+
+	if(!pulls->length)
+		return;
+
+	for (U64 i = 0; i < pulls->length; ++i) {
+
+		DevicePendingPull *pull = &pulls->ptrNonConst[i];
+
+		//Each pull reads the ring it was recorded into, which isn't necessarily the device's current one
+
+		const U8 *mapped = DeviceBufferRef_ptr(pull->stagingReadback)->resource.mappedMemoryExt;
+		const U8 *src = mapped + pull->stagingOffset;
+
+		if(pull->resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer) {
+
+			DeviceBuffer *buffer = DeviceBufferRef_ptr(pull->resource);
+			const U64 start = pull->range.buffer.startRange;
+			const U64 len = pull->range.buffer.endRange - start;
+
+			Buffer_memcpy(
+				Buffer_createRef(buffer->cpuData.ptrNonConst + start, len),
+				Buffer_createRefConst(src, len)
+			);
+		}
+
+		else {
+
+			//De-pitch the backend's row stride back into the tight rows cpuData uses
+
+			DeviceTexture *texture = DeviceTextureRef_ptr(pull->resource);
+			const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
+
+			const U64 tightRow = ETextureFormat_getSize(format, texture->base.width, 1, 1);
+			const U64 rows = (U64) texture->base.height * texture->base.length;
+
+			for(U64 j = 0; j < rows; ++j)
+				Buffer_memcpy(
+					Buffer_createRef(texture->cpuData.ptrNonConst + tightRow * j, tightRow),
+					Buffer_createRefConst(src + pull->rowPitch * j, tightRow)
+				);
+		}
+
+		if(pull->callback)
+			pull->callback(pull->resource, pull->context);
+
+		RefPtr_dec(&pull->resource);
+		RefPtr_dec(&pull->stagingReadback);
+	}
+
+	ListDevicePendingPull_clear(pulls, NULL);
+	AllocationBuffer_freeAll(&device->stagingReadbackAllocations[fifId]);
+}
+
+//Records the queued pulls into the command buffer, after the frame's own commands so they see its results.
+//Called by the backends at the end of GraphicsDevice_submitCommands.
+
+Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(!device->pendingPulls.length)
+		return s_uccess;
+
+	//Total readback memory needed; texture rows are conservatively padded to D3D12's 256 byte row pitch and
+	// every region begins at a 512 byte aligned placed footprint offset, which Vulkan doesn't mind either
+
+	U64 needed = 0;
+
+	for (U64 i = 0; i < device->pendingPulls.length; ++i) {
+
+		const DevicePendingPull *pull = &device->pendingPulls.ptr[i];
+		U64 len;
+
+		if(pull->resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer)
+			len = pull->range.buffer.endRange - pull->range.buffer.startRange;
+
+		else {
+
+			const DeviceTexture *texture = DeviceTextureRef_ptr(pull->resource);
+			const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
+
+			const U64 pitch = (ETextureFormat_getSize(format, texture->base.width, 1, 1) + 255) &~ 255;
+			len = pitch * texture->base.height * texture->base.length;
+		}
+
+		needed += ((len + 511) &~ 511) + 512;
+	}
+
+	if(!device->stagingReadback)
+		gotoIfError3(clean, GraphicsDeviceRef_resizeStagingReadbackBuffer(deviceRef, needed * 3, e_rr));
+
+	AllocationBuffer *allocations = &device->stagingReadbackAllocations[device->fifId];
+	const U8 *base = DeviceBufferRef_ptr(device->stagingReadback)->resource.mappedMemoryExt;
+
+	for (U64 i = 0; i < device->pendingPulls.length; ++i) {
+
+		DevicePendingPull pull = device->pendingPulls.ptr[i];
+		const Bool isBuffer = pull.resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer;
+
+		U64 len;
+		U64 pitch = 0;
+
+		if(isBuffer)
+			len = pull.range.buffer.endRange - pull.range.buffer.startRange;
+
+		else {
+
+			const DeviceTexture *texture = DeviceTextureRef_ptr(pull.resource);
+			const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
+
+			pitch = (ETextureFormat_getSize(format, texture->base.width, 1, 1) + 255) &~ 255;
+			len = pitch * texture->base.height * texture->base.length;
+		}
+
+		const AllocationBufferAllocate allocation = (AllocationBufferAllocate) {
+			.allocationBuffer = allocations,
+			.alignment = 512,
+			.alloc = alloc
+		};
+
+		const U8 *location = NULL;
+
+		if (!AllocationBuffer_allocateBlock(&allocation, len, &location, NULL)) {
+
+			//Grown like the upload staging buffer, after which the allocation has to succeed
+
+			const U64 prevSize = DeviceBufferRef_ptr(device->stagingReadback)->resource.size;
+			gotoIfError3(clean, GraphicsDeviceRef_resizeStagingReadbackBuffer(deviceRef, prevSize * 2 + needed * 3, e_rr));
+
+			allocations = &device->stagingReadbackAllocations[device->fifId];
+			base = DeviceBufferRef_ptr(device->stagingReadback)->resource.mappedMemoryExt;
+
+			const AllocationBufferAllocate retry = (AllocationBufferAllocate) {
+				.allocationBuffer = allocations,
+				.alignment = 512,
+				.alloc = alloc
+			};
+
+			gotoIfError3(clean, AllocationBuffer_allocateBlock(&retry, len, &location, e_rr));
+		}
+
+		pull.stagingOffset = (U64)(location - base);
+		pull.rowPitch = isBuffer ? len : pitch;
+
+		if(isBuffer) {
+			gotoIfError3(clean, DeviceBufferRef_pullExt(
+				commandBuffer, deviceRef, pull.resource,
+				pull.range.buffer.startRange, len, pull.stagingOffset, e_rr
+			));
+		}
+
+		else {
+
+			U64 backendPitch = pull.rowPitch;
+
+			gotoIfError3(clean, DeviceTextureRef_pullExt(
+				commandBuffer, deviceRef, pull.resource, pull.stagingOffset, &backendPitch, e_rr
+			));
+
+			pull.rowPitch = backendPitch;
+		}
+
+		//The pull keeps the ring it was recorded into alive until completion, since a grow swaps the device's ring
+
+		pull.stagingReadback = device->stagingReadback;
+
+		gotoIfError3(clean, ListDevicePendingPull_pushBack(&device->pullsInFlight[device->fifId], pull, alloc, e_rr));
+		RefPtr_inc(device->stagingReadback);        //Owned by the in flight entry just pushed
+
+		device->pendingPulls.ptrNonConst[i].resource = NULL;        //Ownership moved to the in flight list
+	}
+
+clean:
+
+	//Anything that didn't make it into the in flight list still owns its ref
+
+	for(U64 i = 0; i < device->pendingPulls.length; ++i)
+		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].resource);
+
+	ListDevicePendingPull_clear(&device->pendingPulls, NULL);
 	return s_uccess;
 }
 
@@ -1708,6 +2036,10 @@ Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 		//Release all allocations of buffer that was in flight
 
 		AllocationBuffer_freeAll(&device->stagingAllocations[i]);
+
+		//Waiting proves every frame completed, so all recorded readbacks can land and report now
+
+		GraphicsDevice_completePulls(device, i);
 	}
 
 clean:

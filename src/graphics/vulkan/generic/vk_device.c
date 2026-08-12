@@ -502,6 +502,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			//Dependencies, requested alongside whichever feature needs them
 
 			case EOptExtensions_DepthStencilResolve:        on = feat & EGraphicsFeatures_DirectRendering;          break;
+			case EOptExtensions_Maintenance5:               on = feat2 & EGraphicsFeatures2_DescriptorHeap;         break;
 
 			case EOptExtensions_CreateRenderpass2:
 				on = feat & (EGraphicsFeatures_VariableRateShading | EGraphicsFeatures_DirectRendering);
@@ -678,6 +679,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkGetBufferMemoryRequirements2, deviceExt->getBufferMemoryRequirements2);
 	getVkFunctionDevice(clean, vkBindBufferMemory, deviceExt->bindBufferMemory);
 	getVkFunctionDevice(clean, vkUpdateDescriptorSets, deviceExt->updateDescriptorSets);
+	getVkFunctionDevice(clean, vkCmdCopyImageToBuffer, deviceExt->cmdCopyImageToBuffer);
 	getVkFunctionDevice(clean, vkFlushMappedMemoryRanges, deviceExt->flushMappedMemoryRanges);
 	getVkFunctionDevice(clean, vkCmdCopyBuffer, deviceExt->cmdCopyBuffer);
 	getVkFunctionDevice(clean, vkCmdCopyBufferToImage, deviceExt->cmdCopyBufferToImage);
@@ -742,6 +744,11 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		getVkFunctionDevice(clean, vkCmdCopyAccelerationStructureKHR, deviceExt->copyAccelerationStructure);
 		getVkFunctionDevice(clean, vkDestroyAccelerationStructureKHR, deviceExt->destroyAccelerationStructure);
 		getVkFunctionDevice(clean, vkGetAccelerationStructureBuildSizesKHR, deviceExt->getAccelerationStructureBuildSizes);
+		getVkFunctionDevice(
+			clean,
+			vkGetAccelerationStructureDeviceAddressKHR,
+			deviceExt->getAccelerationStructureDeviceAddress
+		);
 		getVkFunctionDevice(
 			clean,
 			vkGetDeviceAccelerationStructureCompatibilityKHR,
@@ -1629,6 +1636,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				ptr += info.opSize;
 			}
 		}
+
+		//Readbacks are recorded after the frame's commands so they observe this frame's results
+
+		gotoIfError3(clean, GraphicsDeviceRef_flushPendingPulls(deviceRef, &state, e_rr));
 
 		//Transition back swapchains to present
 

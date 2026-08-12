@@ -21,6 +21,7 @@
 //graphics/generic/swapchain.h
 
 #pragma once
+#include <stddef.h>
 #include "types/base/lock.h"
 #include "graphics/generic/texture.h"
 
@@ -87,9 +88,19 @@ typedef struct Swapchain {
 
 	SpinLock lock;
 
+	//The lock's 64-byte alignment would otherwise put tail padding after base, which has to be at the very end;
+	// the image and backend structs live directly behind it and tail padding would overlap them.
+
+	U8 pad1[32];
+
 	UnifiedTexture base;
 
 } Swapchain;
+
+static_assert(
+	sizeof(Swapchain) == offsetof(Swapchain, base) + sizeof(UnifiedTexture),
+	"UnifiedTexture has to end Swapchain exactly, the texture images are addressed relative to it"
+);
 
 #define SWAPCHAIN_VERSIONING 3        //How many swapchain images should be requested, should always be 3
 #define SWAPCHAIN_MAX_DELTA 2         //How many swapchain images extra can be available (important for android devices)

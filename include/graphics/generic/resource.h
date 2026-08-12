@@ -50,6 +50,11 @@ typedef enum EGraphicsResourceFlag {
 	EGraphicsResourceFlag_CPUBacked                 = 1 << 5,        //Keep a CPU side copy texture for read/write operations
 	EGraphicsResourceFlag_CPUAllocatedBit           = 1 << 6,        //Keep entirely on CPU
 
+	//CPU readable memory (D3D12 readback heap), only used internally for the pullRegion staging buffer.
+	//Vulkan reuses the CPU allocated memory type, which is host visible either way.
+
+	EGraphicsResourceFlag_CPUReadBit                = 1 << 7,
+
 	EGraphicsResourceFlag_CPUAllocated              = EGraphicsResourceFlag_CPUBacked | EGraphicsResourceFlag_CPUAllocatedBit,
 
 	EGraphicsResourceFlag_ShaderRWBindful           =
@@ -112,6 +117,32 @@ typedef union DevicePendingRange {
 	BufferRange buffer;
 	TextureRange texture;
 } DevicePendingRange;
+
+//Reading back from the device (pullRegion).
+//The callback fires once the frame containing the read completed and the data landed in the resource's cpuData.
+
+typedef void (*DevicePullCallback)(RefPtr *resource, void *context);
+
+typedef struct DevicePendingPull {
+
+	RefPtr *resource;                //Strong ref, released after the callback ran
+
+	DevicePullCallback callback;     //Optional
+	void *context;
+
+	DevicePendingRange range;
+
+	U64 stagingOffset;               //Into stagingReadback, only valid once recorded
+	U64 rowPitch;                    //Row stride in readback memory for textures, byte count for buffers
+
+	//Strong ref to the readback buffer the pull was recorded into, only set once in flight.
+	//A grow (or reserveReadback) swaps the device's ring, so completion has to read the buffer the GPU wrote.
+
+	RefPtr *stagingReadback;
+
+} DevicePendingPull;
+
+TList(DevicePendingPull);
 
 typedef struct DeviceResourceVersion {
 

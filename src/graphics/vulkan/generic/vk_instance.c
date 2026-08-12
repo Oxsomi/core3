@@ -106,10 +106,12 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 
 			.bufferCreate = VkGraphicsDeviceRef_createBuffer,
 			.bufferFlush = VkDeviceBufferRef_flush,
+			.bufferPull = VkDeviceBufferRef_pull,
 			.bufferFree = VkDeviceBuffer_free,
 
 			.textureCreate = VkUnifiedTexture_create,
 			.textureFlush = VkDeviceTextureRef_flush,
+			.texturePull = VkDeviceTextureRef_pull,
 			.textureFree = VkUnifiedTexture_free,
 
 			.swapchainCreate = VkGraphicsDeviceRef_createSwapchain,
@@ -558,7 +560,8 @@ const C8 *optExtensionsName[] = {
 
 	"VK_KHR_push_descriptor",
 
-	"VK_KHR_create_renderpass2", "VK_KHR_depth_stencil_resolve", "VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls"
+	"VK_KHR_create_renderpass2", "VK_KHR_depth_stencil_resolve", "VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls",
+	"VK_KHR_maintenance5"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1651,9 +1654,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//Full bindless (descriptor heap); requires regular bindless too so the feature implies the same on both APIs
 
+		//VK_EXT_descriptor_heap requires VK_KHR_maintenance5 in the enabled list, so a device that doesn't
+		// advertise the dependency simply doesn't get the feature.
+
 		if(
 			(capabilities.features & EGraphicsFeatures_Bindless) &&
 			optExtensions[EOptExtensions_DescriptorHeap] &&
+			optExtensions[EOptExtensions_Maintenance5] &&
 			descriptorHeapFeat.descriptorHeap
 		)
 			capabilities.features2 |= EGraphicsFeatures2_DescriptorHeap;

@@ -131,14 +131,8 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(buf->usage & EDeviceBufferUsage_ASExt)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-	//Acceleration structure buffers don't honor the tight contract, so requesting it hands the allocator a tight
-	// offset while placement still demands the full alignment, which fails resource creation.
-
 	#if D3D12_SDK_VERSION >= 618
-		if(
-			(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment) &&
-			!(buf->usage & EDeviceBufferUsage_ASExt)
-		) {
+		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment) {
 			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT;
 
 			//Tight alignment lets D3D12 pick a smaller alignment; an explicit 64 KiB placement alignment is
@@ -161,6 +155,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 		retError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() couldn't query allocInfo"));
 
 	Bool cpuSided = buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit;
+	const Bool readback = buf->resource.flags & EGraphicsResourceFlag_CPUReadBit;
 
 	DeviceMemoryBlock block;
 
@@ -222,7 +217,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 		acq = ELockAcquire_Invalid;
 
-		D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined);
+		D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined, readback);
 
 		if(device->flags & EGraphicsDeviceFlags_IsDebug)
 			Log_debugLnx(
@@ -256,7 +251,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	else {
 
 		DxBlockRequirements req = (DxBlockRequirements) {
-			.flags = EDxBlockFlags_None,
+			.flags = readback ? EDxBlockFlags_Readback : EDxBlockFlags_None,
 			.alignment = (U32) allocInfo.Alignment,
 			.length = allocInfo.SizeInBytes
 		};
@@ -606,5 +601,54 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 clean:
 	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, NULL);
 	RefPtr_dec(&tempStagingResource);
+	return s_uccess;
+}
+
+Bool DX_WRAP_FUNC(DeviceBufferRef_pull)(
+	void *commandBufferExt,
+	GraphicsDeviceRef *deviceRef,
+	DeviceBufferRef *resource,
+	U64 offset,
+	U64 len,
+	U64 stagingOffset,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+
+	DxDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(resource), Dx);
+	DxDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->stagingReadback), Dx);
+
+	D3D12_BARRIER_GROUP dep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+
+	gotoIfError3(clean, DxDeviceBuffer_transition(
+		bufferExt, D3D12_BARRIER_SYNC_COPY, D3D12_BARRIER_ACCESS_COPY_SOURCE,
+		&deviceExt->bufferTransitions, &dep, alloc, e_rr
+	));
+
+	gotoIfError3(clean, DxDeviceBuffer_transition(
+		stagingExt, D3D12_BARRIER_SYNC_COPY, D3D12_BARRIER_ACCESS_COPY_DEST,
+		&deviceExt->bufferTransitions, &dep, alloc, e_rr
+	));
+
+	if(dep.NumBarriers) {
+		commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dep);
+		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+	}
+
+	commandBuffer->buffer->lpVtbl->CopyBufferRegion(
+		commandBuffer->buffer,
+		stagingExt->buffer, stagingOffset,
+		bufferExt->buffer, offset,
+		len
+	);
+
+clean:
 	return s_uccess;
 }

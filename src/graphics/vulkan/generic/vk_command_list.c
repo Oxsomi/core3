@@ -885,9 +885,12 @@ void VK_WRAP_FUNC(CommandList_process)(
 						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
 						VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
-				if(transition.stage == EPipelineStage_RTASBuild)    //RTASBuild inputs/outputs are AS read/write
+				//AS builds read their inputs (vertex/index/aabb/instance data) as SHADER_READ per spec;
+				// only the AS itself uses AS read/write, which the RTAS branch above already handled.
+
+				if(transition.stage == EPipelineStage_RTASBuild)
 					access =
-						isShaderRead ? VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR :
+						isShaderRead ? VK_ACCESS_2_SHADER_READ_BIT :
 						VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
 
 				if(!pipelineStage)

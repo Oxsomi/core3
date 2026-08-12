@@ -94,7 +94,8 @@ typedef struct DxGraphicsInstance {
 
 typedef enum EDxBlockFlags {
 	EDxBlockFlags_None               = 0,
-	EDxBlockFlags_IsDedicated        = 1 << 0
+	EDxBlockFlags_IsDedicated        = 1 << 0,
+	EDxBlockFlags_Readback           = 1 << 1        //CPU readable heap for pullRegion staging
 } EDxBlockFlags;
 
 typedef struct DxBlockRequirements {
@@ -146,7 +147,7 @@ D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op);
 D3D12_GPU_VIRTUAL_ADDRESS getDxDeviceAddress(DeviceData data);
 D3D12_GPU_VIRTUAL_ADDRESS getDxLocation(DeviceData data, U64 localOffset);
 
-D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType);
+D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType, Bool readback);
 
 //Transitions entire resource rather than sub-resources
 

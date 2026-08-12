@@ -31,13 +31,18 @@
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
 
-D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType) {
+D3D12_HEAP_DESC getDxHeapDesc(
+	GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType, Bool readback
+) {
 
 	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
 	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
 	Bool forceCpuSided = *cpuSided;
 
 	if(!isGpu || hasReBAR)            //Force shared allocations if not dedicated or if ReBAR is available
+		*cpuSided = true;
+
+	if(readback)
 		*cpuSided = true;
 
 	//A heap's own alignment must be one of the legal D3D12 values:
@@ -52,9 +57,11 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 
 	D3D12_HEAP_DESC heapDesc = (D3D12_HEAP_DESC) {
 		.Properties = (D3D12_HEAP_PROPERTIES) {
-			.Type = forceCpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_CUSTOM : D3D12_HEAP_TYPE_DEFAULT),
+			.Type =
+				readback ? D3D12_HEAP_TYPE_READBACK :
+				(forceCpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_CUSTOM : D3D12_HEAP_TYPE_DEFAULT)),
 			.MemoryPoolPreference = isGpu && hasReBAR ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0,
-			.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
+			.CPUPageProperty = readback ? D3D12_CPU_PAGE_PROPERTY_WRITE_BACK : D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
 		},
 		.Flags = D3D12_HEAP_FLAG_CREATE_NOT_ZEROED,        //Equal to vulkan behavior, clear manually
 		.Alignment = heapAlignment
@@ -130,7 +137,8 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
 
 	DxBlockRequirements req = *(DxBlockRequirements*) requirementsExt;
-	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment, resourceType);
+	const Bool readback = req.flags & EDxBlockFlags_Readback;
+	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment, resourceType, readback);
 
 	U64 maxAllocationSize = device->info.capabilities.maxAllocationSize;
 
@@ -149,6 +157,11 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	if(!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps))
 		heapType = (U8) resourceType;
+
+	//Readback memory can never share a block with upload or device memory
+
+	if(readback)
+		heapType |= 0x40;
 
 	//Find an existing allocation
 
