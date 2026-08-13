@@ -18,7 +18,15 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Refuses to build a release for a commit whose CI is not green; shared with anything else that
+  # publishes binaries, see _ci_green.yml for how and why.
+
+  preflight:
+    if: startsWith(github.ref, 'refs/tags/')
+    uses: ./.github/workflows/_ci_green.yml
+
   build:
+    needs: preflight
     strategy:
       # Every platform is published or none is: a release missing an arch silently looks complete.
       fail-fast: true
@@ -134,24 +142,33 @@ jobs:
             --generate-notes \
             --verify-tag
 
-      # A failed release is the one failure nobody is watching for: it happens on a tag push, minutes after
-      # everything already went green, so without this it fails silently until someone looks for the
-      # download. The per platform builds already report through _build.yml's own webhook; this covers the
-      # publish half (and a build that failed, since that skips this job and leaves the tag with no release).
-      # continue-on-error so a throttled Discord can never be the reason a release is marked failed.
+  # A failed release is the failure nobody is watching for: it happens on a tag push, often minutes after
+  # everything already went green, so without this it fails silently until someone goes looking for the
+  # download that never appeared.
+  # Its own job rather than a step, so it covers all three ways a tag ends up without a release: CI wasn't
+  # green (preflight), a platform failed to build, or publishing itself broke. A skipped job reports as
+  # 'skipped', so failure of an earlier job is caught through needs.*.result rather than failure().
 
+  notify-failure:
+    needs: [ preflight, build, publish ]
+    if: always() && startsWith(github.ref, 'refs/tags/') && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    runs-on: ubuntu-latest
+    steps:
       - name: Report failure
-        if: failure()
         continue-on-error: true
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PREFLIGHT: ${{ needs.preflight.result }}
+          BUILD: ${{ needs.build.result }}
+          PUBLISH: ${{ needs.publish.result }}
         run: |
-          echo "::error title=Release failed::${GITHUB_REF_NAME} was tagged but no release was published"
+          REASON="preflight=${PREFLIGHT} build=${BUILD} publish=${PUBLISH}"
+          echo "::error title=Release failed::${GITHUB_REF_NAME} was tagged but no release was published (${REASON})"
           if [ -z "$WEBHOOK_URL" ]; then
             echo "WEBHOOK_URL not set; skipping Discord notification"
             exit 0
           fi
           curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -H "Content-Type: application/json" \
-            -d "{\"embeds\":[{\"title\":\"Release ${GITHUB_REF_NAME} FAILED\",\"description\":\"Tag pushed but no release published. <${RUN_URL}>\",\"color\":15158332}]}" \
+            -d "{\"embeds\":[{\"title\":\"Release ${GITHUB_REF_NAME} FAILED\",\"description\":\"Tag pushed but no release published (${REASON}). <${RUN_URL}>\",\"color\":15158332}]}" \
             "$WEBHOOK_URL"
