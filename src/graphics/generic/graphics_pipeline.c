@@ -437,7 +437,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 	//Create ref ptrs
 
-	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->pipeline, pipeline, e_rr));
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->pipelineGraphics, pipeline, e_rr));
 	allocated = true;
 
 	Pipeline *pipelinePtr = PipelineRef_ptr(*pipeline);

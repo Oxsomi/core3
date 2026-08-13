@@ -241,9 +241,10 @@ extern "C" void Test_hppVec(oxc::c::Test *t) {
 			F32x4(0, 0, -5, 1), F32x4(0, 0, 0, 1), F32x4(0, 1, 0, 0)
 		).transformPoint(F32x4(0, 0, -5, 1)).trunc3().eqApprox(F32x4::zero(), 1e-3f, 1e-4f));
 
-		Test_assert(t, "F32x4x4: perspective near maps to 0", c::F32_abs(F32x4x4::perspective(
-			c::F32_PI / 2, 1, 0.1f, 100
-		).transformPoint(F32x4(0, 0, 0.1f, 1)).z()) < 1e-4f);
+		//Reverse Z: the near plane lands on depth 1 after the perspective divide
+
+		const F32x4 atNear = F32x4x4::perspective(c::F32_PI / 2, 1, 0.1f, 100).transformPoint(F32x4(0, 0, 0.1f, 1));
+		Test_assert(t, "F32x4x4: perspective near maps to 1", c::F32_abs(atNear.z() / atNear.w() - 1) < 1e-4f);
 
 		Test_assert(t, "F32x4x4: orthoSize matches ortho", F32x4x4::orthoSize(4, 2, 0, 10).eqApprox(
 			F32x4x4::ortho(-2, 2, -1, 1, 0, 10)

@@ -51,6 +51,9 @@
 // 28. Device memory      - budget queries, staging buffer resize, handleNextFrame lock contract
 // 29. GPU execution      - clear + cross scope copy + upload actually replayed on the device, twice
 // 30. Acceleration structures - BLAS/TLAS creation, instance plumbing, real builds via submit (rt devices only)
+// 31. Compute execution  - dispatch + CPU/GPU written indirect dispatch, results read back and compared
+// 32. Draw execution     - triangle, scissor, blend, indexed/instanced, depth, indirect and MSAA resolve draws
+// 33. Ray trace execution - a raytracing pipeline traces hit and miss rays against a real TLAS
 //
 //This file only keeps the interface/instance/device orchestration (1-4, 7-10, 15) and the entry point;
 // the modules live in their own files so each area has room to grow:
@@ -59,6 +62,7 @@
 //  test_graphics_descriptors.c  - 11, 12, 13
 //  test_graphics_resources.c    - 23, 25, 26, 27
 //  test_graphics_execute.c      - 16, 28, 29, 30 (submission, readback, acceleration structures)
+//  test_graphics_shaders.c      - 31, 32, 33 (shader execution against the //OxC3_gtest test shaders)
 //
 //Numbering follows the order the modules were added, not the order they run in.
 //
@@ -199,7 +203,24 @@ static void Test_graphicsInstance(Test *t) {
 		);
 
 		Test_checkObjectType(t, "swapchain", &types->swapchain, (TypeId)EGraphicsTypeId_Swapchain, sizeof(Swapchain), alloc);
-		Test_checkObjectType(t, "pipeline", &types->pipeline, (TypeId)EGraphicsTypeId_Pipeline, sizeof(Pipeline), alloc);
+
+		//The pipeline kinds share a typeId but each length has to fit its own info block (Pipeline_infoOffset),
+		// which is exactly the invariant whose violation used to overrun the heap on graphics pipeline creation
+
+		Test_checkObjectType(
+			t, "pipelineCompute", &types->pipelineCompute, (TypeId)EGraphicsTypeId_Pipeline, sizeof(Pipeline), alloc
+		);
+
+		Test_checkObjectType(
+			t, "pipelineGraphics", &types->pipelineGraphics,
+			(TypeId)EGraphicsTypeId_Pipeline, sizeof(Pipeline) + sizeof(PipelineGraphicsInfo), alloc
+		);
+
+		Test_checkObjectType(
+			t, "pipelineRaytracing", &types->pipelineRaytracing,
+			(TypeId)EGraphicsTypeId_Pipeline, sizeof(Pipeline) + sizeof(PipelineRaytracingInfo), alloc
+		);
+
 		Test_checkObjectType(t, "sampler", &types->sampler, (TypeId)EGraphicsTypeId_Sampler, sizeof(Sampler), alloc);
 		Test_checkObjectType(t, "blas", &types->blas, (TypeId)EGraphicsTypeId_BLASExt, sizeof(BLAS), alloc);
 		Test_checkObjectType(t, "tlas", &types->tlas, (TypeId)EGraphicsTypeId_TLASExt, sizeof(TLAS), alloc);
@@ -323,6 +344,13 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	Test_graphicsSubmit(t, deviceRef);
 	Test_graphicsGpuExecute(t, deviceRef);
 	Test_graphicsAccelerationStructures(t, deviceRef);
+
+	//31-33. Shader execution: real dispatches, draws and traces with verified results
+
+	Test_graphicsShaderCompute(t, deviceRef);
+	Test_graphicsShaderDraw(t, deviceRef);
+	Test_graphicsShaderRays(t, deviceRef);
+
 	Test_graphicsDeviceMemory(t, deviceRef);
 
 	RefPtr_dec(&cpuBuffer);

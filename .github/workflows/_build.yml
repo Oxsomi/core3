@@ -115,14 +115,30 @@ jobs:
           python-version: ${{ inputs.python_version }}
 
       # ── Ninja (Android only; used as the CMake generator on every host) ────
-      # The download occasionally arrives truncated ("No END header found"), so one failure gets one retry.
-      - uses: seanmiddleditch/gha-setup-ninja@master
+      # gha-setup-ninja@master kept failing inside its own downloader (truncated zips, ECONNRESET) even when
+      # retried, and it pins nothing; fetching the pinned release directly with real curl retries is sturdier.
+      # python -m zipfile instead of unzip because Windows hosts' bash doesn't ship unzip, and the chmod
+      # restores the exec bit that zipfile extraction drops on unix hosts.
+      - name: Setup Ninja
         if: inputs.os == 'android'
-        id: setup_ninja
-        continue-on-error: true
-
-      - uses: seanmiddleditch/gha-setup-ninja@master
-        if: inputs.os == 'android' && steps.setup_ninja.outcome == 'failure'
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   ZIP=ninja-linux.zip ;;
+            Windows) ZIP=ninja-win.zip ;;
+            macOS)   ZIP=ninja-mac.zip ;;
+          esac
+          for i in 1 2 3 4 5; do
+            curl -fL --retry 5 --retry-all-errors --connect-timeout 30 -o ninja.zip \
+              "https://github.com/ninja-build/ninja/releases/download/v1.12.1/$ZIP" && break
+            echo "ninja download attempt $i failed, retrying"; sleep 10
+          done
+          mkdir -p "$RUNNER_TEMP/ninja-bin"
+          python3 -m zipfile -e ninja.zip "$RUNNER_TEMP/ninja-bin" \
+            || python -m zipfile -e ninja.zip "$RUNNER_TEMP/ninja-bin"
+          chmod +x "$RUNNER_TEMP/ninja-bin/ninja" 2>/dev/null || true
+          "$RUNNER_TEMP/ninja-bin/ninja" --version
+          echo "$RUNNER_TEMP/ninja-bin" >> "$GITHUB_PATH"
 
       # ── Conan ──────────────────────────────────────────────────────────────
       # SteamOS container doesn't have pip by default.

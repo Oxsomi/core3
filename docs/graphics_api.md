@@ -788,6 +788,8 @@ A DepthStencil is an object that holds the depth and stencil buffers as a 2D ima
 
 The depth stencil is quite straight forward; it has up to 3 stencil enabled formats (D24S8Ext, D32S8Ext, S8Ext) that can be used to provide a stencil attachment to startRenderExt and 2 non stencil enabled formats (D16, D32). D24S8Ext is optional, but is important for NV and Intel GPUs since it packs the depth and stencil into 32-bits. D24S8Ext and S8Ext support can be queried through the GraphicsDeviceInfo's capabilities. Whenever possible please use D16 or D32 since it doesn't waste any space for a stencil buffer if it isn't needed. D16 should only be used if depth precision isn't a great priority (performance and memory usage is prioritized). D16 can be used on mobile to save space and time. If allowShaderRead is on, the depth stencil can be accessed through shader logic by passing the resource handle to the GPU.
 
+**Reverse Z:** the viewport is a plain 0..1 depth range on every backend; stored depth equals the NDC z the shader outputs. Reverse Z is therefore an application convention: fold the flip into the projection matrix (swap near/far, or z' = w - z in clip space), so nearer geometry stores the *higher* depth value, clear the "far" depth to 0 and test with ECompareOp_Gt (or Geq). Doing the flip in the projection (before the perspective divide) is also what preserves the reverse Z precision benefit, and it is applied exactly once regardless of which stage (vertex, domain or geometry) feeds the rasterizer. Inverted viewport ranges (minDepth > maxDepth) are deliberately not used: they're legal in Vulkan but violate the D3D functional spec (WARP collapses them to a constant 0).
+
 ```c
 gotoIfError3(clean, GraphicsDeviceRef_createDepthStencil(
     twm->device,

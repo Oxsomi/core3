@@ -268,9 +268,31 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 			.free = (ObjectFreeFunc) Swapchain_free
 		},
 
-		.pipeline = (RefPtrType) {
+		//The three pipeline kinds share a typeId but not a length: graphics and raytracing pipelines store
+		// their info block behind the backend data (Pipeline_infoOffset), compute has no info block at all.
+		//Sizing them apart keeps compute pipelines from carrying the biggest info as dead padding.
+
+		.pipelineCompute = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_Pipeline,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(Pipeline) + sizes->pipeline, alignof(Pipeline)),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) Pipeline_free
+		},
+
+		.pipelineGraphics = (RefPtrType) {
+			.typeId = (TypeId) EGraphicsTypeId_Pipeline,
+			.lengthAndAlignment = RefPtrType_pack(
+				sizeof(Pipeline) + sizes->pipeline + sizeof(PipelineGraphicsInfo), alignof(Pipeline)
+			),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) Pipeline_free
+		},
+
+		.pipelineRaytracing = (RefPtrType) {
+			.typeId = (TypeId) EGraphicsTypeId_Pipeline,
+			.lengthAndAlignment = RefPtrType_pack(
+				sizeof(Pipeline) + sizes->pipeline + sizeof(PipelineRaytracingInfo), alignof(Pipeline)
+			),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) Pipeline_free
 		},

@@ -309,7 +309,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			3, 0, "GraphicsDeviceRef_createPipelineRaytracing() pipeline layout is invalid"
 		));
 
-	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->pipeline, pipelineRef, e_rr));
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->pipelineRaytracing, pipelineRef, e_rr));
 
 	madePipeline = true;
 	Pipeline *pipeline = PipelineRef_ptr(*pipelineRef);

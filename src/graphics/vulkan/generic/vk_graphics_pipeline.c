@@ -372,8 +372,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 	VkPipelineDepthStencilStateCreateInfo depthStencilState = (VkPipelineDepthStencilStateCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.minDepthBounds = 1,
-		.maxDepthBounds = 0,
+		.minDepthBounds = 0,
+		.maxDepthBounds = 1,
 		.depthCompareOp = VK_COMPARE_OP_ALWAYS
 	};
 
@@ -406,8 +406,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.stencilTestEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
 			.front = stencil,
 			.back = stencil,
-			.minDepthBounds = 1,
-			.maxDepthBounds = 0
+			.minDepthBounds = 0,
+			.maxDepthBounds = 1
 		};
 
 	//Rasterizer

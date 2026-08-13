@@ -138,6 +138,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 		PipelineRaytracingGroup group = rtPipeline->groups.ptr[j];
 
+		//generalShader has to be VK_SHADER_UNUSED_KHR for hit groups; zero initializing it silently points
+		// at stage 0, which corrupts the group handle the SBT hands the driver and hangs the GPU on a hit
+
 		groups.ptrNonConst[j] = (VkRayTracingShaderGroupCreateInfoKHR) {
 
 			.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
@@ -146,6 +149,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 				group.intersection == U32_MAX ? VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR :
 				VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR,
 
+			.generalShader = VK_SHADER_UNUSED_KHR,
 			.closestHitShader = group.closestHit,
 			.anyHitShader = group.anyHit,
 			.intersectionShader = group.intersection

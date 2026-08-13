@@ -44,7 +44,8 @@
 //               so a model matrix reads left to right, mul(scale, mul(rotate, translate)).
 //
 //  Handedness   left handed, +Z into the screen, matching F32x4x4_perspective / _lookAt in the HLSL.
-//  Depth        [0, 1] (D3D style), not [-1, 1] (GL style).
+//  Depth        [0, 1] clip range (D3D style, not GL's [-1, 1]), reversed: near lands on 1, far on 0.
+//               The engine renders reverse Z (Gt compare, clear far to 0), see docs/graphics_api.md.
 
 #define MAT_FUNC(T, relErr, absErr)                                                                             \
 																												\
@@ -214,7 +215,7 @@ T##x4x4 T##x4x4_transformSRT(T##x4 scale, T##x4 eulerRad, T##x4 translate);     
 /* Camera: move the world so the camera sits at the origin, then orient it */                                   \
 T##x4x4 T##x4x4_view(T##x4 position, T##x4 eulerRad);                                                           \
 																												\
-/* Projections; left handed with a [0, 1] depth range, matching the HLSL helpers */                             \
+/* Projections; left handed, reverse Z (near depth 1, far 0), matching the HLSL helpers */                      \
 																												\
 T##x4x4 T##x4x4_perspective(T fovYRad, T aspect, T nearPlane, T farPlane);                                      \
 T##x4x4 T##x4x4_ortho(T left, T right, T bottom, T top, T nearPlane, T farPlane);                               \

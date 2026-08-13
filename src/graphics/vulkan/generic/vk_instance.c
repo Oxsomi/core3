@@ -178,11 +178,19 @@ VkBool32 onDebugReport(
 
 		//GPU assisted validation force enables the device features it needs and warns about doing so.
 		//That's an expected side effect of running maximum validation, not an app defect, so it's only logged.
+		//The entrypoint warning is GPU-AV admitting its own push constant lookup can't attribute variables in
+		// multi entrypoint SPIR-V below 1.4; legal modules, no validation lost, and the layer's condition is
+		// inverted anyway (it fires when there are no push constants at all), so it's noise rather than a defect.
 
 		const CharString messageStr = CharString_createRefCStrConst(message);
 		const CharString adjusting = CharString_createRefCStrConst("validation is adjusting settings");
+		const CharString multiEntry = CharString_createRefCStrConst("can't determine which entrypoint");
 
-		if(instance && !CharString_containsStringInsensitive(&messageStr, &adjusting, 0, 0))
+		if(
+			instance &&
+			!CharString_containsStringInsensitive(&messageStr, &adjusting, 0, 0) &&
+			!CharString_containsStringInsensitive(&messageStr, &multiEntry, 0, 0)
+		)
 			AtomicI64_inc(&instance->validationWarnings);
 
 		Log_warnLnx("Warning: %s", message);

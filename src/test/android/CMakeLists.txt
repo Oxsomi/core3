@@ -148,4 +148,11 @@ add_virtual_files(
 
 set_target_properties(OxC3_atest PROPERTIES FOLDER Oxsomi/test)
 
+# The graphics shader execution tests read //OxC3_gtest/test_shaders; the dependency is what makes the
+# package build at all, build_android.py then sweeps every packages/ directory into the apk's assets.
+
+if(TARGET OxC3_gtest)
+	add_virtual_dependencies(TARGET OxC3_atest DEPENDENCIES OxC3_gtest)
+endif()
+
 apply_dependencies(OxC3_atest)
