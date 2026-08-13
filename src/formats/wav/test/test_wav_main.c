@@ -20,10 +20,11 @@
 
 //formats/wav/test/test_wav_main.c
 
+#include "types/test/test.h"
 #include "test_wav_shared.h"
 #include "types/container/test/basic_alloc.h"
 
-int main() {
+OXC3_TEST_MAIN(formats_wav) {
 
 	const Allocator alloc = BasicAllocator_instance;
 	Test t = (Test){ 0 };

@@ -53,7 +53,7 @@ void AudioDevice_free(AudioDevice *dev, const Allocator *alloc) {
 RefPtrType AudioDevice_makeType(const Allocator *alloc) {
 	return (RefPtrType) {
 		.typeId = (TypeId) EAudioTypeId_AudioDevice,
-		.length = (U32)(sizeof(AudioDevice) + AudioDevice_sizeExt),
+		.lengthAndAlignment = RefPtrType_pack(sizeof(AudioDevice) + AudioDevice_sizeExt, alignof(AudioDevice)),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc)AudioDevice_free
 	};
@@ -77,7 +77,7 @@ Bool AudioDeviceRef_create(
 
 	if(
 		type->typeId != (TypeId)EAudioTypeId_AudioDevice ||
-		type->length != sizeof(AudioDevice) + AudioDevice_sizeExt ||
+		RefPtrType_length(type) != sizeof(AudioDevice) + AudioDevice_sizeExt ||
 		type->free != (ObjectFreeFunc)AudioDevice_free ||
 		type->alloc != alloc
 	)

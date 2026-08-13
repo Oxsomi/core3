@@ -90,9 +90,11 @@ Bool CLI_inspectData(const ParsedArgs *args);
 void CLI_ensureVirtualLoaded(const CharString *path);
 
 //Fetch the AES-256 key from whichever of -aes / -aes-file / --aes-stdin was given (at most one may be present).
-//-aes takes 64/66-char hex on the command line; -aes-file (a parameter) reads that same hex OR a raw 32-byte binary
-//file via File_read; --aes-stdin (a flag) reads one line of hex from stdin. Fills outKey (8 U32 = 32 bytes) and sets
-//*hasKey only when a key source is present. Every temporary holding key material is securely wiped before returning.
+//-aes takes 64/66-char hex on the command line;
+// -aes-file (a parameter) reads that same hex OR a raw 32-byte binary file via File_read;
+// --aes-stdin (a flag) reads one line of hex from stdin.
+//Fills outKey (8 U32 = 32 bytes) and sets *hasKey only when a key source is present.
+//Every temporary holding key material is securely wiped before returning.
 Bool CLI_getAesKey(const ParsedArgs *args, U32 outKey[8], Bool *hasKey, Error *e_rr);
 
 Bool CLI_fileList(const ParsedArgs *args);           //List a directory (ls)

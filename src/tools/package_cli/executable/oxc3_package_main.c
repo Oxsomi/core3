@@ -22,6 +22,7 @@
 
 #include "tools/package_cli/packager.h"
 #include "platforms/platform.h"
+#include "types/base/string_read_helper.h"
 #include "platforms/logx.h"
 
 #ifdef CLI_SHADER_COMPILER
@@ -38,16 +39,43 @@ Platform_defineEntrypoint() {
 	if(!s_uccess)        //Can't print
 		Platform_return(-2);
 
+	#ifdef CLI_SHADER_COMPILER
+		//No-op unless the shader compiler is a shared module, which has its own Platform_instance
+		Compiler_setPlatform(Platform_instance);
+	#endif
+
 	ListCharString args = Platform_instance->args;
+
+	//-raw keeps .hlsl/.hlsli as source instead of compiling them, for test data that gets read back as text.
+	//Stripped here so the positional arguments below still line up.
+
+	Bool keepShaderSource = false;
+
+	for (U64 i = 0; i < args.length; ++i) {
+
+		const CharString raw = CharString_createRefCStrConst("-raw");
+
+		if(!CharString_equalsStringSensitive(&args.ptr[i], &raw))
+			continue;
+
+		keepShaderSource = true;
+		ListCharString_popLocation(&args, i, NULL, NULL);
+		break;
+	}
+
+	//Both of these set status before leaving, because exiting 0 here means add_virtual_files' custom target
+	// reports success with no oiCA written, or with a stale one left in place from an earlier build.
 
 	#ifdef PACKAGE_SIMPLE
 		if (args.length != 2) {
 			Log_debugLnx("Invalid arguments: Expected OxC3_package_simple input output");
+			status = -1;
 			goto clean;
 		}
 	#else
 		if (args.length < 2 || args.length > 3) {
 			Log_debugLnx("Invalid arguments: Expected OxC3_package input output (optional: includeDir)");
+			status = -1;
 			goto clean;
 		}
 	#endif
@@ -62,13 +90,15 @@ Platform_defineEntrypoint() {
 
 		compileMode = 1 << ESHBinaryType_SPIRV;
 
+		//Always both formats on Windows rather than whichever the packager's own graphics config prefers.
+		//The packaged oiCA outlives one configuration: a tree's four configs (and its bin/) share these
+		// outputs, so a DXIL-only package written by a static D3D12 packager eventually meets a runtime
+		// that can see Vulkan, which then dies at device create with "SPIRV binary is missing".
+		//Compiling the prebuilt shaders twice costs seconds; diagnosing that mismatch didn't.
+
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			#ifdef GRAPHICS_API_DYNAMIC        //Both DXIL and SPIRV
-				multipleModes = true;
-				compileMode |= 1 << ESHBinaryType_DXIL;
-			#elif !defined(FORCE_VULKAN)    //DXIL only
-		compileMode = 1 << ESHBinaryType_DXIL;
-			#endif
+			multipleModes = true;
+			compileMode |= 1 << ESHBinaryType_DXIL;
 		#endif
 
 	#endif
@@ -79,13 +109,14 @@ Platform_defineEntrypoint() {
 		.encryptionKey = NULL,
 		.multipleModes = multipleModes,
 		.compileMode = compileMode,
-		.threadCount = 1,    //TODO: Platform_getThreads(),
+		.threadCount = (U32) Platform_getThreads(),
 		.includeDir = args.length == 3 ? args.ptr[2] : CharString_createNull(),
 		.merge = true,
 		.extraWarnings = warnings,
 		.enableLogging = true,
 		.isDebug = false,
-		.ignoreEmptyFiles = false
+		.ignoreEmptyFiles = false,
+		.keepShaderSource = keepShaderSource
 	};
 
 	Error err = Error_none();

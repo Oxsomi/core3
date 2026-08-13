@@ -418,6 +418,12 @@ Bool CommandListRef_startRenderExt(
 		Buffer_createRefConst(startRender, sizeof(StartRenderCmdExt) + sizeof(AttachmentInfoInternal) * counter),
 		0, e_rr));
 
+	//A clear load is a side effect all by itself, so a pass without draws still has to keep its scope alive;
+	// otherwise endScope rewinds the scope as untouched and the clear silently never reaches the GPU
+
+	if(startRender->clearMask || (startRender->flags & (EStartRenderFlags_ClearDepth | EStartRenderFlags_ClearStencil)))
+		commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
 	commandList->currentSize = size;
 	commandList->boundImageCount = (U8) (!colors ? 0 : colors->length);
 

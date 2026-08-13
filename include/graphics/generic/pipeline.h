@@ -101,15 +101,16 @@ typedef enum EPipelineFlags {
 	EPipelineFlags_None                               = 0,
 	EPipelineFlags_InternalWeakDeviceRef              = 1 << 0,       //Internal use only
 
-	//Create the pipeline with driver introspection captured, so GraphicsDeviceRef_getPipelineExecutables can return the
-	//per-stage ISA disassembly + VGPR/SGPR statistics. Requires EGraphicsFeatures2_PipelineExecutableInfo on the device;
-	//ignored (no capture) otherwise. Only set it for inspection: capture can disable pipeline caching / cost extra.
+	//Create the pipeline with driver introspection captured, so GraphicsDeviceRef_getPipelineExecutables can return
+	// the per-stage ISA disassembly + VGPR/SGPR statistics.
+	//Requires EGraphicsFeatures2_PipelineExecutableInfo on the device; ignored (no capture) otherwise.
+	//Only set it for inspection: capture can disable pipeline caching / cost extra.
 
 	EPipelineFlags_CaptureISA                         = 1 << 1
 } EPipelineFlags;
 
-//One numeric statistic the driver reports for a pipeline executable (e.g. "Used VGPRs" = 24). value holds the raw bits;
-//reinterpret it per format.
+//One numeric statistic the driver reports for a pipeline executable (e.g. "Used VGPRs" = 24).
+//value holds the raw bits; reinterpret it per format.
 
 typedef enum EPipelineStatisticFormat {
 	EPipelineStatisticFormat_Bool,
@@ -128,8 +129,9 @@ typedef struct PipelineStatistic {
 
 TList(PipelineStatistic);
 
-//One executable within a created pipeline (a compute pipeline has one; graphics/RT can have several). Carries the
-//driver's ISA disassembly + the numeric statistics. Owns its strings + statistics list.
+//One executable within a created pipeline (a compute pipeline has one; graphics/RT can have several).
+//Carries the driver's ISA disassembly + the numeric statistics.
+//Owns its strings + statistics list.
 
 typedef struct PipelineExecutable {
 	CharString name;                            //Driver's name, e.g. "Compute Shader"
@@ -230,10 +232,11 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	Error *e_rr
 );
 
-//Driver introspection for a created pipeline: per-executable ISA disassembly + VGPR/SGPR statistics. The pipeline must
-//have been created with EPipelineFlags_CaptureISA on a device with EGraphicsFeatures2_PipelineExecutableInfo. Backend:
-//Vulkan (VK_KHR_pipeline_executable_properties); unsupported backends/devices return an error. Caller frees *result via
-//ListPipelineExecutable_freeUnderlying.
+//Driver introspection for a created pipeline: per-executable ISA disassembly + VGPR/SGPR statistics.
+//The pipeline must have been created with EPipelineFlags_CaptureISA on a device with
+// EGraphicsFeatures2_PipelineExecutableInfo.
+//Backend: Vulkan (VK_KHR_pipeline_executable_properties); unsupported backends/devices return an error.
+//Caller frees *result via ListPipelineExecutable_freeUnderlying.
 
 Bool GraphicsDeviceRef_getPipelineExecutables(
 	PipelineRef *pipeline,

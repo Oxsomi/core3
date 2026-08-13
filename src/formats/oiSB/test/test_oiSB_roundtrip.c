@@ -58,7 +58,8 @@ Bool sbRoundTrip(
 	return true;
 }
 
-//Single F32 variable at root scope. Verifies basic write/read round-trip.
+//Single F32 variable at root scope.
+//Verifies basic write/read round-trip.
 void Test_SBFileRoundTripSimpleF32(Test *t) {
 
 	Test_setModule(t, "SBFile round-trip: single F32 variable");
@@ -101,7 +102,8 @@ void Test_SBFileRoundTripSimpleF32(Test *t) {
 	}
 }
 
-//Multiple scalar variables at root scope. Verifies ordering is preserved.
+//Multiple scalar variables at root scope.
+//Verifies ordering is preserved.
 void Test_SBFileRoundTripMultipleVars(Test *t) {
 
 	Test_setModule(t, "SBFile round-trip: multiple root variables");
@@ -160,7 +162,8 @@ void Test_SBFileRoundTripMultipleVars(Test *t) {
 	}
 }
 
-//Struct with member variables. Verifies struct registration and variable parentId linkage.
+//Struct with member variables.
+//Verifies struct registration and variable parentId linkage.
 void Test_SBFileRoundTripStruct(Test *t) {
 
 	Test_setModule(t, "SBFile round-trip: struct with members");

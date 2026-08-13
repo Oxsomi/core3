@@ -196,8 +196,13 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 		out->numaNodes = 1;
 }
 
-Bool Platform_setKeyboardVisible(Bool isVisible) {
+//No on screen keyboard here, so there's nothing a hardware one would have to be weighed against.
+
+Bool Platform_hasPhysicalKeyboard() { return true; }
+
+Bool Platform_setKeyboardVisibleForced(Bool isVisible, Bool force) {
 	(void) isVisible;
+	(void) force;
 	return true;
 }
 
@@ -211,9 +216,15 @@ typedef struct EnumerateFiles {
 	Bool b;
 } EnumerateFiles;
 
-BOOL enumerateFiles(HMODULE mod, LPWSTR unused, LPWSTR name, EnumerateFiles *sections) {
+//Signature matches ENUMRESNAMEPROCW exactly rather than taking the EnumerateFiles* directly.
+//Calling a function through a pointer of a different type is undefined however well it works in
+//practice, and newer clang rejects the cast outright under -Wcast-function-type-mismatch.
 
-	mod; unused;
+BOOL enumerateFiles(HMODULE mod, LPCWSTR unused, LPWSTR name, LONG_PTR param) {
+
+	(void) mod; (void) unused;
+
+	EnumerateFiles *sections = (EnumerateFiles*) param;
 
 	CharString str = CharString_createNull();
 	Bool s_uccess = true;
@@ -310,11 +321,7 @@ Bool Platform_initExt(Error *e_rr) {
 
 	EnumerateFiles files = (EnumerateFiles) { .sections = &Platform_instance->virtualSections };
 
-	if (!EnumResourceNamesW(
-		NULL, RT_RCDATA,
-		(ENUMRESNAMEPROCW)enumerateFiles,
-		(LONG_PTR)&files
-	)) {
+	if (!EnumResourceNamesW(NULL, RT_RCDATA, enumerateFiles, (LONG_PTR)&files)) {
 
 		//Enum resource names also fails if we don't have any resources.
 		//To counter this, enumerateFiles sets b if the reason it returned false was because of the function.

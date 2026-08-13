@@ -34,26 +34,31 @@ typedef struct Error Error;
 typedef struct Allocator Allocator;
 
 //Whether the SPIR-V module has an offline AMD ISA path: every entrypoint must be raster (vertex/hull/domain/geometry/
-//pixel), compute or mesh/task. Ray tracing has none (amdllpc emits an empty code section without pipeline context).
+// pixel), compute or mesh/task.
+//Ray tracing has none (amdllpc emits an empty code section without pipeline context).
 //Returns false for those (and for anything that isn't a parseable SPIR-V module), so callers can pre-filter what to
-//disassemble. Uses the compiler's own SPIR-V entrypoint query, hence the allocator.
+// disassemble.
+//Uses the compiler's own SPIR-V entrypoint query, hence the allocator.
 
 Bool SpvISA_stageHasOfflinePath(Buffer spirv, const Allocator *alloc);
 
 //Disassembles a SPIR-V module to AMD ISA text for `gfxTarget` by driving the bundled amdllpc (SPIR-V -> ELF) then
-//amdgpu-dis (ELF -> ISA text); this produces closer-to-final ISA than a device-independent path. `gfxTarget` is a
-//gfx name ("gfx1100") or an explicit major.minor.step ("11.0.0"). `entrypoint` selects which entrypoint to lower
-//from a multi-entry (library) module; pass an empty string to lower the module's default (first) entrypoint. `isaOut`
-//must be an empty buffer and receives the ISA text (caller frees). The bundled offline compiler supports gfx11xx
-//(RDNA3) and gfx12xx (RDNA4). Requires process spawning (SUPPORTS_PROCESS); errors if unavailable on the platform.
+// amdgpu-dis (ELF -> ISA text); this produces closer-to-final ISA than a device-independent path.
+//`gfxTarget` is a gfx name ("gfx1100") or an explicit major.minor.step ("11.0.0").
+//`entrypoint` selects which entrypoint to lower from a multi-entry (library) module; pass an empty string to lower
+// the module's default (first) entrypoint.
+//`isaOut` must be an empty buffer and receives the ISA text (caller frees).
+//The bundled offline compiler supports gfx11xx (RDNA3) and gfx12xx (RDNA4).
+//Requires process spawning (SUPPORTS_PROCESS); errors if unavailable on the platform.
 
 Bool SpvISA_disassemble(
 	Buffer spirv, CharString gfxTarget, CharString entrypoint, Buffer *isaOut, const Allocator *alloc, Error *e_rr
 );
 
 //Probes the bundled amdllpc for the AMD gfx targets it can actually compile for (this build supports only a subset of
-//all AMD ISAs), appending one "gfxNNNN (Arch)" line per supported target to `out` (caller frees the strings). Reflects
-//exactly what the offline ISA path accepts as a `-asic`. Requires process spawning (SUPPORTS_PROCESS).
+// all AMD ISAs), appending one "gfxNNNN (Arch)" line per supported target to `out` (caller frees the strings).
+//Reflects exactly what the offline ISA path accepts as a `-asic`.
+//Requires process spawning (SUPPORTS_PROCESS).
 
 Bool SpvISA_listSupportedTargets(const Allocator *alloc, ListCharString *out, Error *e_rr);
 

@@ -39,7 +39,7 @@ typedef struct AudioIfCtx {
 } AudioIfCtx;
 
 //Set by Test_audioInterfaceGetDeviceInfos: false in headless environments (e.g. CI with no audio hardware),
-//where device enumeration returns zero devices. main() then skips the device-dependent modules.
+// where device enumeration returns zero devices. main() then skips the device-dependent modules.
 static Bool hasAudioDevice = false;
 
 static Bool AudioIfCtx_create(
@@ -138,8 +138,9 @@ void Test_audioInterfaceGetDeviceInfos(Test *t) {
 		AudioInterface_getDeviceInfos(AudioInterfaceRef_ptr(interf), t->alloc, &devices, &err)
 	);
 
-	//A headless environment (CI with no audio hardware) enumerates zero devices. Record that and skip the
-	//device-presence checks instead of failing them; main() skips the device-dependent modules accordingly.
+	//A headless environment (CI with no audio hardware) enumerates zero devices.
+	//Record that and skip the device-presence checks instead of failing them.
+	//main() skips the device-dependent modules accordingly.
 	hasAudioDevice = devices.length >= 1;
 
 	if (!hasAudioDevice)
@@ -475,7 +476,7 @@ void Test_audioDeviceListenerPositionSteps(Test *t) {
 	AudioIfCtx_free(&ctx);
 }
 
-int main() {
+OXC3_TEST_MAIN(audio_interface) {
 
 	const Allocator alloc = BasicAllocator_instance;
 
@@ -500,8 +501,9 @@ int main() {
 	Test_audioDeviceListenerTransformNull(&t);
 	Test_audioDeviceInfoPrint(&t);
 
-	//Tests that require an actual audio device. Headless environments (CI without audio hardware) enumerate
-	//zero devices, so skip these there rather than failing every device-dependent assertion.
+	//Tests that require an actual audio device.
+	//Headless environments (CI without audio hardware) enumerate zero devices,
+	// so skip these there rather than failing every device-dependent assertion.
 	if (hasAudioDevice) {
 		Test_audioInterfaceGetPreferredDevice(&t);
 		Test_audioDeviceCreateDestroy(&t);

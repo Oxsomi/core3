@@ -91,15 +91,20 @@ Bool CharString_insert(CharString *s, C8 c, U64 i, const Allocator *allocator, E
 
 	gotoIfError3(clean, CharString_resize(s, strl + 1, c, allocator, e_rr));
 
-	//If it's not append (otherwise it's already handled)
+	//If it's not append (resize already wrote c at the end in that case).
+	//Compared against strl, not strl - 1: strl is where an append lands now that the string grew by one.
+	//Inserting at strl - 1 is a genuine insert (just before the last character) and used to be skipped.
 
-	if (i != strl - 1) {
+	if (i != strl) {
 
-		//Move one to the right
+		//Move the tail [i, strl) one to the right.
+		//The count is strl - i, not strl; the buffer only holds strl + 1 characters,
+		// so shifting strl of them from i read and wrote past the end for any i > 1.
+		//CharString_insertString below has always done it this way.
 
 		Buffer_memmove(
-			Buffer_createRef(s->ptrNonConst + i + 1,  strl),
-			Buffer_createRef(s->ptrNonConst + i, strl)
+			Buffer_createRef(s->ptrNonConst + i + 1, strl - i),
+			Buffer_createRef(s->ptrNonConst + i, strl - i)
 		);
 
 		s->ptrNonConst[i] = c;
@@ -148,8 +153,9 @@ Bool CharString_replaceAllString(const CharStringReplace2 *replace, EStringCase 
 
 	Bool s_uccess = true;
 	const Allocator *alloc = NULL;
+	ListU64 finds = { 0 };
 
-	if (!replace || !replace->s)
+	if (!replace || !replace->s || !replace->search || !replace->replace)
 		retError(clean, Error_nullPointer(0, "CharString_replaceAllString()::replace is required"));
 
 	alloc = replace->allocator;
@@ -157,102 +163,87 @@ Bool CharString_replaceAllString(const CharStringReplace2 *replace, EStringCase 
 	if(CharString_isRef(*replace->s))
 		retError(clean, Error_constData(0, 0, "CharString_replaceAllString()::replace->s must be managed memory"));
 
-	ListU64 finds = { 0 };
-
 	const CharStringFind find = { replace->s, replace->allocator, replace->off, replace->len, &finds };
 	gotoIfError3(clean, CharString_findAllString(&find, replace->search, caseSensitive, e_rr));
 
 	if (!finds.length)
 		goto clean;
 
-	//Easy replace
-
 	const U64 *ptr = finds.ptr;
-
 	const U64 searchl = CharString_length(*replace->search);
-	C8 *sPtrNonConst = replace->s->ptrNonConst;
-
-	const U64 strl = CharString_length(*replace->replace);
-	const Buffer replaceBuf = CharString_bufferConst(*replace->replace);
 	const U64 replacel = CharString_length(*replace->replace);
+	const U64 strl = CharString_length(*replace->s);
+	const Buffer replaceBuf = CharString_bufferConst(*replace->replace);
+
+	//Same size; overwrite in place, no resize and no moving
 
 	if (searchl == replacel) {
 
+		C8 *sPtr = replace->s->ptrNonConst;
+
 		for (U64 i = 0; i < finds.length; ++i)
-			for (U64 j = ptr[i], k = j + replacel, l = 0; j < k; ++j, ++l)
-				sPtrNonConst[j] = (C8) replaceBuf.ptr[l];
+			Buffer_memcpy(Buffer_createRef(sPtr + ptr[i], replacel), replaceBuf);
 
 		goto clean;
 	}
 
-	//Shrink replaces
+	//Shrinking; walk left to right, since every byte moves towards the front
 
 	if (searchl > replacel) {
 
-		const U64 diff = searchl - replacel;
-
-		U64 iCurrent = ptr[0];
+		C8 *sPtr = replace->s->ptrNonConst;
+		U64 write = ptr[0];
 
 		for (U64 i = 0; i < finds.length; ++i) {
 
-			//We move our replacement string to iCurrent
+			Buffer_memcpy(Buffer_createRef(sPtr + write, replacel), replaceBuf);
+			write += replacel;
 
-			Buffer_memcpy(Buffer_createRef(sPtrNonConst + iCurrent, replacel), replaceBuf);
+			//The run between this match and the next one (or the end of the string) follows it
 
-			iCurrent += replacel;
-
-			//We then move the tail of the string
-
-			const U64 iStart = ptr[i] + searchl;
-			const U64 iEnd = i == finds.length - 1 ? strl : ptr[i + 1];
+			const U64 tailStart = ptr[i] + searchl;
+			const U64 tailEnd = i + 1 == finds.length ? strl : ptr[i + 1];
 
 			Buffer_memmove(
-				Buffer_createRef(sPtrNonConst + iCurrent, iEnd - iStart),
-				Buffer_createRef(sPtrNonConst + iStart, iEnd - iStart)
+				Buffer_createRef(sPtr + write, tailEnd - tailStart),
+				Buffer_createRef(sPtr + tailStart, tailEnd - tailStart)
 			);
 
-			iCurrent += iEnd - iStart;
+			write += tailEnd - tailStart;
 		}
 
-		//Ensure the string is now the right size
-
-		gotoIfError3(clean, CharString_resize(replace->s, strl - diff * finds.length, ' ', alloc, e_rr));
+		gotoIfError3(clean, CharString_resize(replace->s, write, ' ', alloc, e_rr));
 		goto clean;
 	}
 
-	//Grow replaces
+	//Growing; resize first, then walk right to left so nothing is overwritten before it's read.
+	//The pointer has to be re-read afterwards, since the resize may have reallocated.
 
-	//Ensure the string is now the right size
+	const U64 newLen = strl + (replacel - searchl) * finds.length;
+	gotoIfError3(clean, CharString_resize(replace->s, newLen, ' ', alloc, e_rr));
 
-	const U64 diff = replacel - searchl;
+	{
+		C8 *sPtr = replace->s->ptrNonConst;
+		U64 readEnd = strl;            //end of the not yet moved region, in the old layout
+		U64 write = newLen;            //end of the already written region, in the new layout
 
-	gotoIfError3(clean, CharString_resize(replace->s, strl + diff * finds.length, ' ', alloc, e_rr));
+		for (U64 i = finds.length - 1; i != U64_MAX; --i) {
 
-	//Move from right to left
+			const U64 tailStart = ptr[i] + searchl;
+			const U64 tailLen = readEnd - tailStart;
 
-	U64 newLoc = strl - 1;
+			write -= tailLen;
 
-	for (U64 i = finds.length - 1; i != U64_MAX; ++i) {
+			Buffer_memmove(
+				Buffer_createRef(sPtr + write, tailLen),
+				Buffer_createRef(sPtr + tailStart, tailLen)
+			);
 
-		//Find tail
+			write -= replacel;
+			Buffer_memcpy(Buffer_createRef(sPtr + write, replacel), replaceBuf);
 
-		const U64 iStart = ptr[i] + searchl;
-		const U64 iEnd = i == finds.length - 1 ? strl : ptr[i + 1];
-
-		for (U64 j = iEnd - 1; j != U64_MAX && j >= iStart; --j)
-			sPtrNonConst[newLoc--] = sPtrNonConst[j];
-
-		Buffer_memmove(
-			Buffer_createRef(sPtrNonConst + newLoc - (iEnd - iStart), iEnd - iStart),
-			Buffer_createRef(sPtrNonConst + iStart, iEnd - iStart)
-		);
-
-		newLoc -= iEnd - iStart;
-
-		//Apply replacement before tail
-
-		Buffer_memcpy(Buffer_createRef(sPtrNonConst + newLoc - replacel, replacel), replaceBuf);
-		newLoc -= replacel;
+			readEnd = ptr[i];
+		}
 	}
 
 clean:
@@ -267,12 +258,12 @@ Bool CharString_replaceString(const CharStringReplace2 *replace, Bool isFirst, E
 
 	Bool s_uccess = true;
 
-	if (!replace || replace->s)
-		retError(clean, Error_nullPointer(0, "CharString_replaceString()::replace or replace->s are required"));
+	if (!replace || !replace->s || !replace->search || !replace->replace)
+		retError(clean, Error_nullPointer(0, "CharString_replaceString()::replace and replace->s are required"));
 
 	if(CharString_isRef(*replace->s))
 		retError(clean, Error_constData(0, 0, "CharString_replaceString()::s must use managed memory"));
-	
+
 	const CharStringSensOffLen find = { replace->s, caseSensitive, replace->off, replace->len };
 
 	const U64 res = isFirst ? CharString_findFirstString(&find, replace->search) :
@@ -282,60 +273,58 @@ Bool CharString_replaceString(const CharStringReplace2 *replace, Bool isFirst, E
 		goto clean;
 
 	const U64 searchl = CharString_length(*replace->search);
-	C8 *sPtrNonConst = replace->s->ptrNonConst;
-
-	const U64 strl = CharString_length(*replace->replace);
-	const Buffer replaceBuf = CharString_bufferConst(*replace->replace);
 	const U64 replacel = CharString_length(*replace->replace);
+	const U64 strl = CharString_length(*replace->s);
+	const Buffer replaceBuf = CharString_bufferConst(*replace->replace);
 
-	//Easy, early exit. Strings are same size.
+	//The run after the match, which has to end up directly behind the replacement
+
+	const U64 tailStart = res + searchl;
+	const U64 tailLen = strl - tailStart;
+
+	//Same size; overwrite in place
 
 	if (searchl == replacel) {
-		Buffer_memcpy(Buffer_createRef((U8*)sPtrNonConst + res, replacel), replaceBuf);
+		Buffer_memcpy(Buffer_createRef(replace->s->ptrNonConst + res, replacel), replaceBuf);
 		goto clean;
 	}
 
-	//Replacement is smaller than our search
-	//So we can just move from left to right
+	//Shrinking; move the tail left, write the replacement, then give the slack back
 
 	if (replacel < searchl) {
 
-		const U64 diff = searchl - replacel;    //How much we have to shrink
-
-		//Copy our data over first
+		C8 *sPtr = replace->s->ptrNonConst;
 
 		Buffer_memmove(
-			Buffer_createRef(sPtrNonConst + res + replacel, strl - (res + searchl)),
-			Buffer_createRef(sPtrNonConst + res + searchl, strl - (res + searchl))
+			Buffer_createRef(sPtr + res + replacel, tailLen),
+			Buffer_createRef(sPtr + tailStart, tailLen)
 		);
 
-		//Throw our replacement in there
+		Buffer_memcpy(Buffer_createRef(sPtr + res, replacel), replaceBuf);
 
-		Buffer_memcpy(Buffer_createRef(sPtrNonConst + res, replacel), replaceBuf);
+		gotoIfError3(clean, CharString_resize(
+			replace->s, strl - (searchl - replacel), ' ', replace->allocator, e_rr
+		));
 
-		//Shrink the string; this is done after because we need to read the right of the string first
-
-		gotoIfError3(clean, CharString_resize(replace->s, strl - diff, ' ', replace->allocator, e_rr));
 		goto clean;
 	}
 
-	//Replacement is bigger than our search;
-	//We need to grow first and move from right to left
+	//Growing; resize first, then re-read the pointer since it may have moved, and shift the tail right
 
-	const U64 diff = replacel - searchl;
+	gotoIfError3(clean, CharString_resize(
+		replace->s, strl + (replacel - searchl), ' ', replace->allocator, e_rr
+	));
 
-	gotoIfError3(clean, CharString_resize(replace->s, strl + diff, ' ', replace->allocator, e_rr));
+	{
+		C8 *sPtr = replace->s->ptrNonConst;
 
-	//Copy our data over first
+		Buffer_memmove(
+			Buffer_createRef(sPtr + res + replacel, tailLen),
+			Buffer_createRef(sPtr + tailStart, tailLen)
+		);
 
-	Buffer_memmove(
-		Buffer_createRef(sPtrNonConst + res + replacel, strl - (res + searchl)),
-		Buffer_createRef(sPtrNonConst + res + searchl, strl - (res + searchl))
-	);
-
-	//Throw our replacement in there
-
-	Buffer_memcpy(Buffer_createRef(sPtrNonConst + res, replacel), replaceBuf);
+		Buffer_memcpy(Buffer_createRef(sPtr + res, replacel), replaceBuf);
+	}
 
 clean:
 	return s_uccess;

@@ -62,9 +62,9 @@ typedef enum ECPUVendor {
 	ECPUVendor_Count
 } ECPUVendor;
 
-//Richer CPU topology, gathered once at Platform_create (see Platform_detectCPUInfo). Fields that couldn't be
-//determined on the current OS/arch are left 0. Cache sizes are in bytes; hybrid P/E counts are 0 when the CPU
-//isn't hybrid (or the split is unknown).
+//Richer CPU topology, gathered once at Platform_create (see Platform_detectCPUInfo).
+//Fields that couldn't be determined on the current OS/arch are left 0.
+//Cache sizes are in bytes; hybrid P/E counts are 0 when the CPU isn't hybrid (or the split is unknown).
 
 typedef struct PlatformCPUInfo {
 
@@ -127,9 +127,22 @@ impl U64 Platform_getPhysicalRAM();     //Total installed physical memory in byt
 impl U64 Platform_getAvailableRAM();    //Currently free/available physical memory in bytes (0 if unknown)
 impl void Platform_detectCPUInfo(PlatformCPUInfo *out);   //Fills topology (called once at Platform_create)
 
+//Whether the user has a hardware keyboard they can type on right now.
+//True on platforms that have no on screen keyboard at all, since then there's nothing to weigh it against.
+//Query it per use rather than caching: a bluetooth keyboard can appear or disappear mid session.
+impl Bool Platform_hasPhysicalKeyboard();
+
 //If the device has an on screen keyboard (e.g. Android) you need to call this before handling text input.
 //Also make sure to hide it later with isVisible=false to avoid having a keyboard taking up half of your screen.
-impl Bool Platform_setKeyboardVisible(Bool isVisible);
+//Showing is skipped when a physical keyboard is usable, which is what you want by default: covering half the
+// screen with a second keyboard is worse than not offering one.
+//force overrides that for the cases where the on screen keyboard is the point rather than a fallback.
+//Hiding always goes through, so a hide can never be left stranded by a keyboard being plugged in meanwhile.
+impl Bool Platform_setKeyboardVisibleForced(Bool isVisible, Bool force);
+
+static inline Bool Platform_setKeyboardVisible(Bool isVisible) {
+	return Platform_setKeyboardVisibleForced(isVisible, false);
+}
 
 void Platform_cleanup();                //Call on exit
 
@@ -141,7 +154,16 @@ impl void *Platform_getDataImpl(void *ptr);
 	#define Platform_getData() (state)
 	#define Platform_argc (0)
 	#define Platform_argv (NULL)
-	#define Platform_return(x) return
+
+	//android_main returns nothing, so the exit code is normally dropped.
+	//A test bundled into the android test APK (see OXC3_TEST_ENTRY in types/test/test.h) isn't the entry point though;
+	// it hands its result back to the runner, which is what reports pass/fail.
+
+	#ifdef _OXC3_TEST_BUNDLED
+		#define Platform_return(...) return __VA_ARGS__
+	#else
+		#define Platform_return(x) return
+	#endif
 #else
 	#define Platform_defineEntrypoint() int main(int argc, const char *argv[])
 	#define Platform_getData() Platform_getDataImpl(NULL)

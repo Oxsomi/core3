@@ -96,6 +96,40 @@ void Test_SHFileAddBinVendorMaskOutOfBounds(Test *t) {
 	SHFile_free(&sh, t->alloc);
 }
 
+//A file written before a vendor existed spells "any vendor" with fewer bits than we do now.
+//Reading it has to restate that as today's everything, or the binary silently stops being offered to the
+// vendors added since, which is a shader that runs everywhere quietly refusing to run somewhere.
+
+void Test_SHVendorMaskWidening(Test *t) {
+
+	Test_setModule(t, "ESHVendor: an older all-vendors mask widens to the current one");
+
+	const U16 nowAll = ESHVendor_allMask(ESHVendor_Count);
+
+	//Two vendors fewer, which is exactly the step that adding GOGL and MESA represented
+
+	const U16 olderCount = (U16)(ESHVendor_Count - 2);
+	const U16 olderAll = ESHVendor_allMask(olderCount);
+
+	Test_assert(t, "older all differs from current all", olderAll != nowAll);
+	Test_assert(t, "older all widens", ESHVendor_widenMask(olderAll, olderCount) == nowAll);
+	Test_assert(t, "current all is left alone", ESHVendor_widenMask(nowAll, ESHVendor_Count) == nowAll);
+
+	//A mask naming specific vendors never claimed to cover the new ones, so it must survive untouched
+
+	const U16 justNV = (U16)(1u << ESHVendor_NV);
+	const U16 nvAndAmd = (U16)((1u << ESHVendor_NV) | (1u << ESHVendor_AMD));
+
+	Test_assert(t, "single vendor untouched", ESHVendor_widenMask(justNV, olderCount) == justNV);
+	Test_assert(t, "vendor pair untouched", ESHVendor_widenMask(nvAndAmd, olderCount) == nvAndAmd);
+	Test_assert(t, "empty mask untouched", ESHVendor_widenMask(0, olderCount) == 0);
+
+	//The count is capped by vendorMask being 16 bits wide
+
+	Test_assert(t, "16 saturates", ESHVendor_allMask(16) == (U16)0xFFFF);
+	Test_assert(t, "count fits the mask", ESHVendor_Count <= 16);
+}
+
 void Test_SHFileAddBinInvalidExtensions(Test *t) {
 
 	Test_setModule(t, "SHFile addBinary: extension bits beyond Count rejected");

@@ -1,0 +1,21 @@
+name: Windows ARM64 Vulkan static (clang-cl)
+on: [push]
+
+# arm64 clang-cl has neither SSE nor MSVC's intrinsics, so it's the only Windows job that compiles the
+# NEON paths through clang rather than through MSVC.
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Windows ARM64 Vulkan static (clang-cl)
+      runner: windows-11-arm
+      os: windows
+      build_flags: '-compiler clang -o forceVulkan=True -o cliGraphics=False'
+      cache_name: clang
+      python_cmd: python
+      setup_python: true
+      python_version: '3.13'
+      hook_name: Windows-arm64-vk-static-clang
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

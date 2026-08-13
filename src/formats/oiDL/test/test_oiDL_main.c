@@ -20,10 +20,11 @@
 
 //formats/oiDL/test/test_oiDL_main.c
 
+#include "types/test/test.h"
 #include "test_oiDL_shared.h"
 #include "types/container/test/basic_alloc.h"
 
-int main() {
+OXC3_TEST_MAIN(formats_oiDL) {
 
 	const Allocator alloc = BasicAllocator_instance;
 

@@ -68,6 +68,7 @@ void WWindow_updateMonitors(Window *w) {
 	return;
 
 clean:
+	(void) s_uccess;        //retError sets it, but a void function has nothing to hand it to
 	Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 }
 
@@ -109,7 +110,9 @@ Bool WWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		//Manually set it to be a reference
 		//This makes it, so we don't free it, because we don't own the memory
 
-		w->cpuVisibleBuffer.lengthAndRefBits = ((U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4) | ((U64)1 << 63);
+		w->cpuVisibleBuffer = Buffer_createRef(
+			w->cpuVisibleBuffer.ptrNonConst, (U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4
+		);
 
 		ReleaseDC(w->nativeHandle, screen);
 		screen = NULL;
@@ -796,7 +799,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//We need to keep on popping the end of the array until we reach the next element that isn't invalid
 				//This is to keep the list as small as possible because we might be looping over it at some point
 				//We can of course have devices that aren't initialized in between valid ones,
-				//because our list isn't contiguous (to not invalidate handles)
+				// because our list isn't contiguous (to not invalidate handles)
 
 				if(ours == end - 1)
 					while(

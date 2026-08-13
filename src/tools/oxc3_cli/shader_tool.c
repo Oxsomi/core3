@@ -285,8 +285,9 @@
 		return s_uccess;
 	}
 
-	//Read one oiSH at `path`, free its compiled binaries and rewrite it in place so it's reflection-only
-	//(SHFile_isComplete becomes false). Missing paths are skipped (returns true).
+	//Read one oiSH at `path`, free its compiled binaries and rewrite it in place
+	// so it's reflection-only (SHFile_isComplete becomes false).
+	//Missing paths are skipped (returns true).
 
 	static Bool CLI_shaderStripToReflection(CharString path, Bool *stripped, Error *e_rr) {
 

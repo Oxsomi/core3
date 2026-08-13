@@ -210,15 +210,14 @@ Bool GraphicsDeviceRef_createBufferIntern(
 
 	Bool s_uccess = true;
 	Bool allocated = false;
-	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
 
-	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->buffer, ref, e_rr));
-	allocated = true;
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
+	//Checked first, since getTypes on a NULL device yields a non NULL member pointer that faults in RefPtr_create.
 
 	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"));
+
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
 	if(bindlessDescriptorTable && !(resourceFlags & EGraphicsResourceFlag_ExposeBindless))
 		retError(clean, Error_invalidState(
@@ -261,6 +260,13 @@ Bool GraphicsDeviceRef_createBufferIntern(
 		retError(clean, Error_invalidState(
 			2, "GraphicsDeviceRef_createBufferIntern() buffer length exceeds maxBufferSize"
 		));
+
+	//Allocated only now that every argument has been accepted.
+	//Creating the ref first meant a rejected argument freed a buffer whose resource.device was still NULL,
+	// and DeviceBuffer_freeExt dereferences exactly that to find the backend, so every rejection segfaulted.
+
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->buffer, ref, e_rr));
+	allocated = true;
 
 	DeviceBuffer *buf = DeviceBufferRef_ptr(*ref);
 
@@ -393,5 +399,72 @@ Bool GraphicsDeviceRef_createBufferData(
 	}
 
 clean:
+	return s_uccess;
+}
+
+Bool DeviceBufferRef_pullRegion(
+	DeviceBufferRef *buf, U64 offset, U64 len, DevicePullCallback callback, void *context, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = NULL;
+
+	GraphicsDevice *device = NULL;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	Bool owned = false;
+
+	//Validated before the pointer is reinterpreted, since a wrong type would read a garbage device
+
+	if(!buf || buf->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer)
+		retError(clean, Error_nullPointer(0, "DeviceBufferRef_pullRegion()::buf is required"));
+
+	DeviceBuffer *buffer = DeviceBufferRef_ptr(buf);
+	alloc = GraphicsDeviceRef_getAlloc(buffer->resource.device);
+	const U64 bufLen = buffer->resource.size;
+
+	//The result lands in cpuData, so there has to be one to land in
+
+	if(!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked))
+		retError(clean, Error_invalidOperation(0, "DeviceBufferRef_pullRegion() requires a CPUBacked buffer"));
+
+	if(offset >= bufLen)
+		retError(clean, Error_outOfBounds(1, offset, bufLen, "DeviceBufferRef_pullRegion()::offset out of bounds"));
+
+	if(!len)
+		len = bufLen - offset;
+
+	if(offset + len > bufLen)
+		retError(clean, Error_outOfBounds(
+			2, offset + len, bufLen, "DeviceBufferRef_pullRegion()::offset + len out of bounds"
+		));
+
+	device = GraphicsDeviceRef_ptr(buffer->resource.device);
+
+	acq = SpinLock_lock(&device->lock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		retError(clean, Error_invalidOperation(1, "DeviceBufferRef_pullRegion() couldn't acquire device lock"));
+
+	RefPtr_inc(buf);
+	owned = true;
+
+	const DevicePendingPull pull = (DevicePendingPull) {
+		.resource = buf,
+		.callback = callback,
+		.context = context,
+		.range = (DevicePendingRange) { .buffer = (BufferRange) { .startRange = offset, .endRange = offset + len } }
+	};
+
+	gotoIfError3(clean, ListDevicePendingPull_pushBack(&device->pendingPulls, pull, alloc, e_rr));
+	owned = false;
+
+clean:
+
+	if(owned)
+		RefPtr_dec(&buf);
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->lock);
+
 	return s_uccess;
 }

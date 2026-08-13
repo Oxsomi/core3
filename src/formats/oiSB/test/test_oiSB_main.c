@@ -20,10 +20,11 @@
 
 //formats/oiSB/test/test_oiSB_main.c
 
+#include "types/test/test.h"
 #include "test_oiSB_shared.h"
 #include "types/container/test/basic_alloc.h"
 
-int main() {
+OXC3_TEST_MAIN(formats_oiSB) {
 
 	const Allocator alloc = BasicAllocator_instance;
 	Test t = (Test){ 0 };

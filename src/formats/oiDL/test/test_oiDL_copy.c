@@ -100,10 +100,9 @@ void Test_DLCreateCopyCacheRefs(Test *t) {
 
 	Test_setModule(t, "DLFile_createCopy (cache refs)");
 
-	//Entries that are refs into DLFile::cache must be re-based into the copy's
-	// own cache by DLFile_createCopy.  We inject cache-ref entries directly
-	//(matching what DLFile_read produces for small entries) so the test has no
-	// dependency on the serialization path.
+	//Entries that are refs into DLFile::cache must be re-based into the copy's own cache by DLFile_createCopy.
+	//We inject cache-ref entries directly (matching what DLFile_read produces for small entries),
+	// so the test has no dependency on the serialization path.
 
 	{                            //Data: copy must re-base cache refs, freeing the source must not corrupt the copy
 		DLFile src  = { 0 };
@@ -120,8 +119,8 @@ void Test_DLCreateCopyCacheRefs(Test *t) {
 		for (U64 i = 0; i < 4; ++i)
 			Test_assert(t, "entrySize matches src", DLFile_entrySize(&copy, i) == DLFile_entrySize(&src, i));
 
-		//Poison the source cache: if copy entries still point into src.cache the
-		//size reads below will operate on freed/poisoned memory.
+		//Poison the source cache:
+		// if copy entries still point into src.cache the size reads below will operate on freed/poisoned memory.
 
 		DLFile_free(&src, t->alloc);
 

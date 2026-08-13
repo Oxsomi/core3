@@ -167,7 +167,7 @@ void Test_ESBTypeNameMatrixOtherStrides(Test *t) {
 }
 
 //Invalid slots (stride=X8, or prim=Invalid) must return an empty string, not NULL
-//and not a name belonging to a valid type.
+// and not a name belonging to a valid type.
 void Test_ESBTypeNameInvalidSlots(Test *t) {
 
 	Test_setModule(t, "ESBType name: invalid slots return empty string");

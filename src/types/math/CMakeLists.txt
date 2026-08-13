@@ -39,14 +39,16 @@ target_link_libraries(OxC3_types_math PUBLIC OxC3_types_base)
 
 target_compile_definitions(OxC3_types_math PUBLIC -D_ENABLE_SIMD=${SIMD} -D_FORCE_FLOAT_FALLBACK=${_FORCE_FLOAT_FALLBACK})
 
-if(EnableTests)
+if(EnableTests AND OxC3TestExecutables)
 
 	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+	file(GLOB testsCpp CONFIGURE_DEPENDS "test/*.cpp")    #C++ TUs (e.g. hpp wrapper tests)
 	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
 
 	add_executable(
 		OxC3_types_math_test
 		${testsC}
+		${testsCpp}
 		${testsH}
 		CMakeLists.txt
 	)

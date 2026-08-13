@@ -77,6 +77,7 @@ void Test_SHFileAddBinZeroVendorMask(Test *t);
 void Test_SHFileAddBinZeroVendorMask(Test *t);
 void Test_SHFileAddBinVendorMaskNormalized(Test *t);
 void Test_SHFileAddBinVendorMaskOutOfBounds(Test *t);
+void Test_SHVendorMaskWidening(Test *t);
 void Test_SHFileAddBinInvalidExtensions(Test *t);
 void Test_SHFileAddBinInvalidStageType(Test *t);
 void Test_SHFileAddBinShaderVersionOutOfRange(Test *t);

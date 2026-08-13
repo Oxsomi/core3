@@ -29,7 +29,7 @@
 //Helper: build a ListSubResourceData for a 2D-like layout (arraySize layers, mip chain, depth slices per mip).
 //Fills each slice with a unique byte so content can be verified after round-trip.
 //Caller must call ListSubResourceData_freeUnderlying on *subs,
-//and RefPtr_dec on *sharedStream.
+// and RefPtr_dec on *sharedStream.
 Bool buildSubResources(
 	Test *t,
 	U32 w, U32 h, U32 depth,
@@ -134,7 +134,8 @@ static Bool roundTrip(
 	return true;
 }
 
-//Single 4x4 RGBA8 2D texture, 1 mip, 1 layer. Uses legacy pixel-format path.
+//Single 4x4 RGBA8 2D texture, 1 mip, 1 layer.
+//Uses legacy pixel-format path.
 void Test_DDSRoundTripRGBA8(Test *t) {
 
 	Test_setModule(t, "DDS round-trip: RGBA8 2D single mip");
@@ -235,7 +236,8 @@ void Test_DDSRoundTripMipChain(Test *t) {
 	}
 }
 
-//4x4 RGBA8 cubemap, 1 mip, 6 layers. Requires DXT10 header.
+//4x4 RGBA8 cubemap, 1 mip, 6 layers.
+//Requires DXT10 header.
 //Verifies type, layers, and that all 6 face subresources are present.
 void Test_DDSRoundTripCubemap(Test *t) {
 
@@ -376,9 +378,9 @@ void Test_DDSRoundTrip3D(Test *t) {
 
 //4x4x4 RGBA8 3D texture with a full mip chain (3 mips: 4x4x4, 2x2x2, 1x1x1 => 4+2+1 = 7 subresources).
 //This is the case that regressed when the write comparator sorted Layer->Z->Mip instead of Layer->Mip->Z:
-//multi-mip volumes are the only layout where Z and Mip both vary, so a wrong order made DDS_write reject
-//its own valid input ("contained duplicate data"). Guards against that by asserting the round-trip and the
-//exact Layer->Mip->Z subresource sequence.
+// multi-mip volumes are the only layout where Z and Mip both vary,
+// so a wrong order made DDS_write reject its own valid input ("contained duplicate data").
+//Guards against that by asserting the round-trip and the exact Layer->Mip->Z subresource sequence.
 void Test_DDSRoundTrip3DMipChain(Test *t) {
 
 	Test_setModule(t, "DDS round-trip: RGBA8 3D full mip chain");
@@ -460,7 +462,7 @@ void Test_DDSWriteInvalidMipCount(Test *t) {
 		const U32 claimedMips = 5;    //4x4 only supports 3 mips
 
 		//Build subresources matching the claimed (invalid) mip count so write gets past the count check
-		//and hits the mip validation
+		// and hits the mip validation
 
 		if (!buildSubResources(t, 4, 4, 1, claimedMips, 1, fmtId, &dataSr, &subs, &type)) {
 			Test_assert(t, "build bad mip subs", false);
@@ -487,7 +489,8 @@ void Test_DDSWriteInvalidMipCount(Test *t) {
 	}
 }
 
-//Feed a zeroed stream (wrong magic). DDS_read must fail cleanly.
+//Feed a zeroed stream (wrong magic).
+//DDS_read must fail cleanly.
 void Test_DDSReadInvalidMagic(Test *t) {
 
 	Test_setModule(t, "DDS read: invalid magic number");
@@ -513,7 +516,8 @@ void Test_DDSReadInvalidMagic(Test *t) {
 	}
 }
 
-//buf->length doesn't match info's implied subresource count. Must fail.
+//buf->length doesn't match info's implied subresource count.
+//Must fail.
 void Test_DDSWriteSubresourceMismatch(Test *t) {
 
 	Test_setModule(t, "DDS write: subresource count mismatch");

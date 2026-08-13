@@ -233,8 +233,7 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		lwin->bufferBusy[1] = false;
 
 		//cpuVisibleBuffer points to the content area; user sees nothing of the bar.
-		w->cpuVisibleBuffer.ptr              = lwin->mainBufferPtr;
-		w->cpuVisibleBuffer.lengthAndRefBits = (stride * height) | ((U64)1 << 63);
+		w->cpuVisibleBuffer = Buffer_createRef(lwin->mainBufferPtr, stride * height);
 	}
 
 	w->size = I32x2_create2(totalWidth, totalHeight);
@@ -612,10 +611,10 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	struct wl_compositor *compositor = manager->compositor;
 
 	//Main surface, the handle passed to Vulkan / vkCreateWaylandSurfaceKHR.
-	// Note: Wayland does not expose the window's position in global compositor
-	// coordinates to clients (by design, for security). w->offset is always zero
-	// on this platform. Use w->monitors[i].offsetPixels for output origins, which
-	// is sufficient for subpixel rendering decisions.
+	//Note: Wayland does not expose the window's position in global compositor coordinates to clients
+	// (by design, for security).
+	//w->offset is always zero on this platform.
+	//Use w->monitors[i].offsetPixels for output origins, which is sufficient for subpixel rendering decisions.
 	struct wl_surface *surface = wl_compositor_create_surface(compositor);
 
 	if(!surface)

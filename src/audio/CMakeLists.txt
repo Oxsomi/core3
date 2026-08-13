@@ -49,7 +49,7 @@ if(AUDIO_TEST_DEBUG)
 	target_compile_definitions(OxC3_audio PUBLIC AUDIO_TEST_DEBUG)
 endif()
 
-if(EnableTests)
+if(EnableTests AND OxC3TestExecutables)
 
 	file(GLOB testsInterfaceC CONFIGURE_DEPENDS "test/interface/*.c")
 	file(GLOB testsInterfaceH CONFIGURE_DEPENDS "test/interface/*.h")

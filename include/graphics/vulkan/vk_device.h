@@ -105,6 +105,14 @@ typedef struct VkGraphicsDevice {
 
 	VkFence commitFence[MAX_FRAMES_IN_FLIGHT];
 
+	//Push descriptor emulation, only allocated on a device that lacks VK_KHR_push_descriptor.
+	//One set per frame in flight, each pointing at that frame's globals buffer for the lifetime of the device,
+	// so they're written once at first use and only bound afterwards.
+	//cbufferPool doubles as the "already emulated" marker, since it's the first thing created.
+
+	VkDescriptorPool cbufferPool;
+	VkDescriptorSet cbufferSets[MAX_FRAMES_IN_FLIGHT];
+
 	VkPhysicalDeviceMemoryProperties memoryProperties;
 
 	//Temporary storage for submit time stuff
@@ -135,6 +143,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkCmdCopyAccelerationStructureKHR copyAccelerationStructure;
 	PFN_vkDestroyAccelerationStructureKHR destroyAccelerationStructure;
 	PFN_vkGetAccelerationStructureBuildSizesKHR getAccelerationStructureBuildSizes;
+	PFN_vkGetAccelerationStructureDeviceAddressKHR getAccelerationStructureDeviceAddress;
 	PFN_vkGetDeviceAccelerationStructureCompatibilityKHR getAccelerationStructureCompatibility;
 
 	PFN_vkCmdTraceRaysKHR traceRays;
@@ -185,6 +194,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkUpdateDescriptorSets updateDescriptorSets;
 	PFN_vkFlushMappedMemoryRanges flushMappedMemoryRanges;
 	PFN_vkCmdCopyBuffer cmdCopyBuffer;
+	PFN_vkCmdCopyImageToBuffer cmdCopyImageToBuffer;
 	PFN_vkCmdCopyBufferToImage cmdCopyBufferToImage;
 	PFN_vkGetDeviceQueue getDeviceQueue;
 	PFN_vkCreateSemaphore createSemaphore;

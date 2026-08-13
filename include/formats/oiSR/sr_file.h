@@ -238,7 +238,8 @@ typedef struct SRSymbol {
 
 } SRSymbol;
 
-//A symbol AST node. POD and hashable (treated as a raw byte buffer).
+//A symbol AST node.
+//POD and hashable (treated as a raw byte buffer).
 //Node order matches the producer, so parent/child indices are direct.
 //Direct children are those nodes whose parent == this node's index.
 
@@ -272,7 +273,8 @@ typedef struct SRAnnotation {
 	U8 padding[3];
 } SRAnnotation;
 
-//Frontend bind info for a Register node (kind/shape). Keyed by node index; space/bindPoint are backend-only.
+//Frontend bind info for a Register node (kind/shape).
+//Keyed by node index; space/bindPoint are backend-only.
 
 typedef struct SRRegister {
 
@@ -289,7 +291,8 @@ typedef struct SRRegister {
 
 } SRRegister;
 
-//A single enumerator value. Keyed by its EnumValue node; enumType is the parent enum's underlying type.
+//A single enumerator value.
+//Keyed by its EnumValue node; enumType is the parent enum's underlying type.
 
 typedef struct SREnumValue {
 
@@ -301,10 +304,11 @@ typedef struct SREnumValue {
 
 } SREnumValue;
 
-//The resolved type of a value node (Variable/Parameter/StaticVariable/GroupsharedVariable/Typedef/Struct/Union). Keyed
-//by node index; typeName is the frontend spelling ("float3", "Light", "Texture2D"), the class/rows/cols/elements let a
-//consumer distinguish scalar/vector/matrix/struct/object without parsing the name. This resolves the node localIds that
-//would otherwise dangle (a value node's localId indexes the frontend type table, which isn't serialized).
+//The resolved type of a value node (Variable/Parameter/StaticVariable/GroupsharedVariable/Typedef/Struct/Union).
+//Keyed by node index; typeName is the frontend spelling ("float3", "Light", "Texture2D"), the class/rows/cols/elements
+// let a consumer distinguish scalar/vector/matrix/struct/object without parsing the name.
+//This resolves the node localIds that would otherwise dangle (a value node's localId indexes the frontend type table,
+// which isn't serialized).
 
 typedef struct SRType {
 
@@ -319,7 +323,7 @@ typedef struct SRType {
 
 	U32 typeNameId;                         //Underlying type spelling into names[] (resolved), or U32_MAX
 	U32 displayNameId;                      //Display type spelling into names[] (the alias the user wrote, for tooltips);
-	                                        //U32_MAX = same as typeName
+	// U32_MAX = same as typeName
 
 	U32 defNodeId;                          //Struct/Union node that DEFINES this type (go-to-definition), U32_MAX = none
 	U32 baseNodeId;                         //Base-class struct node (single inheritance), U32_MAX = none
@@ -327,8 +331,10 @@ typedef struct SRType {
 
 } SRType;
 
-//One interface a struct/union implements. A struct can implement several, so these are edges in their own table (keyed
-//by the implementing node) rather than a field on SRType. The concrete base class stays on SRType.baseNodeId.
+//One interface a struct/union implements.
+//A struct can implement several, so these are edges in their own table (keyed by the implementing node) rather than a
+// field on SRType.
+//The concrete base class stays on SRType.baseNodeId.
 
 typedef struct SRInterface {
 
@@ -395,11 +401,13 @@ void ListSRFile_freeUnderlying(ListSRFile *files, const Allocator *alloc);
 Bool SRFile_addString(SRFile *srFile, CharString *str, const Allocator *alloc, U32 *id, Error *e_rr);
 
 //Index of the first node named `name` whose type is `type` (Struct/Union both match ESRNodeType_Struct, they're the
-//record kinds), or U32_MAX. Resolves a type/base/interface name back to its defining node (references are by name
-//because the frontend reflector reuses type indices across uses of the same type).
+// record kinds), or U32_MAX.
+//Resolves a type/base/interface name back to its defining node (references are by name because the frontend reflector
+// reuses type indices across uses of the same type).
 U32 SRFile_findNodeByName(const SRFile *srFile, CharString name, ESRNodeType type);
 
-//Recompute the content hash. Call once the nodes/symbols/annotations/strings are finalized.
+//Recompute the content hash.
+//Call once the nodes/symbols/annotations/strings are finalized.
 Bool SRFile_finalize(SRFile *srFile, const Allocator *alloc, Error *e_rr);
 
 Bool SRFile_write(
@@ -412,10 +420,11 @@ Bool SRFile_write(
 
 Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Allocator *alloc, SRFile *srFile, Error *e_rr);
 
-//Logs a stringified SRFile tree directly. isVerbose dumps every field (ids, localId, parent/child, flags,
-//full source spans, and the raw register/enum-value records) so a serialized oiSR can be reviewed exactly.
+//Logs a stringified SRFile tree directly.
+//isVerbose dumps every field (ids, localId, parent/child, flags, full source spans, and the raw register/enum-value
+// records) so a serialized oiSR can be reviewed exactly.
 //collapseBuiltins folds nodes from builtin includes (@types.hlsli etc.) and their descendants into a per-file
-//summary, so a shader's own symbols aren't buried under the couple hundred builtin symbols the includes pull in.
+// summary, so a shader's own symbols aren't buried under the couple hundred builtin symbols the includes pull in.
 void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool collapseBuiltins, const Allocator *alloc);
 
 //File headers (file spec: docs/oiSR.md)

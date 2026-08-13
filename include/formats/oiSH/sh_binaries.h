@@ -72,19 +72,22 @@ typedef enum ESHExtension {
 	//SM6.10 cooperative vectors (per-thread matrix*vector): DXIL dx::linalg, SPIR-V SPV_NV_cooperative_vector (NV-only).
 	ESHExtension_CoopVec                     = 1 << 21,
 
-	//SM6.10 cooperative matrix (subgroup matrix*matrix / GEMM): DXIL dx::linalg, SPIR-V SPV_KHR_cooperative_matrix (cross-vendor).
+	//SM6.10 cooperative matrix (subgroup matrix*matrix / GEMM): DXIL dx::linalg,
+	// SPIR-V SPV_KHR_cooperative_matrix (cross-vendor).
 	ESHExtension_CoopMat                     = 1 << 22,
 
-	//FP8 (e4m3/e5m2) cooperative vector/matrix support: an additive gate on top of CoopVec/CoopMat (whose base tier is
-	//FP16 + INT8). FP8 is not universally supported (newer HW on Vulkan; a vendor/EXT extension for KHR cooperative
-	//matrix), so it is a separate flag the runtime matches against device cooperative properties. Annotation-driven:
-	//NV cooperative-vector FP8 is only an interpretation, not a SPIR-V capability, so it isn't reflection-detectable
-	//(hence not in the SpirvNative/DxilNative sets, or it would be demoted).
+	//FP8 (e4m3/e5m2) cooperative vector/matrix support: an additive gate on top of CoopVec/CoopMat,
+	// whose base tier is FP16 + INT8.
+	//FP8 is not universally supported (newer HW on Vulkan; a vendor/EXT extension for KHR cooperative matrix),
+	// so it is a separate flag the runtime matches against device cooperative properties.
+	//Annotation-driven: NV cooperative-vector FP8 is only an interpretation, not a SPIR-V capability,
+	// so it isn't reflection-detectable (hence not in the SpirvNative/DxilNative sets, or it would be demoted).
 	ESHExtension_CoopFP8                     = 1 << 23,
 
-	//Cooperative-vector training (D3D12 Tier 1.1 / SPV_NV_cooperative_vector CooperativeVectorTrainingNV): the outer-
-	//product / reduce-sum accumulate ops (weight/bias gradients). Additive gate on top of CoopVec, reflection-detectable
-	//(a real capability) but kept out of the Native sets so adding it doesn't churn every oiSH's dormant mask.
+	//Cooperative-vector training (D3D12 Tier 1.1 / SPV_NV_cooperative_vector CooperativeVectorTrainingNV):
+	// the outer-product / reduce-sum accumulate ops (weight/bias gradients).
+	//Additive gate on top of CoopVec, reflection-detectable (a real capability)
+	// but kept out of the Native sets so adding it doesn't churn every oiSH's dormant mask.
 	ESHExtension_CoopVecTraining             = 1 << 24,
 
 	//Full bindless: direct descriptor heap indexing from shaders (requires the DescriptorHeap device feature).
@@ -129,12 +132,12 @@ typedef enum ESHExtension {
 
 	//Which backend DXC can *compile* an extension to, as opposed to the DxilNative / SpirvNative sets above which
 	// say which backend it can be *detected* (reflected) from.
-	//DXC lowers an HLSL intrinsic to a single backend, but the other backend is still reachable when the shader
-	// writes the operation as inline SPIR-V ([[vk::ext_*]]). Inline SPIR-V is itself SPIR-V, so it's an escape
-	// hatch onto SPIRV only - never onto DXIL. An extension is therefore listed as single-backend below ONLY when
-	// the other backend has no path at all; a DXIL-only *intrinsic* (OMM / SER / triangle position fetch /
-	// cooperative vectors) is NOT single-backend because a SPIRV build can still express it inline, so it stays
-	// dual (absent from both sets).
+	//DXC lowers an HLSL intrinsic to a single backend,
+	// but the other backend is still reachable when the shader writes the operation as inline SPIR-V ([[vk::ext_*]]).
+	//Inline SPIR-V is itself SPIR-V, so it's an escape hatch onto SPIRV only - never onto DXIL.
+	//An extension is therefore listed as single-backend below ONLY when the other backend has no path at all.
+	//A DXIL-only *intrinsic* (OMM / SER / triangle position fetch / cooperative vectors) is NOT single-backend
+	// because a SPIRV build can still express it inline, so it stays dual (absent from both sets).
 	//When adding an extension above: leave it out of both sets to keep it dual (the default), and only add it here
 	// if one backend is genuinely impossible.
 
@@ -168,8 +171,27 @@ typedef enum ESHVendor {
 	ESHVendor_APPL,
 	ESHVendor_SMSG,
 	ESHVendor_HWEI,
+	ESHVendor_GOGL,
+	ESHVendor_MESA,
 	ESHVendor_Count
 } ESHVendor;
+
+//All bits below a count, which is how a vendorMask spells "any vendor".
+//writerCount comes from SHHeader::vendorCount, so this is the everything of whoever wrote the file.
+
+static inline U16 ESHVendor_allMask(U16 count) {
+	//0xFFFF spelled out rather than U16_MAX, which lives in constants.h and isn't reachable from here.
+	return count >= 16 ? (U16)0xFFFF : (U16)(((U32)1 << count) - 1);
+}
+
+//Restates an all-vendors mask in terms of the vendors that exist now.
+//A file written before a vendor was added spells everything with fewer bits, and left alone that mask would
+// quietly start excluding the new vendor, refusing a binary its author meant to run anywhere.
+//A mask naming specific vendors is returned untouched: it never claimed to cover ones that did not exist.
+
+static inline U16 ESHVendor_widenMask(U16 mask, U16 writerCount) {
+	return mask == ESHVendor_allMask(writerCount) ? ESHVendor_allMask(ESHVendor_Count) : mask;
+}
 
 typedef enum ESHBinaryFlags {
 
@@ -202,7 +224,8 @@ typedef struct SHUniform {
 } SHUniform;
 
 //Runtime SHEntry with some extra information that is used to decide how to compile
-//This is how the SHEntry is found in the shader. Afterwards, it is transformed into binaries.
+//This is how the SHEntry is found in the shader.
+//Afterwards, it is transformed into binaries.
 //Then the SHEntry will point to the binaries instead to save space.
 typedef struct SHUniformRuntime {
 

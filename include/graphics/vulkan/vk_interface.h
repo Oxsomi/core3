@@ -80,10 +80,20 @@
 	void  VkDeviceBuffer_free(DeviceBuffer *buffer);
 	Bool VkDeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending, Error *e_rr);
 
+	Bool VkDeviceBufferRef_pull(
+		void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *resource,
+		U64 offset, U64 len, U64 stagingOffset, Error *e_rr
+	);
+
 	//Device texture
 
 	Bool VkUnifiedTexture_create(TextureRef *textureRef, const CharString *name, Error *e_rr);
 	Bool VkDeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending, Error *e_rr);
+
+	Bool VkDeviceTextureRef_pull(
+		void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *resource,
+		const TextureRange *range, U64 stagingOffset, U64 *rowPitch, Error *e_rr
+	);
 	void  VkUnifiedTexture_free(TextureRef *textureRef);
 
 	//Swapchain

@@ -50,8 +50,13 @@ void Platform_cleanupExt() {
 
 	void *Platform_getDataImpl(void *ptr) { (void) ptr; return NULL; }
 	
-	Bool Platform_setKeyboardVisible(Bool isVisible) {
+	//No on screen keyboard here, so there's nothing a hardware one would have to be weighed against.
+
+	Bool Platform_hasPhysicalKeyboard() { return true; }
+
+	Bool Platform_setKeyboardVisibleForced(Bool isVisible, Bool force) {
 		(void) isVisible;
+		(void) force;
 		return true;
 	}
 
@@ -182,7 +187,7 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 	#endif
 
 	//Without parsing /sys/devices/system/cpu topology we can't reliably separate SMT or P/E cores, so fall back
-	//to logical == physical (accurate on the no-SMT ARM parts this branch mostly targets).
+	// to logical == physical (accurate on the no-SMT ARM parts this branch mostly targets).
 	//TODO: parse /sys topology for true physical core count, hybrid P/E split and NUMA node count.
 
 	out->physicalCores = out->logicalCores;

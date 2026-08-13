@@ -114,8 +114,9 @@ Bool CLI_profileData(const ParsedArgs *args, ProfileOperation op) {
 	Bool s_uccess = true;
 	Error err = Error_none(), *e_rr = &err;
 
-	//Buffer to profile on. -length overrides the 1 GiB default so quick runs (e.g. the CLI test) can use a
-	//small buffer instead of allocating and processing a full gigabyte.
+	//Buffer to profile on.
+	//-length overrides the 1 GiB default so quick runs (e.g. the CLI test) can use a small buffer
+	// instead of allocating and processing a full gigabyte.
 
 	U64 bufferSize = GIBI;
 
@@ -253,8 +254,8 @@ Bool _CLI_profileCast(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	(void)args;
 	Bool s_uccess = true;
 
-	//Scale the cast count to the buffer so a smaller -length still works. Each step reads at most number*8
-	//(= bufferLen/32) bytes, so any buffer >= 256 bytes stays in bounds.
+	//Scale the cast count to the buffer so a smaller -length still works.
+	//Each step reads at most number*8 (= bufferLen/32) bytes, so any buffer >= 256 bytes stays in bounds.
 
 	if(Buffer_length(buf) < 256)
 		retError(clean, Error_invalidParameter(1, 0, "_CLI_profileCast() requires buf to be >= 256 bytes"));

@@ -161,8 +161,8 @@ void Test_CASetTime(Test *t) {
 		CAHandle hf = addFile(t, &ca, root, "nodate.txt", 0, false);
 
 		//Whether it succeeds or fails, it must not crash and fileTime must be
-		//either 0 (unchanged) or the requested value, never an uninitialised
-		//or out-of-range garbage number.
+		// either 0 (unchanged) or the requested value, never an uninitialised
+		// or out-of-range garbage number.
 
 		Ns ts = (Ns)5000 * MS;
 		Bool ok = CAFile_setTime(&ca, hf, ts, NULL);

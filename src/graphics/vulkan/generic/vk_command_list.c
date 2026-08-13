@@ -777,6 +777,17 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 		case ECommandOp_StartScope: {
 
+			//Stencil and blend constants belong to the scope that set them, so a scope that doesn't set them starts
+			// from the default rather than inheriting whatever the previous one left.
+			//Recording already forces the pipeline, viewport and scissor to be re-declared per scope; without this
+			// these two would be the only state that leaks across, which makes a scope depend on whether an
+			// unrelated earlier one happened to be hidden.
+			//Only the requested values reset, since stencilRef and blendConstants track what the GPU actually has;
+			// the flush before the next draw then sets them again only if they really differ.
+
+			temp->tempStencilRef = 0;
+			temp->tempBlendConstants = F32x4_zero();
+
 			VkDependencyInfo dependency = (VkDependencyInfo) {
 				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
 				.dependencyFlags = 0
@@ -874,9 +885,12 @@ void VK_WRAP_FUNC(CommandList_process)(
 						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
 						VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
-				if(transition.stage == EPipelineStage_RTASBuild)    //RTASBuild inputs/outputs are AS read/write
+				//AS builds read their inputs (vertex/index/aabb/instance data) as SHADER_READ per spec;
+				// only the AS itself uses AS read/write, which the RTAS branch above already handled.
+
+				if(transition.stage == EPipelineStage_RTASBuild)
 					access =
-						isShaderRead ? VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR :
+						isShaderRead ? VK_ACCESS_2_SHADER_READ_BIT :
 						VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
 
 				if(!pipelineStage)

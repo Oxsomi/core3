@@ -56,10 +56,19 @@ static const char *testFileRenamed = "data_renamed.bin";
 static const char *testFile2       = "platform_test_tmp/move_src.bin";
 static const char *testMoveDir     = "platform_test_tmp/subdir";
 
-//Virtual section name registered by CMake
-static const char *vSection        = "//OxC3_plinttst/testdata";
-static const char *vFileHello      = "//OxC3_plinttst/testdata/hello.txt";
-static const char *vFileSub        = "//OxC3_plinttst/testdata/sub/world.txt";
+//Virtual section name registered by CMake.
+//A section lives under the target that packaged it, and this suite is compiled into two of them:
+// OxC3_plinttst on desktop, OxC3_atest in the android bundle (android has no exec, see src/test/android).
+//CMake passes the name so the paths follow whichever one is building.
+
+#ifndef _OXC3_TEST_VFS_TARGET
+	#define _OXC3_TEST_VFS_TARGET "OxC3_plinttst"
+#endif
+
+static const char *vLibrary        = "//" _OXC3_TEST_VFS_TARGET;
+static const char *vSection        = "//" _OXC3_TEST_VFS_TARGET "/testdata";
+static const char *vFileHello      = "//" _OXC3_TEST_VFS_TARGET "/testdata/hello.txt";
+static const char *vFileSub        = "//" _OXC3_TEST_VFS_TARGET "/testdata/sub/world.txt";
 
 // -- 1. WindowManager lifecycle ------------------------------------------------
 
@@ -519,9 +528,9 @@ clean:
 }
 
 // -- 4c. File - long path tests ------------------------------------------------
-// Windows: verifies \\?\ long-path handling (paths > MAX_PATH = 260 chars).
-// All platforms: verifies deeply nested paths and names near the 255-byte
-// filename limit work correctly end-to-end through the platform abstraction.
+//Windows: verifies \\?\ long-path handling (paths > MAX_PATH = 260 chars).
+//All platforms: verifies deeply nested paths and names near the 255-byte filename limit work correctly end-to-end
+// through the platform abstraction.
  
 //Build a CharString from a stack buffer without allocation.
 //Only safe for string literals / compile-time-known content.
@@ -607,16 +616,15 @@ static void Test_fileLongPath(Test *t) {
 	CharString_free(&longFile, t->alloc);
  
 	// -- 2. Deep directory tree (total path > 260 chars on Windows) ------------
-	// Build a path that exceeds the legacy MAX_PATH of 260 characters so that
-	// CharString_toLongPath's \\?\ prefix is exercised on Windows.
-	// On POSIX systems this just tests a legitimately deep path.
+	//Build a path that exceeds the legacy MAX_PATH of 260 characters
+	// so that CharString_toLongPath's \\?\ prefix is exercised on Windows.
+	//On POSIX systems this just tests a legitimately deep path.
 	//
-	// Structure:
+	//Structure:
 	//   platform_test_longpath/
 	//     level_01/level_02/.../level_32/   (each component 8 chars + '/')
 	//
-	// 8 * 32 + 32 slashes = 288 chars just for levels, plus the 22-char root
-	// and a filename -> comfortably over 260.
+	//8 * 32 + 32 slashes = 288 chars just for levels, plus the 22-char root and a filename -> comfortably over 260.
  
 	{
 		//Build the deep dir path incrementally
@@ -743,11 +751,14 @@ static void Test_fileCaseAndUtf8(Test *t) {
 	CharString lowerFile = CharString_createRefCStrConst("platform_test_caseutf8/foo.txt");
 	Test_assert(t, "addUpper", File_add(&upperFile, EFileType_File, false, t->alloc, &t->err));
 
-	#if _PLATFORM_TYPE == PLATFORM_WINDOWS || _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
-		//Windows/macOS: case-insensitive by default
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS || _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS || \
+		_PLATFORM_TYPE == PLATFORM_ANDROID
+		//Windows/macOS: case-insensitive by default.
+		//Android belongs here too even though its kernel is Linux: the working directory is externalDataPath
+		//(see aplatform.c), and external storage is FUSE emulated, which preserves case but matches without it.
 		Test_assert(t, "hasLower", File_hasFile(&lowerFile, t->alloc));
 	#else
-		//Linux/Android: case-sensitive
+		//Linux: case-sensitive
 		Test_assert(t, "notHasLower", !File_hasFile(&lowerFile, t->alloc));
 	#endif
 
@@ -890,6 +901,132 @@ clean:
 	File_unloadVirtual(&secPath, alloc, NULL);
 }
 
+// -- 5b. Virtual - foreach hands back paths that are valid inputs ----------------------------------
+
+//The contract documented above File_foreach: every path a callback receives is fully qualified and can be
+// fed straight back into another File_* call.
+//It is worth its own test because it broke once already, and it breaks silently: every in-tree consumer cuts
+// a known prefix off the reported path, so a regression corrupts packaged archive names instead of erroring.
+
+typedef struct ForeachRoundTrip {
+	Test *t;
+	U64 files, folders, badPrefix, unreadable, wrongSize;
+} ForeachRoundTrip;
+
+static Bool Test_foreachRoundTripCallback(const FileInfo *info, void *userData, const Allocator *alloc, Error *e_rr) {
+
+	(void) e_rr;
+
+	ForeachRoundTrip *ctx = (ForeachRoundTrip*) userData;
+
+	if(info->type == EFileType_Folder)
+		++ctx->folders;
+
+	else ++ctx->files;
+
+	//Fully qualified means // followed by the section for a virtual entry, and an absolute path otherwise.
+	//A third slash would mean the section got joined onto an already prefixed path.
+	//Either way the check has to keep going afterwards, since the read back below is the actual point.
+
+	if(File_isVirtual(info->path)) {
+
+		if(CharString_getAt(info->path, 2) == '/')
+			++ctx->badPrefix;
+	}
+
+	else if(!CharString_length(info->path) || CharString_getAt(info->path, 0) == '.')
+		++ctx->badPrefix;
+
+	//The load bearing half: hand the reported path straight back to the file api.
+	//getInfo has to agree it exists, and for a file the read has to produce exactly the size foreach reported.
+
+	FileInfo again = (FileInfo) { 0 };
+
+	if(!File_getInfo(&info->path, &again, alloc, NULL)) {
+		++ctx->unreadable;
+		return true;
+	}
+
+	if(again.type != info->type || again.fileSize != info->fileSize)
+		++ctx->wrongSize;
+
+	FileInfo_free(&again, alloc);
+
+	if(info->type == EFileType_Folder)
+		return true;
+
+	Buffer buf = Buffer_createNull();
+	RefPtrType fhType = FileHandle_makeType(alloc);
+
+	if(!File_read(&info->path, 50 * MS, 0, 0, &fhType, &buf, NULL))
+		++ctx->unreadable;
+
+	else if(Buffer_length(buf) != info->fileSize)
+		++ctx->wrongSize;
+
+	Buffer_free(&buf, alloc);
+	return true;
+}
+
+static void Test_virtualForeachRoundTrip(Test *t) {
+
+	Test_setModule(t, "File/ForeachRoundTrip");
+
+	const Allocator *alloc = Platform_instance->alloc;
+	const RefPtrType memStreamType = MemoryStream_makeType(alloc);
+
+	CharString secPath = CharString_createRefCStrConst(vSection);
+
+	if(!Test_assert(t, "loadVirtual", File_loadVirtual(&secPath, &memStreamType, NULL, NULL, alloc, &t->err)))
+		return;
+
+	ForeachRoundTrip ctx = (ForeachRoundTrip) { .t = t };
+
+	Test_assert(t, "foreachOk", File_foreach(
+		&secPath, !Platform_instance->useWorkingDir, Test_foreachRoundTripCallback, &ctx, true, alloc, &t->err
+	));
+
+	Test_assert(t, "sawFiles",       ctx.files >= 2);            //hello.txt and sub/world.txt
+	Test_assert(t, "allPrefixed",    !ctx.badPrefix);
+	Test_assert(t, "allReadBack",    !ctx.unreadable);
+	Test_assert(t, "sizesAgree",     !ctx.wrongSize);
+
+	File_unloadVirtual(&secPath, alloc, NULL);
+
+	//The same guarantee for physical paths, which report absolute rather than //-prefixed.
+	//This builds its own two entry directory rather than walking the working directory,
+	// since whatever happens to be lying there on a runner would make the read back assertions flaky.
+
+	ForeachRoundTrip phys = (ForeachRoundTrip) { .t = t };
+
+	CharString physDir  = CharString_createRefCStrConst("platform_foreach_tmp");
+	CharString physFile = CharString_createRefCStrConst("platform_foreach_tmp/entry.bin");
+	CharString physSub  = CharString_createRefCStrConst("platform_foreach_tmp/sub");
+
+	RefPtrType fhType = FileHandle_makeType(alloc);
+	Buffer payload = Buffer_createRefConst("foreach", 7);
+
+	File_remove(&physDir, 50 * MS, alloc, NULL);
+
+	if (
+		Test_assert(t, "physAddDir",  File_add(&physDir,  EFileType_Folder, false, alloc, &t->err)) &&
+		Test_assert(t, "physAddSub",  File_add(&physSub,  EFileType_Folder, false, alloc, &t->err)) &&
+		Test_assert(t, "physAddFile", File_add(&physFile, EFileType_File,   false, alloc, &t->err)) &&
+		Test_assert(t, "physWrite",   File_write(&payload, &physFile, 0, 0, 50 * MS, false, &fhType, &t->err))
+	) {
+		Test_assert(t, "physForeach", File_foreach(
+			&physDir, !Platform_instance->useWorkingDir, Test_foreachRoundTripCallback, &phys, true, alloc, &t->err
+		));
+
+		Test_assert(t, "physSawBoth",       phys.files >= 1 && phys.folders >= 1);
+		Test_assert(t, "physicalAbsolute",  !phys.badPrefix);
+		Test_assert(t, "physicalReadBack",  !phys.unreadable);
+		Test_assert(t, "physicalSizes",     !phys.wrongSize);
+	}
+
+	File_remove(&physDir, 50 * MS, alloc, NULL);
+}
+
 // -- 5a. Virtual - Double load, operations on root, library or section  ----------------------------
 
 static void Test_virtualEdgeCases(Test *t) {
@@ -898,9 +1035,9 @@ static void Test_virtualEdgeCases(Test *t) {
 
 	const RefPtrType memStreamType = MemoryStream_makeType(t->alloc);
 	CharString vRoot   = CharString_createRefCStrConst("//.");
-	CharString libRoot = CharString_createRefCStrConst("//OxC3_plinttst");
-	CharString sec     = CharString_createRefCStrConst("//OxC3_plinttst/testdata");
-	CharString child   = CharString_createRefCStrConst("//OxC3_plinttst/testdata/hello.txt");
+	CharString libRoot = CharString_createRefCStrConst(vLibrary);
+	CharString sec     = CharString_createRefCStrConst(vSection);
+	CharString child   = CharString_createRefCStrConst(vFileHello);
 
 	//1. Load at section level (baseline)
 	Test_assert(t, "loadSec", File_loadVirtual(&sec, &memStreamType, NULL, NULL, t->alloc, &t->err));
@@ -975,7 +1112,16 @@ static void Test_dynamicLibrary(Test *t) {
 	#endif
 
 	DynamicLibrary dl = NULL;
-	Test_assert(t, "load", DynamicLibrary_load(rtLib, true, &dl, &err));
+
+	//Android puts an apk's native libraries in a loader-managed directory, not the app data dir that
+	//isAppDir resolves against, so a bare name (which the linker resolves against it) is the way in.
+
+	#if _PLATFORM_TYPE == PLATFORM_ANDROID
+		Test_assert(t, "load", DynamicLibrary_loadSystem(rtLib, &dl, &err));
+	#else
+		Test_assert(t, "load", DynamicLibrary_load(rtLib, true, &dl, &err));
+	#endif
+
 	Test_assert(t, "nonNull", dl != NULL);
 
 	//Load a known symbol that exists in all C runtimes
@@ -1069,11 +1215,11 @@ static void Test_windowNullguards(Test *t) {
 
 // -- entry point ---------------------------------------------------------------
 
-Platform_defineEntrypoint() {
+OXC3_TEST_ENTRY(platforms_interface) {
 
 	Error err = Error_none();
 	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err)) {
-		// Can't even set up the platform , hard fail
+		Test_printPlatformCreateFail(&err);        //Can't even set up the platform, hard fail (but say why first)
 		Platform_return(1);
 	}
 
@@ -1097,6 +1243,7 @@ Platform_defineEntrypoint() {
 	Test_fileRepeatedOpenClose(&t);
 
 	Test_platformsFileVirtual(&t);
+	Test_virtualForeachRoundTrip(&t);
 	Test_virtualEdgeCases(&t);
 
 	Test_dynamicLibrary(&t);

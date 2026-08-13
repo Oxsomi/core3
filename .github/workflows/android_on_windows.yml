@@ -1,11 +1,11 @@
-name: Android Vulkan
+name: Android Vulkan (Windows host)
 on: [push]
 
 jobs:
   build:
     uses: ./.github/workflows/_build.yml
     with:
-      name: Android Vulkan
+      name: Android Vulkan (Windows host)
       runner: windows-2022
       os: android
       build_flags: ''

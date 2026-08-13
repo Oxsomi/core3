@@ -27,7 +27,6 @@
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/window.h"
-#include "platforms/platform.h"
 #include "types/base/error.h"
 
 Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface, Error *e_rr) {
@@ -55,7 +54,11 @@ Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR
 	if (!instanceExt->createSurfaceExt)
 		retError(clean, Error_nullPointer(0, "VkSurface_create()::createSurfaceExt is NULL!"));
 
-	return checkVkError(
-		((PFN_vkCreateAndroidSurfaceKHR)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
-	);
+	gotoIfError3(clean, checkVkError(
+		((PFN_vkCreateAndroidSurfaceKHR)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface),
+		e_rr
+	));
+
+clean:
+	return s_uccess;
 }

@@ -52,19 +52,28 @@ endif()
 
 target_include_directories(OxC3_package_CLI PUBLIC include/tools/package_cli)
 
-# OxC3_package executable, for easily executing OxC3_package_CLI commands
+# OxC3_package executable, for easily executing OxC3_package_CLI commands.
+#
+# Not on android: Platform_defineEntrypoint gives android_main rather than main there, so an executable
+# doesn't link (ld.lld: undefined symbol: main), and an apk couldn't run one anyway.
+# Nothing is lost by skipping it, since a cross build packages its virtual files with the host
+# OxC3_package it tool_requires; the library above is still built and linked into the app.
 
-file(GLOB sources CONFIGURE_DEPENDS "executable/*.c")
+if(NOT ANDROID)
 
-add_executable(
-	OxC3_package
-	${sources}
-	CMakeLists.txt
-)
+	file(GLOB sources CONFIGURE_DEPENDS "executable/*.c")
 
-set_target_properties(OxC3_package PROPERTIES FOLDER Oxsomi/CLI)
-target_link_libraries(OxC3_package PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_package_CLI)
+	add_executable(
+		OxC3_package
+		${sources}
+		CMakeLists.txt
+	)
 
-include(../../../cmake/oxc3.cmake)
-configure_icon(OxC3_package "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
-apply_dependencies(OxC3_package)
+	set_target_properties(OxC3_package PROPERTIES FOLDER Oxsomi/CLI)
+	target_link_libraries(OxC3_package PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_package_CLI)
+
+	include(../../../cmake/oxc3.cmake)
+	configure_icon(OxC3_package "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
+	apply_dependencies(OxC3_package)
+
+endif()

@@ -9,6 +9,10 @@ jobs:
       runner: ubuntu-24.04-arm
       os: linux
       build_flags: '-o cliGraphics=False'
+      # arm64 Vulkan device coverage, which CI has nowhere else.
+      # The one-job restriction noted in linux.yml is about eight identical x64 jobs, so it doesn't
+      # apply to a different architecture.
+      vulkan_icd: true
       python_cmd: python3
       setup_python: false
       python_version: ''

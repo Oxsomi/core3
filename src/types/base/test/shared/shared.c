@@ -32,6 +32,21 @@ void Test_print(Test *test, const C8 *str) {
 	printf("-- %s: %s\n", Test_prefix(test), str);            //No access to Log, that's in container
 }
 
+void Test_printPlatformCreateFail(const Error *e) {
+
+	if (!e || !e->genericError) {
+		printf("-- Fatal: Platform_create failed without error info\n");
+		return;
+	}
+
+	printf(
+		"-- Fatal: Platform_create failed: %s (%s, sub %"PRIu32", param %"PRIu32": %"PRIX64" %"PRIX64")\n",
+		e->errorStr ? e->errorStr : "???",
+		EGenericError_TO_STRING[e->genericError],
+		e->errorSubId, e->paramId, e->paramValue0, e->paramValue1
+	);
+}
+
 void Test_setModule(Test *test, const C8 *moduleName) {
 
 	if (test->currentModule) {
@@ -81,11 +96,16 @@ Bool Test_assert2(Test *test, const C8 *section, Bool value, const C8 *file, U64
 		!source ? "???" : source
 	);
 
+	//Guarded and newline terminated because this runs while a failure is already being reported.
+	//A NULL errorStr would otherwise crash the harness mid-report and take the rest of the suite's output
+	// with it, and without the newline android's log pump merges this into the next assert and truncates it.
+
 	if (test->err.genericError)
 		printf(
-			"-- Error: %s (%s)",
-			EGenericError_TO_STRING[test->err.genericError],
-			test->err.errorStr
+			"-- Error: %s (%s)\n",
+			test->err.genericError < EGenericError_Stderr + 1 ?
+				EGenericError_TO_STRING[test->err.genericError] : "???",
+			test->err.errorStr ? test->err.errorStr : "???"
 		);
 
 	test->err = Error_none();

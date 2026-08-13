@@ -43,7 +43,8 @@ typedef enum EDLFlags {
 
 	EDLFlags_IsString                = 1 << 1,        //If true; must be a valid UTF8 string
 
-	//Chunk size of AES for multi threading. 0 = 128KiB, 1 = 1MiB, 2 = 8MiB, 3 = 64MiB
+	//Chunk size of AES for multi threading.
+	//0 = 128KiB, 1 = 1MiB, 2 = 8MiB, 3 = 64MiB
 
 	EDLFlags_UseAESChunksA           = 1 << 2,
 	EDLFlags_UseAESChunksB           = 1 << 3,

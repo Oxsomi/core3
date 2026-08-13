@@ -20,8 +20,8 @@
 
 //shader_compiler/spirv_isa.c
 //Offline SPIR-V -> AMD ISA by driving the bundled amdllpc + amdgpu-dis directly (rga.exe's own vk-spv-offline wrapper
-//is unreliable). Shared by the CLI's `isa` category and the shader-compiler ISA snapshot test so both produce the
-//exact same ISA text.
+// is unreliable).
+//Shared by the CLI's `isa` category and the shader-compiler ISA snapshot test so both produce the exact same ISA text.
 
 #include "shader_compiler/spirv_isa.h"
 #include "shader_compiler/compiler.h"
@@ -39,7 +39,8 @@
 Bool SpvISA_stageHasOfflinePath(Buffer spirv, const Allocator *alloc) {
 
 	//Reuse the compiler's SPIR-V entrypoint query (it maps each OpEntryPoint's execution model to an ESHPipelineStage)
-	//rather than parsing the module here. The compiler argument is unused for the SPIR-V path, so NULL is fine.
+	// rather than parsing the module here.
+	//The compiler argument is unused for the SPIR-V path, so NULL is fine.
 
 	ListCompilerEntrypoint entrypoints = (ListCompilerEntrypoint) { 0 };
 	Error err = Error_none();
@@ -50,8 +51,9 @@ Bool SpvISA_stageHasOfflinePath(Buffer spirv, const Allocator *alloc) {
 	}
 
 	//amdllpc lowers these to a single hardware stage offline: raster (vertex/hull/domain/geometry/pixel), compute and
-	//mesh/task. Ray tracing has no single-module offline path here (amdllpc emits an empty code section without the
-	//pipeline/traversal context), so a module qualifies only if every entrypoint is one of the above.
+	// mesh/task.
+	//Ray tracing has no single-module offline path here (amdllpc emits an empty code section without the
+	// pipeline/traversal context), so a module qualifies only if every entrypoint is one of the above.
 
 	Bool offline = entrypoints.length > 0;
 
@@ -78,7 +80,8 @@ Bool SpvISA_stageHasOfflinePath(Buffer spirv, const Allocator *alloc) {
 }
 
 //Runs a tool bundled in the rga/ folder next to the executable (app-dir relative, so it resolves from any working
-//directory), falling back to a same-named tool on PATH. Returns its exit code + captured stdout/stderr (caller frees).
+// directory), falling back to a same-named tool on PATH.
+//Returns its exit code + captured stdout/stderr (caller frees).
 
 static Bool SpvISA_runTool(
 	CharString appRelPath, CharString sysName, const ListCharString *args,
@@ -137,7 +140,8 @@ clean:
 }
 
 //amdllpc's -gfxip only honors the major.minor.step form (e.g. "11.0.0"); the "gfxNNNN" name is silently ignored and
-//falls back to the default target. Converts "gfx1100" -> "11.0.0" (last digit = step, previous = minor, rest = major).
+// falls back to the default target.
+//Converts "gfx1100" -> "11.0.0" (last digit = step, previous = minor, rest = major).
 //A value already starting with a digit is treated as an explicit major.minor.step and passed through as-is.
 
 static Bool SpvISA_gfxipArg(CharString target, const Allocator *alloc, CharString *out, Error *e_rr) {
@@ -181,7 +185,7 @@ clean:
 }
 
 //Parses the unsigned value (decimal or 0x-hex) after `key` on any line of the amdgpu-dis text, returning the max
-//across occurrences (a pipeline can list several hardware stages) or 0 if the key never appears.
+// across occurrences (a pipeline can list several hardware stages) or 0 if the key never appears.
 
 static U64 SpvISA_metaU64(Buffer text, const C8 *key) {
 
@@ -234,7 +238,7 @@ static U64 SpvISA_metaU64(Buffer text, const C8 *key) {
 }
 
 //For a disassembly line "<mnemonic> ... // <hexaddr>: <8hex> [<8hex> ...]", returns hexaddr + 4 * (number of encoding
-//words), i.e. the byte offset just past this instruction; 0 if the line carries no "// addr: bytes" encoding comment.
+// words), i.e. the byte offset just past this instruction; 0 if the line carries no "// addr: bytes" encoding comment.
 
 static U64 SpvISA_instrEnd(const C8 *l, U64 len) {
 
@@ -290,9 +294,10 @@ static U64 SpvISA_instrEnd(const C8 *l, U64 len) {
 }
 
 //Trims raw amdgpu-dis output down to what's useful for inspection and lines it up with the mesa spirv2isa backend:
-//a one-line register/resource-usage summary (SGPRs/VGPRs/code/instrs/scratch/lds, matching mesa's field set, from
-//the ELF PAL metadata plus the disassembly) followed by just the instructions and function labels. The bulk of the
-//raw output (assembler directives, the s_code_end 0xbf9f0000 padding, and the ELF/PAL metadata block) is dropped.
+// a one-line register/resource-usage summary (SGPRs/VGPRs/code/instrs/scratch/lds, matching mesa's field set, from
+// the ELF PAL metadata plus the disassembly) followed by just the instructions and function labels.
+//The bulk of the raw output (assembler directives, the s_code_end 0xbf9f0000 padding, and the ELF/PAL metadata block)
+// is dropped.
 
 static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error *e_rr) {
 
@@ -333,7 +338,8 @@ static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error 
 	}
 
 	//Keep only real code: instruction lines (tab + mnemonic) and _amdgpu* function labels; drop directives, the
-	//s_code_end padding and the ELF/PAL metadata. Tally the instruction count and code size (mesa reports both) here.
+	// s_code_end padding and the ELF/PAL metadata.
+	//Tally the instruction count and code size (mesa reports both) here.
 
 	const CharString amdgpuPfx = CharString_createRefCStrConst("_amdgpu");
 	const CharString symendSfx = CharString_createRefCStrConst("_symend:");
@@ -446,10 +452,11 @@ Bool SpvISA_disassemble(
 	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, CharString_createRefCStrConst("-o"), alloc, e_rr));
 	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, tmpElf, alloc, e_rr));
 
-	//Only use the "<spv>,<entrypoint>" selector when `entrypoint` is genuinely one of the module's OpEntryPoints. The
-	//oiSH identifier keeps the original HLSL name, but a single-entry module's SPIR-V is normalized to "main", so a
-	//mismatched name would make amdllpc error ("failed to identify shader stages by entry-point"). When it doesn't
-	//match, dropping the selector lets amdllpc lower the sole entrypoint; the selector only disambiguates a library.
+	//Only use the "<spv>,<entrypoint>" selector when `entrypoint` is genuinely one of the module's OpEntryPoints.
+	//The oiSH identifier keeps the original HLSL name, but a single-entry module's SPIR-V is normalized to "main", so a
+	// mismatched name would make amdllpc error ("failed to identify shader stages by entry-point").
+	//When it doesn't match, dropping the selector lets amdllpc lower the sole entrypoint; the selector only
+	// disambiguates a library.
 
 	Bool useEntry = false;
 
@@ -483,7 +490,8 @@ Bool SpvISA_disassemble(
 	));
 
 	//amdllpc can exit 0 yet emit nothing (an unsupported gfxip prints "Invalid gfxip" and produces no ELF), so a
-	//missing/empty ELF is a failure too. Surface amdllpc's own diagnostic (stderr, else stdout).
+	// missing/empty ELF is a failure too.
+	//Surface amdllpc's own diagnostic (stderr, else stdout).
 
 	const Bool elfOk = !llpcExit && File_read(&tmpElf, 1 * SECOND, 0, 0, &fileHandleType, &elf, NULL) && Buffer_length(elf);
 
@@ -548,8 +556,9 @@ Bool SpvISA_listSupportedTargets(const Allocator *alloc, ListCharString *out, Er
 
 	Bool s_uccess = true;
 
-	//Candidate AMD targets across GCN..RDNA4; the probe keeps only the ones this amdllpc build accepts. amdllpc validates
-	//-gfxip up front (rejecting unsupported ones with "Invalid gfxip") even with no input file, so no shader is needed.
+	//Candidate AMD targets across GCN..RDNA4; the probe keeps only the ones this amdllpc build accepts.
+	//amdllpc validates -gfxip up front (rejecting unsupported ones with "Invalid gfxip") even with no input file, so no
+	// shader is needed.
 
 	static const struct { const C8 *gfx; const C8 *arch; } candidates[] = {
 		{ "gfx900", "GCN5/Vega" }, { "gfx906", "GCN5/Vega20" },

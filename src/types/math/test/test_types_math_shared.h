@@ -32,8 +32,10 @@ void Test_pack(Test *test);
 void Test_rand(Test *test);
 void Test_quat(Test *test);
 void Test_typeCast(Test *test);
-void Test_u128(Test *test);
+void Test_mathU128(Test *test);
 void Test_vec4i(Test *test);
 void Test_vec4f(Test *test);
+void Test_hppVec(Test *test);       //Defined in the C++ TU test_types_math_hpp.cpp
+void Test_mat(Test *test);
 void Test_vec2i(Test *test);
 void Test_vec2f(Test *test);

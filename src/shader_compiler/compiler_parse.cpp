@@ -654,7 +654,7 @@ Bool Compiler_registerUniform(
 	uniformType = CharString_createRefSizedConst(idenStart, str - idenStart, false);
 	typeId = ETypeId_parse(uniformType);
 
-	if (typeId == ETypeId_Undefined || typeId == (TypeId) ETypeId_C8)
+	if (typeId == (TypeId) ETypeId_Undefined || typeId == (TypeId) ETypeId_C8)
 		retError(clean, Error_invalidState(
 			0,
 			"Compiler_registerUniform() invalid syntax, expected type = ((U/I/F)(8/16/32/64)/B)"
@@ -980,10 +980,10 @@ Bool Compiler_parse(
 		tmp = CharString_createNull();
 	}
 
-	//Reflect at the highest shader model (a SM6.10 library) so every feature is available to the reflection
-	//parse, including the SM6.9/6.10 raytracing ops (SER / OMM / triangle position fetch). Reflection is
-	//stage-agnostic here (the oxc::stage / [shader(...)] annotation drives the real stage), so a lib target
-	//that can hold any stage is the right choice.
+	//Reflect at the highest shader model (a SM6.10 library) so every feature is available to the reflection parse,
+	// including the SM6.9/6.10 raytracing ops (SER / OMM / triangle position fetch).
+	//Reflection is stage-agnostic here (the oxc::stage / [shader(...)] annotation drives the real stage),
+	// so a lib target that can hold any stage is the right choice.
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "lib_6_10", alloc, e_rr));
 
@@ -1236,7 +1236,7 @@ Bool Compiler_parse(
 			//Defines reference parsedLiterals, which are owned by the Parser.
 			//The parser goes out of scope at the end of the function, so we have to copy it.
 			//We won't do this for other params, because they're references to the input string
-			//which will be alive after this function.
+			// which will be alive after this function.
 
 			if(runtimeEntry.defineNameValues.length) {
 				ListCharString tmpArr = ListCharString{};
@@ -1338,7 +1338,8 @@ static Bool Compiler_reflectNode(
 		gotoIfError3(clean, ListSRAnnotation_pushBack(&reflection->annotations, srAnnot, alloc, e_rr));
 	}
 
-	//Node itself. Root parent (0xFFFF) and "no fwd/back declare" (UINT_MAX) map to our U32_MAX sentinel.
+	//Node itself.
+	//Root parent (0xFFFF) and "no fwd/back declare" (UINT_MAX) map to our U32_MAX sentinel.
 
 	srNode.nameId = nameId;
 	srNode.semanticId = semanticId;
@@ -1383,7 +1384,8 @@ clean:
 
 //Detail tiers on top of the node tree: function return, resource bind info and enum values.
 //A D3D scalar variable type -> its HLSL base spelling, or nullptr for non-scalar bases (struct/object/void) which
-//have no reconstructible builtin name. Used to name function-parameter types (params carry no type localId + no name).
+// have no reconstructible builtin name.
+//Used to name function-parameter types (params carry no type localId + no name).
 
 static const C8 *Compiler_svtBaseName(D3D_SHADER_VARIABLE_TYPE t) {
 	switch (t) {
@@ -1421,8 +1423,9 @@ static SRType Compiler_typeBase(U32 nodeId, U32 typeClass, U32 rows, U32 cols, U
 	return ty;
 }
 
-//Pushes the individual lengths of a >=2-dimensional array into the shared pool + returns its (start, count). Single or
-//non-array types keep start = U32_MAX (the flattened count already lives in SRType.elements / SRRegister.bindCount).
+//Pushes the individual lengths of a >=2-dimensional array into the shared pool + returns its (start, count).
+//Single or non-array types keep start = U32_MAX (the flattened count already lives in SRType.elements /
+// SRRegister.bindCount).
 
 static Bool Compiler_pushArrayDims(
 	SRFile *reflection, const D3D12_ARRAY_DESC *ad, U32 *start, U8 *count, const Allocator *alloc, Error *e_rr
@@ -1472,9 +1475,10 @@ clean:
 	return s_uccess;
 }
 
-//Reconstructs + pushes a function-parameter's type. Parameters carry no type localId, so builtin scalar/vector/matrix
-//names are rebuilt from the parameter desc (HLSL vector/matrix dims are 1..4); struct/object params keep only their
-//class, since D3D12_PARAMETER_DESC exposes no type name for them.
+//Reconstructs + pushes a function-parameter's type.
+//Parameters carry no type localId, so builtin scalar/vector/matrix names are rebuilt from the parameter desc (HLSL
+// vector/matrix dims are 1..4); struct/object params keep only their class, since D3D12_PARAMETER_DESC exposes no
+// type name for them.
 
 static Bool Compiler_pushParamType(
 	SRFile *reflection, U32 nodeId, D3D_SHADER_VARIABLE_TYPE svt, U32 typeClass, U32 rows, U32 cols,
@@ -1535,7 +1539,8 @@ static Bool Compiler_reflectDetails(
 			reflection->nodes.ptrNonConst[funcDesc.NodeId].flags |= ESRNodeFlag_HasReturn;
 
 			//The return value is an extra parameter child right after the real parameters (which are contiguous
-			//after the function node), so it's at funcNode + 1 + parameterCount. Tag it so it reads as (return).
+			// after the function node), so it's at funcNode + 1 + parameterCount.
+			//Tag it so it reads as (return).
 
 			U64 retId = (U64) funcDesc.NodeId + 1 + funcDesc.FunctionParameterCount;
 
@@ -1660,11 +1665,12 @@ static Bool Compiler_reflectDetails(
 	}
 
 	//Types: for these value nodes the localId indexes the reflector's frontend type table (GetTypeByIndex), which
-	//isn't otherwise serialized; resolve each into an SRType record so the localId stops dangling and hover can show
-	//"float3", "Light", "Texture2D". These are the kinds the fork guarantees carry a type localId (parameters carry
-	//their type in the function-parameter reflection instead, handled in the function loop above). GetTypeByIndex hands
-	//back a CHLSLReflectionType (an ID3D12ShaderReflectionType1), so GetDesc1 (which adds the display/alias spelling on
-	//top of the underlying name) is safe.
+	// isn't otherwise serialized; resolve each into an SRType record so the localId stops dangling and hover can show
+	// "float3", "Light", "Texture2D".
+	//These are the kinds the fork guarantees carry a type localId (parameters carry their type in the
+	// function-parameter reflection instead, handled in the function loop above).
+	//GetTypeByIndex hands back a CHLSLReflectionType (an ID3D12ShaderReflectionType1), so GetDesc1 (which adds the
+	// display/alias spelling on top of the underlying name) is safe.
 
 	for (U64 i = 0; i < reflection->nodes.length; ++i) {
 
@@ -1686,10 +1692,11 @@ static Bool Compiler_reflectDetails(
 
 		SRType ty = Compiler_typeBase((U32) i, d.Desc.Class, d.Desc.Rows, d.Desc.Columns, d.Desc.Elements);
 
-		//Go-to-definition: resolve the type's underlying name to its defining Struct/Union node. Name matching (not the
-		//localId, which the reflector reuses across uses of the same struct) is what links a value to its definition;
-		//self links (a struct node pointing at itself) are dropped so defNodeId always means "jump elsewhere". Builtins
-		//("float3") have no struct node so this stays U32_MAX.
+		//Go-to-definition: resolve the type's underlying name to its defining Struct/Union node.
+		//Name matching (not the localId, which the reflector reuses across uses of the same struct) is what links a
+		// value to its definition; self links (a struct node pointing at itself) are dropped so defNodeId always means
+		// "jump elsewhere".
+		//Builtins ("float3") have no struct node so this stays U32_MAX.
 
 		if (d.Desc.Name) {
 			CharString tn = CharString_createRefCStrConst(d.Desc.Name);
@@ -1698,9 +1705,11 @@ static Bool Compiler_reflectDetails(
 		}
 
 		//Base class (single inheritance) + implemented interfaces: GetBaseClass / GetInterfaceByIndex report types,
-		//resolved to their defining nodes by name. The concrete base goes on the SRType; each interface is an edge in
-		//the separate interfaces table (a struct can implement several). These are properties of the type DEFINITION,
-		//so only the Struct/Union node itself records them; a variable of the type reaches them through defNodeId.
+		// resolved to their defining nodes by name.
+		//The concrete base goes on the SRType; each interface is an edge in the separate interfaces table (a struct
+		// can implement several).
+		//These are properties of the type DEFINITION, so only the Struct/Union node itself records them; a variable
+		// of the type reaches them through defNodeId.
 
 		if ((nt == ESRNodeType_Struct || nt == ESRNodeType_Union) && d.Desc.Class == D3D_SVC_STRUCT) {
 
@@ -1914,8 +1923,8 @@ Bool Compiler_reflect(
 	{
 		//Emit the source-location tier (file/line/column) whenever the reflector reports the SymbolInfo feature.
 		//GetNodeSymbolDesc guards the no-file sentinel (uint16_t(-1)), so synthetic/builtin nodes come back with an
-		//empty file name (-> fileNameId U32_MAX) rather than reading out of bounds. Names/tree/annotations are
-		//independent of this tier (names come from GetNodeDesc).
+		// empty file name (-> fileNameId U32_MAX) rather than reading out of bounds.
+		//Names/tree/annotations are independent of this tier (names come from GetNodeDesc).
 
 		Bool reflectSymbols = (reflDesc.Features & D3D12_HLSL_REFLECTION_FEATURE_SYMBOL_INFO) != 0;
 

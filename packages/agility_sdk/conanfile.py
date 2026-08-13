@@ -54,8 +54,9 @@ class agility_sdk(ConanFile):
 		# case-sensitive on Linux, so find it explicitly and stage it as LICENSE-WARP.txt.
 		self._stage_license(os.path.join(self.source_folder, "warp"), "LICENSE-WARP.txt")
 
-		# The WARP + agility runtimes are Windows DLLs. Everywhere else (e.g. Linux/macOS building the shader compiler)
-		# only the headers are needed (DXC's dxcreflect.h includes d3d12shader.h),
+		# The WARP + agility runtimes are Windows DLLs.
+		# Everywhere else (e.g. Linux/macOS building the shader compiler) only the headers are needed
+		# (DXC's dxcreflect.h includes d3d12shader.h),
 		# so this is an include-only package there, just like nvapi on non-(Windows x64).
 
 		if self.settings.os == "Windows":

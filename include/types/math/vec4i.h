@@ -95,7 +95,7 @@ static inline I32x4 I32x4_negTwo() { return I32x4_xxxx4(-2); }
 
 #endif
 
-#if _PLATFORM_TYPE != PLATFORM_WINDOWS || _SIMD != SIMD_SSE
+#if !_SIMD_HAS_SVML
 	static inline I32x4 I32x4_div(I32x4 a, I32x4 b) { NONE_OP4I(I32x4_get(a, i) / I32x4_get(b, i)); }
 #endif
 

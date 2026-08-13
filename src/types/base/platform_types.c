@@ -24,7 +24,9 @@
 
 #if _ARCH == ARCH_X86_64
 
-	#ifndef _MSC_VER
+	#ifdef _MSC_VER
+		#include <intrin.h>        //__cpuid; MSVC resolves it without this, clang-cl needs the declaration
+	#else
 		#include <cpuid.h>
 	#endif
 
@@ -34,7 +36,7 @@
 			return;
 
 		#ifdef _MSC_VER
-			__cpuid(result, leaf);
+			__cpuid((int*) result, leaf);        //Takes int[4]; the leaves we read are bit fields either way
 		#else
 			if(leaf == 7)
 				__get_cpuid_count(7, 0, &result[0], &result[1], &result[2], &result[3]);
@@ -48,9 +50,9 @@
 
 	#ifdef _MSC_VER
 		#include <intrin.h>
-		static U64 Platform_getXCR0() { return _xgetbv(0); }
+		U64 Platform_getXCR0() { return _xgetbv(0); }
 	#else
-		static U64 Platform_getXCR0() {
+		U64 Platform_getXCR0() {
 			U32 eax, edx;
 			__asm__ volatile("xgetbv" : "=a"(eax), "=d"(edx) : "c"(0));
 			return ((U64) edx << 32) | eax;
@@ -180,7 +182,8 @@
 		if (hasSHA)
 			f |= ECPUFeatures_HwSHA256;
 
-		//int8 dot-product (ARMv8.4 DotProd). Windows-on-ARM has no dedicated PF_ flag, so it's best-effort there.
+		//int8 dot-product (ARMv8.4 DotProd).
+		//Windows-on-ARM has no dedicated PF_ flag, so it's best-effort there.
 
 		#if _PLATFORM_TYPE == PLATFORM_IOS || _PLATFORM_TYPE == PLATFORM_OSX
 			f |= ECPUFeatures_Int8Dot;        //Apple silicon supports DotProd

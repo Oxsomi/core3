@@ -1,0 +1,20 @@
+name: Windows ARM64 D3D12+Vulkan dynamic (clang-cl)
+on: [push]
+
+# Dynamic linking on arm64 under clang; the last corner of the clang-cl matrix the other jobs leave out.
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Windows ARM64 D3D12+Vulkan dynamic (clang-cl)
+      runner: windows-11-arm
+      os: windows
+      build_flags: '-compiler clang -dynamic_linking True -o forceVulkan=True -o cliGraphics=False'
+      cache_name: clang
+      python_cmd: python
+      setup_python: true
+      python_version: '3.13'
+      hook_name: Windows-arm64-dynamic-clang
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

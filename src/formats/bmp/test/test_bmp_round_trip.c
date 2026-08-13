@@ -99,7 +99,8 @@ static Bool bmpRoundTripHeader(
 	return true;
 }
 
-//4x4 BGRA8, bottom-up (standard orientation). Verifies header fields survive round-trip.
+//4x4 BGRA8, bottom-up (standard orientation).
+//Verifies header fields survive round-trip.
 void Test_BMPRoundTripBGRA8(Test *t) {
 
 	Test_setModule(t, "BMP round-trip: 4x4 BGRA8 bottom-up");
@@ -145,7 +146,8 @@ void Test_BMPRoundTripBGRA8(Test *t) {
 	}
 }
 
-//4x4 BGR8 (discardAlpha = true). Verifies 24-bit path and stride padding (4 * 3 = 12, already aligned).
+//4x4 BGR8 (discardAlpha = true).
+//Verifies 24-bit path and stride padding (4 * 3 = 12, already aligned).
 void Test_BMPRoundTripBGR8(Test *t) {
 
 	Test_setModule(t, "BMP round-trip: 4x4 BGR8 (discardAlpha)");
@@ -258,7 +260,8 @@ void Test_BMPRoundTripTopDown(Test *t) {
 	}
 }
 
-//3x3 BGR8: row width 9 bytes padded to 12. Verifies stride padding is applied correctly.
+//3x3 BGR8: row width 9 bytes padded to 12.
+//Verifies stride padding is applied correctly.
 //If padding is missing the fileSize check will fail on read, catching the bug.
 void Test_BMPRoundTripStridePadding(Test *t) {
 
@@ -299,7 +302,7 @@ void Test_BMPRoundTripStridePadding(Test *t) {
 
 //Verify that BMP_write emits compression = 0 (BI_RGB) and compressedSize = expectedLen in the raw header.
 //These fields are written by BMP_write but not surfaced through BMPInfo, so we inspect the
-//raw stream bytes directly using offsetof rather than relying solely on the read-back path.
+// raw stream bytes directly using offsetof rather than relying solely on the read-back path.
 void Test_BMPRoundTripHeaderFields(Test *t) {
 
 	Test_setModule(t, "BMP round-trip: raw header has compression=0 and compressedSize=expectedLen");
@@ -394,7 +397,7 @@ void Test_BMPRoundTripPixelDensity(Test *t) {
 }
 
 //Helper: read one pixel at output position (x, outRow) from the written stream and compare
-//it against the expected pattern from makePixelStream for the given original source row.
+// it against the expected pattern from makePixelStream for the given original source row.
 //makePixelStream pattern: B=(U8)x, G=(U8)origRow, R=(U8)(x+origRow), A=0xFF.
 static Bool checkPixel(
 	OxStream *s,

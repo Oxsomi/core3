@@ -82,22 +82,22 @@ static Bool buildSample(Test *t, SRFile *sr) {
 	SRNode nodes[6] = {
 		//0: namespace MyNS
 		{ .nameId = nsName,    .semanticId = U32_MAX, .localId = U32_MAX, .parent = U32_MAX, .fwdBckDeclareNode = U32_MAX,
-		  .childCount = 1, .annotationStart = U32_MAX, .annotationCount = 0, .type = ESRNodeType_Namespace },
+			.childCount = 1, .annotationStart = U32_MAX, .annotationCount = 0, .type = ESRNodeType_Namespace },
 		//1: struct Light (parent 0)
 		{ .nameId = lightName, .semanticId = U32_MAX, .localId = U32_MAX, .parent = 0, .fwdBckDeclareNode = U32_MAX,
-		  .childCount = 2, .annotationStart = U32_MAX, .annotationCount = 0, .type = ESRNodeType_Struct },
+			.childCount = 2, .annotationStart = U32_MAX, .annotationCount = 0, .type = ESRNodeType_Struct },
 		//2: variable pos (parent 1)
 		{ .nameId = posName,   .semanticId = U32_MAX, .localId = U32_MAX, .parent = 1, .fwdBckDeclareNode = U32_MAX,
-		  .childCount = 0, .annotationStart = U32_MAX, .annotationCount = 0, .type = ESRNodeType_Variable },
+			.childCount = 0, .annotationStart = U32_MAX, .annotationCount = 0, .type = ESRNodeType_Variable },
 		//3: variable color (parent 1)
 		{ .nameId = colName,   .semanticId = U32_MAX, .localId = U32_MAX, .parent = 1, .fwdBckDeclareNode = U32_MAX,
-		  .childCount = 0, .annotationStart = U32_MAX, .annotationCount = 0, .type = ESRNodeType_Variable },
+			.childCount = 0, .annotationStart = U32_MAX, .annotationCount = 0, .type = ESRNodeType_Variable },
 		//4: function main [shader] (root)
 		{ .nameId = mainName,  .semanticId = U32_MAX, .localId = U32_MAX, .parent = U32_MAX, .fwdBckDeclareNode = U32_MAX,
-		  .childCount = 1, .annotationStart = 0, .annotationCount = 1, .type = ESRNodeType_Function },
+			.childCount = 1, .annotationStart = 0, .annotationCount = 1, .type = ESRNodeType_Function },
 		//5: parameter uv : TEXCOORD0 (parent 4)
 		{ .nameId = uvName,    .semanticId = sem,     .localId = U32_MAX, .parent = 4, .fwdBckDeclareNode = U32_MAX,
-		  .childCount = 0, .annotationStart = U32_MAX, .annotationCount = 0, .type = ESRNodeType_Parameter }
+			.childCount = 0, .annotationStart = U32_MAX, .annotationCount = 0, .type = ESRNodeType_Parameter }
 	};
 
 	for(U32 i = 0; i < 6; ++i) {
@@ -121,8 +121,8 @@ static Bool buildSample(Test *t, SRFile *sr) {
 		return false;
 
 	//A type record for the pos variable (node 2): underlying float3 written as the alias vec3 (so both name paths
-	//round-trip), shaped as a [2][3] array (elements = flattened 6, dims from the pool) and pointed at the Light struct
-	//(node 1) as its go-to-definition target, so the type-graph + array fields are all exercised through write/read.
+	// round-trip), shaped as a [2][3] array (elements = flattened 6, dims from the pool) and pointed at the Light struct
+	// (node 1) as its go-to-definition target, so the type-graph + array fields are all exercised through write/read.
 
 	SRType posType = (SRType) {
 		.nodeId = 2, .typeClass = ESRTypeClass_Vector, .rows = 1, .cols = 3,
@@ -137,8 +137,11 @@ static Bool buildSample(Test *t, SRFile *sr) {
 	return SRFile_finalize(sr, t->alloc, &t->err);
 }
 
-//Write then read back an SRFile. Caller owns *archiveSr (RefPtr_dec) and *result (SRFile_free).
-static Bool srRoundTrip(Test *t, const SRFile *src, Bool subFile, StreamRef **archiveSr, SRFile *result, const RefPtrType *type) {
+//Write then read back an SRFile.
+//Caller owns *archiveSr (RefPtr_dec) and *result (SRFile_free).
+static Bool srRoundTrip(
+	Test *t, const SRFile *src, Bool subFile, StreamRef **archiveSr, SRFile *result, const RefPtrType *type
+) {
 
 	StreamRef *sr = NULL;
 

@@ -268,6 +268,12 @@ Bool GraphicsDeviceRef_createTexture(
 
 	Bool s_uccess = true;
 	Bool allocated = false;
+
+	//Checked first, since getTypes on a NULL device yields a non NULL member pointer that faults in RefPtr_create.
+
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createTexture()::dev is required"));
+
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
 
 	if(!formatId || formatId >= ETextureFormatId_Count)
@@ -337,6 +343,98 @@ clean:
 
 	if(!s_uccess && allocated)
 		RefPtr_dec(tex);
+
+	return s_uccess;
+}
+
+Bool DeviceTextureRef_pullRegion(
+	DeviceTextureRef *tex,
+	U16 x, U16 y, U16 z,
+	U16 w, U16 h, U16 l,
+	DevicePullCallback callback, void *context, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = NULL;
+
+	GraphicsDevice *device = NULL;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	Bool owned = false;
+
+	//Validated before the pointer is reinterpreted, since a wrong type would read a garbage device
+
+	if(!tex || tex->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceTexture)
+		retError(clean, Error_nullPointer(0, "DeviceTextureRef_pullRegion()::tex is required"));
+
+	DeviceTexture *texture = DeviceTextureRef_ptr(tex);
+	alloc = GraphicsDeviceRef_getAlloc(texture->base.resource.device);
+
+	if(!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked))
+		retError(clean, Error_invalidOperation(0, "DeviceTextureRef_pullRegion() requires a CPUBacked texture"));
+
+	//Same region semantics as markDirty: zero means the rest of that axis and the region snaps outward
+	// to whole blocks for compressed formats, so pulling can refresh slightly more than was asked
+
+	if(x >= texture->base.width || y >= texture->base.height || z >= texture->base.length)
+		retError(clean, Error_outOfBounds(
+			1, x, texture->base.width, "DeviceTextureRef_pullRegion()::x, y or z out of bounds"
+		));
+
+	if(!w)
+		w = texture->base.width - x;
+
+	if(!h)
+		h = texture->base.height - y;
+
+	if(!l)
+		l = texture->base.length - z;
+
+	if(x + w > texture->base.width || y + h > texture->base.height || z + l > texture->base.length)
+		retError(clean, Error_outOfBounds(
+			4, x + w, texture->base.width, "DeviceTextureRef_pullRegion() region out of bounds"
+		));
+
+	const ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
+
+	U8 alignX = 1, alignY = 1;
+	ETextureFormat_getAlignment(format, &alignX, &alignY);
+
+	const U16 startX = (U16) alignDown(x, alignX);
+	const U16 endX = (U16) U64_min(alignUp(x + w, alignX), texture->base.width);
+
+	const U16 startY = (U16) alignDown(y, alignY);
+	const U16 endY = (U16) U64_min(alignUp(y + h, alignY), texture->base.height);
+
+	device = GraphicsDeviceRef_ptr(texture->base.resource.device);
+
+	acq = SpinLock_lock(&device->lock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		retError(clean, Error_invalidOperation(1, "DeviceTextureRef_pullRegion() couldn't acquire device lock"));
+
+	RefPtr_inc(tex);
+	owned = true;
+
+	const DevicePendingPull pull = (DevicePendingPull) {
+		.resource = tex,
+		.callback = callback,
+		.context = context,
+		.range = (DevicePendingRange) { .texture = (TextureRange) {
+			.startRange = { startX, startY, z },
+			.endRange = { endX, endY, (U16)(z + l) }
+		} }
+	};
+
+	gotoIfError3(clean, ListDevicePendingPull_pushBack(&device->pendingPulls, pull, alloc, e_rr));
+	owned = false;
+
+clean:
+
+	if(owned)
+		RefPtr_dec(&tex);
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->lock);
 
 	return s_uccess;
 }

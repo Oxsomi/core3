@@ -133,6 +133,11 @@ static inline VkDeviceOrHostAddressConstKHR getVkLocation(DeviceData data, U64 l
 }
 
 VkShaderStageFlags vkGetShaderStages(U32 vis);
+
+//Same, but limited to the stages the device's enabled extensions make valid
+
+typedef struct GraphicsDevice GraphicsDevice;
+VkShaderStageFlags vkGetShaderStagesDevice(const GraphicsDevice *device, U32 vis);
 VkDescriptorType vkGetDescriptorType(ESHRegisterType regType);
 
 //Transitions entire resource rather than sub-resources

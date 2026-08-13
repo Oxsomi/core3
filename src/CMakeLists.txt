@@ -20,7 +20,7 @@
 add_subdirectory(types)
 add_subdirectory(formats)
 
-if(EnableTests)
+if(EnableTests AND OxC3TestExecutables)
 	add_subdirectory(tools/package_simple)		# Required to create oiCAs to attach as virtual files
 endif()
 
@@ -34,3 +34,15 @@ endif()
 add_subdirectory(graphics)
 add_subdirectory(audio)
 add_subdirectory(tools)
+
+# Test bundles for platforms that have no exec,
+# so the per-suite executables the other platforms run through ctest can't be used there.
+# Android today; wasm will want the same shape.
+
+if(EnableTests AND NOT OxC3TestExecutables)
+	if(ANDROID)
+		add_subdirectory(test/android)
+	else()
+		message(FATAL_ERROR "No test bundle for this platform yet, add one under src/test/")
+	endif()
+endif()

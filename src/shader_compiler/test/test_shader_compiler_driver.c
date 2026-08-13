@@ -32,9 +32,9 @@
 #include "types/base/error.h"
 #include "types/base/string_read_helper.h"
 
-//Exercises the Compiler_compileShaders driver in compiler_helper.c: batching many files, the JobGroup
-//fan-out under different thread counts, the DXIL backend, and error handling. These are the paths the
-//annotation/corpus modules don't isolate.
+//Exercises the Compiler_compileShaders driver in compiler_helper.c: batching many files,
+// the JobGroup fan-out under different thread counts, the DXIL backend, and error handling.
+//These are the paths the annotation/corpus modules don't isolate.
 
 void Test_shaderCompilerDriver(Test *t) {
 
@@ -115,9 +115,9 @@ void Test_shaderCompilerDriver(Test *t) {
 	}
 
 	//--- [[oxc::binary(...)]] restricts, per-entrypoint, which backend an entrypoint is emitted for ---
-	//An RT library with a both-backends raygen and a DXIL-only miss: SPIRV keeps only the raygen, DXIL keeps
-	//both. This exercises per-entrypoint filtering inside a shared lib compile (the case the driver must get
-	//right) while keeping >=1 entrypoint per backend, so neither side degenerates to an empty oiSH.
+	//An RT library with a both-backends raygen and a DXIL-only miss: SPIRV keeps only the raygen, DXIL keeps both.
+	//This exercises per-entrypoint filtering inside a shared lib compile (the case the driver must get right)
+	// while keeping >=1 entrypoint per backend, so neither side degenerates to an empty oiSH.
 
 	{
 		//DXIL: both entrypoints survive.

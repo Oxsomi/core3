@@ -55,8 +55,9 @@ Bool compileInlineShaders(
 
 	for (U64 i = 0; i < count; ++i) {
 
-		//Distinct dummy names so each compiles into its own oiSH. The names never hit disk; the path
-		//only feeds an -I <parent> arg, which resolves harmlessly within the working directory.
+		//Distinct dummy names so each compiles into its own oiSH.
+		//The names never hit disk.
+		//The path only feeds an -I <parent> arg, which resolves harmlessly within the working directory.
 
 		CharString_free(&name, alloc);
 		gotoIfError3(clean, CharString_format(alloc, &name, e_rr, "%s%"PRIu64".hlsl", namePrefix, i));
@@ -121,14 +122,21 @@ Bool compileFileShader(
 	ListCharString includeDirs = (ListCharString) { 0 };
 	CharString outName = CharString_createNull();
 
-	const CharString pathStr = CharString_createRefCStrConst(path);
+	//Resolved against TEST_SHADER_ROOT so the same relative path works from a working directory and from
+	// the virtual file system; see the note in test_shader_compiler_shared.h.
 
-	//Load the source and drive the real pipeline with the *actual* file name, so logs/errors point at the
-	//shader instead of a placeholder. Feature/stage shaders are self-contained (@virtual includes only).
+	CharString pathStr = CharString_createNull();
+	gotoIfError3(clean, CharString_format(alloc, &pathStr, e_rr, "%s%s", TEST_SHADER_ROOT, path));
+
+	//Load the source and drive the real pipeline with the *actual* file name,
+	// so logs/errors point at the shader instead of a placeholder.
+	//Feature/stage shaders are self-contained (@virtual includes only).
 
 	gotoIfError3(clean, File_read(&pathStr, 1 * SECOND, 0, 0, &fileHandleType, &fileData, e_rr));
 
-	gotoIfError3(clean, ListCharString_pushBack(&allFiles, CharString_createRefCStrConst(path), alloc, e_rr));
+	gotoIfError3(clean, ListCharString_pushBack(
+		&allFiles, CharString_createRefSizedConst(pathStr.ptr, CharString_length(pathStr), true), alloc, e_rr
+	));
 
 	gotoIfError3(clean, ListCharString_pushBack(
 		&allShaderText,
@@ -150,7 +158,8 @@ Bool compileFileShader(
 
 clean:
 	CharString_free(&outName, alloc);
-	ListCharString_free(&allFiles, alloc);              //elements ref `path`
+	ListCharString_free(&allFiles, alloc);              //elements ref `pathStr`
+	CharString_free(&pathStr, alloc);                   //freed after allFiles, which only held refs to it
 	ListCharString_free(&allShaderText, alloc);         //element refs fileData
 	ListCharString_freeUnderlying(&allOutputs, alloc);
 	ListU8_free(&allCompileModes, alloc);
@@ -167,8 +176,8 @@ Bool readOiSH(const Allocator *alloc, Buffer buf, SHFile *out, Error *e_rr) {
 	MemoryStreamRef *ms = NULL;
 	U64 off = 0;
 
-	//Pass a ref: createFromBufferRegion keeps the buffer's ref bits, and MemoryStream frees owned data
-	//on dec. A ref keeps the stream non-owning so the caller still owns `buf`.
+	//Pass a ref: createFromBufferRegion keeps the buffer's ref bits, and MemoryStream frees owned data on dec.
+	//A ref keeps the stream non-owning so the caller still owns `buf`.
 	Buffer ref = Buffer_createRefFromBuffer(buf, true);
 
 	gotoIfError3(clean, MemoryStream_createFromBufferRegion(
@@ -186,9 +195,9 @@ Bool oiSHRoundtrips(const Allocator *alloc, Buffer produced, Error *e_rr) {
 	SHFile file = (SHFile) { 0 };
 	Buffer rewritten = Buffer_createNull();
 
-	//Read the produced oiSH into an SHFile, serialize it back, and require byte-for-byte identity. This
-	//confirms the compiler's serialization is a canonical fixed point (and that read+write agree), so a DXC
-	//update or reflection change that quietly perturbs the oiSH is caught.
+	//Read the produced oiSH into an SHFile, serialize it back, and require byte-for-byte identity.
+	//This confirms the compiler's serialization is a canonical fixed point (and that read+write agree),
+	// so a DXC update or reflection change that quietly perturbs the oiSH is caught.
 	Bool ok =
 		readOiSH(alloc, produced, &file, e_rr) &&
 		writeOiSH(alloc, &file, &rewritten, e_rr) &&

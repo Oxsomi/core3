@@ -59,7 +59,16 @@ void onDebugReport(
 	void *context
 ) {
 
-	(void) context;
+	GraphicsInstance *instance = (GraphicsInstance*) context;
+
+	if(instance) {
+
+		if(severity == D3D12_MESSAGE_SEVERITY_CORRUPTION || severity == D3D12_MESSAGE_SEVERITY_ERROR)
+			AtomicI64_inc(&instance->validationErrors);
+
+		else if(severity == D3D12_MESSAGE_SEVERITY_WARNING)
+			AtomicI64_inc(&instance->validationWarnings);
+	}
 
 	const C8 *categoryStr = "Undefined";
 
@@ -105,7 +114,15 @@ void onDebugReport(
 		const char *messageDetails
 	) {
 
-		(void)pUserData;
+		GraphicsInstance *instance = (GraphicsInstance*) pUserData;
+
+		if(instance) {
+
+			if(severity == NVAPI_D3D12_RAYTRACING_VALIDATION_MESSAGE_SEVERITY_ERROR)
+				AtomicI64_inc(&instance->validationErrors);
+
+			else AtomicI64_inc(&instance->validationWarnings);
+		}
 
 		switch(severity) {
 
@@ -249,9 +266,16 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 			}
 
 			D3D12_MESSAGE_ID hide[] = {
+
 				D3D12_MESSAGE_ID_CREATEDEVICE_DEBUG_LAYER_STARTUP_OPTIONS,
 				D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
-				D3D12_MESSAGE_ID_CREATERESOURCE_INVALIDALIGNMENT    //To check if we allow small alignment
+				D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE,
+				D3D12_MESSAGE_ID_CREATERESOURCE_INVALIDALIGNMENT,   //To check if we allow small alignment
+
+				//The device itself always shows up alive in our own ReportLiveDeviceObjects call at shutdown,
+				// since the debug device still holds it; leaked child objects report under their own ids.
+
+				D3D12_MESSAGE_ID_LIVE_DEVICE
 			};
 
 			D3D12_INFO_QUEUE_FILTER filter = (D3D12_INFO_QUEUE_FILTER) {
@@ -279,7 +303,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 				deviceExt->infoQueue1,
 				onDebugReport,
 				D3D12_MESSAGE_CALLBACK_FLAG_NONE,
-				NULL,
+				(GraphicsInstance*) instance,        //Outlives the device, so the callback context stays valid
 				&callbackCookie
 			), e_rr));
 		}
@@ -300,7 +324,9 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 					void *handle = NULL;
 					NvAPI_Status status = NvAPI_D3D12_RegisterRaytracingValidationMessageCallback(
-						(ID3D12Device5*)deviceExt->device, onDebugReportNv, NULL, &handle
+						(ID3D12Device5*)deviceExt->device, onDebugReportNv,
+						(GraphicsInstance*) instance,        //Outlives the device, so the context stays valid
+						&handle
 					);
 
 					if(status != NVAPI_OK)
@@ -510,6 +536,17 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	if(deviceExt->adapter4)
 		deviceExt->adapter4->lpVtbl->Release(deviceExt->adapter4);
 
+	//Validate exit for leaks, before the info queues go away so the report is still drained and counted below
+
+	if(deviceExt->debugDevice)
+		deviceExt->debugDevice->lpVtbl->ReportLiveDeviceObjects(
+			deviceExt->debugDevice, D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL
+		);
+
+	//Without the live callback (pre Win11) stored messages would otherwise vanish uncounted at shutdown
+
+	DxGraphicsDevice_logDebugMessages(deviceExt, (GraphicsInstance*) instance, alloc);
+
 	if(deviceExt->infoQueue0)
 		deviceExt->infoQueue0->lpVtbl->Release(deviceExt->infoQueue0);
 
@@ -519,16 +556,8 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	if(deviceExt->deviceConfig)
 		deviceExt->deviceConfig->lpVtbl->Release(deviceExt->deviceConfig);
 
-	if(deviceExt->debugDevice) {
-
-		//Validate exit for leaks
-
-		deviceExt->debugDevice->lpVtbl->ReportLiveDeviceObjects(
-			deviceExt->debugDevice, D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL
-		);
-
+	if(deviceExt->debugDevice)
 		deviceExt->debugDevice->lpVtbl->Release(deviceExt->debugDevice);
-	}
 
 	ListDxCommandAllocator_free(&deviceExt->commandPools, alloc);
 
@@ -592,14 +621,26 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 	//Bind descriptor heaps, root signature and descriptor tables since they stay the same for the entire frame.
 	//For every bind point.
 
+	//Without bindless there's no default heap, table or root signature to bind.
+	//Every pipeline brings its own layout in that case, so there's nothing to do per frame.
+
+	if(!device->defaultPipelineLayout || !device->defaultDescriptorTable || !device->defaultDescriptorHeaps)
+		return;
+
 	DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(device->defaultDescriptorHeaps), Dx);
 
 	ID3D12DescriptorHeap *descriptorHeaps[2] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };
 
 	DxDescriptorTable *table = DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Dx);
+	//Each heap's increment comes from GetDescriptorHandleIncrementSize for its own descriptor type,
+	// and sampler descriptors are not the same size as CBV/SRV/UAV ones on every adapter.
+	//So the sampler offset has to scale by the sampler heap's stride.
+	//Using the resource heap's happens to work only where the two coincide,
+	// and lands somewhere else entirely on hardware where they don't.
+
 	D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[2] = {
-		heap->samplerHeap.gpuHandle.ptr + table->allocationLocations[1] * heap->resourcesHeap.gpuIncrement,
-		heap->resourcesHeap.gpuHandle.ptr + table->allocationLocations[0] * heap->resourcesHeap.gpuIncrement
+		{ heap->samplerHeap.gpuHandle.ptr + table->allocationLocations[1] * heap->samplerHeap.gpuIncrement },
+		{ heap->resourcesHeap.gpuHandle.ptr + table->allocationLocations[0] * heap->resourcesHeap.gpuIncrement }
 	};
 
 	commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, 2, descriptorHeaps);
@@ -618,10 +659,61 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
 	D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
 
-	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
+	const U32 globalsRootParam = defaultLayoutExt->rootParamPushDescriptors;
 
-	commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2 + isNv, cbvLoc);
-	commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2 + isNv, cbvLoc);
+	commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, globalsRootParam, cbvLoc);
+	commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, globalsRootParam, cbvLoc);
+}
+
+//The message callback route needs Win11, so on older Windows the stored messages sit unread in the info queue.
+//Draining them when something fails is what turns "invalid argument" into the layer's actual complaint.
+//GetMessageA is not a typo: windows.h's GetMessage macro was active when the vtbl struct was declared.
+
+void DxGraphicsDevice_logDebugMessages(
+	const DxGraphicsDevice *deviceExt, GraphicsInstance *instance, const Allocator *alloc
+) {
+
+	//With infoQueue1 (Win11) the message callback already printed and counted everything live,
+	// so draining would duplicate
+
+	if(!deviceExt || !deviceExt->infoQueue0 || deviceExt->infoQueue1)
+		return;
+
+	ID3D12InfoQueue1 *queue = deviceExt->infoQueue0;
+	const U64 count = queue->lpVtbl->GetNumStoredMessages(queue);
+
+	for (U64 i = 0; i < count; ++i) {
+
+		SIZE_T len = 0;
+
+		if(FAILED(queue->lpVtbl->GetMessageA(queue, i, NULL, &len)) || !len)
+			continue;
+
+		Buffer buf = Buffer_createNull();
+
+		if(!Buffer_createEmptyBytes(len, alloc, &buf, NULL))
+			continue;
+
+		D3D12_MESSAGE *msg = (D3D12_MESSAGE*) buf.ptrNonConst;
+
+		if(SUCCEEDED(queue->lpVtbl->GetMessageA(queue, i, msg, &len)) && msg->pDescription) {
+
+			Log_errorLnx("D3D12: %s", msg->pDescription);
+
+			if(instance) {
+
+				if(msg->Severity == D3D12_MESSAGE_SEVERITY_CORRUPTION || msg->Severity == D3D12_MESSAGE_SEVERITY_ERROR)
+					AtomicI64_inc(&instance->validationErrors);
+
+				else if(msg->Severity == D3D12_MESSAGE_SEVERITY_WARNING)
+					AtomicI64_inc(&instance->validationWarnings);
+			}
+		}
+
+		Buffer_free(&buf, alloc);
+	}
+
+	queue->lpVtbl->ClearStoredMessages(queue);
 }
 
 Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
@@ -643,6 +735,14 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	HANDLE eventHandle = NULL;
 	CharString temp = CharString_createNull();
 	ListU16 temp16 = (ListU16) { 0 };
+
+	//Error path bookkeeping, declared before the first goto so clean always reads initialized values.
+	//recordingAllocator tracks which allocator owns a list that is mid recording, so a poisoned list can be dropped.
+
+	DxCommandAllocator *recordingAllocator = NULL;
+	Bool executed = false;
+
+	DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
 
 	//Wait for previous frame semaphore
 
@@ -686,8 +786,6 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	//Record command list
 
 	DxCommandBuffer *commandBuffer = NULL;
-
-	DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
@@ -775,6 +873,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			gotoIfError3(clean, dxCheck(commandBuffer->lpVtbl->Reset(commandBuffer, allocator->pool, NULL), e_rr));
 		}
 
+		recordingAllocator = allocator;
+
 		//Start copies
 
 		DxCommandBufferState state = (DxCommandBufferState) { .buffer = commandBuffer };
@@ -782,24 +882,34 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		gotoIfError3(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, &state, e_rr));
 
-		//Ensure ubo and staging buffer are the correct states
+		//Ensure the ubo is in the right state, but only when something can actually read it.
+		//An op less submission would otherwise turn into a barrier only command list,
+		// which the debug layer rightly flags as pointless synchronization.
+
+		U64 totalOps = 0;
+
+		for (U64 i = 0; i < commandLists->length; ++i)
+			totalOps += CommandListRef_ptr(commandLists->ptr[i])->commandOps.length;
 
 		D3D12_BARRIER_GROUP dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
-		DxDeviceBuffer *uboExt = DeviceBuffer_ext(frameData, Dx);
+		if (totalOps) {
 
-		gotoIfError3(clean, DxDeviceBuffer_transition(
-			uboExt,
-			D3D12_BARRIER_SYNC_VERTEX_SHADING,
-			D3D12_BARRIER_ACCESS_CONSTANT_BUFFER,
-			&deviceExt->bufferTransitions,
-			&dependency, alloc, e_rr
-		));
+			DxDeviceBuffer *uboExt = DeviceBuffer_ext(frameData, Dx);
 
-		if(dependency.NumBarriers)
-			commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dependency);
+			gotoIfError3(clean, DxDeviceBuffer_transition(
+				uboExt,
+				D3D12_BARRIER_SYNC_VERTEX_SHADING,
+				D3D12_BARRIER_ACCESS_CONSTANT_BUFFER,
+				&deviceExt->bufferTransitions,
+				&dependency, alloc, e_rr
+			));
 
-		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+			if(dependency.NumBarriers)
+				commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dependency);
+
+			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+		}
 
 		GraphicsDevice_rebindDescriptors(device, commandBuffer);
 
@@ -817,6 +927,10 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				ptr += info.opSize;
 			}
 		}
+
+		//Readbacks are recorded after the frame's commands so they observe this frame's results
+
+		gotoIfError3(clean, GraphicsDeviceRef_flushPendingPulls(deviceRef, &state, e_rr));
 
 		//Transition back swapchains to present
 
@@ -857,12 +971,14 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		//End buffer
 
 		gotoIfError3(clean, dxCheck(commandBuffer->lpVtbl->Close(commandBuffer), e_rr));
+		recordingAllocator = NULL;
 	}
 
 	//Submit queue
 	//TODO: Multiple queues
 
 	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, (ID3D12CommandList**) &commandBuffer);
+	executed = true;
 
 	//Presents
 
@@ -894,11 +1010,34 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 clean:
 
+	if(!s_uccess)
+		DxGraphicsDevice_logDebugMessages(deviceExt, GraphicsInstanceRef_ptr(device->instance), alloc);
+
+	//A list that failed during recording or Close is in an error state that Reset can't recover, so keeping it
+	// would poison every later submit that cycles back to this allocator with closed command list errors.
+
+	if(!s_uccess && recordingAllocator && recordingAllocator->cmd) {
+		recordingAllocator->cmd->lpVtbl->Close(recordingAllocator->cmd);        //Best effort, so the pool can Reset
+		recordingAllocator->cmd->lpVtbl->Release(recordingAllocator->cmd);
+		recordingAllocator->cmd = NULL;
+	}
+
+	//The frame's fence value has to signal even on failure, or every later wait on this device hangs forever.
+	//If nothing was submitted the CPU can signal it directly, otherwise the queue signals after the submitted work.
+
+	if(!s_uccess) {
+
+		if(!executed)
+			deviceExt->commitSemaphore->lpVtbl->Signal(deviceExt->commitSemaphore, deviceExt->fenceId);
+
+		else queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId);
+	}
+
 	#if _ARCH == ARCH_X86_64
 
 		//Regardless of device removal, we'll ask NV to report anything fishy to us.
-		//It's technically possible that a TDR/Device removal is caused during setup time,
-		//but it's very unlikely. As we do the bulk of D3D12 calls and all RT calls in submitCommands.
+		//It's technically possible that a TDR/Device removal is caused during setup time, but it's very unlikely.
+		//As we do the bulk of D3D12 calls and all RT calls in submitCommands.
 		//Otherwise we'd have to guard every dxCheck, which might not even have a device (could happen on an instance).
 
 		if(device->info.capabilities.features & EGraphicsFeatures_RayValidation) {

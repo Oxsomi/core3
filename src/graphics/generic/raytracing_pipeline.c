@@ -326,6 +326,16 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	if(!layout)
 		layout = GraphicsDeviceRef_ptr(deviceRef)->defaultPipelineLayout;
 
+	//A device without bindless has no default pipeline layout, and the backends dereference it unconditionally.
+	//EGraphicsDeviceFlags_DisableBindless puts any device in that state, so the pipeline has to bring its own.
+
+	if(!layout)
+		retError(clean, Error_nullPointer(
+			7,
+			"GraphicsDeviceRef_createPipelineRaytracingExt()::layout is required, "
+			"the device has no default pipeline layout because it has no bindless"
+		));
+
 	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
 		gotoIfError3(clean, RefPtr_inc(layout));
 

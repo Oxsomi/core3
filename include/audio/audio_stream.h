@@ -35,7 +35,8 @@ typedef struct CharString CharString;
 typedef struct AudioStreamInfo AudioStreamInfo;
 
 //Stride bytes has one exception; stride of 5 corresponds with 24-bit, as this is common but will have to be remapped.
-//Otherwise it's 2^n, 0 = 1B (8b), 1 = 2B (16b), 2 = 4 (32b), 3 = 8 (64b). 4 = 3 (24b), 5 = 4 (32b, PCM).
+//Otherwise it's 2^n, 0 = 1B (8b), 1 = 2B (16b), 2 = 4 (32b), 3 = 8 (64b).
+//4 = 3 (24b), 5 = 4 (32b, PCM).
 
 #define EAudioStreamFormat_remapStride(x) \
 	((x) == 1 ? 0 : ((x) == 2 ? 1 : ((x) == 4 ? 2 : ((x) == 3 || (x) == 5 ? 4 : 3))))

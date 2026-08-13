@@ -256,6 +256,13 @@ Bool GraphicsDeviceRef_createBLAS(
 	*blasPtr = *blas;
 	blasPtr->base.name = CharString_createNull();
 
+	//Set as soon as the object exists rather than once it is fully built.
+	//A failure below frees the half built BLAS, and BLAS_freeExt reaches the backend through base.device,
+	// so leaving it for the end turned any late failure into a crash.
+
+	gotoIfError3(clean, RefPtr_inc(dev));
+	blasPtr->base.device = dev;
+
 	if(isUpdate)
 		blasPtr->base.flags |= ERTASBuildFlags_IsUpdate;
 
@@ -275,15 +282,17 @@ Bool GraphicsDeviceRef_createBLAS(
 		blasPtr->indexBuffer = (DeviceData) { 0 };
 		blasPtr->positionBuffer = (DeviceData) { 0 };
 
-		gotoIfError3(clean, RefPtr_inc(indexBuffer.buffer));
+		//The index buffer is optional (indexFormat Undefined), and inc'ing a NULL one reports failure without an
+		// error, so an index free BLAS used to fail creation silently here.
+
+		if(indexBuffer.buffer)
+			RefPtr_inc(indexBuffer.buffer);
+
 		blasPtr->indexBuffer = indexBuffer;
 
 		gotoIfError3(clean, RefPtr_inc(positionBuffer.buffer));
 		blasPtr->positionBuffer = positionBuffer;
 	}
-
-	gotoIfError3(clean, RefPtr_inc(dev));
-	blasPtr->base.device = dev;
 
 	if(name)
 		gotoIfError3(clean, CharString_createCopy(*name, alloc, &blasPtr->base.name, e_rr));

@@ -885,11 +885,12 @@ Bool Compiler_convertRegisterSPIRV(
 			}
 
 			//The SPIRV image "Depth" operand (0 = non-depth, 1 = depth/comparison, 2 = no indication) describes
-			//how the image is sampled, not the register type: DXC emits 2 for a regular sampled image and 1 for
-			//one used with SampleCmp (a SamplerComparisonState). It doesn't change the reflected texture type,
-			//the comparison is carried by the separate sampler register, so accept any of the three valid
-			//values. (Previously this compared depth against a per-dimension constant, which rejected all of
-			//Texture1D / Texture3D / TextureCube and every comparison-sampled texture on SPIRV.)
+			// how the image is sampled, not the register type:
+			// DXC emits 2 for a regular sampled image and 1 for one used with SampleCmp (a SamplerComparisonState).
+			//It doesn't change the reflected texture type, the comparison is carried by the separate sampler register,
+			// so accept any of the three valid values.
+			//(Previously this compared depth against a per-dimension constant,
+			// which rejected all of Texture1D / Texture3D / TextureCube and every comparison-sampled texture on SPIRV.)
 			if(binding->image.depth > 2)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() Unexpected image depth"

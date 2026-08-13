@@ -53,7 +53,6 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 	DeviceBufferRef *tempStagingResource = NULL;
 
 	ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
-	Bool compressed = ETextureFormat_getIsCompressed(format);
 
 	DXGI_FORMAT dxFormat = ETextureFormatId_toDXFormat(texture->base.textureFormatId);
 
@@ -76,7 +75,9 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 
 		siz *= (TextureRange_height(texturej) / alignmentY) * TextureRange_length(texturej);
 
-		allocRange += siz;
+		//Every region begins at a placed footprint offset, which D3D12 requires to be 512 byte aligned
+
+		allocRange += (siz + D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1) &~ (D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1);
 	}
 
 	device->pendingBytes += allocRange;
@@ -123,36 +124,43 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 
 			const U64 rowOff = ETextureFormat_getSize(format, x, alignmentY, 1);
 
-			const U64 len = rowLen * (TextureRange_height(texturej) / alignmentY) * TextureRange_length(texturej);
-			const U64 start = (U64) rowLen * (y + z * h) + rowOff;
+			const U64 h2 = (h + alignmentY - 1) / alignmentY;
+			const U64 len = rowLen * h2 * l;
+
+			//cpuData is the tight full texture, so reading it strides by the full row length and slice height;
+			// the 256 aligned pitch only applies to the staging destination
+
+			const U64 fullRowLen = ETextureFormat_getSize(format, texture->base.width, alignmentY, 1);
+			const U64 fullH2 = ((U64)texture->base.height + alignmentY - 1) / alignmentY;
+			const U64 start = fullRowLen * (y / alignmentY + z * fullH2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height && rowLenUnalign == rowLen)
 				Buffer_memcpy(
-					Buffer_createRef(location + allocRange, rowLen * h * l),
-					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h * l)
+					Buffer_createRef(location + allocRange, rowLen * h2 * l),
+					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h2 * l)
 				);
 
 			else for(U64 k = z; k < z + l; ++k) {
 
 				if(w == texture->base.width && rowLenUnalign == rowLen)
 					Buffer_memcpy(
-						Buffer_createRef(location + allocRange + rowLen * (k - z) * h, rowLen * h),
-						Buffer_createRefConst(texture->cpuData.ptr + start + rowLen * (k - z) * h, rowLen * h)
+						Buffer_createRef(location + allocRange + rowLen * (k - z) * h2, rowLen * h2),
+						Buffer_createRefConst(texture->cpuData.ptr + start + fullRowLen * (k - z) * fullH2, rowLen * h2)
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
 					const U64 yOff = (j - y) / alignmentY;
 					Buffer_memcpy(
-						Buffer_createRef(location + allocRange + rowLen * (yOff + (k - z) * h), rowLen),
+						Buffer_createRef(location + allocRange + rowLen * (yOff + (k - z) * h2), rowLen),
 						Buffer_createRefConst(
-							texture->cpuData.ptr + start + rowLenUnalign * (yOff + (k - z) * h), rowLenUnalign
+							texture->cpuData.ptr + start + fullRowLen * (yOff + (k - z) * fullH2), rowLenUnalign
 						)
 					);
 				}
 			}
 
 			U64 allocRangeStart = allocRange;
-			allocRange += len;
+			allocRange += (len + D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1) &~ (D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1);
 
 			gotoIfError3(clean, DxDeviceBuffer_transition(
 				stagingResourceExt,
@@ -194,9 +202,11 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 				ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
 			}
 
+			//The z coordinate is passed through DstZ; the subresource is always mip 0 of layer 0
+
 			D3D12_TEXTURE_COPY_LOCATION dst = (D3D12_TEXTURE_COPY_LOCATION) {
 				.pResource = textureExt->image,
-				.SubresourceIndex = z
+				.SubresourceIndex = 0
 			};
 
 			D3D12_TEXTURE_COPY_LOCATION src = (D3D12_TEXTURE_COPY_LOCATION) {
@@ -214,13 +224,12 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 				}
 			};
 
+			//The box selects from the source footprint, which spans exactly the region, so it starts at zero
+
 			D3D12_BOX srcBox = (D3D12_BOX) {
-				.left   = x,
-				.top    = y,
-				.front  = z,
-				.right  = x + w,
-				.bottom = y + h,
-				.back   = z + l
+				.right  = w,
+				.bottom = h,
+				.back   = l
 			};
 
 			commandBuffer->buffer->lpVtbl->CopyTextureRegion(
@@ -250,7 +259,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 
 		AllocationBufferAllocate allocBuffer = (AllocationBufferAllocate) {
 			.allocationBuffer = stagingBuffer,
-			.alignment = compressed ? 16 : 4,
+			.alignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT,        //Placed footprint offsets must be 512 aligned
 			.alloc = alloc
 		};
 
@@ -276,7 +285,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 
 			allocBuffer = (AllocationBufferAllocate) {
 				.allocationBuffer = stagingBuffer,
-				.alignment = compressed ? 16 : 4,
+				.alignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT,        //Placed footprint offsets must be 512 aligned
 				.alloc = alloc
 			};
 
@@ -308,9 +317,15 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 			rowLen = (rowLen + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1) &~ (D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1);
 
 			U64 rowOff = ETextureFormat_getSize(format, x, alignmentY, 1);
-			const U64 len = rowLen * (TextureRange_height(texturej) / alignmentY) * TextureRange_length(texturej);
-			const U64 h2 = h / alignmentY;
-			const U64 start = rowLen * (y + z * h2) + rowOff;
+			const U64 h2 = (h + alignmentY - 1) / alignmentY;
+			const U64 len = rowLen * h2 * l;
+
+			//cpuData is the tight full texture, so reading it strides by the full row length and slice height;
+			// the 256 aligned pitch only applies to the staging destination
+
+			const U64 fullRowLen = ETextureFormat_getSize(format, texture->base.width, alignmentY, 1);
+			const U64 fullH2 = ((U64)texture->base.height + alignmentY - 1) / alignmentY;
+			const U64 start = fullRowLen * (y / alignmentY + z * fullH2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height && rowLenUnalign == rowLen)
 				Buffer_memcpy(
@@ -323,7 +338,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 				if(w == texture->base.width && rowLenUnalign == rowLen)
 					Buffer_memcpy(
 						Buffer_createRef(location + allocRange + rowLen * (k - z) * h2, rowLen * h2),
-						Buffer_createRefConst(texture->cpuData.ptr + start + rowLen * (k - z) * h2, rowLen * h2)
+						Buffer_createRefConst(texture->cpuData.ptr + start + fullRowLen * (k - z) * fullH2, rowLen * h2)
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
@@ -331,7 +346,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 					Buffer_memcpy(
 						Buffer_createRef(location + allocRange + rowLen * (yOff + (k - z) * h2), rowLen),
 						Buffer_createRefConst(
-							texture->cpuData.ptr + start + rowLenUnalign * (yOff + (k - z) * h2), rowLenUnalign
+							texture->cpuData.ptr + start + fullRowLen * (yOff + (k - z) * fullH2), rowLenUnalign
 						)
 					);
 				}
@@ -382,18 +397,21 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 			}
 
 			U64 allocRangeStart = allocRange;
-			allocRange += len;
+			allocRange += (len + D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1) &~ (D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1);
+
+			//The z coordinate is passed through DstZ; the subresource is always mip 0 of layer 0
 
 			D3D12_TEXTURE_COPY_LOCATION dst = (D3D12_TEXTURE_COPY_LOCATION) {
 				.pResource = textureExt->image,
-				.SubresourceIndex = z
+				.SubresourceIndex = 0
 			};
 
 			D3D12_TEXTURE_COPY_LOCATION src = (D3D12_TEXTURE_COPY_LOCATION) {
 				.pResource = stagingExt->buffer,
 				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
 				.PlacedFootprint = (D3D12_PLACED_SUBRESOURCE_FOOTPRINT) {
-					.Offset = allocRangeStart + (U64)(location - stagingBuffer->buffer.ptr),
+					//Relative to the staging resource rather than the frame region, since the footprint is resource based
+					.Offset = allocRangeStart + (U64)(location - (const U8*)staging->resource.mappedMemoryExt),
 					.Footprint = (D3D12_SUBRESOURCE_FOOTPRINT) {
 						.Format = dxFormat,
 						.Width = w,
@@ -404,13 +422,12 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 				}
 			};
 
+			//The box selects from the source footprint, which spans exactly the region, so it starts at zero
+
 			D3D12_BOX srcBox = (D3D12_BOX) {
-				.left   = x,
-				.top    = y,
-				.front  = z,
-				.right  = x + w,
-				.bottom = y + h,
-				.back   = z + l
+				.right  = w,
+				.bottom = h,
+				.back   = l
 			};
 
 			commandBuffer->buffer->lpVtbl->CopyTextureRegion(
@@ -439,5 +456,130 @@ clean:
 	RefPtr_dec(&tempStagingResource);
 	ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions, e_rr);
 	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+	return s_uccess;
+}
+
+Bool DX_WRAP_FUNC(DeviceTextureRef_pull)(
+	void *commandBufferExt,
+	GraphicsDeviceRef *deviceRef,
+	DeviceTextureRef *resource,
+	const TextureRange *range,
+	U64 stagingOffset,
+	U64 *rowPitch,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+
+	//Any texture type can be pulled, so only the unified base is safe to use here
+
+	const UnifiedTexture utex = TextureRef_getUnifiedTexture(resource, NULL);
+	DxUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(resource, Dx, 0);
+	DxDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->stagingReadback), Dx);
+
+	D3D12_BARRIER_GROUP bufDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+	D3D12_BARRIER_GROUP imgDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE };
+
+	gotoIfError3(clean, DxDeviceBuffer_transition(
+		stagingExt, D3D12_BARRIER_SYNC_COPY, D3D12_BARRIER_ACCESS_COPY_DEST,
+		&deviceExt->bufferTransitions, &bufDep, alloc, e_rr
+	));
+
+	D3D12_BARRIER_SUBRESOURCE_RANGE subresourceRange = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
+		.NumMipLevels = 1,
+		.NumArraySlices = 1,
+		.NumPlanes = 1
+	};
+
+	gotoIfError3(clean, DxUnifiedTexture_transition(
+		textureExt,
+		D3D12_BARRIER_SYNC_COPY,
+		D3D12_BARRIER_ACCESS_COPY_SOURCE,
+		D3D12_BARRIER_LAYOUT_COPY_SOURCE,
+		&subresourceRange,
+		&deviceExt->imageTransitions,
+		&imgDep, alloc, e_rr
+	));
+
+	if(bufDep.NumBarriers || imgDep.NumBarriers) {
+
+		D3D12_BARRIER_GROUP barriers[2];
+		barriers[0] = bufDep;
+		barriers[!!bufDep.NumBarriers] = imgDep;
+
+		commandBuffer->buffer->lpVtbl->Barrier(
+			commandBuffer->buffer,
+			!!bufDep.NumBarriers + !!imgDep.NumBarriers,
+			barriers
+		);
+
+		ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions, e_rr);
+		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+	}
+
+	//Stencil bearing formats never get this far, so the depth format maps to a single plane copy
+
+	const DXGI_FORMAT dxFormat =
+		utex.depthFormat ? (DXGI_FORMAT) EDepthStencilFormat_toDXFormat((EDepthStencilFormat) utex.depthFormat) :
+		ETextureFormatId_toDXFormat(utex.textureFormatId);
+
+	U8 alignX = 1, alignY = 1;
+
+	if(!utex.depthFormat) {
+		const ETextureFormat format = ETextureFormatId_unpack[utex.textureFormatId];
+		ETextureFormat_getAlignment(format, &alignX, &alignY);
+	}
+
+	const U16 x = range->startRange[0];
+	const U16 y = range->startRange[1];
+	const U16 z = range->startRange[2];
+
+	const U16 w = TextureRange_width(*range);
+	const U16 h = TextureRange_height(*range);
+	const U16 l = TextureRange_length(*range);
+
+	const D3D12_TEXTURE_COPY_LOCATION src = (D3D12_TEXTURE_COPY_LOCATION) {
+		.pResource = textureExt->image,
+		.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+		.SubresourceIndex = 0
+	};
+
+	//The footprint dimensions have to stay block multiples for compressed formats, even at unaligned edges
+
+	const D3D12_TEXTURE_COPY_LOCATION dst = (D3D12_TEXTURE_COPY_LOCATION) {
+		.pResource = stagingExt->buffer,
+		.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+		.PlacedFootprint = (D3D12_PLACED_SUBRESOURCE_FOOTPRINT) {
+			.Offset = stagingOffset,
+			.Footprint = (D3D12_SUBRESOURCE_FOOTPRINT) {
+				.Format = dxFormat,
+				.Width = (w + alignX - 1) / alignX * alignX,
+				.Height = (h + alignY - 1) / alignY * alignY,
+				.Depth = l,
+				.RowPitch = (U32) *rowPitch
+			}
+		}
+	};
+
+	//The box is in texture coordinates on the read side, since the source is the texture itself
+
+	D3D12_BOX srcBox = (D3D12_BOX) {
+		.left   = x,
+		.top    = y,
+		.front  = z,
+		.right  = (U32) x + w,
+		.bottom = (U32) y + h,
+		.back   = (U32) z + l
+	};
+
+	commandBuffer->buffer->lpVtbl->CopyTextureRegion(commandBuffer->buffer, &dst, 0, 0, 0, &src, &srcBox);
+
+clean:
 	return s_uccess;
 }

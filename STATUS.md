@@ -3,7 +3,7 @@
 Honest, per-feature maturity so nobody designs against something that doesn't exist yet.
 Legend: ✅ implemented + tested · 🟡 implemented, caveats · 🚧 in progress · 📄 spec/design only · ❌ not planned near-term
 
-Last updated: 2026-07-30 (branch `android`, v3.2.103). Update this table in the same PR as the feature.
+Last updated: 2026-08-04 (branch `android`, v3.2.103). Update this table in the same PR as the feature.
 
 ## Core (types_*)
 
@@ -44,8 +44,8 @@ Last updated: 2026-07-30 (branch `android`, v3.2.103). Update this table in the 
 | Tracked allocator + leak report | ✅ | ✅ | ✅ | ✅ |
 | Sandboxed file IO + FileStream | ✅ | ✅ | ✅ | ✅ (assets read-only via AAsset) |
 | Virtual FS (embedded oiCA) | ✅ | ✅ | ✅ | ✅ (apk `section_*` workaround) |
-| Window + monitors | ✅ | 🟡 Wayland only (no X11) | ❌ yet | 🟡 |
-| Keyboard/mouse (multi-device) | ✅ | ✅ | ❌ yet | 🟡 (touch story undocumented) |
+| Window + monitors | ✅ | 🟡 Wayland only (no X11) | ❌ yet | ✅ |
+| Keyboard/mouse (multi-device) | ✅ | ✅ | ❌ yet | 🟡 touch story undocumented |
 | Dynamic libraries | ✅ | ✅ | ✅ | ✅ |
 
 ## Graphics
@@ -77,4 +77,4 @@ Last updated: 2026-07-30 (branch `android`, v3.2.103). Update this table in the 
 | GLSL / Slang input | ❌ | HLSL-only by design (state in docs) |
 | MSL output | 📄 | Blocked on SPIRV-Cross/Shader translator integration |
 | CLI: convert/encrypt/hash/inspect/rand/profile/devices/package | ✅ | `-aes` key via argv only, stdin/env/file input wanted |
-| CI | 🚧 | Currently red (known; mid-refactor) |
+| CI | ✅ | Passing on all platforms and compilers |

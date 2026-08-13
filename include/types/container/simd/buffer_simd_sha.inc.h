@@ -95,7 +95,8 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 
 	while(len) {
 
-		//We reached an unfilled block. We gotta make a block on the stack and point to it
+		//We reached an unfilled block.
+		//We gotta make a block on the stack and point to it
 
 		if (len < 64 || wasPaddingBlock) {
 

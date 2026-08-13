@@ -221,7 +221,12 @@ static inline I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b) {
 
 	const U8 *ua = (U8 *)&a;
 	const U8 *ub = (U8 *)&b;
-	I32x4_U8x8 c = { 0 };
+
+	//Zeroed through the union's vector member rather than `= { 0 }`: the first member is itself an
+	//aggregate here, which C++ flags under -Wmissing-braces (this header is pulled into oxc::c by vec.hpp).
+
+	I32x4_U8x8 c;
+	c.vec = I32x4_zero();
 
 	for (U8 i = 0; i < 16; ++i) {
 

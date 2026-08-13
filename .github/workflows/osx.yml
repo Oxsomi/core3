@@ -6,7 +6,7 @@ jobs:
     uses: ./.github/workflows/_build.yml
     with:
       name: macOS x64 Vulkan static
-      runner: macos-26
+      runner: macos-26-intel
       os: macos
       build_flags: '-o cliGraphics=False'
       python_cmd: python

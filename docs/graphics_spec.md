@@ -44,7 +44,6 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_surface (and the variant of the platform such as VK_KHR_win32_surface)
   - VK_EXT_swapchain_colorspace
 - Required device extensions:
-  - VK_KHR_push_descriptor and maxPushDescriptors >= 32
   - VK_KHR_synchronization2
   - VK_KHR_swapchain
     - Requires at least 1 image layer.
@@ -54,6 +53,19 @@ Because of this, a device needs the following requirements to be OxC3 compatible
     - Requires inherit alpha or opaque support.
     - Application is responsible for presenting image in the right rotation if SwapchainInfo::requiresManualComposite.
 - Device extensions that can be queried (not all are supported yet):
+  - VK_KHR_push_descriptor (with maxPushDescriptors >= 32) as EVkGraphicsFeatures_PerformantPushDescriptor.
+    Named for the performance rather than the capability: pushing descriptors always works, the flag only says
+    the device does it natively instead of through the emulation described below.
+    Vulkan only, because it's the only api where pushing descriptors isn't a given; D3D12 has root descriptors and
+    Metal has argument buffers, so there'd be nothing to branch on there and it isn't a generic feature bit.
+    A device without it is not rejected. Only the globals constant buffer is ever pushed, and each frame in flight
+    owns that buffer for the lifetime of the device, so OxC3 allocates one descriptor set per frame instead, writes
+    each once and binds it unchanged from then on. There is no per frame update, so no set is ever rewritten while
+    still in flight. The sets are built on the first submit rather than at device creation, because the globals
+    buffers don't exist yet when the Vulkan device is initialised.
+    A one time performance warning is logged on the first submit that takes the emulated path.
+    Android emulators are the common case, since gfxstream drops the extension from the guest even when the host
+    driver exposes it.
   - Debug build only:
     - VK_EXT_debug_marker as internal flag
   - VK_KHR_shader_float16_int8 as F16
@@ -378,6 +390,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - NVAPI NvAPI_D3D12_GetRaytracingCaps cluster operations as RayClusterAS and partitioned TLAS as RayPartitionedTLAS (features2, mega geometry; NVAPI only until a vendor-neutral query exists). Either one also implies RayIndirectASBuild (features2): the mega geometry builds (BUILD_BLAS_FROM_CLAS cluster op, NvAPI_D3D12_BuildRaytracingPartitionedTlasIndirect) are GPU-driven by design, while classic BuildRaytracingAccelerationStructure(Ex) has no indirect variant on D3D12.
 - ShaderModel 6.10 support as EGraphicsFeatures_CoopVec + CoopMat + CoopFP8 + CoopVecTraining + RayTriPosition (D3D12 has no separate caps query; SM6.10 is the proxy - the cooperative-vector TIER_1_0 Minimum Support Set already includes FP16/INT8/FP8; TIER_1_1 not yet a real query). These are gated on enabling D3D12ExperimentalShaderModels on both device factories at instance creation (best-effort: needs the preview Agility SDK + Windows Developer Mode; on failure they're simply not reported). Because they're preview, they're also flagged in GraphicsDeviceCapabilities.experimentalFeatures (a subset of `features` that isn't final); on Vulkan they're real extensions so experimentalFeatures stays empty.
 - D3D12_FEATURE_ASYNC_COMMANDS Supported (Agility 1.720-preview) as EDxGraphicsFeatures_BatchedAsyncCommandList.
+- D3D12_FEATURE_ARCHITECTURE1 CacheCoherentUMA as EDxGraphicsFeatures_CacheCoherentUMA, which switches upload heaps to WRITE_BACK (snooping is free there, and WRITE_COMBINE would make CPU reads disastrous for no gain).
 
 #### Direct3D12 specific extensions
 

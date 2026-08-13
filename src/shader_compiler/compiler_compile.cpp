@@ -267,10 +267,11 @@ Bool Compiler_compile(
 			}
 
 			//NOTE: F32/F64 atomics have no native HLSL intrinsic and are expressed via inline SPIR-V
-			//([[vk::ext_extension("SPV_EXT_shader_atomic_float_add")]] on the atomic function). That inline
-			//attribute already declares the extension, and passing -fspv-extension=SPV_EXT_shader_atomic_float_add
-			//makes DXC fail with "unknown SPIR-V extension" (it isn't in DXC's -fspv-extension whitelist). So we
-			//deliberately do NOT whitelist it here; DXC emits OpAtomicFAddEXT from the inline declaration.
+			// ([[vk::ext_extension("SPV_EXT_shader_atomic_float_add")]] on the atomic function).
+			//That inline attribute already declares the extension,
+			// and passing -fspv-extension=SPV_EXT_shader_atomic_float_add makes DXC fail with "unknown SPIR-V extension"
+			// (it isn't in DXC's -fspv-extension whitelist).
+			//So we deliberately do NOT whitelist it here; DXC emits OpAtomicFAddEXT from the inline declaration.
 		}
 
 		else {
@@ -503,9 +504,10 @@ Bool Compiler_compile(
 		if(FAILED(hr))
 			retError(clean, Error_invalidState(2, "Compiler_compile() fetch hlsl failed"));
 
-			//Fail loudly rather than silently emitting an empty binary that only trips a confusing SHFile_read
-			//error much later. DXC can produce no object without a reported error (e.g. a DXIL validation reject
-			//of a still-experimental op), so guard against a zero-length blob explicitly.
+			//Fail loudly rather than silently emitting an empty binary
+			// that only trips a confusing SHFile_read error much later.
+			//DXC can produce no object without a reported error (e.g. a DXIL validation reject of a still-experimental op),
+			// so guard against a zero-length blob explicitly.
 			if(!resultBlob || !resultBlob->GetBufferSize())
 				retError(clean, Error_invalidState(
 					3, "Compiler_compile() DXC produced an empty binary (compile or validation failed silently)"

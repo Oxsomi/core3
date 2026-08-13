@@ -1,4 +1,5 @@
 from conan import ConanFile
+from conan.tools.build import cross_building
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 from conan.tools.scm import Git
 from conan.tools.files import collect_libs, copy
@@ -6,6 +7,33 @@ import os
 import shutil
 
 required_conan_version = ">=2.0"
+
+# Options oxc3 is built with when it's consumed as a host *tool* rather than as a library; this is the
+# OxC3_package packager that add_virtual_files() shells out to (see cmake/oxc3.cmake).
+#
+# Deliberately constant instead of forwarded from self.options: it's a host binary that only turns files
+# into oiCA archives, so nothing about the target (SIMD level, graphics backend, ...) should change it.
+# Keeping it fixed also means a single prebuilt package serves every android configuration.
+#
+# build_common.py reads this dict straight out of this file so build_android.py can prebuild exactly the
+# binary tool_requires below is going to ask for.
+
+HOST_TOOL_OPTIONS = {
+	"forceVulkan": False,
+	"enableSIMD": True,
+	"enableTests": False,
+	"enableOxC3CLI": True,
+	"forceFloatFallback": False,
+	"enableShaderCompiler": True,
+	"cliGraphics": False,
+	"dynamicLinkingGraphics": True,
+
+	# Static on purpose, unlike the default.
+	# This one is invoked by CMake through find_program during other people's builds,
+	# so a single self-contained exe beats an exe plus a DLL to locate.
+
+	"dynamicLinkingShaderCompiler": False
+}
 
 class oxc3(ConanFile):
 
@@ -30,7 +58,11 @@ class oxc3(ConanFile):
 		"forceFloatFallback": [ True, False ],
 		"enableShaderCompiler": [ True, False ],
 		"cliGraphics": [ True, False ],
-		"dynamicLinkingGraphics": [ True, False ]
+		"dynamicLinkingGraphics": [ True, False ],
+		"dynamicLinkingShaderCompiler": [ True, False ],
+		"debugShaderCompiler": [ True, False ],
+		"enableASAN": [ True, False ],
+		"enableUBSAN": [ True, False ]
 	}
 
 	default_options = {
@@ -41,7 +73,26 @@ class oxc3(ConanFile):
 		"forceFloatFallback": False,
 		"enableShaderCompiler": True,
 		"cliGraphics": True,
-		"dynamicLinkingGraphics": False
+
+		# DXC and SPIRV-Reflect are big, slow to build and almost never what you're actually debugging,
+		# so they stay Release even in a Debug build.
+		# Turn this on to build and consume them in the current mode instead,
+		# which is what you want when stepping into the shader compiler itself.
+
+		"dynamicLinkingGraphics": False,
+
+		# Separate from dynamicLinkingGraphics: that one exists so Vulkan/D3D12 can be picked at runtime,
+		# this one so DXC's ~28 MB lives in one shared module rather than in every consumer.
+		# On by default on desktop; CMakeLists coerces it off where it can't apply (android, or no shader compiler at all).
+
+		"dynamicLinkingShaderCompiler": True,
+		"debugShaderCompiler": False,
+
+		# Diagnostic only, and clang/gcc only.
+		# CMakeLists turns a request under MSVC into a hard error rather than ignoring it.
+
+		"enableASAN": False,
+		"enableUBSAN": False
 	}
 
 	exports_sources = [ "include/*", "cmake/*" ]
@@ -64,9 +115,13 @@ class oxc3(ConanFile):
 		tc.cache_variables["EnableOxC3CLI"] = self.options.enableOxC3CLI
 		tc.cache_variables["EnableSIMD"] = self.options.enableSIMD
 		tc.cache_variables["ForceVulkan"] = self.options.forceVulkan
+		tc.cache_variables["DynamicLinkingShaderCompiler"] = self.options.dynamicLinkingShaderCompiler
+		tc.cache_variables["DebugShaderCompiler"] = self.options.debugShaderCompiler
 		tc.cache_variables["EnableShaderCompiler"] = self.options.enableShaderCompiler
 		tc.cache_variables["CLIGraphics"] = self.options.cliGraphics
 		tc.cache_variables["DynamicLinkingGraphics"] = self.options.dynamicLinkingGraphics
+		tc.cache_variables["EnableASAN"] = self.options.enableASAN
+		tc.cache_variables["EnableUBSAN"] = self.options.enableUBSAN
 
 		if not self.settings.os == "Windows":
 			tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
@@ -80,11 +135,23 @@ class oxc3(ConanFile):
 		git.checkout(self.conan_data["sources"][self.version]["checkout"])
 		git.run("submodule update --init --recursive")
 
+	# Where CMakeLists.txt lives. `conan build`/`export-pkg` run against a working tree so that's the recipe
+	# folder itself, while `conan create` calls source() first which clones the repo into ./core3.
+
+	def _cmakeRoot(self):
+
+		cloned = os.path.join(self.source_folder, "core3")
+
+		if os.path.isfile(os.path.join(cloned, "CMakeLists.txt")):
+			return cloned
+
+		return self.source_folder
+
 	def build(self):
 
 		cmake = CMake(self)
 
-		if os.path.isdir("../core3"):
+		if self._cmakeRoot() != self.source_folder:
 			cmake.configure(build_script_folder="core3")
 		else:
 			cmake.configure()
@@ -94,19 +161,22 @@ class oxc3(ConanFile):
 	# In case we don't have the shader compiler (and OxC3 package) enabled, we will have to depend on a previously built
 	# OxC3 with shader compiler enabled.
 	# This happens for example with Android, where shader compilation is disabled by default.
+	#
+	# It's a tool_requires, so conan resolves it against the *build* profile and puts its bin/ on PATH;
+	# that's how add_virtual_files()'s find_program(OxC3_package) resolves while cross compiling.
+	# build_android.py prebuilds this from the working tree, otherwise conan falls back to building oxc3
+	# from github (see source()), which is almost never what you want locally.
 
 	def build_requirements(self):
-		if not self.options.enableShaderCompiler:
-			self.tool_requires("oxc3/0.2.103", options = {
-				"forceVulkan": self.options.forceVulkan,
-				"enableSIMD": self.options.enableSIMD,
-				"enableTests": False,
-				"enableOxC3CLI": True,
-				"forceFloatFallback": False,
-				"enableShaderCompiler": True,
-				"cliGraphics": False,
-				"dynamicLinkingGraphics": True
-			})
+
+		# Cross building needs it regardless of enableShaderCompiler: what matters is being able to *run* the packager,
+		# and a cross build's binaries target the device.
+		# Android can't even produce the executable (Platform_defineEntrypoint gives android_main, not main),
+		# so without this add_virtual_files' find_program picks up whatever OxC3_package happens to be on PATH,
+		# which is how a months-old one out of the conan cache ended up packaging the shader tests.
+
+		if not self.options.enableShaderCompiler or cross_building(self):
+			self.tool_requires(f"{self.name}/{self.version}", options = HOST_TOOL_OPTIONS)
 
 	def requirements(self):
 
@@ -127,8 +197,8 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2026.08.01")
-			self.requires("spirv_reflect/2026.07.29")
+			self.requires("dxc/2026.08.07.03")
+			self.requires("spirv_reflect/2026.08.06")
 
 			# RGA (CLI tool): offline shader-to-AMD-ISA analysis + device/architecture enumeration.
 			# Only exists where the vendored AMD offline compilers do (Windows/Linux x64); run=True so the
@@ -141,17 +211,19 @@ class oxc3(ConanFile):
 			self.requires("xdg_decoration/2024.12.22")
 
 		# Vulkan headers come from the Oxsomi fork (headers-only), so building no longer needs a system VULKAN_SDK.
-		# The loader is still loaded dynamically at runtime. Required wherever the Vulkan backend is compiled.
+		# The loader is still loaded dynamically at runtime.
+		# Required wherever the Vulkan backend is compiled.
 		usesVulkan = self.settings.os != "Windows" or self.options.forceVulkan or self.options.dynamicLinkingGraphics
 
 		if usesVulkan:
 			self.requires("vulkan_headers/2026.07.28")
 
 		# Validation layers must be built manually for Android; not needed elsewhere.
+		# Pinned near the vulkan_headers version, since an old layer silently weakens validation.
 		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
-			self.requires("vulkan_validation_layers/2025.01.25")
+			self.requires("vulkan_validation_layers/1.4.357.0")
 
-		self.requires("openal_soft/2026.06.04")
+		self.requires("openal_soft/2026.08.06")
 
 	def package(self):
 
@@ -183,29 +255,27 @@ class oxc3(ConanFile):
 		else:
 			platform = "linux"
 
-		# Android always appends <configPath>/build/Debug (etc.) for our package dir since we park our config there.
-		# Windows it stays build/
-		# Linux will keep it relative to core3/build/Debug and so we just append platform/archName
+		# Artifacts don't land in the conan build folder: CMakeLists.txt redirects ARCHIVE/LIBRARY/RUNTIME
+		# output to <cmake root>/build/<config>/<platform>/<arch>/{lib,bin}, and add_virtual_files() writes
+		# its oiCA archives to <cmake root>/build/<config>/<platform>/packages (see cmake/oxc3.cmake).
+		# So derive both from the source tree rather than guessing from build_folder, which moves around
+		# depending on -of, the generator and whether the recipe was created or built in place.
 
-		if self.build_folder.replace("\\", "/").endswith("core3/build/" + str(self.settings.build_type)):
-			input_dir = os.path.join(self.build_folder, platform + "/" + archName)
+		cmake_root = self._cmakeRoot()
+		out_root   = os.path.join(cmake_root, "build", str(self.settings.build_type), platform)
 
-		elif self.build_folder.replace("\\", "/").endswith("/build/" + str(self.settings.build_type)):
-			input_dir = self.build_folder + "/../../"
+		# CMakeLists gives a non default toolchain its own output directory so two compilers can't
+		# inherit each other's archives; see the note there.
+		# Same rule, or package() collects nothing.
 
-		else:
-			input_dir = os.path.join(self.build_folder, str(self.settings.build_type) + "/" + platform + "/" + archName)
+		if platform == "windows" and str(self.settings.compiler) != "msvc":
+			archName += "_clang"
 
-		# Package dir where our oiCA files are output
-		
-		if self.build_folder.replace("\\", "/").endswith("core3/build/" + str(self.settings.build_type)):
-			OxC3_package_dir = os.path.join(self.build_folder, "../" + platform + "/packages")
+		elif platform == "linux" and str(self.settings.compiler) != "gcc":
+			archName += "_clang"
 
-		elif self.build_folder.replace("\\", "/").endswith("/build/" + str(self.settings.build_type)):
-			OxC3_package_dir = os.path.join(self.build_folder, "/../../../" + platform + "/packages")
-
-		else:
-			OxC3_package_dir = os.path.join(self.build_folder, platform + "/packages")
+		input_dir        = os.path.join(out_root, archName)
+		OxC3_package_dir = os.path.join(out_root, "packages")
 
 		input_lib_dir = os.path.join(input_dir, "lib")
 		input_bin_dir = os.path.join(input_dir, "bin")

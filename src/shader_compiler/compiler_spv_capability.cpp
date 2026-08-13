@@ -72,7 +72,7 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			ext = ESHExtension_CoopVec;
 			break;
 
-		//The training capability (outer-product / reduce-sum accumulate) is a distinct device tier (Tier 1.1), gated separately.
+		//Training capability (outer-product / reduce-sum accumulate) is a distinct device tier (Tier 1.1), gated separately.
 		case SpvCapabilityCooperativeVectorTrainingNV:
 			ext = ESHExtension_CoopVecTraining;
 			break;
@@ -87,8 +87,9 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			ext = ESHExtension_DescriptorHeap;
 			break;
 
-		//Cooperative matrix (and, per spec, cooperative vector) require the Vulkan memory model; DXC upgrades
-		//OpMemoryModel to Vulkan and declares these. They enable no oiSH extension of their own, but must be allowed.
+		//Cooperative matrix (and, per spec, cooperative vector) require the Vulkan memory model.
+		//DXC upgrades OpMemoryModel to Vulkan and declares these.
+		//They enable no oiSH extension of their own, but must be allowed.
 		case SpvCapabilityVulkanMemoryModel:
 		case SpvCapabilityVulkanMemoryModelDeviceScope:
 			break;
@@ -153,8 +154,8 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			ext = (ESHExtension)(ESHExtension_I64 | ESHExtension_AtomicI64);
 			break;
 
-		//Both compute-derivative group modes are the same OxC3 feature (ComputeDeriv). DXC emits the Quads
-		//variant for even 2D thread groups (ddx/ddy in compute); the Linear variant for other layouts.
+		//Both compute-derivative group modes are the same OxC3 feature (ComputeDeriv).
+		//DXC emits the Quads variant for even 2D thread groups (ddx/ddy in compute); the Linear variant for other layouts.
 		case SpvCapabilityComputeDerivativeGroupLinearNV:
 		case SpvCapabilityComputeDerivativeGroupQuadsNV:
 			ext = ESHExtension_ComputeDeriv;
@@ -202,8 +203,8 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityStorageImageWriteWithoutFormat:
 
 		//Capabilities introduced by the SPIRV-Headers update that OxC3 doesn't expose as oiSH extensions
-		//(ML / tensors / cooperative matrix / bfloat / small floats / vendor FPGA & subgroup ops). Allowed but
-		//map to no extension.
+		// (ML / tensors / cooperative matrix / bfloat / small floats / vendor FPGA & subgroup ops).
+		//Allowed but map to no extension.
 		case SpvCapabilityTensorsARM:
 		case SpvCapabilityStorageTensorArrayDynamicIndexingARM:
 		case SpvCapabilityStorageTensorArrayNonUniformIndexingARM:
@@ -502,7 +503,7 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 	}
 
 	//Handled separately to ensure there's no default case in the switch,
-	//so that new capabilities are reported when SPIRV-Header update on some compilers.
+	// so that new capabilities are reported when SPIRV-Header update on some compilers.
 
 	if(capability > SpvCapabilityMax)
 		retError(clean, Error_invalidState(

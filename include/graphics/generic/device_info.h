@@ -49,6 +49,8 @@ typedef enum EGraphicsVendorId {
 	EGraphicsVendorId_APPL,
 	EGraphicsVendorId_SMSG,
 	EGraphicsVendorId_HWEI,
+	EGraphicsVendorId_GOGL,
+	EGraphicsVendorId_MESA,
 	EGraphicsVendorId_Unknown
 } EGraphicsVendorId;
 
@@ -63,10 +65,17 @@ typedef enum EGraphicsVendorPCIE {
 	EGraphicsVendorPCIE_MSFT    = 0x1414,
 	EGraphicsVendorPCIE_APPL    = 0x106B,
 	EGraphicsVendorPCIE_SMSG    = 0x144D,
-	EGraphicsVendorPCIE_HWEI    = 0x19E5
+	EGraphicsVendorPCIE_HWEI    = 0x19E5,
+	EGraphicsVendorPCIE_GOGL    = 0x1AE0,
+	EGraphicsVendorPCIE_MESA    = 0x10005
 } EGraphicsVendorPCIE;
 
-static const U16 EGraphicsVendor_PCIE[] = {        //The PCIE ids of the vendors, so they can be easily detected
+//The vendor ids, in EGraphicsVendorId order, so a reported id can be turned into one by index.
+//U32 rather than U16 because not every id is a PCI id: Khronos hands out its own above 0x10000 for vendors
+// with no PCI presence, and Mesa's 0x10005 truncates to 5 in 16 bits, which clang catches as an error.
+//QCOM2 is deliberately absent, being a second id for a vendor already listed rather than another vendor.
+
+static const U32 EGraphicsVendor_PCIE[] = {
 	EGraphicsVendorPCIE_NV,
 	EGraphicsVendorPCIE_AMD,
 	EGraphicsVendorPCIE_ARM,
@@ -76,7 +85,9 @@ static const U16 EGraphicsVendor_PCIE[] = {        //The PCIE ids of the vendors
 	EGraphicsVendorPCIE_MSFT,
 	EGraphicsVendorPCIE_APPL,
 	EGraphicsVendorPCIE_SMSG,
-	EGraphicsVendorPCIE_HWEI
+	EGraphicsVendorPCIE_HWEI,
+	EGraphicsVendorPCIE_GOGL,
+	EGraphicsVendorPCIE_MESA
 };
 
 //If api type is Direct3D12
@@ -102,6 +113,8 @@ typedef enum EDxGraphicsFeatures {
 
 	EDxGraphicsFeatures_BatchedAsyncCommandList = 1 << 11,        //ExecuteCommandLists batching across async queues
 
+	EDxGraphicsFeatures_CacheCoherentUMA        = 1 << 12,        //UMA that snoops CPU caches, upload wants WRITE_BACK
+
 	EDxGraphicsFeatures_ReallyReportReBARWrites = EDxGraphicsFeatures_ReportReBARWrites | EDxGraphicsFeatures_ReBAR,
 
 	EDxGraphicsFeatures_SM6_6                   = 1 << 16,        //Last bits are for shader model
@@ -115,11 +128,24 @@ typedef enum EDxGraphicsFeatures {
 //If api type is Vulkan
 
 typedef enum EVkGraphicsFeatures {
-	EVkGraphicsFeatures_PerfQuery               = 1 << 0,
-	EVkGraphicsFeatures_Maintenance4            = 1 << 1,
-	EVkGraphicsFeatures_BufferDeviceAddress     = 1 << 2,
-	EVkGraphicsFeatures_DriverProperties        = 1 << 3,
-	EVkGraphicsFeatures_MemoryBudget            = 1 << 4
+	EVkGraphicsFeatures_PerfQuery                = 1 << 0,
+	EVkGraphicsFeatures_Maintenance4             = 1 << 1,
+	EVkGraphicsFeatures_BufferDeviceAddress      = 1 << 2,
+	EVkGraphicsFeatures_DriverProperties         = 1 << 3,
+	EVkGraphicsFeatures_MemoryBudget             = 1 << 4,
+
+	//VK_KHR_push_descriptor with at least 32 push descriptors, so the globals constant buffer can be pushed
+	// straight into the command buffer instead of being bound from a set allocated to hold it.
+	//Named for the performance, not the capability: pushing descriptors always works, this only says the device
+	// does it natively rather than through the emulation below.
+	//Vulkan only, because it's the only api where this isn't a given; D3D12 has root descriptors and Metal has
+	// argument buffers, so there's nothing for a caller to branch on outside of Vulkan.
+	//When it's absent OxC3 uses one descriptor set per frame in flight instead,
+	// which trades a push per frame for an allocation and a write at first submit.
+	//Android emulators are the common case, since gfxstream drops the extension from the guest even when the
+	// host driver exposes it.
+
+	EVkGraphicsFeatures_PerformantPushDescriptor = 1 << 5
 } EVkGraphicsFeatures;
 
 //Generic graphics features
@@ -181,8 +207,9 @@ typedef enum EGraphicsFeatures {
 
 	//(bit 26 is EGraphicsFeatures_RayTriPosition, grouped with the raytracing features above)
 
-	//SM6.10 linalg, split to mirror the oiSH extensions (CoopVec/CoopMat/CoopFP8). FP16 + INT8 are the base tier of
-	//CoopVec/CoopMat; CoopFP8 is the additive FP8 tier; CoopVecTraining exposes the Tier-1.1 outer-product/reduce-sum ops.
+	//SM6.10 linalg, split to mirror the oiSH extensions (CoopVec/CoopMat/CoopFP8).
+	//FP16 + INT8 are the base tier of CoopVec/CoopMat; CoopFP8 is the additive FP8 tier.
+	//CoopVecTraining exposes the Tier-1.1 outer-product/reduce-sum ops.
 
 	EGraphicsFeatures_CoopVec                   = 1 << 27,        //Cooperative vectors (per-thread matvec)
 	EGraphicsFeatures_CoopMat                   = 1 << 28,        //Cooperative matrix (subgroup GEMM)
@@ -211,9 +238,9 @@ typedef enum EGraphicsFeatures2 {
 
 	//Mega geometry (RTXMG); Vulkan splits it into two extensions, so OxC3 exposes two bits.
 	//RayClusterAS: cluster acceleration structures (CLAS/cluster BLAS).
-	// D3D12: NVAPI cluster operations caps; Vulkan: VK_NV_cluster_acceleration_structure.
+	//D3D12: NVAPI cluster operations caps; Vulkan: VK_NV_cluster_acceleration_structure.
 	//RayPartitionedTLAS: partitioned top level acceleration structures (PTLAS).
-	// D3D12: NVAPI partitioned TLAS caps; Vulkan: VK_NV_partitioned_acceleration_structure.
+	//D3D12: NVAPI partitioned TLAS caps; Vulkan: VK_NV_partitioned_acceleration_structure.
 
 	EGraphicsFeatures2_RayClusterAS             = 1 << 2,
 	EGraphicsFeatures2_RayPartitionedTLAS       = 1 << 3,
@@ -226,8 +253,8 @@ typedef enum EGraphicsFeatures2 {
 	EGraphicsFeatures2_RayIndirectASBuild       = 1 << 4,
 
 	//Pipeline executable introspection: the driver can hand back per-pipeline ISA disassembly + VGPR/SGPR statistics.
-	//Vulkan: VK_KHR_pipeline_executable_properties (pipelineExecutableInfo). Used for live shader disassembly, not
-	//rendering; device+driver dependent so it isn't golden-pinnable.
+	//Vulkan: VK_KHR_pipeline_executable_properties (pipelineExecutableInfo).
+	//Used for live shader disassembly, not rendering; device+driver dependent so it isn't golden-pinnable.
 
 	EGraphicsFeatures2_PipelineExecutableInfo   = 1 << 5
 
@@ -281,9 +308,11 @@ typedef struct GraphicsDeviceCapabilities {
 	EGraphicsFeatures features;
 	EGraphicsFeatures2 features2;
 
-	//Subset of `features` that is experimental/preview on this device+build (not final; can change or be removed across
-	//SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled via the preview SDK +
-	//D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions, so this stays empty.
+	//Subset of `features` that is experimental/preview on this device+build
+	// (not final; can change or be removed across SDK/driver updates).
+	//On D3D12 the SM6.10-gated cooperative features land here
+	// (enabled via the preview SDK + D3D12ExperimentalShaderModels + Developer Mode).
+	//On Vulkan they're real extensions, so this stays empty.
 	EGraphicsFeatures experimentalFeatures;
 	EGraphicsFeatures2 experimentalFeatures2;
 

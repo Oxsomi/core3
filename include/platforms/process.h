@@ -49,16 +49,19 @@ typedef struct Error Error;
 	} ProcessResult;
 
 	//Shared argument semantics for both spawn functions below:
-	//args: argv[1..] (the executable itself is argv[0]); may be NULL/empty. Each entry is one argument
+	//args: argv[1..] (the executable itself is argv[0]); may be NULL/empty.
+	//Each entry is one argument
 	// (no shell parsing/splitting happens, so arguments with spaces stay a single argument).
 	//workingDir: optional working directory for the child (NULL inherits the current one).
 	//maxTimeout: 0 or U64_MAX waits forever; otherwise the child is killed after the timeout and result->timedOut is set.
-	//stdOut / stdErr: optional captured output. NULL leaves that stream inherited (goes to our own console).
-	// When non-NULL they must be empty (Buffer_createNull()) and are filled with the raw bytes the child wrote; free them.
+	//stdOut / stdErr: optional captured output.
+	//NULL leaves that stream inherited (goes to our own console).
+	//When non-NULL they must be empty (Buffer_createNull()) and are filled with the raw bytes the child wrote; free them.
 	//result: optional exit code / timeout status.
 
 	//Run a LOCAL executable, resolved via File_resolve like the rest of the file API: relative to the app directory
-	// (isAppDir) or the working directory, and unable to escape it. Use this for bundled/app-local tools.
+	// (isAppDir) or the working directory, and unable to escape it.
+	//Use this for bundled/app-local tools.
 	impl Bool Process_run(
 		CharString executable,
 		Bool isAppDir,
@@ -71,7 +74,8 @@ typedef struct Error Error;
 		Error *e_rr
 	);
 
-	//Run a SYSTEM executable by bare name, resolved through the OS PATH. `executable` must be null-terminated and
+	//Run a SYSTEM executable by bare name, resolved through the OS PATH.
+	//`executable` must be null-terminated and
 	// contain NO path separators ('/' or '\'), the same guard as DynamicLibrary_loadSystem, so it can't be abused to
 	// launch an arbitrary caller-chosen path.
 	impl Bool Process_runSystem(

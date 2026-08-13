@@ -83,11 +83,13 @@ typedef enum EBufferEncryptionFlags {
 
 typedef struct BufferEncrypt {
 
-	//"Plaintext"/"Cyphertext" aka data to encrypt/decrypt (does so in place). Leave empty to authenticate with AES.
+	//"Plaintext"/"Cyphertext" aka data to encrypt/decrypt (does so in place).
+	//Leave empty to authenticate with AES.
 	//16-byte alignment required.
 	Buffer *restrict target;
 
-	//Data that was/is supplied to verify integrity of the data. 16-byte alignment required
+	//Data that was/is supplied to verify integrity of the data.
+	//16-byte alignment required
 	const Buffer *restrict additionalData;
 
 	//Only AES is currently supported (but both 256 and 128 is, though 128 only for legacy reasons).
@@ -210,7 +212,8 @@ void Buffer_aesExpertDecUpdate(
 
 //Don't use the data if the function returns false!
 //Clear or remove the generated data if encryption failed, or risk exposing sensitive data.
-//expectTag is the tag you expect. It's OK to ignore the result for encryption, since there's no valid tag yet.
+//expectTag is the tag you expect.
+//It's OK to ignore the result for encryption, since there's no valid tag yet.
 Bool Buffer_aesExpertFinalize(AESEncryptionContext *restrict ctx, U64 aadLen, U64 dataLen, I32x4 expectTag);
 
 #ifdef __cplusplus

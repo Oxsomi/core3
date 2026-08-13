@@ -104,7 +104,7 @@ TList(D3D12_ROOT_PARAMETER1);
 
 //DxDescriptorLayout is no real DX object, only root signature is.
 //But by abstracting it like this we map more closely to Vk while also allowing splitting of root signature and desc layout.
-// And reducing unnecessary conversions of ListDescriptorBinding -> DxDescriptorLayout.
+//And reducing unnecessary conversions of ListDescriptorBinding -> DxDescriptorLayout.
 //For example; we might make the same root sig multiple times but with different root constants or IA/streamout flags.
 typedef struct DxDescriptorLayout {
 	ListD3D12_DESCRIPTOR_RANGE1 rangesResources;
@@ -167,6 +167,15 @@ typedef struct DxGraphicsDevice {
 	U64 padding;
 
 } DxGraphicsDevice;
+
+typedef struct GraphicsInstance GraphicsInstance;
+
+//Drains the info queue's stored validation messages into the log, so a failed HRESULT names the real complaint.
+//No op with infoQueue1 present (Win11), since the message callback already printed (and counted) everything live.
+//The drained messages count into instance's validation counters when instance is non NULL.
+void DxGraphicsDevice_logDebugMessages(
+	const DxGraphicsDevice *deviceExt, GraphicsInstance *instance, const Allocator *alloc
+);
 
 typedef struct DxCommandBufferState {
 

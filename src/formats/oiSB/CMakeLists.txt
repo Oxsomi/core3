@@ -31,7 +31,7 @@ add_library(
 set_target_properties(OxC3_formats_oiSB PROPERTIES FOLDER Oxsomi/formats)
 target_link_libraries(OxC3_formats_oiSB PUBLIC OxC3_types_base OxC3_types_container OxC3_formats_oiDL)
 
-if(EnableTests)
+if(EnableTests AND OxC3TestExecutables)
 
 	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
 	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")

@@ -1,4 +1,4 @@
 sources:
-  "2026.06.04":
+  "2026.08.06":
     url: "https://github.com/Oxsomi/openal-soft.git"
     checkout: "master"

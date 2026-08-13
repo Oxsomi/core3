@@ -52,9 +52,10 @@
 	#include "graphics/generic/device_info.h"
 #endif
 
-//Prints the AMD gfx targets the bundled amdllpc can actually compile for (probed live, so the list matches what this
-//build accepts). Used by 'isa devices', the '?' shorthand, and as a hint after an unknown -asic. This is why OxC3 no
-//longer spawns rga.exe at all: amdllpc + amdgpu-dis do the disassembly, and amdllpc itself reports its target set.
+//Prints the AMD gfx targets the bundled amdllpc can actually compile for, probed live so the list matches what this
+// build accepts.
+//Used by 'isa devices', the '?' shorthand, and as a hint after an unknown -asic.
+//amdllpc + amdgpu-dis do the disassembly directly, and amdllpc reports its own target set.
 
 static Bool CLI_isaPrintDevices(const Allocator *alloc, Error *e_rr) {
 
@@ -90,10 +91,11 @@ clean:
 	return s_uccess;
 }
 
-//Resolves an -asic for any ISA path. "?" prints the device list and sets *handled so the caller stops (no error).
-//Any other value is left for rga to match - it accepts gfx targets, arch names and partial or full marketing names
-//(e.g. "gfx1100", "9070 XT", "AMD Radeon RX 9070 XT") - so *handled stays false and the caller proceeds; a genuinely
-//unknown ASIC is reported by rga when it runs (and CLI_isaDisassembleSpirv then re-prints the device list).
+//Resolves an -asic for any ISA path.
+//"?" prints the device list and sets *handled so the caller stops (no error).
+//Any other value is passed through to the offline disassembler (amdllpc), which accepts a gfx target or a
+// major.minor.step form (e.g. "gfx1100" or "11.0.0"), so *handled stays false and the caller proceeds.
+//A genuinely unknown target is reported by amdllpc when it runs.
 
 Bool CLI_isaResolveAsic(CharString asic, Bool *handled, const Allocator *alloc, Error *e_rr) {
 
@@ -117,9 +119,9 @@ clean:
 	return s_uccess;
 }
 
-//Disassembles a SPIR-V module to AMD ISA text for `asic`, returning the ISA in `isaOut` (caller frees). The actual
-//amdllpc + amdgpu-dis driving lives in the shared SpvISA_ module (so this and the corpus ISA snapshot test produce
-//identical output); here we just reject stages with no offline path early, with a clearer error than amdllpc's.
+//Disassembles a SPIR-V module to AMD ISA text for `asic`, returning the ISA in `isaOut` (caller frees).
+//The actual amdllpc + amdgpu-dis driving lives in the shared SpvISA_ module, so this and the corpus ISA snapshot test
+// produce identical output; here we just reject stages with no offline path early, with a clearer error than amdllpc's.
 
 Bool CLI_isaDisassembleSpirv(
 	Buffer spirv, CharString asic, CharString entrypoint, Buffer *isaOut, const Allocator *alloc, Error *e_rr
@@ -189,8 +191,9 @@ clean:
 	}
 
 	//Live ISA: create a real Vulkan device, compile the oiSH's first compute entry into a pipeline with ISA capture,
-	//then read back the driver's disassembly + statistics. This is the REAL driver ISA (device + driver dependent, not
-	//golden-pinnable), complementing the offline amdllpc goldens.
+	// then read back the driver's disassembly + statistics.
+	//This is the REAL driver ISA, device and driver dependent so it isn't golden-pinnable, complementing the offline
+	// amdllpc goldens.
 
 	static Bool CLI_isaDisassembleLive(SHFile shFile, U64 deviceId, const Allocator *alloc, Error *e_rr) {
 
@@ -242,7 +245,8 @@ clean:
 			));
 
 		gotoIfError3(clean, GraphicsDeviceRef_create(
-			instanceRef, &infos.ptr[deviceId], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, &deviceRef, e_rr
+			instanceRef, &infos.ptr[deviceId], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default,
+			NULL, &deviceRef, e_rr
 		));
 
 		if(!(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features2 & EGraphicsFeatures2_PipelineExecutableInfo))
@@ -250,7 +254,7 @@ clean:
 				0, "CLI_isaDisassembleLive() device lacks VK_KHR_pipeline_executable_properties"
 			));
 
-		//Find the first compute entrypoint (compute-only for now; graphics/RT are a later slice)
+		//Find the first compute entrypoint, since live disassembly drives compute pipelines
 
 		U64 computeEntry = U64_MAX;
 
@@ -259,7 +263,7 @@ clean:
 
 		if(computeEntry == U64_MAX)
 			retError(clean, Error_unsupportedOperation(
-				0, "CLI_isaDisassembleLive() no compute entrypoint (live disassembly currently supports compute)"
+				0, "CLI_isaDisassembleLive() no compute entrypoint (live disassembly drives compute pipelines)"
 			));
 
 		CharString entryName = shFile.entries.ptr[computeEntry].name;
@@ -271,12 +275,12 @@ clean:
 		if(entry == U32_MAX)
 			retError(clean, Error_invalidState(0, "CLI_isaDisassembleLive() couldn't resolve the compute entry for this device"));
 
-		//Create the pipeline with ISA capture + read back the executables. The device's default pipeline layout is used;
-		//it may not match the shader's resources exactly (a validation warning), but the pipeline still compiles and the
-		//driver reports its statistics + ISA, which is what we're after. A per-shader detected layout (for a fully valid
-		//pipeline + clean disassembly) is a follow-up; layout detection is currently unstable for some corpus shaders.
-		//The SPIRV entrypoint is passed as NULL (-> "main"): OxC3 normalizes a single-entry SPIR-V module's entrypoint to
-		//"main" regardless of the HLSL name (e.g. an SHEntry named "mainCompute" is "main" in the SPIR-V).
+		//Create the pipeline with ISA capture, then read back the executables.
+		//The device's default pipeline layout is used, so it may not match the shader's resources exactly (a validation
+		// warning), but the pipeline still compiles and the driver reports its statistics + ISA, which is what we're after.
+		//The SPIRV entrypoint is passed as NULL, which resolves to "main".
+		//OxC3 normalizes a single-entry SPIR-V module's entrypoint to "main" regardless of the HLSL name, so an SHEntry
+		// named "mainCompute" is "main" in the SPIR-V.
 
 		const CharString pName = CharString_createRefCStrConst("isa live pipeline");
 
@@ -409,9 +413,10 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 		U64 off = 0;
 		gotoIfError3(clean, SHFile_read((StreamRef*)readStream, &off, false, alloc, &shFile, e_rr));
 
-		//Pick which binary's SPIR-V to disassemble. -entry is an INDEX into the oiSH's binaries: an entrypoint name
-		//alone is ambiguous, since the same name can occur several times with different uniforms, defines or
-		//extensions. Without -entry, use the sole SPIR-V binary when there's exactly one (list them via 'file data --bin').
+		//Pick which binary's SPIR-V to disassemble.
+		//-entry is an INDEX into the oiSH's binaries: an entrypoint name alone is ambiguous, since the same name can
+		// occur several times with different uniforms, defines or extensions.
+		//Without -entry, use the sole SPIR-V binary when there's exactly one (list them via 'file data --bin').
 
 		CharString entry = CharString_createNull();
 		const Bool hasEntry = ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &entry, NULL) && CharString_length(entry);

@@ -33,9 +33,8 @@
 
 // -- F1. CPU buffer -> screen ---------------------------------------------------
 //
-//Gradient is written from onDraw (driven by WM_PAINT / the Wayland frame cycle),
-//not by the test body. The test only flips a flag in F1State and waits for the
-//callback to have actually run before inspecting the buffer.
+//Gradient is written from onDraw (driven by WM_PAINT / the Wayland frame cycle), not by the test body.
+//The test only flips a flag in F1State and waits for the callback to have actually run before inspecting the buffer.
 
 typedef struct F1State {
 	volatile Bool drawn;
@@ -148,8 +147,8 @@ clean:
 
 // -- F6. Window_storeCPUBufferToDisk -------------------------------------------
 //
-//Fills the buffer with a deterministic pattern from onDraw, then stores it to
-//a DDS file and reads it back to verify pixels round-trip correctly.
+//Fills the buffer with a deterministic pattern from onDraw,
+// then stores it to a DDS file and reads it back to verify pixels round-trip correctly.
 
 typedef struct F6State {
 	volatile Bool drawn;
@@ -166,13 +165,21 @@ static void F6_onDraw(Window *w) {
 	if (!px)
 		return;
 
-	//pixel i -> R = (i & 0xFF), G = ((i >> 1) & 0xFF), B = 42, A = 255
-	for (U32 i = 0; i < W * H; ++i) {
-		px[i * 4 + 0] = (U8)(i & 0xFF);
-		px[i * 4 + 1] = (U8)((i >> 1) & 0xFF);
-		px[i * 4 + 2] = 42;
-		px[i * 4 + 3] = 255;
-	}
+	//R ramps along x, G along y, so the result is the same picture whatever resolution the device hands us.
+	//A linear index instead (R = i & 0xFF) shifts by (W % 256) every row, which is diagonal stripes on anything but a
+	// multiple of 256 wide, and that's indistinguishable by eye from a backend copying rows at the wrong stride.
+	//Pixels 0 and 1 keep the values the read-back below checks for, since they only differ in x.
+
+	for (U32 y = 0; y < H; ++y)
+		for (U32 x = 0; x < W; ++x) {
+
+			const U64 i = (U64) y * W + x;
+
+			px[i * 4 + 0] = (U8)(x & 0xFF);
+			px[i * 4 + 1] = (U8)(y & 0xFF);
+			px[i * 4 + 2] = 42;
+			px[i * 4 + 3] = 255;
+		}
 
 	f6.drawn = true;
 }
@@ -263,7 +270,7 @@ static void Test_storeCPUBuffer(Test *t) {
 
 	//Pixel spot-check via the sub-resource stream
 	//DDS_read returns one SubResourceData per mip/layer.
-	// For a 512x 1-mip 1-layer image there is exactly one entry.
+	//For a 512x 1-mip 1-layer image there is exactly one entry.
 
 	Test_assert(t, "oneSubResource", subResources.length == 1);
 
@@ -278,8 +285,7 @@ static void Test_storeCPUBuffer(Test *t) {
 		OxStream *stream = RefPtr_data(sr->stream, OxStream);
 
 		//We wrote R = 0,G = 0,B = 42,A = 255 at pixel 0.
-		//storeCPUBufferToDisk maps the window format to BGRA8 by default,
-		//so on-disk order is B,G,R,A -> 42,0,0,255.
+		//storeCPUBufferToDisk maps the window format to BGRA8 by default, so on-disk order is B,G,R,A -> 42,0,0,255.
 		//If the format stayed RGBA8 the order is R,G,B,A -> 0,0,42,255.
 		//Accept either
 

@@ -1,0 +1,17 @@
+name: Android Vulkan (Linux host)
+on: [push]
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Android Vulkan (Linux host)
+      runner: ubuntu-latest
+      os: android
+      build_flags: ''
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      hook_name: Android-Linux-static
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

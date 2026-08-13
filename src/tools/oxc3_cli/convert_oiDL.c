@@ -132,7 +132,8 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 
 		gotoIfError3(clean, File_read(convert->input, 100 * MS, 0, 0, &fileHandleType, &buf, e_rr));
 
-		//Create oiDL from text file. Splitting by enter or custom string
+		//Create oiDL from text file.
+		//Splitting by enter or custom string
 
 		if (convert->args->flags & EOperationFlags_Ascii) {
 

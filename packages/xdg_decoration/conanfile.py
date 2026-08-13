@@ -1,9 +1,49 @@
 from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 from conan.tools.files import copy, download, save, collect_libs
+from io import StringIO
 import os
+import shutil
 
 required_conan_version = ">=2.0"
+
+
+def waylandProtocol(conanfile, relativePath, output):
+	"""Put a wayland protocol xml at `output`, preferring the copy the system already has.
+
+	freedesktop puts both cgit and gitlab behind Anubis, which answers anything that isn't a browser with a 418
+	or an access denied page, so neither URL can be relied on from CI.
+	Every distro we build on ships these same files in the wayland-protocols package, which is also where
+	wayland-scanner users are meant to read them from, so ask pkg-config where they live and copy from there.
+	The download stays as a fallback for a machine without the package, and will simply fail as it does today
+	if freedesktop is still blocking.
+	"""
+
+	pkgDataDir = StringIO()
+
+	try:
+		conanfile.run("pkg-config --variable=pkgdatadir wayland-protocols", stdout=pkgDataDir)
+		local = os.path.join(pkgDataDir.getvalue().strip(), relativePath)
+	except Exception:
+		local = ""
+
+	if local and os.path.isfile(local):
+		conanfile.output.info(f"Using system wayland-protocols copy of {relativePath}")
+		shutil.copyfile(local, output)
+		return
+
+	conanfile.output.warning(f"No system wayland-protocols copy of {relativePath}, falling back to the network")
+
+	download(
+		conanfile,
+		[
+			f"https://gitlab.freedesktop.org/wayland/wayland-protocols/-/raw/1.38/{relativePath}",
+			f"https://cgit.freedesktop.org/wayland/wayland-protocols/plain/{relativePath}",
+		],
+		output,
+		retry=3,
+		retry_wait=5,
+	)
 
 class xdg_decoration(ConanFile):
 
@@ -36,7 +76,8 @@ class xdg_decoration(ConanFile):
 		tc.generate()
 
 	def source(self):
-		download(self, "https://cgit.freedesktop.org/wayland/wayland-protocols/plain/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml", "xdg_decoration.xml")
+
+		waylandProtocol(self, "unstable/xdg-decoration/xdg-decoration-unstable-v1.xml", "xdg_decoration.xml")
 
 		self.run("wayland-scanner private-code xdg_decoration.xml xdg_decoration_protocol.c")
 		self.run("wayland-scanner client-header xdg_decoration.xml xdg_decoration_client_protocol.h")

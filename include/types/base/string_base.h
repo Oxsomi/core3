@@ -127,7 +127,8 @@ static inline Bool CharString_isValidAscii(const CharString str) {
 	return true;
 }
 
-//Only checks characters. Please use resolvePath to actually validate if it's safely accessible.
+//Only checks characters.
+//Please use resolvePath to actually validate if it's safely accessible.
 
 static inline U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize) {
 	if (!ptr) return 0;

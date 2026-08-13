@@ -34,12 +34,14 @@ static inline Bool CharString_isValidUTF8(const CharString str) {
 	return Buffer_isUTF8(CharString_bufferConst(str), 1);
 }
 
-//Interop between wchar_t. Converts UTF16 or UTF32 to UTF8
+//Interop between wchar_t.
+//Converts UTF16 or UTF32 to UTF8
 
 Bool CharString_createFromUTF16(const U16 *ptr, U64 limit, const Allocator *allocator, CharString *result, Error *e_rr);
 Bool CharString_createFromUTF32(const U32 *ptr, U64 limit, const Allocator *allocator, CharString *result, Error *e_rr);
 
-//Interop between wide strings. Converts UTF8 to UTF16 or UTF32
+//Interop between wide strings.
+//Converts UTF8 to UTF16 or UTF32
 
 //Allows passing a ref to do it inline, as long as the ref is big enough.
 Bool CharString_toUTF16(const CharString s, const Allocator *allocator, ListU16 *arr, Error *e_rr);

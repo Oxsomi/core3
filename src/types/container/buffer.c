@@ -126,6 +126,89 @@ Bool Buffer_createUninitializedBytes(U64 length, const Allocator *alloc, Buffer 
 	return Buffer_allocBitsInternal(length >> 61 ? U64_MAX : length << 3, alloc, result, e_rr);
 }
 
+//A single U8 immediately before the aligned pointer, holding how far we stepped forward from the real allocation.
+//That's all Buffer_free needs to find the base again, and a byte is aligned anywhere,
+// so it needs no padding of its own.
+//
+//The over-allocation is a fixed BUFFER_ALIGN_MAX rather than the requested alignment,
+// which is what keeps the header down to that one byte: the size is then always length + BUFFER_ALIGN_MAX,
+// so it follows from the length the Buffer already carries and never has to be stored.
+//The offset lands in [1, alignment], so BUFFER_ALIGN_MAX is what makes it fit in a U8.
+
+static Bool Buffer_createBytesAlignedInternal(
+	U64 length, U64 alignment, U64 headerOffset, Bool zeroed, const Allocator *alloc, Buffer *result, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Buffer base = Buffer_createNull();
+
+	if(!result)
+		retError(clean, Error_nullPointer(4, "Buffer_createBytesAlignedInternal()::result is required"));
+
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(
+			4, 0, "Buffer_createBytesAlignedInternal()::result->ptr is non zero, could indicate memleak"
+		));
+
+	if(!alignment || (alignment & (alignment - 1)))
+		retError(clean, Error_invalidParameter(
+			1, 0, "Buffer_createBytesAlignedInternal()::alignment must be a non zero power of two"
+		));
+
+	if(alignment > BUFFER_ALIGN_MAX)
+		retError(clean, Error_invalidParameter(
+			1, 0, "Buffer_createBytesAlignedInternal()::alignment exceeds BUFFER_ALIGN_MAX"
+		));
+
+	if(!length)
+		goto clean;
+
+	const U64 total = length + BUFFER_ALIGN_MAX;
+
+	if(zeroed) {
+		gotoIfError3(clean, Buffer_createEmptyBytes(total, alloc, &base, e_rr));
+	}
+
+	else {
+		gotoIfError3(clean, Buffer_createUninitializedBytes(total, alloc, &base, e_rr));
+	}
+
+	//From start + 1 so there's always a byte in front of the result to put the offset in.
+	//headerOffset shifts what gets aligned: RefPtr wants its payload aligned, not the header before it.
+
+	U8 *const start = base.ptrNonConst;
+
+	const U64 misaligned = (U64)(start + 1 + headerOffset) & (alignment - 1);
+	U8 *const aligned = start + 1 + (misaligned ? alignment - misaligned : 0);
+
+	aligned[-1] = (U8) (aligned - start);
+
+	//Marked aligned so Buffer_free knows to walk back to start rather than freeing the interior pointer.
+	//Without the bit the caller has to remember which creator produced the buffer, which anything holding it
+	// generically (a C++ destructor, a container) has no way of knowing.
+
+	*result = Buffer_createManagedPtr(aligned, length);
+	Buffer_markAligned(result);
+
+	base = Buffer_createNull();        //Ownership moved into result
+
+clean:
+	Buffer_free(&base, alloc);
+	return s_uccess;
+}
+
+Bool Buffer_createUninitializedBytesAligned(
+	U64 length, U64 alignment, U64 headerOffset, const Allocator *alloc, Buffer *result, Error *e_rr
+) {
+	return Buffer_createBytesAlignedInternal(length, alignment, headerOffset, false, alloc, result, e_rr);
+}
+
+Bool Buffer_createEmptyBytesAligned(
+	U64 length, U64 alignment, U64 headerOffset, const Allocator *alloc, Buffer *result, Error *e_rr
+) {
+	return Buffer_createBytesAlignedInternal(length, alignment, headerOffset, true, alloc, result, e_rr);
+}
+
 void Buffer_free(Buffer *buf, const Allocator *alloc) {
 
 	if(!buf || !Buffer_length(*buf))
@@ -143,6 +226,20 @@ void Buffer_free(Buffer *buf, const Allocator *alloc) {
 
 	if(!alloc || !alloc->free)
 		return;
+
+	//An aligned allocation points into the middle of what was allocated, with the distance back to the base in
+	// the byte before it, so hand the allocator the whole block instead of the interior pointer.
+	//The reconstructed buffer is deliberately plain: it carries no aligned bit, so this doesn't recurse.
+
+	if (Buffer_isAligned(*buf)) {
+
+		const U64 offset = ((const U8*) buf->ptr)[-1];
+		const Buffer whole = Buffer_createManagedPtr(buf->ptrNonConst - offset, Buffer_length(*buf) + BUFFER_ALIGN_MAX);
+
+		alloc->free(alloc->ptr, whole);
+		*buf = Buffer_createNull();
+		return;
+	}
 
 	alloc->free(alloc->ptr, *buf);
 	*buf = Buffer_createNull();
@@ -176,7 +273,7 @@ Bool Buffer_createSubset(
 	if(length > Buffer_length(buf))
 		retError(clean, Error_outOfBounds(2, length, Buffer_length(buf), "Buffer_createSubset()::length out of bounds"));
 
-	buf.lengthAndRefBits = length | (buf.lengthAndRefBits >> 62 << 62);
+	Buffer_setLength(&buf, length);
 	*output = buf;
 
 clean:

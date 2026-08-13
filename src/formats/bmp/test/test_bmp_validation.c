@@ -30,9 +30,10 @@
 #include <stddef.h>
 
 //Helper: build a minimal valid BMPHeadersCombined for a 2x2 BGRA8 image,
-//write it into a writable MemoryStream, and return the stream.
+// write it into a writable MemoryStream, and return the stream.
 //The caller can then corrupt specific fields before passing to BMP_read.
-//Caller owns *sr (RefPtr_dec). Returns false on allocation failure.
+//Caller owns *sr (RefPtr_dec).
+//Returns false on allocation failure.
 static Bool makeRawBMPStream(
 	Test *t,
 	StreamRef **sr,

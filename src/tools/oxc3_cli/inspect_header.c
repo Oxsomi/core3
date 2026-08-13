@@ -93,7 +93,8 @@ static const C8 *dataTypes[] = {
 	"U64 (64-bit number)"
 };
 
-//Image / audio formats are parsed via their stream readers (header only). BMP has a 2-byte magic; DDS/WAV are 4-byte.
+//Image / audio formats are parsed via their stream readers (header only).
+//BMP has a 2-byte magic; DDS/WAV are 4-byte.
 
 static Bool CLI_inspectMediaHeader(StreamRef *stream, U16 magic16, U32 magic32, const Allocator *alloc, Error *e_rr) {
 

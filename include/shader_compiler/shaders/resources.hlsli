@@ -19,6 +19,11 @@ R"(
 *  This is called dual licensing.
 */
 
+//shader_compiler/shaders/resources.hlsli
+//
+//The bindless binding model: the descriptor arrays every shader sees and the accessors that index
+//them. Buffer reads/writes and the per frame app data live in their own headers, included below.
+
 #pragma once
 #include "@types.hlsli"
 
@@ -106,99 +111,10 @@ _vkBinding( 0, 2) cbuffer globals {	//Globals used during the entire frame for u
 #define rwTexture2Di(i) _rwTextures2Di[NonUniformResourceIndex(i & ResourceId_mask)]
 #define rwTexture2Du(i) _rwTextures2Du[NonUniformResourceIndex(i & ResourceId_mask)]
 
-U32 bufferBytesUniform(U32 resourceId) {
-	U32 bytes;
-	bufferUniform(resourceId).GetDimensions(bytes);
-	return bytes;
-}
+//Split out of this header once it got too broad to read; included here so @resources.hlsli stays
+//the one include a shader needs. Each is self sufficient if you'd rather include it directly.
 
-U32 bufferBytesUniformRW(U32 resourceId) {
-	U32 bytes;
-	rwBufferUniform(resourceId).GetDimensions(bytes);
-	return bytes;
-}
+#include "@buffer.hlsli"
+#include "@appdata.hlsli"
 
-U32 bufferBytes(U32 resourceId) {
-	U32 bytes;
-	buffer(resourceId).GetDimensions(bytes);
-	return bytes;
-}
-
-U32 bufferBytesRW(U32 resourceId) {
-	U32 bytes;
-	rwBuffer(resourceId).GetDimensions(bytes);
-	return bytes;
-}
-
-template<typename T>
-T getAtUniform(U32 resourceId, U32 id) {
-	return bufferUniform(resourceId).Load<T>(id);
-}
-
-template<typename T>
-T getAt(U32 resourceId, U32 id) {
-	return buffer(resourceId).Load<T>(id);
-}
-
-template<typename T>
-void setAtUniform(U32 resourceId, U32 id, T t) {
-	rwBufferUniform(resourceId).Store<T>(id, t);
-}
-
-template<typename T>
-void setAt(U32 resourceId, U32 id, T t) {
-	rwBuffer(resourceId).Store<T>(id, t);
-}
-
-//Fetch per frame data from the application.
-//If possible, please make sure the offset is const so it's as fast as possible.
-//Offset is in U32s (4-byte), not in bytes!
-//Aligned fetches only return non 0 if all of the vector can be fetched!
-
-U32 getReadSwapchain(U32 offset) { return offset & 1 ? _swapchains[offset >> 1].z : _swapchains[offset >> 1].x; }
-U32 getWriteSwapchain(U32 offset) { return offset & 1 ? _swapchains[offset >> 1].w : _swapchains[offset >> 1].y; }
-
-//Fetch 1 element from user data
-
-U32 getAppData1u(U32 offset) { return offset >= 92 ? 0 : _appData[offset >> 2][offset & 3]; }
-I32 getAppData1i(U32 offset) { return (I32) getAppData1u(offset); }
-F32 getAppData1f(U32 offset) { return F32_fromU32(getAppData1u(offset)); }
-
-//Fetch 2 element vector from user data
-//Use unaligned only if necessary, otherwise please align offset to 8-byte!
-
-U32x2 getAppData2u(U32 offset) {
-	return offset >= 92 ? 0.xx : (
-		(offset & 2) == 0 ? _appData[offset >> 2].xy : _appData[offset >> 2].zw
-	);
-}
-
-I32x2 getAppData2i(U32 offset) { return (I32x2) getAppData2u(offset); }
-F32x2 getAppData2f(U32 offset) { return F32x2_fromU32x2(getAppData2u(offset)); }
-
-U32x2 getAppData2uUnaligned(U32 offset) { return U32x2(getAppData1u(offset), getAppData1u(offset + 1)); }
-I32x2 getAppData2iUnaligned(U32 offset) { return (I32x2) getAppData2uUnaligned(offset); }
-F32x2 getAppData2fUnaligned(U32 offset) { return F32x2_fromU32x2(getAppData2uUnaligned(offset)); }
-
-//Fetch 4 element vector from user data
-//Use unaligned only if necessary, otherwise please align offset to 8-byte!
-
-U32x4 getAppData4u(U32 offset) { return offset >= 92 ? 0 : _appData[offset >> 2]; }
-I32x4 getAppData4i(U32 offset) { return (I32x4) getAppData4u(offset); }
-F32x4 getAppData4f(U32 offset) { return F32x4_fromU32x4(getAppData4u(offset)); }
-
-U32x4 getAppData4uUnaligned(U32 offset) { return U32x4(getAppData2u(offset), getAppData2u(offset + 1)); }
-I32x4 getAppData4iUnaligned(U32 offset) { return (I32x4) getAppData4uUnaligned(offset); }
-F32x4 getAppData4fUnaligned(U32 offset) { return F32x4_fromU32x4(getAppData4uUnaligned(offset)); }
-
-//Fetch 3 element vector from user data
-//Use unaligned only if necessary, otherwise please align offset to 16-byte!
-
-U32x3 getAppData3u(U32 offset) { return getAppData4u(offset).xyz; }
-I32x3 getAppData3i(U32 offset) { return (I32x3) getAppData3u(offset); }
-F32x3 getAppData3f(U32 offset) { return F32x3_fromU32x3(getAppData3u(offset)); }
-
-U32x3 getAppData3uUnaligned(U32 offset) { return getAppData4uUnaligned(offset).xyz; }
-I32x3 getAppData3iUnaligned(U32 offset) { return (I32x3) getAppData3uUnaligned(offset); }
-F32x3 getAppData3fUnaligned(U32 offset) { return F32x3_fromU32x3(getAppData3uUnaligned(offset)); }
 )"

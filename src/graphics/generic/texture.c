@@ -34,6 +34,7 @@
 #include "formats/oiSH/sh_registers.h"
 #include "types/container/texture_format.h"
 #include "types/base/string_base.h"
+#include "types/base/error.h"
 #include "types/math/vec2i.h"
 #include "types/base/constants.h"
 
@@ -83,6 +84,116 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 			return utex;
 		}
 	}
+}
+
+Bool TextureRef_pullRegion(
+	TextureRef *tex,
+	U16 x, U16 y, U16 z,
+	U16 w, U16 h, U16 l,
+	TexturePullCallback callback, void *context, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = NULL;
+
+	GraphicsDevice *device = NULL;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	Bool owned = false;
+
+	//Validated before anything is dereferenced, since a wrong type would read a garbage device
+
+	const EGraphicsTypeId typeId = (EGraphicsTypeId) (tex ? tex->refPtrType->typeId : ETypeId_Undefined);
+
+	if(
+		typeId != EGraphicsTypeId_RenderTexture && typeId != EGraphicsTypeId_DepthStencil &&
+		typeId != EGraphicsTypeId_Swapchain
+	)
+		retError(clean, Error_nullPointer(
+			0, "TextureRef_pullRegion()::tex needs to be a RenderTexture, DepthStencil or Swapchain"
+		));
+
+	if(!callback)
+		retError(clean, Error_nullPointer(
+			7, "TextureRef_pullRegion()::callback is required, since the data has nowhere else to land"
+		));
+
+	const UnifiedTexture utex = TextureRef_getUnifiedTexture(tex, NULL);
+
+	if(utex.sampleCount)
+		retError(clean, Error_invalidOperation(0, "TextureRef_pullRegion() doesn't support MSAA, resolve first"));
+
+	if(utex.depthFormat && !EDepthStencilFormat_getBytes((EDepthStencilFormat) utex.depthFormat))
+		retError(clean, Error_unsupportedOperation(
+			0, "TextureRef_pullRegion() doesn't support stencil bearing depth formats yet"
+		));
+
+	if(x >= utex.width || y >= utex.height || z >= utex.length)
+		retError(clean, Error_outOfBounds(1, x, utex.width, "TextureRef_pullRegion()::x, y or z out of bounds"));
+
+	if(!w)
+		w = utex.width - x;
+
+	if(!h)
+		h = utex.height - y;
+
+	if(!l)
+		l = utex.length - z;
+
+	if(x + w > utex.width || y + h > utex.height || z + l > utex.length)
+		retError(clean, Error_outOfBounds(4, x + w, utex.width, "TextureRef_pullRegion() region out of bounds"));
+
+	//Render targets are never block compressed, so no block snapping is needed here.
+	//The destination is allocated now so a failed allocation surfaces here instead of at completion,
+	// which lets the callback promise it always carries data.
+
+	alloc = GraphicsDeviceRef_getAlloc(utex.resource.device);
+	device = GraphicsDeviceRef_ptr(utex.resource.device);
+
+	const U64 texel =
+		utex.depthFormat ? EDepthStencilFormat_getBytes((EDepthStencilFormat) utex.depthFormat) :
+		ETextureFormat_getSize(ETextureFormatId_unpack[utex.textureFormatId], 1, 1, 1);
+
+	Buffer data = Buffer_createNull();
+	gotoIfError3(clean, Buffer_createUninitializedBytes(texel * w * h * l, alloc, &data, e_rr));
+
+	acq = SpinLock_lock(&device->lock, U64_MAX);
+
+	if(acq < ELockAcquire_Success) {
+		Buffer_free(&data, alloc);
+		retError(clean, Error_invalidOperation(1, "TextureRef_pullRegion() couldn't acquire device lock"));
+	}
+
+	RefPtr_inc(tex);
+	owned = true;
+
+	const DevicePendingPull pull = (DevicePendingPull) {
+		.resource = tex,
+		.textureCallback = callback,
+		.context = context,
+		.range = (DevicePendingRange) { .texture = (TextureRange) {
+			.startRange = { x, y, z },
+			.endRange = { (U16)(x + w), (U16)(y + h), (U16)(z + l) }
+		} },
+		.textureData = data
+	};
+
+	if(!ListDevicePendingPull_pushBack(&device->pendingPulls, pull, alloc, e_rr)) {
+		Buffer_free(&data, alloc);
+		s_uccess = false;
+		goto clean;
+	}
+
+	owned = false;
+
+clean:
+
+	if(owned)
+		RefPtr_dec(&tex);
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->lock);
+
+	return s_uccess;
 }
 
 UnifiedTextureImage *TextureRef_getImageIntern(TextureRef *ref, U32 subResource, U8 imageId) {

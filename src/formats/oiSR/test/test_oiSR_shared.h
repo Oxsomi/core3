@@ -25,10 +25,10 @@
 
 //test_oiSR_validation.c: read-side rejection paths and structural round-trips beyond the happy path.
 
-void Test_SRReadHeaderTamper(Test *t);              //magic / version / unsupported flags / unknown features / feature-flag disagreement
-void Test_SRReadNodeFieldBounds(Test *t);           //invalid type/interp/flags, OOB name/semantic/parent/childCount/fwdBck, annotation range
+void Test_SRReadHeaderTamper(Test *t);              //magic/version/unsupported flags/unknown features/feature-flag mismatch
+void Test_SRReadNodeFieldBounds(Test *t);           //bad type/interp/flags, OOB name/semantic/parent/child/fwd, annot range
 void Test_SRReadSymbolAndAnnotationBounds(Test *t); //OOB symbol.fileNameId and annotation.nameId
-void Test_SRReadFwdDeclare(Test *t);                //valid fwd/def pair round-trip + self-loop / type mismatch / wrong direction / flag-on-non-declarable
+void Test_SRReadFwdDeclare(Test *t);                //valid pair round-trip + self-loop/type-mismatch/wrong-dir/non-decl-flag
 void Test_SRReadStreamShape(Test *t);               //truncated stream, trailing data, misaligned offset
 void Test_SRFileStructuralRoundTrips(Test *t);      //empty, anonymous node, 1-node, large-N, interpolation + fwd field
 void Test_SRFileHashAndName(Test *t);               //hash determinism + content sensitivity, ESRNodeType_name coverage

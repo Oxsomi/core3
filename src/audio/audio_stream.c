@@ -165,7 +165,7 @@ void AudioStream_free(AudioStream *stream, const Allocator *alloc) {
 RefPtrType AudioStream_makeType(const Allocator *alloc) {
 	return (RefPtrType) {
 		.typeId = (TypeId) EAudioTypeId_AudioStream,
-		.length = (U32)(sizeof(AudioStream) + AudioStream_sizeExt),
+		.lengthAndAlignment = RefPtrType_pack(sizeof(AudioStream) + AudioStream_sizeExt, alignof(AudioStream)),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc)AudioStream_free
 	};
@@ -239,7 +239,7 @@ Bool AudioDeviceRef_createStream(
 	if(
 		!type ||
 		type->typeId != (TypeId)EAudioTypeId_AudioStream ||
-		type->length != sizeof(AudioStream) + AudioStream_sizeExt ||
+		RefPtrType_length(type) != sizeof(AudioStream) + AudioStream_sizeExt ||
 		type->free != (ObjectFreeFunc)AudioStream_free ||
 		type->alloc != alloc
 	)

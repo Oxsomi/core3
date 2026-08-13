@@ -45,7 +45,7 @@
 #endif
 
 //dxcapi.h must precede d3d12shader.h: on non-Windows it pulls in the WinAdapter that defines IUnknown,
-//which directx/d3d12shader.h (via d3dcommon.h) needs before it declares its reflection interfaces.
+// which directx/d3d12shader.h (via d3dcommon.h) needs before it declares its reflection interfaces.
 //On Windows those COM types (IUnknown, REFCLSID, BOOL, LPCWSTR, ...) come from <Windows.h>/<Unknwn.h> above.
 #define ENABLE_DXC_STATIC_LINKING
 #include "dxcompiler/dxcapi.h"

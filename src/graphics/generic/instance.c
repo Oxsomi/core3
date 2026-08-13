@@ -171,9 +171,18 @@ RefPtrType GraphicsInstance_makeType(EGraphicsApi api, const Allocator *alloc) {
 
 	api = EGraphicsApi_resolve(api);
 
+	//With GRAPHICS_API_DYNAMIC the backend is a separate module that may not have registered.
+	//In that case there's no instance size to add and nothing valid to hand out.
+	//A zeroed type is rejected by GraphicsInstance_create() below, so this surfaces as an ordinary error, not a crash.
+
+	const GraphicsObjectSizes *sizes = GraphicsInterface_getObjectSizes(api);
+
+	if(!sizes)
+		return (RefPtrType) { 0 };
+
 	return (RefPtrType) {
 		.typeId = (TypeId) EGraphicsTypeId_GraphicsInstance,
-		.length = (U32)(sizeof(GraphicsInstance) + GraphicsInterface_getObjectSizes(api)->instance),
+		.lengthAndAlignment = RefPtrType_pack(sizeof(GraphicsInstance) + sizes->instance, alignof(GraphicsInstance)),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc) GraphicsInstance_freeExt
 	};
@@ -200,7 +209,7 @@ void CommandList_free(CommandList *cmd, const Allocator *alloc);
 
 //Fills the RefPtrTypes of all objects that can be created through this instance (or its devices).
 //They live in the GraphicsInstance so they're guaranteed to outlive the objects created with them,
-//since every graphics object holds a reference to the device and the device to the instance.
+// since every graphics object holds a reference to the device and the device to the instance.
 
 static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, const Allocator *alloc) {
 
@@ -211,35 +220,35 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 
 		.device = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_GraphicsDevice,
-			.length = (U32)(sizeof(GraphicsDevice) + sizes->device),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(GraphicsDevice) + sizes->device, alignof(GraphicsDevice)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) GraphicsDevice_free
 		},
 
 		.buffer = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DeviceBuffer,
-			.length = (U32)(sizeof(DeviceBuffer) + sizes->buffer),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(DeviceBuffer) + sizes->buffer, alignof(DeviceBuffer)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) DeviceBuffer_free
 		},
 
 		.deviceTexture = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DeviceTexture,
-			.length = (U32)(sizeof(DeviceTexture) + imageSize),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(DeviceTexture) + imageSize, alignof(DeviceTexture)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) DeviceTexture_free
 		},
 
 		.renderTexture = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_RenderTexture,
-			.length = (U32)(sizeof(RenderTexture) + imageSize),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(RenderTexture) + imageSize, alignof(RenderTexture)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) GraphicsDevice_freeRenderTexture
 		},
 
 		.depthStencil = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DepthStencil,
-			.length = (U32)(sizeof(DepthStencil) + imageSize),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(DepthStencil) + imageSize, alignof(DepthStencil)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) GraphicsDevice_freeDepthStencil
 		},
@@ -252,70 +261,72 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 			//Unfortunately we still have to allocate up to (48 + 16) * 2 = 128 bytes extra, not too bad though.
 
 			.typeId = (TypeId) EGraphicsTypeId_Swapchain,
-			.length = (U32)(sizeof(Swapchain) + imageSize * SWAPCHAIN_MAX_IMAGES + sizes->swapchain),
+			.lengthAndAlignment = RefPtrType_pack(
+				sizeof(Swapchain) + imageSize * SWAPCHAIN_MAX_IMAGES + sizes->swapchain, alignof(Swapchain)
+			),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) Swapchain_free
 		},
 
 		.pipeline = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_Pipeline,
-			.length = (U32)(sizeof(Pipeline) + sizes->pipeline),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(Pipeline) + sizes->pipeline, alignof(Pipeline)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) Pipeline_free
 		},
 
 		.sampler = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_Sampler,
-			.length = (U32)(sizeof(Sampler) + sizes->sampler),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(Sampler) + sizes->sampler, alignof(Sampler)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) Sampler_free
 		},
 
 		.blas = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_BLASExt,
-			.length = (U32)(sizeof(BLAS) + sizes->blas),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(BLAS) + sizes->blas, alignof(BLAS)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) BLAS_free
 		},
 
 		.tlas = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_TLASExt,
-			.length = (U32)(sizeof(TLAS) + sizes->tlas),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(TLAS) + sizes->tlas, alignof(TLAS)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) TLAS_free
 		},
 
 		.descriptorLayout = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DescriptorLayout,
-			.length = (U32)(sizeof(DescriptorLayout) + sizes->descriptorLayout),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(DescriptorLayout) + sizes->descriptorLayout, alignof(DescriptorLayout)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) DescriptorLayout_free
 		},
 
 		.descriptorTable = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DescriptorTable,
-			.length = (U32)(sizeof(DescriptorTable) + sizes->descriptorTable),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(DescriptorTable) + sizes->descriptorTable, alignof(DescriptorTable)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) DescriptorTable_free
 		},
 
 		.descriptorHeap = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DescriptorHeap,
-			.length = (U32)(sizeof(DescriptorHeap) + sizes->descriptorHeap),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(DescriptorHeap) + sizes->descriptorHeap, alignof(DescriptorHeap)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) DescriptorHeap_free
 		},
 
 		.pipelineLayout = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_PipelineLayout,
-			.length = (U32)(sizeof(PipelineLayout) + sizes->pipelineLayout),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(PipelineLayout) + sizes->pipelineLayout, alignof(PipelineLayout)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) PipelineLayout_free
 		},
 
 		.commandList = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_CommandList,
-			.length = (U32) sizeof(CommandList),
+			.lengthAndAlignment = RefPtrType_pack(sizeof(CommandList), alignof(CommandList)),
 			.alloc = alloc,
 			.free = (ObjectFreeFunc) CommandList_free
 		}
@@ -338,11 +349,28 @@ Bool GraphicsInstance_create(
 
 	api = EGraphicsApi_resolve(api);
 
+	//GraphicsInstance_createExt dispatches straight through tables[api].instanceCreate without a null check.
+	//On non-Windows, EGraphicsApi_resolve() falls back to Vulkan without consulting the registry.
+	//An api whose backend never registered would therefore call a null pointer.
+	//Report it as unsupported instead.
+
+	if(!GraphicsInterface_supportsApi(api))
+		retError(clean, Error_unsupportedOperation(0, "GraphicsInstance_create()::api has no backend available"));
+
+	const GraphicsObjectSizes *sizes = GraphicsInterface_getObjectSizes(api);
+
+	//type->free deliberately isn't matched against &GraphicsInstance_freeExt, for the reason spelled out in Stream_create().
+	//With DynamicLinkingGraphics the backend is a shared lib that links OxC3_graphics PUBLIC,
+	// so the app links that static lib as well.
+	//Both modules then end up with their own GraphicsInstance_freeExt, which Mach-O keeps separate.
+	//typeId, the exact length for this api and alloc still pin the type down to a GraphicsInstance_makeType() result.
+
 	if(
 		!type ||
+		!sizes ||
 		type->typeId != (TypeId) EGraphicsTypeId_GraphicsInstance ||
-		type->length != (U32)(sizeof(GraphicsInstance) + GraphicsInterface_getObjectSizes(api)->instance) ||
-		type->free != (ObjectFreeFunc) GraphicsInstance_freeExt ||
+		RefPtrType_length(type) != (U32)(sizeof(GraphicsInstance) + sizes->instance) ||
+		!type->free ||
 		type->alloc != alloc
 	)
 		retError(clean, Error_invalidParameter(
@@ -378,6 +406,14 @@ clean:
 		RefPtr_dec(instanceRef);
 
 	return s_uccess;
+}
+
+U64 GraphicsInstance_getValidationErrors(GraphicsInstance *inst) {
+	return !inst ? 0 : (U64) AtomicI64_load(&inst->validationErrors);
+}
+
+U64 GraphicsInstance_getValidationWarnings(GraphicsInstance *inst) {
+	return !inst ? 0 : (U64) AtomicI64_load(&inst->validationWarnings);
 }
 
 Bool GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr) {

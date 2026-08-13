@@ -336,7 +336,7 @@ void Test_SHFileAddEntryHitStageSizes(Test *t) {
 		e.stage       = hitStages[i];
 
 		//Intersection shaders never receive a ray payload (they only produce a hit attribute via ReportHit),
-		//so payloadSize must be 0 there and non-zero is rejected.
+		// so payloadSize must be 0 there and non-zero is rejected.
 
 		e.payloadSize = isIntersection ? 0 : 16;
 

@@ -107,10 +107,12 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 
 			.bufferCreate = VkGraphicsDeviceRef_createBuffer,
 			.bufferFlush = VkDeviceBufferRef_flush,
+			.bufferPull = VkDeviceBufferRef_pull,
 			.bufferFree = VkDeviceBuffer_free,
 
 			.textureCreate = VkUnifiedTexture_create,
 			.textureFlush = VkDeviceTextureRef_flush,
+			.texturePull = VkDeviceTextureRef_pull,
 			.textureFree = VkUnifiedTexture_free,
 
 			.swapchainCreate = VkGraphicsDeviceRef_createSwapchain,
@@ -161,14 +163,31 @@ VkBool32 onDebugReport(
 	(void)object;
 	(void)location;
 	(void)objectType;
-	(void)userData;
 	(void)layerPrefix;
 
-	if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
-		Log_errorLnx("Error: %s", message);
+	GraphicsInstance *instance = (GraphicsInstance*) userData;
 
-	else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
+	if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
+
+		if(instance)
+			AtomicI64_inc(&instance->validationErrors);
+
+		Log_errorLnx("Error: %s", message);
+	}
+
+	else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) {
+
+		//GPU assisted validation force enables the device features it needs and warns about doing so.
+		//That's an expected side effect of running maximum validation, not an app defect, so it's only logged.
+
+		const CharString messageStr = CharString_createRefCStrConst(message);
+		const CharString adjusting = CharString_createRefCStrConst("validation is adjusting settings");
+
+		if(instance && !CharString_containsStringInsensitive(&messageStr, &adjusting, 0, 0))
+			AtomicI64_inc(&instance->validationWarnings);
+
 		Log_warnLnx("Warning: %s", message);
+	}
 
 	else if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT)
 		Log_performanceLnx("Performance warning: %s", message);
@@ -478,7 +497,8 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 				VK_DEBUG_REPORT_WARNING_BIT_EXT |
 				VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
 
-			.pfnCallback = (PFN_vkDebugReportCallbackEXT) onDebugReport
+			.pfnCallback = (PFN_vkDebugReportCallbackEXT) onDebugReport,
+			.pUserData = instance
 		};
 
 		gotoIfError3(clean, checkVkError(instanceExt->debugCreateReportCallback(
@@ -522,7 +542,7 @@ void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, const Allocator
 		instanceExt->debugDestroyReportCallback(instanceExt->instance, instanceExt->debugReportCallback, NULL);
 
 	//Instance creation can fail partway (e.g. no compatible driver);
-	//in that case the RefPtr is still dec'd, so the ext might not be initialized yet.
+	// in that case the RefPtr is still dec'd, so the ext might not be initialized yet.
 
 	if(instanceExt->destroyInstance && instanceExt->instance)
 		instanceExt->destroyInstance(instanceExt->instance, NULL);
@@ -532,7 +552,7 @@ void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, const Allocator
 }
 
 const C8 *reqExtensionsName[] = {
-	"VK_KHR_push_descriptor", "VK_KHR_synchronization2", "VK_KHR_swapchain"
+	"VK_KHR_synchronization2", "VK_KHR_swapchain"
 };
 
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
@@ -557,7 +577,10 @@ const C8 *optExtensionsName[] = {
 
 	"VK_EXT_descriptor_heap", "VK_NV_cluster_acceleration_structure", "VK_NV_partitioned_acceleration_structure",
 
-	"VK_KHR_pipeline_executable_properties"
+	"VK_KHR_pipeline_executable_properties", "VK_KHR_push_descriptor",
+
+	"VK_KHR_create_renderpass2", "VK_KHR_depth_stencil_resolve", "VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls",
+	"VK_KHR_maintenance5"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -575,6 +598,31 @@ U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsNam
 		*featuresNext = &Name;                                                  \
 		featuresNext = &Name.pNext;                                             \
 	}  (void) 0
+
+//Reporting every unmet requirement instead of bailing on the first one is what tells an emulator or a weak GPU apart;
+// one says "this will never run OxC3", the other says "this could run OxC3 if the graphics spec were lowered".
+//deviceUnsupported logs the requirement and counts it, the device loop rejects on that count once every check has run.
+//These read the device loop's locals (i, features, limits, unsupportedCount) so they only work inside that loop.
+
+#define deviceUnsupported(...) { Log_debugLnx(__VA_ARGS__); ++unsupportedCount; }
+
+#define requireFeature(x) if(!features.x) deviceUnsupported("Vulkan: Device %"PRIu32" lacks feature " #x, i)
+
+#define requireLimit(x, minimum)                                                          \
+	if(limits.x < (minimum))                                                              \
+		deviceUnsupported(                                                                \
+			"Vulkan: Device %"PRIu32" limit " #x " is %"PRIu64", needs %"PRIu64,          \
+			i, (U64) limits.x, (U64) (minimum)                                            \
+		)
+
+//A few limits are floats (maxSamplerAnisotropy, maxSamplerLodBias, viewportBoundsRange), those print as %f.
+
+#define requireLimitF(x, minimum)                                                         \
+	if(limits.x < (minimum))                                                              \
+		deviceUnsupported(                                                                \
+			"Vulkan: Device %"PRIu32" limit " #x " is %f, needs %f",                      \
+			i, (F64) limits.x, (F64) (minimum)                                            \
+		)
 
 TList(VkPhysicalDevice);
 TListImpl(VkPhysicalDevice);
@@ -614,6 +662,10 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		VkPhysicalDevice dev = temp.ptr[i];
 
+		//Every unmet requirement is logged and counted here, the device is only rejected after the last check has run.
+
+		U64 unsupportedCount = 0;
+
 		//VkOnD3D12 might not match our feature set and it might cause confusion, because it shows 2 extra devices on QCOM
 		//Even though we only really have 1 physical device there (it exists only for emulating GL).
 
@@ -628,8 +680,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 			const CharString d3d12Warp = CharString_createRefCStrConst("Microsoft Direct3D12");
 
-			if (CharString_startsWithStringSensitive(&deviceName, &d3d12Warp, 0))
+			//Logged rather than skipped in silence, because on a machine whose only Vulkan device is this one
+			// the enumeration ends up empty with nothing in the log to explain it.
+
+			if (CharString_startsWithStringSensitive(&deviceName, &d3d12Warp, 0)) {
+				Log_debugLnx("Vulkan: Skipping device %"PRIu32", it is the Direct3D12 passthrough rather than a real device", i);
 				continue;
+			}
 		}
 
 		//Get extensions and layers
@@ -681,7 +738,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 			Bool found = false;
 
-			for(U64 l = 0; l < sizeof(reqExtensions); ++l) {
+			for(U64 l = 0; l < reqExtensionsNameCount; ++l) {
 
 				const CharString reqExt = CharString_createRefCStrConst(reqExtensionsName[l]);
 
@@ -695,7 +752,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			//Check if optional extension
 
 			if (!found)
-				for(U64 l = 0; l < sizeof(optExtensions); ++l) {
+				for(U64 l = 0; l < optExtensionsNameCount; ++l) {
 
 					const CharString optExt = CharString_createRefCStrConst(optExtensionsName[l]);
 
@@ -706,25 +763,12 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				}
 		}
 
-		Bool supported = true;
-		U64 firstUnavailable = 0;
-
-		for(U64 k = 0; k < sizeof(reqExtensions); ++k)
-			if(!reqExtensions[k] && CharString_calcStrLen(reqExtensionsName[k], U64_MAX)) {
-				supported = false;
-				firstUnavailable = k;
-				break;
-			}
-
-		if (!supported) {
-
-			Log_debugLnx(
-				"Vulkan: Unsupported device %"PRIu32", one of the required extensions wasn't present (%s)",
-				i, reqExtensionsName[firstUnavailable]
-			);
-
-			continue;
-		}
+		for(U64 k = 0; k < reqExtensionsNameCount; ++k)
+			if(!reqExtensions[k] && CharString_calcStrLen(reqExtensionsName[k], U64_MAX))
+				deviceUnsupported(
+					"Vulkan: Unsupported device %"PRIu32", required extension %s wasn't present",
+					i, reqExtensionsName[k]
+				);
 
 		//Grab limits and features
 
@@ -806,26 +850,29 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_PROPERTIES
 		);
 
+		//Gated on the extension rather than chained unconditionally, because the instance asks for Vulkan 1.1,
+		// where this struct only exists if VK_KHR_push_descriptor does.
+		//Handing a driver a struct for an extension it never advertised is exactly what emulators mishandle.
+		//A device without the extension keeps a zeroed struct, which reads as no push descriptors and turns on
+		// the emulated path rather than rejecting the device.
+
 		getDeviceProperties(
-			true, VkPhysicalDevicePushDescriptorPropertiesKHR, pushDescriptor,
+			optExtensions[EOptExtensions_PushDescriptor], VkPhysicalDevicePushDescriptorPropertiesKHR, pushDescriptor,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR
 		);
 
 		instanceExt->getPhysicalDeviceProperties2(dev, &properties2);
 
+		//This hack is because BAR aperture is 256 MiB, this is used to distinguish AMD APUs
+
 		if(
 			optExtensions[EOptExtensions_Maintenance4] && (
 				maxBufferSize.maxBufferSize < 256 * MIBI || memorySizeAndDescriptorSets.maxMemoryAllocationSize < 256 * MIBI
 			)
-		) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", maxBufferSize and maxAllocationSize should exceed 256MiB", i);
-			continue;        //This hack is because BAR aperture is 256 MiB, this is used to distinguish AMD APUs
-		}
-
-		if (pushDescriptor.maxPushDescriptors < 32) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", push descriptors >=32 is required", i);
-			continue;
-		}
+		)
+			deviceUnsupported(
+				"Vulkan: Unsupported device %"PRIu32", maxBufferSize and maxAllocationSize should exceed 256MiB", i
+			);
 
 		//Build up list of features
 
@@ -849,8 +896,10 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
 		);
 
+		//Same reasoning as the push descriptor properties above; at Vulkan 1.1 this struct comes with the extension.
+
 		getDeviceFeatures(
-			true,
+			reqExtensions[EReqExtensions_Synchronization2],
 			VkPhysicalDeviceSynchronization2Features,
 			sync2,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
@@ -1039,27 +1088,29 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//Ensure device is compatible first
 
-		if(
-			!features.shaderInt16 ||
-			!features.shaderSampledImageArrayDynamicIndexing ||
-			!features.shaderStorageBufferArrayDynamicIndexing ||
-			!features.shaderUniformBufferArrayDynamicIndexing ||
-			!features.samplerAnisotropy ||
-			!features.drawIndirectFirstInstance ||
-			!features.independentBlend ||
-			!features.imageCubeArray ||
-			!features.fullDrawIndexUint32 ||
-			!features.depthClamp ||
-			!features.depthBiasClamp ||
-			!(features.textureCompressionBC || features.textureCompressionASTC_LDR) ||
-			!features.multiDrawIndirect ||
-			!features.sampleRateShading ||
-			!features.shaderStorageImageReadWithoutFormat ||
-			!features.shaderStorageImageWriteWithoutFormat
-		) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required features wasn't enabled", i);
-			continue;
-		}
+		requireFeature(shaderInt16);
+		requireFeature(shaderSampledImageArrayDynamicIndexing);
+		requireFeature(shaderStorageBufferArrayDynamicIndexing);
+		requireFeature(shaderUniformBufferArrayDynamicIndexing);
+		requireFeature(samplerAnisotropy);
+		requireFeature(drawIndirectFirstInstance);
+		requireFeature(independentBlend);
+		requireFeature(imageCubeArray);
+		requireFeature(fullDrawIndexUint32);
+		requireFeature(depthClamp);
+		requireFeature(depthBiasClamp);
+
+		//Block compression is one requirement that either BC or ASTC LDR satisfies, so it names both.
+
+		if(!features.textureCompressionBC && !features.textureCompressionASTC_LDR)
+			deviceUnsupported(
+				"Vulkan: Device %"PRIu32" lacks feature textureCompressionBC or textureCompressionASTC_LDR", i
+			);
+
+		requireFeature(multiDrawIndirect);
+		requireFeature(sampleRateShading);
+		requireFeature(shaderStorageImageReadWithoutFormat);
+		requireFeature(shaderStorageImageWriteWithoutFormat);
 
 		VkSampleCountFlags requiredMSAA = VK_SAMPLE_COUNT_1_BIT | VK_SAMPLE_COUNT_4_BIT;
 
@@ -1073,73 +1124,75 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			limits.sampledImageIntegerSampleCounts &
 			limits.sampledImageStencilSampleCounts;
 
-		if (
-			limits.maxColorAttachments < 8 ||
-			limits.maxFragmentOutputAttachments < 8 ||
-			limits.maxDescriptorSetInputAttachments < 7 ||
-			limits.maxPerStageDescriptorInputAttachments < 7 ||
-			(allMSAA & requiredMSAA) != requiredMSAA ||
-			limits.maxComputeSharedMemorySize < 16 * KIBI ||
-			limits.maxComputeWorkGroupCount[0] < U16_MAX ||
-			limits.maxComputeWorkGroupCount[1] < U16_MAX ||
-			limits.maxComputeWorkGroupCount[2] < U16_MAX ||
-			limits.maxComputeWorkGroupSize[0] < 1024 ||
-			limits.maxComputeWorkGroupSize[1] < 1024 ||
-			limits.maxComputeWorkGroupSize[2] < 64 ||
-			limits.maxFragmentCombinedOutputResources < 16 ||
-			limits.maxFragmentInputComponents < 112 ||
-			limits.maxFramebufferWidth < 16 * KIBI ||
-			limits.maxFramebufferHeight < 16 * KIBI ||
-			limits.maxImageDimension1D < 16 * KIBI ||
-			limits.maxImageDimension2D < 16 * KIBI ||
-			limits.maxImageDimensionCube < 16 * KIBI ||
-			limits.maxViewportDimensions[0] < 16 * KIBI ||
-			limits.maxViewportDimensions[1] < 16 * KIBI ||
-			limits.maxFramebufferLayers < 256 ||
-			limits.maxImageDimension3D < 256 ||
-			limits.maxImageArrayLayers < 256 ||
-			limits.maxPushConstantsSize < 128 ||
-			limits.maxSamplerAllocationCount < 1024 ||
-			limits.maxSamplerAnisotropy < 16 ||
-			limits.maxStorageBufferRange < 128 * MEGA ||
-			limits.maxSamplerLodBias < 4 ||
-			limits.maxUniformBufferRange < 64 * KIBI ||
-			limits.maxVertexInputAttributeOffset < 2047 ||
-			limits.maxVertexInputAttributes < 16 ||
-			limits.maxVertexInputBindings < 16 ||
-			limits.maxVertexInputBindingStride < 2048 ||
-			limits.maxVertexOutputComponents < 124 ||
-			limits.maxMemoryAllocationCount < 4096 ||
-			limits.maxBoundDescriptorSets < 4 ||
-			limits.viewportBoundsRange[0] > -32768 ||
-			limits.viewportBoundsRange[1] < 32767
-		) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required limit wasn't sufficient", i);
-			continue;
-		}
+		requireLimit(maxColorAttachments, 8);
+		requireLimit(maxFragmentOutputAttachments, 8);
+		requireLimit(maxDescriptorSetInputAttachments, 7);
+		requireLimit(maxPerStageDescriptorInputAttachments, 7);
 
-		//Disable tesselation shaders if minimum isn't met
+		//MSAA is one requirement over eight limits at once, so it reports the intersection rather than each limit.
 
-		if (
-			!features.tessellationShader || (
-				U64_min(
-					U64_min(
-						U64_min(
-							limits.maxTessellationControlPerVertexInputComponents,
-							limits.maxTessellationControlPerVertexOutputComponents
-						),
-						limits.maxTessellationEvaluationInputComponents
-					),
-					limits.maxTessellationEvaluationOutputComponents
-				) < 124 ||
-				limits.maxTessellationControlTotalOutputComponents < 4088 ||
-				limits.maxTessellationControlPerPatchOutputComponents < 120 ||
-				limits.maxTessellationGenerationLevel < 64 ||
-				limits.maxTessellationPatchSize < 32
-			)
-		) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", tesselation isn't supported but is required", i);
-			continue;
+		if((allMSAA & requiredMSAA) != requiredMSAA)
+			deviceUnsupported("Vulkan: Device %"PRIu32" doesn't support 1x and 4x MSAA on every attachment type", i);
+
+		requireLimit(maxComputeSharedMemorySize, 16 * KIBI);
+		requireLimit(maxComputeWorkGroupCount[0], U16_MAX);
+		requireLimit(maxComputeWorkGroupCount[1], U16_MAX);
+		requireLimit(maxComputeWorkGroupCount[2], U16_MAX);
+		requireLimit(maxComputeWorkGroupSize[0], 1024);
+		requireLimit(maxComputeWorkGroupSize[1], 1024);
+		requireLimit(maxComputeWorkGroupSize[2], 64);
+		requireLimit(maxFragmentCombinedOutputResources, 16);
+		requireLimit(maxFragmentInputComponents, 112);
+		requireLimit(maxFramebufferWidth, 16 * KIBI);
+		requireLimit(maxFramebufferHeight, 16 * KIBI);
+		requireLimit(maxImageDimension1D, 16 * KIBI);
+		requireLimit(maxImageDimension2D, 16 * KIBI);
+		requireLimit(maxImageDimensionCube, 16 * KIBI);
+		requireLimit(maxViewportDimensions[0], 16 * KIBI);
+		requireLimit(maxViewportDimensions[1], 16 * KIBI);
+		requireLimit(maxFramebufferLayers, 256);
+		requireLimit(maxImageDimension3D, 256);
+		requireLimit(maxImageArrayLayers, 256);
+		requireLimit(maxPushConstantsSize, 128);
+		requireLimit(maxSamplerAllocationCount, 1024);
+		requireLimitF(maxSamplerAnisotropy, 16);
+		requireLimit(maxStorageBufferRange, 128 * MEGA);
+		requireLimitF(maxSamplerLodBias, 4);
+		requireLimit(maxUniformBufferRange, 64 * KIBI);
+		requireLimit(maxVertexInputAttributeOffset, 2047);
+		requireLimit(maxVertexInputAttributes, 16);
+		requireLimit(maxVertexInputBindings, 16);
+		requireLimit(maxVertexInputBindingStride, 2048);
+		requireLimit(maxVertexOutputComponents, 124);
+		requireLimit(maxMemoryAllocationCount, 4096);
+		requireLimit(maxBoundDescriptorSets, 4);
+
+		//viewportBoundsRange[0] is a lower bound that has to reach far enough into the negatives,
+		// so unlike every other limit it fails when it's too high rather than too low.
+
+		if(limits.viewportBoundsRange[0] > -32768)
+			deviceUnsupported(
+				"Vulkan: Device %"PRIu32" limit viewportBoundsRange[0] is %f, needs -32768 or lower",
+				i, (F64) limits.viewportBoundsRange[0]
+			);
+
+		requireLimitF(viewportBoundsRange[1], 32767);
+
+		//Tesselation is required, and the four per-stage component counts are only meaningful if the feature is there.
+		//Reporting each minimum separately tells a device that is one limit short apart from one that has no tesselation.
+
+		requireFeature(tessellationShader);
+
+		if (features.tessellationShader) {
+
+			requireLimit(maxTessellationControlPerVertexInputComponents, 124);
+			requireLimit(maxTessellationControlPerVertexOutputComponents, 124);
+			requireLimit(maxTessellationEvaluationInputComponents, 124);
+			requireLimit(maxTessellationEvaluationOutputComponents, 124);
+			requireLimit(maxTessellationControlTotalOutputComponents, 4088);
+			requireLimit(maxTessellationControlPerPatchOutputComponents, 120);
+			requireLimit(maxTessellationGenerationLevel, 64);
+			requireLimit(maxTessellationPatchSize, 32);
 		}
 
 		//Disable geometry shaders if minimum isn't met
@@ -1183,6 +1236,8 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			case EGraphicsVendorPCIE_APPL:                  vendor = EGraphicsVendorId_APPL;        break;
 			case EGraphicsVendorPCIE_SMSG:                  vendor = EGraphicsVendorId_SMSG;        break;
 			case EGraphicsVendorPCIE_HWEI:                  vendor = EGraphicsVendorId_HWEI;        break;
+			case EGraphicsVendorPCIE_GOGL:                  vendor = EGraphicsVendorId_GOGL;        break;
+			case EGraphicsVendorPCIE_MESA:                  vendor = EGraphicsVendorId_MESA;        break;
 			default:
 				Log_debugLnx("Unrecognized vendor: %"PRIX32, properties.vendorID);                  break;
 		}
@@ -1216,10 +1271,8 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//Force enable synchronization
 
-		if (!sync2.synchronization2) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", Synchronization 2 unsupported!", i);
-			continue;
-		}
+		if (!sync2.synchronization2)
+			deviceUnsupported("Vulkan: Unsupported device %"PRIu32", Synchronization 2 unsupported!", i);
 
 		//Check if indexing is properly supported
 
@@ -1274,7 +1327,17 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//Direct rendering
 
-		if (optExtensions[EOptExtensions_DynamicRendering] && dynamicRendering.dynamicRendering)
+		//Dynamic rendering only covers the attachments themselves; resolving a depth stencil one and the render pass
+		// objects it's built on come from the two extensions below.
+		//The spec makes those dependencies of dynamic rendering, but emulators advertise it without them, and
+		// requesting an extension the device never offered is what fails device creation with nothing to go on.
+
+		if (
+			optExtensions[EOptExtensions_DynamicRendering] &&
+			optExtensions[EOptExtensions_CreateRenderpass2] &&
+			optExtensions[EOptExtensions_DepthStencilResolve] &&
+			dynamicRendering.dynamicRendering
+		)
 			capabilities.features |= EGraphicsFeatures_DirectRendering;
 
 		//Shader types
@@ -1296,15 +1359,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				VK_SUBGROUP_FEATURE_VOTE_BIT |
 				VK_SUBGROUP_FEATURE_BALLOT_BIT;
 
-			if((subgroup.supportedOperations & requiredSubOp) != requiredSubOp) {
-				Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required subgroup operations was missing!", i);
-				continue;
-			}
+			if((subgroup.supportedOperations & requiredSubOp) != requiredSubOp)
+				deviceUnsupported(
+					"Vulkan: Unsupported device %"PRIu32", one of the required subgroup operations was missing!", i
+				);
 
-			if(subgroup.subgroupSize < 4 || subgroup.subgroupSize > 128) {
-				Log_debugLnx("Vulkan: Unsupported device %"PRIu32", subgroup size is not in range 4-128!", i);
-				continue;
-			}
+			if(subgroup.subgroupSize < 4 || subgroup.subgroupSize > 128)
+				deviceUnsupported("Vulkan: Unsupported device %"PRIu32", subgroup size is not in range 4-128!", i);
 
 			capabilities.features |= EGraphicsFeatures_SubgroupOperations;
 		}
@@ -1327,6 +1388,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(
 			optExtensions[EOptExtensions_VariableRateShading] &&
+			optExtensions[EOptExtensions_CreateRenderpass2] &&
 			vrsFeat.pipelineFragmentShadingRate &&
 			vrsFeat.attachmentFragmentShadingRate &&
 			vrsProp.maxFragmentSize.width >= 2 && vrsProp.maxFragmentSize.height >= 2 &&
@@ -1462,6 +1524,15 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					optExtensions[EOptExtensions_RayPipeline] = false;
 				}
 
+				//Raytracing shaders are compiled against SPIRV 1.4, which brings the two below with it.
+				//Without them the device would advertise raytracing and then fail creation on the extensions it
+				// never offered, so the feature is dropped instead.
+
+				if(!optExtensions[EOptExtensions_Spirv14] || !optExtensions[EOptExtensions_ShaderFloatControls]) {
+					optExtensions[EOptExtensions_RayQuery] = false;
+					optExtensions[EOptExtensions_RayPipeline] = false;
+				}
+
 				//Enable extension
 
 				if(optExtensions[EOptExtensions_RayQuery])
@@ -1560,24 +1631,21 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(allMSAA & VK_SAMPLE_COUNT_8_BIT)
 			capabilities.dataTypes |= EGraphicsDataTypes_MSAA8x;
 
-		//Enforce support for the least descriptors
+		//Enforce support for the least descriptors.
+		//Named one by one rather than as a single "binding tier" verdict,
+		// because knowing which of the eleven fell short is what says whether a device is close or hopeless.
 
-		if(
-			limits.maxPerStageDescriptorSamplers < 16 ||
-			limits.maxPerStageDescriptorUniformBuffers < 12 ||
-			limits.maxPerStageDescriptorStorageBuffers < 8 ||
-			limits.maxPerStageDescriptorSampledImages < 16 ||
-			limits.maxPerStageDescriptorStorageImages < 4 ||
-			limits.maxPerStageResources < 44 ||
-			limits.maxDescriptorSetSamplers < 80 ||
-			limits.maxDescriptorSetUniformBuffers < 72 ||
-			limits.maxDescriptorSetStorageBuffers < 24 ||
-			limits.maxDescriptorSetSampledImages < 96 ||
-			limits.maxDescriptorSetStorageImages < 24
-		) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", graphics binding tier not supported!", i);
-			continue;
-		}
+		requireLimit(maxPerStageDescriptorSamplers, 16);
+		requireLimit(maxPerStageDescriptorUniformBuffers, 12);
+		requireLimit(maxPerStageDescriptorStorageBuffers, 8);
+		requireLimit(maxPerStageDescriptorSampledImages, 16);
+		requireLimit(maxPerStageDescriptorStorageImages, 4);
+		requireLimit(maxPerStageResources, 44);
+		requireLimit(maxDescriptorSetSamplers, 80);
+		requireLimit(maxDescriptorSetUniformBuffers, 72);
+		requireLimit(maxDescriptorSetStorageBuffers, 24);
+		requireLimit(maxDescriptorSetSampledImages, 96);
+		requireLimit(maxDescriptorSetStorageImages, 24);
 
 		//Hopefully enable bindless
 
@@ -1612,9 +1680,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//Full bindless (descriptor heap); requires regular bindless too so the feature implies the same on both APIs
 
+		//VK_EXT_descriptor_heap requires VK_KHR_maintenance5 in the enabled list, so a device that doesn't
+		// advertise the dependency simply doesn't get the feature.
+
 		if(
 			(capabilities.features & EGraphicsFeatures_Bindless) &&
 			optExtensions[EOptExtensions_DescriptorHeap] &&
+			optExtensions[EOptExtensions_Maintenance5] &&
 			descriptorHeapFeat.descriptorHeap
 		)
 			capabilities.features2 |= EGraphicsFeatures2_DescriptorHeap;
@@ -1623,6 +1695,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(optExtensions[EOptExtensions_PipelineExecutableProperties] && pipelineExecutableProps.pipelineExecutableInfo)
 			capabilities.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
+
+		//Push descriptors are a fast path, not a requirement, so a device without them is emulated rather than rejected.
+		//Only the globals constant buffer is ever pushed, so the 32 minimum is far more than OxC3 asks for;
+		// it's kept as the threshold so a driver advertising a token amount takes the emulated path instead.
+
+		if(optExtensions[EOptExtensions_PushDescriptor] && pushDescriptor.maxPushDescriptors >= 32)
+			capabilities.featuresExt |= EVkGraphicsFeatures_PerformantPushDescriptor;
 
 		//Enforce format support
 		//We don't enforce VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT because the standard guarantees it.
@@ -1656,6 +1735,39 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			//D32
 
 			VK_FORMAT_D32_SFLOAT
+		};
+
+		//Parallel to toSupport, so a device can be told which formats it is missing rather than just that one is missing.
+
+		const C8 *toSupportName[] = {
+
+			//R8s, RG8s, RGBA8s
+
+			"R8_SNORM",
+			"R8G8_SNORM",
+			"R8G8B8A8_SNORM",
+
+			//R16, R16s
+			//RG16, RG16s
+
+			"R16_SNORM",
+			"R16G16_SNORM",
+
+			"R16_UNORM",
+			"R16G16_UNORM",
+
+			//RGBA16, RGBA16s
+
+			"R16G16B16A16_UNORM",
+			"R16G16B16A16_SNORM",
+
+			//BGRA8
+
+			"B8G8R8A8_UNORM",
+
+			//D32
+
+			"D32_SFLOAT"
 		};
 
 		VkFormatFeatureFlags reqFormatDef =
@@ -1693,7 +1805,14 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			depthStencilDef
 		};
 
-		Bool unsupported = false;
+		//toSupport, toSupportName and reqFormatFeatFlags are indexed by the same k,
+		// so a format added to one of them has to be added to all three.
+
+		static_assert(
+			sizeof(toSupportName) / sizeof(toSupportName[0]) == sizeof(toSupport) / sizeof(toSupport[0]) &&
+			sizeof(reqFormatFeatFlags) / sizeof(reqFormatFeatFlags[0]) == sizeof(toSupport) / sizeof(toSupport[0]),
+			"toSupport, toSupportName and reqFormatFeatFlags have to stay parallel"
+		);
 
 		for(U64 k = 0; k < sizeof(toSupport) / sizeof(VkFormat); ++k) {
 
@@ -1702,15 +1821,11 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 			VkFormatFeatureFlags reqk = reqFormatFeatFlags[k];
 
-			if((formatInfo.optimalTilingFeatures & reqk) != reqk) {
-				unsupported = true;
-				break;
-			}
-		}
-
-		if (unsupported) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", required texture format not supported!", i);
-			continue;
+			if((formatInfo.optimalTilingFeatures & reqk) != reqk)
+				deviceUnsupported(
+					"Vulkan: Unsupported device %"PRIu32", required texture format %s not supported!",
+					i, toSupportName[k]
+				);
 		}
 
 		//Query for memory size
@@ -1718,13 +1833,25 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		VkGraphicsDevice fakeDevice = (VkGraphicsDevice) { 0 };
 		instanceExt->getPhysicalDeviceMemoryProperties(dev, &fakeDevice.memoryProperties);
 
-		gotoIfError3(clean, VkGraphicsDevice_findAllMemory(&fakeDevice, e_rr));
+		//findAllMemory errors out of the entire enumeration when a device exposes no usable heap at all.
+		//A device that already failed a requirement is rejected either way,
+		// so it keeps its zeroed heap sizes and reports the heap requirement below instead of taking every device with it.
+
+		if(unsupportedCount)
+			(void) VkGraphicsDevice_findAllMemory(&fakeDevice, NULL);
+
+		else gotoIfError3(clean, VkGraphicsDevice_findAllMemory(&fakeDevice, e_rr));
 
 		U64 cpuHeapSize = fakeDevice.maxHeapSizes[0];
 		U64 gpuHeapSize = fakeDevice.maxHeapSizes[1];
 
-		if(cpuHeapSize < 512 * MIBI || gpuHeapSize < 512 * MIBI) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", not enough VRAM or RAM (requires 512MB each).", i);
+		if(cpuHeapSize < 512 * MIBI || gpuHeapSize < 512 * MIBI)
+			deviceUnsupported("Vulkan: Unsupported device %"PRIu32", not enough VRAM or RAM (requires 512MB each).", i);
+
+		//Every requirement has run by now, so the device can be rejected with the full list already logged above.
+
+		if (unsupportedCount) {
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", %"PRIu64" requirement(s) not met", i, unsupportedCount);
 			continue;
 		}
 
@@ -1843,8 +1970,19 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		++j;
 	}
 
-	if(!temp2.length)
+	//A machine with no adapter at all and a machine whose adapters OxC3 turned down are very different results.
+	//The first isn't ours to fail on and a test should skip it, the second is a real result and says our spec is too high,
+	// so they get distinct error codes for the caller to branch on.
+	//deviceCount is what the api itself reported, including the Direct3D12 WARP adapter the loop above skips,
+	// so zero genuinely means there's no Vulkan adapter rather than that we rejected them all.
+
+	if(!temp2.length) {
+
+		if(!deviceCount)
+			retError(clean, Error_notFound(0, 0, "VkGraphicsInstance_getDeviceInfos() no graphics adapter present"));
+
 		retError(clean, Error_unsupportedOperation(0, "VkGraphicsInstance_getDeviceInfos() no supported OxC3 device found"));
+	}
 
 	*result = temp2;
 
@@ -1858,3 +1996,8 @@ clean:
 	ListVkExtensionProperties_free(&temp4, alloc);
 	return s_uccess;
 }
+
+#undef deviceUnsupported
+#undef requireFeature
+#undef requireLimit
+#undef requireLimitF

@@ -46,7 +46,8 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 	if(acqSwapchain != ELockAcquire_Acquired)
 		retError(clean, Error_invalidState(0, "Swapchain_resize() couldn't lock swapchain"));
 
-	//Check if swapchain was in flight. If yes, warn that the user has to flush manually
+	//Check if swapchain was in flight.
+	//If yes, warn that the user has to flush manually
 
 	const ELockAcquire acq = SpinLock_lock(&device->lock, U64_MAX);
 
@@ -137,9 +138,14 @@ Bool GraphicsDeviceRef_createSwapchain(
 
 	Window *window = info.window;
 
+	//Checked first, since getTypes on a NULL device yields a non NULL member pointer that faults in RefPtr_create.
+
+	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createSwapchain()::dev is required"));
+
 	if(!window || !window->nativeHandle)
 		retError(clean, Error_nullPointer(
-			0, "GraphicsDeviceRef_createSwapchain()::deviceRef and info.window (physical) are required"
+			1, "GraphicsDeviceRef_createSwapchain()::info.window (physical) is required"
 		));
 
 	//On some platforms the images we get back != the images we request.

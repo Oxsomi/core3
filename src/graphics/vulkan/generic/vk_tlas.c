@@ -119,9 +119,18 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 				const U64 *blasAddress = &dat->blasDeviceAddress;
 				U64 offset = (const U8*)blasAddress - (((const U8*)tlas->cpuInstancesStatic.ptr) + stride * i);
 
-				*(U64*)((U8*)mem + offset) = getVkDeviceAddress((DeviceData) {
-					.buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer
-				});
+				//The reference has to come from vkGetAccelerationStructureDeviceAddressKHR;
+				// the backing buffer's address is not necessarily the same thing.
+
+				const VkAccelerationStructureDeviceAddressInfoKHR addressInfo =
+					(VkAccelerationStructureDeviceAddressInfoKHR) {
+						.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+						.accelerationStructure = BLAS_ext(BLASRef_ptr(dat->blasCpu), Vk)->as
+					};
+
+				*(U64*)((U8*)mem + offset) = deviceExt->getAccelerationStructureDeviceAddress(
+					deviceExt->device, &addressInfo
+				);
 			}
 
 			acq = SpinLock_lock(&device->allocator.lock, U64_MAX);

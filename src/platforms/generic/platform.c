@@ -49,8 +49,8 @@ void sigFunc(int signal) {
 	}
 
 	//Outputting to console is not technically allowed by the Windows docs
-	//If this signal is triggered from the wrong thread it might cause stackoverflow,
-	//but what are you gonna do? Crash again?
+	//If this signal is triggered from the wrong thread it might cause stackoverflow, but what are you gonna do?
+	//Crash again?
 	//For debugging purposes however, this is very useful
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
@@ -222,7 +222,8 @@ Bool Platform_onFree(void *ptr, U64 len) {
 				break;
 			}
 
-			//Overlapping range, but likely by accident! Log it, but refuse to track it.
+			//Overlapping range, but likely by accident!
+			//Log it, but refuse to track it.
 
 			else if ((U64)ptr >= captured->location && (U64)ptr < captured->location + captured->length)
 				Log_errorLn(
@@ -388,15 +389,20 @@ Platform *Platform_instance = 0, platformInstance = { 0 };
 Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir, Error *e_rr) {
 
 	Bool s_uccess = true;
-	const Bool isSupported = Platform_checkCPUSupport();
 
-	if(!isSupported)
-		retError(clean, Error_unsupportedOperation(
-			0, "Platform_create() failed: Unsupported CPU. Please look at the minimum requirements to run OxC3"
-		));
+	//Returns directly rather than through clean, which runs Platform_cleanup() on the way out.
+	//Every other failure below happens to a platform this call is building, so tearing it down is right;
+	// this one happens to a platform somebody else already owns, and freeing it is the opposite of refusing.
+	//platform.h documents dlls calling this defensively, and on android each suite creates and cleans its own,
+	// so the old behaviour moved the symptom to whichever suite ran next.
 
-	if(Platform_instance)
-		retError(clean, Error_invalidOperation(0, "Platform_create() failed, platform was already initialized"));
+	if(Platform_instance) {
+
+		if(e_rr)
+			*e_rr = Error_invalidOperation(0, "Platform_create() failed, platform was already initialized");
+
+		return false;
+	}
 
 	if(cmdArgc && !cmdArgs)
 		retError(clean, Error_invalidParameter(
@@ -438,6 +444,14 @@ Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocat
 	};
 
 	Platform_detectCPUInfo(&Platform_instance->cpuInfo);
+
+	//After the instance exists on purpose: the SIMD backends diagnose a rejection through Log, which needs the
+	// platform allocator, and nothing done above this point depends on the verdict (the failure path cleans it all up).
+
+	if(!Platform_checkCPUSupport())
+		retError(clean, Error_unsupportedOperation(
+			0, "Platform_create() failed: Unsupported CPU. Please look at the minimum requirements to run OxC3"
+		));
 
 	ListCharString sl = (ListCharString) { 0 };
 

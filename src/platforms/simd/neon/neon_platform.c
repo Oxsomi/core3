@@ -21,13 +21,34 @@
 //platforms/simd/neon/neon_platform.c
 
 #include "platforms/platform.h"
+#include "platforms/logx.h"
 
 Bool Platform_checkCPUSupport() {
-	
+
 	U16 v = 1;
 
 	if(!*(const U8*)&v)        //Little endian only
 		return false;
-	
-	return true;
+
+	//CMakeLists.txt compiles the whole arm64 build with -march=armv8-a+simd+crypto+crc, and the NEON encrypt
+	// path calls vaeseq_u8 unconditionally because SIMD_createCryptoState only exists on SSE.
+	//So unlike CRC32C and SHA-256, which pick a fallback at runtime, AES has no guard behind this one:
+	// an ARMv8-A part without the crypto extension would fault the first time anything encrypts an archive.
+
+	const ECPUFeatures features = Platform_detectCPUFeatures();
+	const ECPUFeatures required = ECPUFeatures_HwAES | ECPUFeatures_PCLMULQDQ | ECPUFeatures_HwCRC32C;
+
+	if((features & required) == required)
+		return true;
+
+	//Same reasoning as the SSE backend: Log needs the platform allocator, so it is only reachable once
+	// Platform_create has built the instance, and a standalone call just reports less.
+
+	if(Platform_instance)
+		Log_errorLnx(
+			"Unsupported CPU, this build requires the ARMv8 crypto and CRC extensions (have %08X, need %08X)",
+			(U32) features, (U32) required
+		);
+
+	return false;
 }

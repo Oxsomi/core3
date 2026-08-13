@@ -169,9 +169,19 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 	if(!(texture->resource.flags & EGraphicsResourceFlag_ShaderRead) && texture->depthFormat)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
+	//The tight alignment spec allows textures too; the driver just may ignore the request, unlike for buffers.
+	//The explicit 64 KiB Alignment above has to be cleared along with it, exactly like the buffer path does.
+	//GetResourceAllocationInfo2 honors the flag over the field and returns the driver's tight alignment, but
+	// CreatePlacedResource2 still validates the field, so leaving it demands a 64 KiB offset while the allocator
+	// correctly hands out the tight one the query returned.
+	//That mismatch only surfaces once earlier allocations leave the heap cursor unaligned, which is why it
+	// survived locally and failed CI, and only for textures, since buffers already cleared the field.
+
 	#if D3D12_SDK_VERSION >= 618
-		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment)
+		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment) {
 			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT;
+			resourceDesc.Alignment = 0;
+		}
 	#endif
 
 	//Allocate memory
@@ -284,7 +294,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 			acq = ELockAcquire_Invalid;
 
-			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined);
+			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined, false, false);
 
 			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormatFullyQualified };
 
@@ -400,15 +410,21 @@ Bool DxUnifiedTexture_transition(
 
 	//Handle image barrier
 
+	//The first use of a resource has SyncBefore NONE, and the spec demands AccessBefore NO_ACCESS with it;
+	// the zeroed initial access reads as ACCESS_COMMON, which is invalid in that combination.
+
 	const D3D12_TEXTURE_BARRIER imageBarrier = (D3D12_TEXTURE_BARRIER) {
 
 		.SyncBefore = image->lastSync,
 		.SyncAfter = sync,
 
-		.AccessBefore = image->lastAccess,
+		.AccessBefore = image->lastSync == D3D12_BARRIER_SYNC_NONE ? D3D12_BARRIER_ACCESS_NO_ACCESS : image->lastAccess,
 		.AccessAfter = access,
 
-		.LayoutBefore = image->lastLayout,
+		//First use also discards through LAYOUT_UNDEFINED, since nothing was written yet and the validator
+		// refuses LAYOUT_COMMON as the before layout of a NO_ACCESS barrier.
+
+		.LayoutBefore = image->lastSync == D3D12_BARRIER_SYNC_NONE ? D3D12_BARRIER_LAYOUT_UNDEFINED : image->lastLayout,
 		.LayoutAfter = layout,
 
 		.pResource = image->image,

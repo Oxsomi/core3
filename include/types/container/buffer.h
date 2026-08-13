@@ -35,6 +35,12 @@ typedef struct Allocator Allocator;
 
 Bool Buffer_createCopy(const Buffer buf, const Allocator *alloc, Buffer *result, Error *e_rr);
 
+//What every allocation below is aligned to without asking for it, matching what malloc promises on 64 bit.
+#define BUFFER_DEFAULT_ALIGNMENT 16
+
+//The most the aligned variants can hand out; it's a byte of bookkeeping and a byte of slack per allocation.
+#define BUFFER_ALIGN_MAX 128
+
 //Guaranteed to be 16-byte aligned
 Bool Buffer_createZeroBits(U64 length, const Allocator *alloc, Buffer *result, Error *e_rr);
 
@@ -52,6 +58,31 @@ static inline Bool Buffer_createEmptyBytes(U64 length, const Allocator *alloc, B
 }
 
 Bool Buffer_createUninitializedBytes(U64 length, const Allocator *alloc, Buffer *result, Error *e_rr);
+
+//The allocator only promises what malloc does, which is 16 bytes on 64 bit targets.
+//That isn't enough for a type declaring more, and SpinLock declares alignas(64) to keep locks off each
+// other's cache lines, so any struct embedding one by value needs this.
+//Writing through a pointer that isn't aligned for its type is undefined rather than merely slow, and
+// compilers act on it: clang turns a struct assignment into aligned AVX stores and faults on the first
+// address that isn't a multiple of 32.
+//alignment must be a power of two and at most 128.
+//
+//headerOffset aligns result->ptr + headerOffset instead of result->ptr itself.
+//RefPtr needs that, since it puts its own bookkeeping first and the object that wants the alignment after
+// it; pass 0 when the buffer itself is what has to be aligned.
+//
+//Buffer_free releases the result like any other buffer: the aligned bit it carries is what tells it to walk
+// back to the real base first, so there is nothing for a caller to remember.
+//The one case that needs care is throwing the Buffer away and keeping only the pointer.
+//Rebuilding it later with Buffer_createManagedPtr loses the bit, so call Buffer_markAligned before freeing.
+
+Bool Buffer_createUninitializedBytesAligned(
+	U64 length, U64 alignment, U64 headerOffset, const Allocator *alloc, Buffer *result, Error *e_rr
+);
+
+Bool Buffer_createEmptyBytesAligned(
+	U64 length, U64 alignment, U64 headerOffset, const Allocator *alloc, Buffer *result, Error *e_rr
+);
 Bool Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output, Error *e_rr);
 
 Bool Buffer_resize(

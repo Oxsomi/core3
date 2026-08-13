@@ -147,7 +147,9 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 	if(!execCount)
 		goto clean;        //Nothing captured (e.g. pipeline wasn't created with the capture flags)
 
-	gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(VkPipelineExecutablePropertiesKHR) * execCount, alloc, &propsBuf, e_rr));
+	gotoIfError3(clean, Buffer_createUninitializedBytes(
+		sizeof(VkPipelineExecutablePropertiesKHR) * execCount, alloc, &propsBuf, e_rr
+	));
 	VkPipelineExecutablePropertiesKHR *props = (VkPipelineExecutablePropertiesKHR*) propsBuf.ptrNonConst;
 
 	for(U32 i = 0; i < execCount; ++i)
@@ -184,7 +186,9 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 		if(statCount) {
 
 			Buffer_free(&statsBuf, alloc);
-			gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(VkPipelineExecutableStatisticKHR) * statCount, alloc, &statsBuf, e_rr));
+			gotoIfError3(clean, Buffer_createUninitializedBytes(
+				sizeof(VkPipelineExecutableStatisticKHR) * statCount, alloc, &statsBuf, e_rr
+			));
 			VkPipelineExecutableStatisticKHR *stats = (VkPipelineExecutableStatisticKHR*) statsBuf.ptrNonConst;
 
 			for(U32 j = 0; j < statCount; ++j)
@@ -200,7 +204,9 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 
 				PipelineStatistic *st = &exec->statistics.ptrNonConst[j];
 				gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(stats[j].name), alloc, &st->name, e_rr));
-				gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(stats[j].description), alloc, &st->description, e_rr));
+				gotoIfError3(clean, CharString_createCopy(
+					CharString_createRefCStrConst(stats[j].description), alloc, &st->description, e_rr
+				));
 
 				switch(stats[j].format) {
 
@@ -234,7 +240,9 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 		if(irCount) {
 
 			Buffer_free(&irsBuf, alloc);
-			gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(VkPipelineExecutableInternalRepresentationKHR) * irCount, alloc, &irsBuf, e_rr));
+			gotoIfError3(clean, Buffer_createUninitializedBytes(
+				sizeof(VkPipelineExecutableInternalRepresentationKHR) * irCount, alloc, &irsBuf, e_rr
+			));
 			VkPipelineExecutableInternalRepresentationKHR *irs = (VkPipelineExecutableInternalRepresentationKHR*) irsBuf.ptrNonConst;
 
 			for(U32 j = 0; j < irCount; ++j)

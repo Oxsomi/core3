@@ -96,13 +96,22 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 
 		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
 
+		//RGBA32f is only optionally supported as an AS vertex format, RGB32f support is mandatory;
+		// the w is padding the stride already covers, so the three component format reads the same memory.
+
+		VkFormat vertexFormat = mapVkFormat(ETextureFormatId_unpack[blas->positionFormatId]);
+
+		if(blas->positionFormatId == ETextureFormatId_RGBA32f)
+			vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+
 		VkAccelerationStructureGeometryTrianglesDataKHR *tri = &geometry.geometry.triangles;
 		*tri = (VkAccelerationStructureGeometryTrianglesDataKHR) {
 			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
-			.vertexFormat = mapVkFormat(ETextureFormatId_unpack[blas->positionFormatId]),
+			.vertexFormat = vertexFormat,
 			.vertexData = getVkLocation(blas->positionBuffer, blas->positionOffset),
 			.vertexStride = blas->positionBufferStride,
-			.maxVertex = (U32) vertexCount
+			.maxVertex = (U32) vertexCount,
+			.indexType = VK_INDEX_TYPE_NONE_KHR        //Zero initialized would read as UINT16 without an index buffer
 		};
 
 		if (blas->indexFormatId) {
@@ -269,8 +278,9 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		RefPtr_inc(pending);
 	}
 
-	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource;
-	//And losing the reference from our object. However that's only if allow update is false.
+	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource,
+	// and losing the reference from our object.
+	//However that's only if allow update is false.
 
 	if(!ListRefPtr_contains(*currentFlight, blas->base.tempScratchBuffer, 0, NULL)) {
 

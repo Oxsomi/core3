@@ -22,8 +22,7 @@
 
 #include "types/container/log.h"
 #include "types/base/thread.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
+#include "types/base/string_base.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 
@@ -46,19 +45,22 @@ void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const C
 
 	switch(lvl) {
 		default:                        androidLvl = ANDROID_LOG_DEBUG;     break;
-		case ELogLevel_Performance:         androidLvl = ANDROID_LOG_INFO;      break;
+		case ELogLevel_Performance:     androidLvl = ANDROID_LOG_INFO;      break;
 		case ELogLevel_Warn:            androidLvl = ANDROID_LOG_WARN;      break;
-		case ELogLevel_Error:               androidLvl = ANDROID_LOG_ERROR;     break;
+		case ELogLevel_Error:           androidLvl = ANDROID_LOG_ERROR;     break;
 	}
 	
 	U64 thread = Thread_getId();
 	const C8 *newLine = options & ELogOptions_NewLine ? "\n" : "";
 
 	if(options & ELogOptions_Thread)
-		__android_log_print(androidLvl, "OxC3", "[%"PRIu64"]: %.*s%s", thread, (int)CharString_length(arg), arg.ptr, newLine);
+		__android_log_print(
+			androidLvl, "OxC3", "[%"PRIu64"]: %.*s%s",
+			thread, !arg ? 0 : (int)CharString_length(*arg), !arg ? "" : arg->ptr, newLine
+		);
 
 	else __android_log_print(
-		androidLvl, "OxC3", "%.*s%s", !arg ? 0 : (int)CharString_length(arg), !arg ? "" : arg.ptr, newLine
+		androidLvl, "OxC3", "%.*s%s", !arg ? 0 : (int)CharString_length(*arg), !arg ? "" : arg->ptr, newLine
 	);
 }
 

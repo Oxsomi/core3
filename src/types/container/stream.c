@@ -43,7 +43,7 @@ RefPtrType Stream_inheritType(const Allocator *alloc, U32 extraSize) {
 
 	return (RefPtrType) {
 		.typeId = (TypeId)EContainerTypeId_Stream,
-		.length = (U32)(sizeof(OxStream) + extraSize),
+		.lengthAndAlignment = RefPtrType_pack(sizeof(OxStream) + extraSize, alignof(OxStream)),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc) Stream_close
 	};
@@ -66,13 +66,22 @@ Bool Stream_create(
 	if ((!write && !read) || !streamRef)
 		retError(clean, Error_nullPointer(!streamRef ? 5 : 0, "Stream_create()::stream and read or write are required"));
 
+	//`type` is expected to come from Stream_inheritType(), but that can't be verified by comparing free to &Stream_close.
+	//Whenever a module is built shared (the shader compiler on OS X/Linux, graphics with DynamicLinkingGraphics),
+	// the core static libs are linked into both that module and the executable.
+	//So each side carries its own Stream_close.
+	//ELF collapses those duplicate definitions into one at load time, Mach-O's two-level namespace keeps them separate.
+	//That is why only OS X rejected a type that Stream_inheritType() had just produced.
+	//typeId, length and free-is-set are plain data and stay meaningful across a module boundary,
+	// so they carry the check instead.
+
 	if (
 		!type ||
 		type->typeId != (TypeId)EContainerTypeId_Stream ||
-		type->length < sizeof(OxStream) ||
-		type->free != (ObjectFreeFunc)Stream_close
+		RefPtrType_length(type) < sizeof(OxStream) ||
+		!type->free
 	)
-		retError(clean, Error_invalidParameter(4, 0, "Stream_create()::type is invalid"));
+		retError(clean, Error_invalidParameter(6, 0, "Stream_create()::type is invalid"));
 
 	if (streamSize >> 48)
 		retError(clean, Error_invalidParameter(5, 0, "Stream_create()::streamSize too big"));
@@ -509,7 +518,7 @@ Bool StreamCursor_write(
 	//This should be avoided by using File_read/FileHandle_read if the file is only accessed once and linearly.
 	//However, in some cases, the file isn't necessarily read like that and/or only parts are accessed.
 	//In that case, you don't want to load the entire file, but you might want to keep the next info ready just in case.
-	// It would minimize IO access at the cost of memory and potentially unnecessary copies.
+	//It would minimize IO access at the cost of memory and potentially unnecessary copies.
 
 	cursor->lastLocation = dstOff;
 	cursor->lastWriteLocation = dstOff + length;
@@ -594,9 +603,9 @@ Bool StreamCursor_read(
 				Buffer_createRefConst(cursor->cacheData.ptr + srcRel, bytesToCopy)
 			);
 
-		//If bufLen isn't present, the caller (e.g. StreamCursor_copyStream) needs the requested data to
-		//start at cacheData[0]. A cache hit at srcRel != 0 leaves it at cacheData[srcRel], so we must NOT
-		//consume here; falling through forces a reload from srcOff so the cache starts at this position.
+		//If bufLen isn't present, the caller (e.g. StreamCursor_copyStream) needs the requested data to start at cacheData[0].
+		//A cache hit at srcRel != 0 leaves it at cacheData[srcRel], so we must NOT consume here.
+		//Falling through forces a reload from srcOff so the cache starts at this position.
 		if (bufLen) {
 			srcOff += bytesToCopy;
 			dstOff += bytesToCopy;
@@ -635,7 +644,7 @@ Bool StreamCursor_read(
 	//This should be avoided by using File_read/FileHandle_read if the file is only accessed once and linearly.
 	//However, in some cases, the file isn't necessarily read like that and/or only parts are accessed.
 	//In that case, you don't want to load the entire file, but you might want to keep the next info ready just in case.
-	// It would minimize IO access at the cost of memory and potentially unnecessary copies.
+	//It would minimize IO access at the cost of memory and potentially unnecessary copies.
 
 	cursor->lastLocation = srcOff;
 

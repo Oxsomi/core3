@@ -30,16 +30,29 @@ Bool RefPtr_create(const RefPtrType *type, RefPtr **result, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(!type || !type->length || !type->free || !type->alloc || !result)
+	if(!type || !RefPtrType_length(type) || !type->free || !type->alloc || !result)
 		retError(clean, Error_nullPointer(
-			!result ? 1 : 0, "RefPtr_create()::type, ->length, ->free, ->alloc and result are required"
+			!result ? 1 : 0, "RefPtr_create()::type, ->lengthAndAlignment, ->free, ->alloc and result are required"
 		));
 
 	if(*result)
 		retError(clean, Error_invalidParameter(3, 0, "RefPtr_create()::result isn't empty, might indicate memleak"));
 
+	//Only pay for the aligned allocator when the type asks for more than the allocator hands out anyway.
+	//It over-allocates and puts a byte in front of what it returns, so the free below has to match.
+
+	const U64 alignment = RefPtrType_alignment(type);
+	const U64 length = sizeof(RefPtr) + RefPtrType_length(type);
+
 	Buffer buf = Buffer_createNull();
-	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(RefPtr) + type->length, type->alloc, &buf, e_rr));
+
+	if(alignment > BUFFER_DEFAULT_ALIGNMENT) {
+		gotoIfError3(clean, Buffer_createEmptyBytesAligned(length, alignment, sizeof(RefPtr), type->alloc, &buf, e_rr));
+	}
+
+	else {
+		gotoIfError3(clean, Buffer_createEmptyBytes(length, type->alloc, &buf, e_rr));
+	}
 
 	*(*result = (RefPtr*)buf.ptr) = (RefPtr) { .refCount = (AtomicI64) { 1 }, .refPtrType = type };
 
@@ -67,8 +80,16 @@ void RefPtr_dec(RefPtr **pptr) {
 
 		ptr->refPtrType->free(RefPtr_data(ptr, void), ptr->refPtrType->alloc);
 
-		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr) + ptr->refPtrType->length);
-		Buffer_free(&orig, ptr->refPtrType->alloc);
+		const RefPtrType *type = ptr->refPtrType;
+		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr) + RefPtrType_length(type));
+
+		//The Buffer that carried the aligned bit went away when only the pointer was kept, so it has to be put
+		// back before freeing, or Buffer_free hands the allocator the payload instead of the real base.
+
+		if(RefPtrType_alignment(type) > BUFFER_DEFAULT_ALIGNMENT)
+			Buffer_markAligned(&orig);
+
+		Buffer_free(&orig, type->alloc);
 	}
 
 	*pptr = NULL;

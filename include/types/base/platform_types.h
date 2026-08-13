@@ -94,13 +94,24 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 	#define _SIMD SIMD_SSE
 #endif
 
+//Whether the transcendental _mm_*_ps intrinsics (pow, log, exp, sin, ...) and _mm_div_epi32 resolve.
+//They're Intel SVML, which MSVC and ICC ship but clang and gcc do not, on any platform.
+//clang-cl targets Windows and still lacks them, so this has to key off the compiler rather than the OS.
+//_SIMD_HAS_SVML == 0 means the naive per-component fallbacks in vec4f.h / vec4i.h are used instead.
+
+#if _SIMD == SIMD_SSE && defined(_MSC_VER) && !defined(__clang__)
+	#define _SIMD_HAS_SVML 1
+#else
+	#define _SIMD_HAS_SVML 0
+#endif
+
 #if _PLATFORM_TYPE == PLATFORM_IOS || _PLATFORM_TYPE == PLATFORM_OSX
 	#define _CRYPTO_ALWAYS
 #endif
 
 //Runtime CPU capability flags, detected once and stored in Platform_instance->cpuFeatures.
 //These say whether a given operation has a hardware / wide-SIMD "full speed" path on this machine,
-//so the runtime (and CLI) can reason about how fast something should be without re-running cpuid.
+// so the runtime (and CLI) can reason about how fast something should be without re-running cpuid.
 
 typedef enum ECPUFeatures {
 
@@ -128,7 +139,15 @@ typedef enum ECPUFeatures {
 #endif
 
 #if _ARCH == ARCH_X86_64
+
 	void Platform_getCPUId(int leaf, U32 result[4]);
+
+	//Extended control register 0, which says which SIMD state the OS actually enabled.
+	//Only valid once leaf 1 ECX bit 27 (OSXSAVE) is known to be set, since xgetbv raises #UD otherwise.
+	//Bits 2:1 are XMM and YMM, so an AVX capable CPU whose OS never enabled them still can't run AVX code.
+
+	U64 Platform_getXCR0();
+
 #endif
 
 //Detects the ECPUFeatures above (cpuid + xgetbv on x86; ECPUFeatures_None on unsupported arch).

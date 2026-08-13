@@ -79,10 +79,20 @@
 	void  D3D12DeviceBuffer_free(DeviceBuffer *buffer);
 	Bool D3D12DeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending, Error *e_rr);
 
+	Bool D3D12DeviceBufferRef_pull(
+		void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *resource,
+		U64 offset, U64 len, U64 stagingOffset, Error *e_rr
+	);
+
 	//Device texture
 
 	Bool D3D12UnifiedTexture_create(TextureRef *textureRef, const CharString *name, Error *e_rr);
 	Bool D3D12DeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending, Error *e_rr);
+
+	Bool D3D12DeviceTextureRef_pull(
+		void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *resource,
+		const TextureRange *range, U64 stagingOffset, U64 *rowPitch, Error *e_rr
+	);
 	void  D3D12UnifiedTexture_free(TextureRef *textureRef);
 
 	//Swapchain

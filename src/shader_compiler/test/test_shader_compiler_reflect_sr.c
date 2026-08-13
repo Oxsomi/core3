@@ -50,7 +50,7 @@ static U32 srFindNode(const SRFile *sr, ESRNodeType type, const C8 *name) {
 }
 
 //Reflect a small shader (struct + annotated compute entry with a semantic parameter) through the real DXC
-//IHLSLReflection frontend and verify Compiler_reflect fills an SRFile, then that the SRFile round-trips.
+// IHLSLReflection frontend and verify Compiler_reflect fills an SRFile, then that the SRFile round-trips.
 
 void Test_shaderCompilerReflectSR(Test *t) {
 
@@ -79,8 +79,8 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		"[[oxc::stage(\"compute\")]]\n"
 		"[numthreads(1, 1, 1)]\n"
 		"void main(uint id : SV_DispatchThreadID) {\n"
-		"	Circle c; c.r = 2;\n"
-		"	buf.Store<uint>(id * 4, dbl(id) + (uint) lights[0].pos.x + (uint) c.area());\n"
+		"\tCircle c; c.r = 2;\n"
+		"\tbuf.Store<uint>(id * 4, dbl(id) + (uint) lights[0].pos.x + (uint) c.area());\n"
 		"}\n";
 
 	gotoIfError3(clean, Compiler_create(alloc, &comp, e_rr));
@@ -97,8 +97,9 @@ void Test_shaderCompilerReflectSR(Test *t) {
 
 	Test_assert(t, "reflect produced nodes", reflection.nodes.length > 0);
 
-	//The source-location tier is present only when the linked dxc guards GetNodeSymbolDesc. Accept either state:
-	//if present it must be parallel to nodes with the SymbolInfo feature; if absent there's no location array.
+	//The source-location tier is present only when the linked dxc guards GetNodeSymbolDesc.
+	//Accept either state: if present it must be parallel to nodes with the SymbolInfo feature; if absent there's no
+	// location array.
 
 	Bool hasSyms = (reflection.flags & ESRSettingsFlags_HasSymbols) != 0;
 	Test_assert(t, "symbol tier consistent",
@@ -125,8 +126,8 @@ void Test_shaderCompilerReflectSR(Test *t) {
 	Test_assert(t, "register reflected", reflection.registers.length > 0);
 	Test_assert(t, "enum values reflected", reflection.enumValues.length >= 2);
 
-	//Type tier: Variable/Struct/Typedef/Union nodes carry a resolved type. Light's members (pos/color) are float3
-	//vectors, and the Light struct node resolves to its own "Light" struct type.
+	//Type tier: Variable/Struct/Typedef/Union nodes carry a resolved type.
+	//Light's members (pos/color) are float3 vectors, and the Light struct node resolves to its own "Light" struct type.
 
 	Test_assert(t, "types reflected", reflection.types.length > 0);
 
@@ -165,7 +166,7 @@ void Test_shaderCompilerReflectSR(Test *t) {
 	}
 
 	//Go-to-definition: the StructuredBuffer<Light> element is a value of struct type, so its type record links back to
-	//the Light struct's defining node (resolved by name, since the reflector reuses type indices across uses).
+	// the Light struct's defining node (resolved by name, since the reflector reuses type indices across uses).
 
 	U32 elemId = srFindNode(&reflection, ESRNodeType_Variable, "$Element");
 	Test_assert(t, "structured-buffer element reflected", elemId != U32_MAX);
@@ -198,8 +199,8 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		Test_assert(t, "Circle implements IArea edge captured", found);
 	}
 
-	//Parameter types come from the function-parameter reflection (D3D12_PARAMETER_DESC), not a type localId. The
-	//entrypoint's "id" parameter is a uint scalar; verify the reconstructed builtin name.
+	//Parameter types come from the function-parameter reflection (D3D12_PARAMETER_DESC), not a type localId.
+	//The entrypoint's "id" parameter is a uint scalar; verify the reconstructed builtin name.
 
 	U32 idParam = srFindNode(&reflection, ESRNodeType_Parameter, "id");
 	Test_assert(t, "parameter id reflected", idParam != U32_MAX);

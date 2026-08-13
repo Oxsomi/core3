@@ -139,15 +139,17 @@ Bool Compiler_getLinkEntries(
 			));
 
 		//Skip this entrypoint if its [[oxc::binary(...)]] mask (AND its stage/extension backend support)
-		//excludes the backend we're currently compiling. A shader targeting all backends thus only emits an
-		//entrypoint for the backends it actually declared / can be expressed on (see SHEntryRuntime_getBinaryTypes).
+		// excludes the backend we're currently compiling.
+		//A shader targeting all backends thus only emits an entrypoint for the backends
+		// it actually declared / can be expressed on (see SHEntryRuntime_getBinaryTypes).
 		//
-		//TODO: this only filters the oiSH *reflection* - the entrypoint is not reported for this backend, but
-		//      the compiled DXIL/SPIRV blob still physically contains its code (it was compiled as part of the
-		//      shared lib). Truly removing it requires explicitly stripping the entrypoint from the binary and
-		//      re-running DCE per backend. Until then, reflection and the actual binary disagree for restricted
-		//      entrypoints. (Doesn't apply to the compile-level skip in Compiler_compileShaderFile, where the
-		//      whole compile is skipped so the code is genuinely absent.)
+		//TODO: this only filters the oiSH *reflection* - the entrypoint is not reported for this backend,
+		//      but the compiled DXIL/SPIRV blob still physically contains its code
+		//      (it was compiled as part of the shared lib).
+		//      Truly removing it requires explicitly stripping the entrypoint from the binary and re-running DCE per backend.
+		//      Until then, reflection and the actual binary disagree for restricted entrypoints.
+		//      (Doesn't apply to the compile-level skip in Compiler_compileShaderFile,
+		//      where the whole compile is skipped so the code is genuinely absent.)
 
 		if (!((SHEntryRuntime_getBinaryTypes(&entry) >> binaryType) & 1))
 			continue;
@@ -155,8 +157,8 @@ Bool Compiler_getLinkEntries(
 		//Ensure we're actually present for what we're currently compiling and that we do really need linking (otherwise skip)
 		//This is not relevant for single entrypoints, as they're always only compiled with the defines / extensions they need.
 		//However, if you have a mix of extensions and defines, then some entrypoints might not need to be linked again.
-		//Example: raygen with both SER and no SER. This would only be linked once per compilation,
-		//            but any other shaders should exclude this.
+		//Example: raygen with both SER and no SER.
+		//            This would only be linked once per compilation, but any other shaders should exclude this.
 		//            (We don't want to have 2x hit shaders included while only raygen needs these compilations)
 
 		//Check extensions

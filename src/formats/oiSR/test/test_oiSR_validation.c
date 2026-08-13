@@ -37,7 +37,8 @@ static SRNode srNode(ESRNodeType type, U32 nameId, U32 parent) {
 	};
 }
 
-//Build a minimal valid 2-node no-symbol SRFile: Namespace(root, 1 child) > Struct. One string "n".
+//Build a minimal valid 2-node no-symbol SRFile: Namespace(root, 1 child) > Struct.
+//One string "n".
 static Bool srBuildMinimal(Test *t, SRFile *sr) {
 
 	if(!SRFile_create(ESRSettingsFlags_None, ESRFeature_All, t->alloc, sr, &t->err))
@@ -122,7 +123,7 @@ void Test_SRReadHeaderTamper(Test *t) {
 	srExpectReadFailsTamper(t, &type, 0,  0xFF, "corrupt magic rejected");        //byte 0 of magic
 	srExpectReadFailsTamper(t, &type, 4,  0xFF, "wrong version rejected");        //version -> 0xFF
 	srExpectReadFailsTamper(t, &type, 5,  0x02, "unsupported flag bit rejected"); //flags: set an ESRFlag_Unsupported bit
-	srExpectReadFailsTamper(t, &type, 10, 0x02, "unknown feature bit rejected");  //features byte 10 = bit 17, outside All|SymbolInfo
+	srExpectReadFailsTamper(t, &type, 10, 0x02, "unknown feature bit rejected");  //byte 10 = bit 17, outside All|SymbolInfo
 	srExpectReadFailsTamper(t, &type, 5,  0x01, "HasSymbols without SymbolInfo rejected"); //flag/feature disagreement
 }
 

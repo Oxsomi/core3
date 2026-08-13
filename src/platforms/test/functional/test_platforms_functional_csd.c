@@ -20,9 +20,8 @@
 
 //platforms/test/functional/test_platforms_functional_csd.c
 //
-//F16. Click min, max, then close on a compositor-without-SSD's client-side
-//     decoration bar (e.g. GNOME/Mutter). Linux/Wayland only; on Windows and on
-//     compositors that provide server-side decorations this is not applicable.
+//F16. Click min, max, then close on a compositor-without-SSD's client-side decoration bar (e.g. GNOME/Mutter).
+//     Linux/Wayland only; on Windows and on compositors that provide server-side decorations this is not applicable.
 
 #include "test_platforms_functional_shared.h"
 
@@ -100,7 +99,8 @@
 		}
 
 		//----- Synthetic: xdotool clicks at absolute bar coordinates -----
-		//Bar sits at the top of the window.  Button layout (right to left):
+		//Bar sits at the top of the window.
+		//Button layout (right to left):
 		//   close  = barWidth - BTN_W / 2          (rightmost)
 		//   max    = barWidth - BTN_W * 3 / 2
 		//   min    = barWidth - BTN_W * 5 / 2
@@ -116,8 +116,8 @@
 				"xdotool search --name 'F16:' windowfocus && "
 				"WIN=$(xdotool search --name 'F16:') && "
 				"GEOM=$(xdotool getwindowgeometry $WIN) && "
-				//Click at bar-relative coords: x = width - BTN_W * 5 / 2 + BTN_W / 2,
-				// y = BTN_H / 2. We use a fixed offset since we know the bar layout.
+				//Click at bar-relative coords: x = width - BTN_W * 5 / 2 + BTN_W / 2, y = BTN_H / 2.
+				//We use a fixed offset since we know the bar layout.
 				"xdotool mousemove --window $WIN "
 					"$(($(xdotool getwindowgeometry --shell $WIN | grep WIDTH | cut -d= -f2) - 161)) 16 "
 				"&& xdotool click 1"

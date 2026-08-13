@@ -20,10 +20,11 @@
 
 //formats/bmp/test/test_bmp_main.c
 
+#include "types/test/test.h"
 #include "test_bmp_shared.h"
 #include "types/container/test/basic_alloc.h"
 
-int main() {
+OXC3_TEST_MAIN(formats_bmp) {
 
 	const Allocator alloc = BasicAllocator_instance;
 	Test t = (Test){ 0 };

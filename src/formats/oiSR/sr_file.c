@@ -336,7 +336,7 @@ static Bool srFileIsBuiltin(CharString file) {
 }
 
 //Prints a string with control characters (newline, carriage return, tab) escaped, so a multi-line value such as an
-//oxc::uniforms annotation stays on a single line and doesn't break the indented tree layout.
+// oxc::uniforms annotation stays on a single line and doesn't break the indented tree layout.
 
 static void srPrintEscaped(const Allocator *alloc, CharString str) {
 
@@ -372,7 +372,8 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 	Bool hasSymbols = srFile->flags & ESRSettingsFlags_HasSymbols;
 
 	//Collapse nodes from builtin includes (@types.hlsli etc.) into a per-file summary at the end, so the shader's
-	//own symbols aren't buried under the couple hundred builtin symbols the includes pull in. Needs source locations.
+	// own symbols aren't buried under the couple hundred builtin symbols the includes pull in.
+	//Needs source locations.
 
 	collapseBuiltins = collapseBuiltins && hasSymbols;
 
@@ -493,7 +494,8 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 					srFile->names.entryStrings.ptr[ty.displayNameId] : under;
 
 				//Multi-dimensional arrays list their per-dim lengths ("[2][3]"); single arrays fall back to the
-				//flattened `elements` ("[6]"). Bounds are re-checked here so a truncated file can't over-read.
+				// flattened `elements` ("[6]").
+				//Bounds are re-checked here so a truncated file can't over-read.
 
 				Bool multiDim =
 					ty.arrayDimCount >= 2 && ty.arrayDimStart != U32_MAX &&
@@ -545,7 +547,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 				}
 
 				//Inheritance, shown in both modes after the type as ": Base, IFace1, IFace2" (concrete base first, then
-				//each implemented interface).
+				// each implemented interface).
 
 				Bool printedColon = false;
 
@@ -594,7 +596,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 					SRRegister reg = srFile->registers.ptr[r];
 
 					//Multi-dimensional resource arrays (Texture2D tex[4][2]) list their per-dim lengths; bindCount is the
-					//flattened total.
+					// flattened total.
 
 					Bool multiDim =
 						reg.arrayDimCount >= 2 && reg.arrayDimStart != U32_MAX &&
@@ -696,7 +698,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 		Log_debug(alloc, ELogOptions_NewLine, "");
 
 		//Annotations render as indented pseudo-children (one per line) right under the node instead of trailing its
-		//header, so they're easy to spot and a multi-line value (e.g. oxc::uniforms) doesn't wreck the tree layout.
+		// header, so they're easy to spot and a multi-line value (e.g. oxc::uniforms) doesn't wreck the tree layout.
 
 		if(isVerbose && node.annotationCount) {
 

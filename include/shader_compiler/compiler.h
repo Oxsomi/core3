@@ -29,6 +29,7 @@
 #endif
 
 typedef struct CharString CharString;
+typedef struct Platform Platform;
 typedef struct SpinLock SpinLock;
 
 typedef enum ECompilerFormat {
@@ -199,6 +200,48 @@ void CompileResult_free(CompileResult *result, const Allocator *alloc);
 void ListCompileResult_freeUnderlying(ListCompileResult *result, const Allocator *alloc);
 
 void ListCompilerEntrypoint_freeUnderlying(ListCompilerEntrypoint *entry, const Allocator *alloc);
+
+//Hand the host's Platform across the module boundary.
+//
+//A shared shader compiler (DynamicLinkingShaderCompiler) still links OxC3_platforms statically,
+// so the module gets its own copy of Platform_instance and it is NULL until told otherwise;
+// every Compiler_* call would then dereference NULL.
+//This is the same hand-off GraphicsInterface_getTable does for a dynamically loaded graphics backend,
+// and platform.h says as much where Platform_instance is declared.
+//
+//Call it once, after Platform_create and before any other Compiler_* call.
+//In a static build it is an inline no-op, so callers don't need to care which linkage they got.
+
+#ifdef SHADER_COMPILER_DYNAMIC
+	void Compiler_setPlatform(Platform *instance);
+#else
+	static inline void Compiler_setPlatform(Platform *instance) { (void) instance; }
+#endif
+
+//Built-in includes.
+//
+//A shader reaches these by name with an @ prefix (#include "@types.hlsli"); they're compiled into the
+//binary rather than read from disk, so they resolve identically on every platform and in a sandbox.
+//The list is enumerable so a tool can show what's available without hardcoding it,
+// an editor's autocomplete, a --list-includes flag, or a web front end serving the sources to a browser.
+//
+//`name` has no @ prefix. `source` is NUL terminated, owned by the compiler and valid for the process.
+
+typedef struct CompilerBuiltInInclude {
+	const C8 *name;
+	const C8 *source;
+} CompilerBuiltInInclude;
+
+U64 Compiler_builtInIncludeCount();
+
+//NULL if i is out of range
+
+const CompilerBuiltInInclude *Compiler_builtInIncludeAt(U64 i);
+
+//Looks up by name, with or without the leading @, case insensitive (matching #include resolution).
+//NULL if there's no such built-in.
+
+const CompilerBuiltInInclude *Compiler_findBuiltInInclude(CharString name);
 
 //A separate Compiler should be created per thread
 

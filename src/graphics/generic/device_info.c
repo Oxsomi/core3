@@ -283,6 +283,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.featuresExt & EDxGraphicsFeatures_BatchedAsyncCommandList)
 				Log_debugLnx("\t\tBatched async command list");
 
+			if(cap.featuresExt & EDxGraphicsFeatures_CacheCoherentUMA)
+				Log_debugLnx("\t\tCache coherent UMA");
+
 			if(cap.featuresExt & EDxGraphicsFeatures_RGBX32fMSAA)
 				Log_debugLnx("\t\tRGB(A)32f supports MSAA");
 
@@ -321,6 +324,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EVkGraphicsFeatures_MemoryBudget)
 				Log_debugLnx("\t\tMemory budget");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_PerformantPushDescriptor)
+				Log_debugLnx("\t\tPush descriptors");
 		}
 	}
 }
@@ -361,6 +367,10 @@ Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format) {
 }
 
 Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format) {
+
+	if(!deviceInfo)
+		return false;
+
 	switch(format) {
 		case EDepthStencilFormat_D24S8Ext:      return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D24S8;
 		case EDepthStencilFormat_D32S8X24Ext:   return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D32S8;

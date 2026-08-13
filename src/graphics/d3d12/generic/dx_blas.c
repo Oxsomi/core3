@@ -117,9 +117,17 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 
 		geometry->Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 
+		//D3D12 has no four component 32 bit vertex position format; the w is padding the stride already covers,
+		// so the three component DXGI format reads the same memory (Vulkan does the same, RGBA32f is optional there).
+
+		DXGI_FORMAT vertexFormat = ETextureFormatId_toDXFormat(blas->positionFormatId);
+
+		if(blas->positionFormatId == ETextureFormatId_RGBA32f)
+			vertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+
 		D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC *tri = &geometry->Triangles;
 		*tri = (D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC) {
-			.VertexFormat = ETextureFormatId_toDXFormat(blas->positionFormatId),
+			.VertexFormat = vertexFormat,
 			.VertexBuffer = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
 				.StartAddress = getDxLocation(blas->positionBuffer, blas->positionOffset),
 				.StrideInBytes = blas->positionBufferStride
@@ -130,7 +138,7 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		if (blas->indexFormatId) {
 			tri->IndexFormat = ETextureFormatId_toDXFormat(blas->indexFormatId);
 			tri->IndexBuffer = getDxLocation(blas->indexBuffer, 0);
-			tri->IndexCount = (U32)(blas->indexBuffer.len / (blas->indexFormatId == ETextureFormat_R32u ? 4 : 2));
+			tri->IndexCount = (U32)(blas->indexBuffer.len / (blas->indexFormatId == ETextureFormatId_R32u ? 4 : 2));
 		}
 	}
 
@@ -241,8 +249,9 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		RefPtr_inc(pending);
 	}
 
-	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource;
-	//And losing the reference from our object. However that's only if allow update is false.
+	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource,
+	// and losing the reference from our object.
+	//However that's only if allow update is false.
 
 	if(!ListRefPtr_contains(*currentFlight, blas->base.tempScratchBuffer, 0, NULL)) {
 

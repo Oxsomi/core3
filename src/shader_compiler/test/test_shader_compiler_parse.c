@@ -29,7 +29,7 @@
 
 //Parse a trivial compute shader with an oxc:: annotation and verify the reflection round-trips:
 // one entrypoint is discovered and marked as a compute stage.
-// This is the smallest end-to-end check of the DXC-backed parser and our annotation handling.
+//This is the smallest end-to-end check of the DXC-backed parser and our annotation handling.
 
 void Test_shaderCompilerParse(Test *t) {
 
@@ -75,4 +75,58 @@ clean:
 		Compiler_free(&comp, alloc);
 
 	Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+}
+
+//Built-in includes are enumerable so tools don't have to hardcode the list; verify the table and the
+// by-name lookup agree, since LoadSource resolves #include "@x.hlsli" through the same lookup.
+
+void Test_shaderCompilerBuiltInIncludes(Test *t) {
+
+	Test_setModule(t, "BuiltInIncludes");
+
+	const U64 count = Compiler_builtInIncludeCount();
+	Test_assert(t, "there are built-ins", count > 0);
+	Test_assert(t, "out of range returns NULL", !Compiler_builtInIncludeAt(count));
+
+	Bool allNamed = true, allSourced = true, allFindable = true, noAtInName = true;
+
+	for(U64 i = 0; i < count; ++i) {
+
+		const CompilerBuiltInInclude *entry = Compiler_builtInIncludeAt(i);
+
+		if(!entry) {
+			allNamed = allSourced = allFindable = false;
+			break;
+		}
+
+		allNamed &= entry->name && entry->name[0];
+		allSourced &= entry->source && entry->source[0];
+		noAtInName &= entry->name[0] != '@';
+
+		//Iteration and lookup must reach the same entry, or a shader could include something no tool lists
+
+		allFindable &= Compiler_findBuiltInInclude(CharString_createRefCStrConst(entry->name)) == entry;
+	}
+
+	Test_assert(t, "every entry is named", allNamed);
+	Test_assert(t, "every entry has source", allSourced);
+	Test_assert(t, "names carry no @ prefix", noAtInName);
+	Test_assert(t, "every entry is findable by name", allFindable);
+
+	//The @ prefix is how a shader spells it, and resolution is case insensitive
+
+	Test_assert(t, "found with @", Compiler_findBuiltInInclude(CharString_createRefCStrConst("@types.hlsli")));
+	Test_assert(t, "found without @", Compiler_findBuiltInInclude(CharString_createRefCStrConst("types.hlsli")));
+	Test_assert(t, "case insensitive", Compiler_findBuiltInInclude(CharString_createRefCStrConst("@TYPES.HLSLI")));
+
+	Test_assert(t, "@ and bare agree", (
+		Compiler_findBuiltInInclude(CharString_createRefCStrConst("@mat.hlsli")) ==
+		Compiler_findBuiltInInclude(CharString_createRefCStrConst("mat.hlsli"))
+	));
+
+	Test_assert(t, "unknown is NULL", !Compiler_findBuiltInInclude(CharString_createRefCStrConst("@nope.hlsli")));
+	Test_assert(t, "empty is NULL", !Compiler_findBuiltInInclude(CharString_createRefCStrConst("")));
+	Test_assert(t, "bare @ is NULL", !Compiler_findBuiltInInclude(CharString_createRefCStrConst("@")));
+
+	Test_setModule(t, NULL);
 }

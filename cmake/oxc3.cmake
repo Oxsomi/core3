@@ -86,7 +86,8 @@ function(apply_dependencies target)
 
 		# Differences in packaging:
 		# Windows you can embed using an .rc file; then this handle can be opened through FindResourceW
-		# Linux you can embed into the elf manually by using objcopy and manually read the section data to find where it's located
+		# Linux you can embed into the elf manually by using objcopy and manually read the section data
+		# to find where it's located
 		# Android has APKs which are just like zip files, so can be easily read (though the NDK can't access subfolders easily)
 		# iOS has IPA which is the same idea as APK.
 		# OS X we will manually link the section into it too.
@@ -118,6 +119,14 @@ function(apply_dependencies target)
 				CONTENT "${res2}"
 			)
 			set_source_files_properties("${_rc_file}" PROPERTIES GENERATED TRUE)
+
+			# The .rc only names the .oiCA files, so its own text is identical no matter what's inside them.
+			# Without this the resource compiler isn't rerun when a package is rebuilt and the binary silently keeps
+			#  embedding the previous archive, surfacing much later as a missing shader binary nowhere near the build.
+			# The other platforms don't need it, they embed through a POST_BUILD objcopy that runs every build.
+
+			set_source_files_properties("${_rc_file}" PROPERTIES OBJECT_DEPENDS "${res}")
+
 			target_sources(${target} PRIVATE "${_rc_file}")
 		endif()
 	endif()

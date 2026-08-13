@@ -85,7 +85,8 @@ void AESEncryptionContext_ghashN2(I32x4 *restrict a, const I32x4 *restrict H, U8
 		a8[i] = I32x8_swapEndianness(I32x8_load(&a[i << 1]));
 
 	//Looks a bit odd, but it's to allow multiple clmuls to run in parallel.
-	//Then, it'll be xored later. If we do clmulNN[i] ^= it creates a dependency, stalling everything.
+	//Then, it'll be xored later.
+	//If we do clmulNN[i] ^= it creates a dependency, stalling everything.
 
 	for (U32 i = 0; i < N2; ++i) {
 		I32x8 Hi = I32x8_create4_4(H[N - 1 - (i << 1)], H[N - 2 - (i << 1)]);
@@ -114,9 +115,10 @@ void AESEncryptionContext_ghashN2(I32x4 *restrict a, const I32x4 *restrict H, U8
 				clmulFused_8[left] = I32x8_xor(clmulFused_8[left], clmulFused_8[left | 2]);
 			}
 
-			//ghashN2 only ever handles up to 8 blocks (N2 <= 4, bounded by the [4] accumulator arrays), so the
-			//tree reduction stops at stride 2. Deeper strides would index [4]/[8]/[16] out of bounds (ghashN4
-			//covers the 16-block case); keeping that dead code trips gcc's -Warray-bounds under fat LTO.
+			//ghashN2 only ever handles up to 8 blocks (N2 <= 4, bounded by the [4] accumulator arrays),
+			// so the tree reduction stops at stride 2.
+			//Deeper strides would index [4]/[8]/[16] out of bounds (ghashN4 covers the 16-block case).
+			//Keeping that dead code trips gcc's -Warray-bounds under fat LTO.
 		}
 	}
 

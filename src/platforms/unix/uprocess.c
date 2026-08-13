@@ -43,7 +43,8 @@
 #define PROCESS_MAX_CAPTURE (64 * MIBI)
 
 //A null-terminated copy of a CharString (execvp/chdir need C strings, and CharString isn't guaranteed terminated).
-//Returns NULL on allocation failure. malloc is used deliberately: this array outlives the OxC3 allocator across fork.
+//Returns NULL on allocation failure.
+//malloc is used deliberately: this array outlives the OxC3 allocator across fork.
 
 static char *Process_dupCStr(CharString s) {
 
@@ -60,8 +61,9 @@ static char *Process_dupCStr(CharString s) {
 	return c;
 }
 
-//Shared spawn core. `executable` is the final exe: a File_resolve'd absolute path
-//(execvp uses it as-is because it contains '/') or a bare PATH name (execvp searches the PATH).
+//Shared spawn core.
+//`executable` is the final exe: a File_resolve'd absolute path
+// (execvp uses it as-is because it contains '/') or a bare PATH name (execvp searches the PATH).
 //So the two public wrappers differ only in resolution.
 
 static Bool Process_spawn(

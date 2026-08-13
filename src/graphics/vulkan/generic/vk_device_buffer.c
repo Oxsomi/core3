@@ -518,7 +518,8 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 				);
 
 				deviceExt->bufferCopies.ptrNonConst[j] = (VkBufferCopy) {
-					.srcOffset = allocRange + (location - stagingBuffer->buffer.ptr),
+					//Relative to the staging resource rather than the frame region, since the copy offset is resource based
+					.srcOffset = allocRange + (location - (const U8*)staging->resource.mappedMemoryExt),
 					.dstOffset = bufferj.startRange,
 					.size = len
 				};
@@ -600,5 +601,62 @@ clean:
 	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
 	ListVkMappedMemoryRange_clear(&deviceExt->mappedMemoryRange, e_rr);
 	ListVkBufferCopy_clear(&deviceExt->bufferCopies, e_rr);
+	return s_uccess;
+}
+
+Bool VK_WRAP_FUNC(DeviceBufferRef_pull)(
+	void *commandBufferExt,
+	GraphicsDeviceRef *deviceRef,
+	DeviceBufferRef *resource,
+	U64 offset,
+	U64 len,
+	U64 stagingOffset,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	const U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+
+	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(resource), Vk);
+	VkDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->stagingReadback), Vk);
+
+	VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+
+	gotoIfError3(clean, VkDeviceBuffer_transition(
+		bufferExt,
+		VK_PIPELINE_STAGE_2_COPY_BIT,
+		VK_ACCESS_2_TRANSFER_READ_BIT,
+		graphicsQueueId,
+		offset, len,
+		&deviceExt->bufferTransitions,
+		&dependency, alloc, e_rr
+	));
+
+	gotoIfError3(clean, VkDeviceBuffer_transition(
+		stagingExt,
+		VK_PIPELINE_STAGE_2_COPY_BIT,
+		VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		graphicsQueueId,
+		stagingOffset, len,
+		&deviceExt->bufferTransitions,
+		&dependency, alloc, e_rr
+	));
+
+	if(dependency.bufferMemoryBarrierCount)
+		deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
+
+	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
+
+	const VkBufferCopy copy = (VkBufferCopy) { .srcOffset = offset, .dstOffset = stagingOffset, .size = len };
+
+	deviceExt->cmdCopyBuffer(commandBuffer->buffer, bufferExt->buffer, stagingExt->buffer, 1, &copy);
+
+clean:
 	return s_uccess;
 }

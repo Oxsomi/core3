@@ -32,7 +32,8 @@ TListNamedImpl(ListThreadHandle);
 
 static const Ns JobQueue_idleSleep = 100000;        //100 * MU
 
-//Pop the next job. Returns false if the queue is currently empty.
+//Pop the next job.
+//Returns false if the queue is currently empty.
 
 static Bool JobQueue_pop(JobQueue *queue, Job *job) {
 
@@ -52,7 +53,8 @@ static Bool JobQueue_pop(JobQueue *queue, Job *job) {
 	return popped;
 }
 
-//Run one job and update bookkeeping. Returns false if no job was available.
+//Run one job and update bookkeeping.
+//Returns false if no job was available.
 
 static Bool JobQueue_runOne(JobQueue *queue, U64 threadId) {
 
@@ -180,7 +182,7 @@ Bool JobQueue_wait(JobQueue *queue, Error *e_rr) {
 
 	//The waiting thread participates as execution context 0.
 	//pending only hits 0 once all jobs *and* the jobs they spawned have finished,
-	//so this also covers multi-stage fan-out pipelines.
+	// so this also covers multi-stage fan-out pipelines.
 
 	while (AtomicI64_load(&queue->pending)) {
 

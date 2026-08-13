@@ -1,0 +1,22 @@
+# clang-cl: clang's frontend with MSVC's driver, ABI and CRT. Same runtime/cppstd as the msvc profiles so
+# the two share prebuilt dependencies where conan allows it.
+[settings]
+build_type=MinSizeRel
+compiler=clang
+compiler.cppstd=20
+compiler.runtime=static
+# Which MSVC runtime to link against. conan requires this for clang on Windows and has no
+# default; v144 is the toolset behind msvc compiler.version=194, so both profiles link the same CRT.
+compiler.runtime_version=v144
+compiler.runtime_type=Release
+compiler.version=16
+os=Windows
+arch=armv8
+
+[conf]
+tools.build:compiler_executables={"c": "clang-cl", "cpp": "clang-cl"}
+# Without this conan picks a generator from what's on PATH, which finds msys2's mingw32-make and
+# then needs a working vcvars environment to locate the CRT. The Visual Studio generator is what the
+# msvc profiles get implicitly; it drives clang-cl through the ClangCL toolset and sets up its own
+# environment, so the build no longer depends on vcvars_ver matching the installed toolset.
+tools.cmake.cmaketoolchain:generator=Visual Studio 17 2022

@@ -49,7 +49,7 @@ Buffer CAFile_getData(CAFile *caFile, CAHandle fileHandle, Bool *isValid);
 Buffer CAFile_getDataConst(const CAFile *caFile, CAHandle fileHandle, Bool *isValid);
 
 //Returns ref to existing data stream (increments stream ref).
-// *streamOff is U64_MAX for invalid handles, folders or fully loaded data, otherwise is offset in the stream.
+//*streamOff is U64_MAX for invalid handles, folders or fully loaded data, otherwise is offset in the stream.
 StreamRef *CAFile_getDataStream(const CAFile *caFile, CAHandle fileHandle, U64 *streamOff);
 
 Bool CAFile_isLoaded(const CAFile *caFile, CAHandle fileHandle);            //Returns false for streams
@@ -59,11 +59,11 @@ Bool CAFile_isLoaded(const CAFile *caFile, CAHandle fileHandle);            //Re
 Bool CAFile_setTime(CAFile *caFile, CAHandle fileHandle, Ns time, Error *e_rr);
 
 //Set data of a file, only valid if it's a file.
-// Moves 'buf' if not a ref, otherwise copies.
+//Moves 'buf' if not a ref, otherwise copies.
 Bool CAFile_setData(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, Buffer *buf, Error *e_rr);
 
 //Set data of a file to a stream, only valid if it's a file.
-// Moves stream to content (moves ref)
+//Moves stream to content (moves ref)
 Bool CAFile_setDataStream(
 	CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, StreamRef **stream, U64 off, U64 len, Error *e_rr
 );

@@ -160,7 +160,8 @@ Bool CLI_rand(const ParsedArgs *args) {
 			retError(clean, Error_invalidOperation(0, "CLI_rand() Invalid operation"));
 	}
 
-	//Default for random number. Default length to how many bytes it takes to represent the number.
+	//Default for random number.
+	//Default length to how many bytes it takes to represent the number.
 
 	U64 maxLen = l;
 

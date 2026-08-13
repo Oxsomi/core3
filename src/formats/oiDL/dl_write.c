@@ -31,7 +31,8 @@
 #include "types/base/error.h"
 #include "types/base/mathi.h"
 
-//We currently don't support compression yet. But once Buffer_compress/decompress is available, it should be easy.
+//We currently don't support compression yet.
+//But once Buffer_compress/decompress is available, it should be easy.
 
 Bool DLFile_write(
 	const DLFile *dlFile,

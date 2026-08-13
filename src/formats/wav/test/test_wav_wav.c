@@ -269,7 +269,8 @@ void Test_WAVAvgI32(Test *t) {
 	);
 }
 
-//Build a MemoryStream backed by a caller-supplied byte buffer. Caller owns *sr.
+//Build a MemoryStream backed by a caller-supplied byte buffer.
+//Caller owns *sr.
 static Bool makeSampleStream(
 	Test *t,
 	const void *samples,

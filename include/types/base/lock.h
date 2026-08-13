@@ -36,8 +36,7 @@ typedef struct SpinLock {
 
 typedef struct Error Error;
 
-//Even though maxTime is in Ns it may be interpreted
-//As a different unit by the runtime.
+//Even though maxTime is in Ns it may be interpreted as a different unit by the runtime.
 //Ex. Windows uses ms so it'll round up to ms
 
 typedef enum ELockAcquire {

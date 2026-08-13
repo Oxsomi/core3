@@ -43,16 +43,16 @@ Bool AllocationBuffer_create(const AllocationBufferCreate *create, Bool isVirtua
 			0, "AllocationBuffer_create()::allocationBuffer isn't NULL, might indicate memleak"
 		));
 
-	if(create->size >> 62)
+	if(create->size >> 48)
 		retError(clean, Error_invalidParameter(
-			0, 0, "AllocationBuffer_create()::size is out of bounds (should be max 62-bit)"
+			0, 0, "AllocationBuffer_create()::size is out of bounds (should be max 48-bit, as Buffer length is)"
 		));
 
 	if (!isVirtual) {
 		gotoIfError3(clean, Buffer_createEmptyBytes(create->size, create->alloc, &create->allocationBuffer->buffer, e_rr));
 	}
 
-	else create->allocationBuffer->buffer = (Buffer) { .lengthAndRefBits = ((U64)3 << 62) | create->size };
+	else create->allocationBuffer->buffer = Buffer_createVirtualRefConst(create->size);
 
 	create->allocationBuffer->nonLinearAlignment = create->nonLinearAlignment;
 	alloc = create->alloc;
@@ -212,7 +212,8 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 		));
 	}
 
-	//No allocations? We start at the front, it's always aligned
+	//No allocations?
+	//We start at the front, it's always aligned
 
 	if (ListAllocationBufferBlock_empty(allocationBuffer->allocations)) {
 
@@ -326,7 +327,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 			}
 
 			//Splitting the buffer, ideally if we're near the back of the buffer
-			//we want to put the empty buffer at the back too.
+			// we want to put the empty buffer at the back too.
 			//This will make it easier for blocks at the end to merge.
 
 			if (AllocationBufferBlock_getCenter(v) >= (len / 2)) {

@@ -20,10 +20,11 @@
 
 //types/container/test/test_types_container_main.c
 
+#include "types/test/test.h"
 #include "test_types_container_shared.h"
 #include "types/container/test/basic_alloc.h"
 
-int main() {
+OXC3_TEST_MAIN(types_container) {
 
 	const Allocator alloc = BasicAllocator_instance;
 
@@ -42,9 +43,13 @@ int main() {
 	Test_bigInt(&t);
 	Test_u128(&t);
 	Test_string(&t);
+	Test_stringOps(&t);
+	Test_containerBuffer(&t);
+	Test_filePaths(&t);
 	Test_list(&t);
 	Test_jobQueue(&t);
 	Test_hpp(&t);
+	Test_hppWrappers(&t);
 	Test_memoryStream(&t);
 	Test_encryptionStream(&t);
 	Test_logOOM(&t);

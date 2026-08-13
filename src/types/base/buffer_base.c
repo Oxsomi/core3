@@ -187,7 +187,7 @@ Bool Buffer_offset(Buffer *buf, U64 length, Error *e_rr) {
 
 	//Maintain constness
 
-	buf->lengthAndRefBits = (bufLen - length) | (buf->lengthAndRefBits >> 62 << 62);
+	Buffer_setLength(buf, bufLen - length);
 
 	if(!bufLen)
 		*buf = Buffer_createNull();
@@ -254,29 +254,30 @@ Bool Buffer_setBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr) {
 			1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_setBitRange()::dstOff out of bounds"
 		));
 
-	//Bits, unaligned
+	//Split into: leading partial byte, whole bytes in the middle, trailing partial byte.
+	//firstFull is the first byte entirely inside the range, lastFull one past the last such byte.
+	//When the range doesn't span a byte boundary at all there is no middle, and the two partial writes
+	// would overlap, so that case is handled on its own.
 
-	if(dstOff & 7) {
-		U8 mask = bits >= 8 ? 0xFF : ((1 << bits) - 1);
-		mask <<= dstOff & 7;
-		dst.ptrNonConst[dstOff >> 3] |= mask;
-	}
+	const U64 end = dstOff + bits;
+	const U64 firstFull = (dstOff + 7) >> 3;
+	const U64 lastFull = end >> 3;
 
-	//Efficient part
+	if (firstFull > lastFull)
+		dst.ptrNonConst[dstOff >> 3] |= (U8)(((1U << bits) - 1) << (dstOff & 7));
 
-	U64 off = (dstOff + 7) >> 3;
-	U64 endOff = (dstOff + bits) >> 3;
+	else {
 
-	if(endOff > off)
-		memset(dst.ptrNonConst + off, 0xFF, endOff - off);
+		if(dstOff & 7)
+			dst.ptrNonConst[dstOff >> 3] |= (U8)(0xFF << (dstOff & 7));
 
-	//Bits unaligned at end
+		if(lastFull > firstFull)
+			memset(dst.ptrNonConst + firstFull, 0xFF, lastFull - firstFull);
 
-	if((endOff << 3) != dstOff + bits) {
-		bits = dstOff + bits - (endOff << 3);
-		U8 mask = (1 << bits) - 1;
-		mask <<= dstOff & 7;
-		dst.ptrNonConst[endOff >> 3] |= mask;
+		//The trailing bits start at bit 0 of lastFull, so this mask isn't shifted
+
+		if(end & 7)
+			dst.ptrNonConst[lastFull] |= (U8)((1U << (end & 7)) - 1);
 	}
 
 clean:
@@ -301,29 +302,25 @@ Bool Buffer_unsetBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr) {
 			1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_unsetBitRange()::dstOff out of bounds"
 		));
 
-	//Bits, unaligned
+	//Same split as Buffer_setBitRange, see the comment there
 
-	if(dstOff & 7) {
-		U8 mask = bits >= 8 ? 0xFF : ((1 << bits) - 1);
-		mask <<= dstOff & 7;
-		dst.ptrNonConst[dstOff >> 3] &=~ mask;
-	}
+	const U64 end = dstOff + bits;
+	const U64 firstFull = (dstOff + 7) >> 3;
+	const U64 lastFull = end >> 3;
 
-	//Efficient part
+	if (firstFull > lastFull)
+		dst.ptrNonConst[dstOff >> 3] &=~ (U8)(((1U << bits) - 1) << (dstOff & 7));
 
-	U64 off = (dstOff + 7) >> 3;
-	U64 endOff = (dstOff + bits) >> 3;
+	else {
 
-	if(endOff > off)
-		memset(dst.ptrNonConst + off, 0x00, endOff - off);
+		if(dstOff & 7)
+			dst.ptrNonConst[dstOff >> 3] &=~ (U8)(0xFF << (dstOff & 7));
 
-	//Bits unaligned at end
+		if(lastFull > firstFull)
+			memset(dst.ptrNonConst + firstFull, 0x00, lastFull - firstFull);
 
-	if((endOff << 3) != dstOff + bits) {
-		bits = dstOff + bits - (endOff << 3);
-		U8 mask = (1 << bits) - 1;
-		mask <<= dstOff & 7;
-		dst.ptrNonConst[endOff >> 3] &=~ mask;
+		if(end & 7)
+			dst.ptrNonConst[lastFull] &=~ (U8)((1U << (end & 7)) - 1);
 	}
 
 clean:

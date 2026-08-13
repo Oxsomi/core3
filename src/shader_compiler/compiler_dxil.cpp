@@ -45,7 +45,7 @@
 #endif
 
 //dxcapi.h must precede d3d12shader.h: on non-Windows it pulls in the WinAdapter that defines IUnknown,
-//which directx/d3d12shader.h (via d3dcommon.h) needs before it declares its reflection interfaces.
+// which directx/d3d12shader.h (via d3dcommon.h) needs before it declares its reflection interfaces.
 //On Windows those COM types (IUnknown, REFCLSID, BOOL, LPCWSTR, ...) come from <Windows.h>/<Unknwn.h> above.
 #define ENABLE_DXC_STATIC_LINKING
 #include "dxcompiler/dxcapi.h"
@@ -511,9 +511,9 @@ extern "C" Bool Compiler_processDXIL(
 			if(isPixelShader && !isOutput && signature.SystemValueType != D3D_NAME_UNDEFINED)
 				continue;
 
-			//SPIRV dead-code-eliminates a fully-unused input, so it isn't in the SPIRV binary at all; DXIL instead
-			// keeps it in the signature (ReadWriteMask == 0, nothing read). Skip it for DXIL too so a shader that
-			// declares but never reads an input reflects identically on both backends.
+			//SPIRV dead-code-eliminates a fully-unused input, so it isn't in the SPIRV binary at all;
+			// DXIL instead keeps it in the signature (ReadWriteMask == 0, nothing read).
+			//Skip it for DXIL too so a shader that declares but never reads an input reflects identically on both backends.
 			if(!isOutput && !signature.ReadWriteMask)
 				continue;
 

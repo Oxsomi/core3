@@ -24,17 +24,39 @@
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
+#include "platforms/monitor.h"
+#include "types/container/buffer.h"
 #include "types/base/error.h"
 #include "types/base/thread.h"
 
 #include <android_native_app_glue.h>
+#include <android/configuration.h>
+#include <android/native_window.h>
 
 void *Platform_getDataImpl(void *ptr) { (void) ptr; return (struct android_app*) Platform_instance->data; }
 
+//Android keeps no per manager native state of its own, everything hangs off Platform_instance->data.
+//The generic layer still uses platformData.ptr as its "there's a real windowing system here" test though, and refuses
+// physical windows as headless without it (see window_manager.c), so the app pointer lives here the way linux keeps
+// its display in LWindowManager.
+//Freeing is the generic WindowManager_free's job, same as the other backends.
+
+typedef struct AWindowManager {
+	struct android_app *app;
+} AWindowManager;
+
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
-	(void) e_rr;
+
+	Bool s_uccess = true;
+
+	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(AWindowManager), Platform_instance->alloc, &w->platformData, e_rr));
+
+	((AWindowManager*) w->platformData.ptrNonConst)->app = (struct android_app*) Platform_instance->data;
+
 	w->isSingleWindow = true;
-	return true;
+
+clean:
+	return s_uccess;
 }
 
 Bool WindowManager_freeNative(WindowManager *w) {
@@ -43,22 +65,100 @@ Bool WindowManager_freeNative(WindowManager *w) {
 }
 
 I32 APlatform_getDeviceOrientation();
+F32 APlatform_getRefreshRate();
 void AWindow_onUpdateSize(Window *w);
+void AWindow_flushTypeChar(Window *w);
+
+//Android shows the app on exactly one display and the NDK has no enumeration API,
+// so there's a single monitor to report.
+//The surface only exists after APP_CMD_INIT_WINDOW; until then there's nothing to
+// measure, and WindowManager_step calls us again once it's up.
+
+//The one display, or false when the surface isn't up yet and there's nothing to measure.
+//A window here always covers the whole display, so its monitor list is the same single entry.
+
+Bool AWindowManager_getMonitor(Monitor *monitor) {
+
+	struct android_app *app = (struct android_app*) Platform_instance->data;
+
+	if(!monitor || !app || !app->window)
+		return false;
+
+	const I32 width = ANativeWindow_getWidth(app->window);
+	const I32 height = ANativeWindow_getHeight(app->window);
+
+	if(width <= 0 || height <= 0)
+		return false;
+
+	//AConfiguration density is already in dpi (the ACONFIGURATION_DENSITY_* values are dpi buckets),
+	// so physical size is px / dpi * 25.4.
+	//Fall back to mdpi, android's reference density.
+
+	I32 density = app->config ? (I32) AConfiguration_getDensity(app->config) : 0;
+
+	if(density <= 0 || density == ACONFIGURATION_DENSITY_NONE || density == ACONFIGURATION_DENSITY_ANY)
+		density = 160;
+
+	const I32 orientation = APlatform_getDeviceOrientation();
+
+	*monitor = (Monitor) {
+		.offsetPixels = I32x2_zero,
+		.sizePixels   = I32x2_create2(width, height),
+		.sizeMm       = I32x2_create2(
+			(I32)(width * 25.4f / (F32)density), (I32)(height * 25.4f / (F32)density)
+		),
+		.orientation  = (EMonitorOrientation)(orientation < 0 ? 0 : orientation),
+		.refreshRate  = APlatform_getRefreshRate()
+	};
+
+	return true;
+}
+
+Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Monitor monitor = (Monitor) { 0 };
+
+	if(!wm)
+		retError(clean, Error_nullPointer(0, "WindowManager_updateMonitors()::wm is required"));
+
+	ListMonitor_clear(&wm->monitors, NULL);
+
+	if(!AWindowManager_getMonitor(&monitor))
+		goto clean;
+
+	gotoIfError3(clean, ListMonitor_pushBack(&wm->monitors, monitor, Platform_instance->alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
 
 void WindowManager_updateExt(WindowManager *manager) {
 
 	(void) manager;
-	
+
 	int ident, events;
 	struct android_poll_source *source;
 	struct android_app *app = (struct android_app*) Platform_instance->data;
 	Window *w = (Window*)app->userData;
-	
+
 repeat:
 	while((ident = ALooper_pollOnce(0, NULL, &events, (void**)&source)) >= 0) {
 		if(source)
 			source->process(app, source);
 	}
+
+	//Soft keyboard text queued from the UI thread;
+	// run it here so onTypeChar sees the app thread like every other callback.
+	//Flushed before the !w early out so the queue can't grow without a window.
+
+	AWindow_flushTypeChar(w);
+
+	//WindowManager_step runs even when no physical window was created
+	// (userData is only set by WindowManager_createWindowPhysical), so everything below this point is window dependent.
+
+	if(!w)
+		return;
 
 	//It's possible our last update was successful but suboptimal.
 	//This happens when the device is rotated in landscape mode which won't trigger any config change or resize.
@@ -77,7 +177,14 @@ repeat:
 	//In case of initialization, we have to wait until the surface is ready.
 	//Afterwards, we can continue
 
-	if(ident == ALOOPER_POLL_TIMEOUT && !(w->flags & EWindowFlags_IsFinalized)) {
+	//ShouldTerminate is checked too: APP_CMD_TERM_WINDOW clears IsFinalized, and without this a window on its way out
+	// would spin here forever waiting for a surface that isn't coming back.
+
+	if(
+		ident == ALOOPER_POLL_TIMEOUT &&
+		!(w->flags & EWindowFlags_IsFinalized) &&
+		!(w->flags & EWindowFlags_ShouldTerminate)
+	) {
 		Thread_sleep(100 * MU);
 		goto repeat;
 	}

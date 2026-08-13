@@ -20,10 +20,11 @@
 
 //formats/oiSH/test/test_oiSH_main.c
 
+#include "types/test/test.h"
 #include "test_oiSH_shared.h"
 #include "types/container/test/basic_alloc.h"
 
-int main() {
+OXC3_TEST_MAIN(formats_oiSH) {
 
 	const Allocator alloc = BasicAllocator_instance;
 	Test t = (Test){ 0 };
@@ -80,6 +81,7 @@ int main() {
 	Test_SHFileAddBinZeroVendorMask(&t);
 	Test_SHFileAddBinVendorMaskNormalized(&t);
 	Test_SHFileAddBinVendorMaskOutOfBounds(&t);
+	Test_SHVendorMaskWidening(&t);
 	Test_SHFileAddBinInvalidExtensions(&t);
 	Test_SHFileAddBinInvalidStageType(&t);
 	Test_SHFileAddBinShaderVersionOutOfRange(&t);

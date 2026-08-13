@@ -88,7 +88,12 @@ typedef struct SHHeader {
 	//Extensions added after a file was written can't have been reflected by its compiler, so the reader marks the
 	// native ones at or above this count dormant automatically (see SHFile_read).
 	U16 extensionCount;
-	U16 padding;
+
+	//ESHVendor_Count of the writer, for the same reason and with the opposite fix up.
+	//A vendorMask is a bitset, so "every vendor" is spelled as all bits below the count set.
+	//Once a vendor is added that spelling stops matching, and a binary meant for anything would start being
+	// refused on the new vendor, so the reader widens a was-everything mask to today's everything.
+	U16 vendorCount;
 
 } SHHeader;
 

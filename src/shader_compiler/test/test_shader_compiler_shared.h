@@ -31,24 +31,26 @@ typedef struct SHFile SHFile;
 //They compile HLSL through the real DXC/SPIRV pipeline, so they require a live Platform_instance.
 //Declared in invocation order (see test_shader_compiler_main.c).
 
-void Test_shaderCompilerParse(Test *t);         //Parse annotations -> SHEntryRuntime reflection
-void Test_shaderCompilerReflectSR(Test *t);     //Frontend symbol AST -> SRFile (oiSR) + round-trip
-void Test_shaderCompilerAnnotations(Test *t);   //oxc:: extensions / model / vendor / defines / uniforms / stages / binary
-void Test_shaderCompilerFeatures(Test *t);      //Shaders *using* extension features -> compiled + reflected
-void Test_shaderCompilerStages(Test *t);        //One shader per pipeline stage -> reflected stage matches
-void Test_shaderCompilerReflection(Test *t);    //Resource registers reflect with correct type/write/array/stride
-void Test_shaderCompilerDriver(Test *t);        //compiler_helper compile driver: threads / modes / errors / round-trip
-void Test_shaderCompilerPermutations(Test *t);  //Multi-entrypoint files with disagreeing oxc:: annotations
-void Test_shaderCompilerCorpus(Test *t);        //Compile the whole test/hlsl corpus (SPIRV snapshot + DXIL coverage)
+void Test_shaderCompilerParse(Test *t);           //Parse annotations -> SHEntryRuntime reflection
+void Test_shaderCompilerReflectSR(Test *t);       //Frontend symbol AST -> SRFile (oiSR) + round-trip
+void Test_shaderCompilerBuiltInIncludes(Test *t); //The enumerable @-prefixed built-in include table
+void Test_shaderCompilerAnnotations(Test *t);     //oxc:: extensions / model / vendor / defines / uniforms / stages / binary
+void Test_shaderCompilerFeatures(Test *t);        //Shaders *using* extension features -> compiled + reflected
+void Test_shaderCompilerStages(Test *t);          //One shader per pipeline stage -> reflected stage matches
+void Test_shaderCompilerReflection(Test *t);      //Resource registers reflect with correct type/write/array/stride
+void Test_shaderCompilerDriver(Test *t);          //compiler_helper compile driver: threads / modes / errors / round-trip
+void Test_shaderCompilerPermutations(Test *t);    //Multi-entrypoint files with disagreeing oxc:: annotations
+void Test_shaderCompilerCorpus(Test *t);          //Compile the whole test/hlsl corpus (SPIRV snapshot + DXIL coverage)
 
 //--- Shared helpers (test_shader_compiler_util.c) ---
 
 //Compile `count` inline HLSL sources (each into its own oiSH, all with the same binary type `mode`)
-//through the real Compiler_compileShaders driver with `threadCount` execution contexts. Uses dummy file
-//names and pre-loaded text, so it never touches the filesystem. Fills `out` with one oiSH buffer per
-//source (empty for shaders that produced nothing). Caller frees `out`.
-//Pass enableLogging=false when a failure is *expected* and the caller asserts on it itself (the compiler
-//then stays quiet instead of printing diagnostics/status for a failure the test is deliberately provoking).
+// through the real Compiler_compileShaders driver with `threadCount` execution contexts.
+//Uses dummy file names and pre-loaded text, so it never touches the filesystem.
+//Fills `out` with one oiSH buffer per source (empty for shaders that produced nothing).
+//Caller frees `out`.
+//Pass enableLogging=false when a failure is *expected* and the caller asserts on it itself
+// (the compiler then stays quiet instead of printing diagnostics/status for a failure the test is deliberately provoking).
 Bool compileInlineShaders(
 	const Allocator *alloc,
 	const C8 *const *srcs,
@@ -61,9 +63,25 @@ Bool compileInlineShaders(
 	Error *e_rr
 );
 
-//Compile a single HLSL shader loaded from `path` (relative to the working dir) into an oiSH of binary type
-//`mode`. Self-contained shaders only (@virtual includes). Fills `out` with one oiSH buffer. Caller frees.
+//Compile a single HLSL shader loaded from `path` (relative to the working dir) into an oiSH of binary type `mode`.
+//Self-contained shaders only (@virtual includes).
+//Fills `out` with one oiSH buffer.
+//Caller frees.
 //keepRegisters keeps declared but unused resources bound and reflected (--keep-registers).
+//Where the HLSL the tests compile actually lives.
+//ctest runs these from src/shader_compiler/test, so a plain relative path finds it.
+//An apk has no working directory to be relative to, so the same tree is bundled as an oiCA and read back
+// through the virtual file system instead (see src/test/android/CMakeLists.txt).
+//Both go through File_read either way, and an include inside a virtual shader resolves virtually too,
+// so only the root differs.
+
+#if defined(_OXC3_TEST_BUNDLED) && defined(_OXC3_TEST_VFS_TARGET)
+	#define TEST_SHADER_SECTION "//" _OXC3_TEST_VFS_TARGET "/shaderdata"
+	#define TEST_SHADER_ROOT    TEST_SHADER_SECTION "/"
+#else
+	#define TEST_SHADER_ROOT    ""
+#endif
+
 Bool compileFileShader(
 	const Allocator *alloc,
 	const C8 *path,

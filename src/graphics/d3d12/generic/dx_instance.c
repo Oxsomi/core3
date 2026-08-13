@@ -106,10 +106,12 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 
 			.bufferCreate = D3D12GraphicsDeviceRef_createBuffer,
 			.bufferFlush = D3D12DeviceBufferRef_flush,
+			.bufferPull = D3D12DeviceBufferRef_pull,
 			.bufferFree = D3D12DeviceBuffer_free,
 
 			.textureCreate = D3D12UnifiedTexture_create,
 			.textureFlush = D3D12DeviceTextureRef_flush,
+			.texturePull = D3D12DeviceTextureRef_pull,
 			.textureFree = D3D12UnifiedTexture_free,
 
 			.swapchainCreate = D3D12GraphicsDeviceRef_createSwapchain,
@@ -197,7 +199,10 @@ Bool DX_WRAP_FUNC(GraphicsInstance_create)(
 	CharString locationD3D12 = CharString_createNull();
 	Bool isVirtual = false;
 
-	if (instance->flags & EGraphicsInstanceFlags_IsDebug)
+	//Braced so the else unambiguously belongs to the FAILED check, which is what it always meant.
+	//A debug factory that came up fine skips the non-debug creation below.
+
+	if (instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
 		if (FAILED(CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory6, (void**)&instanceExt->factory))) {
 			Log_warnLnx(
@@ -209,6 +214,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_create)(
 		}
 
 		else goto setup;
+	}
 
 	gotoIfError3(clean, dxCheck(CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->factory), e_rr));
 
@@ -233,7 +239,7 @@ setup:
 	//CreateDeviceFactory must request the SDK version matching the D3D12Core.dll deployed next to us.
 	//A preview Agility SDK ships a preview core (exports D3D12_PREVIEW_SDK_VERSION); a stable SDK ships the stable core.
 	//Prefer the preview core (unlocks SM6.9/6.10 - cooperative vectors/matrix - but needs Windows Developer Mode),
-	//and fall back to the stable version when the preview core isn't there so we still run on non-dev-mode machines.
+	// and fall back to the stable version when the preview core isn't there so we still run on non-dev-mode machines.
 
 	U32 sdkVersions[2];
 	U32 sdkVersionCount = 0;
@@ -286,8 +292,9 @@ setup:
 
 	//Preview shader models (SM6.9/6.10, required for the cooperative-vector/matrix ops) are experimental on D3D12.
 	//Only meaningful when we actually got the preview core; enable per-instance on both factories (before any device).
-	//Failure is non-fatal - SM6.10 simply isn't reported and the coop features aren't advertised (they'd also be
-	//flagged in caps.experimentalFeatures). It's an opt-in preview path, never a hard requirement.
+	//Failure is non-fatal - SM6.10 simply isn't reported and the coop features aren't advertised
+	// (they'd also be flagged in caps.experimentalFeatures).
+	//It's an opt-in preview path, never a hard requirement.
 
 	#if defined(D3D12_PREVIEW_SDK_VERSION) && D3D12_PREVIEW_SDK_VERSION >= 720
 
@@ -434,6 +441,17 @@ clean:
 
 #endif
 
+//Reporting every unmet requirement instead of bailing on the first one is what tells an emulator or a weak GPU apart;
+// one says "this will never run OxC3", the other says "this could run OxC3 if the graphics spec were lowered".
+//deviceUnsupported logs the requirement and counts it, the adapter loop rejects on that count once every check has run.
+//requireCap names a single flag out of a D3D12_OPTIONS block,
+// so a device is told which capability it lacks rather than which struct it failed.
+//These read the adapter loop's locals (i, unsupportedCount) so they only work inside that loop.
+
+#define deviceUnsupported(...) do { Log_debugLnx(__VA_ARGS__); ++unsupportedCount; } while(false)
+
+#define requireCap(query, cap) if(!(query).cap) deviceUnsupported("D3D12: Device %"PRIu64" lacks capability " #cap, i)
+
 Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -479,6 +497,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(hr != DXGI_ERROR_NOT_FOUND)
 			gotoIfError3(clean, dxCheck(hr, e_rr));
 	}
+
+	//How many adapters DXGI handed us, captured before the duplicate pre-filter below can drop any of them.
+	//"No adapter at all" and "every adapter was rejected" are reported as different errors at the end of this function.
+
+	const U64 adapterCount = adapters.length;
 
 	gotoIfError3(clean, ListGraphicsDeviceInfo_reserve(&tempInfos, adapters.length, alloc, e_rr));
 
@@ -535,12 +558,14 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		DXGI_ADAPTER_DESC3 desc = (DXGI_ADAPTER_DESC3) { 0 };
 		gotoIfError3(clean, dxCheck(adapters.ptr[i]->lpVtbl->GetDesc3(adapters.ptr[i], &desc), e_rr));
 
+		//Every unmet requirement is logged and counted here, the adapter is only rejected after the last check has run.
+
+		U64 unsupportedCount = 0;
+
 		//Fences are required for D3D12
 
-		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES)) {
-			Log_debugLnx("DXGI: Unsupported device %"PRIu32", doesn't support D3D12 fences", i);
-			continue;
-		}
+		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES))
+			deviceUnsupported("DXGI: Unsupported device %"PRIu64", doesn't support D3D12 fences", i);
 
 		EGraphicsVendorId vendorId = EGraphicsVendorId_Unknown;
 
@@ -553,6 +578,10 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			case EGraphicsVendorPCIE_INTC:   vendorId = EGraphicsVendorId_INTC;      break;
 			case EGraphicsVendorPCIE_IMGT:   vendorId = EGraphicsVendorId_IMGT;      break;
 			case EGraphicsVendorPCIE_MSFT:   vendorId = EGraphicsVendorId_MSFT;      break;
+			case EGraphicsVendorPCIE_APPL:   vendorId = EGraphicsVendorId_APPL;      break;
+			case EGraphicsVendorPCIE_SMSG:   vendorId = EGraphicsVendorId_SMSG;      break;
+			case EGraphicsVendorPCIE_HWEI:   vendorId = EGraphicsVendorId_HWEI;      break;
+			case EGraphicsVendorPCIE_GOGL:   vendorId = EGraphicsVendorId_GOGL;      break;
 			default: Log_debugLnx("Unrecognized vendor: %"PRIX32, desc.VendorId);    break;
 		}
 
@@ -580,8 +609,12 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		else independentDevices = true;
 
+		//This is the one requirement that can't wait for the gate below.
+		//Every capability query after it goes through the device we just failed to create,
+		// so there is nothing further left to report on this adapter.
+
 		if(FAILED(lastError)) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support feature level 11.0", i);
+			deviceUnsupported("D3D12: Unsupported device %"PRIu64", doesn't support feature level 11.0", i);
 			goto next;
 		}
 
@@ -631,13 +664,16 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			D3D12_FEATURE_DATA_TIGHT_ALIGNMENT tightAlignment = (D3D12_FEATURE_DATA_TIGHT_ALIGNMENT) { 0 };
 		#endif
 
-		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS, &opt0, sizeof(opt0))) ||
-			!opt0.TypedUAVLoadAdditionalFormats ||
-			!opt0.OutputMergerLogicOp
-		) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS", i);
-			goto next;
+		//A query that failed and a capability that is absent are different problems, so they're reported apart.
+		//The flags are only inspected when the query succeeded,
+		// because a struct left zeroed by a failed query would claim every capability in it is missing.
+
+		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS, &opt0, sizeof(opt0))))
+			deviceUnsupported("D3D12: Unsupported device %"PRIu64", couldn't query D3D12_OPTIONS", i);
+
+		else {
+			requireCap(opt0, TypedUAVLoadAdditionalFormats);
+			requireCap(opt0, OutputMergerLogicOp);
 		}
 
 		if(opt0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3)
@@ -649,17 +685,21 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(opt0.DoublePrecisionFloatShaderOps)
 			caps.dataTypes |= EGraphicsDataTypes_F64;
 
-		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS1, &opt1, sizeof(opt1))) ||
-			!opt1.WaveOps || !opt1.Int64ShaderOps
-		) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS1", i);
-			goto next;
-		}
+		//The subgroup size lives in the same struct, so it's checked here too rather than off a zeroed query.
 
-		if(opt1.WaveLaneCountMin < 4 || opt1.WaveLaneCountMax > 128) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", subgroup size is not in range 4-128!", i);
-			goto next;
+		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS1, &opt1, sizeof(opt1))))
+			deviceUnsupported("D3D12: Unsupported device %"PRIu64", couldn't query D3D12_OPTIONS1", i);
+
+		else {
+
+			requireCap(opt1, WaveOps);
+			requireCap(opt1, Int64ShaderOps);
+
+			if(opt1.WaveLaneCountMin < 4 || opt1.WaveLaneCountMax > 128)
+				deviceUnsupported(
+					"D3D12: Unsupported device %"PRIu64", subgroup size %"PRIu32"-%"PRIu32" is not in range 4-128!",
+					i, opt1.WaveLaneCountMin, opt1.WaveLaneCountMax
+				);
 		}
 
 		if(
@@ -684,13 +724,14 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				caps.features |= EGraphicsFeatures_RayQuery;
 
 			//DXR 1.2 natively supports SER (shader execution reordering, dx::HitObject) and opacity micromaps,
-			//vendor-neutrally.
+			// vendor-neutrally.
 			if(opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2) {
 
 				caps.features |= EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayMicromapOpacity;
 
-				//RayReorder above only means the SER API is available (it can be a no-op). OPTIONS22 reports whether the
-				//device actually reorders, which is the bit apps care about when deciding to restructure a shader for SER.
+				//RayReorder above only means the SER API is available (it can be a no-op).
+				//OPTIONS22 reports whether the device actually reorders,
+				// which is the bit apps care about when deciding to restructure a shader for SER.
 				D3D12_FEATURE_DATA_D3D12_OPTIONS22 opt22 = (D3D12_FEATURE_DATA_D3D12_OPTIONS22) { 0 };
 
 				if(
@@ -715,13 +756,10 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		)
 			caps.features |= EGraphicsFeatures_MeshShader;
 
-		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS8, &opt8, sizeof(opt8))) ||
-			!opt8.UnalignedBlockTexturesSupported
-		) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS8", i);
-			goto next;
-		}
+		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS8, &opt8, sizeof(opt8))))
+			deviceUnsupported("D3D12: Unsupported device %"PRIu64", couldn't query D3D12_OPTIONS8", i);
+
+		else requireCap(opt8, UnalignedBlockTexturesSupported);
 
 		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS9, &opt9, sizeof(opt9))) &&
@@ -732,13 +770,10 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(opt9.DerivativesInMeshAndAmplificationShadersSupported)
 			caps.features |= EGraphicsFeatures_MeshTaskTexDeriv;
 
-		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS12, &opt12, sizeof(opt12))) ||
-			!opt12.EnhancedBarriersSupported
-		) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS12", i);
-			goto next;
-		}
+		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS12, &opt12, sizeof(opt12))))
+			deviceUnsupported("D3D12: Unsupported device %"PRIu64", couldn't query D3D12_OPTIONS12", i);
+
+		else requireCap(opt12, EnhancedBarriersSupported);
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS14, &opt14, sizeof(opt14))) &&
@@ -772,16 +807,13 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		rootSig.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;    //Nice way of querying..
 
-		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig)))) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required root signature 1.1", i);
-			goto next;
-		}
+		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig))))
+			deviceUnsupported("D3D12: Unsupported device %"PRIu64", doesn't support required root signature 1.1", i);
 
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;        //Nice way of querying DirectX...
-		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required shader model (6.5)", i);
-			goto next;
-		}
+
+		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+			deviceUnsupported("D3D12: Unsupported device %"PRIu64", doesn't support required shader model (6.5)", i);
 
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_6;
 		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
@@ -829,10 +861,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				caps.experimentalFeatures |= EGraphicsFeatures_RayTriPosition;
 
 				//Cooperative vectors/matrix (DXIL "Linear Algebra") need the real linalg tier query IN ADDITION to the
-				//shader model - a device can report SM6.10 yet expose no linalg tier, so SM6.10 alone would over-report.
-				//Gate the coop features on the actual tier, then confirm each family with the per-operation support query
-				//(which also reports native vs emulated). Only reachable because experimental shader models were enabled
-				//above, so they stay flagged in experimentalFeatures until the linalg API leaves preview.
+				// shader model - a device can report SM6.10 yet expose no linalg tier, so SM6.10 alone would over-report.
+				//Gate the coop features on the actual tier,
+				// then confirm each family with the per-operation support query (which also reports native vs emulated).
+				//Only reachable because experimental shader models were enabled above,
+				// so they stay flagged in experimentalFeatures until the linalg API leaves preview.
 
 				D3D12_FEATURE_DATA_LINEAR_ALGEBRA_SUPPORT linalg = (D3D12_FEATURE_DATA_LINEAR_ALGEBRA_SUPPORT) { 0 };
 
@@ -845,13 +878,15 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 					EGraphicsFeatures coopFeatures = EGraphicsFeatures_None;
 
-					//Thread matvec = cooperative vectors (OxC3 CoopVec). FP16 is in the guaranteed minimum support set.
+					//Thread matvec = cooperative vectors (OxC3 CoopVec).
+					//FP16 is in the guaranteed minimum support set.
 
 					if(DxGraphicsInstance_supportsCoopVecMatVec(device, D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16, NULL))
 						coopFeatures |= EGraphicsFeatures_CoopVec;
 
-					//FP8 (E4M3/E5M2) weights are also in the minimum set, but may be emulated (up-cast to FP16) on GPUs
-					//without native FP8 - the query reports which, so we can log it (both interpretations count as CoopFP8).
+					//FP8 (E4M3/E5M2) weights are also in the minimum set,
+					// but may be emulated (up-cast to FP16) on GPUs without native FP8 - the query reports which,
+					// so we can log it (both interpretations count as CoopFP8).
 
 					Bool fp8Emulated = false;
 
@@ -930,13 +965,19 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				caps.featuresExt |= EDxGraphicsFeatures_BatchedAsyncCommandList;
 		#endif
 
-		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)))) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_FEATURE_ARCHITECTURE1", i);
-			goto next;
-		}
+		const Bool hasArch =
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)));
+
+		if(!hasArch)
+			deviceUnsupported("D3D12: Unsupported device %"PRIu64", couldn't query D3D12_FEATURE_ARCHITECTURE1", i);
 
 		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE))
 			type = !arch.UMA ? EGraphicsDeviceType_Dedicated : EGraphicsDeviceType_Integrated;
+
+		//Coherent UMA snoops the CPU caches for free, which flips what page property upload memory wants
+
+		if(hasArch && arch.CacheCoherentUMA)
+			caps.featuresExt |= EDxGraphicsFeatures_CacheCoherentUMA;
 
 		U64 sharedMem = desc.SharedSystemMemory;
 		U64 dedicatedMem = desc.DedicatedVideoMemory;
@@ -944,10 +985,21 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if (type != EGraphicsDeviceType_Dedicated)
 			dedicatedMem = sharedMem;
 
-		if (sharedMem < 512 * MIBI || dedicatedMem < 512 * MIBI) {
-			Log_debugLnx("DXGI: Unsupported device %"PRIu32", not enough system or video memory", i);
-			goto next;
-		}
+		//System memory and video memory are two separate requirements, so the device is told which of the two it fails.
+		//The video memory one is withheld when ARCHITECTURE1 failed, because a zeroed arch reads as non-UMA,
+		// which would report a UMA device as having no video memory on top of the query failure that already rejected it.
+
+		if (sharedMem < 512 * MIBI)
+			deviceUnsupported(
+				"DXGI: Unsupported device %"PRIu64", not enough system memory (%"PRIu64" MiB, needs 512 MiB)",
+				i, sharedMem / MIBI
+			);
+
+		if (hasArch && dedicatedMem < 512 * MIBI)
+			deviceUnsupported(
+				"DXGI: Unsupported device %"PRIu64", not enough video memory (%"PRIu64" MiB, needs 512 MiB)",
+				i, dedicatedMem / MIBI
+			);
 
 		caps.sharedMemory = sharedMem;
 		caps.dedicatedMemory = dedicatedMem;
@@ -980,14 +1032,38 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			D3D12_FORMAT_SUPPORT1 mask1 = D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW;
 			D3D12_FORMAT_SUPPORT2 mask2 = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
 
-			if(
-				FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) ||
-				(format.Support2 & mask2) != mask2 ||
-				(format.Support1 & mask1) != mask1
-			) {
-				Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required format (typed uav load)", i);
-				goto next;
+			//Naming the format turns "some format is missing" into a list of exactly which ones are,
+			// which is the difference between a device that is one format short and one that supports none of them.
+
+			const C8 *formatName = ETextureFormatId_name[requiredUavTypedLoad[j]];
+
+			if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))))
+				deviceUnsupported(
+					"D3D12: Unsupported device %"PRIu64", couldn't query format support for %s", i, formatName
+				);
+
+			else {
+
+				if((format.Support1 & mask1) != mask1)
+					deviceUnsupported(
+						"D3D12: Unsupported device %"PRIu64", format %s doesn't support a typed unordered access view",
+						i, formatName
+					);
+
+				if((format.Support2 & mask2) != mask2)
+					deviceUnsupported(
+						"D3D12: Unsupported device %"PRIu64", format %s doesn't support typed uav load and store",
+						i, formatName
+					);
 			}
+		}
+
+		//Every requirement has run by now, so the device can be rejected with the full list already logged above.
+		//This is the only rejection of a device that was created, and it goes through next: to release it.
+
+		if (unsupportedCount) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu64", %"PRIu64" requirement(s) not met", i, unsupportedCount);
+			goto next;
 		}
 
 		//Optional formats
@@ -1105,7 +1181,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				);
 
 				if(status != NVAPI_ACCESS_DENIED && status != NVAPI_OK)
-					Log_debugLnx("D3D12: NVAPI: Couldn't enable raytracing validation on device %"PRIu32"", i);
+					Log_debugLnx("D3D12: NVAPI: Couldn't enable raytracing validation on device %"PRIu64"", i);
 
 				if(status == NVAPI_OK)
 					info->capabilities.features |= EGraphicsFeatures_RayValidation;
@@ -1186,7 +1262,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			}
 
 			else {
-				Log_debugLnx("D3D12: Couldn't driver version for device %"PRIu32"", i);
+				Log_debugLnx("D3D12: Couldn't get driver version for device %"PRIu64"", i);
 				goto next;
 			}
 		}
@@ -1201,8 +1277,19 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		device = NULL;
 	}
 
-	if(!tempInfos.length)
-		retError(clean, Error_unsupportedOperation(0, "D3D12GraphicsInstance_getDeviceInfos() no supported OxC3 device found"));
+	//A machine with no adapter at all and a machine whose adapters OxC3 turned down are very different results.
+	//The first isn't ours to fail on and a test should skip it, the second is a real result and says our spec is too high,
+	// so they get distinct error codes for the caller to branch on.
+
+	if(!tempInfos.length) {
+
+		if(!adapterCount)
+			retError(clean, Error_notFound(0, 0, "D3D12GraphicsInstance_getDeviceInfos() no graphics adapter present"));
+
+		retError(clean, Error_unsupportedOperation(
+			0, "D3D12GraphicsInstance_getDeviceInfos() no supported OxC3 device found"
+		));
+	}
 
 	*result = tempInfos;
 
@@ -1222,3 +1309,6 @@ clean:
 	ListIDXGIAdapter4_free(&adapters, alloc);
 	return s_uccess;
 }
+
+#undef deviceUnsupported
+#undef requireCap

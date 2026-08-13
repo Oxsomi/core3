@@ -340,7 +340,8 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 	U32 newViewId = 0;
 
 	//Note: even though d.resource is properly guarded everywhere, it can only be used with robustness.
-	//        This extension is poorly supported everywhere, so can't use that. Maybe some day.
+	//This extension is poorly supported everywhere, so can't use that.
+	//Maybe some day.
 
 	switch (type) {
 

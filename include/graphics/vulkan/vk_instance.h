@@ -34,6 +34,13 @@
 extern const C8 *reqExtensionsName[];
 extern U64 reqExtensionsNameCount;
 
+//Indexes the presence array built from reqExtensionsName, so the order has to match that table.
+
+typedef enum EReqExtensions {
+	EReqExtensions_Synchronization2,
+	EReqExtensions_Swapchain
+} EReqExtensions;
+
 typedef enum EOptExtensions {
 	EOptExtensions_PerfQuery,
 	EOptExtensions_RayPipeline,
@@ -64,7 +71,18 @@ typedef enum EOptExtensions {
 	EOptExtensions_DescriptorHeap,
 	EOptExtensions_RayClusterAS,
 	EOptExtensions_RayPartitionedTLAS,
-	EOptExtensions_PipelineExecutableProperties
+	EOptExtensions_PipelineExecutableProperties,
+	EOptExtensions_PushDescriptor,
+
+	//Dependencies of the features above rather than features of their own.
+	//They're listed here so they're only ever requested when the device actually advertised them; a device that
+	// offers a feature without its dependencies simply doesn't get the feature.
+
+	EOptExtensions_CreateRenderpass2,
+	EOptExtensions_DepthStencilResolve,
+	EOptExtensions_Spirv14,
+	EOptExtensions_ShaderFloatControls,
+	EOptExtensions_Maintenance5
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];

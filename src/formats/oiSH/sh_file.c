@@ -44,8 +44,8 @@ void SHFile_print(const SHFile *a, Bool isVerbose, const Allocator *alloc) {
 		OXC3_GET_PATCH(a->compilerVersion)
 	);
 
-	//Which binary types this oiSH actually serialized (aggregated over every SHBinaryInfo). With per-entrypoint
-	//[[oxc::binary(...)]] this can differ from what was requested, so it's worth surfacing at a glance.
+	//Which binary types this oiSH actually serialized (aggregated over every SHBinaryInfo).
+	//With per-entrypoint [[oxc::binary(...)]] this can differ from what was requested, so it's worth surfacing at a glance.
 
 	Log_debug(alloc, ELogOptions_None, "Serialized binary types:");
 

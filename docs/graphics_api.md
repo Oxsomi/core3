@@ -91,6 +91,13 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 
   - Select the physical device that has all specified extensions and is a supported vendor and/or device type.
 
+- ```c
+  U64 getValidationErrors();
+  U64 getValidationWarnings();
+  ```
+
+  - How many validation errors and warnings the api's debug layers reported so far across every device of this instance (0 when validation is off). Performance and info messages aren't counted. CI uses these to hard fail whenever a run isn't validation clean; deliberate exceptions are suppressed explicitly at the source (the D3D12 info queue deny list, GPU assisted validation's settings adjustment notice on Vulkan) rather than subtracted here.
+
 ### Used functions and obtained
 
 - Obtained through `Bool GraphicsInstance_create(const GraphicsApplicationInfo *info, EGraphicsApi api, EGraphicsInstanceFlags flags, const Allocator *alloc, const RefPtrType *type, GraphicsInstanceRef **inst, Error *e_rr);` see summary.
@@ -143,8 +150,9 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 - dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
   - MSAA4 and MSAA1 (off) are supported by default.
 - featuresExt: API dependent features that aren't expected to be standardized in the same way.
-  - Vulkan: PerformanceQuery.
-  - Direct3D12: WriteBufferImmediate (for crash debugging), ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use), BatchedAsyncCommandList (batched async command list submission, SM6.10 / Agility 1.720+).
+  - Vulkan: PerformanceQuery, PerformantPushDescriptor.
+    - PerformantPushDescriptor: VK_KHR_push_descriptor with at least 32 push descriptors, so the globals constant buffer is pushed straight into the command buffer instead of bound from a set allocated to hold it. Named for the performance rather than the capability, because pushing descriptors always works; the flag only says the device does it natively. It lives here rather than in `features2` because Vulkan is the only API where that isn't a given; D3D12 has root descriptors and Metal has argument buffers. Without it OxC3 allocates one descriptor set per frame in flight, writes each once to that frame's globals buffer and binds it unchanged afterwards, so there's no per-frame update and nothing is rewritten while in flight. A one-time performance warning is logged on the first submit that takes the emulated path. Android emulators are the usual case, since gfxstream drops the extension from the guest even where the host driver exposes it.
+  - Direct3D12: WriteBufferImmediate (for crash debugging), ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use), BatchedAsyncCommandList (batched async command list submission, SM6.10 / Agility 1.720+), CacheCoherentUMA (UMA that snoops CPU caches; upload heaps then use WRITE_BACK instead of WRITE_COMBINE).
 - maxBufferSize and maxAllocationSize: Device limit on how big a buffer or a single allocation may be.
 
 ### Functions
@@ -187,12 +195,17 @@ GraphicsDeviceRef *device = NULL;
 gotoIfError3(clean, GraphicsDeviceRef_create(
     instance, 						//See "Graphics instance"
     &deviceInfo, 					//See "Graphics device info"
-    EGraphicsDeviceFlags_None,		//IsVerbose, IsDebug, DisableRt, DisableDebug
+    EGraphicsDeviceFlags_None,		//IsVerbose, IsDebug, DisableRt, DisableDebug, DisableBindless
     EGraphicsBufferingMode_Default,	//Frames in flight: Default, Double or Triple
+    NULL,							//Bindless DescriptorLayoutInfo; NULL is OxC3's default layout
     &device,
     e_rr
 ));
 ```
+
+The bindless layout is what the default descriptor table and pipeline layout are built from. Passing NULL uses OxC3's own layout, which is what the prebuilt shaders and the oiSH files OxC3 ships are compiled against. A caller that wants a different one can obtain the default through `GraphicsDevice_defaultBindlessLayout`, modify it and pass it in (it is freed with `DescriptorLayoutInfo_free`, the device copies whatever it gets). `EGraphicsDeviceFlags_DisableBindless` drops bindless entirely, even on a device that supports it; the feature bit is then cleared from the device's capabilities, so there is no default descriptor table or pipeline layout and every pipeline has to supply its own layout.
+
+Whichever layout the device ends up with is the one every shader is held to. When a pipeline is created (or a binary is picked through `GraphicsDeviceRef_getFirstShaderEntry`), `GraphicsDeviceRef_checkShaderFeatures` walks the binary's reflected registers and refuses any bindless array that the device's layout doesn't have at the same space and binding, with an incompatible register type, or with fewer descriptors than the shader declares. A shader that wants bindless arrays on a device without a bindless layout is refused too. The offending register and what the layout has instead are logged, so an oiSH built against an older layout can be run again by recreating that layout and passing it to `GraphicsDeviceRef_create`. Only binaries the oiSH marks as needing bindless are checked; push constants, push descriptors and singular bound resources come from the pipeline layout the caller supplies and are left alone.
 
 ### Properties
 
@@ -529,10 +542,11 @@ A graphics resource consists of the following:
 - device: the owning graphics device.
 - size: CPU visible buffer size.
 - blockOffset/blockId/allocated: API dependent allocation information used to track the allocation.
-- flags: ShaderRead, ShaderWrite, InternalWeakDeviceRef, CPUBacked, CPUAllocated(Bit).
+- flags: ShaderRead, ShaderWrite, InternalWeakDeviceRef, CPUBacked, CPUAllocated(Bit), CPUReadBit.
   - ShaderRead: Whether the resource has a valid resource handle and can be accessed on the GPU through the descriptors. MSAA resources are incompatible with this flag, because there's no Texture2DMS[], it needs to be resolved before reading/writing the resource.
   - ShaderWrite: ^ but for write access. DepthStencil and MSAA disallows this always.
   - InternalWeakDeviceRef: Internal only; tells the resource it belongs to the device, so the device is the only one in charge of cleaning it up.
+  - CPUReadBit: Internal only; places the allocation in CPU readable memory (D3D12 readback heap) for the pullRegion staging buffer. It doesn't compose with user resources: readback heap buffers are limited to copy destination use, mappedMemoryExt isn't meant for direct access and nothing would report when the GPU's writes became visible. Use pullRegion, which handles all of that.
   - Only relevant for DeviceTexture and DeviceBuffer:
     - CPUBacked: The resource will have CPU backed memory to ensure it can continuously be pushed or pulled from the device whenever necessary. Without this flag, the upload data will only be available on first commit, after that the memory will be freed.
     - CPUAllocatedBit (Always use as CPUAllocated to force CPUBacked also): Indicates that the device memory with the resource should be CPU-sided whenever possible. This can free up more device memory if the resource is only rarely being accessed (because it's typically slower than local memory). In some cases, this flag won't do anything, because with shared memory models such as mobile or integrated GPUs the memory between CPU and GPU is shared anyways. This is generally not a useful flag, though it can be when consuming large amounts of memory.
@@ -563,6 +577,10 @@ DeviceTexture and DeviceBuffer can be marked dirty by their respective markDirty
 ### Pulling region (pullRegion)
 
 DeviceTexture and DeviceBuffer can be pulled back from GPU by their pullRegion functions. These functions run at the end of the next frame (next submitCommands end) and will then be pulled back async to the CPU when the operation is completed on the device. On completion, the callback function can be ran (this is 3 frames later). If the result is important right now, it can be stalled by calling wait after the submitCommands, *though that fully stalls the device and should be prevented at all costs*. If it's desired to copy the current state of the resource (if it gets modified after) then a manual copy resource should be created and manual copy should be done to ensure it won't be modified in between.
+
+The staging memory that carries pulls back to the CPU is created at the first pull and only ever grows. On D3D12 that first allocation can bring in a whole new CPU sided memory block mid frame, so latency sensitive applications can call GraphicsDeviceRef_reserveReadback(device, sizePerFrame, e_rr) during load time to move that cost to a predictable place. Underestimating (or passing 0) is fine, the buffers simply grow at the next pull that needs more.
+
+Texture pulls follow the same region semantics as markDirty: zero for an axis means the rest of that axis, and for block compressed formats the region snaps outward to whole blocks, so slightly more than asked can be refreshed. Compressed formats are supported; the pulled data lands in cpuData in the same tight block rows the upload reads from.
 
 ## UnifiedTexture
 
@@ -1825,7 +1843,7 @@ startScope		//Transitions resources
     setRaytracingPipelineExt
     	dispatchRaysExt						//Keeps scope alive
 
-    startRenderExt
+    startRenderExt							//Keeps scope alive if any attachment uses a Clear load
         setPrimitiveBuffers
         setViewport/Scissor
         setBlendConstants
@@ -1844,6 +1862,8 @@ startScope		//Transitions resources
 Because a scope hoists the transitions of operations such as clearImages, copyImages, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same (sub)resource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
 
 All startRenderExts in a scope should be ended and all startRegionDebugExts as well. Since a scope should be self contained.
+
+A scope that never records one of the "keeps scope alive" operations is rewound at endScope as if it never happened: its commands, transitions and scope id are all discarded and it won't appear in activeScopes or execute at submit. State setters (pipelines, viewport, primitive buffers, debug markers) never keep a scope alive on their own. A render pass counts as alive when any of its attachments uses a Clear load, since the clear is a side effect all by itself; a pass that only loads/preserves and never draws is dead weight and gets rewound with the rest.
 
 #### Transitions
 

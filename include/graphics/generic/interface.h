@@ -35,6 +35,7 @@ typedef struct Pipeline Pipeline;
 typedef struct Swapchain Swapchain;
 typedef struct CommandList CommandList;
 typedef struct DeviceBuffer DeviceBuffer;
+typedef struct TextureRange TextureRange;
 typedef struct DescriptorLayout DescriptorLayout;
 typedef struct DescriptorTable DescriptorTable;
 typedef struct DescriptorHeap DescriptorHeap;
@@ -147,6 +148,27 @@ typedef struct GraphicsObjectSizes {
 	);
 
 	typedef void (*DeviceBuffer_freeImpl)(DeviceBuffer *buffer);
+
+	typedef Bool (*DeviceBufferRef_pullImpl)(
+		void *commandBuffer,
+		GraphicsDeviceRef *deviceRef,
+		DeviceBufferRef *resource,
+		U64 offset,
+		U64 len,
+		U64 stagingOffset,
+		Error *e_rr
+	);
+
+	typedef Bool (*DeviceTextureRef_pullImpl)(
+		void *commandBuffer,
+		GraphicsDeviceRef *deviceRef,
+		DeviceTextureRef *resource,
+		const TextureRange *range,
+		U64 stagingOffset,
+		U64 *rowPitch,
+		Error *e_rr
+	);
+
 	typedef Bool (*DeviceBufferRef_flushImpl)(
 		void *commandBuffer,
 		GraphicsDeviceRef *deviceRef,
@@ -315,10 +337,12 @@ typedef struct GraphicsObjectSizes {
 
 		GraphicsDeviceRef_createBufferImpl               bufferCreate;
 		DeviceBufferRef_flushImpl                        bufferFlush;
+		DeviceBufferRef_pullImpl                         bufferPull;
 		DeviceBuffer_freeImpl                            bufferFree;
 
 		UnifiedTexture_createImpl                        textureCreate;
 		DeviceTextureRef_flushImpl                       textureFlush;
+		DeviceTextureRef_pullImpl                        texturePull;
 		UnifiedTexture_freeImpl                          textureFree;
 
 		GraphicsDeviceRef_createSwapchainImpl            swapchainCreate;
@@ -433,10 +457,21 @@ Bool GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf
 void DeviceBuffer_freeExt(DeviceBuffer *buffer);
 Bool DeviceBufferRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending, Error *e_rr);
 
+Bool DeviceBufferRef_pullExt(
+	void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *resource,
+	U64 offset, U64 len, U64 stagingOffset, Error *e_rr
+);
+
 //Device texture
 
 Bool UnifiedTexture_createExt(TextureRef *textureRef, const CharString *name, Error *e_rr);
 Bool DeviceTextureRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending, Error *e_rr);
+
+Bool DeviceTextureRef_pullExt(
+	void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *resource,
+	const TextureRange *range, U64 stagingOffset, U64 *rowPitch, Error *e_rr
+);
+
 void UnifiedTexture_freeExt(TextureRef *textureRef);
 
 //Swapchain

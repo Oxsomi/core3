@@ -54,10 +54,12 @@ Bool DxDeviceBuffer_transition(
 
 	//Handle buffer barrier
 
+	//The first use has SyncBefore NONE, which the spec only allows together with AccessBefore NO_ACCESS
+
 	const D3D12_BUFFER_BARRIER bufferBarrier = (D3D12_BUFFER_BARRIER) {
 		.SyncBefore = buffer->lastSync,
 		.SyncAfter = sync,
-		.AccessBefore = buffer->lastAccess,
+		.AccessBefore = buffer->lastSync == D3D12_BARRIER_SYNC_NONE ? D3D12_BARRIER_ACCESS_NO_ACCESS : buffer->lastAccess,
 		.AccessAfter = access,
 		.pResource = buffer->buffer,
 		.Size = UINT64_MAX            //Sized barrier not allowed
@@ -124,8 +126,10 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(buf->usage & EDeviceBufferUsage_ScratchExt)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
+	//The spec requires UAV alongside, since builds write the AS through unordered access behind the scenes
+
 	if(buf->usage & EDeviceBufferUsage_ASExt)
-		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 	#if D3D12_SDK_VERSION >= 618
 		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment) {
@@ -150,7 +154,21 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(!res || allocInfo.SizeInBytes == U64_MAX)
 		retError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() couldn't query allocInfo"));
 
+	//Tight alignment can hand out tiny alignments, but raytracing dictates minimums the allocation info
+	// doesn't always know about (WARP even returns less for the AS itself): acceleration structures and their
+	// scratch memory are addressed 256 byte aligned and shader binding tables 64 byte aligned
+
+	if(
+		(buf->usage & (EDeviceBufferUsage_ScratchExt | EDeviceBufferUsage_ASExt)) &&
+		allocInfo.Alignment < D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT
+	)
+		allocInfo.Alignment = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT;
+
+	if((buf->usage & EDeviceBufferUsage_SBTExt) && allocInfo.Alignment < D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT)
+		allocInfo.Alignment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+
 	Bool cpuSided = buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit;
+	const Bool readback = buf->resource.flags & EGraphicsResourceFlag_CPUReadBit;
 
 	DeviceMemoryBlock block;
 
@@ -212,7 +230,10 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 		acq = ELockAcquire_Invalid;
 
-		D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined);
+		D3D12_HEAP_DESC heap = getDxHeapDesc(
+			device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined, readback,
+			!!(buf->usage & EDeviceBufferUsage_ASExt)
+		);
 
 		if(device->flags & EGraphicsDeviceFlags_IsDebug)
 			Log_debugLnx(
@@ -246,7 +267,9 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	else {
 
 		DxBlockRequirements req = (DxBlockRequirements) {
-			.flags = EDxBlockFlags_None,
+			.flags =
+				(readback ? EDxBlockFlags_Readback : EDxBlockFlags_None) |
+				(buf->usage & EDeviceBufferUsage_ASExt ? EDxBlockFlags_ASHeap : EDxBlockFlags_None),
 			.alignment = (U32) allocInfo.Alignment,
 			.length = allocInfo.SizeInBytes
 		};
@@ -279,7 +302,11 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 		), e_rr));
 	}
 
-	if (!(block.allocationTypeExt & 1) || (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR))
+	//AS buffers sit in a DEFAULT heap that the CPU can never map, even when ReBAR maps everything else
+
+	const Bool cpuAccessible = !(buf->usage & EDeviceBufferUsage_ASExt);
+
+	if (cpuAccessible && (!(block.allocationTypeExt & 1) || (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR)))
 		gotoIfError3(clean, dxCheck(bufExt->buffer->lpVtbl->Map(
 			bufExt->buffer, 0, NULL, (void**) &buf->resource.mappedMemoryExt
 		), e_rr));
@@ -292,6 +319,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 		retError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"));
 
 	if(
+		cpuAccessible &&
 		(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
 		EDxGraphicsFeatures_ReallyReportReBARWrites
 	)
@@ -572,7 +600,7 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 					bufferExt->buffer,
 					bufferj.startRange,
 					stagingExt->buffer,
-					allocRange + (location - stagingBuffer->buffer.ptr),
+					allocRange + (location - (const U8*)staging->resource.mappedMemoryExt),        //Resource relative
 					len
 				);
 
@@ -596,5 +624,54 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 clean:
 	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, NULL);
 	RefPtr_dec(&tempStagingResource);
+	return s_uccess;
+}
+
+Bool DX_WRAP_FUNC(DeviceBufferRef_pull)(
+	void *commandBufferExt,
+	GraphicsDeviceRef *deviceRef,
+	DeviceBufferRef *resource,
+	U64 offset,
+	U64 len,
+	U64 stagingOffset,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+
+	DxDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(resource), Dx);
+	DxDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->stagingReadback), Dx);
+
+	D3D12_BARRIER_GROUP dep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+
+	gotoIfError3(clean, DxDeviceBuffer_transition(
+		bufferExt, D3D12_BARRIER_SYNC_COPY, D3D12_BARRIER_ACCESS_COPY_SOURCE,
+		&deviceExt->bufferTransitions, &dep, alloc, e_rr
+	));
+
+	gotoIfError3(clean, DxDeviceBuffer_transition(
+		stagingExt, D3D12_BARRIER_SYNC_COPY, D3D12_BARRIER_ACCESS_COPY_DEST,
+		&deviceExt->bufferTransitions, &dep, alloc, e_rr
+	));
+
+	if(dep.NumBarriers) {
+		commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dep);
+		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+	}
+
+	commandBuffer->buffer->lpVtbl->CopyBufferRegion(
+		commandBuffer->buffer,
+		stagingExt->buffer, stagingOffset,
+		bufferExt->buffer, offset,
+		len
+	);
+
+clean:
 	return s_uccess;
 }

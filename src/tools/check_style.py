@@ -157,7 +157,10 @@ BANNED_SYMBOLS: list[dict] = [
             "src/types/base/test/shared/shared.c",
             "src/types/container/string.c",
             "src/platforms/unix/ufile.c",
-            "src/platforms/test/functional/test_platforms_functional_input.c"
+            "src/platforms/test/functional/test_platforms_functional_input.c",
+            # F32x4x4_format is a debug dump of 16 floats. OxC3_types_math sits below OxC3_types_container,
+            # so CharString_format (the alternative this rule points at) isn't reachable from it.
+            "src/types/math/mat.c"
         ),
     },
     # B4, assert

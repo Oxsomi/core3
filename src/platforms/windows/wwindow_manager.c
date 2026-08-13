@@ -199,8 +199,8 @@ typedef struct DataEnumDisplayMonitors {
 	ListMonitor *monitors;
 } DataEnumDisplayMonitors;
 
-//Callback passed to EnumDisplayMonitors. Called once per monitor the WWindow
-// overlaps (or all monitors when called from WindowManager).
+//Callback passed to EnumDisplayMonitors.
+//Called once per monitor the WWindow overlaps (or all monitors when called from WindowManager).
 //Populates w->monitors with geometry, refresh rate, and orientation
 BOOL WWindowManager_enumMonitor(HMONITOR hmon, HDC hdc, LPRECT rect, LPARAM lParam) {
 
@@ -380,6 +380,7 @@ void WindowManager_updateExt(WindowManager *manager) {
 	}
 
 clean:
+	(void) s_uccess;        //retError sets it, but a void function has nothing to hand it to
 	ListU64_free(&seenWindowsLarge, Platform_instance->alloc);
 	Error_print(Platform_instance->alloc, e_rr, ELogLevel_Error, ELogOptions_NewLine);
 }

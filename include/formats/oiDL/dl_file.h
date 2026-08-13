@@ -79,7 +79,7 @@ TList(DLEntryStream);
 typedef struct DLFile {
 
 	//These entries don't necessarily store the actual data.
-	// First, entryStreams[i].stream should be checked to ensure it's not lazily loaded instead.
+	//First, entryStreams[i].stream should be checked to ensure it's not lazily loaded instead.
 
 	union {
 		ListBuffer entryBuffers;

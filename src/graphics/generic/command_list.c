@@ -76,6 +76,7 @@ clean:
 Bool CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 lockTimeout, Error *e_rr) {
 
 	Bool s_uccess = true;
+	ELockAcquire acq = ELockAcquire_Invalid;
 	CommandList *commandList = NULL;
 
 	if(!commandListRef || commandListRef->refPtrType->typeId != (TypeId)EGraphicsTypeId_CommandList)
@@ -83,7 +84,9 @@ Bool CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 lock
 
 	commandList = CommandListRef_ptr(commandListRef);
 
-	if(SpinLock_lock(&commandList->lock, lockTimeout) != ELockAcquire_Acquired)
+	acq = SpinLock_lock(&commandList->lock, lockTimeout);
+
+	if(acq != ELockAcquire_Acquired)
 		retError(clean, Error_invalidOperation(0, "CommandListRef_begin() couldn't acquire lock"));
 
 	if(commandList->state == ECommandListState_Open)
@@ -115,7 +118,11 @@ Bool CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 lock
 
 clean:
 
-	if(!s_uccess && commandList) {
+	//Only undoes what this call did.
+	//Locking an already open list returns AlreadyLocked rather than Acquired, so without this the failure path
+	// would release the lock the first begin still owns and invalidate the recording it started.
+
+	if(!s_uccess && acq == ELockAcquire_Acquired) {
 
 		ListDeviceResourceVersion_clear(&commandList->activeSwapchains, e_rr);
 
@@ -136,6 +143,14 @@ Bool CommandListRef_end(CommandListRef *commandListRef, Error *e_rr) {
 	if (commandList->tempStateFlags & ECommandStateFlags_HasScope)
 		retError(clean, Error_invalidState(0, "CommandListRef_end() can't be called if a scope is open"));
 
+	//A failing startScope assigns InvalidState rather than or-ing it, so it clears HasScope as a side effect and the
+	// check above can't see a scope that broke instead of closing.
+	//That scope already appended its StartScope op and nothing rewinds it, so closing here would hand submit a
+	// recording with a StartScope that has no EndScope and never reached activeScopes.
+
+	if (commandList->tempStateFlags & ECommandStateFlags_InvalidState)
+		retError(clean, Error_invalidState(1, "CommandListRef_end() can't close a recording that was invalidated"));
+
 	gotoIfError3(clean, ListRefPtr_reserve(&commandList->resources, commandList->transitions.length, alloc, e_rr));
 
 	for (U64 i = 0; i < commandList->transitions.length; ++i) {
@@ -153,11 +168,15 @@ Bool CommandListRef_end(CommandListRef *commandListRef, Error *e_rr) {
 
 clean:
 
-	if(!s_uccess && commandList)
-		commandList->state = ECommandListState_Invalid;
+	//Validate fails when this thread doesn't hold the list, and unlocking then would release someone else's lock.
 
-	if(commandList)
+	if(commandList && SpinLock_isLockedForThread(&commandList->lock)) {
+
+		if(!s_uccess)
+			commandList->state = ECommandListState_Invalid;
+
 		SpinLock_unlock(&commandList->lock);
+	}
 
 	return s_uccess;
 }
@@ -803,6 +822,12 @@ Bool GraphicsDeviceRef_createCommandList(
 ) {
 
 	Bool s_uccess = true;
+
+	//Checked first, since getTypes on a NULL device yields a non NULL member pointer that faults in RefPtr_create.
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createCommandList()::deviceRef is required"));
+
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->commandList, commandListRef, e_rr));

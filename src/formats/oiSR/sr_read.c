@@ -113,9 +113,10 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	gotoIfError3(clean, ListSRInterface_resize(&interfaces, header.interfaceCount, alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListSRInterface_buffer(interfaces), alloc, e_rr));
 
-	//Align 16-byte then read the names oiDL. Consume the pad bytes through the cursor rather than only advancing the
-	//offset, so a forward-only stream (file data streaming straight off disk) moves past the padding too; otherwise
-	//DLFile_read would start reading inside the pad and reject the names as a bad DLFile header.
+	//Align 16-byte then read the names oiDL.
+	//Consume the pad bytes through the cursor rather than only advancing the offset, so a forward-only stream (file data
+	// streaming straight off disk) moves past the padding too; otherwise DLFile_read would start reading inside the pad
+	// and reject the names as a bad DLFile header.
 
 	U64 aligned = (*offset + 15) & ~15;
 

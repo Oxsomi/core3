@@ -332,7 +332,7 @@ U64 Descriptor_bufferLength(const Descriptor *d) {
 }
 
 U32 Descriptor_counterOffset(const Descriptor *d) {
-	return
+	return !d ? 0 :
 		d->buffer.startRegionAndCounterOffset.counter16.counterOffset16 |
 		((U32)d->buffer.endRegionAndCounterOffset.counter16.counterOffset16 << 16);
 }

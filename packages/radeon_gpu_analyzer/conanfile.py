@@ -15,7 +15,8 @@ required_conan_version = ">=2.0"
 #    OpenCL through the LC compiler, plus amdgpu-dis for ISA disassembly).
 #
 # Build shape: CLI only (--no-qt drops the Qt GUI entirely, --no-vulkan drops the live-driver Vulkan
-# mode and with it the Vulkan SDK requirement). The offline modes don't need a driver or a GPU.
+# mode and with it the Vulkan SDK requirement).
+# The offline modes don't need a driver or a GPU.
 #
 # Platform reality check: the offline compilers (amdllpc, LC, amdgpu-dis) are prebuilt AMD binaries
 # vendored in the repo (git-lfs) for Windows and Linux x64 only, so that's where this package exists;

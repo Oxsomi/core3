@@ -17,12 +17,13 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-# Functional test for the OxC3 CLI. It drives the built binary through (nearly) every command and asserts on
-# the actual stdout/stderr, known hashes, round-trip contents, expected substrings.
+# Functional test for the OxC3 CLI.
+# It drives the built binary through (nearly) every command
+# and asserts on the actual stdout/stderr, known hashes, round-trip contents, expected substrings.
 # The harder surfaces are covered on purpose: virtual "//" files, -oiCA operations, encryption round-trips,
-# and negative cases that must fail. Environment-dependent categories (graphics/audio/compile) are probed and
-# skipped when the feature isn't in the build; the one genuinely deferred command 
-# (graphics create, the embedded-shader binary isn't ready yet) is marked xfail.
+# and negative cases that must fail.
+# Environment-dependent categories (graphics/audio/compile) are probed and skipped when the feature isn't in the build.
+# The one genuinely deferred command (graphics create, the embedded-shader binary isn't ready yet) is marked xfail.
 #
 # Usage: python test.py <dir-containing-OxC3[.exe]>
 
@@ -133,9 +134,10 @@ def section(name: str):
 def available(exe, category, needle) -> bool:
 	"""True if 'category' lists a subcommand containing needle (i.e. the feature is compiled in)."""
 	_, out = call(exe, [category])
-	# An unknown/unavailable category falls back to the top-level "All categories:" help, whose text
-	# happens to contain other categories' names (e.g. "devices"). Treat that fallback as not-available
-	# so e.g. graphics (whose DLLs may fail to load on a headless CI) is skipped rather than false-matched.
+	# An unknown/unavailable category falls back to the top-level "All categories:" help,
+	# whose text happens to contain other categories' names (e.g. "devices").
+	# Treat that fallback as not-available so e.g. graphics (whose DLLs may fail to load on a headless CI) is skipped
+	# rather than false-matched.
 	if "All categories" in out:
 		return False
 	return needle in out
@@ -204,7 +206,8 @@ def main():
 		run(exe, ["file", "header", "-input", ca], contains=["oiCA"])
 		run(exe, ["file", "data", "-input", ca], contains=["a.txt"])
 
-		# oiDL from a folder: each entry holds a file's raw bytes. Assert the exact per-entry byte lengths.
+		# oiDL from a folder: each entry holds a file's raw bytes.
+		# Assert the exact per-entry byte lengths.
 		dld = p("dld"); os.makedirs(dld)
 		write(os.path.join(dld, "one.bin"), "AAA")            # 3 bytes
 		write(os.path.join(dld, "two.bin"), "BBBBBB")         # 6 bytes
@@ -232,8 +235,8 @@ def main():
 		check(out.count("length =") == 5, "oiDL combine (3 + 2) -> exactly 5 entries")
 
 		# ---- aes key input: -aes / -aes-file / --aes-stdin -----------------------------------------
-		# The GMAC tag depends only on (input, key), so the same key supplied three ways must produce the
-		# identical tag. Exercises the shared CLI_getAesKey decoder (hex arg, hex file, raw file, stdin).
+		# The GMAC tag depends only on (input, key), so the same key supplied three ways must produce the identical tag.
+		# Exercises the shared CLI_getAesKey decoder (hex arg, hex file, raw file, stdin).
 		section("aes key input (-aes / -aes-file / --aes-stdin)")
 
 		keyhex = p("key.hex")
@@ -365,8 +368,9 @@ def main():
 		run(exe, ["info", "license"], contains=["Oxsomi"])
 		run(exe, ["info", "about"], contains=["OxC3"])
 		run(exe, ["devices", "cpu"], contains=["CPU:", "Cores"])
-		# devices all dumps CPU + GPU + audio. Live VRAM needs a created device (deferred prebuilt binary), but
-		# the command degrades gracefully ("Memory in use: unavailable") and still succeeds.
+		# devices all dumps CPU + GPU + audio.
+		# Live VRAM needs a created device (deferred prebuilt binary),
+		# but the command degrades gracefully ("Memory in use: unavailable") and still succeeds.
 		run(exe, ["devices", "all"], contains=["CPU:", "graphics devices"])
 
 		# ---- help (categories, operations-in-category, one operation, one format) -----------------

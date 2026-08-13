@@ -51,10 +51,9 @@ Bool isSingleWindow();
 
 // -- Shared pattern-draw used by F2/F4/F9/F14/F20: a simple onDraw gradient ----
 //
-//All of these tests just need "draw *something* distinguishable, and prove that
-//the pixel that landed in the buffer matches what onDraw was asked to draw at
-//the time of the most recent present()". That state lives in PatternState and is
-//set by the test body; only onDraw actually touches cpuVisibleBuffer.
+//All of these tests just need "draw *something* distinguishable, and prove that the pixel that landed in the buffer
+// matches what onDraw was asked to draw at the time of the most recent present()".
+//That state lives in PatternState and is set by the test body; only onDraw actually touches cpuVisibleBuffer.
 
 typedef struct PatternState {
 	volatile Bool drawn;
@@ -82,8 +81,8 @@ static void Pattern_onDraw(Window *w, PatternState *ps) {
 	ps->drawn = true;
 }
 
-//Pump until either the callback fired or timeout. Used after present() to make
-// sure onDraw actually ran with the *current* zxor before we move on
+//Pump until either the callback fired or timeout.
+//Used after present() to make sure onDraw actually ran with the *current* zxor before we move on
 static Bool Pattern_waitForDraw(volatile Bool *drawn, Ns timeout) {
 
 	Ns waited = 0;
@@ -345,7 +344,7 @@ static void Test_focusMinimize(Test *t) {
 		Test_assert(t, "isMinimized", Window_isMinimized(w));
 	#else
 		//Soft: log the observed state but don't hard-fail on platforms where
-		//the OS may not drive the flag synchronously.
+		// the OS may not drive the flag synchronously.
 		if (!Window_isMinimized(w))
 			Test_print(t, "WARN: IsMinimized not set after minimize request");
 	#endif
@@ -650,6 +649,8 @@ static void Test_maximize(Test *t) {
 			I32x2_x(w->size) <= I32x2_x(originalSize) + 10 &&
 			I32x2_y(w->size) <= I32x2_y(originalSize) + 10
 		);
+	#else
+		(void) originalSize;
 	#endif
 
 	pump(VISUAL_HOLD_NS);
@@ -877,23 +878,20 @@ clean:
 // -- F21. Transparent window (per-pixel alpha) ---------------------------------
 //
 //Opens a 300x300 window with EWindowHint_Transparent | EWindowHint_NoBorder | EWindowHint_ProvideCPUBuffer.
-//Fills the CPU buffer with transparent black (0x00000000) from onDraw, then draws
-// a filled circle in the centre.  Pixels outside the circle have alpha=0 and should be
-// invisible to the compositor; pixels inside are fully opaque.
+//Fills the CPU buffer with transparent black (0x00000000) from onDraw, then draws a filled circle in the centre.
+//Pixels outside the circle have alpha=0 and should be invisible to the compositor; pixels inside are fully opaque.
 //
 //We verify:
 //  - Inside the circle: pixel is 0xFF0000FF (opaque, premultiplied)
 //  - Outside the circle: pixel is 0x00000000 (fully transparent)
 //  - present succeeds without error
 //
-//Visual verification: the window should show a circle floating with no
-// background.  On compositors / drivers that don't honour per-pixel alpha
-// the background may appear black instead of transparent; this is not a
-// test failure since it's a compositor capability, not a bug in our code.
+//Visual verification: the window should show a circle floating with no background.
+//On compositors / drivers that don't honour per-pixel alpha the background may appear black instead of transparent;
+// this is not a test failure since it's a compositor capability, not a bug in our code.
 //
-//NOTE: this is grouped with window state (not CSD) since transparency is a
-//per-pixel composition hint orthogonal to whether the compositor draws its
-//own decorations.
+//NOTE: this is grouped with window state (not CSD) since transparency is a per-pixel composition hint
+// orthogonal to whether the compositor draws its own decorations.
 
 #define F21_RADIUS   100
 #define F21_CX       150

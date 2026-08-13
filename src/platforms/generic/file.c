@@ -130,7 +130,8 @@ Bool File_queryFileObjectCountAllVirtual(
 
 //Physical implementations
 //These all assume we pass them a null terminated string that has been fully resolved.
-//These make their way directly to the OS. They'll be limited to 1023 for portability reasons.
+//These make their way directly to the OS.
+//They'll be limited to 1023 for portability reasons.
 //    Windows: \\?\ need to be fully resolved; \\?\C:\programming\test (not //?/C:/test or //?C:test)
 //    Unix:    Null terminated string
 
@@ -527,7 +528,7 @@ void FileHandle_close(FileHandle *handle, const Allocator *alloc) {
 RefPtrType FileHandle_makeType(const Allocator *alloc) {
 	return (RefPtrType) {
 		.typeId = (TypeId) EPlatformsTypeId_FileHandle,
-		.length = (U32) sizeof(FileHandle),
+		.lengthAndAlignment = RefPtrType_pack(sizeof(FileHandle), alignof(FileHandle)),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc) FileHandle_close
 	};
@@ -549,7 +550,7 @@ Bool File_open(
 	if(!loc || !CharString_isValidFilePath(*loc))
 		retError(clean, Error_invalidParameter(0, 0, "File_open()::loc must be a valid file path"));
 
-	if(!ptrType || ptrType->length != sizeof(FileHandle) || ptrType->typeId != (TypeId) EPlatformsTypeId_FileHandle)
+	if(!ptrType || RefPtrType_length(ptrType) != sizeof(FileHandle) || ptrType->typeId != (TypeId) EPlatformsTypeId_FileHandle)
 		retError(clean, Error_invalidParameter(1, 0, "File_open()::ptrType is invalid"));
 
 	if(!handle)
@@ -681,7 +682,7 @@ Bool File_write(
 	if(!loc || !CharString_isValidFilePath(*loc))
 		retError(clean, Error_invalidParameter(0, 0, "File_write()::loc must be a valid file path"));
 
-	if(!ptrType || ptrType->length != sizeof(FileHandle) || ptrType->typeId != (TypeId) EPlatformsTypeId_FileHandle)
+	if(!ptrType || RefPtrType_length(ptrType) != sizeof(FileHandle) || ptrType->typeId != (TypeId) EPlatformsTypeId_FileHandle)
 		retError(clean, Error_invalidParameter(1, 0, "File_write()::ptrType is invalid"));
 
 	if(File_isVirtual(*loc)) {
@@ -714,7 +715,7 @@ Bool File_read(
 	if(!loc || !CharString_isValidFilePath(*loc))
 		retError(clean, Error_invalidParameter(0, 0, "File_read()::loc must be a valid file path"));
 
-	if(!ptrType || ptrType->length != sizeof(FileHandle) || ptrType->typeId != (TypeId) EPlatformsTypeId_FileHandle)
+	if(!ptrType || RefPtrType_length(ptrType) != sizeof(FileHandle) || ptrType->typeId != (TypeId) EPlatformsTypeId_FileHandle)
 		retError(clean, Error_invalidParameter(1, 0, "File_read()::ptrType is invalid"));
 
 	if(!output)
@@ -997,9 +998,15 @@ Bool File_getInfoVirtualInternal(FileInfo *info, const CharString *loc, const Al
 	//loc is root or a parent directory of a section, always a folder
 	if(!section) {
 
-		const CharString display = CharString_length(*loc) ? *loc : CharString_createRefCStrConst("//.");
+		//Re-qualified with the // marker resolve stripped, so info->path is itself a valid virtual path
+
 		CharString path = CharString_createNull();
-		gotoIfError3(clean, CharString_createCopy(display, alloc, &path, e_rr));
+
+		if(CharString_length(*loc)) {
+			gotoIfError3(clean, CharString_format(alloc, &path, e_rr, "//%.*s", (int) CharString_length(*loc), loc->ptr));
+		}
+
+		else gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst("//."), alloc, &path, e_rr));
 		*info = (FileInfo) {
 			.path   = path,
 			.type   = EFileType_Folder,
@@ -1013,10 +1020,17 @@ Bool File_getInfoVirtualInternal(FileInfo *info, const CharString *loc, const Al
 		const CAFile *caFile = &Platform_instance->archives.ptr[section->loadedAndId << 1 >> 1];
 		CAHandle handle = CAFile_resolve(caFile, subPath);
 
-		//Full path is just loc since it's already resolved and normalized
+		//CAHandle_Invalid is (U64)-1, so its top bit is set and CAHandle_isFolder would call it a folder.
+		//Without this the function reports a phantom empty folder and succeeds for any name at all,
+		// which makes File_has and File_hasFolder answer true for paths that File_read then can't find.
+
+		if(handle == CAHandle_Invalid)
+			retError(clean, Error_notFound(0, 0, "File_getInfoVirtualInternal() file not found in section"));
+
+		//Re-qualified with the // marker resolve stripped, so info->path is itself a valid virtual path
 
 		CharString path = CharString_createNull();
-		gotoIfError3(clean, CharString_createCopy(*loc, alloc, &path, e_rr));
+		gotoIfError3(clean, CharString_format(alloc, &path, e_rr, "//%.*s", (int) CharString_length(*loc), loc->ptr));
 
 		*info = (FileInfo) {
 			.path      = path,
@@ -1069,11 +1083,39 @@ typedef struct ForeachFile {
 	CharString currentPath;
 } ForeachFile;
 
+//Re-qualifies an archive internal name ("hlsl/foo.hlsl") as a full virtual path ("//<section>/hlsl/foo.hlsl")
+// before forwarding to the user's callback.
+//The archive only knows its own names,
+// but foreach's contract is that every reported path is itself a valid input for the other File_* functions,
+// matching the absolute paths the physical foreach reports.
+
+static Bool File_virtualForeachCallback(const FileInfo *info, ForeachFile *foreach, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	CharString path = CharString_createNull();
+
+	gotoIfError3(clean, CharString_format(
+		alloc, &path, e_rr, "//%.*s%.*s",
+		(int) CharString_length(foreach->currentPath), foreach->currentPath.ptr,
+		(int) CharString_length(info->path), info->path.ptr
+	));
+
+	FileInfo prefixed = *info;
+	prefixed.path = path;
+
+	gotoIfError3(clean, foreach->callback(&prefixed, foreach->userData, alloc, e_rr));
+
+clean:
+	CharString_free(&path, alloc);
+	return s_uccess;
+}
+
 Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	ForeachFile *foreach     = (ForeachFile*)userData;
+	CharString prefixed      = CharString_createNull();
 	CharString resolvedLower = CharString_createNull();
 	CharString resolvedSlash = CharString_createNull();
 	CharString secLower      = CharString_createNull();
@@ -1099,8 +1141,10 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 	for(U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
 		const VirtualSection *section = Platform_instance->virtualSections.ptr + i;
 
-		//Only loaded sections are accessible. A registered-but-unloaded section is invisible (matching File_has),
-		//so the root listing/count stays empty when nothing is loaded. Callers load sections before walking them.
+		//Only loaded sections are accessible.
+		//A registered-but-unloaded section is invisible (matching File_has),
+		// so the root listing/count stays empty when nothing is loaded.
+		//Callers load sections before walking them.
 		if(!section->loadedAndId)
 			continue;
 
@@ -1118,8 +1162,9 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 		//- section equals query exactly
 		//- our path starts with section/ (query is inside section)
 
-		//At root the query is empty; every section is below it. startsWith(secLower, "/") is false because
-		//section paths carry no leading slash, so treat an empty query as matching all sections.
+		//At root the query is empty; every section is below it.
+		//startsWith(secLower, "/") is false because section paths carry no leading slash,
+		// so treat an empty query as matching all sections.
 		Bool sectionBelowQuery  = !CharString_length(resolvedLower) ||
 			CharString_startsWithStringInsensitive(&secLower, &resolvedSlash, 0);
 		Bool sectionIsQuery     = CharString_equalsStringInsensitive(&secLower,        &resolvedLower);
@@ -1132,9 +1177,9 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 
 		U64 secSlashCount = CharString_countAllSensitive(&secLower, '/', 0);
 
-		//When iterating root, emit the top-level ancestor directory of nested sections (a/b -> "a") as a
-		//virtual folder, de-duplicated since multiple sections may share it. Top-level (slashless) sections
-		//are emitted by the block below instead, so only nested sections need this.
+		//When iterating root, emit the top-level ancestor directory of nested sections (a/b -> "a") as a virtual folder,
+		// de-duplicated since multiple sections may share it.
+		//Top-level (slashless) sections are emitted by the block below instead, so only nested sections need this.
 		if(!CharString_length(resolvedLower) && secSlashCount) {
 
 			CharString parent = CharString_createNull();
@@ -1156,8 +1201,17 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 				gotoIfError3(clean, CharString_createCopy(parent, alloc, &parentCopy, e_rr));
 				gotoIfError3(clean, ListCharString_pushBack(&visited, parentCopy, alloc, e_rr));
 
+				//Emitted with the // marker so the callback can hand the path straight back to File_*;
+				// the visited dedup above stays on the unprefixed form.
+
+				CharString_free(&prefixed, alloc);
+
+				gotoIfError3(clean, CharString_format(
+					alloc, &prefixed, e_rr, "//%.*s", (int) CharString_length(parent), parent.ptr
+				));
+
 				FileInfo info = (FileInfo) {
-					.path   = parentCopy,
+					.path   = prefixed,
 					.type   = EFileType_Folder,
 					.access = EFileAccess_Read
 				};
@@ -1171,8 +1225,14 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 
 		if(emitSection) {
 
+			CharString_free(&prefixed, alloc);
+
+			gotoIfError3(clean, CharString_format(
+				alloc, &prefixed, e_rr, "//%.*s", (int) CharString_length(secLower), secLower.ptr
+			));
+
 			FileInfo info = (FileInfo) {
-				.path   = secLower,
+				.path   = prefixed,
 				.type   = EFileType_Folder,
 				.access = EFileAccess_Read
 			};
@@ -1190,7 +1250,7 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 			if(queryInsideSection)
 				CharString_cut(&resolvedLower, CharString_length(secSlash), 0, &child);
 
-			//currentPath is used by File_virtualCallback to prepend section prefix
+			//currentPath is what File_virtualForeachCallback prepends to each archive internal name
 			foreach->currentPath = secSlash;
 
 			CAHandle handle = CAFile_resolve(caFile, child);
@@ -1201,8 +1261,8 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 			gotoIfError3(clean, CAFile_foreach(
 				caFile,
 				handle,
-				foreach->callback,
-				foreach->userData,
+				(FileCallback) File_virtualForeachCallback,
+				foreach,
 				foreach->isRecursive,
 				alloc,
 				e_rr
@@ -1220,6 +1280,7 @@ clean:
 		SpinLock_unlock(&Platform_instance->virtualSectionsLock);
 
 	ListCharString_freeUnderlying(&visited, alloc);        //visited holds owned copies of the top-level dir names
+	CharString_free(&prefixed, alloc);
 	CharString_free(&resolvedLower, alloc);
 	CharString_free(&resolvedSlash, alloc);
 	CharString_free(&secLower, alloc);
@@ -1346,9 +1407,31 @@ Bool File_unloadVirtualInternal(void *userData, const CharString *loc, const All
 			continue;
 
 		if(section->loadedAndId) {
-			CAFile_free(&Platform_instance->archives.ptrNonConst[section->loadedAndId << 1 >> 1], alloc);
-			ListCAFile_erase(&Platform_instance->archives, section->loadedAndId << 1 >> 1, NULL);
+
+			const U64 id = section->loadedAndId << 1 >> 1;
+
+			CAFile_free(&Platform_instance->archives.ptrNonConst[id], alloc);
+			ListCAFile_erase(&Platform_instance->archives, id, NULL);
 			section->loadedAndId = 0;
+
+			//loadedAndId is an index into archives, and erase shifts everything after id down one.
+			//Every other loaded section therefore points one slot too high from here on.
+			//Unloading a parent path matches more than one section (root matches all of them), so without this the next
+			// iteration frees a slot past the end, a double free of the archive that just moved down.
+			//It only shows up once two sections are loaded, which is why a single section target never tripped it.
+
+			for (U64 j = 0; j < Platform_instance->virtualSections.length; ++j) {
+
+				VirtualSection *other = Platform_instance->virtualSections.ptrNonConst + j;
+
+				if(!other->loadedAndId)
+					continue;
+
+				const U64 otherId = other->loadedAndId << 1 >> 1;
+
+				if(otherId > id)
+					other->loadedAndId = (otherId - 1) | ((U64)1 << 63);
+			}
 		}
 	}
 

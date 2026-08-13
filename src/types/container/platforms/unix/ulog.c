@@ -30,9 +30,9 @@
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 
-//Required for the _PLATFORM_TYPE / PLATFORM_* checks below. Without it the preprocessor silently treats all of them
-// as 0, the ANDROID/IOS exclusion below excludes *every* platform and Log_log is never compiled
-// (surfacing as "undefined reference to Log_log" when linking on Linux/OSX).
+//Required for the _PLATFORM_TYPE / PLATFORM_* checks below.
+//Without it the preprocessor silently treats all of them as 0, the ANDROID/IOS exclusion below excludes *every* platform
+// and Log_log is never compiled (surfacing as "undefined reference to Log_log" when linking on Linux/OSX).
 #include "types/base/platform_types.h"
 
 #include <stdio.h>

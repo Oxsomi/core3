@@ -148,7 +148,8 @@ clean:
 	return s_uccess;
 }
 
-//Shared spawn core. `executable` is the final exe
+//Shared spawn core.
+//`executable` is the final exe
 // (a File_resolve'd absolute path, or a bare PATH name when systemSearch is set).
 //systemSearch controls whether Windows resolves it through the PATH (lpApplicationName NULL).
 
@@ -198,7 +199,7 @@ static Bool Process_spawn(
 	gotoIfError3(clean, CharString_toUTF16(cmd, alloc, &cmdW, e_rr));
 
 	//For an exact (resolved) path, hand CreateProcess the application name so it launches that file and doesn't
-	//fall back to a PATH search; for a system name, leave it NULL so Windows resolves it through the PATH.
+	// fall back to a PATH search; for a system name, leave it NULL so Windows resolves it through the PATH.
 
 	if(!systemSearch)
 		gotoIfError3(clean, CharString_toUTF16(executable, alloc, &exeW, e_rr));
@@ -245,7 +246,7 @@ static Bool Process_spawn(
 	if(errWr) { CloseHandle(errWr); errWr = NULL; }
 
 	//Poll both pipes and the process together; reading both avoids the deadlock where the child blocks
-	//filling one pipe while we block reading the other.
+	// filling one pipe while we block reading the other.
 
 	const Ns start = Time_now();
 	Bool timedOut = false;

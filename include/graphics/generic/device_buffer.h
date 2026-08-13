@@ -120,6 +120,14 @@ Bool GraphicsDeviceRef_createBufferData(
 
 Bool DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count, Error *e_rr);
 
+//Read a region back from the device into cpuData (requires CPUBacked).
+//The copy is recorded after the next submit's command lists, so it sees that frame's results, and completes
+// once the frame finished on the device (the callback fires then; stall with wait() if it's needed now).
+//len 0 means the whole buffer starting at offset.
+Bool DeviceBufferRef_pullRegion(
+	DeviceBufferRef *buf, U64 offset, U64 len, DevicePullCallback callback, void *context, Error *e_rr
+);
+
 #ifdef __cplusplus
 	}
 #endif

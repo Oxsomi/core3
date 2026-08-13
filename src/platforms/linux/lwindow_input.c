@@ -380,7 +380,7 @@ static void LWindow_pointerButtonBar(
 	InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
 
 	//Map linux BTN_ codes to EMouseButton.
-	// EMouseButton values start after EMouseAxis_End; mirror the Windows mapping.
+	//EMouseButton values start after EMouseAxis_End; mirror the Windows mapping.
 	EMouseActions mb;
 	switch(button) {
 		case BTN_LEFT:    mb = EMouseButton_Left;    break;
@@ -471,10 +471,10 @@ static void LWindow_touchDown(
 
 	InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
 
-	//Fresh contact point: seed absolute position, zero relative axes, same as
-	// LWindow_pointerEnterBar does for a pointer entering the surface. There is no
-	// "previous position" yet, so RX/RY must not carry over a stale delta from
-	// mouse motion or a different finger's last move
+	//Fresh contact point: seed absolute position, zero relative axes,
+	// same as LWindow_pointerEnterBar does for a pointer entering the surface.
+	//There is no "previous position" yet,
+	// so RX/RY must not carry over a stale delta from mouse motion or a different finger's last move
 
 	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0, EInputType_Axis);
 	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1, EInputType_Axis);
@@ -516,8 +516,8 @@ static void LWindow_touchUp(void *data, struct wl_touch *touch, U32 serial, U32 
 
 	//Contact has ended; no further motion events will arrive for this finger.
 	//Settle RX/RY back to zero so nothing reads a stale "still moving" delta,
-	// and report the change, same as any other axis update. Abs (Temp0/Temp1) is
-	// left untouched: "last known position" stays meaningful after lift-off
+	// and report the change, same as any other axis update.
+	//Abs (Temp0/Temp1) is left untouched: "last known position" stays meaningful after lift-off
 
 	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX, EInputType_Axis);
 	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY, EInputType_Axis);
