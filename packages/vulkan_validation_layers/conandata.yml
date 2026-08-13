@@ -1,4 +1,4 @@
 sources:
-  "1.4.357.0":
+  "1.4.357.0-oxc1":
     url: "https://github.com/Oxsomi/Vulkan-ValidationLayers.git"
-    checkout: "vulkan-sdk-1.4.357.0"
+    checkout: "vulkan-sdk-1.4.357.0-oxc1"

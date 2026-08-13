@@ -1,0 +1,33 @@
+name: Windows x64 Vulkan static (clang-cl, ASan + UBSan)
+
+# Nightly companion to the linux clang sanitizer job, see linux_clang_sanitizers.yml for why these aren't
+# in the per commit matrix.
+#
+# Worth having on top of linux because it is the only sanitized job that exercises the Windows code paths:
+# the win32 platform layer, and (unlike the linux jobs) a real D3D12 device via WARP.
+#
+# x64 only. CMakeLists links clang_rt.asan_dynamic-x86_64 by name, so an arm64 job would need the arm64
+# runtime wired up first; MSVC stays unsanitized on purpose, its sanitizers aren't trusted here.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Windows x64 Vulkan static (clang-cl, ASan + UBSan)
+      runner: windows-2022
+      os: windows
+      build_flags: '-compiler clang -o forceVulkan=True -o cliGraphics=False -asan True -ubsan True'
+      # Its own cache group: sanitized dependencies are distinct conan packages from the plain clang-cl job's.
+      cache_name: clang_sanitizers
+      python_cmd: python
+      setup_python: false
+      python_version: ''
+      sanitizers: true
+      hook_name: Windows-x64-vk-static-clang-sanitizers
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

@@ -54,6 +54,8 @@ function(apply_dependencies target)
 
 	get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
 
+	set(_objcopySections)
+
 	foreach(file ${res})
 
 		string(REPLACE "\\" "/" file "${file}")
@@ -94,21 +96,35 @@ function(apply_dependencies target)
 		# web/emscripten has a virtual filesystem.
 		
 		if(WIN32)
-			get_property(res2 TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST_RC)
-			set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST_RC ${RELATIVE_PATH}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${file}\"\n${res2})
+			get_property(res2 TARGET ${target} PROPERTY RESOURCE_LIST_RC)
+			set_property(TARGET ${target} PROPERTY RESOURCE_LIST_RC ${RELATIVE_PATH}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${file}\"\n${res2})
 		elseif(APPLE)
-			add_custom_command(
-				TARGET ${_ARGS_TARGET} POST_BUILD
-				COMMAND llvm-objcopy --add-section "@${TARGET_OF_PACKAGE},${PACKAGE_NAME}=${file}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
-			)
+			list(APPEND _objcopySections --add-section "@${TARGET_OF_PACKAGE},${PACKAGE_NAME}=${file}")
 		elseif(UNIX AND NOT ANDROID)
-			add_custom_command(
-				TARGET ${_ARGS_TARGET} POST_BUILD
-				COMMAND objcopy --add-section "packages/${RELATIVE_PATH}=${file}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
-			)
+			list(APPEND _objcopySections --add-section "packages/${RELATIVE_PATH}=${file}")
 		endif()
 
 	endforeach()
+
+	# All sections go into ONE objcopy invocation: rewriting a Mach-O that llvm-objcopy already rewrote
+	# emits a "__LINKEDIT file offset out of order" binary that dyld refuses, so with two or more embedded
+	# packages the sequential per-file commands produced an unrunnable executable on macOS.
+
+	if(_objcopySections)
+
+		if(APPLE)
+			add_custom_command(
+				TARGET ${target} POST_BUILD
+				COMMAND llvm-objcopy ${_objcopySections} "$<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_NAME:${target}>" "$<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_NAME:${target}>"
+			)
+		elseif(UNIX AND NOT ANDROID)
+			add_custom_command(
+				TARGET ${target} POST_BUILD
+				COMMAND objcopy ${_objcopySections} "$<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_NAME:${target}>" "$<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_NAME:${target}>"
+			)
+		endif()
+
+	endif()
 
 	if(WIN32)
 		get_property(res2 TARGET ${target} PROPERTY RESOURCE_LIST_RC)

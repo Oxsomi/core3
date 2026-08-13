@@ -279,8 +279,11 @@ Bool Compiler_getLinkEntries(
 					break;
 				}
 
+				//l is the matching entry the search above found; k is the uniform combination being built,
+				// which has nothing to do with an index into linkEntries (and can run past its length)
+
 				if (l != linkEntries->length) {
-					gotoIfError3(clean, ListU16_pushBack(&linkEntries->ptrNonConst[k].runtimeEntries, (U16)j, alloc, e_rr));
+					gotoIfError3(clean, ListU16_pushBack(&linkEntries->ptrNonConst[l].runtimeEntries, (U16)j, alloc, e_rr));
 					continue;
 				}
 

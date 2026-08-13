@@ -1,0 +1,31 @@
+name: macOS ARM64 Vulkan static (ASan + UBSan)
+
+# Nightly companion to the linux and windows clang sanitizer jobs, see linux_clang_sanitizers.yml for why
+# these aren't in the per commit matrix.
+#
+# The third libc and allocator in the set: Darwin's malloc has different slack and free behaviour than
+# glibc's and than the Windows heap, and it is the only arm64 host that runs the suites under a sanitizer,
+# which is exactly the combination that made a use after free show up on linux arm64 and nowhere else.
+
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: macOS ARM64 Vulkan static (ASan + UBSan)
+      runner: macos-15
+      os: macos
+      build_flags: '-o cliGraphics=False -asan True -ubsan True'
+      # Its own cache group: sanitized dependencies are distinct conan packages from the plain macOS job's.
+      cache_name: sanitizers
+      python_cmd: python
+      setup_python: true
+      python_version: '3.10'
+      sanitizers: true
+      hook_name: macOS-arm64-static-sanitizers
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

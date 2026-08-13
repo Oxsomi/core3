@@ -619,6 +619,16 @@ extern "C" Bool Compiler_processSPIRV(
 			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"));
 	}
 
+	//The reflect module was created with SPV_REFLECT_MODULE_FLAG_NO_COPY, so it points straight into *result
+	// and every name it exposes is a pointer into those bytes.
+	//It has to be destroyed before the buffer is, or the destroy walks freed memory; on Windows that reads a
+	// still mapped page and appears to work, on Linux the chunk can be munmap'd (or sit in a thread arena's
+	// PROT_NONE tail) and the same code segfaults.
+	//Zeroing it keeps the destroy at clean a no-op, since it early outs on a NULL _internal.
+
+	spvReflectDestroyShaderModule(&spvMod);
+	spvMod = SpvReflectShaderModule{};
+
 	Buffer_free(result, alloc);
 	gotoIfError3(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), alloc, result, e_rr));
 
@@ -939,8 +949,12 @@ extern "C" Bool Compiler_linkSPIRV(
 						else asU32[j] = inputAsU16[j];    //Expand 16-bit to 32-bit
 					}
 
+				//Size of this uniform's own storage, not the number of uniforms in the map.
+				//Buffer_memcpy clamps to the smaller side, so getting this wrong silently truncated
+				// anything wider than the uniform count (e.g. a lone F64x4 kept only its first 4 bytes).
+
 				else Buffer_memcpy(
-					Buffer_createRef(asU32, uniformMap.size() << 2),
+					Buffer_createRef(asU32, uniformMap[i].size() << 2),
 					Buffer_createRefConst(uniformData.ptr + uniform.dataOffset, len)
 				);
 			}
@@ -968,9 +982,12 @@ extern "C" Bool Compiler_linkSPIRV(
 
 	gotoIfError3(clean, Buffer_resize(result, linkedBinSiz << 2, false, false, alloc, e_rr));
 
+	//Length comes from the source, not the destination: taking it from *result only happens to be correct
+	// while callers guarantee an empty result (Buffer_resize early outs when the length already matches).
+
 	Buffer_memcpy(
 		*result,
-		Buffer_createRefConst(linkedBinPtr, Buffer_length(*result))
+		Buffer_createRefConst(linkedBinPtr, linkedBinSiz << 2)
 	);
 
 clean:
