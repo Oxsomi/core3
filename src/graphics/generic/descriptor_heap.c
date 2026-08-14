@@ -26,7 +26,9 @@
 #include "types/container/ref_ptr.h"
 #include "types/base/string_base.h"
 
-void DescriptorHeap_free(DescriptorHeap *heap, const Allocator *alloc) {
+void DescriptorHeap_free(void *heapGeneric, const Allocator *alloc) {
+
+	DescriptorHeap *heap = (DescriptorHeap*) heapGeneric;
 
 	(void)alloc;
 

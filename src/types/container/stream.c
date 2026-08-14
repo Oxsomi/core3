@@ -25,7 +25,9 @@
 #include "types/container/container_types.h"
 #include "types/base/mathi.h"
 
-void Stream_close(OxStream *stream, const Allocator *alloc) {
+void Stream_close(void *streamGeneric, const Allocator *alloc) {
+
+	OxStream *stream = (OxStream*) streamGeneric;
 
 	if (!stream)
 		return;
@@ -45,7 +47,7 @@ RefPtrType Stream_inheritType(const Allocator *alloc, U32 extraSize) {
 		.typeId = (TypeId)EContainerTypeId_Stream,
 		.lengthAndAlignment = RefPtrType_pack(sizeof(OxStream) + extraSize, alignof(OxStream)),
 		.alloc = alloc,
-		.free = (ObjectFreeFunc) Stream_close
+		.free = Stream_close
 	};
 }
 

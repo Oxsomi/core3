@@ -167,6 +167,14 @@ EGraphicsApi EGraphicsApi_resolve(EGraphicsApi api) {
 	return api;
 }
 
+//Unlike the other object frees (each a void* shim in its own file), the GraphicsInstance RefPtr free is the
+//backend GraphicsInstance_freeExt itself, which is typed GraphicsInstance* because it is also invoked through
+//the interface table. This tiny shim adapts it to ObjectFreeFunc so registering it below is a real type match
+//under -fsanitize=function rather than a cast across mismatched function types.
+static void GraphicsInstance_freeRefPtr(void *instGeneric, const Allocator *alloc) {
+	GraphicsInstance_freeExt((GraphicsInstance*) instGeneric, alloc);
+}
+
 RefPtrType GraphicsInstance_makeType(EGraphicsApi api, const Allocator *alloc) {
 
 	api = EGraphicsApi_resolve(api);
@@ -184,28 +192,30 @@ RefPtrType GraphicsInstance_makeType(EGraphicsApi api, const Allocator *alloc) {
 		.typeId = (TypeId) EGraphicsTypeId_GraphicsInstance,
 		.lengthAndAlignment = RefPtrType_pack(sizeof(GraphicsInstance) + sizes->instance, alignof(GraphicsInstance)),
 		.alloc = alloc,
-		.free = (ObjectFreeFunc) GraphicsInstance_freeExt
+		.free = GraphicsInstance_freeRefPtr
 	};
 }
 
 //Free functions of the graphics objects; only used as the ObjectFreeFunc of their RefPtrType.
 //These are intentionally not exposed in the public headers, use RefPtr_dec instead.
 
-void GraphicsDevice_free(GraphicsDevice *device, const Allocator *alloc);
-void DeviceBuffer_free(DeviceBuffer *buffer, const Allocator *alloc);
-void DeviceTexture_free(DeviceTexture *texture, const Allocator *alloc);
-void GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, const Allocator *alloc);
-void GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, const Allocator *alloc);
-void Swapchain_free(Swapchain *swapchain, const Allocator *alloc);
-void Pipeline_free(Pipeline *pipeline, const Allocator *alloc);
-void Sampler_free(Sampler *sampler, const Allocator *alloc);
-void BLAS_free(BLAS *blas, const Allocator *alloc);
-void TLAS_free(TLAS *tlas, const Allocator *alloc);
-void DescriptorLayout_free(DescriptorLayout *layout, const Allocator *alloc);
-void DescriptorTable_free(DescriptorTable *table, const Allocator *alloc);
-void DescriptorHeap_free(DescriptorHeap *heap, const Allocator *alloc);
-void PipelineLayout_free(PipelineLayout *layout, const Allocator *alloc);
-void CommandList_free(CommandList *cmd, const Allocator *alloc);
+//RefPtr destructors: all take void* and cast internally, so the RefPtrType.free slot they
+//are registered in is a real type match under -fsanitize=function.
+void GraphicsDevice_free(void *device, const Allocator *alloc);
+void DeviceBuffer_free(void *buffer, const Allocator *alloc);
+void DeviceTexture_free(void *texture, const Allocator *alloc);
+void GraphicsDevice_freeRenderTexture(void *renderTexture, const Allocator *alloc);
+void GraphicsDevice_freeDepthStencil(void *depthStencil, const Allocator *alloc);
+void Swapchain_free(void *swapchain, const Allocator *alloc);
+void Pipeline_free(void *pipeline, const Allocator *alloc);
+void Sampler_free(void *sampler, const Allocator *alloc);
+void BLAS_free(void *blas, const Allocator *alloc);
+void TLAS_free(void *tlas, const Allocator *alloc);
+void DescriptorLayout_free(void *layout, const Allocator *alloc);
+void DescriptorTable_free(void *table, const Allocator *alloc);
+void DescriptorHeap_free(void *heap, const Allocator *alloc);
+void PipelineLayout_free(void *layout, const Allocator *alloc);
+void CommandList_free(void *cmd, const Allocator *alloc);
 
 //Fills the RefPtrTypes of all objects that can be created through this instance (or its devices).
 //They live in the GraphicsInstance so they're guaranteed to outlive the objects created with them,
@@ -222,35 +232,35 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 			.typeId = (TypeId) EGraphicsTypeId_GraphicsDevice,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(GraphicsDevice) + sizes->device, alignof(GraphicsDevice)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) GraphicsDevice_free
+			.free = GraphicsDevice_free
 		},
 
 		.buffer = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DeviceBuffer,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(DeviceBuffer) + sizes->buffer, alignof(DeviceBuffer)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) DeviceBuffer_free
+			.free = DeviceBuffer_free
 		},
 
 		.deviceTexture = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DeviceTexture,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(DeviceTexture) + imageSize, alignof(DeviceTexture)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) DeviceTexture_free
+			.free = DeviceTexture_free
 		},
 
 		.renderTexture = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_RenderTexture,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(RenderTexture) + imageSize, alignof(RenderTexture)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) GraphicsDevice_freeRenderTexture
+			.free = GraphicsDevice_freeRenderTexture
 		},
 
 		.depthStencil = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DepthStencil,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(DepthStencil) + imageSize, alignof(DepthStencil)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) GraphicsDevice_freeDepthStencil
+			.free = GraphicsDevice_freeDepthStencil
 		},
 
 		.swapchain = (RefPtrType) {
@@ -265,7 +275,7 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 				sizeof(Swapchain) + imageSize * SWAPCHAIN_MAX_IMAGES + sizes->swapchain, alignof(Swapchain)
 			),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) Swapchain_free
+			.free = Swapchain_free
 		},
 
 		//The three pipeline kinds share a typeId but not a length: graphics and raytracing pipelines store
@@ -276,7 +286,7 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 			.typeId = (TypeId) EGraphicsTypeId_Pipeline,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(Pipeline) + sizes->pipeline, alignof(Pipeline)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) Pipeline_free
+			.free = Pipeline_free
 		},
 
 		.pipelineGraphics = (RefPtrType) {
@@ -285,7 +295,7 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 				sizeof(Pipeline) + sizes->pipeline + sizeof(PipelineGraphicsInfo), alignof(Pipeline)
 			),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) Pipeline_free
+			.free = Pipeline_free
 		},
 
 		.pipelineRaytracing = (RefPtrType) {
@@ -294,63 +304,63 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 				sizeof(Pipeline) + sizes->pipeline + sizeof(PipelineRaytracingInfo), alignof(Pipeline)
 			),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) Pipeline_free
+			.free = Pipeline_free
 		},
 
 		.sampler = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_Sampler,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(Sampler) + sizes->sampler, alignof(Sampler)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) Sampler_free
+			.free = Sampler_free
 		},
 
 		.blas = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_BLASExt,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(BLAS) + sizes->blas, alignof(BLAS)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) BLAS_free
+			.free = BLAS_free
 		},
 
 		.tlas = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_TLASExt,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(TLAS) + sizes->tlas, alignof(TLAS)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) TLAS_free
+			.free = TLAS_free
 		},
 
 		.descriptorLayout = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DescriptorLayout,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(DescriptorLayout) + sizes->descriptorLayout, alignof(DescriptorLayout)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) DescriptorLayout_free
+			.free = DescriptorLayout_free
 		},
 
 		.descriptorTable = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DescriptorTable,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(DescriptorTable) + sizes->descriptorTable, alignof(DescriptorTable)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) DescriptorTable_free
+			.free = DescriptorTable_free
 		},
 
 		.descriptorHeap = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DescriptorHeap,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(DescriptorHeap) + sizes->descriptorHeap, alignof(DescriptorHeap)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) DescriptorHeap_free
+			.free = DescriptorHeap_free
 		},
 
 		.pipelineLayout = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_PipelineLayout,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(PipelineLayout) + sizes->pipelineLayout, alignof(PipelineLayout)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) PipelineLayout_free
+			.free = PipelineLayout_free
 		},
 
 		.commandList = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_CommandList,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(CommandList), alignof(CommandList)),
 			.alloc = alloc,
-			.free = (ObjectFreeFunc) CommandList_free
+			.free = CommandList_free
 		}
 	};
 }

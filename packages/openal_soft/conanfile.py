@@ -117,6 +117,12 @@ class openal_soft(ConanFile):
 		tc = CMakeToolchain(self)
 		tc.cppstd = "20"
 
+		# Force the static RELEASE CRT for every config, like the dxc/spirv_reflect recipes and OxC3 itself.
+		# Two reasons: OxC3 links /MT in all configs, so a Debug openal linking /MTd would be a CRT mismatch;
+		# and clang-cl's ASan refuses the debug CRT outright ("invalid argument '/MTd' not allowed with
+		# '-fsanitize=address'"), which is what broke the Windows Debug+ASan build before this.
+		tc.variables["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreaded"
+
 		if self.settings.os == "Linux":
 			tc.cache_variables["ALSOFT_BACKEND_ALSA"]      = True
 			tc.cache_variables["ALSOFT_BACKEND_PIPEWIRE"]  = True

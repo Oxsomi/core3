@@ -29,7 +29,9 @@
 #include "formats/oiSH/sh_registers.h"
 #include "types/container/ref_ptr.h"
 
-void Sampler_free(Sampler *sampler, const Allocator *alloc) {
+void Sampler_free(void *samplerGeneric, const Allocator *alloc) {
+
+	Sampler *sampler = (Sampler*) samplerGeneric;
 
 	(void)alloc;
 

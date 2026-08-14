@@ -60,7 +60,9 @@ TListImpl(DevicePendingPull);
 
 static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId);
 
-void GraphicsDevice_free(GraphicsDevice *device, const Allocator *alloc) {
+void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
+
+	GraphicsDevice *device = (GraphicsDevice*) deviceGeneric;
 
 	(void)alloc;
 

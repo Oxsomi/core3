@@ -28,7 +28,9 @@
 #include "types/container/ref_ptr.h"
 #include "platforms/logx.h"
 
-void PipelineLayout_free(PipelineLayout *layout, const Allocator *alloc) {
+void PipelineLayout_free(void *layoutGeneric, const Allocator *alloc) {
+
+	PipelineLayout *layout = (PipelineLayout*) layoutGeneric;
 
 	(void)alloc;
 

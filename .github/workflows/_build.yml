@@ -227,16 +227,6 @@ jobs:
           test -n "$MANIFEST" || { echo "::error::LunarG SDK layout changed, no layer manifest found"; exit 1; }
           echo "VK_ADD_LAYER_PATH=$(dirname "$MANIFEST")" >> "$GITHUB_ENV"
 
-      - name: Set up Homebrew
-        if: runner.os == 'macOS'
-        uses: Homebrew/actions/setup-homebrew@master
-
-      - name: Setup LLVM
-        if: runner.os == 'macOS'
-        uses: ZhongRuoyu/setup-llvm@v0
-        with:
-          llvm-version: 17
-
       # ── Android platform deps ──────────────────────────────────────────────
       - name: Set up JDK 17
         if: inputs.os == 'android'

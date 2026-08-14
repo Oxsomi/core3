@@ -44,7 +44,9 @@ void *Pipeline_infoOffset(Pipeline *pipeline) {
 	return (U8*)(pipeline + 1) + GraphicsDeviceRef_getObjectSizes(pipeline->device)->pipeline;
 }
 
-void Pipeline_free(Pipeline *pipeline, const Allocator *alloc) {
+void Pipeline_free(void *pipelineGeneric, const Allocator *alloc) {
+
+	Pipeline *pipeline = (Pipeline*) pipelineGeneric;
 
 	Pipeline_freeExt(pipeline, alloc);
 

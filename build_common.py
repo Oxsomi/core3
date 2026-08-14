@@ -594,7 +594,9 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 
 		dxcTablegenConf = ""
 
-		if (asan or ubsan) and system == "Windows":
+		# DXC is ASan-sanitized on Windows (never UBSan), so the trigger is `asan`, not `asan or ubsan`.
+
+		if asan and system == "Windows":
 
 			conanCreateIfChanged(
 				"packages/dxc", shaderProfile, shaderMode, shaderArgs, cache,

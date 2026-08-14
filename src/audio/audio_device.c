@@ -38,7 +38,9 @@ impl extern U32 AudioDevice_sizeExt;
 impl Bool AudioDevice_createExt(Bool isDebug, AudioDevice *dev, Error *e_rr);
 impl void AudioDevice_freeExt(AudioDevice *dev, const Allocator *alloc);
 
-void AudioDevice_free(AudioDevice *dev, const Allocator *alloc) {
+void AudioDevice_free(void *devGeneric, const Allocator *alloc) {
+
+	AudioDevice *dev = (AudioDevice*) devGeneric;
 
 	if(!dev)
 		return;
@@ -55,7 +57,7 @@ RefPtrType AudioDevice_makeType(const Allocator *alloc) {
 		.typeId = (TypeId) EAudioTypeId_AudioDevice,
 		.lengthAndAlignment = RefPtrType_pack(sizeof(AudioDevice) + AudioDevice_sizeExt, alignof(AudioDevice)),
 		.alloc = alloc,
-		.free = (ObjectFreeFunc)AudioDevice_free
+		.free = AudioDevice_free
 	};
 }
 
@@ -78,7 +80,7 @@ Bool AudioDeviceRef_create(
 	if(
 		type->typeId != (TypeId)EAudioTypeId_AudioDevice ||
 		RefPtrType_length(type) != sizeof(AudioDevice) + AudioDevice_sizeExt ||
-		type->free != (ObjectFreeFunc)AudioDevice_free ||
+		type->free != AudioDevice_free ||
 		type->alloc != alloc
 	)
 		retError(clean, Error_invalidParameter(4, 0, "AudioDeviceRef_create()::type is invalid"));

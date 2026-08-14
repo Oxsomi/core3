@@ -118,7 +118,8 @@ clean:
 	return s_uccess;
 }
 
-void Swapchain_free(Swapchain *swapchain, const Allocator *alloc) {
+void Swapchain_free(void *swapchainGeneric, const Allocator *alloc) {
+	Swapchain *swapchain = (Swapchain*) swapchainGeneric;
 	SpinLock_lock(&swapchain->lock, U64_MAX);
 	Swapchain_freeExt(swapchain, alloc);
 	UnifiedTexture_free((TextureRef*)((U8*)swapchain - sizeof(RefPtr)));

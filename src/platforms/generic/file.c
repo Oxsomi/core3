@@ -516,7 +516,9 @@ clean:
 	return s_uccess;
 }
 
-void FileHandle_close(FileHandle *handle, const Allocator *alloc) {
+void FileHandle_close(void *handleGeneric, const Allocator *alloc) {
+
+	FileHandle *handle = (FileHandle*) handleGeneric;
 
 	if(!handle)
 		return;
@@ -532,7 +534,7 @@ RefPtrType FileHandle_makeType(const Allocator *alloc) {
 		.typeId = (TypeId) EPlatformsTypeId_FileHandle,
 		.lengthAndAlignment = RefPtrType_pack(sizeof(FileHandle), alignof(FileHandle)),
 		.alloc = alloc,
-		.free = (ObjectFreeFunc) FileHandle_close
+		.free = FileHandle_close
 	};
 }
 
@@ -896,7 +898,9 @@ clean:
 	return s_uccess;
 }
 
-Bool File_readVirtualInternal(Buffer *output, const CharString *loc, const Allocator *alloc, Error *e_rr) {
+Bool File_readVirtualInternal(void *outputGeneric, const CharString *loc, const Allocator *alloc, Error *e_rr) {
+
+	Buffer *output = (Buffer*) outputGeneric;
 
 	Bool s_uccess = true;
 
@@ -977,7 +981,7 @@ Bool File_readVirtual(const CharString *loc, Buffer *output, Ns maxTimeout, cons
 
 	return File_virtualOp(
 		loc, maxTimeout,
-		(VirtualFileFunc) File_readVirtualInternal,
+		File_readVirtualInternal,
 		output,
 		false,
 		alloc,
@@ -985,7 +989,9 @@ Bool File_readVirtual(const CharString *loc, Buffer *output, Ns maxTimeout, cons
 	);
 }
 
-Bool File_getInfoVirtualInternal(FileInfo *info, const CharString *loc, const Allocator *alloc, Error *e_rr) {
+Bool File_getInfoVirtualInternal(void *infoGeneric, const CharString *loc, const Allocator *alloc, Error *e_rr) {
+
+	FileInfo *info = (FileInfo*) infoGeneric;
 
 	Bool s_uccess = true;
 	CharString subPath = CharString_createNull();
@@ -1067,7 +1073,7 @@ Bool File_getInfoVirtual(const CharString *loc, FileInfo *info, const Allocator 
 
 	gotoIfError3(clean, File_virtualOp(
 		loc, 1 * MS,
-		(VirtualFileFunc) File_getInfoVirtualInternal,
+		File_getInfoVirtualInternal,
 		info,
 		false,
 		alloc,
@@ -1314,7 +1320,7 @@ Bool File_foreachVirtual(
 
 	return File_virtualOp(
 		loc, 1 * SECOND,
-		(VirtualFileFunc) File_foreachVirtualInternal,
+		File_foreachVirtualInternal,
 		&foreachFile,
 		false,
 		alloc,
@@ -1375,7 +1381,8 @@ impl Bool File_loadVirtualInternal1(
 	Error *e_rr
 );
 
-Bool File_loadVirtualInternal(FileLoadVirtual *userData, const CharString *loc, const Allocator *alloc, Error *e_rr) {
+Bool File_loadVirtualInternal(void *userDataGeneric, const CharString *loc, const Allocator *alloc, Error *e_rr) {
+	FileLoadVirtual *userData = (FileLoadVirtual*) userDataGeneric;
 	return File_loadVirtualInternal1(userData, loc, true, userData->memoryStreamType, userData->encStreamType, alloc, e_rr);
 }
 
@@ -1450,7 +1457,7 @@ clean:
 
 Bool File_isVirtualLoaded(const CharString *loc, const Allocator *alloc, Error *e_rr) {
 	FileLoadVirtual virt = (FileLoadVirtual) { 0 };
-	return File_virtualOp(loc, 1 * MS, (VirtualFileFunc) File_loadVirtualInternal, &virt, false, alloc, e_rr);
+	return File_virtualOp(loc, 1 * MS, File_loadVirtualInternal, &virt, false, alloc, e_rr);
 }
 
 Bool File_loadVirtual(
@@ -1469,7 +1476,7 @@ Bool File_loadVirtual(
 		.encStreamType = encStreamType
 	};
 
-	return File_virtualOp(loc, 1 * MS, (VirtualFileFunc) File_loadVirtualInternal, &virt, false, alloc, e_rr);
+	return File_virtualOp(loc, 1 * MS, File_loadVirtualInternal, &virt, false, alloc, e_rr);
 }
 
 Bool File_unloadVirtual(const CharString *loc, const Allocator *alloc, Error *e_rr) {

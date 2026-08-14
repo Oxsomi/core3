@@ -48,8 +48,13 @@ class dxc(ConanFile):
 			else:
 				flags += [ "-fsanitize=address", "-fno-omit-frame-pointer" ]
 
+		# vptr needs RTTI across the whole program, which the prebuilt setup lacks. enum is off because DXC's
+		# own reflection uses 0xFFFFFFFF as an "unknown" _D3D_SHADER_VARIABLE_TYPE sentinel, which is a valid
+		# use of an out-of-range enum value that -fsanitize=enum flags; that is DXC's design, not our bug, and
+		# with halt_on_error it would abort the build. The rest of UBSan stays on so it can still catch real
+		# undefined behaviour DXC hits while processing our shaders.
 		if self.options.enableUBSAN:
-			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr" ]
+			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr,enum" ]
 			flags += [ "/Oy-" ] if msvcStyle else [ "-fno-omit-frame-pointer" ]
 
 		return flags

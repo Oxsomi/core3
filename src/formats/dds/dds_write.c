@@ -30,7 +30,9 @@
 #include "types/base/mathi.h"
 #include "types/base/mathf.h"
 
-ECompareResult SubResourceData_sort(const SubResourceData *a, const SubResourceData *b) {
+ECompareResult SubResourceData_sort(const void *aRaw, const void *bRaw) {
+
+	const SubResourceData *a = (const SubResourceData*) aRaw, *b = (const SubResourceData*) bRaw;
 
 	if (a->layerId != b->layerId)
 		return a->layerId < b->layerId ? ECompareResult_Lt : ECompareResult_Gt;
@@ -148,7 +150,7 @@ Bool DDS_write(
 
 	//Sort subresources to ensure we don't have missing or wrongly ordered SubResource data
 
-	if (!ListSubResourceData_sortCustom(*buf, (CompareFunction)SubResourceData_sort))
+	if (!ListSubResourceData_sortCustom(*buf, SubResourceData_sort))
 		retError(clean, Error_invalidState(0, "DDS_write()::buf couldn't be sorted"));
 
 	//Validate size of each subresource

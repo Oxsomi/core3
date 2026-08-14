@@ -1,5 +1,9 @@
 # OxC3 (Oxsomi core 3.2.103): Ra
 
+**OxC3** (0xC3, Oxsomi core 3) is a cross-platform C11 framework for applications, tools and games. It is the successor to O(x)somi core v2/v1, merging ostlc (standard template library), owc (window core) and ogc (graphics core) into one coherent, layered codebase. It is written in C so it stays fast to build, easy to parse for reflection/codegen, and straightforward to wrap from other languages (bindings or a future VM); a C++20 convenience layer is possible on top.
+
+For per-module maturity, see [STATUS.md](STATUS.md). For how the modules fit together (and the error-handling idiom used everywhere), see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 | Platforms | x64 -> Vulkan | x64 -> Native API | x64 dynamic (Vk + Native) | ARM -> Vulkan | ARM -> Native API | ARM dynamic (Vk + Native) |
 | --------- | ------------- | ----------------- | ------------------------- | ------------- | ----------------- | ------------------------- |
 | Windows   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_dynamic.yml/badge.svg) | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows_arm.yml/badge.svg)** | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12_arm.yml/badge.svg) | **![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_arm_dynamic.yml/badge.svg)** |
@@ -33,9 +37,20 @@ link's symbol visibility) rather than everywhere at once:
 MinGW GCC isn't supported on Windows: it's a different CRT and ABI, so it would be a new target rather than
 a new compiler, and the prebuilt dependencies (DXC among them) are MSVC.
 
-**OxC3** (0xC3, Oxsomi core 3) is a cross-platform C11 framework for applications, tools and games. It is the successor to O(x)somi core v2/v1, merging ostlc (standard template library), owc (window core) and ogc (graphics core) into one coherent, layered codebase. It is written in C so it stays fast to build, easy to parse for reflection/codegen, and straightforward to wrap from other languages (bindings or a future VM); a C++20 convenience layer is possible on top.
+### Nightly sanitizer builds (ASan + UBSan)
 
-For per-module maturity, see [STATUS.md](STATUS.md). For how the modules fit together (and the error-handling idiom used everywhere), see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+These run on a nightly schedule rather than per push, and instrument OxC3, the spirv_reflect fork and DXC.
+A green badge means that configuration built and ran the suite clean under the sanitizers.
+
+| Nightly (clang, ASan + UBSan) | x64 | ARM64 |
+| ----------------------------- | --- | ----- |
+| Windows (clang-cl) | ![windows sanitizers](https://github.com/Oxsomi/core3/actions/workflows/windows_clang_sanitizers.yml/badge.svg) | N/A, the runner's LLVM ships no aarch64 sanitizer runtime |
+| Linux (clang) | ![linux sanitizers](https://github.com/Oxsomi/core3/actions/workflows/linux_clang_sanitizers.yml/badge.svg) | ![linux arm sanitizers](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_clang_sanitizers.yml/badge.svg) |
+| Mac OS X (clang) | ![osx sanitizers](https://github.com/Oxsomi/core3/actions/workflows/osx_clang_sanitizers.yml/badge.svg) | ![osx arm sanitizers](https://github.com/Oxsomi/core3/actions/workflows/osx_arm_sanitizers.yml/badge.svg) |
+
+Windows is x64 only. DXC's UBSan has `enum` excluded everywhere: its reflection uses an out-of-range
+`_D3D_SHADER_VARIABLE_TYPE` sentinel that `-fsanitize=enum` flags, which is DXC's design rather than our
+bug; the rest of UBSan stays on.
 
 ## Modules
 
