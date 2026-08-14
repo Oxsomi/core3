@@ -291,11 +291,13 @@ if(MSVC)
 		# don't give us.
 
 		# Linking the standalone runtime so UBSan names the check and the line rather than just trapping.
-		# vptr is off because it needs RTTI across the whole program, which the prebuilt dependencies
-		# don't give us.
+		# vptr is off because it needs RTTI across the whole program, which the prebuilt dependencies don't
+		# give us. enum is off because OxC3 uses flag enums and sentinels (e.g. ESHExtension holds OR'd bits
+		# and a 1<<Count "unset" marker) whose values are legal by design but not individual enumerators, which
+		# -fsanitize=enum flags on every load; that idiom is pervasive here, so the check is all noise.
 
 		if(EnableUBSAN)
-			list(APPEND BUILD_FLAGS "-fsanitize=undefined" "-fno-sanitize=vptr" "/Oy-")
+			list(APPEND BUILD_FLAGS "-fsanitize=undefined" "-fno-sanitize=vptr,enum" "/Oy-")
 			link_libraries("clang_rt.ubsan_standalone-${sanitizerArch}.lib")
 		endif()
 	endif()
@@ -434,13 +436,14 @@ else()
 		add_link_options(-fsanitize=address)
 	endif()
 
-	# Only vptr is disabled: it needs RTTI across the prebuilt dependencies, which they aren't built with.
-	# function stays ON: every FileCallback implementation now genuinely takes void* and casts internally
-	# (rather than declaring its concrete userData type and being cast at the call site), so an indirect call
-	# through the FileCallback pointer is a true type match.
+	# vptr needs RTTI across the prebuilt dependencies, which they aren't built with. enum is off because OxC3
+	# uses flag enums and sentinels (ESHExtension holds OR'd bits and a 1<<Count "unset" marker) whose values
+	# are legal by design but not individual enumerators, which -fsanitize=enum flags on every load.
+	# function stays ON: every callback implementation now genuinely takes void* and casts internally, so an
+	# indirect call through the callback pointer is a true type match.
 
 	if(EnableUBSAN)
-		add_compile_options(-fsanitize=undefined -fno-sanitize=vptr -fno-omit-frame-pointer)
+		add_compile_options(-fsanitize=undefined -fno-sanitize=vptr,enum -fno-omit-frame-pointer)
 		add_link_options(-fsanitize=undefined)
 	endif()
 

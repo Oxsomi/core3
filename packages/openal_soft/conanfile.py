@@ -49,7 +49,7 @@ class openal_soft(ConanFile):
 		# it would only catch this dependency's own callback-type mismatches, which are not ours to fix,
 		# while the memory checks that matter for our inputs (asan, ubsan's bounds/overflow) stay on.
 		if self.options.enableUBSAN:
-			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr,function" ]
+			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr,function,enum" ]
 			flags += [ "/Oy-" ] if msvcStyle else [ "-fno-omit-frame-pointer" ]
 
 		return flags
@@ -110,6 +110,15 @@ class openal_soft(ConanFile):
 		self.settings.rm_safe("compiler.cppstd")
 		self.settings.rm_safe("compiler.libcxx")
 
+		# Force the static RELEASE CRT even in a Debug build. OxC3 links /MT in every config (its CMakeLists
+		# pins it), so a Debug openal on /MTd would be a CRT mismatch; and clang-cl's ASan refuses the debug
+		# CRT outright ("/MTd not allowed with -fsanitize=address"). Setting runtime_type here (rather than only
+		# CMAKE_MSVC_RUNTIME_LIBRARY in generate(), which conan's own msvc-runtime block overrode back to
+		# MultiThreadedDebug) makes conan itself emit MultiThreaded, and since configure() runs during graph
+		# expansion the package id stays consistent between the graph and the build.
+		if self.settings.os == "Windows":
+			self.settings.compiler.runtime_type = "Release"
+
 	def generate(self):
 		deps = CMakeDeps(self)
 		deps.generate()
@@ -117,10 +126,8 @@ class openal_soft(ConanFile):
 		tc = CMakeToolchain(self)
 		tc.cppstd = "20"
 
-		# Force the static RELEASE CRT for every config, like the dxc/spirv_reflect recipes and OxC3 itself.
-		# Two reasons: OxC3 links /MT in all configs, so a Debug openal linking /MTd would be a CRT mismatch;
-		# and clang-cl's ASan refuses the debug CRT outright ("invalid argument '/MTd' not allowed with
-		# '-fsanitize=address'"), which is what broke the Windows Debug+ASan build before this.
+		# Belt-and-suspenders for the static release CRT; the load-bearing part is runtime_type=Release in
+		# configure() (this alone was overridden by conan's own msvc-runtime block). See that comment.
 		tc.variables["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreaded"
 
 		if self.settings.os == "Linux":

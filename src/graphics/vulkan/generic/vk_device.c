@@ -1387,7 +1387,11 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	VkFence *fence = &deviceExt->commitFence[device->fifId];
 
-	if (device->submitId > device->framesInFlight) {
+	//Only wait when a submit is actually pending on this fence. If the previous submit at this fifId failed
+	//the fence was left unsignaled (see commitFencePending), so waiting would just burn the full timeout on
+	//something nothing will signal; skip straight to reusing the unsignaled fence.
+
+	if (device->submitId > device->framesInFlight && deviceExt->commitFencePending[device->fifId]) {
 
 		gotoIfError3(clean, checkVkError(deviceExt->waitForFences(
 			deviceExt->device,
@@ -1702,7 +1706,12 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		.pWaitDstStageMask = deviceExt->waitStages.ptr
 	};
 
-	gotoIfError3(clean, checkVkError(deviceExt->queueSubmit(queue.queue, 1, &submitInfo, *fence), e_rr));
+	//Record whether the fence now has a submit pending on it BEFORE propagating any error: a failed submit
+	//leaves it unsignaled, and the next frame at this fifId must know not to wait on it.
+
+	VkResult submitRes = deviceExt->queueSubmit(queue.queue, 1, &submitInfo, *fence);
+	deviceExt->commitFencePending[device->fifId] = submitRes == VK_SUCCESS;
+	gotoIfError3(clean, checkVkError(submitRes, e_rr));
 
 	//Presents
 
@@ -1779,6 +1788,15 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 	//Wait for the device
 
 	gotoIfError3(clean, GraphicsDeviceRef_wait(deviceRef, e_rr));
+
+	//The flush borrowed this frame's commit fence and waited on it (via deviceWaitIdle), so it is now
+	//signaled. Reset it, otherwise the frame's own vkQueueSubmit below would be handed an already-signaled
+	//fence, which is invalid. The pending flag stays false until that real submit sets it.
+
+	gotoIfError3(clean, checkVkError(
+		deviceExt->resetFences(deviceExt->device, 1, &deviceExt->commitFence[device->fifId]), e_rr
+	));
+	deviceExt->commitFencePending[device->fifId] = false;
 
 	//Reset command list
 

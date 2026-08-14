@@ -121,9 +121,13 @@ jobs:
     # LeakSanitizer is off on purpose: the suites already assert their own allocation counts return to zero
     # (the "NoLeaks" checks), while lavapipe, DXC and the ICD loader leak by design at exit and would paint
     # every run red. abort_on_error/halt_on_error are what make a finding fail the step instead of scrolling by.
+    # detect_odr_violation=0: OxC3 deliberately links its core static libs into both the executable and a
+    # shared module (the shader compiler .so/.dylib, dynamic graphics), so a file-scope global like
+    # SHA256_STATE exists once per module. Those copies are identical, but ASan's ODR checker sees two
+    # registrations of the same symbol and aborts; the "violation" is an artifact of that linking, not a bug.
 
     env:
-      ASAN_OPTIONS: ${{ inputs.sanitizers && 'detect_leaks=0:abort_on_error=1' || '' }}
+      ASAN_OPTIONS: ${{ inputs.sanitizers && 'detect_leaks=0:abort_on_error=1:detect_odr_violation=0' || '' }}
       UBSAN_OPTIONS: ${{ inputs.sanitizers && 'print_stacktrace=1:halt_on_error=1' || '' }}
 
     steps:

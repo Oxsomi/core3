@@ -49,7 +49,7 @@ class spirv_reflect(ConanFile):
 		# it would only catch this dependency's own callback-type mismatches, which are not ours to fix,
 		# while the memory checks that matter for our inputs (asan, ubsan's bounds/overflow) stay on.
 		if self.options.enableUBSAN:
-			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr,function" ]
+			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr,function,enum" ]
 			flags += [ "/Oy-" ] if msvcStyle else [ "-fno-omit-frame-pointer" ]
 
 		return flags
