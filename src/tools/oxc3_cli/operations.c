@@ -109,8 +109,7 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Numeric type (e.g. a float format: F8, F16, F32, F64, BF16, TF19, PXR24, FP24).",
 	"Operate inside the given oiCA archive instead of the working directory.",
 	"Read the 32-byte AES key from a file (64/66-char hex or a raw 32-byte binary) instead of a plaintext argument.",
-	"Target AMD GPU or architecture for ISA operations: a gfx target or (partial) marketing name, "
-	"e.g. gfx1100 or \"9070 XT\". Use '?' or 'isa devices' to list them."
+	"AMD GPU/arch for ISA operations: a gfx target (e.g. gfx1100), or 'live[:index]'. Use '?' or 'isa devices' to list."
 };
 
 //Flags
