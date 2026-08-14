@@ -877,7 +877,8 @@ static inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction
 }
 
 //The comparator takes void* to match CompareFunction exactly, so calling it through that pointer isn't a
-//function-type mismatch (-fsanitize=function). It casts back to the real type immediately.
+// function-type mismatch under -fsanitize=function.
+//It casts back to the real type immediately.
 #define TGenericList_tsort(T)                                                                        \
 ECompareResult sort##T(const void *aRaw, const void *bRaw) {                                         \
 	const T *a = (const T*) aRaw, *b = (const T*) bRaw;                                              \

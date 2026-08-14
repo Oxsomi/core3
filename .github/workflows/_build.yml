@@ -395,18 +395,47 @@ jobs:
       # It sits with the sanitizer libs under lib/clang/<ver>/lib/windows, not in clang's bin, so nothing
       # puts it on PATH; without this every sanitized executable dies at startup with a missing DLL.
 
+      # The runtime has to come from the SAME clang that compiled the binaries, or the DLL is found but its
+      # exports don't match and every sanitized process dies with 0xC0000139 STATUS_ENTRYPOINT_NOT_FOUND.
+      # The conan profiles pin the Visual Studio generator, which drives clang through the ClangCL toolset,
+      # i.e. the LLVM bundled inside the VS install, NOT whatever clang-cl happens to be on PATH (the runners
+      # also carry a standalone LLVM under C:\Program Files\LLVM at a different major version). So resolve the
+      # VS copy via vswhere and only fall back to PATH if there is no VS LLVM at all.
+
       - name: Add the clang sanitizer runtime to PATH
         if: inputs.sanitizers && runner.os == 'Windows'
         shell: pwsh
         run: |
-          $clang = (Get-Command clang-cl -ErrorAction SilentlyContinue).Source
-          if (-not $clang) { $clang = "C:\Program Files\LLVM\bin\clang-cl.exe" }
-          $runtime = Get-ChildItem (Join-Path (Split-Path $clang) "..\lib\clang") -Directory -ErrorAction SilentlyContinue |
+          $clangDir = $null
+
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+
+          if (Test-Path $vswhere) {
+            $vsRoot = & $vswhere -latest -products * -property installationPath
+            if ($vsRoot) {
+              $candidate = Join-Path $vsRoot "VC\Tools\Llvm\x64\bin"
+              if (Test-Path (Join-Path $candidate "clang-cl.exe")) { $clangDir = $candidate }
+            }
+          }
+
+          if (-not $clangDir) {
+            $onPath = (Get-Command clang-cl -ErrorAction SilentlyContinue).Source
+            if ($onPath) { $clangDir = Split-Path $onPath }
+            Write-Host "::warning::No VS bundled LLVM found; falling back to clang-cl on PATH ($clangDir)"
+          }
+
+          if (-not $clangDir) { throw "No clang-cl found, neither in the VS install nor on PATH" }
+
+          $runtime = Get-ChildItem (Join-Path $clangDir "..\lib\clang") -Directory -ErrorAction SilentlyContinue |
             ForEach-Object { Join-Path $_.FullName "lib\windows" } |
             Where-Object { Test-Path $_ } |
             Select-Object -First 1
-          if (-not $runtime) { throw "No clang sanitizer runtime directory found next to $clang" }
-          Write-Host "Sanitizer runtime: $runtime"
+
+          if (-not $runtime) { throw "No clang sanitizer runtime directory found next to $clangDir" }
+
+          # Logged so a future mismatch is visible in the run rather than only as a startup failure.
+          Write-Host "Compiler dir      : $clangDir"
+          Write-Host "Sanitizer runtime : $runtime"
           Add-Content -Path $env:GITHUB_PATH -Value $runtime
 
       - name: Enable Developer Mode (the preview Agility SDK requires it)

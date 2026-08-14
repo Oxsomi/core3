@@ -460,9 +460,9 @@ Bool StreamCursor_write(
 
 			U64 bytesToCopy = U64_min(cursorLen - dstRel, length);
 
-			//Guarded on bytesToCopy so a zero length write never forms buf.ptr + srcOff when buf.ptr is
-			//NULL: a null source buffer is legal for an empty append, but NULL + 0 is undefined behaviour
-			//that UBSan flags (and copying zero bytes is pointless regardless).
+			//Guarded on bytesToCopy so a zero length write never forms buf.ptr + srcOff when buf.ptr is NULL.
+			//A null source buffer is legal for an empty append, but NULL + 0 is undefined behaviour that UBSan flags.
+			//Copying zero bytes is pointless regardless.
 
 			if(bytesToCopy && cursor->cacheData.ptr != buf.ptr)
 				Buffer_memcpy(

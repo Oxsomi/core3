@@ -105,10 +105,11 @@ typedef struct VkGraphicsDevice {
 
 	VkFence commitFence[MAX_FRAMES_IN_FLIGHT];
 
-	//Whether a submit is actually pending on commitFence[i]. A failed vkQueueSubmit leaves the fence
-	//reset-but-unsignaled (submitId still advanced), so without this the next frame at that fifId would wait
-	//the full timeout on a fence nothing will ever signal. When false, that wait (and its reset) is skipped
-	//and the still-unsignaled fence is reused directly, which self-heals once submits succeed again.
+	//Whether a submit is actually pending on commitFence[i].
+	//A failed vkQueueSubmit leaves the fence reset-but-unsignaled, while submitId still advanced.
+	//Without this the next frame at that fifId would wait the full timeout on a fence nothing will ever signal.
+	//When false that wait, and its reset, is skipped and the still-unsignaled fence is reused directly.
+	//This self-heals once submits succeed again.
 	Bool commitFencePending[MAX_FRAMES_IN_FLIGHT];
 
 	//Push descriptor emulation, only allocated on a device that lacks VK_KHR_push_descriptor.

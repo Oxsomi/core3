@@ -167,10 +167,11 @@ EGraphicsApi EGraphicsApi_resolve(EGraphicsApi api) {
 	return api;
 }
 
-//Unlike the other object frees (each a void* shim in its own file), the GraphicsInstance RefPtr free is the
-//backend GraphicsInstance_freeExt itself, which is typed GraphicsInstance* because it is also invoked through
-//the interface table. This tiny shim adapts it to ObjectFreeFunc so registering it below is a real type match
-//under -fsanitize=function rather than a cast across mismatched function types.
+//The other object frees are each a void* shim in their own file.
+//The GraphicsInstance RefPtr free is the backend GraphicsInstance_freeExt itself, which is typed
+// GraphicsInstance* because it is also invoked through the interface table.
+//This tiny shim adapts it to ObjectFreeFunc, so registering it below is a real type match under
+// -fsanitize=function rather than a cast across mismatched function types.
 static void GraphicsInstance_freeRefPtr(void *instGeneric, const Allocator *alloc) {
 	GraphicsInstance_freeExt((GraphicsInstance*) instGeneric, alloc);
 }

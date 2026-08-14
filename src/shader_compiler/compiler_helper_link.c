@@ -235,8 +235,16 @@ Bool Compiler_getLinkEntries(
 
 			U64 combinationId = ((k * defines + defineId) * extensions + extensionId) * shaderVersions + shaderVersion;
 
+			//An entry without uniforms still runs this loop once, since uniformCombos is 0 and the max(1, ..) keeps it going.
+			//Its ptr is NULL with a 0 stride.
+			//Offsetting a null pointer is undefined even by zero, which UBSan flags.
+			//So keep it null rather than computing NULL + 0.
+
+			const U8 *uniformPtr =
+				entry.uniformData.ptr ? entry.uniformData.ptr + entry.uniformStride * k : NULL;
+
 			LinkEntry linkEntry = (LinkEntry) {
-				.uniformData = Buffer_createRefConst(entry.uniformData.ptr + entry.uniformStride * k, entry.uniformStride),
+				.uniformData = Buffer_createRefConst(uniformPtr, entry.uniformStride),
 				.combinationId = (U16) combinationId
 			};
 

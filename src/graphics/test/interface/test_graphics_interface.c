@@ -63,6 +63,7 @@
 //  test_graphics_resources.c    - 23, 25, 26, 27
 //  test_graphics_execute.c      - 16, 28, 29, 30 (submission, readback, acceleration structures)
 //  test_graphics_shaders.c      - 31, 32, 33 (shader execution against the //OxC3_gtest test shaders)
+//  test_graphics_formats_frames.c - 34, 35, 36 (per format round trips, shape gates, frame ring)
 //
 //Numbering follows the order the modules were added, not the order they run in.
 //
@@ -350,6 +351,12 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	Test_graphicsShaderCompute(t, deviceRef);
 	Test_graphicsShaderDraw(t, deviceRef);
 	Test_graphicsShaderRays(t, deviceRef);
+
+	//34-36. Resource round trips and the frame ring, rather than what a shader computes
+
+	Test_graphicsFormatRoundTrip(t, deviceRef);
+	Test_graphicsTextureShapes(t, deviceRef);
+	Test_graphicsFramesInFlight(t, deviceRef);
 
 	Test_graphicsDeviceMemory(t, deviceRef);
 

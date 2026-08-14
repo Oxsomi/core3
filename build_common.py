@@ -407,6 +407,12 @@ def hostToolOptionArgs():
 # Dependency building (hash cached, so unchanged recipes don't get re-created every run)
 # ---------------------------------------------------------------------------------------------------
 
+#Recipes shared through python_requires rather than living in the package folder itself.
+#They have to be part of every dependent's hash, otherwise editing the shared logic leaves the cache thinking
+# nothing changed and the packages that consume it are never rebuilt.
+
+SHARED_RECIPES = ( "packages/sanitizers", )
+
 def hashPackage(packagePath, profilePath, mode):
 
 	h = hashlib.sha256()
@@ -416,14 +422,51 @@ def hashPackage(packagePath, profilePath, mode):
 		with open(profilePath, "rb") as f:
 			h.update(f.read())
 
-	for root, _, files in os.walk(packagePath):
-		for fname in sorted(files):
-			fpath = os.path.join(root, fname)
-			h.update(fpath.encode())
-			with open(fpath, "rb") as f:
-				h.update(f.read())
+	folders = [ packagePath ]
+
+	for shared in SHARED_RECIPES:
+
+		resolved = shared if os.path.isabs(shared) else os.path.join(ROOT, shared)
+
+		#A package is only rehashed for a shared recipe it doesn't already contain, so hashing
+		# packages/sanitizers itself doesn't fold it in twice.
+
+		if os.path.isdir(resolved) and os.path.normpath(resolved) != os.path.normpath(packagePath):
+			folders.append(resolved)
+
+	for folder in folders:
+		for root, _, files in os.walk(folder):
+			for fname in sorted(files):
+				fpath = os.path.join(root, fname)
+				h.update(fpath.encode())
+				with open(fpath, "rb") as f:
+					h.update(f.read())
 
 	return h.hexdigest()
+
+_sharedRecipesExported = False
+
+def exportSharedRecipes():
+	"""conan export the python_requires recipes that the dependency recipes consume.
+
+	A python_requires has to be resolvable from the local cache before any consumer is created, otherwise the
+	consumer's recipe fails to load. Export doesn't build anything, so this is cheap; it still only runs once
+	per process since nothing changes underneath it mid-build.
+	"""
+
+	global _sharedRecipesExported
+
+	if _sharedRecipesExported:
+		return
+
+	for shared in SHARED_RECIPES:
+
+		resolved = shared if os.path.isabs(shared) else os.path.join(ROOT, shared)
+
+		if os.path.isdir(resolved):
+			run(f"conan export \"{resolved}\"", cwd=ROOT)
+
+	_sharedRecipesExported = True
 
 def loadHashCache():
 
@@ -557,6 +600,11 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 	"""Create everything oxc3 needs for a *host* build (which includes the OxC3_package tool build)."""
 
 	system = hostSystem()
+
+	#dxc, spirv_reflect and openal_soft share their sanitizer wiring through a python_requires, which has to
+	# be in the cache before any of them is created.
+
+	exportSharedRecipes()
 
 	# Only the packages that actually compile C/C++ take these; the rest are headers or prebuilt binaries.
 	# A sanitized consumer can't link unsanitized dependencies: MSVC's STL records its ASan container
