@@ -43,7 +43,7 @@ impl Bool WindowManager_freeNative(WindowManager *w);
 
 impl Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr);
 
-void Window_free(Window *ptr, const Allocator *allocator);
+void Window_free(void *ptr, const Allocator *allocator);
 
 extern U32 Window_extSize;
 
@@ -68,13 +68,13 @@ Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize
 			.typeId = (TypeId) EPlatformsTypeId_Window,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(Window) + Window_extSize, alignof(Window)),
 			.alloc = Platform_instance->alloc,
-			.free = (ObjectFreeFunc) Window_free
+			.free = Window_free
 		},
 		.windowTypeVirtual = (RefPtrType) {
 			.typeId = (TypeId) EPlatformsTypeId_Window,
 			.lengthAndAlignment = RefPtrType_pack(sizeof(Window), alignof(Window)),
 			.alloc = Platform_instance->alloc,
-			.free = (ObjectFreeFunc) Window_free
+			.free = Window_free
 		}
 	};
 
@@ -167,7 +167,9 @@ void WindowManager_forgetWindow(WindowManager *manager, WindowRef *wRef) {
 	}
 }
 
-void Window_free(Window *w, const Allocator *alloc) {
+void Window_free(void *wGeneric, const Allocator *alloc) {
+
+	Window *w = (Window*) wGeneric;
 
 	if(!WindowManager_isAccessible(w->owner)) {
 		Log_warnLnx("WindowManager tried to free Window but it didn't have access");

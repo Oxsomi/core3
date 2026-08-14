@@ -1,0 +1,29 @@
+name: macOS x64 Vulkan static (ASan + UBSan)
+
+# Completes the sanitizer arch coverage for macOS: with this, both architectures are sanitized here just as
+# they are on linux and Windows.
+#
+# Nightly rather than per push for the same reason as the other sanitizer jobs, see
+# linux_clang_sanitizers.yml.
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: macOS x64 Vulkan static (ASan + UBSan)
+      runner: macos-26-intel
+      os: macos
+      build_flags: '-o cliGraphics=False -asan True -ubsan True'
+      cache_name: sanitizers
+      python_cmd: python
+      setup_python: true
+      python_version: '3.10'
+      sanitizers: true
+      hook_name: macOS-x64-static-sanitizers
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

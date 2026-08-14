@@ -63,7 +63,9 @@ void DescriptorTableBinding_free(DescriptorTableBinding *binding, const Allocato
 		ListBufferDescriptorRange_free(&binding->multiple.buffers, alloc);
 }
 
-void DescriptorTable_free(DescriptorTable *table, const Allocator *alloc) {
+void DescriptorTable_free(void *tableGeneric, const Allocator *alloc) {
+
+	DescriptorTable *table = (DescriptorTable*) tableGeneric;
 
 	//Announce descriptor leaks
 

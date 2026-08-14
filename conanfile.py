@@ -185,6 +185,17 @@ class oxc3(ConanFile):
 		if self.options.dynamicLinkingGraphics and self.settings.os == "Windows":
 			hasD3D12 = True
 
+		# The three dependencies that compile C/C++ have to be built the same way we are: a sanitized
+		# consumer can't link unsanitized dependencies (ASan has to own operator new, and MSVC's STL records
+		# its container annotation state per object).
+		# Propagating here rather than only on the command line that creates them is what makes the graph
+		# ask for the packages that were actually built. Without it the root passes -o enableASAN=True while
+		# dxc/spirv_reflect/openal_soft fall back to their own default of False, so the resolved package ids
+		# are for unsanitized binaries that nothing ever built -- which is a "Missing binary" error at
+		# install time, not a link failure later.
+
+		sanitized = { "enableASAN": self.options.enableASAN, "enableUBSAN": self.options.enableUBSAN }
+
 		# NVAPI is only needed for the D3D12 backend (RT validation, and future cluster / mega geometry).
 		if hasD3D12:
 			self.requires("nvapi/2026.08.02")
@@ -197,8 +208,14 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2026.08.07.03")
-			self.requires("spirv_reflect/2026.08.06")
+
+			# Both shader-compiler deps are sanitized. DXC's build compiles host tablegen tools and RUNS them
+			# mid-build; instrumented on Windows they abort for want of the sanitizer runtime, so build.py
+			# feeds a Windows sanitized DXC unsanitized tablegen binaries via user.dxc:tablegen_dir (the same
+			# split the android/web cross builds use). That conf is not part of the package id, so the graph
+			# still just asks for a sanitized DXC here regardless of where its tablegen came from.
+			self.requires("dxc/2026.08.07.03", options=sanitized)
+			self.requires("spirv_reflect/2026.08.06", options=sanitized)
 
 			# RGA (CLI tool): offline shader-to-AMD-ISA analysis + device/architecture enumeration.
 			# Only exists where the vendored AMD offline compilers do (Windows/Linux x64); run=True so the
@@ -221,9 +238,9 @@ class oxc3(ConanFile):
 		# Validation layers must be built manually for Android; not needed elsewhere.
 		# Pinned near the vulkan_headers version, since an old layer silently weakens validation.
 		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
-			self.requires("vulkan_validation_layers/1.4.357.0")
+			self.requires("vulkan_validation_layers/1.4.357.0-oxc1")
 
-		self.requires("openal_soft/2026.08.06")
+		self.requires("openal_soft/2026.08.06", options=sanitized)
 
 	def package(self):
 
@@ -280,11 +297,32 @@ class oxc3(ConanFile):
 		input_lib_dir = os.path.join(input_dir, "lib")
 		input_bin_dir = os.path.join(input_dir, "bin")
 
-		copy(self, "*.a", input_lib_dir, lib_dst)
-		copy(self, "*.lib", input_lib_dir, lib_dst)
-		copy(self, "*.pdb", input_lib_dir, lib_dst)
-		copy(self, "*.exp", input_lib_dir, lib_dst)
-		copy(self, "*", input_bin_dir, bin_dst)
+		# The test executables live in the same bin/ as the CLI and the packagers, but nothing consuming
+		# this package runs them, and OxC3_shader_compiler_test alone is tens of MB.
+		# Only the executables are dropped: OxC3_types_test and OxC3_types_container_test_util are the
+		# libraries a consumer writes its *own* tests against, so those stay in lib/.
+		# _dylib_test is a shared library rather than an executable, but it exists purely for
+		# Test_dynamicLibrary to dlopen, so it goes too.
+		# OxC3_plinttst is the platforms interface test; it doesn't end in _test because a packaged
+		# target name is capped at 15 characters (see apply_dependencies in cmake/oxc3.cmake).
+		# The _perf binaries are benchmarks, equally uninteresting to a consumer.
+
+		testBinaries = [
+			"*_test", "*_test.exe", "*_test.pdb", "*_dylib_test*",
+			"*plinttst*", "*_perf", "*_perf.exe", "*_perf.pdb"
+		]
+
+		# OxC3_types_test and OxC3_types_container_test_util stay: those are the libraries a consumer links
+		# to write its own tests. What goes is the import library of the dylib fixture excluded above
+		# (whose DLL is no longer here to import) and the benchmark support library.
+
+		testLibs = [ "*dylib_test*", "*_perf_lib*" ]
+
+		copy(self, "*.a", input_lib_dir, lib_dst, excludes=testLibs)
+		copy(self, "*.lib", input_lib_dir, lib_dst, excludes=testLibs)
+		copy(self, "*.pdb", input_lib_dir, lib_dst, excludes=testLibs)
+		copy(self, "*.exp", input_lib_dir, lib_dst, excludes=testLibs)
+		copy(self, "*", input_bin_dir, bin_dst, excludes=testBinaries)
 		copy(self, "*", OxC3_package_dir, bin_dst + "/packages")
 
 	def package_info(self):

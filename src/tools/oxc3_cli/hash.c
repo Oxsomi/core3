@@ -128,7 +128,9 @@ clean:
 	return s_uccess;
 }
 
-Bool CLI_hashAllTheFiles(const FileInfo *info, EFormat *format, const Allocator *alloc, Error *e_rr) {
+Bool CLI_hashAllTheFiles(const FileInfo *info, void *formatGeneric, const Allocator *alloc, Error *e_rr) {
+
+	EFormat *format = (EFormat*) formatGeneric;
 
 	(void) alloc;
 
@@ -157,7 +159,7 @@ Bool CLI_hashFile(const ParsedArgs *args) {
 
 	if (File_hasFolder(&str, alloc)) {
 		EFormat format = args->format;        //Local non-const copy (File_foreach's userData is a void*)
-		return File_foreach(&str, false, (FileCallback) CLI_hashAllTheFiles, &format, true, alloc, NULL);
+		return File_foreach(&str, false, CLI_hashAllTheFiles, &format, true, alloc, NULL);
 	}
 
 	return CLI_hash(str, true, args->format, NULL);

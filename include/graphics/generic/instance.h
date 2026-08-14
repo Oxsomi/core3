@@ -64,9 +64,13 @@ typedef enum EGraphicsInstanceFlags {
 //These are stored here because the RefPtrType must stay alive for as long as any RefPtr created with it.
 //The lengths depend on the api's ext sizes, the allocator is the one the instance was created with.
 
+//The three pipeline types share EGraphicsTypeId_Pipeline but differ in length: graphics and raytracing
+// pipelines store their info block behind the backend data (Pipeline_infoOffset), compute has none.
+//Each object carries the RefPtrType that created it, so freeing uses the right length per kind.
+
 typedef struct GraphicsObjectTypes {
 	RefPtrType device, buffer, deviceTexture, renderTexture, depthStencil, swapchain;
-	RefPtrType pipeline, sampler, blas, tlas;
+	RefPtrType pipelineCompute, pipelineGraphics, pipelineRaytracing, sampler, blas, tlas;
 	RefPtrType descriptorLayout, descriptorTable, descriptorHeap, pipelineLayout;
 	RefPtrType commandList;
 } GraphicsObjectTypes;

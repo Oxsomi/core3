@@ -434,7 +434,9 @@ void DescriptorLayoutInfo_free(DescriptorLayoutInfo *info, const Allocator *allo
 	ListCharString_freeUnderlying(&info->bindingNames, alloc);
 }
 
-void DescriptorLayout_free(DescriptorLayout *layout, const Allocator *alloc) {
+void DescriptorLayout_free(void *layoutGeneric, const Allocator *alloc) {
+
+	DescriptorLayout *layout = (DescriptorLayout*) layoutGeneric;
 
 	DescriptorLayout_freeExt(layout, alloc);
 

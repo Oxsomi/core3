@@ -172,7 +172,17 @@ extern "C" Bool Compiler_processSPIRV(
 
 	//Reflect binary information, since our own parser doesn't have the info yet.
 
-	res = spvReflectCreateShaderModule2(SPV_REFLECT_MODULE_FLAG_NO_COPY, binLen, resultPtr, &spvMod);
+	//Deliberately NOT SPV_REFLECT_MODULE_FLAG_NO_COPY.
+	//SPIRV-Reflect reads literal strings (OpName/OpString/OpSource) with an unbounded strlen and never
+	// checks that an instruction fits inside the module, so it can read past the end of what it is given.
+	//With NO_COPY that is our own exactly sized buffer and the read leaves the mapping outright, which is
+	// what segfaults on linux arm64; letting it copy into its own allocation puts ordinary heap slack
+	// behind the module instead. A few KB of memcpy per shader is nothing next to reflecting it.
+	//Both reported upstream, restore NO_COPY once they're fixed:
+	// https://github.com/KhronosGroup/SPIRV-Reflect/issues/351 (reads the header before validating size)
+	// https://github.com/KhronosGroup/SPIRV-Reflect/issues/352 (unbounded strlen on literal strings)
+
+	res = spvReflectCreateShaderModule2(0, binLen, resultPtr, &spvMod);
 
 	if(res != SPV_REFLECT_RESULT_SUCCESS)
 		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() SPIRV returned couldn't be reflected"));
@@ -619,6 +629,14 @@ extern "C" Bool Compiler_processSPIRV(
 			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"));
 	}
 
+	//The module is destroyed before *result is freed and reallocated below.
+	//Its strings point into its own copy of the SPIR-V now, but the ordering was a real use after free
+	// back when it was created with NO_COPY, and it stays correct rather than incidentally correct.
+	//Zeroing it keeps the destroy at clean a no-op, since it early outs on a NULL _internal.
+
+	spvReflectDestroyShaderModule(&spvMod);
+	spvMod = SpvReflectShaderModule{};
+
 	Buffer_free(result, alloc);
 	gotoIfError3(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), alloc, result, e_rr));
 
@@ -729,7 +747,17 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 
 	//Reflect binary information, since our own parser doesn't have the info yet.
 
-	res = spvReflectCreateShaderModule2(SPV_REFLECT_MODULE_FLAG_NO_COPY, binLen, resultPtr, &spvMod);
+	//Deliberately NOT SPV_REFLECT_MODULE_FLAG_NO_COPY.
+	//SPIRV-Reflect reads literal strings (OpName/OpString/OpSource) with an unbounded strlen and never
+	// checks that an instruction fits inside the module, so it can read past the end of what it is given.
+	//With NO_COPY that is our own exactly sized buffer and the read leaves the mapping outright, which is
+	// what segfaults on linux arm64; letting it copy into its own allocation puts ordinary heap slack
+	// behind the module instead. A few KB of memcpy per shader is nothing next to reflecting it.
+	//Both reported upstream, restore NO_COPY once they're fixed:
+	// https://github.com/KhronosGroup/SPIRV-Reflect/issues/351 (reads the header before validating size)
+	// https://github.com/KhronosGroup/SPIRV-Reflect/issues/352 (unbounded strlen on literal strings)
+
+	res = spvReflectCreateShaderModule2(0, binLen, resultPtr, &spvMod);
 
 	if(res != SPV_REFLECT_RESULT_SUCCESS)
 		retError(clean, Error_invalidState(2, "Compiler_getUniqueEntrypointsSPIRV() SPIRV returned couldn't be reflected"));
@@ -939,8 +967,12 @@ extern "C" Bool Compiler_linkSPIRV(
 						else asU32[j] = inputAsU16[j];    //Expand 16-bit to 32-bit
 					}
 
+				//Size of this uniform's own storage, not the number of uniforms in the map.
+				//Buffer_memcpy clamps to the smaller side, so getting this wrong silently truncated
+				// anything wider than the uniform count (e.g. a lone F64x4 kept only its first 4 bytes).
+
 				else Buffer_memcpy(
-					Buffer_createRef(asU32, uniformMap.size() << 2),
+					Buffer_createRef(asU32, uniformMap[i].size() << 2),
 					Buffer_createRefConst(uniformData.ptr + uniform.dataOffset, len)
 				);
 			}
@@ -968,9 +1000,12 @@ extern "C" Bool Compiler_linkSPIRV(
 
 	gotoIfError3(clean, Buffer_resize(result, linkedBinSiz << 2, false, false, alloc, e_rr));
 
+	//Length comes from the source, not the destination: taking it from *result only happens to be correct
+	// while callers guarantee an empty result (Buffer_resize early outs when the length already matches).
+
 	Buffer_memcpy(
 		*result,
-		Buffer_createRefConst(linkedBinPtr, Buffer_length(*result))
+		Buffer_createRefConst(linkedBinPtr, linkedBinSiz << 2)
 	);
 
 clean:

@@ -54,6 +54,8 @@ function(apply_dependencies target)
 
 	get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
 
+	set(_objcopySections)
+
 	foreach(file ${res})
 
 		string(REPLACE "\\" "/" file "${file}")
@@ -90,25 +92,46 @@ function(apply_dependencies target)
 		# to find where it's located
 		# Android has APKs which are just like zip files, so can be easily read (though the NDK can't access subfolders easily)
 		# iOS has IPA which is the same idea as APK.
-		# OS X we will manually link the section into it too.
+		# OS X asks the linker for the section with -sectcreate, so it needs no external tool at all
 		# web/emscripten has a virtual filesystem.
 		
 		if(WIN32)
-			get_property(res2 TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST_RC)
-			set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST_RC ${RELATIVE_PATH}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${file}\"\n${res2})
+			get_property(res2 TARGET ${target} PROPERTY RESOURCE_LIST_RC)
+			set_property(TARGET ${target} PROPERTY RESOURCE_LIST_RC ${RELATIVE_PATH}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${file}\"\n${res2})
 		elseif(APPLE)
-			add_custom_command(
-				TARGET ${_ARGS_TARGET} POST_BUILD
-				COMMAND llvm-objcopy --add-section "@${TARGET_OF_PACKAGE},${PACKAGE_NAME}=${file}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
+
+			# Embedded by the linker rather than by patching the binary afterwards.
+			# llvm-objcopy --add-section on Mach-O rewrites the load commands and leaves __LINKEDIT at a
+			# file offset dyld refuses to load ("segment '__LINKEDIT' file offset out of order"), whether it
+			# adds one section or several. -sectcreate is the supported way in: the linker lays the segment
+			# out itself, so the result is well formed by construction.
+			# oplatform.c reads whatever it finds, it only cares that the segment name starts with @, so the
+			# naming (and the 15 character cap that keeps segname within Mach-O's 16) is unchanged.
+
+			target_link_options(${target} PRIVATE
+				"LINKER:-sectcreate,@${TARGET_OF_PACKAGE},${PACKAGE_NAME},${file}"
 			)
+
+			# The linker only reruns when an input changes, and a .oiCA named in a flag isn't one.
+
+			set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS "${file}")
+
 		elseif(UNIX AND NOT ANDROID)
-			add_custom_command(
-				TARGET ${_ARGS_TARGET} POST_BUILD
-				COMMAND objcopy --add-section "packages/${RELATIVE_PATH}=${file}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
-			)
+			list(APPEND _objcopySections --add-section "packages/${RELATIVE_PATH}=${file}")
 		endif()
 
 	endforeach()
+
+	# ELF only; macOS embeds at link time above.
+	# Still one objcopy for all sections rather than one per package: each invocation rewrites the whole
+	# binary, so per-file commands cost a full copy each and give the tool more chances to get it wrong.
+
+	if(_objcopySections)
+		add_custom_command(
+			TARGET ${target} POST_BUILD
+			COMMAND objcopy ${_objcopySections} "$<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_NAME:${target}>" "$<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_NAME:${target}>"
+		)
+	endif()
 
 	if(WIN32)
 		get_property(res2 TARGET ${target} PROPERTY RESOURCE_LIST_RC)

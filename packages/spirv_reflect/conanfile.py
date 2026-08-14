@@ -23,59 +23,19 @@ class spirv_reflect(ConanFile):
 	options = { "enableASAN": [ True, False ], "enableUBSAN": [ True, False ] }
 	default_options = { "enableASAN": False, "enableUBSAN": False }
 
-	# A sanitized consumer can't link unsanitized dependencies, so the flags have to reach these too.
-	# MSVC's STL records its ASan container annotation state per object and lld-link rejects the mix,
-	# hence disabling the annotations rather than instrumenting the STL.
+	python_requires = "oxc3_sanitizers/1.0"
+
+	# Sanitizer wiring lives in the shared oxc3_sanitizers python_requires so dxc, spirv_reflect and
+	# openal_soft can't drift apart. Only the disabled UBSan checks differ per dependency:
+	#  vptr      needs RTTI across the whole program, which the prebuilt setup lacks.
+	#  function  would only catch this dependency's own callback-type mismatches, which are not ours to fix.
+	#  enum      flag enums and sentinels are legal by design but are not individual enumerators.
 
 	def _sanitizerFlags(self):
-
-		flags = []
-
-		if self.options.enableASAN:
-			flags += [ "/fsanitize=address", "/Oy-", "-D_DISABLE_STRING_ANNOTATION=1", "-D_DISABLE_VECTOR_ANNOTATION=1" ]
-
-		if self.options.enableUBSAN:
-			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr", "/Oy-" ]
-
-		return flags
-
-	# The compile side flags alone aren't enough: CMake drives lld-link directly, so the /defaultlib
-	# directives clang-cl embeds for the sanitizer runtimes never reach it.
-	# Point the linker at clang's own runtime directory and name the libraries here too.
+		return self.python_requires["oxc3_sanitizers"].module.sanitizerFlags(self, "vptr,function,enum")
 
 	def _sanitizerLinkFlags(self):
-
-		if not (self.options.enableASAN or self.options.enableUBSAN):
-			return []
-
-		if self.settings.os != "Windows":
-			return []
-
-		import glob as _glob
-		import shutil as _shutil
-
-		executables = self.conf.get("tools.build:compiler_executables", default={}, check_type=dict)
-		cc = executables.get("c") or "clang-cl"
-		resolved = cc if os.path.isabs(cc) else (_shutil.which(cc) or "")
-
-		if not resolved:
-			return []
-
-		binDir = os.path.dirname(resolved)
-		found = _glob.glob(os.path.join(binDir, "..", "lib", "clang", "*", "lib", "windows"))
-
-		if not found:
-			return []
-
-		flags = [ "-libpath:%s" % os.path.normpath(found[0]) ]
-
-		if self.options.enableASAN:
-			flags += [ "clang_rt.asan_dynamic-x86_64.lib", "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" ]
-
-		if self.options.enableUBSAN:
-			flags += [ "clang_rt.ubsan_standalone-x86_64.lib" ]
-
-		return flags
+		return self.python_requires["oxc3_sanitizers"].module.sanitizerLinkFlags(self)
 
 
 	def layout(self):
@@ -96,6 +56,13 @@ class spirv_reflect(ConanFile):
 		tc.variables["SPIRV_REFLECT_STATIC_LIB"] = True
 		tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
 		tc.variables["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreaded"
+
+		# This static library gets linked into OxC3's shared shader compiler (dynamicLinkingShaderCompiler),
+		# and on ELF every object folded into a .so must be position independent. Without this an arm64
+		# dynamic build fails at link with "relocation R_AARCH64_ADR_PREL_PG_HI21 ... recompile with -fPIC"
+		# (x86_64 happens to tolerate the non-PIC relocations, arm64 does not). OxC3 sets the same flag on its
+		# own targets; the dependency has to opt in separately because it is built as its own CMake project.
+		tc.variables["CMAKE_POSITION_INDEPENDENT_CODE"] = True
 		for flag in self._sanitizerLinkFlags():
 			tc.extra_exelinkflags.append(flag)
 			tc.extra_sharedlinkflags.append(flag)

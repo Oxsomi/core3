@@ -267,7 +267,7 @@ void Test_mat(Test *test) {
 
 	//========================= projections =========================
 
-	//Left handed, [0, 1] depth.
+	//Left handed, reverse Z: near lands on depth 1, far on 0.
 	//What matters is where the near and far planes land after the divide.
 
 	{
@@ -277,12 +277,12 @@ void Test_mat(Test *test) {
 		const F32x4 atNear = F32x4x4_transformPoint(proj, F32x4_create4(0, 0, nearPlane, 1));
 		const F32x4 atFar = F32x4x4_transformPoint(proj, F32x4_create4(0, 0, farPlane, 1));
 
-		Test_assert(test, "mat perspective near maps to 0", F32_abs(
-			F32x4_z(atNear) / F32x4_w(atNear)
+		Test_assert(test, "mat perspective near maps to 1", F32_abs(
+			F32x4_z(atNear) / F32x4_w(atNear) - 1
 		) < 1e-4f);
 
-		Test_assert(test, "mat perspective far maps to 1", F32_abs(
-			F32x4_z(atFar) / F32x4_w(atFar) - 1
+		Test_assert(test, "mat perspective far maps to 0", F32_abs(
+			F32x4_z(atFar) / F32x4_w(atFar)
 		) < 1e-4f);
 
 		//w carries view space z, which is what makes the perspective divide work
@@ -295,12 +295,12 @@ void Test_mat(Test *test) {
 	{
 		const F32x4x4 ortho = F32x4x4_ortho(-2, 2, -1, 1, 0, 10);
 
-		Test_assert(test, "mat ortho near maps to 0", F32_abs(
-			F32x4_z(F32x4x4_transformPoint(ortho, F32x4_create4(0, 0, 0, 1)))
+		Test_assert(test, "mat ortho near maps to 1", F32_abs(
+			F32x4_z(F32x4x4_transformPoint(ortho, F32x4_create4(0, 0, 0, 1))) - 1
 		) < 1e-5f);
 
-		Test_assert(test, "mat ortho far maps to 1", F32_abs(
-			F32x4_z(F32x4x4_transformPoint(ortho, F32x4_create4(0, 0, 10, 1))) - 1
+		Test_assert(test, "mat ortho far maps to 0", F32_abs(
+			F32x4_z(F32x4x4_transformPoint(ortho, F32x4_create4(0, 0, 10, 1)))
 		) < 1e-5f);
 
 		Test_assert(test, "mat ortho right maps to 1", F32_abs(

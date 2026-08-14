@@ -104,8 +104,8 @@ void VK_WRAP_FUNC(CommandList_process)(
 					.y = (F32) I32x2_y(offset),
 					.width = (F32) I32x2_x(size),
 					.height = (F32) I32x2_y(size),
-					.minDepth = 1,
-					.maxDepth = 0
+					.minDepth = 0,
+					.maxDepth = 1
 				};
 
 			if ((op - ECommandOp_SetViewport + 1) & 2)

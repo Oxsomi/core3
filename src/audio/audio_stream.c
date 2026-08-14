@@ -133,7 +133,9 @@ impl extern U32 AudioStream_sizeExt;
 impl Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e_rr);
 impl void AudioStream_freeExt(AudioStream *stream, const Allocator *alloc);
 
-void AudioStream_free(AudioStream *stream, const Allocator *alloc) {
+void AudioStream_free(void *streamGeneric, const Allocator *alloc) {
+
+	AudioStream *stream = (AudioStream*) streamGeneric;
 
 	if(!stream)
 		return;
@@ -167,7 +169,7 @@ RefPtrType AudioStream_makeType(const Allocator *alloc) {
 		.typeId = (TypeId) EAudioTypeId_AudioStream,
 		.lengthAndAlignment = RefPtrType_pack(sizeof(AudioStream) + AudioStream_sizeExt, alignof(AudioStream)),
 		.alloc = alloc,
-		.free = (ObjectFreeFunc)AudioStream_free
+		.free = AudioStream_free
 	};
 }
 
@@ -240,7 +242,7 @@ Bool AudioDeviceRef_createStream(
 		!type ||
 		type->typeId != (TypeId)EAudioTypeId_AudioStream ||
 		RefPtrType_length(type) != sizeof(AudioStream) + AudioStream_sizeExt ||
-		type->free != (ObjectFreeFunc)AudioStream_free ||
+		type->free != AudioStream_free ||
 		type->alloc != alloc
 	)
 		retError(clean, Error_invalidParameter(4, 0, "AudioDeviceRef_create()::type is invalid"));

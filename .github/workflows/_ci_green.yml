@@ -1,0 +1,77 @@
+name: _ci-green (reusable)
+
+# Fails unless every other workflow at this commit finished green.
+#
+# Actions has no cross workflow "needs" and the ~30 push workflows are separate runs, so this asks the API
+# what else exists at the SHA and waits it out. Anything that publishes binaries should sit behind it:
+# without it, a tag (or a nightly) on a commit whose android emulator or shader compiler job failed would
+# still hand out artifacts that look fine.
+#
+# Deliberately NOT used by the sanitizer nightlies. Those exist to find problems and publish only logs, so
+# gating them on a green tree would withhold their output exactly when something is already wrong.
+
+on:
+  workflow_call:
+    inputs:
+      # Defaults to the commit this run is for: the tag for a tag push, the default branch head for a
+      # schedule, which is the right question in both cases.
+      sha:
+        type: string
+        required: false
+        default: ''
+      # A full matrix from cold caches is slow; this only has to be longer than that.
+      timeout_minutes:
+        type: number
+        required: false
+        default: 90
+      # Guards against the opposite failure: a tag pushed seconds after the commit, before CI registered
+      # anything, would otherwise see an empty list and call it green.
+      min_runs:
+        type: number
+        required: false
+        default: 5
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the commit's other workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha != '' && inputs.sha || github.sha }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+          MIN_RUNS: ${{ inputs.min_runs }}
+        run: |
+          deadline=$(( $(date +%s) + TIMEOUT_MINUTES * 60 ))
+
+          while :; do
+
+            # This run is excluded, or it would wait on itself forever.
+            runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${SHA}&per_page=100" \
+              --jq "[.workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | {name, status, conclusion}]")
+
+            total=$(jq 'length' <<< "$runs")
+            pending=$(jq '[.[] | select(.status != "completed")] | length' <<< "$runs")
+            failed=$(jq -r '[.[] | select(.conclusion != null and .conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral")] | map(.name) | join(", ")' <<< "$runs")
+
+            if [ -n "$failed" ]; then
+              echo "::error title=CI is not green::${SHA} has failing workflows: ${failed}"
+              exit 1
+            fi
+
+            if [ "$total" -lt "$MIN_RUNS" ]; then
+              echo "Only ${total} runs visible for ${SHA} so far, waiting for CI to register..."
+            elif [ "$pending" -eq 0 ]; then
+              echo "All ${total} workflow runs for ${SHA} are green."
+              break
+            else
+              echo "${pending}/${total} workflow runs still going..."
+            fi
+
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error title=CI did not finish::Timed out waiting for ${SHA}'s workflows"
+              exit 1
+            fi
+
+            sleep 60
+          done

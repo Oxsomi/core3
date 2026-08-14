@@ -1,0 +1,174 @@
+name: Release
+
+# Publishes a GitHub release with a prebuilt per platform, built from the tag itself.
+#
+# Tag it and the rest is automatic:
+#   git tag Ra && git push origin Ra
+#
+# workflow_dispatch runs the identical build without publishing anything, which is how to check the
+# pipeline (and how long it takes) before committing to a tag.
+#
+# The prebuilts are assembled by _build.yml's upload_prebuilts step, which mirrors what the conan package
+# holds, so a downloaded zip and a conan install give the same layout.
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+
+jobs:
+  # Refuses to build a release for a commit whose CI is not green; shared with anything else that
+  # publishes binaries, see _ci_green.yml for how and why.
+
+  preflight:
+    if: startsWith(github.ref, 'refs/tags/')
+    uses: ./.github/workflows/_ci_green.yml
+
+  build:
+    needs: preflight
+    strategy:
+      # Every platform is published or none is: a release missing an arch silently looks complete.
+      fail-fast: true
+      matrix:
+        include:
+          - name: Windows x64 Vulkan static
+            runner: windows-2022
+            os: windows
+            build_flags: '-o forceVulkan=True'
+            python_cmd: python
+            setup_python: false
+            python_version: ''
+            hook_name: Windows-x64-vk-static
+          - name: Windows ARM64 Vulkan static
+            runner: windows-11-arm
+            os: windows
+            build_flags: '-o forceVulkan=True'
+            python_cmd: python
+            setup_python: true
+            python_version: '3.13'
+            hook_name: Windows-arm64-vk-static
+          - name: Linux x64 Vulkan static
+            runner: ubuntu-latest
+            os: linux
+            build_flags: ''
+            python_cmd: python3
+            setup_python: false
+            python_version: ''
+            hook_name: Linux-x64-static
+          - name: Linux ARM64 Vulkan static
+            runner: ubuntu-24.04-arm
+            os: linux
+            build_flags: ''
+            python_cmd: python3
+            setup_python: false
+            python_version: ''
+            hook_name: Linux-arm64-static
+          - name: macOS x64 Vulkan static
+            runner: macos-26-intel
+            os: macos
+            build_flags: ''
+            python_cmd: python
+            setup_python: true
+            python_version: '3.10'
+            hook_name: macOS-x64-static
+          - name: macOS ARM64 Vulkan static
+            runner: macos-15
+            os: macos
+            build_flags: ''
+            python_cmd: python
+            setup_python: true
+            python_version: '3.10'
+            hook_name: macOS-arm64-static
+
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: ${{ matrix.name }}
+      runner: ${{ matrix.runner }}
+      os: ${{ matrix.os }}
+      # Deliberately without the push matrix's -o cliGraphics=False: that keeps CI fast, but a released
+      # CLI people download is expected to have the graphics commands in it.
+      build_flags: ${{ matrix.build_flags }}
+      cache_name: release
+      python_cmd: ${{ matrix.python_cmd }}
+      setup_python: ${{ matrix.setup_python }}
+      python_version: ${{ matrix.python_version }}
+      upload_prebuilts: true
+      hook_name: ${{ matrix.hook_name }}-release
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+
+  publish:
+    needs: build
+    # Only a tag produces a release; a manual run stops after building, leaving the artifacts on the run.
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    # The default token is read only for contents; creating a release needs write.
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download prebuilts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: prebuilt-*
+          path: artifacts
+
+      # download-artifact unpacks each artifact into its own directory, so they're re-zipped here one per
+      # platform. Named after the tag so a downloaded file still says what it is months later.
+
+      - name: Package prebuilts
+        run: |
+          mkdir -p dist
+          for dir in artifacts/prebuilt-*; do
+            [ -d "$dir" ] || continue
+            platform="$(basename "$dir" | sed 's/^prebuilt-//; s/-release$//')"
+            (cd "$dir" && zip -qr "../../dist/OxC3-${GITHUB_REF_NAME}-${platform}.zip" .)
+            echo "packaged $platform"
+          done
+          ls -lh dist
+
+      # gh is preinstalled on the runners and uses the job's own token, so this needs no third party action.
+      # --generate-notes writes the changelog from what landed since the previous tag.
+      # --verify-tag refuses to invent a release for a tag that isn't actually pushed.
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/*.zip \
+            --title "OxC3 ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --verify-tag
+
+  # A failed release is the failure nobody is watching for: it happens on a tag push, often minutes after
+  # everything already went green, so without this it fails silently until someone goes looking for the
+  # download that never appeared.
+  # Its own job rather than a step, so it covers all three ways a tag ends up without a release: CI wasn't
+  # green (preflight), a platform failed to build, or publishing itself broke. A skipped job reports as
+  # 'skipped', so failure of an earlier job is caught through needs.*.result rather than failure().
+
+  notify-failure:
+    needs: [ preflight, build, publish ]
+    if: always() && startsWith(github.ref, 'refs/tags/') && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report failure
+        continue-on-error: true
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PREFLIGHT: ${{ needs.preflight.result }}
+          BUILD: ${{ needs.build.result }}
+          PUBLISH: ${{ needs.publish.result }}
+        run: |
+          REASON="preflight=${PREFLIGHT} build=${BUILD} publish=${PUBLISH}"
+          echo "::error title=Release failed::${GITHUB_REF_NAME} was tagged but no release was published (${REASON})"
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "WEBHOOK_URL not set; skipping Discord notification"
+            exit 0
+          fi
+          curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -H "Content-Type: application/json" \
+            -d "{\"embeds\":[{\"title\":\"Release ${GITHUB_REF_NAME} FAILED\",\"description\":\"Tag pushed but no release published (${REASON}). <${RUN_URL}>\",\"color\":15158332}]}" \
+            "$WEBHOOK_URL"

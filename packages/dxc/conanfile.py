@@ -26,59 +26,24 @@ class dxc(ConanFile):
 	options = { "enableASAN": [ True, False ], "enableUBSAN": [ True, False ] }
 	default_options = { "enableASAN": False, "enableUBSAN": False }
 
-	# A sanitized consumer can't link unsanitized dependencies, so the flags have to reach these too.
-	# MSVC's STL records its ASan container annotation state per object and lld-link rejects the mix,
-	# hence disabling the annotations rather than instrumenting the STL.
+	python_requires = "oxc3_sanitizers/1.0"
+
+	# Sanitizer wiring lives in the shared oxc3_sanitizers python_requires so dxc, spirv_reflect and
+	# openal_soft can't drift apart. Only the disabled UBSan checks differ per dependency:
+	#  vptr             needs RTTI across the whole program, which the prebuilt setup lacks.
+	#  enum             DXC's reflection uses 0xFFFFFFFF as an "unknown" _D3D_SHADER_VARIABLE_TYPE
+	#                   sentinel, a deliberate out-of-range enum value.
+	#  nonnull-attribute  hlsl::Append memcpy's from an empty vector's data(), i.e. memcpy(dst, NULL, 0).
+	#                   Copying zero bytes is harmless, but memcpy declares its source nonnull, so it is
+	#                   UB by the letter. (Same idiom we fixed on our own side in stream.c.)
+	# These abort the build under halt_on_error, so a noisy check costs the whole run's ASan coverage,
+	# which is the coverage actually worth having on DXC.
 
 	def _sanitizerFlags(self):
-
-		flags = []
-
-		if self.options.enableASAN:
-			flags += [ "/fsanitize=address", "/Oy-", "-D_DISABLE_STRING_ANNOTATION=1", "-D_DISABLE_VECTOR_ANNOTATION=1" ]
-
-		if self.options.enableUBSAN:
-			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr", "/Oy-" ]
-
-		return flags
-
-	# The compile side flags alone aren't enough: CMake drives lld-link directly, so the /defaultlib
-	# directives clang-cl embeds for the sanitizer runtimes never reach it.
-	# Point the linker at clang's own runtime directory and name the libraries here too.
+		return self.python_requires["oxc3_sanitizers"].module.sanitizerFlags(self, "vptr,enum,nonnull-attribute")
 
 	def _sanitizerLinkFlags(self):
-
-		if not (self.options.enableASAN or self.options.enableUBSAN):
-			return []
-
-		if self.settings.os != "Windows":
-			return []
-
-		import glob as _glob
-		import shutil as _shutil
-
-		executables = self.conf.get("tools.build:compiler_executables", default={}, check_type=dict)
-		cc = executables.get("c") or "clang-cl"
-		resolved = cc if os.path.isabs(cc) else (_shutil.which(cc) or "")
-
-		if not resolved:
-			return []
-
-		binDir = os.path.dirname(resolved)
-		found = _glob.glob(os.path.join(binDir, "..", "lib", "clang", "*", "lib", "windows"))
-
-		if not found:
-			return []
-
-		flags = [ "-libpath:%s" % os.path.normpath(found[0]) ]
-
-		if self.options.enableASAN:
-			flags += [ "clang_rt.asan_dynamic-x86_64.lib", "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" ]
-
-		if self.options.enableUBSAN:
-			flags += [ "clang_rt.ubsan_standalone-x86_64.lib" ]
-
-		return flags
+		return self.python_requires["oxc3_sanitizers"].module.sanitizerLinkFlags(self)
 
 
 	exports_sources = [ "include/dxc/*", "external/SPIRV-Tools/include/*", "external/DirectX-Headers/include/*" ]
@@ -150,13 +115,18 @@ class dxc(ConanFile):
 		tc.variables["ENABLE_SPIRV_CODEGEN"] = True
 		tc.variables["CMAKE_EXPORT_COMPILE_COMMANDS"] = True
 		tc.variables["DXC_USE_LIT"] = True
-		# Debug only.
-		# A Release build is what ships, where an assert firing aborts the app rather than helping anyone,
-		# and it also drops the android test .so from 547 to 490 MB.
-		# That's ~11%, not the bulk:
-		# statically linked LLVM/clang/SPIRV-Tools plus an unstripped symbol table is what actually makes it that size.
+		# On for Debug and for any sanitized build; off for the Release that ships.
+		# In a shipping Release an assert firing just aborts the app rather than helping anyone, and it also
+		# drops the android test .so from 547 to 490 MB (~11%, not the bulk: statically linked
+		# LLVM/clang/SPIRV-Tools plus an unstripped symbol table is what actually makes it that size).
+		# A sanitizer run is the opposite situation: we WANT DXC's own asserts firing next to ASan/UBSan so a
+		# bug in how it processes our shaders is caught at its source. Tying it to the sanitizer flags rather
+		# than to build_type=Debug gets those asserts on an optimized DXC, avoiding the multi-GB Debug
+		# static-LLVM build that would risk the runner's disk.
 
-		tc.variables["LLVM_ENABLE_ASSERTIONS"] = self.settings.build_type == "Debug"
+		tc.variables["LLVM_ENABLE_ASSERTIONS"] = (
+			self.settings.build_type == "Debug" or self.options.enableASAN or self.options.enableUBSAN
+		)
 		tc.variables["ENABLE_DXC_STATIC_LINKING"] = True
 
 		tc.variables["LLVM_LIT_ARGS"] = "-v"

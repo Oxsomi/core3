@@ -25,7 +25,9 @@
 #include "types/container/container_types.h"
 #include "types/base/mathi.h"
 
-void Stream_close(OxStream *stream, const Allocator *alloc) {
+void Stream_close(void *streamGeneric, const Allocator *alloc) {
+
+	OxStream *stream = (OxStream*) streamGeneric;
 
 	if (!stream)
 		return;
@@ -45,7 +47,7 @@ RefPtrType Stream_inheritType(const Allocator *alloc, U32 extraSize) {
 		.typeId = (TypeId)EContainerTypeId_Stream,
 		.lengthAndAlignment = RefPtrType_pack(sizeof(OxStream) + extraSize, alignof(OxStream)),
 		.alloc = alloc,
-		.free = (ObjectFreeFunc) Stream_close
+		.free = Stream_close
 	};
 }
 
@@ -458,7 +460,11 @@ Bool StreamCursor_write(
 
 			U64 bytesToCopy = U64_min(cursorLen - dstRel, length);
 
-			if(cursor->cacheData.ptr != buf.ptr)
+			//Guarded on bytesToCopy so a zero length write never forms buf.ptr + srcOff when buf.ptr is NULL.
+			//A null source buffer is legal for an empty append, but NULL + 0 is undefined behaviour that UBSan flags.
+			//Copying zero bytes is pointless regardless.
+
+			if(bytesToCopy && cursor->cacheData.ptr != buf.ptr)
 				Buffer_memcpy(
 					Buffer_createRef(cursor->cacheData.ptrNonConst + dstRel, bytesToCopy),
 					Buffer_createRefConst(buf.ptr + srcOff, bytesToCopy)

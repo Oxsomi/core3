@@ -33,7 +33,9 @@ impl extern U32 AudioSource_sizeExt;
 impl Bool AudioSource_createExt(AudioSource *source, const Allocator *alloc, Error *e_rr);
 impl void AudioSource_freeExt(AudioSource *source, const Allocator *alloc);
 
-void AudioSource_free(AudioSource *source, const Allocator *alloc) {
+void AudioSource_free(void *sourceGeneric, const Allocator *alloc) {
+
+	AudioSource *source = (AudioSource*) sourceGeneric;
 
 	if(!source)
 		return;
@@ -48,7 +50,7 @@ RefPtrType AudioSource_makeType(const Allocator *alloc) {
 		.typeId = (TypeId)EAudioTypeId_AudioSource,
 		.lengthAndAlignment = RefPtrType_pack(sizeof(AudioSource) + AudioSource_sizeExt, alignof(AudioSource)),
 		.alloc = alloc,
-		.free = (ObjectFreeFunc)AudioSource_free
+		.free = AudioSource_free
 	};
 }
 
@@ -73,7 +75,7 @@ Bool AudioDeviceRef_createSourceGeneric(
 		!type ||
 		type->typeId != (TypeId)EAudioTypeId_AudioSource ||
 		RefPtrType_length(type) != (U32)(sizeof(AudioSource) + AudioSource_sizeExt) ||
-		type->free != (ObjectFreeFunc)AudioSource_free ||
+		type->free != AudioSource_free ||
 		type->alloc != alloc
 	)
 		retError(clean, Error_invalidParameter(4, 0, "AudioDeviceRef_createSourceGeneric()::type is invalid"));

@@ -80,6 +80,20 @@ on:
       hook_name:
         type: string
         required: true
+      # Sets the sanitizer runtime options for a job whose build_flags turn on -asan/-ubsan.
+      # A reusable workflow doesn't inherit env from its caller, so the caller can't set these itself.
+      sanitizers:
+        type: boolean
+        required: false
+        default: false
+      # Publishes this job's Release output as a downloadable artifact.
+      # Off by default: it is only worth paying the storage for the configurations actually handed out,
+      # not for all ~30 of them, and never for a sanitized build (which needs its sanitizer runtime
+      # alongside it and runs at a fraction of the speed).
+      upload_prebuilts:
+        type: boolean
+        required: false
+        default: false
     secrets:
       WEBHOOK_URL:
         required: true
@@ -103,6 +117,19 @@ jobs:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
 
+    # Only meaningful for a job that built with -asan/-ubsan, harmless (empty) everywhere else.
+    # LeakSanitizer is off on purpose: the suites already assert their own allocation counts return to zero
+    # (the "NoLeaks" checks), while lavapipe, DXC and the ICD loader leak by design at exit and would paint
+    # every run red. abort_on_error/halt_on_error are what make a finding fail the step instead of scrolling by.
+    # detect_odr_violation=0: OxC3 deliberately links its core static libs into both the executable and a
+    # shared module (the shader compiler .so/.dylib, dynamic graphics), so a file-scope global like
+    # SHA256_STATE exists once per module. Those copies are identical, but ASan's ODR checker sees two
+    # registrations of the same symbol and aborts; the "violation" is an artifact of that linking, not a bug.
+
+    env:
+      ASAN_OPTIONS: ${{ inputs.sanitizers && 'detect_leaks=0:abort_on_error=1:detect_odr_violation=0' || '' }}
+      UBSAN_OPTIONS: ${{ inputs.sanitizers && 'print_stacktrace=1:halt_on_error=1' || '' }}
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -115,14 +142,30 @@ jobs:
           python-version: ${{ inputs.python_version }}
 
       # ── Ninja (Android only; used as the CMake generator on every host) ────
-      # The download occasionally arrives truncated ("No END header found"), so one failure gets one retry.
-      - uses: seanmiddleditch/gha-setup-ninja@master
+      # gha-setup-ninja@master kept failing inside its own downloader (truncated zips, ECONNRESET) even when
+      # retried, and it pins nothing; fetching the pinned release directly with real curl retries is sturdier.
+      # python -m zipfile instead of unzip because Windows hosts' bash doesn't ship unzip, and the chmod
+      # restores the exec bit that zipfile extraction drops on unix hosts.
+      - name: Setup Ninja
         if: inputs.os == 'android'
-        id: setup_ninja
-        continue-on-error: true
-
-      - uses: seanmiddleditch/gha-setup-ninja@master
-        if: inputs.os == 'android' && steps.setup_ninja.outcome == 'failure'
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   ZIP=ninja-linux.zip ;;
+            Windows) ZIP=ninja-win.zip ;;
+            macOS)   ZIP=ninja-mac.zip ;;
+          esac
+          for i in 1 2 3 4 5; do
+            curl -fL --retry 5 --retry-all-errors --connect-timeout 30 -o ninja.zip \
+              "https://github.com/ninja-build/ninja/releases/download/v1.12.1/$ZIP" && break
+            echo "ninja download attempt $i failed, retrying"; sleep 10
+          done
+          mkdir -p "$RUNNER_TEMP/ninja-bin"
+          python3 -m zipfile -e ninja.zip "$RUNNER_TEMP/ninja-bin" \
+            || python -m zipfile -e ninja.zip "$RUNNER_TEMP/ninja-bin"
+          chmod +x "$RUNNER_TEMP/ninja-bin/ninja" 2>/dev/null || true
+          "$RUNNER_TEMP/ninja-bin/ninja" --version
+          echo "$RUNNER_TEMP/ninja-bin" >> "$GITHUB_PATH"
 
       # ── Conan ──────────────────────────────────────────────────────────────
       # SteamOS container doesn't have pip by default.
@@ -187,16 +230,6 @@ jobs:
           MANIFEST=$(find "$HOME/vvl" -name 'VkLayer_khronos_validation.json' | head -n 1)
           test -n "$MANIFEST" || { echo "::error::LunarG SDK layout changed, no layer manifest found"; exit 1; }
           echo "VK_ADD_LAYER_PATH=$(dirname "$MANIFEST")" >> "$GITHUB_ENV"
-
-      - name: Set up Homebrew
-        if: runner.os == 'macOS'
-        uses: Homebrew/actions/setup-homebrew@master
-
-      - name: Setup LLVM
-        if: runner.os == 'macOS'
-        uses: ZhongRuoyu/setup-llvm@v0
-        with:
-          llvm-version: 17
 
       # ── Android platform deps ──────────────────────────────────────────────
       - name: Set up JDK 17
@@ -357,6 +390,54 @@ jobs:
       # With it, the runner's Microsoft Basic Render Driver shows up and binds the WARP we already deploy next
       # to the executables, which meets every D3D12 requirement OxC3 asks for.
 
+      # CMakeLists links ASan's dynamic runtime on clang-cl (a static one can't be shared with the shader
+      # compiler DLL), so clang_rt.asan_dynamic-x86_64.dll has to be resolvable when the tests launch.
+      # It sits with the sanitizer libs under lib/clang/<ver>/lib/windows, not in clang's bin, so nothing
+      # puts it on PATH; without this every sanitized executable dies at startup with a missing DLL.
+
+      # The runtime has to come from the SAME clang that compiled the binaries, or the DLL is found but its
+      # exports don't match and every sanitized process dies with 0xC0000139 STATUS_ENTRYPOINT_NOT_FOUND.
+      # The conan profiles pin the Visual Studio generator, which drives clang through the ClangCL toolset,
+      # i.e. the LLVM bundled inside the VS install, NOT whatever clang-cl happens to be on PATH (the runners
+      # also carry a standalone LLVM under C:\Program Files\LLVM at a different major version). So resolve the
+      # VS copy via vswhere and only fall back to PATH if there is no VS LLVM at all.
+
+      - name: Add the clang sanitizer runtime to PATH
+        if: inputs.sanitizers && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $clangDir = $null
+
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+
+          if (Test-Path $vswhere) {
+            $vsRoot = & $vswhere -latest -products * -property installationPath
+            if ($vsRoot) {
+              $candidate = Join-Path $vsRoot "VC\Tools\Llvm\x64\bin"
+              if (Test-Path (Join-Path $candidate "clang-cl.exe")) { $clangDir = $candidate }
+            }
+          }
+
+          if (-not $clangDir) {
+            $onPath = (Get-Command clang-cl -ErrorAction SilentlyContinue).Source
+            if ($onPath) { $clangDir = Split-Path $onPath }
+            Write-Host "::warning::No VS bundled LLVM found; falling back to clang-cl on PATH ($clangDir)"
+          }
+
+          if (-not $clangDir) { throw "No clang-cl found, neither in the VS install nor on PATH" }
+
+          $runtime = Get-ChildItem (Join-Path $clangDir "..\lib\clang") -Directory -ErrorAction SilentlyContinue |
+            ForEach-Object { Join-Path $_.FullName "lib\windows" } |
+            Where-Object { Test-Path $_ } |
+            Select-Object -First 1
+
+          if (-not $runtime) { throw "No clang sanitizer runtime directory found next to $clangDir" }
+
+          # Logged so a future mismatch is visible in the run rather than only as a startup failure.
+          Write-Host "Compiler dir      : $clangDir"
+          Write-Host "Sanitizer runtime : $runtime"
+          Add-Content -Path $env:GITHUB_PATH -Value $runtime
+
       - name: Enable Developer Mode (the preview Agility SDK requires it)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -365,17 +446,59 @@ jobs:
           New-Item -Path $k -Force | Out-Null
           Set-ItemProperty -Path $k -Name AllowDevelopmentWithoutDevLicense -Value 1 -Type DWord
 
+      # -deploy exports the conan package and lays it out under prebuilt/<mode>, so what ends up published
+      # is defined by conanfile.py's package() rather than by a second list of globs that can drift from it.
+      # It also snapshots: the deployed copy is taken out of the conan cache at build time, so the SIMD
+      # fallback build below (which reuses the same output directory) cannot overwrite what gets uploaded.
+
       - name: Build Debug
         if: inputs.os != 'android'
-        run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True ${{ inputs.build_flags }}
+        run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
 
       - name: Build Release
         if: inputs.os != 'android'
-        run: ${{ inputs.python_cmd }} build.py -mode Release -tests True ${{ inputs.build_flags }}
+        run: ${{ inputs.python_cmd }} build.py -mode Release -tests True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
 
       - name: Build Release (SIMD fallback)
         if: inputs.os != 'android'
         run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True ${{ inputs.build_flags }}
+
+      # ── Prebuilts ──────────────────────────────────────────────────────────
+      # Last, and only on success(): every build and every test of this job has to have passed before a
+      # binary is published, so a red main can't leave downloadable artifacts lying around claiming to be
+      # a working build.
+      # The contents come from conanfile.py's package() via -deploy above; the only thing subtracted here
+      # is debug symbols, which dwarf everything else (the shader compiler's pdb alone is ~360 MB) and are
+      # not what a prebuilt is for.
+
+      - name: Upload prebuilts
+        if: success() && inputs.upload_prebuilts && inputs.os != 'android'
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuilt-${{ inputs.hook_name }}
+          path: |
+            prebuilt/**
+            !prebuilt/**/*.pdb
+          if-no-files-found: error
+          retention-days: 14
+
+      # ── Sanitizer reports ──────────────────────────────────────────────────
+      # ctest writes every test's stdout and stderr to LastTest.log, so a sanitizer report lands there in
+      # full, stack and all, rather than only in the console summary.
+      # Kept as an artifact because these jobs run unattended overnight: by the time anyone looks the run
+      # log is inconvenient to read and impossible to diff against the previous night's.
+      # always(), since a build that fails midway is exactly when the log is wanted.
+
+      - name: Collect sanitizer and test logs
+        if: always() && inputs.sanitizers
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanitizer-logs-${{ inputs.hook_name }}
+          path: |
+            build/**/Testing/Temporary/LastTest.log
+            build/**/Testing/Temporary/LastTestsFailed.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       # ── Cleanup before cache save ──────────────────────────────────────────
       # The LRU pass matters because restore-keys chains caches across conanfile changes.

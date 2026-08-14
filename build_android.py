@@ -172,6 +172,10 @@ def doBuild(
 
 	# Build dependencies for the target.
 	# Keyed per profile so x64 and arm64 don't invalidate each other.
+	# openal_soft (and dxc/spirv_reflect below) resolve their sanitizer wiring through a python_requires, so
+	# that recipe has to be exported before any of them is created.
+
+	common.exportSharedRecipes()
 
 	for package in ("packages/openal_soft", "packages/vulkan_headers"):
 		common.conanCreateIfChanged(

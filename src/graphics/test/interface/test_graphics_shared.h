@@ -54,3 +54,11 @@ void Test_graphicsSubmit(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef);
+
+void Test_graphicsShaderCompute(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef);
+
+void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsTextureShapes(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsFramesInFlight(Test *t, GraphicsDeviceRef *deviceRef);

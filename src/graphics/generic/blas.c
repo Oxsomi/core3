@@ -28,7 +28,9 @@
 #include "types/container/ref_ptr.h"
 #include "types/base/constants.h"
 
-void BLAS_free(BLAS *blas, const Allocator *alloc) {
+void BLAS_free(void *blasGeneric, const Allocator *alloc) {
+
+	BLAS *blas = (BLAS*) blasGeneric;
 
 	(void)alloc;
 

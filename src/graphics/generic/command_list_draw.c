@@ -249,7 +249,7 @@ Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, const Se
 	//Issue command
 
 	gotoIfError3(clean, CommandList_append(
-		commandList, ECommandOp_SetPrimitiveBuffers, Buffer_createRefConst(&buffers, sizeof(buffers)), 0, e_rr
+		commandList, ECommandOp_SetPrimitiveBuffers, Buffer_createRefConst(buffers, sizeof(*buffers)), 0, e_rr
 	));
 
 clean:

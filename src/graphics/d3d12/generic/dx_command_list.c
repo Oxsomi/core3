@@ -211,8 +211,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 					.TopLeftY = (F32) I32x2_y(offset),
 					.Width = (F32) I32x2_x(size),
 					.Height = (F32) I32x2_y(size),
-					.MinDepth = 1,
-					.MaxDepth = 0
+					.MinDepth = 0,
+					.MaxDepth = 1
 				};
 
 			if ((op - ECommandOp_SetViewport + 1) & 2)

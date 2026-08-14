@@ -407,6 +407,12 @@ def hostToolOptionArgs():
 # Dependency building (hash cached, so unchanged recipes don't get re-created every run)
 # ---------------------------------------------------------------------------------------------------
 
+#Recipes shared through python_requires rather than living in the package folder itself.
+#They have to be part of every dependent's hash, otherwise editing the shared logic leaves the cache thinking
+# nothing changed and the packages that consume it are never rebuilt.
+
+SHARED_RECIPES = ( "packages/sanitizers", )
+
 def hashPackage(packagePath, profilePath, mode):
 
 	h = hashlib.sha256()
@@ -416,14 +422,51 @@ def hashPackage(packagePath, profilePath, mode):
 		with open(profilePath, "rb") as f:
 			h.update(f.read())
 
-	for root, _, files in os.walk(packagePath):
-		for fname in sorted(files):
-			fpath = os.path.join(root, fname)
-			h.update(fpath.encode())
-			with open(fpath, "rb") as f:
-				h.update(f.read())
+	folders = [ packagePath ]
+
+	for shared in SHARED_RECIPES:
+
+		resolved = shared if os.path.isabs(shared) else os.path.join(ROOT, shared)
+
+		#A package is only rehashed for a shared recipe it doesn't already contain, so hashing
+		# packages/sanitizers itself doesn't fold it in twice.
+
+		if os.path.isdir(resolved) and os.path.normpath(resolved) != os.path.normpath(packagePath):
+			folders.append(resolved)
+
+	for folder in folders:
+		for root, _, files in os.walk(folder):
+			for fname in sorted(files):
+				fpath = os.path.join(root, fname)
+				h.update(fpath.encode())
+				with open(fpath, "rb") as f:
+					h.update(f.read())
 
 	return h.hexdigest()
+
+_sharedRecipesExported = False
+
+def exportSharedRecipes():
+	"""conan export the python_requires recipes that the dependency recipes consume.
+
+	A python_requires has to be resolvable from the local cache before any consumer is created, otherwise the
+	consumer's recipe fails to load. Export doesn't build anything, so this is cheap; it still only runs once
+	per process since nothing changes underneath it mid-build.
+	"""
+
+	global _sharedRecipesExported
+
+	if _sharedRecipesExported:
+		return
+
+	for shared in SHARED_RECIPES:
+
+		resolved = shared if os.path.isabs(shared) else os.path.join(ROOT, shared)
+
+		if os.path.isdir(resolved):
+			run(f"conan export \"{resolved}\"", cwd=ROOT)
+
+	_sharedRecipesExported = True
 
 def loadHashCache():
 
@@ -558,6 +601,11 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 
 	system = hostSystem()
 
+	#dxc, spirv_reflect and openal_soft share their sanitizer wiring through a python_requires, which has to
+	# be in the cache before any of them is created.
+
+	exportSharedRecipes()
+
 	# Only the packages that actually compile C/C++ take these; the rest are headers or prebuilt binaries.
 	# A sanitized consumer can't link unsanitized dependencies: MSVC's STL records its ASan container
 	# annotation state per object and lld-link rejects the mix, and ASan has to own operator new, which
@@ -593,8 +641,37 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 		shaderProfile = hostProfileForMode(shaderMode, compiler)
 		shaderArgs = hostProfileArgs(shaderMode, compiler)
 
+		# On Windows a sanitized DXC can't build its own tablegen: the instrumented llvm-tblgen/clang-tblgen
+		# abort mid-build for want of the sanitizer runtime (STATUS_ENTRYPOINT_NOT_FOUND). Do it the way the
+		# android/web cross builds do (see build_android.py): build an UNSANITIZED host DXC purely for its
+		# tablegen binaries, then point the sanitized build at them with user.dxc:tablegen_dir, which makes the
+		# recipe set LLVM_USE_HOST_TOOLS=OFF and consume those instead of building its own. Unsanitized tools
+		# need no runtime, so they run fine. Linux/macOS build tablegen inline without trouble and skip this.
+
+		dxcTablegenConf = ""
+
+		# DXC is ASan-sanitized on Windows (never UBSan), so the trigger is `asan`, not `asan or ubsan`.
+
+		if asan and system == "Windows":
+
+			conanCreateIfChanged(
+				"packages/dxc", shaderProfile, shaderMode, shaderArgs, cache,
+				key="packages/dxc::host_tablegen", options=""
+			)
+
+			# hostTablegenDir resolves the graph with default (unsanitized) options, so it finds the host DXC
+			# just built rather than the sanitized one. The conf is not part of the package id.
+
+			tablegenDir = hostTablegenDir(mode=shaderMode, compiler=compiler)
+
+			if tablegenDir:
+				dxcTablegenConf = f' -c:h user.dxc:tablegen_dir="{tablegenDir}"'
+			else:
+				print("-- WARNING: no host DXC tablegen found; sanitized Windows DXC will try to build its own")
+
 		for package in SHADER_COMPILER_DEPS:
-			conanCreateIfChanged(package, shaderProfile, shaderMode, shaderArgs, cache, options=sanitizerOptions)
+			depOptions = (sanitizerOptions + dxcTablegenConf) if package == "packages/dxc" else sanitizerOptions
+			conanCreateIfChanged(package, shaderProfile, shaderMode, shaderArgs, cache, options=depOptions.strip())
 		conanCreateIfChanged("packages/openal_soft",        profile, mode, profileArgs, cache, options=sanitizerOptions)
 
 		if system == "Linux":

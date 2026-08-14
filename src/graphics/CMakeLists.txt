@@ -87,6 +87,24 @@ if(graphicsAllowD3D12)
 	add_subdirectory(d3d12)
 endif()
 
+if(EnableTests)
+
+	# Test shaders ship as their own package instead of polluting //OxC3_graphics.
+	# OxC3_gtest is a plain custom target that only exists to own the package; target and name are capped at 15 chars.
+	# Not gated on OxC3TestExecutables, since the android test app consumes this package too.
+
+	add_custom_target(OxC3_gtest)
+	set_target_properties(OxC3_gtest PROPERTIES FOLDER Oxsomi/test/graphics)
+
+	add_virtual_files(
+		TARGET OxC3_gtest NAME test_shaders
+		ROOT ${CMAKE_CURRENT_SOURCE_DIR}/test/shaders
+		SELF ${CMAKE_CURRENT_SOURCE_DIR}/../..
+		FORCE_PACKAGER
+	)
+
+endif()
+
 if(EnableTests AND OxC3TestExecutables)
 
 	# Interface test: headless-safe checks always run, device tests skip without an adapter.
@@ -104,7 +122,7 @@ if(EnableTests AND OxC3TestExecutables)
 	target_link_libraries(OxC3_graphics_interface_test PUBLIC OxC3_graphics_target OxC3_platforms OxC3_types_test)
 	set_target_properties(OxC3_graphics_interface_test PROPERTIES FOLDER Oxsomi/test/graphics)
 
-	add_virtual_dependencies(TARGET OxC3_graphics_interface_test DEPENDENCIES OxC3_graphics)
+	add_virtual_dependencies(TARGET OxC3_graphics_interface_test DEPENDENCIES OxC3_graphics OxC3_gtest)
 
 	apply_dependencies(OxC3_graphics_interface_test)
 	add_test(NAME OxC3_graphics_interface_test COMMAND OxC3_graphics_interface_test)

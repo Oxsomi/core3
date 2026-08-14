@@ -876,9 +876,13 @@ static inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction
 	return true;
 }
 
+//The comparator takes void* to match CompareFunction exactly, so calling it through that pointer isn't a
+// function-type mismatch under -fsanitize=function.
+//It casts back to the real type immediately.
 #define TGenericList_tsort(T)                                                                        \
-ECompareResult sort##T(const T *a, const T *b) {                                                    \
-	return *a < *b ? ECompareResult_Lt : (*a > *b ? ECompareResult_Gt : ECompareResult_Eq);            \
+ECompareResult sort##T(const void *aRaw, const void *bRaw) {                                         \
+	const T *a = (const T*) aRaw, *b = (const T*) bRaw;                                              \
+	return *a < *b ? ECompareResult_Lt : (*a > *b ? ECompareResult_Gt : ECompareResult_Eq);          \
 }
 
 #define TGenericList_sorts(f) f(U64); f(I64); f(U32); f(I32); f(U16); f(I16); f(U8); f(I8); f(F32); f(F64);
@@ -976,17 +980,17 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction f) {
 }
 
 #define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) {    \
-	return GenericList_sortCustom(l, (CompareFunction) sort##T);         \
+	return GenericList_sortCustom(l, sort##T);                           \
 }
 
 TGenericList_sorts(TGenericList_sort);
 
-static inline ECompareResult GenericList_compareString(const CharString *a, const CharString *b) {
-	return CharString_compareSensitive(a, b);
+static inline ECompareResult GenericList_compareString(const void *aRaw, const void *bRaw) {
+	return CharString_compareSensitive((const CharString*) aRaw, (const CharString*) bRaw);
 }
 
-static inline ECompareResult GenericList_compareStringInsensitive(const CharString *a, const CharString *b) {
-	return CharString_compareInsensitive(a, b);
+static inline ECompareResult GenericList_compareStringInsensitive(const void *aRaw, const void *bRaw) {
+	return CharString_compareInsensitive((const CharString*) aRaw, (const CharString*) bRaw);
 }
 
 Bool GenericList_sortString(GenericList list, EStringCase stringCase) {
@@ -996,8 +1000,8 @@ Bool GenericList_sortString(GenericList list, EStringCase stringCase) {
 
 	return
 		stringCase == EStringCase_Insensitive ?
-		GenericList_sortCustom(list, (CompareFunction) GenericList_compareStringInsensitive) :
-		GenericList_sortCustom(list, (CompareFunction) GenericList_compareString);
+		GenericList_sortCustom(list, GenericList_compareStringInsensitive) :
+		GenericList_sortCustom(list, GenericList_compareString);
 }
 
 Bool GenericList_pushBack(GenericList *list, const Buffer *buf, const Allocator *allocator, Error *e_rr) {

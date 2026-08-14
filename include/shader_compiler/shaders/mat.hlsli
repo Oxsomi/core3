@@ -22,7 +22,7 @@ R"(
 //shader_compiler/shaders/mat.hlsli
 //
 //F32x4x4 transforms, projections and the 4x4 inverse. Mirrors types/math/mat.h on the CPU side;
-//the conventions (row major, row vectors, left handed, [0,1] depth) are documented there.
+//the conventions (row major, row vectors, left handed, reverse Z: near depth 1, far 0) are documented there.
 
 #pragma once
 #include "@types.hlsli"
@@ -90,13 +90,15 @@ F32x4x4 F32x4x4_view(F32x3 position, F32x3 rotation) {
 	return mul(F32x4x4_rotate(rotation), F32x4x4_translate(-position));
 }
 
+//Reverse Z: near lands on depth 1, far on 0, matching the engine's Gt compare and clear-to-0
+
 F32x4x4 F32x4x4_perspective(F32 fovYRad, F32 aspect, F32 near, F32 far) {
 	F32 scale = 1 / tan(fovYRad / 2);
 	return F32x4x4(
 		scale / aspect,		0,		0,								0,
 		0,					scale,	0,								0,
-		0,					0,		far / (far - near),				1,
-		0,					0,		-near * far / (far - near),		0
+		0,					0,		-near / (far - near),			1,
+		0,					0,		near * far / (far - near),		0
 	);
 }
 

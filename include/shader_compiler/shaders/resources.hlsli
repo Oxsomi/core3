@@ -62,7 +62,11 @@ UNKNOWN_FORMAT _binding(10, 1, u327680, RWTexture2D<U32x4> _rwTextures2Du[16384]
 	_binding(11, 1, t327680, RaytracingAccelerationStructure _tlasExt[16]);
 #endif
 
-_vkBinding( 0, 2) cbuffer globals {	//Globals used during the entire frame for useful information such as frame id.
+//The register is explicit because the default root signature binds globals at b0 space0, and DXIL linking of
+// multi entrypoint files renumbers implicitly assigned registers, which silently moved globals to b1.
+//The SPIRV backend ignores register() when vk::binding is present, so no macro split is needed.
+
+_vkBinding( 0, 2) cbuffer globals : register(b0) {	//Globals used during the entire frame such as frame id.
 
 	U32 _frameId;					//Can loop back to 0 after U32_MAX!
 	F32 _time;						//Time since launch of app

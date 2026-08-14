@@ -238,7 +238,9 @@ clean:
 	return s_uccess;
 }
 
-void DeviceTexture_free(DeviceTexture *texture, const Allocator *alloc) {
+void DeviceTexture_free(void *textureGeneric, const Allocator *alloc) {
+
+	DeviceTexture *texture = (DeviceTexture*) textureGeneric;
 
 	(void)alloc;
 

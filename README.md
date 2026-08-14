@@ -1,5 +1,9 @@
 # OxC3 (Oxsomi core 3.2.103): Ra
 
+**OxC3** (0xC3, Oxsomi core 3) is a cross-platform C11 framework for applications, tools and games. It is the successor to O(x)somi core v2/v1, merging ostlc (standard template library), owc (window core) and ogc (graphics core) into one coherent, layered codebase. It is written in C so it stays fast to build, easy to parse for reflection/codegen, and straightforward to wrap from other languages (bindings or a future VM); a C++20 convenience layer is possible on top.
+
+For per-module maturity, see [STATUS.md](STATUS.md). For how the modules fit together (and the error-handling idiom used everywhere), see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 | Platforms | x64 -> Vulkan | x64 -> Native API | x64 dynamic (Vk + Native) | ARM -> Vulkan | ARM -> Native API | ARM dynamic (Vk + Native) |
 | --------- | ------------- | ----------------- | ------------------------- | ------------- | ----------------- | ------------------------- |
 | Windows   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_dynamic.yml/badge.svg) | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows_arm.yml/badge.svg)** | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12_arm.yml/badge.svg) | **![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_arm_dynamic.yml/badge.svg)** |
@@ -33,9 +37,20 @@ link's symbol visibility) rather than everywhere at once:
 MinGW GCC isn't supported on Windows: it's a different CRT and ABI, so it would be a new target rather than
 a new compiler, and the prebuilt dependencies (DXC among them) are MSVC.
 
-**OxC3** (0xC3, Oxsomi core 3) is a cross-platform C11 framework for applications, tools and games. It is the successor to O(x)somi core v2/v1, merging ostlc (standard template library), owc (window core) and ogc (graphics core) into one coherent, layered codebase. It is written in C so it stays fast to build, easy to parse for reflection/codegen, and straightforward to wrap from other languages (bindings or a future VM); a C++20 convenience layer is possible on top.
+### Nightly sanitizer builds (ASan + UBSan)
 
-For per-module maturity, see [STATUS.md](STATUS.md). For how the modules fit together (and the error-handling idiom used everywhere), see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+These run on a nightly schedule rather than per push, and instrument OxC3, the spirv_reflect fork and DXC.
+A green badge means that configuration built and ran the suite clean under the sanitizers.
+
+| Nightly (clang, ASan + UBSan) | x64 | ARM64 |
+| ----------------------------- | --- | ----- |
+| Windows (clang-cl) | ![windows sanitizers](https://github.com/Oxsomi/core3/actions/workflows/windows_clang_sanitizers.yml/badge.svg) | N/A, the runner's LLVM ships no aarch64 sanitizer runtime |
+| Linux (clang) | ![linux sanitizers](https://github.com/Oxsomi/core3/actions/workflows/linux_clang_sanitizers.yml/badge.svg) | ![linux arm sanitizers](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_clang_sanitizers.yml/badge.svg) |
+| Mac OS X (clang) | ![osx sanitizers](https://github.com/Oxsomi/core3/actions/workflows/osx_clang_sanitizers.yml/badge.svg) | ![osx arm sanitizers](https://github.com/Oxsomi/core3/actions/workflows/osx_arm_sanitizers.yml/badge.svg) |
+
+Windows is x64 only. DXC's UBSan has `enum` excluded everywhere: its reflection uses an out-of-range
+`_D3D_SHADER_VARIABLE_TYPE` sentinel that `-fsanitize=enum` flags, which is DXC's design rather than our
+bug; the rest of UBSan stays on.
 
 ## Modules
 
@@ -62,7 +77,7 @@ For per-module maturity, see [STATUS.md](STATUS.md). For how the modules fit tog
 - **CMake 3.13+**.
 - A C11/C++ compiler (MSVC, clang, gcc); see the toolchain table above for what's covered per platform, and `-compiler` under [build.py syntax](#getting-started) to pick one. C++ is only used to interface with C++ deps such as DXC (and a C++ layer for samples or complex work is exposed).
 - **Windows on ARM64**: ARMASM64 (install the ARM64 build tools via the VS installer) when using MSVC.
-- **OS X**: `brew install llvm` for llvm-objcopy. If using the Vulkan SDK with bindless, export `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1` and set `VULKAN_SDK` (e.g. in `~/.bash_profile`).
+- **OS X**: If using the Vulkan SDK with bindless, export `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1` and set `VULKAN_SDK` (e.g. in `~/.bash_profile`).
 - **Linux**: Wayland is the window backend, `sudo apt install libwayland-dev libxkbcommon-dev -y` (plus wayland-scanner). For audio deps: `sudo apt install libasound2-dev libpipewire-0.3-dev -y`. For the windowed functional tests: `sudo apt install xdotool -y`. *X11-only sessions are currently unsupported for windowing.*
 - **Android**: NDK installed with `ANDROID_NDK` set (plus `ANDROID_SDK` + a JDK when building an apk); Android 10 (API 29)+ on device (Vulkan 1.1+). Cross compiles from Windows, Linux and macOS. Ninja or make can drive the build (Ninja required for Debug builds due to the Vulkan validation layers). Since the packaging tool is built for the host too, the host's own prerequisites (above) apply as well. See [Android SDK setup](#android-sdk-setup).
 

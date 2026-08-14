@@ -65,6 +65,13 @@ def main():
 
 	parser.add_argument("--force_deps", action="store_true", help="Ignore hash cache and rebuild all dependencies")
 
+	parser.add_argument(
+		"-deploy", type=str, default=None,
+		help="After building, export the conan package and lay it out in this folder. Use it to produce a "
+		     "prebuilt without restating what belongs in one: the contents come from conanfile.py's "
+		     "package(), so a deployed folder and a conan install give the same thing"
+	)
+
 	args, remainder = parser.parse_known_args()
 
 	system        = common.hostSystem()
@@ -112,22 +119,49 @@ def main():
 
 	build_modes = common.ALL_MODES if (system == "Windows" and args.mode is None) else [ args.mode or "Release" ]
 
+	# One options string for both the build and the export below: export-pkg has to select the very package
+	# id the build produced, so any drift between the two would silently export a different configuration.
+
+	options = (
+		f"-o enableSIMD={args.simd} "
+		f"-o enableTests={args.tests} "
+		f"-o dynamicLinkingGraphics={args.dynamic_linking} "
+		f"-o dynamicLinkingShaderCompiler={args.dynamic_linking_shader_compiler} "
+		f"-o debugShaderCompiler={args.debug_shader_compiler} "
+		f"-o enableASAN={args.asan} "
+		f"-o enableUBSAN={args.ubsan} "
+		f"{common.shaderCompilerDepArgs(debugShaderCompiler)} "
+		f"{extra}"
+	)
+
 	for mode in build_modes:
 		common.run(
 			f"conan build . "
 			f"-of {build_dir} "
 			f"{common.hostProfileArgs(mode, compiler)} "
 			f"-s build_type={mode} "
-			f"-o enableSIMD={args.simd} "
-			f"-o enableTests={args.tests} "
-			f"-o dynamicLinkingGraphics={args.dynamic_linking} "
-			f"-o dynamicLinkingShaderCompiler={args.dynamic_linking_shader_compiler} "
-			f"-o debugShaderCompiler={args.debug_shader_compiler} "
-			f"-o enableASAN={args.asan} "
-			f"-o enableUBSAN={args.ubsan} "
-			f"{common.shaderCompilerDepArgs(debugShaderCompiler)} "
-			f"{extra}"
+			f"{options}"
 		)
+
+		# Packaging is conanfile.py's job, so a prebuilt never has to restate which files belong in one.
+		# direct_deploy copies just this package (not its dependencies) out of the cache into a plain
+		# folder, which is what makes the result usable as a downloadable archive.
+
+		if args.deploy:
+
+			reference = f"{common.recipeName()}/{common.recipeVersion()}"
+			profile   = common.hostProfileArgs(mode, compiler)
+
+			common.run(f"conan export-pkg . -of {build_dir} {profile} -s build_type={mode} {options}")
+
+			common.run(
+				f"conan install --requires={reference} "
+				f"{profile} "
+				f"-s build_type={mode} "
+				f"{options} "
+				f"--deployer=direct_deploy "
+				f"--deployer-folder=\"{args.deploy}/{mode}\""
+			)
 
 	# Run tests
 

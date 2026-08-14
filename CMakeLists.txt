@@ -232,12 +232,57 @@ if(MSVC)
 		# Our code is instrumented while the prebuilt dependencies (DXC, SPIRV-Reflect) are not, and
 		# rebuilding those under ASan would cost far more than the annotations are worth.
 
+		# compiler-rt names its Windows runtimes after the target arch, so this can't be hardcoded to x86_64:
+		# that is what kept an arm64 sanitizer build off the table entirely.
+
+		if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|arm64|aarch64")
+			set(sanitizerArch "aarch64")
+		else()
+			set(sanitizerArch "x86_64")
+		endif()
+
+		# Whether a given toolchain actually ships the runtime for this arch is a build-time fact we can't
+		# assume: LLVM has supported ASan on Windows aarch64 for a while, but whether a particular installer
+		# includes the prebuilt library is up to whoever produced it.
+		# Checking here turns "unresolved external symbol __asan_report_load8" thousands of lines into the
+		# link log into a configure-time error that names the arch and lists what the toolchain does have,
+		# which is what the first arm64 sanitizer run needs in order to be actionable.
+
+		set(requiredSanitizerLibs "")
+
+		if(EnableASAN)
+			list(APPEND requiredSanitizerLibs
+				"clang_rt.asan_dynamic-${sanitizerArch}.lib"
+				"clang_rt.asan_dynamic_runtime_thunk-${sanitizerArch}.lib"
+			)
+		endif()
+
+		if(EnableUBSAN)
+			list(APPEND requiredSanitizerLibs "clang_rt.ubsan_standalone-${sanitizerArch}.lib")
+		endif()
+
+		foreach(sanitizerLib ${requiredSanitizerLibs})
+			if(NOT EXISTS "${clangRtDir}/${sanitizerLib}")
+
+				file(GLOB availableSanitizerLibs RELATIVE "${clangRtDir}" "${clangRtDir}/clang_rt.*")
+				string(REPLACE ";" "\n  " availableSanitizerLibs "${availableSanitizerLibs}")
+
+				message(FATAL_ERROR
+					"${sanitizerLib} is missing from ${clangRtDir}, so this toolchain can't produce a "
+					"sanitized ${sanitizerArch} build. Runtimes it does ship:\n  ${availableSanitizerLibs}"
+				)
+			endif()
+		endforeach()
+
 		if(EnableASAN)
 			list(APPEND BUILD_FLAGS
 				"/fsanitize=address" "/Oy-"
 				"-D_DISABLE_STRING_ANNOTATION=1" "-D_DISABLE_VECTOR_ANNOTATION=1"
 			)
-			link_libraries("clang_rt.asan_dynamic-x86_64.lib" "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib")
+			link_libraries(
+				"clang_rt.asan_dynamic-${sanitizerArch}.lib"
+				"clang_rt.asan_dynamic_runtime_thunk-${sanitizerArch}.lib"
+			)
 		endif()
 
 		# Trap rather than diagnose: UBSan's reporting runtime is the flakiest part of its Windows support,
@@ -246,12 +291,14 @@ if(MSVC)
 		# don't give us.
 
 		# Linking the standalone runtime so UBSan names the check and the line rather than just trapping.
-		# vptr is off because it needs RTTI across the whole program, which the prebuilt dependencies
-		# don't give us.
+		# vptr is off because it needs RTTI across the whole program, which the prebuilt dependencies don't
+		# give us. enum is off because OxC3 uses flag enums and sentinels (e.g. ESHExtension holds OR'd bits
+		# and a 1<<Count "unset" marker) whose values are legal by design but not individual enumerators, which
+		# -fsanitize=enum flags on every load; that idiom is pervasive here, so the check is all noise.
 
 		if(EnableUBSAN)
-			list(APPEND BUILD_FLAGS "-fsanitize=undefined" "-fno-sanitize=vptr" "/Oy-")
-			link_libraries("clang_rt.ubsan_standalone-x86_64.lib")
+			list(APPEND BUILD_FLAGS "-fsanitize=undefined" "-fno-sanitize=vptr,enum" "/Oy-")
+			link_libraries("clang_rt.ubsan_standalone-${sanitizerArch}.lib")
 		endif()
 	endif()
 
@@ -389,8 +436,14 @@ else()
 		add_link_options(-fsanitize=address)
 	endif()
 
+	# vptr needs RTTI across the prebuilt dependencies, which they aren't built with. enum is off because OxC3
+	# uses flag enums and sentinels (ESHExtension holds OR'd bits and a 1<<Count "unset" marker) whose values
+	# are legal by design but not individual enumerators, which -fsanitize=enum flags on every load.
+	# function stays ON: every callback implementation now genuinely takes void* and casts internally, so an
+	# indirect call through the callback pointer is a true type match.
+
 	if(EnableUBSAN)
-		add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer)
+		add_compile_options(-fsanitize=undefined -fno-sanitize=vptr,enum -fno-omit-frame-pointer)
 		add_link_options(-fsanitize=undefined)
 	endif()
 

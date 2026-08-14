@@ -95,7 +95,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->pipeline, pipeline, e_rr));
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->pipelineCompute, pipeline, e_rr));
 	allocated = true;
 
 	Pipeline *pipelinePtr = PipelineRef_ptr(*pipeline);

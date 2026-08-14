@@ -90,11 +90,13 @@ T##x4x4 T##x4x4_perspective(T fovYRad, T aspect, T nearPlane, T farPlane) {     
 	const T scale = 1 / T##_tan(fovYRad / 2);                                                                           \
 	const T range = farPlane - nearPlane;                                                                               \
 																														\
+	/* Reverse Z: near lands on depth 1, far on 0, matching the engine's Gt compare and clear-to-0 */                   \
+																														\
 	T##x4x4 m = T##x4x4_zero();                                                                                         \
 	m.v[0] = T##x4_create4(scale / aspect, 0, 0, 0);                                                                    \
 	m.v[1] = T##x4_create4(0, scale, 0, 0);                                                                             \
-	m.v[2] = T##x4_create4(0, 0, farPlane / range, 1);                                                                  \
-	m.v[3] = T##x4_create4(0, 0, -nearPlane * farPlane / range, 0);                                                     \
+	m.v[2] = T##x4_create4(0, 0, -nearPlane / range, 1);                                                                \
+	m.v[3] = T##x4_create4(0, 0, nearPlane * farPlane / range, 0);                                                      \
 	return m;                                                                                                           \
 }                                                                                                                       \
 																														\
@@ -104,12 +106,14 @@ T##x4x4 T##x4x4_ortho(T left, T right, T bottom, T top, T nearPlane, T farPlane)
 	const T height = top - bottom;                                                                                      \
 	const T range = farPlane - nearPlane;                                                                               \
 																														\
+	/* Reverse Z, same convention as perspective: near lands on depth 1, far on 0 */                                    \
+																														\
 	T##x4x4 m = T##x4x4_zero();                                                                                         \
 	m.v[0] = T##x4_create4(2 / width, 0, 0, 0);                                                                         \
 	m.v[1] = T##x4_create4(0, 2 / height, 0, 0);                                                                        \
-	m.v[2] = T##x4_create4(0, 0, 1 / range, 0);                                                                         \
+	m.v[2] = T##x4_create4(0, 0, -1 / range, 0);                                                                        \
 	m.v[3] = T##x4_create4(                                                                                             \
-		-(right + left) / width, -(top + bottom) / height, -nearPlane / range, 1                                        \
+		-(right + left) / width, -(top + bottom) / height, farPlane / range, 1                                          \
 	);                                                                                                                  \
 	return m;                                                                                                           \
 }                                                                                                                       \

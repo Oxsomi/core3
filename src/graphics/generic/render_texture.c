@@ -29,7 +29,8 @@
 #include "types/container/texture_format.h"
 #include "types/base/error.h"
 
-void GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, const Allocator *alloc) {
+void GraphicsDevice_freeRenderTexture(void *renderTextureGeneric, const Allocator *alloc) {
+	RenderTexture *renderTexture = (RenderTexture*) renderTextureGeneric;
 	(void)alloc;
 	UnifiedTexture_free((TextureRef*)((U8*)renderTexture - sizeof(RefPtr)));
 }

@@ -23,59 +23,19 @@ class openal_soft(ConanFile):
 	options = { "enableASAN": [ True, False ], "enableUBSAN": [ True, False ] }
 	default_options = { "enableASAN": False, "enableUBSAN": False }
 
-	# A sanitized consumer can't link unsanitized dependencies, so the flags have to reach these too.
-	# MSVC's STL records its ASan container annotation state per object and lld-link rejects the mix,
-	# hence disabling the annotations rather than instrumenting the STL.
+	python_requires = "oxc3_sanitizers/1.0"
+
+	# Sanitizer wiring lives in the shared oxc3_sanitizers python_requires so dxc, spirv_reflect and
+	# openal_soft can't drift apart. Only the disabled UBSan checks differ per dependency:
+	#  vptr      needs RTTI across the whole program, which the prebuilt setup lacks.
+	#  function  would only catch this dependency's own callback-type mismatches, which are not ours to fix.
+	#  enum      flag enums and sentinels are legal by design but are not individual enumerators.
 
 	def _sanitizerFlags(self):
-
-		flags = []
-
-		if self.options.enableASAN:
-			flags += [ "/fsanitize=address", "/Oy-", "-D_DISABLE_STRING_ANNOTATION=1", "-D_DISABLE_VECTOR_ANNOTATION=1" ]
-
-		if self.options.enableUBSAN:
-			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr", "/Oy-" ]
-
-		return flags
-
-	# The compile side flags alone aren't enough: CMake drives lld-link directly, so the /defaultlib
-	# directives clang-cl embeds for the sanitizer runtimes never reach it.
-	# Point the linker at clang's own runtime directory and name the libraries here too.
+		return self.python_requires["oxc3_sanitizers"].module.sanitizerFlags(self, "vptr,function,enum")
 
 	def _sanitizerLinkFlags(self):
-
-		if not (self.options.enableASAN or self.options.enableUBSAN):
-			return []
-
-		if self.settings.os != "Windows":
-			return []
-
-		import glob as _glob
-		import shutil as _shutil
-
-		executables = self.conf.get("tools.build:compiler_executables", default={}, check_type=dict)
-		cc = executables.get("c") or "clang-cl"
-		resolved = cc if os.path.isabs(cc) else (_shutil.which(cc) or "")
-
-		if not resolved:
-			return []
-
-		binDir = os.path.dirname(resolved)
-		found = _glob.glob(os.path.join(binDir, "..", "lib", "clang", "*", "lib", "windows"))
-
-		if not found:
-			return []
-
-		flags = [ "-libpath:%s" % os.path.normpath(found[0]) ]
-
-		if self.options.enableASAN:
-			flags += [ "clang_rt.asan_dynamic-x86_64.lib", "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" ]
-
-		if self.options.enableUBSAN:
-			flags += [ "clang_rt.ubsan_standalone-x86_64.lib" ]
-
-		return flags
+		return self.python_requires["oxc3_sanitizers"].module.sanitizerLinkFlags(self)
 
 
 	exports_sources = [ "include/*" ]
@@ -87,12 +47,25 @@ class openal_soft(ConanFile):
 		self.settings.rm_safe("compiler.cppstd")
 		self.settings.rm_safe("compiler.libcxx")
 
+		# Force the static RELEASE CRT even in a Debug build. OxC3 links /MT in every config (its CMakeLists
+		# pins it), so a Debug openal on /MTd would be a CRT mismatch; and clang-cl's ASan refuses the debug
+		# CRT outright ("/MTd not allowed with -fsanitize=address"). Setting runtime_type here (rather than only
+		# CMAKE_MSVC_RUNTIME_LIBRARY in generate(), which conan's own msvc-runtime block overrode back to
+		# MultiThreadedDebug) makes conan itself emit MultiThreaded, and since configure() runs during graph
+		# expansion the package id stays consistent between the graph and the build.
+		if self.settings.os == "Windows":
+			self.settings.compiler.runtime_type = "Release"
+
 	def generate(self):
 		deps = CMakeDeps(self)
 		deps.generate()
 
 		tc = CMakeToolchain(self)
 		tc.cppstd = "20"
+
+		# Belt-and-suspenders for the static release CRT; the load-bearing part is runtime_type=Release in
+		# configure() (this alone was overridden by conan's own msvc-runtime block). See that comment.
+		tc.variables["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreaded"
 
 		if self.settings.os == "Linux":
 			tc.cache_variables["ALSOFT_BACKEND_ALSA"]      = True

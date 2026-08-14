@@ -162,7 +162,9 @@ Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result) 
 	return true;
 }
 
-void TLAS_free(TLAS *tlas, const Allocator *alloc) {
+void TLAS_free(void *tlasGeneric, const Allocator *alloc) {
+
+	TLAS *tlas = (TLAS*) tlasGeneric;
 
 	(void)alloc;
 

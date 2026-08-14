@@ -791,7 +791,9 @@ clean:
 
 //Free and create
 
-void CommandList_free(CommandList *cmd, const Allocator *alloc) {
+void CommandList_free(void *cmdGeneric, const Allocator *alloc) {
+
+	CommandList *cmd = (CommandList*) cmdGeneric;
 
 	(void)alloc;
 

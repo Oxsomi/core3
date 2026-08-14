@@ -174,7 +174,9 @@ clean:
 	return s_uccess;
 }
 
-void DeviceBuffer_free(DeviceBuffer *buffer, const Allocator *alloc) {
+void DeviceBuffer_free(void *bufferGeneric, const Allocator *alloc) {
+
+	DeviceBuffer *buffer = (DeviceBuffer*) bufferGeneric;
 
 	(void)alloc;
 

@@ -482,6 +482,28 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 	SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
 	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtimeEntry, ctx->combinationId, &binaryIdentifier, e_rr));
 
+	//Bracketed by two lines rather than logged once, because getLinkEntries reflects the binary through
+	//SPIRV-Reflect, which can take the process down without saying which shader it was working on.
+	//Both lines come from this job, so a "Reflecting" with no matching "Reflected" names the shader that died,
+	// no matter how the other threads' output interleaves.
+	//Pairing against the "Link"/"Process" lines instead does not work, since those are logged by the leaf jobs,
+	// so their ordering says nothing about this.
+	//The pointer, length and ref bit are here because the only crash we have seen is inside SPIRV-Reflect's read
+	// of this buffer.
+	//Without NO_COPY the only thing it does with our memory is one memcpy of exactly this length.
+	//So a fault there means the length outruns the allocation or the pointer is already dead.
+	//"ref" tells those two apart from a genuinely bad module.
+
+	if(job->enableLogging)
+		Log_debugLn(
+			alloc, "Reflecting entrypoints: %.*s (%s, %"PRIu32":%"PRIu32", %"PRIu64" bytes @ 0x%"PRIx64"%s)",
+			(int) CharString_length(inputPath), inputPath.ptr,
+			file->binaryType == ESHBinaryType_SPIRV ? "spirv" : "dxil",
+			(U32) ctx->runtimeEntryId, (U32) ctx->combinationId,
+			Buffer_length(ctx->tempResult.binary), (U64) ctx->tempResult.binary.ptr,
+			Buffer_isRef(ctx->tempResult.binary) ? ", ref" : ""
+		);
+
 	//Lib files need to be specialized per shader annotation or per entrypoint; non libs loop once.
 
 	gotoIfError3(clean, Compiler_getLinkEntries(
@@ -495,6 +517,28 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		alloc,
 		e_rr
 	));
+
+	if(job->enableLogging)
+		Log_debugLn(
+			alloc, "Reflected entrypoints: %.*s (%s, %"PRIu32":%"PRIu32")",
+			(int) CharString_length(inputPath), inputPath.ptr,
+			file->binaryType == ESHBinaryType_SPIRV ? "spirv" : "dxil",
+			(U32) ctx->runtimeEntryId, (U32) ctx->combinationId
+		);
+
+	//A non-annotation ([[oxc::stage]]) entry produces exactly one link entry, hence one leaf.
+	//That leaf reflects and rewrites the shared combo->tempResult in place.
+	//Two such leaves would race that buffer and corrupt the heap.
+	//The invariant holds today because uniforms are rejected on non-annotation entries,
+	// and uniforms are the only thing that fans a stage entry into multiple combinations.
+	//It is enforced here anyway so a future change fails loudly rather than silently reintroducing that race.
+
+	if (!runtimeEntry.isShaderAnnotation && ctx->linkEntries.length > 1)
+		retError(clean, Error_invalidState(
+			0,
+			"Compiler_compileCombinationJob() a non-annotation entry produced multiple link entries, "
+			"which would race the shared compile result"
+		));
 
 	//Activate the combination latch and fan out its leaves.
 	//From here cleanup is via the latch: we hold a self token, fail the file latch on error,
@@ -856,13 +900,20 @@ Bool Compiler_registerShaderBinary(
 		gotoIfError3(clean, SHFile_addInclude(shFile, &shInclude, alloc, e_rr));
 	}
 
-	//Move binary there to avoid copying mem if possible
+	//Move binary there to avoid copying mem if possible.
+	//Ownership is handed to binaryInfo before the fallible SHFile_addBinary rather than after it.
+	//If the add fails and jumps to clean, binaryInfo is then the sole owner,
+	// so SHBinaryInfo_free releases the binary and registers exactly once.
+	//Nulling tempResult after the add left both binaryInfo and tempResult owning the same blocks on that path,
+	// so SHBinaryInfo_free here plus the caller's CompileResult_free double freed them.
+	//On success addBinary moves them out of binaryInfo, so this stays a single free either way.
 
 	binaryInfo.registers = tempResult->registers;
 	binaryInfo.binaries[compileMode] = tempResult->binary;
-	gotoIfError3(clean, SHFile_addBinary(shFile, &binaryInfo, alloc, e_rr));
 	tempResult->binary = Buffer_createNull();
 	tempResult->registers = (ListSHRegisterRuntime) { 0 };
+
+	gotoIfError3(clean, SHFile_addBinary(shFile, &binaryInfo, alloc, e_rr));
 
 	CompileResult_free(tempResult, alloc);
 
