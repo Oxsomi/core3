@@ -82,7 +82,7 @@ class openal_soft(ConanFile):
 		# Forward slashes: this ends up inside a quoted string in conan_toolchain.cmake, where CMake reads
 		# a backslash as an escape and dies on paths like C:\Program Files ("Invalid character escape '\P'").
 
-		flags = [ "-libpath:%s" % os.path.normpath(found[0]).replace("\\", "/") ]
+		flags = [ "-libpath:\\\"%s\\\"" % os.path.normpath(found[0]).replace("\\", "/") ]
 
 		# compiler-rt names these after the target arch, so it can't be pinned to x86_64 or an arm64 build
 		# silently links the wrong runtime (or none).

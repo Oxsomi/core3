@@ -482,16 +482,24 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 	SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
 	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtimeEntry, ctx->combinationId, &binaryIdentifier, e_rr));
 
-	//Logged before the call rather than after it, unlike the success lines: getLinkEntries reflects the
-	//binary through SPIRV-Reflect, which can take the process down, and then nothing says which shader it
-	//was working on. The last of these without a matching "Link"/"Process" line is the one that died.
+	//Bracketed by two lines rather than logged once, because getLinkEntries reflects the binary through
+	//SPIRV-Reflect, which can take the process down without saying which shader it was working on.
+	//Both lines come from this job, so a "Reflecting" with no matching "Reflected" names the shader that
+	//died no matter how the other threads' output interleaves. Pairing against the "Link"/"Process" lines
+	//instead does not work: those are logged by the leaf jobs, so their ordering says nothing about this.
+	//The pointer, length and ref bit are here because the only crash we have seen is inside SPIRV-Reflect's
+	//read of this buffer. Without NO_COPY the only thing it does with our memory is one memcpy of exactly
+	//this length, so a fault there means the length outruns the allocation or the pointer is already dead,
+	//and "ref" tells those two apart from a genuinely bad module.
 
 	if(job->enableLogging)
 		Log_debugLn(
-			alloc, "Reflecting entrypoints: %.*s (%s, %"PRIu32":%"PRIu32")",
+			alloc, "Reflecting entrypoints: %.*s (%s, %"PRIu32":%"PRIu32", %"PRIu64" bytes @ 0x%"PRIx64"%s)",
 			(int) CharString_length(inputPath), inputPath.ptr,
 			file->binaryType == ESHBinaryType_SPIRV ? "spirv" : "dxil",
-			(U32) ctx->runtimeEntryId, (U32) ctx->combinationId
+			(U32) ctx->runtimeEntryId, (U32) ctx->combinationId,
+			Buffer_length(ctx->tempResult.binary), (U64) ctx->tempResult.binary.ptr,
+			Buffer_isRef(ctx->tempResult.binary) ? ", ref" : ""
 		);
 
 	//Lib files need to be specialized per shader annotation or per entrypoint; non libs loop once.
@@ -507,6 +515,14 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		alloc,
 		e_rr
 	));
+
+	if(job->enableLogging)
+		Log_debugLn(
+			alloc, "Reflected entrypoints: %.*s (%s, %"PRIu32":%"PRIu32")",
+			(int) CharString_length(inputPath), inputPath.ptr,
+			file->binaryType == ESHBinaryType_SPIRV ? "spirv" : "dxil",
+			(U32) ctx->runtimeEntryId, (U32) ctx->combinationId
+		);
 
 	//Activate the combination latch and fan out its leaves.
 	//From here cleanup is via the latch: we hold a self token, fail the file latch on error,

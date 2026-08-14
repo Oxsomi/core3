@@ -185,6 +185,17 @@ class oxc3(ConanFile):
 		if self.options.dynamicLinkingGraphics and self.settings.os == "Windows":
 			hasD3D12 = True
 
+		# The three dependencies that compile C/C++ have to be built the same way we are: a sanitized
+		# consumer can't link unsanitized dependencies (ASan has to own operator new, and MSVC's STL records
+		# its container annotation state per object).
+		# Propagating here rather than only on the command line that creates them is what makes the graph
+		# ask for the packages that were actually built. Without it the root passes -o enableASAN=True while
+		# dxc/spirv_reflect/openal_soft fall back to their own default of False, so the resolved package ids
+		# are for unsanitized binaries that nothing ever built -- which is a "Missing binary" error at
+		# install time, not a link failure later.
+
+		sanitized = { "enableASAN": self.options.enableASAN, "enableUBSAN": self.options.enableUBSAN }
+
 		# NVAPI is only needed for the D3D12 backend (RT validation, and future cluster / mega geometry).
 		if hasD3D12:
 			self.requires("nvapi/2026.08.02")
@@ -197,8 +208,8 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2026.08.07.03")
-			self.requires("spirv_reflect/2026.08.06")
+			self.requires("dxc/2026.08.07.03", options=sanitized)
+			self.requires("spirv_reflect/2026.08.06", options=sanitized)
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")
@@ -217,7 +228,7 @@ class oxc3(ConanFile):
 		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
 			self.requires("vulkan_validation_layers/1.4.357.0-oxc1")
 
-		self.requires("openal_soft/2026.08.06")
+		self.requires("openal_soft/2026.08.06", options=sanitized)
 
 	def package(self):
 

@@ -1,8 +1,7 @@
 name: macOS x64 Vulkan static (ASan + UBSan)
 
-# Completes the sanitizer arch coverage: with this, both architectures are sanitized on linux and macOS.
-# Windows stays x64 only because CMakeLists links clang_rt.asan_dynamic-x86_64 by name, so an arm64 job
-# needs that runtime wired up first.
+# Completes the sanitizer arch coverage for macOS: with this, both architectures are sanitized here just as
+# they are on linux and Windows.
 #
 # Nightly rather than per push for the same reason as the other sanitizer jobs, see
 # linux_clang_sanitizers.yml.

@@ -234,15 +234,45 @@ if(MSVC)
 
 		# compiler-rt names its Windows runtimes after the target arch, so this can't be hardcoded to x86_64:
 		# that is what kept an arm64 sanitizer build off the table entirely.
-		# Whether LLVM ships an aarch64 Windows ASan runtime depends on the toolchain; if it doesn't, the
-		# runtime directory is still found above and the link fails naming the missing library, which is a
-		# clear enough error to act on.
 
 		if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|arm64|aarch64")
 			set(sanitizerArch "aarch64")
 		else()
 			set(sanitizerArch "x86_64")
 		endif()
+
+		# Whether a given toolchain actually ships the runtime for this arch is a build-time fact we can't
+		# assume: LLVM has supported ASan on Windows aarch64 for a while, but whether a particular installer
+		# includes the prebuilt library is up to whoever produced it.
+		# Checking here turns "unresolved external symbol __asan_report_load8" thousands of lines into the
+		# link log into a configure-time error that names the arch and lists what the toolchain does have,
+		# which is what the first arm64 sanitizer run needs in order to be actionable.
+
+		set(requiredSanitizerLibs "")
+
+		if(EnableASAN)
+			list(APPEND requiredSanitizerLibs
+				"clang_rt.asan_dynamic-${sanitizerArch}.lib"
+				"clang_rt.asan_dynamic_runtime_thunk-${sanitizerArch}.lib"
+			)
+		endif()
+
+		if(EnableUBSAN)
+			list(APPEND requiredSanitizerLibs "clang_rt.ubsan_standalone-${sanitizerArch}.lib")
+		endif()
+
+		foreach(sanitizerLib ${requiredSanitizerLibs})
+			if(NOT EXISTS "${clangRtDir}/${sanitizerLib}")
+
+				file(GLOB availableSanitizerLibs RELATIVE "${clangRtDir}" "${clangRtDir}/clang_rt.*")
+				string(REPLACE ";" "\n  " availableSanitizerLibs "${availableSanitizerLibs}")
+
+				message(FATAL_ERROR
+					"${sanitizerLib} is missing from ${clangRtDir}, so this toolchain can't produce a "
+					"sanitized ${sanitizerArch} build. Runtimes it does ship:\n  ${availableSanitizerLibs}"
+				)
+			endif()
+		endforeach()
 
 		if(EnableASAN)
 			list(APPEND BUILD_FLAGS
