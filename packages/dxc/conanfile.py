@@ -170,13 +170,18 @@ class dxc(ConanFile):
 		tc.variables["ENABLE_SPIRV_CODEGEN"] = True
 		tc.variables["CMAKE_EXPORT_COMPILE_COMMANDS"] = True
 		tc.variables["DXC_USE_LIT"] = True
-		# Debug only.
-		# A Release build is what ships, where an assert firing aborts the app rather than helping anyone,
-		# and it also drops the android test .so from 547 to 490 MB.
-		# That's ~11%, not the bulk:
-		# statically linked LLVM/clang/SPIRV-Tools plus an unstripped symbol table is what actually makes it that size.
+		# On for Debug and for any sanitized build; off for the Release that ships.
+		# In a shipping Release an assert firing just aborts the app rather than helping anyone, and it also
+		# drops the android test .so from 547 to 490 MB (~11%, not the bulk: statically linked
+		# LLVM/clang/SPIRV-Tools plus an unstripped symbol table is what actually makes it that size).
+		# A sanitizer run is the opposite situation: we WANT DXC's own asserts firing next to ASan/UBSan so a
+		# bug in how it processes our shaders is caught at its source. Tying it to the sanitizer flags rather
+		# than to build_type=Debug gets those asserts on an optimized DXC, avoiding the multi-GB Debug
+		# static-LLVM build that would risk the runner's disk.
 
-		tc.variables["LLVM_ENABLE_ASSERTIONS"] = self.settings.build_type == "Debug"
+		tc.variables["LLVM_ENABLE_ASSERTIONS"] = (
+			self.settings.build_type == "Debug" or self.options.enableASAN or self.options.enableUBSAN
+		)
 		tc.variables["ENABLE_DXC_STATIC_LINKING"] = True
 
 		tc.variables["LLVM_LIT_ARGS"] = "-v"

@@ -62,7 +62,9 @@ const C8 *oiSHSuffixes[] = {
 	".dxil.oiSH"
 };
 
-Bool registerFile(const FileInfo *file, ShaderFileRecursion *shaderFiles, const Allocator *alloc, Error *e_rr) {
+Bool registerFile(const FileInfo *file, void *shaderFilesGeneric, const Allocator *alloc, Error *e_rr) {
+
+	ShaderFileRecursion *shaderFiles = (ShaderFileRecursion*) shaderFilesGeneric;
 
 	Bool s_uccess = true;
 	CharString copy = CharString_createNull();
@@ -222,7 +224,7 @@ Bool Compiler_getTargetsFromFile(
 		gotoIfError3(clean, File_foreach(
 			&input,
 			false,
-			(FileCallback) registerFile,
+			registerFile,
 			&shaderFileRecursion,
 			true,
 			alloc,

@@ -72,7 +72,9 @@ typedef struct CLIAudioConvertForeach {
 	CharString inputDir;
 } CLIAudioConvertForeach;
 
-Bool CLI_audioConvertFind(const FileInfo *info, CLIAudioConvertForeach *data, const Allocator *alloc, Error *e_rr) {
+Bool CLI_audioConvertFind(const FileInfo *info, void *dataGeneric, const Allocator *alloc, Error *e_rr) {
+
+	CLIAudioConvertForeach *data = (CLIAudioConvertForeach*) dataGeneric;
 
 	CharString copy = CharString_createNull();
 	CharString wav = CharString_createRefCStrConst(".wav");
@@ -230,7 +232,7 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 			.inputDir = resolved1
 		};
 
-		if(!File_foreach(&inputStr, false, (FileCallback) CLI_audioConvertFind, &audioForeach, true, alloc, NULL)) {
+		if(!File_foreach(&inputStr, false, CLI_audioConvertFind, &audioForeach, true, alloc, NULL)) {
 			CharString_free(&resolved, alloc);
 			CharString_free(&resolved1, alloc);
 			Log_debugLnx("CLI_audioConvert() invalid -output argument. Couldn't query all files");

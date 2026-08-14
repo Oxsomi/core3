@@ -206,7 +206,9 @@ typedef struct FileCounter {
 	U64 counter;
 } FileCounter;
 
-static Bool countFileType(const FileInfo *info, FileCounter *counter, const Allocator *alloc, Error *e_rr) {
+static Bool countFileType(const FileInfo *info, void *counterGeneric, const Allocator *alloc, Error *e_rr) {
+
+	FileCounter *counter = (FileCounter*) counterGeneric;
 
 	(void) e_rr; (void) alloc;
 
@@ -254,7 +256,7 @@ Bool File_queryFileObjectCount(
 	//Normal counter for local files
 
 	FileCounter counter = (FileCounter) { .type = type, .useType = true };
-	gotoIfError3(clean, File_foreach(loc, false, (FileCallback) countFileType, &counter, isRecursive, alloc, e_rr));
+	gotoIfError3(clean, File_foreach(loc, false, countFileType, &counter, isRecursive, alloc, e_rr));
 	*res = counter.counter;
 
 clean:
@@ -286,7 +288,7 @@ Bool File_queryFileObjectCountAll(const CharString *loc, Bool isRecursive, U64 *
 
 	FileCounter counter = (FileCounter) { 0 };
 	gotoIfError3(clean, File_foreach(
-		loc, !Platform_instance->useWorkingDir, (FileCallback) countFileType, &counter, isRecursive, alloc, e_rr
+		loc, !Platform_instance->useWorkingDir, countFileType, &counter, isRecursive, alloc, e_rr
 	));
 
 	*res = counter.counter;
@@ -1089,7 +1091,9 @@ typedef struct ForeachFile {
 // but foreach's contract is that every reported path is itself a valid input for the other File_* functions,
 // matching the absolute paths the physical foreach reports.
 
-static Bool File_virtualForeachCallback(const FileInfo *info, ForeachFile *foreach, const Allocator *alloc, Error *e_rr) {
+static Bool File_virtualForeachCallback(const FileInfo *info, void *foreachGeneric, const Allocator *alloc, Error *e_rr) {
+
+	ForeachFile *foreach = (ForeachFile*) foreachGeneric;
 
 	Bool s_uccess = true;
 	CharString path = CharString_createNull();
@@ -1261,7 +1265,7 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 			gotoIfError3(clean, CAFile_foreach(
 				caFile,
 				handle,
-				(FileCallback) File_virtualForeachCallback,
+				File_virtualForeachCallback,
 				foreach,
 				foreach->isRecursive,
 				alloc,
@@ -1333,7 +1337,7 @@ Bool File_queryFileObjectCountVirtual(
 		retError(clean, Error_nullPointer(3, "File_queryFileObjectCountVirtual()::res is required"));
 
 	FileCounter counter = (FileCounter) { .type = type, .useType = true };
-	gotoIfError3(clean, File_foreachVirtual(loc, (FileCallback) countFileType, &counter, isRecursive, alloc, e_rr));
+	gotoIfError3(clean, File_foreachVirtual(loc, countFileType, &counter, isRecursive, alloc, e_rr));
 	*res = counter.counter;
 
 clean:
@@ -1354,7 +1358,7 @@ Bool File_queryFileObjectCountAllVirtual(
 		retError(clean, Error_nullPointer(2, "File_queryFileObjectCountAllVirtual()::res is required"));
 
 	FileCounter counter = (FileCounter) { 0 };
-	gotoIfError3(clean, File_foreachVirtual(loc, (FileCallback) countFileType, &counter, isRecursive, alloc, e_rr));
+	gotoIfError3(clean, File_foreachVirtual(loc, countFileType, &counter, isRecursive, alloc, e_rr));
 	*res = counter.counter;
 
 clean:

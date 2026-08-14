@@ -39,7 +39,9 @@
 #include "platforms/file.h"
 #include "tools/oxc3_cli/cli.h"
 
-Bool addFileToDLFile(const FileInfo *file, ListCharString *names, const Allocator *alloc, Error *e_rr) {
+Bool addFileToDLFile(const FileInfo *file, void *namesGeneric, const Allocator *alloc, Error *e_rr) {
+
+	ListCharString *names = (ListCharString*) namesGeneric;
 
 	if (file->type == EFileType_Folder)
 		return true;
@@ -179,7 +181,7 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 		gotoIfError3(clean, ListBuffer_reserve(&buffers, 256, alloc, e_rr));
 
 		gotoIfError3(clean, File_foreach(
-			convert->input, false, (FileCallback) addFileToDLFile, &paths,
+			convert->input, false, addFileToDLFile, &paths,
 			!(convert->args->flags & EOperationFlags_NonRecursive),
 			alloc,
 			e_rr

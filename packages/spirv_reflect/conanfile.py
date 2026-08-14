@@ -45,8 +45,11 @@ class spirv_reflect(ConanFile):
 			else:
 				flags += [ "-fsanitize=address", "-fno-omit-frame-pointer" ]
 
+		# vptr needs RTTI across the whole program, which the prebuilt setup lacks. function is off too:
+		# it would only catch this dependency's own callback-type mismatches, which are not ours to fix,
+		# while the memory checks that matter for our inputs (asan, ubsan's bounds/overflow) stay on.
 		if self.options.enableUBSAN:
-			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr" ]
+			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr,function" ]
 			flags += [ "/Oy-" ] if msvcStyle else [ "-fno-omit-frame-pointer" ]
 
 		return flags
@@ -116,6 +119,13 @@ class spirv_reflect(ConanFile):
 		tc.variables["SPIRV_REFLECT_STATIC_LIB"] = True
 		tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
 		tc.variables["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreaded"
+
+		# This static library gets linked into OxC3's shared shader compiler (dynamicLinkingShaderCompiler),
+		# and on ELF every object folded into a .so must be position independent. Without this an arm64
+		# dynamic build fails at link with "relocation R_AARCH64_ADR_PREL_PG_HI21 ... recompile with -fPIC"
+		# (x86_64 happens to tolerate the non-PIC relocations, arm64 does not). OxC3 sets the same flag on its
+		# own targets; the dependency has to opt in separately because it is built as its own CMake project.
+		tc.variables["CMAKE_POSITION_INDEPENDENT_CODE"] = True
 		for flag in self._sanitizerLinkFlags():
 			tc.extra_exelinkflags.append(flag)
 			tc.extra_sharedlinkflags.append(flag)

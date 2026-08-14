@@ -208,6 +208,12 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
+
+			# Both shader-compiler deps are sanitized. DXC's build compiles host tablegen tools and RUNS them
+			# mid-build; instrumented on Windows they abort for want of the sanitizer runtime, so build.py
+			# feeds a Windows sanitized DXC unsanitized tablegen binaries via user.dxc:tablegen_dir (the same
+			# split the android/web cross builds use). That conf is not part of the package id, so the graph
+			# still just asks for a sanitized DXC here regardless of where its tablegen came from.
 			self.requires("dxc/2026.08.07.03", options=sanitized)
 			self.requires("spirv_reflect/2026.08.06", options=sanitized)
 

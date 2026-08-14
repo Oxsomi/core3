@@ -45,7 +45,9 @@ typedef struct CAFileRecursion {
 	const RefPtrType *fileHandleType;
 } CAFileRecursion;
 
-Bool addFileToCAFile(const FileInfo *file, CAFileRecursion *caFile, const Allocator *alloc, Error *e_rr) {
+Bool addFileToCAFile(const FileInfo *file, void *caFileGeneric, const Allocator *alloc, Error *e_rr) {
+
+	CAFileRecursion *caFile = (CAFileRecursion*) caFileGeneric;
 
 	Bool s_uccess = true;
 	CharString subPath = CharString_createNull();
@@ -204,7 +206,7 @@ Bool CLI_convertToCA(const CLIConvert *convert, Error *e_rr) {
 		gotoIfError3(clean, File_foreach(
 			&caFileRecursion.root,
 			false,
-			(FileCallback)addFileToCAFile,
+			addFileToCAFile,
 			&caFileRecursion,
 			!(convert->args->flags & EOperationFlags_NonRecursive),
 			alloc,
@@ -277,7 +279,9 @@ clean:
 	return s_uccess;
 }
 
-static Bool extractCAFileEntry(const FileInfo *file, CAFileExtractRecursion *extract, const Allocator *alloc, Error *e_rr) {
+static Bool extractCAFileEntry(const FileInfo *file, void *extractGeneric, const Allocator *alloc, Error *e_rr) {
+
+	CAFileExtractRecursion *extract = (CAFileExtractRecursion*) extractGeneric;
 
 	Bool s_uccess = true;
 	CharString loc = CharString_createNull();
@@ -378,7 +382,7 @@ Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr) {
 		gotoIfError3(clean, CAFile_foreach(
 			&file,
 			CAHandle_Root,
-			(FileCallback)extractCAFileEntry,
+			extractCAFileEntry,
 			&extract,
 			true,
 			alloc,

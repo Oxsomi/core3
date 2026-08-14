@@ -45,8 +45,11 @@ class openal_soft(ConanFile):
 			else:
 				flags += [ "-fsanitize=address", "-fno-omit-frame-pointer" ]
 
+		# vptr needs RTTI across the whole program, which the prebuilt setup lacks. function is off too:
+		# it would only catch this dependency's own callback-type mismatches, which are not ours to fix,
+		# while the memory checks that matter for our inputs (asan, ubsan's bounds/overflow) stay on.
 		if self.options.enableUBSAN:
-			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr" ]
+			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr,function" ]
 			flags += [ "/Oy-" ] if msvcStyle else [ "-fno-omit-frame-pointer" ]
 
 		return flags

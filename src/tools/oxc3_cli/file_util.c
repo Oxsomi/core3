@@ -351,7 +351,7 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 		case EFileArchiveOp_List:
 		case EFileArchiveOp_Tree:
 			gotoIfError3(clean, CAFile_foreach(
-				&caFile, CAHandle_Root, (FileCallback) CLI_filePrintEntry, NULL, op == EFileArchiveOp_Tree, alloc, e_rr
+				&caFile, CAHandle_Root, CLI_filePrintEntry, NULL, op == EFileArchiveOp_Tree, alloc, e_rr
 			));
 			break;
 
@@ -541,7 +541,7 @@ static Bool CLI_fileListImpl(const ParsedArgs *args, Bool isRecursive) {
 		input = CharString_createRefCStrConst(".");        //Default to the working directory
 
 	CLI_ensureVirtualLoaded(&input);
-	return File_foreach(&input, false, (FileCallback) CLI_filePrintEntry, NULL, isRecursive, alloc, NULL);
+	return File_foreach(&input, false, CLI_filePrintEntry, NULL, isRecursive, alloc, NULL);
 }
 
 Bool CLI_fileList(const ParsedArgs *args) {

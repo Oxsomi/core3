@@ -55,7 +55,9 @@
 
 //Printing an entry
 
-Bool collectArchiveEntries(const FileInfo *info, ListCharString *arg, const Allocator *alloc, Error *e_rr) {
+Bool collectArchiveEntries(const FileInfo *info, void *argGeneric, const Allocator *alloc, Error *e_rr) {
+
+	ListCharString *arg = (ListCharString*) argGeneric;
 
 	Bool s_uccess = true;
 	CharString tmp = CharString_createNull();
@@ -77,7 +79,9 @@ typedef struct OutputFolderToDisk {
 	const CAFile *sourceArchive;
 } OutputFolderToDisk;
 
-Bool writeToDisk(const FileInfo *info, OutputFolderToDisk *output, const Allocator *alloc, Error *e_rr) {
+Bool writeToDisk(const FileInfo *info, void *outputGeneric, const Allocator *alloc, Error *e_rr) {
+
+	OutputFolderToDisk *output = (OutputFolderToDisk*) outputGeneric;
 
 	Bool s_uccess = true;
 	CharString subDir = CharString_createNull();
@@ -273,7 +277,7 @@ Bool CLI_storeFileOrFolder(const ParsedArgs *args, const CAFile *a, CAHandle han
 		gotoIfError3(clean, CAFile_foreach(
 			a,
 			handle,
-			(FileCallback) writeToDisk,
+			writeToDisk,
 			&output,
 			true,
 			alloc,
@@ -504,7 +508,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 						gotoIfError3(cleanCa, CAFile_foreach(
 							&file,
 							handle,
-							(FileCallback) collectArchiveEntries,
+							collectArchiveEntries,
 							&strings,
 							true,
 							alloc,
@@ -547,7 +551,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 				gotoIfError3(cleanCa, CAFile_foreach(
 					&file,
 					CAHandle_Root,
-					(FileCallback) collectArchiveEntries,
+					collectArchiveEntries,
 					&strings,
 					true,
 					alloc,

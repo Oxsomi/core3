@@ -585,8 +585,35 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 		shaderProfile = hostProfileForMode(shaderMode, compiler)
 		shaderArgs = hostProfileArgs(shaderMode, compiler)
 
+		# On Windows a sanitized DXC can't build its own tablegen: the instrumented llvm-tblgen/clang-tblgen
+		# abort mid-build for want of the sanitizer runtime (STATUS_ENTRYPOINT_NOT_FOUND). Do it the way the
+		# android/web cross builds do (see build_android.py): build an UNSANITIZED host DXC purely for its
+		# tablegen binaries, then point the sanitized build at them with user.dxc:tablegen_dir, which makes the
+		# recipe set LLVM_USE_HOST_TOOLS=OFF and consume those instead of building its own. Unsanitized tools
+		# need no runtime, so they run fine. Linux/macOS build tablegen inline without trouble and skip this.
+
+		dxcTablegenConf = ""
+
+		if (asan or ubsan) and system == "Windows":
+
+			conanCreateIfChanged(
+				"packages/dxc", shaderProfile, shaderMode, shaderArgs, cache,
+				key="packages/dxc::host_tablegen", options=""
+			)
+
+			# hostTablegenDir resolves the graph with default (unsanitized) options, so it finds the host DXC
+			# just built rather than the sanitized one. The conf is not part of the package id.
+
+			tablegenDir = hostTablegenDir(mode=shaderMode, compiler=compiler)
+
+			if tablegenDir:
+				dxcTablegenConf = f' -c:h user.dxc:tablegen_dir="{tablegenDir}"'
+			else:
+				print("-- WARNING: no host DXC tablegen found; sanitized Windows DXC will try to build its own")
+
 		for package in SHADER_COMPILER_DEPS:
-			conanCreateIfChanged(package, shaderProfile, shaderMode, shaderArgs, cache, options=sanitizerOptions)
+			depOptions = (sanitizerOptions + dxcTablegenConf) if package == "packages/dxc" else sanitizerOptions
+			conanCreateIfChanged(package, shaderProfile, shaderMode, shaderArgs, cache, options=depOptions.strip())
 		conanCreateIfChanged("packages/openal_soft",        profile, mode, profileArgs, cache, options=sanitizerOptions)
 
 		if system == "Linux":

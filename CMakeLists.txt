@@ -434,8 +434,13 @@ else()
 		add_link_options(-fsanitize=address)
 	endif()
 
+	# Only vptr is disabled: it needs RTTI across the prebuilt dependencies, which they aren't built with.
+	# function stays ON: every FileCallback implementation now genuinely takes void* and casts internally
+	# (rather than declaring its concrete userData type and being cast at the call site), so an indirect call
+	# through the FileCallback pointer is a true type match.
+
 	if(EnableUBSAN)
-		add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer)
+		add_compile_options(-fsanitize=undefined -fno-sanitize=vptr -fno-omit-frame-pointer)
 		add_link_options(-fsanitize=undefined)
 	endif()
 

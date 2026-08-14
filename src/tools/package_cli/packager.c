@@ -45,7 +45,9 @@ typedef struct CAFileRecursion {
 	Bool keepShaderSource;        //See PackageSettings; stores .hlsl as-is rather than compiling it
 } CAFileRecursion;
 
-Bool packageFile(const FileInfo *file, CAFileRecursion *pkgFile, const Allocator *alloc, Error *e_rr) {
+Bool packageFile(const FileInfo *file, void *pkgFileGeneric, const Allocator *alloc, Error *e_rr) {
+
+	CAFileRecursion *pkgFile = (CAFileRecursion*) pkgFileGeneric;
 
 	Bool s_uccess = true;
 	CharString subPath = CharString_createNull();
@@ -214,7 +216,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 	gotoIfError3(clean, File_foreach(
 		&caFileRecursion.root,
 		false,
-		(FileCallback) packageFile,
+		packageFile,
 		&caFileRecursion,
 		true,
 		alloc,
