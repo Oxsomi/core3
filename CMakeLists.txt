@@ -232,12 +232,27 @@ if(MSVC)
 		# Our code is instrumented while the prebuilt dependencies (DXC, SPIRV-Reflect) are not, and
 		# rebuilding those under ASan would cost far more than the annotations are worth.
 
+		# compiler-rt names its Windows runtimes after the target arch, so this can't be hardcoded to x86_64:
+		# that is what kept an arm64 sanitizer build off the table entirely.
+		# Whether LLVM ships an aarch64 Windows ASan runtime depends on the toolchain; if it doesn't, the
+		# runtime directory is still found above and the link fails naming the missing library, which is a
+		# clear enough error to act on.
+
+		if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|arm64|aarch64")
+			set(sanitizerArch "aarch64")
+		else()
+			set(sanitizerArch "x86_64")
+		endif()
+
 		if(EnableASAN)
 			list(APPEND BUILD_FLAGS
 				"/fsanitize=address" "/Oy-"
 				"-D_DISABLE_STRING_ANNOTATION=1" "-D_DISABLE_VECTOR_ANNOTATION=1"
 			)
-			link_libraries("clang_rt.asan_dynamic-x86_64.lib" "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib")
+			link_libraries(
+				"clang_rt.asan_dynamic-${sanitizerArch}.lib"
+				"clang_rt.asan_dynamic_runtime_thunk-${sanitizerArch}.lib"
+			)
 		endif()
 
 		# Trap rather than diagnose: UBSan's reporting runtime is the flakiest part of its Windows support,
@@ -251,7 +266,7 @@ if(MSVC)
 
 		if(EnableUBSAN)
 			list(APPEND BUILD_FLAGS "-fsanitize=undefined" "-fno-sanitize=vptr" "/Oy-")
-			link_libraries("clang_rt.ubsan_standalone-x86_64.lib")
+			link_libraries("clang_rt.ubsan_standalone-${sanitizerArch}.lib")
 		endif()
 	endif()
 

@@ -34,11 +34,23 @@ class dxc(ConanFile):
 
 		flags = []
 
+		# Windows means an MSVC ABI driver (msvc or clang-cl), which spells these with a slash and rejects
+		# the driver forms; a plain clang/gcc rejects the slash forms just as hard ("no such file or
+		# directory: '/fsanitize=address'"), so the spelling has to follow the platform.
+		# The _DISABLE_*_ANNOTATION defines are MSVC STL specific: it records its ASan container annotation
+		# state per object and lld-link refuses to mix instrumented and uninstrumented ones.
+
+		msvcStyle = self.settings.os == "Windows"
+
 		if self.options.enableASAN:
-			flags += [ "/fsanitize=address", "/Oy-", "-D_DISABLE_STRING_ANNOTATION=1", "-D_DISABLE_VECTOR_ANNOTATION=1" ]
+			if msvcStyle:
+				flags += [ "/fsanitize=address", "/Oy-", "-D_DISABLE_STRING_ANNOTATION=1", "-D_DISABLE_VECTOR_ANNOTATION=1" ]
+			else:
+				flags += [ "-fsanitize=address", "-fno-omit-frame-pointer" ]
 
 		if self.options.enableUBSAN:
-			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr", "/Oy-" ]
+			flags += [ "-fsanitize=undefined", "-fno-sanitize=vptr" ]
+			flags += [ "/Oy-" ] if msvcStyle else [ "-fno-omit-frame-pointer" ]
 
 		return flags
 
@@ -70,13 +82,21 @@ class dxc(ConanFile):
 		if not found:
 			return []
 
-		flags = [ "-libpath:%s" % os.path.normpath(found[0]) ]
+		# Forward slashes: this ends up inside a quoted string in conan_toolchain.cmake, where CMake reads
+		# a backslash as an escape and dies on paths like C:\Program Files ("Invalid character escape '\P'").
+
+		flags = [ "-libpath:%s" % os.path.normpath(found[0]).replace("\\", "/") ]
+
+		# compiler-rt names these after the target arch, so it can't be pinned to x86_64 or an arm64 build
+		# silently links the wrong runtime (or none).
+
+		arch = "aarch64" if str(self.settings.arch) in ("armv8", "arm64", "aarch64") else "x86_64"
 
 		if self.options.enableASAN:
-			flags += [ "clang_rt.asan_dynamic-x86_64.lib", "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" ]
+			flags += [ "clang_rt.asan_dynamic-%s.lib" % arch, "clang_rt.asan_dynamic_runtime_thunk-%s.lib" % arch ]
 
 		if self.options.enableUBSAN:
-			flags += [ "clang_rt.ubsan_standalone-x86_64.lib" ]
+			flags += [ "clang_rt.ubsan_standalone-%s.lib" % arch ]
 
 		return flags
 

@@ -482,6 +482,18 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 	SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
 	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtimeEntry, ctx->combinationId, &binaryIdentifier, e_rr));
 
+	//Logged before the call rather than after it, unlike the success lines: getLinkEntries reflects the
+	//binary through SPIRV-Reflect, which can take the process down, and then nothing says which shader it
+	//was working on. The last of these without a matching "Link"/"Process" line is the one that died.
+
+	if(job->enableLogging)
+		Log_debugLn(
+			alloc, "Reflecting entrypoints: %.*s (%s, %"PRIu32":%"PRIu32")",
+			(int) CharString_length(inputPath), inputPath.ptr,
+			file->binaryType == ESHBinaryType_SPIRV ? "spirv" : "dxil",
+			(U32) ctx->runtimeEntryId, (U32) ctx->combinationId
+		);
+
 	//Lib files need to be specialized per shader annotation or per entrypoint; non libs loop once.
 
 	gotoIfError3(clean, Compiler_getLinkEntries(

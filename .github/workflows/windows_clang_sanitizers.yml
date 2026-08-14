@@ -1,4 +1,4 @@
-name: Windows x64 Vulkan static (clang-cl, ASan + UBSan)
+name: Windows x64 D3D12+Vulkan dynamic (clang-cl, ASan + UBSan)
 
 # Nightly companion to the linux clang sanitizer job, see linux_clang_sanitizers.yml for why these aren't
 # in the per commit matrix.
@@ -18,16 +18,21 @@ jobs:
   build:
     uses: ./.github/workflows/_build.yml
     with:
-      name: Windows x64 Vulkan static (clang-cl, ASan + UBSan)
+      name: Windows x64 D3D12+Vulkan dynamic (clang-cl, ASan + UBSan)
       runner: windows-2022
       os: windows
-      build_flags: '-compiler clang -o forceVulkan=True -o cliGraphics=False -asan True -ubsan True'
+      # -dynamic_linking is what actually gets both backends: per src/graphics/CMakeLists.txt only the
+      # DynamicLinkingGraphics branch enables D3D12 and Vulkan together. Dropping forceVulkan on its own
+      # would have selected D3D12 only, sanitizing half of what we wanted.
+      # It also suits ASan here: the dynamic sanitizer runtime is already required because the shader
+      # compiler is a DLL, and more backend DLLs change nothing about that.
+      build_flags: '-compiler clang -dynamic_linking True -o cliGraphics=False -asan True -ubsan True'
       # Its own cache group: sanitized dependencies are distinct conan packages from the plain clang-cl job's.
       cache_name: clang_sanitizers
       python_cmd: python
       setup_python: false
       python_version: ''
       sanitizers: true
-      hook_name: Windows-x64-vk-static-clang-sanitizers
+      hook_name: Windows-x64-clang-sanitizers
     secrets:
       WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
