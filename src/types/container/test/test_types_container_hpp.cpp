@@ -38,12 +38,12 @@ namespace oxc { namespace c {
 //Bind the wrapper to the C ListU32 (declared inside oxc::c by list.hpp), at global scope.
 OXC_BIND_LIST(ListU32)
 
-//Descending comparator for sortCustom, defined in test_types_container_hpp_callbacks.c rather than here.
+//Descending comparator for sortCustom, defined in C in test_types_container_list.c rather than here.
 //A definition in this TU would return oxc::c::ECompareResult, since the C headers are included inside that
 // namespace above, and the C sort that calls it expects the plain C enum.
 //The two are the same type to the linker but not to -fsanitize=function, which reads that as a call through
 // an incorrect function type; declaring it here and defining it in C keeps both sides honest.
-extern "C" oxc::c::ECompareResult cmpU32Desc(const void *a, const void *b);
+extern "C" oxc::c::ECompareResult cmpU32Desc(const void *a, const void *b, void *context);
 
 extern "C" void Test_hpp(oxc::c::Test *t) {
 
@@ -103,6 +103,25 @@ extern "C" void Test_hpp(oxc::c::Test *t) {
 		Test_assert(t, "List: sortCustom result", list[0] == 5 && list[4] == 1);
 		Test_assert(t, "List: reverse", list.reverse() && list[0] == 1 && list[4] == 5);
 		Test_assert(t, "List: swap", list.swap(0, 4, e_rr) && list[0] == 5 && list[4] == 1);
+
+		//A C++ comparator, captures and all, with no C linkage anywhere in sight.
+		//It ranks by a table that lives outside the elements, so the capture is the only thing that can
+		// express the order: values 1..5 rank 30, 10, 50, 20, 40, which sorts them 2, 4, 1, 5, 3.
+
+		const c::U32 rank[6] = { 0, 30, 10, 50, 20, 40 };
+
+		Test_assert(t, "List: sortCustom (callable)", list.sortCustom(
+			[&rank](const c::U32 &a, const c::U32 &b) {
+				return rank[a] < rank[b]
+					? c::ECompareResult_Lt
+					: (rank[a] > rank[b] ? c::ECompareResult_Gt : c::ECompareResult_Eq);
+			}
+		));
+
+		Test_assert(
+			t, "List: sortCustom callable followed the capture",
+			list[0] == 2 && list[1] == 4 && list[2] == 1 && list[3] == 5 && list[4] == 3
+		);
 
 		//range-for over begin()/end()
 

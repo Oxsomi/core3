@@ -18,20 +18,22 @@
 *  This is called dual licensing.
 */
 
-//types/container/test/test_types_container_hpp_callbacks.c
-
-//Callbacks the hpp wrapper test hands to the C containers, kept in C on purpose.
-//test_types_container_hpp.cpp includes the C headers inside namespace oxc::c, so anything it defines returns
-// oxc::c::ECompareResult, which is a different type to the C sort that ends up calling it even though the two
-// are identical at the ABI level.
-//-fsanitize=function compares the callee's recorded signature against the call site's and reports exactly
-// that mismatch as a call through an incorrect function type, so the definition lives here where the enum is
-// the one the caller expects; the C++ side only takes its address.
+//types/base/algorithm.c
 
 #include "types/base/algorithm.h"
-#include "types/base/types.h"
 
-ECompareResult cmpU32Desc(const void *a, const void *b) {
-	const U32 x = *(const U32*) a, y = *(const U32*) b;
-	return x > y ? ECompareResult_Lt : (x < y ? ECompareResult_Gt : ECompareResult_Eq);
+//See CompareInvoke in the header for why a comparator from another language is reached through here.
+
+ECompareResult CompareWrapper_compare(const void *aPtr, const void *bPtr, void *context) {
+
+	const CompareWrapper *wrapper = (const CompareWrapper*) context;
+
+	if(!wrapper || !wrapper->invoke)
+		return ECompareResult_Eq;
+
+	const I8 res = wrapper->invoke(aPtr, bPtr, wrapper->context);
+
+	//Compared rather than cast: an out of range result would otherwise become an invalid enum value.
+
+	return res < 0 ? ECompareResult_Lt : (res > 0 ? ECompareResult_Gt : ECompareResult_Eq);
 }

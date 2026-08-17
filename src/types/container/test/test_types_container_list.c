@@ -42,10 +42,24 @@ TList(OverAligned);
 TListImpl(OverAligned);
 
 //Descending comparator for sortCustom (sortCustom orders ascending by comparator).
+//Deliberately not static: the hpp wrapper test sorts through the same C API and shares this comparator,
+// because a comparator it defined itself would return oxc::c::ECompareResult (its C headers live in that
+// namespace), which is a different type to the C sort calling it even though the two are identical at the
+// ABI level, and -fsanitize=function reports exactly that as a call through an incorrect function type.
 
-static ECompareResult cmpU32Desc(const void *a, const void *b) {
+ECompareResult cmpU32Desc(const void *a, const void *b, void *context) {
+	(void) context;
 	const U32 x = *(const U32*) a, y = *(const U32*) b;
 	return x > y ? ECompareResult_Lt : (x < y ? ECompareResult_Gt : ECompareResult_Eq);
+}
+
+//Sorts by a key looked up in a table the caller passes as context, which is the whole point of having one:
+//the ordering lives outside the elements, so it can't be expressed by comparing them.
+
+static ECompareResult cmpU32ByKey(const void *a, const void *b, void *context) {
+	const U32 *keys = (const U32*) context;
+	const U32 x = keys[*(const U32*) a], y = keys[*(const U32*) b];
+	return x < y ? ECompareResult_Lt : (x > y ? ECompareResult_Gt : ECompareResult_Eq);
 }
 
 void Test_list(Test *t) {
@@ -128,9 +142,35 @@ void Test_list(Test *t) {
 	Bool asc = list.ptr[0] == 1 && list.ptr[1] == 2 && list.ptr[2] == 3 && list.ptr[3] == 4 && list.ptr[4] == 5;
 	Test_assert(t, "sorted ascending", asc);
 
-	Test_assert(t, "sortCustom (descending)", ListU32_sortCustom(list, cmpU32Desc));
+	Test_assert(t, "sortCustom (descending)", ListU32_sortCustom(list, cmpU32Desc, NULL));
 	Bool desc = list.ptr[0] == 5 && list.ptr[4] == 1;
 	Test_assert(t, "sortCustom descending", desc);
+
+	//Its own list, so the checks after this one still see the 1..5 they expect.
+	//It holds indices 0..4 and the context table says what each index is worth, so the result is the table's
+	// order rather than the elements' own.
+	//keys[] ranks index 3 first and index 1 last, which no comparison of the values alone could produce.
+
+	{
+		static const U32 keys[5] = { 40, 50, 20, 10, 30 };
+
+		ListU32 keyed = (ListU32) { 0 };
+		Bool keyedOk = true;
+
+		for (U32 i = 0; i < 5; ++i)
+			keyedOk &= ListU32_pushBack(&keyed, i, alloc, e_rr);
+
+		Test_assert(t, "pushBack for sortCustom context", keyedOk);
+
+		Test_assert(t, "sortCustom (context table)", ListU32_sortCustom(keyed, cmpU32ByKey, (void*)(const void*)keys));
+
+		Test_assert(
+			t, "sortCustom followed the context table",
+			keyed.ptr[0] == 3 && keyed.ptr[1] == 2 && keyed.ptr[2] == 4 && keyed.ptr[3] == 0 && keyed.ptr[4] == 1
+		);
+
+		ListU32_free(&keyed, alloc);
+	}
 
 	Test_assert(t, "reverse", ListU32_reverse(list));
 	Test_assert(t, "reversed back to ascending", list.ptr[0] == 1 && list.ptr[4] == 5);

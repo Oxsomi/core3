@@ -58,7 +58,9 @@ clean:                                                                          
 																															\
 Bool Name##_swap(Name l, U64 i, U64 j, Error *e_rr) { return GenericList_swap(Name##_toList(l), i, j, e_rr); }                \
 Bool Name##_reverse(Name l) { return GenericList_reverse(Name##_toList(l)); }                                                \
-Bool Name##_sortCustom(Name l, CompareFunction func) { return GenericList_sortCustom(Name##_toList(l), func); }                \
+Bool Name##_sortCustom(Name l, CompareFunction func, void *context) {                                                         \
+	return GenericList_sortCustom(Name##_toList(l), func, context);                                                           \
+}                                                                                                                             \
 																															\
 Bool Name##_createSubset(const Name l, U64 index, U64 length, Name *result, Error *e_rr) {                                    \
 	const Allocator *alloc = (const Allocator*)NULL;                                                                        \

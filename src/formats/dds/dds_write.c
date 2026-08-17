@@ -30,7 +30,9 @@
 #include "types/base/mathi.h"
 #include "types/base/mathf.h"
 
-ECompareResult SubResourceData_sort(const void *aRaw, const void *bRaw) {
+ECompareResult SubResourceData_sort(const void *aRaw, const void *bRaw, void *context) {
+
+	(void) context;
 
 	const SubResourceData *a = (const SubResourceData*) aRaw, *b = (const SubResourceData*) bRaw;
 
@@ -150,7 +152,7 @@ Bool DDS_write(
 
 	//Sort subresources to ensure we don't have missing or wrongly ordered SubResource data
 
-	if (!ListSubResourceData_sortCustom(*buf, SubResourceData_sort))
+	if (!ListSubResourceData_sortCustom(*buf, SubResourceData_sort, NULL))
 		retError(clean, Error_invalidState(0, "DDS_write()::buf couldn't be sorted"));
 
 	//Validate size of each subresource

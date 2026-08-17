@@ -119,7 +119,7 @@ static inline Bool Name##_neq(const Name a, const Name b) { return !Name##_eq(a,
 																															\
 Bool Name##_swap(Name l, U64 i, U64 j, Error *e_rr);                                                                        \
 Bool Name##_reverse(Name l);                                                                                                \
-Bool Name##_sortCustom(Name l, CompareFunction func);                                                                       \
+Bool Name##_sortCustom(Name l, CompareFunction func, void *context);                                                        \
 																															\
 Bool Name##_createSubset(const Name l, U64 index, U64 length, Name *result, Error *e_rr);                                   \
 Bool Name##_create(U64 length, const Allocator *alloc, Name *result, Error *e_rr);                                          \

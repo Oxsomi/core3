@@ -49,6 +49,29 @@ typedef Bool (*JobCallback)(void *data, U64 threadId, JobQueue *queue);
 //A job that actually runs is responsible for its own cleanup inside its callback instead.
 typedef void (*JobDestructor)(void *data);
 
+//The shape a callback from another language has to have, mentioning no struct or enum type on purpose.
+//A wrapper compiles its own callback in its own language, and a type like JobQueue only reaches it under a
+// namespace (a C header included at global scope would define every C name there), which makes it a
+// DIFFERENT type to the compiler even though it is the same declaration with the same layout.
+//-fsanitize=function compares the type a function was defined with against the type it is called through, so
+// crossing the boundary with JobQueue in the signature is reported as a call through an incorrect function
+// type; builtin types carry no scope and match on both sides, which is why JobDestructor above never had to
+// care and this deliberately looks like it.
+
+typedef Bool (*JobInvoke)(void *data, U64 threadId);
+
+//A wrapper's job data has to START with this, since the callback below reads the JobInvoke back out of it.
+
+typedef struct JobWrapperJob {
+	JobInvoke invoke;
+} JobWrapperJob;
+
+//A JobCallback that forwards to the JobInvoke at the start of data.
+//Wrappers pass this (a C function, so the queue calls it with the type it was defined with) as their
+// JobCallback, which leaves their own builtin-only JobInvoke as the only thing crossing languages.
+
+Bool JobQueue_wrapperCallback(void *data, U64 threadId, JobQueue *queue);
+
 typedef struct Job {
 	JobCallback callback;
 	void *data;

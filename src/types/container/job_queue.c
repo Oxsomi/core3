@@ -173,6 +173,25 @@ Bool JobQueue_push(JobQueue *queue, JobCallback callback, void *data, Error *e_r
 	return JobQueue_pushDestructor(queue, callback, data, NULL, e_rr);
 }
 
+//See JobInvoke in the header for why a wrapper's callback goes through here rather than being handed to the
+// queue directly.
+//The whole data pointer is forwarded, not the JobWrapperJob, so the wrapper can cast it back to its own type.
+
+Bool JobQueue_wrapperCallback(void *data, U64 threadId, JobQueue *queue) {
+
+	(void) queue;
+
+	if(!data)
+		return false;
+
+	const JobWrapperJob *job = (const JobWrapperJob*) data;
+
+	if(!job->invoke)
+		return false;
+
+	return job->invoke(data, threadId);
+}
+
 Bool JobQueue_wait(JobQueue *queue, Error *e_rr) {
 
 	Bool s_uccess = true;
