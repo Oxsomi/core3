@@ -500,6 +500,15 @@ void Test_stringRead(Test *test) {
 		Test_assert(test, invalidFilePaths[i][0] ? invalidFilePaths[i] : "(empty)", !CharString_isValidFilePath(s));
 	}
 
+	//A null string, which is not the same as the "" above: that one still carries a pointer to the literal,
+	// while this one has none at all.
+	//The trailing segment check used to offset that null pointer, so this is the case the table above cannot
+	// reach, and it is the shape every File_* entry point hands over when given a default constructed path.
+
+	s = CharString_createNull();
+	Test_assert(test, "(null string)", !CharString_isValidFilePath(s));
+	Test_assert(test, "(null string) filename", !CharString_isValidFileName(s));
+
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 
 		static const C8 *validFilePathsWin[] = {

@@ -104,6 +104,9 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 	if(blas->base.flags & ERTASBuildFlags_IsUpdate)
 		flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
 
+	if(blas->base.flags & ERTASBuildFlags_AllowDataAccessExt)
+		flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_DATA_ACCESS;
+
 	D3D12_RAYTRACING_GEOMETRY_DESC *geometry = &blasExt->geometry;
 	*geometry = (D3D12_RAYTRACING_GEOMETRY_DESC) { 0 };
 

@@ -215,7 +215,7 @@ class oxc3(ConanFile):
 			# split the android/web cross builds use). That conf is not part of the package id, so the graph
 			# still just asks for a sanitized DXC here regardless of where its tablegen came from.
 			self.requires("dxc/2026.08.07.03", options=sanitized)
-			self.requires("spirv_reflect/2026.08.06", options=sanitized)
+			self.requires("spirv_reflect/2026.08.17", options=sanitized)
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")

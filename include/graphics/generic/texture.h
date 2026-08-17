@@ -84,11 +84,15 @@ Bool TextureRef_isTexture(RefPtr *tex);
 //Read a region of a render target back from the GPU (RenderTexture, DepthStencil or Swapchain).
 //These have no cpuData, so the data arrives through the callback as a tight row buffer it may take over.
 //Same timing contract and region semantics as DeviceTextureRef_pullRegion.
-//MSAA has to be resolved before pulling and stencil bearing depth formats aren't supported yet.
+//MSAA has to be resolved before pulling.
+//plane selects what a multi planar format hands back, one plane per pull: 0 is the first plane (depth, or
+// the stencil of a stencil only format), 1 is the stencil of a combined format (1 byte per texel).
+//Anything single planar only accepts plane 0.
 Bool TextureRef_pullRegion(
 	TextureRef *tex,
 	U16 x, U16 y, U16 z,
 	U16 w, U16 h, U16 l,
+	U8 plane,
 	TexturePullCallback callback, void *context, Error *e_rr
 );
 

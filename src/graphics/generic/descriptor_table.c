@@ -563,6 +563,15 @@ Bool DescriptorTableRef_setDescriptors(
 	if(arrayId >= b->count)
 		retError(clean, Error_outOfBounds(0, arrayId, b->count, "DescriptorTableRef_setDescriptors()::arrayId out of bounds"));
 
+	//An empty list has nothing to bind, and letting it through is worse than a no-op in both directions.
+	//On an array binding the "is it already bound" loop runs zero times,
+	// so it reported success having bound nothing.
+	//On a single binding it indexed element 0 of a list without one.
+	//DescriptorTableRef_unsetDescriptors already refuses a count of 0, so this matches the contract it set.
+
+	if(!darr->length)
+		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_setDescriptors()::darr needs a length of >0"));
+
 	if(arrayId + darr->length > b->count)
 		retError(clean, Error_outOfBounds(
 			0, arrayId + darr->length, b->count, "DescriptorTableRef_setDescriptors()::arrayId + darr.length out of bounds"
@@ -970,6 +979,8 @@ Bool DescriptorTableRef_setDescriptors(
 		if(allEq)
 			goto clean;
 	}
+
+	//Safe to index element 0 unconditionally: an empty list was refused with the parameter checks above.
 
 	else if(Descriptor_eq(&darr->ptr[0], &binding->single, type))
 		goto clean;

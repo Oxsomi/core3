@@ -424,6 +424,38 @@ void Test_allocationBufferVirtual(Test *t) {
 		Test_assert(t, "Virtual block end",   ab.allocations.ptr[0].end == 256);
 	}
 
+	//A second allocation is what first offsets the base, and freeing is what first range checks against it.
+	//The single allocate above never does either: it takes the empty list path, which hands back the base
+	// unchanged, so every pointer this type computes went untested on the virtual path.
+	//That mattered because a virtual buffer's base is NULL, so all of it was undefined pointer arithmetic that
+	// the sanitizer builds never got to see.
+
+	const U8 *q = NULL;
+	Test_assert(t, "Virtual second allocateBlock", AllocationBuffer_allocateBlock(&spec, 512, &q, &t->err));
+	Test_assert(t, "Virtual second offset", (U64)(const void*) q == 256);
+	Test_assert(t, "Virtual block count after second", ab.allocations.length == 2);
+
+	//Freeing out of order exercises the block search, the merge and the front pop, which are the paths that
+	//compare a computed address against the base.
+
+	AllocationBuffer_freeBlock(&ab, p);
+	Test_assert(t, "Virtual free first leaves second", ab.allocations.length >= 1);
+
+	AllocationBuffer_freeBlock(&ab, q);
+	Test_assert(t, "Virtual free both empties list", !ab.allocations.length);
+
+	//An out of range pointer has to stay a no-op on a virtual buffer too, where "out of range" is an offset
+	//past the length rather than an address outside a real mapping.
+
+	const U8 *r = NULL;
+	Test_assert(t, "Virtual realloc after free", AllocationBuffer_allocateBlock(&spec, 128, &r, &t->err));
+
+	AllocationBuffer_freeBlock(&ab, (const U8*)(U64)70000);
+	Test_assert(t, "Virtual free past end is a no-op", ab.allocations.length == 1);
+
+	AllocationBuffer_freeBlock(&ab, r);
+	Test_assert(t, "Virtual free valid after no-op", !ab.allocations.length);
+
 	AllocationBuffer_free(&ab, t->alloc);
 }
 

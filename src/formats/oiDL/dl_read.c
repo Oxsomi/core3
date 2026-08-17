@@ -329,7 +329,15 @@ Bool DLFile_read(
 		//Allocate space somewhere, into tmp
 
 		if (isSmallAlloc) {
-			tmp = Buffer_createRef(dlFile->cache.ptrNonConst + cacheOff, entryLen);
+
+			//An oiDL whose small entries are all zero length asks for no cache at all, so the base stays null
+			// and offsetting it is undefined even by the zero cacheOff is then.
+			//A null ref of length 0 is what Buffer_createRef would have produced anyway.
+
+			tmp = Buffer_length(dlFile->cache)
+				? Buffer_createRef(dlFile->cache.ptrNonConst + cacheOff, entryLen)
+				: Buffer_createNull();
+
 			cacheOff += entryLen;
 		}
 

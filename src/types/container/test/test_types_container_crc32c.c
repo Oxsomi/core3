@@ -49,4 +49,42 @@ void Test_crc32c(Test *test) {
 		const U32 got = Buffer_crc32c(buf);
 		Test_assert(test, cases[i].str, got == want);
 	}
+
+	//Every misaligned base has to produce the same CRC as the identical bytes hashed from an aligned base.
+	//The hardware path peels up to seven bytes to reach 8 byte alignment, and the peel used to read its U32
+	// straight off an odd address, which sanitizers reject as a misaligned load (the CLI hashes argv-backed
+	// string refs, so arbitrary alignment is a real input, not a contrived one).
+	//Sweeping every length also covers a buffer that ends before alignment is ever reached, the plain U64
+	// loop and each tail width.
+
+	Test_setModule(test, "CRC32C misaligned");
+
+	C8 pattern[72];
+
+	for (U64 i = 0; i < sizeof(pattern); ++i)
+		pattern[i] = (C8)(i * 37 + 11);
+
+	U64 alignedStorage[9];
+	C8 *alignedC8 = (C8*) alignedStorage;
+
+	static const C8 *offsetNames[8] = {
+		"offset 0", "offset 1", "offset 2", "offset 3", "offset 4", "offset 5", "offset 6", "offset 7"
+	};
+
+	for (U64 off = 0; off < 8; ++off) {
+
+		Bool allMatch = true;
+
+		for (U64 len = 0; len + off <= sizeof(pattern); ++len) {
+
+			Buffer_memcpy(Buffer_createRef(alignedC8, len), Buffer_createRefConst(pattern + off, len));
+
+			const U32 misaligned = Buffer_crc32c(Buffer_createRefConst(pattern + off, len));
+			const U32 aligned = Buffer_crc32c(Buffer_createRefConst(alignedC8, len));
+
+			allMatch &= misaligned == aligned;
+		}
+
+		Test_assert(test, offsetNames[off], allMatch);
+	}
 }

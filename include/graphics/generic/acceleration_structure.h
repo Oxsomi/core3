@@ -48,7 +48,12 @@ typedef enum ERTASBuildFlags {
 
 	ERTASBuildFlags_IsUpdate                   = 1 << 5,        //If current update is refit (requires parent AS to be set)
 
-	ERTASBuildFlags_Count                      = 6,
+	//Keep triangle vertex positions readable from a hit (RayTriPosition / position fetch).
+	//Both APIs make this a build time opt in, and the AS is larger with it on, so it stays off by default.
+
+	ERTASBuildFlags_AllowDataAccessExt         = 1 << 6,
+
+	ERTASBuildFlags_Count                      = 7,
 
 	ERTASBuildFlags_DefaultTLAS                = ERTASBuildFlags_FastBuild,
 	ERTASBuildFlags_DefaultBLAS                = ERTASBuildFlags_FastTrace | ERTASBuildFlags_AllowCompaction

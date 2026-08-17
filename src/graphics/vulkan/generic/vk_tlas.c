@@ -116,8 +116,13 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 				if(!dat->blasCpu)
 					continue;
 
+				//Offset of this instance's AS reference from the START of the instance array, not from the start
+				// of this instance.
+				//Subtracting the per instance base as well left only the constant intra struct offset, so every
+				// iteration wrote the same slot and instances past the first never received an address at all.
+
 				const U64 *blasAddress = &dat->blasDeviceAddress;
-				U64 offset = (const U8*)blasAddress - (((const U8*)tlas->cpuInstancesStatic.ptr) + stride * i);
+				U64 offset = (const U8*)blasAddress - (const U8*)tlas->cpuInstancesStatic.ptr;
 
 				//The reference has to come from vkGetAccelerationStructureDeviceAddressKHR;
 				// the backing buffer's address is not necessarily the same thing.

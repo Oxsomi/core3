@@ -64,6 +64,8 @@
 //  test_graphics_execute.c      - 16, 28, 29, 30 (submission, readback, acceleration structures)
 //  test_graphics_shaders.c      - 31, 32, 33 (shader execution against the //OxC3_gtest test shaders)
 //  test_graphics_formats_frames.c - 34, 35, 36 (per format round trips, shape gates, frame ring)
+//  test_graphics_capabilities.c - 37 (capability bit invariants and feature gated API agreement)
+//  test_graphics_caps_exec.c    - 38 (a shader dispatched per capability, results verified)
 //
 //Numbering follows the order the modules were added, not the order they run in.
 //
@@ -358,6 +360,11 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	Test_graphicsTextureShapes(t, deviceRef);
 	Test_graphicsFramesInFlight(t, deviceRef);
 
+	//37-38. The capability bits themselves: their invariants, and that gated APIs and shaders agree with them
+
+	Test_graphicsCapabilities(t, deviceRef);
+	Test_graphicsCapabilityExecution(t, deviceRef);
+
 	Test_graphicsDeviceMemory(t, deviceRef);
 
 	RefPtr_dec(&cpuBuffer);
@@ -365,6 +372,10 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 
 	GraphicsDeviceRef_wait(deviceRef, NULL);
 	RefPtr_dec(&deviceRef);
+
+	//39. Config variants, after this adapter's device is gone so the extra devices don't share its memory.
+
+	Test_graphicsConfigVariants(t, instRef, info);
 }
 
 static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
@@ -437,6 +448,30 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	Test_assert(t, "getPreferredDevice", GraphicsInstance_getPreferredDevice(
 		inst, NULL, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, &preferred, &t->err
 	));
+
+	//LUID is host side identity rather than anything a shader can observe, so this is the only place it can be
+	// checked at all.
+	//Identity is what it promises, so identity is what gets asserted: two distinct adapters must not share a
+	// LUID, and must not share a UUID either.
+	//Deliberately NOT asserted: that a LUID is non zero (nothing promises that), that it is stable across
+	// runs, or that it matches the same GPU seen through the other API, since one instance only sees one API.
+	//The documented uuid[0] == luid fallback is also left alone: there is no bit saying whether UUIDs are
+	// supported, so the condition can't be told apart from its own consequence.
+
+	for (U64 i = 0; i < infos.length; ++i) {
+
+		const GraphicsDeviceInfo *a = &infos.ptr[i];
+
+		for (U64 j = i + 1; j < infos.length; ++j) {
+
+			const GraphicsDeviceInfo *b = &infos.ptr[j];
+
+			if((a->capabilities.features & b->capabilities.features) & EGraphicsFeatures_LUID)
+				Test_assert(t, "luidUnique", a->luid != b->luid);
+
+			Test_assert(t, "uuidUnique", a->uuid[0] != b->uuid[0] || a->uuid[1] != b->uuid[1]);
+		}
+	}
 
 	//8-14. Every enumerated adapter gets the full battery, so integrated and software devices are exercised
 	// on machines that have them rather than only the preferred device

@@ -159,6 +159,8 @@ jobs:
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+          COMMIT_SHA: ${{ github.sha }}
           PREFLIGHT: ${{ needs.preflight.result }}
           BUILD: ${{ needs.build.result }}
           PUBLISH: ${{ needs.publish.result }}
@@ -169,6 +171,18 @@ jobs:
             echo "WEBHOOK_URL not set; skipping Discord notification"
             exit 0
           fi
+          # The tag alone doesn't say what it was cut from, which matters when a tag gets moved and re-pushed.
+          # The job results and the sha are fixed shapes, but a tag name is not: git forbids control
+          # characters, spaces and a handful of punctuation in a refname, and does NOT forbid the double
+          # quote, so it gets escaped the same way _build.yml escapes a commit subject.
+          # The backtick is held in a variable for the same reason as there: a bare one would open a command
+          # substitution inside the double quoted payload.
+          jsonEscape() {
+            printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '[:cntrl:]'
+          }
+          BT='`'
+          SHORT_SHA=$(printf '%s' "$COMMIT_SHA" | cut -c1-8)
+          TAG=$(jsonEscape "$GITHUB_REF_NAME")
           curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -H "Content-Type: application/json" \
-            -d "{\"embeds\":[{\"title\":\"Release ${GITHUB_REF_NAME} FAILED\",\"description\":\"Tag pushed but no release published (${REASON}). <${RUN_URL}>\",\"color\":15158332}]}" \
+            -d "{\"embeds\":[{\"title\":\"Release ${TAG} FAILED\",\"url\":\"${RUN_URL}\",\"description\":\"Tag pushed but no release published (${REASON}).\",\"color\":15158332,\"fields\":[{\"name\":\"Tag\",\"value\":\"${BT}${TAG}${BT}\",\"inline\":true},{\"name\":\"Commit\",\"value\":\"[${BT}${SHORT_SHA}${BT}](${COMMIT_URL})\",\"inline\":true}]}]}" \
             "$WEBHOOK_URL"

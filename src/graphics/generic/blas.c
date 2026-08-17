@@ -111,6 +111,14 @@ Bool GraphicsDeviceRef_createBLAS(
 			1, "GraphicsDeviceRef_createBLAS() uses motion blur, but it's unsupported"
 		));
 
+	//Without position fetch support the flag would be silently invalid on the API side, and the failure would
+	// surface at trace time rather than here where the mistake was made.
+
+	if((blas->base.flags & ERTASBuildFlags_AllowDataAccessExt) && !(feat & EGraphicsFeatures_RayTriPosition))
+		retError(clean, Error_unsupportedOperation(
+			1, "GraphicsDeviceRef_createBLAS() uses AllowDataAccess, but position fetch is unsupported"
+		));
+
 	//RTAS_validateDeviceBuffer may normalize len, so validate local copies;
 	//they're committed to the new BLAS below
 

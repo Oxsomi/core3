@@ -90,6 +90,7 @@ Bool TextureRef_pullRegion(
 	TextureRef *tex,
 	U16 x, U16 y, U16 z,
 	U16 w, U16 h, U16 l,
+	U8 plane,
 	TexturePullCallback callback, void *context, Error *e_rr
 ) {
 
@@ -122,9 +123,18 @@ Bool TextureRef_pullRegion(
 	if(utex.sampleCount)
 		retError(clean, Error_invalidOperation(0, "TextureRef_pullRegion() doesn't support MSAA, resolve first"));
 
-	if(utex.depthFormat && !EDepthStencilFormat_getBytes((EDepthStencilFormat) utex.depthFormat))
-		retError(clean, Error_unsupportedOperation(
-			0, "TextureRef_pullRegion() doesn't support stencil bearing depth formats yet"
+	//One pull carries one plane.
+	//getPullBytes returning 0 is what says the format doesn't have the requested one,
+	// which covers plane 1 on anything single planar and any plane past 1.
+
+	if(plane && !utex.depthFormat)
+		retError(clean, Error_invalidParameter(
+			7, plane, "TextureRef_pullRegion()::plane has to be 0 for color formats"
+		));
+
+	if(utex.depthFormat && !EDepthStencilFormat_getPullBytes((EDepthStencilFormat) utex.depthFormat, plane))
+		retError(clean, Error_invalidParameter(
+			7, plane, "TextureRef_pullRegion()::plane doesn't exist on this format"
 		));
 
 	if(x >= utex.width || y >= utex.height || z >= utex.length)
@@ -150,7 +160,7 @@ Bool TextureRef_pullRegion(
 	device = GraphicsDeviceRef_ptr(utex.resource.device);
 
 	const U64 texel =
-		utex.depthFormat ? EDepthStencilFormat_getBytes((EDepthStencilFormat) utex.depthFormat) :
+		utex.depthFormat ? EDepthStencilFormat_getPullBytes((EDepthStencilFormat) utex.depthFormat, plane) :
 		ETextureFormat_getSize(ETextureFormatId_unpack[utex.textureFormatId], 1, 1, 1);
 
 	Buffer data = Buffer_createNull();
@@ -172,7 +182,8 @@ Bool TextureRef_pullRegion(
 		.context = context,
 		.range = (DevicePendingRange) { .texture = (TextureRange) {
 			.startRange = { x, y, z },
-			.endRange = { (U16)(x + w), (U16)(y + h), (U16)(z + l) }
+			.endRange = { (U16)(x + w), (U16)(y + h), (U16)(z + l) },
+			.planeId = plane
 		} },
 		.textureData = data
 	};

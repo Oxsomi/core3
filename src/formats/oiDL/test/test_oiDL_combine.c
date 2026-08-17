@@ -164,4 +164,44 @@ void Test_DLCombine(Test *t) {
 		Test_assert(t, "combine null b fails", !DLFile_combine(&a, NULL, t->alloc, &c, NULL));
 		DLFile_free(&a, t->alloc);
 	}
+
+	//Zero-length entries are the case where the combined file needs no cache at all, so its cache base is
+	// null while the small-entry path still accepts the entry (a zero length is under the small limit and
+	// still fits a zero sized cache).
+	//That path then offsets the null base.
+	//Both element types get their own case, since the string and data branches compute the offset separately.
+
+	{            //Data entries of length zero
+		DLFile a = { 0 }, b = { 0 }, c = { 0 };
+		DLFile_create(&sData, 0, t->alloc, &a, &t->err);
+		DLFile_create(&sData, 0, t->alloc, &b, &t->err);
+
+		Buffer empty = Buffer_createNull();
+		Test_assert(t, "combine empty data: add", DLFile_addEntry(&a, &empty, t->alloc, &t->err));
+
+		Test_assert(t, "combine empty data", DLFile_combine(&a, &b, t->alloc, &c, &t->err));
+		Test_assert(t, "combine empty data count", c.entryBuffers.length == 1);
+		Test_assert(t, "combine empty data length", !Buffer_length(c.entryBuffers.ptr[0]));
+
+		DLFile_free(&a, t->alloc);
+		DLFile_free(&b, t->alloc);
+		DLFile_free(&c, t->alloc);
+	}
+
+	{            //String entries of length zero
+		DLFile a = { 0 }, b = { 0 }, c = { 0 };
+		DLFile_create(&sStr, 0, t->alloc, &a, &t->err);
+		DLFile_create(&sStr, 0, t->alloc, &b, &t->err);
+
+		CharString empty = CharString_createNull();
+		Test_assert(t, "combine empty string: add", DLFile_addEntryString(&a, &empty, t->alloc, &t->err));
+
+		Test_assert(t, "combine empty string", DLFile_combine(&a, &b, t->alloc, &c, &t->err));
+		Test_assert(t, "combine empty string count", c.entryStrings.length == 1);
+		Test_assert(t, "combine empty string length", !CharString_length(c.entryStrings.ptr[0]));
+
+		DLFile_free(&a, t->alloc);
+		DLFile_free(&b, t->alloc);
+		DLFile_free(&c, t->alloc);
+	}
 }

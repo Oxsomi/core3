@@ -70,26 +70,29 @@ static inline U32 Buffer_crc32cSimd(const Buffer buf, U32 prevCrc) {
 	U64 len = bufLen;
 	const U64 offNear8 = U64_min((U64)buf.ptr + bufLen, (off + 7) & ~7);
 
-	//Go to nearest 8 byte boundary
+	//Go to the nearest 8 byte boundary, smallest type first so every load is aligned for its own type: a U8
+	// when the address is odd, a U16 when it's 2 mod 4, a U32 when it's 4 mod 8.
+	//The old widest-first order read a U32 straight off an odd address, which is a misaligned load.
+	//The resulting CRC is identical either way, since folding bytes through wider chunks is associative.
 
 	if (off & 7) {
 
-		if (off + sizeof(U32) <= offNear8) {
-			crc = SIMD_CRC32C_U32(crc, *(U32*)(void*)off);
-			off += sizeof(U32);
-			len -= sizeof(U32);
+		if ((off & 1) && off + sizeof(U8) <= offNear8) {
+			crc = SIMD_CRC32C_U8(crc, *(const U8*)(void*)off);
+			off += sizeof(U8);
+			len -= sizeof(U8);
 		}
 
-		if (off + sizeof(U16) <= offNear8) {
-			crc = SIMD_CRC32C_U16(crc, *(U16*)(void*)off);
+		if ((off & 2) && off + sizeof(U16) <= offNear8) {
+			crc = SIMD_CRC32C_U16(crc, *(const U16*)(void*)off);
 			off += sizeof(U16);
 			len -= sizeof(U16);
 		}
 
-		if (off + sizeof(U8) <= offNear8) {
-			crc = SIMD_CRC32C_U8(crc, *(U8*)(void*)off);
-			off += sizeof(U8);
-			len -= sizeof(U8);
+		if ((off & 4) && off + sizeof(U32) <= offNear8) {
+			crc = SIMD_CRC32C_U32(crc, *(const U32*)(void*)off);
+			off += sizeof(U32);
+			len -= sizeof(U32);
 		}
 	}
 

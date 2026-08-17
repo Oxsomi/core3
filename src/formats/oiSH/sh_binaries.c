@@ -425,10 +425,13 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 	//Start copying
 
-	void *dstU64 = &info.identifier.extensions;
-	const void *srcU64 = &binaries->identifier.extensions;
+	//extensions and dormantExt are a U32-aligned pair, so moving them as one in-place U64 can be a misaligned access.
+	//The same eight bytes are copied instead.
 
-	*(U64*)dstU64 = *(const U64*) srcU64;
+	Buffer_memcpy(
+		Buffer_createRef(&info.identifier.extensions, sizeof(U64)),
+		Buffer_createRefConst(&binaries->identifier.extensions, sizeof(U64))
+	);
 
 	//Copy buffers
 

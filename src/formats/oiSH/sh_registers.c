@@ -224,7 +224,13 @@ Bool SHRegisterRuntime_hash(
 	static_assert(sizeof(SHRegister) == sizeof(U64) * (ESHBinaryType_Count + 1), "Expected SHRegister as U64[N + 1]");
 
 	U64 hash = sbFile ? sbFile->hash : Buffer_fnv1a64Offset;
-	const U64 *regU64 = (const U64*) registr;
+
+	//SHRegister only guarantees U32 alignment, so reading it in place as U64s can be a misaligned load.
+	//The bytes go through a properly aligned local instead.
+	//The static_assert above keeps the sizes in sync.
+
+	U64 regU64[ESHBinaryType_Count + 1];
+	Buffer_memcpy(Buffer_createRef(regU64, sizeof(regU64)), Buffer_createRefConst(registr, sizeof(SHRegister)));
 
 	for(U64 i = 0; i < ESHBinaryType_Count + 1; ++i)
 		hash = Buffer_fnv1a64Single(regU64[i], hash);

@@ -158,9 +158,22 @@ static inline I32x2 I32x2_xor(I32x2 a, I32x2 b) { NONE_OP2I(a.v[i] ^ b.v[i]); }
 static inline I32x2 I32x2_andnot(I32x2 a, I32x2 b) { NONE_OP2I(~a.v[i] & b.v[i]); }        //~a & b
 static inline I32x2 I32x2_not(I32x2 a) { NONE_OP2I(~a.v[i]); }
 
-static inline I32x2 I32x2_lsh32(I32x2 a, U8 bits) { return I32x2_create2(I32x2_x(a) << bits, I32x2_y(a) << bits); }
+//Both shifts go through U32, matching I32x4_lsh32/I32x4_rsh32 so the two widths agree bit for bit.
+//Shifting a negative signed value left is undefined, and so is shifting by the width or more, which is why
+// the cast and the >= 32 case are both here rather than only the one the compiler happens to warn about.
+
+static inline I32x2 I32x2_lsh32(I32x2 a, U8 bits) {
+	return I32x2_create2(
+		(I32)(bits >= 32 ? 0 : (U32)I32x2_x(a) << bits),
+		(I32)(bits >= 32 ? 0 : (U32)I32x2_y(a) << bits)
+	);
+}
+
 static inline I32x2 I32x2_rsh32(I32x2 a, U8 bits) {
-	return I32x2_create2((I32)((U32)I32x2_x(a) >> bits), (I32)((U32)I32x2_y(a) >> bits));
+	return I32x2_create2(
+		(I32)(bits >= 32 ? 0 : (U32)I32x2_x(a) >> bits),
+		(I32)(bits >= 32 ? 0 : (U32)I32x2_y(a) >> bits)
+	);
 }
 
 #ifdef __cplusplus

@@ -248,11 +248,24 @@ F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return mad(a, b, c); }
 #include "@fixed_point.hlsli"
 
 #ifdef __spirv__
+
 	#define UNKNOWN_FORMAT [[vk::image_format("unknown")]]
 	#define PUSH_CONSTANT [[vk::push_constant]] 
+
+	//Dual source blending's two outputs.
+	//SPIR-V wants BOTH at location 0, told apart by the Index decoration (location 1 would mean a second attachment instead).
+	//DXIL reads plain SV_Target0/1 as src0/src1 whenever an Src1 blend factor is used, so there both expand to nothing.
+	//Both outputs must carry a macro, since DXC refuses a mix of explicit and implicit locations.
+	//Use as: DUAL_SRC_TARGET0 F32x4 a : SV_Target0; DUAL_SRC_TARGET1 F32x4 b : SV_Target1;
+
+	#define DUAL_SRC_TARGET0 [[vk::location(0)]]
+	#define DUAL_SRC_TARGET1 [[vk::location(0)]] [[vk::index(1)]]
+
 #else
 	#define UNKNOWN_FORMAT
 	#define PUSH_CONSTANT
+	#define DUAL_SRC_TARGET0
+	#define DUAL_SRC_TARGET1
 #endif
 
 )"

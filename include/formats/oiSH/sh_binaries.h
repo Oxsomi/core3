@@ -141,11 +141,14 @@ typedef enum ESHExtension {
 	//When adding an extension above: leave it out of both sets to keep it dual (the default), and only add it here
 	// if one backend is genuinely impossible.
 
+	//SubgroupArithmetic and SubgroupShuffle deliberately are NOT here: WaveActiveSum / WaveReadLaneAt are
+	// plain HLSL, so DXC compiles them to DXIL fine.
+	//DXIL reflection just can't DETECT them (one generic wave ops flag), which is a DxilNative matter and
+	// keeps them annotation-driven on DXIL, not a reason to refuse the compile.
+
 	ESHExtension_NoDxilCompile =                              //SPIRV-only to compile: no DXIL intrinsic exists
 		ESHExtension_AtomicF32 |
 		ESHExtension_AtomicF64 |
-		ESHExtension_SubgroupArithmetic |
-		ESHExtension_SubgroupShuffle |
 		ESHExtension_RayMotionBlur,
 
 	ESHExtension_NoSpirvCompile =                             //DXIL-only to compile: no SPIR-V intrinsic or inline op

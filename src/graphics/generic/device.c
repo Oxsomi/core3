@@ -679,7 +679,8 @@ Bool GraphicsDeviceRef_create(
 			EGraphicsFeatures_RayMicromapOpacity |
 			EGraphicsFeatures_RayMotionBlur      |
 			EGraphicsFeatures_RayReorder         |
-			EGraphicsFeatures_RayValidation
+			EGraphicsFeatures_RayValidation      |
+			EGraphicsFeatures_RayTriPosition
 		);
 		device->info.capabilities.features2 &=~ (
 			EGraphicsFeatures2_RayReorderActual   |
@@ -1157,6 +1158,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	if(extensions & ESHExtension_RayMicromapOpacity)        features |= EGraphicsFeatures_RayMicromapOpacity;
 	if(extensions & ESHExtension_RayMotionBlur)             features |= EGraphicsFeatures_RayMotionBlur;
 	if(extensions & ESHExtension_RayReorder)                features |= EGraphicsFeatures_RayReorder;
+	if(extensions & ESHExtension_RayTriPosition)            features |= EGraphicsFeatures_RayTriPosition;
 
 	if(extensions & ESHExtension_ComputeDeriv)              features |= EGraphicsFeatures_ComputeDeriv;
 	if(extensions & ESHExtension_MeshTaskTexDeriv)          features |= EGraphicsFeatures_MeshTaskTexDeriv;
@@ -1566,7 +1568,10 @@ static void GraphicsDevice_pullRowMeasures(
 
 	if (utex.depthFormat) {
 
-		const U8 texel = EDepthStencilFormat_getBytes((EDepthStencilFormat) utex.depthFormat);
+		//Pull bytes rather than plain bytes: the range says which plane rides this pull, and each plane has its
+		// own texel size (the stencil of a combined format is 1 byte, D24's depth is a 32 bit word).
+
+		const U8 texel = EDepthStencilFormat_getPullBytes((EDepthStencilFormat) utex.depthFormat, (U8) range->planeId);
 
 		*rowBytes = (U64) TextureRange_width(*range) * texel;
 		*rows = TextureRange_height(*range);

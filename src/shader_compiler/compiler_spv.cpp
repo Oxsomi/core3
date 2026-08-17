@@ -170,6 +170,15 @@ extern "C" Bool Compiler_processSPIRV(
 	if(!demotions || !result || !registers)
 		retError(clean, Error_nullPointer(0, "Compiler_processSPIRV() demotions, result and registers are required"));
 
+	//Fix alignment up front: the caller's Buffer can be a ref at any address, and the optimizer below indexes
+	// it as U32s.
+
+	if ((U64)resultPtr & 3) {
+		copied.resize(binLen >> 2);
+		Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
+		resultPtr = copied.data();
+	}
+
 	//Reflect binary information, since our own parser doesn't have the info yet.
 
 	//Deliberately NOT SPV_REFLECT_MODULE_FLAG_NO_COPY.
@@ -401,17 +410,27 @@ extern "C" Bool Compiler_processSPIRV(
 				ESBType *inputType = isOutput ? outputs : inputs;
 				U8 *inputSemantic = isOutput ? outputSemantics : inputSemantics;
 
-				if(input->location >= 16)
+				//A dual source second output shares location 0 with the first and is distinguished by the Index
+				// decoration (surfaced by the spirv-reflect fork; U32_MAX when absent).
+				//Its slot is location + index, which is exactly where DXIL's reflection puts SV_Target1, and
+				// matching slots is what keeps the two backends' reflections combinable into one oiSH.
+
+				U32 slot = input->location;
+
+				if(isOutput && input->index != U32_MAX)
+					slot += input->index;
+
+				if(slot >= 16)
 					retError(clean, Error_invalidState(
 						0, "Compiler_processSPIRV() input/output location out of bounds (allowed up to 16)"
 					));
 
-				if(inputType[input->location])
+				if(inputType[slot])
 					retError(clean, Error_invalidState(
 						0, "Compiler_processSPIRV() input/output location is already defined"
 					));
 
-				gotoIfError3(clean, SpvReflectFormatToESBType(input->format, &inputType[input->location], e_rr));
+				gotoIfError3(clean, SpvReflectFormatToESBType(input->format, &inputType[slot], e_rr));
 
 				//Grab and parse semantic
 
@@ -488,8 +507,16 @@ extern "C" Bool Compiler_processSPIRV(
 				if(semanticValue >= 15)
 					retError(clean, Error_invalidState(1, "Compiler_processSPIRV() unique semantic id out of bounds"));
 
+				//The index is kept even for a default semantic name.
+				//Zeroing it here threw away the 1 in SV_TARGET1 (and the 3 in TEXCOORD3), while the DXIL path
+				// keeps signature.SemanticIndex unconditionally, so the two backends recorded different
+				// outputSemanticNames for the same shader and SHFile_combine refused to merge them.
+				//semanticName is already folded into the high nibble above, so this matches DXIL's encoding in
+				// both cases: (name << 4) | index for a named semantic, plain index for a default one.
+				//SV_TARGET0 still encodes as 0, so nothing single target changes.
+
 				semanticValue |= (U8)(semanticName << 4);
-				inputSemantic[input->location] = !semanticName ? 0 : (U8) semanticValue;
+				inputSemantic[slot] = (U8) semanticValue;
 			}
 		}
 
@@ -614,11 +641,7 @@ extern "C" Bool Compiler_processSPIRV(
 		if (!isDebug)
 			optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass()).RegisterPass(spvtools::CreateStripReflectInfoPass());
 
-		if ((U64)resultPtr & 3) {        //Fix alignment
-			copied.resize(binLen >> 2);
-			Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
-			resultPtr = copied.data();
-		}
+		//Alignment was already fixed at the top of the function, before the decoration scan.
 
 		//keep-all: our own optimizer would otherwise strip the unused bindings DXC just preserved
 
@@ -869,6 +892,7 @@ extern "C" Bool Compiler_linkSPIRV(
 	//Link (or just use the already linked binary)
 
 	std::vector<U32> linkedBin;
+	std::vector<U32> alignedBin;
 	const U32 *linkedBinPtr = NULL;
 	U64 linkedBinSiz = 0;
 
@@ -882,6 +906,15 @@ extern "C" Bool Compiler_linkSPIRV(
 		retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary provided was not a U32[]"));
 
 	linkedBinSiz >>= 2;
+
+	//Fix alignment the same way Compiler_processSPIRV and Compiler_disassembleSPIRV do: the input is a caller
+	// Buffer that can be a ref at any address, and the optimizer below reads it as U32s.
+
+	if ((U64)(const void*)linkedBinPtr & 3) {
+		alignedBin.resize(linkedBinSiz);
+		Buffer_memcpy(Buffer_createRef(alignedBin.data(), linkedBinSiz << 2), inputs->ptr[0]);
+		linkedBinPtr = alignedBin.data();
+	}
 
 	//Run optimizer to get rid of uniforms
 
@@ -950,7 +983,19 @@ extern "C" Bool Compiler_linkSPIRV(
 				U16 *asU16 = (U16*) asU32;
 
 				const U8 *inputAsU8 = uniformData.ptr + uniform.dataOffset;
-				const U16 *inputAsU16 = (const U16*) inputAsU8;
+
+				//dataOffset is an unpadded running byte sum, so a U16 view of the input can be misaligned
+				// (e.g. a U8 uniform declared before a U16 one puts it at an odd offset).
+				//The words are copied to an aligned local instead; 16 elements is the widest expandable
+				// uniform (a 4x4 matrix) and Buffer_memcpy clamps to the smaller side.
+
+				U16 inputU16Copy[16] = {};
+				Buffer_memcpy(
+					Buffer_createRef(inputU16Copy, sizeof(inputU16Copy)),
+					Buffer_createRefConst(inputAsU8, len)
+				);
+
+				const U16 *inputAsU16 = inputU16Copy;
 
 				if (isBool || isX8 || (!is16 && isX16))
 					for (U64 j = 0; j < width * height; ++j) {

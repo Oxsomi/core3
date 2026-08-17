@@ -259,26 +259,23 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(tex.resource.device), Vk);
 
+	//A view's format has to be the IMAGE's format.
+	//Picking a plane of a depth stencil image is the aspect mask's job, never the format's.
+	//The per plane formats this used to select (S8_UINT for plane 1 and so on) are only legal on images
+	// created with MUTABLE_FORMAT, which these aren't,
+	// so validation rejected every view of a combined depth stencil image outright.
+
 	VkFormat vkFormat;
 
 	if(tex.depthFormat)
 		switch(tex.depthFormat) {
 
 			default:
-			case EDepthStencilFormat_D32: vkFormat = VK_FORMAT_D32_SFLOAT; break;
-			case EDepthStencilFormat_D16: vkFormat = VK_FORMAT_D16_UNORM;  break;
-
-			case EDepthStencilFormat_D32S8X24Ext:
-				vkFormat = d.texture.planeId ? VK_FORMAT_S8_UINT : VK_FORMAT_D32_SFLOAT;
-				break;
-
-			case EDepthStencilFormat_D24S8Ext:
-				vkFormat = d.texture.planeId ? VK_FORMAT_S8_UINT : VK_FORMAT_D24_UNORM_S8_UINT;
-				break;
-
-			case EDepthStencilFormat_S8X24Ext:
-				vkFormat = VK_FORMAT_S8_UINT;
-				break;
+			case EDepthStencilFormat_D32:         vkFormat = VK_FORMAT_D32_SFLOAT;         break;
+			case EDepthStencilFormat_D16:         vkFormat = VK_FORMAT_D16_UNORM;          break;
+			case EDepthStencilFormat_D32S8X24Ext: vkFormat = VK_FORMAT_D32_SFLOAT_S8_UINT; break;
+			case EDepthStencilFormat_D24S8Ext:    vkFormat = VK_FORMAT_D24_UNORM_S8_UINT;  break;
+			case EDepthStencilFormat_S8X24Ext:    vkFormat = VK_FORMAT_S8_UINT;            break;
 		}
 
 	else vkFormat = mapVkFormat(ETextureFormatId_unpack[tex.textureFormatId]);
@@ -306,10 +303,29 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 		else if(!texExt->views.ptr[viewId].view && firstEmptyViewId == U32_MAX)
 			firstEmptyViewId = viewId;
 
+	//planeId picks the aspect: 0 = the format's first plane (depth, or stencil for a stencil only format),
+	// 1 = the stencil plane of a combined format.
+	//0xFF is the ATTACHMENT sentinel: dynamic rendering requires the depth and the stencil attachment to carry the SAME view,
+	// so the render path asks for one view spanning every aspect the format has.
+	//A sampled view can never use that, since sampling allows exactly one aspect,
+	// which is also why the sentinel gets its own dedup slot rather than sharing plane 0's.
+
 	VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 
-	if(tex.depthFormat)
-		aspect = d.texture.planeId ? VK_IMAGE_ASPECT_STENCIL_BIT : VK_IMAGE_ASPECT_DEPTH_BIT;
+	if (tex.depthFormat) {
+
+		const EDepthStencilFormat dsFormat = (EDepthStencilFormat) tex.depthFormat;
+
+		if(d.texture.planeId == 0xFF)
+			aspect =
+				(EDepthStencilFormat_hasDepth(dsFormat) ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
+				(EDepthStencilFormat_hasStencil(dsFormat) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
+
+		else if(d.texture.planeId)
+			aspect = VK_IMAGE_ASPECT_STENCIL_BIT;
+
+		else aspect = EDepthStencilFormat_hasDepth(dsFormat) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_STENCIL_BIT;
+	}
 
 	VkImageViewCreateInfo viewCreate = (VkImageViewCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,

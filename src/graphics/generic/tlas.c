@@ -221,6 +221,11 @@ Bool GraphicsDeviceRef_createTLAS(
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
 	Bool allocated = false;
 
+	//See the matching fields in TLAS; only the CPU instance path below can prove anything.
+
+	Bool blasDataAccessKnown = false;
+	Bool blasDataAccessAll = false;
+
 	//Validate
 
 	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
@@ -307,6 +312,9 @@ Bool GraphicsDeviceRef_createTLAS(
 			if(!length)
 				retError(clean, Error_invalidOperation(10, "GraphicsDeviceRef_createTLAS() is missing instance list"));
 
+			blasDataAccessKnown = true;
+			blasDataAccessAll = true;
+
 			for (U64 i = 0; i < length; ++i) {
 
 				TLASInstanceData dat = (TLASInstanceData) { 0 };
@@ -324,6 +332,9 @@ Bool GraphicsDeviceRef_createTLAS(
 						retError(clean, Error_invalidOperation(
 							13, "GraphicsDeviceRef_createTLAS() BLAS device is incompatible"
 						));
+
+					if(!(BLASRef_ptr(dat.blasCpu)->base.flags & ERTASBuildFlags_AllowDataAccessExt))
+						blasDataAccessAll = false;
 				}
 
 				if(!(dat.instanceId24_mask8 >> 24))
@@ -357,6 +368,11 @@ Bool GraphicsDeviceRef_createTLAS(
 
 	*tlasPtr = *tlas;
 	tlasPtr->base.name = CharString_createNull();
+
+	//The input struct is caller-constructed, so the cached validation bits are set here rather than trusted.
+
+	tlasPtr->blasDataAccessKnown = blasDataAccessKnown;
+	tlasPtr->blasDataAccessAll = blasDataAccessAll;
 
 	//Set as soon as the object exists rather than once it is fully built.
 	//TLAS_freeExt reads base.device to find the backend, so a rejection between here and there used to free

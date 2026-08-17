@@ -290,6 +290,28 @@ void VK_WRAP_FUNC(CommandList_process)(
 					break;
 				}
 
+				//VkClearColorValue is a union, and the spec requires the member matching the attachment's numeric
+				// format: int32 for SINT, uint32 for UINT, float32 for everything else.
+				//Writing float32 unconditionally only appeared to work because ClearColor is a union too, so the
+				// bytes aliased through - which relies on a denormal or NaN bit pattern surviving a float
+				// assignment, and disagrees with D3D12, whose ClearRenderTargetView takes floats and CONVERTS
+				// them to the integer format rather than reinterpreting them.
+				//Selecting the member here is what makes an integer clear mean the same thing on both backends.
+
+				const UnifiedTexture colorTex = TextureRef_getUnifiedTexture(attachmentsj->image, NULL);
+
+				const ETexturePrimitive colorPrim =
+					ETextureFormat_getPrimitive(ETextureFormatId_unpack[colorTex.textureFormatId]);
+
+				VkClearColorValue clearColor = (VkClearColorValue) { 0 };
+
+				for (U8 c = 0; c < 4; ++c)
+					switch (colorPrim) {
+						case ETexturePrimitive_SInt:    clearColor.int32[c] = attachmentsj->color.colori[c];    break;
+						case ETexturePrimitive_UInt:    clearColor.uint32[c] = attachmentsj->color.coloru[c];   break;
+						default:                        clearColor.float32[c] = attachmentsj->color.colorf[c];  break;
+					}
+
 				attachmentsExt[i] = (VkRenderingAttachmentInfoKHR) {
 
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -301,16 +323,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 						!((startRender->unusedAfterRenderMask >> i) & 1) ? VK_ATTACHMENT_STORE_OP_STORE:
 						VK_ATTACHMENT_STORE_OP_DONT_CARE,
 
-					.clearValue = (VkClearValue) {
-						.color = (VkClearColorValue) {
-							.float32 = {
-								attachmentsj->color.colorf[0],
-								attachmentsj->color.colorf[1],
-								attachmentsj->color.colorf[2],
-								attachmentsj->color.colorf[3]
-							}
-						}
-					}
+					.clearValue = (VkClearValue) { .color = clearColor }
 				};
 
 				if(attachmentsj->resolveImage && !addResolveImage(*attachmentsj, &attachmentsExt[i])) {
@@ -343,7 +356,14 @@ void VK_WRAP_FUNC(CommandList_process)(
 				U32 viewId = U32_MAX;
 				VkImageView view = NULL;
 
-				Descriptor descriptor = (Descriptor) { .resource = startRender->depthStencil };
+				//planeId 0xFF = the attachment view spanning every aspect; the stencil attachment below asks for
+				// the same, since dynamic rendering requires both slots to carry one identical view.
+
+				Descriptor descriptor = (Descriptor) {
+					.resource = startRender->depthStencil,
+					.texture = (TextureDescriptorRange) { .planeId = 0xFF }
+				};
+
 				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
 
 				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
@@ -394,7 +414,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				Descriptor descriptor = (Descriptor) {
 					.resource = startRender->depthStencil,
-					.texture = (TextureDescriptorRange) { .planeId = 1 }
+					.texture = (TextureDescriptorRange) { .planeId = 0xFF }
 				};
 
 				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources

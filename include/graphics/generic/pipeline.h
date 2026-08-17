@@ -143,6 +143,10 @@ typedef struct Pipeline {
 
 	EPipelineType type;
 	EPipelineFlags flags;
+
+	U32 extensions;              //ESHExtension: union over the stages' binaries, minus their dormant extensions
+	U32 padding;
+
 	PipelineLayoutRef *layout;
 
 	ListPipelineStage stages;

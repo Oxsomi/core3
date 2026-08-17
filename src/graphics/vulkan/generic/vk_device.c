@@ -327,14 +327,19 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	bindNextVkStruct(
-		VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV,
-		feat & EGraphicsFeatures_RayReorder,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV,
-			.rayTracingInvocationReorder = true
-		}
-	)
+	//No NV fallback: on an SDK without the EXT struct the RayReorder claim can never be set (the feature
+	// query site skips it), so there is nothing to chain.
+
+	#ifdef VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME
+		bindNextVkStruct(
+			VkPhysicalDeviceRayTracingInvocationReorderFeaturesEXT,
+			feat & EGraphicsFeatures_RayReorder,
+			{
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_EXT,
+				.rayTracingInvocationReorder = true
+			}
+		)
+	#endif
 
 	bindNextVkStruct(
 		VkPhysicalDeviceOpacityMicromapFeaturesEXT,
@@ -391,6 +396,38 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			.descriptorHeap = true
 		}
 	)
+
+	//Both derivative group modes are requested, not just the one detection happens to look at.
+	//Enabling the extension alone isn't enough for a features struct: without this the device advertises
+	// ComputeDeriv while neither mode is actually on, and every ddx/ddy in a compute shader is then rejected
+	// by validation at vkCreateShaderModule.
+	//Which mode a shader needs is DXC's choice rather than ours: it emits the quad group for an even 2D
+	// thread group and the linear group otherwise, and both map to this one OxC3 feature.
+
+	//The KHR and NV structs are aliases of one another, so either enables the feature.
+	//The #ifdef only picks whichever name the SDK in use actually declares, matching how vk_instance.c queries it.
+
+	#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME
+		bindNextVkStruct(
+			VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR,
+			feat & EGraphicsFeatures_ComputeDeriv,
+			{
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR,
+				.computeDerivativeGroupQuads = true,
+				.computeDerivativeGroupLinear = true
+			}
+		)
+	#else
+		bindNextVkStruct(
+			VkPhysicalDeviceComputeShaderDerivativesFeaturesNV,
+			feat & EGraphicsFeatures_ComputeDeriv,
+			{
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_NV,
+				.computeDerivativeGroupQuads = true,
+				.computeDerivativeGroupLinear = true
+			}
+		)
+	#endif
 
 	bindNextVkStruct(
 		VkPhysicalDeviceClusterAccelerationStructureFeaturesNV,

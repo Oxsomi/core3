@@ -23,6 +23,10 @@
 #pragma once
 #include "types/test/test.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/pipeline.h"
+#include "graphics/generic/command_list.h"
+#include "graphics/generic/device_buffer.h"
+#include "formats/oiSH/sh_file.h"
 
 //Headless modules (pure, no device), called directly from the entry point.
 
@@ -62,3 +66,23 @@ void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsTextureShapes(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsFramesInFlight(Test *t, GraphicsDeviceRef *deviceRef);
+
+void Test_graphicsCapabilities(Test *t, GraphicsDeviceRef *deviceRef);
+
+//Shader execution helpers, defined in test_graphics_shaders.c and shared with the capability execution
+//module so the two don't keep their own copies of the same load/dispatch/readback dance.
+
+Bool TestShaders_loadFile(Test *t, const C8 *pathStr, SHFile *file);
+U32 TestShaders_entry(Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, const C8 *name);
+Bool TestShaders_computePipeline(Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, PipelineRef **pipeline);
+Bool TestShaders_submitAndWait(
+	Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *commandList, const void *appData, U64 appDataLen
+);
+Bool TestShaders_pullBuffer(Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *emptyList, DeviceBufferRef *buffer);
+
+void Test_graphicsCapabilityExecution(Test *t, GraphicsDeviceRef *deviceRef);
+
+//Config variants build their own devices from the flags under test, so this one takes the instance and the
+//adapter rather than a device the suite already created.
+
+void Test_graphicsConfigVariants(Test *t, GraphicsInstanceRef *instRef, const GraphicsDeviceInfo *info);

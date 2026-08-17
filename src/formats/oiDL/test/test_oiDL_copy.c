@@ -358,6 +358,34 @@ void Test_DLCreateCopyPlain(Test *t) {
 		DLFile_free(&copy, t->alloc);
 	}
 
+	{                            //Ref entry in a file that never allocated a cache
+		DLFile src  = { 0 };
+		DLFile copy = { 0 };
+
+		static const U8 payload[4] = { 1, 2, 3, 4 };
+
+		if (!DLFile_create(&kSettingsData, 0, t->alloc, &src, &t->err)) {
+			Test_assert(t, "Create cache-less Data file for copy", false);
+			goto doneCopyRefNoCache;
+		}
+
+		//A ref rather than an owned allocation, which is what sends the copy down the "does this point into
+		// the cache" branch instead of just duplicating the buffer.
+		//With no cache allocated that comparison used to build an end pointer from a null base.
+		//The empty-file case above cannot reach it, since with no entries the loop never runs.
+
+		Buffer ref = Buffer_createRefConst(payload, sizeof(payload));
+		Test_assert(t, "add ref entry",          DLFile_addEntry(&src, &ref, t->alloc, &t->err));
+
+		Test_assert(t, "createCopy ref no cache", DLFile_createCopy(&src, t->alloc, &copy, &t->err));
+		Test_assert(t, "copy entryCount 1",       DLFile_entryCount(&copy) == 1);
+		Test_assert(t, "copy entrySize 4",        DLFile_entrySize(&copy, 0) == 4);
+
+	doneCopyRefNoCache:
+		DLFile_free(&src,  t->alloc);
+		DLFile_free(&copy, t->alloc);
+	}
+
 	{                            //Settings are preserved in the copy
 		DLFile src  = { 0 };
 		DLFile copy = { 0 };

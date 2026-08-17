@@ -186,6 +186,13 @@ Bool CharString_isValidFilePath(CharString str) {
 	U64 prev = 0;
 	U64 strl = CharString_length(str);
 
+	//An empty string has a null ptr, and the trailing segment below offsets it, which is undefined even by the
+	// zero prev would be here.
+	//The final `return !!strl` already rejects the empty string, so leaving early is the same answer.
+
+	if(!strl)
+		return false;
+
 	for (U64 i = 0; i < strl; ++i) {
 
 		const C8 c = str.ptr[i];

@@ -290,6 +290,29 @@ void Test_graphicsDescriptorTable(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "setSingleOOB", !DescriptorTableRef_setDescriptor(table, 2, 1, false, &desc, NULL));
 	Test_assert(t, "unsetSingle", DescriptorTableRef_unsetDescriptors(table, 2, 0, 1, &t->err));
 
+	//The plural setter, which nothing else in the suite reaches directly: setDescriptor and the by name forms
+	// all funnel through it with a length fixed at 1, so its range handling was never exercised.
+	//Binding 0 is the count 4 array, so arrayId 1 with 2 descriptors fits and arrayId 3 with 2 runs off the end.
+
+	const Descriptor descPair[2] = { desc, desc };
+	ListDescriptor many = (ListDescriptor) { 0 };
+	ListDescriptor_createRefConst(descPair, 2, &many, NULL);
+
+	Test_assert(t, "setMany", DescriptorTableRef_setDescriptors(table, 0, 1, false, &many, &t->err));
+	Test_assert(t, "setManyNoRef", !tablePtr->resources.length);
+	Test_assert(t, "setManyOOB", !DescriptorTableRef_setDescriptors(table, 0, 3, false, &many, NULL));
+	Test_assert(t, "unsetMany", DescriptorTableRef_unsetDescriptors(table, 0, 1, 2, &t->err));
+
+	//An empty list has nothing to bind and has to be refused on both binding shapes.
+	//The array case is the one that mattered: it used to report success while binding nothing, because the
+	// comparison loop simply ran zero times.
+	//The single case indexed element 0 of a list that has none.
+
+	ListDescriptor none = (ListDescriptor) { 0 };
+
+	Test_assert(t, "setNoneSingle", !DescriptorTableRef_setDescriptors(table, 2, 0, false, &none, NULL));
+	Test_assert(t, "setNoneArray", !DescriptorTableRef_setDescriptors(table, 0, 0, false, &none, NULL));
+
 	//The by name variants resolve the register name first, so they're the same operations routed differently
 	// and an unknown name has to be refused everywhere rather than defaulting to binding 0.
 

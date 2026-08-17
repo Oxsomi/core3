@@ -445,6 +445,45 @@ static inline U8 EDepthStencilFormat_getBytes(EDepthStencilFormat f) {
 	}
 }
 
+static inline Bool EDepthStencilFormat_hasStencil(EDepthStencilFormat f) {
+	switch(f) {
+		case EDepthStencilFormat_D24S8Ext:
+		case EDepthStencilFormat_D32S8X24Ext:
+		case EDepthStencilFormat_S8X24Ext:
+			return true;
+		default:
+			return false;
+	}
+}
+
+static inline Bool EDepthStencilFormat_hasDepth(EDepthStencilFormat f) {
+	return f != EDepthStencilFormat_None && f != EDepthStencilFormat_S8X24Ext;
+}
+
+//Bytes per texel a pullRegion of the given plane of this format hands back.
+//One pull carries one plane, since the planes have different sizes and packing.
+//Plane 0 is the format's first plane: depth for depth bearing formats (D24's depth pulls as 32 bit words
+// with the top byte undefined, hence 4), or the stencil of a stencil only format.
+//Plane 1 is the stencil of a combined format, tightly packed at one byte per texel.
+//Returns 0 for a plane the format doesn't have.
+static inline U8 EDepthStencilFormat_getPullBytes(EDepthStencilFormat f, U8 planeId) {
+
+	if(planeId == 1)
+		return EDepthStencilFormat_hasStencil(f) && EDepthStencilFormat_hasDepth(f) ? 1 : 0;
+
+	if(planeId)
+		return 0;
+
+	switch(f) {
+		case EDepthStencilFormat_D16:         return 2;
+		case EDepthStencilFormat_D32:         return 4;
+		case EDepthStencilFormat_D24S8Ext:    return 4;
+		case EDepthStencilFormat_D32S8X24Ext: return 4;
+		case EDepthStencilFormat_S8X24Ext:    return 1;
+		default:                              return 0;
+	}
+}
+
 //Get the alignments (x, y) of a texture format
 //Returns false if it doesn't need alignment (so alignment = 1x1)
 //The packing macro stores alignmentY at bit 15 and alignmentX at bit 21, so the reads mirror that;

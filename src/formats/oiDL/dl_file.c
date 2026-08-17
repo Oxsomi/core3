@@ -158,8 +158,15 @@ Bool DLFile_createCopy(const DLFile *dlFile, const Allocator *alloc, DLFile *cop
 			}
 
 			//Either a ref or a ref to the cache, needs move of address or just ref the same buffer
+			//The empty cache is checked first so the end pointer is never formed for it: its base is null, and
+			// offsetting a null pointer is undefined even by zero.
+			//Nothing can point inside an empty cache anyway, so short circuiting gives the same answer.
 
-			if (buf.ptr < dlFile->cache.ptr || buf.ptr >= dlFile->cache.ptr + Buffer_length(dlFile->cache)) {
+			if (
+				!Buffer_length(dlFile->cache) ||
+				buf.ptr < dlFile->cache.ptr ||
+				buf.ptr >= dlFile->cache.ptr + Buffer_length(dlFile->cache)
+			) {
 				copy->entryBuffers.ptrNonConst[i] = buf;
 				continue;
 			}
@@ -191,8 +198,12 @@ Bool DLFile_createCopy(const DLFile *dlFile, const Allocator *alloc, DLFile *cop
 			}
 
 			//Either a ref or a ref to the cache, needs move of address or just ref the same str
+			//The empty cache is checked first so the end pointer is never formed for it: its base is null, and
+			// offsetting a null pointer is undefined even by zero.
+			//Nothing can point inside an empty cache anyway, so short circuiting gives the same answer.
 
 			if (
+				!Buffer_length(dlFile->cache) ||
 				(const U8*)str.ptr < dlFile->cache.ptr ||
 				(const U8*)str.ptr >= dlFile->cache.ptr + Buffer_length(dlFile->cache)
 			) {

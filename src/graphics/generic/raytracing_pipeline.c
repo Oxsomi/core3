@@ -51,8 +51,11 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 	Bool madePipeline = false;
 	U64 totalBinaryCount = 0;
+	U32 pipelineExtensions = 0;
+	U32 padding = 0;
 	ListU32 binaryIndices = (ListU32) { 0 };
 	ListPipelineStage tmpStages = (ListPipelineStage) { 0 };
+	(void) padding;
 
 	//Validate sizes
 
@@ -162,6 +165,8 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 		const SHBinaryInfo *bin = &file->binaries.ptr[realBinaryId];
 
 		gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, bin, entry, e_rr));
+
+		pipelineExtensions |= (U32)(bin->identifier.extensions &~ bin->dormantExtensions);
 
 		if(stage.binaryId == U32_MAX)
 			retError(clean, Error_invalidParameter(
@@ -320,7 +325,8 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	*pipeline = (Pipeline) {
 		.device = deviceRef,
 		.type = EPipelineType_RaytracingExt,
-		.flags = flags
+		.flags = flags,
+		.extensions = pipelineExtensions
 	};
 
 	if(!layout)

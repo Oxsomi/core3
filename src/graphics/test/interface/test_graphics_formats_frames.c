@@ -74,6 +74,116 @@ static const ETextureFormatId testRoundTripFormats[] = {
 	ETextureFormatId_BC4,     ETextureFormatId_BC5,     ETextureFormatId_BC7
 };
 
+//Optional formats: present only when the adapter claims the matching capability bit, unlike the required
+//table above.
+//ASTC and BCn are alternatives rather than both being required (the enum comments say so: if one is absent
+// the other has to be there), and BC4/BC5/BC7 already sit in the required table, so ASTC is the half that
+// had no coverage at all.
+
+typedef struct TestOptionalFormat {
+	ETextureFormatId formatId;
+	EGraphicsDataTypes dataType;
+} TestOptionalFormat;
+
+static const TestOptionalFormat testOptionalFormats[] = {
+	{ ETextureFormatId_RGB32f,   EGraphicsDataTypes_RGB32f },
+	{ ETextureFormatId_RGB32i,   EGraphicsDataTypes_RGB32i },
+	{ ETextureFormatId_RGB32u,   EGraphicsDataTypes_RGB32u },
+	{ ETextureFormatId_ASTC_4x4, EGraphicsDataTypes_ASTC   },
+	{ ETextureFormatId_ASTC_8x8, EGraphicsDataTypes_ASTC   }
+};
+
+//One format's upload / readback / compare, shared by the required table and the optional one below.
+//seed varies the byte pattern per call so a stale readback from a previous format can't masquerade as a pass.
+
+static Bool Test_roundTripFormat(
+	Test *t,
+	GraphicsDeviceRef *deviceRef,
+	const ListCommandListRef *lists,
+	ETextureFormatId formatId,
+	U16 w,
+	U16 h,
+	U64 seed
+) {
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	const ETextureFormat format = ETextureFormatId_unpack[formatId];
+	const U64 texSize = ETextureFormat_getSize(format, w, h, 1);
+
+	//createTexture demands the initial data be exactly the format's size for these dimensions, so this
+	//doubles as a check that getSize agrees with what the resource layer expects.
+
+	Buffer src = Buffer_createNull();
+
+	if(!Test_assert(t, "srcAlloc", Buffer_createUninitializedBytes(texSize, alloc, &src, &t->err)))
+		return false;
+
+	for(U64 j = 0; j < texSize; ++j)
+		src.ptrNonConst[j] = (U8)((j * 7 + seed * 31 + 1) & 0xFF);
+
+	Buffer upload = Buffer_createNull();
+	Bool ok = Test_assert(t, "uploadCopy", Buffer_createCopy(src, alloc, &upload, &t->err));
+
+	DeviceTextureRef *texture = NULL;
+	const CharString name = CharString_createRefCStrConst("Format round trip");
+
+	if(ok)
+		ok = Test_assert(t, "create", GraphicsDeviceRef_createTexture(
+			deviceRef, ETextureType_2D, formatId, EGraphicsResourceFlag_CPUBacked,
+			w, h, 1, NULL, &name, &upload, &texture, &t->err
+		));
+
+	//createTexture takes ownership of upload on success.
+	//On failure it is still ours.
+
+	if(!ok)
+		Buffer_free(&upload, alloc);
+
+	U32 pulled = 0;
+
+	if(ok)
+		ok = Test_assert(t, "pull", DeviceTextureRef_pullRegion(
+			texture, 0, 0, 0, 0, 0, 0, Test_pullCompleted, &pulled, &t->err
+		));
+
+	//The upload is issued by the same submit that services the pull, so one round trip is enough.
+
+	if(ok)
+		ok = Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(
+			deviceRef, lists, NULL, NULL, 0, 0, &t->err
+		));
+
+	if(ok)
+		ok = Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+	Bool matched = false;
+
+	if (ok) {
+
+		Test_assert(t, "pullCalled", pulled == 1);
+
+		//The readback lands in the texture's own cpuData.
+		//Compare it byte for byte against what went up.
+
+		const DeviceTexture *texPtr = DeviceTextureRef_ptr(texture);
+
+		const Bool sameLen = Buffer_length(texPtr->cpuData) == texSize;
+		Test_assert(t, "pullLength", sameLen);
+
+		const Bool same = sameLen && Buffer_eq(
+			Buffer_createRefConst(texPtr->cpuData.ptr, texSize),
+			Buffer_createRefConst(src.ptr, texSize)
+		);
+
+		matched = Test_assert(t, "pullMatches", same);
+	}
+
+	RefPtr_dec(&texture);
+	Buffer_free(&src, alloc);
+	return matched;
+}
+
 void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_setModule(t, "GraphicsDevice/formatRoundTrip");
@@ -106,90 +216,45 @@ void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef) {
 	const U64 formatCount = sizeof(testRoundTripFormats) / sizeof(testRoundTripFormats[0]);
 	U32 roundTripped = 0;
 
-	for (U64 i = 0; i < formatCount; ++i) {
-
-		const ETextureFormatId formatId = testRoundTripFormats[i];
-		const ETextureFormat format = ETextureFormatId_unpack[formatId];
-
-		const U64 texSize = ETextureFormat_getSize(format, w, h, 1);
-
-		//createTexture demands the initial data be exactly the format's size for these dimensions, so this
-		//doubles as a check that getSize agrees with what the resource layer expects.
-
-		Buffer src = Buffer_createNull();
-
-		if(!Test_assert(t, "srcAlloc", Buffer_createUninitializedBytes(texSize, alloc, &src, &t->err)))
-			continue;
-
-		//A per byte pattern that varies with the format index, so a stale readback from the previous
-		//iteration can't masquerade as a pass.
-
-		for(U64 j = 0; j < texSize; ++j)
-			src.ptrNonConst[j] = (U8)((j * 7 + i * 31 + 1) & 0xFF);
-
-		Buffer upload = Buffer_createNull();
-		Bool ok = Test_assert(t, "uploadCopy", Buffer_createCopy(src, alloc, &upload, &t->err));
-
-		DeviceTextureRef *texture = NULL;
-		const CharString name = CharString_createRefCStrConst("Format round trip");
-
-		if(ok)
-			ok = Test_assert(t, "create", GraphicsDeviceRef_createTexture(
-				deviceRef, ETextureType_2D, formatId, EGraphicsResourceFlag_CPUBacked,
-				w, h, 1, NULL, &name, &upload, &texture, &t->err
-			));
-
-		//createTexture takes ownership of upload on success; on failure it is still ours.
-
-		if(!ok)
-			Buffer_free(&upload, alloc);
-
-		U32 pulled = 0;
-
-		if(ok)
-			ok = Test_assert(t, "pull", DeviceTextureRef_pullRegion(
-				texture, 0, 0, 0, 0, 0, 0, Test_pullCompleted, &pulled, &t->err
-			));
-
-		//The upload is issued by the same submit that services the pull, so one round trip is enough.
-
-		if(ok)
-			ok = Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(
-				deviceRef, &lists, NULL, NULL, 0, 0, &t->err
-			));
-
-		if(ok)
-			ok = Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err));
-
-		if (ok) {
-
-			Test_assert(t, "pullCalled", pulled == 1);
-
-			//The readback lands in the texture's own cpuData; compare it byte for byte against what went up.
-
-			const DeviceTexture *texPtr = DeviceTextureRef_ptr(texture);
-
-			const Bool sameLen = Buffer_length(texPtr->cpuData) == texSize;
-			Test_assert(t, "pullLength", sameLen);
-
-			const Bool same = sameLen && Buffer_eq(
-				Buffer_createRefConst(texPtr->cpuData.ptr, texSize),
-				Buffer_createRefConst(src.ptr, texSize)
-			);
-
-			if(Test_assert(t, "pullMatches", same))
-				++roundTripped;
-		}
-
-		RefPtr_dec(&texture);
-		Buffer_free(&src, alloc);
-	}
+	for (U64 i = 0; i < formatCount; ++i)
+		if(Test_roundTripFormat(t, deviceRef, &lists, testRoundTripFormats[i], w, h, i))
+			++roundTripped;
 
 	//Every format in the table is required, so anything less than all of them is a failure rather than a skip.
 
 	Test_assert(t, "roundTrippedAll", roundTripped == formatCount);
 
 	Log_debugLnx("-- formatRoundTrip: %"PRIu32" / %"PRIu64" formats round tripped", roundTripped, formatCount);
+
+	//Optional formats, each paired with the capability bit that promises it.
+	//Unlike the table above these are skipped when the device doesn't claim them, which is a legitimate answer
+	// rather than a regression.
+	//When the bit IS claimed the round trip has to work,
+	// and that is what turns the claim into something checkable instead of a bit reporting on itself.
+
+	const GraphicsDeviceCapabilities caps = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities;
+
+	U32 optionalRun = 0, optionalSkipped = 0;
+
+	for (U64 i = 0; i < sizeof(testOptionalFormats) / sizeof(testOptionalFormats[0]); ++i) {
+
+		const TestOptionalFormat opt = testOptionalFormats[i];
+
+		if(!(caps.dataTypes & opt.dataType)) {
+			++optionalSkipped;
+			continue;
+		}
+
+		if(Test_assert(t, "optionalFormat", Test_roundTripFormat(
+			t, deviceRef, &lists, opt.formatId, w, h, formatCount + i
+		)))
+			++optionalRun;
+	}
+
+	Log_debugLnx(
+		"-- formatRoundTrip: %"PRIu32" optional formats round tripped, %"PRIu32" not claimed by this adapter",
+		optionalRun, optionalSkipped
+	);
 
 	ListCommandListRef_free(&lists, alloc);
 	RefPtr_dec(&emptyList);

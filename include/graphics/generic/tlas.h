@@ -167,7 +167,13 @@ typedef struct TLAS {
 
 	Bool useDeviceMemory;
 	Bool disallowBindlessDescriptor;
-	U8 padding[2];
+
+	//Cached at create for validation: whether every visible instance's BLAS was built with
+	// ERTASBuildFlags_AllowDataAccessExt, so ray triangle position fetch is legal against this TLAS.
+	//Only knowable when the instances are CPU-side; device-built and serialized TLASes leave it unknown.
+
+	Bool blasDataAccessKnown;
+	Bool blasDataAccessAll;
 
 	BindlessDescriptor handle;
 

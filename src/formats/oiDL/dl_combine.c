@@ -39,12 +39,14 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 	if(!a || !b)
 		retError(clean, Error_nullPointer(!a ? 0 : 1, "DLFile_combine()::a and b are required"));
 
-	const void *aSettingsPtr = &a->settings;
-	const void *bSettingsPtr = &b->settings;
+	//DLSettings only guarantees U32 alignment, so comparing it in place as U64s can be a misaligned load;
+	// a byte compare over the same span avoids that.
 
-	for(U64 i = 0; i < 7; ++i)
-		if(((const U64*)aSettingsPtr)[i] != ((const U64*)bSettingsPtr)[i])
-			retError(clean, Error_invalidParameter(1, 0, "DLFile_combine()::a is incompatible with b"));
+	if(Buffer_neq(
+		Buffer_createRefConst(&a->settings, sizeof(U64) * 7),
+		Buffer_createRefConst(&b->settings, sizeof(U64) * 7)
+	))
+		retError(clean, Error_invalidParameter(1, 0, "DLFile_combine()::a is incompatible with b"));
 
 	//"Combine" cache, but keep it limited to 1 MiB
 
@@ -100,8 +102,13 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 			U64 strl = CharString_length(str);
 
 			//Put into cache
+			//cacheSize is checked first because two cache-less files still satisfy the rest of this condition
+			// for a zero length entry (0 < smallLen and 0 + 0 <= 0), and the cache base is then null, which
+			// makes offsetting it undefined.
+			//There is no cache to place anything in at that point, so such an entry takes the copy path below
+			// and lands as the same empty string either way.
 
-			if (strl < DLFile_smallLen && cacheIt + strl <= cacheSize) {
+			if (cacheSize && strl < DLFile_smallLen && cacheIt + strl <= cacheSize) {
 
 				Buffer_memcpy(
 					Buffer_createRef(combined->cache.ptrNonConst + cacheIt, strl),
@@ -139,8 +146,10 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 			U64 bufl = Buffer_length(buf);
 
 			//Put into cache
+			//Same reason as the string branch above: without a cache the base is null, and a zero length entry
+			// otherwise satisfies this condition and offsets it.
 
-			if (bufl < DLFile_smallLen && cacheIt + bufl <= cacheSize) {
+			if (cacheSize && bufl < DLFile_smallLen && cacheIt + bufl <= cacheSize) {
 
 				Buffer_memcpy(
 					Buffer_createRef(combined->cache.ptrNonConst + cacheIt, bufl),

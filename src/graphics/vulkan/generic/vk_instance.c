@@ -567,16 +567,32 @@ U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsNam
 const C8 *optExtensionsName[] = {
 
 	"VK_KHR_performance_query",      "VK_KHR_ray_tracing_pipeline",   "VK_KHR_ray_query",
-	"VK_KHR_acceleration_structure", "VK_NV_ray_tracing_motion_blur", "VK_NV_ray_tracing_invocation_reorder",
+	"VK_KHR_acceleration_structure", "VK_NV_ray_tracing_motion_blur",
+
+	//The cross vendor SER extension, not the NV one: the shader stack emits SPV_EXT_shader_invocation_reorder,
+	// which is what this extension licenses.
+	//The NV extension's SPIR-V requirement is the NV form with its own opcode numbering,
+	// which OxC3 deliberately doesn't emit.
+	//Deliberately NO NV fallback for older SDKs either: enabling the NV device extension can't run the EXT
+	// SPIR-V this engine ships, so it would claim a feature every shader then fails on.
+	//The string itself needs no SDK support; only the feature/property structs do, and those sites simply
+	// skip the query when the SDK lacks them, which leaves the claim unset.
+
+	"VK_EXT_ray_tracing_invocation_reorder",
+
 	"VK_EXT_mesh_shader",            "VK_KHR_fragment_shading_rate",  "VK_KHR_dynamic_rendering",
 	"VK_EXT_opacity_micromap",       "VK_EXT_shader_atomic_float",    "VK_KHR_deferred_host_operations",
 	"VK_NV_ray_tracing_validation",
 
-	#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME
-		"VK_KHR_compute_shader_derivatives",
-	#else
-		"VK_NV_compute_shader_derivatives",
-	#endif
+	//Deliberately the NV extension even where the SDK has the KHR one.
+	//The only thing that consumes this is SPIR-V produced by DXC, and DXC declares
+	// SPV_NV_compute_shader_derivatives, whose requirement is VK_NV_compute_shader_derivatives specifically.
+	//Enabling the KHR device extension does not satisfy that, so a ddx in a compute shader was rejected at
+	// vkCreateShaderModule while the device still advertised the feature.
+	//A device exposing only the KHR extension therefore doesn't get the bit, which is the right answer: DXC
+	// can't emit anything such a device could run either.
+
+	"VK_NV_compute_shader_derivatives",
 
 	"VK_KHR_maintenance4",        "VK_KHR_buffer_device_address", "VK_EXT_descriptor_indexing", "VK_KHR_driver_properties",
 	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8",   "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget",
@@ -826,12 +842,17 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR
 		);
 
-		getDeviceProperties(
-			optExtensions[EOptExtensions_RayReorder],
-			VkPhysicalDeviceRayTracingInvocationReorderPropertiesNV,
-			rayReorderProp,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_NV
-		);
+		//No NV fallback: an SDK without the EXT structs can't claim RayReorder at all (the EXT SPIR-V the
+		// engine emits wouldn't run on the NV extension), so the properties just stay zeroed.
+
+		#ifdef VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME
+			getDeviceProperties(
+				optExtensions[EOptExtensions_RayReorder],
+				VkPhysicalDeviceRayTracingInvocationReorderPropertiesEXT,
+				rayReorderProp,
+				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_EXT
+			);
+		#endif
 
 		getDeviceProperties(
 			optExtensions[EOptExtensions_Bindless],
@@ -984,12 +1005,16 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV
 		);
 
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayReorder],
-			VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV,
-			rayReorderFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV
-		);
+		//No NV fallback here either: a zeroed feature struct is what keeps the claim honest on older SDKs.
+
+		#ifdef VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME
+			getDeviceFeatures(
+				optExtensions[EOptExtensions_RayReorder],
+				VkPhysicalDeviceRayTracingInvocationReorderFeaturesEXT,
+				rayReorderFeat,
+				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_EXT
+			);
+		#endif
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_RayMicromapOpacity],
@@ -1440,7 +1465,11 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(rtValidation.rayTracingValidation)
 			capabilities.features |= EGraphicsFeatures_RayValidation;
 
-		if(computeDeriv.computeDerivativeGroupLinear)
+		//Both derivative group modes count, since which one a shader needs is DXC's choice rather than ours:
+		// it emits the quad group for an even 2D thread group and the linear group otherwise.
+		//Reading only the linear flag would advertise the feature to a shader that ends up needing quads.
+
+		if(computeDeriv.computeDerivativeGroupLinear || computeDeriv.computeDerivativeGroupQuads)
 			capabilities.features |= EGraphicsFeatures_ComputeDeriv;
 
 		//Cooperative vectors/matrix (linalg) aren't gated on raytracing, so set them here rather than in the RT block.
@@ -1559,13 +1588,25 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					//RayReorder = the SER API is available (valid to call, possibly a no-op).
 					//RayReorderActual = the driver hints it actually reorders, so it's worth restructuring shaders for.
 
-					if(rayReorderFeat.rayTracingInvocationReorder) {
+					//The EXT device extension (requested above where the SDK has it) licenses exactly the
+					// SPV_EXT_shader_invocation_reorder form the shader stack emits: the module validates, the
+					// pipeline builds, and a record + reorder + invoke trace runs correctly (Shaders/raysSer).
+					//The old oxc::HitObject struct wrapper in extension.RayReorder.hlsli device-losted on SPIR-V,
+					// since it embedded the opaque hit object type in a composite.
+					//oxc::HitObject is now a bare typedef with C-style free functions, so that failure mode is gone.
 
-						capabilities.features |= EGraphicsFeatures_RayReorder;
+					//The query macros above declare rayReorderFeat/Prop, so this block only exists when the SDK
+					// has the EXT types; an older SDK never claims RayReorder at all.
 
-						if(rayReorderProp.rayTracingInvocationReorderReorderingHint)
-							capabilities.features2 |= EGraphicsFeatures2_RayReorderActual;
-					}
+					#ifdef VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME
+						if(rayReorderFeat.rayTracingInvocationReorder) {
+
+							capabilities.features |= EGraphicsFeatures_RayReorder;
+
+							if(rayReorderProp.rayTracingInvocationReorderReorderingHint)
+								capabilities.features2 |= EGraphicsFeatures2_RayReorderActual;
+						}
+					#endif
 
 					if(rayOpacityMicroFeat.micromap)
 						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;

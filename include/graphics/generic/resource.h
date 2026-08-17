@@ -97,7 +97,7 @@ typedef struct TextureRange {
 	U16 startRange[3];
 	U16 endRange[3];
 	U16 levelId;
-	U16 padding;
+	U16 planeId;        //Plane of a multi planar format: 0 = first plane (depth), 1 = stencil of a combined format
 } TextureRange;
 
 typedef struct ImageRange {

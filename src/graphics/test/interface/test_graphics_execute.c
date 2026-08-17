@@ -504,7 +504,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 			TestTexturePull targetPull = (TestTexturePull) { .expected = 0xFF0000FFu };
 
 			Test_assert(t, "targetPull", TextureRef_pullRegion(
-				target, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &targetPull, &t->err
+				target, 0, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &targetPull, &t->err
 			));
 
 			Test_assert(t, "targetPullSubmit", GraphicsDeviceRef_submitCommands(
@@ -576,7 +576,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 					TestTexturePull depthPull = (TestTexturePull) { .expected = 0x3F000000u };
 
 					Test_assert(t, "depthPull", TextureRef_pullRegion(
-						depth, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &depthPull, &t->err
+						depth, 0, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &depthPull, &t->err
 					));
 
 					Test_assert(t, "depthPullSubmit", GraphicsDeviceRef_submitCommands(
@@ -597,13 +597,120 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			RefPtr_dec(&depth);
 
+			//The stencil variant of the same clear + pull: a stencil bearing format pulls its STENCIL plane at
+			// one byte per texel, so a 0xAB clear reads back as 16 bytes of 0xAB, which the U32 comparison sees as
+			// four words of 0xABABABAB.
+			//D32S8 rather than D24S8, since D3D12 suppresses D24S8 on some hardware by design.
+			//Skipped rather than failed when absent, since neither combined format is required of an adapter.
+
+			if (GraphicsDeviceInfo_supportsDepthStencilFormat(
+				&GraphicsDeviceRef_ptr(deviceRef)->info, EDepthStencilFormat_D32S8X24Ext
+			) && (GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features & EGraphicsFeatures_DirectRendering)) {
+
+				DepthStencilRef *stencilTex = NULL;
+				CommandListRef *stencilList = NULL;
+				const CharString stencilName = CharString_createRefCStrConst("Execute stencil");
+
+				Test_assert(t, "stencilCreate", GraphicsDeviceRef_createDepthStencil(
+					deviceRef, 4, 4, EDepthStencilFormat_D32S8X24Ext, false, EMSAASamples_Off, NULL,
+					&stencilName, &stencilTex, &t->err
+				));
+
+				if (stencilTex && Test_assert(t, "stencilListCreate", GraphicsDeviceRef_createCommandList(
+					deviceRef, 4 * KIBI, 64, 16, true, &stencilList, &t->err
+				))) {
+
+					Test_assert(t, "stencilListBegin", CommandListRef_begin(stencilList, true, U64_MAX, &t->err));
+					Test_assert(t, "stencilScope", CommandListRef_startScope(stencilList, NULL, 1, NULL, &t->err));
+
+					AttachmentInfo stColor = (AttachmentInfo) { .image = target, .load = ELoadAttachmentType_Clear };
+					ListAttachmentInfo stColors = (ListAttachmentInfo) { 0 };
+					ListAttachmentInfo_createRefConst(&stColor, 1, &stColors, NULL);
+
+					//Both planes are cleared, since leaving depth to a load would read uninitialized memory on the
+					// APIs that demand a clear, discard or copy before the first use.
+
+					const DepthStencilAttachmentInfo stencilAttach = (DepthStencilAttachmentInfo) {
+						.image = stencilTex,
+						.depthLoad = ELoadAttachmentType_Clear,
+						.stencilLoad = ELoadAttachmentType_Clear,
+						.clearDepth = 1,
+						.clearStencil = 0xAB
+					};
+
+					Test_assert(t, "stencilRenderStart", CommandListRef_startRenderExt(
+						stencilList, I32x2_zero, I32x2_create2(4, 4), &stColors, &stencilAttach, &t->err
+					));
+
+					Test_assert(t, "stencilRenderEnd", CommandListRef_endRenderExt(stencilList, &t->err));
+					Test_assert(t, "stencilScopeEnd", CommandListRef_endScope(stencilList, &t->err));
+					Test_assert(t, "stencilListEnd", CommandListRef_end(stencilList, &t->err));
+
+					ListCommandListRef stencilLists = (ListCommandListRef) { 0 };
+					ListCommandListRef_createRefConst(&stencilList, 1, &stencilLists, NULL);
+
+					Test_assert(t, "stencilClearSubmit", GraphicsDeviceRef_submitCommands(
+						deviceRef, &stencilLists, NULL, NULL, 0, 0, &t->err
+					));
+
+					Test_assert(t, "stencilClearWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+					TestTexturePull stencilPull = (TestTexturePull) { .expected = 0xABABABABu };
+
+					Test_assert(t, "stencilPull", TextureRef_pullRegion(
+						stencilTex, 0, 0, 0, 0, 0, 0, 1, Test_texturePullCallback, &stencilPull, &t->err
+					));
+
+					Test_assert(t, "stencilPullSubmit", GraphicsDeviceRef_submitCommands(
+						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+					));
+
+					Test_assert(t, "stencilPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+					Test_assert(t, "stencilPullCompleted", stencilPull.count == 1);
+					Test_assert(t, "stencilPullLen", stencilPull.len == 4 * 4);
+					Test_assert(t, "stencilPullValue", stencilPull.matching == 4);
+
+					//The DEPTH plane of the same combined texture: the 1.0f clear reads back as its exact bit
+					// pattern, proving both planes of one format are separately reachable.
+
+					TestTexturePull depthPlanePull = (TestTexturePull) { .expected = 0x3F800000u };
+
+					Test_assert(t, "stencilDepthPull", TextureRef_pullRegion(
+						stencilTex, 0, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &depthPlanePull, &t->err
+					));
+
+					Test_assert(t, "stencilDepthPullSubmit", GraphicsDeviceRef_submitCommands(
+						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+					));
+
+					Test_assert(t, "stencilDepthPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+
+					Test_assert(t, "stencilDepthPullCompleted", depthPlanePull.count == 1);
+					Test_assert(t, "stencilDepthPullLen", depthPlanePull.len == 4 * 4 * 4);
+					Test_assert(t, "stencilDepthPullValue", depthPlanePull.matching == 16);
+				}
+
+				RefPtr_dec(&stencilList);
+				RefPtr_dec(&stencilTex);
+			}
+
+			else Test_print(t, "Device lacks D32S8 (or direct rendering), skipping stencil pull test");
+
 			//The refusals: wrong type, missing callback and MSAA (which also can't be copied, only resolved)
 
 			Test_assert(t, "pullDeviceTexRefused", !TextureRef_pullRegion(
-				texture, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &targetPull, NULL
+				texture, 0, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &targetPull, NULL
 			));
 
-			Test_assert(t, "pullNoCallbackRefused", !TextureRef_pullRegion(target, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL));
+			//A plane the format doesn't have is refused rather than silently pulled as plane 0: plane 1 only
+			// exists on combined depth stencil formats, so a color target rejects it.
+
+			Test_assert(t, "pullBadPlaneRefused", !TextureRef_pullRegion(
+				target, 0, 0, 0, 0, 0, 0, 1, Test_texturePullCallback, &targetPull, NULL
+			));
+
+			Test_assert(t, "pullNoCallbackRefused", !TextureRef_pullRegion(target, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL));
 
 			RenderTextureRef *msaaTarget = NULL;
 			const CharString msaaName = CharString_createRefCStrConst("Execute MSAA target");
@@ -616,7 +723,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 			if (msaaTarget) {
 
 				Test_assert(t, "pullMsaaRefused", !TextureRef_pullRegion(
-					msaaTarget, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &targetPull, NULL
+					msaaTarget, 0, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &targetPull, NULL
 				));
 
 				//Copying MSAA is refused at record time now; the failed command invalidates the recording,

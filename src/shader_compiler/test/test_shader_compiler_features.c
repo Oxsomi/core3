@@ -77,9 +77,12 @@ void Test_shaderCompilerFeatures(Test *t) {
 		{ "features/subgroup_operations.hlsl", ESHExtension_SubgroupOperations, B_BOTH },
 		{ "features/ray_query.hlsl",           ESHExtension_RayQuery,           B_BOTH },
 
-		//SPIRV-only: inline-SPIRV atomics, or capabilities OxC3/DXC restrict to SPIRV (see SpirvNative set)
-		{ "features/subgroup_arithmetic.hlsl", ESHExtension_SubgroupArithmetic, B_SPV },
-		{ "features/subgroup_shuffle.hlsl",    ESHExtension_SubgroupShuffle,    B_SPV },
+		//Plain HLSL wave intrinsics, so both backends compile them.
+		//DXIL reflection can't detect either (one generic wave ops flag), so on DXIL they are annotation-driven.
+		{ "features/subgroup_arithmetic.hlsl", ESHExtension_SubgroupArithmetic, B_BOTH },
+		{ "features/subgroup_shuffle.hlsl",    ESHExtension_SubgroupShuffle,    B_BOTH },
+
+		//SPIRV-only: inline-SPIRV atomics (DXIL has no float atomic intrinsics)
 		{ "features/atomic_f32.hlsl",          ESHExtension_AtomicF32,          B_SPV },
 		{ "features/atomic_f64.hlsl",          ESHExtension_AtomicF64,          B_SPV },
 

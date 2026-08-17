@@ -810,13 +810,40 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig))))
 			deviceUnsupported("D3D12: Unsupported device %"PRIu64", doesn't support required root signature 1.1", i);
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;        //Nice way of querying DirectX...
+		//D3D12_FEATURE_DATA_SHADER_MODEL is in/out: the runtime CLAMPS HighestShaderModel down to what the
+		// device supports and still returns S_OK, only failing when the requested value is unknown to the
+		// runtime itself.
+		//Testing SUCCEEDED alone therefore reported every model the RUNTIME knows rather than what the DEVICE
+		// has, which over-reported SM6.7+ on adapters that don't have it (WARP included).
+		//So the probe walks down from the newest model this build knows until the runtime recognises one,
+		// and the value handed back is the device's real ceiling.
+		//Every threshold below compares against that.
 
-		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+		static const D3D_SHADER_MODEL probeModels[] = {
+			#if D3D12_PREVIEW_SDK_VERSION >= 720
+				D3D_SHADER_MODEL_6_10,
+			#endif
+			D3D_SHADER_MODEL_6_9, D3D_SHADER_MODEL_6_5
+		};
+
+		D3D_SHADER_MODEL highestModel = D3D_SHADER_MODEL_NONE;
+
+		for (U64 m = 0; m < sizeof(probeModels) / sizeof(probeModels[0]); ++m) {
+
+			shaderOpt.HighestShaderModel = probeModels[m];
+
+			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
+				device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)
+			))) {
+				highestModel = shaderOpt.HighestShaderModel;
+				break;
+			}
+		}
+
+		if(highestModel < D3D_SHADER_MODEL_6_5)
 			deviceUnsupported("D3D12: Unsupported device %"PRIu64", doesn't support required shader model (6.5)", i);
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_6;
-		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
+		if (highestModel >= D3D_SHADER_MODEL_6_6) {
 
 			caps.featuresExt |= EDxGraphicsFeatures_WaveSize | EDxGraphicsFeatures_PAQ | EDxGraphicsFeatures_SM6_6;
 			caps.features |= EGraphicsFeatures_ComputeDeriv;
@@ -828,16 +855,13 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				caps.features2 |= EGraphicsFeatures2_DescriptorHeap;
 		}
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_7;
-		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+		if(highestModel >= D3D_SHADER_MODEL_6_7)
 			caps.featuresExt |= EDxGraphicsFeatures_SM6_7;
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_8;
-		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+		if(highestModel >= D3D_SHADER_MODEL_6_8)
 			caps.featuresExt |= EDxGraphicsFeatures_WaveSizeMinMax | EDxGraphicsFeatures_SM6_8;
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_9;
-		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+		if(highestModel >= D3D_SHADER_MODEL_6_9)
 			caps.featuresExt |= EDxGraphicsFeatures_SM6_9;
 
 		#if D3D12_SDK_VERSION >= 618
@@ -850,8 +874,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		#endif
 
 		#if D3D12_PREVIEW_SDK_VERSION >= 720
-			shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_10;
-			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
+			if (highestModel >= D3D_SHADER_MODEL_6_10) {
 
 				caps.featuresExt |= EDxGraphicsFeatures_SM6_10;
 
@@ -964,6 +987,27 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			)
 				caps.featuresExt |= EDxGraphicsFeatures_BatchedAsyncCommandList;
 		#endif
+
+		//SER's API claim (DXR tier 1.2, set above) is only usable from a shader written at SM6.9,
+		// since dx::HitObject requires it.
+		//A device below that ceiling claims an API no shader can reach, so the claim is withdrawn.
+		//Where it holds, it stays experimental while SM6.9 itself is preview only.
+
+		if (caps.features & EGraphicsFeatures_RayReorder) {
+
+			if(!(caps.featuresExt & EDxGraphicsFeatures_SM6_9)) {
+				caps.features &= ~EGraphicsFeatures_RayReorder;
+				caps.features2 &= ~EGraphicsFeatures2_RayReorderActual;
+			}
+
+			else {
+
+				caps.experimentalFeatures |= EGraphicsFeatures_RayReorder;
+
+				if(caps.features2 & EGraphicsFeatures2_RayReorderActual)
+					caps.experimentalFeatures2 |= EGraphicsFeatures2_RayReorderActual;
+			}
+		}
 
 		const Bool hasArch =
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)));

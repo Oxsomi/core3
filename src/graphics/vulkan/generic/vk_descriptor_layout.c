@@ -291,7 +291,14 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		if (!((setPresent >> linkId) & 1)) {
 
 			setInfo[linkId].pBindings = &bindings.ptr[i];
-			partiallyBound[linkId].pBindingFlags = &flags.ptr[i];
+
+			//flags is only reserved for a layout that has bindless bindings, so for every other layout it stays
+			// empty with a null ptr, and &flags.ptr[i] offsets that null.
+			//The value would go unread in that case anyway, since partiallyBound is only chained into pNext
+			// just below when this set is actually bindless.
+
+			if(flags.length)
+				partiallyBound[linkId].pBindingFlags = &flags.ptr[i];
 
 			if ((isBindlessSet >> linkId) & 1) {
 				setInfo[linkId].pNext = &partiallyBound[linkId];

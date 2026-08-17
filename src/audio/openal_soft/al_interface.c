@@ -58,8 +58,11 @@ clean:
 	return s_uccess;
 }
 
-void AudioInterface_freeExt(AudioInterface *interf, const Allocator *alloc) {
-	(void) interf; (void) alloc;
+//Registered as a RefPtr free callback, so the signature has to be the generic void* one.
+//The typed version this once was makes the call through the callback pointer undefined.
+
+void AudioInterface_freeExt(void *interfGeneric, const Allocator *alloc) {
+	(void) interfGeneric; (void) alloc;
 	//Nothing to clean.
 }
 

@@ -1,6 +1,9 @@
 RWStructuredBuffer<uint> buf;
 
-[[oxc::extension("SubgroupShuffle")]]
+//SubgroupOperations rides along for the DXIL variant: any wave intrinsic sets the one generic WAVE_OPS
+// reflection flag, which maps to SubgroupOperations and has to be declared for processDXIL to accept it.
+
+[[oxc::extension("SubgroupShuffle", "SubgroupOperations")]]
 [[oxc::model("6.5")]]
 [[oxc::stage("compute")]]
 [numthreads(64, 1, 1)]

@@ -31,6 +31,7 @@
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
+#include "formats/oiSH/sh_binaries.h"
 #include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/texture_format.h"
@@ -38,6 +39,48 @@
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
 #include "command_list_internal.h"
+
+//Ray triangle position fetch requires every BLAS it reads to be built with ERTASBuildFlags_AllowDataAccessExt,
+// but the shader picks its TLAS descriptor at runtime, so the exact target is unknowable at record time.
+//The candidates are the TLASes this scope transitioned, since declaring that access is already required for
+// correct synchronization; a scope without any TLAS transition has nothing to judge.
+//The error only fires when every candidate provably fails the requirement (that includes the common single
+// TLAS scene), so a legitimate multi TLAS mix or a device built TLAS is never accused.
+
+static Bool CommandList_validateRayTriPosition(CommandList *commandList, PipelineRef *pipelineRef, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U64 candidates = 0;
+	U64 provablyBad = 0;
+
+	if(!(PipelineRef_ptr(pipelineRef)->extensions & (U32) ESHExtension_RayTriPosition))
+		goto clean;
+
+	for(U64 i = 0; i < commandList->pendingTransitions.length; ++i) {
+
+		RefPtr *res = commandList->pendingTransitions.ptr[i].resource;
+
+		if(!res || res->refPtrType->typeId != (TypeId) EGraphicsTypeId_TLASExt)
+			continue;
+
+		++candidates;
+
+		const TLAS *tlas = TLASRef_ptr(res);
+
+		if(tlas->blasDataAccessKnown && !tlas->blasDataAccessAll)
+			++provablyBad;
+	}
+
+	if(candidates && candidates == provablyBad)
+		retError(clean, Error_invalidState(
+			0,
+			"CommandList_validateRayTriPosition() the pipeline uses RayTriPosition, but every TLAS transitioned "
+			"in this scope has a BLAS built without ERTASBuildFlags_AllowDataAccessExt"
+		));
+
+clean:
+	return s_uccess;
+}
 
 Bool CommandList_validateGraphicsPipeline(
 	Pipeline *pipeline,
@@ -287,6 +330,8 @@ Bool CommandListRef_drawBase(CommandListRef *commandListRef, Buffer buf, EComman
 		commandList->boundSampleCount, e_rr
 	));
 
+	gotoIfError3(clean, CommandList_validateRayTriPosition(commandList, pipelineRef, e_rr));
+
 	gotoIfError3(clean, CommandList_append(commandList, op, buf, 1, e_rr));
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
@@ -379,6 +424,10 @@ Bool CommandListRef_dispatch(CommandListRef *commandListRef, DispatchCmd dispatc
 	if (!commandList->pipeline[EPipelineType_Compute])
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatch() requires bound compute pipeline"));
 
+	gotoIfError3(clean, CommandList_validateRayTriPosition(
+		commandList, commandList->pipeline[EPipelineType_Compute], e_rr
+	));
+
 	const U64 groupCountMax = U64_max(dispatch.groups[0], U64_max(dispatch.groups[1], dispatch.groups[2]));
 
 	if(groupCountMax > U16_MAX)
@@ -427,6 +476,8 @@ Bool CommandListRef_dispatchRaysExt(CommandListRef *commandListRef, DispatchRays
 
 	if (!rayPipeline)
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() requires bound raytracing pipeline"));
+
+	gotoIfError3(clean, CommandList_validateRayTriPosition(commandList, rayPipeline, e_rr));
 
 	U64 total = dispatch.x * dispatch.y;
 
@@ -516,6 +567,10 @@ Bool CommandListRef_dispatchIndirect(CommandListRef *commandListRef, DeviceBuffe
 
 	if (!commandList->pipeline[EPipelineType_Compute])
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchIndirect() requires bound compute pipeline"));
+
+	gotoIfError3(clean, CommandList_validateRayTriPosition(
+		commandList, commandList->pipeline[EPipelineType_Compute], e_rr
+	));
 
 	if(offset & 15)
 		retError(clean, Error_invalidParameter(

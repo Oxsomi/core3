@@ -45,8 +45,6 @@ typedef struct CASettings {
 	ECASettingsFlags flags;
 	U32 padding;
 
-	//Compared as U64[5]
-
 	EXXCompressionType compressionType;
 	EXXEncryptionType encryptionType;
 	U32 encryptionKey[8];

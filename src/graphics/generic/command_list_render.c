@@ -118,6 +118,31 @@ Bool CommandListRef_startRenderExt(
 				7, "CommandListRef_startRenderExt() render target is set as clear but also read only"
 			));
 
+		//An integer clear value has to survive a float round trip, because D3D12 has no integer render target
+		// clear at all: ClearRenderTargetView takes FLOAT[4] and the runtime converts it to the attachment's
+		// integer format (ClearUnorderedAccessViewUint needs a UAV, not an RTV, so it is not a way out).
+		//F32 carries a 24 bit significand, so magnitudes up to 2^24 - 1 convert exactly and anything beyond
+		// silently lands on a neighbouring value.
+		//Rejecting that here keeps the two backends agreeing rather than quietly diverging on large values.
+
+		if (info.load == ELoadAttachmentType_Clear) {
+
+			const ETexturePrimitive prim = ETextureFormat_getPrimitive(ETextureFormatId_unpack[texture.textureFormatId]);
+
+			if(prim == ETexturePrimitive_SInt || prim == ETexturePrimitive_UInt)
+				for(U8 c = 0; c < 4; ++c) {
+
+					const I64 v = prim == ETexturePrimitive_SInt ? (I64) info.color.colori[c] : (I64) info.color.coloru[c];
+
+					if(v > ((I64)1 << 24) - 1 || v < -(((I64)1 << 24) - 1))
+						retError(clean, Error_outOfBounds(
+							7, (U64) (v < 0 ? -v : v), ((U64)1 << 24) - 1,
+							"CommandListRef_startRenderExt() integer clear value must fit in 24 bits, "
+							"since D3D12 clears integer render targets through a float conversion"
+						));
+				}
+		}
+
 		//Check generic properties like devices
 
 		if(texture.resource.device != commandList->device)

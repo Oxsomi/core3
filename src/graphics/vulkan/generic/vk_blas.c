@@ -148,6 +148,9 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 	if(blas->base.flags & ERTASBuildFlags_MinimizeMemory)
 		flags |= VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR;
 
+	if(blas->base.flags & ERTASBuildFlags_AllowDataAccessExt)
+		flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DATA_ACCESS_BIT_KHR;
+
 	blasExt->geometries = (VkAccelerationStructureBuildGeometryInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
 		.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,

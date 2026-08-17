@@ -39,6 +39,7 @@
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/commands.h"
 #include "platforms/platform.h"
+#include "platforms/logx.h"
 #include "platforms/file.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/test/test.h"
@@ -55,12 +56,14 @@
 typedef struct TestShaderAppData {
 	U32 handles[4];
 	F32 color[4];
+	U32 logicSrc0[4];        //U32 offsets 8..11: what logic op instance 0 writes
+	U32 logicSrc1[4];        //U32 offsets 12..15: what instance 1 XORs on top
 } TestShaderAppData;
 
 //The gtest section only holds compiled oiSH files when the build had the shader compiler, so absence means skip.
 //Loading the section twice is harmless, which keeps every module self contained.
 
-static Bool TestShaders_loadFile(Test *t, const C8 *pathStr, SHFile *file) {
+Bool TestShaders_loadFile(Test *t, const C8 *pathStr, SHFile *file) {
 
 	const Allocator *alloc = Platform_instance->alloc;
 
@@ -99,7 +102,7 @@ static Bool TestShaders_loadFile(Test *t, const C8 *pathStr, SHFile *file) {
 
 //Every test shader file holds a single stage; only the raytracing file carries more than one named entry
 
-static U32 TestShaders_entry(Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, const C8 *name) {
+U32 TestShaders_entry(Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, const C8 *name) {
 
 	const CharString entryName = CharString_createRefCStrConst(name);
 
@@ -111,7 +114,7 @@ static U32 TestShaders_entry(Test *t, GraphicsDeviceRef *deviceRef, const SHFile
 	return id;
 }
 
-static Bool TestShaders_computePipeline(
+Bool TestShaders_computePipeline(
 	Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, PipelineRef **pipeline
 ) {
 
@@ -130,13 +133,17 @@ static Bool TestShaders_computePipeline(
 
 //The vertex and pixel shader are separate single entry files, picked out of one shared file list by slot
 
-static Bool TestShaders_graphicsPipeline(
+//The pixel entry is named because SHFile_combine matches entries by name, so two pixel shaders in one
+//package can't both be "main" unless they agree on their signature - which a 1 target and a 2 target one
+//don't.
+
+static Bool TestShaders_graphicsPipelineNamed(
 	Test *t, GraphicsDeviceRef *deviceRef, const ListSHFile *files, U16 vertexFile, U16 pixelFile,
-	const PipelineGraphicsInfo *info, PipelineRef **pipeline
+	const C8 *pixelEntry, const PipelineGraphicsInfo *info, PipelineRef **pipeline
 ) {
 
 	const U32 vertexId = TestShaders_entry(t, deviceRef, &files->ptr[vertexFile], "main");
-	const U32 pixelId = TestShaders_entry(t, deviceRef, &files->ptr[pixelFile], "main");
+	const U32 pixelId = TestShaders_entry(t, deviceRef, &files->ptr[pixelFile], pixelEntry);
 
 	if(vertexId == U32_MAX || pixelId == U32_MAX)
 		return false;
@@ -156,7 +163,14 @@ static Bool TestShaders_graphicsPipeline(
 	));
 }
 
-static Bool TestShaders_submitAndWait(
+static Bool TestShaders_graphicsPipeline(
+	Test *t, GraphicsDeviceRef *deviceRef, const ListSHFile *files, U16 vertexFile, U16 pixelFile,
+	const PipelineGraphicsInfo *info, PipelineRef **pipeline
+) {
+	return TestShaders_graphicsPipelineNamed(t, deviceRef, files, vertexFile, pixelFile, "main", info, pipeline);
+}
+
+Bool TestShaders_submitAndWait(
 	Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *commandList, const void *appData, U64 appDataLen
 ) {
 
@@ -179,7 +193,7 @@ static void TestShaders_countPull(RefPtr *resource, void *context) {
 
 //Scribbling the CPU copy first makes sure only a real GPU to CPU pull can produce the expected values
 
-static Bool TestShaders_pullBuffer(Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *emptyList, DeviceBufferRef *buffer) {
+Bool TestShaders_pullBuffer(Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *emptyList, DeviceBufferRef *buffer) {
 
 	DeviceBuffer *bufferPtr = DeviceBufferRef_ptr(buffer);
 
@@ -223,7 +237,7 @@ static Bool TestShaders_pullPixels(
 ) {
 
 	Bool ok = Test_assert(t, "queuePixelPull", TextureRef_pullRegion(
-		target, 0, 0, 0, 0, 0, 0, TestShaders_pixelPull, pixels, &t->err
+		target, 0, 0, 0, 0, 0, 0, 0, TestShaders_pixelPull, pixels, &t->err
 	));
 
 	ok &= TestShaders_submitAndWait(t, deviceRef, emptyList, NULL, 0);
@@ -518,27 +532,31 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 		"//OxC3_gtest/test_shaders/test_depth_vs.oiSH",
 		"//OxC3_gtest/test_shaders/test_depth_ps.oiSH",
 		"//OxC3_gtest/test_shaders/test_vertex_vs.oiSH",
-		"//OxC3_gtest/test_shaders/test_write_args.oiSH"
+		"//OxC3_gtest/test_shaders/test_write_args.oiSH",
+		"//OxC3_gtest/test_shaders/test_draw_mrt_ps.oiSH",
+		"//OxC3_gtest/test_shaders/test_logicop_vs.oiSH",
+		"//OxC3_gtest/test_shaders/test_logicop_ps.oiSH",
+		"//OxC3_gtest/test_shaders/test_draw_dualsrc_ps.oiSH"
 	};
 
-	SHFile files[6] = { 0 };
+	SHFile files[10] = { 0 };
 	Bool loadedAll = true;
 
-	for(U64 i = 0; i < 6; ++i)
+	for(U64 i = 0; i < 10; ++i)
 		loadedAll &= TestShaders_loadFile(t, drawShaderPaths[i], &files[i]);
 
 	if (!loadedAll) {
 
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping draw execution tests");
 
-		for(U64 i = 0; i < 6; ++i)
+		for(U64 i = 0; i < 10; ++i)
 			SHFile_free(&files[i], alloc);
 
 		return;
 	}
 
 	ListSHFile fileList = (ListSHFile) { 0 };
-	ListSHFile_createRefConst(files, 6, &fileList, NULL);
+	ListSHFile_createRefConst(files, 10, &fileList, NULL);
 
 	RenderTextureRef *target = NULL;
 	RenderTextureRef *msaaTarget = NULL;
@@ -549,6 +567,12 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	DeviceBufferRef *gpuArgs = NULL;
 	PipelineRef *flatPipeline = NULL;
 	PipelineRef *blendPipeline = NULL;
+	PipelineRef *wirePipeline = NULL;
+	PipelineRef *mrtPipeline = NULL;
+	RenderTextureRef *mrtTarget = NULL;
+	PipelineRef *logicPipeline = NULL;
+	RenderTextureRef *logicTarget = NULL;
+	PipelineRef *dualPipeline = NULL;
 	PipelineRef *vertexPipeline = NULL;
 	PipelineRef *depthPipeline = NULL;
 	PipelineRef *msaaPipeline = NULL;
@@ -660,6 +684,208 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 				t, deviceRef, commandList, &appData, sizeof(appData)
 			))
 				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0x6600CC66u);
+		}
+	}
+
+	//Wireframe, when the adapter claims it.
+	//The same fullscreen triangle that fills all 64 pixels above covers only its edges in wireframe, so the
+	// interior keeps the clear.
+	//Counting rather than comparing a fixed picture is deliberate: which pixels an edge touches is the
+	// rasterizer's business and differs between implementations, but "some but not all" separates a wireframe
+	// that took effect from one that was silently ignored, which would fill all 64 exactly as the flat draw did.
+
+	if(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features & EGraphicsFeatures_Wireframe) {
+
+		PipelineGraphicsInfo wireInfo = flatInfo;
+		wireInfo.rasterizer.flags = (U16)(wireInfo.rasterizer.flags | ERasterizerFlags_IsWireframeExt);
+
+		if (TestShaders_graphicsPipeline(t, deviceRef, &fileList, 0, 1, &wireInfo, &wirePipeline)) {
+
+			Test_assert(t, "beginWire", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+
+			appData.color[0] = 1; appData.color[1] = 1; appData.color[2] = 1; appData.color[3] = 1;
+
+			if (TestShaders_openDraw(t, commandList, 1, target, wirePipeline)) {
+
+				Test_assert(t, "drawWire", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+
+				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
+					t, deviceRef, commandList, &appData, sizeof(appData)
+				)) {
+
+					TestShaderPixels pixels = (TestShaderPixels) { 0 };
+
+					if (TestShaders_pullPixels(t, deviceRef, emptyList, target, &pixels)) {
+
+						U32 drawn = 0;
+
+						for(U64 i = 0; i < 64; ++i)
+							drawn += pixels.pixels[i] == 0xFFFFFFFFu;
+
+						Test_assert(t, "wireDrewSomething", drawn > 0);
+						Test_assert(t, "wireLeftInterior", drawn < 64);
+					}
+				}
+			}
+		}
+	}
+
+	//Multiple render targets: one draw writing two attachments, each getting its own constant.
+	//This is the runtime half of the same thing the packaged MRT shader covers at compile time.
+	//Nothing else in the suite binds more than one attachment,
+	// which is how a backend divergence on the second target's semantic index stayed invisible
+	// until packaging refused to merge the two.
+	//Both targets are pulled and checked separately, so writing one output to both, or swapping them, fails.
+
+	{
+		name = CharString_createRefCStrConst("Shader draw MRT target 1");
+
+		if(Test_assert(t, "createMrtTarget", GraphicsDeviceRef_createRenderTexture(
+			deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+			EMSAASamples_Off, NULL, &name, &mrtTarget, &t->err
+		))) {
+
+			PipelineGraphicsInfo mrtInfo = flatInfo;
+			mrtInfo.attachmentCountExt = 2;
+			mrtInfo.attachmentFormatsExt[1] = ETextureFormatId_RGBA8;
+
+			if (TestShaders_graphicsPipelineNamed(
+				t, deviceRef, &fileList, 0, 6, "mainMrt", &mrtInfo, &mrtPipeline
+			)) {
+
+				Test_assert(t, "beginMrt", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+				Test_assert(t, "scopeMrt", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+
+				const AttachmentInfo mrtColors[2] = {
+					(AttachmentInfo) { .image = target,    .load = ELoadAttachmentType_Clear },
+					(AttachmentInfo) { .image = mrtTarget, .load = ELoadAttachmentType_Clear }
+				};
+
+				ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+				ListAttachmentInfo_createRefConst(mrtColors, 2, &colors, NULL);
+
+				Test_assert(t, "renderStartMrt", CommandListRef_startRenderExt(
+					commandList, I32x2_zero, I32x2_create2(8, 8), &colors, NULL, &t->err
+				));
+
+				Test_assert(t, "viewportScissorMrt", CommandListRef_setViewportAndScissor(
+					commandList, I32x2_zero, I32x2_zero, &t->err
+				));
+
+				Test_assert(t, "bindMrt", CommandListRef_setGraphicsPipeline(commandList, mrtPipeline, &t->err));
+				Test_assert(t, "drawMrt", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+
+				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
+					t, deviceRef, commandList, &appData, sizeof(appData)
+				)) {
+					TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF3366FFu);
+					TestShaders_checkPixels(t, deviceRef, emptyList, mrtTarget, 0xFF00CC00u);
+				}
+			}
+		}
+	}
+
+	//Logic op, when the adapter claims it: one draw of two instances into a UINT target, the pipeline set to XOR.
+	//Instance 0 XORs its value against the zero clear and instance 1 XORs on top,
+	// so the readback holds src0 ^ src1 - a value no other op produces from these inputs.
+	//Distinct failures land on distinct constants: a dropped logic op (plain overwrite) gives the last value
+	// written, OR and AND give their own results, a dead draw leaves the clear.
+	//The target is RGBA8u rather than the module's RGBA8, since a logic op is only defined on an integer
+	// framebuffer and D3D12 refuses it on UNORM outright.
+	//The gate is required: Vulkan reports logicOp false on most mobile GPUs and MoltenVK, and the pipeline
+	// create would fail there rather than skip.
+
+	if(!(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features & EGraphicsFeatures_LogicOp))
+		Test_print(t, "Device doesn't support logicOp, skipping logic op test");
+
+	else {
+
+		name = CharString_createRefCStrConst("Shader draw logic op target");
+
+		if(Test_assert(t, "createLogicTarget", GraphicsDeviceRef_createRenderTexture(
+			deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8u, EGraphicsResourceFlag_None,
+			EMSAASamples_Off, NULL, &name, &logicTarget, &t->err
+		))) {
+
+			PipelineGraphicsInfo logicInfo = (PipelineGraphicsInfo) {
+				.attachmentCountExt = 1,
+				.attachmentFormatsExt = { ETextureFormatId_RGBA8u },
+				.blendState = (BlendState) {
+					.enable = true,                       //Required: D3D12 drops LogicOpEnable otherwise
+					.renderTargetMask = 0,                //Required: a logic op excludes blending
+					.logicOpExt = ELogicOpExt_Xor,
+					.writeMask = { EWriteMask_All }
+				}
+			};
+
+			if (TestShaders_graphicsPipeline(t, deviceRef, &fileList, 7, 8, &logicInfo, &logicPipeline)) {
+
+				Test_assert(t, "beginLogic", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+
+				appData.logicSrc0[0] = 0xF0; appData.logicSrc0[1] = 0x33;
+				appData.logicSrc0[2] = 0x5A; appData.logicSrc0[3] = 0xFF;
+				appData.logicSrc1[0] = 0x0F; appData.logicSrc1[1] = 0x11;
+				appData.logicSrc1[2] = 0x3C; appData.logicSrc1[3] = 0x0F;
+
+				if (TestShaders_openDraw(t, commandList, 1, logicTarget, logicPipeline)) {
+
+					Test_assert(t, "drawLogic", CommandListRef_drawUnindexed(commandList, 3, 2, &t->err));
+
+					//XOR of the two sources per channel: R 0xF0^0x0F, G 0x33^0x11, B 0x5A^0x3C, A 0xFF^0x0F.
+					//R is the low byte of the pulled U32, matching every other expectation in this module.
+
+					if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
+						t, deviceRef, commandList, &appData, sizeof(appData)
+					))
+						TestShaders_checkPixels(t, deviceRef, emptyList, logicTarget, 0xF06622FFu);
+				}
+			}
+		}
+	}
+
+	//Dual source blend, when the adapter claims it: the pixel shader emits two colors from one draw and the
+	// blend multiplies the first by the second, so the attachment ends up holding the app data color scaled by
+	// exactly a half - a result no single source factor produces from these inputs, so a backend that ignored
+	// the second source lands on the unscaled color and fails.
+	//The destination factor is Zero, so the cleared attachment contributes nothing.
+	//This is also the runtime proof of the dual source reflection path: both outputs sit at LOCATION 0 on
+	// SPIR-V, told apart by the Index decoration the DUAL_SRC macros apply.
+
+	if(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features & EGraphicsFeatures_DualSrcBlend) {
+
+		PipelineGraphicsInfo dualInfo = flatInfo;
+		dualInfo.blendState = (BlendState) {
+			.enable = true,
+			.renderTargetMask = 1,
+			.writeMask = { EWriteMask_All },
+			.attachments = { (BlendStateAttachment) {
+				.srcBlend = EBlend_Src1ColorExt, .dstBlend = EBlend_Zero,
+				.srcBlendAlpha = EBlend_Src1AlphaExt, .dstBlendAlpha = EBlend_Zero,
+				.blendOp = EBlendOp_Add, .blendOpAlpha = EBlendOp_Add
+			} }
+		};
+
+		if (TestShaders_graphicsPipelineNamed(
+			t, deviceRef, &fileList, 0, 9, "mainDualSrc", &dualInfo, &dualPipeline
+		)) {
+
+			Test_assert(t, "beginDual", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+
+			//All four channels at 0.8, so the halved result is 0.4, which lands on 102 in 8 bit unorm with no
+			// rounding ambiguity either before or after the multiply.
+
+			appData.color[0] = 204.f / 255; appData.color[1] = 204.f / 255;
+			appData.color[2] = 204.f / 255; appData.color[3] = 204.f / 255;
+
+			if (TestShaders_openDraw(t, commandList, 1, target, dualPipeline)) {
+
+				Test_assert(t, "drawDual", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+
+				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
+					t, deviceRef, commandList, &appData, sizeof(appData)
+				))
+					TestShaders_checkPixels(t, deviceRef, emptyList, target, 0x66666666u);
+			}
 		}
 	}
 
@@ -862,55 +1088,88 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 		}
 	}
 
-	//MSAA 4x: a fully covered pixel resolves to exactly the flat color, and the result lands in the
-	// readback target through the resolve attachment rather than a copy
+	//MSAA: a fully covered pixel resolves to exactly the flat color whatever the sample count, and the result
+	// lands in the readback target through the resolve attachment rather than a copy.
+	//4x is required of every adapter; 2x and 8x are optional, so those are skipped unless the adapter claims
+	// them, and running when it does is what turns the claim into something checked rather than reported.
+	//Target and pipeline are rebuilt per count, since both bake the sample count in.
 
-	name = CharString_createRefCStrConst("Shader draw MSAA target");
+	static const struct {
+		EMSAASamples samples;
+		EGraphicsDataTypes dataType;            //0 when the count is required rather than optional
+	} msaaCases[] = {
+		{ EMSAASamples_x2Ext, EGraphicsDataTypes_MSAA2x },
+		{ EMSAASamples_x4,    (EGraphicsDataTypes) 0    },
+		{ EMSAASamples_x8Ext, EGraphicsDataTypes_MSAA8x }
+	};
 
-	Test_assert(t, "createMsaaTarget", GraphicsDeviceRef_createRenderTexture(
-		deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
-		EMSAASamples_x4, NULL, &name, &msaaTarget, &t->err
-	));
+	const EGraphicsDataTypes msaaTypes = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.dataTypes;
+	U32 msaaRun = 0, msaaSkipped = 0;
 
-	PipelineGraphicsInfo msaaInfo = flatInfo;
-	msaaInfo.msaa = EMSAASamples_x4;
+	for (U64 m = 0; m < sizeof(msaaCases) / sizeof(msaaCases[0]); ++m) {
 
-	if (
-		msaaTarget &&
-		TestShaders_graphicsPipeline(t, deviceRef, &fileList, 0, 1, &msaaInfo, &msaaPipeline)
-	) {
+		if (msaaCases[m].dataType && !(msaaTypes & msaaCases[m].dataType)) {
+			++msaaSkipped;
+			continue;
+		}
 
-		Test_assert(t, "beginMsaa", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-		Test_assert(t, "scopeMsaa", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+		name = CharString_createRefCStrConst("Shader draw MSAA target");
 
-		const AttachmentInfo msaaColor = (AttachmentInfo) {
-			.image = msaaTarget,
-			.load = ELoadAttachmentType_Clear,
-			.resolveMode = EMSAAResolveMode_Average,
-			.resolveImage = target
-		};
+		if(!Test_assert(t, "createMsaaTarget", GraphicsDeviceRef_createRenderTexture(
+			deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+			msaaCases[m].samples, NULL, &name, &msaaTarget, &t->err
+		)))
+			continue;
 
-		ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
-		ListAttachmentInfo_createRefConst(&msaaColor, 1, &colors, NULL);
+		PipelineGraphicsInfo msaaInfo = flatInfo;
+		msaaInfo.msaa = msaaCases[m].samples;
 
-		Test_assert(t, "renderStartMsaa", CommandListRef_startRenderExt(
-			commandList, I32x2_zero, I32x2_create2(8, 8), &colors, NULL, &t->err
-		));
+		if (TestShaders_graphicsPipeline(t, deviceRef, &fileList, 0, 1, &msaaInfo, &msaaPipeline)) {
 
-		Test_assert(t, "viewportScissorMsaa", CommandListRef_setViewportAndScissor(
-			commandList, I32x2_zero, I32x2_zero, &t->err
-		));
+			Test_assert(t, "beginMsaa", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+			Test_assert(t, "scopeMsaa", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
 
-		Test_assert(t, "bindMsaa", CommandListRef_setGraphicsPipeline(commandList, msaaPipeline, &t->err));
-		Test_assert(t, "drawMsaa", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+			const AttachmentInfo msaaColor = (AttachmentInfo) {
+				.image = msaaTarget,
+				.load = ELoadAttachmentType_Clear,
+				.resolveMode = EMSAAResolveMode_Average,
+				.resolveImage = target
+			};
 
-		appData.color[0] = 102.f / 255; appData.color[1] = 1; appData.color[2] = 51.f / 255; appData.color[3] = 1;
+			ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+			ListAttachmentInfo_createRefConst(&msaaColor, 1, &colors, NULL);
 
-		if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-			t, deviceRef, commandList, &appData, sizeof(appData)
-		))
-			TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF33FF66u);
+			Test_assert(t, "renderStartMsaa", CommandListRef_startRenderExt(
+				commandList, I32x2_zero, I32x2_create2(8, 8), &colors, NULL, &t->err
+			));
+
+			Test_assert(t, "viewportScissorMsaa", CommandListRef_setViewportAndScissor(
+				commandList, I32x2_zero, I32x2_zero, &t->err
+			));
+
+			Test_assert(t, "bindMsaa", CommandListRef_setGraphicsPipeline(commandList, msaaPipeline, &t->err));
+			Test_assert(t, "drawMsaa", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+
+			appData.color[0] = 102.f / 255; appData.color[1] = 1; appData.color[2] = 51.f / 255; appData.color[3] = 1;
+
+			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
+				t, deviceRef, commandList, &appData, sizeof(appData)
+			)) {
+				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF33FF66u);
+				++msaaRun;
+			}
+		}
+
+		//Both are rebuilt next iteration, and RefPtr_dec nulls them so the clean block below is still safe.
+
+		RefPtr_dec(&msaaPipeline);
+		RefPtr_dec(&msaaTarget);
 	}
+
+	Log_debugLnx(
+		"-- draw: %"PRIu32" MSAA sample counts resolved, %"PRIu32" not claimed by this adapter",
+		msaaRun, msaaSkipped
+	);
 
 clean:
 
@@ -920,6 +1179,12 @@ clean:
 	RefPtr_dec(&msaaPipeline);
 	RefPtr_dec(&depthPipeline);
 	RefPtr_dec(&vertexPipeline);
+	RefPtr_dec(&dualPipeline);
+	RefPtr_dec(&logicPipeline);
+	RefPtr_dec(&logicTarget);
+	RefPtr_dec(&mrtPipeline);
+	RefPtr_dec(&mrtTarget);
+	RefPtr_dec(&wirePipeline);
 	RefPtr_dec(&blendPipeline);
 	RefPtr_dec(&flatPipeline);
 	RefPtr_dec(&gpuArgs);
@@ -930,7 +1195,7 @@ clean:
 	RefPtr_dec(&msaaTarget);
 	RefPtr_dec(&target);
 
-	for(U64 i = 0; i < 6; ++i)
+	for(U64 i = 0; i < 10; ++i)
 		SHFile_free(&files[i], alloc);
 }
 
@@ -941,9 +1206,13 @@ clean:
 //Two rays start above the triangle's interior and two outside, so the readback distinguishes the closest
 // hit and miss shaders actually running from any default.
 
-void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef) {
+//The whole ray pipeline vehicle (scene, SBT, dispatch and readback) shared by the plain and the SER
+//variant, which differ only in which oiSH drives it: both trace the same 4 rays at the same triangle and
+//have to land on the same (1, 1, 0, 0).
 
-	Test_setModule(t, "Shaders/rays");
+static void TestShaders_raysWithFile(Test *t, GraphicsDeviceRef *deviceRef, const C8 *moduleName, const C8 *path) {
+
+	Test_setModule(t, moduleName);
 
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
@@ -961,7 +1230,7 @@ void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	SHFile file = (SHFile) { 0 };
 
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_rays.oiSH", &file)) {
+	if (!TestShaders_loadFile(t, path, &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping ray trace tests");
 		return;
 	}
@@ -1214,4 +1483,30 @@ clean:
 	}
 
 	RefPtr_dec(&ownInstanceRef);
+}
+
+void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	TestShaders_raysWithFile(t, deviceRef, "Shaders/rays", "//OxC3_gtest/test_shaders/test_rays.oiSH");
+
+	//The SER variant records the hit as a HitObject, hints the scheduler with MaybeReorderThread,
+	// then invokes the recorded shader explicitly.
+	//Reordering itself is unobservable by design,
+	// so what is checked is that the split path lands on exactly the same payloads as the plain TraceRay above.
+	//Running with the reorder hint in place is also the only "doesn't break" coverage RayReorderActual can
+	// get: a device that claims to actually reorder still has to produce identical results.
+	//An experimental claim is skipped: on Vulkan the NV device extension can't accept the EXT SPIR-V the
+	// shader stack emits, and on D3D12 the SM6.9 the shaders need is preview only.
+
+	const GraphicsDeviceCapabilities caps = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities;
+
+	if(!(caps.features & EGraphicsFeatures_RayReorder))
+		return;
+
+	if (caps.experimentalFeatures & EGraphicsFeatures_RayReorder) {
+		Test_print(t, "RayReorder claimed but experimental on this backend, skipping SER trace test");
+		return;
+	}
+
+	TestShaders_raysWithFile(t, deviceRef, "Shaders/raysSer", "//OxC3_gtest/test_shaders/test_rays_ser.oiSH");
 }
