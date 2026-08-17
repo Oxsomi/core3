@@ -53,7 +53,12 @@ namespace {
 		oxc::c::U64 *freed;
 	};
 
-	void Payload_free(void *ptr, const oxc::c::Allocator*) {
+	//Registered as freeInvoke rather than free, so its signature carries no C struct type.
+	//An oxc::c::Allocator parameter here would be a different type to the RefPtr_dec that calls it, which
+	// -fsanitize=function reports as a call through an incorrect function type (see ObjectFreeInvoke).
+	//This one doesn't need the allocator at all; a callback that did would cast it back.
+
+	void Payload_free(void *ptr, const void*) {
 		Payload *p = (Payload*) ptr;
 		if(p->freed)
 			++*p->freed;
@@ -199,14 +204,21 @@ extern "C" void Test_hppWrappers(oxc::c::Test *t) {
 	{
 		c::U64 freed = 0;
 
+		//free stays NULL and freeInvoke carries the callback, which is how a wrapper registers one.
+
 		const c::RefPtrType type = {
-			(c::TypeId) 0xC0FFEE, (c::U32) sizeof(Payload), &alloc, Payload_free
+			(c::TypeId) 0xC0FFEE, (c::U32) sizeof(Payload), &alloc, nullptr, Payload_free
 		};
 
 		{
 			RefPtr<Payload> p;
 			Test_assert(t, "RefPtr: default is null", !p && !p.valid());
-			Test_assert(t, "RefPtr: create", RefPtr<Payload>::create(&type, p, e_rr) && p);
+
+			//Returns instead of carrying on: everything below dereferences p, so a failed create used to take
+			// the whole binary down and the buffered output naming the failed assert went with it.
+
+			if(!Test_assert(t, "RefPtr: create", RefPtr<Payload>::create(&type, p, e_rr) && p))
+				return;
 
 			p->value = 7;
 			p->freed = &freed;

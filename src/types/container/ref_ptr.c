@@ -30,9 +30,13 @@ Bool RefPtr_create(const RefPtrType *type, RefPtr **result, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(!type || !RefPtrType_length(type) || !type->free || !type->alloc || !result)
+	//Either free or freeInvoke has to be there, since an object that frees neither way would leak.
+	//A wrapper from another language sets freeInvoke and leaves free NULL (see ObjectFreeInvoke).
+
+	if(!type || !RefPtrType_length(type) || (!type->free && !type->freeInvoke) || !type->alloc || !result)
 		retError(clean, Error_nullPointer(
-			!result ? 1 : 0, "RefPtr_create()::type, ->lengthAndAlignment, ->free, ->alloc and result are required"
+			!result ? 1 : 0,
+			"RefPtr_create()::type, ->lengthAndAlignment, ->alloc, one of ->free / ->freeInvoke, and result are required"
 		));
 
 	if(*result)
@@ -78,7 +82,14 @@ void RefPtr_dec(RefPtr **pptr) {
 
 	if(!AtomicI64_dec(&ptr->refCount)) {
 
-		ptr->refPtrType->free(RefPtr_data(ptr, void), ptr->refPtrType->alloc);
+		//freeInvoke first: a wrapper registers that one precisely because its own callback can't carry the
+		// Allocator type (see ObjectFreeInvoke).
+
+		if(ptr->refPtrType->freeInvoke)
+			ptr->refPtrType->freeInvoke(RefPtr_data(ptr, void), ptr->refPtrType->alloc);
+
+		else if(ptr->refPtrType->free)
+			ptr->refPtrType->free(RefPtr_data(ptr, void), ptr->refPtrType->alloc);
 
 		const RefPtrType *type = ptr->refPtrType;
 		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr) + RefPtrType_length(type));
