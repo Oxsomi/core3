@@ -152,7 +152,9 @@ namespace oxc {
 	void __hoGetAttributes([[vk::ext_reference]] HitObject h, [[vk::ext_reference]] Attr attributes);
 
 	#undef OXC_SER_OP
-
+)"
+//This header exceeds MSVC's single string-literal limit (C2026), so it's split into two adjacent raw strings (concatenated).
+R"(
 	//Public API
 
 	void HitObject_MakeNop(inout HitObject h) { __hoRecordEmpty(h); }
