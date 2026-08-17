@@ -97,14 +97,19 @@ D3D12_TEXTURE_ADDRESS_MODE mapDxAddressMode(ESamplerAddressMode addressMode) {
 	}
 }
 
+//Takes a count and not a ListDescriptor: the interface table's slot is
+//DescriptorTable_unsetDescriptorsImpl, which the Vulkan side already matched.
+//A pointer and a U64 arrive in the same register on x64, so this went unnoticed until
+//-fsanitize=function compared the two types at the call.
+
 Bool DX_WRAP_FUNC(DescriptorTable_unsetDescriptors)(
 	DescriptorTable *table,
 	U64 bindId,
 	U64 arrayId,
-	const ListDescriptor *darr,
+	U64 count,
 	Error *e_rr
 ) {
-	(void) table; (void) bindId; (void) arrayId; (void) darr; (void) e_rr;
+	(void) table; (void) bindId; (void) arrayId; (void) count; (void) e_rr;
 	return true;
 }
 

@@ -77,8 +77,10 @@ def sanitizerFlags(conanfile, disabledUBSanChecks, ubsanIgnorelist = None):
 		# Forward slashes even on Windows: the flag ends up inside a string in conan_toolchain.cmake, where a
 		# path like C:\Users\... is a CMake escape error ("Invalid character escape '\U'").
 		# clang takes either spelling.
-		# clang only, since gcc has no equivalent flag; it doesn't need one either, as the only file ignored so
-		# far is a WASAPI backend that exists on Windows alone and gcc never compiles it.
+		# clang only, since gcc has no equivalent flag.
+		# No dependency passes an ignorelist today: openal_soft was the only one, and it is no longer sanitized
+		# at all. Kept because it is the right shape for per-file noise in dxc or spirv_reflect later, but it is
+		# untested from here on, so re-verify the flag actually reaches the compiler before relying on it.
 
 		if ubsanIgnorelist and conanfile.settings.compiler == "clang":
 			ignorelistFlag = "-fsanitize-ignorelist=%s" % ubsanIgnorelist.replace("\\", "/")
