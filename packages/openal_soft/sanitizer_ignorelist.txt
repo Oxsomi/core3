@@ -1,0 +1,12 @@
+# UBSan ignorelist for the openal_soft build, passed with -fsanitize-ignorelist.
+#
+# alc/backends/wasapi.cpp takes members off a WAVEFORMATEXTENSIBLE that the mix format query can leave null,
+# which happens when there is no usable output device: exactly what CI runners and headless machines have, and
+# what makes the audio suite abort under UBSAN_OPTIONS=halt_on_error=1.
+#
+# It is openal's own UB rather than ours, so this ignores that one file instead of adding null to the
+# -fno-sanitize list, which would have switched the check off across the whole dependency.
+# See build/reports/third_party_findings.md for the upstream report this is waiting on.
+
+[null]
+src:*wasapi.cpp

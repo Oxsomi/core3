@@ -229,14 +229,20 @@ void *TextureRef_getImplExt(TextureRef *ref) {
 
 	//Avoid movement of SwapchainExt for example, by allowing a fixed reservation of images.
 
-	U64 img = tex->maxImages ? tex->maxImages : tex->images;
+	const GraphicsObjectSize imageSize = GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image;
+	const U8 reserved = UnifiedTexture_reservedImages(tex->images, tex->maxImages);
+
+	//Behind the last image ext block, rounded to a cache line so the backend's own struct starts aligned.
 
 	//TODO: subResource
-	return (UnifiedTextureImage*)(
-		(U8*)tex +
-		sizeof(*tex) +
-		(sizeof(UnifiedTextureImage) + GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image) * img
+	const U64 implExt = GraphicsObjectSize_alignUp(
+		(U64) (void*) (
+			UnifiedTexture_imageExtBase(tex, imageSize, reserved) + GraphicsObjectSize_stride(imageSize) * reserved
+		),
+		64
 	);
+
+	return (UnifiedTextureImage*) (void*) implExt;
 }
 
 UnifiedTextureImage TextureRef_getImage(TextureRef *ref, U32 subResource, U8 imageId) {
@@ -274,11 +280,16 @@ void *TextureRef_getImgExt(TextureRef *ref, U32 subResource, U8 imageId) {
 	if(subResource)                //TODO: subResource
 		return NULL;
 
+	//Reserved rather than images: a swapchain reserves maxImages worth of both arrays, so the ext region
+	// starts past the reservation and not past however many images are live right now.
+	//This used to disagree with TextureRef_getImplExt, which always reserved.
+
+	const GraphicsObjectSize imageSize = GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image;
+	const U8 reserved = UnifiedTexture_reservedImages(tex->images, tex->maxImages);
+
 	return (UnifiedTextureImage*) (
-		(U8*)tex +
-		sizeof(*tex) +
-		sizeof(UnifiedTextureImage) * tex->images +
-		GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image * imageId
+		UnifiedTexture_imageExtBase(tex, imageSize, reserved) +
+		GraphicsObjectSize_stride(imageSize) * imageId
 	);
 }
 

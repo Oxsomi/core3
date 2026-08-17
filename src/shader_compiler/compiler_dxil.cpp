@@ -229,6 +229,7 @@ extern "C" Bool Compiler_processDXIL(
 	IDxcBlobEncoding *finalShader{};
 	IDxcBlob *finalVersion{};
 	IDxcContainerBuilder *containerBuilder{};
+	IDxcContainerReflection *containerReflection{};
 	IDxcOperationResult *opResult{};
 	IDxcBlobEncoding *err{};
 
@@ -683,9 +684,45 @@ extern "C" Bool Compiler_processDXIL(
 		if(FAILED(containerBuilder->Load(finalShader)))
 			retError(clean, Error_invalidOperation(0, "Compiler_processDXIL() Couldn't turn into container"));
 	
-		containerBuilder->RemovePart(DXC_PART_PDB);
-		containerBuilder->RemovePart(DXC_PART_PDB_NAME);
-		containerBuilder->RemovePart(DXC_PART_REFLECTION_DATA);
+		//All three parts are optional, and asking to remove one the container doesn't have makes DXC throw
+		// DXC_E_MISSING_PART internally (DxcContainerBuilder::RemovePart).
+		//DXC catches that itself and turns it into an HRESULT we were ignoring anyway, so it read as harmless,
+		// but the throw is fatal under Windows ASan: the catch block faults while unwinding.
+		//The container is therefore asked what it actually holds first, and only those parts are removed.
+
+		static const U32 removableParts[] = { DXC_PART_PDB, DXC_PART_PDB_NAME, DXC_PART_REFLECTION_DATA };
+		U8 removablePartCount = (U8)(sizeof(removableParts) / sizeof(removableParts[0]));
+
+		Bool hasPart[sizeof(removableParts) / sizeof(removableParts[0])] = { false };
+
+		hr = DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&containerReflection));
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(2, "Compiler_processDXIL() IDxcContainerReflection couldn't be created"));
+
+		if(FAILED(containerReflection->Load(finalShader)))
+			retError(clean, Error_invalidOperation(0, "Compiler_processDXIL() Couldn't reflect container parts"));
+
+		U32 partCount = 0;
+
+		if(FAILED(containerReflection->GetPartCount(&partCount)))
+			retError(clean, Error_invalidOperation(0, "Compiler_processDXIL() Couldn't count container parts"));
+
+		for(U32 i = 0; i < partCount; ++i) {
+
+			U32 partKind = 0;
+
+			if(FAILED(containerReflection->GetPartKind(i, &partKind)))
+				continue;
+
+			for(U8 j = 0; j < removablePartCount; ++j)
+				if(partKind == removableParts[j])
+					hasPart[j] = true;
+		}
+
+		for(U8 j = 0; j < removablePartCount; ++j)
+			if(hasPart[j])
+				containerBuilder->RemovePart(removableParts[j]);
 
 		hr = containerBuilder->SerializeContainer(&opResult);
 
@@ -738,6 +775,9 @@ clean:
 
 	if(containerBuilder)
 		containerBuilder->Release();
+
+	if(containerReflection)
+		containerReflection->Release();
 
 	if(opResult)
 		opResult->Release();

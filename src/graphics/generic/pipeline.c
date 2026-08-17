@@ -41,7 +41,9 @@ void *Pipeline_infoOffset(Pipeline *pipeline) {
 	if(!pipeline || !pipeline->device)
 		return NULL;
 
-	return (U8*)(pipeline + 1) + GraphicsDeviceRef_getObjectSizes(pipeline->device)->pipeline;
+	//The info struct sits behind the backend's pipeline ext, so the ext's stride is what to skip.
+
+	return (U8*)(pipeline + 1) + GraphicsObjectSize_stride(GraphicsDeviceRef_getObjectSizes(pipeline->device)->pipeline);
 }
 
 void Pipeline_free(void *pipelineGeneric, const Allocator *alloc) {

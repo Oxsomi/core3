@@ -44,6 +44,16 @@
 
 TListImpl(GraphicsDeviceInfo);
 
+//Every one of these objects has a backend extension struct sitting directly behind it, so the RefPtr has to
+//account for that struct's alignment as well as the owner's; the owner being 64 byte aligned says nothing
+//about where the block behind it lands, and it's the block behind it that holds a SpinLock.
+//The stride rather than the plain size, so the block itself starts aligned too.
+
+#define OXC3_APPENDED_LEN(T, extSize) RefPtrType_pack(                  \
+	sizeof(T) + GraphicsObjectSize_stride(extSize),                     \
+	U64_max(alignof(T), GraphicsObjectSize_alignment(extSize))          \
+)
+
 const C8 *EGraphicsApi_name[EGraphicsApi_Count] = {
 	"Vulkan", "D3D12"
 };
@@ -191,7 +201,7 @@ RefPtrType GraphicsInstance_makeType(EGraphicsApi api, const Allocator *alloc) {
 
 	return (RefPtrType) {
 		.typeId = (TypeId) EGraphicsTypeId_GraphicsInstance,
-		.lengthAndAlignment = RefPtrType_pack(sizeof(GraphicsInstance) + sizes->instance, alignof(GraphicsInstance)),
+		.lengthAndAlignment = OXC3_APPENDED_LEN(GraphicsInstance, sizes->instance),
 		.alloc = alloc,
 		.free = GraphicsInstance_freeRefPtr
 	};
@@ -225,41 +235,54 @@ void CommandList_free(void *cmd, const Allocator *alloc);
 static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, const Allocator *alloc) {
 
 	const GraphicsObjectSizes *sizes = GraphicsInterface_getObjectSizes(api);
-	const U64 imageSize = sizes->image + sizeof(UnifiedTextureImage);
+
+	//These three reserve one image, so the appended size is asked for with that count; the accessors in
+	// texture.c derive their offsets from the same helper, which is the point of it existing.
+	//The alignment has to cover the backend struct too, not just the owner: the owner being 64 byte aligned
+	// says nothing about where the appended blocks land, and it's the appended block that holds the SpinLock.
+
+	const U64 imageSize = UnifiedTexture_appendedSize(sizes->image, 1);
+	const U64 imageAlignment = GraphicsObjectSize_alignment(sizes->image);
 
 	return (GraphicsObjectTypes) {
 
 		.device = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_GraphicsDevice,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(GraphicsDevice) + sizes->device, alignof(GraphicsDevice)),
+			.lengthAndAlignment = OXC3_APPENDED_LEN(GraphicsDevice, sizes->device),
 			.alloc = alloc,
 			.free = GraphicsDevice_free
 		},
 
 		.buffer = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DeviceBuffer,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(DeviceBuffer) + sizes->buffer, alignof(DeviceBuffer)),
+			.lengthAndAlignment = OXC3_APPENDED_LEN(DeviceBuffer, sizes->buffer),
 			.alloc = alloc,
 			.free = DeviceBuffer_free
 		},
 
 		.deviceTexture = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DeviceTexture,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(DeviceTexture) + imageSize, alignof(DeviceTexture)),
+			.lengthAndAlignment = RefPtrType_pack(
+				sizeof(DeviceTexture) + imageSize, U64_max(alignof(DeviceTexture), imageAlignment)
+			),
 			.alloc = alloc,
 			.free = DeviceTexture_free
 		},
 
 		.renderTexture = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_RenderTexture,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(RenderTexture) + imageSize, alignof(RenderTexture)),
+			.lengthAndAlignment = RefPtrType_pack(
+				sizeof(RenderTexture) + imageSize, U64_max(alignof(RenderTexture), imageAlignment)
+			),
 			.alloc = alloc,
 			.free = GraphicsDevice_freeRenderTexture
 		},
 
 		.depthStencil = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DepthStencil,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(DepthStencil) + imageSize, alignof(DepthStencil)),
+			.lengthAndAlignment = RefPtrType_pack(
+				sizeof(DepthStencil) + imageSize, U64_max(alignof(DepthStencil), imageAlignment)
+			),
 			.alloc = alloc,
 			.free = GraphicsDevice_freeDepthStencil
 		},
@@ -272,8 +295,18 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 			//Unfortunately we still have to allocate up to (48 + 16) * 2 = 128 bytes extra, not too bad though.
 
 			.typeId = (TypeId) EGraphicsTypeId_Swapchain,
+			//Reserves the full image count up front so its ext blocks never move when the swapchain resizes.
+			//Asked for as one reservation rather than imageSize * MAX, which would have counted the padding in
+			// front of the ext blocks once per image.
+
 			.lengthAndAlignment = RefPtrType_pack(
-				sizeof(Swapchain) + imageSize * SWAPCHAIN_MAX_IMAGES + sizes->swapchain, alignof(Swapchain)
+				sizeof(Swapchain) +
+				UnifiedTexture_appendedSize(sizes->image, SWAPCHAIN_MAX_IMAGES) +
+				GraphicsObjectSize_stride(sizes->swapchain),
+				U64_max(
+					U64_max(alignof(Swapchain), imageAlignment),
+					GraphicsObjectSize_alignment(sizes->swapchain)
+				)
 			),
 			.alloc = alloc,
 			.free = Swapchain_free
@@ -285,7 +318,7 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 
 		.pipelineCompute = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_Pipeline,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(Pipeline) + sizes->pipeline, alignof(Pipeline)),
+			.lengthAndAlignment = OXC3_APPENDED_LEN(Pipeline, sizes->pipeline),
 			.alloc = alloc,
 			.free = Pipeline_free
 		},
@@ -293,7 +326,11 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 		.pipelineGraphics = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_Pipeline,
 			.lengthAndAlignment = RefPtrType_pack(
-				sizeof(Pipeline) + sizes->pipeline + sizeof(PipelineGraphicsInfo), alignof(Pipeline)
+				sizeof(Pipeline) + GraphicsObjectSize_stride(sizes->pipeline) + sizeof(PipelineGraphicsInfo),
+				U64_max(
+					U64_max(alignof(Pipeline), alignof(PipelineGraphicsInfo)),
+					GraphicsObjectSize_alignment(sizes->pipeline)
+				)
 			),
 			.alloc = alloc,
 			.free = Pipeline_free
@@ -302,7 +339,11 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 		.pipelineRaytracing = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_Pipeline,
 			.lengthAndAlignment = RefPtrType_pack(
-				sizeof(Pipeline) + sizes->pipeline + sizeof(PipelineRaytracingInfo), alignof(Pipeline)
+				sizeof(Pipeline) + GraphicsObjectSize_stride(sizes->pipeline) + sizeof(PipelineRaytracingInfo),
+				U64_max(
+					U64_max(alignof(Pipeline), alignof(PipelineRaytracingInfo)),
+					GraphicsObjectSize_alignment(sizes->pipeline)
+				)
 			),
 			.alloc = alloc,
 			.free = Pipeline_free
@@ -310,49 +351,49 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 
 		.sampler = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_Sampler,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(Sampler) + sizes->sampler, alignof(Sampler)),
+			.lengthAndAlignment = OXC3_APPENDED_LEN(Sampler, sizes->sampler),
 			.alloc = alloc,
 			.free = Sampler_free
 		},
 
 		.blas = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_BLASExt,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(BLAS) + sizes->blas, alignof(BLAS)),
+			.lengthAndAlignment = OXC3_APPENDED_LEN(BLAS, sizes->blas),
 			.alloc = alloc,
 			.free = BLAS_free
 		},
 
 		.tlas = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_TLASExt,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(TLAS) + sizes->tlas, alignof(TLAS)),
+			.lengthAndAlignment = OXC3_APPENDED_LEN(TLAS, sizes->tlas),
 			.alloc = alloc,
 			.free = TLAS_free
 		},
 
 		.descriptorLayout = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DescriptorLayout,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(DescriptorLayout) + sizes->descriptorLayout, alignof(DescriptorLayout)),
+			.lengthAndAlignment = OXC3_APPENDED_LEN(DescriptorLayout, sizes->descriptorLayout),
 			.alloc = alloc,
 			.free = DescriptorLayout_free
 		},
 
 		.descriptorTable = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DescriptorTable,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(DescriptorTable) + sizes->descriptorTable, alignof(DescriptorTable)),
+			.lengthAndAlignment = OXC3_APPENDED_LEN(DescriptorTable, sizes->descriptorTable),
 			.alloc = alloc,
 			.free = DescriptorTable_free
 		},
 
 		.descriptorHeap = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_DescriptorHeap,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(DescriptorHeap) + sizes->descriptorHeap, alignof(DescriptorHeap)),
+			.lengthAndAlignment = OXC3_APPENDED_LEN(DescriptorHeap, sizes->descriptorHeap),
 			.alloc = alloc,
 			.free = DescriptorHeap_free
 		},
 
 		.pipelineLayout = (RefPtrType) {
 			.typeId = (TypeId) EGraphicsTypeId_PipelineLayout,
-			.lengthAndAlignment = RefPtrType_pack(sizeof(PipelineLayout) + sizes->pipelineLayout, alignof(PipelineLayout)),
+			.lengthAndAlignment = OXC3_APPENDED_LEN(PipelineLayout, sizes->pipelineLayout),
 			.alloc = alloc,
 			.free = PipelineLayout_free
 		},
@@ -402,7 +443,7 @@ Bool GraphicsInstance_create(
 		!type ||
 		!sizes ||
 		type->typeId != (TypeId) EGraphicsTypeId_GraphicsInstance ||
-		RefPtrType_length(type) != (U32)(sizeof(GraphicsInstance) + sizes->instance) ||
+		RefPtrType_length(type) != (U32)(sizeof(GraphicsInstance) + GraphicsObjectSize_stride(sizes->instance)) ||
 		!type->free ||
 		type->alloc != alloc
 	)

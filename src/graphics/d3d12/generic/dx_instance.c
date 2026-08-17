@@ -57,20 +57,36 @@ TListNamed(IDXGIAdapter4*, ListIDXGIAdapter4)
 TListNamedImpl(ListIDXGIAdapter4)
 
 GraphicsObjectSizes DxGraphicsObjectSizes = {
-	.blas = sizeof(DxBLAS),
-	.tlas = sizeof(DxTLAS),
-	.pipeline = sizeof(DxPipeline),
-	.sampler = 16,        //Doesn't exist
-	.buffer = sizeof(DxDeviceBuffer),
-	.image = sizeof(DxUnifiedTexture),
-	.swapchain = sizeof(DxSwapchain),
-	.device = sizeof(DxGraphicsDevice),
-	.instance = sizeof(DxGraphicsInstance),
-	.descriptorLayout = sizeof(DxDescriptorLayout),
-	.descriptorTable = sizeof(DxDescriptorTable),
-	.descriptorHeap = sizeof(DxDescriptorHeap),
-	.pipelineLayout = sizeof(ID3D12RootSignature) + 8
+	.blas = GraphicsObjectSize_create(DxBLAS),
+	.tlas = GraphicsObjectSize_create(DxTLAS),
+	.pipeline = GraphicsObjectSize_create(DxPipeline),
+	.sampler = GraphicsObjectSize_createRaw(16, 16),        //Doesn't exist
+	.buffer = GraphicsObjectSize_create(DxDeviceBuffer),
+	.image = GraphicsObjectSize_create(DxUnifiedTexture),
+	.swapchain = GraphicsObjectSize_create(DxSwapchain),
+	.device = GraphicsObjectSize_create(DxGraphicsDevice),
+	.instance = GraphicsObjectSize_create(DxGraphicsInstance),
+	.descriptorLayout = GraphicsObjectSize_create(DxDescriptorLayout),
+	.descriptorTable = GraphicsObjectSize_create(DxDescriptorTable),
+	.descriptorHeap = GraphicsObjectSize_create(DxDescriptorHeap),
+	.pipelineLayout = GraphicsObjectSize_createPadded(ID3D12RootSignature, 8)
 };
+
+//As on the Vulkan side: the packing has far more room than these need, and this keeps that a fact.
+
+static_assert(
+	sizeof(DxGraphicsDevice) < (1 << 24) && sizeof(DxGraphicsInstance) < (1 << 24) &&
+	sizeof(DxSwapchain) < (1 << 24) && alignof(DxUnifiedTexture) <= 255 && alignof(DxGraphicsDevice) <= 255,
+	"A D3D12 extension struct outgrew the size or alignment GraphicsObjectSize can pack"
+);
+
+//As on the Vulkan side: TextureRef_getImplExt rounds to a cache line because it can't name the struct that
+//follows, so this pins down that a cache line is still enough.
+
+static_assert(
+	alignof(DxSwapchain) <= 64 && alignof(DxUnifiedTexture) <= 64,
+	"A D3D12 texture extension struct needs more than the cache line TextureRef_getImplExt rounds to"
+);
 
 #ifndef GRAPHICS_API_DYNAMIC
 	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api) {

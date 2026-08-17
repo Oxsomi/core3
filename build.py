@@ -84,6 +84,15 @@ def main():
 		print("-- Error: -mode is required on non-Windows platforms", file=sys.stderr)
 		sys.exit(1)
 
+	# MSVC's own sanitizers are deliberately unused here (see windows_clang_sanitizers.yml), and asking for
+	# them anyway doesn't fail cleanly: cl ignores -fsanitize=undefined with a D9002 warning and carries on
+	# unsanitized, while its ASan pulls in a runtime the clang flags don't match, which surfaces as unresolved
+	# __imp___asan_* symbols deep inside a dependency build rather than as anything pointing back here.
+
+	if args.compiler == "msvc" and (args.asan == "True" or args.ubsan == "True"):
+		print("-- Error: -asan/-ubsan require -compiler clang, MSVC's sanitizers aren't used here", file=sys.stderr)
+		sys.exit(1)
+
 	# Decide which modes to build deps for
 
 	# A CMake cache is tied to the compiler that configured it, so a non-default toolchain gets its own

@@ -66,9 +66,12 @@ typedef RefPtr DescriptorTableRef;
 typedef RefPtr DescriptorHeapRef;
 typedef RefPtr PipelineLayoutRef;
 
+//GraphicsObjectSize and its helpers live in graphics_types.h, since texture.h needs them and is included
+//from underneath this header.
+
 typedef struct GraphicsObjectSizes {
-	U32 blas, tlas, pipeline, sampler, buffer, image, swapchain, device, instance;
-	U32 descriptorLayout, descriptorTable, descriptorHeap, pipelineLayout;
+	GraphicsObjectSize blas, tlas, pipeline, sampler, buffer, image, swapchain, device, instance;
+	GraphicsObjectSize descriptorLayout, descriptorTable, descriptorHeap, pipelineLayout;
 } GraphicsObjectSizes;
 
 //Dynamic linking will load the dlls to generate the function tables.

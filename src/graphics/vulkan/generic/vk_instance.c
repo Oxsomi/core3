@@ -57,20 +57,37 @@ static const C8 *VkGraphicsInstance_loaderName() {
 }
 
 GraphicsObjectSizes VkGraphicsObjectSizes = {
-	.blas = sizeof(VkBLAS),
-	.tlas = sizeof(VkTLAS),
-	.pipeline = sizeof(VkPipeline) + 8,             //Align to 16
-	.sampler = sizeof(VkSampler) + 8,               //Align to 16
-	.buffer = sizeof(VkDeviceBuffer),
-	.image = sizeof(VkUnifiedTexture),
-	.swapchain = sizeof(VkSwapchain),
-	.device = sizeof(VkGraphicsDevice),
-	.instance = sizeof(VkGraphicsInstance),
-	.descriptorLayout = sizeof(VkDescriptorLayout),
-	.descriptorTable = sizeof(VkDescriptorTable),
-	.descriptorHeap = sizeof(VkDescriptorHeap),
-	.pipelineLayout = sizeof(VkPipelineLayout) + 8  //Align to 16
+	.blas = GraphicsObjectSize_create(VkBLAS),
+	.tlas = GraphicsObjectSize_create(VkTLAS),
+	.pipeline = GraphicsObjectSize_createPadded(VkPipeline, 8),             //Align to 16
+	.sampler = GraphicsObjectSize_createPadded(VkSampler, 8),               //Align to 16
+	.buffer = GraphicsObjectSize_create(VkDeviceBuffer),
+	.image = GraphicsObjectSize_create(VkUnifiedTexture),
+	.swapchain = GraphicsObjectSize_create(VkSwapchain),
+	.device = GraphicsObjectSize_create(VkGraphicsDevice),
+	.instance = GraphicsObjectSize_create(VkGraphicsInstance),
+	.descriptorLayout = GraphicsObjectSize_create(VkDescriptorLayout),
+	.descriptorTable = GraphicsObjectSize_create(VkDescriptorTable),
+	.descriptorHeap = GraphicsObjectSize_create(VkDescriptorHeap),
+	.pipelineLayout = GraphicsObjectSize_createPadded(VkPipelineLayout, 8)  //Align to 16
 };
+
+//The packing above gives the size 24 bits and the alignment a byte, which is far more than any of these need;
+//this is here so that stops being an assumption.
+
+static_assert(
+	sizeof(VkGraphicsDevice) < (1 << 24) && sizeof(VkGraphicsInstance) < (1 << 24) &&
+	sizeof(VkSwapchain) < (1 << 24) && alignof(VkUnifiedTexture) <= 255 && alignof(VkGraphicsDevice) <= 255,
+	"A Vulkan extension struct outgrew the size or alignment GraphicsObjectSize can pack"
+);
+
+//TextureRef_getImplExt hands back a void*, so it rounds to a cache line rather than to the alignment of a
+//struct it can't name. That covers everything today; this is here so it stops being an assumption.
+
+static_assert(
+	alignof(VkSwapchain) <= 64 && alignof(VkUnifiedTexture) <= 64,
+	"A Vulkan texture extension struct needs more than the cache line TextureRef_getImplExt rounds to"
+);
 
 #ifndef GRAPHICS_API_DYNAMIC
 	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api) {

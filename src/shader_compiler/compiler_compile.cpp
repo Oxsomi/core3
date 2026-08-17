@@ -146,7 +146,15 @@ Bool Compiler_compile(
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wconversion", alloc, e_rr));
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wdouble-promotion", alloc, e_rr));
 
-		if(settings->debug || requiresLink) {
+		//-Zi is here for the linked DXIL path, which needs the extra metadata to survive linking.
+		//On SPIRV it means something else entirely: with no -fspv-debug= to narrow it down, DXC turns on EVERY
+		// debug category (see "By default turn on all categories" in HLSLOptions.cpp), debugInfoSource
+		// included, which makes the emitter read each OpSource file off disk to embed its text.
+		//Every include of ours is virtual, so each of those reads fails and DXC throws an exception it catches
+		// itself, once per include, and a release SPIRV binary ends up carrying the whole source for nothing.
+		//So SPIRV only gets it when debug info was actually asked for, where line 168 also narrows it down.
+
+		if(settings->debug || (requiresLink && settings->outputType != ESHBinaryType_SPIRV)) {
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zi", alloc, e_rr));
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qembed_debug", alloc, e_rr));
 		}

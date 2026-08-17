@@ -1250,6 +1250,13 @@ static void TestShaders_raysWithFile(Test *t, GraphicsDeviceRef *deviceRef, cons
 	GraphicsInstanceRef *ownInstanceRef = NULL;
 	GraphicsDeviceRef *ownDeviceRef = NULL;
 
+	//Declared out here with the ref it belongs to, not in the branch that fills it in.
+	//RefPtr_create keeps a POINTER to the type rather than a copy (see ref_ptr.h), so a type scoped to that
+	// branch is already gone by the time the instance is released at the end of this function, which is a
+	// stack use after scope that only ASan was ever going to notice.
+
+	RefPtrType instanceType = (RefPtrType) { 0 };
+
 	if (suiteInstance->api == EGraphicsApi_Direct3D12 && gpuValidationOn) {
 
 		Test_print(t, "D3D12 GPU based validation breaks raytracing state objects, tracing on a dedicated device");
@@ -1259,7 +1266,7 @@ static void TestShaders_raysWithFile(Test *t, GraphicsDeviceRef *deviceRef, cons
 			.version = 1
 		};
 
-		RefPtrType instanceType = GraphicsInstance_makeType(suiteInstance->api, alloc);
+		instanceType = GraphicsInstance_makeType(suiteInstance->api, alloc);
 		ListGraphicsDeviceInfo deviceInfos = (ListGraphicsDeviceInfo) { 0 };
 
 		if(!Test_assert(t, "createOwnInstance", GraphicsInstance_create(

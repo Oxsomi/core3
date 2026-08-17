@@ -31,14 +31,24 @@ class openal_soft(ConanFile):
 	#  function  would only catch this dependency's own callback-type mismatches, which are not ours to fix.
 	#  enum      flag enums and sentinels are legal by design but are not individual enumerators.
 
+	#  null is NOT disabled here: wasapi.cpp is the only file that trips it, so it goes through the ignorelist
+	#  next to this recipe instead, which leaves the check doing its job in the rest of openal.
+
 	def _sanitizerFlags(self):
-		return self.python_requires["oxc3_sanitizers"].module.sanitizerFlags(self, "vptr,function,enum")
+		return self.python_requires["oxc3_sanitizers"].module.sanitizerFlags(
+			self, "vptr,function,enum", os.path.join(self.recipe_folder, "sanitizer_ignorelist.txt")
+		)
 
 	def _sanitizerLinkFlags(self):
 		return self.python_requires["oxc3_sanitizers"].module.sanitizerLinkFlags(self)
 
 
 	exports_sources = [ "include/*" ]
+
+	#Exported rather than exports_sources: _sanitizerFlags reads it from recipe_folder at generate time, so it
+	#has to sit next to the conanfile in the cache rather than in the source tree.
+
+	exports = [ "sanitizer_ignorelist.txt" ]
 
 	def layout(self):
 		cmake_layout(self)

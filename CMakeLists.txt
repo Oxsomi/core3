@@ -254,6 +254,11 @@ if(MSVC)
 			list(APPEND requiredSanitizerLibs
 				"clang_rt.asan_dynamic-${sanitizerArch}.lib"
 				"clang_rt.asan_dynamic_runtime_thunk-${sanitizerArch}.lib"
+
+				# The DLL and not just its import library, since it's needed to RUN anything we build; it is
+				# copied next to the executables below.
+
+				"clang_rt.asan_dynamic-${sanitizerArch}.dll"
 			)
 		endif()
 
@@ -283,6 +288,19 @@ if(MSVC)
 				"clang_rt.asan_dynamic-${sanitizerArch}.lib"
 				"clang_rt.asan_dynamic_runtime_thunk-${sanitizerArch}.lib"
 			)
+
+			# Linking the import library is only half of it: the dynamic ASan runtime has to be findable when
+			# anything we built actually RUNS.
+			# The build runs tools of its own (the packaging steps in add_virtual_files) and ctest runs the test
+			# executables, and the loader looks next to the exe while knowing nothing about the toolchain's
+			# lib/windows, so every one of them dies at load with
+			# "clang_rt.asan_dynamic-<arch>.dll was not found".
+			# A custom build step reports that as nothing but an exit code (0xC0000135), which says nothing
+			# about a DLL, so this is worth being explicit about rather than rediscovering.
+			# Adding the directory here reuses the copy every executable already does for its dependencies,
+			# see apply_dependencies in cmake/oxc3.cmake.
+
+			list(APPEND CONAN_RUNTIME_LIB_DIRS "${clangRtDir}")
 		endif()
 
 		# Trap rather than diagnose: UBSan's reporting runtime is the flakiest part of its Windows support,
