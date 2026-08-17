@@ -68,7 +68,26 @@ def sanitizerFlags(conanfile, disabledUBSanChecks, ubsanIgnorelist = None):
 
 	if conanfile.options.enableUBSAN:
 
-		flags += [ "-fsanitize=undefined", "-fno-sanitize=%s" % disabledUBSanChecks ]
+		# gcc does not take every check name clang does, and an unknown one is a hard error rather than a
+		# no-op ("unrecognized argument to -fno-sanitize= option").
+		# function is the one that bites: clang checks indirect call types in C, gcc only ever implemented it
+		# for C++, so naming it to gcc breaks the build for a check that was never going to run there anyway.
+		# Filtering rather than erroring, since disabling a check gcc does not have is a no-op by definition.
+
+		clangOnlyChecks = ( "function", )
+
+		checks = [ c for c in disabledUBSanChecks.split(",") if c ]
+
+		if conanfile.settings.compiler == "gcc":
+			checks = [ c for c in checks if c not in clangOnlyChecks ]
+
+		flags += [ "-fsanitize=undefined" ]
+
+		# An empty -fno-sanitize= is itself an error, so the flag only goes in when something survived.
+
+		if checks:
+			flags += [ "-fno-sanitize=%s" % ",".join(checks) ]
+
 		flags += [ "/Oy-" ] if msvcStyle else [ "-fno-omit-frame-pointer" ]
 
 		# clang-cl doesn't take the driver spelling of this one, so it goes through its /clang: escape hatch;

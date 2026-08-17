@@ -303,6 +303,22 @@ if(MSVC)
 			list(APPEND CONAN_RUNTIME_LIB_DIRS "${clangRtDir}")
 		endif()
 
+		# Identical COMDAT folding has to be off for a sanitized link, or ASan reports false positives on
+		# perfectly legal reads.
+		# ASan gives every global a trailing redzone, and Release folds identical globals across translation
+		# units, so one global's redzone ends up sitting on another global's data.
+		# The report that found this had THREE globals at one address, DXC's L"\0" and L"" plus our own "" from
+		# compiler_helper_jobs.c, all of them nothing but NUL bytes and therefore foldable.
+		# Reading the empty string then looks like reading a redzone, and ASan names the nearest preceding
+		# global instead, which is why it read as a 6491 byte overrun of an unrelated 26 KB literal.
+		# Debug never reproduced it because folding is a Release optimization, and DXC was identical in both.
+		# ODR detection is likely the same story, since it works through a per-global indicator symbol that
+		# folding can alias, so detect_odr_violation may be worth re-enabling once this is in.
+
+		if(EnableASAN OR EnableUBSAN)
+			add_link_options("-opt:noicf")
+		endif()
+
 		# Trap rather than diagnose: UBSan's reporting runtime is the flakiest part of its Windows support,
 		# and a trap is enough here since OxC3 installs a crash handler that prints a stacktrace anyway.
 		# vptr is off because it needs RTTI across the whole program, which the prebuilt dependencies
