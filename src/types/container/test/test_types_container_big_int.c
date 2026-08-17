@@ -65,29 +65,36 @@ void Test_bigIntCmp(Test *t) {
 
 	Test_setModule(t, "BigInt_cmp");
 
-	const U128 compares[] = {
-		U128_createU64x2(0x0000000000000000, 0x0000000000000000),
-		U128_createU64x2(0x0000000000000001, 0x0000000000000000),
-		U128_createU64x2(0x000000007FFFFFFF, 0x0000000000000000),
-		U128_createU64x2(0x0000000080000000, 0x0000000000000000),
-		U128_createU64x2(0x0000000080000001, 0x0000000000000000),
-		U128_createU64x2(0x00000000FFFFFFFF, 0x0000000000000000),
-		U128_createU64x2(0x00000001FFFFFFFF, 0x0000000000000000),
-		U128_createU64x2(0x00000001FFFFFFFF, 0x0000000000000001),
-		U128_createU64x2(0x00000001FFFFFFFF, 0x00000000FFFFFFFF),
-		U128_createU64x2(0x00000001FFFFFFFF, 0x00000001FFFFFFFF),
-		U128_createU64x2(0x00000001FFFFFFFF, 0xFFFFFFFFFFFFFFFF)
+	//Ascending values as BigInt limbs, least significant first, which is the order BigInt itself uses.
+	//These were U128s handed to BigInt_createRefConst through a (const U64*) cast, but on every non-Windows
+	// target U128 is __uint128_t, and reading that object through a U64 lvalue is an aliasing violation.
+	//At -O0 nothing acted on it; a Release build read stale limbs instead, so every comparison that had to
+	// fall through to the low limb returned the wrong answer.
+	//The limbs are the actual subject here, so there is nothing to convert in the first place.
+
+	static const U64 compares[][2] = {
+		{ 0x0000000000000000, 0x0000000000000000 },
+		{ 0x0000000000000001, 0x0000000000000000 },
+		{ 0x000000007FFFFFFF, 0x0000000000000000 },
+		{ 0x0000000080000000, 0x0000000000000000 },
+		{ 0x0000000080000001, 0x0000000000000000 },
+		{ 0x00000000FFFFFFFF, 0x0000000000000000 },
+		{ 0x00000001FFFFFFFF, 0x0000000000000000 },
+		{ 0x00000001FFFFFFFF, 0x0000000000000001 },
+		{ 0x00000001FFFFFFFF, 0x00000000FFFFFFFF },
+		{ 0x00000001FFFFFFFF, 0x00000001FFFFFFFF },
+		{ 0x00000001FFFFFFFF, 0xFFFFFFFFFFFFFFFF }
 	};
 
 	for (U64 i = 1; i < sizeof(compares) / sizeof(compares[0]); ++i) {
 		BigInt aBig = { 0 }, bBig = { 0 };
 
-		if (!BigInt_createRefConst((const U64*)&compares[i - 1], 2, &aBig, &t->err)) {
+		if (!BigInt_createRefConst(compares[i - 1], 2, &aBig, &t->err)) {
 			Test_assert(t, "BigInt_createRefConst", false);
 			continue;
 		}
 
-		if (!BigInt_createRefConst((const U64*)&compares[i], 2, &bBig, &t->err)) {
+		if (!BigInt_createRefConst(compares[i], 2, &bBig, &t->err)) {
 			Test_assert(t, "BigInt_createRefConst", false);
 			continue;
 		}

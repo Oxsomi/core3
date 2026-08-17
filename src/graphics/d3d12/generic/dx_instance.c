@@ -589,7 +589,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		EGraphicsDeviceType type = EGraphicsDeviceType_CPU;
 
-		const U64 luid = *(const U64*) &desc.AdapterLuid;
+		//Copied rather than read through a U64 lvalue: LUID is a struct of two 32-bit fields, and punning it
+		// is the same aliasing violation that made a Release build read stale limbs in the BigInt test.
+
+		U64 luid = 0;
+		Buffer_memcpy(Buffer_createRef(&luid, sizeof(luid)), Buffer_createRefConst(&desc.AdapterLuid, sizeof(luid)));
 
 		//Create temporary device.
 		//Unfortunately, there's no other way to query features it seems.

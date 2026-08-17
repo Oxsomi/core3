@@ -38,11 +38,12 @@ namespace oxc { namespace c {
 //Bind the wrapper to the C ListU32 (declared inside oxc::c by list.hpp), at global scope.
 OXC_BIND_LIST(ListU32)
 
-//Descending comparator for sortCustom; extern "C" so it matches the C CompareFunction pointer type.
-extern "C" oxc::c::ECompareResult cmpU32Desc(const void *a, const void *b) {
-	const oxc::c::U32 x = *(const oxc::c::U32*) a, y = *(const oxc::c::U32*) b;
-	return x > y ? oxc::c::ECompareResult_Lt : (x < y ? oxc::c::ECompareResult_Gt : oxc::c::ECompareResult_Eq);
-}
+//Descending comparator for sortCustom, defined in test_types_container_hpp_callbacks.c rather than here.
+//A definition in this TU would return oxc::c::ECompareResult, since the C headers are included inside that
+// namespace above, and the C sort that calls it expects the plain C enum.
+//The two are the same type to the linker but not to -fsanitize=function, which reads that as a call through
+// an incorrect function type; declaring it here and defining it in C keeps both sides honest.
+extern "C" oxc::c::ECompareResult cmpU32Desc(const void *a, const void *b);
 
 extern "C" void Test_hpp(oxc::c::Test *t) {
 
