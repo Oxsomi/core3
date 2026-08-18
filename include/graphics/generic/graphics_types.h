@@ -57,7 +57,11 @@ typedef enum EGraphicsTypeId {
 	EGraphicsTypeId_BLASExt                      = makeObjectId(0x1C34, 15, 0),
 	EGraphicsTypeId_TLASExt                      = makeObjectId(0x1C34, 16, 0),
 
-	EGraphicsTypeId_Count                        = 17
+	//Requires EGraphicsFeatures_RayMicromapOpacity
+
+	EGraphicsTypeId_OpacityMicromapExt           = makeObjectId(0x1C34, 17, 0),
+
+	EGraphicsTypeId_Count                        = 18
 
 } EGraphicsTypeId;
 

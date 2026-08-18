@@ -33,96 +33,7 @@
 #include "types/container/ref_ptr.h"
 #include "types/base/constants.h"
 
-F32x4 TLASTransformSRT_getScale(const TLASTransformSRT *srt) {
-	return !srt ? F32x4_zero() : F32x4_create3(srt->sx, srt->sy, srt->sz);
-}
-
-Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value) {
-
-	if(!srt)
-		return false;
-
-	srt->sx = F32x4_x(value);
-	srt->sy = F32x4_y(value);
-	srt->sz = F32x4_z(value);
-	return true;
-}
-
-F32x4 TLASTransformSRT_getPivot(const TLASTransformSRT *srt) {
-	return !srt ? F32x4_zero() : F32x4_create3(srt->pvx, srt->pvy, srt->pvz);
-}
-
-Bool TLASTransformSRT_setPivot(TLASTransformSRT *srt, F32x4 value) {
-
-	if(!srt)
-		return false;
-
-	srt->pvx = F32x4_x(value);
-	srt->pvy = F32x4_y(value);
-	srt->pvz = F32x4_z(value);
-	return true;
-}
-
-F32x4 TLASTransformSRT_getTranslate(const TLASTransformSRT *srt) {
-	return !srt ? F32x4_zero() : F32x4_create3(srt->tx, srt->ty, srt->tz);
-}
-
-Bool TLASTransformSRT_setTranslate(TLASTransformSRT *srt, F32x4 value) {
-
-	if(!srt)
-		return false;
-
-	srt->tx = F32x4_x(value);
-	srt->ty = F32x4_y(value);
-	srt->tz = F32x4_z(value);
-	return true;
-}
-
-QuatF32 TLASTransformSRT_getQuat(const TLASTransformSRT *srt) {
-	return !srt ? QuatF32_identity() : QuatF32_create(srt->q0, srt->q1, srt->q2, srt->q3);
-}
-
-Bool TLASTransformSRT_setQuat(TLASTransformSRT *srt, QuatF32 value) {
-
-	if(!srt)
-		return false;
-
-	srt->q0 = QuatF32_x(value);
-	srt->q1 = QuatF32_y(value);
-	srt->q2 = QuatF32_z(value);
-	srt->q3 = QuatF32_w(value);
-	return true;
-}
-
-F32x4 TLASTransformSRT_getShearing(const TLASTransformSRT *srt) {
-	return !srt ? F32x4_zero() : F32x4_create3(srt->a, srt->b, srt->c);
-}
-
-Bool TLASTransformSRT_setShearing(TLASTransformSRT *srt, F32x4 value) {
-
-	if(!srt)
-		return false;
-
-	srt->a = F32x4_x(value);
-	srt->b = F32x4_y(value);
-	srt->c = F32x4_z(value);
-	return true;
-}
-
-TListImpl(TLASInstanceMotion);
-TListImpl(TLASInstanceStatic);
-
-TLASInstanceData *TLASInstanceMotion_getDataInternal(TLASInstanceMotion *mot) {
-	switch (mot->type) {
-		default:                            return &mot->staticInst.data;
-		case ETLASInstanceType_Matrix:      return &mot->matrixInst.data;
-		case ETLASInstanceType_SRT:         return &mot->srtInst.data;
-	}
-}
-
-TLASInstanceData TLASInstanceMotion_getData(const TLASInstanceMotion *mot) {
-	return *TLASInstanceMotion_getDataInternal((TLASInstanceMotion*)mot);
-}
+TListImpl(TLASInstance);
 
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result) {
 
@@ -130,22 +41,11 @@ Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData *
 		!result ||
 		tlas->useDeviceMemory ||
 		tlas->base.asConstructionType != ETLASConstructionType_Instances ||
-		i >= tlas->cpuInstancesMotion.length
+		i >= tlas->cpuInstances.length
 	)
 		return false;
 
-	if(tlas->base.isMotionBlurExt) {
-
-		TLASInstanceMotion *motion = &tlas->cpuInstancesMotion.ptrNonConst[i];
-
-		if(motion->type >= ETLASInstanceType_Count)
-			return false;
-
-		*result = TLASInstanceMotion_getDataInternal(motion);
-	}
-
-	else *result = &tlas->cpuInstancesStatic.ptrNonConst[i].data;
-
+	*result = &tlas->cpuInstances.ptrNonConst[i].data;
 	return true;
 }
 
@@ -187,16 +87,13 @@ void TLAS_free(void *tlasGeneric, const Allocator *alloc) {
 
 		else {
 
-			for(U64 i = 0; i < tlas->cpuInstancesStatic.length; ++i) {
+			for(U64 i = 0; i < tlas->cpuInstances.length; ++i) {
 				TLASInstanceData *result = NULL;
 				TLAS_getInstanceDataCpuInternal(tlas, i, &result);
 				RefPtr_dec(&result->blasCpu);
 			}
 
-			if(tlas->base.isMotionBlurExt)
-				ListTLASInstanceMotion_free(&tlas->cpuInstancesMotion, alloc);
-
-			else ListTLASInstanceStatic_free(&tlas->cpuInstancesStatic, alloc);
+			ListTLASInstance_free(&tlas->cpuInstances, alloc);
 		}
 	}
 
@@ -281,11 +178,6 @@ Bool GraphicsDeviceRef_createTLAS(
 			0, "GraphicsDeviceRef_createTLAS() is unsupported without raytracing support"
 		));
 
-	if(tlas->base.isMotionBlurExt && !(feat & EGraphicsFeatures_RayMotionBlur))
-		retError(clean, Error_unsupportedOperation(
-			0, "GraphicsDeviceRef_createTLAS() uses motion blur, but it's unsupported"
-		));
-
 	//RTAS_validateDeviceBuffer may normalize len, so validate a local copy; it's committed to the new TLAS below
 
 	DeviceData deviceData = (DeviceData) { 0 };
@@ -299,7 +191,7 @@ Bool GraphicsDeviceRef_createTLAS(
 			deviceData = tlas->deviceData;
 			gotoIfError3(clean, RTAS_validateDeviceBuffer(&deviceData, e_rr));
 
-			U64 stride = tlas->base.isMotionBlurExt ? sizeof(TLASInstanceMotion) : sizeof(TLASInstanceStatic);
+			U64 stride = sizeof(TLASInstance);
 
 			if(deviceData.len < stride || deviceData.len % stride)
 				retError(clean, Error_invalidOperation(9, "GraphicsDeviceRef_createTLAS() invalid AS buffer size"));
@@ -307,7 +199,7 @@ Bool GraphicsDeviceRef_createTLAS(
 
 		else {
 
-			U64 length = tlas->cpuInstancesMotion.length;        //instancesMotion and instancesStatic are at the same loc
+			U64 length = tlas->cpuInstances.length;        //instancesMotion and instancesStatic are at the same loc
 
 			if(!length)
 				retError(clean, Error_invalidOperation(10, "GraphicsDeviceRef_createTLAS() is missing instance list"));
@@ -401,29 +293,19 @@ Bool GraphicsDeviceRef_createTLAS(
 
 			//Copy buffers
 
-			if (tlas->base.isMotionBlurExt) {
-				tlasPtr->cpuInstancesMotion = (ListTLASInstanceMotion) { 0 };
-				gotoIfError3(clean, ListTLASInstanceMotion_createCopy(
-					tlas->cpuInstancesMotion,
+			{
+				tlasPtr->cpuInstances = (ListTLASInstance) { 0 };
+				gotoIfError3(clean, ListTLASInstance_createCopy(
+					tlas->cpuInstances,
 					alloc,
-					&tlasPtr->cpuInstancesMotion,
-					e_rr
-				));
-			}
-
-			else {
-				tlasPtr->cpuInstancesStatic = (ListTLASInstanceStatic) { 0 };
-				gotoIfError3(clean, ListTLASInstanceStatic_createCopy(
-					tlas->cpuInstancesStatic,
-					alloc,
-					&tlasPtr->cpuInstancesStatic,
+					&tlasPtr->cpuInstances,
 					e_rr
 				));
 			}
 
 			//Add refs to BLASes
 
-			U64 length = tlas->cpuInstancesMotion.length;        //instancesMotion and instancesStatic are at the same loc
+			U64 length = tlas->cpuInstances.length;        //instancesMotion and instancesStatic are at the same loc
 
 			Bool invalidData = false;
 
@@ -500,7 +382,7 @@ Bool GraphicsDeviceRef_createTLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	TLASRef *parent,                    //If specified, indicates refit
-	const ListTLASInstanceStatic *instances,
+	const ListTLASInstance *instances,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
 	const CharString *name,
@@ -518,34 +400,7 @@ Bool GraphicsDeviceRef_createTLASExt(
 	};
 
 	if(instances)
-		tlasInfo.cpuInstancesStatic = *instances;
-
-	return GraphicsDeviceRef_createTLAS(dev, &tlasInfo, bindlessDescriptorTable, name, tlas, e_rr);
-}
-
-Bool GraphicsDeviceRef_createTLASMotionExt(
-	GraphicsDeviceRef *dev,
-	ERTASBuildFlags buildFlags,
-	TLASRef *parent,
-	const ListTLASInstanceMotion *instances,
-	Bool disallowBindlessDescriptor,
-	DescriptorTableRef *bindlessDescriptorTable,
-	const CharString *name,
-	TLASRef **tlas,
-	Error *e_rr
-) {
-
-	TLAS tlasInfo = (TLAS) {
-		.base = (RTAS) {
-			.asConstructionType = (U8) ETLASConstructionType_Instances,
-			.flags = (U8) buildFlags,
-			.parent = parent
-		},
-		.disallowBindlessDescriptor = disallowBindlessDescriptor
-	};
-
-	if(instances)
-		tlasInfo.cpuInstancesMotion = *instances;
+		tlasInfo.cpuInstances = *instances;
 
 	return GraphicsDeviceRef_createTLAS(dev, &tlasInfo, bindlessDescriptorTable, name, tlas, e_rr);
 }
@@ -553,7 +408,6 @@ Bool GraphicsDeviceRef_createTLASMotionExt(
 Bool GraphicsDeviceRef_createTLASDeviceExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	Bool isMotionBlurExt,
 	TLASRef *parent,
 	const DeviceData *instancesDevice,
 	Bool disallowBindlessDescriptor,
@@ -567,7 +421,6 @@ Bool GraphicsDeviceRef_createTLASDeviceExt(
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
 			.flags = (U8) buildFlags,
-			.isMotionBlurExt = isMotionBlurExt,
 			.parent = parent
 		},
 		.useDeviceMemory = true,

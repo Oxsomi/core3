@@ -772,7 +772,7 @@ Bool CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas,
 		TLAS *tlas = TLASRef_ptr(rtas);
 
 		if(!tlas->useDeviceMemory)
-			for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
+			for (U64 j = 0; j < tlas->cpuInstances.length; ++j) {
 
 				TLASInstanceData dat = (TLASInstanceData) { 0 };
 				TLAS_getInstanceDataCpu(tlas, j, &dat);

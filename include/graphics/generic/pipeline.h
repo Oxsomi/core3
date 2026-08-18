@@ -78,7 +78,8 @@ typedef enum EPipelineRaytracingFlags {
 	EPipelineRaytracingFlags_SkipTriangles            = 1 << 0,
 	EPipelineRaytracingFlags_SkipAABBs                = 1 << 1,
 
-	EPipelineRaytracingFlags_AllowMotionBlurExt       = 1 << 2,        //Requires feature RayMotionBlur
+	//Reserved, free to reuse.
+	EPipelineRaytracingFlags_Reserved2                = 1 << 2,
 
 	//Disallowing null shaders in stages.
 	//This is extra validation, but might also signal to the API that access to all stages are safe.
@@ -88,7 +89,13 @@ typedef enum EPipelineRaytracingFlags {
 	EPipelineRaytracingFlags_NoNullMiss               = 1 << 5,
 	EPipelineRaytracingFlags_NoNullIntersection       = 1 << 6,
 
-	EPipelineRaytracingFlags_Count                    = 7,
+	//Requires feature RayMicromapOpacity.
+	//Opt in rather than implicit: a pipeline that allows opacity micromaps may traverse differently, so both
+	// APIs make you say so at pipeline creation and ignore any micromap otherwise.
+
+	EPipelineRaytracingFlags_AllowOpacityMicromapExt  = 1 << 7,
+
+	EPipelineRaytracingFlags_Count                    = 8,
 
 	EPipelineRaytracingFlags_Default                  = EPipelineRaytracingFlags_SkipAABBs,
 

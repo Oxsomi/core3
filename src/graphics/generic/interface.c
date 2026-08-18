@@ -23,6 +23,7 @@
 #ifdef GRAPHICS_API_DYNAMIC
 	#include "graphics/generic/blas.h"
 	#include "graphics/generic/tlas.h"
+	#include "graphics/generic/opacity_micromap.h"
 	#include "graphics/generic/pipeline.h"
 	#include "graphics/generic/sampler.h"
 	#include "graphics/generic/swapchain.h"
@@ -136,6 +137,20 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		((GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(GraphicsDeviceRef_ptr(device)->instance)->api]).func)
 
 	//RTAS
+
+	void OpacityMicromap_freeExt(OpacityMicromap *micromap) {
+		WrapperFunction(micromap->base.device, opacityMicromapFree)(micromap);
+	}
+
+	Bool OpacityMicromap_initExt(OpacityMicromap *micromap, Error *e_rr) {
+		return WrapperFunction(micromap->base.device, opacityMicromapInit)(micromap, e_rr);
+	}
+
+	Bool OpacityMicromapRef_flushExt(
+		void *commandBuffer, GraphicsDeviceRef *deviceRef, OpacityMicromapRef *pending, Error *e_rr
+	) {
+		return WrapperFunction(deviceRef, opacityMicromapFlush)(commandBuffer, deviceRef, pending, e_rr);
+	}
 
 	void BLAS_freeExt(BLAS *blas) { WrapperFunction(blas->base.device, blasFree)(blas); }
 	Bool BLAS_initExt(BLAS *blas, Error *e_rr) { return WrapperFunction(blas->base.device, blasInit)(blas, e_rr); }

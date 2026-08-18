@@ -86,6 +86,14 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR
 	};
 
+	//Chained off the triangle data below, so it has to outlive that scope rather than live inside it.
+
+	VkAccelerationStructureTrianglesOpacityMicromapEXT ommTriangles = (
+		VkAccelerationStructureTrianglesOpacityMicromapEXT
+	) {
+		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT
+	};
+
 	if(blas->base.flagsExt & EBLASFlag_DisableAnyHit)
 		geometry.flags |= VK_GEOMETRY_OPAQUE_BIT_KHR;
 
@@ -117,6 +125,22 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		if (blas->indexFormatId) {
 			tri->indexType = blas->indexFormatId == ETextureFormatId_R32u ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
 			tri->indexData = getVkLocation(blas->indexBuffer, 0);
+		}
+
+		//Opacity micromaps, stage 1.
+		//The micromap handle stays null on purpose: that is what tells the driver the index buffer holds only
+		// special indices (fully opaque or fully transparent) rather than referencing a built micromap.
+		//usageCounts stays empty for the same reason, since there are no micromap entries to describe.
+
+		if (blas->ommIndexFormatId) {
+
+			ommTriangles.indexType =
+				blas->ommIndexFormatId == ETextureFormatId_R32u ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
+
+			ommTriangles.indexBuffer = getVkLocation(blas->ommIndexBuffer, 0);
+			ommTriangles.indexStride = blas->ommIndexFormatId == ETextureFormatId_R32u ? 4 : 2;
+
+			tri->pNext = &ommTriangles;
 		}
 	}
 

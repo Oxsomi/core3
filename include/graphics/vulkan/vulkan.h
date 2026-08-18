@@ -108,6 +108,17 @@ typedef struct VkBLAS {
 	U64 padding;
 } VkBLAS;
 
+TListNamed(VkMicromapUsageEXT, ListVkMicromapUsageEXT);
+
+//The usages have to be re-supplied to every BLAS that links this micromap, so the API shaped copy is built
+// once at create and kept, rather than rebuilt per BLAS.
+
+typedef struct VkOpacityMicromap {
+	VkMicromapBuildInfoEXT build;
+	VkMicromapEXT micromap;
+	ListVkMicromapUsageEXT usages;
+} VkOpacityMicromap;
+
 typedef struct VkTLAS {
 	VkAccelerationStructureGeometryKHR geometry;
 	VkAccelerationStructureBuildGeometryInfoKHR geometries;

@@ -46,7 +46,11 @@ typedef enum EOptExtensions {
 	EOptExtensions_RayPipeline,
 	EOptExtensions_RayQuery,
 	EOptExtensions_RayAcceleration,
-	EOptExtensions_RayMotionBlur,
+
+	//Reserved, free to reuse.
+	//The slot must stay: it indexes the positional extension name table in vk_instance.c.
+
+	EOptExtensions_Reserved12,
 	EOptExtensions_RayReorder,
 	EOptExtensions_MeshShader,
 	EOptExtensions_VariableRateShading,

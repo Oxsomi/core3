@@ -354,7 +354,8 @@ Bool CommandListRef_transitionRTAS(
 		if(rtas.tempScratchBuffer)
 			gotoIfError3(clean, CommandListRef_transitionBuffer(
 				commandList, rtas.tempScratchBuffer, (BufferRange) { 0 },
-				ETransitionType_ShaderWrite, EPipelineStage_RTASBuild, e_rr));
+				ETransitionType_ShaderWrite, EPipelineStage_RTASBuild, e_rr
+			));
 
 		if (rtas.parent) {
 
@@ -390,24 +391,22 @@ Bool CommandListRef_transitionRTAS(
 				));
 			}
 
-			else {
-				gotoIfError3(clean, CommandListRef_transitionBuffer(
+			else gotoIfError3(clean, CommandListRef_transitionBuffer(
 				commandList,
 				tlas->deviceData.buffer,
 				(BufferRange) {
 					.startRange = tlas->deviceData.offset,
 					.endRange = tlas->deviceData.offset + tlas->deviceData.len
 				},
-				ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr));
-			}
+				ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+			));
 		}
 
 		else {
 
 			BLAS *blas = BLASRef_ptr(rtasPtr);
 
-			if(blas->base.asConstructionType == EBLASConstructionType_Procedural)
-			{
+			if(blas->base.asConstructionType == EBLASConstructionType_Procedural) {
 				gotoIfError3(clean, CommandListRef_transitionBuffer(
 					commandList,
 					blas->aabbBuffer.buffer,
@@ -415,7 +414,8 @@ Bool CommandListRef_transitionRTAS(
 						.startRange = blas->aabbBuffer.offset + blas->aabbOffset,
 						.endRange = blas->aabbBuffer.offset + blas->aabbBuffer.len
 					},
-					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr));
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+				));
 			}
 
 			else {
@@ -427,16 +427,34 @@ Bool CommandListRef_transitionRTAS(
 						.startRange = blas->indexBuffer.offset,
 						.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
 					},
-					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr));
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+				));
+
+				//The end of the POSITION range, not the index range; this used to read indexBuffer, which gave an
+				// unindexed BLAS an empty range and an indexed one a range belonging to a different buffer.
 
 				gotoIfError3(clean, CommandListRef_transitionBuffer(
 					commandList,
 					blas->positionBuffer.buffer,
 					(BufferRange) {
 						.startRange = blas->positionBuffer.offset + blas->positionOffset,
-						.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
+						.endRange = blas->positionBuffer.offset + blas->positionBuffer.len
 					},
-					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr));
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+				));
+
+				//The build reads the opacity micromap indices too, so they need the same barrier.
+				//Unconditional like the index buffer above, which is also absent on an unindexed BLAS.
+
+				gotoIfError3(clean, CommandListRef_transitionBuffer(
+					commandList,
+					blas->ommIndexBuffer.buffer,
+					(BufferRange) {
+						.startRange = blas->ommIndexBuffer.offset,
+						.endRange = blas->ommIndexBuffer.offset + blas->ommIndexBuffer.len
+					},
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+				));
 			}
 		}
 	}
@@ -579,7 +597,7 @@ Bool CommandListRef_startScope(
 			TLAS *tlas = TLASRef_ptr(res);
 
 			if(!tlas->useDeviceMemory)
-				for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
+				for (U64 j = 0; j < tlas->cpuInstances.length; ++j) {
 
 					TLASInstanceData dat = (TLASInstanceData) { 0 };
 					TLAS_getInstanceDataCpu(tlas, j, &dat);

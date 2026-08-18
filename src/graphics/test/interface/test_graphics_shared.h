@@ -32,7 +32,6 @@
 
 void Test_graphicsFormats(Test *t);
 void Test_bindlessDescriptorPacking(Test *t);
-void Test_tlasTransformSRT(Test *t);
 void Test_descriptorPacking(Test *t);
 void Test_textureRange(Test *t);
 void Test_graphicsDefaultBindlessLayout(Test *t);

@@ -342,7 +342,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
-		case C8x2('R', 'a'):    //RayQuery, RayMicromapOpacity, RayMotionBlur, RayReorder
+		case C8x2('R', 'a'):    //RayQuery, RayMicromapOpacity, RayReorder
 
 			if(stageNameLen == 8 && Buffer_readU64(buf, 0, NULL, NULL) == C8x8('R', 'a', 'y', 'Q', 'u', 'e', 'r', 'y'))
 				return ESHExtension_RayQuery;
@@ -356,13 +356,6 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL, NULL) == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
 						)
 							return ESHExtension_RayMicromapOpacity;
-
-						break;
-
-					case C8x8('y', 'M', 'o', 't', 'i', 'o', 'n', 'B'):        //RayMotionBlur
-
-						if(stageNameLen == 13 && Buffer_readU32(buf, 10, NULL, NULL) == C8x4('B', 'l', 'u', 'r'))
-							return ESHExtension_RayMotionBlur;
 
 						break;
 

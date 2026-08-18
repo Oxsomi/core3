@@ -56,7 +56,14 @@ typedef enum ERTASBuildFlags {
 	ERTASBuildFlags_Count                      = 7,
 
 	ERTASBuildFlags_DefaultTLAS                = ERTASBuildFlags_FastBuild,
-	ERTASBuildFlags_DefaultBLAS                = ERTASBuildFlags_FastTrace | ERTASBuildFlags_AllowCompaction
+	ERTASBuildFlags_DefaultBLAS                = ERTASBuildFlags_FastTrace | ERTASBuildFlags_AllowCompaction,
+
+	//Every flag an opacity micromap build accepts.
+	//Micromaps have no update mode at all (VkBuildMicromapModeEXT only has BUILD), so AllowUpdate and IsUpdate
+	// are errors rather than no-ops, and there is no micromap counterpart to MinimizeMemory.
+
+	ERTASBuildFlags_SupportedOpacityMicromapExt =
+		ERTASBuildFlags_FastTrace | ERTASBuildFlags_FastBuild | ERTASBuildFlags_AllowCompaction
 
 } ERTASBuildFlags;
 
@@ -65,7 +72,7 @@ typedef struct RTAS {
 	GraphicsDeviceRef *device;
 
 	U8 padding0[2];
-	Bool isMotionBlurExt;                      //If active, this will make a motion blur AS
+	Bool padding2;
 	Bool isCompleted;                          //If this is active, we know the RTAS is already done
 
 	U8 padding1;

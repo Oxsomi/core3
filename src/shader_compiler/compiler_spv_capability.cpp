@@ -51,10 +51,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			ext = ESHExtension_RayQuery;
 			break;
 
-		case SpvCapabilityRayTracingMotionBlurNV:
-			ext = ESHExtension_RayMotionBlur;
-			break;
-
 		//SPV_EXT_shader_invocation_reorder (ShaderInvocationReorderEXT) is what DXC emits for dx::HitObject SER.
 		case SpvCapabilityShaderInvocationReorderEXT:
 			ext = ESHExtension_RayReorder;
@@ -491,6 +487,10 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 
 		//NV SER is unsupported; OxC3 maps the EXT form (SPV_EXT_shader_invocation_reorder) instead.
 		case SpvCapabilityShaderInvocationReorderNV:
+
+		//Motion blur was removed 2026-08-18: DXR has no equivalent and RTXMG dropped it, so a shader asking
+		// for it can no longer be represented in oiSH.
+		case SpvCapabilityRayTracingMotionBlurNV:
 
 			retError(clean, Error_invalidState(
 				2, "spvMapCapabilityToESHExtension() SPIRV contained capability that isn't supported in oiSH"

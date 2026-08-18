@@ -122,10 +122,28 @@ typedef union DxPipeline {
 } DxPipeline;
 
 typedef struct DxBLAS {
+
 	D3D12_RAYTRACING_GEOMETRY_DESC geometry;
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
+
+	//OmmTriangles holds POINTERS to these two rather than the structs themselves, so both have to outlive the
+	// geometry desc and therefore live here rather than on the stack at build time.
+	//Only used when the geometry type is OMM_TRIANGLES; the plain triangle path writes geometry.Triangles.
+
+	D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC ommTriangleData;
+	D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC ommLinkage;
+
 	U32 primitives, padding[3];
+
 } DxBLAS;
+
+TListNamed(D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY, ListDxOMMHistogram);
+
+typedef struct DxOpacityMicromap {
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
+	D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC array;
+	ListDxOMMHistogram histogram;
+} DxOpacityMicromap;
 
 typedef struct DxTLAS {
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;

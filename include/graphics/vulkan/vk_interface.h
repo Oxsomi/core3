@@ -32,6 +32,13 @@
 	Bool VkBLAS_init(BLAS *blas, Error *e_rr);
 	Bool VkBLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr);
 
+	void  VkOpacityMicromap_free(OpacityMicromap *micromap);
+	Bool VkOpacityMicromap_init(OpacityMicromap *micromap, Error *e_rr);
+
+	Bool VkOpacityMicromapRef_flush(
+		void *commandBuffer, GraphicsDeviceRef *deviceRef, OpacityMicromapRef *pending, Error *e_rr
+	);
+
 	void  VkTLAS_free(TLAS *tlas);
 	Bool VkTLAS_init(TLAS *tlas, Error *e_rr);
 	Bool VkTLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending, Error *e_rr);

@@ -52,7 +52,8 @@ typedef enum ESHExtension {
 	ESHExtension_RayQuery                    = 1 << 8,
 	ESHExtension_RayMicromapOpacity          = 1 << 9,
 	ESHExtension_RayTriPosition              = 1 << 10,       //SM6.10 tri vertex position fetch (RayQuery + ray-pipeline)
-	ESHExtension_RayMotionBlur               = 1 << 11,
+	//Reserved, free to reuse.
+	ESHExtension_Reserved11                  = 1 << 11,
 	ESHExtension_RayReorder                  = 1 << 12,
 
 	ESHExtension_Multiview                   = 1 << 13,
@@ -112,7 +113,6 @@ typedef enum ESHExtension {
 		ESHExtension_RayMicromapOpacity |
 		ESHExtension_RayQuery |
 		ESHExtension_RayTriPosition |
-		ESHExtension_RayMotionBlur |
 		ESHExtension_RayReorder |
 		ESHExtension_AtomicF32 |
 		ESHExtension_AtomicF64 |
@@ -148,8 +148,7 @@ typedef enum ESHExtension {
 
 	ESHExtension_NoDxilCompile =                              //SPIRV-only to compile: no DXIL intrinsic exists
 		ESHExtension_AtomicF32 |
-		ESHExtension_AtomicF64 |
-		ESHExtension_RayMotionBlur,
+		ESHExtension_AtomicF64,
 
 	ESHExtension_NoSpirvCompile =                             //DXIL-only to compile: no SPIR-V intrinsic or inline op
 		ESHExtension_MeshTaskTexDeriv,

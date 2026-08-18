@@ -184,7 +184,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 		maxAttributeSize = U8_max(maxAttributeSize, entry->intersectionSize);
 	}
 
-	Bool anyMotionBlurExt = info->flags & EPipelineRaytracingFlags_AllowMotionBlurExt;
+	Bool anyOpacityMicromapExt = info->flags & EPipelineRaytracingFlags_AllowOpacityMicromapExt;
 
 	if((((U64)groups->length + tmpStages.length) >> 32) || ((tmpStages.length) >> 32))
 		retError(clean, Error_outOfBounds(
@@ -304,9 +304,10 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			1, 0, "GraphicsDeviceRef_createPipelineRaytracing() can't be called if RayPipeline isn't supported"
 		));
 
-	if(anyMotionBlurExt && !(dev->info.capabilities.features & EGraphicsFeatures_RayMotionBlur))
+	if(anyOpacityMicromapExt && !(dev->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity))
 		retError(clean, Error_invalidParameter(
-			1, 0, "GraphicsDeviceRef_createPipelineRaytracing() can't enable motion blur if the feature isn't supported"
+			1, 0,
+			"GraphicsDeviceRef_createPipelineRaytracing() can't allow opacity micromaps if the feature isn't supported"
 		));
 
 	if(layout && layout->refPtrType->typeId != (TypeId) EGraphicsTypeId_PipelineLayout)

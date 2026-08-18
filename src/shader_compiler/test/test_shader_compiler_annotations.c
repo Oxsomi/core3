@@ -81,7 +81,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		//Skip bits a compute annotation can't set (tested elsewhere / not annotation-settable)
 		switch (1 << i) {
 
-			case ESHExtension_RayMotionBlur:        //CPU-side only
+			case ESHExtension_Reserved11:           //Reserved slot, no annotation keyword
 			case ESHExtension_Bindless:             //Derived from the binary, not annotation-settable
 			case ESHExtension_UnboundArraySize:
 			case ESHExtension_RayReorder:           //Requires a raygen stage

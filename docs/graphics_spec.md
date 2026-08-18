@@ -75,7 +75,6 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_ray_tracing_pipeline as RaytracingPipeline
   - VK_KHR_ray_query as RayQuery
   - VK_KHR_acceleration_structure && (RaytracingPipeline || RaytracingQuery) as Raytracing
-  - VK_NV_ray_tracing_motion_blur as RayMotionBlur
   - VK_NV_ray_tracing_invocation_reorder (.rayTracingInvocationReorder) as RayReorder; if .rayTracingInvocationReorderReorderingHint is also set, RayReorderActual (features2) - the device actually reorders rather than exposing a no-op API
   - VK_KHR_ray_tracing_position_fetch as RayTriPosition (covers both the RayQuery and ray-pipeline shader forms)
   - VK_NV_cluster_acceleration_structure (.clusterAccelerationStructure) as RayClusterAS (features2; mega geometry cluster BLAS/CLAS)
@@ -224,9 +223,6 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
   - shaderGroupHandleSize should be 32.
 - shaderGroupBaseAlignment should be 32 or 64.
   - rayTraversalPrimitiveCulling and rayTracingPipelineTraceRaysIndirect should be enabled.
-
-- Motion blur:
-  - Both indirect and normal rays are allowed to be traced if RayIndirect is on. Otherwise RayIndirect has to be turned off.
 
 #### Mesh shaders
 

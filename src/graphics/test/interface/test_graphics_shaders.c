@@ -1341,7 +1341,7 @@ static void TestShaders_raysWithFile(Test *t, GraphicsDeviceRef *deviceRef, cons
 	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(deviceRef, &blasInfo, &name, &blas, &t->err)))
 		goto clean;
 
-	TLASInstanceStatic instance = (TLASInstanceStatic) {
+	TLASInstance instance = (TLASInstance) {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
 		.data = (TLASInstanceData) {
 			.instanceId24_mask8 = 0xFFu << 24,
@@ -1350,8 +1350,8 @@ static void TestShaders_raysWithFile(Test *t, GraphicsDeviceRef *deviceRef, cons
 		}
 	};
 
-	ListTLASInstanceStatic instances = (ListTLASInstanceStatic) { 0 };
-	ListTLASInstanceStatic_createRefConst(&instance, 1, &instances, NULL);
+	ListTLASInstance instances = (ListTLASInstance) { 0 };
+	ListTLASInstance_createRefConst(&instance, 1, &instances, NULL);
 
 	name = CharString_createRefCStrConst("Ray trace TLAS");
 

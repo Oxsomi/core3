@@ -45,5 +45,6 @@ EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
 	EGraphicsTypeId_DescriptorHeap,
 
 	EGraphicsTypeId_BLASExt,
-	EGraphicsTypeId_TLASExt
+	EGraphicsTypeId_TLASExt,
+	EGraphicsTypeId_OpacityMicromapExt
 };

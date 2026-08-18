@@ -51,6 +51,7 @@ void BLAS_free(void *blasGeneric, const Allocator *alloc) {
 	else {
 		RefPtr_dec(&blas->indexBuffer.buffer);
 		RefPtr_dec(&blas->positionBuffer.buffer);
+		RefPtr_dec(&blas->ommIndexBuffer.buffer);
 	}
 
 	RefPtr_dec(&blas->base.device);
@@ -106,11 +107,6 @@ Bool GraphicsDeviceRef_createBLAS(
 			0, "GraphicsDeviceRef_createBLAS() is unsupported without raytracing support"
 		));
 
-	if(blas->base.isMotionBlurExt && !(feat & EGraphicsFeatures_RayMotionBlur))
-		retError(clean, Error_unsupportedOperation(
-			1, "GraphicsDeviceRef_createBLAS() uses motion blur, but it's unsupported"
-		));
-
 	//Without position fetch support the flag would be silently invalid on the API side, and the failure would
 	// surface at trace time rather than here where the mistake was made.
 
@@ -119,12 +115,26 @@ Bool GraphicsDeviceRef_createBLAS(
 			1, "GraphicsDeviceRef_createBLAS() uses AllowDataAccess, but position fetch is unsupported"
 		));
 
+	//Same reasoning for opacity micromaps: an unsupported OMM index buffer would either be ignored or fail
+	// deep inside the build, rather than at the create call that asked for it.
+	//The construction type is only meaningful for geometry, so the field is read behind that check.
+
+	if(
+		blas->base.asConstructionType == EBLASConstructionType_Geometry &&
+		blas->ommIndexFormatId &&
+		!(feat & EGraphicsFeatures_RayMicromapOpacity)
+	)
+		retError(clean, Error_unsupportedOperation(
+			1, "GraphicsDeviceRef_createBLAS() uses an OMM index buffer, but opacity micromaps are unsupported"
+		));
+
 	//RTAS_validateDeviceBuffer may normalize len, so validate local copies;
 	//they're committed to the new BLAS below
 
 	DeviceData positionBuffer = (DeviceData) { 0 };
 	DeviceData indexBuffer = (DeviceData) { 0 };
 	DeviceData aabbBuffer = (DeviceData) { 0 };
+	DeviceData ommIndexBuffer = (DeviceData) { 0 };
 
 	//Validate geometry BLAS
 
@@ -217,6 +227,57 @@ Bool GraphicsDeviceRef_createBLAS(
 			default:
 				retError(clean, Error_unsupportedOperation(2, "GraphicsDeviceRef_createBLAS()::indexFormat must be R32u or R16u"));
 		}
+
+		//Validate opacity micromaps (stage 1, special indices only)
+
+		const ETextureFormatId ommIndexFormat = blas->ommIndexFormatId;
+		ommIndexBuffer = blas->ommIndexBuffer;
+
+		if (ommIndexFormat == ETextureFormatId_Undefined) {
+
+			if(ommIndexBuffer.buffer)
+				retError(clean, Error_unsupportedOperation(
+					1, "GraphicsDeviceRef_createBLAS()::ommIndexBuffer should be NULL if ommIndexFormat is Undefined"
+				));
+		}
+
+		else {
+
+			//An OMM index is per triangle, so without triangle indices there is nothing to index against.
+
+			if(indexFormat == ETextureFormatId_Undefined)
+				retError(clean, Error_unsupportedOperation(
+					1, "GraphicsDeviceRef_createBLAS()::ommIndexFormat requires an indexed BLAS"
+				));
+
+			if(ommIndexFormat != ETextureFormatId_R16u && ommIndexFormat != ETextureFormatId_R32u)
+				retError(clean, Error_unsupportedOperation(
+					2, "GraphicsDeviceRef_createBLAS()::ommIndexFormat must be R32u or R16u"
+				));
+
+			//Validated before the length checks below, because RTAS_validateDeviceBuffer normalizes a len of 0
+			// to "rest of the buffer"; checking lengths first would reject that spelling instead of resolving it.
+
+			gotoIfError3(clean, RTAS_validateDeviceBuffer(&ommIndexBuffer, e_rr));
+
+			const U8 ommIndexStride = ommIndexFormat == ETextureFormatId_R32u ? 4 : 2;
+
+			if(!ommIndexBuffer.buffer || (ommIndexBuffer.len & (ommIndexStride - 1)))
+				retError(clean, Error_unsupportedOperation(
+					1,
+					"GraphicsDeviceRef_createBLAS()::ommIndexBuffer should be multiple of ommIndexFormat and not NULL"
+				));
+
+			//One OMM index per triangle, and a triangle is three vertex indices.
+
+			const U8 indexStride = indexFormat == ETextureFormatId_R32u ? 4 : 2;
+			const U64 triangles = indexBuffer.len / indexStride / 3;
+
+			if(ommIndexBuffer.len / ommIndexStride != triangles)
+				retError(clean, Error_unsupportedOperation(
+					1, "GraphicsDeviceRef_createBLAS()::ommIndexBuffer needs exactly one index per triangle"
+				));
+		}
 	}
 
 	//Validate AABBs
@@ -302,6 +363,17 @@ Bool GraphicsDeviceRef_createBLAS(
 
 		gotoIfError3(clean, RefPtr_inc(positionBuffer.buffer));
 		blasPtr->positionBuffer = positionBuffer;
+
+		//Optional like the index buffer, so the same NULL guard applies.
+		//Committing the validated local rather than leaving the struct copy in place is what carries the
+		// normalized length (a len of 0 means "rest of the buffer") into the object.
+
+		blasPtr->ommIndexBuffer = (DeviceData) { 0 };
+
+		if(ommIndexBuffer.buffer)
+			RefPtr_inc(ommIndexBuffer.buffer);
+
+		blasPtr->ommIndexBuffer = ommIndexBuffer;
 	}
 
 	if(name)
@@ -315,6 +387,55 @@ clean:
 		RefPtr_dec(blasRef);
 
 	return s_uccess;
+}
+
+//The element width of an OMM index format, 0 for a format that carries no OMM.
+//Kept local because the two legal formats are validated at create time; anything else has no width to report.
+
+static U8 EOMMIndex_stride(ETextureFormatId ommIndexFormat) {
+
+	switch (ommIndexFormat) {
+		case ETextureFormatId_R16u:    return 2;
+		case ETextureFormatId_R32u:    return 4;
+		default:                       return 0;
+	}
+}
+
+U32 EOMMSpecialIndex_pack(EOMMSpecialIndex specialIndex, ETextureFormatId ommIndexFormat) {
+
+	//Both APIs define the special indices as negative signed values but compare them against the UNSIGNED
+	// element, so the stored value is the two's complement truncated to that element's width.
+	//Masking rather than casting through I16/I32 keeps the truncation explicit and width driven.
+
+	const U8 stride = EOMMIndex_stride(ommIndexFormat);
+
+	if(!stride)
+		return 0;
+
+	const U32 raw = (U32)(I32) specialIndex;
+	return stride == 2 ? (raw & U16_MAX) : raw;
+}
+
+U32 EOMMIndex_max(ETextureFormatId ommIndexFormat) {
+
+	//Four special values sit at the top of the range, so the last usable real index is four below the maximum.
+
+	const U8 stride = EOMMIndex_stride(ommIndexFormat);
+
+	if(!stride)
+		return 0;
+
+	return (stride == 2 ? U16_MAX : U32_MAX) - 4;
+}
+
+Bool EOMMIndex_isSpecial(U32 raw, ETextureFormatId ommIndexFormat) {
+
+	const U8 stride = EOMMIndex_stride(ommIndexFormat);
+
+	if(!stride)
+		return false;
+
+	return raw > EOMMIndex_max(ommIndexFormat) && raw <= (stride == 2 ? U16_MAX : U32_MAX);
 }
 
 BLASCreateInfo BLASCreateInfo_indexed(
@@ -362,6 +483,37 @@ BLASCreateInfo BLASCreateInfo_unindexed(
 	);
 }
 
+//Special index only OMM: the caller supplies one index per triangle and no micromap object exists yet.
+
+BLASCreateInfo BLASCreateInfo_indexedWithOmmIndicesExt(
+	ERTASBuildFlags buildFlags,
+	EBLASFlag blasFlags,
+	ETextureFormatId positionFormat,
+	U16 positionOffset,
+	U16 positionBufferStride,
+	DeviceData positionBuffer,
+	ETextureFormatId indexFormat,
+	DeviceData indexBuffer,
+	ETextureFormatId ommIndexFormat,
+	DeviceData ommIndexBuffer
+) {
+
+	BLASCreateInfo info = BLASCreateInfo_indexed(
+		buildFlags,
+		blasFlags,
+		positionFormat,
+		positionOffset,
+		positionBufferStride,
+		positionBuffer,
+		indexFormat,
+		indexBuffer
+	);
+
+	info.ommIndexFormat = ommIndexFormat;
+	info.ommIndexBuffer = ommIndexBuffer;
+	return info;
+}
+
 Bool GraphicsDeviceRef_createBLASExt(
 	GraphicsDeviceRef *dev,
 	const BLASCreateInfo *info,
@@ -387,7 +539,9 @@ Bool GraphicsDeviceRef_createBLASExt(
 		.positionBufferStride = info->positionBufferStride,
 		.positionOffset = info->positionOffset,
 		.indexBuffer = info->indexBuffer,
-		.positionBuffer = info->positionBuffer
+		.positionBuffer = info->positionBuffer,
+		.ommIndexFormatId = (U8) info->ommIndexFormat,
+		.ommIndexBuffer = info->ommIndexBuffer
 	};
 
 	gotoIfError3(clean, GraphicsDeviceRef_createBLAS(dev, &blasInfo, name, blas, e_rr));

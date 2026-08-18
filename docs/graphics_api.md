@@ -81,7 +81,7 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 
 - ```c
   Bool getPreferredDevice(
-  	GraphicsDeviceCapabilities requiredCapabilities,
+  	const GraphicsDeviceCapabilities *requiredCapabilities,
   	U64 vendorMask,
   	U64 deviceTypeMask,
   	GraphicsDeviceInfo *deviceInfo,
@@ -138,7 +138,7 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 
 #### Capabilities
 
-- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayMotionBlur, RayReorder, RayTriPosition, RayValidation, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend, Workgraphs, SwapchainCompute, CoopVec, CoopMat, CoopFP8, CoopVecTraining.
+- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayReorder, RayTriPosition, RayValidation, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend, Workgraphs, SwapchainCompute, CoopVec, CoopMat, CoopFP8, CoopVecTraining.
 
 - experimentalFeatures: the subset of `features` that is experimental/preview on this device+build (not final; may change or be removed across SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled best-effort via the preview Agility SDK + D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions so this stays empty. Check it if you want to opt into preview features knowingly.
   - RayValidation: extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot.
@@ -225,9 +225,9 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
 
 - ```c
   Bool submitCommands(
-  	ListCommandListRef commandLists,
-  	ListSwapchainRef swapchains,
-  	Buffer appData,
+  	const ListCommandListRef *commandLists,
+  	const ListSwapchainRef *swapchains,
+  	const Buffer *appData,
   	F32 deltaTime,		//< 0 = auto calculate time and deltaTime
   	F32 time,
   	Error *e_rr
@@ -274,6 +274,7 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   	const SHFile *shaderBinary,
   	const CharString *name,			//Temporary name for debugging
   	U32 entryId,					//Identifier from getFirstShaderEntry
+  	const CharString *entryName,	//Optional: SPIRV entrypoint to use
   	EPipelineFlags flags,
   	PipelineLayoutRef *layout,		//NULL = default bindless pipeline layout
   	PipelineRef **pipeline,
@@ -360,32 +361,45 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   ```
 
 - ```c
-  Bool createBLASExt(
-  	ERTASBuildFlags buildFlags,
-  	EBLASFlag blasFlags,
-  	ETextureFormatId positionFormat,	//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
-  	U16 positionOffset,					//Offset into first position for first vertex
-  	ETextureFormatId indexFormat,		//R16u, R32u, Undefined
-  	U16 positionBufferStride,			//<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
-  	DeviceData positionBuffer,			//Required
-  	DeviceData indexBuffer,				//Optional if indexFormat == Undefined
-  	BLASRef *parent,					//If specified, indicates refit
-  	CharString name,
-  	BLASRef **blas,
-  	Error *e_rr
-  );
-  ```
+  //Triangle geometry parameters travel as a struct so optional features become fields, not entry points.
+  //Built through BLASCreateInfo_indexed/_unindexed rather than by hand: required parameters stay
+  // positional there, so forgetting one is still a compile error.
+  typedef struct BLASCreateInfo {
+  	ERTASBuildFlags buildFlags;
+  	EBLASFlag blasFlags;
+  	ETextureFormatId positionFormat;	//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
+  	ETextureFormatId indexFormat;		//R16u, R32u, Undefined for unindexed
+  	U16 positionOffset;					//Offset into first position for first vertex
+  	U16 positionBufferStride;			//<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
+  	U32 padding;
+  	DeviceData positionBuffer;			//Required
+  	DeviceData indexBuffer;				//Only if indexFormat
+  	BLASRef *parent;					//If specified, indicates refit
+  } BLASCreateInfo;
 
-- ```c
-  Bool createBLASUnindexedExt(
+  BLASCreateInfo BLASCreateInfo_indexed(
   	ERTASBuildFlags buildFlags,
   	EBLASFlag blasFlags,
-  	ETextureFormatId positionFormat,	//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
-  	U16 positionOffset,					//Offset into first position for first vertex
-  	U16 positionBufferStride,			//<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
-  	DeviceData positionBuffer,			//Required
-  	BLASRef *parent,					//If specified, indicates refit
-  	CharString name,
+  	ETextureFormatId positionFormat,
+  	U16 positionOffset,
+  	U16 positionBufferStride,
+  	DeviceData positionBuffer,
+  	ETextureFormatId indexFormat,
+  	DeviceData indexBuffer
+  );
+
+  BLASCreateInfo BLASCreateInfo_unindexed(
+  	ERTASBuildFlags buildFlags,
+  	EBLASFlag blasFlags,
+  	ETextureFormatId positionFormat,
+  	U16 positionOffset,
+  	U16 positionBufferStride,
+  	DeviceData positionBuffer
+  );
+
+  Bool createBLASExt(
+  	const BLASCreateInfo *info,
+  	const CharString *name,
   	BLASRef **blas,
   	Error *e_rr
   );
@@ -399,7 +413,7 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   	U32 aabbOffset,						//Offset into the aabb array
   	DeviceData buffer,					//Required
   	BLASRef *parent,					//If specified, indicates refit
-  	CharString name,
+  	const CharString *name,
   	BLASRef **blas,
   	Error *e_rr
   );
@@ -409,20 +423,7 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   Bool createTLASExt(
   	ERTASBuildFlags buildFlags,
   	TLASRef *parent,					//If specified, indicates refit
-  	const ListTLASInstanceStatic *instances,
-  	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
-  	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
-  	const CharString *name,
-  	TLASRef **tlas,
-  	Error *e_rr
-  );
-  ```
-
-- ```c
-  Bool createTLASMotionExt(
-  	ERTASBuildFlags buildFlags,
-  	TLASRef *parent,					//If specified, indicates refit
-  	const ListTLASInstanceMotion *instances,
+  	const ListTLASInstance *instances,
   	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
   	const CharString *name,
@@ -434,7 +435,6 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
 - ```c
   Bool createTLASDeviceExt(
   	ERTASBuildFlags buildFlags,
-  	Bool isMotionBlurExt,				//Requires extension
   	TLASRef *parent,					//If specified, indicates refit
   	const DeviceData *instancesDevice,	//Instances on the GPU, should be sized correctly
   	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
@@ -1020,7 +1020,6 @@ The pipeline raytracing info struct contains two types of members; post init and
 - Pre construction (supply before createRaytracingPipelinesExt):
   - flags:
     - SkipTriangles/SkipAABBs: Triangle or AABB primitives are skipped for this raytracing pipeline.
-    - AllowMotionBlurExt: Allow the hardware accelerated motion blur extension to be executed.
     - NoNull(AnyHit/ClosestHit/Miss/Intersection): (One of) These shaders aren't allowed to be null for both validation and linking reasons.
   - maxPayloadSize: 4-byte aligned payload size (>0 and <=32). This must be the max of all payload sizes used in the raytracing pipeline.
   - maxAttributeSize: 4-byte aligned attribute size for intersection shaders (>=8 and <=32). Must be the max of all intersection attribute sizes. If intersection shaders aren't used, this should be 8.
@@ -1190,7 +1189,7 @@ In OxC3 graphics, either the application or the OxC3 baker (or the OxC3 compiler
 With the following limitations:
 
 - The resources require bindless to function, so shaders should use this as well. When using resources, resources.hlsl has to be included (the compiler automatically includes it). This file can be found in inc/shader_compiler/shaders.
-  - types.hlsl also defines all HLSL types as OxC3 types, to ensure it could be cross compiled to GLSL in the future (since GLSL has some features that HLSL might not support, such as HW RT motion blur). Using these predefined types are fully optional if HLSL is the final target (Vulkan + D3D12), though it is recommended to use them to avoid getting stuck to one shading language.
+  - types.hlsl also defines all HLSL types as OxC3 types, to ensure it could be cross compiled to GLSL in the future (since GLSL has some features that HLSL might not support). Using these predefined types are fully optional if HLSL is the final target (Vulkan + D3D12), though it is recommended to use them to avoid getting stuck to one shading language.
 
 The OxC3 baker will (if used) convert HLSL to SPIR-V, DXIL, MSL or WGSL depending on which API is currently used. It can provide this as a pre-baked binary too (.oiSH Oxsomi SHader). The pre-baked binary contains all 4 formats to ensure it can be loaded on any platform. But the baker will only include the one relevant to the current API to prevent bloating.
 
@@ -1276,7 +1275,6 @@ Device data is a subarea of a buffer; it contains the reference to the buffer re
 Contains the following properties:
 
 - device: the device that the AS was created on. An AS is only compatible with other ASes that are from the same device.
-- isMotionBlurExt: relevant for BLAS or TLAS; BLAS it means it contains the previous data of the geometry while TLAS means it contains previous data of all instances (so it can be motion blurred). This is the NV specific extension for Ampere and up (unless anyone else supports it).
 - isCompleted: this is set when the BLAS has been signaled as fully built. For example when buildBLASExt has been called or when the first submitCommands has been triggered since it has been queued.
 - flagsExt: BLAS or TLAS specific flags (currently only used for BLAS).
 - asConstructionType: the BLAS or TLAS specific construction type.
@@ -1306,30 +1304,28 @@ The latter can only be used through intersection shaders, while the former has w
 ##### Example: Triangle geometry
 
 ```c
-gotoIfError3(clean, GraphicsDeviceRef_createBLASExt(
-	twm->device,
+const BLASCreateInfo blasInfo = BLASCreateInfo_indexed(
 	ERTASBuildFlags_DefaultBLAS,			//Fast trace & allow compaction
 	EBLASFlag_DisableAnyHit,				//No transparency needed, optimize for opaque
 	ETextureFormatId_RG16f, 0,				//No pos attrib offset and format is RG16f
-	ETextureFormatId_R16u,					//Indices are 16-bit
 	(U16) sizeof(vertexPos[0]),				//Stride is F16[2]
 	(DeviceData) {
         .buffer = twm->vertexBuffers[0]		//Entire buffer is accessible
     },
+	ETextureFormatId_R16u,					//Indices are 16-bit
 	(DeviceData) {
         .buffer = twm->indexBuffer,
         .len = sizeof(U16) * 6 				//Only use sub region
-   	},
-	NULL,									//No refit
-	CharString_createRefCStrConst("BLAS"),	//Debug name
-	&twm->blas,								//BLASRef*
-	e_rr
-));
+   	}
+);
+
+const CharString name = CharString_createRefCStrConst("BLAS");
+gotoIfError3(clean, GraphicsDeviceRef_createBLASExt(twm->device, &blasInfo, &name, &twm->blas, e_rr));
 ```
 
 The example above assumes that there is an index buffer and a position buffer available. Those buffers need to have the ASReadExt buffer usage to be accessible during build time.
 
-There is also a version of this that doesn't require index buffers; createBLASUnindexedExt. The DeviceData for indexBuffer and the index format can be left out for that function.
+Unindexed geometry goes through BLASCreateInfo_unindexed instead, which drops the index format and buffer arguments; a refit sets `.parent` on the returned struct before the create call.
 
 The BLAS flags are the following: EBLASFlag_AvoidDuplicateAnyHit and EBLASFlag_DisableAnyHit. This is only relevant for raytracing pipelines and is irrelevant if the TLAS instance itself turns off anyHit.
 
@@ -1390,19 +1386,12 @@ In the example above, two AABBs are created from a buffer.
 
 ##### Used functions and obtained
 
-- Obtained through createBLASProceduralExt, createBLASExt and createBLASUnindexedExt from GraphicsDeviceRef.
+- Obtained through createBLASProceduralExt and createBLASExt (via a BLASCreateInfo) from GraphicsDeviceRef.
 - Used in TLAS creation and can be copied to/from the CPU.
 
 #### TLAS
 
 A TLAS is a top level acceleration structure; it is the representation of a couple instances of triangle geometry or procedural geometry (a scene). It has an acceleration structure built over these instances to accelerate tracing rays through it. BLASes (Bottom level acceleration structures) are used through a TLAS (top level AS) and can be accessed in raytracing.
-
-There are two types of TLASes:
-
-- HW Static intersections (static geometry).
-- HW Motion blur intersections (static, matrix or transform motion).
-
-The latter can only be used with HW motion blur hardware, while the former is always available (if raytracing is available) and is simpler to construct.
 
 A TLAS can be initialized through two different methods:
 
@@ -1412,8 +1401,8 @@ A TLAS can be initialized through two different methods:
 ##### Example: Static instances
 
 ```c
-TLASInstanceStatic instances[1] = {
-    (TLASInstanceStatic) {
+TLASInstance instances[1] = {
+    (TLASInstance) {
         .transform = {
             { 1, 0, 0, 0 },
             { 0, 1, 0, 0 },
@@ -1427,58 +1416,12 @@ TLASInstanceStatic instances[1] = {
     }
 };
 
-ListTLASInstanceStatic instanceList = (ListTLASInstanceStatic) { 0 };
-gotoIfError3(clean, ListTLASInstanceStatic_createRefConst(
+ListTLASInstance instanceList = (ListTLASInstance) { 0 };
+gotoIfError3(clean, ListTLASInstance_createRefConst(
     instances, sizeof(instances) / sizeof(instances[0]), &instanceList, e_rr
 ));
 
 gotoIfError3(clean, GraphicsDeviceRef_createTLASExt(
-    twm->device,
-    ERTASBuildFlags_DefaultTLAS,
-    NULL,
-    instanceList,
-    false,				//disallowBindlessDescriptor
-    NULL,				//bindlessDescriptorTable; NULL = device's default bindless table
-    CharString_createRefCStrConst("Test TLAS"),
-    &twm->tlas,
-    e_rr
-));
-```
-
-For GPU construction, the same can be done and has to follow the exact struct; except blasCpu will become the address of the BLAS on the GPU.
-
-##### Example: Motion blur
-
-```c
-TLASInstanceMotion instances[1] = {
-    (TLASInstanceMotion) {
-        .type = ETLASInstanceType_Matrix,			//Static for ETLASInstanceStatic
-        .matrixInst = (TLASInstanceMatrixMotion) {
-            .prev = {
-                { 1, 0, 0, 0 },
-                { 0, 1, 0, 0 },
-                { 0, 0, 1, 0 }
-            },
-            .next = {
-                { 2, 0, 0, 0 },		//Grow twice in size as an animation
-                { 0, 2, 0, 0 },
-                { 0, 0, 2, 0 }
-            },
-            .data = (TLASInstanceData) {
-                .blasCpu = twm->blas,
-                .instanceId24_mask8 = ((U32)0xFF << 24),
-                .sbtOffset24_flags8 = (ETLASInstanceFlag_Default << 24) | 0	//Hit index 0
-            }
-        }
-    }
-};
-
-ListTLASInstanceMotion instanceList = (ListTLASInstanceMotion) { 0 };
-gotoIfError3(clean, ListTLASInstanceMotion_createRefConst(
-    instances, sizeof(instances) / sizeof(instances[0]), &instanceList, e_rr
-));
-
-gotoIfError3(clean, GraphicsDeviceRef_createTLASMotionExt(
     twm->device,
     ERTASBuildFlags_DefaultTLAS,
     NULL,
@@ -1498,26 +1441,13 @@ For GPU construction, the same can be done and has to follow the exact struct; e
 - base: RTAS standardizes BLAS and TLAS a little bit.
 - useDeviceMemory: If the TLAS was created through GPU memory or via a temporary CPU visible buffer.
 - handle: Descriptor index of the acceleration structure.
-- Depending on useDeviceMemory, base.isMotionBlurExt and base.asConstructionType: (Instances, Serialized):
+- Depending on useDeviceMemory and base.asConstructionType: (Instances, Serialized):
   - ETLASConstructionType_Serialized:
     - Buffer cpuData: Indicates cpu memory that represents the TLAS. Might become invalidated because of a driver update.
   - useDeviceMemory:
-    - deviceData: Represents the resource range that holds the TLASInstanceStatic[] or TLASInstanceMotion[] (isMotionBlurExt) on the GPU.
-  - isMotionBlurExt (requires motion blur feature):
-    - cpuInstancesMotion: List of TLASInstanceMotion.
+    - deviceData: Represents the resource range that holds the TLASInstance[] on the GPU.
   - else
-    - cpuInstancesStatic: List of TLASInstanceStatic.
-
-##### TLASInstanceStatic + TLASInstanceMotion
-
-Both represent a single mesh instance. They both contain one instance data (TLAS_getInstanceDataCpu) while they contain 1 or 2 transforms. TLASInstanceMotion may contain two transforms if the type is not ETLASInstanceType_Static. Otherwise either transform or staticInst.transform contain a F32x4x3 transform matrix.  When the instance type is ETLASInstanceType_Matrix it contains two matrices (matrixInst.prev and matrixInst.next).
-
-When the type is ETLASInstanceType_SRT, srtInst.prev and next contain a special transform format;
-
-- Scale, pivots, translate and shear: x, y, z
-- Orientation: Quaternion xyzw.
-
-This type has helpers through TLASTransformSRT such as create(scale, pivot, translate, quat, shearing), createSimple(scale, translate, quat) and getters/setters for each type.
+    - cpuInstances: List of TLASInstance.
 
 ##### Instance data
 
@@ -1541,7 +1471,7 @@ The instance flags are identical to both DXR and VkRT:
 
 ##### Used functions and obtained
 
-- Obtained through createTLASExt, createTLASMotionExt and createTLASDeviceExt from GraphicsDeviceRef.
+- Obtained through createTLASExt and createTLASDeviceExt from GraphicsDeviceRef.
 - Accessible from TraceRay/traceRayEXT only through the handle.
 
 ## Commands

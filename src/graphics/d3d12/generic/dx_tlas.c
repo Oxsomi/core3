@@ -49,12 +49,12 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 		retError(clean, Error_unsupportedOperation(0, "D3D12TLAS_init()::serialized not supported yet"));        //TODO:
 
 	U64 instancesU64 = 0;
-	U64 stride = sizeof(TLASInstanceStatic);
+	U64 stride = sizeof(TLASInstance);
 
 	if (tlas->useDeviceMemory)
 		instancesU64 = tlas->deviceData.len / stride;
 
-	else instancesU64 = tlas->cpuInstancesStatic.length;
+	else instancesU64 = tlas->cpuInstances.length;
 
 	if(instancesU64 >> 24)
 		retError(clean, Error_outOfBounds(
@@ -123,8 +123,7 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 			Buffer cpuDat = DeviceBufferRef_ptr(tlas->tempInstanceBuffer)->cpuData;
 			Buffer_memcpy(
 				cpuDat,
-				tlas->base.isMotionBlurExt ? ListTLASInstanceMotion_bufferConst(tlas->cpuInstancesMotion) :
-				ListTLASInstanceStatic_bufferConst(tlas->cpuInstancesStatic)
+				ListTLASInstance_bufferConst(tlas->cpuInstances)
 			);
 
 			//We have to transform the CPU-sided buffer to a GPU buffer address
@@ -139,7 +138,7 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 				if(!dat->blasCpu)
 					continue;
 
-				U64 off = (const U8*)&dat->blasDeviceAddress - (const U8*)tlas->cpuInstancesStatic.ptr;
+				U64 off = (const U8*)&dat->blasDeviceAddress - (const U8*)tlas->cpuInstances.ptr;
 				*(U64*)(mem + off) = getDxDeviceAddress((DeviceData) { .buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer });
 			}
 

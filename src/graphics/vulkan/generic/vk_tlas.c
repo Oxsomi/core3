@@ -50,12 +50,12 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 		retError(clean, Error_unsupportedOperation(0, "VkTLAS_init()::serialized not supported yet"));        //TODO:
 
 	U64 instancesU64 = 0;
-	U64 stride = tlas->base.isMotionBlurExt ? sizeof(TLASInstanceMotion) : sizeof(TLASInstanceStatic);
+	U64 stride = sizeof(TLASInstance);
 
 	if (tlas->useDeviceMemory)
 		instancesU64 = tlas->deviceData.len / stride;
 
-	else instancesU64 = tlas->cpuInstancesStatic.length;        //Both static and motion length are at the same loc
+	else instancesU64 = tlas->cpuInstances.length;
 
 	if(instancesU64 >> 24)
 		retError(clean, Error_outOfBounds(
@@ -103,7 +103,7 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 			Buffer_memcpy(
 				Buffer_createRef(mem, stride * instancesU64),
-				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)    //static, motion same pos
+				Buffer_createRefConst(tlas->cpuInstances.ptr, stride * instancesU64)
 			);
 
 			//We have to transform the CPU-sided buffer to a GPU buffer address
@@ -122,7 +122,7 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 				// iteration wrote the same slot and instances past the first never received an address at all.
 
 				const U64 *blasAddress = &dat->blasDeviceAddress;
-				U64 offset = (const U8*)blasAddress - (const U8*)tlas->cpuInstancesStatic.ptr;
+				U64 offset = (const U8*)blasAddress - (const U8*)tlas->cpuInstances.ptr;
 
 				//The reference has to come from vkGetAccelerationStructureDeviceAddressKHR;
 				// the backing buffer's address is not necessarily the same thing.
@@ -190,9 +190,6 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 	if(tlas->base.flags & ERTASBuildFlags_MinimizeMemory)
 		flags |= VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR;
-
-	if(tlas->base.isMotionBlurExt)
-		flags |= VK_BUILD_ACCELERATION_STRUCTURE_MOTION_BIT_NV;
 
 	tlasExt->geometries = (VkAccelerationStructureBuildGeometryInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,

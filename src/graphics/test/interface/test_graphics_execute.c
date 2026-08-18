@@ -826,6 +826,31 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 		deviceRef, &zeroStride, &blasName, &badBlas, NULL
 	));
 
+	//An OMM index is per triangle, so asking for one without triangle indices has nothing to index against.
+	//Rejected regardless of device support, since it is malformed rather than unsupported.
+
+	const BLASCreateInfo ommWithoutIndices = BLASCreateInfo_indexedWithOmmIndicesExt(
+		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
+		ETextureFormatId_Undefined, (DeviceData) { 0 },
+		ETextureFormatId_R16u, positionData
+	);
+
+	Test_assert(t, "blasOmmWithoutIndices", !GraphicsDeviceRef_createBLASExt(
+		deviceRef, &ommWithoutIndices, &blasName, &badBlas, NULL
+	));
+
+	//An OMM index format of Undefined means no OMM at all, so carrying a buffer anyway is contradictory.
+
+	BLASCreateInfo ommBufferNoFormat = BLASCreateInfo_unindexed(
+		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
+	);
+
+	ommBufferNoFormat.ommIndexBuffer = positionData;
+
+	Test_assert(t, "blasOmmBufferWithoutFormat", !GraphicsDeviceRef_createBLASExt(
+		deviceRef, &ommBufferNoFormat, &blasName, &badBlas, NULL
+	));
+
 	Test_assert(t, "blasRejectedNothing", !badBlas);
 
 	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
@@ -841,7 +866,7 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 
 	//One instance at identity, pointing at the BLAS just made
 
-	TLASInstanceStatic instance = (TLASInstanceStatic) {
+	TLASInstance instance = (TLASInstance) {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
 		.data = (TLASInstanceData) {
 			.instanceId24_mask8 = 0xFFu << 24,
@@ -850,8 +875,8 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 		}
 	};
 
-	ListTLASInstanceStatic instances = (ListTLASInstanceStatic) { 0 };
-	ListTLASInstanceStatic_createRefConst(&instance, 1, &instances, NULL);
+	ListTLASInstance instances = (ListTLASInstance) { 0 };
+	ListTLASInstance_createRefConst(&instance, 1, &instances, NULL);
 
 	if(!Test_assert(t, "createTlas", GraphicsDeviceRef_createTLASExt(
 		deviceRef, ERTASBuildFlags_DefaultTLAS, NULL, &instances, true, NULL, &tlasName, &tlas, &t->err

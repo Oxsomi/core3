@@ -34,6 +34,7 @@
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/tlas.h"
+#include "graphics/generic/opacity_micromap.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/descriptor_heap.h"
@@ -222,6 +223,7 @@ void Pipeline_free(void *pipeline, const Allocator *alloc);
 void Sampler_free(void *sampler, const Allocator *alloc);
 void BLAS_free(void *blas, const Allocator *alloc);
 void TLAS_free(void *tlas, const Allocator *alloc);
+void OpacityMicromap_free(void *micromap, const Allocator *alloc);
 void DescriptorLayout_free(void *layout, const Allocator *alloc);
 void DescriptorTable_free(void *table, const Allocator *alloc);
 void DescriptorHeap_free(void *heap, const Allocator *alloc);
@@ -368,6 +370,13 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 			.lengthAndAlignment = OXC3_APPENDED_LEN(TLAS, sizes->tlas),
 			.alloc = alloc,
 			.free = TLAS_free
+		},
+
+		.opacityMicromap = (RefPtrType) {
+			.typeId = (TypeId) EGraphicsTypeId_OpacityMicromapExt,
+			.lengthAndAlignment = OXC3_APPENDED_LEN(OpacityMicromap, sizes->opacityMicromap),
+			.alloc = alloc,
+			.free = OpacityMicromap_free
 		},
 
 		.descriptorLayout = (RefPtrType) {

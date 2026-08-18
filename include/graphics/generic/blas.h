@@ -55,13 +55,21 @@ typedef struct BLAS {
 			U8 indexFormatId;                           //ETextureFormatId: R16u, R32u or Undefined
 			U16 positionBufferStride;                   //<= 2048
 
-			U16 positionOffset, padding;
+			U16 positionOffset;
+
+			//Element type only; the values it holds are EOMMSpecialIndex, see above.
+
+			U8 ommIndexFormatId;                        //ETextureFormatId: R16u, R32u or Undefined for no OMM
+			U8 padding;
 
 			DeviceData positionBuffer;
 
-			//TODO: For motion vectors: nextPositionBufferDevice, nextPositionBufferCpu
-
 			DeviceData indexBuffer;                     //Only if indexFormatId
+
+			//Stage 1 opacity micromaps: special indices only, so this is the per triangle index buffer and
+			// there is no micromap object to attach yet.
+
+			DeviceData ommIndexBuffer;                  //Only if ommIndexFormatId
 		};
 
 		//If EBLASConstructionType_Procedural
@@ -82,13 +90,48 @@ typedef RefPtr BLASRef;
 #define BLASRef_ptr(ptr) RefPtr_data(ptr, BLAS)
 
 //Creating BLASes;
-//If cpu memory is used:
-//    It internally allocates a staging buffer to build from.
+//Every geometry buffer is a DeviceData, so it always references a DeviceBuffer rather than CPU memory.
+//    Feeding one from CPU memory is a two step nicety: GraphicsDeviceRef_createBufferData uploads the bytes
+//    into a DeviceBuffer (which needs EDeviceBufferUsage_ASReadExt), and the DeviceData then points at it.
+//    Whether that buffer's allocation is device local or CPU backed does not matter here and is not checked.
+//    NOTE this is unlike TLAS, which really does stage CPU instances internally via tempInstanceBuffer.
 //BLAS recording has to be done manually during command list recording.
 //    This is done through the buildBLASExt command which allows both generating BLAS from compute as well.
 //If the BLAS is deleted before submitting any commands then it won't exist.
 //    Submitting an empty/unfinished BLAS to a TLAS will hide the instance.
 //    It has to re-create a TLAS if the BLAS is finished to ensure the BLAS is shown.
+
+//Opacity micromap special indices: the values an OMM index buffer holds when no micromap object is attached.
+//Both APIs define these as NEGATIVE signed constants but read the buffer as UNSIGNED, so the element stores
+// the two's complement truncated to its own width: with R16u, FullyTransparent is 0xFFFF, with R32u it is
+// 0xFFFFFFFF. The helpers below do that truncation so a caller never has to.
+//A hit resolves as: FullyTransparent is ignored entirely, FullyOpaque skips anyHit, and both Unknown values
+// are treated as non opaque so anyHit still runs.
+//Values match VkOpacityMicromapSpecialIndexEXT and D3D12_RAYTRACING_OPACITY_MICROMAP_SPECIAL_INDEX.
+
+typedef enum EOMMSpecialIndex {
+	EOMMSpecialIndex_FullyTransparent        = -1,
+	EOMMSpecialIndex_FullyOpaque             = -2,
+	EOMMSpecialIndex_FullyUnknownTransparent = -3,
+	EOMMSpecialIndex_FullyUnknownOpaque      = -4
+} EOMMSpecialIndex;
+
+//Pack a special index into the element width the format uses, which is the value to store in the buffer.
+//Returns 0 for a format that carries no OMM, since there is no element to write in that case.
+
+U32 EOMMSpecialIndex_pack(EOMMSpecialIndex specialIndex, ETextureFormatId ommIndexFormat);
+
+//Highest index that still means "entry N of a micromap" rather than a special value.
+//The special values occupy the TOP of each element's range, so a generator counting upwards has to stop here;
+// R16u gives 0xFFFB and R32u gives 0xFFFFFFFB.
+//The base offset (added to non special indices by both APIs) is applied AFTER the special check, so it cannot
+// rescue an index that already collided with the reserved range.
+
+U32 EOMMIndex_max(ETextureFormatId ommIndexFormat);
+
+//Whether a raw element value read back from the buffer falls in that reserved range.
+
+Bool EOMMIndex_isSpecial(U32 raw, ETextureFormatId ommIndexFormat);
 
 //Creating BLAS from triangle geometry.
 //The parameters travel as a struct rather than as a dozen arguments so optional geometry features can be
@@ -112,6 +155,20 @@ typedef struct BLASCreateInfo {
 	DeviceData positionBuffer;          //Required
 	DeviceData indexBuffer;             //Only if indexFormat
 
+	//Stage 1 opacity micromaps (Ext): special index only, no micromap object is attached.
+	//Requires indices, so it is only reachable through BLASCreateInfo_indexedWithOmmIndicesExt.
+
+	//R16u or R32u only. R8u is legal on D3D12 and on VK_KHR_opacity_micromap but forbidden by the EXT
+	// extension we target, so it is deliberately not offered.
+
+	ETextureFormatId ommIndexFormat;    //R16u, R32u, Undefined for no OMM
+	U32 padding1;
+
+	//ONE element PER TRIANGLE, so exactly indexBuffer triangles worth, and every element must be an
+	// EOMMSpecialIndex while no micromap object exists to index into.
+
+	DeviceData ommIndexBuffer;          //Only if ommIndexFormat
+
 	BLASRef *parent;                    //If specified, indicates refit
 
 } BLASCreateInfo;
@@ -134,6 +191,26 @@ BLASCreateInfo BLASCreateInfo_unindexed(
 	U16 positionOffset,
 	U16 positionBufferStride,
 	DeviceData positionBuffer
+);
+
+//Opacity micromaps: the SPECIAL INDEX form, which needs no micromap object at all.
+//Named for what it takes rather than for OMM in general, because it only fills in the per triangle index
+// buffer; it creates nothing and returns nothing but a filled in BLASCreateInfo.
+//Linking a built OpacityMicromapRef is a different helper (an OMM ARRAY), not this one.
+//The index buffer holds one special index per triangle, so it needs the triangle indices too, which is why it
+// extends the indexed form rather than standing on its own.
+
+BLASCreateInfo BLASCreateInfo_indexedWithOmmIndicesExt(
+	ERTASBuildFlags buildFlags,
+	EBLASFlag blasFlags,
+	ETextureFormatId positionFormat,
+	U16 positionOffset,
+	U16 positionBufferStride,
+	DeviceData positionBuffer,
+	ETextureFormatId indexFormat,
+	DeviceData indexBuffer,
+	ETextureFormatId ommIndexFormat,
+	DeviceData ommIndexBuffer
 );
 
 Bool GraphicsDeviceRef_createBLASExt(

@@ -143,6 +143,32 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 			tri->IndexBuffer = getDxLocation(blas->indexBuffer, 0);
 			tri->IndexCount = (U32)(blas->indexBuffer.len / (blas->indexFormatId == ETextureFormatId_R32u ? 4 : 2));
 		}
+
+		//Opacity micromaps, stage 1.
+		//D3D12 swaps the whole geometry type rather than chaining, so the triangle desc written above moves
+		// into its own storage and the union member becomes the OMM pair pointing at it.
+		//OpacityMicromapArray stays null on purpose: that is what says the index buffer holds only special
+		// indices instead of referencing a built micromap array.
+
+		if (blas->ommIndexFormatId) {
+
+			blasExt->ommTriangleData = *tri;
+
+			blasExt->ommLinkage = (D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC) {
+				.OpacityMicromapIndexBuffer = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
+					.StartAddress = getDxLocation(blas->ommIndexBuffer, 0),
+					.StrideInBytes = blas->ommIndexFormatId == ETextureFormatId_R32u ? 4 : 2
+				},
+				.OpacityMicromapIndexFormat = ETextureFormatId_toDXFormat(blas->ommIndexFormatId)
+			};
+
+			geometry->Type = D3D12_RAYTRACING_GEOMETRY_TYPE_OMM_TRIANGLES;
+
+			geometry->OmmTriangles = (D3D12_RAYTRACING_GEOMETRY_OMM_TRIANGLES_DESC) {
+				.pTriangles = &blasExt->ommTriangleData,
+				.pOmmLinkage = &blasExt->ommLinkage
+			};
+		}
 	}
 
 	else {

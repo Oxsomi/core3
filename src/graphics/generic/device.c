@@ -677,7 +677,6 @@ Bool GraphicsDeviceRef_create(
 			EGraphicsFeatures_RayPipeline        |
 			EGraphicsFeatures_RayQuery           |
 			EGraphicsFeatures_RayMicromapOpacity |
-			EGraphicsFeatures_RayMotionBlur      |
 			EGraphicsFeatures_RayReorder         |
 			EGraphicsFeatures_RayValidation      |
 			EGraphicsFeatures_RayTriPosition
@@ -1156,7 +1155,6 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	if(extensions & ESHExtension_RayQuery)                  features |= EGraphicsFeatures_RayQuery;
 	if(extensions & ESHExtension_RayMicromapOpacity)        features |= EGraphicsFeatures_RayMicromapOpacity;
-	if(extensions & ESHExtension_RayMotionBlur)             features |= EGraphicsFeatures_RayMotionBlur;
 	if(extensions & ESHExtension_RayReorder)                features |= EGraphicsFeatures_RayReorder;
 	if(extensions & ESHExtension_RayTriPosition)            features |= EGraphicsFeatures_RayTriPosition;
 

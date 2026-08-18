@@ -42,7 +42,7 @@ typedef enum ETLASInstanceFlag {
 } ETLASInstanceFlag;
 
 typedef enum ETLASConstructionType {
-	ETLASConstructionType_Instances,     //deviceData, cpuInstancesMotion or cpuInstancesStatic contains valid data
+	ETLASConstructionType_Instances,     //deviceData or cpuInstances contains valid data
 	ETLASConstructionType_Serialized,    //cpuData contains serialized data from a previously created AS
 	ETLASConstructionType_Count
 } ETLASConstructionType;
@@ -61,101 +61,14 @@ typedef struct TLASInstanceData {
 
 } TLASInstanceData;
 
-typedef enum ETLASInstanceType {
-	ETLASInstanceType_Static,            //TLASInstanceStatic
-	ETLASInstanceType_Matrix,            //TLASInstanceMatrix
-	ETLASInstanceType_SRT,               //TLASInstanceSRT
-	ETLASInstanceType_Count
-} ETLASInstanceType;
-
-//These are the different type of TLASInstances;
-//TLASInstanceData is CPU-only & wraps two types; so the TLAS could be used to support HW motion blur with a simple flag.
-//TLASInstanceDevice is the default, while TLASInstanceMotionDevice is the specific one for the HW RT motion blur extension.
-
-//https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkSRTDataNV.html
-typedef struct TLASTransformSRT {
-
-	//sx, sy and sz are scale
-	//pvx, pvy, pvz are pivots
-	//tx, ty, tz are translate
-	//q0, q1, q2, q3 is a QuatF32 for the orientation
-	//a, b, c is shearing
-
-	F32 sx, a, b;
-	F32 pvx, sy, c;
-	F32 pvy, sz, pvz;
-	F32 q0, q1, q2, q3;        //QuatF32 (but doesn't properly align)
-	F32 tx, ty, tz;
-
-} TLASTransformSRT;
-
-F32x4 TLASTransformSRT_getScale(const TLASTransformSRT *srt);
-Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value);
-
-F32x4 TLASTransformSRT_getPivot(const TLASTransformSRT *srt);
-Bool TLASTransformSRT_setPivot(TLASTransformSRT *srt, F32x4 value);
-
-F32x4 TLASTransformSRT_getTranslate(const TLASTransformSRT *srt);
-Bool TLASTransformSRT_setTranslate(TLASTransformSRT *srt, F32x4 value);
-
-QuatF32 TLASTransformSRT_getQuat(const TLASTransformSRT *srt);
-Bool TLASTransformSRT_setQuat(TLASTransformSRT *srt, QuatF32 value);
-
-F32x4 TLASTransformSRT_getShearing(const TLASTransformSRT *srt);
-Bool TLASTransformSRT_setShearing(TLASTransformSRT *srt, F32x4 value);
-
-static inline TLASTransformSRT TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat) {
-	TLASTransformSRT srt = { 0 };
-	TLASTransformSRT_setScale(&srt, scale);
-	TLASTransformSRT_setTranslate(&srt, translate);
-	TLASTransformSRT_setQuat(&srt, quat);
-	return srt;
-}
-
-static inline TLASTransformSRT TLASTransformSRT_create(
-	F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing
-) {
-	TLASTransformSRT srt = TLASTransformSRT_createSimple(scale, translate, quat);
-	TLASTransformSRT_setPivot(&srt, pivot);
-	TLASTransformSRT_setShearing(&srt, shearing);
-	return srt;
-}
-
-typedef struct TLASInstanceStatic {
+typedef struct TLASInstance {
 	TLASTransform transform;
 	TLASInstanceData data;
-} TLASInstanceStatic;
+} TLASInstance;
 
-typedef struct TLASInstanceSRT {
-	TLASTransformSRT prev, next;
-	TLASInstanceData data;
-} TLASInstanceSRT;
+TList(TLASInstance);
 
-typedef struct TLASInstanceMatrixMotion {
-	TLASTransform prev, next;
-	TLASInstanceData data;
-} TLASInstanceMatrixMotion;
-
-typedef struct TLASInstanceMotion {
-
-	ETLASInstanceType type;
-	U32 padding;
-
-	union {
-		TLASInstanceSRT srtInst;                    //ETLASInstanceMotionType_SRT
-		TLASInstanceMatrixMotion matrixInst;        //ETLASInstanceMotionType_Matrix
-		TLASInstanceStatic staticInst;              //ETLASInstanceMotionType_Static
-	};
-
-} TLASInstanceMotion;
-
-TLASInstanceData TLASInstanceMotion_getData(const TLASInstanceMotion *mot);
-
-TList(TLASInstanceMotion);
-TList(TLASInstanceStatic);
-
-//A TLAS is a ListTLASInstance or a DeviceBuffer that contains either
-// TLASInstance[] (isMotionBlurExt) or TLASInstanceStatic[] (!isMotionBlurExt)
+//A TLAS is a ListTLASInstance or a DeviceBuffer that contains TLASInstance[]
 
 typedef U32 BindlessDescriptor;
 
@@ -177,19 +90,15 @@ typedef struct TLAS {
 
 	BindlessDescriptor handle;
 
-	DeviceBufferRef *tempInstanceBuffer;        //If cpuInstanceMotion or cpuInstancesStatic, temp upload heap
+	DeviceBufferRef *tempInstanceBuffer;        //If cpuInstances, temp upload heap
 
 	union {
 
-		//If useDeviceMemory
-		//TLASInstanceMotion[] (isMotionBlurExt) or TLASInstanceStatic[] (!isMotionBlurExt)
+		//If useDeviceMemory; TLASInstance[]
 		DeviceData deviceData;
 
-		//If !useDeviceMemory && isMotionBlurExt
-		ListTLASInstanceMotion cpuInstancesMotion;
-
-		//If !useDeviceMemory && !isMotionBlurExt
-		ListTLASInstanceStatic cpuInstancesStatic;
+		//If !useDeviceMemory
+		ListTLASInstance cpuInstances;
 
 		//If ETLASConstructionType_Serialized
 		Buffer cpuData;
@@ -212,19 +121,7 @@ Bool GraphicsDeviceRef_createTLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	TLASRef *parent,                    //If specified, indicates refit
-	const ListTLASInstanceStatic *instances,
-	Bool disallowBindlessDescriptor,
-	DescriptorTableRef *bindlessDescriptorTable,
-	const CharString *name,
-	TLASRef **tlas,
-	Error *e_rr
-);
-
-Bool GraphicsDeviceRef_createTLASMotionExt(
-	GraphicsDeviceRef *dev,
-	ERTASBuildFlags buildFlags,
-	TLASRef *parent,                    //If specified, indicates refit
-	const ListTLASInstanceMotion *instances,
+	const ListTLASInstance *instances,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
 	const CharString *name,
@@ -235,7 +132,6 @@ Bool GraphicsDeviceRef_createTLASMotionExt(
 Bool GraphicsDeviceRef_createTLASDeviceExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	Bool isMotionBlurExt,               //Requires extension
 	TLASRef *parent,                    //If specified, indicates refit
 	const DeviceData *instancesDevice,  //Instances on the GPU, should be sized correctly
 	Bool disallowBindlessDescriptor,

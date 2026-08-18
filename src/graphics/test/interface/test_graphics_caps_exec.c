@@ -57,16 +57,15 @@
 //  Multiview - no viewMask is ever set on the render or the pipeline, so every render is single view.
 //  DualSrcBlend - the second source must be Location 0 Index 1 on SPIR-V, and neither the reflection
 //   (which keys outputs on location alone) nor oiSH can represent that yet; plain MRT works and is covered.
-//  RayMicromapOpacity - the engine cannot BUILD or attach an opacity micromap: detection and device
-//   enablement are fully wired on both backends, but BLAS has no OMM member, no create entry point takes
-//   one, and neither backend ever sets the OMM geometry type (vk_blas.c never chains the triangles pNext,
-//   dx_blas.c never uses OMM_TRIANGLES).
-//   Until an attach path exists there is no OMM in any scene to observe.
-//   When it lands, the honest test is BINARY: an OMM marking a region fully transparent makes a ray MISS
-//   where it would otherwise hit, which is exact, unlike ray T which is not bit exact across vendors.
-//   Smallest useful step: a special index buffer variant of createBLASExt
-//   (no micromap object, no OC1 encoding) is enough for that test.
-//  RayMotionBlur - no HLSL surface for motion traces.
+//  RayMicromapOpacity - stage 1 (special indices only) is now ATTACHABLE: BLASCreateInfo carries
+//   ommIndexFormat/ommIndexBuffer, BLASCreateInfo_indexedWithOmmIndicesExt builds one, vk_blas.c chains
+//   VkAccelerationStructureTrianglesOpacityMicromapEXT with a null micromap handle and dx_blas.c switches the
+//   geometry to OMM_TRIANGLES with a null micromap array.
+//   Execution is still NOT covered here: that needs the allow OMM opt-in on the pipeline and
+//   RAYQUERY_FLAG_ALLOW_OPACITY_MICROMAPS on the shader side, and the ray must not use FORCE_OPAQUE or the
+//   micromap is bypassed and the test would pass for the wrong reason.
+//   The honest test remains BINARY: a fully transparent special index makes a ray MISS where it would
+//   otherwise hit, which is exact, unlike ray T which is not bit exact across vendors.
 //  Raytracing - an umbrella bit with no ESHExtension; RayQuery and RayPipeline are the concrete bits.
 //  CoopVec / CoopMat / CoopFP8 / CoopVecTraining - need buffer types the bindless layout lacks; compile
 //   coverage lives in the shader compiler's feature corpus.
@@ -322,8 +321,8 @@ static void Test_buildCapabilityTlas(
 	//Every other test in the suite uses a single instance, which is why a backend writing all references into
 	// instance 0's slot went unnoticed.
 
-	TLASInstanceStatic instance[2] = {
-		(TLASInstanceStatic) {
+	TLASInstance instance[2] = {
+		(TLASInstance) {
 			.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
 			.data = (TLASInstanceData) {
 				.instanceId24_mask8 = 0xFFu << 24,
@@ -331,7 +330,7 @@ static void Test_buildCapabilityTlas(
 				.blasCpu = blas
 			}
 		},
-		(TLASInstanceStatic) {
+		(TLASInstance) {
 			.transform = { { 1, 0, 0, 2 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
 			.data = (TLASInstanceData) {
 				.instanceId24_mask8 = 0xFFu << 24,
@@ -341,8 +340,8 @@ static void Test_buildCapabilityTlas(
 		}
 	};
 
-	ListTLASInstanceStatic instances = (ListTLASInstanceStatic) { 0 };
-	ListTLASInstanceStatic_createRefConst(instance, 2, &instances, NULL);
+	ListTLASInstance instances = (ListTLASInstance) { 0 };
+	ListTLASInstance_createRefConst(instance, 2, &instances, NULL);
 
 	name = CharString_createRefCStrConst("Capability trace TLAS");
 

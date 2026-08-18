@@ -107,9 +107,6 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_RayMicromapOpacity)
 			Log_debugLnx("\t\tRaytracing opacity micromap");
 
-		if(feat & EGraphicsFeatures_RayMotionBlur)
-			Log_debugLnx("\t\tRaytracing motion blur");
-
 		if(feat & EGraphicsFeatures_RayReorder)
 			Log_debugLnx(
 				cap.features2 & EGraphicsFeatures2_RayReorderActual ?

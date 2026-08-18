@@ -30,7 +30,6 @@
 //  5. Texture formats   - format helper sanity (types/device_info)
 //  6. Bindless packing  - BindlessDescriptor pack3/unpack3 and handle accessors (pure, no device needed)
 // 15. Null device       - every resource creator rejects a NULL device instead of faulting on it
-// 17. TLASTransformSRT  - interleaved VkSRTDataNV get/set round trip and pinned field layout
 // 18. Descriptor pack   - buffer region + counter offset bit packing, texture/tlas/sampler union
 // 19. TextureRange      - extent helpers
 // 24. Default layout    - the bindless layout OxC3 shaders compile against (DXIL chain law, SPIRV sets, rt gating)
@@ -82,6 +81,7 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/opacity_micromap.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/descriptor_table.h"
@@ -229,6 +229,11 @@ static void Test_graphicsInstance(Test *t) {
 		Test_checkObjectType(t, "tlas", &types->tlas, (TypeId)EGraphicsTypeId_TLASExt, sizeof(TLAS), alloc);
 
 		Test_checkObjectType(
+			t, "opacityMicromap", &types->opacityMicromap,
+			(TypeId)EGraphicsTypeId_OpacityMicromapExt, sizeof(OpacityMicromap), alloc
+		);
+
+		Test_checkObjectType(
 			t, "descriptorLayout", &types->descriptorLayout,
 			(TypeId)EGraphicsTypeId_DescriptorLayout, sizeof(DescriptorLayout), alloc
 		);
@@ -253,6 +258,48 @@ static void Test_graphicsInstance(Test *t) {
 			(TypeId)EGraphicsTypeId_CommandList, sizeof(CommandList), alloc
 		);
 	}
+
+	//Opacity micromap special indices are pure value math, so they are checked here rather than on a device.
+	//The truncation is the part worth pinning: both APIs define these as negative signed values but read the
+	// buffer as unsigned, so the same special index is a different stored value per element width, and getting
+	// it wrong silently selects a DIFFERENT special index rather than failing.
+
+	Test_assert(
+		t, "ommPackR16u",
+		EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyTransparent, ETextureFormatId_R16u) == 0xFFFF
+	);
+
+	Test_assert(
+		t, "ommPackR32u",
+		EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyTransparent, ETextureFormatId_R32u) == 0xFFFFFFFF
+	);
+
+	Test_assert(
+		t, "ommPackUnknownOpaque",
+		EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyUnknownOpaque, ETextureFormatId_R32u) == 0xFFFFFFFC
+	);
+
+	Test_assert(
+		t, "ommPackNarrowDiffers",
+		EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyOpaque, ETextureFormatId_R16u) == 0xFFFE
+	);
+
+	//A format that carries no OMM has no element to write, so it packs to nothing rather than to a real value.
+
+	Test_assert(
+		t, "ommPackUndefined",
+		!EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyTransparent, ETextureFormatId_Undefined)
+	);
+
+	Test_assert(t, "ommIndexMaxR16u", EOMMIndex_max(ETextureFormatId_R16u) == 0xFFFB);
+	Test_assert(t, "ommIndexMaxR32u", EOMMIndex_max(ETextureFormatId_R32u) == 0xFFFFFFFB);
+
+	Test_assert(t, "ommIndexSpecialTop", EOMMIndex_isSpecial(0xFFFF, ETextureFormatId_R16u));
+	Test_assert(t, "ommIndexNotSpecial", !EOMMIndex_isSpecial(0xFFFB, ETextureFormatId_R16u));
+
+	//0xFFFF is a real index at 32 bit width and a special one at 16, so the check has to be format driven.
+
+	Test_assert(t, "ommIndexWidthMatters", !EOMMIndex_isSpecial(0xFFFF, ETextureFormatId_R32u));
 
 	//Free through the generic ref counter; double-dec must be safe (pointer is NULLed)
 
@@ -590,7 +637,6 @@ OXC3_TEST_ENTRY(graphics_interface) {
 	Test_graphicsInstance(&t);
 	Test_graphicsFormats(&t);
 	Test_bindlessDescriptorPacking(&t);
-	Test_tlasTransformSRT(&t);
 	Test_descriptorPacking(&t);
 	Test_textureRange(&t);
 	Test_graphicsDefaultBindlessLayout(&t);

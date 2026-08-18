@@ -317,16 +317,6 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	bindNextVkStruct(
-		VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
-		feat & EGraphicsFeatures_RayMotionBlur,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV,
-			.rayTracingMotionBlur = true,
-			.rayTracingMotionBlurPipelineTraceRaysIndirect = true
-		}
-	)
-
 	//No NV fallback: on an SDK without the EXT struct the RayReorder claim can never be set (the feature
 	// query site skips it), so there is nothing to chain.
 
@@ -509,7 +499,6 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_RayPipeline:                on = feat & EGraphicsFeatures_RayPipeline;              break;
 			case EOptExtensions_RayQuery:                   on = feat & EGraphicsFeatures_RayQuery;                 break;
 			case EOptExtensions_RayAcceleration:            on = feat & EGraphicsFeatures_Raytracing;               break;
-			case EOptExtensions_RayMotionBlur:              on = feat & EGraphicsFeatures_RayMotionBlur;            break;
 			case EOptExtensions_RayReorder:                 on = feat & EGraphicsFeatures_RayReorder;               break;
 			case EOptExtensions_MeshShader:                 on = feat & EGraphicsFeatures_MeshShader;               break;
 			case EOptExtensions_VariableRateShading:        on = feat & EGraphicsFeatures_VariableRateShading;      break;

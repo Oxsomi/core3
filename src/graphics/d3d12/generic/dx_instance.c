@@ -59,6 +59,7 @@ TListNamedImpl(ListIDXGIAdapter4)
 GraphicsObjectSizes DxGraphicsObjectSizes = {
 	.blas = GraphicsObjectSize_create(DxBLAS),
 	.tlas = GraphicsObjectSize_create(DxTLAS),
+	.opacityMicromap = GraphicsObjectSize_create(DxOpacityMicromap),
 	.pipeline = GraphicsObjectSize_create(DxPipeline),
 	.sampler = GraphicsObjectSize_createRaw(16, 16),        //Doesn't exist
 	.buffer = GraphicsObjectSize_create(DxDeviceBuffer),
@@ -107,6 +108,10 @@ static_assert(
 			.blasInit = D3D12BLAS_init,
 			.blasFlush = D3D12BLASRef_flush,
 			.blasFree = D3D12BLAS_free,
+
+			.opacityMicromapInit = D3D12OpacityMicromap_init,
+			.opacityMicromapFlush = D3D12OpacityMicromapRef_flush,
+			.opacityMicromapFree = D3D12OpacityMicromap_free,
 
 			.tlasInit = D3D12TLAS_init,
 			.tlasFlush = D3D12TLASRef_flush,

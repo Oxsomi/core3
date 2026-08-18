@@ -244,11 +244,6 @@ Bool Compiler_compile(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_multiview", alloc, e_rr
 				));
 
-			if(toCompile->extensions & ESHExtension_RayMotionBlur)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_NV_ray_tracing_motion_blur", alloc, e_rr
-				));
-
 			if(toCompile->extensions & ESHExtension_RayQuery)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_query", alloc, e_rr

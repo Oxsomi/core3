@@ -47,7 +47,6 @@
 	EGraphicsFeatures_RayPipeline        |        \
 	EGraphicsFeatures_RayQuery           |        \
 	EGraphicsFeatures_RayMicromapOpacity |        \
-	EGraphicsFeatures_RayMotionBlur      |        \
 	EGraphicsFeatures_RayReorder         |        \
 	EGraphicsFeatures_RayValidation      |        \
 	EGraphicsFeatures_RayTriPosition              \

@@ -71,6 +71,7 @@ typedef enum EGraphicsInstanceFlags {
 typedef struct GraphicsObjectTypes {
 	RefPtrType device, buffer, deviceTexture, renderTexture, depthStencil, swapchain;
 	RefPtrType pipelineCompute, pipelineGraphics, pipelineRaytracing, sampler, blas, tlas;
+	RefPtrType opacityMicromap;
 	RefPtrType descriptorLayout, descriptorTable, descriptorHeap, pipelineLayout;
 	RefPtrType commandList;
 } GraphicsObjectTypes;

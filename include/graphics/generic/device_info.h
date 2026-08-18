@@ -179,7 +179,8 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_RayPipeline               = 1 << 9,
 	EGraphicsFeatures_RayQuery                  = 1 << 10,
 	EGraphicsFeatures_RayMicromapOpacity        = 1 << 11,
-	EGraphicsFeatures_RayMotionBlur             = 1 << 12,
+	//Reserved, free to reuse.
+	EGraphicsFeatures_Reserved12             = 1 << 12,
 	EGraphicsFeatures_RayReorder                = 1 << 13,
 	EGraphicsFeatures_RayValidation             = 1 << 14,        //Debugging for raytracing validation
 	EGraphicsFeatures_RayTriPosition            = 1 << 26,        //SM6.10 tri vertex position fetch (RayQuery + ray-pipeline)

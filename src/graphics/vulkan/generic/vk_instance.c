@@ -59,6 +59,7 @@ static const C8 *VkGraphicsInstance_loaderName() {
 GraphicsObjectSizes VkGraphicsObjectSizes = {
 	.blas = GraphicsObjectSize_create(VkBLAS),
 	.tlas = GraphicsObjectSize_create(VkTLAS),
+	.opacityMicromap = GraphicsObjectSize_create(VkOpacityMicromap),
 	.pipeline = GraphicsObjectSize_createPadded(VkPipeline, 8),             //Align to 16
 	.sampler = GraphicsObjectSize_createPadded(VkSampler, 8),               //Align to 16
 	.buffer = GraphicsObjectSize_create(VkDeviceBuffer),
@@ -108,6 +109,10 @@ static_assert(
 			.blasInit = VkBLAS_init,
 			.blasFlush = VkBLASRef_flush,
 			.blasFree = VkBLAS_free,
+
+			.opacityMicromapInit = VkOpacityMicromap_init,
+			.opacityMicromapFlush = VkOpacityMicromapRef_flush,
+			.opacityMicromapFree = VkOpacityMicromap_free,
 
 			.tlasInit = VkTLAS_init,
 			.tlasFlush = VkTLASRef_flush,
@@ -584,7 +589,7 @@ U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsNam
 const C8 *optExtensionsName[] = {
 
 	"VK_KHR_performance_query",      "VK_KHR_ray_tracing_pipeline",   "VK_KHR_ray_query",
-	"VK_KHR_acceleration_structure", "VK_NV_ray_tracing_motion_blur",
+	"VK_KHR_acceleration_structure", "",
 
 	//The cross vendor SER extension, not the NV one: the shader stack emits SPV_EXT_shader_invocation_reorder,
 	// which is what this extension licenses.
@@ -1013,13 +1018,6 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VkPhysicalDeviceRayQueryFeaturesKHR,
 			rayQueryFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR
-		);
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayMotionBlur],
-			VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
-			rayMotionBlurFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV
 		);
 
 		//No NV fallback here either: a zeroed feature struct is what keeps the claim honest on older SDKs.
@@ -1590,17 +1588,6 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				if(optExtensions[EOptExtensions_RayQuery] || optExtensions[EOptExtensions_RayPipeline]) {
 
 					capabilities.features |= EGraphicsFeatures_Raytracing;
-
-					if(rayMotionBlurFeat.rayTracingMotionBlur)
-						capabilities.features |= EGraphicsFeatures_RayMotionBlur;
-
-					//Indirect must allow motion blur too (if it's enabled)
-
-					if(
-						rayMotionBlurFeat.rayTracingMotionBlur &&
-						!rayMotionBlurFeat.rayTracingMotionBlurPipelineTraceRaysIndirect
-					)
-						capabilities.features &= ~EGraphicsFeatures_RayMotionBlur;
 
 					//RayReorder = the SER API is available (valid to call, possibly a no-op).
 					//RayReorderActual = the driver hints it actually reorders, so it's worth restructuring shaders for.

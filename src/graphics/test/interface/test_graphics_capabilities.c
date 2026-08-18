@@ -67,7 +67,6 @@ static const TestCapabilityBit testFeatureBits[] = {
 	{ EGraphicsFeatures_RayPipeline,            "RayPipeline" },
 	{ EGraphicsFeatures_RayQuery,               "RayQuery" },
 	{ EGraphicsFeatures_RayMicromapOpacity,     "RayMicromapOpacity" },
-	{ EGraphicsFeatures_RayMotionBlur,          "RayMotionBlur" },
 	{ EGraphicsFeatures_RayReorder,             "RayReorder" },
 	{ EGraphicsFeatures_RayValidation,          "RayValidation" },
 	{ EGraphicsFeatures_RayTriPosition,         "RayTriPosition" },
@@ -131,7 +130,7 @@ void Test_graphicsCapabilities(Test *t, GraphicsDeviceRef *deviceRef) {
 	//Every ray sub-feature is derived inside the raytracing branch, so none can appear without it.
 
 	const EGraphicsFeatures raySubFeatures =
-		EGraphicsFeatures_RayMicromapOpacity | EGraphicsFeatures_RayMotionBlur |
+		EGraphicsFeatures_RayMicromapOpacity |
 		EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayValidation | EGraphicsFeatures_RayTriPosition;
 
 	if(f & raySubFeatures)
