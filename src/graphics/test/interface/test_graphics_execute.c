@@ -809,22 +809,31 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 
 		const DeviceData plainData = (DeviceData) { .buffer = plain };
 
+		const BLASCreateInfo wrongUsage = BLASCreateInfo_unindexed(
+			ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, plainData
+		);
+
 		Test_assert(t, "blasWrongUsage", !GraphicsDeviceRef_createBLASExt(
-			deviceRef, ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0,
-			ETextureFormatId_Undefined, 16, plainData, (DeviceData) { 0 }, NULL, &blasName, &badBlas, NULL
+			deviceRef, &wrongUsage, &blasName, &badBlas, NULL
 		));
 	}
 
+	const BLASCreateInfo zeroStride = BLASCreateInfo_unindexed(
+		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 0, positionData
+	);
+
 	Test_assert(t, "blasZeroStride", !GraphicsDeviceRef_createBLASExt(
-		deviceRef, ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0,
-		ETextureFormatId_Undefined, 0, positionData, (DeviceData) { 0 }, NULL, &blasName, &badBlas, NULL
+		deviceRef, &zeroStride, &blasName, &badBlas, NULL
 	));
 
 	Test_assert(t, "blasRejectedNothing", !badBlas);
 
+	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
+		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
+	);
+
 	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(
-		deviceRef, ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0,
-		ETextureFormatId_Undefined, 16, positionData, (DeviceData) { 0 }, NULL, &blasName, &blas, &t->err
+		deviceRef, &blasInfo, &blasName, &blas, &t->err
 	)))
 		goto clean;
 

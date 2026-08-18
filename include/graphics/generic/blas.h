@@ -90,33 +90,55 @@ typedef RefPtr BLASRef;
 //    Submitting an empty/unfinished BLAS to a TLAS will hide the instance.
 //    It has to re-create a TLAS if the BLAS is finished to ensure the BLAS is shown.
 
-//Creating BLAS from triangle geometry
+//Creating BLAS from triangle geometry.
+//The parameters travel as a struct rather than as a dozen arguments so optional geometry features can be
+// added as fields instead of as another entry point.
+//Build one with the helpers below rather than by hand: they take the REQUIRED parameters positionally, so a
+// forgotten one is still a compile error, and leave the optional fields zeroed.
+
+typedef struct BLASCreateInfo {
+
+	ERTASBuildFlags buildFlags;
+	EBLASFlag blasFlags;
+
+	ETextureFormatId positionFormat;    //RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
+	ETextureFormatId indexFormat;       //R16u, R32u, Undefined for unindexed
+
+	U16 positionOffset;                 //Offset into first position for first vertex
+	U16 positionBufferStride;           //<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
+
+	U32 padding;
+
+	DeviceData positionBuffer;          //Required
+	DeviceData indexBuffer;             //Only if indexFormat
+
+	BLASRef *parent;                    //If specified, indicates refit
+
+} BLASCreateInfo;
+
+BLASCreateInfo BLASCreateInfo_indexed(
+	ERTASBuildFlags buildFlags,
+	EBLASFlag blasFlags,
+	ETextureFormatId positionFormat,
+	U16 positionOffset,
+	U16 positionBufferStride,
+	DeviceData positionBuffer,
+	ETextureFormatId indexFormat,
+	DeviceData indexBuffer
+);
+
+BLASCreateInfo BLASCreateInfo_unindexed(
+	ERTASBuildFlags buildFlags,
+	EBLASFlag blasFlags,
+	ETextureFormatId positionFormat,
+	U16 positionOffset,
+	U16 positionBufferStride,
+	DeviceData positionBuffer
+);
 
 Bool GraphicsDeviceRef_createBLASExt(
 	GraphicsDeviceRef *dev,
-	ERTASBuildFlags buildFlags,
-	EBLASFlag blasFlags,
-	ETextureFormatId positionFormat,    //RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
-	U16 positionOffset,                 //Offset into first position for first vertex
-	ETextureFormatId indexFormat,       //R16u, R32u, Undefined
-	U16 positionBufferStride,           //<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
-	DeviceData positionBuffer,          //Required
-	DeviceData indexBuffer,             //Optional if indexFormat == Undefined
-	BLASRef *parent,                    //If specified, indicates refit
-	const CharString *name,
-	BLASRef **blas,
-	Error *e_rr
-);
-
-Bool GraphicsDeviceRef_createBLASUnindexedExt(
-	GraphicsDeviceRef *dev,
-	ERTASBuildFlags buildFlags,
-	EBLASFlag blasFlags,
-	ETextureFormatId positionFormat,    //RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
-	U16 positionOffset,                 //Offset into first position for first vertex
-	U16 positionBufferStride,           //<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
-	DeviceData positionBuffer,          //Required
-	BLASRef *parent,                    //If specified, indicates refit
+	const BLASCreateInfo *info,
 	const CharString *name,
 	BLASRef **blas,
 	Error *e_rr

@@ -1334,10 +1334,11 @@ static void TestShaders_raysWithFile(Test *t, GraphicsDeviceRef *deviceRef, cons
 	const DeviceData positionData = (DeviceData) { .buffer = positions };
 	name = CharString_createRefCStrConst("Ray trace BLAS");
 
-	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(
-		deviceRef, ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0,
-		ETextureFormatId_Undefined, 16, positionData, (DeviceData) { 0 }, NULL, &name, &blas, &t->err
-	)))
+	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
+		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
+	);
+
+	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(deviceRef, &blasInfo, &name, &blas, &t->err)))
 		goto clean;
 
 	TLASInstanceStatic instance = (TLASInstanceStatic) {

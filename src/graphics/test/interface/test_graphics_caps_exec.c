@@ -310,10 +310,11 @@ static void Test_buildCapabilityTlas(
 		!forceNoDataAccess
 		? ERTASBuildFlags_AllowDataAccessExt : ERTASBuildFlags_None;
 
-	if(!Test_assert(t, "capBlas", GraphicsDeviceRef_createBLASExt(
-		deviceRef, blasFlags, EBLASFlag_None, ETextureFormatId_RGBA32f, 0,
-		ETextureFormatId_Undefined, 16, positionData, (DeviceData) { 0 }, NULL, &name, &blas, &t->err
-	)))
+	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
+		blasFlags, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
+	);
+
+	if(!Test_assert(t, "capBlas", GraphicsDeviceRef_createBLASExt(deviceRef, &blasInfo, &name, &blas, &t->err)))
 		goto clean;
 
 	//Two instances of the one BLAS: the second translated +2 along X, so a ray aimed there can only hit if

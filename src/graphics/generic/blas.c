@@ -317,67 +317,83 @@ clean:
 	return s_uccess;
 }
 
-Bool GraphicsDeviceRef_createBLASExt(
-	GraphicsDeviceRef *dev,
+BLASCreateInfo BLASCreateInfo_indexed(
 	ERTASBuildFlags buildFlags,
 	EBLASFlag blasFlags,
 	ETextureFormatId positionFormat,
 	U16 positionOffset,
-	ETextureFormatId indexFormat,
 	U16 positionBufferStride,
 	DeviceData positionBuffer,
-	DeviceData indexBuffer,
-	BLASRef *parent,
-	const CharString *name,
-	BLASRef **blas,
-	Error *e_rr
+	ETextureFormatId indexFormat,
+	DeviceData indexBuffer
 ) {
-	const BLAS blasInfo = (BLAS) {
-		.base = (RTAS) {
-			.asConstructionType = (U8) EBLASConstructionType_Geometry,
-			.flags = (U8) buildFlags,
-			.flagsExt = (U8) blasFlags,
-			.parent = parent
-		},
-		.positionFormatId =    (U8) positionFormat,
-		.indexFormatId = (U8) indexFormat,
-		.positionBufferStride = positionBufferStride,
+	return (BLASCreateInfo) {
+		.buildFlags = buildFlags,
+		.blasFlags = blasFlags,
+		.positionFormat = positionFormat,
+		.indexFormat = indexFormat,
 		.positionOffset = positionOffset,
-		.indexBuffer = indexBuffer,
-		.positionBuffer = positionBuffer
+		.positionBufferStride = positionBufferStride,
+		.positionBuffer = positionBuffer,
+		.indexBuffer = indexBuffer
 	};
-
-	return GraphicsDeviceRef_createBLAS(dev, &blasInfo, name, blas, e_rr);
 }
 
-Bool GraphicsDeviceRef_createBLASUnindexedExt(
-	GraphicsDeviceRef *dev,
+//Unindexed is the same geometry with no index buffer, which the format enum already expresses as Undefined.
+//It stays a helper rather than an entry point so there is only one create call to validate and to extend.
+
+BLASCreateInfo BLASCreateInfo_unindexed(
 	ERTASBuildFlags buildFlags,
 	EBLASFlag blasFlags,
 	ETextureFormatId positionFormat,
 	U16 positionOffset,
 	U16 positionBufferStride,
-	DeviceData positionBuffer,
-	BLASRef *parent,
-	const CharString *name,
-	BLASRef **blas,
-	Error *e_rr
+	DeviceData positionBuffer
 ) {
-	return GraphicsDeviceRef_createBLASExt(
-		dev,
+	return BLASCreateInfo_indexed(
 		buildFlags,
 		blasFlags,
 		positionFormat,
 		positionOffset,
-		ETextureFormatId_Undefined,
 		positionBufferStride,
 		positionBuffer,
-		(DeviceData) { 0 },
-		parent,
-		name,
-		blas,
-		e_rr
+		ETextureFormatId_Undefined,
+		(DeviceData) { 0 }
 	);
+}
+
+Bool GraphicsDeviceRef_createBLASExt(
+	GraphicsDeviceRef *dev,
+	const BLASCreateInfo *info,
+	const CharString *name,
+	BLASRef **blas,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!info)
+		retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_createBLASExt()::info is required"));
+
+	const BLAS blasInfo = (BLAS) {
+		.base = (RTAS) {
+			.asConstructionType = (U8) EBLASConstructionType_Geometry,
+			.flags = (U8) info->buildFlags,
+			.flagsExt = (U8) info->blasFlags,
+			.parent = info->parent
+		},
+		.positionFormatId = (U8) info->positionFormat,
+		.indexFormatId = (U8) info->indexFormat,
+		.positionBufferStride = info->positionBufferStride,
+		.positionOffset = info->positionOffset,
+		.indexBuffer = info->indexBuffer,
+		.positionBuffer = info->positionBuffer
+	};
+
+	gotoIfError3(clean, GraphicsDeviceRef_createBLAS(dev, &blasInfo, name, blas, e_rr));
+
+clean:
+	return s_uccess;
 }
 
 //Creating BLAS from AABBs
