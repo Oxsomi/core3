@@ -40,13 +40,27 @@ typedef enum ERTASBuildFlags {
 
 	ERTASBuildFlags_None                       = 0,
 
-	ERTASBuildFlags_AllowUpdate                = 1 << 0,        //Allow updates using "refitting" (skeletal animations, etc.)
+	//Allow updates using "refitting" (skeletal animations, etc.).
+	//A refit is IN PLACE: the first build of an AS is a full build, and every build recorded after that
+	// one refits the same acceleration structure from itself, so the object, its device address and its
+	// bindless handle all stay exactly what they were.
+	//Change the inputs and record the update again to refit; a BLAS reads its own position buffer back, a
+	// TLAS takes new instances through TLASRef_setInstancesExt.
+	//Repeated refits degrade traversal quality on both APIs, so an AS that has drifted far from the
+	// geometry it was built for wants a fresh one rather than another refit.
+
+	ERTASBuildFlags_AllowUpdate                = 1 << 0,
+
 	ERTASBuildFlags_AllowCompaction            = 1 << 1,        //Allow to reduce memory used after compact command
 	ERTASBuildFlags_FastTrace                  = 1 << 2,        //Prefer optimizing longer / longer builds for better RT perf
 	ERTASBuildFlags_FastBuild                  = 1 << 3,        //Prefer fast builds over longer builds (might be worse RT perf)
 	ERTASBuildFlags_MinimizeMemory             = 1 << 4,        //Ensure both scratch and output mem is reduced (slower builds)
 
-	ERTASBuildFlags_IsUpdate                   = 1 << 5,        //If current update is refit (requires parent AS to be set)
+	//Reserved, free to reuse.
+	//Used to mean "this build is a refit", which is no longer something the caller asks for: whether a
+	// build refits is decided by whether the AS has been built before.
+
+	ERTASBuildFlags_Reserved5                  = 1 << 5,
 
 	//Keep triangle vertex positions readable from a hit (RayTriPosition / position fetch).
 	//Both APIs make this a build time opt in, and the AS is larger with it on, so it stays off by default.
@@ -59,8 +73,8 @@ typedef enum ERTASBuildFlags {
 	ERTASBuildFlags_DefaultBLAS                = ERTASBuildFlags_FastTrace | ERTASBuildFlags_AllowCompaction,
 
 	//Every flag an opacity micromap build accepts.
-	//Micromaps have no update mode at all (VkBuildMicromapModeEXT only has BUILD), so AllowUpdate and IsUpdate
-	// are errors rather than no-ops, and there is no micromap counterpart to MinimizeMemory.
+	//Micromaps have no update mode at all (VkBuildMicromapModeEXT only has BUILD), so AllowUpdate is an error
+	// rather than a no-op, and there is no micromap counterpart to MinimizeMemory.
 
 	ERTASBuildFlags_SupportedOpacityMicromapExt =
 		ERTASBuildFlags_FastTrace | ERTASBuildFlags_FastBuild | ERTASBuildFlags_AllowCompaction
@@ -79,8 +93,6 @@ typedef struct RTAS {
 	U8 flags;                                  //ERTASBuildFlags
 	U8 flagsExt;                               //For BLAS; EBLASFlag
 	U8 asConstructionType;                     //ETLASConstructionType or EBlasConstructionType
-
-	RTASRef *parent;                           //Only if Updated / this is a refit
 
 	DeviceBufferRef *asBuffer;                 //The acceleration structure as a buffer
 	DeviceBufferRef *tempScratchBuffer;        //Not required, but might include scratch buffer for temp build memory

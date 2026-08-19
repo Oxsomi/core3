@@ -21,6 +21,7 @@
 //graphics/d3d12/generic/dx_blas.c
 
 #include "graphics/generic/device.h"
+#include "types/base/mathi.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/d3d12/dx_device.h"
@@ -100,9 +101,6 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 
 	if(blas->base.flags & ERTASBuildFlags_MinimizeMemory)
 		flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_MINIMIZE_MEMORY;
-
-	if(blas->base.flags & ERTASBuildFlags_IsUpdate)
-		flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
 
 	if(blas->base.flags & ERTASBuildFlags_AllowDataAccessExt)
 		flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_DATA_ACCESS;
@@ -227,7 +225,11 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		EGraphicsResourceFlag_None,
 		NULL,
 		&tmp,
-		blas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
+		//One scratch buffer serves both, since the same object now does the full build and every refit after
+		// it; the update size is not required to be the smaller of the two, so neither is assumed.
+
+		blas->base.flags & ERTASBuildFlags_AllowUpdate ?
+			U64_max(sizes.ScratchDataSizeInBytes, sizes.UpdateScratchDataSizeInBytes) : sizes.ScratchDataSizeInBytes,
 		&blas->base.tempScratchBuffer,
 		e_rr
 	));
@@ -262,9 +264,14 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		.ScratchAccelerationStructureData = DeviceBufferRef_ptr(blas->base.tempScratchBuffer)->resource.deviceAddress
 	};
 
-	if(blas->base.parent) {
-		BLAS *parent = BLASRef_ptr(blas->base.parent);
-		buildAs.SourceAccelerationStructureData = DeviceBufferRef_ptr(parent->base.asBuffer)->resource.deviceAddress;
+	//A structure that was already built refits itself in place, which both APIs allow and which is what
+	// keeps its device address stable across an update.
+	//PERFORM_UPDATE goes on the local copy rather than on the stored inputs, since the prebuild sizes
+	// were queried without it.
+
+	if (blas->base.isCompleted) {
+		buildAs.Inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+		buildAs.SourceAccelerationStructureData = dstAS;
 	}
 
 	commandBuffer->buffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer->buffer, &buildAs, 0, NULL);

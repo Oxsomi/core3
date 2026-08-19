@@ -945,34 +945,6 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 
 	Test_assert(t, "blasTypeId", blas->refPtrType->typeId == (TypeId) EGraphicsTypeId_BLASExt);
 
-	//Refit validation.
-	//A parent means "update that AS in place", which is only legal if the parent allowed updates when it was
-	// built, and IsUpdate without a parent has nothing to update from.
-	//The BLAS above was built with ERTASBuildFlags_None, so it is exactly the case that must be refused.
-
-	{
-		BLASCreateInfo refitNoAllowUpdate = BLASCreateInfo_unindexed(
-			ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
-		);
-
-		refitNoAllowUpdate.parent = blas;
-
-		Test_assert(t, "blasRefitWithoutAllowUpdate", !GraphicsDeviceRef_createBLASExt(
-			deviceRef, &refitNoAllowUpdate, &blasName, &badBlas, NULL
-		));
-
-		BLASCreateInfo updateNoParent = BLASCreateInfo_unindexed(
-			ERTASBuildFlags_AllowUpdate | ERTASBuildFlags_IsUpdate,
-			EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
-		);
-
-		Test_assert(t, "blasIsUpdateWithoutParent", !GraphicsDeviceRef_createBLASExt(
-			deviceRef, &updateNoParent, &blasName, &badBlas, NULL
-		));
-
-		Test_assert(t, "blasRefitRejectedNothing", !badBlas);
-	}
-
 	//One instance at identity, pointing at the BLAS just made
 
 	TLASInstance instance = (TLASInstance) {
@@ -988,28 +960,45 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 	ListTLASInstance_createRefConst(&instance, 1, &instances, NULL);
 
 	if(!Test_assert(t, "createTlas", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS, NULL, &instances, true, NULL, &tlasName, &tlas, &t->err
+		deviceRef, ERTASBuildFlags_DefaultTLAS, &instances, true, NULL, &tlasName, &tlas, &t->err
 	)))
 		goto clean;
 
 	Test_assert(t, "tlasTypeId", tlas->refPtrType->typeId == (TypeId) EGraphicsTypeId_TLASExt);
 
-	//Same refit validation on the TLAS side.
-	//The TLAS above used DefaultTLAS, which is FastBuild only, so it never allowed updates either.
+	//Refit validation, which now lives on the setter rather than on create: a refit updates the TLAS that is
+	// already there, so there is no second object to reject.
+	//The TLAS above used DefaultTLAS, which is FastBuild only, so it never allowed updates.
 
 	{
-		TLASRef *badTlas = NULL;
+		Test_assert(t, "setInstancesNullTlas", !TLASRef_setInstancesExt(NULL, &instances, NULL));
+		Test_assert(t, "setInstancesNullList", !TLASRef_setInstancesExt(tlas, NULL, NULL));
+		Test_assert(t, "setInstancesWithoutAllowUpdate", !TLASRef_setInstancesExt(tlas, &instances, NULL));
 
-		Test_assert(t, "tlasRefitWithoutAllowUpdate", !GraphicsDeviceRef_createTLASExt(
-			deviceRef, ERTASBuildFlags_DefaultTLAS, tlas, &instances, true, NULL, &tlasName, &badTlas, NULL
-		));
+		//One that does allow updates, so the rest of the rules have something valid to run against.
 
-		Test_assert(t, "tlasIsUpdateWithoutParent", !GraphicsDeviceRef_createTLASExt(
-			deviceRef, ERTASBuildFlags_AllowUpdate | ERTASBuildFlags_IsUpdate, NULL, &instances, true, NULL,
-			&tlasName, &badTlas, NULL
-		));
+		TLASRef *updatable = NULL;
 
-		Test_assert(t, "tlasRefitRejectedNothing", !badTlas);
+		if (Test_assert(t, "createTlasUpdatable", GraphicsDeviceRef_createTLASExt(
+			deviceRef, ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate, &instances, true, NULL,
+			&tlasName, &updatable, &t->err
+		))) {
+
+			//An update refits the structure that is there instead of sizing a new one, so the instance count is
+			// fixed for the lifetime of the TLAS.
+
+			const TLASInstance pairData[2] = { instance, instance };
+			ListTLASInstance pair = (ListTLASInstance) { 0 };
+			ListTLASInstance_createRefConst(pairData, 2, &pair, NULL);
+
+			Test_assert(t, "setInstancesWrongLength", !TLASRef_setInstancesExt(updatable, &pair, NULL));
+			Test_assert(t, "setInstancesRejectedClean", !TLASRef_ptr(updatable)->instancesDirty);
+
+			Test_assert(t, "setInstances", TLASRef_setInstancesExt(updatable, &instances, &t->err));
+			Test_assert(t, "setInstancesDirty", TLASRef_ptr(updatable)->instancesDirty);
+
+			RefPtr_dec(&updatable);
+		}
 	}
 
 	//The CPU side instance plumbing hands back what went in

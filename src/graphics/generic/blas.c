@@ -54,11 +54,6 @@ void BLAS_free(void *blasGeneric, const Allocator *alloc) {
 		RefPtr_dec(&blas->ommIndexBuffer.buffer);
 	}
 
-	//A refit holds a reference to the AS it updates from, taken at create; without this the parent leaks for
-	// the process lifetime, and with it goes its bindless descriptor and its device reference.
-
-	RefPtr_dec(&blas->base.parent);
-
 	RefPtr_dec(&blas->base.device);
 }
 
@@ -83,26 +78,6 @@ Bool GraphicsDeviceRef_createBLAS(
 	if(*blasRef)
 		retError(clean, Error_invalidParameter(
 			3, 0, "GraphicsDeviceRef_createBLAS()::*blasRef not NULL, indicates memleak"
-		));
-
-	if(blas->base.parent && blas->base.parent->refPtrType->typeId != (TypeId) EGraphicsTypeId_BLASExt)
-		retError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createBLAS()::parent is invalid"));
-
-	if(blas->base.parent && BLASRef_ptr(blas->base.parent)->base.device != dev)
-		retError(clean, Error_invalidOperation(
-			1, "GraphicsDeviceRef_createBLAS()::parent and BLAS device need to share device"
-		));
-
-	if(!blas->base.parent && (blas->base.flags & ERTASBuildFlags_IsUpdate))
-		retError(clean, Error_invalidOperation(
-			7, "GraphicsDeviceRef_createBLAS()::parent is required if IsUpdate is present"
-		));
-
-	const Bool isUpdate = blas->base.parent || (blas->base.flags & ERTASBuildFlags_IsUpdate);
-
-	if(!(blas->base.flags & ERTASBuildFlags_AllowUpdate) && isUpdate)
-		retError(clean, Error_invalidOperation(
-			7, "GraphicsDeviceRef_createBLAS() is update is not possible if AllowUpdate is false"
 		));
 
 	EGraphicsFeatures feat = GraphicsDeviceRef_ptr(dev)->info.capabilities.features;
@@ -326,9 +301,6 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	BLAS *blasPtr = BLASRef_ptr(*blasRef);
 
-	if(blas->base.parent)
-		gotoIfError3(clean, RefPtr_inc(blas->base.parent));
-
 	*blasPtr = *blas;
 	blasPtr->base.name = CharString_createNull();
 
@@ -338,9 +310,6 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	gotoIfError3(clean, RefPtr_inc(dev));
 	blasPtr->base.device = dev;
-
-	if(isUpdate)
-		blasPtr->base.flags |= ERTASBuildFlags_IsUpdate;
 
 	if (blas->base.asConstructionType == EBLASConstructionType_Serialized) {
 		blasPtr->cpuData = Buffer_createNull();
@@ -536,8 +505,7 @@ Bool GraphicsDeviceRef_createBLASExt(
 		.base = (RTAS) {
 			.asConstructionType = (U8) EBLASConstructionType_Geometry,
 			.flags = (U8) info->buildFlags,
-			.flagsExt = (U8) info->blasFlags,
-			.parent = info->parent
+			.flagsExt = (U8) info->blasFlags
 		},
 		.positionFormatId = (U8) info->positionFormat,
 		.indexFormatId = (U8) info->indexFormat,
@@ -564,7 +532,6 @@ Bool GraphicsDeviceRef_createBLASProceduralExt(
 	U32 aabbStride,
 	U32 aabbOffset,
 	DeviceData buffer,
-	BLASRef *parent,
 	const CharString *name,
 	BLASRef **blas,
 	Error *e_rr
@@ -573,8 +540,7 @@ Bool GraphicsDeviceRef_createBLASProceduralExt(
 		.base = (RTAS) {
 			.asConstructionType = (U8) EBLASConstructionType_Procedural,
 			.flags = (U8) buildFlags,
-			.flagsExt = (U8) blasFlags,
-			.parent = parent
+			.flagsExt = (U8) blasFlags
 		},
 		.aabbBuffer = buffer,
 		.aabbStride = aabbStride,

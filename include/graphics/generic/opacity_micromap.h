@@ -91,8 +91,8 @@ typedef RefPtr OpacityMicromapRef;
 #define OpacityMicromap_ext(ptr, T) (!ptr ? NULL : (T##OpacityMicromap*)(ptr + 1))        //impl
 #define OpacityMicromapRef_ptr(ptr) RefPtr_data(ptr, OpacityMicromap)
 
-//base.parent, base.asConstructionType and base.flagsExt are meaningless for a micromap
-// and are rejected rather than ignored, so a caller cannot believe a refit happened.
+//base.asConstructionType and base.flagsExt are meaningless for a micromap and are rejected rather than
+// ignored, so a caller cannot believe they did something.
 //The legal build flags are ERTASBuildFlags_SupportedOpacityMicromapExt.
 
 typedef struct OpacityMicromapCreateInfo {

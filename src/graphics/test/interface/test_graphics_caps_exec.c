@@ -346,7 +346,7 @@ static void Test_buildCapabilityTlas(
 	name = CharString_createRefCStrConst("Capability trace TLAS");
 
 	if(!Test_assert(t, "capTlas", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS, NULL, &instances, false, NULL, &name, &tlas, &t->err
+		deviceRef, ERTASBuildFlags_DefaultTLAS, &instances, false, NULL, &name, &tlas, &t->err
 	)))
 		goto clean;
 

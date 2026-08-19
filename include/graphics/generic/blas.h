@@ -169,8 +169,6 @@ typedef struct BLASCreateInfo {
 
 	DeviceData ommIndexBuffer;          //Only if ommIndexFormat
 
-	BLASRef *parent;                    //If specified, indicates refit
-
 } BLASCreateInfo;
 
 BLASCreateInfo BLASCreateInfo_indexed(
@@ -230,7 +228,6 @@ Bool GraphicsDeviceRef_createBLASProceduralExt(
 	U32 aabbStride,                     //Alignment: 8
 	U32 aabbOffset,                     //Offset into the aabb array
 	DeviceData buffer,                  //Required
-	BLASRef *parent,                    //If specified, indicates refit
 	const CharString *name,
 	BLASRef **blas,
 	Error *e_rr

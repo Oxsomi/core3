@@ -357,28 +357,8 @@ Bool CommandListRef_transitionRTAS(
 				ETransitionType_ShaderWrite, EPipelineStage_RTASBuild, e_rr
 			));
 
-		if (rtas.parent) {
-
-			TransitionInternal *oldState = NULL;
-			if(CommandListRef_isBound(commandList, rtas.parent, (ResourceRange) { 0 }, &oldState)) {
-
-				if(oldState->type != type)
-					retError(clean, Error_invalidOperation(
-						4, "CommandListRef_transitionRTAS()::rtas.parent was already transitioned in scope!"
-					));
-
-				oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
-			}
-
-			else {
-
-				const TransitionInternal transition = (TransitionInternal) {
-					.resource = rtas.parent, .stage = stage, .type = type
-				};
-
-				gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
-			}
-		}
+		//A refit reads and writes the same structure, so the transition this function already records for the
+		// AS itself is the barrier the update needs; there is no separate source to declare.
 
 		if(isTLAS) {
 

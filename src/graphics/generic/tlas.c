@@ -62,6 +62,89 @@ Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result) 
 	return true;
 }
 
+//Swaps in a new set of instances so the next recorded update refits rather than rebuilds.
+//The instance array itself is only uploaded again at build time, which keeps a batch of transform changes to
+// a single upload instead of one per call.
+
+Bool TLASRef_setInstancesExt(TLASRef *tlasRef, const ListTLASInstance *instances, Error *e_rr) {
+
+	Bool s_uccess = true;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	U64 referenced = 0;
+	TLAS *tlas = NULL;
+
+	if(!tlasRef || tlasRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_TLASExt)
+		retError(clean, Error_nullPointer(0, "TLASRef_setInstancesExt()::tlas is required"));
+
+	if(!instances)
+		retError(clean, Error_nullPointer(1, "TLASRef_setInstancesExt()::instances is required"));
+
+	tlas = TLASRef_ptr(tlasRef);
+
+	if(!(tlas->base.flags & ERTASBuildFlags_AllowUpdate))
+		retError(clean, Error_invalidOperation(
+			0, "TLASRef_setInstancesExt() requires a TLAS that was built with AllowUpdate"
+		));
+
+	if(tlas->base.asConstructionType != ETLASConstructionType_Instances || tlas->useDeviceMemory)
+		retError(clean, Error_invalidOperation(
+			0, "TLASRef_setInstancesExt() is only valid on a TLAS built from CPU instances"
+		));
+
+	//An update refits the structure that is already there instead of sizing a new one, so both APIs want the
+	// instance count the TLAS was built with.
+
+	if(instances->length != tlas->cpuInstances.length)
+		retError(clean, Error_invalidParameter(
+			1, 0, "TLASRef_setInstancesExt()::instances needs the length the TLAS was built with"
+		));
+
+	if((acq = SpinLock_lock(&tlas->base.lock, U64_MAX)) < ELockAcquire_Success)
+		retError(clean, Error_invalidState(0, "TLASRef_setInstancesExt() couldn't acquire the TLAS"));
+
+	//Referenced up front, so an invalid BLAS halfway down the list leaves the TLAS exactly as it was rather
+	// than half swapped.
+
+	for (; referenced < instances->length; ++referenced) {
+
+		BLASRef *blas = instances->ptr[referenced].data.blasCpu;
+
+		if(!blas)
+			continue;
+
+		if(blas->refPtrType->typeId != (TypeId) EGraphicsTypeId_BLASExt || !RefPtr_inc(blas))
+			retError(clean, Error_invalidParameter(
+				1, 0, "TLASRef_setInstancesExt()::instances[i].data.blasCpu is invalid"
+			));
+	}
+
+	for (U64 i = 0; i < tlas->cpuInstances.length; ++i) {
+		TLASInstanceData *old = NULL;
+		TLAS_getInstanceDataCpuInternal(tlas, i, &old);
+		RefPtr_dec(&old->blasCpu);
+	}
+
+	for (U64 i = 0; i < instances->length; ++i)
+		tlas->cpuInstances.ptrNonConst[i] = instances->ptr[i];
+
+	referenced = 0;        //Handed over to the TLAS
+	tlas->instancesDirty = true;
+
+clean:
+
+	//Whatever was referenced but never handed over has to go back, or a rejected call leaks every BLAS it read.
+
+	for (U64 i = 0; i < referenced; ++i) {
+		BLASRef *blas = instances->ptr[i].data.blasCpu;
+		RefPtr_dec(&blas);
+	}
+
+	if(tlas && acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&tlas->base.lock);
+
+	return s_uccess;
+}
+
 void TLAS_free(void *tlasGeneric, const Allocator *alloc) {
 
 	TLAS *tlas = (TLAS*) tlasGeneric;
@@ -101,11 +184,6 @@ void TLAS_free(void *tlasGeneric, const Allocator *alloc) {
 		GraphicsDeviceRef_freeDescriptorBindless(tlas->base.device, tlas->bindlessDescriptorTable, tlas->handle, NULL);
 		RefPtr_dec(&tlas->bindlessDescriptorTable);
 	}
-
-	//A refit holds a reference to the AS it updates from, taken at create; without this the parent leaks for
-	// the process lifetime, and with it goes its bindless descriptor and its device reference.
-
-	RefPtr_dec(&tlas->base.parent);
 
 	RefPtr_dec(&tlas->base.device);
 }
@@ -154,26 +232,6 @@ Bool GraphicsDeviceRef_createTLAS(
 	if(*tlasRef)
 		retError(clean, Error_invalidParameter(
 			3, 0, "GraphicsDeviceRef_createTLAS()::*tlasRef not NULL, indicates memleak"
-		));
-
-	if(tlas->base.parent && tlas->base.parent->refPtrType->typeId != (TypeId) EGraphicsTypeId_TLASExt)
-		retError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createTLAS()::parent is invalid"));
-
-	if(tlas->base.parent && TLASRef_ptr(tlas->base.parent)->base.device != dev)
-		retError(clean, Error_invalidOperation(
-			1, "GraphicsDeviceRef_createTLAS()::parent and TLAS device need to share device"
-		));
-
-	if(!tlas->base.parent && (tlas->base.flags & ERTASBuildFlags_IsUpdate))
-		retError(clean, Error_invalidOperation(
-			7, "GraphicsDeviceRef_createTLAS()::parent is required if IsUpdate is present"
-		));
-
-	const Bool isUpdate = tlas->base.parent || (tlas->base.flags & ERTASBuildFlags_IsUpdate);
-
-	if(!(tlas->base.flags & ERTASBuildFlags_AllowUpdate) && isUpdate)
-		retError(clean, Error_invalidOperation(
-			8, "GraphicsDeviceRef_createTLAS() is update is not possible if AllowUpdate is false"
 		));
 
 	EGraphicsFeatures feat = GraphicsDeviceRef_ptr(dev)->info.capabilities.features;
@@ -260,9 +318,6 @@ Bool GraphicsDeviceRef_createTLAS(
 
 	TLAS *tlasPtr = TLASRef_ptr(*tlasRef);
 
-	if(tlas->base.parent)
-		gotoIfError3(clean, RefPtr_inc(tlas->base.parent));
-
 	*tlasPtr = *tlas;
 	tlasPtr->base.name = CharString_createNull();
 
@@ -277,9 +332,6 @@ Bool GraphicsDeviceRef_createTLAS(
 
 	gotoIfError3(clean, RefPtr_inc(dev));
 	tlasPtr->base.device = dev;
-
-	if(isUpdate)
-		tlasPtr->base.flags |= ERTASBuildFlags_IsUpdate;
 
 	if (tlas->base.asConstructionType == ETLASConstructionType_Serialized) {
 		tlasPtr->cpuData = Buffer_createNull();
@@ -386,7 +438,6 @@ clean:
 Bool GraphicsDeviceRef_createTLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	TLASRef *parent,                    //If specified, indicates refit
 	const ListTLASInstance *instances,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
@@ -398,8 +449,7 @@ Bool GraphicsDeviceRef_createTLASExt(
 	TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
-			.flags = (U8) buildFlags,
-			.parent = parent
+			.flags = (U8) buildFlags
 		},
 		.disallowBindlessDescriptor = disallowBindlessDescriptor
 	};
@@ -413,7 +463,6 @@ Bool GraphicsDeviceRef_createTLASExt(
 Bool GraphicsDeviceRef_createTLASDeviceExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	TLASRef *parent,
 	const DeviceData *instancesDevice,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
@@ -425,8 +474,7 @@ Bool GraphicsDeviceRef_createTLASDeviceExt(
 	TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
-			.flags = (U8) buildFlags,
-			.parent = parent
+			.flags = (U8) buildFlags
 		},
 		.useDeviceMemory = true,
 		.disallowBindlessDescriptor = disallowBindlessDescriptor

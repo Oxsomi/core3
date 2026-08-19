@@ -1333,7 +1333,7 @@ static void TestShaders_ommSpecialIndex(
 	name = CharString_createRefCStrConst("OMM TLAS, fully opaque");
 
 	if(!Test_assert(t, "ommCreateTlasOpaque", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS, NULL, &ommInstances, false, NULL, &name, &tlasOpaque, &t->err
+		deviceRef, ERTASBuildFlags_DefaultTLAS, &ommInstances, false, NULL, &name, &tlasOpaque, &t->err
 	)))
 		goto clean;
 
@@ -1341,7 +1341,7 @@ static void TestShaders_ommSpecialIndex(
 	name = CharString_createRefCStrConst("OMM TLAS, fully transparent");
 
 	if(!Test_assert(t, "ommCreateTlasTransparent", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS, NULL, &ommInstances, false, NULL, &name, &tlasTransparent, &t->err
+		deviceRef, ERTASBuildFlags_DefaultTLAS, &ommInstances, false, NULL, &name, &tlasTransparent, &t->err
 	)))
 		goto clean;
 
@@ -1608,12 +1608,8 @@ static void TestShaders_raysWithFile(
 
 	DeviceBufferRef *positions = NULL;
 	DeviceBufferRef *output = NULL;
-	DeviceBufferRef *positionsMoved = NULL;
 	BLASRef *blas = NULL;
-	BLASRef *blasRefit = NULL;
 	TLASRef *tlas = NULL;
-	TLASRef *tlasRefit = NULL;
-	TLASRef *tlasOverRefitBlas = NULL;
 	PipelineRef *pipeline = NULL;
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
@@ -1629,8 +1625,11 @@ static void TestShaders_raysWithFile(
 	Buffer triData = Buffer_createRefConst(triangle, sizeof(triangle));
 	CharString name = CharString_createRefCStrConst("Ray trace positions");
 
+	//CPUBacked because the BLAS refit below rewrites these positions in place and marks them dirty, which is
+	// what a refit reads: the BLAS keeps pointing at this same buffer.
+
 	if(!Test_assert(t, "createPositions", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_CPUBacked, NULL,
 		&name, &triData, &positions, &t->err
 	)))
 		goto clean;
@@ -1664,7 +1663,7 @@ static void TestShaders_raysWithFile(
 	name = CharString_createRefCStrConst("Ray trace TLAS");
 
 	if(!Test_assert(t, "createTlas", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate, NULL, &instances, false, NULL,
+		deviceRef, ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate, &instances, false, NULL,
 		&name, &tlas, &t->err
 	)))
 		goto clean;
@@ -1775,16 +1774,18 @@ static void TestShaders_raysWithFile(
 		Test_assert(t, "rayResults", values[0] == 1 && values[1] == 1 && !values[2] && !values[3]);
 	}
 
-	//Refit the TLAS with the instance translated far along Z, so the same 4 rays can no longer reach the
-	// triangle and every one has to miss.
-	//That is what separates a refit that ran from one that silently did nothing: a no-op refit still produces
-	// a valid AS that traces the ORIGINAL scene, so it would keep reporting the two hits above.
-	//Only one of the two ray variants runs this and the two blocks below it: refit and opacity micromaps are
-	// API level rather than SER specific, so there is no reason to pay for them twice.
-	//This used to crash WARP inside the refit build, which turned out to be ours rather than WARP's: dx_tlas.c
-	// assigned the parent to Dest instead of Source, so the driver copied from a null address.
+	//Refit the TLAS by moving its one instance far along Z, so the same 4 rays can no longer reach the triangle
+	// and every one has to miss.
+	//That is what separates a refit that ran from one that silently did nothing: a no-op refit still leaves a
+	// valid AS describing the ORIGINAL scene, so it would keep reporting the two hits above.
+	//A refit is in place, so this is the SAME TLAS throughout: no second object, no reallocation, and the
+	// bindless handle the shader was already given keeps working, which the assert below pins down.
+	//Only one of the two ray variants runs this and the blocks after it: refit and opacity micromaps are API
+	// level rather than SER specific, so there is no reason to pay for them twice.
 
 	if (testApiExtras) {
+
+		const BindlessDescriptor handleBeforeRefit = TLASRef_ptr(tlas)->handle;
 
 		TLASInstance moved = instance;
 		moved.transform[2][3] = 1000;                //Translate Z; the transform is row major 3x4
@@ -1792,12 +1793,7 @@ static void TestShaders_raysWithFile(
 		ListTLASInstance movedInstances = (ListTLASInstance) { 0 };
 		ListTLASInstance_createRefConst(&moved, 1, &movedInstances, NULL);
 
-		name = CharString_createRefCStrConst("Ray trace TLAS refit");
-
-		Bool madeRefit = Test_assert(t, "createTlasRefit", GraphicsDeviceRef_createTLASExt(
-			deviceRef, ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate, tlas, &movedInstances, false,
-			NULL, &name, &tlasRefit, &t->err
-		));
+		Bool madeRefit = Test_assert(t, "setInstancesMoved", TLASRef_setInstancesExt(tlas, &movedInstances, &t->err));
 
 		madeRefit &= Test_assert(t, "createRefitList", GraphicsDeviceRef_createCommandList(
 			deviceRef, KIBI, 16, 8, true, &refitList, &t->err
@@ -1805,32 +1801,19 @@ static void TestShaders_raysWithFile(
 
 		if (madeRefit) {
 
-			//A refit is a new object, so it has its own bindless slot and the raygen shader has to be pointed
-			// at it; reusing the parent's handle would just retrace the original scene.
+			//The scene the shader reads is reached through the same handle as before, so the app data that
+			// drove the first trace drives this one unchanged.
 
-			TestShaderAppData refitAppData = (TestShaderAppData) {
-				.handles = { DeviceBufferRef_ptr(output)->writeHandle, TLASRef_ptr(tlasRefit)->handle }
-			};
-
-			//Its own transition list: the one above names the PARENT tlas, and transitioning that while the
-			// shader reads the refit leaves the AS the trace actually touches in the wrong state.
-
-			const Transition refitTransitions[2] = {
-				(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
-				(Transition) { .resource = tlasRefit, .stage = EPipelineStage_RaygenExt }
-			};
-
-			ListTransition refitTransitionList = (ListTransition) { 0 };
-			ListTransition_createRefConst(refitTransitions, 2, &refitTransitionList, NULL);
+			Test_assert(t, "refitKeepsHandle", TLASRef_ptr(tlas)->handle == handleBeforeRefit);
 
 			Test_assert(t, "beginRefit", CommandListRef_begin(refitList, true, U64_MAX, &t->err));
 
 			Test_assert(t, "scopeRefit", CommandListRef_startScope(refitList, NULL, 4, NULL, &t->err));
-			Test_assert(t, "updateTlasRefit", CommandListRef_updateTLASExt(refitList, tlasRefit, &t->err));
+			Test_assert(t, "updateTlasRefit", CommandListRef_updateTLASExt(refitList, tlas, &t->err));
 			Test_assert(t, "scopeRefitEnd", CommandListRef_endScope(refitList, &t->err));
 
 			Test_assert(t, "scopeTraceRefit", CommandListRef_startScope(
-				refitList, &refitTransitionList, 5, NULL, &t->err
+				refitList, &traceTransitionList, 5, NULL, &t->err
 			));
 
 			Test_assert(t, "bindPipelineRefit", CommandListRef_setRaytracingPipeline(refitList, pipeline, &t->err));
@@ -1839,103 +1822,97 @@ static void TestShaders_raysWithFile(
 
 			Test_assert(t, "endRefit", CommandListRef_end(refitList, &t->err));
 
-			if (TestShaders_submitAndWait(t, deviceRef, refitList, &refitAppData, sizeof(refitAppData)))
+			if (TestShaders_submitAndWait(t, deviceRef, refitList, &appData, sizeof(appData)))
 				if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 					const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
 					Test_assert(t, "rayResultsRefit", !values[0] && !values[1] && !values[2] && !values[3]);
 				}
+
+			//Refit straight back to where it started.
+			//This is the case the old copy based design could not express without a third acceleration
+			// structure that pinned the second one, which pinned the first: chaining refits grew memory for as
+			// long as the chain was alive.
+			//In place it is the same object every time, so this costs nothing at all, and landing back on the
+			// original result proves a second refit reads the state the first one left rather than the state
+			// the AS was originally built from.
+
+			ListTLASInstance backInstances = (ListTLASInstance) { 0 };
+			ListTLASInstance_createRefConst(&instance, 1, &backInstances, NULL);
+
+			if (Test_assert(t, "setInstancesBack", TLASRef_setInstancesExt(tlas, &backInstances, &t->err))) {
+
+				Test_assert(t, "beginRefitBack", CommandListRef_begin(refitList, true, U64_MAX, &t->err));
+
+				Test_assert(t, "scopeRefitBack", CommandListRef_startScope(refitList, NULL, 4, NULL, &t->err));
+				Test_assert(t, "updateTlasRefitBack", CommandListRef_updateTLASExt(refitList, tlas, &t->err));
+				Test_assert(t, "scopeRefitBackEnd", CommandListRef_endScope(refitList, &t->err));
+
+				Test_assert(t, "scopeTraceRefitBack", CommandListRef_startScope(
+					refitList, &traceTransitionList, 5, NULL, &t->err
+				));
+
+				Test_assert(t, "bindPipelineRefitBack", CommandListRef_setRaytracingPipeline(
+					refitList, pipeline, &t->err
+				));
+
+				Test_assert(t, "traceRefitBack", CommandListRef_dispatch1DRaysExt(refitList, 0, 4, &t->err));
+				Test_assert(t, "scopeTraceRefitBackEnd", CommandListRef_endScope(refitList, &t->err));
+				Test_assert(t, "endRefitBack", CommandListRef_end(refitList, &t->err));
+
+				if (TestShaders_submitAndWait(t, deviceRef, refitList, &appData, sizeof(appData)))
+					if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+						const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+
+						Test_assert(
+							t, "rayResultsRefitBack",
+							values[0] == 1 && values[1] == 1 && !values[2] && !values[3]
+						);
+					}
+			}
 		}
 
-		//The same idea one level down, so the BLAS update path gets the same treatment the TLAS one just did.
-		//Here the triangle itself moves rather than the instance, which means the refit BLAS holds geometry the
-		// parent never had and a refit that quietly did nothing keeps tracing the original triangle.
-		//It gets its own TLAS because an instance names exactly one BLAS, and that TLAS is a plain build so the
-		// only thing under test is the BLAS.
+		//Opacity micromaps run here rather than at the end, because the BLAS refit below rewrites the position
+		// buffer these BLASes are built over and would leave them tracing a triangle that moved away.
 
-		const F32 triangleMoved[12] = {
-			0, 0, 1000, 1,
-			1, 0, 1000, 1,
-			0, 1, 1000, 1
-		};
+		TestShaders_ommSpecialIndex(t, deviceRef, &file, positions, output, emptyList);
 
-		Buffer movedData = Buffer_createRefConst(triangleMoved, sizeof(triangleMoved));
-		name = CharString_createRefCStrConst("Ray trace positions moved");
+		//The same idea one level down, so the BLAS update path gets the same treatment.
+		//Here the triangle itself moves rather than the instance, by rewriting the position buffer the BLAS
+		// already reads; the TLAS is refitted straight after because an instance caches the bounds of the BLAS
+		// it points at, so a BLAS that changed leaves every TLAS over it stale.
 
-		Bool madeBlasRefit = Test_assert(t, "createPositionsMoved", GraphicsDeviceRef_createBufferData(
-			deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
-			&name, &movedData, &positionsMoved, &t->err
+		Bool madeBlasRefit = Test_assert(t, "createBlasRefitList", GraphicsDeviceRef_createCommandList(
+			deviceRef, 2 * KIBI, 32, 16, true, &blasRefitList, &t->err
 		));
 
 		if (madeBlasRefit) {
 
-			BLASCreateInfo blasRefitInfo = BLASCreateInfo_unindexed(
-				ERTASBuildFlags_AllowUpdate, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16,
-				(DeviceData) { .buffer = positionsMoved }
-			);
+			F32 *positionData2 = (F32*) DeviceBufferRef_ptr(positions)->cpuData.ptrNonConst;
 
-			//An update may point at a different vertex buffer as long as the topology matches, which is what
-			// lets the moved triangle come from a buffer of its own instead of a rewrite of the original.
+			for(U64 i = 0; i < 3; ++i)
+				positionData2[i * 4 + 2] = 1000;                //Z of every vertex, the stride is 4 floats
 
-			blasRefitInfo.parent = blas;
-
-			name = CharString_createRefCStrConst("Ray trace BLAS refit");
-
-			madeBlasRefit = Test_assert(t, "createBlasRefit", GraphicsDeviceRef_createBLASExt(
-				deviceRef, &blasRefitInfo, &name, &blasRefit, &t->err
+			madeBlasRefit = Test_assert(t, "markPositionsDirty", DeviceBufferRef_markDirty(
+				positions, 0, sizeof(triangle), &t->err
 			));
 		}
 
 		if (madeBlasRefit) {
-
-			TLASInstance overRefit = instance;
-			overRefit.data.blasCpu = blasRefit;
-
-			ListTLASInstance overRefitInstances = (ListTLASInstance) { 0 };
-			ListTLASInstance_createRefConst(&overRefit, 1, &overRefitInstances, NULL);
-
-			name = CharString_createRefCStrConst("Ray trace TLAS over refit BLAS");
-
-			madeBlasRefit = Test_assert(t, "createTlasOverRefitBlas", GraphicsDeviceRef_createTLASExt(
-				deviceRef, ERTASBuildFlags_DefaultTLAS, NULL, &overRefitInstances, false, NULL,
-				&name, &tlasOverRefitBlas, &t->err
-			));
-
-			madeBlasRefit &= Test_assert(t, "createBlasRefitList", GraphicsDeviceRef_createCommandList(
-				deviceRef, 2 * KIBI, 32, 16, true, &blasRefitList, &t->err
-			));
-		}
-
-		if (madeBlasRefit) {
-
-			TestShaderAppData blasRefitAppData = (TestShaderAppData) {
-				.handles = { DeviceBufferRef_ptr(output)->writeHandle, TLASRef_ptr(tlasOverRefitBlas)->handle }
-			};
-
-			const Transition blasRefitTransitions[2] = {
-				(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
-				(Transition) { .resource = tlasOverRefitBlas, .stage = EPipelineStage_RaygenExt }
-			};
-
-			ListTransition blasRefitTransitionList = (ListTransition) { 0 };
-			ListTransition_createRefConst(blasRefitTransitions, 2, &blasRefitTransitionList, NULL);
 
 			Test_assert(t, "beginBlasRefit", CommandListRef_begin(blasRefitList, true, U64_MAX, &t->err));
 
 			Test_assert(t, "scopeBlasRefit", CommandListRef_startScope(blasRefitList, NULL, 6, NULL, &t->err));
-			Test_assert(t, "updateBlasRefit", CommandListRef_updateBLASExt(blasRefitList, blasRefit, &t->err));
+			Test_assert(t, "updateBlasRefit", CommandListRef_updateBLASExt(blasRefitList, blas, &t->err));
 			Test_assert(t, "scopeBlasRefitEnd", CommandListRef_endScope(blasRefitList, &t->err));
 
-			Test_assert(t, "scopeTlasOverRefit", CommandListRef_startScope(blasRefitList, NULL, 7, NULL, &t->err));
-
-			Test_assert(t, "updateTlasOverRefit", CommandListRef_updateTLASExt(
-				blasRefitList, tlasOverRefitBlas, &t->err
-			));
-
-			Test_assert(t, "scopeTlasOverRefitEnd", CommandListRef_endScope(blasRefitList, &t->err));
+			Test_assert(t, "scopeTlasAfterBlas", CommandListRef_startScope(blasRefitList, NULL, 7, NULL, &t->err));
+			Test_assert(t, "updateTlasAfterBlas", CommandListRef_updateTLASExt(blasRefitList, tlas, &t->err));
+			Test_assert(t, "scopeTlasAfterBlasEnd", CommandListRef_endScope(blasRefitList, &t->err));
 
 			Test_assert(t, "scopeTraceBlasRefit", CommandListRef_startScope(
-				blasRefitList, &blasRefitTransitionList, 8, NULL, &t->err
+				blasRefitList, &traceTransitionList, 8, NULL, &t->err
 			));
 
 			Test_assert(t, "bindPipelineBlasRefit", CommandListRef_setRaytracingPipeline(
@@ -1947,7 +1924,7 @@ static void TestShaders_raysWithFile(
 
 			Test_assert(t, "endBlasRefit", CommandListRef_end(blasRefitList, &t->err));
 
-			if (TestShaders_submitAndWait(t, deviceRef, blasRefitList, &blasRefitAppData, sizeof(blasRefitAppData)))
+			if (TestShaders_submitAndWait(t, deviceRef, blasRefitList, &appData, sizeof(appData)))
 				if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 					const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -1955,9 +1932,6 @@ static void TestShaders_raysWithFile(
 				}
 		}
 
-		//Opacity micromaps run last because they need the scene the plain trace already proved works
-
-		TestShaders_ommSpecialIndex(t, deviceRef, &file, positions, output, emptyList);
 	}
 
 clean:
@@ -1967,13 +1941,9 @@ clean:
 	RefPtr_dec(&emptyList);
 	RefPtr_dec(&commandList);
 	RefPtr_dec(&pipeline);
-	RefPtr_dec(&tlasOverRefitBlas);
-	RefPtr_dec(&tlasRefit);
 	RefPtr_dec(&tlas);
-	RefPtr_dec(&blasRefit);
 	RefPtr_dec(&blas);
 	RefPtr_dec(&output);
-	RefPtr_dec(&positionsMoved);
 	RefPtr_dec(&positions);
 
 	SHFile_free(&file, alloc);

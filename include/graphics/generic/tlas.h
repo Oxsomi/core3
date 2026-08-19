@@ -88,6 +88,12 @@ typedef struct TLAS {
 	Bool blasDataAccessKnown;
 	Bool blasDataAccessAll;
 
+	//Set by TLASRef_setInstancesExt and cleared by the build that consumed it.
+	//The instance array lives in a mapped buffer that is filled once at create, so without this a refit
+	// would rebuild the structure over the instances it already had.
+
+	Bool instancesDirty;
+
 	BindlessDescriptor handle;
 
 	DeviceBufferRef *tempInstanceBuffer;        //If cpuInstances, temp upload heap
@@ -113,6 +119,13 @@ typedef RefPtr TLASRef;
 
 Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result);
 
+//Replaces the instances a CPU built TLAS holds, so the next recorded update refits it in place.
+//The count has to match what the TLAS was built with: both APIs update an existing structure rather than
+// resize one, so a scene that gained or lost instances needs a new TLAS instead of a refit.
+//Only valid on a TLAS built from CPU instances, and only on one that allows updates.
+
+Bool TLASRef_setInstancesExt(TLASRef *tlas, const ListTLASInstance *instances, Error *e_rr);
+
 //Creating TLASes;
 //The changes are queued until the graphics device submits the next commands.
 //If the TLAS is deleted before submitting any commands then it won't be filled with anything.
@@ -120,7 +133,6 @@ Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result);
 Bool GraphicsDeviceRef_createTLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	TLASRef *parent,                    //If specified, indicates refit
 	const ListTLASInstance *instances,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
@@ -132,7 +144,6 @@ Bool GraphicsDeviceRef_createTLASExt(
 Bool GraphicsDeviceRef_createTLASDeviceExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	TLASRef *parent,                    //If specified, indicates refit
 	const DeviceData *instancesDevice,  //Instances on the GPU, should be sized correctly
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,

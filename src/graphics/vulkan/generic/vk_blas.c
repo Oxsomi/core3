@@ -21,6 +21,7 @@
 //graphics/vulkan/generic/vk_blas.c
 
 #include "graphics/generic/device.h"
+#include "types/base/mathi.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/vulkan/vk_device.h"
@@ -183,11 +184,8 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		.pGeometries = &blasExt->geometry
 	};
 
-	if(blas->base.parent)
-		blasExt->geometries.srcAccelerationStructure = BLAS_ext(BLASRef_ptr(blas->base.parent), Vk)->as;
-
-	if(blas->base.flags & ERTASBuildFlags_IsUpdate)
-		blasExt->geometries.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+	//mode and srcAccelerationStructure are left at build here and decided per build in flush instead, since
+	// whether a build refits depends on whether this structure has been built before.
 
 	//Get build size to allocate scratch and final buffer
 
@@ -231,7 +229,11 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		EGraphicsResourceFlag_None,
 		NULL,
 		&tmp,
-		blas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.updateScratchSize : sizes.buildScratchSize,
+		//One scratch buffer serves both, since the same object now does the full build and every refit after
+		// it; the update size is not required to be the smaller of the two, so neither is assumed.
+
+		blas->base.flags & ERTASBuildFlags_AllowUpdate ?
+			U64_max(sizes.buildScratchSize, sizes.updateScratchSize) : sizes.buildScratchSize,
 		&blas->base.tempScratchBuffer, e_rr
 	));
 
@@ -288,6 +290,14 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		return s_uccess;
 
 	const VkAccelerationStructureBuildRangeInfoKHR *range = &blasExt->range;
+
+	//A structure that was already built refits itself in place, which both APIs allow and which is what keeps
+	// its device address and every instance descriptor pointing at it valid across an update.
+
+	if (blas->base.isCompleted) {
+		blasExt->geometries.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+		blasExt->geometries.srcAccelerationStructure = blasExt->as;
+	}
 
 	deviceExt->cmdBuildAccelerationStructures(
 		commandBuffer->buffer,

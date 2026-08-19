@@ -375,7 +375,9 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   	U32 padding;
   	DeviceData positionBuffer;			//Required
   	DeviceData indexBuffer;				//Only if indexFormat
-  	BLASRef *parent;					//If specified, indicates refit
+  	ETextureFormatId ommIndexFormat;	//R16u, R32u, Undefined for no OMM
+  	U32 padding1;
+  	DeviceData ommIndexBuffer;			//Only if ommIndexFormat
   } BLASCreateInfo;
 
   BLASCreateInfo BLASCreateInfo_indexed(
@@ -413,7 +415,6 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   	U32 aabbStride,						//Alignment: 8
   	U32 aabbOffset,						//Offset into the aabb array
   	DeviceData buffer,					//Required
-  	BLASRef *parent,					//If specified, indicates refit
   	const CharString *name,
   	BLASRef **blas,
   	Error *e_rr
@@ -423,7 +424,6 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
 - ```c
   Bool createTLASExt(
   	ERTASBuildFlags buildFlags,
-  	TLASRef *parent,					//If specified, indicates refit
   	const ListTLASInstance *instances,
   	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
@@ -434,9 +434,13 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   ```
 
 - ```c
+  //Refits a CPU built TLAS in place; see Refitting
+  Bool TLASRef_setInstancesExt(TLASRef *tlas, const ListTLASInstance *instances, Error *e_rr);
+  ```
+
+- ```c
   Bool createTLASDeviceExt(
   	ERTASBuildFlags buildFlags,
-  	TLASRef *parent,					//If specified, indicates refit
   	const DeviceData *instancesDevice,	//Instances on the GPU, should be sized correctly
   	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
@@ -1279,17 +1283,31 @@ Contains the following properties:
 - isCompleted: this is set when the BLAS has been signaled as fully built. For example when buildBLASExt has been called or when the first submitCommands has been triggered since it has been queued.
 - flagsExt: BLAS or TLAS specific flags (currently only used for BLAS).
 - asConstructionType: the BLAS or TLAS specific construction type.
-- parent: the acceleration structure that was used as a base (for example: compaction or refitting).
 - scratchBuffer: temporary data that is only available until the AS has been created and the frame has been completed on the CPU.
 - asBuffer: the buffer resource that represents this acceleration structure.
 - flags:
-  - AllowUpdate (0): refitting is allowed. This is a faster way of updating acceleration structures, but at the cost of traversal time.
+  - AllowUpdate (0): refitting is allowed. This is a faster way of updating acceleration structures, but at the cost of traversal time. See Refitting below.
   - AllowCompaction (1): compaction is allowed. This reduces memory overhead for the acceleration structures.
   - FastTrace (2): optimize trace times over build times / memory.
   - FastBuild (3): optimize build times over trace times / memory.
   - MinimizeMemory (4): optimize memory over trace times / build times.
-  - IsUpdate (5): this RTAS build is a refit (reuses old data to expand the ASes).
+  - Reserved5 (5): reserved, free to reuse. Used to mean "this build is a refit", which is no longer something the caller asks for.
   - DisableAutomaticUpdate (6): next submitCommands shouldn't build this acceleration structure. This is useful when the mesh has to be initialized by the GPU using commands first (such as copies, compute or stream out).
+
+##### Refitting
+
+A refit (also called an update) rebuilds an acceleration structure from the one already there instead of from nothing. It is much cheaper than a full build and is what skeletal animation, moving instances and deforming geometry use, at the cost of traversal quality that degrades the further the new data drifts from what the structure was originally built for. Build with `ERTASBuildFlags_AllowUpdate` to allow it.
+
+**A refit is in place and does not produce a new object.** The first build of an AS is a full build; every build recorded after that one refits the same structure from itself, which is what both APIs mean by an update whose source and destination are the same. So the AS, its device address and (for a TLAS) its bindless handle all survive a refit unchanged: nothing that points at it has to be re-pointed, and refitting every frame allocates nothing.
+
+To refit, change the inputs and record the update again:
+
+- A **BLAS** reads its own position buffer, so rewriting that buffer (and marking it dirty if it is CPUBacked) is the change. Only the vertex data may move; the topology, formats and counts are fixed for the life of the structure, because an update refits an existing structure rather than sizing a new one.
+- A **TLAS** takes new instances through `TLASRef_setInstancesExt`, which requires the same instance count it was built with. The upload happens at build time, so setting instances repeatedly before recording an update costs one upload rather than one per call.
+
+A BLAS that was refitted leaves every TLAS over it stale, since an instance caches the bounds of the BLAS it points at, so record the TLAS update in the same submit right after the BLAS one.
+
+There is no way to keep the previous generation of an AS alive while refitting, by design: that used to be the only shape available and it meant every refit both reallocated the whole structure and pinned its predecessor for as long as it lived, so a chain of refits grew memory without bound. Something that genuinely needs last frame's structure (temporal techniques) wants a deliberate copy, not a refit.
 
 #### BLAS
 
@@ -1326,9 +1344,26 @@ gotoIfError3(clean, GraphicsDeviceRef_createBLASExt(twm->device, &blasInfo, &nam
 
 The example above assumes that there is an index buffer and a position buffer available. Those buffers need to have the ASReadExt buffer usage to be accessible during build time.
 
-Unindexed geometry goes through BLASCreateInfo_unindexed instead, which drops the index format and buffer arguments; a refit sets `.parent` on the returned struct before the create call.
+Unindexed geometry goes through BLASCreateInfo_unindexed instead, which drops the index format and buffer arguments.
 
 The BLAS flags are the following: EBLASFlag_AvoidDuplicateAnyHit and EBLASFlag_DisableAnyHit. This is only relevant for raytracing pipelines and is irrelevant if the TLAS instance itself turns off anyHit.
+
+###### Opacity micromaps (Ext)
+
+BLASCreateInfo_indexedWithOmmIndicesExt extends the indexed form with a per triangle opacity index buffer, which requires EGraphicsFeatures_RayMicromapOpacity. It is the SPECIAL INDEX form: no micromap object is attached, so every element has to be an EOMMSpecialIndex rather than an index into one. Build the values with EOMMSpecialIndex_pack, since the special indices are negative constants matched against an unsigned element and so depend on the element width (FullyTransparent is 0xFFFF with R16u and 0xFFFFFFFF with R32u).
+
+- FullyTransparent: the triangle is ignored entirely, so the ray passes through it.
+- FullyOpaque: the triangle hits without ever running anyHit.
+- FullyUnknownTransparent / FullyUnknownOpaque: anyHit decides, the name being the hint for what it usually is.
+
+The index buffer holds exactly one element per TRIANGLE (so indexBuffer length / index stride / 3) and only R16u or R32u are accepted. R8u is legal on D3D12 and on VK_KHR_opacity_micromap but forbidden by the EXT extension OxC3 targets, so it is deliberately not offered.
+
+Two opt-ins outside the BLAS have to line up or the micromap is silently ignored, which looks exactly like a micromap that did nothing:
+
+- The pipeline needs EPipelineRaytracingFlags_AllowOpacityMicromapExt. Both APIs may traverse differently when micromaps are in play, so they make you say so at pipeline creation and ignore any micromap otherwise.
+- The instance must NOT set ForceDisableAnyHit, and the ray must not use RAY_FLAG_FORCE_OPAQUE. Both mean FORCE_OPAQUE, which makes traversal treat every triangle as opaque and skip the micromap. Note that ETLASInstanceFlag_Default INCLUDES ForceDisableAnyHit, so an instance that wants micromaps has to spell its flags out rather than take the default.
+
+Whether a real micromap object is worth building over special indices is what the EGraphicsFeatures2_RayMicromapOpacityActual capability bit is for; special indices cost nothing either way.
 
 ##### Example: Procedural geometry
 
@@ -1359,7 +1394,6 @@ gotoIfError3(clean, GraphicsDeviceRef_createBLASProceduralExt(
 	sizeof(F32) * 3 * 2,
 	0,
 	(DeviceData) { .buffer = twm->aabbs },
-	NULL,
 	CharString_createRefCStrConst("Test BLAS AABB"),
 	&twm->blasAABB,
 	e_rr
@@ -1467,7 +1501,7 @@ The instance flags are identical to both DXR and VkRT:
 
 - DisableCulling (0): Don't listen to the back/front face culling flags of TraceRay.
 - CCW (1): Counter clockwise winding order.
-- ForceDisableAnyHit (2): Never run any hit.
+- ForceDisableAnyHit (2): Never run any hit. This is FORCE_OPAQUE on both APIs, so it also turns off opacity micromaps for the instance; it is part of ETLASInstanceFlag_Default.
 - ForceEnableAnyHit (3): Always run any hit.
 
 ##### Used functions and obtained
