@@ -31,6 +31,7 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/tlas.h"
+#include "graphics/generic/opacity_micromap.h"
 #include "graphics/generic/blas.h"
 #include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
@@ -347,7 +348,11 @@ Bool CommandListRef_transitionRTAS(
 		return s_uccess;
 
 	Bool isTLAS = rtasPtr->refPtrType->typeId == (TypeId) EGraphicsTypeId_TLASExt;
-	RTAS rtas = isTLAS ? TLASRef_ptr(rtasPtr)->base : BLASRef_ptr(rtasPtr)->base;
+	Bool isOMM = rtasPtr->refPtrType->typeId == (TypeId) EGraphicsTypeId_OpacityMicromapExt;
+
+	RTAS rtas =
+		isTLAS ? TLASRef_ptr(rtasPtr)->base :
+		(isOMM ? OpacityMicromapRef_ptr(rtasPtr)->base : BLASRef_ptr(rtasPtr)->base);
 
 	if(stage == EPipelineStage_RTASBuild && type == ETransitionType_ShaderWrite) {
 
@@ -360,7 +365,32 @@ Bool CommandListRef_transitionRTAS(
 		//A refit reads and writes the same structure, so the transition this function already records for the
 		// AS itself is the barrier the update needs; there is no separate source to declare.
 
-		if(isTLAS) {
+		if (isOMM) {
+
+			OpacityMicromap *micromap = OpacityMicromapRef_ptr(rtasPtr);
+
+			gotoIfError3(clean, CommandListRef_transitionBuffer(
+				commandList,
+				micromap->inputBuffer.buffer,
+				(BufferRange) {
+					.startRange = micromap->inputBuffer.offset,
+					.endRange = micromap->inputBuffer.offset + micromap->inputBuffer.len
+				},
+				ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+			));
+
+			gotoIfError3(clean, CommandListRef_transitionBuffer(
+				commandList,
+				micromap->entryBuffer.buffer,
+				(BufferRange) {
+					.startRange = micromap->entryBuffer.offset,
+					.endRange = micromap->entryBuffer.offset + micromap->entryBuffer.len
+				},
+				ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+			));
+		}
+
+		else if(isTLAS) {
 
 			TLAS *tlas = TLASRef_ptr(rtasPtr);
 
@@ -438,6 +468,18 @@ Bool CommandListRef_transitionRTAS(
 			}
 		}
 	}
+
+	//A BLAS that links a micromap reads it during its build and traversal keeps reading it afterwards, so the
+	// micromap follows the BLAS into whatever scope the BLAS entered, in read state either way.
+
+	if(
+		!isTLAS && !isOMM &&
+		BLASRef_ptr(rtasPtr)->base.asConstructionType == EBLASConstructionType_Geometry &&
+		BLASRef_ptr(rtasPtr)->ommMicromap
+	)
+		gotoIfError3(clean, CommandListRef_transitionRTAS(
+			commandList, BLASRef_ptr(rtasPtr)->ommMicromap, ETransitionType_ShaderRead, stage, e_rr
+		));
 
 	TransitionInternal *oldState = NULL;
 	if(CommandListRef_isBound(commandList, rtasPtr, (ResourceRange) { 0 }, &oldState)) {

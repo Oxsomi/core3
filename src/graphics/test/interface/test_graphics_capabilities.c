@@ -147,12 +147,17 @@ void Test_graphicsCapabilities(Test *t, GraphicsDeviceRef *deviceRef) {
 	if(f2 & EGraphicsFeatures2_RayMicromapOpacityActual)
 		Test_assert(t, "ommActualImpliesOmm", (f & EGraphicsFeatures_RayMicromapOpacity) != 0);
 
+	//8-bit OMM indices only mean anything on a device that takes micromaps at all
+
+	if(f2 & EGraphicsFeatures2_RayMicromapOpacityU8)
+		Test_assert(t, "ommU8ImpliesOmm", (f & EGraphicsFeatures_RayMicromapOpacity) != 0);
+
 	//The RT specific features2 bits are equally meaningless without raytracing itself.
 
 	const EGraphicsFeatures2 rayFeatures2 =
 		EGraphicsFeatures2_RayClusterAS | EGraphicsFeatures2_RayPartitionedTLAS |
 		EGraphicsFeatures2_RayIndirectASBuild | EGraphicsFeatures2_RayReorderActual |
-		EGraphicsFeatures2_RayMicromapOpacityActual;
+		EGraphicsFeatures2_RayMicromapOpacityActual | EGraphicsFeatures2_RayMicromapOpacityU8;
 
 	if(f2 & rayFeatures2)
 		Test_assert(t, "rayFeatures2ImpliesRaytracing", (f & EGraphicsFeatures_Raytracing) != 0);

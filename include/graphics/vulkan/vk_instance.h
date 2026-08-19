@@ -85,7 +85,14 @@ typedef enum EOptExtensions {
 	EOptExtensions_DepthStencilResolve,
 	EOptExtensions_Spirv14,
 	EOptExtensions_ShaderFloatControls,
-	EOptExtensions_Maintenance5
+	EOptExtensions_Maintenance5,
+
+	//The KHR promotion of RayMicromapOpacity above and the extension it hard depends on.
+	//Appended rather than placed next to their sibling because this enum indexes the positional extension
+	// name table in vk_instance.c.
+
+	EOptExtensions_RayMicromapOpacityKHR,
+	EOptExtensions_DeviceAddressCommands
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];

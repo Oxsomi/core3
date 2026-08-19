@@ -22,6 +22,8 @@
 
 #include "graphics/generic/interface.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/opacity_micromap.h"
+#include "platforms/logx.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "types/container/string.h"
@@ -52,10 +54,15 @@ void BLAS_free(void *blasGeneric, const Allocator *alloc) {
 		RefPtr_dec(&blas->indexBuffer.buffer);
 		RefPtr_dec(&blas->positionBuffer.buffer);
 		RefPtr_dec(&blas->ommIndexBuffer.buffer);
+		RefPtr_dec(&blas->ommMicromap);
 	}
 
 	RefPtr_dec(&blas->base.device);
 }
+
+//Defined with the other EOMMIndex helpers below; the create validation above them needs the width too.
+
+static U8 EOMMIndex_stride(ETextureFormatId ommIndexFormat);
 
 Bool GraphicsDeviceRef_createBLAS(
 	GraphicsDeviceRef *dev, const BLAS *blas, const CharString *name, BLASRef **blasRef, Error *e_rr
@@ -215,6 +222,11 @@ Bool GraphicsDeviceRef_createBLAS(
 
 		if (ommIndexFormat == ETextureFormatId_Undefined) {
 
+			if(blas->ommMicromap)
+				retError(clean, Error_invalidOperation(
+					1, "GraphicsDeviceRef_createBLAS()::ommMicromap requires an OMM index buffer to link through"
+				));
+
 			if(ommIndexBuffer.buffer)
 				retError(clean, Error_unsupportedOperation(
 					1, "GraphicsDeviceRef_createBLAS()::ommIndexBuffer should be NULL if ommIndexFormat is Undefined"
@@ -230,9 +242,23 @@ Bool GraphicsDeviceRef_createBLAS(
 					1, "GraphicsDeviceRef_createBLAS()::ommIndexFormat requires an indexed BLAS"
 				));
 
-			if(ommIndexFormat != ETextureFormatId_R16u && ommIndexFormat != ETextureFormatId_R32u)
+			if(
+				ommIndexFormat != ETextureFormatId_R16u && ommIndexFormat != ETextureFormatId_R32u &&
+				ommIndexFormat != ETextureFormatId_R8u
+			)
 				retError(clean, Error_unsupportedOperation(
-					2, "GraphicsDeviceRef_createBLAS()::ommIndexFormat must be R32u or R16u"
+					2, "GraphicsDeviceRef_createBLAS()::ommIndexFormat must be R32u, R16u or R8u"
+				));
+
+			//D3D12 always takes 8-bit OMM indices, Vulkan only under the KHR extension, which is what the
+			// qualifier bit reports; rejected here so the mistake surfaces at create rather than in the driver.
+
+			if(
+				ommIndexFormat == ETextureFormatId_R8u &&
+				!(GraphicsDeviceRef_ptr(dev)->info.capabilities.features2 & EGraphicsFeatures2_RayMicromapOpacityU8)
+			)
+				retError(clean, Error_unsupportedOperation(
+					2, "GraphicsDeviceRef_createBLAS()::ommIndexFormat R8u needs RayMicromapOpacityU8"
 				));
 
 			//Validated before the length checks below, because RTAS_validateDeviceBuffer normalizes a len of 0
@@ -240,13 +266,43 @@ Bool GraphicsDeviceRef_createBLAS(
 
 			gotoIfError3(clean, RTAS_validateDeviceBuffer(&ommIndexBuffer, e_rr));
 
-			const U8 ommIndexStride = ommIndexFormat == ETextureFormatId_R32u ? 4 : 2;
+			const U8 ommIndexStride = EOMMIndex_stride(ommIndexFormat);
 
 			if(!ommIndexBuffer.buffer || (ommIndexBuffer.len & (ommIndexStride - 1)))
 				retError(clean, Error_unsupportedOperation(
 					1,
 					"GraphicsDeviceRef_createBLAS()::ommIndexBuffer should be multiple of ommIndexFormat and not NULL"
 				));
+
+			//A linked micromap has to be a real one from the same device; NULL is the special index only form.
+
+			if (blas->ommMicromap) {
+
+				if(blas->ommMicromap->refPtrType->typeId != (TypeId) EGraphicsTypeId_OpacityMicromapExt)
+					retError(clean, Error_invalidOperation(
+						1, "GraphicsDeviceRef_createBLAS()::ommMicromap is invalid"
+					));
+
+				if(OpacityMicromapRef_ptr(blas->ommMicromap)->base.device != dev)
+					retError(clean, Error_invalidOperation(
+						1, "GraphicsDeviceRef_createBLAS()::ommMicromap needs to share the BLAS's device"
+					));
+
+				//Worth saying once rather than never or per create: a real micromap costs build time and
+				// memory, and on a device that likely emulates micromaps traversal won't pay that back the
+				// way the free special indices would (see EGraphicsFeatures2_RayMicromapOpacityActual).
+
+				if(
+					!(GraphicsDeviceRef_ptr(dev)->info.capabilities.features2 &
+					EGraphicsFeatures2_RayMicromapOpacityActual) &&
+					GraphicsDevice_logOnce(GraphicsDeviceRef_ptr(dev), EGraphicsDeviceMessage_OmmLikelyEmulated)
+				)
+					Log_performanceLnx(
+						"GraphicsDeviceRef_createBLAS() linked a real opacity micromap, but this device likely "
+						"emulates micromaps (RayMicromapOpacityActual is unset); special index OMM is free, a "
+						"micromap object may not pay off here"
+					);
+			}
 
 			//One OMM index per triangle, and a triangle is three vertex indices.
 
@@ -348,6 +404,9 @@ Bool GraphicsDeviceRef_createBLAS(
 			RefPtr_inc(ommIndexBuffer.buffer);
 
 		blasPtr->ommIndexBuffer = ommIndexBuffer;
+
+		if(blasPtr->ommMicromap)
+			gotoIfError3(clean, RefPtr_inc(blasPtr->ommMicromap));
 	}
 
 	if(name)
@@ -364,15 +423,22 @@ clean:
 }
 
 //The element width of an OMM index format, 0 for a format that carries no OMM.
-//Kept local because the two legal formats are validated at create time; anything else has no width to report.
+//Kept local because the legal formats are validated at create time; anything else has no width to report.
 
 static U8 EOMMIndex_stride(ETextureFormatId ommIndexFormat) {
 
 	switch (ommIndexFormat) {
+		case ETextureFormatId_R8u:     return 1;
 		case ETextureFormatId_R16u:    return 2;
 		case ETextureFormatId_R32u:    return 4;
 		default:                       return 0;
 	}
+}
+
+//All ones at the element's width, so the helpers below stay arithmetic rather than a ladder of ternaries.
+
+static U32 EOMMIndex_mask(U8 stride) {
+	return stride == 4 ? U32_MAX : ((U32)1 << (stride * 8)) - 1;
 }
 
 U32 EOMMSpecialIndex_pack(EOMMSpecialIndex specialIndex, ETextureFormatId ommIndexFormat) {
@@ -387,7 +453,7 @@ U32 EOMMSpecialIndex_pack(EOMMSpecialIndex specialIndex, ETextureFormatId ommInd
 		return 0;
 
 	const U32 raw = (U32)(I32) specialIndex;
-	return stride == 2 ? (raw & U16_MAX) : raw;
+	return raw & EOMMIndex_mask(stride);
 }
 
 U32 EOMMIndex_max(ETextureFormatId ommIndexFormat) {
@@ -399,7 +465,7 @@ U32 EOMMIndex_max(ETextureFormatId ommIndexFormat) {
 	if(!stride)
 		return 0;
 
-	return (stride == 2 ? U16_MAX : U32_MAX) - 4;
+	return EOMMIndex_mask(stride) - 4;
 }
 
 Bool EOMMIndex_isSpecial(U32 raw, ETextureFormatId ommIndexFormat) {
@@ -409,7 +475,7 @@ Bool EOMMIndex_isSpecial(U32 raw, ETextureFormatId ommIndexFormat) {
 	if(!stride)
 		return false;
 
-	return raw > EOMMIndex_max(ommIndexFormat) && raw <= (stride == 2 ? U16_MAX : U32_MAX);
+	return raw > EOMMIndex_max(ommIndexFormat) && raw <= EOMMIndex_mask(stride);
 }
 
 BLASCreateInfo BLASCreateInfo_indexed(
@@ -488,6 +554,30 @@ BLASCreateInfo BLASCreateInfo_indexedWithOmmIndicesExt(
 	return info;
 }
 
+//The micromap ARRAY form, which is the indices form plus the object the indices point into.
+
+BLASCreateInfo BLASCreateInfo_indexedWithOmmExt(
+	ERTASBuildFlags buildFlags,
+	EBLASFlag blasFlags,
+	ETextureFormatId positionFormat,
+	U16 positionOffset,
+	U16 positionBufferStride,
+	DeviceData positionBuffer,
+	ETextureFormatId indexFormat,
+	DeviceData indexBuffer,
+	ETextureFormatId ommIndexFormat,
+	DeviceData ommIndexBuffer,
+	OpacityMicromapRef *ommMicromap
+) {
+	BLASCreateInfo info = BLASCreateInfo_indexedWithOmmIndicesExt(
+		buildFlags, blasFlags, positionFormat, positionOffset, positionBufferStride, positionBuffer,
+		indexFormat, indexBuffer, ommIndexFormat, ommIndexBuffer
+	);
+
+	info.ommMicromap = ommMicromap;
+	return info;
+}
+
 Bool GraphicsDeviceRef_createBLASExt(
 	GraphicsDeviceRef *dev,
 	const BLASCreateInfo *info,
@@ -514,7 +604,8 @@ Bool GraphicsDeviceRef_createBLASExt(
 		.indexBuffer = info->indexBuffer,
 		.positionBuffer = info->positionBuffer,
 		.ommIndexFormatId = (U8) info->ommIndexFormat,
-		.ommIndexBuffer = info->ommIndexBuffer
+		.ommIndexBuffer = info->ommIndexBuffer,
+		.ommMicromap = info->ommMicromap
 	};
 
 	gotoIfError3(clean, GraphicsDeviceRef_createBLAS(dev, &blasInfo, name, blas, e_rr));

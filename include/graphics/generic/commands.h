@@ -159,10 +159,16 @@ Bool CommandListRef_dispatch3DRaysExt(
 //Raytracing feature
 
 typedef RefPtr TLASRef;
+typedef RefPtr OpacityMicromapRef;
 typedef RefPtr BLASRef;
 
 Bool CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas, Error *e_rr);
 Bool CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr);
+
+//Builds an opacity micromap, which has to be recorded before any BLAS build that links it.
+//A micromap has no update mode, so recording it again after it completed is a no-op.
+
+Bool CommandListRef_updateOmmExt(CommandListRef *commandList, OpacityMicromapRef *micromap, Error *e_rr);
 
 //DynamicRendering feature
 

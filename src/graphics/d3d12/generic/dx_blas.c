@@ -23,6 +23,7 @@
 #include "graphics/generic/device.h"
 #include "types/base/mathi.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/opacity_micromap.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
@@ -155,9 +156,17 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 			blasExt->ommLinkage = (D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC) {
 				.OpacityMicromapIndexBuffer = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
 					.StartAddress = getDxLocation(blas->ommIndexBuffer, 0),
-					.StrideInBytes = blas->ommIndexFormatId == ETextureFormatId_R32u ? 4 : 2
+					.StrideInBytes =
+						blas->ommIndexFormatId == ETextureFormatId_R32u ? 4 :
+						(blas->ommIndexFormatId == ETextureFormatId_R8u ? 1 : 2)
 				},
-				.OpacityMicromapIndexFormat = ETextureFormatId_toDXFormat(blas->ommIndexFormatId)
+				.OpacityMicromapIndexFormat = ETextureFormatId_toDXFormat(blas->ommIndexFormatId),
+
+				//The built OMM array's address when one is linked; 0 keeps the special index only form
+
+				.OpacityMicromapArray = !blas->ommMicromap ? 0 : DeviceBufferRef_ptr(
+					OpacityMicromapRef_ptr(blas->ommMicromap)->base.asBuffer
+				)->resource.deviceAddress
 			};
 
 			geometry->Type = D3D12_RAYTRACING_GEOMETRY_TYPE_OMM_TRIANGLES;

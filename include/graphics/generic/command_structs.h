@@ -85,7 +85,8 @@ typedef enum ECommandOp {
 	ECommandOp_DispatchRaysExt,
 	ECommandOp_SetRaytracingPipelineExt,
 	ECommandOp_UpdateBLASExt,
-	ECommandOp_UpdateTLASExt
+	ECommandOp_UpdateTLASExt,
+	ECommandOp_UpdateOmmExt
 
 } ECommandOp;
 

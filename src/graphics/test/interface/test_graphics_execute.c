@@ -840,6 +840,20 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 		deviceRef, &ommWithoutIndices, &blasName, &badBlas, NULL
 	));
 
+	//A micromap without an index buffer has nothing to link it to the triangles
+
+	{
+		BLASCreateInfo ommNoIndices = BLASCreateInfo_unindexed(
+			ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
+		);
+
+		ommNoIndices.ommMicromap = (OpacityMicromapRef*) positionData.buffer;        //Wrong type too, format first
+
+		Test_assert(t, "blasOmmMicromapWithoutFormat", !GraphicsDeviceRef_createBLASExt(
+			deviceRef, &ommNoIndices, &blasName, &badBlas, NULL
+		));
+	}
+
 	//An OMM index format of Undefined means no OMM at all, so carrying a buffer anyway is contradictory.
 
 	BLASCreateInfo ommBufferNoFormat = BLASCreateInfo_unindexed(

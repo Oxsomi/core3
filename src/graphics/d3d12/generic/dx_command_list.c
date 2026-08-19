@@ -32,6 +32,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/tlas.h"
+#include "graphics/generic/opacity_micromap.h"
 #include "graphics/generic/blas.h"
 #include "types/container/buffer.h"
 #include "types/math/vec4i_swizzle.h"
@@ -919,6 +920,15 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			break;
 
+		//An OMM array is an acceleration structure on D3D12, so it flushes the same way
+
+		case ECommandOp_UpdateOmmExt:
+
+			if(!(DX_WRAP_FUNC(OpacityMicromapRef_flush))(temp, deviceRef, *(OpacityMicromapRef**)data, e_rr))
+				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
+			break;
+
 		//case ECommandOp_DispatchRaysIndirect:
 		case ECommandOp_DispatchRaysExt: {
 
@@ -1070,10 +1080,17 @@ void DX_WRAP_FUNC(CommandList_process)(
 				//If it's on the GPU then we have to rely on manual RTAS transitions
 
 				Bool isTLAS = transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_TLASExt;
+				Bool isOMM = transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_OpacityMicromapExt;
 
-				if (isTLAS || transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_BLASExt) {
+				//An OMM array is an acceleration structure on D3D12, so it transitions exactly like one
 
-					RTAS rtas = isTLAS ? TLASRef_ptr(transition.resource)->base : BLASRef_ptr(transition.resource)->base;
+				if (isTLAS || isOMM || transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_BLASExt) {
+
+					RTAS rtas =
+						isTLAS ? TLASRef_ptr(transition.resource)->base : (
+							isOMM ? OpacityMicromapRef_ptr(transition.resource)->base :
+							BLASRef_ptr(transition.resource)->base
+						);
 
 					gotoIfError3(nextTransition, DxDeviceBuffer_transition(
 

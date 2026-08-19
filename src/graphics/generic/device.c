@@ -684,6 +684,7 @@ Bool GraphicsDeviceRef_create(
 		device->info.capabilities.features2 &=~ (
 			EGraphicsFeatures2_RayReorderActual         |
 			EGraphicsFeatures2_RayMicromapOpacityActual |
+			EGraphicsFeatures2_RayMicromapOpacityU8     |
 			EGraphicsFeatures2_RayClusterAS             |
 			EGraphicsFeatures2_RayPartitionedTLAS       |
 			EGraphicsFeatures2_RayIndirectASBuild
@@ -2115,6 +2116,16 @@ U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDevic
 		return 0;
 
 	return GraphicsDevice_getMemoryBudgetExt(device, isDeviceLocal);
+}
+
+Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message) {
+
+	if(!device)
+		return false;
+
+	//Fetch or returns the PREVIOUS bits, so the first caller sees the bit clear and everyone after sees it set
+
+	return !(AtomicI64_or(&device->runtimeMessages, (I64) message) & (I64) message);
 }
 
 Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {

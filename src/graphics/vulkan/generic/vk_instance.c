@@ -625,7 +625,9 @@ const C8 *optExtensionsName[] = {
 	"VK_KHR_push_descriptor",
 
 	"VK_KHR_create_renderpass2", "VK_KHR_depth_stencil_resolve", "VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls",
-	"VK_KHR_maintenance5"
+	"VK_KHR_maintenance5",
+
+	"VK_KHR_opacity_micromap", "VK_KHR_device_address_commands"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1036,6 +1038,16 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VkPhysicalDeviceOpacityMicromapFeaturesEXT,
 			rayOpacityMicroFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT
+		);
+
+		//The KHR promotion is queried independently: a device may expose either or both, and which one answers
+		// decides the struct vk_blas.c chains and whether 8-bit OMM indices are legal.
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayMicromapOpacityKHR] && optExtensions[EOptExtensions_DeviceAddressCommands],
+			VkPhysicalDeviceOpacityMicromapFeaturesKHR,
+			rayOpacityMicroFeatKhr,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_KHR
 		);
 
 		getDeviceFeatures(
@@ -1612,8 +1624,17 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 						}
 					#endif
 
-					if(rayOpacityMicroFeat.micromap)
+					if(rayOpacityMicroFeat.micromap || rayOpacityMicroFeatKhr.micromap)
 						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
+
+					//KHR is preferred when the device offers it.
+					//It would also be the only VK path where 8-bit OMM indices are legal (VUID 11570 vs the EXT
+					// VUID 10719), but RayMicromapOpacityU8 deliberately stays UNCLAIMED here: the KHR side isn't
+					// implemented yet (micromap arrays refuse, the attach never ran on a real driver), and a
+					// capability must not outrun its implementation.
+
+					if(rayOpacityMicroFeatKhr.micromap)
+						capabilities.featuresExt |= EVkGraphicsFeatures_OpacityMicromapKHR;
 
 					if(rayPositionFetchFeat.rayTracingPositionFetch)
 						capabilities.features |= EGraphicsFeatures_RayTriPosition;

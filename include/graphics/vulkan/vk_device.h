@@ -153,6 +153,14 @@ typedef struct VkGraphicsDevice {
 	PFN_vkGetAccelerationStructureDeviceAddressKHR getAccelerationStructureDeviceAddress;
 	PFN_vkGetDeviceAccelerationStructureCompatibilityKHR getAccelerationStructureCompatibility;
 
+	//Only loaded on the EXT opacity micromap path; the KHR promotion builds micromap arrays through the
+	// ordinary acceleration structure entry points above and has no micromap functions of its own.
+
+	PFN_vkCreateMicromapEXT createMicromap;
+	PFN_vkDestroyMicromapEXT destroyMicromap;
+	PFN_vkCmdBuildMicromapsEXT cmdBuildMicromaps;
+	PFN_vkGetMicromapBuildSizesEXT getMicromapBuildSizes;
+
 	PFN_vkCmdTraceRaysKHR traceRays;
 	PFN_vkCmdTraceRaysIndirectKHR traceRaysIndirect;
 	PFN_vkCreateRayTracingPipelinesKHR createRaytracingPipelines;

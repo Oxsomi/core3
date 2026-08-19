@@ -503,7 +503,16 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_MeshShader:                 on = feat & EGraphicsFeatures_MeshShader;               break;
 			case EOptExtensions_VariableRateShading:        on = feat & EGraphicsFeatures_VariableRateShading;      break;
 			case EOptExtensions_DynamicRendering:           on = feat & EGraphicsFeatures_DirectRendering;          break;
-			case EOptExtensions_RayMicromapOpacity:         on = feat & EGraphicsFeatures_RayMicromapOpacity;       break;
+			//EXT is the fallback: a device that got the KHR promotion runs that instead, see vk_instance.c
+
+			case EOptExtensions_RayMicromapOpacity:
+				on = (feat & EGraphicsFeatures_RayMicromapOpacity) && !(featEx & EVkGraphicsFeatures_OpacityMicromapKHR);
+				break;
+
+			case EOptExtensions_RayMicromapOpacityKHR:
+			case EOptExtensions_DeviceAddressCommands:
+				on = featEx & EVkGraphicsFeatures_OpacityMicromapKHR;
+				break;
 			case EOptExtensions_AtomicF32:                  on = types & EGraphicsDataTypes_AtomicF32;              break;
 			case EOptExtensions_DeferredHostOperations:     on = feat & EGraphicsFeatures_Raytracing;               break;
 			case EOptExtensions_RaytracingValidation:       on = feat & EGraphicsFeatures_RayValidation;            break;
@@ -780,6 +789,18 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			vkGetDeviceAccelerationStructureCompatibilityKHR,
 			deviceExt->getAccelerationStructureCompatibility
 		);
+
+		//The EXT micromap entry points; the KHR promotion has none, its arrays build through the AS calls above
+
+		if(
+			(feat & EGraphicsFeatures_RayMicromapOpacity) &&
+			!(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR)
+		) {
+			getVkFunctionDevice(clean, vkCreateMicromapEXT, deviceExt->createMicromap);
+			getVkFunctionDevice(clean, vkDestroyMicromapEXT, deviceExt->destroyMicromap);
+			getVkFunctionDevice(clean, vkCmdBuildMicromapsEXT, deviceExt->cmdBuildMicromaps);
+			getVkFunctionDevice(clean, vkGetMicromapBuildSizesEXT, deviceExt->getMicromapBuildSizes);
+		}
 	}
 
 	if (feat & EGraphicsFeatures_RayPipeline) {

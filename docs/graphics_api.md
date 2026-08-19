@@ -142,9 +142,10 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 
 - experimentalFeatures: the subset of `features` that is experimental/preview on this device+build (not final; may change or be removed across SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled best-effort via the preview Agility SDK + D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions so this stays empty. Check it if you want to opt into preview features knowingly.
   - RayValidation: extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot.
-- features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild, RayMicromapOpacityActual.
+- features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild, RayMicromapOpacityActual, RayMicromapOpacityU8.
   - RayReorderActual: SER (RayReorder) means the shader-execution-reordering API is available (always valid to call, but may be a no-op); RayReorderActual means the device actually performs the reordering, so it's worth restructuring shaders around it.
   - RayMicromapOpacityActual: same shape one feature over. RayMicromapOpacity means the API accepts opacity micromaps; this bit means they're likely backed by dedicated hardware rather than emulated, so a real micromap object is worth building. Neither API reports it (D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's VkPhysicalDeviceOpacityMicromapFeaturesEXT is one bool, and an Ampere 3080 reports the same 12/12 subdivision maximum as hardware that has the units), so OxC3 derives it: NVIDIA needs RayReorderActual since the reordering and OMM hardware shipped in the same generation, every other vendor is taken at its word. It is a heuristic, so treat it as "worth it" rather than as a guarantee; special-index-only OMM costs nothing either way.
+  - RayMicromapOpacityU8: 8-bit (R8u) OMM index buffers are legal. D3D12 ships this with opacity micromaps themselves; on Vulkan only the VK_KHR_opacity_micromap promotion permits VK_INDEX_TYPE_UINT8 (the EXT extension forbids it), and since OxC3's KHR path isn't implemented yet no Vulkan device claims the bit today — R8u is rejected at BLAS create there.
   - DescriptorHeap: full bindless; shaders index the descriptor heap directly without a fixed descriptor layout. D3D12: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) + resource binding tier 3; Vulkan: VK_EXT_descriptor_heap. Always implies Bindless on both APIs.
   - RayClusterAS + RayPartitionedTLAS: mega geometry (RTXMG), split the way Vulkan splits it: cluster acceleration structures (CLAS/cluster BLAS) and partitioned TLAS. Vulkan: VK_NV_cluster_acceleration_structure / VK_NV_partitioned_acceleration_structure; D3D12: NVAPI raytracing caps (cluster operations / partitioned TLAS).
   - RayIndirectASBuild: GPU-driven acceleration structure builds. Vulkan: accelerationStructureIndirectBuild (vkCmdBuildAccelerationStructuresIndirectKHR for classic AS); D3D12: implied by either mega geometry bit, since those builds are indirect by design.
@@ -246,6 +247,12 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   ```
 
   - Waits for all currently queued commands on the device.
+
+- ```c
+  Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message);
+  ```
+
+  - One time runtime hints: returns true exactly once per device per message (an atomic test and set on GraphicsDevice::runtimeMessages), so the caller logs on true and stays silent forever after, preventing a per call hint from spamming. Current messages: OmmLikelyEmulated, logged as a performance hint when a BLAS links a real opacity micromap on a device without RayMicromapOpacityActual (where the free special indices usually serve better).
 
 - ```c
   Bool createSwapchain(
@@ -1356,7 +1363,7 @@ BLASCreateInfo_indexedWithOmmIndicesExt extends the indexed form with a per tria
 - FullyOpaque: the triangle hits without ever running anyHit.
 - FullyUnknownTransparent / FullyUnknownOpaque: anyHit decides, the name being the hint for what it usually is.
 
-The index buffer holds exactly one element per TRIANGLE (so indexBuffer length / index stride / 3) and only R16u or R32u are accepted. R8u is legal on D3D12 and on VK_KHR_opacity_micromap but forbidden by the EXT extension OxC3 targets, so it is deliberately not offered.
+The index buffer holds exactly one element per TRIANGLE (so indexBuffer length / index stride / 3). R16u and R32u are accepted everywhere opacity micromaps are; R8u additionally requires the EGraphicsFeatures2_RayMicromapOpacityU8 capability, since Vulkan's EXT extension forbids 8-bit indices and only the KHR promotion (or D3D12) permits them.
 
 Two opt-ins outside the BLAS have to line up or the micromap is silently ignored, which looks exactly like a micromap that did nothing:
 
@@ -1364,6 +1371,8 @@ Two opt-ins outside the BLAS have to line up or the micromap is silently ignored
 - The instance must NOT set ForceDisableAnyHit, and the ray must not use RAY_FLAG_FORCE_OPAQUE. Both mean FORCE_OPAQUE, which makes traversal treat every triangle as opaque and skip the micromap. Note that ETLASInstanceFlag_Default INCLUDES ForceDisableAnyHit, so an instance that wants micromaps has to spell its flags out rather than take the default.
 
 Whether a real micromap object is worth building over special indices is what the EGraphicsFeatures2_RayMicromapOpacityActual capability bit is for; special indices cost nothing either way.
+
+Micromap OBJECTS go through `GraphicsDeviceRef_createOpacityMicromapExt` (see opacity_micromap.h): the create takes an input buffer of packed opacity bits, an entry buffer of `OpacityMicromapEntry` records (dataOffset, subdivisionLevel, format) and the usage counts describing them, all needing EDeviceBufferUsage_ASReadExt. Input and entry buffers must sit at 256 byte aligned addresses on Vulkan (VUID-vkCmdBuildMicromapsEXT-pInfos-07515, validated at create) and 128 byte aligned on D3D12; OxC3's own ASRead allocations satisfy both, and on D3D12 SDK versions whose debug layer wrongly enforces 256 (stable before 620, preview before 722) the allocation floor stays 256 so validation runs clean. The build is recorded with `CommandListRef_updateOmmExt`, which must precede any BLAS build that links the micromap; recording it again after it completed is a no-op, since micromaps have no update mode. A BLAS links one through `BLASCreateInfo_indexedWithOmmExt`, whose OMM index buffer then holds ENTRY indices (special values still allowed per triangle) instead of only special values. On D3D12 an OMM array is itself an acceleration structure; on Vulkan the EXT extension builds it as a `VkMicromapEXT` (the KHR promotion's as-an-acceleration-structure build is not implemented yet for lack of a driver to test against, so micromap objects are refused there while special indices keep working).
 
 ##### Example: Procedural geometry
 

@@ -85,7 +85,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_cooperative_matrix as CoopMat (cooperative matrix / GEMM)
   - VK_EXT_shader_float8 as CoopFP8 (.shaderFloat8 - the additive FP8 e4m3/e5m2 cooperative tier)
   - VK_EXT_mesh_shader as MeshShader
-  - VK_EXT_opacity_micromap as RayMicromapOpacity. RayMicromapOpacityActual (features2) is NOT read from Vulkan at all; it is derived, see below.
+  - VK_EXT_opacity_micromap OR VK_KHR_opacity_micromap (+ its VK_KHR_device_address_commands dependency) as RayMicromapOpacity. The KHR promotion is preferred when the device offers it (EVkGraphicsFeatures_OpacityMicromapKHR in featuresExt records which one runs). KHR would also be the only VK path where RayMicromapOpacityU8 (features2, 8-bit OMM indices) could be set — it permits VK_INDEX_TYPE_UINT8 (VUID-VkAccelerationStructureTrianglesOpacityMicromapKHR-indexType-11570) while EXT forbids it (VUID-...EXT-indexType-10719) — but the bit stays unclaimed on Vulkan until the KHR path is implemented. RayMicromapOpacityActual (features2) is NOT read from Vulkan at all; it is derived, see below.
   - VK_KHR_dynamic_rendering as DirectRendering
   - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
   - VK_KHR_multiview as Multiview.
@@ -371,7 +371,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - VariableShadingRateTier as EGraphicsFeatures_VariableRateShading.
 - RaytracingTier>1_0 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline
 - RaytracingTier>1_1 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline + EGraphicsFeatures_RayQuery.
-- RaytracingTier>=1_2 (DXR 1.2) as EGraphicsFeatures_RayMicromapOpacity + EGraphicsFeatures_RayReorder. Additionally OPTIONS22.ShaderExecutionReorderingActuallyReorders as RayReorderActual (features2) - RayReorder only means the SER API is available (can be a no-op), RayReorderActual means the device really reorders. RayMicromapOpacityActual (features2) has no equivalent query on either API and is derived instead, see below.
+- RaytracingTier>=1_2 (DXR 1.2) as EGraphicsFeatures_RayMicromapOpacity + EGraphicsFeatures_RayReorder + RayMicromapOpacityU8 (features2; DXR accepts DXGI_FORMAT_R8_UINT OMM index buffers wherever it accepts micromaps). Additionally OPTIONS22.ShaderExecutionReorderingActuallyReorders as RayReorderActual (features2) - RayReorder only means the SER API is available (can be a no-op), RayReorderActual means the device really reorders. RayMicromapOpacityActual (features2) has no equivalent query on either API and is derived instead, see below.
 - Native16BitShaderOpsSupported as EGraphicsDataTypes_F16 and EGraphicsDataTypes_I16.
 - DoublePrecisionFloatShaderOps as EGraphicsDataTypes_F64.
 - EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally), D32S8 is always available.

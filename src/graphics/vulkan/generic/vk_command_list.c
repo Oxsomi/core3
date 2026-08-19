@@ -34,6 +34,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/tlas.h"
+#include "graphics/generic/opacity_micromap.h"
 #include "graphics/generic/blas.h"
 #include "platforms/logx.h"
 #include "formats/oiSH/sh_registers.h"
@@ -721,6 +722,13 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			break;
 
+		case ECommandOp_UpdateOmmExt:
+
+			if(!(VK_WRAP_FUNC(OpacityMicromapRef_flush))(temp, deviceRef, *(OpacityMicromapRef**)data, e_rr))
+				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
+			break;
+
 		//case ECommandOp_DispatchRaysIndirect:
 		case ECommandOp_DispatchRaysExt: {
 
@@ -852,17 +860,33 @@ void VK_WRAP_FUNC(CommandList_process)(
 						break;
 
 					case EPipelineStage_RTASBuild:
+
 						pipelineStage = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+
+						//Micromap builds run at their own stage, so on the EXT path the build barrier has to
+						// cover both; a stage bit no op in the scope uses is legal and free.
+
+						if(
+							(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity) &&
+							!(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR)
+						)
+							pipelineStage |= VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+
 						break;
 				}
 
 				//If it's on the GPU then we have to rely on manual RTAS transitions
 
 				Bool isTLAS = transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_TLASExt;
+				Bool isOMM = transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_OpacityMicromapExt;
 
-				if (isTLAS || transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_BLASExt) {
+				if (isTLAS || isOMM || transition.resource->refPtrType->typeId == (TypeId)EGraphicsTypeId_BLASExt) {
 
-					RTAS rtas = isTLAS ? TLASRef_ptr(transition.resource)->base : BLASRef_ptr(transition.resource)->base;
+					RTAS rtas =
+						isTLAS ? TLASRef_ptr(transition.resource)->base : (
+							isOMM ? OpacityMicromapRef_ptr(transition.resource)->base :
+							BLASRef_ptr(transition.resource)->base
+						);
 
 					//Read to RTAS is illegal if it's not initialized yet.
 					//However, if ShaderWrite is used on an RTAS then it will be written in the current scope.
@@ -870,13 +894,25 @@ void VK_WRAP_FUNC(CommandList_process)(
 					if (!rtas.isCompleted && transition.type != ETransitionType_ShaderWrite)
 						continue;
 
+					//A micromap is written and read with its own access bits on the EXT path; the AS bits stay in
+					// the mask so the same barrier is right for a KHR device, where the array IS an AS.
+					//A BLAS build consuming a micromap reads it with the micromap bit too.
+
+					VkAccessFlags2 rtasAccess =
+						transition.type == ETransitionType_ShaderWrite ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR :
+						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+					if(isOMM && (pipelineStage & VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT))
+						rtasAccess |=
+							transition.type == ETransitionType_ShaderWrite ?
+							VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT : VK_ACCESS_2_MICROMAP_READ_BIT_EXT;
+
 					gotoIfError3(nextTransition, VkDeviceBuffer_transition(
 
 						DeviceBuffer_ext(DeviceBufferRef_ptr(rtas.asBuffer), Vk),
 						pipelineStage,
 
-						transition.type == ETransitionType_ShaderWrite ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR :
-						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+						rtasAccess,
 
 						graphicsQueueId,
 						0, 0,

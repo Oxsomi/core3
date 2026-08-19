@@ -813,3 +813,46 @@ Bool CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas, Er
 Bool CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr) {
 	return CommandListRef_updateRTASExt(commandList, blas, true, e_rr);
 }
+
+Bool CommandListRef_updateOmmExt(CommandListRef *commandListRef, OpacityMicromapRef *micromap, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!I32x2_all(I32x2_eq(commandList->currentSize, I32x2_zero)))
+		retError(clean, Error_invalidOperation(
+			0, "CommandListRef_updateOmmExt() is disallowed during render calls"
+		));
+
+	if(!micromap || micromap->refPtrType->typeId != (TypeId) EGraphicsTypeId_OpacityMicromapExt)
+		retError(clean, Error_unsupportedOperation(
+			0, "CommandListRef_updateOmmExt() requires an opacity micromap"
+		));
+
+	gotoIfError3(clean, CommandListRef_transitionRTAS(
+		commandList,
+		micromap,
+		ETransitionType_ShaderWrite,
+		EPipelineStage_RTASBuild,
+		e_rr
+	));
+
+	RTASRef *args[2] = { micromap, NULL };
+
+	gotoIfError3(clean, CommandList_append(
+		commandList,
+		ECommandOp_UpdateOmmExt,
+		Buffer_createRefConst(args, sizeof(args)),
+		0, e_rr
+	));
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}

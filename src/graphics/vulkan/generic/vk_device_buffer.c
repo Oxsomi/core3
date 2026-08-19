@@ -130,11 +130,29 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(buf->usage & EDeviceBufferUsage_ScratchExt)
 		usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
-	if(buf->usage & EDeviceBufferUsage_ASExt)
+	//The EXT micromap path has its own storage and build input usage bits; a micromap array under the KHR
+	// promotion is an acceleration structure, so there the AS bits below already cover it.
+	//Only legal to request when the EXT extension is actually enabled.
+
+	const Bool ommExt =
+		(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity) &&
+		!(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR);
+
+	if(buf->usage & EDeviceBufferUsage_ASExt) {
+
 		usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
 
-	if(buf->usage & EDeviceBufferUsage_ASReadExt)
+		if(ommExt)
+			usage |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
+	}
+
+	if(buf->usage & EDeviceBufferUsage_ASReadExt) {
+
 		usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+
+		if(ommExt)
+			usage |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;
+	}
 
 	if(buf->usage & EDeviceBufferUsage_SBTExt)
 		usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
@@ -175,8 +193,14 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if (buf->usage & EDeviceBufferUsage_ScratchExt)
 		requirements.memoryRequirements.alignment = U64_max(256, requirements.memoryRequirements.alignment);
 
+	//256 rather than 16 when micromaps are on: a micromap build's data and triangleArray addresses must be
+	// 256 aligned (VUID-vkCmdBuildMicromapsEXT-pInfos-07515) and any ASRead buffer may feed one.
+
 	if (buf->usage & EDeviceBufferUsage_ASReadExt)
-		requirements.memoryRequirements.alignment = U64_max(16, requirements.memoryRequirements.alignment);
+		requirements.memoryRequirements.alignment = U64_max(
+			(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity) ? 256 : 16,
+			requirements.memoryRequirements.alignment
+		);
 
 	DeviceMemoryBlock block;
 	gotoIfError3(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(

@@ -83,6 +83,12 @@ typedef struct DxGraphicsInstance {
 	ID3D12DeviceFactory *deviceFactoryNoSingleton;
 	ID3D12DeviceFactory *deviceFactorySingleton;
 
+	//Which D3D12SDKVersion the device factory accepted (the preview constant or the stable one), so version
+	// gated workarounds know which runtime line they are on.
+
+	U32 agilitySdkVersion;
+	U32 padding0;
+
 	AGSContext *agsContext;
 
 	CharString nvDriverVersion;

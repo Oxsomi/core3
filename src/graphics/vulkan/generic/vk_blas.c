@@ -23,6 +23,7 @@
 #include "graphics/generic/device.h"
 #include "types/base/mathi.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/opacity_micromap.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_buffer.h"
@@ -130,18 +131,55 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 
 		if (blas->ommIndexFormatId) {
 
-			blasExt->ommTriangles = (VkAccelerationStructureTrianglesOpacityMicromapEXT) {
+			VkIndexType indexType = VK_INDEX_TYPE_UINT16;
+			U8 indexStride = 2;
 
-				.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT,
+			switch (blas->ommIndexFormatId) {
+				case ETextureFormatId_R32u:    indexType = VK_INDEX_TYPE_UINT32;    indexStride = 4;    break;
+				case ETextureFormatId_R8u:     indexType = VK_INDEX_TYPE_UINT8;     indexStride = 1;    break;
+				default:                                                                                break;
+			}
 
-				.indexType =
-					blas->ommIndexFormatId == ETextureFormatId_R32u ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16,
+			//Which of the two extensions the device runs decides the struct: they are not layout compatible and
+			// the driver only accepts its own.
+			//R8u can't get here at all today: no Vulkan device claims RayMicromapOpacityU8 (that waits on the
+			// KHR path being implemented) and BLAS create validation rejects R8u without it.
 
-				.indexBuffer = getVkLocation(blas->ommIndexBuffer, 0),
-				.indexStride = blas->ommIndexFormatId == ETextureFormatId_R32u ? 4 : 2
-			};
+			if(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR) {
 
-			tri->pNext = &blasExt->ommTriangles;
+				blasExt->ommTrianglesKhr = (VkAccelerationStructureTrianglesOpacityMicromapKHR) {
+					.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_KHR,
+					.indexType = indexType,
+					.indexBuffer = getVkDeviceAddress(blas->ommIndexBuffer),
+					.indexStride = indexStride
+				};
+
+				tri->pNext = &blasExt->ommTrianglesKhr;
+			}
+
+			else {
+
+				blasExt->ommTrianglesExt = (VkAccelerationStructureTrianglesOpacityMicromapEXT) {
+					.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT,
+					.indexType = indexType,
+					.indexBuffer = getVkLocation(blas->ommIndexBuffer, 0),
+					.indexStride = indexStride
+				};
+
+				//A linked micromap brings its handle and its usage counts; the EXT extension wants the same
+				// counts the array was built with restated in every BLAS that links it.
+
+				if (blas->ommMicromap) {
+
+					VkOpacityMicromap *micromapExt = OpacityMicromap_ext(OpacityMicromapRef_ptr(blas->ommMicromap), Vk);
+
+					blasExt->ommTrianglesExt.micromap = micromapExt->micromap;
+					blasExt->ommTrianglesExt.usageCountsCount = (U32) micromapExt->usages.length;
+					blasExt->ommTrianglesExt.pUsageCounts = micromapExt->usages.ptr;
+				}
+
+				tri->pNext = &blasExt->ommTrianglesExt;
+			}
 		}
 	}
 

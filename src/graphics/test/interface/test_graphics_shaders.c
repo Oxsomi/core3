@@ -35,6 +35,7 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/tlas.h"
+#include "graphics/generic/opacity_micromap.h"
 #include "graphics/generic/bindless_descriptor.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/commands.h"
@@ -1213,16 +1214,20 @@ clean:
 //Both halves are needed. "Everything missed" on its own is also what a BLAS that quietly failed to build
 // looks like, so the opaque half is what proves the geometry survived the OMM path at all, and only the pair
 // together says the micromap was consulted.
-//R16u rather than R32u on purpose: the special indices are signed constants matched against an unsigned
-// element, so R16u is where a driver would disagree with our truncation to 0xFFFF.
+//Narrow formats rather than R32u on purpose: the special indices are signed constants matched against an
+// unsigned element, so the truncated widths (0xFFFF for R16u, 0xFF for R8u) are where a driver would
+// disagree with our packing.
+//The wrapper below runs R16u everywhere and repeats the pair with R8u where RayMicromapOpacityU8 is set,
+// which on Vulkan doubles as the only execution coverage the KHR extension path can get.
 
-static void TestShaders_ommSpecialIndex(
+static void TestShaders_ommSpecialIndexWithFormat(
 	Test *t,
 	GraphicsDeviceRef *deviceRef,
 	const SHFile *file,
 	DeviceBufferRef *positions,
 	DeviceBufferRef *output,
-	CommandListRef *emptyList
+	CommandListRef *emptyList,
+	ETextureFormatId ommIndexFormat
 ) {
 
 	const GraphicsDeviceCapabilities caps = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities;
@@ -1261,13 +1266,16 @@ static void TestShaders_ommSpecialIndex(
 	)))
 		goto clean;
 
-	const U16 opaqueIndex = (U16) EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyOpaque, ETextureFormatId_R16u);
+	//Packed into a U32 and sliced to the element width, which reads out the low bytes on the little endian
+	// targets OxC3 runs on; one triangle, so the buffer is exactly one element.
 
-	const U16 transparentIndex =
-		(U16) EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyTransparent, ETextureFormatId_R16u);
+	const U8 ommStride = ommIndexFormat == ETextureFormatId_R32u ? 4 : (ommIndexFormat == ETextureFormatId_R16u ? 2 : 1);
 
-	Buffer opaqueData = Buffer_createRefConst(&opaqueIndex, sizeof(opaqueIndex));
-	Buffer transparentData = Buffer_createRefConst(&transparentIndex, sizeof(transparentIndex));
+	const U32 opaqueIndex = EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyOpaque, ommIndexFormat);
+	const U32 transparentIndex = EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyTransparent, ommIndexFormat);
+
+	Buffer opaqueData = Buffer_createRefConst(&opaqueIndex, ommStride);
+	Buffer transparentData = Buffer_createRefConst(&transparentIndex, ommStride);
 
 	name = CharString_createRefCStrConst("OMM indices, fully opaque");
 
@@ -1291,13 +1299,13 @@ static void TestShaders_ommSpecialIndex(
 	const BLASCreateInfo opaqueInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
 		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
 		ETextureFormatId_R16u, indexBufferData,
-		ETextureFormatId_R16u, (DeviceData) { .buffer = ommOpaque }
+		ommIndexFormat, (DeviceData) { .buffer = ommOpaque }
 	);
 
 	const BLASCreateInfo transparentInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
 		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
 		ETextureFormatId_R16u, indexBufferData,
-		ETextureFormatId_R16u, (DeviceData) { .buffer = ommTransparent }
+		ommIndexFormat, (DeviceData) { .buffer = ommTransparent }
 	);
 
 	name = CharString_createRefCStrConst("OMM BLAS, fully opaque");
@@ -1500,6 +1508,362 @@ clean:
 	RefPtr_dec(&ommTransparent);
 	RefPtr_dec(&ommOpaque);
 	RefPtr_dec(&indices);
+}
+
+//A real micromap ARRAY, built on the GPU and linked into a BLAS, rather than the special index form above.
+//One micromap holds five 2-state subdivision level 1 entries: entry k of 0..3 is opaque except for micro
+// triangle k, entry 4 is fully transparent.
+//The instance is nudged by (-0.05, -0.05) so ray 0 lands strictly inside the CENTER sub triangle and ray 1
+// strictly inside the corner one at the barycentric origin, comfortably away from every sub triangle edge.
+//The assertions are deliberately mapping agnostic: the spec's space filling curve decides which bit is which
+// sub triangle, so instead of assuming that order, the four single bit probes must produce exactly one
+// (miss, hit), exactly one (hit, miss) and two (hit, hit) for rays 0 and 1.
+//That is only satisfiable if each probe culled a DIFFERENT sub triangle, which is per micro triangle
+// addressing proven without a single assumption about the curve; entry 4 proving all miss pins the decode.
+
+static void TestShaders_ommMicromapArray(
+	Test *t,
+	GraphicsDeviceRef *deviceRef,
+	const SHFile *file,
+	DeviceBufferRef *positions,
+	DeviceBufferRef *output,
+	CommandListRef *emptyList
+) {
+
+	const GraphicsDeviceCapabilities caps = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities;
+
+	if (!(caps.features & EGraphicsFeatures_RayMicromapOpacity)) {
+		Test_print(t, "Device lacks opacity micromaps, skipping micromap array test");
+		return;
+	}
+
+	if (caps.experimentalFeatures & EGraphicsFeatures_RayMicromapOpacity) {
+		Test_print(t, "Opacity micromaps claimed but experimental on this backend, skipping micromap array test");
+		return;
+	}
+
+	//The KHR path builds micromap arrays as acceleration structures, which isn't implemented until a driver
+	// exists to test it against; special index OMM covers such a device above.
+
+	const GraphicsInstance *instance = GraphicsInstanceRef_ptr(GraphicsDeviceRef_ptr(deviceRef)->instance);
+
+	if (
+		instance->api == EGraphicsApi_Vulkan &&
+		(caps.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR)
+	) {
+		Test_print(t, "Micromap arrays aren't implemented on the Vulkan KHR path yet, skipping");
+		return;
+	}
+
+	DeviceBufferRef *indices = NULL;
+	DeviceBufferRef *inputBits = NULL;
+	DeviceBufferRef *entries = NULL;
+	OpacityMicromapRef *micromap = NULL;
+	PipelineRef *pipeline = NULL;
+
+	DeviceBufferRef *ommIndex[5] = { 0 };
+	BLASRef *blas[5] = { 0 };
+	TLASRef *tlas[5] = { 0 };
+	CommandListRef *lists[5] = { 0 };
+
+	const U16 triangleIndices[3] = { 0, 1, 2 };
+	Buffer indexData = Buffer_createRefConst(triangleIndices, sizeof(triangleIndices));
+
+	CharString name = CharString_createRefCStrConst("OMM array triangle indices");
+
+	if(!Test_assert(t, "ommArrayCreateIndices", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&name, &indexData, &indices, &t->err
+	)))
+		goto clean;
+
+	//One byte of opacity bits per entry, 4 bytes apart so every dataOffset stays 4 byte aligned.
+	//2-state: bit set is opaque, cleared is transparent, and only the low 4 bits exist at level 1.
+
+	U8 opacityBits[20] = { 0 };
+
+	for(U8 k = 0; k < 4; ++k)
+		opacityBits[k * 4] = 0xF & ~(1 << k);
+
+	//opacityBits[16] stays 0: entry 4 is fully transparent
+
+	Buffer bitsData = Buffer_createRefConst(opacityBits, sizeof(opacityBits));
+	name = CharString_createRefCStrConst("OMM array opacity bits");
+
+	if(!Test_assert(t, "ommArrayCreateBits", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&name, &bitsData, &inputBits, &t->err
+	)))
+		goto clean;
+
+	OpacityMicromapEntry entryData[5];
+
+	for(U8 k = 0; k < 5; ++k)
+		entryData[k] = (OpacityMicromapEntry) {
+			.dataOffset = (U32) k * 4,
+			.subdivisionLevel = 1,
+			.format = EOpacityMicromapFormat_Opacity2State
+		};
+
+	Buffer entryRef = Buffer_createRefConst(entryData, sizeof(entryData));
+	name = CharString_createRefCStrConst("OMM array entries");
+
+	if(!Test_assert(t, "ommArrayCreateEntries", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&name, &entryRef, &entries, &t->err
+	)))
+		goto clean;
+
+	const OpacityMicromapUsage usage = (OpacityMicromapUsage) {
+		.count = 5, .subdivisionLevel = 1, .format = EOpacityMicromapFormat_Opacity2State
+	};
+
+	OpacityMicromapCreateInfo micromapInfo = OpacityMicromapCreateInfo_uniform(
+		ERTASBuildFlags_None,
+		&(DeviceData) { .buffer = inputBits },
+		&(DeviceData) { .buffer = entries },
+		sizeof(OpacityMicromapEntry),
+		&usage
+	);
+
+	name = CharString_createRefCStrConst("OMM array micromap");
+
+	if(!Test_assert(t, "ommArrayCreate", GraphicsDeviceRef_createOpacityMicromapExt(
+		deviceRef, &micromapInfo, &name, &micromap, &t->err
+	)))
+		goto clean;
+
+	//The same pipeline shape the special index test uses; micromaps are ignored without the opt in
+
+	const U32 raygenId = TestShaders_entry(t, deviceRef, file, "mainRaygen");
+	const U32 missId = TestShaders_entry(t, deviceRef, file, "mainMiss");
+	const U32 hitId = TestShaders_entry(t, deviceRef, file, "mainClosestHit");
+
+	if(raygenId == U32_MAX || missId == U32_MAX || hitId == U32_MAX)
+		goto clean;
+
+	PipelineStage stages[3] = {
+		(PipelineStage) { .binaryId = raygenId },
+		(PipelineStage) { .binaryId = missId },
+		(PipelineStage) { .binaryId = hitId }
+	};
+
+	ListPipelineStage stageList = (ListPipelineStage) { 0 };
+	ListPipelineStage_createRefConst(stages, 3, &stageList, NULL);
+
+	ListSHFile fileList = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(file, 1, &fileList, NULL);
+
+	PipelineRaytracingGroup group = (PipelineRaytracingGroup) {
+		.closestHit = 2, .anyHit = U32_MAX, .intersection = U32_MAX
+	};
+
+	ListPipelineRaytracingGroup groupList = (ListPipelineRaytracingGroup) { 0 };
+	ListPipelineRaytracingGroup_createRefConst(&group, 1, &groupList, NULL);
+
+	const PipelineRaytracingInfo pipelineInfo = (PipelineRaytracingInfo) {
+		.flags = EPipelineRaytracingFlags_Default | EPipelineRaytracingFlags_AllowOpacityMicromapExt,
+		.maxRecursionDepth = 1
+	};
+
+	name = CharString_createRefCStrConst("OMM array pipeline");
+
+	if(!Test_assert(t, "ommArrayCreatePipeline", GraphicsDeviceRef_createPipelineRaytracingExt(
+		deviceRef, &stageList, &fileList, &groupList, &pipelineInfo, &name,
+		EPipelineFlags_None, NULL, &pipeline, &t->err
+	)))
+		goto clean;
+
+	//How rays 0 and 1 resolved per probe, packed as (ray0Hit << 1) | ray1Hit
+
+	U8 outcomes[4] = { 0 };
+	Bool traced = true;
+
+	for (U8 k = 0; k < 5 && traced; ++k) {
+
+		const U16 entryIndex = k;
+		Buffer ommIndexData = Buffer_createRefConst(&entryIndex, sizeof(entryIndex));
+
+		name = CharString_createRefCStrConst("OMM array index buffer");
+
+		traced &= Test_assert(t, "ommArrayCreateIndexBuf", GraphicsDeviceRef_createBufferData(
+			deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+			&name, &ommIndexData, &ommIndex[k], &t->err
+		));
+
+		if(!traced)
+			break;
+
+		const BLASCreateInfo blasInfo = BLASCreateInfo_indexedWithOmmExt(
+			ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16,
+			(DeviceData) { .buffer = positions },
+			ETextureFormatId_R16u, (DeviceData) { .buffer = indices },
+			ETextureFormatId_R16u, (DeviceData) { .buffer = ommIndex[k] },
+			micromap
+		);
+
+		name = CharString_createRefCStrConst("OMM array BLAS");
+
+		traced &= Test_assert(t, "ommArrayCreateBlas", GraphicsDeviceRef_createBLASExt(
+			deviceRef, &blasInfo, &name, &blas[k], &t->err
+		));
+
+		if(!traced)
+			break;
+
+		//Nudged so ray 0 sits strictly inside the center sub triangle and ray 1 strictly inside the corner
+		// one; without this ray 0 would land exactly on the shared edge and the outcome would be tie break
+		// dependent.
+
+		const TLASInstance ommInstance = (TLASInstance) {
+			.transform = { { 1, 0, 0, -0.05f }, { 0, 1, 0, -0.05f }, { 0, 0, 1, 0 } },
+			.data = (TLASInstanceData) {
+				.instanceId24_mask8 = 0xFFu << 24,
+				.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_DisableCulling << 24,
+				.blasCpu = blas[k]
+			}
+		};
+
+		ListTLASInstance ommInstances = (ListTLASInstance) { 0 };
+		ListTLASInstance_createRefConst(&ommInstance, 1, &ommInstances, NULL);
+
+		name = CharString_createRefCStrConst("OMM array TLAS");
+
+		traced &= Test_assert(t, "ommArrayCreateTlas", GraphicsDeviceRef_createTLASExt(
+			deviceRef, ERTASBuildFlags_DefaultTLAS, &ommInstances, false, NULL, &name, &tlas[k], &t->err
+		));
+
+		traced &= Test_assert(t, "ommArrayCreateList", GraphicsDeviceRef_createCommandList(
+			deviceRef, 2 * KIBI, 32, 16, true, &lists[k], &t->err
+		));
+
+		if(!traced)
+			break;
+
+		const Transition traceTransitions[2] = {
+			(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+			(Transition) { .resource = tlas[k], .stage = EPipelineStage_RaygenExt }
+		};
+
+		ListTransition traceTransitionList = (ListTransition) { 0 };
+		ListTransition_createRefConst(traceTransitions, 2, &traceTransitionList, NULL);
+
+		//The micromap build only runs once; recording it again is a no-op after it completed
+
+		Test_assert(t, "ommArrayBegin", CommandListRef_begin(lists[k], true, U64_MAX, &t->err));
+
+		Test_assert(t, "ommArrayScopeOmm", CommandListRef_startScope(lists[k], NULL, 1, NULL, &t->err));
+		Test_assert(t, "ommArrayUpdateOmm", CommandListRef_updateOmmExt(lists[k], micromap, &t->err));
+		Test_assert(t, "ommArrayScopeOmmEnd", CommandListRef_endScope(lists[k], &t->err));
+
+		Test_assert(t, "ommArrayScopeBlas", CommandListRef_startScope(lists[k], NULL, 2, NULL, &t->err));
+		Test_assert(t, "ommArrayUpdateBlas", CommandListRef_updateBLASExt(lists[k], blas[k], &t->err));
+		Test_assert(t, "ommArrayScopeBlasEnd", CommandListRef_endScope(lists[k], &t->err));
+
+		Test_assert(t, "ommArrayScopeTlas", CommandListRef_startScope(lists[k], NULL, 3, NULL, &t->err));
+		Test_assert(t, "ommArrayUpdateTlas", CommandListRef_updateTLASExt(lists[k], tlas[k], &t->err));
+		Test_assert(t, "ommArrayScopeTlasEnd", CommandListRef_endScope(lists[k], &t->err));
+
+		Test_assert(t, "ommArrayScopeTrace", CommandListRef_startScope(
+			lists[k], &traceTransitionList, 4, NULL, &t->err
+		));
+
+		Test_assert(t, "ommArrayBind", CommandListRef_setRaytracingPipeline(lists[k], pipeline, &t->err));
+		Test_assert(t, "ommArrayTrace", CommandListRef_dispatch1DRaysExt(lists[k], 0, 4, &t->err));
+		Test_assert(t, "ommArrayScopeTraceEnd", CommandListRef_endScope(lists[k], &t->err));
+
+		Test_assert(t, "ommArrayEnd", CommandListRef_end(lists[k], &t->err));
+
+		const TestShaderAppData appData = (TestShaderAppData) {
+			.handles = { DeviceBufferRef_ptr(output)->writeHandle, TLASRef_ptr(tlas[k])->handle }
+		};
+
+		traced &= TestShaders_submitAndWait(t, deviceRef, lists[k], &appData, sizeof(appData));
+		traced = traced && TestShaders_pullBuffer(t, deviceRef, emptyList, output);
+
+		if (traced) {
+
+			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+
+			//The geometric misses stay misses no matter what the micromap says
+
+			Test_assert(t, "ommArrayOutsideMiss", !values[2] && !values[3]);
+
+			if(k == 4)
+				Test_assert(t, "ommArrayAllTransparent", !values[0] && !values[1]);
+
+			else outcomes[k] = (U8)(((values[0] == 1) << 1) | (values[1] == 1));
+		}
+	}
+
+	//The probe set proves per micro triangle addressing without assuming the space filling curve's order
+
+	if (traced) {
+
+		U8 missHit = 0, hitMiss = 0, hitHit = 0, missMiss = 0;
+
+		for (U8 k = 0; k < 4; ++k)
+			switch (outcomes[k]) {
+				case 1:     ++missHit;    break;        //ray 0 culled: this bit is the center sub triangle
+				case 2:     ++hitMiss;    break;        //ray 1 culled: this bit is the corner sub triangle
+				case 3:     ++hitHit;     break;        //a sub triangle neither ray visits
+				default:    ++missMiss;   break;        //one bit culled both rays: not per micro triangle
+			}
+
+		Test_assert(t, "ommArrayCenterProbe", missHit == 1);
+		Test_assert(t, "ommArrayCornerProbe", hitMiss == 1);
+		Test_assert(t, "ommArrayUntouchedProbes", hitHit == 2);
+		Test_assert(t, "ommArrayNoDoubleCull", !missMiss);
+
+		//The likely emulated hint fires once per device rather than per BLAS: five linked micromaps, one
+		// bit. Non NV vendors (WARP included) claim RayMicromapOpacityActual, so the bit only appears
+		// where that is unset.
+
+		Test_assert(
+			t, "ommArrayHintOnce",
+			!!(AtomicI64_load(&GraphicsDeviceRef_ptr(deviceRef)->runtimeMessages) &
+			(I64) EGraphicsDeviceMessage_OmmLikelyEmulated) ==
+			!(caps.features2 & EGraphicsFeatures2_RayMicromapOpacityActual)
+		);
+	}
+
+clean:
+
+	for (U8 k = 0; k < 5; ++k) {
+		RefPtr_dec(&lists[k]);
+		RefPtr_dec(&tlas[k]);
+		RefPtr_dec(&blas[k]);
+		RefPtr_dec(&ommIndex[k]);
+	}
+
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&micromap);
+	RefPtr_dec(&entries);
+	RefPtr_dec(&inputBits);
+	RefPtr_dec(&indices);
+}
+
+static void TestShaders_ommSpecialIndex(
+	Test *t,
+	GraphicsDeviceRef *deviceRef,
+	const SHFile *file,
+	DeviceBufferRef *positions,
+	DeviceBufferRef *output,
+	CommandListRef *emptyList
+) {
+
+	TestShaders_ommSpecialIndexWithFormat(t, deviceRef, file, positions, output, emptyList, ETextureFormatId_R16u);
+
+	//The 8-bit pair is the same scene through a 1 byte element, where the special index truncates to 0xFF.
+
+	const GraphicsDeviceCapabilities caps = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities;
+
+	if (caps.features2 & EGraphicsFeatures2_RayMicromapOpacityU8) {
+		Test_print(t, "Repeating the OMM special index pair with R8u indices");
+		TestShaders_ommSpecialIndexWithFormat(t, deviceRef, file, positions, output, emptyList, ETextureFormatId_R8u);
+	}
+
+	else Test_print(t, "Device lacks 8-bit OMM indices, R8u trace pair skipped");
 }
 
 //The whole ray pipeline vehicle (scene, SBT, dispatch and readback) shared by the plain and the SER
@@ -1877,6 +2241,7 @@ static void TestShaders_raysWithFile(
 		// buffer these BLASes are built over and would leave them tracing a triangle that moved away.
 
 		TestShaders_ommSpecialIndex(t, deviceRef, &file, positions, output, emptyList);
+		TestShaders_ommMicromapArray(t, deviceRef, &file, positions, output, emptyList);
 
 		//The same idea one level down, so the BLAS update path gets the same treatment.
 		//Here the triangle itself moves rather than the instance, by rewriting the position buffer the BLAS

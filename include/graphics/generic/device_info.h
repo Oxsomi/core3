@@ -146,7 +146,14 @@ typedef enum EVkGraphicsFeatures {
 	//Android emulators are the common case, since gfxstream drops the extension from the guest even when the
 	// host driver exposes it.
 
-	EVkGraphicsFeatures_PerformantPushDescriptor = 1 << 5
+	EVkGraphicsFeatures_PerformantPushDescriptor = 1 << 5,
+
+	//VK_KHR_opacity_micromap (plus its VK_KHR_device_address_commands dependency) is what got enabled rather
+	// than VK_EXT_opacity_micromap.
+	//The EXT extension is promoted to KHR rather than deprecated, and current drivers commonly still expose
+	// only EXT, so the backend prefers KHR and falls back; this bit records which one the device runs.
+
+	EVkGraphicsFeatures_OpacityMicromapKHR       = 1 << 6
 
 } EVkGraphicsFeatures;
 
@@ -275,7 +282,13 @@ typedef enum EGraphicsFeatures2 {
 	//Use it to decide whether a REAL micromap is worth building; special index only OMM costs nothing either
 	// way, so on a device without this bit prefer special indices over a micromap object.
 
-	EGraphicsFeatures2_RayMicromapOpacityActual = 1 << 5
+	EGraphicsFeatures2_RayMicromapOpacityActual = 1 << 5,
+
+	//8-bit (R8u) OMM index buffers are legal on this device.
+	//D3D12 ships this with opacity micromaps themselves. On Vulkan only VK_KHR_opacity_micromap permits
+	// VK_INDEX_TYPE_UINT8 (VUID 11570; the EXT extension forbids it, VUID 10719), but the KHR path isn't
+	// implemented yet, so no Vulkan device claims this bit today and R8u is rejected at BLAS create there.
+	EGraphicsFeatures2_RayMicromapOpacityU8     = 1 << 6
 
 } EGraphicsFeatures2;
 

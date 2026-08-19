@@ -295,6 +295,8 @@ setup:
 
 	gotoIfError3(clean, dxCheck(factoryHr, e_rr));
 
+	instanceExt->agilitySdkVersion = usedSdkVersion;
+
 	gotoIfError3(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->SetFlags(
 		instanceExt->deviceFactoryNoSingleton, D3D12_DEVICE_FACTORY_FLAG_DISALLOW_STORING_NEW_DEVICE_AS_SINGLETON
 	), e_rr));
@@ -752,6 +754,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			if(opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2) {
 
 				caps.features |= EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayMicromapOpacity;
+
+				//DXR accepts 8-bit OMM index buffers wherever it accepts micromaps at all, unlike Vulkan where
+				// only the KHR extension permits them, so the qualifier ships with the tier.
+
+				caps.features2 |= EGraphicsFeatures2_RayMicromapOpacityU8;
 
 				//RayReorder above only means the SER API is available (it can be a no-op).
 				//OPTIONS22 reports whether the device actually reorders,

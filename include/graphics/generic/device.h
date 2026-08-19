@@ -76,6 +76,20 @@ typedef enum EGraphicsBufferingMode {
 
 #define MAX_FRAMES_IN_FLIGHT 3           //Don't touch
 
+//One time runtime hints, so a message fires once per device rather than on every call that notices the
+// same thing.
+//A bit set in GraphicsDevice::runtimeMessages means the message was already logged;
+// GraphicsDevice_logOnce is the test and set that guards the log call.
+
+typedef enum EGraphicsDeviceMessage {
+
+	//A real micromap object was linked into a BLAS on a device that likely emulates opacity micromaps
+	// (RayMicromapOpacityActual unset), where the free special indices are usually the better tool.
+
+	EGraphicsDeviceMessage_OmmLikelyEmulated = 1 << 0
+
+} EGraphicsDeviceMessage;
+
 typedef struct GraphicsDevice {
 
 	GraphicsInstanceRef *instance;
@@ -88,6 +102,8 @@ typedef struct GraphicsDevice {
 	U16 pad0;
 	U8 framesInFlight;
 	U8 fifId;                //(submitId - 1) % FRAMES_IN_FLIGHT
+
+	AtomicI64 runtimeMessages;                              //EGraphicsDeviceMessage bits that already logged
 
 	Ns lastSubmit;
 
@@ -243,6 +259,10 @@ Bool GraphicsDeviceRef_submitCommands(
 
 //Wait on previously submitted commands
 Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr);
+
+//True exactly once per device per message, so the caller logs on true and stays silent forever after.
+
+Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message);
 
 //Create the pullRegion readback buffers ahead of time, sized for sizePerFrame bytes of pulls per frame.
 //The readback memory is otherwise created at the first pull, which on D3D12 can bring in a whole new memory

@@ -167,6 +167,33 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if((buf->usage & EDeviceBufferUsage_SBTExt) && allocInfo.Alignment < D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT)
 		allocInfo.Alignment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
 
+	//Any ASRead buffer may feed a micromap array build, whose input has an alignment floor of its own:
+	// 128 (D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_BYTE_ALIGNMENT).
+	//Debug layers before stable 620 and preview 722 enforce 256 while citing that constant (fixed in the
+	// 1.619.5 stable point release, but the point release is invisible to D3D12SDKVersion and the engine only
+	// ever requests its header's stable/preview constants, so the line is gated per SDK version instead; see
+	// build/reports/d3d12_debug_layer_omm_input_alignment.md). Those runtimes get a 256 floor to stay
+	// validation clean, which only costs alignment.
+
+	if(
+		(buf->usage & EDeviceBufferUsage_ASReadExt) &&
+		(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity)
+	) {
+
+		const U32 sdkVersion =
+			GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Dx)->agilitySdkVersion;
+
+		//The preview line (7xx) is fixed from 722, the stable line from 620
+
+		const Bool layerEnforces256 = sdkVersion < (sdkVersion >= 700 ? 722u : 620u);
+
+		const U64 ommAlignment =
+			layerEnforces256 ? 256 : D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_BYTE_ALIGNMENT;
+
+		if(allocInfo.Alignment < ommAlignment)
+			allocInfo.Alignment = ommAlignment;
+	}
+
 	Bool cpuSided = buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit;
 	const Bool readback = buf->resource.flags & EGraphicsResourceFlag_CPUReadBit;
 

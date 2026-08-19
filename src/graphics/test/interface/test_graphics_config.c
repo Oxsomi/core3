@@ -55,6 +55,7 @@
 #define TEST_CONFIG_RT_FEATURES2 (                \
 	EGraphicsFeatures2_RayReorderActual   |       \
 	EGraphicsFeatures2_RayMicromapOpacityActual | \
+	EGraphicsFeatures2_RayMicromapOpacityU8 |     \
 	EGraphicsFeatures2_RayClusterAS       |       \
 	EGraphicsFeatures2_RayPartitionedTLAS |       \
 	EGraphicsFeatures2_RayIndirectASBuild         \

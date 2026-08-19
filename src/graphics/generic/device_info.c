@@ -123,6 +123,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_RayTriPosition)
 			Log_debugLnx("\t\tRay triangle vertex position fetch");
 
+		if(cap.features2 & EGraphicsFeatures2_RayMicromapOpacityU8)
+			Log_debugLnx("\t\tRaytracing opacity micromap 8-bit indices");
+
 		if(cap.features2 & EGraphicsFeatures2_RayClusterAS)
 			Log_debugLnx("\t\tRaytracing cluster acceleration structures (mega geometry)");
 
