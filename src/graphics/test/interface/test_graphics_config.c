@@ -161,6 +161,9 @@ void Test_graphicsConfigVariants(Test *t, GraphicsInstanceRef *instRef, const Gr
 			//The whole bindful module on a device with bindless OFF: descriptor work must not need it
 
 			Test_graphicsBindful(t, noBindlessRef);
+			Test_graphicsBindfulAdvanced(t, noBindlessRef);
+			Test_graphicsBindfulSampler(t, noBindlessRef);
+			Test_graphicsBindfulDraw(t, noBindlessRef);
 
 			//A device without a bindless layout still has to serve plain resources, since that is the whole
 			// point of being able to turn bindless off.

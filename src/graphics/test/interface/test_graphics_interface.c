@@ -400,6 +400,11 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	//41. The bindful path: a pipeline with its own layout and a table bound at record time.
 
 	Test_graphicsBindful(t, deviceRef);
+	Test_graphicsBindfulAdvanced(t, deviceRef);
+	Test_graphicsBindfulSampler(t, deviceRef);
+	Test_graphicsBindfulDraw(t, deviceRef);
+	Test_graphicsBindlessInterleave(t, deviceRef);
+	Test_graphicsBindfulRays(t, deviceRef);
 	Test_graphicsGpuExecute(t, deviceRef);
 	Test_graphicsAccelerationStructures(t, deviceRef);
 

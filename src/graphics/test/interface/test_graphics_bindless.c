@@ -27,16 +27,16 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/device_buffer.h"
-#include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/descriptor_heap.h"
-#include "graphics/generic/bindless_descriptor.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/commands.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/command_list.h"
+#include "graphics/generic/commands.h"
 #include "platforms/platform.h"
 #include "formats/oiSH/sh_file.h"
+#include "graphics/generic/bindless_descriptor.h"
 #include "graphics/generic/graphics_types.h"
 #include "types/test/test.h"
 #include "types/base/string_base.h"
@@ -215,4 +215,262 @@ clean:
 	RefPtr_dec(&readWrite);
 	RefPtr_dec(&readOnly);
 	RefPtr_dec(&plain);
+}
+
+// -- 14. Bindful and bindless interleaved in one scope ---------------------------
+
+//Backends emit descriptor state lazily at the work op and remember what the command buffer last saw, so the
+// dangerous transitions are custom to default (the default sets or root arguments have to come back) and
+// default to custom right after. Three dispatches cross both transitions in a single scope; each writes its
+// own buffer, so a stale table or root signature can't hide.
+//Lives in this file rather than the bindful one because it NEEDS bindless, which that file must not.
+
+void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Bindless/interleave");
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if (!device->defaultDescriptorTable) {
+		Test_print(t, "Device has no bindless descriptor table, skipping bindful interleave tests");
+		return;
+	}
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	DescriptorHeapRef *heap = NULL;
+	DescriptorLayoutRef *layout = NULL;
+	DescriptorTableRef *tableA = NULL;
+	DescriptorTableRef *tableB = NULL;
+	PipelineLayoutRef *pipelineLayout = NULL;
+	PipelineRef *bindfulPipeline = NULL;
+	PipelineRef *bindlessPipeline = NULL;
+	DeviceBufferRef *src = NULL;
+	DeviceBufferRef *dstA = NULL;
+	DeviceBufferRef *dstB = NULL;
+	DeviceBufferRef *bindlessOut = NULL;
+	CommandListRef *commandList = NULL;
+	CommandListRef *emptyList = NULL;
+
+	SHFile copyFile = (SHFile) { 0 };
+	SHFile writeFile = (SHFile) { 0 };
+	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+
+	if (
+		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_copy.oiSH", &copyFile) ||
+		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_write.oiSH", &writeFile)
+	) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful interleave tests");
+		SHFile_free(&copyFile, alloc);
+		return;
+	}
+
+	const U32 entryId = TestShaders_entry(t, deviceRef, &copyFile, "main");
+
+	if(entryId == U32_MAX)
+		goto clean;
+
+	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
+		deviceRef, &copyFile, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
+		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	)))
+		goto clean;
+
+	CharString name = CharString_createRefCStrConst("Bindful interleave layout");
+
+	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &layoutInfo, &name, &layout, &t->err
+	)))
+		goto clean;
+
+	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 4, .maxDescriptorTables = 2 };
+	name = CharString_createRefCStrConst("Bindful interleave heap");
+
+	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
+		deviceRef, &heapInfo, &name, &heap, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindful interleave table A");
+
+	if(!Test_assert(t, "tableACreate", DescriptorHeapRef_createDescriptorTable(
+		heap, layout, EDescriptorTableFlags_None, &name, &tableA, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindful interleave table B");
+
+	if(!Test_assert(t, "tableBCreate", DescriptorHeapRef_createDescriptorTable(
+		heap, layout, EDescriptorTableFlags_None, &name, &tableB, &t->err
+	)))
+		goto clean;
+
+	U32 srcData[64];
+
+	for(U32 i = 0; i < 64; ++i)
+		srcData[i] = i;
+
+	Buffer srcRef = Buffer_createRefConst(srcData, sizeof(srcData));
+	name = CharString_createRefCStrConst("Bindful interleave src");
+
+	if(!Test_assert(t, "srcCreate", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderRead, NULL,
+		&name, &srcRef, &src, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindful interleave dst A");
+
+	if(!Test_assert(t, "dstACreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, 64 * sizeof(U32), &dstA, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindful interleave dst B");
+
+	if(!Test_assert(t, "dstBCreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, 64 * sizeof(U32), &dstB, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindful interleave bindless out");
+
+	if(!Test_assert(t, "bindlessOutCreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, 64 * sizeof(U32), &bindlessOut, &t->err
+	)))
+		goto clean;
+
+	const Descriptor srcDesc = Descriptor_buffer(src, 0, 0, NULL, 0);
+	const Descriptor dstADesc = Descriptor_buffer(dstA, 0, 0, NULL, 0);
+	const Descriptor dstBDesc = Descriptor_buffer(dstB, 0, 0, NULL, 0);
+
+	const CharString inputName = CharString_createRefCStrConst("input");
+	const CharString outputName = CharString_createRefCStrConst("output");
+
+	Test_assert(t, "setSrcA", DescriptorTableRef_setDescriptorByName(tableA, &inputName, 0, false, &srcDesc, &t->err));
+	Test_assert(t, "setDstA", DescriptorTableRef_setDescriptorByName(tableA, &outputName, 0, false, &dstADesc, &t->err));
+	Test_assert(t, "setSrcB", DescriptorTableRef_setDescriptorByName(tableB, &inputName, 0, false, &srcDesc, &t->err));
+	Test_assert(t, "setDstB", DescriptorTableRef_setDescriptorByName(tableB, &outputName, 0, false, &dstBDesc, &t->err));
+
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	name = CharString_createRefCStrConst("Bindful interleave pipeline layout");
+
+	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
+		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindful interleave pipeline");
+
+	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
+		deviceRef, &copyFile, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &bindfulPipeline, &t->err
+	)))
+		goto clean;
+
+	if(!TestShaders_computePipeline(t, deviceRef, &writeFile, &bindlessPipeline))
+		goto clean;
+
+	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
+	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+
+	const Transition transitions[4] = {
+		(Transition) { .resource = src,         .stage = EPipelineStage_Compute },
+		(Transition) { .resource = dstA,        .stage = EPipelineStage_Compute, .isWrite = true },
+		(Transition) { .resource = dstB,        .stage = EPipelineStage_Compute, .isWrite = true },
+		(Transition) { .resource = bindlessOut, .stage = EPipelineStage_Compute, .isWrite = true }
+	};
+
+	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition_createRefConst(transitions, 4, &transitionList, NULL);
+
+	//Custom, then default, then custom again, all in one scope
+
+	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
+	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
+
+	Test_assert(t, "bindTableA", CommandListRef_bindDescriptorTable(commandList, tableA, &t->err));
+	Test_assert(t, "bindBindful", CommandListRef_setComputePipeline(commandList, bindfulPipeline, &t->err));
+	Test_assert(t, "dispatchA", CommandListRef_dispatch1D(commandList, 1, &t->err));
+
+	Test_assert(t, "bindBindless", CommandListRef_setComputePipeline(commandList, bindlessPipeline, &t->err));
+	Test_assert(t, "dispatchBindless", CommandListRef_dispatch1D(commandList, 1, &t->err));
+
+	Test_assert(t, "bindTableB", CommandListRef_bindDescriptorTable(commandList, tableB, &t->err));
+	Test_assert(t, "bindBindful2", CommandListRef_setComputePipeline(commandList, bindfulPipeline, &t->err));
+	Test_assert(t, "dispatchB", CommandListRef_dispatch1D(commandList, 1, &t->err));
+
+	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
+	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+	TestShaderAppData appData = (TestShaderAppData) {
+		.handles = { DeviceBufferRef_ptr(bindlessOut)->writeHandle, 0xC0DE0000u }
+	};
+
+	if (TestShaders_submitAndWait(t, deviceRef, commandList, &appData, sizeof(appData))) {
+
+		Bool okA = TestShaders_pullBuffer(t, deviceRef, emptyList, dstA);
+		Bool okOut = TestShaders_pullBuffer(t, deviceRef, emptyList, bindlessOut);
+		Bool okB = TestShaders_pullBuffer(t, deviceRef, emptyList, dstB);
+
+		if (okA && okOut && okB) {
+
+			const U32 *a = (const U32*) DeviceBufferRef_ptr(dstA)->cpuData.ptr;
+			const U32 *o = (const U32*) DeviceBufferRef_ptr(bindlessOut)->cpuData.ptr;
+			const U32 *b = (const U32*) DeviceBufferRef_ptr(dstB)->cpuData.ptr;
+
+			Bool allMatch = true;
+
+			for(U32 i = 0; i < 64; ++i)
+				allMatch &= a[i] == i * 2 + 1 && o[i] == 0xC0DE0000u + i && b[i] == i * 2 + 1;
+
+			Test_assert(t, "interleaveResults", allMatch);
+		}
+	}
+
+clean:
+
+	if(tableA) {
+		DescriptorTableRef_unsetDescriptors(tableA, 0, 0, 1, NULL);
+		DescriptorTableRef_unsetDescriptors(tableA, 1, 0, 1, NULL);
+	}
+
+	if(tableB) {
+		DescriptorTableRef_unsetDescriptors(tableB, 0, 0, 1, NULL);
+		DescriptorTableRef_unsetDescriptors(tableB, 1, 0, 1, NULL);
+	}
+
+	RefPtr_dec(&emptyList);
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&bindlessPipeline);
+	RefPtr_dec(&bindfulPipeline);
+	RefPtr_dec(&pipelineLayout);
+	RefPtr_dec(&bindlessOut);
+	RefPtr_dec(&dstB);
+	RefPtr_dec(&dstA);
+	RefPtr_dec(&src);
+	RefPtr_dec(&tableB);
+	RefPtr_dec(&tableA);
+	RefPtr_dec(&layout);
+	RefPtr_dec(&heap);
+
+	DescriptorLayoutInfo_free(&layoutInfo, alloc);
+	SHFile_free(&copyFile, alloc);
+	SHFile_free(&writeFile, alloc);
 }
