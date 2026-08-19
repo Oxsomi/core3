@@ -1812,7 +1812,12 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	Log_performanceLnx("VkGraphicsDevice_flush called!");
+	if(GraphicsDevice_logOnce(device, EGraphicsDeviceMessage_SubmitFlushed))
+		Log_performanceLnx(
+			"Vulkan: submit was split mid recording because pending copies or AS builds crossed the flush "
+			"threshold, which adds a GPU sync point; raise flushThreshold or batch smaller uploads "
+			"(only logged once)"
+		);
 
 	//End current command list
 

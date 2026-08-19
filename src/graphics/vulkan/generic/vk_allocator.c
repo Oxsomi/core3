@@ -169,11 +169,13 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		(allocator->device->flags & EGraphicsDeviceFlags_IsDebug) &&
 		dedicated.prefersDedicatedAllocation &&
 		!dedicated.requiresDedicatedAllocation &&
-		allocator->blocks.length >= 2000
+		allocator->blocks.length >= 2000 &&
+		GraphicsDevice_logOnce(allocator->device, EGraphicsDeviceMessage_TooManyMemoryBlocks)
 	)
 		Log_performanceLnx(
 			"VkDeviceMemoryAllocator_allocate() Memory allocation prefers dedicated allocation, "
-			"but there are already >= 2000 memory blocks. Falling back to shared allocations to prevent reaching 4096"
+			"but there are already >= 2000 memory blocks. Falling back to shared allocations to prevent "
+			"reaching 4096 (only logged once)"
 		);
 
 	//Find an existing allocation

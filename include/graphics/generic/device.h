@@ -86,7 +86,21 @@ typedef enum EGraphicsDeviceMessage {
 	//A real micromap object was linked into a BLAS on a device that likely emulates opacity micromaps
 	// (RayMicromapOpacityActual unset), where the free special indices are usually the better tool.
 
-	EGraphicsDeviceMessage_OmmLikelyEmulated = 1 << 0
+	EGraphicsDeviceMessage_OmmLikelyEmulated    = 1 << 0,
+
+	//A submit was split mid recording because pending copies or AS builds crossed the flush threshold,
+	// which inserts a GPU sync point; frequent hits want a higher flushThreshold or smaller upload batches.
+
+	EGraphicsDeviceMessage_SubmitFlushed        = 1 << 1,
+
+	//A pipeline layout exceeded 13 root signature DWORDs, past which D3D12 drivers typically spill to memory.
+
+	EGraphicsDeviceMessage_RootSignature13Dwords = 1 << 2,
+
+	//An allocation preferring a dedicated block fell back to shared because the device already holds >= 2000
+	// memory blocks (the cap guards the API limit of 4096 allocations).
+
+	EGraphicsDeviceMessage_TooManyMemoryBlocks  = 1 << 3
 
 } EGraphicsDeviceMessage;
 

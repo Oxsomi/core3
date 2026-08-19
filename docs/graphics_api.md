@@ -252,7 +252,7 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message);
   ```
 
-  - One time runtime hints: returns true exactly once per device per message (an atomic test and set on GraphicsDevice::runtimeMessages), so the caller logs on true and stays silent forever after, preventing a per call hint from spamming. Current messages: OmmLikelyEmulated, logged as a performance hint when a BLAS links a real opacity micromap on a device without RayMicromapOpacityActual (where the free special indices usually serve better).
+  - One time runtime hints: returns true exactly once per device per message (an atomic test and set on GraphicsDevice::runtimeMessages), so the caller logs on true and stays silent forever after, preventing a per call hint from spamming. Current messages: OmmLikelyEmulated (a BLAS links a real opacity micromap on a device without RayMicromapOpacityActual, where the free special indices usually serve better), SubmitFlushed (a submit was split mid recording because pending copies or AS builds crossed flushThreshold, adding a GPU sync point), RootSignature13Dwords (a pipeline layout exceeds the 13 root signature DWORDs D3D12 drivers keep in fast memory) and TooManyMemoryBlocks (a dedicated allocation fell back to shared because the device already holds >= 2000 blocks).
 
 - ```c
   Bool createSwapchain(

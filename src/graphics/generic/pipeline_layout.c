@@ -253,9 +253,10 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 			"bindings +1 if non static samplers are used, +1 if other resources are used"
 		));
 
-	if(dwords > 13)
+	if(dwords > 13 && GraphicsDevice_logOnce(device, EGraphicsDeviceMessage_RootSignature13Dwords))
 		Log_performanceLnx(
-			"GraphicsDeviceRef_createPipelineLayout() root signature would exceed 13 DWORDs if a DirectX backend is used"
+			"GraphicsDeviceRef_createPipelineLayout() root signature would exceed 13 DWORDs if a DirectX backend "
+			"is used (only logged once)"
 		);
 
 	//Create object
