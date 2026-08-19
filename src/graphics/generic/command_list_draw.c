@@ -60,6 +60,17 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 
 	Bool s_uccess = true;
 
+	//The outcome only depends on these three identities (layouts are immutable and descriptor CONTENTS are
+	// not validated here), so a matching triple was already proven valid and long runs of work ops between
+	// binds skip everything below.
+
+	if(
+		commandList->validatedPipeline == pipelineRef &&
+		commandList->validatedTable == commandList->boundDescriptorTable &&
+		commandList->validatedHeap == commandList->boundDescriptorHeap
+	)
+		return s_uccess;
+
 	PipelineLayoutRef *layoutRef = PipelineRef_ptr(pipelineRef)->layout;
 
 	if(layoutRef == GraphicsDeviceRef_ptr(commandList->device)->defaultPipelineLayout)
@@ -76,11 +87,27 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 
 	if (layout->info.bindings) {
 
+		//The heap bind is explicit because switching heaps is expensive; a table silently implying its heap
+		// would hide exactly the cost that made it explicit
+
+		if(!commandList->boundDescriptorHeap)
+			retError(clean, Error_invalidOperation(
+				2,
+				"CommandList_validateBindState() a custom layout needs its descriptor heap bound "
+				"(CommandListRef_bindDescriptorHeap)"
+			));
+
 		if(!commandList->boundDescriptorTable)
 			retError(clean, Error_invalidOperation(
 				0,
 				"CommandList_validateBindState() the pipeline's layout needs a descriptor table, but none is bound "
 				"(CommandListRef_bindDescriptorTable)"
+			));
+
+		if(DescriptorTableRef_ptr(commandList->boundDescriptorTable)->parent != commandList->boundDescriptorHeap)
+			retError(clean, Error_invalidOperation(
+				3,
+				"CommandList_validateBindState() the bound descriptor table doesn't belong to the bound heap"
 			));
 
 		if(DescriptorTableRef_ptr(commandList->boundDescriptorTable)->layout != layout->info.bindings)
@@ -92,6 +119,13 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 	}
 
 clean:
+
+	if (s_uccess) {
+		commandList->validatedPipeline = pipelineRef;
+		commandList->validatedTable = commandList->boundDescriptorTable;
+		commandList->validatedHeap = commandList->boundDescriptorHeap;
+	}
+
 	return s_uccess;
 }
 
@@ -876,6 +910,54 @@ Bool CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas, Er
 //Bindful: only SETS state; the work ops validate it against the bound pipeline's layout.
 //The KeepAlive transition is what makes end() collect the table into the command list's resources, which is
 // also what carries it into the frame's resourcesInFlight at submit.
+
+//Explicit rather than implied by the table: switching heaps can stall the GPU (D3D12 especially), so the
+// switch has to be a visible command in the recording.
+
+Bool CommandListRef_bindDescriptorHeap(CommandListRef *commandListRef, DescriptorHeapRef *heap, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = commandListRef ? GraphicsDeviceRef_getAlloc(CommandListRef_ptr(commandListRef)->device) : NULL;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!heap || heap->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorHeap)
+		retError(clean, Error_unsupportedOperation(
+			0, "CommandListRef_bindDescriptorHeap() requires a descriptor heap"
+		));
+
+	if(DescriptorHeapRef_ptr(heap)->device != commandList->device)
+		retError(clean, Error_unsupportedOperation(
+			1, "CommandListRef_bindDescriptorHeap()::heap's device is incompatible"
+		));
+
+	if (!CommandListRef_isBound(commandList, heap, (ResourceRange) { 0 }, NULL)) {
+
+		const TransitionInternal transition = (TransitionInternal) {
+			.resource = heap, .type = ETransitionType_KeepAlive
+		};
+
+		gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
+	}
+
+	DescriptorHeapRef *args[2] = { heap, NULL };
+
+	gotoIfError3(clean, CommandList_append(
+		commandList,
+		ECommandOp_BindDescriptorHeap,
+		Buffer_createRefConst(args, sizeof(args)),
+		0, e_rr
+	));
+
+	commandList->boundDescriptorHeap = heap;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
 
 Bool CommandListRef_bindDescriptorTable(CommandListRef *commandListRef, DescriptorTableRef *table, Error *e_rr) {
 

@@ -195,9 +195,17 @@ static void DxCommandBufferState_bindDescriptors(
 
 	if (layoutRef == device->defaultPipelineLayout) {
 
-		if (temp->defaultDescriptorsDirty) {
-			temp->defaultDescriptorsDirty = false;
+		if (!temp->defaultDescriptorsBound) {
+
+			temp->defaultDescriptorsBound = true;
 			GraphicsDevice_rebindDescriptors(device, buffer);
+
+			//The rebind switched the heap and root signatures back to the defaults, so the custom path's
+			// trackers no longer describe what is bound.
+
+			temp->lastBoundHeap = NULL;
+			temp->lastBoundTable[0] = temp->lastBoundTable[1] = NULL;
+			temp->lastRootSig[0] = temp->lastRootSig[1] = NULL;
 		}
 
 		return;
@@ -206,15 +214,32 @@ static void DxCommandBufferState_bindDescriptors(
 	const PipelineLayout *layout = PipelineLayoutRef_ptr(layoutRef);
 	DxPipelineLayout *layoutExt = PipelineLayout_ext((PipelineLayout*)layout, Dx);
 
-	if(isCompute)
-		buffer->lpVtbl->SetComputeRootSignature(buffer, layoutExt->rootSig);
+	const U8 bindPoint = isCompute ? 1 : 0;
 
-	else buffer->lpVtbl->SetGraphicsRootSignature(buffer, layoutExt->rootSig);
+	//Tracked separately like the other command buffer state: the root signature only re-emits when it truly
+	// changed, because setting one (even the same one) drops every root argument on D3D12.
 
-	temp->defaultDescriptorsDirty = true;
+	if (temp->lastRootSig[bindPoint] != layoutExt->rootSig) {
+
+		if(isCompute)
+			buffer->lpVtbl->SetComputeRootSignature(buffer, layoutExt->rootSig);
+
+		else buffer->lpVtbl->SetGraphicsRootSignature(buffer, layoutExt->rootSig);
+
+		temp->lastRootSig[bindPoint] = layoutExt->rootSig;
+		temp->lastBoundTable[bindPoint] = NULL;        //The switch dropped every root argument
+		temp->defaultDescriptorsBound = false;
+	}
 
 	if(!temp->boundDescriptorTable || !layout->info.bindings)
 		return;
+
+	//Root arguments persist while the root signature does, so an unchanged table has nothing to re-emit
+
+	if(temp->lastBoundTable[bindPoint] == temp->boundDescriptorTable)
+		return;
+
+	temp->lastBoundTable[bindPoint] = temp->boundDescriptorTable;
 
 	const DescriptorTable *table = DescriptorTableRef_ptr(temp->boundDescriptorTable);
 	DxDescriptorTable *tableExt = DescriptorTable_ext((DescriptorTable*)table, Dx);
@@ -224,8 +249,13 @@ static void DxCommandBufferState_bindDescriptors(
 	//The table's heap has to be current; when it differs from the default heap this switches it, and the
 	// default rebind switches back through the dirty flag above.
 
-	ID3D12DescriptorHeap *descriptorHeaps[2] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };
-	buffer->lpVtbl->SetDescriptorHeaps(buffer, heap->samplerHeap.heap ? 2 : 1, descriptorHeaps);
+	if (temp->boundDescriptorHeap && temp->lastBoundHeap != temp->boundDescriptorHeap) {
+
+		ID3D12DescriptorHeap *descriptorHeaps[2] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };
+		buffer->lpVtbl->SetDescriptorHeaps(buffer, heap->samplerHeap.heap ? 2 : 1, descriptorHeaps);
+
+		temp->lastBoundHeap = temp->boundDescriptorHeap;
+	}
 
 	//The layout has at most two root tables (resources, samplers), created in encounter order; each binding's
 	// root param is in rootParamOffsets, so the first binding of each class names its table's param.
@@ -1030,6 +1060,10 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 		case ECommandOp_BindDescriptorTable:
 			temp->boundDescriptorTable = *(RefPtr* const*) data;
+			break;
+
+		case ECommandOp_BindDescriptorHeap:
+			temp->boundDescriptorHeap = *(RefPtr* const*) data;
 			break;
 
 		case ECommandOp_UpdateOmmExt:

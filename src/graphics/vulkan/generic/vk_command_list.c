@@ -85,11 +85,20 @@ static void VkCommandBufferState_bindDescriptors(
 
 	PipelineLayoutRef *layoutRef = PipelineRef_ptr(pipelineRef)->layout;
 
+	const U8 bindPointId =
+		bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE ? 0 : (bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS ? 1 : 2);
+
 	if (layoutRef == device->defaultPipelineLayout) {
 
-		if (temp->defaultDescriptorsDirty) {
-			temp->defaultDescriptorsDirty = false;
+		if (!temp->defaultDescriptorsBound) {
+
+			temp->defaultDescriptorsBound = true;
 			GraphicsDevice_rebindDescriptors(device, temp->buffer, NULL);
+
+			for(U8 i = 0; i < 3; ++i) {
+				temp->lastBoundTable[i] = NULL;
+				temp->lastBoundLayout[i] = VK_NULL_HANDLE;
+			}
 		}
 
 		return;
@@ -104,6 +113,15 @@ static void VkCommandBufferState_bindDescriptors(
 	VkDescriptorTable *tableExt = DescriptorTable_ext(DescriptorTableRef_ptr(temp->boundDescriptorTable), Vk);
 	VkPipelineLayout *layoutExt = PipelineLayout_ext(PipelineLayoutRef_ptr(layoutRef), Vk);
 
+	if(
+		temp->lastBoundTable[bindPointId] == temp->boundDescriptorTable &&
+		temp->lastBoundLayout[bindPointId] == *layoutExt
+	)
+		return;
+
+	temp->lastBoundTable[bindPointId] = temp->boundDescriptorTable;
+	temp->lastBoundLayout[bindPointId] = *layoutExt;
+
 	for (U64 j = 0, k = 0; j < tableExt->bindCommands; ++j) {
 
 		deviceExt->cmdBindDescriptorSets(
@@ -117,7 +135,7 @@ static void VkCommandBufferState_bindDescriptors(
 		k += tableExt->counts[j];
 	}
 
-	temp->defaultDescriptorsDirty = true;
+	temp->defaultDescriptorsBound = false;
 }
 
 void VK_WRAP_FUNC(CommandList_process)(
@@ -786,6 +804,12 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 		case ECommandOp_BindDescriptorTable:
 			temp->boundDescriptorTable = *(RefPtr* const*) data;
+			break;
+
+		//Nothing to emit on Vulkan today (a heap is a pool); recorded for VK_EXT_descriptor_heap later
+
+		case ECommandOp_BindDescriptorHeap:
+			temp->boundDescriptorHeap = *(RefPtr* const*) data;
 			break;
 
 		case ECommandOp_UpdateOmmExt:

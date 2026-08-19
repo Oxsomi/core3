@@ -158,6 +158,10 @@ void Test_graphicsConfigVariants(Test *t, GraphicsInstanceRef *instRef, const Gr
 
 			Test_assert(t, "configNoBindlessKeepsDataTypes", caps.dataTypes == base.dataTypes);
 
+			//The whole bindful module on a device with bindless OFF: descriptor work must not need it
+
+			Test_graphicsBindful(t, noBindlessRef);
+
 			//A device without a bindless layout still has to serve plain resources, since that is the whole
 			// point of being able to turn bindless off.
 

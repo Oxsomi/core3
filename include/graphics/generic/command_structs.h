@@ -34,6 +34,7 @@ typedef RefPtr PipelineRef;
 typedef RefPtr DepthStencilRef;
 typedef RefPtr DeviceBufferRef;
 typedef RefPtr DescriptorTableRef;
+typedef RefPtr DescriptorHeapRef;
 
 typedef enum ECommandOp {
 
@@ -89,9 +90,12 @@ typedef enum ECommandOp {
 	ECommandOp_UpdateTLASExt,
 	ECommandOp_UpdateOmmExt,
 
-	//Bindful: sets the descriptor table state; backends emit the actual binds lazily at the work op
+	//Bindful: set descriptor state; backends emit the actual binds lazily at the work op.
+	//The heap bind is a separate EXPLICIT command because switching heaps is expensive on some hardware
+	// (D3D12 can stall the GPU), so it must be visible in the recording rather than implied by a table.
 
-	ECommandOp_BindDescriptorTable
+	ECommandOp_BindDescriptorTable,
+	ECommandOp_BindDescriptorHeap
 
 } ECommandOp;
 

@@ -1672,7 +1672,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
 
-		gotoIfError3(clean, GraphicsDevice_rebindDescriptors(device, commandBuffer, e_rr));
+		//Descriptors bind lazily at the first work op that needs them (bindful), so a purely bindful frame
+		// never pays for the default set setup.
 
 		//Record commands
 
@@ -1871,7 +1872,16 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 
 	gotoIfError3(clean, checkVkError(deviceExt->beginCommandBuffer(commandBuffer->buffer, &beginInfo), e_rr));
 
-	gotoIfError3(clean, GraphicsDevice_rebindDescriptors(device, commandBuffer->buffer, e_rr));
+	//The fresh buffer has no descriptor state, so the emitted state trackers reset and the next work op's
+	// lazy bind re-emits whatever was last bound (default or custom), rather than eagerly binding defaults
+	// the remaining commands might never use.
+
+	commandBuffer->defaultDescriptorsBound = false;
+
+	for(U8 bindfulI = 0; bindfulI < 3; ++bindfulI) {
+		commandBuffer->lastBoundTable[bindfulI] = NULL;
+		commandBuffer->lastBoundLayout[bindfulI] = VK_NULL_HANDLE;
+	}
 
 	//Reset temporary variables to avoid invalid caching behavior
 

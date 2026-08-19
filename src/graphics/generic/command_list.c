@@ -817,6 +817,14 @@ clean:
 			commandList->pipeline[i] = NULL;
 
 		commandList->boundDescriptorTable = NULL;
+		commandList->boundDescriptorHeap = NULL;
+
+		//The cached triple names objects by identity, and a freed pipeline's address could be reused by a
+		// new one, so the cache doesn't outlive the scope that proved it.
+
+		commandList->validatedPipeline = NULL;
+		commandList->validatedTable = NULL;
+		commandList->validatedHeap = NULL;
 
 		ListTransitionInternal_clear(&commandList->pendingTransitions, e_rr);
 
