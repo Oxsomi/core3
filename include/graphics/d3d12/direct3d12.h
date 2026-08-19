@@ -113,7 +113,7 @@ typedef enum ECompareOp ECompareOp;
 typedef union DxPipeline {
 
 	struct {
-		ID3D12StateObject *stateObject;                    //For anything else (RTPSO, workgraphs, mesh shaders, etc.)
+		ID3D12StateObject *stateObject;                    //For anything else (RTPSO, mesh shaders, etc.)
 		ID3D12StateObjectProperties *stateObjectProps;
 	};
 

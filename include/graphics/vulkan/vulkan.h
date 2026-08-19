@@ -101,10 +101,18 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 typedef enum ECompareOp ECompareOp;
 
 typedef struct VkBLAS {
+
 	VkAccelerationStructureGeometryKHR geometry;
 	VkAccelerationStructureBuildGeometryInfoKHR geometries;
 	VkAccelerationStructureBuildRangeInfoKHR range;
 	VkAccelerationStructureKHR as;
+
+	//The triangle data CHAINS this rather than containing it, so it has to live as long as the geometry desc
+	//  and cannot sit on the stack of the function that fills it in.
+	//Only used when the BLAS carries an OMM index buffer; pNext stays NULL otherwise.
+
+	VkAccelerationStructureTrianglesOpacityMicromapEXT ommTriangles;
+
 	U64 padding;
 } VkBLAS;
 

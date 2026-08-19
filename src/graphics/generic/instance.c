@@ -45,6 +45,28 @@
 
 TListImpl(GraphicsDeviceInfo);
 
+//Lives in device_info.c but isn't API: it fills in the capability bits neither backend can report.
+
+void GraphicsDeviceInfo_deriveCapabilities(GraphicsDeviceInfo *deviceInfo);
+
+//The only way device infos are allowed to leave this file, so nothing can hand out an adapter whose derived
+// bits were never filled in and a search sees the same capabilities a created device will report.
+
+static Bool GraphicsInstance_getDeviceInfosDerived(
+	const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	gotoIfError3(clean, GraphicsInstance_getDeviceInfosExt(inst, infos, e_rr));
+
+	for(U64 i = 0; i < infos->length; ++i)
+		GraphicsDeviceInfo_deriveCapabilities(&infos->ptrNonConst[i]);
+
+clean:
+	return s_uccess;
+}
+
 //Every one of these objects has a backend extension struct sitting directly behind it, so the RefPtr has to
 //account for that struct's alignment as well as the owner's; the owner being 64 byte aligned says nothing
 //about where the block behind it lands, and it's the block behind it that holds a SpinLock.
@@ -83,7 +105,7 @@ Bool GraphicsInstance_getPreferredDevice(
 			4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty"
 		));
 
-	gotoIfError3(clean, GraphicsInstance_getDeviceInfosExt(inst, &tmp, e_rr));
+	gotoIfError3(clean, GraphicsInstance_getDeviceInfosDerived(inst, &tmp, e_rr));
 
 	U64 preferredDedicated = 0;
 	U64 preferredNonDedicated = 0;
@@ -508,7 +530,7 @@ Bool GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsD
 			!inst ? 0 : 1, "GraphicsInstance_getDeviceInfos()::inst and infos are required"
 		));
 
-	gotoIfError3(clean, GraphicsInstance_getDeviceInfosExt(inst, infos, e_rr));
+	gotoIfError3(clean, GraphicsInstance_getDeviceInfosDerived(inst, infos, e_rr));
 
 clean:
 	return s_uccess;

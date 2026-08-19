@@ -245,7 +245,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	//--- Backend auto-restrict: SHEntryRuntime_getSupportedBinaryTypes AND's the stage + extension support,
 	//--- independent of the annotation. A backend-exclusive extension (AtomicF32, inline-SPIRV atomics)
 	//--- restricts to SPIRV; a plain compute entrypoint supports both. This is the mechanism behind
-	//--- "workgraph is DXIL-only", etc. ---
+	//--- backend restriction by stage/extension, etc. ---
 
 	src = CharString_createRefCStrConst(
 		"[[oxc::extension(\"AtomicF32\")]]\n"

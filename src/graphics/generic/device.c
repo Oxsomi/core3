@@ -682,9 +682,10 @@ Bool GraphicsDeviceRef_create(
 			EGraphicsFeatures_RayTriPosition
 		);
 		device->info.capabilities.features2 &=~ (
-			EGraphicsFeatures2_RayReorderActual   |
-			EGraphicsFeatures2_RayClusterAS       |
-			EGraphicsFeatures2_RayPartitionedTLAS |
+			EGraphicsFeatures2_RayReorderActual         |
+			EGraphicsFeatures2_RayMicromapOpacityActual |
+			EGraphicsFeatures2_RayClusterAS             |
+			EGraphicsFeatures2_RayPartitionedTLAS       |
 			EGraphicsFeatures2_RayIndirectASBuild
 		);
 	}

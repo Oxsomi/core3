@@ -230,7 +230,6 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 			case D3D12_SHVER_CLOSEST_HIT_SHADER:    stage = ESHPipelineStage_ClosestHitExt;    break;
 			case D3D12_SHVER_MISS_SHADER:           stage = ESHPipelineStage_MissExt;          break;
 			case D3D12_SHVER_CALLABLE_SHADER:       stage = ESHPipelineStage_CallableExt;      break;
-			case D3D12_SHVER_NODE_SHADER:           stage = ESHPipelineStage_WorkgraphExt;     break;
 
 			case D3D12_SHVER_PIXEL_SHADER:          stage = ESHPipelineStage_Pixel;            break;
 			case D3D12_SHVER_VERTEX_SHADER:         stage = ESHPipelineStage_Vertex;           break;
@@ -252,10 +251,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 
 		else {
 
-			if(
-				(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) ||
-				stage == ESHPipelineStage_WorkgraphExt
-			) {
+			if(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) {
 
 				if(!alreadyContainsLib)
 					gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
@@ -344,8 +340,7 @@ extern "C" Bool Compiler_linkDXIL(
 
 	Bool isShaderAnnotation =
 		(stageType >= ESHPipelineStage_RtStartExt && stageType >= ESHPipelineStage_RtEndExt) ||
-		stageType >= ESHPipelineStage_Count ||            //Maintain lib linking
-		stageType == ESHPipelineStage_WorkgraphExt;
+		stageType >= ESHPipelineStage_Count;            //Maintain lib linking
 
 	Bool hasErrors = false;
 

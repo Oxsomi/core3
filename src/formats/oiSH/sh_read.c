@@ -627,8 +627,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 			// fallthrough
 
-			case ESHPipelineStage_Compute:
-			case ESHPipelineStage_WorkgraphExt: {
+			case ESHPipelineStage_Compute: {
 
 				SHGroups groups = (SHGroups) { 0 };
 				gotoIfError3(clean, StreamCursor_consume(&cursor, offset, &groups, sizeof(groups), alloc, e_rr));
@@ -638,7 +637,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 				entry.groupZ   = groups.z;
 				entry.waveSize = groups.waveSize;
 
-				if (entry.waveSize && entry.stage != ESHPipelineStage_Compute && entry.stage != ESHPipelineStage_WorkgraphExt)
+				if (entry.waveSize && entry.stage != ESHPipelineStage_Compute)
 					retError(clean, Error_invalidParameter(
 						0, 0, "SHFile_read() waveSize not supported by mesh or task shader"
 					));

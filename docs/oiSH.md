@@ -92,9 +92,9 @@ typedef enum ESHPipelineStage {
 	ESHPipelineStage_MeshExt,
 	ESHPipelineStage_TaskExt,
 
-	//WorkGraph extension is required
+	//Reserved, free to reuse (was the workgraph stage)
 
-	ESHPipelineStage_WorkgraphExt
+	ESHPipelineStage_Reserved
 
 } ESHPipelineStage;
 
@@ -386,7 +386,7 @@ SHFile {		//Must be 16-byte aligned
      			U8 inputSemantics[validInputs];			//Starting at: semantics[0]
      			U8 outputSemantics[validOutputs];		//Starting at: semantics[uniqueInputSemantics]
 
-	    if compute, mesh, task or workgraph:
+	    if compute, mesh or task:
 		    U16x4 groups;
                	groups.w = waveSize: U4[4] required, min, max, recommended
                     Where the U4: 0 = None, 3-8 = 4-128 (log2), else invalid
@@ -420,7 +420,7 @@ CRC32C hashes are used for the source and include directories to see if they're 
 
 ## entrypointType
 
-Entrypoint type clarifies what type of entrypoint was compiled as (ESHPipelineStage). If compiled as a library (e.g. raytracing, workgraphs, etc.), this value should only be looked at from the user perspective if there are duplicates. This is because the entrypointType only has meaning if binary was compiled for a specific target (using [stage("")] for example).
+Entrypoint type clarifies what type of entrypoint was compiled as (ESHPipelineStage). If compiled as a library (e.g. raytracing, etc.), this value should only be looked at from the user perspective if there are duplicates. This is because the entrypointType only has meaning if binary was compiled for a specific target (using [stage("")] for example).
 
 If this is not the case, then the compiler can decide how to combine entrypoints. It will be allowed for raygen, miss and hit shaders to be compiled in a single go, and for the stage type to be raygen for all of them. But if the stage is determined to need a specialized compile, then it can be combined with only the stages it is compatible with (for example; if pixel and vertex shaders have different internal defines or compiler settings, then they can still be separated if need be).
 
@@ -439,7 +439,7 @@ The following define the requirements of binaries embedded in oiSH files.
 
 ### SPIRV spec
 
-- Main entrypoint should be called "main" unless it's compiled as a lib file (raytracing, workgraphs, etc.).
+- Main entrypoint should be called "main" unless it's compiled as a lib file (raytracing, etc.).
 - SPV1.3 is used by default but SPV1.4 is used when RT is present (RT stage or RayQuery).
 - Capabilities:
   - Always supported:
@@ -593,6 +593,6 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 
 1.2(.5): No major bump, no oiSH files exist in the wild yet. Added SHHeader::extensionCount (the writer's ESHExtension_Count), so readers that know about newer native extensions can automatically mark them dormant for files written before those extensions existed. Added the DescriptorHeap extension (full bindless: SM6.6 dynamic resources on DXIL, SPV_EXT_descriptor_heap on SPIRV), natively detected on both backends.
 
-1.2(.5): No major bump, no oiSH files exist in the wild yet. Added the `[[oxc::binary("spv", "dxil")]]` entrypoint annotation for per-entrypoint backend selection (see OxC3_tool.md); absent = all supported backends, and it AND's with the backends the stage + extensions can be expressed on (e.g. workgraph is DXIL-only, ComputeDeriv/AtomicF32 are SPIRV-only). No format change: which backends an entrypoint targets is already expressed by which binaries its referenced SHBinaryInfo carry (ESHBinaryFlags). Also fixed DXIL reflection of opaque non-struct structured-buffer elements (RWStructuredBuffer&lt;float4&gt; whose $Element DXC leaves as D3D_SVT_VOID) and folded D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS into WriteMSTexture.
+1.2(.5): No major bump, no oiSH files exist in the wild yet. Added the `[[oxc::binary("spv", "dxil")]]` entrypoint annotation for per-entrypoint backend selection (see OxC3_tool.md); absent = all supported backends, and it AND's with the backends the stage + extensions can be expressed on (e.g. ComputeDeriv/AtomicF32 are SPIRV-only). No format change: which backends an entrypoint targets is already expressed by which binaries its referenced SHBinaryInfo carry (ESHBinaryFlags). Also fixed DXIL reflection of opaque non-struct structured-buffer elements (RWStructuredBuffer&lt;float4&gt; whose $Element DXC leaves as D3D_SVT_VOID) and folded D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS into WriteMSTexture.
 
 1.2(.6): No major bump, no oiSH files exist in the wild yet. Repurposed the trailing `SHHeader::padding` U16 as `flags`, persisting `ESHSettingsFlags` (see Header flags section). This adds `ESHSettingsFlags_ReflectionOnly`, marking an oiSH that carries reflection but no compiled binaries; it is what `OxC3 shader reflect` emits and what lets such a file load even though `SHFile_isComplete` is false. Backwards compatible: existing files wrote the padding as zero, which reads back as `ESHSettingsFlags_None`. The field is inside the hashed range, so the reflection-only state is integrity-checked.

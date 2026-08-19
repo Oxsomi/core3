@@ -54,6 +54,11 @@ void BLAS_free(void *blasGeneric, const Allocator *alloc) {
 		RefPtr_dec(&blas->ommIndexBuffer.buffer);
 	}
 
+	//A refit holds a reference to the AS it updates from, taken at create; without this the parent leaks for
+	// the process lifetime, and with it goes its bindless descriptor and its device reference.
+
+	RefPtr_dec(&blas->base.parent);
+
 	RefPtr_dec(&blas->base.device);
 }
 

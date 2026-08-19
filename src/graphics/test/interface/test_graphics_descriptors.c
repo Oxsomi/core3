@@ -20,7 +20,7 @@
 
 //graphics/test/interface/test_graphics_descriptors.c
 
-//Descriptor layout, table and bindless modules (11, 12, 13).
+//Descriptor layout, table and bindless modules (11, 12, 13, 40).
 //These need a live device and are called once per adapter from the device test loop.
 
 #include "graphics/generic/device.h"
@@ -30,6 +30,9 @@
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/bindless_descriptor.h"
+#include "graphics/generic/render_texture.h"
+#include "graphics/generic/command_list.h"
+#include "graphics/generic/commands.h"
 #include "graphics/generic/graphics_types.h"
 #include "types/test/test.h"
 #include "types/base/string_base.h"
@@ -582,4 +585,225 @@ clean:
 	RefPtr_dec(&readWrite);
 	RefPtr_dec(&readOnly);
 	RefPtr_dec(&plain);
+}
+
+// -- 40. Descriptor allocation: filling a binding, recycling, resources in flight -
+
+//Every descriptor test above allocates a single slot and hands it straight back, so the allocator was only ever
+// asked for slot 0 of an array.
+//This fills a binding to its declared count instead, which is what real code does the moment a scene holds more
+// than a couple of exposed buffers or acceleration structures.
+//It runs in two halves, because "the slot came back" and "the slot came back while the gpu still held the
+// resource" are separate paths: the first frees descriptors nothing ever touched, the second frees descriptors
+// the table owns a reference through and whose buffer is in flight in a submitted command list.
+
+//Allocates until the binding is full, returning a bitmask of the slots it got.
+//A slot that repeats or lands outside the array stops the fill, so a full mask is the only way to pass.
+
+static U64 Test_fillDescriptorBinding(
+	Test *t,
+	DescriptorTableRef *table,
+	const Descriptor *desc,
+	Bool maintainRef,
+	U64 count
+) {
+
+	U64 taken = 0;
+
+	for (U64 i = 0; i < count; ++i) {
+
+		U64 arrayId = U64_MAX;
+
+		if(!DescriptorTableRef_allocDescriptor(table, 0, &arrayId, maintainRef, desc, &t->err))
+			break;
+
+		if(arrayId >= count || ((taken >> arrayId) & 1))
+			break;
+
+		taken |= (U64)1 << arrayId;
+	}
+
+	return taken;
+}
+
+void Test_graphicsDescriptorAlloc(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "DescriptorTable/alloc");
+
+	DescriptorHeapRef *heap = NULL;
+	DescriptorLayoutRef *layout = NULL;
+	DescriptorTableRef *table = NULL;
+	DeviceBufferRef *buffer = NULL;
+	RenderTextureRef *target = NULL;
+	CommandListRef *commandList = NULL;
+
+	//One array of 8, small enough to fill exhaustively and big enough that the bitset behind it spans more than
+	// the handful of slots the rest of the suite ever touches.
+	//Bindless is deliberately left out of both the layout and the heap, so this runs the same on every adapter.
+
+	const U64 count = 8;
+
+	CharString bindingName = CharString_createRefCStrConst("allocBuffers");
+
+	DescriptorBinding binding = (DescriptorBinding) {
+		.registerType = ESHRegisterType_ByteAddressBuffer,
+		.count = 8,
+		.binding = (SHBinding) { .space = 0, .binding = 0 },
+		.visibility = 1 << ESHPipelineStage_Compute
+	};
+
+	DescriptorLayoutInfo info = (DescriptorLayoutInfo) { 0 };
+
+	Test_assert(t, "allocBindingRef", ListDescriptorBinding_createRefConst(&binding, 1, &info.bindings, &t->err));
+	Test_assert(t, "allocNameRef", ListCharString_createRefConst(&bindingName, 1, &info.bindingNames, &t->err));
+
+	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 8, .maxDescriptorTables = 1 };
+
+	CharString name = CharString_createRefCStrConst("Descriptor alloc heap");
+
+	if(!Test_assert(t, "allocHeapCreate", GraphicsDeviceRef_createDescriptorHeap(
+		deviceRef, &heapInfo, &name, &heap, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Descriptor alloc layout");
+
+	if(!Test_assert(t, "allocLayoutCreate", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &info, &name, &layout, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Descriptor alloc table");
+
+	if(!Test_assert(t, "allocTableCreate", DescriptorHeapRef_createDescriptorTable(
+		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Descriptor alloc buffer");
+
+	if(!Test_assert(t, "allocBufferCreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderRead, NULL, &name, 256, &buffer, &t->err
+	)))
+		goto clean;
+
+	const DescriptorTable *tablePtr = DescriptorTableRef_ptr(table);
+	const Descriptor desc = Descriptor_buffer(buffer, 0, 0, NULL, 0);
+
+	//Nothing in flight first: the allocator on its own, with no owner of the buffer other than this function.
+	//The binding declares 8 slots, so 8 allocations have to succeed and each has to land on a slot of its own.
+
+	Test_assert(t, "fillToCount", Test_fillDescriptorBinding(t, table, &desc, false, count) == 0xFF);
+
+	//Only a full binding may refuse, and refusing has to leave the caller's id alone rather than report a slot
+	// off the end of the array.
+
+	U64 overflowId = U64_MAX;
+
+	Test_assert(t, "allocPastCount", !DescriptorTableRef_allocDescriptor(table, 0, &overflowId, false, &desc, NULL));
+	Test_assert(t, "allocPastCountNothing", overflowId == U64_MAX);
+
+	//Freeing a slot in the middle proves the search finds a hole rather than tracking a high water mark.
+
+	U64 recycled = U64_MAX;
+
+	Test_assert(t, "freeMiddle", DescriptorTableRef_unsetDescriptors(table, 0, 3, 1, &t->err));
+	Test_assert(t, "reallocMiddle", DescriptorTableRef_allocDescriptor(table, 0, &recycled, false, &desc, &t->err));
+	Test_assert(t, "reallocMiddleId", recycled == 3);
+	Test_assert(t, "allocFullAgain", !DescriptorTableRef_allocDescriptor(table, 0, &overflowId, false, &desc, NULL));
+
+	//Releasing the whole binding has to give all 8 slots back, not only the ones below some internal bound.
+
+	Test_assert(t, "freeAll", DescriptorTableRef_unsetDescriptors(table, 0, 0, count, &t->err));
+	Test_assert(t, "refillToCount", Test_fillDescriptorBinding(t, table, &desc, false, count) == 0xFF);
+	Test_assert(t, "refillFreeAll", DescriptorTableRef_unsetDescriptors(table, 0, 0, count, &t->err));
+
+	//maintainRef was false throughout, so the table never took a reference of its own to give back.
+
+	Test_assert(t, "refillNoRefs", !tablePtr->resources.length);
+
+	//Now the same binding with the buffer genuinely in flight.
+	//maintainRef makes the table hold a reference for as long as the descriptor lives and a submitted command
+	// list makes the device hold one until that frame retires, so the descriptors below are freed with two other
+	// owners still on the resource, which is what a resource released mid frame actually looks like.
+	//The clear on a throwaway render target is the modify op the scope needs: an empty scope is dropped along
+	// with its transitions, so the buffer would never reach the device's in flight list.
+
+	name = CharString_createRefCStrConst("Descriptor alloc target");
+
+	if(!Test_assert(t, "allocTargetCreate", GraphicsDeviceRef_createRenderTexture(
+		deviceRef, ETextureType_2D, 4, 4, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		EMSAASamples_Off, NULL, &name, &target, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "allocListCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, 2 * KIBI, 64, 16, true, &commandList, &t->err
+	)))
+		goto clean;
+
+	const Transition transition = (Transition) { .resource = buffer, .stage = EPipelineStage_Compute };
+
+	ListTransition transitions = (ListTransition) { 0 };
+	ListTransition_createRefConst(&transition, 1, &transitions, NULL);
+
+	const ImageRange all = (ImageRange) { .levelId = U32_MAX, .layerId = U32_MAX };
+
+	const Bool recorded =
+		Test_assert(t, "inFlightBegin", CommandListRef_begin(commandList, true, U64_MAX, &t->err)) &&
+		Test_assert(t, "inFlightScope", CommandListRef_startScope(commandList, &transitions, 1, NULL, &t->err)) &&
+		Test_assert(t, "inFlightClear", CommandListRef_clearImagef(
+			commandList, F32x4_create4(0, 0, 0, 1), all, target, &t->err
+		)) &&
+		Test_assert(t, "inFlightScopeEnd", CommandListRef_endScope(commandList, &t->err)) &&
+		Test_assert(t, "inFlightEnd", CommandListRef_end(commandList, &t->err));
+
+	if(!recorded)
+		goto clean;
+
+	//The list only keeps what its transitions named, so this is what makes the submit below put the buffer in
+	// flight instead of only the render target.
+
+	Test_assert(t, "inFlightTracked", ListRefPtr_contains(CommandListRef_ptr(commandList)->resources, buffer, 0, NULL));
+
+	ListCommandListRef lists = (ListCommandListRef) { 0 };
+	ListCommandListRef_createRefConst(&commandList, 1, &lists, NULL);
+
+	Test_assert(t, "inFlightSubmit", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
+
+	//Every descriptor points at the same buffer, so the table's resource list holds one entry with a count of 8.
+
+	Test_assert(t, "inFlightFill", Test_fillDescriptorBinding(t, table, &desc, true, count) == 0xFF);
+	Test_assert(t, "inFlightRef", tablePtr->resources.length == 1);
+
+	//Freed while the submit is still outstanding; the slots have to come back right away and the table has to
+	// let go of every reference it took, even though the device is still holding one of its own.
+
+	Test_assert(t, "inFlightFree", DescriptorTableRef_unsetDescriptors(table, 0, 0, count, &t->err));
+	Test_assert(t, "inFlightNoRefs", !tablePtr->resources.length);
+
+	U64 duringId = U64_MAX;
+
+	Test_assert(t, "inFlightRealloc", DescriptorTableRef_allocDescriptor(table, 0, &duringId, true, &desc, &t->err));
+	Test_assert(t, "inFlightReallocId", !duringId);
+	Test_assert(t, "inFlightFreeAgain", DescriptorTableRef_unsetDescriptors(table, 0, duringId, 1, &t->err));
+
+	//And once the frame has actually retired the binding still hands out all 8, so the device releasing its own
+	// reference afterwards stranded nothing.
+
+	Test_assert(t, "inFlightWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+	Test_assert(t, "afterWaitFill", Test_fillDescriptorBinding(t, table, &desc, true, count) == 0xFF);
+	Test_assert(t, "afterWaitRef", tablePtr->resources.length == 1);
+
+	//Those 8 are deliberately left allocated: freeing the table is what has to release them, which is the last
+	// owner the buffer's dec below relies on.
+
+clean:
+
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&target);
+	RefPtr_dec(&buffer);
+	RefPtr_dec(&table);
+	RefPtr_dec(&layout);
+	RefPtr_dec(&heap);
 }

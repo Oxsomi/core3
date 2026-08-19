@@ -250,10 +250,12 @@ clean:
 
 U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSizeType) {
 
-	U16 minVersion = OISH_SHADER_MODEL(6, 5);
+	//No stage raises the floor on its own any more: workgraphs were the only one (SM6.8) and they're gone.
+	//The parameter stays because the floor is a per stage question and the next stage to need one goes here.
 
-	if(stage == ESHPipelineStage_WorkgraphExt)
-		minVersion = OISH_SHADER_MODEL(6, 8);
+	(void) stage;
+
+	U16 minVersion = OISH_SHADER_MODEL(6, 5);
 
 	if(waveSizeType == 1)
 		minVersion = OISH_SHADER_MODEL(6, 6);

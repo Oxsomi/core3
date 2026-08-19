@@ -53,9 +53,12 @@ typedef enum ESHPipelineStage {
 	ESHPipelineStage_MeshExt,
 	ESHPipelineStage_TaskExt,
 
-	//WorkGraph extension is required
+	//Reserved, free to reuse.
+	//Was the workgraph (node) stage, removed 2026-08-18: D3D12 disables work graphs from SM 6.10+, there is no
+	// Vulkan equivalent, and OxC3 never had a runtime pipeline for them.
+	//The slot stays because the stage id is serialized in oiSH and indexes SHEntry_stageNames.
 
-	ESHPipelineStage_WorkgraphExt,
+	ESHPipelineStage_Reserved,
 
 	ESHPipelineStage_Count
 
@@ -92,7 +95,7 @@ typedef struct SHEntry {
 
 		struct {
 
-			U16 groupX, groupY;                  //Present for compute, workgraph, task and mesh shaders
+			U16 groupX, groupY;                  //Present for compute, task and mesh shaders
 
 			U16 groupZ;
 			U8 intersectionSize, payloadSize;    //Raytracing payload sizes
@@ -134,7 +137,7 @@ extern const C8 *SHEntry_stageNames[ESHPipelineStage_Count];
 typedef enum ESHEntryRuntimeFlag {
 	ESHEntryRuntimeFlag_None              = 0,
 	ESHEntryRuntimeFlag_IsRt              = 1 << 0,    //Raytracing stage (raygen/miss/closesthit/anyhit/intersection/callable)
-	ESHEntryRuntimeFlag_ContainsGfxOrComp = 1 << 1     //Graphics or compute stage (not RT, not workgraph)
+	ESHEntryRuntimeFlag_ContainsGfxOrComp = 1 << 1     //Graphics or compute stage (not RT)
 } ESHEntryRuntimeFlag;
 
 typedef struct SHEntryRuntime {

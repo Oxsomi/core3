@@ -101,10 +101,6 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 			break;
 
-		case C8x4('n', 'o', 'd', 'e'):        //node
-			if(stageNameLen == 4)            return ESHPipelineStage_WorkgraphExt;
-			break;
-
 		case C8x4('m', 'e', 's', 'h'):        //mesh
 			if(stageNameLen == 4)            return ESHPipelineStage_MeshExt;
 			break;
@@ -664,15 +660,14 @@ Bool Compiler_parseShaderStageAnnot(
 
 	entry.entry.stage = SHPipelineStage(stage);
 
-	//isRt = RT stage; containsGfxOrComp = not RT and not workgraph (folded into runtimeFlags)
+	//isRt = RT stage; containsGfxOrComp = not RT (folded into runtimeFlags)
 
 	entry.runtimeFlags &= (U8)~(ESHEntryRuntimeFlag_IsRt | ESHEntryRuntimeFlag_ContainsGfxOrComp);
 
 	if (stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt)
 		entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_IsRt;
 
-	else if (stage != ESHPipelineStage_WorkgraphExt)
-		entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_ContainsGfxOrComp;
+	else entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_ContainsGfxOrComp;
 
 clean:
 	return s_uccess;

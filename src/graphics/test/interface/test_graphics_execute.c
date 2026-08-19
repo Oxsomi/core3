@@ -31,6 +31,7 @@
 #include "graphics/generic/render_texture.h"
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/opacity_micromap.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/commands.h"
@@ -853,6 +854,86 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 
 	Test_assert(t, "blasRejectedNothing", !badBlas);
 
+	//Opacity micromap create validation.
+	//Every one of these must be refused, so the buffers can be any valid ASReadExt DeviceData; what is under
+	// test is the create info, not the geometry.
+	//A device without RayMicromapOpacity refuses all of them for that reason instead, which still passes but
+	// proves nothing there.
+
+	{
+		OpacityMicromapRef *badOmm = NULL;
+
+		const OpacityMicromapUsage usage = {
+			.count = 1, .subdivisionLevel = 1, .format = EOpacityMicromapFormat_Opacity2State
+		};
+
+		//Micromaps have no update mode at all, so an update flag is not merely ignored.
+
+		OpacityMicromapCreateInfo badFlags = OpacityMicromapCreateInfo_uniform(
+			ERTASBuildFlags_AllowUpdate, &positionData, &positionData, sizeof(OpacityMicromapEntry), &usage
+		);
+
+		Test_assert(t, "ommBadBuildFlags", !GraphicsDeviceRef_createOpacityMicromapExt(
+			deviceRef, &badFlags, &blasName, &badOmm, NULL
+		));
+
+		//A stride that cannot hold one record, and one that is not 4 byte aligned.
+
+		OpacityMicromapCreateInfo shortStride = OpacityMicromapCreateInfo_uniform(
+			ERTASBuildFlags_None, &positionData, &positionData, 4, &usage
+		);
+
+		Test_assert(t, "ommStrideTooSmall", !GraphicsDeviceRef_createOpacityMicromapExt(
+			deviceRef, &shortStride, &blasName, &badOmm, NULL
+		));
+
+		OpacityMicromapCreateInfo oddStride = OpacityMicromapCreateInfo_uniform(
+			ERTASBuildFlags_None, &positionData, &positionData, 9, &usage
+		);
+
+		Test_assert(t, "ommStrideUnaligned", !GraphicsDeviceRef_createOpacityMicromapExt(
+			deviceRef, &oddStride, &blasName, &badOmm, NULL
+		));
+
+		//No usages at all: the entry count would be 0, so there is nothing to build.
+
+		OpacityMicromapCreateInfo noUsages = OpacityMicromapCreateInfo_uniform(
+			ERTASBuildFlags_None, &positionData, &positionData, sizeof(OpacityMicromapEntry), NULL
+		);
+
+		Test_assert(t, "ommNoUsages", !GraphicsDeviceRef_createOpacityMicromapExt(
+			deviceRef, &noUsages, &blasName, &badOmm, NULL
+		));
+
+		//A usage that describes zero entries, and one with a format neither API defines.
+
+		const OpacityMicromapUsage zeroCount = { .count = 0, .subdivisionLevel = 1, .format = 1 };
+
+		OpacityMicromapCreateInfo zeroUsage = OpacityMicromapCreateInfo_uniform(
+			ERTASBuildFlags_None, &positionData, &positionData, sizeof(OpacityMicromapEntry), &zeroCount
+		);
+
+		Test_assert(t, "ommZeroCount", !GraphicsDeviceRef_createOpacityMicromapExt(
+			deviceRef, &zeroUsage, &blasName, &badOmm, NULL
+		));
+
+		const OpacityMicromapUsage badFormat = { .count = 1, .subdivisionLevel = 1, .format = 7 };
+
+		OpacityMicromapCreateInfo badFormatInfo = OpacityMicromapCreateInfo_uniform(
+			ERTASBuildFlags_None, &positionData, &positionData, sizeof(OpacityMicromapEntry), &badFormat
+		);
+
+		Test_assert(t, "ommBadFormat", !GraphicsDeviceRef_createOpacityMicromapExt(
+			deviceRef, &badFormatInfo, &blasName, &badOmm, NULL
+		));
+
+		Test_assert(t, "ommNullInfo", !GraphicsDeviceRef_createOpacityMicromapExt(
+			deviceRef, NULL, &blasName, &badOmm, NULL
+		));
+
+		Test_assert(t, "ommRejectedNothing", !badOmm);
+	}
+
 	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
 		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
 	);
@@ -863,6 +944,34 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 		goto clean;
 
 	Test_assert(t, "blasTypeId", blas->refPtrType->typeId == (TypeId) EGraphicsTypeId_BLASExt);
+
+	//Refit validation.
+	//A parent means "update that AS in place", which is only legal if the parent allowed updates when it was
+	// built, and IsUpdate without a parent has nothing to update from.
+	//The BLAS above was built with ERTASBuildFlags_None, so it is exactly the case that must be refused.
+
+	{
+		BLASCreateInfo refitNoAllowUpdate = BLASCreateInfo_unindexed(
+			ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
+		);
+
+		refitNoAllowUpdate.parent = blas;
+
+		Test_assert(t, "blasRefitWithoutAllowUpdate", !GraphicsDeviceRef_createBLASExt(
+			deviceRef, &refitNoAllowUpdate, &blasName, &badBlas, NULL
+		));
+
+		BLASCreateInfo updateNoParent = BLASCreateInfo_unindexed(
+			ERTASBuildFlags_AllowUpdate | ERTASBuildFlags_IsUpdate,
+			EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
+		);
+
+		Test_assert(t, "blasIsUpdateWithoutParent", !GraphicsDeviceRef_createBLASExt(
+			deviceRef, &updateNoParent, &blasName, &badBlas, NULL
+		));
+
+		Test_assert(t, "blasRefitRejectedNothing", !badBlas);
+	}
 
 	//One instance at identity, pointing at the BLAS just made
 
@@ -884,6 +993,24 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 		goto clean;
 
 	Test_assert(t, "tlasTypeId", tlas->refPtrType->typeId == (TypeId) EGraphicsTypeId_TLASExt);
+
+	//Same refit validation on the TLAS side.
+	//The TLAS above used DefaultTLAS, which is FastBuild only, so it never allowed updates either.
+
+	{
+		TLASRef *badTlas = NULL;
+
+		Test_assert(t, "tlasRefitWithoutAllowUpdate", !GraphicsDeviceRef_createTLASExt(
+			deviceRef, ERTASBuildFlags_DefaultTLAS, tlas, &instances, true, NULL, &tlasName, &badTlas, NULL
+		));
+
+		Test_assert(t, "tlasIsUpdateWithoutParent", !GraphicsDeviceRef_createTLASExt(
+			deviceRef, ERTASBuildFlags_AllowUpdate | ERTASBuildFlags_IsUpdate, NULL, &instances, true, NULL,
+			&tlasName, &badTlas, NULL
+		));
+
+		Test_assert(t, "tlasRefitRejectedNothing", !badTlas);
+	}
 
 	//The CPU side instance plumbing hands back what went in
 

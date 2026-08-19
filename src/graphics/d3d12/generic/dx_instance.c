@@ -678,7 +678,6 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		D3D12_FEATURE_DATA_D3D12_OPTIONS14 opt14 = (D3D12_FEATURE_DATA_D3D12_OPTIONS14) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS16 opt16 = (D3D12_FEATURE_DATA_D3D12_OPTIONS16) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS17 opt17 = (D3D12_FEATURE_DATA_D3D12_OPTIONS17) { 0 };
-		D3D12_FEATURE_DATA_D3D12_OPTIONS21 opt21 = (D3D12_FEATURE_DATA_D3D12_OPTIONS21) { 0 };
 
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderOpt = (D3D12_FEATURE_DATA_SHADER_MODEL) { 0 };
 		D3D12_FEATURE_DATA_ARCHITECTURE1 arch = (D3D12_FEATURE_DATA_ARCHITECTURE1) { 0 };
@@ -817,12 +816,6 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			opt17.ManualWriteTrackingResourceSupported
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_ReportReBARWrites;
-
-		if(
-			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS21, &opt21, sizeof(opt21))) &&
-			opt21.WorkGraphsTier >= D3D12_WORK_GRAPHS_TIER_1_0
-		)
-			caps.features |= EGraphicsFeatures_Workgraphs;
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_HARDWARE_COPY, &hwCopy, sizeof(hwCopy))) &&

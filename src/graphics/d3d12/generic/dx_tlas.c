@@ -220,9 +220,14 @@ Bool DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		.ScratchAccelerationStructureData = DeviceBufferRef_ptr(tlas->base.tempScratchBuffer)->resource.deviceAddress
 	};
 
+	//The parent is the SOURCE of an update, not its destination; this used to assign Dest, which both left
+	// Source at 0 (so the driver copied from a null address) and pointed the output at the parent's own
+	// buffer.
+	//The BLAS path has always done it this way, see dx_blas.c.
+
 	if(tlas->base.parent) {
 		TLAS *parent = TLASRef_ptr(tlas->base.parent);
-		buildAs.DestAccelerationStructureData = DeviceBufferRef_ptr(parent->base.asBuffer)->resource.deviceAddress;
+		buildAs.SourceAccelerationStructureData = DeviceBufferRef_ptr(parent->base.asBuffer)->resource.deviceAddress;
 	}
 
 	commandBuffer->buffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer->buffer, &buildAs, 0, NULL);

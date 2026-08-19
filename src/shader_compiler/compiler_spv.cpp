@@ -383,7 +383,7 @@ extern "C" Bool Compiler_processSPIRV(
 			));
 
 		Bool isStageRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
-		Bool isGfx = !isStageRt && stage != ESHPipelineStage_WorkgraphExt && stage != ESHPipelineStage_Compute;
+		Bool isGfx = !isStageRt && stage != ESHPipelineStage_Compute;
 
 		isRt |= isStageRt;
 
@@ -827,7 +827,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 
 		else {
 
-			if((stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) || stage == ESHPipelineStage_WorkgraphExt) {
+			if(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) {
 
 				if(!alreadyContainsLib)
 					gotoIfError3(clean, ListCompilerEntrypoint_pushBack(

@@ -94,7 +94,7 @@ void Test_SHPipelineStagePrefixes(Test *t) {
 	Test_assert(t, "ms", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_MeshExt),      "ms"));
 	Test_assert(t, "as", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_TaskExt),      "as"));
 
-	//All RT + workgraph stages -> "lib"
+	//All RT stages -> "lib"
 
 	Test_assert(t, "raygen=lib",       cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_RaygenExt),      "lib"));
 	Test_assert(t, "miss=lib",         cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_MissExt),        "lib"));
@@ -102,7 +102,6 @@ void Test_SHPipelineStagePrefixes(Test *t) {
 	Test_assert(t, "closesthit=lib",   cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_ClosestHitExt),  "lib"));
 	Test_assert(t, "anyhit=lib",       cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_AnyHitExt),      "lib"));
 	Test_assert(t, "intersection=lib", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_IntersectionExt),"lib"));
-	Test_assert(t, "workgraph=lib",    cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_WorkgraphExt),   "lib"));
 
 	//Every stage must return a non-null prefix
 
@@ -130,7 +129,6 @@ void Test_SHEntryStageName(Test *t) {
 		{ ESHPipelineStage_IntersectionExt,"intersection"   },
 		{ ESHPipelineStage_MeshExt,        "mesh"           },
 		{ ESHPipelineStage_TaskExt,        "task"           },
-		{ ESHPipelineStage_WorkgraphExt,   "node"           },
 	};
 
 	SHEntry e = (SHEntry) { 0 };

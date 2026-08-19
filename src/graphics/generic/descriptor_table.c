@@ -374,6 +374,7 @@ clean:
 Bool DescriptorTable_addRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Bool referenced = false;
 	const Allocator *alloc = table ? GraphicsDeviceRef_getAlloc(DescriptorHeapRef_ptr(table->parent)->device) : NULL;
 
 	if(!ref)
@@ -391,11 +392,27 @@ Bool DescriptorTable_addRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 			goto clean;
 		}
 
+	//The table is what keeps the resource alive while a descriptor points at it, so the first descriptor has to
+	// take a reference here.
+	//loseRef gives exactly this one back when the last descriptor goes and DescriptorTable_free gives back what
+	// is still held at that point, so without it both of those release a reference the table never owned and the
+	// resource dies underneath whoever created it.
+
+	if(!RefPtr_inc(ref))
+		retError(clean, Error_invalidState(0, "DescriptorTable_addRef() couldn't reference the resource"));
+
+	referenced = true;
+
 	gotoIfError3(clean, ListDescriptorTableResourceRef_pushBack(
 		&table->resources, (DescriptorTableResourceRef) { .resource = ref, .count = 1 }, alloc, e_rr
 	));
 
+	referenced = false;        //Handed over to the table
+
 clean:
+
+	if(referenced)
+		RefPtr_dec(&ref);
 
 	if(lock && acq == ELockAcquire_Acquired)
 		SpinLock_unlock(lock);
@@ -1414,8 +1431,14 @@ Bool DescriptorTableRef_allocDescriptor(
 	//        isFree000 isFree001 isFree010 isFree011
 	//        etc.
 
+	//The bitset holds one bit per descriptor while its length counts U64s, so an index into it and its length
+	// are in different units and the bound has to be the binding's element count.
+	//That bound is also what keeps the padding bits past the last descriptor from being handed out: the
+	// allocation above rounds up to whole words, so those bits read as free and would otherwise allocate.
+
 	ListU64 activeList = binding->multiple.activeList;
-	U64 foundId = activeList.length;
+	U64 count = bindings.ptr[bindId].count;
+	U64 foundId = count;
 
 	for(U64 j = 0; j < activeList.length; j += 2) {
 
@@ -1431,11 +1454,13 @@ Bool DescriptorTableRef_allocDescriptor(
 		if(bit == U8_MAX)
 			continue;
 
-		foundId = (j << 7) | bit;
+		//A pair starts at the first of its two words, so the base is 64 bits per word and not 128 per pair.
+
+		foundId = (j << 6) | bit;
 		break;
 	}
 
-	if(foundId >= activeList.length)
+	if(foundId >= count)
 		retError(clean, Error_outOfMemory(0, "DescriptorTableRef_allocDescriptor() out of memory"));
 
 	*arrayId = (U32) foundId;

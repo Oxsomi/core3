@@ -60,7 +60,6 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileAddEntryNonRTPayloadRejected(&t);
 	Test_SHFileAddEntryGraphicsCannotHaveGroup(&t);
 	Test_SHFileAddEntryIntersectionOnWrongStage(&t);
-	Test_SHFileAddEntryWaveSizeWorkgraph(&t);
 	Test_SHFileAddEntryWaveSizeInvalidNibbles(&t);
 	Test_SHFileAddEntryWaveSizeOnNonCompute(&t);
 	Test_SHFileAddEntryHitStageSizes(&t);

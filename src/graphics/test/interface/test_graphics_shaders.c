@@ -1206,11 +1206,309 @@ clean:
 //Two rays start above the triangle's interior and two outside, so the readback distinguishes the closest
 // hit and miss shaders actually running from any default.
 
+//Special index opacity micromaps, traced for real rather than only validated at create.
+//Two BLASes over the same triangle and the same index buffer, differing in nothing but the per triangle
+// special index they carry: FullyOpaque has to trace exactly like the plain scene, FullyTransparent has to
+// make every one of the 4 rays miss.
+//Both halves are needed. "Everything missed" on its own is also what a BLAS that quietly failed to build
+// looks like, so the opaque half is what proves the geometry survived the OMM path at all, and only the pair
+// together says the micromap was consulted.
+//R16u rather than R32u on purpose: the special indices are signed constants matched against an unsigned
+// element, so R16u is where a driver would disagree with our truncation to 0xFFFF.
+
+static void TestShaders_ommSpecialIndex(
+	Test *t,
+	GraphicsDeviceRef *deviceRef,
+	const SHFile *file,
+	DeviceBufferRef *positions,
+	DeviceBufferRef *output,
+	CommandListRef *emptyList
+) {
+
+	const GraphicsDeviceCapabilities caps = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities;
+
+	if (!(caps.features & EGraphicsFeatures_RayMicromapOpacity)) {
+		Test_print(t, "Device lacks opacity micromaps, skipping OMM trace test");
+		return;
+	}
+
+	if (caps.experimentalFeatures & EGraphicsFeatures_RayMicromapOpacity) {
+		Test_print(t, "Opacity micromaps claimed but experimental on this backend, skipping OMM trace test");
+		return;
+	}
+
+	DeviceBufferRef *indices = NULL;
+	DeviceBufferRef *ommOpaque = NULL;
+	DeviceBufferRef *ommTransparent = NULL;
+	BLASRef *blasOpaque = NULL;
+	BLASRef *blasTransparent = NULL;
+	TLASRef *tlasOpaque = NULL;
+	TLASRef *tlasTransparent = NULL;
+	PipelineRef *pipeline = NULL;
+	CommandListRef *opaqueList = NULL;
+	CommandListRef *transparentList = NULL;
+
+	//An OMM index is per triangle, which is why this geometry is indexed where the plain scene is not.
+
+	const U16 triangleIndices[3] = { 0, 1, 2 };
+	Buffer indexData = Buffer_createRefConst(triangleIndices, sizeof(triangleIndices));
+
+	CharString name = CharString_createRefCStrConst("OMM triangle indices");
+
+	if(!Test_assert(t, "ommCreateIndices", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&name, &indexData, &indices, &t->err
+	)))
+		goto clean;
+
+	const U16 opaqueIndex = (U16) EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyOpaque, ETextureFormatId_R16u);
+
+	const U16 transparentIndex =
+		(U16) EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyTransparent, ETextureFormatId_R16u);
+
+	Buffer opaqueData = Buffer_createRefConst(&opaqueIndex, sizeof(opaqueIndex));
+	Buffer transparentData = Buffer_createRefConst(&transparentIndex, sizeof(transparentIndex));
+
+	name = CharString_createRefCStrConst("OMM indices, fully opaque");
+
+	if(!Test_assert(t, "ommCreateOpaque", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&name, &opaqueData, &ommOpaque, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("OMM indices, fully transparent");
+
+	if(!Test_assert(t, "ommCreateTransparent", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&name, &transparentData, &ommTransparent, &t->err
+	)))
+		goto clean;
+
+	const DeviceData positionData = (DeviceData) { .buffer = positions };
+	const DeviceData indexBufferData = (DeviceData) { .buffer = indices };
+
+	const BLASCreateInfo opaqueInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
+		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
+		ETextureFormatId_R16u, indexBufferData,
+		ETextureFormatId_R16u, (DeviceData) { .buffer = ommOpaque }
+	);
+
+	const BLASCreateInfo transparentInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
+		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
+		ETextureFormatId_R16u, indexBufferData,
+		ETextureFormatId_R16u, (DeviceData) { .buffer = ommTransparent }
+	);
+
+	name = CharString_createRefCStrConst("OMM BLAS, fully opaque");
+
+	if(!Test_assert(t, "ommCreateBlasOpaque", GraphicsDeviceRef_createBLASExt(
+		deviceRef, &opaqueInfo, &name, &blasOpaque, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("OMM BLAS, fully transparent");
+
+	if(!Test_assert(t, "ommCreateBlasTransparent", GraphicsDeviceRef_createBLASExt(
+		deviceRef, &transparentInfo, &name, &blasTransparent, &t->err
+	)))
+		goto clean;
+
+	//ForceDisableAnyHit is deliberately absent where the rest of the module uses Default.
+	//It is FORCE_OPAQUE on both APIs, and a forced opaque instance makes traversal ignore opacity micromaps
+	// entirely, so the transparent half would report hits and pass for the wrong reason.
+
+	TLASInstance ommInstance = (TLASInstance) {
+		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
+		.data = (TLASInstanceData) {
+			.instanceId24_mask8 = 0xFFu << 24,
+			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_DisableCulling << 24,
+			.blasCpu = blasOpaque
+		}
+	};
+
+	ListTLASInstance ommInstances = (ListTLASInstance) { 0 };
+	ListTLASInstance_createRefConst(&ommInstance, 1, &ommInstances, NULL);
+
+	name = CharString_createRefCStrConst("OMM TLAS, fully opaque");
+
+	if(!Test_assert(t, "ommCreateTlasOpaque", GraphicsDeviceRef_createTLASExt(
+		deviceRef, ERTASBuildFlags_DefaultTLAS, NULL, &ommInstances, false, NULL, &name, &tlasOpaque, &t->err
+	)))
+		goto clean;
+
+	ommInstance.data.blasCpu = blasTransparent;
+	name = CharString_createRefCStrConst("OMM TLAS, fully transparent");
+
+	if(!Test_assert(t, "ommCreateTlasTransparent", GraphicsDeviceRef_createTLASExt(
+		deviceRef, ERTASBuildFlags_DefaultTLAS, NULL, &ommInstances, false, NULL, &name, &tlasTransparent, &t->err
+	)))
+		goto clean;
+
+	//A pipeline of its own: both APIs ignore micromaps unless the pipeline opted in, so the plain one the
+	// module already built would trace straight through the transparent triangle and report hits.
+
+	const U32 raygenId = TestShaders_entry(t, deviceRef, file, "mainRaygen");
+	const U32 missId = TestShaders_entry(t, deviceRef, file, "mainMiss");
+	const U32 hitId = TestShaders_entry(t, deviceRef, file, "mainClosestHit");
+
+	if(raygenId == U32_MAX || missId == U32_MAX || hitId == U32_MAX)
+		goto clean;
+
+	PipelineStage ommStages[3] = {
+		(PipelineStage) { .binaryId = raygenId },
+		(PipelineStage) { .binaryId = missId },
+		(PipelineStage) { .binaryId = hitId }
+	};
+
+	ListPipelineStage ommStageList = (ListPipelineStage) { 0 };
+	ListPipelineStage_createRefConst(ommStages, 3, &ommStageList, NULL);
+
+	ListSHFile ommFileList = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(file, 1, &ommFileList, NULL);
+
+	PipelineRaytracingGroup ommGroup = (PipelineRaytracingGroup) {
+		.closestHit = 2, .anyHit = U32_MAX, .intersection = U32_MAX
+	};
+
+	ListPipelineRaytracingGroup ommGroupList = (ListPipelineRaytracingGroup) { 0 };
+	ListPipelineRaytracingGroup_createRefConst(&ommGroup, 1, &ommGroupList, NULL);
+
+	const PipelineRaytracingInfo ommPipelineInfo = (PipelineRaytracingInfo) {
+		.flags = EPipelineRaytracingFlags_Default | EPipelineRaytracingFlags_AllowOpacityMicromapExt,
+		.maxRecursionDepth = 1
+	};
+
+	name = CharString_createRefCStrConst("OMM ray trace pipeline");
+
+	if(!Test_assert(t, "ommCreatePipeline", GraphicsDeviceRef_createPipelineRaytracingExt(
+		deviceRef, &ommStageList, &ommFileList, &ommGroupList, &ommPipelineInfo, &name,
+		EPipelineFlags_None, NULL, &pipeline, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "ommCreateOpaqueList", GraphicsDeviceRef_createCommandList(
+		deviceRef, 2 * KIBI, 32, 16, true, &opaqueList, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "ommCreateTransparentList", GraphicsDeviceRef_createCommandList(
+		deviceRef, 2 * KIBI, 32, 16, true, &transparentList, &t->err
+	)))
+		goto clean;
+
+	//Opaque first, so a failure below can be read as "the OMM path broke tracing" rather than "the micromap
+	// culled something", which are the two ways this can go wrong and want different fixes.
+
+	const Transition opaqueTransitions[2] = {
+		(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+		(Transition) { .resource = tlasOpaque, .stage = EPipelineStage_RaygenExt }
+	};
+
+	ListTransition opaqueTransitionList = (ListTransition) { 0 };
+	ListTransition_createRefConst(opaqueTransitions, 2, &opaqueTransitionList, NULL);
+
+	Test_assert(t, "ommBeginOpaque", CommandListRef_begin(opaqueList, true, U64_MAX, &t->err));
+
+	Test_assert(t, "ommScopeBlasOpaque", CommandListRef_startScope(opaqueList, NULL, 1, NULL, &t->err));
+	Test_assert(t, "ommUpdateBlasOpaque", CommandListRef_updateBLASExt(opaqueList, blasOpaque, &t->err));
+	Test_assert(t, "ommScopeBlasOpaqueEnd", CommandListRef_endScope(opaqueList, &t->err));
+
+	Test_assert(t, "ommScopeTlasOpaque", CommandListRef_startScope(opaqueList, NULL, 2, NULL, &t->err));
+	Test_assert(t, "ommUpdateTlasOpaque", CommandListRef_updateTLASExt(opaqueList, tlasOpaque, &t->err));
+	Test_assert(t, "ommScopeTlasOpaqueEnd", CommandListRef_endScope(opaqueList, &t->err));
+
+	Test_assert(t, "ommScopeTraceOpaque", CommandListRef_startScope(
+		opaqueList, &opaqueTransitionList, 3, NULL, &t->err
+	));
+
+	Test_assert(t, "ommBindOpaque", CommandListRef_setRaytracingPipeline(opaqueList, pipeline, &t->err));
+	Test_assert(t, "ommTraceOpaque", CommandListRef_dispatch1DRaysExt(opaqueList, 0, 4, &t->err));
+	Test_assert(t, "ommScopeTraceOpaqueEnd", CommandListRef_endScope(opaqueList, &t->err));
+
+	Test_assert(t, "ommEndOpaque", CommandListRef_end(opaqueList, &t->err));
+
+	const TestShaderAppData opaqueAppData = (TestShaderAppData) {
+		.handles = { DeviceBufferRef_ptr(output)->writeHandle, TLASRef_ptr(tlasOpaque)->handle }
+	};
+
+	if (TestShaders_submitAndWait(t, deviceRef, opaqueList, &opaqueAppData, sizeof(opaqueAppData)))
+		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+
+			Test_assert(t, "ommResultsOpaque", values[0] == 1 && values[1] == 1 && !values[2] && !values[3]);
+		}
+
+	const Transition transparentTransitions[2] = {
+		(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+		(Transition) { .resource = tlasTransparent, .stage = EPipelineStage_RaygenExt }
+	};
+
+	ListTransition transparentTransitionList = (ListTransition) { 0 };
+	ListTransition_createRefConst(transparentTransitions, 2, &transparentTransitionList, NULL);
+
+	Test_assert(t, "ommBeginTransparent", CommandListRef_begin(transparentList, true, U64_MAX, &t->err));
+
+	Test_assert(t, "ommScopeBlasTransparent", CommandListRef_startScope(transparentList, NULL, 1, NULL, &t->err));
+
+	Test_assert(t, "ommUpdateBlasTransparent", CommandListRef_updateBLASExt(
+		transparentList, blasTransparent, &t->err
+	));
+
+	Test_assert(t, "ommScopeBlasTransparentEnd", CommandListRef_endScope(transparentList, &t->err));
+
+	Test_assert(t, "ommScopeTlasTransparent", CommandListRef_startScope(transparentList, NULL, 2, NULL, &t->err));
+
+	Test_assert(t, "ommUpdateTlasTransparent", CommandListRef_updateTLASExt(
+		transparentList, tlasTransparent, &t->err
+	));
+
+	Test_assert(t, "ommScopeTlasTransparentEnd", CommandListRef_endScope(transparentList, &t->err));
+
+	Test_assert(t, "ommScopeTraceTransparent", CommandListRef_startScope(
+		transparentList, &transparentTransitionList, 3, NULL, &t->err
+	));
+
+	Test_assert(t, "ommBindTransparent", CommandListRef_setRaytracingPipeline(transparentList, pipeline, &t->err));
+	Test_assert(t, "ommTraceTransparent", CommandListRef_dispatch1DRaysExt(transparentList, 0, 4, &t->err));
+	Test_assert(t, "ommScopeTraceTransparentEnd", CommandListRef_endScope(transparentList, &t->err));
+
+	Test_assert(t, "ommEndTransparent", CommandListRef_end(transparentList, &t->err));
+
+	const TestShaderAppData transparentAppData = (TestShaderAppData) {
+		.handles = { DeviceBufferRef_ptr(output)->writeHandle, TLASRef_ptr(tlasTransparent)->handle }
+	};
+
+	if (TestShaders_submitAndWait(t, deviceRef, transparentList, &transparentAppData, sizeof(transparentAppData)))
+		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+
+			Test_assert(t, "ommResultsTransparent", !values[0] && !values[1] && !values[2] && !values[3]);
+		}
+
+clean:
+
+	RefPtr_dec(&transparentList);
+	RefPtr_dec(&opaqueList);
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&tlasTransparent);
+	RefPtr_dec(&tlasOpaque);
+	RefPtr_dec(&blasTransparent);
+	RefPtr_dec(&blasOpaque);
+	RefPtr_dec(&ommTransparent);
+	RefPtr_dec(&ommOpaque);
+	RefPtr_dec(&indices);
+}
+
 //The whole ray pipeline vehicle (scene, SBT, dispatch and readback) shared by the plain and the SER
 //variant, which differ only in which oiSH drives it: both trace the same 4 rays at the same triangle and
 //have to land on the same (1, 1, 0, 0).
 
-static void TestShaders_raysWithFile(Test *t, GraphicsDeviceRef *deviceRef, const C8 *moduleName, const C8 *path) {
+static void TestShaders_raysWithFile(
+	Test *t, GraphicsDeviceRef *deviceRef, const C8 *moduleName, const C8 *path, Bool testApiExtras
+) {
 
 	Test_setModule(t, moduleName);
 
@@ -1310,11 +1608,17 @@ static void TestShaders_raysWithFile(Test *t, GraphicsDeviceRef *deviceRef, cons
 
 	DeviceBufferRef *positions = NULL;
 	DeviceBufferRef *output = NULL;
+	DeviceBufferRef *positionsMoved = NULL;
 	BLASRef *blas = NULL;
+	BLASRef *blasRefit = NULL;
 	TLASRef *tlas = NULL;
+	TLASRef *tlasRefit = NULL;
+	TLASRef *tlasOverRefitBlas = NULL;
 	PipelineRef *pipeline = NULL;
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
+	CommandListRef *refitList = NULL;
+	CommandListRef *blasRefitList = NULL;
 
 	const F32 triangle[12] = {
 		0, 0, 0, 1,
@@ -1334,8 +1638,12 @@ static void TestShaders_raysWithFile(Test *t, GraphicsDeviceRef *deviceRef, cons
 	const DeviceData positionData = (DeviceData) { .buffer = positions };
 	name = CharString_createRefCStrConst("Ray trace BLAS");
 
+	//AllowUpdate on the parent because the refit below updates FROM this one, and both APIs require the source
+	// of an update to have been built with it.
+	//Our own validation only checks the refit's flags, so leaving it off here fails in the driver instead.
+
 	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
-		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
+		ERTASBuildFlags_AllowUpdate, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
 	);
 
 	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(deviceRef, &blasInfo, &name, &blas, &t->err)))
@@ -1356,7 +1664,8 @@ static void TestShaders_raysWithFile(Test *t, GraphicsDeviceRef *deviceRef, cons
 	name = CharString_createRefCStrConst("Ray trace TLAS");
 
 	if(!Test_assert(t, "createTlas", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS, NULL, &instances, false, NULL, &name, &tlas, &t->err
+		deviceRef, ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate, NULL, &instances, false, NULL,
+		&name, &tlas, &t->err
 	)))
 		goto clean;
 
@@ -1466,14 +1775,205 @@ static void TestShaders_raysWithFile(Test *t, GraphicsDeviceRef *deviceRef, cons
 		Test_assert(t, "rayResults", values[0] == 1 && values[1] == 1 && !values[2] && !values[3]);
 	}
 
+	//Refit the TLAS with the instance translated far along Z, so the same 4 rays can no longer reach the
+	// triangle and every one has to miss.
+	//That is what separates a refit that ran from one that silently did nothing: a no-op refit still produces
+	// a valid AS that traces the ORIGINAL scene, so it would keep reporting the two hits above.
+	//Only one of the two ray variants runs this and the two blocks below it: refit and opacity micromaps are
+	// API level rather than SER specific, so there is no reason to pay for them twice.
+	//This used to crash WARP inside the refit build, which turned out to be ours rather than WARP's: dx_tlas.c
+	// assigned the parent to Dest instead of Source, so the driver copied from a null address.
+
+	if (testApiExtras) {
+
+		TLASInstance moved = instance;
+		moved.transform[2][3] = 1000;                //Translate Z; the transform is row major 3x4
+
+		ListTLASInstance movedInstances = (ListTLASInstance) { 0 };
+		ListTLASInstance_createRefConst(&moved, 1, &movedInstances, NULL);
+
+		name = CharString_createRefCStrConst("Ray trace TLAS refit");
+
+		Bool madeRefit = Test_assert(t, "createTlasRefit", GraphicsDeviceRef_createTLASExt(
+			deviceRef, ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate, tlas, &movedInstances, false,
+			NULL, &name, &tlasRefit, &t->err
+		));
+
+		madeRefit &= Test_assert(t, "createRefitList", GraphicsDeviceRef_createCommandList(
+			deviceRef, KIBI, 16, 8, true, &refitList, &t->err
+		));
+
+		if (madeRefit) {
+
+			//A refit is a new object, so it has its own bindless slot and the raygen shader has to be pointed
+			// at it; reusing the parent's handle would just retrace the original scene.
+
+			TestShaderAppData refitAppData = (TestShaderAppData) {
+				.handles = { DeviceBufferRef_ptr(output)->writeHandle, TLASRef_ptr(tlasRefit)->handle }
+			};
+
+			//Its own transition list: the one above names the PARENT tlas, and transitioning that while the
+			// shader reads the refit leaves the AS the trace actually touches in the wrong state.
+
+			const Transition refitTransitions[2] = {
+				(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+				(Transition) { .resource = tlasRefit, .stage = EPipelineStage_RaygenExt }
+			};
+
+			ListTransition refitTransitionList = (ListTransition) { 0 };
+			ListTransition_createRefConst(refitTransitions, 2, &refitTransitionList, NULL);
+
+			Test_assert(t, "beginRefit", CommandListRef_begin(refitList, true, U64_MAX, &t->err));
+
+			Test_assert(t, "scopeRefit", CommandListRef_startScope(refitList, NULL, 4, NULL, &t->err));
+			Test_assert(t, "updateTlasRefit", CommandListRef_updateTLASExt(refitList, tlasRefit, &t->err));
+			Test_assert(t, "scopeRefitEnd", CommandListRef_endScope(refitList, &t->err));
+
+			Test_assert(t, "scopeTraceRefit", CommandListRef_startScope(
+				refitList, &refitTransitionList, 5, NULL, &t->err
+			));
+
+			Test_assert(t, "bindPipelineRefit", CommandListRef_setRaytracingPipeline(refitList, pipeline, &t->err));
+			Test_assert(t, "traceRefit", CommandListRef_dispatch1DRaysExt(refitList, 0, 4, &t->err));
+			Test_assert(t, "scopeTraceRefitEnd", CommandListRef_endScope(refitList, &t->err));
+
+			Test_assert(t, "endRefit", CommandListRef_end(refitList, &t->err));
+
+			if (TestShaders_submitAndWait(t, deviceRef, refitList, &refitAppData, sizeof(refitAppData)))
+				if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+					const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+					Test_assert(t, "rayResultsRefit", !values[0] && !values[1] && !values[2] && !values[3]);
+				}
+		}
+
+		//The same idea one level down, so the BLAS update path gets the same treatment the TLAS one just did.
+		//Here the triangle itself moves rather than the instance, which means the refit BLAS holds geometry the
+		// parent never had and a refit that quietly did nothing keeps tracing the original triangle.
+		//It gets its own TLAS because an instance names exactly one BLAS, and that TLAS is a plain build so the
+		// only thing under test is the BLAS.
+
+		const F32 triangleMoved[12] = {
+			0, 0, 1000, 1,
+			1, 0, 1000, 1,
+			0, 1, 1000, 1
+		};
+
+		Buffer movedData = Buffer_createRefConst(triangleMoved, sizeof(triangleMoved));
+		name = CharString_createRefCStrConst("Ray trace positions moved");
+
+		Bool madeBlasRefit = Test_assert(t, "createPositionsMoved", GraphicsDeviceRef_createBufferData(
+			deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+			&name, &movedData, &positionsMoved, &t->err
+		));
+
+		if (madeBlasRefit) {
+
+			BLASCreateInfo blasRefitInfo = BLASCreateInfo_unindexed(
+				ERTASBuildFlags_AllowUpdate, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16,
+				(DeviceData) { .buffer = positionsMoved }
+			);
+
+			//An update may point at a different vertex buffer as long as the topology matches, which is what
+			// lets the moved triangle come from a buffer of its own instead of a rewrite of the original.
+
+			blasRefitInfo.parent = blas;
+
+			name = CharString_createRefCStrConst("Ray trace BLAS refit");
+
+			madeBlasRefit = Test_assert(t, "createBlasRefit", GraphicsDeviceRef_createBLASExt(
+				deviceRef, &blasRefitInfo, &name, &blasRefit, &t->err
+			));
+		}
+
+		if (madeBlasRefit) {
+
+			TLASInstance overRefit = instance;
+			overRefit.data.blasCpu = blasRefit;
+
+			ListTLASInstance overRefitInstances = (ListTLASInstance) { 0 };
+			ListTLASInstance_createRefConst(&overRefit, 1, &overRefitInstances, NULL);
+
+			name = CharString_createRefCStrConst("Ray trace TLAS over refit BLAS");
+
+			madeBlasRefit = Test_assert(t, "createTlasOverRefitBlas", GraphicsDeviceRef_createTLASExt(
+				deviceRef, ERTASBuildFlags_DefaultTLAS, NULL, &overRefitInstances, false, NULL,
+				&name, &tlasOverRefitBlas, &t->err
+			));
+
+			madeBlasRefit &= Test_assert(t, "createBlasRefitList", GraphicsDeviceRef_createCommandList(
+				deviceRef, 2 * KIBI, 32, 16, true, &blasRefitList, &t->err
+			));
+		}
+
+		if (madeBlasRefit) {
+
+			TestShaderAppData blasRefitAppData = (TestShaderAppData) {
+				.handles = { DeviceBufferRef_ptr(output)->writeHandle, TLASRef_ptr(tlasOverRefitBlas)->handle }
+			};
+
+			const Transition blasRefitTransitions[2] = {
+				(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+				(Transition) { .resource = tlasOverRefitBlas, .stage = EPipelineStage_RaygenExt }
+			};
+
+			ListTransition blasRefitTransitionList = (ListTransition) { 0 };
+			ListTransition_createRefConst(blasRefitTransitions, 2, &blasRefitTransitionList, NULL);
+
+			Test_assert(t, "beginBlasRefit", CommandListRef_begin(blasRefitList, true, U64_MAX, &t->err));
+
+			Test_assert(t, "scopeBlasRefit", CommandListRef_startScope(blasRefitList, NULL, 6, NULL, &t->err));
+			Test_assert(t, "updateBlasRefit", CommandListRef_updateBLASExt(blasRefitList, blasRefit, &t->err));
+			Test_assert(t, "scopeBlasRefitEnd", CommandListRef_endScope(blasRefitList, &t->err));
+
+			Test_assert(t, "scopeTlasOverRefit", CommandListRef_startScope(blasRefitList, NULL, 7, NULL, &t->err));
+
+			Test_assert(t, "updateTlasOverRefit", CommandListRef_updateTLASExt(
+				blasRefitList, tlasOverRefitBlas, &t->err
+			));
+
+			Test_assert(t, "scopeTlasOverRefitEnd", CommandListRef_endScope(blasRefitList, &t->err));
+
+			Test_assert(t, "scopeTraceBlasRefit", CommandListRef_startScope(
+				blasRefitList, &blasRefitTransitionList, 8, NULL, &t->err
+			));
+
+			Test_assert(t, "bindPipelineBlasRefit", CommandListRef_setRaytracingPipeline(
+				blasRefitList, pipeline, &t->err
+			));
+
+			Test_assert(t, "traceBlasRefit", CommandListRef_dispatch1DRaysExt(blasRefitList, 0, 4, &t->err));
+			Test_assert(t, "scopeTraceBlasRefitEnd", CommandListRef_endScope(blasRefitList, &t->err));
+
+			Test_assert(t, "endBlasRefit", CommandListRef_end(blasRefitList, &t->err));
+
+			if (TestShaders_submitAndWait(t, deviceRef, blasRefitList, &blasRefitAppData, sizeof(blasRefitAppData)))
+				if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+					const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+					Test_assert(t, "rayResultsBlasRefit", !values[0] && !values[1] && !values[2] && !values[3]);
+				}
+		}
+
+		//Opacity micromaps run last because they need the scene the plain trace already proved works
+
+		TestShaders_ommSpecialIndex(t, deviceRef, &file, positions, output, emptyList);
+	}
+
 clean:
 
+	RefPtr_dec(&blasRefitList);
+	RefPtr_dec(&refitList);
 	RefPtr_dec(&emptyList);
 	RefPtr_dec(&commandList);
 	RefPtr_dec(&pipeline);
+	RefPtr_dec(&tlasOverRefitBlas);
+	RefPtr_dec(&tlasRefit);
 	RefPtr_dec(&tlas);
+	RefPtr_dec(&blasRefit);
 	RefPtr_dec(&blas);
 	RefPtr_dec(&output);
+	RefPtr_dec(&positionsMoved);
 	RefPtr_dec(&positions);
 
 	SHFile_free(&file, alloc);
@@ -1495,7 +1995,7 @@ clean:
 
 void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef) {
 
-	TestShaders_raysWithFile(t, deviceRef, "Shaders/rays", "//OxC3_gtest/test_shaders/test_rays.oiSH");
+	TestShaders_raysWithFile(t, deviceRef, "Shaders/rays", "//OxC3_gtest/test_shaders/test_rays.oiSH", true);
 
 	//The SER variant records the hit as a HitObject, hints the scheduler with MaybeReorderThread,
 	// then invokes the recorded shader explicitly.
@@ -1516,5 +2016,7 @@ void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef) {
 		return;
 	}
 
-	TestShaders_raysWithFile(t, deviceRef, "Shaders/raysSer", "//OxC3_gtest/test_shaders/test_rays_ser.oiSH");
+	TestShaders_raysWithFile(
+		t, deviceRef, "Shaders/raysSer", "//OxC3_gtest/test_shaders/test_rays_ser.oiSH", false
+	);
 }

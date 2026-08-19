@@ -83,9 +83,7 @@ Bool Compiler_getLinkEntries(
 		binaryIdentifier->stageType >= ESHPipelineStage_RtStartExt &&
 		binaryIdentifier->stageType <= ESHPipelineStage_RtEndExt;
 
-	Bool isLib =
-		binaryIdentifier->stageType == ESHPipelineStage_WorkgraphExt ||
-		isRt;
+	Bool isLib = isRt;
 
 	Bool isLibTarget = isLib;
 	isLib = isLibTarget || (binaryIdentifier->stageType == ESHPipelineStage_Count);
@@ -281,7 +279,7 @@ Bool Compiler_getLinkEntries(
 
 			else {
 
-				//If RT/workgraph shader, try to find a previous linkEntry
+				//If RT shader, try to find a previous linkEntry
 				//In that case, we just reference the same binary.
 
 				U64 l = 0;

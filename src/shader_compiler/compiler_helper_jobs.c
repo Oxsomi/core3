@@ -312,8 +312,7 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 
 		Bool currGfxOrComp = !(
 			(entry.stage >= ESHPipelineStage_RtStartExt && entry.stage >= ESHPipelineStage_RtEndExt) ||
-			entry.stage >= ESHPipelineStage_Count ||
-			entry.stage == ESHPipelineStage_WorkgraphExt
+			entry.stage >= ESHPipelineStage_Count
 		);
 
 		if(currGfxOrComp)
@@ -342,8 +341,12 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 		e_rr
 	));
 
+	//A lib with no named entrypoint used to mean raytracing OR a workgraph; workgraphs are gone, so the only
+	// remaining non-RT case falls back to the Count sentinel that dxil_link already treats as "maintain lib
+	// linking" rather than to a concrete stage.
+
 	if (linkEntry.entrypointId == U16_MAX)
-		binaryIdentifier.stageType = combo->isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_WorkgraphExt;
+		binaryIdentifier.stageType = combo->isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_Count;
 
 	//Register the binary and link its runtime entries to it.
 	//binaryId is derived from the current const SHFile *size,

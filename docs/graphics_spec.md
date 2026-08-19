@@ -367,7 +367,6 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 
 - Bindless is almost always supported (Resource binding tier 3), but if it's not then it's required to use resource binding tier 1 (11.1+ of 64 UAVs, 128 SRVs).
 - Writeable MSAA textures as EGraphicsFeatures_WriteMSTexture.
-- WorkGraphsTier as EGraphicsFeatures_Workgraphs.
 - MeshShaderTier as EGraphicsFeatures_MeshShader.
 - VariableShadingRateTier as EGraphicsFeatures_VariableRateShading.
 - RaytracingTier>1_0 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline

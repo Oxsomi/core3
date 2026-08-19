@@ -74,7 +74,6 @@ static const TestCapabilityBit testFeatureBits[] = {
 	{ EGraphicsFeatures_Wireframe,              "Wireframe" },
 	{ EGraphicsFeatures_LogicOp,                "LogicOp" },
 	{ EGraphicsFeatures_DualSrcBlend,           "DualSrcBlend" },
-	{ EGraphicsFeatures_Workgraphs,             "Workgraphs" },
 	{ EGraphicsFeatures_SwapchainCompute,       "SwapchainCompute" },
 	{ EGraphicsFeatures_ComputeDeriv,           "ComputeDeriv" },
 	{ EGraphicsFeatures_MeshTaskTexDeriv,       "MeshTaskTexDeriv" },
@@ -142,11 +141,18 @@ void Test_graphicsCapabilities(Test *t, GraphicsDeviceRef *deviceRef) {
 	if(f2 & EGraphicsFeatures2_RayReorderActual)
 		Test_assert(t, "reorderActualImpliesReorder", (f & EGraphicsFeatures_RayReorder) != 0);
 
+	//Same shape for opacity micromaps, except this one is derived rather than reported, so the check also
+	// covers the derivation running on a device that never claimed the base feature.
+
+	if(f2 & EGraphicsFeatures2_RayMicromapOpacityActual)
+		Test_assert(t, "ommActualImpliesOmm", (f & EGraphicsFeatures_RayMicromapOpacity) != 0);
+
 	//The RT specific features2 bits are equally meaningless without raytracing itself.
 
 	const EGraphicsFeatures2 rayFeatures2 =
 		EGraphicsFeatures2_RayClusterAS | EGraphicsFeatures2_RayPartitionedTLAS |
-		EGraphicsFeatures2_RayIndirectASBuild | EGraphicsFeatures2_RayReorderActual;
+		EGraphicsFeatures2_RayIndirectASBuild | EGraphicsFeatures2_RayReorderActual |
+		EGraphicsFeatures2_RayMicromapOpacityActual;
 
 	if(f2 & rayFeatures2)
 		Test_assert(t, "rayFeatures2ImpliesRaytracing", (f & EGraphicsFeatures_Raytracing) != 0);

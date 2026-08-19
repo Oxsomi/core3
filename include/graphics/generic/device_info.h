@@ -128,6 +128,7 @@ typedef enum EDxGraphicsFeatures {
 //If api type is Vulkan
 
 typedef enum EVkGraphicsFeatures {
+
 	EVkGraphicsFeatures_PerfQuery                = 1 << 0,
 	EVkGraphicsFeatures_Maintenance4             = 1 << 1,
 	EVkGraphicsFeatures_BufferDeviceAddress      = 1 << 2,
@@ -146,6 +147,7 @@ typedef enum EVkGraphicsFeatures {
 	// host driver exposes it.
 
 	EVkGraphicsFeatures_PerformantPushDescriptor = 1 << 5
+
 } EVkGraphicsFeatures;
 
 //Generic graphics features
@@ -165,25 +167,23 @@ typedef enum EGraphicsFeatures {
 
 	EGraphicsFeatures_MultiDrawIndirectCount    = 1 << 2,
 
-	EGraphicsFeatures_MeshShader                = 1 << 3,        //Mesh and task shaders
+	EGraphicsFeatures_MeshShader                = 1 << 3,          //Mesh and task shaders
 	EGraphicsFeatures_GeometryShader            = 1 << 4,
 
-	EGraphicsFeatures_SubgroupArithmetic        = 1 << 5,        //Non prefix arithmetic operations
+	EGraphicsFeatures_SubgroupArithmetic        = 1 << 5,          //Non prefix arithmetic operations
 	EGraphicsFeatures_SubgroupShuffle           = 1 << 6,
 
 	EGraphicsFeatures_Multiview                 = 1 << 7,
 
 	//Raytracing extensions
 
-	EGraphicsFeatures_Raytracing                = 1 << 8,        //Requires RayPipeline or RayQuery
+	EGraphicsFeatures_Raytracing                = 1 << 8,          //Requires RayPipeline or RayQuery
 	EGraphicsFeatures_RayPipeline               = 1 << 9,
 	EGraphicsFeatures_RayQuery                  = 1 << 10,
 	EGraphicsFeatures_RayMicromapOpacity        = 1 << 11,
-	//Reserved, free to reuse.
-	EGraphicsFeatures_Reserved12             = 1 << 12,
+	EGraphicsFeatures_RayTriPosition            = 1 << 12,         //SM6.10 tri vertex position fetch (RayQuery + ray-pipeline)
 	EGraphicsFeatures_RayReorder                = 1 << 13,
-	EGraphicsFeatures_RayValidation             = 1 << 14,        //Debugging for raytracing validation
-	EGraphicsFeatures_RayTriPosition            = 1 << 26,        //SM6.10 tri vertex position fetch (RayQuery + ray-pipeline)
+	EGraphicsFeatures_RayValidation             = 1 << 14,         //Debugging for raytracing validation
 
 	//LUID for sharing devices
 
@@ -195,7 +195,7 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_LogicOp                   = 1 << 17,
 	EGraphicsFeatures_DualSrcBlend              = 1 << 18,
 
-	EGraphicsFeatures_Workgraphs                = 1 << 19,
+	EGraphicsFeatures_Reserved19                = 1 << 19,        //Reserved, free to reuse.
 	EGraphicsFeatures_SwapchainCompute          = 1 << 20,        //isComputeExt in createSwapchain is supported
 
 	EGraphicsFeatures_ComputeDeriv              = 1 << 21,        //Compute derivatives (ddx/ddy)
@@ -212,10 +212,16 @@ typedef enum EGraphicsFeatures {
 	//FP16 + INT8 are the base tier of CoopVec/CoopMat; CoopFP8 is the additive FP8 tier.
 	//CoopVecTraining exposes the Tier-1.1 outer-product/reduce-sum ops.
 
-	EGraphicsFeatures_CoopVec                   = 1 << 27,        //Cooperative vectors (per-thread matvec)
-	EGraphicsFeatures_CoopMat                   = 1 << 28,        //Cooperative matrix (subgroup GEMM)
-	EGraphicsFeatures_CoopFP8                   = 1 << 29,        //FP8 (e4m3/e5m2) cooperative type support
-	EGraphicsFeatures_CoopVecTraining           = 1 << 30         //CoopVec training (outer-product / reduce-sum accumulate)
+	EGraphicsFeatures_CoopVec                   = 1 << 26,        //Cooperative vectors (per-thread matvec)
+	EGraphicsFeatures_CoopMat                   = 1 << 27,        //Cooperative matrix (subgroup GEMM)
+	EGraphicsFeatures_CoopFP8                   = 1 << 28,        //FP8 (e4m3/e5m2) cooperative type support
+	EGraphicsFeatures_CoopVecTraining           = 1 << 29,        //CoopVec training (outer-product / reduce-sum accumulate)
+	EGraphicsFeatures_Reserved30                = 1 << 30,        //Reserved, free to reuse.
+
+	//Spelled as a subtraction rather than as -2147483648, which is a unary minus on a constant too large for
+	// int and so an unsigned one; msvc rejects that under C4146 while clang stays quiet.
+
+	EGraphicsFeatures_Reserved                  = -2147483647 - 1  //Reserved for safety enum reasons
 
 } EGraphicsFeatures;
 
@@ -251,7 +257,25 @@ typedef enum EGraphicsFeatures2 {
 	//D3D12: set when mega geometry is, since those builds are indirect by design
 	// (BUILD_BLAS_FROM_CLAS cluster op / NvAPI_D3D12_BuildRaytracingPartitionedTlasIndirect).
 
-	EGraphicsFeatures2_RayIndirectASBuild       = 1 << 4
+	EGraphicsFeatures2_RayIndirectASBuild       = 1 << 4,
+
+	//Whether opacity micromaps (EGraphicsFeatures_RayMicromapOpacity) are likely backed by dedicated hardware
+	// rather than emulated, in the same shape as RayReorderActual above.
+	//Neither API exposes this: D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's
+	// VkPhysicalDeviceOpacityMicromapFeaturesEXT is a single bool, and the subdivision level properties are no
+	// help either (an Ampere 3080 reports the spec maximum of 12/12, same as hardware that has the units).
+	//So this bit is a HEURISTIC rather than a query, which is why it is derived once per device instead of
+	// being reported by a backend.
+	//On NVIDIA the SER reordering hardware and the OMM engines arrived in the same generation, so the SER
+	// reordering hint doubles as "this generation or newer".
+	//Deliberately not a device ID table: an unknown future GPU that reports reordering is treated as capable
+	// instead of falling off the end of a lookup, and this works on every OS unlike NVAPI.
+	//Other vendors are taken at their word, so NVIDIA is the only carve out and only because Ampere is known
+	// to report OMM without the units.
+	//Use it to decide whether a REAL micromap is worth building; special index only OMM costs nothing either
+	// way, so on a device without this bit prefer special indices over a micromap object.
+
+	EGraphicsFeatures2_RayMicromapOpacityActual = 1 << 5
 
 } EGraphicsFeatures2;
 

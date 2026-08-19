@@ -204,9 +204,9 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 	//Invalidate compute or raytracing stages
 
-	if(stageFlags & ((1 << ESHPipelineStage_Compute) | (1 << ESHPipelineStage_WorkgraphExt)))
+	if(stageFlags & (1 << ESHPipelineStage_Compute))
 		retError(clean, Error_invalidOperation(
-			5, "GraphicsDeviceRef_createPipelinesGraphics()::info contains compute or workgraph stage"
+			5, "GraphicsDeviceRef_createPipelinesGraphics()::info contains a compute stage"
 		));
 
 	if(stageFlags & (((1 << ESHPipelineStage_RtEndExt) - 1) &~ ((1 << ESHPipelineStage_RtStartExt) - 1)))

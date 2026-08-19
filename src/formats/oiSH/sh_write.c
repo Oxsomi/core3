@@ -322,7 +322,6 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			// fallthrough
 
 			case ESHPipelineStage_Compute:
-			case ESHPipelineStage_WorkgraphExt:
 				dataSize += sizeof(U16) * 4;            //group x, y, z, waveSize
 				break;
 
@@ -708,8 +707,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			// fallthrough
 
-			case ESHPipelineStage_Compute:
-			case ESHPipelineStage_WorkgraphExt: {
+			case ESHPipelineStage_Compute: {
 				SHGroups groups = { .x = entry.groupX, .y = entry.groupY, .z = entry.groupZ, .waveSize = entry.waveSize };
 				gotoIfError3(clean, StreamCursor_append(&cursor, offset, &groups, sizeof(groups), alloc, e_rr));
 				break;

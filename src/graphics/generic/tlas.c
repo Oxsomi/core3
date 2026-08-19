@@ -102,6 +102,11 @@ void TLAS_free(void *tlasGeneric, const Allocator *alloc) {
 		RefPtr_dec(&tlas->bindlessDescriptorTable);
 	}
 
+	//A refit holds a reference to the AS it updates from, taken at create; without this the parent leaks for
+	// the process lifetime, and with it goes its bindless descriptor and its device reference.
+
+	RefPtr_dec(&tlas->base.parent);
+
 	RefPtr_dec(&tlas->base.device);
 }
 

@@ -392,6 +392,10 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	Test_graphicsPipelineLayout(t, deviceRef);
 	Test_graphicsShaderReflection(t, deviceRef);
 	Test_graphicsSubmit(t, deviceRef);
+
+	//40. Runs after submit because half of it needs a resource the device is still holding.
+
+	Test_graphicsDescriptorAlloc(t, deviceRef);
 	Test_graphicsGpuExecute(t, deviceRef);
 	Test_graphicsAccelerationStructures(t, deviceRef);
 

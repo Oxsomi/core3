@@ -192,7 +192,10 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelineRaytracing() tmpStages.length + groups.length out of bounds"
 		));
 
-	if(info->flags >> EPipelineRaytracingFlags_Count)
+	//Cast because flags is a U8 and the enum now fills all 8 of its bits, which msvc flags as a shift by the
+	// full width even though the promotion in front of it makes the shift defined.
+
+	if((U32)info->flags >> EPipelineRaytracingFlags_Count)
 		retError(clean, Error_invalidParameter(
 			1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::info.flags is invalid"
 		));
