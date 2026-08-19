@@ -1782,6 +1782,10 @@ A graphics pipeline for use with DirectRendering needs to set the attachment cou
 
 ### Raytracing feature
 
+#### bindDescriptorTable
+
+Bindful: binds the descriptor table that pipelines with a CUSTOM pipeline layout read from. This only sets state; the work ops (draw/dispatch/dispatchRays) are the validators, so bind order never matters: at work time the bound pipeline's layout must reference the exact DescriptorLayout the table was created from, push descriptor layouts are refused until their writes exist, and pipelines on the device's default (bindless) layout ignore the bound table entirely. Backends emit the actual binds lazily right before the work, which also re-emits the default bindings after a custom root signature dropped them on D3D12. Custom layout pipelines are opted out of the globals/frame data unless their layout declares that slot. The table is kept alive by the command list; per resource scope transitions remain the caller's job until auto transitions land. Scope end resets the bind like it does bound pipelines.
+
 #### updateTLASExt/updateBLASExt
 
 Are used to force update TLAS and BLAS respectively. This is useful when the TLAS/BLAS is entirely GPU generated with compute and thus, it needs to be issued on the GPU (not CPU). The CPU generated one only works if GPU buffers were filled previous frame or if the CPU does. For more complex scenarios, auto update should be turned off when BLAS/TLAS is generated and manual updates should be done.

@@ -816,6 +816,8 @@ clean:
 		for(U64 i = 0; i < EPipelineType_Count; ++i)
 			commandList->pipeline[i] = NULL;
 
+		commandList->boundDescriptorTable = NULL;
+
 		ListTransitionInternal_clear(&commandList->pendingTransitions, e_rr);
 
 		commandList->tempStateFlags = 0;

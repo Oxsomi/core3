@@ -33,6 +33,7 @@ typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr PipelineRef;
 typedef RefPtr DepthStencilRef;
 typedef RefPtr DeviceBufferRef;
+typedef RefPtr DescriptorTableRef;
 
 typedef enum ECommandOp {
 
@@ -86,7 +87,11 @@ typedef enum ECommandOp {
 	ECommandOp_SetRaytracingPipelineExt,
 	ECommandOp_UpdateBLASExt,
 	ECommandOp_UpdateTLASExt,
-	ECommandOp_UpdateOmmExt
+	ECommandOp_UpdateOmmExt,
+
+	//Bindful: sets the descriptor table state; backends emit the actual binds lazily at the work op
+
+	ECommandOp_BindDescriptorTable
 
 } ECommandOp;
 

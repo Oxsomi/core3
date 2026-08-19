@@ -35,6 +35,8 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/opacity_micromap.h"
+#include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/blas.h"
 #include "platforms/logx.h"
 #include "formats/oiSH/sh_registers.h"
@@ -64,6 +66,58 @@ static inline Bool addResolveImage(AttachmentInfoInternal attachment, VkRenderin
 	result->resolveImageView = view;
 	result->resolveImageLayout = imageExt->lastLayout;
 	return true;
+}
+
+//Bindful: descriptors are emitted lazily at the work op, where the pipeline (and so the layout) is
+// known; binds only set state.
+//A custom layout emits the bound table's sets against that layout and marks the default sets dirty, since
+// binding with an incompatible layout invalidates them; a default layout pipeline then rebinds them once.
+
+Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer, Error *e_rr);
+
+static void VkCommandBufferState_bindDescriptors(
+	VkCommandBufferState *temp,
+	VkGraphicsDevice *deviceExt,
+	GraphicsDevice *device,
+	PipelineRef *pipelineRef,
+	VkPipelineBindPoint bindPoint
+) {
+
+	PipelineLayoutRef *layoutRef = PipelineRef_ptr(pipelineRef)->layout;
+
+	if (layoutRef == device->defaultPipelineLayout) {
+
+		if (temp->defaultDescriptorsDirty) {
+			temp->defaultDescriptorsDirty = false;
+			GraphicsDevice_rebindDescriptors(device, temp->buffer, NULL);
+		}
+
+		return;
+	}
+
+	//The generic work op validation proved the table matches the layout; a layout without bindings has
+	// nothing to emit at all.
+
+	if(!temp->boundDescriptorTable || !PipelineLayoutRef_ptr(layoutRef)->info.bindings)
+		return;
+
+	VkDescriptorTable *tableExt = DescriptorTable_ext(DescriptorTableRef_ptr(temp->boundDescriptorTable), Vk);
+	VkPipelineLayout *layoutExt = PipelineLayout_ext(PipelineLayoutRef_ptr(layoutRef), Vk);
+
+	for (U64 j = 0, k = 0; j < tableExt->bindCommands; ++j) {
+
+		deviceExt->cmdBindDescriptorSets(
+			temp->buffer,
+			bindPoint,
+			*layoutExt,
+			tableExt->offsets[j], tableExt->counts[j], &tableExt->sets[k],
+			0, NULL
+		);
+
+		k += tableExt->counts[j];
+	}
+
+	temp->defaultDescriptorsDirty = true;
 }
 
 void VK_WRAP_FUNC(CommandList_process)(
@@ -543,6 +597,10 @@ void VK_WRAP_FUNC(CommandList_process)(
 				);
 			}
 
+			VkCommandBufferState_bindDescriptors(
+				temp, deviceExt, device, temp->pipelines[EPipelineType_Graphics], VK_PIPELINE_BIND_POINT_GRAPHICS
+			);
+
 			//Bind index buffer
 
 			if (
@@ -691,6 +749,10 @@ void VK_WRAP_FUNC(CommandList_process)(
 				);
 			}
 
+			VkCommandBufferState_bindDescriptors(
+				temp, deviceExt, device, temp->pipelines[EPipelineType_Compute], VK_PIPELINE_BIND_POINT_COMPUTE
+			);
+
 			if(op == ECommandOp_Dispatch) {
 				DispatchCmd dispatch = *(const DispatchCmd*)data;
 				deviceExt->cmdDispatch(
@@ -722,6 +784,10 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			break;
 
+		case ECommandOp_BindDescriptorTable:
+			temp->boundDescriptorTable = *(RefPtr* const*) data;
+			break;
+
 		case ECommandOp_UpdateOmmExt:
 
 			if(!(VK_WRAP_FUNC(OpacityMicromapRef_flush))(temp, deviceRef, *(OpacityMicromapRef**)data, e_rr))
@@ -744,6 +810,11 @@ void VK_WRAP_FUNC(CommandList_process)(
 					*Pipeline_ext(raytracingPipeline, Vk)
 				);
 			}
+
+			VkCommandBufferState_bindDescriptors(
+				temp, deviceExt, device, temp->pipelines[EPipelineType_RaytracingExt],
+				VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
+			);
 
 			PipelineRaytracingInfo info = *Pipeline_info(raytracingPipeline, PipelineRaytracingInfo);
 

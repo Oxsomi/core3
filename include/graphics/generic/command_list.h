@@ -60,6 +60,10 @@ typedef struct CommandList {
 
 	PipelineRef *pipeline[EPipelineType_Count];
 
+	//Bindful: table state for pipelines with a custom layout; reset per scope like the pipelines above
+
+	DescriptorTableRef *boundDescriptorTable;
+
 	ImageAndRange boundImages[8];
 
 	U16 tempStateFlags;                                //ECommandStateFlags

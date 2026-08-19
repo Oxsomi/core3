@@ -91,6 +91,15 @@ Bool CommandListRef_setRaytracingPipeline(CommandListRef *commandList, PipelineR
 
 Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, const SetPrimitiveBuffersCmd *buffers, Error *e_rr);
 
+//Binds the descriptor table pipelines with a custom pipeline layout read from (bindful).
+//This only SETS state: the work ops (draw/dispatch/dispatchRays) are what validate that the bound table's
+// layout matches the bound pipeline's layout, so bind order never matters.
+//Pipelines using the device's default (bindless) layout ignore it entirely.
+//The table is kept alive by the command list; the resources its descriptors point at follow the usual
+// rules (maintainRef or caller kept), and scope transitions for them stay the caller's job for now.
+
+Bool CommandListRef_bindDescriptorTable(CommandListRef *commandList, DescriptorTableRef *table, Error *e_rr);
+
 Bool CommandListRef_draw(CommandListRef *commandList, const DrawCmd *draw, Error *e_rr);
 
 Bool CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount, Error *e_rr);

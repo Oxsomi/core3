@@ -270,6 +270,14 @@ typedef struct VkCommandBufferState {
 	RefPtr *tempPipelines[EPipelineType_Count];   //Pipelines that were set via command, but not bound yet
 	RefPtr *pipelines[EPipelineType_Count];       //Currently bound pipelines
 
+	//Bindful: table state set by BindDescriptorTable, emitted lazily at the work ops.
+	//defaultDescriptorsDirty means a custom layout bind disturbed the default table's sets, so the next work
+	// op on a default layout pipeline has to rebind them.
+
+	RefPtr *boundDescriptorTable;
+	Bool defaultDescriptorsDirty;
+	U8 padding0[7];
+
 	F32x4 blendConstants, tempBlendConstants;
 
 	U8 stencilRef, tempStencilRef;

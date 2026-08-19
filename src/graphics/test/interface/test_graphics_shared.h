@@ -48,6 +48,7 @@ void Test_graphicsDescriptorTable(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessDescriptor(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBufferBindless(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsDescriptorAlloc(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindful(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsSamplerAndData(Test *t, GraphicsDeviceRef *deviceRef);

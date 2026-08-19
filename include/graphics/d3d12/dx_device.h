@@ -182,6 +182,14 @@ typedef struct DxCommandBufferState {
 	RefPtr *tempPipelines[EPipelineType_Count];       //Pipelines that were set via command, but not bound yet
 	RefPtr *pipeline;
 
+	//Bindful: table state set by BindDescriptorTable, emitted lazily at the work ops.
+	//defaultDescriptorsDirty means a custom root signature switch dropped the default root arguments, so the
+	// next work op on a default layout pipeline has to rebind them.
+
+	RefPtr *boundDescriptorTable;
+	Bool defaultDescriptorsDirty;
+	U8 padding1[7];
+
 	ImageAndRange boundTargets[9];                    //All 8 RTVs and DSV
 	ImageAndRange resolveTargets[9];                  //Dst MSAA targets
 

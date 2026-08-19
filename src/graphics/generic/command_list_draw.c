@@ -26,6 +26,9 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/sampler.h"
@@ -46,6 +49,51 @@
 // correct synchronization; a scope without any TLAS transition has nothing to judge.
 //The error only fires when every candidate provably fails the requirement (that includes the common single
 // TLAS scene), so a legitimate multi TLAS mix or a device built TLAS is never accused.
+
+//Bindful: the work ops are the validators, binds only set state, so bind order never matters and
+// only recorded work has to be consistent.
+//A pipeline on the device's default (bindless) layout is always fine: submit binds that table for the
+// whole frame. A custom layout requires the bound table to be built from the exact DescriptorLayout the
+// pipeline layout references, which is what makes the backend's lazy bind at this op provably valid.
+
+static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef *pipelineRef, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	PipelineLayoutRef *layoutRef = PipelineRef_ptr(pipelineRef)->layout;
+
+	if(layoutRef == GraphicsDeviceRef_ptr(commandList->device)->defaultPipelineLayout)
+		goto clean;
+
+	const PipelineLayout *layout = PipelineLayoutRef_ptr(layoutRef);
+
+	//Push descriptor writes don't exist yet (phase 2), so a layout that declares them would read garbage
+
+	if(layout->info.pushDescriptors)
+		retError(clean, Error_unsupportedOperation(
+			0, "CommandList_validateBindState() push descriptors can't be recorded yet (bindful phase 2)"
+		));
+
+	if (layout->info.bindings) {
+
+		if(!commandList->boundDescriptorTable)
+			retError(clean, Error_invalidOperation(
+				0,
+				"CommandList_validateBindState() the pipeline's layout needs a descriptor table, but none is bound "
+				"(CommandListRef_bindDescriptorTable)"
+			));
+
+		if(DescriptorTableRef_ptr(commandList->boundDescriptorTable)->layout != layout->info.bindings)
+			retError(clean, Error_invalidOperation(
+				1,
+				"CommandList_validateBindState() the bound descriptor table wasn't created from the DescriptorLayout "
+				"the pipeline's layout references"
+			));
+	}
+
+clean:
+	return s_uccess;
+}
 
 static Bool CommandList_validateRayTriPosition(CommandList *commandList, PipelineRef *pipelineRef, Error *e_rr) {
 
@@ -317,6 +365,8 @@ Bool CommandListRef_drawBase(CommandListRef *commandListRef, Buffer buf, EComman
 	if (!pipelineRef)
 		retError(clean, Error_invalidOperation(1, "CommandListRef_drawBase() requires bound graphics pipeline"));
 
+	gotoIfError3(clean, CommandList_validateBindState(commandList, pipelineRef, e_rr));
+
 	U32 flags = ECommandStateFlags_AnyScissor | ECommandStateFlags_AnyViewport;
 
 	if ((commandList->tempStateFlags & flags) != flags)
@@ -424,6 +474,10 @@ Bool CommandListRef_dispatch(CommandListRef *commandListRef, DispatchCmd dispatc
 	if (!commandList->pipeline[EPipelineType_Compute])
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatch() requires bound compute pipeline"));
 
+	gotoIfError3(clean, CommandList_validateBindState(
+		commandList, commandList->pipeline[EPipelineType_Compute], e_rr
+	));
+
 	gotoIfError3(clean, CommandList_validateRayTriPosition(
 		commandList, commandList->pipeline[EPipelineType_Compute], e_rr
 	));
@@ -477,6 +531,7 @@ Bool CommandListRef_dispatchRaysExt(CommandListRef *commandListRef, DispatchRays
 	if (!rayPipeline)
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() requires bound raytracing pipeline"));
 
+	gotoIfError3(clean, CommandList_validateBindState(commandList, rayPipeline, e_rr));
 	gotoIfError3(clean, CommandList_validateRayTriPosition(commandList, rayPipeline, e_rr));
 
 	U64 total = dispatch.x * dispatch.y;
@@ -567,6 +622,10 @@ Bool CommandListRef_dispatchIndirect(CommandListRef *commandListRef, DeviceBuffe
 
 	if (!commandList->pipeline[EPipelineType_Compute])
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchIndirect() requires bound compute pipeline"));
+
+	gotoIfError3(clean, CommandList_validateBindState(
+		commandList, commandList->pipeline[EPipelineType_Compute], e_rr
+	));
 
 	gotoIfError3(clean, CommandList_validateRayTriPosition(
 		commandList, commandList->pipeline[EPipelineType_Compute], e_rr
@@ -812,6 +871,55 @@ Bool CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas, Er
 
 Bool CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr) {
 	return CommandListRef_updateRTASExt(commandList, blas, true, e_rr);
+}
+
+//Bindful: only SETS state; the work ops validate it against the bound pipeline's layout.
+//The KeepAlive transition is what makes end() collect the table into the command list's resources, which is
+// also what carries it into the frame's resourcesInFlight at submit.
+
+Bool CommandListRef_bindDescriptorTable(CommandListRef *commandListRef, DescriptorTableRef *table, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = commandListRef ? GraphicsDeviceRef_getAlloc(CommandListRef_ptr(commandListRef)->device) : NULL;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!table || table->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
+		retError(clean, Error_unsupportedOperation(
+			0, "CommandListRef_bindDescriptorTable() requires a descriptor table"
+		));
+
+	if(DescriptorHeapRef_ptr(DescriptorTableRef_ptr(table)->parent)->device != commandList->device)
+		retError(clean, Error_unsupportedOperation(
+			1, "CommandListRef_bindDescriptorTable()::table's device is incompatible"
+		));
+
+	if (!CommandListRef_isBound(commandList, table, (ResourceRange) { 0 }, NULL)) {
+
+		const TransitionInternal transition = (TransitionInternal) {
+			.resource = table, .type = ETransitionType_KeepAlive
+		};
+
+		gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
+	}
+
+	DescriptorTableRef *args[2] = { table, NULL };
+
+	gotoIfError3(clean, CommandList_append(
+		commandList,
+		ECommandOp_BindDescriptorTable,
+		Buffer_createRefConst(args, sizeof(args)),
+		0, e_rr
+	));
+
+	commandList->boundDescriptorTable = table;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
 }
 
 Bool CommandListRef_updateOmmExt(CommandListRef *commandListRef, OpacityMicromapRef *micromap, Error *e_rr) {

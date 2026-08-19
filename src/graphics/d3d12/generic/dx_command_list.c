@@ -33,6 +33,10 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/opacity_micromap.h"
+#include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/descriptor_layout.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/blas.h"
 #include "types/container/buffer.h"
 #include "types/math/vec4i_swizzle.h"
@@ -170,6 +174,104 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 
 	deviceExt->device->lpVtbl->CreateDepthStencilView(deviceExt->device, resource, &dsv, location);
 	return location;
+}
+
+void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *commandBuffer);
+
+//Bindful: descriptors are emitted lazily at the work op, where the pipeline (and so the root
+// signature) is known; binds only set state.
+//A custom layout switches the root signature, which drops EVERY root argument, so the default layout state
+// is marked dirty and a later default layout work op re-runs the frame rebind.
+
+static void DxCommandBufferState_bindDescriptors(
+	DxCommandBufferState *temp,
+	GraphicsDevice *device,
+	PipelineRef *pipelineRef,
+	Bool isCompute
+) {
+
+	PipelineLayoutRef *layoutRef = PipelineRef_ptr(pipelineRef)->layout;
+	DxCommandBuffer *buffer = temp->buffer;
+
+	if (layoutRef == device->defaultPipelineLayout) {
+
+		if (temp->defaultDescriptorsDirty) {
+			temp->defaultDescriptorsDirty = false;
+			GraphicsDevice_rebindDescriptors(device, buffer);
+		}
+
+		return;
+	}
+
+	const PipelineLayout *layout = PipelineLayoutRef_ptr(layoutRef);
+	DxPipelineLayout *layoutExt = PipelineLayout_ext((PipelineLayout*)layout, Dx);
+
+	if(isCompute)
+		buffer->lpVtbl->SetComputeRootSignature(buffer, layoutExt->rootSig);
+
+	else buffer->lpVtbl->SetGraphicsRootSignature(buffer, layoutExt->rootSig);
+
+	temp->defaultDescriptorsDirty = true;
+
+	if(!temp->boundDescriptorTable || !layout->info.bindings)
+		return;
+
+	const DescriptorTable *table = DescriptorTableRef_ptr(temp->boundDescriptorTable);
+	DxDescriptorTable *tableExt = DescriptorTable_ext((DescriptorTable*)table, Dx);
+
+	DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(table->parent), Dx);
+
+	//The table's heap has to be current; when it differs from the default heap this switches it, and the
+	// default rebind switches back through the dirty flag above.
+
+	ID3D12DescriptorHeap *descriptorHeaps[2] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };
+	buffer->lpVtbl->SetDescriptorHeaps(buffer, heap->samplerHeap.heap ? 2 : 1, descriptorHeaps);
+
+	//The layout has at most two root tables (resources, samplers), created in encounter order; each binding's
+	// root param is in rootParamOffsets, so the first binding of each class names its table's param.
+
+	const DescriptorLayout *descLayout = DescriptorLayoutRef_ptr(layout->info.bindings);
+	DxDescriptorLayout *descLayoutExt = DescriptorLayout_ext((DescriptorLayout*)descLayout, Dx);
+
+	U8 resourceParam = U8_MAX, samplerParam = U8_MAX;
+
+	for (U64 i = 0; i < descLayout->info.bindings.length; ++i) {
+
+		const ESHRegisterType type =
+			(ESHRegisterType)(descLayout->info.bindings.ptr[i].registerType & ESHRegisterType_TypeMask);
+
+		const Bool isSampler = type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState;
+
+		if(isSampler && samplerParam == U8_MAX)
+			samplerParam = descLayoutExt->rootParamOffsets.ptr[i];
+
+		else if(!isSampler && resourceParam == U8_MAX)
+			resourceParam = descLayoutExt->rootParamOffsets.ptr[i];
+	}
+
+	if (resourceParam != U8_MAX) {
+
+		const D3D12_GPU_DESCRIPTOR_HANDLE handle = (D3D12_GPU_DESCRIPTOR_HANDLE) {
+			.ptr = heap->resourcesHeap.gpuHandle.ptr + tableExt->allocationLocations[0] * heap->resourcesHeap.gpuIncrement
+		};
+
+		if(isCompute)
+			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, resourceParam, handle);
+
+		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, resourceParam, handle);
+	}
+
+	if (samplerParam != U8_MAX) {
+
+		const D3D12_GPU_DESCRIPTOR_HANDLE handle = (D3D12_GPU_DESCRIPTOR_HANDLE) {
+			.ptr = heap->samplerHeap.gpuHandle.ptr + tableExt->allocationLocations[1] * heap->samplerHeap.gpuIncrement
+		};
+
+		if(isCompute)
+			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, samplerParam, handle);
+
+		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, samplerParam, handle);
+	}
 }
 
 void DX_WRAP_FUNC(CommandList_process)(
@@ -701,6 +803,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 				);
 			}
 
+			DxCommandBufferState_bindDescriptors(temp, device, temp->pipeline, false);
+
 			PipelineGraphicsInfo *graphicsShader = Pipeline_info(PipelineRef_ptr(temp->pipeline), PipelineGraphicsInfo);
 			D3D12_PRIMITIVE_TOPOLOGY topology = 0;
 
@@ -878,6 +982,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 				);
 			}
 
+			DxCommandBufferState_bindDescriptors(temp, device, temp->pipeline, true);
+
 			if(op == ECommandOp_Dispatch) {
 				DispatchCmd dispatch = *(const DispatchCmd*)data;
 				buffer->lpVtbl->Dispatch(
@@ -922,6 +1028,10 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 		//An OMM array is an acceleration structure on D3D12, so it flushes the same way
 
+		case ECommandOp_BindDescriptorTable:
+			temp->boundDescriptorTable = *(RefPtr* const*) data;
+			break;
+
 		case ECommandOp_UpdateOmmExt:
 
 			if(!(DX_WRAP_FUNC(OpacityMicromapRef_flush))(temp, deviceRef, *(OpacityMicromapRef**)data, e_rr))
@@ -943,6 +1053,12 @@ void DX_WRAP_FUNC(CommandList_process)(
 					Pipeline_ext(raytracingPipeline, Dx)->stateObject
 				);
 			}
+
+			//Ray tracing dispatch reads through the compute root signature on D3D12
+
+			DxCommandBufferState_bindDescriptors(
+				temp, device, temp->tempPipelines[EPipelineType_RaytracingExt], true
+			);
 
 			PipelineRaytracingInfo info = *Pipeline_info(raytracingPipeline, PipelineRaytracingInfo);
 

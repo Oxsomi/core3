@@ -396,6 +396,10 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	//40. Runs after submit because half of it needs a resource the device is still holding.
 
 	Test_graphicsDescriptorAlloc(t, deviceRef);
+
+	//41. The bindful path: a pipeline with its own layout and a table bound at record time.
+
+	Test_graphicsBindful(t, deviceRef);
 	Test_graphicsGpuExecute(t, deviceRef);
 	Test_graphicsAccelerationStructures(t, deviceRef);
 
