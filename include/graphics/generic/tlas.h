@@ -41,6 +41,41 @@ typedef enum ETLASInstanceFlag {
 	ETLASInstanceFlag_Default                   = ETLASInstanceFlag_DisableCulling | ETLASInstanceFlag_ForceDisableAnyHit
 } ETLASInstanceFlag;
 
+//TLAS specific state, which lives in RTAS::flagsExt the way EBLASFlag does for a BLAS.
+//A byte of flags rather than a run of Bools because four Bools packed with the bindless handle into exactly 8
+// bytes, and a fifth would have cost another 8 to carry one bit.
+//UseDeviceMemory and DisallowBindlessDescriptor come from the caller through the create functions, the rest is
+// state OxC3 keeps itself.
+
+typedef enum ETLASFlag {
+
+	ETLASFlag_None                       = 0,
+
+	//Instances live in a device buffer (deviceData) rather than in cpuInstances.
+
+	ETLASFlag_UseDeviceMemory            = 1 << 0,
+
+	//Won't allocate a bindless descriptor, so the TLAS can't be reached from a shader.
+
+	ETLASFlag_DisallowBindlessDescriptor = 1 << 1,
+
+	//Cached at create for validation: whether every visible instance's BLAS was built with
+	// ERTASBuildFlags_AllowDataAccessExt, so ray triangle position fetch is legal against this TLAS.
+	//Only knowable when the instances are CPU side; device built and serialized TLASes leave Known unset.
+
+	ETLASFlag_BlasDataAccessKnown        = 1 << 2,
+	ETLASFlag_BlasDataAccessAll          = 1 << 3,
+
+	//Set by TLASRef_setInstancesExt and cleared by the build that consumed it.
+	//The instance array lives in a mapped buffer that is filled once at create, so without this a refit would
+	// rebuild the structure over the instances it already had.
+
+	ETLASFlag_InstancesDirty             = 1 << 4,
+
+	ETLASFlag_Count                      = 5
+
+} ETLASFlag;
+
 typedef enum ETLASConstructionType {
 	ETLASConstructionType_Instances,     //deviceData or cpuInstances contains valid data
 	ETLASConstructionType_Serialized,    //cpuData contains serialized data from a previously created AS
@@ -78,23 +113,12 @@ typedef struct TLAS {
 
 	DescriptorTableRef *bindlessDescriptorTable;
 
-	Bool useDeviceMemory;
-	Bool disallowBindlessDescriptor;
-
-	//Cached at create for validation: whether every visible instance's BLAS was built with
-	// ERTASBuildFlags_AllowDataAccessExt, so ray triangle position fetch is legal against this TLAS.
-	//Only knowable when the instances are CPU-side; device-built and serialized TLASes leave it unknown.
-
-	Bool blasDataAccessKnown;
-	Bool blasDataAccessAll;
-
-	//Set by TLASRef_setInstancesExt and cleared by the build that consumed it.
-	//The instance array lives in a mapped buffer that is filled once at create, so without this a refit
-	// would rebuild the structure over the instances it already had.
-
-	Bool instancesDirty;
+	//TLAS specific flags are ETLASFlag in base.flagsExt; read them through TLAS_hasFlag rather than directly,
+	// since base.flags right next to it is the BUILD flags and the two are easy to mix up at a glance.
 
 	BindlessDescriptor handle;
+
+	U32 padding0;
 
 	DeviceBufferRef *tempInstanceBuffer;        //If cpuInstances, temp upload heap
 
@@ -116,6 +140,10 @@ typedef RefPtr TLASRef;
 
 #define TLAS_ext(ptr, T) (!ptr ? NULL : (T##TLAS*)(ptr + 1))        //impl
 #define TLASRef_ptr(ptr) RefPtr_data(ptr, TLAS)
+
+static inline Bool TLAS_hasFlag(const TLAS *tlas, ETLASFlag flag) {
+	return !!(tlas->base.flagsExt & (U8) flag);
+}
 
 Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result);
 

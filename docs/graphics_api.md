@@ -1281,7 +1281,7 @@ Contains the following properties:
 
 - device: the device that the AS was created on. An AS is only compatible with other ASes that are from the same device.
 - isCompleted: this is set when the BLAS has been signaled as fully built. For example when buildBLASExt has been called or when the first submitCommands has been triggered since it has been queued.
-- flagsExt: BLAS or TLAS specific flags (currently only used for BLAS).
+- flagsExt: BLAS or TLAS specific flags; EBLASFlag for a BLAS, ETLASFlag for a TLAS.
 - asConstructionType: the BLAS or TLAS specific construction type.
 - scratchBuffer: temporary data that is only available until the AS has been created and the frame has been completed on the CPU.
 - asBuffer: the buffer resource that represents this acceleration structure.
@@ -1473,13 +1473,16 @@ For GPU construction, the same can be done and has to follow the exact struct; e
 
 ##### Properties
 
-- base: RTAS standardizes BLAS and TLAS a little bit.
-- useDeviceMemory: If the TLAS was created through GPU memory or via a temporary CPU visible buffer.
+- base: RTAS standardizes BLAS and TLAS a little bit. TLAS specific state lives in `base.flagsExt` as ETLASFlag, read through `TLAS_hasFlag`:
+  - UseDeviceMemory: the instances came from GPU memory rather than from a temporary CPU visible buffer.
+  - DisallowBindlessDescriptor: no bindless descriptor was allocated, so the TLAS cannot be reached from a shader.
+  - BlasDataAccessKnown / BlasDataAccessAll: cached at create, whether every visible instance's BLAS allows ray triangle position fetch. Only knowable for CPU side instances, so Known stays unset for device built and serialized TLASes.
+  - InstancesDirty: `TLASRef_setInstancesExt` has supplied new instances that the next build has yet to upload.
 - handle: Descriptor index of the acceleration structure.
-- Depending on useDeviceMemory and base.asConstructionType: (Instances, Serialized):
+- Depending on UseDeviceMemory and base.asConstructionType: (Instances, Serialized):
   - ETLASConstructionType_Serialized:
     - Buffer cpuData: Indicates cpu memory that represents the TLAS. Might become invalidated because of a driver update.
-  - useDeviceMemory:
+  - UseDeviceMemory:
     - deviceData: Represents the resource range that holds the TLASInstance[] on the GPU.
   - else
     - cpuInstances: List of TLASInstance.

@@ -613,8 +613,8 @@ static void Test_capabilityRayTriPositionGuard(Test *t, GraphicsDeviceRef *devic
 
 	//The cached bits are what the record time check reads, so they are pinned down here as well.
 
-	Test_assert(t, "rtpGuardKnown", TLASRef_ptr(tlas)->blasDataAccessKnown);
-	Test_assert(t, "rtpGuardAllOff", !TLASRef_ptr(tlas)->blasDataAccessAll);
+	Test_assert(t, "rtpGuardKnown", TLAS_hasFlag(TLASRef_ptr(tlas), ETLASFlag_BlasDataAccessKnown));
+	Test_assert(t, "rtpGuardAllOff", !TLAS_hasFlag(TLASRef_ptr(tlas), ETLASFlag_BlasDataAccessAll));
 
 	if(!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_caps_raytriposition.oiSH", &file))
 		goto clean;

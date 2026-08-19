@@ -992,10 +992,10 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 			ListTLASInstance_createRefConst(pairData, 2, &pair, NULL);
 
 			Test_assert(t, "setInstancesWrongLength", !TLASRef_setInstancesExt(updatable, &pair, NULL));
-			Test_assert(t, "setInstancesRejectedClean", !TLASRef_ptr(updatable)->instancesDirty);
+			Test_assert(t, "setInstancesRejectedClean", !TLAS_hasFlag(TLASRef_ptr(updatable), ETLASFlag_InstancesDirty));
 
 			Test_assert(t, "setInstances", TLASRef_setInstancesExt(updatable, &instances, &t->err));
-			Test_assert(t, "setInstancesDirty", TLASRef_ptr(updatable)->instancesDirty);
+			Test_assert(t, "setInstancesDirty", TLAS_hasFlag(TLASRef_ptr(updatable), ETLASFlag_InstancesDirty));
 
 			RefPtr_dec(&updatable);
 		}

@@ -478,14 +478,25 @@ Bool DescriptorTableRef_unsetDescriptors(
 		for (U64 i = arrayId; i < arrayId + count; ++i) {
 
 			WeakRefPtr *ref = binding->multiple.resources.ptr[i];
+			const Bool maintained = (binding->multiple.maintainRef.ptr[i >> 6] >> (i & 63)) & 1;
+
 			binding->multiple.activeList.ptrNonConst[i >> 6] &=~ ((U64)1 << (i & 63));
 
 			if(ref && ref->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer) {
-				gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, binding->multiple.buffers.ptr[i].counter, e_rr));
+
+				//Gated on the same bit as the resource, because a counter is only ever ADDED under maintainRef.
+				//Releasing it unconditionally took a count belonging to whichever other descriptor did maintain it,
+				// so two descriptors sharing one counter buffer released it while one of them still pointed at it.
+
+				if(maintained)
+					gotoIfError3(clean, DescriptorTable_loseRef(
+						tablePtr, binding->multiple.buffers.ptr[i].counter, e_rr
+					));
+
 				binding->multiple.buffers.ptrNonConst[i].counter = NULL;
 			}
 
-			if((binding->multiple.maintainRef.ptr[i >> 6] >> (i & 63)) & 1)
+			if(maintained)
 				gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, ref, e_rr));
 
 			binding->multiple.resources.ptrNonConst[i] = NULL;
@@ -495,7 +506,12 @@ Bool DescriptorTableRef_unsetDescriptors(
 		WeakRefPtr *ref = binding->single.resource;
 
 		if(ref && ref->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer) {
-			gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, binding->single.buffer.counter, e_rr));
+
+			//Same reasoning as the array path above: added only under maintainRef, so released only under it.
+
+			if(binding->single.maintainRef)
+				gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, binding->single.buffer.counter, e_rr));
+
 			binding->single.buffer.counter = NULL;
 		}
 

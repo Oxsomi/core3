@@ -39,7 +39,7 @@ Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData *
 
 	if(
 		!result ||
-		tlas->useDeviceMemory ||
+		TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory) ||
 		tlas->base.asConstructionType != ETLASConstructionType_Instances ||
 		i >= tlas->cpuInstances.length
 	)
@@ -86,7 +86,10 @@ Bool TLASRef_setInstancesExt(TLASRef *tlasRef, const ListTLASInstance *instances
 			0, "TLASRef_setInstancesExt() requires a TLAS that was built with AllowUpdate"
 		));
 
-	if(tlas->base.asConstructionType != ETLASConstructionType_Instances || tlas->useDeviceMemory)
+	if(
+		tlas->base.asConstructionType != ETLASConstructionType_Instances ||
+		TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory)
+	)
 		retError(clean, Error_invalidOperation(
 			0, "TLASRef_setInstancesExt() is only valid on a TLAS built from CPU instances"
 		));
@@ -128,7 +131,7 @@ Bool TLASRef_setInstancesExt(TLASRef *tlasRef, const ListTLASInstance *instances
 		tlas->cpuInstances.ptrNonConst[i] = instances->ptr[i];
 
 	referenced = 0;        //Handed over to the TLAS
-	tlas->instancesDirty = true;
+	tlas->base.flagsExt |= (U8) ETLASFlag_InstancesDirty;
 
 clean:
 
@@ -165,7 +168,7 @@ void TLAS_free(void *tlasGeneric, const Allocator *alloc) {
 
 	else if (tlas->base.asConstructionType == ETLASConstructionType_Instances) {
 
-		if(tlas->useDeviceMemory)
+		if(TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
 			RefPtr_dec(&tlas->deviceData.buffer);
 
 		else {
@@ -203,8 +206,7 @@ Bool GraphicsDeviceRef_createTLAS(
 
 	//See the matching fields in TLAS; only the CPU instance path below can prove anything.
 
-	Bool blasDataAccessKnown = false;
-	Bool blasDataAccessAll = false;
+	ETLASFlag dataAccessFlags = ETLASFlag_None;
 
 	//Validate
 
@@ -214,7 +216,7 @@ Bool GraphicsDeviceRef_createTLAS(
 	if(!tlas)
 		retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_createTLAS()::tlas is required"));
 
-	if(bindlessDescriptorTable && tlas->disallowBindlessDescriptor)
+	if(bindlessDescriptorTable && TLAS_hasFlag(tlas, ETLASFlag_DisallowBindlessDescriptor))
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_createTLAS() bindlessDescriptorTable is set, but disallowed"));
 
 	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
@@ -223,7 +225,7 @@ Bool GraphicsDeviceRef_createTLAS(
 			"GraphicsDeviceRef_createTLAS()::bindlessDescriptorTable should be valid if non NULL"
 		));
 
-	if (!tlas->disallowBindlessDescriptor && !bindlessDescriptorTable)
+	if (!TLAS_hasFlag(tlas, ETLASFlag_DisallowBindlessDescriptor) && !bindlessDescriptorTable)
 		bindlessDescriptorTable = GraphicsDeviceRef_ptr(dev)->defaultDescriptorTable;
 
 	if(!tlasRef)
@@ -249,7 +251,7 @@ Bool GraphicsDeviceRef_createTLAS(
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Instances) {
 
-		if (tlas->useDeviceMemory) {
+		if (TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory)) {
 
 			deviceData = tlas->deviceData;
 			gotoIfError3(clean, RTAS_validateDeviceBuffer(&deviceData, e_rr));
@@ -267,8 +269,7 @@ Bool GraphicsDeviceRef_createTLAS(
 			if(!length)
 				retError(clean, Error_invalidOperation(10, "GraphicsDeviceRef_createTLAS() is missing instance list"));
 
-			blasDataAccessKnown = true;
-			blasDataAccessAll = true;
+			dataAccessFlags = ETLASFlag_BlasDataAccessKnown | ETLASFlag_BlasDataAccessAll;
 
 			for (U64 i = 0; i < length; ++i) {
 
@@ -289,7 +290,7 @@ Bool GraphicsDeviceRef_createTLAS(
 						));
 
 					if(!(BLASRef_ptr(dat.blasCpu)->base.flags & ERTASBuildFlags_AllowDataAccessExt))
-						blasDataAccessAll = false;
+						dataAccessFlags &=~ ETLASFlag_BlasDataAccessAll;
 				}
 
 				if(!(dat.instanceId24_mask8 >> 24))
@@ -323,8 +324,7 @@ Bool GraphicsDeviceRef_createTLAS(
 
 	//The input struct is caller-constructed, so the cached validation bits are set here rather than trusted.
 
-	tlasPtr->blasDataAccessKnown = blasDataAccessKnown;
-	tlasPtr->blasDataAccessAll = blasDataAccessAll;
+	tlasPtr->base.flagsExt |= (U8) dataAccessFlags;
 
 	//Set as soon as the object exists rather than once it is fully built.
 	//TLAS_freeExt reads base.device to find the backend, so a rejection between here and there used to free
@@ -340,7 +340,7 @@ Bool GraphicsDeviceRef_createTLAS(
 
 	else {
 
-		if (tlas->useDeviceMemory) {
+		if (TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory)) {
 			tlasPtr->deviceData = (DeviceData) { 0 };
 			gotoIfError3(clean, RefPtr_inc(deviceData.buffer));
 			tlasPtr->deviceData = deviceData;
@@ -449,9 +449,9 @@ Bool GraphicsDeviceRef_createTLASExt(
 	TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
-			.flags = (U8) buildFlags
-		},
-		.disallowBindlessDescriptor = disallowBindlessDescriptor
+			.flags = (U8) buildFlags,
+			.flagsExt = (U8) (disallowBindlessDescriptor ? ETLASFlag_DisallowBindlessDescriptor : ETLASFlag_None)
+		}
 	};
 
 	if(instances)
@@ -474,10 +474,12 @@ Bool GraphicsDeviceRef_createTLASDeviceExt(
 	TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
-			.flags = (U8) buildFlags
-		},
-		.useDeviceMemory = true,
-		.disallowBindlessDescriptor = disallowBindlessDescriptor
+			.flags = (U8) buildFlags,
+			.flagsExt = (U8) (
+				ETLASFlag_UseDeviceMemory |
+				(disallowBindlessDescriptor ? ETLASFlag_DisallowBindlessDescriptor : ETLASFlag_None)
+			)
+		}
 	};
 
 	if(instancesDevice)

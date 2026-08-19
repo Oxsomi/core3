@@ -67,7 +67,7 @@ static Bool CommandList_validateRayTriPosition(CommandList *commandList, Pipelin
 
 		const TLAS *tlas = TLASRef_ptr(res);
 
-		if(tlas->blasDataAccessKnown && !tlas->blasDataAccessAll)
+		if(TLAS_hasFlag(tlas, ETLASFlag_BlasDataAccessKnown) && !TLAS_hasFlag(tlas, ETLASFlag_BlasDataAccessAll))
 			++provablyBad;
 	}
 
@@ -771,7 +771,7 @@ Bool CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas,
 
 		TLAS *tlas = TLASRef_ptr(rtas);
 
-		if(!tlas->useDeviceMemory)
+		if(!TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
 			for (U64 j = 0; j < tlas->cpuInstances.length; ++j) {
 
 				TLASInstanceData dat = (TLASInstanceData) { 0 };

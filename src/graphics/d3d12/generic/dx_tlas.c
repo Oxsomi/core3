@@ -90,7 +90,7 @@ static void DxTLAS_fillInstances(TLAS *tlas) {
 		}
 	}
 
-	tlas->instancesDirty = false;
+	tlas->base.flagsExt &=~ (U8) ETLASFlag_InstancesDirty;
 }
 
 Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
@@ -111,7 +111,7 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 	U64 instancesU64 = 0;
 	U64 stride = sizeof(TLASInstance);
 
-	if (tlas->useDeviceMemory)
+	if (TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
 		instancesU64 = tlas->deviceData.len / stride;
 
 	else instancesU64 = tlas->cpuInstances.length;
@@ -154,7 +154,7 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 		//We have to temporarily allocate a device mem buffer
 
-		if (!tlas->useDeviceMemory) {
+		if (!TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory)) {
 
 			gotoIfError3(clean, CharString_format(
 				alloc,
@@ -256,7 +256,7 @@ Bool DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	//New instances only reach the GPU here, so a batch of transform changes costs one upload rather than
 	// one per change.
 
-	if(tlas->instancesDirty && !tlas->useDeviceMemory)
+	if(TLAS_hasFlag(tlas, ETLASFlag_InstancesDirty) && !TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
 		DxTLAS_fillInstances(tlas);
 
 	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(tlas->base.asBuffer)->resource.deviceAddress;

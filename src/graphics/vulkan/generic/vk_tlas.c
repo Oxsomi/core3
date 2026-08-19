@@ -114,7 +114,7 @@ static Bool VkTLAS_fillInstances(GraphicsDeviceRef *deviceRef, TLAS *tlas, Error
 		gotoIfError3(clean, checkVkError(deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &mappedRange), e_rr));
 	}
 
-	tlas->instancesDirty = false;
+	tlas->base.flagsExt &=~ (U8) ETLASFlag_InstancesDirty;
 
 clean:
 
@@ -144,7 +144,7 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 	U64 instancesU64 = 0;
 	U64 stride = sizeof(TLASInstance);
 
-	if (tlas->useDeviceMemory)
+	if (TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
 		instancesU64 = tlas->deviceData.len / stride;
 
 	else instancesU64 = tlas->cpuInstances.length;
@@ -165,7 +165,7 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 		//We have to temporarily allocate a device mem buffer
 
-		if (!tlas->useDeviceMemory) {
+		if (!TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory)) {
 
 			gotoIfError3(clean, CharString_format(
 				alloc,
@@ -348,7 +348,7 @@ Bool VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	//New instances only reach the GPU here, so a batch of transform changes costs one upload rather than
 	// one per change.
 
-	if(tlas->instancesDirty && !tlas->useDeviceMemory)
+	if(TLAS_hasFlag(tlas, ETLASFlag_InstancesDirty) && !TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
 		gotoIfError3(clean, VkTLAS_fillInstances(deviceRef, tlas, e_rr));
 
 	//A structure that was already built refits itself in place, which both APIs allow and which is what

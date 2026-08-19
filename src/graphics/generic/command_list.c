@@ -364,7 +364,7 @@ Bool CommandListRef_transitionRTAS(
 
 			TLAS *tlas = TLASRef_ptr(rtasPtr);
 
-			if(!tlas->useDeviceMemory) {
+			if(!TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory)) {
 				gotoIfError3(clean, CommandListRef_transitionBuffer(
 					commandList, tlas->tempInstanceBuffer, (BufferRange) { 0 },
 					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
@@ -576,7 +576,7 @@ Bool CommandListRef_startScope(
 
 			TLAS *tlas = TLASRef_ptr(res);
 
-			if(!tlas->useDeviceMemory)
+			if(!TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
 				for (U64 j = 0; j < tlas->cpuInstances.length; ++j) {
 
 					TLASInstanceData dat = (TLASInstanceData) { 0 };
