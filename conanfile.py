@@ -38,7 +38,7 @@ HOST_TOOL_OPTIONS = {
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.103"
+	version = "0.2.104"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"

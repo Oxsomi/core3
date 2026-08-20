@@ -639,3 +639,133 @@ clean:
 	DescriptorLayoutInfo_free(&layoutInfo, alloc);
 	SHFile_free(&file, alloc);
 }
+
+// -- 16. The per frame globals other than app data ------------------------------
+
+//Every bindless test reads getAppData, so the app data half of the globals block is covered by the whole
+//suite. The rest of it - frame id, time, delta, swapchain count - had no execution coverage at all, which
+//is exactly the half a change to where the block lives can break without a single test noticing.
+//Two submits, because the interesting property is that these move: the frame id has to advance and the
+//clock must not run backwards.
+
+void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Bindless/frameGlobals");
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if (!device->defaultDescriptorTable) {
+		Test_print(t, "Device has no bindless descriptor table, skipping frame globals tests");
+		return;
+	}
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	DeviceBufferRef *output = NULL;
+	PipelineRef *pipeline = NULL;
+	CommandListRef *commandList = NULL;
+	CommandListRef *emptyList = NULL;
+
+	SHFile file = (SHFile) { 0 };
+
+	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_frame_globals.oiSH", &file)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping frame globals tests");
+		return;
+	}
+
+	CharString name = CharString_createRefCStrConst("Frame globals output");
+
+	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, 4 * sizeof(U32), &output, &t->err
+	)))
+		goto clean;
+
+	if(!TestShaders_computePipeline(t, deviceRef, &file, &pipeline))
+		goto clean;
+
+	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, 2 * KIBI, 32, 16, true, &commandList, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
+	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+
+	const Transition transition = (Transition) {
+		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
+	};
+
+	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
+
+	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
+	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
+	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
+	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+	TestShaderAppData appData = (TestShaderAppData) {
+		.handles = { DeviceBufferRef_ptr(output)->writeHandle }
+	};
+
+	U32 firstFrameId = 0;
+	F32 firstTime = 0;
+	Bool readFirst = false;
+
+	if (TestShaders_submitAndWait(t, deviceRef, commandList, &appData, sizeof(appData)))
+		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+
+			firstFrameId = values[0];
+			Buffer_memcpy(Buffer_createRef(&firstTime, sizeof(F32)), Buffer_createRefConst(&values[1], sizeof(U32)));
+
+			F32 deltaTime = 0;
+			Buffer_memcpy(Buffer_createRef(&deltaTime, sizeof(F32)), Buffer_createRefConst(&values[2], sizeof(U32)));
+
+			//The shader really read the block rather than zero initialised memory: a submit that has happened
+			// has a non zero frame id, and neither clock can be negative
+
+			Test_assert(t, "frameIdNonZero", firstFrameId != 0);
+			Test_assert(t, "timeNotNegative", firstTime >= 0);
+			Test_assert(t, "deltaNotNegative", deltaTime >= 0);
+
+			//No swapchain exists in this headless suite, so the count the runtime published has to say so
+
+			Test_assert(t, "swapchainCountZero", values[3] == 0);
+
+			readFirst = true;
+		}
+
+	//A second submit of the same list: the frame id advances and time cannot go backwards, which is what
+	// makes this a test of the live per frame block rather than of one constant
+
+	if (readFirst && TestShaders_submitAndWait(t, deviceRef, commandList, &appData, sizeof(appData)))
+		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+
+			F32 secondTime = 0;
+			Buffer_memcpy(Buffer_createRef(&secondTime, sizeof(F32)), Buffer_createRefConst(&values[1], sizeof(U32)));
+
+			Test_assert(t, "frameIdAdvanced", values[0] > firstFrameId);
+			Test_assert(t, "timeMovesForward", secondTime >= firstTime);
+		}
+
+clean:
+
+	RefPtr_dec(&emptyList);
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&output);
+
+	SHFile_free(&file, alloc);
+}

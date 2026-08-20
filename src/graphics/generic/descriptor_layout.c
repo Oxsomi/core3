@@ -173,18 +173,33 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 		const SHBinaryInfo *bin = &binary->binaries.ptr[binaryId];
 
+		//A push constant register only counts for the binary type it actually has a binding in.
+		//DXIL has no push constant concept: the same declaration reflects there as an ordinary constant
+		//buffer, and the SPIRV side's push constant register carries no DXIL binding. Counting that register
+		//anyway would leave hasPushConstants set on the DXIL pass and stop the constant buffer that IS the
+		//DXIL form of it from being promoted, so a shader's push constants silently became a descriptor.
+
 		Bool hasPushConstants = false;
 
-		for(U64 j = 0; j < bin->registers.length; ++j)
-			if(bin->registers.ptr[j].reg.registerType == ESHRegisterType_PushConstants) {
+		for (U64 j = 0; j < bin->registers.length; ++j) {
 
-				if(hasPushConstants)
-					retError(clean, Error_invalidParameter(
-						3, 0, "DescriptorLayoutInfo_detect() already has a push constant, two aren't allowed at once"
-					));
+			const SHRegisterRuntime *pushReg = &bin->registers.ptr[j];
 
-				hasPushConstants = true;
-			}
+			if(pushReg->reg.registerType != ESHRegisterType_PushConstants)
+				continue;
+
+			const SHBinding *pushBinding = &pushReg->reg.bindings.arr[binaryType];
+
+			if(pushBinding->binding == U32_MAX && pushBinding->space == U32_MAX)
+				continue;
+
+			if(hasPushConstants)
+				retError(clean, Error_invalidParameter(
+					3, 0, "DescriptorLayoutInfo_detect() already has a push constant, two aren't allowed at once"
+				));
+
+			hasPushConstants = true;
+		}
 
 		for(U64 j = 0; j < bin->registers.length; ++j) {
 
@@ -544,6 +559,20 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 				0,
 				"GraphicsDeviceRef_createDescriptorLayout() can't contain push constants as a descriptor layout, "
 				"provide them using a pipeline layout instead"
+			));
+
+		//OxC3 binds its own per frame globals in the reserved space, so a caller's binding there would either
+		// be overwritten by the runtime or quietly shadow it.
+		//A shader that genuinely declares this space was built against a different OxC3 than the one running
+		// it: either newer, or modified to lay its globals out elsewhere. Neither can be honoured here.
+		//The device's own layouts are exempt, since they are what occupies the space in the first place.
+
+		if(!(info->flags & EDescriptorLayoutFlags_InternalWeakDeviceRef) && b.binding.space == OXC3_RESERVED_SPACE)
+			retError(clean, Error_invalidOperation(
+				1,
+				"GraphicsDeviceRef_createDescriptorLayout() register space 0xC3 is reserved for OxC3's own per "
+				"frame globals. A shader binding there was built against a different (newer or modified) OxC3 "
+				"than this runtime, which binds its globals to that space itself"
 			));
 
 		if(b.registerType == ESHRegisterType_Sampler || b.registerType == ESHRegisterType_SamplerComparisonState)

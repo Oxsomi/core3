@@ -22,6 +22,7 @@
 
 #pragma once
 #include "graphics/generic/command_structs.h"
+#include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "graphics/generic/resource.h"
 #include "types/container/ref_ptr.h"
@@ -65,6 +66,24 @@ typedef struct CommandList {
 
 	DescriptorTableRef *boundDescriptorTable;
 	DescriptorHeapRef *boundDescriptorHeap;
+
+	//Bindful: the push constant bytes a work op will hand the backend, kept inline because the layout caps
+	// them at 128 bytes. Written by setPushConstants and reset per scope like every other bind state.
+	//pushConstantSize is what was written, which the work op checks against the pipeline layout's own size:
+	// a partial write would leave the rest of the range as whatever the last pipeline left behind.
+
+	U8 pushConstantData[128];
+	U8 pushConstantSize;
+	U8 padding1[7];
+
+	//Bindful: the push descriptors a work op will hand the backend, written by setPushDescriptors and reset
+	// per scope like every other bind state.
+	//The count is checked against the pipeline layout's push descriptor layout at the work op, for the same
+	// reason a partial push constant write is refused: the rest would be whatever the last pipeline bound.
+
+	Descriptor pushDescriptors[OXC3_MAX_PUSH_DESCRIPTORS];
+	U8 pushDescriptorCount;
+	U8 padding2[7];
 
 	//The (pipeline, table, heap) triple the last successful work op validation ran against.
 	//Bind state validation only depends on those identities, so as long as they match, re-validating is

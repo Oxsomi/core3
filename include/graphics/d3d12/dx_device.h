@@ -201,6 +201,21 @@ typedef struct DxCommandBufferState {
 	Bool defaultDescriptorsBound;
 	U8 padding1[7];
 
+	//Push constants are root arguments, so a root signature switch drops them and each bind point needs its
+	// own re-emit; that is what pushConstantsEmitted tracks.
+
+	U8 pushConstantData[128];
+	U8 pushConstantSize;
+	U8 pushConstantsEmitted[2];                       //Per bind point: [0] = graphics, [1] = compute
+	U8 padding2[13];
+
+	//Push descriptors are root descriptors, so the same root signature switch drops them.
+
+	Descriptor pushDescriptors[OXC3_MAX_PUSH_DESCRIPTORS];
+	U8 pushDescriptorCount;
+	U8 pushDescriptorsEmitted[2];                     //Per bind point: [0] = graphics, [1] = compute
+	U8 padding3[13];
+
 	ImageAndRange boundTargets[9];                    //All 8 RTVs and DSV
 	ImageAndRange resolveTargets[9];                  //Dst MSAA targets
 

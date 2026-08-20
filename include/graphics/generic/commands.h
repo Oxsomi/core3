@@ -22,6 +22,7 @@
 
 #pragma once
 #include "graphics/generic/command_structs.h"
+#include "graphics/generic/descriptor_table.h"
 #include "types/math/vec4.h"
 
 #ifdef __cplusplus
@@ -106,6 +107,20 @@ Bool CommandListRef_bindDescriptorTable(CommandListRef *commandList, DescriptorT
 // table's parent is exactly this heap.
 
 Bool CommandListRef_bindDescriptorHeap(CommandListRef *commandList, DescriptorHeapRef *heap, Error *e_rr);
+
+//Writes the push constants the next work op will run with (bindful).
+//The data has to be exactly the size the bound pipeline's layout declared: the range is one object to the
+// backends, so writing part of it would leave the rest holding whatever the previous pipeline left there.
+//Like the binds above this only sets state; the work ops validate it against the pipeline actually bound.
+
+Bool CommandListRef_setPushConstants(CommandListRef *commandList, Buffer data, Error *e_rr);
+
+//Writes every push descriptor the bound pipeline's layout declares, in the layout's own binding order
+//(the order detectLayoutFromEntry/Entries produced into pushDescriptorInfo, whose bindingNames name them).
+//All of them at once rather than one at a time: a partial set would leave the rest pointing at whatever the
+//last pipeline bound, and both backends emit the whole set anyway.
+
+Bool CommandListRef_setPushDescriptors(CommandListRef *commandList, const ListDescriptor *descriptors, Error *e_rr);
 
 Bool CommandListRef_draw(CommandListRef *commandList, const DrawCmd *draw, Error *e_rr);
 

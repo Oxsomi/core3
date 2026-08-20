@@ -182,6 +182,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkCmdSetBlendConstants cmdSetBlendConstants;
 	PFN_vkCmdSetStencilReference cmdSetStencilReference;
 	PFN_vkCmdBindPipeline cmdBindPipeline;
+	PFN_vkCmdPushConstants cmdPushConstants;
 	PFN_vkCmdBindIndexBuffer cmdBindIndexBuffer;
 	PFN_vkCmdBindVertexBuffers cmdBindVertexBuffers;
 	PFN_vkCmdDrawIndexed cmdDrawIndexed;
@@ -282,8 +283,29 @@ typedef struct VkCommandBufferState {
 
 	RefPtr *boundDescriptorTable;
 	RefPtr *boundDescriptorHeap;
+
+	//Push constants are re-emitted per bind point, because a pipeline layout change invalidates them and
+	// the three bind points each carry their own set
+
+	U8 pushConstantData[128];
+	U8 pushConstantSize;
+	U8 pushConstantsEmitted[3];               //Per bind point: compute, graphics, rt
+	U8 padding2[4];
 	RefPtr *lastBoundTable[3];
 	VkPipelineLayout lastBoundLayout[3];
+
+	//What the constants were last pushed against, per bind point. Emitted alone can't answer it: a pipeline
+	//layout change invalidates push constants, and a layout without bindings never touches lastBoundLayout.
+
+	VkPipelineLayout lastPushLayout[3];
+
+	//Push descriptors travel with the command buffer the same way, and a layout switch invalidates them too.
+
+	Descriptor pushDescriptors[OXC3_MAX_PUSH_DESCRIPTORS];
+	U8 pushDescriptorCount;
+	U8 pushDescriptorsEmitted[3];             //Per bind point: compute, graphics, rt
+	U8 padding4[4];
+	VkPipelineLayout lastPushDescLayout[3];
 
 	Bool defaultDescriptorsBound;
 	U8 padding0[15];

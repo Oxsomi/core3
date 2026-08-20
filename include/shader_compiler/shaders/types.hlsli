@@ -271,6 +271,12 @@ F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return mad(a, b, c); }
 	#define DUAL_SRC_TARGET1
 #endif
 
+//The register space OxC3 reserves for its own per frame globals on DXIL. Anything a shader declares there
+//is refused at layout creation, because the runtime binds its own data to it.
+//Keep in sync with OXC3_RESERVED_SPACE in graphics/generic/descriptor_layout.h.
+
+#define OXC3_RESERVED_SPACE space195        //0xC3
+
 //Memory scope and semantics, as the SPIR-V atomic instructions take them.
 //These are the raw SPIR-V enumerant values rather than an HLSL enum, because they are handed straight to an
 //[[vk::ext_instruction]] intrinsic, which takes plain uints.

@@ -3,7 +3,7 @@
 Honest, per-feature maturity so nobody designs against something that doesn't exist yet.
 Legend: ✅ implemented + tested · 🟡 implemented, caveats · 🚧 in progress · 📄 spec/design only · ❌ not planned near-term
 
-Last updated: 2026-08-04 (branch `android`, v3.2.103). Update this table in the same PR as the feature.
+Last updated: 2026-08-04 (branch `android`, v3.2.104). Update this table in the same PR as the feature.
 
 ## Core (types_*)
 

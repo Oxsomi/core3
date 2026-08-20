@@ -1,4 +1,4 @@
-# OxC3 (Oxsomi core 3.2.103): Ra
+# OxC3 (Oxsomi core 3.2.104): Ra
 
 **OxC3** (0xC3, Oxsomi core 3) is a cross-platform C11 framework for applications, tools and games. It is the successor to O(x)somi core v2/v1, merging ostlc (standard template library), owc (window core) and ogc (graphics core) into one coherent, layered codebase. It is written in C so it stays fast to build, easy to parse for reflection/codegen, and straightforward to wrap from other languages (bindings or a future VM); a C++20 convenience layer is possible on top.
 

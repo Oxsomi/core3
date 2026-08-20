@@ -419,10 +419,14 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	Test_graphicsBindfulAppendCounter(t, deviceRef);
 	Test_graphicsBindlessInterleave(t, deviceRef);
 	Test_graphicsBindlessEverywhere(t, deviceRef);
+	Test_graphicsFrameGlobals(t, deviceRef);
 	Test_graphicsBindfulRays(t, deviceRef);
 	Test_graphicsBindfulOmm(t, deviceRef);
 	Test_graphicsBindfulRayQueryGraphics(t, deviceRef);
 	Test_graphicsBindfulAtomicFloat(t, deviceRef);
+	Test_graphicsBindfulPushConstants(t, deviceRef);
+	Test_graphicsBindfulPushDescriptors(t, deviceRef);
+	Test_graphicsBindfulReservedSpace(t, deviceRef);
 	Test_graphicsGpuExecute(t, deviceRef);
 	Test_graphicsAccelerationStructures(t, deviceRef);
 

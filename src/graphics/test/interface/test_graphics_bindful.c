@@ -5439,3 +5439,482 @@ void Test_graphicsBindfulAtomicFloat(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	else Test_print(t, "Device lacks 64 bit float atomics, skipping that width");
 }
+
+// -- 63. Push constants ---------------------------------------------------------
+
+//Push constants are root constants rather than descriptors: the values ride in the command stream instead
+// of the heap, so nothing about them goes through a table. That also means a root signature switch drops
+// them on D3D12, which is why the backends re-emit at the work op rather than at the write.
+//Two dispatches with different constants and no rebinding between them prove the re-emit really happens.
+
+typedef struct TestBindfulPushData {
+	U32 scale, bias, xorMask, offset;
+} TestBindfulPushData;
+
+void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Bindful/pushConstants");
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	DescriptorHeapRef *heap = NULL;
+	DescriptorLayoutRef *layout = NULL;
+	DescriptorTableRef *table = NULL;
+	PipelineLayoutRef *pipelineLayout = NULL;
+	PipelineRef *pipeline = NULL;
+	DeviceBufferRef *output = NULL;
+	CommandListRef *commandList = NULL;
+	CommandListRef *emptyList = NULL;
+
+	SHFile file = (SHFile) { 0 };
+	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	DescriptorBinding pushConstants = (DescriptorBinding) { 0 };
+
+	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_pushconst.oiSH", &file)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping push constant tests");
+		return;
+	}
+
+	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+
+	if(entryId == U32_MAX)
+		goto clean;
+
+	//Matched by shape rather than by name, which is what the engine's own copy shaders do: a global struct
+	// becomes the implicit $Globals cbuffer on DXIL, so its register never carries the variable's name.
+	//Vulkan reflects it as a real push constant register, so both backends land on the same binding here.
+
+	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
+		deviceRef, &file, entryId, EDescriptorLayoutFlags_None,
+		EDetectDescriptorLayoutFlags_AssumePushConstants,
+		NULL, NULL, &pushConstants, &layoutInfo, NULL, &t->err
+	)))
+		goto clean;
+
+	if (!Test_assert(t, "detectedPushConstants", pushConstants.count != 0))
+		goto clean;
+
+	Test_assert(t, "pushConstantSize", pushConstants.constantBufferSize == sizeof(TestBindfulPushData));
+
+	CharString name = CharString_createRefCStrConst("Push constant layout");
+
+	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &layoutInfo, &name, &layout, &t->err
+	)))
+		goto clean;
+
+	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
+	name = CharString_createRefCStrConst("Push constant heap");
+
+	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
+		deviceRef, &heapInfo, &name, &heap, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Push constant table");
+
+	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
+		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Push constant output");
+
+	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, 128 * sizeof(U32), &output, &t->err
+	)))
+		goto clean;
+
+	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
+	const CharString outputName = CharString_createRefCStrConst("output");
+
+	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
+
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) {
+		.bindings = layout, .pushConstants = pushConstants
+	};
+
+	name = CharString_createRefCStrConst("Push constant pipeline layout");
+
+	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
+		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Push constant pipeline");
+
+	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
+		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
+	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+
+	const Transition transition = (Transition) {
+		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
+	};
+
+	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
+
+	//A dispatch without the constants written has to be refused: the range would hold whatever the last
+	// pipeline left in it, which is exactly the garbage read this validation exists to prevent
+
+	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+
+	Test_assert(t, "scopeNeg", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
+	Test_assert(t, "bindHeapNeg", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
+	Test_assert(t, "bindTableNeg", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
+	Test_assert(t, "bindPipelineNeg", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+	Test_assert(t, "dispatchWithoutConstants", !CommandListRef_dispatch1D(commandList, 1, NULL));
+
+	//A partial write is refused too, for the same reason: the rest of the range would be stale
+
+	const U32 tooSmall = 4;
+
+	Test_assert(t, "setTooSmall", CommandListRef_setPushConstants(
+		commandList, Buffer_createRefConst(&tooSmall, sizeof(tooSmall)), &t->err
+	));
+
+	Test_assert(t, "dispatchWrongSize", !CommandListRef_dispatch1D(commandList, 1, NULL));
+	Test_assert(t, "scopeNegEnd", CommandListRef_endScope(commandList, &t->err));
+
+	//Two dispatches, different constants, nothing rebound in between: the second set only lands if the
+	// backend re-emits at the work op rather than once at the bind
+
+	//Disjoint output ranges, so both results survive and neither dispatch races the other for a slot
+
+	const TestBindfulPushData first = (TestBindfulPushData) { .scale = 3, .bias = 7, .xorMask = 0, .offset = 0 };
+	const TestBindfulPushData second = (TestBindfulPushData) { .scale = 5, .bias = 1, .xorMask = 0xFFu, .offset = 64 };
+
+	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 2, NULL, &t->err));
+	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
+	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
+	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+
+	Test_assert(t, "setFirst", CommandListRef_setPushConstants(
+		commandList, Buffer_createRefConst(&first, sizeof(first)), &t->err
+	));
+
+	Test_assert(t, "dispatchFirst", CommandListRef_dispatch1D(commandList, 1, &t->err));
+
+	Test_assert(t, "setSecond", CommandListRef_setPushConstants(
+		commandList, Buffer_createRefConst(&second, sizeof(second)), &t->err
+	));
+
+	Test_assert(t, "dispatchSecond", CommandListRef_dispatch1D(commandList, 1, &t->err));
+
+	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
+	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+			//Each dispatch wrote its own half, so BOTH sets have to be visible: that is what proves the
+			// second write reached the GPU instead of the first one being reused. Sharing one range instead
+			// would just race the two dispatches, which says nothing about the push constants.
+
+			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+
+			Bool allMatch = true;
+
+			for(U32 i = 0; i < 64; ++i) {
+				allMatch &= values[i] == ((i * first.scale + first.bias) ^ first.xorMask);
+				allMatch &= values[i + 64] == ((i * second.scale + second.bias) ^ second.xorMask);
+			}
+
+			Test_assert(t, "pushConstantResults", allMatch);
+		}
+
+clean:
+
+	if(table)
+		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
+
+	RefPtr_dec(&emptyList);
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&pipelineLayout);
+	RefPtr_dec(&output);
+	RefPtr_dec(&table);
+	RefPtr_dec(&layout);
+	RefPtr_dec(&heap);
+
+	DescriptorLayoutInfo_free(&layoutInfo, alloc);
+	SHFile_free(&file, alloc);
+}
+
+// -- 64. The reserved register space --------------------------------------------
+
+//OxC3 binds its own per frame globals (frame id, time, swapchain descriptors, app data) to a register space
+// it keeps for itself, so a caller's layout may not put anything there.
+//It matters now that anyone can build a layout: the globals used to sit at b0 space0, which is the first
+// thing someone writing a constant buffer reaches for, and nothing would have told them they collided.
+
+void Test_graphicsBindfulReservedSpace(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Bindful/reservedSpace");
+
+	DescriptorLayoutRef *layout = NULL;
+
+	//A layout that is legal in every respect except the space it asks for
+
+	DescriptorBinding reserved = (DescriptorBinding) {
+		.registerType = ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
+		.count = 1,
+		.binding = (SHBinding) { .space = OXC3_RESERVED_SPACE, .binding = 0 },
+		.visibility = U32_MAX
+	};
+
+	const CharString reservedName = CharString_createRefCStrConst("collides");
+
+	DescriptorLayoutInfo info = (DescriptorLayoutInfo) { 0 };
+	ListDescriptorBinding_createRefConst(&reserved, 1, &info.bindings, NULL);
+	ListCharString_createRefConst(&reservedName, 1, &info.bindingNames, NULL);
+
+	const CharString name = CharString_createRefCStrConst("Reserved space layout");
+
+	Test_assert(t, "reservedSpaceRefused", !GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &info, &name, &layout, NULL
+	));
+
+	Test_assert(t, "reservedSpaceNoLayout", !layout);
+
+	//The very same binding one space over is fine, which is what proves the space is the only objection
+
+	reserved.binding.space = OXC3_RESERVED_SPACE + 1;
+
+	DescriptorLayoutInfo okInfo = (DescriptorLayoutInfo) { 0 };
+	ListDescriptorBinding_createRefConst(&reserved, 1, &okInfo.bindings, NULL);
+	ListCharString_createRefConst(&reservedName, 1, &okInfo.bindingNames, NULL);
+
+	if(Test_assert(t, "neighbourSpaceAccepted", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &okInfo, &name, &layout, &t->err
+	)))
+		RefPtr_dec(&layout);
+}
+
+// -- 65. Push descriptors -------------------------------------------------------
+
+//Root descriptors rather than table entries: both resources ride in the command stream, so this module
+// binds no descriptor heap and no descriptor table at all and the pipeline layout carries only the push
+// descriptor layout. That also exercises the backends' "push descriptors only" root signature branch.
+//Two dispatches against two different constant buffers with nothing rebound between them prove the backends
+// re-emit at the work op rather than once at the write.
+
+void Test_graphicsBindfulPushDescriptors(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Bindful/pushDescriptors");
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	DescriptorLayoutRef *pushLayout = NULL;
+	PipelineLayoutRef *pipelineLayout = NULL;
+	PipelineRef *pipeline = NULL;
+	DeviceBufferRef *first = NULL;
+	DeviceBufferRef *second = NULL;
+	DeviceBufferRef *output = NULL;
+	CommandListRef *commandList = NULL;
+	CommandListRef *emptyList = NULL;
+
+	SHFile file = (SHFile) { 0 };
+	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	DescriptorLayoutInfo pushInfo = (DescriptorLayoutInfo) { 0 };
+
+	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_pushdesc.oiSH", &file)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping push descriptor tests");
+		return;
+	}
+
+	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+
+	if(entryId == U32_MAX)
+		goto clean;
+
+	//Naming both registers is what splits them out of the ordinary bindings
+
+	const CharString pushNames[2] = {
+		CharString_createRefCStrConst("params"),
+		CharString_createRefCStrConst("output")
+	};
+
+	ListCharString pushList = (ListCharString) { 0 };
+	ListCharString_createRefConst(pushNames, 2, &pushList, NULL);
+
+	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
+		deviceRef, &file, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
+		&pushList, NULL, NULL, &layoutInfo, &pushInfo, &t->err
+	)))
+		goto clean;
+
+	//Everything the shader declares is a push descriptor, so nothing is left for an ordinary layout
+
+	Test_assert(t, "noOrdinaryBindings", !layoutInfo.bindings.length);
+
+	if(!Test_assert(t, "detectedPushDescriptors", pushInfo.bindings.length == 2))
+		goto clean;
+
+	CharString name = CharString_createRefCStrConst("Push descriptor layout");
+
+	if(!Test_assert(t, "pushLayoutCreate", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &pushInfo, &name, &pushLayout, &t->err
+	))) {
+		Test_print(t, "Push descriptor layouts unsupported on this device, skipping");
+		goto clean;
+	}
+
+	//A CBV's length has to be 256-byte aligned and match what reflection reported, exactly like module 47
+
+	U32 firstData[64] = { 0 };
+	firstData[0] = 3; firstData[1] = 7; firstData[2] = 0; firstData[3] = 0;
+
+	U32 secondData[64] = { 0 };
+	secondData[0] = 5; secondData[1] = 1; secondData[2] = 0xFFu; secondData[3] = 64;
+
+	Buffer firstRef = Buffer_createRefConst(firstData, sizeof(firstData));
+	name = CharString_createRefCStrConst("Push descriptor params A");
+
+	if(!Test_assert(t, "firstCreate", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_Uniform, EGraphicsResourceFlag_None, NULL, &name, &firstRef, &first, &t->err
+	)))
+		goto clean;
+
+	Buffer secondRef = Buffer_createRefConst(secondData, sizeof(secondData));
+	name = CharString_createRefCStrConst("Push descriptor params B");
+
+	if(!Test_assert(t, "secondCreate", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_Uniform, EGraphicsResourceFlag_None, NULL, &name, &secondRef, &second, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Push descriptor output");
+
+	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, 128 * sizeof(U32), &output, &t->err
+	)))
+		goto clean;
+
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .pushDescriptors = pushLayout };
+	name = CharString_createRefCStrConst("Push descriptor pipeline layout");
+
+	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
+		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Push descriptor pipeline");
+
+	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
+		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
+	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+
+	//Nothing is declared at scope start on purpose: a push descriptor's own transition is what has to put
+	// these three in the right state, so an empty list is what proves the work op records them
+
+	ListTransition transitionList = (ListTransition) { 0 };
+
+	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
+
+	Descriptor pushA[2] = { Descriptor_buffer(first, 0, 0, NULL, 0), outputDesc };
+	Descriptor pushB[2] = { Descriptor_buffer(second, 0, 0, NULL, 0), outputDesc };
+
+	ListDescriptor pushARef = (ListDescriptor) { 0 };
+	ListDescriptor pushBRef = (ListDescriptor) { 0 };
+	ListDescriptor_createRefConst(pushA, 2, &pushARef, NULL);
+	ListDescriptor_createRefConst(pushB, 2, &pushBRef, NULL);
+
+	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+
+	//A dispatch with nothing written is refused: the root descriptors would point at whatever the last
+	// pipeline left in them, which is the read this validation exists to prevent.
+	//A partial write is refused for the same reason, so the negatives live in their own scope (a refused
+	// work op hides the whole scope).
+
+	Test_assert(t, "scopeNeg", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
+	Test_assert(t, "bindPipelineNeg", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+	Test_assert(t, "dispatchWithoutDescriptors", !CommandListRef_dispatch1D(commandList, 1, NULL));
+
+	ListDescriptor partial = (ListDescriptor) { 0 };
+	ListDescriptor_createRefConst(pushA, 1, &partial, NULL);
+
+	Test_assert(t, "setPartial", CommandListRef_setPushDescriptors(commandList, &partial, &t->err));
+	Test_assert(t, "dispatchWrongCount", !CommandListRef_dispatch1D(commandList, 1, NULL));
+	Test_assert(t, "scopeNegEnd", CommandListRef_endScope(commandList, &t->err));
+
+	//Two dispatches, two different constant buffers, nothing rebound between them: the second set only
+	// lands if the backend re-emits at the work op
+
+	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 2, NULL, &t->err));
+	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+
+	Test_assert(t, "setFirst", CommandListRef_setPushDescriptors(commandList, &pushARef, &t->err));
+	Test_assert(t, "dispatchFirst", CommandListRef_dispatch1D(commandList, 1, &t->err));
+
+	Test_assert(t, "setSecond", CommandListRef_setPushDescriptors(commandList, &pushBRef, &t->err));
+	Test_assert(t, "dispatchSecond", CommandListRef_dispatch1D(commandList, 1, &t->err));
+
+	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
+	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+			//Disjoint halves, so BOTH pushes have to have landed rather than only the last one
+
+			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+
+			Bool firstMatch = true, secondMatch = true;
+
+			for(U32 i = 0; i < 64; ++i) {
+				firstMatch &= values[i] == ((i * firstData[0] + firstData[1]) ^ firstData[2]);
+				secondMatch &= values[i + 64] == ((i * secondData[0] + secondData[1]) ^ secondData[2]);
+			}
+
+			Test_assert(t, "pushDescriptorFirstResults", firstMatch);
+			Test_assert(t, "pushDescriptorSecondResults", secondMatch);
+		}
+
+clean:
+
+	RefPtr_dec(&emptyList);
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&pipelineLayout);
+	RefPtr_dec(&output);
+	RefPtr_dec(&second);
+	RefPtr_dec(&first);
+	RefPtr_dec(&pushLayout);
+
+	DescriptorLayoutInfo_free(&pushInfo, alloc);
+	DescriptorLayoutInfo_free(&layoutInfo, alloc);
+	SHFile_free(&file, alloc);
+}
