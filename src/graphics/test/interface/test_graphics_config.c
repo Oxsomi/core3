@@ -176,6 +176,9 @@ void Test_graphicsConfigVariants(Test *t, GraphicsInstanceRef *instRef, const Gr
 			Test_graphicsBindfulHeapRecycle(t, noBindlessRef);
 			Test_graphicsBindfulPushDescriptorBoundary(t, noBindlessRef);
 			Test_graphicsBindfulSamplerCmp(t, noBindlessRef);
+			Test_graphicsBindfulStructured(t, noBindlessRef);
+			Test_graphicsBindfulAppendCounter(t, noBindlessRef);
+			Test_graphicsBindfulAtomicFloat(t, noBindlessRef);
 
 			//The descriptor modules self-branch on hasBindless, so this is their only bindless-off execution
 

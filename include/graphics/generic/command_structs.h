@@ -132,7 +132,7 @@ typedef struct TransitionInternal {      //Transitions issued by a scope.
 
 	ResourceRange range;
 
-	EPipelineStage stage;                //First shader stage that will access this resource (if !type)
+	U32 stageMask;                       //Shader stages that will access this resource (if !type), see above
 	ETransitionType type;
 
 } TransitionInternal;

@@ -474,3 +474,168 @@ clean:
 	SHFile_free(&copyFile, alloc);
 	SHFile_free(&writeFile, alloc);
 }
+
+// -- 15. A custom layout that opts every binding into bindless updates ----------
+
+//AllowBindlessEverywhere drops the array-only restriction and treats every register as dynamic, which is a
+//distinct backend shape rather than a hint: Vulkan adds UPDATE_AFTER_BIND and partially bound flags to
+//bindings that would not otherwise carry them, and D3D12 relaxes the descriptor volatility flags on the
+//range. Tests only ever used AllowBindlessOnArrays, so this shape was created but never executed.
+//It requires the bindless feature even though the layout is a custom one, which is why it lives here.
+
+void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Bindless/everywhere");
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if (!(device->info.capabilities.features & EGraphicsFeatures_Bindless)) {
+		Test_print(t, "Device has no bindless, skipping bindless everywhere tests");
+		return;
+	}
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	DescriptorHeapRef *heap = NULL;
+	DescriptorLayoutRef *layout = NULL;
+	DescriptorTableRef *table = NULL;
+	PipelineLayoutRef *pipelineLayout = NULL;
+	PipelineRef *pipeline = NULL;
+	DeviceBufferRef *output = NULL;
+	CommandListRef *commandList = NULL;
+	CommandListRef *emptyList = NULL;
+
+	SHFile file = (SHFile) { 0 };
+	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+
+	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_write.oiSH", &file)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindless everywhere tests");
+		return;
+	}
+
+	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+
+	if(entryId == U32_MAX)
+		goto clean;
+
+	//The flag rides on the layout, so detection is asked for it rather than the layout being hand built
+
+	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
+		deviceRef, &file, entryId, EDescriptorLayoutFlags_AllowBindlessEverywhere,
+		(EDetectDescriptorLayoutFlags) 0, NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	)))
+		goto clean;
+
+	CharString name = CharString_createRefCStrConst("Bindless everywhere layout");
+
+	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &layoutInfo, &name, &layout, &t->err
+	)))
+		goto clean;
+
+	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) {
+		.flags = EDescriptorHeapFlags_AllowBindless, .maxBuffersRW = 1, .maxDescriptorTables = 1
+	};
+
+	name = CharString_createRefCStrConst("Bindless everywhere heap");
+
+	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
+		deviceRef, &heapInfo, &name, &heap, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindless everywhere table");
+
+	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
+		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindless everywhere output");
+
+	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, 64 * sizeof(U32), &output, &t->err
+	)))
+		goto clean;
+
+	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
+	const CharString outputName = CharString_createRefCStrConst("output");
+
+	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
+
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	name = CharString_createRefCStrConst("Bindless everywhere pipeline layout");
+
+	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
+		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindless everywhere pipeline");
+
+	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
+		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, 2 * KIBI, 32, 16, true, &commandList, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
+	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+
+	const Transition transition = (Transition) {
+		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
+	};
+
+	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
+
+	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
+	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
+	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
+	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
+	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
+	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+
+			Bool allMatch = true;
+
+			for(U32 i = 0; i < 64; ++i)
+				allMatch &= values[i] == i * 3 + 7;
+
+			Test_assert(t, "everywhereResults", allMatch);
+		}
+
+clean:
+
+	if(table)
+		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
+
+	RefPtr_dec(&emptyList);
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&pipelineLayout);
+	RefPtr_dec(&output);
+	RefPtr_dec(&table);
+	RefPtr_dec(&layout);
+	RefPtr_dec(&heap);
+
+	DescriptorLayoutInfo_free(&layoutInfo, alloc);
+	SHFile_free(&file, alloc);
+}

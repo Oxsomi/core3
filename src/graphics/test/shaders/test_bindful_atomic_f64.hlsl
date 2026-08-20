@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -19,21 +18,25 @@ R"(
 *  This is called dual licensing.
 */
 
-//AtomicF64 (64-bit float atomic add). No DXIL intrinsic exists, so it's SPIRV-only: an inline OpAtomicFAddEXT
-//(SPV_EXT_shader_atomic_float_add, the same instruction as F32 but the AtomicFloat64AddEXT capability). Pass the
-//target memory (e.g. a RWStructuredBuffer element) plus a SPIR-V memory scope (1 = Device) and semantics (0 = Relaxed).
-//Declared unconditionally (see extension.AtomicF32.hlsli): the vk:: attributes are no-ops off SPIRV, and it must be
-//visible during the non-SPIRV reflection pass.
 
-//The oxc:: type names and the memory scope/semantics constants both live in types.hlsli
 #include "@types.hlsli"
+#include "@extensions.hlsli"
 
-namespace oxc {
+//The 64 bit twin of test_bindful_atomic_f32: same reasoning, a typed double lvalue only a bindful layout
+// can supply, since the bindless resource set has nothing but RWByteAddressBuffer.
+//AtomicF64 has no DXIL intrinsic either (ESHExtension_NoDxilCompile), so this is SPIRV only.
+//F64 is declared alongside it because a double typed buffer needs the Float64 capability of its own.
+//Deliberately includes NO bindless headers.
 
-	[[vk::ext_capability(/* AtomicFloat64AddEXT */ 6034)]]
-	[[vk::ext_extension("SPV_EXT_shader_atomic_float_add")]]
-	[[vk::ext_instruction(/* OpAtomicFAddEXT */ 6035)]]
-	F64 AtomicAddF64([[vk::ext_reference]] F64 mem, U32 memoryScope, U32 memorySemantics, F64 value);
+RWStructuredBuffer<F64> buf : register(u0, space0);
 
+[[oxc::extension("AtomicF64", "F64")]]
+[[oxc::model("6.5")]]
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main(uint id : SV_DispatchThreadID) {
+
+	//Every thread adds 1 to slot 0, so a lost update leaves the total short of 64
+
+	oxc::AtomicAddF64(buf[0], oxc::MemoryScope_Device, oxc::MemorySemantics_Relaxed, (F64) 1.0);
 }
-)"

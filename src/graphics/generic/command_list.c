@@ -316,14 +316,14 @@ Bool CommandListRef_transitionBuffer(
 				4, "CommandListRef_transitionBuffer()::buffer was already transitioned in scope!"
 			));
 
-		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		oldState->stageMask |= EPipelineStage_toMask(stage);
 		return s_uccess;
 	}
 
 	const TransitionInternal transition = (TransitionInternal) {
 		.resource = buffer,
 		.range = (ResourceRange) { .buffer = range },
-		.stage = stage,
+		.stageMask = EPipelineStage_toMask(stage),
 		.type = type
 	};
 
@@ -489,11 +489,13 @@ Bool CommandListRef_transitionRTAS(
 				4, "CommandListRef_transitionRTAS()::rtas was already transitioned in scope!"
 			));
 
-		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		oldState->stageMask |= EPipelineStage_toMask(stage);
 		return s_uccess;
 	}
 
-	const TransitionInternal transition = (TransitionInternal) { .resource = rtasPtr, .stage = stage, .type = type };
+	const TransitionInternal transition = (TransitionInternal) {
+		.resource = rtasPtr, .stageMask = EPipelineStage_toMask(stage), .type = type
+	};
 	gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
 
 clean:
@@ -541,14 +543,14 @@ Bool CommandListRef_transitionImage(
 
 		//To combine shader transitions we just take the highest up shader stage it's used
 
-		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		oldState->stageMask |= EPipelineStage_toMask(stage);
 		return s_uccess;
 	}
 
 	const TransitionInternal transition = (TransitionInternal) {
 		.resource = image,
 		.range = (ResourceRange) { .image = range },
-		.stage = stage,
+		.stageMask = EPipelineStage_toMask(stage),
 		.type = type
 	};
 
@@ -671,7 +673,7 @@ Bool CommandListRef_startScope(
 			transitionDst = (TransitionInternal) {
 				.resource = res,
 				.range = transition.range,
-				.stage = transition.stage,
+				.stageMask = EPipelineStage_toMask(transition.stage),
 				.type = transition.isWrite ? ETransitionType_ShaderWrite : ETransitionType_ShaderRead
 			};
 		}
@@ -691,9 +693,10 @@ Bool CommandListRef_startScope(
 					0, "CommandListRef_startScope()::transitions[i].resource is already transitioned"
 				));
 
-			//To combine shader transitions we just take the highest up shader stage it's used
+			//Combining two declarations for one resource is a union: the resource really is accessed from
+			// every stage that was declared, and a mask is the only thing that can say so.
 
-			found->stage = (EPipelineStage) U64_min(found->stage, transitionDst.stage);
+			found->stageMask |= transitionDst.stageMask;
 			continue;
 		}
 

@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -19,21 +18,24 @@ R"(
 *  This is called dual licensing.
 */
 
-//AtomicF64 (64-bit float atomic add). No DXIL intrinsic exists, so it's SPIRV-only: an inline OpAtomicFAddEXT
-//(SPV_EXT_shader_atomic_float_add, the same instruction as F32 but the AtomicFloat64AddEXT capability). Pass the
-//target memory (e.g. a RWStructuredBuffer element) plus a SPIR-V memory scope (1 = Device) and semantics (0 = Relaxed).
-//Declared unconditionally (see extension.AtomicF32.hlsli): the vk:: attributes are no-ops off SPIRV, and it must be
-//visible during the non-SPIRV reflection pass.
 
-//The oxc:: type names and the memory scope/semantics constants both live in types.hlsli
 #include "@types.hlsli"
 
-namespace oxc {
+//Structured buffers address by ELEMENT, not by byte, so the descriptor carries a stride the table validates
+// the range against. Nothing else in the suite binds one: every other bindful buffer is byte addressed.
+//Each component is transformed differently, so a wrong stride or a swapped field shows up per component
+// rather than as a single blurred mismatch.
+//The element is a built in vector rather than a custom struct on purpose: a struct element makes the two
+// backends describe the layout differently and SBFile_combine then refuses to build a dual backend oiSH.
+//Deliberately includes NO bindless headers.
 
-	[[vk::ext_capability(/* AtomicFloat64AddEXT */ 6034)]]
-	[[vk::ext_extension("SPV_EXT_shader_atomic_float_add")]]
-	[[vk::ext_instruction(/* OpAtomicFAddEXT */ 6035)]]
-	F64 AtomicAddF64([[vk::ext_reference]] F64 mem, U32 memoryScope, U32 memorySemantics, F64 value);
+StructuredBuffer<U32x4> input : register(t0, space0);
+RWStructuredBuffer<U32x4> output : register(u1, space0);
 
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+
+	const U32x4 e = input[id.x];
+	output[id.x] = U32x4(e.x * 2, e.y + 100, e.z ^ 0xFFu, e.w + id.x);
 }
-)"

@@ -304,6 +304,67 @@ static void DxCommandBufferState_bindDescriptors(
 	}
 }
 
+//A declared stage stands for itself AND every later stage that could reach the resource, because a scope
+//names only the FIRST stage that accesses it. D3D12 groups the graphics shader stages into two scopes, so a
+//pre pixel stage means both of them, while compute stays a scope of its own rather than being folded in
+//through NON_PIXEL_SHADING as it used to be.
+
+//The acceleration structure access bits accept only a short list of sync scopes, and the per stage graphics
+//scopes are not on it: a graphics stage reaches an RTAS through inline raytracing (RayQuery), for which
+//ALL_SHADING is the narrowest legal scope. Pairing VERTEX_SHADING or PIXEL_SHADING with an RTAS access bit
+//is rejected outright by the debug layer, so the generic mapper below can't be reused here.
+
+static D3D12_BARRIER_SYNC DxBarrierSyncRtas_fromMask(U32 stageMask) {
+
+	D3D12_BARRIER_SYNC sync = D3D12_BARRIER_SYNC_NONE;
+
+	//ALL_SHADING already subsumes compute and raytracing, so those only matter on their own
+
+	if(stageMask & (EPipelineStageMask_PrePixel | ((U32)1 << EPipelineStage_Pixel)))
+		sync |= D3D12_BARRIER_SYNC_ALL_SHADING;
+
+	else {
+
+		if(stageMask & ((U32)1 << EPipelineStage_Compute))
+			sync |= D3D12_BARRIER_SYNC_COMPUTE_SHADING;
+
+		if(stageMask & EPipelineStageMask_RtAny)
+			sync |= D3D12_BARRIER_SYNC_RAYTRACING;
+	}
+
+	if(stageMask & EPipelineStageMask_RTASBuild)
+		sync |= D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE;
+
+	//An empty scope would pair SYNC_NONE with an access bit that isn't NO_ACCESS, which isn't legal either
+
+	if(!sync)
+		sync = D3D12_BARRIER_SYNC_ALL_SHADING;
+
+	return sync;
+}
+
+static D3D12_BARRIER_SYNC DxBarrierSync_fromMask(U32 stageMask) {
+
+	D3D12_BARRIER_SYNC sync = D3D12_BARRIER_SYNC_NONE;
+
+	if(stageMask & EPipelineStageMask_PrePixel)
+		sync |= D3D12_BARRIER_SYNC_VERTEX_SHADING | D3D12_BARRIER_SYNC_PIXEL_SHADING;
+
+	if(stageMask & ((U32)1 << EPipelineStage_Pixel))
+		sync |= D3D12_BARRIER_SYNC_PIXEL_SHADING;
+
+	if(stageMask & ((U32)1 << EPipelineStage_Compute))
+		sync |= D3D12_BARRIER_SYNC_COMPUTE_SHADING;
+
+	if(stageMask & EPipelineStageMask_RtAny)
+		sync |= D3D12_BARRIER_SYNC_RAYTRACING;
+
+	if(stageMask & EPipelineStageMask_RTASBuild)
+		sync |= D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE;
+
+	return sync;
+}
+
 void DX_WRAP_FUNC(CommandList_process)(
 	CommandList *commandList,
 	GraphicsDeviceRef *deviceRef,
@@ -676,11 +737,15 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 					if (i == count) {        //Depth stencil
 
-						if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)                //Take both planes (depth & stencil)
-							++range.NumPlanes;
+						//A depth ONLY format (D16, D32) has a single plane, so claiming two is out of bounds.
+						//Only a combined format has a stencil plane to add, and a stencil only format IS the
+						// stencil plane, which sits after the depth one.
 
-						else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)        //Take only the stencil plane
+						if(utex.depthFormat == EDepthStencilFormat_S8X24Ext)                //Take only the stencil plane
 							++range.FirstPlane;
+
+						else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)        //Take depth & stencil
+							++range.NumPlanes;
 					}
 
 					if(!DxUnifiedTexture_transition(
@@ -709,11 +774,13 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				if (i == count) {        //Depth stencil
 
-					if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)                //Take both planes (depth & stencil)
-						++range.NumPlanes;
+					//Same plane rule as the discard above: a depth only format is one plane
 
-					else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)        //Take only the stencil plane
+					if(utex.depthFormat == EDepthStencilFormat_S8X24Ext)                //Take only the stencil plane
 						++range.FirstPlane;
+
+					else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)        //Take depth & stencil
+						++range.NumPlanes;
 				}
 
 				if(!DxUnifiedTexture_transition(
@@ -749,8 +816,20 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				DXGI_FORMAT format = 0;
 
+				//ResolveSubresource refuses depth formats outright: it takes only fully typed non integer
+				// non stencil formats, plus the two depth readable typeless ones it names in its own
+				// diagnostic. Those are exactly the formats a depth SRV uses, so the resolve borrows that
+				// mapping rather than handing it the DSV format, which is what made depth resolve fail.
+
 				if(i == count)
-					format = EDepthStencilFormat_toDXFormat(utex.depthFormat);
+					switch(utex.depthFormat) {
+
+						default:
+						case EDepthStencilFormat_D32:            format = DXGI_FORMAT_R32_FLOAT;               break;
+						case EDepthStencilFormat_D16:            format = DXGI_FORMAT_R16_UNORM;               break;
+						case EDepthStencilFormat_D32S8X24Ext:    format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS; break;
+						case EDepthStencilFormat_D24S8Ext:       format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;   break;
+					}
 
 				else format = ETextureFormatId_toDXFormat(utex.textureFormatId);
 
@@ -1096,6 +1175,31 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			PipelineRaytracingInfo info = *Pipeline_info(raytracingPipeline, PipelineRaytracingInfo);
 
+			//The shader binding table is read by the trace itself rather than by anything the scope declared,
+			// so no transition ever names it and its tracked state stays where the upload copy left it.
+			//Ordering it here is what makes the trace's reads visible to that copy; after the first trace the
+			// buffer already sits in this state and the helper adds no barrier.
+
+			if (info.shaderBindingTable) {
+
+				D3D12_BARRIER_GROUP sbtDependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+				DeviceBuffer *sbtBuffer = DeviceBufferRef_ptr(info.shaderBindingTable);
+
+				if(!DxDeviceBuffer_transition(
+					DeviceBuffer_ext(sbtBuffer, Dx),
+					D3D12_BARRIER_SYNC_RAYTRACING,
+					D3D12_BARRIER_ACCESS_SHADER_RESOURCE,
+					&deviceExt->bufferTransitions,
+					&sbtDependency, alloc, e_rr
+				))
+					Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
+				else if(sbtDependency.NumBarriers)
+					buffer->lpVtbl->Barrier(temp->buffer, 1, &sbtDependency);
+
+				ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+			}
+
 			D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE hit = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) {
 				.StartAddress = getDxDeviceAddress((DeviceData) { .buffer = info.shaderBindingTable }),
 				.SizeInBytes = (U64)raytracingShaderAlignment * info.groups.length,
@@ -1199,33 +1303,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 				if(transition.type == ETransitionType_KeepAlive)        //TODO: Residency management
 					continue;
 
-				D3D12_BARRIER_SYNC pipelineStage = 0;
-
-				switch (transition.stage) {
-
-					default:                                                                                        break;
-					case EPipelineStage_Compute:        pipelineStage = D3D12_BARRIER_SYNC_COMPUTE_SHADING;            break;
-					case EPipelineStage_Vertex:            pipelineStage = D3D12_BARRIER_SYNC_VERTEX_SHADING;            break;
-					case EPipelineStage_Pixel:            pipelineStage = D3D12_BARRIER_SYNC_PIXEL_SHADING;            break;
-
-					case EPipelineStage_GeometryExt:
-					case EPipelineStage_Domain:
-					case EPipelineStage_Hull:
-						pipelineStage = D3D12_BARRIER_SYNC_NON_PIXEL_SHADING;
-						break;
-
-					case EPipelineStage_RaygenExt:
-					case EPipelineStage_CallableExt:
-					case EPipelineStage_MissExt:
-					case EPipelineStage_ClosestHitExt:
-					case EPipelineStage_AnyHitExt:
-						pipelineStage = D3D12_BARRIER_SYNC_RAYTRACING;
-						break;
-
-					case EPipelineStage_RTASBuild:
-						pipelineStage = D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE;
-						break;
-				}
+				D3D12_BARRIER_SYNC pipelineStage = DxBarrierSync_fromMask(transition.stageMask);
 
 				//If it's on the GPU then we have to rely on manual RTAS transitions
 
@@ -1246,7 +1324,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 						DeviceBuffer_ext(DeviceBufferRef_ptr(rtas.asBuffer), Dx),
 
-						pipelineStage,
+						DxBarrierSyncRtas_fromMask(transition.stageMask),
 
 						transition.type == ETransitionType_ShaderWrite ?
 							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE |
@@ -1317,11 +1395,25 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 							break;
 
+						//A depth resolve target is discarded and resolved as a depth stencil resource, not as a
+						// render target: RENDER_TARGET access and layout aren't legal on a texture that was never
+						// created with the render target flag, and this scope is what the next barrier uses as its
+						// source, so declaring the wrong one lets the resolve race the discard that precedes it.
+						//Clear only ever reaches render textures and swapchains (clearImages refuses anything
+						// else), so its resource is never depth stencil and the ternaries collapse for it.
+
 						case ETransitionType_ResolveTargetWrite:        //We handle a 'secret' transition after (needs discard first)
 						case ETransitionType_Clear:
-							pipelineStage = D3D12_BARRIER_SYNC_RENDER_TARGET;
-							access = D3D12_BARRIER_ACCESS_RENDER_TARGET;
-							layout = D3D12_BARRIER_LAYOUT_RENDER_TARGET;
+
+							pipelineStage =
+								isDepthStencil ? D3D12_BARRIER_SYNC_DEPTH_STENCIL : D3D12_BARRIER_SYNC_RENDER_TARGET;
+
+							access =
+								isDepthStencil ? D3D12_BARRIER_ACCESS_DEPTH_STENCIL_WRITE : D3D12_BARRIER_ACCESS_RENDER_TARGET;
+
+							layout =
+								isDepthStencil ? D3D12_BARRIER_LAYOUT_DEPTH_STENCIL_WRITE : D3D12_BARRIER_LAYOUT_RENDER_TARGET;
+
 							break;
 
 						case ETransitionType_CopyRead:

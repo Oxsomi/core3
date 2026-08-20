@@ -395,7 +395,7 @@ Bool CommandListRef_startRenderExt(
 		TransitionInternal transition = (TransitionInternal) {
 			.resource = info.image,
 			.range = (ResourceRange) { .image = info.range },
-			.stage = EPipelineStage_Count,
+			.stageMask = 0,
 			.type = info.readOnly ? ETransitionType_RenderTargetRead : ETransitionType_RenderTargetWrite
 		};
 

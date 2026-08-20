@@ -808,7 +808,7 @@ void Test_graphicsBindfulDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile files[2] = { { 0 } };
+	SHFile files[2] = { 0 };
 	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
 	ListU32 entrypoints = (ListU32) { 0 };
 
@@ -2682,7 +2682,7 @@ void Test_graphicsBindfulDrawFixed(Test *t, GraphicsDeviceRef *deviceRef) {
 		"//OxC3_gtest/test_shaders/test_draw_mrt_ps.oiSH"             //5: two targets, constant colors
 	};
 
-	SHFile files[6] = { { 0 } };
+	SHFile files[6] = { 0 };
 	Bool loadedAll = true;
 
 	for(U64 i = 0; i < 6; ++i)
@@ -2706,6 +2706,10 @@ void Test_graphicsBindfulDrawFixed(Test *t, GraphicsDeviceRef *deviceRef) {
 	RenderTextureRef *mrtTarget = NULL;
 	RenderTextureRef *msaaTarget = NULL;
 	DepthStencilRef *depth = NULL;
+	DepthStencilRef *msaaDepth = NULL;
+	DepthStencilRef *resolvedDepth = NULL;
+	RenderTextureRef *msaaDepthColor = NULL;
+	PipelineRef *msaaDepthPipeline = NULL;
 	DeviceBufferRef *vertexBuffer = NULL;
 	DeviceBufferRef *indexBuffer = NULL;
 	DeviceBufferRef *drawArgs = NULL;
@@ -3046,6 +3050,111 @@ void Test_graphicsBindfulDrawFixed(Test *t, GraphicsDeviceRef *deviceRef) {
 		RefPtr_dec(&msaaTarget);
 	}
 
+	//A multisampled DEPTH attachment resolving into a single sample one, which nothing exercised before and
+	// which turned out to be broken on both backends: Vulkan wanted a colour attachment scope for the resolve
+	// even on depth, and D3D12 was handing ResolveSubresource a DSV format it refuses outright.
+	//Min rather than average, since averaging depth isn't universally supported.
+
+	const Bool canResolveDepth = (device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA2x) != 0;
+
+	if (!canResolveDepth)
+		Test_print(t, "Device lacks 2x MSAA, skipping the depth resolve leg");
+
+	if (canResolveDepth) {
+
+		name = CharString_createRefCStrConst("Fixed function MSAA depth");
+
+		Bool madeDepthResolve = Test_assert(t, "msaaDepthCreate", GraphicsDeviceRef_createDepthStencil(
+			deviceRef, 8, 8, EDepthStencilFormat_D32, false, EMSAASamples_x2Ext, NULL, &name, &msaaDepth, &t->err
+		));
+
+		name = CharString_createRefCStrConst("Fixed function resolved depth");
+
+		madeDepthResolve &= Test_assert(t, "resolvedDepthCreate", GraphicsDeviceRef_createDepthStencil(
+			deviceRef, 8, 8, EDepthStencilFormat_D32, true, EMSAASamples_Off, NULL, &name, &resolvedDepth, &t->err
+		));
+
+		name = CharString_createRefCStrConst("Fixed function MSAA depth colour");
+
+		madeDepthResolve &= Test_assert(t, "msaaDepthColorCreate", GraphicsDeviceRef_createRenderTexture(
+			deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+			EMSAASamples_x2Ext, NULL, &name, &msaaDepthColor, &t->err
+		));
+
+		PipelineGraphicsInfo msaaDepthInfo = flatInfo;
+		msaaDepthInfo.depthStencil = (DepthStencilState) {
+			.flags = EDepthStencilFlags_DepthWrite, .depthCompare = ECompareOp_Gt
+		};
+
+		msaaDepthInfo.depthFormatExt = EDepthStencilFormat_D32;
+		msaaDepthInfo.msaa = EMSAASamples_x2Ext;
+
+		madeDepthResolve = madeDepthResolve && TestBindful_graphicsPipeline(
+			t, deviceRef, &fileList, 2, 3, "main", &msaaDepthInfo, pipelineLayout, &msaaDepthPipeline
+		);
+
+		if (madeDepthResolve) {
+
+			Test_assert(t, "beginDepthResolve", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+			Test_assert(t, "scopeDepthResolve", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+
+			const AttachmentInfo depthResolveColor = (AttachmentInfo) {
+				.image = msaaDepthColor,
+				.load = ELoadAttachmentType_Clear,
+				.resolveMode = EMSAAResolveMode_Average,
+				.resolveImage = target
+			};
+
+			ListAttachmentInfo depthResolveColors = (ListAttachmentInfo) { 0 };
+			ListAttachmentInfo_createRefConst(&depthResolveColor, 1, &depthResolveColors, NULL);
+
+			const DepthStencilAttachmentInfo depthResolveAttach = (DepthStencilAttachmentInfo) {
+				.image = msaaDepth,
+				.depthLoad = ELoadAttachmentType_Clear,
+				.clearDepth = 0,
+				.resolveImage = resolvedDepth,
+				.depthStencilResolve = EMSAAResolveMode_Min
+			};
+
+			Test_assert(t, "renderStartDepthResolve", CommandListRef_startRenderExt(
+				commandList, I32x2_zero, I32x2_create2(8, 8), &depthResolveColors, &depthResolveAttach, &t->err
+			));
+
+			Test_assert(t, "viewportScissorDepthResolve", CommandListRef_setViewportAndScissor(
+				commandList, I32x2_zero, I32x2_zero, &t->err
+			));
+
+			Test_assert(t, "bindDepthResolve", CommandListRef_setGraphicsPipeline(commandList, msaaDepthPipeline, &t->err));
+			Test_assert(t, "drawDepthResolve", CommandListRef_drawUnindexed(commandList, 9, 1, &t->err));
+
+			if(TestBindful_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0)) {
+
+				//The surviving triangle's depth, resolved out of the multisampled buffer
+
+				TestShaderPixels depthPixels = (TestShaderPixels) { 0 };
+
+				if (TestShaders_pullPixels(t, deviceRef, emptyList, resolvedDepth, &depthPixels)) {
+
+					U32 matching = 0;
+
+					for(U64 i = 0; i < 64; ++i) {
+
+						F32 depthValue = 0;
+						Buffer_memcpy(
+							Buffer_createRef(&depthValue, sizeof(depthValue)),
+							Buffer_createRefConst(&depthPixels.pixels[i], sizeof(U32))
+						);
+
+						const F32 delta = depthValue - 0.7f;
+						matching += delta > -1e-6f && delta < 1e-6f;
+					}
+
+					Test_assert(t, "depthResolveValues", matching == 64);
+				}
+			}
+		}
+	}
+
 clean:
 
 	RefPtr_dec(&emptyList);
@@ -3059,6 +3168,10 @@ clean:
 	RefPtr_dec(&indexBuffer);
 	RefPtr_dec(&vertexBuffer);
 	RefPtr_dec(&depth);
+	RefPtr_dec(&msaaDepthPipeline);
+	RefPtr_dec(&msaaDepthColor);
+	RefPtr_dec(&resolvedDepth);
+	RefPtr_dec(&msaaDepth);
 	RefPtr_dec(&msaaTarget);
 	RefPtr_dec(&mrtTarget);
 	RefPtr_dec(&target);
@@ -4088,4 +4201,1241 @@ clean:
 
 	DescriptorLayoutInfo_free(&layoutInfo, alloc);
 	SHFile_free(&file, alloc);
+}
+
+// -- 58. Structured buffers: element addressing and stride ----------------------
+
+//Every other bindful buffer in the suite is byte addressed, so the structured path is untouched: the table
+// validates the descriptor's range against the stride reflection reported, and the shader indexes by
+// element rather than by byte. Each of the four fields is transformed differently, so a stride the backend
+// got wrong shows up as a specific field landing on a neighbour's value.
+
+typedef struct TestBindfulElem {
+	U32 a, b, c, d;
+} TestBindfulElem;
+
+void Test_graphicsBindfulStructured(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Bindful/structured");
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	DescriptorHeapRef *heap = NULL;
+	DescriptorLayoutRef *layout = NULL;
+	DescriptorTableRef *table = NULL;
+	PipelineLayoutRef *pipelineLayout = NULL;
+	PipelineRef *pipeline = NULL;
+	DeviceBufferRef *input = NULL;
+	DeviceBufferRef *output = NULL;
+	CommandListRef *commandList = NULL;
+	CommandListRef *emptyList = NULL;
+
+	SHFile file = (SHFile) { 0 };
+	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+
+	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_structured.oiSH", &file)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping structured buffer tests");
+		return;
+	}
+
+	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+
+	if(entryId == U32_MAX)
+		goto clean;
+
+	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
+		deviceRef, &file, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
+		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	)))
+		goto clean;
+
+	//The stride is what makes this a structured buffer rather than a byte address one, so it is asserted
+	// rather than assumed from the results
+
+	Bool strideMatches = false;
+
+	for(U64 i = 0; i < layoutInfo.bindings.length; ++i)
+		if(layoutInfo.bindings.ptr[i].structedBufferStride == sizeof(TestBindfulElem))
+			strideMatches = true;
+
+	Test_assert(t, "reflectedStride", strideMatches);
+
+	CharString name = CharString_createRefCStrConst("Structured layout");
+
+	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &layoutInfo, &name, &layout, &t->err
+	)))
+		goto clean;
+
+	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
+	name = CharString_createRefCStrConst("Structured heap");
+
+	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
+		deviceRef, &heapInfo, &name, &heap, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Structured table");
+
+	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
+		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	)))
+		goto clean;
+
+	TestBindfulElem elems[64];
+
+	for(U32 i = 0; i < 64; ++i)
+		elems[i] = (TestBindfulElem) { .a = i, .b = i * 7, .c = i * 3, .d = i * 11 };
+
+	Buffer inputRef = Buffer_createRefConst(elems, sizeof(elems));
+	name = CharString_createRefCStrConst("Structured input");
+
+	if(!Test_assert(t, "inputCreate", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderRead, NULL,
+		&name, &inputRef, &input, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Structured output");
+
+	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, sizeof(elems), &output, &t->err
+	)))
+		goto clean;
+
+	const Descriptor inputDesc = Descriptor_buffer(input, 0, 0, NULL, 0);
+	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
+
+	const CharString inputName = CharString_createRefCStrConst("input");
+	const CharString outputName = CharString_createRefCStrConst("output");
+
+	Test_assert(t, "setInput", DescriptorTableRef_setDescriptorByName(table, &inputName, 0, false, &inputDesc, &t->err));
+	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
+
+	//A range that isn't a whole number of elements has to be refused, which is the stride rule itself
+
+	const Descriptor misalignedDesc = Descriptor_buffer(input, 0, sizeof(elems) - 4, NULL, 0);
+
+	Test_assert(t, "misalignedRangeRefused", !DescriptorTableRef_setDescriptorByName(
+		table, &inputName, 0, true, &misalignedDesc, NULL
+	));
+
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	name = CharString_createRefCStrConst("Structured pipeline layout");
+
+	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
+		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Structured pipeline");
+
+	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
+		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, 2 * KIBI, 32, 16, true, &commandList, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
+	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+
+	const Transition transitions[2] = {
+		(Transition) { .resource = input, .stage = EPipelineStage_Compute },
+		(Transition) { .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
+	};
+
+	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition_createRefConst(transitions, 2, &transitionList, NULL);
+
+	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
+	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
+	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
+	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
+	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
+	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+			const TestBindfulElem *values = (const TestBindfulElem*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+
+			Bool allMatch = true;
+
+			for(U32 i = 0; i < 64; ++i)
+				allMatch &=
+					values[i].a == i * 2 &&
+					values[i].b == i * 7 + 100 &&
+					values[i].c == ((i * 3) ^ 0xFFu) &&
+					values[i].d == i * 11 + i;
+
+			Test_assert(t, "structuredResults", allMatch);
+		}
+
+clean:
+
+	if(table) {
+		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
+		DescriptorTableRef_unsetDescriptors(table, 1, 0, 1, NULL);
+	}
+
+	RefPtr_dec(&emptyList);
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&pipelineLayout);
+	RefPtr_dec(&output);
+	RefPtr_dec(&input);
+	RefPtr_dec(&table);
+	RefPtr_dec(&layout);
+	RefPtr_dec(&heap);
+
+	DescriptorLayoutInfo_free(&layoutInfo, alloc);
+	SHFile_free(&file, alloc);
+}
+
+// -- 59. Append buffer with a counter resource ----------------------------------
+
+//A counter is a second resource hanging off one descriptor, and the table only accepts one on an
+// Append/Consume register, which nothing has ever exercised. Vulkan's descriptor write refuses counters
+// outright today, so this executes the append on D3D12 and pins that documented refusal on Vulkan, which
+// keeps the boundary visible rather than leaving the backend difference implicit.
+
+void Test_graphicsBindfulAppendCounter(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Bindful/appendCounter");
+
+	const Allocator *alloc = Platform_instance->alloc;
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	const Bool isVulkan = GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_Vulkan;
+
+	DescriptorHeapRef *heap = NULL;
+	DescriptorLayoutRef *layout = NULL;
+	DescriptorTableRef *table = NULL;
+	PipelineLayoutRef *pipelineLayout = NULL;
+	PipelineRef *pipeline = NULL;
+	DeviceBufferRef *appended = NULL;
+	DeviceBufferRef *counter = NULL;
+	CommandListRef *commandList = NULL;
+	CommandListRef *emptyList = NULL;
+
+	SHFile file = (SHFile) { 0 };
+	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+
+	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_append.oiSH", &file)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping append counter tests");
+		return;
+	}
+
+	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+
+	if(entryId == U32_MAX)
+		goto clean;
+
+	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
+		deviceRef, &file, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
+		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	)))
+		goto clean;
+
+	CharString name = CharString_createRefCStrConst("Append counter layout");
+
+	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &layoutInfo, &name, &layout, &t->err
+	)))
+		goto clean;
+
+	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
+	name = CharString_createRefCStrConst("Append counter heap");
+
+	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
+		deviceRef, &heapInfo, &name, &heap, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Append counter table");
+
+	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
+		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Append counter data");
+
+	if(!Test_assert(t, "appendedCreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, 64 * sizeof(U32), &appended, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Append counter counter");
+
+	if(!Test_assert(t, "counterCreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, 4, &counter, &t->err
+	)))
+		goto clean;
+
+	const CharString appendedName = CharString_createRefCStrConst("appended");
+	const Descriptor appendDesc = Descriptor_buffer(appended, 0, 0, counter, 0);
+
+	if (isVulkan) {
+
+		//Vulkan's descriptor write reports the counter as unimplemented rather than silently ignoring it,
+		// which is what keeps a shader from reading a counter that was never bound
+
+		Test_assert(t, "counterRefusedOnVulkan", !DescriptorTableRef_setDescriptorByName(
+			table, &appendedName, 0, false, &appendDesc, NULL
+		));
+
+		Test_print(t, "Vulkan has no append/consume counter support yet, refusal pinned instead of executing");
+		goto clean;
+	}
+
+	if(!Test_assert(t, "setAppended", DescriptorTableRef_setDescriptorByName(
+		table, &appendedName, 0, false, &appendDesc, &t->err
+	)))
+		goto clean;
+
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	name = CharString_createRefCStrConst("Append counter pipeline layout");
+
+	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
+		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Append counter pipeline");
+
+	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
+		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, 2 * KIBI, 32, 16, true, &commandList, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
+	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+
+	const Transition transitions[2] = {
+		(Transition) { .resource = appended, .stage = EPipelineStage_Compute, .isWrite = true },
+		(Transition) { .resource = counter, .stage = EPipelineStage_Compute, .isWrite = true }
+	};
+
+	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition_createRefConst(transitions, 2, &transitionList, NULL);
+
+	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
+	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
+	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
+	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
+	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
+	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+		if (TestShaders_pullBuffer(t, deviceRef, emptyList, counter)) {
+
+			//One in every four threads appended, so the counter is exactly a quarter of the 64 threads
+
+			const U32 counterValue = *(const U32*) DeviceBufferRef_ptr(counter)->cpuData.ptr;
+
+			Test_assert(t, "counterValue", counterValue == 16);
+		}
+
+clean:
+
+	if(table)
+		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
+
+	RefPtr_dec(&emptyList);
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&pipelineLayout);
+	RefPtr_dec(&counter);
+	RefPtr_dec(&appended);
+	RefPtr_dec(&table);
+	RefPtr_dec(&layout);
+	RefPtr_dec(&heap);
+
+	DescriptorLayoutInfo_free(&layoutInfo, alloc);
+	SHFile_free(&file, alloc);
+}
+
+// -- 60. Opacity micromaps through a bindful table ------------------------------
+
+//Opacity micromaps sit below the binding model entirely, but their only execution coverage runs through
+// bindless handles, so a device without bindless never traces one. The special index form is enough to
+// prove the path end to end: one triangle marked fully opaque must be hit, the same triangle marked fully
+// transparent must be missed, and the difference can only come from the micromap indices being consumed.
+//The pipeline has to opt in, since both APIs ignore micromaps otherwise and would report hits either way.
+
+static void TestBindful_ommWithFormat(
+	Test *t,
+	GraphicsDeviceRef *deviceRef,
+	const SHFile *file,
+	DeviceBufferRef *positions,
+	DescriptorHeapRef *heap,
+	DescriptorTableRef *table,
+	PipelineLayoutRef *pipelineLayout,
+	DeviceBufferRef *output,
+	CommandListRef *emptyList,
+	ETextureFormatId ommIndexFormat
+) {
+
+	DeviceBufferRef *indices = NULL;
+	DeviceBufferRef *ommOpaque = NULL;
+	DeviceBufferRef *ommTransparent = NULL;
+	BLASRef *blasOpaque = NULL;
+	BLASRef *blasTransparent = NULL;
+	TLASRef *tlasOpaque = NULL;
+	TLASRef *tlasTransparent = NULL;
+	PipelineRef *pipeline = NULL;
+	CommandListRef *commandList = NULL;
+
+	const U16 triangleIndices[3] = { 0, 1, 2 };
+	Buffer indexData = Buffer_createRefConst(triangleIndices, sizeof(triangleIndices));
+	CharString name = CharString_createRefCStrConst("Bindful OMM indices");
+
+	if(!Test_assert(t, "ommCreateIndices", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&name, &indexData, &indices, &t->err
+	)))
+		goto clean;
+
+	//One triangle, so each micromap index buffer is exactly one element wide
+
+	const U8 ommStride = ommIndexFormat == ETextureFormatId_R32u ? 4 : (ommIndexFormat == ETextureFormatId_R16u ? 2 : 1);
+
+	const U32 opaqueIndex = EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyOpaque, ommIndexFormat);
+	const U32 transparentIndex = EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyTransparent, ommIndexFormat);
+
+	Buffer opaqueData = Buffer_createRefConst(&opaqueIndex, ommStride);
+	Buffer transparentData = Buffer_createRefConst(&transparentIndex, ommStride);
+
+	name = CharString_createRefCStrConst("Bindful OMM indices, fully opaque");
+
+	if(!Test_assert(t, "ommCreateOpaque", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&name, &opaqueData, &ommOpaque, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindful OMM indices, fully transparent");
+
+	if(!Test_assert(t, "ommCreateTransparent", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&name, &transparentData, &ommTransparent, &t->err
+	)))
+		goto clean;
+
+	const DeviceData positionData = (DeviceData) { .buffer = positions };
+	const DeviceData indexBufferData = (DeviceData) { .buffer = indices };
+
+	const BLASCreateInfo opaqueInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
+		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
+		ETextureFormatId_R16u, indexBufferData,
+		ommIndexFormat, (DeviceData) { .buffer = ommOpaque }
+	);
+
+	const BLASCreateInfo transparentInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
+		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
+		ETextureFormatId_R16u, indexBufferData,
+		ommIndexFormat, (DeviceData) { .buffer = ommTransparent }
+	);
+
+	name = CharString_createRefCStrConst("Bindful OMM BLAS, fully opaque");
+
+	if(!Test_assert(t, "ommCreateBlasOpaque", GraphicsDeviceRef_createBLASExt(
+		deviceRef, &opaqueInfo, &name, &blasOpaque, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindful OMM BLAS, fully transparent");
+
+	if(!Test_assert(t, "ommCreateBlasTransparent", GraphicsDeviceRef_createBLASExt(
+		deviceRef, &transparentInfo, &name, &blasTransparent, &t->err
+	)))
+		goto clean;
+
+	//DisableCulling so a back facing hit still counts, exactly as the bindless micromap test does
+
+	TLASInstance ommInstance = (TLASInstance) {
+		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
+		.data = (TLASInstanceData) {
+			.instanceId24_mask8 = 0xFFu << 24,
+			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_DisableCulling << 24,
+			.blasCpu = blasOpaque
+		}
+	};
+
+	ListTLASInstance ommInstances = (ListTLASInstance) { 0 };
+	ListTLASInstance_createRefConst(&ommInstance, 1, &ommInstances, NULL);
+
+	name = CharString_createRefCStrConst("Bindful OMM TLAS, fully opaque");
+
+	if(!Test_assert(t, "ommCreateTlasOpaque", GraphicsDeviceRef_createTLASExt(
+		deviceRef, ERTASBuildFlags_DefaultTLAS, &ommInstances, true, NULL, &name, &tlasOpaque, &t->err
+	)))
+		goto clean;
+
+	ommInstance.data.blasCpu = blasTransparent;
+	name = CharString_createRefCStrConst("Bindful OMM TLAS, fully transparent");
+
+	if(!Test_assert(t, "ommCreateTlasTransparent", GraphicsDeviceRef_createTLASExt(
+		deviceRef, ERTASBuildFlags_DefaultTLAS, &ommInstances, true, NULL, &name, &tlasTransparent, &t->err
+	)))
+		goto clean;
+
+	const U32 raygenId = TestShaders_entry(t, deviceRef, file, "mainRaygen");
+	const U32 missId = TestShaders_entry(t, deviceRef, file, "mainMiss");
+	const U32 hitId = TestShaders_entry(t, deviceRef, file, "mainClosestHit");
+
+	if(raygenId == U32_MAX || missId == U32_MAX || hitId == U32_MAX)
+		goto clean;
+
+	PipelineStage ommStages[3] = {
+		(PipelineStage) { .binaryId = raygenId },
+		(PipelineStage) { .binaryId = missId },
+		(PipelineStage) { .binaryId = hitId }
+	};
+
+	ListPipelineStage ommStageList = (ListPipelineStage) { 0 };
+	ListPipelineStage_createRefConst(ommStages, 3, &ommStageList, NULL);
+
+	ListSHFile fileList = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(file, 1, &fileList, NULL);
+
+	PipelineRaytracingGroup group = (PipelineRaytracingGroup) {
+		.closestHit = 2, .anyHit = U32_MAX, .intersection = U32_MAX
+	};
+
+	ListPipelineRaytracingGroup groupList = (ListPipelineRaytracingGroup) { 0 };
+	ListPipelineRaytracingGroup_createRefConst(&group, 1, &groupList, NULL);
+
+	//Without the opt in both APIs ignore the micromap and the transparent triangle would report hits
+
+	const PipelineRaytracingInfo info = (PipelineRaytracingInfo) {
+		.flags = EPipelineRaytracingFlags_Default | EPipelineRaytracingFlags_AllowOpacityMicromapExt,
+		.maxRecursionDepth = 1
+	};
+
+	name = CharString_createRefCStrConst("Bindful OMM pipeline");
+
+	if(!Test_assert(t, "ommCreatePipeline", GraphicsDeviceRef_createPipelineRaytracingExt(
+		deviceRef, &ommStageList, &fileList, &groupList, &info, &name, EPipelineFlags_None,
+		pipelineLayout, &pipeline, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "ommCreateList", GraphicsDeviceRef_createCommandList(
+		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
+	)))
+		goto clean;
+
+	//Fully opaque first: the same four rays the plain trace uses, so two of them have to hit
+
+	for (U8 pass = 0; pass < 2; ++pass) {
+
+		TLASRef *tlas = pass ? tlasTransparent : tlasOpaque;
+		const Descriptor tlasDesc = Descriptor_tlas(tlas);
+		const CharString sceneName = CharString_createRefCStrConst("scene");
+
+		Test_assert(t, "ommSetTlas", DescriptorTableRef_setDescriptorByName(
+			table, &sceneName, 0, true, &tlasDesc, &t->err
+		));
+
+		const Transition traceTransitions[2] = {
+			(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+			(Transition) { .resource = tlas, .stage = EPipelineStage_RaygenExt }
+		};
+
+		ListTransition traceTransitionList = (ListTransition) { 0 };
+		ListTransition_createRefConst(traceTransitions, 2, &traceTransitionList, NULL);
+
+		Test_assert(t, "ommBegin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+
+		Test_assert(t, "ommScopeBlas", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+		Test_assert(t, "ommUpdateBlas", CommandListRef_updateBLASExt(
+			commandList, pass ? blasTransparent : blasOpaque, &t->err
+		));
+		Test_assert(t, "ommScopeBlasEnd", CommandListRef_endScope(commandList, &t->err));
+
+		Test_assert(t, "ommScopeTlas", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
+		Test_assert(t, "ommUpdateTlas", CommandListRef_updateTLASExt(commandList, tlas, &t->err));
+		Test_assert(t, "ommScopeTlasEnd", CommandListRef_endScope(commandList, &t->err));
+
+		Test_assert(t, "ommScopeTrace", CommandListRef_startScope(commandList, &traceTransitionList, 3, NULL, &t->err));
+		Test_assert(t, "ommBindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
+		Test_assert(t, "ommBindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
+		Test_assert(t, "ommBindPipeline", CommandListRef_setRaytracingPipeline(commandList, pipeline, &t->err));
+		Test_assert(t, "ommTrace", CommandListRef_dispatch1DRaysExt(commandList, 0, 4, &t->err));
+		Test_assert(t, "ommScopeTraceEnd", CommandListRef_endScope(commandList, &t->err));
+
+		Test_assert(t, "ommEnd", CommandListRef_end(commandList, &t->err));
+
+		if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+			if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+				const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+
+				if(pass)
+					Test_assert(t, "ommResultsTransparent", !values[0] && !values[1] && !values[2] && !values[3]);
+
+				else Test_assert(t, "ommResultsOpaque", values[0] == 1 && values[1] == 1 && !values[2] && !values[3]);
+			}
+	}
+
+clean:
+
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&tlasTransparent);
+	RefPtr_dec(&tlasOpaque);
+	RefPtr_dec(&blasTransparent);
+	RefPtr_dec(&blasOpaque);
+	RefPtr_dec(&ommTransparent);
+	RefPtr_dec(&ommOpaque);
+	RefPtr_dec(&indices);
+}
+
+void Test_graphicsBindfulOmm(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Bindful/omm");
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	const GraphicsDeviceCapabilities caps = device->info.capabilities;
+
+	if (!(caps.features & EGraphicsFeatures_RayPipeline)) {
+		Test_print(t, "Device lacks raytracing pipelines, skipping bindful micromap tests");
+		return;
+	}
+
+	if (!(caps.features & EGraphicsFeatures_RayMicromapOpacity)) {
+		Test_print(t, "Device lacks opacity micromaps, skipping bindful micromap tests");
+		return;
+	}
+
+	if (caps.experimentalFeatures & EGraphicsFeatures_RayMicromapOpacity) {
+		Test_print(t, "Opacity micromaps claimed but experimental on this backend, skipping bindful micromap tests");
+		return;
+	}
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	DescriptorHeapRef *heap = NULL;
+	DescriptorLayoutRef *layout = NULL;
+	DescriptorTableRef *table = NULL;
+	PipelineLayoutRef *pipelineLayout = NULL;
+	DeviceBufferRef *positions = NULL;
+	DeviceBufferRef *output = NULL;
+	CommandListRef *emptyList = NULL;
+
+	SHFile file = (SHFile) { 0 };
+	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	ListU32 entrypoints = (ListU32) { 0 };
+
+	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_rays.oiSH", &file)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful micromap tests");
+		return;
+	}
+
+	GraphicsInstanceRef *ownInstanceRef = NULL;
+	GraphicsDeviceRef *ownDeviceRef = NULL;
+	RefPtrType instanceType = (RefPtrType) { 0 };
+
+	if (!TestShaders_rtDedicatedDevice(t, &deviceRef, &ownInstanceRef, &ownDeviceRef, &instanceType)) {
+		SHFile_free(&file, alloc);
+		return;
+	}
+
+	const F32 triangle[12] = {
+		0, 0, 0, 1,
+		1, 0, 0, 1,
+		0, 1, 0, 1
+	};
+
+	Buffer triData = Buffer_createRefConst(triangle, sizeof(triangle));
+	CharString name = CharString_createRefCStrConst("Bindful OMM positions");
+
+	if(!Test_assert(t, "createPositions", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&name, &triData, &positions, &t->err
+	)))
+		goto clean;
+
+	const U32 raygenId = TestShaders_entry(t, deviceRef, &file, "mainRaygen");
+	const U32 missId = TestShaders_entry(t, deviceRef, &file, "mainMiss");
+	const U32 hitId = TestShaders_entry(t, deviceRef, &file, "mainClosestHit");
+
+	if(raygenId == U32_MAX || missId == U32_MAX || hitId == U32_MAX)
+		goto clean;
+
+	const U32 entryIds[3] = { raygenId, missId, hitId };
+
+	Test_assert(t, "entrypointsRef", ListU32_createRefConst(entryIds, 3, &entrypoints, &t->err));
+
+	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntries(
+		deviceRef, &file, &entrypoints, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
+		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindful OMM layout");
+
+	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &layoutInfo, &name, &layout, &t->err
+	)))
+		goto clean;
+
+	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) {
+		.maxBuffersRW = 1, .maxAccelerationStructures = 1, .maxDescriptorTables = 1
+	};
+
+	name = CharString_createRefCStrConst("Bindful OMM heap");
+
+	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
+		deviceRef, &heapInfo, &name, &heap, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindful OMM table");
+
+	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
+		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Bindful OMM output");
+
+	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, 4 * sizeof(U32), &output, &t->err
+	)))
+		goto clean;
+
+	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
+	const CharString outputName = CharString_createRefCStrConst("output");
+
+	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
+
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	name = CharString_createRefCStrConst("Bindful OMM pipeline layout");
+
+	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
+		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
+	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+
+	TestBindful_ommWithFormat(
+		t, deviceRef, &file, positions, heap, table, pipelineLayout, output, emptyList, ETextureFormatId_R16u
+	);
+
+	//R8u indices need their own capability, since Vulkan's EXT extension forbids them and only the KHR
+	// promotion or D3D12 accepts them
+
+	if (caps.features2 & EGraphicsFeatures2_RayMicromapOpacityU8) {
+
+		Test_print(t, "Repeating the bindful micromap pair with R8u indices");
+
+		TestBindful_ommWithFormat(
+			t, deviceRef, &file, positions, heap, table, pipelineLayout, output, emptyList, ETextureFormatId_R8u
+		);
+	}
+
+clean:
+
+	if(table) {
+		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
+		DescriptorTableRef_unsetDescriptors(table, 1, 0, 1, NULL);
+	}
+
+	RefPtr_dec(&emptyList);
+	RefPtr_dec(&pipelineLayout);
+	RefPtr_dec(&output);
+	RefPtr_dec(&positions);
+	RefPtr_dec(&table);
+	RefPtr_dec(&layout);
+	RefPtr_dec(&heap);
+
+	DescriptorLayoutInfo_free(&layoutInfo, alloc);
+	SHFile_free(&file, alloc);
+
+	TestShaders_rtDedicatedDeviceEnd(t, &ownInstanceRef, &ownDeviceRef);
+}
+
+// -- 61. Inline raytracing from a graphics stage --------------------------------
+
+//Every other RayQuery test traces from compute, which hid a real backend bug: D3D12 accepts only a short
+// list of sync scopes alongside the acceleration structure access bits, and the per stage graphics scopes
+// are not on it, so a TLAS transitioned for a pixel shader produced a barrier the debug layer rejects.
+// Compute maps to a legal scope, so no compute test could ever reach it.
+//Tracing the same scene from a pixel shader is what puts a graphics stage on a TLAS transition.
+
+void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Bindful/rayQueryGraphics");
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if (!(device->info.capabilities.features & EGraphicsFeatures_RayQuery)) {
+		Test_print(t, "Device lacks ray query, skipping graphics stage ray query tests");
+		return;
+	}
+
+	if (!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering)) {
+		Test_print(t, "Device lacks direct rendering, skipping graphics stage ray query tests");
+		return;
+	}
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	DescriptorHeapRef *heap = NULL;
+	DescriptorLayoutRef *layout = NULL;
+	DescriptorTableRef *table = NULL;
+	PipelineLayoutRef *pipelineLayout = NULL;
+	PipelineRef *pipeline = NULL;
+	DeviceBufferRef *positions = NULL;
+	BLASRef *blas = NULL;
+	TLASRef *tlas = NULL;
+	RenderTextureRef *target = NULL;
+	CommandListRef *commandList = NULL;
+	CommandListRef *emptyList = NULL;
+
+	SHFile files[2] = { 0 };
+
+	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	ListU32 entrypoints = (ListU32) { 0 };
+
+	if (
+		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_draw_vs.oiSH", &files[0]) ||
+		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_rayquery_ps.oiSH", &files[1])
+	) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping graphics ray query tests");
+		SHFile_free(&files[0], alloc);
+		return;
+	}
+
+	ListSHFile fileList = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(files, 2, &fileList, NULL);
+
+	const U32 vertexId = TestShaders_entry(t, deviceRef, &files[0], "main");
+	const U32 pixelId = TestShaders_entry(t, deviceRef, &files[1], "main");
+
+	if(vertexId == U32_MAX || pixelId == U32_MAX) {
+		Test_print(t, "No ray query entrypoint for this backend, skipping graphics ray query tests");
+		goto clean;
+	}
+
+	//The same one triangle scene the other raytracing modules use
+
+	const F32 triangle[12] = {
+		0, 0, 0, 1,
+		1, 0, 0, 1,
+		0, 1, 0, 1
+	};
+
+	Buffer triData = Buffer_createRefConst(triangle, sizeof(triangle));
+	CharString name = CharString_createRefCStrConst("Ray query graphics positions");
+
+	if(!Test_assert(t, "createPositions", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
+		&name, &triData, &positions, &t->err
+	)))
+		goto clean;
+
+	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
+		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16,
+		(DeviceData) { .buffer = positions }
+	);
+
+	name = CharString_createRefCStrConst("Ray query graphics BLAS");
+
+	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(deviceRef, &blasInfo, &name, &blas, &t->err)))
+		goto clean;
+
+	const TLASInstance instance = (TLASInstance) {
+		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
+		.data = (TLASInstanceData) {
+			.instanceId24_mask8 = 0xFFu << 24,
+			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
+			.blasCpu = blas
+		}
+	};
+
+	ListTLASInstance instances = (ListTLASInstance) { 0 };
+	ListTLASInstance_createRefConst(&instance, 1, &instances, NULL);
+
+	name = CharString_createRefCStrConst("Ray query graphics TLAS");
+
+	if(!Test_assert(t, "createTlas", GraphicsDeviceRef_createTLASExt(
+		deviceRef, ERTASBuildFlags_DefaultTLAS, &instances, true, NULL, &name, &tlas, &t->err
+	)))
+		goto clean;
+
+	//Only the pixel shader owns a register, so the layout comes from that entry
+
+	const U32 entryIds[1] = { pixelId };
+
+	Test_assert(t, "entrypointsRef", ListU32_createRefConst(entryIds, 1, &entrypoints, &t->err));
+
+	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntries(
+		deviceRef, &files[1], &entrypoints, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
+		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Ray query graphics layout");
+
+	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &layoutInfo, &name, &layout, &t->err
+	)))
+		goto clean;
+
+	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxAccelerationStructures = 1, .maxDescriptorTables = 1 };
+	name = CharString_createRefCStrConst("Ray query graphics heap");
+
+	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
+		deviceRef, &heapInfo, &name, &heap, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Ray query graphics table");
+
+	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
+		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	)))
+		goto clean;
+
+	const Descriptor tlasDesc = Descriptor_tlas(tlas);
+	const CharString sceneName = CharString_createRefCStrConst("scene");
+
+	Test_assert(t, "setTlas", DescriptorTableRef_setDescriptorByName(table, &sceneName, 0, false, &tlasDesc, &t->err));
+
+	name = CharString_createRefCStrConst("Ray query graphics target");
+
+	if(!Test_assert(t, "targetCreate", GraphicsDeviceRef_createRenderTexture(
+		deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+		EMSAASamples_Off, NULL, &name, &target, &t->err
+	)))
+		goto clean;
+
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	name = CharString_createRefCStrConst("Ray query graphics pipeline layout");
+
+	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
+		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	)))
+		goto clean;
+
+	PipelineStage stages[2] = {
+		(PipelineStage) { .binaryId = vertexId, .shFileId = 0 },
+		(PipelineStage) { .binaryId = pixelId, .shFileId = 1 }
+	};
+
+	ListPipelineStage stageList = (ListPipelineStage) { 0 };
+	ListPipelineStage_createRefConst(stages, 2, &stageList, NULL);
+
+	const PipelineGraphicsInfo pipelineInfo = (PipelineGraphicsInfo) {
+		.attachmentCountExt = 1,
+		.attachmentFormatsExt = { ETextureFormatId_RGBA8 }
+	};
+
+	name = CharString_createRefCStrConst("Ray query graphics pipeline");
+
+	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineGraphics(
+		deviceRef, &fileList, &stageList, &pipelineInfo, &name, EPipelineFlags_None,
+		pipelineLayout, &pipeline, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
+	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+
+	//The TLAS is declared at the PIXEL stage, which is the whole point of the module: that is what puts a
+	// graphics sync scope on an acceleration structure barrier
+
+	const Transition transition = (Transition) { .resource = tlas, .stage = EPipelineStage_Pixel };
+
+	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
+
+	const AttachmentInfo attachment = (AttachmentInfo) { .image = target, .load = ELoadAttachmentType_Clear };
+	ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+	ListAttachmentInfo_createRefConst(&attachment, 1, &colors, NULL);
+
+	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+
+	Test_assert(t, "scopeBlas", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+	Test_assert(t, "updateBlas", CommandListRef_updateBLASExt(commandList, blas, &t->err));
+	Test_assert(t, "scopeBlasEnd", CommandListRef_endScope(commandList, &t->err));
+
+	Test_assert(t, "scopeTlas", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
+	Test_assert(t, "updateTlas", CommandListRef_updateTLASExt(commandList, tlas, &t->err));
+	Test_assert(t, "scopeTlasEnd", CommandListRef_endScope(commandList, &t->err));
+
+	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 3, NULL, &t->err));
+	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
+	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
+
+	Test_assert(t, "renderStart", CommandListRef_startRenderExt(
+		commandList, I32x2_zero, I32x2_create2(8, 8), &colors, NULL, &t->err
+	));
+
+	Test_assert(t, "viewportScissor", CommandListRef_setViewportAndScissor(
+		commandList, I32x2_zero, I32x2_zero, &t->err
+	));
+
+	Test_assert(t, "bindPipeline", CommandListRef_setGraphicsPipeline(commandList, pipeline, &t->err));
+	Test_assert(t, "draw", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+	Test_assert(t, "renderEnd", CommandListRef_endRenderExt(commandList, &t->err));
+	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
+
+	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+		TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF3366FFu);
+
+clean:
+
+	if(table)
+		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
+
+	RefPtr_dec(&emptyList);
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&pipelineLayout);
+	RefPtr_dec(&target);
+	RefPtr_dec(&tlas);
+	RefPtr_dec(&blas);
+	RefPtr_dec(&positions);
+	RefPtr_dec(&table);
+	RefPtr_dec(&layout);
+	RefPtr_dec(&heap);
+
+	DescriptorLayoutInfo_free(&layoutInfo, alloc);
+	SHFile_free(&files[0], alloc);
+	SHFile_free(&files[1], alloc);
+}
+
+// -- 62. Float atomics, reachable at last through a bindful layout --------------
+
+//AtomicF32 was compile-tested only, because oxc::AtomicAddF32 takes its target by reference and so needs a
+// typed float lvalue, while the bindless resource set exposes nothing but RWByteAddressBuffer. A bindful
+// layout can declare RWStructuredBuffer<float> at a classic register, which is exactly the missing piece.
+//The extension has no DXIL intrinsic (ESHExtension_NoDxilCompile), so only a SPIRV backend has an
+// entrypoint to run; the module skips wherever that binary doesn't exist rather than failing.
+
+static void TestBindful_atomicFloatWithWidth(Test *t, GraphicsDeviceRef *deviceRef, Bool isDouble) {
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	DescriptorHeapRef *heap = NULL;
+	DescriptorLayoutRef *layout = NULL;
+	DescriptorTableRef *table = NULL;
+	PipelineLayoutRef *pipelineLayout = NULL;
+	PipelineRef *pipeline = NULL;
+	DeviceBufferRef *output = NULL;
+	CommandListRef *commandList = NULL;
+	CommandListRef *emptyList = NULL;
+
+	SHFile file = (SHFile) { 0 };
+	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+
+	const C8 *path =
+		isDouble ?
+		"//OxC3_gtest/test_shaders/test_bindful_atomic_f64.oiSH" :
+		"//OxC3_gtest/test_shaders/test_bindful_atomic_f32.oiSH";
+
+	if (!TestShaders_loadFile(t, path, &file)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping float atomic tests");
+		return;
+	}
+
+	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+
+	if (entryId == U32_MAX) {
+		Test_print(t, "Float atomics have no DXIL intrinsic, so this backend has no entrypoint to run");
+		goto clean;
+	}
+
+	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
+		deviceRef, &file, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
+		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	)))
+		goto clean;
+
+	CharString name = CharString_createRefCStrConst("Float atomic layout");
+
+	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
+		deviceRef, &layoutInfo, &name, &layout, &t->err
+	)))
+		goto clean;
+
+	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
+	name = CharString_createRefCStrConst("Float atomic heap");
+
+	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
+		deviceRef, &heapInfo, &name, &heap, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Float atomic table");
+
+	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
+		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	)))
+		goto clean;
+
+	//The buffer starts zeroed, so the accumulated total is exactly the thread count
+
+	F64 initial[64] = { 0 };
+	const U64 elemSize = isDouble ? sizeof(F64) : sizeof(F32);
+	Buffer initialRef = Buffer_createRefConst(initial, elemSize * 64);
+	name = CharString_createRefCStrConst("Float atomic output");
+
+	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBufferData(
+		deviceRef, EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		NULL, &name, &initialRef, &output, &t->err
+	)))
+		goto clean;
+
+	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
+	const CharString bufName = CharString_createRefCStrConst("buf");
+
+	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &bufName, 0, false, &outputDesc, &t->err));
+
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	name = CharString_createRefCStrConst("Float atomic pipeline layout");
+
+	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
+		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Float atomic pipeline");
+
+	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
+		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, 2 * KIBI, 32, 16, true, &commandList, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
+		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
+	)))
+		goto clean;
+
+	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
+	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+
+	const Transition transition = (Transition) {
+		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
+	};
+
+	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
+
+	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
+	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
+	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
+	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
+	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
+	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+
+	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+
+			//64 threads each add one, and a lost update lands short: the sum is exact at either width
+
+			const void *ptr = DeviceBufferRef_ptr(output)->cpuData.ptr;
+			const F64 total = isDouble ? *(const F64*) ptr : (F64) *(const F32*) ptr;
+
+			Test_assert(t, "atomicFloatTotal", total == 64.0);
+		}
+
+clean:
+
+	if(table)
+		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
+
+	RefPtr_dec(&emptyList);
+	RefPtr_dec(&commandList);
+	RefPtr_dec(&pipeline);
+	RefPtr_dec(&pipelineLayout);
+	RefPtr_dec(&output);
+	RefPtr_dec(&table);
+	RefPtr_dec(&layout);
+	RefPtr_dec(&heap);
+
+	DescriptorLayoutInfo_free(&layoutInfo, alloc);
+	SHFile_free(&file, alloc);
+}
+
+//AtomicF32 and AtomicF64 are separate device capabilities and separate SPIRV capabilities, so each is run
+//only where it is claimed; neither has a DXIL intrinsic, so a DXIL backend simply has no entrypoint.
+
+void Test_graphicsBindfulAtomicFloat(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Bindful/atomicFloat");
+
+	const GraphicsDeviceCapabilities caps = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities;
+
+	if(caps.dataTypes & EGraphicsDataTypes_AtomicF32)
+		TestBindful_atomicFloatWithWidth(t, deviceRef, false);
+
+	else Test_print(t, "Device lacks 32 bit float atomics, skipping that width");
+
+	if(caps.dataTypes & EGraphicsDataTypes_AtomicF64)
+		TestBindful_atomicFloatWithWidth(t, deviceRef, true);
+
+	else Test_print(t, "Device lacks 64 bit float atomics, skipping that width");
 }
