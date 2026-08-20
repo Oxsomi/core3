@@ -206,11 +206,16 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelineRaytracing()::info.maxPayloadSize and maxAttributeSize need to be 2 byte aligned"
 		));
 
-	if(maxAttributeSize > 32 || info->maxRecursionDepth > 2 || maxPayloadSize > 32)
+	//The payload was sharing the attribute's 32-byte limit, which is not its limit:
+	// 32 is the hard cap D3D12 puts on HIT ATTRIBUTES (D3D12_RAYTRACING_MAX_ATTRIBUTE_SIZE_IN_BYTES),
+	// while neither api caps the payload at all, it costs registers,
+	// not validity. 255 is where the oiSH entry's U8 payloadSize runs out.
+
+	if(maxAttributeSize > 32 || info->maxRecursionDepth > 2)
 		retError(clean, Error_invalidParameter(
 			1, 0,
 			"GraphicsDeviceRef_createPipelineRaytracing()::info."
-			"maxAttributeSize, maxRecursionDepth and maxRayHitAttributeSize need to be <=32, <=2 and <=32 respectively"
+			"maxAttributeSize and maxRecursionDepth need to be <=32 and <=2 respectively"
 		));
 
 	if(maxAttributeSize < 8 || maxPayloadSize < 2 || !info->maxRecursionDepth)

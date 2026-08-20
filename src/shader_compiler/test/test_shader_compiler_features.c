@@ -106,6 +106,11 @@ void Test_shaderCompilerFeatures(Test *t) {
 		//(SPV_EXT_shader_invocation_reorder, opaque OpTypeHitObjectEXT via vk::SpirvOpaqueType), so it works on both.
 		{ "features/ray_reorder.hlsl",          ESHExtension_RayReorder,         B_BOTH },
 
+		//SM6.1 fragment barycentrics:
+		// native SV_Barycentrics semantic on both backends (SPIRV:
+		// BaryCoordKHR through SPV_KHR_fragment_shader_barycentric).
+		{ "features/barycentrics.hlsl",         ESHExtension_Barycentrics,       B_BOTH },
+
 		//SM6.10 ray tri vertex position fetch: native intrinsic on DXIL; on SPIRV the ray query stays native HLSL
 		// and only the position-fetch op is inline SPIR-V (a valid RayQuery<> can be handed to it by reference),
 		// so it works on both.

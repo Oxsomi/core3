@@ -82,7 +82,8 @@ static inline Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtens
 		D3D_SHADER_REQUIRES_WAVE_OPS,
 		//SM6.6 dynamic resources; both heap indexing flags fold into the one DescriptorHeap extension.
 		D3D_SHADER_REQUIRES_RESOURCE_DESCRIPTOR_HEAP_INDEXING,
-		D3D_SHADER_REQUIRES_SAMPLER_DESCRIPTOR_HEAP_INDEXING
+		D3D_SHADER_REQUIRES_SAMPLER_DESCRIPTOR_HEAP_INDEXING,
+		D3D_SHADER_REQUIRES_BARYCENTRICS
 	};
 
 	ESHExtension extensions[] = {
@@ -99,7 +100,8 @@ static inline Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtens
 		ESHExtension_WriteMSTexture,        //ADVANCED_TEXTURE_OPS folded into WriteMSTexture (see above)
 		ESHExtension_SubgroupOperations,
 		ESHExtension_DescriptorHeap,
-		ESHExtension_DescriptorHeap
+		ESHExtension_DescriptorHeap,
+		ESHExtension_Barycentrics
 	};
 
 	flags &= ~defaultOps;
@@ -320,7 +322,7 @@ extern "C" Bool Compiler_processDXIL(
 
 				if(funcDesc.RaytracingShader.ParamPayloadSize > 128)
 					retError(clean, Error_outOfBounds(
-						0, funcDesc.RaytracingShader.ParamPayloadSize, 128, "Compiler_processDXIL() payload out of bounds"
+						0, funcDesc.RaytracingShader.ParamPayloadSize, 255, "Compiler_processDXIL() payload out of bounds"
 					));
 
 				payloadSize = (U8) funcDesc.RaytracingShader.ParamPayloadSize;

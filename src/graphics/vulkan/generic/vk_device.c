@@ -379,6 +379,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
+		VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR,
+		feat & EGraphicsFeatures_Barycentrics,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_FEATURES_KHR,
+			.fragmentShaderBarycentric = true
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceDescriptorHeapFeaturesEXT,
 		feat2 & EGraphicsFeatures2_DescriptorHeap,
 		{
@@ -529,6 +538,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_CooperativeMatrix:          on = feat & EGraphicsFeatures_CoopMat;                  break;
 			case EOptExtensions_ShaderFloat8:               on = feat & EGraphicsFeatures_CoopFP8;                  break;
 			case EOptExtensions_RayTriPosition:             on = feat & EGraphicsFeatures_RayTriPosition;           break;
+			case EOptExtensions_Barycentrics:               on = feat & EGraphicsFeatures_Barycentrics;             break;
 			case EOptExtensions_DescriptorHeap:             on = feat2 & EGraphicsFeatures2_DescriptorHeap;         break;
 			case EOptExtensions_RayClusterAS:               on = feat2 & EGraphicsFeatures2_RayClusterAS;           break;
 			case EOptExtensions_RayPartitionedTLAS:         on = feat2 & EGraphicsFeatures2_RayPartitionedTLAS;     break;

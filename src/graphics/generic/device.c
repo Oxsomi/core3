@@ -1159,6 +1159,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	if(extensions & ESHExtension_RayMicromapOpacity)        features |= EGraphicsFeatures_RayMicromapOpacity;
 	if(extensions & ESHExtension_RayReorder)                features |= EGraphicsFeatures_RayReorder;
 	if(extensions & ESHExtension_RayTriPosition)            features |= EGraphicsFeatures_RayTriPosition;
+	if(extensions & ESHExtension_Barycentrics)              features |= EGraphicsFeatures_Barycentrics;
 
 	if(extensions & ESHExtension_ComputeDeriv)              features |= EGraphicsFeatures_ComputeDeriv;
 	if(extensions & ESHExtension_MeshTaskTexDeriv)          features |= EGraphicsFeatures_MeshTaskTexDeriv;

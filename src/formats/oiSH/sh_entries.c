@@ -183,10 +183,8 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 				2, "SHFile_addEntrypoint() payloadSize is required for hit/callable/miss shaders"
 			));
 
-		if(entry->payloadSize > 128)
-			retError(clean, Error_outOfBounds(
-				0, entry->payloadSize, 128, "SHFile_addEntrypoint() payloadSize must be <=128"
-			));
+		//No upper bound:
+		// payloadSize is a U8, so the type is the bound (255).
 	}
 
 	else if(entry->payloadSize)

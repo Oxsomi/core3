@@ -147,7 +147,7 @@ typedef enum ESHExtension {
 	ESHExtension_RayQuery					= 1 << 8,
 	ESHExtension_RayMicromapOpacity			= 1 << 9,
 	ESHExtension_RayTriPosition				= 1 << 10,		//SM6.10 tri vertex position fetch (RayQuery + ray-pipeline)
-	ESHExtension_Reserved11					= 1 << 11,
+	ESHExtension_Barycentrics				= 1 << 11,		//SV_Barycentrics (fragment); BaryCoordKHR in SPIRV
 	ESHExtension_RayReorder					= 1 << 12,
 
 	ESHExtension_Multiview					= 1 << 13,
@@ -486,6 +486,7 @@ The following define the requirements of binaries embedded in oiSH files.
     - GroupNonUniformVote or SubgroupVoteKHR
     - GroupNonUniformBallot or SubgroupBallotKHR
   - ShaderInvocationReorderEXT as RayReorder.
+  - FragmentBarycentricKHR as Barycentrics.
   - RayQueryKHR as RayQuery.
   - RayTracingOpacityMicromapEXT as RayMicromapOpacity.
   - RayTracingPositionFetchKHR or RayQueryPositionFetchKHR as RayTriPosition.

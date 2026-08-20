@@ -589,7 +589,7 @@ U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsNam
 const C8 *optExtensionsName[] = {
 
 	"VK_KHR_performance_query",      "VK_KHR_ray_tracing_pipeline",   "VK_KHR_ray_query",
-	"VK_KHR_acceleration_structure", "",
+	"VK_KHR_acceleration_structure", "VK_KHR_fragment_shader_barycentric",
 
 	//The cross vendor SER extension, not the NV one: the shader stack emits SPV_EXT_shader_invocation_reorder,
 	// which is what this extension licenses.
@@ -1079,6 +1079,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		);
 
 		getDeviceFeatures(
+			optExtensions[EOptExtensions_Barycentrics],
+			VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR,
+			fragBaryFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
 			optExtensions[EOptExtensions_DescriptorHeap],
 			VkPhysicalDeviceDescriptorHeapFeaturesEXT,
 			descriptorHeapFeat,
@@ -1496,8 +1503,20 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		// it emits the quad group for an even 2D thread group and the linear group otherwise.
 		//Reading only the linear flag would advertise the feature to a shader that ends up needing quads.
 
-		if(computeDeriv.computeDerivativeGroupLinear || computeDeriv.computeDerivativeGroupQuads)
+		//BOTH derivative group modes are required, because which one a shader needs is DXC's choice,
+		// it emits the quad group for an even 2D thread group and the linear group otherwise.
+		//Granting on either mode alone makes vkCreateDevice fail with VK_ERROR_FEATURE_NOT_PRESENT on any device
+		// supporting just one, which loses the whole device rather than only derivatives,
+		// so this must stay an AND to match the request.
+
+		if(computeDeriv.computeDerivativeGroupLinear && computeDeriv.computeDerivativeGroupQuads)
 			capabilities.features |= EGraphicsFeatures_ComputeDeriv;
+
+		//Not gated on raytracing either:
+		// barycentrics is a fragment-shader feature.
+
+		if(fragBaryFeat.fragmentShaderBarycentric)
+			capabilities.features |= EGraphicsFeatures_Barycentrics;
 
 		//Cooperative vectors/matrix (linalg) aren't gated on raytracing, so set them here rather than in the RT block.
 		//Base tier of each is FP16 + INT8; CoopFP8 is the additive FP8 tier; training exposes the outer-product/reduce ops.
