@@ -403,6 +403,11 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	Test_graphicsBindfulAdvanced(t, deviceRef);
 	Test_graphicsBindfulSampler(t, deviceRef);
 	Test_graphicsBindfulDraw(t, deviceRef);
+	Test_graphicsBindfulLayoutSwitch(t, deviceRef);
+	Test_graphicsBindfulCbuffer(t, deviceRef);
+	Test_graphicsBindfulRwTexture(t, deviceRef);
+	Test_graphicsBindfulArray(t, deviceRef);
+	Test_graphicsBindfulSpaces(t, deviceRef);
 	Test_graphicsBindlessInterleave(t, deviceRef);
 	Test_graphicsBindfulRays(t, deviceRef);
 	Test_graphicsGpuExecute(t, deviceRef);

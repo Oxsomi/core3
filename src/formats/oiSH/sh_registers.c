@@ -600,6 +600,10 @@ Bool ListSHRegisterRuntime_addTextureBase(
 				));
 		}
 
+		//Norm formats want norm templates (unorm/snorm float): DXIL reflection keeps the norm primitive, so
+		// requiring agreement here catches a template/format mismatch that would read garbage at runtime
+		// (a plain float template makes DXC's SPIRV claim a 32-bit float image format).
+
 		if(
 			textureFormatPrimitive != primitive &&
 			(textureFormatPrimitive & ESHTexturePrimitive_TypeMask) != ESHTexturePrimitive_Count

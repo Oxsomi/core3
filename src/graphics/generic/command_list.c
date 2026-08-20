@@ -657,7 +657,14 @@ Bool CommandListRef_startScope(
 				retError(clean, Error_constData(
 					0, 0, "CommandListRef_startScope()::transitions[i].resource should be writable"));
 
-			if(!transition.isWrite && !(resource.flags & EGraphicsResourceFlag_ShaderRead))
+			//A constant buffer read is a shader read too: CBV capability comes from the uniform usage
+			// rather than ShaderRead, which is the SRV path (see EGraphicsResourceFlag_ShaderRead's docs)
+
+			const Bool isUniform =
+				res->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer &&
+				(DeviceBufferRef_ptr(res)->usage & EDeviceBufferUsage_Uniform);
+
+			if(!transition.isWrite && !(resource.flags & EGraphicsResourceFlag_ShaderRead) && !isUniform)
 				retError(clean, Error_unsupportedOperation(
 					1, "CommandListRef_startScope()::transitions[i].resource should be readable"));
 

@@ -423,9 +423,16 @@ Bool DxUnifiedTexture_transition(
 
 		//First use also discards through LAYOUT_UNDEFINED, since nothing was written yet and the validator
 		// refuses LAYOUT_COMMON as the before layout of a NO_ACCESS barrier.
+		//The DISCARD flag is what makes that count as the resource's initialization: NOT_ZEROED render
+		// target capable resources must see a discard, clear or copy first, and only a flagged barrier is
+		// the discard (an unflagged UNDEFINED transition leaves compression metadata uninitialized).
 
 		.LayoutBefore = image->lastSync == D3D12_BARRIER_SYNC_NONE ? D3D12_BARRIER_LAYOUT_UNDEFINED : image->lastLayout,
 		.LayoutAfter = layout,
+
+		.Flags =
+			image->lastSync == D3D12_BARRIER_SYNC_NONE ?
+			D3D12_TEXTURE_BARRIER_FLAG_DISCARD : D3D12_TEXTURE_BARRIER_FLAG_NONE,
 
 		.pResource = image->image,
 

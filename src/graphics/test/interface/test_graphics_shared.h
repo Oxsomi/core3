@@ -53,6 +53,11 @@ void Test_graphicsBindful(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulAdvanced(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulSampler(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulDraw(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulLayoutSwitch(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulCbuffer(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulRwTexture(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulArray(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulSpaces(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef);
@@ -113,6 +118,17 @@ Bool TestShaders_rtDedicatedDevice(
 );
 
 void TestShaders_rtDedicatedDeviceEnd(Test *t, GraphicsInstanceRef **ownInstanceRef, GraphicsDeviceRef **ownDeviceRef);
+
+typedef struct TestShaderPixels {
+	U32 count;
+	U32 padding;
+	U64 len;
+	U32 pixels[64];
+} TestShaderPixels;
+
+Bool TestShaders_pullPixels(
+	Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *emptyList, RefPtr *target, TestShaderPixels *pixels
+);
 
 //Pulls the 8x8 render target back and passes when all 64 pixels equal the expected packed RGBA8 value
 

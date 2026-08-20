@@ -167,6 +167,16 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if((buf->usage & EDeviceBufferUsage_SBTExt) && allocInfo.Alignment < D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT)
 		allocInfo.Alignment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
 
+	//Constant buffer views address their data 256 byte aligned
+	// (D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT); tight alignment can hand out less for small buffers,
+	// and a CBV pointing at an unaligned buffer start gets the device removed for the invalid call.
+
+	if(
+		(buf->usage & EDeviceBufferUsage_Uniform) &&
+		allocInfo.Alignment < D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT
+	)
+		allocInfo.Alignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
+
 	//Any ASRead buffer may feed a micromap array build, whose input has an alignment floor of its own:
 	// 128 (D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_BYTE_ALIGNMENT).
 	//Debug layers before stable 620 and preview 722 enforce 256 while citing that constant (fixed in the

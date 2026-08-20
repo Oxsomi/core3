@@ -1270,6 +1270,21 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				access = isShaderRead ? D3D12_BARRIER_ACCESS_SHADER_RESOURCE : D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
 
+				//A readable uniform buffer is read through CONSTANT_BUFFER rather than SHADER_RESOURCE;
+				// both can apply when a buffer carries ShaderRead and the uniform usage at once
+
+				if (
+					isShaderRead && !isImage &&
+					transition.resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer &&
+					(DeviceBufferRef_ptr(transition.resource)->usage & EDeviceBufferUsage_Uniform)
+				) {
+
+					access |= D3D12_BARRIER_ACCESS_CONSTANT_BUFFER;
+
+					if(!(DeviceBufferRef_ptr(transition.resource)->resource.flags & EGraphicsResourceFlag_ShaderRead))
+						access &=~ D3D12_BARRIER_ACCESS_SHADER_RESOURCE;
+				}
+
 				if(isImage)
 					layout = isShaderRead ? D3D12_BARRIER_LAYOUT_SHADER_RESOURCE : D3D12_BARRIER_LAYOUT_UNORDERED_ACCESS;
 

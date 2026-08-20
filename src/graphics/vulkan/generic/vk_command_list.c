@@ -1031,10 +1031,27 @@ void VK_WRAP_FUNC(CommandList_process)(
 					layout = isShaderRead ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
 				}
 
-				if (!isImage)
+				if (!isImage) {
+
 					access =
 						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
 						VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+
+					//A readable uniform buffer is read through UNIFORM_READ rather than storage reads;
+					// both can apply when a buffer carries ShaderRead and the uniform usage at once
+
+					if (
+						isShaderRead &&
+						transition.resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer &&
+						(DeviceBufferRef_ptr(transition.resource)->usage & EDeviceBufferUsage_Uniform)
+					) {
+
+						access |= VK_ACCESS_2_UNIFORM_READ_BIT;
+
+						if(!(DeviceBufferRef_ptr(transition.resource)->resource.flags & EGraphicsResourceFlag_ShaderRead))
+							access &=~ VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+					}
+				}
 
 				//AS builds read their inputs (vertex/index/aabb/instance data) as SHADER_READ per spec;
 				// only the AS itself uses AS read/write, which the RTAS branch above already handled.

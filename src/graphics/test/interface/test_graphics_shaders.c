@@ -291,13 +291,6 @@ Bool TestShaders_pullBuffer(Test *t, GraphicsDeviceRef *deviceRef, CommandListRe
 
 //Texture pulls hand over an owned buffer; the callback copies out the 8x8 payload the checks below compare
 
-typedef struct TestShaderPixels {
-	U32 count;
-	U32 padding;
-	U64 len;
-	U32 pixels[64];
-} TestShaderPixels;
-
 static void TestShaders_pixelPull(RefPtr *resource, Buffer *data, void *context) {
 
 	(void) resource;
@@ -311,7 +304,7 @@ static void TestShaders_pixelPull(RefPtr *resource, Buffer *data, void *context)
 		result->pixels[i] = ((const U32*)data->ptr)[i];
 }
 
-static Bool TestShaders_pullPixels(
+Bool TestShaders_pullPixels(
 	Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *emptyList, RefPtr *target, TestShaderPixels *pixels
 ) {
 
