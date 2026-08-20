@@ -58,6 +58,13 @@ void Test_graphicsBindfulCbuffer(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulRwTexture(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulArray(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulSpaces(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulIndirect(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulDrawFixed(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulTableUpdate(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulSharedRegister(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulHeapRecycle(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulPushDescriptorBoundary(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulSamplerCmp(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef);

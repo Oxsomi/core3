@@ -1083,8 +1083,15 @@ void VK_WRAP_FUNC(CommandList_process)(
 						case ETransitionType_ResolveTargetWrite:        //No distinction in Vulkan
 						case ETransitionType_RenderTargetWrite:
 
+							//Depth is written by the depth test at both fragment test stages AND by the
+							// attachment's storeOp, which the spec places at LATE_FRAGMENT_TESTS. This stage
+							// is what the NEXT barrier uses as its source, so leaving LATE out lets a later
+							// read of the image race the store (a write after write hazard the validator
+							// reports the moment a render pass' depth is sampled by a shader afterwards).
+
 							pipelineStage =
-								isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
+								isDepthStencil ?
+								VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT :
 								VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 							access =
