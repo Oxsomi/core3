@@ -76,6 +76,10 @@ const C8 *fixedPointHlsli =
 	#include "shader_compiler/shaders/fixed_point.hlsli"
 	;
 
+const C8 *packHlsli =
+	#include "shader_compiler/shaders/pack.hlsli"
+	;
+
 const C8 *bufferHlsli =
 	#include "shader_compiler/shaders/buffer.hlsli"
 	;
@@ -127,6 +131,7 @@ static const CompilerBuiltInInclude CompilerBuiltInIncludes[] = {
 	{ "mat.hlsli",                          matHlsli                     },
 	{ "indirect.hlsli",                     indirectHlsli                },
 	{ "fixed_point.hlsli",                  fixedPointHlsli              },
+	{ "pack.hlsli",                         packHlsli                    },
 	{ "buffer.hlsli",                       bufferHlsli                  },
 	{ "appdata.hlsli",                      appDataHlsli                 },
 

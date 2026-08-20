@@ -202,7 +202,8 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_LogicOp                   = 1 << 17,
 	EGraphicsFeatures_DualSrcBlend              = 1 << 18,
 
-	EGraphicsFeatures_Reserved19                = 1 << 19,        //Reserved, free to reuse.
+	//SV_Barycentrics in fragment shaders (SM6.1 / VK_KHR_fragment_shader_barycentric)
+	EGraphicsFeatures_Barycentrics              = 1 << 19,
 	EGraphicsFeatures_SwapchainCompute          = 1 << 20,        //isComputeExt in createSwapchain is supported
 
 	EGraphicsFeatures_ComputeDeriv              = 1 << 21,        //Compute derivatives (ddx/ddy)
@@ -383,7 +384,19 @@ typedef struct GraphicsDeviceInfo {
 
 } GraphicsDeviceInfo;
 
-typedef enum EGraphicsApi EGraphicsApi;
+//Defined here rather than in instance.h (which includes this header):
+// a C11 forward `typedef enum EGraphicsApi EGraphicsApi;` before the definition is ill-formed C++,
+// and the C++ graphics layer (graphics/graphics.hpp) includes these headers inside namespace oxc::c.
+
+#define GRAPHICS_API_VULKAN 0
+#define GRAPHICS_API_D3D12 1
+
+typedef enum EGraphicsApi {
+	EGraphicsApi_Vulkan            = GRAPHICS_API_VULKAN,
+	EGraphicsApi_Direct3D12        = GRAPHICS_API_D3D12,
+	//EGraphicsApi_Metal, EGraphicsApi_WebGPU,
+	EGraphicsApi_Count
+} EGraphicsApi;
 
 void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities);
 

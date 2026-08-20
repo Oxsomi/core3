@@ -112,4 +112,62 @@ void Test_floatType(Test *test) {
 	Test_assert(test, "BF16 bytes",        EFloatType_bytes(EFloatType_BF16) == 2);
 	Test_assert(test, "BF16 exponentBits", EFloatType_exponentBits(EFloatType_BF16) == 8);
 	Test_assert(test, "BF16 mantissaBits", EFloatType_mantissaBits(EFloatType_BF16) == 7);
+
+	//Carry across a widening exponent.
+	//Rounding the mantissa up can overflow it even when the destination has MORE exponent bits,
+	// and dropping that carry halves the value.
+
+	Test_assert(test, "F16 -> BF16 carries",  BF16_castF32(F16_castBF16(F32_castF16(7.997f))) == 8);
+	Test_assert(test, "FP24 -> TF19 carries", TF19_castF32(FP24_castTF19(F32_castFP24(31.999f))) == 32);
+
+	//Unsigned types:
+	// no sign field at all
+
+	Test_setModule(test, "EFloatType (unsigned)");
+
+	Test_assert(test, "F32 hasSign",        EFloatType_hasSign(EFloatType_F32));
+	Test_assert(test, "UF21 hasSign",       !EFloatType_hasSign(EFloatType_UF21));
+
+	Test_assert(test, "UF21 bytes",         EFloatType_bytes(EFloatType_UF21) == 4);
+
+	Test_assert(test, "UF21 exponentBits",  EFloatType_exponentBits(EFloatType_UF21) == 6);
+	Test_assert(test, "UF21 mantissaBits",  EFloatType_mantissaBits(EFloatType_UF21) == 15);
+
+	//signMask is 0, which is what makes sign/abs/isZero degrade correctly with no special cases
+
+	const UF21 uf21One = F32_castUF21(1);
+
+	Test_assert(test, "UF21 signMask",      !EFloatType_signMask(EFloatType_UF21));
+	Test_assert(test, "UF21 exponentShift", EFloatType_exponentShift(EFloatType_UF21) == 15);
+	Test_assert(test, "UF21 sign",          !EFloatType_sign(EFloatType_UF21, uf21One));
+	Test_assert(test, "UF21 abs",           EFloatType_abs(EFloatType_UF21, uf21One) == uf21One);
+	Test_assert(test, "UF21 negate no-op",  EFloatType_negate(EFloatType_UF21, uf21One) == uf21One);
+	Test_assert(test, "UF21 isZero",        EFloatType_isZero(EFloatType_UF21, 0));
+	Test_assert(test, "UF21 isZero",        !EFloatType_isZero(EFloatType_UF21, uf21One));
+
+	//Classification still works without a sign bit
+
+	Test_assert(test, "UF21 isInf",         EFloatType_isInf(EFloatType_UF21, (U64)63 << 15));
+	Test_assert(test, "UF21 isNaN",         EFloatType_isNaN(EFloatType_UF21, ((U64)63 << 15) | 1));
+	Test_assert(test, "UF21 isDeN",         EFloatType_isDeN(EFloatType_UF21, 1));
+
+	//DOWNCAST across the sign boundary:
+	// a negative cannot be represented, so it CLAMPS to +0 rather than arriving as its magnitude,
+	// signMask being 0 would otherwise just drop the sign
+
+	Test_assert(test, "F32 -> UF21 clamps", !F32_castUF21(-3.5f));
+	Test_assert(test, "F64 -> UF21 clamps", !F64_castUF21(-1e-8));
+	Test_assert(test, "F32 -> UF21 keeps +", UF21_castF32(F32_castUF21(3.5f)) == 3.5f);
+
+	//UPCAST across it:
+	// an unsigned source can never produce a negative
+
+	Test_assert(test, "UF21 -> F32 positive", UF21_castF32(F32_castUF21(3.5f)) > 0);
+	Test_assert(test, "UF21 -> F16 positive", F16_castF32(UF21_castF16(F32_castUF21(3.5f))) > 0);
+
+	//UF21's wider exponent reaches below F16's smallest normal,
+	// which is the point of spending the sign bit there rather than on a 16th mantissa bit
+
+	Test_assert(test, "UF21 holds 1e-9",      UF21_castF32(F32_castUF21(1e-9f)) > 0);
+	Test_assert(test, "F16 flushes 1e-9",     F16_castF32(F32_castF16(1e-9f)) == 0);
 }

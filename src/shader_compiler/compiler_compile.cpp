@@ -249,6 +249,14 @@ Bool Compiler_compile(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_query", alloc, e_rr
 				));
 
+			//SV_Barycentrics is a semantic DXC lowers natively (no inline [[vk::ext_*]] declares the extension for us
+			// like the RT hlsli helpers do), so the allow list must admit it.
+
+			if(toCompile->extensions & ESHExtension_Barycentrics)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_KHR_fragment_shader_barycentric", alloc, e_rr
+				));
+
 			//Full bindless (ResourceDescriptorHeap/SamplerDescriptorHeap lowered to SPV_EXT_descriptor_heap).
 			//-fspv-use-descriptor-heap opts into the real heap lowering (the default is emulation through
 			// descriptor indexing runtime arrays, which OxC3 doesn't accept as registers).

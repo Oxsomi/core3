@@ -47,10 +47,7 @@ typedef enum EOptExtensions {
 	EOptExtensions_RayQuery,
 	EOptExtensions_RayAcceleration,
 
-	//Reserved, free to reuse.
-	//The slot must stay: it indexes the positional extension name table in vk_instance.c.
-
-	EOptExtensions_Reserved12,
+	EOptExtensions_Barycentrics,       //VK_KHR_fragment_shader_barycentric (SV_Barycentrics in fragment shaders)
 	EOptExtensions_RayReorder,
 	EOptExtensions_MeshShader,
 	EOptExtensions_VariableRateShading,

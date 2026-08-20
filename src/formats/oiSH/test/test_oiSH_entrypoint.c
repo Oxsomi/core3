@@ -256,11 +256,13 @@ void Test_SHFileAddEntryMissMustHavePayload(Test *t) {
 	U16 binId = 0;
 	e.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
 
+	//No upper bound beyond the U8 type itself:
+	// payloadSize's 255 ceiling is the format's,
+	// and a larger value cannot be represented to test. 200 was rejected when the cap was 128.
+
 	Test_assert(t, "zero payload rejected",     !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
 	e.payloadSize = 200;
-	Test_assert(t, "payload > 128 rejected",    !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
-	e.payloadSize = 128;
-	Test_assert(t, "payload == 128 accepted",    SHFile_addEntrypoint(&sh, &e, t->alloc, &t->err));
+	Test_assert(t, "payload == 200 accepted",    SHFile_addEntrypoint(&sh, &e, t->alloc, &t->err));
 
 	SHFile_free(&sh, t->alloc);
 }

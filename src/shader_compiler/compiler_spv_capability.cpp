@@ -56,8 +56,14 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			ext = ESHExtension_RayReorder;
 			break;
 
-		//SM6.10 ray triangle vertex position fetch (SPV_KHR_ray_tracing_position_fetch): the ray-pipeline
-		//(RayTracingPositionFetchKHR) and RayQuery (RayQueryPositionFetchKHR) capabilities share one extension.
+		//SM6.10 ray triangle vertex position fetch (SPV_KHR_ray_tracing_position_fetch):
+		// the ray-pipeline (RayTracingPositionFetchKHR) and RayQuery (RayQueryPositionFetchKHR) capabilities share one
+		// extension.
+		//SV_Barycentrics / GetAttributeAtVertex (SPV_KHR_fragment_shader_barycentric)
+		case SpvCapabilityFragmentBarycentricKHR:
+			ext = ESHExtension_Barycentrics;
+			break;
+
 		case SpvCapabilityRayTracingPositionFetchKHR:
 		case SpvCapabilityRayQueryPositionFetchKHR:
 			ext = ESHExtension_RayTriPosition;
@@ -373,7 +379,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		//Possible in the future? TODO:
 
 		case SpvCapabilityShaderViewportIndexLayerEXT:
-		case SpvCapabilityFragmentBarycentricKHR:
 		case SpvCapabilityDemoteToHelperInvocation:
 		case SpvCapabilityExpectAssumeKHR:
 		case SpvCapabilityBitInstructions:

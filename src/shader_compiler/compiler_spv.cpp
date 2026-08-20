@@ -351,9 +351,9 @@ extern "C" Bool Compiler_processSPIRV(
 
 				if (isPayload) {
 
-					if(structSize > 128)
+					if(structSize > 255)
 						retError(clean, Error_outOfBounds(
-							0, structSize, 128, "Compiler_processSPIRV() payload out of bounds"
+							0, structSize, 255, "Compiler_processSPIRV() payload out of bounds"
 						));
 
 					payloadSize = (U8) structSize;

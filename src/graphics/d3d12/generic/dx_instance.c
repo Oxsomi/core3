@@ -734,6 +734,13 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_WriteBufferImmediate;
 
+		//SV_Barycentrics / GetAttributeAtVertex.
+		//No shader-model gate needed:
+		// the SM6.5 baseline above already exceeds the SM6.1 the semantic requires.
+
+		if(opt3.BarycentricsSupported)
+			caps.features |= EGraphicsFeatures_Barycentrics;
+
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS4, &opt4, sizeof(opt4))) &&
 			opt4.Native16BitShaderOpsSupported

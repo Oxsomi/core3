@@ -299,6 +299,17 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
+		case C8x2('B', 'a'):    //Barycentrics
+
+			if(
+				stageNameLen == 12 &&
+				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('r', 'y', 'c', 'e', 'n', 't', 'r', 'i') &&
+				Buffer_readU16(buf, 10, NULL, NULL) == C8x2('c', 's')
+			)
+				return ESHExtension_Barycentrics;
+
+			break;
+
 		case C8x2('A', 't'):    //AtomicI64, AtomicF32, AtomicF64
 
 			if(stageNameLen == 9)

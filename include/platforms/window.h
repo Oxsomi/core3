@@ -263,7 +263,10 @@ static inline Bool Window_terminate(Window *w) {
 	if(!w)
 		return false;
 
-	w->flags |= EWindowFlags_ShouldTerminate;        //Mark thread for destroy
+	//Cast:
+	// |= yields int, and int doesn't implicitly convert back to a C++ enum,
+	// this is the one line that kept window.h out of namespace oxc::c (C is fine either way).
+	w->flags = (EWindowFlags)(w->flags | EWindowFlags_ShouldTerminate);   //Mark thread for destroy
 	return true;
 }
 
