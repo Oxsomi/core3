@@ -182,6 +182,25 @@ typedef struct DxCommandBufferState {
 	RefPtr *tempPipelines[EPipelineType_Count];       //Pipelines that were set via command, but not bound yet
 	RefPtr *pipeline;
 
+	//Bindful: table state set by BindDescriptorTable, emitted lazily at the work ops.
+	//defaultDescriptorsDirty means a custom root signature switch dropped the default root arguments, so the
+	// next work op on a default layout pipeline has to rebind them.
+
+	//Bindful: heap and table state set by the bind commands, emitted lazily at the work ops.
+	//The heap bind is EXPLICIT because switching heaps can stall the GPU on some hardware; lastBoundHeap
+	// tracks what the command buffer really has so the switch only ever goes out when it changed.
+	//defaultDescriptorsBound starts false: the default (bindless) heap, root signature and table only bind at
+	// the first work op that runs a default layout pipeline, so a purely bindful frame never pays for them.
+
+	RefPtr *boundDescriptorTable;
+	RefPtr *boundDescriptorHeap;
+	RefPtr *lastBoundHeap;
+	RefPtr *lastBoundTable[2];                        //Per bind point: [0] = graphics, [1] = compute
+	ID3D12RootSignature *lastRootSig[2];
+
+	Bool defaultDescriptorsBound;
+	U8 padding1[7];
+
 	ImageAndRange boundTargets[9];                    //All 8 RTVs and DSV
 	ImageAndRange resolveTargets[9];                  //Dst MSAA targets
 

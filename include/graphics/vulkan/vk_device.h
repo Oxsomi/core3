@@ -270,6 +270,24 @@ typedef struct VkCommandBufferState {
 	RefPtr *tempPipelines[EPipelineType_Count];   //Pipelines that were set via command, but not bound yet
 	RefPtr *pipelines[EPipelineType_Count];       //Currently bound pipelines
 
+	//Bindful: table state set by BindDescriptorTable, emitted lazily at the work ops.
+	//defaultDescriptorsDirty means a custom layout bind disturbed the default table's sets, so the next work
+	// op on a default layout pipeline has to rebind them.
+
+	//Bindful: heap and table state set by the bind commands, emitted lazily at the work ops.
+	//The heap has nothing to emit on Vulkan today (a descriptor heap is a pool), but the state is recorded so
+	// VK_EXT_descriptor_heap can map the explicit bind directly later.
+	//defaultDescriptorsBound starts false: the default sets only bind at the first work op that runs a
+	// default layout pipeline, so a purely bindful frame never pays for them.
+
+	RefPtr *boundDescriptorTable;
+	RefPtr *boundDescriptorHeap;
+	RefPtr *lastBoundTable[3];
+	VkPipelineLayout lastBoundLayout[3];
+
+	Bool defaultDescriptorsBound;
+	U8 padding0[15];
+
 	F32x4 blendConstants, tempBlendConstants;
 
 	U8 stencilRef, tempStencilRef;

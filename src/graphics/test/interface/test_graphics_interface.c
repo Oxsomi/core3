@@ -396,6 +396,33 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	//40. Runs after submit because half of it needs a resource the device is still holding.
 
 	Test_graphicsDescriptorAlloc(t, deviceRef);
+
+	//41. The bindful path: a pipeline with its own layout and a table bound at record time.
+
+	Test_graphicsBindful(t, deviceRef);
+	Test_graphicsBindfulAdvanced(t, deviceRef);
+	Test_graphicsBindfulSampler(t, deviceRef);
+	Test_graphicsBindfulDraw(t, deviceRef);
+	Test_graphicsBindfulLayoutSwitch(t, deviceRef);
+	Test_graphicsBindfulCbuffer(t, deviceRef);
+	Test_graphicsBindfulRwTexture(t, deviceRef);
+	Test_graphicsBindfulArray(t, deviceRef);
+	Test_graphicsBindfulSpaces(t, deviceRef);
+	Test_graphicsBindfulIndirect(t, deviceRef);
+	Test_graphicsBindfulDrawFixed(t, deviceRef);
+	Test_graphicsBindfulTableUpdate(t, deviceRef);
+	Test_graphicsBindfulSharedRegister(t, deviceRef);
+	Test_graphicsBindfulHeapRecycle(t, deviceRef);
+	Test_graphicsBindfulPushDescriptorBoundary(t, deviceRef);
+	Test_graphicsBindfulSamplerCmp(t, deviceRef);
+	Test_graphicsBindfulStructured(t, deviceRef);
+	Test_graphicsBindfulAppendCounter(t, deviceRef);
+	Test_graphicsBindlessInterleave(t, deviceRef);
+	Test_graphicsBindlessEverywhere(t, deviceRef);
+	Test_graphicsBindfulRays(t, deviceRef);
+	Test_graphicsBindfulOmm(t, deviceRef);
+	Test_graphicsBindfulRayQueryGraphics(t, deviceRef);
+	Test_graphicsBindfulAtomicFloat(t, deviceRef);
 	Test_graphicsGpuExecute(t, deviceRef);
 	Test_graphicsAccelerationStructures(t, deviceRef);
 

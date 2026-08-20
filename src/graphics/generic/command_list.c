@@ -316,14 +316,14 @@ Bool CommandListRef_transitionBuffer(
 				4, "CommandListRef_transitionBuffer()::buffer was already transitioned in scope!"
 			));
 
-		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		oldState->stageMask |= EPipelineStage_toMask(stage);
 		return s_uccess;
 	}
 
 	const TransitionInternal transition = (TransitionInternal) {
 		.resource = buffer,
 		.range = (ResourceRange) { .buffer = range },
-		.stage = stage,
+		.stageMask = EPipelineStage_toMask(stage),
 		.type = type
 	};
 
@@ -489,11 +489,13 @@ Bool CommandListRef_transitionRTAS(
 				4, "CommandListRef_transitionRTAS()::rtas was already transitioned in scope!"
 			));
 
-		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		oldState->stageMask |= EPipelineStage_toMask(stage);
 		return s_uccess;
 	}
 
-	const TransitionInternal transition = (TransitionInternal) { .resource = rtasPtr, .stage = stage, .type = type };
+	const TransitionInternal transition = (TransitionInternal) {
+		.resource = rtasPtr, .stageMask = EPipelineStage_toMask(stage), .type = type
+	};
 	gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
 
 clean:
@@ -541,14 +543,14 @@ Bool CommandListRef_transitionImage(
 
 		//To combine shader transitions we just take the highest up shader stage it's used
 
-		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		oldState->stageMask |= EPipelineStage_toMask(stage);
 		return s_uccess;
 	}
 
 	const TransitionInternal transition = (TransitionInternal) {
 		.resource = image,
 		.range = (ResourceRange) { .image = range },
-		.stage = stage,
+		.stageMask = EPipelineStage_toMask(stage),
 		.type = type
 	};
 
@@ -657,14 +659,21 @@ Bool CommandListRef_startScope(
 				retError(clean, Error_constData(
 					0, 0, "CommandListRef_startScope()::transitions[i].resource should be writable"));
 
-			if(!transition.isWrite && !(resource.flags & EGraphicsResourceFlag_ShaderRead))
+			//A constant buffer read is a shader read too: CBV capability comes from the uniform usage
+			// rather than ShaderRead, which is the SRV path (see EGraphicsResourceFlag_ShaderRead's docs)
+
+			const Bool isUniform =
+				res->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer &&
+				(DeviceBufferRef_ptr(res)->usage & EDeviceBufferUsage_Uniform);
+
+			if(!transition.isWrite && !(resource.flags & EGraphicsResourceFlag_ShaderRead) && !isUniform)
 				retError(clean, Error_unsupportedOperation(
 					1, "CommandListRef_startScope()::transitions[i].resource should be readable"));
 
 			transitionDst = (TransitionInternal) {
 				.resource = res,
 				.range = transition.range,
-				.stage = transition.stage,
+				.stageMask = EPipelineStage_toMask(transition.stage),
 				.type = transition.isWrite ? ETransitionType_ShaderWrite : ETransitionType_ShaderRead
 			};
 		}
@@ -684,9 +693,10 @@ Bool CommandListRef_startScope(
 					0, "CommandListRef_startScope()::transitions[i].resource is already transitioned"
 				));
 
-			//To combine shader transitions we just take the highest up shader stage it's used
+			//Combining two declarations for one resource is a union: the resource really is accessed from
+			// every stage that was declared, and a mask is the only thing that can say so.
 
-			found->stage = (EPipelineStage) U64_min(found->stage, transitionDst.stage);
+			found->stageMask |= transitionDst.stageMask;
 			continue;
 		}
 
@@ -815,6 +825,16 @@ clean:
 
 		for(U64 i = 0; i < EPipelineType_Count; ++i)
 			commandList->pipeline[i] = NULL;
+
+		commandList->boundDescriptorTable = NULL;
+		commandList->boundDescriptorHeap = NULL;
+
+		//The cached triple names objects by identity, and a freed pipeline's address could be reused by a
+		// new one, so the cache doesn't outlive the scope that proved it.
+
+		commandList->validatedPipeline = NULL;
+		commandList->validatedTable = NULL;
+		commandList->validatedHeap = NULL;
 
 		ListTransitionInternal_clear(&commandList->pendingTransitions, e_rr);
 

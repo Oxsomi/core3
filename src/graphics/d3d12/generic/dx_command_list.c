@@ -33,6 +33,10 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/opacity_micromap.h"
+#include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/descriptor_layout.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/blas.h"
 #include "types/container/buffer.h"
 #include "types/math/vec4i_swizzle.h"
@@ -170,6 +174,195 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 
 	deviceExt->device->lpVtbl->CreateDepthStencilView(deviceExt->device, resource, &dsv, location);
 	return location;
+}
+
+void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *commandBuffer);
+
+//Bindful: descriptors are emitted lazily at the work op, where the pipeline (and so the root
+// signature) is known; binds only set state.
+//A custom layout switches the root signature, which drops EVERY root argument, so the default layout state
+// is marked dirty and a later default layout work op re-runs the frame rebind.
+
+static void DxCommandBufferState_bindDescriptors(
+	DxCommandBufferState *temp,
+	GraphicsDevice *device,
+	PipelineRef *pipelineRef,
+	Bool isCompute
+) {
+
+	PipelineLayoutRef *layoutRef = PipelineRef_ptr(pipelineRef)->layout;
+	DxCommandBuffer *buffer = temp->buffer;
+
+	if (layoutRef == device->defaultPipelineLayout) {
+
+		if (!temp->defaultDescriptorsBound) {
+
+			temp->defaultDescriptorsBound = true;
+			GraphicsDevice_rebindDescriptors(device, buffer);
+
+			//The rebind switched the heap and root signatures back to the defaults, so the custom path's
+			// trackers no longer describe what is bound.
+
+			temp->lastBoundHeap = NULL;
+			temp->lastBoundTable[0] = temp->lastBoundTable[1] = NULL;
+			temp->lastRootSig[0] = temp->lastRootSig[1] = NULL;
+		}
+
+		return;
+	}
+
+	const PipelineLayout *layout = PipelineLayoutRef_ptr(layoutRef);
+	DxPipelineLayout *layoutExt = PipelineLayout_ext((PipelineLayout*)layout, Dx);
+
+	const U8 bindPoint = isCompute ? 1 : 0;
+
+	//Tracked separately like the other command buffer state: the root signature only re-emits when it truly
+	// changed, because setting one (even the same one) drops every root argument on D3D12.
+
+	if (temp->lastRootSig[bindPoint] != layoutExt->rootSig) {
+
+		if(isCompute)
+			buffer->lpVtbl->SetComputeRootSignature(buffer, layoutExt->rootSig);
+
+		else buffer->lpVtbl->SetGraphicsRootSignature(buffer, layoutExt->rootSig);
+
+		temp->lastRootSig[bindPoint] = layoutExt->rootSig;
+		temp->lastBoundTable[bindPoint] = NULL;        //The switch dropped every root argument
+		temp->defaultDescriptorsBound = false;
+	}
+
+	if(!temp->boundDescriptorTable || !layout->info.bindings)
+		return;
+
+	//Root arguments persist while the root signature does, so an unchanged table has nothing to re-emit
+
+	if(temp->lastBoundTable[bindPoint] == temp->boundDescriptorTable)
+		return;
+
+	temp->lastBoundTable[bindPoint] = temp->boundDescriptorTable;
+
+	const DescriptorTable *table = DescriptorTableRef_ptr(temp->boundDescriptorTable);
+	DxDescriptorTable *tableExt = DescriptorTable_ext((DescriptorTable*)table, Dx);
+
+	DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(table->parent), Dx);
+
+	//The table's heap has to be current; when it differs from the default heap this switches it, and the
+	// default rebind switches back through the dirty flag above.
+
+	if (temp->boundDescriptorHeap && temp->lastBoundHeap != temp->boundDescriptorHeap) {
+
+		ID3D12DescriptorHeap *descriptorHeaps[2] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };
+		buffer->lpVtbl->SetDescriptorHeaps(buffer, heap->samplerHeap.heap ? 2 : 1, descriptorHeaps);
+
+		temp->lastBoundHeap = temp->boundDescriptorHeap;
+	}
+
+	//The layout has at most two root tables (resources, samplers), created in encounter order; each binding's
+	// root param is in rootParamOffsets, so the first binding of each class names its table's param.
+
+	const DescriptorLayout *descLayout = DescriptorLayoutRef_ptr(layout->info.bindings);
+	DxDescriptorLayout *descLayoutExt = DescriptorLayout_ext((DescriptorLayout*)descLayout, Dx);
+
+	U8 resourceParam = U8_MAX, samplerParam = U8_MAX;
+
+	for (U64 i = 0; i < descLayout->info.bindings.length; ++i) {
+
+		const ESHRegisterType type =
+			(ESHRegisterType)(descLayout->info.bindings.ptr[i].registerType & ESHRegisterType_TypeMask);
+
+		const Bool isSampler = type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState;
+
+		if(isSampler && samplerParam == U8_MAX)
+			samplerParam = descLayoutExt->rootParamOffsets.ptr[i];
+
+		else if(!isSampler && resourceParam == U8_MAX)
+			resourceParam = descLayoutExt->rootParamOffsets.ptr[i];
+	}
+
+	if (resourceParam != U8_MAX) {
+
+		const D3D12_GPU_DESCRIPTOR_HANDLE handle = (D3D12_GPU_DESCRIPTOR_HANDLE) {
+			.ptr = heap->resourcesHeap.gpuHandle.ptr + tableExt->allocationLocations[0] * heap->resourcesHeap.gpuIncrement
+		};
+
+		if(isCompute)
+			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, resourceParam, handle);
+
+		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, resourceParam, handle);
+	}
+
+	if (samplerParam != U8_MAX) {
+
+		const D3D12_GPU_DESCRIPTOR_HANDLE handle = (D3D12_GPU_DESCRIPTOR_HANDLE) {
+			.ptr = heap->samplerHeap.gpuHandle.ptr + tableExt->allocationLocations[1] * heap->samplerHeap.gpuIncrement
+		};
+
+		if(isCompute)
+			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, samplerParam, handle);
+
+		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, samplerParam, handle);
+	}
+}
+
+//A declared stage stands for itself AND every later stage that could reach the resource, because a scope
+//names only the FIRST stage that accesses it. D3D12 groups the graphics shader stages into two scopes, so a
+//pre pixel stage means both of them, while compute stays a scope of its own rather than being folded in
+//through NON_PIXEL_SHADING as it used to be.
+
+//The acceleration structure access bits accept only a short list of sync scopes, and the per stage graphics
+//scopes are not on it: a graphics stage reaches an RTAS through inline raytracing (RayQuery), for which
+//ALL_SHADING is the narrowest legal scope. Pairing VERTEX_SHADING or PIXEL_SHADING with an RTAS access bit
+//is rejected outright by the debug layer, so the generic mapper below can't be reused here.
+
+static D3D12_BARRIER_SYNC DxBarrierSyncRtas_fromMask(U32 stageMask) {
+
+	D3D12_BARRIER_SYNC sync = D3D12_BARRIER_SYNC_NONE;
+
+	//ALL_SHADING already subsumes compute and raytracing, so those only matter on their own
+
+	if(stageMask & (EPipelineStageMask_PrePixel | ((U32)1 << EPipelineStage_Pixel)))
+		sync |= D3D12_BARRIER_SYNC_ALL_SHADING;
+
+	else {
+
+		if(stageMask & ((U32)1 << EPipelineStage_Compute))
+			sync |= D3D12_BARRIER_SYNC_COMPUTE_SHADING;
+
+		if(stageMask & EPipelineStageMask_RtAny)
+			sync |= D3D12_BARRIER_SYNC_RAYTRACING;
+	}
+
+	if(stageMask & EPipelineStageMask_RTASBuild)
+		sync |= D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE;
+
+	//An empty scope would pair SYNC_NONE with an access bit that isn't NO_ACCESS, which isn't legal either
+
+	if(!sync)
+		sync = D3D12_BARRIER_SYNC_ALL_SHADING;
+
+	return sync;
+}
+
+static D3D12_BARRIER_SYNC DxBarrierSync_fromMask(U32 stageMask) {
+
+	D3D12_BARRIER_SYNC sync = D3D12_BARRIER_SYNC_NONE;
+
+	if(stageMask & EPipelineStageMask_PrePixel)
+		sync |= D3D12_BARRIER_SYNC_VERTEX_SHADING | D3D12_BARRIER_SYNC_PIXEL_SHADING;
+
+	if(stageMask & ((U32)1 << EPipelineStage_Pixel))
+		sync |= D3D12_BARRIER_SYNC_PIXEL_SHADING;
+
+	if(stageMask & ((U32)1 << EPipelineStage_Compute))
+		sync |= D3D12_BARRIER_SYNC_COMPUTE_SHADING;
+
+	if(stageMask & EPipelineStageMask_RtAny)
+		sync |= D3D12_BARRIER_SYNC_RAYTRACING;
+
+	if(stageMask & EPipelineStageMask_RTASBuild)
+		sync |= D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE;
+
+	return sync;
 }
 
 void DX_WRAP_FUNC(CommandList_process)(
@@ -544,11 +737,15 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 					if (i == count) {        //Depth stencil
 
-						if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)                //Take both planes (depth & stencil)
-							++range.NumPlanes;
+						//A depth ONLY format (D16, D32) has a single plane, so claiming two is out of bounds.
+						//Only a combined format has a stencil plane to add, and a stencil only format IS the
+						// stencil plane, which sits after the depth one.
 
-						else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)        //Take only the stencil plane
+						if(utex.depthFormat == EDepthStencilFormat_S8X24Ext)                //Take only the stencil plane
 							++range.FirstPlane;
+
+						else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)        //Take depth & stencil
+							++range.NumPlanes;
 					}
 
 					if(!DxUnifiedTexture_transition(
@@ -577,11 +774,13 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				if (i == count) {        //Depth stencil
 
-					if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)                //Take both planes (depth & stencil)
-						++range.NumPlanes;
+					//Same plane rule as the discard above: a depth only format is one plane
 
-					else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)        //Take only the stencil plane
+					if(utex.depthFormat == EDepthStencilFormat_S8X24Ext)                //Take only the stencil plane
 						++range.FirstPlane;
+
+					else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)        //Take depth & stencil
+						++range.NumPlanes;
 				}
 
 				if(!DxUnifiedTexture_transition(
@@ -617,8 +816,20 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				DXGI_FORMAT format = 0;
 
+				//ResolveSubresource refuses depth formats outright: it takes only fully typed non integer
+				// non stencil formats, plus the two depth readable typeless ones it names in its own
+				// diagnostic. Those are exactly the formats a depth SRV uses, so the resolve borrows that
+				// mapping rather than handing it the DSV format, which is what made depth resolve fail.
+
 				if(i == count)
-					format = EDepthStencilFormat_toDXFormat(utex.depthFormat);
+					switch(utex.depthFormat) {
+
+						default:
+						case EDepthStencilFormat_D32:            format = DXGI_FORMAT_R32_FLOAT;               break;
+						case EDepthStencilFormat_D16:            format = DXGI_FORMAT_R16_UNORM;               break;
+						case EDepthStencilFormat_D32S8X24Ext:    format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS; break;
+						case EDepthStencilFormat_D24S8Ext:       format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;   break;
+					}
 
 				else format = ETextureFormatId_toDXFormat(utex.textureFormatId);
 
@@ -700,6 +911,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 					Pipeline_ext(PipelineRef_ptr(temp->pipeline), Dx)->pso
 				);
 			}
+
+			DxCommandBufferState_bindDescriptors(temp, device, temp->pipeline, false);
 
 			PipelineGraphicsInfo *graphicsShader = Pipeline_info(PipelineRef_ptr(temp->pipeline), PipelineGraphicsInfo);
 			D3D12_PRIMITIVE_TOPOLOGY topology = 0;
@@ -878,6 +1091,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 				);
 			}
 
+			DxCommandBufferState_bindDescriptors(temp, device, temp->pipeline, true);
+
 			if(op == ECommandOp_Dispatch) {
 				DispatchCmd dispatch = *(const DispatchCmd*)data;
 				buffer->lpVtbl->Dispatch(
@@ -922,6 +1137,14 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 		//An OMM array is an acceleration structure on D3D12, so it flushes the same way
 
+		case ECommandOp_BindDescriptorTable:
+			temp->boundDescriptorTable = *(RefPtr* const*) data;
+			break;
+
+		case ECommandOp_BindDescriptorHeap:
+			temp->boundDescriptorHeap = *(RefPtr* const*) data;
+			break;
+
 		case ECommandOp_UpdateOmmExt:
 
 			if(!(DX_WRAP_FUNC(OpacityMicromapRef_flush))(temp, deviceRef, *(OpacityMicromapRef**)data, e_rr))
@@ -944,7 +1167,38 @@ void DX_WRAP_FUNC(CommandList_process)(
 				);
 			}
 
+			//Ray tracing dispatch reads through the compute root signature on D3D12
+
+			DxCommandBufferState_bindDescriptors(
+				temp, device, temp->tempPipelines[EPipelineType_RaytracingExt], true
+			);
+
 			PipelineRaytracingInfo info = *Pipeline_info(raytracingPipeline, PipelineRaytracingInfo);
+
+			//The shader binding table is read by the trace itself rather than by anything the scope declared,
+			// so no transition ever names it and its tracked state stays where the upload copy left it.
+			//Ordering it here is what makes the trace's reads visible to that copy; after the first trace the
+			// buffer already sits in this state and the helper adds no barrier.
+
+			if (info.shaderBindingTable) {
+
+				D3D12_BARRIER_GROUP sbtDependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+				DeviceBuffer *sbtBuffer = DeviceBufferRef_ptr(info.shaderBindingTable);
+
+				if(!DxDeviceBuffer_transition(
+					DeviceBuffer_ext(sbtBuffer, Dx),
+					D3D12_BARRIER_SYNC_RAYTRACING,
+					D3D12_BARRIER_ACCESS_SHADER_RESOURCE,
+					&deviceExt->bufferTransitions,
+					&sbtDependency, alloc, e_rr
+				))
+					Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
+				else if(sbtDependency.NumBarriers)
+					buffer->lpVtbl->Barrier(temp->buffer, 1, &sbtDependency);
+
+				ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+			}
 
 			D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE hit = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) {
 				.StartAddress = getDxDeviceAddress((DeviceData) { .buffer = info.shaderBindingTable }),
@@ -1049,33 +1303,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 				if(transition.type == ETransitionType_KeepAlive)        //TODO: Residency management
 					continue;
 
-				D3D12_BARRIER_SYNC pipelineStage = 0;
-
-				switch (transition.stage) {
-
-					default:                                                                                        break;
-					case EPipelineStage_Compute:        pipelineStage = D3D12_BARRIER_SYNC_COMPUTE_SHADING;            break;
-					case EPipelineStage_Vertex:            pipelineStage = D3D12_BARRIER_SYNC_VERTEX_SHADING;            break;
-					case EPipelineStage_Pixel:            pipelineStage = D3D12_BARRIER_SYNC_PIXEL_SHADING;            break;
-
-					case EPipelineStage_GeometryExt:
-					case EPipelineStage_Domain:
-					case EPipelineStage_Hull:
-						pipelineStage = D3D12_BARRIER_SYNC_NON_PIXEL_SHADING;
-						break;
-
-					case EPipelineStage_RaygenExt:
-					case EPipelineStage_CallableExt:
-					case EPipelineStage_MissExt:
-					case EPipelineStage_ClosestHitExt:
-					case EPipelineStage_AnyHitExt:
-						pipelineStage = D3D12_BARRIER_SYNC_RAYTRACING;
-						break;
-
-					case EPipelineStage_RTASBuild:
-						pipelineStage = D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE;
-						break;
-				}
+				D3D12_BARRIER_SYNC pipelineStage = DxBarrierSync_fromMask(transition.stageMask);
 
 				//If it's on the GPU then we have to rely on manual RTAS transitions
 
@@ -1096,7 +1324,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 						DeviceBuffer_ext(DeviceBufferRef_ptr(rtas.asBuffer), Dx),
 
-						pipelineStage,
+						DxBarrierSyncRtas_fromMask(transition.stageMask),
 
 						transition.type == ETransitionType_ShaderWrite ?
 							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE |
@@ -1119,6 +1347,21 @@ void DX_WRAP_FUNC(CommandList_process)(
 				D3D12_BARRIER_ACCESS access = 0;
 
 				access = isShaderRead ? D3D12_BARRIER_ACCESS_SHADER_RESOURCE : D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
+
+				//A readable uniform buffer is read through CONSTANT_BUFFER rather than SHADER_RESOURCE;
+				// both can apply when a buffer carries ShaderRead and the uniform usage at once
+
+				if (
+					isShaderRead && !isImage &&
+					transition.resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer &&
+					(DeviceBufferRef_ptr(transition.resource)->usage & EDeviceBufferUsage_Uniform)
+				) {
+
+					access |= D3D12_BARRIER_ACCESS_CONSTANT_BUFFER;
+
+					if(!(DeviceBufferRef_ptr(transition.resource)->resource.flags & EGraphicsResourceFlag_ShaderRead))
+						access &=~ D3D12_BARRIER_ACCESS_SHADER_RESOURCE;
+				}
 
 				if(isImage)
 					layout = isShaderRead ? D3D12_BARRIER_LAYOUT_SHADER_RESOURCE : D3D12_BARRIER_LAYOUT_UNORDERED_ACCESS;
@@ -1152,11 +1395,25 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 							break;
 
+						//A depth resolve target is discarded and resolved as a depth stencil resource, not as a
+						// render target: RENDER_TARGET access and layout aren't legal on a texture that was never
+						// created with the render target flag, and this scope is what the next barrier uses as its
+						// source, so declaring the wrong one lets the resolve race the discard that precedes it.
+						//Clear only ever reaches render textures and swapchains (clearImages refuses anything
+						// else), so its resource is never depth stencil and the ternaries collapse for it.
+
 						case ETransitionType_ResolveTargetWrite:        //We handle a 'secret' transition after (needs discard first)
 						case ETransitionType_Clear:
-							pipelineStage = D3D12_BARRIER_SYNC_RENDER_TARGET;
-							access = D3D12_BARRIER_ACCESS_RENDER_TARGET;
-							layout = D3D12_BARRIER_LAYOUT_RENDER_TARGET;
+
+							pipelineStage =
+								isDepthStencil ? D3D12_BARRIER_SYNC_DEPTH_STENCIL : D3D12_BARRIER_SYNC_RENDER_TARGET;
+
+							access =
+								isDepthStencil ? D3D12_BARRIER_ACCESS_DEPTH_STENCIL_WRITE : D3D12_BARRIER_ACCESS_RENDER_TARGET;
+
+							layout =
+								isDepthStencil ? D3D12_BARRIER_LAYOUT_DEPTH_STENCIL_WRITE : D3D12_BARRIER_LAYOUT_RENDER_TARGET;
+
 							break;
 
 						case ETransitionType_CopyRead:

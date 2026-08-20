@@ -60,6 +60,20 @@ typedef struct CommandList {
 
 	PipelineRef *pipeline[EPipelineType_Count];
 
+	//Bindful: heap and table state for pipelines with a custom layout; reset per scope like the pipelines
+	// above. The work ops validate that the bound table's parent IS the bound heap.
+
+	DescriptorTableRef *boundDescriptorTable;
+	DescriptorHeapRef *boundDescriptorHeap;
+
+	//The (pipeline, table, heap) triple the last successful work op validation ran against.
+	//Bind state validation only depends on those identities, so as long as they match, re-validating is
+	// skipped: 5000 draws with nothing rebound between them pay the price once.
+
+	PipelineRef *validatedPipeline;
+	DescriptorTableRef *validatedTable;
+	DescriptorHeapRef *validatedHeap;
+
 	ImageAndRange boundImages[8];
 
 	U16 tempStateFlags;                                //ECommandStateFlags

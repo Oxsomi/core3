@@ -50,17 +50,6 @@
 #include "types/base/string_base.h"
 #include "test_graphics_shared.h"
 
-//One app data layout shared by every test shader, so a single submit can feed mixed pipelines.
-//handles[0] = output buffer, handles[1] = base value or TLAS, handles[2] = indirect argument buffer.
-//color is what the pixel shaders return, read as F32x4 at U32 offset 4.
-
-typedef struct TestShaderAppData {
-	U32 handles[4];
-	F32 color[4];
-	U32 logicSrc0[4];        //U32 offsets 8..11: what logic op instance 0 writes
-	U32 logicSrc1[4];        //U32 offsets 12..15: what instance 1 XORs on top
-} TestShaderAppData;
-
 //The gtest section only holds compiled oiSH files when the build had the shader compiler, so absence means skip.
 //Loading the section twice is harmless, which keeps every module self contained.
 
@@ -187,6 +176,95 @@ Bool TestShaders_submitAndWait(
 	return Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err)) && ok;
 }
 
+//D3D12's GPU based validation instruments raytracing libs into invalid bytecode
+// ("Internal declaration 'GBV_Debug_Resource' is unused"), hardware then hangs executing it and even
+// WARP's surviving run leaves those bytecode errors in the counters, failing the validation clean check.
+//So on D3D12 with it enabled, raytracing modules trace on their own device with only GPU based validation
+// off, which keeps the coverage and still hard checks that instance's counters at the end.
+
+Bool TestShaders_rtDedicatedDevice(
+	Test *t,
+	GraphicsDeviceRef **deviceRef,
+	GraphicsInstanceRef **ownInstanceRef,
+	GraphicsDeviceRef **ownDeviceRef,
+	RefPtrType *instanceType
+) {
+
+	const Allocator *alloc = Platform_instance->alloc;
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
+	const GraphicsInstance *suiteInstance = GraphicsInstanceRef_ptr(device->instance);
+
+	const Bool gpuValidationOn =
+		(suiteInstance->flags & EGraphicsInstanceFlags_IsDebug) &&
+		!(suiteInstance->flags & EGraphicsInstanceFlags_DisableGPUBV);
+
+	if (suiteInstance->api != EGraphicsApi_Direct3D12 || !gpuValidationOn)
+		return true;
+
+	Test_print(t, "D3D12 GPU based validation breaks raytracing state objects, tracing on a dedicated device");
+
+	GraphicsApplicationInfo appInfo = (GraphicsApplicationInfo) {
+		.name = CharString_createRefCStrConst("OxC3 ray trace test"),
+		.version = 1
+	};
+
+	*instanceType = GraphicsInstance_makeType(suiteInstance->api, alloc);
+	ListGraphicsDeviceInfo deviceInfos = (ListGraphicsDeviceInfo) { 0 };
+
+	if(!Test_assert(t, "createOwnInstance", GraphicsInstance_create(
+		&appInfo, suiteInstance->api, EGraphicsInstanceFlags_DisableGPUBV, alloc, instanceType, ownInstanceRef,
+		&t->err
+	)))
+		return false;
+
+	//The adapter has to be the same one the suite handed us, matched by name
+
+	GraphicsInstance *ownInstance = GraphicsInstanceRef_ptr(*ownInstanceRef);
+	Bool created = false;
+
+	if (Test_assert(t, "ownDeviceInfos", GraphicsInstance_getDeviceInfos(ownInstance, &deviceInfos, &t->err))) {
+
+		for(U64 i = 0; i < deviceInfos.length; ++i)
+			if (Buffer_eq(
+				Buffer_createRefConst(deviceInfos.ptr[i].name, sizeof(deviceInfos.ptr[i].name)),
+				Buffer_createRefConst(device->info.name, sizeof(device->info.name))
+			)) {
+				created = Test_assert(t, "createOwnDevice", GraphicsDeviceRef_create(
+					*ownInstanceRef, &deviceInfos.ptr[i], EGraphicsDeviceFlags_None,
+					EGraphicsBufferingMode_Default, NULL, ownDeviceRef, &t->err
+				));
+				break;
+			}
+	}
+
+	ListGraphicsDeviceInfo_free(&deviceInfos, alloc);
+
+	if (!created) {
+		RefPtr_dec(ownInstanceRef);
+		return false;
+	}
+
+	*deviceRef = *ownDeviceRef;
+	return true;
+}
+
+//The dedicated device's run has to be validation clean too, its counters just live on the own instance
+
+void TestShaders_rtDedicatedDeviceEnd(Test *t, GraphicsInstanceRef **ownInstanceRef, GraphicsDeviceRef **ownDeviceRef) {
+
+	if (*ownDeviceRef) {
+
+		GraphicsDeviceRef_wait(*ownDeviceRef, NULL);
+		RefPtr_dec(ownDeviceRef);
+
+		GraphicsInstance *ownInstance = GraphicsInstanceRef_ptr(*ownInstanceRef);
+		Test_assert(t, "ownValidationErrors", !GraphicsInstance_getValidationErrors(ownInstance));
+		Test_assert(t, "ownValidationWarnings", !GraphicsInstance_getValidationWarnings(ownInstance));
+	}
+
+	RefPtr_dec(ownInstanceRef);
+}
+
 static void TestShaders_countPull(RefPtr *resource, void *context) {
 	(void) resource;
 	++*(U32*)context;
@@ -213,13 +291,6 @@ Bool TestShaders_pullBuffer(Test *t, GraphicsDeviceRef *deviceRef, CommandListRe
 
 //Texture pulls hand over an owned buffer; the callback copies out the 8x8 payload the checks below compare
 
-typedef struct TestShaderPixels {
-	U32 count;
-	U32 padding;
-	U64 len;
-	U32 pixels[64];
-} TestShaderPixels;
-
 static void TestShaders_pixelPull(RefPtr *resource, Buffer *data, void *context) {
 
 	(void) resource;
@@ -233,7 +304,7 @@ static void TestShaders_pixelPull(RefPtr *resource, Buffer *data, void *context)
 		result->pixels[i] = ((const U32*)data->ptr)[i];
 }
 
-static Bool TestShaders_pullPixels(
+Bool TestShaders_pullPixels(
 	Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *emptyList, RefPtr *target, TestShaderPixels *pixels
 ) {
 
@@ -246,7 +317,7 @@ static Bool TestShaders_pullPixels(
 	return Test_assert(t, "pixelPullLen", pixels->len == 64 * 4) && ok;
 }
 
-static Bool TestShaders_checkPixels(
+Bool TestShaders_checkPixels(
 	Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *emptyList, RefPtr *target, U32 expected
 ) {
 
@@ -1897,78 +1968,16 @@ static void TestShaders_raysWithFile(
 		return;
 	}
 
-	//D3D12's GPU based validation instruments raytracing libs into invalid bytecode
-	// ("Internal declaration 'GBV_Debug_Resource' is unused"), hardware then hangs executing it and even
-	// WARP's surviving run leaves those bytecode errors in the counters, failing the validation clean check.
-	//So on D3D12 with it enabled the module traces on its own device with only GPU based validation off,
-	// which keeps the coverage and still hard checks that instance's counters at the end.
-
-	const GraphicsInstance *suiteInstance = GraphicsInstanceRef_ptr(device->instance);
-
-	const Bool gpuValidationOn =
-		(suiteInstance->flags & EGraphicsInstanceFlags_IsDebug) &&
-		!(suiteInstance->flags & EGraphicsInstanceFlags_DisableGPUBV);
-
 	GraphicsInstanceRef *ownInstanceRef = NULL;
 	GraphicsDeviceRef *ownDeviceRef = NULL;
-
-	//Declared out here with the ref it belongs to, not in the branch that fills it in.
-	//RefPtr_create keeps a POINTER to the type rather than a copy (see ref_ptr.h), so a type scoped to that
-	// branch is already gone by the time the instance is released at the end of this function, which is a
-	// stack use after scope that only ASan was ever going to notice.
-
 	RefPtrType instanceType = (RefPtrType) { 0 };
 
-	if (suiteInstance->api == EGraphicsApi_Direct3D12 && gpuValidationOn) {
-
-		Test_print(t, "D3D12 GPU based validation breaks raytracing state objects, tracing on a dedicated device");
-
-		GraphicsApplicationInfo appInfo = (GraphicsApplicationInfo) {
-			.name = CharString_createRefCStrConst("OxC3 ray trace test"),
-			.version = 1
-		};
-
-		instanceType = GraphicsInstance_makeType(suiteInstance->api, alloc);
-		ListGraphicsDeviceInfo deviceInfos = (ListGraphicsDeviceInfo) { 0 };
-
-		if(!Test_assert(t, "createOwnInstance", GraphicsInstance_create(
-			&appInfo, suiteInstance->api, EGraphicsInstanceFlags_DisableGPUBV, alloc, &instanceType, &ownInstanceRef, &t->err
-		))) {
-			SHFile_free(&file, alloc);
-			return;
-		}
-
-		//The adapter has to be the same one the suite handed us, matched by name
-
-		GraphicsInstance *ownInstance = GraphicsInstanceRef_ptr(ownInstanceRef);
-		Bool created = false;
-
-		if (Test_assert(t, "ownDeviceInfos", GraphicsInstance_getDeviceInfos(ownInstance, &deviceInfos, &t->err))) {
-
-			for(U64 i = 0; i < deviceInfos.length; ++i)
-				if (Buffer_eq(
-					Buffer_createRefConst(deviceInfos.ptr[i].name, sizeof(deviceInfos.ptr[i].name)),
-					Buffer_createRefConst(device->info.name, sizeof(device->info.name))
-				)) {
-					created = Test_assert(t, "createOwnDevice", GraphicsDeviceRef_create(
-						ownInstanceRef, &deviceInfos.ptr[i], EGraphicsDeviceFlags_None,
-						EGraphicsBufferingMode_Default, NULL, &ownDeviceRef, &t->err
-					));
-					break;
-				}
-		}
-
-		ListGraphicsDeviceInfo_free(&deviceInfos, alloc);
-
-		if (!created) {
-			RefPtr_dec(&ownInstanceRef);
-			SHFile_free(&file, alloc);
-			return;
-		}
-
-		deviceRef = ownDeviceRef;
-		device = GraphicsDeviceRef_ptr(deviceRef);
+	if (!TestShaders_rtDedicatedDevice(t, &deviceRef, &ownInstanceRef, &ownDeviceRef, &instanceType)) {
+		SHFile_free(&file, alloc);
+		return;
 	}
+
+	device = GraphicsDeviceRef_ptr(deviceRef);
 
 	DeviceBufferRef *positions = NULL;
 	DeviceBufferRef *output = NULL;
@@ -2313,19 +2322,7 @@ clean:
 
 	SHFile_free(&file, alloc);
 
-	//The dedicated device's run has to be validation clean too, its counters just live on the own instance
-
-	if (ownDeviceRef) {
-
-		GraphicsDeviceRef_wait(ownDeviceRef, NULL);
-		RefPtr_dec(&ownDeviceRef);
-
-		GraphicsInstance *ownInstance = GraphicsInstanceRef_ptr(ownInstanceRef);
-		Test_assert(t, "ownValidationErrors", !GraphicsInstance_getValidationErrors(ownInstance));
-		Test_assert(t, "ownValidationWarnings", !GraphicsInstance_getValidationWarnings(ownInstance));
-	}
-
-	RefPtr_dec(&ownInstanceRef);
+	TestShaders_rtDedicatedDeviceEnd(t, &ownInstanceRef, &ownDeviceRef);
 }
 
 void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef) {

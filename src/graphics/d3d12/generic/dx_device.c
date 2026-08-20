@@ -911,7 +911,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
 		}
 
-		GraphicsDevice_rebindDescriptors(device, commandBuffer);
+		//Descriptors bind lazily at the first work op that needs them (bindful), so a purely bindful frame
+		// never pays for the default heap and root signature setup.
 
 		//Record commands
 
@@ -1116,7 +1117,13 @@ Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *
 	commandBuffer->stencilRef = 0;
 	commandBuffer->blendConstants = F32x4_zero();
 
-	GraphicsDevice_rebindDescriptors(device, commandBuffer->buffer);
+	//The fresh buffer has no descriptor state, so the emitted state trackers reset and the next work op's
+	// lazy bind re-emits whatever was last bound (default or custom).
+
+	commandBuffer->defaultDescriptorsBound = false;
+	commandBuffer->lastBoundHeap = NULL;
+	commandBuffer->lastBoundTable[0] = commandBuffer->lastBoundTable[1] = NULL;
+	commandBuffer->lastRootSig[0] = commandBuffer->lastRootSig[1] = NULL;
 
 clean:
 

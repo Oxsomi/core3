@@ -158,6 +158,33 @@ void Test_graphicsConfigVariants(Test *t, GraphicsInstanceRef *instRef, const Gr
 
 			Test_assert(t, "configNoBindlessKeepsDataTypes", caps.dataTypes == base.dataTypes);
 
+			//The whole bindful module on a device with bindless OFF: descriptor work must not need it
+
+			Test_graphicsBindful(t, noBindlessRef);
+			Test_graphicsBindfulAdvanced(t, noBindlessRef);
+			Test_graphicsBindfulSampler(t, noBindlessRef);
+			Test_graphicsBindfulDraw(t, noBindlessRef);
+			Test_graphicsBindfulLayoutSwitch(t, noBindlessRef);
+			Test_graphicsBindfulCbuffer(t, noBindlessRef);
+			Test_graphicsBindfulRwTexture(t, noBindlessRef);
+			Test_graphicsBindfulArray(t, noBindlessRef);
+			Test_graphicsBindfulSpaces(t, noBindlessRef);
+			Test_graphicsBindfulIndirect(t, noBindlessRef);
+			Test_graphicsBindfulDrawFixed(t, noBindlessRef);
+			Test_graphicsBindfulTableUpdate(t, noBindlessRef);
+			Test_graphicsBindfulSharedRegister(t, noBindlessRef);
+			Test_graphicsBindfulHeapRecycle(t, noBindlessRef);
+			Test_graphicsBindfulPushDescriptorBoundary(t, noBindlessRef);
+			Test_graphicsBindfulSamplerCmp(t, noBindlessRef);
+			Test_graphicsBindfulStructured(t, noBindlessRef);
+			Test_graphicsBindfulAppendCounter(t, noBindlessRef);
+			Test_graphicsBindfulAtomicFloat(t, noBindlessRef);
+
+			//The descriptor modules self-branch on hasBindless, so this is their only bindless-off execution
+
+			Test_graphicsDescriptorTable(t, noBindlessRef);
+			Test_graphicsDescriptorAlloc(t, noBindlessRef);
+
 			//A device without a bindless layout still has to serve plain resources, since that is the whole
 			// point of being able to turn bindless off.
 

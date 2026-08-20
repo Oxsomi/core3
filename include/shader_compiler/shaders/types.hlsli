@@ -87,7 +87,10 @@ R"(
 
 #endif
 
-#ifdef __OXC_EXT_F64
+//AtomicF64 implies the double types: its intrinsic takes a double by reference, so a shader that enables
+//the atomic without the type could never call it, and the SPIRV capability check refuses that pairing anyway.
+
+#if defined(__OXC_EXT_F64) || defined(__OXC_EXT_ATOMICF64)
 
 	typedef double F64;
 	typedef double2 F64x2;
@@ -267,5 +270,42 @@ F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return mad(a, b, c); }
 	#define DUAL_SRC_TARGET0
 	#define DUAL_SRC_TARGET1
 #endif
+
+//Memory scope and semantics, as the SPIR-V atomic instructions take them.
+//These are the raw SPIR-V enumerant values rather than an HLSL enum, because they are handed straight to an
+//[[vk::ext_instruction]] intrinsic, which takes plain uints.
+//A shader that names them reads as what it means instead of as a pair of bare numbers.
+
+namespace oxc {
+
+	//OpAtomic* memory scope: how far the operation is ordered.
+	//Device is the one to reach for on a buffer other dispatches read; Workgroup only orders within a group.
+
+	static const U32 MemoryScope_CrossDevice   = 0;
+	static const U32 MemoryScope_Device        = 1;
+	static const U32 MemoryScope_Workgroup     = 2;
+	static const U32 MemoryScope_Subgroup      = 3;
+	static const U32 MemoryScope_Invocation    = 4;
+	static const U32 MemoryScope_QueueFamily   = 5;
+
+	//OpAtomic* memory semantics: what ordering the operation itself imposes.
+	//Relaxed is the plain atomic with no ordering beyond the operation being indivisible, which is what an
+	//accumulate wants; the acquire/release forms are for handing data between invocations.
+
+	static const U32 MemorySemantics_Relaxed              = 0x000;
+	static const U32 MemorySemantics_Acquire              = 0x002;
+	static const U32 MemorySemantics_Release              = 0x004;
+	static const U32 MemorySemantics_AcquireRelease       = 0x008;
+	static const U32 MemorySemantics_SequentiallyConsistent = 0x010;
+
+	//Storage class qualifiers, OR'd onto the semantics above when the ordering has to name the memory it covers
+
+	static const U32 MemorySemantics_UniformMemory        = 0x040;
+	static const U32 MemorySemantics_SubgroupMemory       = 0x080;
+	static const U32 MemorySemantics_WorkgroupMemory      = 0x100;
+	static const U32 MemorySemantics_CrossWorkgroupMemory = 0x200;
+	static const U32 MemorySemantics_ImageMemory          = 0x800;
+
+}
 
 )"
