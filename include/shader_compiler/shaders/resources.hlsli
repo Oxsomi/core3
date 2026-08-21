@@ -32,12 +32,15 @@ static const U32 U32_MAX = 0xFFFFFFFFu;
 
 //Even though DXIL bindings could use setId == spaceId and default registerId on 0,
 //It'd be inefficient, because the root signature can't simplify this to 3 ranges.
+//DXIL puts the whole set in OxC3's reserved space rather than space 0, so a custom layout can use the
+//spaces people actually reach for without ever colliding with the engine's own bindless arrays.
+//SPIRV needs no such move: its sets are separate from the caller's by construction.
 
 #ifdef __spirv__
 	#define _binding(bindingId, setId, a, ...) [[vk::binding(bindingId, setId)]] __VA_ARGS__
 	#define _vkBinding(a, b) [[vk::binding(a, b)]]
 #else
-	#define _binding(a, b, registerId, ...) __VA_ARGS__ : register(registerId)
+	#define _binding(a, b, registerId, ...) __VA_ARGS__ : register(registerId, OXC3_RESERVED_SPACE)
 	#define _vkBinding(a, b)
 #endif
 
@@ -62,11 +65,13 @@ UNKNOWN_FORMAT _binding(10, 1, u327680, RWTexture2D<U32x4> _rwTextures2Du[16384]
 	_binding(11, 1, t327680, RaytracingAccelerationStructure _tlasExt[16]);
 #endif
 
-//The register is explicit because the default root signature binds globals at b0 space0, and DXIL linking of
-// multi entrypoint files renumbers implicitly assigned registers, which silently moved globals to b1.
+//The register is explicit because the default root signature binds globals at a fixed slot, and DXIL linking
+// of multi entrypoint files renumbers implicitly assigned registers, which silently moved globals to b1.
 //The SPIRV backend ignores register() when vk::binding is present, so no macro split is needed.
+//The space is OxC3's reserved one rather than 0: custom layouts let anyone declare their own b0, and space 0
+// is exactly what they reach for first, so leaving globals there made a collision a matter of time.
 
-_vkBinding( 0, 2) cbuffer globals : register(b0) {	//Globals used during the entire frame such as frame id.
+_vkBinding( 0, 2) cbuffer globals : register(b0, OXC3_RESERVED_SPACE) {	//Globals used for the entire frame.
 
 	U32 _frameId;					//Can loop back to 0 after U32_MAX!
 	F32 _time;						//Time since launch of app

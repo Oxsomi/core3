@@ -479,7 +479,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Sampler,
 			.count = EDescriptorTypeCount_Sampler,
 			.binding = (SHBinding) {
-				.space = 0,
+				.space = isSpirv ? 0 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 0 : EDescriptorTypeOffset_Sampler
 			},
 			.visibility = U32_MAX
@@ -488,7 +488,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture2D,
 			.count = EDescriptorTypeCount_Texture2D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 0 : EDescriptorTypeOffset_Texture2D
 			},
 			.visibility = U32_MAX
@@ -497,7 +497,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_TextureCube,
 			.count = EDescriptorTypeCount_TextureCube,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 1 : EDescriptorTypeOffset_TextureCube
 			},
 			.visibility = U32_MAX
@@ -506,7 +506,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture3D,
 			.count = EDescriptorTypeCount_Texture3D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 2 : EDescriptorTypeOffset_Texture3D
 			},
 			.visibility = U32_MAX
@@ -515,7 +515,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_ByteAddressBuffer,
 			.count = EDescriptorTypeCount_Buffer,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 3 : EDescriptorTypeOffset_Buffer
 			},
 			.visibility = U32_MAX
@@ -524,7 +524,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWBuffer,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 4 : EDescriptorTypeOffset_RWBuffer
 			},
 			.visibility = U32_MAX
@@ -533,7 +533,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 5 : EDescriptorTypeOffset_RWTexture3D
 			},
 			.visibility = U32_MAX,
@@ -543,7 +543,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Di,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 6 : EDescriptorTypeOffset_RWTexture3Di
 			},
 			.visibility = U32_MAX,
@@ -553,7 +553,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Du,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 7 : EDescriptorTypeOffset_RWTexture3Du
 			},
 			.visibility = U32_MAX,
@@ -563,7 +563,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 8 : EDescriptorTypeOffset_RWTexture2D
 			},
 			.visibility = U32_MAX,
@@ -573,7 +573,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Di,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 9 : EDescriptorTypeOffset_RWTexture2Di
 			},
 			.visibility = U32_MAX,
@@ -583,7 +583,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Du,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 10 : EDescriptorTypeOffset_RWTexture2Du
 			},
 			.visibility = U32_MAX,
@@ -598,7 +598,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_AccelerationStructure,
 			.count = EDescriptorTypeCount_TLASExt,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 11 : EDescriptorTypeOffset_TLASExt
 			},
 			.visibility = U32_MAX
@@ -814,9 +814,12 @@ Bool GraphicsDeviceRef_create(
 		DescriptorBinding cbv = (DescriptorBinding) {
 			.registerType = ESHRegisterType_ConstantBuffer,
 			.count = 1,
+			//Vulkan keeps it in its own set; DXIL uses the reserved space so a custom layout's b0 can't land
+			// on top of it
+
 			.binding = (SHBinding) {
-				.space = isSpirv ? 2 : 0,
-				.binding = isSpirv ? 0 : 0
+				.space = isSpirv ? 2 : OXC3_RESERVED_SPACE,
+				.binding = 0
 			},
 			.visibility = U32_MAX,
 			.constantBufferSize = (U32) sizeof(CBufferData)

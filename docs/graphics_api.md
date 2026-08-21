@@ -904,10 +904,20 @@ A DescriptorLayout is the description of how the resources are bound to the pipe
   - If it's owned by a graphics device or not, useful for internal use only.
 - bindings: a list of descriptor bindings that specifies the count, register type, id, visibility and space of a specific resource binding. The definition of this depends on the API; in Vulkan there are other binding types than DirectX12, so the implementation will try to merge ranges together if possible. As such, try to put UAVs, SRVs and CBVs closely together and a similar recommendation for Vulkan register types (images, textures, subpass inputs, ssbo, ubo, RTAS). The implementation can determine it can't merge a range if for example visibility mismatches (Vulkan) or the two have mismatching bindless flags.
 
+### Reserved register space
+
+OxC3 binds its own per frame globals (frame id, time, delta time, swapchain descriptors and the app data block) to a register space it keeps for itself: `OXC3_RESERVED_SPACE`, which is `0xC3` (195). createDescriptorLayout refuses any caller binding that lands there.
+
+This concerns DXIL only. On Vulkan the globals live in their own descriptor set, and set indices are far too few to hide a reservation in. On DXIL they used to sit at `b0 space0`, which is exactly what someone writing their first constant buffer types. That was harmless while the default bindless layout was the only layout there was, and became a silent collision the moment custom layouts let anyone declare their own `b0`.
+
+A shader that genuinely declares this space was built against a different OxC3 than the one running it: either a newer one, or one modified to lay its globals out elsewhere. Neither can be honoured, so the layout is refused rather than allowed to quietly shadow the runtime's binding or be overwritten by it. The device's own layouts are exempt, since they are what occupies the space in the first place.
+
+Shaders spell it as `OXC3_RESERVED_SPACE` (from types.hlsli), which expands to `space195`. The C and HLSL definitions have to stay in sync, in `graphics/generic/descriptor_layout.h` and `shader_compiler/shaders/types.hlsli` respectively; a shader compiled against a different value binds somewhere the runtime doesn't look.
+
 ### Used functions and obtained
 
 - Obtained through GraphicsDeviceRef's createDescriptorLayout.
-- A DescriptorLayoutInfo (to create the layout itself) can generally be obtained through the shader reflection by using `DescriptorLayout_detect`, though this might not be optimal if all shaders have a similar / the same DescriptorLayout (unless you manually avoid creating duplicates).
+- A DescriptorLayoutInfo (to create the layout itself) can generally be obtained through the shader reflection by using `GraphicsDeviceRef_detectLayoutFromEntry` (one entrypoint) or `GraphicsDeviceRef_detectLayoutFromEntries` (several sharing one layout), though this might not be optimal if all shaders have a similar / the same DescriptorLayout (unless you manually avoid creating duplicates). Naming a register there also splits it out as push constants or push descriptors rather than an ordinary binding.
 - Used when creating a PipelineLayout.
 
 ## Pipeline
@@ -1780,7 +1790,7 @@ Every startRender needs to match an endRender. During the render it's not allowe
 
 A graphics pipeline for use with DirectRendering needs to set the attachment count (and format(s)) or the depth stencil format. One that doesn't use direct rendering can't be used.
 
-### Raytracing feature
+### Bindful descriptors
 
 #### bindDescriptorHeap
 
@@ -1789,6 +1799,28 @@ Binds a descriptor heap: any descriptor table bound after this has to belong to 
 #### bindDescriptorTable
 
 Bindful: binds the descriptor table that pipelines with a CUSTOM pipeline layout read from. This only sets state; the work ops (draw/dispatch/dispatchRays) are the validators, so bind order never matters: at work time the bound pipeline's layout must reference the exact DescriptorLayout the table was created from, push descriptor layouts are refused until their writes exist, and pipelines on the device's default (bindless) layout ignore the bound table entirely. Backends emit the actual binds lazily right before the work, which also re-emits the default bindings after a custom root signature dropped them on D3D12. Custom layout pipelines are opted out of the globals/frame data unless their layout declares that slot. There is no table index: a pipeline layout references exactly ONE bindings DescriptorLayout (which itself spans up to 4 spaces/sets on Vulkan and up to 2 root tables on D3D12), so set indices and root parameters are baked into the layout/table pair; a slot index gets added if pipeline layouts ever grow multiple table slots. The table is kept alive by the command list; per resource scope transitions remain the caller's job until auto transitions land. Scope end resets the bind like it does bound pipelines.
+
+#### setPushConstants
+
+Writes the pipeline layout's push constants: a small block of bytes that rides in the command stream rather than in a descriptor heap (root constants on D3D12, `vkCmdPushConstants` on Vulkan). A write is 4 to 128 bytes and a multiple of 4. 128 is what both APIs guarantee: it is Vulkan's minimum `maxPushConstantsSize` and 32 of the 64 DWORDs a D3D12 root signature has.
+
+Like the binds this only sets state, and the work op is the validator. At draw/dispatch/dispatchRays time the written size has to match exactly the `constantBufferSize` the bound pipeline layout declares. Writing constants a layout never declared is refused, since it can only mean the wrong pipeline is bound; a layout that declares them with nothing written is refused too, rather than reading back whatever the previous pipeline happened to leave in the range. That check sits ahead of the bind state cache, because unlike the pipeline/table/heap triple the cache keys on, the written size is mutable state that a later setPushConstants can change without rebinding anything.
+
+The payload is copied into the command itself rather than referenced, so a replay never depends on the caller's buffer still being alive. Backends emit it lazily at the work op, which is what makes a root signature switch between two work ops harmless: D3D12 drops every root argument on such a switch, so an eager emit at the write would silently lose the values. Two dispatches with different constants and no rebinding in between therefore each see their own. Scope end resets the written size like every other bind state.
+
+#### setPushDescriptors
+
+Writes every push descriptor the bound pipeline's layout declares, in that layout's own binding order (the order `detectLayoutFromEntry`/`detectLayoutFromEntries` produced into `pushDescriptorInfo`, whose `bindingNames` name them). A push descriptor lives in the command stream rather than in a heap: a root CBV/SRV/UAV on D3D12, `vkCmdPushDescriptorSetKHR` on Vulkan. Nothing about it goes through a DescriptorTable, so no heap or table has to be bound for one.
+
+All of them are written at once rather than one at a time, because a partial set would leave the rest pointing at whatever the previous pipeline bound, and both backends emit the whole set anyway. The work op validates the written count against the layout, refuses a count that doesn't match it, and refuses writes against a layout that declares none — the same three rules push constants follow, and for the same reason they sit ahead of the bind state cache. Scope end resets the write.
+
+What can be *recorded* is **buffer class** only: a constant buffer, a byte address or structured buffer, or an acceleration structure. On D3D12 a root descriptor is one raw GPU virtual address, and a texture's format, mip and swizzle have nowhere to live in it (there are no root samplers at all). A layout carrying a texture push descriptor is still legal and both backends build one — D3D12 routes it through a single entry descriptor table, and the device builds exactly such a layout for its own copy shader — so the refusal lands at the work op rather than at `createDescriptorLayout`. Filling that table needs a shader visible heap slot allocated at record time, which doesn't exist yet. At most `OXC3_MAX_PUSH_DESCRIPTORS` can be recorded, since each costs 2 of a D3D12 root signature's 64 DWORDs.
+
+The resources are kept alive by the command list, like a bound table's are, and per resource scope transitions remain the caller's job until auto transitions land.
+
+**Known gap:** on Vulkan a caller owned push descriptor layout currently requires `VK_KHR_push_descriptor` (the `PerformantPushDescriptor` capability) and is refused at layout creation without it. The device's own globals layout is exempt because it carries its own emulation — one descriptor set per frame in flight, written once and bound unchanged — which works only because that buffer is fixed for the whole frame. A caller's push descriptors change per work op, so the general emulation needs a set allocated per push from a per frame pool. Android emulators are the case that hits this, since gfxstream drops the extension from the guest even where the host driver exposes it.
+
+### Raytracing feature
 
 #### updateTLASExt/updateBLASExt
 

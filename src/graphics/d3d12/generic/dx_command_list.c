@@ -228,7 +228,80 @@ static void DxCommandBufferState_bindDescriptors(
 
 		temp->lastRootSig[bindPoint] = layoutExt->rootSig;
 		temp->lastBoundTable[bindPoint] = NULL;        //The switch dropped every root argument
+		temp->pushConstantsEmitted[bindPoint] = false;
+		temp->pushDescriptorsEmitted[bindPoint] = false;
 		temp->defaultDescriptorsBound = false;
+	}
+
+	//Emitted before the table work below, which returns early for a layout that has push constants but no
+	// bindings at all; the root signature above is current either way by this point.
+
+	if (temp->pushConstantSize && !temp->pushConstantsEmitted[bindPoint] && layout->info.pushConstants.count) {
+
+		const U32 num32Bit = temp->pushConstantSize >> 2;
+
+		if(isCompute)
+			buffer->lpVtbl->SetComputeRoot32BitConstants(
+				buffer, layoutExt->rootParamPushConstants, num32Bit, temp->pushConstantData, 0
+			);
+
+		else buffer->lpVtbl->SetGraphicsRoot32BitConstants(
+			buffer, layoutExt->rootParamPushConstants, num32Bit, temp->pushConstantData, 0
+		);
+
+		temp->pushConstantsEmitted[bindPoint] = true;
+	}
+
+	//Push descriptors are root descriptors: one raw GPU virtual address per binding. That is also why only
+	//buffer class resources can be one, since a texture's format, mip and swizzle have nowhere to live in an
+	//address; createDescriptorLayout refuses the rest up front.
+	//Emitted here for the same reason as the constants: the table work below returns early for a layout that
+	//has no ordinary bindings at all.
+
+	if (temp->pushDescriptorCount && !temp->pushDescriptorsEmitted[bindPoint] && layout->info.pushDescriptors) {
+
+		const DescriptorLayout *pushLayout = DescriptorLayoutRef_ptr(layout->info.pushDescriptors);
+		DxDescriptorLayout *pushExt = DescriptorLayout_ext((DescriptorLayout*)pushLayout, Dx);
+
+		for (U8 i = 0; i < temp->pushDescriptorCount && i < pushLayout->info.bindings.length; ++i) {
+
+			const Descriptor d = temp->pushDescriptors[i];
+			const DescriptorBinding binding = pushLayout->info.bindings.ptr[i];
+			const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
+
+			const U32 rootParam = layoutExt->rootParamPushDescriptors + pushExt->rootParamOffsets.ptr[i];
+
+			D3D12_GPU_VIRTUAL_ADDRESS addr =
+				type == ESHRegisterType_AccelerationStructure ?
+				DeviceBufferRef_ptr(TLASRef_ptr(d.resource)->base.asBuffer)->resource.deviceAddress :
+				DeviceBufferRef_ptr(d.resource)->resource.deviceAddress + Descriptor_startBuffer(&d);
+
+			if (type == ESHRegisterType_ConstantBuffer) {
+
+				if(isCompute)
+					buffer->lpVtbl->SetComputeRootConstantBufferView(buffer, rootParam, addr);
+
+				else buffer->lpVtbl->SetGraphicsRootConstantBufferView(buffer, rootParam, addr);
+			}
+
+			else if (binding.registerType & ESHRegisterType_IsWrite) {
+
+				if(isCompute)
+					buffer->lpVtbl->SetComputeRootUnorderedAccessView(buffer, rootParam, addr);
+
+				else buffer->lpVtbl->SetGraphicsRootUnorderedAccessView(buffer, rootParam, addr);
+			}
+
+			else {
+
+				if(isCompute)
+					buffer->lpVtbl->SetComputeRootShaderResourceView(buffer, rootParam, addr);
+
+				else buffer->lpVtbl->SetGraphicsRootShaderResourceView(buffer, rootParam, addr);
+			}
+		}
+
+		temp->pushDescriptorsEmitted[bindPoint] = true;
 	}
 
 	if(!temp->boundDescriptorTable || !layout->info.bindings)
@@ -1144,6 +1217,43 @@ void DX_WRAP_FUNC(CommandList_process)(
 		case ECommandOp_BindDescriptorHeap:
 			temp->boundDescriptorHeap = *(RefPtr* const*) data;
 			break;
+
+		//The bytes travel with the command, so nothing here depends on the recorder's buffer still existing
+
+		case ECommandOp_SetPushConstants: {
+
+			const SetPushConstantsCmd *push = (const SetPushConstantsCmd*) data;
+
+			temp->pushConstantSize = (U8) push->size;
+
+			Buffer_memcpy(
+				Buffer_createRef(temp->pushConstantData, push->size),
+				Buffer_createRefConst(push->data, push->size)
+			);
+
+			//A fresh write has to reach every bind point, since each carries its own copy
+
+			temp->pushConstantsEmitted[0] = temp->pushConstantsEmitted[1] = false;
+
+			break;
+		}
+
+		case ECommandOp_SetPushDescriptors: {
+
+			const SetPushDescriptorsCmd *push = (const SetPushDescriptorsCmd*) data;
+			const Descriptor *descriptors = (const Descriptor*)(push + 1);
+
+			temp->pushDescriptorCount = (U8) push->count;
+
+			Buffer_memcpy(
+				Buffer_createRef(temp->pushDescriptors, push->count * sizeof(Descriptor)),
+				Buffer_createRefConst(descriptors, push->count * sizeof(Descriptor))
+			);
+
+			temp->pushDescriptorsEmitted[0] = temp->pushDescriptorsEmitted[1] = false;
+
+			break;
+		}
 
 		case ECommandOp_UpdateOmmExt:
 

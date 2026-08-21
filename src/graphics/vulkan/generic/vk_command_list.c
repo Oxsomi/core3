@@ -36,6 +36,7 @@
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/opacity_micromap.h"
 #include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/blas.h"
 #include "platforms/logx.h"
@@ -104,14 +105,126 @@ static void VkCommandBufferState_bindDescriptors(
 		return;
 	}
 
+	const PipelineLayout *layout = PipelineLayoutRef_ptr(layoutRef);
+	VkPipelineLayout *layoutExt = PipelineLayout_ext((PipelineLayout*)layout, Vk);
+
+	//Push constants belong to the layout, so a layout switch drops them; this is the one place that knows
+	// both the layout and the bind point, which is why they go out from here rather than at the write.
+	//Emitted before the table work below, which returns early for a layout that has push constants but no
+	// bindings at all.
+
+	if (
+		temp->pushConstantSize && layout->info.pushConstants.count &&
+		(!temp->pushConstantsEmitted[bindPointId] || temp->lastPushLayout[bindPointId] != *layoutExt)
+	) {
+
+		deviceExt->cmdPushConstants(
+			temp->buffer,
+			*layoutExt,
+			vkGetShaderStagesDevice(device, layout->info.pushConstants.visibility),
+			0,
+			temp->pushConstantSize,
+			temp->pushConstantData
+		);
+
+		temp->pushConstantsEmitted[bindPointId] = true;
+		temp->lastPushLayout[bindPointId] = *layoutExt;
+	}
+
+	//Push descriptors go out here for the same reasons, and buffer class only for the same reason D3D12 is:
+	// createDescriptorLayout refuses anything else, so the writes below only ever describe buffers and RTASes.
+
+	if (temp->pushDescriptorCount && layout->info.pushDescriptors && (
+		!temp->pushDescriptorsEmitted[bindPointId] || temp->lastPushDescLayout[bindPointId] != *layoutExt
+	)) {
+
+		const DescriptorLayout *pushLayout = DescriptorLayoutRef_ptr(layout->info.pushDescriptors);
+
+		//The push set sits after whatever sets the ordinary bindings occupy, which is exactly how
+		// vk_pipeline_layout.c stacked them
+
+		U32 pushSet = 0;
+
+		if (layout->info.bindings) {
+
+			VkDescriptorLayout *bindExt = DescriptorLayout_ext(DescriptorLayoutRef_ptr(layout->info.bindings), Vk);
+
+			while(pushSet < 4 && bindExt->layouts[pushSet])
+				++pushSet;
+		}
+
+		VkWriteDescriptorSet writes[OXC3_MAX_PUSH_DESCRIPTORS];
+		VkDescriptorBufferInfo buffers[OXC3_MAX_PUSH_DESCRIPTORS];
+		VkWriteDescriptorSetAccelerationStructureKHR accelerations[OXC3_MAX_PUSH_DESCRIPTORS];
+		VkAccelerationStructureKHR handles[OXC3_MAX_PUSH_DESCRIPTORS];
+
+		U32 writeCount = 0;
+
+		for (U8 i = 0; i < temp->pushDescriptorCount && i < pushLayout->info.bindings.length; ++i) {
+
+			Descriptor d = temp->pushDescriptors[i];
+			const DescriptorBinding binding = pushLayout->info.bindings.ptr[i];
+			const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
+
+			writes[writeCount] = (VkWriteDescriptorSet) {
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstBinding = binding.binding.binding,
+				.descriptorCount = 1
+			};
+
+			if (type == ESHRegisterType_AccelerationStructure) {
+
+				handles[writeCount] = TLAS_ext(TLASRef_ptr(d.resource), Vk)->as;
+
+				accelerations[writeCount] = (VkWriteDescriptorSetAccelerationStructureKHR) {
+					.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+					.accelerationStructureCount = 1,
+					.pAccelerationStructures = &handles[writeCount]
+				};
+
+				writes[writeCount].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+				writes[writeCount].pNext = &accelerations[writeCount];
+			}
+
+			else {
+
+				//An unset end region means the rest of the buffer, the same convention the tables use
+
+				if(!Descriptor_endBuffer(&d)) {
+					const U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
+					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(&d);
+				}
+
+				buffers[writeCount] = (VkDescriptorBufferInfo) {
+					.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Vk)->buffer,
+					.offset = Descriptor_startBuffer(&d),
+					.range = Descriptor_bufferLength(&d)
+				};
+
+				writes[writeCount].descriptorType =
+					type == ESHRegisterType_ConstantBuffer ?
+					VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
+				writes[writeCount].pBufferInfo = &buffers[writeCount];
+			}
+
+			++writeCount;
+		}
+
+		if(writeCount)
+			deviceExt->cmdPushDescriptorSet(temp->buffer, bindPoint, *layoutExt, pushSet, writeCount, writes);
+
+		temp->pushDescriptorsEmitted[bindPointId] = true;
+		temp->lastPushDescLayout[bindPointId] = *layoutExt;
+	}
+
 	//The generic work op validation proved the table matches the layout; a layout without bindings has
 	// nothing to emit at all.
 
-	if(!temp->boundDescriptorTable || !PipelineLayoutRef_ptr(layoutRef)->info.bindings)
+	if(!temp->boundDescriptorTable || !layout->info.bindings)
 		return;
 
 	VkDescriptorTable *tableExt = DescriptorTable_ext(DescriptorTableRef_ptr(temp->boundDescriptorTable), Vk);
-	VkPipelineLayout *layoutExt = PipelineLayout_ext(PipelineLayoutRef_ptr(layoutRef), Vk);
 
 	if(
 		temp->lastBoundTable[bindPointId] == temp->boundDescriptorTable &&
@@ -867,6 +980,45 @@ void VK_WRAP_FUNC(CommandList_process)(
 		case ECommandOp_BindDescriptorHeap:
 			temp->boundDescriptorHeap = *(RefPtr* const*) data;
 			break;
+
+		//The bytes travel with the command, so nothing here depends on the recorder's buffer still existing
+
+		case ECommandOp_SetPushConstants: {
+
+			const SetPushConstantsCmd *push = (const SetPushConstantsCmd*) data;
+
+			temp->pushConstantSize = (U8) push->size;
+
+			Buffer_memcpy(
+				Buffer_createRef(temp->pushConstantData, push->size),
+				Buffer_createRefConst(push->data, push->size)
+			);
+
+			//A fresh write has to reach every bind point, since each carries its own copy
+
+			for(U8 i = 0; i < 3; ++i)
+				temp->pushConstantsEmitted[i] = false;
+
+			break;
+		}
+
+		case ECommandOp_SetPushDescriptors: {
+
+			const SetPushDescriptorsCmd *push = (const SetPushDescriptorsCmd*) data;
+			const Descriptor *descriptors = (const Descriptor*)(push + 1);
+
+			temp->pushDescriptorCount = (U8) push->count;
+
+			Buffer_memcpy(
+				Buffer_createRef(temp->pushDescriptors, push->count * sizeof(Descriptor)),
+				Buffer_createRefConst(descriptors, push->count * sizeof(Descriptor))
+			);
+
+			for(U8 i = 0; i < 3; ++i)
+				temp->pushDescriptorsEmitted[i] = false;
+
+			break;
+		}
 
 		case ECommandOp_UpdateOmmExt:
 

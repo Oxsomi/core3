@@ -27,6 +27,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/texture.h"
@@ -60,9 +61,119 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 
 	Bool s_uccess = true;
 
-	//The outcome only depends on these three identities (layouts are immutable and descriptor CONTENTS are
-	// not validated here), so a matching triple was already proven valid and long runs of work ops between
-	// binds skip everything below.
+	PipelineLayoutRef *layoutRef = PipelineRef_ptr(pipelineRef)->layout;
+
+	//Push constants are checked ahead of the cache below, because unlike the three identities it keys on,
+	// their size is mutable state: a later setPushConstants can change it without rebinding anything.
+
+	if (layoutRef != GraphicsDeviceRef_ptr(commandList->device)->defaultPipelineLayout) {
+
+		const U32 declared = PipelineLayoutRef_ptr(layoutRef)->info.pushConstants.count ?
+			PipelineLayoutRef_ptr(layoutRef)->info.pushConstants.constantBufferSize : 0;
+
+		if(declared && commandList->pushConstantSize != declared)
+			retError(clean, Error_invalidOperation(
+				4,
+				"CommandList_validateBindState() the pipeline's layout declares push constants that weren't "
+				"written at this size (CommandListRef_setPushConstants)"
+			));
+
+		//Writing push constants a layout never declared can only mean the wrong pipeline is bound
+
+		if(!declared && commandList->pushConstantSize)
+			retError(clean, Error_invalidOperation(
+				5,
+				"CommandList_validateBindState() push constants were written but the pipeline's layout "
+				"doesn't declare any"
+			));
+
+		//Push descriptors are mutable in the same way, so they're checked here rather than in the cache.
+		//All or nothing: the layout's whole set has to have been written, since the backends emit the whole
+		// set and a partial one would leave the rest pointing at whatever the last pipeline bound.
+
+		DescriptorLayoutRef *pushRef = PipelineLayoutRef_ptr(layoutRef)->info.pushDescriptors;
+		const U64 pushCount = pushRef ? DescriptorLayoutRef_ptr(pushRef)->info.bindings.length : 0;
+
+		//Only buffer class push descriptors can actually be emitted: on D3D12 a root descriptor is one raw
+		// GPU virtual address, with nowhere to carry a texture's format, mip or swizzle.
+		//The LAYOUT is legal either way and both backends build it (D3D12 routes a texture through a single
+		// entry descriptor table), which is why this sits here and not at createDescriptorLayout: the device
+		// builds exactly such a layout for its own copy shader and simply never pushes it.
+		//Filling that table needs a shader visible heap slot allocated at record time, which doesn't exist.
+
+		if (pushCount) {
+
+			if(pushCount > OXC3_MAX_PUSH_DESCRIPTORS)
+				retError(clean, Error_outOfBounds(
+					8, pushCount, OXC3_MAX_PUSH_DESCRIPTORS,
+					"CommandList_validateBindState() the pipeline's layout declares more push descriptors than "
+					"OXC3_MAX_PUSH_DESCRIPTORS, which can never be written"
+				));
+
+			const ListDescriptorBinding pushBindings = DescriptorLayoutRef_ptr(pushRef)->info.bindings;
+
+			//A scope names only the FIRST stage that reaches a resource, so the earliest stage of the bound
+			// pipeline's type is the conservative answer: the backends expand it into every later stage.
+
+			const EPipelineStage stage =
+				PipelineRef_ptr(pipelineRef)->type == EPipelineType_Compute ? EPipelineStage_Compute : (
+					PipelineRef_ptr(pipelineRef)->type == EPipelineType_Graphics ?
+					EPipelineStage_Vertex : EPipelineStage_RtStart
+				);
+
+			for(U64 i = 0; i < pushBindings.length; ++i) {
+
+				const DescriptorBinding binding = pushBindings.ptr[i];
+				const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
+
+				if(type < ESHRegisterType_BufferStart || type > ESHRegisterType_BufferEnd)
+					retError(clean, Error_unsupportedOperation(
+						1,
+						"CommandList_validateBindState() only buffer class push descriptors can be recorded "
+						"(constant, byte address, structured or acceleration structure); a texture or sampler "
+						"push descriptor has no record time path yet"
+					));
+
+				//The count was already proven to match the layout, so every binding has its descriptor
+
+				const Descriptor d = commandList->pushDescriptors[i];
+
+				const ETransitionType transition =
+					binding.registerType & ESHRegisterType_IsWrite ?
+					ETransitionType_ShaderWrite : ETransitionType_ShaderRead;
+
+				if (type == ESHRegisterType_AccelerationStructure) {
+					gotoIfError3(clean, CommandListRef_transitionRTAS(commandList, d.resource, transition, stage, e_rr));
+					continue;
+				}
+
+				const BufferRange range = (BufferRange) {
+					.startRange = Descriptor_startBuffer(&d),
+					.endRange = Descriptor_endBuffer(&d)
+				};
+
+				gotoIfError3(clean, CommandListRef_transitionBuffer(commandList, d.resource, range, transition, stage, e_rr));
+			}
+		}
+
+		if(pushCount && commandList->pushDescriptorCount != pushCount)
+			retError(clean, Error_invalidOperation(
+				6,
+				"CommandList_validateBindState() the pipeline's layout declares push descriptors that weren't "
+				"all written (CommandListRef_setPushDescriptors)"
+			));
+
+		if(!pushCount && commandList->pushDescriptorCount)
+			retError(clean, Error_invalidOperation(
+				7,
+				"CommandList_validateBindState() push descriptors were written but the pipeline's layout "
+				"doesn't declare any"
+			));
+	}
+
+	//The rest of the outcome only depends on these three identities (layouts are immutable and descriptor
+	// CONTENTS are not validated here), so a matching triple was already proven valid and long runs of work
+	// ops between binds skip everything below.
 
 	if(
 		commandList->validatedPipeline == pipelineRef &&
@@ -71,19 +182,10 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 	)
 		return s_uccess;
 
-	PipelineLayoutRef *layoutRef = PipelineRef_ptr(pipelineRef)->layout;
-
 	if(layoutRef == GraphicsDeviceRef_ptr(commandList->device)->defaultPipelineLayout)
 		goto clean;
 
 	const PipelineLayout *layout = PipelineLayoutRef_ptr(layoutRef);
-
-	//Push descriptor writes don't exist yet (phase 2), so a layout that declares them would read garbage
-
-	if(layout->info.pushDescriptors)
-		retError(clean, Error_unsupportedOperation(
-			0, "CommandList_validateBindState() push descriptors can't be recorded yet (bindful phase 2)"
-		));
 
 	if (layout->info.bindings) {
 
@@ -952,6 +1054,117 @@ Bool CommandListRef_bindDescriptorHeap(CommandListRef *commandListRef, Descripto
 	commandList->boundDescriptorHeap = heap;
 
 clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
+//Push constants are pure state like the binds: the work op is what validates them against the bound
+//pipeline's layout and the backends emit them there, which is also what makes a root signature switch
+//between two work ops harmless (D3D12 drops all root arguments on such a switch).
+
+Bool CommandListRef_setPushConstants(CommandListRef *commandListRef, Buffer data, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	const U64 size = Buffer_length(data);
+
+	if(!size || size > sizeof(commandList->pushConstantData))
+		retError(clean, Error_outOfBounds(
+			1, size, sizeof(commandList->pushConstantData),
+			"CommandListRef_setPushConstants()::data must be 1 to 128 bytes"
+		));
+
+	if(size & 3)
+		retError(clean, Error_invalidParameter(
+			1, 0, "CommandListRef_setPushConstants()::data must be a multiple of 4 bytes"
+		));
+
+	//The payload rides along in the command itself rather than as a pointer, so a replay doesn't depend on
+	// the caller's buffer still being alive
+
+	SetPushConstantsCmd cmd = (SetPushConstantsCmd) { .size = (U32) size };
+
+	Buffer_memcpy(Buffer_createRef(cmd.data, size), data);
+
+	gotoIfError3(clean, CommandList_append(
+		commandList,
+		ECommandOp_SetPushConstants,
+		Buffer_createRefConst(&cmd, sizeof(cmd)),
+		0, e_rr
+	));
+
+	Buffer_memcpy(Buffer_createRef(commandList->pushConstantData, size), data);
+
+	commandList->pushConstantSize = (U8) size;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
+//Push descriptors are pure state like the binds and the constants: the work op validates the written count
+//against the bound pipeline's layout and the backends emit them there, so a root signature switch between
+//two work ops is harmless and bind order never matters.
+
+Bool CommandListRef_setPushDescriptors(CommandListRef *commandListRef, const ListDescriptor *descriptors, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = commandListRef ? GraphicsDeviceRef_getAlloc(CommandListRef_ptr(commandListRef)->device) : NULL;
+	Buffer payload = Buffer_createNull();
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	const U64 count = !descriptors ? 0 : descriptors->length;
+
+	if(!count || count > OXC3_MAX_PUSH_DESCRIPTORS)
+		retError(clean, Error_outOfBounds(
+			1, count, OXC3_MAX_PUSH_DESCRIPTORS,
+			"CommandListRef_setPushDescriptors()::descriptors must hold 1 to OXC3_MAX_PUSH_DESCRIPTORS entries"
+		));
+
+	//No transition is recorded here on purpose: whether a push descriptor is read or written comes from the
+	// layout's register type, and the layout isn't known until a pipeline is bound.
+	//The work op transitions each of them (ShaderRead/ShaderWrite), which is also what keeps them alive.
+
+	for (U64 i = 0; i < count; ++i)
+		if(!descriptors->ptr[i].resource)
+			retError(clean, Error_nullPointer(
+				1, "CommandListRef_setPushDescriptors()::descriptors[i].resource is required"
+			));
+
+	//Header plus the descriptors themselves, so a replay doesn't depend on the caller's list still existing
+
+	const U64 descriptorBytes = count * sizeof(Descriptor);
+
+	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(SetPushDescriptorsCmd) + descriptorBytes, alloc, &payload, e_rr));
+
+	*(SetPushDescriptorsCmd*) payload.ptrNonConst = (SetPushDescriptorsCmd) { .count = (U32) count };
+
+	Buffer_memcpy(
+		Buffer_createRef(payload.ptrNonConst + sizeof(SetPushDescriptorsCmd), descriptorBytes),
+		Buffer_createRefConst(descriptors->ptr, descriptorBytes)
+	);
+
+	gotoIfError3(clean, CommandList_append(commandList, ECommandOp_SetPushDescriptors, payload, 0, e_rr));
+
+	Buffer_memcpy(
+		Buffer_createRef(commandList->pushDescriptors, descriptorBytes),
+		Buffer_createRefConst(descriptors->ptr, descriptorBytes)
+	);
+
+	commandList->pushDescriptorCount = (U8) count;
+
+clean:
+
+	Buffer_free(&payload, alloc);
 
 	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;

@@ -320,7 +320,8 @@ void Test_graphicsDefaultBindlessLayout(Test *t) {
 		DescriptorLayoutInfo_free(&result, alloc);
 	}
 
-	//DXIL: everything lives in space 0 and the ranges chain, SRVs through t and UAVs through u
+	//DXIL: everything lives in OxC3's reserved space (not space 0, which callers get to use) and the ranges
+	// chain, SRVs through t and UAVs through u
 
 	if(Test_assert(t, "dxil", GraphicsDevice_defaultBindlessLayout(
 		&infoRt, ESHBinaryType_DXIL, &result, alloc, &t->err
@@ -328,12 +329,12 @@ void Test_graphicsDefaultBindlessLayout(Test *t) {
 
 		const DescriptorBinding *b = result.bindings.ptr;
 
-		Bool space0 = true;
+		Bool reservedSpace = true;
 
 		for(U64 i = 0; i < result.bindings.length; ++i)
-			space0 &= !b[i].binding.space;
+			reservedSpace &= b[i].binding.space == OXC3_RESERVED_SPACE;
 
-		Test_assert(t, "dxilSpace0", space0 && result.bindings.length == 13);
+		Test_assert(t, "dxilReservedSpace", reservedSpace && result.bindings.length == 13);
 		Test_assert(t, "dxilSampler", !b[0].binding.binding);
 
 		//[1] textures2D, [2] cubes, [3] 3D, [4] buffer, [12] tlas share the t namespace

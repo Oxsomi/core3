@@ -828,6 +828,8 @@ clean:
 
 		commandList->boundDescriptorTable = NULL;
 		commandList->boundDescriptorHeap = NULL;
+		commandList->pushConstantSize = 0;
+		commandList->pushDescriptorCount = 0;
 
 		//The cached triple names objects by identity, and a freed pipeline's address could be reused by a
 		// new one, so the cache doesn't outlive the scope that proved it.

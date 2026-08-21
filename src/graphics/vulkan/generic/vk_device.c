@@ -708,6 +708,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkCmdSetBlendConstants, deviceExt->cmdSetBlendConstants);
 	getVkFunctionDevice(clean, vkCmdSetStencilReference, deviceExt->cmdSetStencilReference);
 	getVkFunctionDevice(clean, vkCmdBindPipeline, deviceExt->cmdBindPipeline);
+	getVkFunctionDevice(clean, vkCmdPushConstants, deviceExt->cmdPushConstants);
 	getVkFunctionDevice(clean, vkCmdBindIndexBuffer, deviceExt->cmdBindIndexBuffer);
 	getVkFunctionDevice(clean, vkCmdBindVertexBuffers, deviceExt->cmdBindVertexBuffers);
 	getVkFunctionDevice(clean, vkCmdDrawIndexed, deviceExt->cmdDrawIndexed);
@@ -1891,6 +1892,10 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 	for(U8 bindfulI = 0; bindfulI < 3; ++bindfulI) {
 		commandBuffer->lastBoundTable[bindfulI] = NULL;
 		commandBuffer->lastBoundLayout[bindfulI] = VK_NULL_HANDLE;
+		commandBuffer->lastPushLayout[bindfulI] = VK_NULL_HANDLE;
+		commandBuffer->pushConstantsEmitted[bindfulI] = false;
+		commandBuffer->lastPushDescLayout[bindfulI] = VK_NULL_HANDLE;
+		commandBuffer->pushDescriptorsEmitted[bindfulI] = false;
 	}
 
 	//Reset temporary variables to avoid invalid caching behavior
