@@ -1,8 +1,9 @@
+{% set _detected, detectedVersion, _exe = detect_api.detect_gcc_compiler() %}
 [settings]
 os=Linux
 compiler=gcc
 compiler.cppstd=gnu17
 compiler.cstd=gnu17
-compiler.version=13
+compiler.version={{ detect_api.default_compiler_version("gcc", detectedVersion) }}
 compiler.libcxx=libstdc++11
 arch=armv8

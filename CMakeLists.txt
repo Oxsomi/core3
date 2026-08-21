@@ -470,6 +470,51 @@ else()
 		add_link_options(-fsanitize=address)
 	endif()
 
+	# A proprietary driver has two quarrels with a sanitized process, and both surface only as
+	# vkCreateDevice failing: it maps memory inside the shadow gap, and it loads its compiler with
+	# RTLD_DEEPBIND. Neither is negotiable from inside the driver, so the gap protection comes off and
+	# the flag is stripped by a preload.
+	# Both are needed. With only one the outcome depends on where the process happens to land in memory,
+	# which reads as an intermittent driver bug rather than as a sanitizer restriction.
+	# This lives here rather than in the build script so that running ctest directly behaves the same,
+	# which is how the suite is usually run while working on it.
+
+	if(EnableASAN AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+
+		add_library(OxC3_asan_no_deepbind MODULE cmake/linux/asan_no_deepbind.c)
+		set_target_properties(OxC3_asan_no_deepbind PROPERTIES FOLDER Oxsomi/test)
+
+		# Left uninstrumented: it is preloaded ahead of the sanitizer runtime so that it wins the dlopen
+		# interception, which is earlier than that runtime is ready to serve instrumented code.
+
+		target_compile_options(OxC3_asan_no_deepbind PRIVATE -fno-sanitize=all)
+		target_link_options(OxC3_asan_no_deepbind PRIVATE -fno-sanitize=all)
+	endif()
+
+	# Applied to the tests that reach a real device. Appends rather than assigns, so options a caller
+	# already set survive, and full unwinds are asked for here: a driver without symbols yields a single
+	# frame under the fast unwinder, and a leak with no named frame can't be suppressed at all.
+
+	function(oxc3SanitizerDeviceTestEnv target)
+
+		if(NOT (EnableASAN AND CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+			return()
+		endif()
+
+		# The loader unloads drivers and layers on the way out, which takes their globals out of the leak
+		# checker's root set, so everything those globals still own is reported as leaked. Keeping the
+		# modules mapped is what makes the report honest: it costs nothing at exit and it means a real
+		# leak below a driver is still reported instead of being suppressed along with the noise.
+
+		set_property(TEST ${target} APPEND PROPERTY ENVIRONMENT_MODIFICATION
+			"LD_PRELOAD=path_list_prepend:$<TARGET_FILE:OxC3_asan_no_deepbind>"
+			"ASAN_OPTIONS=string_append:,protect_shadow_gap=0,verify_asan_link_order=0"
+			"LSAN_OPTIONS=string_append:,suppressions=${CMAKE_SOURCE_DIR}/cmake/lsan_suppressions.txt"
+			"VK_LOADER_DISABLE_DYNAMIC_LIBRARY_UNLOADING=set:1"
+		)
+
+	endfunction()
+
 	# vptr needs RTTI across the prebuilt dependencies, which they aren't built with. enum is off because OxC3
 	# uses flag enums and sentinels (ESHExtension holds OR'd bits and a 1<<Count "unset" marker) whose values
 	# are legal by design but not individual enumerators, which -fsanitize=enum flags on every load.

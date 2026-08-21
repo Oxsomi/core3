@@ -196,6 +196,19 @@ class dxc(ConanFile):
 			tc.extra_cflags.append("-fno-if-conversion")
 			tc.extra_cxxflags.append("-fno-if-conversion")
 
+		# GCC 14 tightened -Warray-bounds and then reports a false positive inside libstdc++'s own
+		# std::vector reallocation, blamed on SPIRV-Tools' BasicBlock array:
+		# "forming offset 8 is out of the bounds [0, 8] of object with type BasicBlock* const [1]".
+		# The copy is in range, GCC just loses the object size through the inlined memmove.
+		# Demote only that one, the same way the clang-cl case below does,
+		# so a real out of bounds anywhere else still stops the build.
+
+		gccVersion = self._real_compiler_version()
+
+		if self.settings.compiler == "gcc" and gccVersion and gccVersion >= (14, 0):
+			tc.extra_cflags.append("-Wno-array-bounds")
+			tc.extra_cxxflags.append("-Wno-array-bounds")
+
 		# DXC builds its own sources and its vendored SPIRV-Tools with -Werror,
 		# and those have only ever been compiled with MSVC on Windows.
 		# clang-cl warns where MSVC doesn't, so the build dies on third party code we don't own:

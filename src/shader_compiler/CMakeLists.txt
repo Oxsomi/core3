@@ -117,4 +117,22 @@ if(EnableTests AND OxC3TestExecutables)
 		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/test"
 	)
 
+	# DXC's vendored clang allocates CGFunctionInfo with a trailing objects layout, one operator new
+	# sized for the arguments that follow the object, and then destroys it through a plain delete on
+	# the smaller declared type. ASan sees 128 bytes allocated against 32 deallocated and aborts.
+	# The mismatch is real but it is theirs, and it cannot be suppressed by symbol the way a leak or an
+	# odr violation can, so the check is turned off for the tests that link DXC and stays on everywhere
+	# else. Every other ASan check remains active here.
+
+	# The leak suppressions are the same ones the build uses, DXC and SPIRV-Reflect leaving allocations
+	# to process exit, suppressed by library entry point so a leak in OxC3's own code still reports.
+
+	# Appended rather than assigned: the caller sets options of its own that the whole suite depends on,
+	# and a plain ENVIRONMENT would replace them instead of adding to them.
+
+	if(EnableASAN)
+		set_tests_properties(OxC3_shader_compiler_test PROPERTIES ENVIRONMENT_MODIFICATION
+			"ASAN_OPTIONS=string_append:,new_delete_type_mismatch=0;LSAN_OPTIONS=string_append:,suppressions=${CMAKE_SOURCE_DIR}/cmake/lsan_suppressions.txt")
+	endif()
+
 endif()

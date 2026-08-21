@@ -127,4 +127,9 @@ if(EnableTests AND OxC3TestExecutables)
 	apply_dependencies(OxC3_graphics_interface_test)
 	add_test(NAME OxC3_graphics_interface_test COMMAND OxC3_graphics_interface_test)
 
+	# Enumerates every adapter the machine exposes, so it is the test the sanitizer's quarrel with a
+	# proprietary driver decides the coverage of.
+
+	oxc3SanitizerDeviceTestEnv(OxC3_graphics_interface_test)
+
 endif()

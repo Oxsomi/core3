@@ -226,6 +226,74 @@ SUPPORTED_COMPILERS = { "Windows": ("msvc", "clang"), "Darwin": ("clang",), "Lin
 def defaultCompiler():
 	return DEFAULT_COMPILERS[hostSystem()]
 
+# The executable each profile's compiler is detected through. Has to match what the profile template
+# asks detect_api for, or the guard below would check a different compiler than the build uses.
+
+PROFILE_COMPILER_EXE = {
+	("Windows", "msvc"):  "cl",
+	("Windows", "clang"): "clang-cl",
+	("Darwin",  "clang"): "clang",
+	("Linux",   "gcc"):   "gcc",
+	("Linux",   "clang"): "clang"
+}
+
+def detectedCompilerVersion(exe):
+	"""The version `exe` actually reports, or None if it isn't there.
+
+	Only the major matters, which is what conan keys package ids on for every compiler this repo uses.
+	"""
+
+	for args in ( [ exe, "-dumpfullversion" ], [ exe, "--version" ] ):
+
+		try:
+			probe = subprocess.run(args, capture_output=True, text=True, timeout=10)
+		except Exception:
+			continue
+
+		if probe.returncode:
+			continue
+
+		found = re.search(r"([0-9]+)(\.[0-9]+)*", probe.stdout)
+
+		if found:
+			return found.group(1)
+
+	return None
+
+def verifyHostCompiler(compiler, system):
+	"""Fail early when the profile can't describe this machine.
+
+	The profiles detect their compiler's version rather than pinning one, so a machine that lacks that
+	compiler, or has one newer than conan understands, produces a conan error deep into the first
+	dependency build. Both cases are diagnosable up front and the fix differs, so say which it is.
+	"""
+
+	exe = PROFILE_COMPILER_EXE.get(( system, compiler ))
+
+	if not exe:
+		return
+
+	version = detectedCompilerVersion(exe)
+
+	if version is None:
+		print(
+			f"Profile compiler '{compiler}' selected, but '{exe}' was not found on PATH.\n"
+			f"Install it, or pick another with -compiler=<{'|'.join(SUPPORTED_COMPILERS[system])}>.",
+			file=sys.stderr
+		)
+		sys.exit(1)
+
+	known = conanKnownCompilerVersions(compiler)
+
+	if known and version not in known:
+		print(
+			f"{exe} reports version {version}, which this conan doesn't accept for '{compiler}' "
+			f"(it knows up to {known[-1]}).\n"
+			f"Upgrade conan, or widen compiler.version in settings_user.yml.",
+			file=sys.stderr
+		)
+		sys.exit(1)
+
 def hostProfileBase(compiler = None):
 
 	arch = hostArch()[0]
@@ -237,6 +305,8 @@ def hostProfileBase(compiler = None):
 	if compiler not in supported:
 		print(f"Unsupported compiler '{compiler}' on {system}; expected one of {', '.join(supported)}", file=sys.stderr)
 		sys.exit(1)
+
+	verifyHostCompiler(compiler, system)
 
 	if system == "Windows":
 		return f"packages/conan/profiles/windows_{compiler}_{arch}"
