@@ -407,3 +407,182 @@ macro(add_virtual_dependencies_external)
 	endif()
 
 endmacro()
+
+# oxc3_add_test: one test target, defined once.
+#
+# Replaces ~18 lines of per module boilerplate that spelled the target name five or six times.
+# That repetition is what let the C++ glob go missing from every module except types/container, which silently excluded
+# C++ test TUs from the build while it still exited 0.
+#
+#   oxc3_add_test(
+#       NAME        OxC3_formats_bmp_test
+#       FOLDER      Oxsomi/test/formats
+#       LIBS        OxC3_types_container_test_util OxC3_formats_bmp
+#       [DIR        test]                # source dir, relative to the caller
+#       [INCLUDES   ../../../include]
+#       [WORKING_DIR <dir>]              # for a test that reads data relative to itself
+#       [SOURCES    <files...>]          # extra sources (e.g. an HLSL corpus shown in the IDE)
+#       [DATA       <files...>]          # re-run when these change, not just on relink
+#       [DEPS       <targets/files...>]   # e.g. a DLL the exe loads but does not relink against, or a
+#                                         # package built by another target
+#       [NO_AUTORUN]                     # register with ctest but don't run it after building
+#   )
+#
+# Tests run as a POST_BUILD step, so a target that didn't relink doesn't re-run: the build graph does the
+# dirty tracking rather than a second cache with its own staleness rules.
+# POST_BUILD is portable across generators (PRE_BUILD is the Visual Studio only one), but it EXECUTES the
+# binary, so it is skipped when cross compiling; Android runs its suite on device through OxC3_atest.
+
+function(oxc3_add_test)
+
+	set(options NO_AUTORUN)
+	set(oneValue NAME FOLDER DIR WORKING_DIR)
+	set(multiValue LIBS INCLUDES DATA DEPS SOURCES)
+	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
+
+	if(NOT T_NAME)
+		message(FATAL_ERROR "oxc3_add_test: NAME is required")
+	endif()
+
+	if(NOT T_DIR)
+		set(T_DIR "test")
+	endif()
+
+	# Every test kind in one place, so a new module can't forget the C++ half.
+
+	file(GLOB testSources CONFIGURE_DEPENDS
+		"${CMAKE_CURRENT_SOURCE_DIR}/${T_DIR}/*.c"
+		"${CMAKE_CURRENT_SOURCE_DIR}/${T_DIR}/*.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/${T_DIR}/*.h"
+	)
+
+	add_executable(${T_NAME} ${testSources} ${T_SOURCES} CMakeLists.txt)
+
+	if(T_LIBS)
+		target_link_libraries(${T_NAME} PUBLIC ${T_LIBS})
+	endif()
+
+	if(T_INCLUDES)
+		target_include_directories(${T_NAME} PUBLIC ${T_INCLUDES})
+	endif()
+
+	set_target_properties(${T_NAME} PROPERTIES FOLDER "${T_FOLDER}")
+
+	if(T_WORKING_DIR)
+		set_target_properties(${T_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${T_WORKING_DIR}")
+	endif()
+
+	set(runArgs NAME ${T_NAME} FOLDER "${T_FOLDER}")
+
+	if(T_WORKING_DIR)
+		list(APPEND runArgs WORKING_DIR "${T_WORKING_DIR}")
+	endif()
+
+	if(T_NO_AUTORUN)
+		list(APPEND runArgs NO_AUTORUN)
+	endif()
+
+	oxc3_add_test_run(${runArgs} DATA ${T_DATA} DEPS ${T_DEPS})
+
+endfunction()
+
+# The run half on its own, for a target built by hand because it needs more than the wrapper does (a package attached
+# to it, a dylib it dlopens).
+# Registers with ctest, and runs it after building unless OxC3TestAutoRun is off.
+
+function(oxc3_add_test_run)
+
+	set(options NO_AUTORUN)
+	set(oneValue NAME FOLDER WORKING_DIR)
+	set(multiValue DATA DEPS)
+	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
+
+	if(NOT TARGET ${T_NAME})
+		message(FATAL_ERROR "oxc3_add_test_run: ${T_NAME} is not a target")
+	endif()
+
+	if(T_WORKING_DIR)
+		add_test(NAME ${T_NAME} COMMAND ${T_NAME} WORKING_DIRECTORY "${T_WORKING_DIR}")
+	else()
+		add_test(NAME ${T_NAME} COMMAND ${T_NAME})
+	endif()
+
+	if(NOT OxC3TestAutoRun OR T_NO_AUTORUN OR CMAKE_CROSSCOMPILING)
+		return()
+	endif()
+
+	# A STAMP, not a POST_BUILD event.
+	# Under MSBuild a post build event runs every time the project is built, and it builds every project each pass even
+	# when the link is skipped, so POST_BUILD would re-run every suite on every build.
+	# A custom command with an OUTPUT re-runs only when something it DEPENDS on is newer than that output, which is real
+	# dirty tracking and behaves the same on Ninja.
+	#
+	# Through the wrapper, never directly: MSBuild fails a step whose output merely LOOKS like an error, and these tests
+	# print error shaped text on purpose.
+	# See cmake/run_test.cmake.
+
+	set(runScript "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/run_test.cmake")
+	set(stamp "${CMAKE_CURRENT_BINARY_DIR}/${T_NAME}.passed")
+
+	set(runArgs -DTEST_EXE=$<TARGET_FILE:${T_NAME}> -DTEST_NAME=${T_NAME})
+
+	if(T_WORKING_DIR)
+		list(APPEND runArgs -DTEST_WORKING_DIR=${T_WORKING_DIR})
+	endif()
+
+	# DATA is what makes a data driven suite honest: a test built from a golden, an HLSL corpus or a
+	# packaged shader relinks nothing when one of those changes, so without naming them the stamp stays
+	# newer than its real inputs and the one test whose whole job is comparing against them never re-runs.
+	#
+	# These are FILES on purpose.
+	# Depending on a custom target here would re-run every build, since a custom target is out of date by definition.
+
+	add_custom_command(
+		OUTPUT "${stamp}"
+		COMMAND ${CMAKE_COMMAND} ${runArgs} -P "${runScript}"
+		COMMAND ${CMAKE_COMMAND} -E touch "${stamp}"
+		DEPENDS ${T_NAME} ${T_DATA} ${T_DEPS}
+		COMMENT "Running ${T_NAME}"
+		VERBATIM
+	)
+
+	add_custom_target(${T_NAME}_run ALL DEPENDS "${stamp}")
+	set_target_properties(${T_NAME}_run PROPERTIES FOLDER "${T_FOLDER}")
+
+endfunction()
+
+# A test that is not an executable of its own (the CLI suite drives a python script against a built binary).
+# It hangs off the target it exercises, so it re-runs when that binary changes.
+
+function(oxc3_add_test_command)
+
+	set(options NO_AUTORUN)
+	set(oneValue NAME TARGET WORKING_DIR FOLDER)
+	set(multiValue COMMAND DATA DEPS)
+	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
+
+	if(T_WORKING_DIR)
+		add_test(NAME ${T_NAME} COMMAND ${T_COMMAND} WORKING_DIRECTORY ${T_WORKING_DIR})
+	else()
+		add_test(NAME ${T_NAME} COMMAND ${T_COMMAND})
+	endif()
+
+	if(OxC3TestAutoRun AND NOT T_NO_AUTORUN AND NOT CMAKE_CROSSCOMPILING AND TARGET ${T_TARGET})
+
+		set(stamp "${CMAKE_CURRENT_BINARY_DIR}/${T_NAME}.passed")
+
+		add_custom_command(
+			OUTPUT "${stamp}"
+			COMMAND ${T_COMMAND}
+			COMMAND ${CMAKE_COMMAND} -E touch "${stamp}"
+			DEPENDS ${T_TARGET} ${T_DATA} ${T_DEPS}
+			WORKING_DIRECTORY ${T_WORKING_DIR}
+			COMMENT "Running ${T_NAME}"
+			VERBATIM
+		)
+
+		add_custom_target(${T_NAME}_run ALL DEPENDS "${stamp}")
+		set_target_properties(${T_NAME}_run PROPERTIES FOLDER "${T_FOLDER}")
+	endif()
+
+endfunction()

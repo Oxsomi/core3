@@ -91,7 +91,7 @@ void DescriptorTable_free(void *tableGeneric, const Allocator *alloc) {
 					if((tb->multiple.activeList.ptr[j >> 6] >> (j & 63)) & 1) {
 
 						Log_warnLnx(
-							"Leaked descriptor at %.*s[%"PRIu64"] (#%"PRIu64", id % "PRIu64", space % "PRIu64")",
+							"Leaked descriptor at %.*s[%"PRIu64"] (#%"PRIu64", id %"PRIu32", space %"PRIu32")",
 							(int) CharString_length(name), name.ptr, j, i, b->binding.binding, b->binding.space
 						);
 
@@ -124,7 +124,7 @@ void DescriptorTable_free(void *tableGeneric, const Allocator *alloc) {
 			else if(tb->single.resource) {
 
 				Log_warnLnx(
-					"Leaked descriptor at %.*s (#%"PRIu64", id %"PRIu64", space %"PRIu64")",
+					"Leaked descriptor at %.*s (#%"PRIu64", id %"PRIu32", space %"PRIu32")",
 					(int) CharString_length(name), name.ptr, i, b->binding.binding, b->binding.space
 				);
 

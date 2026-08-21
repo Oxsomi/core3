@@ -41,20 +41,12 @@ target_compile_definitions(OxC3_types_math PUBLIC -D_ENABLE_SIMD=${SIMD} -D_FORC
 
 if(EnableTests AND OxC3TestExecutables)
 
-	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
-	file(GLOB testsCpp CONFIGURE_DEPENDS "test/*.cpp")    #C++ TUs (e.g. hpp wrapper tests)
-	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
+	include(../../../cmake/oxc3.cmake)
 
-	add_executable(
-		OxC3_types_math_test
-		${testsC}
-		${testsCpp}
-		${testsH}
-		CMakeLists.txt
+	oxc3_add_test(
+		NAME     OxC3_types_math_test
+		FOLDER   Oxsomi/test/types
+		LIBS     OxC3_types_math OxC3_types_test
 	)
-
-	target_link_libraries(OxC3_types_math_test PUBLIC OxC3_types_math OxC3_types_test)
-	set_target_properties(OxC3_types_math_test PROPERTIES FOLDER Oxsomi/test/types)
-	add_test(NAME OxC3_types_math_test COMMAND OxC3_types_math_test)
 
 endif()

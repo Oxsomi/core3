@@ -94,11 +94,18 @@ if(EnableTests AND OxC3TestExecutables)
 	endif()
 
 	if(Python3_EXECUTABLE)
-		add_test(
-			NAME OxC3_cli_test
-			COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/test.py $<TARGET_FILE_DIR:OxC3>
-			WORKING_DIRECTORY $<TARGET_FILE_DIR:OxC3>
+
+		include(../../../cmake/oxc3.cmake)
+
+		oxc3_add_test_command(
+			NAME        OxC3_cli_test
+			TARGET      OxC3
+			FOLDER      Oxsomi/test/tools
+			COMMAND     ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/test.py $<TARGET_FILE_DIR:OxC3>
+			WORKING_DIR $<TARGET_FILE_DIR:OxC3>
+			DATA        ${CMAKE_SOURCE_DIR}/tools/test.py
 		)
+
 	else()
 		message(WARNING "OxC3_cli_test skipped: Python3 interpreter not found")
 	endif()

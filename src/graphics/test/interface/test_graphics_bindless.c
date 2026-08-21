@@ -663,10 +663,13 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	DeviceBufferRef *output = NULL;
 	PipelineRef *pipeline = NULL;
+	PipelineLayoutRef *pipelineLayout = NULL;
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
 	SHFile file = (SHFile) { 0 };
+	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	DescriptorBinding pushConstants = (DescriptorBinding) { 0 };
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_frame_globals.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping frame globals tests");
@@ -682,7 +685,50 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	if(!TestShaders_computePipeline(t, deviceRef, &file, &pipeline))
+	//The output handle rides in a push constant now, so this pipeline can't use the device's default layout
+	// as is: it needs the same bindless bindings and globals push descriptor WITH a push constant range on
+	// top, which is what composing one from the device's own layouts gives.
+
+	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+
+	if(entryId == U32_MAX)
+		goto clean;
+
+	//On DXIL a push constant reflects as the implicit $Globals cbuffer, so it can't be found by name; Assume
+	// is unambiguous here because detect skips the reserved space, where the globals block lives.
+
+	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
+		deviceRef, &file, entryId, EDescriptorLayoutFlags_None,
+		EDetectDescriptorLayoutFlags_AssumePushConstants,
+		NULL, NULL, &pushConstants, &layoutInfo, NULL, &t->err
+	)))
+		goto clean;
+
+	//Everything else this shader touches is the runtime's own bindless set, which detect skips.
+
+	Test_assert(t, "noOrdinaryBindings", !layoutInfo.bindings.length);
+
+	if(!Test_assert(t, "detectedPushConstants", pushConstants.count != 0))
+		goto clean;
+
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) {
+		.bindings = device->defaultDescLayout,
+		.pushDescriptors = device->defaultCBufferLayout,
+		.pushConstants = pushConstants
+	};
+
+	name = CharString_createRefCStrConst("Frame globals pipeline layout");
+
+	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
+		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	)))
+		goto clean;
+
+	name = CharString_createRefCStrConst("Frame globals pipeline");
+
+	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
+		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	)))
 		goto clean;
 
 	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
@@ -705,22 +751,24 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 	ListTransition transitionList = (ListTransition) { 0 };
 	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
 
+	//The write handle travels as a push constant rather than in the app data block.
+
+	const U32 pushData[4] = { DeviceBufferRef_ptr(output)->writeHandle, 0, 0, 0 };
+	const Buffer pushRef = Buffer_createRefConst(pushData, sizeof(pushData));
+
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
 	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+	Test_assert(t, "setPushConstants", CommandListRef_setPushConstants(commandList, pushRef, &t->err));
 	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
-
-	TestShaderAppData appData = (TestShaderAppData) {
-		.handles = { DeviceBufferRef_ptr(output)->writeHandle }
-	};
 
 	U32 firstFrameId = 0;
 	F32 firstTime = 0;
 	Bool readFirst = false;
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, &appData, sizeof(appData)))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -748,7 +796,7 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 	//A second submit of the same list: the frame id advances and time cannot go backwards, which is what
 	// makes this a test of the live per frame block rather than of one constant
 
-	if (readFirst && TestShaders_submitAndWait(t, deviceRef, commandList, &appData, sizeof(appData)))
+	if (readFirst && TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -765,7 +813,9 @@ clean:
 	RefPtr_dec(&emptyList);
 	RefPtr_dec(&commandList);
 	RefPtr_dec(&pipeline);
+	RefPtr_dec(&pipelineLayout);
 	RefPtr_dec(&output);
 
+	DescriptorLayoutInfo_free(&layoutInfo, alloc);
 	SHFile_free(&file, alloc);
 }

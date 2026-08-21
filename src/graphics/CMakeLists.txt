@@ -111,11 +111,12 @@ if(EnableTests AND OxC3TestExecutables)
 	# add_virtual_dependencies is required so device creation can load the //OxC3_graphics prebuilt shaders.
 
 	include(../../cmake/oxc3.cmake)
-	file(GLOB testsInterfaceC CONFIGURE_DEPENDS "test/interface/*.c")
+
+	file(GLOB testsInterface CONFIGURE_DEPENDS "test/interface/*.c" "test/interface/*.cpp")
 
 	add_executable(
 		OxC3_graphics_interface_test
-		${testsInterfaceC}
+		${testsInterface}
 		CMakeLists.txt
 	)
 
@@ -125,6 +126,20 @@ if(EnableTests AND OxC3TestExecutables)
 	add_virtual_dependencies(TARGET OxC3_graphics_interface_test DEPENDENCIES OxC3_graphics OxC3_gtest)
 
 	apply_dependencies(OxC3_graphics_interface_test)
-	add_test(NAME OxC3_graphics_interface_test COMMAND OxC3_graphics_interface_test)
+
+	# The shaders this test runs are packaged, not linked, so editing one relinks nothing.
+	# Naming them as data is what makes editing a shader (or an hlsli one of them includes) re-run the test.
+	# Both trees: the test's own shaders and the engine shaders the device itself loads.
+
+	file(GLOB_RECURSE graphicsTestShaders CONFIGURE_DEPENDS
+		"${CMAKE_CURRENT_SOURCE_DIR}/test/shaders/*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/generic/shaders/*"
+	)
+
+	oxc3_add_test_run(
+		NAME   OxC3_graphics_interface_test
+		FOLDER Oxsomi/test/graphics
+		DATA   ${graphicsTestShaders}
+	)
 
 endif()

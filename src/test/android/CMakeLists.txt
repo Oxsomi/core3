@@ -35,16 +35,20 @@ set(testRoot ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
 file(GLOB_RECURSE androidTestSources CONFIGURE_DEPENDS
 	"${testRoot}/types/base/test/*.c"
+	"${testRoot}/types/base/test/*.cpp"
 	"${testRoot}/types/math/test/*.c"
 	"${testRoot}/types/math/test/*.cpp"
 	"${testRoot}/types/container/test/*.c"
 	"${testRoot}/types/container/test/*.cpp"
 	"${testRoot}/formats/*/test/*.c"
+	"${testRoot}/formats/*/test/*.cpp"
 	"${testRoot}/audio/test/interface/*.c"
 	"${testRoot}/audio/test/functional/*.c"
 	"${testRoot}/platforms/test/functional/*.c"
 	"${testRoot}/graphics/test/interface/*.c"
+	"${testRoot}/graphics/test/interface/*.cpp"
 	"${testRoot}/platforms/test/interface/*.c"
+	"${testRoot}/platforms/test/interface/*.cpp"
 )
 
 if(EnableShaderCompiler)

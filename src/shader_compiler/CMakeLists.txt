@@ -85,36 +85,31 @@ if(EnableTests AND OxC3TestExecutables)
 	# oxc:: annotations, extensions and disassembly.
 	# The test/hlsl corpus is exposed to the test at build time via OXC3_SHADER_COMPILER_TEST_HLSL_DIR.
 
-	file(GLOB shaderCompilerTestsC CONFIGURE_DEPENDS "test/*.c")
-
 	# The HLSL corpus is test data, not compiled by the build; mark it header-only so it shows up
 	# in the IDE (under an "hlsl" group) without CMake trying to invoke a shader compiler on it.
 	file(GLOB_RECURSE shaderCompilerTestHlsl CONFIGURE_DEPENDS "test/hlsl/*.hlsl" "test/hlsl/*.hlsli")
 	set_source_files_properties(${shaderCompilerTestHlsl} PROPERTIES HEADER_FILE_ONLY ON)
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/test/hlsl" PREFIX "hlsl" FILES ${shaderCompilerTestHlsl})
 
-	add_executable(
-		OxC3_shader_compiler_test
-		${shaderCompilerTestsC}
-		${shaderCompilerTestHlsl}
-		CMakeLists.txt
-	)
+	# Everything the corpus test is built FROM, none of which is a source it links against: the HLSL corpus, the reference
+	# oiSH it compares against, and the includes embedded into the compiler itself (types.hlsli and friends).
+	# Editing any of them has to re-run the test, and none of them relinks the executable.
 
-	target_link_libraries(OxC3_shader_compiler_test PUBLIC OxC3_shader_compiler OxC3_platforms OxC3_types_test)
+	file(GLOB shaderCompilerGoldens CONFIGURE_DEPENDS "test/*.oiSH")
+	file(GLOB_RECURSE shaderCompilerEmbedded CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../include/shader_compiler/shaders/*.hlsli")
 
 	# The corpus test reads/writes shaders + their reference oiSH relative to the working directory, so
 	# run it from the corpus folder (OxC3 restricts file access to the working dir).
-	# Set it for both the VS debugger and ctest.
 
-	set_target_properties(OxC3_shader_compiler_test PROPERTIES
-		FOLDER Oxsomi/test/graphics
-		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/test"
-	)
+	include(../../cmake/oxc3.cmake)
 
-	add_test(
-		NAME OxC3_shader_compiler_test
-		COMMAND OxC3_shader_compiler_test
-		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/test"
+	oxc3_add_test(
+		NAME        OxC3_shader_compiler_test
+		FOLDER      Oxsomi/test/graphics
+		LIBS        OxC3_shader_compiler OxC3_platforms OxC3_types_test
+		SOURCES     ${shaderCompilerTestHlsl}
+		WORKING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/test"
+		DATA        ${shaderCompilerTestHlsl} ${shaderCompilerGoldens} ${shaderCompilerEmbedded}
 	)
 
 endif()

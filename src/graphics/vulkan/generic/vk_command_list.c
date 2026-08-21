@@ -131,6 +131,84 @@ static void VkCommandBufferState_bindDescriptors(
 		temp->lastPushLayout[bindPointId] = *layoutExt;
 	}
 
+	//A custom layout whose bindings are the device's own bindless set gets that table's sets bound against
+	// ITS layout; the sets come from the same DescriptorLayout, so they sit at the same indices.
+
+	if (PipelineLayout_usesRuntimeBindless(layout) && temp->lastBoundLayout[bindPointId] != *layoutExt) {
+
+		VkDescriptorTable *bindlessExt =
+			DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Vk);
+
+		for (U64 j = 0, k = 0; j < bindlessExt->bindCommands; ++j) {
+
+			deviceExt->cmdBindDescriptorSets(
+				temp->buffer, bindPoint, *layoutExt,
+				bindlessExt->offsets[j], bindlessExt->counts[j], &bindlessExt->sets[k],
+				0, NULL
+			);
+
+			k += bindlessExt->counts[j];
+		}
+
+		temp->lastBoundLayout[bindPointId] = *layoutExt;
+		temp->lastBoundTable[bindPointId] = NULL;
+
+		//Binding against a custom layout disturbs what the default layout had bound.
+
+		temp->defaultDescriptorsBound = false;
+	}
+
+	//A custom layout that declares OxC3's per frame globals gets them pushed here: the default layout's own
+	// bind never runs for it, so _frameId/_time would otherwise be whatever the set last held.
+	//Tracked with the same pair as the caller's push descriptors, since a layout carries one or the other.
+
+	if (PipelineLayout_hasRuntimeGlobals(layout) && (
+		!temp->pushDescriptorsEmitted[bindPointId] || temp->lastPushDescLayout[bindPointId] != *layoutExt
+	)) {
+
+		U32 globalsSet = 0;
+
+		if (layout->info.bindings) {
+
+			VkDescriptorLayout *bindExt = DescriptorLayout_ext(DescriptorLayoutRef_ptr(layout->info.bindings), Vk);
+
+			while(globalsSet < 4 && bindExt->layouts[globalsSet])
+				++globalsSet;
+		}
+
+		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
+
+		//Without VK_KHR_push_descriptor the device emulates it with one set per frame in flight, already
+		// written to that frame's globals buffer, so the emulated path binds it instead of pushing.
+
+		if (deviceExt->cmdPushDescriptorSet) {
+
+			const VkDescriptorBufferInfo bufferInfo = (VkDescriptorBufferInfo) {
+				.buffer = DeviceBuffer_ext(frameData, Vk)->buffer,
+				.offset = 0,
+				.range = frameData->resource.size
+			};
+
+			const VkWriteDescriptorSet cbv = (VkWriteDescriptorSet) {
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				.pBufferInfo = &bufferInfo
+			};
+
+			deviceExt->cmdPushDescriptorSet(temp->buffer, bindPoint, *layoutExt, globalsSet, 1, &cbv);
+		}
+
+		else deviceExt->cmdBindDescriptorSets(
+			temp->buffer, bindPoint, *layoutExt, globalsSet, 1, &deviceExt->cbufferSets[device->fifId], 0, NULL
+		);
+
+		temp->pushDescriptorsEmitted[bindPointId] = true;
+		temp->lastPushDescLayout[bindPointId] = *layoutExt;
+	}
+
 	//Push descriptors go out here for the same reasons, and buffer class only for the same reason D3D12 is:
 	// createDescriptorLayout refuses anything else, so the writes below only ever describe buffers and RTASes.
 

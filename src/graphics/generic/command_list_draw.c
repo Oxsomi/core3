@@ -91,8 +91,15 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 		//All or nothing: the layout's whole set has to have been written, since the backends emit the whole
 		// set and a partial one would leave the rest pointing at whatever the last pipeline bound.
 
+		//The runtime's own globals are a push descriptor the SUBMIT fills, so a layout carrying them asks
+		// nothing of the caller; requiring a write here would make push constants and _frameId/_time
+		// mutually exclusive, since wanting the former is what forces a custom layout in the first place.
+
 		DescriptorLayoutRef *pushRef = PipelineLayoutRef_ptr(layoutRef)->info.pushDescriptors;
-		const U64 pushCount = pushRef ? DescriptorLayoutRef_ptr(pushRef)->info.bindings.length : 0;
+
+		const U64 pushCount =
+			(pushRef && !PipelineLayout_hasRuntimeGlobals(PipelineLayoutRef_ptr(layoutRef))) ?
+			DescriptorLayoutRef_ptr(pushRef)->info.bindings.length : 0;
 
 		//Only buffer class push descriptors can actually be emitted: on D3D12 a root descriptor is one raw
 		// GPU virtual address, with nowhere to carry a texture's format, mip or swizzle.
@@ -187,7 +194,11 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 
 	const PipelineLayout *layout = PipelineLayoutRef_ptr(layoutRef);
 
-	if (layout->info.bindings) {
+	//A layout whose bindings are the device's own bindless set is served by the device's heap and table, so
+	// the caller has nothing to bind: requiring it would make the bindless set and push constants mutually
+	// exclusive, the same way requiring a write for the runtime globals would have.
+
+	if (layout->info.bindings && !PipelineLayout_usesRuntimeBindless(layout)) {
 
 		//The heap bind is explicit because switching heaps is expensive; a table silently implying its heap
 		// would hide exactly the cost that made it explicit

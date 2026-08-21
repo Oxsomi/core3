@@ -231,6 +231,66 @@ static void DxCommandBufferState_bindDescriptors(
 		temp->pushConstantsEmitted[bindPoint] = false;
 		temp->pushDescriptorsEmitted[bindPoint] = false;
 		temp->defaultDescriptorsBound = false;
+
+		//A custom layout whose bindings are the device's own bindless set gets the device's heap and table
+		// bound against ITS root signature; the root params come from the same DescriptorLayout, so they sit
+		// at the same indices the default root signature puts them at.
+
+		if (PipelineLayout_usesRuntimeBindless(layout)) {
+
+			DxDescriptorHeap *bindlessHeap =
+				DescriptorHeap_ext(DescriptorHeapRef_ptr(device->defaultDescriptorHeaps), Dx);
+
+			DxDescriptorTable *bindlessTable =
+				DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Dx);
+
+			ID3D12DescriptorHeap *heaps[2] = { bindlessHeap->resourcesHeap.heap, bindlessHeap->samplerHeap.heap };
+
+			//Sampler descriptors are not the same size as CBV/SRV/UAV ones on every adapter, so each offset
+			// scales by its own heap's increment.
+
+			const D3D12_GPU_DESCRIPTOR_HANDLE tables[2] = {
+				{
+					bindlessHeap->samplerHeap.gpuHandle.ptr +
+					bindlessTable->allocationLocations[1] * bindlessHeap->samplerHeap.gpuIncrement
+				},
+				{
+					bindlessHeap->resourcesHeap.gpuHandle.ptr +
+					bindlessTable->allocationLocations[0] * bindlessHeap->resourcesHeap.gpuIncrement
+				}
+			};
+
+			if(temp->lastBoundHeap != device->defaultDescriptorHeaps) {
+				buffer->lpVtbl->SetDescriptorHeaps(buffer, 2, heaps);
+				temp->lastBoundHeap = device->defaultDescriptorHeaps;
+			}
+
+			for(U32 i = 0; i < 2; ++i) {
+
+				if(isCompute)
+					buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, i, tables[i]);
+
+				else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, i, tables[i]);
+			}
+		}
+
+		//A custom layout that declares OxC3's per frame globals gets them bound here, since the default
+		// layout's own bind never runs for it and the root signature switch just dropped every argument.
+
+		if (PipelineLayout_hasRuntimeGlobals(layout)) {
+
+			const DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
+			const D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
+
+			if(isCompute)
+				buffer->lpVtbl->SetComputeRootConstantBufferView(
+					buffer, layoutExt->rootParamPushDescriptors, cbvLoc
+				);
+
+			else buffer->lpVtbl->SetGraphicsRootConstantBufferView(
+				buffer, layoutExt->rootParamPushDescriptors, cbvLoc
+			);
+		}
 	}
 
 	//Emitted before the table work below, which returns early for a layout that has push constants but no

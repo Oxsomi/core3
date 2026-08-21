@@ -252,6 +252,54 @@ def hostProfileForMode(mode, compiler = None):
 	base = hostProfileBase(compiler)
 	return f"{base}_{mode}" if hostSystem() == "Windows" else base
 
+def visualStudioNinjaConf(compiler):
+	"""Conf a Ninja build on Windows needs, and an early check that it can work at all.
+
+	The Visual Studio generator never runs vcvars; it sets its own environment up. Ninja does run it, which
+	surfaces two things that generator hid:
+
+	  - vswhere lives in the VS Installer folder and is usually not on PATH, so vcvars cannot find the
+	    install. Pointing conan straight at the installation removes the need for it.
+	  - conan derives -vcvars_ver from the profile's pinned toolset (v144 -> 14.4). If that toolset is not
+	    installed, vcvars fails with a message that says nothing about profiles, so it is checked here.
+	"""
+
+	if hostSystem() != "Windows":
+		return ""
+
+	vswhere = os.path.join(
+		os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+		"Microsoft Visual Studio", "Installer", "vswhere.exe"
+	)
+
+	if not os.path.isfile(vswhere):
+		print("-- Error: -generator ninja needs Visual Studio; vswhere.exe was not found", file=sys.stderr)
+		sys.exit(1)
+
+	install = capture(f'"{vswhere}" -latest -products * -property installationPath').strip()
+
+	if not install:
+		print("-- Error: -generator ninja needs Visual Studio; vswhere reported no installation", file=sys.stderr)
+		sys.exit(1)
+
+	# The profiles pin a runtime_version, and conan turns that into the toolset vcvars is asked for.
+
+	wanted = "14.4"                              #v144, what both windows profiles pin
+	toolsets = os.path.join(install, "VC", "Tools", "MSVC")
+	have = sorted(os.listdir(toolsets)) if os.path.isdir(toolsets) else []
+
+	if not any(v.startswith(wanted) for v in have):
+		print(
+			f"-- Error: -generator ninja needs MSVC toolset {wanted}x, which the profiles pin through\n"
+			f"   compiler.runtime_version. Installed: {', '.join(have) or 'none'}.\n"
+			f"   Install it through the VS Installer, or build without -generator ninja; the Visual Studio\n"
+			f"   generator does not use vcvars and is unaffected.",
+			file=sys.stderr
+		)
+		sys.exit(1)
+
+	return f'-c tools.microsoft.msbuild:installation_path="{install}" '
+
 def hostProfileArgs(mode, compiler = None):
 	p = hostProfileForMode(mode, compiler)
 	return f"--profile:build={p} --profile:host={p}"

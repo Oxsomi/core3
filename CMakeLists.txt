@@ -18,10 +18,64 @@
 # This is called dual licensing.
 
 cmake_minimum_required(VERSION 3.26.0)
+
+# The dependencies come from conan, so the toolchain it writes has to exist before project() runs.
+# Checked here because project() is where CMake consumes it, and the error it raises there names a missing
+# file without saying which tool was supposed to produce it.
+# An IDE configuring from a preset is the usual way to arrive here, since it will happily configure a
+# configuration that was never built.
+
+if(CMAKE_TOOLCHAIN_FILE AND NOT EXISTS "${CMAKE_TOOLCHAIN_FILE}")
+
+	# The build folder names the configuration it belongs to, so the exact command can be recovered from it
+	# rather than left as an example the reader has to adapt.
+	# Everything but windows puts the mode in the path (build/<mode>/<platform>/...), because those trees are
+	# single config; windows keeps every config in one tree, so -mode is optional there.
+
+	set(setupScript "build.py")
+	set(setupArgs "-tests True")
+
+	if("${CMAKE_BINARY_DIR}" MATCHES "/build/([^/]+)/(android|linux|osx)/")
+		string(PREPEND setupArgs "-mode ${CMAKE_MATCH_1} ")
+	endif()
+
+	if("${CMAKE_BINARY_DIR}" MATCHES "/android/([^/]+)/")
+
+		# A cross build, driven by its own script, and the arch is explicit rather than the host's.
+
+		set(setupScript "build_android.py")
+		string(APPEND setupArgs " -arch ${CMAKE_MATCH_1} -generator Ninja")
+
+	else()
+
+		if("${CMAKE_BINARY_DIR}" MATCHES "_clang")
+			string(APPEND setupArgs " -compiler clang")
+		endif()
+
+		if("${CMAKE_BINARY_DIR}" MATCHES "_ninja")
+			string(APPEND setupArgs " -generator ninja")
+		endif()
+
+	endif()
+
+	message(FATAL_ERROR
+		"conan has not set this configuration up yet, so there is no toolchain at "
+		"${CMAKE_TOOLCHAIN_FILE} -- the build scripts own that step, and an IDE will happily configure a "
+		"configuration that was never built. Run this once, then configure again:"
+		"\n\n    python ${setupScript} ${setupArgs}\n"
+	)
+endif()
+
 project(OxC3)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
+
+# What clangd and VS Code's C/C++ extension read to know how each file is compiled.
+# Only the Ninja and Makefile generators emit it; the Visual Studio generator ignores it and gets its
+# IntelliSense from the .vcxproj instead, so this is harmless there rather than conditional.
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # SET(GRAPHVIZ_CUSTOM_TARGETS TRUE)
 
@@ -534,6 +588,17 @@ else()
 	set(OxC3TestExecutables ON)
 endif()
 
+# Each suite runs behind a stamp file that depends on everything it was built from, so one whose inputs did not change
+# does not re-run and the build graph does the dirty tracking.
+# CI turns this OFF and drives ctest explicitly, which always runs everything and reports per test rather than as one
+# build failure.
+
+option(OxC3TestAutoRun "Run each test right after building it" ON)
+
+if(OxC3TestAutoRun AND OxC3TestExecutables AND NOT CMAKE_CROSSCOMPILING)
+	message("-- Tests run automatically after building (-DOxC3TestAutoRun=Off to disable)")
+endif()
+
 if(EnableShaderCompiler)
 
 	message("-- Enabling OxC3 compile shaders (-DEnableShaderCompiler=On)")
@@ -643,3 +708,25 @@ set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")
 set(ForceVulkan OFF CACHE BOOL "Force Vulkan support (disable native API if static linking)")
 
 add_subdirectory(src)
+
+# compile_commands.json lands in the build tree, but every editor looks for it beside the sources.
+# Copied rather than symlinked, since a symlink on Windows needs Developer Mode or elevation.
+# Plain copy rather than copy_if_different, so the output is always newer than its input and this does not
+# re-run on every build.
+# The generator writes the file at generate time, so it is only ever copied after a reconfigure.
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS AND EXISTS "${CMAKE_BINARY_DIR}/compile_commands.json")
+
+	add_custom_command(
+		OUTPUT "${CMAKE_SOURCE_DIR}/compile_commands.json"
+		COMMAND ${CMAKE_COMMAND} -E copy
+			"${CMAKE_BINARY_DIR}/compile_commands.json" "${CMAKE_SOURCE_DIR}/compile_commands.json"
+		DEPENDS "${CMAKE_BINARY_DIR}/compile_commands.json"
+		COMMENT "Exporting compile_commands.json"
+		VERBATIM
+	)
+
+	add_custom_target(OxC3_compile_commands ALL DEPENDS "${CMAKE_SOURCE_DIR}/compile_commands.json")
+	set_target_properties(OxC3_compile_commands PROPERTIES FOLDER Oxsomi/tools)
+
+endif()

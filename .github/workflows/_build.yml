@@ -317,14 +317,14 @@ jobs:
 
       - name: Build Android Release (shader compiler)
         if: inputs.os == 'android' && inputs.android_shader_compiler
-        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch arm64 -tests True -shader_compiler True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch arm64 -tests True -ctest True -shader_compiler True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
 
       # x64 rather than arm64: the emulator below runs on an x86_64 host, and an arm64 image there is
       # software emulated and far too slow to finish a test run.
 
       - name: Build Android Release (x64, for the emulator)
         if: inputs.os == 'android' && inputs.android_run
-        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch x64 -tests True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch x64 -tests True -ctest True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
 
       # The emulator needs KVM, which the runner exposes but doesn't make writable by default.
 
@@ -373,7 +373,7 @@ jobs:
           # host driver supports, and on api 31 the guest ICD allowlist is old enough to cost us more than that.
           emulator-options: -no-window -gpu lavapipe -noaudio -no-boot-anim -camera-back none -qemu -cpu host
           disable-animations: true
-          script: ${{ inputs.python_cmd }} build_android.py --skip_build --apk --sign --run -mode Release -arch x64 -tests True -package net.osomi.test -version 0.1.0 -name "OxC3 test" -keystore_password oxc3ci -test_timeout 900
+          script: ${{ inputs.python_cmd }} build_android.py --skip_build --apk --sign --run -mode Release -arch x64 -tests True -ctest True -package net.osomi.test -version 0.1.0 -name "OxC3 test" -keystore_password oxc3ci -test_timeout 900
 
       # ── Build: everything else ─────────────────────────────────────────────
       # Debug goes first because a failing step aborts the job,
@@ -453,15 +453,15 @@ jobs:
 
       - name: Build Debug
         if: inputs.os != 'android'
-        run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
+        run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True -ctest True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
 
       - name: Build Release
         if: inputs.os != 'android'
-        run: ${{ inputs.python_cmd }} build.py -mode Release -tests True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
+        run: ${{ inputs.python_cmd }} build.py -mode Release -tests True -ctest True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
 
       - name: Build Release (SIMD fallback)
         if: inputs.os != 'android'
-        run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True ${{ inputs.build_flags }}
+        run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True -ctest True ${{ inputs.build_flags }}
 
       # ── Prebuilts ──────────────────────────────────────────────────────────
       # Last, and only on success(): every build and every test of this job has to have passed before a

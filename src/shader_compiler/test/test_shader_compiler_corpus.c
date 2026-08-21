@@ -83,6 +83,71 @@ static Bool shReadFile(const Allocator *alloc, Buffer buf, SHFile *out) {
 	return ok;
 }
 
+//Re-serialize an oiSH with the fields that churn without the OUTPUT changing blanked out.
+//
+//Two of them are metadata about the build rather than about what was compiled: the OxC3 version stamped into
+// every header, which moves on every release, and the CRC32C recorded per include, which moves when any
+// embedded header is touched even for whitespace.
+//Neither can change the bytecode or the reflection on its own, so letting them fail the snapshot meant all 32
+// references churned for a version bump or a stray space in types.hlsli.
+//
+//sourceHash is deliberately NOT blanked: that one moves when the corpus shader itself changes, which is
+// exactly when the reference should be looked at again.
+//
+//The header's own hash covers the include CRCs, so it is recomputed rather than patched; writing the file out
+// again does that.
+
+static Bool shNormalize(const Allocator *alloc, Buffer in, Buffer *out) {
+
+	SHFile file = (SHFile) { 0 };
+	const RefPtrType msType = MemoryStream_makeType(alloc);
+	MemoryStreamRef *ms = NULL;
+	Error err = Error_none();
+	U64 off = 0;
+	Bool ok = false;
+
+	if(!shReadFile(alloc, in, &file))
+		goto clean;
+
+	file.compilerVersion = 0;
+
+	for(U64 i = 0; i < file.includes.length; ++i)
+		file.includes.ptrNonConst[i].crc32c = 0;
+
+	if(!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &ms, &err))
+		goto clean;
+
+	if(!SHFile_write((StreamRef*) ms, &off, &file, alloc, &err))
+		goto clean;
+
+	ok = MemoryStream_move(&ms, out, &err);
+
+clean:
+
+	if(!ok && err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	RefPtr_dec(&ms);
+	SHFile_free(&file, alloc);
+	return ok;
+}
+
+//True when two oiSH carry the same compiled output, ignoring only the churn shNormalize blanks.
+
+static Bool shContentMatches(const Allocator *alloc, Buffer a, Buffer b) {
+
+	Buffer na = Buffer_createNull(), nb = Buffer_createNull();
+
+	const Bool match =
+		shNormalize(alloc, a, &na) &&
+		shNormalize(alloc, b, &nb) &&
+		Buffer_eq(na, nb);
+
+	Buffer_free(&na, alloc);
+	Buffer_free(&nb, alloc);
+	return match;
+}
+
 //Resolve the semantic name for one I/O slot.
 //A zero name index is the default (TEXCOORD for an input, SV_TARGET for an output).
 //Otherwise it indexes semanticNames (inputs first, outputs after uniqueInputSemantics).
@@ -415,7 +480,18 @@ void Test_shaderCompilerCorpus(Test *t) {
 			Buffer_free(&golden, alloc);
 			gotoIfError3(clean, File_read(&ref, 1 * SECOND, 0, 0, &fileHandleType, &golden, e_rr));
 
+			//Exact first, so an untouched reference is still compared byte for byte.
+			//Only when that fails does the version/include-CRC tolerance get a say; see shContentMatches.
+
 			Bool matches = Buffer_eq(produced, golden);
+
+			if(!matches && shContentMatches(alloc, produced, golden)) {
+				Log_warnLn(
+					alloc, "\toiSH differs from %.*s only in version/include metadata, content is identical",
+					(int) CharString_length(ref), ref.ptr
+				);
+				matches = true;
+			}
 
 			if (!matches) {
 

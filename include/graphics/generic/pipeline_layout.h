@@ -57,6 +57,16 @@ typedef struct PipelineLayout {
 #define PipelineLayout_ext(ptr, T) (!ptr ? NULL : (T##PipelineLayout*)(ptr + 1))        //impl
 #define PipelineLayoutRef_ptr(ptr) RefPtr_data(ptr, PipelineLayout)
 
+//True when the layout declares OxC3's per frame globals (b0 in the reserved space, sized to CBufferData),
+//which the runtime fills itself; see the definition for why a caller can't declare it.
+
+Bool PipelineLayout_hasRuntimeGlobals(const PipelineLayout *layout);
+
+//True when the layout's bindings are the device's own bindless layout, which the runtime's heap and table
+//serve, so the caller binds neither.
+
+Bool PipelineLayout_usesRuntimeBindless(const PipelineLayout *layout);
+
 Bool GraphicsDeviceRef_createPipelineLayout(
 	GraphicsDeviceRef *dev,
 	const PipelineLayoutInfo *info,    //Moves info

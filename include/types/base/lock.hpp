@@ -22,6 +22,15 @@
 
 #pragma once
 
+//Pre-include system headers used by the C headers below at global scope;
+//they must not be pulled in for the first time inside a namespace.
+
+#include <atomic>
+#include <stdalign.h>
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+
 namespace oxc {
 
 	namespace c {

@@ -1,5 +1,22 @@
 {
-    "files.associations": {
+	// Presets rather than the extension's own kits, so VS Code configures the same trees build.py does
+	// instead of a fifth one of its own.
+	"cmake.useCMakePresets": "always",
+
+	// build.py already configures and builds; CMake Tools should not race it on folder open.
+	"cmake.configureOnOpen": false,
+	"cmake.configureOnEdit": false,
+
+	// compile_commands.json is copied to the repo root by the OxC3_compile_commands target, which only the
+	// Ninja generator feeds (the Visual Studio generator does not emit one).
+	// Build with `-generator ninja` once and both clangd and the C/C++ extension pick it up from here.
+	"C_Cpp.default.compileCommands": "${workspaceFolder}/compile_commands.json",
+	"clangd.arguments": [
+		"--compile-commands-dir=${workspaceFolder}",
+		"--header-insertion=never"
+	],
+
+	"files.associations": {
 		"stringx.h": "c",
 		"vec.h": "c",
 		"buffer.h": "c",
@@ -13,6 +30,7 @@
 		"allocator.h": "c",
 		"execinfo.h": "c",
 		"entries.h": "c",
-		"vk_device.h": "c"
+		"vk_device.h": "c",
+		"*.hlsli": "hlsl"
 	}
 }

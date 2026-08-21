@@ -37,6 +37,19 @@
 #include "types/container/buffer.hpp"
 #include "types/container/memory_stream.hpp"
 
+//Pre-include system headers used by the C headers below at global scope;
+//they must not be pulled in for the first time inside a namespace.
+//platform.h reaches lock.h and so atomic.h, which includes <atomic> on every non-Windows target, and a
+//<atomic> first seen inside oxc::c declares operator new in a namespace, which is ill-formed.
+//It happens to work today only because something else includes it at global scope first, which is an
+//include order this header should not depend on (lock.hpp documents the same discipline).
+
+#include <atomic>
+#include <stdalign.h>
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+
 namespace oxc {
 
 	namespace c {

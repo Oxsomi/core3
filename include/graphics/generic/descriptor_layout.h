@@ -119,6 +119,11 @@ typedef enum EDetectDescriptorLayoutFlags {
 
 } EDetectDescriptorLayoutFlags;
 
+//Whether a reflected register name is one the RUNTIME owns (the bindless set or the per frame globals)
+//rather than the caller's. Names, not spaces: the spaces differ per backend.
+
+Bool GraphicsDeviceRef_isRuntimeRegister(GraphicsDeviceRef *dev, const CharString *name);
+
 Bool GraphicsDeviceRef_detectLayoutFromEntries(
 	GraphicsDeviceRef *dev,
 	const SHFile *tmpBinary,

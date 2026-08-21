@@ -43,6 +43,35 @@ void PipelineLayout_free(void *layoutGeneric, const Allocator *alloc) {
 	}
 }
 
+//OxC3's per frame globals are a constant buffer the RUNTIME fills. A pipeline layout that declares it gets
+//them bound for it, rather than only the device's own default layout doing so: a custom layout is exactly
+//what a shader needs the moment it wants push constants, and losing _frameId/_time in the process would make
+//the two mutually exclusive.
+//Identity rather than shape, because the shape differs per backend: the globals sit at b0 in the reserved
+//space on DXIL but in their own SET 2 on Vulkan (see the binding in device.c), and set 2 is not reserved
+//there, so a caller could legitimately own a binding that looks identical.
+//Identity is exact and needs no per backend rule; the device's layout is the only one this can ever be.
+
+Bool PipelineLayout_hasRuntimeGlobals(const PipelineLayout *layout) {
+
+	if(!layout || !layout->info.pushDescriptors || !layout->device)
+		return false;
+
+	return layout->info.pushDescriptors == GraphicsDeviceRef_ptr(layout->device)->defaultCBufferLayout;
+}
+
+//The same idea for the bindless set: a layout whose bindings ARE the device's own layout is served by the
+//device's own heap and table, so the caller neither has to bind one nor could, since createDescriptorLayout
+//refuses caller bindings in the reserved space the whole bindless set lives in.
+
+Bool PipelineLayout_usesRuntimeBindless(const PipelineLayout *layout) {
+
+	if(!layout || !layout->info.bindings || !layout->device)
+		return false;
+
+	return layout->info.bindings == GraphicsDeviceRef_ptr(layout->device)->defaultDescLayout;
+}
+
 Bool GraphicsDeviceRef_createPipelineLayout(
 	GraphicsDeviceRef *dev,
 	const PipelineLayoutInfo *info,

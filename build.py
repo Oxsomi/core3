@@ -19,6 +19,7 @@
 
 import argparse
 import os
+import shutil
 import sys
 
 import build_common as common
@@ -32,6 +33,17 @@ def main():
 	parser.add_argument("-mode", type=str, default=None, choices=common.ALL_MODES, help="Build type (optional on Windows; defaults to all configs)")
 	parser.add_argument("-simd",            type=str, default="True",  choices=["True", "False"], help="Enable SIMD")
 	parser.add_argument("-tests",           type=str, default="False", choices=["True", "False"], help="Enable tests")
+	parser.add_argument(
+		"-ctest", default="False", choices=["True", "False"],
+		help="Run the full suite through ctest after building. Off by default: each suite already runs right "
+		     "after it is built, and only when one of its inputs changed. CI turns this on to always run everything."
+	)
+	parser.add_argument(
+		"-generator", type=str, default=None, choices=["ninja", "default"],
+		help="CMake generator. 'default' is whatever the profile picks (Visual Studio on Windows). 'ninja' "
+		     "builds with Ninja instead, which is what produces a compile_commands.json for clangd and VS "
+		     "Code. It gets its own build tree, since a CMake cache belongs to the generator that made it"
+	)
 	parser.add_argument("-dynamic_linking", type=str, default="False", choices=["True", "False"], help="Dynamic linking graphics")
 	parser.add_argument(
 		"-dynamic_linking_shader_compiler", type=str, default="True", choices=["True", "False"],
@@ -101,6 +113,28 @@ def main():
 	compiler = args.compiler or common.defaultCompiler()
 	suffix   = "" if compiler == common.defaultCompiler() else f"_{compiler}"
 
+	# A CMake cache belongs to its generator just as much as to its compiler, so Ninja gets its own tree
+	# rather than making every switch a full reconfigure.
+
+	# Ninja Multi-Config on Windows rather than plain Ninja, so one tree still holds every config the way the
+	# Visual Studio generator does and -mode stays optional.
+	# Elsewhere -mode is always given and the build folder already names it, so single config Ninja is right.
+	# Checked here rather than at the conan call, so an unusable toolchain fails before anything is built.
+
+	generatorConf = ""
+
+	if args.generator == "ninja":
+
+		if shutil.which("ninja") is None:
+			print("-- Error: -generator ninja needs ninja on PATH", file=sys.stderr)
+			sys.exit(1)
+
+		suffix += "_ninja"
+
+		ninjaGenerator = "Ninja Multi-Config" if system == "Windows" else "Ninja"
+		generatorConf = f'-c tools.cmake.cmaketoolchain:generator="{ninjaGenerator}" '
+		generatorConf += common.visualStudioNinjaConf(compiler)
+
 	if system == "Windows":
 		dep_modes = common.ALL_MODES if args.mode is None else [ args.mode ]
 		build_dir = f"build/{platform_name}/{arch}{suffix}"
@@ -132,8 +166,14 @@ def main():
 	# id the build produced, so any drift between the two would silently export a different configuration.
 
 	options = (
+		f"{generatorConf}"
 		f"-o enableSIMD={args.simd} "
 		f"-o enableTests={args.tests} "
+
+		# Either the build runs each suite as it is built, or ctest runs them all at the end.
+		# Both means every suite runs twice.
+
+		f"-o testAutoRun={'False' if args.ctest == 'True' else 'True'} "
 		f"-o dynamicLinkingGraphics={args.dynamic_linking} "
 		f"-o dynamicLinkingShaderCompiler={args.dynamic_linking_shader_compiler} "
 		f"-o debugShaderCompiler={args.debug_shader_compiler} "
@@ -172,9 +212,15 @@ def main():
 				f"--deployer-folder=\"{args.deploy}/{mode}\""
 			)
 
-	# Run tests
+	# Run tests.
+	#
+	# Normally there is nothing to do here: each suite runs behind a stamp file that depends on everything the
+	# suite was built from, so one whose inputs did not change does not re-run and the build graph does the
+	# dirty tracking (see oxc3_add_test in cmake/oxc3.cmake).
+	# CI passes -ctest to run the whole suite through ctest regardless, which always runs everything and
+	# reports per test rather than as a single build failure.
 
-	if args.tests == "True":
+	if args.tests == "True" and args.ctest == "True":
 
 		test_mode = args.mode if args.mode is not None else "Release"
 

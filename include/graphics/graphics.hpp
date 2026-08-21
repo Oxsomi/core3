@@ -107,6 +107,15 @@ namespace oxc {
 		#include "graphics/generic/pipeline.h"
 		#include "graphics/generic/command_list.h"
 		#include "graphics/generic/commands.h"
+
+		//Bindful descriptors. Explicit rather than leaning on what command_list.h drags in, since the C++
+		//classes below name every one of these types directly.
+
+		#include "graphics/generic/descriptor_layout.h"
+		#include "graphics/generic/descriptor_heap.h"
+		#include "graphics/generic/descriptor_table.h"
+		#include "graphics/generic/bindless_descriptor.h"
+		#include "graphics/generic/pipeline_layout.h"
 		#include "graphics/generic/blas.h"
 		#include "graphics/generic/tlas.h"
 
@@ -459,6 +468,169 @@ namespace oxc {
 			[[nodiscard]] c::U32 bindlessHandle() const noexcept { return data()->samplerLocation; }
 		};
 
+		//Bindful descriptors.
+		//A DescriptorLayout describes what a shader binds, a DescriptorHeap owns the storage and a
+		//DescriptorTable is one layout's worth of descriptors allocated out of a heap.
+		//Declared in that order because DescriptorHeap::createTable names the other two.
+
+		//I32x2 by hand, for the same reason Texture::size() builds one by hand: vec2i.h's helpers are not in
+		//this closure, and pulling it into the namespaced include block for two one liners would widen that
+		//block for no gain. These exist so callers stop hand rolling them per file.
+
+		[[nodiscard]] inline c::I32x2 xy(c::I32 x, c::I32 y) noexcept { return c::I32x2{ { x, y } }; }
+		[[nodiscard]] inline c::I32x2 xy() noexcept { return c::I32x2{ { 0, 0 } }; }
+
+		[[nodiscard]] inline c::Bool sameXy(c::I32x2 a, c::I32x2 b) noexcept {
+			return a.v[0] == b.v[0] && a.v[1] == b.v[1];
+		}
+
+		class DescriptorLayout : public Handle<c::DescriptorLayout> { public: using Handle::Handle; };
+		class PipelineLayout : public Handle<c::PipelineLayout> { public: using Handle::Handle; };
+
+		class DescriptorTable : public Handle<c::DescriptorTable> {
+		public:
+			using Handle::Handle;
+
+			//maintainRef makes the table hold a reference to the resource, so it outlives the caller's handle.
+
+			[[nodiscard]] c::Bool set(
+				c::U64 bindId, c::U64 arrayId, const c::Descriptor &d,
+				c::Bool maintainRef = false, c::Error *e_rr = nullptr
+			) noexcept {
+				return c::DescriptorTableRef_setDescriptor(handle(), bindId, arrayId, maintainRef, &d, e_rr);
+			}
+
+			//By name is the reflection-driven form: it pairs with Device::detectLayout, which keeps the
+			// register names, so nothing has to track which bindId a shader's register ended up as.
+
+			[[nodiscard]] c::Bool setByName(
+				const c::C8 *registerName, const c::Descriptor &d,
+				c::U64 arrayId = 0, c::Bool maintainRef = false, c::Error *e_rr = nullptr
+			) noexcept {
+				const c::CharString n = name(registerName);
+				return c::DescriptorTableRef_setDescriptorByName(handle(), &n, arrayId, maintainRef, &d, e_rr);
+			}
+
+			//Named setRange rather than an overload of set: a one element braced list would otherwise be
+			//ambiguous against the single descriptor form above, which callers can only break by hoisting a
+			//named initializer_list.
+
+			[[nodiscard]] c::Bool setRange(
+				c::U64 bindId, c::U64 arrayId, std::initializer_list<c::Descriptor> d,
+				c::Bool maintainRef = false, c::Error *e_rr = nullptr
+			) noexcept {
+
+				c::ListDescriptor list{};
+
+				if(d.size())
+					(void) c::ListDescriptor_createRefConst(d.begin(), d.size(), &list, nullptr);
+
+				return c::DescriptorTableRef_setDescriptors(handle(), bindId, arrayId, maintainRef, &list, e_rr);
+			}
+
+			[[nodiscard]] c::Bool unset(
+				c::U64 bindId, c::U64 arrayId, c::U64 count, c::Error *e_rr = nullptr
+			) noexcept {
+				return c::DescriptorTableRef_unsetDescriptors(handle(), bindId, arrayId, count, e_rr);
+			}
+
+			//The plural and unset forms of the by-name path, which the singular setByName above only half covered.
+
+			[[nodiscard]] c::Bool setRangeByName(
+				const c::C8 *registerName, std::initializer_list<c::Descriptor> d,
+				c::U64 arrayId = 0, c::Bool maintainRef = false, c::Error *e_rr = nullptr
+			) noexcept {
+
+				const c::CharString n = name(registerName);
+				c::ListDescriptor list{};
+
+				if(d.size())
+					(void) c::ListDescriptor_createRefConst(d.begin(), d.size(), &list, nullptr);
+					
+				return c::DescriptorTableRef_setDescriptorsByName(handle(), &n, arrayId, maintainRef, &list, e_rr);
+			}
+
+			[[nodiscard]] c::Bool unsetByName(
+				const c::C8 *registerName, c::U64 arrayId, c::U64 count, c::Error *e_rr = nullptr
+			) noexcept {
+				const c::CharString n = name(registerName);
+				return c::DescriptorTableRef_unsetDescriptorsByName(handle(), &n, arrayId, count, e_rr);
+			}
+
+			//Allocation picks the arrayId for you instead of taking one, so it comes back by reference and the
+			//Bool stays the success channel like everywhere else.
+
+			[[nodiscard]] c::Bool alloc(
+				c::U64 bindId, c::U64 &arrayId, const c::Descriptor &d,
+				c::Bool maintainRef = false, c::Error *e_rr = nullptr
+			) noexcept {
+				return c::DescriptorTableRef_allocDescriptor(handle(), bindId, &arrayId, maintainRef, &d, e_rr);
+			}
+
+			[[nodiscard]] c::Bool allocByName(
+				const c::C8 *registerName, c::U64 &arrayId, const c::Descriptor &d,
+				c::Bool maintainRef = false, c::Error *e_rr = nullptr
+			) noexcept {
+				const c::CharString n = name(registerName);
+				return c::DescriptorTableRef_allocDescriptorByName(handle(), &n, &arrayId, maintainRef, &d, e_rr);
+			}
+
+			//U64_MAX means the table's layout declares no such register.
+
+			[[nodiscard]] c::U64 resolveRegisterName(const c::C8 *registerName) const noexcept {
+				const c::CharString n = name(registerName);
+				return c::DescriptorTableRef_resolveRegisterName(handle(), &n);
+			}
+
+			//The bindless pair. Rather than naming a register these SEARCH the layout for one that fits the
+			//type and stride, so they hand back the bind id and bindless type id they landed on as well as the
+			//array slot; all three come back by reference for the same reason alloc()'s arrayId does.
+			//strideOrLength 0 means "don't care about size".
+
+			[[nodiscard]] c::Bool allocBindless(
+				c::ESHRegisterType type, c::U32 strideOrLength,
+				c::U16 &bindId, c::U8 &bindlessTypeId, c::U64 &arrayId, const c::Descriptor &d,
+				c::Bool maintainRef = false, c::Error *e_rr = nullptr
+			) noexcept {
+				return c::DescriptorTableRef_allocDescriptorBindless(
+					handle(), type, strideOrLength, &bindId, &bindlessTypeId, &arrayId, maintainRef, &d, e_rr
+				);
+			}
+
+			//Finds the register a resource WOULD go into without allocating one.
+			//planeId picks a plane of a multi planar resource, which is how a depth buffer's stencil is read.
+
+			[[nodiscard]] c::Bool findBindlessRegister(
+				c::ESHRegisterType type, c::U32 strideOrLength,
+				c::U16 &bindId, c::U8 &bindlessTypeId, c::RefPtr *resource,
+				c::U8 planeId = 0, c::Error *e_rr = nullptr
+			) const noexcept {
+				return c::DescriptorTableRef_findBindlessRegister(
+					handle(), type, strideOrLength, &bindId, &bindlessTypeId, resource, planeId, e_rr
+				);
+			}
+		};
+
+		class DescriptorHeap : public Handle<c::DescriptorHeap> {
+		public:
+			using Handle::Handle;
+
+			[[nodiscard]] c::Bool createTable(
+				const DescriptorLayout &layout, const c::C8 *debugName, DescriptorTable &result,
+				c::EDescriptorTableFlags flags = (c::EDescriptorTableFlags) 0, c::Error *e_rr = nullptr
+			) noexcept {
+
+				const c::CharString n = name(debugName);
+				c::DescriptorTableRef *raw = nullptr;
+
+				if(!c::DescriptorHeapRef_createDescriptorTable(handle(), layout.handle(), flags, &n, &raw, e_rr))
+					return false;
+
+				result = DescriptorTable(RefPtr<c::DescriptorTable>::adopt(raw));
+				return true;
+			}
+		};
+
 		class Pipeline : public Handle<c::Pipeline> { public: using Handle::Handle; };
 		class Blas : public Handle<c::BLAS> { public: using Handle::Handle; };
 
@@ -678,6 +850,40 @@ namespace oxc {
 					return CommandRender(nullptr);
 
 				return CommandRender(list);
+			}
+
+			//Bindful: these only set state, and the work ops (draw/dispatch/dispatchRays) validate it against
+			//the bound pipeline's layout, so bind order never matters. Scope end resets all of it.
+
+			[[nodiscard]] c::Bool bindDescriptorHeap(const DescriptorHeap &heap, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_bindDescriptorHeap(list, heap.handle(), e_rr);
+			}
+
+			[[nodiscard]] c::Bool bindDescriptorTable(const DescriptorTable &table, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_bindDescriptorTable(list, table.handle(), e_rr);
+			}
+
+			//Push constants ride in the command stream rather than the heap. Templated on the payload so the
+			//size comes from the type: the work op requires it to match the layout's declared size exactly,
+			//and a hand-passed length is the one thing that can silently get that wrong.
+
+			template<typename T>
+			[[nodiscard]] c::Bool setPushConstants(const T &data, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_setPushConstants(
+					list, c::Buffer_createRefConst(&data, sizeof(T)), e_rr
+				);
+			}
+
+			//Every push descriptor the layout declares, in its binding order. All at once rather than one at
+			//a time, because a partial set leaves the rest pointing at whatever the last pipeline bound.
+
+			[[nodiscard]] c::Bool setPushDescriptors(
+				std::initializer_list<c::Descriptor> descriptors, c::Error *e_rr = nullptr
+			) noexcept {
+				c::ListDescriptor d{};
+				if(descriptors.size())
+					(void) c::ListDescriptor_createRefConst(descriptors.begin(), descriptors.size(), &d, nullptr);
+				return c::CommandListRef_setPushDescriptors(list, &d, e_rr);
 			}
 
 			[[nodiscard]] c::Bool setComputePipeline(const Pipeline &p, c::Error *e_rr = nullptr) noexcept {
@@ -949,13 +1155,33 @@ namespace oxc {
 		struct ShaderVariant {
 			c::ESHExtension prefer = c::ESHExtension_None;
 			c::ESHExtension disallow = c::ESHExtension_None;
-			std::initializer_list<const c::C8*> defines{};
-			std::initializer_list<const c::C8*> uniforms{};
+			//No initializer on these two: MSVC rejects list initialization in a non-static data member
+			// initializer (C2797), = {} included.
+			//initializer_list default constructs to empty, so leaving it off means the same thing.
+
+			std::initializer_list<const c::C8*> defines;
+			std::initializer_list<const c::C8*> uniforms;
 		};
 
 		class Device {
 
 			RefPtr<c::GraphicsDevice> ref;
+
+		public:
+
+			Device() noexcept = default;
+
+			//Borrow a device someone else owns, which is how a test module wraps the raw GraphicsDeviceRef*
+			//its harness hands it. share() increments, so the borrowed handle is released independently and
+			//the owner's own dec still lands: adopting here would double free.
+
+			[[nodiscard]] static Device share(c::GraphicsDeviceRef *raw) noexcept {
+				Device d;
+				d.ref = RefPtr<c::GraphicsDevice>::share(raw);
+				return d;
+			}
+
+		private:
 
 			//Single entry-resolution path for every pipeline kind.
 			//U32_MAX means no binary of that entry can run here, which each factory turns into its own error.
@@ -1056,13 +1282,19 @@ namespace oxc {
 
 			//---- factories (each adopts the C factory's reference)
 
+			//allowResize false pins the recording to bufferLen, which is what the fixed size tests need; the C
+			//API refuses a command that would grow past it instead of reallocating.
+
 			[[nodiscard]] c::Bool createCommandList(
 				c::U64 bufferLen, c::U64 estCommands, c::U64 estResources,
-				CommandList &result, c::Error *e_rr = nullptr
+				CommandList &result, c::Bool allowResize = true, c::Error *e_rr = nullptr
 			) noexcept {
 
 				c::CommandListRef *raw = nullptr;
-				if(!c::GraphicsDeviceRef_createCommandList(handle(), bufferLen, estCommands, estResources, true, &raw, e_rr))
+
+				if(!c::GraphicsDeviceRef_createCommandList(
+					handle(), bufferLen, estCommands, estResources, allowResize, &raw, e_rr
+				))
 					return false;
 
 				result = CommandList(RefPtr<c::CommandList>::adopt(raw));
@@ -1097,15 +1329,21 @@ namespace oxc {
 				return true;
 			}
 
+			//bindlessTable null routes the resource into the device's own bindless table, which is what the C
+			//API's null means; pass one to route it into a table you own instead.
+
 			[[nodiscard]] c::Bool createBuffer(
 				c::EDeviceBufferUsage usage, c::EGraphicsResourceFlag flags,
-				const c::C8 *debugName, c::U64 len, DeviceBuffer &result, c::Error *e_rr = nullptr
+				const c::C8 *debugName, c::U64 len, DeviceBuffer &result,
+				const DescriptorTable *bindlessTable = nullptr, c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::CharString n = name(debugName);
 				c::DeviceBufferRef *raw = nullptr;
 
-				if(!c::GraphicsDeviceRef_createBuffer(handle(), usage, flags, nullptr, &n, len, &raw, e_rr))
+				if(!c::GraphicsDeviceRef_createBuffer(
+					handle(), usage, flags, bindlessTable ? bindlessTable->handle() : nullptr, &n, len, &raw, e_rr
+				))
 					return false;
 
 				result = DeviceBuffer(RefPtr<c::DeviceBuffer>::adopt(raw));
@@ -1116,13 +1354,16 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool createBufferData(
 				c::EDeviceBufferUsage usage, c::EGraphicsResourceFlag flags,
-				const c::C8 *debugName, c::Buffer *dat, DeviceBuffer &result, c::Error *e_rr = nullptr
+				const c::C8 *debugName, c::Buffer *dat, DeviceBuffer &result,
+				const DescriptorTable *bindlessTable = nullptr, c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::CharString n = name(debugName);
 				c::DeviceBufferRef *raw = nullptr;
 
-				if(!c::GraphicsDeviceRef_createBufferData(handle(), usage, flags, nullptr, &n, dat, &raw, e_rr))
+				if(!c::GraphicsDeviceRef_createBufferData(
+					handle(), usage, flags, bindlessTable ? bindlessTable->handle() : nullptr, &n, dat, &raw, e_rr
+				))
 					return false;
 
 				result = DeviceBuffer(RefPtr<c::DeviceBuffer>::adopt(raw));
@@ -1131,7 +1372,8 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool createRenderTexture(
 				c::U16 width, c::U16 height, c::ETextureFormatId format, c::EGraphicsResourceFlag flags,
-				const c::C8 *debugName, RenderTexture &result, c::Error *e_rr = nullptr
+				const c::C8 *debugName, RenderTexture &result,
+				const DescriptorTable *bindlessTable = nullptr, c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::CharString n = name(debugName);
@@ -1139,7 +1381,7 @@ namespace oxc {
 
 				if(!c::GraphicsDeviceRef_createRenderTexture(
 					handle(), c::ETextureType_2D, width, height, 1, format, flags,
-					c::EMSAASamples_Off, nullptr, &n, &raw, e_rr
+					c::EMSAASamples_Off, bindlessTable ? bindlessTable->handle() : nullptr, &n, &raw, e_rr
 				))
 					return false;
 
@@ -1183,9 +1425,14 @@ namespace oxc {
 
 			//Entry selection + compute pipeline in one step; the common case for oiSH files.
 
+			//layout null means OxC3's default bindless layout, which is what the C API's null means too.
+			//A bindful pipeline passes the PipelineLayout it was built against; the work ops then validate the
+			//bound table/push state against it.
+
 			[[nodiscard]] c::Bool createComputePipeline(
 				const c::SHFile &shFile, const c::C8 *entryName, const c::C8 *debugName,
-				Pipeline &result, c::Error *e_rr = nullptr, const ShaderVariant &variant = {}
+				Pipeline &result, const ShaderVariant &variant = {}, const PipelineLayout *layout = nullptr,
+				c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::U32 entryId = resolveEntry(shFile, entryName, variant);
@@ -1196,9 +1443,18 @@ namespace oxc {
 				}
 
 				const c::CharString n = name(debugName);
+
+				//SPIRV keeps the entry's ORIGINAL name (an oiSH entry "mainSingle" is "mainSingle" in the
+				//module, not "main"), and the C API reads a null entryName as "main".
+				//So the name this resolved the id from has to be forwarded, or a shader whose entry isn't
+				//literally called main targets the wrong entrypoint on Vulkan. DXIL ignores it.
+
+				const c::CharString entry = name(entryName);
 				c::PipelineRef *raw = nullptr;
+
 				if(!c::GraphicsDeviceRef_createPipelineCompute(
-					handle(), &shFile, &n, entryId, nullptr, c::EPipelineFlags_None, nullptr, &raw, e_rr
+					handle(), &shFile, &n, entryId, &entry, c::EPipelineFlags_None,
+					layout ? layout->handle() : nullptr, &raw, e_rr
 				))
 					return false;
 
@@ -1303,7 +1559,11 @@ namespace oxc {
 				(void) c::ListSHFile_createRefConst(&shFile, 1, &fileList, nullptr);
 
 				c::PipelineRaytracingInfo info{};
-				info.flags = flags;
+
+				//The C struct stores these as U8 and documents the enum it carries, so the narrowing is the
+				// intent rather than an accident; MSVC warns (C4244) unless it is spelled out.
+
+				info.flags = (c::U8) flags;
 				info.maxRecursionDepth = maxRecursionDepth;
 
 				const c::CharString nm = name(debugName);
@@ -1363,14 +1623,16 @@ namespace oxc {
 			[[nodiscard]] c::Bool createTexture(
 				c::ETextureType type, c::ETextureFormatId format, c::EGraphicsResourceFlag flags,
 				c::U16 width, c::U16 height, c::U16 length,
-				const c::C8 *debugName, c::Buffer *dat, DeviceTexture &result, c::Error *e_rr = nullptr
+				const c::C8 *debugName, c::Buffer *dat, DeviceTexture &result,
+				const DescriptorTable *bindlessTable = nullptr, c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::CharString n = name(debugName);
 				c::DeviceTextureRef *raw = nullptr;
 
 				if(!c::GraphicsDeviceRef_createTexture(
-					handle(), type, format, flags, width, height, length, nullptr, &n, dat, &raw, e_rr
+					handle(), type, format, flags, width, height, length,
+					bindlessTable ? bindlessTable->handle() : nullptr, &n, dat, &raw, e_rr
 				))
 					return false;
 
@@ -1401,14 +1663,105 @@ namespace oxc {
 			//Allocates into the device's default bindless table (disallowBindlessDescriptor = false),
 			// like the other factories.
 
+			[[nodiscard]] c::Bool createDescriptorHeap(
+				const c::DescriptorHeapInfo &info, const c::C8 *debugName, DescriptorHeap &result,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				const c::CharString n = name(debugName);
+				c::DescriptorHeapRef *raw = nullptr;
+
+				if(!c::GraphicsDeviceRef_createDescriptorHeap(handle(), &info, &n, &raw, e_rr))
+					return false;
+
+				result = DescriptorHeap(RefPtr<c::DescriptorHeap>::adopt(raw));
+				return true;
+			}
+
+			//info is MOVED on success (house rule of the C API), which is why it is not const here.
+
+			[[nodiscard]] c::Bool createDescriptorLayout(
+				c::DescriptorLayoutInfo &info, const c::C8 *debugName, DescriptorLayout &result,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				const c::CharString n = name(debugName);
+				c::DescriptorLayoutRef *raw = nullptr;
+
+				if(!c::GraphicsDeviceRef_createDescriptorLayout(handle(), &info, &n, &raw, e_rr))
+					return false;
+
+				result = DescriptorLayout(RefPtr<c::DescriptorLayout>::adopt(raw));
+				return true;
+			}
+
+			[[nodiscard]] c::Bool createPipelineLayout(
+				const c::PipelineLayoutInfo &info, const c::C8 *debugName, PipelineLayout &result,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				const c::CharString n = name(debugName);
+				c::PipelineLayoutRef *raw = nullptr;
+
+				if(!c::GraphicsDeviceRef_createPipelineLayout(handle(), &info, &n, &raw, e_rr))
+					return false;
+
+				result = PipelineLayout(RefPtr<c::PipelineLayout>::adopt(raw));
+				return true;
+			}
+
+			//Reflection-derived layout for one entrypoint.
+			//pushConstantName/pushDescriptorNames name the registers that are NOT ordinary bindings; the C
+			// side requires the matching out parameter to be null when its list is absent, which is enforced
+			// here by passing null through rather than by the caller remembering it.
+
+			[[nodiscard]] c::Bool detectLayout(
+				const c::SHFile &binary, c::U32 entrypoint,
+				c::DescriptorLayoutInfo &info,
+				const c::C8 *pushConstantName = nullptr, c::DescriptorBinding *pushConstantOut = nullptr,
+				std::initializer_list<const c::C8*> pushDescriptorNames = {},
+				c::DescriptorLayoutInfo *pushDescriptorInfo = nullptr,
+				c::EDescriptorLayoutFlags flags = c::EDescriptorLayoutFlags_None,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				c::CharString names[OXC3_MAX_PUSH_DESCRIPTORS];
+				c::ListCharString nameList{};
+
+				const c::U64 count =
+					pushDescriptorNames.size() < OXC3_MAX_PUSH_DESCRIPTORS ?
+					pushDescriptorNames.size() : OXC3_MAX_PUSH_DESCRIPTORS;
+
+				for(c::U64 i = 0; i < count; ++i)
+					names[i] = name(pushDescriptorNames.begin()[i]);
+
+				if(count)
+					(void) c::ListCharString_createRefConst(names, count, &nameList, nullptr);
+
+				const c::CharString pushName = pushConstantName ? name(pushConstantName) : c::CharString{};
+
+				return c::GraphicsDeviceRef_detectLayoutFromEntry(
+					handle(), &binary, entrypoint, flags, (c::EDetectDescriptorLayoutFlags) 0,
+					count ? &nameList : nullptr,
+					pushConstantName ? &pushName : nullptr,
+					pushConstantOut,
+					&info,
+					count ? pushDescriptorInfo : nullptr,
+					e_rr
+				);
+			}
+
 			[[nodiscard]] c::Bool createSampler(
-				const c::SamplerInfo &info, const c::C8 *debugName, Sampler &result, c::Error *e_rr = nullptr
+				const c::SamplerInfo &info, const c::C8 *debugName, Sampler &result,
+				const DescriptorTable *bindlessTable = nullptr, c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::CharString n = name(debugName);
 				c::SamplerRef *raw = nullptr;
 
-				if(!c::GraphicsDeviceRef_createSampler(handle(), info, false, nullptr, &n, &raw, e_rr))
+				if(!c::GraphicsDeviceRef_createSampler(
+					handle(), info, false, bindlessTable ? bindlessTable->handle() : nullptr, &n, &raw, e_rr
+				))
 					return false;
 
 				result = Sampler(RefPtr<c::Sampler>::adopt(raw));

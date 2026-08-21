@@ -28,6 +28,13 @@
 #include "graphics/generic/device_buffer.h"
 #include "formats/oiSH/sh_file.h"
 
+//C++ test TUs include this inside oxc::c, so the declarations need C linkage to match the C compiled
+//definitions; without it the helpers below mangle as C++ and fail to link.
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //Headless modules (pure, no device), called directly from the entry point.
 
 void Test_graphicsFormats(Test *t);
@@ -159,3 +166,7 @@ void Test_graphicsCapabilityExecution(Test *t, GraphicsDeviceRef *deviceRef);
 //adapter rather than a device the suite already created.
 
 void Test_graphicsConfigVariants(Test *t, GraphicsInstanceRef *instRef, const GraphicsDeviceInfo *info);
+
+#ifdef __cplusplus
+	}
+#endif

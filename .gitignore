@@ -53,6 +53,7 @@ CMakeFiles/*
 builds/*
 build/*
 CMakeUserPresets.json
+compile_commands.json
 tools/builds/*
 tools/CMakeFiles/*
 *.vcxproj

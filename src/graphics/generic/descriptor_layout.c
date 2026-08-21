@@ -28,6 +28,7 @@
 #include "types/container/ref_ptr.h"
 #include "types/container/string.h"
 #include "types/base/string_read.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/constants.h"
 
 TListImpl(DescriptorBinding);
@@ -78,6 +79,34 @@ Bool DescriptorBinding_overlaps(
 		default:
 			return false;
 	}
+}
+
+//Whether a reflected register is one of the runtime's own rather than the caller's.
+//The device names every binding it owns, so the names ARE the authority; the spaces are not, since they
+//differ per backend (see the detect loop for what that costs).
+
+Bool GraphicsDeviceRef_isRuntimeRegister(GraphicsDeviceRef *dev, const CharString *name) {
+
+	if(!dev || !name || !CharString_length(*name))
+		return false;
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
+
+	DescriptorLayoutRef *owned[2] = { device->defaultDescLayout, device->defaultCBufferLayout };
+
+	for (U64 i = 0; i < 2; ++i) {
+
+		if(!owned[i])
+			continue;
+
+		const ListCharString names = DescriptorLayoutRef_ptr(owned[i])->info.bindingNames;
+
+		for (U64 j = 0; j < names.length; ++j)
+			if(CharString_equalsStringSensitive(&names.ptr[j], name))
+				return true;
+	}
+
+	return false;
 }
 
 Bool GraphicsDeviceRef_detectLayoutFromEntries(
@@ -223,6 +252,18 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 				validBinding = (reg->reg.isUsedFlag >> binaryType) & 1;
 
 			if(!validBinding)    //Doesn't exist in current binary type
+				continue;
+
+			//The runtime's own registers are the bindless set and the per frame globals. Every shader that
+			//includes resources.hlsli reflects them, but they are not the caller's to declare, and detecting
+			//one only produces a layout that createDescriptorLayout would refuse.
+			//Skipping them is also what lets AssumePushConstants find the constant buffer that IS the push
+			//constant on DXIL, rather than tripping over the globals block that precedes it.
+			//Matched by NAME, not by space: the reserved space only holds them on DXIL, while SPIRV keeps the
+			//bindless set in sets 0/1 and the globals in set 2. Matching on space there would either miss them
+			//or, worse, eat a bindful shader's own set0 binding0.
+
+			if(GraphicsDeviceRef_isRuntimeRegister(dev, &reg->name))
 				continue;
 
 			U8 regType = getDxilRegisterType(reg->reg.registerType);
