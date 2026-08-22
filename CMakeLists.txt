@@ -27,19 +27,20 @@ cmake_minimum_required(VERSION 3.26.0)
 
 if(CMAKE_TOOLCHAIN_FILE AND NOT EXISTS "${CMAKE_TOOLCHAIN_FILE}")
 
-	# The build folder names the configuration it belongs to, so the exact command can be recovered from it
-	# rather than left as an example the reader has to adapt.
-	# Everything but windows puts the mode in the path (build/<mode>/<platform>/...), because those trees are
+	# Recovered from the TOOLCHAIN path, not the build folder: a preset builds into a tree of its own
+	# (build/ide/<preset>) and only reads the toolchain out of the one the script made, so the build folder no
+	# longer names the configuration but the toolchain still does.
+	# Everything but windows puts the mode in that path (build/<mode>/<platform>/...), because those trees are
 	# single config; windows keeps every config in one tree, so -mode is optional there.
 
 	set(setupScript "build.py")
 	set(setupArgs "-tests True")
 
-	if("${CMAKE_BINARY_DIR}" MATCHES "/build/([^/]+)/(android|linux|osx)/")
+	if("${CMAKE_TOOLCHAIN_FILE}" MATCHES "/build/([^/]+)/(android|linux|osx)/")
 		string(PREPEND setupArgs "-mode ${CMAKE_MATCH_1} ")
 	endif()
 
-	if("${CMAKE_BINARY_DIR}" MATCHES "/android/([^/]+)/")
+	if("${CMAKE_TOOLCHAIN_FILE}" MATCHES "/android/([^/]+)/")
 
 		# A cross build, driven by its own script, and the arch is explicit rather than the host's.
 
@@ -48,22 +49,108 @@ if(CMAKE_TOOLCHAIN_FILE AND NOT EXISTS "${CMAKE_TOOLCHAIN_FILE}")
 
 	else()
 
-		if("${CMAKE_BINARY_DIR}" MATCHES "_clang")
+		if("${CMAKE_TOOLCHAIN_FILE}" MATCHES "_clang")
 			string(APPEND setupArgs " -compiler clang")
 		endif()
 
-		if("${CMAKE_BINARY_DIR}" MATCHES "_ninja")
+		if("${CMAKE_TOOLCHAIN_FILE}" MATCHES "_ninja")
 			string(APPEND setupArgs " -generator ninja")
 		endif()
 
 	endif()
 
-	message(FATAL_ERROR
-		"conan has not set this configuration up yet, so there is no toolchain at "
-		"${CMAKE_TOOLCHAIN_FILE} -- the build scripts own that step, and an IDE will happily configure a "
-		"configuration that was never built. Run this once, then configure again:"
-		"\n\n    python ${setupScript} ${setupArgs}\n"
-	)
+	# An IDE preset bootstraps itself rather than sending the reader to a terminal: opening a configuration
+	# nobody has built is the normal way to arrive here, and "run this and come back" is a poor answer to it.
+	# -setup_only stops after conan writes the toolchain and dependency files, so this does not build OxC3
+	# inside a configure step; the IDE builds it afterwards like any other tree.
+	# A plain cmake invocation still only reports the command, since there the caller drives the build anyway.
+
+	if(OxC3IdeTree)
+
+		find_program(oxc3Python NAMES python3 python py REQUIRED)
+
+		message("-- Setting this configuration up first: ${setupScript} ${setupArgs} (one time, and slow)")
+
+		separate_arguments(setupArgList NATIVE_COMMAND "${setupArgs}")
+
+		execute_process(
+			COMMAND "${oxc3Python}" "${CMAKE_CURRENT_SOURCE_DIR}/${setupScript}" ${setupArgList} -setup_only True
+			WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+			RESULT_VARIABLE setupResult
+		)
+
+		if(setupResult EQUAL 0 AND EXISTS "${CMAKE_TOOLCHAIN_FILE}")
+			message("-- Set up, continuing")
+		else()
+			message(FATAL_ERROR
+				"setting this configuration up failed (${setupResult}), so there is still no toolchain at "
+				"${CMAKE_TOOLCHAIN_FILE}. Run it by hand to see what went wrong:"
+				"\n\n    python ${setupScript} ${setupArgs}\n"
+			)
+		endif()
+
+	else()
+
+		message(FATAL_ERROR
+			"conan has not set this configuration up yet, so there is no toolchain at "
+			"${CMAKE_TOOLCHAIN_FILE} -- the build scripts own that step. Run this once, then configure again:"
+			"\n\n    python ${setupScript} ${setupArgs}\n"
+		)
+
+	endif()
+endif()
+
+# conan generates its dependency files per configuration, so a tree only has the ones the script was asked to
+# build. An IDE offers every configuration in the preset regardless, and picking one conan never generated
+# fails late and unhelpfully: find_package quietly finds nothing and the first compile reports a missing
+# AL/al.h or nvapi.h, which looks like a broken checkout rather than a configuration that was never set up.
+#
+# The generators folder names them (agility_sdk-Target-release.cmake and friends), so the available set is
+# read straight out of it and the IDE is offered exactly that.
+
+if(OxC3IdeTree AND CMAKE_TOOLCHAIN_FILE)
+
+	get_filename_component(oxc3GenDir "${CMAKE_TOOLCHAIN_FILE}" DIRECTORY)
+	file(GLOB oxc3ConanConfigs "${oxc3GenDir}/*-Target-*.cmake")
+
+	set(oxc3HaveConfigs "")
+
+	foreach(cfgFile ${oxc3ConanConfigs})
+		if("${cfgFile}" MATCHES "-Target-([a-z]+)\.cmake$")
+			set(cfgName "${CMAKE_MATCH_1}")
+			foreach(known Debug Release MinSizeRel RelWithDebInfo)
+				string(TOLOWER "${known}" knownLower)
+				if("${cfgName}" STREQUAL "${knownLower}")
+					list(APPEND oxc3HaveConfigs "${known}")
+				endif()
+			endforeach()
+		endif()
+	endforeach()
+
+	list(REMOVE_DUPLICATES oxc3HaveConfigs)
+
+	if(oxc3HaveConfigs)
+
+		set(CMAKE_CONFIGURATION_TYPES "${oxc3HaveConfigs}" CACHE STRING "" FORCE)
+		message("-- conan set this tree up for: ${oxc3HaveConfigs}")
+
+		# A single config generator picks one, so it has to be one of those rather than whatever it defaulted to.
+
+		if(CMAKE_BUILD_TYPE AND NOT CMAKE_BUILD_TYPE IN_LIST oxc3HaveConfigs)
+			list(GET oxc3HaveConfigs 0 oxc3FirstConfig)
+			message(FATAL_ERROR
+				"conan set this tree up for ${oxc3HaveConfigs}, not ${CMAKE_BUILD_TYPE}. Pick one of those, or "
+				"run the build script again for ${CMAKE_BUILD_TYPE} first. On windows build.py builds every "
+				"configuration when -mode is left off."
+			)
+		endif()
+
+		if(NOT CMAKE_BUILD_TYPE)
+			list(GET oxc3HaveConfigs 0 CMAKE_BUILD_TYPE)
+		endif()
+
+	endif()
+
 endif()
 
 project(OxC3)
@@ -681,18 +768,38 @@ if(NOT ANDROID)
 	endif()
 endif()
 
+# Where the built artifacts land.
+#
+# An IDE that owns a build folder writes into it and clears what it does not recognise, so a preset points one
+# at its own tree (build/ide/<preset>) rather than at the tree conan set up. That keeps conan's generators out
+# of its reach, but both trees still describe the same configuration, so their artifacts would otherwise land
+# on the same paths and overwrite each other. OxC3IdeTree keeps the IDE's inside its own tree.
+#
+# Packages are not affected: add_virtual_files derives those from SELF (the source root) rather than from the
+# build folder, and writing one is idempotent, so both trees share them.
+
+set(OxC3IdeTree OFF CACHE BOOL "Build tree belongs to an IDE, so keep artifacts inside it (see CMakePresets.json)")
+
+if(OxC3IdeTree)
+    set(oxc3OutRoot "${CMAKE_BINARY_DIR}/out")
+    set(oxc3OutTail "")
+else()
+    set(oxc3OutRoot "${CMAKE_CURRENT_SOURCE_DIR}/build")
+    set(oxc3OutTail "/${platform}/${archDir}")
+endif()
+
 # Single-config generators (Makefile, Ninja)
 
 if(NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${archDir}/lib")
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${archDir}/bin")
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${archDir}/bin")
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${oxc3OutRoot}/${CMAKE_BUILD_TYPE}${oxc3OutTail}/lib")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${oxc3OutRoot}/${CMAKE_BUILD_TYPE}${oxc3OutTail}/bin")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${oxc3OutRoot}/${CMAKE_BUILD_TYPE}${oxc3OutTail}/bin")
 else()                                            # Multi-config generators (Visual Studio, Xcode)
     foreach(config ${CMAKE_CONFIGURATION_TYPES})
         string(TOUPPER ${config} CONFIG)
-        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${archDir}/lib")
-        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${archDir}/bin")
-        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${archDir}/bin")
+        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG} "${oxc3OutRoot}/${config}${oxc3OutTail}/lib")
+        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG} "${oxc3OutRoot}/${config}${oxc3OutTail}/bin")
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} "${oxc3OutRoot}/${config}${oxc3OutTail}/bin")
     endforeach()
 endif()
 

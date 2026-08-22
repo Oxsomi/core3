@@ -10,7 +10,8 @@
 			"name": "base",
 			"hidden": true,
 			"cacheVariables": {
-				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+				"OxC3IdeTree": "ON"
 			}
 		},
 		{
@@ -19,7 +20,7 @@
 			"displayName": "Windows x64 - MSVC (Visual Studio)",
 			"description": "python build.py -tests True",
 			"generator": "Visual Studio 17 2022",
-			"binaryDir": "${sourceDir}/build/windows/x64/build",
+			"binaryDir": "${sourceDir}/build/ide/windows-msvc",
 			"toolchainFile": "${sourceDir}/build/windows/x64/build/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -33,7 +34,7 @@
 			"displayName": "Windows x64 - MSVC (Ninja)",
 			"description": "python build.py -tests True -generator ninja",
 			"generator": "Ninja Multi-Config",
-			"binaryDir": "${sourceDir}/build/windows/x64_ninja/build",
+			"binaryDir": "${sourceDir}/build/ide/windows-msvc-ninja",
 			"toolchainFile": "${sourceDir}/build/windows/x64_ninja/build/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -48,7 +49,7 @@
 			"description": "python build.py -tests True -compiler clang",
 			"generator": "Visual Studio 17 2022",
 			"toolset": "ClangCL",
-			"binaryDir": "${sourceDir}/build/windows/x64_clang/build",
+			"binaryDir": "${sourceDir}/build/ide/windows-clang",
 			"toolchainFile": "${sourceDir}/build/windows/x64_clang/build/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -62,7 +63,7 @@
 			"displayName": "Windows x64 - clang-cl (Ninja)",
 			"description": "python build.py -tests True -compiler clang -generator ninja",
 			"generator": "Ninja Multi-Config",
-			"binaryDir": "${sourceDir}/build/windows/x64_clang_ninja/build",
+			"binaryDir": "${sourceDir}/build/ide/windows-clang-ninja",
 			"toolchainFile": "${sourceDir}/build/windows/x64_clang_ninja/build/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -75,7 +76,8 @@
 			"inherits": "base",
 			"displayName": "Linux x64 - gcc, Debug",
 			"description": "python build.py -mode Debug -tests True",
-			"binaryDir": "${sourceDir}/build/Debug/linux/x64/build/Debug",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-gcc-debug",
 			"toolchainFile": "${sourceDir}/build/Debug/linux/x64/build/Debug/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -88,7 +90,8 @@
 			"inherits": "base",
 			"displayName": "Linux x64 - clang, Debug",
 			"description": "python build.py -mode Debug -tests True -compiler clang",
-			"binaryDir": "${sourceDir}/build/Debug/linux/x64_clang/build/Debug",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-clang-debug",
 			"toolchainFile": "${sourceDir}/build/Debug/linux/x64_clang/build/Debug/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -101,7 +104,8 @@
 			"inherits": "base",
 			"displayName": "macOS arm64 - clang, Debug",
 			"description": "python build.py -mode Debug -tests True",
-			"binaryDir": "${sourceDir}/build/Debug/osx/aarch64/build/Debug",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/macos-debug",
 			"toolchainFile": "${sourceDir}/build/Debug/osx/aarch64/build/Debug/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -114,7 +118,8 @@
 			"inherits": "base",
 			"displayName": "Linux x64 - gcc, Release",
 			"description": "python build.py -mode Release -tests True",
-			"binaryDir": "${sourceDir}/build/Release/linux/x64/build/Release",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-gcc-release",
 			"toolchainFile": "${sourceDir}/build/Release/linux/x64/build/Release/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -127,7 +132,8 @@
 			"inherits": "base",
 			"displayName": "Linux x64 - clang, Release",
 			"description": "python build.py -mode Release -tests True -compiler clang",
-			"binaryDir": "${sourceDir}/build/Release/linux/x64_clang/build/Release",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-clang-release",
 			"toolchainFile": "${sourceDir}/build/Release/linux/x64_clang/build/Release/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -140,7 +146,8 @@
 			"inherits": "base",
 			"displayName": "macOS arm64 - clang, Release",
 			"description": "python build.py -mode Release -tests True",
-			"binaryDir": "${sourceDir}/build/Release/osx/aarch64/build/Release",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/macos-release",
 			"toolchainFile": "${sourceDir}/build/Release/osx/aarch64/build/Release/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -153,7 +160,8 @@
 			"inherits": "base",
 			"displayName": "Linux aarch64 - gcc, Debug",
 			"description": "python build.py -mode Debug -tests True",
-			"binaryDir": "${sourceDir}/build/Debug/linux/aarch64/build/Debug",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-aarch64-gcc-debug",
 			"toolchainFile": "${sourceDir}/build/Debug/linux/aarch64/build/Debug/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -166,7 +174,8 @@
 			"inherits": "base",
 			"displayName": "Linux aarch64 - clang, Debug",
 			"description": "python build.py -mode Debug -tests True -compiler clang",
-			"binaryDir": "${sourceDir}/build/Debug/linux/aarch64_clang/build/Debug",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-aarch64-clang-debug",
 			"toolchainFile": "${sourceDir}/build/Debug/linux/aarch64_clang/build/Debug/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -179,7 +188,8 @@
 			"inherits": "base",
 			"displayName": "Linux x64 - clang, Debug (Ninja)",
 			"description": "python build.py -mode Debug -tests True -compiler clang -generator ninja",
-			"binaryDir": "${sourceDir}/build/Debug/linux/x64_clang_ninja/build/Debug",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/ide/linux-clang-ninja-debug",
 			"toolchainFile": "${sourceDir}/build/Debug/linux/x64_clang_ninja/build/Debug/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -192,7 +202,8 @@
 			"inherits": "base",
 			"displayName": "macOS x64 - clang, Debug",
 			"description": "python build.py -mode Debug -tests True",
-			"binaryDir": "${sourceDir}/build/Debug/osx/x64/build/Debug",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/macos-x64-debug",
 			"toolchainFile": "${sourceDir}/build/Debug/osx/x64/build/Debug/generators/conan_toolchain.cmake",
 			"condition": {
 				"type": "equals",
@@ -205,7 +216,8 @@
 			"inherits": "base",
 			"displayName": "Android arm64 - Release",
 			"description": "python build_android.py -mode Release -arch arm64 -generator Ninja -tests True",
-			"binaryDir": "${sourceDir}/build/Release/android/arm64/build/Release",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/ide/android-arm64-release",
 			"toolchainFile": "${sourceDir}/build/Release/android/arm64/build/Release/generators/conan_toolchain.cmake"
 		},
 		{
@@ -213,7 +225,8 @@
 			"inherits": "base",
 			"displayName": "Android arm64 - Debug",
 			"description": "python build_android.py -mode Debug -arch arm64 -generator Ninja -tests True",
-			"binaryDir": "${sourceDir}/build/Debug/android/arm64/build/Debug",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/ide/android-arm64-debug",
 			"toolchainFile": "${sourceDir}/build/Debug/android/arm64/build/Debug/generators/conan_toolchain.cmake"
 		},
 		{
@@ -221,7 +234,8 @@
 			"inherits": "base",
 			"displayName": "Android x64 - Release",
 			"description": "python build_android.py -mode Release -arch x64 -generator Ninja -tests True",
-			"binaryDir": "${sourceDir}/build/Release/android/x64/build/Release",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/ide/android-x64-release",
 			"toolchainFile": "${sourceDir}/build/Release/android/x64/build/Release/generators/conan_toolchain.cmake"
 		},
 		{
@@ -229,7 +243,8 @@
 			"inherits": "base",
 			"displayName": "Android x64 - Debug",
 			"description": "python build_android.py -mode Debug -arch x64 -generator Ninja -tests True",
-			"binaryDir": "${sourceDir}/build/Debug/android/x64/build/Debug",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/ide/android-x64-debug",
 			"toolchainFile": "${sourceDir}/build/Debug/android/x64/build/Debug/generators/conan_toolchain.cmake"
 		}
 	],

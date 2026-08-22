@@ -52,6 +52,7 @@ CMakeFiles/*
 .tmp_versions/
 builds/*
 build/*
+.vs/*
 CMakeUserPresets.json
 compile_commands.json
 tools/builds/*

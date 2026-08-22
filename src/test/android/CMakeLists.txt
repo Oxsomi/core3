@@ -43,8 +43,11 @@ file(GLOB_RECURSE androidTestSources CONFIGURE_DEPENDS
 	"${testRoot}/formats/*/test/*.c"
 	"${testRoot}/formats/*/test/*.cpp"
 	"${testRoot}/audio/test/interface/*.c"
+	"${testRoot}/audio/test/interface/*.cpp"
 	"${testRoot}/audio/test/functional/*.c"
+	"${testRoot}/audio/test/functional/*.cpp"
 	"${testRoot}/platforms/test/functional/*.c"
+	"${testRoot}/platforms/test/functional/*.cpp"
 	"${testRoot}/graphics/test/interface/*.c"
 	"${testRoot}/graphics/test/interface/*.cpp"
 	"${testRoot}/platforms/test/interface/*.c"
@@ -52,7 +55,10 @@ file(GLOB_RECURSE androidTestSources CONFIGURE_DEPENDS
 )
 
 if(EnableShaderCompiler)
-	file(GLOB shaderCompilerTestSources CONFIGURE_DEPENDS "${testRoot}/shader_compiler/test/*.c")
+	file(GLOB shaderCompilerTestSources CONFIGURE_DEPENDS
+		"${testRoot}/shader_compiler/test/*.c"
+		"${testRoot}/shader_compiler/test/*.cpp"
+	)
 	list(APPEND androidTestSources ${shaderCompilerTestSources})
 endif()
 

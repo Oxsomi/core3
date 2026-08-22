@@ -101,7 +101,11 @@ namespace oxc {
 		c::SpinLock spinLock;
 	public:
 
-		Lock(): spinLock{ 0 } {}
+		//Value initialized rather than { 0 }: off Windows AtomicI64 carries a std::atomic and is not an
+		// aggregate, so there is no int to convert from.
+		//{} zeroes it on both, since C++20 gives std::atomic a value initializing default constructor.
+
+		Lock(): spinLock{} {}
 		~Lock() = default;        //Avoid acquiring a lock past their lifetime.
 
 		Lock(const Lock&) = delete;

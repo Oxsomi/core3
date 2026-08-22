@@ -39,6 +39,12 @@ def main():
 		     "after it is built, and only when one of its inputs changed. CI turns this on to always run everything."
 	)
 	parser.add_argument(
+		"-setup_only", type=str, default="False", choices=["True", "False"],
+		help="Stop after conan has written the toolchain and dependency files, without building OxC3 itself. "
+		     "This is what an IDE needs to configure a tree it has never seen, and it is what CMakeLists runs "
+		     "on its own when a preset is opened against a configuration nobody built yet"
+	)
+	parser.add_argument(
 		"-generator", type=str, default=None, choices=["ninja", "default"],
 		help="CMake generator. 'default' is whatever the profile picks (Visual Studio on Windows). 'ninja' "
 		     "builds with Ninja instead, which is what produces a compile_commands.json for clangd and VS "
@@ -183,9 +189,14 @@ def main():
 		f"{extra}"
 	)
 
+	# conan install writes the toolchain and the dependency files without building OxC3; conan build does
+	# both. An IDE only needs the former to configure, and it builds the rest itself.
+
+	conanVerb = "install" if args.setup_only == "True" else "build"
+
 	for mode in build_modes:
 		common.run(
-			f"conan build . "
+			f"conan {conanVerb} . "
 			f"-of {build_dir} "
 			f"{common.hostProfileArgs(mode, compiler)} "
 			f"-s build_type={mode} "

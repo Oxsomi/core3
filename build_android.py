@@ -158,7 +158,7 @@ def androidOptionArgs(simd, tests=False, shaderCompiler=False):
 
 def doBuild(
 	mode, conanHome, binDir, conanArch, level, generator, generatorValidationLayer, simd, doInstall, tests, cache,
-	hostCompiler=None, shaderCompiler=False
+	hostCompiler=None, shaderCompiler=False, setupOnly=False
 ):
 
 	profile     = profileName(conanArch, level, generator)
@@ -221,8 +221,13 @@ def doBuild(
 	outputFolder = f"\"build/{mode}/android/{archName(conanArch)}\""
 	options      = androidOptionArgs(simd, tests, shaderCompiler)
 
+	# install writes the toolchain and dependency files only; build does those and compiles OxC3 too.
+	# An IDE configuring a tree it has never seen needs the first, and builds the rest itself.
+
+	conanVerb = "install" if setupOnly else "build"
+
 	common.run(
-		f"conan build . -of {outputFolder} {options} -s build_type={mode} {profileArgs} --build=missing"
+		f"conan {conanVerb} . -of {outputFolder} {options} -s build_type={mode} {profileArgs} --build=missing"
 	)
 
 	if doInstall:
@@ -658,6 +663,11 @@ def main():
 	)
 
 	parser.add_argument("-generator", type=str, help="CMake Generator")
+	parser.add_argument(
+		"-setup_only", type=str, default="False", choices=["True", "False"],
+		help="Stop after conan has written the toolchain and dependency files, without building OxC3 itself. "
+		     "This is what an IDE needs to configure a tree it has never seen"
+	)
 	parser.add_argument("--skip_build", help="Run full build, if false, can be used to package an already built project", action="store_true")
 
 	parser.add_argument("-package", type=str, help="APK package name (required if -apk)")
@@ -764,7 +774,7 @@ def main():
 			doBuild(
 				args.mode, conanHome, binDir, conanArch, str(args.api), args.generator,
 				generatorValidationLayer, args.simd, args.install, args.tests == "True", cache,
-				args.host_compiler, args.shader_compiler == "True"
+				args.host_compiler, args.shader_compiler == "True", args.setup_only == "True"
 			)
 
 		common.saveHashCache(cache)
