@@ -32,6 +32,11 @@
 
 #include "test_graphics_shared.hpp"
 
+//Log::debugLn is the C++ front for Log_debugLnx, whose x macros name ELogOptions_NewLine unqualified and
+//so cannot be reached through the c namespace.
+
+#include "types/container/log.hpp"
+
 namespace oxc { namespace c {
 	#include "types/base/string_base.h"
 	#include "types/container/buffer.h"
@@ -251,9 +256,29 @@ namespace oxc { namespace gfxtest {
 			return false;
 
 		c::U32 matching = 0;
+		c::U64 firstBad = 64;
 
-		for(c::U64 i = 0; i < 64; ++i)
-			matching += pixels.pixels[i] == expected;
+		for(c::U64 i = 0; i < 64; ++i) {
+
+			if(pixels.pixels[i] == expected)
+				++matching;
+
+			else if(firstBad == 64)
+				firstBad = i;
+		}
+
+		//Every draw in a module checks its target through this one helper, so a failure otherwise says only
+		//"pixelsMatch" with no way to tell WHICH draw produced it or how wrong it was. That is the difference
+		//between an intermittent CI failure being diagnosable and being a shrug, so the mismatch says what it
+		//actually got and where.
+
+		if(matching != 64)
+			Log::debugLn(
+				*dev.alloc(),
+				"-- pixelsMatch: %" PRIu32 " of 64 texels matched, expected %08X, first mismatch at %"
+				PRIu64 " was %08X",
+				matching, expected, firstBad, pixels.pixels[firstBad]
+			);
 
 		return c::Test_assert(t, "pixelsMatch", matching == 64);
 	}

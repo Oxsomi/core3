@@ -68,12 +68,23 @@ int Test_end(Test *test);
 	//Marked unused because most suites never look at it, and the bundle builds with -Wextra -Werror.
 	//This branch is android only (only src/test/android defines _OXC3_TEST_BUNDLED), so the attribute is safe.
 
+	//The suite table in src/test/android/atest_main.c is C and holds these as plain int (*)(void*), so the
+	//definition has to keep C linkage even when the suite itself is a C++ translation unit: the macro expands
+	//at global scope in the suite's own file, outside the extern "C" this header wraps its declarations in,
+	//so a .cpp would otherwise define a mangled symbol the table can never resolve.
+
+	#ifdef __cplusplus
+		#define OXC3_TEST_LINKAGE extern "C"
+	#else
+		#define OXC3_TEST_LINKAGE
+	#endif
+
 	#define OXC3_TEST_MAIN(name)                                                                      \
 		static int OxC3_testBody_##name(void *state);                                                 \
-		int OxC3_test_##name(void *state) { return OxC3_testBody_##name(state); }                     \
+		OXC3_TEST_LINKAGE int OxC3_test_##name(void *state) { return OxC3_testBody_##name(state); }   \
 		static int OxC3_testBody_##name(void *state __attribute__((unused)))
 
-	#define OXC3_TEST_ENTRY(name) int OxC3_test_##name(void *state)
+	#define OXC3_TEST_ENTRY(name) OXC3_TEST_LINKAGE int OxC3_test_##name(void *state)
 
 #else
 	#define OXC3_TEST_MAIN(name) int main()
