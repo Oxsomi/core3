@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_formats_frames.c
+//graphics/test/interface/test_graphics_formats_frames.cpp
 //
 //Coverage group B: what a resource round trip and the frame ring do, rather than what a single shader computes.
 //
@@ -32,18 +32,26 @@
 //Module 35 pins those refusals instead.
 //So the day the resource layer grows 3D support the asserts flip and say so rather than silently passing.
 
-#include "types/test/test.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
-#include "platforms/logx.h"
-#include "types/base/error.h"
-#include "types/base/allocator.h"
-#include "platforms/platform.h"
-#include "graphics/generic/device.h"
-#include "graphics/generic/device_texture.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/commands.h"
-#include "test_graphics_shared.h"
+namespace oxc { namespace c {
+	#include "types/base/allocator.h"
+	#include "types/base/error.h"
+	#include "types/container/buffer.h"
+	#include "types/container/string.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/logx.h"
+	#include "platforms/platform.h"
+	#include "graphics/generic/command_list.h"
+	#include "graphics/generic/commands.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_texture.h"
+	#include "test_graphics_shared.h"
+} }
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+
+namespace oxc { namespace c {
 
 //34. Per format upload -> readback round trip.
 
@@ -151,7 +159,7 @@ static Bool Test_roundTripFormat(
 
 	if(ok)
 		ok = Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(
-			deviceRef, lists, NULL, NULL, 0, 0, &t->err
+			deviceRef, lists, NULL, 0, 0, &t->err
 		));
 
 	if(ok)
@@ -195,7 +203,7 @@ void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef) {
 	//The uploads and pulls themselves are queued on the device, not recorded into this list.
 
 	CommandListRef *emptyList = NULL;
-	ListCommandListRef lists = (ListCommandListRef) { 0 };
+	ListCommandListRef lists {};
 
 	if(!(
 		Test_assert(t, "createList", GraphicsDeviceRef_createCommandList(
@@ -224,7 +232,7 @@ void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_assert(t, "roundTrippedAll", roundTripped == formatCount);
 
-	Log_debugLnx("-- formatRoundTrip: %"PRIu32" / %"PRIu64" formats round tripped", roundTripped, formatCount);
+	Log_debugLnx("-- formatRoundTrip: %" PRIu32 " / %" PRIu64 " formats round tripped", roundTripped, formatCount);
 
 	//Optional formats, each paired with the capability bit that promises it.
 	//Unlike the table above these are skipped when the device doesn't claim them, which is a legitimate answer
@@ -252,7 +260,7 @@ void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef) {
 	}
 
 	Log_debugLnx(
-		"-- formatRoundTrip: %"PRIu32" optional formats round tripped, %"PRIu32" not claimed by this adapter",
+		"-- formatRoundTrip: %" PRIu32 " optional formats round tripped, %" PRIu32 " not claimed by this adapter",
 		optionalRun, optionalSkipped
 	);
 
@@ -396,7 +404,7 @@ void Test_graphicsFramesInFlight(Test *t, GraphicsDeviceRef *deviceRef) {
 	//As in formatRoundTrip: a submit needs to carry something, so every frame below rides this empty list.
 
 	CommandListRef *emptyList = NULL;
-	ListCommandListRef lists = (ListCommandListRef) { 0 };
+	ListCommandListRef lists {};
 
 	if(!(
 		Test_assert(t, "createList", GraphicsDeviceRef_createCommandList(
@@ -420,7 +428,7 @@ void Test_graphicsFramesInFlight(Test *t, GraphicsDeviceRef *deviceRef) {
 	for (U32 i = 0; i < submits; ++i) {
 
 		if(!Test_assert(t, "cycleSubmit", GraphicsDeviceRef_submitCommands(
-			deviceRef, &lists, NULL, NULL, 0, 0, &t->err
+			deviceRef, &lists, NULL, 0, 0, &t->err
 		)))
 			break;
 	}
@@ -471,7 +479,7 @@ void Test_graphicsFramesInFlight(Test *t, GraphicsDeviceRef *deviceRef) {
 
 		if(ok)
 			ok = Test_assert(t, "ringSubmit", GraphicsDeviceRef_submitCommands(
-				deviceRef, &lists, NULL, NULL, 0, 0, &t->err
+				deviceRef, &lists, NULL, 0, 0, &t->err
 			));
 
 		if(ok)
@@ -507,3 +515,4 @@ void Test_graphicsFramesInFlight(Test *t, GraphicsDeviceRef *deviceRef) {
 	ListCommandListRef_free(&lists, alloc);
 	RefPtr_dec(&emptyList);
 }
+} }

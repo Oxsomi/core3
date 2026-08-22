@@ -26,10 +26,21 @@
 //The BLAS has to be built with ERTASBuildFlags_AllowDataAccessExt or the data simply isn't kept; the harness
 // sets that flag whenever the device claims the capability.
 
-#include "@appdata.hlsli"
 #include "@buffer.hlsli"
 #include "@resources.hlsli"
 #include "@extensions.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct CapsPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 aux;           //Second handle, where the test needs one (a TLAS for the ray query cases)
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT CapsPush _push;
 
 //Thread 0 traces the instance at the origin, thread 1 the one translated +2 along X.
 //Both must see the SAME object space positions, which is itself part of the test: a fetch returning world
@@ -52,7 +63,7 @@ void main(U32 i : SV_DispatchThreadID) {
 	ray.TMax = 10;
 
 	RayQuery<RAY_FLAG_NONE> query;
-	query.TraceRayInline(tlasExtUniform(getAppData1u(1)), RAY_FLAG_NONE, 0xFF, ray);
+	query.TraceRayInline(tlasExtUniform(_push.aux), RAY_FLAG_NONE, 0xFF, ray);
 	query.Proceed();
 
 	U32 ok = 0;
@@ -69,5 +80,5 @@ void main(U32 i : SV_DispatchThreadID) {
 			all(p.p2 == F32x3(0, 1, 0)) ? 1 : 0;
 	}
 
-	setAtUniform<U32>(getAppData1u(0), i << 2, ok);
+	setAtUniform<U32>(_push.output, i << 2, ok);
 }

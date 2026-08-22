@@ -24,9 +24,20 @@
 //RayQuery is a separate capability from RayPipeline, and a device can have either without the other,
 // so the two need separate coverage rather than one standing in for the other.
 
-#include "@appdata.hlsli"
 #include "@buffer.hlsli"
 #include "@resources.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct CapsPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 aux;           //Second handle, where the test needs one (a TLAS for the ray query cases)
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT CapsPush _push;
 
 //Three rays against a TLAS holding TWO instances of the same triangle, the second translated +2 along X.
 //Thread 0 aims into instance 0 and must hit, thread 1 aims into instance 1 and must hit, thread 2 aims away
@@ -62,10 +73,10 @@ void main(U32 i : SV_DispatchThreadID) {
 	ray.Direction = i == 2 ? F32x3(0, 0, -1) : F32x3(0, 0, 1);
 
 	RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
-	query.TraceRayInline(tlasExtUniform(getAppData1u(1)), RAY_FLAG_NONE, 0xFF, ray);
+	query.TraceRayInline(tlasExtUniform(_push.aux), RAY_FLAG_NONE, 0xFF, ray);
 	query.Proceed();
 
 	const U32 hit = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 1 : 0;
 
-	setAtUniform<U32>(getAppData1u(0), i << 2, hit);
+	setAtUniform<U32>(_push.output, i << 2, hit);
 }

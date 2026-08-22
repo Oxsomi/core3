@@ -18,13 +18,24 @@
 *  This is called dual licensing.
 */
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 #include "@buffer.hlsli"
 #include "@indirect.hlsli"
 
 //Write indirect arguments on the GPU, so the next scope can consume them without CPU involvement.
-//App data: [2] = bindless write handle of the argument buffer, offset 2 so one submit can also feed test_write.
 //Layout: IndirectDraw at 0 (3 vertices, 2 instances), IndirectDispatch at 16 (2 groups).
+//
+//Shares its push constant block with test_write.hlsl, so one setPushConstants feeds whichever of the two is
+//bound; this one only reads the argument handle.
+
+struct WritePush {
+	U32 output;
+	U32 base;
+	U32 args;          //Bindless write handle of the argument buffer
+	U32 padding0;
+};
+
+PUSH_CONSTANT WritePush _push;
 
 [shader("compute")]
 [numthreads(1, 1, 1)]
@@ -42,7 +53,7 @@ void main(U32 i : SV_DispatchThreadID) {
 	dispatch.z = 1;
 	dispatch.pad = 0;
 
-	U32 resourceId = getAppData1u(2);
+	U32 resourceId = _push.args;
 	setAtUniform(resourceId, 0, draw);
 	setAtUniform(resourceId, 16, dispatch);
 }

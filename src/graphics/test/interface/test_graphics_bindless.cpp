@@ -18,29 +18,37 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_bindless.c
+//graphics/test/interface/test_graphics_bindless.cpp
 
 //The bindless half of the descriptor tests (modules 12, 13): the device's default table and buffers
 // exposing themselves into it. Devices without bindless skip with a message; the bindful twin of this
 // coverage lives in test_graphics_bindful.c and runs everywhere.
 
-#include "graphics/generic/device.h"
-#include "graphics/generic/device_info.h"
-#include "graphics/generic/device_buffer.h"
-#include "graphics/generic/descriptor_table.h"
-#include "graphics/generic/descriptor_layout.h"
-#include "graphics/generic/descriptor_heap.h"
-#include "graphics/generic/pipeline_layout.h"
-#include "graphics/generic/pipeline.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/commands.h"
-#include "platforms/platform.h"
-#include "formats/oiSH/sh_file.h"
-#include "graphics/generic/bindless_descriptor.h"
-#include "graphics/generic/graphics_types.h"
-#include "types/test/test.h"
-#include "types/base/string_base.h"
-#include "test_graphics_shared.h"
+namespace oxc { namespace c {
+	#include "types/base/string_base.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_file.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/platform.h"
+	#include "graphics/generic/bindless_descriptor.h"
+	#include "graphics/generic/command_list.h"
+	#include "graphics/generic/commands.h"
+	#include "graphics/generic/descriptor_heap.h"
+	#include "graphics/generic/descriptor_layout.h"
+	#include "graphics/generic/descriptor_table.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_buffer.h"
+	#include "graphics/generic/device_info.h"
+	#include "graphics/generic/graphics_types.h"
+	#include "graphics/generic/pipeline.h"
+	#include "graphics/generic/pipeline_layout.h"
+	#include "test_graphics_shared.h"
+} }
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+
+namespace oxc { namespace c {
 
 // -- 12. Bindless descriptors in the device's default table ----------------------
 
@@ -252,9 +260,10 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile copyFile = (SHFile) { 0 };
-	SHFile writeFile = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	SHFile copyFile {};
+	SHFile writeFile {};
+	PipelineLayoutRef *bindlessLayout = NULL;
+	DescriptorLayoutInfo layoutInfo {};
 
 	if (
 		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_copy.oiSH", &copyFile) ||
@@ -283,7 +292,9 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 4, .maxDescriptorTables = 2 };
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 4, .maxDescriptorTables = 2 };
 	name = CharString_createRefCStrConst("Bindful interleave heap");
 
 	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
@@ -323,7 +334,7 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "dstACreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 64 * sizeof(U32), &dstA, &t->err
 	)))
 		goto clean;
@@ -332,7 +343,7 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "dstBCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 64 * sizeof(U32), &dstB, &t->err
 	)))
 		goto clean;
@@ -341,7 +352,7 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "bindlessOutCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 64 * sizeof(U32), &bindlessOut, &t->err
 	)))
 		goto clean;
@@ -358,7 +369,7 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "setSrcB", DescriptorTableRef_setDescriptorByName(tableB, &inputName, 0, false, &srcDesc, &t->err));
 	Test_assert(t, "setDstB", DescriptorTableRef_setDescriptorByName(tableB, &outputName, 0, false, &dstBDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Bindful interleave pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -373,7 +384,7 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	if(!TestShaders_computePipeline(t, deviceRef, &writeFile, &bindlessPipeline))
+	if(!TestShaders_computePipelinePush(t, deviceRef, &writeFile, &bindlessPipeline, &bindlessLayout))
 		goto clean;
 
 	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
@@ -390,16 +401,26 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
 	const Transition transitions[4] = {
-		(Transition) { .resource = src,         .stage = EPipelineStage_Compute },
-		(Transition) { .resource = dstA,        .stage = EPipelineStage_Compute, .isWrite = true },
-		(Transition) { .resource = dstB,        .stage = EPipelineStage_Compute, .isWrite = true },
-		(Transition) { .resource = bindlessOut, .stage = EPipelineStage_Compute, .isWrite = true }
+		{ .resource = src,         .stage = EPipelineStage_Compute },
+		{ .resource = dstA,        .stage = EPipelineStage_Compute, .isWrite = true },
+		{ .resource = dstB,        .stage = EPipelineStage_Compute, .isWrite = true },
+		{ .resource = bindlessOut, .stage = EPipelineStage_Compute, .isWrite = true }
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(transitions, 4, &transitionList, NULL);
 
-	//Custom, then default, then custom again, all in one scope
+	//Custom, then custom again, then default, all in one scope.
+	//
+	//The bindless dispatch goes last because its shader reads push constants, and those belong to the
+	//pipeline layout that declares them: binding a layout without them afterwards leaves state the work op
+	//has no way to validate, so it refuses. Ordering it last is the whole of the accommodation; the scope
+	//still crosses between a custom layout and the device's default one.
+
+	//The handles the shader reads, in the order its push block declares them.
+
+	const U32 bindlessPushData[4] = { DeviceBufferRef_ptr(bindlessOut)->writeHandle, 0xC0DE0000u, 0, 0 };
+	const Buffer bindlessPushRef = Buffer_createRefConst(bindlessPushData, sizeof(bindlessPushData));
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
@@ -409,21 +430,18 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "bindBindful", CommandListRef_setComputePipeline(commandList, bindfulPipeline, &t->err));
 	Test_assert(t, "dispatchA", CommandListRef_dispatch1D(commandList, 1, &t->err));
 
-	Test_assert(t, "bindBindless", CommandListRef_setComputePipeline(commandList, bindlessPipeline, &t->err));
-	Test_assert(t, "dispatchBindless", CommandListRef_dispatch1D(commandList, 1, &t->err));
-
 	Test_assert(t, "bindTableB", CommandListRef_bindDescriptorTable(commandList, tableB, &t->err));
 	Test_assert(t, "bindBindful2", CommandListRef_setComputePipeline(commandList, bindfulPipeline, &t->err));
 	Test_assert(t, "dispatchB", CommandListRef_dispatch1D(commandList, 1, &t->err));
 
+	Test_assert(t, "bindBindless", CommandListRef_setComputePipeline(commandList, bindlessPipeline, &t->err));
+	Test_assert(t, "pushBindless", CommandListRef_setPushConstants(commandList, bindlessPushRef, &t->err));
+	Test_assert(t, "dispatchBindless", CommandListRef_dispatch1D(commandList, 1, &t->err));
+
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	TestShaderAppData appData = (TestShaderAppData) {
-		.handles = { DeviceBufferRef_ptr(bindlessOut)->writeHandle, 0xC0DE0000u }
-	};
-
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, &appData, sizeof(appData))) {
+	if (TestShaders_submitAndWait(t, deviceRef, commandList)) {
 
 		Bool okA = TestShaders_pullBuffer(t, deviceRef, emptyList, dstA);
 		Bool okOut = TestShaders_pullBuffer(t, deviceRef, emptyList, bindlessOut);
@@ -442,6 +460,8 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "interleaveResults", allMatch);
 		}
+	}
+
 	}
 
 clean:
@@ -472,6 +492,7 @@ clean:
 
 	DescriptorLayoutInfo_free(&layoutInfo, alloc);
 	SHFile_free(&copyFile, alloc);
+	RefPtr_dec(&bindlessLayout);
 	SHFile_free(&writeFile, alloc);
 }
 
@@ -505,8 +526,8 @@ void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_write.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindless everywhere tests");
@@ -533,7 +554,9 @@ void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) {
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	DescriptorHeapInfo heapInfo = {
 		.flags = EDescriptorHeapFlags_AllowBindless, .maxBuffersRW = 1, .maxDescriptorTables = 1
 	};
 
@@ -555,7 +578,7 @@ void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 64 * sizeof(U32), &output, &t->err
 	)))
 		goto clean;
@@ -565,7 +588,7 @@ void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Bindless everywhere pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -593,11 +616,11 @@ void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
-	const Transition transition = (Transition) {
+	const Transition transition = {
 		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -609,7 +632,7 @@ void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -621,6 +644,8 @@ void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "everywhereResults", allMatch);
 		}
+
+	}
 
 clean:
 
@@ -640,11 +665,11 @@ clean:
 	SHFile_free(&file, alloc);
 }
 
-// -- 16. The per frame globals other than app data ------------------------------
+// -- 16. The per frame globals ------------------------------
 
-//Every bindless test reads getAppData, so the app data half of the globals block is covered by the whole
-//suite. The rest of it - frame id, time, delta, swapchain count - had no execution coverage at all, which
-//is exactly the half a change to where the block lives can break without a single test noticing.
+//Frame id, time, delta and swapchain count are the whole of the globals block now, and none of them had
+//execution coverage at all, which is exactly what a change to where the block lives can break without a
+//single test noticing.
 //Two submits, because the interesting property is that these move: the frame id has to advance and the
 //clock must not run backwards.
 
@@ -667,9 +692,9 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
-	DescriptorBinding pushConstants = (DescriptorBinding) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
+	DescriptorBinding pushConstants {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_frame_globals.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping frame globals tests");
@@ -680,7 +705,7 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 4 * sizeof(U32), &output, &t->err
 	)))
 		goto clean;
@@ -689,6 +714,8 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 	// as is: it needs the same bindless bindings and globals push descriptor WITH a push constant range on
 	// top, which is what composing one from the device's own layouts gives.
 
+	//Scoped so the goto above jumps around these rather than into them.
+	{
 	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
 
 	if(entryId == U32_MAX)
@@ -711,7 +738,9 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 	if(!Test_assert(t, "detectedPushConstants", pushConstants.count != 0))
 		goto clean;
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) {
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	PipelineLayoutInfo pipelineLayoutInfo = {
 		.bindings = device->defaultDescLayout,
 		.pushDescriptors = device->defaultCBufferLayout,
 		.pushConstants = pushConstants
@@ -744,14 +773,14 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
-	const Transition transition = (Transition) {
+	const Transition transition = {
 		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
 
-	//The write handle travels as a push constant rather than in the app data block.
+	//The write handle travels as a push constant.
 
 	const U32 pushData[4] = { DeviceBufferRef_ptr(output)->writeHandle, 0, 0, 0 };
 	const Buffer pushRef = Buffer_createRefConst(pushData, sizeof(pushData));
@@ -768,7 +797,7 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 	F32 firstTime = 0;
 	Bool readFirst = false;
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -796,7 +825,7 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 	//A second submit of the same list: the frame id advances and time cannot go backwards, which is what
 	// makes this a test of the live per frame block rather than of one constant
 
-	if (readFirst && TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (readFirst && TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -807,6 +836,10 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 			Test_assert(t, "frameIdAdvanced", values[0] > firstFrameId);
 			Test_assert(t, "timeMovesForward", secondTime >= firstTime);
 		}
+
+	}
+
+	}
 
 clean:
 
@@ -819,3 +852,4 @@ clean:
 	DescriptorLayoutInfo_free(&layoutInfo, alloc);
 	SHFile_free(&file, alloc);
 }
+} }

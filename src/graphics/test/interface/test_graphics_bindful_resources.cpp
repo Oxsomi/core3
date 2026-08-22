@@ -18,37 +18,45 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_bindful_resources.c
+//graphics/test/interface/test_graphics_bindful_resources.cpp
 //
 //Every descriptor KIND reachable through a bindful table, each one executed rather than merely bound:
 //samplers, constant buffers, RW textures, arrays, multiple spaces, a register shared by two stages,
 //comparison sampling, structured buffers, append counters and float atomics.
 //Split out of test_graphics_bindful.c, which had grown to 24 modules in one file.
 
-#include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
-#include "graphics/generic/device_info.h"
-#include "graphics/generic/device_buffer.h"
-#include "graphics/generic/device_texture.h"
-#include "graphics/generic/sampler.h"
-#include "graphics/generic/render_texture.h"
-#include "graphics/generic/depth_stencil.h"
-#include "graphics/generic/descriptor_layout.h"
-#include "graphics/generic/descriptor_table.h"
-#include "graphics/generic/descriptor_heap.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/commands.h"
-#include "graphics/generic/pipeline_layout.h"
-#include "graphics/generic/pipeline.h"
-#include "graphics/generic/blas.h"
-#include "graphics/generic/tlas.h"
-#include "platforms/platform.h"
-#include "formats/oiSH/sh_file.h"
-#include "graphics/generic/graphics_types.h"
-#include "types/test/test.h"
-#include "types/base/string_base.h"
-#include "types/container/list_basic_types.h"
-#include "test_graphics_shared.h"
+namespace oxc { namespace c {
+	#include "types/base/string_base.h"
+	#include "types/container/list_basic_types.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_file.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/platform.h"
+	#include "graphics/generic/blas.h"
+	#include "graphics/generic/command_list.h"
+	#include "graphics/generic/commands.h"
+	#include "graphics/generic/depth_stencil.h"
+	#include "graphics/generic/descriptor_heap.h"
+	#include "graphics/generic/descriptor_layout.h"
+	#include "graphics/generic/descriptor_table.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_buffer.h"
+	#include "graphics/generic/device_info.h"
+	#include "graphics/generic/device_texture.h"
+	#include "graphics/generic/graphics_types.h"
+	#include "graphics/generic/instance.h"
+	#include "graphics/generic/pipeline.h"
+	#include "graphics/generic/pipeline_layout.h"
+	#include "graphics/generic/render_texture.h"
+	#include "graphics/generic/sampler.h"
+	#include "graphics/generic/tlas.h"
+	#include "test_graphics_shared.h"
+} }
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+
+namespace oxc { namespace c {
 
 // -- 43. Bindful sampling: a texture, a sampler and a buffer in one table --------
 
@@ -73,8 +81,8 @@ void Test_graphicsBindfulSampler(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
 	Buffer texData = Buffer_createNull();
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_sampler.oiSH", &file)) {
@@ -100,8 +108,10 @@ void Test_graphicsBindfulSampler(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) {
-		.maxTextures = 1, .maxSamplers = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	DescriptorHeapInfo heapInfo = { .maxSamplers = 1,
+		.maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
 	};
 
 	name = CharString_createRefCStrConst("Bindful sampler heap");
@@ -142,7 +152,7 @@ void Test_graphicsBindfulSampler(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	texData = Buffer_createNull();
 
-	const SamplerInfo samplerInfo = (SamplerInfo) { .filter = ESamplerFilterMode_Nearest };
+	const SamplerInfo samplerInfo = { .filter = ESamplerFilterMode_Nearest };
 	name = CharString_createRefCStrConst("Bindful sampler sampler");
 
 	if(!Test_assert(t, "samplerCreate", GraphicsDeviceRef_createSampler(
@@ -154,7 +164,7 @@ void Test_graphicsBindfulSampler(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 64 * sizeof(U32), &output, &t->err
 	)))
 		goto clean;
@@ -171,7 +181,7 @@ void Test_graphicsBindfulSampler(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "setSamp", DescriptorTableRef_setDescriptorByName(table, &sampName, 0, false, &sampDesc, &t->err));
 	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Bindful sampler pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -200,11 +210,11 @@ void Test_graphicsBindfulSampler(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
 	const Transition transitions[2] = {
-		(Transition) { .resource = texture, .stage = EPipelineStage_Compute },
-		(Transition) { .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
+		{ .resource = texture, .stage = EPipelineStage_Compute },
+		{ .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(transitions, 2, &transitionList, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -216,7 +226,7 @@ void Test_graphicsBindfulSampler(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -228,6 +238,8 @@ void Test_graphicsBindfulSampler(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "bindfulSampleResults", allMatch);
 		}
+
+	}
 
 clean:
 
@@ -275,8 +287,8 @@ void Test_graphicsBindfulCbuffer(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_cbuffer.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful CBV tests");
@@ -301,8 +313,10 @@ void Test_graphicsBindfulCbuffer(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) {
-		.maxConstantBuffers = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 1,
+		.maxConstantBuffers = 1, .maxDescriptorTables = 1
 	};
 
 	name = CharString_createRefCStrConst("Bindful CBV heap");
@@ -335,7 +349,7 @@ void Test_graphicsBindfulCbuffer(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 64 * sizeof(U32), &output, &t->err
 	)))
 		goto clean;
@@ -349,7 +363,7 @@ void Test_graphicsBindfulCbuffer(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "setConsts", DescriptorTableRef_setDescriptorByName(table, &constsName, 0, false, &constsDesc, &t->err));
 	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Bindful CBV pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -378,11 +392,11 @@ void Test_graphicsBindfulCbuffer(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
 	const Transition transitions[2] = {
-		(Transition) { .resource = consts, .stage = EPipelineStage_Compute },
-		(Transition) { .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
+		{ .resource = consts, .stage = EPipelineStage_Compute },
+		{ .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(transitions, 2, &transitionList, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -394,7 +408,7 @@ void Test_graphicsBindfulCbuffer(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -406,6 +420,8 @@ void Test_graphicsBindfulCbuffer(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "cbufferResults", allMatch);
 		}
+
+	}
 
 clean:
 
@@ -448,8 +464,8 @@ void Test_graphicsBindfulRwTexture(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_rwtex.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful RW texture tests");
@@ -474,7 +490,9 @@ void Test_graphicsBindfulRwTexture(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxTexturesRW = 1, .maxDescriptorTables = 1 };
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	DescriptorHeapInfo heapInfo = { .maxTexturesRW = 1, .maxDescriptorTables = 1 };
 	name = CharString_createRefCStrConst("Bindful RW texture heap");
 
 	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
@@ -502,7 +520,7 @@ void Test_graphicsBindfulRwTexture(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_assert(t, "setTarget", DescriptorTableRef_setDescriptorByName(table, &targetName, 0, false, &targetDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Bindful RW texture pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -530,11 +548,11 @@ void Test_graphicsBindfulRwTexture(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
-	const Transition transition = (Transition) {
+	const Transition transition = {
 		.resource = target, .stage = EPipelineStage_Compute, .isWrite = true
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -550,11 +568,11 @@ void Test_graphicsBindfulRwTexture(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0)) {
+	if (TestShaders_submitAndWait(t, deviceRef, commandList)) {
 
 		//Each pixel holds R = i * 3, A = 255, so the packed value is 0xFF000000 | (i * 3)
 
-		TestShaderPixels pixels = (TestShaderPixels) { 0 };
+		TestShaderPixels pixels {};
 
 		if (TestShaders_pullPixels(t, deviceRef, emptyList, target, &pixels)) {
 
@@ -565,6 +583,8 @@ void Test_graphicsBindfulRwTexture(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "rwTextureResults", allMatch);
 		}
+	}
+
 	}
 
 clean:
@@ -607,8 +627,8 @@ void Test_graphicsBindfulArray(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_array.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful array tests");
@@ -633,7 +653,9 @@ void Test_graphicsBindfulArray(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 5, .maxDescriptorTables = 1 };
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 5, .maxDescriptorTables = 1 };
 	name = CharString_createRefCStrConst("Bindful array heap");
 
 	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
@@ -677,7 +699,7 @@ void Test_graphicsBindfulArray(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 64 * sizeof(U32), &output, &t->err
 	)))
 		goto clean;
@@ -687,7 +709,7 @@ void Test_graphicsBindfulArray(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Bindful array pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -716,14 +738,14 @@ void Test_graphicsBindfulArray(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
 	const Transition transitions[5] = {
-		(Transition) { .resource = inputs[0], .stage = EPipelineStage_Compute },
-		(Transition) { .resource = inputs[1], .stage = EPipelineStage_Compute },
-		(Transition) { .resource = inputs[2], .stage = EPipelineStage_Compute },
-		(Transition) { .resource = inputs[3], .stage = EPipelineStage_Compute },
-		(Transition) { .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
+		{ .resource = inputs[0], .stage = EPipelineStage_Compute },
+		{ .resource = inputs[1], .stage = EPipelineStage_Compute },
+		{ .resource = inputs[2], .stage = EPipelineStage_Compute },
+		{ .resource = inputs[3], .stage = EPipelineStage_Compute },
+		{ .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(transitions, 5, &transitionList, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -735,7 +757,7 @@ void Test_graphicsBindfulArray(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -747,6 +769,8 @@ void Test_graphicsBindfulArray(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "arrayResults", allMatch);
 		}
+
+	}
 
 clean:
 
@@ -796,8 +820,8 @@ void Test_graphicsBindfulSpaces(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_spaces.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful spaces tests");
@@ -822,7 +846,9 @@ void Test_graphicsBindfulSpaces(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
 	name = CharString_createRefCStrConst("Bindful spaces heap");
 
 	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
@@ -855,7 +881,7 @@ void Test_graphicsBindfulSpaces(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 64 * sizeof(U32), &output, &t->err
 	)))
 		goto clean;
@@ -869,7 +895,7 @@ void Test_graphicsBindfulSpaces(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "setSrc", DescriptorTableRef_setDescriptorByName(table, &inputName, 0, false, &srcDesc, &t->err));
 	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Bindful spaces pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -898,11 +924,11 @@ void Test_graphicsBindfulSpaces(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
 	const Transition transitions[2] = {
-		(Transition) { .resource = src, .stage = EPipelineStage_Compute },
-		(Transition) { .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
+		{ .resource = src, .stage = EPipelineStage_Compute },
+		{ .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(transitions, 2, &transitionList, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -914,7 +940,7 @@ void Test_graphicsBindfulSpaces(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -926,6 +952,8 @@ void Test_graphicsBindfulSpaces(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "spacesResults", allMatch);
 		}
+
+	}
 
 clean:
 
@@ -979,16 +1007,16 @@ void Test_graphicsBindfulSharedRegister(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
-	ListU32 entrypoints = (ListU32) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
+	ListU32 entrypoints {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_shared_reg.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping shared register tests");
 		return;
 	}
 
-	ListSHFile fileList = (ListSHFile) { 0 };
+	ListSHFile fileList {};
 	ListSHFile_createRefConst(&file, 1, &fileList, NULL);
 
 	const U32 vertexId = TestShaders_entry(t, deviceRef, &file, "mainVertex");
@@ -999,6 +1027,8 @@ void Test_graphicsBindfulSharedRegister(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Detecting from both entries at once is what unions the visibility of the register they share
 
+	//Scoped so the goto above jumps around these rather than into them.
+	{
 	const U32 entryIds[2] = { vertexId, pixelId };
 
 	Test_assert(t, "entrypointsRef", ListU32_createRefConst(entryIds, 2, &entrypoints, &t->err));
@@ -1033,7 +1063,7 @@ void Test_graphicsBindfulSharedRegister(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
+	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
 	name = CharString_createRefCStrConst("Shared register heap");
 
 	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
@@ -1079,7 +1109,7 @@ void Test_graphicsBindfulSharedRegister(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Shared register pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -1088,16 +1118,16 @@ void Test_graphicsBindfulSharedRegister(Test *t, GraphicsDeviceRef *deviceRef) {
 		goto clean;
 
 	PipelineStage stages[2] = {
-		(PipelineStage) { .binaryId = vertexId, .shFileId = 0 },
-		(PipelineStage) { .binaryId = pixelId, .shFileId = 0 }
+		{ .binaryId = vertexId, .shFileId = 0 },
+		{ .binaryId = pixelId, .shFileId = 0 }
 	};
 
-	ListPipelineStage stageList = (ListPipelineStage) { 0 };
+	ListPipelineStage stageList {};
 	ListPipelineStage_createRefConst(stages, 2, &stageList, NULL);
 
-	const PipelineGraphicsInfo pipelineInfo = (PipelineGraphicsInfo) {
-		.attachmentCountExt = 1,
-		.attachmentFormatsExt = { ETextureFormatId_RGBA8 }
+	const PipelineGraphicsInfo pipelineInfo = {
+		.attachmentFormatsExt = { ETextureFormatId_RGBA8 },
+		.attachmentCountExt = 1
 	};
 
 	name = CharString_createRefCStrConst("Shared register pipeline");
@@ -1123,13 +1153,13 @@ void Test_graphicsBindfulSharedRegister(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//The vertex stage reads it too, so the transition names the earliest stage that touches it
 
-	const Transition transition = (Transition) { .resource = shared, .stage = EPipelineStage_Vertex };
+	const Transition transition = { .resource = shared, .stage = EPipelineStage_Vertex };
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
 
-	const AttachmentInfo attachment = (AttachmentInfo) { .image = target, .load = ELoadAttachmentType_Clear };
-	ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+	const AttachmentInfo attachment = { .image = target, .load = ELoadAttachmentType_Clear };
+	ListAttachmentInfo colors {};
 	ListAttachmentInfo_createRefConst(&attachment, 1, &colors, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -1151,8 +1181,10 @@ void Test_graphicsBindfulSharedRegister(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF3366FFu);
+
+	}
 
 clean:
 
@@ -1208,8 +1240,8 @@ void Test_graphicsBindfulSamplerCmp(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_sampler_cmp.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping comparison sampler tests");
@@ -1234,8 +1266,10 @@ void Test_graphicsBindfulSamplerCmp(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) {
-		.maxTextures = 1, .maxSamplers = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	DescriptorHeapInfo heapInfo = { .maxSamplers = 1,
+		.maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
 	};
 
 	name = CharString_createRefCStrConst("Comparison sampler heap");
@@ -1272,11 +1306,11 @@ void Test_graphicsBindfulSamplerCmp(Test *t, GraphicsDeviceRef *deviceRef) {
 	//Comparison samplers are a distinct descriptor: enableComparison is what the table's write checks the
 	// register type against
 
-	const SamplerInfo samplerInfo = (SamplerInfo) {
+	const SamplerInfo samplerInfo = {
 		.filter = ESamplerFilterMode_Nearest,
-		.enableComparison = true,
 		.comparisonFunction = ECompareOp_Lt
-	};
+	,
+		.enableComparison = true};
 
 	name = CharString_createRefCStrConst("Comparison sampler sampler");
 
@@ -1289,7 +1323,7 @@ void Test_graphicsBindfulSamplerCmp(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 64 * sizeof(U32), &output, &t->err
 	)))
 		goto clean;
@@ -1308,7 +1342,7 @@ void Test_graphicsBindfulSamplerCmp(Test *t, GraphicsDeviceRef *deviceRef) {
 	));
 	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Comparison sampler pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -1337,20 +1371,20 @@ void Test_graphicsBindfulSamplerCmp(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
 	const Transition transitions[2] = {
-		(Transition) { .resource = depth, .stage = EPipelineStage_Compute },
-		(Transition) { .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
+		{ .resource = depth, .stage = EPipelineStage_Compute },
+		{ .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(transitions, 2, &transitionList, NULL);
 
 	//A render pass that draws nothing, purely so the depth clear fills the buffer with a known value
 
-	const AttachmentInfo color = (AttachmentInfo) { .image = colorTarget, .load = ELoadAttachmentType_Clear };
-	ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+	const AttachmentInfo color = { .image = colorTarget, .load = ELoadAttachmentType_Clear };
+	ListAttachmentInfo colors {};
 	ListAttachmentInfo_createRefConst(&color, 1, &colors, NULL);
 
-	const DepthStencilAttachmentInfo depthAttach = (DepthStencilAttachmentInfo) {
+	const DepthStencilAttachmentInfo depthAttach = {
 		.image = depth,
 		.depthLoad = ELoadAttachmentType_Clear,
 		.clearDepth = 0.5f
@@ -1376,7 +1410,7 @@ void Test_graphicsBindfulSamplerCmp(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -1390,6 +1424,8 @@ void Test_graphicsBindfulSamplerCmp(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "comparisonResults", allMatch);
 		}
+
+	}
 
 clean:
 
@@ -1442,8 +1478,8 @@ void Test_graphicsBindfulStructured(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_structured.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping structured buffer tests");
@@ -1464,6 +1500,8 @@ void Test_graphicsBindfulStructured(Test *t, GraphicsDeviceRef *deviceRef) {
 	//The stride is what makes this a structured buffer rather than a byte address one, so it is asserted
 	// rather than assumed from the results
 
+	//Scoped so the goto above jumps around these rather than into them.
+	{
 	Bool strideMatches = false;
 
 	for(U64 i = 0; i < layoutInfo.bindings.length; ++i)
@@ -1479,7 +1517,7 @@ void Test_graphicsBindfulStructured(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
+	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
 	name = CharString_createRefCStrConst("Structured heap");
 
 	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
@@ -1497,7 +1535,7 @@ void Test_graphicsBindfulStructured(Test *t, GraphicsDeviceRef *deviceRef) {
 	TestBindfulElem elems[64];
 
 	for(U32 i = 0; i < 64; ++i)
-		elems[i] = (TestBindfulElem) { .a = i, .b = i * 7, .c = i * 3, .d = i * 11 };
+		elems[i] = { .a = i, .b = i * 7, .c = i * 3, .d = i * 11 };
 
 	Buffer inputRef = Buffer_createRefConst(elems, sizeof(elems));
 	name = CharString_createRefCStrConst("Structured input");
@@ -1512,7 +1550,7 @@ void Test_graphicsBindfulStructured(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, sizeof(elems), &output, &t->err
 	)))
 		goto clean;
@@ -1534,7 +1572,7 @@ void Test_graphicsBindfulStructured(Test *t, GraphicsDeviceRef *deviceRef) {
 		table, &inputName, 0, true, &misalignedDesc, NULL
 	));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Structured pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -1563,11 +1601,11 @@ void Test_graphicsBindfulStructured(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
 	const Transition transitions[2] = {
-		(Transition) { .resource = input, .stage = EPipelineStage_Compute },
-		(Transition) { .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
+		{ .resource = input, .stage = EPipelineStage_Compute },
+		{ .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(transitions, 2, &transitionList, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -1579,7 +1617,7 @@ void Test_graphicsBindfulStructured(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const TestBindfulElem *values = (const TestBindfulElem*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -1595,6 +1633,8 @@ void Test_graphicsBindfulStructured(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "structuredResults", allMatch);
 		}
+
+	}
 
 clean:
 
@@ -1642,8 +1682,8 @@ void Test_graphicsBindfulAppendCounter(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_append.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping append counter tests");
@@ -1668,7 +1708,9 @@ void Test_graphicsBindfulAppendCounter(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
 	name = CharString_createRefCStrConst("Append counter heap");
 
 	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
@@ -1687,7 +1729,7 @@ void Test_graphicsBindfulAppendCounter(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "appendedCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 64 * sizeof(U32), &appended, &t->err
 	)))
 		goto clean;
@@ -1696,7 +1738,7 @@ void Test_graphicsBindfulAppendCounter(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "counterCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 4, &counter, &t->err
 	)))
 		goto clean;
@@ -1722,7 +1764,7 @@ void Test_graphicsBindfulAppendCounter(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Append counter pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -1751,11 +1793,11 @@ void Test_graphicsBindfulAppendCounter(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
 	const Transition transitions[2] = {
-		(Transition) { .resource = appended, .stage = EPipelineStage_Compute, .isWrite = true },
-		(Transition) { .resource = counter, .stage = EPipelineStage_Compute, .isWrite = true }
+		{ .resource = appended, .stage = EPipelineStage_Compute, .isWrite = true },
+		{ .resource = counter, .stage = EPipelineStage_Compute, .isWrite = true }
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(transitions, 2, &transitionList, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -1767,7 +1809,7 @@ void Test_graphicsBindfulAppendCounter(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, counter)) {
 
 			//One in every four threads appended, so the counter is exactly a quarter of the 64 threads
@@ -1776,6 +1818,8 @@ void Test_graphicsBindfulAppendCounter(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "counterValue", counterValue == 16);
 		}
+
+	}
 
 clean:
 
@@ -1817,8 +1861,8 @@ static void TestBindful_atomicFloatWithWidth(Test *t, GraphicsDeviceRef *deviceR
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
 
 	const C8 *path =
 		isDouble ?
@@ -1850,7 +1894,9 @@ static void TestBindful_atomicFloatWithWidth(Test *t, GraphicsDeviceRef *deviceR
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
 	name = CharString_createRefCStrConst("Float atomic heap");
 
 	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
@@ -1874,7 +1920,7 @@ static void TestBindful_atomicFloatWithWidth(Test *t, GraphicsDeviceRef *deviceR
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBufferData(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, &initialRef, &output, &t->err
 	)))
 		goto clean;
@@ -1884,7 +1930,7 @@ static void TestBindful_atomicFloatWithWidth(Test *t, GraphicsDeviceRef *deviceR
 
 	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &bufName, 0, false, &outputDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Float atomic pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -1912,11 +1958,11 @@ static void TestBindful_atomicFloatWithWidth(Test *t, GraphicsDeviceRef *deviceR
 	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
-	const Transition transition = (Transition) {
+	const Transition transition = {
 		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -1928,7 +1974,7 @@ static void TestBindful_atomicFloatWithWidth(Test *t, GraphicsDeviceRef *deviceR
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			//64 threads each add one, and a lost update lands short: the sum is exact at either width
@@ -1938,6 +1984,8 @@ static void TestBindful_atomicFloatWithWidth(Test *t, GraphicsDeviceRef *deviceR
 
 			Test_assert(t, "atomicFloatTotal", total == 64.0);
 		}
+
+	}
 
 clean:
 
@@ -1976,3 +2024,4 @@ void Test_graphicsBindfulAtomicFloat(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	else Test_print(t, "Device lacks 64 bit float atomics, skipping that width");
 }
+} }

@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_interface.c
+//graphics/test/interface/test_graphics_interface.cpp
 
 //Graphics interface (non-functional) unit tests.
 //
@@ -70,34 +70,43 @@
 //
 //Run in CI, no display, no human interaction required.
 
-#include "graphics/generic/instance.h"
-#include "graphics/generic/device.h"
-#include "graphics/generic/device_info.h"
-#include "graphics/generic/device_buffer.h"
-#include "graphics/generic/device_texture.h"
-#include "graphics/generic/render_texture.h"
-#include "graphics/generic/depth_stencil.h"
-#include "graphics/generic/swapchain.h"
-#include "graphics/generic/pipeline.h"
-#include "graphics/generic/sampler.h"
-#include "graphics/generic/blas.h"
-#include "graphics/generic/opacity_micromap.h"
-#include "graphics/generic/tlas.h"
-#include "graphics/generic/descriptor_layout.h"
-#include "graphics/generic/descriptor_table.h"
-#include "graphics/generic/descriptor_heap.h"
-#include "graphics/generic/pipeline_layout.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/graphics_types.h"
-#include "platforms/platform.h"
-#include "platforms/file.h"
-#include "platforms/logx.h"
-#include "types/test/test.h"
-#include "types/container/memory_stream.h"
-#include "types/container/texture_format.h"
-#include "types/base/string_base.h"
-#include "types/base/error.h"
-#include "test_graphics_shared.h"
+namespace oxc { namespace c {
+	#include "types/base/error.h"
+	#include "types/base/string_base.h"
+	#include "types/container/memory_stream.h"
+	#include "types/container/texture_format.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/file.h"
+	#include "platforms/logx.h"
+	#include "platforms/platform.h"
+	#include "platforms/window.h"
+	#include "graphics/generic/blas.h"
+	#include "graphics/generic/command_list.h"
+	#include "graphics/generic/depth_stencil.h"
+	#include "graphics/generic/descriptor_heap.h"
+	#include "graphics/generic/descriptor_layout.h"
+	#include "graphics/generic/descriptor_table.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_buffer.h"
+	#include "graphics/generic/device_info.h"
+	#include "graphics/generic/device_texture.h"
+	#include "graphics/generic/graphics_types.h"
+	#include "graphics/generic/instance.h"
+	#include "graphics/generic/opacity_micromap.h"
+	#include "graphics/generic/pipeline.h"
+	#include "graphics/generic/pipeline_layout.h"
+	#include "graphics/generic/render_texture.h"
+	#include "graphics/generic/sampler.h"
+	#include "graphics/generic/swapchain.h"
+	#include "graphics/generic/tlas.h"
+	#include "test_graphics_shared.h"
+} }
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+
+namespace oxc { namespace c {
 
 // -- 1. GraphicsInterface ------------------------------------------------------
 
@@ -145,7 +154,7 @@ static void Test_graphicsInstance(Test *t) {
 
 	const Allocator *alloc = Platform_instance->alloc;
 
-	GraphicsApplicationInfo appInfo = (GraphicsApplicationInfo) {
+	GraphicsApplicationInfo appInfo = {
 		.name = CharString_createRefCStrConst("OxC3 graphics interface test"),
 		.version = 1
 	};
@@ -159,15 +168,21 @@ static void Test_graphicsInstance(Test *t) {
 	Error err = Error_none();
 	RefPtrType type = GraphicsInstance_makeType(EGraphicsApi_Count, alloc);
 
-	Test_assert(t, "createNullApp", !GraphicsInstance_create(NULL, EGraphicsApi_Count, 0, alloc, &type, &instRef, &err));
-	Test_assert(t, "createNullInst", !GraphicsInstance_create(&appInfo, EGraphicsApi_Count, 0, alloc, &type, NULL, &err));
-	Test_assert(t, "createNullType", !GraphicsInstance_create(&appInfo, EGraphicsApi_Count, 0, alloc, NULL, NULL, &err));
+	Test_assert(t, "createNullApp", !GraphicsInstance_create(
+		NULL, EGraphicsApi_Count, EGraphicsInstanceFlags_None, alloc, &type, &instRef, &err
+	));
+	Test_assert(t, "createNullInst", !GraphicsInstance_create(
+		&appInfo, EGraphicsApi_Count, EGraphicsInstanceFlags_None, alloc, &type, NULL, &err
+	));
+	Test_assert(t, "createNullType", !GraphicsInstance_create(
+		&appInfo, EGraphicsApi_Count, EGraphicsInstanceFlags_None, alloc, NULL, NULL, &err
+	));
 
 	//Real create.
 	//Instance creation legitimately fails on machines without a compatible driver/ICD;
 	// that's not a test failure, the device tests are simply skipped (like the adapter check below).
 
-	if (!GraphicsInstance_create(&appInfo, EGraphicsApi_Count, 0, alloc, &type, &instRef, &t->err)) {
+	if (!GraphicsInstance_create(&appInfo, EGraphicsApi_Count, EGraphicsInstanceFlags_None, alloc, &type, &instRef, &t->err)) {
 		Test_print(t, "No compatible graphics driver, skipping instance tests");
 		t->err = Error_none();
 		return;
@@ -371,7 +386,7 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	//10. Swapchain requires a physical window; NULL must be rejected
 
 	SwapchainRef *swapchain = NULL;
-	SwapchainInfo swapchainInfo = (SwapchainInfo) { .window = NULL };
+	SwapchainInfo swapchainInfo = { .window = NULL };
 
 	Test_assert(t, "swapchainNullWindow", !GraphicsDeviceRef_createSwapchain(
 		deviceRef, swapchainInfo, false, NULL, &swapchain, NULL
@@ -467,16 +482,16 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 
 	const Allocator *alloc = Platform_instance->alloc;
 
-	GraphicsApplicationInfo appInfo = (GraphicsApplicationInfo) {
+	GraphicsApplicationInfo appInfo = {
 		.name = CharString_createRefCStrConst("OxC3 graphics interface test"),
 		.version = 1
 	};
 
 	RefPtrType type = GraphicsInstance_makeType(api, alloc);
 	GraphicsInstanceRef *instRef = NULL;
-	ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
+	ListGraphicsDeviceInfo infos {};
 
-	if (!GraphicsInstance_create(&appInfo, api, 0, alloc, &type, &instRef, &t->err)) {
+	if (!GraphicsInstance_create(&appInfo, api, EGraphicsInstanceFlags_None, alloc, &type, &instRef, &t->err)) {
 		Test_print(t, "No compatible graphics driver, skipping device tests");
 		t->err = Error_none();
 		return;
@@ -491,7 +506,7 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 
 	//getPreferredDevice validation
 
-	GraphicsDeviceInfo preferred = (GraphicsDeviceInfo) { 0 };
+	GraphicsDeviceInfo preferred {};
 
 	Test_assert(t, "getPreferredNullInfo", !GraphicsInstance_getPreferredDevice(
 		inst, NULL, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, NULL, NULL
@@ -584,7 +599,11 @@ static void Test_graphicsDevice(Test *t) {
 
 	Bool any = false;
 
-	for (EGraphicsApi api = 0; api < EGraphicsApi_Count; ++api) {
+	//Counted in the underlying type: C++ has no ++ for an enum, and 0 is not one either.
+
+	for (U32 apiRaw = 0; apiRaw < (U32) EGraphicsApi_Count; ++apiRaw) {
+
+		const EGraphicsApi api = (EGraphicsApi) apiRaw;
 
 		if(!GraphicsInterface_supportsApi(api))
 			continue;
@@ -639,7 +658,7 @@ static void Test_graphicsNullDevice(Test *t) {
 	));
 
 	Test_assert(t, "swapchain", !GraphicsDeviceRef_createSwapchain(
-		NULL, (SwapchainInfo) { 0 }, false, NULL, &swapchain, NULL
+		NULL, { 0 }, false, NULL, &swapchain, NULL
 	));
 
 	Test_assert(t, "commandList", !GraphicsDeviceRef_createCommandList(
@@ -653,7 +672,14 @@ static void Test_graphicsNullDevice(Test *t) {
 	);
 }
 
+} }
+
 // -- entry point ---------------------------------------------------------------
+
+//Outside the namespace: this expands to the platform's entry point, and main has to be ::main.
+
+using namespace oxc;
+using namespace oxc::c;
 
 OXC3_TEST_ENTRY(graphics_interface) {
 
@@ -663,7 +689,7 @@ OXC3_TEST_ENTRY(graphics_interface) {
 		Platform_return(1);
 	}
 
-	Test t = (Test) { .alloc = Platform_instance->alloc };
+	Test t = { .alloc = Platform_instance->alloc };
 
 	U64 allocsBefore = Platform_getActiveAllocations(0);
 

@@ -18,36 +18,59 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_shaders_rays.c
+//graphics/test/interface/test_graphics_shaders_rays.cpp
 //
 //Ray trace execution, including the acceleration structures and shader binding tables it has to build
 //first, which is most of the file.
 //Split out of test_graphics_shaders.c, which had grown past 2300 lines.
 
-#include "graphics/generic/instance.h"
-#include "graphics/generic/device.h"
-#include "graphics/generic/device_info.h"
-#include "graphics/generic/device_buffer.h"
-#include "graphics/generic/render_texture.h"
-#include "graphics/generic/depth_stencil.h"
-#include "graphics/generic/texture.h"
-#include "graphics/generic/pipeline.h"
-#include "graphics/generic/blas.h"
-#include "graphics/generic/tlas.h"
-#include "graphics/generic/opacity_micromap.h"
-#include "graphics/generic/bindless_descriptor.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/commands.h"
-#include "platforms/platform.h"
-#include "platforms/logx.h"
-#include "platforms/file.h"
-#include "formats/oiSH/sh_file.h"
-#include "types/test/test.h"
-#include "types/container/memory_stream.h"
-#include "types/container/texture_format.h"
-#include "types/container/buffer.h"
-#include "types/base/string_base.h"
-#include "test_graphics_shared.h"
+namespace oxc { namespace c {
+	#include "types/base/string_base.h"
+	#include "types/container/buffer.h"
+	#include "types/container/memory_stream.h"
+	#include "types/container/texture_format.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_file.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/file.h"
+	#include "platforms/logx.h"
+	#include "platforms/platform.h"
+	#include "graphics/generic/bindless_descriptor.h"
+	#include "graphics/generic/blas.h"
+	#include "graphics/generic/command_list.h"
+	#include "graphics/generic/commands.h"
+	#include "graphics/generic/depth_stencil.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_buffer.h"
+	#include "graphics/generic/device_info.h"
+	#include "graphics/generic/instance.h"
+	#include "graphics/generic/opacity_micromap.h"
+	#include "graphics/generic/pipeline.h"
+	#include "graphics/generic/render_texture.h"
+	#include "graphics/generic/texture.h"
+	#include "graphics/generic/tlas.h"
+	#include "test_graphics_shared.h"
+} }
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+
+namespace oxc { namespace c {
+
+//The output handle and the acceleration structure, which is what the ray shaders read.
+//Shared by the module, since every pipeline here declares the same block.
+
+static PipelineLayoutRef *raysPushLayout = NULL;
+static U32 raysPushData[4] = {};
+
+static Bool TestShaders_raysLayout(Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, U32 raygenId) {
+	return raysPushLayout || TestShaders_pushConstantLayout(t, deviceRef, file, raygenId, &raysPushLayout);
+}
+
+static Bool TestShaders_pushRays(Test *t, CommandListRef *commandList) {
+	const Buffer ref = Buffer_createRefConst(raysPushData, sizeof(raysPushData));
+	return Test_assert(t, "pushRays", CommandListRef_setPushConstants(commandList, ref, &t->err));
+}
 
 // -- 33. Ray trace execution -----------------------------------------------------
 
@@ -118,6 +141,8 @@ static void TestShaders_ommSpecialIndexWithFormat(
 	//Packed into a U32 and sliced to the element width, which reads out the low bytes on the little endian
 	// targets OxC3 runs on; one triangle, so the buffer is exactly one element.
 
+	//Scoped so the goto above jumps around these rather than into them.
+	{
 	const U8 ommStride = ommIndexFormat == ETextureFormatId_R32u ? 4 : (ommIndexFormat == ETextureFormatId_R16u ? 2 : 1);
 
 	const U32 opaqueIndex = EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyOpaque, ommIndexFormat);
@@ -142,19 +167,19 @@ static void TestShaders_ommSpecialIndexWithFormat(
 	)))
 		goto clean;
 
-	const DeviceData positionData = (DeviceData) { .buffer = positions };
-	const DeviceData indexBufferData = (DeviceData) { .buffer = indices };
+	const DeviceData positionData = { .buffer = positions };
+	const DeviceData indexBufferData = { .buffer = indices };
 
 	const BLASCreateInfo opaqueInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
 		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
 		ETextureFormatId_R16u, indexBufferData,
-		ommIndexFormat, (DeviceData) { .buffer = ommOpaque }
+		ommIndexFormat, { .buffer = ommOpaque }
 	);
 
 	const BLASCreateInfo transparentInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
 		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
 		ETextureFormatId_R16u, indexBufferData,
-		ommIndexFormat, (DeviceData) { .buffer = ommTransparent }
+		ommIndexFormat, { .buffer = ommTransparent }
 	);
 
 	name = CharString_createRefCStrConst("OMM BLAS, fully opaque");
@@ -175,16 +200,16 @@ static void TestShaders_ommSpecialIndexWithFormat(
 	//It is FORCE_OPAQUE on both APIs, and a forced opaque instance makes traversal ignore opacity micromaps
 	// entirely, so the transparent half would report hits and pass for the wrong reason.
 
-	TLASInstance ommInstance = (TLASInstance) {
+	TLASInstance ommInstance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
-		.data = (TLASInstanceData) {
+		.data = {
 			.instanceId24_mask8 = 0xFFu << 24,
 			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_DisableCulling << 24,
 			.blasCpu = blasOpaque
 		}
 	};
 
-	ListTLASInstance ommInstances = (ListTLASInstance) { 0 };
+	ListTLASInstance ommInstances {};
 	ListTLASInstance_createRefConst(&ommInstance, 1, &ommInstances, NULL);
 
 	name = CharString_createRefCStrConst("OMM TLAS, fully opaque");
@@ -213,34 +238,36 @@ static void TestShaders_ommSpecialIndexWithFormat(
 		goto clean;
 
 	PipelineStage ommStages[3] = {
-		(PipelineStage) { .binaryId = raygenId },
-		(PipelineStage) { .binaryId = missId },
-		(PipelineStage) { .binaryId = hitId }
+		{ .binaryId = raygenId },
+		{ .binaryId = missId },
+		{ .binaryId = hitId }
 	};
 
-	ListPipelineStage ommStageList = (ListPipelineStage) { 0 };
+	ListPipelineStage ommStageList {};
 	ListPipelineStage_createRefConst(ommStages, 3, &ommStageList, NULL);
 
-	ListSHFile ommFileList = (ListSHFile) { 0 };
+	ListSHFile ommFileList {};
 	ListSHFile_createRefConst(file, 1, &ommFileList, NULL);
 
-	PipelineRaytracingGroup ommGroup = (PipelineRaytracingGroup) {
+	PipelineRaytracingGroup ommGroup = {
 		.closestHit = 2, .anyHit = U32_MAX, .intersection = U32_MAX
 	};
 
-	ListPipelineRaytracingGroup ommGroupList = (ListPipelineRaytracingGroup) { 0 };
+	ListPipelineRaytracingGroup ommGroupList {};
 	ListPipelineRaytracingGroup_createRefConst(&ommGroup, 1, &ommGroupList, NULL);
 
-	const PipelineRaytracingInfo ommPipelineInfo = (PipelineRaytracingInfo) {
+	const PipelineRaytracingInfo ommPipelineInfo = {
 		.flags = EPipelineRaytracingFlags_Default | EPipelineRaytracingFlags_AllowOpacityMicromapExt,
 		.maxRecursionDepth = 1
 	};
 
 	name = CharString_createRefCStrConst("OMM ray trace pipeline");
 
+	TestShaders_raysLayout(t, deviceRef, file, raygenId);
+
 	if(!Test_assert(t, "ommCreatePipeline", GraphicsDeviceRef_createPipelineRaytracingExt(
 		deviceRef, &ommStageList, &ommFileList, &ommGroupList, &ommPipelineInfo, &name,
-		EPipelineFlags_None, NULL, &pipeline, &t->err
+		EPipelineFlags_None, raysPushLayout, &pipeline, &t->err
 	)))
 		goto clean;
 
@@ -258,12 +285,18 @@ static void TestShaders_ommSpecialIndexWithFormat(
 	// culled something", which are the two ways this can go wrong and want different fixes.
 
 	const Transition opaqueTransitions[2] = {
-		(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
-		(Transition) { .resource = tlasOpaque, .stage = EPipelineStage_RaygenExt }
+		{ .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+		{ .resource = tlasOpaque, .stage = EPipelineStage_RaygenExt }
 	};
 
-	ListTransition opaqueTransitionList = (ListTransition) { 0 };
+	ListTransition opaqueTransitionList {};
 	ListTransition_createRefConst(opaqueTransitions, 2, &opaqueTransitionList, NULL);
+
+	//Set before the recording: a push constant is captured when the list is recorded, not when it is
+	//submitted.
+
+	raysPushData[0] = DeviceBufferRef_ptr(output)->writeHandle;
+	raysPushData[1] = TLASRef_ptr(tlasOpaque)->handle;
 
 	Test_assert(t, "ommBeginOpaque", CommandListRef_begin(opaqueList, true, U64_MAX, &t->err));
 
@@ -280,16 +313,13 @@ static void TestShaders_ommSpecialIndexWithFormat(
 	));
 
 	Test_assert(t, "ommBindOpaque", CommandListRef_setRaytracingPipeline(opaqueList, pipeline, &t->err));
+		TestShaders_pushRays(t, opaqueList);
 	Test_assert(t, "ommTraceOpaque", CommandListRef_dispatch1DRaysExt(opaqueList, 0, 4, &t->err));
 	Test_assert(t, "ommScopeTraceOpaqueEnd", CommandListRef_endScope(opaqueList, &t->err));
 
 	Test_assert(t, "ommEndOpaque", CommandListRef_end(opaqueList, &t->err));
 
-	const TestShaderAppData opaqueAppData = (TestShaderAppData) {
-		.handles = { DeviceBufferRef_ptr(output)->writeHandle, TLASRef_ptr(tlasOpaque)->handle }
-	};
-
-	if (TestShaders_submitAndWait(t, deviceRef, opaqueList, &opaqueAppData, sizeof(opaqueAppData)))
+	if (TestShaders_submitAndWait(t, deviceRef, opaqueList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -298,12 +328,14 @@ static void TestShaders_ommSpecialIndexWithFormat(
 		}
 
 	const Transition transparentTransitions[2] = {
-		(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
-		(Transition) { .resource = tlasTransparent, .stage = EPipelineStage_RaygenExt }
+		{ .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+		{ .resource = tlasTransparent, .stage = EPipelineStage_RaygenExt }
 	};
 
-	ListTransition transparentTransitionList = (ListTransition) { 0 };
+	ListTransition transparentTransitionList {};
 	ListTransition_createRefConst(transparentTransitions, 2, &transparentTransitionList, NULL);
+
+	raysPushData[1] = TLASRef_ptr(tlasTransparent)->handle;
 
 	Test_assert(t, "ommBeginTransparent", CommandListRef_begin(transparentList, true, U64_MAX, &t->err));
 
@@ -328,22 +360,21 @@ static void TestShaders_ommSpecialIndexWithFormat(
 	));
 
 	Test_assert(t, "ommBindTransparent", CommandListRef_setRaytracingPipeline(transparentList, pipeline, &t->err));
+		TestShaders_pushRays(t, transparentList);
 	Test_assert(t, "ommTraceTransparent", CommandListRef_dispatch1DRaysExt(transparentList, 0, 4, &t->err));
 	Test_assert(t, "ommScopeTraceTransparentEnd", CommandListRef_endScope(transparentList, &t->err));
 
 	Test_assert(t, "ommEndTransparent", CommandListRef_end(transparentList, &t->err));
 
-	const TestShaderAppData transparentAppData = (TestShaderAppData) {
-		.handles = { DeviceBufferRef_ptr(output)->writeHandle, TLASRef_ptr(tlasTransparent)->handle }
-	};
-
-	if (TestShaders_submitAndWait(t, deviceRef, transparentList, &transparentAppData, sizeof(transparentAppData)))
+	if (TestShaders_submitAndWait(t, deviceRef, transparentList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
 
 			Test_assert(t, "ommResultsTransparent", !values[0] && !values[1] && !values[2] && !values[3]);
 		}
+
+	}
 
 clean:
 
@@ -429,6 +460,8 @@ static void TestShaders_ommMicromapArray(
 	//One byte of opacity bits per entry, 4 bytes apart so every dataOffset stays 4 byte aligned.
 	//2-state: bit set is opaque, cleared is transparent, and only the low 4 bits exist at level 1.
 
+	//Scoped so the goto above jumps around these rather than into them.
+	{
 	U8 opacityBits[20] = { 0 };
 
 	for(U8 k = 0; k < 4; ++k)
@@ -448,7 +481,7 @@ static void TestShaders_ommMicromapArray(
 	OpacityMicromapEntry entryData[5];
 
 	for(U8 k = 0; k < 5; ++k)
-		entryData[k] = (OpacityMicromapEntry) {
+		entryData[k] = {
 			.dataOffset = (U32) k * 4,
 			.subdivisionLevel = 1,
 			.format = EOpacityMicromapFormat_Opacity2State
@@ -463,14 +496,20 @@ static void TestShaders_ommMicromapArray(
 	)))
 		goto clean;
 
-	const OpacityMicromapUsage usage = (OpacityMicromapUsage) {
+	const OpacityMicromapUsage usage = {
 		.count = 5, .subdivisionLevel = 1, .format = EOpacityMicromapFormat_Opacity2State
 	};
 
+	//Named rather than compound literals: C++ has no address of a braced list, and these are passed by
+	//pointer.
+
+	const DeviceData inputBitsData = { .buffer = inputBits };
+	const DeviceData entriesData = { .buffer = entries };
+
 	OpacityMicromapCreateInfo micromapInfo = OpacityMicromapCreateInfo_uniform(
 		ERTASBuildFlags_None,
-		&(DeviceData) { .buffer = inputBits },
-		&(DeviceData) { .buffer = entries },
+		&inputBitsData,
+		&entriesData,
 		sizeof(OpacityMicromapEntry),
 		&usage
 	);
@@ -492,34 +531,36 @@ static void TestShaders_ommMicromapArray(
 		goto clean;
 
 	PipelineStage stages[3] = {
-		(PipelineStage) { .binaryId = raygenId },
-		(PipelineStage) { .binaryId = missId },
-		(PipelineStage) { .binaryId = hitId }
+		{ .binaryId = raygenId },
+		{ .binaryId = missId },
+		{ .binaryId = hitId }
 	};
 
-	ListPipelineStage stageList = (ListPipelineStage) { 0 };
+	ListPipelineStage stageList {};
 	ListPipelineStage_createRefConst(stages, 3, &stageList, NULL);
 
-	ListSHFile fileList = (ListSHFile) { 0 };
+	ListSHFile fileList {};
 	ListSHFile_createRefConst(file, 1, &fileList, NULL);
 
-	PipelineRaytracingGroup group = (PipelineRaytracingGroup) {
+	PipelineRaytracingGroup group = {
 		.closestHit = 2, .anyHit = U32_MAX, .intersection = U32_MAX
 	};
 
-	ListPipelineRaytracingGroup groupList = (ListPipelineRaytracingGroup) { 0 };
+	ListPipelineRaytracingGroup groupList {};
 	ListPipelineRaytracingGroup_createRefConst(&group, 1, &groupList, NULL);
 
-	const PipelineRaytracingInfo pipelineInfo = (PipelineRaytracingInfo) {
+	const PipelineRaytracingInfo pipelineInfo = {
 		.flags = EPipelineRaytracingFlags_Default | EPipelineRaytracingFlags_AllowOpacityMicromapExt,
 		.maxRecursionDepth = 1
 	};
 
 	name = CharString_createRefCStrConst("OMM array pipeline");
 
+	TestShaders_raysLayout(t, deviceRef, file, raygenId);
+
 	if(!Test_assert(t, "ommArrayCreatePipeline", GraphicsDeviceRef_createPipelineRaytracingExt(
 		deviceRef, &stageList, &fileList, &groupList, &pipelineInfo, &name,
-		EPipelineFlags_None, NULL, &pipeline, &t->err
+		EPipelineFlags_None, raysPushLayout, &pipeline, &t->err
 	)))
 		goto clean;
 
@@ -545,9 +586,9 @@ static void TestShaders_ommMicromapArray(
 
 		const BLASCreateInfo blasInfo = BLASCreateInfo_indexedWithOmmExt(
 			ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16,
-			(DeviceData) { .buffer = positions },
-			ETextureFormatId_R16u, (DeviceData) { .buffer = indices },
-			ETextureFormatId_R16u, (DeviceData) { .buffer = ommIndex[k] },
+			{ .buffer = positions },
+			ETextureFormatId_R16u, { .buffer = indices },
+			ETextureFormatId_R16u, { .buffer = ommIndex[k] },
 			micromap
 		);
 
@@ -564,16 +605,16 @@ static void TestShaders_ommMicromapArray(
 		// one; without this ray 0 would land exactly on the shared edge and the outcome would be tie break
 		// dependent.
 
-		const TLASInstance ommInstance = (TLASInstance) {
+		const TLASInstance ommInstance = {
 			.transform = { { 1, 0, 0, -0.05f }, { 0, 1, 0, -0.05f }, { 0, 0, 1, 0 } },
-			.data = (TLASInstanceData) {
+			.data = {
 				.instanceId24_mask8 = 0xFFu << 24,
 				.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_DisableCulling << 24,
 				.blasCpu = blas[k]
 			}
 		};
 
-		ListTLASInstance ommInstances = (ListTLASInstance) { 0 };
+		ListTLASInstance ommInstances {};
 		ListTLASInstance_createRefConst(&ommInstance, 1, &ommInstances, NULL);
 
 		name = CharString_createRefCStrConst("OMM array TLAS");
@@ -590,14 +631,17 @@ static void TestShaders_ommMicromapArray(
 			break;
 
 		const Transition traceTransitions[2] = {
-			(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
-			(Transition) { .resource = tlas[k], .stage = EPipelineStage_RaygenExt }
+			{ .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+			{ .resource = tlas[k], .stage = EPipelineStage_RaygenExt }
 		};
 
-		ListTransition traceTransitionList = (ListTransition) { 0 };
+		ListTransition traceTransitionList {};
 		ListTransition_createRefConst(traceTransitions, 2, &traceTransitionList, NULL);
 
 		//The micromap build only runs once; recording it again is a no-op after it completed
+
+		raysPushData[0] = DeviceBufferRef_ptr(output)->writeHandle;
+		raysPushData[1] = TLASRef_ptr(tlas[k])->handle;
 
 		Test_assert(t, "ommArrayBegin", CommandListRef_begin(lists[k], true, U64_MAX, &t->err));
 
@@ -618,16 +662,13 @@ static void TestShaders_ommMicromapArray(
 		));
 
 		Test_assert(t, "ommArrayBind", CommandListRef_setRaytracingPipeline(lists[k], pipeline, &t->err));
+		TestShaders_pushRays(t, lists[k]);
 		Test_assert(t, "ommArrayTrace", CommandListRef_dispatch1DRaysExt(lists[k], 0, 4, &t->err));
 		Test_assert(t, "ommArrayScopeTraceEnd", CommandListRef_endScope(lists[k], &t->err));
 
 		Test_assert(t, "ommArrayEnd", CommandListRef_end(lists[k], &t->err));
 
-		const TestShaderAppData appData = (TestShaderAppData) {
-			.handles = { DeviceBufferRef_ptr(output)->writeHandle, TLASRef_ptr(tlas[k])->handle }
-		};
-
-		traced &= TestShaders_submitAndWait(t, deviceRef, lists[k], &appData, sizeof(appData));
+		traced &= TestShaders_submitAndWait(t, deviceRef, lists[k]);
 		traced = traced && TestShaders_pullBuffer(t, deviceRef, emptyList, output);
 
 		if (traced) {
@@ -674,6 +715,8 @@ static void TestShaders_ommMicromapArray(
 			(I64) EGraphicsDeviceMessage_OmmLikelyEmulated) ==
 			!(caps.features2 & EGraphicsFeatures2_RayMicromapOpacityActual)
 		);
+	}
+
 	}
 
 clean:
@@ -739,7 +782,7 @@ static void TestShaders_raysWithFile(
 
 	const Allocator *alloc = Platform_instance->alloc;
 
-	SHFile file = (SHFile) { 0 };
+	SHFile file {};
 
 	if (!TestShaders_loadFile(t, path, &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping ray trace tests");
@@ -748,7 +791,7 @@ static void TestShaders_raysWithFile(
 
 	GraphicsInstanceRef *ownInstanceRef = NULL;
 	GraphicsDeviceRef *ownDeviceRef = NULL;
-	RefPtrType instanceType = (RefPtrType) { 0 };
+	RefPtrType instanceType {};
 
 	if (!TestShaders_rtDedicatedDevice(t, &deviceRef, &ownInstanceRef, &ownDeviceRef, &instanceType)) {
 		SHFile_free(&file, alloc);
@@ -785,7 +828,9 @@ static void TestShaders_raysWithFile(
 	)))
 		goto clean;
 
-	const DeviceData positionData = (DeviceData) { .buffer = positions };
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	const DeviceData positionData = { .buffer = positions };
 	name = CharString_createRefCStrConst("Ray trace BLAS");
 
 	//AllowUpdate on the parent because the refit below updates FROM this one, and both APIs require the source
@@ -799,22 +844,23 @@ static void TestShaders_raysWithFile(
 	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(deviceRef, &blasInfo, &name, &blas, &t->err)))
 		goto clean;
 
-	TLASInstance instance = (TLASInstance) {
+	TLASInstance instance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
-		.data = (TLASInstanceData) {
+		.data = {
 			.instanceId24_mask8 = 0xFFu << 24,
 			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
 			.blasCpu = blas
 		}
 	};
 
-	ListTLASInstance instances = (ListTLASInstance) { 0 };
+	ListTLASInstance instances {};
 	ListTLASInstance_createRefConst(&instance, 1, &instances, NULL);
 
 	name = CharString_createRefCStrConst("Ray trace TLAS");
 
 	if(!Test_assert(t, "createTlas", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate, &instances, false, NULL,
+		deviceRef, (ERTASBuildFlags) (ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate),
+		&instances, false, NULL,
 		&name, &tlas, &t->err
 	)))
 		goto clean;
@@ -827,7 +873,7 @@ static void TestShaders_raysWithFile(
 
 	Test_assert(t, "createOutput", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 4 * sizeof(U32), &output, &t->err
 	));
 
@@ -841,33 +887,35 @@ static void TestShaders_raysWithFile(
 		goto clean;
 
 	PipelineStage stages[3] = {
-		(PipelineStage) { .binaryId = raygenId },
-		(PipelineStage) { .binaryId = missId },
-		(PipelineStage) { .binaryId = hitId }
+		{ .binaryId = raygenId },
+		{ .binaryId = missId },
+		{ .binaryId = hitId }
 	};
 
-	ListPipelineStage stageList = (ListPipelineStage) { 0 };
+	ListPipelineStage stageList {};
 	ListPipelineStage_createRefConst(stages, 3, &stageList, NULL);
 
-	ListSHFile fileList = (ListSHFile) { 0 };
+	ListSHFile fileList {};
 	ListSHFile_createRefConst(&file, 1, &fileList, NULL);
 
-	PipelineRaytracingGroup group = (PipelineRaytracingGroup) {
+	PipelineRaytracingGroup group = {
 		.closestHit = 2, .anyHit = U32_MAX, .intersection = U32_MAX
 	};
 
-	ListPipelineRaytracingGroup groupList = (ListPipelineRaytracingGroup) { 0 };
+	ListPipelineRaytracingGroup groupList {};
 	ListPipelineRaytracingGroup_createRefConst(&group, 1, &groupList, NULL);
 
-	const PipelineRaytracingInfo info = (PipelineRaytracingInfo) {
+	const PipelineRaytracingInfo info = {
 		.flags = EPipelineRaytracingFlags_Default,
 		.maxRecursionDepth = 1
 	};
 
 	name = CharString_createRefCStrConst("Ray trace pipeline");
 
+	TestShaders_raysLayout(t, deviceRef, &file, raygenId);
+
 	if(!Test_assert(t, "createPipeline", GraphicsDeviceRef_createPipelineRaytracingExt(
-		deviceRef, &stageList, &fileList, &groupList, &info, &name, EPipelineFlags_None, NULL, &pipeline, &t->err
+		deviceRef, &stageList, &fileList, &groupList, &info, &name, EPipelineFlags_None, raysPushLayout, &pipeline, &t->err
 	)))
 		goto clean;
 
@@ -886,6 +934,9 @@ static void TestShaders_raysWithFile(
 
 	//Build the scene and trace in one submit, split into scopes for the same dependency reason as the AS module
 
+	raysPushData[0] = DeviceBufferRef_ptr(output)->writeHandle;
+	raysPushData[1] = TLASRef_ptr(tlas)->handle;
+
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 
 	Test_assert(t, "scopeBlas", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
@@ -897,25 +948,22 @@ static void TestShaders_raysWithFile(
 	Test_assert(t, "scopeTlasEnd", CommandListRef_endScope(commandList, &t->err));
 
 	const Transition traceTransitions[2] = {
-		(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
-		(Transition) { .resource = tlas, .stage = EPipelineStage_RaygenExt }
+		{ .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+		{ .resource = tlas, .stage = EPipelineStage_RaygenExt }
 	};
 
-	ListTransition traceTransitionList = (ListTransition) { 0 };
+	ListTransition traceTransitionList {};
 	ListTransition_createRefConst(traceTransitions, 2, &traceTransitionList, NULL);
 
 	Test_assert(t, "scopeTrace", CommandListRef_startScope(commandList, &traceTransitionList, 3, NULL, &t->err));
 	Test_assert(t, "bindPipeline", CommandListRef_setRaytracingPipeline(commandList, pipeline, &t->err));
+		TestShaders_pushRays(t, commandList);
 	Test_assert(t, "trace", CommandListRef_dispatch1DRaysExt(commandList, 0, 4, &t->err));
 	Test_assert(t, "scopeTraceEnd", CommandListRef_endScope(commandList, &t->err));
 
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	TestShaderAppData appData = (TestShaderAppData) {
-		.handles = { DeviceBufferRef_ptr(output)->writeHandle, TLASRef_ptr(tlas)->handle }
-	};
-
-	if(!TestShaders_submitAndWait(t, deviceRef, commandList, &appData, sizeof(appData)))
+	if(!TestShaders_submitAndWait(t, deviceRef, commandList))
 		goto clean;
 
 	if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
@@ -941,7 +989,7 @@ static void TestShaders_raysWithFile(
 		TLASInstance moved = instance;
 		moved.transform[2][3] = 1000;                //Translate Z; the transform is row major 3x4
 
-		ListTLASInstance movedInstances = (ListTLASInstance) { 0 };
+		ListTLASInstance movedInstances {};
 		ListTLASInstance_createRefConst(&moved, 1, &movedInstances, NULL);
 
 		Bool madeRefit = Test_assert(t, "setInstancesMoved", TLASRef_setInstancesExt(tlas, &movedInstances, &t->err));
@@ -952,7 +1000,7 @@ static void TestShaders_raysWithFile(
 
 		if (madeRefit) {
 
-			//The scene the shader reads is reached through the same handle as before, so the app data that
+			//The scene the shader reads is reached through the same handle as before, so the push block that
 			// drove the first trace drives this one unchanged.
 
 			Test_assert(t, "refitKeepsHandle", TLASRef_ptr(tlas)->handle == handleBeforeRefit);
@@ -968,12 +1016,13 @@ static void TestShaders_raysWithFile(
 			));
 
 			Test_assert(t, "bindPipelineRefit", CommandListRef_setRaytracingPipeline(refitList, pipeline, &t->err));
+		TestShaders_pushRays(t, refitList);
 			Test_assert(t, "traceRefit", CommandListRef_dispatch1DRaysExt(refitList, 0, 4, &t->err));
 			Test_assert(t, "scopeTraceRefitEnd", CommandListRef_endScope(refitList, &t->err));
 
 			Test_assert(t, "endRefit", CommandListRef_end(refitList, &t->err));
 
-			if (TestShaders_submitAndWait(t, deviceRef, refitList, &appData, sizeof(appData)))
+			if (TestShaders_submitAndWait(t, deviceRef, refitList))
 				if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 					const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -988,7 +1037,7 @@ static void TestShaders_raysWithFile(
 			// original result proves a second refit reads the state the first one left rather than the state
 			// the AS was originally built from.
 
-			ListTLASInstance backInstances = (ListTLASInstance) { 0 };
+			ListTLASInstance backInstances {};
 			ListTLASInstance_createRefConst(&instance, 1, &backInstances, NULL);
 
 			if (Test_assert(t, "setInstancesBack", TLASRef_setInstancesExt(tlas, &backInstances, &t->err))) {
@@ -1006,12 +1055,13 @@ static void TestShaders_raysWithFile(
 				Test_assert(t, "bindPipelineRefitBack", CommandListRef_setRaytracingPipeline(
 					refitList, pipeline, &t->err
 				));
+				TestShaders_pushRays(t, refitList);
 
 				Test_assert(t, "traceRefitBack", CommandListRef_dispatch1DRaysExt(refitList, 0, 4, &t->err));
 				Test_assert(t, "scopeTraceRefitBackEnd", CommandListRef_endScope(refitList, &t->err));
 				Test_assert(t, "endRefitBack", CommandListRef_end(refitList, &t->err));
 
-				if (TestShaders_submitAndWait(t, deviceRef, refitList, &appData, sizeof(appData)))
+				if (TestShaders_submitAndWait(t, deviceRef, refitList))
 					if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 						const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -1053,6 +1103,12 @@ static void TestShaders_raysWithFile(
 
 		if (madeBlasRefit) {
 
+			//The OMM helpers above share this block and leave it pointing at a TLAS of their own that is
+			//already destroyed, so it is restored before anything records against it again.
+
+			raysPushData[0] = DeviceBufferRef_ptr(output)->writeHandle;
+			raysPushData[1] = TLASRef_ptr(tlas)->handle;
+
 			Test_assert(t, "beginBlasRefit", CommandListRef_begin(blasRefitList, true, U64_MAX, &t->err));
 
 			Test_assert(t, "scopeBlasRefit", CommandListRef_startScope(blasRefitList, NULL, 6, NULL, &t->err));
@@ -1070,19 +1126,22 @@ static void TestShaders_raysWithFile(
 			Test_assert(t, "bindPipelineBlasRefit", CommandListRef_setRaytracingPipeline(
 				blasRefitList, pipeline, &t->err
 			));
+			TestShaders_pushRays(t, blasRefitList);
 
 			Test_assert(t, "traceBlasRefit", CommandListRef_dispatch1DRaysExt(blasRefitList, 0, 4, &t->err));
 			Test_assert(t, "scopeTraceBlasRefitEnd", CommandListRef_endScope(blasRefitList, &t->err));
 
 			Test_assert(t, "endBlasRefit", CommandListRef_end(blasRefitList, &t->err));
 
-			if (TestShaders_submitAndWait(t, deviceRef, blasRefitList, &appData, sizeof(appData)))
+			if (TestShaders_submitAndWait(t, deviceRef, blasRefitList))
 				if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 					const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
 					Test_assert(t, "rayResultsBlasRefit", !values[0] && !values[1] && !values[2] && !values[3]);
 				}
 		}
+
+	}
 
 	}
 
@@ -1097,6 +1156,11 @@ clean:
 	RefPtr_dec(&blas);
 	RefPtr_dec(&output);
 	RefPtr_dec(&positions);
+
+	//A module static so every pipeline here shares one layout, which means it outlives the scope that
+	//created it and has to be released at the end of the module instead.
+
+	RefPtr_dec(&raysPushLayout);
 
 	SHFile_free(&file, alloc);
 
@@ -1130,3 +1194,4 @@ void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef) {
 		t, deviceRef, "Shaders/raysSer", "//OxC3_gtest/test_shaders/test_rays_ser.oiSH", false
 	);
 }
+} }

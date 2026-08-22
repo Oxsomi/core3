@@ -558,7 +558,7 @@ extern "C" void Test_graphicsDescriptorAlloc(oxc::c::Test *t, oxc::c::GraphicsDe
 
 	Test_assert(t, "inFlightTracked", c::ListRefPtr_contains(commandList.data()->resources, buffer.handle(), 0, nullptr));
 
-	Test_assert(t, "inFlightSubmit", dev.submit({ &commandList }, {}, nullptr, 0, 0, 0, e_rr));
+	Test_assert(t, "inFlightSubmit", dev.submit({ &commandList }, {}, 0, 0, e_rr));
 
 	//Every descriptor points at the same buffer, so the table's resource list holds one entry with a count of 8.
 

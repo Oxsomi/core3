@@ -367,6 +367,15 @@ static void DxCommandBufferState_bindDescriptors(
 	if(!temp->boundDescriptorTable || !layout->info.bindings)
 		return;
 
+	const DescriptorTable *table = DescriptorTableRef_ptr(temp->boundDescriptorTable);
+
+	//A table stays bound across a pipeline switch, so it can outlive the layout it was bound for.
+	//Emitting it against a root signature built from a DIFFERENT DescriptorLayout writes root parameters
+	// that signature never declared, which is what interleaving a bindful dispatch with a bindless one does.
+
+	if(table->layout != layout->info.bindings)
+		return;
+
 	//Root arguments persist while the root signature does, so an unchanged table has nothing to re-emit
 
 	if(temp->lastBoundTable[bindPoint] == temp->boundDescriptorTable)
@@ -374,7 +383,6 @@ static void DxCommandBufferState_bindDescriptors(
 
 	temp->lastBoundTable[bindPoint] = temp->boundDescriptorTable;
 
-	const DescriptorTable *table = DescriptorTableRef_ptr(temp->boundDescriptorTable);
 	DxDescriptorTable *tableExt = DescriptorTable_ext((DescriptorTable*)table, Dx);
 
 	DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(table->parent), Dx);

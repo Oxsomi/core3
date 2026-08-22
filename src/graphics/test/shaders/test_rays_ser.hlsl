@@ -24,9 +24,21 @@
 //Identical payloads out of both is the whole assertion, since the reorder itself only moves work between
 // lanes and may not change any computed value.
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 #include "@buffer.hlsli"
 #include "@extensions.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct RaysPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 tlas;          //Bindless handle of the acceleration structure
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT RaysPush _push;
 
 //SM6.9 requires payload access qualifiers, so unlike test_rays.hlsl the payload says exactly who reads and
 // writes it: the caller seeds and reads it back, the hit and miss shaders overwrite it.
@@ -91,7 +103,7 @@ void mainRaygen() {
 
 	OXC_HITOBJECT(hit);
 
-	oxc::HitObject_TraceRay(hit, tlasExtUniform(getAppData1u(1)), RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
+	oxc::HitObject_TraceRay(hit, tlasExtUniform(_push.tlas), RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
 	oxc::MaybeReorderThread(hit);
 	oxc::HitObject_Invoke(hit, payload);
 
@@ -104,7 +116,7 @@ void mainRaygen() {
 	// misses), so every ray has to produce the identical payload again or the sentinel fails the readback.
 
 	RayQuery<RAY_FLAG_NONE> query;
-	query.TraceRayInline(tlasExtUniform(getAppData1u(1)), RAY_FLAG_FORCE_OPAQUE, 0xFF, ray);
+	query.TraceRayInline(tlasExtUniform(_push.tlas), RAY_FLAG_FORCE_OPAQUE, 0xFF, ray);
 	query.Proceed();
 
 	OXC_HITOBJECT_ATTRIBUTES BuiltInTriangleIntersectionAttributes attrs;
@@ -124,7 +136,7 @@ void mainRaygen() {
 	oxc::HitObject_Invoke(hitRq, payload);
 
 	U32 ok = payload.hit == serHit && oxc::HitObject_GetShaderTableIndex(hitRq) == 0 ? 1 : 0;
-	setAtUniform(getAppData1u(0), i << 2, ok ? serHit : 0xBADBAD);
+	setAtUniform(_push.output, i << 2, ok ? serHit : 0xBADBAD);
 }
 
 #endif

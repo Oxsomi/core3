@@ -25,8 +25,20 @@
 // shaderFloat16 but no 16 bit STORAGE feature, so a half crossing the buffer interface would declare
 // StorageBuffer16BitAccess and the validation layers would reject the module at create time.
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 #include "@buffer.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct CapsPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 aux;           //Second handle, where the test needs one (a TLAS for the ray query cases)
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT CapsPush _push;
 
 //The three predicates below bracket half's significand from both sides, which is as much as a portable
 // shader can assert about it.
@@ -92,5 +104,5 @@ void main(U32 i : SV_DispatchThreadID) {
 		narrowedCount += (F32)((F16)wide) != wide ? 1 : 0;
 	}
 
-	setAtUniform<U32x4>(getAppData1u(0), 0, U32x4(total, exactCount, tenBitsCount, narrowedCount));
+	setAtUniform<U32x4>(_push.output, 0, U32x4(total, exactCount, tenBitsCount, narrowedCount));
 }

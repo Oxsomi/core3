@@ -229,7 +229,6 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   Bool submitCommands(
   	const ListCommandListRef *commandLists,
   	const ListSwapchainRef *swapchains,
-  	const Buffer *appData,
   	F32 deltaTime,		//< 0 = auto calculate time and deltaTime
   	F32 time,
   	Error *e_rr
@@ -506,7 +505,7 @@ gotoIfError3(clean, ListCommandListRef_createRefConst(&commandList, 1, &commandL
 gotoIfError3(clean, ListSwapchainRef_createRefConst(&swapchain, 1, &swapchains, e_rr));
 
 gotoIfError3(clean, GraphicsDeviceRef_submitCommands(
-    device, commandLists, swapchains, Buffer_createNull() /* appData */, -1, 0, e_rr
+    device, commandLists, swapchains, -1, 0, e_rr
 ));
 ```
 
@@ -906,7 +905,7 @@ A DescriptorLayout is the description of how the resources are bound to the pipe
 
 ### Reserved register space
 
-OxC3 binds its own per frame globals (frame id, time, delta time, swapchain descriptors and the app data block) to a register space it keeps for itself: `OXC3_RESERVED_SPACE`, which is `0xC3` (195). createDescriptorLayout refuses any caller binding that lands there.
+OxC3 binds its own per frame globals (frame id, time, delta time and swapchain descriptors) to a register space it keeps for itself: `OXC3_RESERVED_SPACE`, which is `0xC3` (195). createDescriptorLayout refuses any caller binding that lands there.
 
 This concerns DXIL only. On Vulkan the globals live in their own descriptor set, and set indices are far too few to hide a reservation in. On DXIL they used to sit at `b0 space0`, which is exactly what someone writing their first constant buffer types. That was harmless while the default bindless layout was the only layout there was, and became a silent collision the moment custom layouts let anyone declare their own `b0`.
 
@@ -917,7 +916,7 @@ Shaders spell it as `OXC3_RESERVED_SPACE` (from types.hlsli), which expands to `
 ### Used functions and obtained
 
 - Obtained through GraphicsDeviceRef's createDescriptorLayout.
-- A DescriptorLayoutInfo (to create the layout itself) can generally be obtained through the shader reflection by using `GraphicsDeviceRef_detectLayoutFromEntry` (one entrypoint) or `GraphicsDeviceRef_detectLayoutFromEntries` (several sharing one layout), though this might not be optimal if all shaders have a similar / the same DescriptorLayout (unless you manually avoid creating duplicates). Naming a register there also splits it out as push constants or push descriptors rather than an ordinary binding.
+- A DescriptorLayoutInfo (to create the layout itself) can generally be obtained through the shader reflection by using `GraphicsDeviceRef_detectLayoutFromEntry` (one entrypoint) or `GraphicsDeviceRef_detectLayoutFromEntries` (several sharing one layout). The identifier they take is the packed one `GraphicsDeviceRef_getFirstShaderEntry` returns and `PipelineStage::binaryId` carries: the entrypoint in the low 16 bits, and in the high 16 bits an index into THAT entrypoint's binary list rather than into the file's binaries, so reflection reads the same variant the pipeline will be built from, though this might not be optimal if all shaders have a similar / the same DescriptorLayout (unless you manually avoid creating duplicates). Naming a register there also splits it out as push constants or push descriptors rather than an ordinary binding.
 - Used when creating a PipelineLayout.
 
 ## Pipeline
@@ -1798,7 +1797,7 @@ Binds a descriptor heap: any descriptor table bound after this has to belong to 
 
 #### bindDescriptorTable
 
-Bindful: binds the descriptor table that pipelines with a CUSTOM pipeline layout read from. This only sets state; the work ops (draw/dispatch/dispatchRays) are the validators, so bind order never matters: at work time the bound pipeline's layout must reference the exact DescriptorLayout the table was created from, push descriptor layouts are refused until their writes exist, and pipelines on the device's default (bindless) layout ignore the bound table entirely. Backends emit the actual binds lazily right before the work, which also re-emits the default bindings after a custom root signature dropped them on D3D12. Custom layout pipelines are opted out of the globals/frame data unless their layout declares that slot. There is no table index: a pipeline layout references exactly ONE bindings DescriptorLayout (which itself spans up to 4 spaces/sets on Vulkan and up to 2 root tables on D3D12), so set indices and root parameters are baked into the layout/table pair; a slot index gets added if pipeline layouts ever grow multiple table slots. The table is kept alive by the command list; per resource scope transitions remain the caller's job until auto transitions land. Scope end resets the bind like it does bound pipelines.
+Bindful: binds the descriptor table that pipelines with a CUSTOM pipeline layout read from. This only sets state; the work ops (draw/dispatch/dispatchRays) are the validators, so bind order never matters: at work time the bound pipeline's layout must reference the exact DescriptorLayout the table was created from, push descriptor layouts are refused until their writes exist, and a pipeline whose layout does not reference the table's DescriptorLayout ignores the bound table entirely rather than emitting it. That covers the device's default (bindless) layout and any custom layout built from the runtime bindless set, which is what lets a bindful dispatch and a bindless one interleave inside one scope: the table stays bound across the pipeline switch, and emitting it against a layout that never declared it would bind sets Vulkan rejects and write root parameters D3D12's signature does not have. Backends emit the actual binds lazily right before the work, which also re-emits the default bindings after a custom root signature dropped them on D3D12. Custom layout pipelines are opted out of the globals/frame data unless their layout declares that slot. There is no table index: a pipeline layout references exactly ONE bindings DescriptorLayout (which itself spans up to 4 spaces/sets on Vulkan and up to 2 root tables on D3D12), so set indices and root parameters are baked into the layout/table pair; a slot index gets added if pipeline layouts ever grow multiple table slots. The table is kept alive by the command list; per resource scope transitions remain the caller's job until auto transitions land. Scope end resets the bind like it does bound pipelines.
 
 #### setPushConstants
 

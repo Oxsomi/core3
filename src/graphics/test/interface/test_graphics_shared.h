@@ -107,23 +107,33 @@ void Test_graphicsCapabilities(Test *t, GraphicsDeviceRef *deviceRef);
 //Shader execution helpers, defined in test_graphics_shaders.c and shared with the capability execution
 //module so the two don't keep their own copies of the same load/dispatch/readback dance.
 
-//One app data layout shared by every test shader, so a single submit can feed mixed pipelines.
+//One push constant layout shared by every test shader, so the modules don't each declare their own.
 //handles[0] = output buffer, handles[1] = base value or TLAS, handles[2] = indirect argument buffer.
 //color is what the pixel shaders return, read as F32x4 at U32 offset 4.
+//
+//The bytes are captured when setPushConstants is RECORDED, so an assignment has to precede the recording
+//that reads it rather than the submit.
 
-typedef struct TestShaderAppData {
+typedef struct TestShaderPushData {
 	U32 handles[4];
 	F32 color[4];
 	U32 logicSrc0[4];        //U32 offsets 8..11: what logic op instance 0 writes
 	U32 logicSrc1[4];        //U32 offsets 12..15: what instance 1 XORs on top
-} TestShaderAppData;
+} TestShaderPushData;
 
 Bool TestShaders_loadFile(Test *t, const C8 *pathStr, SHFile *file);
 U32 TestShaders_entry(Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, const C8 *name);
-Bool TestShaders_computePipeline(Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, PipelineRef **pipeline);
-Bool TestShaders_submitAndWait(
-	Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *commandList, const void *appData, U64 appDataLen
+Bool TestShaders_pushConstantLayout(
+	Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, U32 entryId, PipelineLayoutRef **layout
 );
+
+Bool TestShaders_computePipeline(Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, PipelineRef **pipeline);
+
+Bool TestShaders_computePipelinePush(
+	Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, PipelineRef **pipeline,
+	PipelineLayoutRef **layoutOut
+);
+Bool TestShaders_submitAndWait(Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *commandList);
 Bool TestShaders_pullBuffer(Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *emptyList, DeviceBufferRef *buffer);
 
 //D3D12's GPU based validation instruments raytracing libs into invalid bytecode, so modules that execute

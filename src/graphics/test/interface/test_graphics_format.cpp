@@ -18,22 +18,30 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_format.c
+//graphics/test/interface/test_graphics_format.cpp
 
 //Pure format, packing and layout modules (5, 6, 17, 18, 19, 24).
 //No device is needed, so these always run, even where no adapter exists.
 
-#include "graphics/generic/device.h"
-#include "graphics/generic/device_info.h"
-#include "graphics/generic/tlas.h"
-#include "graphics/generic/descriptor_layout.h"
-#include "graphics/generic/descriptor_table.h"
-#include "graphics/generic/bindless_descriptor.h"
-#include "platforms/platform.h"
-#include "types/test/test.h"
-#include "types/container/texture_format.h"
-#include "types/base/string_read_helper.h"
-#include "test_graphics_shared.h"
+namespace oxc { namespace c {
+	#include "types/base/string_read_helper.h"
+	#include "types/container/texture_format.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/platform.h"
+	#include "graphics/generic/bindless_descriptor.h"
+	#include "graphics/generic/descriptor_layout.h"
+	#include "graphics/generic/descriptor_table.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_info.h"
+	#include "graphics/generic/tlas.h"
+	#include "test_graphics_shared.h"
+} }
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+
+namespace oxc { namespace c {
 
 // -- 5. Texture format helpers --------------------------------------------------
 
@@ -65,12 +73,15 @@ void Test_graphicsFormats(Test *t) {
 	//The support queries only read capabilities.dataTypes, so a synthesised info exercises both answers without
 	// needing the adapter to happen to have or lack the type.
 
-	GraphicsDeviceInfo none = (GraphicsDeviceInfo) { 0 };
-	GraphicsDeviceInfo all = (GraphicsDeviceInfo) { 0 };
+	GraphicsDeviceInfo none {};
+	GraphicsDeviceInfo all {};
 
-	all.capabilities.dataTypes =
+	//Cast because C++ types an OR of enumerators as int, unlike C.
+
+	all.capabilities.dataTypes = (EGraphicsDataTypes) (
 		EGraphicsDataTypes_BCn | EGraphicsDataTypes_ASTC | EGraphicsDataTypes_RGB32f |
-		EGraphicsDataTypes_D24S8 | EGraphicsDataTypes_S8;
+		EGraphicsDataTypes_D24S8 | EGraphicsDataTypes_S8
+	);
 
 	//Anything not gated by a data type is supported regardless of the device
 
@@ -218,7 +229,7 @@ void Test_textureRange(Test *t) {
 
 	Test_setModule(t, "TextureRange");
 
-	const TextureRange r = (TextureRange) { .startRange = { 1, 2, 3 }, .endRange = { 11, 22, 33 }, .levelId = 4 };
+	const TextureRange r = { .startRange = { 1, 2, 3 }, .endRange = { 11, 22, 33 }, .levelId = 4 };
 
 	Test_assert(t, "width", TextureRange_width(r) == 10);
 	Test_assert(t, "height", TextureRange_height(r) == 20);
@@ -226,7 +237,7 @@ void Test_textureRange(Test *t) {
 
 	//An empty range is legal and measures zero, it isn't an error value
 
-	const TextureRange empty = (TextureRange) { 0 };
+	const TextureRange empty {};
 
 	Test_assert(t, "emptyWidth", !TextureRange_width(empty));
 	Test_assert(t, "emptyHeight", !TextureRange_height(empty));
@@ -246,11 +257,11 @@ void Test_graphicsDefaultBindlessLayout(Test *t) {
 
 	const Allocator *alloc = Platform_instance->alloc;
 
-	GraphicsDeviceInfo info = (GraphicsDeviceInfo) { 0 };
-	GraphicsDeviceInfo infoRt = (GraphicsDeviceInfo) { 0 };
+	GraphicsDeviceInfo info {};
+	GraphicsDeviceInfo infoRt {};
 	infoRt.capabilities.features = EGraphicsFeatures_Raytracing;
 
-	DescriptorLayoutInfo result = (DescriptorLayoutInfo) { 0 };
+	DescriptorLayoutInfo result {};
 
 	Test_assert(t, "nullInfo", !GraphicsDevice_defaultBindlessLayout(NULL, ESHBinaryType_DXIL, &result, alloc, NULL));
 	Test_assert(t, "nullResult", !GraphicsDevice_defaultBindlessLayout(&info, ESHBinaryType_DXIL, NULL, alloc, NULL));
@@ -359,3 +370,4 @@ void Test_graphicsDefaultBindlessLayout(Test *t) {
 		DescriptorLayoutInfo_free(&result, alloc);
 	}
 }
+} }

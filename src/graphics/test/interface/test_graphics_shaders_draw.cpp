@@ -18,41 +18,63 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_shaders_draw.c
+//graphics/test/interface/test_graphics_shaders_draw.cpp
 //
 //Draw execution, and the pipeline/render helpers only these draws use.
 //Split out of test_graphics_shaders.c, which had grown past 2300 lines.
 
-#include "graphics/generic/instance.h"
-#include "graphics/generic/device.h"
-#include "graphics/generic/device_info.h"
-#include "graphics/generic/device_buffer.h"
-#include "graphics/generic/render_texture.h"
-#include "graphics/generic/depth_stencil.h"
-#include "graphics/generic/texture.h"
-#include "graphics/generic/pipeline.h"
-#include "graphics/generic/blas.h"
-#include "graphics/generic/tlas.h"
-#include "graphics/generic/opacity_micromap.h"
-#include "graphics/generic/bindless_descriptor.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/commands.h"
-#include "platforms/platform.h"
-#include "platforms/logx.h"
-#include "platforms/file.h"
-#include "formats/oiSH/sh_file.h"
-#include "types/test/test.h"
-#include "types/container/memory_stream.h"
-#include "types/container/texture_format.h"
-#include "types/container/buffer.h"
-#include "types/base/string_base.h"
-#include "test_graphics_shared.h"
+namespace oxc { namespace c {
+	#include "types/base/string_base.h"
+	#include "types/container/buffer.h"
+	#include "types/container/memory_stream.h"
+	#include "types/container/texture_format.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_file.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/file.h"
+	#include "platforms/logx.h"
+	#include "platforms/platform.h"
+	#include "graphics/generic/bindless_descriptor.h"
+	#include "graphics/generic/blas.h"
+	#include "graphics/generic/command_list.h"
+	#include "graphics/generic/commands.h"
+	#include "graphics/generic/depth_stencil.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_buffer.h"
+	#include "graphics/generic/device_info.h"
+	#include "graphics/generic/instance.h"
+	#include "graphics/generic/opacity_micromap.h"
+	#include "graphics/generic/pipeline.h"
+	#include "graphics/generic/render_texture.h"
+	#include "graphics/generic/texture.h"
+	#include "graphics/generic/tlas.h"
+	#include "test_graphics_shared.h"
+} }
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+
+namespace oxc { namespace c {
 
 //The vertex and pixel shader are separate single entry files, picked out of one shared file list by slot
 
 //The pixel entry is named because SHFile_combine matches entries by name, so two pixel shaders in one
 //package can't both be "main" unless they agree on their signature - which a 1 target and a 2 target one
 //don't.
+
+//Shared by every pipeline this module builds; they all read the same push constant block.
+static PipelineLayoutRef *drawPushLayout = NULL;
+static PipelineLayoutRef *argsPushLayout = NULL;
+
+//TestShaderPushData has exactly the layout the pixel shaders declare, so it is what gets pushed.
+//The bytes are captured at record time, so every assignment below precedes the recording that reads it.
+
+static TestShaderPushData drawPush = {};
+
+static Bool TestShaders_pushDraw(Test *t, CommandListRef *commandList) {
+	const Buffer ref = Buffer_createRefConst(&drawPush, sizeof(drawPush));
+	return Test_assert(t, "pushDraw", CommandListRef_setPushConstants(commandList, ref, &t->err));
+}
 
 static Bool TestShaders_graphicsPipelineNamed(
 	Test *t, GraphicsDeviceRef *deviceRef, const ListSHFile *files, U16 vertexFile, U16 pixelFile,
@@ -66,17 +88,23 @@ static Bool TestShaders_graphicsPipelineNamed(
 		return false;
 
 	PipelineStage stages[2] = {
-		(PipelineStage) { .binaryId = vertexId, .shFileId = vertexFile },
-		(PipelineStage) { .binaryId = pixelId, .shFileId = pixelFile }
+		{ .binaryId = vertexId, .shFileId = vertexFile },
+		{ .binaryId = pixelId, .shFileId = pixelFile }
 	};
 
-	ListPipelineStage stageList = (ListPipelineStage) { 0 };
+	ListPipelineStage stageList {};
 	ListPipelineStage_createRefConst(stages, 2, &stageList, NULL);
 
 	const CharString name = CharString_createRefCStrConst("Shader test graphics pipeline");
 
+	//The pixel shaders read their color from a push constant, so the layout has to declare the push
+	//constants. Detected from the pixel entry, which is the stage that reads them.
+
+	if(!drawPushLayout && !TestShaders_pushConstantLayout(t, deviceRef, &files->ptr[pixelFile], pixelId, &drawPushLayout))
+		return false;
+
 	return Test_assert(t, "createGraphicsPipeline", GraphicsDeviceRef_createPipelineGraphics(
-		deviceRef, files, &stageList, info, &name, EPipelineFlags_None, NULL, pipeline, &t->err
+		deviceRef, files, &stageList, info, &name, EPipelineFlags_None, drawPushLayout, pipeline, &t->err
 	));
 }
 
@@ -96,8 +124,8 @@ static Bool TestShaders_openDraw(
 
 	Bool ok = Test_assert(t, "scope", CommandListRef_startScope(commandList, NULL, scopeId, NULL, &t->err));
 
-	const AttachmentInfo color = (AttachmentInfo) { .image = target, .load = ELoadAttachmentType_Clear };
-	ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+	const AttachmentInfo color = { .image = target, .load = ELoadAttachmentType_Clear };
+	ListAttachmentInfo colors {};
 	ListAttachmentInfo_createRefConst(&color, 1, &colors, NULL);
 
 	ok &= Test_assert(t, "renderStart", CommandListRef_startRenderExt(
@@ -108,7 +136,8 @@ static Bool TestShaders_openDraw(
 		commandList, I32x2_zero, I32x2_zero, &t->err
 	));
 
-	return Test_assert(t, "bindPipeline", CommandListRef_setGraphicsPipeline(commandList, pipeline, &t->err)) && ok;
+	ok &= Test_assert(t, "bindPipeline", CommandListRef_setGraphicsPipeline(commandList, pipeline, &t->err));
+	return TestShaders_pushDraw(t, commandList) && ok;
 }
 
 static Bool TestShaders_closeDraw(Test *t, CommandListRef *commandList) {
@@ -174,7 +203,7 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 		return;
 	}
 
-	ListSHFile fileList = (ListSHFile) { 0 };
+	ListSHFile fileList {};
 	ListSHFile_createRefConst(files, 10, &fileList, NULL);
 
 	RenderTextureRef *target = NULL;
@@ -206,9 +235,11 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 		EMSAASamples_Off, NULL, &name, &target, &t->err
 	));
 
-	const PipelineGraphicsInfo flatInfo = (PipelineGraphicsInfo) {
-		.attachmentCountExt = 1,
-		.attachmentFormatsExt = { ETextureFormatId_RGBA8 }
+	//Designators must appear in declaration order in C++, which is not the order these were written in.
+
+	const PipelineGraphicsInfo flatInfo = {
+		.attachmentFormatsExt = { ETextureFormatId_RGBA8 },
+		.attachmentCountExt = 1
 	};
 
 	if(!target || !TestShaders_graphicsPipeline(t, deviceRef, &fileList, 0, 1, &flatInfo, &flatPipeline))
@@ -227,19 +258,19 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "beginEmptyList", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
 	Test_assert(t, "endEmptyList", CommandListRef_end(emptyList, &t->err));
 
-	//Fullscreen triangle: every pixel has to hold the app data color exactly
+	//Fullscreen triangle: every pixel has to hold the pushed color exactly
 
 	Test_assert(t, "beginFlat", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 
-	TestShaderAppData appData = (TestShaderAppData) { .color = { 1, 102.f / 255, 51.f / 255, 1 } };
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	drawPush = TestShaderPushData { .color = { 1, 102.f / 255, 51.f / 255, 1 } };
 
 	if (TestShaders_openDraw(t, commandList, 1, target, flatPipeline)) {
 
 		Test_assert(t, "draw", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
 
-		if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-			t, deviceRef, commandList, &appData, sizeof(appData)
-		))
+		if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
 			TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF3366FFu);
 	}
 
@@ -247,7 +278,7 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_assert(t, "beginScissor", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 
-	appData.color[0] = 0; appData.color[1] = 204.f / 255; appData.color[2] = 0;
+	drawPush.color[0] = 0; drawPush.color[1] = 204.f / 255; drawPush.color[2] = 0;
 
 	if (TestShaders_openDraw(t, commandList, 1, target, flatPipeline)) {
 
@@ -257,11 +288,9 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 
 		Test_assert(t, "drawScissor", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
 
-		if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-			t, deviceRef, commandList, &appData, sizeof(appData)
-		)) {
+		if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList)) {
 
-			TestShaderPixels pixels = (TestShaderPixels) { 0 };
+			TestShaderPixels pixels {};
 
 			if (TestShaders_pullPixels(t, deviceRef, emptyList, target, &pixels)) {
 
@@ -278,11 +307,11 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	//Additive blend: two fullscreen instances of the same color have to sum to exactly twice the bytes
 
 	PipelineGraphicsInfo blendInfo = flatInfo;
-	blendInfo.blendState = (BlendState) {
+	blendInfo.blendState = {
 		.enable = true,
 		.renderTargetMask = 1,
 		.writeMask = { EWriteMask_All },
-		.attachments = { (BlendStateAttachment) {
+		.attachments = { {
 			.srcBlend = EBlend_One, .dstBlend = EBlend_One,
 			.srcBlendAlpha = EBlend_One, .dstBlendAlpha = EBlend_One,
 			.blendOp = EBlendOp_Add, .blendOpAlpha = EBlendOp_Add
@@ -293,15 +322,13 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 
 		Test_assert(t, "beginBlend", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 
-		appData.color[0] = 51.f / 255; appData.color[1] = 102.f / 255; appData.color[2] = 0; appData.color[3] = 51.f / 255;
+		drawPush.color[0] = 51.f / 255; drawPush.color[1] = 102.f / 255; drawPush.color[2] = 0; drawPush.color[3] = 51.f / 255;
 
 		if (TestShaders_openDraw(t, commandList, 1, target, blendPipeline)) {
 
 			Test_assert(t, "drawBlend", CommandListRef_drawUnindexed(commandList, 3, 2, &t->err));
 
-			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-				t, deviceRef, commandList, &appData, sizeof(appData)
-			))
+			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
 				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0x6600CC66u);
 		}
 	}
@@ -322,17 +349,15 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "beginWire", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 
-			appData.color[0] = 1; appData.color[1] = 1; appData.color[2] = 1; appData.color[3] = 1;
+			drawPush.color[0] = 1; drawPush.color[1] = 1; drawPush.color[2] = 1; drawPush.color[3] = 1;
 
 			if (TestShaders_openDraw(t, commandList, 1, target, wirePipeline)) {
 
 				Test_assert(t, "drawWire", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
 
-				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-					t, deviceRef, commandList, &appData, sizeof(appData)
-				)) {
+				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList)) {
 
-					TestShaderPixels pixels = (TestShaderPixels) { 0 };
+					TestShaderPixels pixels {};
 
 					if (TestShaders_pullPixels(t, deviceRef, emptyList, target, &pixels)) {
 
@@ -376,11 +401,11 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 				Test_assert(t, "scopeMrt", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
 
 				const AttachmentInfo mrtColors[2] = {
-					(AttachmentInfo) { .image = target,    .load = ELoadAttachmentType_Clear },
-					(AttachmentInfo) { .image = mrtTarget, .load = ELoadAttachmentType_Clear }
+					{ .image = target,    .load = ELoadAttachmentType_Clear },
+					{ .image = mrtTarget, .load = ELoadAttachmentType_Clear }
 				};
 
-				ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+				ListAttachmentInfo colors {};
 				ListAttachmentInfo_createRefConst(mrtColors, 2, &colors, NULL);
 
 				Test_assert(t, "renderStartMrt", CommandListRef_startRenderExt(
@@ -392,11 +417,10 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 				));
 
 				Test_assert(t, "bindMrt", CommandListRef_setGraphicsPipeline(commandList, mrtPipeline, &t->err));
+			TestShaders_pushDraw(t, commandList);
 				Test_assert(t, "drawMrt", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
 
-				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-					t, deviceRef, commandList, &appData, sizeof(appData)
-				)) {
+				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList)) {
 					TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF3366FFu);
 					TestShaders_checkPixels(t, deviceRef, emptyList, mrtTarget, 0xFF00CC00u);
 				}
@@ -426,25 +450,25 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 			EMSAASamples_Off, NULL, &name, &logicTarget, &t->err
 		))) {
 
-			PipelineGraphicsInfo logicInfo = (PipelineGraphicsInfo) {
-				.attachmentCountExt = 1,
-				.attachmentFormatsExt = { ETextureFormatId_RGBA8u },
-				.blendState = (BlendState) {
+			PipelineGraphicsInfo logicInfo = {
+				.blendState = {
 					.enable = true,                       //Required: D3D12 drops LogicOpEnable otherwise
 					.renderTargetMask = 0,                //Required: a logic op excludes blending
 					.logicOpExt = ELogicOpExt_Xor,
 					.writeMask = { EWriteMask_All }
-				}
+				},
+				.attachmentFormatsExt = { ETextureFormatId_RGBA8u },
+				.attachmentCountExt = 1
 			};
 
 			if (TestShaders_graphicsPipeline(t, deviceRef, &fileList, 7, 8, &logicInfo, &logicPipeline)) {
 
 				Test_assert(t, "beginLogic", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 
-				appData.logicSrc0[0] = 0xF0; appData.logicSrc0[1] = 0x33;
-				appData.logicSrc0[2] = 0x5A; appData.logicSrc0[3] = 0xFF;
-				appData.logicSrc1[0] = 0x0F; appData.logicSrc1[1] = 0x11;
-				appData.logicSrc1[2] = 0x3C; appData.logicSrc1[3] = 0x0F;
+				drawPush.logicSrc0[0] = 0xF0; drawPush.logicSrc0[1] = 0x33;
+				drawPush.logicSrc0[2] = 0x5A; drawPush.logicSrc0[3] = 0xFF;
+				drawPush.logicSrc1[0] = 0x0F; drawPush.logicSrc1[1] = 0x11;
+				drawPush.logicSrc1[2] = 0x3C; drawPush.logicSrc1[3] = 0x0F;
 
 				if (TestShaders_openDraw(t, commandList, 1, logicTarget, logicPipeline)) {
 
@@ -453,9 +477,7 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 					//XOR of the two sources per channel: R 0xF0^0x0F, G 0x33^0x11, B 0x5A^0x3C, A 0xFF^0x0F.
 					//R is the low byte of the pulled U32, matching every other expectation in this module.
 
-					if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-						t, deviceRef, commandList, &appData, sizeof(appData)
-					))
+					if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
 						TestShaders_checkPixels(t, deviceRef, emptyList, logicTarget, 0xF06622FFu);
 				}
 			}
@@ -463,7 +485,7 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	}
 
 	//Dual source blend, when the adapter claims it: the pixel shader emits two colors from one draw and the
-	// blend multiplies the first by the second, so the attachment ends up holding the app data color scaled by
+	// blend multiplies the first by the second, so the attachment ends up holding the pushed color scaled by
 	// exactly a half - a result no single source factor produces from these inputs, so a backend that ignored
 	// the second source lands on the unscaled color and fails.
 	//The destination factor is Zero, so the cleared attachment contributes nothing.
@@ -473,11 +495,11 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	if(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features & EGraphicsFeatures_DualSrcBlend) {
 
 		PipelineGraphicsInfo dualInfo = flatInfo;
-		dualInfo.blendState = (BlendState) {
+		dualInfo.blendState = {
 			.enable = true,
 			.renderTargetMask = 1,
 			.writeMask = { EWriteMask_All },
-			.attachments = { (BlendStateAttachment) {
+			.attachments = { {
 				.srcBlend = EBlend_Src1ColorExt, .dstBlend = EBlend_Zero,
 				.srcBlendAlpha = EBlend_Src1AlphaExt, .dstBlendAlpha = EBlend_Zero,
 				.blendOp = EBlendOp_Add, .blendOpAlpha = EBlendOp_Add
@@ -493,16 +515,14 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 			//All four channels at 0.8, so the halved result is 0.4, which lands on 102 in 8 bit unorm with no
 			// rounding ambiguity either before or after the multiply.
 
-			appData.color[0] = 204.f / 255; appData.color[1] = 204.f / 255;
-			appData.color[2] = 204.f / 255; appData.color[3] = 204.f / 255;
+			drawPush.color[0] = 204.f / 255; drawPush.color[1] = 204.f / 255;
+			drawPush.color[2] = 204.f / 255; drawPush.color[3] = 204.f / 255;
 
 			if (TestShaders_openDraw(t, commandList, 1, target, dualPipeline)) {
 
 				Test_assert(t, "drawDual", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
 
-				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-					t, deviceRef, commandList, &appData, sizeof(appData)
-				))
+				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
 					TestShaders_checkPixels(t, deviceRef, emptyList, target, 0x66666666u);
 			}
 		}
@@ -534,7 +554,7 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	PipelineGraphicsInfo vertexInfo = flatInfo;
 	vertexInfo.vertexLayout.bufferStrides12_isInstance1[0] = sizeof(F32) * 2;
-	vertexInfo.vertexLayout.attributes[0] = (VertexAttribute) { .format = ETextureFormatId_RG32f };
+	vertexInfo.vertexLayout.attributes[0] = { .format = ETextureFormatId_RG32f };
 
 	if (
 		vertexBuffer && indexBuffer &&
@@ -543,11 +563,11 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 
 		Test_assert(t, "beginVertex", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 
-		appData.color[0] = 204.f / 255; appData.color[1] = 0; appData.color[2] = 204.f / 255; appData.color[3] = 1;
+		drawPush.color[0] = 204.f / 255; drawPush.color[1] = 0; drawPush.color[2] = 204.f / 255; drawPush.color[3] = 1;
 
 		if (TestShaders_openDraw(t, commandList, 1, target, vertexPipeline)) {
 
-			SetPrimitiveBuffersCmd primitives = (SetPrimitiveBuffersCmd) { 0 };
+			SetPrimitiveBuffersCmd primitives {};
 			primitives.vertexBuffers[0] = vertexBuffer;
 			primitives.indexBuffer = indexBuffer;
 			primitives.isIndex32Bit = false;
@@ -555,9 +575,7 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 			Test_assert(t, "setPrimitiveBuffers", CommandListRef_setPrimitiveBuffers(commandList, &primitives, &t->err));
 			Test_assert(t, "drawIndexed", CommandListRef_drawIndexed(commandList, 6, 2, &t->err));
 
-			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-				t, deviceRef, commandList, &appData, sizeof(appData)
-			))
+			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
 				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFFCC00CCu);
 		}
 	}
@@ -576,7 +594,7 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	// the far clear is 0 and the compare is Greater
 
 	PipelineGraphicsInfo depthInfo = flatInfo;
-	depthInfo.depthStencil = (DepthStencilState) { .flags = EDepthStencilFlags_DepthWrite, .depthCompare = ECompareOp_Gt };
+	depthInfo.depthStencil = { .flags = EDepthStencilFlags_DepthWrite, .depthCompare = ECompareOp_Gt };
 	depthInfo.depthFormatExt = EDepthStencilFormat_D32;
 
 	if (
@@ -587,11 +605,11 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 		Test_assert(t, "beginDepth", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 		Test_assert(t, "scopeDepth", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
 
-		const AttachmentInfo color = (AttachmentInfo) { .image = target, .load = ELoadAttachmentType_Clear };
-		ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+		const AttachmentInfo color = { .image = target, .load = ELoadAttachmentType_Clear };
+		ListAttachmentInfo colors {};
 		ListAttachmentInfo_createRefConst(&color, 1, &colors, NULL);
 
-		const DepthStencilAttachmentInfo depthAttach = (DepthStencilAttachmentInfo) {
+		const DepthStencilAttachmentInfo depthAttach = {
 			.image = depth,
 			.depthLoad = ELoadAttachmentType_Clear,
 			.clearDepth = 0
@@ -606,16 +624,17 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 		));
 
 		Test_assert(t, "bindDepth", CommandListRef_setGraphicsPipeline(commandList, depthPipeline, &t->err));
+			TestShaders_pushDraw(t, commandList);
 		Test_assert(t, "drawDepth", CommandListRef_drawUnindexed(commandList, 9, 1, &t->err));
 
-		if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0)) {
+		if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList)) {
 
 			//The middle triangle's green and its 0.7 depth, straight from the shader with no viewport
 			// remap in between; a small tolerance stays anyway for the wider GPU test rig
 
 			TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF00FF00u);
 
-			TestShaderPixels depthPixels = (TestShaderPixels) { 0 };
+			TestShaderPixels depthPixels {};
 
 			if (TestShaders_pullPixels(t, deviceRef, emptyList, depth, &depthPixels)) {
 
@@ -653,15 +672,13 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 
 		Test_assert(t, "beginIndirect", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 
-		appData.color[0] = 1; appData.color[1] = 1; appData.color[2] = 0; appData.color[3] = 1;
+		drawPush.color[0] = 1; drawPush.color[1] = 1; drawPush.color[2] = 0; drawPush.color[3] = 1;
 
 		if (TestShaders_openDraw(t, commandList, 1, target, flatPipeline)) {
 
 			Test_assert(t, "drawIndirect", CommandListRef_drawIndirect(commandList, cpuArgs, 0, 1, false, &t->err));
 
-			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-				t, deviceRef, commandList, &appData, sizeof(appData)
-			))
+			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
 				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF00FFFFu);
 		}
 	}
@@ -677,32 +694,37 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 		NULL, &name, 32, &gpuArgs, &t->err
 	));
 
-	if (gpuArgs && TestShaders_computePipeline(t, deviceRef, &files[5], &argsPipeline)) {
+	if (gpuArgs && TestShaders_computePipelinePush(t, deviceRef, &files[5], &argsPipeline, &argsPushLayout)) {
 
-		const Transition argsWrite = (Transition) {
+		const Transition argsWrite = {
 			.resource = gpuArgs, .stage = EPipelineStage_Compute, .isWrite = true
 		};
 
-		ListTransition argsTransition = (ListTransition) { 0 };
+		ListTransition argsTransition {};
 		ListTransition_createRefConst(&argsWrite, 1, &argsTransition, NULL);
 
 		Test_assert(t, "beginGpuDraw", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 
 		Test_assert(t, "scopeGpuArgs", CommandListRef_startScope(commandList, &argsTransition, 1, NULL, &t->err));
+		//test_write_args declares its own 16 byte block rather than the pixel one, so this pushes that shape
+		//instead of drawPush; the work op requires the written size to match what the layout declares.
+
+		const U32 argsPushData[4] = { 0, 0, DeviceBufferRef_ptr(gpuArgs)->writeHandle, 0 };
+		const Buffer argsPushRef = Buffer_createRefConst(argsPushData, sizeof(argsPushData));
+
 		Test_assert(t, "bindGpuArgs", CommandListRef_setComputePipeline(commandList, argsPipeline, &t->err));
+		Test_assert(t, "pushGpuArgs", CommandListRef_setPushConstants(commandList, argsPushRef, &t->err));
 		Test_assert(t, "dispatchGpuArgs", CommandListRef_dispatch1D(commandList, 1, &t->err));
 		Test_assert(t, "scopeGpuArgsEnd", CommandListRef_endScope(commandList, &t->err));
 
-		appData.handles[2] = DeviceBufferRef_ptr(gpuArgs)->writeHandle;
-		appData.color[0] = 51.f / 255; appData.color[1] = 51.f / 255; appData.color[2] = 1; appData.color[3] = 1;
+		drawPush.handles[2] = DeviceBufferRef_ptr(gpuArgs)->writeHandle;
+		drawPush.color[0] = 51.f / 255; drawPush.color[1] = 51.f / 255; drawPush.color[2] = 1; drawPush.color[3] = 1;
 
 		if (TestShaders_openDraw(t, commandList, 2, target, flatPipeline)) {
 
 			Test_assert(t, "drawGpuIndirect", CommandListRef_drawIndirect(commandList, gpuArgs, 0, 1, false, &t->err));
 
-			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-				t, deviceRef, commandList, &appData, sizeof(appData)
-			))
+			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
 				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFFFF3333u);
 		}
 	}
@@ -741,21 +763,21 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 			continue;
 
 		PipelineGraphicsInfo msaaInfo = flatInfo;
-		msaaInfo.msaa = msaaCases[m].samples;
+		msaaInfo.msaa = (MSAASamples) msaaCases[m].samples;
 
 		if (TestShaders_graphicsPipeline(t, deviceRef, &fileList, 0, 1, &msaaInfo, &msaaPipeline)) {
 
 			Test_assert(t, "beginMsaa", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
 			Test_assert(t, "scopeMsaa", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
 
-			const AttachmentInfo msaaColor = (AttachmentInfo) {
+			const AttachmentInfo msaaColor = {
 				.image = msaaTarget,
 				.load = ELoadAttachmentType_Clear,
 				.resolveMode = EMSAAResolveMode_Average,
 				.resolveImage = target
 			};
 
-			ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+			ListAttachmentInfo colors {};
 			ListAttachmentInfo_createRefConst(&msaaColor, 1, &colors, NULL);
 
 			Test_assert(t, "renderStartMsaa", CommandListRef_startRenderExt(
@@ -766,14 +788,13 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 				commandList, I32x2_zero, I32x2_zero, &t->err
 			));
 
+			drawPush.color[0] = 102.f / 255; drawPush.color[1] = 1; drawPush.color[2] = 51.f / 255; drawPush.color[3] = 1;
+
 			Test_assert(t, "bindMsaa", CommandListRef_setGraphicsPipeline(commandList, msaaPipeline, &t->err));
+			TestShaders_pushDraw(t, commandList);
 			Test_assert(t, "drawMsaa", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
 
-			appData.color[0] = 102.f / 255; appData.color[1] = 1; appData.color[2] = 51.f / 255; appData.color[3] = 1;
-
-			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(
-				t, deviceRef, commandList, &appData, sizeof(appData)
-			)) {
+			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList)) {
 				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF33FF66u);
 				++msaaRun;
 			}
@@ -786,9 +807,11 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	}
 
 	Log_debugLnx(
-		"-- draw: %"PRIu32" MSAA sample counts resolved, %"PRIu32" not claimed by this adapter",
+		"-- draw: %" PRIu32 " MSAA sample counts resolved, %" PRIu32 " not claimed by this adapter",
 		msaaRun, msaaSkipped
 	);
+
+	}
 
 clean:
 
@@ -814,6 +837,13 @@ clean:
 	RefPtr_dec(&msaaTarget);
 	RefPtr_dec(&target);
 
+	//These are module statics so every pipeline here can share one layout, which means they outlive the
+	//scope that created them and have to be released at the end of the module instead.
+
+	RefPtr_dec(&argsPushLayout);
+	RefPtr_dec(&drawPushLayout);
+
 	for(U64 i = 0; i < 10; ++i)
 		SHFile_free(&files[i], alloc);
 }
+} }

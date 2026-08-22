@@ -26,8 +26,20 @@
 //DXC emits the Quads derivative group for an even 2D thread group and the Linear one otherwise; both map to
 // the same OxC3 extension, so a 2x2 group keeps this on the quad path.
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 #include "@buffer.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct CapsPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 aux;           //Second handle, where the test needs one (a TLAS for the ray query cases)
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT CapsPush _push;
 
 //The value varies by exactly 1 across x and exactly 10 across y, so within the quad the derivatives are
 // those two constants, and every value involved is a small integer that F32 holds exactly.
@@ -48,5 +60,5 @@ void main(U32x3 id : SV_DispatchThreadID) {
 	const F32 dx = ddx(v);
 	const F32 dy = ddy(v);
 
-	rwBufferUniform(getAppData1u(0)).InterlockedAdd(0, dx == 1.0f && dy == 10.0f ? 1 : 0);
+	rwBufferUniform(_push.output).InterlockedAdd(0, dx == 1.0f && dy == 10.0f ? 1 : 0);
 }

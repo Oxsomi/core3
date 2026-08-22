@@ -26,7 +26,7 @@
 // delta the runtime writes alongside the swapchain ids.
 //That is the half of the globals block a layout change can silently break, so one thread copies the raw
 // fields out for the CPU to check against what it submitted.
-//The output handle rides in a push constant, which is what replaced the app data block, so this also covers
+//The output handle rides in a push constant, so this also covers
 // a custom pipeline layout receiving the runtime globals at all.
 //A cbuffer rounds to 16 bytes on DXIL, so the block is spelled at 16: a 4 byte struct would be declared as 4
 // on SPIRV and 16 on DXIL, and the work op requires the written size to match exactly.

@@ -18,31 +18,39 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_execute.c
+//graphics/test/interface/test_graphics_execute.cpp
 
 //Submission and real GPU execution modules: submit state machine, memory upkeep, execution
 // with readback round trips and acceleration structures (16, 28, 29, 30).
 
-#include "graphics/generic/instance.h"
-#include "graphics/generic/device.h"
-#include "graphics/generic/device_info.h"
-#include "graphics/generic/device_buffer.h"
-#include "graphics/generic/device_texture.h"
-#include "graphics/generic/render_texture.h"
-#include "graphics/generic/depth_stencil.h"
-#include "graphics/generic/blas.h"
-#include "graphics/generic/opacity_micromap.h"
-#include "graphics/generic/tlas.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/commands.h"
-#include "graphics/generic/graphics_types.h"
-#include "platforms/platform.h"
-#include "platforms/logx.h"
-#include "types/test/test.h"
-#include "types/container/texture_format.h"
-#include "types/container/buffer.h"
-#include "types/base/string_base.h"
-#include "test_graphics_shared.h"
+namespace oxc { namespace c {
+	#include "types/base/string_base.h"
+	#include "types/container/buffer.h"
+	#include "types/container/texture_format.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/logx.h"
+	#include "platforms/platform.h"
+	#include "graphics/generic/blas.h"
+	#include "graphics/generic/command_list.h"
+	#include "graphics/generic/commands.h"
+	#include "graphics/generic/depth_stencil.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_buffer.h"
+	#include "graphics/generic/device_info.h"
+	#include "graphics/generic/device_texture.h"
+	#include "graphics/generic/graphics_types.h"
+	#include "graphics/generic/instance.h"
+	#include "graphics/generic/opacity_micromap.h"
+	#include "graphics/generic/render_texture.h"
+	#include "graphics/generic/tlas.h"
+	#include "test_graphics_shared.h"
+} }
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+
+namespace oxc { namespace c {
 
 // -- 16. Submit ------------------------------------------------------------------
 
@@ -57,7 +65,7 @@ void Test_graphicsSubmit(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_setModule(t, "GraphicsDevice/submit");
 
 	CommandListRef *commandList = NULL;
-	ListCommandListRef lists = (ListCommandListRef) { 0 };
+	ListCommandListRef lists {};
 
 	if(!Test_assert(t, "create", GraphicsDeviceRef_createCommandList(
 		deviceRef, 2 * KIBI, 64, 16, true, &commandList, &t->err
@@ -72,15 +80,15 @@ void Test_graphicsSubmit(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Nothing to submit at all is the one combination that has to be refused
 
-	Test_assert(t, "submitNothing", !GraphicsDeviceRef_submitCommands(deviceRef, NULL, NULL, NULL, 0, 0, NULL));
-	Test_assert(t, "submitNullDevice", !GraphicsDeviceRef_submitCommands(NULL, NULL, NULL, NULL, 0, 0, NULL));
+	Test_assert(t, "submitNothing", !GraphicsDeviceRef_submitCommands(deviceRef, NULL, NULL, 0, 0, NULL));
+	Test_assert(t, "submitNullDevice", !GraphicsDeviceRef_submitCommands(NULL, NULL, NULL, 0, 0, NULL));
 
 	if(Test_assert(t, "listRef", ListCommandListRef_createRefConst(&commandList, 1, &lists, &t->err))) {
 
 		//Submitted twice so a second frame in flight is used, which is what picks a different emulated set
 
-		Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
-		Test_assert(t, "submitAgain", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
+		Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, 0, 0, &t->err));
+		Test_assert(t, "submitAgain", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, 0, 0, &t->err));
 		Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err));
 	}
 
@@ -221,7 +229,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 	const CharString targetName = CharString_createRefCStrConst("Execute target");
 	const CharString textureName = CharString_createRefCStrConst("Execute texture");
 
-	const ImageRange all = (ImageRange) { .levelId = U32_MAX, .layerId = U32_MAX };
+	const ImageRange all = { .levelId = U32_MAX, .layerId = U32_MAX };
 
 	if(!Test_assert(t, "createTarget", GraphicsDeviceRef_createRenderTexture(
 		deviceRef, ETextureType_2D, 4, 4, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
@@ -277,19 +285,19 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 		Test_assert(t, "copyScope", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
 
 		Test_assert(t, "copy", CommandListRef_copyImage(
-			commandList, target, texture, (CopyImageRegion) { 0 }, &t->err
+			commandList, target, texture, { 0 }, &t->err
 		));
 
 		Test_assert(t, "endCopyScope", CommandListRef_endScope(commandList, &t->err));
 		Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-		ListCommandListRef lists = (ListCommandListRef) { 0 };
+		ListCommandListRef lists {};
 		ListCommandListRef_createRefConst(&commandList, 1, &lists, NULL);
 
 		//Twice, so the second replay starts from state the first one left behind
 
-		Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
-		Test_assert(t, "submitAgain", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
+		Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, 0, 0, &t->err));
+		Test_assert(t, "submitAgain", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, 0, 0, &t->err));
 		Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err));
 
 		//Read the results back: the copied texture has to hold the clear color and the pattern buffer its bytes.
@@ -323,7 +331,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 
 		Test_assert(t, "pullNotYet", !pulled);
 
-		Test_assert(t, "submitPull", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
+		Test_assert(t, "submitPull", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, 0, 0, &t->err));
 
 		//Growing the ring while pulls are in flight swaps the buffers; the pulls have to survive on the old one
 
@@ -361,7 +369,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 
 		//An op-less list, so upload and readback rounds don't replay the clear and copy above
 
-		ListCommandListRef emptyLists = (ListCommandListRef) { 0 };
+		ListCommandListRef emptyLists {};
 
 		if(
 			Test_assert(t, "createEmptyList", GraphicsDeviceRef_createCommandList(
@@ -385,7 +393,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 			Test_assert(t, "regionMarkDirty", DeviceTextureRef_markDirty(texture, 1, 1, 0, 2, 2, 1, &t->err));
 
 			Test_assert(t, "regionUploadSubmit", GraphicsDeviceRef_submitCommands(
-				deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+				deviceRef, &emptyLists, NULL, 0, 0, &t->err
 			));
 
 			Test_assert(t, "regionUploadWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
@@ -398,7 +406,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 			));
 
 			Test_assert(t, "regionPullSubmit", GraphicsDeviceRef_submitCommands(
-				deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+				deviceRef, &emptyLists, NULL, 0, 0, &t->err
 			));
 
 			Test_assert(t, "regionPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
@@ -445,7 +453,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 					DeviceTexture *bcPtr = DeviceTextureRef_ptr(bcTex);
 
 					Test_assert(t, "bcUploadSubmit", GraphicsDeviceRef_submitCommands(
-						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+						deviceRef, &emptyLists, NULL, 0, 0, &t->err
 					));
 
 					Test_assert(t, "bcUploadWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
@@ -458,7 +466,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 					));
 
 					Test_assert(t, "bcPullSubmit", GraphicsDeviceRef_submitCommands(
-						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+						deviceRef, &emptyLists, NULL, 0, 0, &t->err
 					));
 
 					Test_assert(t, "bcPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
@@ -481,7 +489,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 					));
 
 					Test_assert(t, "bcPullBlockSubmit", GraphicsDeviceRef_submitCommands(
-						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+						deviceRef, &emptyLists, NULL, 0, 0, &t->err
 					));
 
 					Test_assert(t, "bcPullBlockWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
@@ -502,14 +510,14 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 			//Render targets have no cpuData; their pulls hand the region to the callback as an owned buffer.
 			//The target still holds the clear color from the replay above, which is what proves the transport.
 
-			TestTexturePull targetPull = (TestTexturePull) { .expected = 0xFF0000FFu };
+			TestTexturePull targetPull = { .expected = 0xFF0000FFu };
 
 			Test_assert(t, "targetPull", TextureRef_pullRegion(
 				target, 0, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &targetPull, &t->err
 			));
 
 			Test_assert(t, "targetPullSubmit", GraphicsDeviceRef_submitCommands(
-				deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+				deviceRef, &emptyLists, NULL, 0, 0, &t->err
 			));
 
 			Test_assert(t, "targetPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
@@ -540,11 +548,11 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 					Test_assert(t, "depthListBegin", CommandListRef_begin(depthList, true, U64_MAX, &t->err));
 					Test_assert(t, "depthScope", CommandListRef_startScope(depthList, NULL, 1, NULL, &t->err));
 
-					AttachmentInfo color = (AttachmentInfo) { .image = target, .load = ELoadAttachmentType_Clear };
-					ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+					AttachmentInfo color = { .image = target, .load = ELoadAttachmentType_Clear };
+					ListAttachmentInfo colors {};
 					ListAttachmentInfo_createRefConst(&color, 1, &colors, NULL);
 
-					const DepthStencilAttachmentInfo depthAttach = (DepthStencilAttachmentInfo) {
+					const DepthStencilAttachmentInfo depthAttach = {
 						.image = depth,
 						.depthLoad = ELoadAttachmentType_Clear,
 						.clearDepth = 0.5f
@@ -563,25 +571,25 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 
 					Test_assert(t, "depthListEnd", CommandListRef_end(depthList, &t->err));
 
-					ListCommandListRef depthLists = (ListCommandListRef) { 0 };
+					ListCommandListRef depthLists {};
 					ListCommandListRef_createRefConst(&depthList, 1, &depthLists, NULL);
 
 					Test_assert(t, "depthClearSubmit", GraphicsDeviceRef_submitCommands(
-						deviceRef, &depthLists, NULL, NULL, 0, 0, &t->err
+						deviceRef, &depthLists, NULL, 0, 0, &t->err
 					));
 
 					Test_assert(t, "depthClearWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
 
 					//A 0.5f clear reads back as its exact bit pattern in every D32 texel
 
-					TestTexturePull depthPull = (TestTexturePull) { .expected = 0x3F000000u };
+					TestTexturePull depthPull = { .expected = 0x3F000000u };
 
 					Test_assert(t, "depthPull", TextureRef_pullRegion(
 						depth, 0, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &depthPull, &t->err
 					));
 
 					Test_assert(t, "depthPullSubmit", GraphicsDeviceRef_submitCommands(
-						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+						deviceRef, &emptyLists, NULL, 0, 0, &t->err
 					));
 
 					Test_assert(t, "depthPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
@@ -624,14 +632,14 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 					Test_assert(t, "stencilListBegin", CommandListRef_begin(stencilList, true, U64_MAX, &t->err));
 					Test_assert(t, "stencilScope", CommandListRef_startScope(stencilList, NULL, 1, NULL, &t->err));
 
-					AttachmentInfo stColor = (AttachmentInfo) { .image = target, .load = ELoadAttachmentType_Clear };
-					ListAttachmentInfo stColors = (ListAttachmentInfo) { 0 };
+					AttachmentInfo stColor = { .image = target, .load = ELoadAttachmentType_Clear };
+					ListAttachmentInfo stColors {};
 					ListAttachmentInfo_createRefConst(&stColor, 1, &stColors, NULL);
 
 					//Both planes are cleared, since leaving depth to a load would read uninitialized memory on the
 					// APIs that demand a clear, discard or copy before the first use.
 
-					const DepthStencilAttachmentInfo stencilAttach = (DepthStencilAttachmentInfo) {
+					const DepthStencilAttachmentInfo stencilAttach = {
 						.image = stencilTex,
 						.depthLoad = ELoadAttachmentType_Clear,
 						.stencilLoad = ELoadAttachmentType_Clear,
@@ -647,23 +655,23 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 					Test_assert(t, "stencilScopeEnd", CommandListRef_endScope(stencilList, &t->err));
 					Test_assert(t, "stencilListEnd", CommandListRef_end(stencilList, &t->err));
 
-					ListCommandListRef stencilLists = (ListCommandListRef) { 0 };
+					ListCommandListRef stencilLists {};
 					ListCommandListRef_createRefConst(&stencilList, 1, &stencilLists, NULL);
 
 					Test_assert(t, "stencilClearSubmit", GraphicsDeviceRef_submitCommands(
-						deviceRef, &stencilLists, NULL, NULL, 0, 0, &t->err
+						deviceRef, &stencilLists, NULL, 0, 0, &t->err
 					));
 
 					Test_assert(t, "stencilClearWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
 
-					TestTexturePull stencilPull = (TestTexturePull) { .expected = 0xABABABABu };
+					TestTexturePull stencilPull = { .expected = 0xABABABABu };
 
 					Test_assert(t, "stencilPull", TextureRef_pullRegion(
 						stencilTex, 0, 0, 0, 0, 0, 0, 1, Test_texturePullCallback, &stencilPull, &t->err
 					));
 
 					Test_assert(t, "stencilPullSubmit", GraphicsDeviceRef_submitCommands(
-						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+						deviceRef, &emptyLists, NULL, 0, 0, &t->err
 					));
 
 					Test_assert(t, "stencilPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
@@ -675,14 +683,14 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 					//The DEPTH plane of the same combined texture: the 1.0f clear reads back as its exact bit
 					// pattern, proving both planes of one format are separately reachable.
 
-					TestTexturePull depthPlanePull = (TestTexturePull) { .expected = 0x3F800000u };
+					TestTexturePull depthPlanePull = { .expected = 0x3F800000u };
 
 					Test_assert(t, "stencilDepthPull", TextureRef_pullRegion(
 						stencilTex, 0, 0, 0, 0, 0, 0, 0, Test_texturePullCallback, &depthPlanePull, &t->err
 					));
 
 					Test_assert(t, "stencilDepthPullSubmit", GraphicsDeviceRef_submitCommands(
-						deviceRef, &emptyLists, NULL, NULL, 0, 0, &t->err
+						deviceRef, &emptyLists, NULL, 0, 0, &t->err
 					));
 
 					Test_assert(t, "stencilDepthPullWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
@@ -734,7 +742,7 @@ void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef) {
 				Test_assert(t, "msaaCopyScope", CommandListRef_startScope(emptyList, NULL, 1, NULL, &t->err));
 
 				Test_assert(t, "copyMsaaRefused", !CommandListRef_copyImage(
-					emptyList, msaaTarget, target, (CopyImageRegion) { 0 }, NULL
+					emptyList, msaaTarget, target, { 0 }, NULL
 				));
 
 				CommandListRef_end(emptyList, NULL);
@@ -802,13 +810,15 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 		deviceRef, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL, &plainName, 48, &plain, &t->err
 	));
 
-	const DeviceData positionData = (DeviceData) { .buffer = positions };
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	const DeviceData positionData = { .buffer = positions };
 
 	//A buffer without ASReadExt usage can't feed an AS build, and a zero stride can't address vertices
 
 	if (plain) {
 
-		const DeviceData plainData = (DeviceData) { .buffer = plain };
+		const DeviceData plainData = { .buffer = plain };
 
 		const BLASCreateInfo wrongUsage = BLASCreateInfo_unindexed(
 			ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, plainData
@@ -832,7 +842,7 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 
 	const BLASCreateInfo ommWithoutIndices = BLASCreateInfo_indexedWithOmmIndicesExt(
 		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
-		ETextureFormatId_Undefined, (DeviceData) { 0 },
+		ETextureFormatId_Undefined, { 0 },
 		ETextureFormatId_R16u, positionData
 	);
 
@@ -961,16 +971,16 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 
 	//One instance at identity, pointing at the BLAS just made
 
-	TLASInstance instance = (TLASInstance) {
+	TLASInstance instance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
-		.data = (TLASInstanceData) {
+		.data = {
 			.instanceId24_mask8 = 0xFFu << 24,
 			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
 			.blasCpu = blas
 		}
 	};
 
-	ListTLASInstance instances = (ListTLASInstance) { 0 };
+	ListTLASInstance instances {};
 	ListTLASInstance_createRefConst(&instance, 1, &instances, NULL);
 
 	if(!Test_assert(t, "createTlas", GraphicsDeviceRef_createTLASExt(
@@ -994,7 +1004,8 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 		TLASRef *updatable = NULL;
 
 		if (Test_assert(t, "createTlasUpdatable", GraphicsDeviceRef_createTLASExt(
-			deviceRef, ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate, &instances, true, NULL,
+			deviceRef, (ERTASBuildFlags) (ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate),
+			&instances, true, NULL,
 			&tlasName, &updatable, &t->err
 		))) {
 
@@ -1002,7 +1013,7 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 			// fixed for the lifetime of the TLAS.
 
 			const TLASInstance pairData[2] = { instance, instance };
-			ListTLASInstance pair = (ListTLASInstance) { 0 };
+			ListTLASInstance pair {};
 			ListTLASInstance_createRefConst(pairData, 2, &pair, NULL);
 
 			Test_assert(t, "setInstancesWrongLength", !TLASRef_setInstancesExt(updatable, &pair, NULL));
@@ -1017,7 +1028,7 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 
 	//The CPU side instance plumbing hands back what went in
 
-	TLASInstanceData roundTrip = (TLASInstanceData) { 0 };
+	TLASInstanceData roundTrip {};
 
 	Test_assert(t, "instanceData", TLAS_getInstanceDataCpu(TLASRef_ptr(tlas), 0, &roundTrip));
 	Test_assert(t, "instanceBlas", roundTrip.blasCpu == blas);
@@ -1042,11 +1053,13 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef) 
 		Test_assert(t, "endScopeTlas", CommandListRef_endScope(commandList, &t->err));
 		Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-		ListCommandListRef lists = (ListCommandListRef) { 0 };
+		ListCommandListRef lists {};
 		ListCommandListRef_createRefConst(&commandList, 1, &lists, NULL);
 
-		Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, NULL, 0, 0, &t->err));
+		Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(deviceRef, &lists, NULL, 0, 0, &t->err));
 		Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+	}
+
 	}
 
 clean:
@@ -1059,3 +1072,4 @@ clean:
 
 	(void) alloc;
 }
+} }

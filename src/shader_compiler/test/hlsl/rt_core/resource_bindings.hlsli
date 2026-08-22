@@ -45,6 +45,33 @@ enum EResourceBinding {
 	EResourceBinding_Padding2
 };
 
+//One field per slot the enum above named.
+//Scalars rather than vectors or arrays: on DXIL each array element takes its own 16 byte cbuffer row, and
+//the work op requires the size the shader declares to match what is written exactly.
+
+struct ResourceBindings {
+
+	U32 constantColorBuffer;
+	U32 constantColorBufferRW;
+	U32 indirectDrawRW;
+	U32 indirectDispatchRW;
+
+	U32 viewProjMatricesRW;
+	U32 viewProjMatrices;
+	U32 crabbage2049x;
+	U32 crabbageCompressed;
+
+	U32 samplerId;
+	U32 tlas;
+	U32 renderTargetRW;
+	U32 orientation;
+
+	F32 sunDirX, sunDirY, sunDirZ, padding1;
+	F32 camPosX, camPosY, camPosZ, padding2;
+};
+
+PUSH_CONSTANT ResourceBindings _bindings;
+
 struct ViewProjMatrices {
 	F32x4x4 view, proj, viewProj;
 	F32x4x4 viewInv, projInv, viewProjInv;

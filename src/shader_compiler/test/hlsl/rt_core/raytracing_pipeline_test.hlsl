@@ -36,7 +36,7 @@ void mainMiss(inout ColorPayload payload) {
 
 	RayDesc ray = createRay(WorldRayOrigin(), 0, WorldRayDirection(), 1e38);
 
-	F32x3 sunDir = getAppData3f(EResourceBinding_SunDirXYZ);
+	F32x3 sunDir = F32x3(_bindings.sunDirX, _bindings.sunDirY, _bindings.sunDirZ);
 
 	F32x3 color = Atmosphere::earth(sunDir).getContribution(ray);
 
@@ -47,7 +47,7 @@ void mainMiss(inout ColorPayload payload) {
 [shader("closesthit")]
 void mainClosestHit(inout ColorPayload payload, BuiltInTriangleIntersectionAttributes attr) {
 
-	F32x3 sunDir = getAppData3f(EResourceBinding_SunDirXYZ);
+	F32x3 sunDir = F32x3(_bindings.sunDirX, _bindings.sunDirY, _bindings.sunDirZ);
 
 	F32x3 diffuse = Atmosphere::earth(sunDir).getSunContribution(F32x3(0, 0, 1)) * F32x3(expandBary(attr.barycentrics));
 
@@ -61,12 +61,12 @@ void mainClosestHit(inout ColorPayload payload, BuiltInTriangleIntersectionAttri
 [shader("raygeneration")]
 void mainRaygen() {
 
-	RWTexture2D<unorm F32x4> tex = rwTexture2DUniform(getAppData1u(EResourceBinding_RenderTargetRW));
+	RWTexture2D<unorm F32x4> tex = rwTexture2DUniform(_bindings.renderTargetRW);
 
 	U32x2 id = DispatchRaysIndex().xy;
 	U32x2 dims = DispatchRaysDimensions().xy;
 	
-	U32 orientation = getAppData1u(EResourceBinding_Orientation);
+	U32 orientation = _bindings.orientation;
 
 	U32x2 ogId = id;
 
@@ -95,7 +95,7 @@ void mainRaygen() {
 
 	F32 localTime = _time * 0.5;
 
-	F32x3 camPos = getAppData3f(EResourceBinding_CamPosXYZ);
+	F32x3 camPos = F32x3(_bindings.camPosX, _bindings.camPosY, _bindings.camPosZ);
 
 	Camera cam;
 	cam.v = F32x4x4_lookDir(camPos, F32x3(0, 0, -1), F32x3(0, 1, 0));
@@ -122,7 +122,7 @@ void mainRaygen() {
 
 	//Trace against
 
-	U32 tlasId = getAppData1u(EResourceBinding_TLAS);
+	U32 tlasId = _bindings.tlas;
 	RayDesc ray = { F32x3(uv * 10 - 5, 5), 0, F32x3(0, 0, -1), 1e6 };
 
 	if(!tlasId)
@@ -143,7 +143,7 @@ void mainRaygen() {
 
 		F32x3 norm = normalize(posOnRay(ray, tmp.x) - sphere.pos);
 
-		F32x3 sunDir = getAppData3f(EResourceBinding_SunDirXYZ);
+		F32x3 sunDir = F32x3(_bindings.sunDirX, _bindings.sunDirY, _bindings.sunDirZ);
 
 		payload.color = Atmosphere::earth(sunDir).getSunContribution(norm) * F32x3(1, 0.5, 0.25);
 	}*/

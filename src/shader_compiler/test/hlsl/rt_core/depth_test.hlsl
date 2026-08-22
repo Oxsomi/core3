@@ -63,7 +63,7 @@ VSOutput mainVS(U32 id : SV_VertexID, U32 instanceId : SV_InstanceID) {
 	F32x4x4 m = F32x4x4_transform(pos, rot, scale);		//pos, rot, scale
 	F32x3 wpos = mul(F32x4(mpos, 1), m).xyz;
 
-	U32 viewProjMatBuf = getAppData1u(EResourceBinding_ViewProjMatrices);
+	U32 viewProjMatBuf = _bindings.viewProjMatrices;
 	ViewProjMatrices viewProjMat = getAtUniform<ViewProjMatrices>(viewProjMatBuf, 0);
 
 	F32x4 cpos = mul(F32x4(wpos, 1), viewProjMat.viewProj);

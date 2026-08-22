@@ -18,37 +18,47 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_shaders_helpers.c
+//graphics/test/interface/test_graphics_shaders_helpers.cpp
 //
 //The TestShaders_ helpers the whole graphics suite is built on: loading an oiSH, resolving an entry,
 //building a pipeline, submitting and waiting, and pulling a resource back for the CPU to check.
 //These are declared in test_graphics_shared.h and used well beyond this directory's own modules.
 //Split out of test_graphics_shaders.c, which had grown past 2300 lines.
 
-#include "graphics/generic/instance.h"
-#include "graphics/generic/device.h"
-#include "graphics/generic/device_info.h"
-#include "graphics/generic/device_buffer.h"
-#include "graphics/generic/render_texture.h"
-#include "graphics/generic/depth_stencil.h"
-#include "graphics/generic/texture.h"
-#include "graphics/generic/pipeline.h"
-#include "graphics/generic/blas.h"
-#include "graphics/generic/tlas.h"
-#include "graphics/generic/opacity_micromap.h"
-#include "graphics/generic/bindless_descriptor.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/commands.h"
-#include "platforms/platform.h"
-#include "platforms/logx.h"
-#include "platforms/file.h"
-#include "formats/oiSH/sh_file.h"
-#include "types/test/test.h"
-#include "types/container/memory_stream.h"
-#include "types/container/texture_format.h"
-#include "types/container/buffer.h"
-#include "types/base/string_base.h"
-#include "test_graphics_shared.h"
+namespace oxc { namespace c {
+	#include "types/base/string_base.h"
+	#include "types/container/buffer.h"
+	#include "types/container/memory_stream.h"
+	#include "types/container/texture_format.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_file.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/file.h"
+	#include "platforms/logx.h"
+	#include "platforms/platform.h"
+	#include "graphics/generic/bindless_descriptor.h"
+	#include "graphics/generic/blas.h"
+	#include "graphics/generic/command_list.h"
+	#include "graphics/generic/commands.h"
+	#include "graphics/generic/depth_stencil.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_buffer.h"
+	#include "graphics/generic/device_info.h"
+	#include "graphics/generic/instance.h"
+	#include "graphics/generic/opacity_micromap.h"
+	#include "graphics/generic/descriptor_layout.h"
+	#include "graphics/generic/pipeline.h"
+	#include "graphics/generic/pipeline_layout.h"
+	#include "graphics/generic/render_texture.h"
+	#include "graphics/generic/texture.h"
+	#include "graphics/generic/tlas.h"
+	#include "test_graphics_shared.h"
+} }
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+
+namespace oxc { namespace c {
 
 //The gtest section only holds compiled oiSH files when the build had the shader compiler, so absence means skip.
 //Loading the section twice is harmless, which keeps every module self contained.
@@ -104,8 +114,80 @@ U32 TestShaders_entry(Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file,
 	return id;
 }
 
+//A pipeline layout that keeps the runtime's own bindless set and per frame globals, and adds whatever push
+//constants the entry declares.
+//
+//A shader that reads a push constant needs a layout that declares it. Composing from the device's own
+//layouts rather than building a fresh one is what keeps the bindless handles and the globals reachable
+//from the same shader.
+//
+//On DXIL a push constant reflects as the implicit $Globals cbuffer, so it cannot be found by name;
+//AssumePushConstants is unambiguous here because detect skips the reserved space the globals live in.
+
+Bool TestShaders_pushConstantLayout(
+	Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, U32 entryId, PipelineLayoutRef **layout
+) {
+
+	const Allocator *alloc = Platform_instance->alloc;
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	DescriptorLayoutInfo layoutInfo {};
+	DescriptorBinding pushConstants {};
+	Bool success = false;
+
+	if(!Test_assert(t, "detectPushLayout", GraphicsDeviceRef_detectLayoutFromEntry(
+		deviceRef, file, entryId, EDescriptorLayoutFlags_None,
+		EDetectDescriptorLayoutFlags_AssumePushConstants,
+		NULL, NULL, &pushConstants, &layoutInfo, NULL, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "detectedPushConstants", pushConstants.count != 0))
+		goto clean;
+
+	//Detect reports the stage of the entry it was given, but a graphics pipeline reads the block from its
+	//pixel stage and a raytracing one from raygen, miss and hit alike. A range whose visibility misses a
+	//stage that reads it is rejected at pipeline creation, so every stage the tests use is named here.
+
+	pushConstants.visibility =
+		((U32)1 << ESHPipelineStage_Vertex) | ((U32)1 << ESHPipelineStage_Pixel) |
+		((U32)1 << ESHPipelineStage_Compute) |
+		((U32)1 << ESHPipelineStage_RaygenExt) | ((U32)1 << ESHPipelineStage_CallableExt) |
+		((U32)1 << ESHPipelineStage_MissExt) | ((U32)1 << ESHPipelineStage_ClosestHitExt) |
+		((U32)1 << ESHPipelineStage_AnyHitExt) | ((U32)1 << ESHPipelineStage_IntersectionExt);
+
+	{
+		const PipelineLayoutInfo pipelineLayoutInfo = {
+			.bindings = device->defaultDescLayout,
+			.pushDescriptors = device->defaultCBufferLayout,
+			.pushConstants = pushConstants
+		};
+
+		const CharString name = CharString_createRefCStrConst("Shader test push constant layout");
+
+		success = Test_assert(t, "createPushLayout", GraphicsDeviceRef_createPipelineLayout(
+			deviceRef, &pipelineLayoutInfo, &name, layout, &t->err
+		));
+	}
+
+clean:
+	DescriptorLayoutInfo_free(&layoutInfo, alloc);
+	return success;
+}
+
 Bool TestShaders_computePipeline(
 	Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, PipelineRef **pipeline
+) {
+	return TestShaders_computePipelinePush(t, deviceRef, file, pipeline, NULL);
+}
+
+//As above, but the shader reads push constants, so it needs a layout that declares them.
+//layoutOut is optional and hands back the layout the caller has to release; passing NULL builds the pipeline
+//on the device's default layout, which is what a shader without push constants wants.
+
+Bool TestShaders_computePipelinePush(
+	Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, PipelineRef **pipeline,
+	PipelineLayoutRef **layoutOut
 ) {
 
 	const U32 id = TestShaders_entry(t, deviceRef, file, "main");
@@ -113,25 +195,31 @@ Bool TestShaders_computePipeline(
 	if(id == U32_MAX)
 		return false;
 
+	PipelineLayoutRef *layout = NULL;
+
+	if(layoutOut) {
+
+		if(!TestShaders_pushConstantLayout(t, deviceRef, file, id, &layout))
+			return false;
+
+		*layoutOut = layout;
+	}
+
 	const CharString entryName = CharString_createRefCStrConst("main");
 	const CharString name = CharString_createRefCStrConst("Shader test compute pipeline");
 
 	return Test_assert(t, "createComputePipeline", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, file, &name, id, &entryName, EPipelineFlags_None, NULL, pipeline, &t->err
+		deviceRef, file, &name, id, &entryName, EPipelineFlags_None, layout, pipeline, &t->err
 	));
 }
 
-Bool TestShaders_submitAndWait(
-	Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *commandList, const void *appData, U64 appDataLen
-) {
+Bool TestShaders_submitAndWait(Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *commandList) {
 
-	ListCommandListRef lists = (ListCommandListRef) { 0 };
+	ListCommandListRef lists {};
 	ListCommandListRef_createRefConst(&commandList, 1, &lists, NULL);
 
-	const Buffer appDataBuf = appData ? Buffer_createRefConst(appData, appDataLen) : Buffer_createNull();
-
 	const Bool ok = Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(
-		deviceRef, &lists, NULL, appData ? &appDataBuf : NULL, 0, 0, &t->err
+		deviceRef, &lists, NULL, 0, 0, &t->err
 	));
 
 	return Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err)) && ok;
@@ -164,13 +252,13 @@ Bool TestShaders_rtDedicatedDevice(
 
 	Test_print(t, "D3D12 GPU based validation breaks raytracing state objects, tracing on a dedicated device");
 
-	GraphicsApplicationInfo appInfo = (GraphicsApplicationInfo) {
+	GraphicsApplicationInfo appInfo = {
 		.name = CharString_createRefCStrConst("OxC3 ray trace test"),
 		.version = 1
 	};
 
 	*instanceType = GraphicsInstance_makeType(suiteInstance->api, alloc);
-	ListGraphicsDeviceInfo deviceInfos = (ListGraphicsDeviceInfo) { 0 };
+	ListGraphicsDeviceInfo deviceInfos {};
 
 	if(!Test_assert(t, "createOwnInstance", GraphicsInstance_create(
 		&appInfo, suiteInstance->api, EGraphicsInstanceFlags_DisableGPUBV, alloc, instanceType, ownInstanceRef,
@@ -246,7 +334,7 @@ Bool TestShaders_pullBuffer(Test *t, GraphicsDeviceRef *deviceRef, CommandListRe
 		buffer, 0, 0, TestShaders_countPull, &pulled, &t->err
 	));
 
-	ok &= TestShaders_submitAndWait(t, deviceRef, emptyList, NULL, 0);
+	ok &= TestShaders_submitAndWait(t, deviceRef, emptyList);
 	return Test_assert(t, "bufferPullCompleted", pulled == 1) && ok;
 }
 
@@ -273,7 +361,7 @@ Bool TestShaders_pullPixels(
 		target, 0, 0, 0, 0, 0, 0, 0, TestShaders_pixelPull, pixels, &t->err
 	));
 
-	ok &= TestShaders_submitAndWait(t, deviceRef, emptyList, NULL, 0);
+	ok &= TestShaders_submitAndWait(t, deviceRef, emptyList);
 	ok &= Test_assert(t, "pixelPullCompleted", pixels->count == 1);
 	return Test_assert(t, "pixelPullLen", pixels->len == 64 * 4) && ok;
 }
@@ -282,7 +370,7 @@ Bool TestShaders_checkPixels(
 	Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *emptyList, RefPtr *target, U32 expected
 ) {
 
-	TestShaderPixels pixels = (TestShaderPixels) { 0 };
+	TestShaderPixels pixels {};
 
 	if(!TestShaders_pullPixels(t, deviceRef, emptyList, target, &pixels))
 		return false;
@@ -294,3 +382,4 @@ Bool TestShaders_checkPixels(
 
 	return Test_assert(t, "pixelsMatch", matching == 64);
 }
+} }

@@ -195,12 +195,24 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 		U16 entrypointId = (U16) epPacked;
 		U16 binaryId = epPacked >> 16;
 
-		if(binaryId >= binary->binaries.length || entrypointId >= binary->entries.length)
+		if(entrypointId >= binary->entries.length)
 			retError(clean, Error_invalidParameter(
-				3, 0, "DescriptorLayoutInfo_detect()::entrypoints binary or entry index out of bounds"
+				3, 0, "DescriptorLayoutInfo_detect()::entrypoints entry index out of bounds"
 			));
 
-		const SHBinaryInfo *bin = &binary->binaries.ptr[binaryId];
+		//The high half is an index into the entry's own binary list, not into the file's binaries, which is
+		//how GraphicsDeviceRef_getFirstShaderEntry packs it and how the pipeline creators unpack it.
+		//Indexing the file directly happens to agree whenever an entry's first variant is also binary 0, so
+		//it only diverges on a file with variants, where it silently reflected the wrong binary.
+
+		const SHEntry *entryInfo = &binary->entries.ptr[entrypointId];
+
+		if(binaryId >= entryInfo->binaryIds.length)
+			retError(clean, Error_invalidParameter(
+				3, 0, "DescriptorLayoutInfo_detect()::entrypoints binary index out of bounds"
+			));
+
+		const SHBinaryInfo *bin = &binary->binaries.ptr[entryInfo->binaryIds.ptr[binaryId]];
 
 		//A push constant register only counts for the binary type it actually has a binding in.
 		//DXIL has no push constant concept: the same declaration reflects there as an ordinary constant

@@ -26,8 +26,8 @@
 [numthreads(256, 1, 1)]
 void main(U32 i : SV_DispatchThreadID) {
 
-	U32 objectTransformGlobal = getAppData1u(0);
-	U32 objectTransformLocal = getAppData1u(1);
+	U32 objectTransformGlobal = _bindings.constantColorBuffer;
+	U32 objectTransformLocal = _bindings.constantColorBufferRW;
 
 	U32 bytes = bufferBytesUniform(objectTransformGlobal);
 	U32 loops = bytes > 0 ? 16 : (bytes > 1 ? 64 : (bytes > 2 ? 128 : 4096));

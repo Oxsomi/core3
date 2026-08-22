@@ -1951,7 +1951,6 @@ namespace oxc {
 			[[nodiscard]] c::Bool submit(
 				std::initializer_list<const CommandList*> lists,
 				std::initializer_list<const Swapchain*> swapchains,
-				const void *appData, c::U64 appDataLen,
 				c::F32 deltaTime = -1, c::F32 time = 0,
 				c::Error *e_rr = nullptr
 			) noexcept {
@@ -1974,10 +1973,7 @@ namespace oxc {
 				if(nl) (void) c::ListCommandListRef_createRefConst(rawLists, nl, &listRefs, nullptr);
 				if(ns) (void) c::ListSwapchainRef_createRefConst(rawChains, ns, &chainRefs, nullptr);
 
-				const c::Buffer data = appDataLen ?
-					c::Buffer_createRefConst(appData, appDataLen) : c::Buffer{};
-
-				return c::GraphicsDeviceRef_submitCommands(handle(), &listRefs, &chainRefs, &data, deltaTime, time, e_rr);
+				return c::GraphicsDeviceRef_submitCommands(handle(), &listRefs, &chainRefs, deltaTime, time, e_rr);
 			}
 		};
 	}

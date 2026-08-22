@@ -18,36 +18,44 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_bindful_layout.c
+//graphics/test/interface/test_graphics_bindful_layout.cpp
 //
 //Pipeline layout state that is not a descriptor: push constants, and the register space OxC3 reserves
 //for its own per frame globals.
 //Split out of test_graphics_bindful.c, which had grown to 24 modules in one file.
 
-#include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
-#include "graphics/generic/device_info.h"
-#include "graphics/generic/device_buffer.h"
-#include "graphics/generic/device_texture.h"
-#include "graphics/generic/sampler.h"
-#include "graphics/generic/render_texture.h"
-#include "graphics/generic/depth_stencil.h"
-#include "graphics/generic/descriptor_layout.h"
-#include "graphics/generic/descriptor_table.h"
-#include "graphics/generic/descriptor_heap.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/commands.h"
-#include "graphics/generic/pipeline_layout.h"
-#include "graphics/generic/pipeline.h"
-#include "graphics/generic/blas.h"
-#include "graphics/generic/tlas.h"
-#include "platforms/platform.h"
-#include "formats/oiSH/sh_file.h"
-#include "graphics/generic/graphics_types.h"
-#include "types/test/test.h"
-#include "types/base/string_base.h"
-#include "types/container/list_basic_types.h"
-#include "test_graphics_shared.h"
+namespace oxc { namespace c {
+	#include "types/base/string_base.h"
+	#include "types/container/list_basic_types.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_file.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/platform.h"
+	#include "graphics/generic/blas.h"
+	#include "graphics/generic/command_list.h"
+	#include "graphics/generic/commands.h"
+	#include "graphics/generic/depth_stencil.h"
+	#include "graphics/generic/descriptor_heap.h"
+	#include "graphics/generic/descriptor_layout.h"
+	#include "graphics/generic/descriptor_table.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_buffer.h"
+	#include "graphics/generic/device_info.h"
+	#include "graphics/generic/device_texture.h"
+	#include "graphics/generic/graphics_types.h"
+	#include "graphics/generic/instance.h"
+	#include "graphics/generic/pipeline.h"
+	#include "graphics/generic/pipeline_layout.h"
+	#include "graphics/generic/render_texture.h"
+	#include "graphics/generic/sampler.h"
+	#include "graphics/generic/tlas.h"
+	#include "test_graphics_shared.h"
+} }
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+
+namespace oxc { namespace c {
 
 // -- 63. Push constants ---------------------------------------------------------
 
@@ -75,9 +83,9 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
-	DescriptorBinding pushConstants = (DescriptorBinding) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
+	DescriptorBinding pushConstants {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_pushconst.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping push constant tests");
@@ -112,7 +120,9 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
 	name = CharString_createRefCStrConst("Push constant heap");
 
 	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
@@ -131,7 +141,7 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 128 * sizeof(U32), &output, &t->err
 	)))
 		goto clean;
@@ -141,7 +151,7 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) {
+	PipelineLayoutInfo pipelineLayoutInfo = {
 		.bindings = layout, .pushConstants = pushConstants
 	};
 
@@ -172,11 +182,11 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
-	const Transition transition = (Transition) {
+	const Transition transition = {
 		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
 	};
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
 
 	//A dispatch without the constants written has to be refused: the range would hold whatever the last
@@ -206,8 +216,8 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Disjoint output ranges, so both results survive and neither dispatch races the other for a slot
 
-	const TestBindfulPushData first = (TestBindfulPushData) { .scale = 3, .bias = 7, .xorMask = 0, .offset = 0 };
-	const TestBindfulPushData second = (TestBindfulPushData) { .scale = 5, .bias = 1, .xorMask = 0xFFu, .offset = 64 };
+	const TestBindfulPushData first = { .scale = 3, .bias = 7, .xorMask = 0, .offset = 0 };
+	const TestBindfulPushData second = { .scale = 5, .bias = 1, .xorMask = 0xFFu, .offset = 64 };
 
 	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 2, NULL, &t->err));
 	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
@@ -229,7 +239,7 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			//Each dispatch wrote its own half, so BOTH sets have to be visible: that is what proves the
@@ -247,6 +257,8 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "pushConstantResults", allMatch);
 		}
+
+	}
 
 clean:
 
@@ -268,7 +280,7 @@ clean:
 
 // -- 64. The reserved register space --------------------------------------------
 
-//OxC3 binds its own per frame globals (frame id, time, swapchain descriptors, app data) to a register space
+//OxC3 binds its own per frame globals (frame id, time, swapchain descriptors) to a register space
 // it keeps for itself, so a caller's layout may not put anything there.
 //It matters now that anyone can build a layout: the globals used to sit at b0 space0, which is the first
 // thing someone writing a constant buffer reaches for, and nothing would have told them they collided.
@@ -281,16 +293,16 @@ void Test_graphicsBindfulReservedSpace(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//A layout that is legal in every respect except the space it asks for
 
-	DescriptorBinding reserved = (DescriptorBinding) {
-		.registerType = ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
+	DescriptorBinding reserved = {
+		.registerType = (ESHRegisterType) (ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite),
 		.count = 1,
-		.binding = (SHBinding) { .space = OXC3_RESERVED_SPACE, .binding = 0 },
+		.binding = { .space = OXC3_RESERVED_SPACE, .binding = 0 },
 		.visibility = U32_MAX
 	};
 
 	const CharString reservedName = CharString_createRefCStrConst("collides");
 
-	DescriptorLayoutInfo info = (DescriptorLayoutInfo) { 0 };
+	DescriptorLayoutInfo info {};
 	ListDescriptorBinding_createRefConst(&reserved, 1, &info.bindings, NULL);
 	ListCharString_createRefConst(&reservedName, 1, &info.bindingNames, NULL);
 
@@ -306,7 +318,7 @@ void Test_graphicsBindfulReservedSpace(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	reserved.binding.space = OXC3_RESERVED_SPACE + 1;
 
-	DescriptorLayoutInfo okInfo = (DescriptorLayoutInfo) { 0 };
+	DescriptorLayoutInfo okInfo {};
 	ListDescriptorBinding_createRefConst(&reserved, 1, &okInfo.bindings, NULL);
 	ListCharString_createRefConst(&reservedName, 1, &okInfo.bindingNames, NULL);
 
@@ -315,3 +327,4 @@ void Test_graphicsBindfulReservedSpace(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		RefPtr_dec(&layout);
 }
+} }

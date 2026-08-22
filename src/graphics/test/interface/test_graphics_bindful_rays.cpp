@@ -18,36 +18,44 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_bindful_rays.c
+//graphics/test/interface/test_graphics_bindful_rays.cpp
 //
 //Bindful ray tracing: a TLAS reached through a table instead of a handle, opacity micromaps, and inline
 //ray tracing issued from a graphics stage.
 //Split out of test_graphics_bindful.c, which had grown to 24 modules in one file.
 
-#include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
-#include "graphics/generic/device_info.h"
-#include "graphics/generic/device_buffer.h"
-#include "graphics/generic/device_texture.h"
-#include "graphics/generic/sampler.h"
-#include "graphics/generic/render_texture.h"
-#include "graphics/generic/depth_stencil.h"
-#include "graphics/generic/descriptor_layout.h"
-#include "graphics/generic/descriptor_table.h"
-#include "graphics/generic/descriptor_heap.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/commands.h"
-#include "graphics/generic/pipeline_layout.h"
-#include "graphics/generic/pipeline.h"
-#include "graphics/generic/blas.h"
-#include "graphics/generic/tlas.h"
-#include "platforms/platform.h"
-#include "formats/oiSH/sh_file.h"
-#include "graphics/generic/graphics_types.h"
-#include "types/test/test.h"
-#include "types/base/string_base.h"
-#include "types/container/list_basic_types.h"
-#include "test_graphics_shared.h"
+namespace oxc { namespace c {
+	#include "types/base/string_base.h"
+	#include "types/container/list_basic_types.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_file.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/platform.h"
+	#include "graphics/generic/blas.h"
+	#include "graphics/generic/command_list.h"
+	#include "graphics/generic/commands.h"
+	#include "graphics/generic/depth_stencil.h"
+	#include "graphics/generic/descriptor_heap.h"
+	#include "graphics/generic/descriptor_layout.h"
+	#include "graphics/generic/descriptor_table.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_buffer.h"
+	#include "graphics/generic/device_info.h"
+	#include "graphics/generic/device_texture.h"
+	#include "graphics/generic/graphics_types.h"
+	#include "graphics/generic/instance.h"
+	#include "graphics/generic/pipeline.h"
+	#include "graphics/generic/pipeline_layout.h"
+	#include "graphics/generic/render_texture.h"
+	#include "graphics/generic/sampler.h"
+	#include "graphics/generic/tlas.h"
+	#include "test_graphics_shared.h"
+} }
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+
+namespace oxc { namespace c {
 
 // -- 46. Bindful ray tracing: the TLAS through a table instead of a handle -------
 
@@ -80,9 +88,9 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 	CommandListRef *commandList = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
-	ListU32 entrypoints = (ListU32) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
+	ListU32 entrypoints {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_rays.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful ray trace tests");
@@ -91,7 +99,7 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	GraphicsInstanceRef *ownInstanceRef = NULL;
 	GraphicsDeviceRef *ownDeviceRef = NULL;
-	RefPtrType instanceType = (RefPtrType) { 0 };
+	RefPtrType instanceType {};
 
 	if (!TestShaders_rtDedicatedDevice(t, &deviceRef, &ownInstanceRef, &ownDeviceRef, &instanceType)) {
 		SHFile_free(&file, alloc);
@@ -119,7 +127,7 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
 		ERTASBuildFlags_AllowUpdate, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16,
-		(DeviceData) { .buffer = positions }
+		{ .buffer = positions }
 	);
 
 	name = CharString_createRefCStrConst("Bindful rays BLAS");
@@ -127,22 +135,25 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(deviceRef, &blasInfo, &name, &blas, &t->err)))
 		goto clean;
 
-	const TLASInstance instance = (TLASInstance) {
+	//Scoped so the goto above jumps around these rather than into them.
+	{
+	const TLASInstance instance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
-		.data = (TLASInstanceData) {
+		.data = {
 			.instanceId24_mask8 = 0xFFu << 24,
 			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
 			.blasCpu = blas
 		}
 	};
 
-	ListTLASInstance instances = (ListTLASInstance) { 0 };
+	ListTLASInstance instances {};
 	ListTLASInstance_createRefConst(&instance, 1, &instances, NULL);
 
 	name = CharString_createRefCStrConst("Bindful rays TLAS");
 
 	if(!Test_assert(t, "createTlas", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate, &instances, true, NULL,
+		deviceRef, (ERTASBuildFlags) (ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate),
+		&instances, true, NULL,
 		&name, &tlas, &t->err
 	)))
 		goto clean;
@@ -173,8 +184,8 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) {
-		.maxBuffersRW = 1, .maxAccelerationStructures = 1, .maxDescriptorTables = 1
+	DescriptorHeapInfo heapInfo = { .maxAccelerationStructures = 1,
+		.maxBuffersRW = 1, .maxDescriptorTables = 1
 	};
 
 	name = CharString_createRefCStrConst("Bindful rays heap");
@@ -195,7 +206,7 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 4 * sizeof(U32), &output, &t->err
 	)))
 		goto clean;
@@ -209,7 +220,7 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "setTlas", DescriptorTableRef_setDescriptorByName(table, &sceneName, 0, false, &tlasDesc, &t->err));
 	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Bindful rays pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -218,25 +229,25 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 		goto clean;
 
 	PipelineStage stages[3] = {
-		(PipelineStage) { .binaryId = raygenId },
-		(PipelineStage) { .binaryId = missId },
-		(PipelineStage) { .binaryId = hitId }
+		{ .binaryId = raygenId },
+		{ .binaryId = missId },
+		{ .binaryId = hitId }
 	};
 
-	ListPipelineStage stageList = (ListPipelineStage) { 0 };
+	ListPipelineStage stageList {};
 	ListPipelineStage_createRefConst(stages, 3, &stageList, NULL);
 
-	ListSHFile fileList = (ListSHFile) { 0 };
+	ListSHFile fileList {};
 	ListSHFile_createRefConst(&file, 1, &fileList, NULL);
 
-	PipelineRaytracingGroup group = (PipelineRaytracingGroup) {
+	PipelineRaytracingGroup group = {
 		.closestHit = 2, .anyHit = U32_MAX, .intersection = U32_MAX
 	};
 
-	ListPipelineRaytracingGroup groupList = (ListPipelineRaytracingGroup) { 0 };
+	ListPipelineRaytracingGroup groupList {};
 	ListPipelineRaytracingGroup_createRefConst(&group, 1, &groupList, NULL);
 
-	const PipelineRaytracingInfo info = (PipelineRaytracingInfo) {
+	const PipelineRaytracingInfo info = {
 		.flags = EPipelineRaytracingFlags_Default,
 		.maxRecursionDepth = 1
 	};
@@ -263,11 +274,11 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
 
 	const Transition traceTransitions[2] = {
-		(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
-		(Transition) { .resource = tlas, .stage = EPipelineStage_RaygenExt }
+		{ .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+		{ .resource = tlas, .stage = EPipelineStage_RaygenExt }
 	};
 
-	ListTransition traceTransitionList = (ListTransition) { 0 };
+	ListTransition traceTransitionList {};
 	ListTransition_createRefConst(traceTransitions, 2, &traceTransitionList, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -289,7 +300,7 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -301,16 +312,16 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 	// the descriptor written into the table earlier has to keep addressing it. Moving the instance far along
 	// Z takes it out of every ray's path, so all four rays must miss without the table being touched again.
 
-	const TLASInstance movedInstance = (TLASInstance) {
+	const TLASInstance movedInstance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 1000 } },
-		.data = (TLASInstanceData) {
+		.data = {
 			.instanceId24_mask8 = 0xFFu << 24,
 			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
 			.blasCpu = blas
 		}
 	};
 
-	ListTLASInstance movedInstances = (ListTLASInstance) { 0 };
+	ListTLASInstance movedInstances {};
 	ListTLASInstance_createRefConst(&movedInstance, 1, &movedInstances, NULL);
 
 	if (Test_assert(t, "setInstancesMoved", TLASRef_setInstancesExt(tlas, &movedInstances, &t->err))) {
@@ -333,7 +344,7 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 
 		Test_assert(t, "endRefit", CommandListRef_end(commandList, &t->err));
 
-		if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+		if (TestShaders_submitAndWait(t, deviceRef, commandList))
 			if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 				const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -364,7 +375,7 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "endRefitBack", CommandListRef_end(commandList, &t->err));
 
-			if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+			if (TestShaders_submitAndWait(t, deviceRef, commandList))
 				if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 					const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -410,7 +421,7 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 
 			Test_assert(t, "endBlasRefit", CommandListRef_end(commandList, &t->err));
 
-			if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+			if (TestShaders_submitAndWait(t, deviceRef, commandList))
 				if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 					const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -418,6 +429,8 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 					Test_assert(t, "blasRefitMissesAll", !values[0] && !values[1] && !values[2] && !values[3]);
 				}
 		}
+	}
+
 	}
 
 clean:
@@ -488,6 +501,8 @@ static void TestBindful_ommWithFormat(
 
 	//One triangle, so each micromap index buffer is exactly one element wide
 
+	//Scoped so the goto above jumps around these rather than into them.
+	{
 	const U8 ommStride = ommIndexFormat == ETextureFormatId_R32u ? 4 : (ommIndexFormat == ETextureFormatId_R16u ? 2 : 1);
 
 	const U32 opaqueIndex = EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyOpaque, ommIndexFormat);
@@ -512,19 +527,19 @@ static void TestBindful_ommWithFormat(
 	)))
 		goto clean;
 
-	const DeviceData positionData = (DeviceData) { .buffer = positions };
-	const DeviceData indexBufferData = (DeviceData) { .buffer = indices };
+	const DeviceData positionData = { .buffer = positions };
+	const DeviceData indexBufferData = { .buffer = indices };
 
 	const BLASCreateInfo opaqueInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
 		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
 		ETextureFormatId_R16u, indexBufferData,
-		ommIndexFormat, (DeviceData) { .buffer = ommOpaque }
+		ommIndexFormat, { .buffer = ommOpaque }
 	);
 
 	const BLASCreateInfo transparentInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
 		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
 		ETextureFormatId_R16u, indexBufferData,
-		ommIndexFormat, (DeviceData) { .buffer = ommTransparent }
+		ommIndexFormat, { .buffer = ommTransparent }
 	);
 
 	name = CharString_createRefCStrConst("Bindful OMM BLAS, fully opaque");
@@ -543,16 +558,16 @@ static void TestBindful_ommWithFormat(
 
 	//DisableCulling so a back facing hit still counts, exactly as the bindless micromap test does
 
-	TLASInstance ommInstance = (TLASInstance) {
+	TLASInstance ommInstance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
-		.data = (TLASInstanceData) {
+		.data = {
 			.instanceId24_mask8 = 0xFFu << 24,
 			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_DisableCulling << 24,
 			.blasCpu = blasOpaque
 		}
 	};
 
-	ListTLASInstance ommInstances = (ListTLASInstance) { 0 };
+	ListTLASInstance ommInstances {};
 	ListTLASInstance_createRefConst(&ommInstance, 1, &ommInstances, NULL);
 
 	name = CharString_createRefCStrConst("Bindful OMM TLAS, fully opaque");
@@ -578,27 +593,27 @@ static void TestBindful_ommWithFormat(
 		goto clean;
 
 	PipelineStage ommStages[3] = {
-		(PipelineStage) { .binaryId = raygenId },
-		(PipelineStage) { .binaryId = missId },
-		(PipelineStage) { .binaryId = hitId }
+		{ .binaryId = raygenId },
+		{ .binaryId = missId },
+		{ .binaryId = hitId }
 	};
 
-	ListPipelineStage ommStageList = (ListPipelineStage) { 0 };
+	ListPipelineStage ommStageList {};
 	ListPipelineStage_createRefConst(ommStages, 3, &ommStageList, NULL);
 
-	ListSHFile fileList = (ListSHFile) { 0 };
+	ListSHFile fileList {};
 	ListSHFile_createRefConst(file, 1, &fileList, NULL);
 
-	PipelineRaytracingGroup group = (PipelineRaytracingGroup) {
+	PipelineRaytracingGroup group = {
 		.closestHit = 2, .anyHit = U32_MAX, .intersection = U32_MAX
 	};
 
-	ListPipelineRaytracingGroup groupList = (ListPipelineRaytracingGroup) { 0 };
+	ListPipelineRaytracingGroup groupList {};
 	ListPipelineRaytracingGroup_createRefConst(&group, 1, &groupList, NULL);
 
 	//Without the opt in both APIs ignore the micromap and the transparent triangle would report hits
 
-	const PipelineRaytracingInfo info = (PipelineRaytracingInfo) {
+	const PipelineRaytracingInfo info = {
 		.flags = EPipelineRaytracingFlags_Default | EPipelineRaytracingFlags_AllowOpacityMicromapExt,
 		.maxRecursionDepth = 1
 	};
@@ -629,11 +644,11 @@ static void TestBindful_ommWithFormat(
 		));
 
 		const Transition traceTransitions[2] = {
-			(Transition) { .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
-			(Transition) { .resource = tlas, .stage = EPipelineStage_RaygenExt }
+			{ .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
+			{ .resource = tlas, .stage = EPipelineStage_RaygenExt }
 		};
 
-		ListTransition traceTransitionList = (ListTransition) { 0 };
+		ListTransition traceTransitionList {};
 		ListTransition_createRefConst(traceTransitions, 2, &traceTransitionList, NULL);
 
 		Test_assert(t, "ommBegin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -657,7 +672,7 @@ static void TestBindful_ommWithFormat(
 
 		Test_assert(t, "ommEnd", CommandListRef_end(commandList, &t->err));
 
-		if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+		if (TestShaders_submitAndWait(t, deviceRef, commandList))
 			if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
 
 				const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
@@ -667,6 +682,8 @@ static void TestBindful_ommWithFormat(
 
 				else Test_assert(t, "ommResultsOpaque", values[0] == 1 && values[1] == 1 && !values[2] && !values[3]);
 			}
+	}
+
 	}
 
 clean:
@@ -714,9 +731,9 @@ void Test_graphicsBindfulOmm(Test *t, GraphicsDeviceRef *deviceRef) {
 	DeviceBufferRef *output = NULL;
 	CommandListRef *emptyList = NULL;
 
-	SHFile file = (SHFile) { 0 };
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
-	ListU32 entrypoints = (ListU32) { 0 };
+	SHFile file {};
+	DescriptorLayoutInfo layoutInfo {};
+	ListU32 entrypoints {};
 
 	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_rays.oiSH", &file)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful micromap tests");
@@ -725,7 +742,7 @@ void Test_graphicsBindfulOmm(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	GraphicsInstanceRef *ownInstanceRef = NULL;
 	GraphicsDeviceRef *ownDeviceRef = NULL;
-	RefPtrType instanceType = (RefPtrType) { 0 };
+	RefPtrType instanceType {};
 
 	if (!TestShaders_rtDedicatedDevice(t, &deviceRef, &ownInstanceRef, &ownDeviceRef, &instanceType)) {
 		SHFile_free(&file, alloc);
@@ -747,6 +764,8 @@ void Test_graphicsBindfulOmm(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
+	//Scoped so the goto above jumps around these rather than into them.
+	{
 	const U32 raygenId = TestShaders_entry(t, deviceRef, &file, "mainRaygen");
 	const U32 missId = TestShaders_entry(t, deviceRef, &file, "mainMiss");
 	const U32 hitId = TestShaders_entry(t, deviceRef, &file, "mainClosestHit");
@@ -771,8 +790,8 @@ void Test_graphicsBindfulOmm(Test *t, GraphicsDeviceRef *deviceRef) {
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) {
-		.maxBuffersRW = 1, .maxAccelerationStructures = 1, .maxDescriptorTables = 1
+	DescriptorHeapInfo heapInfo = { .maxAccelerationStructures = 1,
+		.maxBuffersRW = 1, .maxDescriptorTables = 1
 	};
 
 	name = CharString_createRefCStrConst("Bindful OMM heap");
@@ -793,7 +812,7 @@ void Test_graphicsBindfulOmm(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked,
+		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
 		NULL, &name, 4 * sizeof(U32), &output, &t->err
 	)))
 		goto clean;
@@ -803,7 +822,7 @@ void Test_graphicsBindfulOmm(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Bindful OMM pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -833,6 +852,8 @@ void Test_graphicsBindfulOmm(Test *t, GraphicsDeviceRef *deviceRef) {
 		TestBindful_ommWithFormat(
 			t, deviceRef, &file, positions, heap, table, pipelineLayout, output, emptyList, ETextureFormatId_R8u
 		);
+	}
+
 	}
 
 clean:
@@ -896,8 +917,8 @@ void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef)
 
 	SHFile files[2] = { 0 };
 
-	DescriptorLayoutInfo layoutInfo = (DescriptorLayoutInfo) { 0 };
-	ListU32 entrypoints = (ListU32) { 0 };
+	DescriptorLayoutInfo layoutInfo {};
+	ListU32 entrypoints {};
 
 	if (
 		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_draw_vs.oiSH", &files[0]) ||
@@ -908,7 +929,7 @@ void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef)
 		return;
 	}
 
-	ListSHFile fileList = (ListSHFile) { 0 };
+	ListSHFile fileList {};
 	ListSHFile_createRefConst(files, 2, &fileList, NULL);
 
 	const U32 vertexId = TestShaders_entry(t, deviceRef, &files[0], "main");
@@ -921,6 +942,8 @@ void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef)
 
 	//The same one triangle scene the other raytracing modules use
 
+	//Scoped so the goto above jumps around these rather than into them.
+	{
 	const F32 triangle[12] = {
 		0, 0, 0, 1,
 		1, 0, 0, 1,
@@ -938,7 +961,7 @@ void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef)
 
 	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
 		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16,
-		(DeviceData) { .buffer = positions }
+		{ .buffer = positions }
 	);
 
 	name = CharString_createRefCStrConst("Ray query graphics BLAS");
@@ -946,16 +969,16 @@ void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef)
 	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(deviceRef, &blasInfo, &name, &blas, &t->err)))
 		goto clean;
 
-	const TLASInstance instance = (TLASInstance) {
+	const TLASInstance instance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
-		.data = (TLASInstanceData) {
+		.data = {
 			.instanceId24_mask8 = 0xFFu << 24,
 			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
 			.blasCpu = blas
 		}
 	};
 
-	ListTLASInstance instances = (ListTLASInstance) { 0 };
+	ListTLASInstance instances {};
 	ListTLASInstance_createRefConst(&instance, 1, &instances, NULL);
 
 	name = CharString_createRefCStrConst("Ray query graphics TLAS");
@@ -984,7 +1007,7 @@ void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef)
 	)))
 		goto clean;
 
-	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) { .maxAccelerationStructures = 1, .maxDescriptorTables = 1 };
+	DescriptorHeapInfo heapInfo = { .maxAccelerationStructures = 1, .maxDescriptorTables = 1 };
 	name = CharString_createRefCStrConst("Ray query graphics heap");
 
 	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
@@ -1012,7 +1035,7 @@ void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef)
 	)))
 		goto clean;
 
-	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) { .bindings = layout };
+	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
 	name = CharString_createRefCStrConst("Ray query graphics pipeline layout");
 
 	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
@@ -1021,16 +1044,16 @@ void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef)
 		goto clean;
 
 	PipelineStage stages[2] = {
-		(PipelineStage) { .binaryId = vertexId, .shFileId = 0 },
-		(PipelineStage) { .binaryId = pixelId, .shFileId = 1 }
+		{ .binaryId = vertexId, .shFileId = 0 },
+		{ .binaryId = pixelId, .shFileId = 1 }
 	};
 
-	ListPipelineStage stageList = (ListPipelineStage) { 0 };
+	ListPipelineStage stageList {};
 	ListPipelineStage_createRefConst(stages, 2, &stageList, NULL);
 
-	const PipelineGraphicsInfo pipelineInfo = (PipelineGraphicsInfo) {
-		.attachmentCountExt = 1,
-		.attachmentFormatsExt = { ETextureFormatId_RGBA8 }
+	const PipelineGraphicsInfo pipelineInfo = {
+		.attachmentFormatsExt = { ETextureFormatId_RGBA8 },
+		.attachmentCountExt = 1
 	};
 
 	name = CharString_createRefCStrConst("Ray query graphics pipeline");
@@ -1057,13 +1080,13 @@ void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef)
 	//The TLAS is declared at the PIXEL stage, which is the whole point of the module: that is what puts a
 	// graphics sync scope on an acceleration structure barrier
 
-	const Transition transition = (Transition) { .resource = tlas, .stage = EPipelineStage_Pixel };
+	const Transition transition = { .resource = tlas, .stage = EPipelineStage_Pixel };
 
-	ListTransition transitionList = (ListTransition) { 0 };
+	ListTransition transitionList {};
 	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
 
-	const AttachmentInfo attachment = (AttachmentInfo) { .image = target, .load = ELoadAttachmentType_Clear };
-	ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+	const AttachmentInfo attachment = { .image = target, .load = ELoadAttachmentType_Clear };
+	ListAttachmentInfo colors {};
 	ListAttachmentInfo_createRefConst(&attachment, 1, &colors, NULL);
 
 	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
@@ -1095,8 +1118,10 @@ void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef)
 
 	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList, NULL, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList))
 		TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF3366FFu);
+
+	}
 
 clean:
 
@@ -1119,3 +1144,4 @@ clean:
 	SHFile_free(&files[0], alloc);
 	SHFile_free(&files[1], alloc);
 }
+} }

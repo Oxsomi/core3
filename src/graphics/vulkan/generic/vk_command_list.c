@@ -296,13 +296,23 @@ static void VkCommandBufferState_bindDescriptors(
 		temp->lastPushDescLayout[bindPointId] = *layoutExt;
 	}
 
-	//The generic work op validation proved the table matches the layout; a layout without bindings has
-	// nothing to emit at all.
+	//A layout without bindings has nothing to emit at all.
 
 	if(!temp->boundDescriptorTable || !layout->info.bindings)
 		return;
 
-	VkDescriptorTable *tableExt = DescriptorTable_ext(DescriptorTableRef_ptr(temp->boundDescriptorTable), Vk);
+	const DescriptorTable *table = DescriptorTableRef_ptr(temp->boundDescriptorTable);
+
+	//A table stays bound across a pipeline switch, so it can outlive the layout it was bound for.
+	//Emitting it against a layout built from a DIFFERENT DescriptorLayout binds sets the layout never
+	// declared, which is what interleaving a bindful dispatch with a bindless one does.
+	//The bindless path above already bound the device's own sets for such a layout, so there is nothing
+	// left to do here.
+
+	if(table->layout != layout->info.bindings)
+		return;
+
+	VkDescriptorTable *tableExt = DescriptorTable_ext((DescriptorTable*)table, Vk);
 
 	if(
 		temp->lastBoundTable[bindPointId] == temp->boundDescriptorTable &&

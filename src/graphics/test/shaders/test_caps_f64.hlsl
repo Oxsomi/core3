@@ -27,8 +27,20 @@
 //That gap is the whole test: round tripping 2^24 + k through a double returns k for all 64 values of k only
 // if the arithmetic really ran at 64 bits.
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 #include "@buffer.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct CapsPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 aux;           //Second handle, where the test needs one (a TLAS for the ray query cases)
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT CapsPush _push;
 
 //The addend is seeded with SV_DispatchThreadID so neither DXC nor the driver can fold the loop into a
 // constant computed at host precision.
@@ -58,5 +70,5 @@ void main(U32 i : SV_DispatchThreadID) {
 		total += back == want ? k : 0;
 	}
 
-	setAtUniform<U32>(getAppData1u(0), 0, total);
+	setAtUniform<U32>(_push.output, 0, total);
 }
