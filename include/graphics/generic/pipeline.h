@@ -73,30 +73,6 @@ typedef struct PipelineGraphicsInfo {
 
 //Raytracing pipeline
 
-typedef enum EPipelineRaytracingFlags {
-
-	EPipelineRaytracingFlags_SkipTriangles            = 1 << 0,
-	EPipelineRaytracingFlags_SkipAABBs                = 1 << 1,
-
-	EPipelineRaytracingFlags_AllowMotionBlurExt       = 1 << 2,        //Requires feature RayMotionBlur
-
-	//Disallowing null shaders in stages.
-	//This is extra validation, but might also signal to the API that access to all stages are safe.
-
-	EPipelineRaytracingFlags_NoNullAnyHit             = 1 << 3,
-	EPipelineRaytracingFlags_NoNullClosestHit         = 1 << 4,
-	EPipelineRaytracingFlags_NoNullMiss               = 1 << 5,
-	EPipelineRaytracingFlags_NoNullIntersection       = 1 << 6,
-
-	EPipelineRaytracingFlags_Count                    = 7,
-
-	EPipelineRaytracingFlags_Default                  = EPipelineRaytracingFlags_SkipAABBs,
-
-	EPipelineRaytracingFlags_DefaultStrict            =
-		EPipelineRaytracingFlags_SkipAABBs | EPipelineRaytracingFlags_NoNullClosestHit | EPipelineRaytracingFlags_NoNullMiss
-
-} EPipelineRaytracingFlags;
-
 typedef enum EPipelineFlags {
 	EPipelineFlags_None                               = 0,
 	EPipelineFlags_InternalWeakDeviceRef              = 1 << 0,       //Internal use only

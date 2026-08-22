@@ -21,6 +21,8 @@
 //formats/oiSP/sp_file.c
 
 #include "formats/oiSP/sp_file.h"
+#include "types/base/string_read.h"
+#include "types/base/string_read_helper.h"
 #include "types/math/type_cast.h"
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiDL/dl_entry.h"
@@ -113,6 +115,64 @@ const C8 *ESPField_name(ESPField field) {
 
 Bool ESPField_isIndexed(ESPField field) {
 	return field < ESPField_Count && SPField_info[field].indexed;
+}
+
+U8 ESPField_indexCount(ESPField field) {
+
+	if(field >= ESPField_Count || !SPField_info[field].indexed)
+		return 1;
+
+	return field == ESPField_VertexBufferStride || field == ESPField_VertexBufferRate ? 16 : 8;
+}
+
+Bool ESPField_parsePath(CharString path, ESPField *field, U8 *index) {
+
+	if(!field || !index)
+		return false;
+
+	//Split "name[index]" on the bracket; a name without one addresses index 0.
+
+	U64 nameLen = CharString_length(path);
+	U64 idx = 0;
+	Bool hasIndex = false;
+
+	for (U64 i = 0; i < CharString_length(path); ++i)
+		if (path.ptr[i] == '[') {
+
+			nameLen = i;
+			hasIndex = true;
+
+			if(i + 2 > CharString_length(path) || path.ptr[CharString_length(path) - 1] != ']')
+				return false;
+
+			const CharString num = CharString_createRefSizedConst(path.ptr + i + 1, CharString_length(path) - i - 2, false);
+
+			if(!CharString_length(num) || !CharString_parseU64(num, &idx))
+				return false;
+
+			break;
+		}
+
+	const CharString name = CharString_createRefSizedConst(path.ptr, nameLen, false);
+
+	for (U64 i = 0; i < ESPField_Count; ++i) {
+
+		const CharString candidate = CharString_createRefCStrConst(SPField_info[i].name);
+
+		if(!CharString_equalsStringSensitive(&name, &candidate))
+			continue;
+
+		//An index on a field without one is as wrong as one past the end.
+
+		if(hasIndex && (!SPField_info[i].indexed || idx >= ESPField_indexCount((ESPField) i)))
+			return false;
+
+		*field = (ESPField) i;
+		*index = (U8) idx;
+		return true;
+	}
+
+	return false;
 }
 
 const C8 *ESPField_reason(ESPField field) {
@@ -390,6 +450,7 @@ Bool SPFile_derivePipeline(
 	const U64 specializationStart = spFile->specializations.length;
 	const U64 graphicsStart = spFile->graphicsStates.length;
 	const U64 raytracingStart = spFile->raytracingStates.length;
+	const U64 nameStart = spFile->names.entryStrings.length;
 	Bool appended = false;
 
 	if(!spFile || !files || !stages || !stageCount)
@@ -504,9 +565,12 @@ Bool SPFile_derivePipeline(
 		base.type = (U8) ESPPipelineType_Raytracing;
 		base.stateIndex = (U32) raytracingStart;
 		rt.maxRecursionDepth = 1;
+		rt.raytracingFlags = (U8) EPipelineRaytracingFlags_Default;
 
 		gotoIfError3(clean, SPFile_assume(spFile, &base, ESPField_MaxRecursionDepth, 0, 1, alloc, e_rr));
-		gotoIfError3(clean, SPFile_assume(spFile, &base, ESPField_RaytracingFlags, 0, 0, alloc, e_rr));
+		gotoIfError3(clean, SPFile_assume(
+			spFile, &base, ESPField_RaytracingFlags, 0, EPipelineRaytracingFlags_Default, alloc, e_rr
+		));
 
 		gotoIfError3(clean, ListSPRaytracingState_pushBack(&spFile->raytracingStates, rt, alloc, e_rr));
 		goto append;
@@ -623,12 +687,20 @@ clean:
 		ListSPSpecialization_resize(&spFile->specializations, specializationStart, alloc, NULL);
 		ListSPGraphicsState_resize(&spFile->graphicsStates, graphicsStart, alloc, NULL);
 		ListSPRaytracingState_resize(&spFile->raytracingStates, raytracingStart, alloc, NULL);
+
+		for(U64 i = nameStart; i < spFile->names.entryStrings.length; ++i)
+			CharString_free(&spFile->names.entryStrings.ptrNonConst[i], alloc);
+
+		ListCharString_resize(&spFile->names.entryStrings, nameStart, alloc, NULL);
+
+		if(spFile->names.entryStreams.length > nameStart)
+			ListDLEntryStream_resize(&spFile->names.entryStreams, nameStart, alloc, NULL);
 	}
 
 	return s_uccess;
 }
 
-//Reinterprets a U32 holding float bits, so F32 fields can travel through the one U32 every field uses.
+//Records a value the caller chose, so the field stops being assumed.
 
 Bool SPFile_supply(SPFile *spFile, U32 pipelineId, ESPField field, U8 index, U32 value, Error *e_rr) {
 
@@ -644,7 +716,7 @@ Bool SPFile_supply(SPFile *spFile, U32 pipelineId, ESPField field, U8 index, U32
 		retError(clean, Error_invalidParameter(2, 0, "SPFile_supply()::field is unknown"));
 
 	const Bool indexed = SPField_info[field].indexed;
-	const U8 limit = field == ESPField_VertexBufferStride || field == ESPField_VertexBufferRate ? 16 : 8;
+	const U8 limit = ESPField_indexCount(field);
 
 	if(indexed && index >= limit)
 		retError(clean, Error_outOfBounds(3, index, limit, "SPFile_supply()::index out of bounds"));

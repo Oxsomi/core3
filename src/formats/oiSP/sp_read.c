@@ -238,10 +238,10 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		if(spec.source >= ESPFieldSource_Count)
 			retError(clean, Error_invalidState(0, "SPFile_read() specialization had an invalid source"));
 
-		//An index on a field that has none would address something that doesn't exist
+		//An index past the field's range (or any index on a field that has none) addresses state that doesn't exist
 
-		if(spec.index && !ESPField_isIndexed((ESPField) spec.field))
-			retError(clean, Error_invalidState(0, "SPFile_read() specialization indexed a field that has no index"));
+		if(spec.index >= ESPField_indexCount((ESPField) spec.field))
+			retError(clean, Error_invalidState(0, "SPFile_read() specialization index is out of range for its field"));
 	}
 
 	//Validate the pipelines and that their ranges sit inside the pools

@@ -183,6 +183,33 @@ typedef enum ETopologyMode {
 
 } ETopologyMode;
 
+//How a ray tracing pipeline traces: which geometry it skips and which stages may be null.
+//Stored by oiSP as rt.flags, so the default a pipeline assumes is named here rather than in the graphics layer.
+
+typedef enum EPipelineRaytracingFlags {
+
+	EPipelineRaytracingFlags_SkipTriangles            = 1 << 0,
+	EPipelineRaytracingFlags_SkipAABBs                = 1 << 1,
+
+	EPipelineRaytracingFlags_AllowMotionBlurExt       = 1 << 2,        //Requires feature RayMotionBlur
+
+	//Disallowing null shaders in stages.
+	//This is extra validation, but might also signal to the API that access to all stages are safe.
+
+	EPipelineRaytracingFlags_NoNullAnyHit             = 1 << 3,
+	EPipelineRaytracingFlags_NoNullClosestHit         = 1 << 4,
+	EPipelineRaytracingFlags_NoNullMiss               = 1 << 5,
+	EPipelineRaytracingFlags_NoNullIntersection       = 1 << 6,
+
+	EPipelineRaytracingFlags_Count                    = 7,
+
+	EPipelineRaytracingFlags_Default                  = EPipelineRaytracingFlags_SkipAABBs,
+
+	EPipelineRaytracingFlags_DefaultStrict            =
+		EPipelineRaytracingFlags_SkipAABBs | EPipelineRaytracingFlags_NoNullClosestHit | EPipelineRaytracingFlags_NoNullMiss
+
+} EPipelineRaytracingFlags;
+
 //The pipeline state a backend binds, which is the same state oiSP stores.
 //It's defined here rather than in the graphics layer because a stored pipeline has to stay readable without a device,
 // and the graphics layer aliases these, so state moves between a file and a live pipeline as a copy.

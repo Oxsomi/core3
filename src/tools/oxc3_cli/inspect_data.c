@@ -1092,7 +1092,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 						file.names.entryStrings.ptr[stage.entrypoint] : CharString_createRefCStrConst("<unnamed>");
 
 					Log_debugLnx(
-						"	%s: %.*s in %.*s (source hash 0x%08"PRIX32")",
+						"\t%s: %.*s in %.*s (source hash 0x%08"PRIX32")",
 						SHEntry_stageNames[stage.stage],
 						(int) CharString_length(entryName), entryName.ptr,
 						(int) CharString_length(shaderFile), shaderFile.ptr,

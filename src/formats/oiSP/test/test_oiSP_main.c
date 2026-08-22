@@ -21,6 +21,7 @@
 //formats/oiSP/test/test_oiSP_main.c
 
 #include "formats/oiSP/sp_file.h"
+#include "types/math/type_cast.h"
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiSB/sb_variable.h"
 #include "types/test/test.h"
@@ -502,8 +503,6 @@ clean:
 	ListSHEntry_free(&sh.entries, t->alloc);
 }
 
-//A tampered header or an out of range record has to be refused rather than trusted.
-
 //Only the attachments a blend state can reach are stored, so what a file costs follows from the blend state itself.
 
 void Test_SPFileBlendAttachmentPacking(Test *t) {
@@ -723,6 +722,411 @@ clean:
 	ListSHEntry_free(&sh.entries, t->alloc);
 }
 
+//Every rejection the reader has gets a byte flipped into it, so a hostile file can't index out of a pool.
+//Offsets follow the spec's layout: magic, SPHeader, pipelines[], stages[], specializations[], graphicsStates[].
+
+static Bool tamper(Test *t, const C8 *label, StreamRef *stream, U64 offset, U8 value) {
+
+	MemoryStream *ms = RefPtr_data(stream, MemoryStream);
+
+	if(offset >= Buffer_length(ms->data))
+		return Test_assert(t, label, false);
+
+	const U8 previous = ms->data.ptr[offset];
+	ms->data.ptrNonConst[offset] = value;
+
+	SPFile bad = (SPFile) { 0 };
+	U64 readOff = 0;
+	const Bool refused = !SPFile_read(stream, &readOff, false, t->alloc, &bad, NULL);
+
+	SPFile_free(&bad, t->alloc);
+	ms->data.ptrNonConst[offset] = previous;
+	return Test_assert(t, label, refused);
+}
+
+void Test_SPReadTamperRecords(Test *t) {
+
+	Test_setModule(t, "SPFile: every out of range record is refused on read");
+
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+
+	SHEntry entries[2] = { entryOf("mainVS", ESHPipelineStage_Vertex), entryOf("mainPS", ESHPipelineStage_Pixel) };
+	entries[0].inputs[0] = ESBType_F32x3;
+	entries[1].outputs[0] = ESBType_F32x4;
+
+	SHFile sh = fileOf(entries, 2);
+	ListSHFile files = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(&sh, 1, &files, NULL);
+
+	SPFile sp = (SPFile) { 0 };
+	StreamRef *stream = NULL;
+	StreamRef *truncated = NULL;
+
+	if(!Test_assert(t, "create", SPFile_create(ESPSettingsFlags_None, t->alloc, &sp, &t->err)))
+		goto clean;
+
+	const SPStageRef stages[2] = { refOf(0, 0), refOf(0, 1) };
+	CharString none = CharString_createNull();
+
+	if(!Test_assert(t, "derive", SPFile_derivePipeline(&sp, &files, NULL, none, stages, 2, t->alloc, NULL, &t->err)))
+		goto clean;
+
+	Test_assert(t, "finalize", SPFile_finalize(&sp, t->alloc, &t->err));
+
+	if(!Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &stream, &t->err)))
+		goto clean;
+
+	U64 off = 0;
+
+	if(!Test_assert(t, "write", SPFile_write(&sp, t->alloc, stream, &off, &t->err)))
+		goto clean;
+
+	//The file reads back untouched, so every refusal below is the tamper and not the file.
+
+	{
+		SPFile good = (SPFile) { 0 };
+		U64 readOff = 0;
+		Test_assert(t, "readsUntouched", SPFile_read(stream, &readOff, false, t->alloc, &good, &t->err));
+		SPFile_free(&good, t->alloc);
+	}
+
+	const U64 H = 4;                                           //SPHeader after the magic
+	const U64 P = H + 36;                                      //pipelines[] (SPHeader is 36 bytes)
+	const U64 S = P + 20 * sp.pipelines.length;                //stages[]
+	const U64 X = S + 16 * sp.stages.length;                   //specializations[]
+	const U64 G = X + 8 * sp.specializations.length;           //graphicsStates[] (stored form)
+
+	tamper(t, "unsupportedFlags", stream, H + 1, 0xFF);
+	tamper(t, "blendAttachmentCountMismatch", stream, H + 24, 1);
+	tamper(t, "vertexBufferCountMismatch", stream, H + 28, 5);
+	tamper(t, "vertexAttributeCountMismatch", stream, H + 32, 9);
+
+	tamper(t, "pipelineNameOutOfBounds", stream, P + 0, 0x7F);
+	tamper(t, "pipelineTypeInvalid", stream, P + 4, 0xFF);
+	tamper(t, "pipelineFlagsUnsupported", stream, P + 5, 0x80);
+	tamper(t, "pipelineStageStartOutOfBounds", stream, P + 6, 0xFF);
+	tamper(t, "pipelineNoStages", stream, P + 7, 0);
+	tamper(t, "pipelineStageRangeOutOfBounds", stream, P + 7, 0xFF);
+	tamper(t, "pipelineSpecializationStartOutOfBounds", stream, P + 8, 0xFF);
+	tamper(t, "pipelineStateIndexOutOfBounds", stream, P + 16, 0xFF);
+
+	tamper(t, "stageShaderFileOutOfBounds", stream, S + 0, 0x7F);
+	tamper(t, "stageEntrypointOutOfBounds", stream, S + 4, 0x7F);
+	tamper(t, "stageKindInvalid", stream, S + 12, 0xFF);
+
+	tamper(t, "specializationFieldInvalid", stream, X + 0, 0xFF);
+	tamper(t, "specializationSourceInvalid", stream, X + 2, 0xFF);
+
+	//An index on a field that has none, and one past the range of a field that does
+
+	for (U64 i = 0; i < sp.specializations.length; ++i) {
+
+		const SPSpecialization spec = sp.specializations.ptr[i];
+
+		if (!ESPField_isIndexed((ESPField) spec.field)) {
+			tamper(t, "specializationIndexOnUnindexed", stream, X + 8 * i + 1, 1);
+			break;
+		}
+	}
+
+	for (U64 i = 0; i < sp.specializations.length; ++i) {
+
+		const SPSpecialization spec = sp.specializations.ptr[i];
+
+		if (ESPField_isIndexed((ESPField) spec.field)) {
+			tamper(t, "specializationIndexPastRange", stream, X + 8 * i + 1, 200);
+			break;
+		}
+	}
+
+	tamper(t, "renderTargetCountAboveEight", stream, G + 1, 9);
+
+	//A read that doesn't start 16-byte aligned, and one that runs out of bytes
+
+	{
+		SPFile bad = (SPFile) { 0 };
+		U64 readOff = 8;
+		Test_assert(t, "misalignedRefused", !SPFile_read(stream, &readOff, false, t->alloc, &bad, NULL));
+		SPFile_free(&bad, t->alloc);
+	}
+
+	{
+		MemoryStream *ms = RefPtr_data(stream, MemoryStream);
+		Buffer cut = Buffer_createRefConst(ms->data.ptr, Buffer_length(ms->data) - 48);
+
+		if (Test_assert(t, "truncatedStream", MemoryStream_createFromBuffer(
+			&cut, EMemoryStreamFlags_None, &type, &truncated, &t->err
+		))) {
+			SPFile bad = (SPFile) { 0 };
+			U64 readOff = 0;
+			Test_assert(t, "truncatedRefused", !SPFile_read(truncated, &readOff, false, t->alloc, &bad, NULL));
+			SPFile_free(&bad, t->alloc);
+		}
+	}
+
+clean:
+	RefPtr_dec(&truncated);
+	RefPtr_dec(&stream);
+	SPFile_free(&sp, t->alloc);
+	ListSHFile_free(&files, t->alloc);
+	ListSHEntry_free(&sh.entries, t->alloc);
+}
+
+//Deriving refuses what can't be one pipeline rather than guessing, and a refusal leaves nothing behind.
+
+void Test_SPDeriveRefusals(Test *t) {
+
+	Test_setModule(t, "SPFile: deriving refuses what can't form one pipeline and rolls back");
+
+	SHEntry entries[5] = {
+		entryOf("vsA", ESHPipelineStage_Vertex), entryOf("vsB", ESHPipelineStage_Vertex),
+		entryOf("mainCS", ESHPipelineStage_Compute), entryOf("mainMS", ESHPipelineStage_MeshExt),
+		entryOf("mainPS", ESHPipelineStage_Pixel)
+	};
+
+	SHFile sh = fileOf(entries, 5);
+	ListSHFile files = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(&sh, 1, &files, NULL);
+
+	SPFile sp = (SPFile) { 0 };
+	CharString name = CharString_createRefCStrConst("refused");
+
+	if(!Test_assert(t, "create", SPFile_create(ESPSettingsFlags_None, t->alloc, &sp, &t->err)))
+		goto clean;
+
+	const U64 namesBefore = sp.names.entryStrings.length;
+
+	const SPStageRef twoVertex[2] = { refOf(0, 0), refOf(0, 1) };
+	Test_assert(t, "sameKindTwice", !SPFile_derivePipeline(&sp, &files, NULL, name, twoVertex, 2, t->alloc, NULL, NULL));
+
+	const SPStageRef mesh[1] = { refOf(0, 3) };
+	Test_assert(t, "meshRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, mesh, 1, t->alloc, NULL, NULL));
+
+	const SPStageRef mixed[2] = { refOf(0, 2), refOf(0, 4) };
+	Test_assert(t, "mixedKindsRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, mixed, 2, t->alloc, NULL, NULL));
+
+	const SPStageRef badFile[1] = { refOf(7, 0) };
+	Test_assert(t, "fileIdRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, badFile, 1, t->alloc, NULL, NULL));
+
+	const SPStageRef badEntry[1] = { refOf(0, 9) };
+	Test_assert(t, "entryIdRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, badEntry, 1, t->alloc, NULL, NULL));
+
+	SPStageRef tooMany[17];
+
+	for(U8 i = 0; i < 17; ++i)
+		tooMany[i] = refOf(0, 0);
+
+	Test_assert(t, "tooManyRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, tooMany, 17, t->alloc, NULL, NULL));
+
+	//Nothing a refused derive touched survives, the name it added included
+
+	Test_assert(t, "noPipelines", !sp.pipelines.length);
+	Test_assert(t, "noStages", !sp.stages.length);
+	Test_assert(t, "noSpecializations", !sp.specializations.length);
+	Test_assert(t, "noNames", sp.names.entryStrings.length == namesBefore);
+
+	//And the same file still derives a valid pipeline afterwards
+
+	const SPStageRef ok[1] = { refOf(0, 2) };
+	Test_assert(t, "stillDerives", SPFile_derivePipeline(&sp, &files, NULL, name, ok, 1, t->alloc, NULL, &t->err));
+	Test_assert(t, "onePipeline", sp.pipelines.length == 1);
+
+clean:
+	SPFile_free(&sp, t->alloc);
+	ListSHFile_free(&files, t->alloc);
+	ListSHEntry_free(&sh.entries, t->alloc);
+}
+
+//Supplying is checked the same way reading is, and a field's path round trips through its parser.
+
+void Test_SPSupplyAndPaths(Test *t) {
+
+	Test_setModule(t, "SPFile: supply validates its arguments and field paths parse back");
+
+	SHEntry entries[3] = {
+		entryOf("mainCS", ESHPipelineStage_Compute),
+		entryOf("mainVS", ESHPipelineStage_Vertex),
+		entryOf("mainPS", ESHPipelineStage_Pixel)
+	};
+
+	SHFile sh = fileOf(entries, 3);
+	ListSHFile files = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(&sh, 1, &files, NULL);
+
+	SPFile sp = (SPFile) { 0 };
+	CharString none = CharString_createNull();
+	U32 computeId = U32_MAX, gfxId = U32_MAX;
+
+	if(!Test_assert(t, "create", SPFile_create(ESPSettingsFlags_None, t->alloc, &sp, &t->err)))
+		goto clean;
+
+	const SPStageRef cs[1] = { refOf(0, 0) };
+	const SPStageRef gfx[2] = { refOf(0, 1), refOf(0, 2) };
+	Test_assert(t, "deriveCompute", SPFile_derivePipeline(&sp, &files, NULL, none, cs, 1, t->alloc, &computeId, &t->err));
+	Test_assert(t, "deriveGraphics", SPFile_derivePipeline(&sp, &files, NULL, none, gfx, 2, t->alloc, &gfxId, &t->err));
+
+	Test_assert(t, "badPipelineId", !SPFile_supply(&sp, 9, ESPField_TopologyMode, 0, 0, NULL));
+	Test_assert(t, "unknownField", !SPFile_supply(&sp, gfxId, ESPField_Count, 0, 0, NULL));
+	Test_assert(t, "indexPastRange", !SPFile_supply(&sp, gfxId, ESPField_RenderTargetFormat, 8, 0, NULL));
+	Test_assert(t, "vertexIndexInRange", SPFile_supply(&sp, gfxId, ESPField_VertexBufferStride, 15, 16, &t->err));
+	Test_assert(t, "vertexIndexPastRange", !SPFile_supply(&sp, gfxId, ESPField_VertexBufferStride, 16, 16, NULL));
+	Test_assert(t, "indexOnUnindexed", !SPFile_supply(&sp, gfxId, ESPField_TopologyMode, 1, 0, NULL));
+	Test_assert(t, "graphicsFieldOnCompute", !SPFile_supply(&sp, computeId, ESPField_TopologyMode, 0, 0, NULL));
+	Test_assert(t, "rtFieldOnGraphics", !SPFile_supply(&sp, gfxId, ESPField_MaxRecursionDepth, 0, 1, NULL));
+
+	//Index counts are what the reader and supply agree on
+
+	Test_assert(t, "count8", ESPField_indexCount(ESPField_BlendSrc) == 8);
+	Test_assert(t, "count16", ESPField_indexCount(ESPField_VertexBufferRate) == 16);
+	Test_assert(t, "count1", ESPField_indexCount(ESPField_TopologyMode) == 1);
+
+	//Paths parse back to exactly the field the report printed
+
+	ESPField field = ESPField_Count;
+	U8 index = 0xFF;
+
+	Test_assert(t, "parseIndexed", ESPField_parsePath(CharString_createRefCStrConst("blend.src[2]"), &field, &index));
+	Test_assert(t, "parsedField", field == ESPField_BlendSrc && index == 2);
+
+	Test_assert(t, "parsePlain", ESPField_parsePath(CharString_createRefCStrConst("topology"), &field, &index));
+	Test_assert(t, "parsedPlain", field == ESPField_TopologyMode && index == 0);
+
+	Test_assert(t, "parseVertex", ESPField_parsePath(CharString_createRefCStrConst("vertex.stride[15]"), &field, &index));
+	Test_assert(t, "parsedVertex", field == ESPField_VertexBufferStride && index == 15);
+
+	Test_assert(t, "parseRejectsPastRange", !ESPField_parsePath(CharString_createRefCStrConst("blend.src[8]"), &field, &index));
+	Test_assert(t, "parseRejectsUnindexed", !ESPField_parsePath(CharString_createRefCStrConst("topology[1]"), &field, &index));
+	Test_assert(t, "parseRejectsUnknown", !ESPField_parsePath(CharString_createRefCStrConst("nope"), &field, &index));
+	Test_assert(t, "parseRejectsPrefix", !ESPField_parsePath(CharString_createRefCStrConst("blend"), &field, &index));
+	Test_assert(t, "parseRejectsUnclosed", !ESPField_parsePath(CharString_createRefCStrConst("blend.src[2"), &field, &index));
+
+	//Every reported name parses back to itself, so the report is always a valid -pso-set
+
+	Bool allRoundTrip = true;
+
+	for (U32 i = 0; i < ESPField_Count; ++i) {
+		const CharString path = CharString_createRefCStrConst(ESPField_name((ESPField) i));
+		allRoundTrip &= ESPField_parsePath(path, &field, &index) && field == (ESPField) i;
+	}
+
+	Test_assert(t, "everyNameRoundTrips", allRoundTrip);
+
+clean:
+	SPFile_free(&sp, t->alloc);
+	ListSHFile_free(&files, t->alloc);
+	ListSHEntry_free(&sh.entries, t->alloc);
+}
+
+//Structural validation names each mismatch between state and shader, and the print says what was generated.
+
+static Bool issuesMention(const ListCharString *issues, const C8 *needle) {
+
+	const CharString n = CharString_createRefCStrConst(needle);
+
+	for(U64 i = 0; i < issues->length; ++i)
+		if(CharString_findFirstStringSensitive(&issues->ptr[i], &n, 0, 0) != U64_MAX)
+			return true;
+
+	return false;
+}
+
+void Test_SPValidateAndPrint(Test *t) {
+
+	Test_setModule(t, "SPFile: validation names every mismatch and print states what was generated");
+
+	SHEntry entries[4] = {
+		entryOf("mainVS", ESHPipelineStage_Vertex), entryOf("mainPS", ESHPipelineStage_Pixel),
+		entryOf("mainHS", ESHPipelineStage_Hull), entryOf("mainDS", ESHPipelineStage_Domain)
+	};
+
+	entries[1].outputs[0] = ESBType_F32x4;
+
+	SHFile sh = fileOf(entries, 4);
+	ListSHFile files = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(&sh, 1, &files, NULL);
+
+	SPFile sp = (SPFile) { 0 };
+	ListCharString issues = (ListCharString) { 0 };
+	CharString text = CharString_createNull();
+	CharString none = CharString_createNull();
+	U32 gfxId = U32_MAX, tessId = U32_MAX, loneId = U32_MAX;
+
+	if(!Test_assert(t, "create", SPFile_create(ESPSettingsFlags_None, t->alloc, &sp, &t->err)))
+		goto clean;
+
+	const SPStageRef gfx[2] = { refOf(0, 0), refOf(0, 1) };
+	const SPStageRef tess[4] = { refOf(0, 0), refOf(0, 2), refOf(0, 3), refOf(0, 1) };
+	const SPStageRef lone[2] = { refOf(0, 0), refOf(0, 2) };
+
+	Test_assert(t, "deriveGraphics", SPFile_derivePipeline(&sp, &files, NULL, none, gfx, 2, t->alloc, &gfxId, &t->err));
+	Test_assert(t, "deriveTess", SPFile_derivePipeline(&sp, &files, NULL, none, tess, 4, t->alloc, &tessId, &t->err));
+	Test_assert(t, "deriveLoneHull", SPFile_derivePipeline(&sp, &files, NULL, none, lone, 2, t->alloc, &loneId, &t->err));
+
+	//blend.targetMask past the declared targets, depth state with no attachment, a sample shading fraction outside
+	// 0..1, then blend.enable with an empty mask
+
+	Test_assert(t, "supplyMask", SPFile_supply(&sp, gfxId, ESPField_BlendTargetMask, 0, 0x6, &t->err));
+	Test_assert(t, "supplyDepthFlags", SPFile_supply(&sp, gfxId, ESPField_DepthStencilFlags, 0, 1, &t->err));
+	Test_assert(t, "supplyShading", SPFile_supply(&sp, gfxId, ESPField_MsaaMinSampleShading, 0, U32_fromF32Bits(2.f), &t->err));
+
+	Test_assert(t, "validateGraphics", SPFile_validate(&sp, gfxId, &files, gfx, t->alloc, &issues, &t->err));
+	Test_assert(t, "maskBeyondCount", issuesMention(&issues, "blend.targetMask enables target"));
+	Test_assert(t, "depthWithoutFormat", issuesMention(&issues, "depth.format is none"));
+	Test_assert(t, "shadingOutOfRange", issuesMention(&issues, "msaa.minSampleShading"));
+
+	ListCharString_freeUnderlying(&issues, t->alloc);
+	Test_assert(t, "supplyEnableNoMask", SPFile_supply(&sp, gfxId, ESPField_BlendTargetMask, 0, 0, &t->err));
+	Test_assert(t, "supplyEnable", SPFile_supply(&sp, gfxId, ESPField_BlendEnable, 0, 1, &t->err));
+	Test_assert(t, "validateAgain", SPFile_validate(&sp, gfxId, &files, gfx, t->alloc, &issues, &t->err));
+	Test_assert(t, "enableWithoutMask", issuesMention(&issues, "enables no target"));
+
+	//Tessellation: a pair with a bad control point count, a lone hull stage, and control points without tessellation
+
+	ListCharString_freeUnderlying(&issues, t->alloc);
+	Test_assert(t, "supplyPatchZero", SPFile_supply(&sp, tessId, ESPField_PatchControlPoints, 0, 0, &t->err));
+	Test_assert(t, "validateTess", SPFile_validate(&sp, tessId, &files, tess, t->alloc, &issues, &t->err));
+	Test_assert(t, "patchCountRange", issuesMention(&issues, "patchControlPoints is"));
+
+	ListCharString_freeUnderlying(&issues, t->alloc);
+	Test_assert(t, "validateLone", SPFile_validate(&sp, loneId, &files, lone, t->alloc, &issues, &t->err));
+	Test_assert(t, "lonePairing", issuesMention(&issues, "needs its domain stage"));
+
+	ListCharString_freeUnderlying(&issues, t->alloc);
+	Test_assert(t, "supplyPatchNoTess", SPFile_supply(&sp, gfxId, ESPField_PatchControlPoints, 0, 3, &t->err));
+	Test_assert(t, "validateNoTess", SPFile_validate(&sp, gfxId, &files, gfx, t->alloc, &issues, &t->err));
+	Test_assert(t, "patchWithoutTess", issuesMention(&issues, "without tessellation"));
+
+	//The print carries the kind, the count and what was generated
+
+	{
+		const SPStageRef vsOnly[1] = { refOf(0, 0) };
+		U32 vsId = U32_MAX;
+		Test_assert(t, "deriveVsOnly", SPFile_derivePipeline(&sp, &files, NULL, none, vsOnly, 1, t->alloc, &vsId, &t->err));
+
+		//The stand-in itself is generated by the caller that binds it, which records that on the pipeline
+
+		if(vsId != U32_MAX)
+			sp.pipelines.ptrNonConst[vsId].flags |= ESPPipelineFlag_GeneratedPixelStage;
+
+		Test_assert(t, "print", SPFile_print(&sp, vsId, t->alloc, &text, &t->err));
+
+		const CharString kind = CharString_createRefCStrConst("; Pipeline state (graphics), 1 stage(s)");
+		const CharString generated = CharString_createRefCStrConst("NOTE: the pixel stage was generated");
+
+		Test_assert(t, "printKind", CharString_findFirstStringSensitive(&text, &kind, 0, 0) != U64_MAX);
+		Test_assert(t, "printGenerated", CharString_findFirstStringSensitive(&text, &generated, 0, 0) != U64_MAX);
+	}
+
+clean:
+	CharString_free(&text, t->alloc);
+	ListCharString_freeUnderlying(&issues, t->alloc);
+	SPFile_free(&sp, t->alloc);
+	ListSHFile_free(&files, t->alloc);
+	ListSHEntry_free(&sh.entries, t->alloc);
+}
+
+//A tampered header or an out of range record has to be refused rather than trusted.
+
 void Test_SPReadTamper(Test *t) {
 
 	Test_setModule(t, "SPFile: a tampered file is refused");
@@ -825,6 +1229,10 @@ int main() {
 	Test_SPFileBlendAttachmentPacking(&t);
 	Test_SPFileVertexLayoutPacking(&t);
 	Test_SPReadTamper(&t);
+	Test_SPReadTamperRecords(&t);
+	Test_SPDeriveRefusals(&t);
+	Test_SPSupplyAndPaths(&t);
+	Test_SPValidateAndPrint(&t);
 	Test_SPFieldNames(&t);
 
 	BasicAllocator_checkLeakedMem(&t);

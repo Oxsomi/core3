@@ -328,7 +328,7 @@ typedef enum ESPField {
 } ESPField;
 ```
 
-Enum-valued fields are stored as integers naming the enum they mirror in a comment, the same way oiSH stores an `ESBType` as `U8`. Those enums (`ETextureFormatId`, `EBlend`, `ECompareOp`, ...) live in the graphics layer and are referenced by value only, so the format itself carries no graphics dependency and stays readable without a device.
+Enum-valued fields are stored as integers naming the enum they mirror in a comment, the same way oiSH stores an `ESBType` as `U8`. The state enums (`EBlend`, `ECompareOp`, `EPipelineRaytracingFlags`, ...) are oiSP's own, declared in `sp_state.h` below; only `ETextureFormatId` and `EDepthStencilFormat` come from the texture format tables, which carry no graphics dependency either, so the format stays readable without a device.
 
 `SPRasterizerState`, `SPDepthState`, `SPBlendAttachment`, `SPBlendStateRuntime`, `SPVertexAttribute` and
 `SPVertexLayoutRuntime` are not merely byte compatible with the state a graphics pipeline binds, they are that state:
@@ -434,6 +434,19 @@ typedef enum ETopologyMode {
 	EToplogyMode_Count
 } ETopologyMode;
 
+typedef enum EPipelineRaytracingFlags { //rt.flags; a derived pipeline assumes EPipelineRaytracingFlags_Default
+	EPipelineRaytracingFlags_SkipTriangles      = 1 << 0,
+	EPipelineRaytracingFlags_SkipAABBs          = 1 << 1,
+	EPipelineRaytracingFlags_AllowMotionBlurExt = 1 << 2, //Requires feature RayMotionBlur
+	EPipelineRaytracingFlags_NoNullAnyHit       = 1 << 3, //Null shaders disallowed per stage (extra validation)
+	EPipelineRaytracingFlags_NoNullClosestHit   = 1 << 4,
+	EPipelineRaytracingFlags_NoNullMiss         = 1 << 5,
+	EPipelineRaytracingFlags_NoNullIntersection = 1 << 6,
+	EPipelineRaytracingFlags_Count              = 7,
+	EPipelineRaytracingFlags_Default            = EPipelineRaytracingFlags_SkipAABBs,
+	EPipelineRaytracingFlags_DefaultStrict      = EPipelineRaytracingFlags_SkipAABBs | EPipelineRaytracingFlags_NoNullClosestHit | EPipelineRaytracingFlags_NoNullMiss
+} EPipelineRaytracingFlags;
+
 typedef enum ECullMode {
 	ECullMode_Back,
 	ECullMode_None,
@@ -465,8 +478,8 @@ typedef enum ECompareOp {
 
 typedef enum EStencilOp {
 	EStencilOp_Keep, EStencilOp_Zero,
-	EStencilOp_Replace, EStencilOp_Invert,
-	EStencilOp_IncClamp, EStencilOp_DecClamp,
+	EStencilOp_Replace, EStencilOp_IncClamp,
+	EStencilOp_DecClamp, EStencilOp_Invert,
 	EStencilOp_IncWrap, EStencilOp_DecWrap,
 	EStencilOp_Count
 } EStencilOp;
@@ -497,7 +510,10 @@ typedef enum EWriteMask {
 	EWriteMask_G    = 1 << 1,
 	EWriteMask_B    = 1 << 2,
 	EWriteMask_A    = 1 << 3,
-	EWriteMask_All  = 0xF
+	EWriteMask_All  = 0xF,
+	EWriteMask_RGBA = 0xF,
+	EWriteMask_RGB  = 0x7,
+	EWriteMask_RG   = 0x3
 } EWriteMask;
 
 typedef enum ELogicOpExt {
@@ -564,7 +580,7 @@ Compute, graphics and ray tracing stages sitting in one oiSH are *separate* pipe
 
 `SPFile_validate` performs the checks that need **no device**, so a mismatch names itself long before a driver returns an opaque error: the pixel stage writing more render targets than the pipeline declares, a declared target with no format, depth state with no depth attachment, a vertex input the pipeline has no format for, half a tessellation pair or a control point count outside 1..32 (or set without tessellation), a render target count above 8, a blend target mask enabling targets that don't exist, blending enabled with nothing masked, sample shading outside 0..1, and a ray tracing pipeline that can't trace a single ray.
 
-Device-dependent validation stays with the backend, since it needs capabilities rather than the pipeline alone: whether a format is supported as a vertex input or color attachment, which MSAA counts the device offers, and whether features like dual-source blending, wireframe, depth bias or geometry shaders exist. Enum *bounds* checking also stays there, because those enums live in the graphics layer that oiSP deliberately doesn't depend on.
+Device-dependent validation stays with the backend, since it needs capabilities rather than the pipeline alone: whether a format is supported as a vertex input or color attachment, which MSAA counts the device offers, and whether features like dual-source blending, wireframe, depth bias or geometry shaders exist. Enum *bounds* checking stays there too: the reader keeps every stored integer as is and the backend rejects a value it can't map, so a newer file's value never turns into a silently different one here.
 
 ## Hashing & comparing
 
@@ -605,4 +621,4 @@ round-trip its own pipelines through it, without two definitions of the same sta
 
 ## Changelog
 
-1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Carries the pipeline records with their common base (name, kind, stage range, specialization range, kind specific state index), the shared stage pool naming each stage's oiSH + entrypoint + source hash, the specialization pool recording every field a shader can't prove along with whether it was derived, supplied or assumed, and the kind specific graphics and ray tracing state pools. The graphics state covers `PipelineGraphicsInfo` completely, including the rasterizer, full depth/stencil, per-target blend factors and write masks, sample-rate shading and tessellation control points, so a pipeline that supplies every reported field is whole rather than partial; the state structs and the enums they store are declared here and aliased by the graphics layer rather than duplicated. Blend state and the vertex layout exist as a `Stored` and a `Runtime` form, since a blend state can only reach the attachments blending selects and a vertex layout only the buffers and input locations it fills in, so a graphics state costs 64 bytes on disk against the 204 a pipeline binds.
+1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Carries the pipeline records with their common base (name, kind, stage range, specialization range, kind specific state index), the shared stage pool naming each stage's oiSH + entrypoint + source hash, the specialization pool recording every field a shader can't prove along with whether it was derived, supplied or assumed, and the kind specific graphics and ray tracing state pools. The graphics state covers `PipelineGraphicsInfo` completely, including the rasterizer, full depth/stencil, per-target blend factors and write masks, sample-rate shading and tessellation control points, so a pipeline that supplies every reported field is whole rather than partial; the state structs and the enums they store are declared here and aliased by the graphics layer rather than duplicated. Blend state and the vertex layout exist as a `Stored` and a `Runtime` form, since a blend state can only reach the attachments blending selects and a vertex layout only the buffers and input locations it fills in, so a graphics state costs 64 bytes on disk against the 204 a pipeline binds. A derived ray tracing pipeline assumes `rt.flags = EPipelineRaytracingFlags_Default` (skip AABBs), the same default the graphics layer creates with.

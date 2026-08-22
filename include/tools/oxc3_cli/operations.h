@@ -65,9 +65,9 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_AESFileShift,             //-aes-file: read the AES key from a file instead of argv
 
 	EOperationHasParameter_ISAAsicShift,             //-asic: target AMD GPU/architecture for RGA ISA operations
-	EOperationHasParameter_RTVFormatShift,           //-rtv: override render target formats for live graphics ISA
-	EOperationHasParameter_RecursionDepthShift,      //-recursion-depth: override the ray tracing recursion limit
 	EOperationHasParameter_PipelineOutputShift,      //-pso-output: write the pipeline that was used as an oiSP
+	EOperationHasParameter_PipelineSetShift,         //-pso-set: supply pipeline fields by the path the report prints
+	EOperationHasParameter_PipelineInputShift,       //-pso-input: replay a stored oiSP's values over the derived pipeline
 
 	EOperationHasParameter_CountEnum,                //How many enums there are
 
@@ -109,9 +109,9 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_AESFile                   = 1 << EOperationHasParameter_AESFileShift,
 
 	EOperationHasParameter_ISAAsic                   = 1 << EOperationHasParameter_ISAAsicShift,
-	EOperationHasParameter_RTVFormat                 = 1 << EOperationHasParameter_RTVFormatShift,
-	EOperationHasParameter_RecursionDepth            = 1 << EOperationHasParameter_RecursionDepthShift,
 	EOperationHasParameter_PipelineOutput            = 1 << EOperationHasParameter_PipelineOutputShift,
+	EOperationHasParameter_PipelineSet               = 1 << EOperationHasParameter_PipelineSetShift,
+	EOperationHasParameter_PipelineInput             = 1 << EOperationHasParameter_PipelineInputShift,
 
 	//The two parameter key sources (-aes / -aes-file); --aes-stdin is a flag (EOperationFlags_AESStdin), so a
 	//"any key source present" test must also check that flag separately.

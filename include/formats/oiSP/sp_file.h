@@ -128,6 +128,15 @@ typedef enum ESPField {
 const C8 *ESPField_name(ESPField field);
 Bool ESPField_isIndexed(ESPField field);
 
+//How many indices an indexed field has (8 per render target, 16 per vertex buffer), 1 for a field without any.
+
+U8 ESPField_indexCount(ESPField field);
+
+//Parses the path a field is reported under ("blend.src[2]", "topology") back into the field and its index.
+//Returns false for an unknown name or an index outside the field's range, so a typo can't land on another field.
+
+Bool ESPField_parsePath(CharString path, ESPField *field, U8 *index);
+
 //Why reflection can't prove a field, and which values are legal; both are static text keyed off the field.
 
 const C8 *ESPField_reason(ESPField field);
@@ -190,9 +199,6 @@ typedef struct SPPipelineBase {
 	U32 stateIndex;                             //Into graphicsStates or raytracingStates; unused by compute
 
 } SPPipelineBase;
-
-//One vertex input location: which buffer it reads, at what offset, in what format.
-//Laid out the way a vertex attribute is bound, so lowering is a field copy rather than a repack.
 
 //How vertices are assembled: the topology they form and where each input location is fetched from.
 //Formats come from the vertex stage's signature; the packing into buffers is a pipeline choice, not a signature.
@@ -327,7 +333,6 @@ typedef struct SPRaytracingState {
 
 } SPRaytracingState;
 
-TList(SPVertexAttribute);
 TList(SPSpecialization);
 TList(SPStage);
 TList(SPPipelineBase);

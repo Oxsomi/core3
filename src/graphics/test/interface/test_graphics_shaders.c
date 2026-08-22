@@ -41,6 +41,8 @@
 #include "platforms/platform.h"
 #include "platforms/file.h"
 #include "formats/oiSH/sh_file.h"
+#include "formats/oiSP/sp_file.h"
+#include "graphics/generic/pipeline_serialize.h"
 #include "types/test/test.h"
 #include "types/container/memory_stream.h"
 #include "types/container/texture_format.h"
@@ -1000,8 +1002,8 @@ void Test_graphicsShaderNamedEntry(Test *t, GraphicsDeviceRef *deviceRef) {
 
 		const CharString name = CharString_createRefCStrConst("Named entrypoint graphics pipeline");
 
-		//Before the entrypoint fix this failed validation, looking up "mainVS" in a SPIR-V module whose
-		// entrypoint had been renamed to "main"
+		//A named entrypoint is looked up under the name the SPIR-V module actually kept, which the compile path
+		// may have renamed to "main", rather than under the HLSL name the oiSH records.
 
 		Test_assert(t, "createNamedEntryPipeline", GraphicsDeviceRef_createPipelineGraphics(
 			deviceRef, &fileList, &stageList, &info, &name, EPipelineFlags_None, NULL, &pipeline, &t->err
@@ -1020,6 +1022,118 @@ void Test_graphicsShaderNamedEntry(Test *t, GraphicsDeviceRef *deviceRef) {
 // raytracing pipeline can fetch the TLAS and trace against it.
 //Two rays start above the triangle's interior and two outside, so the readback distinguishes the closest
 // hit and miss shaders actually running from any default.
+
+//A live pipeline dumps to an oiSP that's exact, lowers back to the state it was created with, and rebuilds.
+
+void Test_graphicsShaderPipelineSerialize(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Shaders/pipeline serialize (oiSP)");
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if (!device->defaultDescriptorTable) {
+		Test_print(t, "Device has no bindless descriptor table, skipping pipeline serialize tests");
+		return;
+	}
+
+	if (!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering)) {
+		Test_print(t, "Device lacks direct rendering, skipping pipeline serialize tests");
+		return;
+	}
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	SHFile files[2] = { 0 };
+	ListSHFile fileList = (ListSHFile) { 0 };
+	ListCharString names = (ListCharString) { 0 };
+	PipelineRef *pipeline = NULL;
+	PipelineRef *rebuilt = NULL;
+	SPFile sp = (SPFile) { 0 };
+	U32 pipelineId = U32_MAX;
+
+	const CharString nameArr[2] = {
+		CharString_createRefCStrConst("test_draw_vs.oiSH"), CharString_createRefCStrConst("test_draw_ps.oiSH")
+	};
+
+	if(
+		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_draw_vs.oiSH", &files[0]) ||
+		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_draw_ps.oiSH", &files[1])
+	)
+		goto clean;
+
+	ListSHFile_createRefConst(files, 2, &fileList, NULL);
+	ListCharString_createRefConst(nameArr, 2, &names, NULL);
+
+	//State with enough non default values that a lossy round trip would show
+
+	PipelineGraphicsInfo info = (PipelineGraphicsInfo) {
+		.attachmentCountExt = 1,
+		.attachmentFormatsExt = { ETextureFormatId_RGBA8 },
+		.rasterizer = (Rasterizer) { .cullMode = ECullMode_None },
+		.blendState = (BlendState) {
+			.enable = true, .renderTargetMask = 1, .writeMask = { EWriteMask_All },
+			.attachments = { (BlendStateAttachment) {
+				.srcBlend = EBlend_One, .dstBlend = EBlend_One, .srcBlendAlpha = EBlend_One, .dstBlendAlpha = EBlend_One,
+				.blendOp = EBlendOp_Add, .blendOpAlpha = EBlendOp_Add
+			} }
+		}
+	};
+
+	if(!TestShaders_graphicsPipeline(t, deviceRef, &fileList, 0, 1, &info, &pipeline))
+		goto clean;
+
+	if(!Test_assert(t, "createSP", SPFile_create(ESPSettingsFlags_None, alloc, &sp, &t->err)))
+		goto clean;
+
+	if(!Test_assert(t, "dump", Pipeline_toSPFile(
+		pipeline, &fileList, &names, CharString_createRefCStrConst("draw"), alloc, &sp, &pipelineId, &t->err
+	)))
+		goto clean;
+
+	//Dumped state is exact (nothing assumed) and keeps the one declared target rather than growing to eight
+
+	Test_assert(t, "dumpExact", SPFile_isExact(&sp, pipelineId));
+
+	const SPGraphicsState *state = SPFile_graphicsState(&sp, pipelineId);
+
+	if (Test_assert(t, "dumpHasGraphicsState", state != NULL)) {
+		Test_assert(t, "dumpTargetCount", state->renderTargetCount == 1);
+		Test_assert(t, "dumpTargetFormat", state->renderTargetFormats[0] == (U8) ETextureFormatId_RGBA8);
+		Test_assert(t, "dumpBlend", state->blend.enable && state->blend.attachments[0].srcBlend == EBlend_One);
+	}
+
+	//Lowering gives back what the pipeline was created with
+
+	PipelineGraphicsInfo back = (PipelineGraphicsInfo) { 0 };
+
+	if (Test_assert(t, "lower", SPFile_toGraphicsInfo(&sp, pipelineId, &back, &t->err))) {
+		Test_assert(t, "lowerTargets", back.attachmentCountExt == 1 && back.attachmentFormatsExt[0] == ETextureFormatId_RGBA8);
+		Test_assert(t, "lowerRasterizer", back.rasterizer.cullMode == ECullMode_None);
+		Test_assert(t, "lowerBlend", back.blendState.enable && back.blendState.renderTargetMask == 1);
+		Test_assert(
+			t, "lowerAttachment",
+			back.blendState.attachments[0].dstBlendAlpha == EBlend_One && back.blendState.attachments[0].blendOp == EBlendOp_Add
+		);
+		Test_assert(t, "lowerWriteMask", back.blendState.writeMask[0] == EWriteMask_All);
+	}
+
+	//And a stored pipeline rebuilds against the same oiSH files, resolved by name
+
+	Test_assert(t, "rebuild", GraphicsDeviceRef_createPipelineFromSPFile(
+		deviceRef, &sp, pipelineId, &fileList, &names, NULL, alloc, &rebuilt, &t->err
+	));
+
+	Test_assert(t, "rebuilt", rebuilt != NULL);
+
+clean:
+	RefPtr_dec(&rebuilt);
+	RefPtr_dec(&pipeline);
+	SPFile_free(&sp, alloc);
+	ListCharString_free(&names, alloc);
+	ListSHFile_free(&fileList, alloc);
+	SHFile_free(&files[0], alloc);
+	SHFile_free(&files[1], alloc);
+}
 
 void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef) {
 

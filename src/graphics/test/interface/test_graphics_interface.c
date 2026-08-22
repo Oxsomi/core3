@@ -353,6 +353,7 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	Test_graphicsShaderDraw(t, deviceRef);
 	Test_graphicsShaderNamedEntry(t, deviceRef);
 	Test_graphicsShaderRays(t, deviceRef);
+	Test_graphicsShaderPipelineSerialize(t, deviceRef);
 
 	//34-36. Resource round trips and the frame ring, rather than what a shader computes
 

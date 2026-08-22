@@ -44,6 +44,7 @@
 #include "formats/oiSB/sb_variable.h"
 #include "graphics/generic/pipeline_serialize.h"
 #include "shader_compiler/spirv_isa.h"
+#include "types/math/type_cast.h"
 #include "shader_compiler/compiler.h"
 
 #ifdef CLI_GRAPHICS
@@ -233,66 +234,8 @@ clean:
 		return s_uccess;
 	}
 
-	//First SHEntry with the given pipeline stage, or U64_MAX if none.
-
-	//A vertex input's ESBType (SHEntry.inputs[]) -> the matching vertex-buffer ETextureFormatId, or Undefined if none.
-	//Vertex inputs are scalars/vectors; HLSL float/uint/int are 32-bit and half is 16-bit, so 8/64-bit have no format.
-	//16-bit has no 3-component format, so a 3-component 16-bit input falls back to the 4-component (RGBA) one.
-
-	static ETextureFormatId CLI_esbTypeToVertexFormat(U8 esbType) {
-
-		if(!esbType)
-			return ETextureFormatId_Undefined;
-
-		const ESBStride stride = ESBType_getStride(esbType);
-
-		if(stride != ESBStride_X16 && stride != ESBStride_X32)
-			return ETextureFormatId_Undefined;
-
-		const U8 comp = (U8) ESBType_getVector(esbType);        //0..3 = 1..4 components
-
-		static const ETextureFormatId f32[4] =
-			{ ETextureFormatId_R32f, ETextureFormatId_RG32f, ETextureFormatId_RGB32f, ETextureFormatId_RGBA32f };
-		static const ETextureFormatId u32[4] =
-			{ ETextureFormatId_R32u, ETextureFormatId_RG32u, ETextureFormatId_RGB32u, ETextureFormatId_RGBA32u };
-		static const ETextureFormatId i32[4] =
-			{ ETextureFormatId_R32i, ETextureFormatId_RG32i, ETextureFormatId_RGB32i, ETextureFormatId_RGBA32i };
-		static const ETextureFormatId f16[4] =
-			{ ETextureFormatId_R16f, ETextureFormatId_RG16f, ETextureFormatId_RGBA16f, ETextureFormatId_RGBA16f };
-		static const ETextureFormatId u16[4] =
-			{ ETextureFormatId_R16u, ETextureFormatId_RG16u, ETextureFormatId_RGBA16u, ETextureFormatId_RGBA16u };
-		static const ETextureFormatId i16[4] =
-			{ ETextureFormatId_R16i, ETextureFormatId_RG16i, ETextureFormatId_RGBA16i, ETextureFormatId_RGBA16i };
-
-		const Bool is16 = stride == ESBStride_X16;
-
-		switch(ESBType_getPrimitive(esbType)) {
-			case ESBPrimitive_Float: return (is16 ? f16 : f32)[comp];
-			case ESBPrimitive_UInt:  return (is16 ? u16 : u32)[comp];
-			case ESBPrimitive_Int:   return (is16 ? i16 : i32)[comp];
-			default:                 return ETextureFormatId_Undefined;
-		}
-	}
-
-	//A pixel output's ESBType (SHEntry.outputs[]) -> a standard render target format matching its primitive.
-	//Float outputs take the common 8-bit unorm color target; integer outputs keep full precision.
-	//The pixel shader writes a prefix of the 4 channels, so a fixed RGBA target is always compatible.
-
-	static ETextureFormatId CLI_esbTypeToRenderTarget(U8 esbType) {
-
-		if(!esbType)
-			return ETextureFormatId_Undefined;
-
-		switch(ESBType_getPrimitive(esbType)) {
-			case ESBPrimitive_Float: return ETextureFormatId_RGBA8;
-			case ESBPrimitive_UInt:  return ETextureFormatId_RGBA32u;
-			case ESBPrimitive_Int:   return ETextureFormatId_RGBA32i;
-			default:                 return ETextureFormatId_Undefined;
-		}
-	}
-
 	//A texture format name (e.g. "rgba16f", case-insensitive) -> its ETextureFormatId, or Undefined if unknown.
-	//Used to parse the -rtv override.
+	//Used by -pso-set for rtv.format.
 
 	static ETextureFormatId CLI_parseTextureFormat(CharString name) {
 
@@ -567,10 +510,135 @@ clean:
 		return s_uccess;
 	}
 
+	//Applies "path[idx]=value,..." to a derived pipeline through SPFile_supply, by the paths the report prints.
+	//rtv.format takes a texture format name, the F32 fields a float literal, everything else an integer.
+
+	static Bool CLI_isaApplyPipelineSet(SPFile *spFile, U32 pipelineId, CharString set, Error *e_rr) {
+
+		Bool s_uccess = true;
+		U64 start = 0;
+
+		for (U64 i = 0; i <= CharString_length(set); ++i) {
+
+			if(i != CharString_length(set) && set.ptr[i] != ',')
+				continue;
+
+			const CharString seg = CharString_createRefSizedConst(set.ptr + start, i - start, false);
+			start = i + 1;
+
+			if(!CharString_length(seg))
+				continue;
+
+			U64 eq = U64_MAX;
+
+			for (U64 j = 0; j < CharString_length(seg); ++j)
+				if (seg.ptr[j] == '=') {
+					eq = j;
+					break;
+				}
+
+			if(eq == U64_MAX || !eq || eq + 1 >= CharString_length(seg))
+				retError(clean, Error_invalidParameter(
+					0, 0, "CLI_isaDisassemble() -pso-set expects path=value entries separated by commas"
+				));
+
+			const CharString path = CharString_createRefSizedConst(seg.ptr, eq, false);
+			const CharString valueStr =
+				CharString_createRefSizedConst(seg.ptr + eq + 1, CharString_length(seg) - eq - 1, false);
+
+			ESPField field = ESPField_Count;
+			U8 index = 0;
+
+			if (!ESPField_parsePath(path, &field, &index)) {
+				Log_errorLnx(
+					"-pso-set: '%.*s' isn't a field this pipeline reports (see the report's paths)", (int) eq, seg.ptr
+				);
+				retError(clean, Error_invalidParameter(0, 0, "CLI_isaDisassemble() -pso-set has an unknown field path"));
+			}
+
+			U32 value = 0;
+			U64 parsed = 0;
+			F32 f = 0;
+
+			const Bool isF32 =
+				field == ESPField_DepthBiasClamp || field == ESPField_DepthBiasSlope || field == ESPField_MsaaMinSampleShading;
+
+			if (field == ESPField_RenderTargetFormat && !(valueStr.ptr[0] >= '0' && valueStr.ptr[0] <= '9')) {
+
+				const ETextureFormatId fmt = CLI_parseTextureFormat(valueStr);
+
+				if(fmt == ETextureFormatId_Undefined)
+					retError(clean, Error_invalidParameter(
+						0, 0, "CLI_isaDisassemble() -pso-set rtv.format has an unknown texture format (e.g. rgba8, rgba16f)"
+					));
+
+				value = (U32) fmt;
+			}
+
+			else if(isF32 && CharString_parseFloat(valueStr, &f))
+				value = U32_fromF32Bits(f);
+
+			else if(CharString_parseU64(valueStr, &parsed) && !(parsed >> 32))
+				value = (U32) parsed;
+
+			else {
+				Log_errorLnx("-pso-set: '%.*s' has no valid value", (int) CharString_length(seg), seg.ptr);
+				retError(clean, Error_invalidParameter(0, 0, "CLI_isaDisassemble() -pso-set value couldn't be parsed"));
+			}
+
+			gotoIfError3(clean, SPFile_supply(spFile, pipelineId, field, index, value, e_rr));
+		}
+
+	clean:
+		return s_uccess;
+	}
+
+	//Replays every field a stored oiSP carries over the derived pipeline; the stored values count as supplied.
+	//The stored pipeline has to be of the same kind, since its fields belong to that kind's state.
+
+	static Bool CLI_isaApplyPipelineInput(
+		SPFile *spFile, U32 pipelineId, CharString path, const RefPtrType *fileHandleType,
+		const Allocator *alloc, Error *e_rr
+	) {
+
+		Bool s_uccess = true;
+		Buffer data = Buffer_createNull();
+		StreamRef *stream = NULL;
+		SPFile stored = (SPFile) { 0 };
+		const RefPtrType memStreamType = MemoryStream_makeType(alloc);
+
+		gotoIfError3(clean, File_read(&path, 1 * SECOND, 0, 0, fileHandleType, &data, e_rr));
+		gotoIfError3(clean, MemoryStream_createFromBuffer(&data, EMemoryStreamFlags_None, &memStreamType, &stream, e_rr));
+
+		U64 off = 0;
+		gotoIfError3(clean, SPFile_read(stream, &off, false, alloc, &stored, e_rr));
+
+		if(!stored.pipelines.length)
+			retError(clean, Error_invalidState(0, "CLI_isaDisassemble() -pso-input holds no pipeline"));
+
+		const SPPipelineBase src = stored.pipelines.ptr[0];
+
+		if(src.type != spFile->pipelines.ptr[pipelineId].type)
+			retError(clean, Error_invalidState(
+				0, "CLI_isaDisassemble() -pso-input is a different kind of pipeline than the one the shader forms"
+			));
+
+		for (U32 i = 0; i < src.specializationCount; ++i) {
+			const SPSpecialization spec = stored.specializations.ptr[src.specializationStart + i];
+			gotoIfError3(clean, SPFile_supply(spFile, pipelineId, (ESPField) spec.field, spec.index, spec.value, e_rr));
+		}
+
+	clean:
+		SPFile_free(&stored, alloc);
+		RefPtr_dec(&stream);
+		Buffer_free(&data, alloc);
+		return s_uccess;
+	}
+
 	static Bool CLI_isaDisassembleLive(
 		SHFile shFile, U64 deviceId, Bool hasOutput, CharString outputStr, const RefPtrType *fileHandleType,
-		const U8 *overrideRtv, U8 overrideRtvCount, Bool hasRecursionDepth, U8 recursionDepth, Bool assumeDefaults,
-		Bool hasPipelineOutput, CharString pipelineOutputStr,
+		Bool assumeDefaults,
+		Bool hasPipelineOutput, CharString pipelineOutputStr, CharString psoSet, CharString psoInput,
 		CharString shaderName,
 		const Allocator *alloc, Error *e_rr
 	) {
@@ -655,7 +723,7 @@ clean:
 		CharString entryName = CharString_createNull();
 		U8 boundStageCount = 0;                //Reported, since a dropped stage would otherwise be invisible
 
-		//Pick the stages that form ONE pipelineState.
+		//Pick the stages that form ONE pipeline.
 		//A file may hold compute, graphics and ray tracing stages side by side; those are separate pipelines, so only
 		// the first kind present is taken (compute, then graphics, then ray tracing) and the rest is reported rather
 		// than silently folded in or silently dropped.
@@ -756,20 +824,16 @@ clean:
 			&spFile, &fileList, &shaderNames, CharString_createNull(), stageRefs, stageRefCount, alloc, &pipelineId, e_rr
 		));
 
-		//An override is a supplied value, so it drops out of the specialization report.
+		//-pso-input replays a stored pipeline's values over the derived one, so a run can be repeated or edited from
+		// the oiSP a previous -pso-output wrote; every value it carries counts as supplied.
 
-		for(U8 i = 0; i < overrideRtvCount; ++i)
-			gotoIfError3(clean, SPFile_supply(
-				&spFile, pipelineId, ESPField_RenderTargetFormat, i, overrideRtv[i], e_rr
-			));
+		if(CharString_length(psoInput))
+			gotoIfError3(clean, CLI_isaApplyPipelineInput(&spFile, pipelineId, psoInput, fileHandleType, alloc, e_rr));
 
-		//-recursion-depth is the one ray tracing field with no sensible default; the flags default to none, which
-		// is what a lib without special skip/null rules means, so supplying the depth makes the state exact.
+		//-pso-set supplies any reported field by the path the report prints, so nothing has to stay assumed.
 
-		if (hasRecursionDepth) {
-			gotoIfError3(clean, SPFile_supply(&spFile, pipelineId, ESPField_MaxRecursionDepth, 0, recursionDepth, e_rr));
-			gotoIfError3(clean, SPFile_supply(&spFile, pipelineId, ESPField_RaytracingFlags, 0, 0, e_rr));
-		}
+		if(CharString_length(psoSet))
+			gotoIfError3(clean, CLI_isaApplyPipelineSet(&spFile, pipelineId, psoSet, e_rr));
 
 		//Structural validation runs before the driver sees the pipeline, so a mismatch names itself instead of
 		// surfacing as an opaque driver error.
@@ -813,6 +877,11 @@ clean:
 				else Log_errorLnx("\t%s: %s (legal: %s)", name, reason, domain);
 			}
 
+			Log_errorLnx(
+				"Supply them with -pso-set \"path=value,...\" (any field, by the path above), replay an oiSP with -pso-input, "
+				"or pass --assume-defaults for a quick look."
+			);
+
 			retError(clean, Error_invalidState(
 				1, "CLI_isaDisassembleLive() pipeline state is missing; supply it or pass -assume-defaults"
 			));
@@ -821,7 +890,6 @@ clean:
 		//The record is copied once the overrides are in, so the lowering below reads final values.
 
 		const SPPipelineBase pipelineBase = spFile.pipelines.ptr[pipelineId];
-		const SPGraphicsState *gfxState = SPFile_graphicsState(&spFile, pipelineId);
 		const SPRaytracingState *rtState = SPFile_raytracingState(&spFile, pipelineId);
 
 		if(pipelineBase.type == (U8) ESPPipelineType_Compute) {
@@ -981,13 +1049,6 @@ clean:
 			//The descriptor already holds every field, so this is the same lowering a loaded oiSP goes through.
 
 			gotoIfError3(clean, SPFile_toGraphicsInfo(&spFile, pipelineId, &info, e_rr));
-
-			//A pixel shader writing nothing still needs one attachment for the pipeline to create.
-
-			if (!gfxState->renderTargetCount) {
-				info.attachmentFormatsExt[0] = (U8) ETextureFormatId_RGBA8;
-				info.attachmentCountExt = 1;
-			}
 
 			gotoIfError3(clean, GraphicsDeviceRef_createPipelineGraphics(
 				deviceRef, &fileList, &stageList, &info, &pName, EPipelineFlags_CaptureISA, NULL, &pipeline, e_rr
@@ -1235,34 +1296,6 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 		if(live) {
 
-			//-rtv <fmt>[,<fmt>...] overrides the reflected render target formats for a live graphics gfxState->
-
-			U8 overrideRtv[8] = { 0 };
-			U8 overrideRtvCount = 0;
-
-			CharString rtvStr = CharString_createNull();
-
-			if(ParsedArgs_getArg(args, EOperationHasParameter_RTVFormatShift, &rtvStr, NULL) && CharString_length(rtvStr)) {
-
-				U64 start = 0;
-
-				for(U64 i = 0; i <= CharString_length(rtvStr) && overrideRtvCount < 8; ++i)
-
-					if(i == CharString_length(rtvStr) || rtvStr.ptr[i] == ',') {
-
-						const CharString seg = CharString_createRefSizedConst(rtvStr.ptr + start, i - start, false);
-						const ETextureFormatId fmt = CLI_parseTextureFormat(seg);
-
-						if(fmt == ETextureFormatId_Undefined)
-							retError(clean, Error_invalidParameter(
-								0, 0, "CLI_isaDisassemble() -rtv has an unknown texture format (e.g. rgba8, rgba16f, r32f)"
-							));
-
-						overrideRtv[overrideRtvCount++] = (U8) fmt;
-						start = i + 1;
-					}
-			}
-
 			gotoIfError3(clean, File_read(&inputStr, 1 * SECOND, 0, 0, &fileHandleType, &input, e_rr));
 			gotoIfError3(clean, MemoryStream_createFromBuffer(
 				&input, EMemoryStreamFlags_None, &memoryStreamType, &readStream, e_rr
@@ -1271,35 +1304,20 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 			U64 liveOff = 0;
 			gotoIfError3(clean, SHFile_read((StreamRef*)readStream, &liveOff, false, alloc, &shFile, e_rr));
 
-			//Recursion depth is the one ray tracing field a shader never declares, so it's an override rather than a
-			// derived value; -assume-defaults lets the remaining assumptions through for a quick look.
-
-			CharString depthStr = CharString_createNull();
-			U64 recursionDepth = 0;
-			const Bool hasRecursionDepth =
-				ParsedArgs_getArg(args, EOperationHasParameter_RecursionDepthShift, &depthStr, NULL) &&
-				CharString_length(depthStr);
-
-			const Bool badDepth =
-				hasRecursionDepth &&
-				(!CharString_parseU64(depthStr, &recursionDepth) || !recursionDepth || recursionDepth > 255);
-
-			if(badDepth)
-				retError(clean, Error_invalidParameter(
-					0, 0, "CLI_isaDisassemble() -recursion-depth has to be a number in 1..255"
-				));
-
 			const Bool assumeDefaults = (args->flags & EOperationFlags_AssumeDefaults) != 0;
 
 			CharString pipelineOutputStr = CharString_createNull();
+			CharString psoSetStr = CharString_createNull();
+			CharString psoInputStr = CharString_createNull();
+			ParsedArgs_getArg(args, EOperationHasParameter_PipelineSetShift, &psoSetStr, NULL);
+			ParsedArgs_getArg(args, EOperationHasParameter_PipelineInputShift, &psoInputStr, NULL);
 			const Bool hasPipelineOutput =
 				ParsedArgs_getArg(args, EOperationHasParameter_PipelineOutputShift, &pipelineOutputStr, NULL) &&
 				CharString_length(pipelineOutputStr);
 
 			gotoIfError3(clean, CLI_isaDisassembleLive(
-				shFile, deviceId, hasOutput, outputStr, &fileHandleType, overrideRtv, overrideRtvCount,
-				hasRecursionDepth, (U8) recursionDepth, assumeDefaults,
-				hasPipelineOutput, pipelineOutputStr, inputStr, alloc, e_rr
+				shFile, deviceId, hasOutput, outputStr, &fileHandleType, assumeDefaults,
+				hasPipelineOutput, pipelineOutputStr, psoSetStr, psoInputStr, inputStr, alloc, e_rr
 			));
 			goto clean;
 		}

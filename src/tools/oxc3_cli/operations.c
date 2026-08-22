@@ -86,9 +86,9 @@ const C8 *EOperationHasParameter_names[] = {
 	"-oiCA",
 	"-aes-file",
 	"-asic",
-	"-rtv",
-	"-recursion-depth",
-	"-pso-output"
+	"-pso-output",
+	"-pso-set",
+	"-pso-input"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -113,9 +113,10 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Operate inside the given oiCA archive instead of the working directory.",
 	"Read the 32-byte AES key from a file (64/66-char hex or a raw 32-byte binary) instead of a plaintext argument.",
 	"AMD GPU/arch for ISA operations: a gfx target (e.g. gfx1100), or 'live[:index]'. Use '?' or 'isa devices' to list.",
-	"Override render target formats for live graphics ISA (e.g. rgba16f,r32f); default is reflected from the pixel shader.",
-	"Override the ray tracing recursion limit (default 1); the shader never declares it.",
-	"Write the pipeline the disassembly was taken from as an oiSP, so it can be inspected or loaded later."
+	"Write the pipeline the disassembly was taken from as an oiSP, so it can be inspected or loaded later.",
+	"Supply pipeline fields by the path the report prints, e.g. \"blend.enable=1,rtv.format[0]=rgba16f\"; "
+		"any field, so nothing has to stay assumed.",
+	"Replay a stored oiSP (from -pso-output) over the derived pipeline, so a run can be repeated or edited."
 };
 
 //Flags
@@ -828,8 +829,8 @@ void Operations_init() {
 				EOperationHasParameter_Output |
 				EOperationHasParameter_ISAAsic | EOperationHasParameter_Entry |
 				EOperationHasParameter_IncludeDir | EOperationHasParameter_ThreadCount |
-				EOperationHasParameter_RTVFormat | EOperationHasParameter_RecursionDepth |
-				EOperationHasParameter_PipelineOutput,
+				EOperationHasParameter_PipelineOutput | EOperationHasParameter_PipelineSet |
+				EOperationHasParameter_PipelineInput,
 
 			.operationFlags = EOperationFlags_Debug | EOperationFlags_Verbose | EOperationFlags_AssumeDefaults
 		};

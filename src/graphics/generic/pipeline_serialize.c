@@ -29,8 +29,6 @@
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 
-//F32 fields travel through the one U32 every specialization uses.
-
 Bool SPFile_toComputeStage(
 	const SPFile *spFile, U32 pipelineId, const ListPipelineStage *stages, PipelineStage *stage, Error *e_rr
 ) {
@@ -133,11 +131,14 @@ Bool SPFile_fromGraphicsInfo(SPFile *spFile, U32 pipelineId, const PipelineGraph
 
 	gotoIfError3(clean, SPFile_supply(spFile, pipelineId, ESPField_RenderTargetCount, 0, info->attachmentCountExt, e_rr));
 
-	for (U8 i = 0; i < 8; ++i) {
+	//Only the declared targets have a format; supplying one past the count would grow the count to reach it.
 
+	for(U8 i = 0; i < info->attachmentCountExt && i < 8; ++i)
 		gotoIfError3(clean, SPFile_supply(
 			spFile, pipelineId, ESPField_RenderTargetFormat, i, info->attachmentFormatsExt[i], e_rr
 		));
+
+	for (U8 i = 0; i < 8; ++i) {
 
 		gotoIfError3(clean, SPFile_supply(
 			spFile, pipelineId, ESPField_BlendWriteMask, i, info->blendState.writeMask[i], e_rr

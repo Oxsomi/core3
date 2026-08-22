@@ -55,6 +55,9 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 	if(spFile->specializations.length >> 32)
 		retError(clean, Error_invalidOperation(0, "SPFile_write()::specializations out of bounds"));
 
+	if((spFile->graphicsStates.length >> 32) || (spFile->raytracingStates.length >> 32))
+		retError(clean, Error_invalidOperation(0, "SPFile_write()::states out of bounds"));
+
 	//Each pipeline's ranges have to sit inside the pools, or a reader would index out of them.
 
 	for (U64 i = 0; i < spFile->pipelines.length; ++i) {

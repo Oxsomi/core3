@@ -131,9 +131,19 @@ static const C8 *VkGraphicsPipeline_spirvEntrypoint(Buffer spirv) {
 			break;
 
 		//OpEntryPoint (opcode 15) is execution model, id, then the null terminated name.
+		//The name has to end inside the instruction, or a malformed module would be read past its end.
 
-		if(op == 15 && w + 3 < wordCount)
-			return (const C8*) (words + w + 3);
+		if (op == 15 && len >= 4 && w + len <= wordCount) {
+
+			const C8 *name = (const C8*) (words + w + 3);
+			const U64 maxLen = (U64) (len - 3) * sizeof(U32);
+
+			for(U64 i = 0; i < maxLen; ++i)
+				if(!name[i])
+					return name;
+
+			return "main";
+		}
 
 		w += len;
 	}
@@ -309,7 +319,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		//A graphics stage always compiles to its own single entrypoint module, but whether that entrypoint kept the
 		// HLSL name or was renamed to "main" depends on the compile path, while the oiSH records the HLSL name either
 		// way, so the name is read from the module itself.
-		//This can go once a binary records which of the two forms it is.
+		//The oiSH doesn't record which of the two forms a binary kept, so the module is the only place to look.
 
 		const Buffer stageSpirv = buf->binaries[ESHBinaryType_SPIRV];
 		const C8 *entryPoint = VkGraphicsPipeline_spirvEntrypoint(stageSpirv);
