@@ -253,8 +253,11 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 			fileBuf = Buffer_createNull();
 		}
 
+		//paths owns a copy of every path addFileToDLFile walked over, sortedPaths only holds refs into it,
+		// so the sorted view has to go first and the owner has to release its strings too.
+
 		ListCharString_free(&sortedPaths, alloc);
-		ListCharString_free(&paths, alloc);
+		ListCharString_freeUnderlying(&paths, alloc);
 	}
 
 	//Now we're left with only data entries

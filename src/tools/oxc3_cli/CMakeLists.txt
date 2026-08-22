@@ -106,6 +106,19 @@ if(EnableTests AND OxC3TestExecutables)
 			DATA        ${CMAKE_SOURCE_DIR}/tools/test.py
 		)
 
+		# Drives DXC through the CLI, so it hits the same CGFunctionInfo new/delete size mismatch the
+		# shader compiler test documents.
+
+		if(EnableASAN)
+			oxc3_test_env(OxC3_cli_test
+				"ASAN_OPTIONS=string_append:,new_delete_type_mismatch=0"
+				"LSAN_OPTIONS=string_append:,suppressions=${CMAKE_SOURCE_DIR}/cmake/lsan_suppressions.txt"
+			)
+		endif()
+
+		# Drives the graphics device commands too, so it needs the same driver accommodations.
+
+		oxc3SanitizerDeviceTestEnv(OxC3_cli_test)
 	else()
 		message(WARNING "OxC3_cli_test skipped: Python3 interpreter not found")
 	endif()

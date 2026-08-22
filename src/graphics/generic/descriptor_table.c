@@ -813,14 +813,22 @@ Bool DescriptorTableRef_setDescriptors(
 						3, 0, "DescriptorTableRef_setDescriptors() sampler set at a non sampler register"
 					));
 
+				//Only one direction of this is checkable.
+				//SPIRV cannot express a comparison sampler: OpTypeSampler is identical either way and the
+				// comparison lives on the image, so a SPIRV only binary reflects SamplerComparisonState as a
+				// plain Sampler, and refusing a comparison sampler there would reject a correct shader.
+				//The other direction still holds, because a SamplerComparisonState register can only come from
+				// a backend that knew, either DXIL reflection or a combine that promoted it from one.
+
 				if(
 					d.resource &&
-					(type == ESHRegisterType_SamplerComparisonState) != SamplerRef_ptr(d.resource)->info.enableComparison
+					type == ESHRegisterType_SamplerComparisonState &&
+					!SamplerRef_ptr(d.resource)->info.enableComparison
 				)
 					retError(clean, Error_invalidParameter(
 						3, 0,
-						"DescriptorTableRef_setDescriptors() sampler doesn't match sampler type "
-						"(SamplerState or SamplerComparisonState)"
+						"DescriptorTableRef_setDescriptors() a SamplerComparisonState register needs a sampler "
+						"created with enableComparison"
 					));
 
 				if(

@@ -524,7 +524,9 @@ function(oxc3_add_test_run)
 	set(runScript "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/run_test.cmake")
 	set(stamp "${CMAKE_CURRENT_BINARY_DIR}/${T_NAME}.passed")
 
-	set(runArgs -DTEST_EXE=$<TARGET_FILE:${T_NAME}> -DTEST_NAME=${T_NAME})
+	set(envFile "${CMAKE_CURRENT_BINARY_DIR}/${T_NAME}.env")
+
+	set(runArgs -DTEST_EXE=$<TARGET_FILE:${T_NAME}> -DTEST_NAME=${T_NAME} -DTEST_ENV_FILE=${envFile})
 
 	if(T_WORKING_DIR)
 		list(APPEND runArgs -DTEST_WORKING_DIR=${T_WORKING_DIR})
@@ -549,6 +551,36 @@ function(oxc3_add_test_run)
 	add_custom_target(${T_NAME}_run ALL DEPENDS "${stamp}")
 	set_target_properties(${T_NAME}_run PROPERTIES FOLDER "${T_FOLDER}")
 
+	# Generated rather than written now, so oxc3_test_env can still add to it afterwards.
+
+	file(GENERATE OUTPUT "${envFile}" CONTENT "$<JOIN:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_ENV>,\n>\n")
+
+endfunction()
+
+# Environment for one test, in ctest's own ENVIRONMENT_MODIFICATION syntax (NAME=op:VALUE).
+#
+# Applied to BOTH ways a suite runs: set_property(TEST) covers ctest, and the same entries are written beside
+# the stamp for run_test.cmake, which is a plain execute_process and cannot read test properties.
+# Without the second half an ASan build that runs its suites at build time (the default) would run them
+# without the options CI applies, and fail on things CI never sees.
+#
+# Callable after the test is registered, which is how both existing callers are written: the entries land on
+# a target property and file(GENERATE) resolves it once every CMakeLists has run.
+
+function(oxc3_test_env testName)
+
+	if(NOT ARGN)
+		return()
+	endif()
+
+	if(TEST ${testName})
+		set_property(TEST ${testName} APPEND PROPERTY ENVIRONMENT_MODIFICATION ${ARGN})
+	endif()
+
+	if(TARGET ${testName}_run)
+		set_property(TARGET ${testName}_run APPEND PROPERTY OXC3_TEST_ENV ${ARGN})
+	endif()
+
 endfunction()
 
 # A test that is not an executable of its own (the CLI suite drives a python script against a built binary).
@@ -570,10 +602,20 @@ function(oxc3_add_test_command)
 	if(OxC3TestAutoRun AND NOT T_NO_AUTORUN AND NOT CMAKE_CROSSCOMPILING AND TARGET ${T_TARGET})
 
 		set(stamp "${CMAKE_CURRENT_BINARY_DIR}/${T_NAME}.passed")
+		set(envFile "${CMAKE_CURRENT_BINARY_DIR}/${T_NAME}.env")
+		set(runScript "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/run_test.cmake")
+
+		# Through the same wrapper as an executable suite, for the same two reasons: MSBuild fails a step whose
+		# output merely LOOKS like an error, and the environment has to match what ctest applies.
+		# | separated because -D would split a ; separated list itself.
+
+		string(JOIN "|" commandLine ${T_COMMAND})
 
 		add_custom_command(
 			OUTPUT "${stamp}"
-			COMMAND ${T_COMMAND}
+			COMMAND ${CMAKE_COMMAND}
+				"-DTEST_COMMAND=${commandLine}" -DTEST_NAME=${T_NAME} -DTEST_ENV_FILE=${envFile}
+				-DTEST_WORKING_DIR=${T_WORKING_DIR} -P "${runScript}"
 			COMMAND ${CMAKE_COMMAND} -E touch "${stamp}"
 			DEPENDS ${T_TARGET} ${T_DATA} ${T_DEPS}
 			WORKING_DIRECTORY ${T_WORKING_DIR}
@@ -583,6 +625,8 @@ function(oxc3_add_test_command)
 
 		add_custom_target(${T_NAME}_run ALL DEPENDS "${stamp}")
 		set_target_properties(${T_NAME}_run PROPERTIES FOLDER "${T_FOLDER}")
+
+		file(GENERATE OUTPUT "${envFile}" CONTENT "$<JOIN:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_ENV>,\n>\n")
 	endif()
 
 endfunction()

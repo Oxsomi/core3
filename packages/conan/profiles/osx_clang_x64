@@ -1,7 +1,8 @@
+{% set _detected, detectedVersion, _exe = detect_api.detect_clang_compiler() %}
 [settings]
 os=Macos
 compiler=clang
 compiler.cppstd=gnu17
-compiler.version=18
+compiler.version={{ detect_api.default_compiler_version("clang", detectedVersion) }}
 compiler.libcxx=libc++
 arch=x86_64

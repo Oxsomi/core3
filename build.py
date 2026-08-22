@@ -194,13 +194,42 @@ def main():
 
 	conanVerb = "install" if args.setup_only == "True" else "build"
 
+	# The packager and any other instrumented tool the build runs statically links OxC3_types_base while
+	# also loading libOxC3_shader_compiler.so, which links the same static library, so every non static
+	# global in it is defined in both modules and ASan aborts with an odr-violation before the tool does
+	# any work. The definitions are identical, one static library reached through two link paths.
+	# Scoped to the build: ctest runs from its own invocation below and keeps full ODR checking, so this
+	# only covers build time tools. Removing the need for it means the shared shader compiler linking
+	# types_base dynamically, or hiding those globals in the .so.
+
+	buildEnv = None
+
+	if args.asan == "True":
+
+		buildEnv = dict(os.environ)
+
+		buildEnv["ASAN_OPTIONS"] = ",".join(
+			filter(None, [ os.environ.get("ASAN_OPTIONS"), "detect_odr_violation=0" ])
+		)
+
+		# LeakSanitizer runs at exit of every tool the build invokes, and DXC and SPIRV-Reflect both
+		# leave allocations to process exit. Suppressed by symbol rather than switching leak detection
+		# off, so a leak in OxC3's own code during a build still reports.
+
+		suppressions = os.path.join(common.ROOT, "cmake", "lsan_suppressions.txt")
+
+		buildEnv["LSAN_OPTIONS"] = ",".join(
+			filter(None, [ os.environ.get("LSAN_OPTIONS"), f"suppressions={suppressions}" ])
+		)
+
 	for mode in build_modes:
 		common.run(
 			f"conan {conanVerb} . "
 			f"-of {build_dir} "
 			f"{common.hostProfileArgs(mode, compiler)} "
 			f"-s build_type={mode} "
-			f"{options}"
+			f"{options}",
+			env = buildEnv
 		)
 
 		# Packaging is conanfile.py's job, so a prebuilt never has to restate which files belong in one.
