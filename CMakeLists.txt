@@ -111,6 +111,40 @@ endif()
 if(OxC3IdeTree AND CMAKE_TOOLCHAIN_FILE)
 
 	get_filename_component(oxc3GenDir "${CMAKE_TOOLCHAIN_FILE}" DIRECTORY)
+
+	# The options this configuration was set up with live in conan's own preset beside the toolchain, and
+	# nowhere else: conan_toolchain.cmake does not carry them.
+	# Without this the IDE tree silently configures with the CMakeLists defaults instead, so it would build a
+	# different project than the script and than CI (EnableShaderCompiler off, for one).
+
+	set(oxc3ConanPresets "${oxc3GenDir}/CMakePresets.json")
+
+	if(EXISTS "${oxc3ConanPresets}")
+
+		file(READ "${oxc3ConanPresets}" oxc3PresetsJson)
+
+		string(JSON oxc3CacheVars ERROR_VARIABLE oxc3JsonErr GET "${oxc3PresetsJson}" configurePresets 0 cacheVariables)
+
+		if(NOT oxc3JsonErr AND oxc3CacheVars)
+
+			string(JSON oxc3VarCount LENGTH "${oxc3CacheVars}")
+
+			if(oxc3VarCount GREATER 0)
+
+				math(EXPR oxc3LastVar "${oxc3VarCount} - 1")
+
+				foreach(i RANGE 0 ${oxc3LastVar})
+					string(JSON oxc3Key MEMBER "${oxc3CacheVars}" ${i})
+					string(JSON oxc3Val GET "${oxc3CacheVars}" ${oxc3Key})
+					set(${oxc3Key} "${oxc3Val}" CACHE STRING "" FORCE)
+				endforeach()
+
+				message("-- Took ${oxc3VarCount} option(s) from the configuration conan set up")
+
+			endif()
+		endif()
+	endif()
+
 	file(GLOB oxc3ConanConfigs "${oxc3GenDir}/*-Target-*.cmake")
 
 	set(oxc3HaveConfigs "")

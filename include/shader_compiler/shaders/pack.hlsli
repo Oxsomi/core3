@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -167,5 +166,3 @@ F32x3 unpackNormal17(U32 p) {
 
 	return F32x3(xy, (p >> 16) & 1 ? -z : z);
 }
-
-)"

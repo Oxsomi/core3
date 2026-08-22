@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -174,4 +173,3 @@ namespace oxc {
 #else
 	#define OXC_COOPMAT_GEMM_FP8_16(bufA, bufB, bufOut) oxc::CoopMatGemmFP8_16((bufA), (bufB), (bufOut))
 #endif
-)"

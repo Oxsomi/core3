@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -152,9 +151,6 @@ namespace oxc {
 	void __hoGetAttributes([[vk::ext_reference]] HitObject h, [[vk::ext_reference]] Attr attributes);
 
 	#undef OXC_SER_OP
-)"
-//This header exceeds MSVC's single string-literal limit (C2026), so it's split into two adjacent raw strings (concatenated).
-R"(
 	//Public API
 
 	void HitObject_MakeNop(inout HitObject h) { __hoRecordEmpty(h); }
@@ -354,4 +350,3 @@ R"(
 #endif
 
 }
-)"

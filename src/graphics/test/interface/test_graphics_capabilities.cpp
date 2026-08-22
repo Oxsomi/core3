@@ -51,6 +51,11 @@ namespace oxc { namespace c {
 
 namespace {
 
+	//graphics.hpp already has the guard this was: OwnedList frees its list on every exit path, error
+	//returns included.
+
+	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo, oxc::c::DescriptorLayoutInfo_free>;
+
 	//Names are only for the coverage log, so a run says which bits this adapter actually exercised rather than
 	// leaving "it passed" ambiguous between "tested" and "skipped".
 
@@ -114,17 +119,6 @@ namespace {
 	//DescriptorLayoutInfo is a plain C struct with no wrapper, so it gets a local guard rather than a manual
 	//free on every exit path.
 
-	struct OwnedLayoutInfo {
-
-		oxc::c::DescriptorLayoutInfo info{};
-		const oxc::c::Allocator *alloc;
-
-		explicit OwnedLayoutInfo(const oxc::c::Allocator *a) noexcept : alloc(a) {}
-		~OwnedLayoutInfo() noexcept { oxc::c::DescriptorLayoutInfo_free(&info, alloc); }
-
-		OwnedLayoutInfo(const OwnedLayoutInfo&) = delete;
-		OwnedLayoutInfo &operator=(const OwnedLayoutInfo&) = delete;
-	};
 }
 
 extern "C" void Test_graphicsCapabilities(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
@@ -322,9 +316,9 @@ extern "C" void Test_graphicsCapabilities(oxc::c::Test *t, oxc::c::GraphicsDevic
 		OwnedLayoutInfo info(alloc);
 		DescriptorLayout layout;
 
-		info.info.flags = c::EDescriptorLayoutFlags_AllowBindlessOnArrays;
+		info.list.flags = c::EDescriptorLayoutFlags_AllowBindlessOnArrays;
 
-		const c::Bool created = dev.createDescriptorLayout(info.info, "Capability probe", layout, nullptr);
+		const c::Bool created = dev.createDescriptorLayout(info.list, "Capability probe", layout, nullptr);
 
 		//An empty binding list may be refused for reasons unrelated to bindless, so this only asserts the one
 		// direction that is unambiguous: without the capability it must not succeed.

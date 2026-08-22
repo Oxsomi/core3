@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -78,5 +77,3 @@ F32x3 getAppData3f(U32 offset) { return F32x3_fromU32x3(getAppData3u(offset)); }
 U32x3 getAppData3uUnaligned(U32 offset) { return getAppData4uUnaligned(offset).xyz; }
 I32x3 getAppData3iUnaligned(U32 offset) { return (I32x3) getAppData3uUnaligned(offset); }
 F32x3 getAppData3fUnaligned(U32 offset) { return F32x3_fromU32x3(getAppData3uUnaligned(offset)); }
-
-)"

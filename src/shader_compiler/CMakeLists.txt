@@ -36,11 +36,40 @@ else()
 	set(shaderCompilerLinkage STATIC)
 endif()
 
+# The built-in HLSL headers are ordinary HLSL, so an editor treats them as shaders rather than as the string
+# literals they used to be, and the compiler still resolves #include "@types.hlsli" out of its own binary.
+# Generating them into a translation unit of their own is what keeps editing one header from recompiling
+# compiler.cpp and relinking the whole module.
+
+file(GLOB builtInHlsli CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../include/shader_compiler/shaders/*.hlsli")
+
+if(NOT Python3_EXECUTABLE)
+	find_package(Python3 COMPONENTS Interpreter REQUIRED)
+endif()
+
+set(builtInHlsliC "${CMAKE_CURRENT_BINARY_DIR}/oxc3_builtin_includes.c")
+set(embedScript "${CMAKE_CURRENT_SOURCE_DIR}/../tools/embed_hlsli.py")
+
+add_custom_command(
+	OUTPUT "${builtInHlsliC}"
+	COMMAND ${Python3_EXECUTABLE} "${embedScript}" -output "${builtInHlsliC}" ${builtInHlsli}
+	DEPENDS ${builtInHlsli} "${embedScript}"
+	COMMENT "Embedding the built-in HLSL headers"
+	VERBATIM
+)
+
+# HEADER_FILE_ONLY so they show up to edit without the build trying to compile HLSL as C.
+
+set_source_files_properties(${builtInHlsli} PROPERTIES HEADER_FILE_ONLY ON)
+source_group("shaders" FILES ${builtInHlsli})
+
 add_library(
 	OxC3_shader_compiler
 	${shaderCompilerLinkage}
 	${compilerHeaders}
 	${compilerSources}
+	${builtInHlsli}
+	"${builtInHlsliC}"
 	CMakeLists.txt
 )
 

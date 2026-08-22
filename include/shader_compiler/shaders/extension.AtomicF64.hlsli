@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -36,4 +35,3 @@ namespace oxc {
 	F64 AtomicAddF64([[vk::ext_reference]] F64 mem, U32 memoryScope, U32 memorySemantics, F64 value);
 
 }
-)"

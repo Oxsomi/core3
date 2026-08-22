@@ -44,29 +44,11 @@ namespace oxc { namespace c {
 
 namespace {
 
-	struct OwnedSHFile {
+	//graphics.hpp already has the guard these were: OwnedList frees its list on every exit path, error
+	//returns included.
 
-		oxc::c::SHFile file{};
-		const oxc::c::Allocator *alloc;
-
-		explicit OwnedSHFile(const oxc::c::Allocator *a) noexcept : alloc(a) {}
-		~OwnedSHFile() noexcept { oxc::c::SHFile_free(&file, alloc); }
-
-		OwnedSHFile(const OwnedSHFile&) = delete;
-		OwnedSHFile &operator=(const OwnedSHFile&) = delete;
-	};
-
-	struct OwnedLayoutInfo {
-
-		oxc::c::DescriptorLayoutInfo info{};
-		const oxc::c::Allocator *alloc;
-
-		explicit OwnedLayoutInfo(const oxc::c::Allocator *a) noexcept : alloc(a) {}
-		~OwnedLayoutInfo() noexcept { oxc::c::DescriptorLayoutInfo_free(&info, alloc); }
-
-		OwnedLayoutInfo(const OwnedLayoutInfo&) = delete;
-		OwnedLayoutInfo &operator=(const OwnedLayoutInfo&) = delete;
-	};
+	using OwnedSHFile = oxc::gfx::OwnedList<oxc::c::SHFile, oxc::c::SHFile_free>;
+	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo, oxc::c::DescriptorLayoutInfo_free>;
 }
 
 // -- 23. TextureRef predicates and accessors -------------------------------------
@@ -115,30 +97,30 @@ extern "C" void Test_graphicsTextureRef(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 	//A texture is anything that resolves to a unified texture, which a buffer never does
 
-	Test_assert(t, "renderIsTexture", c::TextureRef_isTexture(renderTexture.handle()));
-	Test_assert(t, "depthIsTexture", c::TextureRef_isTexture(depthStencil.handle()));
+	Test_assert(t, "renderIsTexture", renderTexture.isTexture());
+	Test_assert(t, "depthIsTexture", depthStencil.isTexture());
 	Test_assert(t, "bufferIsNotTexture", !c::TextureRef_isTexture(buffer.handle()));
 	Test_assert(t, "nullIsNotTexture", !c::TextureRef_isTexture(nullptr));
 
 	//Depth is decided by the object kind, not by the format it happens to carry
 
-	Test_assert(t, "depthIsDepthStencil", c::TextureRef_isDepthStencil(depthStencil.handle()));
-	Test_assert(t, "renderIsNotDepthStencil", !c::TextureRef_isDepthStencil(renderTexture.handle()));
+	Test_assert(t, "depthIsDepthStencil", depthStencil.isDepthStencil());
+	Test_assert(t, "renderIsNotDepthStencil", !renderTexture.isDepthStencil());
 	Test_assert(t, "bufferIsNotDepthStencil", !c::TextureRef_isDepthStencil(buffer.handle()));
 	Test_assert(t, "nullIsNotDepthStencil", !c::TextureRef_isDepthStencil(nullptr));
 
 	//Only render textures and swapchains can be written as a render target, so a depth stencil is excluded here
 	// even though it is a perfectly valid attachment
 
-	Test_assert(t, "renderIsWritable", c::TextureRef_isRenderTargetWritable(renderTexture.handle()));
-	Test_assert(t, "depthIsNotWritable", !c::TextureRef_isRenderTargetWritable(depthStencil.handle()));
+	Test_assert(t, "renderIsWritable", renderTexture.isRenderTargetWritable());
+	Test_assert(t, "depthIsNotWritable", !depthStencil.isRenderTargetWritable());
 	Test_assert(t, "bufferIsNotWritable", !c::TextureRef_isRenderTargetWritable(buffer.handle()));
 	Test_assert(t, "nullIsNotWritable", !c::TextureRef_isRenderTargetWritable(nullptr));
 
 	//The unified texture is what every command reads dimensions and ownership from
 
-	const c::UnifiedTexture render = c::TextureRef_getUnifiedTexture(renderTexture.handle(), nullptr);
-	const c::UnifiedTexture depth = c::TextureRef_getUnifiedTexture(depthStencil.handle(), nullptr);
+	const c::UnifiedTexture render = renderTexture.unifiedTexture();
+	const c::UnifiedTexture depth = depthStencil.unifiedTexture();
 
 	Test_assert(t, "renderSize", render.width == 32 && render.height == 16);
 	Test_assert(t, "renderDevice", render.resource.device == deviceRef);
@@ -157,17 +139,17 @@ extern "C" void Test_graphicsTextureRef(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 	//Handles come from the per image bindless allocation, and nothing here was exposed
 
-	Test_assert(t, "noReadHandle", c::TextureRef_getReadHandle(renderTexture.handle(), 0, 0) == c::BindlessDescriptor_None);
-	Test_assert(t, "noWriteHandle", c::TextureRef_getWriteHandle(renderTexture.handle(), 0, 0) == c::BindlessDescriptor_None);
+	Test_assert(t, "noReadHandle", renderTexture.readHandle(0, 0) == c::BindlessDescriptor_None);
+	Test_assert(t, "noWriteHandle", renderTexture.writeHandle(0, 0) == c::BindlessDescriptor_None);
 
 	Test_assert(t, "currMatchesImage0",
-		renderTexture.currReadHandle(0) == c::TextureRef_getReadHandle(renderTexture.handle(), 0, 0)
+		renderTexture.currReadHandle(0) == renderTexture.readHandle(0, 0)
 	);
 
 	//An out of range image, an unsupported subresource and a NULL ref all answer as nothing
 
-	Test_assert(t, "handleImageOOB", c::TextureRef_getReadHandle(renderTexture.handle(), 0, 5) == c::BindlessDescriptor_None);
-	Test_assert(t, "handleSubResource", c::TextureRef_getReadHandle(renderTexture.handle(), 1, 0) == c::BindlessDescriptor_None);
+	Test_assert(t, "handleImageOOB", renderTexture.readHandle(0, 5) == c::BindlessDescriptor_None);
+	Test_assert(t, "handleSubResource", renderTexture.readHandle(1, 0) == c::BindlessDescriptor_None);
 	Test_assert(t, "handleNull", c::TextureRef_getReadHandle(nullptr, 0, 0) == c::BindlessDescriptor_None);
 
 	const c::UnifiedTextureImage oob = c::TextureRef_getImage(renderTexture.handle(), 0, 5);
@@ -184,8 +166,8 @@ extern "C" void Test_graphicsTextureRef(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 			"Predicate exposed target", exposed, nullptr, e_rr
 		))) {
 
-			const c::BindlessDescriptor read = c::TextureRef_getReadHandle(exposed.handle(), 0, 0);
-			const c::BindlessDescriptor write = c::TextureRef_getWriteHandle(exposed.handle(), 0, 0);
+			const c::BindlessDescriptor read = exposed.readHandle(0, 0);
+			const c::BindlessDescriptor write = exposed.writeHandle(0, 0);
 
 			Test_assert(t, "exposedRead",
 				read != c::BindlessDescriptor_None && c::BindlessDescriptor_isValid(deviceRef, nullptr, read)
@@ -542,11 +524,11 @@ extern "C" void Test_graphicsShaderReflection(oxc::c::Test *t, oxc::c::GraphicsD
 	//MemoryStreamRef and the StreamRef the oiSH reader consumes are both bare RefPtr typedefs, so the handle
 	// crosses without the C module's cast.
 
-	if(!stream || !Test_assert(t, "readSHFile", c::SHFile_read(stream.handle(), &streamOffset, false, alloc, &shader.file, e_rr)))
+	if(!stream || !Test_assert(t, "readSHFile", c::SHFile_read(stream.handle(), &streamOffset, false, alloc, &shader.list, e_rr)))
 		return;
 
-	Test_assert(t, "hasEntries", shader.file.entries.length && shader.file.binaries.length);
-	Test_assert(t, "isComplete", c::SHFile_isComplete(&shader.file));
+	Test_assert(t, "hasEntries", shader.list.entries.length && shader.list.binaries.length);
+	Test_assert(t, "isComplete", c::SHFile_isComplete(&shader.list));
 
 	//ROTATE is a uniform, so the two permutations are found by value and resolve to different binaries
 
@@ -565,28 +547,28 @@ extern "C" void Test_graphicsShaderReflection(oxc::c::Test *t, oxc::c::GraphicsD
 	// compiled from the same source, which is exactly what these four look up; they stay on the C entry point.
 
 	const c::U32 idFalse = c::GraphicsDeviceRef_getFirstShaderEntry(
-		deviceRef, &shader.file, &entryName, nullptr, &listFalse, c::ESHExtension_None, c::ESHExtension_None
+		deviceRef, &shader.list, &entryName, nullptr, &listFalse, c::ESHExtension_None, c::ESHExtension_None
 	);
 
 	const c::U32 idTrue = c::GraphicsDeviceRef_getFirstShaderEntry(
-		deviceRef, &shader.file, &entryName, nullptr, &listTrue, c::ESHExtension_None, c::ESHExtension_None
+		deviceRef, &shader.list, &entryName, nullptr, &listTrue, c::ESHExtension_None, c::ESHExtension_None
 	);
 
 	Test_assert(t, "entryFound", idFalse != c::U32_MAX);
 	Test_assert(t, "entryFoundTrue", idTrue != c::U32_MAX && idTrue != idFalse);
 
 	Test_assert(t, "entryMissing", c::GraphicsDeviceRef_getFirstShaderEntry(
-		deviceRef, &shader.file, &missingName, nullptr, &listFalse, c::ESHExtension_None, c::ESHExtension_None
+		deviceRef, &shader.list, &missingName, nullptr, &listFalse, c::ESHExtension_None, c::ESHExtension_None
 	) == c::U32_MAX);
 
 	//The copy shader doesn't use ray query, so requiring it can't find anything
 
 	Test_assert(t, "entryWrongExtension", c::GraphicsDeviceRef_getFirstShaderEntry(
-		deviceRef, &shader.file, &entryName, nullptr, &listFalse, c::ESHExtension_None, c::ESHExtension_RayQuery
+		deviceRef, &shader.list, &entryName, nullptr, &listFalse, c::ESHExtension_None, c::ESHExtension_RayQuery
 	) == c::U32_MAX);
 
 	Test_assert(t, "entryNullDevice", c::GraphicsDeviceRef_getFirstShaderEntry(
-		nullptr, &shader.file, &entryName, nullptr, &listFalse, c::ESHExtension_None, c::ESHExtension_None
+		nullptr, &shader.list, &entryName, nullptr, &listFalse, c::ESHExtension_None, c::ESHExtension_None
 	) == c::U32_MAX);
 
 	if(idFalse == c::U32_MAX)
@@ -598,13 +580,13 @@ extern "C" void Test_graphicsShaderReflection(oxc::c::Test *t, oxc::c::GraphicsD
 	// Assume* pair below has no wrapper spelling and this call stays on the C entry point.
 
 	if(!Test_assert(t, "detectLayout", c::GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &shader.file, idFalse,
+		deviceRef, &shader.list, idFalse,
 		c::EDescriptorLayoutFlags_None,
 		(c::EDetectDescriptorLayoutFlags)(
 			c::EDetectDescriptorLayoutFlags_AssumePushDescriptors | c::EDetectDescriptorLayoutFlags_AssumePushConstants
 		),
 		nullptr, nullptr,
-		&pushConst, &info.info, &pushDesc.info, e_rr
+		&pushConst, &info.list, &pushDesc.list, e_rr
 	)))
 		return;
 
@@ -618,18 +600,18 @@ extern "C" void Test_graphicsShaderReflection(oxc::c::Test *t, oxc::c::GraphicsD
 			pushConst.constantBufferSize && !(pushConst.constantBufferSize & 3) && pushConst.constantBufferSize <= 128
 		);
 
-	Test_assert(t, "detectedPushDescriptors", pushDesc.info.bindings.length >= 1);
-	Test_assert(t, "detectedPushFlag", pushDesc.info.flags & c::EDescriptorLayoutFlags_HasPushDescriptors);
+	Test_assert(t, "detectedPushDescriptors", pushDesc.list.bindings.length >= 1);
+	Test_assert(t, "detectedPushFlag", pushDesc.list.flags & c::EDescriptorLayoutFlags_HasPushDescriptors);
 
 	//The detected layouts have to round trip through real creation, since that's what they're for
 
 	if(!Test_assert(t, "createReflectedPushDesc", dev.createDescriptorLayout(
-		pushDesc.info, "Reflected push descriptor layout", pushDescLayout, e_rr
+		pushDesc.list, "Reflected push descriptor layout", pushDescLayout, e_rr
 	)))
 		return;
 
-	if(info.info.bindings.length && !Test_assert(t, "createReflectedBindings", dev.createDescriptorLayout(
-		info.info, "Reflected descriptor layout", bindingsLayout, e_rr
+	if(info.list.bindings.length && !Test_assert(t, "createReflectedBindings", dev.createDescriptorLayout(
+		info.list, "Reflected descriptor layout", bindingsLayout, e_rr
 	)))
 		return;
 
@@ -645,8 +627,8 @@ extern "C" void Test_graphicsShaderReflection(oxc::c::Test *t, oxc::c::GraphicsD
 
 	//checkShaderFeatures is what refuses an oiSH the device can't run, so the one the device does run has to pass
 
-	const c::SHEntry *entry = &shader.file.entries.ptr[(c::U16) idFalse];
-	const c::SHBinaryInfo *binary = &shader.file.binaries.ptr[entry->binaryIds.ptr[idFalse >> 16]];
+	const c::SHEntry *entry = &shader.list.entries.ptr[(c::U16) idFalse];
+	const c::SHBinaryInfo *binary = &shader.list.binaries.ptr[entry->binaryIds.ptr[idFalse >> 16]];
 
 	Test_assert(t, "checkFeatures", dev.checkShaderFeatures(*binary, *entry, e_rr));
 
@@ -664,7 +646,7 @@ extern "C" void Test_graphicsShaderReflection(oxc::c::Test *t, oxc::c::GraphicsD
 	c::PipelineRef *rawPipeline = nullptr;
 
 	if(Test_assert(t, "createPipeline", c::GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &shader.file, &pipelineName, idFalse, &entryName, c::EPipelineFlags_None,
+		deviceRef, &shader.list, &pipelineName, idFalse, &entryName, c::EPipelineFlags_None,
 		pipelineLayout.handle(), &rawPipeline, e_rr
 	))) {
 		pipeline = Pipeline(RefPtr<c::Pipeline>::adopt(rawPipeline));
@@ -676,7 +658,7 @@ extern "C" void Test_graphicsShaderReflection(oxc::c::Test *t, oxc::c::GraphicsD
 	c::PipelineRef *badPipeline = nullptr;
 
 	Test_assert(t, "createPipelineBadEntry", !c::GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &shader.file, &pipelineName, 0xFFFF, &entryName, c::EPipelineFlags_None,
+		deviceRef, &shader.list, &pipelineName, 0xFFFF, &entryName, c::EPipelineFlags_None,
 		pipelineLayout.handle(), &badPipeline, nullptr
 	));
 

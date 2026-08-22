@@ -455,8 +455,8 @@ def hostToolOptionArgs():
 # Dependency building (hash cached, so unchanged recipes don't get re-created every run)
 # ---------------------------------------------------------------------------------------------------
 
-#Recipes shared through python_requires rather than living in the package folder itself.
-#They have to be part of every dependent's hash, otherwise editing the shared logic leaves the cache thinking
+# Recipes shared through python_requires rather than living in the package folder itself.
+# They have to be part of every dependent's hash, otherwise editing the shared logic leaves the cache thinking
 # nothing changed and the packages that consume it are never rebuilt.
 
 SHARED_RECIPES = ( "packages/sanitizers", )
@@ -476,7 +476,7 @@ def hashPackage(packagePath, profilePath, mode):
 
 		resolved = shared if os.path.isabs(shared) else os.path.join(ROOT, shared)
 
-		#A package is only rehashed for a shared recipe it doesn't already contain, so hashing
+		# A package is only rehashed for a shared recipe it doesn't already contain, so hashing
 		# packages/sanitizers itself doesn't fold it in twice.
 
 		if os.path.isdir(resolved) and os.path.normpath(resolved) != os.path.normpath(packagePath):
@@ -649,7 +649,7 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 
 	system = hostSystem()
 
-	#dxc, spirv_reflect and openal_soft share their sanitizer wiring through a python_requires, which has to
+	# dxc, spirv_reflect and openal_soft share their sanitizer wiring through a python_requires, which has to
 	# be in the cache before any of them is created.
 
 	exportSharedRecipes()
@@ -757,7 +757,7 @@ def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False, compiler=None):
 	# export-pkg packages whatever is sitting in bin/, and CMakeLists pins the output directory to a source-relative path,
 	# so every configuration shares it regardless of the build folder.
 	# A normal build.py run leaves OxC3_shader_compiler.dll there; the host tool is static (HOST_TOOL_OPTIONS) and would ship a
-	#~29 MB DLL it never built, and that nothing loads.
+	# ~29 MB DLL it never built, and that nothing loads.
 	# Clear it first so what gets exported is a function of the options rather than of whatever was built here last.
 
 	# Matches the suffix CMakeLists puts on the output directory for a non default toolchain; without it

@@ -37,29 +37,11 @@ namespace oxc { namespace c {
 
 namespace {
 
-	struct OwnedSHFile {
+	//graphics.hpp already has the guard these were: OwnedList frees its list on every exit path, error
+	//returns included.
 
-		oxc::c::SHFile file{};
-		const oxc::c::Allocator *alloc;
-
-		explicit OwnedSHFile(const oxc::c::Allocator *a) noexcept : alloc(a) {}
-		~OwnedSHFile() noexcept { oxc::c::SHFile_free(&file, alloc); }
-
-		OwnedSHFile(const OwnedSHFile&) = delete;
-		OwnedSHFile &operator=(const OwnedSHFile&) = delete;
-	};
-
-	struct OwnedLayoutInfo {
-
-		oxc::c::DescriptorLayoutInfo info{};
-		const oxc::c::Allocator *alloc;
-
-		explicit OwnedLayoutInfo(const oxc::c::Allocator *a) noexcept : alloc(a) {}
-		~OwnedLayoutInfo() noexcept { oxc::c::DescriptorLayoutInfo_free(&info, alloc); }
-
-		OwnedLayoutInfo(const OwnedLayoutInfo&) = delete;
-		OwnedLayoutInfo &operator=(const OwnedLayoutInfo&) = delete;
-	};
+	using OwnedSHFile = oxc::gfx::OwnedList<oxc::c::SHFile, oxc::c::SHFile_free>;
+	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo, oxc::c::DescriptorLayoutInfo_free>;
 }
 
 //Root descriptors rather than table entries: both resources ride in the command stream, so this module
@@ -84,12 +66,12 @@ extern "C" void Test_graphicsBindfulPushDescriptors(oxc::c::Test *t, oxc::c::Gra
 
 	OwnedSHFile shader(alloc);
 
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_pushdesc.oiSH", &shader.file)) {
+	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_pushdesc.oiSH", &shader.list)) {
 		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping push descriptor tests");
 		return;
 	}
 
-	const c::U32 entryId = TestShaders_entry(t, deviceRef, &shader.file, "main");
+	const c::U32 entryId = TestShaders_entry(t, deviceRef, &shader.list, "main");
 
 	if(entryId == c::U32_MAX)
 		return;
@@ -100,16 +82,16 @@ extern "C" void Test_graphicsBindfulPushDescriptors(oxc::c::Test *t, oxc::c::Gra
 	OwnedLayoutInfo pushInfo(alloc);
 
 	if(!Test_assert(t, "detectLayout", dev.detectLayout(
-		shader.file, entryId, layoutInfo.info, nullptr, nullptr, { "params", "output" }, &pushInfo.info,
+		shader.list, entryId, layoutInfo.list, nullptr, nullptr, { "params", "output" }, &pushInfo.list,
 		c::EDescriptorLayoutFlags_None, e_rr
 	)))
 		return;
 
 	//Everything the shader declares is a push descriptor, so nothing is left for an ordinary layout.
 
-	Test_assert(t, "noOrdinaryBindings", !layoutInfo.info.bindings.length);
+	Test_assert(t, "noOrdinaryBindings", !layoutInfo.list.bindings.length);
 
-	if(!Test_assert(t, "detectedPushDescriptors", pushInfo.info.bindings.length == 2))
+	if(!Test_assert(t, "detectedPushDescriptors", pushInfo.list.bindings.length == 2))
 		return;
 
 	DescriptorLayout pushLayout;
@@ -117,7 +99,7 @@ extern "C" void Test_graphicsBindfulPushDescriptors(oxc::c::Test *t, oxc::c::Gra
 	//Refused outright on a device without VK_KHR_push_descriptor, which is the documented gap rather than a
 	// failure: asserting first would record a red before the skip ever printed.
 
-	if(!dev.createDescriptorLayout(pushInfo.info, "Push descriptor layout", pushLayout, nullptr)) {
+	if(!dev.createDescriptorLayout(pushInfo.list, "Push descriptor layout", pushLayout, nullptr)) {
 		Test_print(t, "Push descriptor layouts unsupported on this device, skipping");
 		return;
 	}
@@ -167,7 +149,7 @@ extern "C" void Test_graphicsBindfulPushDescriptors(oxc::c::Test *t, oxc::c::Gra
 	Pipeline pipeline;
 
 	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
-		shader.file, "main", "Push descriptor pipeline", pipeline, {}, &pipelineLayout, e_rr
+		shader.list, "main", "Push descriptor pipeline", pipeline, {}, &pipelineLayout, e_rr
 	)))
 		return;
 

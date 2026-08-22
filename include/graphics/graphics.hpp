@@ -253,9 +253,9 @@ namespace oxc {
 			[[nodiscard]] c::Bool getPreferredDevice(
 				const c::GraphicsDeviceCapabilities &required,
 				c::GraphicsDeviceInfo &deviceInfo,
-				c::Error *e_rr = nullptr,
 				c::U64 vendorMask = c::GraphicsInstance_vendorMaskAll,
-				c::U64 deviceTypeMask = c::GraphicsInstance_deviceTypeAll
+				c::U64 deviceTypeMask = c::GraphicsInstance_deviceTypeAll,
+				c::Error *e_rr = nullptr
 			) const noexcept {
 				return c::GraphicsInstance_getPreferredDevice(
 					ref.data(), &required, vendorMask, deviceTypeMask, &deviceInfo, e_rr
@@ -332,17 +332,74 @@ namespace oxc {
 			}
 		};
 
-		class RenderTexture : public Handle<c::RenderTexture> {
-		public:
-			using Handle::Handle;
+		//Everything a TextureRef answers regardless of which kind of texture is behind it.
+		//RenderTexture, DeviceTexture and Swapchain are all one to the C API, so they inherit this rather than
+		// each spelling the same six calls out, or callers reaching past the wrapper for them.
+		//CRTP because a Handle knows its own C type: the mixin needs handle(), which only the derived class has.
+
+		template<typename Self>
+		struct TextureHandleOps {
+
+			[[nodiscard]] c::RefPtr *textureRef() const noexcept {
+				return static_cast<const Self*>(this)->handle();
+			}
 
 			[[nodiscard]] c::U32 currReadHandle(c::U32 subResource = 0) const noexcept {
-				return c::TextureRef_getCurrReadHandle(handle(), subResource);
+				return c::TextureRef_getCurrReadHandle(textureRef(), subResource);
 			}
 
 			[[nodiscard]] c::U32 currWriteHandle(c::U32 subResource = 0) const noexcept {
-				return c::TextureRef_getCurrWriteHandle(handle(), subResource);
+				return c::TextureRef_getCurrWriteHandle(textureRef(), subResource);
 			}
+
+			//imageId picks the image within the subresource; the curr* pair above resolves it for you and is
+			//what a caller normally wants.
+
+			[[nodiscard]] c::U32 readHandle(c::U32 subResource = 0, c::U8 imageId = 0) const noexcept {
+				return c::TextureRef_getReadHandle(textureRef(), subResource, imageId);
+			}
+
+			[[nodiscard]] c::U32 writeHandle(c::U32 subResource = 0, c::U8 imageId = 0) const noexcept {
+				return c::TextureRef_getWriteHandle(textureRef(), subResource, imageId);
+			}
+
+			//Size and format can change at resize time (a Swapchain especially), so this goes through the
+			// locked TextureRef_getUnifiedTexture (see ETextureRangeType), never the *Fast path.
+			//Pass a version to learn whether a recorded commandList survived a resize (ETextureRangeType's
+			// layer/level fields).
+
+			[[nodiscard]] c::UnifiedTexture unifiedTexture(c::DeviceResourceVersion *version = nullptr) const noexcept {
+				return c::TextureRef_getUnifiedTexture(textureRef(), version);
+			}
+
+			[[nodiscard]] c::Bool isTexture() const noexcept { return c::TextureRef_isTexture(textureRef()); }
+
+			[[nodiscard]] c::Bool isDepthStencil() const noexcept {
+				return c::TextureRef_isDepthStencil(textureRef());
+			}
+
+			[[nodiscard]] c::Bool isRenderTargetWritable() const noexcept {
+				return c::TextureRef_isRenderTargetWritable(textureRef());
+			}
+
+			//As I32x2 so it slots straight into scope.render()/setViewportAndScissor.
+			//Built by hand rather than through xy(): that is declared further down, and vec2i.h's helpers are
+			// not in this closure (resource.h only pulls vec2.h).
+			//Don't use on a Swapchain if you don't know the size yet.
+
+			[[nodiscard]] c::I32x2 size() const noexcept {
+				const c::UnifiedTexture tex = unifiedTexture();
+				return c::I32x2{ { (c::I32) tex.width, (c::I32) tex.height } };
+			}
+
+			[[nodiscard]] c::ETextureFormatId format() const noexcept {
+				return (c::ETextureFormatId) unifiedTexture().textureFormatId;
+			}
+		};
+
+		class RenderTexture : public Handle<c::RenderTexture>, public TextureHandleOps<RenderTexture> {
+		public:
+			using Handle::Handle;
 
 			//Readback without a cpuData (see TextureRef_pullRegion):
 			// the region arrives through the callback as a tight row buffer owned by the runtime,
@@ -361,17 +418,9 @@ namespace oxc {
 			}
 		};
 
-		class DeviceTexture : public Handle<c::DeviceTexture> {
+		class DeviceTexture : public Handle<c::DeviceTexture>, public TextureHandleOps<DeviceTexture> {
 		public:
 			using Handle::Handle;
-
-			[[nodiscard]] c::U32 currReadHandle(c::U32 subResource = 0) const noexcept {
-				return c::TextureRef_getCurrReadHandle(handle(), subResource);
-			}
-
-			[[nodiscard]] c::U32 currWriteHandle(c::U32 subResource = 0) const noexcept {
-				return c::TextureRef_getCurrWriteHandle(handle(), subResource);
-			}
 
 			//Zero w/h/l = rest of that axis, so the default marks the whole texture.
 			//Regions merge like DeviceBuffer::markDirty:
@@ -397,15 +446,11 @@ namespace oxc {
 			}
 		};
 
-		class DepthStencil : public Handle<c::DepthStencil> {
+		class DepthStencil : public Handle<c::DepthStencil>, public TextureHandleOps<DepthStencil> {
 		public:
 			using Handle::Handle;
 
-			//Only meaningful when created with allowShaderRead.
-
-			[[nodiscard]] c::U32 currReadHandle(c::U32 subResource = 0) const noexcept {
-				return c::TextureRef_getCurrReadHandle(handle(), subResource);
-			}
+			//currReadHandle is only meaningful when created with allowShaderRead.
 
 			//Depth-stencil readback is per plane, one pull each (see TextureRef_pullRegion's plane parameter):
 			// plane 0 = depth (or the stencil of a stencil-only format),
@@ -420,43 +465,12 @@ namespace oxc {
 			}
 		};
 
-		class Swapchain : public Handle<c::Swapchain> {
+		class Swapchain : public Handle<c::Swapchain>, public TextureHandleOps<Swapchain> {
 		public:
 			using Handle::Handle;
 
 			[[nodiscard]] c::Bool resize(c::Error *e_rr = nullptr) noexcept {
 				return c::SwapchainRef_resize(handle(), e_rr);
-			}
-
-			[[nodiscard]] c::U32 currReadHandle(c::U32 subResource = 0) const noexcept {
-				return c::TextureRef_getCurrReadHandle(handle(), subResource);
-			}
-
-			[[nodiscard]] c::U32 currWriteHandle(c::U32 subResource = 0) const noexcept {
-				return c::TextureRef_getCurrWriteHandle(handle(), subResource);
-			}
-
-			//Size and format can change at resize time,
-			// so this goes through the locked TextureRef_getUnifiedTexture (see ETextureRangeType),
-			// never the *Fast path.
-			//Pass a version to learn whether a recorded commandList survived a resize (ETextureRangeType's layer/level
-			// fields).
-
-			[[nodiscard]] c::UnifiedTexture unifiedTexture(c::DeviceResourceVersion *version = nullptr) const noexcept {
-				return c::TextureRef_getUnifiedTexture(handle(), version);
-			}
-
-			//As I32x2 so it slots straight into scope.render()/setViewportAndScissor. Built by hand:
-			// vec2i.h's helpers aren't in this closure (resource.h only pulls vec2.h). Don't use on a Swapchain if you
-			// don't know the size yet.
-
-			[[nodiscard]] c::I32x2 size() const noexcept {
-				const c::UnifiedTexture t = unifiedTexture();
-				return c::I32x2{ { (c::I32) t.width, (c::I32) t.height } };
-			}
-
-			[[nodiscard]] c::ETextureFormatId format() const noexcept {
-				return (c::ETextureFormatId) unifiedTexture().textureFormatId;
 			}
 		};
 
@@ -1181,6 +1195,23 @@ namespace oxc {
 				return d;
 			}
 
+			//Straight off the device, so a caller does not reach through data() for either.
+			//framesInFlight is how many submits can be outstanding, which is what sizes a per frame ring.
+
+			[[nodiscard]] c::U8 framesInFlight() const noexcept { return ref.data()->framesInFlight; }
+
+			//The api is the instance's, not the device info's; the device holds a ref on the instance for its
+			// whole life, so reaching through it is safe.
+
+			[[nodiscard]] c::EGraphicsApi api() const noexcept {
+
+				//GraphicsInstanceRef_ptr is a macro, so it cannot be reached through c:: and is spelled out
+				//here instead; RefPtr_data is the payload right after the RefPtr header.
+
+				const c::RefPtr *instance = ref.data()->instance;
+				return instance ? ((const c::GraphicsInstance*) (instance + 1))->api : c::EGraphicsApi_Count;
+			}
+
 		private:
 
 			//Single entry-resolution path for every pipeline kind.
@@ -1255,9 +1286,9 @@ namespace oxc {
 				const c::GraphicsDeviceInfo &info,
 				c::EGraphicsDeviceFlags flags,
 				Device &result,
-				c::Error *e_rr = nullptr,
 				c::EGraphicsBufferingMode bufferingMode = c::EGraphicsBufferingMode_Default,
-				const c::DescriptorLayoutInfo *bindlessLayout = nullptr
+				const c::DescriptorLayoutInfo *bindlessLayout = nullptr,
+				c::Error *e_rr = nullptr
 			) noexcept {
 
 				result = Device();
@@ -1309,8 +1340,8 @@ namespace oxc {
 			//Fifo caps presentation at the refresh rate.
 
 			[[nodiscard]] c::Bool createSwapchain(
-				void *window, c::Bool allowComputeWrite, Swapchain &result, c::Error *e_rr = nullptr,
-				std::initializer_list<c::U8> presentModes = {}
+				void *window, c::Bool allowComputeWrite, Swapchain &result,
+				std::initializer_list<c::U8> presentModes = {}, c::Error *e_rr = nullptr
 			) noexcept {
 
 				c::SwapchainInfo info{};
@@ -1487,10 +1518,11 @@ namespace oxc {
 				const c::SHFile &shFile,
 				std::initializer_list<const c::C8*> raygenEntries,
 				const c::C8 *missEntry, std::initializer_list<const c::C8*> closestHitEntries,
-				const c::C8 *debugName, Pipeline &result, c::Error *e_rr = nullptr,
+				const c::C8 *debugName, Pipeline &result,
 				const ShaderVariant &variant = {},
 				c::U8 maxRecursionDepth = 1,
-				c::EPipelineRaytracingFlags flags = c::EPipelineRaytracingFlags_Default
+				c::EPipelineRaytracingFlags flags = c::EPipelineRaytracingFlags_Default,
+				c::Error *e_rr = nullptr
 			) noexcept {
 
 				if(!closestHitEntries.size()) {
@@ -1751,16 +1783,21 @@ namespace oxc {
 				);
 			}
 
+			//disallowBindlessDescriptor keeps the sampler out of any bindless table, the one this names and the
+			// device's default both, so it can only be reached through a bindful binding.
+
 			[[nodiscard]] c::Bool createSampler(
 				const c::SamplerInfo &info, const c::C8 *debugName, Sampler &result,
-				const DescriptorTable *bindlessTable = nullptr, c::Error *e_rr = nullptr
+				const DescriptorTable *bindlessTable = nullptr, c::Bool disallowBindlessDescriptor = false,
+				c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::CharString n = name(debugName);
 				c::SamplerRef *raw = nullptr;
 
 				if(!c::GraphicsDeviceRef_createSampler(
-					handle(), info, false, bindlessTable ? bindlessTable->handle() : nullptr, &n, &raw, e_rr
+					handle(), info, disallowBindlessDescriptor,
+					bindlessTable ? bindlessTable->handle() : nullptr, &n, &raw, e_rr
 				))
 					return false;
 
@@ -1848,8 +1885,8 @@ namespace oxc {
 				const c::PipelineGraphicsInfo &info,
 				const c::SHFile &shFile,
 				std::initializer_list<const c::C8*> stageEntries,
-				const c::C8 *debugName, Pipeline &result, c::Error *e_rr = nullptr,
-				const ShaderVariant &variant = {}
+				const c::C8 *debugName, Pipeline &result,
+				const ShaderVariant &variant = {}, c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::Allocator *alloc = c::GraphicsDeviceRef_getAlloc(handle());
