@@ -23,15 +23,15 @@
 //Pure format, packing and layout modules (5, 6, 17, 18, 19, 24).
 //No device is needed, so these always run, even where no adapter exists.
 
-//sh_registers.h reaches vec4.h and so the SSE intrinsics, which pull the CRT's stdlib.h in behind them.
-//That path re-enters clang's stddef.h with __need_NULL defined, a section that is NOT behind the file's
-//include guard and runs every time: it declares `namespace std { nullptr_t }` and then `using ::std::nullptr_t`.
-//Inside oxc::c the first line declares oxc::c::std and the second cannot find ::std, which is a hard error.
-//Pulling <cstddef> in at global scope first gives ::std::nullptr_t a real definition, so the re-entry
-//resolves against that instead. Every other converted module gets this for free through the C++ headers it
-//includes before its own block; this one has no handles and so included none.
+//This module owns no handles, so it needs nothing OUT of graphics.hpp; what it needs is the pre-include
+//discipline that header performs, which every other converted module gets for free by including it.
+//The C headers below reach the standard library twice over: sh_registers.h ends up at the SSE intrinsics
+//and so at <stdlib.h>, and platform.h reaches atomic.h and so at <atomic>. Pulled in from inside oxc::c
+//those declare their contents in oxc::c::std and then fail to resolve every ::std:: they refer to, which on
+//libc++ is a wall of errors and on the Microsoft STL happens to be survivable. Including graphics.hpp first
+//puts all of them at global scope, so the copies inside the block hit their include guards and do nothing.
 
-#include <cstddef>
+#include "graphics/graphics.hpp"
 
 namespace oxc { namespace c {
 	#include "types/base/string_read_helper.h"
