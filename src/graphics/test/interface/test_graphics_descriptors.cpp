@@ -521,7 +521,8 @@ extern "C" void Test_graphicsDescriptorAlloc(oxc::c::Test *t, oxc::c::GraphicsDe
 	// with its transitions, so the buffer would never reach the device's in flight list.
 
 	if(!Test_assert(t, "allocTargetCreate", dev.createRenderTexture(
-		4, 4, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Descriptor alloc target", target, nullptr, e_rr
+		4, 4, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Descriptor alloc target", target,
+		c::EMSAASamples_Off, nullptr, e_rr
 	)))
 		return;
 

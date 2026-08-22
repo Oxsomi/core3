@@ -24,6 +24,17 @@
 //live table, recycling its slots, and where the push descriptor boundary sits.
 //Split out of test_graphics_bindful.c, which had grown to 24 modules in one file.
 
+//The shared helpers in terms of the handle types. Both C++ headers come BEFORE the block below: a
+//standard header included after the C headers landed in oxc::c finds its guard already tripped and
+//leaves its symbols in that namespace.
+
+#include "test_graphics_shared.hpp"
+
+//Log::debugLn is the C++ front for Log_debugLnx; the x macros name ELogOptions_NewLine unqualified and
+//so cannot be reached through the c namespace.
+
+#include "types/container/log.hpp"
+
 namespace oxc { namespace c {
 	#include "types/base/string_base.h"
 	#include "types/container/list_basic_types.h"
@@ -52,10 +63,10 @@ namespace oxc { namespace c {
 	#include "test_graphics_shared.h"
 } }
 
+using namespace oxc;
+
 //Same namespace the C headers landed in, so the definitions here match the declarations in
 //test_graphics_shared.h and the macros in those headers still expand to names that resolve.
-
-namespace oxc { namespace c {
 
 // -- 41. Bindful: descriptor table bound at record time ---------------------------
 
@@ -65,181 +76,167 @@ namespace oxc { namespace c {
 // test never restates what the shader already declares.
 //The shader has a single classic register (u0), so the whole flow works on a device without bindless.
 
-void Test_graphicsBindful(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindful(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindful");
+	c::Test_setModule(t, "Bindful");
 
-	const Allocator *alloc = Platform_instance->alloc;
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	DescriptorHeapRef *heap = NULL;
-	DescriptorLayoutRef *layout = NULL;
-	DescriptorTableRef *table = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	PipelineRef *pipeline = NULL;
-	DeviceBufferRef *buffer = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
+	gfxtest::OwnedSHFile file(dev.alloc());
 
-	SHFile file {};
-	DescriptorLayoutInfo layoutInfo {};
-
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_write.oiSH", &file)) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful tests");
+	if (!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_write.oiSH", file.list)) {
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful tests");
 		return;
 	}
 
-	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+	const c::U32 entryId = gfxtest::entry(t, dev, file.list, "main");
 
-	if(entryId == U32_MAX)
-		goto clean;
+	if(entryId == c::U32_MAX)
+		return;
+
+	gfx::DescriptorHeap heap;
+	gfx::DescriptorLayout layout;
+	gfx::DescriptorTable table;
+	gfx::PipelineLayout pipelineLayout;
+	gfx::Pipeline pipeline;
+	gfx::DeviceBuffer buffer;
+	gfx::CommandList commandList, emptyList;
+
+	//The table holds no reference of its own, so its descriptor goes back before the buffer it names does.
+
+	struct TableGuard {
+
+		gfx::DescriptorTable &table;
+
+		~TableGuard() {
+			if(table)
+				(void) table.unset(0, 0, 1, nullptr);
+		}
+	} tableGuard{ table };
 
 	//The reflection knows the registers, so the layout comes from the shader rather than being restated
 
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &file, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
+
+	if(!Test_assert(t, "detectLayout", dev.detectLayout(
+		file.list, entryId, layoutInfo.list, nullptr, nullptr, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	CharString name = CharString_createRefCStrConst("Bindful layout");
+	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(layoutInfo.list, "Bindful layout", layout, e_rr)))
+		return;
 
-	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutInfo, &name, &layout, &t->err
+	c::DescriptorHeapInfo heapInfo = { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
+
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Bindful heap", heap, e_rr)))
+		return;
+
+	if(!Test_assert(t, "tableCreate", heap.createTable(
+		layout, "Bindful table", table, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
-
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
-	name = CharString_createRefCStrConst("Bindful heap");
-
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
-	)))
-		goto clean;
-
-	name = CharString_createRefCStrConst("Bindful table");
-
-	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
-	)))
-		goto clean;
+		return;
 
 	//64 threads each write id * 3 + 7 as a U32, so the pull can prove the dispatch really ran bindful
 
-	name = CharString_createRefCStrConst("Bindful output buffer");
-
-	if(!Test_assert(t, "bufferCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &buffer, &t->err
+	if(!Test_assert(t, "bufferCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Bindful output buffer", 64 * sizeof(c::U32), buffer, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	const Descriptor desc = Descriptor_buffer(buffer, 0, 0, NULL, 0);
-	const CharString outputName = CharString_createRefCStrConst("output");
+	const c::Descriptor desc = c::Descriptor_buffer(buffer.handle(), 0, 0, NULL, 0);
 
-	Test_assert(t, "setDescriptor", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &desc, &t->err));
+	Test_assert(t, "setDescriptor", table.setByName("output", desc, 0, false, e_rr));
 
 	//The pipeline brings its own layout rather than the device's default bindless one
 
-	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
-	name = CharString_createRefCStrConst("Bindful pipeline layout");
+	c::PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout.handle() };
 
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Bindful pipeline layout", pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful pipeline");
-
-	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		file.list, "main", "Bindful pipeline", pipeline, {}, &pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 2 * KIBI, 32, 16, true, &commandList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "listCreate", dev.createCommandList(2 * c::KIBI, 32, 16, commandList, true, e_rr)))
+		return;
 
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
 
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
 
-	const Transition transition = {
-		.resource = buffer, .stage = EPipelineStage_Compute, .isWrite = true
+	const c::Transition transition = {
+		.resource = buffer.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
 	};
 
-	ListTransition transitions {};
-	ListTransition_createRefConst(&transition, 1, &transitions, NULL);
-
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
 
 	//The work op is the validator: without a heap or table the dispatch has to be refused.
 	//A refused work op invalidates its scope, which endScope hides wholesale; that is by design, so the real
 	// dispatch lives in a scope of its own and rebinds its state (scope end resets pipeline and table binds).
 
-	Test_assert(t, "scopeNeg", CommandListRef_startScope(commandList, &transitions, 1, NULL, &t->err));
-	Test_assert(t, "bindPipelineNeg", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
-	Test_assert(t, "dispatchWithoutHeap", !CommandListRef_dispatch1D(commandList, 1, NULL));
-	Test_assert(t, "bindHeapNeg", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "dispatchWithoutTable", !CommandListRef_dispatch1D(commandList, 1, NULL));
+	{
+		gfx::CommandScope scope = commandList.scope({ transition }, 1, {}, e_rr);
+		Test_assert(t, "scopeNeg", (c::Bool) scope);
+		Test_assert(t, "bindPipelineNeg", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "dispatchWithoutHeap", !scope.dispatch1D(1, nullptr));
+		Test_assert(t, "bindHeapNeg", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "dispatchWithoutTable", !scope.dispatch1D(1, nullptr));
 
-	//The recorders themselves refuse NULL and refs of the wrong type before any state changes
+		//The recorders themselves refuse NULL and refs of the wrong type before any state changes.
+		//A handle cannot BE null or hold the wrong kind of object, so these four keep the C entry points,
+		// reached through the scope's own recorder rather than by leaving the RAII layer.
 
-	Test_assert(t, "bindHeapNull", !CommandListRef_bindDescriptorHeap(commandList, NULL, NULL));
-	Test_assert(t, "bindHeapWrongType", !CommandListRef_bindDescriptorHeap(commandList, buffer, NULL));
-	Test_assert(t, "bindTableNull", !CommandListRef_bindDescriptorTable(commandList, NULL, NULL));
-	Test_assert(t, "bindTableWrongType", !CommandListRef_bindDescriptorTable(commandList, heap, NULL));
-	Test_assert(t, "scopeNegEnd", CommandListRef_endScope(commandList, &t->err));
+		Test_assert(t, "bindHeapNull", !c::CommandListRef_bindDescriptorHeap(scope.raw(), NULL, NULL));
+
+		Test_assert(t, "bindHeapWrongType", !c::CommandListRef_bindDescriptorHeap(
+			scope.raw(), buffer.handle(), NULL
+		));
+
+		Test_assert(t, "bindTableNull", !c::CommandListRef_bindDescriptorTable(scope.raw(), NULL, NULL));
+
+		Test_assert(t, "bindTableWrongType", !c::CommandListRef_bindDescriptorTable(
+			scope.raw(), heap.handle(), NULL
+		));
+
+		Test_assert(t, "scopeNegEnd", scope.end(e_rr));
+	}
 
 	//The real work; scope state (pipeline, heap and table binds) reset at endScope, so everything binds again
 
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitions, 2, NULL, &t->err));
-	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
-	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
-	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
+	{
+		gfx::CommandScope scope = commandList.scope({ transition }, 2, {}, e_rr);
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindTable", scope.bindDescriptorTable(table, e_rr));
+		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "dispatch", scope.dispatch1D(1, e_rr));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
 
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+	Test_assert(t, "end", commandList.end(e_rr));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList))
-		if (TestShaders_pullBuffer(t, deviceRef, emptyList, buffer)) {
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, buffer)) {
 
-			const U32 *values = (const U32*) DeviceBufferRef_ptr(buffer)->cpuData.ptr;
+			const c::U32 *values = (const c::U32*) buffer.data()->cpuData.ptr;
 
-			Bool allMatch = true;
+			c::Bool allMatch = true;
 
-			for(U32 i = 0; i < 64; ++i)
+			for(c::U32 i = 0; i < 64; ++i)
 				allMatch &= values[i] == i * 3 + 7;
 
 			Test_assert(t, "bindfulResults", allMatch);
 		}
-
-	}
-
-clean:
-
-	if(table)
-		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&buffer);
-	RefPtr_dec(&table);
-	RefPtr_dec(&layout);
-	RefPtr_dec(&heap);
-
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	SHFile_free(&file, alloc);
 }
 
 // -- 42. Bindful, advanced: multi binding tables, table switching, wrong heap ----
@@ -248,283 +245,232 @@ clean:
 // over the same layout then prove switching tables between dispatches, and a table from another heap proves
 // the wrong heap negative. Runs everywhere, bindless included but never required.
 
-void Test_graphicsBindfulAdvanced(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindfulAdvanced(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindful/advanced");
+	c::Test_setModule(t, "Bindful/advanced");
 
-	const Allocator *alloc = Platform_instance->alloc;
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	DescriptorHeapRef *heap = NULL;
-	DescriptorHeapRef *otherHeap = NULL;
-	DescriptorLayoutRef *layout = NULL;
-	DescriptorTableRef *tableA = NULL;
-	DescriptorTableRef *tableB = NULL;
-	DescriptorTableRef *tableOther = NULL;
-	DescriptorLayoutRef *layoutTwin = NULL;
-	DescriptorTableRef *tableTwin = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	PipelineRef *pipeline = NULL;
-	DeviceBufferRef *src = NULL;
-	DeviceBufferRef *dstA = NULL;
-	DeviceBufferRef *dstB = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
+	gfxtest::OwnedSHFile file(dev.alloc());
 
-	SHFile file {};
-	DescriptorLayoutInfo layoutInfo {};
-	DescriptorLayoutInfo layoutTwinInfo {};
-
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_copy.oiSH", &file)) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping advanced bindful tests");
+	if (!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_copy.oiSH", file.list)) {
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping advanced bindful tests");
 		return;
 	}
 
-	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+	const c::U32 entryId = gfxtest::entry(t, dev, file.list, "main");
 
-	if(entryId == U32_MAX)
-		goto clean;
+	if(entryId == c::U32_MAX)
+		return;
 
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &file, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	gfx::DescriptorHeap heap, otherHeap;
+	gfx::DescriptorLayout layout, layoutTwin;
+	gfx::DescriptorTable tableA, tableB, tableOther, tableTwin;
+	gfx::PipelineLayout pipelineLayout;
+	gfx::Pipeline pipeline;
+	gfx::DeviceBuffer src, dstA, dstB;
+	gfx::CommandList commandList, emptyList;
+
+	//Only the two real tables ever hold descriptors; the twin and the foreign one exist to be refused.
+
+	struct TableGuard {
+
+		gfx::DescriptorTable &a, &b;
+
+		~TableGuard() {
+
+			if (a) {
+				(void) a.unset(0, 0, 1, nullptr);
+				(void) a.unset(1, 0, 1, nullptr);
+			}
+
+			if (b) {
+				(void) b.unset(0, 0, 1, nullptr);
+				(void) b.unset(1, 0, 1, nullptr);
+			}
+		}
+	} tableGuard{ tableA, tableB };
+
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc()), layoutTwinInfo(dev.alloc());
+
+	if(!Test_assert(t, "detectLayout", dev.detectLayout(
+		file.list, entryId, layoutInfo.list, nullptr, nullptr, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	CharString name = CharString_createRefCStrConst("Bindful advanced layout");
-
-	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutInfo, &name, &layout, &t->err
+	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(
+		layoutInfo.list, "Bindful advanced layout", layout, e_rr
 	)))
-		goto clean;
+		return;
 
 	//Room for both real tables; the other heap exists only to prove its table can't bind under this one
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 6, .maxDescriptorTables = 3 };
-	name = CharString_createRefCStrConst("Bindful advanced heap");
+	c::DescriptorHeapInfo heapInfo = { .maxBuffersRW = 6, .maxDescriptorTables = 3 };
 
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Bindful advanced heap", heap, e_rr)))
+		return;
+
+	c::DescriptorHeapInfo otherHeapInfo = { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
+
+	if(!Test_assert(t, "otherHeapCreate", dev.createDescriptorHeap(
+		otherHeapInfo, "Bindful advanced other heap", otherHeap, e_rr
 	)))
-		goto clean;
+		return;
 
-	DescriptorHeapInfo otherHeapInfo = { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
-	name = CharString_createRefCStrConst("Bindful advanced other heap");
-
-	if(!Test_assert(t, "otherHeapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &otherHeapInfo, &name, &otherHeap, &t->err
+	if(!Test_assert(t, "tableACreate", heap.createTable(
+		layout, "Bindful advanced table A", tableA, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful advanced table A");
-
-	if(!Test_assert(t, "tableACreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &tableA, &t->err
+	if(!Test_assert(t, "tableBCreate", heap.createTable(
+		layout, "Bindful advanced table B", tableB, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
-
-	name = CharString_createRefCStrConst("Bindful advanced table B");
-
-	if(!Test_assert(t, "tableBCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &tableB, &t->err
-	)))
-		goto clean;
+		return;
 
 	//A second detect yields a structurally IDENTICAL layout; the work ops must still refuse a table made
 	// from it, because layout compatibility is exact object identity, not structural equality
 
-	if(!Test_assert(t, "detectTwinLayout", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &file, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		NULL, NULL, NULL, &layoutTwinInfo, NULL, &t->err
+	if(!Test_assert(t, "detectTwinLayout", dev.detectLayout(
+		file.list, entryId, layoutTwinInfo.list, nullptr, nullptr, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful advanced twin layout");
-
-	if(!Test_assert(t, "layoutTwinCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutTwinInfo, &name, &layoutTwin, &t->err
+	if(!Test_assert(t, "layoutTwinCreate", dev.createDescriptorLayout(
+		layoutTwinInfo.list, "Bindful advanced twin layout", layoutTwin, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful advanced twin table");
-
-	if(!Test_assert(t, "tableTwinCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layoutTwin, EDescriptorTableFlags_None, &name, &tableTwin, &t->err
+	if(!Test_assert(t, "tableTwinCreate", heap.createTable(
+		layoutTwin, "Bindful advanced twin table", tableTwin, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful advanced other table");
-
-	if(!Test_assert(t, "tableOtherCreate", DescriptorHeapRef_createDescriptorTable(
-		otherHeap, layout, EDescriptorTableFlags_None, &name, &tableOther, &t->err
+	if(!Test_assert(t, "tableOtherCreate", otherHeap.createTable(
+		layout, "Bindful advanced other table", tableOther, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
+		return;
 
 	//src holds 0..63, the shader writes i * 2 + 1 through whichever table is bound
 
-	U32 srcData[64];
+	c::U32 srcData[64];
 
-	for(U32 i = 0; i < 64; ++i)
+	for(c::U32 i = 0; i < 64; ++i)
 		srcData[i] = i;
 
-	Buffer srcRef = Buffer_createRefConst(srcData, sizeof(srcData));
-	name = CharString_createRefCStrConst("Bindful advanced src");
+	c::Buffer srcRef = c::Buffer_createRefConst(srcData, sizeof(srcData));
 
-	if(!Test_assert(t, "srcCreate", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderRead, NULL,
-		&name, &srcRef, &src, &t->err
+	if(!Test_assert(t, "srcCreate", dev.createBufferData(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead,
+		"Bindful advanced src", &srcRef, src, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful advanced dst A");
+	const c::EGraphicsResourceFlag writeBacked =
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked);
 
-	if(!Test_assert(t, "dstACreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &dstA, &t->err
+	if(!Test_assert(t, "dstACreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None, writeBacked, "Bindful advanced dst A", 64 * sizeof(c::U32), dstA, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful advanced dst B");
-
-	if(!Test_assert(t, "dstBCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &dstB, &t->err
+	if(!Test_assert(t, "dstBCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None, writeBacked, "Bindful advanced dst B", 64 * sizeof(c::U32), dstB, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	const Descriptor srcDesc = Descriptor_buffer(src, 0, 0, NULL, 0);
-	const Descriptor dstADesc = Descriptor_buffer(dstA, 0, 0, NULL, 0);
-	const Descriptor dstBDesc = Descriptor_buffer(dstB, 0, 0, NULL, 0);
+	const c::Descriptor srcDesc = c::Descriptor_buffer(src.handle(), 0, 0, NULL, 0);
+	const c::Descriptor dstADesc = c::Descriptor_buffer(dstA.handle(), 0, 0, NULL, 0);
+	const c::Descriptor dstBDesc = c::Descriptor_buffer(dstB.handle(), 0, 0, NULL, 0);
 
-	const CharString inputName = CharString_createRefCStrConst("input");
-	const CharString outputName = CharString_createRefCStrConst("output");
+	Test_assert(t, "setSrcA", tableA.setByName("input", srcDesc, 0, false, e_rr));
+	Test_assert(t, "setDstA", tableA.setByName("output", dstADesc, 0, false, e_rr));
+	Test_assert(t, "setSrcB", tableB.setByName("input", srcDesc, 0, false, e_rr));
+	Test_assert(t, "setDstB", tableB.setByName("output", dstBDesc, 0, false, e_rr));
 
-	Test_assert(t, "setSrcA", DescriptorTableRef_setDescriptorByName(tableA, &inputName, 0, false, &srcDesc, &t->err));
-	Test_assert(t, "setDstA", DescriptorTableRef_setDescriptorByName(tableA, &outputName, 0, false, &dstADesc, &t->err));
-	Test_assert(t, "setSrcB", DescriptorTableRef_setDescriptorByName(tableB, &inputName, 0, false, &srcDesc, &t->err));
-	Test_assert(t, "setDstB", DescriptorTableRef_setDescriptorByName(tableB, &outputName, 0, false, &dstBDesc, &t->err));
+	c::PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout.handle() };
 
-	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
-	name = CharString_createRefCStrConst("Bindful advanced pipeline layout");
-
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Bindful advanced pipeline layout", pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful advanced pipeline");
-
-	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		file.list, "main", "Bindful advanced pipeline", pipeline, {}, &pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)))
+		return;
 
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
 
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
 
-	const Transition transitions[3] = {
-		{ .resource = src,  .stage = EPipelineStage_Compute },
-		{ .resource = dstA, .stage = EPipelineStage_Compute, .isWrite = true },
-		{ .resource = dstB, .stage = EPipelineStage_Compute, .isWrite = true }
+	const c::Transition transitions[3] = {
+		{ .resource = src.handle(),  .stage = c::EPipelineStage_Compute },
+		{ .resource = dstA.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true },
+		{ .resource = dstB.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true }
 	};
 
-	ListTransition transitionList {};
-	ListTransition_createRefConst(transitions, 3, &transitionList, NULL);
-
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
 
 	//A table from another heap must be refused at the work op; its own scope so the refusal can't hide the
 	// real work recorded below
 
-	Test_assert(t, "scopeNeg", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
-	Test_assert(t, "bindHeapNeg", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "bindOtherTable", CommandListRef_bindDescriptorTable(commandList, tableOther, &t->err));
-	Test_assert(t, "bindPipelineNeg", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
-	Test_assert(t, "dispatchWrongHeap", !CommandListRef_dispatch1D(commandList, 1, NULL));
-	Test_assert(t, "bindTwinTable", CommandListRef_bindDescriptorTable(commandList, tableTwin, &t->err));
-	Test_assert(t, "dispatchTwinLayout", !CommandListRef_dispatch1D(commandList, 1, NULL));
-	Test_assert(t, "scopeNegEnd", CommandListRef_endScope(commandList, &t->err));
+	{
+		gfx::CommandScope scope = commandList.scopeSpan(transitions, 3, 1, nullptr, 0, e_rr);
+		Test_assert(t, "scopeNeg", (c::Bool) scope);
+		Test_assert(t, "bindHeapNeg", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindOtherTable", scope.bindDescriptorTable(tableOther, e_rr));
+		Test_assert(t, "bindPipelineNeg", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "dispatchWrongHeap", !scope.dispatch1D(1, nullptr));
+		Test_assert(t, "bindTwinTable", scope.bindDescriptorTable(tableTwin, e_rr));
+		Test_assert(t, "dispatchTwinLayout", !scope.dispatch1D(1, nullptr));
+		Test_assert(t, "scopeNegEnd", scope.end(e_rr));
+	}
 
 	//Two dispatches through two tables, switching between them without touching the heap or pipeline
 
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 2, NULL, &t->err));
-	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+	{
+		gfx::CommandScope scope = commandList.scopeSpan(transitions, 3, 2, nullptr, 0, e_rr);
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
 
-	Test_assert(t, "bindTableA", CommandListRef_bindDescriptorTable(commandList, tableA, &t->err));
-	Test_assert(t, "dispatchA", CommandListRef_dispatch1D(commandList, 1, &t->err));
+		Test_assert(t, "bindTableA", scope.bindDescriptorTable(tableA, e_rr));
+		Test_assert(t, "dispatchA", scope.dispatch1D(1, e_rr));
 
-	Test_assert(t, "bindTableB", CommandListRef_bindDescriptorTable(commandList, tableB, &t->err));
-	Test_assert(t, "dispatchB", CommandListRef_dispatch1D(commandList, 1, &t->err));
+		Test_assert(t, "bindTableB", scope.bindDescriptorTable(tableB, e_rr));
+		Test_assert(t, "dispatchB", scope.dispatch1D(1, e_rr));
 
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList)) {
+	Test_assert(t, "end", commandList.end(e_rr));
 
-		Bool okA = TestShaders_pullBuffer(t, deviceRef, emptyList, dstA);
-		Bool okB = TestShaders_pullBuffer(t, deviceRef, emptyList, dstB);
+	if (gfxtest::submitAndWait(t, dev, commandList)) {
+
+		c::Bool okA = gfxtest::pullBuffer(t, dev, emptyList, dstA);
+		c::Bool okB = gfxtest::pullBuffer(t, dev, emptyList, dstB);
 
 		if (okA && okB) {
 
-			const U32 *a = (const U32*) DeviceBufferRef_ptr(dstA)->cpuData.ptr;
-			const U32 *b = (const U32*) DeviceBufferRef_ptr(dstB)->cpuData.ptr;
+			const c::U32 *a = (const c::U32*) dstA.data()->cpuData.ptr;
+			const c::U32 *b = (const c::U32*) dstB.data()->cpuData.ptr;
 
-			Bool allMatch = true;
+			c::Bool allMatch = true;
 
-			for(U32 i = 0; i < 64; ++i)
+			for(c::U32 i = 0; i < 64; ++i)
 				allMatch &= a[i] == i * 2 + 1 && b[i] == i * 2 + 1;
 
 			Test_assert(t, "bindfulSwitchResults", allMatch);
 		}
 	}
-
-	}
-
-clean:
-
-	if(tableA) {
-		DescriptorTableRef_unsetDescriptors(tableA, 0, 0, 1, NULL);
-		DescriptorTableRef_unsetDescriptors(tableA, 1, 0, 1, NULL);
-	}
-
-	if(tableB) {
-		DescriptorTableRef_unsetDescriptors(tableB, 0, 0, 1, NULL);
-		DescriptorTableRef_unsetDescriptors(tableB, 1, 0, 1, NULL);
-	}
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&dstB);
-	RefPtr_dec(&dstA);
-	RefPtr_dec(&src);
-	RefPtr_dec(&tableOther);
-	RefPtr_dec(&tableTwin);
-	RefPtr_dec(&layoutTwin);
-	RefPtr_dec(&tableB);
-	RefPtr_dec(&tableA);
-	RefPtr_dec(&otherHeap);
-	RefPtr_dec(&heap);
-	RefPtr_dec(&layout);
-
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	DescriptorLayoutInfo_free(&layoutTwinInfo, alloc);
-	SHFile_free(&file, alloc);
 }
 
 // -- 45. Bindful layout switch: two custom layouts in one scope ------------------
@@ -534,257 +480,205 @@ clean:
 // which drops all root arguments, so the second dispatch only works if the lazy emission re-establishes
 // everything. Two pipelines with structurally different layouts dispatch back to back; both outputs checked.
 
-void Test_graphicsBindfulLayoutSwitch(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindfulLayoutSwitch(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindful/layoutSwitch");
+	c::Test_setModule(t, "Bindful/layoutSwitch");
 
-	const Allocator *alloc = Platform_instance->alloc;
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	DescriptorHeapRef *heap = NULL;
-	DescriptorLayoutRef *layoutW = NULL;
-	DescriptorLayoutRef *layoutC = NULL;
-	DescriptorTableRef *tableW = NULL;
-	DescriptorTableRef *tableC = NULL;
-	PipelineLayoutRef *pipelineLayoutW = NULL;
-	PipelineLayoutRef *pipelineLayoutC = NULL;
-	PipelineRef *pipelineW = NULL;
-	PipelineRef *pipelineC = NULL;
-	DeviceBufferRef *bufW = NULL;
-	DeviceBufferRef *src = NULL;
-	DeviceBufferRef *bufC = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
-
-	SHFile writeFile {};
-	SHFile copyFile {};
-	DescriptorLayoutInfo layoutWInfo {};
-	DescriptorLayoutInfo layoutCInfo {};
+	gfxtest::OwnedSHFile writeFile(dev.alloc()), copyFile(dev.alloc());
 
 	if (
-		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_write.oiSH", &writeFile) ||
-		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_copy.oiSH", &copyFile)
+		!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_write.oiSH", writeFile.list) ||
+		!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_copy.oiSH", copyFile.list)
 	) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping layout switch tests");
-		SHFile_free(&writeFile, alloc);
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping layout switch tests");
 		return;
 	}
 
-	const U32 writeId = TestShaders_entry(t, deviceRef, &writeFile, "main");
-	const U32 copyId = TestShaders_entry(t, deviceRef, &copyFile, "main");
+	const c::U32 writeId = gfxtest::entry(t, dev, writeFile.list, "main");
+	const c::U32 copyId = gfxtest::entry(t, dev, copyFile.list, "main");
 
-	if(writeId == U32_MAX || copyId == U32_MAX)
-		goto clean;
+	if(writeId == c::U32_MAX || copyId == c::U32_MAX)
+		return;
 
-	if(!Test_assert(t, "detectLayoutW", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &writeFile, writeId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		NULL, NULL, NULL, &layoutWInfo, NULL, &t->err
+	gfx::DescriptorHeap heap;
+	gfx::DescriptorLayout layoutW, layoutC;
+	gfx::DescriptorTable tableW, tableC;
+	gfx::PipelineLayout pipelineLayoutW, pipelineLayoutC;
+	gfx::Pipeline pipelineW, pipelineC;
+	gfx::DeviceBuffer bufW, src, bufC;
+	gfx::CommandList commandList, emptyList;
+
+	struct TableGuard {
+
+		gfx::DescriptorTable &w, &c;
+
+		~TableGuard() {
+
+			if(w)
+				(void) w.unset(0, 0, 1, nullptr);
+
+			if (c) {
+				(void) c.unset(0, 0, 1, nullptr);
+				(void) c.unset(1, 0, 1, nullptr);
+			}
+		}
+	} tableGuard{ tableW, tableC };
+
+	gfxtest::OwnedLayoutInfo layoutWInfo(dev.alloc()), layoutCInfo(dev.alloc());
+
+	if(!Test_assert(t, "detectLayoutW", dev.detectLayout(
+		writeFile.list, writeId, layoutWInfo.list, nullptr, nullptr, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	if(!Test_assert(t, "detectLayoutC", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &copyFile, copyId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		NULL, NULL, NULL, &layoutCInfo, NULL, &t->err
+	if(!Test_assert(t, "detectLayoutC", dev.detectLayout(
+		copyFile.list, copyId, layoutCInfo.list, nullptr, nullptr, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	CharString name = CharString_createRefCStrConst("Layout switch write layout");
-
-	if(!Test_assert(t, "layoutWCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutWInfo, &name, &layoutW, &t->err
+	if(!Test_assert(t, "layoutWCreate", dev.createDescriptorLayout(
+		layoutWInfo.list, "Layout switch write layout", layoutW, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Layout switch copy layout");
-
-	if(!Test_assert(t, "layoutCCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutCInfo, &name, &layoutC, &t->err
+	if(!Test_assert(t, "layoutCCreate", dev.createDescriptorLayout(
+		layoutCInfo.list, "Layout switch copy layout", layoutC, e_rr
 	)))
-		goto clean;
+		return;
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 3, .maxDescriptorTables = 2 };
-	name = CharString_createRefCStrConst("Layout switch heap");
+	c::DescriptorHeapInfo heapInfo = { .maxBuffersRW = 3, .maxDescriptorTables = 2 };
 
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Layout switch heap", heap, e_rr)))
+		return;
+
+	if(!Test_assert(t, "tableWCreate", heap.createTable(
+		layoutW, "Layout switch write table", tableW, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Layout switch write table");
-
-	if(!Test_assert(t, "tableWCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layoutW, EDescriptorTableFlags_None, &name, &tableW, &t->err
+	if(!Test_assert(t, "tableCCreate", heap.createTable(
+		layoutC, "Layout switch copy table", tableC, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Layout switch copy table");
+	const c::EGraphicsResourceFlag writeBacked =
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked);
 
-	if(!Test_assert(t, "tableCCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layoutC, EDescriptorTableFlags_None, &name, &tableC, &t->err
+	if(!Test_assert(t, "bufWCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None, writeBacked, "Layout switch write output", 64 * sizeof(c::U32),
+		bufW, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Layout switch write output");
+	c::U32 srcData[64];
 
-	if(!Test_assert(t, "bufWCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &bufW, &t->err
-	)))
-		goto clean;
-
-	U32 srcData[64];
-
-	for(U32 i = 0; i < 64; ++i)
+	for(c::U32 i = 0; i < 64; ++i)
 		srcData[i] = i;
 
-	Buffer srcRef = Buffer_createRefConst(srcData, sizeof(srcData));
-	name = CharString_createRefCStrConst("Layout switch src");
+	c::Buffer srcRef = c::Buffer_createRefConst(srcData, sizeof(srcData));
 
-	if(!Test_assert(t, "srcCreate", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderRead, NULL,
-		&name, &srcRef, &src, &t->err
+	if(!Test_assert(t, "srcCreate", dev.createBufferData(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead,
+		"Layout switch src", &srcRef, src, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Layout switch copy output");
-
-	if(!Test_assert(t, "bufCCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &bufC, &t->err
+	if(!Test_assert(t, "bufCCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None, writeBacked, "Layout switch copy output", 64 * sizeof(c::U32),
+		bufC, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	const Descriptor bufWDesc = Descriptor_buffer(bufW, 0, 0, NULL, 0);
-	const Descriptor srcDesc = Descriptor_buffer(src, 0, 0, NULL, 0);
-	const Descriptor bufCDesc = Descriptor_buffer(bufC, 0, 0, NULL, 0);
+	const c::Descriptor bufWDesc = c::Descriptor_buffer(bufW.handle(), 0, 0, NULL, 0);
+	const c::Descriptor srcDesc = c::Descriptor_buffer(src.handle(), 0, 0, NULL, 0);
+	const c::Descriptor bufCDesc = c::Descriptor_buffer(bufC.handle(), 0, 0, NULL, 0);
 
-	const CharString inputName = CharString_createRefCStrConst("input");
-	const CharString outputName = CharString_createRefCStrConst("output");
+	Test_assert(t, "setBufW", tableW.setByName("output", bufWDesc, 0, false, e_rr));
+	Test_assert(t, "setSrc", tableC.setByName("input", srcDesc, 0, false, e_rr));
+	Test_assert(t, "setBufC", tableC.setByName("output", bufCDesc, 0, false, e_rr));
 
-	Test_assert(t, "setBufW", DescriptorTableRef_setDescriptorByName(tableW, &outputName, 0, false, &bufWDesc, &t->err));
-	Test_assert(t, "setSrc", DescriptorTableRef_setDescriptorByName(tableC, &inputName, 0, false, &srcDesc, &t->err));
-	Test_assert(t, "setBufC", DescriptorTableRef_setDescriptorByName(tableC, &outputName, 0, false, &bufCDesc, &t->err));
+	c::PipelineLayoutInfo pipelineLayoutWInfo = { .bindings = layoutW.handle() };
 
-	PipelineLayoutInfo pipelineLayoutWInfo = { .bindings = layoutW };
-	name = CharString_createRefCStrConst("Layout switch write pipeline layout");
-
-	if(!Test_assert(t, "pipelineLayoutWCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutWInfo, &name, &pipelineLayoutW, &t->err
+	if(!Test_assert(t, "pipelineLayoutWCreate", dev.createPipelineLayout(
+		pipelineLayoutWInfo, "Layout switch write pipeline layout", pipelineLayoutW, e_rr
 	)))
-		goto clean;
+		return;
 
-	PipelineLayoutInfo pipelineLayoutCInfo = { .bindings = layoutC };
-	name = CharString_createRefCStrConst("Layout switch copy pipeline layout");
+	c::PipelineLayoutInfo pipelineLayoutCInfo = { .bindings = layoutC.handle() };
 
-	if(!Test_assert(t, "pipelineLayoutCCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutCInfo, &name, &pipelineLayoutC, &t->err
+	if(!Test_assert(t, "pipelineLayoutCCreate", dev.createPipelineLayout(
+		pipelineLayoutCInfo, "Layout switch copy pipeline layout", pipelineLayoutC, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Layout switch write pipeline");
-
-	if(!Test_assert(t, "pipelineWCreate", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &writeFile, &name, writeId, NULL, EPipelineFlags_None, pipelineLayoutW, &pipelineW, &t->err
+	if(!Test_assert(t, "pipelineWCreate", dev.createComputePipeline(
+		writeFile.list, "main", "Layout switch write pipeline", pipelineW, {}, &pipelineLayoutW, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Layout switch copy pipeline");
-
-	if(!Test_assert(t, "pipelineCCreate", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &copyFile, &name, copyId, NULL, EPipelineFlags_None, pipelineLayoutC, &pipelineC, &t->err
+	if(!Test_assert(t, "pipelineCCreate", dev.createComputePipeline(
+		copyFile.list, "main", "Layout switch copy pipeline", pipelineC, {}, &pipelineLayoutC, e_rr
 	)))
-		goto clean;
+		return;
 
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)))
+		return;
 
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
 
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
 
-	const Transition transitions[3] = {
-		{ .resource = bufW, .stage = EPipelineStage_Compute, .isWrite = true },
-		{ .resource = src,  .stage = EPipelineStage_Compute },
-		{ .resource = bufC, .stage = EPipelineStage_Compute, .isWrite = true }
+	const c::Transition transitions[3] = {
+		{ .resource = bufW.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true },
+		{ .resource = src.handle(),  .stage = c::EPipelineStage_Compute },
+		{ .resource = bufC.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true }
 	};
 
-	ListTransition transitionList {};
-	ListTransition_createRefConst(transitions, 3, &transitionList, NULL);
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
 
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
-	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
+	{
+		gfx::CommandScope scope = commandList.scopeSpan(transitions, 3, 1, nullptr, 0, e_rr);
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
 
-	Test_assert(t, "bindTableW", CommandListRef_bindDescriptorTable(commandList, tableW, &t->err));
-	Test_assert(t, "bindPipelineW", CommandListRef_setComputePipeline(commandList, pipelineW, &t->err));
-	Test_assert(t, "dispatchW", CommandListRef_dispatch1D(commandList, 1, &t->err));
+		Test_assert(t, "bindTableW", scope.bindDescriptorTable(tableW, e_rr));
+		Test_assert(t, "bindPipelineW", scope.setComputePipeline(pipelineW, e_rr));
+		Test_assert(t, "dispatchW", scope.dispatch1D(1, e_rr));
 
-	Test_assert(t, "bindTableC", CommandListRef_bindDescriptorTable(commandList, tableC, &t->err));
-	Test_assert(t, "bindPipelineC", CommandListRef_setComputePipeline(commandList, pipelineC, &t->err));
-	Test_assert(t, "dispatchC", CommandListRef_dispatch1D(commandList, 1, &t->err));
+		Test_assert(t, "bindTableC", scope.bindDescriptorTable(tableC, e_rr));
+		Test_assert(t, "bindPipelineC", scope.setComputePipeline(pipelineC, e_rr));
+		Test_assert(t, "dispatchC", scope.dispatch1D(1, e_rr));
 
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList)) {
+	Test_assert(t, "end", commandList.end(e_rr));
 
-		Bool okW = TestShaders_pullBuffer(t, deviceRef, emptyList, bufW);
-		Bool okC = TestShaders_pullBuffer(t, deviceRef, emptyList, bufC);
+	if (gfxtest::submitAndWait(t, dev, commandList)) {
+
+		c::Bool okW = gfxtest::pullBuffer(t, dev, emptyList, bufW);
+		c::Bool okC = gfxtest::pullBuffer(t, dev, emptyList, bufC);
 
 		if (okW && okC) {
 
-			const U32 *w = (const U32*) DeviceBufferRef_ptr(bufW)->cpuData.ptr;
-			const U32 *c = (const U32*) DeviceBufferRef_ptr(bufC)->cpuData.ptr;
+			const c::U32 *w = (const c::U32*) bufW.data()->cpuData.ptr;
+			const c::U32 *copied = (const c::U32*) bufC.data()->cpuData.ptr;
 
-			Bool allMatch = true;
+			c::Bool allMatch = true;
 
-			for(U32 i = 0; i < 64; ++i)
-				allMatch &= w[i] == i * 3 + 7 && c[i] == i * 2 + 1;
+			for(c::U32 i = 0; i < 64; ++i)
+				allMatch &= w[i] == i * 3 + 7 && copied[i] == i * 2 + 1;
 
 			Test_assert(t, "layoutSwitchResults", allMatch);
 		}
 	}
-
-	}
-
-clean:
-
-	if(tableW)
-		DescriptorTableRef_unsetDescriptors(tableW, 0, 0, 1, NULL);
-
-	if(tableC) {
-		DescriptorTableRef_unsetDescriptors(tableC, 0, 0, 1, NULL);
-		DescriptorTableRef_unsetDescriptors(tableC, 1, 0, 1, NULL);
-	}
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipelineC);
-	RefPtr_dec(&pipelineW);
-	RefPtr_dec(&pipelineLayoutC);
-	RefPtr_dec(&pipelineLayoutW);
-	RefPtr_dec(&bufC);
-	RefPtr_dec(&src);
-	RefPtr_dec(&bufW);
-	RefPtr_dec(&tableC);
-	RefPtr_dec(&tableW);
-	RefPtr_dec(&layoutC);
-	RefPtr_dec(&layoutW);
-	RefPtr_dec(&heap);
-
-	DescriptorLayoutInfo_free(&layoutWInfo, alloc);
-	DescriptorLayoutInfo_free(&layoutCInfo, alloc);
-	SHFile_free(&writeFile, alloc);
-	SHFile_free(&copyFile, alloc);
 }
 
 // -- 53. Updating a table between two submits of the same table ------------------
@@ -796,172 +690,161 @@ clean:
 // the same binding of the same table at another buffer, submit again. Both results are checked, so a stale
 // descriptor surviving the update shows up as the first buffer's values coming back twice.
 
-void Test_graphicsBindfulTableUpdate(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindfulTableUpdate(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindful/tableUpdate");
+	c::Test_setModule(t, "Bindful/tableUpdate");
 
-	const Allocator *alloc = Platform_instance->alloc;
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	DescriptorHeapRef *heap = NULL;
-	DescriptorLayoutRef *layout = NULL;
-	DescriptorTableRef *table = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	PipelineRef *pipeline = NULL;
-	DeviceBufferRef *srcA = NULL;
-	DeviceBufferRef *srcB = NULL;
-	DeviceBufferRef *output = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
+	gfxtest::OwnedSHFile file(dev.alloc());
 
-	SHFile file {};
-	DescriptorLayoutInfo layoutInfo {};
-
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_copy.oiSH", &file)) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping table update tests");
+	if (!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_copy.oiSH", file.list)) {
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping table update tests");
 		return;
 	}
 
-	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+	const c::U32 entryId = gfxtest::entry(t, dev, file.list, "main");
 
-	if(entryId == U32_MAX)
-		goto clean;
+	if(entryId == c::U32_MAX)
+		return;
 
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &file, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	gfx::DescriptorHeap heap;
+	gfx::DescriptorLayout layout;
+	gfx::DescriptorTable table;
+	gfx::PipelineLayout pipelineLayout;
+	gfx::Pipeline pipeline;
+	gfx::DeviceBuffer srcA, srcB, output;
+	gfx::CommandList commandList, emptyList;
+
+	struct TableGuard {
+
+		gfx::DescriptorTable &table;
+
+		~TableGuard() {
+
+			if (table) {
+				(void) table.unset(0, 0, 1, nullptr);
+				(void) table.unset(1, 0, 1, nullptr);
+			}
+		}
+	} tableGuard{ table };
+
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
+
+	if(!Test_assert(t, "detectLayout", dev.detectLayout(
+		file.list, entryId, layoutInfo.list, nullptr, nullptr, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	CharString name = CharString_createRefCStrConst("Table update layout");
+	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(layoutInfo.list, "Table update layout", layout, e_rr)))
+		return;
 
-	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutInfo, &name, &layout, &t->err
+	c::DescriptorHeapInfo heapInfo = { .maxBuffersRW = 3, .maxDescriptorTables = 1 };
+
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Table update heap", heap, e_rr)))
+		return;
+
+	if(!Test_assert(t, "tableCreate", heap.createTable(
+		layout, "Table update table", table, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
-
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 3, .maxDescriptorTables = 1 };
-	name = CharString_createRefCStrConst("Table update heap");
-
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
-	)))
-		goto clean;
-
-	name = CharString_createRefCStrConst("Table update table");
-
-	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
-	)))
-		goto clean;
+		return;
 
 	//Two sources whose results can't be confused: A gives i * 2 + 1, B gives i * 2 + 1001
 
-	U32 dataA[64], dataB[64];
+	c::U32 dataA[64], dataB[64];
 
-	for(U32 i = 0; i < 64; ++i) {
+	for(c::U32 i = 0; i < 64; ++i) {
 		dataA[i] = i;
 		dataB[i] = i + 500;
 	}
 
-	Buffer refA = Buffer_createRefConst(dataA, sizeof(dataA));
-	name = CharString_createRefCStrConst("Table update src A");
+	c::Buffer refA = c::Buffer_createRefConst(dataA, sizeof(dataA));
 
-	if(!Test_assert(t, "srcACreate", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderRead, NULL,
-		&name, &refA, &srcA, &t->err
+	if(!Test_assert(t, "srcACreate", dev.createBufferData(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead,
+		"Table update src A", &refA, srcA, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	Buffer refB = Buffer_createRefConst(dataB, sizeof(dataB));
-	name = CharString_createRefCStrConst("Table update src B");
+	c::Buffer refB = c::Buffer_createRefConst(dataB, sizeof(dataB));
 
-	if(!Test_assert(t, "srcBCreate", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderRead, NULL,
-		&name, &refB, &srcB, &t->err
+	if(!Test_assert(t, "srcBCreate", dev.createBufferData(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead,
+		"Table update src B", &refB, srcB, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Table update output");
-
-	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &output, &t->err
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Table update output", 64 * sizeof(c::U32), output, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	const Descriptor srcADesc = Descriptor_buffer(srcA, 0, 0, NULL, 0);
-	const Descriptor srcBDesc = Descriptor_buffer(srcB, 0, 0, NULL, 0);
-	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
+	const c::Descriptor srcADesc = c::Descriptor_buffer(srcA.handle(), 0, 0, NULL, 0);
+	const c::Descriptor srcBDesc = c::Descriptor_buffer(srcB.handle(), 0, 0, NULL, 0);
+	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, NULL, 0);
 
-	const CharString inputName = CharString_createRefCStrConst("input");
-	const CharString outputName = CharString_createRefCStrConst("output");
+	Test_assert(t, "setSrcA", table.setByName("input", srcADesc, 0, false, e_rr));
+	Test_assert(t, "setOutput", table.setByName("output", outputDesc, 0, false, e_rr));
 
-	Test_assert(t, "setSrcA", DescriptorTableRef_setDescriptorByName(table, &inputName, 0, false, &srcADesc, &t->err));
-	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
+	c::PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout.handle() };
 
-	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
-	name = CharString_createRefCStrConst("Table update pipeline layout");
-
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Table update pipeline layout", pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Table update pipeline");
-
-	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		file.list, "main", "Table update pipeline", pipeline, {}, &pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 2 * KIBI, 32, 16, true, &commandList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "listCreate", dev.createCommandList(2 * c::KIBI, 32, 16, commandList, true, e_rr)))
+		return;
 
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
 
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
 
 	//Both sources are declared up front: transitions are recorded against concrete resources, and the second
 	// submit replays the same list after the table points at the other one
 
-	const Transition transitions[3] = {
-		{ .resource = srcA, .stage = EPipelineStage_Compute },
-		{ .resource = srcB, .stage = EPipelineStage_Compute },
-		{ .resource = output, .stage = EPipelineStage_Compute, .isWrite = true }
+	const c::Transition transitions[3] = {
+		{ .resource = srcA.handle(), .stage = c::EPipelineStage_Compute },
+		{ .resource = srcB.handle(), .stage = c::EPipelineStage_Compute },
+		{ .resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true }
 	};
 
-	ListTransition transitionList {};
-	ListTransition_createRefConst(transitions, 3, &transitionList, NULL);
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
 
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
-	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
-	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
-	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+	{
+		gfx::CommandScope scope = commandList.scopeSpan(transitions, 3, 1, nullptr, 0, e_rr);
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindTable", scope.bindDescriptorTable(table, e_rr));
+		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "dispatch", scope.dispatch1D(1, e_rr));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
+
+	Test_assert(t, "end", commandList.end(e_rr));
 
 	//First submit reads A; submitAndWait returns only once the frame retired, which is what makes the
 	// descriptor update below legal
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList))
-		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
 
-			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
-			Bool allMatch = true;
+			c::Bool allMatch = true;
 
-			for(U32 i = 0; i < 64; ++i)
+			for(c::U32 i = 0; i < 64; ++i)
 				allMatch &= values[i] == i * 2 + 1;
 
 			Test_assert(t, "firstSubmitValues", allMatch);
@@ -969,43 +852,20 @@ void Test_graphicsBindfulTableUpdate(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Same table, same binding, another buffer
 
-	Test_assert(t, "updateSrc", DescriptorTableRef_setDescriptorByName(table, &inputName, 0, true, &srcBDesc, &t->err));
+	Test_assert(t, "updateSrc", table.setByName("input", srcBDesc, 0, true, e_rr));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList))
-		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
 
-			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
-			Bool allMatch = true;
+			c::Bool allMatch = true;
 
-			for(U32 i = 0; i < 64; ++i)
+			for(c::U32 i = 0; i < 64; ++i)
 				allMatch &= values[i] == (i + 500) * 2 + 1;
 
 			Test_assert(t, "secondSubmitValues", allMatch);
 		}
-
-	}
-
-clean:
-
-	if(table) {
-		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
-		DescriptorTableRef_unsetDescriptors(table, 1, 0, 1, NULL);
-	}
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&output);
-	RefPtr_dec(&srcB);
-	RefPtr_dec(&srcA);
-	RefPtr_dec(&table);
-	RefPtr_dec(&layout);
-	RefPtr_dec(&heap);
-
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	SHFile_free(&file, alloc);
 }
 
 // -- 55. Descriptor table slot recycling ----------------------------------------
@@ -1016,73 +876,69 @@ clean:
 // afterwards, so this fills the budget, frees, reallocates and then actually dispatches through the
 // recycled table rather than only creating it.
 
-void Test_graphicsBindfulHeapRecycle(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindfulHeapRecycle(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindful/heapRecycle");
+	c::Test_setModule(t, "Bindful/heapRecycle");
 
-	const Allocator *alloc = Platform_instance->alloc;
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	DescriptorHeapRef *heap = NULL;
-	DescriptorLayoutRef *layout = NULL;
-	DescriptorTableRef *tableFirst = NULL;
-	DescriptorTableRef *tableOverBudget = NULL;
-	DescriptorTableRef *tableRecycled = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	PipelineRef *pipeline = NULL;
-	DeviceBufferRef *output = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
+	gfxtest::OwnedSHFile file(dev.alloc());
 
-	SHFile file {};
-	DescriptorLayoutInfo layoutInfo {};
-
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_write.oiSH", &file)) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping heap recycle tests");
+	if (!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_write.oiSH", file.list)) {
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping heap recycle tests");
 		return;
 	}
 
-	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+	const c::U32 entryId = gfxtest::entry(t, dev, file.list, "main");
 
-	if(entryId == U32_MAX)
-		goto clean;
+	if(entryId == c::U32_MAX)
+		return;
 
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &file, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	gfx::DescriptorHeap heap;
+	gfx::DescriptorLayout layout;
+	gfx::DescriptorTable tableFirst, tableOverBudget, tableRecycled;
+	gfx::PipelineLayout pipelineLayout;
+	gfx::Pipeline pipeline;
+	gfx::DeviceBuffer output;
+	gfx::CommandList commandList, emptyList;
+
+	struct TableGuard {
+
+		gfx::DescriptorTable &table;
+
+		~TableGuard() {
+			if(table)
+				(void) table.unset(0, 0, 1, nullptr);
+		}
+	} tableGuard{ tableRecycled };
+
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
+
+	if(!Test_assert(t, "detectLayout", dev.detectLayout(
+		file.list, entryId, layoutInfo.list, nullptr, nullptr, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	CharString name = CharString_createRefCStrConst("Heap recycle layout");
-
-	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutInfo, &name, &layout, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(layoutInfo.list, "Heap recycle layout", layout, e_rr)))
+		return;
 
 	//Room for exactly one table, so the second allocation has to be refused and the third can only succeed
 	// by reusing what the first one gave back
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
-	name = CharString_createRefCStrConst("Heap recycle heap");
+	c::DescriptorHeapInfo heapInfo = { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
 
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Heap recycle heap", heap, e_rr)))
+		return;
+
+	if(!Test_assert(t, "tableFirstCreate", heap.createTable(
+		layout, "Heap recycle first table", tableFirst, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Heap recycle first table");
-
-	if(!Test_assert(t, "tableFirstCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &tableFirst, &t->err
-	)))
-		goto clean;
-
-	name = CharString_createRefCStrConst("Heap recycle over budget table");
-
-	Test_assert(t, "tableOverBudgetRefused", !DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &tableOverBudget, NULL
+	Test_assert(t, "tableOverBudgetRefused", !heap.createTable(
+		layout, "Heap recycle over budget table", tableOverBudget, c::EDescriptorTableFlags_None, nullptr
 	));
 
 	Test_assert(t, "tableOverBudgetNull", !tableOverBudget);
@@ -1090,110 +946,77 @@ void Test_graphicsBindfulHeapRecycle(Test *t, GraphicsDeviceRef *deviceRef) {
 	//Freeing a table that never held a descriptor keeps the debug build's leaked descriptor warning quiet,
 	// which would otherwise fire for slots still set at free time
 
-	RefPtr_dec(&tableFirst);
+	tableFirst.release();
 
-	name = CharString_createRefCStrConst("Heap recycle recycled table");
-
-	if(!Test_assert(t, "tableRecycledCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &tableRecycled, &t->err
+	if(!Test_assert(t, "tableRecycledCreate", heap.createTable(
+		layout, "Heap recycle recycled table", tableRecycled, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
+		return;
 
 	//Creating it is not enough: the recycled slot has to survive a real dispatch through it
 
-	name = CharString_createRefCStrConst("Heap recycle output");
-
-	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &output, &t->err
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Heap recycle output", 64 * sizeof(c::U32), output, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
-	const CharString outputName = CharString_createRefCStrConst("output");
+	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, NULL, 0);
 
-	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(
-		tableRecycled, &outputName, 0, false, &outputDesc, &t->err
-	));
+	Test_assert(t, "setOutput", tableRecycled.setByName("output", outputDesc, 0, false, e_rr));
 
-	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
-	name = CharString_createRefCStrConst("Heap recycle pipeline layout");
+	c::PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout.handle() };
 
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Heap recycle pipeline layout", pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Heap recycle pipeline");
-
-	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		file.list, "main", "Heap recycle pipeline", pipeline, {}, &pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 2 * KIBI, 32, 16, true, &commandList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "listCreate", dev.createCommandList(2 * c::KIBI, 32, 16, commandList, true, e_rr)))
+		return;
 
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
 
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
 
-	const Transition transition = {
-		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
+	const c::Transition transition = {
+		.resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
 	};
 
-	ListTransition transitionList {};
-	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
 
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
-	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, tableRecycled, &t->err));
-	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
-	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+	{
+		gfx::CommandScope scope = commandList.scope({ transition }, 1, {}, e_rr);
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindTable", scope.bindDescriptorTable(tableRecycled, e_rr));
+		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "dispatch", scope.dispatch1D(1, e_rr));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList))
-		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+	Test_assert(t, "end", commandList.end(e_rr));
 
-			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
 
-			Bool allMatch = true;
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
-			for(U32 i = 0; i < 64; ++i)
+			c::Bool allMatch = true;
+
+			for(c::U32 i = 0; i < 64; ++i)
 				allMatch &= values[i] == i * 3 + 7;
 
 			Test_assert(t, "recycledTableResults", allMatch);
 		}
-
-	}
-
-clean:
-
-	if(tableRecycled)
-		DescriptorTableRef_unsetDescriptors(tableRecycled, 0, 0, 1, NULL);
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&output);
-	RefPtr_dec(&tableRecycled);
-	RefPtr_dec(&tableOverBudget);
-	RefPtr_dec(&tableFirst);
-	RefPtr_dec(&layout);
-	RefPtr_dec(&heap);
-
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	SHFile_free(&file, alloc);
 }
 
 // -- 56. The push descriptor boundary -------------------------------------------
@@ -1205,158 +1028,117 @@ clean:
 //The refusal is checked with a heap and a table already bound, since the push descriptor check runs before
 // the unbound heap check and would otherwise pass for the wrong reason.
 
-void Test_graphicsBindfulPushDescriptorBoundary(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindfulPushDescriptorBoundary(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindful/pushBoundary");
+	c::Test_setModule(t, "Bindful/pushBoundary");
 
-	const Allocator *alloc = Platform_instance->alloc;
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	DescriptorHeapRef *heap = NULL;
-	DescriptorLayoutRef *layout = NULL;
-	DescriptorLayoutRef *pushLayout = NULL;
-	DescriptorTableRef *table = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	PipelineRef *pipeline = NULL;
-	DeviceBufferRef *output = NULL;
-	CommandListRef *commandList = NULL;
+	gfxtest::OwnedSHFile file(dev.alloc());
 
-	SHFile file {};
-	DescriptorLayoutInfo layoutInfo {};
-	DescriptorLayoutInfo pushInfo {};
-
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_spaces.oiSH", &file)) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping push boundary tests");
+	if (!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_spaces.oiSH", file.list)) {
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping push boundary tests");
 		return;
 	}
 
-	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+	const c::U32 entryId = gfxtest::entry(t, dev, file.list, "main");
 
-	if(entryId == U32_MAX)
-		goto clean;
+	if(entryId == c::U32_MAX)
+		return;
+
+	gfx::DescriptorHeap heap;
+	gfx::DescriptorLayout layout, pushLayout;
+	gfx::DescriptorTable table;
+	gfx::PipelineLayout pipelineLayout;
+	gfx::Pipeline pipeline;
+	gfx::DeviceBuffer output;
+	gfx::CommandList commandList;
+
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc()), pushInfo(dev.alloc());
 
 	//Naming one register makes it a push descriptor while the other stays a normal binding, which is the
 	// mixed layout the work ops have to refuse. The assume-all flag would leave no normal bindings at all.
 	//This shader keeps its two registers in different spaces on purpose: Vulkan refuses a pipeline layout
 	// whose push descriptors and normal bindings land in the same set.
 
-	const CharString pushName = CharString_createRefCStrConst("input");
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	ListCharString pushNames {};
-	ListCharString_createRefConst(&pushName, 1, &pushNames, NULL);
-
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &file, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		&pushNames, NULL, NULL, &layoutInfo, &pushInfo, &t->err
+	if(!Test_assert(t, "detectLayout", dev.detectLayout(
+		file.list, entryId, layoutInfo.list, nullptr, nullptr, { "input" }, &pushInfo.list,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	if (!pushInfo.bindings.length || !layoutInfo.bindings.length) {
-		Test_print(t, "Shader didn't split into push and normal bindings, skipping push boundary tests");
-		goto clean;
+	if (!pushInfo.list.bindings.length || !layoutInfo.list.bindings.length) {
+		c::Test_print(t, "Shader didn't split into push and normal bindings, skipping push boundary tests");
+		return;
 	}
 
-	CharString name = CharString_createRefCStrConst("Push boundary layout");
-
-	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutInfo, &name, &layout, &t->err
-	)))
-		goto clean;
-
-	name = CharString_createRefCStrConst("Push boundary push layout");
+	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(layoutInfo.list, "Push boundary layout", layout, e_rr)))
+		return;
 
 	//A device without VK_KHR_push_descriptor refuses a caller owned push descriptor layout outright, which is
 	// the documented gap rather than a failure of this module.
 	//Android emulators are the usual case, since gfxstream drops the extension from the guest.
 
-	if(!GraphicsDeviceRef_createDescriptorLayout(deviceRef, &pushInfo, &name, &pushLayout, NULL)) {
-		Test_print(t, "Device has no push descriptor support, skipping push boundary tests");
-		goto clean;
+	if(!dev.createDescriptorLayout(pushInfo.list, "Push boundary push layout", pushLayout, nullptr)) {
+		c::Test_print(t, "Device has no push descriptor support, skipping push boundary tests");
+		return;
 	}
 
-	Test_assert(t, "pushLayoutCreate", pushLayout);
+	Test_assert(t, "pushLayoutCreate", pushLayout.valid());
 
-	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
-	name = CharString_createRefCStrConst("Push boundary heap");
+	c::DescriptorHeapInfo heapInfo = { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
 
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Push boundary heap", heap, e_rr)))
+		return;
+
+	if(!Test_assert(t, "tableCreate", heap.createTable(
+		layout, "Push boundary table", table, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Push boundary table");
-
-	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Push boundary output", 64 * sizeof(c::U32), output, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Push boundary output");
-
-	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &output, &t->err
-	)))
-		goto clean;
-
-	PipelineLayoutInfo pipelineLayoutInfo = {
-		.bindings = layout, .pushDescriptors = pushLayout
+	c::PipelineLayoutInfo pipelineLayoutInfo = {
+		.bindings = layout.handle(), .pushDescriptors = pushLayout.handle()
 	};
 
-	name = CharString_createRefCStrConst("Push boundary pipeline layout");
-
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Push boundary pipeline layout", pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Push boundary pipeline");
-
-	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
+	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		file.list, "main", "Push boundary pipeline", pipeline, {}, &pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 2 * KIBI, 32, 16, true, &commandList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "listCreate", dev.createCommandList(2 * c::KIBI, 32, 16, commandList, true, e_rr)))
+		return;
 
-	const Transition transition = {
-		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
+	const c::Transition transition = {
+		.resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
 	};
-
-	ListTransition transitionList {};
-	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
 
 	//Everything a normal dispatch needs is in place, so the only thing left to refuse it is the layout's
 	// push descriptors. The scope stays unsubmitted: a refused work op invalidates it and end() hides it.
 
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
-	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
-	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
-	Test_assert(t, "dispatchRefused", !CommandListRef_dispatch1D(commandList, 1, NULL));
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
 
+	{
+		gfx::CommandScope scope = commandList.scope({ transition }, 1, {}, e_rr);
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindTable", scope.bindDescriptorTable(table, e_rr));
+		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "dispatchRefused", !scope.dispatch1D(1, nullptr));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
 	}
 
-clean:
-
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&output);
-	RefPtr_dec(&table);
-	RefPtr_dec(&pushLayout);
-	RefPtr_dec(&layout);
-	RefPtr_dec(&heap);
-
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	DescriptorLayoutInfo_free(&pushInfo, alloc);
-	SHFile_free(&file, alloc);
+	Test_assert(t, "end", commandList.end(e_rr));
 }
-} }

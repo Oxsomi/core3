@@ -83,7 +83,7 @@ extern "C" void Test_graphicsBindfulPushDescriptors(oxc::c::Test *t, oxc::c::Gra
 
 	if(!Test_assert(t, "detectLayout", dev.detectLayout(
 		shader.list, entryId, layoutInfo.list, nullptr, nullptr, { "params", "output" }, &pushInfo.list,
-		c::EDescriptorLayoutFlags_None, e_rr
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
 		return;
 

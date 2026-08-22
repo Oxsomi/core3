@@ -23,6 +23,17 @@
 //Draw execution, and the pipeline/render helpers only these draws use.
 //Split out of test_graphics_shaders.c, which had grown past 2300 lines.
 
+//The shared helpers in terms of the handle types. Both C++ headers come BEFORE the block below: a
+//standard header included after the C headers landed in oxc::c finds its guard already tripped and
+//leaves its symbols in that namespace.
+
+#include "test_graphics_shared.hpp"
+
+//Log::debugLn is the C++ front for Log_debugLnx; the x macros name ELogOptions_NewLine unqualified and
+//so cannot be reached through the c namespace.
+
+#include "types/container/log.hpp"
+
 namespace oxc { namespace c {
 	#include "types/base/string_base.h"
 	#include "types/container/buffer.h"
@@ -51,10 +62,10 @@ namespace oxc { namespace c {
 	#include "test_graphics_shared.h"
 } }
 
+using namespace oxc;
+
 //Same namespace the C headers landed in, so the definitions here match the declarations in
 //test_graphics_shared.h and the macros in those headers still expand to names that resolve.
-
-namespace oxc { namespace c {
 
 //The vertex and pixel shader are separate single entry files, picked out of one shared file list by slot
 
@@ -63,87 +74,101 @@ namespace oxc { namespace c {
 //don't.
 
 //Shared by every pipeline this module builds; they all read the same push constant block.
-static PipelineLayoutRef *drawPushLayout = NULL;
-static PipelineLayoutRef *argsPushLayout = NULL;
+//Module statics because the pipelines share one layout, so it outlives any single phase - and it has to be
+//released before the module returns, or a static handle outlives the device and releases into one that is
+//already gone.
 
-//TestShaderPushData has exactly the layout the pixel shaders declare, so it is what gets pushed.
+static gfx::PipelineLayout drawPushLayout;
+static gfx::PipelineLayout argsPushLayout;
+
+//c::TestShaderPushData has exactly the layout the pixel shaders declare, so it is what gets pushed.
 //The bytes are captured at record time, so every assignment below precedes the recording that reads it.
 
-static TestShaderPushData drawPush = {};
+static c::TestShaderPushData drawPush = {};
 
-static Bool TestShaders_pushDraw(Test *t, CommandListRef *commandList) {
-	const Buffer ref = Buffer_createRefConst(&drawPush, sizeof(drawPush));
-	return Test_assert(t, "pushDraw", CommandListRef_setPushConstants(commandList, ref, &t->err));
-}
+//The draw phases record into a scope that already has a cleared render pass open; that pair is
+//gfxtest::DrawPass, since a helper cannot hand back two objects that must outlive it any other way.
 
-static Bool TestShaders_graphicsPipelineNamed(
-	Test *t, GraphicsDeviceRef *deviceRef, const ListSHFile *files, U16 vertexFile, U16 pixelFile,
-	const C8 *pixelEntry, const PipelineGraphicsInfo *info, PipelineRef **pipeline
+using gfxtest::DrawPass;
+
+static c::Bool TestShaders_graphicsPipelineNamed(
+	c::Test *t, gfx::Device &dev, const c::ListSHFile *files, c::U16 vertexFile, c::U16 pixelFile,
+	const c::C8 *pixelEntry, const c::PipelineGraphicsInfo *info, gfx::Pipeline &pipeline
 ) {
 
-	const U32 vertexId = TestShaders_entry(t, deviceRef, &files->ptr[vertexFile], "main");
-	const U32 pixelId = TestShaders_entry(t, deviceRef, &files->ptr[pixelFile], pixelEntry);
+	const c::U32 vertexId = gfxtest::entry(t, dev, files->ptr[vertexFile], "main");
+	const c::U32 pixelId = gfxtest::entry(t, dev, files->ptr[pixelFile], pixelEntry);
 
-	if(vertexId == U32_MAX || pixelId == U32_MAX)
+	if(vertexId == c::U32_MAX || pixelId == c::U32_MAX)
 		return false;
-
-	PipelineStage stages[2] = {
-		{ .binaryId = vertexId, .shFileId = vertexFile },
-		{ .binaryId = pixelId, .shFileId = pixelFile }
-	};
-
-	ListPipelineStage stageList {};
-	ListPipelineStage_createRefConst(stages, 2, &stageList, NULL);
-
-	const CharString name = CharString_createRefCStrConst("Shader test graphics pipeline");
 
 	//The pixel shaders read their color from a push constant, so the layout has to declare the push
 	//constants. Detected from the pixel entry, which is the stage that reads them.
 
-	if(!drawPushLayout && !TestShaders_pushConstantLayout(t, deviceRef, &files->ptr[pixelFile], pixelId, &drawPushLayout))
+	if(!drawPushLayout.valid() && !gfxtest::pushConstantLayout(t, dev, files->ptr[pixelFile], pixelId, drawPushLayout))
 		return false;
 
-	return Test_assert(t, "createGraphicsPipeline", GraphicsDeviceRef_createPipelineGraphics(
-		deviceRef, files, &stageList, info, &name, EPipelineFlags_None, drawPushLayout, pipeline, &t->err
-	));
+	//The stage list is built from ids this already resolved, so the C entry point is what takes it: the
+	//wrapper's graphics factory resolves its own entries by name and has no form that accepts them.
+
+	c::PipelineStage stages[2] = {
+		{ .binaryId = vertexId, .shFileId = vertexFile },
+		{ .binaryId = pixelId, .shFileId = pixelFile }
+	};
+
+	c::ListPipelineStage stageList {};
+	c::ListPipelineStage_createRefConst(stages, 2, &stageList, NULL);
+
+	const c::CharString name = c::CharString_createRefCStrConst("Shader test graphics pipeline");
+	c::PipelineRef *raw = NULL;
+
+	if(!Test_assert(t, "createGraphicsPipeline", c::GraphicsDeviceRef_createPipelineGraphics(
+		(c::GraphicsDeviceRef*) dev.handle(), files, &stageList, info, &name, c::EPipelineFlags_None,
+		(c::PipelineLayoutRef*) drawPushLayout.handle(), &raw, &t->err
+	)))
+		return false;
+
+	pipeline = gfx::Pipeline(::oxc::RefPtr<c::Pipeline>::share(raw));
+	c::RefPtr_dec(&raw);
+	return true;
 }
 
-static Bool TestShaders_graphicsPipeline(
-	Test *t, GraphicsDeviceRef *deviceRef, const ListSHFile *files, U16 vertexFile, U16 pixelFile,
-	const PipelineGraphicsInfo *info, PipelineRef **pipeline
+static c::Bool TestShaders_graphicsPipeline(
+	c::Test *t, gfx::Device &dev, const c::ListSHFile *files, c::U16 vertexFile, c::U16 pixelFile,
+	const c::PipelineGraphicsInfo *info, gfx::Pipeline &pipeline
 ) {
-	return TestShaders_graphicsPipelineNamed(t, deviceRef, files, vertexFile, pixelFile, "main", info, pipeline);
+	return TestShaders_graphicsPipelineNamed(t, dev, files, vertexFile, pixelFile, "main", info, pipeline);
 }
 
 //Opens a scope, starts a cleared render into the 8x8 target and binds the pipeline with full viewport and scissor.
 //The caller already began the command list, so a compute scope can precede the render scope when a phase needs one.
 
-static Bool TestShaders_openDraw(
-	Test *t, CommandListRef *commandList, U32 scopeId, RefPtr *target, PipelineRef *pipeline
+static DrawPass TestShaders_openDraw(
+	c::Test *t, gfx::CommandList &commandList, c::U32 scopeId, c::RefPtr *target, const gfx::Pipeline &pipeline
 ) {
 
-	Bool ok = Test_assert(t, "scope", CommandListRef_startScope(commandList, NULL, scopeId, NULL, &t->err));
+	c::Error *e_rr = &t->err;
 
-	const AttachmentInfo color = { .image = target, .load = ELoadAttachmentType_Clear };
-	ListAttachmentInfo colors {};
-	ListAttachmentInfo_createRefConst(&color, 1, &colors, NULL);
+	gfx::CommandScope scope = commandList.scope({}, scopeId, {}, e_rr);
+	c::Bool ok = Test_assert(t, "scope", (c::Bool) scope);
 
-	ok &= Test_assert(t, "renderStart", CommandListRef_startRenderExt(
-		commandList, I32x2_zero, I32x2_create2(8, 8), &colors, NULL, &t->err
-	));
+	const c::AttachmentInfo color = { .image = target, .load = c::ELoadAttachmentType_Clear };
 
-	ok &= Test_assert(t, "viewportScissor", CommandListRef_setViewportAndScissor(
-		commandList, I32x2_zero, I32x2_zero, &t->err
-	));
+	gfx::CommandRender render = scope.render(c::I32x2_zero, c::I32x2_create2(8, 8), { color }, NULL, e_rr);
 
-	ok &= Test_assert(t, "bindPipeline", CommandListRef_setGraphicsPipeline(commandList, pipeline, &t->err));
-	return TestShaders_pushDraw(t, commandList) && ok;
+	ok &= Test_assert(t, "renderStart", (c::Bool) render);
+	ok &= Test_assert(t, "viewportScissor", render.setViewportAndScissor(c::I32x2_zero, c::I32x2_zero, e_rr));
+	ok &= Test_assert(t, "bindPipeline", render.setGraphicsPipeline(pipeline, e_rr));
+
+	const c::Bool pushed = Test_assert(t, "pushDraw", render.setPushConstants(drawPush, e_rr));
+
+	return DrawPass{ static_cast<gfx::CommandScope&&>(scope), static_cast<gfx::CommandRender&&>(render), pushed && ok };
 }
 
-static Bool TestShaders_closeDraw(Test *t, CommandListRef *commandList) {
-	Bool ok = Test_assert(t, "renderEnd", CommandListRef_endRenderExt(commandList, &t->err));
-	ok &= Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-	return Test_assert(t, "end", CommandListRef_end(commandList, &t->err)) && ok;
+static c::Bool TestShaders_closeDraw(c::Test *t, DrawPass &pass, gfx::CommandList &commandList) {
+	c::Bool ok = Test_assert(t, "renderEnd", pass.render.end(&t->err));
+	ok &= Test_assert(t, "scopeEnd", pass.scope.end(&t->err));
+	return Test_assert(t, "end", commandList.end(&t->err)) && ok;
 }
 
 // -- 32. Draw execution ----------------------------------------------------------
@@ -154,27 +179,28 @@ static Bool TestShaders_closeDraw(Test *t, CommandListRef *commandList) {
 // through real vertex and index buffers, depth test accept and reject, indirect draws from CPU and GPU
 // written arguments and an MSAA 4x draw that resolves into the readback target.
 
-void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsShaderDraw(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Shaders/draw");
+	c::Test_setModule(t, "Shaders/draw");
 
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	if (!device->defaultDescriptorTable) {
-		Test_print(t, "Device has no bindless descriptor table, skipping draw execution tests");
+	if (!dev.hasBindlessTable()) {
+		c::Test_print(t, "Device has no bindless descriptor table, skipping draw execution tests");
 		return;
 	}
 
-	if (!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering)) {
-		Test_print(t, "Device lacks direct rendering, skipping draw execution tests");
+	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+		c::Test_print(t, "Device lacks direct rendering, skipping draw execution tests");
 		return;
 	}
 
-	const Allocator *alloc = Platform_instance->alloc;
+	const c::Allocator *alloc = dev.alloc();
 
 	//One shared file list all graphics pipelines pick their stages from by slot
 
-	static const C8 *drawShaderPaths[] = {
+	static const c::C8 *drawShaderPaths[] = {
 		"//OxC3_gtest/test_shaders/test_draw_vs.oiSH",
 		"//OxC3_gtest/test_shaders/test_draw_ps.oiSH",
 		"//OxC3_gtest/test_shaders/test_depth_vs.oiSH",
@@ -187,116 +213,101 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 		"//OxC3_gtest/test_shaders/test_draw_dualsrc_ps.oiSH"
 	};
 
-	SHFile files[10] = { 0 };
-	Bool loadedAll = true;
+	//An SHFile has no handle of its own, so the whole set gets one guard that frees on every exit path.
 
-	for(U64 i = 0; i < 10; ++i)
-		loadedAll &= TestShaders_loadFile(t, drawShaderPaths[i], &files[i]);
+	struct OwnedFiles {
+
+		c::SHFile files[10] = {};
+		const c::Allocator *alloc;
+
+		explicit OwnedFiles(const c::Allocator *a) : alloc(a) {}
+
+		~OwnedFiles() {
+			for(c::U64 i = 0; i < 10; ++i)
+				c::SHFile_free(&files[i], alloc);
+		}
+	} owned(alloc);
+
+	c::SHFile *files = owned.files;
+	c::Bool loadedAll = true;
+
+	for(c::U64 i = 0; i < 10; ++i)
+		loadedAll &= gfxtest::loadFile(t, drawShaderPaths[i], files[i]);
 
 	if (!loadedAll) {
-
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping draw execution tests");
-
-		for(U64 i = 0; i < 10; ++i)
-			SHFile_free(&files[i], alloc);
-
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping draw execution tests");
 		return;
 	}
 
-	ListSHFile fileList {};
-	ListSHFile_createRefConst(files, 10, &fileList, NULL);
+	c::ListSHFile fileList {};
+	c::ListSHFile_createRefConst(files, 10, &fileList, NULL);
 
-	RenderTextureRef *target = NULL;
-	RenderTextureRef *msaaTarget = NULL;
-	DepthStencilRef *depth = NULL;
-	DeviceBufferRef *vertexBuffer = NULL;
-	DeviceBufferRef *indexBuffer = NULL;
-	DeviceBufferRef *cpuArgs = NULL;
-	DeviceBufferRef *gpuArgs = NULL;
-	PipelineRef *flatPipeline = NULL;
-	PipelineRef *blendPipeline = NULL;
-	PipelineRef *wirePipeline = NULL;
-	PipelineRef *mrtPipeline = NULL;
-	RenderTextureRef *mrtTarget = NULL;
-	PipelineRef *logicPipeline = NULL;
-	RenderTextureRef *logicTarget = NULL;
-	PipelineRef *dualPipeline = NULL;
-	PipelineRef *vertexPipeline = NULL;
-	PipelineRef *depthPipeline = NULL;
-	PipelineRef *msaaPipeline = NULL;
-	PipelineRef *argsPipeline = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
+	gfx::RenderTexture target, msaaTarget, mrtTarget, logicTarget;
+	gfx::DepthStencil depth;
+	gfx::DeviceBuffer vertexBuffer, indexBuffer, cpuArgs, gpuArgs;
+	gfx::Pipeline flatPipeline, blendPipeline, wirePipeline, mrtPipeline, logicPipeline;
+	gfx::Pipeline dualPipeline, vertexPipeline, depthPipeline, msaaPipeline, argsPipeline;
+	gfx::CommandList commandList, emptyList;
 
-	CharString name = CharString_createRefCStrConst("Shader draw target");
-
-	Test_assert(t, "createTarget", GraphicsDeviceRef_createRenderTexture(
-		deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
-		EMSAASamples_Off, NULL, &name, &target, &t->err
+	Test_assert(t, "createTarget", dev.createRenderTexture(
+		8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None,
+		"Shader draw target", target, c::EMSAASamples_Off, nullptr, e_rr
 	));
 
 	//Designators must appear in declaration order in C++, which is not the order these were written in.
 
-	const PipelineGraphicsInfo flatInfo = {
-		.attachmentFormatsExt = { ETextureFormatId_RGBA8 },
+	const c::PipelineGraphicsInfo flatInfo = {
+		.attachmentFormatsExt = { c::ETextureFormatId_RGBA8 },
 		.attachmentCountExt = 1
 	};
 
-	if(!target || !TestShaders_graphicsPipeline(t, deviceRef, &fileList, 0, 1, &flatInfo, &flatPipeline))
-		goto clean;
+	if(!target || !TestShaders_graphicsPipeline(t, dev, &fileList, 0, 1, &flatInfo, flatPipeline))
+		return;
 
-	if(!Test_assert(t, "createList", GraphicsDeviceRef_createCommandList(
-		deviceRef, 8 * KIBI, 128, 32, true, &commandList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "createList", dev.createCommandList(8 * c::KIBI, 128, 32, commandList, true, e_rr)))
+		return;
 
-	if(!Test_assert(t, "createEmptyList", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "createEmptyList", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
 
-	Test_assert(t, "beginEmptyList", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmptyList", CommandListRef_end(emptyList, &t->err));
+	Test_assert(t, "beginEmptyList", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmptyList", emptyList.end(e_rr));
 
 	//Fullscreen triangle: every pixel has to hold the pushed color exactly
 
-	Test_assert(t, "beginFlat", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	Test_assert(t, "beginFlat", commandList.begin(true, e_rr));
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	drawPush = TestShaderPushData { .color = { 1, 102.f / 255, 51.f / 255, 1 } };
+	drawPush = c::TestShaderPushData { .color = { 1, 102.f / 255, 51.f / 255, 1 } };
 
-	if (TestShaders_openDraw(t, commandList, 1, target, flatPipeline)) {
+	if (DrawPass pass = TestShaders_openDraw(t, commandList, 1, target.textureRef(), flatPipeline)) {
 
-		Test_assert(t, "draw", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+		Test_assert(t, "draw", pass.render.drawUnindexed(3, 1, &t->err));
 
-		if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
-			TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF3366FFu);
+		if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList))
+			(void) gfxtest::checkPixels(t, dev, emptyList, target.textureRef(), 0xFF3366FFu);
 	}
 
 	//Scissor: the draw only lands on the left half, the right half keeps the clear
 
-	Test_assert(t, "beginScissor", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	Test_assert(t, "beginScissor", commandList.begin(true, e_rr));
 
 	drawPush.color[0] = 0; drawPush.color[1] = 204.f / 255; drawPush.color[2] = 0;
 
-	if (TestShaders_openDraw(t, commandList, 1, target, flatPipeline)) {
+	if (DrawPass pass = TestShaders_openDraw(t, commandList, 1, target.textureRef(), flatPipeline)) {
 
-		Test_assert(t, "scissorHalf", CommandListRef_setScissor(
-			commandList, I32x2_zero, I32x2_create2(4, 8), &t->err
-		));
+		Test_assert(t, "scissorHalf", pass.render.setScissor(c::I32x2_zero, c::I32x2_create2(4, 8), e_rr));
 
-		Test_assert(t, "drawScissor", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+		Test_assert(t, "drawScissor", pass.render.drawUnindexed(3, 1, &t->err));
 
-		if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList)) {
+		if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList)) {
 
-			TestShaderPixels pixels {};
+			c::TestShaderPixels pixels {};
 
-			if (TestShaders_pullPixels(t, deviceRef, emptyList, target, &pixels)) {
+			if (gfxtest::pullPixels(t, dev, emptyList, target.textureRef(), pixels)) {
 
-				U32 matching = 0;
+				c::U32 matching = 0;
 
-				for(U64 i = 0; i < 64; ++i)
+				for(c::U64 i = 0; i < 64; ++i)
 					matching += pixels.pixels[i] == ((i & 7) < 4 ? 0xFF00CC00u : 0u);
 
 				Test_assert(t, "scissorPixels", matching == 64);
@@ -306,30 +317,30 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Additive blend: two fullscreen instances of the same color have to sum to exactly twice the bytes
 
-	PipelineGraphicsInfo blendInfo = flatInfo;
+	c::PipelineGraphicsInfo blendInfo = flatInfo;
 	blendInfo.blendState = {
 		.enable = true,
 		.renderTargetMask = 1,
-		.writeMask = { EWriteMask_All },
+		.writeMask = { c::EWriteMask_All },
 		.attachments = { {
-			.srcBlend = EBlend_One, .dstBlend = EBlend_One,
-			.srcBlendAlpha = EBlend_One, .dstBlendAlpha = EBlend_One,
-			.blendOp = EBlendOp_Add, .blendOpAlpha = EBlendOp_Add
+			.srcBlend = c::EBlend_One, .dstBlend = c::EBlend_One,
+			.srcBlendAlpha = c::EBlend_One, .dstBlendAlpha = c::EBlend_One,
+			.blendOp = c::EBlendOp_Add, .blendOpAlpha = c::EBlendOp_Add
 		} }
 	};
 
-	if (TestShaders_graphicsPipeline(t, deviceRef, &fileList, 0, 1, &blendInfo, &blendPipeline)) {
+	if (TestShaders_graphicsPipeline(t, dev, &fileList, 0, 1, &blendInfo, blendPipeline)) {
 
-		Test_assert(t, "beginBlend", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+		Test_assert(t, "beginBlend", commandList.begin(true, e_rr));
 
 		drawPush.color[0] = 51.f / 255; drawPush.color[1] = 102.f / 255; drawPush.color[2] = 0; drawPush.color[3] = 51.f / 255;
 
-		if (TestShaders_openDraw(t, commandList, 1, target, blendPipeline)) {
+		if (DrawPass pass = TestShaders_openDraw(t, commandList, 1, target.textureRef(), blendPipeline)) {
 
-			Test_assert(t, "drawBlend", CommandListRef_drawUnindexed(commandList, 3, 2, &t->err));
+			Test_assert(t, "drawBlend", pass.render.drawUnindexed(3, 2, &t->err));
 
-			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
-				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0x6600CC66u);
+			if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList))
+				(void) gfxtest::checkPixels(t, dev, emptyList, target.textureRef(), 0x6600CC66u);
 		}
 	}
 
@@ -340,30 +351,30 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	// rasterizer's business and differs between implementations, but "some but not all" separates a wireframe
 	// that took effect from one that was silently ignored, which would fill all 64 exactly as the flat draw did.
 
-	if(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features & EGraphicsFeatures_Wireframe) {
+	if(dev.info().capabilities.features & c::EGraphicsFeatures_Wireframe) {
 
-		PipelineGraphicsInfo wireInfo = flatInfo;
-		wireInfo.rasterizer.flags = (U16)(wireInfo.rasterizer.flags | ERasterizerFlags_IsWireframeExt);
+		c::PipelineGraphicsInfo wireInfo = flatInfo;
+		wireInfo.rasterizer.flags = (c::U16)(wireInfo.rasterizer.flags | c::ERasterizerFlags_IsWireframeExt);
 
-		if (TestShaders_graphicsPipeline(t, deviceRef, &fileList, 0, 1, &wireInfo, &wirePipeline)) {
+		if (TestShaders_graphicsPipeline(t, dev, &fileList, 0, 1, &wireInfo, wirePipeline)) {
 
-			Test_assert(t, "beginWire", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+			Test_assert(t, "beginWire", commandList.begin(true, e_rr));
 
 			drawPush.color[0] = 1; drawPush.color[1] = 1; drawPush.color[2] = 1; drawPush.color[3] = 1;
 
-			if (TestShaders_openDraw(t, commandList, 1, target, wirePipeline)) {
+			if (DrawPass pass = TestShaders_openDraw(t, commandList, 1, target.textureRef(), wirePipeline)) {
 
-				Test_assert(t, "drawWire", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+				Test_assert(t, "drawWire", pass.render.drawUnindexed(3, 1, &t->err));
 
-				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList)) {
+				if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList)) {
 
-					TestShaderPixels pixels {};
+					c::TestShaderPixels pixels {};
 
-					if (TestShaders_pullPixels(t, deviceRef, emptyList, target, &pixels)) {
+					if (gfxtest::pullPixels(t, dev, emptyList, target.textureRef(), pixels)) {
 
-						U32 drawn = 0;
+						c::U32 drawn = 0;
 
-						for(U64 i = 0; i < 64; ++i)
+						for(c::U64 i = 0; i < 64; ++i)
 							drawn += pixels.pixels[i] == 0xFFFFFFFFu;
 
 						Test_assert(t, "wireDrewSomething", drawn > 0);
@@ -382,47 +393,46 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	//Both targets are pulled and checked separately, so writing one output to both, or swapping them, fails.
 
 	{
-		name = CharString_createRefCStrConst("Shader draw MRT target 1");
-
-		if(Test_assert(t, "createMrtTarget", GraphicsDeviceRef_createRenderTexture(
-			deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
-			EMSAASamples_Off, NULL, &name, &mrtTarget, &t->err
+		if(Test_assert(t, "createMrtTarget", dev.createRenderTexture(
+			8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None,
+			"Shader draw MRT target 1", mrtTarget, c::EMSAASamples_Off, nullptr, e_rr
 		))) {
 
-			PipelineGraphicsInfo mrtInfo = flatInfo;
+			c::PipelineGraphicsInfo mrtInfo = flatInfo;
 			mrtInfo.attachmentCountExt = 2;
-			mrtInfo.attachmentFormatsExt[1] = ETextureFormatId_RGBA8;
+			mrtInfo.attachmentFormatsExt[1] = c::ETextureFormatId_RGBA8;
 
 			if (TestShaders_graphicsPipelineNamed(
-				t, deviceRef, &fileList, 0, 6, "mainMrt", &mrtInfo, &mrtPipeline
+				t, dev, &fileList, 0, 6, "mainMrt", &mrtInfo, mrtPipeline
 			)) {
 
-				Test_assert(t, "beginMrt", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-				Test_assert(t, "scopeMrt", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+				Test_assert(t, "beginMrt", commandList.begin(true, e_rr));
 
-				const AttachmentInfo mrtColors[2] = {
-					{ .image = target,    .load = ELoadAttachmentType_Clear },
-					{ .image = mrtTarget, .load = ELoadAttachmentType_Clear }
+				const c::AttachmentInfo mrtColors[2] = {
+					{ .image = target.textureRef(),    .load = c::ELoadAttachmentType_Clear },
+					{ .image = mrtTarget.textureRef(), .load = c::ELoadAttachmentType_Clear }
 				};
 
-				ListAttachmentInfo colors {};
-				ListAttachmentInfo_createRefConst(mrtColors, 2, &colors, NULL);
+				gfx::CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+				Test_assert(t, "scopeMrt", (c::Bool) scope);
 
-				Test_assert(t, "renderStartMrt", CommandListRef_startRenderExt(
-					commandList, I32x2_zero, I32x2_create2(8, 8), &colors, NULL, &t->err
-				));
+				gfx::CommandRender render = scope.render(
+					c::I32x2_zero, c::I32x2_create2(8, 8), { mrtColors[0], mrtColors[1] }, NULL, e_rr
+				);
 
-				Test_assert(t, "viewportScissorMrt", CommandListRef_setViewportAndScissor(
-					commandList, I32x2_zero, I32x2_zero, &t->err
-				));
+				Test_assert(t, "renderStartMrt", (c::Bool) render);
+				Test_assert(t, "viewportScissorMrt", render.setViewportAndScissor(c::I32x2_zero, c::I32x2_zero, e_rr));
+				Test_assert(t, "bindMrt", render.setGraphicsPipeline(mrtPipeline, e_rr));
+				Test_assert(t, "pushDraw", render.setPushConstants(drawPush, e_rr));
+				Test_assert(t, "drawMrt", render.drawUnindexed(3, 1, e_rr));
 
-				Test_assert(t, "bindMrt", CommandListRef_setGraphicsPipeline(commandList, mrtPipeline, &t->err));
-			TestShaders_pushDraw(t, commandList);
-				Test_assert(t, "drawMrt", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+				DrawPass pass{
+					static_cast<gfx::CommandScope&&>(scope), static_cast<gfx::CommandRender&&>(render), true
+				};
 
-				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList)) {
-					TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF3366FFu);
-					TestShaders_checkPixels(t, deviceRef, emptyList, mrtTarget, 0xFF00CC00u);
+				if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList)) {
+					(void) gfxtest::checkPixels(t, dev, emptyList, target.textureRef(), 0xFF3366FFu);
+					(void) gfxtest::checkPixels(t, dev, emptyList, mrtTarget.textureRef(), 0xFF00CC00u);
 				}
 			}
 		}
@@ -438,47 +448,45 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	//The gate is required: Vulkan reports logicOp false on most mobile GPUs and MoltenVK, and the pipeline
 	// create would fail there rather than skip.
 
-	if(!(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features & EGraphicsFeatures_LogicOp))
-		Test_print(t, "Device doesn't support logicOp, skipping logic op test");
+	if(!(dev.info().capabilities.features & c::EGraphicsFeatures_LogicOp))
+		c::Test_print(t, "Device doesn't support logicOp, skipping logic op test");
 
 	else {
 
-		name = CharString_createRefCStrConst("Shader draw logic op target");
-
-		if(Test_assert(t, "createLogicTarget", GraphicsDeviceRef_createRenderTexture(
-			deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8u, EGraphicsResourceFlag_None,
-			EMSAASamples_Off, NULL, &name, &logicTarget, &t->err
+		if(Test_assert(t, "createLogicTarget", dev.createRenderTexture(
+			8, 8, c::ETextureFormatId_RGBA8u, c::EGraphicsResourceFlag_None,
+			"Shader draw logic op target", logicTarget, c::EMSAASamples_Off, nullptr, e_rr
 		))) {
 
-			PipelineGraphicsInfo logicInfo = {
+			c::PipelineGraphicsInfo logicInfo = {
 				.blendState = {
 					.enable = true,                       //Required: D3D12 drops LogicOpEnable otherwise
 					.renderTargetMask = 0,                //Required: a logic op excludes blending
-					.logicOpExt = ELogicOpExt_Xor,
-					.writeMask = { EWriteMask_All }
+					.logicOpExt = c::ELogicOpExt_Xor,
+					.writeMask = { c::EWriteMask_All }
 				},
-				.attachmentFormatsExt = { ETextureFormatId_RGBA8u },
+				.attachmentFormatsExt = { c::ETextureFormatId_RGBA8u },
 				.attachmentCountExt = 1
 			};
 
-			if (TestShaders_graphicsPipeline(t, deviceRef, &fileList, 7, 8, &logicInfo, &logicPipeline)) {
+			if (TestShaders_graphicsPipeline(t, dev, &fileList, 7, 8, &logicInfo, logicPipeline)) {
 
-				Test_assert(t, "beginLogic", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+				Test_assert(t, "beginLogic", commandList.begin(true, e_rr));
 
 				drawPush.logicSrc0[0] = 0xF0; drawPush.logicSrc0[1] = 0x33;
 				drawPush.logicSrc0[2] = 0x5A; drawPush.logicSrc0[3] = 0xFF;
 				drawPush.logicSrc1[0] = 0x0F; drawPush.logicSrc1[1] = 0x11;
 				drawPush.logicSrc1[2] = 0x3C; drawPush.logicSrc1[3] = 0x0F;
 
-				if (TestShaders_openDraw(t, commandList, 1, logicTarget, logicPipeline)) {
+				if (DrawPass pass = TestShaders_openDraw(t, commandList, 1, logicTarget.textureRef(), logicPipeline)) {
 
-					Test_assert(t, "drawLogic", CommandListRef_drawUnindexed(commandList, 3, 2, &t->err));
+					Test_assert(t, "drawLogic", pass.render.drawUnindexed(3, 2, &t->err));
 
 					//XOR of the two sources per channel: R 0xF0^0x0F, G 0x33^0x11, B 0x5A^0x3C, A 0xFF^0x0F.
 					//R is the low byte of the pulled U32, matching every other expectation in this module.
 
-					if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
-						TestShaders_checkPixels(t, deviceRef, emptyList, logicTarget, 0xF06622FFu);
+					if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList))
+						(void) gfxtest::checkPixels(t, dev, emptyList, logicTarget.textureRef(), 0xF06622FFu);
 				}
 			}
 		}
@@ -492,25 +500,25 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	//This is also the runtime proof of the dual source reflection path: both outputs sit at LOCATION 0 on
 	// SPIR-V, told apart by the Index decoration the DUAL_SRC macros apply.
 
-	if(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features & EGraphicsFeatures_DualSrcBlend) {
+	if(dev.info().capabilities.features & c::EGraphicsFeatures_DualSrcBlend) {
 
-		PipelineGraphicsInfo dualInfo = flatInfo;
+		c::PipelineGraphicsInfo dualInfo = flatInfo;
 		dualInfo.blendState = {
 			.enable = true,
 			.renderTargetMask = 1,
-			.writeMask = { EWriteMask_All },
+			.writeMask = { c::EWriteMask_All },
 			.attachments = { {
-				.srcBlend = EBlend_Src1ColorExt, .dstBlend = EBlend_Zero,
-				.srcBlendAlpha = EBlend_Src1AlphaExt, .dstBlendAlpha = EBlend_Zero,
-				.blendOp = EBlendOp_Add, .blendOpAlpha = EBlendOp_Add
+				.srcBlend = c::EBlend_Src1ColorExt, .dstBlend = c::EBlend_Zero,
+				.srcBlendAlpha = c::EBlend_Src1AlphaExt, .dstBlendAlpha = c::EBlend_Zero,
+				.blendOp = c::EBlendOp_Add, .blendOpAlpha = c::EBlendOp_Add
 			} }
 		};
 
 		if (TestShaders_graphicsPipelineNamed(
-			t, deviceRef, &fileList, 0, 9, "mainDualSrc", &dualInfo, &dualPipeline
+			t, dev, &fileList, 0, 9, "mainDualSrc", &dualInfo, dualPipeline
 		)) {
 
-			Test_assert(t, "beginDual", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+			Test_assert(t, "beginDual", commandList.begin(true, e_rr));
 
 			//All four channels at 0.8, so the halved result is 0.4, which lands on 102 in 8 bit unorm with no
 			// rounding ambiguity either before or after the multiply.
@@ -518,12 +526,12 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 			drawPush.color[0] = 204.f / 255; drawPush.color[1] = 204.f / 255;
 			drawPush.color[2] = 204.f / 255; drawPush.color[3] = 204.f / 255;
 
-			if (TestShaders_openDraw(t, commandList, 1, target, dualPipeline)) {
+			if (DrawPass pass = TestShaders_openDraw(t, commandList, 1, target.textureRef(), dualPipeline)) {
 
-				Test_assert(t, "drawDual", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+				Test_assert(t, "drawDual", pass.render.drawUnindexed(3, 1, &t->err));
 
-				if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
-					TestShaders_checkPixels(t, deviceRef, emptyList, target, 0x66666666u);
+				if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList))
+					(void) gfxtest::checkPixels(t, dev, emptyList, target.textureRef(), 0x66666666u);
 			}
 		}
 	}
@@ -533,122 +541,118 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	//This is also the only path that replays setPrimitiveBuffers, which used to record 8 bytes of pointer
 	// instead of the command payload.
 
-	const F32 quad[8] = { -1, -1, 1, -1, -1, 1, 1, 1 };
-	const U16 quadIndices[6] = { 0, 1, 2, 2, 1, 3 };
+	const c::F32 quad[8] = { -1, -1, 1, -1, -1, 1, 1, 1 };
+	const c::U16 quadIndices[6] = { 0, 1, 2, 2, 1, 3 };
 
-	Buffer dataRef = Buffer_createRefConst(quad, sizeof(quad));
-	name = CharString_createRefCStrConst("Shader draw vertices");
-
-	Test_assert(t, "createVertexBuffer", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL,
-		&name, &dataRef, &vertexBuffer, &t->err
+	c::Buffer dataRef = c::Buffer_createRefConst(quad, sizeof(quad));
+	Test_assert(t, "createVertexBuffer", dev.createBufferData(
+		c::EDeviceBufferUsage_Vertex, c::EGraphicsResourceFlag_None,
+		"Shader draw vertices", &dataRef, vertexBuffer, nullptr, e_rr
 	));
 
-	dataRef = Buffer_createRefConst(quadIndices, sizeof(quadIndices));
-	name = CharString_createRefCStrConst("Shader draw indices");
-
-	Test_assert(t, "createIndexBuffer", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_Index, EGraphicsResourceFlag_None, NULL,
-		&name, &dataRef, &indexBuffer, &t->err
+	dataRef = c::Buffer_createRefConst(quadIndices, sizeof(quadIndices));
+	Test_assert(t, "createIndexBuffer", dev.createBufferData(
+		c::EDeviceBufferUsage_Index, c::EGraphicsResourceFlag_None,
+		"Shader draw indices", &dataRef, indexBuffer, nullptr, e_rr
 	));
 
-	PipelineGraphicsInfo vertexInfo = flatInfo;
-	vertexInfo.vertexLayout.bufferStrides12_isInstance1[0] = sizeof(F32) * 2;
-	vertexInfo.vertexLayout.attributes[0] = { .format = ETextureFormatId_RG32f };
+	c::PipelineGraphicsInfo vertexInfo = flatInfo;
+	vertexInfo.vertexLayout.bufferStrides12_isInstance1[0] = sizeof(c::F32) * 2;
+	vertexInfo.vertexLayout.attributes[0] = { .format = c::ETextureFormatId_RG32f };
 
 	if (
 		vertexBuffer && indexBuffer &&
-		TestShaders_graphicsPipeline(t, deviceRef, &fileList, 4, 1, &vertexInfo, &vertexPipeline)
+		TestShaders_graphicsPipeline(t, dev, &fileList, 4, 1, &vertexInfo, vertexPipeline)
 	) {
 
-		Test_assert(t, "beginVertex", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+		Test_assert(t, "beginVertex", commandList.begin(true, e_rr));
 
 		drawPush.color[0] = 204.f / 255; drawPush.color[1] = 0; drawPush.color[2] = 204.f / 255; drawPush.color[3] = 1;
 
-		if (TestShaders_openDraw(t, commandList, 1, target, vertexPipeline)) {
+		if (DrawPass pass = TestShaders_openDraw(t, commandList, 1, target.textureRef(), vertexPipeline)) {
 
-			SetPrimitiveBuffersCmd primitives {};
-			primitives.vertexBuffers[0] = vertexBuffer;
-			primitives.indexBuffer = indexBuffer;
+			c::SetPrimitiveBuffersCmd primitives {};
+			primitives.vertexBuffers[0] = vertexBuffer.handle();
+			primitives.indexBuffer = indexBuffer.handle();
 			primitives.isIndex32Bit = false;
 
-			Test_assert(t, "setPrimitiveBuffers", CommandListRef_setPrimitiveBuffers(commandList, &primitives, &t->err));
-			Test_assert(t, "drawIndexed", CommandListRef_drawIndexed(commandList, 6, 2, &t->err));
+			Test_assert(t, "setPrimitiveBuffers", pass.render.setPrimitiveBuffers(primitives, e_rr));
+			Test_assert(t, "drawIndexed", pass.render.drawIndexed(6, 2, &t->err));
 
-			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
-				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFFCC00CCu);
+			if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList))
+				(void) gfxtest::checkPixels(t, dev, emptyList, target.textureRef(), 0xFFCC00CCu);
 		}
 	}
 
 	//Depth story in one draw: a far triangle writes, a nearer one passes, the farthest one after it must be
 	// rejected, so the survivor's color and its exact depth prove both accept and reject paths
 
-	name = CharString_createRefCStrConst("Shader draw depth");
-
-	Test_assert(t, "createDepth", GraphicsDeviceRef_createDepthStencil(
-		deviceRef, 8, 8, EDepthStencilFormat_D32, false, EMSAASamples_Off, NULL, &name, &depth, &t->err
+	Test_assert(t, "createDepth", dev.createDepthStencil(
+		8, 8, c::EDepthStencilFormat_D32, false, "Shader draw depth", depth, c::EMSAASamples_Off, e_rr
 	));
 
 	//Reverse Z is an app convention (fold 1 - z into the projection); the viewport is a plain 0..1 range
 	// on every backend, so the test shader outputs reversed z directly: near stores the higher value,
 	// the far clear is 0 and the compare is Greater
 
-	PipelineGraphicsInfo depthInfo = flatInfo;
-	depthInfo.depthStencil = { .flags = EDepthStencilFlags_DepthWrite, .depthCompare = ECompareOp_Gt };
-	depthInfo.depthFormatExt = EDepthStencilFormat_D32;
+	c::PipelineGraphicsInfo depthInfo = flatInfo;
+	depthInfo.depthStencil = { .flags = c::EDepthStencilFlags_DepthWrite, .depthCompare = c::ECompareOp_Gt };
+	depthInfo.depthFormatExt = c::EDepthStencilFormat_D32;
 
 	if (
 		depth &&
-		TestShaders_graphicsPipeline(t, deviceRef, &fileList, 2, 3, &depthInfo, &depthPipeline)
+		TestShaders_graphicsPipeline(t, dev, &fileList, 2, 3, &depthInfo, depthPipeline)
 	) {
 
-		Test_assert(t, "beginDepth", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-		Test_assert(t, "scopeDepth", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+		Test_assert(t, "beginDepth", commandList.begin(true, e_rr));
 
-		const AttachmentInfo color = { .image = target, .load = ELoadAttachmentType_Clear };
-		ListAttachmentInfo colors {};
-		ListAttachmentInfo_createRefConst(&color, 1, &colors, NULL);
+		const c::AttachmentInfo color = { .image = target.textureRef(), .load = c::ELoadAttachmentType_Clear };
 
-		const DepthStencilAttachmentInfo depthAttach = {
-			.image = depth,
-			.depthLoad = ELoadAttachmentType_Clear,
+		const c::DepthStencilAttachmentInfo depthAttach = {
+			.image = depth.textureRef(),
+			.depthLoad = c::ELoadAttachmentType_Clear,
 			.clearDepth = 0
 		};
 
-		Test_assert(t, "renderStartDepth", CommandListRef_startRenderExt(
-			commandList, I32x2_zero, I32x2_create2(8, 8), &colors, &depthAttach, &t->err
-		));
+		gfx::CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+		Test_assert(t, "scopeDepth", (c::Bool) scope);
 
-		Test_assert(t, "viewportScissorDepth", CommandListRef_setViewportAndScissor(
-			commandList, I32x2_zero, I32x2_zero, &t->err
-		));
+		gfx::CommandRender render = scope.render(
+			c::I32x2_zero, c::I32x2_create2(8, 8), { color }, &depthAttach, e_rr
+		);
 
-		Test_assert(t, "bindDepth", CommandListRef_setGraphicsPipeline(commandList, depthPipeline, &t->err));
-			TestShaders_pushDraw(t, commandList);
-		Test_assert(t, "drawDepth", CommandListRef_drawUnindexed(commandList, 9, 1, &t->err));
+		Test_assert(t, "renderStartDepth", (c::Bool) render);
+		Test_assert(t, "viewportScissorDepth", render.setViewportAndScissor(c::I32x2_zero, c::I32x2_zero, e_rr));
+		Test_assert(t, "bindDepth", render.setGraphicsPipeline(depthPipeline, e_rr));
+		Test_assert(t, "pushDraw", render.setPushConstants(drawPush, e_rr));
+		Test_assert(t, "drawDepth", render.drawUnindexed(9, 1, e_rr));
 
-		if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList)) {
+		DrawPass pass{
+			static_cast<gfx::CommandScope&&>(scope), static_cast<gfx::CommandRender&&>(render), true
+		};
+
+		if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList)) {
 
 			//The middle triangle's green and its 0.7 depth, straight from the shader with no viewport
 			// remap in between; a small tolerance stays anyway for the wider GPU test rig
 
-			TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF00FF00u);
+			(void) gfxtest::checkPixels(t, dev, emptyList, target.textureRef(), 0xFF00FF00u);
 
-			TestShaderPixels depthPixels {};
+			c::TestShaderPixels depthPixels {};
 
-			if (TestShaders_pullPixels(t, deviceRef, emptyList, depth, &depthPixels)) {
+			if (gfxtest::pullPixels(t, dev, emptyList, depth.textureRef(), depthPixels)) {
 
-				U32 matching = 0;
+				c::U32 matching = 0;
 
-				for(U64 i = 0; i < 64; ++i) {
+				for(c::U64 i = 0; i < 64; ++i) {
 
-					F32 depthValue = 0;
-					Buffer_memcpy(
-						Buffer_createRef(&depthValue, sizeof(depthValue)),
-						Buffer_createRefConst(&depthPixels.pixels[i], sizeof(U32))
+					c::F32 depthValue = 0;
+					c::Buffer_memcpy(
+						c::Buffer_createRef(&depthValue, sizeof(depthValue)),
+						c::Buffer_createRefConst(&depthPixels.pixels[i], sizeof(c::U32))
 					);
 
-					const F32 delta = depthValue - 0.7f;
+					const c::F32 delta = depthValue - 0.7f;
 					matching += delta > -1e-6f && delta < 1e-6f;
 				}
 
@@ -659,73 +663,67 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Indirect draw from CPU written arguments
 
-	const U32 drawArgs[4] = { 3, 1, 0, 0 };
-	dataRef = Buffer_createRefConst(drawArgs, sizeof(drawArgs));
-	name = CharString_createRefCStrConst("Shader draw indirect args");
-
-	Test_assert(t, "createDrawArgs", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_Indirect, EGraphicsResourceFlag_None, NULL,
-		&name, &dataRef, &cpuArgs, &t->err
+	const c::U32 drawArgs[4] = { 3, 1, 0, 0 };
+	dataRef = c::Buffer_createRefConst(drawArgs, sizeof(drawArgs));
+	Test_assert(t, "createDrawArgs", dev.createBufferData(
+		c::EDeviceBufferUsage_Indirect, c::EGraphicsResourceFlag_None,
+		"Shader draw indirect args", &dataRef, cpuArgs, nullptr, e_rr
 	));
 
 	if (cpuArgs) {
 
-		Test_assert(t, "beginIndirect", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+		Test_assert(t, "beginIndirect", commandList.begin(true, e_rr));
 
 		drawPush.color[0] = 1; drawPush.color[1] = 1; drawPush.color[2] = 0; drawPush.color[3] = 1;
 
-		if (TestShaders_openDraw(t, commandList, 1, target, flatPipeline)) {
+		if (DrawPass pass = TestShaders_openDraw(t, commandList, 1, target.textureRef(), flatPipeline)) {
 
-			Test_assert(t, "drawIndirect", CommandListRef_drawIndirect(commandList, cpuArgs, 0, 1, false, &t->err));
+			Test_assert(t, "drawIndirect", pass.render.drawIndirect(cpuArgs, 0, 1, false, &t->err));
 
-			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
-				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF00FFFFu);
+			if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList))
+				(void) gfxtest::checkPixels(t, dev, emptyList, target.textureRef(), 0xFF00FFFFu);
 		}
 	}
 
 	//Indirect draw from GPU written arguments: a compute scope writes { 3 vertices, 2 instances } and the
 	// render scope consumes it in the same submit
 
-	name = CharString_createRefCStrConst("Shader draw GPU args");
-
-	Test_assert(t, "createGpuDrawArgs", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_Indirect,
-		EGraphicsResourceFlag_ShaderWriteBindless,
-		NULL, &name, 32, &gpuArgs, &t->err
+	Test_assert(t, "createGpuDrawArgs", dev.createBuffer(
+		c::EDeviceBufferUsage_Indirect, c::EGraphicsResourceFlag_ShaderWriteBindless,
+		"Shader draw GPU args", 32, gpuArgs, nullptr, e_rr
 	));
 
-	if (gpuArgs && TestShaders_computePipelinePush(t, deviceRef, &files[5], &argsPipeline, &argsPushLayout)) {
+	if (gpuArgs && gfxtest::computePipelinePush(t, dev, files[5], argsPipeline, argsPushLayout)) {
 
-		const Transition argsWrite = {
-			.resource = gpuArgs, .stage = EPipelineStage_Compute, .isWrite = true
+		const c::Transition argsWrite = {
+			.resource = gpuArgs.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
 		};
 
-		ListTransition argsTransition {};
-		ListTransition_createRefConst(&argsWrite, 1, &argsTransition, NULL);
+		Test_assert(t, "beginGpuDraw", commandList.begin(true, e_rr));
 
-		Test_assert(t, "beginGpuDraw", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-
-		Test_assert(t, "scopeGpuArgs", CommandListRef_startScope(commandList, &argsTransition, 1, NULL, &t->err));
 		//test_write_args declares its own 16 byte block rather than the pixel one, so this pushes that shape
 		//instead of drawPush; the work op requires the written size to match what the layout declares.
 
-		const U32 argsPushData[4] = { 0, 0, DeviceBufferRef_ptr(gpuArgs)->writeHandle, 0 };
-		const Buffer argsPushRef = Buffer_createRefConst(argsPushData, sizeof(argsPushData));
+		const c::U32 argsPushData[4] = { 0, 0, gpuArgs.writeHandle(), 0 };
 
-		Test_assert(t, "bindGpuArgs", CommandListRef_setComputePipeline(commandList, argsPipeline, &t->err));
-		Test_assert(t, "pushGpuArgs", CommandListRef_setPushConstants(commandList, argsPushRef, &t->err));
-		Test_assert(t, "dispatchGpuArgs", CommandListRef_dispatch1D(commandList, 1, &t->err));
-		Test_assert(t, "scopeGpuArgsEnd", CommandListRef_endScope(commandList, &t->err));
+		{
+			gfx::CommandScope scope = commandList.scope({ argsWrite }, 1, {}, e_rr);
+			Test_assert(t, "scopeGpuArgs", (c::Bool) scope);
+			Test_assert(t, "bindGpuArgs", scope.setComputePipeline(argsPipeline, e_rr));
+			Test_assert(t, "pushGpuArgs", scope.setPushConstants(argsPushData, e_rr));
+			Test_assert(t, "dispatchGpuArgs", scope.dispatch1D(1, e_rr));
+			Test_assert(t, "scopeGpuArgsEnd", scope.end(e_rr));
+		}
 
-		drawPush.handles[2] = DeviceBufferRef_ptr(gpuArgs)->writeHandle;
+		drawPush.handles[2] = gpuArgs.writeHandle();
 		drawPush.color[0] = 51.f / 255; drawPush.color[1] = 51.f / 255; drawPush.color[2] = 1; drawPush.color[3] = 1;
 
-		if (TestShaders_openDraw(t, commandList, 2, target, flatPipeline)) {
+		if (DrawPass pass = TestShaders_openDraw(t, commandList, 2, target.textureRef(), flatPipeline)) {
 
-			Test_assert(t, "drawGpuIndirect", CommandListRef_drawIndirect(commandList, gpuArgs, 0, 1, false, &t->err));
+			Test_assert(t, "drawGpuIndirect", pass.render.drawIndirect(gpuArgs, 0, 1, false, &t->err));
 
-			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList))
-				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFFFF3333u);
+			if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList))
+				(void) gfxtest::checkPixels(t, dev, emptyList, target.textureRef(), 0xFFFF3333u);
 		}
 	}
 
@@ -736,114 +734,84 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef) {
 	//Target and pipeline are rebuilt per count, since both bake the sample count in.
 
 	static const struct {
-		EMSAASamples samples;
-		EGraphicsDataTypes dataType;            //0 when the count is required rather than optional
+		c::EMSAASamples samples;
+		c::EGraphicsDataTypes dataType;            //0 when the count is required rather than optional
 	} msaaCases[] = {
-		{ EMSAASamples_x2Ext, EGraphicsDataTypes_MSAA2x },
-		{ EMSAASamples_x4,    (EGraphicsDataTypes) 0    },
-		{ EMSAASamples_x8Ext, EGraphicsDataTypes_MSAA8x }
+		{ c::EMSAASamples_x2Ext, c::EGraphicsDataTypes_MSAA2x },
+		{ c::EMSAASamples_x4,    (c::EGraphicsDataTypes) 0    },
+		{ c::EMSAASamples_x8Ext, c::EGraphicsDataTypes_MSAA8x }
 	};
 
-	const EGraphicsDataTypes msaaTypes = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.dataTypes;
-	U32 msaaRun = 0, msaaSkipped = 0;
+	const c::EGraphicsDataTypes msaaTypes = dev.info().capabilities.dataTypes;
+	c::U32 msaaRun = 0, msaaSkipped = 0;
 
-	for (U64 m = 0; m < sizeof(msaaCases) / sizeof(msaaCases[0]); ++m) {
+	for (c::U64 m = 0; m < sizeof(msaaCases) / sizeof(msaaCases[0]); ++m) {
 
 		if (msaaCases[m].dataType && !(msaaTypes & msaaCases[m].dataType)) {
 			++msaaSkipped;
 			continue;
 		}
 
-		name = CharString_createRefCStrConst("Shader draw MSAA target");
-
-		if(!Test_assert(t, "createMsaaTarget", GraphicsDeviceRef_createRenderTexture(
-			deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
-			msaaCases[m].samples, NULL, &name, &msaaTarget, &t->err
+		if(!Test_assert(t, "createMsaaTarget", dev.createRenderTexture(
+			8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None,
+			"Shader draw MSAA target", msaaTarget, msaaCases[m].samples, nullptr, e_rr
 		)))
 			continue;
 
-		PipelineGraphicsInfo msaaInfo = flatInfo;
-		msaaInfo.msaa = (MSAASamples) msaaCases[m].samples;
+		c::PipelineGraphicsInfo msaaInfo = flatInfo;
+		msaaInfo.msaa = (c::MSAASamples) msaaCases[m].samples;
 
-		if (TestShaders_graphicsPipeline(t, deviceRef, &fileList, 0, 1, &msaaInfo, &msaaPipeline)) {
+		if (TestShaders_graphicsPipeline(t, dev, &fileList, 0, 1, &msaaInfo, msaaPipeline)) {
 
-			Test_assert(t, "beginMsaa", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-			Test_assert(t, "scopeMsaa", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
+			Test_assert(t, "beginMsaa", commandList.begin(true, e_rr));
 
-			const AttachmentInfo msaaColor = {
-				.image = msaaTarget,
-				.load = ELoadAttachmentType_Clear,
-				.resolveMode = EMSAAResolveMode_Average,
-				.resolveImage = target
+			const c::AttachmentInfo msaaColor = {
+				.image = msaaTarget.textureRef(),
+				.load = c::ELoadAttachmentType_Clear,
+				.resolveMode = c::EMSAAResolveMode_Average,
+				.resolveImage = target.textureRef()
 			};
-
-			ListAttachmentInfo colors {};
-			ListAttachmentInfo_createRefConst(&msaaColor, 1, &colors, NULL);
-
-			Test_assert(t, "renderStartMsaa", CommandListRef_startRenderExt(
-				commandList, I32x2_zero, I32x2_create2(8, 8), &colors, NULL, &t->err
-			));
-
-			Test_assert(t, "viewportScissorMsaa", CommandListRef_setViewportAndScissor(
-				commandList, I32x2_zero, I32x2_zero, &t->err
-			));
 
 			drawPush.color[0] = 102.f / 255; drawPush.color[1] = 1; drawPush.color[2] = 51.f / 255; drawPush.color[3] = 1;
 
-			Test_assert(t, "bindMsaa", CommandListRef_setGraphicsPipeline(commandList, msaaPipeline, &t->err));
-			TestShaders_pushDraw(t, commandList);
-			Test_assert(t, "drawMsaa", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
+			gfx::CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+			Test_assert(t, "scopeMsaa", (c::Bool) scope);
 
-			if(TestShaders_closeDraw(t, commandList) && TestShaders_submitAndWait(t, deviceRef, commandList)) {
-				TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF33FF66u);
+			gfx::CommandRender render = scope.render(
+				c::I32x2_zero, c::I32x2_create2(8, 8), { msaaColor }, NULL, e_rr
+			);
+
+			Test_assert(t, "renderStartMsaa", (c::Bool) render);
+			Test_assert(t, "viewportScissorMsaa", render.setViewportAndScissor(c::I32x2_zero, c::I32x2_zero, e_rr));
+			Test_assert(t, "bindMsaa", render.setGraphicsPipeline(msaaPipeline, e_rr));
+			Test_assert(t, "pushDraw", render.setPushConstants(drawPush, e_rr));
+			Test_assert(t, "drawMsaa", render.drawUnindexed(3, 1, e_rr));
+
+			DrawPass pass{
+				static_cast<gfx::CommandScope&&>(scope), static_cast<gfx::CommandRender&&>(render), true
+			};
+
+			if(TestShaders_closeDraw(t, pass, commandList) && gfxtest::submitAndWait(t, dev, commandList)) {
+				(void) gfxtest::checkPixels(t, dev, emptyList, target.textureRef(), 0xFF33FF66u);
 				++msaaRun;
 			}
 		}
 
-		//Both are rebuilt next iteration, and RefPtr_dec nulls them so the clean block below is still safe.
+		//Both are rebuilt next iteration, so this iteration's pair goes back first.
 
-		RefPtr_dec(&msaaPipeline);
-		RefPtr_dec(&msaaTarget);
+		msaaPipeline.release();
+		msaaTarget.release();
 	}
 
-	Log_debugLnx(
+	Log::debugLn(
+		*alloc,
 		"-- draw: %" PRIu32 " MSAA sample counts resolved, %" PRIu32 " not claimed by this adapter",
 		msaaRun, msaaSkipped
 	);
 
-	}
-
-clean:
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&argsPipeline);
-	RefPtr_dec(&msaaPipeline);
-	RefPtr_dec(&depthPipeline);
-	RefPtr_dec(&vertexPipeline);
-	RefPtr_dec(&dualPipeline);
-	RefPtr_dec(&logicPipeline);
-	RefPtr_dec(&logicTarget);
-	RefPtr_dec(&mrtPipeline);
-	RefPtr_dec(&mrtTarget);
-	RefPtr_dec(&wirePipeline);
-	RefPtr_dec(&blendPipeline);
-	RefPtr_dec(&flatPipeline);
-	RefPtr_dec(&gpuArgs);
-	RefPtr_dec(&cpuArgs);
-	RefPtr_dec(&indexBuffer);
-	RefPtr_dec(&vertexBuffer);
-	RefPtr_dec(&depth);
-	RefPtr_dec(&msaaTarget);
-	RefPtr_dec(&target);
-
 	//These are module statics so every pipeline here can share one layout, which means they outlive the
-	//scope that created them and have to be released at the end of the module instead.
+	//scope that created them AND would otherwise outlive the device, releasing into one that is already gone.
 
-	RefPtr_dec(&argsPushLayout);
-	RefPtr_dec(&drawPushLayout);
-
-	for(U64 i = 0; i < 10; ++i)
-		SHFile_free(&files[i], alloc);
+	argsPushLayout.release();
+	drawPushLayout.release();
 }
-} }

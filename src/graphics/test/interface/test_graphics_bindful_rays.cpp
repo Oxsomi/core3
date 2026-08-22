@@ -24,6 +24,17 @@
 //ray tracing issued from a graphics stage.
 //Split out of test_graphics_bindful.c, which had grown to 24 modules in one file.
 
+//The shared helpers in terms of the handle types. Both C++ headers come BEFORE the block below: a
+//standard header included after the C headers landed in oxc::c finds its guard already tripped and
+//leaves its symbols in that namespace.
+
+#include "test_graphics_shared.hpp"
+
+//Log::debugLn is the C++ front for Log_debugLnx; the x macros name ELogOptions_NewLine unqualified and
+//so cannot be reached through the c namespace.
+
+#include "types/container/log.hpp"
+
 namespace oxc { namespace c {
 	#include "types/base/string_base.h"
 	#include "types/container/list_basic_types.h"
@@ -52,10 +63,10 @@ namespace oxc { namespace c {
 	#include "test_graphics_shared.h"
 } }
 
+using namespace oxc;
+
 //Same namespace the C headers landed in, so the definitions here match the declarations in
 //test_graphics_shared.h and the macros in those headers still expand to names that resolve.
-
-namespace oxc { namespace c {
 
 // -- 46. Bindful ray tracing: the TLAS through a table instead of a handle -------
 
@@ -63,247 +74,202 @@ namespace oxc { namespace c {
 // rays module with the TLAS and output buffer coming from classic registers.
 //The TLAS is created with disallowBindlessDescriptor, so this works on a device without bindless at all.
 
-void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindfulRays(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindful/rays");
+	c::Test_setModule(t, "Bindful/rays");
 
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	if (!(device->info.capabilities.features & EGraphicsFeatures_RayPipeline)) {
-		Test_print(t, "Device lacks raytracing pipelines, skipping bindful ray trace tests");
+	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_RayPipeline)) {
+		c::Test_print(t, "Device lacks raytracing pipelines, skipping bindful ray trace tests");
 		return;
 	}
 
-	const Allocator *alloc = Platform_instance->alloc;
+	gfxtest::OwnedSHFile file(dev.alloc());
 
-	DescriptorHeapRef *heap = NULL;
-	DescriptorLayoutRef *layout = NULL;
-	DescriptorTableRef *table = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	PipelineRef *pipeline = NULL;
-	DeviceBufferRef *positions = NULL;
-	DeviceBufferRef *output = NULL;
-	BLASRef *blas = NULL;
-	TLASRef *tlas = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
-
-	SHFile file {};
-	DescriptorLayoutInfo layoutInfo {};
-	ListU32 entrypoints {};
-
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_rays.oiSH", &file)) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful ray trace tests");
+	if (!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_rays.oiSH", file.list)) {
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful ray trace tests");
 		return;
 	}
 
-	GraphicsInstanceRef *ownInstanceRef = NULL;
-	GraphicsDeviceRef *ownDeviceRef = NULL;
-	RefPtrType instanceType {};
+	gfxtest::RtDedicatedDevice dedicated(t, dev);
 
-	if (!TestShaders_rtDedicatedDevice(t, &deviceRef, &ownInstanceRef, &ownDeviceRef, &instanceType)) {
-		SHFile_free(&file, alloc);
+	if(!dedicated)
 		return;
-	}
+
+	gfx::DescriptorHeap heap;
+	gfx::DescriptorLayout layout;
+	gfx::DescriptorTable table;
+	gfx::PipelineLayout pipelineLayout;
+	gfx::Pipeline pipeline;
+	gfx::DeviceBuffer positions, output;
+	gfx::Blas blas;
+	gfx::Tlas tlas;
+	gfx::CommandList commandList, emptyList;
+
+	//The table holds no reference of its own, so its descriptors go back before the resources they name do.
+
+	struct TableGuard {
+
+		gfx::DescriptorTable &table;
+
+		~TableGuard() {
+			if(table) {
+				(void) table.unset(0, 0, 1, nullptr);
+				(void) table.unset(1, 0, 1, nullptr);
+			}
+		}
+	} tableGuard{ table };
 
 	//The same one triangle scene the bindless rays module uses
 
-	const F32 triangle[12] = {
+	const c::F32 triangle[12] = {
 		0, 0, 0, 1,
 		1, 0, 0, 1,
 		0, 1, 0, 1
 	};
 
-	Buffer triData = Buffer_createRefConst(triangle, sizeof(triangle));
-	CharString name = CharString_createRefCStrConst("Bindful rays positions");
+	c::Buffer triData = c::Buffer_createRefConst(triangle, sizeof(triangle));
 
 	//CPUBacked because the BLAS refit at the end rewrites these positions in place and marks them dirty
 
-	if(!Test_assert(t, "createPositions", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_CPUBacked, NULL,
-		&name, &triData, &positions, &t->err
+	if(!Test_assert(t, "createPositions", dev.createBufferData(
+		c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_CPUBacked,
+		"Bindful rays positions", &triData, positions, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
-		ERTASBuildFlags_AllowUpdate, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16,
-		{ .buffer = positions }
+	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_unindexed(
+		c::ERTASBuildFlags_AllowUpdate, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positions.region()
 	);
 
-	name = CharString_createRefCStrConst("Bindful rays BLAS");
+	if(!Test_assert(t, "createBlas", dev.createBlas(blasInfo, "Bindful rays BLAS", blas, e_rr)))
+		return;
 
-	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(deviceRef, &blasInfo, &name, &blas, &t->err)))
-		goto clean;
-
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	const TLASInstance instance = {
+	const c::TLASInstance instance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
 		.data = {
 			.instanceId24_mask8 = 0xFFu << 24,
-			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
-			.blasCpu = blas
+			.sbtOffset24_flags8 = (c::U32) c::ETLASInstanceFlag_Default << 24,
+			.blasCpu = blas.handle()
 		}
 	};
 
-	ListTLASInstance instances {};
-	ListTLASInstance_createRefConst(&instance, 1, &instances, NULL);
-
-	name = CharString_createRefCStrConst("Bindful rays TLAS");
-
-	if(!Test_assert(t, "createTlas", GraphicsDeviceRef_createTLASExt(
-		deviceRef, (ERTASBuildFlags) (ERTASBuildFlags_DefaultTLAS | ERTASBuildFlags_AllowUpdate),
-		&instances, true, NULL,
-		&name, &tlas, &t->err
+	if(!Test_assert(t, "createTlas", dev.createTlas(
+		(c::ERTASBuildFlags) (c::ERTASBuildFlags_DefaultTLAS | c::ERTASBuildFlags_AllowUpdate),
+		&instance, 1, "Bindful rays TLAS", tlas, true, e_rr
 	)))
-		goto clean;
+		return;
 
-	const U32 raygenId = TestShaders_entry(t, deviceRef, &file, "mainRaygen");
-	const U32 missId = TestShaders_entry(t, deviceRef, &file, "mainMiss");
-	const U32 hitId = TestShaders_entry(t, deviceRef, &file, "mainClosestHit");
+	const c::U32 raygenId = gfxtest::entry(t, dev, file.list, "mainRaygen");
+	const c::U32 missId = gfxtest::entry(t, dev, file.list, "mainMiss");
+	const c::U32 hitId = gfxtest::entry(t, dev, file.list, "mainClosestHit");
 
-	if(raygenId == U32_MAX || missId == U32_MAX || hitId == U32_MAX)
-		goto clean;
+	if(raygenId == c::U32_MAX || missId == c::U32_MAX || hitId == c::U32_MAX)
+		return;
 
 	//The layout comes from all three stages' reflection at once
 
-	const U32 entryIds[3] = { raygenId, missId, hitId };
+	const c::U32 entryIds[3] = { raygenId, missId, hitId };
 
-	Test_assert(t, "entrypointsRef", ListU32_createRefConst(entryIds, 3, &entrypoints, &t->err));
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntries(
-		deviceRef, &file, &entrypoints, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	if(!Test_assert(t, "detectLayout", dev.detectLayoutFromEntries(
+		file.list, entryIds, 3, layoutInfo.list, c::EDescriptorLayoutFlags_None,
+		(c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful rays layout");
-
-	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutInfo, &name, &layout, &t->err
+	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(
+		layoutInfo.list, "Bindful rays layout", layout, e_rr
 	)))
-		goto clean;
+		return;
 
-	DescriptorHeapInfo heapInfo = { .maxAccelerationStructures = 1,
+	c::DescriptorHeapInfo heapInfo = { .maxAccelerationStructures = 1,
 		.maxBuffersRW = 1, .maxDescriptorTables = 1
 	};
 
-	name = CharString_createRefCStrConst("Bindful rays heap");
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Bindful rays heap", heap, e_rr)))
+		return;
 
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
+	if(!Test_assert(t, "tableCreate", heap.createTable(
+		layout, "Bindful rays table", table, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful rays table");
-
-	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Bindful rays output", 4 * sizeof(c::U32), output, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful rays output");
+	const c::Descriptor tlasDesc = c::Descriptor_tlas(tlas.handle());
+	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, NULL, 0);
 
-	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 4 * sizeof(U32), &output, &t->err
+	Test_assert(t, "setTlas", table.setByName("scene", tlasDesc, 0, false, e_rr));
+	Test_assert(t, "setOutput", table.setByName("output", outputDesc, 0, false, e_rr));
+
+	c::PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout.handle() };
+
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Bindful rays pipeline layout", pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	const Descriptor tlasDesc = Descriptor_tlas(tlas);
-	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
-
-	const CharString sceneName = CharString_createRefCStrConst("scene");
-	const CharString outputName = CharString_createRefCStrConst("output");
-
-	Test_assert(t, "setTlas", DescriptorTableRef_setDescriptorByName(table, &sceneName, 0, false, &tlasDesc, &t->err));
-	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
-
-	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
-	name = CharString_createRefCStrConst("Bindful rays pipeline layout");
-
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	if(!Test_assert(t, "pipelineCreate", dev.createRaytracingPipeline(
+		file.list, { "mainRaygen" }, "mainMiss", { "mainClosestHit" }, "Bindful rays pipeline", pipeline, {}, 1,
+		c::EPipelineRaytracingFlags_Default, &pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	PipelineStage stages[3] = {
-		{ .binaryId = raygenId },
-		{ .binaryId = missId },
-		{ .binaryId = hitId }
+	if(!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)))
+		return;
+
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
+
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
+
+	const c::Transition traceTransitions[2] = {
+		{ .resource = output.handle(), .stage = c::EPipelineStage_RaygenExt, .isWrite = true },
+		{ .resource = tlas.handle(), .stage = c::EPipelineStage_RaygenExt }
 	};
 
-	ListPipelineStage stageList {};
-	ListPipelineStage_createRefConst(stages, 3, &stageList, NULL);
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
 
-	ListSHFile fileList {};
-	ListSHFile_createRefConst(&file, 1, &fileList, NULL);
+	{
+		gfx::CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+		Test_assert(t, "scopeBlas", (c::Bool) scope);
+		Test_assert(t, "updateBlas", scope.updateBlas(blas, e_rr));
+		Test_assert(t, "scopeBlasEnd", scope.end(e_rr));
+	}
 
-	PipelineRaytracingGroup group = {
-		.closestHit = 2, .anyHit = U32_MAX, .intersection = U32_MAX
-	};
+	{
+		gfx::CommandScope scope = commandList.scope({}, 2, {}, e_rr);
+		Test_assert(t, "scopeTlas", (c::Bool) scope);
+		Test_assert(t, "updateTlas", scope.updateTlas(tlas, e_rr));
+		Test_assert(t, "scopeTlasEnd", scope.end(e_rr));
+	}
 
-	ListPipelineRaytracingGroup groupList {};
-	ListPipelineRaytracingGroup_createRefConst(&group, 1, &groupList, NULL);
+	{
+		gfx::CommandScope scope = commandList.scopeSpan(traceTransitions, 2, 3, nullptr, 0, e_rr);
+		Test_assert(t, "scopeTrace", (c::Bool) scope);
+		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindTable", scope.bindDescriptorTable(table, e_rr));
+		Test_assert(t, "bindPipeline", scope.setRaytracingPipeline(pipeline, e_rr));
+		Test_assert(t, "trace", scope.dispatch1DRays(0, 4, e_rr));
+		Test_assert(t, "scopeTraceEnd", scope.end(e_rr));
+	}
 
-	const PipelineRaytracingInfo info = {
-		.flags = EPipelineRaytracingFlags_Default,
-		.maxRecursionDepth = 1
-	};
+	Test_assert(t, "end", commandList.end(e_rr));
 
-	name = CharString_createRefCStrConst("Bindful rays pipeline");
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
 
-	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineRaytracingExt(
-		deviceRef, &stageList, &fileList, &groupList, &info, &name, EPipelineFlags_None,
-		pipelineLayout, &pipeline, &t->err
-	)))
-		goto clean;
-
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
-	)))
-		goto clean;
-
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
-
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
-
-	const Transition traceTransitions[2] = {
-		{ .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
-		{ .resource = tlas, .stage = EPipelineStage_RaygenExt }
-	};
-
-	ListTransition traceTransitionList {};
-	ListTransition_createRefConst(traceTransitions, 2, &traceTransitionList, NULL);
-
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-
-	Test_assert(t, "scopeBlas", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
-	Test_assert(t, "updateBlas", CommandListRef_updateBLASExt(commandList, blas, &t->err));
-	Test_assert(t, "scopeBlasEnd", CommandListRef_endScope(commandList, &t->err));
-
-	Test_assert(t, "scopeTlas", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
-	Test_assert(t, "updateTlas", CommandListRef_updateTLASExt(commandList, tlas, &t->err));
-	Test_assert(t, "scopeTlasEnd", CommandListRef_endScope(commandList, &t->err));
-
-	Test_assert(t, "scopeTrace", CommandListRef_startScope(commandList, &traceTransitionList, 3, NULL, &t->err));
-	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
-	Test_assert(t, "bindPipeline", CommandListRef_setRaytracingPipeline(commandList, pipeline, &t->err));
-	Test_assert(t, "trace", CommandListRef_dispatch1DRaysExt(commandList, 0, 4, &t->err));
-	Test_assert(t, "scopeTraceEnd", CommandListRef_endScope(commandList, &t->err));
-
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
-
-	if (TestShaders_submitAndWait(t, deviceRef, commandList))
-		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
-
-			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
 			Test_assert(t, "bindfulRayResults", values[0] == 1 && values[1] == 1 && !values[2] && !values[3]);
 		}
@@ -312,42 +278,42 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 	// the descriptor written into the table earlier has to keep addressing it. Moving the instance far along
 	// Z takes it out of every ray's path, so all four rays must miss without the table being touched again.
 
-	const TLASInstance movedInstance = {
+	const c::TLASInstance movedInstance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 1000 } },
 		.data = {
 			.instanceId24_mask8 = 0xFFu << 24,
-			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
-			.blasCpu = blas
+			.sbtOffset24_flags8 = (c::U32) c::ETLASInstanceFlag_Default << 24,
+			.blasCpu = blas.handle()
 		}
 	};
 
-	ListTLASInstance movedInstances {};
-	ListTLASInstance_createRefConst(&movedInstance, 1, &movedInstances, NULL);
+	if (Test_assert(t, "setInstancesMoved", tlas.setInstances(&movedInstance, 1, e_rr))) {
 
-	if (Test_assert(t, "setInstancesMoved", TLASRef_setInstancesExt(tlas, &movedInstances, &t->err))) {
+		Test_assert(t, "beginRefit", commandList.begin(true, e_rr));
 
-		Test_assert(t, "beginRefit", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+		{
+			gfx::CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+			Test_assert(t, "scopeRefit", (c::Bool) scope);
+			Test_assert(t, "updateTlasRefit", scope.updateTlas(tlas, e_rr));
+			Test_assert(t, "scopeRefitEnd", scope.end(e_rr));
+		}
 
-		Test_assert(t, "scopeRefit", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
-		Test_assert(t, "updateTlasRefit", CommandListRef_updateTLASExt(commandList, tlas, &t->err));
-		Test_assert(t, "scopeRefitEnd", CommandListRef_endScope(commandList, &t->err));
+		{
+			gfx::CommandScope scope = commandList.scopeSpan(traceTransitions, 2, 2, nullptr, 0, e_rr);
+			Test_assert(t, "scopeTraceRefit", (c::Bool) scope);
+			Test_assert(t, "bindHeapRefit", scope.bindDescriptorHeap(heap, e_rr));
+			Test_assert(t, "bindTableRefit", scope.bindDescriptorTable(table, e_rr));
+			Test_assert(t, "bindPipelineRefit", scope.setRaytracingPipeline(pipeline, e_rr));
+			Test_assert(t, "traceRefit", scope.dispatch1DRays(0, 4, e_rr));
+			Test_assert(t, "scopeTraceRefitEnd", scope.end(e_rr));
+		}
 
-		Test_assert(t, "scopeTraceRefit", CommandListRef_startScope(
-			commandList, &traceTransitionList, 2, NULL, &t->err
-		));
+		Test_assert(t, "endRefit", commandList.end(e_rr));
 
-		Test_assert(t, "bindHeapRefit", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-		Test_assert(t, "bindTableRefit", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
-		Test_assert(t, "bindPipelineRefit", CommandListRef_setRaytracingPipeline(commandList, pipeline, &t->err));
-		Test_assert(t, "traceRefit", CommandListRef_dispatch1DRaysExt(commandList, 0, 4, &t->err));
-		Test_assert(t, "scopeTraceRefitEnd", CommandListRef_endScope(commandList, &t->err));
+		if (gfxtest::submitAndWait(t, dev, commandList))
+			if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
 
-		Test_assert(t, "endRefit", CommandListRef_end(commandList, &t->err));
-
-		if (TestShaders_submitAndWait(t, deviceRef, commandList))
-			if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
-
-				const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+				const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
 				Test_assert(t, "refitMissesAll", !values[0] && !values[1] && !values[2] && !values[3]);
 			}
@@ -355,30 +321,33 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 		//Refit back to where it started: the second refit reads the state the first one left behind, so a
 		// refit that quietly rebuilt from the original instances instead would land on the wrong result here
 
-		if (Test_assert(t, "setInstancesBack", TLASRef_setInstancesExt(tlas, &instances, &t->err))) {
+		if (Test_assert(t, "setInstancesBack", tlas.setInstances(&instance, 1, e_rr))) {
 
-			Test_assert(t, "beginRefitBack", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+			Test_assert(t, "beginRefitBack", commandList.begin(true, e_rr));
 
-			Test_assert(t, "scopeRefitBack", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
-			Test_assert(t, "updateTlasRefitBack", CommandListRef_updateTLASExt(commandList, tlas, &t->err));
-			Test_assert(t, "scopeRefitBackEnd", CommandListRef_endScope(commandList, &t->err));
+			{
+				gfx::CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+				Test_assert(t, "scopeRefitBack", (c::Bool) scope);
+				Test_assert(t, "updateTlasRefitBack", scope.updateTlas(tlas, e_rr));
+				Test_assert(t, "scopeRefitBackEnd", scope.end(e_rr));
+			}
 
-			Test_assert(t, "scopeTraceBack", CommandListRef_startScope(
-				commandList, &traceTransitionList, 2, NULL, &t->err
-			));
+			{
+				gfx::CommandScope scope = commandList.scopeSpan(traceTransitions, 2, 2, nullptr, 0, e_rr);
+				Test_assert(t, "scopeTraceBack", (c::Bool) scope);
+				Test_assert(t, "bindHeapBack", scope.bindDescriptorHeap(heap, e_rr));
+				Test_assert(t, "bindTableBack", scope.bindDescriptorTable(table, e_rr));
+				Test_assert(t, "bindPipelineBack", scope.setRaytracingPipeline(pipeline, e_rr));
+				Test_assert(t, "traceBack", scope.dispatch1DRays(0, 4, e_rr));
+				Test_assert(t, "scopeTraceBackEnd", scope.end(e_rr));
+			}
 
-			Test_assert(t, "bindHeapBack", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-			Test_assert(t, "bindTableBack", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
-			Test_assert(t, "bindPipelineBack", CommandListRef_setRaytracingPipeline(commandList, pipeline, &t->err));
-			Test_assert(t, "traceBack", CommandListRef_dispatch1DRaysExt(commandList, 0, 4, &t->err));
-			Test_assert(t, "scopeTraceBackEnd", CommandListRef_endScope(commandList, &t->err));
+			Test_assert(t, "endRefitBack", commandList.end(e_rr));
 
-			Test_assert(t, "endRefitBack", CommandListRef_end(commandList, &t->err));
+			if (gfxtest::submitAndWait(t, dev, commandList))
+				if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
 
-			if (TestShaders_submitAndWait(t, deviceRef, commandList))
-				if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
-
-					const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+					const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
 					Test_assert(t, "refitBackHitsAgain", values[0] == 1 && values[1] == 1 && !values[2] && !values[3]);
 				}
@@ -388,74 +357,50 @@ void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef) {
 		// reach, so the BLAS has to rebuild from the rewritten positions and the TLAS after it. Both rays
 		// missing proves the new vertex data really reached the bottom level structure.
 
-		F32 *movedPositions = (F32*) DeviceBufferRef_ptr(positions)->cpuData.ptrNonConst;
+		c::F32 *movedPositions = (c::F32*) positions.data()->cpuData.ptrNonConst;
 
-		for(U64 i = 0; i < 3; ++i)
+		for(c::U64 i = 0; i < 3; ++i)
 			movedPositions[i * 4 + 2] = 1000;                //Z of every vertex, the stride is 4 floats
 
-		if (Test_assert(t, "markPositionsDirty", DeviceBufferRef_markDirty(positions, 0, sizeof(triangle), &t->err))) {
+		if (Test_assert(t, "markPositionsDirty", positions.markDirty(0, sizeof(triangle), e_rr))) {
 
-			Test_assert(t, "beginBlasRefit", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+			Test_assert(t, "beginBlasRefit", commandList.begin(true, e_rr));
 
-			Test_assert(t, "scopeBlasRefit", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
-			Test_assert(t, "updateBlasRefit", CommandListRef_updateBLASExt(commandList, blas, &t->err));
-			Test_assert(t, "scopeBlasRefitEnd", CommandListRef_endScope(commandList, &t->err));
+			{
+				gfx::CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+				Test_assert(t, "scopeBlasRefit", (c::Bool) scope);
+				Test_assert(t, "updateBlasRefit", scope.updateBlas(blas, e_rr));
+				Test_assert(t, "scopeBlasRefitEnd", scope.end(e_rr));
+			}
 
-			Test_assert(t, "scopeTlasAfterBlas", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
-			Test_assert(t, "updateTlasAfterBlas", CommandListRef_updateTLASExt(commandList, tlas, &t->err));
-			Test_assert(t, "scopeTlasAfterBlasEnd", CommandListRef_endScope(commandList, &t->err));
+			{
+				gfx::CommandScope scope = commandList.scope({}, 2, {}, e_rr);
+				Test_assert(t, "scopeTlasAfterBlas", (c::Bool) scope);
+				Test_assert(t, "updateTlasAfterBlas", scope.updateTlas(tlas, e_rr));
+				Test_assert(t, "scopeTlasAfterBlasEnd", scope.end(e_rr));
+			}
 
-			Test_assert(t, "scopeTraceBlasRefit", CommandListRef_startScope(
-				commandList, &traceTransitionList, 3, NULL, &t->err
-			));
+			{
+				gfx::CommandScope scope = commandList.scopeSpan(traceTransitions, 2, 3, nullptr, 0, e_rr);
+				Test_assert(t, "scopeTraceBlasRefit", (c::Bool) scope);
+				Test_assert(t, "bindHeapBlasRefit", scope.bindDescriptorHeap(heap, e_rr));
+				Test_assert(t, "bindTableBlasRefit", scope.bindDescriptorTable(table, e_rr));
+				Test_assert(t, "bindPipelineBlasRefit", scope.setRaytracingPipeline(pipeline, e_rr));
+				Test_assert(t, "traceBlasRefit", scope.dispatch1DRays(0, 4, e_rr));
+				Test_assert(t, "scopeTraceBlasRefitEnd", scope.end(e_rr));
+			}
 
-			Test_assert(t, "bindHeapBlasRefit", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-			Test_assert(t, "bindTableBlasRefit", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
+			Test_assert(t, "endBlasRefit", commandList.end(e_rr));
 
-			Test_assert(t, "bindPipelineBlasRefit", CommandListRef_setRaytracingPipeline(
-				commandList, pipeline, &t->err
-			));
+			if (gfxtest::submitAndWait(t, dev, commandList))
+				if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
 
-			Test_assert(t, "traceBlasRefit", CommandListRef_dispatch1DRaysExt(commandList, 0, 4, &t->err));
-			Test_assert(t, "scopeTraceBlasRefitEnd", CommandListRef_endScope(commandList, &t->err));
-
-			Test_assert(t, "endBlasRefit", CommandListRef_end(commandList, &t->err));
-
-			if (TestShaders_submitAndWait(t, deviceRef, commandList))
-				if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
-
-					const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+					const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
 					Test_assert(t, "blasRefitMissesAll", !values[0] && !values[1] && !values[2] && !values[3]);
 				}
 		}
 	}
-
-	}
-
-clean:
-
-	if(table) {
-		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
-		DescriptorTableRef_unsetDescriptors(table, 1, 0, 1, NULL);
-	}
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&output);
-	RefPtr_dec(&tlas);
-	RefPtr_dec(&blas);
-	RefPtr_dec(&positions);
-	RefPtr_dec(&table);
-	RefPtr_dec(&layout);
-	RefPtr_dec(&heap);
-
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	SHFile_free(&file, alloc);
-
-	TestShaders_rtDedicatedDeviceEnd(t, &ownInstanceRef, &ownDeviceRef);
 }
 
 // -- 60. Opacity micromaps through a bindful table ------------------------------
@@ -467,215 +412,173 @@ clean:
 //The pipeline has to opt in, since both APIs ignore micromaps otherwise and would report hits either way.
 
 static void TestBindful_ommWithFormat(
-	Test *t,
-	GraphicsDeviceRef *deviceRef,
-	const SHFile *file,
-	DeviceBufferRef *positions,
-	DescriptorHeapRef *heap,
-	DescriptorTableRef *table,
-	PipelineLayoutRef *pipelineLayout,
-	DeviceBufferRef *output,
-	CommandListRef *emptyList,
-	ETextureFormatId ommIndexFormat
+	c::Test *t,
+	gfx::Device &dev,
+	const c::SHFile &file,
+	const gfx::DeviceBuffer &positions,
+	const gfx::DescriptorHeap &heap,
+	gfx::DescriptorTable &table,
+	const gfx::PipelineLayout &pipelineLayout,
+	const gfx::DeviceBuffer &output,
+	const gfx::CommandList &emptyList,
+	c::ETextureFormatId ommIndexFormat
 ) {
 
-	DeviceBufferRef *indices = NULL;
-	DeviceBufferRef *ommOpaque = NULL;
-	DeviceBufferRef *ommTransparent = NULL;
-	BLASRef *blasOpaque = NULL;
-	BLASRef *blasTransparent = NULL;
-	TLASRef *tlasOpaque = NULL;
-	TLASRef *tlasTransparent = NULL;
-	PipelineRef *pipeline = NULL;
-	CommandListRef *commandList = NULL;
+	c::Error *e_rr = &t->err;
 
-	const U16 triangleIndices[3] = { 0, 1, 2 };
-	Buffer indexData = Buffer_createRefConst(triangleIndices, sizeof(triangleIndices));
-	CharString name = CharString_createRefCStrConst("Bindful OMM indices");
+	gfx::DeviceBuffer indices, ommOpaque, ommTransparent;
+	gfx::Blas blasOpaque, blasTransparent;
+	gfx::Tlas tlasOpaque, tlasTransparent;
+	gfx::Pipeline pipeline;
+	gfx::CommandList commandList;
 
-	if(!Test_assert(t, "ommCreateIndices", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
-		&name, &indexData, &indices, &t->err
+	const c::U16 triangleIndices[3] = { 0, 1, 2 };
+	c::Buffer indexData = c::Buffer_createRefConst(triangleIndices, sizeof(triangleIndices));
+
+	if(!Test_assert(t, "ommCreateIndices", dev.createBufferData(
+		c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
+		"Bindful OMM indices", &indexData, indices, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
 	//One triangle, so each micromap index buffer is exactly one element wide
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	const U8 ommStride = ommIndexFormat == ETextureFormatId_R32u ? 4 : (ommIndexFormat == ETextureFormatId_R16u ? 2 : 1);
+	const c::U8 ommStride = ommIndexFormat == c::ETextureFormatId_R32u ? 4 : (ommIndexFormat == c::ETextureFormatId_R16u ? 2 : 1);
 
-	const U32 opaqueIndex = EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyOpaque, ommIndexFormat);
-	const U32 transparentIndex = EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyTransparent, ommIndexFormat);
+	const c::U32 opaqueIndex = c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyOpaque, ommIndexFormat);
+	const c::U32 transparentIndex = c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyTransparent, ommIndexFormat);
 
-	Buffer opaqueData = Buffer_createRefConst(&opaqueIndex, ommStride);
-	Buffer transparentData = Buffer_createRefConst(&transparentIndex, ommStride);
+	c::Buffer opaqueData = c::Buffer_createRefConst(&opaqueIndex, ommStride);
+	c::Buffer transparentData = c::Buffer_createRefConst(&transparentIndex, ommStride);
 
-	name = CharString_createRefCStrConst("Bindful OMM indices, fully opaque");
-
-	if(!Test_assert(t, "ommCreateOpaque", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
-		&name, &opaqueData, &ommOpaque, &t->err
+	if(!Test_assert(t, "ommCreateOpaque", dev.createBufferData(
+		c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
+		"Bindful OMM indices, fully opaque", &opaqueData, ommOpaque, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful OMM indices, fully transparent");
-
-	if(!Test_assert(t, "ommCreateTransparent", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
-		&name, &transparentData, &ommTransparent, &t->err
+	if(!Test_assert(t, "ommCreateTransparent", dev.createBufferData(
+		c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
+		"Bindful OMM indices, fully transparent", &transparentData, ommTransparent, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	const DeviceData positionData = { .buffer = positions };
-	const DeviceData indexBufferData = { .buffer = indices };
+	const c::DeviceData positionData = positions.region();
+	const c::DeviceData indexBufferData = indices.region();
 
-	const BLASCreateInfo opaqueInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
-		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
-		ETextureFormatId_R16u, indexBufferData,
-		ommIndexFormat, { .buffer = ommOpaque }
+	const c::BLASCreateInfo opaqueInfo = c::BLASCreateInfo_indexedWithOmmIndicesExt(
+		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData,
+		c::ETextureFormatId_R16u, indexBufferData,
+		ommIndexFormat, ommOpaque.region()
 	);
 
-	const BLASCreateInfo transparentInfo = BLASCreateInfo_indexedWithOmmIndicesExt(
-		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData,
-		ETextureFormatId_R16u, indexBufferData,
-		ommIndexFormat, { .buffer = ommTransparent }
+	const c::BLASCreateInfo transparentInfo = c::BLASCreateInfo_indexedWithOmmIndicesExt(
+		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData,
+		c::ETextureFormatId_R16u, indexBufferData,
+		ommIndexFormat, ommTransparent.region()
 	);
 
-	name = CharString_createRefCStrConst("Bindful OMM BLAS, fully opaque");
-
-	if(!Test_assert(t, "ommCreateBlasOpaque", GraphicsDeviceRef_createBLASExt(
-		deviceRef, &opaqueInfo, &name, &blasOpaque, &t->err
+	if(!Test_assert(t, "ommCreateBlasOpaque", dev.createBlas(
+		opaqueInfo, "Bindful OMM BLAS, fully opaque", blasOpaque, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful OMM BLAS, fully transparent");
-
-	if(!Test_assert(t, "ommCreateBlasTransparent", GraphicsDeviceRef_createBLASExt(
-		deviceRef, &transparentInfo, &name, &blasTransparent, &t->err
+	if(!Test_assert(t, "ommCreateBlasTransparent", dev.createBlas(
+		transparentInfo, "Bindful OMM BLAS, fully transparent", blasTransparent, e_rr
 	)))
-		goto clean;
+		return;
 
 	//DisableCulling so a back facing hit still counts, exactly as the bindless micromap test does
 
-	TLASInstance ommInstance = {
+	c::TLASInstance ommInstance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
 		.data = {
 			.instanceId24_mask8 = 0xFFu << 24,
-			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_DisableCulling << 24,
-			.blasCpu = blasOpaque
+			.sbtOffset24_flags8 = (c::U32) c::ETLASInstanceFlag_DisableCulling << 24,
+			.blasCpu = blasOpaque.handle()
 		}
 	};
 
-	ListTLASInstance ommInstances {};
-	ListTLASInstance_createRefConst(&ommInstance, 1, &ommInstances, NULL);
-
-	name = CharString_createRefCStrConst("Bindful OMM TLAS, fully opaque");
-
-	if(!Test_assert(t, "ommCreateTlasOpaque", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS, &ommInstances, true, NULL, &name, &tlasOpaque, &t->err
+	if(!Test_assert(t, "ommCreateTlasOpaque", dev.createTlas(
+		c::ERTASBuildFlags_DefaultTLAS, &ommInstance, 1, "Bindful OMM TLAS, fully opaque", tlasOpaque, true, e_rr
 	)))
-		goto clean;
+		return;
 
-	ommInstance.data.blasCpu = blasTransparent;
-	name = CharString_createRefCStrConst("Bindful OMM TLAS, fully transparent");
+	ommInstance.data.blasCpu = blasTransparent.handle();
 
-	if(!Test_assert(t, "ommCreateTlasTransparent", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS, &ommInstances, true, NULL, &name, &tlasTransparent, &t->err
+	if(!Test_assert(t, "ommCreateTlasTransparent", dev.createTlas(
+		c::ERTASBuildFlags_DefaultTLAS, &ommInstance, 1, "Bindful OMM TLAS, fully transparent",
+		tlasTransparent, true, e_rr
 	)))
-		goto clean;
+		return;
 
-	const U32 raygenId = TestShaders_entry(t, deviceRef, file, "mainRaygen");
-	const U32 missId = TestShaders_entry(t, deviceRef, file, "mainMiss");
-	const U32 hitId = TestShaders_entry(t, deviceRef, file, "mainClosestHit");
+	const c::U32 raygenId = gfxtest::entry(t, dev, file, "mainRaygen");
+	const c::U32 missId = gfxtest::entry(t, dev, file, "mainMiss");
+	const c::U32 hitId = gfxtest::entry(t, dev, file, "mainClosestHit");
 
-	if(raygenId == U32_MAX || missId == U32_MAX || hitId == U32_MAX)
-		goto clean;
-
-	PipelineStage ommStages[3] = {
-		{ .binaryId = raygenId },
-		{ .binaryId = missId },
-		{ .binaryId = hitId }
-	};
-
-	ListPipelineStage ommStageList {};
-	ListPipelineStage_createRefConst(ommStages, 3, &ommStageList, NULL);
-
-	ListSHFile fileList {};
-	ListSHFile_createRefConst(file, 1, &fileList, NULL);
-
-	PipelineRaytracingGroup group = {
-		.closestHit = 2, .anyHit = U32_MAX, .intersection = U32_MAX
-	};
-
-	ListPipelineRaytracingGroup groupList {};
-	ListPipelineRaytracingGroup_createRefConst(&group, 1, &groupList, NULL);
+	if(raygenId == c::U32_MAX || missId == c::U32_MAX || hitId == c::U32_MAX)
+		return;
 
 	//Without the opt in both APIs ignore the micromap and the transparent triangle would report hits
 
-	const PipelineRaytracingInfo info = {
-		.flags = EPipelineRaytracingFlags_Default | EPipelineRaytracingFlags_AllowOpacityMicromapExt,
-		.maxRecursionDepth = 1
-	};
-
-	name = CharString_createRefCStrConst("Bindful OMM pipeline");
-
-	if(!Test_assert(t, "ommCreatePipeline", GraphicsDeviceRef_createPipelineRaytracingExt(
-		deviceRef, &ommStageList, &fileList, &groupList, &info, &name, EPipelineFlags_None,
-		pipelineLayout, &pipeline, &t->err
+	if(!Test_assert(t, "ommCreatePipeline", dev.createRaytracingPipeline(
+		file, { "mainRaygen" }, "mainMiss", { "mainClosestHit" }, "Bindful OMM pipeline", pipeline, {}, 1,
+		(c::EPipelineRaytracingFlags) (
+			c::EPipelineRaytracingFlags_Default | c::EPipelineRaytracingFlags_AllowOpacityMicromapExt
+		),
+		&pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	if(!Test_assert(t, "ommCreateList", GraphicsDeviceRef_createCommandList(
-		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "ommCreateList", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)))
+		return;
 
 	//Fully opaque first: the same four rays the plain trace uses, so two of them have to hit
 
-	for (U8 pass = 0; pass < 2; ++pass) {
+	for (c::U8 pass = 0; pass < 2; ++pass) {
 
-		TLASRef *tlas = pass ? tlasTransparent : tlasOpaque;
-		const Descriptor tlasDesc = Descriptor_tlas(tlas);
-		const CharString sceneName = CharString_createRefCStrConst("scene");
+		const gfx::Tlas &tlas = pass ? tlasTransparent : tlasOpaque;
+		const c::Descriptor tlasDesc = c::Descriptor_tlas(tlas.handle());
 
-		Test_assert(t, "ommSetTlas", DescriptorTableRef_setDescriptorByName(
-			table, &sceneName, 0, true, &tlasDesc, &t->err
-		));
+		Test_assert(t, "ommSetTlas", table.setByName("scene", tlasDesc, 0, true, e_rr));
 
-		const Transition traceTransitions[2] = {
-			{ .resource = output, .stage = EPipelineStage_RaygenExt, .isWrite = true },
-			{ .resource = tlas, .stage = EPipelineStage_RaygenExt }
+		const c::Transition traceTransitions[2] = {
+			{ .resource = output.handle(), .stage = c::EPipelineStage_RaygenExt, .isWrite = true },
+			{ .resource = tlas.handle(), .stage = c::EPipelineStage_RaygenExt }
 		};
 
-		ListTransition traceTransitionList {};
-		ListTransition_createRefConst(traceTransitions, 2, &traceTransitionList, NULL);
+		Test_assert(t, "ommBegin", commandList.begin(true, e_rr));
 
-		Test_assert(t, "ommBegin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+		{
+			gfx::CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+			Test_assert(t, "ommScopeBlas", (c::Bool) scope);
+			Test_assert(t, "ommUpdateBlas", scope.updateBlas(pass ? blasTransparent : blasOpaque, e_rr));
+			Test_assert(t, "ommScopeBlasEnd", scope.end(e_rr));
+		}
 
-		Test_assert(t, "ommScopeBlas", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
-		Test_assert(t, "ommUpdateBlas", CommandListRef_updateBLASExt(
-			commandList, pass ? blasTransparent : blasOpaque, &t->err
-		));
-		Test_assert(t, "ommScopeBlasEnd", CommandListRef_endScope(commandList, &t->err));
+		{
+			gfx::CommandScope scope = commandList.scope({}, 2, {}, e_rr);
+			Test_assert(t, "ommScopeTlas", (c::Bool) scope);
+			Test_assert(t, "ommUpdateTlas", scope.updateTlas(tlas, e_rr));
+			Test_assert(t, "ommScopeTlasEnd", scope.end(e_rr));
+		}
 
-		Test_assert(t, "ommScopeTlas", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
-		Test_assert(t, "ommUpdateTlas", CommandListRef_updateTLASExt(commandList, tlas, &t->err));
-		Test_assert(t, "ommScopeTlasEnd", CommandListRef_endScope(commandList, &t->err));
+		{
+			gfx::CommandScope scope = commandList.scopeSpan(traceTransitions, 2, 3, nullptr, 0, e_rr);
+			Test_assert(t, "ommScopeTrace", (c::Bool) scope);
+			Test_assert(t, "ommBindHeap", scope.bindDescriptorHeap(heap, e_rr));
+			Test_assert(t, "ommBindTable", scope.bindDescriptorTable(table, e_rr));
+			Test_assert(t, "ommBindPipeline", scope.setRaytracingPipeline(pipeline, e_rr));
+			Test_assert(t, "ommTrace", scope.dispatch1DRays(0, 4, e_rr));
+			Test_assert(t, "ommScopeTraceEnd", scope.end(e_rr));
+		}
 
-		Test_assert(t, "ommScopeTrace", CommandListRef_startScope(commandList, &traceTransitionList, 3, NULL, &t->err));
-		Test_assert(t, "ommBindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-		Test_assert(t, "ommBindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
-		Test_assert(t, "ommBindPipeline", CommandListRef_setRaytracingPipeline(commandList, pipeline, &t->err));
-		Test_assert(t, "ommTrace", CommandListRef_dispatch1DRaysExt(commandList, 0, 4, &t->err));
-		Test_assert(t, "ommScopeTraceEnd", CommandListRef_endScope(commandList, &t->err));
+		Test_assert(t, "ommEnd", commandList.end(e_rr));
 
-		Test_assert(t, "ommEnd", CommandListRef_end(commandList, &t->err));
+		if (gfxtest::submitAndWait(t, dev, commandList))
+			if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
 
-		if (TestShaders_submitAndWait(t, deviceRef, commandList))
-			if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
-
-				const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+				const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
 				if(pass)
 					Test_assert(t, "ommResultsTransparent", !values[0] && !values[1] && !values[2] && !values[3]);
@@ -683,198 +586,146 @@ static void TestBindful_ommWithFormat(
 				else Test_assert(t, "ommResultsOpaque", values[0] == 1 && values[1] == 1 && !values[2] && !values[3]);
 			}
 	}
-
-	}
-
-clean:
-
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&tlasTransparent);
-	RefPtr_dec(&tlasOpaque);
-	RefPtr_dec(&blasTransparent);
-	RefPtr_dec(&blasOpaque);
-	RefPtr_dec(&ommTransparent);
-	RefPtr_dec(&ommOpaque);
-	RefPtr_dec(&indices);
 }
 
-void Test_graphicsBindfulOmm(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindfulOmm(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindful/omm");
+	c::Test_setModule(t, "Bindful/omm");
 
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-	const GraphicsDeviceCapabilities caps = device->info.capabilities;
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	if (!(caps.features & EGraphicsFeatures_RayPipeline)) {
-		Test_print(t, "Device lacks raytracing pipelines, skipping bindful micromap tests");
+	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
+
+	if (!(caps.features & c::EGraphicsFeatures_RayPipeline)) {
+		c::Test_print(t, "Device lacks raytracing pipelines, skipping bindful micromap tests");
 		return;
 	}
 
-	if (!(caps.features & EGraphicsFeatures_RayMicromapOpacity)) {
-		Test_print(t, "Device lacks opacity micromaps, skipping bindful micromap tests");
+	if (!(caps.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
+		c::Test_print(t, "Device lacks opacity micromaps, skipping bindful micromap tests");
 		return;
 	}
 
-	if (caps.experimentalFeatures & EGraphicsFeatures_RayMicromapOpacity) {
-		Test_print(t, "Opacity micromaps claimed but experimental on this backend, skipping bindful micromap tests");
+	if (caps.experimentalFeatures & c::EGraphicsFeatures_RayMicromapOpacity) {
+		c::Test_print(t, "Opacity micromaps claimed but experimental on this backend, skipping bindful micromap tests");
 		return;
 	}
 
-	const Allocator *alloc = Platform_instance->alloc;
+	gfxtest::OwnedSHFile file(dev.alloc());
 
-	DescriptorHeapRef *heap = NULL;
-	DescriptorLayoutRef *layout = NULL;
-	DescriptorTableRef *table = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	DeviceBufferRef *positions = NULL;
-	DeviceBufferRef *output = NULL;
-	CommandListRef *emptyList = NULL;
-
-	SHFile file {};
-	DescriptorLayoutInfo layoutInfo {};
-	ListU32 entrypoints {};
-
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_rays.oiSH", &file)) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful micromap tests");
+	if (!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_rays.oiSH", file.list)) {
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful micromap tests");
 		return;
 	}
 
-	GraphicsInstanceRef *ownInstanceRef = NULL;
-	GraphicsDeviceRef *ownDeviceRef = NULL;
-	RefPtrType instanceType {};
+	gfxtest::RtDedicatedDevice dedicated(t, dev);
 
-	if (!TestShaders_rtDedicatedDevice(t, &deviceRef, &ownInstanceRef, &ownDeviceRef, &instanceType)) {
-		SHFile_free(&file, alloc);
+	if(!dedicated)
 		return;
-	}
 
-	const F32 triangle[12] = {
+	gfx::DescriptorHeap heap;
+	gfx::DescriptorLayout layout;
+	gfx::DescriptorTable table;
+	gfx::PipelineLayout pipelineLayout;
+	gfx::DeviceBuffer positions, output;
+	gfx::CommandList emptyList;
+
+	struct TableGuard {
+
+		gfx::DescriptorTable &table;
+
+		~TableGuard() {
+			if(table) {
+				(void) table.unset(0, 0, 1, nullptr);
+				(void) table.unset(1, 0, 1, nullptr);
+			}
+		}
+	} tableGuard{ table };
+
+	const c::F32 triangle[12] = {
 		0, 0, 0, 1,
 		1, 0, 0, 1,
 		0, 1, 0, 1
 	};
 
-	Buffer triData = Buffer_createRefConst(triangle, sizeof(triangle));
-	CharString name = CharString_createRefCStrConst("Bindful OMM positions");
+	c::Buffer triData = c::Buffer_createRefConst(triangle, sizeof(triangle));
 
-	if(!Test_assert(t, "createPositions", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
-		&name, &triData, &positions, &t->err
+	if(!Test_assert(t, "createPositions", dev.createBufferData(
+		c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
+		"Bindful OMM positions", &triData, positions, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	const U32 raygenId = TestShaders_entry(t, deviceRef, &file, "mainRaygen");
-	const U32 missId = TestShaders_entry(t, deviceRef, &file, "mainMiss");
-	const U32 hitId = TestShaders_entry(t, deviceRef, &file, "mainClosestHit");
+	const c::U32 raygenId = gfxtest::entry(t, dev, file.list, "mainRaygen");
+	const c::U32 missId = gfxtest::entry(t, dev, file.list, "mainMiss");
+	const c::U32 hitId = gfxtest::entry(t, dev, file.list, "mainClosestHit");
 
-	if(raygenId == U32_MAX || missId == U32_MAX || hitId == U32_MAX)
-		goto clean;
+	if(raygenId == c::U32_MAX || missId == c::U32_MAX || hitId == c::U32_MAX)
+		return;
 
-	const U32 entryIds[3] = { raygenId, missId, hitId };
+	const c::U32 entryIds[3] = { raygenId, missId, hitId };
 
-	Test_assert(t, "entrypointsRef", ListU32_createRefConst(entryIds, 3, &entrypoints, &t->err));
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntries(
-		deviceRef, &file, &entrypoints, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	if(!Test_assert(t, "detectLayout", dev.detectLayoutFromEntries(
+		file.list, entryIds, 3, layoutInfo.list, c::EDescriptorLayoutFlags_None,
+		(c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful OMM layout");
+	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(layoutInfo.list, "Bindful OMM layout", layout, e_rr)))
+		return;
 
-	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutInfo, &name, &layout, &t->err
-	)))
-		goto clean;
-
-	DescriptorHeapInfo heapInfo = { .maxAccelerationStructures = 1,
+	c::DescriptorHeapInfo heapInfo = { .maxAccelerationStructures = 1,
 		.maxBuffersRW = 1, .maxDescriptorTables = 1
 	};
 
-	name = CharString_createRefCStrConst("Bindful OMM heap");
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Bindful OMM heap", heap, e_rr)))
+		return;
 
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
+	if(!Test_assert(t, "tableCreate", heap.createTable(layout, "Bindful OMM table", table, c::EDescriptorTableFlags_None, e_rr)))
+		return;
+
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Bindful OMM output", 4 * sizeof(c::U32), output, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful OMM table");
+	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, NULL, 0);
 
-	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	Test_assert(t, "setOutput", table.setByName("output", outputDesc, 0, false, e_rr));
+
+	c::PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout.handle() };
+
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Bindful OMM pipeline layout", pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful OMM output");
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
 
-	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 4 * sizeof(U32), &output, &t->err
-	)))
-		goto clean;
-
-	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
-	const CharString outputName = CharString_createRefCStrConst("output");
-
-	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
-
-	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
-	name = CharString_createRefCStrConst("Bindful OMM pipeline layout");
-
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
-	)))
-		goto clean;
-
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
-
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
 
 	TestBindful_ommWithFormat(
-		t, deviceRef, &file, positions, heap, table, pipelineLayout, output, emptyList, ETextureFormatId_R16u
+		t, dev, file.list, positions, heap, table, pipelineLayout, output, emptyList, c::ETextureFormatId_R16u
 	);
 
 	//R8u indices need their own capability, since Vulkan's EXT extension forbids them and only the KHR
 	// promotion or D3D12 accepts them
 
-	if (caps.features2 & EGraphicsFeatures2_RayMicromapOpacityU8) {
+	if (caps.features2 & c::EGraphicsFeatures2_RayMicromapOpacityU8) {
 
-		Test_print(t, "Repeating the bindful micromap pair with R8u indices");
+		c::Test_print(t, "Repeating the bindful micromap pair with R8u indices");
 
 		TestBindful_ommWithFormat(
-			t, deviceRef, &file, positions, heap, table, pipelineLayout, output, emptyList, ETextureFormatId_R8u
+			t, dev, file.list, positions, heap, table, pipelineLayout, output, emptyList, c::ETextureFormatId_R8u
 		);
 	}
-
-	}
-
-clean:
-
-	if(table) {
-		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
-		DescriptorTableRef_unsetDescriptors(table, 1, 0, 1, NULL);
-	}
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&output);
-	RefPtr_dec(&positions);
-	RefPtr_dec(&table);
-	RefPtr_dec(&layout);
-	RefPtr_dec(&heap);
-
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	SHFile_free(&file, alloc);
-
-	TestShaders_rtDedicatedDeviceEnd(t, &ownInstanceRef, &ownDeviceRef);
 }
 
 // -- 61. Inline raytracing from a graphics stage --------------------------------
@@ -885,263 +736,211 @@ clean:
 // Compute maps to a legal scope, so no compute test could ever reach it.
 //Tracing the same scene from a pixel shader is what puts a graphics stage on a TLAS transition.
 
-void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindfulRayQueryGraphics(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindful/rayQueryGraphics");
+	c::Test_setModule(t, "Bindful/rayQueryGraphics");
 
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	if (!(device->info.capabilities.features & EGraphicsFeatures_RayQuery)) {
-		Test_print(t, "Device lacks ray query, skipping graphics stage ray query tests");
+	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_RayQuery)) {
+		c::Test_print(t, "Device lacks ray query, skipping graphics stage ray query tests");
 		return;
 	}
 
-	if (!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering)) {
-		Test_print(t, "Device lacks direct rendering, skipping graphics stage ray query tests");
+	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+		c::Test_print(t, "Device lacks direct rendering, skipping graphics stage ray query tests");
 		return;
 	}
 
-	const Allocator *alloc = Platform_instance->alloc;
-
-	DescriptorHeapRef *heap = NULL;
-	DescriptorLayoutRef *layout = NULL;
-	DescriptorTableRef *table = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	PipelineRef *pipeline = NULL;
-	DeviceBufferRef *positions = NULL;
-	BLASRef *blas = NULL;
-	TLASRef *tlas = NULL;
-	RenderTextureRef *target = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
-
-	SHFile files[2] = { 0 };
-
-	DescriptorLayoutInfo layoutInfo {};
-	ListU32 entrypoints {};
+	gfxtest::OwnedSHFile vertexFile(dev.alloc()), pixelFile(dev.alloc());
 
 	if (
-		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_draw_vs.oiSH", &files[0]) ||
-		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_rayquery_ps.oiSH", &files[1])
+		!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_draw_vs.oiSH", vertexFile.list) ||
+		!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_rayquery_ps.oiSH", pixelFile.list)
 	) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping graphics ray query tests");
-		SHFile_free(&files[0], alloc);
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping graphics ray query tests");
 		return;
 	}
 
-	ListSHFile fileList {};
-	ListSHFile_createRefConst(files, 2, &fileList, NULL);
+	const c::SHFile files[2] = { vertexFile.list, pixelFile.list };
 
-	const U32 vertexId = TestShaders_entry(t, deviceRef, &files[0], "main");
-	const U32 pixelId = TestShaders_entry(t, deviceRef, &files[1], "main");
+	const c::U32 vertexId = gfxtest::entry(t, dev, files[0], "main");
+	const c::U32 pixelId = gfxtest::entry(t, dev, files[1], "main");
 
-	if(vertexId == U32_MAX || pixelId == U32_MAX) {
-		Test_print(t, "No ray query entrypoint for this backend, skipping graphics ray query tests");
-		goto clean;
+	if(vertexId == c::U32_MAX || pixelId == c::U32_MAX) {
+		c::Test_print(t, "No ray query entrypoint for this backend, skipping graphics ray query tests");
+		return;
 	}
+
+	gfx::DescriptorHeap heap;
+	gfx::DescriptorLayout layout;
+	gfx::DescriptorTable table;
+	gfx::PipelineLayout pipelineLayout;
+	gfx::Pipeline pipeline;
+	gfx::DeviceBuffer positions;
+	gfx::Blas blas;
+	gfx::Tlas tlas;
+	gfx::RenderTexture target;
+	gfx::CommandList commandList, emptyList;
+
+	struct TableGuard {
+
+		gfx::DescriptorTable &table;
+
+		~TableGuard() {
+			if(table)
+				(void) table.unset(0, 0, 1, nullptr);
+		}
+	} tableGuard{ table };
 
 	//The same one triangle scene the other raytracing modules use
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	const F32 triangle[12] = {
+	const c::F32 triangle[12] = {
 		0, 0, 0, 1,
 		1, 0, 0, 1,
 		0, 1, 0, 1
 	};
 
-	Buffer triData = Buffer_createRefConst(triangle, sizeof(triangle));
-	CharString name = CharString_createRefCStrConst("Ray query graphics positions");
+	c::Buffer triData = c::Buffer_createRefConst(triangle, sizeof(triangle));
 
-	if(!Test_assert(t, "createPositions", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
-		&name, &triData, &positions, &t->err
+	if(!Test_assert(t, "createPositions", dev.createBufferData(
+		c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
+		"Ray query graphics positions", &triData, positions, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
-		ERTASBuildFlags_None, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16,
-		{ .buffer = positions }
+	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_unindexed(
+		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positions.region()
 	);
 
-	name = CharString_createRefCStrConst("Ray query graphics BLAS");
+	if(!Test_assert(t, "createBlas", dev.createBlas(blasInfo, "Ray query graphics BLAS", blas, e_rr)))
+		return;
 
-	if(!Test_assert(t, "createBlas", GraphicsDeviceRef_createBLASExt(deviceRef, &blasInfo, &name, &blas, &t->err)))
-		goto clean;
-
-	const TLASInstance instance = {
+	const c::TLASInstance instance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
 		.data = {
 			.instanceId24_mask8 = 0xFFu << 24,
-			.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
-			.blasCpu = blas
+			.sbtOffset24_flags8 = (c::U32) c::ETLASInstanceFlag_Default << 24,
+			.blasCpu = blas.handle()
 		}
 	};
 
-	ListTLASInstance instances {};
-	ListTLASInstance_createRefConst(&instance, 1, &instances, NULL);
-
-	name = CharString_createRefCStrConst("Ray query graphics TLAS");
-
-	if(!Test_assert(t, "createTlas", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS, &instances, true, NULL, &name, &tlas, &t->err
+	if(!Test_assert(t, "createTlas", dev.createTlas(
+		c::ERTASBuildFlags_DefaultTLAS, &instance, 1, "Ray query graphics TLAS", tlas, true, e_rr
 	)))
-		goto clean;
+		return;
 
 	//Only the pixel shader owns a register, so the layout comes from that entry
 
-	const U32 entryIds[1] = { pixelId };
+	const c::U32 entryIds[1] = { pixelId };
 
-	Test_assert(t, "entrypointsRef", ListU32_createRefConst(entryIds, 1, &entrypoints, &t->err));
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntries(
-		deviceRef, &files[1], &entrypoints, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	if(!Test_assert(t, "detectLayout", dev.detectLayoutFromEntries(
+		files[1], entryIds, 1, layoutInfo.list, c::EDescriptorLayoutFlags_None,
+		(c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Ray query graphics layout");
-
-	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutInfo, &name, &layout, &t->err
+	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(
+		layoutInfo.list, "Ray query graphics layout", layout, e_rr
 	)))
-		goto clean;
+		return;
 
-	DescriptorHeapInfo heapInfo = { .maxAccelerationStructures = 1, .maxDescriptorTables = 1 };
-	name = CharString_createRefCStrConst("Ray query graphics heap");
+	c::DescriptorHeapInfo heapInfo = { .maxAccelerationStructures = 1, .maxDescriptorTables = 1 };
 
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Ray query graphics heap", heap, e_rr)))
+		return;
+
+	if(!Test_assert(t, "tableCreate", heap.createTable(
+		layout, "Ray query graphics table", table, c::EDescriptorTableFlags_None, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Ray query graphics table");
+	const c::Descriptor tlasDesc = c::Descriptor_tlas(tlas.handle());
 
-	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	Test_assert(t, "setTlas", table.setByName("scene", tlasDesc, 0, false, e_rr));
+
+	if(!Test_assert(t, "targetCreate", dev.createRenderTexture(
+		8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Ray query graphics target", target,
+		c::EMSAASamples_Off, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	const Descriptor tlasDesc = Descriptor_tlas(tlas);
-	const CharString sceneName = CharString_createRefCStrConst("scene");
+	c::PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout.handle() };
 
-	Test_assert(t, "setTlas", DescriptorTableRef_setDescriptorByName(table, &sceneName, 0, false, &tlasDesc, &t->err));
-
-	name = CharString_createRefCStrConst("Ray query graphics target");
-
-	if(!Test_assert(t, "targetCreate", GraphicsDeviceRef_createRenderTexture(
-		deviceRef, ETextureType_2D, 8, 8, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
-		EMSAASamples_Off, NULL, &name, &target, &t->err
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Ray query graphics pipeline layout", pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
-	name = CharString_createRefCStrConst("Ray query graphics pipeline layout");
-
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
-	)))
-		goto clean;
-
-	PipelineStage stages[2] = {
-		{ .binaryId = vertexId, .shFileId = 0 },
-		{ .binaryId = pixelId, .shFileId = 1 }
-	};
-
-	ListPipelineStage stageList {};
-	ListPipelineStage_createRefConst(stages, 2, &stageList, NULL);
-
-	const PipelineGraphicsInfo pipelineInfo = {
-		.attachmentFormatsExt = { ETextureFormatId_RGBA8 },
+	const c::PipelineGraphicsInfo pipelineInfo = {
+		.attachmentFormatsExt = { c::ETextureFormatId_RGBA8 },
 		.attachmentCountExt = 1
 	};
 
-	name = CharString_createRefCStrConst("Ray query graphics pipeline");
-
-	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineGraphics(
-		deviceRef, &fileList, &stageList, &pipelineInfo, &name, EPipelineFlags_None,
-		pipelineLayout, &pipeline, &t->err
+	if(!Test_assert(t, "pipelineCreate", dev.createGraphicsPipeline(
+		pipelineInfo, files, 2, { { "main", 0 }, { "main", 1 } }, "Ray query graphics pipeline", pipeline,
+		{}, &pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)))
+		return;
 
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
 
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
 
 	//The TLAS is declared at the PIXEL stage, which is the whole point of the module: that is what puts a
 	// graphics sync scope on an acceleration structure barrier
 
-	const Transition transition = { .resource = tlas, .stage = EPipelineStage_Pixel };
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
 
-	ListTransition transitionList {};
-	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
-
-	const AttachmentInfo attachment = { .image = target, .load = ELoadAttachmentType_Clear };
-	ListAttachmentInfo colors {};
-	ListAttachmentInfo_createRefConst(&attachment, 1, &colors, NULL);
-
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-
-	Test_assert(t, "scopeBlas", CommandListRef_startScope(commandList, NULL, 1, NULL, &t->err));
-	Test_assert(t, "updateBlas", CommandListRef_updateBLASExt(commandList, blas, &t->err));
-	Test_assert(t, "scopeBlasEnd", CommandListRef_endScope(commandList, &t->err));
-
-	Test_assert(t, "scopeTlas", CommandListRef_startScope(commandList, NULL, 2, NULL, &t->err));
-	Test_assert(t, "updateTlas", CommandListRef_updateTLASExt(commandList, tlas, &t->err));
-	Test_assert(t, "scopeTlasEnd", CommandListRef_endScope(commandList, &t->err));
-
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 3, NULL, &t->err));
-	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
-
-	Test_assert(t, "renderStart", CommandListRef_startRenderExt(
-		commandList, I32x2_zero, I32x2_create2(8, 8), &colors, NULL, &t->err
-	));
-
-	Test_assert(t, "viewportScissor", CommandListRef_setViewportAndScissor(
-		commandList, I32x2_zero, I32x2_zero, &t->err
-	));
-
-	Test_assert(t, "bindPipeline", CommandListRef_setGraphicsPipeline(commandList, pipeline, &t->err));
-	Test_assert(t, "draw", CommandListRef_drawUnindexed(commandList, 3, 1, &t->err));
-	Test_assert(t, "renderEnd", CommandListRef_endRenderExt(commandList, &t->err));
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
-
-	if (TestShaders_submitAndWait(t, deviceRef, commandList))
-		TestShaders_checkPixels(t, deviceRef, emptyList, target, 0xFF3366FFu);
-
+	{
+		gfx::CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+		Test_assert(t, "scopeBlas", (c::Bool) scope);
+		Test_assert(t, "updateBlas", scope.updateBlas(blas, e_rr));
+		Test_assert(t, "scopeBlasEnd", scope.end(e_rr));
 	}
 
-clean:
+	{
+		gfx::CommandScope scope = commandList.scope({}, 2, {}, e_rr);
+		Test_assert(t, "scopeTlas", (c::Bool) scope);
+		Test_assert(t, "updateTlas", scope.updateTlas(tlas, e_rr));
+		Test_assert(t, "scopeTlasEnd", scope.end(e_rr));
+	}
 
-	if(table)
-		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
+	{
+		gfx::CommandScope scope = commandList.scope(
+			{ { .resource = tlas.handle(), .stage = c::EPipelineStage_Pixel } }, 3, {}, e_rr
+		);
 
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&target);
-	RefPtr_dec(&tlas);
-	RefPtr_dec(&blas);
-	RefPtr_dec(&positions);
-	RefPtr_dec(&table);
-	RefPtr_dec(&layout);
-	RefPtr_dec(&heap);
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindTable", scope.bindDescriptorTable(table, e_rr));
 
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	SHFile_free(&files[0], alloc);
-	SHFile_free(&files[1], alloc);
+		{
+			gfx::CommandRender render = scope.render(
+				c::I32x2_zero, c::I32x2_create2(8, 8),
+				{ { .image = target.handle(), .load = c::ELoadAttachmentType_Clear } }, nullptr, e_rr
+			);
+
+			Test_assert(t, "renderStart", (c::Bool) render);
+			Test_assert(t, "viewportScissor", render.setViewportAndScissor(c::I32x2_zero, c::I32x2_zero, e_rr));
+			Test_assert(t, "bindPipeline", render.setGraphicsPipeline(pipeline, e_rr));
+			Test_assert(t, "draw", render.drawUnindexed(3, 1, e_rr));
+			Test_assert(t, "renderEnd", render.end(e_rr));
+		}
+
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
+
+	Test_assert(t, "end", commandList.end(e_rr));
+
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		(void) gfxtest::checkPixels(t, dev, emptyList, target.handle(), 0xFF3366FFu);
 }
-} }

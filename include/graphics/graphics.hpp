@@ -64,6 +64,11 @@
 #include "types/container/string.hpp"
 #include "types/container/buffer.hpp"
 #include "types/container/texture_format.hpp"
+
+//For the basic element lists (ListU32 among them), which it declares inside oxc::c with the right
+//pre-include discipline; detectLayoutFromEntries takes one.
+
+#include "types/container/list.hpp"
 #include "types/math/vec4f.hpp"
 
 #include <stddef.h>            //swapchain.h / device_texture.h use it; must not first appear in a namespace
@@ -712,6 +717,53 @@ namespace oxc {
 				return c::CommandListRef_setPrimitiveBuffers(list, &b, e_rr);
 			}
 
+			//The same state CommandScope sets, which the C API accepts inside a render pass too and a draw
+			//generally needs there: the pixel stage reads its push constants, and a bindful pipeline reaches
+			//its resources through the bound heap and table.
+			//Repeated rather than inherited because a render pass is not a scope: it is what a scope opens,
+			//and the ops it does NOT accept (dispatch, the update and copy family) have no business here.
+
+			template<typename T>
+			[[nodiscard]] c::Bool setPushConstants(const T &data, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_setPushConstants(list, c::Buffer_createRefConst(&data, sizeof(T)), e_rr);
+			}
+
+			[[nodiscard]] c::Bool setPushDescriptors(
+				std::initializer_list<c::Descriptor> descriptors, c::Error *e_rr = nullptr
+			) noexcept {
+
+				c::ListDescriptor d{};
+
+				if(descriptors.size())
+					(void) c::ListDescriptor_createRefConst(descriptors.begin(), descriptors.size(), &d, nullptr);
+					
+				return c::CommandListRef_setPushDescriptors(list, &d, e_rr);
+			}
+
+			[[nodiscard]] c::Bool bindDescriptorHeap(const DescriptorHeap &heap, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_bindDescriptorHeap(list, heap.handle(), e_rr);
+			}
+
+			[[nodiscard]] c::Bool bindDescriptorTable(const DescriptorTable &table, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_bindDescriptorTable(list, table.handle(), e_rr);
+			}
+
+			[[nodiscard]] c::Bool setViewport(c::I32x2 offset, c::I32x2 size, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_setViewport(list, offset, size, e_rr);
+			}
+
+			[[nodiscard]] c::Bool setScissor(c::I32x2 offset, c::I32x2 size, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_setScissor(list, offset, size, e_rr);
+			}
+
+			[[nodiscard]] c::Bool setStencil(c::U8 stencilValue, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_setStencil(list, stencilValue, e_rr);
+			}
+
+			[[nodiscard]] c::Bool setBlendConstants(c::F32x4 blendConstants, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_setBlendConstants(list, blendConstants, e_rr);
+			}
+
 			[[nodiscard]] c::Bool drawIndexed(c::U32 indexCount, c::U32 instanceCount = 1, c::Error *e_rr = nullptr) noexcept {
 				return c::CommandListRef_drawIndexed(list, indexCount, instanceCount, e_rr);
 			}
@@ -859,6 +911,27 @@ namespace oxc {
 				c::ListAttachmentInfo colorList{};
 				if(colors.size())
 					(void) c::ListAttachmentInfo_createRefConst(colors.begin(), colors.size(), &colorList, nullptr);
+
+				if(!c::CommandListRef_startRenderExt(list, offset, size, &colorList, depthStencil, e_rr))
+					return CommandRender(nullptr);
+
+				return CommandRender(list);
+			}
+
+			//The same, for an attachment set whose size is only known at run time, or that a caller already
+			//holds as an array: an initializer_list has to be written out literally.
+
+			[[nodiscard]] CommandRender renderSpan(
+				c::I32x2 offset, c::I32x2 size,
+				const c::AttachmentInfo *colors, c::U64 colorCount,
+				const c::DepthStencilAttachmentInfo *depthStencil = nullptr,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				c::ListAttachmentInfo colorList{};
+
+				if(colorCount)
+					(void) c::ListAttachmentInfo_createRefConst(colors, colorCount, &colorList, nullptr);
 
 				if(!c::CommandListRef_startRenderExt(list, offset, size, &colorList, depthStencil, e_rr))
 					return CommandRender(nullptr);
@@ -1123,6 +1196,31 @@ namespace oxc {
 				return CommandScope(handle());
 			}
 
+			//The same, for a transition set whose size is only known at run time: an initializer_list has to be
+			//written out literally, so a caller holding an array and a count cannot use the form above.
+
+			[[nodiscard]] CommandScope scopeSpan(
+				const c::Transition *transitions, c::U64 transitionCount,
+				c::U32 id = 0,
+				const c::CommandScopeDependency *deps = nullptr, c::U64 depCount = 0,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				c::ListTransition transitionList{};
+				c::ListCommandScopeDependency depList{};
+
+				if(transitionCount)
+					(void) c::ListTransition_createRefConst(transitions, transitionCount, &transitionList, nullptr);
+
+				if(depCount)
+					(void) c::ListCommandScopeDependency_createRefConst(deps, depCount, &depList, nullptr);
+
+				if(!c::CommandListRef_startScope(handle(), &transitionList, id, &depList, e_rr))
+					return CommandScope(nullptr);
+
+				return CommandScope(handle());
+			}
+
 			//begin(doClear=true) already clears;
 			// standalone clear() exists to drop the recorded commands AND the resource refs they keep alive without
 			// opening the list for recording.
@@ -1176,6 +1274,21 @@ namespace oxc {
 			std::initializer_list<const c::C8*> defines;
 			std::initializer_list<const c::C8*> uniforms;
 		};
+
+		//One stage of a graphics pipeline: which entry, and which of the SHFiles handed to the factory holds
+		//it. fileId is always 0 for a pipeline built from a single file, which is what the short overload of
+		//createGraphicsPipeline fills in.
+
+		struct StageEntry {
+			const c::C8 *entry;
+			c::U16 fileId = 0;
+		};
+
+		//A graphics pipeline has at most one stage per graphics shader stage (vertex, pixel, geometry, hull,
+		//domain, mesh, task), so ESHPipelineStage_Count bounds any stage list the API can accept and the
+		//single-file overload can copy into a span of that size instead of allocating.
+
+		static const c::U64 maxPipelineStages = c::ESHPipelineStage_Count;
 
 		class Device {
 
@@ -1307,6 +1420,29 @@ namespace oxc {
 			void release() noexcept { ref.release(); }
 			[[nodiscard]] const c::GraphicsDeviceInfo &info() const noexcept { return ref.data()->info; }
 
+			//The runtime's own bindless set. A device without one runs bindful only, which is a skip rather
+			//than a failure for every module whose shaders index descriptors by handle.
+
+			[[nodiscard]] c::Bool hasBindlessTable() const noexcept { return ref.data()->defaultDescriptorTable; }
+
+			//That table, BORROWED: a resource asks to be exposed in it by naming it at creation, and the
+			//device keeps owning it either way, so this shares rather than adopts.
+
+			[[nodiscard]] DescriptorTable defaultTable() const noexcept {
+				return DescriptorTable(RefPtr<c::DescriptorTable>::share(ref.data()->defaultDescriptorTable));
+			}
+
+			//The two layouts a custom pipeline layout composes with to keep the bindless handles and the per
+			//frame globals reachable, rather than building a fresh layout that can reach neither.
+
+			[[nodiscard]] c::DescriptorLayoutRef *defaultDescLayout() const noexcept {
+				return ref.data()->defaultDescLayout;
+			}
+
+			[[nodiscard]] c::DescriptorLayoutRef *defaultCBufferLayout() const noexcept {
+				return ref.data()->defaultCBufferLayout;
+			}
+
 			[[nodiscard]] c::Bool wait(c::Error *e_rr = nullptr) noexcept {
 				return c::GraphicsDeviceRef_wait(handle(), e_rr);
 			}
@@ -1401,9 +1537,15 @@ namespace oxc {
 				return true;
 			}
 
+			//msaa bakes into the texture exactly as it does into the pipeline that draws to it, so a
+			//multisampled target and its pipeline have to name the same count.
+			//Type and length are pinned to a plain 2D image: UnifiedTexture_create refuses everything else
+			//today (see the shape gates in module 35), so there is nothing else to offer yet.
+
 			[[nodiscard]] c::Bool createRenderTexture(
 				c::U16 width, c::U16 height, c::ETextureFormatId format, c::EGraphicsResourceFlag flags,
 				const c::C8 *debugName, RenderTexture &result,
+				c::EMSAASamples msaa = c::EMSAASamples_Off,
 				const DescriptorTable *bindlessTable = nullptr, c::Error *e_rr = nullptr
 			) noexcept {
 
@@ -1412,7 +1554,7 @@ namespace oxc {
 
 				if(!c::GraphicsDeviceRef_createRenderTexture(
 					handle(), c::ETextureType_2D, width, height, 1, format, flags,
-					c::EMSAASamples_Off, bindlessTable ? bindlessTable->handle() : nullptr, &n, &raw, e_rr
+					msaa, bindlessTable ? bindlessTable->handle() : nullptr, &n, &raw, e_rr
 				))
 					return false;
 
@@ -1434,10 +1576,15 @@ namespace oxc {
 				return true;
 			}
 
+			//disallowBindlessDescriptor keeps the TLAS out of the device's default bindless table entirely, for a
+			//structure only ever reached through a bindful binding; the default takes a descriptor like every
+			//other factory here.
+
 			[[nodiscard]] c::Bool createTlas(
 				c::ERTASBuildFlags buildFlags,
 				const c::TLASInstance *instances, c::U64 instanceCount,
-				const c::C8 *debugName, Tlas &result, c::Error *e_rr = nullptr
+				const c::C8 *debugName, Tlas &result,
+				c::Bool disallowBindlessDescriptor = false, c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::CharString n = name(debugName);
@@ -1447,7 +1594,10 @@ namespace oxc {
 						return false;
 
 				c::TLASRef *raw = nullptr;
-				if(!c::GraphicsDeviceRef_createTLASExt(handle(), buildFlags, &list, false, nullptr, &n, &raw, e_rr))
+
+				if(!c::GraphicsDeviceRef_createTLASExt(
+					handle(), buildFlags, &list, disallowBindlessDescriptor, nullptr, &n, &raw, e_rr
+				))
 					return false;
 
 				result = Tlas(RefPtr<c::TLAS>::adopt(raw));
@@ -1514,6 +1664,9 @@ namespace oxc {
 			// U32_MAX - triangle geometry needs neither, and adding them means deciding per group,
 			// which is a signature this wrapper does not have a consumer for.
 
+			//layout as in createComputePipeline: null is OxC3's default bindless layout, and a raygen that reads
+			//push constants needs the layout declaring them or dispatchRays refuses the state it never validated.
+
 			[[nodiscard]] c::Bool createRaytracingPipeline(
 				const c::SHFile &shFile,
 				std::initializer_list<const c::C8*> raygenEntries,
@@ -1522,6 +1675,7 @@ namespace oxc {
 				const ShaderVariant &variant = {},
 				c::U8 maxRecursionDepth = 1,
 				c::EPipelineRaytracingFlags flags = c::EPipelineRaytracingFlags_Default,
+				const PipelineLayout *layout = nullptr,
 				c::Error *e_rr = nullptr
 			) noexcept {
 
@@ -1603,7 +1757,7 @@ namespace oxc {
 
 				if(!c::GraphicsDeviceRef_createPipelineRaytracingExt(
 					handle(), &stages.list, &fileList, &groups.list, &info, &nm,
-					c::EPipelineFlags_None, nullptr, &raw, e_rr
+					c::EPipelineFlags_None, layout ? layout->handle() : nullptr, &raw, e_rr
 				))
 					return false;
 
@@ -1672,16 +1826,20 @@ namespace oxc {
 				return true;
 			}
 
+			//msaa as in createRenderTexture: a depth buffer attached to a multisampled pass has to carry the
+			//same count as the colour target and the pipeline.
+
 			[[nodiscard]] c::Bool createDepthStencil(
 				c::U16 width, c::U16 height, c::EDepthStencilFormat format, c::Bool allowShaderRead,
-				const c::C8 *debugName, DepthStencil &result, c::Error *e_rr = nullptr
+				const c::C8 *debugName, DepthStencil &result,
+				c::EMSAASamples msaa = c::EMSAASamples_Off, c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::CharString n = name(debugName);
 				c::DepthStencilRef *raw = nullptr;
 
 				if(!c::GraphicsDeviceRef_createDepthStencil(
-					handle(), width, height, format, allowShaderRead, c::EMSAASamples_Off, nullptr, &n, &raw, e_rr
+					handle(), width, height, format, allowShaderRead, msaa, nullptr, &n, &raw, e_rr
 				))
 					return false;
 
@@ -1742,6 +1900,34 @@ namespace oxc {
 				return true;
 			}
 
+			//Reflection-derived layout over SEVERAL entrypoints at once, which is what a pipeline built from
+			// more than one stage needs: a raytracing pipeline's raygen, miss and closesthit, or a graphics
+			// pipeline's vertex and pixel, all share ONE layout, so it has to come from their union rather
+			// than from whichever stage was asked first.
+			//entrypoints are the ids resolveEntry/getFirstShaderEntry handed back, packed (entryId, binaryId)
+			// as the C side documents.
+			//Push constants and push descriptors are not offered here: the C entry point takes them, but no
+			// caller declares them across a multi stage layout yet, and an out parameter no one fills is worse
+			// than one that is absent.
+
+			[[nodiscard]] c::Bool detectLayoutFromEntries(
+				const c::SHFile &binary, const c::U32 *entrypoints, c::U64 entrypointCount,
+				c::DescriptorLayoutInfo &info,
+				c::EDescriptorLayoutFlags flags = c::EDescriptorLayoutFlags_None,
+				c::EDetectDescriptorLayoutFlags detectFlags = (c::EDetectDescriptorLayoutFlags) 0,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				c::ListU32 list{};
+
+				if(entrypointCount && !c::ListU32_createRefConst(entrypoints, entrypointCount, &list, e_rr))
+					return false;
+
+				return c::GraphicsDeviceRef_detectLayoutFromEntries(
+					handle(), &binary, &list, flags, detectFlags, nullptr, nullptr, nullptr, &info, nullptr, e_rr
+				);
+			}
+
 			//Reflection-derived layout for one entrypoint.
 			//pushConstantName/pushDescriptorNames name the registers that are NOT ordinary bindings; the C
 			// side requires the matching out parameter to be null when its list is absent, which is enforced
@@ -1754,6 +1940,7 @@ namespace oxc {
 				std::initializer_list<const c::C8*> pushDescriptorNames = {},
 				c::DescriptorLayoutInfo *pushDescriptorInfo = nullptr,
 				c::EDescriptorLayoutFlags flags = c::EDescriptorLayoutFlags_None,
+				c::EDetectDescriptorLayoutFlags detectFlags = (c::EDetectDescriptorLayoutFlags) 0,
 				c::Error *e_rr = nullptr
 			) noexcept {
 
@@ -1773,7 +1960,7 @@ namespace oxc {
 				const c::CharString pushName = pushConstantName ? name(pushConstantName) : c::CharString{};
 
 				return c::GraphicsDeviceRef_detectLayoutFromEntry(
-					handle(), &binary, entrypoint, flags, (c::EDetectDescriptorLayoutFlags) 0,
+					handle(), &binary, entrypoint, flags, detectFlags,
 					count ? &nameList : nullptr,
 					pushConstantName ? &pushName : nullptr,
 					pushConstantOut,
@@ -1873,45 +2060,61 @@ namespace oxc {
 				return true;
 			}
 
-			//Graphics pipeline from one SHFile;
+			//Graphics pipeline whose stages come from SEVERAL SHFiles, which is the normal shape once a vertex
+			// and a pixel shader are compiled as separate single entry files: each StageEntry names its entry
+			// and which of shFiles it lives in, and stage ORDER is the order given here.
 			// stageEntries resolve like createRaytracingPipeline's (first binary compatible with the device per entry
 			// name). info crosses as a passthrough (see PipelineGraphicsInfo);
 			// a DIRECT-RENDERING pipeline (drawn inside CommandScope::render) MUST fill attachmentCountExt +
 			// attachmentFormatsExt (ETextureFormatId each) and depthFormatExt to match render()'s attachments -
 			// renderPass is ignored then.
 			//Without DirectRendering, renderPass is required and the Ext fields are ignored; one, never both.
+			//layout as in createComputePipeline: null is OxC3's default bindless layout.
 
-			[[nodiscard]] c::Bool createGraphicsPipeline(
+			[[nodiscard]] c::Bool createGraphicsPipelineSpan(
 				const c::PipelineGraphicsInfo &info,
-				const c::SHFile &shFile,
-				std::initializer_list<const c::C8*> stageEntries,
+				const c::SHFile *shFiles, c::U64 fileCount,
+				const StageEntry *stageEntries, c::U64 stageCount,
 				const c::C8 *debugName, Pipeline &result,
-				const ShaderVariant &variant = {}, c::Error *e_rr = nullptr
+				const ShaderVariant &variant = {}, const PipelineLayout *layout = nullptr,
+				c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::Allocator *alloc = c::GraphicsDeviceRef_getAlloc(handle());
 
 				OwnedList<c::ListPipelineStage, c::ListPipelineStage_free> stages(alloc);
 
-				if(!c::ListPipelineStage_resize(&stages.list, stageEntries.size(), alloc, e_rr))
+				if(!c::ListPipelineStage_resize(&stages.list, stageCount, alloc, e_rr))
 					return false;
 
 				c::U64 n = 0;
 
-				for(const c::C8 *entry : stageEntries) {
+				for(c::U64 s = 0; s < stageCount; ++s) {
 
-					const c::U32 id = resolveEntry(shFile, entry, variant);
+					const StageEntry &stage = stageEntries[s];
+
+					if(stage.fileId >= fileCount) {
+						if(e_rr) *e_rr = c::Error_outOfBounds(
+							2, stage.fileId, fileCount, "createGraphicsPipeline() stage names a file that isn't there"
+						);
+						return false;
+					}
+
+					const c::U32 id = resolveEntry(shFiles[stage.fileId], stage.entry, variant);
 
 					if(id == c::U32_MAX) {
 						if(e_rr) *e_rr = c::Error_notFound(0, 0, "createGraphicsPipeline() entry not found or unsupported");
 						return false;
 					}
 
-					stages.list.ptrNonConst[n++].binaryId = id;
+					stages.list.ptrNonConst[n].binaryId = id;
+					stages.list.ptrNonConst[n++].shFileId = stage.fileId;
 				}
 
 				c::ListSHFile fileList{};
-				(void) c::ListSHFile_createRefConst(&shFile, 1, &fileList, nullptr);
+
+				if(fileCount && !c::ListSHFile_createRefConst(shFiles, fileCount, &fileList, e_rr))
+					return false;
 
 				const c::CharString nm = name(debugName);
 				c::PipelineRef *raw = nullptr;
@@ -1922,12 +2125,55 @@ namespace oxc {
 				// so OwnedList's free is a no-op afterwards and still correct on the early-exit paths above.
 
 				if(!c::GraphicsDeviceRef_createPipelineGraphics(
-					handle(), &fileList, &stages.list, &info, &nm, c::EPipelineFlags_None, nullptr, &raw, e_rr
+					handle(), &fileList, &stages.list, &info, &nm, c::EPipelineFlags_None,
+					layout ? layout->handle() : nullptr, &raw, e_rr
 				))
 					return false;
 
 				result = Pipeline(RefPtr<c::Pipeline>::adopt(raw));
 				return true;
+			}
+
+			//The literal forms of the above. A graphics pipeline has one stage per shader stage, so the fixed
+			//span they copy into covers anything the API can express.
+
+			[[nodiscard]] c::Bool createGraphicsPipeline(
+				const c::PipelineGraphicsInfo &info,
+				const c::SHFile *shFiles, c::U64 fileCount,
+				std::initializer_list<StageEntry> stageEntries,
+				const c::C8 *debugName, Pipeline &result,
+				const ShaderVariant &variant = {}, const PipelineLayout *layout = nullptr,
+				c::Error *e_rr = nullptr
+			) noexcept {
+				return createGraphicsPipelineSpan(
+					info, shFiles, fileCount, stageEntries.begin(), stageEntries.size(),
+					debugName, result, variant, layout, e_rr
+				);
+			}
+
+			//And when every stage lives in ONE file, which is what an oiSH holding a whole effect looks like.
+
+			[[nodiscard]] c::Bool createGraphicsPipeline(
+				const c::PipelineGraphicsInfo &info,
+				const c::SHFile &shFile,
+				std::initializer_list<const c::C8*> stageEntries,
+				const c::C8 *debugName, Pipeline &result,
+				const ShaderVariant &variant = {}, const PipelineLayout *layout = nullptr,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				StageEntry entries[maxPipelineStages];
+
+				const c::U64 count =
+					stageEntries.size() < maxPipelineStages ?
+					stageEntries.size() : maxPipelineStages;
+
+				for(c::U64 i = 0; i < count; ++i)
+					entries[i] = StageEntry{ stageEntries.begin()[i], 0 };
+
+				return createGraphicsPipelineSpan(
+					info, &shFile, 1, entries, count, debugName, result, variant, layout, e_rr
+				);
 			}
 
 			//Packed entryId | binaryId<<16, or U32_MAX when no binary in the file can run here.

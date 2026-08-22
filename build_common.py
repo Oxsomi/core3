@@ -240,10 +240,11 @@ PROFILE_COMPILER_EXE = {
 def resolveCompilerExe(exe):
 	"""`exe` as something runnable, or None.
 
-	cl and clang-cl only reach PATH inside a developer command prompt, and nothing else here needs one: the
-	Visual Studio generator finds its own toolchain, and conan's profile detection goes through vswhere.
-	A check that insisted on PATH would therefore fail on machines, and on CI runners, where the build itself
-	works perfectly well.
+	cl and clang-cl only reach PATH inside a developer command prompt, and the Visual Studio generator finds
+	its own toolchain regardless, so a check that insisted on PATH would fail on machines, and on CI runners,
+	where the build itself works perfectly well.
+	Conan's own detection is split on this: detect_msvc_compiler goes through vswhere and needs nothing on
+	PATH, while detect_clang_compiler simply runs the executable (see ensureCompilerOnPath below).
 	"""
 
 	found = shutil.which(exe)
@@ -327,6 +328,28 @@ def detectedCompilerVersion(exe, compiler = None):
 
 	return None
 
+def ensureCompilerOnPath(exe):
+	"""Put `exe` on PATH when it was only found through a Visual Studio install.
+
+	The Windows clang profiles detect their version with detect_api.detect_clang_compiler("clang-cl"), which
+	runs the executable and so only ever looks at PATH. resolveCompilerExe finds the Visual Studio copy as
+	well, so without this the guard below passes on a machine that has clang-cl while RENDERING the profile
+	dies with "No version provided to 'detect_api.default_compiler_version()' for clang compiler".
+	It is also what lets CMAKE_C_COMPILER resolve, since tools.build:compiler_executables names clang-cl
+	rather than a full path.
+
+	Only clang needs it: detect_msvc_compiler goes through vswhere, and prepending the MSVC bin directory
+	would shadow tools that share a name with one of its own (link, most of all) for the rest of the process.
+	"""
+
+	if exe != "clang-cl" or shutil.which(exe):
+		return
+
+	resolved = resolveCompilerExe(exe)
+
+	if resolved:
+		os.environ["PATH"] = os.path.dirname(resolved) + os.pathsep + os.environ.get("PATH", "")
+
 def verifyHostCompiler(compiler, system):
 	"""Fail early when the profile can't describe this machine.
 
@@ -339,6 +362,8 @@ def verifyHostCompiler(compiler, system):
 
 	if not exe:
 		return
+
+	ensureCompilerOnPath(exe)
 
 	version = detectedCompilerVersion(exe, compiler)
 

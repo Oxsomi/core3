@@ -280,6 +280,47 @@ Bool CommandListRef_startRenderExt(
 			4, "CommandListRef_startRenderExt()::depth clear value can't be non zero if there's no depth buffer bound"
 		));
 
+	//Validate the depth stencil resolve, which the colour attachments got above but this one never did.
+
+	if (depthStencil) {
+
+		if(depthStencil->depthStencilResolve >= EMSAAResolveMode_Count)
+			retError(clean, Error_invalidOperation(
+				4, "CommandListRef_startRenderExt()::depthStencil had invalid depthStencilResolve"
+			));
+
+		if(depthStencil->depthStencilResolve && !depthStencil->resolveImage)
+			retError(clean, Error_invalidOperation(
+				4, "CommandListRef_startRenderExt()::depthStencil had depthStencilResolve but no resolveImage"
+			));
+
+		//EMSAAResolveMode_Average is the zero value, so a caller that fills resolveImage and leaves the mode
+		// alone lands on it by accident. Averaging a depth plane is not something an implementation has to
+		// support (it is rarely in Vulkan's supportedDepthResolveModes), so leaving it through turns a
+		// forgotten field into a driver level validation failure. Refuse it here, where the message can say
+		// what to pick instead.
+
+		if(depthStencil->resolveImage && depthStencil->depthStencilResolve == EMSAAResolveMode_Average)
+			retError(clean, Error_invalidOperation(
+				4,
+				"CommandListRef_startRenderExt()::depthStencil resolve needs an explicit Min or Max; "
+				"averaging a depth plane isn't universally supported"
+			));
+
+		//The stencil plane is resolved with the same mode as depth (both backends emit one mode), and a
+		// stencil plane only ever supports SAMPLE_ZERO in practice, which this enum cannot express yet.
+
+		if (depthStencil->resolveImage && depthStencil->image) {
+
+			const UnifiedTexture utex = TextureRef_getUnifiedTexture(depthStencil->image, NULL);
+
+			if(utex.depthFormat >= EDepthStencilFormat_StencilStart)
+				retError(clean, Error_unsupportedOperation(
+					4, "CommandListRef_startRenderExt() can't resolve a depth stencil format yet, only depth only"
+				));
+		}
+	}
+
 	StartRenderCmdExt *startRender = (StartRenderCmdExt*)command.ptr;
 
 	*startRender = (StartRenderCmdExt) {

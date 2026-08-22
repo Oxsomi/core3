@@ -24,6 +24,12 @@
 // exposing themselves into it. Devices without bindless skip with a message; the bindful twin of this
 // coverage lives in test_graphics_bindful.c and runs everywhere.
 
+//The shared helpers in terms of the handle types. This header comes BEFORE the block below: a standard
+//header included after the C headers landed in oxc::c finds its guard already tripped and leaves its
+//symbols in that namespace.
+
+#include "test_graphics_shared.hpp"
+
 namespace oxc { namespace c {
 	#include "types/base/string_base.h"
 	#include "types/test/test.h"
@@ -45,184 +51,178 @@ namespace oxc { namespace c {
 	#include "test_graphics_shared.h"
 } }
 
+using namespace oxc;
+
 //Same namespace the C headers landed in, so the definitions here match the declarations in
 //test_graphics_shared.h and the macros in those headers still expand to names that resolve.
 
-namespace oxc { namespace c {
-
 // -- 12. Bindless descriptors in the device's default table ----------------------
 
-void Test_graphicsBindlessDescriptor(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindlessDescriptor(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "BindlessDescriptor");
+	c::Test_setModule(t, "BindlessDescriptor");
 
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	if (!device->defaultDescriptorTable) {
-		Test_print(t, "Device has no bindless descriptor table, skipping bindless descriptor tests");
+	if (!dev.hasBindlessTable()) {
+		c::Test_print(t, "Device has no bindless descriptor table, skipping bindless descriptor tests");
 		return;
 	}
 
-	DeviceBufferRef *buffer = NULL;
-	CharString name = CharString_createRefCStrConst("Bindless descriptor test buffer");
+	gfx::DeviceBuffer buffer;
 
 	//ShaderRead without ExposeBindlessRead, so the buffer takes no descriptor of its own and this test owns the one
 	// it allocates below.
 
-	if(!Test_assert(t, "bufferCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderRead, NULL, &name, 256, &buffer, &t->err
+	if(!Test_assert(t, "bufferCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead,
+		"Bindless descriptor test buffer", 256, buffer, nullptr, e_rr
 	)))
 		return;
 
-	const Descriptor desc = Descriptor_buffer(buffer, 0, 0, NULL, 0);
-	BindlessDescriptor handle = BindlessDescriptor_None;
+	//The device level allocator is what this module is about, and a handle can express neither the null
+	//device nor the null table these negatives need, so it is called through the C entry points throughout.
+
+	const c::Descriptor desc = c::Descriptor_buffer(buffer.handle(), 0, 0, NULL, 0);
+	c::BindlessDescriptor handle = c::BindlessDescriptor_None;
 
 	//NULL as the table means the device's default one.
 
-	Test_assert(t, "allocate", GraphicsDeviceRef_allocateDescriptorBindless(
-		deviceRef, NULL, ESHRegisterType_ByteAddressBuffer, 0, false, &desc, &handle, &t->err
+	Test_assert(t, "allocate", c::GraphicsDeviceRef_allocateDescriptorBindless(
+		deviceRef, NULL, c::ESHRegisterType_ByteAddressBuffer, 0, false, &desc, &handle, &t->err
 	));
 
-	Test_assert(t, "handleNotNone", handle != BindlessDescriptor_None);
-	Test_assert(t, "handleHasType", BindlessDescriptor_getBindlessType(handle) != 0);
-	Test_assert(t, "handleValid", BindlessDescriptor_isValid(deviceRef, NULL, handle));
+	Test_assert(t, "handleNotNone", handle != c::BindlessDescriptor_None);
+	Test_assert(t, "handleHasType", c::BindlessDescriptor_getBindlessType(handle) != 0);
+	Test_assert(t, "handleValid", c::BindlessDescriptor_isValid(deviceRef, NULL, handle));
 
 	//The default layout has at most 13 bindless arrays, so type 15 can never resolve to one.
 
-	Test_assert(t, "handleTypeOutOfRange", !BindlessDescriptor_isValid(deviceRef, NULL, (BindlessDescriptor)15 << 17));
-	Test_assert(t, "handleNoDevice", !BindlessDescriptor_isValid(NULL, NULL, handle));
+	Test_assert(t, "handleTypeOutOfRange", !c::BindlessDescriptor_isValid(deviceRef, NULL, (c::BindlessDescriptor)15 << 17));
+	Test_assert(t, "handleNoDevice", !c::BindlessDescriptor_isValid(NULL, NULL, handle));
 
 	//Allocation validation; a descriptor is required and so is somewhere to put the handle.
 
-	Test_assert(t, "allocateNoDevice", !GraphicsDeviceRef_allocateDescriptorBindless(
-		NULL, NULL, ESHRegisterType_ByteAddressBuffer, 0, false, &desc, &handle, NULL
+	Test_assert(t, "allocateNoDevice", !c::GraphicsDeviceRef_allocateDescriptorBindless(
+		NULL, NULL, c::ESHRegisterType_ByteAddressBuffer, 0, false, &desc, &handle, NULL
 	));
 
-	BindlessDescriptor unused = BindlessDescriptor_None;
+	c::BindlessDescriptor unused = c::BindlessDescriptor_None;
 
-	Test_assert(t, "allocateNoDescriptor", !GraphicsDeviceRef_allocateDescriptorBindless(
-		deviceRef, NULL, ESHRegisterType_ByteAddressBuffer, 0, false, NULL, &unused, NULL
+	Test_assert(t, "allocateNoDescriptor", !c::GraphicsDeviceRef_allocateDescriptorBindless(
+		deviceRef, NULL, c::ESHRegisterType_ByteAddressBuffer, 0, false, NULL, &unused, NULL
 	));
 
-	Test_assert(t, "allocateNothingLeaked", unused == BindlessDescriptor_None);
+	Test_assert(t, "allocateNothingLeaked", unused == c::BindlessDescriptor_None);
 
 	//Freeing hands the slot back, so allocating the same descriptor again lands on it.
 
-	Test_assert(t, "free", GraphicsDeviceRef_freeDescriptorBindless(deviceRef, NULL, handle, &t->err));
+	Test_assert(t, "free", c::GraphicsDeviceRef_freeDescriptorBindless(deviceRef, NULL, handle, &t->err));
 
-	BindlessDescriptor reused = BindlessDescriptor_None;
+	c::BindlessDescriptor reused = c::BindlessDescriptor_None;
 
-	Test_assert(t, "reallocate", GraphicsDeviceRef_allocateDescriptorBindless(
-		deviceRef, NULL, ESHRegisterType_ByteAddressBuffer, 0, false, &desc, &reused, &t->err
+	Test_assert(t, "reallocate", c::GraphicsDeviceRef_allocateDescriptorBindless(
+		deviceRef, NULL, c::ESHRegisterType_ByteAddressBuffer, 0, false, &desc, &reused, &t->err
 	));
 
 	Test_assert(t, "slotReused", reused == handle);
 
 	//Freeing twice and freeing None are both no-ops rather than errors, which is what resource destructors rely on.
 
-	Test_assert(t, "freeAgain", GraphicsDeviceRef_freeDescriptorBindless(deviceRef, NULL, reused, &t->err));
-	Test_assert(t, "freeTwice", GraphicsDeviceRef_freeDescriptorBindless(deviceRef, NULL, reused, &t->err));
+	Test_assert(t, "freeAgain", c::GraphicsDeviceRef_freeDescriptorBindless(deviceRef, NULL, reused, &t->err));
+	Test_assert(t, "freeTwice", c::GraphicsDeviceRef_freeDescriptorBindless(deviceRef, NULL, reused, &t->err));
 
-	Test_assert(t, "freeNone", GraphicsDeviceRef_freeDescriptorBindless(
-		deviceRef, NULL, BindlessDescriptor_None, &t->err
+	Test_assert(t, "freeNone", c::GraphicsDeviceRef_freeDescriptorBindless(
+		deviceRef, NULL, c::BindlessDescriptor_None, &t->err
 	));
-
-	RefPtr_dec(&buffer);
 }
 
 // -- 13. DeviceBuffer only takes a bindless descriptor when asked ----------------
 
-void Test_graphicsBufferBindless(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBufferBindless(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "DeviceBuffer/bindless");
+	c::Test_setModule(t, "DeviceBuffer/bindless");
 
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	DeviceBufferRef *plain = NULL;
-	DeviceBufferRef *readOnly = NULL;
-	DeviceBufferRef *readWrite = NULL;
-	DeviceBufferRef *rejected = NULL;
-
-	CharString name = CharString_createRefCStrConst("Bindless flagless buffer");
+	gfx::DeviceBuffer plain, readOnly, readWrite, rejected;
 
 	//Without either Expose flag there's no descriptor and no table ref, whatever the device supports.
 
-	Test_assert(t, "plainCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderRead, NULL, &name, 256, &plain, &t->err
+	Test_assert(t, "plainCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead,
+		"Bindless flagless buffer", 256, plain, nullptr, e_rr
 	));
 
 	if (plain) {
 
-		const DeviceBuffer *plainPtr = DeviceBufferRef_ptr(plain);
+		const c::DeviceBuffer *plainPtr = plain.data();
 
-		Test_assert(t, "plainNoReadHandle", plainPtr->readHandle == BindlessDescriptor_None);
-		Test_assert(t, "plainNoWriteHandle", plainPtr->writeHandle == BindlessDescriptor_None);
+		Test_assert(t, "plainNoReadHandle", plainPtr->readHandle == c::BindlessDescriptor_None);
+		Test_assert(t, "plainNoWriteHandle", plainPtr->writeHandle == c::BindlessDescriptor_None);
 		Test_assert(t, "plainNoTable", !plainPtr->bindlessDescriptorTable);
 	}
 
-	name = CharString_createRefCStrConst("Bindless read buffer");
-
-	if (!device->defaultDescriptorTable) {
+	if (!dev.hasBindlessTable()) {
 
 		//Asking to be exposed on a device that has nowhere to expose it has to fail rather than silently do nothing.
 
-		Test_assert(t, "exposeWithoutBindless", !GraphicsDeviceRef_createBuffer(
-			deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderReadBindless, NULL, &name, 256, &rejected, NULL
+		Test_assert(t, "exposeWithoutBindless", !dev.createBuffer(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderReadBindless,
+			"Bindless read buffer", 256, rejected, nullptr, nullptr
 		));
 
 		Test_assert(t, "exposeWithoutBindlessNothing", !rejected);
-		Test_print(t, "Device has no bindless descriptor table, skipping exposed buffer tests");
-		goto clean;
+		c::Test_print(t, "Device has no bindless descriptor table, skipping exposed buffer tests");
+		return;
 	}
 
 	//ExposeBindlessRead takes a read descriptor and nothing else.
 
-	Test_assert(t, "readCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderReadBindless, NULL, &name, 256, &readOnly, &t->err
+	Test_assert(t, "readCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderReadBindless,
+		"Bindless read buffer", 256, readOnly, nullptr, e_rr
 	));
 
 	if (readOnly) {
 
-		const DeviceBuffer *readPtr = DeviceBufferRef_ptr(readOnly);
+		const c::DeviceBuffer *readPtr = readOnly.data();
 
-		Test_assert(t, "readHandle", readPtr->readHandle != BindlessDescriptor_None);
-		Test_assert(t, "readNoWriteHandle", readPtr->writeHandle == BindlessDescriptor_None);
-		Test_assert(t, "readDefaultTable", readPtr->bindlessDescriptorTable == device->defaultDescriptorTable);
-		Test_assert(t, "readHandleValid", BindlessDescriptor_isValid(deviceRef, NULL, readPtr->readHandle));
+		Test_assert(t, "readHandle", readPtr->readHandle != c::BindlessDescriptor_None);
+		Test_assert(t, "readNoWriteHandle", readPtr->writeHandle == c::BindlessDescriptor_None);
+		Test_assert(t, "readDefaultTable", readPtr->bindlessDescriptorTable == dev.defaultTable().handle());
+		Test_assert(t, "readHandleValid", c::BindlessDescriptor_isValid(deviceRef, NULL, readPtr->readHandle));
 	}
 
 	//Both Expose flags take two descriptors, one per binding, so they can't be the same handle.
 
-	name = CharString_createRefCStrConst("Bindless read write buffer");
-
-	Test_assert(t, "rwCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderRWBindless, NULL, &name, 256, &readWrite, &t->err
+	Test_assert(t, "rwCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRWBindless,
+		"Bindless read write buffer", 256, readWrite, nullptr, e_rr
 	));
 
 	if (readWrite) {
 
-		const DeviceBuffer *rwPtr = DeviceBufferRef_ptr(readWrite);
+		const c::DeviceBuffer *rwPtr = readWrite.data();
 
-		Test_assert(t, "rwReadHandle", rwPtr->readHandle != BindlessDescriptor_None);
-		Test_assert(t, "rwWriteHandle", rwPtr->writeHandle != BindlessDescriptor_None);
+		Test_assert(t, "rwReadHandle", rwPtr->readHandle != c::BindlessDescriptor_None);
+		Test_assert(t, "rwWriteHandle", rwPtr->writeHandle != c::BindlessDescriptor_None);
 		Test_assert(t, "rwHandlesDiffer", rwPtr->readHandle != rwPtr->writeHandle);
-		Test_assert(t, "rwWriteHandleValid", BindlessDescriptor_isValid(deviceRef, NULL, rwPtr->writeHandle));
+		Test_assert(t, "rwWriteHandleValid", c::BindlessDescriptor_isValid(deviceRef, NULL, rwPtr->writeHandle));
 	}
 
 	//A table without a flag that says the resource may be exposed is a contradiction.
 
-	Test_assert(t, "tableWithoutExposeFlag", !GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_None, device->defaultDescriptorTable,
-		&name, 256, &rejected, NULL
+	const gfx::DescriptorTable defaultTable = dev.defaultTable();
+
+	Test_assert(t, "tableWithoutExposeFlag", !dev.createBuffer(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_None,
+		"Bindless read write buffer", 256, rejected, &defaultTable, nullptr
 	));
 
 	Test_assert(t, "tableWithoutExposeFlagNothing", !rejected);
-
-clean:
-
-	RefPtr_dec(&readWrite);
-	RefPtr_dec(&readOnly);
-	RefPtr_dec(&plain);
 }
 
 // -- 14. Bindful and bindless interleaved in one scope ---------------------------
@@ -233,182 +233,164 @@ clean:
 // own buffer, so a stale table or root signature can't hide.
 //Lives in this file rather than the bindful one because it NEEDS bindless, which that file must not.
 
-void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindlessInterleave(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindless/interleave");
+	c::Test_setModule(t, "Bindless/interleave");
 
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	if (!device->defaultDescriptorTable) {
-		Test_print(t, "Device has no bindless descriptor table, skipping bindful interleave tests");
+	if (!dev.hasBindlessTable()) {
+		c::Test_print(t, "Device has no bindless descriptor table, skipping bindful interleave tests");
 		return;
 	}
 
-	const Allocator *alloc = Platform_instance->alloc;
-
-	DescriptorHeapRef *heap = NULL;
-	DescriptorLayoutRef *layout = NULL;
-	DescriptorTableRef *tableA = NULL;
-	DescriptorTableRef *tableB = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	PipelineRef *bindfulPipeline = NULL;
-	PipelineRef *bindlessPipeline = NULL;
-	DeviceBufferRef *src = NULL;
-	DeviceBufferRef *dstA = NULL;
-	DeviceBufferRef *dstB = NULL;
-	DeviceBufferRef *bindlessOut = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
-
-	SHFile copyFile {};
-	SHFile writeFile {};
-	PipelineLayoutRef *bindlessLayout = NULL;
-	DescriptorLayoutInfo layoutInfo {};
+	gfxtest::OwnedSHFile copyFile(dev.alloc()), writeFile(dev.alloc());
 
 	if (
-		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_copy.oiSH", &copyFile) ||
-		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_write.oiSH", &writeFile)
+		!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_copy.oiSH", copyFile.list) ||
+		!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_write.oiSH", writeFile.list)
 	) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful interleave tests");
-		SHFile_free(&copyFile, alloc);
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindful interleave tests");
 		return;
 	}
 
-	const U32 entryId = TestShaders_entry(t, deviceRef, &copyFile, "main");
+	const c::U32 entryId = gfxtest::entry(t, dev, copyFile.list, "main");
 
-	if(entryId == U32_MAX)
-		goto clean;
+	if(entryId == c::U32_MAX)
+		return;
 
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &copyFile, entryId, EDescriptorLayoutFlags_None, (EDetectDescriptorLayoutFlags) 0,
-		NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
+
+	if(!Test_assert(t, "detectLayout", dev.detectLayout(
+		copyFile.list, entryId, layoutInfo.list, nullptr, nullptr, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	CharString name = CharString_createRefCStrConst("Bindful interleave layout");
+	gfx::DescriptorLayout layout;
 
-	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutInfo, &name, &layout, &t->err
+	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(
+		layoutInfo.list, "Bindful interleave layout", layout, e_rr
 	)))
-		goto clean;
+		return;
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 4, .maxDescriptorTables = 2 };
-	name = CharString_createRefCStrConst("Bindful interleave heap");
+	c::DescriptorHeapInfo heapInfo{};
+	heapInfo.maxBuffersRW = 4;
+	heapInfo.maxDescriptorTables = 2;
 
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
+	gfx::DescriptorHeap heap;
+
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Bindful interleave heap", heap, e_rr)))
+		return;
+
+	gfx::DescriptorTable tableA, tableB;
+
+	if(!Test_assert(t, "tableACreate", heap.createTable(
+		layout, "Bindful interleave table A", tableA, (c::EDescriptorTableFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful interleave table A");
-
-	if(!Test_assert(t, "tableACreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &tableA, &t->err
+	if(!Test_assert(t, "tableBCreate", heap.createTable(
+		layout, "Bindful interleave table B", tableB, (c::EDescriptorTableFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful interleave table B");
+	c::U32 srcData[64];
 
-	if(!Test_assert(t, "tableBCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &tableB, &t->err
-	)))
-		goto clean;
-
-	U32 srcData[64];
-
-	for(U32 i = 0; i < 64; ++i)
+	for(c::U32 i = 0; i < 64; ++i)
 		srcData[i] = i;
 
-	Buffer srcRef = Buffer_createRefConst(srcData, sizeof(srcData));
-	name = CharString_createRefCStrConst("Bindful interleave src");
+	c::Buffer srcRef = c::Buffer_createRefConst(srcData, sizeof(srcData));
 
-	if(!Test_assert(t, "srcCreate", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_ShaderRead, NULL,
-		&name, &srcRef, &src, &t->err
+	gfx::DeviceBuffer src, dstA, dstB, bindlessOut;
+
+	if(!Test_assert(t, "srcCreate", dev.createBufferData(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead,
+		"Bindful interleave src", &srcRef, src, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful interleave dst A");
+	const c::EGraphicsResourceFlag writeBacked =
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked);
 
-	if(!Test_assert(t, "dstACreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &dstA, &t->err
+	if(!Test_assert(t, "dstACreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None, writeBacked, "Bindful interleave dst A", 64 * sizeof(c::U32), dstA, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful interleave dst B");
-
-	if(!Test_assert(t, "dstBCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &dstB, &t->err
+	if(!Test_assert(t, "dstBCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None, writeBacked, "Bindful interleave dst B", 64 * sizeof(c::U32), dstB, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful interleave bindless out");
-
-	if(!Test_assert(t, "bindlessOutCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &bindlessOut, &t->err
+	if(!Test_assert(t, "bindlessOutCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWriteBindless | c::EGraphicsResourceFlag_CPUBacked),
+		"Bindful interleave bindless out", 64 * sizeof(c::U32), bindlessOut, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	const Descriptor srcDesc = Descriptor_buffer(src, 0, 0, NULL, 0);
-	const Descriptor dstADesc = Descriptor_buffer(dstA, 0, 0, NULL, 0);
-	const Descriptor dstBDesc = Descriptor_buffer(dstB, 0, 0, NULL, 0);
+	//Neither table holds a reference of its own, so their descriptors go back before the buffers do.
 
-	const CharString inputName = CharString_createRefCStrConst("input");
-	const CharString outputName = CharString_createRefCStrConst("output");
+	struct TableGuard {
 
-	Test_assert(t, "setSrcA", DescriptorTableRef_setDescriptorByName(tableA, &inputName, 0, false, &srcDesc, &t->err));
-	Test_assert(t, "setDstA", DescriptorTableRef_setDescriptorByName(tableA, &outputName, 0, false, &dstADesc, &t->err));
-	Test_assert(t, "setSrcB", DescriptorTableRef_setDescriptorByName(tableB, &inputName, 0, false, &srcDesc, &t->err));
-	Test_assert(t, "setDstB", DescriptorTableRef_setDescriptorByName(tableB, &outputName, 0, false, &dstBDesc, &t->err));
+		gfx::DescriptorTable &a, &b;
 
-	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
-	name = CharString_createRefCStrConst("Bindful interleave pipeline layout");
+		~TableGuard() {
+			(void) a.unset(0, 0, 1, nullptr);
+			(void) a.unset(1, 0, 1, nullptr);
+			(void) b.unset(0, 0, 1, nullptr);
+			(void) b.unset(1, 0, 1, nullptr);
+		}
+	} tableGuard{ tableA, tableB };
 
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
+	const c::Descriptor srcDesc = c::Descriptor_buffer(src.handle(), 0, 0, NULL, 0);
+	const c::Descriptor dstADesc = c::Descriptor_buffer(dstA.handle(), 0, 0, NULL, 0);
+	const c::Descriptor dstBDesc = c::Descriptor_buffer(dstB.handle(), 0, 0, NULL, 0);
+
+	Test_assert(t, "setSrcA", tableA.setByName("input", srcDesc, 0, false, e_rr));
+	Test_assert(t, "setDstA", tableA.setByName("output", dstADesc, 0, false, e_rr));
+	Test_assert(t, "setSrcB", tableB.setByName("input", srcDesc, 0, false, e_rr));
+	Test_assert(t, "setDstB", tableB.setByName("output", dstBDesc, 0, false, e_rr));
+
+	c::PipelineLayoutInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.bindings = layout.handle();
+
+	gfx::PipelineLayout pipelineLayout, bindlessLayout;
+
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Bindful interleave pipeline layout", pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Bindful interleave pipeline");
+	gfx::Pipeline bindfulPipeline, bindlessPipeline;
 
-	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &copyFile, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &bindfulPipeline, &t->err
+	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		copyFile.list, "main", "Bindful interleave pipeline", bindfulPipeline, {}, &pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	if(!TestShaders_computePipelinePush(t, deviceRef, &writeFile, &bindlessPipeline, &bindlessLayout))
-		goto clean;
+	if(!gfxtest::computePipelinePush(t, dev, writeFile.list, bindlessPipeline, bindlessLayout))
+		return;
 
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
-	)))
-		goto clean;
+	gfx::CommandList commandList, emptyList;
 
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
+	if(!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)))
+		return;
 
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
 
-	const Transition transitions[4] = {
-		{ .resource = src,         .stage = EPipelineStage_Compute },
-		{ .resource = dstA,        .stage = EPipelineStage_Compute, .isWrite = true },
-		{ .resource = dstB,        .stage = EPipelineStage_Compute, .isWrite = true },
-		{ .resource = bindlessOut, .stage = EPipelineStage_Compute, .isWrite = true }
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
+
+	const c::Transition transitions[4] = {
+		{ .resource = src.handle(),         .stage = c::EPipelineStage_Compute },
+		{ .resource = dstA.handle(),        .stage = c::EPipelineStage_Compute, .isWrite = true },
+		{ .resource = dstB.handle(),        .stage = c::EPipelineStage_Compute, .isWrite = true },
+		{ .resource = bindlessOut.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true }
 	};
-
-	ListTransition transitionList {};
-	ListTransition_createRefConst(transitions, 4, &transitionList, NULL);
 
 	//Custom, then custom again, then default, all in one scope.
 	//
@@ -419,81 +401,55 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//The handles the shader reads, in the order its push block declares them.
 
-	const U32 bindlessPushData[4] = { DeviceBufferRef_ptr(bindlessOut)->writeHandle, 0xC0DE0000u, 0, 0 };
-	const Buffer bindlessPushRef = Buffer_createRefConst(bindlessPushData, sizeof(bindlessPushData));
+	const c::U32 bindlessPushData[4] = { bindlessOut.writeHandle(), 0xC0DE0000u, 0, 0 };
 
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
-	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
 
-	Test_assert(t, "bindTableA", CommandListRef_bindDescriptorTable(commandList, tableA, &t->err));
-	Test_assert(t, "bindBindful", CommandListRef_setComputePipeline(commandList, bindfulPipeline, &t->err));
-	Test_assert(t, "dispatchA", CommandListRef_dispatch1D(commandList, 1, &t->err));
+	{
+		gfx::CommandScope scope = commandList.scope(
+			{ transitions[0], transitions[1], transitions[2], transitions[3] }, 1, {}, e_rr
+		);
 
-	Test_assert(t, "bindTableB", CommandListRef_bindDescriptorTable(commandList, tableB, &t->err));
-	Test_assert(t, "bindBindful2", CommandListRef_setComputePipeline(commandList, bindfulPipeline, &t->err));
-	Test_assert(t, "dispatchB", CommandListRef_dispatch1D(commandList, 1, &t->err));
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
 
-	Test_assert(t, "bindBindless", CommandListRef_setComputePipeline(commandList, bindlessPipeline, &t->err));
-	Test_assert(t, "pushBindless", CommandListRef_setPushConstants(commandList, bindlessPushRef, &t->err));
-	Test_assert(t, "dispatchBindless", CommandListRef_dispatch1D(commandList, 1, &t->err));
+		Test_assert(t, "bindTableA", scope.bindDescriptorTable(tableA, e_rr));
+		Test_assert(t, "bindBindful", scope.setComputePipeline(bindfulPipeline, e_rr));
+		Test_assert(t, "dispatchA", scope.dispatch1D(1, e_rr));
 
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+		Test_assert(t, "bindTableB", scope.bindDescriptorTable(tableB, e_rr));
+		Test_assert(t, "bindBindful2", scope.setComputePipeline(bindfulPipeline, e_rr));
+		Test_assert(t, "dispatchB", scope.dispatch1D(1, e_rr));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList)) {
+		Test_assert(t, "bindBindless", scope.setComputePipeline(bindlessPipeline, e_rr));
+		Test_assert(t, "pushBindless", scope.setPushConstants(bindlessPushData, e_rr));
+		Test_assert(t, "dispatchBindless", scope.dispatch1D(1, e_rr));
 
-		Bool okA = TestShaders_pullBuffer(t, deviceRef, emptyList, dstA);
-		Bool okOut = TestShaders_pullBuffer(t, deviceRef, emptyList, bindlessOut);
-		Bool okB = TestShaders_pullBuffer(t, deviceRef, emptyList, dstB);
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
+
+	Test_assert(t, "end", commandList.end(e_rr));
+
+	if (gfxtest::submitAndWait(t, dev, commandList)) {
+
+		c::Bool okA = gfxtest::pullBuffer(t, dev, emptyList, dstA);
+		c::Bool okOut = gfxtest::pullBuffer(t, dev, emptyList, bindlessOut);
+		c::Bool okB = gfxtest::pullBuffer(t, dev, emptyList, dstB);
 
 		if (okA && okOut && okB) {
 
-			const U32 *a = (const U32*) DeviceBufferRef_ptr(dstA)->cpuData.ptr;
-			const U32 *o = (const U32*) DeviceBufferRef_ptr(bindlessOut)->cpuData.ptr;
-			const U32 *b = (const U32*) DeviceBufferRef_ptr(dstB)->cpuData.ptr;
+			const c::U32 *a = (const c::U32*) dstA.data()->cpuData.ptr;
+			const c::U32 *o = (const c::U32*) bindlessOut.data()->cpuData.ptr;
+			const c::U32 *b = (const c::U32*) dstB.data()->cpuData.ptr;
 
-			Bool allMatch = true;
+			c::Bool allMatch = true;
 
-			for(U32 i = 0; i < 64; ++i)
+			for(c::U32 i = 0; i < 64; ++i)
 				allMatch &= a[i] == i * 2 + 1 && o[i] == 0xC0DE0000u + i && b[i] == i * 2 + 1;
 
 			Test_assert(t, "interleaveResults", allMatch);
 		}
 	}
-
-	}
-
-clean:
-
-	if(tableA) {
-		DescriptorTableRef_unsetDescriptors(tableA, 0, 0, 1, NULL);
-		DescriptorTableRef_unsetDescriptors(tableA, 1, 0, 1, NULL);
-	}
-
-	if(tableB) {
-		DescriptorTableRef_unsetDescriptors(tableB, 0, 0, 1, NULL);
-		DescriptorTableRef_unsetDescriptors(tableB, 1, 0, 1, NULL);
-	}
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&bindlessPipeline);
-	RefPtr_dec(&bindfulPipeline);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&bindlessOut);
-	RefPtr_dec(&dstB);
-	RefPtr_dec(&dstA);
-	RefPtr_dec(&src);
-	RefPtr_dec(&tableB);
-	RefPtr_dec(&tableA);
-	RefPtr_dec(&layout);
-	RefPtr_dec(&heap);
-
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	SHFile_free(&copyFile, alloc);
-	RefPtr_dec(&bindlessLayout);
-	SHFile_free(&writeFile, alloc);
 }
 
 // -- 15. A custom layout that opts every binding into bindless updates ----------
@@ -504,165 +460,142 @@ clean:
 //range. Tests only ever used AllowBindlessOnArrays, so this shape was created but never executed.
 //It requires the bindless feature even though the layout is a custom one, which is why it lives here.
 
-void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindlessEverywhere(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindless/everywhere");
+	c::Test_setModule(t, "Bindless/everywhere");
 
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	if (!(device->info.capabilities.features & EGraphicsFeatures_Bindless)) {
-		Test_print(t, "Device has no bindless, skipping bindless everywhere tests");
+	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_Bindless)) {
+		c::Test_print(t, "Device has no bindless, skipping bindless everywhere tests");
 		return;
 	}
 
-	const Allocator *alloc = Platform_instance->alloc;
+	gfxtest::OwnedSHFile file(dev.alloc());
 
-	DescriptorHeapRef *heap = NULL;
-	DescriptorLayoutRef *layout = NULL;
-	DescriptorTableRef *table = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	PipelineRef *pipeline = NULL;
-	DeviceBufferRef *output = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
-
-	SHFile file {};
-	DescriptorLayoutInfo layoutInfo {};
-
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_write.oiSH", &file)) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindless everywhere tests");
+	if (!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_write.oiSH", file.list)) {
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindless everywhere tests");
 		return;
 	}
 
-	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+	const c::U32 entryId = gfxtest::entry(t, dev, file.list, "main");
 
-	if(entryId == U32_MAX)
-		goto clean;
+	if(entryId == c::U32_MAX)
+		return;
 
 	//The flag rides on the layout, so detection is asked for it rather than the layout being hand built
 
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &file, entryId, EDescriptorLayoutFlags_AllowBindlessEverywhere,
-		(EDetectDescriptorLayoutFlags) 0, NULL, NULL, NULL, &layoutInfo, NULL, &t->err
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
+
+	if(!Test_assert(t, "detectLayout", dev.detectLayout(
+		file.list, entryId, layoutInfo.list, nullptr, nullptr, {}, nullptr,
+		c::EDescriptorLayoutFlags_AllowBindlessEverywhere, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	CharString name = CharString_createRefCStrConst("Bindless everywhere layout");
+	gfx::DescriptorLayout layout;
 
-	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutInfo, &name, &layout, &t->err
+	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(
+		layoutInfo.list, "Bindless everywhere layout", layout, e_rr
 	)))
-		goto clean;
+		return;
 
-	//Scoped so the goto above jumps around these rather than into them.
+	c::DescriptorHeapInfo heapInfo{};
+	heapInfo.flags = c::EDescriptorHeapFlags_AllowBindless;
+	heapInfo.maxBuffersRW = 1;
+	heapInfo.maxDescriptorTables = 1;
+
+	gfx::DescriptorHeap heap;
+
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Bindless everywhere heap", heap, e_rr)))
+		return;
+
+	gfx::DescriptorTable table;
+
+	if(!Test_assert(t, "tableCreate", heap.createTable(
+		layout, "Bindless everywhere table", table, (c::EDescriptorTableFlags) 0, e_rr
+	)))
+		return;
+
+	gfx::DeviceBuffer output;
+
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Bindless everywhere output", 64 * sizeof(c::U32), output, nullptr, e_rr
+	)))
+		return;
+
+	//The table holds no reference of its own, so the descriptor goes back before the buffer does.
+
+	struct TableGuard {
+		gfx::DescriptorTable &table;
+		~TableGuard() { (void) table.unset(0, 0, 1, nullptr); }
+	} tableGuard{ table };
+
+	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, NULL, 0);
+
+	Test_assert(t, "setOutput", table.setByName("output", outputDesc, 0, false, e_rr));
+
+	c::PipelineLayoutInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.bindings = layout.handle();
+
+	gfx::PipelineLayout pipelineLayout;
+
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Bindless everywhere pipeline layout", pipelineLayout, e_rr
+	)))
+		return;
+
+	gfx::Pipeline pipeline;
+
+	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		file.list, "main", "Bindless everywhere pipeline", pipeline, {}, &pipelineLayout, e_rr
+	)))
+		return;
+
+	gfx::CommandList commandList, emptyList;
+
+	if(!Test_assert(t, "listCreate", dev.createCommandList(2 * c::KIBI, 32, 16, commandList, true, e_rr)))
+		return;
+
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
+
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
+
+	const c::Transition transition = {
+		.resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
+	};
+
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
+
 	{
-	DescriptorHeapInfo heapInfo = {
-		.flags = EDescriptorHeapFlags_AllowBindless, .maxBuffersRW = 1, .maxDescriptorTables = 1
-	};
+		gfx::CommandScope scope = commandList.scope({ transition }, 1, {}, e_rr);
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindTable", scope.bindDescriptorTable(table, e_rr));
+		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "dispatch", scope.dispatch1D(1, e_rr));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
 
-	name = CharString_createRefCStrConst("Bindless everywhere heap");
+	Test_assert(t, "end", commandList.end(e_rr));
 
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
-	)))
-		goto clean;
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
 
-	name = CharString_createRefCStrConst("Bindless everywhere table");
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
-	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
-	)))
-		goto clean;
+			c::Bool allMatch = true;
 
-	name = CharString_createRefCStrConst("Bindless everywhere output");
-
-	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 64 * sizeof(U32), &output, &t->err
-	)))
-		goto clean;
-
-	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
-	const CharString outputName = CharString_createRefCStrConst("output");
-
-	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
-
-	PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout };
-	name = CharString_createRefCStrConst("Bindless everywhere pipeline layout");
-
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
-	)))
-		goto clean;
-
-	name = CharString_createRefCStrConst("Bindless everywhere pipeline");
-
-	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
-	)))
-		goto clean;
-
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 2 * KIBI, 32, 16, true, &commandList, &t->err
-	)))
-		goto clean;
-
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
-
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
-
-	const Transition transition = {
-		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
-	};
-
-	ListTransition transitionList {};
-	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
-
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
-	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
-	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
-	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
-
-	if (TestShaders_submitAndWait(t, deviceRef, commandList))
-		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
-
-			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
-
-			Bool allMatch = true;
-
-			for(U32 i = 0; i < 64; ++i)
+			for(c::U32 i = 0; i < 64; ++i)
 				allMatch &= values[i] == i * 3 + 7;
 
 			Test_assert(t, "everywhereResults", allMatch);
 		}
-
-	}
-
-clean:
-
-	if(table)
-		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&output);
-	RefPtr_dec(&table);
-	RefPtr_dec(&layout);
-	RefPtr_dec(&heap);
-
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	SHFile_free(&file, alloc);
 }
 
 // -- 16. The per frame globals ------------------------------
@@ -673,140 +606,133 @@ clean:
 //Two submits, because the interesting property is that these move: the frame id has to advance and the
 //clock must not run backwards.
 
-void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsFrameGlobals(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindless/frameGlobals");
+	c::Test_setModule(t, "Bindless/frameGlobals");
 
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	if (!device->defaultDescriptorTable) {
-		Test_print(t, "Device has no bindless descriptor table, skipping frame globals tests");
+	if (!dev.hasBindlessTable()) {
+		c::Test_print(t, "Device has no bindless descriptor table, skipping frame globals tests");
 		return;
 	}
 
-	const Allocator *alloc = Platform_instance->alloc;
+	gfxtest::OwnedSHFile file(dev.alloc());
 
-	DeviceBufferRef *output = NULL;
-	PipelineRef *pipeline = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
-
-	SHFile file {};
-	DescriptorLayoutInfo layoutInfo {};
-	DescriptorBinding pushConstants {};
-
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_frame_globals.oiSH", &file)) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping frame globals tests");
+	if (!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_frame_globals.oiSH", file.list)) {
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping frame globals tests");
 		return;
 	}
 
-	CharString name = CharString_createRefCStrConst("Frame globals output");
+	gfx::DeviceBuffer output;
 
-	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 4 * sizeof(U32), &output, &t->err
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWriteBindless | c::EGraphicsResourceFlag_CPUBacked),
+		"Frame globals output", 4 * sizeof(c::U32), output, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	//The output handle rides in a push constant now, so this pipeline can't use the device's default layout
-	// as is: it needs the same bindless bindings and globals push descriptor WITH a push constant range on
-	// top, which is what composing one from the device's own layouts gives.
+	const c::U32 entryId = gfxtest::entry(t, dev, file.list, "main");
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
-
-	if(entryId == U32_MAX)
-		goto clean;
+	if(entryId == c::U32_MAX)
+		return;
 
 	//On DXIL a push constant reflects as the implicit $Globals cbuffer, so it can't be found by name; Assume
 	// is unambiguous here because detect skips the reserved space, where the globals block lives.
 
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &file, entryId, EDescriptorLayoutFlags_None,
-		EDetectDescriptorLayoutFlags_AssumePushConstants,
-		NULL, NULL, &pushConstants, &layoutInfo, NULL, &t->err
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
+	c::DescriptorBinding pushConstants{};
+
+	if(!Test_assert(t, "detectLayout", dev.detectLayout(
+		file.list, entryId, layoutInfo.list, nullptr, &pushConstants, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, c::EDetectDescriptorLayoutFlags_AssumePushConstants, e_rr
 	)))
-		goto clean;
+		return;
 
 	//Everything else this shader touches is the runtime's own bindless set, which detect skips.
 
-	Test_assert(t, "noOrdinaryBindings", !layoutInfo.bindings.length);
+	Test_assert(t, "noOrdinaryBindings", !layoutInfo.list.bindings.length);
 
 	if(!Test_assert(t, "detectedPushConstants", pushConstants.count != 0))
-		goto clean;
+		return;
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	PipelineLayoutInfo pipelineLayoutInfo = {
-		.bindings = device->defaultDescLayout,
-		.pushDescriptors = device->defaultCBufferLayout,
-		.pushConstants = pushConstants
+	//The output handle rides in a push constant, so this pipeline can't use the device's default layout as
+	// is: it needs the same bindless bindings and globals push descriptor WITH a push constant range on top,
+	// which is what composing one from the device's own layouts gives.
+
+	c::PipelineLayoutInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.bindings = dev.defaultDescLayout();
+	pipelineLayoutInfo.pushDescriptors = dev.defaultCBufferLayout();
+	pipelineLayoutInfo.pushConstants = pushConstants;
+
+	gfx::PipelineLayout pipelineLayout;
+
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Frame globals pipeline layout", pipelineLayout, e_rr
+	)))
+		return;
+
+	gfx::Pipeline pipeline;
+
+	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		file.list, "main", "Frame globals pipeline", pipeline, {}, &pipelineLayout, e_rr
+	)))
+		return;
+
+	gfx::CommandList commandList, emptyList;
+
+	if(!Test_assert(t, "listCreate", dev.createCommandList(2 * c::KIBI, 32, 16, commandList, true, e_rr)))
+		return;
+
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
+
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
+
+	const c::Transition transition = {
+		.resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
 	};
-
-	name = CharString_createRefCStrConst("Frame globals pipeline layout");
-
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
-	)))
-		goto clean;
-
-	name = CharString_createRefCStrConst("Frame globals pipeline");
-
-	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
-	)))
-		goto clean;
-
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 2 * KIBI, 32, 16, true, &commandList, &t->err
-	)))
-		goto clean;
-
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
-
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
-
-	const Transition transition = {
-		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
-	};
-
-	ListTransition transitionList {};
-	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
 
 	//The write handle travels as a push constant.
 
-	const U32 pushData[4] = { DeviceBufferRef_ptr(output)->writeHandle, 0, 0, 0 };
-	const Buffer pushRef = Buffer_createRefConst(pushData, sizeof(pushData));
+	const c::U32 pushData[4] = { output.writeHandle(), 0, 0, 0 };
 
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
-	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
-	Test_assert(t, "setPushConstants", CommandListRef_setPushConstants(commandList, pushRef, &t->err));
-	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
 
-	U32 firstFrameId = 0;
-	F32 firstTime = 0;
-	Bool readFirst = false;
+	{
+		gfx::CommandScope scope = commandList.scope({ transition }, 1, {}, e_rr);
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "setPushConstants", scope.setPushConstants(pushData, e_rr));
+		Test_assert(t, "dispatch", scope.dispatch1D(1, e_rr));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList))
-		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+	Test_assert(t, "end", commandList.end(e_rr));
 
-			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+	c::U32 firstFrameId = 0;
+	c::F32 firstTime = 0;
+	c::Bool readFirst = false;
+
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
+
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
 			firstFrameId = values[0];
-			Buffer_memcpy(Buffer_createRef(&firstTime, sizeof(F32)), Buffer_createRefConst(&values[1], sizeof(U32)));
+			c::Buffer_memcpy(
+				c::Buffer_createRef(&firstTime, sizeof(c::F32)),
+				c::Buffer_createRefConst(&values[1], sizeof(c::U32))
+			);
 
-			F32 deltaTime = 0;
-			Buffer_memcpy(Buffer_createRef(&deltaTime, sizeof(F32)), Buffer_createRefConst(&values[2], sizeof(U32)));
+			c::F32 deltaTime = 0;
+			c::Buffer_memcpy(
+				c::Buffer_createRef(&deltaTime, sizeof(c::F32)),
+				c::Buffer_createRefConst(&values[2], sizeof(c::U32))
+			);
 
 			//The shader really read the block rather than zero initialised memory: a submit that has happened
 			// has a non zero frame id, and neither clock can be negative
@@ -825,31 +751,18 @@ void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef) {
 	//A second submit of the same list: the frame id advances and time cannot go backwards, which is what
 	// makes this a test of the live per frame block rather than of one constant
 
-	if (readFirst && TestShaders_submitAndWait(t, deviceRef, commandList))
-		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+	if (readFirst && gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
 
-			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
-			F32 secondTime = 0;
-			Buffer_memcpy(Buffer_createRef(&secondTime, sizeof(F32)), Buffer_createRefConst(&values[1], sizeof(U32)));
+			c::F32 secondTime = 0;
+			c::Buffer_memcpy(
+				c::Buffer_createRef(&secondTime, sizeof(c::F32)),
+				c::Buffer_createRefConst(&values[1], sizeof(c::U32))
+			);
 
 			Test_assert(t, "frameIdAdvanced", values[0] > firstFrameId);
 			Test_assert(t, "timeMovesForward", secondTime >= firstTime);
 		}
-
-	}
-
-	}
-
-clean:
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&output);
-
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	SHFile_free(&file, alloc);
 }
-} }

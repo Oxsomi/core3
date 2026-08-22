@@ -302,7 +302,7 @@ extern "C" void Test_graphicsCapabilities(oxc::c::Test *t, oxc::c::GraphicsDevic
 		RenderTexture rt;
 
 		Test_assert(t, "msaaOffAlwaysWorks", dev.createRenderTexture(
-			4, 4, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Capability probe", rt, nullptr, e_rr
+			4, 4, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Capability probe", rt, c::EMSAASamples_Off, nullptr, e_rr
 		));
 	}
 

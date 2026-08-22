@@ -31,27 +31,21 @@
 // that isn't 3D, see src/graphics/generic/texture.c.
 //Module 35 pins those refusals instead.
 //So the day the resource layer grows 3D support the asserts flip and say so rather than silently passing.
+//
+//Written against the C++ layer (graphics/graphics.hpp), so every handle releases itself. Module 36 reads the
+//frame ring's own counters, which are device internals the wrapper deliberately does not expose; those go
+//through the C handle and are called out where they happen.
+
+#include "test_graphics_shared.hpp"
+
+//Log::debugLn is the C++ front for Log_debugLnx; the x macros name ELogOptions_NewLine unqualified and so
+//cannot be reached through the c namespace.
+
+#include "types/container/log.hpp"
 
 namespace oxc { namespace c {
-	#include "types/base/allocator.h"
-	#include "types/base/error.h"
-	#include "types/container/buffer.h"
-	#include "types/container/string.h"
-	#include "types/test/test.h"
-	#include "formats/oiSH/sh_registers.h"
-	#include "platforms/logx.h"
-	#include "platforms/platform.h"
-	#include "graphics/generic/command_list.h"
-	#include "graphics/generic/commands.h"
-	#include "graphics/generic/device.h"
 	#include "graphics/generic/device_texture.h"
-	#include "test_graphics_shared.h"
-} }
-
-//Same namespace the C headers landed in, so the definitions here match the declarations in
-//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
-
-namespace oxc { namespace c {
+}}
 
 //34. Per format upload -> readback round trip.
 
@@ -60,179 +54,186 @@ namespace oxc { namespace c {
 // that RenderTextures use.
 //So the callback just counts, and the comparison happens after the wait.
 
-static void Test_pullCompleted(RefPtr *resource, void *context) {
-	(void) resource;
-	++*(U32*)context;
-}
+namespace {
 
-//Formats worth round tripping, deliberately not all 76.
-//This runs per adapter, so the point is to cover the shapes that the upload and readback paths treat
-// differently (channel counts, texel sizes, signedness, block compression) rather than every permutation.
-//Compressed formats are included because their row pitch is computed from block size, which is exactly where
-//a copy path gets it wrong.
-//Every entry is one OxC3 requires of any adapter it runs on, so they are all expected to round trip; there is
-//deliberately no support check here, because a format quietly losing support should fail rather than skip.
+	using namespace oxc;
 
-static const ETextureFormatId testRoundTripFormats[] = {
-	ETextureFormatId_R8,      ETextureFormatId_RG8,     ETextureFormatId_RGBA8,   ETextureFormatId_BGRA8,
-	ETextureFormatId_R8u,     ETextureFormatId_RGBA8u,  ETextureFormatId_R8i,     ETextureFormatId_RGBA8i,
-	ETextureFormatId_R16,     ETextureFormatId_RGBA16,  ETextureFormatId_R16f,    ETextureFormatId_RGBA16f,
-	ETextureFormatId_R32u,    ETextureFormatId_RGBA32u, ETextureFormatId_R32f,    ETextureFormatId_RGBA32f,
-	ETextureFormatId_BGR10A2,
-	ETextureFormatId_BC4,     ETextureFormatId_BC5,     ETextureFormatId_BC7
-};
-
-//Optional formats: present only when the adapter claims the matching capability bit, unlike the required
-//table above.
-//ASTC and BCn are alternatives rather than both being required (the enum comments say so: if one is absent
-// the other has to be there), and BC4/BC5/BC7 already sit in the required table, so ASTC is the half that
-// had no coverage at all.
-
-typedef struct TestOptionalFormat {
-	ETextureFormatId formatId;
-	EGraphicsDataTypes dataType;
-} TestOptionalFormat;
-
-static const TestOptionalFormat testOptionalFormats[] = {
-	{ ETextureFormatId_RGB32f,   EGraphicsDataTypes_RGB32f },
-	{ ETextureFormatId_RGB32i,   EGraphicsDataTypes_RGB32i },
-	{ ETextureFormatId_RGB32u,   EGraphicsDataTypes_RGB32u },
-	{ ETextureFormatId_ASTC_4x4, EGraphicsDataTypes_ASTC   },
-	{ ETextureFormatId_ASTC_8x8, EGraphicsDataTypes_ASTC   }
-};
-
-//One format's upload / readback / compare, shared by the required table and the optional one below.
-//seed varies the byte pattern per call so a stale readback from a previous format can't masquerade as a pass.
-
-static Bool Test_roundTripFormat(
-	Test *t,
-	GraphicsDeviceRef *deviceRef,
-	const ListCommandListRef *lists,
-	ETextureFormatId formatId,
-	U16 w,
-	U16 h,
-	U64 seed
-) {
-
-	const Allocator *alloc = Platform_instance->alloc;
-
-	const ETextureFormat format = ETextureFormatId_unpack[formatId];
-	const U64 texSize = ETextureFormat_getSize(format, w, h, 1);
-
-	//createTexture demands the initial data be exactly the format's size for these dimensions, so this
-	//doubles as a check that getSize agrees with what the resource layer expects.
-
-	Buffer src = Buffer_createNull();
-
-	if(!Test_assert(t, "srcAlloc", Buffer_createUninitializedBytes(texSize, alloc, &src, &t->err)))
-		return false;
-
-	for(U64 j = 0; j < texSize; ++j)
-		src.ptrNonConst[j] = (U8)((j * 7 + seed * 31 + 1) & 0xFF);
-
-	Buffer upload = Buffer_createNull();
-	Bool ok = Test_assert(t, "uploadCopy", Buffer_createCopy(src, alloc, &upload, &t->err));
-
-	DeviceTextureRef *texture = NULL;
-	const CharString name = CharString_createRefCStrConst("Format round trip");
-
-	if(ok)
-		ok = Test_assert(t, "create", GraphicsDeviceRef_createTexture(
-			deviceRef, ETextureType_2D, formatId, EGraphicsResourceFlag_CPUBacked,
-			w, h, 1, NULL, &name, &upload, &texture, &t->err
-		));
-
-	//createTexture takes ownership of upload on success.
-	//On failure it is still ours.
-
-	if(!ok)
-		Buffer_free(&upload, alloc);
-
-	U32 pulled = 0;
-
-	if(ok)
-		ok = Test_assert(t, "pull", DeviceTextureRef_pullRegion(
-			texture, 0, 0, 0, 0, 0, 0, Test_pullCompleted, &pulled, &t->err
-		));
-
-	//The upload is issued by the same submit that services the pull, so one round trip is enough.
-
-	if(ok)
-		ok = Test_assert(t, "submit", GraphicsDeviceRef_submitCommands(
-			deviceRef, lists, NULL, 0, 0, &t->err
-		));
-
-	if(ok)
-		ok = Test_assert(t, "wait", GraphicsDeviceRef_wait(deviceRef, &t->err));
-
-	Bool matched = false;
-
-	if (ok) {
-
-		Test_assert(t, "pullCalled", pulled == 1);
-
-		//The readback lands in the texture's own cpuData.
-		//Compare it byte for byte against what went up.
-
-		const DeviceTexture *texPtr = DeviceTextureRef_ptr(texture);
-
-		const Bool sameLen = Buffer_length(texPtr->cpuData) == texSize;
-		Test_assert(t, "pullLength", sameLen);
-
-		const Bool same = sameLen && Buffer_eq(
-			Buffer_createRefConst(texPtr->cpuData.ptr, texSize),
-			Buffer_createRefConst(src.ptr, texSize)
-		);
-
-		matched = Test_assert(t, "pullMatches", same);
+	void pullCompleted(c::RefPtr *resource, void *context) {
+		(void) resource;
+		++*(c::U32*)context;
 	}
 
-	RefPtr_dec(&texture);
-	Buffer_free(&src, alloc);
-	return matched;
+	//Formats worth round tripping, deliberately not all 76.
+	//This runs per adapter, so the point is to cover the shapes that the upload and readback paths treat
+	//differently (channel counts, texel sizes, signedness, block compression) rather than every permutation.
+	//Compressed formats are included because their row pitch is computed from block size, which is exactly
+	//where a copy path gets it wrong.
+	//Every entry is one OxC3 requires of any adapter it runs on, so they are all expected to round trip;
+	//there is deliberately no support check here, because a format quietly losing support should fail
+	//rather than skip.
+
+	const c::ETextureFormatId testRoundTripFormats[] = {
+		c::ETextureFormatId_R8,   c::ETextureFormatId_RG8,     c::ETextureFormatId_RGBA8,  c::ETextureFormatId_BGRA8,
+		c::ETextureFormatId_R8u,  c::ETextureFormatId_RGBA8u,  c::ETextureFormatId_R8i,    c::ETextureFormatId_RGBA8i,
+		c::ETextureFormatId_R16,  c::ETextureFormatId_RGBA16,  c::ETextureFormatId_R16f,   c::ETextureFormatId_RGBA16f,
+		c::ETextureFormatId_R32u, c::ETextureFormatId_RGBA32u, c::ETextureFormatId_R32f,   c::ETextureFormatId_RGBA32f,
+		c::ETextureFormatId_BGR10A2,
+		c::ETextureFormatId_BC4,  c::ETextureFormatId_BC5,     c::ETextureFormatId_BC7
+	};
+
+	//Optional formats: present only when the adapter claims the matching capability bit, unlike the required
+	//table above.
+	//ASTC and BCn are alternatives rather than both being required (the enum comments say so: if one is
+	//absent the other has to be there), and BC4/BC5/BC7 already sit in the required table, so ASTC is the
+	//half that had no coverage at all.
+
+	struct TestOptionalFormat {
+		c::ETextureFormatId formatId;
+		c::EGraphicsDataTypes dataType;
+	};
+
+	const TestOptionalFormat testOptionalFormats[] = {
+		{ c::ETextureFormatId_RGB32f,   c::EGraphicsDataTypes_RGB32f },
+		{ c::ETextureFormatId_RGB32i,   c::EGraphicsDataTypes_RGB32i },
+		{ c::ETextureFormatId_RGB32u,   c::EGraphicsDataTypes_RGB32u },
+		{ c::ETextureFormatId_ASTC_4x4, c::EGraphicsDataTypes_ASTC   },
+		{ c::ETextureFormatId_ASTC_8x8, c::EGraphicsDataTypes_ASTC   }
+	};
+
+	//One format's upload / readback / compare, shared by the required table and the optional one below.
+	//seed varies the byte pattern per call so a stale readback from a previous format can't masquerade as
+	//a pass.
+
+	c::Bool roundTripFormat(
+		c::Test *t,
+		gfx::Device &dev,
+		const gfx::CommandList &emptyList,
+		c::ETextureFormatId formatId,
+		c::U16 w,
+		c::U16 h,
+		c::U64 seed
+	) {
+
+		const c::Allocator *alloc = dev.alloc();
+
+		const c::ETextureFormat format = c::ETextureFormatId_unpack[formatId];
+		const c::U64 texSize = c::ETextureFormat_getSize(format, w, h, 1);
+
+		//createTexture demands the initial data be exactly the format's size for these dimensions, so this
+		//doubles as a check that getSize agrees with what the resource layer expects.
+
+		c::Buffer src = c::Buffer_createNull();
+
+		if(!c::Test_assert(t, "srcAlloc", c::Buffer_createUninitializedBytes(texSize, alloc, &src, &t->err)))
+			return false;
+
+		for(c::U64 j = 0; j < texSize; ++j)
+			src.ptrNonConst[j] = (c::U8)((j * 7 + seed * 31 + 1) & 0xFF);
+
+		c::Buffer upload = c::Buffer_createNull();
+		c::Bool ok = c::Test_assert(t, "uploadCopy", c::Buffer_createCopy(src, alloc, &upload, &t->err));
+
+		gfx::DeviceTexture texture;
+
+		if(ok)
+			ok = c::Test_assert(t, "create", dev.createTexture(
+				c::ETextureType_2D, formatId, c::EGraphicsResourceFlag_CPUBacked,
+				w, h, 1, "Format round trip", &upload, texture, nullptr, &t->err
+			));
+
+		//createTexture takes ownership of upload on success.
+		//On failure it is still ours.
+
+		if(!ok)
+			c::Buffer_free(&upload, alloc);
+
+		c::U32 pulled = 0;
+
+		if(ok)
+			ok = c::Test_assert(t, "pull", texture.pullRegion(0, 0, 0, 0, 0, 0, pullCompleted, &pulled, &t->err));
+
+		//The upload is issued by the same submit that services the pull, so one round trip is enough.
+
+		if(ok)
+			ok = c::Test_assert(t, "submit", dev.submit({ &emptyList }, {}, 0, 0, &t->err));
+
+		if(ok)
+			ok = c::Test_assert(t, "wait", dev.wait(&t->err));
+
+		c::Bool matched = false;
+
+		if (ok) {
+
+			c::Test_assert(t, "pullCalled", pulled == 1);
+
+			//The readback lands in the texture's own cpuData.
+			//Compare it byte for byte against what went up.
+
+			const c::DeviceTexture *texPtr = texture.data();
+
+			const c::Bool sameLen = c::Buffer_length(texPtr->cpuData) == texSize;
+			c::Test_assert(t, "pullLength", sameLen);
+
+			const c::Bool same = sameLen && c::Buffer_eq(
+				c::Buffer_createRefConst(texPtr->cpuData.ptr, texSize),
+				c::Buffer_createRefConst(src.ptr, texSize)
+			);
+
+			matched = c::Test_assert(t, "pullMatches", same);
+		}
+
+		c::Buffer_free(&src, alloc);
+		return matched;
+	}
+
+	//submitCommands refuses a submit that carries neither a command list nor a swapchain, so an empty list
+	//is what lets these round trips ride a real frame. The uploads and pulls themselves are queued on the
+	//device, not recorded into this list.
+	//
+	//The C form asserted that a ListCommandListRef could be built from it as well; Device::submit builds
+	//that list itself, so there is nothing left here for that assert to have checked.
+
+	c::Bool makeEmptyList(c::Test *t, gfx::Device &dev, gfx::CommandList &emptyList) {
+		return
+			c::Test_assert(t, "createList", dev.createCommandList(4 * c::KIBI, 64, 16, emptyList, true, &t->err)) &&
+			c::Test_assert(t, "beginList", emptyList.begin(true, &t->err)) &&
+			c::Test_assert(t, "endList", emptyList.end(&t->err));
+	}
 }
 
-void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsFormatRoundTrip(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "GraphicsDevice/formatRoundTrip");
+	using namespace oxc;
+	using namespace oxc::gfx;
 
-	const Allocator *alloc = Platform_instance->alloc;
+	c::Test_setModule(t, "GraphicsDevice/formatRoundTrip");
 
-	//submitCommands refuses a submit that carries neither a command list nor a swapchain,
-	// so an empty list is what lets these round trips ride a real frame.
-	//The uploads and pulls themselves are queued on the device, not recorded into this list.
+	Device dev = Device::share(deviceRef);
 
-	CommandListRef *emptyList = NULL;
-	ListCommandListRef lists {};
+	CommandList emptyList;
 
-	if(!(
-		Test_assert(t, "createList", GraphicsDeviceRef_createCommandList(
-			deviceRef, 4 * KIBI, 64, 16, true, &emptyList, &t->err
-		)) &&
-		Test_assert(t, "beginList", CommandListRef_begin(emptyList, true, U64_MAX, &t->err)) &&
-		Test_assert(t, "endList", CommandListRef_end(emptyList, &t->err)) &&
-		Test_assert(t, "listRef", ListCommandListRef_createRefConst(&emptyList, 1, &lists, &t->err))
-	)) {
-		RefPtr_dec(&emptyList);
+	if(!makeEmptyList(t, dev, emptyList))
 		return;
-	}
 
 	//A multiple of 4 in both axes so every block compressed format covers whole blocks.
 
-	const U16 w = 8, h = 8;
+	const c::U16 w = 8, h = 8;
 
-	const U64 formatCount = sizeof(testRoundTripFormats) / sizeof(testRoundTripFormats[0]);
-	U32 roundTripped = 0;
+	const c::U64 formatCount = sizeof(testRoundTripFormats) / sizeof(testRoundTripFormats[0]);
+	c::U32 roundTripped = 0;
 
-	for (U64 i = 0; i < formatCount; ++i)
-		if(Test_roundTripFormat(t, deviceRef, &lists, testRoundTripFormats[i], w, h, i))
+	for (c::U64 i = 0; i < formatCount; ++i)
+		if(roundTripFormat(t, dev, emptyList, testRoundTripFormats[i], w, h, i))
 			++roundTripped;
 
 	//Every format in the table is required, so anything less than all of them is a failure rather than a skip.
 
-	Test_assert(t, "roundTrippedAll", roundTripped == formatCount);
+	c::Test_assert(t, "roundTrippedAll", roundTripped == formatCount);
 
-	Log_debugLnx("-- formatRoundTrip: %" PRIu32 " / %" PRIu64 " formats round tripped", roundTripped, formatCount);
+	Log::debugLn(
+		*dev.alloc(), "-- formatRoundTrip: %" PRIu32 " / %" PRIu64 " formats round tripped",
+		roundTripped, formatCount
+	);
 
 	//Optional formats, each paired with the capability bit that promises it.
 	//Unlike the table above these are skipped when the device doesn't claim them, which is a legitimate answer
@@ -240,11 +241,11 @@ void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef) {
 	//When the bit IS claimed the round trip has to work,
 	// and that is what turns the claim into something checkable instead of a bit reporting on itself.
 
-	const GraphicsDeviceCapabilities caps = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities;
+	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
 
-	U32 optionalRun = 0, optionalSkipped = 0;
+	c::U32 optionalRun = 0, optionalSkipped = 0;
 
-	for (U64 i = 0; i < sizeof(testOptionalFormats) / sizeof(testOptionalFormats[0]); ++i) {
+	for (c::U64 i = 0; i < sizeof(testOptionalFormats) / sizeof(testOptionalFormats[0]); ++i) {
 
 		const TestOptionalFormat opt = testOptionalFormats[i];
 
@@ -253,19 +254,17 @@ void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef) {
 			continue;
 		}
 
-		if(Test_assert(t, "optionalFormat", Test_roundTripFormat(
-			t, deviceRef, &lists, opt.formatId, w, h, formatCount + i
+		if(c::Test_assert(t, "optionalFormat", roundTripFormat(
+			t, dev, emptyList, opt.formatId, w, h, formatCount + i
 		)))
 			++optionalRun;
 	}
 
-	Log_debugLnx(
+	Log::debugLn(
+		*dev.alloc(),
 		"-- formatRoundTrip: %" PRIu32 " optional formats round tripped, %" PRIu32 " not claimed by this adapter",
 		optionalRun, optionalSkipped
 	);
-
-	ListCommandListRef_free(&lists, alloc);
-	RefPtr_dec(&emptyList);
 }
 
 //35. Texture shape gates.
@@ -273,56 +272,59 @@ void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef) {
 //Each one is a TODO in UnifiedTexture_create.
 //When one is lifted the matching assert here fails and points at what to update.
 
-void Test_graphicsTextureShapes(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsTextureShapes(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "GraphicsDevice/textureShapes");
+	using namespace oxc;
+	using namespace oxc::gfx;
 
-	const Allocator *alloc = Platform_instance->alloc;
-	const CharString name = CharString_createRefCStrConst("Shape gate");
+	c::Test_setModule(t, "GraphicsDevice/textureShapes");
+
+	Device dev = Device::share(deviceRef);
+	const c::Allocator *alloc = dev.alloc();
 
 	//Helper shaped inline rather than as a function: each case wants a different size of initial data, and
 	//createTexture insists the data length matches the format size exactly before it reaches the shape gates.
 
-	const ETextureFormatId formatId = ETextureFormatId_RGBA8;
-	const ETextureFormat format = ETextureFormatId_unpack[formatId];
+	const c::ETextureFormatId formatId = c::ETextureFormatId_RGBA8;
+	const c::ETextureFormat format = c::ETextureFormatId_unpack[formatId];
 
 	//3D is refused outright today, even though the descriptor layer already understands Texture3D views.
 
 	{
-		const U64 size = ETextureFormat_getSize(format, 4, 4, 4);
-		Buffer dat = Buffer_createNull();
+		const c::U64 size = c::ETextureFormat_getSize(format, 4, 4, 4);
+		c::Buffer dat = c::Buffer_createNull();
 
-		if (Test_assert(t, "alloc3D", Buffer_createEmptyBytes(size, alloc, &dat, &t->err))) {
+		if (c::Test_assert(t, "alloc3D", c::Buffer_createEmptyBytes(size, alloc, &dat, &t->err))) {
 
-			DeviceTextureRef *tex = NULL;
+			DeviceTexture tex;
 
-			Test_assert(t, "refuse3D", !GraphicsDeviceRef_createTexture(
-				deviceRef, ETextureType_3D, formatId, EGraphicsResourceFlag_CPUBacked,
-				4, 4, 4, NULL, &name, &dat, &tex, NULL
+			c::Test_assert(t, "refuse3D", !dev.createTexture(
+				c::ETextureType_3D, formatId, c::EGraphicsResourceFlag_CPUBacked,
+				4, 4, 4, "Shape gate", &dat, tex, nullptr, nullptr
 			));
 
-			Test_assert(t, "refuse3DNoLeak", !tex);
-			Buffer_free(&dat, alloc);
+			c::Test_assert(t, "refuse3DNoLeak", !tex.valid());
+			c::Buffer_free(&dat, alloc);
 		}
 	}
 
 	//Cube is equally refused, and for the same reason (only 2D passes the type gate).
 
 	{
-		const U64 size = ETextureFormat_getSize(format, 4, 4, 1);
-		Buffer dat = Buffer_createNull();
+		const c::U64 size = c::ETextureFormat_getSize(format, 4, 4, 1);
+		c::Buffer dat = c::Buffer_createNull();
 
-		if (Test_assert(t, "allocCube", Buffer_createEmptyBytes(size, alloc, &dat, &t->err))) {
+		if (c::Test_assert(t, "allocCube", c::Buffer_createEmptyBytes(size, alloc, &dat, &t->err))) {
 
-			DeviceTextureRef *tex = NULL;
+			DeviceTexture tex;
 
-			Test_assert(t, "refuseCube", !GraphicsDeviceRef_createTexture(
-				deviceRef, ETextureType_Cube, formatId, EGraphicsResourceFlag_CPUBacked,
-				4, 4, 1, NULL, &name, &dat, &tex, NULL
+			c::Test_assert(t, "refuseCube", !dev.createTexture(
+				c::ETextureType_Cube, formatId, c::EGraphicsResourceFlag_CPUBacked,
+				4, 4, 1, "Shape gate", &dat, tex, nullptr, nullptr
 			));
 
-			Test_assert(t, "refuseCubeNoLeak", !tex);
-			Buffer_free(&dat, alloc);
+			c::Test_assert(t, "refuseCubeNoLeak", !tex.valid());
+			c::Buffer_free(&dat, alloc);
 		}
 	}
 
@@ -330,20 +332,20 @@ void Test_graphicsTextureShapes(Test *t, GraphicsDeviceRef *deviceRef) {
 	//distinct path from refuse3D even though both end in a rejection.
 
 	{
-		const U64 size = ETextureFormat_getSize(format, 4, 4, 2);
-		Buffer dat = Buffer_createNull();
+		const c::U64 size = c::ETextureFormat_getSize(format, 4, 4, 2);
+		c::Buffer dat = c::Buffer_createNull();
 
-		if (Test_assert(t, "allocArray", Buffer_createEmptyBytes(size, alloc, &dat, &t->err))) {
+		if (c::Test_assert(t, "allocArray", c::Buffer_createEmptyBytes(size, alloc, &dat, &t->err))) {
 
-			DeviceTextureRef *tex = NULL;
+			DeviceTexture tex;
 
-			Test_assert(t, "refuse2DArray", !GraphicsDeviceRef_createTexture(
-				deviceRef, ETextureType_2D, formatId, EGraphicsResourceFlag_CPUBacked,
-				4, 4, 2, NULL, &name, &dat, &tex, NULL
+			c::Test_assert(t, "refuse2DArray", !dev.createTexture(
+				c::ETextureType_2D, formatId, c::EGraphicsResourceFlag_CPUBacked,
+				4, 4, 2, "Shape gate", &dat, tex, nullptr, nullptr
 			));
 
-			Test_assert(t, "refuse2DArrayNoLeak", !tex);
-			Buffer_free(&dat, alloc);
+			c::Test_assert(t, "refuse2DArrayNoLeak", !tex.valid());
+			c::Buffer_free(&dat, alloc);
 		}
 	}
 
@@ -351,35 +353,35 @@ void Test_graphicsTextureShapes(Test *t, GraphicsDeviceRef *deviceRef) {
 	//thinks of a 2D texture as having no depth.
 
 	{
-		DeviceTextureRef *tex = NULL;
-		Buffer empty = Buffer_createNull();
+		DeviceTexture tex;
+		c::Buffer empty = c::Buffer_createNull();
 
-		Test_assert(t, "refuseZeroLength", !GraphicsDeviceRef_createTexture(
-			deviceRef, ETextureType_2D, formatId, EGraphicsResourceFlag_CPUBacked,
-			4, 4, 0, NULL, &name, &empty, &tex, NULL
+		c::Test_assert(t, "refuseZeroLength", !dev.createTexture(
+			c::ETextureType_2D, formatId, c::EGraphicsResourceFlag_CPUBacked,
+			4, 4, 0, "Shape gate", &empty, tex, nullptr, nullptr
 		));
 
-		Test_assert(t, "refuseZeroWidth", !GraphicsDeviceRef_createTexture(
-			deviceRef, ETextureType_2D, formatId, EGraphicsResourceFlag_CPUBacked,
-			0, 4, 1, NULL, &name, &empty, &tex, NULL
+		c::Test_assert(t, "refuseZeroWidth", !dev.createTexture(
+			c::ETextureType_2D, formatId, c::EGraphicsResourceFlag_CPUBacked,
+			0, 4, 1, "Shape gate", &empty, tex, nullptr, nullptr
 		));
 
-		Test_assert(t, "refuseZeroNoLeak", !tex);
+		c::Test_assert(t, "refuseZeroNoLeak", !tex.valid());
 	}
 
 	//Above the documented limits of 16384 / 16384 / 256.
 	//It uses no initial data, so the size check can't be what rejects it; the extent gate is.
 
 	{
-		DeviceTextureRef *tex = NULL;
-		Buffer empty = Buffer_createNull();
+		DeviceTexture tex;
+		c::Buffer empty = c::Buffer_createNull();
 
-		Test_assert(t, "refuseTooWide", !GraphicsDeviceRef_createTexture(
-			deviceRef, ETextureType_2D, formatId, EGraphicsResourceFlag_CPUBacked,
-			16385, 4, 1, NULL, &name, &empty, &tex, NULL
+		c::Test_assert(t, "refuseTooWide", !dev.createTexture(
+			c::ETextureType_2D, formatId, c::EGraphicsResourceFlag_CPUBacked,
+			16385, 4, 1, "Shape gate", &empty, tex, nullptr, nullptr
 		));
 
-		Test_assert(t, "refuseTooWideNoLeak", !tex);
+		c::Test_assert(t, "refuseTooWideNoLeak", !tex.valid());
 	}
 }
 
@@ -388,131 +390,117 @@ void Test_graphicsTextureShapes(Test *t, GraphicsDeviceRef *deviceRef) {
 //resources (command allocators, the globals buffer, the staging and readback rings, resourcesInFlight) are
 //reused rather than touched once.
 
-void Test_graphicsFramesInFlight(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsFramesInFlight(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "GraphicsDevice/framesInFlight");
+	using namespace oxc;
+	using namespace oxc::gfx;
 
-	const Allocator *alloc = Platform_instance->alloc;
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	c::Test_setModule(t, "GraphicsDevice/framesInFlight");
+
+	Device dev = Device::share(deviceRef);
+	const c::Allocator *alloc = dev.alloc();
+
+	//submitId, fifId and pendingPulls are the frame ring's own bookkeeping, which is exactly what this
+	//module is about and is not something graphics.hpp exposes, so they come off the device directly.
+
+	const c::GraphicsDevice *device = c::deviceOf(dev.handle());
 
 	//Read the live count rather than assuming MAX_FRAMES_IN_FLIGHT: it is 2 on android and 3 elsewhere.
 
-	const U8 fif = device->framesInFlight;
+	const c::U8 fif = dev.framesInFlight();
 
-	Test_assert(t, "framesInFlightSane", fif >= 2 && fif <= MAX_FRAMES_IN_FLIGHT);
+	c::Test_assert(t, "framesInFlightSane", fif >= 2 && fif <= MAX_FRAMES_IN_FLIGHT);
 
 	//As in formatRoundTrip: a submit needs to carry something, so every frame below rides this empty list.
 
-	CommandListRef *emptyList = NULL;
-	ListCommandListRef lists {};
+	CommandList emptyList;
 
-	if(!(
-		Test_assert(t, "createList", GraphicsDeviceRef_createCommandList(
-			deviceRef, 4 * KIBI, 64, 16, true, &emptyList, &t->err
-		)) &&
-		Test_assert(t, "beginList", CommandListRef_begin(emptyList, true, U64_MAX, &t->err)) &&
-		Test_assert(t, "endList", CommandListRef_end(emptyList, &t->err)) &&
-		Test_assert(t, "listRef", ListCommandListRef_createRefConst(&emptyList, 1, &lists, &t->err))
-	)) {
-		RefPtr_dec(&emptyList);
+	if(!makeEmptyList(t, dev, emptyList))
 		return;
-	}
 
-	const U64 startSubmit = device->submitId;
+	const c::U64 startSubmit = device->submitId;
 
 	//Enough submits to wrap the ring more than twice, so a frame index is reused while an earlier one is
 	//still being retired.
 
-	const U32 submits = (U32) fif * 3;
+	const c::U32 submits = (c::U32) fif * 3;
 
-	for (U32 i = 0; i < submits; ++i) {
-
-		if(!Test_assert(t, "cycleSubmit", GraphicsDeviceRef_submitCommands(
-			deviceRef, &lists, NULL, 0, 0, &t->err
-		)))
+	for (c::U32 i = 0; i < submits; ++i)
+		if(!c::Test_assert(t, "cycleSubmit", dev.submit({ &emptyList }, {}, 0, 0, &t->err)))
 			break;
-	}
 
-	Test_assert(t, "cycleWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+	c::Test_assert(t, "cycleWait", dev.wait(&t->err));
 
 	//submitId advances once per submit, and fifId must land back inside the ring.
 
-	Test_assert(t, "submitIdAdvanced", device->submitId == startSubmit + submits);
-	Test_assert(t, "fifIdInRange", device->fifId < fif);
+	c::Test_assert(t, "submitIdAdvanced", device->submitId == startSubmit + submits);
+	c::Test_assert(t, "fifIdInRange", device->fifId < fif);
 
 	//Uploads across consecutive frames: each iteration creates a CPU backed texture with a distinct pattern
 	//and pulls it back in the same frame, so the staging and readback rings are exercised on every frame
 	//index rather than just the first.
 
-	const CharString name = CharString_createRefCStrConst("Frame ring texture");
-	U32 verified = 0;
+	c::U32 verified = 0;
 
-	for (U32 i = 0; i < (U32) fif * 2; ++i) {
+	for (c::U32 i = 0; i < (c::U32) fif * 2; ++i) {
 
-		const U32 pattern = 0xA5000000u | i;
+		const c::U32 pattern = 0xA5000000u | i;
 
-		Buffer dat = Buffer_createNull();
+		c::Buffer dat = c::Buffer_createNull();
 
-		if(!Test_assert(t, "ringAlloc", Buffer_createUninitializedBytes(4 * 4 * 4, alloc, &dat, &t->err)))
+		if(!c::Test_assert(t, "ringAlloc", c::Buffer_createUninitializedBytes(4 * 4 * 4, alloc, &dat, &t->err)))
 			break;
 
-		for(U64 j = 0; j < 4 * 4; ++j)
-			((U32*)dat.ptrNonConst)[j] = pattern;
+		for(c::U64 j = 0; j < 4 * 4; ++j)
+			((c::U32*)dat.ptrNonConst)[j] = pattern;
 
-		DeviceTextureRef *tex = NULL;
+		DeviceTexture tex;
 
-		Bool ok = Test_assert(t, "ringCreate", GraphicsDeviceRef_createTexture(
-			deviceRef, ETextureType_2D, ETextureFormatId_RGBA8, EGraphicsResourceFlag_CPUBacked,
-			4, 4, 1, NULL, &name, &dat, &tex, &t->err
+		c::Bool ok = c::Test_assert(t, "ringCreate", dev.createTexture(
+			c::ETextureType_2D, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_CPUBacked,
+			4, 4, 1, "Frame ring texture", &dat, tex, nullptr, &t->err
 		));
 
 		if(!ok) {
-			Buffer_free(&dat, alloc);
+			c::Buffer_free(&dat, alloc);
 			break;
 		}
 
-		U32 pulled = 0;
+		c::U32 pulled = 0;
 
-		ok = Test_assert(t, "ringPull", DeviceTextureRef_pullRegion(
-			tex, 0, 0, 0, 0, 0, 0, Test_pullCompleted, &pulled, &t->err
-		));
+		ok = c::Test_assert(t, "ringPull", tex.pullRegion(0, 0, 0, 0, 0, 0, pullCompleted, &pulled, &t->err));
 
 		if(ok)
-			ok = Test_assert(t, "ringSubmit", GraphicsDeviceRef_submitCommands(
-				deviceRef, &lists, NULL, 0, 0, &t->err
-			));
+			ok = c::Test_assert(t, "ringSubmit", dev.submit({ &emptyList }, {}, 0, 0, &t->err));
 
 		if(ok)
-			ok = Test_assert(t, "ringWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+			ok = c::Test_assert(t, "ringWait", dev.wait(&t->err));
 
 		//Verify from cpuData rather than from the callback: the pattern proves this frame's own upload came
 		//back, not a leftover from the previous frame index.
 
 		if (ok && pulled == 1) {
 
-			const DeviceTexture *texPtr = DeviceTextureRef_ptr(tex);
+			const c::DeviceTexture *texPtr = tex.data();
 
-			if(Buffer_length(texPtr->cpuData) >= sizeof(U32) && ((const U32*)texPtr->cpuData.ptr)[0] == pattern)
+			if(
+				c::Buffer_length(texPtr->cpuData) >= sizeof(c::U32) &&
+				((const c::U32*)texPtr->cpuData.ptr)[0] == pattern
+			)
 				++verified;
 		}
-
-		RefPtr_dec(&tex);
 	}
 
-	Test_assert(t, "ringRoundTrips", verified == (U32) fif * 2);
+	c::Test_assert(t, "ringRoundTrips", verified == (c::U32) fif * 2);
 
 	//Readback reservations are idempotent in the shrinking direction and reject a null device; doing this
 	//after the ring has wrapped means the reserve hits an already populated readback buffer.
 
-	Test_assert(t, "reserveGrow", GraphicsDeviceRef_reserveReadback(deviceRef, 64 * KIBI, &t->err));
-	Test_assert(t, "reserveNoShrink", GraphicsDeviceRef_reserveReadback(deviceRef, 0, &t->err));
-	Test_assert(t, "reserveNullDevice", !GraphicsDeviceRef_reserveReadback(NULL, 0, NULL));
+	c::Test_assert(t, "reserveGrow", dev.reserveReadback(64 * c::KIBI, &t->err));
+	c::Test_assert(t, "reserveNoShrink", dev.reserveReadback(0, &t->err));
+	c::Test_assert(t, "reserveNullDevice", !c::GraphicsDeviceRef_reserveReadback(nullptr, 0, nullptr));
 
 	//The ring must be drained by the wait above; nothing should still be pending.
 
-	Test_assert(t, "noPendingPulls", !device->pendingPulls.length);
-
-	ListCommandListRef_free(&lists, alloc);
-	RefPtr_dec(&emptyList);
+	c::Test_assert(t, "noPendingPulls", !device->pendingPulls.length);
 }
-} }

@@ -23,39 +23,15 @@
 //Pipeline layout state that is not a descriptor: push constants, and the register space OxC3 reserves
 //for its own per frame globals.
 //Split out of test_graphics_bindful.c, which had grown to 24 modules in one file.
+//
+//Written against the C++ layer (graphics/graphics.hpp): every handle releases itself, so there is no clean
+//label, no goto chain and no ordered list of RefPtr_dec calls to keep in step with the locals.
+
+#include "test_graphics_shared.hpp"
 
 namespace oxc { namespace c {
-	#include "types/base/string_base.h"
-	#include "types/container/list_basic_types.h"
-	#include "types/test/test.h"
-	#include "formats/oiSH/sh_file.h"
-	#include "formats/oiSH/sh_registers.h"
-	#include "platforms/platform.h"
-	#include "graphics/generic/blas.h"
-	#include "graphics/generic/command_list.h"
-	#include "graphics/generic/commands.h"
-	#include "graphics/generic/depth_stencil.h"
-	#include "graphics/generic/descriptor_heap.h"
-	#include "graphics/generic/descriptor_layout.h"
-	#include "graphics/generic/descriptor_table.h"
-	#include "graphics/generic/device.h"
 	#include "graphics/generic/device_buffer.h"
-	#include "graphics/generic/device_info.h"
-	#include "graphics/generic/device_texture.h"
-	#include "graphics/generic/graphics_types.h"
-	#include "graphics/generic/instance.h"
-	#include "graphics/generic/pipeline.h"
-	#include "graphics/generic/pipeline_layout.h"
-	#include "graphics/generic/render_texture.h"
-	#include "graphics/generic/sampler.h"
-	#include "graphics/generic/tlas.h"
-	#include "test_graphics_shared.h"
-} }
-
-//Same namespace the C headers landed in, so the definitions here match the declarations in
-//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
-
-namespace oxc { namespace c {
+}}
 
 // -- 63. Push constants ---------------------------------------------------------
 
@@ -64,152 +40,152 @@ namespace oxc { namespace c {
 // them on D3D12, which is why the backends re-emit at the work op rather than at the write.
 //Two dispatches with different constants and no rebinding between them prove the re-emit really happens.
 
-typedef struct TestBindfulPushData {
-	U32 scale, bias, xorMask, offset;
-} TestBindfulPushData;
+namespace {
 
-void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef) {
+	struct TestBindfulPushData {
+		oxc::c::U32 scale, bias, xorMask, offset;
+	};
+}
 
-	Test_setModule(t, "Bindful/pushConstants");
+extern "C" void Test_graphicsBindfulPushConstants(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	const Allocator *alloc = Platform_instance->alloc;
+	using namespace oxc;
+	using namespace oxc::gfx;
+	using namespace oxc::gfxtest;
 
-	DescriptorHeapRef *heap = NULL;
-	DescriptorLayoutRef *layout = NULL;
-	DescriptorTableRef *table = NULL;
-	PipelineLayoutRef *pipelineLayout = NULL;
-	PipelineRef *pipeline = NULL;
-	DeviceBufferRef *output = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
+	c::Error *e_rr = &t->err;
 
-	SHFile file {};
-	DescriptorLayoutInfo layoutInfo {};
-	DescriptorBinding pushConstants {};
+	c::Test_setModule(t, "Bindful/pushConstants");
 
-	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_pushconst.oiSH", &file)) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping push constant tests");
+	Device dev = Device::share(deviceRef);
+
+	OwnedSHFile file(dev.alloc());
+
+	if (!loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_pushconst.oiSH", file.list)) {
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping push constant tests");
 		return;
 	}
 
-	const U32 entryId = TestShaders_entry(t, deviceRef, &file, "main");
+	const c::U32 entryId = entry(t, dev, file.list, "main");
 
-	if(entryId == U32_MAX)
-		goto clean;
+	if(entryId == c::U32_MAX)
+		return;
 
 	//Matched by shape rather than by name, which is what the engine's own copy shaders do: a global struct
 	// becomes the implicit $Globals cbuffer on DXIL, so its register never carries the variable's name.
 	//Vulkan reflects it as a real push constant register, so both backends land on the same binding here.
 
-	if(!Test_assert(t, "detectLayout", GraphicsDeviceRef_detectLayoutFromEntry(
-		deviceRef, &file, entryId, EDescriptorLayoutFlags_None,
-		EDetectDescriptorLayoutFlags_AssumePushConstants,
-		NULL, NULL, &pushConstants, &layoutInfo, NULL, &t->err
+	OwnedLayoutInfo layoutInfo(dev.alloc());
+	c::DescriptorBinding pushConstants{};
+
+	if(!c::Test_assert(t, "detectLayout", dev.detectLayout(
+		file.list, entryId, layoutInfo.list, nullptr, &pushConstants, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, c::EDetectDescriptorLayoutFlags_AssumePushConstants, e_rr
 	)))
-		goto clean;
+		return;
 
-	if (!Test_assert(t, "detectedPushConstants", pushConstants.count != 0))
-		goto clean;
+	if (!c::Test_assert(t, "detectedPushConstants", pushConstants.count != 0))
+		return;
 
-	Test_assert(t, "pushConstantSize", pushConstants.constantBufferSize == sizeof(TestBindfulPushData));
+	c::Test_assert(t, "pushConstantSize", pushConstants.constantBufferSize == sizeof(TestBindfulPushData));
 
-	CharString name = CharString_createRefCStrConst("Push constant layout");
+	DescriptorLayout layout;
 
-	if(!Test_assert(t, "layoutCreate", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &layoutInfo, &name, &layout, &t->err
+	if(!c::Test_assert(t, "layoutCreate", dev.createDescriptorLayout(
+		layoutInfo.list, "Push constant layout", layout, e_rr
 	)))
-		goto clean;
+		return;
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	DescriptorHeapInfo heapInfo = { .maxBuffersRW = 1, .maxDescriptorTables = 1 };
-	name = CharString_createRefCStrConst("Push constant heap");
+	c::DescriptorHeapInfo heapInfo{};
+	heapInfo.maxBuffersRW = 1;
+	heapInfo.maxDescriptorTables = 1;
 
-	if(!Test_assert(t, "heapCreate", GraphicsDeviceRef_createDescriptorHeap(
-		deviceRef, &heapInfo, &name, &heap, &t->err
+	DescriptorHeap heap;
+
+	if(!c::Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Push constant heap", heap, e_rr)))
+		return;
+
+	DescriptorTable table;
+
+	if(!c::Test_assert(t, "tableCreate", heap.createTable(
+		layout, "Push constant table", table, (c::EDescriptorTableFlags) 0, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Push constant table");
+	DeviceBuffer output;
 
-	if(!Test_assert(t, "tableCreate", DescriptorHeapRef_createDescriptorTable(
-		heap, layout, EDescriptorTableFlags_None, &name, &table, &t->err
+	if(!c::Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Push constant output", 128 * sizeof(c::U32), output, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	name = CharString_createRefCStrConst("Push constant output");
+	//The table holds no reference of its own, so the descriptor goes back before the buffer does.
 
-	if(!Test_assert(t, "outputCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 128 * sizeof(U32), &output, &t->err
+	struct TableGuard {
+		DescriptorTable &table;
+		~TableGuard() { (void) table.unset(0, 0, 1, nullptr); }
+	} tableGuard{ table };
+
+	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, nullptr, 0);
+
+	c::Test_assert(t, "setOutput", table.setByName("output", outputDesc, 0, false, e_rr));
+
+	c::PipelineLayoutInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.bindings = layout.handle();
+	pipelineLayoutInfo.pushConstants = pushConstants;
+
+	PipelineLayout pipelineLayout;
+
+	if(!c::Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Push constant pipeline layout", pipelineLayout, e_rr
 	)))
-		goto clean;
+		return;
 
-	const Descriptor outputDesc = Descriptor_buffer(output, 0, 0, NULL, 0);
-	const CharString outputName = CharString_createRefCStrConst("output");
+	Pipeline pipeline;
 
-	Test_assert(t, "setOutput", DescriptorTableRef_setDescriptorByName(table, &outputName, 0, false, &outputDesc, &t->err));
+	if(!c::Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		file.list, "main", "Push constant pipeline", pipeline, {}, &pipelineLayout, e_rr
+	)))
+		return;
 
-	PipelineLayoutInfo pipelineLayoutInfo = {
-		.bindings = layout, .pushConstants = pushConstants
+	CommandList commandList, emptyList;
+
+	if(!c::Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)))
+		return;
+
+	if(!c::Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
+
+	c::Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	c::Test_assert(t, "endEmpty", emptyList.end(e_rr));
+
+	const c::Transition transition = {
+		.resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
 	};
 
-	name = CharString_createRefCStrConst("Push constant pipeline layout");
-
-	if(!Test_assert(t, "pipelineLayoutCreate", GraphicsDeviceRef_createPipelineLayout(
-		deviceRef, &pipelineLayoutInfo, &name, &pipelineLayout, &t->err
-	)))
-		goto clean;
-
-	name = CharString_createRefCStrConst("Push constant pipeline");
-
-	if(!Test_assert(t, "pipelineCreate", GraphicsDeviceRef_createPipelineCompute(
-		deviceRef, &file, &name, entryId, NULL, EPipelineFlags_None, pipelineLayout, &pipeline, &t->err
-	)))
-		goto clean;
-
-	if(!Test_assert(t, "listCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
-	)))
-		goto clean;
-
-	if(!Test_assert(t, "emptyListCreate", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
-
-	Test_assert(t, "beginEmpty", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmpty", CommandListRef_end(emptyList, &t->err));
-
-	const Transition transition = {
-		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
-	};
-
-	ListTransition transitionList {};
-	ListTransition_createRefConst(&transition, 1, &transitionList, NULL);
+	c::Test_assert(t, "begin", commandList.begin(true, e_rr));
 
 	//A dispatch without the constants written has to be refused: the range would hold whatever the last
-	// pipeline left in it, which is exactly the garbage read this validation exists to prevent
+	// pipeline left in it, which is exactly the garbage read this validation exists to prevent.
+	//A partial write is refused for the same reason, and both live in their own scope because a refused
+	// work op hides the whole scope.
 
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+	{
+		CommandScope scope = commandList.scope({ transition }, 1, {}, e_rr);
+		c::Test_assert(t, "scopeNeg", (c::Bool) scope);
+		c::Test_assert(t, "bindHeapNeg", scope.bindDescriptorHeap(heap, e_rr));
+		c::Test_assert(t, "bindTableNeg", scope.bindDescriptorTable(table, e_rr));
+		c::Test_assert(t, "bindPipelineNeg", scope.setComputePipeline(pipeline, e_rr));
+		c::Test_assert(t, "dispatchWithoutConstants", !scope.dispatch1D(1, nullptr));
 
-	Test_assert(t, "scopeNeg", CommandListRef_startScope(commandList, &transitionList, 1, NULL, &t->err));
-	Test_assert(t, "bindHeapNeg", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "bindTableNeg", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
-	Test_assert(t, "bindPipelineNeg", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
-	Test_assert(t, "dispatchWithoutConstants", !CommandListRef_dispatch1D(commandList, 1, NULL));
+		const c::U32 tooSmall = 4;
 
-	//A partial write is refused too, for the same reason: the rest of the range would be stale
-
-	const U32 tooSmall = 4;
-
-	Test_assert(t, "setTooSmall", CommandListRef_setPushConstants(
-		commandList, Buffer_createRefConst(&tooSmall, sizeof(tooSmall)), &t->err
-	));
-
-	Test_assert(t, "dispatchWrongSize", !CommandListRef_dispatch1D(commandList, 1, NULL));
-	Test_assert(t, "scopeNegEnd", CommandListRef_endScope(commandList, &t->err));
+		c::Test_assert(t, "setTooSmall", scope.setPushConstants(tooSmall, e_rr));
+		c::Test_assert(t, "dispatchWrongSize", !scope.dispatch1D(1, nullptr));
+		c::Test_assert(t, "scopeNegEnd", scope.end(e_rr));
+	}
 
 	//Two dispatches, different constants, nothing rebound in between: the second set only lands if the
 	// backend re-emits at the work op rather than once at the bind
@@ -219,63 +195,39 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef) {
 	const TestBindfulPushData first = { .scale = 3, .bias = 7, .xorMask = 0, .offset = 0 };
 	const TestBindfulPushData second = { .scale = 5, .bias = 1, .xorMask = 0xFFu, .offset = 64 };
 
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &transitionList, 2, NULL, &t->err));
-	Test_assert(t, "bindHeap", CommandListRef_bindDescriptorHeap(commandList, heap, &t->err));
-	Test_assert(t, "bindTable", CommandListRef_bindDescriptorTable(commandList, table, &t->err));
-	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
+	{
+		CommandScope scope = commandList.scope({ transition }, 2, {}, e_rr);
+		c::Test_assert(t, "scope", (c::Bool) scope);
+		c::Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
+		c::Test_assert(t, "bindTable", scope.bindDescriptorTable(table, e_rr));
+		c::Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
+		c::Test_assert(t, "setFirst", scope.setPushConstants(first, e_rr));
+		c::Test_assert(t, "dispatchFirst", scope.dispatch1D(1, e_rr));
+		c::Test_assert(t, "setSecond", scope.setPushConstants(second, e_rr));
+		c::Test_assert(t, "dispatchSecond", scope.dispatch1D(1, e_rr));
+		c::Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
 
-	Test_assert(t, "setFirst", CommandListRef_setPushConstants(
-		commandList, Buffer_createRefConst(&first, sizeof(first)), &t->err
-	));
+	c::Test_assert(t, "end", commandList.end(e_rr));
 
-	Test_assert(t, "dispatchFirst", CommandListRef_dispatch1D(commandList, 1, &t->err));
-
-	Test_assert(t, "setSecond", CommandListRef_setPushConstants(
-		commandList, Buffer_createRefConst(&second, sizeof(second)), &t->err
-	));
-
-	Test_assert(t, "dispatchSecond", CommandListRef_dispatch1D(commandList, 1, &t->err));
-
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
-
-	if (TestShaders_submitAndWait(t, deviceRef, commandList))
-		if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+	if (submitAndWait(t, dev, commandList))
+		if (pullBuffer(t, dev, emptyList, output)) {
 
 			//Each dispatch wrote its own half, so BOTH sets have to be visible: that is what proves the
 			// second write reached the GPU instead of the first one being reused. Sharing one range instead
 			// would just race the two dispatches, which says nothing about the push constants.
 
-			const U32 *values = (const U32*) DeviceBufferRef_ptr(output)->cpuData.ptr;
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
-			Bool allMatch = true;
+			c::Bool allMatch = true;
 
-			for(U32 i = 0; i < 64; ++i) {
+			for(c::U32 i = 0; i < 64; ++i) {
 				allMatch &= values[i] == ((i * first.scale + first.bias) ^ first.xorMask);
 				allMatch &= values[i + 64] == ((i * second.scale + second.bias) ^ second.xorMask);
 			}
 
-			Test_assert(t, "pushConstantResults", allMatch);
+			c::Test_assert(t, "pushConstantResults", allMatch);
 		}
-
-	}
-
-clean:
-
-	if(table)
-		DescriptorTableRef_unsetDescriptors(table, 0, 0, 1, NULL);
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&pipelineLayout);
-	RefPtr_dec(&output);
-	RefPtr_dec(&table);
-	RefPtr_dec(&layout);
-	RefPtr_dec(&heap);
-
-	DescriptorLayoutInfo_free(&layoutInfo, alloc);
-	SHFile_free(&file, alloc);
 }
 
 // -- 64. The reserved register space --------------------------------------------
@@ -285,46 +237,47 @@ clean:
 //It matters now that anyone can build a layout: the globals used to sit at b0 space0, which is the first
 // thing someone writing a constant buffer reaches for, and nothing would have told them they collided.
 
-void Test_graphicsBindfulReservedSpace(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsBindfulReservedSpace(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Bindful/reservedSpace");
+	using namespace oxc;
+	using namespace oxc::gfx;
 
-	DescriptorLayoutRef *layout = NULL;
+	c::Test_setModule(t, "Bindful/reservedSpace");
+
+	Device dev = Device::share(deviceRef);
 
 	//A layout that is legal in every respect except the space it asks for
 
-	DescriptorBinding reserved = {
-		.registerType = (ESHRegisterType) (ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite),
+	c::DescriptorBinding reserved = {
+		.registerType = (c::ESHRegisterType) (c::ESHRegisterType_ByteAddressBuffer | c::ESHRegisterType_IsWrite),
 		.count = 1,
 		.binding = { .space = OXC3_RESERVED_SPACE, .binding = 0 },
-		.visibility = U32_MAX
+		.visibility = c::U32_MAX
 	};
 
-	const CharString reservedName = CharString_createRefCStrConst("collides");
+	const c::CharString reservedName = c::CharString_createRefCStrConst("collides");
 
-	DescriptorLayoutInfo info {};
-	ListDescriptorBinding_createRefConst(&reserved, 1, &info.bindings, NULL);
-	ListCharString_createRefConst(&reservedName, 1, &info.bindingNames, NULL);
+	c::DescriptorLayoutInfo info{};
+	c::ListDescriptorBinding_createRefConst(&reserved, 1, &info.bindings, nullptr);
+	c::ListCharString_createRefConst(&reservedName, 1, &info.bindingNames, nullptr);
 
-	const CharString name = CharString_createRefCStrConst("Reserved space layout");
+	DescriptorLayout layout;
 
-	Test_assert(t, "reservedSpaceRefused", !GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &info, &name, &layout, NULL
+	c::Test_assert(t, "reservedSpaceRefused", !dev.createDescriptorLayout(
+		info, "Reserved space layout", layout, nullptr
 	));
 
-	Test_assert(t, "reservedSpaceNoLayout", !layout);
+	c::Test_assert(t, "reservedSpaceNoLayout", !layout.valid());
 
 	//The very same binding one space over is fine, which is what proves the space is the only objection
 
 	reserved.binding.space = OXC3_RESERVED_SPACE + 1;
 
-	DescriptorLayoutInfo okInfo {};
-	ListDescriptorBinding_createRefConst(&reserved, 1, &okInfo.bindings, NULL);
-	ListCharString_createRefConst(&reservedName, 1, &okInfo.bindingNames, NULL);
+	c::DescriptorLayoutInfo okInfo{};
+	c::ListDescriptorBinding_createRefConst(&reserved, 1, &okInfo.bindings, nullptr);
+	c::ListCharString_createRefConst(&reservedName, 1, &okInfo.bindingNames, nullptr);
 
-	if(Test_assert(t, "neighbourSpaceAccepted", GraphicsDeviceRef_createDescriptorLayout(
-		deviceRef, &okInfo, &name, &layout, &t->err
-	)))
-		RefPtr_dec(&layout);
+	c::Test_assert(t, "neighbourSpaceAccepted", dev.createDescriptorLayout(
+		okInfo, "Reserved space layout", layout, &t->err
+	));
 }
-} }

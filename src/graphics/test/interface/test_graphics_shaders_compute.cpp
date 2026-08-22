@@ -22,39 +22,15 @@
 //
 //Compute execution: the smallest end to end path, a dispatch whose result is pulled back and checked.
 //Split out of test_graphics_shaders.c, which had grown past 2300 lines.
+//
+//Written against the C++ layer (graphics/graphics.hpp): every handle releases itself, so there is no clean
+//label, no goto chain and no ordered list of RefPtr_dec calls to keep in step with the locals.
+
+#include "test_graphics_shared.hpp"
 
 namespace oxc { namespace c {
-	#include "types/base/string_base.h"
-	#include "types/container/buffer.h"
-	#include "types/container/memory_stream.h"
-	#include "types/container/texture_format.h"
-	#include "types/test/test.h"
-	#include "formats/oiSH/sh_file.h"
-	#include "formats/oiSH/sh_registers.h"
-	#include "platforms/file.h"
-	#include "platforms/logx.h"
-	#include "platforms/platform.h"
-	#include "graphics/generic/bindless_descriptor.h"
-	#include "graphics/generic/blas.h"
-	#include "graphics/generic/command_list.h"
-	#include "graphics/generic/commands.h"
-	#include "graphics/generic/depth_stencil.h"
-	#include "graphics/generic/device.h"
 	#include "graphics/generic/device_buffer.h"
-	#include "graphics/generic/device_info.h"
-	#include "graphics/generic/instance.h"
-	#include "graphics/generic/opacity_micromap.h"
-	#include "graphics/generic/pipeline.h"
-	#include "graphics/generic/render_texture.h"
-	#include "graphics/generic/texture.h"
-	#include "graphics/generic/tlas.h"
-	#include "test_graphics_shared.h"
-} }
-
-//Same namespace the C headers landed in, so the definitions here match the declarations in
-//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
-
-namespace oxc { namespace c {
+}}
 
 // -- 31. Compute execution -------------------------------------------------------
 
@@ -62,217 +38,198 @@ namespace oxc { namespace c {
 //The same shader then runs through dispatchIndirect twice: once from CPU written arguments at an aligned
 // offset and once from arguments another dispatch wrote on the GPU, which is the full indirect pipeline.
 
-void Test_graphicsShaderCompute(Test *t, GraphicsDeviceRef *deviceRef) {
+extern "C" void Test_graphicsShaderCompute(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	Test_setModule(t, "Shaders/compute");
+	using namespace oxc;
+	using namespace oxc::gfx;
+	using namespace oxc::gfxtest;
 
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	c::Error *e_rr = &t->err;
 
-	if (!device->defaultDescriptorTable) {
-		Test_print(t, "Device has no bindless descriptor table, skipping compute execution tests");
+	c::Test_setModule(t, "Shaders/compute");
+
+	//The harness owns this ref, so it is borrowed rather than adopted.
+
+	Device dev = Device::share(deviceRef);
+
+	if (!dev.hasBindlessTable()) {
+		c::Test_print(t, "Device has no bindless descriptor table, skipping compute execution tests");
 		return;
 	}
 
-	const Allocator *alloc = Platform_instance->alloc;
-
-	SHFile writeFile {};
-	SHFile argsFile {};
+	OwnedSHFile writeFile(dev.alloc());
+	OwnedSHFile argsFile(dev.alloc());
 
 	if (
-		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_write.oiSH", &writeFile) ||
-		!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_write_args.oiSH", &argsFile)
+		!loadFile(t, "//OxC3_gtest/test_shaders/test_write.oiSH", writeFile.list) ||
+		!loadFile(t, "//OxC3_gtest/test_shaders/test_write_args.oiSH", argsFile.list)
 	) {
-		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping compute execution tests");
-		SHFile_free(&writeFile, alloc);
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping compute execution tests");
 		return;
 	}
-
-	DeviceBufferRef *output = NULL;
-	DeviceBufferRef *cpuArgs = NULL;
-	DeviceBufferRef *gpuArgs = NULL;
-	PipelineRef *pipelineWrite = NULL;
-	PipelineRef *pipelineArgs = NULL;
-	CommandListRef *commandList = NULL;
-	CommandListRef *emptyList = NULL;
-	PipelineLayoutRef *writeLayout = NULL;
-	PipelineLayoutRef *argsLayout = NULL;
 
 	//128 slots, so the GPU written two group dispatch at the end has room for both groups
 
-	CharString name = CharString_createRefCStrConst("Shader compute output");
+	DeviceBuffer output;
 
-	Test_assert(t, "createOutput", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None,
-		(EGraphicsResourceFlag) (EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked),
-		NULL, &name, 128 * sizeof(U32), &output, &t->err
-	));
-
-	if(!output || !TestShaders_computePipelinePush(t, deviceRef, &writeFile, &pipelineWrite, &writeLayout))
-		goto clean;
-
-	if(!Test_assert(t, "createList", GraphicsDeviceRef_createCommandList(
-		deviceRef, 4 * KIBI, 64, 16, true, &commandList, &t->err
+	if(!c::Test_assert(t, "createOutput", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWriteBindless | c::EGraphicsResourceFlag_CPUBacked),
+		"Shader compute output", 128 * sizeof(c::U32), output, nullptr, e_rr
 	)))
-		goto clean;
+		return;
+
+	Pipeline pipelineWrite;
+	PipelineLayout writeLayout;
+
+	if(!computePipelinePush(t, dev, writeFile.list, pipelineWrite, writeLayout))
+		return;
+
+	CommandList commandList, emptyList;
+
+	if(!c::Test_assert(t, "createList", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)))
+		return;
 
 	//An empty list completes pulls without re-running work, since replaying a dispatch would write the
 	// output buffer a second time
 
-	if(!Test_assert(t, "createEmptyList", GraphicsDeviceRef_createCommandList(
-		deviceRef, KIBI, 16, 8, true, &emptyList, &t->err
-	)))
-		goto clean;
+	if(!c::Test_assert(t, "createEmptyList", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
 
-	Test_assert(t, "beginEmptyList", CommandListRef_begin(emptyList, true, U64_MAX, &t->err));
-	Test_assert(t, "endEmptyList", CommandListRef_end(emptyList, &t->err));
+	c::Test_assert(t, "beginEmptyList", emptyList.begin(true, e_rr));
+	c::Test_assert(t, "endEmptyList", emptyList.end(e_rr));
 
-	//Scoped so the goto above jumps around these rather than into them.
-	{
-	const Transition outputWrite = {
-		.resource = output, .stage = EPipelineStage_Compute, .isWrite = true
+	const c::Transition outputWrite = {
+		.resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
 	};
 
-	ListTransition outputTransition {};
-	ListTransition_createRefConst(&outputWrite, 1, &outputTransition, NULL);
-
-	DeviceBuffer *outputPtr = DeviceBufferRef_ptr(output);
-	const U32 *values = (const U32*) outputPtr->cpuData.ptr;
+	const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
 
 	//Direct dispatch
 
 	//Pushed inside each recording, since the bytes are captured when setPushConstants is recorded rather
 	//than when the list is submitted.
 
-	U32 pushData[4] = { outputPtr->writeHandle, 0xC0DE0000u, 0, 0 };
-	const Buffer pushRef = Buffer_createRefConst(pushData, sizeof(pushData));
+	c::U32 pushData[4] = { output.writeHandle(), 0xC0DE0000u, 0, 0 };
 
-	Test_assert(t, "begin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-	Test_assert(t, "scope", CommandListRef_startScope(commandList, &outputTransition, 1, NULL, &t->err));
-	Test_assert(t, "bindPipeline", CommandListRef_setComputePipeline(commandList, pipelineWrite, &t->err));
-		Test_assert(t, "push", CommandListRef_setPushConstants(commandList, pushRef, &t->err));
-	Test_assert(t, "dispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
-	Test_assert(t, "scopeEnd", CommandListRef_endScope(commandList, &t->err));
-	Test_assert(t, "end", CommandListRef_end(commandList, &t->err));
+	c::Test_assert(t, "begin", commandList.begin(true, e_rr));
 
-	if(!TestShaders_submitAndWait(t, deviceRef, commandList))
-		goto clean;
+	{
+		CommandScope scope = commandList.scope({ outputWrite }, 1, {}, e_rr);
+		c::Test_assert(t, "scope", (c::Bool) scope);
+		c::Test_assert(t, "bindPipeline", scope.setComputePipeline(pipelineWrite, e_rr));
+		c::Test_assert(t, "push", scope.setPushConstants(pushData, e_rr));
+		c::Test_assert(t, "dispatch", scope.dispatch1D(1, e_rr));
+		c::Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
 
-	if (TestShaders_pullBuffer(t, deviceRef, emptyList, output)) {
+	c::Test_assert(t, "end", commandList.end(e_rr));
 
-		U32 matching = 0;
+	if(!submitAndWait(t, dev, commandList))
+		return;
 
-		for(U32 i = 0; i < 64; ++i)
+	if (pullBuffer(t, dev, emptyList, output)) {
+
+		c::U32 matching = 0;
+
+		for(c::U32 i = 0; i < 64; ++i)
 			matching += values[i] == 0xC0DE0000u + i;
 
-		Test_assert(t, "directDispatchValues", matching == 64);
+		c::Test_assert(t, "directDispatchValues", matching == 64);
 	}
 
 	//Indirect dispatch from CPU written arguments; the nonzero offset checks aligned addressing into the buffer
 
-	const U32 cpuArgsData[8] = { 0, 0, 0, 0, 1, 1, 1, 0 };
-	Buffer cpuArgsRef = Buffer_createRefConst(cpuArgsData, sizeof(cpuArgsData));
+	const c::U32 cpuArgsData[8] = { 0, 0, 0, 0, 1, 1, 1, 0 };
+	c::Buffer cpuArgsRef = c::Buffer_createRefConst(cpuArgsData, sizeof(cpuArgsData));
 
-	name = CharString_createRefCStrConst("Shader compute indirect args");
+	DeviceBuffer cpuArgs;
 
-	Test_assert(t, "createCpuArgs", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_Indirect, EGraphicsResourceFlag_None, NULL,
-		&name, &cpuArgsRef, &cpuArgs, &t->err
+	c::Test_assert(t, "createCpuArgs", dev.createBufferData(
+		c::EDeviceBufferUsage_Indirect, c::EGraphicsResourceFlag_None,
+		"Shader compute indirect args", &cpuArgsRef, cpuArgs, nullptr, e_rr
 	));
 
 	if (cpuArgs) {
 
 		pushData[1] = 0xD15C0000u;
 
-		Test_assert(t, "beginIndirect", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
-		Test_assert(t, "scopeIndirect", CommandListRef_startScope(commandList, &outputTransition, 1, NULL, &t->err));
-		Test_assert(t, "bindIndirect", CommandListRef_setComputePipeline(commandList, pipelineWrite, &t->err));
-		Test_assert(t, "push", CommandListRef_setPushConstants(commandList, pushRef, &t->err));
-		Test_assert(t, "dispatchIndirect", CommandListRef_dispatchIndirect(commandList, cpuArgs, 16, &t->err));
-		Test_assert(t, "scopeIndirectEnd", CommandListRef_endScope(commandList, &t->err));
-		Test_assert(t, "endIndirect", CommandListRef_end(commandList, &t->err));
+		c::Test_assert(t, "beginIndirect", commandList.begin(true, e_rr));
 
-		if(
-			TestShaders_submitAndWait(t, deviceRef, commandList) &&
-			TestShaders_pullBuffer(t, deviceRef, emptyList, output)
-		) {
+		{
+			CommandScope scope = commandList.scope({ outputWrite }, 1, {}, e_rr);
+			c::Test_assert(t, "scopeIndirect", (c::Bool) scope);
+			c::Test_assert(t, "bindIndirect", scope.setComputePipeline(pipelineWrite, e_rr));
+			c::Test_assert(t, "push", scope.setPushConstants(pushData, e_rr));
+			c::Test_assert(t, "dispatchIndirect", scope.dispatchIndirect(cpuArgs, 16, e_rr));
+			c::Test_assert(t, "scopeIndirectEnd", scope.end(e_rr));
+		}
 
-			U32 matching = 0;
+		c::Test_assert(t, "endIndirect", commandList.end(e_rr));
 
-			for(U32 i = 0; i < 64; ++i)
+		if(submitAndWait(t, dev, commandList) && pullBuffer(t, dev, emptyList, output)) {
+
+			c::U32 matching = 0;
+
+			for(c::U32 i = 0; i < 64; ++i)
 				matching += values[i] == 0xD15C0000u + i;
 
-			Test_assert(t, "cpuIndirectValues", matching == 64);
+			c::Test_assert(t, "cpuIndirectValues", matching == 64);
 		}
 	}
 
 	//Indirect dispatch from GPU written arguments: one dispatch writes { 2, 1, 1 }, the next consumes it,
 	// so 128 threads have to land and the argument buffer is proven writable and consumable in one submit
 
-	name = CharString_createRefCStrConst("Shader compute GPU args");
+	DeviceBuffer gpuArgs;
 
-	Test_assert(t, "createGpuArgs", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_Indirect,
-		EGraphicsResourceFlag_ShaderWriteBindless,
-		NULL, &name, 32, &gpuArgs, &t->err
+	c::Test_assert(t, "createGpuArgs", dev.createBuffer(
+		c::EDeviceBufferUsage_Indirect, c::EGraphicsResourceFlag_ShaderWriteBindless,
+		"Shader compute GPU args", 32, gpuArgs, nullptr, e_rr
 	));
 
-	if (gpuArgs && TestShaders_computePipelinePush(t, deviceRef, &argsFile, &pipelineArgs, &argsLayout)) {
+	Pipeline pipelineArgs;
+	PipelineLayout argsLayout;
 
-		const Transition argsWrite = {
-			.resource = gpuArgs, .stage = EPipelineStage_Compute, .isWrite = true
+	if (gpuArgs && computePipelinePush(t, dev, argsFile.list, pipelineArgs, argsLayout)) {
+
+		const c::Transition argsWrite = {
+			.resource = gpuArgs.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
 		};
 
-		ListTransition argsTransition {};
-		ListTransition_createRefConst(&argsWrite, 1, &argsTransition, NULL);
-
 		pushData[1] = 0xA53F0000u;
-		pushData[2] = DeviceBufferRef_ptr(gpuArgs)->writeHandle;
+		pushData[2] = gpuArgs.writeHandle();
 
-		Test_assert(t, "beginGpu", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+		c::Test_assert(t, "beginGpu", commandList.begin(true, e_rr));
 
-		Test_assert(t, "scopeArgs", CommandListRef_startScope(commandList, &argsTransition, 1, NULL, &t->err));
-		Test_assert(t, "bindArgs", CommandListRef_setComputePipeline(commandList, pipelineArgs, &t->err));
-		Test_assert(t, "push", CommandListRef_setPushConstants(commandList, pushRef, &t->err));
-		Test_assert(t, "dispatchArgs", CommandListRef_dispatch1D(commandList, 1, &t->err));
-		Test_assert(t, "scopeArgsEnd", CommandListRef_endScope(commandList, &t->err));
+		{
+			CommandScope scope = commandList.scope({ argsWrite }, 1, {}, e_rr);
+			c::Test_assert(t, "scopeArgs", (c::Bool) scope);
+			c::Test_assert(t, "bindArgs", scope.setComputePipeline(pipelineArgs, e_rr));
+			c::Test_assert(t, "push", scope.setPushConstants(pushData, e_rr));
+			c::Test_assert(t, "dispatchArgs", scope.dispatch1D(1, e_rr));
+			c::Test_assert(t, "scopeArgsEnd", scope.end(e_rr));
+		}
 
-		Test_assert(t, "scopeGpu", CommandListRef_startScope(commandList, &outputTransition, 2, NULL, &t->err));
-		Test_assert(t, "bindGpu", CommandListRef_setComputePipeline(commandList, pipelineWrite, &t->err));
-		Test_assert(t, "push", CommandListRef_setPushConstants(commandList, pushRef, &t->err));
-		Test_assert(t, "dispatchGpu", CommandListRef_dispatchIndirect(commandList, gpuArgs, 16, &t->err));
-		Test_assert(t, "scopeGpuEnd", CommandListRef_endScope(commandList, &t->err));
+		{
+			CommandScope scope = commandList.scope({ outputWrite }, 2, {}, e_rr);
+			c::Test_assert(t, "scopeGpu", (c::Bool) scope);
+			c::Test_assert(t, "bindGpu", scope.setComputePipeline(pipelineWrite, e_rr));
+			c::Test_assert(t, "push", scope.setPushConstants(pushData, e_rr));
+			c::Test_assert(t, "dispatchGpu", scope.dispatchIndirect(gpuArgs, 16, e_rr));
+			c::Test_assert(t, "scopeGpuEnd", scope.end(e_rr));
+		}
 
-		Test_assert(t, "endGpu", CommandListRef_end(commandList, &t->err));
+		c::Test_assert(t, "endGpu", commandList.end(e_rr));
 
-		if(
-			TestShaders_submitAndWait(t, deviceRef, commandList) &&
-			TestShaders_pullBuffer(t, deviceRef, emptyList, output)
-		) {
+		if(submitAndWait(t, dev, commandList) && pullBuffer(t, dev, emptyList, output)) {
 
-			U32 matching = 0;
+			c::U32 matching = 0;
 
-			for(U32 i = 0; i < 128; ++i)
+			for(c::U32 i = 0; i < 128; ++i)
 				matching += values[i] == 0xA53F0000u + i;
 
-			Test_assert(t, "gpuIndirectValues", matching == 128);
+			c::Test_assert(t, "gpuIndirectValues", matching == 128);
 		}
 	}
-
-	}
-
-clean:
-	RefPtr_dec(&writeLayout);
-	RefPtr_dec(&argsLayout);
-
-	RefPtr_dec(&emptyList);
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipelineArgs);
-	RefPtr_dec(&pipelineWrite);
-	RefPtr_dec(&gpuArgs);
-	RefPtr_dec(&cpuArgs);
-	RefPtr_dec(&output);
-
-	SHFile_free(&argsFile, alloc);
-	SHFile_free(&writeFile, alloc);
 }
-} }

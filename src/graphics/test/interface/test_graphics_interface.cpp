@@ -70,6 +70,18 @@
 //
 //Run in CI, no display, no human interaction required.
 
+//The shared helpers in terms of the handle types, plus the shims for the macros a module cannot reach
+//through a namespace qualifier.
+//Both C++ headers come BEFORE the block below: a standard header included after the C headers landed in
+//oxc::c finds its guard already tripped and leaves its symbols in that namespace.
+
+#include "test_graphics_shared.hpp"
+
+//Log::debugLn is the C++ front for Log_debugLnx; the x macros name ELogOptions_NewLine unqualified and so
+//cannot be reached through the c namespace.
+
+#include "types/container/log.hpp"
+
 namespace oxc { namespace c {
 	#include "types/base/error.h"
 	#include "types/base/string_base.h"
@@ -103,39 +115,39 @@ namespace oxc { namespace c {
 	#include "test_graphics_shared.h"
 } }
 
-//Same namespace the C headers landed in, so the definitions here match the declarations in
-//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
+//One file scope using rather than one per function: this module has a dozen static helpers besides
+//its entry points, and they all reach c:: the same way.
 
-namespace oxc { namespace c {
+using namespace oxc;
 
 // -- 1. GraphicsInterface ------------------------------------------------------
 
-static void Test_graphicsInterface(Test *t) {
+static void Test_graphicsInterface(c::Test *t) {
 
-	Test_setModule(t, "GraphicsInterface");
+	c::Test_setModule(t, "GraphicsInterface");
 
-	Test_assert(t, "create", GraphicsInterface_create(&t->err));
-	Test_assert(t, "createTwice", GraphicsInterface_create(&t->err));        //Guards against multiple inits
+	Test_assert(t, "create", c::GraphicsInterface_create(&t->err));
+	Test_assert(t, "createTwice", c::GraphicsInterface_create(&t->err));        //Guards against multiple inits
 
 	//Resolving the default api must give a real api that's supported
 
-	EGraphicsApi def = EGraphicsApi_resolve(EGraphicsApi_Count);
-	Test_assert(t, "resolveDefault", def < EGraphicsApi_Count);
-	Test_assert(t, "defaultSupported", GraphicsInterface_supportsApi(def));
-	Test_assert(t, "resolveIdentity", EGraphicsApi_resolve(def) == def);
+	c::EGraphicsApi def = c::EGraphicsApi_resolve(c::EGraphicsApi_Count);
+	Test_assert(t, "resolveDefault", def < c::EGraphicsApi_Count);
+	Test_assert(t, "defaultSupported", c::GraphicsInterface_supportsApi(def));
+	Test_assert(t, "resolveIdentity", c::EGraphicsApi_resolve(def) == def);
 }
 
 // -- 2. GraphicsInstance_makeType ----------------------------------------------
 
-static void Test_graphicsInstanceType(Test *t) {
+static void Test_graphicsInstanceType(c::Test *t) {
 
-	Test_setModule(t, "GraphicsInstance/Type");
+	c::Test_setModule(t, "GraphicsInstance/Type");
 
-	const Allocator *alloc = Platform_instance->alloc;
-	RefPtrType type = GraphicsInstance_makeType(EGraphicsApi_Count, alloc);
+	const c::Allocator *alloc = c::Platform_instance->alloc;
+	c::RefPtrType type = c::GraphicsInstance_makeType(c::EGraphicsApi_Count, alloc);
 
-	Test_assert(t, "typeId", type.typeId == (TypeId) EGraphicsTypeId_GraphicsInstance);
-	Test_assert(t, "length", RefPtrType_length(&type) >= sizeof(GraphicsInstance));
+	Test_assert(t, "typeId", type.typeId == (c::TypeId) c::EGraphicsTypeId_GraphicsInstance);
+	Test_assert(t, "length", c::RefPtrType_length(&type) >= sizeof(c::GraphicsInstance));
 	Test_assert(t, "alloc", type.alloc == alloc);
 	Test_assert(t, "freeFunc", type.free);
 }
@@ -143,19 +155,19 @@ static void Test_graphicsInstanceType(Test *t) {
 // -- 3/4. Instance create / free + object type table ---------------------------
 
 static void Test_checkObjectType(
-	Test *t, const C8 *name, const RefPtrType *type, TypeId typeId, U64 minLen, const Allocator *alloc
+	c::Test *t, const c::C8 *name, const c::RefPtrType *type, c::TypeId typeId, c::U64 minLen, const c::Allocator *alloc
 ) {
-	Test_assert(t, name, type->typeId == typeId && RefPtrType_length(type) >= minLen && type->alloc == alloc && type->free);
+	Test_assert(t, name, type->typeId == typeId && c::RefPtrType_length(type) >= minLen && type->alloc == alloc && type->free);
 }
 
-static void Test_graphicsInstance(Test *t) {
+static void Test_graphicsInstance(c::Test *t) {
 
-	Test_setModule(t, "GraphicsInstance");
+	c::Test_setModule(t, "GraphicsInstance");
 
-	const Allocator *alloc = Platform_instance->alloc;
+	const c::Allocator *alloc = c::Platform_instance->alloc;
 
-	GraphicsApplicationInfo appInfo = {
-		.name = CharString_createRefCStrConst("OxC3 graphics interface test"),
+	c::GraphicsApplicationInfo appInfo = {
+		.name = c::CharString_createRefCStrConst("OxC3 graphics interface test"),
 		.version = 1
 	};
 
@@ -163,114 +175,118 @@ static void Test_graphicsInstance(Test *t) {
 
 	//Parameter validation: missing instance output
 
-	GraphicsInstanceRef *instRef = NULL;
+	c::GraphicsInstanceRef *instRef = NULL;
 
-	Error err = Error_none();
-	RefPtrType type = GraphicsInstance_makeType(EGraphicsApi_Count, alloc);
+	c::Error err = c::Error_none();
+	c::RefPtrType type = c::GraphicsInstance_makeType(c::EGraphicsApi_Count, alloc);
 
-	Test_assert(t, "createNullApp", !GraphicsInstance_create(
-		NULL, EGraphicsApi_Count, EGraphicsInstanceFlags_None, alloc, &type, &instRef, &err
+	Test_assert(t, "createNullApp", !c::GraphicsInstance_create(
+		NULL, c::EGraphicsApi_Count, c::EGraphicsInstanceFlags_None, alloc, &type, &instRef, &err
 	));
-	Test_assert(t, "createNullInst", !GraphicsInstance_create(
-		&appInfo, EGraphicsApi_Count, EGraphicsInstanceFlags_None, alloc, &type, NULL, &err
+	Test_assert(t, "createNullInst", !c::GraphicsInstance_create(
+		&appInfo, c::EGraphicsApi_Count, c::EGraphicsInstanceFlags_None, alloc, &type, NULL, &err
 	));
-	Test_assert(t, "createNullType", !GraphicsInstance_create(
-		&appInfo, EGraphicsApi_Count, EGraphicsInstanceFlags_None, alloc, NULL, NULL, &err
+	Test_assert(t, "createNullType", !c::GraphicsInstance_create(
+		&appInfo, c::EGraphicsApi_Count, c::EGraphicsInstanceFlags_None, alloc, NULL, NULL, &err
 	));
 
 	//Real create.
 	//Instance creation legitimately fails on machines without a compatible driver/ICD;
 	// that's not a test failure, the device tests are simply skipped (like the adapter check below).
 
-	if (!GraphicsInstance_create(&appInfo, EGraphicsApi_Count, EGraphicsInstanceFlags_None, alloc, &type, &instRef, &t->err)) {
-		Test_print(t, "No compatible graphics driver, skipping instance tests");
-		t->err = Error_none();
+	if (!c::GraphicsInstance_create(
+		&appInfo, c::EGraphicsApi_Count, c::EGraphicsInstanceFlags_None, alloc, &type, &instRef, &t->err
+	)) {
+		c::Test_print(t, "No compatible graphics driver, skipping instance tests");
+		t->err = c::Error_none();
 		return;
 	}
 
-	GraphicsInstance *inst = GraphicsInstanceRef_ptr(instRef);
+	c::GraphicsInstance *inst = c::instanceOf(instRef);
 
 	Test_assert(t, "instNotNull", inst != NULL);
-	Test_assert(t, "apiResolved", inst && inst->api == EGraphicsApi_resolve(EGraphicsApi_Count));
+	Test_assert(t, "apiResolved", inst && inst->api == c::EGraphicsApi_resolve(c::EGraphicsApi_Count));
 	Test_assert(t, "allocStored", inst && inst->alloc == alloc);
-	Test_assert(t, "refTypeId", instRef->refPtrType->typeId == (TypeId) EGraphicsTypeId_GraphicsInstance);
+	Test_assert(t, "refTypeId", instRef->refPtrType->typeId == (c::TypeId) c::EGraphicsTypeId_GraphicsInstance);
 
 	//Object type table invariants: correct typeIds, length can hold the base struct, same alloc, free func set.
 	//These types live in the instance so they're guaranteed to outlive the objects created with them.
 
 	if (inst) {
 
-		const GraphicsObjectTypes *types = &inst->types;
+		const c::GraphicsObjectTypes *types = &inst->types;
 
-		Test_checkObjectType(t, "device", &types->device, (TypeId)EGraphicsTypeId_GraphicsDevice, sizeof(GraphicsDevice), alloc);
-		Test_checkObjectType(t, "buffer", &types->buffer, (TypeId)EGraphicsTypeId_DeviceBuffer, sizeof(DeviceBuffer), alloc);
+		Test_checkObjectType(
+			t, "device", &types->device, (c::TypeId)c::EGraphicsTypeId_GraphicsDevice, sizeof(c::GraphicsDevice), alloc
+		);
+		Test_checkObjectType(t, "buffer", &types->buffer, (c::TypeId)c::EGraphicsTypeId_DeviceBuffer, sizeof(c::DeviceBuffer), alloc);
 
 		Test_checkObjectType(
 			t, "deviceTexture", &types->deviceTexture,
-			(TypeId)EGraphicsTypeId_DeviceTexture, sizeof(DeviceTexture), alloc
+			(c::TypeId)c::EGraphicsTypeId_DeviceTexture, sizeof(c::DeviceTexture), alloc
 		);
 
 		Test_checkObjectType(
 			t, "renderTexture", &types->renderTexture,
-			(TypeId)EGraphicsTypeId_RenderTexture, sizeof(RenderTexture), alloc
+			(c::TypeId)c::EGraphicsTypeId_RenderTexture, sizeof(c::RenderTexture), alloc
 		);
 
 		Test_checkObjectType(
 			t, "depthStencil", &types->depthStencil,
-			(TypeId)EGraphicsTypeId_DepthStencil, sizeof(DepthStencil), alloc
+			(c::TypeId)c::EGraphicsTypeId_DepthStencil, sizeof(c::DepthStencil), alloc
 		);
 
-		Test_checkObjectType(t, "swapchain", &types->swapchain, (TypeId)EGraphicsTypeId_Swapchain, sizeof(Swapchain), alloc);
+		Test_checkObjectType(t, "swapchain", &types->swapchain, (c::TypeId)c::EGraphicsTypeId_Swapchain, sizeof(c::Swapchain), alloc);
 
 		//The pipeline kinds share a typeId but each length has to fit its own info block (Pipeline_infoOffset),
 		// which is exactly the invariant whose violation used to overrun the heap on graphics pipeline creation
 
 		Test_checkObjectType(
-			t, "pipelineCompute", &types->pipelineCompute, (TypeId)EGraphicsTypeId_Pipeline, sizeof(Pipeline), alloc
+			t, "pipelineCompute", &types->pipelineCompute, (c::TypeId)c::EGraphicsTypeId_Pipeline, sizeof(c::Pipeline), alloc
 		);
 
 		Test_checkObjectType(
 			t, "pipelineGraphics", &types->pipelineGraphics,
-			(TypeId)EGraphicsTypeId_Pipeline, sizeof(Pipeline) + sizeof(PipelineGraphicsInfo), alloc
+			(c::TypeId)c::EGraphicsTypeId_Pipeline, sizeof(c::Pipeline) + sizeof(c::PipelineGraphicsInfo), alloc
 		);
 
 		Test_checkObjectType(
 			t, "pipelineRaytracing", &types->pipelineRaytracing,
-			(TypeId)EGraphicsTypeId_Pipeline, sizeof(Pipeline) + sizeof(PipelineRaytracingInfo), alloc
+			(c::TypeId)c::EGraphicsTypeId_Pipeline, sizeof(c::Pipeline) + sizeof(c::PipelineRaytracingInfo), alloc
 		);
 
-		Test_checkObjectType(t, "sampler", &types->sampler, (TypeId)EGraphicsTypeId_Sampler, sizeof(Sampler), alloc);
-		Test_checkObjectType(t, "blas", &types->blas, (TypeId)EGraphicsTypeId_BLASExt, sizeof(BLAS), alloc);
-		Test_checkObjectType(t, "tlas", &types->tlas, (TypeId)EGraphicsTypeId_TLASExt, sizeof(TLAS), alloc);
+		Test_checkObjectType(t, "sampler", &types->sampler, (c::TypeId)c::EGraphicsTypeId_Sampler, sizeof(c::Sampler), alloc);
+		Test_checkObjectType(t, "blas", &types->blas, (c::TypeId)c::EGraphicsTypeId_BLASExt, sizeof(c::BLAS), alloc);
+		Test_checkObjectType(t, "tlas", &types->tlas, (c::TypeId)c::EGraphicsTypeId_TLASExt, sizeof(c::TLAS), alloc);
 
 		Test_checkObjectType(
 			t, "opacityMicromap", &types->opacityMicromap,
-			(TypeId)EGraphicsTypeId_OpacityMicromapExt, sizeof(OpacityMicromap), alloc
+			(c::TypeId)c::EGraphicsTypeId_OpacityMicromapExt, sizeof(c::OpacityMicromap), alloc
 		);
 
 		Test_checkObjectType(
 			t, "descriptorLayout", &types->descriptorLayout,
-			(TypeId)EGraphicsTypeId_DescriptorLayout, sizeof(DescriptorLayout), alloc
+			(c::TypeId)c::EGraphicsTypeId_DescriptorLayout, sizeof(c::DescriptorLayout), alloc
 		);
 
 		Test_checkObjectType(
 			t, "descriptorTable", &types->descriptorTable,
-			(TypeId)EGraphicsTypeId_DescriptorTable, sizeof(DescriptorTable), alloc
+			(c::TypeId)c::EGraphicsTypeId_DescriptorTable, sizeof(c::DescriptorTable), alloc
 		);
 
 		Test_checkObjectType(
 			t, "descriptorHeap", &types->descriptorHeap,
-			(TypeId)EGraphicsTypeId_DescriptorHeap, sizeof(DescriptorHeap), alloc
+			(c::TypeId)c::EGraphicsTypeId_DescriptorHeap, sizeof(c::DescriptorHeap), alloc
 		);
 
 		Test_checkObjectType(
 			t, "pipelineLayout", &types->pipelineLayout,
-			(TypeId)EGraphicsTypeId_PipelineLayout, sizeof(PipelineLayout), alloc
+			(c::TypeId)c::EGraphicsTypeId_PipelineLayout, sizeof(c::PipelineLayout), alloc
 		);
 
 		Test_checkObjectType(
 			t, "commandList", &types->commandList,
-			(TypeId)EGraphicsTypeId_CommandList, sizeof(CommandList), alloc
+			(c::TypeId)c::EGraphicsTypeId_CommandList, sizeof(c::CommandList), alloc
 		);
 	}
 
@@ -281,47 +297,47 @@ static void Test_graphicsInstance(Test *t) {
 
 	Test_assert(
 		t, "ommPackR16u",
-		EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyTransparent, ETextureFormatId_R16u) == 0xFFFF
+		c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyTransparent, c::ETextureFormatId_R16u) == 0xFFFF
 	);
 
 	Test_assert(
 		t, "ommPackR32u",
-		EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyTransparent, ETextureFormatId_R32u) == 0xFFFFFFFF
+		c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyTransparent, c::ETextureFormatId_R32u) == 0xFFFFFFFF
 	);
 
 	Test_assert(
 		t, "ommPackUnknownOpaque",
-		EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyUnknownOpaque, ETextureFormatId_R32u) == 0xFFFFFFFC
+		c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyUnknownOpaque, c::ETextureFormatId_R32u) == 0xFFFFFFFC
 	);
 
 	Test_assert(
 		t, "ommPackNarrowDiffers",
-		EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyOpaque, ETextureFormatId_R16u) == 0xFFFE
+		c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyOpaque, c::ETextureFormatId_R16u) == 0xFFFE
 	);
 
 	//A format that carries no OMM has no element to write, so it packs to nothing rather than to a real value.
 
 	Test_assert(
 		t, "ommPackUndefined",
-		!EOMMSpecialIndex_pack(EOMMSpecialIndex_FullyTransparent, ETextureFormatId_Undefined)
+		!c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyTransparent, c::ETextureFormatId_Undefined)
 	);
 
-	Test_assert(t, "ommIndexMaxR16u", EOMMIndex_max(ETextureFormatId_R16u) == 0xFFFB);
-	Test_assert(t, "ommIndexMaxR32u", EOMMIndex_max(ETextureFormatId_R32u) == 0xFFFFFFFB);
+	Test_assert(t, "ommIndexMaxR16u", c::EOMMIndex_max(c::ETextureFormatId_R16u) == 0xFFFB);
+	Test_assert(t, "ommIndexMaxR32u", c::EOMMIndex_max(c::ETextureFormatId_R32u) == 0xFFFFFFFB);
 
-	Test_assert(t, "ommIndexSpecialTop", EOMMIndex_isSpecial(0xFFFF, ETextureFormatId_R16u));
-	Test_assert(t, "ommIndexNotSpecial", !EOMMIndex_isSpecial(0xFFFB, ETextureFormatId_R16u));
+	Test_assert(t, "ommIndexSpecialTop", c::EOMMIndex_isSpecial(0xFFFF, c::ETextureFormatId_R16u));
+	Test_assert(t, "ommIndexNotSpecial", !c::EOMMIndex_isSpecial(0xFFFB, c::ETextureFormatId_R16u));
 
 	//0xFFFF is a real index at 32 bit width and a special one at 16, so the check has to be format driven.
 
-	Test_assert(t, "ommIndexWidthMatters", !EOMMIndex_isSpecial(0xFFFF, ETextureFormatId_R32u));
+	Test_assert(t, "ommIndexWidthMatters", !c::EOMMIndex_isSpecial(0xFFFF, c::ETextureFormatId_R32u));
 
 	//Free through the generic ref counter; double-dec must be safe (pointer is NULLed)
 
-	RefPtr_dec(&instRef);
+	c::RefPtr_dec(&instRef);
 	Test_assert(t, "freeNulled", instRef == NULL);
 
-	RefPtr_dec(&instRef);
+	c::RefPtr_dec(&instRef);
 	Test_assert(t, "doubleDecSafe", instRef == NULL);
 }
 
@@ -329,187 +345,196 @@ static void Test_graphicsInstance(Test *t) {
 
 //One adapter's full run: create the device, run every device scoped module, tear down again
 
-static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, const GraphicsDeviceInfo *info) {
+static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRef, const c::GraphicsDeviceInfo *info) {
 
-	Test_setModule(t, "GraphicsDevice");
+	c::Test_setModule(t, "GraphicsDevice");
 
-	GraphicsInstance *inst = GraphicsInstanceRef_ptr(instRef);
-	const Allocator *alloc = inst->alloc;
+	c::GraphicsInstance *inst = c::instanceOf(instRef);
+	const c::Allocator *alloc = inst->alloc;
+	c::Error *e_rr = &t->err;
 
-	GraphicsDeviceRef *deviceRef = NULL;
-	DeviceBufferRef *buffer = NULL;
-	DeviceBufferRef *cpuBuffer = NULL;
-
-	Log_debugLnx("-- GraphicsDevice: testing %s", info->name);
+	Log::debugLn(*alloc, "-- GraphicsDevice: testing %s", info->name);
 
 	//8. Device create / wait
 
-	if(!Test_assert(t, "deviceCreate", GraphicsDeviceRef_create(
-		instRef, info, EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, NULL, &deviceRef, &t->err
+	//Device::create takes an Instance, which is deliberately neither copyable nor borrowable because it owns
+	// the RefPtrType the C side keeps pointing at, and this driver was handed a raw instance ref it does not
+	// own. Module 8 is about GraphicsDeviceRef_create itself, so the C entry point is what gets called and
+	// the handle adopts the result: share() takes a reference, the raw dec drops the one create() returned,
+	// and the device is owned by `dev` from there on.
+
+	c::GraphicsDeviceRef *created = NULL;
+
+	if(!Test_assert(t, "deviceCreate", c::GraphicsDeviceRef_create(
+		instRef, info, c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, NULL, &created, &t->err
 	)))
 		return;
 
-	Test_assert(t, "deviceTypeId", deviceRef->refPtrType->typeId == (TypeId) EGraphicsTypeId_GraphicsDevice);
-	Test_assert(t, "deviceAlloc", GraphicsDeviceRef_getAlloc(deviceRef) == alloc);
-	Test_assert(t, "deviceTypes", GraphicsDeviceRef_getTypes(deviceRef) == &inst->types);
-	Test_assert(t, "deviceWait", GraphicsDeviceRef_wait(deviceRef, &t->err));
+	gfx::Device dev = gfx::Device::share(created);
+	c::RefPtr_dec(&created);
+
+	c::GraphicsDeviceRef *deviceRef = (c::GraphicsDeviceRef*) dev.handle();
+
+	Test_assert(t, "deviceTypeId", deviceRef->refPtrType->typeId == (c::TypeId) c::EGraphicsTypeId_GraphicsDevice);
+	Test_assert(t, "deviceAlloc", dev.alloc() == alloc);
+	Test_assert(t, "deviceTypes", c::GraphicsDeviceRef_getTypes(deviceRef) == &inst->types);
+	Test_assert(t, "deviceWait", dev.wait(e_rr));
 
 	//9. DeviceBuffer
 
-	CharString testVertexBuffer = CharString_createRefCStrConst("Test vertex buffer");
+	gfx::DeviceBuffer buffer, cpuBuffer;
 
-	Test_assert(t, "bufferCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL,
-		&testVertexBuffer, 256, &buffer, &t->err
+	Test_assert(t, "bufferCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_Vertex, c::EGraphicsResourceFlag_None,
+		"Test vertex buffer", 256, buffer, nullptr, e_rr
 	));
 
-	Test_assert(t, "bufferTypeId", buffer && buffer->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer);
-	Test_assert(t, "bufferSize", buffer && DeviceBufferRef_ptr(buffer)->resource.size == 256);
+	Test_assert(t, "bufferTypeId", buffer.valid() &&
+		buffer.handle()->refPtrType->typeId == (c::TypeId) c::EGraphicsTypeId_DeviceBuffer);
 
-	//markDirty requires a CPU-backed buffer; the vertex buffer above isn't
+	Test_assert(t, "bufferSize", buffer.valid() && buffer.data()->resource.size == 256);
 
-	Test_assert(t, "markDirtyNotBacked", !DeviceBufferRef_markDirty(buffer, 0, 0, NULL));
-	Test_assert(t, "markDirtyNull", !DeviceBufferRef_markDirty(NULL, 0, 0, NULL));
+	//markDirty requires a CPU-backed buffer; the vertex buffer above isn't.
+	//A null resource is not something a handle can hold, so that one stays on the C entry point.
 
-	CharString testCpuBuffer = CharString_createRefCStrConst("Test cpu buffer");
+	Test_assert(t, "markDirtyNotBacked", !buffer.markDirty(0, 0, nullptr));
+	Test_assert(t, "markDirtyNull", !c::DeviceBufferRef_markDirty(NULL, 0, 0, NULL));
 
-	Test_assert(t, "cpuBufferCreate", GraphicsDeviceRef_createBuffer(
-		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_CPUBacked, NULL,
-		&testCpuBuffer, 128, &cpuBuffer, &t->err
+	Test_assert(t, "cpuBufferCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_CPUBacked,
+		"Test cpu buffer", 128, cpuBuffer, nullptr, e_rr
 	));
 
 	if(cpuBuffer) {
-		Test_assert(t, "markDirty", DeviceBufferRef_markDirty(cpuBuffer, 0, 64, &t->err));
-		Test_assert(t, "markDirtyOOB", !DeviceBufferRef_markDirty(cpuBuffer, 256, 1, NULL));
+		Test_assert(t, "markDirty", cpuBuffer.markDirty(0, 64, e_rr));
+		Test_assert(t, "markDirtyOOB", !cpuBuffer.markDirty(256, 1, nullptr));
 	}
 
 	//10. Swapchain requires a physical window; NULL must be rejected
 
-	SwapchainRef *swapchain = NULL;
-	SwapchainInfo swapchainInfo = { .window = NULL };
+	gfx::Swapchain swapchain;
 
-	Test_assert(t, "swapchainNullWindow", !GraphicsDeviceRef_createSwapchain(
-		deviceRef, swapchainInfo, false, NULL, &swapchain, NULL
-	));
+	Test_assert(t, "swapchainNullWindow", !dev.createSwapchain(nullptr, false, swapchain, {}, nullptr));
 
 	//11-14. Everything that needs a live device but no submission.
 	//Each of these owns and frees the objects it creates, so they can run in any order.
 
-	Test_graphicsDescriptorTable(t, deviceRef);
-	Test_graphicsBindlessDescriptor(t, deviceRef);
-	Test_graphicsBufferBindless(t, deviceRef);
-	Test_graphicsCommandList(t, deviceRef);
-	Test_graphicsCommandRecording(t, deviceRef);
-	Test_graphicsCommandValidation(t, deviceRef);
-	Test_graphicsRenderPass(t, deviceRef);
-	Test_graphicsTextureRef(t, deviceRef);
-	Test_graphicsSamplerAndData(t, deviceRef);
-	Test_graphicsPipelineLayout(t, deviceRef);
-	Test_graphicsShaderReflection(t, deviceRef);
-	Test_graphicsSubmit(t, deviceRef);
+	c::Test_graphicsDescriptorTable(t, deviceRef);
+	c::Test_graphicsBindlessDescriptor(t, deviceRef);
+	c::Test_graphicsBufferBindless(t, deviceRef);
+	c::Test_graphicsCommandList(t, deviceRef);
+	c::Test_graphicsCommandRecording(t, deviceRef);
+	c::Test_graphicsCommandValidation(t, deviceRef);
+	c::Test_graphicsRenderPass(t, deviceRef);
+	c::Test_graphicsTextureRef(t, deviceRef);
+	c::Test_graphicsSamplerAndData(t, deviceRef);
+	c::Test_graphicsPipelineLayout(t, deviceRef);
+	c::Test_graphicsShaderReflection(t, deviceRef);
+	c::Test_graphicsSubmit(t, deviceRef);
 
 	//40. Runs after submit because half of it needs a resource the device is still holding.
 
-	Test_graphicsDescriptorAlloc(t, deviceRef);
+	c::Test_graphicsDescriptorAlloc(t, deviceRef);
 
 	//41. The bindful path: a pipeline with its own layout and a table bound at record time.
 
-	Test_graphicsBindful(t, deviceRef);
-	Test_graphicsBindfulAdvanced(t, deviceRef);
-	Test_graphicsBindfulSampler(t, deviceRef);
-	Test_graphicsBindfulDraw(t, deviceRef);
-	Test_graphicsBindfulLayoutSwitch(t, deviceRef);
-	Test_graphicsBindfulCbuffer(t, deviceRef);
-	Test_graphicsBindfulRwTexture(t, deviceRef);
-	Test_graphicsBindfulArray(t, deviceRef);
-	Test_graphicsBindfulSpaces(t, deviceRef);
-	Test_graphicsBindfulIndirect(t, deviceRef);
-	Test_graphicsBindfulDrawFixed(t, deviceRef);
-	Test_graphicsBindfulTableUpdate(t, deviceRef);
-	Test_graphicsBindfulSharedRegister(t, deviceRef);
-	Test_graphicsBindfulHeapRecycle(t, deviceRef);
-	Test_graphicsBindfulPushDescriptorBoundary(t, deviceRef);
-	Test_graphicsBindfulSamplerCmp(t, deviceRef);
-	Test_graphicsBindfulStructured(t, deviceRef);
-	Test_graphicsBindfulAppendCounter(t, deviceRef);
-	Test_graphicsBindlessInterleave(t, deviceRef);
-	Test_graphicsBindlessEverywhere(t, deviceRef);
-	Test_graphicsFrameGlobals(t, deviceRef);
-	Test_graphicsBindfulRays(t, deviceRef);
-	Test_graphicsBindfulOmm(t, deviceRef);
-	Test_graphicsBindfulRayQueryGraphics(t, deviceRef);
-	Test_graphicsBindfulAtomicFloat(t, deviceRef);
-	Test_graphicsBindfulPushConstants(t, deviceRef);
-	Test_graphicsBindfulPushDescriptors(t, deviceRef);
-	Test_graphicsBindfulReservedSpace(t, deviceRef);
-	Test_graphicsGpuExecute(t, deviceRef);
-	Test_graphicsAccelerationStructures(t, deviceRef);
+	c::Test_graphicsBindful(t, deviceRef);
+	c::Test_graphicsBindfulAdvanced(t, deviceRef);
+	c::Test_graphicsBindfulSampler(t, deviceRef);
+	c::Test_graphicsBindfulDraw(t, deviceRef);
+	c::Test_graphicsBindfulLayoutSwitch(t, deviceRef);
+	c::Test_graphicsBindfulCbuffer(t, deviceRef);
+	c::Test_graphicsBindfulRwTexture(t, deviceRef);
+	c::Test_graphicsBindfulArray(t, deviceRef);
+	c::Test_graphicsBindfulSpaces(t, deviceRef);
+	c::Test_graphicsBindfulIndirect(t, deviceRef);
+	c::Test_graphicsBindfulDrawFixed(t, deviceRef);
+	c::Test_graphicsBindfulTableUpdate(t, deviceRef);
+	c::Test_graphicsBindfulSharedRegister(t, deviceRef);
+	c::Test_graphicsBindfulHeapRecycle(t, deviceRef);
+	c::Test_graphicsBindfulPushDescriptorBoundary(t, deviceRef);
+	c::Test_graphicsBindfulSamplerCmp(t, deviceRef);
+	c::Test_graphicsBindfulStructured(t, deviceRef);
+	c::Test_graphicsBindfulAppendCounter(t, deviceRef);
+	c::Test_graphicsBindlessInterleave(t, deviceRef);
+	c::Test_graphicsBindlessEverywhere(t, deviceRef);
+	c::Test_graphicsFrameGlobals(t, deviceRef);
+	c::Test_graphicsBindfulRays(t, deviceRef);
+	c::Test_graphicsBindfulOmm(t, deviceRef);
+	c::Test_graphicsBindfulRayQueryGraphics(t, deviceRef);
+	c::Test_graphicsBindfulAtomicFloat(t, deviceRef);
+	c::Test_graphicsBindfulPushConstants(t, deviceRef);
+	c::Test_graphicsBindfulPushDescriptors(t, deviceRef);
+	c::Test_graphicsBindfulReservedSpace(t, deviceRef);
+	c::Test_graphicsGpuExecute(t, deviceRef);
+	c::Test_graphicsAccelerationStructures(t, deviceRef);
 
 	//31-33. Shader execution: real dispatches, draws and traces with verified results
 
-	Test_graphicsShaderCompute(t, deviceRef);
-	Test_graphicsShaderDraw(t, deviceRef);
-	Test_graphicsShaderRays(t, deviceRef);
+	c::Test_graphicsShaderCompute(t, deviceRef);
+	c::Test_graphicsShaderDraw(t, deviceRef);
+	c::Test_graphicsShaderRays(t, deviceRef);
 
 	//34-36. Resource round trips and the frame ring, rather than what a shader computes
 
-	Test_graphicsFormatRoundTrip(t, deviceRef);
-	Test_graphicsTextureShapes(t, deviceRef);
-	Test_graphicsFramesInFlight(t, deviceRef);
+	c::Test_graphicsFormatRoundTrip(t, deviceRef);
+	c::Test_graphicsTextureShapes(t, deviceRef);
+	c::Test_graphicsFramesInFlight(t, deviceRef);
 
 	//37-38. The capability bits themselves: their invariants, and that gated APIs and shaders agree with them
 
-	Test_graphicsCapabilities(t, deviceRef);
-	Test_graphicsCapabilityExecution(t, deviceRef);
+	c::Test_graphicsCapabilities(t, deviceRef);
+	c::Test_graphicsCapabilityExecution(t, deviceRef);
 
-	Test_graphicsDeviceMemory(t, deviceRef);
+	c::Test_graphicsDeviceMemory(t, deviceRef);
 
-	RefPtr_dec(&cpuBuffer);
-	RefPtr_dec(&buffer);
+	//39. Config variants run after this adapter's device is gone so the extra devices don't share its
+	// memory, so the handles are released here rather than left to the end of the scope.
 
-	GraphicsDeviceRef_wait(deviceRef, NULL);
-	RefPtr_dec(&deviceRef);
+	buffer.release();
+	cpuBuffer.release();
 
-	//39. Config variants, after this adapter's device is gone so the extra devices don't share its memory.
+	(void) dev.wait(nullptr);
+	dev.release();
 
-	Test_graphicsConfigVariants(t, instRef, info);
+	c::Test_graphicsConfigVariants(t, instRef, info);
 }
 
-static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
+static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 
-	Test_setModule(t, "GraphicsDevice");
-	Test_print(t, EGraphicsApi_name[api]);        //Marks which graphics API this device-test run targets
+	c::Test_setModule(t, "GraphicsDevice");
+	c::Test_print(t, c::EGraphicsApi_name[api]);        //Marks which graphics API this device-test run targets
 
-	const Allocator *alloc = Platform_instance->alloc;
+	const c::Allocator *alloc = c::Platform_instance->alloc;
 
-	GraphicsApplicationInfo appInfo = {
-		.name = CharString_createRefCStrConst("OxC3 graphics interface test"),
+	c::GraphicsApplicationInfo appInfo = {
+		.name = c::CharString_createRefCStrConst("OxC3 graphics interface test"),
 		.version = 1
 	};
 
-	RefPtrType type = GraphicsInstance_makeType(api, alloc);
-	GraphicsInstanceRef *instRef = NULL;
-	ListGraphicsDeviceInfo infos {};
+	c::RefPtrType type = c::GraphicsInstance_makeType(api, alloc);
+	c::GraphicsInstanceRef *instRef = NULL;
+	c::ListGraphicsDeviceInfo infos {};
 
-	if (!GraphicsInstance_create(&appInfo, api, EGraphicsInstanceFlags_None, alloc, &type, &instRef, &t->err)) {
-		Test_print(t, "No compatible graphics driver, skipping device tests");
-		t->err = Error_none();
+	if (!c::GraphicsInstance_create(&appInfo, api, c::EGraphicsInstanceFlags_None, alloc, &type, &instRef, &t->err)) {
+		c::Test_print(t, "No compatible graphics driver, skipping device tests");
+		t->err = c::Error_none();
 		return;
 	}
 
-	GraphicsInstance *inst = GraphicsInstanceRef_ptr(instRef);
+	c::GraphicsInstance *inst = c::instanceOf(instRef);
 
 	//getDeviceInfos validation
 
-	Test_assert(t, "getDeviceInfosNullResult", !GraphicsInstance_getDeviceInfos(inst, NULL, NULL));
-	Test_assert(t, "getDeviceInfosNullInst", !GraphicsInstance_getDeviceInfos(NULL, &infos, NULL));
+	Test_assert(t, "getDeviceInfosNullResult", !c::GraphicsInstance_getDeviceInfos(inst, NULL, NULL));
+	Test_assert(t, "getDeviceInfosNullInst", !c::GraphicsInstance_getDeviceInfos(NULL, &infos, NULL));
 
 	//getPreferredDevice validation
 
-	GraphicsDeviceInfo preferred {};
+	c::GraphicsDeviceInfo preferred {};
 
-	Test_assert(t, "getPreferredNullInfo", !GraphicsInstance_getPreferredDevice(
-		inst, NULL, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, NULL, NULL
+	Test_assert(t, "getPreferredNullInfo", !c::GraphicsInstance_getPreferredDevice(
+		inst, NULL, c::GraphicsInstance_vendorMaskAll, c::GraphicsInstance_deviceTypeAll, NULL, NULL
 	));
 
 	//A GPU (or software rasterizer like lavapipe) is never guaranteed here, so a machine without one has to stay green.
@@ -518,11 +543,11 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	//Any other error means adapters were enumerated but every one of them failed OxC3's requirements.
 	//That is a real result to fail on, and the device selection log right above names each requirement that went unmet.
 
-	if (!GraphicsInstance_getDeviceInfos(inst, &infos, &t->err) || !infos.length) {
+	if (!c::GraphicsInstance_getDeviceInfos(inst, &infos, &t->err) || !infos.length) {
 
-		if (t->err.genericError == EGenericError_NotFound) {
-			Test_print(t, "No graphics adapter present, skipping device tests");
-			t->err = Error_none();
+		if (t->err.genericError == c::EGenericError_NotFound) {
+			c::Test_print(t, "No graphics adapter present, skipping device tests");
+			t->err = c::Error_none();
 			goto clean;
 		}
 
@@ -531,19 +556,26 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	}
 
 	//Device creation loads the prebuilt shaders from the //OxC3_graphics section,
-	// which are only packaged when the build has the shader compiler enabled
+	// which are only packaged when the build has the shader compiler enabled.
+	//Scoped so the two gotos ABOVE don't jump across these declarations into their lifetime, which C++
+	// refuses outright: nothing below the block needs them, and the goto inside it only leaves scopes.
 
-	const CharString graphicsSection = CharString_createRefCStrConst("//OxC3_graphics");
-	const CharString prebuiltShader = CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
-	const RefPtrType memStreamType = MemoryStream_makeType(alloc);
+	{
+		const c::CharString graphicsSection = c::CharString_createRefCStrConst("//OxC3_graphics");
+		const c::CharString prebuiltShader = c::CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
+		const c::RefPtrType memStreamType = c::MemoryStream_makeType(alloc);
 
-	if (!File_loadVirtual(&graphicsSection, &memStreamType, NULL, NULL, alloc, NULL) || !File_hasFile(&prebuiltShader, alloc)) {
-		Test_print(t, "Prebuilt shaders unavailable (built without shader compiler), skipping device tests");
-		goto clean;
+		if (
+			!c::File_loadVirtual(&graphicsSection, &memStreamType, NULL, NULL, alloc, NULL) ||
+			!c::File_hasFile(&prebuiltShader, alloc)
+		) {
+			c::Test_print(t, "Prebuilt shaders unavailable (built without shader compiler), skipping device tests");
+			goto clean;
+		}
 	}
 
-	Test_assert(t, "getPreferredDevice", GraphicsInstance_getPreferredDevice(
-		inst, NULL, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, &preferred, &t->err
+	Test_assert(t, "getPreferredDevice", c::GraphicsInstance_getPreferredDevice(
+		inst, NULL, c::GraphicsInstance_vendorMaskAll, c::GraphicsInstance_deviceTypeAll, &preferred, &t->err
 	));
 
 	//LUID is host side identity rather than anything a shader can observe, so this is the only place it can be
@@ -555,15 +587,15 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	//The documented uuid[0] == luid fallback is also left alone: there is no bit saying whether UUIDs are
 	// supported, so the condition can't be told apart from its own consequence.
 
-	for (U64 i = 0; i < infos.length; ++i) {
+	for (c::U64 i = 0; i < infos.length; ++i) {
 
-		const GraphicsDeviceInfo *a = &infos.ptr[i];
+		const c::GraphicsDeviceInfo *a = &infos.ptr[i];
 
-		for (U64 j = i + 1; j < infos.length; ++j) {
+		for (c::U64 j = i + 1; j < infos.length; ++j) {
 
-			const GraphicsDeviceInfo *b = &infos.ptr[j];
+			const c::GraphicsDeviceInfo *b = &infos.ptr[j];
 
-			if((a->capabilities.features & b->capabilities.features) & EGraphicsFeatures_LUID)
+			if((a->capabilities.features & b->capabilities.features) & c::EGraphicsFeatures_LUID)
 				Test_assert(t, "luidUnique", a->luid != b->luid);
 
 			Test_assert(t, "uuidUnique", a->uuid[0] != b->uuid[0] || a->uuid[1] != b->uuid[1]);
@@ -573,39 +605,39 @@ static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 	//8-14. Every enumerated adapter gets the full battery, so integrated and software devices are exercised
 	// on machines that have them rather than only the preferred device
 
-	for(U64 i = 0; i < infos.length; ++i)
+	for(c::U64 i = 0; i < infos.length; ++i)
 		Test_graphicsDeviceSingle(t, instRef, &infos.ptr[i]);
 
 clean:
 
-	ListGraphicsDeviceInfo_free(&infos, alloc);
+	c::ListGraphicsDeviceInfo_free(&infos, alloc);
 
 	//After every device fully shut down, the whole api run has to be validation clean;
 	// any error or warning the debug layers reported is a real defect, which is what hard fails CI
 
-	Test_setModule(t, "GraphicsDevice/validation");
-	Test_assert(t, "validationErrors", !GraphicsInstance_getValidationErrors(inst));
-	Test_assert(t, "validationWarnings", !GraphicsInstance_getValidationWarnings(inst));
+	c::Test_setModule(t, "GraphicsDevice/validation");
+	Test_assert(t, "validationErrors", !c::GraphicsInstance_getValidationErrors(inst));
+	Test_assert(t, "validationWarnings", !c::GraphicsInstance_getValidationWarnings(inst));
 
-	RefPtr_dec(&instRef);
+	c::RefPtr_dec(&instRef);
 }
 
 //Run the full device test suite for every graphics api the build actually supports, so under dynamic
 //linking we exercise e.g. both Direct3D12 and Vulkan (instead of only the platform's default api).
 
-static void Test_graphicsDevice(Test *t) {
+static void Test_graphicsDevice(c::Test *t) {
 
-	Test_setModule(t, "GraphicsDevice");
+	c::Test_setModule(t, "GraphicsDevice");
 
-	Bool any = false;
+	c::Bool any = false;
 
 	//Counted in the underlying type: C++ has no ++ for an enum, and 0 is not one either.
 
-	for (U32 apiRaw = 0; apiRaw < (U32) EGraphicsApi_Count; ++apiRaw) {
+	for (c::U32 apiRaw = 0; apiRaw < (c::U32) c::EGraphicsApi_Count; ++apiRaw) {
 
-		const EGraphicsApi api = (EGraphicsApi) apiRaw;
+		const c::EGraphicsApi api = (c::EGraphicsApi) apiRaw;
 
-		if(!GraphicsInterface_supportsApi(api))
+		if(!c::GraphicsInterface_supportsApi(api))
 			continue;
 
 		any = true;
@@ -613,7 +645,7 @@ static void Test_graphicsDevice(Test *t) {
 	}
 
 	if(!any)
-		Test_print(t, "No supported graphics api, skipping device tests");
+		c::Test_print(t, "No supported graphics api, skipping device tests");
 }
 
 // -- 15. Null device rejection ---------------------------------------------------
@@ -624,45 +656,45 @@ static void Test_graphicsDevice(Test *t) {
 //Only the first member of GraphicsObjectTypes sits at offset 0, so every other creator is exposed.
 //None of these need a live device, which is why this runs even where no adapter is present.
 
-static void Test_graphicsNullDevice(Test *t) {
+static void Test_graphicsNullDevice(c::Test *t) {
 
-	Test_setModule(t, "GraphicsDevice/nullDevice");
+	c::Test_setModule(t, "GraphicsDevice/nullDevice");
 
-	const CharString name = CharString_createRefCStrConst("Null device rejection");
+	const c::CharString name = c::CharString_createRefCStrConst("Null device rejection");
 
-	DeviceBufferRef *buffer = NULL;
-	DeviceTextureRef *texture = NULL;
-	RenderTextureRef *renderTexture = NULL;
-	DepthStencilRef *depthStencil = NULL;
-	SwapchainRef *swapchain = NULL;
-	CommandListRef *commandList = NULL;
+	c::DeviceBufferRef *buffer = NULL;
+	c::DeviceTextureRef *texture = NULL;
+	c::RenderTextureRef *renderTexture = NULL;
+	c::DepthStencilRef *depthStencil = NULL;
+	c::SwapchainRef *swapchain = NULL;
+	c::CommandListRef *commandList = NULL;
 
-	Buffer empty = Buffer_createNull();
+	c::Buffer empty = c::Buffer_createNull();
 
-	Test_assert(t, "buffer", !GraphicsDeviceRef_createBuffer(
-		NULL, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL, &name, 256, &buffer, NULL
+	Test_assert(t, "buffer", !c::GraphicsDeviceRef_createBuffer(
+		NULL, c::EDeviceBufferUsage_Vertex, c::EGraphicsResourceFlag_None, NULL, &name, 256, &buffer, NULL
 	));
 
-	Test_assert(t, "texture", !GraphicsDeviceRef_createTexture(
-		NULL, ETextureType_2D, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
+	Test_assert(t, "texture", !c::GraphicsDeviceRef_createTexture(
+		NULL, c::ETextureType_2D, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None,
 		1, 1, 0, NULL, &name, &empty, &texture, NULL
 	));
 
-	Test_assert(t, "renderTexture", !GraphicsDeviceRef_createRenderTexture(
-		NULL, ETextureType_2D, 1, 1, 1, ETextureFormatId_RGBA8, EGraphicsResourceFlag_None,
-		EMSAASamples_Off, NULL, &name, &renderTexture, NULL
+	Test_assert(t, "renderTexture", !c::GraphicsDeviceRef_createRenderTexture(
+		NULL, c::ETextureType_2D, 1, 1, 1, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None,
+		c::EMSAASamples_Off, NULL, &name, &renderTexture, NULL
 	));
 
-	Test_assert(t, "depthStencil", !GraphicsDeviceRef_createDepthStencil(
-		NULL, 1, 1, EDepthStencilFormat_D32, false, EMSAASamples_Off, NULL, &name, &depthStencil, NULL
+	Test_assert(t, "depthStencil", !c::GraphicsDeviceRef_createDepthStencil(
+		NULL, 1, 1, c::EDepthStencilFormat_D32, false, c::EMSAASamples_Off, NULL, &name, &depthStencil, NULL
 	));
 
-	Test_assert(t, "swapchain", !GraphicsDeviceRef_createSwapchain(
+	Test_assert(t, "swapchain", !c::GraphicsDeviceRef_createSwapchain(
 		NULL, { 0 }, false, NULL, &swapchain, NULL
 	));
 
-	Test_assert(t, "commandList", !GraphicsDeviceRef_createCommandList(
-		NULL, 2 * KIBI, 128, 64, true, &commandList, NULL
+	Test_assert(t, "commandList", !c::GraphicsDeviceRef_createCommandList(
+		NULL, 2 * c::KIBI, 128, 64, true, &commandList, NULL
 	));
 
 	//A rejection must not leave a half built object behind, since the caller has no way to free one.
@@ -671,8 +703,6 @@ static void Test_graphicsNullDevice(Test *t) {
 		!buffer && !texture && !renderTexture && !depthStencil && !swapchain && !commandList
 	);
 }
-
-} }
 
 // -- entry point ---------------------------------------------------------------
 

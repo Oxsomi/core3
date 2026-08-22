@@ -50,3 +50,30 @@ DepthLayerOutput main(U32 id : SV_VertexID) {
 	output.color = layerColor[triangleId];
 	return output;
 }
+
+//The same depth, but covering only PART of each pixel it touches, which is what a resolve mode needs to be
+// observable at all: a fullscreen triangle leaves every sample of a pixel holding the same value, so min and
+// max agree and a backend that ignores the mode looks correct.
+//A quad over the left of the target whose right edge is SLANTED, running from x 4.5 at the bottom of an 8
+// wide target to x 5.5 at the top. Everything left of it keeps both samples at 0.7, everything right keeps
+// the cleared 0, and the pixels the edge crosses hold one of each, which is the only thing min and max can
+// disagree about.
+//The slant is the point. A 45 degree edge is exactly the axis the standard 2x pattern places its two samples
+// on ((0.25, 0.25) and (0.75, 0.75)), so both would land on the edge itself and no pixel would ever split; a
+// purely vertical one relies on the two samples differing in x, which the standard pattern does but a device
+// reporting standardSampleLocations false need not. Slanted, neither degeneracy applies.
+//6 vertices, two triangles, same winding as the fullscreen triangle above.
+
+[shader("vertex")]
+DepthLayerOutput mainPartial(U32 id : SV_VertexID) {
+
+	static const F32x2 corners[6] = {
+		F32x2(-1, -1), F32x2(0.125, -1), F32x2(-1, 1),
+		F32x2(0.125, -1), F32x2(0.375, 1), F32x2(-1, 1)
+	};
+
+	DepthLayerOutput output;
+	output.pos = F32x4(corners[id % 6].x, corners[id % 6].y, layerDepth[1], 1);
+	output.color = layerColor[1];
+	return output;
+}
