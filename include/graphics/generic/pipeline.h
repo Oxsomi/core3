@@ -46,8 +46,8 @@ typedef struct PipelineGraphicsInfo {
 	DepthStencilState depthStencil;
 	BlendState blendState;
 
-	MSAASamples msaa;
-	TopologyMode topologyMode;
+	U8 msaa;                                 //EMSAASamples
+	U8 topologyMode;                         //ETopologyMode
 	U16 padding;
 
 	U32 subPass;                             //When renderPass is used

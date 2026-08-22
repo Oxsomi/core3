@@ -45,6 +45,7 @@
 #include "formats/oiSH/sh_headers.h"
 #include "formats/oiSB/sb_file.h"
 #include "formats/oiSR/sr_file.h"
+#include "formats/oiSP/sp_file.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
@@ -1046,6 +1047,76 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 		}
 
 		//oiSR file (frontend symbol AST reflection)
+
+		case SPHeader_MAGIC: {
+
+			if(encryptionKey)
+				retError(clean, Error_invalidState(0, "CLI_inspectData() oiSP doesn't have aes support!"));
+
+			SPFile file = (SPFile) { 0 };
+			CharString printed = CharString_createNull();
+
+			U64 spOff = 0;
+			gotoIfError3(cleanSp, SPFile_read(stream, &spOff, false, alloc, &file, e_rr));
+
+			Log_debugLnx("oiSP with %"PRIu64" pipeline(s):", file.pipelines.length);
+
+			//Each pipeline prints its whole state with every field's provenance, so a stored pipeline shows which of
+			// its values nobody actually chose.
+
+			for (U64 i = 0; i < file.pipelines.length; ++i) {
+
+				const SPPipelineBase pipeline = file.pipelines.ptr[i];
+
+				if(pipeline.name != U32_MAX)
+					Log_debugLnx(
+						"Pipeline %"PRIu64": %.*s", i,
+						(int) CharString_length(file.names.entryStrings.ptr[pipeline.name]),
+						file.names.entryStrings.ptr[pipeline.name].ptr
+					);
+
+				else Log_debugLnx("Pipeline %"PRIu64":", i);
+
+				//Stages name the shader they came from, which is what makes a stored pipeline resolvable again.
+
+				for (U8 j = 0; j < pipeline.stageCount; ++j) {
+
+					const SPStage stage = file.stages.ptr[pipeline.stageStart + j];
+
+					const CharString shaderFile =
+						stage.shaderFile != U32_MAX ?
+						file.names.entryStrings.ptr[stage.shaderFile] : CharString_createRefCStrConst("<unnamed>");
+
+					const CharString entryName =
+						stage.entrypoint != U32_MAX ?
+						file.names.entryStrings.ptr[stage.entrypoint] : CharString_createRefCStrConst("<unnamed>");
+
+					Log_debugLnx(
+						"	%s: %.*s in %.*s (source hash 0x%08"PRIX32")",
+						SHEntry_stageNames[stage.stage],
+						(int) CharString_length(entryName), entryName.ptr,
+						(int) CharString_length(shaderFile), shaderFile.ptr,
+						stage.sourceHash
+					);
+				}
+
+				CharString_free(&printed, alloc);
+				gotoIfError3(cleanSp, SPFile_print(&file, (U32) i, alloc, &printed, e_rr));
+				Log_debugLnx("%.*s", (int) CharString_length(printed), printed.ptr);
+			}
+
+		cleanSp:
+
+			CharString_free(&printed, alloc);
+			SPFile_free(&file, alloc);
+
+			RefPtr_dec(&stream);
+
+			if(err.genericError)
+				goto clean;
+
+			break;
+		}
 
 		case SRHeader_MAGIC: {
 

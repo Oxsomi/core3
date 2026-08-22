@@ -31,6 +31,7 @@
 #include "formats/oiDL/dl_headers.h"
 #include "formats/oiSH/sh_headers.h"
 #include "formats/oiSR/sr_file.h"
+#include "formats/oiSP/sp_file.h"
 #include "formats/oiXX/oiXX.h"
 #include "formats/bmp/bmp_file.h"
 #include "formats/bmp/bmp_headers.h"
@@ -248,6 +249,7 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 		case SHHeader_MAGIC:    reqLen = sizeof(SHHeader) + sizeof(U32);    break;
 		case SBHeader_MAGIC:    reqLen = sizeof(SBHeader) + sizeof(U32);    break;
 		case SRHeader_MAGIC:    reqLen = sizeof(SRHeader) + sizeof(U32);    break;
+		case SPHeader_MAGIC:    reqLen = sizeof(SPHeader) + sizeof(U32);    break;
 		default:
 			Log_errorLnx("File wasn't recognized.");
 			goto clean;
@@ -331,6 +333,24 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 		}
 
 		//oiSR header (frontend symbol AST reflection)
+
+		case SPHeader_MAGIC: {
+
+			const SPHeader spHeader = *(const SPHeader*)(buf.ptr + sizeof(U32));
+
+			Log_debugLnx("Detected oiSP file with following info:");
+
+			XXFile_printVersion(spHeader.version);
+
+			Log_debugLnx(
+				"With %"PRIu32" pipeline(s), %"PRIu32" stage(s) and %"PRIu32" specialization(s)",
+				spHeader.pipelineCount,
+				spHeader.stageCount,
+				spHeader.specializationCount
+			);
+
+			break;
+		}
 
 		case SRHeader_MAGIC: {
 

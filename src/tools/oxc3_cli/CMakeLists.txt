@@ -34,7 +34,7 @@ target_link_libraries(
 	OxC3CLI PUBLIC
 	OxC3_types_base OxC3_types_math OxC3_types_container
 	OxC3_platforms
-	OxC3_formats_oiSH OxC3_formats_oiSB OxC3_formats_oiSR OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_wav
+	OxC3_formats_oiSH OxC3_formats_oiSP OxC3_formats_oiSB OxC3_formats_oiSR OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_wav
 	OxC3_formats_bmp OxC3_formats_dds
 	OxC3_audio
 )

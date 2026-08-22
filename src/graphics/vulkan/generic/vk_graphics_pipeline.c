@@ -111,6 +111,36 @@ static inline VkBlendFactor mapVkBlend(EBlend op) {
 	}
 }
 
+//Name of a SPIR-V module's entrypoint, or "main" when it can't be read.
+//vkCreateGraphicsPipelines requires pName to be a real OpEntryPoint, and the reflected name isn't always that name.
+
+static const C8 *VkGraphicsPipeline_spirvEntrypoint(Buffer spirv) {
+
+	const U32 *words = (const U32*) spirv.ptr;
+	const U64 wordCount = Buffer_length(spirv) >> 2;
+
+	if(!words || wordCount <= 5 || words[0] != 0x07230203)
+		return "main";
+
+	for (U64 w = 5; w < wordCount; ) {
+
+		const U32 op = words[w] & 0xFFFF;
+		const U32 len = words[w] >> 16;
+
+		if(!len)
+			break;
+
+		//OpEntryPoint (opcode 15) is execution model, id, then the null terminated name.
+
+		if(op == 15 && w + 3 < wordCount)
+			return (const C8*) (words + w + 3);
+
+		w += len;
+	}
+
+	return "main";
+}
+
 Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	GraphicsDevice *device,
 	const ListSHFile *binaries,
@@ -276,13 +306,13 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		const SHEntry *entry = &bin->entries.ptr[entrypointId];
 		const SHBinaryInfo *buf = &bin->binaries.ptr[entry->binaryIds.ptr[binaryId]];
 
-		//Bind the SPIR-V entrypoint, using the entry's own name (e.g. "mainVS" from the oiSH).
-		//Unlike DXIL, a SPIR-V module keeps its original entrypoint name.
-		//Fall back to "main" only when it's unnamed; entry->name lives in the SHFile for the call's duration.
-		//vkCreateGraphicsPipelines enforces that pName is a real OpEntryPoint.
+		//A graphics stage always compiles to its own single entrypoint module, but whether that entrypoint kept the
+		// HLSL name or was renamed to "main" depends on the compile path, while the oiSH records the HLSL name either
+		// way, so the name is read from the module itself.
+		//This can go once a binary records which of the two forms it is.
 
 		const Buffer stageSpirv = buf->binaries[ESHBinaryType_SPIRV];
-		const C8 *entryPoint = CharString_length(entry->name) ? entry->name.ptr : "main";
+		const C8 *entryPoint = VkGraphicsPipeline_spirvEntrypoint(stageSpirv);
 
 		VkShaderModule module = NULL;
 

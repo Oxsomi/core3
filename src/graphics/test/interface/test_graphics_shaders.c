@@ -934,7 +934,87 @@ clean:
 		SHFile_free(&files[i], alloc);
 }
 
-// -- 33. Ray trace execution -----------------------------------------------------
+// -- 33. Named entrypoint graphics pipeline --------------------------------------
+
+//A graphics pipeline whose vertex and pixel shaders do NOT name their entrypoint "main".
+//The compiler renames a non lib module's sole entrypoint to "main" in the SPIR-V while reflection keeps the
+// original name ("mainVS"/"mainPS"), so pipeline creation has to look up "main" and not the reflected name.
+//Only creation is exercised, since that is exactly where the wrong name is rejected by validation.
+
+void Test_graphicsShaderNamedEntry(Test *t, GraphicsDeviceRef *deviceRef) {
+
+	Test_setModule(t, "Shaders/namedEntry");
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if (!device->defaultDescriptorTable) {
+		Test_print(t, "Device has no bindless descriptor table, skipping named entrypoint test");
+		return;
+	}
+
+	if (!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering)) {
+		Test_print(t, "Device lacks direct rendering, skipping named entrypoint test");
+		return;
+	}
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	SHFile files[2] = { 0 };
+
+	const Bool loadedAll =
+		TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_named_vs.oiSH", &files[0]) &
+		TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_named_ps.oiSH", &files[1]);
+
+	if (!loadedAll) {
+
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping named entrypoint test");
+
+		for(U64 i = 0; i < 2; ++i)
+			SHFile_free(&files[i], alloc);
+
+		return;
+	}
+
+	ListSHFile fileList = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(files, 2, &fileList, NULL);
+
+	PipelineRef *pipeline = NULL;
+
+	const U32 vertexId = TestShaders_entry(t, deviceRef, &files[0], "mainVS");
+	const U32 pixelId = TestShaders_entry(t, deviceRef, &files[1], "mainPS");
+
+	if (vertexId != U32_MAX && pixelId != U32_MAX) {
+
+		PipelineStage stages[2] = {
+			(PipelineStage) { .binaryId = vertexId, .shFileId = 0 },
+			(PipelineStage) { .binaryId = pixelId, .shFileId = 1 }
+		};
+
+		ListPipelineStage stageList = (ListPipelineStage) { 0 };
+		ListPipelineStage_createRefConst(stages, 2, &stageList, NULL);
+
+		const PipelineGraphicsInfo info = (PipelineGraphicsInfo) {
+			.attachmentCountExt = 1,
+			.attachmentFormatsExt = { ETextureFormatId_RGBA8 }
+		};
+
+		const CharString name = CharString_createRefCStrConst("Named entrypoint graphics pipeline");
+
+		//Before the entrypoint fix this failed validation, looking up "mainVS" in a SPIR-V module whose
+		// entrypoint had been renamed to "main"
+
+		Test_assert(t, "createNamedEntryPipeline", GraphicsDeviceRef_createPipelineGraphics(
+			deviceRef, &fileList, &stageList, &info, &name, EPipelineFlags_None, NULL, &pipeline, &t->err
+		));
+	}
+
+	RefPtr_dec(&pipeline);
+
+	for(U64 i = 0; i < 2; ++i)
+		SHFile_free(&files[i], alloc);
+}
+
+// -- 34. Ray trace execution -----------------------------------------------------
 
 //The same one triangle scene the AS module builds, but with the bindless descriptor enabled so a real
 // raytracing pipeline can fetch the TLAS and trace against it.

@@ -57,6 +57,7 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsShaderCompute(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsShaderNamedEntry(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef);

@@ -346,10 +346,12 @@ static void Test_graphicsDeviceSingle(Test *t, GraphicsInstanceRef *instRef, con
 	Test_graphicsGpuExecute(t, deviceRef);
 	Test_graphicsAccelerationStructures(t, deviceRef);
 
-	//31-33. Shader execution: real dispatches, draws and traces with verified results
+	//31-34. Shader execution: real dispatches, draws and traces with verified results, plus a named
+	// entrypoint pipeline that only has to create
 
 	Test_graphicsShaderCompute(t, deviceRef);
 	Test_graphicsShaderDraw(t, deviceRef);
+	Test_graphicsShaderNamedEntry(t, deviceRef);
 	Test_graphicsShaderRays(t, deviceRef);
 
 	//34-36. Resource round trips and the frame ring, rather than what a shader computes

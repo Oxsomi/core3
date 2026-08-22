@@ -17,14 +17,36 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-add_subdirectory(oiXX)
-add_subdirectory(oiDL)
-add_subdirectory(oiCA)
-add_subdirectory(oiBC)
-add_subdirectory(dds)
-add_subdirectory(oiSB)
-add_subdirectory(oiSR)
-add_subdirectory(oiSH)
-add_subdirectory(oiSP)
-add_subdirectory(bmp)
-add_subdirectory(wav)
+
+file(GLOB formatsSPHeaders CONFIGURE_DEPENDS "../../../include/formats/oiSP/*.h")
+file(GLOB formatsSPSources CONFIGURE_DEPENDS "*.c")
+
+add_library(
+	OxC3_formats_oiSP
+	STATIC
+	${formatsSPHeaders}
+	${formatsSPSources}
+	CMakeLists.txt
+)
+
+set_target_properties(OxC3_formats_oiSP PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_oiSP PUBLIC OxC3_types_base OxC3_types_container OxC3_formats_oiDL OxC3_formats_oiSH)
+
+if(EnableTests AND OxC3TestExecutables)
+
+	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
+
+	add_executable(
+		OxC3_formats_oiSP_test
+		${testsC}
+		${testsH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_formats_oiSP_test PUBLIC OxC3_types_container_test_util OxC3_formats_oiSP)
+	set_target_properties(OxC3_formats_oiSP_test PROPERTIES FOLDER Oxsomi/test/formats)
+	target_include_directories(OxC3_formats_oiSP_test PUBLIC "../../../include")
+	add_test(NAME OxC3_formats_oiSP_test COMMAND OxC3_formats_oiSP_test)
+
+endif()

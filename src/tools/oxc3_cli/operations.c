@@ -85,7 +85,10 @@ const C8 *EOperationHasParameter_names[] = {
 	"-type",
 	"-oiCA",
 	"-aes-file",
-	"-asic"
+	"-asic",
+	"-rtv",
+	"-recursion-depth",
+	"-pso-output"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -109,7 +112,10 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Numeric type (e.g. a float format: F8, F16, F32, F64, BF16, TF19, PXR24, FP24).",
 	"Operate inside the given oiCA archive instead of the working directory.",
 	"Read the 32-byte AES key from a file (64/66-char hex or a raw 32-byte binary) instead of a plaintext argument.",
-	"AMD GPU/arch for ISA operations: a gfx target (e.g. gfx1100), or 'live[:index]'. Use '?' or 'isa devices' to list."
+	"AMD GPU/arch for ISA operations: a gfx target (e.g. gfx1100), or 'live[:index]'. Use '?' or 'isa devices' to list.",
+	"Override render target formats for live graphics ISA (e.g. rgba16f,r32f); default is reflected from the pixel shader.",
+	"Override the ray tracing recursion limit (default 1); the shader never declares it.",
+	"Write the pipeline the disassembly was taken from as an oiSP, so it can be inspected or loaded later."
 };
 
 //Flags
@@ -142,7 +148,8 @@ const C8 *EOperationFlags_names[EOperationFlags_Count] = {
 	"--verbose",
 	"--fixed",
 	"--aes-stdin",
-	"--keep-registers"
+	"--keep-registers",
+	"--assume-defaults"
 };
 
 const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
@@ -173,7 +180,8 @@ const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
 	"Print full information to the console.",
 	"Emit a fixed-point value instead of a float format (float convert).",
 	"Read the 32-byte AES key (hex) from one line of stdin instead of a plaintext argument.",
-	"Keep declared but unused resources bound and reflected (stable register layouts across shader variants)."
+	"Keep declared but unused resources bound and reflected (stable register layouts across shader variants).",
+	"Compile with assumed pipeline state instead of refusing; the assumed fields print with the disassembly."
 };
 
 //Operations
@@ -819,9 +827,11 @@ void Operations_init() {
 			.optionalParameters =
 				EOperationHasParameter_Output |
 				EOperationHasParameter_ISAAsic | EOperationHasParameter_Entry |
-				EOperationHasParameter_IncludeDir | EOperationHasParameter_ThreadCount,
+				EOperationHasParameter_IncludeDir | EOperationHasParameter_ThreadCount |
+				EOperationHasParameter_RTVFormat | EOperationHasParameter_RecursionDepth |
+				EOperationHasParameter_PipelineOutput,
 
-			.operationFlags = EOperationFlags_Debug | EOperationFlags_Verbose
+			.operationFlags = EOperationFlags_Debug | EOperationFlags_Verbose | EOperationFlags_AssumeDefaults
 		};
 
 	#endif

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # check_style.py
 # Style checks (all files):
-#   1.  No line longer than 128 characters
+#   1.  No line longer than 128 columns (a tab advances to the next multiple of 4)
 #   2.  No trailing tabs or spaces at end of line
 #   3.  No spaces used for indentation (tabs only)
 #   4.  No duplicate filenames anywhere in the scanned tree
@@ -91,6 +91,41 @@ ALL_EXTENSIONS    = C_EXTENSIONS
 INC_FRAGMENT_MARKERS = ('.inc.h', '.inc.hpp')
 
 MAX_LINE_LENGTH       = 128
+TAB_WIDTH             = 4
+
+
+def prune_dirs(dirs: list) -> None:
+    """Drop directories neither the checker nor the fixer should walk into.
+
+    Both the scanner and the in-place fixer use this, so the fixer can never
+    rewrite a directory the checker doesn't even look at, vendored clones most
+    of all: rewriting those would produce a huge diff against upstream.
+    """
+
+    # Repo-root clones of dependencies / prototypes: not committed, absent on a clean checkout.
+    local_clones = ('radeon_gpu_analyzer', 'DirectXShaderCompiler', 'nvapi', 'mesa', 'Vulkan-ValidationLayers')
+
+    dirs[:] = [
+        d for d in dirs
+        if not d.startswith('.') and d not in ('build', 'VULKAN_SDK', '__pycache__') and d not in local_clones
+    ]
+
+
+def visual_length(line: str, tab_width: int = TAB_WIDTH) -> int:
+    """Length of a line in columns, where a tab advances to the next tab stop.
+
+    A tab is up to `tab_width` spaces wide, not one character, so counting raw
+    characters lets a deeply indented line sit far past the limit while still
+    passing.  Measuring in columns is what the limit actually means.
+    """
+
+    col = 0
+
+    for ch in line:
+        col = (col // tab_width + 1) * tab_width if ch == '	' else col + 1
+
+    return col
+
 MAX_WARNINGS_PER_FILE = 20
 
 # ---------------------------------------------------------------------------
@@ -586,9 +621,11 @@ def check_file(
                 todos.append((lineno, m.group(1).upper(), line.strip()))
 
         # ── 1. Line length ────────────────────────────────────────────────
-        if len(line) > max_line_len:
+        line_cols = visual_length(line)
+        if line_cols > max_line_len:
             if add(f"  line {lineno}, col {max_line_len + 1}: "
-                   f"line too long ({len(line)} > {max_line_len} chars)"):
+                   f"line too long ({line_cols} > {max_line_len} columns, "
+                   f"tabs counted to the next multiple of {TAB_WIDTH})"):
                 return violations, todos
 
         # ── 2. Trailing whitespace ────────────────────────────────────────
@@ -657,7 +694,7 @@ def fix_indentation(root: str) -> tuple[int, int]:
       - Replace every run of 4 leading spaces on a line with one tab
         (applied repeatedly until no leading-space run of 4 remains).
       - Replace any tab that appears after the leading-whitespace indent
-        region (mid-line tab) with 4 spaces.
+        region (mid-line tab) with spaces up to the next tab stop.
 
     Skips files that contain non-ASCII bytes (they would need binary-safe
     handling and are already flagged by check 5).
@@ -668,7 +705,7 @@ def fix_indentation(root: str) -> tuple[int, int]:
     skipped = 0
 
     for dirpath, dirs, filenames in os.walk(root):
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'build']
+        prune_dirs(dirs)
         for fname in filenames:
             ext = os.path.splitext(fname)[1].lower()
             if ext not in ALL_EXTENSIONS:
@@ -707,11 +744,28 @@ def fix_indentation(root: str) -> tuple[int, int]:
                     else:
                         break
 
-                # ── Step 2: mid-line tabs → 4 spaces ─────────────────────
+                # Step 2: mid-line tabs -> spaces up to the next tab stop.
+                # A tab is *up to* tab_width spaces: it advances to the next
+                # multiple of tab_width, so expanding every one to a flat 4
+                # spaces shifts whatever the tab was aligning.  Expanding by
+                # column preserves that alignment.
                 indent_len = len(new_body) - len(new_body.lstrip('\t'))
                 indent     = new_body[:indent_len]
                 rest       = new_body[indent_len:]
-                rest       = rest.replace('\t', '    ')
+
+                if '\t' in rest:
+                    col      = indent_len * TAB_WIDTH        # the indent is all tabs
+                    expanded = []
+                    for ch in rest:
+                        if ch == '\t':
+                            pad = TAB_WIDTH - (col % TAB_WIDTH)
+                            expanded.append(' ' * pad)
+                            col += pad
+                        else:
+                            expanded.append(ch)
+                            col += 1
+                    rest = ''.join(expanded)
+
                 new_body   = indent + rest
 
                 if new_body != body:
@@ -740,10 +794,7 @@ def scan(
     names_to_paths: dict[str, list[str]] = defaultdict(list)
 
     for dirpath, dirs, filenames in os.walk(root):
-        # Prune hidden directories (.git, .cache, .vscode, etc.) so they
-        # are never recursed into.  Modifying dirs[:] in-place is the
-        # os.walk-documented way to control recursion.
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'build' and d != 'VULKAN_SDK' and d != '__pycache__']
+        prune_dirs(dirs)
         for fname in filenames:
             ext = os.path.splitext(fname)[1].lower()
             if ext not in ALL_EXTENSIONS:
@@ -825,7 +876,7 @@ def main() -> None:
     parser.add_argument("root", help="Root directory to scan")
     parser.add_argument(
         "--max-line-length", type=int, default=MAX_LINE_LENGTH,
-        metavar="N", help=f"Maximum allowed line length (default: {MAX_LINE_LENGTH})"
+        metavar="N", help=f"Maximum allowed line length in columns (default: {MAX_LINE_LENGTH})"
     )
     parser.add_argument(
         "--max-warnings-per-file", type=int, default=MAX_WARNINGS_PER_FILE,
