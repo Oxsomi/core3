@@ -136,7 +136,9 @@ static Bool Process_drainPipe(HANDLE *pipe, ListU8 *acc, Bool *any, const Alloca
 	}
 
 	if(acc->length + got > PROCESS_MAX_CAPTURE)
-		retError(clean, Error_outOfBounds(0, acc->length + got, PROCESS_MAX_CAPTURE, "Process_run() captured output too large"));
+		retError(clean, Error_outOfBounds(
+			0, acc->length + got, PROCESS_MAX_CAPTURE, "Process_run() captured output too large"
+		));
 
 	ListU8 ref = (ListU8) { 0 };
 	gotoIfError3(clean, ListU8_createRefConst(chunk, got, &ref, e_rr));

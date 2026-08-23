@@ -2177,3 +2177,23 @@ const GraphicsObjectTypes *GraphicsDevice_getTypes(const GraphicsDevice *device)
 const GraphicsObjectTypes *GraphicsDeviceRef_getTypes(GraphicsDeviceRef *device) {
 	return GraphicsDevice_getTypes(GraphicsDeviceRef_ptr(device));
 }
+
+Bool GraphicsDeviceRef_listShaderTargets(
+	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!deviceRef || !result)
+		retError(clean, Error_nullPointer(!deviceRef ? 0 : 2, "GraphicsDeviceRef_listShaderTargets() requires both"));
+
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(
+			2, 0, "GraphicsDeviceRef_listShaderTargets()::result isn't empty, may indicate memleak"
+		));
+
+	gotoIfError3(clean, GraphicsDeviceRef_listShaderTargetsExt(deviceRef, alloc, result, e_rr));
+
+clean:
+	return s_uccess;
+}

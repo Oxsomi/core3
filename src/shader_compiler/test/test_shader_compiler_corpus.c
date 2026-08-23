@@ -565,7 +565,9 @@ void Test_shaderCompilerCorpus(Test *t) {
 			else {
 				File_write(&produced, &ref, 0, 0, 1 * SECOND, true, &fileHandleType, &err);
 				err = Error_none();
-				Log_warnLn(alloc, "Generated missing oiSR reference %.*s (review & commit)", (int) CharString_length(ref), ref.ptr);
+				Log_warnLn(
+					alloc, "Generated missing oiSR reference %.*s (review & commit)", (int) CharString_length(ref), ref.ptr
+				);
 				Test_assert(t, ref.ptr, false);
 			}
 
@@ -610,7 +612,8 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 			if (
 				!MemoryStream_createFromBufferRegion(
-					Buffer_createRefFromBuffer(oiSH, true), 0, Buffer_length(oiSH), EMemoryStreamFlags_None, &msTypeIsa, &ms, &err
+					Buffer_createRefFromBuffer(oiSH, true), 0, Buffer_length(oiSH),
+					EMemoryStreamFlags_None, &msTypeIsa, &ms, &err
 				) ||
 				!SHFile_read((StreamRef*) ms, &shOff, false, alloc, &sh, &err)
 			) {
@@ -648,7 +651,8 @@ void Test_shaderCompilerCorpus(Test *t) {
 					//Pass the binary's entrypoint so amdllpc lowers the RIGHT one out of a multi-entry (library) module,
 					//not just the module's first entrypoint (which would make every non-vertex lib stage wrong).
 
-					const Bool ok = SpvISA_disassemble(spv, target, sh.binaries.ptr[b].identifier.entrypoint, &isa, alloc, &err);
+					const Bool ok =
+						SpvISA_disassemble(spv, target, sh.binaries.ptr[b].identifier.entrypoint, &isa, alloc, &err);
 
 					//The first attempt doubles as the availability probe: a launch failure (tools absent) skips the
 					//whole phase, while any other failure is a real regression to surface.
@@ -657,7 +661,10 @@ void Test_shaderCompilerCorpus(Test *t) {
 						isaProbed = true;
 						isaAvailable = ok || err.genericError != EGenericError_NotFound;
 						if (!isaAvailable)
-							Log_warnLn(alloc, "ISA snapshot skipped: amdllpc/amdgpu-dis not found next to the test (rga/utils not bundled)");
+							Log_warnLn(
+								alloc,
+								"ISA snapshot skipped: amdllpc/amdgpu-dis not found next to the test (rga/utils not bundled)"
+							);
 					}
 
 					if (!isaAvailable) {
@@ -667,7 +674,10 @@ void Test_shaderCompilerCorpus(Test *t) {
 					}
 
 					if (!ok) {
-						Log_errorLn(alloc, "ISA disassembly failed for %.*s binary %"PRIu64" @ %s", (int) baseLen, out.ptr, b, isaTargets[tI]);
+						Log_errorLn(
+							alloc, "ISA disassembly failed for %.*s binary %"PRIu64" @ %s",
+							(int) baseLen, out.ptr, b, isaTargets[tI]
+						);
 						Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 						err = Error_none();
 						Test_assert(t, "ISA disassembly", false);
@@ -678,7 +688,9 @@ void Test_shaderCompilerCorpus(Test *t) {
 					//Golden = <base>.gfxNN.isa for a single-binary oiSH, <base>.<binaryIndex>.gfxNN.isa when it has several
 
 					const Bool made = multi ?
-						CharString_format(alloc, &ref, &err, "%.*s.%"PRIu64".%s.isa", (int) baseLen, out.ptr, b, isaSuffix[tI]) :
+						CharString_format(
+							alloc, &ref, &err, "%.*s.%"PRIu64".%s.isa", (int) baseLen, out.ptr, b, isaSuffix[tI]
+						) :
 						CharString_format(alloc, &ref, &err, "%.*s.%s.isa", (int) baseLen, out.ptr, isaSuffix[tI]);
 
 					if (!made) {
@@ -710,7 +722,10 @@ void Test_shaderCompilerCorpus(Test *t) {
 					else {
 						File_write(&isa, &ref, 0, 0, 1 * SECOND, true, &fileHandleType, &err);
 						err = Error_none();
-						Log_warnLn(alloc, "Generated missing ISA reference %.*s (review & commit)", (int) CharString_length(ref), ref.ptr);
+						Log_warnLn(
+							alloc, "Generated missing ISA reference %.*s (review & commit)",
+							(int) CharString_length(ref), ref.ptr
+						);
 						Test_assert(t, ref.ptr, false);
 					}
 

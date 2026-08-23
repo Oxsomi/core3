@@ -434,8 +434,12 @@ Bool SpvISA_disassemble(
 	gotoIfError3(clean, File_add(&tmpDir, EFileType_Folder, false, alloc, e_rr));
 	madeTmp = true;
 
-	gotoIfError3(clean, CharString_format(alloc, &tmpSpv, e_rr, "%.*s/shader.spv", (int) CharString_length(tmpDir), tmpDir.ptr));
-	gotoIfError3(clean, CharString_format(alloc, &tmpElf, e_rr, "%.*s/shader.elf", (int) CharString_length(tmpDir), tmpDir.ptr));
+	gotoIfError3(clean, CharString_format(
+		alloc, &tmpSpv, e_rr, "%.*s/shader.spv", (int) CharString_length(tmpDir), tmpDir.ptr
+	));
+	gotoIfError3(clean, CharString_format(
+		alloc, &tmpElf, e_rr, "%.*s/shader.elf", (int) CharString_length(tmpDir), tmpDir.ptr
+	));
 	gotoIfError3(clean, File_write(&spirv, &tmpSpv, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
 
 	const Bool isWin = _PLATFORM_TYPE == PLATFORM_WINDOWS;
@@ -563,7 +567,8 @@ Bool SpvISA_listSupportedTargets(const Allocator *alloc, ListCharString *out, Er
 	static const struct { const C8 *gfx; const C8 *arch; } candidates[] = {
 		{ "gfx900", "GCN5/Vega" }, { "gfx906", "GCN5/Vega20" },
 		{ "gfx1010", "RDNA1" }, { "gfx1030", "RDNA2" }, { "gfx1032", "RDNA2" }, { "gfx1034", "RDNA2" }, { "gfx1035", "RDNA2" },
-		{ "gfx1100", "RDNA3" }, { "gfx1101", "RDNA3" }, { "gfx1102", "RDNA3" }, { "gfx1103", "RDNA3" }, { "gfx1150", "RDNA3.5" },
+		{ "gfx1100", "RDNA3" }, { "gfx1101", "RDNA3" }, { "gfx1102", "RDNA3" }, { "gfx1103", "RDNA3" },
+		{ "gfx1150", "RDNA3.5" },
 		{ "gfx1200", "RDNA4" }, { "gfx1201", "RDNA4" }
 	};
 
@@ -583,7 +588,9 @@ Bool SpvISA_listSupportedTargets(const Allocator *alloc, ListCharString *out, Er
 		ListCharString_free(&args, alloc);
 
 		gotoIfError3(clean, SpvISA_gfxipArg(CharString_createRefCStrConst(candidates[i].gfx), alloc, &gfxip, e_rr));
-		gotoIfError3(clean, CharString_format(alloc, &gfxipArg, e_rr, "-gfxip=%.*s", (int) CharString_length(gfxip), gfxip.ptr));
+		gotoIfError3(clean, CharString_format(
+			alloc, &gfxipArg, e_rr, "-gfxip=%.*s", (int) CharString_length(gfxip), gfxip.ptr
+		));
 		gotoIfError3(clean, ListCharString_pushBack(&args, gfxipArg, alloc, e_rr));
 
 		I32 exitCode = 0;

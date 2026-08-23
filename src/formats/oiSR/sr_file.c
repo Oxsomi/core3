@@ -241,7 +241,9 @@ Bool SRFile_addString(SRFile *srFile, CharString *str, const Allocator *alloc, U
 	}
 
 	if(srFile->names.entryStrings.length >= U32_MAX - 1)
-		retError(clean, Error_outOfBounds(0, srFile->names.entryStrings.length, U32_MAX - 1, "SRFile_addString() too many strings"));
+		retError(clean, Error_outOfBounds(
+			0, srFile->names.entryStrings.length, U32_MAX - 1, "SRFile_addString() too many strings"
+		));
 
 	//The pool owns its strings, so store a copy (DLFile_addEntryString moves it in)
 

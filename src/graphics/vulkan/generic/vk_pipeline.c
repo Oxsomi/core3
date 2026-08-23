@@ -203,7 +203,9 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 			for(U32 j = 0; j < statCount; ++j) {
 
 				PipelineStatistic *st = &exec->statistics.ptrNonConst[j];
-				gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(stats[j].name), alloc, &st->name, e_rr));
+				gotoIfError3(clean, CharString_createCopy(
+					CharString_createRefCStrConst(stats[j].name), alloc, &st->name, e_rr
+				));
 				gotoIfError3(clean, CharString_createCopy(
 					CharString_createRefCStrConst(stats[j].description), alloc, &st->description, e_rr
 				));
@@ -243,7 +245,8 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 			gotoIfError3(clean, Buffer_createUninitializedBytes(
 				sizeof(VkPipelineExecutableInternalRepresentationKHR) * irCount, alloc, &irsBuf, e_rr
 			));
-			VkPipelineExecutableInternalRepresentationKHR *irs = (VkPipelineExecutableInternalRepresentationKHR*) irsBuf.ptrNonConst;
+			VkPipelineExecutableInternalRepresentationKHR *irs =
+				(VkPipelineExecutableInternalRepresentationKHR*) irsBuf.ptrNonConst;
 
 			for(U32 j = 0; j < irCount; ++j)
 				irs[j] = (VkPipelineExecutableInternalRepresentationKHR) {

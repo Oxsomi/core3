@@ -133,6 +133,12 @@ typedef struct GraphicsObjectSizes {
 		Pipeline *pipeline, const Allocator *alloc, ListPipelineExecutable *result, Error *e_rr
 	);
 
+	//Shader targets other than the device itself that its driver can still compile for, if any.
+
+	typedef Bool (*GraphicsDeviceRef_listShaderTargetsImpl)(
+		GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+	);
+
 	//Sampler
 
 	typedef Bool (*GraphicsDeviceRef_createSamplerImpl)(
@@ -331,6 +337,7 @@ typedef struct GraphicsObjectSizes {
 		GraphicsDevice_createPipelineRaytracingImpl      pipelineCreateRt;
 		Pipeline_freeImpl                                pipelineFree;
 		Pipeline_getExecutablesImpl                      pipelineGetExecutables;
+		GraphicsDeviceRef_listShaderTargetsImpl          deviceListShaderTargets;
 
 		GraphicsDeviceRef_createSamplerImpl              samplerCreate;
 		Sampler_freeImpl                                 samplerFree;
@@ -445,6 +452,10 @@ Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 
 void Pipeline_freeExt(Pipeline *pipeline, const Allocator *alloc);
 Bool Pipeline_getExecutablesExt(Pipeline *pipeline, const Allocator *alloc, ListPipelineExecutable *result, Error *e_rr);
+
+Bool GraphicsDeviceRef_listShaderTargetsExt(
+	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+);
 
 //Sampler
 

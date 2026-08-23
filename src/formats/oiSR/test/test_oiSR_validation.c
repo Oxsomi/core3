@@ -347,7 +347,9 @@ void Test_SRReadStreamShape(Test *t) {
 
 			StreamRef *trailing = NULL;
 			Bool made = MemoryStream_createFromBufferRegion(
-				Buffer_createRefConst(padded.ptr, total + 16), 0, total + 16, EMemoryStreamFlags_None, &type, &trailing, &t->err);
+				Buffer_createRefConst(padded.ptr, total + 16), 0, total + 16,
+				EMemoryStreamFlags_None, &type, &trailing, &t->err
+			);
 
 			SRFile result = { 0 };
 			Bool readOk = false;
@@ -431,7 +433,10 @@ void Test_SRFileStructuralRoundTrips(Test *t) {
 
 			Bool ok = srRoundTrip(t, &sr, &type, &s, &result);
 			Test_assert(t, "anonymous node round-trips", ok);
-			Test_assert(t, "anonymous node stays anonymous", ok && result.nodes.length == 1 && result.nodes.ptr[0].nameId == U32_MAX);
+			Test_assert(
+				t, "anonymous node stays anonymous",
+				ok && result.nodes.length == 1 && result.nodes.ptr[0].nameId == U32_MAX
+			);
 			SRFile_print(&result, 0, true, true, t->alloc);        //verbose must not crash on (anonymous)
 		}
 		else Test_assert(t, "create anon", false);

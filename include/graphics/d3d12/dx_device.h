@@ -22,6 +22,7 @@
 
 #pragma once
 #include "graphics/d3d12/direct3d12.h"
+#include "graphics/d3d12/dx_amd_shader_analyzer.h"
 #include "graphics/generic/command_list.h"
 #include "types/container/list.h"
 #include "types/container/list_predeclare.h"
@@ -165,6 +166,10 @@ typedef struct DxGraphicsDevice {
 
 	U64 fenceId;
 	U64 padding;
+
+	//AMD's driver extension, the only route to a compiled shader on D3D12; zeroed on any other driver.
+
+	DxAmdShaderAnalyzer amdAnalyzer;
 
 } DxGraphicsDevice;
 

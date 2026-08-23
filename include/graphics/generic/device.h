@@ -26,6 +26,7 @@
 #include "graphics/generic/resource.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
+#include "types/container/string.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -257,6 +258,14 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 //Records the queued pullRegion reads into the command buffer; called by backends after the frame's commands.
 Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr);
 Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize, Error *e_rr);
+
+//Shader targets this device's driver can compile for besides the device itself; empty on a backend or driver
+// that offers none, which is every one but AMD's D3D12 today.
+//The names are the driver's own and can be passed back as an ISA target.
+
+Bool GraphicsDeviceRef_listShaderTargets(
+	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+);
 
 #ifdef __cplusplus
 	}

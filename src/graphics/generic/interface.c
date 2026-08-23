@@ -193,6 +193,22 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		WrapperFunction(pipeline->device, pipelineFree)(pipeline, alloc);
 	}
 
+	//A backend with nothing to add simply has no entry, which is not an error: the list stays empty.
+
+	Bool GraphicsDeviceRef_listShaderTargetsExt(
+		GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+	) {
+
+		Bool s_uccess = true;
+		GraphicsDeviceRef_listShaderTargetsImpl listFn = WrapperFunction(deviceRef, deviceListShaderTargets);
+
+		if(listFn)
+			gotoIfError3(clean, listFn(deviceRef, alloc, result, e_rr));
+
+	clean:
+		return s_uccess;
+	}
+
 	Bool Pipeline_getExecutablesExt(Pipeline *pipeline, const Allocator *alloc, ListPipelineExecutable *result, Error *e_rr) {
 
 		Bool s_uccess = true;

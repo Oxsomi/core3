@@ -232,6 +232,24 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		deviceExt->device, &IID_ID3D12DeviceConfiguration1, (void**) &deviceExt->deviceConfig
 	), e_rr));
 
+	//D3D12 has no pipeline introspection of its own, so the capability is whatever AMD's extension offers.
+	//It's probed here rather than at enumeration because it needs a live ID3D12Device.
+	//An AMD driver can be installed next to another vendor's GPU, so the adapter has to be AMD as well: the
+	// extension binds to a device and would otherwise describe hardware that isn't the one being inspected.
+
+	Bool isAmd = device->info.vendor == EGraphicsVendorId_AMD;
+
+	#ifdef _HAS_AMD_AGS
+
+		//AGS initializing proves the AMD driver is present and answering, not just that the adapter reports as AMD.
+
+		isAmd &= !!(instanceExt->flags & EDxGraphicsInstanceFlags_HasAMDAgs);
+
+	#endif
+
+	if(isAmd && DxAmdShaderAnalyzer_init((ID3D12Device*) deviceExt->device, &deviceExt->amdAnalyzer))
+		device->info.capabilities.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
+
 	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
 	(void) isNv;
 
@@ -501,6 +519,8 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	const Allocator *alloc = instance->alloc;
 
 	DxGraphicsDevice *deviceExt = (DxGraphicsDevice*)ext;
+
+	DxAmdShaderAnalyzer_free(&deviceExt->amdAnalyzer);
 
 	if(deviceExt->device) {
 

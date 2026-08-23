@@ -100,6 +100,8 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 			.pipelineCreateCompute = D3D12GraphicsDevice_createPipelineCompute,
 			.pipelineCreateRt = D3D12GraphicsDevice_createPipelineRaytracingInternal,
 			.pipelineFree = D3D12Pipeline_free,
+			.pipelineGetExecutables = DX_WRAP_FUNC(Pipeline_getExecutables),
+			.deviceListShaderTargets = DX_WRAP_FUNC(GraphicsDeviceRef_listShaderTargets),
 
 			.samplerCreate = D3D12GraphicsDeviceRef_createSampler,
 			.samplerFree = D3D12Sampler_free,

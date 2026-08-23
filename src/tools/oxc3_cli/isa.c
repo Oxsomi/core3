@@ -61,6 +61,102 @@
 //Used by 'isa devices', the '?' shorthand, and as a hint after an unknown -asic.
 //amdllpc + amdgpu-dis do the disassembly directly, and amdllpc reports its own target set.
 
+//The shader analyzer lives in the AMD driver and binds to a device, so a machine that mixes vendors has to pick
+// the AMD adapter rather than whichever one enumerated first.
+//Returns U64_MAX when there's no AMD device to bind to.
+
+#ifdef CLI_GRAPHICS
+
+	static U64 CLI_isaFindAmdDevice(ListGraphicsDeviceInfo infos) {
+
+		for(U64 i = 0; i < infos.length; ++i)
+			if(infos.ptr[i].vendor == EGraphicsVendorId_AMD)
+				return i;
+
+		return U64_MAX;
+	}
+
+#endif
+
+//Targets the installed driver can compile for besides the device itself, which today means AMD on D3D12.
+//Absent everywhere else, so a machine without them says nothing rather than reporting a failure.
+
+static Bool CLI_isaPrintLiveTargets(const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	//Failures land in a local error that is deliberately dropped: a machine without these targets is the normal
+	// case and shouldn't turn 'isa devices' into a failure.
+
+	(void) e_rr;
+
+	#ifndef CLI_GRAPHICS
+		(void) alloc;
+	#else
+
+		RefPtrType instanceType = (RefPtrType) { 0 };
+		GraphicsInstanceRef *instanceRef = NULL;
+		GraphicsDeviceRef *deviceRef = NULL;
+		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
+		ListCharString liveTargets = (ListCharString) { 0 };
+		Error gErr = Error_none();
+
+		if(!GraphicsInterface_create(&gErr) || !GraphicsInterface_supportsApi(EGraphicsApi_Direct3D12))
+			goto clean;
+
+		instanceType = GraphicsInstance_makeType(EGraphicsApi_Direct3D12, alloc);
+
+		const GraphicsApplicationInfo appInfo = {
+			.name = CharString_createRefCStrConst("OxC3 CLI isa devices"),
+			.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
+		};
+
+		if(!GraphicsInstance_create(
+			&appInfo, EGraphicsApi_Direct3D12, EGraphicsInstanceFlags_None, alloc, &instanceType, &instanceRef, &gErr
+		))
+			goto clean;
+
+		if(!GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, &gErr) || !infos.length)
+			goto clean;
+
+		//The list belongs to the driver rather than the adapter, so any AMD device answers for the whole generation.
+
+		const U64 amdDevice = CLI_isaFindAmdDevice(infos);
+
+		if(amdDevice == U64_MAX)
+			goto clean;
+
+		if(!GraphicsDeviceRef_create(
+			instanceRef, &infos.ptr[amdDevice], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default,
+			NULL, &deviceRef, &gErr
+		))
+			goto clean;
+
+		if(!GraphicsDeviceRef_listShaderTargets(deviceRef, alloc, &liveTargets, &gErr) || !liveTargets.length)
+			goto clean;
+
+		Log_debugLnx("");
+		Log_debugLnx(
+			"Live DXIL targets (%s driver; pass one as -asic with -compile-output dxil):", infos.ptr[amdDevice].name
+		);
+
+		for(U64 i = 0; i < liveTargets.length; ++i)
+			Log_debugLnx("\t%.*s", (int) CharString_length(liveTargets.ptr[i]), liveTargets.ptr[i].ptr);
+
+	clean:
+
+		//The device holds on to the info it was created from, so the list outlives it
+
+		ListCharString_freeUnderlying(&liveTargets, alloc);
+		RefPtr_dec(&deviceRef);
+		RefPtr_dec(&instanceRef);
+		ListGraphicsDeviceInfo_free(&infos, alloc);
+
+	#endif
+
+	return s_uccess;
+}
+
 static Bool CLI_isaPrintDevices(const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -72,6 +168,11 @@ static Bool CLI_isaPrintDevices(const Allocator *alloc, Error *e_rr) {
 
 	for(U64 i = 0; i < targets.length; ++i)
 		Log_debugLnx("\t%.*s", (int) CharString_length(targets.ptr[i]), targets.ptr[i].ptr);
+
+	//An installed AMD driver compiles for its whole generation, not only the ASIC present, and that's the only
+	// route DXIL has to ISA; those need a device to enumerate, so they're listed separately.
+
+	gotoIfError3(clean, CLI_isaPrintLiveTargets(alloc, e_rr));
 
 clean:
 	ListCharString_freeUnderlying(&targets, alloc);
@@ -150,11 +251,27 @@ clean:
 	//The same text is used for the console and for -output, so both paths look identical.
 
 	static Bool CLI_isaAppendExecutables(
-		CharString *out, const ListPipelineExecutable *execs, const Allocator *alloc, Error *e_rr
+		CharString *out, const ListPipelineExecutable *execs, Bool hasIntrospection,
+		const Allocator *alloc, Error *e_rr
 	) {
 
 		Bool s_uccess = true;
 		CharString line = CharString_createNull();
+
+		//A device with no introspection still validated the pipeline by creating it, so that's what's reported.
+		//On D3D12 that means anything but an AMD driver, since ISA there comes from AMD's own extension.
+
+		if (!hasIntrospection) {
+
+			const CharString noApi = CharString_createRefCStrConst(
+				";   (this device exposes no pipeline introspection, so there is nothing to read back. The pipeline "
+				"compiled, which validates the binary and the state against a real driver. D3D12 has no equivalent "
+				"of VK_KHR_pipeline_executable_properties, so ISA there comes from AMD's own driver extension and "
+				"needs an AMD driver. For AMD ISA from SPIR-V use '-asic <gfxN>')\n"
+			);
+
+			return CharString_appendString(out, &noApi, alloc, e_rr);
+		}
 
 		if(!execs->length) {
 
@@ -438,7 +555,8 @@ clean:
 	//Compiles the stand-ins to an oiSH entirely in memory, so nothing is written next to the user's files.
 
 	static Bool CLI_isaCompileStandIns(
-		const SHEntry *vsTarget, const SHEntry *psSource, SHFile *out, const Allocator *alloc, Error *e_rr
+		const SHEntry *vsTarget, const SHEntry *psSource, ESHBinaryType binaryType,
+		SHFile *out, const Allocator *alloc, Error *e_rr
 	) {
 
 		Bool s_uccess = true;
@@ -464,7 +582,9 @@ clean:
 			&outputs, CharString_createRefCStrConst("oxc3_isa_stand_ins.oiSH"), alloc, e_rr
 		));
 
-		gotoIfError3(clean, ListU8_pushBack(&modes, (U8) ESHBinaryType_SPIRV, alloc, e_rr));
+		//The stand-ins join the shader's own stages in one pipeline, so they have to be the same binary type.
+
+		gotoIfError3(clean, ListU8_pushBack(&modes, (U8) binaryType, alloc, e_rr));
 
 		gotoIfError3(clean, Compiler_compileShaders(
 			&files, &texts, &outputs, &modes,
@@ -635,9 +755,47 @@ clean:
 		return s_uccess;
 	}
 
+	//A single entry module has its SPIR-V entrypoint normalized to "main" while a library keeps the HLSL names, so
+	// the name the oiSH recorded is only handed to the backend when the module genuinely carries it.
+	//Passing a name the module doesn't have resolves to nothing and the driver reports it as an opaque failure.
+	//The returned string references the oiSH, so it lives as long as the caller's SHFile.
+
+	static CharString CLI_isaSpirvEntry(const SHFile *shFile, U32 entry, CharString recorded, const Allocator *alloc) {
+
+		if(!CharString_length(recorded) || (U16) entry >= shFile->entries.length)
+			return CharString_createNull();
+
+		const SHEntry *shEntry = &shFile->entries.ptr[(U16) entry];
+		const U16 binaryIndex = (U16)(entry >> 16);
+
+		if(binaryIndex >= shEntry->binaryIds.length)
+			return CharString_createNull();
+
+		const U16 binaryId = shEntry->binaryIds.ptr[binaryIndex];
+
+		if(binaryId >= shFile->binaries.length)
+			return CharString_createNull();
+
+		const Buffer spirv = shFile->binaries.ptr[binaryId].binaries[ESHBinaryType_SPIRV];
+
+		if(!Buffer_length(spirv))
+			return CharString_createNull();
+
+		ListCompilerEntrypoint eps = (ListCompilerEntrypoint) { 0 };
+		Error epErr = Error_none();
+		Bool found = false;
+
+		if(Compiler_getUniqueEntrypoints(NULL, ESHBinaryType_SPIRV, spirv, true, &eps, alloc, &epErr))
+			for(U64 i = 0; i < eps.length && !found; ++i)
+				found = CharString_equalsStringSensitive(&eps.ptr[i].name, &recorded);
+
+		ListCompilerEntrypoint_freeUnderlying(&eps, alloc);
+		return found ? recorded : CharString_createNull();
+	}
+
 	static Bool CLI_isaDisassembleLive(
-		SHFile shFile, U64 deviceId, Bool hasOutput, CharString outputStr, const RefPtrType *fileHandleType,
-		Bool assumeDefaults,
+		SHFile shFile, ESHBinaryType binaryType, U64 deviceId, Bool hasOutput, CharString outputStr,
+		const RefPtrType *fileHandleType, Bool assumeDefaults,
 		Bool hasPipelineOutput, CharString pipelineOutputStr, CharString psoSet, CharString psoInput,
 		CharString shaderName,
 		const Allocator *alloc, Error *e_rr
@@ -670,10 +828,21 @@ clean:
 				0, "CLI_isaDisassembleLive() couldn't create a graphics interface (no driver/ICD?)"
 			));
 
-		if(!GraphicsInterface_supportsApi(EGraphicsApi_Vulkan))
-			retError(clean, Error_unsupportedOperation(0, "CLI_isaDisassembleLive() Vulkan isn't available on this machine"));
+		//SPIR-V is compiled by Vulkan and DXIL by D3D12, so the binary the oiSH holds picks the backend.
+		//Everything below is the generic graphics interface, so only this choice differs between them.
 
-		instanceType = GraphicsInstance_makeType(EGraphicsApi_Vulkan, alloc);
+		const EGraphicsApi api = binaryType == ESHBinaryType_DXIL ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan;
+		const C8 *apiName = EGraphicsApi_name[api];
+
+		if (!GraphicsInterface_supportsApi(api)) {
+
+			Log_errorLnx("%s isn't available on this machine, which is what %s binaries are compiled by.", apiName,
+				ESHBinaryType_names[binaryType]);
+
+			retError(clean, Error_unsupportedOperation(0, "CLI_isaDisassembleLive() the required graphics API is unavailable"));
+		}
+
+		instanceType = GraphicsInstance_makeType(api, alloc);
 
 		const GraphicsApplicationInfo appInfo = {
 			.name = CharString_createRefCStrConst("OxC3 CLI isa live"),
@@ -681,20 +850,29 @@ clean:
 		};
 
 		gotoIfError3(clean, GraphicsInstance_create(
-			&appInfo, EGraphicsApi_Vulkan, EGraphicsInstanceFlags_None, alloc, &instanceType, &instanceRef, e_rr
+			&appInfo, api, EGraphicsInstanceFlags_None, alloc, &instanceType, &instanceRef, e_rr
 		));
 
 		gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr));
 
 		if(!infos.length)
-			retError(clean, Error_invalidState(0, "CLI_isaDisassembleLive() no Vulkan devices found"));
+			retError(clean, Error_invalidState(0, "CLI_isaDisassembleLive() the graphics API reported no devices"));
 
-		//List the Vulkan devices so the user can pick one with -asic live:<index> (multi-GPU / multi-vendor machines)
+		//List the devices so the user can pick one with -asic live:<index> (multi-GPU / multi-vendor machines)
 
-		Log_debugLnx("Vulkan devices (select with -asic live:<index>):");
+		Log_debugLnx("%s devices (select with -asic live:<index>):", apiName);
 
 		for(U64 i = 0; i < infos.length; ++i)
 			Log_debugLnx("\t%"PRIu64": %s", i, infos.ptr[i].name);
+
+		//Plain "live" picks for the caller: DXIL is only introspectable through AMD's driver extension, so an AMD
+		// adapter is preferred over whichever one enumerated first, while SPIR-V is cross-vendor and takes device 0.
+
+		if (deviceId == U64_MAX) {
+
+			const U64 amdDevice = api == EGraphicsApi_Direct3D12 ? CLI_isaFindAmdDevice(infos) : U64_MAX;
+			deviceId = amdDevice == U64_MAX ? 0 : amdDevice;
+		}
 
 		if(deviceId >= infos.length)
 			retError(clean, Error_outOfBounds(
@@ -706,10 +884,14 @@ clean:
 			NULL, &deviceRef, e_rr
 		));
 
+		//Without introspection the run still builds the pipeline, which validates the binary and the state; it just
+		// has nothing to disassemble afterwards, so it's said here rather than refused.
+
 		if(!(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features2 & EGraphicsFeatures2_PipelineExecutableInfo))
-			retError(clean, Error_unsupportedOperation(
-				0, "CLI_isaDisassembleLive() device lacks VK_KHR_pipeline_executable_properties"
-			));
+			Log_warnLnx(
+				"%s on this device exposes no pipeline introspection, so this run validates the pipeline without "
+				"disassembling it.", apiName
+			);
 
 		//A NULL layout takes the device's default bindless layout (@resources.hlsli), which is what OxC3 compiles
 		// shaders against, so the pipeline is valid as-is; a per-shader detected layout would instead omit the bindless
@@ -764,8 +946,9 @@ clean:
 			static const C8 *kindNames[3] = { "compute", "graphics", "ray tracing" };
 
 			Log_warnLnx(
-				"This file holds %s, %s and %s stages, which are separate pipelines; only the %s one is compiled. "
-				"Use -entry to pick another.",
+				"This file holds %s, %s and %s stages, which are separate pipelines; only the %s one is compiled, "
+				"since the live path takes compute over graphics over ray tracing. Pass a file holding a single kind "
+				"to inspect the others.",
 				kindCounts[0] ? "compute" : "no compute", kindCounts[1] ? "graphics" : "no graphics",
 				kindCounts[2] ? "ray tracing" : "no ray tracing", kindNames[chosenKind]
 			);
@@ -904,11 +1087,22 @@ clean:
 				deviceRef, &shFile, &entryName, NULL, NULL, ESHExtension_None, ESHExtension_None
 			);
 
+			//A stage that resolves to nothing usually failed the device's own feature check, which prints its reason
+			// just above this; the common one is a shader built against its own bindless layout, since the pipeline is
+			// created with the device's default one.
+
 			if(entry == U32_MAX)
-				retError(clean, Error_invalidState(0, "CLI_isaDisassembleLive() couldn't resolve the compute entry"));
+				retError(clean, Error_invalidState(
+					0,
+					"CLI_isaDisassembleLive() no compatible binary for the compute stage (see the reason above; "
+					"a custom descriptor layout can't be supplied yet)"
+				));
+
+			const CharString spvEntry = CLI_isaSpirvEntry(&shFile, entry, entryName, alloc);
 
 			gotoIfError3(clean, GraphicsDeviceRef_createPipelineCompute(
-				deviceRef, &shFile, &pName, entry, NULL, EPipelineFlags_CaptureISA, NULL, &pipeline, e_rr
+				deviceRef, &shFile, &pName, entry, CharString_length(spvEntry) ? &spvEntry : NULL,
+				EPipelineFlags_CaptureISA, NULL, &pipeline, e_rr
 			));
 		}
 
@@ -961,7 +1155,7 @@ clean:
 
 			if (vsTarget || psSource) {
 
-				gotoIfError3(clean, CLI_isaCompileStandIns(vsTarget, psSource, &standIns, alloc, e_rr));
+				gotoIfError3(clean, CLI_isaCompileStandIns(vsTarget, psSource, binaryType, &standIns, alloc, e_rr));
 
 				if(!standIns.entries.length)
 					retError(clean, Error_invalidState(
@@ -1152,7 +1346,16 @@ clean:
 			0, "CLI_isaDisassembleLive() needs a compute, a vertex+pixel, or a raygen+miss+closesthit shader"
 		));
 
-		gotoIfError3(clean, GraphicsDeviceRef_getPipelineExecutables(pipeline, alloc, &execs, e_rr));
+		//Creating the pipeline is itself the check that this binary and this state are valid on a real driver.
+		//Reading the compiled shader back is a separate capability that only Vulkan exposes, so it's asked for
+		// only where it exists and its absence is reported rather than treated as a failure.
+
+		const Bool hasIntrospection =
+			(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features2 &
+			EGraphicsFeatures2_PipelineExecutableInfo) != 0;
+
+		if(hasIntrospection)
+			gotoIfError3(clean, GraphicsDeviceRef_getPipelineExecutables(pipeline, alloc, &execs, e_rr));
 
 		gotoIfError3(clean, CharString_format(
 			alloc, &text, e_rr, "; Live ISA for '%.*s' on %s\n",
@@ -1197,7 +1400,7 @@ clean:
 			);
 		}
 
-		gotoIfError3(clean, CLI_isaAppendExecutables(&text, &execs, alloc, e_rr));
+		gotoIfError3(clean, CLI_isaAppendExecutables(&text, &execs, hasIntrospection, alloc, e_rr));
 
 		if(hasOutput) {
 
@@ -1273,10 +1476,10 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 		const CharString liveStr = CharString_createRefCStrConst("live");
 		const CharString livePfx = CharString_createRefCStrConst("live:");
 
-		//"live" targets device 0; "live:<index>" targets a specific GPU (the function lists them all first)
+		//"live" lets the function choose; "live:<index>" targets a specific GPU (it lists them all first)
 
 		Bool live = CharString_equalsStringInsensitive(&asic, &liveStr);
-		U64 deviceId = 0;
+		U64 deviceId = U64_MAX;
 
 		if(!live && CharString_startsWithStringInsensitive(&asic, &livePfx, 0)) {
 
@@ -1304,6 +1507,38 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 			U64 liveOff = 0;
 			gotoIfError3(clean, SHFile_read((StreamRef*)readStream, &liveOff, false, alloc, &shFile, e_rr));
 
+			//Which binary is run decides the backend: SPIR-V goes to Vulkan, DXIL to D3D12.
+			//-compile-output picks when the file holds both; otherwise the one that's present is used, preferring
+			// SPIR-V because it's the only one any driver disassembles today.
+
+			ESHBinaryType liveType = ESHBinaryType_Count;
+			CharString liveMode = CharString_createNull();
+
+			if (ParsedArgs_getArg(args, EOperationHasParameter_ShaderOutputModeShift, &liveMode, NULL)) {
+
+				if(CharString_equalsCStringInsensitive(&liveMode, "DXIL"))
+					liveType = ESHBinaryType_DXIL;
+
+				else if(CharString_equalsCStringInsensitive(&liveMode, "SPV"))
+					liveType = ESHBinaryType_SPIRV;
+
+				else retError(clean, Error_invalidParameter(
+					0, 0, "CLI_isaDisassemble() -compile-output has to be spv or dxil"
+				));
+			}
+
+			else for (U64 i = 0; i < shFile.binaries.length && liveType == ESHBinaryType_Count; ++i) {
+
+				if(Buffer_length(shFile.binaries.ptr[i].binaries[ESHBinaryType_SPIRV]))
+					liveType = ESHBinaryType_SPIRV;
+
+				else if(Buffer_length(shFile.binaries.ptr[i].binaries[ESHBinaryType_DXIL]))
+					liveType = ESHBinaryType_DXIL;
+			}
+
+			if(liveType == ESHBinaryType_Count)
+				retError(clean, Error_notFound(0, 0, "CLI_isaDisassemble() the oiSH holds no SPIR-V or DXIL binary"));
+
 			const Bool assumeDefaults = (args->flags & EOperationFlags_AssumeDefaults) != 0;
 
 			CharString pipelineOutputStr = CharString_createNull();
@@ -1316,13 +1551,38 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 				CharString_length(pipelineOutputStr);
 
 			gotoIfError3(clean, CLI_isaDisassembleLive(
-				shFile, deviceId, hasOutput, outputStr, &fileHandleType, assumeDefaults,
+				shFile, liveType, deviceId, hasOutput, outputStr, &fileHandleType, assumeDefaults,
 				hasPipelineOutput, pipelineOutputStr, psoSetStr, psoInputStr, inputStr, alloc, e_rr
 			));
 			goto clean;
 		}
 
 	#endif
+
+	//Everything below is the offline path, which hands amdllpc a module and a gfxip and never forms a pipeline.
+	//The pipeline flags therefore have nothing to act on here, so they're refused rather than silently dropped.
+
+	{
+		CharString psoArg = CharString_createNull();
+
+		const Bool hasPsoArg =
+			ParsedArgs_getArg(args, EOperationHasParameter_PipelineOutputShift, &psoArg, NULL) ||
+			ParsedArgs_getArg(args, EOperationHasParameter_PipelineSetShift, &psoArg, NULL) ||
+			ParsedArgs_getArg(args, EOperationHasParameter_PipelineInputShift, &psoArg, NULL);
+
+		if(hasPsoArg)
+			retError(clean, Error_invalidParameter(
+				0, 0,
+				"CLI_isaDisassemble() -pso-output/-pso-set/-pso-input describe a pipeline state object, which only "
+				"'-asic live' builds"
+			));
+
+		if(args->flags & EOperationFlags_AssumeDefaults)
+			retError(clean, Error_invalidParameter(
+				0, 0,
+				"CLI_isaDisassemble() --assume-defaults fills in pipeline state that only '-asic live' derives"
+			));
+	}
 
 	//Validate the ASIC first; '?' or an unknown device prints the device list so the user can pick a valid one
 
@@ -1383,7 +1643,9 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 			if(!Buffer_length(chosen->binaries[ESHBinaryType_SPIRV]))
 				retError(clean, Error_invalidParameter(
-					0, 1, "CLI_isaDisassemble() binary at -entry has no SPIR-V (DXIL-only; use the live AMD device path)"
+					0, 1, "CLI_isaDisassemble() binary at -entry has no SPIR-V; the offline path lowers SPIR-V "
+					"only, so use '-asic live' "
+					"to run this DXIL on a real device"
 				));
 		}
 
@@ -1401,7 +1663,9 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 			if(!spvCount)
 				retError(clean, Error_notFound(
-					0, 0, "CLI_isaDisassemble() oiSH has no SPIR-V binary (DXIL-only; use the live AMD device path instead)"
+					0, 0, "CLI_isaDisassemble() oiSH has no SPIR-V binary; the offline path lowers SPIR-V "
+					"only, so use '-asic live' "
+					"to run this DXIL on a real device"
 				));
 
 			if(spvCount > 1)

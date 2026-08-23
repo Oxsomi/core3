@@ -818,7 +818,7 @@ void Operations_init() {
 			.name = "disassemble",
 			.desc = "Disassemble a shader to AMD ISA (with VGPR/SGPR/LDS usage) for a chosen ASIC. Input may be "
 				"SPIR-V (.spv) or an oiSH (its SPIR-V binary is extracted; pass -entry to select one). Without "
-				"-output the ISA is printed. DXIL has no offline path here.",
+				"-output the ISA is printed. DXIL has no offline path; run it with -asic live instead.",
 
 			.func = &CLI_isaDisassemble,
 
@@ -827,7 +827,7 @@ void Operations_init() {
 			.requiredParameters = EOperationHasParameter_Input,
 			.optionalParameters =
 				EOperationHasParameter_Output |
-				EOperationHasParameter_ISAAsic | EOperationHasParameter_Entry |
+				EOperationHasParameter_ISAAsic | EOperationHasParameter_Entry | EOperationHasParameter_ShaderOutputMode |
 				EOperationHasParameter_IncludeDir | EOperationHasParameter_ThreadCount |
 				EOperationHasParameter_PipelineOutput | EOperationHasParameter_PipelineSet |
 				EOperationHasParameter_PipelineInput,

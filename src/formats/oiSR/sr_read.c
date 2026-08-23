@@ -239,7 +239,9 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			// (unless it's a function with parameter children) has no children.
 
 			if(j <= i || otherIsFwd)
-				retError(clean, Error_invalidState(0, "SRFile_read() forward declaration must point forward to its definition"));
+				retError(clean, Error_invalidState(
+					0, "SRFile_read() forward declaration must point forward to its definition"
+				));
 
 			if(node.annotationCount)
 				retError(clean, Error_invalidState(0, "SRFile_read() forward declaration must not carry annotations"));
@@ -251,7 +253,9 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		//A definition's back-link points backward to its forward declaration
 
 		else if(j >= i || !otherIsFwd)
-			retError(clean, Error_invalidState(0, "SRFile_read() definition back-link must point to an earlier forward declaration"));
+			retError(clean, Error_invalidState(
+				0, "SRFile_read() definition back-link must point to an earlier forward declaration"
+			));
 	}
 
 	//Validate symbol references
@@ -357,7 +361,9 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			retError(clean, Error_invalidState(0, "SRFile_read() interface.nodeId doesn't reference a Struct/Union node"));
 
 		if(itf.interfaceNodeId >= nodes.length || nodes.ptr[itf.interfaceNodeId].type != ESRNodeType_Interface)
-			retError(clean, Error_invalidState(0, "SRFile_read() interface.interfaceNodeId doesn't reference an Interface node"));
+			retError(clean, Error_invalidState(
+				0, "SRFile_read() interface.interfaceNodeId doesn't reference an Interface node"
+			));
 	}
 
 	if(!isSubFile && *offset != stream->size)
