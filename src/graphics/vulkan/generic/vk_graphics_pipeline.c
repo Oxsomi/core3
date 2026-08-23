@@ -33,6 +33,7 @@
 #include "types/container/texture_format.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/container/string.h"
+#include "types/base/string_read_helper.h"
 #include "types/container/log.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"
@@ -111,16 +112,23 @@ static inline VkBlendFactor mapVkBlend(EBlend op) {
 	}
 }
 
-//Name of a SPIR-V module's entrypoint, or "main" when it can't be read.
-//vkCreateGraphicsPipelines requires pName to be a real OpEntryPoint, and the reflected name isn't always that name.
+//Name of the SPIR-V entrypoint a stage binds, or "main" when the module can't be read.
+//vkCreateGraphicsPipelines requires pName to be a real OpEntryPoint, and the name the oiSH records isn't always
+// that name: a single entry module has its sole entrypoint renamed to "main", while a library keeps the HLSL names
+// and holds one OpEntryPoint per stage it carries.
+//So the entrypoint the oiSH names wins when the module has it, then the one whose execution model is this stage's,
+// and only a module with neither falls back to its first.
 
-static const C8 *VkGraphicsPipeline_spirvEntrypoint(Buffer spirv) {
+static const C8 *VkGraphicsPipeline_spirvEntrypoint(Buffer spirv, CharString preferred, U32 executionModel) {
 
 	const U32 *words = (const U32*) spirv.ptr;
 	const U64 wordCount = Buffer_length(spirv) >> 2;
 
 	if(!words || wordCount <= 5 || words[0] != 0x07230203)
 		return "main";
+
+	const C8 *byModel = NULL;
+	const C8 *first = NULL;
 
 	for (U64 w = 5; w < wordCount; ) {
 
@@ -137,18 +145,28 @@ static const C8 *VkGraphicsPipeline_spirvEntrypoint(Buffer spirv) {
 
 			const C8 *name = (const C8*) (words + w + 3);
 			const U64 maxLen = (U64) (len - 3) * sizeof(U32);
+			Bool terminated = false;
 
-			for(U64 i = 0; i < maxLen; ++i)
-				if(!name[i])
+			for(U64 i = 0; i < maxLen && !terminated; ++i)
+				terminated = !name[i];
+
+			if (terminated) {
+
+				if(CharString_equalsCStringSensitive(&preferred, name))
 					return name;
 
-			return "main";
+				if(words[w + 1] == executionModel && !byModel)
+					byModel = name;
+
+				if(!first)
+					first = name;
+			}
 		}
 
 		w += len;
 	}
 
-	return "main";
+	return byModel ? byModel : first ? first : "main";
 }
 
 Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
@@ -288,14 +306,34 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	for(U64 j = 0; j < pipeline->stages.length; ++j) {
 
 		VkShaderStageFlagBits stageBit = 0;
+		U32 executionModel = 0;                  //SPIR-V execution model of this stage; Vertex is 0
 		PipelineStage stage = pipeline->stages.ptr[j];
 
 		switch (stage.stageType) {
-			default:                          stageBit = VK_SHADER_STAGE_VERTEX_BIT;                   break;
-			case EPipelineStage_Pixel:        stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;                 break;
-			case EPipelineStage_GeometryExt:  stageBit = VK_SHADER_STAGE_GEOMETRY_BIT;                 break;
-			case EPipelineStage_Hull:         stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;     break;
-			case EPipelineStage_Domain:       stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;  break;
+
+			default:
+				stageBit = VK_SHADER_STAGE_VERTEX_BIT;
+				break;
+
+			case EPipelineStage_Pixel:
+				stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;
+				executionModel = 4;
+				break;
+
+			case EPipelineStage_GeometryExt:
+				stageBit = VK_SHADER_STAGE_GEOMETRY_BIT;
+				executionModel = 3;
+				break;
+
+			case EPipelineStage_Hull:
+				stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+				executionModel = 1;
+				break;
+
+			case EPipelineStage_Domain:
+				stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+				executionModel = 2;
+				break;
 		}
 
 		if(name && CharString_length(*name))
@@ -316,13 +354,12 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		const SHEntry *entry = &bin->entries.ptr[entrypointId];
 		const SHBinaryInfo *buf = &bin->binaries.ptr[entry->binaryIds.ptr[binaryId]];
 
-		//A graphics stage always compiles to its own single entrypoint module, but whether that entrypoint kept the
-		// HLSL name or was renamed to "main" depends on the compile path, while the oiSH records the HLSL name either
-		// way, so the name is read from the module itself.
-		//The oiSH doesn't record which of the two forms a binary kept, so the module is the only place to look.
+		//Whether a stage's entrypoint kept its HLSL name or was renamed to "main" depends on the compile path, and
+		// a file holding several graphics stages compiles them into one shared module, while the oiSH records the
+		// HLSL name either way; the module is the only place that knows which name each stage really binds.
 
 		const Buffer stageSpirv = buf->binaries[ESHBinaryType_SPIRV];
-		const C8 *entryPoint = VkGraphicsPipeline_spirvEntrypoint(stageSpirv);
+		const C8 *entryPoint = VkGraphicsPipeline_spirvEntrypoint(stageSpirv, entry->name, executionModel);
 
 		VkShaderModule module = NULL;
 

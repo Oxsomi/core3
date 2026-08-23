@@ -577,7 +577,13 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 
 	lwin->backBufferId      = (U8)((chosen + 1) % LWINDOW_BUFFER_COUNT);
 
-	w->cpuVisibleBuffer.ptr = lwin->mainBufferPtr + stride * lwin->backBufferId;
+	//LWindow_initSize only prints its failure rather than tearing the window down, so a window whose shm pool
+	// never mapped still finalizes and reaches here with a null base and zero geometry.
+	//Offsetting that null is undefined even by the zero the stride and id are then, and there is no mapping to
+	// expose either way, so the view stays empty.
+
+	w->cpuVisibleBuffer.ptr =
+		lwin->mainBufferPtr ? lwin->mainBufferPtr + stride * lwin->backBufferId : NULL;
 
 clean:
 	return s_uccess;

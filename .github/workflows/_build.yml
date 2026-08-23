@@ -453,15 +453,15 @@ jobs:
 
       - name: Build Debug
         if: inputs.os != 'android'
-        run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
+        run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True -ctest True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
 
       - name: Build Release
         if: inputs.os != 'android'
-        run: ${{ inputs.python_cmd }} build.py -mode Release -tests True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
+        run: ${{ inputs.python_cmd }} build.py -mode Release -tests True -ctest True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
 
       - name: Build Release (SIMD fallback)
         if: inputs.os != 'android'
-        run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True ${{ inputs.build_flags }}
+        run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True -ctest True ${{ inputs.build_flags }}
 
       # ── Prebuilts ──────────────────────────────────────────────────────────
       # Last, and only on success(): every build and every test of this job has to have passed before a
@@ -527,13 +527,91 @@ jobs:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
           HOOK_OS_NAME: ${{ inputs.hook_name }}
           WORKFLOW_NAME: ${{ github.workflow }}
+          # Everything below is there to say WHICH build the status belongs to.
+          # Around 25 notifications land per push, and pushes often follow each other closely, so a status on
+          # its own doesn't identify what it was the status of.
+          # These are passed as env rather than interpolated into the script, since a ${{ }} inside run: is
+          # substituted as source text and anything quote-like in it would rewrite the script.
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          # Only push events carry a head_commit, so this is empty on the nightly schedule and the subject is
+          # then simply left out.
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          REPO_NAME: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          API_URL: ${{ github.api_url }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Post directly to the Discord webhook
           if [ -z "$WEBHOOK_URL" ]; then
             echo "WEBHOOK_URL not set; skipping Discord notification"
             exit 0
           fi
+
+          # A commit subject is arbitrary text and routinely holds quotes and backslashes, either of which
+          # would close the JSON string early and make Discord reject the payload as malformed.
+          # The backslash has to be escaped before the quote, or this would re-escape what it just added.
+          # Control characters cannot appear raw inside a JSON string at all, so they are dropped.
+          jsonEscape() {
+            printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '[:cntrl:]'
+          }
+
+          # Kept in a variable because a bare backtick would open a command substitution inside the
+          # double quoted strings below.
+          BT='`'
+
           COLOR=$([ "$JOB_STATUS" = "success" ] && echo 3066993 || echo 15158332)
+          RUN_URL="$SERVER_URL/$REPO_NAME/actions/runs/$RUN_ID"
+          SHORT_SHA=$(printf '%s' "$COMMIT_SHA" | cut -c1-8)
+
+          # First line only and clipped: an embed field value caps out at 1024 characters and the commit
+          # bodies in this repo run well past that.
+          SUBJECT=$(printf '%s' "$COMMIT_MSG" | head -n 1 | cut -c1-140)
+
+          FIELDS="{\"name\":\"Commit\",\"value\":\"[${BT}${SHORT_SHA}${BT}]($SERVER_URL/$REPO_NAME/commit/$COMMIT_SHA)"
+
+          if [ -n "$SUBJECT" ]; then
+            FIELDS="$FIELDS $(jsonEscape "$SUBJECT")"
+          fi
+
+          FIELDS="$FIELDS\"}"
+          FIELDS="$FIELDS,{\"name\":\"Branch\",\"value\":\"${BT}$(jsonEscape "$REF_NAME")${BT}\",\"inline\":true}"
+          FIELDS="$FIELDS,{\"name\":\"Trigger\",\"value\":\"$(jsonEscape "$EVENT_NAME") by $(jsonEscape "$ACTOR")\",\"inline\":true}"
+
+          # No workflow here is pull_request triggered, so a PR number can only come from asking which pull
+          # requests contain this commit.
+          # Only the number is read, and with grep rather than jq. jq is on every runner image the matrix
+          # currently uses, so this is not about availability: a PR number is plain digits, which grep matches
+          # exactly, and that keeps the step free of a JSON parser it would otherwise only need for this.
+          # The PR title is deliberately left out for the same reason. Rendering it means un-escaping it back
+          # out of the JSON, which does need a real parser, and the linked number already says which PR it is.
+          # Best effort throughout: no token, no network or no matching PR each just leave the field off.
+          if [ -n "$GH_TOKEN" ]; then
+
+            PR_JSON=$(curl -fsS --max-time 10 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "$API_URL/repos/$REPO_NAME/commits/$COMMIT_SHA/pulls" 2>/dev/null || true)
+
+            # The first "number" in the response is the pull request's own. A milestone carries one too, but
+            # it sits far later in the object, so first match wins is right rather than merely convenient.
+            PR_NUM=$(printf '%s' "$PR_JSON" \
+              | grep -o '"number"[[:space:]]*:[[:space:]]*[0-9]\+' \
+              | head -n 1 \
+              | grep -o '[0-9]\+$' || true)
+
+            if [ -n "$PR_NUM" ]; then
+              FIELDS="$FIELDS,{\"name\":\"Pull request\",\"value\":\"[#$PR_NUM]($SERVER_URL/$REPO_NAME/pull/$PR_NUM)\",\"inline\":true}"
+            fi
+          fi
+
+          # The title carries the run link, since an embed title only becomes clickable through its url and
+          # markdown does not render there.
           curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -H "Content-Type: application/json" \
-            -d "{\"embeds\":[{\"title\":\"${WORKFLOW_NAME} (${HOOK_OS_NAME})\",\"description\":\"Status: ${JOB_STATUS}\",\"color\":${COLOR}}]}" \
+            -d "{\"embeds\":[{\"title\":\"$(jsonEscape "$WORKFLOW_NAME") ($(jsonEscape "$HOOK_OS_NAME"))\",\"url\":\"$RUN_URL\",\"description\":\"Status: ${JOB_STATUS}\",\"color\":${COLOR},\"fields\":[${FIELDS}],\"footer\":{\"text\":\"Run #${RUN_NUMBER} - attempt ${RUN_ATTEMPT}\"}}]}" \
             "$WEBHOOK_URL"

@@ -119,8 +119,8 @@ namespace oxc {
 			return oxc::c::Name##_contains(l, t, off, eq);                                                              \
 		}                                                                                                               \
 																														\
-		static oxc::c::Bool sortCustom(oxc::c::Name &l, oxc::c::CompareFunction func) {                                 \
-			return oxc::c::Name##_sortCustom(l, func);                                                                  \
+		static oxc::c::Bool sortCustom(oxc::c::Name &l, oxc::c::CompareFunction func, void *context) {                  \
+			return oxc::c::Name##_sortCustom(l, func, context);                                                         \
 		}                                                                                                               \
 																														\
 		static oxc::c::Bool reverse(oxc::c::Name &l) { return oxc::c::Name##_reverse(l); }                              \
@@ -174,6 +174,24 @@ namespace oxc {
 		);
 
 	private:
+
+		//Holds a C++ comparator for the duration of one sortCustom call, see the template overload below.
+
+		template<typename F>
+		struct SortCallable {
+
+			F func;
+
+			//The only function of ours the C sort calls, so its signature is builtin only on purpose.
+			//An ECompareResult return here would be a different type to the sort's own, which
+			// -fsanitize=function reports as a call through an incorrect function type (see CompareInvoke).
+
+			static c::I8 invoke(const void *aPtr, const void *bPtr, void *context) {
+				SortCallable *self = (SortCallable*) context;
+				const c::ECompareResult res = self->func(*(const Elem*) aPtr, *(const Elem*) bPtr);
+				return res == c::ECompareResult_Lt ? (c::I8) -1 : (res == c::ECompareResult_Gt ? (c::I8) 1 : (c::I8) 0);
+			}
+		};
 
 		CList list;
 		c::Allocator alloc;
@@ -252,7 +270,30 @@ namespace oxc {
 
 		//Ordering (default comparator sort is per-type opt-in, so only sortCustom is exposed generically)
 
-		[[nodiscard]] c::Bool sortCustom(c::CompareFunction func) noexcept { return Traits::sortCustom(list, func); }
+		//context reaches the comparator untouched, so it can carry state without a global.
+
+		[[nodiscard]] c::Bool sortCustom(c::CompareFunction func, void *context = nullptr) noexcept {
+			return Traits::sortCustom(list, func, context);
+		}
+
+		//C++ style sortCustom; the comparator is any callable taking two elements, captures included.
+		//Excluded for a plain c::CompareFunction so the overload above still wins for those.
+		//Nothing is allocated: a sort runs to completion before returning, so the callable lives on the stack
+		// for exactly as long as the C sort needs it.
+
+		template<typename F, typename = std::enable_if_t<!std::is_convertible<F, c::CompareFunction>::value>>
+		[[nodiscard]] c::Bool sortCustom(F &&f) noexcept {
+
+			using Callable = SortCallable<typename std::decay<F>::type>;
+
+			Callable callable { std::forward<F>(f) };
+			c::CompareWrapper wrapper { &Callable::invoke, &callable };
+
+			//The comparator the sort receives is the C forwarder, so the function it calls was compiled with
+			// the types it calls it through; only Callable::invoke crosses, and that is builtin only.
+
+			return Traits::sortCustom(list, &c::CompareWrapper_compare, &wrapper);
+		}
 		[[nodiscard]] c::Bool reverse() noexcept { return Traits::reverse(list); }
 		[[nodiscard]] c::Bool swap(c::U64 i, c::U64 j, c::Error *e_rr = nullptr) noexcept {
 			return Traits::swap(list, i, j, e_rr);

@@ -27,6 +27,31 @@
             }
         },
         {
+            // conan owns the toolchain for a configuration, so a preset cannot be configured until its tree
+            // has been built once. Configuring one that has not been is an error naming the exact command,
+            // and every command it can name is in the picker here.
+            "label": "OxC3: set up a build tree (conan + first build)",
+            "type": "shell",
+            "command": "python",
+            "linux": {
+                "command": "python3"
+            },
+            "osx": {
+                "command": "python3"
+            },
+            "args": [
+                "${workspaceFolder}/${input:oxc3Setup}"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
             "label": "launch-gdbserver",
             "type": "process",
             "command": "flatpak-spawn",
@@ -55,6 +80,28 @@
             "label": "build and launch",
             "dependsOn": ["build", "launch-gdbserver"],
             "dependsOrder": "sequence"
+        }
+    ],
+    "inputs": [
+        {
+            // One entry per CMakePresets.json configuration, spelled exactly as the configure error prints it.
+            "id": "oxc3Setup",
+            "type": "pickString",
+            "description": "Which configuration to set up (matches the preset names)",
+            "default": "build.py -tests True -compiler clang",
+            "options": [
+                { "label": "windows-msvc",              "value": "build.py -tests True" },
+                { "label": "windows-clang",             "value": "build.py -tests True -compiler clang" },
+                { "label": "windows-msvc-ninja",        "value": "build.py -tests True -generator ninja" },
+                { "label": "windows-clang-ninja",       "value": "build.py -tests True -compiler clang -generator ninja" },
+                { "label": "linux/macos - Debug",       "value": "build.py -mode Debug -tests True" },
+                { "label": "linux/macos - Release",     "value": "build.py -mode Release -tests True" },
+                { "label": "linux - clang, Debug",      "value": "build.py -mode Debug -tests True -compiler clang" },
+                { "label": "android-arm64-debug",       "value": "build_android.py -mode Debug -tests True -arch arm64 -generator Ninja" },
+                { "label": "android-arm64-release",     "value": "build_android.py -mode Release -tests True -arch arm64 -generator Ninja" },
+                { "label": "android-x64-debug",         "value": "build_android.py -mode Debug -tests True -arch x64 -generator Ninja" },
+                { "label": "android-x64-release",       "value": "build_android.py -mode Release -tests True -arch x64 -generator Ninja" }
+            ]
         }
     ]
 }

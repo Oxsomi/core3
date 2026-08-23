@@ -100,10 +100,13 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 			.hasShaderAnnotation = ai.hasShaderAnnotation
 		};
 
-		const void *extPtrSrc = &ai.identifier.extensions;
-		void *extPtrDst = &c.identifier.extensions;
+		//extensions and dormantExt are a U32-aligned pair, so moving them as one in-place U64 can be a misaligned access.
+		//The same eight bytes are copied instead.
 
-		*(U64*)extPtrDst = *(const U64*)extPtrSrc;
+		Buffer_memcpy(
+			Buffer_createRef(&c.identifier.extensions, sizeof(U64)),
+			Buffer_createRefConst(&ai.identifier.extensions, sizeof(U64))
+		);
 
 		//Couldn't find a match, can add the easy way
 		//TODO: Old binaries to new binary id
@@ -451,10 +454,12 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 		for (U8 k = 0; k < ESHBinaryType_Count; ++k)
 			c.binaries[k] = Buffer_createRefFromBuffer(bi.binaries[k], true);
 
-		const void *extPtrSrc = &bi.identifier.extensions;
-		void *extPtrDst = &c.identifier.extensions;
+		//Same misaligned U64 move as above, done as a byte copy.
 
-		*(U64*)extPtrDst = *(const U64*)extPtrSrc;
+		Buffer_memcpy(
+			Buffer_createRef(&c.identifier.extensions, sizeof(U64)),
+			Buffer_createRefConst(&bi.identifier.extensions, sizeof(U64))
+		);
 
 		gotoIfError3(clean, SHFile_addBinary(combined, &c, alloc, e_rr));
 		remappedBinaries.ptrNonConst[i] = (U16) (combined->binaries.length - 1);

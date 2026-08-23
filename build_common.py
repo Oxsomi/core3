@@ -226,6 +226,166 @@ SUPPORTED_COMPILERS = { "Windows": ("msvc", "clang"), "Darwin": ("clang",), "Lin
 def defaultCompiler():
 	return DEFAULT_COMPILERS[hostSystem()]
 
+# The executable each profile's compiler is detected through. Has to match what the profile template
+# asks detect_api for, or the guard below would check a different compiler than the build uses.
+
+PROFILE_COMPILER_EXE = {
+	("Windows", "msvc"):  "cl",
+	("Windows", "clang"): "clang-cl",
+	("Darwin",  "clang"): "clang",
+	("Linux",   "gcc"):   "gcc",
+	("Linux",   "clang"): "clang"
+}
+
+def resolveCompilerExe(exe):
+	"""`exe` as something runnable, or None.
+
+	cl and clang-cl only reach PATH inside a developer command prompt, and the Visual Studio generator finds
+	its own toolchain regardless, so a check that insisted on PATH would fail on machines, and on CI runners,
+	where the build itself works perfectly well.
+	Conan's own detection is split on this: detect_msvc_compiler goes through vswhere and needs nothing on
+	PATH, while detect_clang_compiler simply runs the executable (see ensureCompilerOnPath below).
+	"""
+
+	found = shutil.which(exe)
+
+	if found or hostSystem() != "Windows" or exe not in ("cl", "clang-cl"):
+		return found
+
+	vswhere = os.path.join(
+		os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"),
+		"Microsoft Visual Studio", "Installer", "vswhere.exe"
+	)
+
+	if not os.path.isfile(vswhere):
+		return None
+
+	try:
+		install = capture('"' + vswhere + '" -latest -products * -property installationPath').strip()
+	except Exception:
+		return None
+
+	if not install:
+		return None
+
+	if exe == "clang-cl":
+		candidate = os.path.join(install, "VC", "Tools", "Llvm", "x64", "bin", "clang-cl.exe")
+		return candidate if os.path.isfile(candidate) else None
+
+	toolsets = os.path.join(install, "VC", "Tools", "MSVC")
+
+	if not os.path.isdir(toolsets):
+		return None
+
+	for version in sorted(os.listdir(toolsets), reverse=True):
+		candidate = os.path.join(toolsets, version, "bin", "HostX64", "x64", "cl.exe")
+		if os.path.isfile(candidate):
+			return candidate
+
+	return None
+
+def detectedCompilerVersion(exe, compiler = None):
+	"""The version `exe` actually reports, or None if it isn't there.
+
+	Only the major matters, which is what conan keys package ids on for every compiler this repo uses.
+	"""
+
+	resolved = resolveCompilerExe(exe)
+
+	if not resolved:
+		return None
+
+	for args in ( [ resolved, "-dumpfullversion" ], [ resolved, "--version" ] ):
+
+		try:
+			probe = subprocess.run(args, capture_output=True, text=True, timeout=10)
+		except Exception:
+			continue
+
+		# cl has no version flag and writes its banner to stderr, so both streams are read and a non zero
+		# return code is not taken as "no answer".
+
+		text = (probe.stdout or "") + (probe.stderr or "")
+
+		if compiler == "msvc":
+
+			# conan spells msvc as major*10 + minor/10, so 19.38 is 193 rather than 19.
+
+			found = re.search(r"Version\s+([0-9]+)\.([0-9]+)", text)
+
+			if found:
+				return str(int(found.group(1)) * 10 + int(found.group(2)) // 10)
+
+			continue
+
+		if probe.returncode:
+			continue
+
+		found = re.search(r"([0-9]+)(\.[0-9]+)*", text)
+
+		if found:
+			return found.group(1)
+
+	return None
+
+def ensureCompilerOnPath(exe):
+	"""Put `exe` on PATH when it was only found through a Visual Studio install.
+
+	The Windows clang profiles detect their version with detect_api.detect_clang_compiler("clang-cl"), which
+	runs the executable and so only ever looks at PATH. resolveCompilerExe finds the Visual Studio copy as
+	well, so without this the guard below passes on a machine that has clang-cl while RENDERING the profile
+	dies with "No version provided to 'detect_api.default_compiler_version()' for clang compiler".
+	It is also what lets CMAKE_C_COMPILER resolve, since tools.build:compiler_executables names clang-cl
+	rather than a full path.
+
+	Only clang needs it: detect_msvc_compiler goes through vswhere, and prepending the MSVC bin directory
+	would shadow tools that share a name with one of its own (link, most of all) for the rest of the process.
+	"""
+
+	if exe != "clang-cl" or shutil.which(exe):
+		return
+
+	resolved = resolveCompilerExe(exe)
+
+	if resolved:
+		os.environ["PATH"] = os.path.dirname(resolved) + os.pathsep + os.environ.get("PATH", "")
+
+def verifyHostCompiler(compiler, system):
+	"""Fail early when the profile can't describe this machine.
+
+	The profiles detect their compiler's version rather than pinning one, so a machine that lacks that
+	compiler, or has one newer than conan understands, produces a conan error deep into the first
+	dependency build. Both cases are diagnosable up front and the fix differs, so say which it is.
+	"""
+
+	exe = PROFILE_COMPILER_EXE.get(( system, compiler ))
+
+	if not exe:
+		return
+
+	ensureCompilerOnPath(exe)
+
+	version = detectedCompilerVersion(exe, compiler)
+
+	if version is None:
+		print(
+			f"Profile compiler '{compiler}' selected, but '{exe}' was not found on PATH or in a Visual Studio install.\n"
+			f"Install it, or pick another with -compiler=<{'|'.join(SUPPORTED_COMPILERS[system])}>.",
+			file=sys.stderr
+		)
+		sys.exit(1)
+
+	known = conanKnownCompilerVersions(compiler)
+
+	if known and version not in known:
+		print(
+			f"{exe} reports version {version}, which this conan doesn't accept for '{compiler}' "
+			f"(it knows up to {known[-1]}).\n"
+			f"Upgrade conan, or widen compiler.version in settings_user.yml.",
+			file=sys.stderr
+		)
+		sys.exit(1)
+
 def hostProfileBase(compiler = None):
 
 	arch = hostArch()[0]
@@ -237,6 +397,8 @@ def hostProfileBase(compiler = None):
 	if compiler not in supported:
 		print(f"Unsupported compiler '{compiler}' on {system}; expected one of {', '.join(supported)}", file=sys.stderr)
 		sys.exit(1)
+
+	verifyHostCompiler(compiler, system)
 
 	if system == "Windows":
 		return f"packages/conan/profiles/windows_{compiler}_{arch}"
@@ -251,6 +413,54 @@ def hostProfileForMode(mode, compiler = None):
 
 	base = hostProfileBase(compiler)
 	return f"{base}_{mode}" if hostSystem() == "Windows" else base
+
+def visualStudioNinjaConf(compiler):
+	"""Conf a Ninja build on Windows needs, and an early check that it can work at all.
+
+	The Visual Studio generator never runs vcvars; it sets its own environment up. Ninja does run it, which
+	surfaces two things that generator hid:
+
+	  - vswhere lives in the VS Installer folder and is usually not on PATH, so vcvars cannot find the
+	    install. Pointing conan straight at the installation removes the need for it.
+	  - conan derives -vcvars_ver from the profile's pinned toolset (v144 -> 14.4). If that toolset is not
+	    installed, vcvars fails with a message that says nothing about profiles, so it is checked here.
+	"""
+
+	if hostSystem() != "Windows":
+		return ""
+
+	vswhere = os.path.join(
+		os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+		"Microsoft Visual Studio", "Installer", "vswhere.exe"
+	)
+
+	if not os.path.isfile(vswhere):
+		print("-- Error: -generator ninja needs Visual Studio; vswhere.exe was not found", file=sys.stderr)
+		sys.exit(1)
+
+	install = capture(f'"{vswhere}" -latest -products * -property installationPath').strip()
+
+	if not install:
+		print("-- Error: -generator ninja needs Visual Studio; vswhere reported no installation", file=sys.stderr)
+		sys.exit(1)
+
+	# The profiles pin a runtime_version, and conan turns that into the toolset vcvars is asked for.
+
+	wanted = "14.4"                              #v144, what both windows profiles pin
+	toolsets = os.path.join(install, "VC", "Tools", "MSVC")
+	have = sorted(os.listdir(toolsets)) if os.path.isdir(toolsets) else []
+
+	if not any(v.startswith(wanted) for v in have):
+		print(
+			f"-- Error: -generator ninja needs MSVC toolset {wanted}x, which the profiles pin through\n"
+			f"   compiler.runtime_version. Installed: {', '.join(have) or 'none'}.\n"
+			f"   Install it through the VS Installer, or build without -generator ninja; the Visual Studio\n"
+			f"   generator does not use vcvars and is unaffected.",
+			file=sys.stderr
+		)
+		sys.exit(1)
+
+	return f'-c tools.microsoft.msbuild:installation_path="{install}" '
 
 def hostProfileArgs(mode, compiler = None):
 	p = hostProfileForMode(mode, compiler)
@@ -407,8 +617,8 @@ def hostToolOptionArgs():
 # Dependency building (hash cached, so unchanged recipes don't get re-created every run)
 # ---------------------------------------------------------------------------------------------------
 
-#Recipes shared through python_requires rather than living in the package folder itself.
-#They have to be part of every dependent's hash, otherwise editing the shared logic leaves the cache thinking
+# Recipes shared through python_requires rather than living in the package folder itself.
+# They have to be part of every dependent's hash, otherwise editing the shared logic leaves the cache thinking
 # nothing changed and the packages that consume it are never rebuilt.
 
 SHARED_RECIPES = ( "packages/sanitizers", )
@@ -428,7 +638,7 @@ def hashPackage(packagePath, profilePath, mode):
 
 		resolved = shared if os.path.isabs(shared) else os.path.join(ROOT, shared)
 
-		#A package is only rehashed for a shared recipe it doesn't already contain, so hashing
+		# A package is only rehashed for a shared recipe it doesn't already contain, so hashing
 		# packages/sanitizers itself doesn't fold it in twice.
 
 		if os.path.isdir(resolved) and os.path.normpath(resolved) != os.path.normpath(packagePath):
@@ -601,7 +811,7 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 
 	system = hostSystem()
 
-	#dxc, spirv_reflect and openal_soft share their sanitizer wiring through a python_requires, which has to
+	# dxc, spirv_reflect and openal_soft share their sanitizer wiring through a python_requires, which has to
 	# be in the cache before any of them is created.
 
 	exportSharedRecipes()
@@ -717,7 +927,7 @@ def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False, compiler=None):
 	# export-pkg packages whatever is sitting in bin/, and CMakeLists pins the output directory to a source-relative path,
 	# so every configuration shares it regardless of the build folder.
 	# A normal build.py run leaves OxC3_shader_compiler.dll there; the host tool is static (HOST_TOOL_OPTIONS) and would ship a
-	#~29 MB DLL it never built, and that nothing loads.
+	# ~29 MB DLL it never built, and that nothing loads.
 	# Clear it first so what gets exported is a function of the options rather than of whatever was built here last.
 
 	# Matches the suffix CMakeLists puts on the output directory for a non default toolchain; without it

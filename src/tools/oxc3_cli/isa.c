@@ -446,7 +446,7 @@ clean:
 
 		const CharString head = CharString_createRefCStrConst(
 			"#include \"@types.hlsli\"\n"
-			"#include \"@appdata.hlsli\"\n"
+			"#include \"@resources.hlsli\"\n"
 			"\n"
 			"//Generated stand-ins for stages this shader doesn't declare; only the shader's own stages are meaningful.\n"
 			"\n"
@@ -471,7 +471,7 @@ clean:
 				"StandInVertexOut main(U32 _vertexId : SV_VertexID) {\n"
 				"\n"
 				"\tStandInVertexOut o;\n"
-				"\to._position = getAppData4f(0);\n"
+				"\to._position = F32x4(_time, _deltaTime, (F32) _frameId, (F32) _swapchainCount);\n"
 			);
 
 			gotoIfError3(clean, CharString_appendString(out, &vsMid, alloc, e_rr));
@@ -483,14 +483,23 @@ clean:
 				if(!type)
 					continue;
 
-				//The values come from the app data buffer so they aren't compile time constants.
+				//The values come from the per frame globals, so they aren't compile time constants and the stand-in
+				// needs no layout beyond the default one.
 
-				const C8 *getter = "getAppData4f";
+				const C8 *source = "F32x4(_time, _deltaTime, (F32) _frameId, (F32) _swapchainCount)";
 
 				switch(ESBType_getPrimitive(type)) {
-					case ESBPrimitive_Int:   getter = "getAppData4i";  break;
-					case ESBPrimitive_UInt:  getter = "getAppData4u";  break;
-					default:                                           break;
+
+					case ESBPrimitive_Int:
+						source = "I32x4((I32) _frameId, (I32) _swapchainCount, asint(_time), asint(_deltaTime))";
+						break;
+
+					case ESBPrimitive_UInt:
+						source = "U32x4(_frameId, _swapchainCount, asuint(_time), asuint(_deltaTime))";
+						break;
+
+					default:
+						break;
 				}
 
 				static const C8 *swizzles[4] = { "x", "xy", "xyz", "xyzw" };
@@ -498,8 +507,8 @@ clean:
 
 				CharString_free(&line, alloc);
 				gotoIfError3(clean, CharString_format(
-					alloc, &line, e_rr, "\to._v%"PRIu8" = (%s) %s(%"PRIu8").%s;\n",
-					i, ESBType_name(type), getter, (U8) ((i + 1) * 4), swizzles[comp & 3]
+					alloc, &line, e_rr, "\to._v%"PRIu8" = (%s) %s.%s;\n",
+					i, ESBType_name(type), source, swizzles[comp & 3]
 				));
 
 				gotoIfError3(clean, CharString_appendString(out, &line, alloc, e_rr));

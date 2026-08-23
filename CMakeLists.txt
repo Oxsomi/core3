@@ -18,10 +18,185 @@
 # This is called dual licensing.
 
 cmake_minimum_required(VERSION 3.26.0)
+
+# The dependencies come from conan, so the toolchain it writes has to exist before project() runs.
+# Checked here because project() is where CMake consumes it, and the error it raises there names a missing
+# file without saying which tool was supposed to produce it.
+# An IDE configuring from a preset is the usual way to arrive here, since it will happily configure a
+# configuration that was never built.
+
+if(CMAKE_TOOLCHAIN_FILE AND NOT EXISTS "${CMAKE_TOOLCHAIN_FILE}")
+
+	# Recovered from the TOOLCHAIN path, not the build folder: a preset builds into a tree of its own
+	# (build/ide/<preset>) and only reads the toolchain out of the one the script made, so the build folder no
+	# longer names the configuration but the toolchain still does.
+	# Everything but windows puts the mode in that path (build/<mode>/<platform>/...), because those trees are
+	# single config; windows keeps every config in one tree, so -mode is optional there.
+
+	set(setupScript "build.py")
+	set(setupArgs "-tests True")
+
+	if("${CMAKE_TOOLCHAIN_FILE}" MATCHES "/build/([^/]+)/(android|linux|osx)/")
+		string(PREPEND setupArgs "-mode ${CMAKE_MATCH_1} ")
+	endif()
+
+	if("${CMAKE_TOOLCHAIN_FILE}" MATCHES "/android/([^/]+)/")
+
+		# A cross build, driven by its own script, and the arch is explicit rather than the host's.
+
+		set(setupScript "build_android.py")
+		string(APPEND setupArgs " -arch ${CMAKE_MATCH_1} -generator Ninja")
+
+	else()
+
+		if("${CMAKE_TOOLCHAIN_FILE}" MATCHES "_clang")
+			string(APPEND setupArgs " -compiler clang")
+		endif()
+
+		if("${CMAKE_TOOLCHAIN_FILE}" MATCHES "_ninja")
+			string(APPEND setupArgs " -generator ninja")
+		endif()
+
+	endif()
+
+	# An IDE preset bootstraps itself rather than sending the reader to a terminal: opening a configuration
+	# nobody has built is the normal way to arrive here, and "run this and come back" is a poor answer to it.
+	# -setup_only stops after conan writes the toolchain and dependency files, so this does not build OxC3
+	# inside a configure step; the IDE builds it afterwards like any other tree.
+	# A plain cmake invocation still only reports the command, since there the caller drives the build anyway.
+
+	if(OxC3IdeTree)
+
+		find_program(oxc3Python NAMES python3 python py REQUIRED)
+
+		message("-- Setting this configuration up first: ${setupScript} ${setupArgs} (one time, and slow)")
+
+		separate_arguments(setupArgList NATIVE_COMMAND "${setupArgs}")
+
+		execute_process(
+			COMMAND "${oxc3Python}" "${CMAKE_CURRENT_SOURCE_DIR}/${setupScript}" ${setupArgList} -setup_only True
+			WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+			RESULT_VARIABLE setupResult
+		)
+
+		if(setupResult EQUAL 0 AND EXISTS "${CMAKE_TOOLCHAIN_FILE}")
+			message("-- Set up, continuing")
+		else()
+			message(FATAL_ERROR
+				"setting this configuration up failed (${setupResult}), so there is still no toolchain at "
+				"${CMAKE_TOOLCHAIN_FILE}. Run it by hand to see what went wrong:"
+				"\n\n    python ${setupScript} ${setupArgs}\n"
+			)
+		endif()
+
+	else()
+
+		message(FATAL_ERROR
+			"conan has not set this configuration up yet, so there is no toolchain at "
+			"${CMAKE_TOOLCHAIN_FILE} -- the build scripts own that step. Run this once, then configure again:"
+			"\n\n    python ${setupScript} ${setupArgs}\n"
+		)
+
+	endif()
+endif()
+
+# conan generates its dependency files per configuration, so a tree only has the ones the script was asked to
+# build. An IDE offers every configuration in the preset regardless, and picking one conan never generated
+# fails late and unhelpfully: find_package quietly finds nothing and the first compile reports a missing
+# AL/al.h or nvapi.h, which looks like a broken checkout rather than a configuration that was never set up.
+#
+# The generators folder names them (agility_sdk-Target-release.cmake and friends), so the available set is
+# read straight out of it and the IDE is offered exactly that.
+
+if(OxC3IdeTree AND CMAKE_TOOLCHAIN_FILE)
+
+	get_filename_component(oxc3GenDir "${CMAKE_TOOLCHAIN_FILE}" DIRECTORY)
+
+	# The options this configuration was set up with live in conan's own preset beside the toolchain, and
+	# nowhere else: conan_toolchain.cmake does not carry them.
+	# Without this the IDE tree silently configures with the CMakeLists defaults instead, so it would build a
+	# different project than the script and than CI (EnableShaderCompiler off, for one).
+
+	set(oxc3ConanPresets "${oxc3GenDir}/CMakePresets.json")
+
+	if(EXISTS "${oxc3ConanPresets}")
+
+		file(READ "${oxc3ConanPresets}" oxc3PresetsJson)
+
+		string(JSON oxc3CacheVars ERROR_VARIABLE oxc3JsonErr GET "${oxc3PresetsJson}" configurePresets 0 cacheVariables)
+
+		if(NOT oxc3JsonErr AND oxc3CacheVars)
+
+			string(JSON oxc3VarCount LENGTH "${oxc3CacheVars}")
+
+			if(oxc3VarCount GREATER 0)
+
+				math(EXPR oxc3LastVar "${oxc3VarCount} - 1")
+
+				foreach(i RANGE 0 ${oxc3LastVar})
+					string(JSON oxc3Key MEMBER "${oxc3CacheVars}" ${i})
+					string(JSON oxc3Val GET "${oxc3CacheVars}" ${oxc3Key})
+					set(${oxc3Key} "${oxc3Val}" CACHE STRING "" FORCE)
+				endforeach()
+
+				message("-- Took ${oxc3VarCount} option(s) from the configuration conan set up")
+
+			endif()
+		endif()
+	endif()
+
+	file(GLOB oxc3ConanConfigs "${oxc3GenDir}/*-Target-*.cmake")
+
+	set(oxc3HaveConfigs "")
+
+	foreach(cfgFile ${oxc3ConanConfigs})
+		if("${cfgFile}" MATCHES "-Target-([a-z]+)\.cmake$")
+			set(cfgName "${CMAKE_MATCH_1}")
+			foreach(known Debug Release MinSizeRel RelWithDebInfo)
+				string(TOLOWER "${known}" knownLower)
+				if("${cfgName}" STREQUAL "${knownLower}")
+					list(APPEND oxc3HaveConfigs "${known}")
+				endif()
+			endforeach()
+		endif()
+	endforeach()
+
+	list(REMOVE_DUPLICATES oxc3HaveConfigs)
+
+	if(oxc3HaveConfigs)
+
+		set(CMAKE_CONFIGURATION_TYPES "${oxc3HaveConfigs}" CACHE STRING "" FORCE)
+		message("-- conan set this tree up for: ${oxc3HaveConfigs}")
+
+		# A single config generator picks one, so it has to be one of those rather than whatever it defaulted to.
+
+		if(CMAKE_BUILD_TYPE AND NOT CMAKE_BUILD_TYPE IN_LIST oxc3HaveConfigs)
+			list(GET oxc3HaveConfigs 0 oxc3FirstConfig)
+			message(FATAL_ERROR
+				"conan set this tree up for ${oxc3HaveConfigs}, not ${CMAKE_BUILD_TYPE}. Pick one of those, or "
+				"run the build script again for ${CMAKE_BUILD_TYPE} first. On windows build.py builds every "
+				"configuration when -mode is left off."
+			)
+		endif()
+
+		if(NOT CMAKE_BUILD_TYPE)
+			list(GET oxc3HaveConfigs 0 CMAKE_BUILD_TYPE)
+		endif()
+
+	endif()
+
+endif()
+
 project(OxC3)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
+
+# What clangd and VS Code's C/C++ extension read to know how each file is compiled.
+# Only the Ninja and Makefile generators emit it; the Visual Studio generator ignores it and gets its
+# IntelliSense from the .vcxproj instead, so this is harmless there rather than conditional.
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # SET(GRAPHVIZ_CUSTOM_TARGETS TRUE)
 
@@ -254,6 +429,11 @@ if(MSVC)
 			list(APPEND requiredSanitizerLibs
 				"clang_rt.asan_dynamic-${sanitizerArch}.lib"
 				"clang_rt.asan_dynamic_runtime_thunk-${sanitizerArch}.lib"
+
+				# The DLL and not just its import library, since it's needed to RUN anything we build; it is
+				# copied next to the executables below.
+
+				"clang_rt.asan_dynamic-${sanitizerArch}.dll"
 			)
 		endif()
 
@@ -283,6 +463,35 @@ if(MSVC)
 				"clang_rt.asan_dynamic-${sanitizerArch}.lib"
 				"clang_rt.asan_dynamic_runtime_thunk-${sanitizerArch}.lib"
 			)
+
+			# Linking the import library is only half of it: the dynamic ASan runtime has to be findable when
+			# anything we built actually RUNS.
+			# The build runs tools of its own (the packaging steps in add_virtual_files) and ctest runs the test
+			# executables, and the loader looks next to the exe while knowing nothing about the toolchain's
+			# lib/windows, so every one of them dies at load with
+			# "clang_rt.asan_dynamic-<arch>.dll was not found".
+			# A custom build step reports that as nothing but an exit code (0xC0000135), which says nothing
+			# about a DLL, so this is worth being explicit about rather than rediscovering.
+			# Adding the directory here reuses the copy every executable already does for its dependencies,
+			# see apply_dependencies in cmake/oxc3.cmake.
+
+			list(APPEND CONAN_RUNTIME_LIB_DIRS "${clangRtDir}")
+		endif()
+
+		# Identical COMDAT folding has to be off for a sanitized link, or ASan reports false positives on
+		# perfectly legal reads.
+		# ASan gives every global a trailing redzone, and Release folds identical globals across translation
+		# units, so one global's redzone ends up sitting on another global's data.
+		# The report that found this had THREE globals at one address, DXC's L"\0" and L"" plus our own "" from
+		# compiler_helper_jobs.c, all of them nothing but NUL bytes and therefore foldable.
+		# Reading the empty string then looks like reading a redzone, and ASan names the nearest preceding
+		# global instead, which is why it read as a 6491 byte overrun of an unrelated 26 KB literal.
+		# Debug never reproduced it because folding is a Release optimization, and DXC was identical in both.
+		# ODR detection is likely the same story, since it works through a per-global indicator symbol that
+		# folding can alias, so detect_odr_violation may be worth re-enabling once this is in.
+
+		if(EnableASAN OR EnableUBSAN)
+			add_link_options("-opt:noicf")
 		endif()
 
 		# Trap rather than diagnose: UBSan's reporting runtime is the flakiest part of its Windows support,
@@ -436,6 +645,28 @@ else()
 		add_link_options(-fsanitize=address)
 	endif()
 
+	# A proprietary driver has two quarrels with a sanitized process, and both surface only as
+	# vkCreateDevice failing: it maps memory inside the shadow gap, and it loads its compiler with
+	# RTLD_DEEPBIND. Neither is negotiable from inside the driver, so the gap protection comes off and
+	# the flag is stripped by a preload.
+	# Both are needed. With only one the outcome depends on where the process happens to land in memory,
+	# which reads as an intermittent driver bug rather than as a sanitizer restriction.
+	# This lives here rather than in the build script so that running ctest directly behaves the same,
+	# which is how the suite is usually run while working on it.
+
+	if(EnableASAN AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+
+		add_library(OxC3_asan_no_deepbind MODULE cmake/linux/asan_no_deepbind.c)
+		set_target_properties(OxC3_asan_no_deepbind PROPERTIES FOLDER Oxsomi/test)
+
+		# Left uninstrumented: it is preloaded ahead of the sanitizer runtime so that it wins the dlopen
+		# interception, which is earlier than that runtime is ready to serve instrumented code.
+
+		target_compile_options(OxC3_asan_no_deepbind PRIVATE -fno-sanitize=all)
+		target_link_options(OxC3_asan_no_deepbind PRIVATE -fno-sanitize=all)
+	endif()
+
+
 	# vptr needs RTTI across the prebuilt dependencies, which they aren't built with. enum is off because OxC3
 	# uses flag enums and sentinels (ESHExtension holds OR'd bits and a 1<<Count "unset" marker) whose values
 	# are legal by design but not individual enumerators, which -fsanitize=enum flags on every load.
@@ -451,6 +682,41 @@ else()
 	# add_link_options(-fsanitize=thread)
 
 endif()
+
+include(cmake/oxc3.cmake)
+
+# Defined at top level rather than inside a compiler branch: both callers (the graphics interface test and
+# the CLI test) call it unconditionally, so a definition that only existed for one compiler made every other
+# one fail to configure with "Unknown CMake command".
+# The body still no-ops unless this is an ASan build on Linux.
+
+# Applied to the tests that reach a real device. Appends rather than assigns, so options a caller
+# already set survive, and full unwinds are asked for here: a driver without symbols yields a single
+# frame under the fast unwinder, and a leak with no named frame can't be suppressed at all.
+
+function(oxc3SanitizerDeviceTestEnv target)
+
+	if(NOT (EnableASAN AND CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+		return()
+	endif()
+
+	# The loader unloads drivers and layers on the way out, which takes their globals out of the leak
+	# checker's root set, so everything those globals still own is reported as leaked. Keeping the
+	# modules mapped is what makes the report honest: it costs nothing at exit and it means a real
+	# leak below a driver is still reported instead of being suppressed along with the noise.
+
+	# Through oxc3_test_env so the suite gets this whether it runs at build time behind its stamp or through
+	# ctest; a test property alone only reaches the second.
+
+	oxc3_test_env(${target}
+		"LD_PRELOAD=path_list_prepend:$<TARGET_FILE:OxC3_asan_no_deepbind>"
+		"ASAN_OPTIONS=string_append:,protect_shadow_gap=0,verify_asan_link_order=0"
+		"LSAN_OPTIONS=string_append:,suppressions=${CMAKE_SOURCE_DIR}/cmake/lsan_suppressions.txt"
+		"VK_LOADER_DISABLE_DYNAMIC_LIBRARY_UNLOADING=set:1"
+	)
+
+endfunction()
+
 
 if(EnableOxC3CLI)
 
@@ -498,6 +764,17 @@ if(ANDROID OR EMSCRIPTEN OR IOS)
 	message("-- Test suites bundle into one module (no exec on this platform)")
 else()
 	set(OxC3TestExecutables ON)
+endif()
+
+# Each suite runs behind a stamp file that depends on everything it was built from, so one whose inputs did not change
+# does not re-run and the build graph does the dirty tracking.
+# CI turns this OFF and drives ctest explicitly, which always runs everything and reports per test rather than as one
+# build failure.
+
+option(OxC3TestAutoRun "Run each test right after building it" ON)
+
+if(OxC3TestAutoRun AND OxC3TestExecutables AND NOT CMAKE_CROSSCOMPILING)
+	message("-- Tests run automatically after building (-DOxC3TestAutoRun=Off to disable)")
 endif()
 
 if(EnableShaderCompiler)
@@ -582,18 +859,38 @@ if(NOT ANDROID)
 	endif()
 endif()
 
+# Where the built artifacts land.
+#
+# An IDE that owns a build folder writes into it and clears what it does not recognise, so a preset points one
+# at its own tree (build/ide/<preset>) rather than at the tree conan set up. That keeps conan's generators out
+# of its reach, but both trees still describe the same configuration, so their artifacts would otherwise land
+# on the same paths and overwrite each other. OxC3IdeTree keeps the IDE's inside its own tree.
+#
+# Packages are not affected: add_virtual_files derives those from SELF (the source root) rather than from the
+# build folder, and writing one is idempotent, so both trees share them.
+
+set(OxC3IdeTree OFF CACHE BOOL "Build tree belongs to an IDE, so keep artifacts inside it (see CMakePresets.json)")
+
+if(OxC3IdeTree)
+    set(oxc3OutRoot "${CMAKE_BINARY_DIR}/out")
+    set(oxc3OutTail "")
+else()
+    set(oxc3OutRoot "${CMAKE_CURRENT_SOURCE_DIR}/build")
+    set(oxc3OutTail "/${platform}/${archDir}")
+endif()
+
 # Single-config generators (Makefile, Ninja)
 
 if(NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${archDir}/lib")
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${archDir}/bin")
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${archDir}/bin")
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${oxc3OutRoot}/${CMAKE_BUILD_TYPE}${oxc3OutTail}/lib")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${oxc3OutRoot}/${CMAKE_BUILD_TYPE}${oxc3OutTail}/bin")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${oxc3OutRoot}/${CMAKE_BUILD_TYPE}${oxc3OutTail}/bin")
 else()                                            # Multi-config generators (Visual Studio, Xcode)
     foreach(config ${CMAKE_CONFIGURATION_TYPES})
         string(TOUPPER ${config} CONFIG)
-        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${archDir}/lib")
-        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${archDir}/bin")
-        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${archDir}/bin")
+        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG} "${oxc3OutRoot}/${config}${oxc3OutTail}/lib")
+        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG} "${oxc3OutRoot}/${config}${oxc3OutTail}/bin")
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} "${oxc3OutRoot}/${config}${oxc3OutTail}/bin")
     endforeach()
 endif()
 
@@ -609,3 +906,25 @@ set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")
 set(ForceVulkan OFF CACHE BOOL "Force Vulkan support (disable native API if static linking)")
 
 add_subdirectory(src)
+
+# compile_commands.json lands in the build tree, but every editor looks for it beside the sources.
+# Copied rather than symlinked, since a symlink on Windows needs Developer Mode or elevation.
+# Plain copy rather than copy_if_different, so the output is always newer than its input and this does not
+# re-run on every build.
+# The generator writes the file at generate time, so it is only ever copied after a reconfigure.
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS AND EXISTS "${CMAKE_BINARY_DIR}/compile_commands.json")
+
+	add_custom_command(
+		OUTPUT "${CMAKE_SOURCE_DIR}/compile_commands.json"
+		COMMAND ${CMAKE_COMMAND} -E copy
+			"${CMAKE_BINARY_DIR}/compile_commands.json" "${CMAKE_SOURCE_DIR}/compile_commands.json"
+		DEPENDS "${CMAKE_BINARY_DIR}/compile_commands.json"
+		COMMENT "Exporting compile_commands.json"
+		VERBATIM
+	)
+
+	add_custom_target(OxC3_compile_commands ALL DEPENDS "${CMAKE_SOURCE_DIR}/compile_commands.json")
+	set_target_properties(OxC3_compile_commands PROPERTIES FOLDER Oxsomi/tools)
+
+endif()

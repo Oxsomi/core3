@@ -51,17 +51,19 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			ext = ESHExtension_RayQuery;
 			break;
 
-		case SpvCapabilityRayTracingMotionBlurNV:
-			ext = ESHExtension_RayMotionBlur;
-			break;
-
 		//SPV_EXT_shader_invocation_reorder (ShaderInvocationReorderEXT) is what DXC emits for dx::HitObject SER.
 		case SpvCapabilityShaderInvocationReorderEXT:
 			ext = ESHExtension_RayReorder;
 			break;
 
-		//SM6.10 ray triangle vertex position fetch (SPV_KHR_ray_tracing_position_fetch): the ray-pipeline
-		//(RayTracingPositionFetchKHR) and RayQuery (RayQueryPositionFetchKHR) capabilities share one extension.
+		//SM6.10 ray triangle vertex position fetch (SPV_KHR_ray_tracing_position_fetch):
+		// the ray-pipeline (RayTracingPositionFetchKHR) and RayQuery (RayQueryPositionFetchKHR) capabilities share one
+		// extension.
+		//SV_Barycentrics / GetAttributeAtVertex (SPV_KHR_fragment_shader_barycentric)
+		case SpvCapabilityFragmentBarycentricKHR:
+			ext = ESHExtension_Barycentrics;
+			break;
+
 		case SpvCapabilityRayTracingPositionFetchKHR:
 		case SpvCapabilityRayQueryPositionFetchKHR:
 			ext = ESHExtension_RayTriPosition;
@@ -377,7 +379,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		//Possible in the future? TODO:
 
 		case SpvCapabilityShaderViewportIndexLayerEXT:
-		case SpvCapabilityFragmentBarycentricKHR:
 		case SpvCapabilityDemoteToHelperInvocation:
 		case SpvCapabilityExpectAssumeKHR:
 		case SpvCapabilityBitInstructions:
@@ -491,6 +492,10 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 
 		//NV SER is unsupported; OxC3 maps the EXT form (SPV_EXT_shader_invocation_reorder) instead.
 		case SpvCapabilityShaderInvocationReorderNV:
+
+		//Motion blur was removed 2026-08-18: DXR has no equivalent and RTXMG dropped it, so a shader asking
+		// for it can no longer be represented in oiSH.
+		case SpvCapabilityRayTracingMotionBlurNV:
 
 			retError(clean, Error_invalidState(
 				2, "spvMapCapabilityToESHExtension() SPIRV contained capability that isn't supported in oiSH"

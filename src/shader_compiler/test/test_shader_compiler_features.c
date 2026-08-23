@@ -77,9 +77,12 @@ void Test_shaderCompilerFeatures(Test *t) {
 		{ "features/subgroup_operations.hlsl", ESHExtension_SubgroupOperations, B_BOTH },
 		{ "features/ray_query.hlsl",           ESHExtension_RayQuery,           B_BOTH },
 
-		//SPIRV-only: inline-SPIRV atomics, or capabilities OxC3/DXC restrict to SPIRV (see SpirvNative set)
-		{ "features/subgroup_arithmetic.hlsl", ESHExtension_SubgroupArithmetic, B_SPV },
-		{ "features/subgroup_shuffle.hlsl",    ESHExtension_SubgroupShuffle,    B_SPV },
+		//Plain HLSL wave intrinsics, so both backends compile them.
+		//DXIL reflection can't detect either (one generic wave ops flag), so on DXIL they are annotation-driven.
+		{ "features/subgroup_arithmetic.hlsl", ESHExtension_SubgroupArithmetic, B_BOTH },
+		{ "features/subgroup_shuffle.hlsl",    ESHExtension_SubgroupShuffle,    B_BOTH },
+
+		//SPIRV-only: inline-SPIRV atomics (DXIL has no float atomic intrinsics)
 		{ "features/atomic_f32.hlsl",          ESHExtension_AtomicF32,          B_SPV },
 		{ "features/atomic_f64.hlsl",          ESHExtension_AtomicF64,          B_SPV },
 
@@ -102,6 +105,11 @@ void Test_shaderCompilerFeatures(Test *t) {
 		//SM6.9 SER: native dx::HitObject on DXIL; on SPIRV the hit object + reorder are inline SPIR-V
 		//(SPV_EXT_shader_invocation_reorder, opaque OpTypeHitObjectEXT via vk::SpirvOpaqueType), so it works on both.
 		{ "features/ray_reorder.hlsl",          ESHExtension_RayReorder,         B_BOTH },
+
+		//SM6.1 fragment barycentrics:
+		// native SV_Barycentrics semantic on both backends (SPIRV:
+		// BaryCoordKHR through SPV_KHR_fragment_shader_barycentric).
+		{ "features/barycentrics.hlsl",         ESHExtension_Barycentrics,       B_BOTH },
 
 		//SM6.10 ray tri vertex position fetch: native intrinsic on DXIL; on SPIRV the ray query stays native HLSL
 		// and only the position-fetch op is inline SPIR-V (a valid RayQuery<> can be handed to it by reference),

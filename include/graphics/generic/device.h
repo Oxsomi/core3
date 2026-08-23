@@ -49,11 +49,9 @@ typedef struct CBufferData {        //TODO: Replace this entirely when we can.
 	U32 frameId;                    //Can loop back to 0 after U32_MAX!
 	F32 time;                       //Time since launch of app
 	F32 deltaTime;                  //deltaTime since last frame.
-	U32 swapchainCount;             //How many swapchains are present (will insert ids into appData)
+	U32 swapchainCount;             //How many swapchains are present
 
 	U32 swapchains[2 * 16];
-
-	U32 appData[(512 - 16 - 2 * 16 * 4) / 4];
 
 } CBufferData;
 
@@ -77,6 +75,34 @@ typedef enum EGraphicsBufferingMode {
 
 #define MAX_FRAMES_IN_FLIGHT 3           //Don't touch
 
+//One time runtime hints, so a message fires once per device rather than on every call that notices the
+// same thing.
+//A bit set in GraphicsDevice::runtimeMessages means the message was already logged;
+// GraphicsDevice_logOnce is the test and set that guards the log call.
+
+typedef enum EGraphicsDeviceMessage {
+
+	//A real micromap object was linked into a BLAS on a device that likely emulates opacity micromaps
+	// (RayMicromapOpacityActual unset), where the free special indices are usually the better tool.
+
+	EGraphicsDeviceMessage_OmmLikelyEmulated    = 1 << 0,
+
+	//A submit was split mid recording because pending copies or AS builds crossed the flush threshold,
+	// which inserts a GPU sync point; frequent hits want a higher flushThreshold or smaller upload batches.
+
+	EGraphicsDeviceMessage_SubmitFlushed        = 1 << 1,
+
+	//A pipeline layout exceeded 13 root signature DWORDs, past which D3D12 drivers typically spill to memory.
+
+	EGraphicsDeviceMessage_RootSignature13Dwords = 1 << 2,
+
+	//An allocation preferring a dedicated block fell back to shared because the device already holds >= 2000
+	// memory blocks (the cap guards the API limit of 4096 allocations).
+
+	EGraphicsDeviceMessage_TooManyMemoryBlocks  = 1 << 3
+
+} EGraphicsDeviceMessage;
+
 typedef struct GraphicsDevice {
 
 	GraphicsInstanceRef *instance;
@@ -89,6 +115,8 @@ typedef struct GraphicsDevice {
 	U16 pad0;
 	U8 framesInFlight;
 	U8 fifId;                //(submitId - 1) % FRAMES_IN_FLIGHT
+
+	AtomicI64 runtimeMessages;                              //EGraphicsDeviceMessage bits that already logged
 
 	Ns lastSubmit;
 
@@ -225,14 +253,14 @@ TListNamed(SwapchainRef*, ListSwapchainRef);
 //It returns U64_MAX on error (e.g. if nullptr)
 U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal);
 
-//Submit commands to device
-//appData is up to a 368 byte per frame array used for transmitting render critical info.
+//Submit commands to device.
+//Per dispatch data a shader needs travels as a push constant, which the shader declares and the pipeline
+//layout validates, rather than through a block of untyped bytes that every shader shared.
 Bool GraphicsDeviceRef_submitCommands(
 
 	GraphicsDeviceRef *deviceRef,
 	const ListCommandListRef *commandLists,
 	const ListSwapchainRef *swapchains,
-	const Buffer *appData,
 
 	//Set deltaTime < 0 to indicate it has to auto calculate time and deltaTime.
 	//But this is not recommended when the deltaTime is constant for example.
@@ -244,6 +272,10 @@ Bool GraphicsDeviceRef_submitCommands(
 
 //Wait on previously submitted commands
 Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr);
+
+//True exactly once per device per message, so the caller logs on true and stays silent forever after.
+
+Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message);
 
 //Create the pullRegion readback buffers ahead of time, sized for sizePerFrame bytes of pulls per frame.
 //The readback memory is otherwise created at the first pull, which on D3D12 can bring in a whole new memory

@@ -224,7 +224,13 @@ Bool SHRegisterRuntime_hash(
 	static_assert(sizeof(SHRegister) == sizeof(U64) * (ESHBinaryType_Count + 1), "Expected SHRegister as U64[N + 1]");
 
 	U64 hash = sbFile ? sbFile->hash : Buffer_fnv1a64Offset;
-	const U64 *regU64 = (const U64*) registr;
+
+	//SHRegister only guarantees U32 alignment, so reading it in place as U64s can be a misaligned load.
+	//The bytes go through a properly aligned local instead.
+	//The static_assert above keeps the sizes in sync.
+
+	U64 regU64[ESHBinaryType_Count + 1];
+	Buffer_memcpy(Buffer_createRef(regU64, sizeof(regU64)), Buffer_createRefConst(registr, sizeof(SHRegister)));
 
 	for(U64 i = 0; i < ESHBinaryType_Count + 1; ++i)
 		hash = Buffer_fnv1a64Single(regU64[i], hash);
@@ -287,11 +293,21 @@ Bool SHBinaryInfo_addRegisterBase(
 	U64 hash = 0;
 	gotoIfError3(clean, SHRegisterRuntime_hash(&registr, name, arrays, sbFile, &hash, e_rr));
 
-	//Find duplicate register (that is legal to add, without conflicting info)
+	//Find duplicate register (that is legal to add, without conflicting info).
+	//The caller hands over the buffer either way, so a duplicate has to consume it too rather than leave it
+	//for the caller to trip over: two entrypoints declaring the same push constant block hash identically,
+	//and the second one's SBFile_create then refuses a buffer that still holds the first one's variables.
 
 	for(U64 i = 0; i < registers->length; ++i)
-		if(registers->ptr[i].hash == hash)
+		if(registers->ptr[i].hash == hash) {
+
+			if(sbFile) {
+				SBFile_free(sbFile, alloc);
+				*sbFile = (SBFile) { 0 };
+			}
+
 			goto clean;
+		}
 
 	//Ensure there's no registers with duplicate name or binding
 
@@ -593,6 +609,10 @@ Bool ListSHRegisterRuntime_addTextureBase(
 					0, "ListSHRegisterRuntime_addRWTexture() texture format is incompatible"
 				));
 		}
+
+		//Norm formats want norm templates (unorm/snorm float): DXIL reflection keeps the norm primitive, so
+		// requiring agreement here catches a template/format mismatch that would read garbage at runtime
+		// (a plain float template makes DXC's SPIRV claim a 32-bit float image format).
 
 		if(
 			textureFormatPrimitive != primitive &&

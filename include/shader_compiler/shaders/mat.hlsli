@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -180,5 +179,3 @@ F32x4x4 inverseSlow(F32x4x4 m) {
 
 	return ret;
 }
-
-)"

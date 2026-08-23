@@ -28,6 +28,7 @@
 #include "types/container/ref_ptr.h"
 #include "types/container/string.h"
 #include "types/base/string_read.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/constants.h"
 
 TListImpl(DescriptorBinding);
@@ -78,6 +79,34 @@ Bool DescriptorBinding_overlaps(
 		default:
 			return false;
 	}
+}
+
+//Whether a reflected register is one of the runtime's own rather than the caller's.
+//The device names every binding it owns, so the names ARE the authority; the spaces are not, since they
+//differ per backend (see the detect loop for what that costs).
+
+Bool GraphicsDeviceRef_isRuntimeRegister(GraphicsDeviceRef *dev, const CharString *name) {
+
+	if(!dev || !name || !CharString_length(*name))
+		return false;
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
+
+	DescriptorLayoutRef *owned[2] = { device->defaultDescLayout, device->defaultCBufferLayout };
+
+	for (U64 i = 0; i < 2; ++i) {
+
+		if(!owned[i])
+			continue;
+
+		const ListCharString names = DescriptorLayoutRef_ptr(owned[i])->info.bindingNames;
+
+		for (U64 j = 0; j < names.length; ++j)
+			if(CharString_equalsStringSensitive(&names.ptr[j], name))
+				return true;
+	}
+
+	return false;
 }
 
 Bool GraphicsDeviceRef_detectLayoutFromEntries(
@@ -166,25 +195,52 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 		U16 entrypointId = (U16) epPacked;
 		U16 binaryId = epPacked >> 16;
 
-		if(binaryId >= binary->binaries.length || entrypointId >= binary->entries.length)
+		if(entrypointId >= binary->entries.length)
 			retError(clean, Error_invalidParameter(
-				3, 0, "DescriptorLayoutInfo_detect()::entrypoints binary or entry index out of bounds"
+				3, 0, "DescriptorLayoutInfo_detect()::entrypoints entry index out of bounds"
 			));
 
-		const SHBinaryInfo *bin = &binary->binaries.ptr[binaryId];
+		//The high half is an index into the entry's own binary list, not into the file's binaries, which is
+		//how GraphicsDeviceRef_getFirstShaderEntry packs it and how the pipeline creators unpack it.
+		//Indexing the file directly happens to agree whenever an entry's first variant is also binary 0, so
+		//it only diverges on a file with variants, where it silently reflected the wrong binary.
+
+		const SHEntry *entryInfo = &binary->entries.ptr[entrypointId];
+
+		if(binaryId >= entryInfo->binaryIds.length)
+			retError(clean, Error_invalidParameter(
+				3, 0, "DescriptorLayoutInfo_detect()::entrypoints binary index out of bounds"
+			));
+
+		const SHBinaryInfo *bin = &binary->binaries.ptr[entryInfo->binaryIds.ptr[binaryId]];
+
+		//A push constant register only counts for the binary type it actually has a binding in.
+		//DXIL has no push constant concept: the same declaration reflects there as an ordinary constant
+		//buffer, and the SPIRV side's push constant register carries no DXIL binding. Counting that register
+		//anyway would leave hasPushConstants set on the DXIL pass and stop the constant buffer that IS the
+		//DXIL form of it from being promoted, so a shader's push constants silently became a descriptor.
 
 		Bool hasPushConstants = false;
 
-		for(U64 j = 0; j < bin->registers.length; ++j)
-			if(bin->registers.ptr[j].reg.registerType == ESHRegisterType_PushConstants) {
+		for (U64 j = 0; j < bin->registers.length; ++j) {
 
-				if(hasPushConstants)
-					retError(clean, Error_invalidParameter(
-						3, 0, "DescriptorLayoutInfo_detect() already has a push constant, two aren't allowed at once"
-					));
+			const SHRegisterRuntime *pushReg = &bin->registers.ptr[j];
 
-				hasPushConstants = true;
-			}
+			if(pushReg->reg.registerType != ESHRegisterType_PushConstants)
+				continue;
+
+			const SHBinding *pushBinding = &pushReg->reg.bindings.arr[binaryType];
+
+			if(pushBinding->binding == U32_MAX && pushBinding->space == U32_MAX)
+				continue;
+
+			if(hasPushConstants)
+				retError(clean, Error_invalidParameter(
+					3, 0, "DescriptorLayoutInfo_detect() already has a push constant, two aren't allowed at once"
+				));
+
+			hasPushConstants = true;
+		}
 
 		for(U64 j = 0; j < bin->registers.length; ++j) {
 
@@ -208,6 +264,18 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 				validBinding = (reg->reg.isUsedFlag >> binaryType) & 1;
 
 			if(!validBinding)    //Doesn't exist in current binary type
+				continue;
+
+			//The runtime's own registers are the bindless set and the per frame globals. Every shader that
+			//includes resources.hlsli reflects them, but they are not the caller's to declare, and detecting
+			//one only produces a layout that createDescriptorLayout would refuse.
+			//Skipping them is also what lets AssumePushConstants find the constant buffer that IS the push
+			//constant on DXIL, rather than tripping over the globals block that precedes it.
+			//Matched by NAME, not by space: the reserved space only holds them on DXIL, while SPIRV keeps the
+			//bindless set in sets 0/1 and the globals in set 2. Matching on space there would either miss them
+			//or, worse, eat a bindful shader's own set0 binding0.
+
+			if(GraphicsDeviceRef_isRuntimeRegister(dev, &reg->name))
 				continue;
 
 			U8 regType = getDxilRegisterType(reg->reg.registerType);
@@ -544,6 +612,20 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 				0,
 				"GraphicsDeviceRef_createDescriptorLayout() can't contain push constants as a descriptor layout, "
 				"provide them using a pipeline layout instead"
+			));
+
+		//OxC3 binds its own per frame globals in the reserved space, so a caller's binding there would either
+		// be overwritten by the runtime or quietly shadow it.
+		//A shader that genuinely declares this space was built against a different OxC3 than the one running
+		// it: either newer, or modified to lay its globals out elsewhere. Neither can be honoured here.
+		//The device's own layouts are exempt, since they are what occupies the space in the first place.
+
+		if(!(info->flags & EDescriptorLayoutFlags_InternalWeakDeviceRef) && b.binding.space == OXC3_RESERVED_SPACE)
+			retError(clean, Error_invalidOperation(
+				1,
+				"GraphicsDeviceRef_createDescriptorLayout() register space 0xC3 is reserved for OxC3's own per "
+				"frame globals. A shader binding there was built against a different (newer or modified) OxC3 "
+				"than this runtime, which binds its globals to that space itself"
 			));
 
 		if(b.registerType == ESHRegisterType_Sampler || b.registerType == ESHRegisterType_SamplerComparisonState)

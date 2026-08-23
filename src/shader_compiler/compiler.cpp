@@ -53,93 +53,15 @@
 #include <exception>
 #include "compiler_private.hpp"
 
-const C8 *resources =
-	#include "shader_compiler/shaders/resources.hlsli"
-	;
+//The built-in headers live beside this file as ordinary HLSL and are turned into string data by
+//src/tools/embed_hlsli.py, which the build runs into its own translation unit.
+//Declared rather than defined here on purpose: including them into THIS file is what used to make editing one
+// header recompile all of compiler.cpp and relink a 187MB module.
 
-const C8 *types =
-	#include "shader_compiler/shaders/types.hlsli"
-	;
-
-//Split out of types.hlsli / resources.hlsli; the umbrella headers include them, so a shader that only
-//says #include "@types.hlsli" still sees everything it used to.
-
-const C8 *matHlsli =
-	#include "shader_compiler/shaders/mat.hlsli"
-	;
-
-const C8 *indirectHlsli =
-	#include "shader_compiler/shaders/indirect.hlsli"
-	;
-
-const C8 *fixedPointHlsli =
-	#include "shader_compiler/shaders/fixed_point.hlsli"
-	;
-
-const C8 *bufferHlsli =
-	#include "shader_compiler/shaders/buffer.hlsli"
-	;
-
-const C8 *appDataHlsli =
-	#include "shader_compiler/shaders/appdata.hlsli"
-	;
-
-const C8 *extensionsHlsli =
-	#include "shader_compiler/shaders/extensions.hlsli"
-	;
-
-const C8 *extensionRayReorderHlsl =
-	#include "shader_compiler/shaders/extension.RayReorder.hlsli"
-	;
-
-const C8 *extensionRayTriPositionHlsl =
-	#include "shader_compiler/shaders/extension.RayTriPosition.hlsli"
-	;
-
-const C8 *extensionRayMicromapOpacityHlsl =
-	#include "shader_compiler/shaders/extension.RayMicromapOpacity.hlsli"
-	;
-
-const C8 *extensionAtomicF32Hlsl =
-	#include "shader_compiler/shaders/extension.AtomicF32.hlsli"
-	;
-
-const C8 *extensionAtomicF64Hlsl =
-	#include "shader_compiler/shaders/extension.AtomicF64.hlsli"
-	;
-
-const C8 *extensionCoopVecHlsl =
-	#include "shader_compiler/shaders/extension.CoopVec.hlsli"
-	;
-
-const C8 *extensionCoopMatHlsl =
-	#include "shader_compiler/shaders/extension.CoopMat.hlsli"
-	;
-
-static const CompilerBuiltInInclude CompilerBuiltInIncludes[] = {
-
-	{ "resources.hlsli",                    resources                    },
-	{ "types.hlsli",                        types                        },
-	{ "extensions.hlsli",                   extensionsHlsli              },
-
-	//Split out of types.hlsli / resources.hlsli
-
-	{ "mat.hlsli",                          matHlsli                     },
-	{ "indirect.hlsli",                     indirectHlsli                },
-	{ "fixed_point.hlsli",                  fixedPointHlsli              },
-	{ "buffer.hlsli",                       bufferHlsli                  },
-	{ "appdata.hlsli",                      appDataHlsli                 },
-
-	//Opt in per extension, so a shader only pays for what it asks for
-
-	{ "extension.RayReorder.hlsli",         extensionRayReorderHlsl      },
-	{ "extension.RayTriPosition.hlsli",     extensionRayTriPositionHlsl  },
-	{ "extension.RayMicromapOpacity.hlsli", extensionRayMicromapOpacityHlsl },
-	{ "extension.AtomicF32.hlsli",          extensionAtomicF32Hlsl       },
-	{ "extension.AtomicF64.hlsli",          extensionAtomicF64Hlsl       },
-	{ "extension.CoopVec.hlsli",            extensionCoopVecHlsl         },
-	{ "extension.CoopMat.hlsli",            extensionCoopMatHlsl         }
-};
+extern "C" {
+	extern const CompilerBuiltInInclude CompilerBuiltInIncludes[];
+	extern const U64 CompilerBuiltInIncludeCount;
+}
 
 extern "C" {
 
@@ -155,7 +77,7 @@ extern "C" {
 	#endif
 
 	U64 Compiler_builtInIncludeCount() {
-		return sizeof(CompilerBuiltInIncludes) / sizeof(CompilerBuiltInIncludes[0]);
+		return CompilerBuiltInIncludeCount;
 	}
 
 	const CompilerBuiltInInclude *Compiler_builtInIncludeAt(U64 i) {
@@ -543,7 +465,10 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
-SpinLock lockThread = { 0 };
+//Value initialized rather than { 0 }: off Windows AtomicI64 holds a std::atomic and is not an aggregate, so
+//there is no int to convert from. {} zeroes it on every platform.
+
+SpinLock lockThread{};
 Bool hasInitialized = false;
 
 Bool Compiler_setup(Error *e_rr) {

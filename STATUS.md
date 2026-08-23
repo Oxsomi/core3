@@ -3,7 +3,7 @@
 Honest, per-feature maturity so nobody designs against something that doesn't exist yet.
 Legend: ✅ implemented + tested · 🟡 implemented, caveats · 🚧 in progress · 📄 spec/design only · ❌ not planned near-term
 
-Last updated: 2026-08-04 (branch `android`, v3.2.103). Update this table in the same PR as the feature.
+Last updated: 2026-08-04 (branch `android`, v3.2.104). Update this table in the same PR as the feature.
 
 ## Core (types_*)
 
@@ -57,7 +57,7 @@ Last updated: 2026-08-04 (branch `android`, v3.2.103). Update this table in the 
 | Buffers/textures + suballocation | ✅ | ✅ | |
 | Descriptor heap/layout/table + bindless | ✅ | ✅ | Android: bindful path missing |
 | Compute/graphics pipelines | ✅ | ✅ | Android: render passes missing |
-| Raytracing (pipeline + query, BLAS/TLAS) | ✅ | ✅ | Micromap/motion-blur/reorder behind extension flags |
+| Raytracing (pipeline + query, BLAS/TLAS) | ✅ | ✅ | Micromap/reorder behind extension flags |
 | Mesh shaders / VRS | ✅ | ✅ | |
 | Workgraphs | 🚧 | 🚧 | Lib-link specialization actively being fixed (see recent commits) |
 | Metal | 📄 | — | Enum reserved; needs SPIRV-Cross MSL path |

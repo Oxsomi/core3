@@ -1,0 +1,42 @@
+# LeakSanitizer suppressions for third party code: the build time tools driving DXC or SPIRV-Reflect,
+# the tests that link the same compiler, and the Vulkan validation layer the graphics suite loads.
+# Nothing here is an OxC3 allocation: every leak these cover is allocated below the entry points named,
+# with our frames appearing only as the caller. A leak in OxC3's own code still reports everywhere.
+#
+# Suppressed at the LIBRARY BOUNDARY rather than by leaf symbol on purpose. The leaks are spread over
+# many internal helpers (DefinesToString, ParseEntryPoints, ParseDescriptorSets, ...) that move
+# between versions, so naming them individually turns every dependency bump into whack a mole, while
+# these three entry points are stable public API.
+
+# One DXC bug, reached from everywhere: its Windows compatibility layer calls newlocale() per string
+# conversion and never freelocale()s it, so compiling, linking, reflecting and even stat'ing an
+# include each leak locales.
+# Suppressed at the LEAF rather than per entry point, because the caller list kept growing (compile,
+# then link, then RegisterLibrary, then the virtual filesystem's Stat) while the leak never changed.
+# Safe to match this broadly: OxC3 creates no locales anywhere, so every newlocale leak is third
+# party by construction.
+leak:__newlocale
+
+# DXC blob allocations that outlive the compile, owned by its own IMalloc rather than ours.
+leak:hlsl::DxcCreateBlob
+leak:DxcUtils::CreateBlobFromPinned
+
+# DXC's SPIR-V backend interns type names into a context it never tears down.
+leak:clang::spirv::SpirvContext
+
+# SPIRV-Reflect leaves its parsed module tables to process exit. This is its internal entry point,
+# reached from spvReflectCreateShaderModule2; OxC3 has no symbol of this name.
+leak:CreateShaderModule
+
+# The validation layer keeps per thread state it never tears down, on threads it starts itself, so the
+# frames below the sanitizer's thread entry are all its own. Matched by module because the layer ships
+# stripped, which leaves nothing else to name.
+# Debug only by construction: a build that doesn't ask for validation never loads it.
+# Wildcarded because a module is matched as a whole path, unlike the symbol entries above.
+leak:*libVkLayer_khronos_validation.so*
+
+# A proprietary driver allocating for its own lifetime. Named by module rather than by anything broader
+# on purpose: the tests keep drivers and layers mapped for the leak check, so their globals stay in the
+# root set and this is one of the few allocations that is genuinely never freed rather than an artifact
+# of unloading. That also means a leak OxC3 causes below a driver call still reports.
+leak:*libnvidia-*.so*

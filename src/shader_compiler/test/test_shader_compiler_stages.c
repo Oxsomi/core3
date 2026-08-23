@@ -37,8 +37,6 @@
 //Graphics + compute + mesh/task + raytracing (raygen/closesthit/anyhit/miss/intersection/callable) stages are covered.
 //
 //Most stages run on BOTH backends.
-//Work-graph nodes are DXIL-only: DXC has no SPIR-V lowering for HLSL work graphs,
-// so `node` is gated to DXIL via the `backends` mask.
 //The only remaining parked stage is inheritance
 // (an upstream DXC SPIR-V assert on multi-base-class structs, unrelated to a specific stage).
 
@@ -72,8 +70,7 @@ void Test_shaderCompilerStages(Test *t) {
 		{ "stages/anyhit.hlsl",        "anyhit",        ST_BOTH },
 		{ "stages/miss.hlsl",          "miss",          ST_BOTH },
 		{ "stages/intersection.hlsl",  "intersection",  ST_BOTH },
-		{ "stages/callable.hlsl",      "callable",      ST_BOTH },
-		{ "stages/node.hlsl",          "node",          ST_DXIL }        //DXC has no SPIR-V lowering for work graphs
+		{ "stages/callable.hlsl",      "callable",      ST_BOTH }
 	};
 
 	//Each stage is exercised on BOTH backends: the reflected stage must be identical on SPIRV and DXIL.

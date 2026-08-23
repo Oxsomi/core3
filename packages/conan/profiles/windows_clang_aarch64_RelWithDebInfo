@@ -1,3 +1,4 @@
+{% set _detected, detectedVersion, _exe = detect_api.detect_clang_compiler("clang-cl") %}
 # clang-cl: clang's frontend with MSVC's driver, ABI and CRT. Same runtime/cppstd as the msvc profiles so
 # the two share prebuilt dependencies where conan allows it.
 [settings]
@@ -9,7 +10,7 @@ compiler.runtime=static
 # default; v144 is the toolset behind msvc compiler.version=194, so both profiles link the same CRT.
 compiler.runtime_version=v144
 compiler.runtime_type=Release
-compiler.version=16
+compiler.version={{ detect_api.default_compiler_version("clang", detectedVersion) }}
 os=Windows
 arch=armv8
 

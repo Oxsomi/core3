@@ -118,6 +118,31 @@ Bool CommandListRef_startRenderExt(
 				7, "CommandListRef_startRenderExt() render target is set as clear but also read only"
 			));
 
+		//An integer clear value has to survive a float round trip, because D3D12 has no integer render target
+		// clear at all: ClearRenderTargetView takes FLOAT[4] and the runtime converts it to the attachment's
+		// integer format (ClearUnorderedAccessViewUint needs a UAV, not an RTV, so it is not a way out).
+		//F32 carries a 24 bit significand, so magnitudes up to 2^24 - 1 convert exactly and anything beyond
+		// silently lands on a neighbouring value.
+		//Rejecting that here keeps the two backends agreeing rather than quietly diverging on large values.
+
+		if (info.load == ELoadAttachmentType_Clear) {
+
+			const ETexturePrimitive prim = ETextureFormat_getPrimitive(ETextureFormatId_unpack[texture.textureFormatId]);
+
+			if(prim == ETexturePrimitive_SInt || prim == ETexturePrimitive_UInt)
+				for(U8 c = 0; c < 4; ++c) {
+
+					const I64 v = prim == ETexturePrimitive_SInt ? (I64) info.color.colori[c] : (I64) info.color.coloru[c];
+
+					if(v > ((I64)1 << 24) - 1 || v < -(((I64)1 << 24) - 1))
+						retError(clean, Error_outOfBounds(
+							7, (U64) (v < 0 ? -v : v), ((U64)1 << 24) - 1,
+							"CommandListRef_startRenderExt() integer clear value must fit in 24 bits, "
+							"since D3D12 clears integer render targets through a float conversion"
+						));
+				}
+		}
+
 		//Check generic properties like devices
 
 		if(texture.resource.device != commandList->device)
@@ -255,6 +280,47 @@ Bool CommandListRef_startRenderExt(
 			4, "CommandListRef_startRenderExt()::depth clear value can't be non zero if there's no depth buffer bound"
 		));
 
+	//Validate the depth stencil resolve, which the colour attachments got above but this one never did.
+
+	if (depthStencil) {
+
+		if(depthStencil->depthStencilResolve >= EMSAAResolveMode_Count)
+			retError(clean, Error_invalidOperation(
+				4, "CommandListRef_startRenderExt()::depthStencil had invalid depthStencilResolve"
+			));
+
+		if(depthStencil->depthStencilResolve && !depthStencil->resolveImage)
+			retError(clean, Error_invalidOperation(
+				4, "CommandListRef_startRenderExt()::depthStencil had depthStencilResolve but no resolveImage"
+			));
+
+		//EMSAAResolveMode_Average is the zero value, so a caller that fills resolveImage and leaves the mode
+		// alone lands on it by accident. Averaging a depth plane is not something an implementation has to
+		// support (it is rarely in Vulkan's supportedDepthResolveModes), so leaving it through turns a
+		// forgotten field into a driver level validation failure. Refuse it here, where the message can say
+		// what to pick instead.
+
+		if(depthStencil->resolveImage && depthStencil->depthStencilResolve == EMSAAResolveMode_Average)
+			retError(clean, Error_invalidOperation(
+				4,
+				"CommandListRef_startRenderExt()::depthStencil resolve needs an explicit Min or Max; "
+				"averaging a depth plane isn't universally supported"
+			));
+
+		//The stencil plane is resolved with the same mode as depth (both backends emit one mode), and a
+		// stencil plane only ever supports SAMPLE_ZERO in practice, which this enum cannot express yet.
+
+		if (depthStencil->resolveImage && depthStencil->image) {
+
+			const UnifiedTexture utex = TextureRef_getUnifiedTexture(depthStencil->image, NULL);
+
+			if(utex.depthFormat >= EDepthStencilFormat_StencilStart)
+				retError(clean, Error_unsupportedOperation(
+					4, "CommandListRef_startRenderExt() can't resolve a depth stencil format yet, only depth only"
+				));
+		}
+	}
+
 	StartRenderCmdExt *startRender = (StartRenderCmdExt*)command.ptr;
 
 	*startRender = (StartRenderCmdExt) {
@@ -370,7 +436,7 @@ Bool CommandListRef_startRenderExt(
 		TransitionInternal transition = (TransitionInternal) {
 			.resource = info.image,
 			.range = (ResourceRange) { .image = info.range },
-			.stage = EPipelineStage_Count,
+			.stageMask = 0,
 			.type = info.readOnly ? ETransitionType_RenderTargetRead : ETransitionType_RenderTargetWrite
 		};
 

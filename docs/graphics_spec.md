@@ -75,7 +75,6 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_ray_tracing_pipeline as RaytracingPipeline
   - VK_KHR_ray_query as RayQuery
   - VK_KHR_acceleration_structure && (RaytracingPipeline || RaytracingQuery) as Raytracing
-  - VK_NV_ray_tracing_motion_blur as RayMotionBlur
   - VK_NV_ray_tracing_invocation_reorder (.rayTracingInvocationReorder) as RayReorder; if .rayTracingInvocationReorderReorderingHint is also set, RayReorderActual (features2) - the device actually reorders rather than exposing a no-op API
   - VK_KHR_ray_tracing_position_fetch as RayTriPosition (covers both the RayQuery and ray-pipeline shader forms)
   - VK_NV_cluster_acceleration_structure (.clusterAccelerationStructure) as RayClusterAS (features2; mega geometry cluster BLAS/CLAS)
@@ -86,7 +85,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_cooperative_matrix as CoopMat (cooperative matrix / GEMM)
   - VK_EXT_shader_float8 as CoopFP8 (.shaderFloat8 - the additive FP8 e4m3/e5m2 cooperative tier)
   - VK_EXT_mesh_shader as MeshShader
-  - VK_EXT_opacity_micromap as RayMicromapOpacity
+  - VK_EXT_opacity_micromap OR VK_KHR_opacity_micromap (+ its VK_KHR_device_address_commands dependency) as RayMicromapOpacity. The KHR promotion is preferred when the device offers it (EVkGraphicsFeatures_OpacityMicromapKHR in featuresExt records which one runs). KHR would also be the only VK path where RayMicromapOpacityU8 (features2, 8-bit OMM indices) could be set — it permits VK_INDEX_TYPE_UINT8 (VUID-VkAccelerationStructureTrianglesOpacityMicromapKHR-indexType-11570) while EXT forbids it (VUID-...EXT-indexType-10719) — but the bit stays unclaimed on Vulkan until the KHR path is implemented. RayMicromapOpacityActual (features2) is NOT read from Vulkan at all; it is derived, see below.
   - VK_KHR_dynamic_rendering as DirectRendering
   - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
   - VK_KHR_multiview as Multiview.
@@ -224,9 +223,6 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
   - shaderGroupHandleSize should be 32.
 - shaderGroupBaseAlignment should be 32 or 64.
   - rayTraversalPrimitiveCulling and rayTracingPipelineTraceRaysIndirect should be enabled.
-
-- Motion blur:
-  - Both indirect and normal rays are allowed to be traced if RayIndirect is on. Otherwise RayIndirect has to be turned off.
 
 #### Mesh shaders
 
@@ -371,12 +367,11 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 
 - Bindless is almost always supported (Resource binding tier 3), but if it's not then it's required to use resource binding tier 1 (11.1+ of 64 UAVs, 128 SRVs).
 - Writeable MSAA textures as EGraphicsFeatures_WriteMSTexture.
-- WorkGraphsTier as EGraphicsFeatures_Workgraphs.
 - MeshShaderTier as EGraphicsFeatures_MeshShader.
 - VariableShadingRateTier as EGraphicsFeatures_VariableRateShading.
 - RaytracingTier>1_0 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline
 - RaytracingTier>1_1 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline + EGraphicsFeatures_RayQuery.
-- RaytracingTier>=1_2 (DXR 1.2) as EGraphicsFeatures_RayMicromapOpacity + EGraphicsFeatures_RayReorder. Additionally OPTIONS22.ShaderExecutionReorderingActuallyReorders as RayReorderActual (features2) - RayReorder only means the SER API is available (can be a no-op), RayReorderActual means the device really reorders.
+- RaytracingTier>=1_2 (DXR 1.2) as EGraphicsFeatures_RayMicromapOpacity + EGraphicsFeatures_RayReorder + RayMicromapOpacityU8 (features2; DXR accepts DXGI_FORMAT_R8_UINT OMM index buffers wherever it accepts micromaps). Additionally OPTIONS22.ShaderExecutionReorderingActuallyReorders as RayReorderActual (features2) - RayReorder only means the SER API is available (can be a no-op), RayReorderActual means the device really reorders. RayMicromapOpacityActual (features2) has no equivalent query on either API and is derived instead, see below.
 - Native16BitShaderOpsSupported as EGraphicsDataTypes_F16 and EGraphicsDataTypes_I16.
 - DoublePrecisionFloatShaderOps as EGraphicsDataTypes_F64.
 - EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally), D32S8 is always available.
@@ -402,6 +397,12 @@ There are specific extensions that are not relevant to other extensions, hence t
 - ShaderModel 6.6 support as WaveSize and PAQ.
 - ShaderModel 6.8 support as WaveSizeMinMax.
 - ShaderModel 6.6 to 6.9 as SM6_6 and SM6_9 respectively. To distance features and shader models a bit.
+
+## Derived capabilities
+
+Most capability bits map onto something an API reports. These do not: no API exposes them, so OxC3 works them out from bits that are reported. `GraphicsDeviceInfo_deriveCapabilities` fills them in for every device the instance hands out, which is what lets `GraphicsInstance_getPreferredDevice` filter on them like on any other bit; a device created with `EGraphicsDeviceFlags_DisableRt` has the raytracing ones cleared along with the rest.
+
+- **RayMicromapOpacityActual** (features2): whether opacity micromaps are worth building a real micromap object for, as opposed to being accepted by the API and emulated. D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's VkPhysicalDeviceOpacityMicromapFeaturesEXT is a single bool, and the subdivision level properties are no help either (an Ampere 3080 reports the spec maximum of 12/12, the same as hardware that has the units). Derivation: on NVIDIA the bit requires RayReorderActual, since the SER reordering hardware and the OMM engines shipped in the same generation; every other vendor is taken at its word. Deliberately not a device ID table, so an unknown future GPU that reports reordering is treated as capable rather than falling off the end of a lookup, and it needs no vendor SDK. It is a HEURISTIC: treat a set bit as "worth it", not as a guarantee, and note that special-index-only OMM costs nothing either way so it is always fine to use.
 
 ## List of Metal requirements
 

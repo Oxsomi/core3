@@ -105,10 +105,11 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			Log_debugLnx("\t\tRay query");
 
 		if(feat & EGraphicsFeatures_RayMicromapOpacity)
-			Log_debugLnx("\t\tRaytracing opacity micromap");
-
-		if(feat & EGraphicsFeatures_RayMotionBlur)
-			Log_debugLnx("\t\tRaytracing motion blur");
+			Log_debugLnx(
+				cap.features2 & EGraphicsFeatures2_RayMicromapOpacityActual ?
+				"\t\tRaytracing opacity micromap (real micromaps worth building)" :
+				"\t\tRaytracing opacity micromap (prefer special indices)"
+			);
 
 		if(feat & EGraphicsFeatures_RayReorder)
 			Log_debugLnx(
@@ -121,6 +122,12 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(feat & EGraphicsFeatures_RayTriPosition)
 			Log_debugLnx("\t\tRay triangle vertex position fetch");
+
+		if(feat & EGraphicsFeatures_Barycentrics)
+			Log_debugLnx("\t\tFragment shader barycentrics");
+
+		if(cap.features2 & EGraphicsFeatures2_RayMicromapOpacityU8)
+			Log_debugLnx("\t\tRaytracing opacity micromap 8-bit indices");
 
 		if(cap.features2 & EGraphicsFeatures2_RayClusterAS)
 			Log_debugLnx("\t\tRaytracing cluster acceleration structures (mega geometry)");
@@ -139,9 +146,6 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(feat & EGraphicsFeatures_DualSrcBlend)
 			Log_debugLnx("\t\tDual src blend (blend state)");
-
-		if(feat & EGraphicsFeatures_Workgraphs)
-			Log_debugLnx("\t\tWork graphs");
 
 		if(feat & EGraphicsFeatures_SwapchainCompute)
 			Log_debugLnx("\t\tSwapchain compute");
@@ -329,6 +333,31 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 				Log_debugLnx("\t\tPush descriptors");
 		}
 	}
+}
+
+//Capabilities neither API reports, worked out from the ones it did.
+//Called on every GraphicsDeviceInfo the instance hands out, so a device search can filter on these bits like
+// on any other, which is the whole reason they are bits rather than a query function.
+
+void GraphicsDeviceInfo_deriveCapabilities(GraphicsDeviceInfo *deviceInfo) {
+
+	if(!deviceInfo || !(deviceInfo->capabilities.features & EGraphicsFeatures_RayMicromapOpacity))
+		return;
+
+	//NVIDIA is the only vendor we have evidence of reporting OMM on hardware without the units (Ampere), so it
+	// is the only one that gets a carve out.
+	//RayReorderActual means the driver hints it ACTUALLY reorders rather than accepting the SER API as a
+	// no-op, which on NVIDIA only holds from the generation that also introduced the OMM hardware.
+	//See the header for why this is a heuristic and why it isn't a device ID table.
+	//Every other vendor is taken at its word: a reported capability is assumed real until profiling proves it
+	// is emulated, rather than being denied on suspicion.
+
+	const Bool actual =
+		deviceInfo->vendor != EGraphicsVendorId_NV ||
+		!!(deviceInfo->capabilities.features2 & EGraphicsFeatures2_RayReorderActual);
+
+	if(actual)
+		deviceInfo->capabilities.features2 |= EGraphicsFeatures2_RayMicromapOpacityActual;
 }
 
 Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format) {

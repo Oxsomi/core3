@@ -57,14 +57,20 @@ static inline Bool EDataType_isSigned(EDataType type) { return type & EDataType_
 //U2 dataTypeStride (EDataTypeStride)
 //U3 dataType (EDataType)
 
+//The library id shifted up by 19 leaves the top bits of a 32-bit value set, which overflows a signed int
+// (the default type of the plain literals these are invoked with).
+//That is undefined rather than merely implementation defined, and UBSan's shift check flags it at runtime
+// wherever an id is composed from variables, so every field is widened to U32 before it is shifted.
+//The composed bits are unchanged, so all ids keep their values.
+
 #define makeTypeId(libId, typeId, width, height, dataTypeStride, dataType)                                                \
 	(                                                                                                                     \
-		((libId) << 19) | ((typeId) << 9) |                                                                               \
-		(((width) - 1) << 7) | (((height) - 1) << 5) | ((dataTypeStride) << 3) | (dataType)                               \
+		((U32)(libId) << 19) | ((U32)(typeId) << 9) |                                                                     \
+		(((U32)(width) - 1) << 7) | (((U32)(height) - 1) << 5) | ((U32)(dataTypeStride) << 3) | (U32)(dataType)            \
 	)
 
 #define makeObjectId(libId, typeId, properties) \
-	(((libId) << 19) | ((typeId) << 9) | ((properties) << 3) | EDataType_Object)
+	(((U32)(libId) << 19) | ((U32)(typeId) << 9) | ((U32)(properties) << 3) | (U32)EDataType_Object)
 
 #define LIBRARYID_DEFAULT 0x1C30
 

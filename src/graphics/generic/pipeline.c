@@ -43,7 +43,9 @@ void *Pipeline_infoOffset(Pipeline *pipeline) {
 	if(!pipeline || !pipeline->device)
 		return NULL;
 
-	return (U8*)(pipeline + 1) + GraphicsDeviceRef_getObjectSizes(pipeline->device)->pipeline;
+	//The info struct sits behind the backend's pipeline ext, so the ext's stride is what to skip.
+
+	return (U8*)(pipeline + 1) + GraphicsObjectSize_stride(GraphicsDeviceRef_getObjectSizes(pipeline->device)->pipeline);
 }
 
 void Pipeline_free(void *pipelineGeneric, const Allocator *alloc) {
@@ -251,8 +253,22 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 
 			Error err = Error_none();
 
+			//A rejected candidate is the normal outcome of a search, not a failure:
+			// an oiSH that carries an SER variant beside a baseline one always has the SER binary rejected on a device
+			// without reordering.
+			//Error_print logs the message at the caller's level but the stack trace unconditionally at Error,
+			// so a lookup that goes on to succeed still reads as a crash; the reason goes out at Debug instead,
+			// and the real failure, U32_MAX out of the whole loop, stays the caller's to report.
+
 			if(!GraphicsDeviceRef_checkShaderFeatures(deviceRef, &binInfo, &entry, &err)) {
-				Error_print(GraphicsDeviceRef_getAlloc(deviceRef), &err, ELogLevel_Error, ELogOptions_NewLine);
+
+				Log_debugLn(
+					GraphicsDeviceRef_getAlloc(deviceRef),
+					"GraphicsDeviceRef_getFirstShaderEntry(): skipped entry %"PRIu64" binary %"PRIu64", "
+					"the device is missing a feature it needs",
+					i, j
+				);
+
 				continue;
 			}
 

@@ -317,24 +317,19 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	bindNextVkStruct(
-		VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
-		feat & EGraphicsFeatures_RayMotionBlur,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV,
-			.rayTracingMotionBlur = true,
-			.rayTracingMotionBlurPipelineTraceRaysIndirect = true
-		}
-	)
+	//No NV fallback: on an SDK without the EXT struct the RayReorder claim can never be set (the feature
+	// query site skips it), so there is nothing to chain.
 
-	bindNextVkStruct(
-		VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV,
-		feat & EGraphicsFeatures_RayReorder,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV,
-			.rayTracingInvocationReorder = true
-		}
-	)
+	#ifdef VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME
+		bindNextVkStruct(
+			VkPhysicalDeviceRayTracingInvocationReorderFeaturesEXT,
+			feat & EGraphicsFeatures_RayReorder,
+			{
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_EXT,
+				.rayTracingInvocationReorder = true
+			}
+		)
+	#endif
 
 	bindNextVkStruct(
 		VkPhysicalDeviceOpacityMicromapFeaturesEXT,
@@ -384,6 +379,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
+		VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR,
+		feat & EGraphicsFeatures_Barycentrics,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_FEATURES_KHR,
+			.fragmentShaderBarycentric = true
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceDescriptorHeapFeaturesEXT,
 		feat2 & EGraphicsFeatures2_DescriptorHeap,
 		{
@@ -391,6 +395,38 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			.descriptorHeap = true
 		}
 	)
+
+	//Both derivative group modes are requested, not just the one detection happens to look at.
+	//Enabling the extension alone isn't enough for a features struct: without this the device advertises
+	// ComputeDeriv while neither mode is actually on, and every ddx/ddy in a compute shader is then rejected
+	// by validation at vkCreateShaderModule.
+	//Which mode a shader needs is DXC's choice rather than ours: it emits the quad group for an even 2D
+	// thread group and the linear group otherwise, and both map to this one OxC3 feature.
+
+	//The KHR and NV structs are aliases of one another, so either enables the feature.
+	//The #ifdef only picks whichever name the SDK in use actually declares, matching how vk_instance.c queries it.
+
+	#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME
+		bindNextVkStruct(
+			VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR,
+			feat & EGraphicsFeatures_ComputeDeriv,
+			{
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR,
+				.computeDerivativeGroupQuads = true,
+				.computeDerivativeGroupLinear = true
+			}
+		)
+	#else
+		bindNextVkStruct(
+			VkPhysicalDeviceComputeShaderDerivativesFeaturesNV,
+			feat & EGraphicsFeatures_ComputeDeriv,
+			{
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_NV,
+				.computeDerivativeGroupQuads = true,
+				.computeDerivativeGroupLinear = true
+			}
+		)
+	#endif
 
 	bindNextVkStruct(
 		VkPhysicalDeviceClusterAccelerationStructureFeaturesNV,
@@ -481,12 +517,20 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_RayPipeline:                on = feat & EGraphicsFeatures_RayPipeline;              break;
 			case EOptExtensions_RayQuery:                   on = feat & EGraphicsFeatures_RayQuery;                 break;
 			case EOptExtensions_RayAcceleration:            on = feat & EGraphicsFeatures_Raytracing;               break;
-			case EOptExtensions_RayMotionBlur:              on = feat & EGraphicsFeatures_RayMotionBlur;            break;
 			case EOptExtensions_RayReorder:                 on = feat & EGraphicsFeatures_RayReorder;               break;
 			case EOptExtensions_MeshShader:                 on = feat & EGraphicsFeatures_MeshShader;               break;
 			case EOptExtensions_VariableRateShading:        on = feat & EGraphicsFeatures_VariableRateShading;      break;
 			case EOptExtensions_DynamicRendering:           on = feat & EGraphicsFeatures_DirectRendering;          break;
-			case EOptExtensions_RayMicromapOpacity:         on = feat & EGraphicsFeatures_RayMicromapOpacity;       break;
+			//EXT is the fallback: a device that got the KHR promotion runs that instead, see vk_instance.c
+
+			case EOptExtensions_RayMicromapOpacity:
+				on = (feat & EGraphicsFeatures_RayMicromapOpacity) && !(featEx & EVkGraphicsFeatures_OpacityMicromapKHR);
+				break;
+
+			case EOptExtensions_RayMicromapOpacityKHR:
+			case EOptExtensions_DeviceAddressCommands:
+				on = featEx & EVkGraphicsFeatures_OpacityMicromapKHR;
+				break;
 			case EOptExtensions_AtomicF32:                  on = types & EGraphicsDataTypes_AtomicF32;              break;
 			case EOptExtensions_DeferredHostOperations:     on = feat & EGraphicsFeatures_Raytracing;               break;
 			case EOptExtensions_RaytracingValidation:       on = feat & EGraphicsFeatures_RayValidation;            break;
@@ -503,6 +547,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_CooperativeMatrix:          on = feat & EGraphicsFeatures_CoopMat;                  break;
 			case EOptExtensions_ShaderFloat8:               on = feat & EGraphicsFeatures_CoopFP8;                  break;
 			case EOptExtensions_RayTriPosition:             on = feat & EGraphicsFeatures_RayTriPosition;           break;
+			case EOptExtensions_Barycentrics:               on = feat & EGraphicsFeatures_Barycentrics;             break;
 			case EOptExtensions_DescriptorHeap:             on = feat2 & EGraphicsFeatures2_DescriptorHeap;         break;
 			case EOptExtensions_RayClusterAS:               on = feat2 & EGraphicsFeatures2_RayClusterAS;           break;
 			case EOptExtensions_RayPartitionedTLAS:         on = feat2 & EGraphicsFeatures2_RayPartitionedTLAS;     break;
@@ -673,6 +718,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkCmdSetBlendConstants, deviceExt->cmdSetBlendConstants);
 	getVkFunctionDevice(clean, vkCmdSetStencilReference, deviceExt->cmdSetStencilReference);
 	getVkFunctionDevice(clean, vkCmdBindPipeline, deviceExt->cmdBindPipeline);
+	getVkFunctionDevice(clean, vkCmdPushConstants, deviceExt->cmdPushConstants);
 	getVkFunctionDevice(clean, vkCmdBindIndexBuffer, deviceExt->cmdBindIndexBuffer);
 	getVkFunctionDevice(clean, vkCmdBindVertexBuffers, deviceExt->cmdBindVertexBuffers);
 	getVkFunctionDevice(clean, vkCmdDrawIndexed, deviceExt->cmdDrawIndexed);
@@ -764,6 +810,18 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			vkGetDeviceAccelerationStructureCompatibilityKHR,
 			deviceExt->getAccelerationStructureCompatibility
 		);
+
+		//The EXT micromap entry points; the KHR promotion has none, its arrays build through the AS calls above
+
+		if(
+			(feat & EGraphicsFeatures_RayMicromapOpacity) &&
+			!(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR)
+		) {
+			getVkFunctionDevice(clean, vkCreateMicromapEXT, deviceExt->createMicromap);
+			getVkFunctionDevice(clean, vkDestroyMicromapEXT, deviceExt->destroyMicromap);
+			getVkFunctionDevice(clean, vkCmdBuildMicromapsEXT, deviceExt->cmdBuildMicromaps);
+			getVkFunctionDevice(clean, vkGetMicromapBuildSizesEXT, deviceExt->getMicromapBuildSizes);
+		}
 	}
 
 	if (feat & EGraphicsFeatures_RayPipeline) {
@@ -1643,7 +1701,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
 
-		gotoIfError3(clean, GraphicsDevice_rebindDescriptors(device, commandBuffer, e_rr));
+		//Descriptors bind lazily at the first work op that needs them (bindful), so a purely bindful frame
+		// never pays for the default set setup.
 
 		//Record commands
 
@@ -1783,7 +1842,12 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	Log_performanceLnx("VkGraphicsDevice_flush called!");
+	if(GraphicsDevice_logOnce(device, EGraphicsDeviceMessage_SubmitFlushed))
+		Log_performanceLnx(
+			"Vulkan: submit was split mid recording because pending copies or AS builds crossed the flush "
+			"threshold, which adds a GPU sync point; raise flushThreshold or batch smaller uploads "
+			"(only logged once)"
+		);
 
 	//End current command list
 
@@ -1837,7 +1901,20 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 
 	gotoIfError3(clean, checkVkError(deviceExt->beginCommandBuffer(commandBuffer->buffer, &beginInfo), e_rr));
 
-	gotoIfError3(clean, GraphicsDevice_rebindDescriptors(device, commandBuffer->buffer, e_rr));
+	//The fresh buffer has no descriptor state, so the emitted state trackers reset and the next work op's
+	// lazy bind re-emits whatever was last bound (default or custom), rather than eagerly binding defaults
+	// the remaining commands might never use.
+
+	commandBuffer->defaultDescriptorsBound = false;
+
+	for(U8 bindfulI = 0; bindfulI < 3; ++bindfulI) {
+		commandBuffer->lastBoundTable[bindfulI] = NULL;
+		commandBuffer->lastBoundLayout[bindfulI] = VK_NULL_HANDLE;
+		commandBuffer->lastPushLayout[bindfulI] = VK_NULL_HANDLE;
+		commandBuffer->pushConstantsEmitted[bindfulI] = false;
+		commandBuffer->lastPushDescLayout[bindfulI] = VK_NULL_HANDLE;
+		commandBuffer->pushDescriptorsEmitted[bindfulI] = false;
+	}
 
 	//Reset temporary variables to avoid invalid caching behavior
 

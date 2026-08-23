@@ -29,6 +29,40 @@ typedef enum ECompareResult {
 	ECompareResult_Gt
 } ECompareResult;
 
-typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr);
+//context is whatever was handed to the sort and is passed through untouched, so a comparator can carry state
+// (an external key table, a locale, a language wrapper's own callable) instead of reaching for a global.
+//Comparators that don't need it take it and ignore it.
+
+typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr, void *context);
 typedef Bool (*EqualsFunction)(const void *aPtr, const void *bPtr);        //Passing NULL as func indicates raw buffer compare
 typedef U64 (*HashFunction)(const void *aPtr);                            //Passing NULL as func indicates raw buffer hash
+
+//A comparator coming from another language, whose signature mentions no struct or enum type on purpose.
+//Such a comparator is compiled in its own language, where a type like ECompareResult is only reachable under
+// a namespace and is therefore a DIFFERENT type to the C sort that ends up calling it, which
+// -fsanitize=function reports as a call through an incorrect function type (see JobInvoke in job_queue.h for
+// the same reasoning on the job queue side).
+//Returns the usual three way answer: negative if a sorts before b, 0 if they tie, positive if after.
+
+typedef I8 (*CompareInvoke)(const void *aPtr, const void *bPtr, void *context);
+
+//Hand one of these to a sort as its context, together with CompareWrapper_compare as its CompareFunction.
+
+typedef struct CompareWrapper {
+	CompareInvoke invoke;
+	void *context;              //Passed on to invoke; the wrapper's own payload rather than this struct
+} CompareWrapper;
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
+//A CompareFunction that forwards to the CompareInvoke of the CompareWrapper it receives as context.
+//Deliberately a real function rather than static inline: a C++ caller has to end up calling the copy that
+// was compiled as C, which is the entire point of routing through it.
+
+ECompareResult CompareWrapper_compare(const void *aPtr, const void *bPtr, void *context);
+
+#ifdef __cplusplus
+	}
+#endif

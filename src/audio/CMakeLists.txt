@@ -51,19 +51,14 @@ endif()
 
 if(EnableTests AND OxC3TestExecutables)
 
-	file(GLOB testsInterfaceC CONFIGURE_DEPENDS "test/interface/*.c")
-	file(GLOB testsInterfaceH CONFIGURE_DEPENDS "test/interface/*.h")
+	include(../../cmake/oxc3.cmake)
 
-	add_executable(
-		OxC3_audio_interface_test
-		${testsInterfaceC}
-		${testsInterfaceH}
-		CMakeLists.txt
+	oxc3_add_test(
+		NAME     OxC3_audio_interface_test
+		FOLDER   Oxsomi/test/audio
+		DIR      test/interface
+		LIBS     OxC3_audio OxC3_types_container_test_util
 	)
-
-	target_link_libraries(OxC3_audio_interface_test PUBLIC OxC3_audio OxC3_types_container_test_util)
-	set_target_properties(OxC3_audio_interface_test PROPERTIES FOLDER Oxsomi/test/audio)
-	add_test(NAME OxC3_audio_interface_test COMMAND OxC3_audio_interface_test)
 
 	file(GLOB testsFunctionalC CONFIGURE_DEPENDS "test/functional/*.c")
 	file(GLOB testsFunctionalH CONFIGURE_DEPENDS "test/functional/*.h")

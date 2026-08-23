@@ -21,6 +21,7 @@
 //graphics/d3d12/generic/dx_tlas.c
 
 #include "graphics/generic/device.h"
+#include "types/base/mathi.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/descriptor_heap.h"
@@ -32,6 +33,65 @@
 
 void DX_WRAP_FUNC(TLAS_free)(TLAS *tlas) { (void)tlas; }        //No-op
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
+
+//Writes the instance array into its upload buffer and turns every BLAS reference into the device address the
+// build actually reads.
+//Split out of init because a refit has to do this again: the buffer is filled once at create, so an update
+// would otherwise rebuild the structure over the instances it already had.
+
+static void DxTLAS_fillInstances(TLAS *tlas) {
+
+	const U64 instancesU64 = tlas->cpuInstances.length;
+
+	Buffer cpuDat = DeviceBufferRef_ptr(tlas->tempInstanceBuffer)->cpuData;
+	Buffer_memcpy(
+		cpuDat,
+		ListTLASInstance_bufferConst(tlas->cpuInstances)
+	);
+
+	//We have to transform the CPU-sided buffer to a GPU buffer address
+
+	U8 *mem = (U8*) cpuDat.ptr;
+
+	for (U64 i = 0; i < instancesU64; ++i) {
+
+		TLASInstanceData *dat = NULL;
+		TLAS_getInstanceDataCpuInternal(tlas, i, &dat);
+
+		if(!dat->blasCpu)
+			continue;
+
+		U64 off = (const U8*)&dat->blasDeviceAddress - (const U8*)tlas->cpuInstances.ptr;
+		*(U64*)(mem + off) = getDxDeviceAddress((DeviceData) { .buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer });
+	}
+
+	//cpuData is a CPU side copy rather than the mapped upload heap, so the instances only reach the GPU
+	// once they are copied across.
+	//The buffer's own flush would do this, but only for ranges marked dirty before the frame started, and
+	// a refit fills this in while that frame is already being recorded.
+
+	DeviceBuffer *instanceBuf = DeviceBufferRef_ptr(tlas->tempInstanceBuffer);
+
+	if (instanceBuf->resource.mappedMemoryExt) {
+
+		const U64 len = sizeof(TLASInstance) * instancesU64;
+
+		Buffer_memcpy(
+			Buffer_createRef(instanceBuf->resource.mappedMemoryExt, len),
+			Buffer_createRefConst(cpuDat.ptr, len)
+		);
+
+		ID3D12ManualWriteTrackingResource *tracking =
+			(ID3D12ManualWriteTrackingResource*) instanceBuf->resource.debugExt;
+
+		if (tracking) {
+			D3D12_RANGE rangeD3D12 = (D3D12_RANGE) { .Begin = 0, .End = len };
+			tracking->lpVtbl->TrackWrite(tracking, 0, &rangeD3D12);
+		}
+	}
+
+	tlas->base.flagsExt &=~ (U8) ETLASFlag_InstancesDirty;
+}
 
 Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
@@ -49,12 +109,12 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 		retError(clean, Error_unsupportedOperation(0, "D3D12TLAS_init()::serialized not supported yet"));        //TODO:
 
 	U64 instancesU64 = 0;
-	U64 stride = sizeof(TLASInstanceStatic);
+	U64 stride = sizeof(TLASInstance);
 
-	if (tlas->useDeviceMemory)
+	if (TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
 		instancesU64 = tlas->deviceData.len / stride;
 
-	else instancesU64 = tlas->cpuInstancesStatic.length;
+	else instancesU64 = tlas->cpuInstances.length;
 
 	if(instancesU64 >> 24)
 		retError(clean, Error_outOfBounds(
@@ -79,9 +139,6 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 	if(tlas->base.flags & ERTASBuildFlags_MinimizeMemory)
 		flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_MINIMIZE_MEMORY;
 
-	if(tlas->base.flags & ERTASBuildFlags_IsUpdate)
-		flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
-
 	//Get build size to allocate scratch and final buffer
 
 	tlasExt->inputs = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS) {
@@ -97,7 +154,7 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 		//We have to temporarily allocate a device mem buffer
 
-		if (!tlas->useDeviceMemory) {
+		if (!TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory)) {
 
 			gotoIfError3(clean, CharString_format(
 				alloc,
@@ -120,28 +177,7 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 			CharString_free(&tmp, alloc);
 
-			Buffer cpuDat = DeviceBufferRef_ptr(tlas->tempInstanceBuffer)->cpuData;
-			Buffer_memcpy(
-				cpuDat,
-				tlas->base.isMotionBlurExt ? ListTLASInstanceMotion_bufferConst(tlas->cpuInstancesMotion) :
-				ListTLASInstanceStatic_bufferConst(tlas->cpuInstancesStatic)
-			);
-
-			//We have to transform the CPU-sided buffer to a GPU buffer address
-
-			U8 *mem = (U8*) cpuDat.ptr;
-
-			for (U64 i = 0; i < instancesU64; ++i) {
-
-				TLASInstanceData *dat = NULL;
-				TLAS_getInstanceDataCpuInternal(tlas, i, &dat);
-
-				if(!dat->blasCpu)
-					continue;
-
-				U64 off = (const U8*)&dat->blasDeviceAddress - (const U8*)tlas->cpuInstancesStatic.ptr;
-				*(U64*)(mem + off) = getDxDeviceAddress((DeviceData) { .buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer });
-			}
+			DxTLAS_fillInstances(tlas);
 
 			instances = (DeviceData) { .buffer = tlas->tempInstanceBuffer, .len = stride * instancesU64 };
 		}
@@ -186,7 +222,11 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 		EGraphicsResourceFlag_None,
 		NULL,
 		&tmp,
-		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
+		//One scratch buffer serves both, since the same object now does the full build and every refit after
+		// it; the update size is not required to be the smaller of the two, so neither is assumed.
+
+		tlas->base.flags & ERTASBuildFlags_AllowUpdate ?
+			U64_max(sizes.ScratchDataSizeInBytes, sizes.UpdateScratchDataSizeInBytes) : sizes.ScratchDataSizeInBytes,
 		&tlas->base.tempScratchBuffer,
 		e_rr
 	));
@@ -213,6 +253,12 @@ Bool DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
 		return s_uccess;
 
+	//New instances only reach the GPU here, so a batch of transform changes costs one upload rather than
+	// one per change.
+
+	if(TLAS_hasFlag(tlas, ETLASFlag_InstancesDirty) && !TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
+		DxTLAS_fillInstances(tlas);
+
 	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(tlas->base.asBuffer)->resource.deviceAddress;
 
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildAs = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC) {
@@ -221,9 +267,14 @@ Bool DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		.ScratchAccelerationStructureData = DeviceBufferRef_ptr(tlas->base.tempScratchBuffer)->resource.deviceAddress
 	};
 
-	if(tlas->base.parent) {
-		TLAS *parent = TLASRef_ptr(tlas->base.parent);
-		buildAs.DestAccelerationStructureData = DeviceBufferRef_ptr(parent->base.asBuffer)->resource.deviceAddress;
+	//A structure that was already built refits itself in place, which both APIs allow and which is what
+	// keeps its device address stable across an update.
+	//PERFORM_UPDATE goes on the local copy rather than on the stored inputs, since the prebuild sizes
+	// were queried without it.
+
+	if (tlas->base.isCompleted) {
+		buildAs.Inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+		buildAs.SourceAccelerationStructureData = dstAS;
 	}
 
 	commandBuffer->buffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer->buffer, &buildAs, 0, NULL);

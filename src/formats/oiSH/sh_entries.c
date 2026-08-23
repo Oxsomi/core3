@@ -52,7 +52,7 @@ const C8 *SHEntry_stageNames[ESHPipelineStage_Count] = {
 	"mesh",
 	"task",
 
-	"node"
+	"reserved"
 };
 
 const C8 *SHEntry_stageName(const SHEntry *entry) {
@@ -127,9 +127,9 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 				0, (entry->waveSize >> (i << 2)) & 0xF, 9, "SHFile_addEntrypoint() waveSize out of bounds"
 			));
 
-	if(entry->waveSize && entry->stage != ESHPipelineStage_Compute && entry->stage != ESHPipelineStage_WorkgraphExt)
+	if(entry->waveSize && entry->stage != ESHPipelineStage_Compute)
 		retError(clean, Error_invalidOperation(
-			0, "SHFile_addEntrypoint() defined WaveSize, but wasn't a workgraph or compute"
+			0, "SHFile_addEntrypoint() defined WaveSize, but wasn't compute"
 		));
 
 	Bool hasRt = entry->stage >= ESHPipelineStage_RtStartExt && entry->stage <= ESHPipelineStage_RtEndExt;
@@ -143,7 +143,6 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 			hasGraphics = true;
 			// fallthrough
 
-		case ESHPipelineStage_WorkgraphExt:
 		case ESHPipelineStage_Compute:
 			hasCompute = true;
 			break;
@@ -184,10 +183,8 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 				2, "SHFile_addEntrypoint() payloadSize is required for hit/callable/miss shaders"
 			));
 
-		if(entry->payloadSize > 128)
-			retError(clean, Error_outOfBounds(
-				0, entry->payloadSize, 128, "SHFile_addEntrypoint() payloadSize must be <=128"
-			));
+		//No upper bound:
+		// payloadSize is a U8, so the type is the bound (255).
 	}
 
 	else if(entry->payloadSize)
@@ -413,11 +410,6 @@ U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime) {
 	//entrypoint sharing a compile agrees on it - which is what makes it safe to skip a whole compile with.
 
 	U8 mask = (U8)((1 << ESHBinaryType_Count) - 1);
-
-	//Stage support: workgraphs (nodes) only exist on DXIL.
-
-	if (runtime->entry.stage == ESHPipelineStage_WorkgraphExt)
-		mask &= (U8)(1 << ESHBinaryType_DXIL);
 
 	//Extension compile support: a feature restricts to one backend only when the other has no path at all,
 	// per the ESHExtension_NoDxilCompile / ESHExtension_NoSpirvCompile sets in sh_binaries.h.
@@ -698,7 +690,6 @@ void SHEntry_print(const SHEntry *shEntry, Bool isVerbose, const Allocator *allo
 			// fallthrough
 
 			case ESHPipelineStage_Compute:
-			case ESHPipelineStage_WorkgraphExt:
 
 				Log_debugLn(
 					alloc,

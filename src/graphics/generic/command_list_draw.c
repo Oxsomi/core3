@@ -26,11 +26,16 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/descriptor_layout.h"
+#include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
+#include "formats/oiSH/sh_binaries.h"
 #include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/texture_format.h"
@@ -38,6 +43,239 @@
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
 #include "command_list_internal.h"
+
+//Ray triangle position fetch requires every BLAS it reads to be built with ERTASBuildFlags_AllowDataAccessExt,
+// but the shader picks its TLAS descriptor at runtime, so the exact target is unknowable at record time.
+//The candidates are the TLASes this scope transitioned, since declaring that access is already required for
+// correct synchronization; a scope without any TLAS transition has nothing to judge.
+//The error only fires when every candidate provably fails the requirement (that includes the common single
+// TLAS scene), so a legitimate multi TLAS mix or a device built TLAS is never accused.
+
+//Bindful: the work ops are the validators, binds only set state, so bind order never matters and
+// only recorded work has to be consistent.
+//A pipeline on the device's default (bindless) layout is always fine: submit binds that table for the
+// whole frame. A custom layout requires the bound table to be built from the exact DescriptorLayout the
+// pipeline layout references, which is what makes the backend's lazy bind at this op provably valid.
+
+static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef *pipelineRef, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	PipelineLayoutRef *layoutRef = PipelineRef_ptr(pipelineRef)->layout;
+
+	//Push constants are checked ahead of the cache below, because unlike the three identities it keys on,
+	// their size is mutable state: a later setPushConstants can change it without rebinding anything.
+
+	if (layoutRef != GraphicsDeviceRef_ptr(commandList->device)->defaultPipelineLayout) {
+
+		const U32 declared = PipelineLayoutRef_ptr(layoutRef)->info.pushConstants.count ?
+			PipelineLayoutRef_ptr(layoutRef)->info.pushConstants.constantBufferSize : 0;
+
+		if(declared && commandList->pushConstantSize != declared)
+			retError(clean, Error_invalidOperation(
+				4,
+				"CommandList_validateBindState() the pipeline's layout declares push constants that weren't "
+				"written at this size (CommandListRef_setPushConstants)"
+			));
+
+		//Writing push constants a layout never declared can only mean the wrong pipeline is bound
+
+		if(!declared && commandList->pushConstantSize)
+			retError(clean, Error_invalidOperation(
+				5,
+				"CommandList_validateBindState() push constants were written but the pipeline's layout "
+				"doesn't declare any"
+			));
+
+		//Push descriptors are mutable in the same way, so they're checked here rather than in the cache.
+		//All or nothing: the layout's whole set has to have been written, since the backends emit the whole
+		// set and a partial one would leave the rest pointing at whatever the last pipeline bound.
+
+		//The runtime's own globals are a push descriptor the SUBMIT fills, so a layout carrying them asks
+		// nothing of the caller; requiring a write here would make push constants and _frameId/_time
+		// mutually exclusive, since wanting the former is what forces a custom layout in the first place.
+
+		DescriptorLayoutRef *pushRef = PipelineLayoutRef_ptr(layoutRef)->info.pushDescriptors;
+
+		const U64 pushCount =
+			(pushRef && !PipelineLayout_hasRuntimeGlobals(PipelineLayoutRef_ptr(layoutRef))) ?
+			DescriptorLayoutRef_ptr(pushRef)->info.bindings.length : 0;
+
+		//Only buffer class push descriptors can actually be emitted: on D3D12 a root descriptor is one raw
+		// GPU virtual address, with nowhere to carry a texture's format, mip or swizzle.
+		//The LAYOUT is legal either way and both backends build it (D3D12 routes a texture through a single
+		// entry descriptor table), which is why this sits here and not at createDescriptorLayout: the device
+		// builds exactly such a layout for its own copy shader and simply never pushes it.
+		//Filling that table needs a shader visible heap slot allocated at record time, which doesn't exist.
+
+		if (pushCount) {
+
+			if(pushCount > OXC3_MAX_PUSH_DESCRIPTORS)
+				retError(clean, Error_outOfBounds(
+					8, pushCount, OXC3_MAX_PUSH_DESCRIPTORS,
+					"CommandList_validateBindState() the pipeline's layout declares more push descriptors than "
+					"OXC3_MAX_PUSH_DESCRIPTORS, which can never be written"
+				));
+
+			const ListDescriptorBinding pushBindings = DescriptorLayoutRef_ptr(pushRef)->info.bindings;
+
+			//A scope names only the FIRST stage that reaches a resource, so the earliest stage of the bound
+			// pipeline's type is the conservative answer: the backends expand it into every later stage.
+
+			const EPipelineStage stage =
+				PipelineRef_ptr(pipelineRef)->type == EPipelineType_Compute ? EPipelineStage_Compute : (
+					PipelineRef_ptr(pipelineRef)->type == EPipelineType_Graphics ?
+					EPipelineStage_Vertex : EPipelineStage_RtStart
+				);
+
+			for(U64 i = 0; i < pushBindings.length; ++i) {
+
+				const DescriptorBinding binding = pushBindings.ptr[i];
+				const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
+
+				if(type < ESHRegisterType_BufferStart || type > ESHRegisterType_BufferEnd)
+					retError(clean, Error_unsupportedOperation(
+						1,
+						"CommandList_validateBindState() only buffer class push descriptors can be recorded "
+						"(constant, byte address, structured or acceleration structure); a texture or sampler "
+						"push descriptor has no record time path yet"
+					));
+
+				//The count was already proven to match the layout, so every binding has its descriptor
+
+				const Descriptor d = commandList->pushDescriptors[i];
+
+				const ETransitionType transition =
+					binding.registerType & ESHRegisterType_IsWrite ?
+					ETransitionType_ShaderWrite : ETransitionType_ShaderRead;
+
+				if (type == ESHRegisterType_AccelerationStructure) {
+					gotoIfError3(clean, CommandListRef_transitionRTAS(commandList, d.resource, transition, stage, e_rr));
+					continue;
+				}
+
+				const BufferRange range = (BufferRange) {
+					.startRange = Descriptor_startBuffer(&d),
+					.endRange = Descriptor_endBuffer(&d)
+				};
+
+				gotoIfError3(clean, CommandListRef_transitionBuffer(commandList, d.resource, range, transition, stage, e_rr));
+			}
+		}
+
+		if(pushCount && commandList->pushDescriptorCount != pushCount)
+			retError(clean, Error_invalidOperation(
+				6,
+				"CommandList_validateBindState() the pipeline's layout declares push descriptors that weren't "
+				"all written (CommandListRef_setPushDescriptors)"
+			));
+
+		if(!pushCount && commandList->pushDescriptorCount)
+			retError(clean, Error_invalidOperation(
+				7,
+				"CommandList_validateBindState() push descriptors were written but the pipeline's layout "
+				"doesn't declare any"
+			));
+	}
+
+	//The rest of the outcome only depends on these three identities (layouts are immutable and descriptor
+	// CONTENTS are not validated here), so a matching triple was already proven valid and long runs of work
+	// ops between binds skip everything below.
+
+	if(
+		commandList->validatedPipeline == pipelineRef &&
+		commandList->validatedTable == commandList->boundDescriptorTable &&
+		commandList->validatedHeap == commandList->boundDescriptorHeap
+	)
+		return s_uccess;
+
+	if(layoutRef == GraphicsDeviceRef_ptr(commandList->device)->defaultPipelineLayout)
+		goto clean;
+
+	const PipelineLayout *layout = PipelineLayoutRef_ptr(layoutRef);
+
+	//A layout whose bindings are the device's own bindless set is served by the device's heap and table, so
+	// the caller has nothing to bind: requiring it would make the bindless set and push constants mutually
+	// exclusive, the same way requiring a write for the runtime globals would have.
+
+	if (layout->info.bindings && !PipelineLayout_usesRuntimeBindless(layout)) {
+
+		//The heap bind is explicit because switching heaps is expensive; a table silently implying its heap
+		// would hide exactly the cost that made it explicit
+
+		if(!commandList->boundDescriptorHeap)
+			retError(clean, Error_invalidOperation(
+				2,
+				"CommandList_validateBindState() a custom layout needs its descriptor heap bound "
+				"(CommandListRef_bindDescriptorHeap)"
+			));
+
+		if(!commandList->boundDescriptorTable)
+			retError(clean, Error_invalidOperation(
+				0,
+				"CommandList_validateBindState() the pipeline's layout needs a descriptor table, but none is bound "
+				"(CommandListRef_bindDescriptorTable)"
+			));
+
+		if(DescriptorTableRef_ptr(commandList->boundDescriptorTable)->parent != commandList->boundDescriptorHeap)
+			retError(clean, Error_invalidOperation(
+				3,
+				"CommandList_validateBindState() the bound descriptor table doesn't belong to the bound heap"
+			));
+
+		if(DescriptorTableRef_ptr(commandList->boundDescriptorTable)->layout != layout->info.bindings)
+			retError(clean, Error_invalidOperation(
+				1,
+				"CommandList_validateBindState() the bound descriptor table wasn't created from the DescriptorLayout "
+				"the pipeline's layout references"
+			));
+	}
+
+clean:
+
+	if (s_uccess) {
+		commandList->validatedPipeline = pipelineRef;
+		commandList->validatedTable = commandList->boundDescriptorTable;
+		commandList->validatedHeap = commandList->boundDescriptorHeap;
+	}
+
+	return s_uccess;
+}
+
+static Bool CommandList_validateRayTriPosition(CommandList *commandList, PipelineRef *pipelineRef, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U64 candidates = 0;
+	U64 provablyBad = 0;
+
+	if(!(PipelineRef_ptr(pipelineRef)->extensions & (U32) ESHExtension_RayTriPosition))
+		goto clean;
+
+	for(U64 i = 0; i < commandList->pendingTransitions.length; ++i) {
+
+		RefPtr *res = commandList->pendingTransitions.ptr[i].resource;
+
+		if(!res || res->refPtrType->typeId != (TypeId) EGraphicsTypeId_TLASExt)
+			continue;
+
+		++candidates;
+
+		const TLAS *tlas = TLASRef_ptr(res);
+
+		if(TLAS_hasFlag(tlas, ETLASFlag_BlasDataAccessKnown) && !TLAS_hasFlag(tlas, ETLASFlag_BlasDataAccessAll))
+			++provablyBad;
+	}
+
+	if(candidates && candidates == provablyBad)
+		retError(clean, Error_invalidState(
+			0,
+			"CommandList_validateRayTriPosition() the pipeline uses RayTriPosition, but every TLAS transitioned "
+			"in this scope has a BLAS built without ERTASBuildFlags_AllowDataAccessExt"
+		));
+
+clean:
+	return s_uccess;
+}
 
 Bool CommandList_validateGraphicsPipeline(
 	Pipeline *pipeline,
@@ -274,6 +512,8 @@ Bool CommandListRef_drawBase(CommandListRef *commandListRef, Buffer buf, EComman
 	if (!pipelineRef)
 		retError(clean, Error_invalidOperation(1, "CommandListRef_drawBase() requires bound graphics pipeline"));
 
+	gotoIfError3(clean, CommandList_validateBindState(commandList, pipelineRef, e_rr));
+
 	U32 flags = ECommandStateFlags_AnyScissor | ECommandStateFlags_AnyViewport;
 
 	if ((commandList->tempStateFlags & flags) != flags)
@@ -286,6 +526,8 @@ Bool CommandListRef_drawBase(CommandListRef *commandListRef, Buffer buf, EComman
 		commandList->boundDepthFormat,
 		commandList->boundSampleCount, e_rr
 	));
+
+	gotoIfError3(clean, CommandList_validateRayTriPosition(commandList, pipelineRef, e_rr));
 
 	gotoIfError3(clean, CommandList_append(commandList, op, buf, 1, e_rr));
 
@@ -379,6 +621,14 @@ Bool CommandListRef_dispatch(CommandListRef *commandListRef, DispatchCmd dispatc
 	if (!commandList->pipeline[EPipelineType_Compute])
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatch() requires bound compute pipeline"));
 
+	gotoIfError3(clean, CommandList_validateBindState(
+		commandList, commandList->pipeline[EPipelineType_Compute], e_rr
+	));
+
+	gotoIfError3(clean, CommandList_validateRayTriPosition(
+		commandList, commandList->pipeline[EPipelineType_Compute], e_rr
+	));
+
 	const U64 groupCountMax = U64_max(dispatch.groups[0], U64_max(dispatch.groups[1], dispatch.groups[2]));
 
 	if(groupCountMax > U16_MAX)
@@ -427,6 +677,9 @@ Bool CommandListRef_dispatchRaysExt(CommandListRef *commandListRef, DispatchRays
 
 	if (!rayPipeline)
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() requires bound raytracing pipeline"));
+
+	gotoIfError3(clean, CommandList_validateBindState(commandList, rayPipeline, e_rr));
+	gotoIfError3(clean, CommandList_validateRayTriPosition(commandList, rayPipeline, e_rr));
 
 	U64 total = dispatch.x * dispatch.y;
 
@@ -516,6 +769,14 @@ Bool CommandListRef_dispatchIndirect(CommandListRef *commandListRef, DeviceBuffe
 
 	if (!commandList->pipeline[EPipelineType_Compute])
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchIndirect() requires bound compute pipeline"));
+
+	gotoIfError3(clean, CommandList_validateBindState(
+		commandList, commandList->pipeline[EPipelineType_Compute], e_rr
+	));
+
+	gotoIfError3(clean, CommandList_validateRayTriPosition(
+		commandList, commandList->pipeline[EPipelineType_Compute], e_rr
+	));
 
 	if(offset & 15)
 		retError(clean, Error_invalidParameter(
@@ -716,8 +977,8 @@ Bool CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas,
 
 		TLAS *tlas = TLASRef_ptr(rtas);
 
-		if(!tlas->useDeviceMemory)
-			for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
+		if(!TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
+			for (U64 j = 0; j < tlas->cpuInstances.length; ++j) {
 
 				TLASInstanceData dat = (TLASInstanceData) { 0 };
 				TLAS_getInstanceDataCpu(tlas, j, &dat);
@@ -757,4 +1018,255 @@ Bool CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas, Er
 
 Bool CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr) {
 	return CommandListRef_updateRTASExt(commandList, blas, true, e_rr);
+}
+
+//Bindful: only SETS state; the work ops validate it against the bound pipeline's layout.
+//The KeepAlive transition is what makes end() collect the table into the command list's resources, which is
+// also what carries it into the frame's resourcesInFlight at submit.
+
+//Explicit rather than implied by the table: switching heaps can stall the GPU (D3D12 especially), so the
+// switch has to be a visible command in the recording.
+
+Bool CommandListRef_bindDescriptorHeap(CommandListRef *commandListRef, DescriptorHeapRef *heap, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = commandListRef ? GraphicsDeviceRef_getAlloc(CommandListRef_ptr(commandListRef)->device) : NULL;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!heap || heap->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorHeap)
+		retError(clean, Error_unsupportedOperation(
+			0, "CommandListRef_bindDescriptorHeap() requires a descriptor heap"
+		));
+
+	if(DescriptorHeapRef_ptr(heap)->device != commandList->device)
+		retError(clean, Error_unsupportedOperation(
+			1, "CommandListRef_bindDescriptorHeap()::heap's device is incompatible"
+		));
+
+	if (!CommandListRef_isBound(commandList, heap, (ResourceRange) { 0 }, NULL)) {
+
+		const TransitionInternal transition = (TransitionInternal) {
+			.resource = heap, .type = ETransitionType_KeepAlive
+		};
+
+		gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
+	}
+
+	DescriptorHeapRef *args[2] = { heap, NULL };
+
+	gotoIfError3(clean, CommandList_append(
+		commandList,
+		ECommandOp_BindDescriptorHeap,
+		Buffer_createRefConst(args, sizeof(args)),
+		0, e_rr
+	));
+
+	commandList->boundDescriptorHeap = heap;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
+//Push constants are pure state like the binds: the work op is what validates them against the bound
+//pipeline's layout and the backends emit them there, which is also what makes a root signature switch
+//between two work ops harmless (D3D12 drops all root arguments on such a switch).
+
+Bool CommandListRef_setPushConstants(CommandListRef *commandListRef, Buffer data, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	const U64 size = Buffer_length(data);
+
+	if(!size || size > sizeof(commandList->pushConstantData))
+		retError(clean, Error_outOfBounds(
+			1, size, sizeof(commandList->pushConstantData),
+			"CommandListRef_setPushConstants()::data must be 1 to 128 bytes"
+		));
+
+	if(size & 3)
+		retError(clean, Error_invalidParameter(
+			1, 0, "CommandListRef_setPushConstants()::data must be a multiple of 4 bytes"
+		));
+
+	//The payload rides along in the command itself rather than as a pointer, so a replay doesn't depend on
+	// the caller's buffer still being alive
+
+	SetPushConstantsCmd cmd = (SetPushConstantsCmd) { .size = (U32) size };
+
+	Buffer_memcpy(Buffer_createRef(cmd.data, size), data);
+
+	gotoIfError3(clean, CommandList_append(
+		commandList,
+		ECommandOp_SetPushConstants,
+		Buffer_createRefConst(&cmd, sizeof(cmd)),
+		0, e_rr
+	));
+
+	Buffer_memcpy(Buffer_createRef(commandList->pushConstantData, size), data);
+
+	commandList->pushConstantSize = (U8) size;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
+//Push descriptors are pure state like the binds and the constants: the work op validates the written count
+//against the bound pipeline's layout and the backends emit them there, so a root signature switch between
+//two work ops is harmless and bind order never matters.
+
+Bool CommandListRef_setPushDescriptors(CommandListRef *commandListRef, const ListDescriptor *descriptors, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = commandListRef ? GraphicsDeviceRef_getAlloc(CommandListRef_ptr(commandListRef)->device) : NULL;
+	Buffer payload = Buffer_createNull();
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	const U64 count = !descriptors ? 0 : descriptors->length;
+
+	if(!count || count > OXC3_MAX_PUSH_DESCRIPTORS)
+		retError(clean, Error_outOfBounds(
+			1, count, OXC3_MAX_PUSH_DESCRIPTORS,
+			"CommandListRef_setPushDescriptors()::descriptors must hold 1 to OXC3_MAX_PUSH_DESCRIPTORS entries"
+		));
+
+	//No transition is recorded here on purpose: whether a push descriptor is read or written comes from the
+	// layout's register type, and the layout isn't known until a pipeline is bound.
+	//The work op transitions each of them (ShaderRead/ShaderWrite), which is also what keeps them alive.
+
+	for (U64 i = 0; i < count; ++i)
+		if(!descriptors->ptr[i].resource)
+			retError(clean, Error_nullPointer(
+				1, "CommandListRef_setPushDescriptors()::descriptors[i].resource is required"
+			));
+
+	//Header plus the descriptors themselves, so a replay doesn't depend on the caller's list still existing
+
+	const U64 descriptorBytes = count * sizeof(Descriptor);
+
+	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(SetPushDescriptorsCmd) + descriptorBytes, alloc, &payload, e_rr));
+
+	*(SetPushDescriptorsCmd*) payload.ptrNonConst = (SetPushDescriptorsCmd) { .count = (U32) count };
+
+	Buffer_memcpy(
+		Buffer_createRef(payload.ptrNonConst + sizeof(SetPushDescriptorsCmd), descriptorBytes),
+		Buffer_createRefConst(descriptors->ptr, descriptorBytes)
+	);
+
+	gotoIfError3(clean, CommandList_append(commandList, ECommandOp_SetPushDescriptors, payload, 0, e_rr));
+
+	Buffer_memcpy(
+		Buffer_createRef(commandList->pushDescriptors, descriptorBytes),
+		Buffer_createRefConst(descriptors->ptr, descriptorBytes)
+	);
+
+	commandList->pushDescriptorCount = (U8) count;
+
+clean:
+
+	Buffer_free(&payload, alloc);
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
+Bool CommandListRef_bindDescriptorTable(CommandListRef *commandListRef, DescriptorTableRef *table, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = commandListRef ? GraphicsDeviceRef_getAlloc(CommandListRef_ptr(commandListRef)->device) : NULL;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!table || table->refPtrType->typeId != (TypeId) EGraphicsTypeId_DescriptorTable)
+		retError(clean, Error_unsupportedOperation(
+			0, "CommandListRef_bindDescriptorTable() requires a descriptor table"
+		));
+
+	if(DescriptorHeapRef_ptr(DescriptorTableRef_ptr(table)->parent)->device != commandList->device)
+		retError(clean, Error_unsupportedOperation(
+			1, "CommandListRef_bindDescriptorTable()::table's device is incompatible"
+		));
+
+	if (!CommandListRef_isBound(commandList, table, (ResourceRange) { 0 }, NULL)) {
+
+		const TransitionInternal transition = (TransitionInternal) {
+			.resource = table, .type = ETransitionType_KeepAlive
+		};
+
+		gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
+	}
+
+	DescriptorTableRef *args[2] = { table, NULL };
+
+	gotoIfError3(clean, CommandList_append(
+		commandList,
+		ECommandOp_BindDescriptorTable,
+		Buffer_createRefConst(args, sizeof(args)),
+		0, e_rr
+	));
+
+	commandList->boundDescriptorTable = table;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
+Bool CommandListRef_updateOmmExt(CommandListRef *commandListRef, OpacityMicromapRef *micromap, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!I32x2_all(I32x2_eq(commandList->currentSize, I32x2_zero)))
+		retError(clean, Error_invalidOperation(
+			0, "CommandListRef_updateOmmExt() is disallowed during render calls"
+		));
+
+	if(!micromap || micromap->refPtrType->typeId != (TypeId) EGraphicsTypeId_OpacityMicromapExt)
+		retError(clean, Error_unsupportedOperation(
+			0, "CommandListRef_updateOmmExt() requires an opacity micromap"
+		));
+
+	gotoIfError3(clean, CommandListRef_transitionRTAS(
+		commandList,
+		micromap,
+		ETransitionType_ShaderWrite,
+		EPipelineStage_RTASBuild,
+		e_rr
+	));
+
+	RTASRef *args[2] = { micromap, NULL };
+
+	gotoIfError3(clean, CommandList_append(
+		commandList,
+		ECommandOp_UpdateOmmExt,
+		Buffer_createRefConst(args, sizeof(args)),
+		0, e_rr
+	));
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
 }

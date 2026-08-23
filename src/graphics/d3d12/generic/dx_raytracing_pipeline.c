@@ -106,6 +106,12 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		.Flags = ((U16)(pipelineRt->flags & 3)) << 8
 	};
 
+	//Not foldable into the shift above: that trick only lines up because SkipTriangles/SkipAABBs are bits 0 and
+	// 1 and map to 0x100/0x200, while ALLOW_OPACITY_MICROMAPS is 0x400 and our bit for it is 7, not 2.
+
+	if(pipelineRt->flags & EPipelineRaytracingFlags_AllowOpacityMicromapExt)
+		config1.Flags |= D3D12_RAYTRACING_PIPELINE_FLAG_ALLOW_OPACITY_MICROMAPS;
+
 	stateObjects.ptrNonConst[stateObjectOff++] = (D3D12_STATE_SUBOBJECT) {
 		.Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1,
 		.pDesc = &config1

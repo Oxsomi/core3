@@ -76,8 +76,15 @@ Bool SBFile_create(
 	sbFile->flags = flags &~ ESBSettingsFlags_HideMagicNumber;
 	sbFile->bufferSize = bufferSize;
 
-	const void *flagsPtr = &sbFile->flags;
-	sbFile->hash = Buffer_fnv1a64Single(*(const U64*)flagsPtr, Buffer_fnv1a64Offset);
+	//flags and bufferSize are a U32-aligned pair, so hashing them as one in-place U64 can be a misaligned load.
+
+	U64 flagsAndSize;
+	Buffer_memcpy(
+		Buffer_createRef(&flagsAndSize, sizeof(flagsAndSize)),
+		Buffer_createRefConst(&sbFile->flags, sizeof(U64))
+	);
+
+	sbFile->hash = Buffer_fnv1a64Single(flagsAndSize, Buffer_fnv1a64Offset);
 
 	sbFile->flags = flagsReal;        //We don't want HideMagicNumber to influence hash
 

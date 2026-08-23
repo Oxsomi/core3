@@ -1,0 +1,481 @@
+{
+	"version": 4,
+	"cmakeMinimumRequired": {
+		"major": 3,
+		"minor": 26,
+		"patch": 0
+	},
+	"configurePresets": [
+		{
+			"name": "base",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+				"OxC3IdeTree": "ON"
+			}
+		},
+		{
+			"name": "windows-msvc",
+			"inherits": "base",
+			"displayName": "Windows x64 - MSVC (Visual Studio)",
+			"description": "python build.py -tests True",
+			"generator": "Visual Studio 17 2022",
+			"binaryDir": "${sourceDir}/build/ide/windows-msvc",
+			"toolchainFile": "${sourceDir}/build/windows/x64/build/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Windows"
+			}
+		},
+		{
+			"name": "windows-msvc-ninja",
+			"inherits": "base",
+			"displayName": "Windows x64 - MSVC (Ninja)",
+			"description": "python build.py -tests True -generator ninja",
+			"generator": "Ninja Multi-Config",
+			"binaryDir": "${sourceDir}/build/ide/windows-msvc-ninja",
+			"toolchainFile": "${sourceDir}/build/windows/x64_ninja/build/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Windows"
+			}
+		},
+		{
+			"name": "windows-clang",
+			"inherits": "base",
+			"displayName": "Windows x64 - clang-cl (Visual Studio)",
+			"description": "python build.py -tests True -compiler clang",
+			"generator": "Visual Studio 17 2022",
+			"toolset": "ClangCL",
+			"binaryDir": "${sourceDir}/build/ide/windows-clang",
+			"toolchainFile": "${sourceDir}/build/windows/x64_clang/build/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Windows"
+			}
+		},
+		{
+			"name": "windows-clang-ninja",
+			"inherits": "base",
+			"displayName": "Windows x64 - clang-cl (Ninja)",
+			"description": "python build.py -tests True -compiler clang -generator ninja",
+			"generator": "Ninja Multi-Config",
+			"binaryDir": "${sourceDir}/build/ide/windows-clang-ninja",
+			"toolchainFile": "${sourceDir}/build/windows/x64_clang_ninja/build/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Windows"
+			}
+		},
+		{
+			"name": "linux-gcc-debug",
+			"inherits": "base",
+			"displayName": "Linux x64 - gcc, Debug",
+			"description": "python build.py -mode Debug -tests True",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-gcc-debug",
+			"toolchainFile": "${sourceDir}/build/Debug/linux/x64/build/Debug/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Linux"
+			}
+		},
+		{
+			"name": "linux-clang-debug",
+			"inherits": "base",
+			"displayName": "Linux x64 - clang, Debug",
+			"description": "python build.py -mode Debug -tests True -compiler clang",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-clang-debug",
+			"toolchainFile": "${sourceDir}/build/Debug/linux/x64_clang/build/Debug/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Linux"
+			}
+		},
+		{
+			"name": "macos-debug",
+			"inherits": "base",
+			"displayName": "macOS arm64 - clang, Debug",
+			"description": "python build.py -mode Debug -tests True",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/macos-debug",
+			"toolchainFile": "${sourceDir}/build/Debug/osx/aarch64/build/Debug/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Darwin"
+			}
+		},
+		{
+			"name": "linux-gcc-release",
+			"inherits": "base",
+			"displayName": "Linux x64 - gcc, Release",
+			"description": "python build.py -mode Release -tests True",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-gcc-release",
+			"toolchainFile": "${sourceDir}/build/Release/linux/x64/build/Release/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Linux"
+			}
+		},
+		{
+			"name": "linux-clang-release",
+			"inherits": "base",
+			"displayName": "Linux x64 - clang, Release",
+			"description": "python build.py -mode Release -tests True -compiler clang",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-clang-release",
+			"toolchainFile": "${sourceDir}/build/Release/linux/x64_clang/build/Release/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Linux"
+			}
+		},
+		{
+			"name": "macos-release",
+			"inherits": "base",
+			"displayName": "macOS arm64 - clang, Release",
+			"description": "python build.py -mode Release -tests True",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/macos-release",
+			"toolchainFile": "${sourceDir}/build/Release/osx/aarch64/build/Release/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Darwin"
+			}
+		},
+		{
+			"name": "linux-aarch64-gcc-debug",
+			"inherits": "base",
+			"displayName": "Linux aarch64 - gcc, Debug",
+			"description": "python build.py -mode Debug -tests True",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-aarch64-gcc-debug",
+			"toolchainFile": "${sourceDir}/build/Debug/linux/aarch64/build/Debug/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Linux"
+			}
+		},
+		{
+			"name": "linux-aarch64-clang-debug",
+			"inherits": "base",
+			"displayName": "Linux aarch64 - clang, Debug",
+			"description": "python build.py -mode Debug -tests True -compiler clang",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/linux-aarch64-clang-debug",
+			"toolchainFile": "${sourceDir}/build/Debug/linux/aarch64_clang/build/Debug/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Linux"
+			}
+		},
+		{
+			"name": "linux-clang-ninja-debug",
+			"inherits": "base",
+			"displayName": "Linux x64 - clang, Debug (Ninja)",
+			"description": "python build.py -mode Debug -tests True -compiler clang -generator ninja",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/ide/linux-clang-ninja-debug",
+			"toolchainFile": "${sourceDir}/build/Debug/linux/x64_clang_ninja/build/Debug/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Linux"
+			}
+		},
+		{
+			"name": "macos-x64-debug",
+			"inherits": "base",
+			"displayName": "macOS x64 - clang, Debug",
+			"description": "python build.py -mode Debug -tests True",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/ide/macos-x64-debug",
+			"toolchainFile": "${sourceDir}/build/Debug/osx/x64/build/Debug/generators/conan_toolchain.cmake",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Darwin"
+			}
+		},
+		{
+			"name": "android-arm64-release",
+			"inherits": "base",
+			"displayName": "Android arm64 - Release",
+			"description": "python build_android.py -mode Release -arch arm64 -generator Ninja -tests True",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/ide/android-arm64-release",
+			"toolchainFile": "${sourceDir}/build/Release/android/arm64/build/Release/generators/conan_toolchain.cmake"
+		},
+		{
+			"name": "android-arm64-debug",
+			"inherits": "base",
+			"displayName": "Android arm64 - Debug",
+			"description": "python build_android.py -mode Debug -arch arm64 -generator Ninja -tests True",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/ide/android-arm64-debug",
+			"toolchainFile": "${sourceDir}/build/Debug/android/arm64/build/Debug/generators/conan_toolchain.cmake"
+		},
+		{
+			"name": "android-x64-release",
+			"inherits": "base",
+			"displayName": "Android x64 - Release",
+			"description": "python build_android.py -mode Release -arch x64 -generator Ninja -tests True",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/ide/android-x64-release",
+			"toolchainFile": "${sourceDir}/build/Release/android/x64/build/Release/generators/conan_toolchain.cmake"
+		},
+		{
+			"name": "android-x64-debug",
+			"inherits": "base",
+			"displayName": "Android x64 - Debug",
+			"description": "python build_android.py -mode Debug -arch x64 -generator Ninja -tests True",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/ide/android-x64-debug",
+			"toolchainFile": "${sourceDir}/build/Debug/android/x64/build/Debug/generators/conan_toolchain.cmake"
+		}
+	],
+	"buildPresets": [
+		{
+			"name": "windows-msvc-debug",
+			"configurePreset": "windows-msvc",
+			"configuration": "Debug"
+		},
+		{
+			"name": "windows-msvc-release",
+			"configurePreset": "windows-msvc",
+			"configuration": "Release"
+		},
+		{
+			"name": "windows-msvc-ninja-debug",
+			"configurePreset": "windows-msvc-ninja",
+			"configuration": "Debug"
+		},
+		{
+			"name": "windows-msvc-ninja-release",
+			"configurePreset": "windows-msvc-ninja",
+			"configuration": "Release"
+		},
+		{
+			"name": "windows-clang-debug",
+			"configurePreset": "windows-clang",
+			"configuration": "Debug"
+		},
+		{
+			"name": "windows-clang-release",
+			"configurePreset": "windows-clang",
+			"configuration": "Release"
+		},
+		{
+			"name": "windows-clang-ninja-debug",
+			"configurePreset": "windows-clang-ninja",
+			"configuration": "Debug"
+		},
+		{
+			"name": "windows-clang-ninja-release",
+			"configurePreset": "windows-clang-ninja",
+			"configuration": "Release"
+		},
+		{
+			"name": "linux-gcc-debug",
+			"configurePreset": "linux-gcc-debug"
+		},
+		{
+			"name": "linux-clang-debug",
+			"configurePreset": "linux-clang-debug"
+		},
+		{
+			"name": "macos-debug",
+			"configurePreset": "macos-debug"
+		},
+		{
+			"name": "linux-gcc-release",
+			"configurePreset": "linux-gcc-release"
+		},
+		{
+			"name": "linux-clang-release",
+			"configurePreset": "linux-clang-release"
+		},
+		{
+			"name": "macos-release",
+			"configurePreset": "macos-release"
+		},
+		{
+			"name": "linux-aarch64-gcc-debug",
+			"configurePreset": "linux-aarch64-gcc-debug"
+		},
+		{
+			"name": "linux-aarch64-clang-debug",
+			"configurePreset": "linux-aarch64-clang-debug"
+		},
+		{
+			"name": "linux-clang-ninja-debug",
+			"configurePreset": "linux-clang-ninja-debug"
+		},
+		{
+			"name": "macos-x64-debug",
+			"configurePreset": "macos-x64-debug"
+		},
+		{
+			"name": "android-arm64-release",
+			"configurePreset": "android-arm64-release"
+		},
+		{
+			"name": "android-arm64-debug",
+			"configurePreset": "android-arm64-debug"
+		},
+		{
+			"name": "android-x64-release",
+			"configurePreset": "android-x64-release"
+		},
+		{
+			"name": "android-x64-debug",
+			"configurePreset": "android-x64-debug"
+		}
+	],
+	"testPresets": [
+		{
+			"name": "windows-msvc-debug",
+			"configurePreset": "windows-msvc",
+			"configuration": "Debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "windows-msvc-ninja-debug",
+			"configurePreset": "windows-msvc-ninja",
+			"configuration": "Debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "windows-clang-debug",
+			"configurePreset": "windows-clang",
+			"configuration": "Debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "windows-clang-ninja-debug",
+			"configurePreset": "windows-clang-ninja",
+			"configuration": "Debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "linux-gcc-debug",
+			"configurePreset": "linux-gcc-debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "linux-clang-debug",
+			"configurePreset": "linux-clang-debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "macos-debug",
+			"configurePreset": "macos-debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "linux-gcc-release",
+			"configurePreset": "linux-gcc-release",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "linux-clang-release",
+			"configurePreset": "linux-clang-release",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "macos-release",
+			"configurePreset": "macos-release",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "linux-aarch64-gcc-debug",
+			"configurePreset": "linux-aarch64-gcc-debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "linux-aarch64-clang-debug",
+			"configurePreset": "linux-aarch64-clang-debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "linux-clang-ninja-debug",
+			"configurePreset": "linux-clang-ninja-debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "macos-x64-debug",
+			"configurePreset": "macos-x64-debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "android-arm64-release",
+			"configurePreset": "android-arm64-release",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "android-arm64-debug",
+			"configurePreset": "android-arm64-debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "android-x64-release",
+			"configurePreset": "android-x64-release",
+			"output": {
+				"outputOnFailure": true
+			}
+		},
+		{
+			"name": "android-x64-debug",
+			"configurePreset": "android-x64-debug",
+			"output": {
+				"outputOnFailure": true
+			}
+		}
+	]
+}

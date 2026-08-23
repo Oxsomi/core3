@@ -83,9 +83,7 @@ Bool Compiler_getLinkEntries(
 		binaryIdentifier->stageType >= ESHPipelineStage_RtStartExt &&
 		binaryIdentifier->stageType <= ESHPipelineStage_RtEndExt;
 
-	Bool isLib =
-		binaryIdentifier->stageType == ESHPipelineStage_WorkgraphExt ||
-		isRt;
+	Bool isLib = isRt;
 
 	Bool isLibTarget = isLib;
 	isLib = isLibTarget || (binaryIdentifier->stageType == ESHPipelineStage_Count);
@@ -201,7 +199,19 @@ Bool Compiler_getLinkEntries(
 			U64 m = entry.definesPerCompilation.ptr[k];
 
 			ListCharString tmp = (ListCharString) { 0 };
-			gotoIfError3(clean, ListCharString_createRefConst(entry.defineNameValues.ptr + (l << 1), m << 1, &tmp, e_rr));
+
+			//An entry written with an empty defines annotation still runs this loop once, since
+			// definesPerCompilation then holds a single 0, and defineNameValues is left entirely empty.
+			//Offsetting its null ptr is undefined even by the zero l is here, and createRefConst refuses both a
+			// null ptr and a zero length anyway, so building the ref at all is wrong rather than merely unsafe:
+			// it fails the whole compile.
+			//An empty combination is just the empty list, which is what tmp already holds.
+			//SHEntryRuntime_asBinaryIdentifier guards the same arithmetic the same way.
+
+			if (m)
+				gotoIfError3(clean, ListCharString_createRefConst(
+					entry.defineNameValues.ptr + (l << 1), m << 1, &tmp, e_rr
+				));
 
 			Bool eq = tmp.length == ident.defines.length;        //TODO: ListCharString_equalsUnderlying
 
@@ -269,7 +279,7 @@ Bool Compiler_getLinkEntries(
 
 			else {
 
-				//If RT/workgraph shader, try to find a previous linkEntry
+				//If RT shader, try to find a previous linkEntry
 				//In that case, we just reference the same binary.
 
 				U64 l = 0;

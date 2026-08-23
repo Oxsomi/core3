@@ -376,7 +376,9 @@ Bool GenericList_sortF32(GenericList list);
 Bool GenericList_sortF64(GenericList list);
 
 //Only allowed when the stride is <= 1024 (it needs to copy to a temp buffer)
-Bool GenericList_sortCustom(GenericList list, CompareFunction func);
+//context is handed to func untouched on every comparison; pass NULL when the comparator doesn't need it.
+
+Bool GenericList_sortCustom(GenericList list, CompareFunction func, void *context);
 
 Bool GenericList_sortString(GenericList list, EStringCase stringCase);
 

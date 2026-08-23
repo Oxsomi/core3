@@ -94,20 +94,23 @@ MAX_LINE_LENGTH       = 128
 TAB_WIDTH             = 4
 
 
-def prune_dirs(dirs: list) -> None:
+def prune_dirs(dirpath: str, dirs: list) -> None:
     """Drop directories neither the checker nor the fixer should walk into.
 
     Both the scanner and the in-place fixer use this, so the fixer can never
     rewrite a directory the checker doesn't even look at, vendored clones most
     of all: rewriting those would produce a huge diff against upstream.
-    """
 
-    # Repo-root clones of dependencies / prototypes: not committed, absent on a clean checkout.
-    local_clones = ('radeon_gpu_analyzer', 'DirectXShaderCompiler', 'nvapi', 'mesa', 'Vulkan-ValidationLayers')
+    Nested checkouts (a dependency fork cloned inside the tree, e.g. spirv-reflect or mesa) are
+    recognised by their own .git rather than by name, so somebody cloning the next one doesn't have
+    to remember to come back here. Their sources are not ours and would never satisfy this checker.
+    Modifying dirs[:] in-place is the os.walk-documented way to control recursion.
+    """
 
     dirs[:] = [
         d for d in dirs
-        if not d.startswith('.') and d not in ('build', 'VULKAN_SDK', '__pycache__') and d not in local_clones
+        if not d.startswith('.') and d not in ('build', 'VULKAN_SDK', '__pycache__')
+        and not os.path.exists(os.path.join(dirpath, d, '.git'))
     ]
 
 
@@ -705,7 +708,7 @@ def fix_indentation(root: str) -> tuple[int, int]:
     skipped = 0
 
     for dirpath, dirs, filenames in os.walk(root):
-        prune_dirs(dirs)
+        prune_dirs(dirpath, dirs)
         for fname in filenames:
             ext = os.path.splitext(fname)[1].lower()
             if ext not in ALL_EXTENSIONS:
@@ -781,6 +784,67 @@ def fix_indentation(root: str) -> tuple[int, int]:
 
 
 # ---------------------------------------------------------------------------
+# Embedded shader header size check
+#
+# The .hlsli files under include/shader_compiler/shaders are #included straight
+# into raw string literals in compiler.cpp, and MSVC caps a single string
+# literal at 16380 bytes (C2026).  clang and gcc have no such limit, so an
+# oversized header builds fine everywhere except the MSVC CI leg, which is a
+# miserable way to find out.  A header past the cap is split by closing the raw
+# string and reopening it (see extension.CoopVec.hlsli); adjacent literals
+# concatenate, so the embedded content is unchanged.
+# ---------------------------------------------------------------------------
+
+MSVC_STRING_LITERAL_MAX = 16380
+
+SHADER_INCLUDE_DIR = 'include/shader_compiler/shaders'
+
+def check_embedded_shader_headers(root: str) -> int:
+
+    shader_dir = os.path.join(root, *SHADER_INCLUDE_DIR.split('/'))
+
+    if not os.path.isdir(shader_dir):
+        return 0
+
+    bad = 0
+
+    for fname in sorted(os.listdir(shader_dir)):
+
+        if not fname.endswith('.hlsli'):
+            continue
+
+        path = os.path.join(shader_dir, fname)
+        text = open(path, encoding='utf-8').read()
+
+        # Each chunk is the text between a R"( opener and its )" closer; a file
+        # that never opens one isn't embedded this way and has nothing to check.
+
+        chunks = re.findall(r'R"\((.*?)\)"', text, re.DOTALL)
+
+        for i, chunk in enumerate(chunks):
+
+            size = len(chunk.encode('utf-8'))
+
+            if size <= MSVC_STRING_LITERAL_MAX:
+                continue
+
+            if not bad:
+                print("EMBEDDED SHADER HEADER TOO BIG FOR MSVC:", flush=True)
+
+            bad += 1
+            print(
+                f"  {SHADER_INCLUDE_DIR}/{fname}: raw string {i + 1} is {size} bytes, "
+                f"over MSVC's {MSVC_STRING_LITERAL_MAX} byte limit (C2026)"
+            )
+            print("    split it into two adjacent raw strings, see extension.CoopVec.hlsli")
+
+    if bad:
+        print()
+
+    return bad
+
+
+# ---------------------------------------------------------------------------
 # Directory scanner
 # ---------------------------------------------------------------------------
 
@@ -794,7 +858,7 @@ def scan(
     names_to_paths: dict[str, list[str]] = defaultdict(list)
 
     for dirpath, dirs, filenames in os.walk(root):
-        prune_dirs(dirs)
+        prune_dirs(dirpath, dirs)
         for fname in filenames:
             ext = os.path.splitext(fname)[1].lower()
             if ext not in ALL_EXTENSIONS:
@@ -805,6 +869,9 @@ def scan(
 
     bad_files = 0
     all_todos: list[tuple[str, int, str, str]] = []
+
+    # ── Embedded shader header size check ─────────────────────────────────
+    bad_files += check_embedded_shader_headers(root)
 
     # ── Duplicate filename check ──────────────────────────────────────────
     dup_found = False

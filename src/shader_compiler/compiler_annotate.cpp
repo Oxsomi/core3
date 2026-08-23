@@ -101,10 +101,6 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 			break;
 
-		case C8x4('n', 'o', 'd', 'e'):        //node
-			if(stageNameLen == 4)            return ESHPipelineStage_WorkgraphExt;
-			break;
-
 		case C8x4('m', 'e', 's', 'h'):        //mesh
 			if(stageNameLen == 4)            return ESHPipelineStage_MeshExt;
 			break;
@@ -303,6 +299,17 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
+		case C8x2('B', 'a'):    //Barycentrics
+
+			if(
+				stageNameLen == 12 &&
+				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('r', 'y', 'c', 'e', 'n', 't', 'r', 'i') &&
+				Buffer_readU16(buf, 10, NULL, NULL) == C8x2('c', 's')
+			)
+				return ESHExtension_Barycentrics;
+
+			break;
+
 		case C8x2('A', 't'):    //AtomicI64, AtomicF32, AtomicF64
 
 			if(stageNameLen == 9)
@@ -342,7 +349,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
-		case C8x2('R', 'a'):    //RayQuery, RayMicromapOpacity, RayMotionBlur, RayReorder
+		case C8x2('R', 'a'):    //RayQuery, RayMicromapOpacity, RayReorder
 
 			if(stageNameLen == 8 && Buffer_readU64(buf, 0, NULL, NULL) == C8x8('R', 'a', 'y', 'Q', 'u', 'e', 'r', 'y'))
 				return ESHExtension_RayQuery;
@@ -356,13 +363,6 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL, NULL) == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
 						)
 							return ESHExtension_RayMicromapOpacity;
-
-						break;
-
-					case C8x8('y', 'M', 'o', 't', 'i', 'o', 'n', 'B'):        //RayMotionBlur
-
-						if(stageNameLen == 13 && Buffer_readU32(buf, 10, NULL, NULL) == C8x4('B', 'l', 'u', 'r'))
-							return ESHExtension_RayMotionBlur;
 
 						break;
 
@@ -671,15 +671,14 @@ Bool Compiler_parseShaderStageAnnot(
 
 	entry.entry.stage = SHPipelineStage(stage);
 
-	//isRt = RT stage; containsGfxOrComp = not RT and not workgraph (folded into runtimeFlags)
+	//isRt = RT stage; containsGfxOrComp = not RT (folded into runtimeFlags)
 
 	entry.runtimeFlags &= (U8)~(ESHEntryRuntimeFlag_IsRt | ESHEntryRuntimeFlag_ContainsGfxOrComp);
 
 	if (stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt)
 		entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_IsRt;
 
-	else if (stage != ESHPipelineStage_WorkgraphExt)
-		entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_ContainsGfxOrComp;
+	else entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_ContainsGfxOrComp;
 
 clean:
 	return s_uccess;

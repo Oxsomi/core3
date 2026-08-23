@@ -35,6 +35,21 @@ typedef enum ESHRegisterType ESHRegisterType;
 
 typedef RefPtr GraphicsDeviceRef;
 
+//The register space OxC3 keeps for itself on DXIL, where the per frame globals live (frame id, time,
+//swapchain descriptors). Space 0 was the old home and is far too easy to pick by accident: it is
+//what anyone writing their first constant buffer types, and custom layouts made that a real collision.
+//Vulkan needs no equivalent, since the globals sit in their own descriptor SET there and set indices are
+//too few to hide a reservation in.
+//Keep this in sync with OXC3_RESERVED_SPACE in shader_compiler/shaders/types.hlsli; a shader compiled
+//against a different value binds somewhere this runtime doesn't look.
+
+#define OXC3_RESERVED_SPACE 0xC3
+
+//How many push descriptors one layout may hold. On D3D12 each is a root descriptor costing 2 of the root
+//signature's 64 DWORDs, and Vulkan only guarantees a maxPushDescriptors at all where the extension exists.
+
+#define OXC3_MAX_PUSH_DESCRIPTORS 8
+
 typedef enum EDescriptorLayoutFlags {
 
 	EDescriptorLayoutFlags_None                     = 0,
@@ -103,6 +118,11 @@ typedef enum EDetectDescriptorLayoutFlags {
 	EDetectDescriptorLayoutFlags_AssumePushDescriptors   = 1 << 1        //Assume non push constant buffer as push descriptors
 
 } EDetectDescriptorLayoutFlags;
+
+//Whether a reflected register name is one the RUNTIME owns (the bindless set or the per frame globals)
+//rather than the caller's. Names, not spaces: the spaces differ per backend.
+
+Bool GraphicsDeviceRef_isRuntimeRegister(GraphicsDeviceRef *dev, const CharString *name);
 
 Bool GraphicsDeviceRef_detectLayoutFromEntries(
 	GraphicsDeviceRef *dev,

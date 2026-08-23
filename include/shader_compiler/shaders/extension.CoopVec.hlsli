@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -254,9 +253,6 @@ namespace oxc {
 #endif
 
 }
-)"
-//This header exceeds MSVC's single string-literal limit (C2026), so it's split into two adjacent raw strings (concatenated).
-R"(
 //Public API: (4x4 F16 matrix from matBuf at byte offset/stride) * (the F16 vector in ioBuf), result written to ioBuf.
 //Float16NV = 0 (interpretations), ColumnMajorNV = 1 (layout), transpose = false.
 #ifdef __spirv__
@@ -309,4 +305,3 @@ R"(
 #else
 	#define OXC_COOPVEC_REDUCE_SUM_ACCUMULATE_4_F16(gradB, vecBuf) { vector<half, 4> __oxcV = { (vecBuf)[0].data[0], (vecBuf)[0].data[1], (vecBuf)[0].data[2], (vecBuf)[0].data[3] }; oxc::CoopVecReduceSumAccumulate4F16(__oxcV, (gradB), 0); }
 #endif
-)"

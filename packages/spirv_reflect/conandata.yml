@@ -1,4 +1,4 @@
 sources:
-  "2026.08.06":
+  "2026.08.17":
     url: "https://github.com/Oxsomi/SPIRV-Reflect.git"
-    checkout: "9652a27620695ab767f98a6538a87fc5d2d4590f"
+    checkout: "38c361767c2cff95668c1599f343bcff9fbfdcc1"

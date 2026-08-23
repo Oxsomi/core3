@@ -931,7 +931,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
 		}
 
-		GraphicsDevice_rebindDescriptors(device, commandBuffer);
+		//Descriptors bind lazily at the first work op that needs them (bindful), so a purely bindful frame
+		// never pays for the default heap and root signature setup.
 
 		//Record commands
 
@@ -1080,6 +1081,15 @@ clean:
 
 Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer, Error *e_rr) {
 
+	//The Vulkan twin hints the same way; see EGraphicsDeviceMessage_SubmitFlushed
+
+	if(GraphicsDevice_logOnce(GraphicsDeviceRef_ptr(deviceRef), EGraphicsDeviceMessage_SubmitFlushed))
+		Log_performanceLnx(
+			"D3D12: submit was split mid recording because pending copies or AS builds crossed the flush "
+			"threshold, which adds a GPU sync point; raise flushThreshold or batch smaller uploads "
+			"(only logged once)"
+		);
+
 	Bool s_uccess = true;
 	HANDLE eventHandle = NULL;
 
@@ -1127,7 +1137,13 @@ Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *
 	commandBuffer->stencilRef = 0;
 	commandBuffer->blendConstants = F32x4_zero();
 
-	GraphicsDevice_rebindDescriptors(device, commandBuffer->buffer);
+	//The fresh buffer has no descriptor state, so the emitted state trackers reset and the next work op's
+	// lazy bind re-emits whatever was last bound (default or custom).
+
+	commandBuffer->defaultDescriptorsBound = false;
+	commandBuffer->lastBoundHeap = NULL;
+	commandBuffer->lastBoundTable[0] = commandBuffer->lastBoundTable[1] = NULL;
+	commandBuffer->lastRootSig[0] = commandBuffer->lastRootSig[1] = NULL;
 
 clean:
 

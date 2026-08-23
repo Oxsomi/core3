@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -22,7 +21,7 @@ R"(
 //shader_compiler/shaders/resources.hlsli
 //
 //The bindless binding model: the descriptor arrays every shader sees and the accessors that index
-//them. Buffer reads/writes and the per frame app data live in their own headers, included below.
+//them, plus the per frame globals. Buffer reads/writes live in their own header, included below.
 
 #pragma once
 #include "@types.hlsli"
@@ -32,12 +31,15 @@ static const U32 U32_MAX = 0xFFFFFFFFu;
 
 //Even though DXIL bindings could use setId == spaceId and default registerId on 0,
 //It'd be inefficient, because the root signature can't simplify this to 3 ranges.
+//DXIL puts the whole set in OxC3's reserved space rather than space 0, so a custom layout can use the
+//spaces people actually reach for without ever colliding with the engine's own bindless arrays.
+//SPIRV needs no such move: its sets are separate from the caller's by construction.
 
 #ifdef __spirv__
 	#define _binding(bindingId, setId, a, ...) [[vk::binding(bindingId, setId)]] __VA_ARGS__
 	#define _vkBinding(a, b) [[vk::binding(a, b)]]
 #else
-	#define _binding(a, b, registerId, ...) __VA_ARGS__ : register(registerId)
+	#define _binding(a, b, registerId, ...) __VA_ARGS__ : register(registerId, OXC3_RESERVED_SPACE)
 	#define _vkBinding(a, b)
 #endif
 
@@ -62,23 +64,27 @@ UNKNOWN_FORMAT _binding(10, 1, u327680, RWTexture2D<U32x4> _rwTextures2Du[16384]
 	_binding(11, 1, t327680, RaytracingAccelerationStructure _tlasExt[16]);
 #endif
 
-//The register is explicit because the default root signature binds globals at b0 space0, and DXIL linking of
-// multi entrypoint files renumbers implicitly assigned registers, which silently moved globals to b1.
+//The register is explicit because the default root signature binds globals at a fixed slot, and DXIL linking
+// of multi entrypoint files renumbers implicitly assigned registers, which silently moved globals to b1.
 //The SPIRV backend ignores register() when vk::binding is present, so no macro split is needed.
+//The space is OxC3's reserved one rather than 0: custom layouts let anyone declare their own b0, and space 0
+// is exactly what they reach for first, so leaving globals there made a collision a matter of time.
 
-_vkBinding( 0, 2) cbuffer globals : register(b0) {	//Globals used during the entire frame such as frame id.
+_vkBinding( 0, 2) cbuffer globals : register(b0, OXC3_RESERVED_SPACE) {	//Globals used for the entire frame.
 
 	U32 _frameId;					//Can loop back to 0 after U32_MAX!
 	F32 _time;						//Time since launch of app
 	F32 _deltaTime;					//deltaTime since last frame.
-	U32 _swapchainCount;			//How many swapchains are present (will insert ids into appData)
+	U32 _swapchainCount;			//How many swapchains are present
 
 	U32x4 _swapchains[8];			//Descriptors of swapchains: (Read, write)[2][16]
-
-	//Up to 368 bytes of user data, useful for supplying constant per frame data.
-
-	U32x4 _appData[23];
 };
+
+//Fetch a swapchain id the application pushed for this frame.
+//The offset counts swapchains, and each one carries a read and a write id.
+
+U32 getReadSwapchain(U32 offset) { return offset & 1 ? _swapchains[offset >> 1].z : _swapchains[offset >> 1].x; }
+U32 getWriteSwapchain(U32 offset) { return offset & 1 ? _swapchains[offset >> 1].w : _swapchains[offset >> 1].y; }
 
 #define samplerUniform(i) _samplers[i & ResourceId_mask]
 #define sampler(i) _samplers[NonUniformResourceIndex(i & ResourceId_mask)]
@@ -116,9 +122,6 @@ _vkBinding( 0, 2) cbuffer globals : register(b0) {	//Globals used during the ent
 #define rwTexture2Du(i) _rwTextures2Du[NonUniformResourceIndex(i & ResourceId_mask)]
 
 //Split out of this header once it got too broad to read; included here so @resources.hlsli stays
-//the one include a shader needs. Each is self sufficient if you'd rather include it directly.
+//the one include a shader needs. It is self sufficient if you'd rather include it directly.
 
 #include "@buffer.hlsli"
-#include "@appdata.hlsli"
-
-)"

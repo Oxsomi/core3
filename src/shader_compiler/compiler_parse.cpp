@@ -135,8 +135,13 @@ Bool Compiler_finalizeEntrypoint(
 			0, "Compiler_finalizeEntrypoint() localSize, inputs, outputs, unique/output/inputSemantics are required"
 		));
 
-	if(payloadSize > 128)
-		retError(clean, Error_outOfBounds(0, payloadSize, 128, "Compiler_finalizeEntrypoint() payload out of bounds"));
+	//No payload bound here:
+	// payloadSize arrives as a U8, so 255 IS the bound and a check would be dead code the compiler rejects.
+	//The backends clamp while the value is still wide (compiler_dxil.cpp,
+	// compiler_spv.cpp). Widening past 255 means widening SHEntry::payloadSize and the interface signatures,
+	// a versioned oiSH change.
+	//Neither api caps the payload itself; it is register pressure, not validity.
+	//Hit ATTRIBUTES are the hard limit, 32 bytes in D3D12.
 
 	if(intersectSize > 32)
 		retError(clean, Error_outOfBounds(0, intersectSize, 32, "Compiler_finalizeEntrypoint() attribute out of bounds"));
@@ -155,6 +160,20 @@ Bool Compiler_finalizeEntrypoint(
 	}
 
 	gotoIfError3(clean, Compiler_findEntry(entries, *entryName, &entry, e_rr));
+
+	//A closesthit/anyhit that never READS its attribute struct gets it stripped before reflection runs,
+	// DXIL reports AttributeSize 0, and SPIR-V has no OpVariable left to measure,
+	// so the entry would be rejected for an attribute the driver allocates regardless.
+	//Triangle geometry's attribute is float2 barycentrics, so 8 is the size, not a guess:
+	// an entry that reads nothing still has 8 bytes handed to it.
+	//Procedural geometry is unaffected, its ReportHit-produced attribute is reflected off the intersection shader,
+	// where 0 stays legal.
+
+	if(!intersectSize && (
+		entry->entry.stage == ESHPipelineStage_ClosestHitExt ||
+		entry->entry.stage == ESHPipelineStage_AnyHitExt
+	))
+		intersectSize = 8;
 
 	if(lock) {
 		acq = SpinLock_lock(lock, 1 * SECOND);
@@ -250,10 +269,12 @@ clean:
 
 U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSizeType) {
 
-	U16 minVersion = OISH_SHADER_MODEL(6, 5);
+	//No stage raises the floor on its own any more: workgraphs were the only one (SM6.8) and they're gone.
+	//The parameter stays because the floor is a per stage question and the next stage to need one goes here.
 
-	if(stage == ESHPipelineStage_WorkgraphExt)
-		minVersion = OISH_SHADER_MODEL(6, 8);
+	(void) stage;
+
+	U16 minVersion = OISH_SHADER_MODEL(6, 5);
 
 	if(waveSizeType == 1)
 		minVersion = OISH_SHADER_MODEL(6, 6);

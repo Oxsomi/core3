@@ -177,7 +177,7 @@ void Test_SHFileAddEntryTaskNeedsGroup(Test *t) {
 
 void Test_SHFileAddEntryWaveSizeOnNonCompute(Test *t) {
 
-	Test_setModule(t, "SHFile addEntry: waveSize on non-compute/workgraph rejected");
+	Test_setModule(t, "SHFile addEntry: waveSize on non-compute rejected");
 
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
@@ -239,29 +239,6 @@ void Test_SHFileAddEntryWaveSizeInvalidNibbles(Test *t) {
 	SHFile_free(&sh, t->alloc);
 }
 
-void Test_SHFileAddEntryWaveSizeWorkgraph(Test *t) {
-
-	Test_setModule(t, "SHFile addEntry: waveSize accepted on workgraph");
-
-	SHFile sh = (SHFile) { 0 };
-	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
-
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_WorkgraphExt, NULL, true);
-	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
-
-	SHEntry e = (SHEntry) { 0 };
-	e.name     = CharString_createRefCStrConst("nodeMain");
-	e.stage    = ESHPipelineStage_WorkgraphExt;
-	e.groupX   = 16; e.groupY = 1; e.groupZ = 1;
-	e.waveSize = 0x0003;
-
-	U16 binId = 0;
-	e.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
-
-	Test_assert(t, "workgraph waveSize accepted", SHFile_addEntrypoint(&sh, &e, t->alloc, &t->err));
-	SHFile_free(&sh, t->alloc);
-}
-
 void Test_SHFileAddEntryMissMustHavePayload(Test *t) {
 
 	Test_setModule(t, "SHFile addEntry: miss payloadSize rules");
@@ -279,11 +256,13 @@ void Test_SHFileAddEntryMissMustHavePayload(Test *t) {
 	U16 binId = 0;
 	e.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
 
+	//No upper bound beyond the U8 type itself:
+	// payloadSize's 255 ceiling is the format's,
+	// and a larger value cannot be represented to test. 200 was rejected when the cap was 128.
+
 	Test_assert(t, "zero payload rejected",     !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
 	e.payloadSize = 200;
-	Test_assert(t, "payload > 128 rejected",    !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
-	e.payloadSize = 128;
-	Test_assert(t, "payload == 128 accepted",    SHFile_addEntrypoint(&sh, &e, t->alloc, &t->err));
+	Test_assert(t, "payload == 200 accepted",    SHFile_addEntrypoint(&sh, &e, t->alloc, &t->err));
 
 	SHFile_free(&sh, t->alloc);
 }

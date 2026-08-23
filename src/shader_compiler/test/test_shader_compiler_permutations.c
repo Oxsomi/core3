@@ -161,5 +161,87 @@ void Test_shaderCompilerPermutations(Test *t) {
 		ListBuffer_freeUnderlying(&out, alloc);
 	}
 
+	//--- An empty defines annotation means one combination with no defines, not zero combinations. ---
+	//--- Nothing else compiles that spelling, so the link time define matching never walked an empty range. ---
+
+	{
+		ListBuffer out = (ListBuffer) { 0 };
+
+		Test_assert(t, "empty defines annotation compiles",
+			compileFileShader(alloc, "permutations/empty_defines.hlsl", ESHBinaryType_SPIRV, true, false, &out, &err)
+		);
+
+		//An empty defines list still means one combination, so exactly one binary has to come out of it.
+
+		Test_assert(t, "empty defines produced a binary", out.length == 1);
+
+		ListBuffer_freeUnderlying(&out, alloc);
+	}
+
+	//--- Multiple render targets, and a non zero default semantic index, have to reflect IDENTICALLY on both ---
+	//--- backends, or the two binaries can never be merged into one oiSH. ---
+
+	{
+		ListBuffer spv = (ListBuffer) { 0 };
+		ListBuffer dxil = (ListBuffer) { 0 };
+		SHFile spvFile = (SHFile) { 0 }, dxilFile = (SHFile) { 0 }, combined = (SHFile) { 0 };
+
+		const Bool built =
+			Test_assert(t, "mrt compiles for spirv",
+				compileFileShader(alloc, "stages/pixel_mrt.hlsl", ESHBinaryType_SPIRV, true, false, &spv, &err)
+			) &&
+			Test_assert(t, "mrt compiles for dxil",
+				compileFileShader(alloc, "stages/pixel_mrt.hlsl", ESHBinaryType_DXIL, true, false, &dxil, &err)
+			) &&
+			spv.length == 1 && dxil.length == 1 &&
+			Test_assert(t, "mrt spirv oiSH readable", readOiSH(alloc, spv.ptr[0], &spvFile, &err)) &&
+			Test_assert(t, "mrt dxil oiSH readable", readOiSH(alloc, dxil.ptr[0], &dxilFile, &err));
+
+		//Combining is the operation that actually compares the two reflections field by field, which is why a
+		// divergence on SV_Target1 or TEXCOORD1 surfaces here and nowhere earlier.
+
+		if (built)
+			Test_assert(t, "mrt spirv and dxil combine",
+				SHFile_combine(&spvFile, &dxilFile, alloc, &combined, &err)
+			);
+
+		SHFile_free(&combined, alloc);
+		SHFile_free(&spvFile, alloc);
+		SHFile_free(&dxilFile, alloc);
+		ListBuffer_freeUnderlying(&spv, alloc);
+		ListBuffer_freeUnderlying(&dxil, alloc);
+	}
+
+	//--- Dual source blending: two outputs at LOCATION 0 on SPIR-V (Index 0 and 1) have to land on the same ---
+	//--- reflected slots as DXIL's SV_Target0/1, or the backends can't merge. ---
+
+	{
+		ListBuffer spv = (ListBuffer) { 0 };
+		ListBuffer dxil = (ListBuffer) { 0 };
+		SHFile spvFile = (SHFile) { 0 }, dxilFile = (SHFile) { 0 }, combined = (SHFile) { 0 };
+
+		const Bool built =
+			Test_assert(t, "dualsrc compiles for spirv",
+				compileFileShader(alloc, "stages/pixel_dualsrc.hlsl", ESHBinaryType_SPIRV, true, false, &spv, &err)
+			) &&
+			Test_assert(t, "dualsrc compiles for dxil",
+				compileFileShader(alloc, "stages/pixel_dualsrc.hlsl", ESHBinaryType_DXIL, true, false, &dxil, &err)
+			) &&
+			spv.length == 1 && dxil.length == 1 &&
+			Test_assert(t, "dualsrc spirv oiSH readable", readOiSH(alloc, spv.ptr[0], &spvFile, &err)) &&
+			Test_assert(t, "dualsrc dxil oiSH readable", readOiSH(alloc, dxil.ptr[0], &dxilFile, &err));
+
+		if (built)
+			Test_assert(t, "dualsrc spirv and dxil combine",
+				SHFile_combine(&spvFile, &dxilFile, alloc, &combined, &err)
+			);
+
+		SHFile_free(&combined, alloc);
+		SHFile_free(&spvFile, alloc);
+		SHFile_free(&dxilFile, alloc);
+		ListBuffer_freeUnderlying(&spv, alloc);
+		ListBuffer_freeUnderlying(&dxil, alloc);
+	}
+
 	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 }

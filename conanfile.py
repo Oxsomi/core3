@@ -38,7 +38,7 @@ HOST_TOOL_OPTIONS = {
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.103"
+	version = "0.2.104"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -54,6 +54,7 @@ class oxc3(ConanFile):
 		"forceVulkan": [ True, False ],
 		"enableSIMD": [ True, False ],
 		"enableTests": [ True, False ],
+		"testAutoRun": [ True, False ],
 		"enableOxC3CLI": [ True, False ],
 		"forceFloatFallback": [ True, False ],
 		"enableShaderCompiler": [ True, False ],
@@ -69,6 +70,7 @@ class oxc3(ConanFile):
 		"forceVulkan": False,
 		"enableSIMD": True,
 		"enableTests": False,
+		"testAutoRun": True,
 		"enableOxC3CLI": True,
 		"forceFloatFallback": False,
 		"enableShaderCompiler": True,
@@ -110,8 +112,28 @@ class oxc3(ConanFile):
 		deps.generate()
 
 		tc = CMakeToolchain(self)
+
+		# The repo ships its own CMakePresets.json, so conan's root CMakeUserPresets.json is not generated.
+		# It is an index of every build folder ever configured, and it broke `cmake --list-presets` outright in
+		# two ways: every folder called its preset conan-default, which collides, and a folder that is later
+		# removed leaves an include pointing at nothing.
+		# conan build is unaffected, since that uses the presets inside the build folder rather than this index.
+
+		tc.user_presets_path = False
+
+		# Those per folder presets still get a name of their own, so including one by hand stays unambiguous.
+
+		tc.presets_prefix = "conan-" + "-".join(str(x) for x in [
+			self.settings.os, self.settings.arch, self.settings.compiler, self.settings.build_type
+		]).lower().replace(" ", "-").replace("_", "-")
+
 		tc.cache_variables["ForceFloatFallback"] = self.options.forceFloatFallback
 		tc.cache_variables["EnableTests"] = self.options.enableTests
+
+		# Off when the caller drives ctest itself, otherwise every suite would run twice: once at link time and
+		# again in the ctest pass.
+
+		tc.cache_variables["OxC3TestAutoRun"] = self.options.testAutoRun
 		tc.cache_variables["EnableOxC3CLI"] = self.options.enableOxC3CLI
 		tc.cache_variables["EnableSIMD"] = self.options.enableSIMD
 		tc.cache_variables["ForceVulkan"] = self.options.forceVulkan
@@ -215,7 +237,7 @@ class oxc3(ConanFile):
 			# split the android/web cross builds use). That conf is not part of the package id, so the graph
 			# still just asks for a sanitized DXC here regardless of where its tablegen came from.
 			self.requires("dxc/2026.08.07.03", options=sanitized)
-			self.requires("spirv_reflect/2026.08.06", options=sanitized)
+			self.requires("spirv_reflect/2026.08.17", options=sanitized)
 
 			# RGA (CLI tool): offline shader-to-AMD-ISA analysis + device/architecture enumeration.
 			# Only exists where the vendored AMD offline compilers do (Windows/Linux x64); run=True so the

@@ -22,6 +22,7 @@
 
 #pragma once
 #include "graphics/generic/resource.h"
+#include "graphics/generic/graphics_types.h"        //GraphicsObjectSize, for the layout helpers below
 
 #ifdef __cplusplus
 	extern "C" {
@@ -84,11 +85,15 @@ Bool TextureRef_isTexture(RefPtr *tex);
 //Read a region of a render target back from the GPU (RenderTexture, DepthStencil or Swapchain).
 //These have no cpuData, so the data arrives through the callback as a tight row buffer it may take over.
 //Same timing contract and region semantics as DeviceTextureRef_pullRegion.
-//MSAA has to be resolved before pulling and stencil bearing depth formats aren't supported yet.
+//MSAA has to be resolved before pulling.
+//plane selects what a multi planar format hands back, one plane per pull: 0 is the first plane (depth, or
+// the stencil of a stencil only format), 1 is the stencil of a combined format (1 byte per texel).
+//Anything single planar only accepts plane 0.
 Bool TextureRef_pullRegion(
 	TextureRef *tex,
 	U16 x, U16 y, U16 z,
 	U16 w, U16 h, U16 l,
+	U8 plane,
 	TexturePullCallback callback, void *context, Error *e_rr
 );
 
@@ -96,6 +101,54 @@ UnifiedTextureImage TextureRef_getImage(TextureRef *tex, U32 subResource, U8 ima
 
 U32 TextureRef_getCurrReadHandle(TextureRef *tex, U32 subResource);
 U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource);
+
+//What sits behind a UnifiedTexture, which is always the LAST member of its owner (see the padding note in
+// DeviceTexture) so that this can be addressed from the end of the owning struct:
+//
+//  [owner .. UnifiedTexture][UnifiedTextureImage * reserved][backend image ext * reserved][backend impl ext]
+//
+//Reserved is maxImages when the object asked for a reservation (swapchains resize within it) and images
+// otherwise, and only the entries actually in use get filled in.
+//Both offsets below honour the alignment the backend struct reported, which a raw byte offset did not: the
+// image array alone is enough to land a 64 byte VkUnifiedTexture on a 32 byte boundary.
+//Every consumer goes through these so the accessors and the allocation size can't drift apart.
+
+static inline U8 UnifiedTexture_reservedImages(U8 images, U8 maxImages) { return maxImages ? maxImages : images; }
+
+//Aligned as an ABSOLUTE address, not as an offset: the owner puts its UnifiedTexture wherever its own members
+//leave room, so a 64 byte aligned allocation says nothing about the alignment of this pointer, and rounding a
+//relative offset just preserves whatever skew the owner introduced.
+
+static inline U8 *UnifiedTexture_imageExtBase(
+	UnifiedTexture *tex, GraphicsObjectSize imageSize, U8 reservedImages
+) {
+
+	const U64 aligned = GraphicsObjectSize_alignUp(
+		(U64) (void*) tex + sizeof(UnifiedTexture) + sizeof(UnifiedTextureImage) * reservedImages,
+		GraphicsObjectSize_alignment(imageSize)
+	);
+
+	return (U8*) (void*) aligned;
+}
+
+//Everything appended behind the UnifiedTexture, so an owner knows how much to allocate past its own size.
+
+//Rounded to a cache line at the end, because the backend's own impl struct (a swapchain's, say) starts right
+//behind this and 64 covers anything it can ask for; threading its alignment through every caller to save at
+//most 63 bytes per texture isn't worth the coupling.
+
+//Carries a whole cache line of slack, which covers both the alignment padding in front of the ext blocks
+//(unknowable here, since it depends on where the owner placed its UnifiedTexture) and the rounding the impl
+//ext behind them gets. 64 bytes per texture object is not worth being clever about.
+
+static inline U64 UnifiedTexture_appendedSize(GraphicsObjectSize imageSize, U8 reservedImages) {
+	return GraphicsObjectSize_alignUp(
+		sizeof(UnifiedTextureImage) * reservedImages +
+		GraphicsObjectSize_stride(imageSize) * reservedImages +
+		64,
+		64
+	);
+}
 
 //Only for child classes
 

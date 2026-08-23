@@ -1,4 +1,5 @@
 from conan import ConanFile
+from conan.errors import ConanInvalidConfiguration
 import os
 
 required_conan_version = ">=2.0"
@@ -22,14 +23,28 @@ class oxc3Sanitizers(ConanFile):
 	package_type = "python-require"
 
 
-def sanitizerFlags(conanfile, disabledUBSanChecks):
+def sanitizerFlags(conanfile, disabledUBSanChecks, ubsanIgnorelist = None):
 	"""Compile flags for a dependency built alongside a sanitized OxC3.
 
 	disabledUBSanChecks is a comma separated -fno-sanitize list, since which checks are noise depends on the
 	dependency's own idioms rather than on anything shared.
+
+	ubsanIgnorelist is an optional absolute path to a -fsanitize-ignorelist file, for when the noise is one
+	source file's rather than the whole dependency's; the check then keeps working everywhere else in it.
 	"""
 
 	flags = []
+
+	# Second line of defence behind build.py's own check, for anyone invoking conan directly.
+	# MSVC specifically, not everything that isn't clang: gcc sanitizes fine and is a real host for this on the
+	# linux legs. MSVC is the one that ignores the UBSan half with a D9002 warning instead of failing, so a
+	# "sanitized" MSVC build would quietly be no such thing, and its ASan wants a different runtime than these
+	# flags assume.
+
+	if conanfile.settings.compiler == "msvc" and (conanfile.options.enableASAN or conanfile.options.enableUBSAN):
+		raise ConanInvalidConfiguration(
+			"enableASAN/enableUBSAN require clang; MSVC's sanitizers are deliberately unused in OxC3"
+		)
 
 	# Windows means an MSVC ABI driver (msvc or clang-cl), which spells these with a slash and rejects the
 	# driver forms; a plain clang/gcc rejects the slash forms just as hard ("no such file or directory:
@@ -52,8 +67,43 @@ def sanitizerFlags(conanfile, disabledUBSanChecks):
 	# on as well, which is how the sanitizer jobs run it.
 
 	if conanfile.options.enableUBSAN:
-		flags += [ "-fsanitize=undefined", "-fno-sanitize=%s" % disabledUBSanChecks ]
+
+		# gcc does not take every check name clang does, and an unknown one is a hard error rather than a
+		# no-op ("unrecognized argument to -fno-sanitize= option").
+		# function is the one that bites: clang checks indirect call types in C, gcc only ever implemented it
+		# for C++, so naming it to gcc breaks the build for a check that was never going to run there anyway.
+		# Filtering rather than erroring, since disabling a check gcc does not have is a no-op by definition.
+
+		clangOnlyChecks = ( "function", )
+
+		checks = [ c for c in disabledUBSanChecks.split(",") if c ]
+
+		if conanfile.settings.compiler == "gcc":
+			checks = [ c for c in checks if c not in clangOnlyChecks ]
+
+		flags += [ "-fsanitize=undefined" ]
+
+		# An empty -fno-sanitize= is itself an error, so the flag only goes in when something survived.
+
+		if checks:
+			flags += [ "-fno-sanitize=%s" % ",".join(checks) ]
+
 		flags += [ "/Oy-" ] if msvcStyle else [ "-fno-omit-frame-pointer" ]
+
+		# clang-cl doesn't take the driver spelling of this one, so it goes through its /clang: escape hatch;
+		# UBSan here is always clang, since MSVC's own sanitizers aren't used (see the note above).
+
+		# Forward slashes even on Windows: the flag ends up inside a string in conan_toolchain.cmake, where a
+		# path like C:\Users\... is a CMake escape error ("Invalid character escape '\U'").
+		# clang takes either spelling.
+		# clang only, since gcc has no equivalent flag.
+		# No dependency passes an ignorelist today: openal_soft was the only one, and it is no longer sanitized
+		# at all. Kept because it is the right shape for per-file noise in dxc or spirv_reflect later, but it is
+		# untested from here on, so re-verify the flag actually reaches the compiler before relying on it.
+
+		if ubsanIgnorelist and conanfile.settings.compiler == "clang":
+			ignorelistFlag = "-fsanitize-ignorelist=%s" % ubsanIgnorelist.replace("\\", "/")
+			flags += [ "/clang:%s" % ignorelistFlag ] if msvcStyle else [ ignorelistFlag ]
 
 	return flags
 

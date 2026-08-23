@@ -153,6 +153,14 @@ typedef struct VkGraphicsDevice {
 	PFN_vkGetAccelerationStructureDeviceAddressKHR getAccelerationStructureDeviceAddress;
 	PFN_vkGetDeviceAccelerationStructureCompatibilityKHR getAccelerationStructureCompatibility;
 
+	//Only loaded on the EXT opacity micromap path; the KHR promotion builds micromap arrays through the
+	// ordinary acceleration structure entry points above and has no micromap functions of its own.
+
+	PFN_vkCreateMicromapEXT createMicromap;
+	PFN_vkDestroyMicromapEXT destroyMicromap;
+	PFN_vkCmdBuildMicromapsEXT cmdBuildMicromaps;
+	PFN_vkGetMicromapBuildSizesEXT getMicromapBuildSizes;
+
 	PFN_vkCmdTraceRaysKHR traceRays;
 	PFN_vkCmdTraceRaysIndirectKHR traceRaysIndirect;
 	PFN_vkCreateRayTracingPipelinesKHR createRaytracingPipelines;
@@ -180,6 +188,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkCmdSetBlendConstants cmdSetBlendConstants;
 	PFN_vkCmdSetStencilReference cmdSetStencilReference;
 	PFN_vkCmdBindPipeline cmdBindPipeline;
+	PFN_vkCmdPushConstants cmdPushConstants;
 	PFN_vkCmdBindIndexBuffer cmdBindIndexBuffer;
 	PFN_vkCmdBindVertexBuffers cmdBindVertexBuffers;
 	PFN_vkCmdDrawIndexed cmdDrawIndexed;
@@ -267,6 +276,45 @@ typedef struct VkCommandBufferState {
 
 	RefPtr *tempPipelines[EPipelineType_Count];   //Pipelines that were set via command, but not bound yet
 	RefPtr *pipelines[EPipelineType_Count];       //Currently bound pipelines
+
+	//Bindful: table state set by BindDescriptorTable, emitted lazily at the work ops.
+	//defaultDescriptorsDirty means a custom layout bind disturbed the default table's sets, so the next work
+	// op on a default layout pipeline has to rebind them.
+
+	//Bindful: heap and table state set by the bind commands, emitted lazily at the work ops.
+	//The heap has nothing to emit on Vulkan today (a descriptor heap is a pool), but the state is recorded so
+	// VK_EXT_descriptor_heap can map the explicit bind directly later.
+	//defaultDescriptorsBound starts false: the default sets only bind at the first work op that runs a
+	// default layout pipeline, so a purely bindful frame never pays for them.
+
+	RefPtr *boundDescriptorTable;
+	RefPtr *boundDescriptorHeap;
+
+	//Push constants are re-emitted per bind point, because a pipeline layout change invalidates them and
+	// the three bind points each carry their own set
+
+	U8 pushConstantData[128];
+	U8 pushConstantSize;
+	U8 pushConstantsEmitted[3];               //Per bind point: compute, graphics, rt
+	U8 padding2[4];
+	RefPtr *lastBoundTable[3];
+	VkPipelineLayout lastBoundLayout[3];
+
+	//What the constants were last pushed against, per bind point. Emitted alone can't answer it: a pipeline
+	//layout change invalidates push constants, and a layout without bindings never touches lastBoundLayout.
+
+	VkPipelineLayout lastPushLayout[3];
+
+	//Push descriptors travel with the command buffer the same way, and a layout switch invalidates them too.
+
+	Descriptor pushDescriptors[OXC3_MAX_PUSH_DESCRIPTORS];
+	U8 pushDescriptorCount;
+	U8 pushDescriptorsEmitted[3];             //Per bind point: compute, graphics, rt
+	U8 padding4[4];
+	VkPipelineLayout lastPushDescLayout[3];
+
+	Bool defaultDescriptorsBound;
+	U8 padding0[15];
 
 	F32x4 blendConstants, tempBlendConstants;
 

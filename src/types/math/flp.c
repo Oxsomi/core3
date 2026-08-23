@@ -175,6 +175,14 @@ static inline U64 EFloatType_convertExponent(
 
 		I64 cvt = (I64)exponent - (EFloatType_exponentMask(type1) >> 1);
 		cvt += EFloatType_exponentMask(type2) >> 1;
+
+		//The carry has to land here too, exactly as it does for equal exponents above and for truncation below.
+		//Widening the exponent while NARROWING the mantissa can still round up and overflow it,
+		// and dropping that increment halves the value:
+		// 7.997 F16 -> BF16 came out as 4, 31.999 FP24 -> TF19 as 16. It cannot overflow into Inf here,
+		// the destination has more exponent bits than the source, so a finite source is nowhere near its top.
+
+		cvt += carry;
 		return (U64)cvt;
 	}
 
@@ -318,6 +326,12 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 		#endif
 
 	#endif
+
+	//A negative going to an unsigned type has to CLAMP:
+	// signMask is 0 there, so without this the magnitude would convert cleanly and -3.5 would arrive as +3.5.
+
+	if (!EFloatType_hasSign(conversionType) && EFloatType_sign(type, v))
+		return 0;
 
 	const U64 sign = EFloatType_sign(type, v) ? EFloatType_signMask(conversionType) : 0;
 

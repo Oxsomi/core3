@@ -57,20 +57,38 @@ static const C8 *VkGraphicsInstance_loaderName() {
 }
 
 GraphicsObjectSizes VkGraphicsObjectSizes = {
-	.blas = sizeof(VkBLAS),
-	.tlas = sizeof(VkTLAS),
-	.pipeline = sizeof(VkPipeline) + 8,             //Align to 16
-	.sampler = sizeof(VkSampler) + 8,               //Align to 16
-	.buffer = sizeof(VkDeviceBuffer),
-	.image = sizeof(VkUnifiedTexture),
-	.swapchain = sizeof(VkSwapchain),
-	.device = sizeof(VkGraphicsDevice),
-	.instance = sizeof(VkGraphicsInstance),
-	.descriptorLayout = sizeof(VkDescriptorLayout),
-	.descriptorTable = sizeof(VkDescriptorTable),
-	.descriptorHeap = sizeof(VkDescriptorHeap),
-	.pipelineLayout = sizeof(VkPipelineLayout) + 8  //Align to 16
+	.blas = GraphicsObjectSize_create(VkBLAS),
+	.tlas = GraphicsObjectSize_create(VkTLAS),
+	.opacityMicromap = GraphicsObjectSize_create(VkOpacityMicromap),
+	.pipeline = GraphicsObjectSize_createPadded(VkPipeline, 8),             //Align to 16
+	.sampler = GraphicsObjectSize_createPadded(VkSampler, 8),               //Align to 16
+	.buffer = GraphicsObjectSize_create(VkDeviceBuffer),
+	.image = GraphicsObjectSize_create(VkUnifiedTexture),
+	.swapchain = GraphicsObjectSize_create(VkSwapchain),
+	.device = GraphicsObjectSize_create(VkGraphicsDevice),
+	.instance = GraphicsObjectSize_create(VkGraphicsInstance),
+	.descriptorLayout = GraphicsObjectSize_create(VkDescriptorLayout),
+	.descriptorTable = GraphicsObjectSize_create(VkDescriptorTable),
+	.descriptorHeap = GraphicsObjectSize_create(VkDescriptorHeap),
+	.pipelineLayout = GraphicsObjectSize_createPadded(VkPipelineLayout, 8)  //Align to 16
 };
+
+//The packing above gives the size 24 bits and the alignment a byte, which is far more than any of these need;
+//this is here so that stops being an assumption.
+
+static_assert(
+	sizeof(VkGraphicsDevice) < (1 << 24) && sizeof(VkGraphicsInstance) < (1 << 24) &&
+	sizeof(VkSwapchain) < (1 << 24) && alignof(VkUnifiedTexture) <= 255 && alignof(VkGraphicsDevice) <= 255,
+	"A Vulkan extension struct outgrew the size or alignment GraphicsObjectSize can pack"
+);
+
+//TextureRef_getImplExt hands back a void*, so it rounds to a cache line rather than to the alignment of a
+//struct it can't name. That covers everything today; this is here so it stops being an assumption.
+
+static_assert(
+	alignof(VkSwapchain) <= 64 && alignof(VkUnifiedTexture) <= 64,
+	"A Vulkan texture extension struct needs more than the cache line TextureRef_getImplExt rounds to"
+);
 
 #ifndef GRAPHICS_API_DYNAMIC
 	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api) {
@@ -91,6 +109,10 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 			.blasInit = VkBLAS_init,
 			.blasFlush = VkBLASRef_flush,
 			.blasFree = VkBLAS_free,
+
+			.opacityMicromapInit = VkOpacityMicromap_init,
+			.opacityMicromapFlush = VkOpacityMicromapRef_flush,
+			.opacityMicromapFree = VkOpacityMicromap_free,
 
 			.tlasInit = VkTLAS_init,
 			.tlasFlush = VkTLASRef_flush,
@@ -568,16 +590,32 @@ U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsNam
 const C8 *optExtensionsName[] = {
 
 	"VK_KHR_performance_query",      "VK_KHR_ray_tracing_pipeline",   "VK_KHR_ray_query",
-	"VK_KHR_acceleration_structure", "VK_NV_ray_tracing_motion_blur", "VK_NV_ray_tracing_invocation_reorder",
+	"VK_KHR_acceleration_structure", "VK_KHR_fragment_shader_barycentric",
+
+	//The cross vendor SER extension, not the NV one: the shader stack emits SPV_EXT_shader_invocation_reorder,
+	// which is what this extension licenses.
+	//The NV extension's SPIR-V requirement is the NV form with its own opcode numbering,
+	// which OxC3 deliberately doesn't emit.
+	//Deliberately NO NV fallback for older SDKs either: enabling the NV device extension can't run the EXT
+	// SPIR-V this engine ships, so it would claim a feature every shader then fails on.
+	//The string itself needs no SDK support; only the feature/property structs do, and those sites simply
+	// skip the query when the SDK lacks them, which leaves the claim unset.
+
+	"VK_EXT_ray_tracing_invocation_reorder",
+
 	"VK_EXT_mesh_shader",            "VK_KHR_fragment_shading_rate",  "VK_KHR_dynamic_rendering",
 	"VK_EXT_opacity_micromap",       "VK_EXT_shader_atomic_float",    "VK_KHR_deferred_host_operations",
 	"VK_NV_ray_tracing_validation",
 
-	#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME
-		"VK_KHR_compute_shader_derivatives",
-	#else
-		"VK_NV_compute_shader_derivatives",
-	#endif
+	//Deliberately the NV extension even where the SDK has the KHR one.
+	//The only thing that consumes this is SPIR-V produced by DXC, and DXC declares
+	// SPV_NV_compute_shader_derivatives, whose requirement is VK_NV_compute_shader_derivatives specifically.
+	//Enabling the KHR device extension does not satisfy that, so a ddx in a compute shader was rejected at
+	// vkCreateShaderModule while the device still advertised the feature.
+	//A device exposing only the KHR extension therefore doesn't get the bit, which is the right answer: DXC
+	// can't emit anything such a device could run either.
+
+	"VK_NV_compute_shader_derivatives",
 
 	"VK_KHR_maintenance4",        "VK_KHR_buffer_device_address", "VK_EXT_descriptor_indexing", "VK_KHR_driver_properties",
 	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8",   "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget",
@@ -588,7 +626,9 @@ const C8 *optExtensionsName[] = {
 	"VK_KHR_pipeline_executable_properties", "VK_KHR_push_descriptor",
 
 	"VK_KHR_create_renderpass2", "VK_KHR_depth_stencil_resolve", "VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls",
-	"VK_KHR_maintenance5"
+	"VK_KHR_maintenance5",
+
+	"VK_KHR_opacity_micromap", "VK_KHR_device_address_commands"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -827,12 +867,17 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR
 		);
 
-		getDeviceProperties(
-			optExtensions[EOptExtensions_RayReorder],
-			VkPhysicalDeviceRayTracingInvocationReorderPropertiesNV,
-			rayReorderProp,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_NV
-		);
+		//No NV fallback: an SDK without the EXT structs can't claim RayReorder at all (the EXT SPIR-V the
+		// engine emits wouldn't run on the NV extension), so the properties just stay zeroed.
+
+		#ifdef VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME
+			getDeviceProperties(
+				optExtensions[EOptExtensions_RayReorder],
+				VkPhysicalDeviceRayTracingInvocationReorderPropertiesEXT,
+				rayReorderProp,
+				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_EXT
+			);
+		#endif
 
 		getDeviceProperties(
 			optExtensions[EOptExtensions_Bindless],
@@ -978,25 +1023,32 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR
 		);
 
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayMotionBlur],
-			VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
-			rayMotionBlurFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV
-		);
+		//No NV fallback here either: a zeroed feature struct is what keeps the claim honest on older SDKs.
 
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayReorder],
-			VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV,
-			rayReorderFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV
-		);
+		#ifdef VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME
+			getDeviceFeatures(
+				optExtensions[EOptExtensions_RayReorder],
+				VkPhysicalDeviceRayTracingInvocationReorderFeaturesEXT,
+				rayReorderFeat,
+				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_EXT
+			);
+		#endif
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_RayMicromapOpacity],
 			VkPhysicalDeviceOpacityMicromapFeaturesEXT,
 			rayOpacityMicroFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT
+		);
+
+		//The KHR promotion is queried independently: a device may expose either or both, and which one answers
+		// decides the struct vk_blas.c chains and whether 8-bit OMM indices are legal.
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayMicromapOpacityKHR] && optExtensions[EOptExtensions_DeviceAddressCommands],
+			VkPhysicalDeviceOpacityMicromapFeaturesKHR,
+			rayOpacityMicroFeatKhr,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_KHR
 		);
 
 		getDeviceFeatures(
@@ -1025,6 +1077,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR,
 			rayPositionFetchFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_POSITION_FETCH_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_Barycentrics],
+			VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR,
+			fragBaryFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_FEATURES_KHR
 		);
 
 		getDeviceFeatures(
@@ -1448,8 +1507,24 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(rtValidation.rayTracingValidation)
 			capabilities.features |= EGraphicsFeatures_RayValidation;
 
-		if(computeDeriv.computeDerivativeGroupLinear)
+		//Both derivative group modes count, since which one a shader needs is DXC's choice rather than ours:
+		// it emits the quad group for an even 2D thread group and the linear group otherwise.
+		//Reading only the linear flag would advertise the feature to a shader that ends up needing quads.
+
+		//BOTH derivative group modes are required, because which one a shader needs is DXC's choice,
+		// it emits the quad group for an even 2D thread group and the linear group otherwise.
+		//Granting on either mode alone makes vkCreateDevice fail with VK_ERROR_FEATURE_NOT_PRESENT on any device
+		// supporting just one, which loses the whole device rather than only derivatives,
+		// so this must stay an AND to match the request.
+
+		if(computeDeriv.computeDerivativeGroupLinear && computeDeriv.computeDerivativeGroupQuads)
 			capabilities.features |= EGraphicsFeatures_ComputeDeriv;
+
+		//Not gated on raytracing either:
+		// barycentrics is a fragment-shader feature.
+
+		if(fragBaryFeat.fragmentShaderBarycentric)
+			capabilities.features |= EGraphicsFeatures_Barycentrics;
 
 		//Cooperative vectors/matrix (linalg) aren't gated on raytracing, so set them here rather than in the RT block.
 		//Base tier of each is FP16 + INT8; CoopFP8 is the additive FP8 tier; training exposes the outer-product/reduce ops.
@@ -1553,30 +1628,40 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 					capabilities.features |= EGraphicsFeatures_Raytracing;
 
-					if(rayMotionBlurFeat.rayTracingMotionBlur)
-						capabilities.features |= EGraphicsFeatures_RayMotionBlur;
-
-					//Indirect must allow motion blur too (if it's enabled)
-
-					if(
-						rayMotionBlurFeat.rayTracingMotionBlur &&
-						!rayMotionBlurFeat.rayTracingMotionBlurPipelineTraceRaysIndirect
-					)
-						capabilities.features &= ~EGraphicsFeatures_RayMotionBlur;
-
 					//RayReorder = the SER API is available (valid to call, possibly a no-op).
 					//RayReorderActual = the driver hints it actually reorders, so it's worth restructuring shaders for.
 
-					if(rayReorderFeat.rayTracingInvocationReorder) {
+					//The EXT device extension (requested above where the SDK has it) licenses exactly the
+					// SPV_EXT_shader_invocation_reorder form the shader stack emits: the module validates, the
+					// pipeline builds, and a record + reorder + invoke trace runs correctly (Shaders/raysSer).
+					//The old oxc::HitObject struct wrapper in extension.RayReorder.hlsli device-losted on SPIR-V,
+					// since it embedded the opaque hit object type in a composite.
+					//oxc::HitObject is now a bare typedef with C-style free functions, so that failure mode is gone.
 
-						capabilities.features |= EGraphicsFeatures_RayReorder;
+					//The query macros above declare rayReorderFeat/Prop, so this block only exists when the SDK
+					// has the EXT types; an older SDK never claims RayReorder at all.
 
-						if(rayReorderProp.rayTracingInvocationReorderReorderingHint)
-							capabilities.features2 |= EGraphicsFeatures2_RayReorderActual;
-					}
+					#ifdef VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME
+						if(rayReorderFeat.rayTracingInvocationReorder) {
 
-					if(rayOpacityMicroFeat.micromap)
+							capabilities.features |= EGraphicsFeatures_RayReorder;
+
+							if(rayReorderProp.rayTracingInvocationReorderReorderingHint)
+								capabilities.features2 |= EGraphicsFeatures2_RayReorderActual;
+						}
+					#endif
+
+					if(rayOpacityMicroFeat.micromap || rayOpacityMicroFeatKhr.micromap)
 						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
+
+					//KHR is preferred when the device offers it.
+					//It would also be the only VK path where 8-bit OMM indices are legal (VUID 11570 vs the EXT
+					// VUID 10719), but RayMicromapOpacityU8 deliberately stays UNCLAIMED here: the KHR side isn't
+					// implemented yet (micromap arrays refuse, the attach never ran on a real driver), and a
+					// capability must not outrun its implementation.
+
+					if(rayOpacityMicroFeatKhr.micromap)
+						capabilities.featuresExt |= EVkGraphicsFeatures_OpacityMicromapKHR;
 
 					if(rayPositionFetchFeat.rayTracingPositionFetch)
 						capabilities.features |= EGraphicsFeatures_RayTriPosition;

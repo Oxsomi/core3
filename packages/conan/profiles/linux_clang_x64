@@ -1,9 +1,10 @@
+{% set _detected, detectedVersion, _exe = detect_api.detect_clang_compiler() %}
 [settings]
 os=Linux
 compiler=clang
 compiler.cppstd=gnu17
 compiler.cstd=gnu17
-compiler.version=18
+compiler.version={{ detect_api.default_compiler_version("clang", detectedVersion) }}
 compiler.libcxx=libstdc++11
 arch=x86_64
 

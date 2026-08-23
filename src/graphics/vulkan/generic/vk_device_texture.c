@@ -483,18 +483,35 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
 	const U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
 	//Any texture type can be pulled, so only the unified base is safe to use here.
-	//Stencil bearing formats never get this far, which is what makes the single DEPTH aspect correct.
 
 	const UnifiedTexture utex = TextureRef_getUnifiedTexture(resource, NULL);
 	VkUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(resource, Vk, 0);
 	VkDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->stagingReadback), Vk);
 
-	const VkImageAspectFlags aspect = utex.depthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+	//The copy reads ONE plane, the one the range asks for: plane 1 is the stencil of a combined format,
+	// plane 0 is the first plane (depth, or the stencil of a stencil only format).
+	//The layout transition is a different matter: a barrier on a combined depth stencil image must name every
+	// aspect the image has, so the barrier aspect covers both planes even when the copy touches one.
+
+	const EDepthStencilFormat dsFormat = (EDepthStencilFormat) utex.depthFormat;
+	const U8 pullPlane = (U8) range->planeId;
+
+	const VkImageAspectFlags copyAspect =
+		!utex.depthFormat ? VK_IMAGE_ASPECT_COLOR_BIT : (
+			pullPlane || !EDepthStencilFormat_hasDepth(dsFormat) ?
+			VK_IMAGE_ASPECT_STENCIL_BIT : VK_IMAGE_ASPECT_DEPTH_BIT
+		);
+
+	const VkImageAspectFlags barrierAspect =
+		!utex.depthFormat ? VK_IMAGE_ASPECT_COLOR_BIT : (
+			(EDepthStencilFormat_hasDepth(dsFormat) ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
+			(EDepthStencilFormat_hasStencil(dsFormat) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0)
+		);
 
 	VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
 
 	VkImageSubresourceRange subresourceRange = (VkImageSubresourceRange) {
-		.aspectMask = aspect,
+		.aspectMask = barrierAspect,
 		.levelCount = 1,
 		.layerCount = 1
 	};
@@ -533,7 +550,7 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
 	U8 alignX = 1, alignY = 1;
 
 	if(utex.depthFormat)
-		blockSize = EDepthStencilFormat_getBytes((EDepthStencilFormat) utex.depthFormat);
+		blockSize = EDepthStencilFormat_getPullBytes(dsFormat, pullPlane);
 
 	else {
 		const ETextureFormat format = ETextureFormatId_unpack[utex.textureFormatId];
@@ -550,7 +567,7 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
 		.bufferOffset = stagingOffset,
 		.bufferRowLength = (U32) pitchTexels,
 		.bufferImageHeight = imageHeight,
-		.imageSubresource = (VkImageSubresourceLayers) { .aspectMask = aspect, .layerCount = 1 },
+		.imageSubresource = (VkImageSubresourceLayers) { .aspectMask = copyAspect, .layerCount = 1 },
 		.imageOffset = (VkOffset3D) { .x = range->startRange[0], .y = range->startRange[1], .z = range->startRange[2] },
 		.imageExtent = (VkExtent3D) {
 			TextureRange_width(*range), h, TextureRange_length(*range)

@@ -101,12 +101,38 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 typedef enum ECompareOp ECompareOp;
 
 typedef struct VkBLAS {
+
 	VkAccelerationStructureGeometryKHR geometry;
 	VkAccelerationStructureBuildGeometryInfoKHR geometries;
 	VkAccelerationStructureBuildRangeInfoKHR range;
 	VkAccelerationStructureKHR as;
+
+	//The triangle data CHAINS one of these rather than containing it, so it has to live as long as the
+	//  geometry desc and cannot sit on the stack of the function that fills it in.
+	//A union because a device runs exactly one of the two opacity micromap extensions: the KHR promotion
+	// where the driver has it, the EXT original otherwise (EVkGraphicsFeatures_OpacityMicromapKHR says
+	// which), and the structs are NOT layout compatible (EXT carries usage counts the KHR one moved to the
+	// micromap array's own build).
+	//Only used when the BLAS carries an OMM index buffer; pNext stays NULL otherwise.
+
+	union {
+		VkAccelerationStructureTrianglesOpacityMicromapEXT ommTrianglesExt;
+		VkAccelerationStructureTrianglesOpacityMicromapKHR ommTrianglesKhr;
+	};
+
 	U64 padding;
 } VkBLAS;
+
+TListNamed(VkMicromapUsageEXT, ListVkMicromapUsageEXT);
+
+//The usages have to be re-supplied to every BLAS that links this micromap, so the API shaped copy is built
+// once at create and kept, rather than rebuilt per BLAS.
+
+typedef struct VkOpacityMicromap {
+	VkMicromapBuildInfoEXT build;
+	VkMicromapEXT micromap;
+	ListVkMicromapUsageEXT usages;
+} VkOpacityMicromap;
 
 typedef struct VkTLAS {
 	VkAccelerationStructureGeometryKHR geometry;

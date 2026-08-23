@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -59,4 +58,3 @@ R"(
 #ifdef __OXC_EXT_COOPMAT
 	#include "@extension.CoopMat.hlsli"
 #endif
-)"

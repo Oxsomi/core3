@@ -141,10 +141,24 @@ static inline U64 AllocationBufferBlock_getAligned(AllocationBufferBlock block) 
 	return AllocationBufferBlock_alignTo(AllocationBufferBlock_getStart(block), block.alignment);
 }
 
+//A virtual AllocationBuffer has no memory behind it: its base is NULL and the addresses it hands back are
+// really offsets into a heap that lives somewhere else, which is the whole point of Buffer_createVirtualRefConst.
+//Offsetting a null pointer is undefined even by zero, and every allocation here offsets the base, so the
+// arithmetic goes through integers and converts back once at the end.
+//Converting a pointer to an integer is implementation defined rather than undefined, which is what makes this
+// well defined where the plain pointer arithmetic it replaces was not.
+
+static inline U64 AllocationBuffer_addr(const U8 *ptr) { return (U64)(const void*) ptr; }
+
+static inline const U8 *AllocationBuffer_at(const U8 *base, U64 offset) {
+	return (const U8*)(AllocationBuffer_addr(base) + offset);
+}
+
 static inline Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, const U8 *start, const U8 *ptr) {
 	const U64 blockStart = AllocationBufferBlock_getStart(block);
 	const U64 aligned = AllocationBufferBlock_getAligned(block);
-	return ptr == start + blockStart || ptr == start + aligned;
+	const U64 base = AllocationBuffer_addr(start), loc = AllocationBuffer_addr(ptr);
+	return loc == base + blockStart || loc == base + aligned;
 }
 
 Bool AllocationBuffer_allocateAndFillBlock(
@@ -249,7 +263,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 
 		gotoIfError3(clean, ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc, e_rr));
 
-		*result = allocationBuffer->buffer.ptr + lastAlign;
+		*result = AllocationBuffer_at(allocationBuffer->buffer.ptr, lastAlign);
 		goto clean;
 	}
 
@@ -273,7 +287,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 
 		gotoIfError3(clean, ListAllocationBufferBlock_pushFront(&allocationBuffer->allocations, v, alloc, e_rr));
 
-		*result = allocationBuffer->buffer.ptr + AllocationBufferBlock_getStart(v);
+		*result = AllocationBuffer_at(allocationBuffer->buffer.ptr, AllocationBufferBlock_getStart(v));
 		goto clean;
 	}
 
@@ -322,7 +336,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 				b->startAndNonLinearAndFree &= ~((U64)3 << 62);
 				b->startAndNonLinearAndFree |= (U64) isNonLinearResource << 62;
 				b->alignment = nextAlignment;
-				*result = allocationBuffer->buffer.ptr + aligned;
+				*result = AllocationBuffer_at(allocationBuffer->buffer.ptr, aligned);
 				goto clean;
 			}
 
@@ -351,7 +365,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 				v.alignment = alignment;
 
 				allocationBuffer->allocations.ptrNonConst[i] = v;
-				*result = allocationBuffer->buffer.ptr + aligned;
+				*result = AllocationBuffer_at(allocationBuffer->buffer.ptr, aligned);
 				goto clean;
 			}
 
@@ -379,7 +393,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 			v.end = aligned + size;
 
 			allocationBuffer->allocations.ptrNonConst[i + spaceLeft] = v;
-			*result = allocationBuffer->buffer.ptr + aligned;
+			*result = AllocationBuffer_at(allocationBuffer->buffer.ptr, aligned);
 			goto clean;
 		}
 	}
@@ -396,11 +410,13 @@ void AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 	if(!allocationBuffer)
 		return;
 
-	if(
-		ptr < allocationBuffer->buffer.ptr ||
-		ptr >= allocationBuffer->buffer.ptr + Buffer_length(allocationBuffer->buffer) ||
-		!allocationBuffer->allocations.length
-	)
+	//Same reason as the helpers above: a virtual buffer's base is NULL, so this is a range check on offsets.
+	//A ptr below the base underflows to a huge offset and still fails the length test, which is the answer the
+	// two sided pointer comparison gave, so the invalid-ptr no-ops behave exactly as before.
+
+	const U64 offset = AllocationBuffer_addr(ptr) - AllocationBuffer_addr(allocationBuffer->buffer.ptr);
+
+	if(offset >= Buffer_length(allocationBuffer->buffer) || !allocationBuffer->allocations.length)
 		return;
 
 	//Middle block somewhere possibly, we have to find it first

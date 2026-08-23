@@ -18,12 +18,25 @@
 *  This is called dual licensing.
 */
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 
-//The pixel color comes from the app data, so the readback can prove this exact submit produced it.
+//Per dispatch data this shader reads, declared as a push constant.
+//The colour occupied U32 slots 4..7 and the two logic op sources 8..11 and 12..15, which is why this block
+//keeps all three: one setPushConstants feeds whichever pixel shader is bound.
+
+struct PixelPush {
+	U32 padding0, padding1, padding2, padding3;
+	F32 colorR, colorG, colorB, colorA;
+	U32 logicSrc0R, logicSrc0G, logicSrc0B, logicSrc0A;
+	U32 logicSrc1R, logicSrc1G, logicSrc1B, logicSrc1A;
+};
+
+PUSH_CONSTANT PixelPush _push;
+
+//The pixel color comes from the push constant, so the readback can prove this exact submit produced it.
 //App data: [4..7] = color as F32x4.
 
 [shader("pixel")]
 F32x4 main(F32x4 pos : SV_POSITION) : SV_TARGET {
-	return getAppData4f(4);
+	return F32x4(_push.colorR, _push.colorG, _push.colorB, _push.colorA);
 }

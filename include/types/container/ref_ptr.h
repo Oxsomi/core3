@@ -34,13 +34,28 @@
 
 typedef void (*ObjectFreeFunc)(void *ptr, const Allocator *allocator);
 
+//The same callback for another language, whose signature mentions no struct type on purpose.
+//A wrapper's callback is compiled in its own language, where Allocator is only reachable under a namespace
+// and is therefore a DIFFERENT type to RefPtr_dec calling it, which -fsanitize=function reports as a call
+// through an incorrect function type even though the two are identical at the ABI level.
+//See JobInvoke in job_queue.h and CompareInvoke in algorithm.h for the same shape on the other callbacks.
+//The allocator is the same pointer free would have received, so cast it back on arrival.
+
+typedef void (*ObjectFreeInvoke)(void *ptr, const void *allocator);
+
 typedef U32 TypeId;
 
 typedef struct RefPtrType {
+
 	TypeId typeId;
 	U32 lengthAndAlignment;        //Pack with RefPtrType_pack, read with RefPtrType_length / _alignment
 	const Allocator *alloc;
 	ObjectFreeFunc free;
+
+	//Set this INSTEAD of free from another language; RefPtr_dec prefers it when both are present.
+
+	ObjectFreeInvoke freeInvoke;
+
 } RefPtrType;
 
 //Alignment goes in the upper U8 as its log2, so it costs nothing next to the length rather than another field.

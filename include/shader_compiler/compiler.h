@@ -311,7 +311,7 @@ Bool Compiler_link(
 );
 
 Bool Compiler_finalizeEntrypoint(       //Push reflection data into final entrypoint
-	U32 localSize[3],                   //If compute-adj (workgraph, mesh shaders too) the local size per group
+	U32 localSize[3],                   //If compute-adj (mesh shaders too) the local size per group
 	U8 payloadSize,                     //If miss/hit/callable, the payload size that gets transmitted (bytes)
 	U8 intersectSize,                   //If intersection/hit shader, size of intersection attributes (generally 8 bytes)
 	U16 waveSize,                       //4 pairs of log2(thread) + 1 where 0 = none. req, min, max, rec

@@ -22,6 +22,7 @@
 
 #pragma once
 #include "graphics/generic/command_structs.h"
+#include "graphics/generic/descriptor_table.h"
 #include "types/math/vec4.h"
 
 #ifdef __cplusplus
@@ -91,6 +92,36 @@ Bool CommandListRef_setRaytracingPipeline(CommandListRef *commandList, PipelineR
 
 Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, const SetPrimitiveBuffersCmd *buffers, Error *e_rr);
 
+//Binds a descriptor table (bindful): pipelines with a custom pipeline layout read their descriptors from it.
+//This only SETS state: the work ops (draw/dispatch/dispatchRays) are what validate that the bound table's
+// layout matches the bound pipeline's layout, so bind order never matters.
+//Pipelines using the device's default (bindless) layout ignore it entirely.
+//The table is kept alive by the command list; the resources its descriptors point at follow the usual
+// rules (maintainRef or caller kept), and scope transitions for them stay the caller's job for now.
+
+Bool CommandListRef_bindDescriptorTable(CommandListRef *commandList, DescriptorTableRef *table, Error *e_rr);
+
+//Binds a descriptor heap (bindful): any descriptor table bound after this has to belong to it.
+//Explicit on purpose: switching heaps can stall the GPU (notably D3D12), so the cost has to be visible in
+// the recording rather than implied by whichever table was bound. The work ops validate that the bound
+// table's parent is exactly this heap.
+
+Bool CommandListRef_bindDescriptorHeap(CommandListRef *commandList, DescriptorHeapRef *heap, Error *e_rr);
+
+//Writes the push constants the next work op will run with (bindful).
+//The data has to be exactly the size the bound pipeline's layout declared: the range is one object to the
+// backends, so writing part of it would leave the rest holding whatever the previous pipeline left there.
+//Like the binds above this only sets state; the work ops validate it against the pipeline actually bound.
+
+Bool CommandListRef_setPushConstants(CommandListRef *commandList, Buffer data, Error *e_rr);
+
+//Writes every push descriptor the bound pipeline's layout declares, in the layout's own binding order
+//(the order detectLayoutFromEntry/Entries produced into pushDescriptorInfo, whose bindingNames name them).
+//All of them at once rather than one at a time: a partial set would leave the rest pointing at whatever the
+//last pipeline bound, and both backends emit the whole set anyway.
+
+Bool CommandListRef_setPushDescriptors(CommandListRef *commandList, const ListDescriptor *descriptors, Error *e_rr);
+
 Bool CommandListRef_draw(CommandListRef *commandList, const DrawCmd *draw, Error *e_rr);
 
 Bool CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount, Error *e_rr);
@@ -159,10 +190,16 @@ Bool CommandListRef_dispatch3DRaysExt(
 //Raytracing feature
 
 typedef RefPtr TLASRef;
+typedef RefPtr OpacityMicromapRef;
 typedef RefPtr BLASRef;
 
 Bool CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas, Error *e_rr);
 Bool CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr);
+
+//Builds an opacity micromap, which has to be recorded before any BLAS build that links it.
+//A micromap has no update mode, so recording it again after it completed is a no-op.
+
+Bool CommandListRef_updateOmmExt(CommandListRef *commandList, OpacityMicromapRef *micromap, Error *e_rr);
 
 //DynamicRendering feature
 

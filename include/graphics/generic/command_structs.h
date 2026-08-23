@@ -22,6 +22,7 @@
 
 #pragma once
 #include "types/math/vec2.h"
+#include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "graphics/generic/resource.h"
 
@@ -33,6 +34,8 @@ typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr PipelineRef;
 typedef RefPtr DepthStencilRef;
 typedef RefPtr DeviceBufferRef;
+typedef RefPtr DescriptorTableRef;
+typedef RefPtr DescriptorHeapRef;
 
 typedef enum ECommandOp {
 
@@ -85,7 +88,17 @@ typedef enum ECommandOp {
 	ECommandOp_DispatchRaysExt,
 	ECommandOp_SetRaytracingPipelineExt,
 	ECommandOp_UpdateBLASExt,
-	ECommandOp_UpdateTLASExt
+	ECommandOp_UpdateTLASExt,
+	ECommandOp_UpdateOmmExt,
+
+	//Bindful: set descriptor state; backends emit the actual binds lazily at the work op.
+	//The heap bind is a separate EXPLICIT command because switching heaps is expensive on some hardware
+	// (D3D12 can stall the GPU), so it must be visible in the recording rather than implied by a table.
+
+	ECommandOp_BindDescriptorTable,
+	ECommandOp_BindDescriptorHeap,
+	ECommandOp_SetPushConstants,
+	ECommandOp_SetPushDescriptors
 
 } ECommandOp;
 
@@ -116,13 +129,41 @@ typedef enum ETransitionType {
 	ETransitionType_KeepAlive            //If the only reason of this transition is to keep a resource alive
 } ETransitionType;
 
+//Push constant payload. Fixed size rather than variable: payloads are packed back to back with no padding
+//between them, so an odd sized one would misalign the typed reads that later ops perform on their own data.
+//144 bytes keeps the 16 byte payload convention the other commands hold to, so every following payload stays
+//as aligned as the buffer itself.
+
+typedef struct SetPushConstantsCmd {
+
+	U32 size;
+	U32 padding[3];
+
+	U8 data[128];
+
+} SetPushConstantsCmd;
+
+//Push descriptor payload. Variable length: a 16 byte header followed by exactly count Descriptors, which
+//keeps the whole payload a multiple of 16 (a Descriptor is 32 bytes) without a fixed worst case in every
+//command. The count rides in the header so the backends can find the array without an opSize.
+//How many there can be is OXC3_MAX_PUSH_DESCRIPTORS, in descriptor_layout.h.
+
+typedef struct SetPushDescriptorsCmd {
+
+	U32 count;
+	U32 padding[3];
+
+	//Descriptor descriptors[count];
+
+} SetPushDescriptorsCmd;
+
 typedef struct TransitionInternal {      //Transitions issued by a scope.
 
 	RefPtr *resource;                    //Swapchain, RenderTexture, DepthStencil, DeviceBuffer, DeviceTexture, Sampler
 
 	ResourceRange range;
 
-	EPipelineStage stage;                //First shader stage that will access this resource (if !type)
+	U32 stageMask;                       //Shader stages that will access this resource (if !type), see above
 	ETransitionType type;
 
 } TransitionInternal;

@@ -105,6 +105,36 @@ void Test_CASerializeEmpty(Test *t) {
 		CAFile_free(&ca, t->alloc);
 		CAFile_free(&ca2, t->alloc);
 	}
+
+	//An archive that HAS files, all of them zero length, which is a different case from the empty archive
+	// above: the entry count is non zero, so the read walks the entries, but every length is zero so the
+	// content oiDL allocates no cache and its base stays null.
+	//Reading then range checked each entry against that null base, and the empty archive above never reaches
+	// it because it has no entries to walk at all.
+
+	{
+		CAFile ca = { 0 };
+		CAFile ca2 = { 0 };
+		StreamRef *sr = NULL;
+
+		if (!CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err)) {
+			Test_assert(t, "create ca of empty files", false);
+			goto doneEmptyFiles;
+		}
+
+		//Added but never given data, so each is a loaded, zero length buffer.
+
+		addFile(t, &ca, CAHandle_Root, "a.bin", 0, false);
+		addFile(t, &ca, CAHandle_Root, "b.bin", 0, false);
+
+		Test_assert(t, "write + read empty files", writeAndRead(t, &ca, NULL, &memType, NULL, &sr, &ca2));
+		Test_assert(t, "empty files: fileCount == 2", CAFile_fileCount(&ca2, CAHandle_Root, false) == 2);
+
+	doneEmptyFiles:
+		RefPtr_dec(&sr);
+		CAFile_free(&ca, t->alloc);
+		CAFile_free(&ca2, t->alloc);
+	}
 }
 
 //One file at root, content must survive the round-trip exactly.

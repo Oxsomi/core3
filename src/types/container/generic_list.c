@@ -827,7 +827,7 @@ clean:
 //Uses about 8KB of cache on stack to hopefully sort quite quickly.
 //Does mean that this can only be used for lists < 8KB.
 
-static inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction func) {
+static inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction func, void *context) {
 
 	//for U8[8192] -> U64[1024].
 	//Fits neatly into cache.
@@ -850,7 +850,7 @@ static inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction
 
 		for (; k < j; ++k) {
 
-			if (func(t, tsorted + k * list.stride) != ECompareResult_Lt)        //!isLess
+			if (func(t, tsorted + k * list.stride, context) != ECompareResult_Lt)        //!isLess
 				continue;
 
 			//Move to the right
@@ -879,8 +879,10 @@ static inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction
 //The comparator takes void* to match CompareFunction exactly, so calling it through that pointer isn't a
 // function-type mismatch under -fsanitize=function.
 //It casts back to the real type immediately.
+//The default comparators need no context, but still take it so their type is CompareFunction exactly.
 #define TGenericList_tsort(T)                                                                        \
-ECompareResult sort##T(const void *aRaw, const void *bRaw) {                                         \
+ECompareResult sort##T(const void *aRaw, const void *bRaw, void *context) {                          \
+	(void) context;                                                                                  \
 	const T *a = (const T*) aRaw, *b = (const T*) bRaw;                                              \
 	return *a < *b ? ECompareResult_Lt : (*a > *b ? ECompareResult_Gt : ECompareResult_Eq);          \
 }
@@ -895,7 +897,7 @@ TGenericList_sorts(TGenericList_tsort);
 //Expect F32 sorting to be at least 2x to 5x slower (and F64 even slower).
 //(Profiled on a 3900x)
 
-static inline U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, CompareFunction f) {
+static inline U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, CompareFunction f, void *context) {
 
 	U8 tmp[1024 * 2];        //We only support max of 1024 stride lists. We don't want to allocate
 
@@ -908,8 +910,8 @@ static inline U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, 
 
 	while (true) {
 
-		while(++i < last && f((const U8*)list.ptr + i * list.stride, tmp) == ECompareResult_Lt);
-		while(--j > begin && f((const U8*)list.ptr + j * list.stride, tmp) == ECompareResult_Gt);
+		while(++i < last && f((const U8*)list.ptr + i * list.stride, tmp, context) == ECompareResult_Lt);
+		while(--j > begin && f((const U8*)list.ptr + j * list.stride, tmp, context) == ECompareResult_Gt);
 
 		if(i < j) {
 
@@ -933,36 +935,36 @@ static inline U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, 
 	}
 }
 
-static Bool GenericList_qsortRecurse(GenericList list, U64 begin, U64 end, CompareFunction f) {
+static Bool GenericList_qsortRecurse(GenericList list, U64 begin, U64 end, CompareFunction f, void *context) {
 
 	if(begin >> 63 || end >> 63)
 		return false;
 
 	while(begin < end && end != U64_MAX) {
 
-		const U64 pivot = GenericList_qpartition(list, begin, end, f);
+		const U64 pivot = GenericList_qpartition(list, begin, end, f, context);
 
 		if (pivot == U64_MAX)        //Does return a modified array, but it's not fully sorted
 			return false;
 
 		if ((I64)pivot - begin <= (I64)end - (pivot + 1)) {
-			GenericList_qsortRecurse(list, begin, pivot, f);
+			GenericList_qsortRecurse(list, begin, pivot, f, context);
 			begin = pivot + 1;
 			continue;
 		}
 
-		GenericList_qsortRecurse(list, pivot + 1, end, f);
+		GenericList_qsortRecurse(list, pivot + 1, end, f, context);
 		end = pivot;
 	}
 
 	return true;
 }
 
-static inline Bool GenericList_qsort(GenericList list, CompareFunction f) {
-	return GenericList_qsortRecurse(list, 0, list.length - 1, f);
+static inline Bool GenericList_qsort(GenericList list, CompareFunction f, void *context) {
+	return GenericList_qsortRecurse(list, 0, list.length - 1, f, context);
 }
 
-Bool GenericList_sortCustom(GenericList list, CompareFunction f) {
+Bool GenericList_sortCustom(GenericList list, CompareFunction f, void *context) {
 
 	if(list.length <= 1)
 		return true;
@@ -974,22 +976,24 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction f) {
 		return false;
 
 	if(GenericList_bytes(list) <= 8192)
-		return GenericList_insertionSort8K(list, f);
+		return GenericList_insertionSort8K(list, f, context);
 
-	return GenericList_qsort(list, f);
+	return GenericList_qsort(list, f, context);
 }
 
 #define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) {    \
-	return GenericList_sortCustom(l, sort##T);                           \
+	return GenericList_sortCustom(l, sort##T, NULL);                     \
 }
 
 TGenericList_sorts(TGenericList_sort);
 
-static inline ECompareResult GenericList_compareString(const void *aRaw, const void *bRaw) {
+static inline ECompareResult GenericList_compareString(const void *aRaw, const void *bRaw, void *context) {
+	(void) context;
 	return CharString_compareSensitive((const CharString*) aRaw, (const CharString*) bRaw);
 }
 
-static inline ECompareResult GenericList_compareStringInsensitive(const void *aRaw, const void *bRaw) {
+static inline ECompareResult GenericList_compareStringInsensitive(const void *aRaw, const void *bRaw, void *context) {
+	(void) context;
 	return CharString_compareInsensitive((const CharString*) aRaw, (const CharString*) bRaw);
 }
 
@@ -1000,8 +1004,8 @@ Bool GenericList_sortString(GenericList list, EStringCase stringCase) {
 
 	return
 		stringCase == EStringCase_Insensitive ?
-		GenericList_sortCustom(list, GenericList_compareStringInsensitive) :
-		GenericList_sortCustom(list, GenericList_compareString);
+		GenericList_sortCustom(list, GenericList_compareStringInsensitive, NULL) :
+		GenericList_sortCustom(list, GenericList_compareString, NULL);
 }
 
 Bool GenericList_pushBack(GenericList *list, const Buffer *buf, const Allocator *allocator, Error *e_rr) {

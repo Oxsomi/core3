@@ -31,6 +31,7 @@ typedef union ResourceRange ResourceRange;
 typedef struct Sampler Sampler;
 typedef struct BLAS BLAS;
 typedef struct TLAS TLAS;
+typedef struct OpacityMicromap OpacityMicromap;
 typedef struct Pipeline Pipeline;
 typedef struct Swapchain Swapchain;
 typedef struct CommandList CommandList;
@@ -57,6 +58,7 @@ typedef struct RefPtr RefPtr;
 
 typedef RefPtr BLASRef;
 typedef RefPtr TLASRef;
+typedef RefPtr OpacityMicromapRef;
 typedef RefPtr TextureRef;
 typedef RefPtr DeviceTextureRef;
 typedef RefPtr DeviceBufferRef;
@@ -67,9 +69,13 @@ typedef RefPtr DescriptorTableRef;
 typedef RefPtr DescriptorHeapRef;
 typedef RefPtr PipelineLayoutRef;
 
+//GraphicsObjectSize and its helpers live in graphics_types.h, since texture.h needs them and is included
+//from underneath this header.
+
 typedef struct GraphicsObjectSizes {
-	U32 blas, tlas, pipeline, sampler, buffer, image, swapchain, device, instance;
-	U32 descriptorLayout, descriptorTable, descriptorHeap, pipelineLayout;
+	GraphicsObjectSize blas, tlas, pipeline, sampler, buffer, image, swapchain, device, instance;
+	GraphicsObjectSize descriptorLayout, descriptorTable, descriptorHeap, pipelineLayout;
+	GraphicsObjectSize opacityMicromap;
 } GraphicsObjectSizes;
 
 //Dynamic linking will load the dlls to generate the function tables.
@@ -88,6 +94,13 @@ typedef struct GraphicsObjectSizes {
 #else
 
 	//RTAS
+
+	typedef void (*OpacityMicromap_freeImpl)(OpacityMicromap *micromap);
+	typedef Bool (*OpacityMicromap_initImpl)(OpacityMicromap *micromap, Error *e_rr);
+
+	typedef Bool (*OpacityMicromapRef_flushImpl)(
+		void *commandBuffer, GraphicsDeviceRef *deviceRef, OpacityMicromapRef *pending, Error *e_rr
+	);
 
 	typedef void (*BLAS_freeImpl)(BLAS *blas);
 	typedef Bool (*BLAS_initImpl)(BLAS *blas, Error *e_rr);
@@ -328,6 +341,10 @@ typedef struct GraphicsObjectSizes {
 		BLASRef_flushImpl                                blasFlush;
 		BLAS_freeImpl                                    blasFree;
 
+		OpacityMicromap_initImpl                         opacityMicromapInit;
+		OpacityMicromapRef_flushImpl                     opacityMicromapFlush;
+		OpacityMicromap_freeImpl                         opacityMicromapFree;
+
 		TLAS_initImpl                                    tlasInit;
 		TLASRef_flushImpl                                tlasFlush;
 		TLAS_freeImpl                                    tlasFree;
@@ -411,6 +428,13 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 //Static linking:  These are direct callers to the implementation.
 
 //RTAS
+
+void OpacityMicromap_freeExt(OpacityMicromap *micromap);
+Bool OpacityMicromap_initExt(OpacityMicromap *micromap, Error *e_rr);
+
+Bool OpacityMicromapRef_flushExt(
+	void *commandBuffer, GraphicsDeviceRef *deviceRef, OpacityMicromapRef *pending, Error *e_rr
+);
 
 void BLAS_freeExt(BLAS *blas);
 Bool BLAS_initExt(BLAS *blas, Error *e_rr);

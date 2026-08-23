@@ -42,7 +42,7 @@ struct VSOutput {
 [shader("vertex")]
 VSOutput mainVS(F32x2 pos : TEXCOORD0, F32x2 uv : TEXCOORD1) {
 	
-	U32 orientation = getAppData1u(EResourceBinding_Orientation);
+	U32 orientation = _bindings.orientation;
 
 	VSOutput output = (VSOutput) 0;
 	output.pos = mul(F32x4(pos, 0, 1), F32x4x4_rotateZ(orientation * F32_degToRad));
@@ -53,11 +53,11 @@ VSOutput mainVS(F32x2 pos : TEXCOORD0, F32x2 uv : TEXCOORD1) {
 [shader("pixel")]
 F32x4 mainPS(VSOutput input): SV_TARGET {
 
-	U32 resourceId = getAppData1u(EResourceBinding_ConstantColorBuffer);
+	U32 resourceId = _bindings.constantColorBuffer;
 	F32x3 col = getAtUniform<F32x3>(resourceId, 0);		//Randomly output from compute shader (0 at init)
 
-	Texture2D tex = texture2DUniform(getAppData1u(EResourceBinding_CrabbageCompressed));
-	SamplerState sampler = samplerUniform(getAppData1u(EResourceBinding_Sampler));
+	Texture2D tex = texture2DUniform(_bindings.crabbageCompressed);
+	SamplerState sampler = samplerUniform(_bindings.samplerId);
 
 	F32x3 col2 = tex.Sample(sampler, input.uv).rgb;
 

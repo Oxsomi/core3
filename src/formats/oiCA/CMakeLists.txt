@@ -33,19 +33,13 @@ target_link_libraries(OxC3_formats_oiCA PUBLIC OxC3_types_base OxC3_types_math O
 
 if(EnableTests AND OxC3TestExecutables)
 
-	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
-	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
+	include(../../../cmake/oxc3.cmake)
 
-	add_executable(
-		OxC3_formats_oiCA_test
-		${testsC}
-		${testsH}
-		CMakeLists.txt
+	oxc3_add_test(
+		NAME     OxC3_formats_oiCA_test
+		FOLDER   Oxsomi/test/formats
+		LIBS     OxC3_types_container_test_util OxC3_formats_oiCA
+		INCLUDES "../../../include"
 	)
-
-	target_link_libraries(OxC3_formats_oiCA_test PUBLIC OxC3_types_container_test_util OxC3_formats_oiCA)
-	set_target_properties(OxC3_formats_oiCA_test PROPERTIES FOLDER Oxsomi/test/formats)
-	target_include_directories(OxC3_formats_oiCA_test PUBLIC "../../../include")
-	add_test(NAME OxC3_formats_oiCA_test COMMAND OxC3_formats_oiCA_test)
 
 endif()

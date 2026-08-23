@@ -51,7 +51,11 @@ Bool CharString_erase(const CharStringReplaceErase *erase, C8 c, Bool isFirst) {
 
 	const U64 strl = CharString_length(*s);
 
-	Buffer_memcpy(
+	//Closing the gap shifts the tail down by one, so source and destination are the same allocation one byte
+	// apart and overlap everywhere but the last byte.
+	//memcpy is undefined on overlapping ranges, so this has to be the move.
+
+	Buffer_memmove(
 		Buffer_createRef((U8 *)s->ptr + find, strl - find - 1),
 		Buffer_createRefConst(s->ptr + find + 1, strl - find - 1)
 	);

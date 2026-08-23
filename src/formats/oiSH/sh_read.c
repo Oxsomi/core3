@@ -178,8 +178,13 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	const BinaryInfoFixedSize *fixedBinaryInfo = (const BinaryInfoFixedSize*) staticBuf.ptr;
 	const EntryInfoFixedSize *fixedEntryInfo    = (const EntryInfoFixedSize*) (fixedBinaryInfo + header.binaryCount);
-	const U32 *includeFileCrc32c                = (const U32*) (fixedEntryInfo + header.stageCount);
-	const U8 *arrayDims                         = (const U8*) (includeFileCrc32c + header.includeFileCount);
+	//The sections behind the fixed-size structs are byte-packed, so a U32 here sits at whatever offset the
+	// entry array ended on and an odd stageCount leaves it 2-aligned.
+	//Reading through a typed pointer would be a misaligned load, so this cursor stays U8 and every element is
+	// memcpy'd out below.
+
+	const U8 *includeFileCrc32c                 = (const U8*) (fixedEntryInfo + header.stageCount);
+	const U8 *arrayDims                         = includeFileCrc32c + sizeof(U32) * header.includeFileCount;
 
 	//Parse array dims
 
@@ -237,8 +242,14 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	for (U32 i = 0; i < header.includeFileCount; ++i) {
 
+		U32 crc32c;
+		Buffer_memcpy(
+			Buffer_createRef(&crc32c, sizeof(crc32c)),
+			Buffer_createRefConst(includeFileCrc32c + sizeof(U32) * i, sizeof(U32))
+		);
+
 		SHInclude inc = (SHInclude) { 0 };
-		inc.crc32c = includeFileCrc32c[i];
+		inc.crc32c = crc32c;
 		inc.relativePath = CharString_createRefStrConst(strings.entryStrings.ptr[includeNameStart + i]);
 
 		gotoIfError3(clean, SHFile_addInclude(shFile, &inc, alloc, e_rr));
@@ -327,10 +338,28 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		gotoIfError3(clean, Buffer_createUninitializedBytes(binaryDataSize, alloc, &tmp, e_rr));
 		gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, tmp, alloc, e_rr));
 
-		const U16 *defineNames = (const U16*)tmp.ptr;
-		const U16 *defineValues = defineNames + binary.defineCount;
-		const SHUniform *uniforms = (const SHUniform *)(defineValues + binary.defineCount);
-		const SHRegister *regs = (const SHRegister *)(uniforms + binary.uniformCount);
+		//A binary with no defines, uniforms and registers asks for zero bytes, and that allocation hands back a
+		// null pointer.
+		//Offsetting a null pointer is undefined even by zero, so the cursors are only derived when there is
+		// something to point at.
+		//Every loop below is bounded by one of those same zero counts.
+
+		//The register records sit at 4 * defineCount + sizeof(SHUniform) * uniformCount into the same packed
+		// section, and sizeof(SHUniform) is six, so an odd uniformCount leaves them 2-aligned while SHRegister
+		// wants four for its U32 bindings.
+		//The register cursor therefore stays U8 and each record is memcpy'd to an aligned local in its loop.
+
+		const U16 *defineNames = NULL;
+		const U16 *defineValues = NULL;
+		const SHUniform *uniforms = NULL;
+		const U8 *regs = NULL;
+
+		if (binaryDataSize) {
+			defineNames = (const U16*)tmp.ptr;
+			defineValues = defineNames + binary.defineCount;
+			uniforms = (const SHUniform *)(defineValues + binary.defineCount);
+			regs = (const U8 *)(uniforms + binary.uniformCount);
+		}
 
 		//Compute uniform data size
 
@@ -425,7 +454,13 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		for (U64 i = 0; i < binary.registerCount; ++i) {
 
-			const SHRegister *reg = &regs[i];
+			SHRegister regCopy;
+			Buffer_memcpy(
+				Buffer_createRef(&regCopy, sizeof(regCopy)),
+				Buffer_createRefConst(regs + sizeof(SHRegister) * i, sizeof(SHRegister))
+			);
+
+			const SHRegister *reg = &regCopy;
 
 			if (reg->nameId >= header.registerNameCount)
 				retError(clean, Error_invalidState(1, "SHFile_read() register nameId out of bounds"));
@@ -592,8 +627,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 			// fallthrough
 
-			case ESHPipelineStage_Compute:
-			case ESHPipelineStage_WorkgraphExt: {
+			case ESHPipelineStage_Compute: {
 
 				SHGroups groups = (SHGroups) { 0 };
 				gotoIfError3(clean, StreamCursor_consume(&cursor, offset, &groups, sizeof(groups), alloc, e_rr));
@@ -603,7 +637,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 				entry.groupZ   = groups.z;
 				entry.waveSize = groups.waveSize;
 
-				if (entry.waveSize && entry.stage != ESHPipelineStage_Compute && entry.stage != ESHPipelineStage_WorkgraphExt)
+				if (entry.waveSize && entry.stage != ESHPipelineStage_Compute)
 					retError(clean, Error_invalidParameter(
 						0, 0, "SHFile_read() waveSize not supported by mesh or task shader"
 					));

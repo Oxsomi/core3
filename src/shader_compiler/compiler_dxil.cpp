@@ -82,7 +82,8 @@ static inline Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtens
 		D3D_SHADER_REQUIRES_WAVE_OPS,
 		//SM6.6 dynamic resources; both heap indexing flags fold into the one DescriptorHeap extension.
 		D3D_SHADER_REQUIRES_RESOURCE_DESCRIPTOR_HEAP_INDEXING,
-		D3D_SHADER_REQUIRES_SAMPLER_DESCRIPTOR_HEAP_INDEXING
+		D3D_SHADER_REQUIRES_SAMPLER_DESCRIPTOR_HEAP_INDEXING,
+		D3D_SHADER_REQUIRES_BARYCENTRICS
 	};
 
 	ESHExtension extensions[] = {
@@ -99,7 +100,8 @@ static inline Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtens
 		ESHExtension_WriteMSTexture,        //ADVANCED_TEXTURE_OPS folded into WriteMSTexture (see above)
 		ESHExtension_SubgroupOperations,
 		ESHExtension_DescriptorHeap,
-		ESHExtension_DescriptorHeap
+		ESHExtension_DescriptorHeap,
+		ESHExtension_Barycentrics
 	};
 
 	flags &= ~defaultOps;
@@ -229,6 +231,7 @@ extern "C" Bool Compiler_processDXIL(
 	IDxcBlobEncoding *finalShader{};
 	IDxcBlob *finalVersion{};
 	IDxcContainerBuilder *containerBuilder{};
+	IDxcContainerReflection *containerReflection{};
 	IDxcOperationResult *opResult{};
 	IDxcBlobEncoding *err{};
 
@@ -319,7 +322,7 @@ extern "C" Bool Compiler_processDXIL(
 
 				if(funcDesc.RaytracingShader.ParamPayloadSize > 128)
 					retError(clean, Error_outOfBounds(
-						0, funcDesc.RaytracingShader.ParamPayloadSize, 128, "Compiler_processDXIL() payload out of bounds"
+						0, funcDesc.RaytracingShader.ParamPayloadSize, 255, "Compiler_processDXIL() payload out of bounds"
 					));
 
 				payloadSize = (U8) funcDesc.RaytracingShader.ParamPayloadSize;
@@ -683,9 +686,45 @@ extern "C" Bool Compiler_processDXIL(
 		if(FAILED(containerBuilder->Load(finalShader)))
 			retError(clean, Error_invalidOperation(0, "Compiler_processDXIL() Couldn't turn into container"));
 	
-		containerBuilder->RemovePart(DXC_PART_PDB);
-		containerBuilder->RemovePart(DXC_PART_PDB_NAME);
-		containerBuilder->RemovePart(DXC_PART_REFLECTION_DATA);
+		//All three parts are optional, and asking to remove one the container doesn't have makes DXC throw
+		// DXC_E_MISSING_PART internally (DxcContainerBuilder::RemovePart).
+		//DXC catches that itself and turns it into an HRESULT we were ignoring anyway, so it read as harmless,
+		// but the throw is fatal under Windows ASan: the catch block faults while unwinding.
+		//The container is therefore asked what it actually holds first, and only those parts are removed.
+
+		static const U32 removableParts[] = { DXC_PART_PDB, DXC_PART_PDB_NAME, DXC_PART_REFLECTION_DATA };
+		U8 removablePartCount = (U8)(sizeof(removableParts) / sizeof(removableParts[0]));
+
+		Bool hasPart[sizeof(removableParts) / sizeof(removableParts[0])] = { false };
+
+		hr = DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&containerReflection));
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(2, "Compiler_processDXIL() IDxcContainerReflection couldn't be created"));
+
+		if(FAILED(containerReflection->Load(finalShader)))
+			retError(clean, Error_invalidOperation(0, "Compiler_processDXIL() Couldn't reflect container parts"));
+
+		U32 partCount = 0;
+
+		if(FAILED(containerReflection->GetPartCount(&partCount)))
+			retError(clean, Error_invalidOperation(0, "Compiler_processDXIL() Couldn't count container parts"));
+
+		for(U32 i = 0; i < partCount; ++i) {
+
+			U32 partKind = 0;
+
+			if(FAILED(containerReflection->GetPartKind(i, &partKind)))
+				continue;
+
+			for(U8 j = 0; j < removablePartCount; ++j)
+				if(partKind == removableParts[j])
+					hasPart[j] = true;
+		}
+
+		for(U8 j = 0; j < removablePartCount; ++j)
+			if(hasPart[j])
+				containerBuilder->RemovePart(removableParts[j]);
 
 		hr = containerBuilder->SerializeContainer(&opResult);
 
@@ -738,6 +777,9 @@ clean:
 
 	if(containerBuilder)
 		containerBuilder->Release();
+
+	if(containerReflection)
+		containerReflection->Release();
 
 	if(opResult)
 		opResult->Release();

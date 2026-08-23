@@ -18,8 +18,20 @@
 *  This is called dual licensing.
 */
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 #include "@buffer.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct RaysPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 tlas;          //Bindless handle of the acceleration structure
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT RaysPush _push;
 
 //Each ray writes whether it hit, so the readback can check hits and misses ran through the real pipeline.
 
@@ -66,7 +78,7 @@ void mainRaygen() {
 	HitPayload payload;
 	payload.hit = 0xDEAD;
 
-	TraceRay(tlasExtUniform(getAppData1u(1)), RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
+	TraceRay(tlasExtUniform(_push.tlas), RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
 
-	setAtUniform(getAppData1u(0), i << 2, payload.hit);
+	setAtUniform(_push.output, i << 2, payload.hit);
 }

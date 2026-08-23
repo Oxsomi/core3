@@ -32,7 +32,7 @@
 [numthreads(16, 8, 1)]
 void main(U32x2 id : SV_DispatchThreadID) {
 
-	RWTexture2D<unorm F32x4> tex = rwTexture2DUniform(getAppData1u(EResourceBinding_RenderTargetRW));
+	RWTexture2D<unorm F32x4> tex = rwTexture2DUniform(_bindings.renderTargetRW);
 
 	U32x2 dims;
 	tex.GetDimensions(dims.x, dims.y);
@@ -40,7 +40,7 @@ void main(U32x2 id : SV_DispatchThreadID) {
 	if(any(id >= dims))
 		return;
 
-	U32 orientation = getAppData1u(EResourceBinding_Orientation);
+	U32 orientation = _bindings.orientation;
 	
 	U32x2 ogId = id;
 
@@ -65,7 +65,7 @@ void main(U32x2 id : SV_DispatchThreadID) {
 
 	//Generate primaries
 
-	U32 viewProjMat = getAppData1u(EResourceBinding_ViewProjMatrices);
+	U32 viewProjMat = _bindings.viewProjMatrices;
 	ViewProjMatrices mats = getAtUniform<ViewProjMatrices>(viewProjMat, 0);
 
 	F32x2 uv = (F32x2(id) + 0.5) / F32x2(dims);
@@ -78,7 +78,7 @@ void main(U32x2 id : SV_DispatchThreadID) {
 
 	//Trace against
 
-	U32 tlasId = getAppData1u(EResourceBinding_TLAS);
+	U32 tlasId = _bindings.tlas;
 
 	F32x3 color = rayDir * 0.5 + 0.5;		//Miss
 

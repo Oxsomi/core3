@@ -312,6 +312,39 @@ void Test_containerBuffer(Test *t) {
 		Buffer_free(&joined, alloc);
 	}
 
+	{
+		//Combining two empty buffers allocates nothing, so the output base is null and the second copy used to offset it.
+		//Nothing is copied either way, so the only thing to check is that it succeeds and stays empty.
+
+		const Buffer empty = Buffer_createNull();
+		Buffer joinedEmpty = Buffer_createNull();
+
+		Test_assert(t, "combine empty+empty", Buffer_combine(&empty, &empty, alloc, &joinedEmpty, e_rr));
+		Test_assert(t, "combine empty+empty length", !Buffer_length(joinedEmpty));
+		Buffer_free(&joinedEmpty, alloc);
+	}
+
+	{
+		//The one sided cases: only the second operand's copy offsets the output, so an empty b is what would
+		// leave a live allocation with a zero length copy, and an empty a is what makes that offset zero.
+
+		const U8 r[] = { 7, 8 };
+		const Buffer br = Buffer_createRefConst(r, sizeof(r));
+		const Buffer empty = Buffer_createNull();
+
+		Buffer headOnly = Buffer_createNull(), tailOnly = Buffer_createNull();
+
+		Test_assert(t, "combine data+empty", Buffer_combine(&br, &empty, alloc, &headOnly, e_rr));
+		Test_assert(t, "combine data+empty length", Buffer_length(headOnly) == 2);
+		Test_assert(t, "combine data+empty content", headOnly.ptr[0] == 7 && headOnly.ptr[1] == 8);
+		Buffer_free(&headOnly, alloc);
+
+		Test_assert(t, "combine empty+data", Buffer_combine(&empty, &br, alloc, &tailOnly, e_rr));
+		Test_assert(t, "combine empty+data length", Buffer_length(tailOnly) == 2);
+		Test_assert(t, "combine empty+data content", tailOnly.ptr[0] == 7 && tailOnly.ptr[1] == 8);
+		Buffer_free(&tailOnly, alloc);
+	}
+
 	// -- Unicode ------------------------------------------------------------------------------------
 
 	Test_setModule(t, "BufferUnicode");

@@ -228,16 +228,16 @@ Semantics for input(s) and output(s) for shaders get parsed and have the followi
 Each entrypoint can have annotations on top of the ones used by DXC (have to be before the DXC annotations). The ones introduced in OxC3's pre-processor are the following:
 
 - `[[oxc::stage("vertex")]]` similar to DXC's `[shader("vertex")]` but instead of implying a library compilation (for use in StateObjects), it signals a standalone compilation for this entrypoint. Essentially allowing pixel and vertex shaders to be compiled and packaged as a single oiSH file.
-  - Defining stages is only allowed for stages that have to be separately compiled. For raytracing shaders and workgraphs, the shader annotation should still be used.
+  - Defining stages is only allowed for stages that have to be separately compiled. For raytracing shaders, the shader annotation should still be used.
   - Type must be one of vertex, pixel, compute, geometry, hull, domain, mesh, task.
-  - Do keep in mind that each stage needs a full compile. It might be beneficial to bundle them as a single lib using the "shader" type, when this feature becomes available with workgraphs.
+  - Do keep in mind that each stage needs a full compile. It might be beneficial to bundle them as a single lib using the "shader" type.
   - If not defined, the compiler will ignore the functions if they don't have either a `stage` or `shader` annotation.
   - Note: Please prefer the use of `[shader("type")]` since stage is deprecated. It's there to support backwards compatibility, but introduces extra compile time compared to the 'shader' annotation. This is required for oxc::uniforms.
 - `[[oxc::vendor("NV", "AMD", "QCOM")]]` which vendors are allowed to run this entrypoint. There could be a reason to restrict this, for example when NV specific instructions are used (specifically together with DXIL). Must be one of: NV, AMD, ARM, QCOM, INTC, IMGT, MSFT, APPL, SMSG, HWEI, GOGL, MESA. If not defined, will assume all vendors are applicable. Multiple annotations for vendor is illegal to clarify that it won't induce a new compile for each vendor.
 - `[[oxc::extension("16BitTypes")]]` which extensions to enable. For example 16BitTypes will enable 16-bit types for that entrypoint.
   - Do keep in mind that extensions might introduce another recompile for entrypoints that don't have the same extensions. For example with raytracing shaders. In their case, it will introduce two compiles if one entrypoint doesn't support 16-bit ints and another does.
   - `__OXC_EXT_<X>` can be used to see which extension is enabled. For example `__OXC_EXT_ATOMICI64`.
-  - Extension must be one of F64, I64, 16BitTypes, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayTriPosition, RayMotionBlur, RayReorder, Multiview, ComputeDeriv, PAQ, MeshTaskTexDeriv, WriteMSTexture, Bindless, UnboundArraySize, SubgroupOperations, CoopVec, CoopMat, CoopFP8, CoopVecTraining, DescriptorHeap.
+  - Extension must be one of F64, I64, 16BitTypes, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayTriPosition, RayReorder, Multiview, ComputeDeriv, PAQ, MeshTaskTexDeriv, WriteMSTexture, Bindless, UnboundArraySize, SubgroupOperations, CoopVec, CoopMat, CoopFP8, CoopVecTraining, DescriptorHeap.
     - **Note**: RayReorder is currently only available for raygeneration shaders.
     - **Note**: Multiple extension annotations will indicate there will be a separate compile with each. For example: `[[extension()]]` and `[[extension("16BitTypes")]]` in front of the same function will indicate the function will be compiled with 16-bit types on and off. 16-bit off would for example run on <=Pascal (GTX 10xx). This will allow the same entrypoint to be ran with different functionality. This could aid for example in unpacking vertex/texture data with native support (rather than manual f16tof32).
       - Another good example could be RayReorder, which could give substantial boosts in path tracing workloads. Lovelace would need `[[extension("RayReorder")]]` while the rest such as non NV and Pascal, Turing, Ampere would need `[[extension()]]`. This will force a recompile.
@@ -263,7 +263,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
     - Minimum must be 6.5+ since that's the minimum OxC3 supports (the maximum is 6.10).
     - AtomicI64, ComputeDeriv and PAQ (Payload Access Qualifiers) require SM6.6.
     - WaveSize requires SM6.6.
-    - Workgraphs, and WaveSize with 2 or 3 arguments (min, max, recommended), require SM6.8.
+    - WaveSize with 2 or 3 arguments (min, max, recommended) requires SM6.8.
     - WriteMSTexture (writable multisampled textures) requires SM6.7.
     - RayReorder (Shader Execution Reordering / SER) and RayMicromapOpacity (Opacity Micromaps / OMM) require SM6.9.
     - DescriptorHeap requires SM6.6 (dynamic resources).
@@ -278,7 +278,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
   - Restricts which binary backends this entrypoint is emitted for. Accepts `spv` (or `spirv`) and `dxil` (case insensitive). Unlike models/defines/extensions this does **not** introduce extra compiles; it only narrows which of the already-requested backends this entrypoint ends up in.
   - If not defined, the entrypoint is emitted for every requested backend its stage + extensions can actually be expressed on.
   - The effective set is an AND of three things: the backends passed to `-compile-output`, this annotation (or all backends if it's absent), and the backends the entrypoint's stage + extensions support. Example: compiling with `all` a shader whose entrypoint can only be expressed in SPIRV will only emit SPIRV for it.
-  - Stage / extension support is auto-restricted even without the annotation: workgraphs are DXIL-only; ComputeDeriv, AtomicF32/F64, SubgroupArithmetic/Shuffle, RayMicromapOpacity and RayReorder are SPIRV-only; MeshTaskTexDeriv is DXIL-only. Listing a backend the stage/extension can't target simply drops it (that's the AND) rather than erroring.
+  - Stage / extension support is auto-restricted even without the annotation: ComputeDeriv, AtomicF32/F64, SubgroupArithmetic/Shuffle, RayMicromapOpacity and RayReorder are SPIRV-only; MeshTaskTexDeriv is DXIL-only. Listing a backend the stage/extension can't target simply drops it (that's the AND) rather than erroring.
   - A single annotation lists the full set (e.g. `[[oxc::binary("spv", "dxil")]]`); duplicate binary types within one annotation are rejected.
   - **NOTE** (current limitation): this only filters the oiSH *reflection*, an excluded entrypoint is not reported for that backend, but when it shares a library compile with a kept entrypoint the emitted DXIL/SPIRV blob can still physically contain its code. Explicitly stripping the entrypoint and re-running DCE per backend is planned, after which reflection and the binary will fully agree.
 

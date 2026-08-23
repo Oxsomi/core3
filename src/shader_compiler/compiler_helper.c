@@ -228,7 +228,7 @@ Bool Compiler_getUniqueCompiles(
 				//undefined rather than merely implementation defined.
 				//MSVC happens to give 0x80000000, clang at -O2 is entitled to assume it can't happen.
 
-				if (!isRt && runtime.entry.stage != ESHPipelineStage_WorkgraphExt)
+				if (!isRt)
 					compileCombinations->ptrNonConst[k] |= 1u << 31;
 			}
 		}

@@ -491,10 +491,27 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_pull)(
 		&deviceExt->bufferTransitions, &bufDep, alloc, e_rr
 	));
 
+	//The range says which plane rides this pull.
+	//Subresource indexing puts plane 1 right after plane 0 for a single mip single slice texture,
+	// and a PLANE footprint has to use the plane's own format rather than the combined one:
+	// R8_TYPELESS for stencil, R32_TYPELESS for a 32 bit depth plane, R24_UNORM_X8_TYPELESS for D24's,
+	// matching how the runtime exposes the planes.
+	//The stencil only format never reaches D3D12, since EDepthStencilFormat_toDXFormat maps it to 0 and the
+	// texture can't be created in the first place.
+
+	const EDepthStencilFormat dsFormat = (EDepthStencilFormat) utex.depthFormat;
+	const U8 pullPlane = (U8) range->planeId;
+	const Bool pullsStencil = utex.depthFormat && pullPlane == 1;
+	const Bool isCombined = utex.depthFormat && EDepthStencilFormat_hasStencil(dsFormat) && EDepthStencilFormat_hasDepth(dsFormat);
+
+	//The barrier covers every plane the image has, matching the engine's single tracked layout: a stencil
+	// pull copies plane 1, and a barrier naming only plane 0 would leave it in its old layout, which the
+	// runtime rejects at ExecuteCommandLists.
+
 	D3D12_BARRIER_SUBRESOURCE_RANGE subresourceRange = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
 		.NumMipLevels = 1,
 		.NumArraySlices = 1,
-		.NumPlanes = 1
+		.NumPlanes = isCombined ? 2 : 1
 	};
 
 	gotoIfError3(clean, DxUnifiedTexture_transition(
@@ -523,10 +540,12 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_pull)(
 		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
 	}
 
-	//Stencil bearing formats never get this far, so the depth format maps to a single plane copy
-
 	const DXGI_FORMAT dxFormat =
-		utex.depthFormat ? (DXGI_FORMAT) EDepthStencilFormat_toDXFormat((EDepthStencilFormat) utex.depthFormat) :
+		pullsStencil ? DXGI_FORMAT_R8_TYPELESS :
+		isCombined ? (
+			dsFormat == EDepthStencilFormat_D24S8Ext ? DXGI_FORMAT_R24_UNORM_X8_TYPELESS : DXGI_FORMAT_R32_TYPELESS
+		) :
+		utex.depthFormat ? (DXGI_FORMAT) EDepthStencilFormat_toDXFormat(dsFormat) :
 		ETextureFormatId_toDXFormat(utex.textureFormatId);
 
 	U8 alignX = 1, alignY = 1;
@@ -547,7 +566,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_pull)(
 	const D3D12_TEXTURE_COPY_LOCATION src = (D3D12_TEXTURE_COPY_LOCATION) {
 		.pResource = textureExt->image,
 		.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
-		.SubresourceIndex = 0
+		.SubresourceIndex = pullPlane
 	};
 
 	//The footprint dimensions have to stay block multiples for compressed formats, even at unaligned edges

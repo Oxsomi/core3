@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -25,12 +24,14 @@ R"(
 //Declared unconditionally (see extension.AtomicF32.hlsli): the vk:: attributes are no-ops off SPIRV, and it must be
 //visible during the non-SPIRV reflection pass.
 
+//The oxc:: type names and the memory scope/semantics constants both live in types.hlsli
+#include "@types.hlsli"
+
 namespace oxc {
 
 	[[vk::ext_capability(/* AtomicFloat64AddEXT */ 6034)]]
 	[[vk::ext_extension("SPV_EXT_shader_atomic_float_add")]]
 	[[vk::ext_instruction(/* OpAtomicFAddEXT */ 6035)]]
-	double AtomicAddF64([[vk::ext_reference]] double mem, uint memoryScope, uint memorySemantics, double value);
+	F64 AtomicAddF64([[vk::ext_reference]] F64 mem, U32 memoryScope, U32 memorySemantics, F64 value);
 
 }
-)"

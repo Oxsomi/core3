@@ -247,8 +247,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	if(rtPipeline->flags & EPipelineRaytracingFlags_SkipTriangles)
 		flags |= VK_PIPELINE_CREATE_RAY_TRACING_SKIP_TRIANGLES_BIT_KHR;
 
-	if(rtPipeline->flags & EPipelineRaytracingFlags_AllowMotionBlurExt)
-		flags |= VK_PIPELINE_CREATE_RAY_TRACING_ALLOW_MOTION_BIT_NV;
+	if(rtPipeline->flags & EPipelineRaytracingFlags_AllowOpacityMicromapExt)
+		flags |= VK_PIPELINE_CREATE_RAY_TRACING_OPACITY_MICROMAP_BIT_EXT;
 
 	if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullAnyHit)
 		flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_ANY_HIT_SHADERS_BIT_KHR;

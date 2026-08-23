@@ -57,20 +57,37 @@ TListNamed(IDXGIAdapter4*, ListIDXGIAdapter4)
 TListNamedImpl(ListIDXGIAdapter4)
 
 GraphicsObjectSizes DxGraphicsObjectSizes = {
-	.blas = sizeof(DxBLAS),
-	.tlas = sizeof(DxTLAS),
-	.pipeline = sizeof(DxPipeline),
-	.sampler = 16,        //Doesn't exist
-	.buffer = sizeof(DxDeviceBuffer),
-	.image = sizeof(DxUnifiedTexture),
-	.swapchain = sizeof(DxSwapchain),
-	.device = sizeof(DxGraphicsDevice),
-	.instance = sizeof(DxGraphicsInstance),
-	.descriptorLayout = sizeof(DxDescriptorLayout),
-	.descriptorTable = sizeof(DxDescriptorTable),
-	.descriptorHeap = sizeof(DxDescriptorHeap),
-	.pipelineLayout = sizeof(ID3D12RootSignature) + 8
+	.blas = GraphicsObjectSize_create(DxBLAS),
+	.tlas = GraphicsObjectSize_create(DxTLAS),
+	.opacityMicromap = GraphicsObjectSize_create(DxOpacityMicromap),
+	.pipeline = GraphicsObjectSize_create(DxPipeline),
+	.sampler = GraphicsObjectSize_createRaw(16, 16),        //Doesn't exist
+	.buffer = GraphicsObjectSize_create(DxDeviceBuffer),
+	.image = GraphicsObjectSize_create(DxUnifiedTexture),
+	.swapchain = GraphicsObjectSize_create(DxSwapchain),
+	.device = GraphicsObjectSize_create(DxGraphicsDevice),
+	.instance = GraphicsObjectSize_create(DxGraphicsInstance),
+	.descriptorLayout = GraphicsObjectSize_create(DxDescriptorLayout),
+	.descriptorTable = GraphicsObjectSize_create(DxDescriptorTable),
+	.descriptorHeap = GraphicsObjectSize_create(DxDescriptorHeap),
+	.pipelineLayout = GraphicsObjectSize_createPadded(ID3D12RootSignature, 8)
 };
+
+//As on the Vulkan side: the packing has far more room than these need, and this keeps that a fact.
+
+static_assert(
+	sizeof(DxGraphicsDevice) < (1 << 24) && sizeof(DxGraphicsInstance) < (1 << 24) &&
+	sizeof(DxSwapchain) < (1 << 24) && alignof(DxUnifiedTexture) <= 255 && alignof(DxGraphicsDevice) <= 255,
+	"A D3D12 extension struct outgrew the size or alignment GraphicsObjectSize can pack"
+);
+
+//As on the Vulkan side: TextureRef_getImplExt rounds to a cache line because it can't name the struct that
+//follows, so this pins down that a cache line is still enough.
+
+static_assert(
+	alignof(DxSwapchain) <= 64 && alignof(DxUnifiedTexture) <= 64,
+	"A D3D12 texture extension struct needs more than the cache line TextureRef_getImplExt rounds to"
+);
 
 #ifndef GRAPHICS_API_DYNAMIC
 	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api) {
@@ -91,6 +108,10 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 			.blasInit = D3D12BLAS_init,
 			.blasFlush = D3D12BLASRef_flush,
 			.blasFree = D3D12BLAS_free,
+
+			.opacityMicromapInit = D3D12OpacityMicromap_init,
+			.opacityMicromapFlush = D3D12OpacityMicromapRef_flush,
+			.opacityMicromapFree = D3D12OpacityMicromap_free,
 
 			.tlasInit = D3D12TLAS_init,
 			.tlasFlush = D3D12TLASRef_flush,
@@ -275,6 +296,8 @@ setup:
 	}
 
 	gotoIfError3(clean, dxCheck(factoryHr, e_rr));
+
+	instanceExt->agilitySdkVersion = usedSdkVersion;
 
 	gotoIfError3(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->SetFlags(
 		instanceExt->deviceFactoryNoSingleton, D3D12_DEVICE_FACTORY_FLAG_DISALLOW_STORING_NEW_DEVICE_AS_SINGLETON
@@ -591,7 +614,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		EGraphicsDeviceType type = EGraphicsDeviceType_CPU;
 
-		const U64 luid = *(const U64*) &desc.AdapterLuid;
+		//Copied rather than read through a U64 lvalue: LUID is a struct of two 32-bit fields, and punning it
+		// is the same aliasing violation that made a Release build read stale limbs in the BigInt test.
+
+		U64 luid = 0;
+		Buffer_memcpy(Buffer_createRef(&luid, sizeof(luid)), Buffer_createRefConst(&desc.AdapterLuid, sizeof(luid)));
 
 		//Create temporary device.
 		//Unfortunately, there's no other way to query features it seems.
@@ -655,7 +682,6 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		D3D12_FEATURE_DATA_D3D12_OPTIONS14 opt14 = (D3D12_FEATURE_DATA_D3D12_OPTIONS14) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS16 opt16 = (D3D12_FEATURE_DATA_D3D12_OPTIONS16) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS17 opt17 = (D3D12_FEATURE_DATA_D3D12_OPTIONS17) { 0 };
-		D3D12_FEATURE_DATA_D3D12_OPTIONS21 opt21 = (D3D12_FEATURE_DATA_D3D12_OPTIONS21) { 0 };
 
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderOpt = (D3D12_FEATURE_DATA_SHADER_MODEL) { 0 };
 		D3D12_FEATURE_DATA_ARCHITECTURE1 arch = (D3D12_FEATURE_DATA_ARCHITECTURE1) { 0 };
@@ -710,6 +736,13 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_WriteBufferImmediate;
 
+		//SV_Barycentrics / GetAttributeAtVertex.
+		//No shader-model gate needed:
+		// the SM6.5 baseline above already exceeds the SM6.1 the semantic requires.
+
+		if(opt3.BarycentricsSupported)
+			caps.features |= EGraphicsFeatures_Barycentrics;
+
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS4, &opt4, sizeof(opt4))) &&
 			opt4.Native16BitShaderOpsSupported
@@ -730,6 +763,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			if(opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2) {
 
 				caps.features |= EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayMicromapOpacity;
+
+				//DXR accepts 8-bit OMM index buffers wherever it accepts micromaps at all, unlike Vulkan where
+				// only the KHR extension permits them, so the qualifier ships with the tier.
+
+				caps.features2 |= EGraphicsFeatures2_RayMicromapOpacityU8;
 
 				//RayReorder above only means the SER API is available (it can be a no-op).
 				//OPTIONS22 reports whether the device actually reorders,
@@ -796,12 +834,6 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			caps.featuresExt |= EDxGraphicsFeatures_ReportReBARWrites;
 
 		if(
-			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS21, &opt21, sizeof(opt21))) &&
-			opt21.WorkGraphsTier >= D3D12_WORK_GRAPHS_TIER_1_0
-		)
-			caps.features |= EGraphicsFeatures_Workgraphs;
-
-		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_HARDWARE_COPY, &hwCopy, sizeof(hwCopy))) &&
 			hwCopy.Supported
 		)
@@ -812,13 +844,40 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig))))
 			deviceUnsupported("D3D12: Unsupported device %"PRIu64", doesn't support required root signature 1.1", i);
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;        //Nice way of querying DirectX...
+		//D3D12_FEATURE_DATA_SHADER_MODEL is in/out: the runtime CLAMPS HighestShaderModel down to what the
+		// device supports and still returns S_OK, only failing when the requested value is unknown to the
+		// runtime itself.
+		//Testing SUCCEEDED alone therefore reported every model the RUNTIME knows rather than what the DEVICE
+		// has, which over-reported SM6.7+ on adapters that don't have it (WARP included).
+		//So the probe walks down from the newest model this build knows until the runtime recognises one,
+		// and the value handed back is the device's real ceiling.
+		//Every threshold below compares against that.
 
-		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+		static const D3D_SHADER_MODEL probeModels[] = {
+			#if D3D12_PREVIEW_SDK_VERSION >= 720
+				D3D_SHADER_MODEL_6_10,
+			#endif
+			D3D_SHADER_MODEL_6_9, D3D_SHADER_MODEL_6_5
+		};
+
+		D3D_SHADER_MODEL highestModel = D3D_SHADER_MODEL_NONE;
+
+		for (U64 m = 0; m < sizeof(probeModels) / sizeof(probeModels[0]); ++m) {
+
+			shaderOpt.HighestShaderModel = probeModels[m];
+
+			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
+				device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)
+			))) {
+				highestModel = shaderOpt.HighestShaderModel;
+				break;
+			}
+		}
+
+		if(highestModel < D3D_SHADER_MODEL_6_5)
 			deviceUnsupported("D3D12: Unsupported device %"PRIu64", doesn't support required shader model (6.5)", i);
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_6;
-		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
+		if (highestModel >= D3D_SHADER_MODEL_6_6) {
 
 			caps.featuresExt |= EDxGraphicsFeatures_WaveSize | EDxGraphicsFeatures_PAQ | EDxGraphicsFeatures_SM6_6;
 			caps.features |= EGraphicsFeatures_ComputeDeriv;
@@ -830,16 +889,13 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				caps.features2 |= EGraphicsFeatures2_DescriptorHeap;
 		}
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_7;
-		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+		if(highestModel >= D3D_SHADER_MODEL_6_7)
 			caps.featuresExt |= EDxGraphicsFeatures_SM6_7;
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_8;
-		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+		if(highestModel >= D3D_SHADER_MODEL_6_8)
 			caps.featuresExt |= EDxGraphicsFeatures_WaveSizeMinMax | EDxGraphicsFeatures_SM6_8;
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_9;
-		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+		if(highestModel >= D3D_SHADER_MODEL_6_9)
 			caps.featuresExt |= EDxGraphicsFeatures_SM6_9;
 
 		#if D3D12_SDK_VERSION >= 618
@@ -852,8 +908,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		#endif
 
 		#if D3D12_PREVIEW_SDK_VERSION >= 720
-			shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_10;
-			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
+			if (highestModel >= D3D_SHADER_MODEL_6_10) {
 
 				caps.featuresExt |= EDxGraphicsFeatures_SM6_10;
 
@@ -966,6 +1021,27 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			)
 				caps.featuresExt |= EDxGraphicsFeatures_BatchedAsyncCommandList;
 		#endif
+
+		//SER's API claim (DXR tier 1.2, set above) is only usable from a shader written at SM6.9,
+		// since dx::HitObject requires it.
+		//A device below that ceiling claims an API no shader can reach, so the claim is withdrawn.
+		//Where it holds, it stays experimental while SM6.9 itself is preview only.
+
+		if (caps.features & EGraphicsFeatures_RayReorder) {
+
+			if(!(caps.featuresExt & EDxGraphicsFeatures_SM6_9)) {
+				caps.features &= ~EGraphicsFeatures_RayReorder;
+				caps.features2 &= ~EGraphicsFeatures2_RayReorderActual;
+			}
+
+			else {
+
+				caps.experimentalFeatures |= EGraphicsFeatures_RayReorder;
+
+				if(caps.features2 & EGraphicsFeatures2_RayReorderActual)
+					caps.experimentalFeatures2 |= EGraphicsFeatures2_RayReorderActual;
+			}
+		}
 
 		const Bool hasArch =
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)));

@@ -180,7 +180,10 @@ static inline BitRef InputDevice_getButtonValue(const InputDevice *dev, U16 loca
 	const U64 bitOff = ((U32)localHandle << 1) + isCurrent;
 	U8 *off = dev->states.ptrNonConst + dev->axes * 2 * sizeof(F32) + (bitOff >> 3);
 
-	const BitRef ret = { .ptr = off, .off = (bitOff & 7) };
+	//The cast is what keeps this header includable from C++: bitOff is U64 and off is U8, and a braced
+	//initializer refuses a narrowing conversion there even though the mask makes it provably in range.
+
+	const BitRef ret = { .ptr = off, .off = (U8)(bitOff & 7) };
 	return ret;
 }
 

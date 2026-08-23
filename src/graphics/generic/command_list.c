@@ -31,6 +31,7 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/tlas.h"
+#include "graphics/generic/opacity_micromap.h"
 #include "graphics/generic/blas.h"
 #include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
@@ -315,14 +316,14 @@ Bool CommandListRef_transitionBuffer(
 				4, "CommandListRef_transitionBuffer()::buffer was already transitioned in scope!"
 			));
 
-		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		oldState->stageMask |= EPipelineStage_toMask(stage);
 		return s_uccess;
 	}
 
 	const TransitionInternal transition = (TransitionInternal) {
 		.resource = buffer,
 		.range = (ResourceRange) { .buffer = range },
-		.stage = stage,
+		.stageMask = EPipelineStage_toMask(stage),
 		.type = type
 	};
 
@@ -347,67 +348,75 @@ Bool CommandListRef_transitionRTAS(
 		return s_uccess;
 
 	Bool isTLAS = rtasPtr->refPtrType->typeId == (TypeId) EGraphicsTypeId_TLASExt;
-	RTAS rtas = isTLAS ? TLASRef_ptr(rtasPtr)->base : BLASRef_ptr(rtasPtr)->base;
+	Bool isOMM = rtasPtr->refPtrType->typeId == (TypeId) EGraphicsTypeId_OpacityMicromapExt;
+
+	RTAS rtas =
+		isTLAS ? TLASRef_ptr(rtasPtr)->base :
+		(isOMM ? OpacityMicromapRef_ptr(rtasPtr)->base : BLASRef_ptr(rtasPtr)->base);
 
 	if(stage == EPipelineStage_RTASBuild && type == ETransitionType_ShaderWrite) {
 
 		if(rtas.tempScratchBuffer)
 			gotoIfError3(clean, CommandListRef_transitionBuffer(
 				commandList, rtas.tempScratchBuffer, (BufferRange) { 0 },
-				ETransitionType_ShaderWrite, EPipelineStage_RTASBuild, e_rr));
+				ETransitionType_ShaderWrite, EPipelineStage_RTASBuild, e_rr
+			));
 
-		if (rtas.parent) {
+		//A refit reads and writes the same structure, so the transition this function already records for the
+		// AS itself is the barrier the update needs; there is no separate source to declare.
 
-			TransitionInternal *oldState = NULL;
-			if(CommandListRef_isBound(commandList, rtas.parent, (ResourceRange) { 0 }, &oldState)) {
+		if (isOMM) {
 
-				if(oldState->type != type)
-					retError(clean, Error_invalidOperation(
-						4, "CommandListRef_transitionRTAS()::rtas.parent was already transitioned in scope!"
-					));
+			OpacityMicromap *micromap = OpacityMicromapRef_ptr(rtasPtr);
 
-				oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
-			}
+			gotoIfError3(clean, CommandListRef_transitionBuffer(
+				commandList,
+				micromap->inputBuffer.buffer,
+				(BufferRange) {
+					.startRange = micromap->inputBuffer.offset,
+					.endRange = micromap->inputBuffer.offset + micromap->inputBuffer.len
+				},
+				ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+			));
 
-			else {
-
-				const TransitionInternal transition = (TransitionInternal) {
-					.resource = rtas.parent, .stage = stage, .type = type
-				};
-
-				gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
-			}
+			gotoIfError3(clean, CommandListRef_transitionBuffer(
+				commandList,
+				micromap->entryBuffer.buffer,
+				(BufferRange) {
+					.startRange = micromap->entryBuffer.offset,
+					.endRange = micromap->entryBuffer.offset + micromap->entryBuffer.len
+				},
+				ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+			));
 		}
 
-		if(isTLAS) {
+		else if(isTLAS) {
 
 			TLAS *tlas = TLASRef_ptr(rtasPtr);
 
-			if(!tlas->useDeviceMemory) {
+			if(!TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory)) {
 				gotoIfError3(clean, CommandListRef_transitionBuffer(
 					commandList, tlas->tempInstanceBuffer, (BufferRange) { 0 },
 					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
 				));
 			}
 
-			else {
-				gotoIfError3(clean, CommandListRef_transitionBuffer(
+			else gotoIfError3(clean, CommandListRef_transitionBuffer(
 				commandList,
 				tlas->deviceData.buffer,
 				(BufferRange) {
 					.startRange = tlas->deviceData.offset,
 					.endRange = tlas->deviceData.offset + tlas->deviceData.len
 				},
-				ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr));
-			}
+				ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+			));
 		}
 
 		else {
 
 			BLAS *blas = BLASRef_ptr(rtasPtr);
 
-			if(blas->base.asConstructionType == EBLASConstructionType_Procedural)
-			{
+			if(blas->base.asConstructionType == EBLASConstructionType_Procedural) {
 				gotoIfError3(clean, CommandListRef_transitionBuffer(
 					commandList,
 					blas->aabbBuffer.buffer,
@@ -415,7 +424,8 @@ Bool CommandListRef_transitionRTAS(
 						.startRange = blas->aabbBuffer.offset + blas->aabbOffset,
 						.endRange = blas->aabbBuffer.offset + blas->aabbBuffer.len
 					},
-					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr));
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+				));
 			}
 
 			else {
@@ -427,19 +437,49 @@ Bool CommandListRef_transitionRTAS(
 						.startRange = blas->indexBuffer.offset,
 						.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
 					},
-					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr));
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+				));
+
+				//The end of the POSITION range, not the index range; this used to read indexBuffer, which gave an
+				// unindexed BLAS an empty range and an indexed one a range belonging to a different buffer.
 
 				gotoIfError3(clean, CommandListRef_transitionBuffer(
 					commandList,
 					blas->positionBuffer.buffer,
 					(BufferRange) {
 						.startRange = blas->positionBuffer.offset + blas->positionOffset,
-						.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
+						.endRange = blas->positionBuffer.offset + blas->positionBuffer.len
 					},
-					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr));
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+				));
+
+				//The build reads the opacity micromap indices too, so they need the same barrier.
+				//Unconditional like the index buffer above, which is also absent on an unindexed BLAS.
+
+				gotoIfError3(clean, CommandListRef_transitionBuffer(
+					commandList,
+					blas->ommIndexBuffer.buffer,
+					(BufferRange) {
+						.startRange = blas->ommIndexBuffer.offset,
+						.endRange = blas->ommIndexBuffer.offset + blas->ommIndexBuffer.len
+					},
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
+				));
 			}
 		}
 	}
+
+	//A BLAS that links a micromap reads it during its build and traversal keeps reading it afterwards, so the
+	// micromap follows the BLAS into whatever scope the BLAS entered, in read state either way.
+
+	if(
+		!isTLAS && !isOMM &&
+		BLASRef_ptr(rtasPtr)->base.asConstructionType == EBLASConstructionType_Geometry &&
+		BLASRef_ptr(rtasPtr)->ommMicromap
+	)
+		gotoIfError3(clean, CommandListRef_transitionRTAS(
+			commandList, BLASRef_ptr(rtasPtr)->ommMicromap, ETransitionType_ShaderRead, stage, e_rr
+		));
 
 	TransitionInternal *oldState = NULL;
 	if(CommandListRef_isBound(commandList, rtasPtr, (ResourceRange) { 0 }, &oldState)) {
@@ -449,11 +489,13 @@ Bool CommandListRef_transitionRTAS(
 				4, "CommandListRef_transitionRTAS()::rtas was already transitioned in scope!"
 			));
 
-		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		oldState->stageMask |= EPipelineStage_toMask(stage);
 		return s_uccess;
 	}
 
-	const TransitionInternal transition = (TransitionInternal) { .resource = rtasPtr, .stage = stage, .type = type };
+	const TransitionInternal transition = (TransitionInternal) {
+		.resource = rtasPtr, .stageMask = EPipelineStage_toMask(stage), .type = type
+	};
 	gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
 
 clean:
@@ -501,14 +543,14 @@ Bool CommandListRef_transitionImage(
 
 		//To combine shader transitions we just take the highest up shader stage it's used
 
-		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		oldState->stageMask |= EPipelineStage_toMask(stage);
 		return s_uccess;
 	}
 
 	const TransitionInternal transition = (TransitionInternal) {
 		.resource = image,
 		.range = (ResourceRange) { .image = range },
-		.stage = stage,
+		.stageMask = EPipelineStage_toMask(stage),
 		.type = type
 	};
 
@@ -578,8 +620,8 @@ Bool CommandListRef_startScope(
 
 			TLAS *tlas = TLASRef_ptr(res);
 
-			if(!tlas->useDeviceMemory)
-				for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
+			if(!TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
+				for (U64 j = 0; j < tlas->cpuInstances.length; ++j) {
 
 					TLASInstanceData dat = (TLASInstanceData) { 0 };
 					TLAS_getInstanceDataCpu(tlas, j, &dat);
@@ -617,14 +659,21 @@ Bool CommandListRef_startScope(
 				retError(clean, Error_constData(
 					0, 0, "CommandListRef_startScope()::transitions[i].resource should be writable"));
 
-			if(!transition.isWrite && !(resource.flags & EGraphicsResourceFlag_ShaderRead))
+			//A constant buffer read is a shader read too: CBV capability comes from the uniform usage
+			// rather than ShaderRead, which is the SRV path (see EGraphicsResourceFlag_ShaderRead's docs)
+
+			const Bool isUniform =
+				res->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer &&
+				(DeviceBufferRef_ptr(res)->usage & EDeviceBufferUsage_Uniform);
+
+			if(!transition.isWrite && !(resource.flags & EGraphicsResourceFlag_ShaderRead) && !isUniform)
 				retError(clean, Error_unsupportedOperation(
 					1, "CommandListRef_startScope()::transitions[i].resource should be readable"));
 
 			transitionDst = (TransitionInternal) {
 				.resource = res,
 				.range = transition.range,
-				.stage = transition.stage,
+				.stageMask = EPipelineStage_toMask(transition.stage),
 				.type = transition.isWrite ? ETransitionType_ShaderWrite : ETransitionType_ShaderRead
 			};
 		}
@@ -644,9 +693,10 @@ Bool CommandListRef_startScope(
 					0, "CommandListRef_startScope()::transitions[i].resource is already transitioned"
 				));
 
-			//To combine shader transitions we just take the highest up shader stage it's used
+			//Combining two declarations for one resource is a union: the resource really is accessed from
+			// every stage that was declared, and a mask is the only thing that can say so.
 
-			found->stage = (EPipelineStage) U64_min(found->stage, transitionDst.stage);
+			found->stageMask |= transitionDst.stageMask;
 			continue;
 		}
 
@@ -775,6 +825,18 @@ clean:
 
 		for(U64 i = 0; i < EPipelineType_Count; ++i)
 			commandList->pipeline[i] = NULL;
+
+		commandList->boundDescriptorTable = NULL;
+		commandList->boundDescriptorHeap = NULL;
+		commandList->pushConstantSize = 0;
+		commandList->pushDescriptorCount = 0;
+
+		//The cached triple names objects by identity, and a freed pipeline's address could be reused by a
+		// new one, so the cache doesn't outlive the scope that proved it.
+
+		commandList->validatedPipeline = NULL;
+		commandList->validatedTable = NULL;
+		commandList->validatedHeap = NULL;
 
 		ListTransitionInternal_clear(&commandList->pendingTransitions, e_rr);
 

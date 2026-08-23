@@ -91,7 +91,7 @@ void DescriptorTable_free(void *tableGeneric, const Allocator *alloc) {
 					if((tb->multiple.activeList.ptr[j >> 6] >> (j & 63)) & 1) {
 
 						Log_warnLnx(
-							"Leaked descriptor at %.*s[%"PRIu64"] (#%"PRIu64", id % "PRIu64", space % "PRIu64")",
+							"Leaked descriptor at %.*s[%"PRIu64"] (#%"PRIu64", id %"PRIu32", space %"PRIu32")",
 							(int) CharString_length(name), name.ptr, j, i, b->binding.binding, b->binding.space
 						);
 
@@ -124,7 +124,7 @@ void DescriptorTable_free(void *tableGeneric, const Allocator *alloc) {
 			else if(tb->single.resource) {
 
 				Log_warnLnx(
-					"Leaked descriptor at %.*s (#%"PRIu64", id %"PRIu64", space %"PRIu64")",
+					"Leaked descriptor at %.*s (#%"PRIu64", id %"PRIu32", space %"PRIu32")",
 					(int) CharString_length(name), name.ptr, i, b->binding.binding, b->binding.space
 				);
 
@@ -374,6 +374,7 @@ clean:
 Bool DescriptorTable_addRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Bool referenced = false;
 	const Allocator *alloc = table ? GraphicsDeviceRef_getAlloc(DescriptorHeapRef_ptr(table->parent)->device) : NULL;
 
 	if(!ref)
@@ -391,11 +392,27 @@ Bool DescriptorTable_addRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 			goto clean;
 		}
 
+	//The table is what keeps the resource alive while a descriptor points at it, so the first descriptor has to
+	// take a reference here.
+	//loseRef gives exactly this one back when the last descriptor goes and DescriptorTable_free gives back what
+	// is still held at that point, so without it both of those release a reference the table never owned and the
+	// resource dies underneath whoever created it.
+
+	if(!RefPtr_inc(ref))
+		retError(clean, Error_invalidState(0, "DescriptorTable_addRef() couldn't reference the resource"));
+
+	referenced = true;
+
 	gotoIfError3(clean, ListDescriptorTableResourceRef_pushBack(
 		&table->resources, (DescriptorTableResourceRef) { .resource = ref, .count = 1 }, alloc, e_rr
 	));
 
+	referenced = false;        //Handed over to the table
+
 clean:
+
+	if(referenced)
+		RefPtr_dec(&ref);
 
 	if(lock && acq == ELockAcquire_Acquired)
 		SpinLock_unlock(lock);
@@ -461,14 +478,25 @@ Bool DescriptorTableRef_unsetDescriptors(
 		for (U64 i = arrayId; i < arrayId + count; ++i) {
 
 			WeakRefPtr *ref = binding->multiple.resources.ptr[i];
+			const Bool maintained = (binding->multiple.maintainRef.ptr[i >> 6] >> (i & 63)) & 1;
+
 			binding->multiple.activeList.ptrNonConst[i >> 6] &=~ ((U64)1 << (i & 63));
 
 			if(ref && ref->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer) {
-				gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, binding->multiple.buffers.ptr[i].counter, e_rr));
+
+				//Gated on the same bit as the resource, because a counter is only ever ADDED under maintainRef.
+				//Releasing it unconditionally took a count belonging to whichever other descriptor did maintain it,
+				// so two descriptors sharing one counter buffer released it while one of them still pointed at it.
+
+				if(maintained)
+					gotoIfError3(clean, DescriptorTable_loseRef(
+						tablePtr, binding->multiple.buffers.ptr[i].counter, e_rr
+					));
+
 				binding->multiple.buffers.ptrNonConst[i].counter = NULL;
 			}
 
-			if((binding->multiple.maintainRef.ptr[i >> 6] >> (i & 63)) & 1)
+			if(maintained)
 				gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, ref, e_rr));
 
 			binding->multiple.resources.ptrNonConst[i] = NULL;
@@ -478,7 +506,12 @@ Bool DescriptorTableRef_unsetDescriptors(
 		WeakRefPtr *ref = binding->single.resource;
 
 		if(ref && ref->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer) {
-			gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, binding->single.buffer.counter, e_rr));
+
+			//Same reasoning as the array path above: added only under maintainRef, so released only under it.
+
+			if(binding->single.maintainRef)
+				gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, binding->single.buffer.counter, e_rr));
+
 			binding->single.buffer.counter = NULL;
 		}
 
@@ -562,6 +595,15 @@ Bool DescriptorTableRef_setDescriptors(
 
 	if(arrayId >= b->count)
 		retError(clean, Error_outOfBounds(0, arrayId, b->count, "DescriptorTableRef_setDescriptors()::arrayId out of bounds"));
+
+	//An empty list has nothing to bind, and letting it through is worse than a no-op in both directions.
+	//On an array binding the "is it already bound" loop runs zero times,
+	// so it reported success having bound nothing.
+	//On a single binding it indexed element 0 of a list without one.
+	//DescriptorTableRef_unsetDescriptors already refuses a count of 0, so this matches the contract it set.
+
+	if(!darr->length)
+		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_setDescriptors()::darr needs a length of >0"));
 
 	if(arrayId + darr->length > b->count)
 		retError(clean, Error_outOfBounds(
@@ -771,14 +813,22 @@ Bool DescriptorTableRef_setDescriptors(
 						3, 0, "DescriptorTableRef_setDescriptors() sampler set at a non sampler register"
 					));
 
+				//Only one direction of this is checkable.
+				//SPIRV cannot express a comparison sampler: OpTypeSampler is identical either way and the
+				// comparison lives on the image, so a SPIRV only binary reflects SamplerComparisonState as a
+				// plain Sampler, and refusing a comparison sampler there would reject a correct shader.
+				//The other direction still holds, because a SamplerComparisonState register can only come from
+				// a backend that knew, either DXIL reflection or a combine that promoted it from one.
+
 				if(
 					d.resource &&
-					(type == ESHRegisterType_SamplerComparisonState) != SamplerRef_ptr(d.resource)->info.enableComparison
+					type == ESHRegisterType_SamplerComparisonState &&
+					!SamplerRef_ptr(d.resource)->info.enableComparison
 				)
 					retError(clean, Error_invalidParameter(
 						3, 0,
-						"DescriptorTableRef_setDescriptors() sampler doesn't match sampler type "
-						"(SamplerState or SamplerComparisonState)"
+						"DescriptorTableRef_setDescriptors() a SamplerComparisonState register needs a sampler "
+						"created with enableComparison"
 					));
 
 				if(
@@ -970,6 +1020,8 @@ Bool DescriptorTableRef_setDescriptors(
 		if(allEq)
 			goto clean;
 	}
+
+	//Safe to index element 0 unconditionally: an empty list was refused with the parameter checks above.
 
 	else if(Descriptor_eq(&darr->ptr[0], &binding->single, type))
 		goto clean;
@@ -1403,8 +1455,14 @@ Bool DescriptorTableRef_allocDescriptor(
 	//        isFree000 isFree001 isFree010 isFree011
 	//        etc.
 
+	//The bitset holds one bit per descriptor while its length counts U64s, so an index into it and its length
+	// are in different units and the bound has to be the binding's element count.
+	//That bound is also what keeps the padding bits past the last descriptor from being handed out: the
+	// allocation above rounds up to whole words, so those bits read as free and would otherwise allocate.
+
 	ListU64 activeList = binding->multiple.activeList;
-	U64 foundId = activeList.length;
+	U64 count = bindings.ptr[bindId].count;
+	U64 foundId = count;
 
 	for(U64 j = 0; j < activeList.length; j += 2) {
 
@@ -1420,11 +1478,13 @@ Bool DescriptorTableRef_allocDescriptor(
 		if(bit == U8_MAX)
 			continue;
 
-		foundId = (j << 7) | bit;
+		//A pair starts at the first of its two words, so the base is 64 bits per word and not 128 per pair.
+
+		foundId = (j << 6) | bit;
 		break;
 	}
 
-	if(foundId >= activeList.length)
+	if(foundId >= count)
 		retError(clean, Error_outOfMemory(0, "DescriptorTableRef_allocDescriptor() out of memory"));
 
 	*arrayId = (U32) foundId;

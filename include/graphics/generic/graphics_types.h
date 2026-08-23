@@ -57,11 +57,55 @@ typedef enum EGraphicsTypeId {
 	EGraphicsTypeId_BLASExt                      = makeObjectId(0x1C34, 15, 0),
 	EGraphicsTypeId_TLASExt                      = makeObjectId(0x1C34, 16, 0),
 
-	EGraphicsTypeId_Count                        = 17
+	//Requires EGraphicsFeatures_RayMicromapOpacity
+
+	EGraphicsTypeId_OpacityMicromapExt           = makeObjectId(0x1C34, 17, 0),
+
+	EGraphicsTypeId_Count                        = 18
 
 } EGraphicsTypeId;
 
 extern EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count];
+
+//How big a backend's extension struct is, together with the alignment that struct needs.
+//The two travel as one value because anything appending such a struct has to honour both, and taking the size
+// while forgetting the alignment is exactly what used to leave every VkUnifiedTexture (which holds a SpinLock,
+// so 64) sitting on a 32 byte boundary.
+//It's a struct rather than a bare U32 so that arithmetic on it doesn't compile at all; the alternative was
+// renaming every field and hoping nobody reintroduced a raw byte offset later.
+//The size is in the low 24 bits (16 MiB, and every entry is a plain sizeof of a handful of pointers) and the
+// alignment itself is in the top byte (a power of two, never above 128).
+//This lives here rather than next to GraphicsObjectSizes in interface.h because texture.h needs it and is
+// included from underneath that header.
+
+typedef struct GraphicsObjectSize {
+	U32 sizeAndAlignment;
+} GraphicsObjectSize;
+
+#define GraphicsObjectSize_create(T) { (U32) sizeof(T) | ((U32) alignof(T) << 24) }
+
+//For the entries that pad past their own size so whatever follows them lands right; the alignment stays the
+//struct's own, since that is what the struct itself requires.
+
+#define GraphicsObjectSize_createPadded(T, extra) { (U32) (sizeof(T) + (extra)) | ((U32) alignof(T) << 24) }
+
+//A backend without the object at all still has to report an alignment its consumers can align to.
+
+#define GraphicsObjectSize_createRaw(size, alignment) { (U32) (size) | ((U32) (alignment) << 24) }
+
+static inline U64 GraphicsObjectSize_size(GraphicsObjectSize s) { return s.sizeAndAlignment & 0xFFFFFF; }
+static inline U64 GraphicsObjectSize_alignment(GraphicsObjectSize s) { return s.sizeAndAlignment >> 24; }
+
+static inline U64 GraphicsObjectSize_alignUp(U64 offset, U64 alignment) {
+	return alignment <= 1 ? offset : ((offset + alignment - 1) & ~(alignment - 1));
+}
+
+//What one block costs when they're laid out back to back: every block after the first has to start aligned
+//too, so the size is rounded up to the struct's own alignment.
+
+static inline U64 GraphicsObjectSize_stride(GraphicsObjectSize s) {
+	return GraphicsObjectSize_alignUp(GraphicsObjectSize_size(s), GraphicsObjectSize_alignment(s));
+}
 
 #ifdef __cplusplus
 	}

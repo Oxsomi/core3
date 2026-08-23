@@ -90,6 +90,7 @@ Bool TextureRef_pullRegion(
 	TextureRef *tex,
 	U16 x, U16 y, U16 z,
 	U16 w, U16 h, U16 l,
+	U8 plane,
 	TexturePullCallback callback, void *context, Error *e_rr
 ) {
 
@@ -122,9 +123,18 @@ Bool TextureRef_pullRegion(
 	if(utex.sampleCount)
 		retError(clean, Error_invalidOperation(0, "TextureRef_pullRegion() doesn't support MSAA, resolve first"));
 
-	if(utex.depthFormat && !EDepthStencilFormat_getBytes((EDepthStencilFormat) utex.depthFormat))
-		retError(clean, Error_unsupportedOperation(
-			0, "TextureRef_pullRegion() doesn't support stencil bearing depth formats yet"
+	//One pull carries one plane.
+	//getPullBytes returning 0 is what says the format doesn't have the requested one,
+	// which covers plane 1 on anything single planar and any plane past 1.
+
+	if(plane && !utex.depthFormat)
+		retError(clean, Error_invalidParameter(
+			7, plane, "TextureRef_pullRegion()::plane has to be 0 for color formats"
+		));
+
+	if(utex.depthFormat && !EDepthStencilFormat_getPullBytes((EDepthStencilFormat) utex.depthFormat, plane))
+		retError(clean, Error_invalidParameter(
+			7, plane, "TextureRef_pullRegion()::plane doesn't exist on this format"
 		));
 
 	if(x >= utex.width || y >= utex.height || z >= utex.length)
@@ -150,7 +160,7 @@ Bool TextureRef_pullRegion(
 	device = GraphicsDeviceRef_ptr(utex.resource.device);
 
 	const U64 texel =
-		utex.depthFormat ? EDepthStencilFormat_getBytes((EDepthStencilFormat) utex.depthFormat) :
+		utex.depthFormat ? EDepthStencilFormat_getPullBytes((EDepthStencilFormat) utex.depthFormat, plane) :
 		ETextureFormat_getSize(ETextureFormatId_unpack[utex.textureFormatId], 1, 1, 1);
 
 	Buffer data = Buffer_createNull();
@@ -172,7 +182,8 @@ Bool TextureRef_pullRegion(
 		.context = context,
 		.range = (DevicePendingRange) { .texture = (TextureRange) {
 			.startRange = { x, y, z },
-			.endRange = { (U16)(x + w), (U16)(y + h), (U16)(z + l) }
+			.endRange = { (U16)(x + w), (U16)(y + h), (U16)(z + l) },
+			.planeId = plane
 		} },
 		.textureData = data
 	};
@@ -218,14 +229,20 @@ void *TextureRef_getImplExt(TextureRef *ref) {
 
 	//Avoid movement of SwapchainExt for example, by allowing a fixed reservation of images.
 
-	U64 img = tex->maxImages ? tex->maxImages : tex->images;
+	const GraphicsObjectSize imageSize = GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image;
+	const U8 reserved = UnifiedTexture_reservedImages(tex->images, tex->maxImages);
+
+	//Behind the last image ext block, rounded to a cache line so the backend's own struct starts aligned.
 
 	//TODO: subResource
-	return (UnifiedTextureImage*)(
-		(U8*)tex +
-		sizeof(*tex) +
-		(sizeof(UnifiedTextureImage) + GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image) * img
+	const U64 implExt = GraphicsObjectSize_alignUp(
+		(U64) (void*) (
+			UnifiedTexture_imageExtBase(tex, imageSize, reserved) + GraphicsObjectSize_stride(imageSize) * reserved
+		),
+		64
 	);
+
+	return (UnifiedTextureImage*) (void*) implExt;
 }
 
 UnifiedTextureImage TextureRef_getImage(TextureRef *ref, U32 subResource, U8 imageId) {
@@ -263,11 +280,16 @@ void *TextureRef_getImgExt(TextureRef *ref, U32 subResource, U8 imageId) {
 	if(subResource)                //TODO: subResource
 		return NULL;
 
+	//Reserved rather than images: a swapchain reserves maxImages worth of both arrays, so the ext region
+	// starts past the reservation and not past however many images are live right now.
+	//This used to disagree with TextureRef_getImplExt, which always reserved.
+
+	const GraphicsObjectSize imageSize = GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image;
+	const U8 reserved = UnifiedTexture_reservedImages(tex->images, tex->maxImages);
+
 	return (UnifiedTextureImage*) (
-		(U8*)tex +
-		sizeof(*tex) +
-		sizeof(UnifiedTextureImage) * tex->images +
-		GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image * imageId
+		UnifiedTexture_imageExtBase(tex, imageSize, reserved) +
+		GraphicsObjectSize_stride(imageSize) * imageId
 	);
 }
 

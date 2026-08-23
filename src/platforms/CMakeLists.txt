@@ -103,16 +103,18 @@ if(EnableTests AND OxC3TestExecutables)
 
 	include(../../cmake/oxc3.cmake)
 	file(GLOB testsInterfaceC CONFIGURE_DEPENDS "test/interface/*.c")
+	file(GLOB testsInterfaceCpp CONFIGURE_DEPENDS "test/interface/*.cpp")    #C++ TUs (e.g. hpp wrapper tests)
 
 	add_executable(
 		OxC3_plinttst
 		${testsInterfaceC}
+		${testsInterfaceCpp}
 		CMakeLists.txt
 	)
 
 	target_link_libraries(OxC3_plinttst PUBLIC OxC3_platforms OxC3_types_test OxC3_platforms_interface_dylib_test)
 	set_target_properties(OxC3_plinttst PROPERTIES FOLDER Oxsomi/test/platforms)
-	
+
 	add_virtual_files(
 		TARGET  OxC3_plinttst
 		NAME    testdata
@@ -122,6 +124,19 @@ if(EnableTests AND OxC3TestExecutables)
 	)
 	
 	apply_dependencies(OxC3_plinttst)
-	add_test(NAME OxC3_plinttst COMMAND OxC3_plinttst)
+
+	# Built by hand above rather than through oxc3_add_test, because the package and the dylib it dlopens have to be
+	# attached to the target before it is usable.
+	# The run half is the shared one.
+
+	include(../../cmake/oxc3.cmake)
+
+	file(GLOB_RECURSE plinttstData CONFIGURE_DEPENDS "test/interface/res/*")
+
+	oxc3_add_test_run(
+		NAME   OxC3_plinttst
+		FOLDER Oxsomi/test/platforms
+		DATA   ${plinttstData}
+	)
 
 endif()

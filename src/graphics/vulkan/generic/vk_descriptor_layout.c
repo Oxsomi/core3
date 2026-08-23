@@ -244,6 +244,22 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	U8 setPresent = 0;
 	Bool hasPushDescriptor = info.flags & EDescriptorLayoutFlags_HasPushDescriptors;
 
+	//The device's own globals layout carries its own emulation (one set per frame in flight, written once
+	// and bound unchanged), which works only because that buffer is fixed for the frame.
+	//A caller's push descriptors change per work op, so they need a set allocated per push from a per frame
+	// pool, which doesn't exist yet. Until it does this is refused rather than silently pushing nothing.
+	//Android emulators are the case that hits this, since gfxstream drops the extension from the guest.
+
+	if(
+		hasPushDescriptor && !(info.flags & EDescriptorLayoutFlags_InternalWeakDeviceRef) &&
+		!(device->info.capabilities.featuresExt & EVkGraphicsFeatures_PerformantPushDescriptor)
+	)
+		retError(clean, Error_unsupportedOperation(
+			1,
+			"GraphicsDeviceRef_createDescriptorLayout() this device has no VK_KHR_push_descriptor, and the "
+			"emulated path for caller owned push descriptor layouts isn't implemented yet"
+		));
+
 	for (U64 i = 0; i < sortedList.length; ++i) {
 
 		U64 key = sortedList.ptr[i];
@@ -291,7 +307,14 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		if (!((setPresent >> linkId) & 1)) {
 
 			setInfo[linkId].pBindings = &bindings.ptr[i];
-			partiallyBound[linkId].pBindingFlags = &flags.ptr[i];
+
+			//flags is only reserved for a layout that has bindless bindings, so for every other layout it stays
+			// empty with a null ptr, and &flags.ptr[i] offsets that null.
+			//The value would go unread in that case anyway, since partiallyBound is only chained into pNext
+			// just below when this set is actually bindless.
+
+			if(flags.length)
+				partiallyBound[linkId].pBindingFlags = &flags.ptr[i];
 
 			if ((isBindlessSet >> linkId) & 1) {
 				setInfo[linkId].pNext = &partiallyBound[linkId];

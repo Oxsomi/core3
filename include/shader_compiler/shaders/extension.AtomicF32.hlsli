@@ -1,4 +1,3 @@
-R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -21,16 +20,19 @@ R"(
 
 //AtomicF32 (32-bit float atomic add). There is no DXIL intrinsic for it, so it's SPIRV-only: an inline
 //OpAtomicFAddEXT (SPV_EXT_shader_atomic_float_add). Pass the target memory (e.g. a RWStructuredBuffer element)
-//as the first argument, plus a SPIR-V memory scope (1 = Device) and semantics (0 = Relaxed).
+//as the first argument, plus a memory scope and semantics: see oxc::MemoryScope_* and
+//oxc::MemorySemantics_* in types.hlsli rather than passing the raw SPIR-V numbers.
 //The declaration is unconditional (not under #ifdef __spirv__): the vk:: attributes are no-ops off SPIRV, and it
 //must still be visible during the (non-SPIRV) reflection pass so a shader body that calls it parses.
+
+//The oxc:: type names and the memory scope/semantics constants both live in types.hlsli
+#include "@types.hlsli"
 
 namespace oxc {
 
 	[[vk::ext_capability(/* AtomicFloat32AddEXT */ 6033)]]
 	[[vk::ext_extension("SPV_EXT_shader_atomic_float_add")]]
 	[[vk::ext_instruction(/* OpAtomicFAddEXT */ 6035)]]
-	float AtomicAddF32([[vk::ext_reference]] float mem, uint memoryScope, uint memorySemantics, float value);
+	F32 AtomicAddF32([[vk::ext_reference]] F32 mem, U32 memoryScope, U32 memorySemantics, F32 value);
 
 }
-)"

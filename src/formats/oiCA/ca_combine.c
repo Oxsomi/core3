@@ -322,12 +322,14 @@ Bool CAFile_combine(
 
 	//Validate encryption/compression settings compatibility (compare as U64[5])
 
-	const void *aSettingsPtr = &a->settings.compressionType;
-	const void *bSettingsPtr = &b->settings.compressionType;
+	//The fields only guarantee U32 alignment, so comparing them in place as U64s can be a misaligned load;
+	// a byte compare over the same span avoids that.
 
-	for (U64 i = 0; i < 5; ++i)
-		if (((const U64*)aSettingsPtr)[i] != ((const U64*)bSettingsPtr)[i])
-			retError(clean, Error_invalidParameter(1, 0, "CAFile_combine()::a is incompatible with b"));
+	if (Buffer_neq(
+		Buffer_createRefConst(&a->settings.compressionType, sizeof(U64) * 5),
+		Buffer_createRefConst(&b->settings.compressionType, sizeof(U64) * 5)
+	))
+		retError(clean, Error_invalidParameter(1, 0, "CAFile_combine()::a is incompatible with b"));
 
 	//Merge settings: combine date flags, a leads for everything else
 

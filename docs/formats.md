@@ -113,7 +113,7 @@ ESHSettingsFlags include HideMagicNumber (if the oiSH is a subfile of another fo
 
 The binaries currently supported: SPIRV and DXIL. The one reading the file should pick the most efficient compilation path. Though it's possible the graphics API doesn't support one of them, so both should be included if the binary is used with different runtimes (ofc exclusively DXIL is allowed with a D3D12 and SPIRV with Vulkan).
 
-The extensions currently possible to signal: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayMotionBlur, RayReorder. This is signaled for the entire binary.
+The extensions currently possible to signal: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, Reserved, RayReorder. This is signaled for the entire binary.
 
 It includes the following stages: Vertex, Pixel, Compute, GeometryExt, Hull, Domain, MeshExt, TaskExt, RaygenExt, CallableExt, MissExt, ClosestHitExt, AnyHitExt, IntersectionExt.
 

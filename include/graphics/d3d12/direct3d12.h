@@ -83,6 +83,12 @@ typedef struct DxGraphicsInstance {
 	ID3D12DeviceFactory *deviceFactoryNoSingleton;
 	ID3D12DeviceFactory *deviceFactorySingleton;
 
+	//Which D3D12SDKVersion the device factory accepted (the preview constant or the stable one), so version
+	// gated workarounds know which runtime line they are on.
+
+	U32 agilitySdkVersion;
+	U32 padding0;
+
 	AGSContext *agsContext;
 
 	CharString nvDriverVersion;
@@ -115,11 +121,11 @@ typedef struct DxPipeline {
 	union {
 
 		struct {
-			ID3D12StateObject *stateObject;                //For anything else (RTPSO, workgraphs, mesh shaders, etc.)
+			ID3D12StateObject *stateObject;                    //For anything else (RTPSO, mesh shaders, etc.)
 			ID3D12StateObjectProperties *stateObjectProps;
 		};
 
-		ID3D12PipelineState *pso;                          //For graphics & compute shaders
+		ID3D12PipelineState *pso;                              //For graphics & compute shaders
 
 	};
 
@@ -131,10 +137,28 @@ typedef struct DxPipeline {
 } DxPipeline;
 
 typedef struct DxBLAS {
+
 	D3D12_RAYTRACING_GEOMETRY_DESC geometry;
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
+
+	//OmmTriangles holds POINTERS to these two rather than the structs themselves, so both have to outlive the
+	// geometry desc and therefore live here rather than on the stack at build time.
+	//Only used when the geometry type is OMM_TRIANGLES; the plain triangle path writes geometry.Triangles.
+
+	D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC ommTriangleData;
+	D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC ommLinkage;
+
 	U32 primitives, padding[3];
+
 } DxBLAS;
+
+TListNamed(D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY, ListDxOMMHistogram);
+
+typedef struct DxOpacityMicromap {
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
+	D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC array;
+	ListDxOMMHistogram histogram;
+} DxOpacityMicromap;
 
 typedef struct DxTLAS {
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;

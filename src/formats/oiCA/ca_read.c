@@ -53,7 +53,15 @@ void DLFile_prepMoveStringRef(DLFile *src, CharString *str, DLFile *dst) {
 	U64 bufl = Buffer_length(contentBuf);
 
 	//Move directly into our pre-allocated cache buffer (we know the size from the prev DLFile load)
-	if (contentBuf.ptr >= src->cache.ptr && contentBuf.ptr < src->cache.ptr + Buffer_length(src->cache)) {
+	//An oiDL whose entries are all zero length allocates no cache, leaving a null base that the end pointer
+	// below would offset, which is undefined even by zero.
+	//Nothing lies inside a cache that doesn't exist, so the check short circuits to the same answer.
+
+	if (
+		Buffer_length(src->cache) &&
+		contentBuf.ptr >= src->cache.ptr &&
+		contentBuf.ptr < src->cache.ptr + Buffer_length(src->cache)
+	) {
 
 		Buffer subArea = Buffer_createRef(dst->cache.ptrNonConst + (contentBuf.ptr - src->cache.ptr), bufl);
 		Buffer_memcpy(subArea, contentBuf);
@@ -434,7 +442,14 @@ Bool CAFile_read(
 			U64 bufl = Buffer_length(contentBuf);
 
 			//Move directly into our pre-allocated cache buffer (we know the size from the prev DLFile load)
-			if (contentBuf.ptr >= content.cache.ptr && contentBuf.ptr < content.cache.ptr + Buffer_length(content.cache)) {
+			//Guarded on a non-empty cache for the same reason as the names variant above: an archive whose
+			// files are all empty allocates no cache, and the end pointer would offset a null base.
+
+			if (
+				Buffer_length(content.cache) &&
+				contentBuf.ptr >= content.cache.ptr &&
+				contentBuf.ptr < content.cache.ptr + Buffer_length(content.cache)
+			) {
 				Buffer subArea = Buffer_createRef(caFile->content.cache.ptrNonConst + (contentBuf.ptr - content.cache.ptr), bufl);
 				Buffer_memcpy(subArea, contentBuf);
 				gotoIfError3(clean, CAFile_setData(caFile, fileHandle, alloc, &subArea, e_rr));

@@ -312,8 +312,7 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 
 		Bool currGfxOrComp = !(
 			(entry.stage >= ESHPipelineStage_RtStartExt && entry.stage >= ESHPipelineStage_RtEndExt) ||
-			entry.stage >= ESHPipelineStage_Count ||
-			entry.stage == ESHPipelineStage_WorkgraphExt
+			entry.stage >= ESHPipelineStage_Count
 		);
 
 		if(currGfxOrComp)
@@ -342,8 +341,12 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 		e_rr
 	));
 
+	//A lib with no named entrypoint used to mean raytracing OR a workgraph; workgraphs are gone, so the only
+	// remaining non-RT case falls back to the Count sentinel that dxil_link already treats as "maintain lib
+	// linking" rather than to a concrete stage.
+
 	if (linkEntry.entrypointId == U16_MAX)
-		binaryIdentifier.stageType = combo->isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_WorkgraphExt;
+		binaryIdentifier.stageType = combo->isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_Count;
 
 	//Register the binary and link its runtime entries to it.
 	//binaryId is derived from the current const SHFile *size,
@@ -614,6 +617,116 @@ clean:
 
 //File finalize: runs once every combination has drained and nothing failed.
 //Sorts the binary indices, links entrypoints to binaries and hands the finished SHFile to the job's output slot.
+//Binaries are appended in whatever order their leaf jobs won the SHFile lock, which is thread scheduling,
+//so two runs over identical sources produce the same oiSH with its binaries in a different order and the
+//file differs byte for byte. -threads 1 is stable, anything else is not.
+//Sorting them on the single threaded finalize is what makes the output reproducible. Nothing else has to
+//move: binaryIndices references binaries by index, so it is remapped through the same permutation before it
+//is sorted and consumed.
+
+Bool Compiler_binaryOrderLess(const SHBinaryInfo *a, const SHBinaryInfo *b) {
+
+	//The identifier is what distinguishes one binary from another, so it is what orders them.
+
+	if(a->identifier.stageType != b->identifier.stageType)
+		return a->identifier.stageType < b->identifier.stageType;
+
+	if(a->identifier.shaderVersion != b->identifier.shaderVersion)
+		return a->identifier.shaderVersion < b->identifier.shaderVersion;
+
+	if(a->identifier.extensions != b->identifier.extensions)
+		return a->identifier.extensions < b->identifier.extensions;
+
+	const ECompareResult name =
+		CharString_compareSensitive(&a->identifier.entrypoint, &b->identifier.entrypoint);
+
+	if(name != ECompareResult_Eq)
+		return name == ECompareResult_Lt;
+
+	//Two binaries can still share an identifier (different defines or uniform data), so the compiled bytes
+	//are the last tiebreaker. Blobs that hash the same are interchangeable, so any order between them is
+	//stable by definition.
+
+	for (U64 i = 0; i < ESHBinaryType_Count; ++i) {
+
+		const U32 crcA = Buffer_crc32c(a->binaries[i]);
+		const U32 crcB = Buffer_crc32c(b->binaries[i]);
+
+		if(crcA != crcB)
+			return crcA < crcB;
+	}
+
+	return false;
+}
+
+//Reorders the file's binaries into that order and remaps binaryIndices onto it.
+//Insertion sort rather than anything cleverer: a file has tens of binaries, and this runs once.
+
+Bool Compiler_sortBinaries(SHFile *shFile, ListU32 *binaryIndices, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Buffer orderBuf = Buffer_createNull();
+	Buffer sortedBuf = Buffer_createNull();
+
+	const U64 count = shFile->binaries.length;
+
+	if(count < 2)
+		goto clean;
+
+	gotoIfError3(clean, Buffer_createEmptyBytes(count * sizeof(U16), alloc, &orderBuf, e_rr));
+	gotoIfError3(clean, Buffer_createEmptyBytes(count * sizeof(SHBinaryInfo), alloc, &sortedBuf, e_rr));
+
+	U16 *order = (U16*) orderBuf.ptrNonConst;
+	SHBinaryInfo *sorted = (SHBinaryInfo*) sortedBuf.ptrNonConst;
+	SHBinaryInfo *binaries = shFile->binaries.ptrNonConst;
+
+	for (U64 i = 0; i < count; ++i) {
+
+		U64 j = i;
+
+		for (; j; --j) {
+
+			if(!Compiler_binaryOrderLess(&binaries[i], &binaries[order[j - 1]]))
+				break;
+
+			order[j] = order[j - 1];
+		}
+
+		order[j] = (U16) i;
+	}
+
+	//order[newId] = oldId, so the inverse is what binaryIndices needs.
+
+	for (U64 i = 0; i < count; ++i)
+		sorted[i] = binaries[order[i]];
+
+	Buffer_memcpy(
+		Buffer_createRef(binaries, count * sizeof(SHBinaryInfo)),
+		Buffer_createRefConst(sorted, count * sizeof(SHBinaryInfo))
+	);
+
+	for (U64 i = 0; i < binaryIndices->length; ++i) {
+
+		const U32 v = binaryIndices->ptr[i];
+		const U16 oldId = (U16) v;
+
+		U16 newId = oldId;
+
+		for (U64 j = 0; j < count; ++j)
+			if(order[j] == oldId) {
+				newId = (U16) j;
+				break;
+			}
+
+		binaryIndices->ptrNonConst[i] = (v & 0xFFFF0000u) | newId;
+	}
+
+clean:
+	Buffer_free(&sortedBuf, alloc);
+	Buffer_free(&orderBuf, alloc);
+	return s_uccess;
+}
+
 Bool Compiler_finalizeShaderFile(void *data, U64 threadId, JobQueue *queue) {
 
 	(void) threadId; (void) queue;
@@ -627,7 +740,12 @@ Bool Compiler_finalizeShaderFile(void *data, U64 threadId, JobQueue *queue) {
 	Error errTmp = Error_none();
 	Bool s_uccess = true;
 
-	if(!ListU32_sort(ctx->binaryIndices))
+	//Reproducibility: see Compiler_sortBinaries. Has to run before binaryIndices is sorted and consumed.
+
+	if(!Compiler_sortBinaries(&ctx->shFile, &ctx->binaryIndices, alloc, &errTmp))
+		s_uccess = false;
+
+	else if(!ListU32_sort(ctx->binaryIndices))
 		s_uccess = false;
 
 	else if(!Compiler_registerShaderEntries(&ctx->shFile, &ctx->runtimeEntries, ctx->binaryIndices, alloc, &errTmp))

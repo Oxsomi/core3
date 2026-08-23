@@ -21,6 +21,7 @@
 //graphics/vulkan/generic/vk_tlas.c
 
 #include "graphics/generic/device.h"
+#include "types/base/mathi.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
@@ -31,6 +32,97 @@
 #include "types/base/constants.h"
 
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
+
+//Writes the instance array into its mapped upload buffer and turns every BLAS reference into the device
+// address the build actually reads.
+//Split out of init because a refit has to do this again: the buffer is filled once at create, so an update
+// would otherwise rebuild the structure over the instances it already had.
+
+static Bool VkTLAS_fillInstances(GraphicsDeviceRef *deviceRef, TLAS *tlas, Error *e_rr) {
+
+	Bool s_uccess = true;
+	ELockAcquire acq = ELockAcquire_Invalid;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	const U64 stride = sizeof(TLASInstance);
+	const U64 instancesU64 = tlas->cpuInstances.length;
+
+	//Directly copy the data is allowed, because it's not in flight and it's on the CPU
+
+	DeviceBuffer *tempInstanceBuf = DeviceBufferRef_ptr(tlas->tempInstanceBuffer);
+	void *mem = tempInstanceBuf->resource.mappedMemoryExt;
+
+	Buffer_memcpy(
+		Buffer_createRef(mem, stride * instancesU64),
+		Buffer_createRefConst(tlas->cpuInstances.ptr, stride * instancesU64)
+	);
+
+	//We have to transform the CPU-sided buffer to a GPU buffer address
+
+	for (U64 i = 0; i < instancesU64; ++i) {
+
+		TLASInstanceData *dat = NULL;
+		TLAS_getInstanceDataCpuInternal(tlas, i, &dat);
+
+		if(!dat->blasCpu)
+			continue;
+
+		//Offset of this instance's AS reference from the START of the instance array, not from the start
+		// of this instance.
+		//Subtracting the per instance base as well left only the constant intra struct offset, so every
+		// iteration wrote the same slot and instances past the first never received an address at all.
+
+		const U64 *blasAddress = &dat->blasDeviceAddress;
+		U64 offset = (const U8*)blasAddress - (const U8*)tlas->cpuInstances.ptr;
+
+		//The reference has to come from vkGetAccelerationStructureDeviceAddressKHR;
+		// the backing buffer's address is not necessarily the same thing.
+
+		const VkAccelerationStructureDeviceAddressInfoKHR addressInfo =
+			(VkAccelerationStructureDeviceAddressInfoKHR) {
+				.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+				.accelerationStructure = BLAS_ext(BLASRef_ptr(dat->blasCpu), Vk)->as
+			};
+
+		*(U64*)((U8*)mem + offset) = deviceExt->getAccelerationStructureDeviceAddress(
+			deviceExt->device, &addressInfo
+		);
+	}
+
+	acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
+	DeviceMemoryBlock block = device->allocator.blocks.ptr[tempInstanceBuf->resource.blockId];
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->allocator.lock);
+
+	acq = ELockAcquire_Invalid;
+
+	Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	if(incoherent) {
+
+		VkMappedMemoryRange mappedRange = (VkMappedMemoryRange) {
+			.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+			.memory = (VkDeviceMemory) block.ext,
+			.offset = tempInstanceBuf->resource.blockOffset,
+			.size = stride * instancesU64
+		};
+
+		gotoIfError3(clean, checkVkError(deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &mappedRange), e_rr));
+	}
+
+	tlas->base.flagsExt &=~ (U8) ETLASFlag_InstancesDirty;
+
+clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->allocator.lock);
+
+	return s_uccess;
+}
 
 Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
@@ -50,12 +142,12 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 		retError(clean, Error_unsupportedOperation(0, "VkTLAS_init()::serialized not supported yet"));        //TODO:
 
 	U64 instancesU64 = 0;
-	U64 stride = tlas->base.isMotionBlurExt ? sizeof(TLASInstanceMotion) : sizeof(TLASInstanceStatic);
+	U64 stride = sizeof(TLASInstance);
 
-	if (tlas->useDeviceMemory)
+	if (TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
 		instancesU64 = tlas->deviceData.len / stride;
 
-	else instancesU64 = tlas->cpuInstancesStatic.length;        //Both static and motion length are at the same loc
+	else instancesU64 = tlas->cpuInstances.length;
 
 	if(instancesU64 >> 24)
 		retError(clean, Error_outOfBounds(
@@ -73,7 +165,7 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 		//We have to temporarily allocate a device mem buffer
 
-		if (!tlas->useDeviceMemory) {
+		if (!TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory)) {
 
 			gotoIfError3(clean, CharString_format(
 				alloc,
@@ -96,65 +188,7 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 			CharString_free(&tmp, alloc);
 
-			//Directly copy the data is allowed, because it's not in flight and it's on the CPU
-
-			DeviceBuffer *tempInstanceBuf = DeviceBufferRef_ptr(tlas->tempInstanceBuffer);
-			void *mem = tempInstanceBuf->resource.mappedMemoryExt;
-
-			Buffer_memcpy(
-				Buffer_createRef(mem, stride * instancesU64),
-				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)    //static, motion same pos
-			);
-
-			//We have to transform the CPU-sided buffer to a GPU buffer address
-
-			for (U64 i = 0; i < instancesU64; ++i) {
-
-				TLASInstanceData *dat = NULL;
-				TLAS_getInstanceDataCpuInternal(tlas, i, &dat);
-
-				if(!dat->blasCpu)
-					continue;
-
-				const U64 *blasAddress = &dat->blasDeviceAddress;
-				U64 offset = (const U8*)blasAddress - (((const U8*)tlas->cpuInstancesStatic.ptr) + stride * i);
-
-				//The reference has to come from vkGetAccelerationStructureDeviceAddressKHR;
-				// the backing buffer's address is not necessarily the same thing.
-
-				const VkAccelerationStructureDeviceAddressInfoKHR addressInfo =
-					(VkAccelerationStructureDeviceAddressInfoKHR) {
-						.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
-						.accelerationStructure = BLAS_ext(BLASRef_ptr(dat->blasCpu), Vk)->as
-					};
-
-				*(U64*)((U8*)mem + offset) = deviceExt->getAccelerationStructureDeviceAddress(
-					deviceExt->device, &addressInfo
-				);
-			}
-
-			acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
-
-			DeviceMemoryBlock block = device->allocator.blocks.ptr[tempInstanceBuf->resource.blockId];
-
-			if(acq == ELockAcquire_Acquired)
-				SpinLock_unlock(&device->allocator.lock);
-
-			acq = ELockAcquire_Invalid;
-
-			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-			if(incoherent) {
-
-				VkMappedMemoryRange mappedRange = (VkMappedMemoryRange) {
-					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-					.memory = (VkDeviceMemory) block.ext,
-					.offset = tempInstanceBuf->resource.blockOffset,
-					.size = stride * instancesU64
-				};
-
-				gotoIfError3(clean, checkVkError(deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &mappedRange), e_rr));
-			}
+			gotoIfError3(clean, VkTLAS_fillInstances(deviceRef, tlas, e_rr));
 
 			instances = (DeviceData) { .buffer = tlas->tempInstanceBuffer, .len = stride * instancesU64 };
 		}
@@ -185,9 +219,6 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 	if(tlas->base.flags & ERTASBuildFlags_MinimizeMemory)
 		flags |= VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR;
-
-	if(tlas->base.isMotionBlurExt)
-		flags |= VK_BUILD_ACCELERATION_STRUCTURE_MOTION_BIT_NV;
 
 	tlasExt->geometries = (VkAccelerationStructureBuildGeometryInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
@@ -241,7 +272,11 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 		EGraphicsResourceFlag_None,
 		NULL,
 		&tmp,
-		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.updateScratchSize : sizes.buildScratchSize,
+		//One scratch buffer serves both, since the same object now does the full build and every refit after
+		// it; the update size is not required to be the smaller of the two, so neither is assumed.
+
+		tlas->base.flags & ERTASBuildFlags_AllowUpdate ?
+			U64_max(sizes.buildScratchSize, sizes.updateScratchSize) : sizes.buildScratchSize,
 		&tlas->base.tempScratchBuffer,
 		e_rr
 	));
@@ -262,17 +297,14 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 	//Queue build
 
-	if(tlas->base.parent)
-		tlasExt->geometries.srcAccelerationStructure = TLAS_ext(TLASRef_ptr(tlas->base.parent), Vk)->as;
-
 	tlasExt->geometries.dstAccelerationStructure = tlasExt->as;
 
 	tlasExt->geometries.scratchData = (VkDeviceOrHostAddressKHR) {
 		.deviceAddress = DeviceBufferRef_ptr(tlas->base.tempScratchBuffer)->resource.deviceAddress
 	};
 
-	if(tlas->base.flags & ERTASBuildFlags_IsUpdate)
-		tlasExt->geometries.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+	//mode and srcAccelerationStructure are decided per build in flush instead, since whether a build refits
+	// depends on whether this structure has been built before.
 
 clean:
 
@@ -312,6 +344,20 @@ Bool VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		return s_uccess;
 
 	const VkAccelerationStructureBuildRangeInfoKHR *range = &tlasExt->range;
+
+	//New instances only reach the GPU here, so a batch of transform changes costs one upload rather than
+	// one per change.
+
+	if(TLAS_hasFlag(tlas, ETLASFlag_InstancesDirty) && !TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
+		gotoIfError3(clean, VkTLAS_fillInstances(deviceRef, tlas, e_rr));
+
+	//A structure that was already built refits itself in place, which both APIs allow and which is what
+	// keeps its bindless handle valid across an update.
+
+	if (tlas->base.isCompleted) {
+		tlasExt->geometries.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+		tlasExt->geometries.srcAccelerationStructure = tlasExt->as;
+	}
 
 	deviceExt->cmdBuildAccelerationStructures(
 		commandBuffer->buffer,

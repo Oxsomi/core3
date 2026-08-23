@@ -335,7 +335,13 @@ Bool Buffer_combine(const Buffer *a, const Buffer *b, const Allocator *alloc, Bu
 	gotoIfError3(clean, Buffer_createUninitializedBytes(alen + blen, alloc, output, e_rr));
 
 	Buffer_memcpy(*output, *a);
-	Buffer_memcpy(Buffer_createRef(output->ptrNonConst + alen, blen), *b);
+
+	//Combining two empty buffers allocates nothing, so the output base is null and offsetting it is undefined
+	// even by the zero alen would be here.
+	//There is nothing to copy in that case either, so the second copy is simply skipped.
+
+	if(blen)
+		Buffer_memcpy(Buffer_createRef(output->ptrNonConst + alen, blen), *b);
 
 clean:
 	return s_uccess;

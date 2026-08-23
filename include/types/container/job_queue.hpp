@@ -41,6 +41,7 @@ namespace oxc {
 		#include "types/base/error.h"
 		#include "types/base/allocator.h"
 		#include "types/base/buffer_base.h"
+		#include "types/container/buffer.h"        //Buffer_createUninitializedBytes / Buffer_free, see push()
 	}
 
 	//RAII wrapper around the C JobQueue.
@@ -60,12 +61,21 @@ namespace oxc {
 		template<typename F>
 		struct JobStorage {
 
+			//Has to stay the first member: the queue is handed c::JobQueue_wrapperCallback, which reads the
+			// JobInvoke back out of the start of this storage.
+
+			c::JobWrapperJob base;
 			c::Allocator alloc;
 			F func;
 
-			JobStorage(const c::Allocator &alloc, F &&f) noexcept : alloc(alloc), func(std::move(f)) {}
+			JobStorage(const c::Allocator &alloc, F &&f) noexcept
+				: base{ &invoke }, alloc(alloc), func(std::move(f)) {}
 
-			static c::Bool run(void *data, c::U64 threadId, c::JobQueue*) {
+			//The only function of ours the C queue ever calls, and its signature is builtin only on purpose.
+			//A c::JobQueue parameter here would be a different type to the queue's own JobQueue, which
+			// -fsanitize=function reports as a call through an incorrect function type (see JobInvoke).
+
+			static c::Bool invoke(void *data, c::U64 threadId) {
 				JobStorage *self = (JobStorage*) data;
 				const c::Bool res = self->func(threadId);
 				destroy(self);
@@ -73,14 +83,21 @@ namespace oxc {
 			}
 
 			//Runs ~F and frees the storage.
-			//Used by run() after execution and, via JobDestructor, by JobQueue_free for jobs discarded on shutdown
-			// (so captures don't leak).
+			//Used by invoke() after execution and, via JobDestructor, by JobQueue_free for jobs discarded on
+			// shutdown (so captures don't leak).
+			//void(void*) needs no such care, since neither parameter carries a scope.
 
 			static void destroy(void *data) {
+
 				JobStorage *self = (JobStorage*) data;
 				const c::Allocator allocCopy = self->alloc;
 				self->~JobStorage();
-				allocCopy.free(allocCopy.ptr, c::Buffer_createManagedPtr(self, sizeof(JobStorage)));
+
+				//Freed through the C API rather than by calling allocCopy.free here, for the reason push()
+				// documents: the indirect call belongs on the C side where the callback's type matches.
+
+				c::Buffer buf = c::Buffer_createManagedPtr(self, sizeof(JobStorage));
+				c::Buffer_free(&buf, &allocCopy);
 			}
 		};
 
@@ -137,14 +154,27 @@ namespace oxc {
 
 			c::Buffer buf{};
 
-			if(!queue.alloc || !queue.alloc->alloc || !queue.alloc->alloc(queue.alloc->ptr, sizeof(Storage), &buf, e_rr))
+			//Allocated through the C API instead of calling queue.alloc->alloc from here.
+			//The C headers are included inside oxc::c, so an indirect call made from this header carries
+			// oxc::c::Buffer* / oxc::c::Error* in its type, while the allocator it lands on was compiled with
+			// the plain C ones.
+			//Those are the same types to the linker but not to -fsanitize=function, which reports the call as
+			// going through an incorrect function type; Buffer_createUninitializedBytes performs the same
+			// allocation from C, where the types agree, and checks the allocator for us on the way.
+
+			if(!c::Buffer_createUninitializedBytes(sizeof(Storage), queue.alloc, &buf, e_rr))
 				return false;
 
 			Storage *storage = std::construct_at((Storage*)buf.ptrNonConst, *queue.alloc, std::forward<F>(f));
 
 			//Register destroy as the discard destructor so a queued-but-never-run job frees itself on shutdown.
 
-			if (!c::JobQueue_pushDestructor(&queue, &Storage::run, storage, &Storage::destroy, e_rr)) {
+			//The callback is the C forwarder rather than Storage::invoke, so the pointer the queue calls was
+			// defined with the same types the queue calls it through.
+
+			if (!c::JobQueue_pushDestructor(
+				&queue, &c::JobQueue_wrapperCallback, storage, &Storage::destroy, e_rr
+			)) {
 				Storage::destroy(storage);
 				return false;
 			}

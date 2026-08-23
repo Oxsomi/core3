@@ -61,6 +61,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 	Bool allocated = false;
+	U32 pipelineExtensions = 0;
 
 	//Validate
 
@@ -197,14 +198,15 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 		gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, bin, entry, e_rr));
 
+		pipelineExtensions |= (U32)(bin->identifier.extensions &~ bin->dormantExtensions);
 		stageFlags |= (U64)1 << entry->stage;
 	}
 
 	//Invalidate compute or raytracing stages
 
-	if(stageFlags & ((1 << ESHPipelineStage_Compute) | (1 << ESHPipelineStage_WorkgraphExt)))
+	if(stageFlags & (1 << ESHPipelineStage_Compute))
 		retError(clean, Error_invalidOperation(
-			5, "GraphicsDeviceRef_createPipelinesGraphics()::info contains compute or workgraph stage"
+			5, "GraphicsDeviceRef_createPipelinesGraphics()::info contains a compute stage"
 		));
 
 	if(stageFlags & (((1 << ESHPipelineStage_RtEndExt) - 1) &~ ((1 << ESHPipelineStage_RtStartExt) - 1)))
@@ -417,6 +419,18 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 			"GraphicsDeviceRef_createPipelineGraphics()::info.blendState.logicOpExt can't be on if blending is used"
 		));
 
+	//A logic op without blendState.enable would silently diverge between the backends: Vulkan keys
+	// logicOpEnable on logicOpExt alone, while D3D12 builds its whole blend desc, LogicOpEnable included,
+	// only when enable is set, so the same pipeline would XOR on one API and overwrite on the other.
+	//Rejecting the combination turns that silent divergence into an error at the point of the mistake.
+
+	if(info->blendState.logicOpExt && !info->blendState.enable)
+		retError(clean, Error_invalidOperation(
+			23,
+			"GraphicsDeviceRef_createPipelineGraphics()::info.blendState.logicOpExt requires blendState.enable, "
+			"since D3D12 ignores the logic op entirely without it"
+		));
+
 	if(info->depthFormatExt >= EDepthStencilFormat_Count)
 		retError(clean, Error_invalidOperation(
 			20, "GraphicsDeviceRef_createPipelineGraphics()::info.depthFormatExt out of bounds"
@@ -448,7 +462,8 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 	*pipelinePtr = (Pipeline) {
 		.device = deviceRef,
 		.type = EPipelineType_Graphics,
-		.flags = flags
+		.flags = flags,
+		.extensions = pipelineExtensions
 	};
 
 	if(!layout)

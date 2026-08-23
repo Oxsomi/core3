@@ -261,7 +261,17 @@ static void LWindow_pointerMotionBar(
 	I32 nx = wl_fixed_to_int(sx);
 	I32 ny = wl_fixed_to_int(sy);
 
+	const I32x2 oldCursor = w->cursor;
+
 	w->cursor = I32x2_create2(nx, ny);
+
+	//Same contract as the Windows backend (the Windows backend's WM_MOUSEMOVE path):
+	// fire only on an actual change, right after w->cursor is updated so the callback reads the new position,
+	// and before the axis work.
+	//Without this the callback simply never fired on Wayland and consumers had to read RX/RY.
+
+	if(w->callbacks.onCursorMove && I32x2_neq2(oldCursor, w->cursor))
+		w->callbacks.onCursorMove(w);
 
 	lwin->contentPointerX = nx;
 	lwin->contentPointerY = ny;
@@ -560,7 +570,18 @@ static void LWindow_touchMotion(void *data, struct wl_touch *touch, U32 time, I3
 		return;
 
 	I32 nx = wl_fixed_to_int(x), ny = wl_fixed_to_int(y);
+
+	const I32x2 oldCursor = w->cursor;
+
 	w->cursor = I32x2_create2(nx, ny);
+
+	//A dragging finger IS cursor motion, so it reports like the pointer does.
+	//Touch DOWN deliberately does not, matching the axis handling there:
+	// first contact is the tracking baseline, not a move.
+
+	if(w->callbacks.onCursorMove && I32x2_neq2(oldCursor, w->cursor))
+		w->callbacks.onCursorMove(w);
+
 	lwin->contentPointerX = nx;
 	lwin->contentPointerY = ny;
 

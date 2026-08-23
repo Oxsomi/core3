@@ -39,16 +39,8 @@ typedef struct GraphicsApplicationInfo {
 	U32 version, padding;
 } GraphicsApplicationInfo;
 
-#define GRAPHICS_API_VULKAN 0
-#define GRAPHICS_API_D3D12 1
-
-typedef enum EGraphicsApi {
-	EGraphicsApi_Vulkan            = GRAPHICS_API_VULKAN,
-	EGraphicsApi_Direct3D12        = GRAPHICS_API_D3D12,
-	//EGraphicsApi_Metal,
-	//EGraphicsApi_WebGPU,
-	EGraphicsApi_Count
-} EGraphicsApi;
+//EGraphicsApi (and the GRAPHICS_API_* defines) live in device_info.h, which this header includes,
+// moved there for C++ layer compatibility (see the note at its definition).
 
 extern const C8 *EGraphicsApi_name[EGraphicsApi_Count];
 
@@ -71,6 +63,7 @@ typedef enum EGraphicsInstanceFlags {
 typedef struct GraphicsObjectTypes {
 	RefPtrType device, buffer, deviceTexture, renderTexture, depthStencil, swapchain;
 	RefPtrType pipelineCompute, pipelineGraphics, pipelineRaytracing, sampler, blas, tlas;
+	RefPtrType opacityMicromap;
 	RefPtrType descriptorLayout, descriptorTable, descriptorHeap, pipelineLayout;
 	RefPtrType commandList;
 } GraphicsObjectTypes;

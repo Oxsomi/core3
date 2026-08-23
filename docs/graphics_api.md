@@ -81,7 +81,7 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 
 - ```c
   Bool getPreferredDevice(
-  	GraphicsDeviceCapabilities requiredCapabilities,
+  	const GraphicsDeviceCapabilities *requiredCapabilities,
   	U64 vendorMask,
   	U64 deviceTypeMask,
   	GraphicsDeviceInfo *deviceInfo,
@@ -138,12 +138,14 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 
 #### Capabilities
 
-- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayMotionBlur, RayReorder, RayTriPosition, RayValidation, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend, Workgraphs, SwapchainCompute, CoopVec, CoopMat, CoopFP8, CoopVecTraining.
+- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayReorder, RayTriPosition, RayValidation, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend, SwapchainCompute, CoopVec, CoopMat, CoopFP8, CoopVecTraining.
 
 - experimentalFeatures: the subset of `features` that is experimental/preview on this device+build (not final; may change or be removed across SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled best-effort via the preview Agility SDK + D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions so this stays empty. Check it if you want to opt into preview features knowingly.
   - RayValidation: extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot.
-- features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild.
+- features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild, RayMicromapOpacityActual, RayMicromapOpacityU8.
   - RayReorderActual: SER (RayReorder) means the shader-execution-reordering API is available (always valid to call, but may be a no-op); RayReorderActual means the device actually performs the reordering, so it's worth restructuring shaders around it.
+  - RayMicromapOpacityActual: same shape one feature over. RayMicromapOpacity means the API accepts opacity micromaps; this bit means they're likely backed by dedicated hardware rather than emulated, so a real micromap object is worth building. Neither API reports it (D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's VkPhysicalDeviceOpacityMicromapFeaturesEXT is one bool, and an Ampere 3080 reports the same 12/12 subdivision maximum as hardware that has the units), so OxC3 derives it: NVIDIA needs RayReorderActual since the reordering and OMM hardware shipped in the same generation, every other vendor is taken at its word. It is a heuristic, so treat it as "worth it" rather than as a guarantee; special-index-only OMM costs nothing either way.
+  - RayMicromapOpacityU8: 8-bit (R8u) OMM index buffers are legal. D3D12 ships this with opacity micromaps themselves; on Vulkan only the VK_KHR_opacity_micromap promotion permits VK_INDEX_TYPE_UINT8 (the EXT extension forbids it), and since OxC3's KHR path isn't implemented yet no Vulkan device claims the bit today — R8u is rejected at BLAS create there.
   - DescriptorHeap: full bindless; shaders index the descriptor heap directly without a fixed descriptor layout. D3D12: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) + resource binding tier 3; Vulkan: VK_EXT_descriptor_heap. Always implies Bindless on both APIs.
   - RayClusterAS + RayPartitionedTLAS: mega geometry (RTXMG), split the way Vulkan splits it: cluster acceleration structures (CLAS/cluster BLAS) and partitioned TLAS. Vulkan: VK_NV_cluster_acceleration_structure / VK_NV_partitioned_acceleration_structure; D3D12: NVAPI raytracing caps (cluster operations / partitioned TLAS).
   - RayIndirectASBuild: GPU-driven acceleration structure builds. Vulkan: accelerationStructureIndirectBuild (vkCmdBuildAccelerationStructuresIndirectKHR for classic AS); D3D12: implied by either mega geometry bit, since those builds are indirect by design.
@@ -225,9 +227,8 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
 
 - ```c
   Bool submitCommands(
-  	ListCommandListRef commandLists,
-  	ListSwapchainRef swapchains,
-  	Buffer appData,
+  	const ListCommandListRef *commandLists,
+  	const ListSwapchainRef *swapchains,
   	F32 deltaTime,		//< 0 = auto calculate time and deltaTime
   	F32 time,
   	Error *e_rr
@@ -245,6 +246,12 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   ```
 
   - Waits for all currently queued commands on the device.
+
+- ```c
+  Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message);
+  ```
+
+  - One time runtime hints: returns true exactly once per device per message (an atomic test and set on GraphicsDevice::runtimeMessages), so the caller logs on true and stays silent forever after, preventing a per call hint from spamming. Current messages: OmmLikelyEmulated (a BLAS links a real opacity micromap on a device without RayMicromapOpacityActual, where the free special indices usually serve better), SubmitFlushed (a submit was split mid recording because pending copies or AS builds crossed flushThreshold, adding a GPU sync point), RootSignature13Dwords (a pipeline layout exceeds the 13 root signature DWORDs D3D12 drivers keep in fast memory) and TooManyMemoryBlocks (a dedicated allocation fell back to shared because the device already holds >= 2000 blocks).
 
 - ```c
   Bool createSwapchain(
@@ -274,6 +281,7 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   	const SHFile *shaderBinary,
   	const CharString *name,			//Temporary name for debugging
   	U32 entryId,					//Identifier from getFirstShaderEntry
+  	const CharString *entryName,	//Optional: SPIRV entrypoint to use
   	EPipelineFlags flags,
   	PipelineLayoutRef *layout,		//NULL = default bindless pipeline layout
   	PipelineRef **pipeline,
@@ -360,32 +368,47 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   ```
 
 - ```c
-  Bool createBLASExt(
-  	ERTASBuildFlags buildFlags,
-  	EBLASFlag blasFlags,
-  	ETextureFormatId positionFormat,	//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
-  	U16 positionOffset,					//Offset into first position for first vertex
-  	ETextureFormatId indexFormat,		//R16u, R32u, Undefined
-  	U16 positionBufferStride,			//<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
-  	DeviceData positionBuffer,			//Required
-  	DeviceData indexBuffer,				//Optional if indexFormat == Undefined
-  	BLASRef *parent,					//If specified, indicates refit
-  	CharString name,
-  	BLASRef **blas,
-  	Error *e_rr
-  );
-  ```
+  //Triangle geometry parameters travel as a struct so optional features become fields, not entry points.
+  //Built through BLASCreateInfo_indexed/_unindexed rather than by hand: required parameters stay
+  // positional there, so forgetting one is still a compile error.
+  typedef struct BLASCreateInfo {
+  	ERTASBuildFlags buildFlags;
+  	EBLASFlag blasFlags;
+  	ETextureFormatId positionFormat;	//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
+  	ETextureFormatId indexFormat;		//R16u, R32u, Undefined for unindexed
+  	U16 positionOffset;					//Offset into first position for first vertex
+  	U16 positionBufferStride;			//<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
+  	U32 padding;
+  	DeviceData positionBuffer;			//Required
+  	DeviceData indexBuffer;				//Only if indexFormat
+  	ETextureFormatId ommIndexFormat;	//R16u, R32u, Undefined for no OMM
+  	U32 padding1;
+  	DeviceData ommIndexBuffer;			//Only if ommIndexFormat
+  } BLASCreateInfo;
 
-- ```c
-  Bool createBLASUnindexedExt(
+  BLASCreateInfo BLASCreateInfo_indexed(
   	ERTASBuildFlags buildFlags,
   	EBLASFlag blasFlags,
-  	ETextureFormatId positionFormat,	//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
-  	U16 positionOffset,					//Offset into first position for first vertex
-  	U16 positionBufferStride,			//<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
-  	DeviceData positionBuffer,			//Required
-  	BLASRef *parent,					//If specified, indicates refit
-  	CharString name,
+  	ETextureFormatId positionFormat,
+  	U16 positionOffset,
+  	U16 positionBufferStride,
+  	DeviceData positionBuffer,
+  	ETextureFormatId indexFormat,
+  	DeviceData indexBuffer
+  );
+
+  BLASCreateInfo BLASCreateInfo_unindexed(
+  	ERTASBuildFlags buildFlags,
+  	EBLASFlag blasFlags,
+  	ETextureFormatId positionFormat,
+  	U16 positionOffset,
+  	U16 positionBufferStride,
+  	DeviceData positionBuffer
+  );
+
+  Bool createBLASExt(
+  	const BLASCreateInfo *info,
+  	const CharString *name,
   	BLASRef **blas,
   	Error *e_rr
   );
@@ -398,8 +421,7 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   	U32 aabbStride,						//Alignment: 8
   	U32 aabbOffset,						//Offset into the aabb array
   	DeviceData buffer,					//Required
-  	BLASRef *parent,					//If specified, indicates refit
-  	CharString name,
+  	const CharString *name,
   	BLASRef **blas,
   	Error *e_rr
   );
@@ -408,8 +430,7 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
 - ```c
   Bool createTLASExt(
   	ERTASBuildFlags buildFlags,
-  	TLASRef *parent,					//If specified, indicates refit
-  	const ListTLASInstanceStatic *instances,
+  	const ListTLASInstance *instances,
   	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
   	const CharString *name,
@@ -419,23 +440,13 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   ```
 
 - ```c
-  Bool createTLASMotionExt(
-  	ERTASBuildFlags buildFlags,
-  	TLASRef *parent,					//If specified, indicates refit
-  	const ListTLASInstanceMotion *instances,
-  	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
-  	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
-  	const CharString *name,
-  	TLASRef **tlas,
-  	Error *e_rr
-  );
+  //Refits a CPU built TLAS in place; see Refitting
+  Bool TLASRef_setInstancesExt(TLASRef *tlas, const ListTLASInstance *instances, Error *e_rr);
   ```
 
 - ```c
   Bool createTLASDeviceExt(
   	ERTASBuildFlags buildFlags,
-  	Bool isMotionBlurExt,				//Requires extension
-  	TLASRef *parent,					//If specified, indicates refit
   	const DeviceData *instancesDevice,	//Instances on the GPU, should be sized correctly
   	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
@@ -494,7 +505,7 @@ gotoIfError3(clean, ListCommandListRef_createRefConst(&commandList, 1, &commandL
 gotoIfError3(clean, ListSwapchainRef_createRefConst(&swapchain, 1, &swapchains, e_rr));
 
 gotoIfError3(clean, GraphicsDeviceRef_submitCommands(
-    device, commandLists, swapchains, Buffer_createNull() /* appData */, -1, 0, e_rr
+    device, commandLists, swapchains, -1, 0, e_rr
 ));
 ```
 
@@ -892,10 +903,20 @@ A DescriptorLayout is the description of how the resources are bound to the pipe
   - If it's owned by a graphics device or not, useful for internal use only.
 - bindings: a list of descriptor bindings that specifies the count, register type, id, visibility and space of a specific resource binding. The definition of this depends on the API; in Vulkan there are other binding types than DirectX12, so the implementation will try to merge ranges together if possible. As such, try to put UAVs, SRVs and CBVs closely together and a similar recommendation for Vulkan register types (images, textures, subpass inputs, ssbo, ubo, RTAS). The implementation can determine it can't merge a range if for example visibility mismatches (Vulkan) or the two have mismatching bindless flags.
 
+### Reserved register space
+
+OxC3 binds its own per frame globals (frame id, time, delta time and swapchain descriptors) to a register space it keeps for itself: `OXC3_RESERVED_SPACE`, which is `0xC3` (195). createDescriptorLayout refuses any caller binding that lands there.
+
+This concerns DXIL only. On Vulkan the globals live in their own descriptor set, and set indices are far too few to hide a reservation in. On DXIL they used to sit at `b0 space0`, which is exactly what someone writing their first constant buffer types. That was harmless while the default bindless layout was the only layout there was, and became a silent collision the moment custom layouts let anyone declare their own `b0`.
+
+A shader that genuinely declares this space was built against a different OxC3 than the one running it: either a newer one, or one modified to lay its globals out elsewhere. Neither can be honoured, so the layout is refused rather than allowed to quietly shadow the runtime's binding or be overwritten by it. The device's own layouts are exempt, since they are what occupies the space in the first place.
+
+Shaders spell it as `OXC3_RESERVED_SPACE` (from types.hlsli), which expands to `space195`. The C and HLSL definitions have to stay in sync, in `graphics/generic/descriptor_layout.h` and `shader_compiler/shaders/types.hlsli` respectively; a shader compiled against a different value binds somewhere the runtime doesn't look.
+
 ### Used functions and obtained
 
 - Obtained through GraphicsDeviceRef's createDescriptorLayout.
-- A DescriptorLayoutInfo (to create the layout itself) can generally be obtained through the shader reflection by using `DescriptorLayout_detect`, though this might not be optimal if all shaders have a similar / the same DescriptorLayout (unless you manually avoid creating duplicates).
+- A DescriptorLayoutInfo (to create the layout itself) can generally be obtained through the shader reflection by using `GraphicsDeviceRef_detectLayoutFromEntry` (one entrypoint) or `GraphicsDeviceRef_detectLayoutFromEntries` (several sharing one layout). The identifier they take is the packed one `GraphicsDeviceRef_getFirstShaderEntry` returns and `PipelineStage::binaryId` carries: the entrypoint in the low 16 bits, and in the high 16 bits an index into THAT entrypoint's binary list rather than into the file's binaries, so reflection reads the same variant the pipeline will be built from, though this might not be optimal if all shaders have a similar / the same DescriptorLayout (unless you manually avoid creating duplicates). Naming a register there also splits it out as push constants or push descriptors rather than an ordinary binding.
 - Used when creating a PipelineLayout.
 
 ## Pipeline
@@ -1020,7 +1041,6 @@ The pipeline raytracing info struct contains two types of members; post init and
 - Pre construction (supply before createRaytracingPipelinesExt):
   - flags:
     - SkipTriangles/SkipAABBs: Triangle or AABB primitives are skipped for this raytracing pipeline.
-    - AllowMotionBlurExt: Allow the hardware accelerated motion blur extension to be executed.
     - NoNull(AnyHit/ClosestHit/Miss/Intersection): (One of) These shaders aren't allowed to be null for both validation and linking reasons.
   - maxPayloadSize: 4-byte aligned payload size (>0 and <=32). This must be the max of all payload sizes used in the raytracing pipeline.
   - maxAttributeSize: 4-byte aligned attribute size for intersection shaders (>=8 and <=32). Must be the max of all intersection attribute sizes. If intersection shaders aren't used, this should be 8.
@@ -1190,7 +1210,7 @@ In OxC3 graphics, either the application or the OxC3 baker (or the OxC3 compiler
 With the following limitations:
 
 - The resources require bindless to function, so shaders should use this as well. When using resources, resources.hlsl has to be included (the compiler automatically includes it). This file can be found in inc/shader_compiler/shaders.
-  - types.hlsl also defines all HLSL types as OxC3 types, to ensure it could be cross compiled to GLSL in the future (since GLSL has some features that HLSL might not support, such as HW RT motion blur). Using these predefined types are fully optional if HLSL is the final target (Vulkan + D3D12), though it is recommended to use them to avoid getting stuck to one shading language.
+  - types.hlsl also defines all HLSL types as OxC3 types, to ensure it could be cross compiled to GLSL in the future (since GLSL has some features that HLSL might not support). Using these predefined types are fully optional if HLSL is the final target (Vulkan + D3D12), though it is recommended to use them to avoid getting stuck to one shading language.
 
 The OxC3 baker will (if used) convert HLSL to SPIR-V, DXIL, MSL or WGSL depending on which API is currently used. It can provide this as a pre-baked binary too (.oiSH Oxsomi SHader). The pre-baked binary contains all 4 formats to ensure it can be loaded on any platform. But the baker will only include the one relevant to the current API to prevent bloating.
 
@@ -1276,21 +1296,34 @@ Device data is a subarea of a buffer; it contains the reference to the buffer re
 Contains the following properties:
 
 - device: the device that the AS was created on. An AS is only compatible with other ASes that are from the same device.
-- isMotionBlurExt: relevant for BLAS or TLAS; BLAS it means it contains the previous data of the geometry while TLAS means it contains previous data of all instances (so it can be motion blurred). This is the NV specific extension for Ampere and up (unless anyone else supports it).
 - isCompleted: this is set when the BLAS has been signaled as fully built. For example when buildBLASExt has been called or when the first submitCommands has been triggered since it has been queued.
-- flagsExt: BLAS or TLAS specific flags (currently only used for BLAS).
+- flagsExt: BLAS or TLAS specific flags; EBLASFlag for a BLAS, ETLASFlag for a TLAS.
 - asConstructionType: the BLAS or TLAS specific construction type.
-- parent: the acceleration structure that was used as a base (for example: compaction or refitting).
 - scratchBuffer: temporary data that is only available until the AS has been created and the frame has been completed on the CPU.
 - asBuffer: the buffer resource that represents this acceleration structure.
 - flags:
-  - AllowUpdate (0): refitting is allowed. This is a faster way of updating acceleration structures, but at the cost of traversal time.
+  - AllowUpdate (0): refitting is allowed. This is a faster way of updating acceleration structures, but at the cost of traversal time. See Refitting below.
   - AllowCompaction (1): compaction is allowed. This reduces memory overhead for the acceleration structures.
   - FastTrace (2): optimize trace times over build times / memory.
   - FastBuild (3): optimize build times over trace times / memory.
   - MinimizeMemory (4): optimize memory over trace times / build times.
-  - IsUpdate (5): this RTAS build is a refit (reuses old data to expand the ASes).
+  - Reserved5 (5): reserved, free to reuse. Used to mean "this build is a refit", which is no longer something the caller asks for.
   - DisableAutomaticUpdate (6): next submitCommands shouldn't build this acceleration structure. This is useful when the mesh has to be initialized by the GPU using commands first (such as copies, compute or stream out).
+
+##### Refitting
+
+A refit (also called an update) rebuilds an acceleration structure from the one already there instead of from nothing. It is much cheaper than a full build and is what skeletal animation, moving instances and deforming geometry use, at the cost of traversal quality that degrades the further the new data drifts from what the structure was originally built for. Build with `ERTASBuildFlags_AllowUpdate` to allow it.
+
+**A refit is in place and does not produce a new object.** The first build of an AS is a full build; every build recorded after that one refits the same structure from itself, which is what both APIs mean by an update whose source and destination are the same. So the AS, its device address and (for a TLAS) its bindless handle all survive a refit unchanged: nothing that points at it has to be re-pointed, and refitting every frame allocates nothing.
+
+To refit, change the inputs and record the update again:
+
+- A **BLAS** reads its own position buffer, so rewriting that buffer (and marking it dirty if it is CPUBacked) is the change. Only the vertex data may move; the topology, formats and counts are fixed for the life of the structure, because an update refits an existing structure rather than sizing a new one.
+- A **TLAS** takes new instances through `TLASRef_setInstancesExt`, which requires the same instance count it was built with. The upload happens at build time, so setting instances repeatedly before recording an update costs one upload rather than one per call.
+
+A BLAS that was refitted leaves every TLAS over it stale, since an instance caches the bounds of the BLAS it points at, so record the TLAS update in the same submit right after the BLAS one.
+
+There is no way to keep the previous generation of an AS alive while refitting, by design: that used to be the only shape available and it meant every refit both reallocated the whole structure and pinned its predecessor for as long as it lived, so a chain of refits grew memory without bound. Something that genuinely needs last frame's structure (temporal techniques) wants a deliberate copy, not a refit.
 
 #### BLAS
 
@@ -1306,32 +1339,49 @@ The latter can only be used through intersection shaders, while the former has w
 ##### Example: Triangle geometry
 
 ```c
-gotoIfError3(clean, GraphicsDeviceRef_createBLASExt(
-	twm->device,
+const BLASCreateInfo blasInfo = BLASCreateInfo_indexed(
 	ERTASBuildFlags_DefaultBLAS,			//Fast trace & allow compaction
 	EBLASFlag_DisableAnyHit,				//No transparency needed, optimize for opaque
 	ETextureFormatId_RG16f, 0,				//No pos attrib offset and format is RG16f
-	ETextureFormatId_R16u,					//Indices are 16-bit
 	(U16) sizeof(vertexPos[0]),				//Stride is F16[2]
 	(DeviceData) {
         .buffer = twm->vertexBuffers[0]		//Entire buffer is accessible
     },
+	ETextureFormatId_R16u,					//Indices are 16-bit
 	(DeviceData) {
         .buffer = twm->indexBuffer,
         .len = sizeof(U16) * 6 				//Only use sub region
-   	},
-	NULL,									//No refit
-	CharString_createRefCStrConst("BLAS"),	//Debug name
-	&twm->blas,								//BLASRef*
-	e_rr
-));
+   	}
+);
+
+const CharString name = CharString_createRefCStrConst("BLAS");
+gotoIfError3(clean, GraphicsDeviceRef_createBLASExt(twm->device, &blasInfo, &name, &twm->blas, e_rr));
 ```
 
 The example above assumes that there is an index buffer and a position buffer available. Those buffers need to have the ASReadExt buffer usage to be accessible during build time.
 
-There is also a version of this that doesn't require index buffers; createBLASUnindexedExt. The DeviceData for indexBuffer and the index format can be left out for that function.
+Unindexed geometry goes through BLASCreateInfo_unindexed instead, which drops the index format and buffer arguments.
 
 The BLAS flags are the following: EBLASFlag_AvoidDuplicateAnyHit and EBLASFlag_DisableAnyHit. This is only relevant for raytracing pipelines and is irrelevant if the TLAS instance itself turns off anyHit.
+
+###### Opacity micromaps (Ext)
+
+BLASCreateInfo_indexedWithOmmIndicesExt extends the indexed form with a per triangle opacity index buffer, which requires EGraphicsFeatures_RayMicromapOpacity. It is the SPECIAL INDEX form: no micromap object is attached, so every element has to be an EOMMSpecialIndex rather than an index into one. Build the values with EOMMSpecialIndex_pack, since the special indices are negative constants matched against an unsigned element and so depend on the element width (FullyTransparent is 0xFFFF with R16u and 0xFFFFFFFF with R32u).
+
+- FullyTransparent: the triangle is ignored entirely, so the ray passes through it.
+- FullyOpaque: the triangle hits without ever running anyHit.
+- FullyUnknownTransparent / FullyUnknownOpaque: anyHit decides, the name being the hint for what it usually is.
+
+The index buffer holds exactly one element per TRIANGLE (so indexBuffer length / index stride / 3). R16u and R32u are accepted everywhere opacity micromaps are; R8u additionally requires the EGraphicsFeatures2_RayMicromapOpacityU8 capability, since Vulkan's EXT extension forbids 8-bit indices and only the KHR promotion (or D3D12) permits them.
+
+Two opt-ins outside the BLAS have to line up or the micromap is silently ignored, which looks exactly like a micromap that did nothing:
+
+- The pipeline needs EPipelineRaytracingFlags_AllowOpacityMicromapExt. Both APIs may traverse differently when micromaps are in play, so they make you say so at pipeline creation and ignore any micromap otherwise.
+- The instance must NOT set ForceDisableAnyHit, and the ray must not use RAY_FLAG_FORCE_OPAQUE. Both mean FORCE_OPAQUE, which makes traversal treat every triangle as opaque and skip the micromap. Note that ETLASInstanceFlag_Default INCLUDES ForceDisableAnyHit, so an instance that wants micromaps has to spell its flags out rather than take the default.
+
+Whether a real micromap object is worth building over special indices is what the EGraphicsFeatures2_RayMicromapOpacityActual capability bit is for; special indices cost nothing either way.
+
+Micromap OBJECTS go through `GraphicsDeviceRef_createOpacityMicromapExt` (see opacity_micromap.h): the create takes an input buffer of packed opacity bits, an entry buffer of `OpacityMicromapEntry` records (dataOffset, subdivisionLevel, format) and the usage counts describing them, all needing EDeviceBufferUsage_ASReadExt. Input and entry buffers must sit at 256 byte aligned addresses on Vulkan (VUID-vkCmdBuildMicromapsEXT-pInfos-07515, validated at create) and 128 byte aligned on D3D12; OxC3's own ASRead allocations satisfy both, and on D3D12 SDK versions whose debug layer wrongly enforces 256 (stable before 620, preview before 722) the allocation floor stays 256 so validation runs clean. The build is recorded with `CommandListRef_updateOmmExt`, which must precede any BLAS build that links the micromap; recording it again after it completed is a no-op, since micromaps have no update mode. A BLAS links one through `BLASCreateInfo_indexedWithOmmExt`, whose OMM index buffer then holds ENTRY indices (special values still allowed per triangle) instead of only special values. On D3D12 an OMM array is itself an acceleration structure; on Vulkan the EXT extension builds it as a `VkMicromapEXT` (the KHR promotion's as-an-acceleration-structure build is not implemented yet for lack of a driver to test against, so micromap objects are refused there while special indices keep working).
 
 ##### Example: Procedural geometry
 
@@ -1362,7 +1412,6 @@ gotoIfError3(clean, GraphicsDeviceRef_createBLASProceduralExt(
 	sizeof(F32) * 3 * 2,
 	0,
 	(DeviceData) { .buffer = twm->aabbs },
-	NULL,
 	CharString_createRefCStrConst("Test BLAS AABB"),
 	&twm->blasAABB,
 	e_rr
@@ -1390,19 +1439,12 @@ In the example above, two AABBs are created from a buffer.
 
 ##### Used functions and obtained
 
-- Obtained through createBLASProceduralExt, createBLASExt and createBLASUnindexedExt from GraphicsDeviceRef.
+- Obtained through createBLASProceduralExt and createBLASExt (via a BLASCreateInfo) from GraphicsDeviceRef.
 - Used in TLAS creation and can be copied to/from the CPU.
 
 #### TLAS
 
 A TLAS is a top level acceleration structure; it is the representation of a couple instances of triangle geometry or procedural geometry (a scene). It has an acceleration structure built over these instances to accelerate tracing rays through it. BLASes (Bottom level acceleration structures) are used through a TLAS (top level AS) and can be accessed in raytracing.
-
-There are two types of TLASes:
-
-- HW Static intersections (static geometry).
-- HW Motion blur intersections (static, matrix or transform motion).
-
-The latter can only be used with HW motion blur hardware, while the former is always available (if raytracing is available) and is simpler to construct.
 
 A TLAS can be initialized through two different methods:
 
@@ -1412,8 +1454,8 @@ A TLAS can be initialized through two different methods:
 ##### Example: Static instances
 
 ```c
-TLASInstanceStatic instances[1] = {
-    (TLASInstanceStatic) {
+TLASInstance instances[1] = {
+    (TLASInstance) {
         .transform = {
             { 1, 0, 0, 0 },
             { 0, 1, 0, 0 },
@@ -1427,8 +1469,8 @@ TLASInstanceStatic instances[1] = {
     }
 };
 
-ListTLASInstanceStatic instanceList = (ListTLASInstanceStatic) { 0 };
-gotoIfError3(clean, ListTLASInstanceStatic_createRefConst(
+ListTLASInstance instanceList = (ListTLASInstance) { 0 };
+gotoIfError3(clean, ListTLASInstance_createRefConst(
     instances, sizeof(instances) / sizeof(instances[0]), &instanceList, e_rr
 ));
 
@@ -1447,77 +1489,21 @@ gotoIfError3(clean, GraphicsDeviceRef_createTLASExt(
 
 For GPU construction, the same can be done and has to follow the exact struct; except blasCpu will become the address of the BLAS on the GPU.
 
-##### Example: Motion blur
-
-```c
-TLASInstanceMotion instances[1] = {
-    (TLASInstanceMotion) {
-        .type = ETLASInstanceType_Matrix,			//Static for ETLASInstanceStatic
-        .matrixInst = (TLASInstanceMatrixMotion) {
-            .prev = {
-                { 1, 0, 0, 0 },
-                { 0, 1, 0, 0 },
-                { 0, 0, 1, 0 }
-            },
-            .next = {
-                { 2, 0, 0, 0 },		//Grow twice in size as an animation
-                { 0, 2, 0, 0 },
-                { 0, 0, 2, 0 }
-            },
-            .data = (TLASInstanceData) {
-                .blasCpu = twm->blas,
-                .instanceId24_mask8 = ((U32)0xFF << 24),
-                .sbtOffset24_flags8 = (ETLASInstanceFlag_Default << 24) | 0	//Hit index 0
-            }
-        }
-    }
-};
-
-ListTLASInstanceMotion instanceList = (ListTLASInstanceMotion) { 0 };
-gotoIfError3(clean, ListTLASInstanceMotion_createRefConst(
-    instances, sizeof(instances) / sizeof(instances[0]), &instanceList, e_rr
-));
-
-gotoIfError3(clean, GraphicsDeviceRef_createTLASMotionExt(
-    twm->device,
-    ERTASBuildFlags_DefaultTLAS,
-    NULL,
-    instanceList,
-    false,				//disallowBindlessDescriptor
-    NULL,				//bindlessDescriptorTable; NULL = device's default bindless table
-    CharString_createRefCStrConst("Test TLAS"),
-    &twm->tlas,
-    e_rr
-));
-```
-
-For GPU construction, the same can be done and has to follow the exact struct; except blasCpu will become the address of the BLAS on the GPU.
-
 ##### Properties
 
-- base: RTAS standardizes BLAS and TLAS a little bit.
-- useDeviceMemory: If the TLAS was created through GPU memory or via a temporary CPU visible buffer.
+- base: RTAS standardizes BLAS and TLAS a little bit. TLAS specific state lives in `base.flagsExt` as ETLASFlag, read through `TLAS_hasFlag`:
+  - UseDeviceMemory: the instances came from GPU memory rather than from a temporary CPU visible buffer.
+  - DisallowBindlessDescriptor: no bindless descriptor was allocated, so the TLAS cannot be reached from a shader.
+  - BlasDataAccessKnown / BlasDataAccessAll: cached at create, whether every visible instance's BLAS allows ray triangle position fetch. Only knowable for CPU side instances, so Known stays unset for device built and serialized TLASes.
+  - InstancesDirty: `TLASRef_setInstancesExt` has supplied new instances that the next build has yet to upload.
 - handle: Descriptor index of the acceleration structure.
-- Depending on useDeviceMemory, base.isMotionBlurExt and base.asConstructionType: (Instances, Serialized):
+- Depending on UseDeviceMemory and base.asConstructionType: (Instances, Serialized):
   - ETLASConstructionType_Serialized:
     - Buffer cpuData: Indicates cpu memory that represents the TLAS. Might become invalidated because of a driver update.
-  - useDeviceMemory:
-    - deviceData: Represents the resource range that holds the TLASInstanceStatic[] or TLASInstanceMotion[] (isMotionBlurExt) on the GPU.
-  - isMotionBlurExt (requires motion blur feature):
-    - cpuInstancesMotion: List of TLASInstanceMotion.
+  - UseDeviceMemory:
+    - deviceData: Represents the resource range that holds the TLASInstance[] on the GPU.
   - else
-    - cpuInstancesStatic: List of TLASInstanceStatic.
-
-##### TLASInstanceStatic + TLASInstanceMotion
-
-Both represent a single mesh instance. They both contain one instance data (TLAS_getInstanceDataCpu) while they contain 1 or 2 transforms. TLASInstanceMotion may contain two transforms if the type is not ETLASInstanceType_Static. Otherwise either transform or staticInst.transform contain a F32x4x3 transform matrix.  When the instance type is ETLASInstanceType_Matrix it contains two matrices (matrixInst.prev and matrixInst.next).
-
-When the type is ETLASInstanceType_SRT, srtInst.prev and next contain a special transform format;
-
-- Scale, pivots, translate and shear: x, y, z
-- Orientation: Quaternion xyzw.
-
-This type has helpers through TLASTransformSRT such as create(scale, pivot, translate, quat, shearing), createSimple(scale, translate, quat) and getters/setters for each type.
+    - cpuInstances: List of TLASInstance.
 
 ##### Instance data
 
@@ -1536,12 +1522,12 @@ The instance flags are identical to both DXR and VkRT:
 
 - DisableCulling (0): Don't listen to the back/front face culling flags of TraceRay.
 - CCW (1): Counter clockwise winding order.
-- ForceDisableAnyHit (2): Never run any hit.
+- ForceDisableAnyHit (2): Never run any hit. This is FORCE_OPAQUE on both APIs, so it also turns off opacity micromaps for the instance; it is part of ETLASInstanceFlag_Default.
 - ForceEnableAnyHit (3): Always run any hit.
 
 ##### Used functions and obtained
 
-- Obtained through createTLASExt, createTLASMotionExt and createTLASDeviceExt from GraphicsDeviceRef.
+- Obtained through createTLASExt and createTLASDeviceExt from GraphicsDeviceRef.
 - Accessible from TraceRay/traceRayEXT only through the handle.
 
 ## Commands
@@ -1802,6 +1788,36 @@ gotoIfError3(clean, CommandListRef_endRenderExt(commandList, e_rr));
 Every startRender needs to match an endRender. During the render it's not allowed to access the render textures as a write or read texture. Other operations that change state (implicit transitions) such as clears and copies are also not allowed. If this is required, the developer can end the render and restart it after this operation.
 
 A graphics pipeline for use with DirectRendering needs to set the attachment count (and format(s)) or the depth stencil format. One that doesn't use direct rendering can't be used.
+
+### Bindful descriptors
+
+#### bindDescriptorHeap
+
+Binds a descriptor heap: any descriptor table bound after this has to belong to it, which the work ops validate. Explicit on purpose: switching heaps can stall the GPU (notably on D3D12), so the cost must be a visible command rather than implied by whichever table was bound. On Vulkan there is nothing to emit today (a heap is a descriptor pool), but the state is recorded so VK_EXT_descriptor_heap can map the explicit bind directly later. The default (bindless) heap, root signature and table are no longer bound eagerly per command buffer either: they bind lazily at the first work op that runs a default layout pipeline, so a purely bindful frame never pays for them, and after a mid submit flush the next work op re-emits whatever was last bound.
+
+#### bindDescriptorTable
+
+Bindful: binds the descriptor table that pipelines with a CUSTOM pipeline layout read from. This only sets state; the work ops (draw/dispatch/dispatchRays) are the validators, so bind order never matters: at work time the bound pipeline's layout must reference the exact DescriptorLayout the table was created from, push descriptor layouts are refused until their writes exist, and a pipeline whose layout does not reference the table's DescriptorLayout ignores the bound table entirely rather than emitting it. That covers the device's default (bindless) layout and any custom layout built from the runtime bindless set, which is what lets a bindful dispatch and a bindless one interleave inside one scope: the table stays bound across the pipeline switch, and emitting it against a layout that never declared it would bind sets Vulkan rejects and write root parameters D3D12's signature does not have. Backends emit the actual binds lazily right before the work, which also re-emits the default bindings after a custom root signature dropped them on D3D12. Custom layout pipelines are opted out of the globals/frame data unless their layout declares that slot. There is no table index: a pipeline layout references exactly ONE bindings DescriptorLayout (which itself spans up to 4 spaces/sets on Vulkan and up to 2 root tables on D3D12), so set indices and root parameters are baked into the layout/table pair; a slot index gets added if pipeline layouts ever grow multiple table slots. The table is kept alive by the command list; per resource scope transitions remain the caller's job until auto transitions land. Scope end resets the bind like it does bound pipelines.
+
+#### setPushConstants
+
+Writes the pipeline layout's push constants: a small block of bytes that rides in the command stream rather than in a descriptor heap (root constants on D3D12, `vkCmdPushConstants` on Vulkan). A write is 4 to 128 bytes and a multiple of 4. 128 is what both APIs guarantee: it is Vulkan's minimum `maxPushConstantsSize` and 32 of the 64 DWORDs a D3D12 root signature has.
+
+Like the binds this only sets state, and the work op is the validator. At draw/dispatch/dispatchRays time the written size has to match exactly the `constantBufferSize` the bound pipeline layout declares. Writing constants a layout never declared is refused, since it can only mean the wrong pipeline is bound; a layout that declares them with nothing written is refused too, rather than reading back whatever the previous pipeline happened to leave in the range. That check sits ahead of the bind state cache, because unlike the pipeline/table/heap triple the cache keys on, the written size is mutable state that a later setPushConstants can change without rebinding anything.
+
+The payload is copied into the command itself rather than referenced, so a replay never depends on the caller's buffer still being alive. Backends emit it lazily at the work op, which is what makes a root signature switch between two work ops harmless: D3D12 drops every root argument on such a switch, so an eager emit at the write would silently lose the values. Two dispatches with different constants and no rebinding in between therefore each see their own. Scope end resets the written size like every other bind state.
+
+#### setPushDescriptors
+
+Writes every push descriptor the bound pipeline's layout declares, in that layout's own binding order (the order `detectLayoutFromEntry`/`detectLayoutFromEntries` produced into `pushDescriptorInfo`, whose `bindingNames` name them). A push descriptor lives in the command stream rather than in a heap: a root CBV/SRV/UAV on D3D12, `vkCmdPushDescriptorSetKHR` on Vulkan. Nothing about it goes through a DescriptorTable, so no heap or table has to be bound for one.
+
+All of them are written at once rather than one at a time, because a partial set would leave the rest pointing at whatever the previous pipeline bound, and both backends emit the whole set anyway. The work op validates the written count against the layout, refuses a count that doesn't match it, and refuses writes against a layout that declares none — the same three rules push constants follow, and for the same reason they sit ahead of the bind state cache. Scope end resets the write.
+
+What can be *recorded* is **buffer class** only: a constant buffer, a byte address or structured buffer, or an acceleration structure. On D3D12 a root descriptor is one raw GPU virtual address, and a texture's format, mip and swizzle have nowhere to live in it (there are no root samplers at all). A layout carrying a texture push descriptor is still legal and both backends build one — D3D12 routes it through a single entry descriptor table, and the device builds exactly such a layout for its own copy shader — so the refusal lands at the work op rather than at `createDescriptorLayout`. Filling that table needs a shader visible heap slot allocated at record time, which doesn't exist yet. At most `OXC3_MAX_PUSH_DESCRIPTORS` can be recorded, since each costs 2 of a D3D12 root signature's 64 DWORDs.
+
+The resources are kept alive by the command list, like a bound table's are, and per resource scope transitions remain the caller's job until auto transitions land.
+
+**Known gap:** on Vulkan a caller owned push descriptor layout currently requires `VK_KHR_push_descriptor` (the `PerformantPushDescriptor` capability) and is refused at layout creation without it. The device's own globals layout is exempt because it carries its own emulation — one descriptor set per frame in flight, written once and bound unchanged — which works only because that buffer is fixed for the whole frame. A caller's push descriptors change per work op, so the general emulation needs a set allocated per push from a per frame pool. Android emulators are the case that hits this, since gfxstream drops the extension from the guest even where the host driver exposes it.
 
 ### Raytracing feature
 

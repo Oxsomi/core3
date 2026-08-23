@@ -41,7 +41,32 @@
 #endif
 
 typedef struct AtomicI64 {
+
 	volatile _Atomic(I64) atomic;        //Don't manually touch
+
+	//std::atomic deletes its copy constructor, which makes every struct holding a SpinLock non copyable in
+	// C++ and every TList over one fail to compile, since ListT_at returns T by value.
+	//Windows never had this: there _Atomic(T) is plain T, so the whole C++ layer was written against a
+	// copyable AtomicI64 and only the other platforms disagreed.
+	//Copying an atomic is not atomic with respect to anything else, but neither was it on Windows, and the
+	// lists doing it are moving storage around rather than synchronising through it.
+
+	#if defined(__cplusplus) && _PLATFORM_TYPE != PLATFORM_WINDOWS
+
+		AtomicI64() = default;
+
+		AtomicI64(const AtomicI64 &other) { atomic.store(other.atomic.load()); }
+
+		AtomicI64 &operator=(const AtomicI64 &other) {
+
+			if(this != &other)
+				atomic.store(other.atomic.load());
+
+			return *this;
+		}
+
+	#endif
+
 } AtomicI64;
 
 #undef Atomic

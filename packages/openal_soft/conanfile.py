@@ -23,20 +23,23 @@ class openal_soft(ConanFile):
 	options = { "enableASAN": [ True, False ], "enableUBSAN": [ True, False ] }
 	default_options = { "enableASAN": False, "enableUBSAN": False }
 
-	python_requires = "oxc3_sanitizers/1.0"
-
-	# Sanitizer wiring lives in the shared oxc3_sanitizers python_requires so dxc, spirv_reflect and
-	# openal_soft can't drift apart. Only the disabled UBSan checks differ per dependency:
-	#  vptr      needs RTTI across the whole program, which the prebuilt setup lacks.
-	#  function  would only catch this dependency's own callback-type mismatches, which are not ours to fix.
-	#  enum      flag enums and sentinels are legal by design but are not individual enumerators.
-
-	def _sanitizerFlags(self):
-		return self.python_requires["oxc3_sanitizers"].module.sanitizerFlags(self, "vptr,function,enum")
-
-	def _sanitizerLinkFlags(self):
-		return self.python_requires["oxc3_sanitizers"].module.sanitizerLinkFlags(self)
-
+	# Deliberately NOT sanitized, unlike dxc and spirv_reflect which share the oxc3_sanitizers python_requires.
+	# The enableASAN/enableUBSAN options stay declared because build_common.py passes them and they keep the
+	# package id distinct, but they no longer change how openal is compiled.
+	#
+	# Two reasons. A sanitized openal reported only its own defects, never ours: a null WAVEFORMATEXTENSIBLE in
+	# the WASAPI backend (needed a UBSan ignorelist for that one file), then an access violation inside
+	# al::base_exception::what() on the no-audio path that aborts any headless sanitizer run. Neither is
+	# actionable here. And openal is a stepping stone rather than the destination, so hardening its internals
+	# buys nothing that survives owning the audio stack outright.
+	#
+	# The cost, for whoever revisits this: openal's own reads and writes of buffers OxC3 hands it are no longer
+	# checked, so ASan will not catch us misusing the audio API. Nothing else leaks across, since OxC3 is C and
+	# no instrumented container crosses the boundary. Mixing an uninstrumented DLL into a sanitized process is
+	# supported, and the MSVC STL annotation defines are moot here because those annotations only exist under
+	# ASan in the first place.
+	#
+	# See build/reports/third_party_findings.md for both findings, still unfiled.
 
 	exports_sources = [ "include/*" ]
 
@@ -48,8 +51,9 @@ class openal_soft(ConanFile):
 		self.settings.rm_safe("compiler.libcxx")
 
 		# Force the static RELEASE CRT even in a Debug build. OxC3 links /MT in every config (its CMakeLists
-		# pins it), so a Debug openal on /MTd would be a CRT mismatch; and clang-cl's ASan refuses the debug
-		# CRT outright ("/MTd not allowed with -fsanitize=address"). Setting runtime_type here (rather than only
+		# pins it), so a Debug openal on /MTd would be a CRT mismatch. This used to matter for a second reason
+		# too, clang-cl's ASan refusing the debug CRT outright, which no longer applies now that openal is not
+		# sanitized; the CRT match alone still requires it. Setting runtime_type here (rather than only
 		# CMAKE_MSVC_RUNTIME_LIBRARY in generate(), which conan's own msvc-runtime block overrode back to
 		# MultiThreadedDebug) makes conan itself emit MultiThreaded, and since configure() runs during graph
 		# expansion the package id stays consistent between the graph and the build.
@@ -86,14 +90,6 @@ class openal_soft(ConanFile):
 		# On single-config generators (Ninja, Makefiles) we must pin the build type.
 		if self.settings.os != "Windows":
 			tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
-
-		for flag in self._sanitizerLinkFlags():
-			tc.extra_exelinkflags.append(flag)
-			tc.extra_sharedlinkflags.append(flag)
-
-		for flag in self._sanitizerFlags():
-			tc.extra_cflags.append(flag)
-			tc.extra_cxxflags.append(flag)
 
 		tc.generate()
 

@@ -19,6 +19,7 @@
 
 import argparse
 import os
+import shutil
 import sys
 
 import build_common as common
@@ -32,6 +33,23 @@ def main():
 	parser.add_argument("-mode", type=str, default=None, choices=common.ALL_MODES, help="Build type (optional on Windows; defaults to all configs)")
 	parser.add_argument("-simd",            type=str, default="True",  choices=["True", "False"], help="Enable SIMD")
 	parser.add_argument("-tests",           type=str, default="False", choices=["True", "False"], help="Enable tests")
+	parser.add_argument(
+		"-ctest", default="False", choices=["True", "False"],
+		help="Run the full suite through ctest after building. Off by default: each suite already runs right "
+		     "after it is built, and only when one of its inputs changed. CI turns this on to always run everything."
+	)
+	parser.add_argument(
+		"-setup_only", type=str, default="False", choices=["True", "False"],
+		help="Stop after conan has written the toolchain and dependency files, without building OxC3 itself. "
+		     "This is what an IDE needs to configure a tree it has never seen, and it is what CMakeLists runs "
+		     "on its own when a preset is opened against a configuration nobody built yet"
+	)
+	parser.add_argument(
+		"-generator", type=str, default=None, choices=["ninja", "default"],
+		help="CMake generator. 'default' is whatever the profile picks (Visual Studio on Windows). 'ninja' "
+		     "builds with Ninja instead, which is what produces a compile_commands.json for clangd and VS "
+		     "Code. It gets its own build tree, since a CMake cache belongs to the generator that made it"
+	)
 	parser.add_argument("-dynamic_linking", type=str, default="False", choices=["True", "False"], help="Dynamic linking graphics")
 	parser.add_argument(
 		"-dynamic_linking_shader_compiler", type=str, default="True", choices=["True", "False"],
@@ -84,6 +102,15 @@ def main():
 		print("-- Error: -mode is required on non-Windows platforms", file=sys.stderr)
 		sys.exit(1)
 
+	# MSVC's own sanitizers are deliberately unused here (see windows_clang_sanitizers.yml), and asking for
+	# them anyway doesn't fail cleanly: cl ignores -fsanitize=undefined with a D9002 warning and carries on
+	# unsanitized, while its ASan pulls in a runtime the clang flags don't match, which surfaces as unresolved
+	# __imp___asan_* symbols deep inside a dependency build rather than as anything pointing back here.
+
+	if args.compiler == "msvc" and (args.asan == "True" or args.ubsan == "True"):
+		print("-- Error: -asan/-ubsan require -compiler clang, MSVC's sanitizers aren't used here", file=sys.stderr)
+		sys.exit(1)
+
 	# Decide which modes to build deps for
 
 	# A CMake cache is tied to the compiler that configured it, so a non-default toolchain gets its own
@@ -91,6 +118,28 @@ def main():
 
 	compiler = args.compiler or common.defaultCompiler()
 	suffix   = "" if compiler == common.defaultCompiler() else f"_{compiler}"
+
+	# A CMake cache belongs to its generator just as much as to its compiler, so Ninja gets its own tree
+	# rather than making every switch a full reconfigure.
+
+	# Ninja Multi-Config on Windows rather than plain Ninja, so one tree still holds every config the way the
+	# Visual Studio generator does and -mode stays optional.
+	# Elsewhere -mode is always given and the build folder already names it, so single config Ninja is right.
+	# Checked here rather than at the conan call, so an unusable toolchain fails before anything is built.
+
+	generatorConf = ""
+
+	if args.generator == "ninja":
+
+		if shutil.which("ninja") is None:
+			print("-- Error: -generator ninja needs ninja on PATH", file=sys.stderr)
+			sys.exit(1)
+
+		suffix += "_ninja"
+
+		ninjaGenerator = "Ninja Multi-Config" if system == "Windows" else "Ninja"
+		generatorConf = f'-c tools.cmake.cmaketoolchain:generator="{ninjaGenerator}" '
+		generatorConf += common.visualStudioNinjaConf(compiler)
 
 	if system == "Windows":
 		dep_modes = common.ALL_MODES if args.mode is None else [ args.mode ]
@@ -123,8 +172,14 @@ def main():
 	# id the build produced, so any drift between the two would silently export a different configuration.
 
 	options = (
+		f"{generatorConf}"
 		f"-o enableSIMD={args.simd} "
 		f"-o enableTests={args.tests} "
+
+		# Either the build runs each suite as it is built, or ctest runs them all at the end.
+		# Both means every suite runs twice.
+
+		f"-o testAutoRun={'False' if args.ctest == 'True' else 'True'} "
 		f"-o dynamicLinkingGraphics={args.dynamic_linking} "
 		f"-o dynamicLinkingShaderCompiler={args.dynamic_linking_shader_compiler} "
 		f"-o debugShaderCompiler={args.debug_shader_compiler} "
@@ -134,13 +189,47 @@ def main():
 		f"{extra}"
 	)
 
+	# conan install writes the toolchain and the dependency files without building OxC3; conan build does
+	# both. An IDE only needs the former to configure, and it builds the rest itself.
+
+	conanVerb = "install" if args.setup_only == "True" else "build"
+
+	# The packager and any other instrumented tool the build runs statically links OxC3_types_base while
+	# also loading libOxC3_shader_compiler.so, which links the same static library, so every non static
+	# global in it is defined in both modules and ASan aborts with an odr-violation before the tool does
+	# any work. The definitions are identical, one static library reached through two link paths.
+	# Scoped to the build: ctest runs from its own invocation below and keeps full ODR checking, so this
+	# only covers build time tools. Removing the need for it means the shared shader compiler linking
+	# types_base dynamically, or hiding those globals in the .so.
+
+	buildEnv = None
+
+	if args.asan == "True":
+
+		buildEnv = dict(os.environ)
+
+		buildEnv["ASAN_OPTIONS"] = ",".join(
+			filter(None, [ os.environ.get("ASAN_OPTIONS"), "detect_odr_violation=0" ])
+		)
+
+		# LeakSanitizer runs at exit of every tool the build invokes, and DXC and SPIRV-Reflect both
+		# leave allocations to process exit. Suppressed by symbol rather than switching leak detection
+		# off, so a leak in OxC3's own code during a build still reports.
+
+		suppressions = os.path.join(common.ROOT, "cmake", "lsan_suppressions.txt")
+
+		buildEnv["LSAN_OPTIONS"] = ",".join(
+			filter(None, [ os.environ.get("LSAN_OPTIONS"), f"suppressions={suppressions}" ])
+		)
+
 	for mode in build_modes:
 		common.run(
-			f"conan build . "
+			f"conan {conanVerb} . "
 			f"-of {build_dir} "
 			f"{common.hostProfileArgs(mode, compiler)} "
 			f"-s build_type={mode} "
-			f"{options}"
+			f"{options}",
+			env = buildEnv
 		)
 
 		# Packaging is conanfile.py's job, so a prebuilt never has to restate which files belong in one.
@@ -163,9 +252,15 @@ def main():
 				f"--deployer-folder=\"{args.deploy}/{mode}\""
 			)
 
-	# Run tests
+	# Run tests.
+	#
+	# Normally there is nothing to do here: each suite runs behind a stamp file that depends on everything the
+	# suite was built from, so one whose inputs did not change does not re-run and the build graph does the
+	# dirty tracking (see oxc3_add_test in cmake/oxc3.cmake).
+	# CI passes -ctest to run the whole suite through ctest regardless, which always runs everything and
+	# reports per test rather than as a single build failure.
 
-	if args.tests == "True":
+	if args.tests == "True" and args.ctest == "True":
 
 		test_mode = args.mode if args.mode is not None else "Release"
 

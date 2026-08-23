@@ -39,6 +39,10 @@ namespace oxc {
 	//Pure arithmetic on the enum value, so this is a namespace like Time and ETextureFormat.
 	namespace EFloatType {
 
+		[[nodiscard]] inline c::Bool hasSign(c::EFloatType type) noexcept {
+			return c::EFloatType_hasSign(type);
+		}
+
 		[[nodiscard]] inline c::U8 bytes(c::EFloatType type) noexcept {
 			return c::EFloatType_bytes(type);
 		}

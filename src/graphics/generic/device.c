@@ -479,7 +479,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Sampler,
 			.count = EDescriptorTypeCount_Sampler,
 			.binding = (SHBinding) {
-				.space = 0,
+				.space = isSpirv ? 0 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 0 : EDescriptorTypeOffset_Sampler
 			},
 			.visibility = U32_MAX
@@ -488,7 +488,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture2D,
 			.count = EDescriptorTypeCount_Texture2D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 0 : EDescriptorTypeOffset_Texture2D
 			},
 			.visibility = U32_MAX
@@ -497,7 +497,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_TextureCube,
 			.count = EDescriptorTypeCount_TextureCube,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 1 : EDescriptorTypeOffset_TextureCube
 			},
 			.visibility = U32_MAX
@@ -506,7 +506,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture3D,
 			.count = EDescriptorTypeCount_Texture3D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 2 : EDescriptorTypeOffset_Texture3D
 			},
 			.visibility = U32_MAX
@@ -515,7 +515,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_ByteAddressBuffer,
 			.count = EDescriptorTypeCount_Buffer,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 3 : EDescriptorTypeOffset_Buffer
 			},
 			.visibility = U32_MAX
@@ -524,7 +524,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWBuffer,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 4 : EDescriptorTypeOffset_RWBuffer
 			},
 			.visibility = U32_MAX
@@ -533,7 +533,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 5 : EDescriptorTypeOffset_RWTexture3D
 			},
 			.visibility = U32_MAX,
@@ -543,7 +543,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Di,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 6 : EDescriptorTypeOffset_RWTexture3Di
 			},
 			.visibility = U32_MAX,
@@ -553,7 +553,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Du,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 7 : EDescriptorTypeOffset_RWTexture3Du
 			},
 			.visibility = U32_MAX,
@@ -563,7 +563,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 8 : EDescriptorTypeOffset_RWTexture2D
 			},
 			.visibility = U32_MAX,
@@ -573,7 +573,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Di,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 9 : EDescriptorTypeOffset_RWTexture2Di
 			},
 			.visibility = U32_MAX,
@@ -583,7 +583,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Du,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 10 : EDescriptorTypeOffset_RWTexture2Du
 			},
 			.visibility = U32_MAX,
@@ -598,7 +598,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			.registerType = ESHRegisterType_AccelerationStructure,
 			.count = EDescriptorTypeCount_TLASExt,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 0,
+				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 11 : EDescriptorTypeOffset_TLASExt
 			},
 			.visibility = U32_MAX
@@ -677,14 +677,16 @@ Bool GraphicsDeviceRef_create(
 			EGraphicsFeatures_RayPipeline        |
 			EGraphicsFeatures_RayQuery           |
 			EGraphicsFeatures_RayMicromapOpacity |
-			EGraphicsFeatures_RayMotionBlur      |
 			EGraphicsFeatures_RayReorder         |
-			EGraphicsFeatures_RayValidation
+			EGraphicsFeatures_RayValidation      |
+			EGraphicsFeatures_RayTriPosition
 		);
 		device->info.capabilities.features2 &=~ (
-			EGraphicsFeatures2_RayReorderActual   |
-			EGraphicsFeatures2_RayClusterAS       |
-			EGraphicsFeatures2_RayPartitionedTLAS |
+			EGraphicsFeatures2_RayReorderActual         |
+			EGraphicsFeatures2_RayMicromapOpacityActual |
+			EGraphicsFeatures2_RayMicromapOpacityU8     |
+			EGraphicsFeatures2_RayClusterAS             |
+			EGraphicsFeatures2_RayPartitionedTLAS       |
 			EGraphicsFeatures2_RayIndirectASBuild
 		);
 	}
@@ -812,9 +814,12 @@ Bool GraphicsDeviceRef_create(
 		DescriptorBinding cbv = (DescriptorBinding) {
 			.registerType = ESHRegisterType_ConstantBuffer,
 			.count = 1,
+			//Vulkan keeps it in its own set; DXIL uses the reserved space so a custom layout's b0 can't land
+			// on top of it
+
 			.binding = (SHBinding) {
-				.space = isSpirv ? 2 : 0,
-				.binding = isSpirv ? 0 : 0
+				.space = isSpirv ? 2 : OXC3_RESERVED_SPACE,
+				.binding = 0
 			},
 			.visibility = U32_MAX,
 			.constantBufferSize = (U32) sizeof(CBufferData)
@@ -1155,8 +1160,9 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	if(extensions & ESHExtension_RayQuery)                  features |= EGraphicsFeatures_RayQuery;
 	if(extensions & ESHExtension_RayMicromapOpacity)        features |= EGraphicsFeatures_RayMicromapOpacity;
-	if(extensions & ESHExtension_RayMotionBlur)             features |= EGraphicsFeatures_RayMotionBlur;
 	if(extensions & ESHExtension_RayReorder)                features |= EGraphicsFeatures_RayReorder;
+	if(extensions & ESHExtension_RayTriPosition)            features |= EGraphicsFeatures_RayTriPosition;
+	if(extensions & ESHExtension_Barycentrics)              features |= EGraphicsFeatures_Barycentrics;
 
 	if(extensions & ESHExtension_ComputeDeriv)              features |= EGraphicsFeatures_ComputeDeriv;
 	if(extensions & ESHExtension_MeshTaskTexDeriv)          features |= EGraphicsFeatures_MeshTaskTexDeriv;
@@ -1566,7 +1572,10 @@ static void GraphicsDevice_pullRowMeasures(
 
 	if (utex.depthFormat) {
 
-		const U8 texel = EDepthStencilFormat_getBytes((EDepthStencilFormat) utex.depthFormat);
+		//Pull bytes rather than plain bytes: the range says which plane rides this pull, and each plane has its
+		// own texel size (the stencil of a combined format is 1 byte, D24's depth is a 32 bit word).
+
+		const U8 texel = EDepthStencilFormat_getPullBytes((EDepthStencilFormat) utex.depthFormat, (U8) range->planeId);
 
 		*rowBytes = (U64) TextureRange_width(*range) * texel;
 		*rows = TextureRange_height(*range);
@@ -1850,7 +1859,6 @@ Bool GraphicsDeviceRef_submitCommands(
 	GraphicsDeviceRef *deviceRef,
 	const ListCommandListRef *commandLists,
 	const ListSwapchainRef *swapchains,
-	const Buffer *appData,
 	F32 deltaTime,
 	F32 time,
 	Error *e_rr
@@ -1875,11 +1883,6 @@ Bool GraphicsDeviceRef_submitCommands(
 	if(swapchains && swapchains->length > sizeof(((CBufferData*)NULL)->swapchains) / 8)
 		retError(clean, Error_invalidParameter(
 			2, 1, "GraphicsDeviceRef_submitCommands()::swapchains.length is limited to 16"
-		));
-
-	if(appData && Buffer_length(*appData) > sizeof(((CBufferData*)NULL)->appData))
-		retError(clean, Error_invalidParameter(
-			3, 0, "GraphicsDeviceRef_submitCommands()::appData is limited to 368 bytes"
 		));
 
 	device = GraphicsDeviceRef_ptr(deviceRef);
@@ -2030,7 +2033,7 @@ Bool GraphicsDeviceRef_submitCommands(
 	device->fifId = device->submitId % device->framesInFlight;
 	++device->submitId;
 
-	//Set app data
+	//Fill in the per frame globals
 
 	Ns now = Time_now();
 
@@ -2045,9 +2048,6 @@ Bool GraphicsDeviceRef_submitCommands(
 		data.deltaTime = deltaTime;
 		data.time = time;
 	}
-
-	if(appData)
-		Buffer_memcpy(Buffer_createRef(data.appData, sizeof(data.appData)), *appData);
 
 	//Submit impl should also set the swapchains and process all command lists and swapchains.
 	//This is not present here because the API impl is the one in charge of how it is threaded.
@@ -2111,6 +2111,16 @@ U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDevic
 		return 0;
 
 	return GraphicsDevice_getMemoryBudgetExt(device, isDeviceLocal);
+}
+
+Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message) {
+
+	if(!device)
+		return false;
+
+	//Fetch or returns the PREVIOUS bits, so the first caller sees the bit clear and everyone after sees it set
+
+	return !(AtomicI64_or(&device->runtimeMessages, (I64) message) & (I64) message);
 }
 
 Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {

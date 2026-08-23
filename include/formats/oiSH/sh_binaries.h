@@ -52,7 +52,12 @@ typedef enum ESHExtension {
 	ESHExtension_RayQuery                    = 1 << 8,
 	ESHExtension_RayMicromapOpacity          = 1 << 9,
 	ESHExtension_RayTriPosition              = 1 << 10,       //SM6.10 tri vertex position fetch (RayQuery + ray-pipeline)
-	ESHExtension_RayMotionBlur               = 1 << 11,
+	//SV_Barycentrics / GetAttributeAtVertex (SM6.1+); SPIR-V BaryCoordKHR via SPV_KHR_fragment_shader_barycentric.
+	//Hardware-gated:
+	// RDNA1 lacks the Vulkan extension,
+	// so a fragment shader that reads barycentrics ships as a variant beside a fallback.
+	//Reuses the reserved bit 11 slot; old oiSH files never set it, so dormant masks stay valid.
+	ESHExtension_Barycentrics                = 1 << 11,
 	ESHExtension_RayReorder                  = 1 << 12,
 
 	ESHExtension_Multiview                   = 1 << 13,
@@ -96,7 +101,17 @@ typedef enum ESHExtension {
 	//SPIRV: SPV_EXT_descriptor_heap (DescriptorHeapEXT capability).
 	ESHExtension_DescriptorHeap              = 1 << 25,
 
+	//Barycentrics is native on BOTH backends:
+	// D3D_SHADER_REQUIRES_BARYCENTRICS and BaryCoordKHR both map to it,
+	// so declared-but-unused demotes to dormant like any other native extension.
+	//Adding a native bit churns every oiSH's dormant mask,
+	// so the compiler corpus goldens were REGENERATED with it (dormant gains bit 11 everywhere).
+	//Old third-party files stay safe:
+	// no oiSH written before this bit existed can contain the requires-flag or the capability - the old compiler
+	// rejected both, so no old identifier can diverge from a fresh compile.
+
 	ESHExtension_DxilNative =                                  //Extensions that can be found from DXIL natively
+		ESHExtension_Barycentrics |
 		ESHExtension_RayQuery |
 		ESHExtension_16BitTypes |
 		ESHExtension_I64 |
@@ -109,10 +124,10 @@ typedef enum ESHExtension {
 		ESHExtension_DescriptorHeap,
 
 	ESHExtension_SpirvNative =                                 //Extensions that map directly to SPIRV capabilities
+		ESHExtension_Barycentrics |
 		ESHExtension_RayMicromapOpacity |
 		ESHExtension_RayQuery |
 		ESHExtension_RayTriPosition |
-		ESHExtension_RayMotionBlur |
 		ESHExtension_RayReorder |
 		ESHExtension_AtomicF32 |
 		ESHExtension_AtomicF64 |
@@ -141,12 +156,14 @@ typedef enum ESHExtension {
 	//When adding an extension above: leave it out of both sets to keep it dual (the default), and only add it here
 	// if one backend is genuinely impossible.
 
+	//SubgroupArithmetic and SubgroupShuffle deliberately are NOT here: WaveActiveSum / WaveReadLaneAt are
+	// plain HLSL, so DXC compiles them to DXIL fine.
+	//DXIL reflection just can't DETECT them (one generic wave ops flag), which is a DxilNative matter and
+	// keeps them annotation-driven on DXIL, not a reason to refuse the compile.
+
 	ESHExtension_NoDxilCompile =                              //SPIRV-only to compile: no DXIL intrinsic exists
 		ESHExtension_AtomicF32 |
-		ESHExtension_AtomicF64 |
-		ESHExtension_SubgroupArithmetic |
-		ESHExtension_SubgroupShuffle |
-		ESHExtension_RayMotionBlur,
+		ESHExtension_AtomicF64,
 
 	ESHExtension_NoSpirvCompile =                             //DXIL-only to compile: no SPIR-V intrinsic or inline op
 		ESHExtension_MeshTaskTexDeriv,

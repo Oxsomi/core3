@@ -26,6 +26,17 @@
 #define EFloatType_make(exponentBits, mantissaBits, bytes)            \
 	(((bytes) << 16) | ((exponentBits) << 8) | ((mantissaBits) << 0))
 
+//A type with NO sign bit:
+// every bit is exponent + mantissa and negatives are unrepresentable.
+//Worth it where the value is known non-negative and the bit budget is tight, BC6H's UF16 endpoints,
+// or three 21-bit channels packed into one U64. Converting a negative INTO one of these clamps to +0;
+// converting one out can never produce a negative.
+
+#define EFloatType_unsigned (1 << 24)
+
+#define EFloatType_makeUnsigned(exponentBits, mantissaBits, bytes)    \
+	(EFloatType_unsigned | EFloatType_make(exponentBits, mantissaBits, bytes))
+
 #ifdef __cplusplus
 	extern "C" {
 #endif
@@ -42,12 +53,30 @@ typedef enum EFloatType {
 	EFloatType_BF16            = EFloatType_make( 8,   7,  2),            //BFloat
 	EFloatType_TF19            = EFloatType_make( 8,  10,  4),            //TensorFloat
 	EFloatType_PXR24        = EFloatType_make( 8,  15,  4),
-	EFloatType_FP24            = EFloatType_make( 7,  16,  4)
+	EFloatType_FP24            = EFloatType_make( 7,  16,  4),
+
+	//Unsigned.
+	//Spending the freed bit is the whole point:
+	// UF21 puts it into the exponent, giving a range wider than F16 both ways in 21 bits,
+	// so three fit in a U64 with one to spare.
+	//NOT here on purpose:
+	// a 16-bit unsigned half.
+	//It would be bit-identical to a non-negative F16 with an idle bit 15 and nothing else to distinguish it.
+	//BC6H's UFLOAT endpoints ARE exactly that, its decode ends in (interpolated * 31) >> 6, landing in [0, 0x7BFF],
+	// so a BC6H codec wants plain F16 and a clamp where it fits endpoints,
+	// not a type whose only behaviour is that clamp.
+	//A 16-bit unsigned float that USES all 16 bits is a different type, and has no consumer.
+
+	EFloatType_UF21            = EFloatType_makeUnsigned( 6,  15,  4)
 
 } EFloatType;
 
+static inline Bool EFloatType_hasSign(EFloatType type) {
+	return !(type & EFloatType_unsigned);
+}
+
 static inline U8 EFloatType_bytes(EFloatType type) {
-	return (U8)(type >> 16);
+	return (U8)((type >> 16) & 0xFF);
 }
 
 static inline U8 EFloatType_exponentBits(EFloatType type) {
@@ -71,8 +100,13 @@ static inline U64 EFloatType_signShift(EFloatType type) {
 	return EFloatType_exponentShift(type) + EFloatType_exponentBits(type);
 }
 
+//Zero for an unsigned type, which is what makes sign(),
+// abs() and isZero() fall out correctly without any of them knowing the type has no sign:
+// sign() is never set, abs() masks nothing, isZero() tests the whole value.
+//Every other accessor reads fields BELOW the sign either way.
+
 static inline U64 EFloatType_signMask(EFloatType type) {
-	return (U64)1 << EFloatType_signShift(type);
+	return EFloatType_hasSign(type) ? (U64)1 << EFloatType_signShift(type) : 0;
 }
 
 static inline U64 EFloatType_exponentMask(EFloatType type) {            //Not shifted
@@ -90,6 +124,11 @@ static inline Bool EFloatType_sign(EFloatType type, U64 v) {
 static inline U64 EFloatType_abs(EFloatType type, U64 v) {
 	return v &~ EFloatType_signMask(type);
 }
+
+//A no-op on an unsigned type, exactly as abs() already is:
+// both are pure bit operations on the sign field, and with no field to touch the identity is the honest answer.
+//It also keeps negate an involution.
+//Clamping a value that cannot be represented is convert()'s job, not an accessor's.
 
 static inline U64 EFloatType_negate(EFloatType type, U64 v) {
 	return v ^ EFloatType_signMask(type);
@@ -133,6 +172,7 @@ typedef U16 BF16;
 typedef U32 TF19;
 typedef U32 PXR24;
 typedef U32 FP24;
+typedef U32 UF21;
 
 #define EFloatType_cast1(a, b)                                        \
 static inline a b##_cast##a(b v) {                                    \
@@ -161,7 +201,8 @@ EFloatType_cast1(F64, a);        \
 EFloatType_cast1(BF16, a);        \
 EFloatType_cast1(TF19, a);        \
 EFloatType_cast1(PXR24, a);        \
-EFloatType_cast1(FP24, a);
+EFloatType_cast1(FP24, a);        \
+EFloatType_cast1(UF21, a);
 
 EFloatType_cast(F8);
 EFloatType_cast(F16);
@@ -171,6 +212,7 @@ EFloatType_cast(BF16);
 EFloatType_cast(TF19);
 EFloatType_cast(PXR24);
 EFloatType_cast(FP24);
+EFloatType_cast(UF21);
 
 #undef EFloatType_cast1
 #undef EFloatType_cast

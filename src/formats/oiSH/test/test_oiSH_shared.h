@@ -57,7 +57,6 @@ void Test_SHFileAddEntryIntersectionOnWrongStage(Test *t);
 void Test_SHFileAddEntryHitStageSizes(Test *t);
 void Test_SHFileAddEntryCallablePayload(Test *t);
 void Test_SHFileAddEntryMissMustHavePayload(Test *t);
-void Test_SHFileAddEntryWaveSizeWorkgraph(Test *t);
 void Test_SHFileAddEntryWaveSizeInvalidNibbles(Test *t);
 void Test_SHFileAddEntryWaveSizeOnNonCompute(Test *t);
 void Test_SHFileAddEntryTaskNeedsGroup(Test *t);

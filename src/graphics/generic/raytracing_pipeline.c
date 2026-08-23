@@ -51,8 +51,11 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 	Bool madePipeline = false;
 	U64 totalBinaryCount = 0;
+	U32 pipelineExtensions = 0;
+	U32 padding = 0;
 	ListU32 binaryIndices = (ListU32) { 0 };
 	ListPipelineStage tmpStages = (ListPipelineStage) { 0 };
+	(void) padding;
 
 	//Validate sizes
 
@@ -163,6 +166,8 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 		gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, bin, entry, e_rr));
 
+		pipelineExtensions |= (U32)(bin->identifier.extensions &~ bin->dormantExtensions);
+
 		if(stage.binaryId == U32_MAX)
 			retError(clean, Error_invalidParameter(
 				1, 0,
@@ -179,7 +184,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 		maxAttributeSize = U8_max(maxAttributeSize, entry->intersectionSize);
 	}
 
-	Bool anyMotionBlurExt = info->flags & EPipelineRaytracingFlags_AllowMotionBlurExt;
+	Bool anyOpacityMicromapExt = info->flags & EPipelineRaytracingFlags_AllowOpacityMicromapExt;
 
 	if((((U64)groups->length + tmpStages.length) >> 32) || ((tmpStages.length) >> 32))
 		retError(clean, Error_outOfBounds(
@@ -187,7 +192,10 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelineRaytracing() tmpStages.length + groups.length out of bounds"
 		));
 
-	if(info->flags >> EPipelineRaytracingFlags_Count)
+	//Cast because flags is a U8 and the enum now fills all 8 of its bits, which msvc flags as a shift by the
+	// full width even though the promotion in front of it makes the shift defined.
+
+	if((U32)info->flags >> EPipelineRaytracingFlags_Count)
 		retError(clean, Error_invalidParameter(
 			1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::info.flags is invalid"
 		));
@@ -198,11 +206,16 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelineRaytracing()::info.maxPayloadSize and maxAttributeSize need to be 2 byte aligned"
 		));
 
-	if(maxAttributeSize > 32 || info->maxRecursionDepth > 2 || maxPayloadSize > 32)
+	//The payload was sharing the attribute's 32-byte limit, which is not its limit:
+	// 32 is the hard cap D3D12 puts on HIT ATTRIBUTES (D3D12_RAYTRACING_MAX_ATTRIBUTE_SIZE_IN_BYTES),
+	// while neither api caps the payload at all, it costs registers,
+	// not validity. 255 is where the oiSH entry's U8 payloadSize runs out.
+
+	if(maxAttributeSize > 32 || info->maxRecursionDepth > 2)
 		retError(clean, Error_invalidParameter(
 			1, 0,
 			"GraphicsDeviceRef_createPipelineRaytracing()::info."
-			"maxAttributeSize, maxRecursionDepth and maxRayHitAttributeSize need to be <=32, <=2 and <=32 respectively"
+			"maxAttributeSize and maxRecursionDepth need to be <=32 and <=2 respectively"
 		));
 
 	if(maxAttributeSize < 8 || maxPayloadSize < 2 || !info->maxRecursionDepth)
@@ -299,9 +312,10 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			1, 0, "GraphicsDeviceRef_createPipelineRaytracing() can't be called if RayPipeline isn't supported"
 		));
 
-	if(anyMotionBlurExt && !(dev->info.capabilities.features & EGraphicsFeatures_RayMotionBlur))
+	if(anyOpacityMicromapExt && !(dev->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity))
 		retError(clean, Error_invalidParameter(
-			1, 0, "GraphicsDeviceRef_createPipelineRaytracing() can't enable motion blur if the feature isn't supported"
+			1, 0,
+			"GraphicsDeviceRef_createPipelineRaytracing() can't allow opacity micromaps if the feature isn't supported"
 		));
 
 	if(layout && layout->refPtrType->typeId != (TypeId) EGraphicsTypeId_PipelineLayout)
@@ -320,7 +334,8 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	*pipeline = (Pipeline) {
 		.device = deviceRef,
 		.type = EPipelineType_RaytracingExt,
-		.flags = flags
+		.flags = flags,
+		.extensions = pipelineExtensions
 	};
 
 	if(!layout)

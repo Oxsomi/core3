@@ -81,7 +81,9 @@ typedef struct SortingKey {
 	U32 padding;
 } SortingKey;
 
-static inline ECompareResult SortingKey_compare(const void *aRaw, const void *bRaw) {
+static inline ECompareResult SortingKey_compare(const void *aRaw, const void *bRaw, void *context) {
+
+	(void) context;
 
 	const SortingKey *aKey = (const SortingKey*) aRaw, *bKey = (const SortingKey*) bRaw;
 	const DescriptorBinding *a = aKey->binding;
@@ -283,7 +285,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		goto clean;
 	}
 
-	if(!ListSortingKey_sortCustom(sortedList, SortingKey_compare))
+	if(!ListSortingKey_sortCustom(sortedList, SortingKey_compare, NULL))
 		retError(clean, Error_invalidState(
 			0, "GraphicsDeviceRef_createDescriptorLayout can't sort list"
 		));

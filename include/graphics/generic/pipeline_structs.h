@@ -59,9 +59,40 @@ typedef enum EPipelineStage {
 
 	EPipelineStage_Count,
 
-	EPipelineStage_RTASBuild = 0x100        //Only for use in transitions at RTAS build stage
+	EPipelineStage_RTASBuild = 0x100,       //Only for use in transitions at RTAS build stage
+
+	//Stage SETS, used by the transitions a scope records: bit N is EPipelineStage N.
+	//A scope names only the FIRST stage that accesses a resource and two declarations for one resource fold
+	//together, so a transition has to carry a set rather than a value; the backends expand each bit into the
+	//stages it implies. EPipelineStage_Count is the "no shader stage" sentinel and so maps to an empty set,
+	//which leaves its bit free for RTASBuild to borrow (RTASBuild's own value sits outside the stage range).
+
+	EPipelineStageMask_RTASBuild = 1 << EPipelineStage_Count,
+
+	//Every ray tracing shader stage is one stage as far as barriers are concerned
+
+	EPipelineStageMask_RtAny =
+		(1 << EPipelineStage_RaygenExt)     | (1 << EPipelineStage_CallableExt) |
+		(1 << EPipelineStage_MissExt)       | (1 << EPipelineStage_ClosestHitExt) |
+		(1 << EPipelineStage_AnyHitExt)     | (1 << EPipelineStage_IntersectionExt),
+
+	//The graphics shader stages that precede the pixel stage; D3D12 folds them all into VERTEX_SHADING
+
+	EPipelineStageMask_PrePixel =
+		(1 << EPipelineStage_Vertex)        | (1 << EPipelineStage_Hull) |
+		(1 << EPipelineStage_Domain)        | (1 << EPipelineStage_GeometryExt)
 
 } EPipelineStage;
+
+//A stage's set, or an empty one for the Count sentinel
+
+static inline U32 EPipelineStage_toMask(EPipelineStage stage) {
+
+	if(stage == EPipelineStage_RTASBuild)
+		return EPipelineStageMask_RTASBuild;
+
+	return stage < EPipelineStage_Count ? ((U32)1 << (U32) stage) : 0;
+}
 
 extern const C8 *EPipelineStage_names[];
 
