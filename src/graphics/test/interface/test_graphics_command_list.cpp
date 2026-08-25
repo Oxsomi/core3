@@ -141,7 +141,8 @@ extern "C" void Test_graphicsCommandRecording(oxc::c::Test *t, oxc::c::GraphicsD
 	RenderTexture target;
 
 	if(!Test_assert(t, "createTarget", dev.createRenderTexture(
-		16, 16, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Scope test target", target, nullptr, e_rr
+		16, 16, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Scope test target", target, c::EMSAASamples_Off,
+		nullptr, e_rr
 	)))
 		return;
 
@@ -308,7 +309,8 @@ extern "C" void Test_graphicsCommandValidation(oxc::c::Test *t, oxc::c::Graphics
 	DeviceBuffer buffer;
 
 	if(!Test_assert(t, "createTarget", dev.createRenderTexture(
-		16, 16, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Validation target", target, nullptr, e_rr
+		16, 16, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Validation target", target, c::EMSAASamples_Off,
+		nullptr, e_rr
 	)))
 		return;
 
@@ -472,15 +474,17 @@ extern "C" void Test_graphicsCommandValidation(oxc::c::Test *t, oxc::c::Graphics
 	DeviceBuffer indirect;
 
 	Test_assert(t, "createTarget2", dev.createRenderTexture(
-		16, 16, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Validation copy target", target2, nullptr, e_rr
+		16, 16, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Validation copy target", target2,
+		c::EMSAASamples_Off, nullptr, e_rr
 	));
 
 	Test_assert(t, "createFmtOther", dev.createRenderTexture(
-		16, 16, c::ETextureFormatId_RG16f, c::EGraphicsResourceFlag_None, "Validation format target", fmtOther, nullptr, e_rr
+		16, 16, c::ETextureFormatId_RG16f, c::EGraphicsResourceFlag_None, "Validation format target", fmtOther,
+		c::EMSAASamples_Off, nullptr, e_rr
 	));
 
 	Test_assert(t, "createDepthCopy", dev.createDepthStencil(
-		16, 16, c::EDepthStencilFormat_D32, false, "Validation depth", depth, e_rr
+		16, 16, c::EDepthStencilFormat_D32, false, "Validation depth", depth, c::EMSAASamples_Off, e_rr
 	));
 
 	Test_assert(t, "createIndirect", dev.createBuffer(
@@ -567,15 +571,17 @@ extern "C" void Test_graphicsRenderPass(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	DepthStencil depth;
 
 	Test_assert(t, "createTarget", dev.createRenderTexture(
-		16, 16, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Render pass target", target, nullptr, e_rr
+		16, 16, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Render pass target", target, c::EMSAASamples_Off,
+		nullptr, e_rr
 	));
 
 	Test_assert(t, "createSmaller", dev.createRenderTexture(
-		8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Render pass smaller target", smaller, nullptr, e_rr
+		8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Render pass smaller target", smaller,
+		c::EMSAASamples_Off, nullptr, e_rr
 	));
 
 	Test_assert(t, "createDepth", dev.createDepthStencil(
-		16, 16, c::EDepthStencilFormat_D32, false, "Render pass depth", depth, e_rr
+		16, 16, c::EDepthStencilFormat_D32, false, "Render pass depth", depth, c::EMSAASamples_Off, e_rr
 	));
 
 	//RAII is what turns the C module's staged RefPtr_dec ladders on these two early exits into a plain return.

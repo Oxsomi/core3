@@ -21,7 +21,7 @@
 
 #include "@types.hlsli"
 
-//The pixel color comes from a classic register the bindful table feeds, not from app data or bindless.
+//The pixel color comes from a classic register the bindful table feeds, not a push constant or bindless.
 //Deliberately includes NO bindless headers.
 
 ByteAddressBuffer color : register(t0, space0);

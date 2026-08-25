@@ -465,7 +465,10 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
-SpinLock lockThread = { 0 };
+//Value initialized rather than { 0 }: off Windows AtomicI64 holds a std::atomic and is not an aggregate, so
+//there is no int to convert from. {} zeroes it on every platform.
+
+SpinLock lockThread{};
 Bool hasInitialized = false;
 
 Bool Compiler_setup(Error *e_rr) {

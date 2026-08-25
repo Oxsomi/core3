@@ -23,8 +23,20 @@
 //Separate from test_caps_atomics.hlsl, which needs AtomicI64 as well and therefore skips on any device that
 // has plain I64 without the atomic. This one runs wherever I64 does.
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 #include "@buffer.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct CapsPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 aux;           //Second handle, where the test needs one (a TLAS for the ray query cases)
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT CapsPush _push;
 
 //0xFFFFFFFF * v is (v << 32) - v, so the high word is v - 1 and the low word is -v.
 //For every v above 1 the product needs more than 32 bits, which means a multiply that quietly happened at 32
@@ -54,5 +66,5 @@ void main(U32 i : SV_DispatchThreadID) {
 		total += (hi == v - 1 && lo == (U32)(0u - v)) ? k : 0;
 	}
 
-	setAtUniform<U32>(getAppData1u(0), 0, total);
+	setAtUniform<U32>(_push.output, 0, total);
 }

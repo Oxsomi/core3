@@ -26,8 +26,20 @@
 // SubgroupArithmetic is annotation-driven on DXIL, while SubgroupOperations here is in both Native sets and
 // reflection can confirm it on either backend.
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 #include "@buffer.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct CapsPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 aux;           //Second handle, where the test needs one (a TLAS for the ray query cases)
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT CapsPush _push;
 
 //Every lane is active here, so each wave's ballot bit count is exactly its width,
 // and the first lane of each wave contributes that count.
@@ -45,5 +57,5 @@ void main(U32 i : SV_DispatchThreadID) {
 	const U32 activeLanes = WaveActiveCountBits(true);
 
 	if(WaveIsFirstLane())
-		rwBufferUniform(getAppData1u(0)).InterlockedAdd(0, activeLanes);
+		rwBufferUniform(_push.output).InterlockedAdd(0, activeLanes);
 }

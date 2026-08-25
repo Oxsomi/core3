@@ -18,15 +18,28 @@
 *  This is called dual licensing.
 */
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//The colour occupied U32 slots 4..7 and the two logic op sources 8..11 and 12..15, which is why this block
+//keeps all three: one setPushConstants feeds whichever pixel shader is bound.
+
+struct PixelPush {
+	U32 padding0, padding1, padding2, padding3;
+	F32 colorR, colorG, colorB, colorA;
+	U32 logicSrc0R, logicSrc0G, logicSrc0B, logicSrc0A;
+	U32 logicSrc1R, logicSrc1G, logicSrc1B, logicSrc1A;
+};
+
+PUSH_CONSTANT PixelPush _push;
 
 //Integer output for an integer render target, since a logic op is only defined on integer framebuffers.
-//Each instance returns its own app data value, and the XOR configured in the pipeline folds the two into
+//Each instance returns its own pushed value, and the XOR configured in the pipeline folds the two into
 // one result the readback checks.
 //App data: [8..11] = instance 0's value, [12..15] = instance 1's value, both as U32x4 with every component
 // <= 255 so an 8 bit UINT channel holds it exactly.
 
 [shader("pixel")]
 U32x4 main(F32x4 pos : SV_POSITION, nointerpolation U32 instance : TEXCOORD0) : SV_TARGET {
-	return getAppData4u(instance == 0 ? 8 : 12);
+	return instance == 0 ? U32x4(_push.logicSrc0R, _push.logicSrc0G, _push.logicSrc0B, _push.logicSrc0A) : U32x4(_push.logicSrc1R, _push.logicSrc1G, _push.logicSrc1B, _push.logicSrc1A);
 }

@@ -28,8 +28,20 @@
 //One entrypoint per file, as in the other test shaders: multi entry SPIR-V under 1.4 stops the validation
 // layers attributing globals to an entrypoint, which the suite counts as a real warning.
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 #include "@buffer.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct CapsPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 aux;           //Second handle, where the test needs one (a TLAS for the ray query cases)
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT CapsPush _push;
 
 //64 threads each add (i + 1) into a shared counter, so the total is only right if every add was atomic:
 // a lost update lands short, which a non atomic read-modify-write reliably produces at this thread count.
@@ -52,7 +64,7 @@ void main(U32 i : SV_DispatchThreadID) {
 	// readback rather than plausible.
 
 	if(!i)
-		setAtUniform<U64>(getAppData1u(0), 8, (U64)0x1FFFFFFFEull);
+		setAtUniform<U64>(_push.output, 8, (U64)0x1FFFFFFFEull);
 
-	rwBufferUniform(getAppData1u(0)).InterlockedAdd(0, i + 1);
+	rwBufferUniform(_push.output).InterlockedAdd(0, i + 1);
 }

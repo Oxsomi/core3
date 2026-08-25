@@ -218,6 +218,8 @@ typedef struct DxCommandBufferState {
 
 	ImageAndRange boundTargets[9];                    //All 8 RTVs and DSV
 	ImageAndRange resolveTargets[9];                  //Dst MSAA targets
+	U8 resolveModes[9];                               //EMSAAResolveMode each of the above resolves with
+	U8 padding4[7];
 
 	F32x4 blendConstants, tempBlendConstants;
 

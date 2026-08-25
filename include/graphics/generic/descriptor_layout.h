@@ -36,7 +36,7 @@ typedef enum ESHRegisterType ESHRegisterType;
 typedef RefPtr GraphicsDeviceRef;
 
 //The register space OxC3 keeps for itself on DXIL, where the per frame globals live (frame id, time,
-//swapchain descriptors, app data). Space 0 was the old home and is far too easy to pick by accident: it is
+//swapchain descriptors). Space 0 was the old home and is far too easy to pick by accident: it is
 //what anyone writing their first constant buffer types, and custom layouts made that a real collision.
 //Vulkan needs no equivalent, since the globals sit in their own descriptor SET there and set indices are
 //too few to hide a reservation in.

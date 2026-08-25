@@ -1860,7 +1860,6 @@ Bool GraphicsDeviceRef_submitCommands(
 	GraphicsDeviceRef *deviceRef,
 	const ListCommandListRef *commandLists,
 	const ListSwapchainRef *swapchains,
-	const Buffer *appData,
 	F32 deltaTime,
 	F32 time,
 	Error *e_rr
@@ -1885,11 +1884,6 @@ Bool GraphicsDeviceRef_submitCommands(
 	if(swapchains && swapchains->length > sizeof(((CBufferData*)NULL)->swapchains) / 8)
 		retError(clean, Error_invalidParameter(
 			2, 1, "GraphicsDeviceRef_submitCommands()::swapchains.length is limited to 16"
-		));
-
-	if(appData && Buffer_length(*appData) > sizeof(((CBufferData*)NULL)->appData))
-		retError(clean, Error_invalidParameter(
-			3, 0, "GraphicsDeviceRef_submitCommands()::appData is limited to 368 bytes"
 		));
 
 	device = GraphicsDeviceRef_ptr(deviceRef);
@@ -2040,7 +2034,7 @@ Bool GraphicsDeviceRef_submitCommands(
 	device->fifId = device->submitId % device->framesInFlight;
 	++device->submitId;
 
-	//Set app data
+	//Fill in the per frame globals
 
 	Ns now = Time_now();
 
@@ -2055,9 +2049,6 @@ Bool GraphicsDeviceRef_submitCommands(
 		data.deltaTime = deltaTime;
 		data.time = time;
 	}
-
-	if(appData)
-		Buffer_memcpy(Buffer_createRef(data.appData, sizeof(data.appData)), *appData);
 
 	//Submit impl should also set the swapchains and process all command lists and swapchains.
 	//This is not present here because the API impl is the one in charge of how it is threaded.

@@ -48,11 +48,9 @@ typedef struct CBufferData {        //TODO: Replace this entirely when we can.
 	U32 frameId;                    //Can loop back to 0 after U32_MAX!
 	F32 time;                       //Time since launch of app
 	F32 deltaTime;                  //deltaTime since last frame.
-	U32 swapchainCount;             //How many swapchains are present (will insert ids into appData)
+	U32 swapchainCount;             //How many swapchains are present
 
 	U32 swapchains[2 * 16];
-
-	U32 appData[(512 - 16 - 2 * 16 * 4) / 4];
 
 } CBufferData;
 
@@ -254,14 +252,14 @@ TListNamed(SwapchainRef*, ListSwapchainRef);
 //It returns U64_MAX on error (e.g. if nullptr)
 U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal);
 
-//Submit commands to device
-//appData is up to a 368 byte per frame array used for transmitting render critical info.
+//Submit commands to device.
+//Per dispatch data a shader needs travels as a push constant, which the shader declares and the pipeline
+//layout validates, rather than through a block of untyped bytes that every shader shared.
 Bool GraphicsDeviceRef_submitCommands(
 
 	GraphicsDeviceRef *deviceRef,
 	const ListCommandListRef *commandLists,
 	const ListSwapchainRef *swapchains,
-	const Buffer *appData,
 
 	//Set deltaTime < 0 to indicate it has to auto calculate time and deltaTime.
 	//But this is not recommended when the deltaTime is constant for example.

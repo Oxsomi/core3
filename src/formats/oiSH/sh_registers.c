@@ -293,11 +293,21 @@ Bool SHBinaryInfo_addRegisterBase(
 	U64 hash = 0;
 	gotoIfError3(clean, SHRegisterRuntime_hash(&registr, name, arrays, sbFile, &hash, e_rr));
 
-	//Find duplicate register (that is legal to add, without conflicting info)
+	//Find duplicate register (that is legal to add, without conflicting info).
+	//The caller hands over the buffer either way, so a duplicate has to consume it too rather than leave it
+	//for the caller to trip over: two entrypoints declaring the same push constant block hash identically,
+	//and the second one's SBFile_create then refuses a buffer that still holds the first one's variables.
 
 	for(U64 i = 0; i < registers->length; ++i)
-		if(registers->ptr[i].hash == hash)
+		if(registers->ptr[i].hash == hash) {
+
+			if(sbFile) {
+				SBFile_free(sbFile, alloc);
+				*sbFile = (SBFile) { 0 };
+			}
+
 			goto clean;
+		}
 
 	//Ensure there's no registers with duplicate name or binding
 

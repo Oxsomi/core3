@@ -18,7 +18,20 @@
 *  This is called dual licensing.
 */
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//The colour occupied U32 slots 4..7 and the two logic op sources 8..11 and 12..15, which is why this block
+//keeps all three: one setPushConstants feeds whichever pixel shader is bound.
+
+struct PixelPush {
+	U32 padding0, padding1, padding2, padding3;
+	F32 colorR, colorG, colorB, colorA;
+	U32 logicSrc0R, logicSrc0G, logicSrc0B, logicSrc0A;
+	U32 logicSrc1R, logicSrc1G, logicSrc1B, logicSrc1A;
+};
+
+PUSH_CONSTANT PixelPush _push;
 
 //Pixel shader emitting TWO colors from one draw, which is what dual source blending consumes.
 //Both go to the same attachment rather than to two attachments, which is what makes this dual SOURCE rather
@@ -33,8 +46,8 @@ struct DualSrcOutput {
 	DUAL_SRC_TARGET1 F32x4 src1 : SV_Target1;
 };
 
-//src0 is the app data color, src1 is a fixed half in every channel.
-//The blend is configured src * Src1Color, so the result is the app data color scaled by exactly a half,
+//src0 is the pushed color, src1 is a fixed half in every channel.
+//The blend is configured src * Src1Color, so the result is the pushed color scaled by exactly a half,
 // which no single source blend factor could produce from these inputs alone.
 //App data: [4..7] = color as F32x4.
 
@@ -42,7 +55,7 @@ struct DualSrcOutput {
 DualSrcOutput mainDualSrc(F32x4 pos : SV_POSITION) {
 
 	DualSrcOutput o;
-	o.src0 = getAppData4f(4);
+	o.src0 = F32x4(_push.colorR, _push.colorG, _push.colorB, _push.colorA);
 	o.src1 = F32x4(0.5f, 0.5f, 0.5f, 0.5f);
 	return o;
 }

@@ -21,8 +21,20 @@
 //Capability execution shader: subgroup arithmetic.
 //Gated on SubgroupArithmetic so it is only emitted where the device claims it.
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 #include "@buffer.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct CapsPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 aux;           //Second handle, where the test needs one (a TLAS for the ray query cases)
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT CapsPush _push;
 
 //Each thread contributes its own index to a wave wide sum, then lane 0 of each wave adds that sum into the
 // output with a plain atomic.
@@ -43,5 +55,5 @@ void main(U32 i : SV_DispatchThreadID) {
 	const U32 waveSum = WaveActiveSum(i + 1);
 
 	if(WaveIsFirstLane())
-		rwBufferUniform(getAppData1u(0)).InterlockedAdd(0, waveSum);
+		rwBufferUniform(_push.output).InterlockedAdd(0, waveSum);
 }

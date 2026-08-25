@@ -78,11 +78,12 @@ extern "C" void Test_graphicsTextureRef(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	DeviceBuffer buffer;
 
 	Test_assert(t, "createRenderTexture", dev.createRenderTexture(
-		32, 16, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Predicate render texture", renderTexture, nullptr, e_rr
+		32, 16, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Predicate render texture", renderTexture,
+		c::EMSAASamples_Off, nullptr, e_rr
 	));
 
 	Test_assert(t, "createDepthStencil", dev.createDepthStencil(
-		32, 16, c::EDepthStencilFormat_D32, false, "Predicate depth stencil", depthStencil, e_rr
+		32, 16, c::EDepthStencilFormat_D32, false, "Predicate depth stencil", depthStencil, c::EMSAASamples_Off, e_rr
 	));
 
 	Test_assert(t, "createBuffer", dev.createBuffer(
@@ -163,7 +164,7 @@ extern "C" void Test_graphicsTextureRef(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 		if(Test_assert(t, "createExposed", dev.createRenderTexture(
 			8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_ShaderRWBindless,
-			"Predicate exposed target", exposed, nullptr, e_rr
+			"Predicate exposed target", exposed, c::EMSAASamples_Off, nullptr, e_rr
 		))) {
 
 			const c::BindlessDescriptor read = exposed.readHandle(0, 0);

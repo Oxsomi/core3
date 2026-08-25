@@ -367,6 +367,15 @@ static void DxCommandBufferState_bindDescriptors(
 	if(!temp->boundDescriptorTable || !layout->info.bindings)
 		return;
 
+	const DescriptorTable *table = DescriptorTableRef_ptr(temp->boundDescriptorTable);
+
+	//A table stays bound across a pipeline switch, so it can outlive the layout it was bound for.
+	//Emitting it against a root signature built from a DIFFERENT DescriptorLayout writes root parameters
+	// that signature never declared, which is what interleaving a bindful dispatch with a bindless one does.
+
+	if(table->layout != layout->info.bindings)
+		return;
+
 	//Root arguments persist while the root signature does, so an unchanged table has nothing to re-emit
 
 	if(temp->lastBoundTable[bindPoint] == temp->boundDescriptorTable)
@@ -374,7 +383,6 @@ static void DxCommandBufferState_bindDescriptors(
 
 	temp->lastBoundTable[bindPoint] = temp->boundDescriptorTable;
 
-	const DescriptorTable *table = DescriptorTableRef_ptr(temp->boundDescriptorTable);
 	DxDescriptorTable *tableExt = DescriptorTable_ext((DescriptorTable*)table, Dx);
 
 	DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(table->parent), Dx);
@@ -678,6 +686,17 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			Bool anyResolve = false;
 
+			//Every slot is cleared BEFORE the attachments fill it, not just the ones past colorCount.
+			//A slot that is active but carries no resolveImage is never written below, so clearing only the
+			//tail left it pointing at whatever the PREVIOUS render pass resolved into: a later pass that
+			//resolves any other attachment sets anyResolve and would then resolve this one too, into an
+			//image it no longer names. Slot 8 is the depth stencil one and is re-armed further down.
+
+			for (U8 i = 0; i < 9; ++i) {
+				temp->boundTargets[i] = temp->resolveTargets[i] = (ImageAndRange) { 0 };
+				temp->resolveModes[i] = EMSAAResolveMode_Average;
+			}
+
 			for (U8 i = 0; i < startRender->colorCount; ++i) {
 
 				const AttachmentInfoInternal *attachmentsj = &attachments[j];
@@ -695,6 +714,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 							.image = attachmentsj->resolveImage
 						};
 
+						temp->resolveModes[i] = attachmentsj->resolveMode;
 						anyResolve = true;
 					}
 				}
@@ -726,9 +746,6 @@ void DX_WRAP_FUNC(CommandList_process)(
 				if(active)
 					++j;
 			}
-
-			for (U8 i = startRender->colorCount; i < 9; ++i)
-				temp->boundTargets[i] = temp->resolveTargets[i] = (ImageAndRange) { 0 };
 
 			const DxDescriptorHeapSingle *dsvHeap = &deviceExt->cpuHeaps[ECPUDescriptorHeapType_DSV];
 			D3D12_CPU_DESCRIPTOR_HANDLE dsvCpuDesc = dsvHeap->cpuHandle;
@@ -796,6 +813,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 					.image = startRender->resolveDepthStencil
 				};
 
+				temp->resolveModes[8] = startRender->resolveDepthStencilMode;
 				anyResolve = true;
 			}
 
@@ -966,11 +984,25 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				else format = ETextureFormatId_toDXFormat(utex.textureFormatId);
 
-				buffer->lpVtbl->ResolveSubresource(
+				//ResolveSubresourceRegion rather than ResolveSubresource, which has no mode parameter at all
+				// and always averages. A NULL rect resolves the whole subresource, so with AVERAGE the two are
+				// the same call; MIN and MAX are only reachable through this one.
+
+				D3D12_RESOLVE_MODE resolveMode = D3D12_RESOLVE_MODE_AVERAGE;
+
+				switch(temp->resolveModes[i == count ? 8 : i]) {
+					default:                    break;
+					case EMSAAResolveMode_Min:  resolveMode = D3D12_RESOLVE_MODE_MIN; break;
+					case EMSAAResolveMode_Max:  resolveMode = D3D12_RESOLVE_MODE_MAX; break;
+				}
+
+				buffer->lpVtbl->ResolveSubresourceRegion(
 					buffer,
-					resolveExt->image, 0,
+					resolveExt->image, 0, 0, 0,
 					imageExt->image, 0,
-					format
+					NULL,
+					format,
+					resolveMode
 				);
 			}
 

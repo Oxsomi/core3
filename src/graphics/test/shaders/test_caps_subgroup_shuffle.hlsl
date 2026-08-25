@@ -26,8 +26,20 @@
 //Both backends compile it, since WaveReadLaneAt is plain HLSL; DXIL reflection just can't detect the
 // extension (one generic wave ops flag), so on DXIL it is annotation-driven.
 
-#include "@appdata.hlsli"
+#include "@resources.hlsli"
 #include "@buffer.hlsli"
+
+//Per dispatch data this shader reads, declared as a push constant.
+//Scalars rather than an array: on DXIL each array element takes its own 16 byte cbuffer row, so the size the
+//work op checks would not match what the shader declares.
+
+struct CapsPush {
+	U32 output;        //Bindless write handle of the output buffer
+	U32 aux;           //Second handle, where the test needs one (a TLAS for the ray query cases)
+	U32 padding0, padding1;
+};
+
+PUSH_CONSTANT CapsPush _push;
 
 //128 threads rather than the 64 the sibling shaders use.
 //WaveReadLaneAt may only name an ACTIVE lane, and a group of 64 leaves half of a 128 wide wave idle on the
@@ -66,5 +78,5 @@ void main(U32 i : SV_DispatchThreadID) {
 	//XOR 1 is a permutation of the wave, so a sum is identical whether the shuffle moved anything or not, and
 	// a summing test would pass on a shuffle that is a plain no-op.
 
-	rwBufferUniform(getAppData1u(0)).InterlockedAdd(0, WaveReadLaneAt(mine, partner) == expected ? 1 : 0);
+	rwBufferUniform(_push.output).InterlockedAdd(0, WaveReadLaneAt(mine, partner) == expected ? 1 : 0);
 }

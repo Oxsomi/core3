@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//graphics/test/interface/test_graphics_caps_exec.c
+//graphics/test/interface/test_graphics_caps_exec.cpp
 //
 //Coverage group C, execution half.
 //
@@ -70,23 +70,42 @@
 //  CoopVec / CoopMat / CoopFP8 / CoopVecTraining - need buffer types the bindless layout lacks; compile
 //   coverage lives in the shader compiler's feature corpus.
 
-#include "types/test/test.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
-#include "types/base/error.h"
-#include "platforms/platform.h"
-#include "platforms/logx.h"
-#include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
-#include "graphics/generic/device_info.h"
-#include "graphics/generic/device_buffer.h"
-#include "graphics/generic/blas.h"
-#include "graphics/generic/tlas.h"
-#include "graphics/generic/bindless_descriptor.h"
-#include "graphics/generic/command_list.h"
-#include "graphics/generic/commands.h"
-#include "graphics/generic/pipeline.h"
-#include "test_graphics_shared.h"
+//The shared helpers in terms of the handle types. Both C++ headers come BEFORE the block below: a
+//standard header included after the C headers landed in oxc::c finds its guard already tripped and
+//leaves its symbols in that namespace.
+
+#include "test_graphics_shared.hpp"
+
+//Log::debugLn is the C++ front for Log_debugLnx; the x macros name ELogOptions_NewLine unqualified and
+//so cannot be reached through the c namespace.
+
+#include "types/container/log.hpp"
+
+namespace oxc { namespace c {
+	#include "types/base/error.h"
+	#include "types/container/buffer.h"
+	#include "types/container/string.h"
+	#include "types/test/test.h"
+	#include "formats/oiSH/sh_registers.h"
+	#include "platforms/logx.h"
+	#include "platforms/platform.h"
+	#include "graphics/generic/bindless_descriptor.h"
+	#include "graphics/generic/blas.h"
+	#include "graphics/generic/command_list.h"
+	#include "graphics/generic/commands.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_buffer.h"
+	#include "graphics/generic/device_info.h"
+	#include "graphics/generic/instance.h"
+	#include "graphics/generic/pipeline.h"
+	#include "graphics/generic/tlas.h"
+	#include "test_graphics_shared.h"
+} }
+
+using namespace oxc;
+
+//Same namespace the C headers landed in, so the definitions here match the declarations in
+//test_graphics_shared.h and the macros in those headers still expand to names that resolve.
 
 //Each capability under test: the oiSH to load, the device bit that gates it, and the extension the
 //entrypoint was compiled with.
@@ -99,27 +118,27 @@
 // hold.
 
 typedef struct TestCapabilityWord {
-	U32 offset;                             //Byte offset into the readback
-	U32 value;                              //Expected U32 there
+	c::U32 offset;                             //Byte offset into the readback
+	c::U32 value;                              //Expected U32 there
 } TestCapabilityWord;
 
 #define TEST_CAPS_MAX_WORDS 4
 
 typedef struct TestCapabilityShader {
 
-	const C8 *path;
-	const C8 *name;
+	const c::C8 *path;
+	const c::C8 *name;
 
-	EGraphicsFeatures feature;              //Bit in capabilities.features, or 0 if gated on dataTypes
-	EGraphicsDataTypes dataType;            //Bit in capabilities.dataTypes, or 0 if gated on features
+	c::EGraphicsFeatures feature;              //Bit in capabilities.features, or 0 if gated on dataTypes
+	c::EGraphicsDataTypes dataType;            //Bit in capabilities.dataTypes, or 0 if gated on features
 
-	ESHExtension require;                   //Extension the entrypoint declares
+	c::ESHExtension require;                   //Extension the entrypoint declares
 
 	TestCapabilityWord expected[TEST_CAPS_MAX_WORDS];
-	U8 expectedCount;                       //How many of the words above are checked
+	c::U8 expectedCount;                       //How many of the words above are checked
 
-	Bool spirvOnly;                         //No DXIL variant exists, so D3D12 has nothing to run
-	Bool needsTlas;                         //Wants the shared TLAS handle in app data slot 1
+	c::Bool spirvOnly;                         //No DXIL variant exists, so D3D12 has nothing to run
+	c::Bool needsTlas;                         //Wants the shared TLAS handle in push constant slot 1
 
 } TestCapabilityShader;
 
@@ -143,7 +162,7 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	//It stays gated on AtomicI64 because the entrypoint declares that extension, so the lookup needs it.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_atomics.oiSH", "atomicI64",
-		0, EGraphicsDataTypes_AtomicI64, ESHExtension_AtomicI64,
+		(c::EGraphicsFeatures) (0), (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_AtomicI64), c::ESHExtension_AtomicI64,
 		{ { 0, TEST_CAPS_SUM_64 }, { 8, 0xFFFFFFFEu }, { 12, 0x00000001u } }, 3,
 		false, false
 	},
@@ -152,7 +171,7 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	// atomic, which the entry above skips entirely.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_i64.oiSH", "i64",
-		0, EGraphicsDataTypes_I64, ESHExtension_I64,
+		(c::EGraphicsFeatures) (0), (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_I64), c::ESHExtension_I64,
 		{ { 0, TEST_CAPS_SUM_64 } }, 1,
 		false, false
 	},
@@ -163,7 +182,8 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	// the module genuinely uses Int64 and has to declare it.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_f64.oiSH", "f64",
-		0, EGraphicsDataTypes_F64 | EGraphicsDataTypes_I64, ESHExtension_F64,
+		(c::EGraphicsFeatures) (0),
+		(c::EGraphicsDataTypes) (c::EGraphicsDataTypes_F64 | c::EGraphicsDataTypes_I64), c::ESHExtension_F64,
 		{ { 0, TEST_CAPS_SUM_64 } }, 1,
 		false, false
 	},
@@ -171,7 +191,7 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	//Halves: three predicates bracket the significand from both sides without depending on a rounding mode.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_f16.oiSH", "f16",
-		0, EGraphicsDataTypes_F16, ESHExtension_16BitTypes,
+		(c::EGraphicsFeatures) (0), (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_F16), c::ESHExtension_16BitTypes,
 		{ { 0, TEST_CAPS_SUM_64 }, { 4, 64 }, { 8, 64 } }, 3,
 		false, false
 	},
@@ -181,8 +201,8 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	//Both map to this same extension, so either would be accepted, but the quad path is the one worth exercising.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_computederiv.oiSH", "computeDeriv",
-		EGraphicsFeatures_ComputeDeriv, 0,
-		ESHExtension_ComputeDeriv,
+		(c::EGraphicsFeatures) (c::EGraphicsFeatures_ComputeDeriv), (c::EGraphicsDataTypes) (0),
+		c::ESHExtension_ComputeDeriv,
 		{ { 0, 4 } }, 1,
 		false, false
 	},
@@ -193,8 +213,9 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	// wide wave.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_subgroup_shuffle.oiSH", "subgroupShuffle",
-		EGraphicsFeatures_SubgroupShuffle | EGraphicsFeatures_SubgroupOperations, 0,
-		ESHExtension_SubgroupShuffle,
+		(c::EGraphicsFeatures) (c::EGraphicsFeatures_SubgroupShuffle | c::EGraphicsFeatures_SubgroupOperations),
+		(c::EGraphicsDataTypes) (0),
+		c::ESHExtension_SubgroupShuffle,
 		{ { 0, 128 } }, 1,
 		false, false
 	},
@@ -208,8 +229,9 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	// annotation-driven rather than demotable, exactly like the shuffle entry above.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_subgroup.oiSH", "subgroupArithmetic",
-		EGraphicsFeatures_SubgroupArithmetic | EGraphicsFeatures_SubgroupOperations, 0,
-		ESHExtension_SubgroupArithmetic,
+		(c::EGraphicsFeatures) (c::EGraphicsFeatures_SubgroupArithmetic | c::EGraphicsFeatures_SubgroupOperations),
+		(c::EGraphicsDataTypes) (0),
+		c::ESHExtension_SubgroupArithmetic,
 		{ { 0, TEST_CAPS_SUM_64 } }, 1,
 		false, false
 	},
@@ -218,8 +240,8 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	//Every lane is active, so the counts sum to the thread count rather than the wave count.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_subgroup_ops.oiSH", "subgroupOperations",
-		EGraphicsFeatures_SubgroupOperations, 0,
-		ESHExtension_SubgroupOperations,
+		(c::EGraphicsFeatures) (c::EGraphicsFeatures_SubgroupOperations), (c::EGraphicsDataTypes) (0),
+		c::ESHExtension_SubgroupOperations,
 		{ { 0, 64 } }, 1,
 		false, false
 	},
@@ -229,8 +251,8 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	// reference into instance 0's slot, which left instance 1 unreachable.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_rayquery.oiSH", "rayQuery",
-		EGraphicsFeatures_RayQuery, 0,
-		ESHExtension_RayQuery,
+		(c::EGraphicsFeatures) (c::EGraphicsFeatures_RayQuery), (c::EGraphicsDataTypes) (0),
+		c::ESHExtension_RayQuery,
 		{ { 0, 1 }, { 4, 1 }, { 8, 0 } }, 3,
 		false, true
 	},
@@ -241,8 +263,8 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	// separates object space from world space.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_raytriposition.oiSH", "rayTriPosition",
-		EGraphicsFeatures_RayQuery | EGraphicsFeatures_RayTriPosition, 0,
-		ESHExtension_RayTriPosition,
+		(c::EGraphicsFeatures) (c::EGraphicsFeatures_RayQuery | c::EGraphicsFeatures_RayTriPosition), (c::EGraphicsDataTypes) (0),
+		c::ESHExtension_RayTriPosition,
 		{ { 0, 1 }, { 4, 1 } }, 2,
 		false, true
 	}
@@ -267,88 +289,78 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 //Everything is left NULL on failure, which the caller reads as "no tracing this run".
 
 static void Test_buildCapabilityTlas(
-	Test *t,
-	GraphicsDeviceRef *deviceRef,
-	Bool forceNoDataAccess,        //Deliberately unflagged BLAS, for the negative RayTriPosition guard test
-	DeviceBufferRef **positionsOut,
-	BLASRef **blasOut,
-	TLASRef **tlasOut
+	c::Test *t,
+	gfx::Device &dev,
+	c::Bool forceNoDataAccess,        //Deliberately unflagged BLAS, for the negative RayTriPosition guard test
+	gfx::DeviceBuffer &positions,
+	gfx::Blas &blas,
+	gfx::Tlas &tlas
 ) {
 
-	DeviceBufferRef *positions = NULL;
-	BLASRef *blas = NULL;
-	TLASRef *tlas = NULL;
-	CommandListRef *buildList = NULL;
+	c::Error *e_rr = &t->err;
 
-	const F32 triangle[12] = {
+	const c::F32 triangle[12] = {
 		0, 0, 0, 1,
 		1, 0, 0, 1,
 		0, 1, 0, 1
 	};
 
-	Buffer triData = Buffer_createRefConst(triangle, sizeof(triangle));
-	CharString name = CharString_createRefCStrConst("Capability trace positions");
+	c::Buffer triData = c::Buffer_createRefConst(triangle, sizeof(triangle));
 
-	if(!Test_assert(t, "capPositions", GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, NULL,
-		&name, &triData, &positions, &t->err
+	if(!Test_assert(t, "capPositions", dev.createBufferData(
+		c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
+		"Capability trace positions", &triData, positions, nullptr, e_rr
 	)))
-		goto clean;
+		return;
 
-	const DeviceData positionData = (DeviceData) { .buffer = positions };
-	name = CharString_createRefCStrConst("Capability trace BLAS");
+	const c::DeviceData positionData = { .buffer = positions.handle() };
 
 	//Position fetch is a build time opt in: without AllowDataAccess the vertex data simply isn't kept in the
 	// acceleration structure, so the flag rides along whenever the device claims the capability.
 
-	const GraphicsDeviceCapabilities blasCaps = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities;
+	const c::GraphicsDeviceCapabilities blasCaps = dev.info().capabilities;
 
-	const ERTASBuildFlags blasFlags =
-		(blasCaps.features & EGraphicsFeatures_RayTriPosition) &&
-		!(blasCaps.experimentalFeatures & EGraphicsFeatures_RayTriPosition) &&
+	const c::ERTASBuildFlags blasFlags =
+		(blasCaps.features & c::EGraphicsFeatures_RayTriPosition) &&
+		!(blasCaps.experimentalFeatures & c::EGraphicsFeatures_RayTriPosition) &&
 		!forceNoDataAccess
-		? ERTASBuildFlags_AllowDataAccessExt : ERTASBuildFlags_None;
+		? c::ERTASBuildFlags_AllowDataAccessExt : c::ERTASBuildFlags_None;
 
-	const BLASCreateInfo blasInfo = BLASCreateInfo_unindexed(
-		blasFlags, EBLASFlag_None, ETextureFormatId_RGBA32f, 0, 16, positionData
+	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_unindexed(
+		blasFlags, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData
 	);
 
-	if(!Test_assert(t, "capBlas", GraphicsDeviceRef_createBLASExt(deviceRef, &blasInfo, &name, &blas, &t->err)))
-		goto clean;
+	if(!Test_assert(t, "capBlas", dev.createBlas(blasInfo, "Capability trace BLAS", blas, e_rr)))
+		return;
 
 	//Two instances of the one BLAS: the second translated +2 along X, so a ray aimed there can only hit if
 	// that instance got its own acceleration structure reference.
 	//Every other test in the suite uses a single instance, which is why a backend writing all references into
 	// instance 0's slot went unnoticed.
 
-	TLASInstance instance[2] = {
-		(TLASInstance) {
+	const c::TLASInstance instance[2] = {
+		{
 			.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
-			.data = (TLASInstanceData) {
+			.data = {
 				.instanceId24_mask8 = 0xFFu << 24,
-				.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
-				.blasCpu = blas
+				.sbtOffset24_flags8 = (c::U32) c::ETLASInstanceFlag_Default << 24,
+				.blasCpu = blas.handle()
 			}
 		},
-		(TLASInstance) {
+		{
 			.transform = { { 1, 0, 0, 2 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
-			.data = (TLASInstanceData) {
+			.data = {
 				.instanceId24_mask8 = 0xFFu << 24,
-				.sbtOffset24_flags8 = (U32) ETLASInstanceFlag_Default << 24,
-				.blasCpu = blas
+				.sbtOffset24_flags8 = (c::U32) c::ETLASInstanceFlag_Default << 24,
+				.blasCpu = blas.handle()
 			}
 		}
 	};
 
-	ListTLASInstance instances = (ListTLASInstance) { 0 };
-	ListTLASInstance_createRefConst(instance, 2, &instances, NULL);
-
-	name = CharString_createRefCStrConst("Capability trace TLAS");
-
-	if(!Test_assert(t, "capTlas", GraphicsDeviceRef_createTLASExt(
-		deviceRef, ERTASBuildFlags_DefaultTLAS, &instances, false, NULL, &name, &tlas, &t->err
+	if(!Test_assert(t, "capTlas", dev.createTlas(
+		c::ERTASBuildFlags_DefaultTLAS, instance, 2, "Capability trace TLAS", tlas, false, e_rr
 	)))
-		goto clean;
+		return;
 
 	//Creating them only declares them.
 	//The build has to run on the device before anything can trace against it.
@@ -356,51 +368,49 @@ static void Test_buildCapabilityTlas(
 	//Each build gets its own scope, and the TLAS scope is numbered after the BLAS one, because the TLAS reads
 	// what the BLAS build produced and the backend derives that dependency from the scope ids.
 
+	gfx::CommandList buildList;
+
 	if(!(
-		Test_assert(t, "capAsList", GraphicsDeviceRef_createCommandList(
-			deviceRef, 2 * KIBI, 64, 16, true, &buildList, &t->err
-		)) &&
-		Test_assert(t, "capAsBegin", CommandListRef_begin(buildList, true, U64_MAX, &t->err)) &&
-		Test_assert(t, "capAsBlasScope", CommandListRef_startScope(buildList, NULL, 1, NULL, &t->err)) &&
-		Test_assert(t, "capAsBlas", CommandListRef_updateBLASExt(buildList, blas, &t->err)) &&
-		Test_assert(t, "capAsBlasScopeEnd", CommandListRef_endScope(buildList, &t->err)) &&
-		Test_assert(t, "capAsTlasScope", CommandListRef_startScope(buildList, NULL, 2, NULL, &t->err)) &&
-		Test_assert(t, "capAsTlas", CommandListRef_updateTLASExt(buildList, tlas, &t->err)) &&
-		Test_assert(t, "capAsTlasScopeEnd", CommandListRef_endScope(buildList, &t->err)) &&
-		Test_assert(t, "capAsEnd", CommandListRef_end(buildList, &t->err)) &&
-		TestShaders_submitAndWait(t, deviceRef, buildList, NULL, 0)
+		Test_assert(t, "capAsList", dev.createCommandList(2 * c::KIBI, 64, 16, buildList, true, e_rr)) &&
+		Test_assert(t, "capAsBegin", buildList.begin(true, e_rr))
+	)) {
+		tlas.release();
+		return;
+	}
+
+	{
+		gfx::CommandScope scope = buildList.scope({}, 1, {}, e_rr);
+		Test_assert(t, "capAsBlasScope", (c::Bool) scope);
+		Test_assert(t, "capAsBlas", scope.updateBlas(blas, e_rr));
+		Test_assert(t, "capAsBlasScopeEnd", scope.end(e_rr));
+	}
+
+	{
+		gfx::CommandScope scope = buildList.scope({}, 2, {}, e_rr);
+		Test_assert(t, "capAsTlasScope", (c::Bool) scope);
+		Test_assert(t, "capAsTlas", scope.updateTlas(tlas, e_rr));
+		Test_assert(t, "capAsTlasScopeEnd", scope.end(e_rr));
+	}
+
+	if(!(
+		Test_assert(t, "capAsEnd", buildList.end(e_rr)) &&
+		gfxtest::submitAndWait(t, dev, buildList) &&
+		Test_assert(t, "capTlasHandle", tlas.bindlessHandle() != c::BindlessDescriptor_None)
 	))
-		goto clean;
-
-	if(!Test_assert(t, "capTlasHandle", TLASRef_ptr(tlas)->handle != BindlessDescriptor_None))
-		goto clean;
-
-	*positionsOut = positions;
-	*blasOut = blas;
-	*tlasOut = tlas;
-
-	RefPtr_dec(&buildList);
-	return;
-
-clean:
-
-	RefPtr_dec(&buildList);
-	RefPtr_dec(&tlas);
-	RefPtr_dec(&blas);
-	RefPtr_dec(&positions);
+		tlas.release();
 }
 
-static Bool Test_runCapabilityShader(
-	Test *t,
-	GraphicsDeviceRef *deviceRef,
-	CommandListRef *emptyList,
+static c::Bool Test_runCapabilityShader(
+	c::Test *t,
+	gfx::Device &dev,
+	const gfx::CommandList &emptyList,
 	const TestCapabilityShader *cap,
-	TLASRef *tlas,
-	Bool *ranOut
+	const gfx::Tlas &tlas,
+	c::Bool *ranOut
 ) {
 
-	const Allocator *alloc = Platform_instance->alloc;
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	c::Error *e_rr = &t->err;
+	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
 
 	*ranOut = false;
 
@@ -408,13 +418,13 @@ static Bool Test_runCapabilityShader(
 	//Every bit has to be present rather than any of them, since a shader declaring two extensions needs both;
 	// gating on either would send a device missing one of them into a lookup that can only fail.
 
-	const Bool hasFeatures =
-		!cap->feature || (device->info.capabilities.features & cap->feature) == cap->feature;
+	const c::Bool hasFeatures =
+		!cap->feature || (caps.features & cap->feature) == cap->feature;
 
-	const Bool hasDataTypes =
-		!cap->dataType || (device->info.capabilities.dataTypes & cap->dataType) == cap->dataType;
+	const c::Bool hasDataTypes =
+		!cap->dataType || (caps.dataTypes & cap->dataType) == cap->dataType;
 
-	const Bool supported = (cap->feature || cap->dataType) && hasFeatures && hasDataTypes;
+	const c::Bool supported = (cap->feature || cap->dataType) && hasFeatures && hasDataTypes;
 
 	if(!supported)
 		return true;
@@ -425,8 +435,10 @@ static Bool Test_runCapabilityShader(
 	//Skipping is honest here, since the skip is logged and the bit leaves experimentalFeatures the moment the
 	// real capability query is wired, at which point this line stops matching and the entry runs.
 
-	if (device->info.capabilities.experimentalFeatures & cap->feature) {
-		Log_debugLnx("-- capabilityExec: %s claimed but experimental on this backend, skipped", cap->name);
+	if (caps.experimentalFeatures & cap->feature) {
+		Log::debugLn(
+			*dev.alloc(), "-- capabilityExec: %s claimed but experimental on this backend, skipped", cap->name
+		);
 		return true;
 	}
 
@@ -435,73 +447,65 @@ static Bool Test_runCapabilityShader(
 	//That error is harmless here, but it reads like a real failure in the test output,
 	// so decide up front rather than probing and letting the engine complain.
 
-	const GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	const Bool isSpirvDevice = instance->api != EGraphicsApi_Direct3D12;
+	const c::Bool isSpirvDevice = dev.api() != c::EGraphicsApi_Direct3D12;
 
 	if(cap->spirvOnly && !isSpirvDevice)
 		return true;
 
-	SHFile file = (SHFile) { 0 };
+	gfxtest::OwnedSHFile file(dev.alloc());
 
-	if(!TestShaders_loadFile(t, cap->path, &file))
+	if(!gfxtest::loadFile(t, cap->path, file.list))
 		return true;
 
-	Bool ok = true;
-	DeviceBufferRef *output = NULL;
-	PipelineRef *pipeline = NULL;
-	CommandListRef *commandList = NULL;
-
-	const CharString outputName = CharString_createRefCStrConst("Capability output");
-	const CharString entryName = CharString_createRefCStrConst("main");
+	c::Bool ok = true;
+	gfx::DeviceBuffer output;
+	gfx::Pipeline pipeline;
+	gfx::PipelineLayout pipelineLayout;
+	gfx::CommandList commandList;
 
 	//The entrypoint is only present when compiled with the extension, so this doubles as the check that the
 	// shader really was built for the capability rather than silently falling back.
 
-	const U32 entryId = GraphicsDeviceRef_getFirstShaderEntry(
-		deviceRef, &file, &entryName, NULL, NULL, ESHExtension_None, cap->require
-	);
+	const c::U32 entryId = dev.getFirstShaderEntry(file.list, "main", c::ESHExtension_None, cap->require);
 
-	if (entryId == U32_MAX) {
+	if (entryId == c::U32_MAX) {
 
 		//No entrypoint for this backend's binary type.
 		//That is legitimate rather than a failure:
 		// an entrypoint restricted with [[oxc::binary]] only exists for the backend it named,
 		// and the device consuming the other one has nothing to run.
 
-		Log_debugLnx("-- capabilityExec: %s claimed but no entrypoint for this backend, skipped", cap->name);
+		Log::debugLn(
+			*dev.alloc(), "-- capabilityExec: %s claimed but no entrypoint for this backend, skipped", cap->name
+		);
 
-		SHFile_free(&file, alloc);
 		return true;
 	}
 
-	ok &= Test_assert(t, "capOutput", GraphicsDeviceRef_createBuffer(
-		deviceRef,
-		EDeviceBufferUsage_None,
+	ok &= Test_assert(t, "capOutput", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
 		//ShaderWriteBindless rather than ShaderWrite: the shaders index the buffer through its bindless write handle,
 		// and only the bindless flag allocates one.
 		//Plain ShaderWrite leaves writeHandle at 0,
 		// which makes every shader write land on descriptor 0 and the readback come back untouched.
 
-		EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked,
-		NULL, &outputName, 16, &output, &t->err
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWriteBindless | c::EGraphicsResourceFlag_CPUBacked),
+		"Capability output", 16, output, nullptr, e_rr
 	));
 
 	if(ok) {
 
-		const CharString pipelineName = CharString_createRefCStrConst("Capability pipeline");
+		ok = ok && gfxtest::pushConstantLayout(t, dev, file.list, entryId, pipelineLayout);
 
-		ok &= Test_assert(t, "capPipeline", GraphicsDeviceRef_createPipelineCompute(
-			deviceRef, &file, &pipelineName, entryId, &entryName, EPipelineFlags_None, NULL, &pipeline, &t->err
+		ok = ok && Test_assert(t, "capPipeline", dev.createComputePipeline(
+			file.list, "main", "Capability pipeline", pipeline, {}, &pipelineLayout, e_rr
 		));
 	}
 
 	if (ok) {
 
-		ok &= Test_assert(t, "capList", GraphicsDeviceRef_createCommandList(
-			deviceRef, 2 * KIBI, 64, 16, true, &commandList, &t->err
-		));
-
-		ok = ok && Test_assert(t, "capBegin", CommandListRef_begin(commandList, true, U64_MAX, &t->err));
+		ok &= Test_assert(t, "capList", dev.createCommandList(2 * c::KIBI, 64, 16, commandList, true, e_rr));
+		ok = ok && Test_assert(t, "capBegin", commandList.begin(true, e_rr));
 
 		//The dispatch has to sit in a scope that declares the write, or the backend has no barrier to insert
 		// and refuses the bind.
@@ -509,72 +513,75 @@ static Bool Test_runCapabilityShader(
 		//A tracing entry reads the TLAS as well as writing the output, and the scope has to say so or the
 		// backend has no barrier to put the acceleration structure into a readable state.
 
-		const Transition transitions[2] = {
-			(Transition) { .resource = output, .stage = EPipelineStage_Compute, .isWrite = true },
-			(Transition) { .resource = tlas,   .stage = EPipelineStage_Compute }
+		const c::Transition outputWrite = {
+			.resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
 		};
 
-		ListTransition outputTransition = (ListTransition) { 0 };
-		ListTransition_createRefConst(transitions, cap->needsTlas ? 2 : 1, &outputTransition, NULL);
+		const c::Transition tlasRead = {
+			.resource = tlas.handle(), .stage = c::EPipelineStage_Compute
+		};
+
+		//The push block: the output handle at slot 0, and the shared TLAS at slot 1
+		//for the entries that trace against it, matching what the shaders read.
+
+		const c::U32 pushData[4] = {
+			output.writeHandle(),
+			tlas.valid() ? tlas.bindlessHandle() : 0,
+			0, 0
+		};
 
 		if (ok) {
-			ok &= Test_assert(t, "capScope", CommandListRef_startScope(commandList, &outputTransition, 1, NULL, &t->err));
-			ok &= Test_assert(t, "capBind", CommandListRef_setComputePipeline(commandList, pipeline, &t->err));
-			ok &= Test_assert(t, "capDispatch", CommandListRef_dispatch1D(commandList, 1, &t->err));
-			ok &= Test_assert(t, "capScopeEnd", CommandListRef_endScope(commandList, &t->err));
-			ok &= Test_assert(t, "capEnd", CommandListRef_end(commandList, &t->err));
+
+			gfx::CommandScope scope =
+				cap->needsTlas ?
+				commandList.scope({ outputWrite, tlasRead }, 1, {}, e_rr) :
+				commandList.scope({ outputWrite }, 1, {}, e_rr);
+
+			ok &= Test_assert(t, "capScope", (c::Bool) scope);
+			ok &= Test_assert(t, "capBind", scope.setComputePipeline(pipeline, e_rr));
+			ok &= Test_assert(t, "capPush", scope.setPushConstants(pushData, e_rr));
+			ok &= Test_assert(t, "capDispatch", scope.dispatch1D(1, e_rr));
+			ok &= Test_assert(t, "capScopeEnd", scope.end(e_rr));
+			ok &= Test_assert(t, "capEnd", commandList.end(e_rr));
 		}
 	}
 
-	//App data carries the output buffer's bindless write handle, matching what the shaders read at slot 0.
-
 	if (ok) {
 
-		//Slot 1 carries the shared TLAS for the entries that trace against it, matching what the shaders read.
-
-		const U32 appData[2] = {
-			DeviceBufferRef_ptr(output)->writeHandle,
-			tlas ? TLASRef_ptr(tlas)->handle : 0
-		};
-
-		ok &= TestShaders_submitAndWait(t, deviceRef, commandList, appData, sizeof(appData));
-		ok &= TestShaders_pullBuffer(t, deviceRef, emptyList, output);
+		ok &= gfxtest::submitAndWait(t, dev, commandList);
+		ok &= gfxtest::pullBuffer(t, dev, emptyList, output);
 	}
 
 	if (ok) {
 
-		const DeviceBuffer *outputPtr = DeviceBufferRef_ptr(output);
+		const c::DeviceBuffer *outputPtr = output.data();
 
-		for (U8 w = 0; w < cap->expectedCount; ++w) {
+		for (c::U8 w = 0; w < cap->expectedCount; ++w) {
 
 			const TestCapabilityWord word = cap->expected[w];
 
 			//A word past the readback is a broken table entry rather than a broken device, so it fails here
 			// instead of silently comparing against a zero that was never written.
 
-			if(!Test_assert(t, "capResultInRange", Buffer_length(outputPtr->cpuData) >= (U64)word.offset + 4)) {
+			if(!Test_assert(t, "capResultInRange", c::Buffer_length(outputPtr->cpuData) >= (c::U64)word.offset + 4)) {
 				ok = false;
 				break;
 			}
 
-			const U32 got = *(const U32*)(outputPtr->cpuData.ptr + word.offset);
+			const c::U32 got = *(const c::U32*)(outputPtr->cpuData.ptr + word.offset);
 
 			ok &= Test_assert(t, "capResult", got == word.value);
 
 			if(got != word.value)
-				Log_debugLnx(
-					"-- capabilityExec: %s at +%"PRIu32" expected 0x%08X, got 0x%08X",
+				Log::debugLn(
+					*dev.alloc(),
+					"-- capabilityExec: %s at +%" PRIu32 " expected 0x%08X, got 0x%08X",
 					cap->name, word.offset, word.value, got
 				);
 		}
 
 		*ranOut = ok;
 	}
-
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&output);
-	SHFile_free(&file, alloc);
 
 	return ok;
 }
@@ -585,141 +592,133 @@ static Bool Test_runCapabilityShader(
 //The positive side needs no extra test, since the rayTriPosition entry above dispatches through the same
 // check against the properly flagged TLAS.
 
-static void Test_capabilityRayTriPositionGuard(Test *t, GraphicsDeviceRef *deviceRef) {
+static void Test_capabilityRayTriPositionGuard(c::Test *t, gfx::Device &dev) {
 
-	const GraphicsDeviceCapabilities caps = GraphicsDeviceRef_ptr(deviceRef)->info.capabilities;
+	c::Error *e_rr = &t->err;
+	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
 
 	//Same gates as the positive entry: claimed, not experimental, and RayQuery for the inline trace.
 
-	const EGraphicsFeatures needed = EGraphicsFeatures_RayQuery | EGraphicsFeatures_RayTriPosition;
+	const c::EGraphicsFeatures needed =
+		(c::EGraphicsFeatures) (c::EGraphicsFeatures_RayQuery | c::EGraphicsFeatures_RayTriPosition);
 
-	if((caps.features & needed) != needed || (caps.experimentalFeatures & EGraphicsFeatures_RayTriPosition))
+	if((caps.features & needed) != needed || (caps.experimentalFeatures & c::EGraphicsFeatures_RayTriPosition))
 		return;
 
-	const Allocator *alloc = Platform_instance->alloc;
+	gfx::DeviceBuffer positions, output;
+	gfx::Blas blas;
+	gfx::Tlas tlas;
 
-	DeviceBufferRef *positions = NULL;
-	BLASRef *blas = NULL;
-	TLASRef *tlas = NULL;
-	DeviceBufferRef *output = NULL;
-	PipelineRef *pipeline = NULL;
-	CommandListRef *commandList = NULL;
-	SHFile file = (SHFile) { 0 };
+	Test_buildCapabilityTlas(t, dev, true, positions, blas, tlas);
 
-	Test_buildCapabilityTlas(t, deviceRef, true, &positions, &blas, &tlas);
-
-	if(!Test_assert(t, "rtpGuardTlas", tlas != NULL))
-		goto clean;
+	if(!Test_assert(t, "rtpGuardTlas", tlas.valid()))
+		return;
 
 	//The cached bits are what the record time check reads, so they are pinned down here as well.
 
-	Test_assert(t, "rtpGuardKnown", TLAS_hasFlag(TLASRef_ptr(tlas), ETLASFlag_BlasDataAccessKnown));
-	Test_assert(t, "rtpGuardAllOff", !TLAS_hasFlag(TLASRef_ptr(tlas), ETLASFlag_BlasDataAccessAll));
+	Test_assert(t, "rtpGuardKnown", c::TLAS_hasFlag(tlas.data(), c::ETLASFlag_BlasDataAccessKnown));
+	Test_assert(t, "rtpGuardAllOff", !c::TLAS_hasFlag(tlas.data(), c::ETLASFlag_BlasDataAccessAll));
 
-	if(!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_caps_raytriposition.oiSH", &file))
-		goto clean;
+	gfxtest::OwnedSHFile file(dev.alloc());
 
-	const CharString entryName = CharString_createRefCStrConst("main");
+	if(!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_caps_raytriposition.oiSH", file.list))
+		return;
 
-	const U32 entryId = GraphicsDeviceRef_getFirstShaderEntry(
-		deviceRef, &file, &entryName, NULL, NULL, ESHExtension_None, ESHExtension_RayTriPosition
+	const c::U32 entryId = dev.getFirstShaderEntry(
+		file.list, "main", c::ESHExtension_None, c::ESHExtension_RayTriPosition
 	);
 
-	if(!Test_assert(t, "rtpGuardEntry", entryId != U32_MAX))
-		goto clean;
+	if(!Test_assert(t, "rtpGuardEntry", entryId != c::U32_MAX))
+		return;
 
-	const CharString pipelineName = CharString_createRefCStrConst("RTP guard pipeline");
-	const CharString outputName = CharString_createRefCStrConst("RTP guard output");
+	//The shader reads its output handle from a push constant, and a range the layout doesn't declare is
+	//rejected at pipeline creation, so the layout is detected here like everywhere else.
+
+	gfx::PipelineLayout pipelineLayout;
+
+	if(!gfxtest::pushConstantLayout(t, dev, file.list, entryId, pipelineLayout))
+		return;
+
+	gfx::Pipeline pipeline;
+	gfx::CommandList commandList;
 
 	if(!(
-		Test_assert(t, "rtpGuardPipeline", GraphicsDeviceRef_createPipelineCompute(
-			deviceRef, &file, &pipelineName, entryId, &entryName, EPipelineFlags_None, NULL, &pipeline, &t->err
+		Test_assert(t, "rtpGuardPipeline", dev.createComputePipeline(
+			file.list, "main", "RTP guard pipeline", pipeline, {}, &pipelineLayout, e_rr
 		)) &&
-		Test_assert(t, "rtpGuardOutput", GraphicsDeviceRef_createBuffer(
-			deviceRef, EDeviceBufferUsage_None,
-			EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_CPUBacked,
-			NULL, &outputName, 16, &output, &t->err
+		Test_assert(t, "rtpGuardOutput", dev.createBuffer(
+			c::EDeviceBufferUsage_None,
+			(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWriteBindless | c::EGraphicsResourceFlag_CPUBacked),
+			"RTP guard output", 16, output, nullptr, e_rr
 		)) &&
-		Test_assert(t, "rtpGuardList", GraphicsDeviceRef_createCommandList(
-			deviceRef, 2 * KIBI, 64, 16, true, &commandList, &t->err
-		)) &&
-		Test_assert(t, "rtpGuardBegin", CommandListRef_begin(commandList, true, U64_MAX, &t->err))
+		Test_assert(t, "rtpGuardList", dev.createCommandList(2 * c::KIBI, 64, 16, commandList, true, e_rr)) &&
+		Test_assert(t, "rtpGuardBegin", commandList.begin(true, e_rr))
 	))
-		goto clean;
+		return;
 
-	const Transition transitions[2] = {
-		(Transition) { .resource = output, .stage = EPipelineStage_Compute, .isWrite = true },
-		(Transition) { .resource = tlas,   .stage = EPipelineStage_Compute }
+	const c::Transition transitions[2] = {
+		{ .resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true },
+		{ .resource = tlas.handle(),   .stage = c::EPipelineStage_Compute }
 	};
 
-	ListTransition scopeTransitions = (ListTransition) { 0 };
-	ListTransition_createRefConst(transitions, 2, &scopeTransitions, NULL);
+	gfx::CommandScope scope = commandList.scope({ transitions[0], transitions[1] }, 1, {}, e_rr);
 
 	if(!(
-		Test_assert(t, "rtpGuardScope", CommandListRef_startScope(commandList, &scopeTransitions, 1, NULL, &t->err)) &&
-		Test_assert(t, "rtpGuardBind", CommandListRef_setComputePipeline(commandList, pipeline, &t->err))
+		Test_assert(t, "rtpGuardScope", (c::Bool) scope) &&
+		Test_assert(t, "rtpGuardBind", scope.setComputePipeline(pipeline, e_rr))
 	))
-		goto clean;
+		return;
 
 	//The dispatch itself is what has to fail, since the only TLAS this scope can trace provably lacks the flag.
 
-	Test_assert(t, "rtpGuardRejects", !CommandListRef_dispatch1D(commandList, 1, NULL));
-
-clean:
-
-	RefPtr_dec(&commandList);
-	RefPtr_dec(&pipeline);
-	RefPtr_dec(&output);
-	RefPtr_dec(&tlas);
-	RefPtr_dec(&blas);
-	RefPtr_dec(&positions);
-	SHFile_free(&file, alloc);
+	Test_assert(t, "rtpGuardRejects", !scope.dispatch1D(1, nullptr));
 }
 
-void Test_graphicsCapabilityExecution(Test *t, GraphicsDeviceRef *deviceRef) {
+//38. A shader per capability, dispatched and its results verified.
 
-	Test_setModule(t, "GraphicsDevice/capabilityExec");
+extern "C" void Test_graphicsCapabilityExecution(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
-	CommandListRef *emptyList = NULL;
+	c::Error *e_rr = &t->err;
+
+	c::Test_setModule(t, "GraphicsDevice/capabilityExec");
+
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	gfx::CommandList emptyList;
 
 	if(!(
-		Test_assert(t, "createEmptyList", GraphicsDeviceRef_createCommandList(
-			deviceRef, 2 * KIBI, 64, 16, true, &emptyList, &t->err
-		)) &&
-		Test_assert(t, "beginEmptyList", CommandListRef_begin(emptyList, true, U64_MAX, &t->err)) &&
-		Test_assert(t, "endEmptyList", CommandListRef_end(emptyList, &t->err))
-	)) {
-		RefPtr_dec(&emptyList);
+		Test_assert(t, "createEmptyList", dev.createCommandList(2 * c::KIBI, 64, 16, emptyList, true, e_rr)) &&
+		Test_assert(t, "beginEmptyList", emptyList.begin(true, e_rr)) &&
+		Test_assert(t, "endEmptyList", emptyList.end(e_rr))
+	))
 		return;
-	}
 
 	//One TLAS shared by every entry that traces, built here rather than per entry so the acceleration
 	// structure build isn't repeated for each capability that happens to want one.
 	//It only exists where the device claims RayQuery.
 	//Entries that need it are skipped otherwise.
 
-	DeviceBufferRef *positions = NULL;
-	BLASRef *blas = NULL;
-	TLASRef *tlas = NULL;
+	gfx::DeviceBuffer positions;
+	gfx::Blas blas;
+	gfx::Tlas tlas;
 
-	if(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features & EGraphicsFeatures_RayQuery)
-		Test_buildCapabilityTlas(t, deviceRef, false, &positions, &blas, &tlas);
+	if(dev.info().capabilities.features & c::EGraphicsFeatures_RayQuery)
+		Test_buildCapabilityTlas(t, dev, false, positions, blas, tlas);
 
-	U32 verified = 0, skipped = 0;
+	c::U32 verified = 0, skipped = 0;
 
-	for (U64 i = 0; i < sizeof(testCapabilityShaders) / sizeof(testCapabilityShaders[0]); ++i) {
+	for (c::U64 i = 0; i < sizeof(testCapabilityShaders) / sizeof(testCapabilityShaders[0]); ++i) {
 
-		Bool ran = false;
+		c::Bool ran = false;
 
 		//An entry that traces has nothing to trace against without the TLAS, so it doesn't run at all rather
 		// than dispatching with a handle that points nowhere.
 
-		if(testCapabilityShaders[i].needsTlas && !tlas) {
+		if(testCapabilityShaders[i].needsTlas && !tlas.valid()) {
 			++skipped;
 			continue;
 		}
 
-		Test_runCapabilityShader(t, deviceRef, emptyList, &testCapabilityShaders[i], tlas, &ran);
+		Test_runCapabilityShader(t, dev, emptyList, &testCapabilityShaders[i], tlas, &ran);
 
 		if(ran)
 			++verified;
@@ -729,16 +728,16 @@ void Test_graphicsCapabilityExecution(Test *t, GraphicsDeviceRef *deviceRef) {
 
 	//Says which capabilities were actually executed, so a green run isn't read as "all of them".
 
-	Log_debugLnx("-- capabilityExec: %"PRIu32" capabilities executed and verified, %"PRIu32" not run", verified, skipped);
+	Log::debugLn(
+		*dev.alloc(),
+		"-- capabilityExec: %" PRIu32 " capabilities executed and verified, %" PRIu32 " not run",
+		verified, skipped
+	);
 
-	Test_capabilityRayTriPositionGuard(t, deviceRef);
+	Test_capabilityRayTriPositionGuard(t, dev);
 
-	//The TLAS outlives every dispatch that traced against it, so it's released last.
+	//Everything above is still in flight until the device is idle, and the handles here release in reverse
+	// declaration order once this returns, so the wait has to come first.
 
-	GraphicsDeviceRef_wait(deviceRef, NULL);
-
-	RefPtr_dec(&tlas);
-	RefPtr_dec(&blas);
-	RefPtr_dec(&positions);
-	RefPtr_dec(&emptyList);
+	(void) dev.wait(nullptr);
 }

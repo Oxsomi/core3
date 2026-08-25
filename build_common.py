@@ -237,28 +237,118 @@ PROFILE_COMPILER_EXE = {
 	("Linux",   "clang"): "clang"
 }
 
-def detectedCompilerVersion(exe):
+def resolveCompilerExe(exe):
+	"""`exe` as something runnable, or None.
+
+	cl and clang-cl only reach PATH inside a developer command prompt, and the Visual Studio generator finds
+	its own toolchain regardless, so a check that insisted on PATH would fail on machines, and on CI runners,
+	where the build itself works perfectly well.
+	Conan's own detection is split on this: detect_msvc_compiler goes through vswhere and needs nothing on
+	PATH, while detect_clang_compiler simply runs the executable (see ensureCompilerOnPath below).
+	"""
+
+	found = shutil.which(exe)
+
+	if found or hostSystem() != "Windows" or exe not in ("cl", "clang-cl"):
+		return found
+
+	vswhere = os.path.join(
+		os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"),
+		"Microsoft Visual Studio", "Installer", "vswhere.exe"
+	)
+
+	if not os.path.isfile(vswhere):
+		return None
+
+	try:
+		install = capture('"' + vswhere + '" -latest -products * -property installationPath').strip()
+	except Exception:
+		return None
+
+	if not install:
+		return None
+
+	if exe == "clang-cl":
+		candidate = os.path.join(install, "VC", "Tools", "Llvm", "x64", "bin", "clang-cl.exe")
+		return candidate if os.path.isfile(candidate) else None
+
+	toolsets = os.path.join(install, "VC", "Tools", "MSVC")
+
+	if not os.path.isdir(toolsets):
+		return None
+
+	for version in sorted(os.listdir(toolsets), reverse=True):
+		candidate = os.path.join(toolsets, version, "bin", "HostX64", "x64", "cl.exe")
+		if os.path.isfile(candidate):
+			return candidate
+
+	return None
+
+def detectedCompilerVersion(exe, compiler = None):
 	"""The version `exe` actually reports, or None if it isn't there.
 
 	Only the major matters, which is what conan keys package ids on for every compiler this repo uses.
 	"""
 
-	for args in ( [ exe, "-dumpfullversion" ], [ exe, "--version" ] ):
+	resolved = resolveCompilerExe(exe)
+
+	if not resolved:
+		return None
+
+	for args in ( [ resolved, "-dumpfullversion" ], [ resolved, "--version" ] ):
 
 		try:
 			probe = subprocess.run(args, capture_output=True, text=True, timeout=10)
 		except Exception:
 			continue
 
+		# cl has no version flag and writes its banner to stderr, so both streams are read and a non zero
+		# return code is not taken as "no answer".
+
+		text = (probe.stdout or "") + (probe.stderr or "")
+
+		if compiler == "msvc":
+
+			# conan spells msvc as major*10 + minor/10, so 19.38 is 193 rather than 19.
+
+			found = re.search(r"Version\s+([0-9]+)\.([0-9]+)", text)
+
+			if found:
+				return str(int(found.group(1)) * 10 + int(found.group(2)) // 10)
+
+			continue
+
 		if probe.returncode:
 			continue
 
-		found = re.search(r"([0-9]+)(\.[0-9]+)*", probe.stdout)
+		found = re.search(r"([0-9]+)(\.[0-9]+)*", text)
 
 		if found:
 			return found.group(1)
 
 	return None
+
+def ensureCompilerOnPath(exe):
+	"""Put `exe` on PATH when it was only found through a Visual Studio install.
+
+	The Windows clang profiles detect their version with detect_api.detect_clang_compiler("clang-cl"), which
+	runs the executable and so only ever looks at PATH. resolveCompilerExe finds the Visual Studio copy as
+	well, so without this the guard below passes on a machine that has clang-cl while RENDERING the profile
+	dies with "No version provided to 'detect_api.default_compiler_version()' for clang compiler".
+	It is also what lets CMAKE_C_COMPILER resolve, since tools.build:compiler_executables names clang-cl
+	rather than a full path.
+
+	Only clang needs it: detect_msvc_compiler goes through vswhere, and prepending the MSVC bin directory
+	would shadow tools that share a name with one of its own (link, most of all) for the rest of the process.
+	"""
+
+	if exe != "clang-cl" or shutil.which(exe):
+		return
+
+	resolved = resolveCompilerExe(exe)
+
+	if resolved:
+		os.environ["PATH"] = os.path.dirname(resolved) + os.pathsep + os.environ.get("PATH", "")
 
 def verifyHostCompiler(compiler, system):
 	"""Fail early when the profile can't describe this machine.
@@ -273,11 +363,13 @@ def verifyHostCompiler(compiler, system):
 	if not exe:
 		return
 
-	version = detectedCompilerVersion(exe)
+	ensureCompilerOnPath(exe)
+
+	version = detectedCompilerVersion(exe, compiler)
 
 	if version is None:
 		print(
-			f"Profile compiler '{compiler}' selected, but '{exe}' was not found on PATH.\n"
+			f"Profile compiler '{compiler}' selected, but '{exe}' was not found on PATH or in a Visual Studio install.\n"
 			f"Install it, or pick another with -compiler=<{'|'.join(SUPPORTED_COMPILERS[system])}>.",
 			file=sys.stderr
 		)

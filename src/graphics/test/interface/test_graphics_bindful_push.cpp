@@ -83,7 +83,7 @@ extern "C" void Test_graphicsBindfulPushDescriptors(oxc::c::Test *t, oxc::c::Gra
 
 	if(!Test_assert(t, "detectLayout", dev.detectLayout(
 		shader.list, entryId, layoutInfo.list, nullptr, nullptr, { "params", "output" }, &pushInfo.list,
-		c::EDescriptorLayoutFlags_None, e_rr
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
 	)))
 		return;
 
@@ -204,7 +204,7 @@ extern "C" void Test_graphicsBindfulPushDescriptors(oxc::c::Test *t, oxc::c::Gra
 
 	Test_assert(t, "end", commandList.end(e_rr));
 
-	if (TestShaders_submitAndWait(t, deviceRef, commandList.handle(), nullptr, 0))
+	if (TestShaders_submitAndWait(t, deviceRef, commandList.handle()))
 		if (TestShaders_pullBuffer(t, deviceRef, emptyList.handle(), output.handle())) {
 
 			//Disjoint halves, so BOTH pushes have to have landed rather than only the last one.

@@ -21,7 +21,7 @@
 //shader_compiler/shaders/resources.hlsli
 //
 //The bindless binding model: the descriptor arrays every shader sees and the accessors that index
-//them. Buffer reads/writes and the per frame app data live in their own headers, included below.
+//them, plus the per frame globals. Buffer reads/writes live in their own header, included below.
 
 #pragma once
 #include "@types.hlsli"
@@ -75,14 +75,16 @@ _vkBinding( 0, 2) cbuffer globals : register(b0, OXC3_RESERVED_SPACE) {	//Global
 	U32 _frameId;					//Can loop back to 0 after U32_MAX!
 	F32 _time;						//Time since launch of app
 	F32 _deltaTime;					//deltaTime since last frame.
-	U32 _swapchainCount;			//How many swapchains are present (will insert ids into appData)
+	U32 _swapchainCount;			//How many swapchains are present
 
 	U32x4 _swapchains[8];			//Descriptors of swapchains: (Read, write)[2][16]
-
-	//Up to 368 bytes of user data, useful for supplying constant per frame data.
-
-	U32x4 _appData[23];
 };
+
+//Fetch a swapchain id the application pushed for this frame.
+//The offset counts swapchains, and each one carries a read and a write id.
+
+U32 getReadSwapchain(U32 offset) { return offset & 1 ? _swapchains[offset >> 1].z : _swapchains[offset >> 1].x; }
+U32 getWriteSwapchain(U32 offset) { return offset & 1 ? _swapchains[offset >> 1].w : _swapchains[offset >> 1].y; }
 
 #define samplerUniform(i) _samplers[i & ResourceId_mask]
 #define sampler(i) _samplers[NonUniformResourceIndex(i & ResourceId_mask)]
@@ -120,7 +122,6 @@ _vkBinding( 0, 2) cbuffer globals : register(b0, OXC3_RESERVED_SPACE) {	//Global
 #define rwTexture2Du(i) _rwTextures2Du[NonUniformResourceIndex(i & ResourceId_mask)]
 
 //Split out of this header once it got too broad to read; included here so @resources.hlsli stays
-//the one include a shader needs. Each is self sufficient if you'd rather include it directly.
+//the one include a shader needs. It is self sufficient if you'd rather include it directly.
 
 #include "@buffer.hlsli"
-#include "@appdata.hlsli"
