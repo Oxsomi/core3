@@ -708,8 +708,12 @@ function(oxc3SanitizerDeviceTestEnv target)
 	# Through oxc3_test_env so the suite gets this whether it runs at build time behind its stamp or through
 	# ctest; a test property alone only reaches the second.
 
+	# The preload goes through its own helper: its value is a generator expression, and one stored in a
+	# property is not evaluated again when the env file reads that property back.
+
+	oxc3_test_preload(${target} OxC3_asan_no_deepbind)
+
 	oxc3_test_env(${target}
-		"LD_PRELOAD=path_list_prepend:$<TARGET_FILE:OxC3_asan_no_deepbind>"
 		"ASAN_OPTIONS=string_append:,protect_shadow_gap=0,verify_asan_link_order=0"
 		"LSAN_OPTIONS=string_append:,suppressions=${CMAKE_SOURCE_DIR}/cmake/lsan_suppressions.txt"
 		"VK_LOADER_DISABLE_DYNAMIC_LIBRARY_UNLOADING=set:1"

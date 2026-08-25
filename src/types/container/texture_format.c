@@ -64,5 +64,7 @@ const C8 *ETextureFormatId_name[ETextureFormatId_Count] = {
 	"ASTC 10x10",    "ASTC 10x10 sRGB",
 
 	"ASTC 12x10",    "ASTC 12x10 sRGB",
-	"ASTC 12x12",    "ASTC 12x12 sRGB"
+	"ASTC 12x12",    "ASTC 12x12 sRGB",
+
+	"RGB9E5"
 };

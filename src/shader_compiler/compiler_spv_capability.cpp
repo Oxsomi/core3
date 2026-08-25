@@ -120,6 +120,12 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			ext = ESHExtension_SubgroupShuffle;
 			break;
 
+		//Quad is its own bit rather than part of SubgroupShuffle: Vulkan reports the two separately and drivers
+		// exist that expose shuffle without quad, so folding them would claim hardware that isn't there.
+		case SpvCapabilityGroupNonUniformQuad:
+			ext = ESHExtension_SubgroupQuad;
+			break;
+
 		case SpvCapabilityGroupNonUniform:
 		case SpvCapabilityGroupNonUniformVote:
 		case SpvCapabilityGroupNonUniformBallot:
@@ -402,7 +408,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 
 		case SpvCapabilityGroupNonUniformShuffleRelative:
 		case SpvCapabilityGroupNonUniformClustered:
-		case SpvCapabilityGroupNonUniformQuad:
 		case SpvCapabilityGroupNonUniformRotateKHR:
 		case SpvCapabilityGroupUniformArithmeticKHR:
 

@@ -321,9 +321,17 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
-		case C8x2('S', 'u'):    //SubgroupArithmetic, SubgroupShuffle, SubgroupOperations
+		case C8x2('S', 'u'):    //SubgroupArithmetic, SubgroupShuffle, SubgroupQuad, SubgroupOperations
 
-			if(stageNameLen == 15) {            //SubgroupShuffle
+			if(stageNameLen == 12) {            //SubgroupQuad
+				if(
+					Buffer_readU64(buf, 0, NULL, NULL) == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
+					Buffer_readU64(buf, 4, NULL, NULL) == C8x8('r', 'o', 'u', 'p', 'Q', 'u', 'a', 'd')
+				)
+					return ESHExtension_SubgroupQuad;
+			}
+
+			else if(stageNameLen == 15) {       //SubgroupShuffle
 				if(
 					Buffer_readU64(buf, 0, NULL, NULL) == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
 					Buffer_readU64(buf, 7, NULL, NULL) == C8x8('p', 'S', 'h', 'u', 'f', 'f', 'l', 'e')

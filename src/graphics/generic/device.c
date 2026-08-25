@@ -1155,6 +1155,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	if(extensions & ESHExtension_SubgroupOperations)        features |= EGraphicsFeatures_SubgroupOperations;
 	if(extensions & ESHExtension_SubgroupArithmetic)        features |= EGraphicsFeatures_SubgroupArithmetic;
 	if(extensions & ESHExtension_SubgroupShuffle)           features |= EGraphicsFeatures_SubgroupShuffle;
+	if(extensions & ESHExtension_SubgroupQuad)              features |= EGraphicsFeatures_SubgroupQuad;
 
 	if(extensions & ESHExtension_Multiview)                 features |= EGraphicsFeatures_Multiview;
 

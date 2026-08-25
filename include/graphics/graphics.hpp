@@ -1166,6 +1166,31 @@ namespace oxc {
 		//BORROWED, like every other initializer_list here:
 		// build it in the call expression, never store it.
 
+		//One entry of a pipeline, optionally carrying its OWN variant.
+		//
+		//Resolution is already per entry: the wrapper calls resolveEntry once per name and hands the C
+		//layer resolved binary ids, which carry no variant at all. A single pipeline-wide variant was a
+		//property of this signature rather than of the pipeline, and it made a permutation of ONE entry
+		//inexpressible. A binary's define set must EQUAL the requested one, so asking for a raygen's
+		//defines asked them of every miss and hit shader that declares none, and those stopped resolving.
+		//
+		//Implicit from const C8*, so a plain { "a", "b" } list still means "use the pipeline default".
+		//The variant is BORROWED: one passed inline lives to the end of the full expression, the same
+		//lifetime ShaderVariant's own initializer_list members already depend on.
+
+		struct ShaderVariant;
+
+		struct ShaderEntry {
+
+			const c::C8 *name = nullptr;
+			const ShaderVariant *variant = nullptr;
+
+			ShaderEntry(const c::C8 *name) noexcept : name(name) {}
+
+			ShaderEntry(const c::C8 *name, const ShaderVariant &variant) noexcept :
+				name(name), variant(&variant) {}
+		};
+
 		struct ShaderVariant {
 			c::ESHExtension prefer = c::ESHExtension_None;
 			c::ESHExtension disallow = c::ESHExtension_None;
@@ -1516,8 +1541,8 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool createRaytracingPipeline(
 				const c::SHFile &shFile,
-				std::initializer_list<const c::C8*> raygenEntries,
-				const c::C8 *missEntry, std::initializer_list<const c::C8*> closestHitEntries,
+				std::initializer_list<ShaderEntry> raygenEntries,
+				ShaderEntry missEntry, std::initializer_list<ShaderEntry> closestHitEntries,
 				const c::C8 *debugName, Pipeline &result,
 				const ShaderVariant &variant = {},
 				c::U8 maxRecursionDepth = 1,
@@ -1550,9 +1575,11 @@ namespace oxc {
 
 				c::U64 n = 0;
 
-				auto resolve = [&](const c::C8 *entry) noexcept -> c::Bool {
+				//An entry's own variant wins; the pipeline's is only the default for entries without one.
 
-					const c::U32 id = resolveEntry(shFile, entry, variant);
+				auto resolve = [&](const ShaderEntry &entry) noexcept -> c::Bool {
+
+					const c::U32 id = resolveEntry(shFile, entry.name, entry.variant ? *entry.variant : variant);
 
 					if(id == c::U32_MAX)
 						return false;
@@ -1561,7 +1588,7 @@ namespace oxc {
 					return true;
 				};
 
-				for(const c::C8 *entry : raygenEntries)
+				for(const ShaderEntry &entry : raygenEntries)
 					if(!resolve(entry)) {
 						if(e_rr) *e_rr = c::Error_notFound(0, 0, "raygen entry not found or unsupported");
 						return false;
@@ -1574,7 +1601,7 @@ namespace oxc {
 
 				c::U64 groupCount = 0;
 
-				for(const c::C8 *entry : closestHitEntries) {
+				for(const ShaderEntry &entry : closestHitEntries) {
 
 					if(!resolve(entry)) {
 						if(e_rr) *e_rr = c::Error_notFound(2, 0, "closesthit entry not found or unsupported");

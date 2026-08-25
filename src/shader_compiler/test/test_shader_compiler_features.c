@@ -82,6 +82,11 @@ void Test_shaderCompilerFeatures(Test *t) {
 		{ "features/subgroup_arithmetic.hlsl", ESHExtension_SubgroupArithmetic, B_BOTH },
 		{ "features/subgroup_shuffle.hlsl",    ESHExtension_SubgroupShuffle,    B_BOTH },
 
+		//Quad ops, in the two stages that require different things of them: a pixel shader needs the quad
+		//capability alone, a compute shader needs ComputeDeriv on top to declare what the 2x2 is.
+		{ "features/subgroup_quad.hlsl",         ESHExtension_SubgroupQuad,     B_BOTH },
+		{ "features/subgroup_quad_compute.hlsl", ESHExtension_SubgroupQuad,     B_BOTH },
+
 		//SPIRV-only: inline-SPIRV atomics (DXIL has no float atomic intrinsics)
 		{ "features/atomic_f32.hlsl",          ESHExtension_AtomicF32,          B_SPV },
 		{ "features/atomic_f64.hlsl",          ESHExtension_AtomicF64,          B_SPV },

@@ -224,7 +224,10 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_CoopMat                   = 1 << 27,        //Cooperative matrix (subgroup GEMM)
 	EGraphicsFeatures_CoopFP8                   = 1 << 28,        //FP8 (e4m3/e5m2) cooperative type support
 	EGraphicsFeatures_CoopVecTraining           = 1 << 29,        //CoopVec training (outer-product / reduce-sum accumulate)
-	EGraphicsFeatures_Reserved30                = 1 << 30,        //Reserved, free to reuse.
+	//Quad subgroup ops (QuadReadAcrossX/Y/Diagonal, QuadReadLaneAt).
+	//Reported separately from SubgroupShuffle by Vulkan, and separate hardware from ComputeDeriv:
+	// quad ops in a COMPUTE shader need both this and ComputeDeriv, in a pixel shader only this.
+	EGraphicsFeatures_SubgroupQuad              = 1 << 30,
 
 	//Spelled as a subtraction rather than as -2147483648, which is a unary minus on a constant too large for
 	// int and so an unsigned one; msvc rejects that under C4146 while clang stays quiet.
@@ -330,7 +333,29 @@ typedef enum EGraphicsDataTypes {
 	EGraphicsDataTypes_D24S8                    = 1 << 14,
 	EGraphicsDataTypes_S8                       = 1 << 15,
 
-	EGraphicsDataTypes_D32S8                    = 1 << 16
+	EGraphicsDataTypes_D32S8                    = 1 << 16,
+
+	//Linear filtering is a SEPARATE capability from being able to sample a format at all, and Vulkan only
+	// mandates it for a subset. Every format below can be sampled everywhere OxC3 runs; these bits say
+	// whether a linear sampler over one does anything, since a device without it either fails validation
+	// or silently point samples.
+	//
+	//Two bits and not one: the hardware that lacks each is almost disjoint. Measured over the devices
+	// reporting Vulkan 1.1+ within a year, 42 lack the 16 bit norm filter and 40 lack the 32 bit float one,
+	// and only 9 lack both, because it splits by vendor. ARM (Mali) filters 32 bit float but not 16 bit
+	// norm; Qualcomm (Adreno) is the mirror image. Folding them together would deny each vendor the half
+	// it actually supports.
+
+	EGraphicsDataTypes_LinearFilter16Norm       = 1 << 17,        //R16, RG16, RGBA16 and their snorm twins
+	EGraphicsDataTypes_LinearFilter32f          = 1 << 18,        //R32f, RG32f, RGBA32f
+
+	//RGB9E5 splits cleanly in two: SAMPLING it (and filtering it) is available on effectively everything,
+	// measured at 100% of Vulkan 1.1+ devices reporting within a year, so reading needs no bit and OxC3
+	// requires it. WRITING is the optional half, around a quarter of devices for storage and a third for
+	// render targets, so anything that produces the format rather than consuming it has to check this and
+	// carry a fallback.
+
+	EGraphicsDataTypes_WriteRGB9E5              = 1 << 19
 
 } EGraphicsDataTypes;
 
@@ -408,6 +433,12 @@ Bool GraphicsDeviceInfo_supportsRenderTextureFormat(const GraphicsDeviceInfo *de
 
 //If a texture format is allowed as a vertex attribute
 Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format);
+
+//Whether a LINEAR sampler over this format actually filters, which is not implied by supportsFormat:
+// the formats this can answer false for are all sampleable everywhere OxC3 runs.
+//Only meaningful for a sampled texture; point sampling and every non sampling use are unaffected.
+
+Bool GraphicsDeviceInfo_supportsFormatLinearFilter(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format);
 
 Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format);
 

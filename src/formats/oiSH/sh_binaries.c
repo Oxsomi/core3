@@ -63,7 +63,8 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 	"COOPMAT",
 	"COOPFP8",
 	"COOPVECTRAINING",
-	"DESCRIPTORHEAP"
+	"DESCRIPTORHEAP",
+	"SUBGROUPQUAD"
 };
 
 const C8 *ESHExtension_names[ESHExtension_Count] = {
@@ -92,7 +93,8 @@ const C8 *ESHExtension_names[ESHExtension_Count] = {
 	"CoopMat",
 	"CoopFP8",
 	"CoopVecTraining",
-	"DescriptorHeap"
+	"DescriptorHeap",
+	"SubgroupQuad"
 };
 
 const C8 *ESHVendor_names[ESHVendor_Count + 1] = {

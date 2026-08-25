@@ -22,6 +22,9 @@
 
 #pragma once
 #include "types/math/quat.h"
+#include "types/math/flp.h"
+#include "types/math/vec4i.h"
+#include "types/base/fixed_point.h"
 #include "types/math/vec4f.h"
 #include "types/base/constants.h"
 
@@ -127,6 +130,139 @@ GET_BIT_OP(U64);
 GET_BIT_OP(U32);
 GET_BIT_OP(U16);
 GET_BIT_OP(U8);
+
+//UF21x3
+
+//Three UF21 in the 64 bits of an RG32u texel, the layout @pack.hlsli reads and writes:
+// x in bits 0..20, y ACROSS 21..41, z in 42..62, and bit 63 spare.
+//An accumulator wants exactly this. F16's 10-bit mantissa cannot hold a progressive mean:
+// once the increment falls under half an ulp the downward corrections round away while the upward ones still land,
+// and a non-negative heavy-tailed signal then drifts UP by tens of percent.
+//UF21 keeps a wider exponent than F16 both ways, so neither an emissive value nor a deep-shadow one leaves the range.
+//
+//flp.c truncates ties where the shader rounds to nearest even, so an exact tie can differ by one ulp between the two.
+//Nothing else does; every other value round trips bit for bit.
+
+static inline U64 U64_packF21x3(F32x4 v) {
+
+	const U64 x = F32_castUF21(F32_max(0, F32x4_x(v)));
+	const U64 y = F32_castUF21(F32_max(0, F32x4_y(v)));
+	const U64 z = F32_castUF21(F32_max(0, F32x4_z(v)));
+
+	return x | (y << 21) | (z << 42);
+}
+
+static inline F32x4 F32x4_unpackF21x3(U64 packed) {
+	return F32x4_create3(
+		UF21_castF32((U32) ( packed        & 0x1FFFFF)),
+		UF21_castF32((U32) ((packed >> 21) & 0x1FFFFF)),
+		UF21_castF32((U32) ((packed >> 42) & 0x1FFFFF))
+	);
+}
+
+//RGB9E5
+
+//DXGI_FORMAT_R9G9B9E5_SHAREDEXP, the layout @pack.hlsli reads:
+// r | g<<9 | b<<18 | (e+15)<<27, scale 2^(e-24).
+//Three 9-bit mantissas over one shared 5-bit exponent, 32 bits for an HDR triple whose channels sit within a few
+// stops of each other, emission, irradiance, a probe.
+//Channels far apart lose the dim ones, since they all pay for the brightest one's exponent.
+//
+//Written out rather than approximated: a value written here is read back by the shader through unpackRGB9E5,
+// so a disagreement between the two is a BIAS rather than a rounding error.
+
+static inline U32 U32_packRGB9E5(F32x4 v) {
+
+	const F32 maxV = (511.0f / 512) * 65536;               //((2^9-1)/2^9) * 2^(31-15)
+
+	const F32 r = F32_clamp(F32x4_x(v), 0, maxV);
+	const F32 g = F32_clamp(F32x4_y(v), 0, maxV);
+	const F32 b = F32_clamp(F32x4_z(v), 0, maxV);
+
+	const F32 maxC = F32_max(r, F32_max(g, b));
+
+	I32 e = maxC > 0 ? (I32) F32_floor(F32_log2(maxC)) + 1 : -15;
+
+	if (e < -15)
+		e = -15;
+
+	F32 denom = F32_exp2((F32)(e - 9));
+
+	//A mantissa that rounds up to 2^9 needs one more exponent step, so re-derive once
+
+	if ((I32) F32_floor(maxC / denom + 0.5f) >= 512) {
+		denom *= 2;
+		++e;
+	}
+
+	return
+		(U32) F32_floor(r / denom + 0.5f) |
+		((U32) F32_floor(g / denom + 0.5f) << 9) |
+		((U32) F32_floor(b / denom + 0.5f) << 18) |
+		((U32) (e + 15) << 27);
+}
+
+static inline F32x4 F32x4_unpackRGB9E5(U32 packed) {
+
+	const F32 scale = F32_exp2((F32)((I32)(packed >> 27) - 15 - 9));
+
+	return F32x4_create3(
+		(F32) ( packed        & 0x1FF) * scale,
+		(F32) ((packed >>  9) & 0x1FF) * scale,
+		(F32) ((packed >> 18) & 0x1FF) * scale
+	);
+}
+
+//Fixed point positions
+
+//Three FP37f4 in a U32x4: x in bits 0..41, y in 42..83, z in 84..125, and bits 126..127 spare.
+//
+//Fixed point rather than F32 because a POSITION wants uniform absolute precision, where F32's is
+//proportional to magnitude. 42 bits of 1 sign, 37 integer and 4 fractional cover +-1.4M km at 1/16 cm,
+//so one representation serves a site and its geographic context without the far end going coarse.
+//
+//The intended use is a world REBASED against a moving anchor: the fixed point value is the truth and the
+//instance's F32 transform is derived from it. Both the scale and a whole-unit anchor step are powers of
+//two, so that subtraction is exact in F32 and object-space traversal comes out bit identical across a
+//rebase. An acceleration structure over the result may be REFIT rather than rebuilt: a global rebase
+//translates every instance rigidly, and the surface area heuristic is translation invariant.
+
+static inline Bool I32x4_packFP37f4x3(I32x4 *dst, FP37f4 x, FP37f4 y, FP37f4 z) {
+
+	const I64 lo = -((I64)1 << 41), hi = ((I64)1 << 41) - 1;
+
+	if (!dst || x < lo || x > hi || y < lo || y > hi || z < lo || z > hi)
+		return false;                                      //Returns false on invalid, like the packers above
+
+	const U64 ux = (U64) x & 0x3FFFFFFFFFF;
+	const U64 uy = (U64) y & 0x3FFFFFFFFFF;
+	const U64 uz = (U64) z & 0x3FFFFFFFFFF;
+
+	const U64 lo64 = ux | (uy << 42);
+	const U64 hi64 = (uy >> 22) | (uz << 20);
+
+	*dst = I32x4_create4(
+		(I32)(U32) lo64, (I32)(U32)(lo64 >> 32),
+		(I32)(U32) hi64, (I32)(U32)(hi64 >> 32)
+	);
+
+	return true;
+}
+
+static inline FP37f4 I32x4_unpackFP37f4x3(I32x4 packed, U8 off) {
+
+	if (off >= 3)
+		return 0;
+
+	const U64 lo64 = (U32) I32x4_x(packed) | ((U64)(U32) I32x4_y(packed) << 32);
+	const U64 hi64 = (U32) I32x4_z(packed) | ((U64)(U32) I32x4_w(packed) << 32);
+
+	const U64 v = !off ? lo64 : (off == 1 ? ((lo64 >> 42) | (hi64 << 22)) : (hi64 >> 20));
+
+	//Sign extend from the 42nd bit: the field is two's complement in 42 bits, not in 64.
+
+	return (FP37f4)(((v & 0x3FFFFFFFFFF) ^ ((U64)1 << 41)) - ((U64)1 << 41));
+}
 
 //Compressing quaternions
 

@@ -1435,6 +1435,9 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
 			capabilities.features |= EGraphicsFeatures_SubgroupShuffle;
 
+		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_QUAD_BIT)
+			capabilities.features |= EGraphicsFeatures_SubgroupQuad;
+
 		//Multi view
 
 		if(
@@ -1989,6 +1992,14 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				.format = VK_FORMAT_S8_UINT,
 				.optFormat = EGraphicsDataTypes_S8,
 				.flags = depthStencilDef
+			},
+
+			//Reading RGB9E5 is required, so only the write half is probed here.
+
+			(OptionalFormat) {
+				.format = VK_FORMAT_E5B9G9R9_UFLOAT_PACK32,
+				.optFormat = EGraphicsDataTypes_WriteRGB9E5,
+				.flags = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
 			}
 		};
 
@@ -1999,6 +2010,50 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 			if((formatInfo.optimalTilingFeatures & optionalFormats[k].flags) == optionalFormats[k].flags)
 				capabilities.dataTypes |= optionalFormats[k].optFormat;
+		}
+
+		//Linear filtering, which the loop above can't express: a bit here means EVERY format in its family
+		// filters, so the test is an AND where the optional table is an OR.
+		//Sampling these is already guaranteed by the required set; this is only about whether a linear
+		// sampler over one does anything. A device missing it either trips validation or quietly point
+		// samples, and nothing above this line would have caught either.
+
+		static const VkFormat filter16Norm[] = {
+			VK_FORMAT_R16_UNORM,           VK_FORMAT_R16_SNORM,
+			VK_FORMAT_R16G16_UNORM,        VK_FORMAT_R16G16_SNORM,
+			VK_FORMAT_R16G16B16A16_UNORM,  VK_FORMAT_R16G16B16A16_SNORM
+		};
+
+		static const VkFormat filter32f[] = {
+			VK_FORMAT_R32_SFLOAT, VK_FORMAT_R32G32_SFLOAT, VK_FORMAT_R32G32B32A32_SFLOAT
+		};
+
+		const struct {
+			const VkFormat *formats;
+			U64 count;
+			EGraphicsDataTypes bit;
+		} filterFamilies[] = {
+			{ filter16Norm, sizeof(filter16Norm) / sizeof(VkFormat), EGraphicsDataTypes_LinearFilter16Norm },
+			{ filter32f,    sizeof(filter32f)    / sizeof(VkFormat), EGraphicsDataTypes_LinearFilter32f }
+		};
+
+		for (U64 k = 0; k < sizeof(filterFamilies) / sizeof(filterFamilies[0]); ++k) {
+
+			Bool all = true;
+
+			for (U64 j = 0; j < filterFamilies[k].count; ++j) {
+
+				VkFormatProperties formatInfo = (VkFormatProperties) { 0 };
+				instanceExt->getPhysicalDeviceFormatProperties(dev, filterFamilies[k].formats[j], &formatInfo);
+
+				if(!(formatInfo.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
+					all = false;
+					break;
+				}
+			}
+
+			if(all)
+				capabilities.dataTypes |= filterFamilies[k].bit;
 		}
 
 		//Grab LUID/UUID

@@ -553,7 +553,7 @@ function(oxc3_add_test_run)
 
 	# Generated rather than written now, so oxc3_test_env can still add to it afterwards.
 
-	file(GENERATE OUTPUT "${envFile}" CONTENT "$<JOIN:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_ENV>,\n>\n")
+	file(GENERATE OUTPUT "${envFile}" CONTENT "$<JOIN:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_ENV>,\n>\n$<$<BOOL:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_PRELOAD>>:LD_PRELOAD=path_list_prepend:$<TARGET_FILE:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_PRELOAD>>\n>")
 
 endfunction()
 
@@ -579,6 +579,29 @@ function(oxc3_test_env testName)
 
 	if(TARGET ${testName}_run)
 		set_property(TARGET ${testName}_run APPEND PROPERTY OXC3_TEST_ENV ${ARGN})
+	endif()
+
+endfunction()
+
+# LD_PRELOAD of a target built here, which is the one env entry oxc3_test_env cannot carry.
+#
+# Its value is only knowable through $<TARGET_FILE:>, and a generator expression STORED IN a property comes
+# back out verbatim when file(GENERATE) reads that property: evaluation is a single pass, not recursive.
+# The result was an env file containing the literal text of the expression, which the loader then split on
+# the colon inside it and refused, silently leaving the build-time run without the preload it asked for.
+# So what gets stored is the target NAME, and the env file builds the entry around it in one expression,
+# where $<TARGET_FILE:> is still evaluated.
+
+function(oxc3_test_preload testName preloadTarget)
+
+	if(TEST ${testName})
+		set_property(TEST ${testName} APPEND PROPERTY ENVIRONMENT_MODIFICATION
+			"LD_PRELOAD=path_list_prepend:$<TARGET_FILE:${preloadTarget}>"
+		)
+	endif()
+
+	if(TARGET ${testName}_run)
+		set_property(TARGET ${testName}_run PROPERTY OXC3_TEST_PRELOAD ${preloadTarget})
 	endif()
 
 endfunction()
@@ -626,7 +649,7 @@ function(oxc3_add_test_command)
 		add_custom_target(${T_NAME}_run ALL DEPENDS "${stamp}")
 		set_target_properties(${T_NAME}_run PROPERTIES FOLDER "${T_FOLDER}")
 
-		file(GENERATE OUTPUT "${envFile}" CONTENT "$<JOIN:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_ENV>,\n>\n")
+		file(GENERATE OUTPUT "${envFile}" CONTENT "$<JOIN:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_ENV>,\n>\n$<$<BOOL:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_PRELOAD>>:LD_PRELOAD=path_list_prepend:$<TARGET_FILE:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_PRELOAD>>\n>")
 	endif()
 
 endfunction()

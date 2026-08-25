@@ -101,6 +101,15 @@ typedef enum ESHExtension {
 	//SPIRV: SPV_EXT_descriptor_heap (DescriptorHeapEXT capability).
 	ESHExtension_DescriptorHeap              = 1 << 25,
 
+	//Subgroup quad ops: QuadReadAcrossX/Y/Diagonal and QuadReadLaneAt.
+	//SPIRV GroupNonUniformQuad, Vulkan VK_SUBGROUP_FEATURE_QUAD_BIT, part of core 1.1 subgroup properties.
+	//Held apart from SubgroupShuffle rather than folded into it because the two are separately reported and
+	// drivers exist that expose shuffle without quad.
+	//Held apart from ComputeDeriv because they gate different things:
+	// a quad is implicit in a pixel shader, so quad ops there need this alone,
+	// while in a compute shader DXC also emits a derivative group execution mode and BOTH are required.
+	ESHExtension_SubgroupQuad                = 1 << 26,
+
 	//Barycentrics is native on BOTH backends:
 	// D3D_SHADER_REQUIRES_BARYCENTRICS and BaryCoordKHR both map to it,
 	// so declared-but-unused demotes to dormant like any other native extension.
@@ -133,6 +142,7 @@ typedef enum ESHExtension {
 		ESHExtension_AtomicF64 |
 		ESHExtension_SubgroupArithmetic |
 		ESHExtension_SubgroupShuffle |
+		ESHExtension_SubgroupQuad |
 		ESHExtension_SubgroupOperations |
 		ESHExtension_Multiview |
 		ESHExtension_16BitTypes |
@@ -156,8 +166,8 @@ typedef enum ESHExtension {
 	//When adding an extension above: leave it out of both sets to keep it dual (the default), and only add it here
 	// if one backend is genuinely impossible.
 
-	//SubgroupArithmetic and SubgroupShuffle deliberately are NOT here: WaveActiveSum / WaveReadLaneAt are
-	// plain HLSL, so DXC compiles them to DXIL fine.
+	//SubgroupArithmetic, SubgroupShuffle and SubgroupQuad deliberately are NOT here:
+	// WaveActiveSum / WaveReadLaneAt / QuadReadAcrossX are plain HLSL, so DXC compiles them to DXIL fine.
 	//DXIL reflection just can't DETECT them (one generic wave ops flag), which is a DxilNative matter and
 	// keeps them annotation-driven on DXIL, not a reason to refuse the compile.
 
@@ -168,7 +178,7 @@ typedef enum ESHExtension {
 	ESHExtension_NoSpirvCompile =                             //DXIL-only to compile: no SPIR-V intrinsic or inline op
 		ESHExtension_MeshTaskTexDeriv,
 
-	ESHExtension_Count                       = 26,
+	ESHExtension_Count                       = 27,
 
 	ESHExtension_All                         = (1 << ESHExtension_Count) - 1
 

@@ -291,6 +291,18 @@ The following lossless formats have to be supported for a valid OxC3 implementat
 - RGBA32u, RGBA32i, RGBA32f
 - BGRA8, BGR10A2
 
+RGB9E5 (shared exponent HDR) is required for READING only: sampling and linear filtering it are available
+on effectively every device OxC3 targets. Writing it is optional, see the data type list below.
+
+Linear filtering is NOT implied by any of the above. Two families are commonly sampleable but not filterable,
+and the hardware missing each is almost disjoint, splitting by vendor rather than by tier:
+
+- 16 bit unorm/snorm (R16, RG16, RGBA16 and their snorm twins), gated by `EGraphicsDataTypes_LinearFilter16Norm`
+- 32 bit float (R32f, RG32f, RGBA32f), gated by `EGraphicsDataTypes_LinearFilter32f`
+
+Use `GraphicsDeviceInfo_supportsFormatLinearFilter` before attaching a linear sampler to one of these. A device
+without the bit either fails validation or silently point samples, so this is not a case that reports itself.
+
 The following are required with VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT only:
 
 - RGB32u, RGB32i, RGB32f
@@ -316,6 +328,11 @@ Lossy formats:
   - VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT
 - All ASTC formats have to be supported if EGraphicsDataTypes_ASTC is on.
 - All BCn formats have to be supported if EGraphicsDataTypes_BCn is on.
+
+RGB9E5 writing is a single optional tier: `EGraphicsDataTypes_WriteRGB9E5` covers both storage image and
+render target use, since a device that lacks one essentially always lacks the other. Reading is required and
+so is never gated. Anything that PRODUCES the format rather than consuming it has to check this and carry a
+fallback; `GraphicsDeviceInfo_supportsRenderTextureFormat` already returns false for it without the bit.
 
 The following are optional: If they're not properly supported `GraphicsDeviceInfo_supportsFormat` or `GraphicsDeviceInfo_supportsDepthStencilFormat` will return false.
 

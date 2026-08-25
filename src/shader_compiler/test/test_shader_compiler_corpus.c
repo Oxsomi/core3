@@ -114,6 +114,26 @@ static Bool shNormalize(const Allocator *alloc, Buffer in, Buffer *out) {
 	for(U64 i = 0; i < file.includes.length; ++i)
 		file.includes.ptrNonConst[i].crc32c = 0;
 
+	//A rebuilt DXC restamps the generator word of every SPIRV header (word 2, holding the tool's id in the
+	// high half and the tool's own version in the low half) while emitting byte identical instructions,
+	// so keeping that low half turns the entire corpus red whenever the toolchain package is rebuilt.
+	//Only the version half is dropped, so a binary that came out of a different tool is still caught.
+
+	for(U64 i = 0; i < file.binaries.length; ++i) {
+
+		const Buffer spirv = file.binaries.ptr[i].binaries[ESHBinaryType_SPIRV];
+		Bool readMagic = false;
+
+		if(Buffer_length(spirv) < sizeof(U32) * 5 || Buffer_isConstRef(spirv))
+			continue;
+
+		if(Buffer_readU32(spirv, 0, &readMagic, NULL) != 0x07230203 || !readMagic)
+			continue;
+
+		const U32 generator = Buffer_readU32(spirv, sizeof(U32) * 2, NULL, NULL);
+		Buffer_writeU32(spirv, sizeof(U32) * 2, generator & 0xFFFF0000, NULL);
+	}
+
 	if(!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &ms, &err))
 		goto clean;
 

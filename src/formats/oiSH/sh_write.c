@@ -97,6 +97,12 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 	//Calculate easy sizes and add define names
 
+	//Where this section of the shared string table starts, so the bound below counts define NAMES.
+	//Subtracting anything else makes an unsigned wrap: the table is empty here, so any non-zero
+	//subtrahend reads as an enormous count and refuses every file that has one.
+
+	const U64 defineNameStart = strings.entryBuffers.length;
+
 	U64 dataSize = 0;
 
 	U64 binaryCount[ESHBinaryType_Count] = { 0 };
@@ -119,7 +125,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			gotoIfError3(clean, DLFile_addEntryString(&strings, &str, alloc, e_rr));
 
-			if(strings.entryBuffers.length - shFile->entries.length >= (U16)(U16_MAX - 1))
+			if(strings.entryBuffers.length - defineNameStart >= (U16)(U16_MAX - 1))
 				retError(clean, Error_invalidState(0, "DLFile didn't have space for define names"));
 		}
 
