@@ -34,7 +34,10 @@ Last updated: 2026-08-04 (branch `android`, v3.2.104). Update this table in the 
 | oiBC (Chimera) | 📄 | 📄 | – | Spec draft + stub only |
 | BMP | 🟡 | 🟡 | – | BGRA8/BGR8 only, ≤2 GiB |
 | DDS | 🟡 | 🟡 | – | Modern DXGI subset; no YUV/depth/legacy |
+| HDR | ✅ | ✅ | – | RGBE (Radiance); -Y +X orientation; RLE and flat |
 | WAV | ✅ | ✅ | – | |
+| OBJ | ✅ | ❌ | – | Read-only; fills the shared mesh output (formats/mesh) |
+| PLY | ✅ | ❌ | – | Read-only; ASCII and binary, little and big endian |
 
 ## Platforms
 
