@@ -302,9 +302,18 @@ Bool MemoryStream_move(MemoryStreamRef **streamRef, Buffer *output, Error *e_rr)
 	if (!(stream->parent.streamType & EStreamType_Memory))
 		retError(clean, Error_invalidParameter(0, 0, "MemoryStream_move()::streamRef must be a MemoryStream"));
 
+	//What moves out is the stream's SIZE, not its allocation. A resizable stream that reserved ahead of its writes,
+	// which a reader whose output size is unknown until the end does geometrically, is holding more than was ever
+	// written, and a consumer handed the allocation would upload or hash the slack as if it were data.
+
+	if(Buffer_length(stream->data) > stream->parent.size)
+		gotoIfError3(clean, Buffer_resize(
+			&stream->data, stream->parent.size, true, false, (*streamRef)->refPtrType->alloc, e_rr
+		));
+
 	*output = stream->data;
 	stream->data = Buffer_createNull();
-	
+
 	RefPtr_dec(streamRef);
 
 clean:

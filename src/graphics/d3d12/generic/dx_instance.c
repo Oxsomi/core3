@@ -664,6 +664,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		caps.features |= EGraphicsFeatures_DirectRendering;
 
+		//Timestamps: D3D12 supports timestamp queries on the direct and compute queues on every device. The period
+		// needs a live command queue, so it is filled at device create rather than here.
+
+		caps.features2 |= EGraphicsFeatures2_Timestamps;
+
 		if(independentDevices)
 			caps.featuresExt |= EDxGraphicsFeatures_IndependentDevices;
 
@@ -730,7 +735,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS3, &opt3, sizeof(opt3))) &&
-			opt3.WriteBufferImmediateSupportFlags
+			(opt3.WriteBufferImmediateSupportFlags & D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT)   //DRI records on the direct queue
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_WriteBufferImmediate;
 

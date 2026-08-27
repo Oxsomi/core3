@@ -141,6 +141,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(cap.features2 & EGraphicsFeatures2_RayIndirectASBuild)
 			Log_debugLnx("\t\tRaytracing indirect acceleration structure builds");
 
+		if(cap.features2 & EGraphicsFeatures2_Timestamps)
+			Log_debugLnx("\t\tGPU timestamps (%f ns/tick)", (F64) cap.timestampPeriod);
+
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
 

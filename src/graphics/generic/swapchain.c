@@ -24,6 +24,7 @@
 #include "graphics/generic/interface.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_allocator.h"
 #include "platforms/window.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/error.h"
@@ -102,7 +103,29 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 
 	//Otherwise, we properly resize
 
-	gotoIfError3(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->base.resource.device, swapchainRef, e_rr));
+	if(swapchain->base.resource.flags & EGraphicsResourceFlag_InternalOwnsImages) {
+
+		//A swapchain that owns its images allocates them at base.width and base.height,
+		// so the new size has to be in place BEFORE they are made.
+		//A physical one is instead handed images a presentation engine already sized.
+		//The old images, their views and the block behind them go first, since nothing else will free them.
+
+		swapchain->base.textureFormatId = (U8) textureFormatId;
+		swapchain->base.width = (U16) I32x2_x(newSize);
+		swapchain->base.height = (U16) I32x2_y(newSize);
+
+		UnifiedTexture_freeExt(swapchainRef);
+
+		if(swapchain->base.resource.allocated) {
+			DeviceMemoryAllocator_freeAllocation(
+				&device->allocator, swapchain->base.resource.blockId, swapchain->base.resource.blockOffset
+			);
+			swapchain->base.resource.allocated = false;
+		}
+	}
+
+	else gotoIfError3(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->base.resource.device, swapchainRef, e_rr));
+
 	gotoIfError3(clean, UnifiedTexture_createExt(swapchainRef, &window->title, e_rr));        //Re-create views
 	++swapchain->versionId;
 
@@ -144,9 +167,20 @@ Bool GraphicsDeviceRef_createSwapchain(
 	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createSwapchain()::dev is required"));
 
-	if(!window || !window->nativeHandle)
+	if(!window)
+		retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_createSwapchain()::info.window is required"));
+
+	//A VIRTUAL window has no surface to acquire from and nothing to present to,
+	// so the swapchain owns its images and the frame ends in memory rather than on a screen.
+	//That is what a machine with GPUs and no display has, and it is also what an encoder or an image sequence wants,
+	// so it is a presentation TARGET rather than a fallback.
+	//Everything above the backend sees an ordinary swapchain, which is what lets one renderer drive both.
+
+	const Bool ownsImages = window->type == EWindowType_Virtual;
+
+	if(!ownsImages && !window->nativeHandle)
 		retError(clean, Error_nullPointer(
-			1, "GraphicsDeviceRef_createSwapchain()::info.window (physical) is required"
+			1, "GraphicsDeviceRef_createSwapchain()::info.window (physical) has no native handle"
 		));
 
 	//On some platforms the images we get back != the images we request.
@@ -177,7 +211,10 @@ Bool GraphicsDeviceRef_createSwapchain(
 	swapchain->base = (UnifiedTexture) {
 		.resource = (GraphicsResource) {
 			.device = dev,
-			.flags = allowWriteExt ? EGraphicsResourceFlag_ShaderRWBindful : EGraphicsResourceFlag_ShaderRead,
+			.flags = (GraphicsResourceFlag) (
+				(allowWriteExt ? EGraphicsResourceFlag_ShaderRWBindful : EGraphicsResourceFlag_ShaderRead) |
+				(ownsImages ? EGraphicsResourceFlag_InternalOwnsImages : 0)
+			),
 			.type = (U8) EResourceType_Swapchain
 		},
 		.textureFormatId = (U8) formatId,
@@ -186,7 +223,10 @@ Bool GraphicsDeviceRef_createSwapchain(
 		.height = (U16) I32x2_y(window->size),
 		.length = 1,
 		.levels = 1,
-		.images = 3,        //Probably there are 3 images, but it's possible impl changes this later (up to 5), don't assume
+		//A physical swapchain requests 3 and the presentation engine may return up to SWAPCHAIN_MAX_IMAGES, so a
+		// consumer reads the count back rather than assumes it. A virtual swapchain owns its images and holds exactly
+		// framesInFlight of them, one per frame that can be in flight, with no presentation engine to add slack.
+		.images = ownsImages ? GraphicsDeviceRef_ptr(dev)->framesInFlight : 3,
 		.maxImages = SWAPCHAIN_MAX_IMAGES
 	};
 
@@ -204,7 +244,9 @@ Bool GraphicsDeviceRef_createSwapchain(
 		#endif
 	}
 
-	gotoIfError3(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef, e_rr));
+	if(!ownsImages)
+		gotoIfError3(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef, e_rr));
+
 	gotoIfError3(clean, UnifiedTexture_create(*scRef, bindlessDescriptorTable, &window->title, e_rr));
 
 clean:

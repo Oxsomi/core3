@@ -40,7 +40,10 @@ void DX_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 		const DxUnifiedTexture *image = TextureRef_getImgExtT(textureRef, Dx, 0, i);
 
-		if(image->image && utex.resource.type != EResourceType_Swapchain)
+		if(image->image && (
+			utex.resource.type != EResourceType_Swapchain ||
+			(utex.resource.flags & EGraphicsResourceFlag_InternalOwnsImages)
+		))
 			image->image->lpVtbl->Release(image->image);
 	}
 }
@@ -185,8 +188,18 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 	#endif
 
 	//Allocate memory
+	//
+	//A swapchain normally allocates nothing: DXGI hands it the buffers.
+	//One that OWNS them, which is a swapchain over a virtual window, allocates like any other texture,
+	// except that it has N images where everything else has one.
+	//A resource carries a SINGLE allocation, so those N become N PLACED resources at stride offsets into one heap,
+	// which is what placed resources exist for.
 
-	if(texture->resource.type != EResourceType_Swapchain) {
+	const Bool ownsImages = !!(texture->resource.flags & EGraphicsResourceFlag_InternalOwnsImages);
+
+	if(texture->resource.type != EResourceType_Swapchain || ownsImages) {
+
+		const U8 imageCount = ownsImages ? texture->images : 1;
 
 		D3D12_RESOURCE_ALLOCATION_INFO1 allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO1) { 0 };
 		D3D12_RESOURCE_ALLOCATION_INFO retVal = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
@@ -236,6 +249,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 		//Magic number from NV best practices and seems to match Vulkan's behavior closely.
 
 		if(
+			imageCount == 1 &&
 			!isDeviceTexture &&
 			texture->width >= 512 && texture->height >= 512 &&
 			device->info.type == EGraphicsDeviceType_Dedicated
@@ -327,10 +341,19 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 		else {
 
+			//Every image came from the same resourceDesc,
+			// so one query describes all of them and they sit at a constant stride.
+			//For the single image case this is exactly the size the query returned.
+
+			const U64 alignment = allocInfo.Alignment;
+			const U64 stride = alignment
+				? (allocInfo.SizeInBytes + alignment - 1) / alignment * alignment
+				: allocInfo.SizeInBytes;
+
 			DxBlockRequirements req = (DxBlockRequirements) {
 				.flags = EDxBlockFlags_None,
 				.alignment = (U32) allocInfo.Alignment,
-				.length = allocInfo.SizeInBytes
+				.length = stride * imageCount
 			};
 
 			DeviceMemoryBlock block;
@@ -349,17 +372,22 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormatFullyQualified };
 
-			gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource2(
-				deviceExt->device,
-				block.ext,
-				texture->resource.blockOffset,
-				&resourceDesc,
-				D3D12_BARRIER_LAYOUT_COMMON,
-				texture->resource.type == EResourceType_DeviceTexture ? NULL : &clearValue,
-				0, NULL,
-				&IID_ID3D12Resource,
-				(void**)&managedImageExt->image
-			), e_rr));
+			for(U8 i = 0; i < imageCount; ++i) {
+
+				DxUnifiedTexture *imageExt = TextureRef_getImgExtT(textureRef, Dx, 0, i);
+
+				gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource2(
+					deviceExt->device,
+					block.ext,
+					texture->resource.blockOffset + stride * i,
+					&resourceDesc,
+					D3D12_BARRIER_LAYOUT_COMMON,
+					texture->resource.type == EResourceType_DeviceTexture ? NULL : &clearValue,
+					0, NULL,
+					&IID_ID3D12Resource,
+					(void**)&imageExt->image
+				), e_rr));
+			}
 		}
 	}
 

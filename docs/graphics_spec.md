@@ -81,6 +81,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_NV_partitioned_acceleration_structure (.partitionedAccelerationStructure) as RayPartitionedTLAS (features2; mega geometry PTLAS)
   - VK_KHR_acceleration_structure .accelerationStructureIndirectBuild as RayIndirectASBuild (features2; GPU-driven classic AS builds)
   - VK_EXT_descriptor_heap (.descriptorHeap) as DescriptorHeap (features2); only reported when Bindless also passed, so the feature implies the same baseline on both APIs
+  - VkPhysicalDeviceLimits.timestampComputeAndGraphics, with a non-zero timestampValidBits on the graphics queue family, as Timestamps (features2); limits.timestampPeriod gives the nanoseconds per tick stored in capabilities.timestampPeriod, and results are masked to timestampValidBits before conversion
   - VK_NV_cooperative_vector as CoopVec (cooperative vectors; .cooperativeVectorTraining as CoopVecTraining)
   - VK_KHR_cooperative_matrix as CoopMat (cooperative matrix / GEMM)
   - VK_EXT_shader_float8 as CoopFP8 (.shaderFloat8 - the additive FP8 e4m3/e5m2 cooperative tier)
@@ -399,6 +400,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - DerivativesInMeshAndAmplificationShadersSupported as MeshTaskTexDeriv.
 - ShaderModel 6.6 support as ComputeDeriv.
 - ShaderModel 6.6 support + resource binding tier 3 as DescriptorHeap (features2) - SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) on top of Bindless.
+- Timestamps (features2) is always set: D3D12 supports timestamp queries on the direct and compute queues, and ID3D12CommandQueue::GetTimestampFrequency gives the ticks per second, inverted to the nanoseconds per tick stored in capabilities.timestampPeriod. There is no per-queue valid-bits concept, so results are full 64-bit and unmasked.
 - NVAPI NvAPI_D3D12_GetRaytracingCaps cluster operations as RayClusterAS and partitioned TLAS as RayPartitionedTLAS (features2, mega geometry; NVAPI only until a vendor-neutral query exists). Either one also implies RayIndirectASBuild (features2): the mega geometry builds (BUILD_BLAS_FROM_CLAS cluster op, NvAPI_D3D12_BuildRaytracingPartitionedTlasIndirect) are GPU-driven by design, while classic BuildRaytracingAccelerationStructure(Ex) has no indirect variant on D3D12.
 - ShaderModel 6.10 support as EGraphicsFeatures_CoopVec + CoopMat + CoopFP8 + CoopVecTraining + RayTriPosition (D3D12 has no separate caps query; SM6.10 is the proxy - the cooperative-vector TIER_1_0 Minimum Support Set already includes FP16/INT8/FP8; TIER_1_1 not yet a real query). These are gated on enabling D3D12ExperimentalShaderModels on both device factories at instance creation (best-effort: needs the preview Agility SDK + Windows Developer Mode; on failure they're simply not reported). Because they're preview, they're also flagged in GraphicsDeviceCapabilities.experimentalFeatures (a subset of `features` that isn't final); on Vulkan they're real extensions so experimentalFeatures stays empty.
 - D3D12_FEATURE_ASYNC_COMMANDS Supported (Agility 1.720-preview) as EDxGraphicsFeatures_BatchedAsyncCommandList.

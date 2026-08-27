@@ -617,8 +617,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 				fallbackComputeQueueId = i;
 		}
 
-		if(graphicsQueueId == U32_MAX && q.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+		if(graphicsQueueId == U32_MAX && q.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 			graphicsQueueId = i;
+			deviceExt->timestampValidBits = q.timestampValidBits;
+		}
 
 		if(graphicsQueueId != U32_MAX && computeQueueId != U32_MAX && copyQueueId != U32_MAX)
 			break;
@@ -755,6 +757,11 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	getVkFunctionDevice(clean, vkEndCommandBuffer, deviceExt->endCommandBuffer);
 	getVkFunctionDevice(clean, vkQueueSubmit, deviceExt->queueSubmit);
+	getVkFunctionDevice(clean, vkCreateQueryPool, deviceExt->createQueryPool);
+	getVkFunctionDevice(clean, vkDestroyQueryPool, deviceExt->destroyQueryPool);
+	getVkFunctionDevice(clean, vkCmdResetQueryPool, deviceExt->cmdResetQueryPool);
+	getVkFunctionDevice(clean, vkCmdWriteTimestamp, deviceExt->cmdWriteTimestamp);
+	getVkFunctionDevice(clean, vkGetQueryPoolResults, deviceExt->getQueryPoolResults);
 	getVkFunctionDevice(clean, vkQueuePresentKHR, deviceExt->queuePresentKHR);
 	getVkFunctionDevice(clean, vkCreateGraphicsPipelines, deviceExt->createGraphicsPipelines);
 	getVkFunctionDevice(clean, vkDestroyImageView, deviceExt->destroyImageView);
@@ -987,6 +994,26 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	deviceExt->atomSize = (U8) properties2.properties.limits.nonCoherentAtomSize;
 	deviceExt->nonLinearAlignment = (U32) properties2.properties.limits.bufferImageGranularity;
+	deviceExt->timestampPeriod = properties2.properties.limits.timestampPeriod;
+
+	//One timestamp query pool per frame in flight, only where the device reports the capability.
+
+	if(device->info.capabilities.features2 & EGraphicsFeatures2_Timestamps) {
+
+		VkQueryPoolCreateInfo queryInfo = (VkQueryPoolCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+			.queryType = VK_QUERY_TYPE_TIMESTAMP,
+			.queryCount = GRAPHICS_TIMESTAMP_QUERIES
+		};
+
+		for(U64 i = 0; i < device->framesInFlight; ++i) {
+			gotoIfError3(clean, checkVkError(
+				deviceExt->createQueryPool(deviceExt->device, &queryInfo, NULL, &deviceExt->timestampPool[i]),
+				e_rr
+			));
+			deviceExt->timestampCapacity[i] = GRAPHICS_TIMESTAMP_QUERIES;
+		}
+	}
 
 	//DXGI adapter in case there's no other way to query memory
 
@@ -1146,6 +1173,10 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 		for(U64 i = 0; i < deviceExt->framesInFlight; ++i)
 			if(deviceExt->commitFence[i])
 				deviceExt->destroyFence(deviceExt->device, deviceExt->commitFence[i], NULL);
+
+		for(U64 i = 0; i < deviceExt->framesInFlight; ++i)
+			if(deviceExt->timestampPool[i])
+				deviceExt->destroyQueryPool(deviceExt->device, deviceExt->timestampPool[i], NULL);
 
 		//Only set when push descriptors were emulated; destroying the pool frees the sets with it.
 
@@ -1462,16 +1493,62 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		gotoIfError3(clean, checkVkError(deviceExt->resetFences(deviceExt->device, 1, fence), e_rr));
 	}
 
+	//Read back and resolve the timestamps of the frame that used this slot framesInFlight submits ago, now that its
+	// fence has proven it done. A host read, no GPU copy: the fence is the barrier. Best effort, since a failed read
+	// back only costs a frame of timings, never the submit.
+
+	if(
+		(device->info.capabilities.features2 & EGraphicsFeatures2_Timestamps) &&
+		device->submitId > device->framesInFlight && deviceExt->commitFencePending[device->fifId] &&
+		device->timingSlots[device->fifId]
+	) {
+		const U32 slots = device->timingSlots[device->fifId];
+		Buffer ticks = Buffer_createNull();
+
+		if(Buffer_createUninitializedBytes(slots * sizeof(U64), alloc, &ticks, NULL)) {
+
+			const VkResult qr = deviceExt->getQueryPoolResults(
+				deviceExt->device, deviceExt->timestampPool[device->fifId], 0, slots,
+				slots * sizeof(U64), ticks.ptrNonConst, sizeof(U64), VK_QUERY_RESULT_64_BIT
+			);
+
+			if(qr == VK_SUCCESS) {
+
+				const U32 vb = deviceExt->timestampValidBits;
+				const U64 mask = vb >= 64 ? U64_MAX : (((U64) 1 << vb) - 1);
+				U64 *t = (U64*) ticks.ptrNonConst;
+
+				for(U32 k = 0; k < slots; ++k)
+					t[k] &= mask;
+
+				GraphicsDevice_resolveTimings(device, device->fifId, t, slots, deviceExt->timestampPeriod, alloc, NULL);
+			}
+
+			Buffer_free(&ticks, alloc);
+		}
+	}
+
 	//Acquire swapchain images
 
 	for(U64 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
 
 		Swapchain *swapchain = SwapchainRef_ptr(swapchains->ptr[i]);
+		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains->ptr[i], NULL);
+
+		//A swapchain that owns its images has no presentation engine to acquire from and nothing to present to,
+		// so the next image is simply the next one in the ring and no semaphore has to be waited on.
+		//It is left out of the present lists entirely,
+		// which is what keeps a frame with only these from presenting at all.
+
+		if(swapchain->base.resource.flags & EGraphicsResourceFlag_InternalOwnsImages) {
+			unifiedTexture->currentImageId = (U8) ((unifiedTexture->currentImageId + 1) % unifiedTexture->images);
+			continue;
+		}
+
 		VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchains->ptr[i]);
 
 		VkSemaphore semaphore = swapchainExt->semaphores.ptr[device->fifId];
 
-		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains->ptr[i], NULL);
 		U32 currImg = 0;
 
 		gotoIfError3(clean, checkVkError(deviceExt->acquireNextImage(
@@ -1485,8 +1562,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		unifiedTexture->currentImageId = (U8) currImg;
 
-		deviceExt->swapchainHandles.ptrNonConst[i] = swapchainExt->swapchain;
-		deviceExt->swapchainIndices.ptrNonConst[i] = unifiedTexture->currentImageId;
+		//Pushed rather than written at i, since the virtual ones above leave gaps the present lists must not carry.
+
+		gotoIfError3(clean, ListVkSwapchainKHR_pushBack(&deviceExt->swapchainHandles, swapchainExt->swapchain, alloc, e_rr));
+		gotoIfError3(clean, ListU32_pushBack(&deviceExt->swapchainIndices, unifiedTexture->currentImageId, alloc, e_rr));
 
 		VkPipelineStageFlagBits pipelineStage =
 			(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : 0) |
@@ -1661,6 +1740,49 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		VkCommandBufferState state = (VkCommandBufferState) { .buffer = commandBuffer };
 		gotoIfError3(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, &state, e_rr));
 
+		//Build this frame's timing entries and reset the pool it will write into. buildTimings clears the previous
+		// frame's entries at this slot, so it must run after the resolve above has read them.
+
+		device->timingSlots[device->fifId] = (device->info.capabilities.features2 & EGraphicsFeatures2_Timestamps)
+			? GraphicsDevice_buildTimings(device, device->fifId, commandLists, alloc) : 0;
+
+		deviceExt->timestampCursor = 0;
+
+		//Grow the pool when a frame needs more slots than it currently holds; buildTimings capped total at the ceiling,
+		// so the doubling converges. A pool is recreated only when a frame passes the high-water mark, so it happens
+		// once and never for a caller that stays under the initial capacity.
+
+		if(device->timingSlots[device->fifId] > deviceExt->timestampCapacity[device->fifId]) {
+
+			U32 newCap = deviceExt->timestampCapacity[device->fifId] ? deviceExt->timestampCapacity[device->fifId] : 1;
+
+			while(newCap < device->timingSlots[device->fifId])
+				newCap <<= 1;
+
+			if(deviceExt->timestampPool[device->fifId])
+				deviceExt->destroyQueryPool(deviceExt->device, deviceExt->timestampPool[device->fifId], NULL);
+
+			VkQueryPoolCreateInfo growInfo = (VkQueryPoolCreateInfo) {
+				.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+				.queryType = VK_QUERY_TYPE_TIMESTAMP,
+				.queryCount = newCap
+			};
+
+			if(deviceExt->createQueryPool(deviceExt->device, &growInfo, NULL, &deviceExt->timestampPool[device->fifId]) == VK_SUCCESS)
+				deviceExt->timestampCapacity[device->fifId] = newCap;
+
+			else {
+				deviceExt->timestampPool[device->fifId] = NULL;
+				deviceExt->timestampCapacity[device->fifId] = 0;
+				device->timingSlots[device->fifId] = 0;
+			}
+		}
+
+		if(device->timingSlots[device->fifId])
+			deviceExt->cmdResetQueryPool(
+				commandBuffer, deviceExt->timestampPool[device->fifId], 0, device->timingSlots[device->fifId]
+			);
+
 		//Ensure ubo and staging buffer are the correct states
 
 		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
@@ -1717,24 +1839,32 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		for (U64 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
 
 			SwapchainRef *swapchainRef = swapchains->ptr[i];
-			VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(swapchainRef, Vk, 0);
 
-			VkImageSubresourceRange range = (VkImageSubresourceRange) {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.levelCount = 1,
-				.layerCount = 1
-			};
+			//PRESENT_SRC is meaningless for a swapchain that owns its images: nothing presents it,
+			// and whatever reads it next transitions it the way it would any other render target.
+			//It is still tracked in flight, since its images are as much in use as a presented one's.
 
-			gotoIfError3(clean, VkUnifiedTexture_transition(
-				imageExt,
-				VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-				0,
-				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-				graphicsQueueId,
-				&range,
-				&deviceExt->imageTransitions,
-				&dependency, alloc, e_rr
-			));
+			if(!(SwapchainRef_ptr(swapchainRef)->base.resource.flags & EGraphicsResourceFlag_InternalOwnsImages)) {
+
+				VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(swapchainRef, Vk, 0);
+
+				VkImageSubresourceRange range = (VkImageSubresourceRange) {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.levelCount = 1,
+					.layerCount = 1
+				};
+
+				gotoIfError3(clean, VkUnifiedTexture_transition(
+					imageExt,
+					VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+					0,
+					VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+					graphicsQueueId,
+					&range,
+					&deviceExt->imageTransitions,
+					&dependency, alloc, e_rr
+				));
+			}
 
 			if(RefPtr_inc(swapchainRef))
 				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, swapchainRef, alloc, e_rr));
@@ -1759,7 +1889,12 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		.waitSemaphoreCount = (U32) deviceExt->waitSemaphoresList.length,
 		.pWaitSemaphores = deviceExt->waitSemaphoresList.ptr,
-		.signalSemaphoreCount = (Bool) (!swapchains ? 0 : swapchains->length),
+		//Keyed on what will actually be PRESENTED, rather than on how many swapchains were submitted.
+		//A binary semaphore signalled with nothing waiting on it stays signalled,
+		// and signalling it again next frame is invalid,
+		// so a frame whose swapchains all own their images must not signal one at all.
+
+		.signalSemaphoreCount = (Bool) deviceExt->swapchainHandles.length,
 		.pSignalSemaphores = swapchains && swapchains->length ? &signalSemaphores : NULL,
 		.pCommandBuffers = &commandBuffer,
 		.commandBufferCount = commandBuffer ? 1 : 0,
@@ -1775,13 +1910,16 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	//Presents
 
-	if(swapchains && swapchains->length) {
+	//Only the swapchains the acquire above pushed, which is the physical ones.
+	//A frame that drove nothing but swapchains owning their images presents nothing and ends in memory.
+
+	if(deviceExt->swapchainHandles.length) {
 
 		VkPresentInfoKHR presentInfo = (VkPresentInfoKHR) {
 			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 			.waitSemaphoreCount = 1,
 			.pWaitSemaphores = &signalSemaphores,
-			.swapchainCount = (U32) (!swapchains ? 0 : swapchains->length),
+			.swapchainCount = (U32) deviceExt->swapchainHandles.length,
 			.pSwapchains = deviceExt->swapchainHandles.ptr,
 			.pImageIndices = deviceExt->swapchainIndices.ptr,
 			.pResults = deviceExt->results.ptrNonConst
@@ -1789,15 +1927,22 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		gotoIfError3(clean, checkVkError(deviceExt->queuePresentKHR(queue.queue, &presentInfo), e_rr));
 
-		for(U64 i = 0; i < deviceExt->results.length; ++i) {
+		//The results follow the PUSHED order, so walking the caller's list needs the same skip to stay in step.
 
-			VkResult res = deviceExt->results.ptr[i];
+		for(U64 i = 0, j = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
+
+			SwapchainRef *swapchainRef = swapchains->ptr[i];
+			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
+
+			if(swapchain->base.resource.flags & EGraphicsResourceFlag_InternalOwnsImages)
+				continue;
+
+			const VkResult res = deviceExt->results.ptr[j];
+			++j;
+
 			gotoIfError3(clean, checkVkError(res, e_rr));
 
 			if(res == VK_SUBOPTIMAL_KHR) {
-
-				SwapchainRef *swapchainRef = swapchains->ptr[i];
-				Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 
 				Window *window = swapchain->info.window;
 

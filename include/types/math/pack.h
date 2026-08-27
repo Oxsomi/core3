@@ -213,6 +213,124 @@ static inline F32x4 F32x4_unpackRGB9E5(U32 packed) {
 	);
 }
 
+//Oct18
+
+//A unit vector as an 18 bit octahedral, 9 bits an axis in the low 18 bits, the top 14 left ZERO for the caller.
+//The layout @pack.hlsli reads back through unpackOct18.
+//
+//Octahedral rather than two axes and a sign for the third: the same bits, but no square root to rebuild z
+// and no cliff at the equator where sqrt(1 - x^2 - y^2) loses everything. Its error is uniform over the sphere,
+// about a third of a degree here, which is coarse for shading and plenty for deciding which side of a surface
+// a ray is on. It exists so a mesh can carry one word per TRIANGLE rather than have every hit fetch three positions
+// and take a cross product, and the fourteen spare bits are for whatever else a triangle wants to say about itself.
+//
+//Snorm per axis is symmetric on purpose: -1, 0 and 1 all land exactly, so an axis aligned face normal survives
+// untouched, which is what the walls of any box are.
+
+static inline U32 U32_packOct18(F32x4 n) {
+
+	const F32 x = F32x4_x(n), y = F32x4_y(n), z = F32x4_z(n);
+	const F32 inv = 1 / (F32_abs(x) + F32_abs(y) + F32_abs(z));
+
+	F32 e[2] = { x * inv, y * inv };
+
+	if(z < 0) {
+		const F32 ox = (1 - F32_abs(e[1])) * (e[0] >= 0 ? 1 : -1);
+		const F32 oy = (1 - F32_abs(e[0])) * (e[1] >= 0 ? 1 : -1);
+		e[0] = ox;
+		e[1] = oy;
+	}
+
+	U32 packed = 0;
+
+	//Rounded half away from zero on both sides, so -1 and 1 land on the ends of the range rather than one of them
+	// falling a step outside it.
+
+	for(U8 i = 0; i < 2; ++i) {
+		const F32 c = F32_clamp(e[i], -1, 1) * 255;
+		const I32 q = (I32) (c >= 0 ? F32_floor(c + 0.5f) : -F32_floor(-c + 0.5f)) + 256;
+		packed |= (U32) q << (9 * i);
+	}
+
+	return packed;
+}
+
+static inline F32x4 F32x4_unpackOct18(U32 packed) {
+
+	const F32 ex = (F32) ((I32) (packed & 0x1FF) - 256) / 255;
+	const F32 ey = (F32) ((I32) ((packed >> 9) & 0x1FF) - 256) / 255;
+
+	F32 x = ex, y = ey;
+	const F32 z = 1 - F32_abs(ex) - F32_abs(ey);
+
+	if(z < 0) {
+		x = (1 - F32_abs(ey)) * (ex >= 0 ? 1 : -1);
+		y = (1 - F32_abs(ex)) * (ey >= 0 ? 1 : -1);
+	}
+
+	//Divided by the real length rather than F32x4_normalize3, which is the approximate rsqrt on SSE and hands back
+	// 0.9998 for an axis. A pack helper is read back by a shader that did the exact thing, so it has to be exact.
+
+	const F32x4 n = F32x4_create3(x, y, z);
+	return F32x4_div(n, F32x4_xxxx4(F32x4_len3(n)));
+}
+
+//Oct32
+
+//A unit vector as two snorm16 octahedral axes, x | y<<16, each stored biased by 32768 so the word is unsigned.
+//The layout @pack.hlsli's unpackOct32 reads, and what a SHADING normal wants: about 0.005 degrees, which no lobe
+// can tell from exact, in the four bytes a shading normal should cost.
+
+static inline U32 U32_packOct32(F32x4 n) {
+
+	const F32 x = F32x4_x(n), y = F32x4_y(n), z = F32x4_z(n);
+	const F32 inv = 1 / (F32_abs(x) + F32_abs(y) + F32_abs(z));
+
+	F32 e[2] = { x * inv, y * inv };
+
+	if(z < 0) {
+		const F32 ox = (1 - F32_abs(e[1])) * (e[0] >= 0 ? 1 : -1);
+		const F32 oy = (1 - F32_abs(e[0])) * (e[1] >= 0 ? 1 : -1);
+		e[0] = ox;
+		e[1] = oy;
+	}
+
+	U32 packed = 0;
+
+	for(U8 i = 0; i < 2; ++i) {
+		const F32 c = F32_clamp(e[i], -1, 1) * 32767;
+		const I32 q = (I32) (c >= 0 ? F32_floor(c + 0.5f) : -F32_floor(-c + 0.5f)) + 32768;
+		packed |= (U32) q << (16 * i);
+	}
+
+	return packed;
+}
+
+static inline F32x4 F32x4_unpackOct32(U32 packed) {
+
+	const F32 ex = (F32) ((I32) (packed & 0xFFFF) - 32768) / 32767;
+	const F32 ey = (F32) ((I32) (packed >> 16) - 32768) / 32767;
+
+	F32 x = ex, y = ey;
+	const F32 z = 1 - F32_abs(ex) - F32_abs(ey);
+
+	if(z < 0) {
+		x = (1 - F32_abs(ey)) * (ex >= 0 ? 1 : -1);
+		y = (1 - F32_abs(ex)) * (ey >= 0 ? 1 : -1);
+	}
+
+	const F32x4 n = F32x4_create3(x, y, z);
+	return F32x4_div(n, F32x4_xxxx4(F32x4_len3(n)));
+}
+
+//F16x2
+
+//Two halves in one word, x low, the layout @pack.hlsli's unpackF16x2 reads. What a uv should cost.
+
+static inline U32 U32_packF16x2(F32 x, F32 y) {
+	return (U32) F32_castF16(x) | ((U32) F32_castF16(y) << 16);
+}
+
 //Fixed point positions
 
 //Three FP37f4 in a U32x4: x in bits 0..41, y in 42..83, z in 84..125, and bits 126..127 spare.

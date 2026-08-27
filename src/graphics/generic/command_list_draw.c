@@ -24,6 +24,7 @@
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/commands.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
@@ -794,6 +795,59 @@ Bool CommandListRef_dispatchIndirect(CommandListRef *commandListRef, DeviceBuffe
 
 	gotoIfError3(clean, CommandList_append(
 		commandList, ECommandOp_DispatchIndirect, Buffer_createRefConst(&dispatch, sizeof(dispatch)), 0, e_rr
+	));
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
+Bool CommandListRef_dispatchRaysIndirectExt(
+	CommandListRef *commandListRef, DeviceBufferRef *buffer, U64 offset, U32 raygenLocalId, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean);
+	GraphicsDeviceRef *device = commandList->device;
+
+	PipelineRef *rayPipeline = commandList->pipeline[EPipelineType_RaytracingExt];
+
+	if(!rayPipeline)
+		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysIndirectExt() requires bound raytracing pipeline"));
+
+	gotoIfError3(clean, CommandList_validateBindState(commandList, rayPipeline, e_rr));
+	gotoIfError3(clean, CommandList_validateRayTriPosition(commandList, rayPipeline, e_rr));
+
+	if(raygenLocalId >= Pipeline_info(PipelineRef_ptr(rayPipeline), PipelineRaytracingInfo)->raygenCount)
+		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysIndirectExt() raygen index out of bounds"));
+
+	//The argument buffer holds three U32 thread counts the GPU wrote, VkTraceRaysIndirectCommandKHR on Vulkan and
+	// the trailing Width, Height and Depth of D3D12_DISPATCH_RAYS_DESC on D3D12. Aligned to 4, the alignment
+	// vkCmdTraceRaysIndirectKHR requires and the natural alignment of those counts on D3D12.
+
+	if(offset & 3)
+		retError(clean, Error_invalidParameter(
+			2, 0, "CommandListRef_dispatchRaysIndirectExt()::offset has to be 4-byte aligned"
+		));
+
+	gotoIfError3(clean, CommandListRef_checkDispatchBuffer(device, buffer, offset, sizeof(U32) * 3, e_rr));
+
+	const BufferRange range = (BufferRange) { .startRange = offset, .endRange = offset + sizeof(U32) * 3 };
+	gotoIfError3(clean, CommandListRef_transitionBuffer(
+		commandList, buffer, range, ETransitionType_Indirect, EPipelineStage_Count, e_rr
+	));
+
+	const DispatchRaysIndirectExt dispatch =
+		(DispatchRaysIndirectExt) { .buffer = buffer, .offset = offset, .raygenId = raygenLocalId };
+
+	gotoIfError3(clean, CommandList_append(
+		commandList, ECommandOp_DispatchRaysIndirect, Buffer_createRefConst(&dispatch, sizeof(dispatch)), 0, e_rr
 	));
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;

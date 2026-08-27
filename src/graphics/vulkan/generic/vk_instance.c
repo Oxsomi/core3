@@ -1305,6 +1305,14 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		GraphicsDeviceCapabilities capabilities = (GraphicsDeviceCapabilities) { 0 };
 
+		//Timestamps: core Vulkan, gated by timestampComputeAndGraphics, which implies non-zero valid bits on the
+		// graphics and compute queues. timestampPeriod is the nanoseconds per tick used to convert results.
+
+		if(limits.timestampComputeAndGraphics) {
+			capabilities.features2 |= EGraphicsFeatures2_Timestamps;
+			capabilities.timestampPeriod = limits.timestampPeriod;
+		}
+
 		//Query features
 
 		if(features.logicOp)

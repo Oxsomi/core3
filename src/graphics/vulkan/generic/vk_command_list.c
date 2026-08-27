@@ -395,6 +395,20 @@ static VkPipelineStageFlags2 VkPipelineStage_fromMask(U32 stageMask, const Graph
 	return stages;
 }
 
+//Writes one timestamp to the frame's pool at the current cursor when timing is active, then advances the cursor.
+//The cursor advances even where the pool is absent so it stays in lockstep with GraphicsDevice_buildTimings, whose
+// slot assignment the resolve indexes by.
+
+static void vkTimestampWrite(VkGraphicsDevice *deviceExt, U8 fifId, VkCommandBuffer buffer) {
+
+	const VkQueryPool pool = deviceExt->timestampPool[fifId];
+
+	if(pool && deviceExt->timestampCursor < deviceExt->timestampCapacity[fifId])
+		deviceExt->cmdWriteTimestamp(buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pool, deviceExt->timestampCursor);
+
+	++deviceExt->timestampCursor;
+}
+
 void VK_WRAP_FUNC(CommandList_process)(
 	CommandList *commandList,
 	GraphicsDeviceRef *deviceRef,
@@ -1115,7 +1129,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			break;
 
-		//case ECommandOp_DispatchRaysIndirect:
+		case ECommandOp_DispatchRaysIndirect:
 		case ECommandOp_DispatchRaysExt: {
 
 			Pipeline *raytracingPipeline = PipelineRef_ptr(temp->tempPipelines[EPipelineType_RaytracingExt]);
@@ -1244,6 +1258,26 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
 			++temp->scopeCounter;
+
+			//A scope may bracket its work in a timestamp pair and/or a named debug region;
+			// the flags carry both decisions to EndScope.
+			//A DebugRegion scope has its name in the StartScope payload (data).
+
+			temp->curScopeFlags = (U8) scope.flags;
+
+			if((temp->curScopeFlags & ECommandScopeInternalFlags_DebugRegion) && instanceExt->cmdDebugMarkerBegin) {
+
+				VkDebugUtilsLabelEXT scopeLabel = (VkDebugUtilsLabelEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+					.pLabelName = (const char*) data,
+					.color = { 0.4f, 0.6f, 0.9f, 1.0f }
+				};
+
+				instanceExt->cmdDebugMarkerBegin(buffer, &scopeLabel);
+			}
+
+			if((temp->curScopeFlags & ECommandScopeInternalFlags_Timed))
+				vkTimestampWrite(deviceExt, device->fifId, buffer);
 
 			for (U64 i = scope.transitionOffset; i < scope.transitionOffset + scope.transitionCount; ++i) {
 
@@ -1569,9 +1603,24 @@ void VK_WRAP_FUNC(CommandList_process)(
 			break;
 		}
 
-		//No-op, only used for virtual command list
+		//Emits nothing itself; the end timestamp write lands here in the measurement pass.
+
+		case ECommandOp_StartTimingRegion:
+		case ECommandOp_EndTimingRegion:
+		case ECommandOp_InsertTiming:
+			vkTimestampWrite(deviceExt, device->fifId, buffer);
+			break;
+
+		//The end timestamp and end debug region of a scope; the barriers ran at StartScope.
 
 		case ECommandOp_EndScope:
+
+			if((temp->curScopeFlags & ECommandScopeInternalFlags_Timed))
+				vkTimestampWrite(deviceExt, device->fifId, buffer);
+
+			if((temp->curScopeFlags & ECommandScopeInternalFlags_DebugRegion) && instanceExt->cmdDebugMarkerEnd)
+				instanceExt->cmdDebugMarkerEnd(buffer);
+
 			break;
 
 		//Unsupported

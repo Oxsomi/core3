@@ -858,6 +858,34 @@ namespace oxc {
 			}
 		};
 
+		//Timing region sub-scope (Timestamps feature), mirroring CommandDebugRegion: nothing records "on" it, you keep
+		// recording through the owning scope while it is alive, and it only guarantees endTimingRegionExt across early
+		// returns. Made by CommandScope::timingRegion.
+
+		class CommandTimingRegion {
+
+			c::CommandListRef *list;
+
+		public:
+
+			explicit CommandTimingRegion(c::CommandListRef *l) noexcept : list(l) {}
+			~CommandTimingRegion() noexcept { end(); }
+
+			CommandTimingRegion(const CommandTimingRegion&) = delete;
+			CommandTimingRegion &operator=(const CommandTimingRegion&) = delete;
+			CommandTimingRegion(CommandTimingRegion &&other) noexcept : list(other.list) { other.list = nullptr; }
+			CommandTimingRegion &operator=(CommandTimingRegion&&) = delete;
+
+			[[nodiscard]] explicit operator bool() const noexcept { return list; }
+
+			c::Bool end(c::Error *e_rr = nullptr) noexcept {
+				if(!list) return true;
+				c::CommandListRef *l = list;
+				list = nullptr;
+				return c::CommandListRef_endTimingRegionExt(l, e_rr);
+			}
+		};
+
 		class CommandScope {
 
 			c::CommandListRef *list;
@@ -991,6 +1019,15 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool dispatch2DRays(c::U32 raygenLocalId, c::U32 x, c::U32 y, c::Error *e_rr = nullptr) noexcept {
 				return c::CommandListRef_dispatch2DRaysExt(list, raygenLocalId, x, y, e_rr);
+			}
+
+			//Ray dispatch sized by three U32s (width, height, depth) the GPU wrote into buffer at offset, so a count
+			// computed on the device never has to be read back. Portable across both backends; see the C entry point.
+
+			[[nodiscard]] c::Bool dispatchRaysIndirect(
+				const DeviceBuffer &buffer, c::U64 offset, c::U32 raygenLocalId = 0, c::Error *e_rr = nullptr
+			) noexcept {
+				return c::CommandListRef_dispatchRaysIndirectExt(list, buffer.handle(), offset, raygenLocalId, e_rr);
 			}
 
 			[[nodiscard]] c::Bool updateBlas(const Blas &b, c::Error *e_rr = nullptr) noexcept {
@@ -1152,6 +1189,51 @@ namespace oxc {
 				return CommandDebugRegion(list);
 			}
 
+			//Timestamps feature.
+			//id is a hot path key read back without comparing strings (0 when unused); name is a convenience
+			// (nullptr when unused). Prefer timingRegion() below; the raw pair is for regions that cannot nest lexically.
+
+			[[nodiscard]] c::Bool startTimingRegion(
+				c::U32 id, const c::C8 *regionName = nullptr, c::Error *e_rr = nullptr
+			) noexcept {
+
+				if(!regionName)
+					return c::CommandListRef_startTimingRegionExt(list, id, nullptr, e_rr);
+
+				const c::CharString n = name(regionName);
+				return c::CommandListRef_startTimingRegionExt(list, id, &n, e_rr);
+			}
+
+			[[nodiscard]] c::Bool endTimingRegion(c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_endTimingRegionExt(list, e_rr);
+			}
+
+			[[nodiscard]] c::Bool insertTiming(
+				c::U32 id, const c::C8 *pointName = nullptr, c::Error *e_rr = nullptr
+			) noexcept {
+
+				if(!pointName)
+					return c::CommandListRef_insertTimingExt(list, id, nullptr, e_rr);
+
+				const c::CharString n = name(pointName);
+				return c::CommandListRef_insertTimingExt(list, id, &n, e_rr);
+			}
+
+			//Timing region sub-scope, mirroring regionDebug():
+			// a refused start returns a null region and endTimingRegionExt runs on destruction.
+
+			[[nodiscard]] CommandTimingRegion timingRegion(
+				c::U32 id, const c::C8 *regionName = nullptr, c::Error *e_rr = nullptr
+			) noexcept {
+
+				const c::CharString n = regionName ? name(regionName) : c::CharString{};
+
+				if(!c::CommandListRef_startTimingRegionExt(list, id, regionName ? &n : nullptr, e_rr))
+					return CommandTimingRegion(nullptr);
+
+				return CommandTimingRegion(list);
+			}
+
 			//Escape hatch:
 			// a command this layer has not wrapped yet must never force abandoning the RAII layer - record it as
 			// c::CommandListRef_*(scope.raw(), ...) while the scope is open.
@@ -1174,10 +1256,38 @@ namespace oxc {
 			//A refused scope invalidates the recording, see CommandScope for what that costs. e_rr carries the reason;
 			// check the returned scope and stop recording if it is falsy.
 
+			//Timestamps feature: turn per scope GPU timing on/off for this list before recording. Once on, every
+			// scope gets a begin and end timestamp keyed by its id unless it passes ECommandScopeFlags_DisableTimestamp.
+
+			[[nodiscard]] c::Bool setScopeTiming(c::Bool enable, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_setScopeTimingExt(handle(), enable, e_rr);
+			}
+
+			//Timestamps/DebugMarkers: turn per scope auto debug regions on/off before recording. Once on, every scope
+			// given a name (see scope()) emits a labelled begin/end debug region, unless it disables it.
+
+			[[nodiscard]] c::Bool setScopeDebug(c::Bool enable, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_setScopeDebugExt(handle(), enable, e_rr);
+			}
+
 			[[nodiscard]] CommandScope scope(
 				std::initializer_list<c::Transition> transitions,
 				c::U32 id = 0,
 				std::initializer_list<c::CommandScopeDependency> deps = {},
+				c::Error *e_rr = nullptr
+			) noexcept {
+				return scope(transitions, id, deps, c::ECommandScopeFlags_None, nullptr, e_rr);
+			}
+
+			//Overload taking per-scope flags (e.g. ECommandScopeFlags_DisableTimestamp). id and deps are required
+			// so it never collides with the convenience form above: a positional e_rr there is 4 args, this is 5+.
+
+			[[nodiscard]] CommandScope scope(
+				std::initializer_list<c::Transition> transitions,
+				c::U32 id,
+				std::initializer_list<c::CommandScopeDependency> deps,
+				c::ECommandScopeFlags flags,
+				const c::C8 *scopeName = nullptr,
 				c::Error *e_rr = nullptr
 			) noexcept {
 
@@ -1190,7 +1300,9 @@ namespace oxc {
 				if(deps.size())
 					(void) c::ListCommandScopeDependency_createRefConst(deps.begin(), deps.size(), &depList, nullptr);
 
-				if(!c::CommandListRef_startScope(handle(), &transitionList, id, &depList, e_rr))
+				const c::CharString n = scopeName ? name(scopeName) : c::CharString{};
+
+				if(!c::CommandListRef_startScope(handle(), &transitionList, id, &depList, flags, scopeName ? &n : nullptr, e_rr))
 					return CommandScope(nullptr);
 
 				return CommandScope(handle());
@@ -1205,6 +1317,20 @@ namespace oxc {
 				const c::CommandScopeDependency *deps = nullptr, c::U64 depCount = 0,
 				c::Error *e_rr = nullptr
 			) noexcept {
+				return scopeSpan(transitions, transitionCount, id, deps, depCount, c::ECommandScopeFlags_None, nullptr, e_rr);
+			}
+
+			//Flags overload, as scope() above; id, deps and depCount are required so it never collides with the form
+			// above.
+
+			[[nodiscard]] CommandScope scopeSpan(
+				const c::Transition *transitions, c::U64 transitionCount,
+				c::U32 id,
+				const c::CommandScopeDependency *deps, c::U64 depCount,
+				c::ECommandScopeFlags flags,
+				const c::C8 *scopeName = nullptr,
+				c::Error *e_rr = nullptr
+			) noexcept {
 
 				c::ListTransition transitionList{};
 				c::ListCommandScopeDependency depList{};
@@ -1215,7 +1341,9 @@ namespace oxc {
 				if(depCount)
 					(void) c::ListCommandScopeDependency_createRefConst(deps, depCount, &depList, nullptr);
 
-				if(!c::CommandListRef_startScope(handle(), &transitionList, id, &depList, e_rr))
+				const c::CharString n = scopeName ? name(scopeName) : c::CharString{};
+
+				if(!c::CommandListRef_startScope(handle(), &transitionList, id, &depList, flags, scopeName ? &n : nullptr, e_rr))
 					return CommandScope(nullptr);
 
 				return CommandScope(handle());
@@ -1470,6 +1598,13 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool wait(c::Error *e_rr = nullptr) noexcept {
 				return c::GraphicsDeviceRef_wait(handle(), e_rr);
+			}
+
+			//Timestamps feature: copies the most recently completed frame's GPU timings into out, keyed by id and
+			// name, latent by framesInFlight submits. out is caller-owned; free it with c::ListGraphicsTiming_freeUnderlying.
+
+			[[nodiscard]] c::Bool timings(c::ListGraphicsTiming &out, c::Error *e_rr = nullptr) noexcept {
+				return c::GraphicsDeviceRef_getTimings(handle(), &out, e_rr);
 			}
 
 			//---- factories (each adopts the C factory's reference)

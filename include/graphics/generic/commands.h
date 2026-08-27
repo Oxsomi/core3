@@ -80,6 +80,8 @@ Bool CommandListRef_startScope(
 	const ListTransition *transitions,
 	U32 id,
 	const ListCommandScopeDependency *dependencies,
+	ECommandScopeFlags flags,
+	const CharString *name,
 	Error *e_rr
 );
 
@@ -176,6 +178,16 @@ Bool CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferRe
 //RayPipeline feature
 
 Bool CommandListRef_dispatchRaysExt(CommandListRef *commandList, DispatchRaysExt dispatchRays, Error *e_rr);
+
+//Ray dispatch whose width/height/depth come from a buffer the GPU wrote,
+// so a launch sized by a GPU driven pass never has to read its count back to the CPU.
+//The buffer holds three U32s (width, height, depth) at offset, needs Indirect usage, and is aligned to 4.
+//Vulkan reads the buffer directly; D3D12 writes the pipeline's SBT into a per frame intermediate, copies the
+// three counts in beside it and issues an ExecuteIndirect over it, so the caller sees one portable call.
+
+Bool CommandListRef_dispatchRaysIndirectExt(
+	CommandListRef *commandList, DeviceBufferRef *buffer, U64 offset, U32 raygenLocalId, Error *e_rr
+);
 Bool CommandListRef_dispatch1DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, Error *e_rr);
 Bool CommandListRef_dispatch2DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, U32 raysY, Error *e_rr);
 Bool CommandListRef_dispatch3DRaysExt(
@@ -221,6 +233,32 @@ Bool CommandListRef_endRenderExt(CommandListRef *commandList, Error *e_rr);
 Bool CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, const CharString *name, Error *e_rr);
 Bool CommandListRef_startRegionDebugExt(CommandListRef *commandList, F32x4 color, const CharString *name, Error *e_rr);
 Bool CommandListRef_endRegionDebugExt(CommandListRef *commandList, Error *e_rr);
+
+//Timestamps feature
+
+//Turns per scope GPU timing on or off for this command list; call before recording begins.
+//When on, every scope that does not pass ECommandScopeFlags_DisableTimestamp
+// gets a begin and end timestamp keyed by its scopeId.
+//The device reads the results back once the frame completes, see GraphicsDeviceRef_getTimings.
+
+Bool CommandListRef_setScopeTimingExt(CommandListRef *commandList, Bool enable, Error *e_rr);
+
+//Turns per scope auto debug regions on or off for this command list; call before recording.
+//When on, every scope given a name emits a begin and end debug region labelled by it,
+// unless it passes ECommandScopeFlags_DisableDebug.
+//The name is the one passed to startScope; a scope with no name emits nothing.
+
+Bool CommandListRef_setScopeDebugExt(CommandListRef *commandList, Bool enable, Error *e_rr);
+
+//A manual named region, nestable like a debug region: a begin and end timestamp whose delta is one timing result.
+//id is a hot path key read back without comparing strings, 0 when unused; name is a convenience, NULL when unused.
+
+Bool CommandListRef_startTimingRegionExt(CommandListRef *commandList, U32 id, const CharString *name, Error *e_rr);
+Bool CommandListRef_endTimingRegionExt(CommandListRef *commandList, Error *e_rr);
+
+//A single point in time timestamp; two of them read back are diffed by the caller. Same id and name rules.
+
+Bool CommandListRef_insertTimingExt(CommandListRef *commandList, U32 id, const CharString *name, Error *e_rr);
 
 #ifdef __cplusplus
 	}

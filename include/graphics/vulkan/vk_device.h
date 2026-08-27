@@ -112,6 +112,17 @@ typedef struct VkGraphicsDevice {
 	//This self-heals once submits succeed again.
 	Bool commitFencePending[MAX_FRAMES_IN_FLIGHT];
 
+	//Timing (EGraphicsFeatures2_Timestamps): one query pool per frame in flight, host-read at the fence-gated
+	// recycle a frame later. timestampPeriod is nanoseconds per tick, timestampValidBits the meaningful low bits on
+	// the graphics queue, and timestampCursor the transient next slot while an op walk records.
+
+	VkQueryPool timestampPool[MAX_FRAMES_IN_FLIGHT];
+	U32 timestampCapacity[MAX_FRAMES_IN_FLIGHT];
+	F32 timestampPeriod;
+	U32 timestampValidBits;
+	U32 timestampCursor;
+	U32 padding4;
+
 	//Push descriptor emulation, only allocated on a device that lacks VK_KHR_push_descriptor.
 	//One set per frame in flight, each pointing at that frame's globals buffer for the lifetime of the device,
 	// so they're written once at first use and only bound afterwards.
@@ -167,6 +178,12 @@ typedef struct VkGraphicsDevice {
 	PFN_vkGetRayTracingShaderGroupHandlesKHR getRayTracingShaderGroupHandles;
 
 	PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2;
+
+	PFN_vkCreateQueryPool createQueryPool;
+	PFN_vkDestroyQueryPool destroyQueryPool;
+	PFN_vkCmdResetQueryPool cmdResetQueryPool;
+	PFN_vkCmdWriteTimestamp cmdWriteTimestamp;
+	PFN_vkGetQueryPoolResults getQueryPoolResults;
 
 	//These functions are manually loaded because the runtime will load them anyways.
 	//However, some of these might not be present when statically linked or on the device itself.
@@ -316,6 +333,8 @@ typedef struct VkCommandBufferState {
 	U16 padding;
 
 	U32 scopeCounter;
+	U8 curScopeFlags;                                  //ECommandScopeInternalFlags of the open scope, StartScope -> EndScope
+	U8 padding5[3];
 
 	VkCommandBuffer buffer;
 

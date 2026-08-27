@@ -51,7 +51,10 @@ void VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 		ListVkImageViewMapping_free(&image->views, alloc);
 
-		if(image->image && utex.resource.type != EResourceType_Swapchain)
+		if(image->image && (
+			utex.resource.type != EResourceType_Swapchain ||
+			(utex.resource.flags & EGraphicsResourceFlag_InternalOwnsImages)
+		))
 			deviceExt->destroyImage(deviceExt->device, image->image, NULL);
 	}
 }
@@ -111,8 +114,18 @@ Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 	};
 
 	//Allocate memory
+	//
+	//A swapchain normally allocates nothing: a presentation engine hands it the images.
+	//One that OWNS them, which is a swapchain over a virtual window, allocates like any other texture,
+	// except that it has N images where everything else has one.
+	//A resource carries a SINGLE allocation,
+	// so those N are bound at stride offsets into one block rather than each taking a block of its own.
 
-	if(texture->resource.type != EResourceType_Swapchain) {
+	const Bool ownsImages = !!(texture->resource.flags & EGraphicsResourceFlag_InternalOwnsImages);
+
+	if(texture->resource.type != EResourceType_Swapchain || ownsImages) {
+
+		const U8 imageCount = ownsImages ? texture->images : 1;
 
 		VkMemoryDedicatedRequirements dedicatedReq = {
 			.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS
@@ -125,11 +138,17 @@ Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 		//TODO: versioned image
 
+		for(U8 i = 0; i < imageCount; ++i) {
+
+			VkUnifiedTexture *imageExt = TextureRef_getImgExtT(textureRef, Vk, 0, i);
+
+			gotoIfError3(clean, checkVkError(
+				deviceExt->createImage(deviceExt->device, &imageInfo, NULL, &imageExt->image),
+				e_rr
+			));
+		}
+
 		VkUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Vk, 0, 0);
-		gotoIfError3(clean, checkVkError(
-			deviceExt->createImage(deviceExt->device, &imageInfo, NULL, &managedImageExt->image),
-			e_rr
-		));
 
 		VkImageMemoryRequirementsInfo2 imageReq = (VkImageMemoryRequirementsInfo2) {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
@@ -137,6 +156,25 @@ Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 		};
 
 		deviceExt->getImageMemoryRequirements2(deviceExt->device, &imageReq, &requirements);
+
+		//Every image came from the same create info, so one query describes all of them.
+
+		const U64 align = requirements.memoryRequirements.alignment;
+		const U64 size = requirements.memoryRequirements.size;
+		const U64 stride = align ? (size + align - 1) / align * align : size;
+
+		if(imageCount > 1) {
+
+			if(dedicatedReq.requiresDedicatedAllocation)
+				retError(clean, Error_unsupportedOperation(
+					0, "UnifiedTexture_create() a swapchain owning its images can't have images requiring a dedicated allocation"
+				));
+
+			//A block holding several images is by definition not dedicated to one of them.
+
+			dedicatedReq.prefersDedicatedAllocation = false;
+			requirements.memoryRequirements.size = stride * imageCount;
+		}
 
 		DeviceMemoryBlock block;
 
@@ -153,9 +191,15 @@ Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 		texture->resource.allocated = true;
 
-		gotoIfError3(clean, checkVkError(deviceExt->bindImageMemory(
-			deviceExt->device, managedImageExt->image, (VkDeviceMemory) block.ext, texture->resource.blockOffset
-		), e_rr));
+		for(U8 i = 0; i < imageCount; ++i) {
+
+			VkUnifiedTexture *imageExt = TextureRef_getImgExtT(textureRef, Vk, 0, i);
+
+			gotoIfError3(clean, checkVkError(deviceExt->bindImageMemory(
+				deviceExt->device, imageExt->image, (VkDeviceMemory) block.ext,
+				texture->resource.blockOffset + stride * i
+			), e_rr));
+		}
 	}
 
 	for(U8 i = 0; i < texture->images; ++i) {

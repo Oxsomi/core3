@@ -292,7 +292,13 @@ typedef enum EGraphicsFeatures2 {
 	//D3D12 ships this with opacity micromaps themselves. On Vulkan only VK_KHR_opacity_micromap permits
 	// VK_INDEX_TYPE_UINT8 (VUID 11570; the EXT extension forbids it, VUID 10719), but the KHR path isn't
 	// implemented yet, so no Vulkan device claims this bit today and R8u is rejected at BLAS create there.
-	EGraphicsFeatures2_RayMicromapOpacityU8     = 1 << 6
+	EGraphicsFeatures2_RayMicromapOpacityU8     = 1 << 6,
+
+	//GPU timestamp queries: the device can write pipeline timestamps and reports a period to turn ticks into
+	// nanoseconds. Vulkan gates this on timestampComputeAndGraphics with a non zero timestampValidBits on the
+	// submit queue; D3D12 has it on the graphics and compute queues at root signature level.
+
+	EGraphicsFeatures2_Timestamps               = 1 << 7
 
 } EGraphicsFeatures2;
 
@@ -377,7 +383,8 @@ typedef struct GraphicsDeviceCapabilities {
 	EGraphicsDataTypes dataTypes;
 	U32 featuresExt;                //Extended device features, API dependent
 	
-	U64 padding;
+	F32 timestampPeriod;            //Nanoseconds per GPU timestamp tick under EGraphicsFeatures2_Timestamps, else 0
+	U32 padding;
 
 	U64 dedicatedMemory;            //Memory accessible directly to the device
 	U64 sharedMemory;               //Memory accessible through the CPU (can be equal to dedicatedMemory if iGPU or CPU)

@@ -57,6 +57,276 @@ TListNamedImpl(ListSpinLockPtr);
 TListNamedImpl(ListCommandListRef);
 TListNamedImpl(ListSwapchainRef);
 TListImpl(DevicePendingPull);
+TListImpl(GraphicsTiming);
+TListImpl(TimingEntry);
+
+//Frees a timings list filled by GraphicsDeviceRef_getTimings: its owned name copies, then the array itself.
+
+void ListGraphicsTiming_freeUnderlying(ListGraphicsTiming *timings, const Allocator *alloc) {
+
+	if(!timings)
+		return;
+
+	for(U64 i = 0; i < timings->length; ++i)
+		CharString_free(&timings->ptrNonConst[i].name, alloc);
+
+	ListGraphicsTiming_free(timings, alloc);
+}
+
+//Copies the most recently completed frame's timings into a caller-owned list, names and all,
+// so the result outlives the next submit that overwrites the device's own copy.
+//The caller frees it with ListGraphicsTiming_freeUnderlying; a list a previous call filled may be passed back,
+// its old contents are released first.
+
+Bool GraphicsDeviceRef_getTimings(GraphicsDeviceRef *deviceRef, ListGraphicsTiming *timings, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_getTimings()::deviceRef is required"));
+
+	if(!timings)
+		retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_getTimings()::timings is required"));
+
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	ListGraphicsTiming_freeUnderlying(timings, alloc);
+
+	for(U64 i = 0; i < device->timings.length; ++i) {
+
+		GraphicsTiming t = device->timings.ptr[i];
+		t.name = CharString_createNull();
+
+		if(CharString_length(device->timings.ptr[i].name))
+			gotoIfError3(clean, CharString_createCopy(device->timings.ptr[i].name, alloc, &t.name, e_rr));
+
+		if(!ListGraphicsTiming_pushBack(timings, t, alloc, e_rr)) {
+			CharString_free(&t.name, alloc);
+			s_uccess = false;
+			goto clean;
+		}
+	}
+
+clean:
+	return s_uccess;
+}
+
+//Walks the frame's submitted lists in op order, assigning a query slot to each timing point
+// and building the entry that will pair with its raw ticks later.
+//The backend op walk assigns the SAME slots in the same order via its own cursor, so the two never diverge.
+//Slots are counted, never per-op reserved, so an opted-out or hidden scope costs nothing.
+//Returns the slot count (0 when timing is off, over the pool, or an allocation failed).
+
+U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListCommandListRef *lists, const Allocator *alloc) {
+
+	device->timingCursor = 0;
+	ListTimingEntry_clear(&device->timingEntries[fifId], NULL);
+	ListCharString_freeUnderlying(&device->timingNames[fifId], alloc);
+	ListU64_clear(&device->timingStack, NULL);
+
+	U64 total = 0;
+
+	for(U64 i = 0; i < (lists ? lists->length : 0); ++i)
+		total += CommandListRef_ptr(lists->ptr[i])->timingSlotCount;
+
+	if(!total)
+		return 0;
+
+	if(total > GRAPHICS_TIMESTAMP_QUERIES_MAX) {
+		Log_warnLnx(
+			"Timestamps: %"PRIu64" query slots this frame exceed the %u ceiling, timing skipped for the frame",
+			total, (U32) GRAPHICS_TIMESTAMP_QUERIES_MAX
+		);
+		return 0;
+	}
+
+	Bool ok = true;
+
+	for(U64 i = 0; ok && i < lists->length; ++i) {
+
+		CommandList *cl = CommandListRef_ptr(lists->ptr[i]);
+		const U8 *ptr = cl->data.ptr;
+		U32 scopeCounter = 0;
+		Bool curScopeTimed = false;
+
+		for(U64 j = 0; ok && j < cl->commandOps.length; ++j) {
+
+			const CommandOpInfo info = cl->commandOps.ptr[j];
+			const U8 *data = ptr;
+			ptr += info.opSize;
+
+			switch(info.op) {
+
+				case ECommandOp_StartScope: {
+
+					const CommandScope scope = cl->activeScopes.ptr[scopeCounter++];
+					curScopeTimed = (scope.flags & ECommandScopeInternalFlags_Timed) != 0;
+
+					if(curScopeTimed) {
+
+						//A named scope carries its name in the StartScope payload; a timed named scope reports it, keyed by
+						// its id all the same.
+
+						U32 nameIndex = U32_MAX;
+
+						if(info.opSize && ((const C8*) data)[0]) {
+							CharString copy = CharString_createNull();
+							if(CharString_createCopy(CharString_createRefCStrConst((const C8*) data), alloc, &copy, NULL)) {
+								nameIndex = (U32) device->timingNames[fifId].length;
+								if(!ListCharString_pushBack(&device->timingNames[fifId], copy, alloc, NULL)) {
+									CharString_free(&copy, alloc);
+									ok = false;
+								}
+							}
+						}
+
+						const TimingEntry e = (TimingEntry) {
+							.id = scope.scopeId, .nameIndex = nameIndex,
+							.beginSlot = device->timingCursor++, .endSlot = U32_MAX
+						};
+
+						ok &= ListU64_pushBack(&device->timingStack, device->timingEntries[fifId].length, alloc, NULL);
+						ok &= ListTimingEntry_pushBack(&device->timingEntries[fifId], e, alloc, NULL);
+					}
+
+					break;
+				}
+
+				case ECommandOp_EndScope:
+
+					if(curScopeTimed && device->timingStack.length) {
+						const U32 idx = (U32) device->timingStack.ptr[device->timingStack.length - 1];
+						ListU64_popBack(&device->timingStack, NULL, NULL);
+						device->timingEntries[fifId].ptrNonConst[idx].endSlot = device->timingCursor++;
+					}
+
+					break;
+
+				//A manual region records its id and name; an insert is the same minus the end.
+				//The name was copied into the command buffer at record time and is copied again here into the frame's owned storage,
+				// so the caller's original string never has to outlive either.
+
+				case ECommandOp_StartTimingRegion:
+				case ECommandOp_InsertTiming: {
+
+					const U32 id = ((const TimingRegionCmd*) data)->id;
+					const C8 *namePtr = (const C8*)(data + sizeof(TimingRegionCmd));
+					U32 nameIndex = U32_MAX;
+
+					if(namePtr[0]) {
+						CharString copy = CharString_createNull();
+						if(CharString_createCopy(CharString_createRefCStrConst(namePtr), alloc, &copy, NULL)) {
+							nameIndex = (U32) device->timingNames[fifId].length;
+							if(!ListCharString_pushBack(&device->timingNames[fifId], copy, alloc, NULL)) {
+								CharString_free(&copy, alloc);
+								ok = false;
+							}
+						}
+					}
+
+					const TimingEntry e = (TimingEntry) {
+						.id = id, .nameIndex = nameIndex,
+						.beginSlot = device->timingCursor++, .endSlot = U32_MAX
+					};
+
+					if(info.op == ECommandOp_StartTimingRegion)
+						ok &= ListU64_pushBack(&device->timingStack, device->timingEntries[fifId].length, alloc, NULL);
+
+					ok &= ListTimingEntry_pushBack(&device->timingEntries[fifId], e, alloc, NULL);
+					break;
+				}
+
+				case ECommandOp_EndTimingRegion:
+
+					if(device->timingStack.length) {
+						const U32 idx = (U32) device->timingStack.ptr[device->timingStack.length - 1];
+						ListU64_popBack(&device->timingStack, NULL, NULL);
+						device->timingEntries[fifId].ptrNonConst[idx].endSlot = device->timingCursor++;
+					}
+
+					break;
+
+				default:
+					break;
+			}
+		}
+	}
+
+	//An allocation failed mid-build, so the entries are incomplete and the slot total no longer matches what the
+	// backend would write. Drop the whole frame's timing rather than report or size against a partial set.
+
+	if(!ok) {
+		ListTimingEntry_clear(&device->timingEntries[fifId], NULL);
+		ListCharString_freeUnderlying(&device->timingNames[fifId], alloc);
+		device->timingCursor = 0;
+	}
+
+	return device->timingCursor;
+}
+
+//Pairs the resolved raw ticks with the entries built above into device->timings.
+//A span reports the delta, a point its absolute tick time; both times are nanoseconds.
+//device->timings takes owned copies of the names, freed when it is next refilled or the device is torn down.
+
+Bool GraphicsDevice_resolveTimings(
+	GraphicsDevice *device, U8 fifId, const U64 *ticks, U32 tickCount, F32 nsPerTick, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	//device->timings owns its name copies; free the previous frame's before refilling, since the timingNames they
+	// were copied from is freed by buildTimings this same submit.
+
+	for(U64 i = 0; i < device->timings.length; ++i)
+		CharString_free(&device->timings.ptrNonConst[i].name, alloc);
+
+	gotoIfError3(clean, ListGraphicsTiming_clear(&device->timings, e_rr));
+
+	const ListTimingEntry entries = device->timingEntries[fifId];
+	const ListCharString names = device->timingNames[fifId];
+
+	for(U64 i = 0; i < entries.length; ++i) {
+
+		const TimingEntry e = entries.ptr[i];
+
+		if(e.beginSlot >= tickCount)
+			continue;
+
+		U64 gpuNs;
+
+		if(e.endSlot == U32_MAX)
+			gpuNs = (U64)((F64) ticks[e.beginSlot] * nsPerTick);
+
+		else {
+
+			if(e.endSlot >= tickCount || ticks[e.endSlot] < ticks[e.beginSlot])
+				continue;                //Out of range, or a counter that wrapped within its valid bits: drop the one span
+
+			gpuNs = (U64)((F64)(ticks[e.endSlot] - ticks[e.beginSlot]) * nsPerTick);
+		}
+
+		CharString nameCopy = CharString_createNull();
+
+		if(e.nameIndex != U32_MAX && e.nameIndex < names.length && CharString_length(names.ptr[e.nameIndex]))
+			gotoIfError3(clean, CharString_createCopy(names.ptr[e.nameIndex], alloc, &nameCopy, e_rr));
+
+		const GraphicsTiming t = (GraphicsTiming) {
+			.id = e.id,
+			.gpuNs = gpuNs,
+			.name = nameCopy
+		};
+
+		if(!ListGraphicsTiming_pushBack(&device->timings, t, alloc, e_rr)) {
+			CharString_free(&nameCopy, alloc);
+			s_uccess = false;
+			goto clean;
+		}
+	}
+
+clean:
+	return s_uccess;
+}
 
 static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId);
 
@@ -107,7 +377,15 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 		ListDevicePendingPull_free(&device->pullsInFlight[j], alloc);
 		AllocationBuffer_free(&device->stagingReadbackAllocations[j], alloc);
+
+		//timingNames owns its name copies, so freeUnderlying releases the strings too.
+
+		ListCharString_freeUnderlying(&device->timingNames[j], alloc);
+		ListTimingEntry_free(&device->timingEntries[j], alloc);
 	}
+
+	ListGraphicsTiming_freeUnderlying(&device->timings, alloc);
+	ListU64_free(&device->timingStack, alloc);
 
 	SpinLock_lock(&device->lock, U64_MAX);
 	SpinLock_lock(&device->allocator.lock, U64_MAX);
