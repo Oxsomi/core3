@@ -298,7 +298,15 @@ typedef enum EGraphicsFeatures2 {
 	// nanoseconds. Vulkan gates this on timestampComputeAndGraphics with a non zero timestampValidBits on the
 	// submit queue; D3D12 has it on the graphics and compute queues at root signature level.
 
-	EGraphicsFeatures2_Timestamps               = 1 << 7
+	EGraphicsFeatures2_Timestamps               = 1 << 7,
+
+	//Scopes can carry a PREDICATE: a U64 in a device buffer, read when the scope executes; zero skips the
+	// scope's draws and dispatches while its barriers still run. D3D12 has this in core (SetPredication);
+	// Vulkan gates it on VK_EXT_conditional_rendering, which reads the low 32 bits, so writers fill the
+	// full 64 bits. Without the capability a predicated scope simply runs, which is the correct
+	// degradation for the skip-empty-work uses the feature exists for.
+
+	EGraphicsFeatures2_Predication              = 1 << 8
 
 } EGraphicsFeatures2;
 

@@ -75,6 +75,16 @@ Bool CommandListRef_copyImage(
 TList(Transition);
 TList(CommandScopeDependency);
 
+//predicate, when given, makes the scope CONDITIONAL: a U64 read from the buffer at predicateOffset
+// (8-byte aligned) when the scope executes; zero skips its draws and dispatches, its barriers still run.
+//The buffer needs EDeviceBufferUsage_Predicate and is transitioned and kept alive by the scope itself,
+// so it must not also appear in transitions. Writers fill all 64 bits: Vulkan reads the low word,
+// D3D12 the whole thing. Without EGraphicsFeatures2_Predication the scope runs unconditionally.
+//A predicated scope only takes draws and dispatches; recording a copy, clear, acceleration structure
+// update or ray dispatch inside one is refused: D3D12 predicates copies, clears and resolves where
+// Vulkan does not, and both specs exclude ray and acceleration structure work, which runs regardless.
+//The rule applies whenever a predicate was requested, so recording validates the same on every device.
+
 Bool CommandListRef_startScope(
 	CommandListRef *commandList,
 	const ListTransition *transitions,
@@ -82,6 +92,8 @@ Bool CommandListRef_startScope(
 	const ListCommandScopeDependency *dependencies,
 	ECommandScopeFlags flags,
 	const CharString *name,
+	DeviceBufferRef *predicate,
+	U64 predicateOffset,
 	Error *e_rr
 );
 

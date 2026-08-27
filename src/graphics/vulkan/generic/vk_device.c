@@ -231,6 +231,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
+		VkPhysicalDeviceConditionalRenderingFeaturesEXT,
+		feat2 & EGraphicsFeatures2_Predication,
+		(VkPhysicalDeviceConditionalRenderingFeaturesEXT) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT,
+			.conditionalRendering = true
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceSynchronization2Features,
 		true,
 		(VkPhysicalDeviceSynchronization2Features) {
@@ -543,6 +552,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_RayClusterAS:               on = feat2 & EGraphicsFeatures2_RayClusterAS;           break;
 			case EOptExtensions_RayPartitionedTLAS:         on = feat2 & EGraphicsFeatures2_RayPartitionedTLAS;     break;
 			case EOptExtensions_PushDescriptor:             on = featEx & EVkGraphicsFeatures_PerformantPushDescriptor; break;
+			case EOptExtensions_ConditionalRendering:       on = feat2 & EGraphicsFeatures2_Predication;            break;
 
 			//Dependencies, requested alongside whichever feature needs them
 
@@ -761,6 +771,11 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkDestroyQueryPool, deviceExt->destroyQueryPool);
 	getVkFunctionDevice(clean, vkCmdResetQueryPool, deviceExt->cmdResetQueryPool);
 	getVkFunctionDevice(clean, vkCmdWriteTimestamp, deviceExt->cmdWriteTimestamp);
+
+	if(device->info.capabilities.features2 & EGraphicsFeatures2_Predication) {
+		getVkFunctionDevice(clean, vkCmdBeginConditionalRenderingEXT, deviceExt->cmdBeginConditionalRendering);
+		getVkFunctionDevice(clean, vkCmdEndConditionalRenderingEXT, deviceExt->cmdEndConditionalRendering);
+	}
 	getVkFunctionDevice(clean, vkGetQueryPoolResults, deviceExt->getQueryPoolResults);
 	getVkFunctionDevice(clean, vkQueuePresentKHR, deviceExt->queuePresentKHR);
 	getVkFunctionDevice(clean, vkCreateGraphicsPipelines, deviceExt->createGraphicsPipelines);

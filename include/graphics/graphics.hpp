@@ -1302,7 +1302,44 @@ namespace oxc {
 
 				const c::CharString n = scopeName ? name(scopeName) : c::CharString{};
 
-				if(!c::CommandListRef_startScope(handle(), &transitionList, id, &depList, flags, scopeName ? &n : nullptr, e_rr))
+				if(!c::CommandListRef_startScope(
+					handle(), &transitionList, id, &depList, flags, scopeName ? &n : nullptr, nullptr, 0, e_rr
+				))
+					return CommandScope(nullptr);
+
+				return CommandScope(handle());
+			}
+
+			//As the flags form, with a PREDICATE: the scope executes only while the U64 at predicateOffset in
+			// predicate reads nonzero (see CommandListRef_startScope). The reference form keeps it from ever
+			// colliding with the overloads above.
+
+			[[nodiscard]] CommandScope scope(
+				std::initializer_list<c::Transition> transitions,
+				c::U32 id,
+				std::initializer_list<c::CommandScopeDependency> deps,
+				c::ECommandScopeFlags flags,
+				const c::C8 *scopeName,
+				const DeviceBuffer &predicate,
+				c::U64 predicateOffset,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				c::ListTransition transitionList{};
+				c::ListCommandScopeDependency depList{};
+
+				if(transitions.size())
+					(void) c::ListTransition_createRefConst(transitions.begin(), transitions.size(), &transitionList, nullptr);
+
+				if(deps.size())
+					(void) c::ListCommandScopeDependency_createRefConst(deps.begin(), deps.size(), &depList, nullptr);
+
+				const c::CharString n = scopeName ? name(scopeName) : c::CharString{};
+
+				if(!c::CommandListRef_startScope(
+					handle(), &transitionList, id, &depList, flags, scopeName ? &n : nullptr,
+					predicate.handle(), predicateOffset, e_rr
+				))
 					return CommandScope(nullptr);
 
 				return CommandScope(handle());
@@ -1343,7 +1380,9 @@ namespace oxc {
 
 				const c::CharString n = scopeName ? name(scopeName) : c::CharString{};
 
-				if(!c::CommandListRef_startScope(handle(), &transitionList, id, &depList, flags, scopeName ? &n : nullptr, e_rr))
+				if(!c::CommandListRef_startScope(
+					handle(), &transitionList, id, &depList, flags, scopeName ? &n : nullptr, nullptr, 0, e_rr
+				))
 					return CommandScope(nullptr);
 
 				return CommandScope(handle());

@@ -1269,7 +1269,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				VkDebugUtilsLabelEXT scopeLabel = (VkDebugUtilsLabelEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
-					.pLabelName = (const char*) data,
+					.pLabelName = (const char*) data + sizeof(CommandScopePredicate),
 					.color = { 0.4f, 0.6f, 0.9f, 1.0f }
 				};
 
@@ -1491,6 +1491,11 @@ void VK_WRAP_FUNC(CommandList_process)(
 							access = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
 							break;
 
+						case ETransitionType_Predicate:
+							pipelineStage = VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT;
+							access = VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT;
+							break;
+
 						case ETransitionType_Index:
 							pipelineStage = VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
 							access = VK_ACCESS_2_INDEX_READ_BIT;
@@ -1567,6 +1572,23 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
 			ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions, e_rr);
+
+			//AFTER the barriers, so the predicate write this scope waits on is visible to the read; the
+			// span closes at EndScope. Without the extension the scope runs unconditionally, as documented.
+
+			if((temp->curScopeFlags & ECommandScopeInternalFlags_Predicated) && deviceExt->cmdBeginConditionalRendering) {
+
+				const CommandScopePredicate pred = *(const CommandScopePredicate*) data;
+
+				VkConditionalRenderingBeginInfoEXT cond = (VkConditionalRenderingBeginInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_CONDITIONAL_RENDERING_BEGIN_INFO_EXT,
+					.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(pred.buffer), Vk)->buffer,
+					.offset = pred.offset
+				};
+
+				deviceExt->cmdBeginConditionalRendering(buffer, &cond);
+			}
+
 			break;
 		}
 
@@ -1614,6 +1636,9 @@ void VK_WRAP_FUNC(CommandList_process)(
 		//The end timestamp and end debug region of a scope; the barriers ran at StartScope.
 
 		case ECommandOp_EndScope:
+
+			if((temp->curScopeFlags & ECommandScopeInternalFlags_Predicated) && deviceExt->cmdEndConditionalRendering)
+				deviceExt->cmdEndConditionalRendering(buffer);
 
 			if((temp->curScopeFlags & ECommandScopeInternalFlags_Timed))
 				vkTimestampWrite(deviceExt, device->fifId, buffer);

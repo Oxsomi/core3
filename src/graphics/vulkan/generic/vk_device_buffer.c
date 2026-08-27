@@ -127,6 +127,12 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(buf->usage & EDeviceBufferUsage_Indirect)
 		usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
 
+	//Only legal to request while the extension is enabled; without it a predicate scope runs
+	// unconditionally and never reads the buffer through this usage.
+
+	if((buf->usage & EDeviceBufferUsage_Predicate) && (device->info.capabilities.features2 & EGraphicsFeatures2_Predication))
+		usage |= VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT;
+
 	if(buf->usage & EDeviceBufferUsage_ScratchExt)
 		usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 

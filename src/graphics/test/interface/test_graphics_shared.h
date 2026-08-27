@@ -98,6 +98,7 @@ void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsShaderCompute(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsTimestamps(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsPredication(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef);
 

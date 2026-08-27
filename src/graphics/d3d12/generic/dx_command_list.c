@@ -1634,12 +1634,13 @@ void DX_WRAP_FUNC(CommandList_process)(
 				encoded[1] = 0xFF000000 | 0x6699E6;
 				encoded[2] = ((U64) 8 << 55) | ((U64) 1 << 54);        //Address alignment = 8 and indicate "ansi"
 
-				const U32 strLen = (U32) CharString_calcStrLen((const C8*) data, sizeof(encoded) - sizeof(U64) * 3 - 1);
+				const C8 *scopeName = (const C8*) data + sizeof(CommandScopePredicate);
+				const U32 strLen = (U32) CharString_calcStrLen(scopeName, sizeof(encoded) - sizeof(U64) * 3 - 1);
 				const U32 len = (U32) sizeof(U64) * 3 + strLen;
 
 				Buffer_memcpy(
 					Buffer_createRef(&encoded[3], sizeof(encoded) - sizeof(U64) * 3),
-					Buffer_createRefConst((const C8*) data, strLen)
+					Buffer_createRefConst(scopeName, strLen)
 				);
 
 				buffer->lpVtbl->BeginEvent(buffer, 2, encoded, (len + 7) &~ 7);
@@ -1785,6 +1786,11 @@ void DX_WRAP_FUNC(CommandList_process)(
 							access = D3D12_BARRIER_ACCESS_INDIRECT_ARGUMENT;
 							break;
 
+						case ETransitionType_Predicate:
+							pipelineStage = D3D12_BARRIER_SYNC_PREDICATION;
+							access = D3D12_BARRIER_ACCESS_PREDICATION;
+							break;
+
 						case ETransitionType_Index:
 							pipelineStage = D3D12_BARRIER_SYNC_INDEX_INPUT;
 							access = D3D12_BARRIER_ACCESS_INDEX_BUFFER;
@@ -1854,6 +1860,21 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
 			ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions, e_rr);
+
+			//AFTER the barriers, so the predicate write this scope waits on is visible; EQUAL_ZERO skips
+			// while the U64 reads zero, the same polarity Vulkan's nonzero-runs convention lands on.
+
+			if(temp->curScopeFlags & ECommandScopeInternalFlags_Predicated) {
+
+				const CommandScopePredicate pred = *(const CommandScopePredicate*) data;
+
+				buffer->lpVtbl->SetPredication(
+					buffer,
+					DeviceBuffer_ext(DeviceBufferRef_ptr(pred.buffer), Dx)->buffer,
+					pred.offset, D3D12_PREDICATION_OP_EQUAL_ZERO
+				);
+			}
+
 			break;
 		}
 
@@ -1909,6 +1930,9 @@ void DX_WRAP_FUNC(CommandList_process)(
 		//The end timestamp and end debug region of a scope; the barriers ran at StartScope.
 
 		case ECommandOp_EndScope:
+
+			if(temp->curScopeFlags & ECommandScopeInternalFlags_Predicated)
+				buffer->lpVtbl->SetPredication(buffer, NULL, 0, D3D12_PREDICATION_OP_EQUAL_ZERO);
 
 			if((temp->curScopeFlags & ECommandScopeInternalFlags_Timed))
 				dxTimestampWrite(deviceExt, device->fifId, buffer);

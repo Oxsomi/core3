@@ -310,6 +310,12 @@ class oxc3(ConanFile):
 		input_dir        = os.path.join(out_root, archName)
 		OxC3_package_dir = os.path.join(out_root, "packages")
 
+		# Single-config generators (Ninja/Makefiles, what conan uses off Windows) omit the config subdir for the
+		# packages output oxc3.cmake writes (build/<platform>/packages), while bin and lib keep it. Fall back to
+		# the no-config path so the shader library still lands in bin/packages for consumers.
+		if not os.path.isdir(OxC3_package_dir):
+			OxC3_package_dir = os.path.join(cmake_root, "build", platform, "packages")
+
 		input_lib_dir = os.path.join(input_dir, "lib")
 		input_bin_dir = os.path.join(input_dir, "bin")
 
@@ -352,8 +358,7 @@ class oxc3(ConanFile):
 		else:
 			self.cpp_info.system_libs = [ "m", "xkbcommon", "wayland-cursor" ]
 
-		# hdr and mesh were absent here for a while and had to be compiled from source by their consumers.
-		self.cpp_info.libs = [ "OxC3_formats_bmp", "OxC3_formats_oiBC", "OxC3_formats_hdr", "OxC3_formats_mesh" ]
+		self.cpp_info.libs = [ "OxC3_formats_bmp", "OxC3_formats_oiBC", "OxC3_formats_hdr" ]
 		self.cpp_info.libs += [ "OxC3_graphics", "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
 
 		# The Vulkan loader is loaded dynamically at runtime (see vk_instance.c) and its headers come from the

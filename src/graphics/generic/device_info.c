@@ -144,6 +144,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(cap.features2 & EGraphicsFeatures2_Timestamps)
 			Log_debugLnx("\t\tGPU timestamps (%f ns/tick)", (F64) cap.timestampPeriod);
 
+		if(cap.features2 & EGraphicsFeatures2_Predication)
+			Log_debugLnx("\t\tPredicated scopes");
+
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
 

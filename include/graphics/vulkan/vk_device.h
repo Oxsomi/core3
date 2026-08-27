@@ -183,6 +183,8 @@ typedef struct VkGraphicsDevice {
 	PFN_vkDestroyQueryPool destroyQueryPool;
 	PFN_vkCmdResetQueryPool cmdResetQueryPool;
 	PFN_vkCmdWriteTimestamp cmdWriteTimestamp;
+	PFN_vkCmdBeginConditionalRenderingEXT cmdBeginConditionalRendering;   //NULL without Predication
+	PFN_vkCmdEndConditionalRenderingEXT cmdEndConditionalRendering;
 	PFN_vkGetQueryPoolResults getQueryPoolResults;
 
 	//These functions are manually loaded because the runtime will load them anyways.

@@ -170,9 +170,15 @@ U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListComm
 
 						U32 nameIndex = U32_MAX;
 
-						if(info.opSize && ((const C8*) data)[0]) {
+						if(
+							info.opSize > sizeof(CommandScopePredicate) &&
+							((const C8*) data)[sizeof(CommandScopePredicate)]
+						) {
 							CharString copy = CharString_createNull();
-							if(CharString_createCopy(CharString_createRefCStrConst((const C8*) data), alloc, &copy, NULL)) {
+							if(CharString_createCopy(
+								CharString_createRefCStrConst((const C8*) data + sizeof(CommandScopePredicate)),
+								alloc, &copy, NULL
+							)) {
 								nameIndex = (U32) device->timingNames[fifId].length;
 								if(!ListCharString_pushBack(&device->timingNames[fifId], copy, alloc, NULL)) {
 									CharString_free(&copy, alloc);

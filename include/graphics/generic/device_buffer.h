@@ -46,7 +46,8 @@ typedef enum EDeviceBufferUsage {
 	EDeviceBufferUsage_ScratchExt           = 1 << 4,        //Allow for internal use as scratch buffer
 	EDeviceBufferUsage_ASExt                = 1 << 5,        //Allow for internal use as acceleration structure
 	EDeviceBufferUsage_ASReadExt            = 1 << 6,        //Allow buffer to be read by AS creation
-	EDeviceBufferUsage_SBTExt               = 1 << 7         //Allow for internal use as shader binding table
+	EDeviceBufferUsage_SBTExt               = 1 << 7,        //Allow for internal use as shader binding table
+	EDeviceBufferUsage_Predicate            = 1 << 8         //Allow use as a scope predicate (U64 per read)
 
 } EDeviceBufferUsage;
 

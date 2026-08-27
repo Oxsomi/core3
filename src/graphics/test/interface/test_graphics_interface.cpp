@@ -477,6 +477,7 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 
 	c::Test_graphicsShaderCompute(t, deviceRef);
 	c::Test_graphicsTimestamps(t, deviceRef);
+	c::Test_graphicsPredication(t, deviceRef);
 	c::Test_graphicsShaderDraw(t, deviceRef);
 	c::Test_graphicsShaderRays(t, deviceRef);
 

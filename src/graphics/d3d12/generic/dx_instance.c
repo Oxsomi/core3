@@ -739,6 +739,10 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_WriteBufferImmediate;
 
+		//Predication is core D3D12 (SetPredication), so every device carries the capability.
+
+		caps.features2 |= EGraphicsFeatures2_Predication;
+
 		//SV_Barycentrics / GetAttributeAtVertex.
 		//No shader-model gate needed:
 		// the SM6.5 baseline above already exceeds the SM6.1 the semantic requires.

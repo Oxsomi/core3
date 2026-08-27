@@ -123,7 +123,14 @@ typedef struct CommandList {
 	U32 lastScopeSlotBase;                             //timingSlotCount at startScope, restored if the scope is hidden
 	ECommandScopeFlags lastScopeFlags;                 //Flags of the open scope, carried startScope -> endScope
 	Bool lastScopeNamed;                               //Whether the open scope was given a debug name
-	U8 padding4[3];
+	Bool lastScopePredicated;                          //Whether the open scope carries a predicate
+
+	//Whether a predicate was REQUESTED, even where the capability downgrades the scope to always-run:
+	// the draw-and-dispatch-only rule validates against the request, so recording behaves the same on
+	// every device.
+
+	Bool lastScopeHasPredicate;
+	U8 padding4;
 
 	ListTransitionInternal pendingTransitions;
 

@@ -627,7 +627,9 @@ const C8 *optExtensionsName[] = {
 	"VK_KHR_create_renderpass2", "VK_KHR_depth_stencil_resolve", "VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls",
 	"VK_KHR_maintenance5",
 
-	"VK_KHR_opacity_micromap", "VK_KHR_device_address_commands"
+	"VK_KHR_opacity_micromap", "VK_KHR_device_address_commands",
+
+	"VK_EXT_conditional_rendering"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1072,6 +1074,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		);
 
 		getDeviceFeatures(
+			optExtensions[EOptExtensions_ConditionalRendering],
+			VkPhysicalDeviceConditionalRenderingFeaturesEXT,
+			condRenderFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
 			optExtensions[EOptExtensions_RayTriPosition],
 			VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR,
 			rayPositionFetchFeat,
@@ -1312,6 +1321,12 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			capabilities.features2 |= EGraphicsFeatures2_Timestamps;
 			capabilities.timestampPeriod = limits.timestampPeriod;
 		}
+
+		//Predicated scopes; the inverted flag (skip while nonzero) is deliberately not exposed, since D3D12's
+		// predication only offers this polarity and the API stays the intersection.
+
+		if(optExtensions[EOptExtensions_ConditionalRendering] && condRenderFeat.conditionalRendering)
+			capabilities.features2 |= EGraphicsFeatures2_Predication;
 
 		//Query features
 

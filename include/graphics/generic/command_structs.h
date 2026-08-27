@@ -133,6 +133,7 @@ typedef enum ETransitionType {
 	ETransitionType_ResolveTargetWrite,
 	ETransitionType_CopyRead,
 	ETransitionType_CopyWrite,
+	ETransitionType_Predicate,       //Scope predicate read; injected by startScope, never declared by the caller
 	ETransitionType_KeepAlive            //If the only reason of this transition is to keep a resource alive
 } ETransitionType;
 
@@ -219,13 +220,22 @@ typedef enum ECommandScopeFlags {
 
 typedef enum ECommandScopeInternalFlags {
 	ECommandScopeInternalFlags_Timed       = 1 << 0,    //Emits a begin and end GPU timestamp keyed by scopeId
-	ECommandScopeInternalFlags_DebugRegion = 1 << 1     //Emits a begin and end debug region labelled by its name
+	ECommandScopeInternalFlags_DebugRegion = 1 << 1,    //Emits a begin and end debug region labelled by its name
+	ECommandScopeInternalFlags_Predicated  = 1 << 2     //Executes only while its predicate reads nonzero
 } ECommandScopeInternalFlags;
 
 //StartTimingRegion and InsertTiming carry this prefix then a NUL terminated name,
 // the whole command padded to 16 bytes like a debug marker; EndTimingRegion carries nothing.
 //The id is a hot path key that reads timings back without comparing strings,
 // and the name is a convenience that is empty when the caller passes none.
+
+//The head of every non-empty StartScope payload: the predicate when the scope has one, zeroed otherwise.
+//The scope name, when present, follows NUL terminated. Sized 16 so the name keeps marker alignment.
+
+typedef struct CommandScopePredicate {
+	DeviceBufferRef *buffer;
+	U64 offset;
+} CommandScopePredicate;
 
 typedef struct TimingRegionCmd {
 	U32 id;
