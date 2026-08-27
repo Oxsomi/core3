@@ -255,6 +255,14 @@ Bool GraphicsDeviceRef_createBufferIntern(
 			2, "GraphicsDeviceRef_createBufferIntern() AS or scratch buffer only allowed if raytracing feature is present"
 		));
 
+	//Refused rather than silently dropped: a predicate buffer on a device that cannot predicate would
+	// otherwise carry a usage bit no backend honors, and the surprise surfaces later at startScope.
+
+	if((usage & EDeviceBufferUsage_Predicate) && !(device->info.capabilities.features2 & EGraphicsFeatures2_Predication))
+		retError(clean, Error_invalidState(
+			3, "GraphicsDeviceRef_createBufferIntern() predicate buffer requires the Predication feature"
+		));
+
 	if(!(resourceFlags & EGraphicsResourceFlag_InternalWeakDeviceRef))
 		gotoIfError3(clean, RefPtr_inc(dev));
 

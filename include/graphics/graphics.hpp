@@ -1276,69 +1276,45 @@ namespace oxc {
 				std::initializer_list<c::CommandScopeDependency> deps = {},
 				c::Error *e_rr = nullptr
 			) noexcept {
-				return scope(transitions, id, deps, c::ECommandScopeFlags_None, nullptr, e_rr);
+				return scope(ScopeDesc{ .transitions = transitions, .deps = deps, .id = id }, e_rr);
 			}
 
-			//Overload taking per-scope flags (e.g. ECommandScopeFlags_DisableTimestamp). id and deps are required
-			// so it never collides with the convenience form above: a positional e_rr there is 4 args, this is 5+.
+			//Everything beyond the bare form rides in ONE descriptor, so a new scope option is a field rather
+			// than another overload. Designated initializers keep call sites readable: transitions and deps are
+			// initializer lists living for the full call expression, name turns on the debug label, and a
+			// predicate (with its 8-byte aligned offset) makes the scope CONDITIONAL, see
+			// CommandListRef_startScope for the contract.
 
-			[[nodiscard]] CommandScope scope(
-				std::initializer_list<c::Transition> transitions,
-				c::U32 id,
-				std::initializer_list<c::CommandScopeDependency> deps,
-				c::ECommandScopeFlags flags,
-				const c::C8 *scopeName = nullptr,
-				c::Error *e_rr = nullptr
-			) noexcept {
+			struct ScopeDesc {
+				std::initializer_list<c::Transition> transitions{};
+				std::initializer_list<c::CommandScopeDependency> deps{};
+				c::U32 id{};
+				c::ECommandScopeFlags flags = c::ECommandScopeFlags_None;
+				const c::C8 *name{};
+				const DeviceBuffer *predicate{};
+				c::U64 predicateOffset{};
+			};
+
+			[[nodiscard]] CommandScope scope(const ScopeDesc &desc, c::Error *e_rr = nullptr) noexcept {
 
 				c::ListTransition transitionList{};
 				c::ListCommandScopeDependency depList{};
 
-				if(transitions.size())
-					(void) c::ListTransition_createRefConst(transitions.begin(), transitions.size(), &transitionList, nullptr);
+				if(desc.transitions.size())
+					(void) c::ListTransition_createRefConst(
+						desc.transitions.begin(), desc.transitions.size(), &transitionList, nullptr
+					);
 
-				if(deps.size())
-					(void) c::ListCommandScopeDependency_createRefConst(deps.begin(), deps.size(), &depList, nullptr);
+				if(desc.deps.size())
+					(void) c::ListCommandScopeDependency_createRefConst(
+						desc.deps.begin(), desc.deps.size(), &depList, nullptr
+					);
 
-				const c::CharString n = scopeName ? name(scopeName) : c::CharString{};
-
-				if(!c::CommandListRef_startScope(
-					handle(), &transitionList, id, &depList, flags, scopeName ? &n : nullptr, nullptr, 0, e_rr
-				))
-					return CommandScope(nullptr);
-
-				return CommandScope(handle());
-			}
-
-			//As the flags form, with a PREDICATE: the scope executes only while the U64 at predicateOffset in
-			// predicate reads nonzero (see CommandListRef_startScope). The reference form keeps it from ever
-			// colliding with the overloads above.
-
-			[[nodiscard]] CommandScope scope(
-				std::initializer_list<c::Transition> transitions,
-				c::U32 id,
-				std::initializer_list<c::CommandScopeDependency> deps,
-				c::ECommandScopeFlags flags,
-				const c::C8 *scopeName,
-				const DeviceBuffer &predicate,
-				c::U64 predicateOffset,
-				c::Error *e_rr = nullptr
-			) noexcept {
-
-				c::ListTransition transitionList{};
-				c::ListCommandScopeDependency depList{};
-
-				if(transitions.size())
-					(void) c::ListTransition_createRefConst(transitions.begin(), transitions.size(), &transitionList, nullptr);
-
-				if(deps.size())
-					(void) c::ListCommandScopeDependency_createRefConst(deps.begin(), deps.size(), &depList, nullptr);
-
-				const c::CharString n = scopeName ? name(scopeName) : c::CharString{};
+				const c::CharString n = desc.name ? name(desc.name) : c::CharString{};
 
 				if(!c::CommandListRef_startScope(
-					handle(), &transitionList, id, &depList, flags, scopeName ? &n : nullptr,
-					predicate.handle(), predicateOffset, e_rr
+					handle(), &transitionList, desc.id, &depList, desc.flags, desc.name ? &n : nullptr,
+					desc.predicate ? desc.predicate->handle() : nullptr, desc.predicateOffset, e_rr
 				))
 					return CommandScope(nullptr);
 

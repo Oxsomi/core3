@@ -1226,9 +1226,49 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 //Executing commands
 
 Bool VK_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+
+	Bool s_uccess = true;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	return checkVkError(deviceExt->deviceWaitIdle(GraphicsDevice_ext(device, Vk)->device), e_rr);
+
+	//vkDeviceWaitIdle has no timeout, so a wedged submit turns the caller into a SILENT forever-hang.
+	//A hard deadline would be dishonest in both directions: a slow but correct workload would be failed
+	// by a number, and a real wedge would come back as an ordinary error a caller might swallow with the
+	// device in an unknown state. So the wait itself never gives up: it runs in one second slices over
+	// the pending commit fences and reports the stall while it lasts, which is what lets a pinned CI run
+	// name the exact wait, and it fails only on what the driver actually reports, device loss included.
+	//VK_TIMEOUT is tested by name, since checkVkError treats every non-negative result as success.
+	//Deadline policy stays with the harness that owns the run, not with the runtime.
+
+	VkFence pending[MAX_FRAMES_IN_FLIGHT];
+	U32 pendingCount = 0;
+
+	for(U8 i = 0; i < device->framesInFlight; ++i)
+		if(deviceExt->commitFencePending[i])
+			pending[pendingCount++] = deviceExt->commitFence[i];
+
+	for(U64 waited = 0; pendingCount; ) {
+
+		const VkResult res = deviceExt->waitForFences(deviceExt->device, pendingCount, pending, true, 1 * SECOND);
+
+		if(res != VK_TIMEOUT) {
+			gotoIfError3(clean, checkVkError(res, e_rr));
+			break;
+		}
+
+		++waited;
+
+		if(!(waited % 5))
+			Log_performanceLnx(
+				"GraphicsDeviceRef_wait() still waiting on the commit fences after %"PRIu64"s, "
+				"the device may be wedged", waited
+			);
+	}
+
+	gotoIfError3(clean, checkVkError(deviceExt->deviceWaitIdle(deviceExt->device), e_rr));
+
+clean:
+	return s_uccess;
 }
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(

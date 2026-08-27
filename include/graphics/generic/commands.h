@@ -79,10 +79,12 @@ TList(CommandScopeDependency);
 // (8-byte aligned) when the scope executes; zero skips its draws and dispatches, its barriers still run.
 //The buffer needs EDeviceBufferUsage_Predicate and is transitioned and kept alive by the scope itself,
 // so it must not also appear in transitions. Writers fill all 64 bits: Vulkan reads the low word,
-// D3D12 the whole thing. Without EGraphicsFeatures2_Predication the scope runs unconditionally.
+// D3D12 the whole thing. Without EGraphicsFeatures2_Predication, requesting a predicate is REFUSED at
+// record time (as is the usage bit at buffer creation); branch on the capability to degrade explicitly.
 //A predicated scope only takes draws and dispatches; recording a copy, clear, acceleration structure
-// update or ray dispatch inside one is refused: D3D12 predicates copies, clears and resolves where
-// Vulkan does not, and both specs exclude ray and acceleration structure work, which runs regardless.
+// update or ray dispatch inside one is refused: D3D12 predicates all of those where Vulkan's
+// conditional rendering only covers draws, compute dispatches and attachment clears, so anything
+// outside that shared subset skips on one backend and runs on the other.
 //The rule applies whenever a predicate was requested, so recording validates the same on every device.
 
 Bool CommandListRef_startScope(

@@ -24,14 +24,20 @@
 // behind a nonzero one, prove that a skipped scope leaves its output untouched while its sibling lands,
 // and that both still pass their barriers. Recording is the other half of the contract: a predicated
 // scope only takes draws and dispatches, so a clear that an ordinary scope accepts must be refused.
-//The recording half is pure CPU and keys on the predicate being requested, so it runs on any device;
-// only the execution half needs the capability and the bindless write fixture.
+//Without the capability the contract is refusal (usage bit, then startScope), verified and skipped;
+// with it, the whole test runs bindful, so Predication itself is the only capability it needs.
 
 #include "test_graphics_shared.hpp"
 
 namespace oxc { namespace c {
 	#include "graphics/generic/device_buffer.h"
 }}
+
+namespace {
+	struct TestPredicationPushData {
+		oxc::c::U32 scale, bias, xorMask, offset;
+	};
+}
 
 // -- 33. Predicated scopes -------------------------------------------------------
 
@@ -46,6 +52,25 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 	c::Test_setModule(t, "GraphicsDevice/predication");
 
 	Device dev = Device::share(deviceRef);
+
+	//Without the capability the CONTRACT is refusal, not degradation: the predicate usage bit at buffer
+	// creation is the first gate, so that is what a capability-less device has to reject.
+
+	if(!(dev.info().capabilities.features2 & c::EGraphicsFeatures2_Predication)) {
+
+		const c::U64 zero = 0;
+		c::Buffer zeroData = c::Buffer_createRefConst(&zero, sizeof(zero));
+
+		DeviceBuffer refused;
+
+		c::Test_assert(t, "predicateUsageRefused", !dev.createBufferData(
+			c::EDeviceBufferUsage_Predicate, c::EGraphicsResourceFlag_None,
+			"Refused predicate", &zeroData, refused, nullptr, nullptr
+		));
+
+		c::Test_print(t, "Device has no Predication capability, refusal verified, skipping the rest");
+		return;
+	}
 
 	//Slot 0 reads zero, so its scope is skipped; slot 1 reads nonzero, so its scope runs. Written as full
 	// U64s, since D3D12 evaluates all 64 bits where Vulkan reads the low word.
@@ -91,7 +116,7 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	{
 		CommandScope scope = negList.scope(
-			{}, 61, {}, c::ECommandScopeFlags_None, "Refused clear", predicate, 8, e_rr
+			{ .id = 61, .name = "Refused clear", .predicate = &predicate, .predicateOffset = 8 }, e_rr
 		);
 		c::Test_assert(t, "refusalScope", (c::Bool) scope);
 		c::Test_assert(t, "clearRefused", !scope.clearImagef(c::F32x4_zero(), all, clearTarget.handle(), nullptr));
@@ -100,36 +125,87 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 	c::Test_assert(t, "negEnd", negList.end(e_rr));
 	c::Test_assert(t, "refusedHidden", negList.data()->activeScopes.length == 1);
 
-	if(!(dev.info().capabilities.features2 & c::EGraphicsFeatures2_Predication)) {
-		c::Test_print(t, "Device has no Predication capability, skipping");
-		return;
-	}
-
-	if(!dev.hasBindlessTable()) {
-		c::Test_print(t, "Device has no bindless descriptor table, skipping");
-		return;
-	}
-
 	OwnedSHFile writeFile(dev.alloc());
 
-	if(!loadFile(t, "//OxC3_gtest/test_shaders/test_write.oiSH", writeFile.list)) {
+	if(!loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_pushconst.oiSH", writeFile.list)) {
 		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping");
 		return;
 	}
+
+	const c::U32 entryId = gfxtest::entry(t, dev, writeFile.list, "main");
+
+	if(entryId == c::U32_MAX)
+		return;
+
+	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
+	c::DescriptorBinding pushConstants{};
+
+	if(!c::Test_assert(t, "detectLayout", dev.detectLayout(
+		writeFile.list, entryId, layoutInfo.list, nullptr, &pushConstants, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, c::EDetectDescriptorLayoutFlags_AssumePushConstants, e_rr
+	)))
+		return;
+
+	DescriptorLayout layout;
+
+	if(!c::Test_assert(t, "layoutCreate", dev.createDescriptorLayout(
+		layoutInfo.list, "Predication layout", layout, e_rr
+	)))
+		return;
+
+	c::DescriptorHeapInfo heapInfo{};
+	heapInfo.maxBuffersRW = 1;
+	heapInfo.maxDescriptorTables = 1;
+
+	DescriptorHeap heap;
+
+	if(!c::Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Predication heap", heap, e_rr)))
+		return;
+
+	DescriptorTable table;
+
+	if(!c::Test_assert(t, "tableCreate", heap.createTable(
+		layout, "Predication table", table, (c::EDescriptorTableFlags) 0, e_rr
+	)))
+		return;
 
 	DeviceBuffer output;
 
 	if(!c::Test_assert(t, "createOutput", dev.createBuffer(
 		c::EDeviceBufferUsage_None,
-		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWriteBindless | c::EGraphicsResourceFlag_CPUBacked),
-		"Predication output", 128 * sizeof(c::U32), output, nullptr, e_rr
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Predication output", 64 * sizeof(c::U32), output, nullptr, e_rr
+	)))
+		return;
+
+	//The table holds no reference of its own, so the descriptor goes back before the buffer does.
+
+	struct TableGuard {
+		DescriptorTable &table;
+		~TableGuard() { (void) table.unset(0, 0, 1, nullptr); }
+	} tableGuard{ table };
+
+	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, nullptr, 0);
+
+	if(!c::Test_assert(t, "setOutput", table.setByName("output", outputDesc, 0, false, e_rr)))
+		return;
+
+	c::PipelineLayoutInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.bindings = layout.handle();
+	pipelineLayoutInfo.pushConstants = pushConstants;
+
+	PipelineLayout writeLayout;
+
+	if(!c::Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Predication pipeline layout", writeLayout, e_rr
 	)))
 		return;
 
 	Pipeline pipelineWrite;
-	PipelineLayout writeLayout;
 
-	if(!computePipelinePush(t, dev, writeFile.list, pipelineWrite, writeLayout))
+	if(!c::Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		writeFile.list, "main", "Predication pipeline", pipelineWrite, {}, &writeLayout, e_rr
+	)))
 		return;
 
 	CommandList commandList, emptyList;
@@ -147,8 +223,10 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 		.resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
 	};
 
-	c::U32 pushSkipped[4] = { output.writeHandle(), 0xDEADDEADu, 0, 0 };
-	c::U32 pushRan[4] = { output.writeHandle(), 0xC0DE0000u, 0, 0 };
+	//Scale 0 makes all 64 threads write bias itself, so the whole buffer says which dispatch landed last.
+
+	const TestPredicationPushData pushSkipped = { 0, 0xDEADDEADu, 0, 0 };
+	const TestPredicationPushData pushRan = { 0, 0xC0DE0000u, 0, 0 };
 
 	c::Test_assert(t, "begin", commandList.begin(true, e_rr));
 
@@ -157,9 +235,12 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	{
 		CommandScope scope = commandList.scope(
-			{ outputWrite }, 50, {}, c::ECommandScopeFlags_None, "Ran", predicate, 8, e_rr
+			{ .transitions = { outputWrite }, .id = 50, .name = "Ran", .predicate = &predicate, .predicateOffset = 8 },
+			e_rr
 		);
 		c::Test_assert(t, "ranScope", (c::Bool) scope);
+		c::Test_assert(t, "ranHeap", scope.bindDescriptorHeap(heap, e_rr));
+		c::Test_assert(t, "ranTable", scope.bindDescriptorTable(table, e_rr));
 		c::Test_assert(t, "ranBind", scope.setComputePipeline(pipelineWrite, e_rr));
 		c::Test_assert(t, "ranPush", scope.setPushConstants(pushRan, e_rr));
 		c::Test_assert(t, "ranDispatch", scope.dispatch1D(1, e_rr));
@@ -168,10 +249,15 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	{
 		CommandScope scope = commandList.scope(
-			{ outputWrite }, 51, { { c::ECommandScopeDependencyType_Unconditional, 50 } },
-			c::ECommandScopeFlags_None, "Skipped", predicate, 0, e_rr
+			{
+				.transitions = { outputWrite }, .deps = { { c::ECommandScopeDependencyType_Unconditional, 50 } },
+				.id = 51, .name = "Skipped", .predicate = &predicate
+			},
+			e_rr
 		);
 		c::Test_assert(t, "skippedScope", (c::Bool) scope);
+		c::Test_assert(t, "skippedHeap", scope.bindDescriptorHeap(heap, e_rr));
+		c::Test_assert(t, "skippedTable", scope.bindDescriptorTable(table, e_rr));
 		c::Test_assert(t, "skippedBind", scope.setComputePipeline(pipelineWrite, e_rr));
 		c::Test_assert(t, "skippedPush", scope.setPushConstants(pushSkipped, e_rr));
 		c::Test_assert(t, "skippedDispatch", scope.dispatch1D(1, e_rr));

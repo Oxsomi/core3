@@ -637,7 +637,32 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 		deviceExt->commitSemaphore, deviceExt->fenceId, eventHandle
 	), e_rr));
 
-	WaitForSingleObject(eventHandle, INFINITE);
+	//An INFINITE wait would inherit a wedged submit as a silent forever-hang, and a hard deadline would
+	// fail slow but correct work by a number, so the wait runs in one second slices: it reports the
+	// stall while it lasts and fails only on what the device actually reports, removal included.
+
+	for(U64 waited = 0; ; ) {
+
+		const DWORD waitRes = WaitForSingleObject(eventHandle, 1000);
+
+		if(waitRes == WAIT_OBJECT_0)
+			break;
+
+		if(waitRes != WAIT_TIMEOUT)
+			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_wait() event wait failed"));
+
+		gotoIfError3(clean, dxCheck(
+			deviceExt->device->lpVtbl->GetDeviceRemovedReason(deviceExt->device), e_rr
+		));
+
+		++waited;
+
+		if(!(waited % 5))
+			Log_performanceLnx(
+				"GraphicsDeviceRef_wait() still waiting on the commit fence after %"PRIu64"s, "
+				"the device may be wedged", waited
+			);
+	}
 
 clean:
 	CloseHandle(eventHandle);

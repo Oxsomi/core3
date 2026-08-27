@@ -104,7 +104,7 @@ extern "C" void Test_graphicsTimestamps(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	c::Test_assert(t, "enableScopeDebug", commandList.setScopeDebug(true, e_rr));
 
 	{
-		CommandScope scope = commandList.scope({ outputWrite }, 41, {}, c::ECommandScopeFlags_None, "MainScope", e_rr);
+		CommandScope scope = commandList.scope({ .transitions = { outputWrite }, .id = 41, .name = "MainScope" }, e_rr);
 		c::Test_assert(t, "scope", (c::Bool) scope);
 		c::Test_assert(t, "bindPipeline", scope.setComputePipeline(pipelineWrite, e_rr));
 		c::Test_assert(t, "push", scope.setPushConstants(pushData, e_rr));
@@ -124,7 +124,7 @@ extern "C" void Test_graphicsTimestamps(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 	{
 		CommandScope scope = commandList.scope(
-			{ outputWrite }, 42, {}, c::ECommandScopeFlags_DisableTimestamp, nullptr, e_rr
+			{ .transitions = { outputWrite }, .id = 42, .flags = c::ECommandScopeFlags_DisableTimestamp }, e_rr
 		);
 		c::Test_assert(t, "optOutScope", (c::Bool) scope);
 		c::Test_assert(t, "optOutBind", scope.setComputePipeline(pipelineWrite, e_rr));

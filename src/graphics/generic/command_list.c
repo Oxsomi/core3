@@ -257,14 +257,15 @@ Bool CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U32
 	if((commandList->commandOps.length + 1) >> 32)
 		retError(clean, Error_outOfBounds(0, U32_MAX, U32_MAX, "CommandList_append() command ops can't exceed 32-bit"));
 
-	//A predicated scope only takes draws and dispatches, as a hard rule rather than guidance: D3D12's
-	// predication also suppresses copies, clears and resolves where Vulkan's conditional rendering
-	// discards only draws, dispatches and attachment clears, and BOTH specs enumerate their affected
-	// commands with ray dispatches and acceleration structure builds absent, so those run regardless
-	// and a predicate over them would be a lie. Refusing the record is what keeps one command list
-	// meaning one thing on both backends.
+	//A predicated scope only takes draws and dispatches, as a hard rule rather than guidance: D3D12
+	// predication suppresses copies, clears, resolves, ray dispatches and acceleration structure builds,
+	// where Vulkan's conditional rendering covers only draws, compute dispatches and attachment clears:
+	// the spec DEFINES ray work as unaffected, so it executes regardless of the predicate there, an
+	// omission likely unintended given D3D12 supports predicating it. Everything outside the shared
+	// subset skips on one backend and runs on the other, and refusing the record, a portability rule
+	// rather than an API limit, is what keeps one command list meaning one thing on both.
 
-	if(commandList->lastScopeHasPredicate && (commandList->tempStateFlags & ECommandStateFlags_HasScope))
+	if(commandList->lastScopePredicated && (commandList->tempStateFlags & ECommandStateFlags_HasScope))
 		switch(op) {
 
 			case ECommandOp_ClearImages:
@@ -626,6 +627,16 @@ Bool CommandListRef_startScope(
 
 	if(predicate) {
 
+		//Requesting a predicate without the capability is an ERROR, matching startRenderExt: silently
+		// running a scope the caller asked to be conditional is the wrong kind of surprise when the
+		// predicate guards correctness. A caller that wants the run-anyway degradation branches on
+		// EGraphicsFeatures2_Predication and passes no predicate.
+
+		if(!(GraphicsDeviceRef_ptr(device)->info.capabilities.features2 & EGraphicsFeatures2_Predication))
+			retError(clean, Error_unsupportedOperation(
+				3, "CommandListRef_startScope()::predicate requires EGraphicsFeatures2_Predication"
+			));
+
 		if(predicateOffset & 7)
 			retError(clean, Error_invalidParameter(
 				7, 0, "CommandListRef_startScope()::predicateOffset has to be 8-byte aligned"
@@ -818,15 +829,7 @@ Bool CommandListRef_startScope(
 	commandList->lastScopeId = id;
 	commandList->lastScopeFlags = flags;
 
-	//Without the capability the scope records as an ordinary one: the buffer is still kept alive through a
-	// KeepAlive transition, but no predicate barrier is emitted and no backend begins a conditional span,
-	// so a device that lacks the extension never sees its stages or usage bits.
-
-	const Bool canPredicate =
-		(GraphicsDeviceRef_ptr(device)->info.capabilities.features2 & EGraphicsFeatures2_Predication) != 0;
-
-	commandList->lastScopePredicated = predicate && canPredicate;
-	commandList->lastScopeHasPredicate = predicate != NULL;
+	commandList->lastScopePredicated = predicate != NULL;
 
 	//The predicate's transition is the scope's own rather than the caller's: the read happens at scope
 	// granularity and the resource list this feeds is also what keeps the buffer alive.
@@ -841,7 +844,7 @@ Bool CommandListRef_startScope(
 
 		const TransitionInternal predTransition = (TransitionInternal) {
 			.resource = predicate,
-			.type = canPredicate ? ETransitionType_Predicate : ETransitionType_KeepAlive
+			.type = ETransitionType_Predicate
 		};
 
 		gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, predTransition, alloc, e_rr));
