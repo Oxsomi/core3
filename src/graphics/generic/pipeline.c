@@ -198,14 +198,16 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 			//Error_print logs the message at the caller's level but the stack trace unconditionally at Error,
 			// so a lookup that goes on to succeed still reads as a crash; the reason goes out at Debug instead,
 			// and the real failure, U32_MAX out of the whole loop, stays the caller's to report.
+			//The check's own message rides along: which of features/features2/dataTypes/featuresDx/vendor/binary
+			// type rejected the candidate is the whole content of the line, and every one of them ends up here as
+			// "missing a feature" otherwise, leaving a failed lookup with nothing to go on but guesswork.
 
 			if(!GraphicsDeviceRef_checkShaderFeatures(deviceRef, &binInfo, &entry, &err)) {
 
 				Log_debugLn(
 					GraphicsDeviceRef_getAlloc(deviceRef),
-					"GraphicsDeviceRef_getFirstShaderEntry(): skipped entry %"PRIu64" binary %"PRIu64", "
-					"the device is missing a feature it needs",
-					i, j
+					"GraphicsDeviceRef_getFirstShaderEntry(): skipped entry %"PRIu64" binary %"PRIu64": %s",
+					i, j, err.errorStr ? err.errorStr : "the device is missing a feature it needs"
 				);
 
 				continue;

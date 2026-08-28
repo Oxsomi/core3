@@ -2070,10 +2070,10 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 			Bool all = true;
 
-			for (U64 j = 0; j < filterFamilies[k].count; ++j) {
+			for (U64 f = 0; f < filterFamilies[k].count; ++f) {
 
 				VkFormatProperties formatInfo = (VkFormatProperties) { 0 };
-				instanceExt->getPhysicalDeviceFormatProperties(dev, filterFamilies[k].formats[j], &formatInfo);
+				instanceExt->getPhysicalDeviceFormatProperties(dev, filterFamilies[k].formats[f], &formatInfo);
 
 				if(!(formatInfo.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
 					all = false;

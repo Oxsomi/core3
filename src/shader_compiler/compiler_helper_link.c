@@ -176,11 +176,23 @@ Bool Compiler_getLinkEntries(
 
 		//Check shader versions
 
-		Bool containsShaderVersion = ident.shaderVersion == OISH_SHADER_MODEL(6, 5) && !entry.shaderVersions.length;
+		//The same promotion SHEntryRuntime_asBinaryIdentifier applied on the way out has to be applied on the
+		// way back in: the binary carries the model its EXTENSIONS forced, which can be higher than anything
+		// the entry declared, so matching the declared list verbatim finds nothing and silently drops the link
+		// entry - leaving the entry with fewer binaryIds than it has combinations.
+		//That covers the entry declaring no model at all just as much as one declaring several: its
+		// combinations sit at OISH_SHADER_MODEL_MIN, the same floor asBinaryIdentifier uses, until an
+		// extension raises them.
+
+		const U16 promoted = ESHExtension_minShaderModel(ident.extensions);
+
+		Bool containsShaderVersion =
+			!entry.shaderVersions.length && ident.shaderVersion == U16_max(OISH_SHADER_MODEL_MIN, promoted);
+
 		U16 shaderVersion = 0;
 
 		for(U64 k = 0; k < entry.shaderVersions.length; ++k)
-			if (entry.shaderVersions.ptr[k] == ident.shaderVersion) {
+			if (U16_max(entry.shaderVersions.ptr[k], promoted) == ident.shaderVersion) {
 				containsShaderVersion = true;
 				shaderVersion = (U16) k;
 				break;
