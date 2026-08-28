@@ -23,6 +23,7 @@
 #pragma once
 #include "graphics/d3d12/direct3d12.h"
 #include "graphics/generic/command_list.h"
+#include "graphics/generic/device.h"
 #include "types/container/list.h"
 #include "types/container/list_predeclare.h"
 #include "types/container/allocation_buffer.h"

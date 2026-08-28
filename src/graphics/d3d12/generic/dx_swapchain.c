@@ -168,13 +168,19 @@ void DX_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, const Allocator *alloc) 
 	SwapchainRef *swapchainRef = (RefPtr*) swapchain - 1;
 	DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchainRef);
 
-	for(U8 i = 0; i < swapchain->base.images; ++i) {
+	//Only the images borrowed from the presentation engine are released here; those are the GetBuffer
+	// references this file took. A swapchain that owns its images never called GetBuffer, its images are
+	// placed resources UnifiedTexture_createExt made, and UnifiedTexture_free releases exactly those.
+	//Releasing them here as well is a double release (see the matching test in UnifiedTexture_free).
 
-		ID3D12Resource *img = TextureRef_getImgExtT(swapchainRef, Dx, 0, i)->image;
+	if(!(swapchain->base.resource.flags & EGraphicsResourceFlag_InternalOwnsImages))
+		for(U8 i = 0; i < swapchain->base.images; ++i) {
 
-		if(img)
-			img->lpVtbl->Release(img);
-	}
+			ID3D12Resource *img = TextureRef_getImgExtT(swapchainRef, Dx, 0, i)->image;
+
+			if(img)
+				img->lpVtbl->Release(img);
+		}
 
 	if(swapchainExt->swapchain)
 		swapchainExt->swapchain->lpVtbl->Release(swapchainExt->swapchain);
