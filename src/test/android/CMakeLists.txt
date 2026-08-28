@@ -88,7 +88,7 @@ target_link_libraries(OxC3_atest PUBLIC
 	OxC3_platforms
 	OxC3_graphics
 	OxC3_audio
-	OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr
+	OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr OxC3_formats_mesh
 	OxC3_formats_oiBC OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_oiSB
 	OxC3_formats_oiSH OxC3_formats_wav
 	OxC3_types_test
