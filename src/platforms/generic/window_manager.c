@@ -372,6 +372,23 @@ Bool WindowManager_createWindow(
 	if (type == EWindowType_Physical)
 		gotoIfError3(clean, WindowManager_createWindowPhysical(w, e_rr));
 
+	//A virtual window has no compositor handshake to wait for: it is active and finalized the moment
+	// it exists, so the create/resize pair fires here, exactly where a configure event would fire it
+	// for a physical window. Without this the step loop skips the window forever as not-yet-ready.
+
+	else {
+
+		w->flags |= EWindowFlags_IsActive;
+
+		if(w->callbacks.onCreate)
+			gotoIfError3(clean, w->callbacks.onCreate(w, e_rr));
+
+		w->flags |= EWindowFlags_IsFinalized;
+
+		if(w->callbacks.onResize)
+			gotoIfError3(clean, w->callbacks.onResize(w, e_rr));
+	}
+
 clean:
 
 	if(alloc && !s_uccess)

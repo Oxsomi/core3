@@ -100,6 +100,12 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 
 			Bool missing = false;
 
+			//Set equality, not positional: requested pair k must exist ANYWHERE in the binary's set.
+			//Indexing the request by the inner counter compared the same positions on both sides and
+			//accepted a binary when ANY position agreed, which with two defines resolves a sibling
+			//permutation whose code differs only where this pipeline never branches: images stay
+			//right and the occupancy quietly belongs to the wrong subtype.
+
 			for (U64 k = 0; k < (defines ? defines->length / 2 : 0); ++k) {
 
 				Bool contains = false;
@@ -107,9 +113,9 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 				for (U64 l = 0; l < defines->length / 2; ++l) {
 
 					if (
-						!CharString_equalsString(&(defines->ptr[l << 1]), &(defines2.ptr[l << 1]), EStringCase_Sensitive) ||
+						!CharString_equalsString(&(defines->ptr[k << 1]), &(defines2.ptr[l << 1]), EStringCase_Sensitive) ||
 						!CharString_equalsString(
-							&(defines->ptr[(l << 1) | 1]),
+							&(defines->ptr[(k << 1) | 1]),
 							&(defines2.ptr[(l << 1) | 1]),
 							EStringCase_Sensitive
 						)
