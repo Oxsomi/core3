@@ -231,7 +231,6 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
 Requires task shaders to be present.
 
 - Limits of:
-  - maxMeshMultiviewViewCount >= 4.
   - maxMeshOutputComponents of >= 127.
   - maxMeshOutputLayers of >= 8.
   - maxMeshOutputMemorySize of >= 32Ki.
@@ -241,16 +240,19 @@ Requires task shaders to be present.
   - maxMeshWorkGroupCount[i], maxTaskWorkGroupCount[i] of >= U16_MAX.
   - maxMeshWorkGroupInvocations, maxMeshWorkGroupSize[i], maxTaskWorkGroupInvocations, maxTaskWorkGroupSize[i] of >=128.
   - maxMeshWorkGroupTotalCount of >=4Mi.
-  - maxPreferredMeshWorkGroupInvocations of >=32.
-  - maxPreferredTaskWorkGroupInvocations of >= 32.
   - maxTaskPayloadAndSharedMemorySize of >= 32Ki.
   - maxTaskPayloadSize of >= 16Ki.
   - maxTaskSharedMemorySize of >= 32Ki.
   - maxTaskWorkGroupTotalCount of >= 4 Mi.
-  - meshOutputPerPrimitiveGranularity, meshOutputPerVertexGranularity of >= 32.
 
-prefersCompactPrimitiveOutput is a preference rather than a capability and is NOT required; a device
-may report either value (ANV reports false).
+The preference and hint properties are NOT required: prefersCompactPrimitiveOutput and the
+maxPreferred*WorkGroupInvocations values are scheduling advice, and the meshOutputPer*Granularity
+values only describe how coarsely output allocations round (ANV 8, NV 32); a device may report any
+of them.
+
+MeshShader does NOT guarantee the multiview interplay: ANV reports maxMeshMultiviewViewCount of 1
+with multiviewMeshShader disabled, so combining mesh shaders with multiview means checking those
+properties yourself.
 
 #### Atomics
 

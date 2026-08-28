@@ -142,8 +142,17 @@ clean:
 }
 
 void Swapchain_free(void *swapchainGeneric, const Allocator *alloc) {
+
 	Swapchain *swapchain = (Swapchain*) swapchainGeneric;
 	SpinLock_lock(&swapchain->lock, U64_MAX);
+
+	//A create that failed before attaching the device reaches here through its clean label with the
+	// object still zeroed; both frees dispatch through the device pointer, so there is nothing to free
+	// and no way to ask the backend to try.
+
+	if(!swapchain->base.resource.device)
+		return;
+
 	Swapchain_freeExt(swapchain, alloc);
 	UnifiedTexture_free((TextureRef*)((U8*)swapchain - sizeof(RefPtr)));
 }

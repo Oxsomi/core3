@@ -358,6 +358,12 @@ void UnifiedTexture_free(TextureRef *textureRef) {
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 	GraphicsDeviceRef *device = texture->resource.device;
 
+	//A half built texture (its create failed before the device was attached) owns nothing: the ext
+	// free and the resource free both dispatch through the device, so a zeroed object must stop here.
+
+	if(!device)
+		return;
+
 	if(texture->resource.flags & EGraphicsResourceFlag_ExposeBindless) {
 
 		const UnifiedTextureImage *img = TextureRef_getImageIntern(textureRef, 0, 0);

@@ -1487,7 +1487,6 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(optExtensions[EOptExtensions_MeshShader] && !(
 			!meshShader.taskShader ||
-			meshShaderProp.maxMeshMultiviewViewCount < 4 ||
 			meshShaderProp.maxMeshOutputComponents < 127 ||
 			meshShaderProp.maxMeshOutputLayers < 8 ||
 			meshShaderProp.maxMeshOutputMemorySize < 32 * KIBI ||
@@ -1508,10 +1507,6 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			meshShaderProp.maxTaskWorkGroupSize[1] < 128 ||
 			meshShaderProp.maxTaskWorkGroupSize[2] < 128 ||
 			meshShaderProp.maxMeshWorkGroupTotalCount < 4 * MIBI ||
-			meshShaderProp.maxPreferredMeshWorkGroupInvocations < 32 ||
-			meshShaderProp.maxPreferredTaskWorkGroupInvocations < 32 ||
-			meshShaderProp.meshOutputPerPrimitiveGranularity < 32 ||
-			meshShaderProp.meshOutputPerVertexGranularity < 32 ||
 			meshShaderProp.maxTaskPayloadAndSharedMemorySize < 32 * KIBI ||
 			meshShaderProp.maxTaskPayloadSize < 16 * KIBI ||
 			meshShaderProp.maxTaskSharedMemorySize < 32 * KIBI ||
@@ -1519,8 +1514,11 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		))
 			capabilities.features |= EGraphicsFeatures_MeshShader;
 
-		//prefersCompactPrimitiveOutput is a scheduling preference rather than a capability, so it is
-		// deliberately not required above; ANV reports false and runs mesh shaders fine.
+		//The preference and hint properties gate nothing above: prefersCompactPrimitiveOutput and the
+		// maxPreferred* invocation counts are scheduling advice, and the output granularities only say how
+		// coarsely output allocations round (ANV rounds by 8 where NV rounds by 32; smaller is finer).
+		//maxMeshMultiviewViewCount is not required either: ANV reports 1 with multiviewMeshShader off, so
+		// MeshShader does NOT promise the multiview interplay and a mesh+multiview user checks it itself.
 
 		//Raytracing
 
