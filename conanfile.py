@@ -263,9 +263,16 @@ class oxc3(ConanFile):
 		cmake = CMake(self)
 		cmake.build()
 
-		copy(self, "*.cmake", os.path.join(self.source_folder, "cmake"), os.path.join(self.package_folder, "cmake"))
+		# Headers ship from the SAME tree the libraries were built from. source_folder holds the exported
+		# working tree, which `conan create` leaves sitting beside the clone, so packaging from it shipped
+		# whatever branch the local checkout happened to be on while the binaries came from the pinned
+		# commit. A consumer then compiled against one revision's headers and linked another's objects.
 
-		inc_src = os.path.join(self.source_folder, "include")
+		root = self._cmakeRoot()
+
+		copy(self, "*.cmake", os.path.join(root, "cmake"), os.path.join(self.package_folder, "cmake"))
+
+		inc_src = os.path.join(root, "include")
 		inc_dst = os.path.join(self.package_folder, "include")
 		copy(self, "*.h", inc_src, inc_dst)
 		copy(self, "*.c", inc_src, inc_dst)
