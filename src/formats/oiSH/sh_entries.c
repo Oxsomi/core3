@@ -507,13 +507,31 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 			"SHEntryRuntime_asBinaryIdentifier()::combinationId out of bounds"
 		));
 
+	//An extension can need a newer shader model than the entry asked for, and [[oxc::model]] multiplies
+	// against [[oxc::extension]] rather than describing it, so resolving that pairing belongs here, where a
+	// combination becomes a concrete binary.
+	//PROMOTION, never demotion: the declared model is a floor the author owns, because plain HLSL carries
+	// model requirements no extension names (IsHelperLane, Barrier(), template functions), and lowering past
+	// them would break a shader the table below knows nothing about. Extensions may only raise it, so a
+	// missing entry in that table can only ever surface as the compiler's own "requires shader model X"
+	// diagnostic rather than as a silently under-built binary.
+	//Combinations that promote onto the same model collapse to one identifier, which the compiler already
+	// dedupes, so the combination space stays DENSE: every combination still resolves to a binary, which is
+	// what entry->binaryIds and Compiler_registerShaderEntries require.
+
+	const ESHExtension extensionSet =
+		(ESHExtension)(runtime->extensions.length ? runtime->extensions.ptr[extensionId] : 0);
+
+	const U16 declaredVersion =
+		runtime->shaderVersions.length ? runtime->shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL_MIN;
+
 	*binaryIdentifier = (SHBinaryIdentifier) {
 
 		.entrypoint =
 			runtime->isShaderAnnotation ? CharString_createNull() : CharString_createRefStrConst(runtime->entry.name),
 
-		.extensions = runtime->extensions.length ? runtime->extensions.ptr[extensionId] : 0,
-		.shaderVersion = runtime->shaderVersions.length ? runtime->shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL_MIN,
+		.extensions = extensionSet,
+		.shaderVersion = U16_max(declaredVersion, ESHExtension_minShaderModel(extensionSet)),
 		.stageType = runtime->isShaderAnnotation ? ESHPipelineStage_Count : runtime->entry.stage    //Turn into lib if possible
 	};
 
