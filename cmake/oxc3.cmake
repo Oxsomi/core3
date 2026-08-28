@@ -395,8 +395,22 @@ macro(add_virtual_dependencies_external)
 			# 	message(FATAL_ERROR "Can't find bin directory of package dependency")
 			# endif()
 			
-			find_program(PROGRAM_PATH ${file} REQUIRED)
-			get_filename_component(BIN_DIR "${PROGRAM_PATH}" DIRECTORY)
+			# find_program caches, and what it caches here is an absolute path INTO a conan package folder.
+			# Those are content addressed: any rebuild that changes the package revision leaves the old folder
+			# deleted and this cache entry pointing at nothing, which then surfaces as the packages directory
+			# below "not existing" rather than as the missing program it actually is.
+			# So the cached value is re-validated before it's trusted.
+			# The variable is also per dependency: one shared name would make every entry after the first reuse
+			# whatever the first one resolved to, since find_program does nothing when its variable is already set.
+
+			set(PROGRAM_PATH_VAR OXC3_EXTERNAL_DEP_${file})
+
+			if(${PROGRAM_PATH_VAR} AND NOT EXISTS "${${PROGRAM_PATH_VAR}}")
+				unset(${PROGRAM_PATH_VAR} CACHE)
+			endif()
+
+			find_program(${PROGRAM_PATH_VAR} ${file} REQUIRED)
+			get_filename_component(BIN_DIR "${${PROGRAM_PATH_VAR}}" DIRECTORY)
 			
 			message(STATUS "add_virtual_dependencies_external: Found ${file}'s bin Directory: ${BIN_DIR}")
 
@@ -414,7 +428,10 @@ macro(add_virtual_dependencies_external)
 				endforeach()
 
 			else()
-				message(FATAL_ERROR "${target} package directory not found: ${PACKAGE_DIR}")
+				message(FATAL_ERROR
+					"${_ARGS_TARGET}: package directory not found: ${PACKAGE_DIR} "
+					"(resolved from ${file} at ${${PROGRAM_PATH_VAR}})"
+				)
 			endif()
 
 		endforeach()
