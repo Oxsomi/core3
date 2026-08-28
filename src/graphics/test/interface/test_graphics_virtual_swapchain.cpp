@@ -170,11 +170,16 @@ extern "C" void Test_graphicsVirtualSwapchain(oxc::c::Test *t, oxc::c::GraphicsD
 			//Twice, so the ring advances and the second frame lands on a different image than the first.
 
 			c::Test_assert(t, "submit", dev.submit({ &commandList }, { &swapchain }, 0, 0, e_rr));
-			c::Test_assert(t, "submitAgain", dev.submit({ &commandList }, { &swapchain }, 0, 0, e_rr));
-			c::Test_assert(t, "wait", dev.wait(e_rr));
 
 			//And the frame is readable, which is what makes this an output rather than a discard:
 			// the same pull an encoder or an image writer would use.
+
+			//Queued BEFORE the submit it is meant to observe, which is the only way a pull reaches a rendered
+			// swapchain image: GraphicsDeviceRef_flushPendingPulls records the copy after that submit's own
+			// commands, reading whichever image the ring is on, and the present at the end of the same submit
+			// then advances past it.
+			//Queuing it after both submits instead copies the image the NEXT frame would write, which nothing has
+			// drawn to yet; that reads back uniform, so only the comparison against the clear catches it.
 
 			PullResult pulled = (PullResult) { 0, 0, 0, 0 };
 
@@ -182,16 +187,11 @@ extern "C" void Test_graphicsVirtualSwapchain(oxc::c::Test *t, oxc::c::GraphicsD
 				swapchain.handle(), 0, 0, 0, 0, 0, 0, 0, onPulled, &pulled, e_rr
 			));
 
-			CommandList emptyList;
+			//So the second frame is both the one that proves the ring moved and the one the pull carries back.
+			//Waiting completes every frame in flight, which is what lets the recorded readback land and report.
 
-			if(c::Test_assert(t, "createEmptyList", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))) {
-
-				c::Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
-				c::Test_assert(t, "endEmpty", emptyList.end(e_rr));
-
-				c::Test_assert(t, "submitPull", dev.submit({ &emptyList }, {}, 0, 0, e_rr));
-				c::Test_assert(t, "waitPull", dev.wait(e_rr));
-			}
+			c::Test_assert(t, "submitAgain", dev.submit({ &commandList }, { &swapchain }, 0, 0, e_rr));
+			c::Test_assert(t, "wait", dev.wait(e_rr));
 
 			c::Test_assert(t, "pullCompleted", pulled.count == 1);
 			c::Test_assert(t, "pullSized", pulled.length == (c::U64) c::I32x2_x(size) * c::I32x2_y(size) * 4);
