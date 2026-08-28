@@ -369,8 +369,9 @@ Bool WindowManager_createWindow(
 	cpuVisibleBuffer = Buffer_createNull();
 	titleCopy = CharString_createNull();
 
-	if (type == EWindowType_Physical)
+	if (type == EWindowType_Physical) {
 		gotoIfError3(clean, WindowManager_createWindowPhysical(w, e_rr));
+	}
 
 	//A virtual window has no compositor handshake to wait for: it is active and finalized the moment
 	// it exists, so the create/resize pair fires here, exactly where a configure event would fire it
