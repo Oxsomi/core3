@@ -222,7 +222,8 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
   - maxRayRecursionDepth >= 1.
   - maxShaderGroupStride >= 4096.
   - shaderGroupHandleSize should be 32.
-- shaderGroupBaseAlignment should be 32 or 64.
+- shaderGroupBaseAlignment should be a power of two of at most 64; the alignment is a divisor
+  requirement, so the shader binding table laid out at 64 satisfies any of them (ANV reports 16).
   - rayTraversalPrimitiveCulling and rayTracingPipelineTraceRaysIndirect should be enabled.
 
 #### Mesh shaders
@@ -247,7 +248,9 @@ Requires task shaders to be present.
   - maxTaskSharedMemorySize of >= 32Ki.
   - maxTaskWorkGroupTotalCount of >= 4 Mi.
   - meshOutputPerPrimitiveGranularity, meshOutputPerVertexGranularity of >= 32.
-  - prefersCompactPrimitiveOutput of true.
+
+prefersCompactPrimitiveOutput is a preference rather than a capability and is NOT required; a device
+may report either value (ANV reports false).
 
 #### Atomics
 
