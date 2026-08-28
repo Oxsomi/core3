@@ -828,6 +828,36 @@ void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Alloca
 	ListSHRegisterRuntime_print(&binary->registers, 1, isVerbose, alloc);
 }
 
+U16 ESHExtension_minShaderModel(ESHExtension ext) {
+
+	U16 minVersion = OISH_SHADER_MODEL(6, 5);
+
+	//DescriptorHeap = SM6.6 dynamic resources on DXIL (ResourceDescriptorHeap/SamplerDescriptorHeap).
+	if(ext & (ESHExtension_AtomicI64 | ESHExtension_ComputeDeriv | ESHExtension_PAQ | ESHExtension_DescriptorHeap))
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
+
+	if(ext & ESHExtension_WriteMSTexture)
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 7), minVersion);
+
+	//SM6.9 native ray features: SER (dx::HitObject reorder) and OMM (RayQuery opacity-micromap flags).
+	if(ext & (ESHExtension_RayReorder | ESHExtension_RayMicromapOpacity))
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 9), minVersion);
+
+	//SM6.10 features: cooperative vectors/matrix and ray triangle vertex position fetch.
+	//Neither is detectable from DXIL,
+	// so requiring the model here is what forces a compatible shader model on the DXIL path.
+
+	ESHExtension sm10 = (ESHExtension) (
+		ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining |
+		ESHExtension_RayTriPosition
+	);
+
+	if(ext & sm10)
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 10), minVersion);
+
+	return minVersion;
+}
+
 void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, const Allocator *alloc) {
 
 	if(!identifier)

@@ -1,3 +1,19 @@
+# oxc3's vector headers generate their swizzles with nested __VA_ARGS__ macros,
+# F32x4_expand -> expand2 -> expand3 -> expand4 in vec4f_swizzle.h, which MSVC's LEGACY preprocessor
+# mis-expands into a wall of syntax errors.
+# C never trips it, since C17 mode already implies the conformant preprocessor, but C++ still defaults to
+# the legacy one, so EVERY consumer TU that reaches an oxc:: header fails to compile without this.
+# That makes it a property of the headers rather than a choice each consumer should have to rediscover,
+# hence riding on the imported target. core3's own build sets the same flag for its C++ targets.
+# clang-cl ignores /Zc:preprocessor entirely and is conformant regardless, hence the compiler id check.
+
+if(TARGET oxc3::oxc3 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	set_property(
+		TARGET oxc3::oxc3 APPEND PROPERTY
+		INTERFACE_COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>"
+	)
+endif()
+
 # Setting the icon of the app
 # Call this immediately before apply_dependencies with the executable
 
