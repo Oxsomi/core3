@@ -476,7 +476,7 @@ Bool PLY_read(
 
 		const PLYElement *el = header->elements + e;
 
-		for(U32 n = 0; n < el->count; ++n) {
+		for(U32 elId = 0; elId < el->count; ++elId) {
 
 			if(header->format == EPLYFormat_Ascii) {
 
@@ -485,7 +485,7 @@ Bool PLY_read(
 
 				if(!got)
 					retError(clean, Error_outOfBounds(
-						0, n, el->count, "PLY_read() the body ends before the header's element counts do"
+						0, elId, el->count, "PLY_read() the body ends before the header's element counts do"
 					));
 
 				cursor.pos = 0;
