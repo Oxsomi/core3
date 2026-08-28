@@ -79,12 +79,18 @@ if(EnableShaderCompiler)
 	target_compile_definitions(OxC3_atest PRIVATE _OXC3_TEST_SHADER_COMPILER)
 endif()
 
+# The formats list has to cover EVERY formats/*/test directory the glob above picks up, since bundling a
+# suite compiles its sources but nothing else pulls in the library it tests.
+# A format whose tests are globbed but whose library is missing here only shows up as undefined symbols
+# at link, and only on android, since every other platform links each suite against its own module.
+
 target_link_libraries(OxC3_atest PUBLIC
 	OxC3_platforms
 	OxC3_graphics
 	OxC3_audio
-	OxC3_formats_bmp OxC3_formats_dds OxC3_formats_oiBC OxC3_formats_oiCA
-	OxC3_formats_oiDL OxC3_formats_oiSB OxC3_formats_oiSH OxC3_formats_wav
+	OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr OxC3_formats_mesh
+	OxC3_formats_oiBC OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_oiSB
+	OxC3_formats_oiSH OxC3_formats_wav
 	OxC3_types_test
 	OxC3_types_container_test_util
 )

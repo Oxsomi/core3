@@ -1286,8 +1286,16 @@ namespace oxc {
 			// CommandListRef_startScope for the contract.
 
 			struct ScopeDesc {
-				std::initializer_list<c::Transition> transitions{};
-				std::initializer_list<c::CommandScopeDependency> deps{};
+
+				//MSVC does not implement list initialization in a non static data member initializer for an
+				// initializer_list member (C2797), so these two default through an explicit call rather than {}.
+				//Its default constructor already gives the empty list {} would have.
+
+				using Transitions = std::initializer_list<c::Transition>;
+				using Deps = std::initializer_list<c::CommandScopeDependency>;
+
+				Transitions transitions = Transitions();
+				Deps deps = Deps();
 				c::U32 id{};
 				c::ECommandScopeFlags flags = c::ECommandScopeFlags_None;
 				const c::C8 *name{};

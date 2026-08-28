@@ -103,7 +103,7 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 	if(!c::Test_assert(t, "createNegList", dev.createCommandList(c::KIBI, 16, 8, negList, true, e_rr)))
 		return;
 
-	const c::ImageRange all = (c::ImageRange) { 0 };
+	const c::ImageRange all = {};
 
 	c::Test_assert(t, "negBegin", negList.begin(true, e_rr));
 

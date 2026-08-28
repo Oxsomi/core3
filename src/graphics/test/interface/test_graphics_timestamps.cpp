@@ -146,7 +146,7 @@ extern "C" void Test_graphicsTimestamps(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 		if(!submitAndWait(t, dev, emptyList))
 			return;
 
-	c::ListGraphicsTiming timings = (c::ListGraphicsTiming) { 0 };
+	c::ListGraphicsTiming timings = {};
 
 	if(!c::Test_assert(t, "getTimings", dev.timings(timings, e_rr)))
 		return;
@@ -221,7 +221,7 @@ extern "C" void Test_graphicsTimestamps(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 			if(!submitAndWait(t, dev, emptyList))
 				return;
 
-		c::ListGraphicsTiming grown = (c::ListGraphicsTiming) { 0 };
+		c::ListGraphicsTiming grown = {};
 
 		if(c::Test_assert(t, "growGetTimings", dev.timings(grown, e_rr)))
 			c::Test_assert(t, "growCount", grown.length >= growInserts);          //Scope plus every insert survived

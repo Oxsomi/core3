@@ -313,6 +313,17 @@ Bool SHBinaryInfo_equalsExact(const SHBinaryInfo *a, const SHBinaryInfo *b);
 
 void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Allocator *alloc);
 void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, const Allocator *alloc);
+
+//The oldest shader model that can express an extension set on DXIL, as OISH_SHADER_MODEL.
+//It lives beside the enum because the requirement is a property of the extension itself: several of the
+// declarations above already say so in prose (RayTriPosition is "SM6.10 tri vertex position fetch").
+//A binary's model is PROMOTED to this when its extensions need more than the entry asked for, so the value
+// has to be a true lower bound: too low is caught by the shader compiler's own availability diagnostic,
+// while too high costs devices that could have run the binary.
+//SPIRV has no shader models and never checks one at runtime, but the identifier is shared by both
+// backends, so the promoted value is what the SPIRV binary records too.
+
+U16 ESHExtension_minShaderModel(ESHExtension ext);
 void SHBinaryInfo_free(SHBinaryInfo *info, const Allocator *alloc);
 
 #ifdef __cplusplus
