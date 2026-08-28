@@ -94,17 +94,17 @@ extern "C" void Test_graphicsVirtualSwapchain(oxc::c::Test *t, oxc::c::GraphicsD
 
 	Device dev = Device::share(deviceRef);
 
-	c::WindowManager manager = (c::WindowManager) { 0 };
+	c::WindowManager manager = {};
 	c::WindowRef *windowRef = NULL;
 
-	const c::WindowManagerCallbacks managerCallbacks = (c::WindowManagerCallbacks) { 0 };
+	const c::WindowManagerCallbacks managerCallbacks = {};
 
 	if(!c::Test_assert(t, "createManager", c::WindowManager_create(managerCallbacks, 0, &manager, e_rr)))
 		return;
 
 	//A virtual window is always available, which is the whole point: no display server has to exist.
 
-	const c::WindowCallbacks windowCallbacks = (c::WindowCallbacks) { 0 };
+	const c::WindowCallbacks windowCallbacks = {};
 	const c::CharString title = c::CharString_createRefCStrConst("Virtual swapchain test");
 
 	const c::I32x2 pos = c::I32x2_create2(0, 0);
@@ -149,7 +149,7 @@ extern "C" void Test_graphicsVirtualSwapchain(oxc::c::Test *t, oxc::c::GraphicsD
 
 		if(c::Test_assert(t, "createList", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr))) {
 
-			const c::ImageRange all = (c::ImageRange) { 0 };
+			const c::ImageRange all = {};
 
 			c::Test_assert(t, "begin", commandList.begin(true, e_rr));
 
@@ -181,7 +181,7 @@ extern "C" void Test_graphicsVirtualSwapchain(oxc::c::Test *t, oxc::c::GraphicsD
 			//Queuing it after both submits instead copies the image the NEXT frame would write, which nothing has
 			// drawn to yet; that reads back uniform, so only the comparison against the clear catches it.
 
-			PullResult pulled = (PullResult) { 0, 0, 0, 0 };
+			PullResult pulled = {};
 
 			c::Test_assert(t, "queuePull", c::TextureRef_pullRegion(
 				swapchain.handle(), 0, 0, 0, 0, 0, 0, 0, onPulled, &pulled, e_rr
@@ -248,15 +248,15 @@ extern "C" void Test_graphicsPhysicalSwapchain(oxc::c::Test *t, oxc::c::Graphics
 
 	Device dev = Device::share(deviceRef);
 
-	c::WindowManager manager = (c::WindowManager) { 0 };
+	c::WindowManager manager = {};
 	c::WindowRef *windowRef = NULL;
 
-	const c::WindowManagerCallbacks managerCallbacks = (c::WindowManagerCallbacks) { 0 };
+	const c::WindowManagerCallbacks managerCallbacks = {};
 
 	if(!c::Test_assert(t, "createManager", c::WindowManager_create(managerCallbacks, 0, &manager, e_rr)))
 		return;
 
-	const c::WindowCallbacks windowCallbacks = (c::WindowCallbacks) { 0 };
+	const c::WindowCallbacks windowCallbacks = {};
 	const c::CharString title = c::CharString_createRefCStrConst("Physical swapchain test");
 
 	const c::I32x2 pos = c::I32x2_create2(0, 0);
@@ -296,7 +296,7 @@ extern "C" void Test_graphicsPhysicalSwapchain(oxc::c::Test *t, oxc::c::Graphics
 
 			if(c::Test_assert(t, "createList", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr))) {
 
-				const c::ImageRange all = (c::ImageRange) { 0 };
+				const c::ImageRange all = {};
 
 				c::Test_assert(t, "begin", commandList.begin(true, e_rr));
 
