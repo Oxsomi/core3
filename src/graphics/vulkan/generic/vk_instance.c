@@ -1515,10 +1515,12 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			meshShaderProp.maxTaskPayloadAndSharedMemorySize < 32 * KIBI ||
 			meshShaderProp.maxTaskPayloadSize < 16 * KIBI ||
 			meshShaderProp.maxTaskSharedMemorySize < 32 * KIBI ||
-			meshShaderProp.maxTaskWorkGroupTotalCount < 4 * MIBI ||
-			!meshShaderProp.prefersCompactPrimitiveOutput
+			meshShaderProp.maxTaskWorkGroupTotalCount < 4 * MIBI
 		))
 			capabilities.features |= EGraphicsFeatures_MeshShader;
+
+		//prefersCompactPrimitiveOutput is a scheduling preference rather than a capability, so it is
+		// deliberately not required above; ANV reports false and runs mesh shaders fine.
 
 		//Raytracing
 
@@ -1618,7 +1620,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 						rtpProp.maxRayRecursionDepth < 1 ||
 						rtpProp.maxShaderGroupStride < 4096 ||
 						rtpProp.shaderGroupHandleSize != 32 ||
-						(rtpProp.shaderGroupBaseAlignment != 32 && rtpProp.shaderGroupBaseAlignment != 64)
+
+						//Base alignment is a divisor requirement, so smaller is weaker: any power of two up
+						// to 64 is satisfied by a table laid out at 64. ANV reports 16.
+
+						!rtpProp.shaderGroupBaseAlignment ||
+						rtpProp.shaderGroupBaseAlignment > 64 ||
+						(rtpProp.shaderGroupBaseAlignment & (rtpProp.shaderGroupBaseAlignment - 1))
 					)
 				) {
 					optExtensions[EOptExtensions_RayQuery] = false;
