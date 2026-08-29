@@ -373,7 +373,7 @@ On a build with RGA (see the ISA section), `-asic <asic>` views an oiSH binary's
 
 Some vendors allow viewing the intermediate shader as device-dependent assembly. This can help spot bottlenecks that DXIL/SPIRV hide, since those are device-independent.
 
-OxC3 integrates AMD's [Radeon GPU Analyzer](https://github.com/GPUOpen-Tools/radeon_gpu_analyzer) (RGA) for this, exposed under the `isa` category. It is only available when OxC3 is built with the shader compiler and on a platform where RGA ships (currently Windows/Linux x64). RGA is discovered next to OxC3 (an `rga/` folder placed there by the build) or on `PATH`, so a normal build needs no separate install step.
+OxC3 drives the AMD offline compilers that [Radeon GPU Analyzer](https://github.com/GPUOpen-Tools/radeon_gpu_analyzer) (RGA) vendors, `amdllpc` and `amdgpu-dis`, exposed under the `isa` category; RGA itself isn't built or shipped. They are only available when OxC3 is built with the shader compiler and on a platform where AMD prebuilds them (currently Windows/Linux x64). They are discovered next to OxC3 (an `rga/utils` folder placed there by the build) or on `PATH`, so a normal build needs no separate install step beyond `git-lfs`, which the package uses to fetch them.
 
 - `OxC3 isa devices`: list the AMD ASICs RGA knows about, grouped by architecture (each `gfxNNNN (Arch)` line is followed by its marketing names). Either form can be used as an `-asic`.
 - `OxC3 isa disassemble -input <file.spv|.oiSH> -asic <asic>`: disassemble a shader to AMD ISA for `asic`, prepended with a register/resource-usage summary (VGPRs, SGPRs, LDS, scratch, spills, ISA size) parsed from RGA's analysis. Without `-output` the result is printed; with `-output <file>` it is written there.

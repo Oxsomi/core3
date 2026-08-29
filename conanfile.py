@@ -236,12 +236,12 @@ class oxc3(ConanFile):
 			# feeds a Windows sanitized DXC unsanitized tablegen binaries via user.dxc:tablegen_dir (the same
 			# split the android/web cross builds use). That conf is not part of the package id, so the graph
 			# still just asks for a sanitized DXC here regardless of where its tablegen came from.
-			self.requires("dxc/2026.08.07.03", options=sanitized)
+			self.requires("dxc/2026.08.23", options=sanitized)
 			self.requires("spirv_reflect/2026.08.17", options=sanitized)
 
-			# RGA (CLI tool): offline shader-to-AMD-ISA analysis + device/architecture enumeration.
-			# Only exists where the vendored AMD offline compilers do (Windows/Linux x64); run=True so the
-			# tool's bin dir reaches the run environment (RGA_PATH/PATH) for tests and the OxC3 CLI.
+			# The AMD offline compilers RGA vendors (amdllpc, amdgpu-dis): offline SPIR-V to AMD ISA for the isa
+			# commands. Only exists where AMD prebuilds them (Windows/Linux x64); run=True so the tools' bin dir
+			# reaches the run environment (RGA_PATH/PATH) for tests and the OxC3 CLI.
 			if self.settings.os in ("Windows", "Linux") and self.settings.arch == "x86_64":
 				self.requires("radeon_gpu_analyzer/2026.08.02", run=True)
 
