@@ -11,6 +11,57 @@ OxC3: a C11 cross-platform framework (types, platforms, formats, shader compiler
 and D3D12). The `oxc::`/`gfx::` C++ layers in `include/**/*.hpp` are hand-written wrappers, committed,
 and updated together with the C headers they wrap.
 
+## Review your own diff before handing it over
+
+A human review cycle spent on a stale comment or a formatting slip is a wasted one. Read the whole diff
+back, as a reviewer would, before presenting it. Both halves matter; the second is the one that gets
+skipped.
+
+A change also has to carry what belongs with it:
+
+- A test wherever the behaviour can be tested, in the same change. A rule nothing exercises is one that
+  gets broken silently later. See "Graphics features" for what a graphics feature ships as a set.
+- The documentation that describes it, updated in the same change, including the places that described the
+  behaviour you just replaced. Changelog.md is NOT currently maintained and is years behind; leave it alone
+  rather than adding one entry that implies the rest is current.
+
+Against the standards:
+
+- Every comment you added OR that sits above code you changed. A comment does not go stale loudly, so
+  changing behaviour and leaving its comment is the default failure. Delete comments for things that no
+  longer exist; a doc block for a renamed or removed function is worse than none.
+- No history in comments: they state the rule the code follows now, never what it used to do or why the
+  previous attempt was wrong. That belongs in a design record.
+- Comments in headers state the rule; the reasoning goes at the site that breaks if it is got wrong. Say
+  it in ONE place, and check the other places do not already say it.
+- Formatting: wrapping, 128 columns, tabs, `()` not `(void)`, no dash punctuation. See docs/code_style.md.
+- Nothing in the diff that is unrelated to the change, and no downstream project referenced from core3.
+
+For logic:
+
+- Every error path. A failure between two writes that must both land is the classic one: reserve or
+  validate first so the committing part cannot fail halfway.
+- Both backends kept in step. Changing a shared rule and converting only the backend you can run leaves
+  the other quietly wrong, and the tests you run will not say so.
+- Shared state: what lock covers it, at every site that touches it, and whether two locks can nest.
+- Docs and identifiers: names in prose still exist, and the described behaviour is the current one.
+
+And run the suite, not just the build:
+
+- `python build.py -mode Release -tests True` builds and runs it. A build alone proves nothing about the
+  tests, and a build with tests DISABLED (the option set a consumer package is built with) does not even
+  compile them, so "it built clean" is not a result.
+- Sanitizers where the change could touch memory or lifetime, which is most C in this tree:
+  `-compiler clang -asan True -ubsan True`. clang and gcc only; MSVC has no ASan here, so a Windows-only
+  change is checked by the other compilers instead. This is what CI runs, so a leak or a stale pointer
+  that only ASan sees fails there rather than locally.
+- More than one toolchain where the change is compiler sensitive: macros, alignment, intrinsics, C and C++
+  interop, or anything the ABI reaches. `-compiler gcc|clang` on Linux, msvc and clang-cl on Windows.
+  A tree that builds under one toolchain says nothing about the other two.
+- A new check is worth nothing until it has been seen to fail. Break the thing it guards once, confirm the
+  suite catches it on exactly that assert, and put it back.
+- Say which suite ran and what it reported. "Tests pass" without the count is not a report.
+
 ## Build, test, and the consumer trap
 
 - `python build.py -mode Debug -tests True` (and `Release`). The style check
@@ -39,14 +90,16 @@ and updated together with the C headers they wrap.
   numbers, no dashes as punctuation. Continuation lines start with `//` and break at sentence
   boundaries.
 - Empty parameter lists are `()`, not `(void)`, matching the tree.
+- Wrapped calls and conditions close on their own line, at the indent of the line that opened them, never
+  trailing the last argument; a nested call closes on its own line too. A multi-line condition puts `if (`
+  alone, operands one level deeper, `)` back at the `if`'s indent. See docs/code_style.md.
 - When in doubt, grep a neighbouring file and mirror it; consistency with the tree beats external
   convention.
 
 ## Graphics features
 
 - A feature lands in `graphics/generic` with validation, plus BOTH backends, or gates itself behind a
-  capability bit with graceful degradation. An arm that has never executed (typically D3D12 on a Linux
-  dev box) is written to spec and SAID to be blind, in the docs section and the commit.
+  capability bit with graceful degradation.
 - Every feature ships as a set: validation, both backends, an interface test, and a section in
   `docs/graphics_api.md`.
 - Adding an optional Vulkan extension touches four index-coupled sites, append-only:

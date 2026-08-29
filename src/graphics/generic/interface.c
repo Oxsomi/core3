@@ -159,6 +159,14 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(deviceRef, blasFlush)(commandBuffer, deviceRef, pending, e_rr);
 	}
 
+	Bool BLASRef_prepareCompactExt(GraphicsDeviceRef *deviceRef, BLASRef *blas, Bool *recorded, Error *e_rr) {
+		return WrapperFunction(deviceRef, blasPrepareCompact)(deviceRef, blas, recorded, e_rr);
+	}
+
+	Bool BLASRef_compactExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *blas, Error *e_rr) {
+		return WrapperFunction(deviceRef, blasCompact)(commandBuffer, deviceRef, blas, e_rr);
+	}
+
 	void TLAS_freeExt(TLAS *tlas) { WrapperFunction(tlas->base.device, tlasFree)(tlas); }
 	Bool TLAS_initExt(TLAS *tlas, Error *e_rr) { return WrapperFunction(tlas->base.device, tlasInit)(tlas, e_rr); }
 

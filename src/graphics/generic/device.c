@@ -392,6 +392,8 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 	ListGraphicsTiming_freeUnderlying(&device->timings, alloc);
 	ListU64_free(&device->timingStack, alloc);
+	ListU32_free(&device->compactionFreeQueries, alloc);
+	ListRefPtr_free(&device->liveTlases, alloc);
 
 	SpinLock_lock(&device->lock, U64_MAX);
 	SpinLock_lock(&device->allocator.lock, U64_MAX);
@@ -2188,6 +2190,45 @@ Bool GraphicsDeviceRef_submitCommands(
 
 	lockPtr = NULL;
 
+	//A compaction MOVED a structure some TLAS had resolved, and none of the lists in this submit updates
+	//that TLAS. Letting it through would trace against a structure released when the frame completes, which
+	//shows up as missing geometry and a FASTER frame rather than as a fault. Refuse instead.
+	//
+	//The question is asked of the RECORDINGS being submitted rather than of a flag set while recording, so
+	//a list recorded once and submitted many times answers for every one of those submits, and a list that
+	//is recorded and never submitted answers for none.
+	//
+	//Says nothing about a device memory TLAS, which is the caller's; see CommandListRef_compactBLASExt.
+
+	for (U64 i = 0; i < device->liveTlases.length; ++i) {
+
+		TLASRef *tlasRef = (TLASRef*) device->liveTlases.ptr[i];
+		const TLAS *tlas = TLASRef_ptr(tlasRef);
+
+		//The structure the compaction moved is released when the submit holding the copy completes, so this
+		// TLAS is still valid for THAT submit. Anything after it would be tracing released memory.
+
+		if(!TLAS_hasFlag(tlas, ETLASFlag_AddressesStale) || tlas->staleAtSubmitId >= device->submitId)
+			continue;
+
+		Bool updated = false;
+
+		for(U64 j = 0; !updated && j < (!commandLists ? 0 : commandLists->length); ++j) {
+
+			CommandListRef *listRef = commandLists->ptr[j];
+
+			if(listRef && listRef->refPtrType->typeId == (TypeId) EGraphicsTypeId_CommandList)
+				updated = CommandList_updatesTLAS(CommandListRef_ptr(listRef), tlasRef);
+		}
+
+		if(!updated)
+			retError(clean, Error_invalidState(
+				0,
+				"GraphicsDeviceRef_submitCommands() a BLAS was compacted out from under a TLAS that still "
+				"holds its old address, and no list in this submit updates it"
+			));
+	}
+
 	//Validate command lists
 
 	for(U64 i = 0; i < (!commandLists ? 0 : commandLists->length); ++i) {
@@ -2431,6 +2472,10 @@ Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 		retError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_wait() device's lock couldn't be acquired"));
 
 	gotoIfError3(clean, GraphicsDeviceRef_waitExt(deviceRef, e_rr));
+
+	//The device is idle, so every submit recorded so far has finished.
+
+	device->completedSubmitId = device->submitId;
 
 	for (U64 i = 0; i < device->framesInFlight; ++i) {
 

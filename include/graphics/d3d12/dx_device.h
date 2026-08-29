@@ -161,6 +161,16 @@ typedef struct DxGraphicsDevice {
 
 	IDXGIAdapter4 *adapter4;
 
+	//Compacted size storage, indexed by the slot the shared allocator hands out. D3D12 has no query pool
+	//for this, and EmitRaytracingAccelerationStructurePostbuildInfo cannot target a readback heap (it needs
+	//UNORDERED_ACCESS), so a size is emitted into the emit pool and copied into the same slot of the CPU
+	//readable one.
+
+	#define DX_COMPACTION_QUERIES_BASE 256                      //First pool; each one after it doubles
+
+	ListRefPtr compactionEmitPools;
+	ListRefPtr compactionReadbackPools;
+
 	//Temporary storage for submit time stuff
 
 	ListD3D12_BUFFER_BARRIER bufferTransitions;

@@ -1030,6 +1030,13 @@ namespace oxc {
 				return c::CommandListRef_dispatchRaysIndirectExt(list, buffer.handle(), offset, raygenLocalId, e_rr);
 			}
 
+			//Records the compacting copy. See GraphicsDeviceRef_prepareCompactBLAS for the ordering and
+			//timing rules, all of which are checked here rather than left to the caller.
+
+			[[nodiscard]] c::Bool compactBlas(const Blas &b, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_compactBLASExt(list, b.handle(), e_rr);
+			}
+
 			[[nodiscard]] c::Bool updateBlas(const Blas &b, c::Error *e_rr = nullptr) noexcept {
 				return c::CommandListRef_updateBLASExt(list, b.handle(), e_rr);
 			}
@@ -2182,6 +2189,9 @@ namespace oxc {
 			// so none of the position/index format business applies. aabbStride is 8 byte aligned;
 			// buffer needs EDeviceBufferUsage_ASReadExt like every RTAS input,
 			// and build recording stays manual (updateBlas in a scope), exactly like the triangle path.
+
+			//Swap a built BLAS for a compacted copy. The build must have COMPLETED (submit, then wait), and
+			//every TLAS referencing it must be created after, because compaction moves the structure.
 
 			[[nodiscard]] c::Bool createBlasProcedural(
 				c::ERTASBuildFlags buildFlags, c::EBLASFlag blasFlags,

@@ -26,6 +26,7 @@
 #include "graphics/generic/resource.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
+#include "types/container/list_basic_types.h"
 #include "types/container/string.h"
 
 #ifdef __cplusplus
@@ -138,6 +139,11 @@ typedef struct GraphicsDevice {
 
 	U64 submitId;
 
+	//Highest submit known to have COMPLETED on the device. Work that has to read back something a submit
+	//produced, such as a compacted acceleration structure size, tests against this instead of blocking.
+
+	U64 completedSubmitId;
+
 	EGraphicsDeviceFlags flags;
 	U16 pad0;
 	U8 framesInFlight;
@@ -152,6 +158,25 @@ typedef struct GraphicsDevice {
 	ListWeakRefPtr pendingResources;                        //Resources pending copy from CPU to device next submit
 
 	ListRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];     //Resources in flight, TODO: HashMap
+
+	//Compacted size slots, handed out per BLAS built with AllowCompaction and returned when the compaction
+	//that reads one consumes it. Only the storage differs per backend, a query pool on Vulkan and a pair of
+	//buffers on D3D12, so the bookkeeping is shared: without it the two would drift.
+	//
+	//Slots are recycled rather than only appended, so the high water mark tracks how many structures await
+	//compaction AT ONCE and not how many a session compacts.
+
+	ListU32 compactionFreeQueries;
+	U32 compactionQueryCount;
+	U32 compactionPadding;
+
+	//Every live TLAS, WITHOUT holding a reference: a compaction walks this to find the structures that
+	//resolved the address it is about to move. A TLAS adds itself on create and removes itself on free,
+	//and that pairing is the whole contract, since a stale entry is a dangling read.
+	//
+	//Guarded by this device's lock, never nested with an RTAS lock in either direction.
+
+	ListRefPtr liveTlases;
 
 	SpinLock lock;                                          //Lock for submission and marking resources dirty
 

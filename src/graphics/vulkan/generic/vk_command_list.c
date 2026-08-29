@@ -1066,6 +1066,13 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			break;
 
+		case ECommandOp_CompactBLASExt:
+
+			if(!(VK_WRAP_FUNC(BLASRef_compact))(temp, deviceRef, *(BLASRef**)data, e_rr))
+				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
+			break;
+
 		case ECommandOp_UpdateTLASExt:
 
 			if(!(VK_WRAP_FUNC(TLASRef_flush))(temp, deviceRef, *(TLASRef**)data, e_rr))

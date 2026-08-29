@@ -48,6 +48,7 @@ TListImpl(VkSemaphore);
 TListImpl(VkResult);
 TListImpl(VkSwapchainKHR);
 TListImpl(VkPipelineStageFlags);
+TListImpl(VkQueryPool);
 
 #define bindNextVkStruct(T, condition, ...) \
 	T tmp##T = __VA_ARGS__;                 \
@@ -810,6 +811,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		getVkFunctionDevice(clean, vkCmdBuildAccelerationStructuresKHR, deviceExt->cmdBuildAccelerationStructures);
 		getVkFunctionDevice(clean, vkCreateAccelerationStructureKHR, deviceExt->createAccelerationStructure);
 		getVkFunctionDevice(clean, vkCmdCopyAccelerationStructureKHR, deviceExt->copyAccelerationStructure);
+		getVkFunctionDevice(
+			clean, vkCmdWriteAccelerationStructuresPropertiesKHR, deviceExt->writeAccelerationStructuresProperties
+		);
 		getVkFunctionDevice(clean, vkDestroyAccelerationStructureKHR, deviceExt->destroyAccelerationStructure);
 		getVkFunctionDevice(clean, vkGetAccelerationStructureBuildSizesKHR, deviceExt->getAccelerationStructureBuildSizes);
 		getVkFunctionDevice(
@@ -1193,6 +1197,9 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 			if(deviceExt->timestampPool[i])
 				deviceExt->destroyQueryPool(deviceExt->device, deviceExt->timestampPool[i], NULL);
 
+		for(U64 i = 0; i < deviceExt->compactionPools.length; ++i)
+			deviceExt->destroyQueryPool(deviceExt->device, deviceExt->compactionPools.ptr[i], NULL);
+
 		//Only set when push descriptors were emulated; destroying the pool frees the sets with it.
 
 		if(deviceExt->cbufferPool)
@@ -1208,6 +1215,15 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 	ListVkPipelineStageFlags_free(&deviceExt->waitStages, alloc);
 	ListVkSemaphore_free(&deviceExt->waitSemaphoresList, alloc);
+	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+
+		for(U64 j = 0; j < deviceExt->retiredAs[i].length; ++j)
+			deviceExt->destroyAccelerationStructure(deviceExt->device, deviceExt->retiredAs[i].ptr[j], NULL);
+
+		ListVkAccelerationStructureKHR_free(&deviceExt->retiredAs[i], alloc);
+	}
+
+	ListVkQueryPool_free(&deviceExt->compactionPools, alloc);
 	ListVkResult_free(&deviceExt->results, alloc);
 	ListU32_free(&deviceExt->swapchainIndices, alloc);
 	ListVkSwapchainKHR_free(&deviceExt->swapchainHandles, alloc);
@@ -1546,6 +1562,16 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		), e_rr));
 
 		gotoIfError3(clean, checkVkError(deviceExt->resetFences(deviceExt->device, 1, fence), e_rr));
+
+		//That fence also proves any compaction copy recorded in this slot has run, so the structures it
+		// replaced can go. Their buffers ride resourcesInFlight; only the handles are left to us.
+
+		ListVkAccelerationStructureKHR *retired = &deviceExt->retiredAs[device->fifId];
+
+		for(U64 i = 0; i < retired->length; ++i)
+			deviceExt->destroyAccelerationStructure(deviceExt->device, retired->ptr[i], NULL);
+
+		gotoIfError3(clean, ListVkAccelerationStructureKHR_clear(retired, e_rr));
 	}
 
 	//Read back and resolve the timestamps of the frame that used this slot framesInFlight submits ago, now that its

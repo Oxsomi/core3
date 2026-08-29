@@ -107,6 +107,8 @@ static_assert(
 
 			.blasInit = D3D12BLAS_init,
 			.blasFlush = D3D12BLASRef_flush,
+			.blasPrepareCompact = D3D12BLASRef_prepareCompact,
+			.blasCompact = D3D12BLASRef_compact,
 			.blasFree = D3D12BLAS_free,
 
 			.opacityMicromapInit = D3D12OpacityMicromap_init,

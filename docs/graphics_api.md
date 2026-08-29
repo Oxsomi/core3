@@ -420,6 +420,39 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   ```
 
 - ```c
+  //Record the compacting copy of a built BLAS, typically 30 to 50% smaller and denser to traverse. Every
+  //rule below is checked at record time, so a rejection reaches the caller here and not inside a submit.
+  //
+  //Record it in a LATER submit than the build: the size it needs is what that build produced, and asking too
+  //early errors rather than blocking, so never submitting the build cannot become a hang. It ALLOCATES, and
+  //the structure being replaced lives until the submit holding the copy completes, so peak spans both.
+  //Records nothing, reporting success, when the structure was built without ERTASBuildFlags_AllowCompaction,
+  //is already compacted, or the driver reported no saving.
+  //
+  //Compaction MOVES the structure. Every live TLAS that resolved its address is marked, and the submit after
+  //the copy is refused while any mark stands, so forgetting to update one is an error and not a wrong frame
+  //(a stale TLAS traces released memory, which reads as missing geometry and a FASTER frame). Only TLASes
+  //that reference it are touched. TWO CASES ARE THE CALLER'S:
+  //
+  //1. The mark clears when the TLAS update is RECORDED, not when it executes, since the submit carrying the
+  //   fix would otherwise refuse itself. Record that update into a list you actually submit.
+  //2. A TLAS built with ETLASFlag_UseDeviceMemory owns its instance buffer on the GPU, so its addresses
+  //   cannot be re-resolved here and it is neither marked nor refilled. Rewrite them yourself.
+  Bool CommandListRef_compactBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr);
+  ```
+
+  The mark is satisfied by any command list in the submit that updates the TLAS, regardless of when that
+  list was recorded, so a list recorded once and submitted many times keeps working. It is cleared when the
+  addresses are actually re-resolved, so recording an update into a list that is never submitted does not
+  clear it.
+
+  **One hazard stays with the caller**, because it cannot be closed from inside the API: a TLAS built with
+  `ETLASFlag_UseDeviceMemory` owns its instance buffer on the GPU. Its BLAS addresses are written by the
+  caller, so they cannot be re-resolved here, and whether it even references the structure being compacted
+  cannot be read from the CPU. Such a TLAS is neither marked nor refilled. Rewrite its instance addresses
+  yourself after compacting anything it holds.
+
+- ```c
   Bool createBLASProceduralExt(
   	ERTASBuildFlags buildFlags,
   	EBLASFlag blasFlags,
@@ -1305,10 +1338,11 @@ Contains the following properties:
 - flagsExt: BLAS or TLAS specific flags; EBLASFlag for a BLAS, ETLASFlag for a TLAS.
 - asConstructionType: the BLAS or TLAS specific construction type.
 - scratchBuffer: temporary data that is only available until the AS has been created and the frame has been completed on the CPU.
-- asBuffer: the buffer resource that represents this acceleration structure.
+- asBuffer: the buffer resource that represents this acceleration structure. Compaction REPLACES this, which is why it also changes the structure's device address.
+- isCompacted: set once compaction has run, or once the driver reported no saving. A compacted structure is never copied twice. The rest of the compaction bookkeeping beside it is internal.
 - flags:
   - AllowUpdate (0): refitting is allowed. This is a faster way of updating acceleration structures, but at the cost of traversal time. See Refitting below.
-  - AllowCompaction (1): compaction is allowed. This reduces memory overhead for the acceleration structures.
+  - AllowCompaction (1): compaction is allowed. The flag on its own changes nothing about memory; it makes `CommandListRef_compactBLASExt` legal on the structure, and recording that copy is what reclaims the space.
   - FastTrace (2): optimize trace times over build times / memory.
   - FastBuild (3): optimize build times over trace times / memory.
   - MinimizeMemory (4): optimize memory over trace times / build times.
@@ -1320,6 +1354,8 @@ Contains the following properties:
 A refit (also called an update) rebuilds an acceleration structure from the one already there instead of from nothing. It is much cheaper than a full build and is what skeletal animation, moving instances and deforming geometry use, at the cost of traversal quality that degrades the further the new data drifts from what the structure was originally built for. Build with `ERTASBuildFlags_AllowUpdate` to allow it.
 
 **A refit is in place and does not produce a new object.** The first build of an AS is a full build; every build recorded after that one refits the same structure from itself, which is what both APIs mean by an update whose source and destination are the same. So the AS, its device address and (for a TLAS) its bindless handle all survive a refit unchanged: nothing that points at it has to be re-pointed, and refitting every frame allocates nothing.
+
+**Compaction is the opposite case.** A refit keeps the address; compaction MOVES the structure and changes it. A refit therefore needs nothing from the TLASes referencing it, while a compaction marks every TLAS that resolved the old address and refuses the submit after the copy until each has been updated. See `CommandListRef_compactBLASExt`.
 
 To refit, change the inputs and record the update again:
 

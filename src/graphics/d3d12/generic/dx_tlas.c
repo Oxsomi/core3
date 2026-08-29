@@ -63,6 +63,9 @@ static void DxTLAS_fillInstances(TLAS *tlas) {
 
 		U64 off = (const U8*)&dat->blasDeviceAddress - (const U8*)tlas->cpuInstances.ptr;
 		*(U64*)(mem + off) = getDxDeviceAddress((DeviceData) { .buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer });
+
+		//A snapshot. A compaction that later moves one of these structures marks this TLAS, and the
+		// refill on its next build re-resolves them; see CommandListRef_compactBLASExt.
 	}
 
 	//cpuData is a CPU side copy rather than the mapped upload heap, so the instances only reach the GPU
@@ -90,7 +93,9 @@ static void DxTLAS_fillInstances(TLAS *tlas) {
 		}
 	}
 
-	tlas->base.flagsExt &=~ (U8) ETLASFlag_InstancesDirty;
+	//These addresses have just been resolved, so whatever a compaction invalidated is current again.
+
+	tlas->base.flagsExt &=~ (U8) (ETLASFlag_InstancesDirty | ETLASFlag_AddressesStale);
 }
 
 Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
