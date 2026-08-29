@@ -613,6 +613,15 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 	//Free temp storage
 
+	for(U64 i = 0; i < deviceExt->compactionEmitPools.length; ++i)
+		RefPtr_dec((RefPtr**) &deviceExt->compactionEmitPools.ptrNonConst[i]);
+
+	for(U64 i = 0; i < deviceExt->compactionReadbackPools.length; ++i)
+		RefPtr_dec((RefPtr**) &deviceExt->compactionReadbackPools.ptrNonConst[i]);
+
+	ListRefPtr_free(&deviceExt->compactionEmitPools, alloc);
+	ListRefPtr_free(&deviceExt->compactionReadbackPools, alloc);
+
 	ListD3D12_BUFFER_BARRIER_free(&deviceExt->bufferTransitions, alloc);
 	ListD3D12_TEXTURE_BARRIER_free(&deviceExt->imageTransitions, alloc);
 }

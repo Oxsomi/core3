@@ -134,6 +134,30 @@ Using tabs instead of space; spaces are only for formatting if the alignment is 
 
 Using LF instead of CRLF.
 
+When a call doesn't fit on one line, the closing `)` goes on its own line at the indent of the line that
+OPENED it, and never trails the last argument. The arguments sit one level deeper.
+
+```c
+gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+	deviceRef, EDeviceBufferUsage_ASExt, EGraphicsResourceFlag_None, NULL,
+	&blas->base.name, compactedSize, &blas->base.pendingCompactBuffer, e_rr
+));
+```
+
+A condition that spans lines puts `if (` alone on its line, each operand one level deeper, and the `)` back
+at the `if`'s indent, so the operands read as a list and the body keeps its own indentation. A call nested
+in an operand closes on its own line as well, which is what keeps the operand and its `&&` on one line.
+
+```c
+if (
+	Test_assert(t, "createTlas", dev.createTlas(
+		ERTASBuildFlags_DefaultTLAS, &inst, 1, "Test TLAS", tlas, true, e_rr
+	)) &&
+	compactAndRun(t, dev, blas, "compact")
+)
+	return false;
+```
+
 ## Defines & Macros
 
 Constants as defines should only be used if required; e.g. An array is typedeffed and needs it to be constexpr. But since C doesn't have constexpr, a define should be used. If it's just a constant that's not used for that purpose, it should just be defined as extern.

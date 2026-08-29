@@ -240,6 +240,20 @@ BLASCreateInfo BLASCreateInfo_indexedWithOmmExt(
 	OpacityMicromapRef *ommMicromap
 );
 
+//Internal to CommandListRef_compactBLASExt, which is the entry point a caller uses. Reports recorded =
+//false when there is nothing to do, keeping a copy that would move nothing out of the recording.
+
+Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef *blasRef, Bool *recorded, Error *e_rr);
+
+//Backend facing: claim and return a compacted-size slot. needsPool reports that the claim crossed into a
+//pool the backend has not created storage for yet, so the caller adds one before using the slot.
+
+Bool GraphicsDevice_claimCompactionQuery(GraphicsDevice *device, U32 base, U32 *query, Bool *needsPool, Error *e_rr);
+U32 GraphicsDevice_compactionPoolSize(const GraphicsDevice *device, U32 base);
+void GraphicsDevice_compactionQueryPool(U32 query, U32 base, U32 *pool, U32 *index);
+
+void GraphicsDevice_releaseCompactionQuery(GraphicsDevice *device, U32 query, const Allocator *alloc);
+
 Bool GraphicsDeviceRef_createBLASExt(
 	GraphicsDeviceRef *dev,
 	const BLASCreateInfo *info,

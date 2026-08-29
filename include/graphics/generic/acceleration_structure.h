@@ -94,6 +94,23 @@ typedef struct RTAS {
 	U8 flagsExt;                               //For BLAS; EBLASFlag
 	U8 asConstructionType;                     //ETLASConstructionType or EBlasConstructionType
 
+	//Compaction bookkeeping; see CommandListRef_compactBLASExt for what any of it means to a caller.
+	//
+	//compactionQuery is the slot holding this structure's compacted size, U32_MAX when none was claimed.
+	//compactionSubmitId is the submit that RECORDED it, since the size does not exist until that submit
+	//has completed.
+
+	U64 compactionSubmitId;
+
+	//The smaller structure a recorded compaction will copy INTO, allocated when the copy is recorded and
+	//swapped in for asBuffer as the op is encoded into the command buffer.
+
+	DeviceBufferRef *pendingCompactBuffer;
+
+	U32 compactionQuery;
+	Bool isCompacted;
+	U8 padding3[3];
+
 	DeviceBufferRef *asBuffer;                 //The acceleration structure as a buffer
 	DeviceBufferRef *tempScratchBuffer;        //Not required, but might include scratch buffer for temp build memory
 

@@ -464,6 +464,7 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsBindlessEverywhere(t, deviceRef);
 	c::Test_graphicsFrameGlobals(t, deviceRef);
 	c::Test_graphicsBindfulRays(t, deviceRef);
+	c::Test_graphicsBlasCompaction(t, deviceRef);
 	c::Test_graphicsBindfulOmm(t, deviceRef);
 	c::Test_graphicsBindfulRayQueryGraphics(t, deviceRef);
 	c::Test_graphicsBindfulAtomicFloat(t, deviceRef);

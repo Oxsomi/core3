@@ -107,6 +107,11 @@ typedef struct VkBLAS {
 	VkAccelerationStructureBuildRangeInfoKHR range;
 	VkAccelerationStructureKHR as;
 
+	//Destination of a recorded compaction, held between the record call that creates it and the submit
+	//that encodes the copy into a command buffer.
+
+	VkAccelerationStructureKHR pendingAs;
+
 	//The triangle data CHAINS one of these rather than containing it, so it has to live as long as the
 	//  geometry desc and cannot sit on the stack of the function that fills it in.
 	//A union because a device runs exactly one of the two opacity micromap extensions: the KHR promotion

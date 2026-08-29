@@ -1074,6 +1074,102 @@ Bool CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas, Er
 	return CommandListRef_updateRTASExt(commandList, blas, true, e_rr);
 }
 
+//The CPU half runs HERE rather than at submit: the size is what sizes the allocation, and every rule about
+//when compaction is legal then reaches the caller instead of surfacing inside a submit.
+
+Bool CommandListRef_compactBLASExt(CommandListRef *commandListRef, BLASRef *blas, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!I32x2_all(I32x2_eq(commandList->currentSize, I32x2_zero)))
+		retError(clean, Error_invalidOperation(
+			0, "CommandListRef_compactBLASExt() is disallowed during render calls"
+		));
+
+	if(!blas || blas->refPtrType->typeId != (TypeId) EGraphicsTypeId_BLASExt)
+		retError(clean, Error_unsupportedOperation(0, "CommandListRef_compactBLASExt() requires a BLAS"));
+
+	//Everything about whether this may happen at all, plus the backend's allocation of the destination.
+	//A structure that reports nothing to do leaves no op behind, so the recording stays empty rather than
+	// carrying a copy that would do nothing.
+
+	Bool recorded = false;
+
+	gotoIfError3(clean, GraphicsDeviceRef_prepareCompactBLAS(commandList->device, blas, &recorded, e_rr));
+
+	if(!recorded)
+		goto clean;
+
+	//Every live TLAS that resolved this structure's address is about to be holding a stale one. Marking
+	// them is what turns "traced a structure that moved" from a silently wrong frame into a refused submit;
+	// recording an update of the TLAS clears it again, because that update re-resolves the addresses.
+
+	{
+		GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
+
+		//liveTlases is device state a create or a free on another thread can be mutating.
+
+		const ELockAcquire liveAcq = SpinLock_lock(&device->lock, U64_MAX);
+
+		if(liveAcq < ELockAcquire_Success)
+			retError(clean, Error_invalidState(
+				2, "CommandListRef_compactBLASExt() couldn't acquire device lock to mark dependent TLASes"
+			));
+
+		for (U64 i = 0; i < device->liveTlases.length; ++i) {
+
+			TLAS *tlas = TLASRef_ptr((TLASRef*) device->liveTlases.ptr[i]);
+
+			//A device memory TLAS writes its own instance addresses, so whether it references this structure
+			// cannot be read from here and its addresses could not be re-resolved anyway. Skipped, and the
+			// caller owns it; see CommandListRef_compactBLASExt.
+
+			if(TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
+				continue;
+
+			for (U64 j = 0; j < tlas->cpuInstances.length; ++j) {
+
+				TLASInstanceData dat = (TLASInstanceData) { 0 };
+				TLAS_getInstanceDataCpu(tlas, j, &dat);
+
+				if (dat.blasCpu == blas) {
+
+					//InstancesDirty is what makes the next build actually re-resolve: an update on its own
+					// refits without refilling, so the TLAS would otherwise rebuild around the old address.
+
+					tlas->base.flagsExt |= (U8) (ETLASFlag_AddressesStale | ETLASFlag_InstancesDirty);
+					tlas->staleAtSubmitId = device->submitId;
+					break;
+				}
+			}
+		}
+
+		if(liveAcq == ELockAcquire_Acquired)
+			SpinLock_unlock(&device->lock);
+	}
+
+	gotoIfError3(clean, CommandListRef_transitionRTAS(
+		commandList, blas, ETransitionType_ShaderWrite, EPipelineStage_RTASBuild, e_rr
+	));
+
+	BLASRef *args[2] = { blas, NULL };
+
+	gotoIfError3(clean, CommandList_append(
+		commandList, ECommandOp_CompactBLASExt, Buffer_createRefConst(args, sizeof(args)), 0, e_rr
+	));
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
 //Bindful: only SETS state; the work ops validate it against the bound pipeline's layout.
 //The KeepAlive transition is what makes end() collect the table into the command list's resources, which is
 // also what carries it into the frame's resourcesInFlight at submit.

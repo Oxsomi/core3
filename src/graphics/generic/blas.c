@@ -654,3 +654,150 @@ Bool GraphicsDeviceRef_createBLASProceduralExt(
 //
 //    return GraphicsDeviceRef_createBLAS(dev, &blasInfo, name, blas, e_rr);
 //}
+
+//Slot bookkeeping for the compacted size. The backend owns the storage this indexes into; WHICH slot is
+//shared, so the two backends cannot drift apart on recycling or on when the storage has to grow.
+
+//Pool k holds base << k slots, so the storage doubles: tens of thousands of pending structures need a
+//handful of pools, and a scene with a few never allocates past the first.
+
+Bool GraphicsDevice_claimCompactionQuery(
+	GraphicsDevice *device, U32 base, U32 *query, Bool *needsPool, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	*needsPool = false;
+
+	//A returned slot before a new one, so a scene that compacts as it builds never grows the storage at all.
+
+	if(device->compactionFreeQueries.length) {
+		*query = device->compactionFreeQueries.ptr[device->compactionFreeQueries.length - 1];
+		gotoIfError3(clean, ListU32_popBack(&device->compactionFreeQueries, NULL, e_rr));
+		goto clean;
+	}
+
+	//The pools together hold base * (2^n - 1) slots, so the count landing exactly on that boundary is what
+	// says the next slot has no storage behind it yet.
+
+	U32 covered = 0, size = base;
+
+	while(covered + size <= device->compactionQueryCount) {
+		covered += size;
+		size <<= 1;
+	}
+
+	*needsPool = covered == device->compactionQueryCount;
+	*query = device->compactionQueryCount++;
+
+clean:
+	return s_uccess;
+}
+
+//The size of the pool a new slot needs, which is the one the caller is about to create.
+
+U32 GraphicsDevice_compactionPoolSize(const GraphicsDevice *device, U32 base) {
+
+	U32 covered = 0, size = base;
+
+	while(covered + size <= device->compactionQueryCount) {
+		covered += size;
+		size <<= 1;
+	}
+
+	return size;
+}
+
+void GraphicsDevice_compactionQueryPool(U32 query, U32 base, U32 *pool, U32 *index) {
+
+	U32 covered = 0, size = base, i = 0;
+
+	while(covered + size <= query) {
+		covered += size;
+		size <<= 1;
+		++i;
+	}
+
+	*pool = i;
+	*index = query - covered;
+}
+
+//Failing to recycle would leak one slot, which is not worth failing the compaction that just succeeded.
+
+void GraphicsDevice_releaseCompactionQuery(GraphicsDevice *device, U32 query, const Allocator *alloc) {
+	ListU32_pushBack(&device->compactionFreeQueries, query, alloc, NULL);
+}
+
+//Everything about whether a compaction may happen at all, which is all that can be decided without
+//touching an API. The backend reads the size and allocates the destination.
+//
+//Runs while the copy is being RECORDED, so a rejection reaches the caller there rather than from inside a
+//submit. See CommandListRef_compactBLASExt for what the rules mean to a caller.
+
+Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef *blasRef, Bool *recorded, Error *e_rr) {
+
+	Bool s_uccess = true;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	BLAS *blas = NULL;
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_prepareCompactBLAS()::deviceRef is required"));
+
+	if(!blasRef || blasRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_BLASExt)
+		retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_prepareCompactBLAS()::blasRef is required"));
+
+	if(!recorded)
+		retError(clean, Error_nullPointer(2, "GraphicsDeviceRef_prepareCompactBLAS()::recorded is required"));
+
+	*recorded = false;
+	blas = BLASRef_ptr(blasRef);
+
+	//Nothing to do rather than an error, so a caller can sweep everything it owns without first sorting out
+	// what was built compactable, and recording twice is harmless.
+
+	if(blas->base.isCompacted || !(blas->base.flags & ERTASBuildFlags_AllowCompaction))
+		goto clean;
+
+	if(!blas->base.isCompleted)
+		retError(clean, Error_invalidOperation(
+			0, "GraphicsDeviceRef_prepareCompactBLAS() the structure has to be built first"
+		));
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(blas->base.compactionQuery == U32_MAX)
+		retError(clean, Error_invalidState(
+			2,
+			"GraphicsDeviceRef_prepareCompactBLAS() no compacted size was recorded for this structure, "
+			"its build predates the compaction path or the backend doesn't support it"
+		));
+
+	//The size is produced BY the build, so it does not exist until that build's submit has run. A submit is
+	// done if the device was waited since, or if framesInFlight submits have been queued behind it, which
+	// is what forced its fence to be waited.
+
+	const Bool completed =
+		device->completedSubmitId >= blas->base.compactionSubmitId ||
+		device->submitId >= blas->base.compactionSubmitId + device->framesInFlight;
+
+	if(!completed)
+		retError(clean, Error_invalidState(
+			3,
+			"GraphicsDeviceRef_prepareCompactBLAS() the build's submit hasn't completed, so the compacted "
+			"size isn't readable yet, record the compaction in a later submit than the build"
+		));
+
+	if((acq = SpinLock_lock(&blas->base.lock, U64_MAX)) < ELockAcquire_Success)
+		retError(clean, Error_invalidOperation(
+			4, "GraphicsDeviceRef_prepareCompactBLAS() couldn't acquire the RTAS lock"
+		));
+
+	gotoIfError3(clean, BLASRef_prepareCompactExt(deviceRef, blasRef, recorded, e_rr));
+
+clean:
+
+	if(blas && acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&blas->base.lock);
+
+	return s_uccess;
+}

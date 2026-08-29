@@ -31,6 +31,8 @@
 	void  VkBLAS_free(BLAS *blas);
 	Bool VkBLAS_init(BLAS *blas, Error *e_rr);
 	Bool VkBLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr);
+	Bool VkBLASRef_prepareCompact(GraphicsDeviceRef *deviceRef, BLASRef *blas, Bool *recorded, Error *e_rr);
+	Bool VkBLASRef_compact(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *blas, Error *e_rr);
 
 	void  VkOpacityMicromap_free(OpacityMicromap *micromap);
 	Bool VkOpacityMicromap_init(OpacityMicromap *micromap, Error *e_rr);

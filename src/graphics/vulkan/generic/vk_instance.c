@@ -108,6 +108,8 @@ static_assert(
 
 			.blasInit = VkBLAS_init,
 			.blasFlush = VkBLASRef_flush,
+			.blasPrepareCompact = VkBLASRef_prepareCompact,
+			.blasCompact = VkBLASRef_compact,
 			.blasFree = VkBLAS_free,
 
 			.opacityMicromapInit = VkOpacityMicromap_init,

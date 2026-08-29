@@ -241,6 +241,29 @@ Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, Resource
 	return false;
 }
 
+//Does this recording update the given TLAS? Asked at submit, so that whether a compaction's follow up
+//exists is decided by what is actually being submitted rather than by a flag set while recording.
+
+Bool CommandList_updatesTLAS(const CommandList *commandList, TLASRef *tlas) {
+
+	if(!commandList || !tlas)
+		return false;
+
+	const U8 *ptr = commandList->data.ptr;
+
+	for(U64 i = 0; i < commandList->commandOps.length; ++i) {
+
+		const CommandOpInfo info = commandList->commandOps.ptr[i];
+		const U8 *data = ptr;
+		ptr += info.opSize;
+
+		if(info.op == ECommandOp_UpdateTLASExt && *(TLASRef* const*) data == tlas)
+			return true;
+	}
+
+	return false;
+}
+
 Bool CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U32 extraSkipStacktrace, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -271,6 +294,7 @@ Bool CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U32
 			case ECommandOp_ClearImages:
 			case ECommandOp_CopyImage:
 			case ECommandOp_UpdateBLASExt:
+			case ECommandOp_CompactBLASExt:
 			case ECommandOp_UpdateTLASExt:
 			case ECommandOp_UpdateOmmExt:
 			case ECommandOp_DispatchRaysExt:

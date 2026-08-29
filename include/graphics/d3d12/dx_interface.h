@@ -31,6 +31,8 @@
 	void  D3D12BLAS_free(BLAS *blas);
 	Bool D3D12BLAS_init(BLAS *blas, Error *e_rr);
 	Bool D3D12BLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr);
+	Bool D3D12BLASRef_prepareCompact(GraphicsDeviceRef *deviceRef, BLASRef *blas, Bool *recorded, Error *e_rr);
+	Bool D3D12BLASRef_compact(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *blas, Error *e_rr);
 
 	void  D3D12OpacityMicromap_free(OpacityMicromap *micromap);
 	Bool D3D12OpacityMicromap_init(OpacityMicromap *micromap, Error *e_rr);

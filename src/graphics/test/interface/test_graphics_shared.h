@@ -83,6 +83,7 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulPushDescriptors(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulReservedSpace(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBlasCompaction(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsSamplerAndData(Test *t, GraphicsDeviceRef *deviceRef);

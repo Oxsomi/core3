@@ -88,6 +88,8 @@ TList(VkSemaphore);
 TList(VkResult);
 TList(VkSwapchainKHR);
 TList(VkPipelineStageFlags);
+TList(VkQueryPool);
+TList(VkAccelerationStructureKHR);
 
 typedef struct VkGraphicsDevice {
 
@@ -117,6 +119,22 @@ typedef struct VkGraphicsDevice {
 	// the graphics queue, and timestampCursor the transient next slot while an op walk records.
 
 	VkQueryPool timestampPool[MAX_FRAMES_IN_FLIGHT];
+
+	//Compacted-size queries, one slot per BLAS awaiting compaction. The size only exists once the build has
+	//EXECUTED, so it cannot be read inside the build's own submit.
+	//
+	//Slots return to the free list as compactions consume them, so what is bounded is how many structures
+	//await compaction AT ONCE, and the storage grows for that too.
+
+	#define VK_COMPACTION_QUERIES_BASE 256                      //First pool; each one after it doubles
+
+	ListVkQueryPool compactionPools;                        //Slot i is index i % N of pool i / N
+
+	//Structures a compaction replaced. The buffer under one is a RefPtr and rides the frame's in-flight
+	//list, but the acceleration structure handle is not, so it is destroyed here when the fence for the
+	//frame that recorded the copy proves that copy done.
+
+	ListVkAccelerationStructureKHR retiredAs[MAX_FRAMES_IN_FLIGHT];
 	U32 timestampCapacity[MAX_FRAMES_IN_FLIGHT];
 	F32 timestampPeriod;
 	U32 timestampValidBits;
@@ -159,6 +177,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkCmdBuildAccelerationStructuresKHR cmdBuildAccelerationStructures;
 	PFN_vkCreateAccelerationStructureKHR createAccelerationStructure;
 	PFN_vkCmdCopyAccelerationStructureKHR copyAccelerationStructure;
+	PFN_vkCmdWriteAccelerationStructuresPropertiesKHR writeAccelerationStructuresProperties;
 	PFN_vkDestroyAccelerationStructureKHR destroyAccelerationStructure;
 	PFN_vkGetAccelerationStructureBuildSizesKHR getAccelerationStructureBuildSizes;
 	PFN_vkGetAccelerationStructureDeviceAddressKHR getAccelerationStructureDeviceAddress;
@@ -359,7 +378,6 @@ typedef struct VkDescriptorLayout {
 
 TList(VkDescriptorBufferInfo);
 TList(VkDescriptorImageInfo);
-TList(VkAccelerationStructureKHR);
 
 typedef struct VkDescriptorTableRange {
 
