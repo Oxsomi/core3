@@ -261,7 +261,8 @@ extern "C" Bool Compiler_processSPIRV(
 		switch (entrypoint.spirv_execution_model) {
 
 			case SpvExecutionModelIntersectionKHR:
-				searchIntersection = true;        //Intersection shaders carry only a hit attribute (ReportHit), never a ray payload.
+				//Intersection shaders carry only a hit attribute (ReportHit), never a ray payload.
+				searchIntersection = true;
 				stage = ESHPipelineStage_IntersectionExt;
 				break;
 
@@ -710,7 +711,9 @@ extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, const Allocator *alloc, Ch
 	if(!tool.Disassemble((const U32*)resultPtr, binLen >> 2, &str, opts))
 		retError(clean, Error_invalidOperation(0, "Compiler_createDisassembly() SPIRV couldn't be disassembled"));
 
-	gotoIfError3(clean, CharString_createCopy(CharString_createRefSizedConst(str.c_str(), str.size(), true), alloc, result, e_rr));
+	gotoIfError3(clean, CharString_createCopy(
+		CharString_createRefSizedConst(str.c_str(), str.size(), true), alloc, result, e_rr
+	));
 
 clean:
 	return s_uccess;
@@ -878,7 +881,8 @@ extern "C" Bool Compiler_linkSPIRV(
 	//Cooperative vectors/matrix compile at vulkan1.3 (SPIR-V 1.6),
 	// so their optimizer/validator must match (mirrors Compiler_processSPIRV).
 	//1.6 is a superset of 1.4, so RT + coop is safe too.
-	Bool isLinalg = !!(exts & (ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining));
+	Bool isLinalg =
+		!!(exts & (ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining));
 
 	Bool isMeshTask = stage == ESHPipelineStage_MeshExt || stage == ESHPipelineStage_TaskExt;
 

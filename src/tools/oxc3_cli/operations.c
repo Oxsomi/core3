@@ -775,7 +775,8 @@ void Operations_init() {
 
 			.isFormatLess = true,
 
-			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg | EOperationHasParameter_GraphicsApi,
+			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg |
+				EOperationHasParameter_GraphicsApi,
 			.operationFlags = EOperationFlags_Verbose
 		};
 
@@ -790,7 +791,8 @@ void Operations_init() {
 
 			.isFormatLess = true,
 
-			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg | EOperationHasParameter_GraphicsApi
+			.optionalParameters =
+				EOperationHasParameter_Entry | EOperationHasParameter_CountArg | EOperationHasParameter_GraphicsApi
 		};
 
 	#endif
@@ -1185,7 +1187,9 @@ Bool ParsedArgs_getArg(const ParsedArgs *args, EOperationHasParameter parameterI
 	Bool s_uccess = true;
 
 	if(!args || !arg || !parameterId)
-		retError(clean, Error_nullPointer(!args ? 0 : (!arg ? 2 : 1), "ParsedArgs_getArg()::args, arg and parameterId are required"));
+		retError(clean, Error_nullPointer(
+			!args ? 0 : (!arg ? 2 : 1), "ParsedArgs_getArg()::args, arg and parameterId are required"
+		));
 
 	if(!((args->parameters >> parameterId) & 1))
 		retError(clean, Error_notFound(0, 1, "ParsedArgs_getArg()::parameterId not found"));

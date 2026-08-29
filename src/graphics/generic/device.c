@@ -210,8 +210,8 @@ U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListComm
 					break;
 
 				//A manual region records its id and name; an insert is the same minus the end.
-				//The name was copied into the command buffer at record time and is copied again here into the frame's owned storage,
-				// so the caller's original string never has to outlive either.
+				//The name was copied into the command buffer at record time and is copied again here into the frame's
+				// owned storage, so the caller's original string never has to outlive either.
 
 				case ECommandOp_StartTimingRegion:
 				case ECommandOp_InsertTiming: {

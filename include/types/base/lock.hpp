@@ -64,7 +64,9 @@ namespace oxc {
 			release();
 		}
 
-		[[nodiscard]] static inline c::Bool acquire(c::SpinLock &lock, AcquiredLock &acqLock, c::Ns maxWait = c::U64_MAX) noexcept {
+		[[nodiscard]] static inline c::Bool acquire(
+			c::SpinLock &lock, AcquiredLock &acqLock, c::Ns maxWait = c::U64_MAX
+		) noexcept {
 
 			c::ELockAcquire acq = SpinLock_lock(&lock, maxWait);
 

@@ -819,7 +819,9 @@ Bool CommandListRef_dispatchRaysIndirectExt(
 	PipelineRef *rayPipeline = commandList->pipeline[EPipelineType_RaytracingExt];
 
 	if(!rayPipeline)
-		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysIndirectExt() requires bound raytracing pipeline"));
+		retError(clean, Error_invalidOperation(
+			1, "CommandListRef_dispatchRaysIndirectExt() requires bound raytracing pipeline"
+		));
 
 	gotoIfError3(clean, CommandList_validateBindState(commandList, rayPipeline, e_rr));
 	gotoIfError3(clean, CommandList_validateRayTriPosition(commandList, rayPipeline, e_rr));

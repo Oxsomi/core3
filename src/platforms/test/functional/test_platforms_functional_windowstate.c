@@ -242,7 +242,8 @@ static void Test_multiWindow(Test *t) {
 	WindowRef *w1Ref = NULL, *w2Ref = NULL;
 	I32x2 sz = I32x2_create2(256, 256);
 
-	w1Ref = createWindowCallback(t, "F4: Window A", I32x2_zero, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbsA);
+	w1Ref =
+		createWindowCallback(t, "F4: Window A", I32x2_zero, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbsA);
 	w2Ref = createWindowCallback(t, "F4: Window B", sz, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbsB);
 
 	if (!Test_assert(t, "w1Created", w1Ref != NULL))
@@ -440,7 +441,8 @@ static void Test_monitorInfo(Test *t) {
 				spName = "Vertical BGR";
 
 			Log_debugLn(Platform_instance->alloc,
-				"-- Monitor %"PRIu64": %"PRIi32"x%"PRIi32" @ %.1f Hz, offset (%"PRIi32",%"PRIi32"), size %"PRIi32"x%"PRIi32" mm\n"
+				"-- Monitor %"PRIu64": %"PRIi32"x%"PRIi32" @ %.1f Hz, offset (%"PRIi32",%"PRIi32"), "
+				"size %"PRIi32"x%"PRIi32" mm\n"
 				"--- Subpixel: %s",
 				(U64)i,
 				I32x2_x(m->sizePixels), I32x2_y(m->sizePixels),

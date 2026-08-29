@@ -990,11 +990,11 @@ void SHRegister_print(const SHRegister *reg, U64 indenting, Bool isVerbose, cons
 			Log_debugLn(alloc, "%sinput_attachment_index = %"PRIu8, indent, reg->inputAttachmentId);
 			break;
 
-		case ESHRegisterType_Sampler:                    Log_debugLn(alloc, "%sSamplerState", indent);                     break;
-		case ESHRegisterType_SamplerComparisonState:    Log_debugLn(alloc, "%sSamplerComparisonState", indent);             break;
-		case ESHRegisterType_ConstantBuffer:            Log_debugLn(alloc, "%sConstantBuffer", indent);                     break;
-		case ESHRegisterType_PushConstants:                Log_debugLn(alloc, "%sPushConstants", indent);                     break;
-		case ESHRegisterType_AccelerationStructure:        Log_debugLn(alloc, "%sRaytracingAccelerationStructure", indent); break;
+		case ESHRegisterType_Sampler:                    Log_debugLn(alloc, "%sSamplerState", indent);                    break;
+		case ESHRegisterType_SamplerComparisonState:     Log_debugLn(alloc, "%sSamplerComparisonState", indent);          break;
+		case ESHRegisterType_ConstantBuffer:             Log_debugLn(alloc, "%sConstantBuffer", indent);                  break;
+		case ESHRegisterType_PushConstants:              Log_debugLn(alloc, "%sPushConstants", indent);                   break;
+		case ESHRegisterType_AccelerationStructure:      Log_debugLn(alloc, "%sRaytracingAccelerationStructure", indent); break;
 
 		case ESHRegisterType_ByteAddressBuffer:
 			Log_debugLn(alloc, "%s%sByteAddressBuffer", indent, reg->registerType & ESHRegisterType_IsWrite ? "RW" : "");

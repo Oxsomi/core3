@@ -361,10 +361,14 @@
 
 		gotoIfError3(clean, CLI_shaderStripToReflection(output, &stripped, e_rr));
 
-		gotoIfError3(clean, CharString_format(alloc, &spvPath, e_rr, "%.*s.spv.oiSH", (int) CharString_length(output), output.ptr));
+		gotoIfError3(clean, CharString_format(
+			alloc, &spvPath, e_rr, "%.*s.spv.oiSH", (int) CharString_length(output), output.ptr
+		));
 		gotoIfError3(clean, CLI_shaderStripToReflection(spvPath, &stripped, e_rr));
 
-		gotoIfError3(clean, CharString_format(alloc, &dxilPath, e_rr, "%.*s.dxil.oiSH", (int) CharString_length(output), output.ptr));
+		gotoIfError3(clean, CharString_format(
+			alloc, &dxilPath, e_rr, "%.*s.dxil.oiSH", (int) CharString_length(output), output.ptr
+		));
 		gotoIfError3(clean, CLI_shaderStripToReflection(dxilPath, &stripped, e_rr));
 
 		if(!stripped) {

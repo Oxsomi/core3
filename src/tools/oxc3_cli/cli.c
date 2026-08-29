@@ -384,7 +384,9 @@ Bool CLI_execute(ListCharString argList) {
 
 					//Store param for parsing later
 
-					gotoIfError3(clean, ListCharString_pushBack(&args.args, argList.ptr[j + 1], Platform_instance->alloc, e_rr));
+					gotoIfError3(clean, ListCharString_pushBack(
+						&args.args, argList.ptr[j + 1], Platform_instance->alloc, e_rr
+					));
 				}
 
 				++j;            //Skip next argument

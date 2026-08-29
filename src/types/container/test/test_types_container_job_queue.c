@@ -281,7 +281,9 @@ void Test_jobQueue(Test *t) {
 			const U64 N = 100;
 
 			JobGroup group = (JobGroup) { 0 };
-			Test_assert(t, "JobGroup: create", JobGroup_create(&group, &q, jobGroupFinalize, &result, jobGroupDestructor, e_rr));
+			Test_assert(
+				t, "JobGroup: create", JobGroup_create(&group, &q, jobGroupFinalize, &result, jobGroupDestructor, e_rr)
+			);
 			Test_assert(t, "JobGroup: enter", JobGroup_enter(&group, N, e_rr));      //Count known up front
 
 			GroupWork works[100];
@@ -312,7 +314,9 @@ void Test_jobQueue(Test *t) {
 			const U64 N = 100;
 
 			JobGroup group = (JobGroup) { 0 };
-			Test_assert(t, "JobGroup: create", JobGroup_create(&group, &q, jobGroupFinalize, &result, jobGroupDestructor, e_rr));
+			Test_assert(
+				t, "JobGroup: create", JobGroup_create(&group, &q, jobGroupFinalize, &result, jobGroupDestructor, e_rr)
+			);
 			Test_assert(t, "JobGroup: enter", JobGroup_enter(&group, N, e_rr));
 
 			GroupWork works[100];

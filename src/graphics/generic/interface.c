@@ -451,7 +451,9 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	//Instance
 
 	Bool GraphicsInstance_createExt(const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr) {
-		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(*instanceRef)->api].instanceCreate(info, instanceRef, e_rr);
+		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(*instanceRef)->api].instanceCreate(
+			info, instanceRef, e_rr
+		);
 	}
 
 	void GraphicsInstance_freeExt(GraphicsInstance *inst, const Allocator *alloc) {

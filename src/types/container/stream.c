@@ -146,7 +146,9 @@ Bool StreamCursor_createWithCache(
 	OxStream *streamPtr = RefPtr_data(stream, OxStream);
 
 	if (streamPtr->streamType & EStreamType_DisableSeek)
-		retError(clean, Error_unsupportedOperation(0, "StreamCursor_createWithCache()::DisableSeek streams are not yet supported"));
+		retError(clean, Error_unsupportedOperation(
+			0, "StreamCursor_createWithCache()::DisableSeek streams are not yet supported"
+		));
 
 	RefPtr_inc(stream);
 	inc = true;

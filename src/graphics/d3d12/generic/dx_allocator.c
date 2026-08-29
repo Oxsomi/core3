@@ -272,7 +272,8 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	block = (DeviceMemoryBlock) {
 		.isActive = true,
 		.typeExt = req.alignment,                                  //Only place things with the same alignment in this block
-		.allocationTypeExt = (!cpuSided) | (heapType << 1),        //Don't share GPU mem and CPU mem or heap sharing if no support
+		//Don't share GPU mem and CPU mem or heap sharing if no support
+		.allocationTypeExt = (!cpuSided) | (heapType << 1),
 		.isDedicated = false,
 		.ext = heap
 	};

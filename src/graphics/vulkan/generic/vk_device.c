@@ -1841,7 +1841,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				.queryCount = newCap
 			};
 
-			if(deviceExt->createQueryPool(deviceExt->device, &growInfo, NULL, &deviceExt->timestampPool[device->fifId]) == VK_SUCCESS)
+			if(deviceExt->createQueryPool(
+				deviceExt->device, &growInfo, NULL, &deviceExt->timestampPool[device->fifId]
+			) == VK_SUCCESS)
 				deviceExt->timestampCapacity[device->fifId] = newCap;
 
 			else {

@@ -77,7 +77,9 @@ Bool DDS_write(
 		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::streamRef is not writable"));
 
 	if(!info->w || !info->h || !info->l || !info->mips || !info->layers || !info->textureFormatId)
-		retError(clean, Error_invalidParameter(1, 1, "DDS_write()::info.w, h, l, mips, layers and textureFormatId are required"));
+		retError(clean, Error_invalidParameter(
+			1, 1, "DDS_write()::info.w, h, l, mips, layers and textureFormatId are required"
+		));
 
 	if(info->type >= ETextureType_Count || info->textureFormatId >= ETextureFormatId_Count)
 		retError(clean, Error_invalidParameter(1, 1, "DDS_write()::info.type and textureFormatId have to be valid"));

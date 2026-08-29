@@ -270,7 +270,8 @@ Bool Compiler_convertMemberDXIL(
 
 			CharString varName = CharString_createRefCStrConst(memberName);
 			gotoIfError3(clean, Compiler_convertMemberDXIL(
-				sbFile, member, &varName, newParent, globalOffset + memberDesc.Offset, isPacked, isUnused, memberSize, alloc, e_rr
+				sbFile, member, &varName, newParent, globalOffset + memberDesc.Offset, isPacked, isUnused, memberSize, alloc,
+				e_rr
 			));
 		}
 	}
@@ -864,7 +865,8 @@ Bool Compiler_convertRegisterDXIL(
 
 		case D3D_SIT_TBUFFER:
 		case D3D_SIT_UAV_FEEDBACKTEXTURE:
-			retError(clean, Error_unsupportedOperation(0, "Compiler_convertRegisterDXIL() unsupported input type"));        //TODO:
+			//TODO:
+			retError(clean, Error_unsupportedOperation(0, "Compiler_convertRegisterDXIL() unsupported input type"));
 
 		default:
 			retError(clean, Error_invalidState(0, "Compiler_convertRegisterDXIL() unknown input type"));

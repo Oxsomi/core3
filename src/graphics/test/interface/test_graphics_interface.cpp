@@ -220,7 +220,9 @@ static void Test_graphicsInstance(c::Test *t) {
 		Test_checkObjectType(
 			t, "device", &types->device, (c::TypeId)c::EGraphicsTypeId_GraphicsDevice, sizeof(c::GraphicsDevice), alloc
 		);
-		Test_checkObjectType(t, "buffer", &types->buffer, (c::TypeId)c::EGraphicsTypeId_DeviceBuffer, sizeof(c::DeviceBuffer), alloc);
+		Test_checkObjectType(
+			t, "buffer", &types->buffer, (c::TypeId)c::EGraphicsTypeId_DeviceBuffer, sizeof(c::DeviceBuffer), alloc
+		);
 
 		Test_checkObjectType(
 			t, "deviceTexture", &types->deviceTexture,
@@ -237,7 +239,9 @@ static void Test_graphicsInstance(c::Test *t) {
 			(c::TypeId)c::EGraphicsTypeId_DepthStencil, sizeof(c::DepthStencil), alloc
 		);
 
-		Test_checkObjectType(t, "swapchain", &types->swapchain, (c::TypeId)c::EGraphicsTypeId_Swapchain, sizeof(c::Swapchain), alloc);
+		Test_checkObjectType(
+			t, "swapchain", &types->swapchain, (c::TypeId)c::EGraphicsTypeId_Swapchain, sizeof(c::Swapchain), alloc
+		);
 
 		//The pipeline kinds share a typeId but each length has to fit its own info block (Pipeline_infoOffset),
 		// which is exactly the invariant whose violation used to overrun the heap on graphics pipeline creation

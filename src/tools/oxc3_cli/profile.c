@@ -437,7 +437,8 @@ Bool CLI_profileMD5Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	const Ns now = Time_now();
 
 	Log_debugLnx(
-		"Profile MD5: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). Random hash %04"PRIX32"%04"PRIX32"%04"PRIX32"%04"PRIX32".",
+		"Profile MD5: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). "
+		"Random hash %04"PRIX32"%04"PRIX32"%04"PRIX32"%04"PRIX32".",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),

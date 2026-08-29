@@ -1193,7 +1193,9 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		};
 
 		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa))) ||
+			FAILED(device->lpVtbl->CheckFeatureSupport(
+				device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa)
+			)) ||
 			!msaa.NumQualityLevels
 		)
 			supportRGBX32MSAA = false;
@@ -1202,7 +1204,9 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(
 			(caps.dataTypes & EGraphicsDataTypes_RGB32f) && (
-				FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa))) ||
+				FAILED(device->lpVtbl->CheckFeatureSupport(
+					device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa)
+				)) ||
 				!msaa.NumQualityLevels
 			)
 		)

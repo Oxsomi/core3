@@ -154,7 +154,8 @@ void Test_shaderCompilerPermutations(Test *t) {
 		Error e2 = Error_none();
 
 		//enableLogging=false: the failure is expected and asserted on, so keep the compiler quiet.
-		Bool compiled = compileFileShader(alloc, "permutations/mixed_uniforms.hlsl", ESHBinaryType_SPIRV, false, false, &out, &e2);
+		Bool compiled =
+			compileFileShader(alloc, "permutations/mixed_uniforms.hlsl", ESHBinaryType_SPIRV, false, false, &out, &e2);
 
 		Test_assert(t, "mismatched uniforms across entrypoints rejected", !compiled);
 

@@ -529,7 +529,9 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 					handle = CAFile_fileObjectAt(&file, CAHandle_Root, index);
 
 					if (handle == CAHandle_Invalid) {
-						Log_errorLnx("Index out of bounds, max is %"PRIu64".", CAFile_fileObjectCount(&file, CAHandle_Root, false));
+						Log_errorLnx(
+							"Index out of bounds, max is %"PRIu64".", CAFile_fileObjectCount(&file, CAHandle_Root, false)
+						);
 						goto cleanCa;
 					}
 				}
@@ -934,7 +936,9 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 								gotoIfError3(cleanSh, Compiler_create(alloc, &comp, e_rr));
 
 								if (!Compiler_disassemble(&comp, binaryType, binary, alloc, &tmp, e_rr)) {
-									Log_errorLnx("%s disassembly failed at index %"PRIu64, ESHBinaryType_names[binaryType], entryI);
+									Log_errorLnx(
+										"%s disassembly failed at index %"PRIu64, ESHBinaryType_names[binaryType], entryI
+									);
 									goto cleanSh;
 								}
 

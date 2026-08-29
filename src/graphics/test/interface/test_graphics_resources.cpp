@@ -362,7 +362,9 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	c::PipelineLayoutRef *badLayout = nullptr;
 
 	Test_assert(t, "nullDevice", !c::GraphicsDeviceRef_createPipelineLayout(nullptr, &pc, &layoutName, &badLayout, nullptr));
-	Test_assert(t, "nullInfo", !c::GraphicsDeviceRef_createPipelineLayout(deviceRef, nullptr, &layoutName, &badLayout, nullptr));
+	Test_assert(
+		t, "nullInfo", !c::GraphicsDeviceRef_createPipelineLayout(deviceRef, nullptr, &layoutName, &badLayout, nullptr)
+	);
 
 	bad = pc;
 	bad.pushConstants.constantBufferSize = 0;
@@ -525,7 +527,10 @@ extern "C" void Test_graphicsShaderReflection(oxc::c::Test *t, oxc::c::GraphicsD
 	//MemoryStreamRef and the StreamRef the oiSH reader consumes are both bare RefPtr typedefs, so the handle
 	// crosses without the C module's cast.
 
-	if(!stream || !Test_assert(t, "readSHFile", c::SHFile_read(stream.handle(), &streamOffset, false, alloc, &shader.list, e_rr)))
+	if (
+		!stream ||
+		!Test_assert(t, "readSHFile", c::SHFile_read(stream.handle(), &streamOffset, false, alloc, &shader.list, e_rr))
+	)
 		return;
 
 	Test_assert(t, "hasEntries", shader.list.entries.length && shader.list.binaries.length);

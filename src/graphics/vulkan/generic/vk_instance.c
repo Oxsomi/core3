@@ -619,7 +619,7 @@ const C8 *optExtensionsName[] = {
 
 	"VK_KHR_maintenance4",        "VK_KHR_buffer_device_address", "VK_EXT_descriptor_indexing", "VK_KHR_driver_properties",
 	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8",   "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget",
-	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",      "VK_KHR_ray_tracing_position_fetch",
+	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",   "VK_KHR_ray_tracing_position_fetch",
 
 	"VK_EXT_descriptor_heap", "VK_NV_cluster_acceleration_structure", "VK_NV_partitioned_acceleration_structure",
 
@@ -734,7 +734,9 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			// the enumeration ends up empty with nothing in the log to explain it.
 
 			if (CharString_startsWithStringSensitive(&deviceName, &d3d12Warp, 0)) {
-				Log_debugLnx("Vulkan: Skipping device %"PRIu32", it is the Direct3D12 passthrough rather than a real device", i);
+				Log_debugLnx(
+					"Vulkan: Skipping device %"PRIu32", it is the Direct3D12 passthrough rather than a real device", i
+				);
 				continue;
 			}
 		}
