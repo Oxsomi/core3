@@ -628,7 +628,9 @@ const C8 *optExtensionsName[] = {
 	"VK_KHR_create_renderpass2", "VK_KHR_depth_stencil_resolve", "VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls",
 	"VK_KHR_maintenance5",
 
-	"VK_KHR_opacity_micromap", "VK_KHR_device_address_commands"
+	"VK_KHR_opacity_micromap", "VK_KHR_device_address_commands",
+
+	"VK_EXT_conditional_rendering"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1073,6 +1075,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		);
 
 		getDeviceFeatures(
+			optExtensions[EOptExtensions_ConditionalRendering],
+			VkPhysicalDeviceConditionalRenderingFeaturesEXT,
+			condRenderFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
 			optExtensions[EOptExtensions_RayTriPosition],
 			VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR,
 			rayPositionFetchFeat,
@@ -1313,6 +1322,20 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		GraphicsDeviceCapabilities capabilities = (GraphicsDeviceCapabilities) { 0 };
 
+		//Timestamps: core Vulkan, gated by timestampComputeAndGraphics, which implies non-zero valid bits on the
+		// graphics and compute queues. timestampPeriod is the nanoseconds per tick used to convert results.
+
+		if(limits.timestampComputeAndGraphics) {
+			capabilities.features2 |= EGraphicsFeatures2_Timestamps;
+			capabilities.timestampPeriod = limits.timestampPeriod;
+		}
+
+		//Predicated scopes; the inverted flag (skip while nonzero) is deliberately not exposed, since D3D12's
+		// predication only offers this polarity and the API stays the intersection.
+
+		if(optExtensions[EOptExtensions_ConditionalRendering] && condRenderFeat.conditionalRendering)
+			capabilities.features2 |= EGraphicsFeatures2_Predication;
+
 		//Query features
 
 		if(features.logicOp)
@@ -1443,6 +1466,9 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
 			capabilities.features |= EGraphicsFeatures_SubgroupShuffle;
 
+		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_QUAD_BIT)
+			capabilities.features |= EGraphicsFeatures_SubgroupQuad;
+
 		//Multi view
 
 		if(
@@ -1469,7 +1495,6 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(optExtensions[EOptExtensions_MeshShader] && !(
 			!meshShader.taskShader ||
-			meshShaderProp.maxMeshMultiviewViewCount < 4 ||
 			meshShaderProp.maxMeshOutputComponents < 127 ||
 			meshShaderProp.maxMeshOutputLayers < 8 ||
 			meshShaderProp.maxMeshOutputMemorySize < 32 * KIBI ||
@@ -1490,17 +1515,18 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			meshShaderProp.maxTaskWorkGroupSize[1] < 128 ||
 			meshShaderProp.maxTaskWorkGroupSize[2] < 128 ||
 			meshShaderProp.maxMeshWorkGroupTotalCount < 4 * MIBI ||
-			meshShaderProp.maxPreferredMeshWorkGroupInvocations < 32 ||
-			meshShaderProp.maxPreferredTaskWorkGroupInvocations < 32 ||
-			meshShaderProp.meshOutputPerPrimitiveGranularity < 32 ||
-			meshShaderProp.meshOutputPerVertexGranularity < 32 ||
 			meshShaderProp.maxTaskPayloadAndSharedMemorySize < 32 * KIBI ||
 			meshShaderProp.maxTaskPayloadSize < 16 * KIBI ||
 			meshShaderProp.maxTaskSharedMemorySize < 32 * KIBI ||
-			meshShaderProp.maxTaskWorkGroupTotalCount < 4 * MIBI ||
-			!meshShaderProp.prefersCompactPrimitiveOutput
+			meshShaderProp.maxTaskWorkGroupTotalCount < 4 * MIBI
 		))
 			capabilities.features |= EGraphicsFeatures_MeshShader;
+
+		//The preference and hint properties gate nothing above: prefersCompactPrimitiveOutput and the
+		// maxPreferred* invocation counts are scheduling advice, and the output granularities only say how
+		// coarsely output allocations round (ANV rounds by 8 where NV rounds by 32; smaller is finer).
+		//maxMeshMultiviewViewCount is not required either: ANV reports 1 with multiviewMeshShader off, so
+		// MeshShader does NOT promise the multiview interplay and a mesh+multiview user checks it itself.
 
 		//Raytracing
 
@@ -1600,7 +1626,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 						rtpProp.maxRayRecursionDepth < 1 ||
 						rtpProp.maxShaderGroupStride < 4096 ||
 						rtpProp.shaderGroupHandleSize != 32 ||
-						(rtpProp.shaderGroupBaseAlignment != 32 && rtpProp.shaderGroupBaseAlignment != 64)
+
+						//Base alignment is a divisor requirement, so smaller is weaker: any power of two up
+						// to 64 is satisfied by a table laid out at 64. ANV reports 16.
+
+						!rtpProp.shaderGroupBaseAlignment ||
+						rtpProp.shaderGroupBaseAlignment > 64 ||
+						(rtpProp.shaderGroupBaseAlignment & (rtpProp.shaderGroupBaseAlignment - 1))
 					)
 				) {
 					optExtensions[EOptExtensions_RayQuery] = false;
@@ -2002,6 +2034,14 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				.format = VK_FORMAT_S8_UINT,
 				.optFormat = EGraphicsDataTypes_S8,
 				.flags = depthStencilDef
+			},
+
+			//Reading RGB9E5 is required, so only the write half is probed here.
+
+			(OptionalFormat) {
+				.format = VK_FORMAT_E5B9G9R9_UFLOAT_PACK32,
+				.optFormat = EGraphicsDataTypes_WriteRGB9E5,
+				.flags = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
 			}
 		};
 
@@ -2012,6 +2052,50 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 			if((formatInfo.optimalTilingFeatures & optionalFormats[k].flags) == optionalFormats[k].flags)
 				capabilities.dataTypes |= optionalFormats[k].optFormat;
+		}
+
+		//Linear filtering, which the loop above can't express: a bit here means EVERY format in its family
+		// filters, so the test is an AND where the optional table is an OR.
+		//Sampling these is already guaranteed by the required set; this is only about whether a linear
+		// sampler over one does anything. A device missing it either trips validation or quietly point
+		// samples, and nothing above this line would have caught either.
+
+		static const VkFormat filter16Norm[] = {
+			VK_FORMAT_R16_UNORM,           VK_FORMAT_R16_SNORM,
+			VK_FORMAT_R16G16_UNORM,        VK_FORMAT_R16G16_SNORM,
+			VK_FORMAT_R16G16B16A16_UNORM,  VK_FORMAT_R16G16B16A16_SNORM
+		};
+
+		static const VkFormat filter32f[] = {
+			VK_FORMAT_R32_SFLOAT, VK_FORMAT_R32G32_SFLOAT, VK_FORMAT_R32G32B32A32_SFLOAT
+		};
+
+		const struct {
+			const VkFormat *formats;
+			U64 count;
+			EGraphicsDataTypes bit;
+		} filterFamilies[] = {
+			{ filter16Norm, sizeof(filter16Norm) / sizeof(VkFormat), EGraphicsDataTypes_LinearFilter16Norm },
+			{ filter32f,    sizeof(filter32f)    / sizeof(VkFormat), EGraphicsDataTypes_LinearFilter32f }
+		};
+
+		for (U64 k = 0; k < sizeof(filterFamilies) / sizeof(filterFamilies[0]); ++k) {
+
+			Bool all = true;
+
+			for (U64 f = 0; f < filterFamilies[k].count; ++f) {
+
+				VkFormatProperties formatInfo = (VkFormatProperties) { 0 };
+				instanceExt->getPhysicalDeviceFormatProperties(dev, filterFamilies[k].formats[f], &formatInfo);
+
+				if(!(formatInfo.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
+					all = false;
+					break;
+				}
+			}
+
+			if(all)
+				capabilities.dataTypes |= filterFamilies[k].bit;
 		}
 
 		//Grab LUID/UUID

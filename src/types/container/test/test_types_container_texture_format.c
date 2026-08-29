@@ -118,4 +118,53 @@ void Test_textureFormat(Test *t) {
 
 	Test_assert(t, "D24S8 DXFormat value", EDepthStencilFormat_toDXFormat(EDepthStencilFormat_D24S8Ext) == 45);
 	Test_assert(t, "D32 DXFormat value",   EDepthStencilFormat_toDXFormat(EDepthStencilFormat_D32)      == 40);
+
+	//RGB9E5 is the one format the encoding can't describe literally: 9 bit channels don't survive the >>1
+	// storage and the exponent rides in the alpha field, so the per channel accessors special case it.
+	//What is pinned here is that everything SIZE related stays exact anyway, since the size field holds the
+	// sum of the four counts rather than any single one, and that the odd width case doesn't round; getting
+	// that wrong is what ruled out encoding this as a block format.
+
+	Test_setModule(t, "ETextureFormat/RGB9E5");
+
+	{
+		const ETextureFormat f = ETextureFormat_RGB9E5;
+
+		Test_assert(t, "RGB9E5 bits",           ETextureFormat_getBits(f) == 32);
+		Test_assert(t, "RGB9E5 size",           ETextureFormat_getSize(f, 4096, 2048, 1) == (U64) 4096 * 2048 * 4);
+		Test_assert(t, "RGB9E5 odd width size", ETextureFormat_getSize(f, 4097, 1, 1) == (U64) 4097 * 4);
+		Test_assert(t, "RGB9E5 primitive",      ETextureFormat_getPrimitive(f) == ETexturePrimitive_Float);
+		Test_assert(t, "RGB9E5 not compressed", !ETextureFormat_getIsCompressed(f));
+
+		Test_assert(t, "RGB9E5 exponential",    ETextureFormat_isExponentialEncode(f));
+		Test_assert(t, "RGB9E5 exponent bits",  ETextureFormat_getExponentBits(f) == 5);
+		Test_assert(t, "RGB9E5 R bits",         ETextureFormat_getRedBits(f) == 9);
+		Test_assert(t, "RGB9E5 G bits",         ETextureFormat_getGreenBits(f) == 9);
+		Test_assert(t, "RGB9E5 B bits",         ETextureFormat_getBlueBits(f) == 9);
+		Test_assert(t, "RGB9E5 no alpha",       !ETextureFormat_getAlphaBits(f));
+		Test_assert(t, "RGB9E5 channels",       ETextureFormat_getChannels(f) == 3);
+
+		Test_assert(t, "RGB9E5 id unpack",      ETextureFormatId_unpack[ETextureFormatId_RGB9E5] == f);
+
+		//The encoding is only safe while nothing else lands on the same value.
+
+		U64 collisions = 0;
+
+		for(U64 i = 0; i < ETextureFormatId_Count; ++i)
+			if(i != ETextureFormatId_RGB9E5 && ETextureFormatId_unpack[i] == f)
+				++collisions;
+
+		Test_assert(t, "RGB9E5 encoding unique", !collisions);
+
+		//Nothing else may claim to be exponentially encoded, or the accessor special cases above would
+		// start rewriting formats they don't describe.
+
+		U64 exponential = 0;
+
+		for(U64 i = 0; i < ETextureFormatId_Count; ++i)
+			if(ETextureFormat_isExponentialEncode(ETextureFormatId_unpack[i]))
+				++exponential;
+
+		Test_assert(t, "RGB9E5 sole exponential", exponential == 1);
+	}
 }

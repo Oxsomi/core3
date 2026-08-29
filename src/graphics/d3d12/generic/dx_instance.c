@@ -655,7 +655,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			EGraphicsFeatures_LUID | EGraphicsFeatures_MultiDrawIndirectCount |
 			EGraphicsFeatures_GeometryShader | EGraphicsFeatures_SubgroupArithmetic | EGraphicsFeatures_SubgroupShuffle |
 			EGraphicsFeatures_Wireframe | EGraphicsFeatures_LogicOp | EGraphicsFeatures_DualSrcBlend |
-			EGraphicsFeatures_Multiview | EGraphicsFeatures_SubgroupOperations;
+			EGraphicsFeatures_Multiview | EGraphicsFeatures_SubgroupOperations | EGraphicsFeatures_SubgroupQuad;
 
 		caps.dataTypes |=
 			EGraphicsDataTypes_I64 | EGraphicsDataTypes_BCn | EGraphicsDataTypes_MSAA2x | EGraphicsDataTypes_MSAA8x |
@@ -665,6 +665,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			caps.dataTypes |= EGraphicsDataTypes_D24S8;
 
 		caps.features |= EGraphicsFeatures_DirectRendering;
+
+		//Timestamps: D3D12 supports timestamp queries on the direct and compute queues on every device. The period
+		// needs a live command queue, so it is filled at device create rather than here.
+
+		caps.features2 |= EGraphicsFeatures2_Timestamps;
 
 		if(independentDevices)
 			caps.featuresExt |= EDxGraphicsFeatures_IndependentDevices;
@@ -732,9 +737,13 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS3, &opt3, sizeof(opt3))) &&
-			opt3.WriteBufferImmediateSupportFlags
+			(opt3.WriteBufferImmediateSupportFlags & D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT)   //DRI records on the direct queue
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_WriteBufferImmediate;
+
+		//Predication is core D3D12 (SetPredication), so every device carries the capability.
+
+		caps.features2 |= EGraphicsFeatures2_Predication;
 
 		//SV_Barycentrics / GetAttributeAtVertex.
 		//No shader-model gate needed:

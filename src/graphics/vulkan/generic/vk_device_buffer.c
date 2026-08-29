@@ -127,6 +127,12 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(buf->usage & EDeviceBufferUsage_Indirect)
 		usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
 
+	//The generic layer refuses this usage without the Predication feature, so the extension is enabled
+	// whenever the bit arrives here.
+
+	if(buf->usage & EDeviceBufferUsage_Predicate)
+		usage |= VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT;
+
 	if(buf->usage & EDeviceBufferUsage_ScratchExt)
 		usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 

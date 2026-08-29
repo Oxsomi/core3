@@ -142,6 +142,57 @@ F32x3 unpackRGB9E5(U32 p) {
 	return F32x3(p & 0x1FF, (p >> 9) & 0x1FF, (p >> 18) & 0x1FF) * scale;
 }
 
+//---------------------------------------------------------------- oct18
+
+//A unit vector as an 18 bit octahedral in the low 18 bits, 9 an axis, the top 14 left to the caller.
+//Mirrors U32_packOct18 in types/math/pack.h, which is what writes the per triangle word a mesh reader emits:
+// the geometric normal a hit loads instead of three positions and a cross product, with the triangle's material
+// index above it. About a third of a degree, uniform over the sphere, which is plenty for deciding which side of a
+// surface a ray is on.
+
+U32 packOct18(F32x3 n) {
+
+	const F32x2 p = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));
+	const F32x2 e = n.z >= 0 ? p : (1.xx - abs(p.yx)) * select(p >= 0, 1.xx, (-1).xx);
+	const U32x2 q = U32x2((I32x2) round(clamp(e, -1, 1) * 255) + 256);
+
+	return q.x | (q.y << 9);
+}
+
+F32x3 unpackOct18(U32 v) {
+
+	const F32x2 e = F32x2(I32x2(v & 0x1FF, (v >> 9) & 0x1FF) - 256) / 255;
+	F32x3 n = F32x3(e, 1 - abs(e.x) - abs(e.y));
+
+	if(n.z < 0)
+		n.xy = (1.xx - abs(n.yx)) * select(n.xy >= 0, 1.xx, (-1).xx);
+
+	return normalize(n);
+}
+
+//---------------------------------------------------------------- oct32
+
+//A unit vector as two snorm16 octahedral axes, x | y<<16, each biased by 32768. Mirrors U32_packOct32 in
+// types/math/pack.h, which is what a mesh reader packs its shading normals with. About 0.005 degrees.
+
+U32 packOct32(F32x3 n) {
+	const F32x2 p = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));
+	const F32x2 e = n.z >= 0 ? p : (1.xx - abs(p.yx)) * select(p >= 0, 1.xx, (-1).xx);
+	const U32x2 q = U32x2((I32x2) round(clamp(e, -1, 1) * 32767) + 32768);
+	return q.x | (q.y << 16);
+}
+
+F32x3 unpackOct32(U32 v) {
+
+	const F32x2 e = F32x2(I32x2(v & 0xFFFF, v >> 16) - 32768) / 32767;
+	F32x3 n = F32x3(e, 1 - abs(e.x) - abs(e.y));
+
+	if(n.z < 0)
+		n.xy = (1.xx - abs(n.yx)) * select(n.xy >= 0, 1.xx, (-1).xx);
+
+	return normalize(n);
+}
+
 //---------------------------------------------------------------- normals
 
 //17 bits:

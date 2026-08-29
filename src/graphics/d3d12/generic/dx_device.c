@@ -413,6 +413,45 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		deviceExt->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void**) &deviceExt->commitSemaphore
 	), e_rr));
 
+	//Timestamp query heaps and readback buffers, one per frame in flight, and the period from the graphics queue.
+	//D3D12 supports timestamps on the direct queue on every device, so this is unconditional.
+
+	{
+		U64 timestampFreq = 0;
+		deviceExt->queues[EDxCommandQueue_Graphics].queue->lpVtbl->GetTimestampFrequency(
+			deviceExt->queues[EDxCommandQueue_Graphics].queue, &timestampFreq
+		);
+
+		deviceExt->timestampPeriod = timestampFreq ? (F32) (1.0e9 / (F64) timestampFreq) : 0;
+		device->info.capabilities.timestampPeriod = deviceExt->timestampPeriod;
+
+		D3D12_QUERY_HEAP_DESC timestampHeapDesc = (D3D12_QUERY_HEAP_DESC) {
+			.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP,
+			.Count = GRAPHICS_TIMESTAMP_QUERIES
+		};
+
+		for(U64 i = 0; i < device->framesInFlight; ++i) {
+
+			gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateQueryHeap(
+				deviceExt->device, &timestampHeapDesc, &IID_ID3D12QueryHeap, (void**) &deviceExt->timestampHeap[i]
+			), e_rr));
+
+			//The results resolve into an ordinary readback DeviceBuffer, allocated and mapped for us.
+
+			CharString readbackName = CharString_createRefCStrConst("Timestamp readback");
+
+			gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+				*deviceRef,
+				EDeviceBufferUsage_None,
+				EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit |
+				EGraphicsResourceFlag_CPUReadBit,
+				NULL, &readbackName, GRAPHICS_TIMESTAMP_QUERIES * sizeof(U64), &deviceExt->timestampReadback[i], e_rr
+			));
+
+			deviceExt->timestampCapacity[i] = GRAPHICS_TIMESTAMP_QUERIES;
+		}
+	}
+
 	//Create DSVs
 
 	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
@@ -538,6 +577,17 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 		if(deviceExt->commitSemaphore)
 			deviceExt->commitSemaphore->lpVtbl->Release(deviceExt->commitSemaphore);
 
+		for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+
+			if(deviceExt->timestampHeap[i])
+				deviceExt->timestampHeap[i]->lpVtbl->Release(deviceExt->timestampHeap[i]);
+
+			RefPtr_dec(&deviceExt->timestampReadback[i]);
+
+			RefPtr_dec(&deviceExt->dispatchRaysIndirect[i]);
+			RefPtr_dec(&deviceExt->dispatchRaysIndirectStaging[i]);
+		}
+
 		for(U64 i = 0; i < EExecuteIndirectCommand_Count; ++i)
 			if(deviceExt->commandSigs[i])
 				deviceExt->commandSigs[i]->lpVtbl->Release(deviceExt->commandSigs[i]);
@@ -607,7 +657,32 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 		deviceExt->commitSemaphore, deviceExt->fenceId, eventHandle
 	), e_rr));
 
-	WaitForSingleObject(eventHandle, INFINITE);
+	//An INFINITE wait would inherit a wedged submit as a silent forever-hang, and a hard deadline would
+	// fail slow but correct work by a number, so the wait runs in one second slices: it reports the
+	// stall while it lasts and fails only on what the device actually reports, removal included.
+
+	for(U64 waited = 0; ; ) {
+
+		const DWORD waitRes = WaitForSingleObject(eventHandle, 1000);
+
+		if(waitRes == WAIT_OBJECT_0)
+			break;
+
+		if(waitRes != WAIT_TIMEOUT)
+			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_wait() event wait failed"));
+
+		gotoIfError3(clean, dxCheck(
+			deviceExt->device->lpVtbl->GetDeviceRemovedReason(deviceExt->device), e_rr
+		));
+
+		++waited;
+
+		if(!(waited % 5))
+			Log_performanceLnx(
+				"GraphicsDeviceRef_wait() still waiting on the commit fence after %"PRIu64"s, "
+				"the device may be wedged", waited
+			);
+	}
 
 clean:
 	CloseHandle(eventHandle);
@@ -734,6 +809,77 @@ void DxGraphicsDevice_logDebugMessages(
 	}
 
 	queue->lpVtbl->ClearStoredMessages(queue);
+}
+
+//DispatchRaysIndirect keeps a per frame in flight argument buffer, and only when WriteBufferImmediate is
+// unavailable an upload staging buffer for the shader binding table. Both are ordinary DeviceBuffers, so the
+// allocator, state tracking and teardown are handled for us rather than by hand. This grows them to hold `slots`
+// dispatches and never shrinks, mirroring GraphicsDeviceRef_resizeStagingReadbackBuffer: build the replacements
+// first and swap only on success, so a failed grow keeps the smaller buffers rather than dropping to none.
+
+static Bool DxGraphicsDevice_reserveDispatchRaysIndirect(GraphicsDeviceRef *deviceRef, U64 fifId, U32 slots, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+
+	const U64 stride = sizeof(D3D12DispatchRaysIndirect);
+	DeviceBufferRef *curArgs = deviceExt->dispatchRaysIndirect[fifId];
+
+	if(!slots || (curArgs && DeviceBufferRef_ptr(curArgs)->resource.size >= (U64) slots * stride))
+		return true;
+
+	const Bool wbi = !!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_WriteBufferImmediate);
+
+	U32 newCap = curArgs ? (U32) (DeviceBufferRef_ptr(curArgs)->resource.size / stride) : 0;
+
+	if(!newCap)
+		newCap = GRAPHICS_DISPATCH_RAYS_INDIRECT_ARGS;
+
+	while(newCap < slots)
+		newCap <<= 1;
+
+	const U64 newSize = (U64) newCap * stride;
+
+	DeviceBufferRef *newArgs = NULL;
+	DeviceBufferRef *newStaging = NULL;
+
+	CharString argsName = CharString_createRefCStrConst("DispatchRaysIndirect args");
+
+	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+		deviceRef,
+		EDeviceBufferUsage_Indirect,
+		EGraphicsResourceFlag_InternalWeakDeviceRef,
+		NULL, &argsName, newSize, &newArgs, e_rr
+	));
+
+	if(!wbi) {
+
+		CharString stagingName = CharString_createRefCStrConst("DispatchRaysIndirect SBT staging");
+
+		gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+			deviceRef,
+			EDeviceBufferUsage_None,
+			EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
+			NULL, &stagingName, newSize, &newStaging, e_rr
+		));
+	}
+
+	RefPtr_dec(&deviceExt->dispatchRaysIndirect[fifId]);
+	deviceExt->dispatchRaysIndirect[fifId] = newArgs;
+	newArgs = NULL;
+
+	if(!wbi) {
+		RefPtr_dec(&deviceExt->dispatchRaysIndirectStaging[fifId]);
+		deviceExt->dispatchRaysIndirectStaging[fifId] = newStaging;
+		newStaging = NULL;
+	}
+
+clean:
+	RefPtr_dec(&newArgs);
+	RefPtr_dec(&newStaging);
+	return s_uccess;
 }
 
 Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
@@ -902,6 +1048,105 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		gotoIfError3(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, &state, e_rr));
 
+		//Resolve the previous frame at this slot before buildTimings overwrites its entries; the fence wait above
+		// proved it done, so the readback its ResolveQueryData filled is ready. D3D12 timestamps are full 64-bit.
+
+		if(
+			(device->info.capabilities.features2 & EGraphicsFeatures2_Timestamps) &&
+			device->submitId > device->framesInFlight && device->timingSlots[device->fifId]
+		) {
+			const U64 *ticks =
+				(const U64*) DeviceBufferRef_ptr(deviceExt->timestampReadback[device->fifId])->resource.mappedMemoryExt;
+
+			GraphicsDevice_resolveTimings(
+				device, device->fifId, ticks, device->timingSlots[device->fifId],
+				deviceExt->timestampPeriod, alloc, NULL
+			);
+		}
+
+		device->timingSlots[device->fifId] = (device->info.capabilities.features2 & EGraphicsFeatures2_Timestamps)
+			? GraphicsDevice_buildTimings(device, device->fifId, commandLists, alloc) : 0;
+
+		deviceExt->timestampCursor = 0;
+		deviceExt->dispatchRaysIndirectCursor = 0;
+
+		//Size the DispatchRaysIndirect argument buffer to this frame's indirect ray dispatches before any are
+		// recorded, so the record path never has to drop one. Counting the ops is a quick walk. A failed grow is not
+		// fatal: the smaller buffer stays and only dispatches past its capacity are dropped.
+
+		{
+			U32 driCount = 0;
+
+			for(U64 i = 0; i < (commandLists ? commandLists->length : 0); ++i) {
+				CommandList *cl = CommandListRef_ptr(commandLists->ptr[i]);
+				for(U64 j = 0; j < cl->commandOps.length; ++j)
+					if(cl->commandOps.ptr[j].op == ECommandOp_DispatchRaysIndirect)
+						++driCount;
+			}
+
+			Error driErr = (Error) { 0 };
+
+			if(driCount && !DxGraphicsDevice_reserveDispatchRaysIndirect(deviceRef, device->fifId, driCount, &driErr))
+				Log_errorLnx("DispatchRaysIndirect could not grow its argument buffer, keeping the smaller one");
+		}
+
+		//Grow the heap and its readback buffer when a frame needs more slots than they hold, mirroring the Vulkan
+		// path; the doubling happens once at the high-water mark and never for a caller under the initial capacity.
+
+		if(device->timingSlots[device->fifId] > deviceExt->timestampCapacity[device->fifId]) {
+
+			U32 newCap = deviceExt->timestampCapacity[device->fifId] ? deviceExt->timestampCapacity[device->fifId] : 1;
+
+			while(newCap < device->timingSlots[device->fifId])
+				newCap <<= 1;
+
+			if(deviceExt->timestampHeap[device->fifId])
+				deviceExt->timestampHeap[device->fifId]->lpVtbl->Release(deviceExt->timestampHeap[device->fifId]);
+
+			//Cleared before the recreate so a failed CreateQueryHeap cannot leave a dangling pointer that the failure
+			// branch below would release a second time.
+
+			deviceExt->timestampHeap[device->fifId] = NULL;
+
+			RefPtr_dec(&deviceExt->timestampReadback[device->fifId]);
+
+			D3D12_QUERY_HEAP_DESC growHeapDesc = (D3D12_QUERY_HEAP_DESC) {
+				.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP, .Count = newCap
+			};
+
+			const HRESULT hrHeap = deviceExt->device->lpVtbl->CreateQueryHeap(
+				deviceExt->device, &growHeapDesc, &IID_ID3D12QueryHeap, (void**) &deviceExt->timestampHeap[device->fifId]
+			);
+
+			CharString readbackName = CharString_createRefCStrConst("Timestamp readback");
+			Error readbackErr = (Error) { 0 };
+
+			const Bool grown = SUCCEEDED(hrHeap) && GraphicsDeviceRef_createBuffer(
+				deviceRef,
+				EDeviceBufferUsage_None,
+				EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit |
+				EGraphicsResourceFlag_CPUReadBit,
+				NULL, &readbackName, (U64) newCap * sizeof(U64), &deviceExt->timestampReadback[device->fifId], &readbackErr
+			);
+
+			if(grown)
+				deviceExt->timestampCapacity[device->fifId] = newCap;
+
+			else {
+
+				//A failed grow leaves this frame without timings rather than a torn buffer; release whatever the query
+				// heap create produced so it does not leak, and the readback dec is a no-op if createBuffer never set it.
+
+				if(deviceExt->timestampHeap[device->fifId])
+					deviceExt->timestampHeap[device->fifId]->lpVtbl->Release(deviceExt->timestampHeap[device->fifId]);
+
+				deviceExt->timestampHeap[device->fifId] = NULL;
+				RefPtr_dec(&deviceExt->timestampReadback[device->fifId]);
+				deviceExt->timestampCapacity[device->fifId] = 0;
+				device->timingSlots[device->fifId] = 0;
+			}
+		}
+
 		//Ensure the ubo is in the right state, but only when something can actually read it.
 		//An op less submission would otherwise turn into a barrier only command list,
 		// which the debug layer rightly flags as pointless synchronization.
@@ -953,6 +1198,15 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		gotoIfError3(clean, GraphicsDeviceRef_flushPendingPulls(deviceRef, &state, e_rr));
 
+		//Copy this frame's timestamps out of the query heap into its readback buffer; the CPU reads them a frame on.
+
+		if(device->timingSlots[device->fifId])
+			commandBuffer->lpVtbl->ResolveQueryData(
+				commandBuffer, deviceExt->timestampHeap[device->fifId], D3D12_QUERY_TYPE_TIMESTAMP,
+				0, device->timingSlots[device->fifId],
+				DeviceBuffer_ext(DeviceBufferRef_ptr(deviceExt->timestampReadback[device->fifId]), Dx)->buffer, 0
+			);
+
 		//Transition back swapchains to present
 
 		//Combine transitions into one call.
@@ -962,23 +1216,31 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		for (U64 i = 0; i < (swapchains ? swapchains->length : 0); ++i) {
 
 			SwapchainRef *swapchainRef = swapchains->ptr[i];
-			DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(swapchainRef, Dx, 0);
 
-			D3D12_BARRIER_SUBRESOURCE_RANGE range = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
-				.NumMipLevels = 1,
-				.NumArraySlices = 1,
-				.NumPlanes = 1
-			};
+			//The PRESENT layout is meaningless for a swapchain that owns its images: nothing presents it,
+			// and whatever reads it next transitions it the way it would any other render target.
+			//It is still tracked in flight, since its images are as much in use as a presented one's.
 
-			gotoIfError3(clean, DxUnifiedTexture_transition(
-				imageExt,
-				D3D12_BARRIER_SYNC_RENDER_TARGET,
-				D3D12_BARRIER_ACCESS_COMMON,
-				D3D12_BARRIER_LAYOUT_PRESENT,
-				&range,
-				&deviceExt->imageTransitions,
-				&dependency, alloc, e_rr
-			));
+			if(!(SwapchainRef_ptr(swapchainRef)->base.resource.flags & EGraphicsResourceFlag_InternalOwnsImages)) {
+
+				DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(swapchainRef, Dx, 0);
+
+				D3D12_BARRIER_SUBRESOURCE_RANGE range = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
+					.NumMipLevels = 1,
+					.NumArraySlices = 1,
+					.NumPlanes = 1
+				};
+
+				gotoIfError3(clean, DxUnifiedTexture_transition(
+					imageExt,
+					D3D12_BARRIER_SYNC_RENDER_TARGET,
+					D3D12_BARRIER_ACCESS_COMMON,
+					D3D12_BARRIER_LAYOUT_PRESENT,
+					&range,
+					&deviceExt->imageTransitions,
+					&dependency, alloc, e_rr
+				));
+			}
 
 			if(RefPtr_inc(swapchainRef))
 				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, swapchainRef, alloc, e_rr));
@@ -1006,20 +1268,28 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	for(U64 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
 
 		Swapchain *swapchain = SwapchainRef_ptr(swapchains->ptr[i]);
-		DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchains->ptr[i]);
-
-		DXGI_PRESENT_PARAMETERS regions = (DXGI_PRESENT_PARAMETERS) { 0 };
-
-		gotoIfError3(clean, dxCheck(swapchainExt->swapchain->lpVtbl->Present1(
-			swapchainExt->swapchain,
-			swapchain->presentMode == ESwapchainPresentMode_Fifo ? 1 : 0,
-			swapchain->presentMode == ESwapchainPresentMode_Immediate ? DXGI_PRESENT_ALLOW_TEARING : 0,
-			&regions
-		), e_rr));
-
 		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains->ptr[i], NULL);
+
+		//A swapchain that owns its images has nothing to present to, so the frame ends in memory.
+		//The ring still advances:
+		// that is what keeps a frame in flight from writing the image a previous one is still being read from.
+
+		if(!(swapchain->base.resource.flags & EGraphicsResourceFlag_InternalOwnsImages)) {
+
+			DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchains->ptr[i]);
+
+			DXGI_PRESENT_PARAMETERS regions = (DXGI_PRESENT_PARAMETERS) { 0 };
+
+			gotoIfError3(clean, dxCheck(swapchainExt->swapchain->lpVtbl->Present1(
+				swapchainExt->swapchain,
+				swapchain->presentMode == ESwapchainPresentMode_Fifo ? 1 : 0,
+				swapchain->presentMode == ESwapchainPresentMode_Immediate ? DXGI_PRESENT_ALLOW_TEARING : 0,
+				&regions
+			), e_rr));
+		}
+
 		++unifiedTexture->currentImageId;
-		unifiedTexture->currentImageId %= 3;        //Always triple buffering, %3
+		unifiedTexture->currentImageId %= unifiedTexture->images;
 	}
 
 	//Fence value after present

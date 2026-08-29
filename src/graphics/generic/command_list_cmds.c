@@ -506,3 +506,140 @@ clean:
 
 	return s_uccess;
 }
+
+//Timestamps
+
+Bool CommandListRef_setScopeTimingExt(CommandListRef *commandListRef, Bool enable, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validate(commandListRef);
+
+	//Set before recording scopes so timingSlotCount is counted consistently; a scope already open would mean the
+	// flag applies to only some scopes of the list, which the caller almost never wants.
+
+	if(commandList->tempStateFlags & ECommandStateFlags_HasScope)
+		retError(clean, Error_invalidOperation(0, "CommandListRef_setScopeTimingExt() must be called outside a scope"));
+
+	commandList->timeScopes = enable;
+
+clean:
+	return s_uccess;
+}
+
+Bool CommandListRef_setScopeDebugExt(CommandListRef *commandListRef, Bool enable, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validate(commandListRef);
+
+	if(commandList->tempStateFlags & ECommandStateFlags_HasScope)
+		retError(clean, Error_invalidOperation(0, "CommandListRef_setScopeDebugExt() must be called outside a scope"));
+
+	commandList->debugScopes = enable;
+
+clean:
+	return s_uccess;
+}
+
+//StartTimingRegion and InsertTiming share a serializer, the twin of CommandList_markerDebugExt: a TimingRegionCmd
+// prefix then the NUL terminated name, padded to 16 bytes. EndTimingRegion carries nothing.
+
+Bool CommandList_timingRegionExt(CommandListRef *commandListRef, U32 id, const CharString *name, ECommandOp op, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = commandListRef ? GraphicsDeviceRef_getAlloc(CommandListRef_ptr(commandListRef)->device) : NULL;
+
+	Buffer buf = Buffer_createNull();
+	CommandListRef_validateScope(commandListRef, clean)
+
+	const U64 namel = name ? CharString_length(*name) : 0;
+	const TimingRegionCmd prefix = (TimingRegionCmd) { .id = id };
+
+	U64 len = sizeof(prefix) + namel + 1;
+	len = (len + 15) &~ 15;                                        //Align to 16-byte to not mess up next instruction alignment
+
+	gotoIfError3(clean, Buffer_createUninitializedBytes(len, alloc, &buf, e_rr));
+
+	Buffer_memcpy(buf, Buffer_createRefConst(&prefix, sizeof(prefix)));
+
+	if(namel)
+		Buffer_memcpy(
+			Buffer_createRef(buf.ptrNonConst + sizeof(prefix), namel),
+			CharString_bufferConst(*name)
+		);
+
+	buf.ptrNonConst[sizeof(prefix) + namel] = '\0';
+
+	gotoIfError3(clean, CommandList_append(commandList, op, buf, 1, e_rr));
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	Buffer_free(&buf, alloc);
+	return s_uccess;
+}
+
+Bool CommandListRef_startTimingRegionExt(CommandListRef *commandListRef, U32 id, const CharString *name, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(commandList->timingRegionStack == U8_MAX)
+		retError(clean, Error_outOfBounds(
+			0, U8_MAX, U8_MAX, "CommandListRef_startTimingRegionExt() can only have depth of 255."));
+
+	gotoIfError3(clean, CommandList_timingRegionExt(commandListRef, id, name, ECommandOp_StartTimingRegion, e_rr));
+
+	++commandList->timingRegionStack;
+	commandList->timingSlotCount += 2;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
+Bool CommandListRef_endTimingRegionExt(CommandListRef *commandListRef, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!commandList->timingRegionStack)
+		retError(clean, Error_invalidOperation(1, "CommandListRef_endTimingRegionExt() requires startTimingRegion first."));
+
+	gotoIfError3(clean, CommandList_append(commandList, ECommandOp_EndTimingRegion, Buffer_createNull(), 0, e_rr));
+
+	--commandList->timingRegionStack;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
+Bool CommandListRef_insertTimingExt(CommandListRef *commandListRef, U32 id, const CharString *name, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	gotoIfError3(clean, CommandList_timingRegionExt(commandListRef, id, name, ECommandOp_InsertTiming, e_rr));
+
+	commandList->timingSlotCount += 1;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}

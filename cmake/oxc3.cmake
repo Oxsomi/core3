@@ -1,3 +1,19 @@
+# oxc3's vector headers generate their swizzles with nested __VA_ARGS__ macros,
+# F32x4_expand -> expand2 -> expand3 -> expand4 in vec4f_swizzle.h, which MSVC's LEGACY preprocessor
+# mis-expands into a wall of syntax errors.
+# C never trips it, since C17 mode already implies the conformant preprocessor, but C++ still defaults to
+# the legacy one, so EVERY consumer TU that reaches an oxc:: header fails to compile without this.
+# That makes it a property of the headers rather than a choice each consumer should have to rediscover,
+# hence riding on the imported target. core3's own build sets the same flag for its C++ targets.
+# clang-cl ignores /Zc:preprocessor entirely and is conformant regardless, hence the compiler id check.
+
+if(TARGET oxc3::oxc3 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	set_property(
+		TARGET oxc3::oxc3 APPEND PROPERTY
+		INTERFACE_COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>"
+	)
+endif()
+
 # Setting the icon of the app
 # Call this immediately before apply_dependencies with the executable
 
@@ -379,8 +395,22 @@ macro(add_virtual_dependencies_external)
 			# 	message(FATAL_ERROR "Can't find bin directory of package dependency")
 			# endif()
 			
-			find_program(PROGRAM_PATH ${file} REQUIRED)
-			get_filename_component(BIN_DIR "${PROGRAM_PATH}" DIRECTORY)
+			# find_program caches, and what it caches here is an absolute path INTO a conan package folder.
+			# Those are content addressed: any rebuild that changes the package revision leaves the old folder
+			# deleted and this cache entry pointing at nothing, which then surfaces as the packages directory
+			# below "not existing" rather than as the missing program it actually is.
+			# So the cached value is re-validated before it's trusted.
+			# The variable is also per dependency: one shared name would make every entry after the first reuse
+			# whatever the first one resolved to, since find_program does nothing when its variable is already set.
+
+			set(PROGRAM_PATH_VAR OXC3_EXTERNAL_DEP_${file})
+
+			if(${PROGRAM_PATH_VAR} AND NOT EXISTS "${${PROGRAM_PATH_VAR}}")
+				unset(${PROGRAM_PATH_VAR} CACHE)
+			endif()
+
+			find_program(${PROGRAM_PATH_VAR} ${file} REQUIRED)
+			get_filename_component(BIN_DIR "${${PROGRAM_PATH_VAR}}" DIRECTORY)
 			
 			message(STATUS "add_virtual_dependencies_external: Found ${file}'s bin Directory: ${BIN_DIR}")
 
@@ -398,7 +428,10 @@ macro(add_virtual_dependencies_external)
 				endforeach()
 
 			else()
-				message(FATAL_ERROR "${target} package directory not found: ${PACKAGE_DIR}")
+				message(FATAL_ERROR
+					"${_ARGS_TARGET}: package directory not found: ${PACKAGE_DIR} "
+					"(resolved from ${file} at ${${PROGRAM_PATH_VAR}})"
+				)
 			endif()
 
 		endforeach()
@@ -553,7 +586,7 @@ function(oxc3_add_test_run)
 
 	# Generated rather than written now, so oxc3_test_env can still add to it afterwards.
 
-	file(GENERATE OUTPUT "${envFile}" CONTENT "$<JOIN:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_ENV>,\n>\n")
+	file(GENERATE OUTPUT "${envFile}" CONTENT "$<JOIN:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_ENV>,\n>\n$<$<BOOL:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_PRELOAD>>:LD_PRELOAD=path_list_prepend:$<TARGET_FILE:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_PRELOAD>>\n>")
 
 endfunction()
 
@@ -579,6 +612,29 @@ function(oxc3_test_env testName)
 
 	if(TARGET ${testName}_run)
 		set_property(TARGET ${testName}_run APPEND PROPERTY OXC3_TEST_ENV ${ARGN})
+	endif()
+
+endfunction()
+
+# LD_PRELOAD of a target built here, which is the one env entry oxc3_test_env cannot carry.
+#
+# Its value is only knowable through $<TARGET_FILE:>, and a generator expression STORED IN a property comes
+# back out verbatim when file(GENERATE) reads that property: evaluation is a single pass, not recursive.
+# The result was an env file containing the literal text of the expression, which the loader then split on
+# the colon inside it and refused, silently leaving the build-time run without the preload it asked for.
+# So what gets stored is the target NAME, and the env file builds the entry around it in one expression,
+# where $<TARGET_FILE:> is still evaluated.
+
+function(oxc3_test_preload testName preloadTarget)
+
+	if(TEST ${testName})
+		set_property(TEST ${testName} APPEND PROPERTY ENVIRONMENT_MODIFICATION
+			"LD_PRELOAD=path_list_prepend:$<TARGET_FILE:${preloadTarget}>"
+		)
+	endif()
+
+	if(TARGET ${testName}_run)
+		set_property(TARGET ${testName}_run PROPERTY OXC3_TEST_PRELOAD ${preloadTarget})
 	endif()
 
 endfunction()
@@ -626,7 +682,7 @@ function(oxc3_add_test_command)
 		add_custom_target(${T_NAME}_run ALL DEPENDS "${stamp}")
 		set_target_properties(${T_NAME}_run PROPERTIES FOLDER "${T_FOLDER}")
 
-		file(GENERATE OUTPUT "${envFile}" CONTENT "$<JOIN:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_ENV>,\n>\n")
+		file(GENERATE OUTPUT "${envFile}" CONTENT "$<JOIN:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_ENV>,\n>\n$<$<BOOL:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_PRELOAD>>:LD_PRELOAD=path_list_prepend:$<TARGET_FILE:$<TARGET_PROPERTY:${T_NAME}_run,OXC3_TEST_PRELOAD>>\n>")
 	endif()
 
 endfunction()

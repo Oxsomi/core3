@@ -39,7 +39,7 @@
 //  7. Device enumeration - getDeviceInfos / getPreferredDevice (+ validation)
 //  8. Device             - create / wait / free
 //  9. DeviceBuffer       - create, CPU-backed create, markDirty validation
-// 10. Swapchain          - rejects NULL / non-physical window
+// 10. Swapchain          - rejects a NULL window; a virtual one presents to memory (own module)
 // 11. DescriptorLayout   - explicit binding set, layout/table invariants, parameter validation
 // 12. Bindless           - allocate / free / reuse a descriptor in the device's default table
 // 13. DeviceBuffer       - ExposeBindlessRead/Write only take a descriptor when asked
@@ -411,7 +411,9 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 		Test_assert(t, "markDirtyOOB", !cpuBuffer.markDirty(256, 1, nullptr));
 	}
 
-	//10. Swapchain requires a physical window; NULL must be rejected
+	//10. Swapchain needs a window; NULL must be rejected.
+	//A VIRTUAL one is accepted and covered by its own module, since a swapchain over it owns its images and presents
+	// to memory.
 
 	gfx::Swapchain swapchain;
 
@@ -424,6 +426,8 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsBindlessDescriptor(t, deviceRef);
 	c::Test_graphicsBufferBindless(t, deviceRef);
 	c::Test_graphicsCommandList(t, deviceRef);
+	c::Test_graphicsVirtualSwapchain(t, deviceRef);
+	c::Test_graphicsPhysicalSwapchain(t, deviceRef);
 	c::Test_graphicsCommandRecording(t, deviceRef);
 	c::Test_graphicsCommandValidation(t, deviceRef);
 	c::Test_graphicsRenderPass(t, deviceRef);
@@ -474,6 +478,8 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	// pipelines that only have to create: a named entrypoint pair, and one stored as an oiSP and rebuilt
 
 	c::Test_graphicsShaderCompute(t, deviceRef);
+	c::Test_graphicsTimestamps(t, deviceRef);
+	c::Test_graphicsPredication(t, deviceRef);
 	c::Test_graphicsShaderDraw(t, deviceRef);
 	c::Test_graphicsShaderNamedEntry(t, deviceRef);
 	c::Test_graphicsShaderRays(t, deviceRef);

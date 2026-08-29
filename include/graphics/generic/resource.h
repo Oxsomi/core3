@@ -56,6 +56,16 @@ typedef enum EGraphicsResourceFlag {
 
 	EGraphicsResourceFlag_CPUReadBit                = 1 << 7,
 
+	//A Swapchain whose images this device ALLOCATED, rather than ones a presentation engine handed it.
+	//
+	//Set for a swapchain over a VIRTUAL window, which has no surface to acquire from and nothing to present to,
+	// so its images are ordinary render targets and the frame ends in memory.
+	//Everything above the backend treats it as a swapchain regardless,
+	// which is what lets one renderer drive a window and a headless server unchanged.
+	//Only for internal use; GraphicsDeviceRef_createSwapchain sets it from the window's type.
+
+	EGraphicsResourceFlag_InternalOwnsImages        = 1 << 8,
+
 	EGraphicsResourceFlag_CPUAllocated              = EGraphicsResourceFlag_CPUBacked | EGraphicsResourceFlag_CPUAllocatedBit,
 
 	EGraphicsResourceFlag_ShaderRWBindful           =

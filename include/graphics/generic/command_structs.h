@@ -83,9 +83,16 @@ typedef enum ECommandOp {
 	ECommandOp_StartRegionDebugExt,
 	ECommandOp_EndRegionDebugExt,
 
+	//GPU timestamps
+
+	ECommandOp_StartTimingRegion,
+	ECommandOp_EndTimingRegion,
+	ECommandOp_InsertTiming,
+
 	//Raytracing
 
 	ECommandOp_DispatchRaysExt,
+	ECommandOp_DispatchRaysIndirect,
 	ECommandOp_SetRaytracingPipelineExt,
 	ECommandOp_UpdateBLASExt,
 	ECommandOp_UpdateTLASExt,
@@ -126,6 +133,7 @@ typedef enum ETransitionType {
 	ETransitionType_ResolveTargetWrite,
 	ETransitionType_CopyRead,
 	ETransitionType_CopyWrite,
+	ETransitionType_Predicate,       //Scope predicate read; injected by startScope, never declared by the caller
 	ETransitionType_KeepAlive            //If the only reason of this transition is to keep a resource alive
 } ETransitionType;
 
@@ -193,6 +201,47 @@ typedef struct CommandScopeDependency {
 	U32 id;
 } CommandScopeDependency;
 
+typedef enum ECommandScopeFlags {
+
+	ECommandScopeFlags_None             = 0,
+
+	//Skip this scope's begin and end timestamp while the list is timing scopes (CommandListRef_setScopeTimingExt):
+	// a scope that does little, or one the caller times itself with a manual region, spends no query slots.
+
+	ECommandScopeFlags_DisableTimestamp = 1 << 0,
+
+	//Skip this scope's auto debug region while the list is generating them (CommandListRef_setScopeDebugExt).
+
+	ECommandScopeFlags_DisableDebug     = 1 << 1
+
+} ECommandScopeFlags;
+
+//What a scope decided at endScope, read by the backends. The name for either lives in the StartScope payload.
+
+typedef enum ECommandScopeInternalFlags {
+	ECommandScopeInternalFlags_Timed       = 1 << 0,    //Emits a begin and end GPU timestamp keyed by scopeId
+	ECommandScopeInternalFlags_DebugRegion = 1 << 1,    //Emits a begin and end debug region labelled by its name
+	ECommandScopeInternalFlags_Predicated  = 1 << 2     //Executes only while its predicate reads nonzero
+} ECommandScopeInternalFlags;
+
+//StartTimingRegion and InsertTiming carry this prefix then a NUL terminated name,
+// the whole command padded to 16 bytes like a debug marker; EndTimingRegion carries nothing.
+//The id is a hot path key that reads timings back without comparing strings,
+// and the name is a convenience that is empty when the caller passes none.
+
+//The head of every non-empty StartScope payload: the predicate when the scope has one, zeroed otherwise.
+//The scope name, when present, follows NUL terminated. Sized 16 so the name keeps marker alignment.
+
+typedef struct CommandScopePredicate {
+	DeviceBufferRef *buffer;
+	U64 offset;
+} CommandScopePredicate;
+
+typedef struct TimingRegionCmd {
+	U32 id;
+	U32 padding;
+} TimingRegionCmd;
+
 typedef struct CommandScope {
 
 	U64 commandBufferOffset;
@@ -201,7 +250,8 @@ typedef struct CommandScope {
 
 	U32 commandOpOffset, transitionOffset;
 
-	U32 commandOps, padding;
+	U32 commandOps;
+	U32 flags;                           //ECommandScopeInternalFlags, set at endScope
 
 	U32 transitionCount, scopeId;
 

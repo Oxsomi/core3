@@ -172,6 +172,8 @@ VkFormat mapVkFormat(ETextureFormat format) {
 
 		//Special formats
 
+		case ETextureFormat_RGB9E5:                    return  VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;
+
 		case ETextureFormat_BGR10A2:                    return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
 
 		//BCn formats

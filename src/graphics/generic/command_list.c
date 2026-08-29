@@ -68,6 +68,12 @@ Bool CommandListRef_clear(CommandListRef *commandListRef, Error *e_rr) {
 
 	gotoIfError3(clean, ListDeviceResourceVersion_clear(&commandList->activeSwapchains, e_rr));
 
+	//Timing accounting is per recording, so it resets here with the rest of the recording state; a list re-recorded
+	// each frame counts only its own slots rather than accumulating across frames.
+
+	commandList->timingSlotCount = 0;
+	commandList->timingRegionStack = 0;
+
 	commandList->next = 0;
 
 clean:
@@ -250,6 +256,32 @@ Bool CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U32
 
 	if((commandList->commandOps.length + 1) >> 32)
 		retError(clean, Error_outOfBounds(0, U32_MAX, U32_MAX, "CommandList_append() command ops can't exceed 32-bit"));
+
+	//A predicated scope only takes draws and dispatches, as a hard rule rather than guidance: D3D12
+	// predication suppresses copies, clears, resolves, ray dispatches and acceleration structure builds,
+	// where Vulkan's conditional rendering covers only draws, compute dispatches and attachment clears:
+	// the spec DEFINES ray work as unaffected, so it executes regardless of the predicate there, an
+	// omission likely unintended given D3D12 supports predicating it. Everything outside the shared
+	// subset skips on one backend and runs on the other, and refusing the record, a portability rule
+	// rather than an API limit, is what keeps one command list meaning one thing on both.
+
+	if(commandList->lastScopePredicated && (commandList->tempStateFlags & ECommandStateFlags_HasScope))
+		switch(op) {
+
+			case ECommandOp_ClearImages:
+			case ECommandOp_CopyImage:
+			case ECommandOp_UpdateBLASExt:
+			case ECommandOp_UpdateTLASExt:
+			case ECommandOp_UpdateOmmExt:
+			case ECommandOp_DispatchRaysExt:
+			case ECommandOp_DispatchRaysIndirect:
+				retError(clean, Error_invalidOperation(
+					1, "CommandList_append() a predicated scope only takes draws and dispatches"
+				));
+
+			default:
+				break;
+		}
 
 	if(commandList->next + len > Buffer_length(commandList->data)) {
 
@@ -567,11 +599,17 @@ Bool CommandListRef_startScope(
 	const ListTransition *transitions,
 	U32 id,
 	const ListCommandScopeDependency *deps,
+	ECommandScopeFlags flags,
+	const CharString *name,
+	DeviceBufferRef *predicate,
+	U64 predicateOffset,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
 	const Allocator *alloc = commandListRef ? GraphicsDeviceRef_getAlloc(CommandListRef_ptr(commandListRef)->device) : NULL;
+
+	Buffer scopeName = Buffer_createNull();
 
 	CommandListRef_validate(commandListRef);
 
@@ -586,6 +624,49 @@ Bool CommandListRef_startScope(
 		retError(clean, Error_invalidOperation(
 			0, "CommandListRef_startScope() scope is already present. Nested scopes are unsupported"
 		));
+
+	if(predicate) {
+
+		//Requesting a predicate without the capability is an ERROR, matching startRenderExt: silently
+		// running a scope the caller asked to be conditional is the wrong kind of surprise when the
+		// predicate guards correctness. A caller that wants the run-anyway degradation branches on
+		// EGraphicsFeatures2_Predication and passes no predicate.
+
+		if(!(GraphicsDeviceRef_ptr(device)->info.capabilities.features2 & EGraphicsFeatures2_Predication))
+			retError(clean, Error_unsupportedOperation(
+				3, "CommandListRef_startScope()::predicate requires EGraphicsFeatures2_Predication"
+			));
+
+		if(predicateOffset & 7)
+			retError(clean, Error_invalidParameter(
+				7, 0, "CommandListRef_startScope()::predicateOffset has to be 8-byte aligned"
+			));
+
+		if(predicate->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer)
+			retError(clean, Error_invalidParameter(
+				6, 1, "CommandListRef_startScope()::predicate has to be a DeviceBuffer"
+			));
+
+		const DeviceBuffer *predBuf = DeviceBufferRef_ptr(predicate);
+
+		if(!(predBuf->usage & EDeviceBufferUsage_Predicate))
+			retError(clean, Error_invalidParameter(
+				6, 2, "CommandListRef_startScope()::predicate needs EDeviceBufferUsage_Predicate"
+			));
+
+		//Compared without adding, since an offset near U64_MAX would wrap the sum past the check.
+
+		if(predicateOffset > predBuf->resource.size || predBuf->resource.size - predicateOffset < sizeof(U64))
+			retError(clean, Error_outOfBounds(
+				7, predicateOffset, predBuf->resource.size,
+				"CommandListRef_startScope()::predicateOffset out of bounds"
+			));
+
+		if(predBuf->resource.device != device)
+			retError(clean, Error_unsupportedOperation(
+				2, "CommandListRef_startScope()::predicate's device is incompatible"
+			));
+	}
 
 	gotoIfError3(clean, ListTransitionInternal_clear(&commandList->pendingTransitions, e_rr));
 	gotoIfError3(clean, ListTransitionInternal_reserve(
@@ -744,13 +825,64 @@ Bool CommandListRef_startScope(
 
 	commandList->lastCommandId = (U32) commandList->commandOps.length;
 	commandList->lastOffset = commandList->next;
+	commandList->lastScopeSlotBase = commandList->timingSlotCount;
 	commandList->lastScopeId = id;
+	commandList->lastScopeFlags = flags;
 
-	gotoIfError3(clean, CommandList_append(commandList, ECommandOp_StartScope, Buffer_createNull(), 0, e_rr));
+	commandList->lastScopePredicated = predicate != NULL;
+
+	//The predicate's transition is the scope's own rather than the caller's: the read happens at scope
+	// granularity and the resource list this feeds is also what keeps the buffer alive.
+
+	if(predicate) {
+
+		for(U64 i = 0; i < commandList->pendingTransitions.length; ++i)
+			if(commandList->pendingTransitions.ptr[i].resource == predicate)
+				retError(clean, Error_invalidOperation(
+					2, "CommandListRef_startScope()::predicate may not also appear in transitions"
+				));
+
+		const TransitionInternal predTransition = (TransitionInternal) {
+			.resource = predicate,
+			.type = ETransitionType_Predicate
+		};
+
+		gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, predTransition, alloc, e_rr));
+	}
+
+	//A named scope carries its name in the StartScope payload, NUL terminated and 16-byte aligned like a marker,
+	// so buildTimings can label a timing entry and the backend an auto debug region with it.
+	//Unnamed scopes keep the empty payload and cost nothing.
+
+	const U64 namel = name ? CharString_length(*name) : 0;
+	commandList->lastScopeNamed = namel != 0;
+
+	//A non-empty payload always leads with the predicate header, zeroed where there is none, so the name
+	// sits at one fixed offset for every consumer.
+
+	if(namel || predicate) {
+
+		const U64 nameBytes = namel ? ((namel + 1 + 15) &~ 15) : 0;
+
+		gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(CommandScopePredicate) + nameBytes, alloc, &scopeName, e_rr));
+
+		CommandScopePredicate header = (CommandScopePredicate) { .buffer = predicate, .offset = predicateOffset };
+		Buffer_memcpy(scopeName, Buffer_createRefConst(&header, sizeof(header)));
+
+		if(namel)
+			Buffer_memcpy(
+				Buffer_createRef(scopeName.ptrNonConst + sizeof(CommandScopePredicate), nameBytes),
+				CharString_bufferConst(*name)
+			);
+	}
+
+	gotoIfError3(clean, CommandList_append(commandList, ECommandOp_StartScope, scopeName, 0, e_rr));
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasScope;
 
 clean:
+
+	Buffer_free(&scopeName, alloc);
 
 	if(!s_uccess && commandList)
 		commandList->tempStateFlags = ECommandStateFlags_InvalidState;
@@ -775,6 +907,7 @@ Bool CommandListRef_endScope(CommandListRef *commandListRef, Error *e_rr) {
 
 		gotoIfError3(clean, ListCommandOpInfo_resize(&commandList->commandOps, commandList->lastCommandId, NULL, e_rr));
 		commandList->next = commandList->lastOffset;
+		commandList->timingSlotCount = commandList->lastScopeSlotBase;
 
 		goto clean;
 	}
@@ -782,6 +915,11 @@ Bool CommandListRef_endScope(CommandListRef *commandListRef, Error *e_rr) {
 	if(commandList->debugRegionStack)
 		retError(clean, Error_invalidOperation(
 			0, "CommandListRef_endScope() can't close scope while debugRegion is still active"
+		));
+
+	if(commandList->timingRegionStack)
+		retError(clean, Error_invalidOperation(
+			0, "CommandListRef_endScope() can't close scope while a timing region is still active"
 		));
 
 	if(!I32x2_eq2(commandList->currentSize, I32x2_zero))
@@ -807,6 +945,18 @@ Bool CommandListRef_endScope(CommandListRef *commandListRef, Error *e_rr) {
 		e_rr
 	));
 
+	//A scope emits a begin and end timestamp when its list is timing scopes and it did not opt out.
+	//Counted here, after the hide check above, so a hidden scope reserves nothing;
+	// the backend assigns the actual slot indices in op order at submit.
+
+	const Bool timed = commandList->timeScopes && !(commandList->lastScopeFlags & ECommandScopeFlags_DisableTimestamp);
+
+	const Bool debugRegion = commandList->debugScopes && commandList->lastScopeNamed &&
+		!(commandList->lastScopeFlags & ECommandScopeFlags_DisableDebug);
+
+	if(timed)
+		commandList->timingSlotCount += 2;
+
 	const CommandScope scope = (CommandScope) {
 		.commandBufferOffset = commandList->lastOffset,
 		.commandBufferLength = commandLen,
@@ -814,7 +964,11 @@ Bool CommandListRef_endScope(CommandListRef *commandListRef, Error *e_rr) {
 		.transitionOffset = transitionOffset,
 		.commandOps = commandOps,
 		.transitionCount = (U32) commandList->pendingTransitions.length,
-		.scopeId = commandList->lastScopeId
+		.scopeId = commandList->lastScopeId,
+		.flags =
+			(timed ? ECommandScopeInternalFlags_Timed : 0) |
+			(debugRegion ? ECommandScopeInternalFlags_DebugRegion : 0) |
+			(commandList->lastScopePredicated ? ECommandScopeInternalFlags_Predicated : 0)
 	};
 
 	gotoIfError3(clean, ListCommandScope_pushBack(&commandList->activeScopes, scope, alloc, e_rr));
@@ -842,6 +996,7 @@ clean:
 
 		commandList->tempStateFlags = 0;
 		commandList->debugRegionStack = 0;
+		commandList->timingRegionStack = 0;
 		commandList->currentSize = I32x2_zero;
 
 		if(!s_uccess)

@@ -285,34 +285,11 @@ U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSizeType) {
 	return minVersion;
 }
 
+//Kept as the compiler's public spelling of the rule; the table itself lives in oiSH beside ESHExtension,
+// because SHEntryRuntime_asBinaryIdentifier promotes a combination's model with it.
+
 U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
-
-	U16 minVersion = OISH_SHADER_MODEL(6, 5);
-
-	//DescriptorHeap = SM6.6 dynamic resources on DXIL (ResourceDescriptorHeap/SamplerDescriptorHeap).
-	if(ext & (ESHExtension_AtomicI64 | ESHExtension_ComputeDeriv | ESHExtension_PAQ | ESHExtension_DescriptorHeap))
-		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
-
-	if(ext & ESHExtension_WriteMSTexture)
-		minVersion = U16_max(OISH_SHADER_MODEL(6, 7), minVersion);
-
-	//SM6.9 native ray features: SER (dx::HitObject reorder) and OMM (RayQuery opacity-micromap flags).
-	if(ext & (ESHExtension_RayReorder | ESHExtension_RayMicromapOpacity))
-		minVersion = U16_max(OISH_SHADER_MODEL(6, 9), minVersion);
-
-	//SM6.10 features: cooperative vectors/matrix and ray triangle vertex position fetch.
-	//Neither is detectable from DXIL,
-	// so requiring the model here is what forces a compatible shader model on the DXIL path.
-
-	ESHExtension sm10 = (ESHExtension) (
-		ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining |
-		ESHExtension_RayTriPosition
-	);
-
-	if(ext & sm10)
-		minVersion = U16_max(OISH_SHADER_MODEL(6, 10), minVersion);
-
-	return minVersion;
+	return ESHExtension_minShaderModel(ext);
 }
 
 //Simplified ComPtr to be cross platform
@@ -1150,23 +1127,10 @@ Bool Compiler_parse(
 						"Compiler_parse() one of the non compute/mesh/task stages uses ComputeDeriv, which isn't supported"
 					));
 
-				if(!runtimeEntry.shaderVersions.length)
-					continue;
-
-				U16 reqVersion = Compiler_minFeatureSetExtension(ESHExtension(runtimeEntry.extensions.ptr[j]));
-
-				containsValidVersion = false;
-
-				for (U64 k = 0; k < runtimeEntry.shaderVersions.length; ++k)
-					if (runtimeEntry.shaderVersions.ptr[k] >= reqVersion) {
-						containsValidVersion = true;
-						break;
-					}
-
-				if(!containsValidVersion)
-					retError(clean, Error_invalidState(
-						0, "Compiler_parse() one of the shader extensions was incompatible with all shader models"
-					));
+				//No shader model check here any more: an extension needing a newer one than the entry declared
+				// is resolved rather than refused, by promoting that combination's model in
+				// SHEntryRuntime_asBinaryIdentifier. Rejecting it was what forced an entry to declare the
+				// highest model any of its extensions needed and pulled every other permutation up with it.
 			}
 
 			//Validate groups with stage

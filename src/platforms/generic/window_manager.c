@@ -244,30 +244,48 @@ Bool WindowManager_createWindow(
 			7, 260, 260, "WindowManager_createWindow()::title can't exceed 260 chars"
 		));
 
+	//A virtual window renders to memory rather than to a surface, so no presentation engine constrains its
+	// format: RGBA8 is always available for it and keeps a read back in natural R, G, B, A order, which the BGR
+	// orderings swap. So AutoRGBA8 resolves to RGBA8 for it and the BGR formats are refused, which is what lets a
+	// read back be compared byte for byte. A physical window instead takes what its surface supports, where BGRA8
+	// is the only guaranteed desktop format today, so its AutoRGBA8 stays BGRA8 off Android and RGBA8 is refused.
+
+	const Bool virtualWindow = type == EWindowType_Virtual;
+
+	if(format == EWindowFormat_AutoRGBA8)
+		format = (virtualWindow || _PLATFORM_TYPE == PLATFORM_ANDROID) ? EWindowFormat_RGBA8 : EWindowFormat_BGRA8;
+
 	switch (format) {
+
+		case EWindowFormat_BGRA8:
+		case EWindowFormat_BGR10A2:
+
+			if(virtualWindow)
+				retError(clean, Error_invalidOperation(
+					1, "WindowManager_createWindow()::a virtual window disallows BGR orderings, use an RGBA format"
+				));
+
+			break;
 
 		case EWindowFormat_RGBA8:
 
 			#if _PLATFORM_TYPE != PLATFORM_ANDROID
-				retError(clean, Error_invalidOperation(
-					1, "WindowManager_createWindow()::RGBA8 is unsupported "
-				));
+				if(!virtualWindow)
+					retError(clean, Error_invalidOperation(
+						1, "WindowManager_createWindow()::RGBA8 is unsupported for a physical window on this platform"
+					));
 			#endif
 
-		case EWindowFormat_BGRA8:
-		case EWindowFormat_BGR10A2:
-		case EWindowFormat_RGBA16f:
-		case EWindowFormat_RGBA32f:
 			break;
 
-		case EWindowFormat_AutoRGBA8:
-			format = _PLATFORM_TYPE == PLATFORM_ANDROID ? EWindowFormat_RGBA8 : EWindowFormat_BGRA8;
+		case EWindowFormat_RGBA16f:
+		case EWindowFormat_RGBA32f:
 			break;
 
 		default:
 			retError(clean, Error_invalidEnum(
 				3, (U64) format, 0,
-				"WindowManager_createWindow()::format must be one of BGRA8, BGR10A2, RGBA16f, RGBA32f"
+				"WindowManager_createWindow()::format must be one of RGBA8, BGRA8, BGR10A2, RGBA16f, RGBA32f"
 			));
 	}
 
@@ -351,8 +369,26 @@ Bool WindowManager_createWindow(
 	cpuVisibleBuffer = Buffer_createNull();
 	titleCopy = CharString_createNull();
 
-	if (type == EWindowType_Physical)
+	if (type == EWindowType_Physical) {
 		gotoIfError3(clean, WindowManager_createWindowPhysical(w, e_rr));
+	}
+
+	//A virtual window has no compositor handshake to wait for: it is active and finalized the moment
+	// it exists, so the create/resize pair fires here, exactly where a configure event would fire it
+	// for a physical window. Without this the step loop skips the window forever as not-yet-ready.
+
+	else {
+
+		w->flags |= EWindowFlags_IsActive;
+
+		if(w->callbacks.onCreate)
+			gotoIfError3(clean, w->callbacks.onCreate(w, e_rr));
+
+		w->flags |= EWindowFlags_IsFinalized;
+
+		if(w->callbacks.onResize)
+			gotoIfError3(clean, w->callbacks.onResize(w, e_rr));
+	}
 
 clean:
 

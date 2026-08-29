@@ -90,7 +90,9 @@ typedef enum EOptExtensions {
 	// name table in vk_instance.c.
 
 	EOptExtensions_RayMicromapOpacityKHR,
-	EOptExtensions_DeviceAddressCommands
+	EOptExtensions_DeviceAddressCommands,
+
+	EOptExtensions_ConditionalRendering
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];

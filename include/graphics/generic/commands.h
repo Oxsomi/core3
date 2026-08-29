@@ -75,11 +75,27 @@ Bool CommandListRef_copyImage(
 TList(Transition);
 TList(CommandScopeDependency);
 
+//predicate, when given, makes the scope CONDITIONAL: a U64 read from the buffer at predicateOffset
+// (8-byte aligned) when the scope executes; zero skips its draws and dispatches, its barriers still run.
+//The buffer needs EDeviceBufferUsage_Predicate and is transitioned and kept alive by the scope itself,
+// so it must not also appear in transitions. Writers fill all 64 bits: Vulkan reads the low word,
+// D3D12 the whole thing. Without EGraphicsFeatures2_Predication, requesting a predicate is REFUSED at
+// record time (as is the usage bit at buffer creation); branch on the capability to degrade explicitly.
+//A predicated scope only takes draws and dispatches; recording a copy, clear, acceleration structure
+// update or ray dispatch inside one is refused: D3D12 predicates all of those where Vulkan's
+// conditional rendering only covers draws, compute dispatches and attachment clears, so anything
+// outside that shared subset skips on one backend and runs on the other.
+//The rule applies whenever a predicate was requested, so recording validates the same on every device.
+
 Bool CommandListRef_startScope(
 	CommandListRef *commandList,
 	const ListTransition *transitions,
 	U32 id,
 	const ListCommandScopeDependency *dependencies,
+	ECommandScopeFlags flags,
+	const CharString *name,
+	DeviceBufferRef *predicate,
+	U64 predicateOffset,
 	Error *e_rr
 );
 
@@ -176,6 +192,16 @@ Bool CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferRe
 //RayPipeline feature
 
 Bool CommandListRef_dispatchRaysExt(CommandListRef *commandList, DispatchRaysExt dispatchRays, Error *e_rr);
+
+//Ray dispatch whose width/height/depth come from a buffer the GPU wrote,
+// so a launch sized by a GPU driven pass never has to read its count back to the CPU.
+//The buffer holds three U32s (width, height, depth) at offset, needs Indirect usage, and is aligned to 4.
+//Vulkan reads the buffer directly; D3D12 writes the pipeline's SBT into a per frame intermediate, copies the
+// three counts in beside it and issues an ExecuteIndirect over it, so the caller sees one portable call.
+
+Bool CommandListRef_dispatchRaysIndirectExt(
+	CommandListRef *commandList, DeviceBufferRef *buffer, U64 offset, U32 raygenLocalId, Error *e_rr
+);
 Bool CommandListRef_dispatch1DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, Error *e_rr);
 Bool CommandListRef_dispatch2DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, U32 raysY, Error *e_rr);
 Bool CommandListRef_dispatch3DRaysExt(
@@ -221,6 +247,32 @@ Bool CommandListRef_endRenderExt(CommandListRef *commandList, Error *e_rr);
 Bool CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, const CharString *name, Error *e_rr);
 Bool CommandListRef_startRegionDebugExt(CommandListRef *commandList, F32x4 color, const CharString *name, Error *e_rr);
 Bool CommandListRef_endRegionDebugExt(CommandListRef *commandList, Error *e_rr);
+
+//Timestamps feature
+
+//Turns per scope GPU timing on or off for this command list; call before recording begins.
+//When on, every scope that does not pass ECommandScopeFlags_DisableTimestamp
+// gets a begin and end timestamp keyed by its scopeId.
+//The device reads the results back once the frame completes, see GraphicsDeviceRef_getTimings.
+
+Bool CommandListRef_setScopeTimingExt(CommandListRef *commandList, Bool enable, Error *e_rr);
+
+//Turns per scope auto debug regions on or off for this command list; call before recording.
+//When on, every scope given a name emits a begin and end debug region labelled by it,
+// unless it passes ECommandScopeFlags_DisableDebug.
+//The name is the one passed to startScope; a scope with no name emits nothing.
+
+Bool CommandListRef_setScopeDebugExt(CommandListRef *commandList, Bool enable, Error *e_rr);
+
+//A manual named region, nestable like a debug region: a begin and end timestamp whose delta is one timing result.
+//id is a hot path key read back without comparing strings, 0 when unused; name is a convenience, NULL when unused.
+
+Bool CommandListRef_startTimingRegionExt(CommandListRef *commandList, U32 id, const CharString *name, Error *e_rr);
+Bool CommandListRef_endTimingRegionExt(CommandListRef *commandList, Error *e_rr);
+
+//A single point in time timestamp; two of them read back are diffed by the caller. Same id and name rules.
+
+Bool CommandListRef_insertTimingExt(CommandListRef *commandList, U32 id, const CharString *name, Error *e_rr);
 
 #ifdef __cplusplus
 	}

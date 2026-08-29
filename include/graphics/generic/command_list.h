@@ -110,6 +110,26 @@ typedef struct CommandList {
 	EMSAASamples boundSampleCount;
 	U32 padding;
 
+	//Timing: set by CommandListRef_setScopeTimingExt before recording. When set, every scope that does not opt out
+	// gets a begin and end GPU timestamp keyed by its scopeId. timingRegionStack balances manual start and end
+	// regions the way debugRegionStack balances debug ones, and timingSlotCount counts the query slots this list
+	// consumes at submit, which the device sums across the submit to size the timestamp pool.
+
+	Bool timeScopes;
+	Bool debugScopes;
+	U8 timingRegionStack;
+	U8 padding3;
+	U32 timingSlotCount;
+	U32 lastScopeSlotBase;                             //timingSlotCount at startScope, restored if the scope is hidden
+	ECommandScopeFlags lastScopeFlags;                 //Flags of the open scope, carried startScope -> endScope
+	Bool lastScopeNamed;                               //Whether the open scope was given a debug name
+
+	//Whether the open scope carries a predicate. Requesting one without the capability is refused at
+	// record time, so requested and predicated are the same fact.
+
+	Bool lastScopePredicated;
+	U8 padding4[2];
+
 	ListTransitionInternal pendingTransitions;
 
 	ListDeviceResourceVersion activeSwapchains;        //Locks swapchain when it's first inserted

@@ -37,6 +37,11 @@ U16 TextureRange_length(TextureRange r) { return r.endRange[2] - r.startRange[2]
 
 void GraphicsResource_free(GraphicsResource *resource, RefPtr *resourceRef) {
 
+	//A resource that never got its device has no allocation, nothing pending and no ref to return.
+
+	if(!resource->device)
+		return;
+
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(resource->device);
 
 	if(resource->allocated) {

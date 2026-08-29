@@ -50,6 +50,14 @@ namespace oxc {
 			return c::ETextureFormat_getBits(f);
 		}
 
+		[[nodiscard]] inline c::Bool isExponentialEncode(c::ETextureFormat f) noexcept {
+			return c::ETextureFormat_isExponentialEncode(f);
+		}
+
+		[[nodiscard]] inline c::U64 getExponentBits(c::ETextureFormat f) noexcept {
+			return c::ETextureFormat_getExponentBits(f);
+		}
+
 		[[nodiscard]] inline c::U64 getAlphaBits(c::ETextureFormat f) noexcept {
 			return c::ETextureFormat_getAlphaBits(f);
 		}

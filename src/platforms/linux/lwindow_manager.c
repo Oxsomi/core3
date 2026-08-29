@@ -31,6 +31,7 @@
 #include "types/base/time.h"
 
 #include <stdlib.h>
+#include <poll.h>
 #include <wayland-cursor.h>
 
 void LWindowManager_isAlive(void *data, struct xdg_wm_base *base, U32 serial) {
@@ -495,12 +496,38 @@ clean:
 	return true;
 }
 
+//Pumps the compositor without waiting on it.
+//
+//wl_display_roundtrip, which this used to call, sends a sync request and BLOCKS until the compositor
+//replies. Called once per frame it puts a full client/server round trip on the critical path of every
+//frame, and because the frame loop times itself around this call the cost lands inside the frame time
+//rather than beside it. It is why a window that draws nothing still cost milliseconds.
+//
+//This is the pattern wl_display_prepare_read exists for. prepare_read claims the right to read the socket
+//and fails while this thread still has events queued, so the loop drains those first; the poll with a
+//zero timeout then asks whether anything is actually waiting, and only then is the socket read. Nothing
+//here waits on the compositor, and events that have arrived are still dispatched the same frame.
+
 void WindowManager_updateExt(WindowManager *manager) {
 
 	LWindowManager *lmanager = (LWindowManager*)manager->platformData.ptr;
 
-	if(lmanager) {
-		wl_display_flush(lmanager->display);
-		wl_display_roundtrip(lmanager->display);
-	}
+	if(!lmanager)
+		return;
+
+	struct wl_display *display = lmanager->display;
+
+	while(wl_display_prepare_read(display) != 0)
+		wl_display_dispatch_pending(display);
+
+	wl_display_flush(display);
+
+	struct pollfd pfd = (struct pollfd) { .fd = wl_display_get_fd(display), .events = POLLIN };
+
+	if(poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN))
+		wl_display_read_events(display);
+
+	else wl_display_cancel_read(display);
+
+	wl_display_dispatch_pending(display);
 }
