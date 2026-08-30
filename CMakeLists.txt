@@ -263,15 +263,30 @@ if(EMSCRIPTEN)
 	message("-- Targeting wasm64 (emscripten)")
 	set(ARM OFF)
 
-	# The threaded flavor gets its own target name so the two do not share an output directory.
-	# They are ABI incompatible and their binaries have the same names, so a shared bin/ means whichever
-	# built last wins and the other flavor's artifacts silently become the wrong ones.
+	# Every web flavor gets a target name of its own, so no two of them share an output directory.
+	# -pthread is ABI and a sanitized build links sanitized dependencies, so the flavors are not
+	# interchangeable, while their binaries all carry the same names.
+	# Sharing a bin/ therefore means whichever built last wins and the other flavor's artifacts
+	# silently become the wrong ones.
+	#
+	# This block is authoritative for the web flavor name: wasm64, then _mt when the compile flags carry
+	# -pthread, then _asan, then _ubsan, in that order.
+	# build_web.py (webFlavorSuffix) and conanfile.py (package) rebuild the same name to find what this
+	# wrote, so a change here is a change in all three.
+
+	set(target "wasm64")
 
 	if(CMAKE_C_FLAGS MATCHES "-pthread")
-		set(target "wasm64_mt")
+		set(target "${target}_mt")
 		message("-- pthreads are on: -sDEFAULT_PTHREAD_STACK_SIZE applies and the page must be cross origin isolated")
-	else()
-		set(target "wasm64")
+	endif()
+
+	if(EnableASAN)
+		set(target "${target}_asan")
+	endif()
+
+	if(EnableUBSAN)
+		set(target "${target}_ubsan")
 	endif()
 
 	# LLVM's middle end folds I32x4_clmul64Fallback to zero at -O3 on wasm64, which fails types_math.

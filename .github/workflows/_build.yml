@@ -223,13 +223,18 @@ jobs:
       # into /usr/local/lib (searched on both architectures). And the MoltenVK ICD manifest lives under the
       # brew prefix rather than a path the loader scans, so VK_DRIVER_FILES has to name it explicitly;
       # VK_ICD_FILENAMES is set alongside it for loaders older than 1.3.207.
+      # The link is made from the vulkan-loader keg rather than from the brew prefix, because on Intel that
+      # prefix IS /usr/local: a link built from it points /usr/local/lib/libvulkan.dylib at itself, and dlopen
+      # then finds a symlink loop instead of the driver installed a line earlier.
       - name: Install Vulkan through MoltenVK
         if: inputs.vulkan_icd && runner.os == 'macOS'
         run: |
           brew install --quiet molten-vk vulkan-loader vulkan-tools
           brewPrefix="$(brew --prefix)"
+          loader="$(brew --prefix vulkan-loader)/lib/libvulkan.dylib"
+          test -f "$loader" || { echo "::error::vulkan-loader not found at $loader"; exit 1; }
           sudo mkdir -p /usr/local/lib
-          sudo ln -sf "$brewPrefix/lib/libvulkan.dylib" /usr/local/lib/libvulkan.dylib
+          sudo ln -sf "$loader" /usr/local/lib/libvulkan.dylib
           icd="$brewPrefix/share/vulkan/icd.d/MoltenVK_icd.json"
           test -f "$icd" || { echo "::error::MoltenVK ICD manifest not found at $icd"; exit 1; }
           echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
@@ -342,28 +347,32 @@ jobs:
 
       - name: Build Web Release and run the test bundle
         if: inputs.os == 'web'
-        run: ${{ inputs.python_cmd }} build_web.py -mode Release --run_tests --skip_host_package
+        run: ${{ inputs.python_cmd }} build_web.py -mode Release --run_tests --skip_host_package ${{ inputs.build_flags }}
 
       # ── Build: Android ─────────────────────────────────────────────────────
       # An android build can't run its own packager, so it tool_requires a host oxc3 that has OxC3_package in it,
       # as set up by conanfile.py's build_requirements.
       # Build that once up front, because the three android configs below then share it.
       # That sharing is why HOST_TOOL_OPTIONS is fixed rather than derived from the target's options.
+      # build_flags describes the target, so every step that builds or packages one forwards it, the apk step
+      # further down included; android_sanitizers.yml checks both and says why each half needs them.
+      # The host tooling steps take none, here and in the web section above, since the shared host tool is
+      # built with the fixed options named above.
       - name: Build host OxC3 package (tooling)
         if: inputs.os == 'android'
         run: ${{ inputs.python_cmd }} build_android.py --host_package_only
 
       - name: Build Android Debug
         if: inputs.os == 'android' && !inputs.android_shader_compiler && !inputs.android_run
-        run: ${{ inputs.python_cmd }} build_android.py -mode Debug -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+        run: ${{ inputs.python_cmd }} build_android.py -mode Debug -api ${{ inputs.android_api }} -generator Ninja --skip_host_package ${{ inputs.build_flags }}
 
       - name: Build Android Debug (SIMD fallback)
         if: inputs.os == 'android' && !inputs.android_shader_compiler && !inputs.android_run
-        run: ${{ inputs.python_cmd }} build_android.py -mode Debug -simd False -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+        run: ${{ inputs.python_cmd }} build_android.py -mode Debug -simd False -api ${{ inputs.android_api }} -generator Ninja --skip_host_package ${{ inputs.build_flags }}
 
       - name: Build Android Release
         if: inputs.os == 'android' && !inputs.android_shader_compiler && !inputs.android_run
-        run: ${{ inputs.python_cmd }} build_android.py -mode Release -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release -api ${{ inputs.android_api }} -generator Ninja --skip_host_package ${{ inputs.build_flags }}
 
       # DXC cross compiled to android, which is the expensive half of this: the host build has to produce
       # llvm-tblgen/clang-tblgen for the cross build to borrow (see packages/dxc/conanfile.py), so both
@@ -373,14 +382,14 @@ jobs:
 
       - name: Build Android Release (shader compiler)
         if: inputs.os == 'android' && inputs.android_shader_compiler
-        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch arm64 -tests True -shader_compiler True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch arm64 -tests True -shader_compiler True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package ${{ inputs.build_flags }}
 
       # x64 rather than arm64: the emulator below runs on an x86_64 host, and an arm64 image there is
       # software emulated and far too slow to finish a test run.
 
       - name: Build Android Release (x64, for the emulator)
         if: inputs.os == 'android' && inputs.android_run
-        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch x64 -tests True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release -arch x64 -tests True -api ${{ inputs.android_api }} -generator Ninja --skip_host_package ${{ inputs.build_flags }}
 
       # The emulator needs KVM, which the runner exposes but doesn't make writable by default.
 
@@ -429,7 +438,7 @@ jobs:
           # host driver supports, and on api 31 the guest ICD allowlist is old enough to cost us more than that.
           emulator-options: -no-window -gpu lavapipe -noaudio -no-boot-anim -camera-back none -qemu -cpu host
           disable-animations: true
-          script: ${{ inputs.python_cmd }} build_android.py --skip_build --apk --sign --run -mode Release -arch x64 -tests True -package net.osomi.test -version 0.1.0 -name "OxC3 test" -keystore_password oxc3ci -test_timeout 900
+          script: ${{ inputs.python_cmd }} build_android.py --skip_build --apk --sign --run -mode Release -arch x64 -tests True -package net.osomi.test -version 0.1.0 -name "OxC3 test" -keystore_password oxc3ci -test_timeout 900 ${{ inputs.build_flags }}
 
       # ── Build: everything else ─────────────────────────────────────────────
       # Debug goes first because a failing step aborts the job,
@@ -438,6 +447,9 @@ jobs:
       # so a crash prints real stack frames instead of collapsing into main+<offset>.
       # Each build.py call resolves its own dependencies,
       # so the order carries no other cost than which run pays for building them.
+      # Host builds only, since android and web are cross compiled by the steps above.
+      # A cross job that also ran these would pay for three native builds nothing looks at,
+      # and could go red on a host failure that says nothing about the target it exists to test.
 
       # packages/agility_sdk ships the preview Agility SDK, whose D3D12Core.dll is internally named
       # D3D12CoreRequireDevMode.dll and exports only D3D12SDKVersion 721.
@@ -508,15 +520,15 @@ jobs:
       # fallback build below (which reuses the same output directory) cannot overwrite what gets uploaded.
 
       - name: Build Debug
-        if: inputs.os != 'android'
+        if: inputs.os != 'android' && inputs.os != 'web'
         run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True -ctest True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
 
       - name: Build Release
-        if: inputs.os != 'android'
+        if: inputs.os != 'android' && inputs.os != 'web'
         run: ${{ inputs.python_cmd }} build.py -mode Release -tests True -ctest True ${{ inputs.build_flags }} ${{ inputs.upload_prebuilts && '-deploy prebuilt' || '' }}
 
       - name: Build Release (SIMD fallback)
-        if: inputs.os != 'android'
+        if: inputs.os != 'android' && inputs.os != 'web'
         run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True -ctest True ${{ inputs.build_flags }}
 
       # ── Prebuilts ──────────────────────────────────────────────────────────
@@ -528,7 +540,7 @@ jobs:
       # not what a prebuilt is for.
 
       - name: Upload prebuilts
-        if: success() && inputs.upload_prebuilts && inputs.os != 'android'
+        if: success() && inputs.upload_prebuilts && inputs.os != 'android' && inputs.os != 'web'
         uses: actions/upload-artifact@v4
         with:
           name: prebuilt-${{ inputs.hook_name }}

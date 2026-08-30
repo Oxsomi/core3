@@ -99,6 +99,14 @@ SpinLock Allocator_lock;                            //Multi threading safety
 
 		captured->traceText = Buffer_createNull();
 
+		//Every reader checks the slot's generation before following the frames, and copying is a read too:
+		// the text is only this record's callstack while the ring hasn't handed the slot on.
+		//A copy taken without that check holds an unrelated stack, and the OWNED stamp below would make it
+		// authoritative, which is the one state a trace can no longer be checked out of.
+
+		if(!Error_webStackTraceIsLive((const void *const *) captured->stack))
+			return;
+
 		const C8 *first = (const C8*) captured->stack[1];
 
 		if(!first)
@@ -121,6 +129,15 @@ SpinLock Allocator_lock;                            //Multi threading safety
 
 		for(U64 i = 0; i <= len; ++i)
 			dst[i] = first[i];
+
+		//Checked again now the copy is made: a recycle partway through it takes the head of one stack and
+		// the tail of another, so only a slot that held its generation throughout may be owned.
+		//The frames stay on the ring otherwise, which the reader reports as expired.
+
+		if(!Error_webStackTraceIsLive((const void *const *) captured->stack)) {
+			Buffer_free(&copy, &Allocator_allocationsAllocator);
+			return;
+		}
 
 		for(U64 i = 1; i < STACKTRACE_SIZE && captured->stack[i]; ++i)
 			captured->stack[i] = dst + ((const C8*) captured->stack[i] - first);
@@ -230,6 +247,15 @@ Bool Platform_onAllocate(void *ptr, U64 length, Error *e_rr) {
 	goto clean;
 
 clean:
+
+	//The list owns the copied callstack text from the push onwards, and Platform_onFree frees it together
+	// with the record.
+	//A record that never got that far still owns it here.
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
+		if(!s_uccess)
+			Platform_disownStackTrace(&captured);
+	#endif
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&Allocator_lock);

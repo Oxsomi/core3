@@ -54,6 +54,21 @@ def webProfile(threads):
 	"""
 	return WEB_PROFILE_MT if threads else WEB_PROFILE
 
+def webFlavorSuffix(threads, asan=False, ubsan=False):
+	"""Name of one flavor, as a suffix on wasm64.
+
+	Everything that forks the package set forks this name.
+	-pthread is ABI, and a sanitized build links sanitized dependencies,
+	so none of these share a binary with the plain flavor.
+	CMakeLists.txt's EMSCRIPTEN block is authoritative for the name and derives the artifact directory
+	(archDir) from it: wasm64, then _mt when the compile flags carry -pthread, then _asan, then _ubsan.
+	conanfile.py's package() rebuilds the same name to find what CMake wrote.
+	All three have to agree, otherwise a build writes its binaries into another flavor's bin and the
+	test bundle is looked for in a directory nothing ever writes.
+	"""
+
+	return ("_mt" if threads else "") + ("_asan" if asan else "") + ("_ubsan" if ubsan else "")
+
 def ensureEmsdk():
 
 	emsdk = os.environ.get("EMSDK", os.path.join(os.path.expanduser("~"), "emsdk"))
@@ -65,7 +80,7 @@ def ensureEmsdk():
 	os.environ["EMSDK"] = emsdk
 	return emsdk
 
-def webOptionArgs(tests, hostCrypto=False):
+def webOptionArgs(tests, hostCrypto=False, asan=False, ubsan=False):
 	"""Options for the web target itself.
 
 	enableShaderCompiler=True: the point of the port.
@@ -87,20 +102,30 @@ def webOptionArgs(tests, hostCrypto=False):
 		# Emscripten's SSE shims are deliberately unused: they misparse under -fms-extensions, which
 		# OxC3's C++ TUs require.
 		"enableSIMD": "True",
-		"enableHostCrypto": "True" if hostCrypto else "False"
+		"enableHostCrypto": "True" if hostCrypto else "False",
+
+		# The emscripten linker adds the ASan shadow region (an eighth of MAXIMUM_MEMORY) to INITIAL_MEMORY
+		# itself whenever ALLOW_MEMORY_GROWTH is on, which apply_web_link_options (cmake/oxc3.cmake) sets,
+		# so the 32MB the module starts with covers a sanitized build and nothing here has to raise it.
+		# Raising it from here is not possible anyway: those are target_link_options,
+		# which land after anything conan can put in the linker flags, and emcc takes the last -s setting.
+
+		"enableASAN": "True" if asan else "False",
+		"enableUBSAN": "True" if ubsan else "False"
 	}
 
 	return " ".join(f"-o \"&:{k}={v}\"" for k, v in options.items())
 
-def doBuild(mode, doInstall, tests, cache, hostCrypto=False, threads=False):
+def doBuild(mode, doInstall, tests, cache, hostCrypto=False, threads=False, asan=False, ubsan=False):
 
 	profile      = webProfile(threads)
 	buildProfile = common.crossBuildProfileArgs()
 
-	# The dependency hash cache is keyed per flavor, because the two share recipes but not binaries.
-	# A key collision would report the threaded packages as unchanged and reuse the single threaded ones.
+	# The dependency hash cache is keyed per flavor, because the flavors share recipes but not binaries.
+	# A key collision would report the threaded packages as unchanged and reuse the single threaded ones,
+	# and would hand a sanitized build the unsanitized dependencies in the same way.
 
-	cacheSuffix  = "_mt" if threads else ""
+	cacheSuffix  = webFlavorSuffix(threads, asan, ubsan)
 
 	# Separate output folder per flavor, not just a separate profile.
 	# CMake seeds CMAKE_<LANG>_FLAGS from the toolchain's _INIT variables on the first configure only,
@@ -108,8 +133,18 @@ def doBuild(mode, doInstall, tests, cache, hostCrypto=False, threads=False):
 	# The toolchain file then says one thing and CMakeCache.txt another,
 	# and the build links a single threaded binary that passes every test.
 
-	target       = "wasm64_mt" if threads else "wasm64"
+	target       = f"wasm64{cacheSuffix}"
 	profileArgs  = f"--profile:host=\"{profile}\" {buildProfile}"
+
+	# The dependencies that compile C/C++ have to be built the way we are.
+	# conanfile.py's requirements() propagates enableASAN/enableUBSAN to dxc and spirv_reflect, so the graph
+	# asks for sanitized packages; creating them without these options leaves it resolving a binary that
+	# nothing ever built, which is a "Missing binary" error at install time rather than a link failure later.
+
+	sanitizerOptions = ""
+
+	if asan or ubsan:
+		sanitizerOptions = f"-o enableASAN={asan} -o enableUBSAN={ubsan}"
 
 	# Target dependencies.
 	# Graphics is off (no WebGPU backend yet) so no vulkan_headers; agility_sdk ships d3d12shader.h for DXC's dxcreflect.h.
@@ -138,14 +173,19 @@ def doBuild(mode, doInstall, tests, cache, hostCrypto=False, threads=False):
 
 	shaderMode = common.shaderCompilerDepMode(mode, False)
 
+	# Both of them take their sanitizer wiring from a python_requires, which has to be resolvable from the
+	# local cache before either recipe is loaded.
+
+	common.exportSharedRecipes()
+
 	for package in common.SHADER_COMPILER_DEPS:
 		common.conanCreateIfChanged(
 			package, profile, shaderMode, profileArgs, cache, key=f"{package}::web{cacheSuffix}",
-			options=tablegenConf
+			options=f"{tablegenConf} {sanitizerOptions}".strip()
 		)
 
 	outputFolder = f"\"build/{mode}/web/{target}\""
-	options      = webOptionArgs(tests, hostCrypto)
+	options      = webOptionArgs(tests, hostCrypto, asan, ubsan)
 	shaderArgs   = common.shaderCompilerDepArgs(False)
 
 	common.run(
@@ -179,10 +219,11 @@ def emsdkNode():
 
 	return "node"
 
-def runTests(mode, suite=None, threads=False):
+def runTests(mode, suite=None, threads=False, asan=False, ubsan=False):
 	"""Run the bundle under node directly (what ctest would do), streaming output; exit code is the result."""
 
-	binDir = os.path.join(common.ROOT, "build", mode, "web", "wasm64_mt" if threads else "wasm64", "bin")
+	flavor = f"wasm64{webFlavorSuffix(threads, asan, ubsan)}"
+	binDir = os.path.join(common.ROOT, "build", mode, "web", flavor, "bin")
 	bundle = os.path.join(binDir, "OxC3_wtest.js")
 
 	if not os.path.isfile(bundle):
@@ -225,6 +266,15 @@ def main():
 		"-threads", type=str, default="False", choices=["True", "False"],
 		help="Build the -pthread flavor (needs cross origin isolation in a browser; rebuilds every dependency)"
 	)
+	parser.add_argument(
+		"-asan", type=str, default="False", choices=["True", "False"],
+		help="Build with AddressSanitizer. Its own flavor, in its own output folder: the dependencies that "
+		     "compile C/C++ are rebuilt sanitized, so nothing is shared with the plain build"
+	)
+	parser.add_argument(
+		"-ubsan", type=str, default="False", choices=["True", "False"],
+		help="Build with UndefinedBehaviorSanitizer. Its own flavor as well, for the same reason as -asan"
+	)
 	parser.add_argument("--run_tests", help="Run the test bundle under node after building", action="store_true")
 	parser.add_argument("--skip_build", help="Skip the build (e.g. to only run tests)", action="store_true")
 	parser.add_argument("--install", help="conan export-pkg the result", action="store_true")
@@ -257,11 +307,16 @@ def main():
 		# for the single threaded flavor.
 
 		threads = args.threads == "True"
-		doBuild(args.mode, args.install, args.tests == "True", cache, args.host_crypto or threads, threads)
+
+		doBuild(
+			args.mode, args.install, args.tests == "True", cache, args.host_crypto or threads, threads,
+			args.asan == "True", args.ubsan == "True"
+		)
+
 		common.saveHashCache(cache)
 
 	if args.run_tests:
-		runTests(args.mode, args.suite, args.threads == "True")
+		runTests(args.mode, args.suite, args.threads == "True", args.asan == "True", args.ubsan == "True")
 
 if __name__ == "__main__":
 	main()

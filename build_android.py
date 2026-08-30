@@ -46,6 +46,42 @@ ANDROID_ARCHES = { "x64": "x86_64", "arm64": "armv8" }
 # The single .so -tests True produces, holding every suite; see src/CMakeLists.txt.
 TEST_LIB = "OxC3_atest"
 
+# compiler-rt names its runtimes after the LLVM target arch, which is neither the -arch name nor the abi
+# the apk stores them under.
+
+ANDROID_SANITIZER_ARCHES = { "x64": "x86_64", "arm64": "aarch64" }
+
+# The shim android runs in place of the app's own process, read from lib/<abi>/wrap.sh inside the apk.
+# ASan has to own the allocator before anything else allocates, and the DT_NEEDED the linker records is
+# resolved too late for that, so the runtime is preloaded here instead.
+# Taken from the NDK's AddressSanitizer guide (https://developer.android.com/ndk/guides/asan), including the
+# libc++_shared preload that works around https://github.com/android/ndk/issues/988.
+# The options differ from that guide's.
+# allow_user_segv_handler, because platform.c installs a handler of its own and ASan otherwise takes the
+# signal from it.
+# detect_leaks, because the suites already assert their allocation counts return to zero while the driver and
+# the loader leak by design at exit, the same reason _build.yml turns it off for the host jobs.
+# log_to_syslog, because android starts this through logwrapper, which already routes stderr into logcat.
+# UBSAN_OPTIONS is set here for the same reason it is set for the host jobs: a UBSan finding prints and
+# carries on otherwise, and a dead process is the only thing the test runner can see.
+# The preload is guarded so the same shim serves a UBSan only build, which links its runtime normally and
+# needs no preload at all.
+
+ASAN_WRAP_SH = """#!/system/bin/sh
+HERE="$(cd "$(dirname "$0")" && pwd)"
+export ASAN_OPTIONS=log_to_syslog=false,allow_user_segv_handler=1,detect_leaks=0
+export UBSAN_OPTIONS=print_stacktrace=1,halt_on_error=1
+ASAN_LIB="$(ls "$HERE"/libclang_rt.asan-*-android.so 2>/dev/null)"
+if [ -n "$ASAN_LIB" ]; then
+	if [ -f "$HERE/libc++_shared.so" ]; then
+		export LD_PRELOAD="$ASAN_LIB $HERE/libc++_shared.so"
+	else
+		export LD_PRELOAD="$ASAN_LIB"
+	fi
+fi
+"$@"
+"""
+
 def archName(conanArch):
 	return "x64" if conanArch == "x86_64" else "arm64"
 
@@ -94,6 +130,21 @@ def clangMajorVersion(binDir):
 
 	return common.conanCompilerVersion("clang", found.group(1))
 
+def ndkSanitizerRuntime(name, arch):
+	"""Path to the NDK's libclang_rt.<name>-<arch>-android.so, or None when it ships no such runtime.
+
+	Android defaults every sanitizer to its shared runtime, so this .so is a DT_NEEDED of everything the build
+	produces and has to travel in the apk beside them.
+	The clang version folder in the path moves with every NDK, so it is globbed rather than pinned; an NDK
+	ships exactly one clang, so there is nothing to choose between.
+	"""
+
+	prebuilt = os.path.dirname(ndkToolchainBin())
+	runtime  = f"libclang_rt.{name}-{arch}-android.so"
+	found    = glob.glob(os.path.join(prebuilt, "lib", "clang", "*", "lib", "linux", runtime))
+
+	return found[0] if found else None
+
 def profileName(conanArch, level, generator):
 	return "android_" + conanArch + "_" + str(level) + "_" + generator.replace(" ", "_")
 
@@ -132,7 +183,7 @@ def ensureProfile(conanHome, binDir, conanArch, level, generator):
 # Cross build
 # ---------------------------------------------------------------------------------------------------
 
-def androidOptionArgs(simd, tests=False, shaderCompiler=False):
+def androidOptionArgs(simd, tests=False, shaderCompiler=False, asan=False, ubsan=False):
 	"""Options for the android target itself.
 
 	enableShaderCompiler is off by default: it more than doubles the build (DXC is the bulk of it) and
@@ -141,6 +192,10 @@ def androidOptionArgs(simd, tests=False, shaderCompiler=False):
 
 	enableTests builds OxC3_atest, one .so holding every suite (see src/CMakeLists.txt); android
 	has no exec, so that's the only way to run them on device.
+
+	enableASAN/enableUBSAN are the same sanitizers build.py offers, and the NDK's clang takes the same flags
+	CMakeLists already emits for clang. What android adds is packaging: their runtimes are shared libraries
+	that have to ship inside the apk, and ASan's has to be preloaded there; see makeApk.
 	"""
 
 	options = {
@@ -151,14 +206,16 @@ def androidOptionArgs(simd, tests=False, shaderCompiler=False):
 		"dynamicLinkingGraphics": "False",
 		"dynamicLinkingShaderCompiler": "False",
 		"enableShaderCompiler": "True" if shaderCompiler else "False",
-		"enableSIMD": simd
+		"enableSIMD": simd,
+		"enableASAN": "True" if asan else "False",
+		"enableUBSAN": "True" if ubsan else "False"
 	}
 
 	return " ".join(f"-o \"&:{k}={v}\"" for k, v in options.items())
 
 def doBuild(
 	mode, conanHome, binDir, conanArch, level, generator, generatorValidationLayer, simd, doInstall, tests, cache,
-	hostCompiler=None, shaderCompiler=False, setupOnly=False
+	hostCompiler=None, shaderCompiler=False, setupOnly=False, asan=False, ubsan=False
 ):
 
 	profile     = profileName(conanArch, level, generator)
@@ -177,9 +234,20 @@ def doBuild(
 
 	common.exportSharedRecipes()
 
+	# The dependencies that compile C/C++ have to be built the way we are: ASan owns the allocator the whole
+	# process shares, so a sanitized consumer can't link unsanitized ones.
+	# conanfile.py's requirements() asks for them with these options set, so the package ids it resolves only
+	# exist if they were created with the same ones; without this the install fails for a missing binary.
+
+	sanitizerOptions = f"-o enableASAN={asan} -o enableUBSAN={ubsan}" if (asan or ubsan) else ""
+
+	# vulkan_headers is headers only, so it is the same package either way and conanfile.py asks for it
+	# without these.
+
 	for package in ("packages/openal_soft", "packages/vulkan_headers"):
 		common.conanCreateIfChanged(
-			package, profilePath, mode, profileArgs, cache, key=f"{package}::{profile}"
+			package, profilePath, mode, profileArgs, cache, key=f"{package}::{profile}",
+			options=sanitizerOptions if package == "packages/openal_soft" else ""
 		)
 
 	# The shader compiler's dependencies.
@@ -204,7 +272,7 @@ def doBuild(
 		for package in ("packages/dxc", "packages/spirv_reflect"):
 			common.conanCreateIfChanged(
 				package, profilePath, common.HOST_TOOL_MODE, profileArgs, cache,
-				key=f"{package}::{profile}", options=tablegenConf
+				key=f"{package}::{profile}", options=f"{tablegenConf} {sanitizerOptions}".strip()
 			)
 
 	if mode == "Debug":
@@ -219,7 +287,7 @@ def doBuild(
 		)
 
 	outputFolder = f"\"build/{mode}/android/{archName(conanArch)}\""
-	options      = androidOptionArgs(simd, tests, shaderCompiler)
+	options      = androidOptionArgs(simd, tests, shaderCompiler, asan, ubsan)
 
 	# install writes the toolchain and dependency files only; build does those and compiles OxC3 too.
 	# An IDE configuring a tree it has never seen needs the first, and builds the rest itself.
@@ -281,6 +349,36 @@ def d8Command():
 	java = os.path.join(os.environ["JAVA_HOME"], "bin", "java") if "JAVA_HOME" in os.environ else "java"
 	return f"\"{java}\" -cp \"{jar}\" com.android.tools.r8.D8"
 
+def addSanitizerRuntimes(args, arch, abiFolder):
+	"""Put the sanitizer runtimes, and the shim that preloads ASan's, beside the app's own libraries.
+
+	They are not build output, so nothing in build/ has them to copy; they come out of the NDK the build
+	compiled with.
+	A missing runtime is a hard failure rather than a warning, because an apk that starts and instruments
+	nothing is indistinguishable from a passing run.
+	"""
+
+	names = ([ "asan" ] if args.asan == "True" else []) + ([ "ubsan_standalone" ] if args.ubsan == "True" else [])
+
+	if not names:
+		return
+
+	for name in names:
+
+		runtime = ndkSanitizerRuntime(name, ANDROID_SANITIZER_ARCHES[arch])
+
+		if runtime is None:
+			print(f"-- The NDK ships no {name} runtime for {arch}, so a sanitized apk can't be built", file=sys.stderr)
+			sys.exit(1)
+
+		shutil.copy2(runtime, abiFolder)
+
+	# The newline is pinned rather than left to the host: /system/bin/sh reads a CRLF shebang as a command
+	# name with a trailing carriage return, so an apk packaged on windows would die at startup.
+
+	with open(abiFolder + "/wrap.sh", "w", newline="\n") as output:
+		output.write(ASAN_WRAP_SH)
+
 def makeApk(args, packageDirs):
 
 	if args.package is None or args.version is None or args.lib is None or args.name is None:
@@ -297,12 +395,36 @@ def makeApk(args, packageDirs):
 	inputPath = os.path.join(common.ROOT, "src", "platforms", "android", "AndroidManifest.xml")
 	manifest  = Path(inputPath).read_text()
 
+	# Android reads wrap.sh, and unpacks it out of the apk at all, only for a debuggable app, so a sanitized
+	# build is debuggable in every mode.
+	# A sanitized build is diagnostic and never shipped, which is what makes that free.
+
+	sanitized = args.asan == "True" or args.ubsan == "True"
+
 	manifest = manifest.format(
 		APP_PACKAGE=args.package, APP_VERSION=args.version, APP_API_LEVEL=str(args.api), APP_NAME=args.name,
-		APP_DEBUGGABLE="false" if args.mode == "Release" else "true", APP_CATEGORY=args.category,
+		APP_DEBUGGABLE="false" if (args.mode == "Release" and not sanitized) else "true",
+		APP_CATEGORY=args.category,
 		APP_LIB_NAME=args.lib,
 		APP_EXPORTED="true" if (args.mode != "Release" or args.tests == "True") else "false"
 	)
+
+	# wrap.sh is looked up under the app's native library directory, and that directory is a path inside the
+	# apk itself as long as the libraries are left unextracted, so android finds nothing there and the app
+	# runs uninstrumented.
+	# Installing the unpacked way costs a second copy on device and is what makes the shim reachable.
+	# A manifest that no longer spells it this way is a hard failure rather than a silent no-op, for the same
+	# reason a missing runtime is: an apk that instruments nothing still reads as a passing run.
+
+	if sanitized:
+
+		unextracted = "android:extractNativeLibs=\"false\""
+
+		if unextracted not in manifest:
+			print(f"-- {inputPath} no longer sets {unextracted}, so wrap.sh can't be reached", file=sys.stderr)
+			sys.exit(1)
+
+		manifest = manifest.replace(unextracted, "android:extractNativeLibs=\"true\"")
 
 	apkFolder = f"build/{args.mode}/android/apk"
 	shutil.rmtree(apkFolder, ignore_errors=True)
@@ -337,6 +459,8 @@ def makeApk(args, packageDirs):
 
 		if not found:
 			print(f"-- Warning: no .so found for {abi}, the apk will have no native code", file=sys.stderr)
+
+		addSanitizerRuntimes(args, arch, libFolder + "/" + abi)
 
 	# Copy packages (the oiCA archives add_virtual_files produced)
 
@@ -444,6 +568,12 @@ def makeApk(args, packageDirs):
 			for f in sorted(glob.glob("lib/*/*.so")):
 				apk.write(f, f.replace(os.sep, "/"), compress_type=zipfile.ZIP_STORED)
 
+			# The sanitizer shim is deflated: a sanitized apk has its libraries extracted at install time
+			# anyway, so nothing is mapped out of the archive and there is no alignment to preserve.
+
+			for f in sorted(glob.glob("lib/*/wrap.sh")):
+				apk.write(f, f.replace(os.sep, "/"), compress_type=zipfile.ZIP_DEFLATED)
+
 			apk.write("classes.dex", "classes.dex", compress_type=zipfile.ZIP_DEFLATED)
 
 	finally:
@@ -533,7 +663,10 @@ def runApk(args):
 
 	print(f"-- Installing apk file ({apkFile}) using adb ({adb})")
 
-	if args.mode == "Release":
+	# android:testOnly follows android:debuggable in the manifest, and a sanitized apk is debuggable in every
+	# mode, so the install needs -t there too or it is refused with INSTALL_FAILED_TEST_ONLY.
+
+	if args.mode == "Release" and args.asan != "True" and args.ubsan != "True":
 		common.run(f"{adb} install -r {apkFile}")
 	else:
 		common.run(f"{adb} install -t -r {apkFile}")
@@ -656,6 +789,18 @@ def main():
 		     "borrows its llvm-tblgen/clang-tblgen"
 	)
 	parser.add_argument(
+		"-asan", type=str, default="False", choices=["True", "False"],
+		help="Build with AddressSanitizer. The apk then also carries the NDK's ASan runtime and a wrap.sh "
+		     "preloading it, and is marked debuggable and extractable, which is what makes android honour "
+		     "that shim. Pass it to a --skip_build --apk run too, since that is the half that packages them"
+	)
+	parser.add_argument(
+		"-ubsan", type=str, default="False", choices=["True", "False"],
+		help="Build with UndefinedBehaviorSanitizer. The apk then also carries the NDK's UBSan runtime, "
+		     "which android links against rather than into the binaries. Same note about --skip_build --apk"
+	)
+
+	parser.add_argument(
 		"-host_compiler", type=str, default=None,
 		help="Toolchain for the *host* half of the build: the OxC3_package tool that packages virtual files, "
 		     "and its dependencies. Defaults to the platform's usual one. The android target itself is always "
@@ -744,6 +889,12 @@ def main():
 
 	required = ([] if args.skip_build else [ "ANDROID_NDK" ]) + ([ "ANDROID_SDK" ] if args.apk or args.run else [])
 
+	# A sanitized apk carries the NDK's sanitizer runtimes beside the app's own libraries, so packaging one
+	# needs the NDK even when the build itself happened in an earlier step.
+
+	if args.apk and (args.asan == "True" or args.ubsan == "True") and "ANDROID_NDK" not in required:
+		required.append("ANDROID_NDK")
+
 	for var in required:
 		if var not in os.environ:
 			print(f"{var} not found", file=sys.stderr)
@@ -774,7 +925,8 @@ def main():
 			doBuild(
 				args.mode, conanHome, binDir, conanArch, str(args.api), args.generator,
 				generatorValidationLayer, args.simd, args.install, args.tests == "True", cache,
-				args.host_compiler, args.shader_compiler == "True", args.setup_only == "True"
+				args.host_compiler, args.shader_compiler == "True", args.setup_only == "True",
+				args.asan == "True", args.ubsan == "True"
 			)
 
 		common.saveHashCache(cache)

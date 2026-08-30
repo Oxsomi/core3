@@ -314,10 +314,18 @@ void VK_WRAP_FUNC(BLAS_free)(BLAS *blas) {
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	const VkAccelerationStructureKHR as = BLAS_ext(blas, Vk)->as;
+	const VkBLAS *blasExt = BLAS_ext(blas, Vk);
 
-	if(as)
-		deviceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
+	if(blasExt->as)
+		deviceExt->destroyAccelerationStructure(deviceExt->device, blasExt->as, NULL);
+
+	//A compaction whose copy was prepared but never recorded owns a destination structure that nothing
+	// else will ever adopt, since only BLASRef_compact moves it into as.
+	//The buffer it sits in is released by BLAS_free, which calls this before dropping that reference, so
+	// the structure always goes before its memory.
+
+	if(blasExt->pendingAs)
+		deviceExt->destroyAccelerationStructure(deviceExt->device, blasExt->pendingAs, NULL);
 }
 
 Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr) {

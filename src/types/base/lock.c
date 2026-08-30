@@ -51,14 +51,15 @@
 		#endif
 	#elif _ARCH == ARCH_WASM64
 
-		//wasm has no pause hint: there is no such instruction and clang exposes no builtin for one.
+		//No pause hint is reachable from here: clang exposes no builtin for one, so even though a pause
+		// instruction exists on paper in the shared-everything-threads proposal, nothing can emit it.
 		//Emscripten's own primitives are empty for the same reason: its _mm_pause() compat shim is an empty
 		// function and musl's a_spin() for the emscripten arch is empty with no -pthread variant.
 		//THREAD_YIELD does not deschedule on web either, so a contended lock is a real busy loop.
-		//Emscripten's sched_yield() runs _emscripten_yield(), which drains the proxying queue and fires timers
-		// on the main runtime thread but returns at once on a worker.
-		//Spinning is still safe because pthreads are Web Workers on OS threads that the browser preempts, so a
-		// spinner never starves the holder, but it burns a core: critical sections have to stay short on web.
+		//Under -pthread, emscripten's sched_yield() runs _emscripten_yield(), which drains the proxying queue
+		// and fires timers on the main runtime thread but returns at once on a worker.
+		//A spinner does not starve the holder, since pthreads are Web Workers on OS threads the browser
+		// preempts, but it burns a core: critical sections have to stay short on web.
 		//The main runtime thread arm is load bearing: draining the proxying queue there is what lets a worker
 		// blocked on a proxied call run to completion and release the lock.
 

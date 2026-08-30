@@ -127,11 +127,16 @@ static inline I32x4 I32x4_rshElements(I32x4 a, U8 elementCount) {
 
 //Defined inline rather than out of line as the SSE backend does: SIMD128's shifts take a runtime count,
 // so there is no need for the switch over every immediate that sse_vec.c has to spell out.
+//SIMD128 masks that count against the lane width though (mod 32 for the 32 bit lanes, mod 64 for the 64
+// bit ones), so a count at or past the width wraps to that remainder rather than clearing the vector.
+//The scalar reference and the SSE and NEON backends all give zero there, and I32x4_lsh128 / I32x4_rsh128
+// rely on it: both shift by 64 - bits, which is the full lane width when bits is 0.
+//The count is therefore checked before it reaches the intrinsic.
 
-static inline I32x4 I32x4_lsh32(I32x4 a, U8 bits) { return wasm_i32x4_shl(a, bits); }
-static inline I32x4 I32x4_rsh32(I32x4 a, U8 bits) { return wasm_u32x4_shr(a, bits); }
-static inline I32x4 I32x4_lsh64(I32x4 a, U8 bits) { return wasm_i64x2_shl(a, bits); }
-static inline I32x4 I32x4_rsh64(I32x4 a, U8 bits) { return wasm_u64x2_shr(a, bits); }
+static inline I32x4 I32x4_lsh32(I32x4 a, U8 bits) { return bits >= 32 ? I32x4_zero() : wasm_i32x4_shl(a, bits); }
+static inline I32x4 I32x4_rsh32(I32x4 a, U8 bits) { return bits >= 32 ? I32x4_zero() : wasm_u32x4_shr(a, bits); }
+static inline I32x4 I32x4_lsh64(I32x4 a, U8 bits) { return bits >= 64 ? I32x4_zero() : wasm_i64x2_shl(a, bits); }
+static inline I32x4 I32x4_rsh64(I32x4 a, U8 bits) { return bits >= 64 ? I32x4_zero() : wasm_u64x2_shr(a, bits); }
 
 //SHA256 helper functions
 

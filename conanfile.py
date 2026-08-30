@@ -293,8 +293,27 @@ class oxc3(ConanFile):
 		lib_dst = os.path.join(self.package_folder, "lib")
 		bin_dst = os.path.join(self.package_folder, "bin")
 
+		# The web target has one output directory per flavor, and CMakeLists.txt's EMSCRIPTEN block is
+		# authoritative for its name: wasm64, then _mt when the compile flags carry -pthread, then _asan,
+		# then _ubsan, in that order.
+		# Rebuild the same name here or package() collects another flavor's binaries, or none at all.
+		# CMakeToolchain feeds tools.build:cflags into CMAKE_C_FLAGS_INIT, which is the CMAKE_C_FLAGS that
+		# block matches -pthread against, so reading that conf is reading the flags CMake saw.
+		# build_web.py's webFlavorSuffix() is the third copy of the rule.
+
 		if self.settings.os == "Emscripten":
+
 			archName = "wasm64"
+
+			if "-pthread" in self.conf.get("tools.build:cflags", default=[], check_type=list):
+				archName += "_mt"
+
+			if self.options.enableASAN:
+				archName += "_asan"
+
+			if self.options.enableUBSAN:
+				archName += "_ubsan"
+
 		elif self.settings.arch == "x86_64":
 			archName = "x64"
 		else:

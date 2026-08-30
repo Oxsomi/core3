@@ -752,19 +752,23 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	// which compiles both backends to identical code and times no extract at all. The accumulator can't
 	// fold: it is carried across iterations and all four of its lanes reach the sink, so the add stays 128
 	// bit wide and lane x is only reachable through a real extract.
-	//An iteration is one add plus one extract, hence iters / 2.
+	//An iteration is one add plus one extract, so the loop runs half as many times and extractIters is
+	// what gets reported: counting the adds as extracts would state twice the rate actually measured.
+
+	const U64 extractIters = iters / 2;
 
 	F32x4 xVec = F32x4_zero();
 	F32 xAcc = 0;
 	then = Time_now();
-	for(U64 i = 0; i < iters / 2; ++i) {
+	for(U64 i = 0; i < extractIters; ++i) {
 		xVec = F32x4_add(xVec, win[i & mask]);
 		xAcc += F32x4_x(xVec);
 	}
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f lane extract: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) (xAcc + F32x4_reduce(xVec))
+		extractIters, (F64)(now - then) / SECOND, (F64) extractIters / (F64)(now - then),
+		(F64) (xAcc + F32x4_reduce(xVec))
 	);
 
 	//Transpose is an involution, so transposing in place in a loop folds to nothing; feeding the window

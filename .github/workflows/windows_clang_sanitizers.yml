@@ -27,7 +27,7 @@ jobs:
       # would have selected D3D12 only, sanitizing half of what we wanted.
       # It also suits ASan here: the dynamic sanitizer runtime is already required because the shader
       # compiler is a DLL, and more backend DLLs change nothing about that.
-      build_flags: '-compiler clang -dynamic_linking True -o cliGraphics=False -asan True -ubsan True'
+      build_flags: '-compiler clang -dynamic_linking True -asan True -ubsan True'
       # Its own cache group: sanitized dependencies are distinct conan packages from the plain clang-cl job's.
       cache_name: clang_sanitizers
       python_cmd: python

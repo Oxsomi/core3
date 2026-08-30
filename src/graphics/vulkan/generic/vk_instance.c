@@ -1516,6 +1516,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		))
 			capabilities.features |= EGraphicsFeatures_MeshShader;
 
+		//Mesh shaders are compiled against SPIRV 1.4, which brings the two below with it, same as raytracing.
+		//Without them the device would advertise mesh shaders and then fail creation on an extension it never
+		// offered, so the feature is dropped instead.
+
+		if(!optExtensions[EOptExtensions_Spirv14] || !optExtensions[EOptExtensions_ShaderFloatControls])
+			capabilities.features &= ~(EGraphicsFeatures)EGraphicsFeatures_MeshShader;
+
 		//The preference and hint properties gate nothing above: prefersCompactPrimitiveOutput and the
 		// maxPreferred* invocation counts are scheduling advice, and the output granularities only say how
 		// coarsely output allocations round (ANV rounds by 8 where NV rounds by 32; smaller is finer).

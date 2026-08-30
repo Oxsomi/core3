@@ -792,7 +792,18 @@ function(oxc3_add_test)
 		list(APPEND runArgs NO_AUTORUN)
 	endif()
 
-	oxc3_add_test_run(${runArgs} DATA ${T_DATA} DEPS ${T_DEPS})
+	# Appended only when non empty, like the two above: an empty list would pass the keyword with no value,
+	# which is what a caller writing DATA and then forgetting the files looks like.
+
+	if(T_DATA)
+		list(APPEND runArgs DATA ${T_DATA})
+	endif()
+
+	if(T_DEPS)
+		list(APPEND runArgs DEPS ${T_DEPS})
+	endif()
+
+	oxc3_add_test_run(${runArgs})
 
 endfunction()
 
