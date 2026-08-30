@@ -782,16 +782,25 @@ void DxGraphicsDevice_logDebugMessages(
 
 		if(SUCCEEDED(queue->lpVtbl->GetMessageA(queue, i, msg, &len)) && msg->pDescription) {
 
-			Log_errorLnx("D3D12: %s", msg->pDescription);
+			Bool isError = msg->Severity == D3D12_MESSAGE_SEVERITY_CORRUPTION || msg->Severity == D3D12_MESSAGE_SEVERITY_ERROR;
+			Bool isWarning = msg->Severity == D3D12_MESSAGE_SEVERITY_WARNING;
 
 			if(instance) {
 
-				if(msg->Severity == D3D12_MESSAGE_SEVERITY_CORRUPTION || msg->Severity == D3D12_MESSAGE_SEVERITY_ERROR)
+				if(isError)
 					AtomicI64_inc(&instance->validationErrors);
 
-				else if(msg->Severity == D3D12_MESSAGE_SEVERITY_WARNING)
+				else if(isWarning)
 					AtomicI64_inc(&instance->validationWarnings);
 			}
+
+			if(isError)
+				Log_errorLnx("D3D12: %s", msg->pDescription);
+
+			else if(isWarning)
+				Log_warnLnx("D3D12: %s", msg->pDescription);
+
+			else Log_debugLnx("D3D12: %s", msg->pDescription);
 		}
 
 		Buffer_free(&buf, alloc);
