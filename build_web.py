@@ -252,7 +252,12 @@ def main():
 			os.remove(common.HASH_CACHE_FILE)
 
 		cache = common.loadHashCache()
-		doBuild(args.mode, args.install, args.tests == "True", cache, args.host_crypto, args.threads == "True")
+		# The threaded flavor already needs a cross origin isolated page for its shared memory, which is
+		# the same requirement host crypto has, so it routes by default. --host_crypto still forces it on
+		# for the single threaded flavor.
+
+		threads = args.threads == "True"
+		doBuild(args.mode, args.install, args.tests == "True", cache, args.host_crypto or threads, threads)
 		common.saveHashCache(cache)
 
 	if args.run_tests:

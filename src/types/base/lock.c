@@ -52,10 +52,15 @@
 	#elif _ARCH == ARCH_WASM64
 
 		//wasm has no pause hint: there is no such instruction and clang exposes no builtin for one.
-		//This is not a stopgap for the single threaded default, emscripten's own musl defines a_spin() as an
-		// empty function for wasm, so a no-op is what upstream does under threads too.
-		//It stays correct because CPU_PAUSE only appears in the bounded SHORT_SPIN loop below; the unbounded
-		// wait uses THREAD_YIELD (sched_yield), so a contended lock never degrades into a busy loop.
+		//Emscripten's own primitives are empty for the same reason: its _mm_pause() compat shim is an empty
+		// function and musl's a_spin() for the emscripten arch is empty with no -pthread variant.
+		//THREAD_YIELD does not deschedule on web either, so a contended lock is a real busy loop.
+		//Emscripten's sched_yield() runs _emscripten_yield(), which drains the proxying queue and fires timers
+		// on the main runtime thread but returns at once on a worker.
+		//Spinning is still safe because pthreads are Web Workers on OS threads that the browser preempts, so a
+		// spinner never starves the holder, but it burns a core: critical sections have to stay short on web.
+		//The main runtime thread arm is load bearing: draining the proxying queue there is what lets a worker
+		// blocked on a proxied call run to completion and release the lock.
 
 		#define CPU_PAUSE() ((void)0)
 	#else

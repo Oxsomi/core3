@@ -19,8 +19,9 @@
 
 # One wasm64 module holding every unit test suite, run under node.
 #
-# Same recompile-with-_OXC3_TEST_BUNDLED trick as test/android (see that CMakeLists for the why).
-# But node has a real exec: this is an ordinary executable with an exit code,
+# The bundle itself is oxc3_add_bundled_test (cmake/oxc3.cmake), shared with test/android; that is where the
+# recompile-with-_OXC3_TEST_BUNDLED trick and the suites every bundle takes are explained.
+# What is web's own is here: node has a real exec, so this is an ordinary executable with an exit code,
 # wired into ctest through CMAKE_CROSSCOMPILING_EMULATOR (the emscripten toolchain sets it to node).
 #
 # shader_compiler is bundled unconditionally here, unlike android where it is bundled only when
@@ -28,101 +29,28 @@
 # That is a default, not a capability: DXC cross compiles for both, but it more than doubles the build, so
 # android leaves it off while the web target treats it as the point of the port.
 # Not bundled: graphics_interface (no GPU under node) and the functional suites (need a human).
+# Test_dynamicLibrary is bundled and its dlopen is expected to fail, since there is no dlopen without
+# MAIN_MODULE.
 
 set(testRoot ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
-file(GLOB_RECURSE webTestSources CONFIGURE_DEPENDS
-	"${testRoot}/types/base/test/*.c"
-	"${testRoot}/types/base/test/*.cpp"
-	"${testRoot}/types/math/test/*.c"
-	"${testRoot}/types/math/test/*.cpp"
-	"${testRoot}/types/container/test/*.c"
-	"${testRoot}/types/container/test/*.cpp"
-	"${testRoot}/formats/*/test/*.c"
-	"${testRoot}/formats/*/test/*.cpp"
-	"${testRoot}/audio/test/interface/*.c"
-	"${testRoot}/platforms/test/interface/*.c"
-	"${testRoot}/platforms/test/interface/*.cpp"
-)
+include(${testRoot}/../cmake/oxc3.cmake)
+
+# The shader suites are passed in rather than shared, since bundling them is a per platform decision:
+# web always does, android only when EnableShaderCompiler is on.
 
 file(GLOB webShaderTestSources CONFIGURE_DEPENDS "${testRoot}/shader_compiler/test/*.c")
 
-add_executable(OxC3_wtest
-	${webTestSources}
-	${webShaderTestSources}
-	wtest_main.c
-	CMakeLists.txt
+oxc3_add_bundled_test(
+	TARGET  OxC3_wtest
+	ROOT    ${testRoot}
+	SELF    ${testRoot}/..
+	ENTRY   wtest_main.c
+	SOURCES ${webShaderTestSources}
+	LIBS    OxC3_shader_compiler
 )
-
-# _OXC3_TEST_VFS_TARGET: platforms_interface reaches its test data through the virtual file system,
-# namespaced by the target that packaged it (see test/android/CMakeLists.txt).
-
-target_compile_definitions(OxC3_wtest PRIVATE _OXC3_TEST_BUNDLED _OXC3_TEST_VFS_TARGET="OxC3_wtest")
-
-target_link_libraries(OxC3_wtest PUBLIC
-	OxC3_platforms
-	OxC3_audio
-	OxC3_shader_compiler
-	OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr OxC3_formats_oiBC OxC3_formats_oiCA
-	OxC3_formats_oiDL OxC3_formats_oiSB OxC3_formats_oiSH OxC3_formats_wav
-	OxC3_types_test
-	OxC3_types_container_test_util
-)
-
-
-# Test_dynamicLibrary dlopens this by bare name on other platforms.
-# The web run expects the load to fail (no dlopen without MAIN_MODULE),
-# but the target must still exist for the dependency.
-
-add_dependencies(OxC3_wtest OxC3_platforms_interface_dylib_test)
-
-include(${testRoot}/../cmake/oxc3.cmake)
 
 apply_web_link_options(OxC3_wtest)
-
-add_virtual_files(
-	TARGET  OxC3_wtest
-	NAME    testdata
-	ROOT    ${testRoot}/platforms/test/interface/res
-	SELF    ${testRoot}/..
-	FORCE_PACKAGER
-)
-
-# The shader corpus, reached through the virtual file system rather than a working directory.
-# TEST_SHADER_ROOT (shader_compiler/test/test_shader_compiler_shared.h) resolves to //<vfs target>/shaderdata/
-# whenever the suites are bundled, so a bundled build MUST package this section
-# or every compileFileShader() call fails to read its source.
-# -raw keeps the .hlsl files as they are instead of compiling them during packaging.
-# Same shape as test/android.
-
-if(EnableShaderCompiler)
-
-	set(shaderRes ${CMAKE_CURRENT_BINARY_DIR}/shaderdata)
-
-	file(GLOB_RECURSE shaderTestData CONFIGURE_DEPENDS
-		"${testRoot}/shader_compiler/test/*/*.hlsl"
-		"${testRoot}/shader_compiler/test/*/*.hlsli"
-		"${testRoot}/shader_compiler/test/*.oiSH"
-	)
-
-	foreach(f ${shaderTestData})
-		file(RELATIVE_PATH rel "${testRoot}/shader_compiler/test" "${f}")
-		get_filename_component(relDir "${rel}" DIRECTORY)
-		file(COPY "${f}" DESTINATION "${shaderRes}/${relDir}")
-	endforeach()
-
-	add_virtual_files(
-		TARGET  OxC3_wtest
-		NAME    shaderdata
-		ROOT    ${shaderRes}
-		SELF    ${testRoot}/..
-		FORCE_PACKAGER
-		ARGS    -raw
-	)
-
-endif()
-
-set_target_properties(OxC3_wtest PROPERTIES FOLDER Oxsomi/test)
 
 apply_dependencies(OxC3_wtest)
 

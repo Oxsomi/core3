@@ -311,9 +311,18 @@ endif()
 # Routes SHA-256/AES-GCM to the host's hardware crypto on web, where OxC3's own kernels have no
 # AES/SHA instructions to use (1.27 MB/s AES). Needs a cross origin isolated page and the module
 # running in a Worker; falls back to the built in kernels whenever that isn't the case.
-# Off by default: a standalone shader compiler has no reason to carry it.
+# Default follows -pthread, because the threaded flavor already requires a cross origin isolated page
+# for its shared memory, so routing costs it nothing and it is the flavor that wants the throughput.
+# The single threaded flavor stays off by default: it loads on any page, and defaulting it on would
+# make a page that cannot isolate carry a bridge that never initialises.
 
-set(EnableHostCrypto OFF CACHE BOOL "Route crypto to the host (web only; needs COOP/COEP + Worker)")
+if(EMSCRIPTEN AND CMAKE_C_FLAGS MATCHES "-pthread")
+	set(EnableHostCryptoDefault ON)
+else()
+	set(EnableHostCryptoDefault OFF)
+endif()
+
+set(EnableHostCrypto ${EnableHostCryptoDefault} CACHE BOOL "Route crypto to the host (web only; needs COOP/COEP + Worker)")
 
 if(EnableHostCrypto AND NOT EMSCRIPTEN)
 	message("-- Host crypto off: only implemented for the web target")

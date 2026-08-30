@@ -747,24 +747,39 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
 	//Lane extract is SIMD hostile by construction: scalar reads a float, the vector backends need an
 	// extract_lane. It's included because OxC3 does this all over the place, not because it can win.
+	//The lane is read out of a loop carried accumulator instead of straight out of the window, because an
+	// extract from a freshly loaded vector has a single use and folds back into a narrower scalar load,
+	// which compiles both backends to identical code and times no extract at all. The accumulator can't
+	// fold: it is carried across iterations and all four of its lanes reach the sink, so the add stays 128
+	// bit wide and lane x is only reachable through a real extract.
+	//An iteration is one add plus one extract, hence iters / 2.
 
+	F32x4 xVec = F32x4_zero();
 	F32 xAcc = 0;
 	then = Time_now();
-	for(U64 i = 0; i < iters; ++i)
-		xAcc += F32x4_x(win[i & mask]);
+	for(U64 i = 0; i < iters / 2; ++i) {
+		xVec = F32x4_add(xVec, win[i & mask]);
+		xAcc += F32x4_x(xVec);
+	}
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f lane extract: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) xAcc
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) (xAcc + F32x4_reduce(xVec))
 	);
 
 	//Transpose is an involution, so transposing in place in a loop folds to nothing; feeding the window
 	// back in each iteration keeps it live. Scalar has an unfair advantage here because a compile time
 	// known permutation of 16 floats held in registers is pure register renaming and costs no
 	// instructions at all, where the vector backends issue real shuffles.
+	//Every row is accumulated and every lane of the sink is printed, because sinking one row lets the
+	// vector backends drop five of the eight shuffles while the scalar arm still loads all 16 floats,
+	// which times a different amount of work per arm and makes the comparison meaningless.
+	//The four accumulate adds are sink overhead rather than part of the transpose, and both backends
+	// pay them identically.
 
 	const U64 transposeIters = iters / 4;
-	F32x4 m[4], tSink = F32x4_zero();
+	F32x4 m[4];
+	F32x4 t0 = F32x4_zero(), t1 = F32x4_zero(), t2 = F32x4_zero(), t3 = F32x4_zero();
 	then = Time_now();
 	for(U64 i = 0; i < transposeIters; ++i) {
 		m[0] = win[i & mask];
@@ -772,17 +787,25 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 		m[2] = win[(i + 2) & mask];
 		m[3] = win[(i + 3) & mask];
 		F32x4_transpose4(m, m);
-		tSink = F32x4_add(tSink, m[0]);
+		t0 = F32x4_add(t0, m[0]);
+		t1 = F32x4_add(t1, m[1]);
+		t2 = F32x4_add(t2, m[2]);
+		t3 = F32x4_add(t3, m[3]);
 	}
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f transpose4: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
 		transposeIters, (F64)(now - then) / SECOND, (F64) transposeIters / (F64)(now - then),
-		(F64) F32x4_x(tSink)
+		(F64) F32x4_reduce(F32x4_add(F32x4_add(t0, t1), F32x4_add(t2, t3)))
 	);
 
 	//A 4x4 matrix product is the composite case: 16 multiplies, 12 adds and 16 broadcasts per op, which
 	// is what shipped transform code actually looks like rather than a single instruction in a loop.
+	//The whole product is accumulated and the sink is reduced over all four lanes of all four rows,
+	// because a sink that keeps one row kills the other three rows, three of the eight operand loads and
+	// three lanes of the row that survives, which leaves a handful of scalar arithmetic timed as a
+	// matrix product.
+	//The four adds that fold the product into the sink are overhead both backends pay identically.
 
 	const U64 matIters = iters / 16;
 	F32x4x4 ma, mb, mSink = F32x4x4_identity();
@@ -792,13 +815,13 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 			ma.v[j] = win[(i + j) & mask];
 			mb.v[j] = win[(i + j + 4) & mask];
 		}
-		mSink.v[0] = F32x4_add(mSink.v[0], F32x4x4_mul(ma, mb).v[0]);
+		mSink = F32x4x4_add(mSink, F32x4x4_mul(ma, mb));
 	}
 	now = Time_now();
 	Log_debugLnx(
 		"Profile mat4 mul: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
 		matIters, (F64)(now - then) / SECOND, (F64) matIters / (F64)(now - then),
-		(F64) F32x4_x(mSink.v[0])
+		(F64) F32x4_reduce(F32x4_add(F32x4_add(mSink.v[0], mSink.v[1]), F32x4_add(mSink.v[2], mSink.v[3])))
 	);
 
 	//Integer lanes go through a different execution unit than float. Accumulating a loop invariant
