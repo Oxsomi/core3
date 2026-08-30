@@ -63,6 +63,16 @@ function(apply_web_link_options target)
 		"-sSTACK_SIZE=8MB"
 	)
 
+	# ENVIRONMENT stays 'node' for the threaded flavor too: emscripten appends 'worker' itself once
+	# shared memory is on. A browser flavor would need web,worker and no NODERAWFS instead.
+	# A worker inherits STACK_SIZE otherwise, so every thread would reserve the main thread's 8 MB out
+	# of a heap that starts at 32 MB. Sized down explicitly, and it is a starting point rather than a
+	# measured one: DXC recurses deeply, so raise it if a threaded shader compile overflows.
+
+	if(CMAKE_C_FLAGS MATCHES "-pthread")
+		target_link_options(${target} PRIVATE "-sDEFAULT_PTHREAD_STACK_SIZE=4MB")
+	endif()
+
 endfunction()
 
 function(apply_dependencies target)

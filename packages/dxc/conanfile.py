@@ -147,11 +147,31 @@ class dxc(ConanFile):
 			tc.variables["LLVM_INFERRED_HOST_TRIPLE"] = \
 				"wasm64-unknown-emscripten" if wasm64 else "wasm32-unknown-emscripten"
 
-			# Single-threaded wasm; config-ix would misdetect these because
-			# emscripten ships pthread/zlib headers with stub runtimes.
-			tc.variables["LLVM_ENABLE_THREADS"] = False
+			# Threads follow the profile's -pthread instead of a conan option, since an option that disagrees
+			# with the actual flag builds a silently broken binary.
+			# With threads off llvm::sys::ThreadLocal degrades to a process global, which a threaded build
+			# can't have: OxC3 compiles shaders with a thread per compile
+			# (src/shader_compiler/compiler_helper_jobs.c fans out over a JobGroup).
+			# The profile lists tools.build:cflags in tools.info.package_id:confs
+			# (packages/conan/profiles/emscripten_wasm64), so both flavors get their own package id.
+
+			pthreads = any(
+				"-pthread" in self.conf.get(f"tools.build:{flags}", default=[], check_type=list)
+				for flags in ("cflags", "cxxflags")
+			)
+			tc.variables["LLVM_ENABLE_THREADS"] = pthreads
+
+			# Wasm static archives have no PIC concept, and emscripten only emits position independent code for
+			# MAIN_MODULE/SIDE_MODULE, which web builds turn off
+			# (dynamicLinkingGraphics and dynamicLinkingShaderCompiler are both False there).
+
 			tc.variables["LLVM_ENABLE_PIC"] = False
+
+			# Emscripten ships zlib as a port, so config-ix finds the header but linking it would need -sUSE_ZLIB.
+			# DXC doesn't need zlib to compile HLSL.
+
 			tc.variables["LLVM_ENABLE_ZLIB"] = False
+
 			# NOTE: -fwasm-exceptions and -m64 come from the profile
 			# (tools.build:cflags/cxxflags and exelinkflags) so lib and consumers stay in sync.
 

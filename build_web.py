@@ -32,7 +32,7 @@ Needs a local emsdk (env EMSDK, default ~/emsdk); --run_tests uses the node the 
 falls back to PATH, because emsdk_env is what puts that node on PATH and a plain shell hasn't sourced it.
 Single-threaded wasm for now: no -pthread anywhere, Platform_getThreads() returns 1 and JobQueue
 runs inline (see include/types/container/job_queue.h). EH (-fwasm-exceptions) and -m64 are pinned
-in packages/conan/profiles/emscripten_wasm64.jinja and must match in every consumer link.
+in packages/conan/profiles/emscripten_wasm64 and must match in every consumer link.
 """
 
 import argparse
@@ -42,7 +42,17 @@ import sys
 
 import build_common as common
 
-WEB_PROFILE = os.path.join("packages", "conan", "profiles", "emscripten_wasm64.jinja")
+WEB_PROFILE = os.path.join("packages", "conan", "profiles", "emscripten_wasm64")
+WEB_PROFILE_MT = os.path.join("packages", "conan", "profiles", "emscripten_wasm64_mt")
+
+def webProfile(threads):
+	"""Profile for the requested flavor.
+
+	The two are separate profiles rather than one templated profile so the flag lists that fork
+	package_id are visible in the file that causes the fork. -pthread is ABI, so every dependency is
+	rebuilt for the threaded flavor; nothing is shared with the single threaded one but the recipes.
+	"""
+	return WEB_PROFILE_MT if threads else WEB_PROFILE
 
 def ensureEmsdk():
 
@@ -82,17 +92,31 @@ def webOptionArgs(tests, hostCrypto=False):
 
 	return " ".join(f"-o \"&:{k}={v}\"" for k, v in options.items())
 
-def doBuild(mode, doInstall, tests, cache, hostCrypto=False):
+def doBuild(mode, doInstall, tests, cache, hostCrypto=False, threads=False):
 
+	profile      = webProfile(threads)
 	buildProfile = common.crossBuildProfileArgs()
-	profileArgs  = f"--profile:host=\"{WEB_PROFILE}\" {buildProfile}"
+
+	# The dependency hash cache is keyed per flavor, because the two share recipes but not binaries.
+	# A key collision would report the threaded packages as unchanged and reuse the single threaded ones.
+
+	cacheSuffix  = "_mt" if threads else ""
+
+	# Separate output folder per flavor, not just a separate profile.
+	# CMake seeds CMAKE_<LANG>_FLAGS from the toolchain's _INIT variables on the first configure only,
+	# so reusing a folder configured for the other flavor keeps the cached flags and drops -pthread.
+	# The toolchain file then says one thing and CMakeCache.txt another,
+	# and the build links a single threaded binary that passes every test.
+
+	target       = "wasm64_mt" if threads else "wasm64"
+	profileArgs  = f"--profile:host=\"{profile}\" {buildProfile}"
 
 	# Target dependencies.
 	# Graphics is off (no WebGPU backend yet) so no vulkan_headers; agility_sdk ships d3d12shader.h for DXC's dxcreflect.h.
 	# No openal_soft: emscripten has its own OpenAL.
 
 	common.conanCreateIfChanged(
-		"packages/agility_sdk", WEB_PROFILE, mode, profileArgs, cache, key="packages/agility_sdk::web"
+		"packages/agility_sdk", profile, mode, profileArgs, cache, key=f"packages/agility_sdk::web{cacheSuffix}"
 	)
 
 	# The shader compiler's dependencies.
@@ -116,11 +140,11 @@ def doBuild(mode, doInstall, tests, cache, hostCrypto=False):
 
 	for package in common.SHADER_COMPILER_DEPS:
 		common.conanCreateIfChanged(
-			package, WEB_PROFILE, shaderMode, profileArgs, cache, key=f"{package}::web",
+			package, profile, shaderMode, profileArgs, cache, key=f"{package}::web{cacheSuffix}",
 			options=tablegenConf
 		)
 
-	outputFolder = f"\"build/{mode}/web/wasm64\""
+	outputFolder = f"\"build/{mode}/web/{target}\""
 	options      = webOptionArgs(tests, hostCrypto)
 	shaderArgs   = common.shaderCompilerDepArgs(False)
 
@@ -155,10 +179,10 @@ def emsdkNode():
 
 	return "node"
 
-def runTests(mode, suite=None):
+def runTests(mode, suite=None, threads=False):
 	"""Run the bundle under node directly (what ctest would do), streaming output; exit code is the result."""
 
-	binDir = os.path.join(common.ROOT, "build", mode, "web", "wasm64", "bin")
+	binDir = os.path.join(common.ROOT, "build", mode, "web", "wasm64_mt" if threads else "wasm64", "bin")
 	bundle = os.path.join(binDir, "OxC3_wtest.js")
 
 	if not os.path.isfile(bundle):
@@ -197,6 +221,10 @@ def main():
 		"--host_crypto", action="store_true",
 		help="Route SHA-256/AES-GCM to the host's crypto (needs a cross origin isolated page + Worker in browsers)"
 	)
+	parser.add_argument(
+		"-threads", type=str, default="False", choices=["True", "False"],
+		help="Build the -pthread flavor (needs cross origin isolation in a browser; rebuilds every dependency)"
+	)
 	parser.add_argument("--run_tests", help="Run the test bundle under node after building", action="store_true")
 	parser.add_argument("--skip_build", help="Skip the build (e.g. to only run tests)", action="store_true")
 	parser.add_argument("--install", help="conan export-pkg the result", action="store_true")
@@ -224,11 +252,11 @@ def main():
 			os.remove(common.HASH_CACHE_FILE)
 
 		cache = common.loadHashCache()
-		doBuild(args.mode, args.install, args.tests == "True", cache, args.host_crypto)
+		doBuild(args.mode, args.install, args.tests == "True", cache, args.host_crypto, args.threads == "True")
 		common.saveHashCache(cache)
 
 	if args.run_tests:
-		runTests(args.mode, args.suite)
+		runTests(args.mode, args.suite, args.threads == "True")
 
 if __name__ == "__main__":
 	main()

@@ -228,6 +228,8 @@ typedef struct Window {
 
 //Implementation dependent aka physical windows
 
+//Web titles the browser tab, which every window on the page shares, so the last call wins.
+
 impl Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr);
 impl Bool Window_toggleFullScreen(Window *w, Error *e_rr);
 impl Bool Window_presentPhysical(Window *w, Error *e_rr);

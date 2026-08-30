@@ -44,7 +44,7 @@ Last updated: 2026-08-04 (branch `android`, v3.2.104). Update this table in the 
 | Tracked allocator + leak report | ✅ | ✅ | ✅ | ✅ | ✅ (aligned_alloc, wasm max_align_t is 8) |
 | Sandboxed file IO + FileStream | ✅ | ✅ | ✅ | ✅ (assets read-only via AAsset) | 🟡 read-only, NODERAWFS |
 | Virtual FS (embedded oiCA) | ✅ | ✅ | ✅ | ✅ (apk `section_*` workaround) | ✅ (packaged oiCA) |
-| Window + monitors | ✅ | 🟡 Wayland only (no X11) | ❌ yet | ✅ | 🟡 one canvas, CPU blit only |
+| Window + monitors | ✅ | 🟡 Wayland only (no X11) | ❌ yet | ✅ | 🟡 canvas per window, CPU blit only |
 | Keyboard/mouse (multi-device) | ✅ | ✅ | ❌ yet | 🟡 touch story undocumented | ❌ yet |
 | Dynamic libraries | ✅ | ✅ | ✅ | ✅ | ❌ needs MAIN_MODULE |
 | SIMD | ✅ SSE | ✅ SSE | ✅ SSE/NEON | ✅ NEON | 🟡 SIMD_WASM for vector math, crypto scalar |

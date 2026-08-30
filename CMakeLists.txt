@@ -262,7 +262,17 @@ if(EMSCRIPTEN)
 
 	message("-- Targeting wasm64 (emscripten)")
 	set(ARM OFF)
-	set(target "wasm64")
+
+	# The threaded flavor gets its own target name so the two do not share an output directory.
+	# They are ABI incompatible and their binaries have the same names, so a shared bin/ means whichever
+	# built last wins and the other flavor's artifacts silently become the wrong ones.
+
+	if(CMAKE_C_FLAGS MATCHES "-pthread")
+		set(target "wasm64_mt")
+		message("-- pthreads are on: -sDEFAULT_PTHREAD_STACK_SIZE applies and the page must be cross origin isolated")
+	else()
+		set(target "wasm64")
+	endif()
 
 	# LLVM's middle end folds I32x4_clmul64Fallback to zero at -O3 on wasm64, which fails types_math.
 	# It is a constant folding bug: only operands the compiler can see as constants are affected, so
@@ -883,7 +893,7 @@ if(EnableSIMD)
 		# wasm has no AES-NI, SHA or PCLMULQDQ equivalent; 'simdMath' picks the vector math sources, which
 		# do have a native wasm path in vec4*_wasm.inc.h. Everywhere else the two agree.
 		# -msimd128 changes codegen for every consumer, so it belongs with -m64 and -fwasm-exceptions in
-		# packages/conan/profiles/emscripten_wasm64.jinja rather than only here.
+		# packages/conan/profiles/emscripten_wasm64 rather than only here.
 
 		message("-- SIMD on wasm covers the vector math only (crypto and hash stay scalar)")
 		set(simd none)
