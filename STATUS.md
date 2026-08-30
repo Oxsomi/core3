@@ -38,15 +38,17 @@ Last updated: 2026-08-04 (branch `android`, v3.2.104). Update this table in the 
 
 ## Platforms
 
-| Area | Windows | Linux | OS X | Android |
-| --- | --- | --- | --- | --- |
-| Platform init / CPU topology | ✅ | ✅ | ✅ | ✅ |
-| Tracked allocator + leak report | ✅ | ✅ | ✅ | ✅ |
-| Sandboxed file IO + FileStream | ✅ | ✅ | ✅ | ✅ (assets read-only via AAsset) |
-| Virtual FS (embedded oiCA) | ✅ | ✅ | ✅ | ✅ (apk `section_*` workaround) |
-| Window + monitors | ✅ | 🟡 Wayland only (no X11) | ❌ yet | ✅ |
-| Keyboard/mouse (multi-device) | ✅ | ✅ | ❌ yet | 🟡 touch story undocumented |
-| Dynamic libraries | ✅ | ✅ | ✅ | ✅ |
+| Area | Windows | Linux | OS X | Android | Web (wasm64) |
+| --- | --- | --- | --- | --- | --- |
+| Platform init / CPU topology | ✅ | ✅ | ✅ | ✅ | 🟡 single threaded, no `-pthread` yet |
+| Tracked allocator + leak report | ✅ | ✅ | ✅ | ✅ | ✅ (aligned_alloc, wasm max_align_t is 8) |
+| Sandboxed file IO + FileStream | ✅ | ✅ | ✅ | ✅ (assets read-only via AAsset) | 🟡 read-only, NODERAWFS |
+| Virtual FS (embedded oiCA) | ✅ | ✅ | ✅ | ✅ (apk `section_*` workaround) | ✅ (packaged oiCA) |
+| Window + monitors | ✅ | 🟡 Wayland only (no X11) | ❌ yet | ✅ | 🟡 canvas per window, CPU blit only |
+| Keyboard/mouse (multi-device) | ✅ | ✅ | ❌ yet | 🟡 touch story undocumented | ❌ yet |
+| Dynamic libraries | ✅ | ✅ | ✅ | ✅ | ❌ needs MAIN_MODULE |
+| SIMD | ✅ SSE | ✅ SSE | ✅ SSE/NEON | ✅ NEON | 🟡 SIMD_WASM for vector math, crypto scalar |
+| Hardware crypto | ✅ AES-NI/SHA | ✅ AES-NI/SHA | ✅ | ✅ | 🟡 routed to host, needs a Worker + COOP/COEP |
 
 ## Graphics
 

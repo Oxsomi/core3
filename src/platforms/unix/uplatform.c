@@ -22,6 +22,7 @@
 
 #include "platforms/platform.h"
 #include "types/container/string.h"
+#include "types/base/string_read_helper.h"
 #include "types/container/file_base.h"
 #include "types/base/atomic.h"
 
@@ -36,7 +37,27 @@
 	#include <mach/mach.h>
 #endif
 
-void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
+//OxC3's widest type is I32x4, which is alignas(16) on every backend including the scalar one
+// (see types/math/vec4_{sse,neon,wasm,none}.inc.h), so anything the platform allocator hands out has
+// to be able to hold one.
+//malloc only promises alignof(max_align_t), which is 16 on the x64/arm64 ABIs but only 8 on wasm,
+// where long double is 8-aligned.
+//So web has to ask for the alignment explicitly, otherwise every heap I32x4 (matrices, vector lists,
+// the AES target/AAD buffers) is under-aligned.
+//free() accepts aligned_alloc memory (C11 7.22.3, POSIX), so the free path is unchanged.
+
+#if _PLATFORM_TYPE == PLATFORM_WEB
+
+	void *Platform_allocate(void *allocator, U64 length) {
+		(void)allocator;
+		//aligned_alloc wants a size that's a multiple of the alignment (C11 7.22.3.1)
+		return aligned_alloc(16, length ? (length + 15) &~ (U64)15 : 16);
+	}
+
+#else
+	void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
+#endif
+
 void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
 
 impl Bool Platform_initUnixExt(Error *e_rr);
@@ -62,7 +83,15 @@ void Platform_cleanupExt() {
 
 #endif
 
-U64 Platform_getThreads() { return sysconf(_SC_NPROCESSORS_ONLN); }
+#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(__EMSCRIPTEN_PTHREADS__)
+	//Wasm built without -pthread: sysconf would report navigator.hardwareConcurrency, but no thread
+	// can actually start.
+	//1 keeps JobQueue in its inline mode (job_queue.h).
+	//emcc defines __EMSCRIPTEN_PTHREADS__ for a -pthread build, where sysconf is correct and used.
+	U64 Platform_getThreads() { return 1; }
+#else
+	U64 Platform_getThreads() { return sysconf(_SC_NPROCESSORS_ONLN); }
+#endif
 
 #if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
 	#include <sys/sysctl.h>
@@ -169,11 +198,17 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 				buf[n] = 0;
 
 				//Can't be named "impl"; that's the implementation-dependent marker macro from types.h
-				const C8 *implLine = strstr(buf, "CPU implementer");
-				const C8 *hex = implLine ? strstr(implLine, "0x") : NULL;
+				const CharString cpuinfo = CharString_createRefCStrConst(buf);
+				const CharString implKey = CharString_createRefCStrConst("CPU implementer");
+				const CharString hexKey = CharString_createRefCStrConst("0x");
 
-				if(hex)
-					switch((unsigned) strtoul(hex, NULL, 16)) {
+				const U64 implOff = CharString_findFirstStringSensitive(&cpuinfo, &implKey, 0, 0);
+
+				const U64 hexOff =
+					implOff == U64_MAX ? U64_MAX : CharString_findFirstStringSensitive(&cpuinfo, &hexKey, implOff, 0);
+
+				if(hexOff != U64_MAX)
+					switch((unsigned) strtoul(buf + hexOff, NULL, 16)) {
 						case 0x4e: out->vendor = ECPUVendor_Nvidia;   break;
 						case 0x51: out->vendor = ECPUVendor_Qualcomm; break;
 						case 0x53: out->vendor = ECPUVendor_Samsung;  break;

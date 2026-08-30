@@ -28,6 +28,26 @@
 #include <AL/alc.h>
 #include <AL/alext.h>
 
+//emscripten's built-in OpenAL ships leaner headers than openal-soft's: these extension enums are
+//missing there, but their values are fixed by the extensions that define them (ALC_EXT_debug,
+//AL_EXT_double) and every use checks the extension string at runtime first.
+
+#ifndef ALC_CONTEXT_FLAGS_EXT
+	#define ALC_CONTEXT_FLAGS_EXT 0x19CF
+#endif
+
+#ifndef ALC_CONTEXT_DEBUG_BIT_EXT
+	#define ALC_CONTEXT_DEBUG_BIT_EXT 0x0001
+#endif
+
+#ifndef AL_FORMAT_MONO_DOUBLE_EXT
+	#define AL_FORMAT_MONO_DOUBLE_EXT 0x10012
+#endif
+
+#ifndef AL_FORMAT_STEREO_DOUBLE_EXT
+	#define AL_FORMAT_STEREO_DOUBLE_EXT 0x10013
+#endif
+
 typedef struct ALAudioInterface {
 	U8 padding;                    //Not useful yet, might be for loading functions of DLL for example
 } ALAudioInterface;

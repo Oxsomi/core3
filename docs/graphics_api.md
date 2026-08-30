@@ -644,7 +644,7 @@ A UnifiedTexture contains the following:
 - type: ETextureType; 2D, 3D or Cube.
 - width, height, length: dimensions of the resource. Length needs to be 1 if the type isn't 3D. For cubes the length will be automatically set to 6. The limits are width/height of 16384 and length of 256.
 - levels: how many mip levels are present.
-- images: how many different images are present. This is generally 1, but for Swapchains it is 3 because of versioning.
+- images: how many different images are present. This is 1 for everything but a Swapchain: a physical one requests 3 and the presentation engine may hand back up to 5, a virtual one holds exactly framesInFlight.
 - currentImageId: should only ever be accessed through the graphics API implementation. This value is a lagging value that's unpredictable if it's not in the submitCommands call. However, for Swapchains during that call, this represents what image is currently being rendered to.
 
 The unified texture can be obtained through the RefPtr as follows:

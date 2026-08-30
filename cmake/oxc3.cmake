@@ -31,6 +31,230 @@ function(configure_icon target icon)
 
 endfunction()
 
+# Link options every wasm64 executable needs.
+# Both of the web targets (the CLI and the test bundle) are node programs, so they take the same set; a
+# browser consumer would embed the libraries and choose its own -sENVIRONMENT instead.
+#
+# NODERAWFS mounts the real filesystem, so packages/ resolves through plain POSIX paths from the working
+# directory rather than needing anything preloaded.
+# The memory and stack settings are hard requirements: DXC recursion overflows the 64KB default stack
+# silently, and 2GB is the default memory cap.
+# INITIAL_MEMORY is what the module commits at instantiation, before it does any work, so it stays small
+# and ALLOW_MEMORY_GROWTH sizes it to the workload; a phone should not hand over half a gigabyte just to
+# load the module. DXC grows this a lot while compiling, but only for the run that needs it.
+
+function(apply_web_link_options target)
+
+	if(NOT TARGET ${target})
+		message(FATAL_ERROR "apply_web_link_options: target ${target} not present.")
+	endif()
+
+	if(NOT EMSCRIPTEN)
+		return()
+	endif()
+
+	target_link_options(${target} PRIVATE
+		"-sENVIRONMENT=node"
+		"-sNODERAWFS=1"
+		"-sEXIT_RUNTIME=1"
+		"-sALLOW_MEMORY_GROWTH=1"
+		"-sINITIAL_MEMORY=32MB"
+		"-sMAXIMUM_MEMORY=16GB"
+		"-sSTACK_SIZE=8MB"
+	)
+
+	# ENVIRONMENT stays 'node' for the threaded flavor too: emscripten appends 'worker' itself once
+	# shared memory is on. A browser flavor would need web,worker and no NODERAWFS instead.
+	# A worker inherits STACK_SIZE otherwise, so every thread would reserve the main thread's 8 MB out
+	# of a heap that starts at 32 MB. Sized down explicitly, and it is a starting point rather than a
+	# measured one: DXC recurses deeply, so raise it if a threaded shader compile overflows.
+
+	if(CMAKE_C_FLAGS MATCHES "-pthread")
+		target_link_options(${target} PRIVATE "-sDEFAULT_PTHREAD_STACK_SIZE=4MB")
+	endif()
+
+endfunction()
+
+# One module holding every unit test suite, for a platform that builds no per-suite executables
+# (OxC3TestExecutables off, see the root CMakeLists for which platforms those are and why).
+# Android has no exec at all, and web would otherwise link a separate wasm module per suite,
+# so both compile the same test sources a second time with _OXC3_TEST_BUNDLED,
+# which turns each suite's main() into a named entry (see OXC3_TEST_MAIN / OXC3_TEST_ENTRY in types/test/test.h)
+# that the platform's own entry point calls in turn.
+# Compiling them twice is deliberate: every module's own test target stays untouched,
+# so a bundle can't affect the host build.
+#
+#   oxc3_add_bundled_test(
+#       TARGET      OxC3_wtest          # also the virtual file system namespace the suites read their data from
+#       ROOT        ${testRoot}         # src, the directory the shared suites are globbed out of
+#       SELF        ${testRoot}/..      # repository root, the packages are written under its build/<config>/<platform>
+#       ENTRY       wtest_main.c        # entry point calling the suites, relative to the caller
+#       [SHARED]                        # a library the platform loads, instead of an executable it runs
+#       [SOURCES    <files...>]         # suites this platform bundles on top of the shared set
+#       [LIBS       <targets...>]       # the libraries those extra suites test
+#   )
+#
+# The caller keeps what differs per platform: link options, how the module is launched, and any further data
+# it packages.
+# apply_dependencies stays with the caller too, since it reads the resource list and so has to run after the
+# last add_virtual_files that caller adds.
+
+function(oxc3_add_bundled_test)
+
+	set(options SHARED)
+	set(oneValue TARGET ROOT SELF ENTRY)
+	set(multiValue SOURCES LIBS)
+	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
+
+	# A misspelled keyword otherwise vanishes and the function silently does less than the caller asked.
+	# A keyword given with no value is indistinguishable from not passing it at all.
+
+	if(T_UNPARSED_ARGUMENTS)
+		message(FATAL_ERROR "oxc3_add_bundled_test: unrecognized arguments: ${T_UNPARSED_ARGUMENTS}")
+	endif()
+
+	if(T_KEYWORDS_MISSING_VALUES)
+		message(FATAL_ERROR "oxc3_add_bundled_test: arguments missing a value: ${T_KEYWORDS_MISSING_VALUES}")
+	endif()
+
+	if(NOT T_TARGET)
+		message(FATAL_ERROR "oxc3_add_bundled_test: 'TARGET' argument required.")
+	endif()
+
+	if(TARGET ${T_TARGET})
+		message(FATAL_ERROR "oxc3_add_bundled_test: target ${T_TARGET} already present.")
+	endif()
+
+	if(NOT T_ROOT)
+		message(FATAL_ERROR "oxc3_add_bundled_test: 'ROOT' argument required.")
+	endif()
+
+	if(NOT IS_DIRECTORY ${T_ROOT})
+		message(FATAL_ERROR "oxc3_add_bundled_test: 'ROOT' folder not present.")
+	endif()
+
+	if(NOT T_SELF)
+		message(FATAL_ERROR "oxc3_add_bundled_test: 'SELF' argument required.")
+	endif()
+
+	if(NOT T_ENTRY)
+		message(FATAL_ERROR "oxc3_add_bundled_test: 'ENTRY' argument required.")
+	endif()
+
+	# The entry point lives next to the CMakeLists that bundles it, so a relative ENTRY resolves against the
+	# caller rather than against this file.
+
+	get_filename_component(entry "${T_ENTRY}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+
+	if(NOT EXISTS "${entry}")
+		message(FATAL_ERROR "oxc3_add_bundled_test: 'ENTRY' file not present.")
+	endif()
+
+	# The suites every bundle takes.
+	# A suite that needs a GPU or a human at the device is a per platform decision,
+	# so it comes in through SOURCES instead.
+
+	file(GLOB_RECURSE bundledSources CONFIGURE_DEPENDS
+		"${T_ROOT}/types/base/test/*.c"
+		"${T_ROOT}/types/base/test/*.cpp"
+		"${T_ROOT}/types/math/test/*.c"
+		"${T_ROOT}/types/math/test/*.cpp"
+		"${T_ROOT}/types/container/test/*.c"
+		"${T_ROOT}/types/container/test/*.cpp"
+		"${T_ROOT}/formats/*/test/*.c"
+		"${T_ROOT}/formats/*/test/*.cpp"
+		"${T_ROOT}/audio/test/interface/*.c"
+		"${T_ROOT}/platforms/test/interface/*.c"
+		"${T_ROOT}/platforms/test/interface/*.cpp"
+	)
+
+	# CMakeLists.txt is a source so the bundle stays editable from the IDE, like every other test target.
+
+	if(T_SHARED)
+		add_library(${T_TARGET} SHARED ${bundledSources} ${T_SOURCES} "${entry}" CMakeLists.txt)
+	else()
+		add_executable(${T_TARGET} ${bundledSources} ${T_SOURCES} "${entry}" CMakeLists.txt)
+	endif()
+
+	# _OXC3_TEST_VFS_TARGET: platforms_interface reaches its test data through the virtual file system, and a
+	# section is namespaced by the target that packaged it.
+	# add_virtual_files below registers it under the bundle, not under OxC3_plinttst as the desktop build
+	# does, so the suite is told which name to expect.
+
+	target_compile_definitions(${T_TARGET} PRIVATE _OXC3_TEST_BUNDLED _OXC3_TEST_VFS_TARGET="${T_TARGET}")
+
+	# The formats list has to cover EVERY formats/*/test directory the glob above picks up, since bundling a
+	# suite compiles its sources but nothing else pulls in the library it tests.
+	# A format whose tests are globbed but whose library is missing here only shows up as undefined symbols
+	# at link, and only on a bundling platform, since every other platform links each suite against its own
+	# module.
+
+	target_link_libraries(${T_TARGET} PUBLIC
+		OxC3_platforms
+		OxC3_audio
+		OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr
+		OxC3_formats_oiBC OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_oiSB
+		OxC3_formats_oiSH OxC3_formats_wav
+		OxC3_types_test
+		OxC3_types_container_test_util
+		${T_LIBS}
+	)
+
+	# Test_dynamicLibrary dlopens this by bare name, and nothing links against it,
+	# so a dependency is all that ties it to the bundle.
+
+	add_dependencies(${T_TARGET} OxC3_platforms_interface_dylib_test)
+
+	# platforms_interface reads these through the virtual file system, same as OxC3_plinttst does
+
+	add_virtual_files(
+		TARGET  ${T_TARGET}
+		NAME    testdata
+		ROOT    ${T_ROOT}/platforms/test/interface/res
+		SELF    ${T_SELF}
+		FORCE_PACKAGER
+	)
+
+	# shader_compiler reads its HLSL off disk when ctest runs it from src/shader_compiler/test, a working
+	# directory a bundle doesn't have, so the same tree is packaged and the suite reads it back through
+	# //<target>/shaderdata (TEST_SHADER_ROOT in shader_compiler/test/test_shader_compiler_shared.h resolves
+	# there whenever the suites are bundled).
+	# A bundled build MUST package this or every compileFileShader() call fails to read its source.
+	# -raw is what keeps it readable: the packager otherwise compiles .hlsl into oiSH, and these tests want
+	# the source (they drive the compiler themselves).
+	# The .c/.h next to it aren't staged, since add_virtual_files packages a whole directory.
+
+	if(EnableShaderCompiler)
+
+		set(shaderRes ${CMAKE_CURRENT_BINARY_DIR}/shaderdata)
+
+		file(GLOB_RECURSE shaderTestData CONFIGURE_DEPENDS
+			"${T_ROOT}/shader_compiler/test/*/*.hlsl"
+			"${T_ROOT}/shader_compiler/test/*/*.hlsli"
+			"${T_ROOT}/shader_compiler/test/*.oiSH"
+		)
+
+		foreach(f ${shaderTestData})
+			file(RELATIVE_PATH rel "${T_ROOT}/shader_compiler/test" "${f}")
+			get_filename_component(relDir "${rel}" DIRECTORY)
+			file(COPY "${f}" DESTINATION "${shaderRes}/${relDir}")
+		endforeach()
+
+		add_virtual_files(
+			TARGET  ${T_TARGET}
+			NAME    shaderdata
+			ROOT    ${shaderRes}
+			SELF    ${T_SELF}
+			FORCE_PACKAGER
+			ARGS    -raw
+		)
+
+	endif()
+
+	set_target_properties(${T_TARGET} PROPERTIES FOLDER Oxsomi/test)
+
+endfunction()
+
 function(apply_dependencies target)
 
 	if(NOT TARGET ${target})
@@ -109,7 +333,10 @@ function(apply_dependencies target)
 		# Android has APKs which are just like zip files, so can be easily read (though the NDK can't access subfolders easily)
 		# iOS has IPA which is the same idea as APK.
 		# OS X asks the linker for the section with -sectcreate, so it needs no external tool at all
-		# web/emscripten has a virtual filesystem.
+		# web/emscripten has a virtual filesystem, so nothing is embedded into the module at all.
+		# The android model applies instead: packages/<target>/<name>.oiCA is read at runtime.
+		# node reaches it through NODERAWFS; a browser build would have to populate MEMFS itself first,
+		# which no target does yet (see src/platforms/web).
 		
 		if(WIN32)
 			get_property(res2 TARGET ${target} PROPERTY RESOURCE_LIST_RC)
@@ -132,7 +359,7 @@ function(apply_dependencies target)
 
 			set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS "${file}")
 
-		elseif(UNIX AND NOT ANDROID)
+		elseif(UNIX AND NOT ANDROID AND NOT EMSCRIPTEN)
 			list(APPEND _objcopySections --add-section "packages/${RELATIVE_PATH}=${file}")
 		endif()
 
@@ -199,6 +426,17 @@ macro(add_virtual_files)
 
 	cmake_parse_arguments(_ARGS "${_OPTIONS}" "${_ONE_VALUE}" "${_MULTI_VALUE}" ${ARGN})
 
+	# A misspelled keyword otherwise vanishes and the function silently does less than the caller asked.
+	# A keyword given with no value is indistinguishable from not passing it at all.
+
+	if(_ARGS_UNPARSED_ARGUMENTS)
+		message(FATAL_ERROR "add_virtual_files: unrecognized arguments: ${_ARGS_UNPARSED_ARGUMENTS}")
+	endif()
+
+	if(_ARGS_KEYWORDS_MISSING_VALUES)
+		message(FATAL_ERROR "add_virtual_files: arguments missing a value: ${_ARGS_KEYWORDS_MISSING_VALUES}")
+	endif()
+
 	# Validate
 
 	if(NOT TARGET ${_ARGS_TARGET})
@@ -243,16 +481,20 @@ macro(add_virtual_files)
 	# OxC3_package; Full process to package a file (including shader compilation, not graphics).
 	# OxC3; Full executable with all functionality.
 	
+	# When cross compiling, an in-build packager target can't run on the build machine
+	# (the wasm build DOES build OxC3_package, but as a .js/.wasm), so prefer the host
+	# tool from tool_requires (on PATH); see conanfile.build_requirements().
+
 	if(_ARGS_FORCE_PACKAGER)
-		if(TARGET OxC3_package)
+		if(TARGET OxC3_package AND NOT CMAKE_CROSSCOMPILING)
 			set(OXC3_PACKAGE OxC3_package)
-		elseif(TARGET OxC3_package_simple)
+		elseif(TARGET OxC3_package_simple AND NOT CMAKE_CROSSCOMPILING)
 			set(OXC3_PACKAGE OxC3_package_simple)
 		else()
 			find_program(OXC3_PACKAGE OxC3_package REQUIRED)
 		endif()
 	else()
-		if(NOT TARGET OxC3)
+		if(NOT TARGET OxC3 OR CMAKE_CROSSCOMPILING)
 			find_program(OXC3 OxC3 REQUIRED)
 		else()
 			set(OXC3 OxC3)
@@ -267,6 +509,8 @@ macro(add_virtual_files)
 		set(platform osx)
 	elseif(ANDROID)
 		set(platform android)
+	elseif(EMSCRIPTEN)
+		set(platform web)
 	else()
 		set(platform linux)
 	endif()
@@ -338,6 +582,17 @@ macro(add_virtual_dependencies)
 
 	cmake_parse_arguments(_ARGS "${_OPTIONS}" "${_ONE_VALUE}" "${_MULTI_VALUE}" ${ARGN})
 
+	# A misspelled keyword otherwise vanishes and the function silently does less than the caller asked.
+	# A keyword given with no value is indistinguishable from not passing it at all.
+
+	if(_ARGS_UNPARSED_ARGUMENTS)
+		message(FATAL_ERROR "add_virtual_dependencies: unrecognized arguments: ${_ARGS_UNPARSED_ARGUMENTS}")
+	endif()
+
+	if(_ARGS_KEYWORDS_MISSING_VALUES)
+		message(FATAL_ERROR "add_virtual_dependencies: arguments missing a value: ${_ARGS_KEYWORDS_MISSING_VALUES}")
+	endif()
+
 	if(NOT TARGET ${_ARGS_TARGET})
 		message(FATAL_ERROR "add_virtual_dependencies: target \"${_ARGS_TARGET}\" not present.")
 	endif()
@@ -374,6 +629,17 @@ macro(add_virtual_dependencies_external)
 	set(_MULTI_VALUE DEPENDENCIES)
 
 	cmake_parse_arguments(_ARGS "${_OPTIONS}" "${_ONE_VALUE}" "${_MULTI_VALUE}" ${ARGN})
+
+	# A misspelled keyword otherwise vanishes and the function silently does less than the caller asked.
+	# A keyword given with no value is indistinguishable from not passing it at all.
+
+	if(_ARGS_UNPARSED_ARGUMENTS)
+		message(FATAL_ERROR "add_virtual_dependencies_external: unrecognized arguments: ${_ARGS_UNPARSED_ARGUMENTS}")
+	endif()
+
+	if(_ARGS_KEYWORDS_MISSING_VALUES)
+		message(FATAL_ERROR "add_virtual_dependencies_external: arguments missing a value: ${_ARGS_KEYWORDS_MISSING_VALUES}")
+	endif()
 
 	if(NOT TARGET ${_ARGS_TARGET})
 		message(FATAL_ERROR "add_virtual_dependencies_external: target \"${_ARGS_TARGET}\" not present.")
@@ -473,6 +739,17 @@ function(oxc3_add_test)
 	set(multiValue LIBS INCLUDES DATA DEPS SOURCES)
 	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
 
+	# A misspelled keyword otherwise vanishes and the function silently does less than the caller asked.
+	# A keyword given with no value is indistinguishable from not passing it at all.
+
+	if(T_UNPARSED_ARGUMENTS)
+		message(FATAL_ERROR "oxc3_add_test: unrecognized arguments: ${T_UNPARSED_ARGUMENTS}")
+	endif()
+
+	if(T_KEYWORDS_MISSING_VALUES)
+		message(FATAL_ERROR "oxc3_add_test: arguments missing a value: ${T_KEYWORDS_MISSING_VALUES}")
+	endif()
+
 	if(NOT T_NAME)
 		message(FATAL_ERROR "oxc3_add_test: NAME is required")
 	endif()
@@ -515,7 +792,18 @@ function(oxc3_add_test)
 		list(APPEND runArgs NO_AUTORUN)
 	endif()
 
-	oxc3_add_test_run(${runArgs} DATA ${T_DATA} DEPS ${T_DEPS})
+	# Appended only when non empty, like the two above: an empty list would pass the keyword with no value,
+	# which is what a caller writing DATA and then forgetting the files looks like.
+
+	if(T_DATA)
+		list(APPEND runArgs DATA ${T_DATA})
+	endif()
+
+	if(T_DEPS)
+		list(APPEND runArgs DEPS ${T_DEPS})
+	endif()
+
+	oxc3_add_test_run(${runArgs})
 
 endfunction()
 
@@ -529,6 +817,17 @@ function(oxc3_add_test_run)
 	set(oneValue NAME FOLDER WORKING_DIR)
 	set(multiValue DATA DEPS)
 	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
+
+	# A misspelled keyword otherwise vanishes and the function silently does less than the caller asked.
+	# A keyword given with no value is indistinguishable from not passing it at all.
+
+	if(T_UNPARSED_ARGUMENTS)
+		message(FATAL_ERROR "oxc3_add_test_run: unrecognized arguments: ${T_UNPARSED_ARGUMENTS}")
+	endif()
+
+	if(T_KEYWORDS_MISSING_VALUES)
+		message(FATAL_ERROR "oxc3_add_test_run: arguments missing a value: ${T_KEYWORDS_MISSING_VALUES}")
+	endif()
 
 	if(NOT TARGET ${T_NAME})
 		message(FATAL_ERROR "oxc3_add_test_run: ${T_NAME} is not a target")
@@ -648,6 +947,17 @@ function(oxc3_add_test_command)
 	set(oneValue NAME TARGET WORKING_DIR FOLDER)
 	set(multiValue COMMAND DATA DEPS)
 	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
+
+	# A misspelled keyword otherwise vanishes and the function silently does less than the caller asked.
+	# A keyword given with no value is indistinguishable from not passing it at all.
+
+	if(T_UNPARSED_ARGUMENTS)
+		message(FATAL_ERROR "oxc3_add_test_command: unrecognized arguments: ${T_UNPARSED_ARGUMENTS}")
+	endif()
+
+	if(T_KEYWORDS_MISSING_VALUES)
+		message(FATAL_ERROR "oxc3_add_test_command: arguments missing a value: ${T_KEYWORDS_MISSING_VALUES}")
+	endif()
 
 	if(T_WORKING_DIR)
 		add_test(NAME ${T_NAME} COMMAND ${T_COMMAND} WORKING_DIRECTORY ${T_WORKING_DIR})

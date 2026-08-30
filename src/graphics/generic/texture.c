@@ -439,7 +439,18 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 		));
 
 	if (texture.resource.type == EResourceType_Swapchain) {
-		if(texture.images < 3 || texture.images > 5)
+
+		//A swapchain that owns its images holds one per frame in flight, which is two on Android, so it is held
+		// to the device's count rather than to the floor a presentation engine hands a physical one.
+
+		if (texture.resource.flags & EGraphicsResourceFlag_InternalOwnsImages) {
+			if(texture.images != GraphicsDeviceRef_ptr(texture.resource.device)->framesInFlight)
+				retError(clean, Error_invalidParameter(
+					1, 0, "UnifiedTexture_create()::texturePtr->images has to be framesInFlight for a virtual swapchain"
+				));
+		}
+
+		else if(texture.images < 3 || texture.images > 5)
 			retError(clean, Error_invalidParameter(
 				1, 0, "UnifiedTexture_create()::texturePtr->images is only allowed to be 3-5 swapchains"
 			));

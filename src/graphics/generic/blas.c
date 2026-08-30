@@ -41,8 +41,25 @@ void BLAS_free(void *blasGeneric, const Allocator *alloc) {
 	BLAS_freeExt(blas);
 	CharString_free(&blas->base.name, alloc);
 
+	//The build claims a slot and prepareCompactBLAS hands it back, so a structure destroyed between the two,
+	// or one whose compaction is never prepared at all, is the one path left that can return it.
+	//Without this the slot stays claimed for the rest of the session and the pools grow by one every time.
+
+	if(blas->base.compactionQuery != U32_MAX) {
+
+		GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
+
+		GraphicsDevice_releaseCompactionQuery(device, blas->base.compactionQuery, alloc);
+		blas->base.compactionQuery = U32_MAX;
+	}
+
 	RefPtr_dec(&blas->base.asBuffer);
 	RefPtr_dec(&blas->base.tempScratchBuffer);
+
+	//The destination of a compaction that was prepared but never recorded; BLAS_freeExt above has already
+	// destroyed whatever the backend put in it.
+
+	RefPtr_dec(&blas->base.pendingCompactBuffer);
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
 		Buffer_free(&blas->cpuData, alloc);
@@ -359,6 +376,13 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	*blasPtr = *blas;
 	blasPtr->base.name = CharString_createNull();
+
+	//U32_MAX means no compacted size slot is claimed, which is what the free path reads to decide whether it
+	// has one to hand back.
+	//Set from the copied struct here rather than in a backend's init, so the sentinel holds for both backends
+	// and for a creation that fails before the backend ever ran.
+
+	blasPtr->base.compactionQuery = U32_MAX;
 
 	//Set as soon as the object exists rather than once it is fully built.
 	//A failure below frees the half built BLAS, and BLAS_freeExt reaches the backend through base.device,

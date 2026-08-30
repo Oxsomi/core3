@@ -27,6 +27,7 @@
 #include "types/container/memory_stream.h"
 #include "types/base/string_base.h"
 #include "types/base/string_read_helper.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/mathi.h"
 
 #include <sys/stat.h>
@@ -135,7 +136,9 @@ static Bool File_removeDirRecursivePhysical(const char *path, Ns *maxTimeout, Er
 	struct dirent *entry;
 	while((entry = readdir(dir)) != NULL) {
  
-		if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+		const CharString entryName = CharString_createRefCStrConst(entry->d_name);
+
+		if(CharString_equalsCStringSensitive(&entryName, ".") || CharString_equalsCStringSensitive(&entryName, ".."))
 			continue;
  
 		//Build child path
@@ -484,7 +487,9 @@ Bool File_foreach(
 	struct dirent *entry;
 	while((entry = readdir(dir)) != NULL) {
  
-		if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+		const CharString entryName = CharString_createRefCStrConst(entry->d_name);
+
+		if(CharString_equalsCStringSensitive(&entryName, ".") || CharString_equalsCStringSensitive(&entryName, ".."))
 			continue;
  
 		//Build full path: resolvedNoStar + filename
@@ -560,7 +565,10 @@ clean:
 
 //Virtual files
 
-#if _PLATFORM_TYPE != PLATFORM_ANDROID
+//Android and web provide their own (afile.c / webfile.c): this variant reads section bytes that
+// Platform_initUnixExt mapped from the executable itself, which neither platform can do.
+
+#if _PLATFORM_TYPE != PLATFORM_ANDROID && _PLATFORM_TYPE != PLATFORM_WEB
 
 	Bool File_loadVirtualInternal1(
 		FileLoadVirtual *userData,

@@ -605,7 +605,7 @@ typedef enum EDescriptorTypeCount {
 	EDescriptorTypeCount_RWTexture2Di       = 16384,
 	EDescriptorTypeCount_RWTexture2Du       = 16384,
 
-	EDescriptorTypeCount_Sampler            = 1024,
+	EDescriptorTypeCount_Sampler            = 996,
 	EDescriptorTypeCount_TLASExt            = 16,
 
 	//DirectX bindings

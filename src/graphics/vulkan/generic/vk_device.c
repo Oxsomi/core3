@@ -564,9 +564,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 				on = feat & (EGraphicsFeatures_VariableRateShading | EGraphicsFeatures_DirectRendering);
 				break;
 
+			//VK_EXT_mesh_shader depends on VK_KHR_spirv_1_4 the same way the raytracing extensions do, and
+			// spirv_1_4 is only core from Vulkan 1.2 while the instance asks for 1.1, so it stays an
+			// extension that has to be listed explicitly.
+			//Leaving mesh shaders out here enables VK_EXT_mesh_shader without its dependency, which fails
+			// vkCreateDevice with VUID-vkCreateDevice-ppEnabledExtensionNames-01387.
+
 			case EOptExtensions_Spirv14:
 			case EOptExtensions_ShaderFloatControls:
-				on = feat & (EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery);
+				on = feat & (EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery | EGraphicsFeatures_MeshShader);
 				break;
 
 			default:
@@ -1200,6 +1206,15 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 		for(U64 i = 0; i < deviceExt->compactionPools.length; ++i)
 			deviceExt->destroyQueryPool(deviceExt->device, deviceExt->compactionPools.ptr[i], NULL);
 
+		//The structures a compaction replaced outlive the frame that retired them, so a device torn down
+		// before their fence came back still owns them.
+		//They go here rather than with the lists below: destroying them is a DEVICE level entry point, and
+		// leaving them alive across vkDestroyDevice trips VUID-vkDestroyDevice-device-05137.
+
+		for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+			for(U64 j = 0; j < deviceExt->retiredAs[i].length; ++j)
+				deviceExt->destroyAccelerationStructure(deviceExt->device, deviceExt->retiredAs[i].ptr[j], NULL);
+
 		//Only set when push descriptors were emulated; destroying the pool frees the sets with it.
 
 		if(deviceExt->cbufferPool)
@@ -1215,13 +1230,8 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 	ListVkPipelineStageFlags_free(&deviceExt->waitStages, alloc);
 	ListVkSemaphore_free(&deviceExt->waitSemaphoresList, alloc);
-	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-
-		for(U64 j = 0; j < deviceExt->retiredAs[i].length; ++j)
-			deviceExt->destroyAccelerationStructure(deviceExt->device, deviceExt->retiredAs[i].ptr[j], NULL);
-
+	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 		ListVkAccelerationStructureKHR_free(&deviceExt->retiredAs[i], alloc);
-	}
 
 	ListVkQueryPool_free(&deviceExt->compactionPools, alloc);
 	ListVkResult_free(&deviceExt->results, alloc);

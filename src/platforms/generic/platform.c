@@ -68,8 +68,14 @@ AtomicI64 Allocator_memoryAllocationCount = { 0 };
 AtomicI64 Allocator_memoryAllocationSize = { 0 };
 
 typedef struct DebugAllocation {
+
 	U64 location, length;
 	StackTrace stack;
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
+		Buffer traceText;        //Owns the callstack text stack[] points into; see Platform_ownStackTrace
+	#endif
+
 } DebugAllocation;
 
 TList(DebugAllocation);
@@ -79,6 +85,72 @@ Allocator Allocator_allocationsAllocator;
 Allocator Allocator_trackedAllocator;
 ListDebugAllocation Allocator_allocations;            //TODO: Use hashmap here!
 SpinLock Allocator_lock;                            //Multi threading safety
+
+#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
+
+	//A web frame is a pointer into a recycled ring of callstack text, and these traces are printed at
+	//shutdown, long after the ring moved on (see types/base/platforms/unix/uerror.c).
+	//An allocation record has a lifetime, unlike an Error, so it can own the text instead: copy the whole
+	//string once and rebase the frames onto the copy.
+	//The copy comes from Allocator_allocationsAllocator, which does not route back through the tracked
+	//allocator, so this cannot recurse.
+
+	void Platform_ownStackTrace(DebugAllocation *captured) {
+
+		captured->traceText = Buffer_createNull();
+
+		//Every reader checks the slot's generation before following the frames, and copying is a read too:
+		// the text is only this record's callstack while the ring hasn't handed the slot on.
+		//A copy taken without that check holds an unrelated stack, and the OWNED stamp below would make it
+		// authoritative, which is the one state a trace can no longer be checked out of.
+
+		if(!Error_webStackTraceIsLive((const void *const *) captured->stack))
+			return;
+
+		const C8 *first = (const C8*) captured->stack[1];
+
+		if(!first)
+			return;
+
+		U64 len = 0;
+
+		while(first[len])
+			++len;
+
+		Buffer copy = Buffer_createNull();
+
+		//A failed copy leaves the frames pointing at the ring, which the reader reports as expired.
+		//That is a worse leak report, not a wrong one, and it must not fail the allocation itself.
+
+		if(!Buffer_createUninitializedBytes(len + 1, &Allocator_allocationsAllocator, &copy, NULL))
+			return;
+
+		C8 *dst = (C8*) copy.ptrNonConst;
+
+		for(U64 i = 0; i <= len; ++i)
+			dst[i] = first[i];
+
+		//Checked again now the copy is made: a recycle partway through it takes the head of one stack and
+		// the tail of another, so only a slot that held its generation throughout may be owned.
+		//The frames stay on the ring otherwise, which the reader reports as expired.
+
+		if(!Error_webStackTraceIsLive((const void *const *) captured->stack)) {
+			Buffer_free(&copy, &Allocator_allocationsAllocator);
+			return;
+		}
+
+		for(U64 i = 1; i < STACKTRACE_SIZE && captured->stack[i]; ++i)
+			captured->stack[i] = dst + ((const C8*) captured->stack[i] - first);
+
+		captured->stack[0] = ERROR_WEB_STACKTRACE_OWNED;
+		captured->traceText = copy;
+	}
+
+	void Platform_disownStackTrace(DebugAllocation *captured) {
+		Buffer_free(&captured->traceText, &Allocator_allocationsAllocator);
+	}
+
+#endif
 
 //Allocation
 
@@ -157,6 +229,10 @@ Bool Platform_onAllocate(void *ptr, U64 length, Error *e_rr) {
 
 		Error_captureStackTrace(captured.stack, STACKTRACE_SIZE, 1);
 
+		#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
+			Platform_ownStackTrace(&captured);
+		#endif
+
 		acq = SpinLock_lock(&Allocator_lock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)        //Should never happen
@@ -171,6 +247,15 @@ Bool Platform_onAllocate(void *ptr, U64 length, Error *e_rr) {
 	goto clean;
 
 clean:
+
+	//The list owns the copied callstack text from the push onwards, and Platform_onFree frees it together
+	// with the record.
+	//A record that never got that far still owns it here.
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
+		if(!s_uccess)
+			Platform_disownStackTrace(&captured);
+	#endif
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&Allocator_lock);
@@ -244,6 +329,10 @@ Bool Platform_onFree(void *ptr, U64 len) {
 			s_uccess = false;
 			goto clean;
 		}
+
+		#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
+			Platform_disownStackTrace(&Allocator_allocations.ptrNonConst[i]);
+		#endif
 
 		ListDebugAllocation_erase(&Allocator_allocations, i, NULL);
 
@@ -502,6 +591,11 @@ void Platform_cleanup() {
 	ListVirtualSection_free(&Platform_instance->virtualSections, Platform_instance->alloc);
 
 	Allocator_reportLeaks();
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
+		for(U64 i = 0; i < Allocator_allocations.length; ++i)
+			Platform_disownStackTrace(&Allocator_allocations.ptrNonConst[i]);
+	#endif
 
 	ListDebugAllocation_free(&Allocator_allocations, &Allocator_allocationsAllocator);
 

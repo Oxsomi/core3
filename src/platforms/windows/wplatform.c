@@ -25,6 +25,7 @@
 #include "platforms/logx.h"
 #include "platforms/keyboard.h"
 #include "types/container/string_unicode.h"
+#include "types/base/string_read_helper.h"
 #include "types/container/file_base.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/string_mut_helper.h"
@@ -42,15 +43,26 @@
 
 	#include <string.h>
 
+	static Bool Platform_cpuVendorHas(const CharString *s, const C8 *needle) {
+		const CharString other = CharString_createRefCStrConst(needle);
+		return CharString_containsStringSensitive(s, &other, 0, 0);
+	}
+
 	//Map a registry VendorIdentifier / brand string to a vendor (Windows-on-ARM has no cpuid).
-	static ECPUVendor Platform_cpuVendorFromString(const C8 *s) {
-		if(!s)                                               return ECPUVendor_Unknown;
-		if(strstr(s, "Qualcomm") || strstr(s, "Snapdragon")) return ECPUVendor_Qualcomm;
-		if(strstr(s, "NVIDIA")   || strstr(s, "Nvidia"))     return ECPUVendor_Nvidia;
-		if(strstr(s, "Ampere"))                              return ECPUVendor_Ampere;
-		if(strstr(s, "Samsung"))                             return ECPUVendor_Samsung;
-		if(strstr(s, "Apple"))                               return ECPUVendor_Apple;
-		if(strstr(s, "ARM")      || strstr(s, "Arm"))        return ECPUVendor_Arm;
+	static ECPUVendor Platform_cpuVendorFromString(const C8 *str) {
+
+		if(!str)
+			return ECPUVendor_Unknown;
+
+		const CharString s = CharString_createRefCStrConst(str);
+
+		if(Platform_cpuVendorHas(&s, "Qualcomm") || Platform_cpuVendorHas(&s, "Snapdragon")) return ECPUVendor_Qualcomm;
+		if(Platform_cpuVendorHas(&s, "NVIDIA")   || Platform_cpuVendorHas(&s, "Nvidia"))     return ECPUVendor_Nvidia;
+		if(Platform_cpuVendorHas(&s, "Ampere"))                                              return ECPUVendor_Ampere;
+		if(Platform_cpuVendorHas(&s, "Samsung"))                                             return ECPUVendor_Samsung;
+		if(Platform_cpuVendorHas(&s, "Apple"))                                               return ECPUVendor_Apple;
+		if(Platform_cpuVendorHas(&s, "ARM")      || Platform_cpuVendorHas(&s, "Arm"))        return ECPUVendor_Arm;
+
 		return ECPUVendor_Unknown;
 	}
 

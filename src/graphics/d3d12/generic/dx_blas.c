@@ -235,11 +235,13 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 	// rival the structures themselves in peak footprint.
 
 	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+
 		blas->base.device,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		NULL,
 		&tmp,
+
 		//One scratch buffer serves both, since the same object now does the full build and every refit after
 		// it; the update size is not required to be the smaller of the two, so neither is assumed.
 
@@ -366,6 +368,7 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
@@ -375,7 +378,8 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
 		return s_uccess;
 
-	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(blas->base.asBuffer)->resource.deviceAddress;
+	DeviceBuffer *asBuffer = DeviceBufferRef_ptr(blas->base.asBuffer);
+	D3D12_GPU_VIRTUAL_ADDRESS dstAS = asBuffer->resource.deviceAddress;
 
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildAs = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC) {
 		.DestAccelerationStructureData = dstAS,
@@ -455,8 +459,15 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		// writes as a UAV, so it has to come back before the write and go again before the copy.
 
 		gotoIfError3(clean, DxDeviceBuffer_transition(
-			emitExt, D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
+			emitExt, D3D12_BARRIER_SYNC_EMIT_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO,
 			D3D12_BARRIER_ACCESS_UNORDERED_ACCESS, &deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		gotoIfError3(clean, DxDeviceBuffer_transition(
+			DeviceBuffer_ext(asBuffer, Dx),
+			D3D12_BARRIER_SYNC_EMIT_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO,
+			D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
 		));
 
 		if(dependency.NumBarriers) {

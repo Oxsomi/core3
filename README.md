@@ -11,6 +11,7 @@ For per-module maturity, see [STATUS.md](STATUS.md). For how the modules fit tog
 | Linux     | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux.yml/badge.svg) | N/A | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/linux_dynamic.yml/badge.svg) | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm.yml/badge.svg)** | N/A | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_dynamic.yml/badge.svg)** |
 | SteamOS   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/steamos.yml/badge.svg) | N/A | See linux, but not recommended | N/A | N/A | N/A |
 | Android   | *host:* ![windows host](https://github.com/Oxsomi/core3/actions/workflows/android_on_windows.yml/badge.svg) ![linux host](https://github.com/Oxsomi/core3/actions/workflows/android_on_linux.yml/badge.svg) ![macos host](https://github.com/Oxsomi/core3/actions/workflows/android_on_osx.yml/badge.svg) *+ shader compiler:* ![shader compiler](https://github.com/Oxsomi/core3/actions/workflows/android_shader_compiler.yml/badge.svg) *emulator run:* ![emulator](https://github.com/Oxsomi/core3/actions/workflows/android_emulator.yml/badge.svg) | N/A | N/A, no dynamic linking | (same jobs; both ABIs are built together) | N/A | N/A, no dynamic linking |
+| Web       | N/A, no WebGPU backend yet | *wasm64:* ![web](https://github.com/Oxsomi/core3/actions/workflows/web.yml/badge.svg) | N/A, no dynamic linking | N/A | N/A | N/A |
 | iOS       | **TBD** | **Metal**: **TBD** | N/A, no dynamic linking | **TBD** | **Metal**: **TBD** | N/A, no dynamic linking |
 | Xbox UWP  | N/A | **D3D12**: TBD | N/A | N/A | N/A | N/A |
 
@@ -42,15 +43,27 @@ a new compiler, and the prebuilt dependencies (DXC among them) are MSVC.
 These run on a nightly schedule rather than per push, and instrument OxC3, the spirv_reflect fork and DXC.
 A green badge means that configuration built and ran the suite clean under the sanitizers.
 
-| Nightly (clang, ASan + UBSan) | x64 | ARM64 |
-| ----------------------------- | --- | ----- |
+| Nightly (ASan + UBSan) | x64 | ARM64 |
+| ---------------------- | --- | ----- |
 | Windows (clang-cl) | ![windows sanitizers](https://github.com/Oxsomi/core3/actions/workflows/windows_clang_sanitizers.yml/badge.svg) | N/A, the runner's LLVM ships no aarch64 sanitizer runtime |
 | Linux (clang) | ![linux sanitizers](https://github.com/Oxsomi/core3/actions/workflows/linux_clang_sanitizers.yml/badge.svg) | ![linux arm sanitizers](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_clang_sanitizers.yml/badge.svg) |
+| Linux (gcc) | ![linux gcc sanitizers](https://github.com/Oxsomi/core3/actions/workflows/linux_gcc_sanitizers.yml/badge.svg) | N/A yet |
 | Mac OS X (clang) | ![osx sanitizers](https://github.com/Oxsomi/core3/actions/workflows/osx_clang_sanitizers.yml/badge.svg) | ![osx arm sanitizers](https://github.com/Oxsomi/core3/actions/workflows/osx_arm_sanitizers.yml/badge.svg) |
+| Android (NDK clang) | ![android sanitizers](https://github.com/Oxsomi/core3/actions/workflows/android_sanitizers.yml/badge.svg) | N/A, an arm64 emulator image on an x86_64 runner is software emulated and never finishes |
+| Web (wasm64) | *wasm64:* ![web sanitizers](https://github.com/Oxsomi/core3/actions/workflows/web_sanitizers.yml/badge.svg) | N/A |
+
+Both compilers are sanitized on Linux, not just the alternate one: their ASan sees only what that compiler
+kept after inlining, and their UBSan differs in which checks `-fsanitize=undefined` turns on, so each finds
+defects the other doesn't. MSVC stays excluded, since an unreliable sanitizer is worse than none.
 
 Windows is x64 only. DXC's UBSan has `enum` excluded everywhere: its reflection uses an out-of-range
 `_D3D_SHADER_VARIABLE_TYPE` sentinel that `-fsanitize=enum` flags, which is DXC's design rather than our
 bug; the rest of UBSan stays on.
+
+These run against a software driver where one exists (lavapipe on Linux, MoltenVK on macOS, the emulator on
+Android), so the graphics suites actually execute rather than self-skipping: a sanitizer run that finds no
+adapter goes green having tested none of the allocators or descriptor tables. Vulkan on Windows has no
+software driver here, so it is built but never run under a sanitizer.
 
 ## Modules
 
