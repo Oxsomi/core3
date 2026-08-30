@@ -1,0 +1,155 @@
+/* shader.oxsomi.com — styles. Split out of the single-file prototype; same visual identity
+   (Bootstrap dark, teal brand dot, mono chips), extended for the richer oiSH inspector. */
+
+:root{ --ox-mono: ui-monospace,"Cascadia Code","JetBrains Mono",Consolas,monospace; }
+html,body{ height:100%; }
+body{ display:flex; flex-direction:column; overflow:hidden; }
+.brand-dot{ color:#2dd4bf; }
+.app-main{ flex:1 1 auto; min-height:0; display:flex; }
+.rail{ flex:0 0 232px; border-right:1px solid var(--bs-border-color); display:flex; flex-direction:column; min-height:0; overflow:auto; }
+.editor-pane{ flex:1 1 0; min-width:0; border-right:1px solid var(--bs-border-color); display:flex; flex-direction:column; min-height:0; }
+.output-pane{ flex:1.15 1 0; min-width:0; display:flex; flex-direction:column; min-height:0; }
+.pane-body{ flex:1 1 auto; min-height:0; overflow:auto; position:relative; }
+
+/* ---- file rail ---- */
+.rail-grp{ font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--bs-secondary-color);
+  padding:9px 12px 4px; display:flex; align-items:center; }
+.fitem{ display:flex; align-items:center; gap:7px; padding:4px 12px; font-family:var(--ox-mono); font-size:12.5px; cursor:pointer; }
+.fitem:hover{ background:var(--bs-tertiary-bg); }
+.fitem.active{ background:var(--bs-tertiary-bg); box-shadow:inset 2px 0 0 #2dd4bf; }
+.fitem .bi{ color:var(--bs-secondary-color); }
+.fitem.builtin .name{ color:#86efac; }
+.fitem.folder{ cursor:default; color:var(--bs-secondary-color); }
+.fitem.folder .bi{ color:#7dd3fc; }
+.fitem.oish .name{ color:#c4b5fd; }
+.fitem.sbin .name{ color:#7dd3fc; }
+.fitem .tag{ margin-left:auto; font-size:10px; }
+
+/* ---- CodeMirror ---- */
+.CodeMirror{ height:100%; font-family:var(--ox-mono); font-size:13px; }
+.cm-oxc-anno{ color:#c4b5fd; } .cm-oxc-macro{ color:#f0abfc; } .cm-oxc-include{ color:#86efac; }
+.cm-oxc-type{ color:#5eead4; } .cm-oxc-shader{ color:#fbbf24; }
+.diag-line-error{ background:#f8717115; } .diag-line-warn{ background:#fbbf240f; }
+.cm-underline-error{ text-decoration:underline wavy #f87171; text-decoration-skip-ink:none; }
+.cm-underline-warn{ text-decoration:underline wavy #fbbf24; text-decoration-skip-ink:none; }
+.diag-line-flash{ background:#2dd4bf33 !important; transition:background .5s; }
+.gutter-diag{ font-size:12px; text-align:center; }
+.gutter-diag.error{ color:#f87171; } .gutter-diag.warn{ color:#fbbf24; }
+
+/* ---- reflection tree ---- */
+.tree{ list-style:none; margin:0; padding:6px 0; font-family:var(--ox-mono); font-size:12.5px; }
+.tree ul{ list-style:none; margin:0; padding-left:18px; } .tree li{ padding:1px 0; }
+.tnode{ display:flex; align-items:center; gap:7px; padding:3px 8px; border-radius:6px; flex-wrap:wrap; }
+.tnode:hover{ background:var(--bs-tertiary-bg); } .tnode.exp{ cursor:pointer; }
+.tw{ width:14px; display:inline-block; text-align:center; color:var(--bs-secondary-color); font-size:10px; transition:transform .12s; }
+li.collapsed>.tnode>.tw{ transform:rotate(-90deg); } li.collapsed>ul{ display:none; }
+.tname{ color:var(--bs-emphasis-color); } .ttype{ color:#7dd3fc; }
+.tdim{ color:var(--bs-secondary-color); }
+.toff{ color:var(--bs-secondary-color); margin-left:auto; font-size:11.5px; }
+
+/* register class + chips */
+.reg{ font-family:var(--ox-mono); font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:4px; }
+.reg-cbv{ color:#fbbf24; background:#fbbf2422; } .reg-srv{ color:#38bdf8; background:#38bdf822; }
+.reg-uav{ color:#a78bfa; background:#a78bfa22; } .reg-smp{ color:#34d399; background:#34d39922; }
+.chip{ font-family:var(--ox-mono); font-size:11px; font-weight:600; padding:2px 8px; border-radius:6px; }
+.chip-spv{ color:#38bdf8; background:#38bdf81e; } .chip-dxil{ color:#a78bfa; background:#a78bfa1e; }
+.chip-lib{ color:#fbbf24; background:#fbbf241e; }
+.chip-muted{ color:var(--bs-secondary-color); background:var(--bs-tertiary-bg); }
+.chip-ok{ color:#34d399; background:#34d3991e; } .chip-bad{ color:#f87171; background:#f871711e; }
+
+/* dense key/value + tables used by the inspector */
+.kv{ display:grid; grid-template-columns:190px 1fr; font-family:var(--ox-mono); font-size:12.5px; }
+.kv>div{ padding:3px 0; overflow-wrap:anywhere; } .kv .k{ color:var(--bs-secondary-color); }
+table.ox{ width:100%; font-family:var(--ox-mono); font-size:12px; border-collapse:collapse; }
+table.ox th{ font-weight:600; color:var(--bs-secondary-color); text-align:left; padding:4px 8px;
+  border-bottom:1px solid var(--bs-border-color); white-space:nowrap; position:sticky; top:0; background:var(--bs-body-bg); }
+table.ox td{ padding:4px 8px; border-bottom:1px solid var(--bs-border-color-translucent); vertical-align:top; overflow-wrap:anywhere; }
+table.ox tr.unused td{ opacity:.55; }
+.used-y{ color:#34d399; } .used-n{ color:#f87171; }
+
+/* oiSB (shader buffer) layout */
+.sb{ font-family:var(--ox-mono); font-size:12px; }
+.sb .off{ color:#7dd3fc; } .sb .stride{ color:var(--bs-secondary-color); }
+.sb .sbline{ padding:1px 0; }
+.sb .nest{ margin-left:18px; border-left:1px dashed var(--bs-border-color); padding-left:10px; }
+
+/* CLI hint (which OxC3 command a view corresponds to) + teal action button */
+.cli{ font-family:var(--ox-mono); font-size:12px; color:#5eead4; }
+.btn-teal{ --bs-btn-color:#0f172a; --bs-btn-bg:#2dd4bf; --bs-btn-border-color:#2dd4bf;
+  --bs-btn-hover-bg:#5eead4; --bs-btn-hover-border-color:#5eead4; --bs-btn-hover-color:#0f172a;
+  --bs-btn-active-bg:#14b8a6; --bs-btn-active-border-color:#14b8a6; }
+
+pre.asm{ font-family:var(--ox-mono); font-size:12.5px; line-height:1.5; margin:0; padding:14px 16px; white-space:pre-wrap; }
+pre.cmdcard{ border:1px solid var(--bs-border-color); border-radius:8px; background:var(--bs-tertiary-bg); }
+.binbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+/* ---- reflection/oiSH A↔B diff ---- */
+.diff-row{ display:grid; grid-template-columns:220px 1fr 1fr; border-bottom:1px solid var(--bs-border-color-translucent); font-family:var(--ox-mono); font-size:12px; }
+.diff-row>div{ padding:6px 10px; overflow-wrap:anywhere; } .diff-row .k{ color:var(--bs-secondary-color); }
+.diff-head{ font-weight:600; background:var(--bs-tertiary-bg); position:sticky; top:0; z-index:1; }
+.diff-sect{ font-weight:600; background:var(--bs-tertiary-bg); color:var(--bs-secondary-color); font-size:11px;
+  text-transform:uppercase; letter-spacing:.06em; }
+.diff-sect>div{ padding:4px 10px; }
+.diff-diverge{ background:#f59e0b1a; } .diff-diverge .val-x{ color:#f59e0b; font-weight:600; }
+.diff-add{ color:#34d399; } .diff-del{ color:#f87171; }
+body.divonly .diff-row:not(.diff-diverge):not(.diff-head):not(.diff-sect){ display:none; }
+
+/* ---- disassembly line diff (binary diff by entrypoint) ---- */
+.bdiff{ display:block; }
+.bdiff .ln{ display:block; padding:0 16px; white-space:pre-wrap; }
+.bdiff .ln.add{ background:#34d3991a; color:#34d399; }
+.bdiff .ln.del{ background:#f871711a; color:#f87171; }
+.bdiff .ln.ctx{ color:var(--bs-secondary-color); }
+.bdiff .ln.skip{ color:var(--bs-secondary-color); background:var(--bs-tertiary-bg); text-align:center; font-size:11px; padding:2px 16px; }
+
+/* ---- problems ---- */
+.problems{ height:172px; display:flex; flex-direction:column; }
+body.prob-collapsed .problems{ height:auto; } body.prob-collapsed .problems-body{ display:none; }
+.problems-body{ flex:1 1 auto; overflow:auto; }
+.diag{ display:flex; align-items:baseline; gap:10px; padding:5px 14px; font-family:var(--ox-mono); font-size:12.5px;
+  border-bottom:1px solid var(--bs-border-color-translucent); cursor:pointer; }
+.diag:hover{ background:var(--bs-tertiary-bg); } .diag i{ position:relative; top:2px; }
+.diag-error i{ color:#f87171; } .diag-warn i{ color:#fbbf24; } .diag-info i{ color:#38bdf8; }
+.diag-loc{ color:#7dd3fc; white-space:nowrap; } .diag-msg{ color:var(--bs-emphasis-color); flex:1 1 auto; }
+.diag-code{ color:var(--bs-secondary-color); font-size:11px; white-space:nowrap; }
+.st-link{ cursor:pointer; }
+.statusbar{ font-family:var(--ox-mono); font-size:12px; border-top:1px solid var(--bs-border-color); background:var(--bs-tertiary-bg); }
+.fail-overlay{ position:absolute; inset:0; background:var(--bs-body-bg); display:flex; align-items:center; justify-content:center; text-align:center; z-index:5; }
+.ro-badge{ font-size:11px; }
+.empty-hint{ text-align:center; color:var(--bs-secondary-color); max-width:480px; margin:44px auto; }
+
+/* ---- offcanvas (syntax + CLI map) ---- */
+.syn h6{ color:#2dd4bf; text-transform:uppercase; letter-spacing:.06em; font-size:11px; margin:20px 0 8px; }
+.syn h6:first-child{ margin-top:0; }
+.syn .row-item{ padding:6px 0; border-bottom:1px solid var(--bs-border-color-translucent); }
+.syn .sig{ font-family:var(--ox-mono); font-size:12.5px; color:#c4b5fd; }
+.syn .desc{ font-size:12.5px; color:var(--bs-secondary-color); }
+.syn .tok{ font-family:var(--ox-mono); font-size:12px; padding:2px 6px; border-radius:4px; background:var(--bs-tertiary-bg); display:inline-block; margin:2px 3px 2px 0; }
+.syn .note{ font-size:11.5px; color:#fbbf24; }
+.syn .cli{ font-family:var(--ox-mono); font-size:12px; color:#5eead4; }
+.syn .badge{ font-size:10px; }
+
+/* ---- SPV/DXIL standalone tools ---- */
+.binPane-card textarea{ font-family:var(--ox-mono); font-size:12.5px; }
+
+/* ---- oiSR symbol tree ---- */
+.chip-sr{ color:#c4b5fd; background:#c4b5fd1e; } .chip-sp{ color:#fbbf24; background:#fbbf241e; } .chip-isa{ color:#f87171; background:#f871711e; }
+.sym-kind{ font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:4px; background:var(--bs-tertiary-bg); color:var(--bs-secondary-color); }
+.sym-kind.sym-fn{ color:#fbbf24; background:#fbbf2422; } .sym-kind.sym-reg{ color:#38bdf8; background:#38bdf822; }
+.sym-kind.sym-type{ color:#5eead4; background:#5eead422; } .sym-kind.sym-param{ color:#a78bfa; background:#a78bfa22; }
+.sym-kind.sym-var{ color:#86efac; background:#86efac22; } .sym-kind.sym-ns{ color:var(--bs-secondary-color); }
+.sym-reg-info{ color:var(--bs-secondary-color); } .sym-anno{ color:#c4b5fd; }
+.sym-loc{ color:#7dd3fc; text-decoration:none; font-size:11.5px; } .sym-loc:hover{ text-decoration:underline; }
+.sym-meta{ color:var(--bs-secondary-color); font-size:11px; }
+.fitem.oisr .name{ color:#c4b5fd; } .fitem.oisp .name{ color:#fbbf24; }
+
+/* ---- oiSP provenance ---- */
+.prov-derived{ color:#34d399; background:#34d3991e; } .prov-supplied{ color:#38bdf8; background:#38bdf81e; } .prov-assumed{ color:#fbbf24; background:#fbbf241e; }
+.sp-val{ width:110px; font-family:var(--ox-mono); font-size:12px; padding:1px 6px; }
+
+/* ---- ISA ---- */
+.isa-stats{ font-family:var(--ox-mono); font-size:12px; } .isa-stat{ white-space:nowrap; }
+.isa-state{ background:var(--bs-tertiary-bg); max-height:42vh; overflow:auto; }
+textarea.dxc-line{ font-family:var(--ox-mono); font-size:12.5px; white-space:pre; resize:vertical; }
+#binPane textarea{ font-family:var(--ox-mono); font-size:12.5px; }
+#isaAsic option:disabled{ color:var(--bs-secondary-color); }
