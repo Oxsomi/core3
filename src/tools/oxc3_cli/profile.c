@@ -811,8 +811,11 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	// matrix product.
 	//The four adds that fold the product into the sink are overhead both backends pay identically.
 
+	//Initialized at declaration, since MSVC's flow analysis can't see the per-row assignments below fully
+	// cover them and fails the build on C4701 otherwise.
+
 	const U64 matIters = iters / 16;
-	F32x4x4 ma, mb, mSink = F32x4x4_identity();
+	F32x4x4 ma = F32x4x4_identity(), mb = F32x4x4_identity(), mSink = F32x4x4_identity();
 	then = Time_now();
 	for(U64 i = 0; i < matIters; ++i) {
 		for(U8 j = 0; j < 4; ++j) {

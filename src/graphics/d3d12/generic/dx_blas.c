@@ -366,6 +366,7 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
