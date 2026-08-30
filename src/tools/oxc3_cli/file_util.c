@@ -1279,7 +1279,10 @@ Bool CLI_fileHexdump(const ParsedArgs *args) {
 	const Bool hasLength = (args->parameters & EOperationHasParameter_Length) != 0;
 	CharString tmp = CharString_createNull();
 
-	if((args->parameters & EOperationHasParameter_StartOffset) && CLI_fileArg(args, EOperationHasParameter_StartOffsetShift, &tmp))
+	if(
+		(args->parameters & EOperationHasParameter_StartOffset) &&
+		CLI_fileArg(args, EOperationHasParameter_StartOffsetShift, &tmp)
+	)
 		if(!CharString_parseDec(tmp, &start))
 			start = 0;
 

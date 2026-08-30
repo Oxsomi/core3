@@ -768,7 +768,9 @@ namespace oxc {
 				return c::CommandListRef_drawIndexed(list, indexCount, instanceCount, e_rr);
 			}
 
-			[[nodiscard]] c::Bool drawUnindexed(c::U32 vertexCount, c::U32 instanceCount = 1, c::Error *e_rr = nullptr) noexcept {
+			[[nodiscard]] c::Bool drawUnindexed(
+				c::U32 vertexCount, c::U32 instanceCount = 1, c::Error *e_rr = nullptr
+			) noexcept {
 				return c::CommandListRef_drawUnindexed(list, vertexCount, instanceCount, e_rr);
 			}
 

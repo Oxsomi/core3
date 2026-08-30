@@ -1,0 +1,36 @@
+; gfx1201  SGPRs 8  VGPRs 13  code 184 B  instrs 34  scratch 0  lds 0
+_amdgpu_ps_main:
+	s_mov_b32 s0, s1                                           // 000000000000: BE800001
+	s_mov_b32 m0, s3                                           // 000000000004: BEFD0003
+	s_mov_b64 s[2:3], exec                                     // 000000000008: BE82017E
+	s_wqm_b64 exec, exec                                       // 00000000000C: BEFE1D7E
+	ds_param_load v6, attr0.x wait_va_vdst:15 wait_vm_vsrc:1   // 000000000010: CE8F0006
+	ds_param_load v7, attr0.y wait_va_vdst:15 wait_vm_vsrc:1   // 000000000014: CE8F0107
+	ds_param_load v8, attr0.z wait_va_vdst:15 wait_vm_vsrc:1   // 000000000018: CE8F0208
+	ds_param_load v9, attr0.w wait_va_vdst:15 wait_vm_vsrc:1   // 00000000001C: CE8F0309
+	s_getpc_b64 s[4:5]                                         // 000000000020: BE844700
+	s_delay_alu instid0(SALU_CYCLE_1) | instskip(NEXT) | instid1(SALU_CYCLE_1)// 000000000024: BF870499
+	s_sext_i32_i16 s5, s5                                      // 000000000028: BE850F05
+	s_mov_b32 s1, s5                                           // 00000000002C: BE810005
+	s_mov_b64 exec, s[2:3]                                     // 000000000030: BEFE0102
+	s_load_b256 s[0:7], s[0:1], 0x0                            // 000000000034: F4006000 F8000000
+	v_mov_b32_e32 v2, 0                                        // 00000000003C: 7E040280
+	v_interp_p10_f32 v10, v6, v0, v6 wait_exp:3                // 000000000040: CD00030A 041A0106
+	v_interp_p10_f32 v11, v7, v0, v7 wait_exp:2                // 000000000048: CD00020B 041E0107
+	v_interp_p10_f32 v12, v8, v0, v8 wait_exp:1                // 000000000050: CD00010C 04220108
+	v_interp_p10_f32 v0, v9, v0, v9 wait_exp:0                 // 000000000058: CD000000 04260109
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000060: BF870214
+	v_interp_p2_f32 v6, v6, v1, v10 wait_exp:7                 // 000000000064: CD010706 042A0306
+	v_interp_p2_f32 v7, v7, v1, v11 wait_exp:7                 // 00000000006C: CD010707 042E0307
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000074: BF870214
+	v_interp_p2_f32 v8, v8, v1, v12 wait_exp:7                 // 000000000078: CD010708 04320308
+	v_interp_p2_f32 v0, v9, v1, v0 wait_exp:7                  // 000000000080: CD010700 04020309
+	s_wait_kmcnt 0x0                                           // 000000000088: BFC70000
+	image_load v[2:5], v2, s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D a16// 00000000008C: D3C00041 00000002 00000002
+	s_wait_loadcnt 0x0                                         // 000000000098: BFC00000
+	v_mul_f32_e32 v1, v2, v6                                   // 00000000009C: 10020D02
+	v_mul_f32_e32 v2, v3, v7                                   // 0000000000A0: 10040F03
+	v_mul_f32_e32 v3, v4, v8                                   // 0000000000A4: 10061104
+	v_mul_f32_e32 v0, v5, v0                                   // 0000000000A8: 10000105
+	export mrt0, v1, v2, v3, v0 done                           // 0000000000AC: F800080F 00030201
+	s_endpgm                                                   // 0000000000B4: BFB00000

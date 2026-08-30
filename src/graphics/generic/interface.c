@@ -216,6 +216,38 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		WrapperFunction(pipeline->device, pipelineFree)(pipeline, alloc);
 	}
 
+	//A backend with nothing to add simply has no entry, which is not an error: the list stays empty.
+
+	Bool GraphicsDeviceRef_listShaderTargetsExt(
+		GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+	) {
+
+		Bool s_uccess = true;
+		GraphicsDeviceRef_listShaderTargetsImpl listFn = WrapperFunction(deviceRef, deviceListShaderTargets);
+
+		if(listFn)
+			gotoIfError3(clean, listFn(deviceRef, alloc, result, e_rr));
+
+	clean:
+		return s_uccess;
+	}
+
+	Bool Pipeline_getExecutablesExt(Pipeline *pipeline, const Allocator *alloc, ListPipelineExecutable *result, Error *e_rr) {
+
+		Bool s_uccess = true;
+		Pipeline_getExecutablesImpl execFn = WrapperFunction(pipeline->device, pipelineGetExecutables);
+
+		if(!execFn)
+			retError(clean, Error_unsupportedOperation(
+				0, "Pipeline_getExecutablesExt() backend doesn't support pipeline executable introspection"
+			));
+
+		gotoIfError3(clean, execFn(pipeline, alloc, result, e_rr));
+
+	clean:
+		return s_uccess;
+	}
+
 	//Sampler
 
 	Bool GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, const CharString *name, Error *e_rr) {
@@ -427,7 +459,9 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	//Instance
 
 	Bool GraphicsInstance_createExt(const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr) {
-		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(*instanceRef)->api].instanceCreate(info, instanceRef, e_rr);
+		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(*instanceRef)->api].instanceCreate(
+			info, instanceRef, e_rr
+		);
 	}
 
 	void GraphicsInstance_freeExt(GraphicsInstance *inst, const Allocator *alloc) {

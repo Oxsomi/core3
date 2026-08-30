@@ -97,7 +97,7 @@ if(DynamicLinkingShaderCompiler)
 	endif()
 
 endif()
-target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH)
+target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_formats_oiSR)
 target_link_libraries(OxC3_shader_compiler PUBLIC dxc::dxc spirv_reflect::spirv_reflect)
 
 # On Windows d3d12shader.h (included by DXC's dxcreflect.h) comes from the Windows SDK.

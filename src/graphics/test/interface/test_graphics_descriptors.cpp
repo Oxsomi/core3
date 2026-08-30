@@ -201,9 +201,13 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 	const c::CharString heapName = name("Test descriptor heap");
 	c::DescriptorHeapRef *badHeap = nullptr;
 
-	Test_assert(t, "heapNullDevice", !c::GraphicsDeviceRef_createDescriptorHeap(nullptr, &heapInfo, &heapName, &badHeap, nullptr));
+	Test_assert(
+		t, "heapNullDevice", !c::GraphicsDeviceRef_createDescriptorHeap(nullptr, &heapInfo, &heapName, &badHeap, nullptr)
+	);
 
-	Test_assert(t, "heapNullInfo", !c::GraphicsDeviceRef_createDescriptorHeap(deviceRef, nullptr, &heapName, &badHeap, nullptr));
+	Test_assert(
+		t, "heapNullInfo", !c::GraphicsDeviceRef_createDescriptorHeap(deviceRef, nullptr, &heapName, &badHeap, nullptr)
+	);
 
 	Test_assert(t, "heapNoDescriptors", !dev.createDescriptorHeap(emptyHeapInfo, "Test descriptor heap", heap));
 
@@ -296,7 +300,8 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 	//A buffer to point descriptors at; the read only bindings above require ShaderRead on the resource.
 
 	if(!Test_assert(t, "bufferCreate", dev.createBuffer(
-		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead, "Test descriptor table buffer", 256, buffer, nullptr, e_rr
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead, "Test descriptor table buffer", 256, buffer, nullptr,
+		e_rr
 	)))
 		return;
 
@@ -311,7 +316,9 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 	//The wrapper hands the slot back through a reference, so a null out parameter is another one that only the
 	// C entry point can spell.
 
-	Test_assert(t, "allocNullArrayId", !c::DescriptorTableRef_allocDescriptor(table.handle(), 0, nullptr, false, &desc, nullptr));
+	Test_assert(
+		t, "allocNullArrayId", !c::DescriptorTableRef_allocDescriptor(table.handle(), 0, nullptr, false, &desc, nullptr)
+	);
 
 	//That single descriptor is set through its binding index instead.
 	//maintainRef stays false, so the table doesn't take ownership of the resource.

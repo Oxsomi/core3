@@ -1595,7 +1595,9 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 
 	#if defined(HAS_CLMUL64x4) && defined(HAS_AESx4)
 		if (blockSizeMax > 8 && (use256Or512 & 2) && next + 16 <= end)
-			AESEncryptionContext_blocks16(&counterForIv, &next, end, iv, ctx->H, ctx->key, &ctx->tag, isEncrypt, ctx->encryptionType);
+			AESEncryptionContext_blocks16(
+				&counterForIv, &next, end, iv, ctx->H, ctx->key, &ctx->tag, isEncrypt, ctx->encryptionType
+			);
 	#endif
 
 	if (next >= end)
@@ -1605,7 +1607,9 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 
 	#if defined(HAS_CLMUL64x2) && defined(HAS_AESx2)
 		if (blockSizeMax > 4 && (use256Or512 & 1) && next + 8 <= end)
-			AESEncryptionContext_blocks8(&counterForIv, &next, end, iv, ctx->H, ctx->key, &ctx->tag, isEncrypt, ctx->encryptionType);
+			AESEncryptionContext_blocks8(
+				&counterForIv, &next, end, iv, ctx->H, ctx->key, &ctx->tag, isEncrypt, ctx->encryptionType
+			);
 	#endif
 
 	if (next >= end)

@@ -204,7 +204,9 @@ Bool Compiler_getTargetsFromFile(
 
 		if(output) {
 			Bool isVirtualOut;
-			gotoIfError3(clean, File_resolve(output, &isVirtualOut, 128, &Platform_instance->defaultDir, alloc, &resolved2, e_rr));
+			gotoIfError3(clean, File_resolve(
+				output, &isVirtualOut, 128, &Platform_instance->defaultDir, alloc, &resolved2, e_rr
+			));
 			gotoIfError3(clean, CharString_append(&resolved2, '/', alloc, e_rr));
 		}
 

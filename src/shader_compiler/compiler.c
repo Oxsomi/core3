@@ -682,7 +682,8 @@ static Bool Compiler_paddingCheck(
 				if(var1D > 1 && (siz & 15))
 					Log_warnLn(
 						alloc,
-						"Binary %"PRIu64" has variable \"%.*s.%.*s\" (%.*s) which incurs %"PRIu32" bytes of padding per array index. "
+						"Binary %"PRIu64" has variable \"%.*s.%.*s\" (%.*s) which incurs %"PRIu32" bytes of padding "
+						"per array index. "
 						"Might be inefficient and/or unexpected (total of %"PRIu32" bytes)",
 						binaryId,
 						(int) CharString_length(parentName), parentName.ptr,

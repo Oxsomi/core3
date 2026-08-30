@@ -90,8 +90,21 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 
 	//TODO: Push constants
 
+	//Capture ISA + statistics for live disassembly when requested and supported (VK_KHR_pipeline_executable_properties)
+
+	VkPipelineCreateFlags createFlags = 0;
+
+	if(
+		(pipeline->flags & EPipelineFlags_CaptureISA) &&
+		(device->info.capabilities.features2 & EGraphicsFeatures2_PipelineExecutableInfo)
+	)
+		createFlags =
+			VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR |
+			VK_PIPELINE_CREATE_CAPTURE_INTERNAL_REPRESENTATIONS_BIT_KHR;
+
 	VkComputePipelineCreateInfo pipelineInfo = (VkComputePipelineCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.flags = createFlags,
 		.stage = (VkPipelineShaderStageCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_COMPUTE_BIT,

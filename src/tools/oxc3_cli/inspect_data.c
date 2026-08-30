@@ -33,6 +33,7 @@
 #include "types/container/string_unicode.h"
 #include "types/container/memory_stream.h"
 #include "types/container/encryption_stream.h"
+#include "types/container/stream.h"
 #include "types/container/ref_ptr.h"
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiCA/ca_headers.h"
@@ -43,6 +44,8 @@
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiSH/sh_headers.h"
 #include "formats/oiSB/sb_file.h"
+#include "formats/oiSR/sr_file.h"
+#include "formats/oiSP/sp_file.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
@@ -130,7 +133,7 @@ Bool CLI_showFile(const ParsedArgs *args, Buffer b, U64 start, U64 length, Bool 
 
 	//Output it to a folder on disk was requested
 
-	Error *e_rr = NULL;
+	Error err = Error_none(), *e_rr = &err;        //Surface File_write failures (e.g. a path outside the working dir)
 	CharString tmp = CharString_createNull();
 	CharString tmp1 = CharString_createNull();
 	Bool s_uccess = false;
@@ -226,6 +229,9 @@ Bool CLI_showFile(const ParsedArgs *args, Buffer b, U64 start, U64 length, Bool 
 	s_uccess = true;
 
 clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
+
 	CharString_free(&tmp1, alloc);
 	CharString_free(&tmp, alloc);
 	return s_uccess;
@@ -316,19 +322,22 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 	if(!args) return false;
 
-	Buffer buf = Buffer_createNull();
 	Error err = Error_none(), *e_rr = &err;
 	Bool s_uccess = false;
 
 	CharString path = CharString_createNull();
 	CharString tmp = CharString_createNull();
 	CharString tmp1 = CharString_createNull();
+	Buffer isaText = Buffer_createNull();        //Only used by the oiSH '-asic' ISA view (CLI_RGA)
+	Buffer virtualBuf = Buffer_createNull();     //Virtual files can't be opened as a stream, so they get buffered
 
 	const Allocator *alloc = Platform_instance->alloc;
 	RefPtrType fileHandleType = FileHandle_makeType(alloc);
 	RefPtrType memoryStreamType = MemoryStream_makeType(alloc);
+	RefPtrType fileStreamType = FileStream_makeType(alloc);
 	RefPtrType encStreamType = EncryptionStream_makeType(alloc);
 	StreamRef *stream = NULL;
+	StreamCursor cursor = (StreamCursor) { 0 };        //Peeks the magic; the format readers make their own cursor
 
 	//Get file
 
@@ -337,15 +346,41 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 		goto clean;
 	}
 
-	CLI_ensureVirtualLoaded(&path);        //If it's a "//section/..." path, load the section so File_read can resolve it
+	CLI_ensureVirtualLoaded(&path);        //If it's a "//section/..." path, load the section so File_* can resolve it
 
-	if (!File_read(&path, 100 * MS, 0, 0, &fileHandleType, &buf, e_rr)) {
+	//Get the size without reading the whole (possibly huge) file; the format readers stream what they need from disk.
+
+	FileInfo fileInfo = (FileInfo) { 0 };
+
+	if (!File_getInfo(&path, &fileInfo, alloc, &err)) {
 		Log_errorLnx("Invalid file path.");
 		goto clean;
 	}
 
-	if (Buffer_length(buf) < 4) {
+	const U64 fileSize = fileInfo.fileSize;
+	FileInfo_free(&fileInfo, alloc);
+
+	if (fileSize < 4) {
 		Log_errorLnx("File has to start with magic number.");
+		goto clean;
+	}
+
+	//File_openStream isn't supported on virtual files, so those are read into a buffer and wrapped in a memory stream;
+	// physical files stream straight from disk via the StreamCursor-based format readers.
+
+	if (File_isVirtual(path)) {
+
+		if (!File_read(&path, 100 * MS, 0, 0, &fileHandleType, &virtualBuf, e_rr)) {
+			Log_errorLnx("Invalid file path.");
+			goto clean;
+		}
+
+		if (!MemoryStream_createFromBuffer(&virtualBuf, EMemoryStreamFlags_None, &memoryStreamType, &stream, e_rr))
+			goto clean;
+	}
+
+	else if (!File_openStream(&path, 100 * MS, EFileOpenType_Read, false, &fileHandleType, &fileStreamType, &stream, e_rr)) {
+		Log_errorLnx("Couldn't open file.");
 		goto clean;
 	}
 
@@ -402,11 +437,31 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 	if(hasKey)
 		encryptionKey = encryptionKeyV;
 
-	U32 magic = *(const U32*)buf.ptr;
+	//Peek the 4-byte magic to dispatch; each format reader below makes its own cursor from offset 0 (reads are by offset).
 
-	if(args->flags & (EOperationFlags_Bin | EOperationFlags_Includes) && magic != SHHeader_MAGIC) {
-		Log_errorLnx("--bin and --includes flag can only be used with an oiSH file");
-		return false;
+	U32 magic = 0;
+
+	if (!StreamCursor_create(stream, 0, false, alloc, &cursor, e_rr))
+		goto clean;
+
+	{
+		U64 peekOff = 0;
+		gotoIfError3(clean, StreamCursor_consumeU32(&cursor, &peekOff, &magic, alloc, e_rr));
+	}
+
+	StreamCursor_close(&cursor, alloc);
+
+	if((args->flags & EOperationFlags_Bin) && magic != SHHeader_MAGIC) {
+		Log_errorLnx("--bin flag can only be used with an oiSH file");
+		goto clean;
+	}
+
+	//--includes lists include files for an oiSH; for an oiSR it expands the builtin-include symbols
+	// (@types.hlsli etc.) that are otherwise collapsed into a summary.
+
+	if((args->flags & EOperationFlags_Includes) && magic != SHHeader_MAGIC && magic != SRHeader_MAGIC) {
+		Log_errorLnx("--includes flag can only be used with an oiSH or oiSR file");
+		goto clean;
 	}
 
 	ESHBinaryType binaryType = ESHBinaryType_Count;
@@ -415,7 +470,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 		if(magic != SHHeader_MAGIC) {
 			Log_errorLnx("-compile-output argument can only be used with an oiSH file");
-			return false;
+			goto clean;
 		}
 
 		CharString shaderOutputMode = CharString_createNull();
@@ -449,11 +504,6 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 			Bool madeFile = false;
 			CharString out = CharString_createNull();
 
-			gotoIfError3(cleanCa, MemoryStream_createFromBufferRegion(
-				Buffer_createRefFromBuffer(buf, true), 0, Buffer_length(buf),
-				EMemoryStreamFlags_None, &memoryStreamType, &stream, e_rr
-			));
-
 			gotoIfError3(cleanCa, CAFile_read(stream, &encStreamType, 0, encryptionKey, alloc, &file, e_rr));
 
 			if(encryptionKey)
@@ -479,7 +529,9 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 					handle = CAFile_fileObjectAt(&file, CAHandle_Root, index);
 
 					if (handle == CAHandle_Invalid) {
-						Log_errorLnx("Index out of bounds, max is %"PRIu64".", CAFile_fileObjectCount(&file, CAHandle_Root, false));
+						Log_errorLnx(
+							"Index out of bounds, max is %"PRIu64".", CAFile_fileObjectCount(&file, CAHandle_Root, false)
+						);
 						goto cleanCa;
 					}
 				}
@@ -636,11 +688,6 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 			DLFile file = (DLFile) { 0 };
 
-			gotoIfError3(cleanDl, MemoryStream_createFromBufferRegion(
-				Buffer_createRefFromBuffer(buf, true), 0, Buffer_length(buf),
-				EMemoryStreamFlags_None, &memoryStreamType, &stream, e_rr
-			));
-
 			U64 dlOff = 0;
 			gotoIfError3(cleanDl, DLFile_read(
 				stream, &dlOff, encryptionKey, I32x4_zero(), false, false, alloc, &encStreamType, &file, e_rr
@@ -739,11 +786,6 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 				Compiler comp = (Compiler) { 0 };
 			#endif
 
-			gotoIfError3(cleanSh, MemoryStream_createFromBufferRegion(
-				Buffer_createRefFromBuffer(buf, true), 0, Buffer_length(buf),
-				EMemoryStreamFlags_None, &memoryStreamType, &stream, e_rr
-			));
-
 			U64 shOff = 0;
 			gotoIfError3(cleanSh, SHFile_read(stream, &shOff, false, alloc, &file, e_rr));
 
@@ -755,6 +797,32 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 				Log_errorLnx("oiSH file data can't use --bin and --includes at the same time");
 				goto cleanSh;
 			}
+
+			#ifdef CLI_RGA
+
+				//-asic views a shader binary as AMD ISA. '?' just lists devices; a concrete ASIC implies viewing
+				//SPIR-V, so default to --bin + SPIR-V (no -compile-output needed) and let -entry pick the binary.
+
+				CharString isaAsic = CharString_createNull();
+				const Bool hasAsic =
+					ParsedArgs_getArg(args, EOperationHasParameter_ISAAsicShift, &isaAsic, NULL) &&
+					CharString_length(isaAsic);
+
+				if(hasAsic) {
+
+					Bool asicHandled = false;
+					gotoIfError3(cleanSh, CLI_isaResolveAsic(isaAsic, &asicHandled, alloc, e_rr));
+
+					if(asicHandled)        //'?' listed the devices; nothing more to do
+						goto cleanSh;
+
+					binaryMode = true;
+
+					if(binaryType == ESHBinaryType_Count)
+						binaryType = ESHBinaryType_SPIRV;
+				}
+
+			#endif
 
 			if((args->parameters & EOperationHasParameter_Output) && (
 				binaryType == ESHBinaryType_Count ||
@@ -768,7 +836,17 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 			U64 count = includesMode ? file.includes.length : (binaryMode ? file.binaries.length : file.entries.length);
 			U64 end = 0;
 
-			if (!(args->parameters & EOperationHasParameter_Entry)) {
+			//A concrete -asic on a single-binary oiSH implies viewing that one binary, so treat it as -entry 0
+
+			Bool doEntry = (args->parameters & EOperationHasParameter_Entry) != 0;
+
+			#ifdef CLI_RGA
+				const Bool asicAutoEntry = hasAsic && !doEntry && binaryMode && count == 1;
+				if(asicAutoEntry)
+					doEntry = true;
+			#endif
+
+			if (!doEntry) {
 
 				if(!length && start < count)
 					length = U64_min(64, count - start);
@@ -776,9 +854,9 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 				end = start + length;
 			}
 
-			if (args->parameters & EOperationHasParameter_Entry) {
+			if (doEntry) {
 
-				//Grab entry
+				//Grab entry (an index into the binaries or entries)
 
 				U64 entryI = 0;
 
@@ -787,7 +865,14 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 					goto cleanSh;
 				}
 
-				if (!CharString_parseU64(entry, &entryI)) {
+				Bool needParse = true;
+
+				#ifdef CLI_RGA
+					if(asicAutoEntry)        //Synthesized entry 0, nothing to parse
+						needParse = false;
+				#endif
+
+				if (needParse && !CharString_parseU64(entry, &entryI)) {
 					Log_errorLnx("Invalid argument -entry <uint> expected.");
 					goto cleanSh;
 				}
@@ -813,6 +898,35 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 							goto cleanSh;
 						}
 
+						#ifdef CLI_RGA
+
+							//-asic (already validated at the top of this case): SPIR-V has an offline ISA path (rga);
+							//DXIL doesn't (that's the live-AMD-device route), so warn and fall through to DXIL disasm.
+
+							if(hasAsic) {
+
+								if(binaryType != ESHBinaryType_SPIRV)
+									Log_warnLnx(
+										"-asic has no offline ISA path for %s (that needs the live AMD device via 'OxC3 isa'); "
+										"showing %s disassembly instead",
+										ESHBinaryType_names[binaryType], ESHBinaryType_names[binaryType]
+									);
+
+								else {
+
+									gotoIfError3(cleanSh, CLI_isaDisassembleSpirv(
+										binary, isaAsic, file.binaries.ptr[entryI].identifier.entrypoint, &isaText, alloc, e_rr
+									));
+
+									if(!CLI_showFile(args, isaText, start, length, true, true))
+										goto cleanSh;
+
+									goto cleanSh;
+								}
+							}
+
+						#endif
+
 						//Show as disassembly (DXIL or SPIRV disassembly) unless not available
 
 						#ifdef CLI_SHADER_COMPILER
@@ -822,7 +936,9 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 								gotoIfError3(cleanSh, Compiler_create(alloc, &comp, e_rr));
 
 								if (!Compiler_disassemble(&comp, binaryType, binary, alloc, &tmp, e_rr)) {
-									Log_errorLnx("%s disassembly failed at index %"PRIu64, ESHBinaryType_names[binaryType], entryI);
+									Log_errorLnx(
+										"%s disassembly failed at index %"PRIu64, ESHBinaryType_names[binaryType], entryI
+									);
 									goto cleanSh;
 								}
 
@@ -917,11 +1033,6 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 			SBFile file = (SBFile) { 0 };
 
-			gotoIfError3(cleanSb, MemoryStream_createFromBufferRegion(
-				Buffer_createRefFromBuffer(buf, true), 0, Buffer_length(buf),
-				EMemoryStreamFlags_None, &memoryStreamType, &stream, e_rr
-			));
-
 			U64 sbOff = 0;
 			gotoIfError3(cleanSb, SBFile_read(stream, &sbOff, false, alloc, &file, e_rr));
 
@@ -930,6 +1041,107 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 		cleanSb:
 
 			SBFile_free(&file, alloc);
+
+			RefPtr_dec(&stream);
+
+			if(err.genericError)
+				goto clean;
+
+			break;
+		}
+
+		//oiSR file (frontend symbol AST reflection)
+
+		case SPHeader_MAGIC: {
+
+			if(encryptionKey)
+				retError(clean, Error_invalidState(0, "CLI_inspectData() oiSP doesn't have aes support!"));
+
+			SPFile file = (SPFile) { 0 };
+			CharString printed = CharString_createNull();
+
+			U64 spOff = 0;
+			gotoIfError3(cleanSp, SPFile_read(stream, &spOff, false, alloc, &file, e_rr));
+
+			Log_debugLnx("oiSP with %"PRIu64" pipeline(s):", file.pipelines.length);
+
+			//Each pipeline prints its whole state with every field's provenance, so a stored pipeline shows which of
+			// its values nobody actually chose.
+
+			for (U64 i = 0; i < file.pipelines.length; ++i) {
+
+				const SPPipelineBase pipeline = file.pipelines.ptr[i];
+
+				if(pipeline.name != U32_MAX)
+					Log_debugLnx(
+						"Pipeline %"PRIu64": %.*s", i,
+						(int) CharString_length(file.names.entryStrings.ptr[pipeline.name]),
+						file.names.entryStrings.ptr[pipeline.name].ptr
+					);
+
+				else Log_debugLnx("Pipeline %"PRIu64":", i);
+
+				//Stages name the shader they came from, which is what makes a stored pipeline resolvable again.
+
+				for (U8 j = 0; j < pipeline.stageCount; ++j) {
+
+					const SPStage stage = file.stages.ptr[pipeline.stageStart + j];
+
+					const CharString shaderFile =
+						stage.shaderFile != U32_MAX ?
+						file.names.entryStrings.ptr[stage.shaderFile] : CharString_createRefCStrConst("<unnamed>");
+
+					const CharString entryName =
+						stage.entrypoint != U32_MAX ?
+						file.names.entryStrings.ptr[stage.entrypoint] : CharString_createRefCStrConst("<unnamed>");
+
+					Log_debugLnx(
+						"\t%s: %.*s in %.*s (source hash 0x%08"PRIX32")",
+						SHEntry_stageNames[stage.stage],
+						(int) CharString_length(entryName), entryName.ptr,
+						(int) CharString_length(shaderFile), shaderFile.ptr,
+						stage.sourceHash
+					);
+				}
+
+				CharString_free(&printed, alloc);
+				gotoIfError3(cleanSp, SPFile_print(&file, (U32) i, alloc, &printed, e_rr));
+				Log_debugLnx("%.*s", (int) CharString_length(printed), printed.ptr);
+			}
+
+		cleanSp:
+
+			CharString_free(&printed, alloc);
+			SPFile_free(&file, alloc);
+
+			RefPtr_dec(&stream);
+
+			if(err.genericError)
+				goto clean;
+
+			break;
+		}
+
+		case SRHeader_MAGIC: {
+
+			if(encryptionKey)
+				retError(clean, Error_invalidState(0, "CLI_inspectData() oiSR doesn't have aes support!"));
+
+			SRFile file = (SRFile) { 0 };
+
+			U64 srOff = 0;
+			gotoIfError3(cleanSr, SRFile_read(stream, &srOff, false, alloc, &file, e_rr));
+
+			SRFile_print(
+				&file, 0,
+				(args->flags & EOperationFlags_Verbose) != 0,
+				!(args->flags & EOperationFlags_Includes),        //--includes expands the builtin-include symbols
+				alloc
+			);
+
+		cleanSr:
+
+			SRFile_free(&file, alloc);
 
 			RefPtr_dec(&stream);
 
@@ -953,8 +1165,10 @@ clean:
 	if(err.genericError)
 		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
 
+	StreamCursor_close(&cursor, alloc);
 	RefPtr_dec(&stream);
 	CharString_free(&tmp, alloc);
-	Buffer_free(&buf, alloc);
+	Buffer_free(&isaText, alloc);
+	Buffer_free(&virtualBuf, alloc);
 	return s_uccess;
 }

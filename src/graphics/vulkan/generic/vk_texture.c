@@ -167,7 +167,8 @@ Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 			if(dedicatedReq.requiresDedicatedAllocation)
 				retError(clean, Error_unsupportedOperation(
-					0, "UnifiedTexture_create() a swapchain owning its images can't have images requiring a dedicated allocation"
+					0,
+					"UnifiedTexture_create() a swapchain owning its images can't have images requiring a dedicated allocation"
 				));
 
 			//A block holding several images is by definition not dedicated to one of them.

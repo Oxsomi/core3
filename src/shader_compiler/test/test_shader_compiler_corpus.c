@@ -22,8 +22,10 @@
 
 #include "test_shader_compiler_shared.h"
 #include "shader_compiler/compiler.h"
+#include "shader_compiler/spirv_isa.h"
 #include "formats/oiSH/sh_binaries.h"
 #include "formats/oiSH/sh_file.h"
+#include "formats/oiSR/sr_file.h"
 #include "platforms/platform.h"
 #include "platforms/file.h"
 #include "types/container/string.h"
@@ -58,6 +60,31 @@ static void printOiSH(const Allocator *alloc, Buffer buf, const C8 *label) {
 	else Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 
 	SHFile_free(&file, alloc);
+	RefPtr_dec(&ms);
+}
+
+//Parse an in-memory oiSR and dump its verbose reflection tree, so a snapshot mismatch shows *what* changed.
+static void printOiSR(const Allocator *alloc, Buffer buf, const C8 *label) {
+
+	Error err = Error_none();
+	const RefPtrType msType = MemoryStream_makeType(alloc);
+	MemoryStreamRef *ms = NULL;
+	SRFile file = (SRFile) { 0 };
+	U64 off = 0;
+
+	Log_debugLn(alloc, "--- oiSR (%s) ---", label);
+
+	if (
+		MemoryStream_createFromBufferRegion(
+			Buffer_createRefFromBuffer(buf, true), 0, Buffer_length(buf), EMemoryStreamFlags_None, &msType, &ms, &err
+		) &&
+		SRFile_read((StreamRef*) ms, &off, false, alloc, &file, &err)
+	)
+		SRFile_print(&file, 0, true, true, alloc);
+
+	else Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	SRFile_free(&file, alloc);
 	RefPtr_dec(&ms);
 }
 
@@ -418,8 +445,8 @@ void Test_shaderCompilerCorpus(Test *t) {
 	err = Error_none();
 
 	//Enumerate + resolve every .hlsl entrypoint in the corpus folder, targeting SPIRV for the byte-snapshot.
-	//(A separate DXIL compile+reflect coverage pass follows below; a combined SPIRV+DXIL snapshot is blocked
-	// on a driver issue when a folder is enumerated for both modes with combineFlag - see that pass.)
+	//A separate DXIL compile+reflect coverage pass follows below; SPIRV and DXIL are snapshotted separately, see that
+	// pass for the reason.
 
 	gotoIfError3(clean, Compiler_getTargetsFromFile(
 		here,
@@ -546,15 +573,276 @@ void Test_shaderCompilerCorpus(Test *t) {
 		}
 	}
 
+	//--- oiSR reflection snapshot: reflect every corpus source into an oiSR (frontend symbol AST) and byte-snapshot
+	//--- it against a committed <name>.oiSR reference.
+	//--- This runs the reflection walker (Compiler_reflect) over the WHOLE corpus - so any shader it can't handle
+	//--- surfaces here - and pins its output, using the same "missing reference -> write once + fail" convention as
+	//--- the oiSH snapshots above.
+
+	if (disasmCompCreated) {
+
+		const RefPtrType msType = MemoryStream_makeType(alloc);
+
+		for (U64 i = 0; i < allFiles.length; ++i) {
+
+			SRFile reflection = (SRFile) { 0 };
+			StreamRef *ws = NULL;
+			Buffer produced = Buffer_createNull();
+			CharString ref = CharString_createNull();
+			CharString relPath = CharString_createNull();
+
+			//Reflect with a path relative to the corpus (forward slashes), not the absolute enumerator path: the
+			// source filename is baked into the oiSR (symbol locations), so an absolute path would make the committed
+			// reference machine-specific.
+			//The output ref is <name>.oiSH -> <name>.oiSR next to the oiSH references.
+
+			CharString out = allOutputs.ptr[i];
+			U64 baseLen = CharString_length(out) >= 5 ? CharString_length(out) - 5 : CharString_length(out);
+
+			if (
+				!CharString_format(alloc, &relPath, &err, "hlsl/%.*s.hlsl", (int) baseLen, out.ptr) ||
+				!CharString_format(alloc, &ref, &err, "%.*s.oiSR", (int) baseLen, out.ptr)
+			) {
+				err = Error_none();
+				Test_assert(t, "oiSR reference path", false);
+				goto cleanRefl;
+			}
+
+			CompilerSettings rs = (CompilerSettings) {
+				.string = allShaderText.ptr[i],
+				.path = relPath,
+				.format = ECompilerFormat_HLSL,
+				.outputType = ESHBinaryType_SPIRV,
+				.includeDirs = includeDirs
+			};
+
+			if (!Compiler_reflect(&disasmComp, &rs, alloc, &reflection, &err)) {
+				Log_errorLn(alloc, "reflect failed for %.*s", (int) CharString_length(relPath), relPath.ptr);
+				Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+				err = Error_none();
+				Test_assert(t, ref.ptr, false);
+				goto cleanRefl;
+			}
+
+			U64 wo = 0;
+
+			if (
+				!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &ws, &err) ||
+				!SRFile_write(&reflection, alloc, ws, &wo, &err) ||
+				!MemoryStream_move(&ws, &produced, &err)
+			) {
+				Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+				err = Error_none();
+				Test_assert(t, ref.ptr, false);
+				goto cleanRefl;
+			}
+
+			if (File_has(&ref, alloc)) {
+
+				Buffer_free(&golden, alloc);
+
+				if (!File_read(&ref, 1 * SECOND, 0, 0, &fileHandleType, &golden, &err)) {
+					err = Error_none();
+					Test_assert(t, ref.ptr, false);
+					goto cleanRefl;
+				}
+
+				Bool matches = Buffer_eq(produced, golden);
+
+				if (!matches) {
+					Log_errorLn(alloc, "oiSR mismatch vs reference %.*s", (int) CharString_length(ref), ref.ptr);
+					printOiSR(alloc, produced, "produced");
+					printOiSR(alloc, golden, "reference");
+				}
+
+				Test_assert(t, ref.ptr, matches);
+			}
+
+			else {
+				File_write(&produced, &ref, 0, 0, 1 * SECOND, true, &fileHandleType, &err);
+				err = Error_none();
+				Log_warnLn(
+					alloc, "Generated missing oiSR reference %.*s (review & commit)", (int) CharString_length(ref), ref.ptr
+				);
+				Test_assert(t, ref.ptr, false);
+			}
+
+		cleanRefl:
+			CharString_free(&relPath, alloc);
+			CharString_free(&ref, alloc);
+			Buffer_free(&produced, alloc);
+			RefPtr_dec(&ws);
+			SRFile_free(&reflection, alloc);
+		}
+	}
+
+	//--- ISA snapshot: for each corpus shader whose stage has an offline AMD ISA path, disassemble its SPIR-V to AMD
+	//--- ISA text (via the bundled amdllpc + amdgpu-dis) for two architectures and pin it byte-for-byte, like the
+	//--- oiSH/oiSR snapshots.
+	//--- amdllpc's ISA is deterministic and path/timestamp-free, so it's a stable reference.
+	//--- amdllpc drives closer-to-final ISA than a device-independent path.
+	//--- The tools are bundled next to the exe (rga/utils, copied by the CLI build); if they aren't present the whole
+	//--- phase is skipped rather than failed.
+
+	{
+		const RefPtrType msTypeIsa = MemoryStream_makeType(alloc);
+
+		//Two architectures the bundled amdllpc supports: RDNA3 (gfx1100) and RDNA4 (gfx1201).
+		//The golden suffix is the family (gfx11 / gfx12) so a later minor bump doesn't rename every reference.
+
+		const C8 *isaTargets[2] = { "gfx1100", "gfx1201" };
+		const C8 *isaSuffix[2] = { "gfx11", "gfx12" };
+
+		Bool isaProbed = false, isaAvailable = false;
+
+		for (U64 i = 0; i < allBuffers.length && (!isaProbed || isaAvailable); ++i) {
+
+			const Buffer oiSH = allBuffers.ptr[i];
+
+			if (!Buffer_length(oiSH))
+				continue;
+
+			SHFile sh = (SHFile) { 0 };
+			MemoryStreamRef *ms = NULL;
+			U64 shOff = 0;
+
+			if (
+				!MemoryStream_createFromBufferRegion(
+					Buffer_createRefFromBuffer(oiSH, true), 0, Buffer_length(oiSH),
+					EMemoryStreamFlags_None, &msTypeIsa, &ms, &err
+				) ||
+				!SHFile_read((StreamRef*) ms, &shOff, false, alloc, &sh, &err)
+			) {
+				err = Error_none();
+				RefPtr_dec(&ms);
+				SHFile_free(&sh, alloc);
+				continue;
+			}
+
+			//base = <output> minus the ".oiSH" suffix
+
+			const CharString out = allOutputs.ptr[i];
+			const U64 baseLen = CharString_length(out) >= 5 ? CharString_length(out) - 5 : CharString_length(out);
+			const Bool multi = sh.binaries.length > 1;
+
+			//A multi-entry / lib oiSH carries several binaries; disassemble each offline-capable (raster/compute/mesh)
+			// SPIR-V one.
+			//RT / no-SPIRV binaries are skipped.
+			//The golden is keyed by the binary index when there's more than one, so each entrypoint's ISA is pinned
+			// separately.
+
+			for (U64 b = 0; b < sh.binaries.length && (!isaProbed || isaAvailable); ++b) {
+
+				const Buffer spv = sh.binaries.ptr[b].binaries[ESHBinaryType_SPIRV];
+
+				if (!Buffer_length(spv) || !SpvISA_stageHasOfflinePath(spv, alloc))
+					continue;
+
+				for (U64 tI = 0; tI < 2; ++tI) {
+
+					Buffer isa = Buffer_createNull();
+					CharString ref = CharString_createNull();
+					const CharString target = CharString_createRefCStrConst(isaTargets[tI]);
+
+					//Pass the binary's entrypoint so amdllpc lowers the RIGHT one out of a multi-entry (library) module,
+					//not just the module's first entrypoint (which would make every non-vertex lib stage wrong).
+
+					const Bool ok =
+						SpvISA_disassemble(spv, target, sh.binaries.ptr[b].identifier.entrypoint, &isa, alloc, &err);
+
+					//The first attempt doubles as the availability probe: a launch failure (tools absent) skips the
+					//whole phase, while any other failure is a real regression to surface.
+
+					if (!isaProbed) {
+						isaProbed = true;
+						isaAvailable = ok || err.genericError != EGenericError_NotFound;
+						if (!isaAvailable)
+							Log_warnLn(
+								alloc,
+								"ISA snapshot skipped: amdllpc/amdgpu-dis not found next to the test (rga/utils not bundled)"
+							);
+					}
+
+					if (!isaAvailable) {
+						err = Error_none();
+						Buffer_free(&isa, alloc);
+						break;
+					}
+
+					if (!ok) {
+						Log_errorLn(
+							alloc, "ISA disassembly failed for %.*s binary %"PRIu64" @ %s",
+							(int) baseLen, out.ptr, b, isaTargets[tI]
+						);
+						Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+						err = Error_none();
+						Test_assert(t, "ISA disassembly", false);
+						Buffer_free(&isa, alloc);
+						continue;
+					}
+
+					//Golden = <base>.gfxNN.isa for a single-binary oiSH, <base>.<binaryIndex>.gfxNN.isa when it has several
+
+					const Bool made = multi ?
+						CharString_format(
+							alloc, &ref, &err, "%.*s.%"PRIu64".%s.isa", (int) baseLen, out.ptr, b, isaSuffix[tI]
+						) :
+						CharString_format(alloc, &ref, &err, "%.*s.%s.isa", (int) baseLen, out.ptr, isaSuffix[tI]);
+
+					if (!made) {
+						err = Error_none();
+						Buffer_free(&isa, alloc);
+						continue;
+					}
+
+					if (File_has(&ref, alloc)) {
+
+						Buffer_free(&golden, alloc);
+
+						if (File_read(&ref, 1 * SECOND, 0, 0, &fileHandleType, &golden, &err)) {
+
+							const Bool matches = Buffer_eq(isa, golden);
+
+							if (!matches)
+								Log_errorLn(alloc, "ISA mismatch vs reference %.*s", (int) CharString_length(ref), ref.ptr);
+
+							Test_assert(t, ref.ptr, matches);
+						}
+
+						else {
+							err = Error_none();
+							Test_assert(t, ref.ptr, false);
+						}
+					}
+
+					else {
+						File_write(&isa, &ref, 0, 0, 1 * SECOND, true, &fileHandleType, &err);
+						err = Error_none();
+						Log_warnLn(
+							alloc, "Generated missing ISA reference %.*s (review & commit)",
+							(int) CharString_length(ref), ref.ptr
+						);
+						Test_assert(t, ref.ptr, false);
+					}
+
+					Buffer_free(&isa, alloc);
+					CharString_free(&ref, alloc);
+				}
+			}
+
+			RefPtr_dec(&ms);
+			SHFile_free(&sh, alloc);
+		}
+	}
+
 	//--- DXIL coverage: compile the same on-disk corpus for DXIL too, so it isn't SPIRV-only.
 	//--- There's no byte-snapshot here (the SPIRV pass above is the byte reference; DXIL is exercised for compile +
 	//--- reflection coverage) - this stays robust to benign DXIL output churn while still catching any DXIL-specific
 	//--- compile or reflection regression across the whole corpus.
 	//--- Every corpus shader that produced a SPIRV binary must also produce a DXIL one (none here are backend-restricted).
-	//---
-	//--- NOTE: a single *combined* SPIRV+DXIL snapshot (one oiSH per shader carrying both) would be stronger,
-	//--- but enumerating a folder for both modes with combineFlag currently fails inside Compiler_compileShaders
-	//--- (SHFile_combine step) before any per-shader compile runs - separate OxC3-side item to chase.
+	//--- A single combined SPIRV+DXIL snapshot (one oiSH per shader carrying both) would be stronger, but enumerating a
+	//--- folder for both modes with combineFlag fails inside Compiler_compileShaders (the SHFile_combine step) before
+	//--- any per-shader compile runs, so the two backends are snapshotted separately.
 
 	{
 		ListCharString dxFiles = (ListCharString) { 0 };

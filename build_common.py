@@ -836,6 +836,14 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 
 		conanCreateIfChanged("packages/agility_sdk",        profile, mode, profileArgs, cache)
 		conanCreateIfChanged("packages/nvapi",              profile, mode, profileArgs, cache)
+
+		# RGA is a tool package (settings = os/arch only), so it builds once regardless of mode.
+		# The hash cache makes the repeat calls free.
+		# Windows/Linux x64 only, since it vendors AMD's compilers.
+
+		if system in ("Windows", "Linux") and hostArch()[1] == "x86_64":
+			conanCreateIfChanged("packages/radeon_gpu_analyzer", profile, mode, profileArgs, cache)
+
 		conanCreateIfChanged("packages/vulkan_headers",     profile, mode, profileArgs, cache)
 		# These two follow shaderCompilerDepMode rather than the requested mode
 

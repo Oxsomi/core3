@@ -292,7 +292,8 @@
 		ListCharString_freeUnderlying(&allFiles, Platform_instance->alloc);
 		ListCharString_freeUnderlying(&allShaderText, Platform_instance->alloc);
 		ListCharString_freeUnderlying(&allOutputs, Platform_instance->alloc);
-		ListCharString_free(&includeDirs, Platform_instance->alloc);        //Elements are refs into includeDir; free the list only
+		//Elements are refs into includeDir; free the list only
+		ListCharString_free(&includeDirs, Platform_instance->alloc);
 		ListU8_free(&allCompileModes, Platform_instance->alloc);
 
 		return s_uccess;

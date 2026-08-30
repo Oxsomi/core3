@@ -26,8 +26,10 @@
 #include "platforms/file.h"
 #include "platforms/logx.h"
 #include "formats/oiSH/sh_file.h"
+#include "formats/oiSR/sr_file.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
+#include "types/container/string_helper.h"
 #include "types/container/memory_stream.h"
 #include "types/base/error.h"
 #include "types/base/string_read_helper.h"
@@ -359,10 +361,14 @@
 
 		gotoIfError3(clean, CLI_shaderStripToReflection(output, &stripped, e_rr));
 
-		gotoIfError3(clean, CharString_format(alloc, &spvPath, e_rr, "%.*s.spv.oiSH", (int) CharString_length(output), output.ptr));
+		gotoIfError3(clean, CharString_format(
+			alloc, &spvPath, e_rr, "%.*s.spv.oiSH", (int) CharString_length(output), output.ptr
+		));
 		gotoIfError3(clean, CLI_shaderStripToReflection(spvPath, &stripped, e_rr));
 
-		gotoIfError3(clean, CharString_format(alloc, &dxilPath, e_rr, "%.*s.dxil.oiSH", (int) CharString_length(output), output.ptr));
+		gotoIfError3(clean, CharString_format(
+			alloc, &dxilPath, e_rr, "%.*s.dxil.oiSH", (int) CharString_length(output), output.ptr
+		));
 		gotoIfError3(clean, CLI_shaderStripToReflection(dxilPath, &stripped, e_rr));
 
 		if(!stripped) {
@@ -377,9 +383,97 @@
 		return s_uccess;
 	}
 
+	//shader reflect-symbols: run the frontend HLSL reflection (source-level symbol AST) via Compiler_reflect and
+	//emit an oiSR. This is distinct from `shader reflect` (which strips a compiled oiSH to backend-binding reflection):
+	//here we get entrypoints, user types, resources, enums and scopes as they appear in the source, for editor tooling.
+
+	Bool CLI_shaderReflectSymbols(const ParsedArgs *args) {
+
+		if(!args) return false;
+
+		Bool s_uccess = true;
+		Error err = Error_none(), *e_rr = &err;
+		const Allocator *alloc = Platform_instance->alloc;
+		const RefPtrType memoryStreamType = MemoryStream_makeType(alloc);
+		const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+
+		Buffer buf = Buffer_createNull();
+		Buffer outBuf = Buffer_createNull();
+		Compiler comp = (Compiler) { 0 };
+		Bool hasCompiler = false;
+		SRFile reflection = (SRFile) { 0 };
+		StreamRef *writeStream = NULL;
+		CharString input = (CharString) { 0 };
+		ListCharString includeDirs = (ListCharString) { 0 };
+
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, e_rr));
+		gotoIfError3(clean, CLI_shaderReadFile(input, &buf, e_rr));
+
+		//Split the ';'-delimited -include-dir arg (e.g. "a;b;c") so a shader with #includes resolves them; without this
+		//any shader that includes another file fails to reflect
+
+		CharString includeDir = (CharString) { 0 };
+
+		if (args->parameters & EOperationHasParameter_IncludeDir)
+			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir, e_rr));
+
+		if (CharString_length(includeDir)) {
+			CharStringSplit split = (CharStringSplit) {
+				.s = &includeDir, .allocator = alloc, .result = &includeDirs
+			};
+			gotoIfError3(clean, CharString_splitSensitive(&split, ';', e_rr));
+		}
+
+		gotoIfError3(clean, Compiler_create(alloc, &comp, e_rr));
+		hasCompiler = true;
+
+		CompilerSettings settings = (CompilerSettings) {
+			.string = CharString_createRefSizedConst((const C8*) buf.ptr, Buffer_length(buf), false),
+			.path = input,
+			.format = ECompilerFormat_HLSL,
+			.outputType = ESHBinaryType_SPIRV,
+			.includeDirs = includeDirs
+		};
+
+		gotoIfError3(clean, Compiler_reflect(&comp, &settings, alloc, &reflection, e_rr));
+
+		if(args->parameters & EOperationHasParameter_Output) {
+
+			CharString output = (CharString) { 0 };
+			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output, e_rr));
+
+			U64 writeOff = 0;
+			gotoIfError3(clean, MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memoryStreamType, &writeStream, e_rr));
+			gotoIfError3(clean, SRFile_write(&reflection, alloc, writeStream, &writeOff, e_rr));
+			gotoIfError3(clean, MemoryStream_move(&writeStream, &outBuf, e_rr));
+			gotoIfError3(clean, File_write(&outBuf, &output, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+
+			Log_debugLnx(
+				"Reflected %"PRIu64" nodes -> %.*s",
+				(U64) reflection.nodes.length, (int) CharString_length(output), output.ptr
+			);
+		}
+
+		else SRFile_print(&reflection, 0, (args->flags & EOperationFlags_Verbose) != 0, true, alloc);
+
+	clean:
+		RefPtr_dec(&writeStream);
+		SRFile_free(&reflection, alloc);
+
+		if(hasCompiler)
+			Compiler_free(&comp, alloc);
+
+		ListCharString_free(&includeDirs, alloc);        //Elements are refs into includeDir; free the list only
+		Buffer_free(&outBuf, alloc);
+		Buffer_free(&buf, alloc);
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+		return s_uccess;
+	}
+
 #else
 
 	Bool CLI_shaderReflect(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }
+	Bool CLI_shaderReflectSymbols(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }
 	Bool CLI_shaderEntrypoints(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }
 	Bool CLI_shaderIncludes(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }
 	Bool CLI_shaderFeatureSet(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }

@@ -703,8 +703,12 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 					gotoIfError3(clean, StreamCursor_appendU8(&cursor, offset, semanticCounts, alloc, e_rr));
 
-					gotoIfError3(clean, StreamCursor_append(&cursor, offset, entry.inputSemanticNames, inputs * sizeof(U8), alloc, e_rr));
-					gotoIfError3(clean, StreamCursor_append(&cursor, offset, entry.outputSemanticNames, outputs * sizeof(U8), alloc, e_rr));
+					gotoIfError3(clean, StreamCursor_append(
+						&cursor, offset, entry.inputSemanticNames, inputs * sizeof(U8), alloc, e_rr
+					));
+					gotoIfError3(clean, StreamCursor_append(
+						&cursor, offset, entry.outputSemanticNames, outputs * sizeof(U8), alloc, e_rr
+					));
 				}
 
 				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)

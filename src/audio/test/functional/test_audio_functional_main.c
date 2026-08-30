@@ -560,7 +560,9 @@ void Test_audioSourceSpatialSweep(AudioFuncCtx *ctx, Bool stereo) {
 		.velocity = F32x4_zero()
 	};
 
-	if (!AudioDeviceRef_createSource3D(ctx->device, as, modifier, startPoint, ctx->alloc, &ctx->types->sourceType, &source, &err))
+	if (!AudioDeviceRef_createSource3D(
+		ctx->device, as, modifier, startPoint, ctx->alloc, &ctx->types->sourceType, &source, &err
+	))
 		goto fail;
 
 	if (!AudioDeviceRef_updateListenerPosition(ctx->device, F32x4_zero(), &err))

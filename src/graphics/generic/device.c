@@ -210,8 +210,8 @@ U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListComm
 					break;
 
 				//A manual region records its id and name; an insert is the same minus the end.
-				//The name was copied into the command buffer at record time and is copied again here into the frame's owned storage,
-				// so the caller's original string never has to outlive either.
+				//The name was copied into the command buffer at record time and is copied again here into the frame's
+				// owned storage, so the caller's original string never has to outlive either.
 
 				case ECommandOp_StartTimingRegion:
 				case ECommandOp_InsertTiming: {
@@ -2521,4 +2521,24 @@ const GraphicsObjectTypes *GraphicsDevice_getTypes(const GraphicsDevice *device)
 
 const GraphicsObjectTypes *GraphicsDeviceRef_getTypes(GraphicsDeviceRef *device) {
 	return GraphicsDevice_getTypes(GraphicsDeviceRef_ptr(device));
+}
+
+Bool GraphicsDeviceRef_listShaderTargets(
+	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!deviceRef || !result)
+		retError(clean, Error_nullPointer(!deviceRef ? 0 : 2, "GraphicsDeviceRef_listShaderTargets() requires both"));
+
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(
+			2, 0, "GraphicsDeviceRef_listShaderTargets()::result isn't empty, may indicate memleak"
+		));
+
+	gotoIfError3(clean, GraphicsDeviceRef_listShaderTargetsExt(deviceRef, alloc, result, e_rr));
+
+clean:
+	return s_uccess;
 }

@@ -86,7 +86,9 @@ Bool DynamicLibrary_loadSystem(CharString str, DynamicLibrary *dynamicLib, Error
 		retError(clean, Error_invalidState(0, "DynamicLibrary_loadSystem()::dynamicLib is required"));
 
 	if(*dynamicLib)
-		retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_loadSystem()::dynamicLib was already set, indicates memleak"));
+		retError(clean, Error_invalidParameter(
+			1, 0, "DynamicLibrary_loadSystem()::dynamicLib was already set, indicates memleak"
+		));
 
 	if(!CharString_isNullTerminated(str))
 		retError(clean, Error_invalidParameter(0, 0, "DynamicLibrary_loadSystem()::str must be null-terminated"));

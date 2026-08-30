@@ -77,6 +77,14 @@
 
 	void D3D12Pipeline_free(Pipeline *pipeline, const Allocator *alloc);
 
+	Bool D3D12Pipeline_getExecutables(
+		Pipeline *pipeline, const Allocator *alloc, ListPipelineExecutable *result, Error *e_rr
+	);
+
+	Bool D3D12GraphicsDeviceRef_listShaderTargets(
+		GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+	);
+
 	//Sampler
 
 	Bool D3D12GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, Sampler *sampler, const CharString *name, Error *e_rr);

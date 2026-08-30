@@ -286,7 +286,9 @@ Bool Compiler_getLinkEntries(
 					));
 
 				//The ptr below is the same as linkEntry.entrypointId, except can be used as ptr to avoid intermediate ListU16
-				gotoIfError3(clean, ListU16_createRefConst(&runtimeEntryL.ptr[l].entry.idOrPadding, 1, &linkEntry.runtimeEntries, e_rr));
+				gotoIfError3(clean, ListU16_createRefConst(
+					&runtimeEntryL.ptr[l].entry.idOrPadding, 1, &linkEntry.runtimeEntries, e_rr
+				));
 			}
 
 			else {

@@ -121,7 +121,9 @@ extern "C" void Test_graphicsFormats(oxc::c::Test *t) {
 		c::GraphicsDeviceInfo_supportsDepthStencilFormat(&all, c::EDepthStencilFormat_D24S8Ext)
 	);
 
-	Test_assert(t, "d32s8NeedsType", !c::GraphicsDeviceInfo_supportsDepthStencilFormat(&all, c::EDepthStencilFormat_D32S8X24Ext));
+	Test_assert(
+		t, "d32s8NeedsType", !c::GraphicsDeviceInfo_supportsDepthStencilFormat(&all, c::EDepthStencilFormat_D32S8X24Ext)
+	);
 
 	Test_assert(t, "supportsNullDevice",
 		!c::GraphicsDeviceInfo_supportsFormat(NULL, c::ETextureFormat_RGBA8) &&

@@ -72,6 +72,7 @@ typedef enum EOptExtensions {
 	EOptExtensions_DescriptorHeap,
 	EOptExtensions_RayClusterAS,
 	EOptExtensions_RayPartitionedTLAS,
+	EOptExtensions_PipelineExecutableProperties,
 	EOptExtensions_PushDescriptor,
 
 	//Dependencies of the features above rather than features of their own.

@@ -32,6 +32,7 @@ typedef struct SHFile SHFile;
 //Declared in invocation order (see test_shader_compiler_main.c).
 
 void Test_shaderCompilerParse(Test *t);           //Parse annotations -> SHEntryRuntime reflection
+void Test_shaderCompilerReflectSR(Test *t);       //Frontend symbol AST -> SRFile (oiSR) + round-trip
 void Test_shaderCompilerBuiltInIncludes(Test *t); //The enumerable @-prefixed built-in include table
 void Test_shaderCompilerAnnotations(Test *t);     //oxc:: extensions / model / vendor / defines / uniforms / stages / binary
 void Test_shaderCompilerFeatures(Test *t);        //Shaders *using* extension features -> compiled + reflected

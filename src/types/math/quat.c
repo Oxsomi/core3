@@ -116,10 +116,10 @@ Quat##T Quat##T##_mul(Quat##T a, Quat##T b) {                                   
 	T##x4 azXb = T##x4_mul(b, T##x4_zzzz(a));                                                                            \
 	T##x4 awXb = T##x4_mul(b, T##x4_wwww(a));                                                                            \
 																														\
-	T axXb_x = T##x4_x(axXb),    axXb_y = T##x4_y(axXb),    axXb_z = T##x4_z(axXb),    axXb_w = T##x4_w(axXb);                    \
-	T ayXb_x = T##x4_x(ayXb),    ayXb_y = T##x4_y(ayXb),    ayXb_z = T##x4_z(ayXb),    ayXb_w = T##x4_w(ayXb);                    \
-	T azXb_x = T##x4_x(azXb),    azXb_y = T##x4_y(azXb),    azXb_z = T##x4_z(azXb),    azXb_w = T##x4_w(azXb);                    \
-	T awXb_x = T##x4_x(awXb),    awXb_y = T##x4_y(awXb),    awXb_z = T##x4_z(awXb),    awXb_w = T##x4_w(awXb);                    \
+	T axXb_x = T##x4_x(axXb),    axXb_y = T##x4_y(axXb),    axXb_z = T##x4_z(axXb),    axXb_w = T##x4_w(axXb);                 \
+	T ayXb_x = T##x4_x(ayXb),    ayXb_y = T##x4_y(ayXb),    ayXb_z = T##x4_z(ayXb),    ayXb_w = T##x4_w(ayXb);                 \
+	T azXb_x = T##x4_x(azXb),    azXb_y = T##x4_y(azXb),    azXb_z = T##x4_z(azXb),    azXb_w = T##x4_w(azXb);                 \
+	T awXb_x = T##x4_x(awXb),    awXb_y = T##x4_y(awXb),    awXb_z = T##x4_z(awXb),    awXb_w = T##x4_w(awXb);                 \
 																														\
 	return Quat##T##_create(                                                                                            \
 		awXb_x + axXb_w + ayXb_z - azXb_y,                                                                                \

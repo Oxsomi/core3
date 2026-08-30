@@ -124,6 +124,7 @@ static_assert(
 			.pipelineCreateCompute = VkGraphicsDevice_createPipelineCompute,
 			.pipelineCreateRt = VkGraphicsDevice_createPipelineRaytracingInternal,
 			.pipelineFree = VkPipeline_free,
+			.pipelineGetExecutables = VkPipeline_getExecutables,
 
 			.samplerCreate = VkGraphicsDeviceRef_createSampler,
 			.samplerFree = VkSampler_free,
@@ -620,11 +621,11 @@ const C8 *optExtensionsName[] = {
 
 	"VK_KHR_maintenance4",        "VK_KHR_buffer_device_address", "VK_EXT_descriptor_indexing", "VK_KHR_driver_properties",
 	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8",   "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget",
-	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",      "VK_KHR_ray_tracing_position_fetch",
+	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",   "VK_KHR_ray_tracing_position_fetch",
 
 	"VK_EXT_descriptor_heap", "VK_NV_cluster_acceleration_structure", "VK_NV_partitioned_acceleration_structure",
 
-	"VK_KHR_push_descriptor",
+	"VK_KHR_pipeline_executable_properties", "VK_KHR_push_descriptor",
 
 	"VK_KHR_create_renderpass2", "VK_KHR_depth_stencil_resolve", "VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls",
 	"VK_KHR_maintenance5",
@@ -735,7 +736,9 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			// the enumeration ends up empty with nothing in the log to explain it.
 
 			if (CharString_startsWithStringSensitive(&deviceName, &d3d12Warp, 0)) {
-				Log_debugLnx("Vulkan: Skipping device %"PRIu32", it is the Direct3D12 passthrough rather than a real device", i);
+				Log_debugLnx(
+					"Vulkan: Skipping device %"PRIu32", it is the Direct3D12 passthrough rather than a real device", i
+				);
 				continue;
 			}
 		}
@@ -1148,6 +1151,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_BufferDeviceAddress], VkPhysicalDeviceBufferDeviceAddressFeaturesKHR, deviceAddress,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_PipelineExecutableProperties],
+			VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR,
+			pipelineExecutableProps,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR
 		);
 
 		instanceExt->getPhysicalDeviceFeatures2(dev, &features2);
@@ -1816,6 +1826,11 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			descriptorHeapFeat.descriptorHeap
 		)
 			capabilities.features2 |= EGraphicsFeatures2_DescriptorHeap;
+
+		//Pipeline executable introspection (live ISA disassembly + VGPR/SGPR statistics)
+
+		if(optExtensions[EOptExtensions_PipelineExecutableProperties] && pipelineExecutableProps.pipelineExecutableInfo)
+			capabilities.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
 
 		//Push descriptors are a fast path, not a requirement, so a device without them is emulated rather than rejected.
 		//Only the globals constant buffer is ever pushed, so the 32 minimum is far more than OxC3 asks for;

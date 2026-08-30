@@ -1762,7 +1762,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 						//Clear only ever reaches render textures and swapchains (clearImages refuses anything
 						// else), so its resource is never depth stencil and the ternaries collapse for it.
 
-						case ETransitionType_ResolveTargetWrite:        //We handle a 'secret' transition after (needs discard first)
+						//We handle a 'secret' transition after (needs discard first)
+						case ETransitionType_ResolveTargetWrite:
 						case ETransitionType_Clear:
 
 							pipelineStage =

@@ -21,7 +21,9 @@
 //graphics/d3d12/generic/dx_pipeline.c
 
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/device.h"
 #include "graphics/d3d12/dx_device.h"
+#include "graphics/d3d12/dx_amd_shader_analyzer.h"
 
 void DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 
@@ -44,4 +46,68 @@ void DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 	}
 
 	else dxPipeline->pso->lpVtbl->Release(dxPipeline->pso);
+}
+
+//D3D12 exposes nothing of its own here, so this is AMD's extension or nothing; the pipeline had to be created
+// with EPipelineFlags_CaptureISA for a handle to exist.
+
+Bool DX_WRAP_FUNC(Pipeline_getExecutables)(
+	Pipeline *pipeline,
+	const Allocator *alloc,
+	ListPipelineExecutable *result,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(pipeline->device);
+	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+	const DxPipeline *dxPipeline = Pipeline_ext(pipeline, Dx);
+
+	if(!deviceExt->amdAnalyzer.analyzer)
+		retError(clean, Error_unsupportedOperation(
+			0, "DxPipeline_getExecutables() needs AMD's D3D12 shader analyzer extension, which this driver lacks"
+		));
+
+	if(!dxPipeline->amdAnalyzerHandle)
+		retError(clean, Error_invalidOperation(
+			0, "DxPipeline_getExecutables() the pipeline wasn't created with EPipelineFlags_CaptureISA"
+		));
+
+	gotoIfError3(clean, DxAmdShaderAnalyzer_getExecutables(
+		&deviceExt->amdAnalyzer, dxPipeline->amdAnalyzerHandle,
+		pipeline->type, alloc, result, e_rr
+	));
+
+clean:
+	return s_uccess;
+}
+
+//AMD's driver compiles for a whole generation, not only the installed ASIC, and reports those as virtual GPUs.
+
+Bool DX_WRAP_FUNC(GraphicsDeviceRef_listShaderTargets)(
+	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ListDxAmdVirtualGpu gpus = (ListDxAmdVirtualGpu) { 0 };
+
+	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(deviceRef), Dx);
+
+	if(!deviceExt->amdAnalyzer.analyzer)
+		goto clean;
+
+	gotoIfError3(clean, DxAmdShaderAnalyzer_listVirtualGpus(&deviceExt->amdAnalyzer, alloc, &gpus, e_rr));
+	gotoIfError3(clean, ListCharString_resize(result, gpus.length, alloc, e_rr));
+
+	for(U64 i = 0; i < gpus.length; ++i)
+		gotoIfError3(clean, CharString_createCopy(gpus.ptr[i].name, alloc, &result->ptrNonConst[i], e_rr));
+
+clean:
+
+	for(U64 i = 0; i < gpus.length; ++i)
+		CharString_free(&gpus.ptrNonConst[i].name, alloc);
+
+	ListDxAmdVirtualGpu_free(&gpus, alloc);
+	return s_uccess;
 }

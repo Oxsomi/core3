@@ -450,7 +450,8 @@ Bool CAFile_read(
 				contentBuf.ptr >= content.cache.ptr &&
 				contentBuf.ptr < content.cache.ptr + Buffer_length(content.cache)
 			) {
-				Buffer subArea = Buffer_createRef(caFile->content.cache.ptrNonConst + (contentBuf.ptr - content.cache.ptr), bufl);
+				Buffer subArea =
+					Buffer_createRef(caFile->content.cache.ptrNonConst + (contentBuf.ptr - content.cache.ptr), bufl);
 				Buffer_memcpy(subArea, contentBuf);
 				gotoIfError3(clean, CAFile_setData(caFile, fileHandle, alloc, &subArea, e_rr));
 			}

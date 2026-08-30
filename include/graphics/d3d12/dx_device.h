@@ -22,6 +22,7 @@
 
 #pragma once
 #include "graphics/d3d12/direct3d12.h"
+#include "graphics/d3d12/dx_amd_shader_analyzer.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "types/container/list.h"
@@ -192,6 +193,10 @@ typedef struct DxGraphicsDevice {
 	U32 dispatchRaysIndirectCursor;                //Argument slots used this frame; reset each submit
 
 	U64 padding;
+
+	//AMD's driver extension, the only route to a compiled shader on D3D12; zeroed on any other driver.
+
+	DxAmdShaderAnalyzer amdAnalyzer;
 
 } DxGraphicsDevice;
 

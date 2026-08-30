@@ -30,6 +30,8 @@
 #include "formats/oiDL/dl_file.h"
 #include "formats/oiDL/dl_headers.h"
 #include "formats/oiSH/sh_headers.h"
+#include "formats/oiSR/sr_file.h"
+#include "formats/oiSP/sp_file.h"
 #include "formats/oiXX/oiXX.h"
 #include "formats/bmp/bmp_file.h"
 #include "formats/bmp/bmp_headers.h"
@@ -246,6 +248,8 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 		case DLHeader_MAGIC:    reqLen = sizeof(DLHeader) + sizeof(U32);    break;
 		case SHHeader_MAGIC:    reqLen = sizeof(SHHeader) + sizeof(U32);    break;
 		case SBHeader_MAGIC:    reqLen = sizeof(SBHeader) + sizeof(U32);    break;
+		case SRHeader_MAGIC:    reqLen = sizeof(SRHeader) + sizeof(U32);    break;
+		case SPHeader_MAGIC:    reqLen = sizeof(SPHeader) + sizeof(U32);    break;
 		default:
 			Log_errorLnx("File wasn't recognized.");
 			goto clean;
@@ -323,6 +327,51 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 				sbHeader.structs,
 				sbHeader.vars,
 				sbHeader.bufferSize
+			);
+
+			break;
+		}
+
+		//oiSR header (frontend symbol AST reflection)
+
+		case SPHeader_MAGIC: {
+
+			const SPHeader spHeader = *(const SPHeader*)(buf.ptr + sizeof(U32));
+
+			Log_debugLnx("Detected oiSP file with following info:");
+
+			XXFile_printVersion(spHeader.version);
+
+			Log_debugLnx(
+				"With %"PRIu32" pipeline(s), %"PRIu32" stage(s) and %"PRIu32" specialization(s)",
+				spHeader.pipelineCount,
+				spHeader.stageCount,
+				spHeader.specializationCount
+			);
+
+			break;
+		}
+
+		case SRHeader_MAGIC: {
+
+			const SRHeader srHeader = *(const SRHeader*)(buf.ptr + sizeof(U32));
+
+			Log_debugLnx("Detected oiSR file with following info:");
+
+			XXFile_printVersion(srHeader.version);
+
+			if(srHeader.flags & ESRFlag_HasSymbols)
+				Log_debugLnx("\tFlag: Has source locations (file/line/column)");
+
+			Log_debugLnx(
+				"With %"PRIu32" nodes, %"PRIu32" annotations, %"PRIu32" registers, %"PRIu32" enum values, "
+				"%"PRIu32" types and features 0x%08"PRIX32,
+				srHeader.nodeCount,
+				srHeader.annotationCount,
+				srHeader.registerCount,
+				srHeader.enumValueCount,
+				srHeader.typeCount,
+				srHeader.features
 			);
 
 			break;

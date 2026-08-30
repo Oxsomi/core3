@@ -368,7 +368,9 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 					case C8x8('y', 'M', 'i', 'c', 'r', 'o', 'm', 'a'):        //RayMicromapOpacity
 
 						if(
-							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL, NULL) == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
+							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL, NULL) == C8x8(
+								'p', 'O', 'p', 'a', 'c', 'i', 't', 'y'
+							)
 						)
 							return ESHExtension_RayMicromapOpacity;
 

@@ -457,6 +457,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
+		VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR,
+		feat2 & EGraphicsFeatures2_PipelineExecutableInfo,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR,
+			.pipelineExecutableInfo = true
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceShaderAtomicInt64Features,
 		types & EGraphicsDataTypes_AtomicI64,
 		{
@@ -552,6 +561,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_DescriptorHeap:             on = feat2 & EGraphicsFeatures2_DescriptorHeap;         break;
 			case EOptExtensions_RayClusterAS:               on = feat2 & EGraphicsFeatures2_RayClusterAS;           break;
 			case EOptExtensions_RayPartitionedTLAS:         on = feat2 & EGraphicsFeatures2_RayPartitionedTLAS;     break;
+			case EOptExtensions_PipelineExecutableProperties: on = feat2 & EGraphicsFeatures2_PipelineExecutableInfo; break;
 			case EOptExtensions_PushDescriptor:             on = featEx & EVkGraphicsFeatures_PerformantPushDescriptor; break;
 			case EOptExtensions_ConditionalRendering:       on = feat2 & EGraphicsFeatures2_Predication;            break;
 
@@ -856,6 +866,14 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	if(feat & EGraphicsFeatures_DirectRendering) {
 		getVkFunctionDevice(clean, vkCmdBeginRenderingKHR, deviceExt->cmdBeginRendering);
 		getVkFunctionDevice(clean, vkCmdEndRenderingKHR, deviceExt->cmdEndRendering);
+	}
+
+	if(feat2 & EGraphicsFeatures2_PipelineExecutableInfo) {
+		getVkFunctionDevice(clean, vkGetPipelineExecutablePropertiesKHR, deviceExt->getPipelineExecutableProperties);
+		getVkFunctionDevice(clean, vkGetPipelineExecutableStatisticsKHR, deviceExt->getPipelineExecutableStatistics);
+		getVkFunctionDevice(
+			clean, vkGetPipelineExecutableInternalRepresentationsKHR, deviceExt->getPipelineExecutableInternalRepresentations
+		);
 	}
 
 	if(featEx & EVkGraphicsFeatures_BufferDeviceAddress)
@@ -1859,7 +1877,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				.queryCount = newCap
 			};
 
-			if(deviceExt->createQueryPool(deviceExt->device, &growInfo, NULL, &deviceExt->timestampPool[device->fifId]) == VK_SUCCESS)
+			if(deviceExt->createQueryPool(
+				deviceExt->device, &growInfo, NULL, &deviceExt->timestampPool[device->fifId]
+			) == VK_SUCCESS)
 				deviceExt->timestampCapacity[device->fifId] = newCap;
 
 			else {

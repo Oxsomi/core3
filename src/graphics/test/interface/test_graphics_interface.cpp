@@ -61,7 +61,8 @@
 //  test_graphics_descriptors.c  - 11, 12, 13
 //  test_graphics_resources.c    - 23, 25, 26, 27
 //  test_graphics_execute.c      - 16, 28, 29, 30 (submission, readback, acceleration structures)
-//  test_graphics_shaders.c      - 31, 32, 33 (shader execution against the //OxC3_gtest test shaders)
+//  test_graphics_shaders_*.cpp  - 31, 32, 33 (shader execution against the //OxC3_gtest test shaders; the
+//                                 serialize module creates a named entrypoint pair and round trips an oiSP)
 //  test_graphics_formats_frames.c - 34, 35, 36 (per format round trips, shape gates, frame ring)
 //  test_graphics_capabilities.c - 37 (capability bit invariants and feature gated API agreement)
 //  test_graphics_caps_exec.c    - 38 (a shader dispatched per capability, results verified)
@@ -219,7 +220,9 @@ static void Test_graphicsInstance(c::Test *t) {
 		Test_checkObjectType(
 			t, "device", &types->device, (c::TypeId)c::EGraphicsTypeId_GraphicsDevice, sizeof(c::GraphicsDevice), alloc
 		);
-		Test_checkObjectType(t, "buffer", &types->buffer, (c::TypeId)c::EGraphicsTypeId_DeviceBuffer, sizeof(c::DeviceBuffer), alloc);
+		Test_checkObjectType(
+			t, "buffer", &types->buffer, (c::TypeId)c::EGraphicsTypeId_DeviceBuffer, sizeof(c::DeviceBuffer), alloc
+		);
 
 		Test_checkObjectType(
 			t, "deviceTexture", &types->deviceTexture,
@@ -236,7 +239,9 @@ static void Test_graphicsInstance(c::Test *t) {
 			(c::TypeId)c::EGraphicsTypeId_DepthStencil, sizeof(c::DepthStencil), alloc
 		);
 
-		Test_checkObjectType(t, "swapchain", &types->swapchain, (c::TypeId)c::EGraphicsTypeId_Swapchain, sizeof(c::Swapchain), alloc);
+		Test_checkObjectType(
+			t, "swapchain", &types->swapchain, (c::TypeId)c::EGraphicsTypeId_Swapchain, sizeof(c::Swapchain), alloc
+		);
 
 		//The pipeline kinds share a typeId but each length has to fit its own info block (Pipeline_infoOffset),
 		// which is exactly the invariant whose violation used to overrun the heap on graphics pipeline creation
@@ -474,13 +479,16 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsGpuExecute(t, deviceRef);
 	c::Test_graphicsAccelerationStructures(t, deviceRef);
 
-	//31-33. Shader execution: real dispatches, draws and traces with verified results
+	//31-33. Shader execution: real dispatches, draws and traces with verified results, plus the graphics
+	// pipelines that only have to create: a named entrypoint pair, and one stored as an oiSP and rebuilt
 
 	c::Test_graphicsShaderCompute(t, deviceRef);
 	c::Test_graphicsTimestamps(t, deviceRef);
 	c::Test_graphicsPredication(t, deviceRef);
 	c::Test_graphicsShaderDraw(t, deviceRef);
+	c::Test_graphicsShaderNamedEntry(t, deviceRef);
 	c::Test_graphicsShaderRays(t, deviceRef);
+	c::Test_graphicsShaderPipelineSerialize(t, deviceRef);
 
 	//34-36. Resource round trips and the frame ring, rather than what a shader computes
 

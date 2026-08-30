@@ -74,7 +74,7 @@ software driver here, so it is built but never run under a sanitizer.
   - Docs: [docs/types.md](docs/types.md).
 - **OxC3_formats_***, file format read/write, all input-validated:
   - Standard: BMP (BGRA8), DDS (modern DXGI subset), WAV.
-  - Oxsomi ([oiXX](docs/oiXX.md) family, sharing encryption/endianness conventions): [oiCA](docs/oiCA.md) archives (zip-like, AES-GCM capable, streamable), [oiDL](docs/oiDL.md) data lists, [oiSH](docs/oiSH.md) shader containers (DXIL+SPIR-V + reflection), [oiSB](docs/oiSB.md) shader buffer layouts, [oiBC](docs/oiBC_chimera.md) bytecode (*spec draft; not implemented yet*).
+  - Oxsomi ([oiXX](docs/oiXX.md) family, sharing encryption/endianness conventions): [oiCA](docs/oiCA.md) archives (zip-like, AES-GCM capable, streamable), [oiDL](docs/oiDL.md) data lists, [oiSH](docs/oiSH.md) shader containers (DXIL+SPIR-V + reflection), [oiSB](docs/oiSB.md) shader buffer layouts, [oiSR](docs/oiSR.md) shader reflection (frontend symbol AST), [oiSP](docs/oiSP.md) shader pipelines (serialized compute/graphics/raytracing state), [oiBC](docs/oiBC_chimera.md) bytecode (*spec draft; not implemented yet*).
   - Docs: [docs/formats.md](docs/formats.md).
 - **OxC3_platforms**, everything OS-dependent: default/tracked allocators (leak reports with per-allocation stacktraces in debug), sandboxed file IO (app/working dir only) + `FileStream`, virtual file system for assets embedded in the exe/apk (oiCA-backed), windows (physical + virtual), monitors, keyboard/mouse multi-device input, dynamic library loading. Backends: Windows, Linux (Wayland), OS X (partial), Android.
   - Docs: [docs/platforms.md](docs/platforms.md).

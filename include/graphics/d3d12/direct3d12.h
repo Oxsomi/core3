@@ -116,14 +116,23 @@ typedef struct DxBlockRequirements {
 
 typedef enum ECompareOp ECompareOp;
 
-typedef union DxPipeline {
+typedef struct DxPipeline {
 
-	struct {
-		ID3D12StateObject *stateObject;                    //For anything else (RTPSO, mesh shaders, etc.)
-		ID3D12StateObjectProperties *stateObjectProps;
+	union {
+
+		struct {
+			ID3D12StateObject *stateObject;                    //For anything else (RTPSO, mesh shaders, etc.)
+			ID3D12StateObjectProperties *stateObjectProps;
+		};
+
+		ID3D12PipelineState *pso;                              //For graphics & compute shaders
+
 	};
 
-	ID3D12PipelineState *pso;                              //For graphics & compute shaders
+	//Set only when the pipeline was created through AMD's shader analyzer, which is what makes it readable
+	// back; NULL on every pipeline that took the normal path.
+
+	void *amdAnalyzerHandle;                               //AmdExtD3DPipelineHandle
 
 } DxPipeline;
 

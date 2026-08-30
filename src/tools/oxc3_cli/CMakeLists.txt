@@ -34,7 +34,7 @@ target_link_libraries(
 	OxC3CLI PUBLIC
 	OxC3_types_base OxC3_types_math OxC3_types_container
 	OxC3_platforms
-	OxC3_formats_oiSH OxC3_formats_oiSB OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_wav
+	OxC3_formats_oiSH OxC3_formats_oiSP OxC3_formats_oiSB OxC3_formats_oiSR OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_wav
 	OxC3_formats_bmp OxC3_formats_dds
 	OxC3_audio
 )
@@ -47,6 +47,13 @@ endif()
 if(EnableShaderCompiler)
 	target_link_libraries(OxC3CLI PUBLIC OxC3_shader_compiler OxC3_package_CLI)
 	target_compile_definitions(OxC3CLI PUBLIC -DCLI_SHADER_COMPILER)
+
+	# RGA (AMD ISA) integration: only useful alongside the shader compiler (you disassemble shaders you compiled).
+	# The Radeon GPU Analyzer ships prebuilt offline compilers for Windows/Linux x64 only, so the isa commands exist
+	# there (spawned via the Process API). CLI_RGA implies CLI_SHADER_COMPILER; more targets can be added later.
+	if(CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		target_compile_definitions(OxC3CLI PUBLIC -DCLI_RGA)
+	endif()
 endif()
 
 target_include_directories(OxC3CLI PUBLIC include/tools/oxc3_cli)
@@ -87,6 +94,29 @@ if(UNIX AND TARGET OxC3_graphics_vk)
 		TARGET OxC3 POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:OxC3_graphics_vk> $<TARGET_FILE_DIR:OxC3>
 	)
+
+endif()
+
+# Bundle the Radeon GPU Analyzer next to the OxC3 executable (in an rga/ subfolder) so the isa commands find it
+# relative to the app directory, working from any cwd - the same reason the Agility SDK is placed by app dir.
+# The rga package has settings os/arch only, so all build configs point at the same bin; the per-config genex
+# just picks whichever is populated. copy_directory_if_different keeps rebuilds cheap.
+if(CLIGraphics AND EnableShaderCompiler AND (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+
+	find_package(radeon_gpu_analyzer QUIET)
+
+	if(radeon_gpu_analyzer_FOUND)
+
+		set(_rgaBin
+			"$<$<CONFIG:Debug>:${radeon_gpu_analyzer_BIN_DIRS_DEBUG}>$<$<CONFIG:Release>:${radeon_gpu_analyzer_BIN_DIRS_RELEASE}>$<$<CONFIG:MinSizeRel>:${radeon_gpu_analyzer_BIN_DIRS_MINSIZEREL}>$<$<CONFIG:RelWithDebInfo>:${radeon_gpu_analyzer_BIN_DIRS_RELWITHDEBINFO}>"
+		)
+
+		add_custom_command(
+			TARGET OxC3 POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${_rgaBin}" "$<TARGET_FILE_DIR:OxC3>/rga"
+		)
+
+	endif()
 
 endif()
 

@@ -750,7 +750,9 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Register device
 
 				if (!RegisterRawInputDevices(&rawDevice, 1, sizeof(RAWINPUTDEVICE)))
-					retError(clean, Error_platformError(0, GetLastError(), "WWindow_onCallback() RegisterRawInputDevices failed"));
+					retError(clean, Error_platformError(
+						0, GetLastError(), "WWindow_onCallback() RegisterRawInputDevices failed"
+					));
 
 				//Store device and call callback
 

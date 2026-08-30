@@ -231,6 +231,16 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 	VkPipelineCreateFlags flags = 0;
 
+	//Capture ISA + statistics for live disassembly when requested and supported (VK_KHR_pipeline_executable_properties)
+
+	if(
+		(pipeline->flags & EPipelineFlags_CaptureISA) &&
+		(device->info.capabilities.features2 & EGraphicsFeatures2_PipelineExecutableInfo)
+	)
+		flags |=
+			VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR |
+			VK_PIPELINE_CREATE_CAPTURE_INTERNAL_REPRESENTATIONS_BIT_KHR;
+
 	if(rtPipeline->flags & EPipelineRaytracingFlags_SkipAABBs)
 		flags |= VK_PIPELINE_CREATE_RAY_TRACING_SKIP_AABBS_BIT_KHR;
 
