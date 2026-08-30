@@ -564,9 +564,14 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 				on = feat & (EGraphicsFeatures_VariableRateShading | EGraphicsFeatures_DirectRendering);
 				break;
 
+			//Mesh shaders require SPIR-V 1.4 as much as raytracing does, and the instance asks for Vulkan 1.1,
+			// where neither this nor the float controls it depends on is core yet. Both have to be listed.
+
 			case EOptExtensions_Spirv14:
 			case EOptExtensions_ShaderFloatControls:
-				on = feat & (EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery);
+				on = feat & (
+					EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery | EGraphicsFeatures_MeshShader
+				);
 				break;
 
 			default:
