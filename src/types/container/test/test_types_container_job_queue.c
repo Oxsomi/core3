@@ -19,7 +19,6 @@
 */
 
 //types/container/test/test_types_container_job_queue.c
-
 //
 //Exercises JobQueue and, through it, the SpinLock + Thread primitives it is built on.
 
@@ -33,7 +32,7 @@
 
 #include "types/base/platform_types.h"
 
-#if _PLATFORM_TYPE == PLATFORM_WEB
+#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(__EMSCRIPTEN_PTHREADS__)
 	#define JOBQUEUE_TEST_THREADS 1
 #else
 	#define JOBQUEUE_TEST_THREADS 4

@@ -1216,10 +1216,47 @@ static void Test_windowNullguards(Test *t) {
 
 // -- 8. Platform allocator alignment ------------------------------------------
 
-//OxC3's widest type, I32x4, is alignas(16) on every SIMD backend, so anything the platform allocator
-//returns has to be able to hold one. malloc only promises alignof(max_align_t), which is 16 on the
-//x64/arm64 ABIs but 8 on wasm: web therefore has to align explicitly (see platforms/unix/uplatform.c).
+//OxC3's widest type, I32x4, is alignas(16) on every SIMD backend,
+// so anything the platform allocator returns has to be able to hold one.
+//malloc only promises alignof(max_align_t), which is 16 on the x64/arm64 ABIs but 8 on wasm:
+// web therefore has to align explicitly (see platforms/unix/uplatform.c).
 //Without this, every heap I32x4 is under-aligned and AES-GCM rejects its own target/AAD buffers.
+
+//Web keeps stack trace text in a small recycled ring and marks each capture with the generation that
+//owned its slot, so a trace read after the ring has moved on reports itself as gone instead of printing
+//an unrelated stack (see types/base/platforms/unix/uerror.c).
+//The tracked allocator captures one per allocation and prints them at shutdown, which is exactly the
+//case that outlives the ring, so the detection is what keeps that report honest rather than confident
+//and wrong.
+
+#if _PLATFORM_TYPE == PLATFORM_WEB
+
+	static void Test_webStackTraceGeneration(Test *t) {
+
+		Test_setModule(t, "Platform/StackTrace");
+
+		StackTrace first = { 0 };
+		Error_captureStackTrace(first, STACKTRACE_SIZE, 0);
+
+		Test_assert(t, "captured a frame", first[0] && first[1]);
+		Test_assert(t, "fresh trace is live", Error_webStackTraceIsLive((const void *const *) first));
+
+		//Comfortably more than the ring holds, so this keeps testing recycling if the ring is resized.
+
+		for(U64 i = 0; i < 256; ++i) {
+			StackTrace churn = { 0 };
+			Error_captureStackTrace(churn, STACKTRACE_SIZE, 0);
+		}
+
+		Test_assert(t, "recycled trace reports expired", !Error_webStackTraceIsLive((const void *const *) first));
+
+		//A zeroed array is "no trace", not slot 0.
+
+		StackTrace empty = { 0 };
+		Test_assert(t, "empty trace is not live", !Error_webStackTraceIsLive((const void *const *) empty));
+	}
+
+#endif
 
 static void Test_allocatorAlignment(Test *t) {
 
@@ -1289,6 +1326,10 @@ OXC3_TEST_ENTRY(platforms_interface) {
 	Test_resolution(&t);
 	Test_windowNullguards(&t);
 	Test_allocatorAlignment(&t);
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB
+		Test_webStackTraceGeneration(&t);
+	#endif
 
 	//We might have instantiated a list with some capacity, make sure we get rid of it so the counter doesn't false positive.
 

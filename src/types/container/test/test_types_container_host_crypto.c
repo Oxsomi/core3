@@ -21,15 +21,17 @@
 //types/container/test/test_types_container_host_crypto.c
 //
 //When crypto is routed to the host (web target, -DEnableHostCrypto=ON) the output has to be
-//indistinguishable from OxC3's own kernels: AES-GCM and SHA-256 are standards, so the same key,
-//IV and AAD must give the same ciphertext, the same tag and the same digest. Anything else means
-//the bridge is mis-marshalling something.
+// indistinguishable from OxC3's own kernels.
+//AES-GCM and SHA-256 are standards, so the same key, IV and AAD must give the same ciphertext, the
+// same tag and the same digest.
+//Anything else means the bridge is mis-marshalling something.
 //
 //This compares the two paths directly rather than against stored vectors, so it also covers the
-//marshalling: same input through HostCrypto_* and through Buffer_sha256Fallback / the AES kernel.
+// marshalling: same input through HostCrypto_sha256 and Buffer_sha256Fallback.
+//AES has no software twin reachable from here, so it is only round tripped; see the TODO below.
 //
 //Every assert self-skips when the bridge isn't available (no SharedArrayBuffer, not cross origin
-//isolated, not in a Worker), so the suite stays green on platforms that never route.
+// isolated, not in a Worker), so the suite stays green on platforms that never route.
 
 #include "test_types_container_shared.h"
 #include "types/container/buffer.h"
@@ -47,102 +49,115 @@ void Test_hostCrypto(Test *t) {
 		return;
 	}
 
-#if _PLATFORM_TYPE == PLATFORM_WEB && defined(_OXC3_HOST_CRYPTO)
+	#if _PLATFORM_TYPE == PLATFORM_WEB && defined(_OXC3_HOST_CRYPTO)
 
-	//Sizes that straddle the AES block, the SHA block, a realistic EncryptionStream chunk, and
-	//the initial staging buffer (1 MiB) so the grow-on-demand path is exercised too.
-	static const U64 sizes[] = { 0, 1, 15, 16, 17, 64, 1000, 4096, 65536, 1048576, 3 * 1048576 };
+		//Sizes that straddle the AES block, the SHA block, a realistic EncryptionStream chunk, and
+		//the initial staging buffer (1 MiB) so the grow-on-demand path is exercised too.
+		static const U64 sizes[] = { 0, 1, 15, 16, 17, 64, 1000, 4096, 65536, 1048576, 3 * 1048576 };
 
-	//Counted, not just compared: every one of these sizes is inside the growth ceiling, so the host
-	//has to actually serve them. Without this the asserts below would pass vacuously whenever
-	//HostCrypto_* declined and the software path quietly did the work instead.
+		//Counted, not just compared: every one of these sizes is inside the growth ceiling, so the host
+		//has to actually serve them. Without this the asserts below would pass vacuously whenever
+		//HostCrypto_* declined and the software path quietly did the work instead.
 
-	Bool shaMatched = true, aesMatched = true, roundTripped = true;
-	U64 hostServed = 0;
+		Bool shaMatched = true, aesMatched = true, roundTripped = true;
+		U64 hostServed = 0;
 
-	for(U64 i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i) {
+		for(U64 i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i) {
 
-		const U64 len = sizes[i];
+			const U64 len = sizes[i];
 
-		Buffer data = Buffer_createNull();
-		Buffer copy = Buffer_createNull();
+			Buffer data = Buffer_createNull();
+			Buffer copy = Buffer_createNull();
 
-		if(!Buffer_createUninitializedBytes(len < 16 ? 16 : len, t->alloc, &data, NULL))
-			continue;
+			if(!Buffer_createUninitializedBytes(len < 16 ? 16 : len, t->alloc, &data, NULL))
+				continue;
 
-		for(U64 j = 0; j < len; ++j)
-			data.ptrNonConst[j] = (U8)(j * 31 + i);
+			for(U64 j = 0; j < len; ++j)
+				data.ptrNonConst[j] = (U8)(j * 31 + i);
 
-		Buffer view = Buffer_createRefConst(data.ptr, len);
+			Buffer view = Buffer_createRefConst(data.ptr, len);
 
-		// --- SHA-256: host vs fallback ---
+			// --- SHA-256: host vs fallback ---
 
-		U32 hostDigest[8] = { 0 }, softDigest[8] = { 0 };
+			U32 hostDigest[8] = { 0 }, softDigest[8] = { 0 };
 
-		if(HostCrypto_sha256(view, hostDigest)) {
+			if(HostCrypto_sha256(view, hostDigest)) {
 
-			++hostServed;
-			Buffer_sha256Fallback(view, softDigest);
+				++hostServed;
+				Buffer_sha256Fallback(view, softDigest);
 
-			for(U8 j = 0; j < 8; ++j)
-				if(hostDigest[j] != softDigest[j])
-					shaMatched = false;
-		}
+				for(U8 j = 0; j < 8; ++j)
+					if(hostDigest[j] != softDigest[j])
+						shaMatched = false;
+			}
 
-		// --- AES-256-GCM: encrypt on the host, decrypt with OxC3's kernel ---
+			// --- AES-256-GCM: encrypt on the host, decrypt with OxC3's kernel ---
 
-		if(len && Buffer_createCopy(Buffer_createRefConst(data.ptr, len), t->alloc, &copy, NULL)) {
+			if(len && Buffer_createCopy(Buffer_createRefConst(data.ptr, len), t->alloc, &copy, NULL)) {
 
-			U32 key[8];
-			for(U8 j = 0; j < 8; ++j) key[j] = 0x01020304u + j;
+				U32 key[8];
+				for(U8 j = 0; j < 8; ++j) key[j] = 0x01020304u + j;
 
-			I32x4 iv = I32x4_create4(0x11111111, 0x22222222, 0x33333333, 0);
-			I32x4 tagHost = I32x4_zero();
+				I32x4 iv = I32x4_create4(0x11111111, 0x22222222, 0x33333333, 0);
+				I32x4 tagHost = I32x4_zero();
 
-			Buffer target = Buffer_createRef(copy.ptrNonConst, len);
+				Buffer target = Buffer_createRef(copy.ptrNonConst, len);
 
-			BufferEncrypt enc = (BufferEncrypt) {
-				.target = &target,
-				.additionalData = NULL,
-				.type = EBufferEncryptionType_AES256GCM,
-				.flags = EBufferEncryptionFlags_StopCreateIv,
-				.nonConstEncrypt = { .key = key, .tag = &tagHost, .iv = &iv }
-			};
-
-			//Encrypt through whichever path Buffer_encryptAdvanced picks (the host, when routed)
-			if(Buffer_encryptAdvanced(&enc, NULL)) {
-
-				//Ciphertext must differ from plaintext, or nothing happened
-				if(!Buffer_neq(Buffer_createRefConst(copy.ptr, len), Buffer_createRefConst(data.ptr, len)))
-					aesMatched = false;
-
-				//And it has to decrypt back to exactly the input
-				BufferEncrypt dec = (BufferEncrypt) {
+				BufferEncrypt enc = (BufferEncrypt) {
 					.target = &target,
 					.additionalData = NULL,
 					.type = EBufferEncryptionType_AES256GCM,
-					.flags = EBufferEncryptionFlags_None,
+					.flags = EBufferEncryptionFlags_StopCreateIv,
 					.nonConstEncrypt = { .key = key, .tag = &tagHost, .iv = &iv }
 				};
 
-				if(!Buffer_decryptAdvanced(&dec, NULL))
-					roundTripped = false;
+				//Encrypt through whichever path Buffer_encryptAdvanced picks (the host, when routed)
+				if(Buffer_encryptAdvanced(&enc, NULL)) {
 
-				else if(Buffer_neq(Buffer_createRefConst(copy.ptr, len), Buffer_createRefConst(data.ptr, len)))
-					roundTripped = false;
+					//Ciphertext must differ from plaintext, or nothing happened
+					if(!Buffer_neq(Buffer_createRefConst(copy.ptr, len), Buffer_createRefConst(data.ptr, len)))
+						aesMatched = false;
+
+					//And it has to decrypt back to exactly the input
+					BufferEncrypt dec = (BufferEncrypt) {
+						.target = &target,
+						.additionalData = NULL,
+						.type = EBufferEncryptionType_AES256GCM,
+						.flags = EBufferEncryptionFlags_None,
+						.nonConstEncrypt = { .key = key, .tag = &tagHost, .iv = &iv }
+					};
+
+					if(!Buffer_decryptAdvanced(&dec, NULL))
+						roundTripped = false;
+
+					else if(Buffer_neq(Buffer_createRefConst(copy.ptr, len), Buffer_createRefConst(data.ptr, len)))
+						roundTripped = false;
+				}
+
+				else aesMatched = false;
 			}
 
-			else aesMatched = false;
+			Buffer_free(&copy, t->alloc);
+			Buffer_free(&data, t->alloc);
 		}
 
-		Buffer_free(&copy, t->alloc);
-		Buffer_free(&data, t->alloc);
-	}
+		Test_assert(t, "host served every size (staging grew)", hostServed == sizeof(sizes) / sizeof(sizes[0]));
+		Test_assert(t, "sha256 matches software", shaMatched);
 
-	Test_assert(t, "host served every size (staging grew)", hostServed == sizeof(sizes) / sizeof(sizes[0]));
-	Test_assert(t, "sha256 matches software", shaMatched);
-	Test_assert(t, "aes produces ciphertext", aesMatched);
-	Test_assert(t, "aes round trips", roundTripped);
+		//TODO: The two asserts below are much weaker than the sha256 one above and can't be fixed here yet.
+		//sha256 compares host output against Buffer_sha256Fallback, so it's host versus software.
+		//AES has no equivalent: AESEncryptionContext_* are static inline inside buffer_encrypt.c, so the only
+		// reachable entry points are Buffer_encryptAdvanced / Buffer_decryptAdvanced, and in a host-crypto
+		// build BOTH of those route to the host. "round trips" is therefore host-encrypt against host-decrypt,
+		// which a wrong but self consistent implementation would pass, and "produces ciphertext" only checks
+		// the output differs from the input.
+		//Give AES a Buffer_aesGcmFallback (or expose the context) and this becomes the same shape as sha256.
+		//Until then the real coverage is test_types_container_aes_gcm.c: its fixed vector suites (the GCM
+		// spec's and IEEE 802.1's) call the same routed dispatchers, so in a host-crypto build they check
+		// the host path against known answers, which is stronger than any round trip here.
 
-#endif
+		Test_assert(t, "aes produces ciphertext", aesMatched);
+		Test_assert(t, "aes round trips", roundTripped);
+
+	#endif
 }

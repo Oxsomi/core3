@@ -82,10 +82,11 @@ void Test_shaderCompilerDriver(Test *t) {
 	//--- Same batch, multi-threaded: the JobGroup fan-out must be thread-safe AND produce byte-identical
 	//--- output regardless of thread count (deterministic compile). ---
 
-	//web can't spawn threads (no -pthread yet): a second single-threaded run still checks that
-	//repeated compiles are byte-identical, which is the property consumers rely on.
+	//A wasm build without -pthread can't spawn threads, so it runs single threaded twice instead.
+	//That still checks that repeated compiles are byte-identical, which is the property consumers
+	// rely on, just not the fan-out.
 
-	#if _PLATFORM_TYPE == PLATFORM_WEB
+	#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(__EMSCRIPTEN_PTHREADS__)
 		const U32 driverTestThreads = 1;
 	#else
 		const U32 driverTestThreads = 4;

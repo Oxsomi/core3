@@ -61,7 +61,12 @@ elseif(APPLE)
 elseif(ANDROID)
 	target_include_directories(OxC3_platforms PUBLIC "${ANDROID_NDK}/sources/android/native_app_glue")
 elseif(EMSCRIPTEN)
-	# No windowing/system deps: MEMFS/NODERAWFS for files, browser/node owns the loop.
+	# No system deps to find: emscripten provides the libc, and the canvas windowing in web/webwindow.c
+	# needs only html5.h from the sysroot.
+	# Files come from whatever filesystem is mounted, which is NODERAWFS under node.
+	# A browser build would have an empty MEMFS until something populates it, and nothing does yet
+	# (see the packaging note in cmake/oxc3.cmake).
+	# The loop is owned by node or by the browser either way, so there is no platform loop to link against.
 elseif(UNIX AND NOT APPLE)
 	find_package(xdg_shell REQUIRED)
 	find_package(xdg_decoration REQUIRED)

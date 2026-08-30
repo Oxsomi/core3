@@ -35,7 +35,7 @@
 
 #include "types/base/platform_types.h"
 
-#if _PLATFORM_TYPE == PLATFORM_WEB
+#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(__EMSCRIPTEN_PTHREADS__)
 	#define JOBQUEUE_TEST_THREADS 1
 #else
 	#define JOBQUEUE_TEST_THREADS 4

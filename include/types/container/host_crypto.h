@@ -21,8 +21,8 @@
 //types/container/host_crypto.h
 //
 //Routes SHA-256 and AES-GCM to the host's hardware backed crypto on the web target,
-// because the SIMD_NONE fallbacks are the only thing available there (wasm has no AES/SHA/CLMUL instructions,
-// see docs/web.md): AES-128-GCM runs at 1.27 MB/s in wasm versus ~1800 MB/s through the host.
+// because the scalar fallbacks are the only thing available there: wasm has no AES/SHA/CLMUL
+// instructions, so AES-128-GCM runs at 1.27 MB/s versus ~1800 MB/s through the host.
 //
 //The web platform only exposes crypto.subtle, which is asynchronous,
 // so a synchronous C call reaches it by handing the work to a helper worker and blocking on Atomics.wait until it lands.
@@ -31,8 +31,10 @@
 //None of that is required: when it isn't satisfied Buffer_* keeps using OxC3's own kernels, just slower.
 //
 //Only compiled when EnableHostCrypto is on (see the root CMakeLists); everything below is a no-op otherwise.
-//Output is byte identical either way, AES-GCM and SHA-256 being what they are;
-// the host_crypto test asserts exactly that against the same vectors the software path uses.
+//Output is byte identical either way, AES-GCM and SHA-256 being what they are.
+//The host_crypto test compares the host digest against Buffer_sha256Fallback byte for byte and round
+// trips AES; the fixed vectors in test_types_container_aes_gcm.c cover the routed AES path against
+// known answers.
 
 #pragma once
 #include "types/base/types.h"

@@ -31,6 +31,40 @@ function(configure_icon target icon)
 
 endfunction()
 
+# Link options every wasm64 executable needs.
+# Both of the web targets (the CLI and the test bundle) are node programs, so they take the same set; a
+# browser consumer would embed the libraries and choose its own -sENVIRONMENT instead.
+#
+# NODERAWFS mounts the real filesystem, so packages/ resolves through plain POSIX paths from the working
+# directory rather than needing anything preloaded.
+# The memory and stack settings are hard requirements: DXC recursion overflows the 64KB default stack
+# silently, and 2GB is the default memory cap.
+# INITIAL_MEMORY is what the module commits at instantiation, before it does any work, so it stays small
+# and ALLOW_MEMORY_GROWTH sizes it to the workload; a phone should not hand over half a gigabyte just to
+# load the module. DXC grows this a lot while compiling, but only for the run that needs it.
+
+function(apply_web_link_options target)
+
+	if(NOT TARGET ${target})
+		message(FATAL_ERROR "apply_web_link_options: target ${target} not present.")
+	endif()
+
+	if(NOT EMSCRIPTEN)
+		return()
+	endif()
+
+	target_link_options(${target} PRIVATE
+		"-sENVIRONMENT=node"
+		"-sNODERAWFS=1"
+		"-sEXIT_RUNTIME=1"
+		"-sALLOW_MEMORY_GROWTH=1"
+		"-sINITIAL_MEMORY=32MB"
+		"-sMAXIMUM_MEMORY=16GB"
+		"-sSTACK_SIZE=8MB"
+	)
+
+endfunction()
+
 function(apply_dependencies target)
 
 	if(NOT TARGET ${target})
@@ -112,7 +146,7 @@ function(apply_dependencies target)
 		# web/emscripten has a virtual filesystem, so nothing is embedded into the module at all.
 		# The android model applies instead: packages/<target>/<name>.oiCA is read at runtime.
 		# node reaches it through NODERAWFS; a browser build would have to populate MEMFS itself first,
-		# which no target does yet (see src/platforms/web and docs/web.md).
+		# which no target does yet (see src/platforms/web).
 		
 		if(WIN32)
 			get_property(res2 TARGET ${target} PROPERTY RESOURCE_LIST_RC)

@@ -130,8 +130,8 @@ Bool File_loadVirtualInternal1(
 
 		gotoIfError3(clean, Buffer_createUninitializedBytes(section->lenExt, streamAlloc, &buf, e_rr));
 
-		//Chunked pread, same as ufile.c's FileHandle_readPhysical: a single read isn't guaranteed to
-		// return everything, and MEMFS in particular short reads.
+		//Chunked pread, same as ufile.c's FileHandle_readPhysical: one call is capped at 64 MB,
+		// and a chunk that comes back short is a failed read rather than something to retry.
 
 		U8 *dst           = buf.ptrNonConst;
 		U64 remaining     = section->lenExt;

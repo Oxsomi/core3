@@ -23,20 +23,26 @@
 # But node has a real exec: this is an ordinary executable with an exit code,
 # wired into ctest through CMAKE_CROSSCOMPILING_EMULATOR (the emscripten toolchain sets it to node).
 #
-# Bundled here but not on android: shader_compiler - DXC does build for wasm64.
+# shader_compiler is bundled unconditionally here, unlike android where it is bundled only when
+# -shader_compiler True asked for it.
+# That is a default, not a capability: DXC cross compiles for both, but it more than doubles the build, so
+# android leaves it off while the web target treats it as the point of the port.
 # Not bundled: graphics_interface (no GPU under node) and the functional suites (need a human).
 
 set(testRoot ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
 file(GLOB_RECURSE webTestSources CONFIGURE_DEPENDS
 	"${testRoot}/types/base/test/*.c"
+	"${testRoot}/types/base/test/*.cpp"
 	"${testRoot}/types/math/test/*.c"
 	"${testRoot}/types/math/test/*.cpp"
 	"${testRoot}/types/container/test/*.c"
 	"${testRoot}/types/container/test/*.cpp"
 	"${testRoot}/formats/*/test/*.c"
+	"${testRoot}/formats/*/test/*.cpp"
 	"${testRoot}/audio/test/interface/*.c"
 	"${testRoot}/platforms/test/interface/*.c"
+	"${testRoot}/platforms/test/interface/*.cpp"
 )
 
 file(GLOB webShaderTestSources CONFIGURE_DEPENDS "${testRoot}/shader_compiler/test/*.c")
@@ -57,29 +63,12 @@ target_link_libraries(OxC3_wtest PUBLIC
 	OxC3_platforms
 	OxC3_audio
 	OxC3_shader_compiler
-	OxC3_formats_bmp OxC3_formats_dds OxC3_formats_oiBC OxC3_formats_oiCA
+	OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr OxC3_formats_oiBC OxC3_formats_oiCA
 	OxC3_formats_oiDL OxC3_formats_oiSB OxC3_formats_oiSH OxC3_formats_wav
 	OxC3_types_test
 	OxC3_types_container_test_util
 )
 
-# Node-targeted link: NODERAWFS mounts the real filesystem,
-# so packages/ resolves through plain POSIX paths from the working directory.
-# The memory/stack settings are hard requirements (DXC recursion overflows the 64KB default stack silently).
-# INITIAL_MEMORY is what the module commits at instantiation, before it does any work.
-# Keep it small and let ALLOW_MEMORY_GROWTH size it to the workload:
-# a phone should not have to hand over half a gigabyte just to load the module.
-# DXC grows this a lot while compiling, but it grows on demand and only for the run that needs it.
-
-target_link_options(OxC3_wtest PRIVATE
-	"-sENVIRONMENT=node"
-	"-sNODERAWFS=1"
-	"-sEXIT_RUNTIME=1"
-	"-sALLOW_MEMORY_GROWTH=1"
-	"-sINITIAL_MEMORY=32MB"
-	"-sMAXIMUM_MEMORY=16GB"
-	"-sSTACK_SIZE=8MB"
-)
 
 # Test_dynamicLibrary dlopens this by bare name on other platforms.
 # The web run expects the load to fail (no dlopen without MAIN_MODULE),
@@ -88,6 +77,8 @@ target_link_options(OxC3_wtest PRIVATE
 add_dependencies(OxC3_wtest OxC3_platforms_interface_dylib_test)
 
 include(${testRoot}/../cmake/oxc3.cmake)
+
+apply_web_link_options(OxC3_wtest)
 
 add_virtual_files(
 	TARGET  OxC3_wtest
@@ -137,7 +128,8 @@ apply_dependencies(OxC3_wtest)
 
 # ctest: CMAKE_CROSSCOMPILING_EMULATOR (node) runs the module.
 # Suites that read data get their working directory from -packages:
-# packages/ lives under <SELF>/build/web (add_virtual_files, no config component for single-config generators).
+# packages/ lives under <SELF>/build/<config>/web: conan's toolchain sets CMAKE_CONFIGURATION_TYPES even
+# for single-config generators, so add_virtual_files keeps the config component (see cmake/oxc3.cmake).
 # The shader corpus is reached through the virtual file system rather than a source dir,
 # so it needs the same directory, not its own.
 

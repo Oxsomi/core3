@@ -32,6 +32,7 @@
 #include "types/math/flp.h"
 #include "types/math/vec4i.h"
 #include "types/math/vec4f.h"
+#include "types/math/mat.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
 #include "types/base/constants.h"
@@ -604,7 +605,18 @@ Bool CLI_profileMemset(const ParsedArgs *args) {
 	return CLI_profileData(args, CLI_profileMemsetImpl);
 }
 
-//128-bit float SIMD throughput (add / mul / fma).
+//128 bit vector throughput.
+//Operands are read from an L1 resident window of the profiling buffer rather than being compile time
+// constants. A constant operand lets the optimiser hoist the whole operation out of the loop, fold an
+// involution such as transpose4 or swapEndianness to the identity, or solve an integer accumulate in
+// closed form, and each of those measures the optimiser instead of the vector backend. It shows up as
+// a 0.000000s timing or as a rate an order of magnitude away from its neighbours.
+//Cases named "x4 (independent)" keep four accumulators so the pipeline can overlap; the plain ones
+// keep a single accumulator and therefore measure instruction latency, which is far less backend
+// sensitive. Both shapes are kept because real code contains both.
+
+//4 KiB worth of F32x4, small enough to stay in L1 so the loads don't turn an ALU test into a memory test.
+#define PROFILE_VEC_WINDOW 256
 
 Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
@@ -612,23 +624,52 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	(void) e_rr;
 
 	//Scale the op count to the profiling buffer so -length controls the runtime (default 1 GiB -> ~268M ops).
+
+	Bool s_uccess = true;
 	const U64 iters = Buffer_length(buf) / 4;
-	const F32x4 v = F32x4_create4(1.0000001f, 1.0000002f, 1.0000003f, 1.0000004f);
+	const U64 vecCount = Buffer_length(buf) / sizeof(F32x4);
+
+	if(vecCount < PROFILE_VEC_WINDOW)
+		retError(clean, Error_invalidParameter(
+			1, 0, "CLI_profileVecImpl()::buf is too small to profile vectors"
+		));
+
+	//The window is seeded from the profiling buffer's own bytes, so the values are opaque to the
+	// optimiser, and converted rather than bit cast into [1, 2). Reinterpreting random bytes as floats
+	// would hand the loops denormals, NaNs and zeroes, which makes the timings depend on the data and
+	// makes rsqrt meaningless.
+
+	F32x4 *win = (F32x4*) buf.ptrNonConst;
+
+	for(U64 i = 0; i < PROFILE_VEC_WINDOW; ++i) {
+		const I32x4 bits = I32x4_and(I32x4_load4(&win[i]), I32x4_xxxx4(0xFFFF));
+		win[i] = F32x4_add(F32x4_mul(F32x4_fromI32x4(bits), F32x4_xxxx4(1.0f / 0x10000)), F32x4_xxxx4(1));
+	}
+
+	//Every odd entry is made the reciprocal of the one before it, so a running product over the window
+	// returns to about 1 instead of overflowing. A serial multiply chain by values that are all >= 1
+	// reaches +inf within a couple of thousand iterations, which turns the mul timing into a timing of
+	// infinity arithmetic and prints a useless sink.
+
+	for(U64 i = 1; i < PROFILE_VEC_WINDOW; i += 2)
+		win[i] = F32x4_inverse(win[i - 1]);
+
+	const U64 mask = PROFILE_VEC_WINDOW - 1;
 
 	F32x4 acc = F32x4_zero();
 	Ns then = Time_now();
 	for(U64 i = 0; i < iters; ++i)
-		acc = F32x4_add(acc, v);
+		acc = F32x4_add(acc, win[i & mask]);
 	Ns now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f add: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
 		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(acc)
 	);
 
-	acc = v;
+	acc = F32x4_xxxx4(1);
 	then = Time_now();
 	for(U64 i = 0; i < iters; ++i)
-		acc = F32x4_mul(acc, v);
+		acc = F32x4_mul(acc, win[i & mask]);
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f mul: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
@@ -638,14 +679,179 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	acc = F32x4_zero();
 	then = Time_now();
 	for(U64 i = 0; i < iters; ++i)
-		acc = F32x4_fma(v, v, acc);
+		acc = F32x4_fma(win[i & mask], win[(i + 1) & mask], acc);
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f fma: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
 		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(acc)
 	);
 
-	return true;
+	F32x4 a0 = F32x4_zero(), a1 = F32x4_zero(), a2 = F32x4_zero(), a3 = F32x4_zero();
+	then = Time_now();
+	for(U64 i = 0; i < iters / 4; ++i) {
+		const F32x4 w = win[i & mask];
+		a0 = F32x4_fma(w, win[(i + 1) & mask], a0);
+		a1 = F32x4_fma(w, win[(i + 2) & mask], a1);
+		a2 = F32x4_fma(w, win[(i + 3) & mask], a2);
+		a3 = F32x4_fma(w, win[(i + 4) & mask], a3);
+	}
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4f fma x4 (independent): %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then),
+		(F64) F32x4_x(F32x4_add(F32x4_add(a0, a1), F32x4_add(a2, a3)))
+	);
+
+	//dot4 is multiply then horizontal reduce. SSE has dpps for it, wasm SIMD128 has neither a dot product
+	// nor a horizontal add and reduces through two shuffles instead, so this is a known weak spot.
+
+	F32 dAcc = 0;
+	then = Time_now();
+	for(U64 i = 0; i < iters; ++i)
+		dAcc += F32x4_dot4(win[i & mask], win[(i + 1) & mask]);
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4f dot4: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) dAcc
+	);
+
+	//min and max are where wasm SIMD128 pays for its semantics: f32x4.min/max propagate NaN as IEEE
+	// requires, while SSE minps/maxps just pick an operand, so the wasm forms cost extra instructions.
+
+	F32x4 mnAcc = win[0], mxAcc = win[1];
+	then = Time_now();
+	for(U64 i = 0; i < iters / 2; ++i) {
+		mnAcc = F32x4_min(mnAcc, win[i & mask]);
+		mxAcc = F32x4_max(mxAcc, win[(i + 1) & mask]);
+	}
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4f min/max: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then),
+		(F64) (F32x4_x(mnAcc) + F32x4_x(mxAcc))
+	);
+
+	//rsqrt: SSE has the rsqrtps estimate, wasm SIMD128 has no reciprocal square root at all and
+	// vec4f_wasm.inc.h does an exact divide by a square root instead. Doing four lanes at once still
+	// beats four scalar square roots by more than the exact form costs.
+
+	F32x4 rAcc = F32x4_zero();
+	then = Time_now();
+	for(U64 i = 0; i < iters; ++i)
+		rAcc = F32x4_add(rAcc, F32x4_rsqrt(win[i & mask]));
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4f rsqrt: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(rAcc)
+	);
+
+	//Lane extract is SIMD hostile by construction: scalar reads a float, the vector backends need an
+	// extract_lane. It's included because OxC3 does this all over the place, not because it can win.
+
+	F32 xAcc = 0;
+	then = Time_now();
+	for(U64 i = 0; i < iters; ++i)
+		xAcc += F32x4_x(win[i & mask]);
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4f lane extract: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) xAcc
+	);
+
+	//Transpose is an involution, so transposing in place in a loop folds to nothing; feeding the window
+	// back in each iteration keeps it live. Scalar has an unfair advantage here because a compile time
+	// known permutation of 16 floats held in registers is pure register renaming and costs no
+	// instructions at all, where the vector backends issue real shuffles.
+
+	const U64 transposeIters = iters / 4;
+	F32x4 m[4], tSink = F32x4_zero();
+	then = Time_now();
+	for(U64 i = 0; i < transposeIters; ++i) {
+		m[0] = win[i & mask];
+		m[1] = win[(i + 1) & mask];
+		m[2] = win[(i + 2) & mask];
+		m[3] = win[(i + 3) & mask];
+		F32x4_transpose4(m, m);
+		tSink = F32x4_add(tSink, m[0]);
+	}
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4f transpose4: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
+		transposeIters, (F64)(now - then) / SECOND, (F64) transposeIters / (F64)(now - then),
+		(F64) F32x4_x(tSink)
+	);
+
+	//A 4x4 matrix product is the composite case: 16 multiplies, 12 adds and 16 broadcasts per op, which
+	// is what shipped transform code actually looks like rather than a single instruction in a loop.
+
+	const U64 matIters = iters / 16;
+	F32x4x4 ma, mb, mSink = F32x4x4_identity();
+	then = Time_now();
+	for(U64 i = 0; i < matIters; ++i) {
+		for(U8 j = 0; j < 4; ++j) {
+			ma.v[j] = win[(i + j) & mask];
+			mb.v[j] = win[(i + j + 4) & mask];
+		}
+		mSink.v[0] = F32x4_add(mSink.v[0], F32x4x4_mul(ma, mb).v[0]);
+	}
+	now = Time_now();
+	Log_debugLnx(
+		"Profile mat4 mul: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
+		matIters, (F64)(now - then) / SECOND, (F64) matIters / (F64)(now - then),
+		(F64) F32x4_x(mSink.v[0])
+	);
+
+	//Integer lanes go through a different execution unit than float. Accumulating a loop invariant
+	// integer has a closed form the optimiser will solve outright (float doesn't, because it isn't
+	// associative), so the operand has to come from the window here too.
+
+	const I32x4 *iwin = (const I32x4*) win;
+	I32x4 i0 = I32x4_one(), i1 = I32x4_one(), i2 = I32x4_one(), i3 = I32x4_one();
+	then = Time_now();
+	for(U64 i = 0; i < iters / 4; ++i) {
+		i0 = I32x4_add(i0, iwin[i & mask]);
+		i1 = I32x4_add(i1, iwin[(i + 1) & mask]);
+		i2 = I32x4_add(i2, iwin[(i + 2) & mask]);
+		i3 = I32x4_add(i3, iwin[(i + 3) & mask]);
+	}
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4i add x4 (independent): %"PRIu64" ops in %fs (%f Gop/s). (sink %i)",
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then),
+		I32x4_x(I32x4_add(I32x4_add(i0, i1), I32x4_add(i2, i3)))
+	);
+
+	//Pure shuffle, no arithmetic: one i8x16.shuffle on wasm against four byte swaps scalar. Swapping the
+	// same value twice is the identity, so this reads a fresh operand each iteration for the same reason
+	// transpose4 does.
+
+	I32x4 sAcc = I32x4_zero();
+	then = Time_now();
+	for(U64 i = 0; i < iters; ++i)
+		sAcc = I32x4_add(sAcc, I32x4_swapEndianness(iwin[i & mask]));
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4i swapEndianness: %"PRIu64" ops in %fs (%f Gop/s). (sink %i)",
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), I32x4_x(sAcc)
+	);
+
+	//The realistic one: stream the whole buffer through a transform instead of spinning on an L1 window.
+	//Shipped vector code is usually memory bound, so this says whether width still pays once loads and
+	// stores dominate.
+
+	const F32x4 v = F32x4_xxxx4(1.0000001f);
+	then = Time_now();
+	for(U64 i = 0; i < vecCount; ++i)
+		win[i] = F32x4_fma(win[i], v, v);
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4f streaming fma: %"PRIu64" ops in %fs (%f Gop/s, %f GiB/s). (sink %f)",
+		vecCount, (F64)(now - then) / SECOND, (F64) vecCount / (F64)(now - then),
+		(F64) (vecCount * sizeof(F32x4)) / (F64)(now - then) * SECOND / GIBI, (F64) F32x4_x(win[0])
+	);
+
+clean:
+	return s_uccess;
 }
 
 Bool CLI_profileVec(const ParsedArgs *args) {

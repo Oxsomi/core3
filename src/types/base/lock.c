@@ -50,7 +50,14 @@
 			#define CPU_PAUSE() __asm__ __volatile__("yield")
 		#endif
 	#elif _ARCH == ARCH_WASM64
-		#define CPU_PAUSE() ((void)0) //wasm has no pause hint; spinning is rare (single-threaded default)
+
+		//wasm has no pause hint: there is no such instruction and clang exposes no builtin for one.
+		//This is not a stopgap for the single threaded default, emscripten's own musl defines a_spin() as an
+		// empty function for wasm, so a no-op is what upstream does under threads too.
+		//It stays correct because CPU_PAUSE only appears in the bounded SHORT_SPIN loop below; the unbounded
+		// wait uses THREAD_YIELD (sched_yield), so a contended lock never degrades into a busy loop.
+
+		#define CPU_PAUSE() ((void)0)
 	#else
 		#define CPU_PAUSE() __builtin_ia32_pause()
 	#endif

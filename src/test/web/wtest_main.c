@@ -47,6 +47,7 @@ WTEST_SUITE(formats_bmp);
 WTEST_SUITE(formats_dds);
 WTEST_SUITE(formats_oiBC);
 WTEST_SUITE(formats_oiCA);
+WTEST_SUITE(formats_hdr);
 WTEST_SUITE(formats_oiDL);
 WTEST_SUITE(formats_oiSB);
 WTEST_SUITE(formats_oiSH);
@@ -83,6 +84,7 @@ static const WTestSuite WTest_suites[] = {
 	{ "formats_dds",         OxC3_test_formats_dds,         EWTestDir_Default      },
 	{ "formats_oiBC",        OxC3_test_formats_oiBC,        EWTestDir_Default      },
 	{ "formats_oiCA",        OxC3_test_formats_oiCA,        EWTestDir_Default      },
+	{ "formats_hdr",         OxC3_test_formats_hdr,         EWTestDir_Default      },
 	{ "formats_oiDL",        OxC3_test_formats_oiDL,        EWTestDir_Default      },
 	{ "formats_oiSB",        OxC3_test_formats_oiSB,        EWTestDir_Default      },
 	{ "formats_oiSH",        OxC3_test_formats_oiSH,        EWTestDir_Default      },

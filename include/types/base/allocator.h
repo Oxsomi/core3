@@ -31,7 +31,7 @@ typedef struct Buffer Buffer;
 typedef struct Error Error;
 
 //Alignment contract: whatever an AllocFunc hands back has to be aligned for OxC3's widest type, I32x4,
-// which is alignas(16) on every SIMD backend (types/math/vec4_{sse,neon,none}.inc.h).
+// which is alignas(16) on every SIMD backend (types/math/vec4_{sse,neon,wasm,none}.inc.h).
 //Anything less is undefined behaviour for every heap stored vector/matrix,
 // and AES-GCM rejects such a buffer outright (buffer_encrypt.c requires 16-byte aligned target/additionalData).
 //

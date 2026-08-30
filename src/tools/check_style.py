@@ -146,10 +146,11 @@ BANNED_SYMBOLS: list[dict] = [
         "message": "C++ '{}' operator, forbidden (use OxC3 allocators)",
         "allow_paths": (
             "src/shader_compiler/compiler.cpp",
-            # The only "new" in here is JavaScript inside EM_JS blocks (new SharedArrayBuffer,
-            # new Uint8Array, new Worker), which this rule can't distinguish from C++.
-            "src/types/container/host_crypto.c",
         ),
+        # C++ new/delete cannot appear in a C translation unit, so a hit in a .c file is always a false
+        # positive. In practice it is JavaScript inside EM_JS bodies (new Uint8ClampedArray, new Worker),
+        # which this rule can't tell from C++. Scoping beats listing every web file that embeds JS.
+        "extensions": (".cpp", ".hpp"),
     },
     # B3, printf family
     {
@@ -164,8 +165,10 @@ BANNED_SYMBOLS: list[dict] = [
             # F32x4x4_format is a debug dump of 16 floats. OxC3_types_math sits below OxC3_types_container,
             # so CharString_format (the alternative this rule points at) isn't reachable from it.
             "src/types/math/mat.c",
-            # The node test runner's stdout reporter, same role ulog.c plays: it runs between suites,
-            # when no Platform (and therefore no Log_*x) exists.
+            # The node test runner writes a machine readable protocol on stdout (OXC3_TEST_BEGIN,
+            # RUN/PASS/FAIL per suite, OXC3_TEST_END) that the build scripts parse to decide the result.
+            # Log_* would decorate those lines with a level prefix and ANSI colour (see FONT_GREEN in
+            # ulog.c), so the reporter has to write them undecorated.
             "src/test/web/wtest_main.c",
         ),
     },
@@ -224,15 +227,7 @@ BANNED_SYMBOLS: list[dict] = [
     {
         "pattern": re.compile(r'\b(strcmp|strstr)\s*\('),
         "message": "'{}', use CharString_equalsStringSensitive or Buffer_cmp on CharString_bufferConst",
-        "allow_paths": (
-            "src/platforms/unix/ufile.c",
-            # Raw C strings that never come from a CharString: a /proc/cpuinfo read buffer, Windows'
-            # registry VendorIdentifier, and dladdr's dli_fname. ulog.c additionally sits below
-            # OxC3_types_container, so the alternative this rule points at isn't reachable from it.
-            "src/platforms/unix/uplatform.c",
-            "src/platforms/windows/wplatform.c",
-            "src/types/container/platforms/unix/ulog.c",
-        ),
+        "allow_paths": (),
     },
     # B13, C time functions
     {
@@ -576,6 +571,7 @@ def check_file(
     active_rules = [
         rule for rule in BANNED_SYMBOLS
         if not any(ap in rel for ap in rule["allow_paths"])
+        and (not rule.get("extensions") or rel.endswith(rule["extensions"]))
     ]
 
     # ── Per-line checks ───────────────────────────────────────────────────

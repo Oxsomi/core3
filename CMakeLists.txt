@@ -264,13 +264,18 @@ if(EMSCRIPTEN)
 	set(ARM OFF)
 	set(target "wasm64")
 
-	# LLVM's wasm64 backend miscompiles certain shift/xor reduction loops at -O3 (first seen as
-	# I32x4_clmul64Fallback returning all zeros; a 60-line repro compiles correctly at -O2 and at
-	# -O0, and correctly on x64 at every level). Compile at -O2 on web until an emsdk upgrade
-	# passes the repro; link-time (wasm-opt) optimization is unaffected and stays as-is.
+	# LLVM's middle end folds I32x4_clmul64Fallback to zero at -O3 on wasm64, which fails types_math.
+	# It is a constant folding bug: only operands the compiler can see as constants are affected, so
+	# runtime keys and data are computed correctly and the AES-GCM suites pass either way. It also
+	# only reproduces when I32x4 is the scalar struct, so it hits _SIMD == SIMD_NONE and not
+	# SIMD_WASM, where I32x4 is v128_t. Confirmed on emsdk 6.0.6: SIMD off fails types_math at -O3,
+	# SIMD on passes all 15 suites. See docs/bug_wasm64_o3_constfold.md for the standalone repro.
+	# Pin only the affected configuration, so the default web build keeps -O3.
 
-	set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
-	set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+	if(NOT EnableSIMD)
+		set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+		set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+	endif()
 
 elseif("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "ARM64|arm64|aarch64|armv8" OR "${ANDROID_ABI}" MATCHES "arm64-v8a")
 	message("-- Enabling ARM specific optimizations")
@@ -283,13 +288,12 @@ else()
 endif()
 
 # wasm: no dlopen without MAIN_MODULE (which taxes every module), so both dynamic linking
-# flavors are off, same as android. SIMD is coerced off for now: the SSE paths rely on
-# SHA/AES/PCLMUL/RDRND which emscripten's SSE-over-simd128 shim doesn't provide.
+# flavors are off, same as android.
 
-if(EMSCRIPTEN AND EnableSIMD)
-	message("-- SIMD off: wasm build uses the scalar fallback (no full SSE feature set on wasm)")
-	set(EnableSIMD OFF)
-endif()
+# wasm keeps SIMD on, but only for the vector math, which runs on the native wasm_simd128.h
+# intrinsics in types/math/vec4*_wasm.inc.h. There is no AES-NI, SHA or PCLMULQDQ equivalent in
+# SIMD128, so the crypto and hash backends stay scalar.
+# That split is what SIMD_WASM means; see include/types/base/platform_types.h.
 
 # Graphics needs Vulkan or D3D12; the web target has neither until a WebGPU backend exists,
 # so the whole module (and the graphics CLI) is off there.
@@ -297,7 +301,7 @@ endif()
 # Routes SHA-256/AES-GCM to the host's hardware crypto on web, where OxC3's own kernels have no
 # AES/SHA instructions to use (1.27 MB/s AES). Needs a cross origin isolated page and the module
 # running in a Worker; falls back to the built in kernels whenever that isn't the case.
-# Off by default: a standalone shader compiler has no reason to carry it. See docs/web.md.
+# Off by default: a standalone shader compiler has no reason to carry it.
 
 set(EnableHostCrypto OFF CACHE BOOL "Route crypto to the host (web only; needs COOP/COEP + Worker)")
 
@@ -611,8 +615,17 @@ if(MSVC)
 else()
 
 	if(EMSCRIPTEN)
-		# wasm floats are IEEE 754 strict by spec; no arch flags needed (and the x86/arm
-		# -m flags below are invalid for the wasm target).
+
+		# wasm floats are IEEE 754 strict by spec, so nothing is needed for float behaviour, and the x86/arm
+		# -march flags below are invalid here.
+		# The math uses wasm_simd128.h directly through vec4*_wasm.inc.h (see SIMD_WASM in
+		# types/base/platform_types.h), so -msimd128 is the only flag needed. Emscripten does ship SSE
+		# compat headers in sysroot/include/compat, but they misparse under the -fms-extensions the C++
+		# TUs require, so that route is not taken and no -msse/-mfma flag belongs here.
+
+		if(EnableSIMD)
+			add_compile_options(-msimd128)    #Native SIMD128; no SSE shims, so no -msse/-mfma
+		endif()
 	elseif(ARM)
 		if(EnableSIMD)
 			add_compile_options(-march=armv8-a+simd+crypto+crc)
@@ -864,15 +877,29 @@ endif()
 
 if(EnableSIMD)
 	message("-- Enabling SIMD (-DEnableSIMD=ON)")
-	if(ARM)
+	if(EMSCRIPTEN)
+
+		# Two axes, not one. 'simd' picks the container crypto and hash backend, which stays scalar because
+		# wasm has no AES-NI, SHA or PCLMULQDQ equivalent; 'simdMath' picks the vector math sources, which
+		# do have a native wasm path in vec4*_wasm.inc.h. Everywhere else the two agree.
+		# -msimd128 changes codegen for every consumer, so it belongs with -m64 and -fwasm-exceptions in
+		# packages/conan/profiles/emscripten_wasm64.jinja rather than only here.
+
+		message("-- SIMD on wasm covers the vector math only (crypto and hash stay scalar)")
+		set(simd none)
+		set(simdMath wasm)
+	elseif(ARM)
 		set(simd neon)
+		set(simdMath neon)
 	else()
 		set(simd sse)
+		set(simdMath sse)
 	endif()
 	set(SIMD 1)
 else()
 	message("-- Disabling SIMD (-DEnableSIMD=OFF)")
 	set(simd none)
+	set(simdMath none)
 	set(SIMD 0)
 endif()
 

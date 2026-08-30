@@ -198,12 +198,22 @@ Without bindless, it should be guaranteed that at least the following are availa
 The sampler heap is 996 entries rather than a round 1024 because Metal caps the number of samplers
 reachable per stage from an argument buffer at 996 on Apple7 and Apple8 (M1/M2, A14 through A16); it only
 rises to 500,000 at Apple9 (M3, A17 Pro). A 1024 entry heap excluded every Apple GPU below M3 from
-Bindless, and because maxSamplerAllocationCount is a hard device requirement rather than a capability, it
-excluded them from running OxC3 at all. That applied both to a future native Metal backend and to Vulkan
-through MoltenVK today, since MoltenVK reports Metal's argument buffer sampler cap as its sampler limit.
+Bindless.
 
-996 costs nothing elsewhere. D3D12's shader visible sampler heap holds 2048 descriptors, and Vulkan
-devices that support Bindless report far more, so the heap was never near a limit on either. Samplers are
+It also excluded them from running OxC3 at all, but that is a placement choice rather than a consequence:
+maxSamplerAllocationCount is checked with the hard minimum spec limits, where a miss rejects the device,
+even though the value itself is derived from the bindless sampler heap. The bindful path needs only the
+baseline further down (16 per stage, 80 per set), and EGraphicsDeviceFlags_DisableBindless exists, so a
+device that cannot host the heap could still run bindfully. Moving that one requireLimit into the Bindless
+capability check would turn a rejection into a missing feature bit. That applies to a future native
+Metal backend and to Vulkan through MoltenVK alike, since MoltenVK reports Metal's argument buffer
+sampler cap as its sampler limit.
+
+996 costs nothing elsewhere. OxC3 itself refuses any heap above 2048 samplers
+(DescriptorHeapInfo validation in graphics/generic/descriptor_heap.c, matching D3D12's shader visible
+sampler heap limit), and maxSamplers is a U16, so 996 is well inside what can actually be created.
+The count reaches a real heap on both backends: the default bindless layout in device.c contributes it to
+heapInfo.maxSamplers, which becomes NumDescriptors on D3D12 and a VkDescriptorPoolSize on Vulkan. Samplers are
 also the one descriptor type with no packing consequence: EDescriptorTypeOffset_Sampler is 0 and samplers
 live in their own heap, so unlike the texture and buffer counts this value shifts no other descriptor's
 offset. ResourceId_mask is a shared 17 bit handle mask rather than a per array bound, so the array size

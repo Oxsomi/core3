@@ -92,7 +92,7 @@ class oxc3(ConanFile):
 		"debugShaderCompiler": False,
 
 		# Web only: routes SHA-256/AES-GCM to the host's crypto (needs COOP/COEP + a Worker).
-		# Off by default, a standalone shader compiler doesn't need it. See docs/web.md.
+		# Off by default, a standalone shader compiler doesn't need it.
 
 		"enableHostCrypto": False,
 

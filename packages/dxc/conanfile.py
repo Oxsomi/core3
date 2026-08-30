@@ -1,5 +1,4 @@
 from conan import ConanFile
-from conan.tools.build import cross_building
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 from conan.tools.build import cross_building
 from conan.tools.scm import Git
@@ -143,7 +142,7 @@ class dxc(ConanFile):
 		elif self.settings.os == "Emscripten":
 			# Skip config.guess (would report the build machine's triple).
 			# arch=wasm64 exists on conan >= 2.18; on older conan the profile
-			# uses arch=wasm and carries -sMEMORY64 in tools.build flags.
+			# uses arch=wasm and carries -m64 in tools.build flags.
 			wasm64 = "64" in str(self.settings.arch)
 			tc.variables["LLVM_INFERRED_HOST_TRIPLE"] = \
 				"wasm64-unknown-emscripten" if wasm64 else "wasm32-unknown-emscripten"
@@ -153,8 +152,8 @@ class dxc(ConanFile):
 			tc.variables["LLVM_ENABLE_THREADS"] = False
 			tc.variables["LLVM_ENABLE_PIC"] = False
 			tc.variables["LLVM_ENABLE_ZLIB"] = False
-			# NOTE: -fwasm-exceptions / -sMEMORY64 come from the profile
-			# (tools.build:cflags/cxxflags) so lib and consumers stay in sync.
+			# NOTE: -fwasm-exceptions and -m64 come from the profile
+			# (tools.build:cflags/cxxflags and exelinkflags) so lib and consumers stay in sync.
 
 		# TableGen runs during the build, so a cross build needs one built for the *build* machine.
 		# LLVM's answer is the NATIVE sub build, but it configures itself with default options

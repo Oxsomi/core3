@@ -22,12 +22,14 @@
 Same shape as build_android.py, minus the apk machinery: node has a real exec, so tests are an
 ordinary executable (OxC3_wtest.js + .wasm) with an exit code.
 
-Unlike android the shader compiler IS enabled: DXC cross compiles to wasm64 (packages/dxc), so the
-web target can compile HLSL in the browser/node. The host packager is still tool_required — the
-cross build's own OxC3_package is a .js the build machine can't find_program — which is why
+The shader compiler is on by default here, where android leaves it off. That is a default, not a
+capability: DXC cross compiles for both, but it more than doubles the build, and compiling HLSL in
+the browser is the point of this port. The host packager is still tool_required, because the cross
+build's own OxC3_package is a .js the build machine can't find_program, which is why
 conanfile.build_requirements() also fires on cross_building.
 
-Needs a local emsdk (env EMSDK, default ~/emsdk) and node on PATH (emsdk ships one).
+Needs a local emsdk (env EMSDK, default ~/emsdk); --run_tests uses the node the SDK ships and only
+falls back to PATH, because emsdk_env is what puts that node on PATH and a plain shell hasn't sourced it.
 Single-threaded wasm for now: no -pthread anywhere, Platform_getThreads() returns 1 and JobQueue
 runs inline (see include/types/container/job_queue.h). EH (-fwasm-exceptions) and -m64 are pinned
 in packages/conan/profiles/emscripten_wasm64.jinja and must match in every consumer link.
@@ -56,9 +58,10 @@ def ensureEmsdk():
 def webOptionArgs(tests, hostCrypto=False):
 	"""Options for the web target itself.
 
-	enableShaderCompiler=True: the point of the port. SIMD off: the SSE paths use SHA/AES/PCLMUL/
-	RDRND, which emscripten's SSE shim doesn't provide (CMake would coerce it off anyway; explicit
-	keeps the conan package id honest). No dynamic linking: wasm dlopen needs MAIN_MODULE.
+	enableShaderCompiler=True: the point of the port.
+	SIMD on: SIMD_WASM covers the vector math and leaves crypto and hash scalar, which CMake derives
+	from EnableSIMD; spelling it out keeps the conan package id honest.
+	No dynamic linking: wasm dlopen needs MAIN_MODULE.
 	"""
 
 	options = {
@@ -69,7 +72,11 @@ def webOptionArgs(tests, hostCrypto=False):
 		"dynamicLinkingGraphics": "False",
 		"dynamicLinkingShaderCompiler": "False",
 		"enableShaderCompiler": "True",
-		"enableSIMD": "False",
+		# SIMD_WASM: vector math on native SIMD128 (vec4*_wasm.inc.h), crypto and hash still scalar because
+		# wasm has no AES-NI or SHA equivalent.
+		# Emscripten's SSE shims are deliberately unused: they misparse under -fms-extensions, which
+		# OxC3's C++ TUs require.
+		"enableSIMD": "True",
 		"enableHostCrypto": "True" if hostCrypto else "False"
 	}
 
@@ -126,6 +133,28 @@ def doBuild(mode, doInstall, tests, cache, hostCrypto=False):
 			f"conan export-pkg . -of {outputFolder} {options} -s build_type={mode} {profileArgs} {shaderArgs}"
 		)
 
+def emsdkNode():
+	"""The node the emsdk ships, falling back to PATH.
+
+	emsdk installs node under $EMSDK/node/<version>/bin and only puts it on PATH through emsdk_env, which a
+	plain shell (and CI) hasn't sourced. Resolving it here means --run_tests works from a bare checkout with
+	nothing but EMSDK set, instead of failing with command-not-found that reads like a broken test bundle.
+	"""
+
+	emsdk = os.environ.get("EMSDK")
+
+	if emsdk:
+
+		nodeRoot = os.path.join(emsdk, "node")
+
+		if os.path.isdir(nodeRoot):
+			for entry in sorted(os.listdir(nodeRoot), reverse=True):
+				candidate = os.path.join(nodeRoot, entry, "bin", "node")
+				if os.path.isfile(candidate):
+					return candidate
+
+	return "node"
+
 def runTests(mode, suite=None):
 	"""Run the bundle under node directly (what ctest would do), streaming output; exit code is the result."""
 
@@ -137,7 +166,7 @@ def runTests(mode, suite=None):
 		sys.exit(1)
 
 	cmd = (
-		f"node \"{bundle}\" "
+		f"\"{emsdkNode()}\" \"{bundle}\" "
 		f"-packages \"{os.path.join(common.ROOT, 'build', mode, 'web')}\""
 	)
 

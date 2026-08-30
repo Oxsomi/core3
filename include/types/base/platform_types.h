@@ -45,6 +45,13 @@ typedef U32 EPlatform;
 #define SIMD_SSE 1
 #define SIMD_NEON 2
 
+//wasm SIMD128, through the native wasm_simd128.h intrinsics in types/math/vec4*_wasm.inc.h.
+//Emscripten's SSE shims are not used: they misparse under -fms-extensions, which the C++ TUs require.
+//Separate from SIMD_SSE because it covers the vector math ONLY: there is no wmmintrin.h (AES-NI) or
+// shaintrin.h shim, so the crypto and hash backends stay on the scalar path and route to the host instead
+// where they can (see types/container/host_crypto.h).
+#define SIMD_WASM 3
+
 #define ARCH_NONE 0
 #define ARCH_X86_64 1
 #define ARCH_ARM64 2
@@ -96,8 +103,10 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 	#define _SIMD SIMD_NEON
 #elif _ARCH == ARCH_X86_64
 	#define _SIMD SIMD_SSE
+#elif _ARCH == ARCH_WASM64
+	#define _SIMD SIMD_WASM
 #else
-	#define _SIMD SIMD_NONE //wasm: scalar fallback (no full SSE/NEON feature set)
+	#define _SIMD SIMD_NONE
 #endif
 
 //Whether the transcendental _mm_*_ps intrinsics (pow, log, exp, sin, ...) and _mm_div_epi32 resolve.

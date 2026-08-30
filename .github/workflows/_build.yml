@@ -316,9 +316,9 @@ jobs:
           key: ${{ inputs.os }}-${{ inputs.runner }}-${{ inputs.cache_name }}-${{ hashFiles('packages/**/conanfile.py', 'packages/**/conandata.yml', 'packages/conan/profiles/**') }}
           restore-keys: ${{ inputs.os }}-${{ inputs.runner }}-${{ inputs.cache_name }}-
 
-      # emsdk pinned rather than 'latest': docs/web.md records an LLVM wasm64 -O3 miscompile against a
-      # specific emsdk, and the workaround is validated per version, so a silent toolchain bump would
-      # invalidate it. Bump this and that doc together.
+      # emsdk pinned rather than 'latest': docs/bug_wasm64_o3_constfold.md records an LLVM wasm64 -O3
+      # miscompile against a specific emsdk, and the workaround is validated per version, so a silent
+      # toolchain bump would invalidate it. Bump this and that doc together.
       # The SDK ships its own node, which is what runs the test bundle; build_web.py finds it through $EMSDK.
       - name: Install emsdk
         if: inputs.os == 'web'
@@ -333,8 +333,9 @@ jobs:
       # ── Build: Web (emscripten, wasm64) ────────────────────────────────────
       # Same shape as android: the cross build can't run its own packager (OxC3_package comes out as a .js
       # the build machine can't exec), so a host oxc3 is built once up front and shared.
-      # Unlike android, node gives a real exit code, so --run_tests is genuine runtime validation rather
-      # than a build-only check.
+      # node exec's the bundle directly and returns an exit code, so every web job is runtime validation.
+      # Android needs a separate emulator job for that (android_emulator.yml), because an apk can't be
+      # exec'd from the build; its other jobs only prove it compiles.
       - name: Build host OxC3 package (tooling)
         if: inputs.os == 'web'
         run: ${{ inputs.python_cmd }} build_web.py --host_package_only
