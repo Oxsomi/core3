@@ -49,6 +49,8 @@
 		#else
 			#define CPU_PAUSE() __asm__ __volatile__("yield")
 		#endif
+	#elif _ARCH == ARCH_WASM64
+		#define CPU_PAUSE() ((void)0) //wasm has no pause hint; spinning is rare (single-threaded default)
 	#else
 		#define CPU_PAUSE() __builtin_ia32_pause()
 	#endif

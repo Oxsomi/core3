@@ -23,7 +23,23 @@
 #include "types/base/platform_types.h"
 #include "types/base/error.h"
 
-#if _PLATFORM_TYPE != PLATFORM_ANDROID
+#if _PLATFORM_TYPE == PLATFORM_WEB
+
+	//emscripten's sysroot has no execinfo.h; wasm frames aren't addressable pointers anyway
+	// (emscripten_get_callstack returns text).
+	//An empty capture keeps Error_* working; printing a trace simply shows nothing on web.
+
+	void Error_captureStackTrace(void **stack, U8 stackSize, U8 skipTmp) {
+
+		(void) skipTmp;
+
+		if(!stack || !stackSize)
+			return;
+
+		stack[0] = NULL;
+	}
+
+#elif _PLATFORM_TYPE != PLATFORM_ANDROID
 
 	#include <execinfo.h>
 

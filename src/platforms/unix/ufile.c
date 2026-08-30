@@ -560,7 +560,10 @@ clean:
 
 //Virtual files
 
-#if _PLATFORM_TYPE != PLATFORM_ANDROID
+//Android and web provide their own (afile.c / webfile.c): this variant reads section bytes that
+//Platform_initUnixExt mapped from the executable itself, which neither platform can do.
+
+#if _PLATFORM_TYPE != PLATFORM_ANDROID && _PLATFORM_TYPE != PLATFORM_WEB
 
 	Bool File_loadVirtualInternal1(
 		FileLoadVirtual *userData,

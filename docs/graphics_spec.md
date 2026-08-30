@@ -115,7 +115,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxFramebufferWidth, maxFramebufferHeight, maxImageDimension1D,  maxImageDimension2D, maxImageDimensionCube, maxViewportDimensions[i] of 16Ki or higher.
 - maxFramebufferLayers, maxImageDimension3D, maxImageArrayLayers of 256 or higher.
 - maxPushConstantsSize of 128 or higher.
-- maxSamplerAllocationCount of 1024 or higher.
+- maxSamplerAllocationCount of 996 or higher (see "Why 996 samplers" below).
 - maxSamplerAnisotropy of 16 or higher.
 - maxStorageBufferRange of 128MiB or higher.
 - maxSamplerLodBias of 4 or higher.
@@ -165,13 +165,13 @@ Bindless is supported when the GPU has the following capabilities:
   - on: shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
 - maxDescriptorSetUpdateAfterBindInputAttachments 8
 - maxDescriptorSetUpdateAfterBindSampledImages 1000000
-- maxDescriptorSetUpdateAfterBindSamplers 1024
+- maxDescriptorSetUpdateAfterBindSamplers 996
 - maxDescriptorSetUpdateAfterBindStorageBuffers 1000000
 - maxDescriptorSetUpdateAfterBindStorageImages 1000000
 - maxDescriptorSetUpdateAfterBindUniformBuffers 90
 - maxPerStageDescriptorUpdateAfterBindInputAttachments 8
 - maxPerStageDescriptorUpdateAfterBindSampledImages 1000000
-- maxPerStageDescriptorUpdateAfterBindSamplers 1024
+- maxPerStageDescriptorUpdateAfterBindSamplers 996
 - maxPerStageDescriptorUpdateAfterBindStorageBuffers 1000000
 - maxPerStageDescriptorUpdateAfterBindStorageImages 1000000
 - maxPerStageDescriptorUpdateAfterBindUniformBuffers 15
@@ -192,6 +192,29 @@ Without bindless, it should be guaranteed that at least the following are availa
 - maxDescriptorSetSampledImages of 96 or higher.
 - maxDescriptorSetStorageImages of 24 or higher.
 - 16 acceleration structures if RT is supported.
+
+##### Why 996 samplers
+
+The sampler heap is 996 entries rather than a round 1024 because Metal caps the number of samplers
+reachable per stage from an argument buffer at 996 on Apple7 and Apple8 (M1/M2, A14 through A16); it only
+rises to 500,000 at Apple9 (M3, A17 Pro). A 1024 entry heap excluded every Apple GPU below M3 from
+Bindless, and because maxSamplerAllocationCount is a hard device requirement rather than a capability, it
+excluded them from running OxC3 at all. That applied both to a future native Metal backend and to Vulkan
+through MoltenVK today, since MoltenVK reports Metal's argument buffer sampler cap as its sampler limit.
+
+996 costs nothing elsewhere. D3D12's shader visible sampler heap holds 2048 descriptors, and Vulkan
+devices that support Bindless report far more, so the heap was never near a limit on either. Samplers are
+also the one descriptor type with no packing consequence: EDescriptorTypeOffset_Sampler is 0 and samplers
+live in their own heap, so unlike the texture and buffer counts this value shifts no other descriptor's
+offset. ResourceId_mask is a shared 17 bit handle mask rather than a per array bound, so the array size
+does not have to be a power of two.
+
+Two values have to stay in sync: EDescriptorTypeCount_Sampler in src/graphics/generic/device.c and the
+_samplers array in include/shader_compiler/shaders/resources.hlsli.
+
+This covers the update after bind limits only. maxPerStageDescriptorSamplers and maxDescriptorSetSamplers
+are separate Vulkan limits and are still required at 2048; whether MoltenVK reports those above 996 on
+Apple7/Apple8 is unverified, and is one of the things a macOS runtime test would answer.
 
 #### Multi draw indirect count
 

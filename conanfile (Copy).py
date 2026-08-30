@@ -1,11 +1,9 @@
 from conan import ConanFile
 from conan.tools.build import cross_building
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
-from conan.tools.build import cross_building
 from conan.tools.scm import Git
-from conan.tools.files import collect_libs, copy, rename, replace_in_file
+from conan.tools.files import collect_libs, copy, rename
 import os
-import platform
 import subprocess
 
 required_conan_version = ">=2.0"
@@ -13,7 +11,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2026.08.07.03"
+	version = "2026.08.06.01"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -24,28 +22,6 @@ class dxc(ConanFile):
 
 	# Binary configuration
 	settings = "os", "compiler", "build_type", "arch"
-	options = { "enableASAN": [ True, False ], "enableUBSAN": [ True, False ] }
-	default_options = { "enableASAN": False, "enableUBSAN": False }
-
-	python_requires = "oxc3_sanitizers/1.0"
-
-	# Sanitizer wiring lives in the shared oxc3_sanitizers python_requires so dxc, spirv_reflect and
-	# openal_soft can't drift apart. Only the disabled UBSan checks differ per dependency:
-	#  vptr             needs RTTI across the whole program, which the prebuilt setup lacks.
-	#  enum             DXC's reflection uses 0xFFFFFFFF as an "unknown" _D3D_SHADER_VARIABLE_TYPE
-	#                   sentinel, a deliberate out-of-range enum value.
-	#  nonnull-attribute  hlsl::Append memcpy's from an empty vector's data(), i.e. memcpy(dst, NULL, 0).
-	#                   Copying zero bytes is harmless, but memcpy declares its source nonnull, so it is
-	#                   UB by the letter. (Same idiom we fixed on our own side in stream.c.)
-	# These abort the build under halt_on_error, so a noisy check costs the whole run's ASan coverage,
-	# which is the coverage actually worth having on DXC.
-
-	def _sanitizerFlags(self):
-		return self.python_requires["oxc3_sanitizers"].module.sanitizerFlags(self, "vptr,enum,nonnull-attribute")
-
-	def _sanitizerLinkFlags(self):
-		return self.python_requires["oxc3_sanitizers"].module.sanitizerLinkFlags(self)
-
 
 	exports_sources = [ "include/dxc/*", "external/SPIRV-Tools/include/*", "external/DirectX-Headers/include/*" ]
 
@@ -83,6 +59,59 @@ class dxc(ConanFile):
 		except ValueError:
 			return None
 
+	# Cross builds (Emscripten, Android, ...) need native llvm-tblgen/clang-tblgen
+	# from this same source tree. Without this, CMAKE_CROSSCOMPILING forces
+	# LLVM_USE_HOST_TOOLS on and CrossCompile.cmake auto-configures a nested
+	# NATIVE sub-build with DEFAULT options — default LLVM_ENABLE_EH=OFF, which
+	# cannot compile this fork's LLVMSupport (it throws). Instead we build the
+	# two tblgen binaries once into <build_folder>/native-tblgen with the host
+	# compiler and correct flags (POSIX build machines; elsewhere prebuild them
+	# manually and point DXC_NATIVE_TBLGEN_DIR at a dir containing both).
+
+	def _native_tblgen_dir(self):
+		override = os.environ.get("DXC_NATIVE_TBLGEN_DIR")
+		return override if override else os.path.join(self.build_folder, "native-tblgen", "bin")
+
+	# Executable suffix on the BUILD machine (tblgen runs there, not on host).
+	def _native_exe_suffix(self):
+		return ".exe" if self.settings_build.os == "Windows" else ""
+
+	def _build_native_tblgen(self):
+
+		if os.environ.get("DXC_NATIVE_TBLGEN_DIR"):
+			return
+
+		if self.settings_build.os == "Windows":
+			# The bootstrap below is POSIX (env -u scrub, single-config Ninja).
+			# On a Windows build machine: build llvm-tblgen/clang-tblgen once
+			# with MSVC and point DXC_NATIVE_TBLGEN_DIR at their bin dir.
+			raise Exception(
+				"dxc cross build on a Windows build machine: prebuild native "
+				"llvm-tblgen/clang-tblgen and set DXC_NATIVE_TBLGEN_DIR")
+
+		native = os.path.join(self.build_folder, "native-tblgen")
+		if os.path.isfile(os.path.join(native, "bin", "llvm-tblgen")):
+			return
+
+		src = self.source_folder
+		if os.path.isdir(os.path.join(src, "DirectXShaderCompiler")):
+			src = os.path.join(src, "DirectXShaderCompiler")
+
+		flags = (
+			"-DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_EH=ON -DLLVM_ENABLE_RTTI=ON "
+			"-DLLVM_TARGETS_TO_BUILD=None -DLLVM_DEFAULT_TARGET_TRIPLE=dxil-ms-dx "
+			"-DLLVM_INCLUDE_TESTS=OFF -DHLSL_INCLUDE_TESTS=OFF -DCLANG_INCLUDE_TESTS=OFF "
+			"-DSPIRV_BUILD_TESTS=OFF -DLLVM_INCLUDE_DOCS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF "
+			"-DCLANG_BUILD_EXAMPLES=OFF -DHLSL_BUILD_DXILCONV=OFF "
+			"-DCLANG_ENABLE_STATIC_ANALYZER=OFF -DCLANG_ENABLE_ARCMT=OFF "
+			"-DLLVM_ENABLE_TERMINFO=OFF -DHLSL_OPTIONAL_PROJS_IN_DEFAULT=OFF"
+		)
+
+		# Scrub the emscripten cross env injected by the profile: this is a plain host build.
+		scrub = "env -u CC -u CXX -u AR -u RANLIB -u NM -u STRIP -u CFLAGS -u CXXFLAGS -u LDFLAGS "
+		self.run(f'{scrub}cmake -S "{src}" -B "{native}" -G Ninja {flags}')
+		self.run(f'{scrub}cmake --build "{native}" --target llvm-tblgen clang-tblgen')
+
 	def generate(self):
 
 		deps = CMakeDeps(self)
@@ -116,18 +145,7 @@ class dxc(ConanFile):
 		tc.variables["ENABLE_SPIRV_CODEGEN"] = True
 		tc.variables["CMAKE_EXPORT_COMPILE_COMMANDS"] = True
 		tc.variables["DXC_USE_LIT"] = True
-		# On for Debug and for any sanitized build; off for the Release that ships.
-		# In a shipping Release an assert firing just aborts the app rather than helping anyone, and it also
-		# drops the android test .so from 547 to 490 MB (~11%, not the bulk: statically linked
-		# LLVM/clang/SPIRV-Tools plus an unstripped symbol table is what actually makes it that size).
-		# A sanitizer run is the opposite situation: we WANT DXC's own asserts firing next to ASan/UBSan so a
-		# bug in how it processes our shaders is caught at its source. Tying it to the sanitizer flags rather
-		# than to build_type=Debug gets those asserts on an optimized DXC, avoiding the multi-GB Debug
-		# static-LLVM build that would risk the runner's disk.
-
-		tc.variables["LLVM_ENABLE_ASSERTIONS"] = (
-			self.settings.build_type == "Debug" or self.options.enableASAN or self.options.enableUBSAN
-		)
+		tc.variables["LLVM_ENABLE_ASSERTIONS"] = True
 		tc.variables["ENABLE_DXC_STATIC_LINKING"] = True
 
 		tc.variables["LLVM_LIT_ARGS"] = "-v"
@@ -156,101 +174,35 @@ class dxc(ConanFile):
 			# NOTE: -fwasm-exceptions / -sMEMORY64 come from the profile
 			# (tools.build:cflags/cxxflags) so lib and consumers stay in sync.
 
-		# TableGen runs during the build, so a cross build needs one built for the *build* machine.
-		# LLVM's answer is the NATIVE sub build, but it configures itself with default options
-		# (LLVM_ENABLE_EH=OFF) and then can't compile this fork's LLVMSupport, and it inherits
-		# CMAKE_GENERATOR from us, which for a cross build is a generator pointed at a compiler that
-		# isn't the build machine's.
-		# Upstream 37ccb7a9 made -DLLVM_USE_HOST_TOOLS=OFF stick for exactly this case, so hand it the
-		# ones a host build of this same recipe already produced and packaged.
-		#
-		# Keyed on the conf rather than on a target, because nothing here is specific to one: android
-		# and wasm need it for the same reason, and so would any future cross target.
-		# Say nothing without it and the old NATIVE path runs, which is the previous behaviour rather
-		# than a new failure.
-
-		tablegenDir = self.conf.get("user.dxc:tablegen_dir", check_type=str)
-
-		if tablegenDir:
-
-			# The build machine runs these, so the suffix follows it rather than settings.os.
-
-			exe = ".exe" if platform.system() == "Windows" else ""
-
+		if cross_building(self):
+			# Cross tablegen for ANY cross target: use native host tools
+			# (built in build()) instead of the NATIVE sub-build, which
+			# configures with default options (LLVM_ENABLE_EH=OFF) and cannot
+			# compile this fork's LLVMSupport.
+			tblgen = self._native_tblgen_dir().replace("\\", "/")
+			exe = self._native_exe_suffix()
+			tc.variables["LLVM_TABLEGEN"] = f"{tblgen}/llvm-tblgen{exe}"
+			tc.variables["CLANG_TABLEGEN"] = f"{tblgen}/clang-tblgen{exe}"
 			tc.variables["LLVM_USE_HOST_TOOLS"] = False
-			tc.variables["LLVM_TABLEGEN"] = os.path.join(tablegenDir, "llvm-tblgen" + exe).replace("\\", "/")
-			tc.variables["CLANG_TABLEGEN"] = os.path.join(tablegenDir, "clang-tblgen" + exe).replace("\\", "/")
-
-		elif cross_building(self):
-
-			# Any target that isn't the build machine lands here: android, ios, wasm, or a plain x64 -> arm64 build.
-			# The NATIVE fallback is going to fail, and it fails deep inside a sub configure where the reason
-			# isn't visible, so name it here instead.
-
-			self.output.warning(
-				"Cross building without user.dxc:tablegen_dir, so LLVM's NATIVE sub build has to "
-				"produce TableGen. That configures itself with LLVM_ENABLE_EH=OFF and can't compile "
-				"this fork. Pass the bin/ of a host build of this recipe instead "
-				"(build_common.hostTablegenDir gives you the path)."
-			)
 
 		tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
 
 		tc.variables["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreaded"
 
-		# GCC 14.1 and 14.2 miscompile the component type remap in CGMSHLSLRuntime::SetUAVSRV at -O2/-O3;
-		# they emit the bt/cmov select with inverted polarity, so every typed SRV/UAV ends up with ComponentType U32.
-		# Texture2D<float4> becomes Texture2D<4xU32>, which makes every sample_* fail DXIL validation below SM 6.7
-		# ("sample_* instructions require resource to be declared to return UNORM, SNORM or FLOAT")
-		# and makes reflection report uint for float textures.
-		# -fno-if-conversion (or -fno-tree-vrp) stops GCC forming that select.
+		# GCC 14.1 and 14.2 miscompile the component type remap in CGMSHLSLRuntime::SetUAVSRV at
+		# -O2/-O3; they emit the bt/cmov select with inverted polarity, so every typed SRV/UAV ends
+		# up with ComponentType U32. Texture2D<float4> becomes Texture2D<4xU32>, which makes every
+		# sample_* fail DXIL validation below SM 6.7 ("sample_* instructions require resource to be
+		# declared to return UNORM, SNORM or FLOAT") and makes reflection report uint for float
+		# textures. -fno-if-conversion (or -fno-tree-vrp) stops GCC forming that select.
 		# Fixed in GCC 14.3; 12.x, 13.x and 15+ are unaffected, as are -O0/-O1/-Os and clang
 		# (which is why Microsoft's own clang-built DXC binaries are fine).
-		# This is not the GCC 13 -funswitch-loops miscompile (PR109934 / DXC #7364);
-		# that one is already handled inside DXC's own HandleLLVMOptions.cmake, and its guard stops at < 14.0.
+		# This is not the GCC 13 -funswitch-loops miscompile (PR109934 / DXC #7364); that one is
+		# already handled inside DXC's own HandleLLVMOptions.cmake, and its guard stops at < 14.0.
 
 		if self.settings.compiler == "gcc" and self._real_compiler_version() in [ (14, 1), (14, 2) ]:
 			tc.extra_cflags.append("-fno-if-conversion")
 			tc.extra_cxxflags.append("-fno-if-conversion")
-
-		# GCC 14 tightened -Warray-bounds and then reports a false positive inside libstdc++'s own
-		# std::vector reallocation, blamed on SPIRV-Tools' BasicBlock array:
-		# "forming offset 8 is out of the bounds [0, 8] of object with type BasicBlock* const [1]".
-		# The copy is in range, GCC just loses the object size through the inlined memmove.
-		# Demote only that one, the same way the clang-cl case below does,
-		# so a real out of bounds anywhere else still stops the build.
-
-		gccVersion = self._real_compiler_version()
-
-		if self.settings.compiler == "gcc" and gccVersion and gccVersion >= (14, 0):
-			tc.extra_cflags.append("-Wno-array-bounds")
-			tc.extra_cxxflags.append("-Wno-array-bounds")
-
-		# DXC builds its own sources and its vendored SPIRV-Tools with -Werror,
-		# and those have only ever been compiled with MSVC on Windows.
-		# clang-cl warns where MSVC doesn't, so the build dies on third party code we don't own:
-		# -Wmissing-field-initializers in SPIRV-Tools' binary.cpp/text.cpp and -Wunused-private-field on a padding member.
-		# Demote just those two rather than dropping -Werror,
-		# so a real diagnostic in the rest of the tree still stops the build.
-
-		if self.settings.compiler == "clang" and self.settings.os == "Windows":
-			for flag in ("-Wno-missing-field-initializers", "-Wno-unused-private-field"):
-				tc.extra_cflags.append(flag)
-				tc.extra_cxxflags.append(flag)
-
-		for flag in self._sanitizerLinkFlags():
-			tc.extra_exelinkflags.append(flag)
-			tc.extra_sharedlinkflags.append(flag)
-
-		for flag in self._sanitizerFlags():
-			tc.extra_cflags.append(flag)
-			tc.extra_cxxflags.append(flag)
-
-		# ASan intercepts operator new, and DXC replaces it (dxcmem.cpp), which lld-link rejects outright.
-		# Upstream added this option for exactly that case.
-
-		if self.options.enableASAN:
-			tc.variables["DXC_DISABLE_ALLOCATOR_OVERRIDES"] = True
 
 		tc.generate()
 
@@ -261,40 +213,10 @@ class dxc(ConanFile):
 		git.checkout(self.conan_data["sources"][self.version]["checkout"])
 		git.run("submodule update --init --recursive")
 
-	def _relaxAssertOnlyWarnings(self):
-		"""Let dxcreflection compile LLVM headers with assertions off.
-
-		A lot of LLVM only reads a variable inside an assert, so NDEBUG turns those into
-		-Wunused-parameter / -Wunused-but-set-variable (WinAdapter.h's ScopedLocale CodePage, DenseMap.h's
-		NumEntries, and more behind them). dxcreflection and dxcreflectioncontainer compile those headers
-		with -Wall -Wextra -Werror, which only ever held up because assertions were on.
-
-		Suppressed on the targets rather than through the toolchain: their options are PRIVATE, so they
-		land after anything CMakeToolchain sets and the later -Wextra would just re-enable it. Upstream
-		already keeps a -Wno-unused-template here for the same reason, so this rides along with it.
-		"""
-
-		extra = "-Wno-unused-template -Wno-unused-parameter -Wno-unused-but-set-variable"
-
-		for tool in ("dxcreflection", "dxcreflectioncontainer"):
-
-			path = os.path.join(
-				self.source_folder, "DirectXShaderCompiler/tools/clang/tools", tool, "CMakeLists.txt"
-			)
-
-			if not os.path.isfile(path):
-				continue
-
-			replace_in_file(
-				self, path,
-				f"target_compile_options({tool} PRIVATE -Wno-unused-template)",
-				f"target_compile_options({tool} PRIVATE {extra})",
-				strict=False
-			)
-
 	def build(self):
 
-		self._relaxAssertOnlyWarnings()
+		if cross_building(self):
+			self._build_native_tblgen()
 
 		cmake = CMake(self)
 
@@ -370,21 +292,6 @@ class dxc(ConanFile):
 			wsl_stubs_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include/wsl/stubs")
 			copy(self, "*.h", wsl_stubs_src, include_dir)
 
-		# Host builds carry the tablegens so a cross build of this same recipe can borrow them rather
-		# than running LLVM's NATIVE sub build; see the LLVM_USE_HOST_TOOLS note in generate().
-		# They're build machine executables, so they're only useful out of a package built for the
-		# machine doing the building.
-
-		bin_dst = os.path.join(self.package_folder, "bin")
-
-		for config in ("", "Debug", "Release", "MinSizeRel", "RelWithDebInfo"):
-
-			tablegen_src = os.path.join(self.build_folder, config, "bin") if config else os.path.join(self.build_folder, "bin")
-
-			for name in ("llvm-tblgen", "clang-tblgen"):
-				copy(self, name, tablegen_src, bin_dst)
-				copy(self, name + ".exe", tablegen_src, bin_dst)
-
 		lib_src = os.path.join(self.build_folder, "lib")
 		lib_dst = os.path.join(self.package_folder, "lib")
 
@@ -398,23 +305,12 @@ class dxc(ConanFile):
 			# Copy libs
 
 			for config in ["Debug", "Release", "MinSizeRel", "RelWithDebInfo"]:
-
 				lib_cfg_src = os.path.join(self.build_folder, f"lib/{config}")
 				alt_lib_cfg_src = os.path.join(self.build_folder, f"{config}/lib")
 				copy(self, "*.lib", lib_cfg_src, lib_dst)
 				copy(self, "*.lib", alt_lib_cfg_src, lib_dst)
-
-				# Only the configs that exist to be debugged keep their pdbs.
-				# They are 310 of this package's 1085 MB, and with 16 cache groups on a 10 GB repo cap that
-				# difference is the margin between caches surviving and being evicted between pushes.
-				# Release and MinSizeRel are dropped because nothing steps through an optimized DXC with no
-				# debug info asked for; RelWithDebInfo keeps them, since carrying debug info is its entire point.
-				# A missing pdb costs LNK4099, a warning, since /WX is compile-time only (see CMakeLists.txt).
-
-				if config in ("Debug", "RelWithDebInfo"):
-					copy(self, "*.pdb", lib_cfg_src, lib_dst)
-					copy(self, "*.pdb", alt_lib_cfg_src, lib_dst)
-
+				copy(self, "*.pdb", lib_cfg_src, lib_dst)
+				copy(self, "*.pdb", alt_lib_cfg_src, lib_dst)
 				copy(self, "*.exp", lib_cfg_src, lib_dst)
 				copy(self, "*.exp", alt_lib_cfg_src, lib_dst)
 
@@ -433,8 +329,7 @@ class dxc(ConanFile):
 
 		self.cpp_info.includedirs = [ "include", "include/spirv-tools" ]
 
-		# Important note.
-		# This is built by using the cmake dependency graph
+		# Important note. This is built by using the cmake dependency graph
 		# We have to order from most dependent to least dependent
 		# Since apparently only MSVC is ok with linking in an "invalid" order
 

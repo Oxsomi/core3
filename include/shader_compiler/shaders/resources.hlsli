@@ -43,7 +43,7 @@ static const U32 U32_MAX = 0xFFFFFFFFu;
 	#define _vkBinding(a, b)
 #endif
 
-_binding( 0, 0, s0, 		SamplerState _samplers[1024]);
+_binding( 0, 0, s0, 		SamplerState _samplers[996]);
 
 _binding( 0, 1, t0, 		Texture2D _textures2D[131072]);
 _binding( 1, 1, t131072, 	TextureCube _textureCubes[32768]);

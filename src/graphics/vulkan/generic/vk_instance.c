@@ -1224,7 +1224,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		requireLimit(maxImageDimension3D, 256);
 		requireLimit(maxImageArrayLayers, 256);
 		requireLimit(maxPushConstantsSize, 128);
-		requireLimit(maxSamplerAllocationCount, 1024);
+		requireLimit(maxSamplerAllocationCount, 996);
 		requireLimitF(maxSamplerAnisotropy, 16);
 		requireLimit(maxStorageBufferRange, 128 * MEGA);
 		requireLimitF(maxSamplerLodBias, 4);
@@ -1772,13 +1772,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			optExtensions[EOptExtensions_Bindless] &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindInputAttachments >= 8 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindSampledImages >= 1000000 &&
-			bindlessProp.maxDescriptorSetUpdateAfterBindSamplers >= 1024 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindSamplers >= 996 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindStorageBuffers >= 1000000 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindStorageImages >= 1000000 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindUniformBuffers >= 90 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindInputAttachments >= 8 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindSampledImages >= 1000000 &&
-			bindlessProp.maxPerStageDescriptorUpdateAfterBindSamplers >= 1024 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindSamplers >= 996 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageBuffers >= 1000000 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageImages >= 1000000 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindUniformBuffers >= 15 &&

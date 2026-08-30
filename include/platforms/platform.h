@@ -164,6 +164,16 @@ impl void *Platform_getDataImpl(void *ptr);
 	#else
 		#define Platform_return(x) return
 	#endif
+#elif _PLATFORM_TYPE == PLATFORM_WEB && defined(_OXC3_TEST_BUNDLED)
+
+	//Bundled web suites have the (void *state) signature (see OXC3_TEST_ENTRY in types/test/test.h),
+	//so argc/argv aren't in scope, same shape as the android bundle above. state is NULL on web.
+
+	#define Platform_defineEntrypoint() int main(int argc, const char *argv[])
+	#define Platform_getData() (state)
+	#define Platform_argc (0)
+	#define Platform_argv (NULL)
+	#define Platform_return(...) return __VA_ARGS__
 #else
 	#define Platform_defineEntrypoint() int main(int argc, const char *argv[])
 	#define Platform_getData() Platform_getDataImpl(NULL)

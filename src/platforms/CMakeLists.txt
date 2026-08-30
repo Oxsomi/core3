@@ -60,6 +60,8 @@ elseif(APPLE)
 	target_link_libraries(OxC3_platforms PUBLIC "-framework CoreFoundation" "-framework ApplicationServices" "-framework AppKit")
 elseif(ANDROID)
 	target_include_directories(OxC3_platforms PUBLIC "${ANDROID_NDK}/sources/android/native_app_glue")
+elseif(EMSCRIPTEN)
+	# No windowing/system deps: MEMFS/NODERAWFS for files, browser/node owns the loop.
 elseif(UNIX AND NOT APPLE)
 	find_package(xdg_shell REQUIRED)
 	find_package(xdg_decoration REQUIRED)

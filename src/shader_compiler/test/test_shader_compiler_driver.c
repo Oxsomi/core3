@@ -82,8 +82,19 @@ void Test_shaderCompilerDriver(Test *t) {
 	//--- Same batch, multi-threaded: the JobGroup fan-out must be thread-safe AND produce byte-identical
 	//--- output regardless of thread count (deterministic compile). ---
 
+	//web can't spawn threads (no -pthread yet): a second single-threaded run still checks that
+	//repeated compiles are byte-identical, which is the property consumers rely on.
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB
+		const U32 driverTestThreads = 1;
+	#else
+		const U32 driverTestThreads = 4;
+	#endif
+
 	ListBuffer multi = (ListBuffer) { 0 };
-	Bool okMulti = compileInlineShaders(alloc, shaders, n, ESHBinaryType_SPIRV, 4, "driver_batch", true, &multi, &err);
+	Bool okMulti = compileInlineShaders(
+		alloc, shaders, n, ESHBinaryType_SPIRV, driverTestThreads, "driver_batch", true, &multi, &err
+	);
 
 	Bool deterministic = okMulti && multi.length == single.length;
 

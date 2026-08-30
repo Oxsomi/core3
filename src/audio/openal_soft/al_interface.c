@@ -82,7 +82,15 @@ Bool AudioInterface_getDeviceInfos(
 
 	ListCharString strings = (ListCharString) { 0 };
 
-	ALC_PROCESS_ERROR(NULL, extensionsStr = alcGetString(NULL, ALC_EXTENSIONS));
+	//No backend at all (emscripten under node has no Web Audio, headless CI has no sound server):
+	//report an empty device list rather than an error, callers already handle "no devices".
+
+	extensionsStr = alcGetString(NULL, ALC_EXTENSIONS);
+
+	if(!extensionsStr) {
+		alcGetError(NULL); //Clear ALC_INVALID_DEVICE
+		goto clean;
+	}
 
 	CharString extensions = CharString_createRefCStrConst(extensionsStr);
 

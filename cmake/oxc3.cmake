@@ -109,7 +109,10 @@ function(apply_dependencies target)
 		# Android has APKs which are just like zip files, so can be easily read (though the NDK can't access subfolders easily)
 		# iOS has IPA which is the same idea as APK.
 		# OS X asks the linker for the section with -sectcreate, so it needs no external tool at all
-		# web/emscripten has a virtual filesystem.
+		# web/emscripten has a virtual filesystem, so nothing is embedded into the module at all.
+		# The android model applies instead: packages/<target>/<name>.oiCA is read at runtime.
+		# node reaches it through NODERAWFS; a browser build would have to populate MEMFS itself first,
+		# which no target does yet (see src/platforms/web and docs/web.md).
 		
 		if(WIN32)
 			get_property(res2 TARGET ${target} PROPERTY RESOURCE_LIST_RC)
@@ -132,7 +135,7 @@ function(apply_dependencies target)
 
 			set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS "${file}")
 
-		elseif(UNIX AND NOT ANDROID)
+		elseif(UNIX AND NOT ANDROID AND NOT EMSCRIPTEN)
 			list(APPEND _objcopySections --add-section "packages/${RELATIVE_PATH}=${file}")
 		endif()
 
@@ -243,16 +246,20 @@ macro(add_virtual_files)
 	# OxC3_package; Full process to package a file (including shader compilation, not graphics).
 	# OxC3; Full executable with all functionality.
 	
+	# When cross compiling, an in-build packager target can't run on the build machine
+	# (the wasm build DOES build OxC3_package, but as a .js/.wasm), so prefer the host
+	# tool from tool_requires (on PATH); see conanfile.build_requirements().
+
 	if(_ARGS_FORCE_PACKAGER)
-		if(TARGET OxC3_package)
+		if(TARGET OxC3_package AND NOT CMAKE_CROSSCOMPILING)
 			set(OXC3_PACKAGE OxC3_package)
-		elseif(TARGET OxC3_package_simple)
+		elseif(TARGET OxC3_package_simple AND NOT CMAKE_CROSSCOMPILING)
 			set(OXC3_PACKAGE OxC3_package_simple)
 		else()
 			find_program(OXC3_PACKAGE OxC3_package REQUIRED)
 		endif()
 	else()
-		if(NOT TARGET OxC3)
+		if(NOT TARGET OxC3 OR CMAKE_CROSSCOMPILING)
 			find_program(OXC3 OxC3 REQUIRED)
 		else()
 			set(OXC3 OxC3)
@@ -267,6 +274,8 @@ macro(add_virtual_files)
 		set(platform osx)
 	elseif(ANDROID)
 		set(platform android)
+	elseif(EMSCRIPTEN)
+		set(platform web)
 	else()
 		set(platform linux)
 	endif()

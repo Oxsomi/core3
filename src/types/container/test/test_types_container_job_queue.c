@@ -19,10 +19,26 @@
 */
 
 //types/container/test/test_types_container_job_queue.c
+
 //
 //Exercises JobQueue and, through it, the SpinLock + Thread primitives it is built on.
 
 #include "test_types_container_shared.h"
+
+//web: threads can't spawn (no -pthread yet), and JobQueue's inline mode (threadCount 1) runs jobs on the waiting thread.
+//All ordering/fan-out/failure semantics still hold, so the suite runs with 1 context there instead of skipping.
+//The include is not optional: _PLATFORM_TYPE and PLATFORM_WEB come from platform_types.h,
+// and while both are undefined the preprocessor compares 0 == 0 and quietly picks 1 on EVERY platform,
+// which turns the whole multi threaded JobQueue suite into a single threaded one without failing anything.
+
+#include "types/base/platform_types.h"
+
+#if _PLATFORM_TYPE == PLATFORM_WEB
+	#define JOBQUEUE_TEST_THREADS 1
+#else
+	#define JOBQUEUE_TEST_THREADS 4
+#endif
+
 #include "types/container/job_queue.h"
 #include "types/container/list_basic_types.h"
 #include "types/base/atomic.h"
@@ -172,9 +188,9 @@ void Test_jobQueue(Test *t) {
 		AtomicI64 counter = (AtomicI64) { 0 };
 		const U64 jobCount = 1000;
 
-		if (Test_assert(t, "create multi threaded", JobQueue_create(4, alloc, &q, e_rr))) {
+		if (Test_assert(t, "create multi threaded", JobQueue_create(JOBQUEUE_TEST_THREADS, alloc, &q, e_rr))) {
 
-			Test_assert(t, "threadCount honored", JobQueue_threadCount(&q) == 4);
+			Test_assert(t, "threadCount honored", JobQueue_threadCount(&q) == JOBQUEUE_TEST_THREADS);
 
 			Bool ok = true;
 			for (U64 i = 0; i < jobCount; ++i)
@@ -195,7 +211,7 @@ void Test_jobQueue(Test *t) {
 		JobQueue q = (JobQueue) { 0 };
 		AtomicI64 ran = (AtomicI64) { 0 };
 
-		if (Test_assert(t, "create for failure test", JobQueue_create(4, alloc, &q, e_rr))) {
+		if (Test_assert(t, "create for failure test", JobQueue_create(JOBQUEUE_TEST_THREADS, alloc, &q, e_rr))) {
 
 			Bool ok = true;
 			for (U64 i = 0; i < 50; ++i)
@@ -222,7 +238,7 @@ void Test_jobQueue(Test *t) {
 		AtomicI64 counter = (AtomicI64) { 0 };
 		FanoutPayload payload = { .counter = &counter, .children = 200 };
 
-		if (Test_assert(t, "create for fan-out", JobQueue_create(4, alloc, &q, e_rr))) {
+		if (Test_assert(t, "create for fan-out", JobQueue_create(JOBQUEUE_TEST_THREADS, alloc, &q, e_rr))) {
 
 			Test_assert(t, "push parent", JobQueue_push(&q, jobParentFanout, &payload, e_rr));
 			Test_assert(t, "wait drains spawned jobs", JobQueue_wait(&q, e_rr));
@@ -239,7 +255,7 @@ void Test_jobQueue(Test *t) {
 		JobQueue q = (JobQueue) { 0 };
 		AtomicI64 bad = (AtomicI64) { 0 };
 
-		if (Test_assert(t, "create for threadId range", JobQueue_create(4, alloc, &q, e_rr))) {
+		if (Test_assert(t, "create for threadId range", JobQueue_create(JOBQUEUE_TEST_THREADS, alloc, &q, e_rr))) {
 
 			RangePayload payload = { .bad = &bad, .threadCount = JobQueue_threadCount(&q) };
 
@@ -274,7 +290,7 @@ void Test_jobQueue(Test *t) {
 	{
 		JobQueue q = (JobQueue) { 0 };
 
-		if (Test_assert(t, "create for JobGroup success", JobQueue_create(4, alloc, &q, e_rr))) {
+		if (Test_assert(t, "create for JobGroup success", JobQueue_create(JOBQUEUE_TEST_THREADS, alloc, &q, e_rr))) {
 
 			GroupResult result = { 0 };
 			AtomicI64 workDone = (AtomicI64) { 0 };
@@ -305,7 +321,7 @@ void Test_jobQueue(Test *t) {
 	{
 		JobQueue q = (JobQueue) { 0 };
 
-		if (Test_assert(t, "create for JobGroup failure", JobQueue_create(4, alloc, &q, e_rr))) {
+		if (Test_assert(t, "create for JobGroup failure", JobQueue_create(JOBQUEUE_TEST_THREADS, alloc, &q, e_rr))) {
 
 			GroupResult result = { 0 };
 			AtomicI64 workDone = (AtomicI64) { 0 };

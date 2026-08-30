@@ -27,6 +27,20 @@
 #include "types/container/list.hpp"
 #include "types/container/job_queue.hpp"
 
+//web: threads can't spawn (no -pthread yet), and JobQueue's inline mode (threadCount 1) runs jobs on the waiting thread.
+//All ordering/fan-out/failure semantics still hold, so the suite runs with 1 context there instead of skipping.
+//The include is not optional: _PLATFORM_TYPE and PLATFORM_WEB come from platform_types.h,
+// and while both are undefined the preprocessor compares 0 == 0 and quietly picks 1 on EVERY platform,
+// which turns the whole multi threaded JobQueue suite into a single threaded one without failing anything.
+
+#include "types/base/platform_types.h"
+
+#if _PLATFORM_TYPE == PLATFORM_WEB
+	#define JOBQUEUE_TEST_THREADS 1
+#else
+	#define JOBQUEUE_TEST_THREADS 4
+#endif
+
 //The C test framework carries an extern "C" guard, so include it inside oxc::c (after the wrappers,
 // which already pulled its C-header deps into oxc::c).
 //Its declarations then live in oxc::c with C linkage, matching the C-compiled framework,
@@ -147,8 +161,8 @@ extern "C" void Test_hpp(oxc::c::Test *t) {
 
 	{
 		JobQueue queue;
-		Test_assert(t, "JobQueue: init", queue.init(4, alloc));
-		Test_assert(t, "JobQueue: threadCount", queue.threadCount() == 4);
+		Test_assert(t, "JobQueue: init", queue.init(JOBQUEUE_TEST_THREADS, alloc));
+		Test_assert(t, "JobQueue: threadCount", queue.threadCount() == JOBQUEUE_TEST_THREADS);
 
 		c::AtomicI64 counter{};
 		c::Bool pushed = true;
@@ -165,7 +179,7 @@ extern "C" void Test_hpp(oxc::c::Test *t) {
 
 	{
 		JobQueue queue;
-		Test_assert(t, "JobQueue: init for failure", queue.init(4, alloc));
+		Test_assert(t, "JobQueue: init for failure", queue.init(JOBQUEUE_TEST_THREADS, alloc));
 
 		c::AtomicI64 ran{};
 		c::Bool ok = true;
@@ -185,7 +199,7 @@ extern "C" void Test_hpp(oxc::c::Test *t) {
 
 	{
 		JobQueue queue;
-		Test_assert(t, "JobQueue: init for fan-out", queue.init(4, alloc));
+		Test_assert(t, "JobQueue: init for fan-out", queue.init(JOBQUEUE_TEST_THREADS, alloc));
 
 		c::AtomicI64 counter{};
 		Test_assert(t, "JobQueue: push parent", queue.push([&counter, &queue](c::U64) {

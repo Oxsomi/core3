@@ -146,6 +146,9 @@ BANNED_SYMBOLS: list[dict] = [
         "message": "C++ '{}' operator, forbidden (use OxC3 allocators)",
         "allow_paths": (
             "src/shader_compiler/compiler.cpp",
+            # The only "new" in here is JavaScript inside EM_JS blocks (new SharedArrayBuffer,
+            # new Uint8Array, new Worker), which this rule can't distinguish from C++.
+            "src/types/container/host_crypto.c",
         ),
     },
     # B3, printf family
@@ -160,7 +163,10 @@ BANNED_SYMBOLS: list[dict] = [
             "src/platforms/test/functional/test_platforms_functional_input.c",
             # F32x4x4_format is a debug dump of 16 floats. OxC3_types_math sits below OxC3_types_container,
             # so CharString_format (the alternative this rule points at) isn't reachable from it.
-            "src/types/math/mat.c"
+            "src/types/math/mat.c",
+            # The node test runner's stdout reporter, same role ulog.c plays: it runs between suites,
+            # when no Platform (and therefore no Log_*x) exists.
+            "src/test/web/wtest_main.c",
         ),
     },
     # B4, assert
@@ -219,7 +225,13 @@ BANNED_SYMBOLS: list[dict] = [
         "pattern": re.compile(r'\b(strcmp|strstr)\s*\('),
         "message": "'{}', use CharString_equalsStringSensitive or Buffer_cmp on CharString_bufferConst",
         "allow_paths": (
-            "src/platforms/unix/ufile.c"
+            "src/platforms/unix/ufile.c",
+            # Raw C strings that never come from a CharString: a /proc/cpuinfo read buffer, Windows'
+            # registry VendorIdentifier, and dladdr's dli_fname. ulog.c additionally sits below
+            # OxC3_types_container, so the alternative this rule points at isn't reachable from it.
+            "src/platforms/unix/uplatform.c",
+            "src/platforms/windows/wplatform.c",
+            "src/types/container/platforms/unix/ulog.c",
         ),
     },
     # B13, C time functions
@@ -233,7 +245,8 @@ BANNED_SYMBOLS: list[dict] = [
         "pattern": re.compile(r'\bsystem\s*\('),
         "message": "'system()', always forbidden",
         "allow_paths": (
-            "src/platforms/test/functional/test_platforms_functional.c"
+            # Functional tests shell out to set up window-manager / input state before asserting on it.
+            "src/platforms/test/functional/",
         ),
     },
     # B15, rand / srand
@@ -539,6 +552,7 @@ def check_file(
     in_unix_dir |= "/linux/" in rel or rel.startswith("linux/")
     in_unix_dir |= "/android/" in rel or rel.startswith("android/")
     in_unix_dir |= "/osx/" in rel or rel.startswith("osx/")
+    in_unix_dir |= "/web/" in rel or rel.startswith("web/")     # emscripten is a unix flavor (MEMFS/NODERAWFS)
     if not in_unix_dir:
         for lineno, line in enumerate(lines, start=1):
             m = _POSIX_INCLUDE_RE.match(line)

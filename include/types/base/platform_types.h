@@ -48,7 +48,9 @@ typedef U32 EPlatform;
 #define ARCH_NONE 0
 #define ARCH_X86_64 1
 #define ARCH_ARM64 2
+#define ARCH_WASM64 3
 
+//wasm64 (-m64 / MEMORY64) satisfies this; wasm32 is rejected on purpose, same as other 32-bit targets
 static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 
 //Moved from CMake to header to allow better compilation as a lib
@@ -82,6 +84,8 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 	#define _ARCH ARCH_ARM64
 #elif defined(_WIN64) || defined(__x86_64__)
 	#define _ARCH ARCH_X86_64
+#elif defined(__wasm64__) || defined(__wasm__)
+	#define _ARCH ARCH_WASM64
 #else
 	#error "Undetected architecture type"
 #endif
@@ -90,8 +94,10 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 	#define _SIMD SIMD_NONE
 #elif _ARCH == ARCH_ARM64
 	#define _SIMD SIMD_NEON
-#else
+#elif _ARCH == ARCH_X86_64
 	#define _SIMD SIMD_SSE
+#else
+	#define _SIMD SIMD_NONE //wasm: scalar fallback (no full SSE/NEON feature set)
 #endif
 
 //Whether the transcendental _mm_*_ps intrinsics (pow, log, exp, sin, ...) and _mm_div_epi32 resolve.

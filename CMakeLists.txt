@@ -258,7 +258,21 @@ set(DynamicLinkingShaderCompiler ON CACHE BOOL "Turn on/off OxC3 shader compiler
 
 # Set general compile options
 
-if("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "ARM64|arm64|aarch64|armv8" OR "${ANDROID_ABI}" MATCHES "arm64-v8a")
+if(EMSCRIPTEN)
+
+	message("-- Targeting wasm64 (emscripten)")
+	set(ARM OFF)
+	set(target "wasm64")
+
+	# LLVM's wasm64 backend miscompiles certain shift/xor reduction loops at -O3 (first seen as
+	# I32x4_clmul64Fallback returning all zeros; a 60-line repro compiles correctly at -O2 and at
+	# -O0, and correctly on x64 at every level). Compile at -O2 on web until an emsdk upgrade
+	# passes the repro; link-time (wasm-opt) optimization is unaffected and stays as-is.
+
+	set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+	set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+
+elseif("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "ARM64|arm64|aarch64|armv8" OR "${ANDROID_ABI}" MATCHES "arm64-v8a")
 	message("-- Enabling ARM specific optimizations")
 	set(ARM ON)
 	set(target "arm64")
@@ -268,15 +282,50 @@ else()
 	set(target "x64")
 endif()
 
-if(ANDROID AND DynamicLinkingGraphics)
-	message(FATAL_ERROR "-- FATAL configuration (dynamic linking graphics) not compatible with Android")
+# wasm: no dlopen without MAIN_MODULE (which taxes every module), so both dynamic linking
+# flavors are off, same as android. SIMD is coerced off for now: the SSE paths rely on
+# SHA/AES/PCLMUL/RDRND which emscripten's SSE-over-simd128 shim doesn't provide.
+
+if(EMSCRIPTEN AND EnableSIMD)
+	message("-- SIMD off: wasm build uses the scalar fallback (no full SSE feature set on wasm)")
+	set(EnableSIMD OFF)
+endif()
+
+# Graphics needs Vulkan or D3D12; the web target has neither until a WebGPU backend exists,
+# so the whole module (and the graphics CLI) is off there.
+
+# Routes SHA-256/AES-GCM to the host's hardware crypto on web, where OxC3's own kernels have no
+# AES/SHA instructions to use (1.27 MB/s AES). Needs a cross origin isolated page and the module
+# running in a Worker; falls back to the built in kernels whenever that isn't the case.
+# Off by default: a standalone shader compiler has no reason to carry it. See docs/web.md.
+
+set(EnableHostCrypto OFF CACHE BOOL "Route crypto to the host (web only; needs COOP/COEP + Worker)")
+
+if(EnableHostCrypto AND NOT EMSCRIPTEN)
+	message("-- Host crypto off: only implemented for the web target")
+	set(EnableHostCrypto OFF)
+endif()
+
+set(EnableGraphics ON CACHE BOOL "Turn off/on OxC3 graphics (off on platforms without a backend)")
+
+if(EMSCRIPTEN AND EnableGraphics)
+	message("-- Graphics off: no WebGPU backend yet, wasm builds are headless")
+	set(EnableGraphics OFF)
+endif()
+
+if(NOT EnableGraphics AND CLIGraphics)
+	set(CLIGraphics OFF)
+endif()
+
+if((ANDROID OR EMSCRIPTEN) AND DynamicLinkingGraphics)
+	message(FATAL_ERROR "-- FATAL configuration (dynamic linking graphics) not compatible with Android/wasm")
 endif()
 
 # Coerced rather than fatal, because this defaults to ON: a platform that can't do it, or a build with
 # no shader compiler to share, shouldn't fail on a value nobody asked for.
 
-if(DynamicLinkingShaderCompiler AND ANDROID)
-	message("-- Shader compiler dynamic linking off: not supported on Android")
+if(DynamicLinkingShaderCompiler AND (ANDROID OR EMSCRIPTEN))
+	message("-- Shader compiler dynamic linking off: not supported on Android/wasm")
 	set(DynamicLinkingShaderCompiler OFF)
 endif()
 
@@ -561,7 +610,10 @@ if(MSVC)
 
 else()
 
-	if(ARM)
+	if(EMSCRIPTEN)
+		# wasm floats are IEEE 754 strict by spec; no arch flags needed (and the x86/arm
+		# -m flags below are invalid for the wasm target).
+	elseif(ARM)
 		if(EnableSIMD)
 			add_compile_options(-march=armv8-a+simd+crypto+crc)
 		else()
@@ -596,7 +648,16 @@ else()
 
 	set(useLTO TRUE)
 
-	if(CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT APPLE AND NOT ANDROID)
+	if(EMSCRIPTEN)
+
+		# Nor emscripten, which is also clang-but-not-apple-not-android and would otherwise take the
+		# branch below and get -fuse-ld=lld handed to emcc. Bitcode archives would additionally force
+		# every consumer link through LTO (DXC alone is ~500 MB of archives, and wasm-ld's LTO is
+		# single threaded), for marginal gain.
+
+		set(useLTO FALSE)
+
+	elseif(CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT APPLE AND NOT ANDROID)
 
 		find_program(OXC3_LLD NAMES ld.lld lld)
 
@@ -835,6 +896,9 @@ elseif(APPLE)
 elseif(ANDROID)
 	message("-- Enabling Android support...")
 	set(platform android)
+elseif(EMSCRIPTEN)
+	message("-- Enabling web (emscripten) support...")
+	set(platform web)
 else()
 	message("-- Enabling Linux support...")
 	set(platform linux)
@@ -858,7 +922,13 @@ set(archDir "${target}")
 if(NOT ANDROID)
 	if(WIN32 AND CMAKE_C_COMPILER_ID MATCHES "Clang")
 		set(archDir "${target}_clang")
-	elseif(UNIX AND NOT APPLE AND NOT CMAKE_C_COMPILER_ID STREQUAL "GNU")
+	elseif(UNIX AND NOT APPLE AND NOT EMSCRIPTEN AND NOT CMAKE_C_COMPILER_ID STREQUAL "GNU")
+
+		# Not emscripten: the suffix exists so a gcc and a clang build of the same target can't inherit
+		# each other's archives, and emscripten only ever has the one toolchain. Suffixing it would also
+		# desync conanfile.py's package(), which appends _clang for windows and linux only and would
+		# then collect nothing, plus build_web.py and src/test/web's ctest paths.
+
 		set(archDir "${target}_clang")
 	endif()
 endif()

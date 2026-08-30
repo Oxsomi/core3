@@ -175,3 +175,24 @@ Macros should try to align the `\` required to do multi-line macros on the same 
 If using code snippets from other places, make sure to reference the link to ensure the original source can be compared or an explanation can be found if needed in the future and to provide credits to the original author.
 
 `//` should be preferred when dealing with small comments, unless a large section is commented out or for documentation; in that case `/*` and `*/` should be used. Another reason for `/**/` is if the current formatting doesn't support it or if in a macro definition (since these don't support normal comments).
+
+Comments are laid out one sentence per line. A line that starts a new sentence begins flush (`//Word`), while a line that continues an unfinished sentence from the line above begins with a single space (`// word`). This keeps a paragraph diffable per sentence: changing one word rewraps one line instead of every line after it. A sentence that fits within the line limit stays on one line; only wrap when it doesn't.
+
+```c
+//Callbacks always receive fully qualified paths: absolute for physical entries, //-prefixed for virtual ones.
+//Either form is itself a valid input for the other File_* functions,
+// so foreach output can be fed straight back in (read, getInfo, ...) without the caller re-rooting anything.
+```
+
+`#` comments in CMake and python follow the same one sentence per line rule, but have no continuation marker; a sentence too long for one line is broken at a clause boundary and every line starts with `# `.
+
+```cmake
+# Android has no exec, so the per-suite executables ctest runs elsewhere are useless here.
+# This target compiles the same test sources a second time with _OXC3_TEST_BUNDLED,
+# which turns each suite's main() into a named entry (see OXC3_TEST_MAIN / OXC3_TEST_ENTRY in types/test/test.h)
+# that atest_main.c calls in turn.
+```
+
+Comments belong above the thing they explain, never inside an argument list; a `target_link_options` call keeps its rationale in one block above the command rather than interleaved between the flags.
+
+Generated headers are exempt from the sentence-per-line rule: `src/tools/generate_hpp.py` emits doc lines as `\t//{docLine}` with no continuation form, and the `check_generated_hpp` target rejects hand edits to them.

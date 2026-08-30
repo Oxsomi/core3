@@ -64,9 +64,33 @@ add_executable(
 set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi/CLI)
 target_link_libraries(OxC3 PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3CLI)
 
+# On the web target the CLI executable is a node program.
+# It mounts the real filesystem and gets the stack/memory DXC needs (defaults: 64KB stack, 2GB cap).
+# There is no browser link yet: a browser consumer would embed the libraries and pick its own flags.
+# INITIAL_MEMORY is what the module commits at instantiation, before it does any work.
+# Keep it small and let ALLOW_MEMORY_GROWTH size it to the workload:
+# a phone should not have to hand over half a gigabyte just to load the module.
+# DXC grows this a lot while compiling, but it grows on demand and only for the run that needs it.
+
+if(EMSCRIPTEN)
+	target_link_options(OxC3 PRIVATE
+		"-sENVIRONMENT=node"
+		"-sNODERAWFS=1"
+		"-sEXIT_RUNTIME=1"
+		"-sALLOW_MEMORY_GROWTH=1"
+		"-sINITIAL_MEMORY=32MB"
+		"-sMAXIMUM_MEMORY=16GB"
+		"-sSTACK_SIZE=8MB"
+	)
+endif()
+
 include(../../../cmake/oxc3.cmake)
 configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
-add_virtual_dependencies(TARGET OxC3 DEPENDENCIES OxC3_graphics)
+
+if(CLIGraphics)
+	add_virtual_dependencies(TARGET OxC3 DEPENDENCIES OxC3_graphics)
+endif()
+
 apply_dependencies(OxC3)
 
 # Done automatically by apply_dependencies in things that use OxC3 as a conan package
