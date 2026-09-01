@@ -151,3 +151,17 @@ Macros should try to align the `\` required to do multi-line macros on the same 
 If using code snippets from other places, make sure to reference the link to ensure the original source can be compared or an explanation can be found if needed in the future and to provide credits to the original author.
 
 `//` should be preferred when dealing with small comments, unless a large section is commented out or for documentation; in that case `/*` and `*/` should be used. Another reason for `/**/` is if the current formatting doesn't support it or if in a macro definition (since these don't support normal comments).
+
+A comment line holds at most one sentence, and a sentence never starts in the middle of a line. A sentence too long for one line continues on the next rather than sharing a line with the sentence after it. The 128 character limit is a ceiling and not a target here: break at a natural clause boundary well before it, because a comment is read as prose rather than as a filled paragraph.
+
+A line that starts a sentence uses `//`, a line that continues one uses `// ` with a space. That makes the shape of a multi-sentence comment visible without reading it:
+
+```c
+//pSetLayouts[i] is descriptor set i, and on SPIR-V a binding's space IS its set index (reflection reports
+// the set as the space), so every set goes at the index its space names, whichever of the two layouts
+// declares it.
+//Packing them from 0 in declaration order, as this once did, matched the shader only while one layout
+// was empty or its spaces happened to start at 0 and run contiguously.
+```
+
+The same holds for the `#` comments in the build scripts, except that `#` always takes a space after it.

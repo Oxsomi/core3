@@ -123,10 +123,7 @@ extern "C" void Test_graphicsBindfulPushConstants(oxc::c::Test *t, oxc::c::Graph
 
 	//The table holds no reference of its own, so the descriptor goes back before the buffer does.
 
-	struct TableGuard {
-		DescriptorTable &table;
-		~TableGuard() { (void) table.unset(0, 0, 1, nullptr); }
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, nullptr, 0);
 
@@ -269,9 +266,12 @@ extern "C" void Test_graphicsBindfulReservedSpace(oxc::c::Test *t, oxc::c::Graph
 
 	c::Test_assert(t, "reservedSpaceNoLayout", !layout.valid());
 
-	//The very same binding one space over is fine, which is what proves the space is the only objection
+	//The very same binding in another space is fine, which is what proves the space is the only objection.
+	//On Vulkan a space is a descriptor set index bounded by the device's maxBoundDescriptorSets, so "one
+	// space over" from 0xC3 would be refused there for a reason that has nothing to do with the reservation.
+	//Set 3 is the highest every device is required to be able to bind, so it proves the same thing there.
 
-	reserved.binding.space = OXC3_RESERVED_SPACE + 1;
+	reserved.binding.space = dev.api() == c::EGraphicsApi_Vulkan ? 3 : OXC3_RESERVED_SPACE + 1;
 
 	c::DescriptorLayoutInfo okInfo{};
 	c::ListDescriptorBinding_createRefConst(&reserved, 1, &okInfo.bindings, nullptr);
@@ -280,4 +280,230 @@ extern "C" void Test_graphicsBindfulReservedSpace(oxc::c::Test *t, oxc::c::Graph
 	c::Test_assert(t, "neighbourSpaceAccepted", dev.createDescriptorLayout(
 		okInfo, "Reserved space layout", layout, &t->err
 	));
+}
+
+// -- 63. What a push descriptor and a copy are allowed to be --------------------
+
+//Two rules that were each enforced in only half the stack, so a caller could build something the recorder
+//would always refuse, or ask for something both backends quietly ignored.
+
+extern "C" void Test_graphicsBindfulPushClass(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
+
+	using namespace oxc;
+	using namespace oxc::gfx;
+
+	c::Test_setModule(t, "Bindful/pushClass");
+
+	Device dev = Device::share(deviceRef);
+
+	//A sampler has no root descriptor form on D3D12 and is refused where the layout is built.
+	//A TEXTURE is
+	// deliberately NOT refused there: the device builds a texture push itself for its rotated copy shaders,
+	// so the layout has to keep accepting one, and the work op is where a texture push actually stops.
+	//Pinning both halves keeps that split honest, since it is easy to read as an oversight and "fix" by
+	// tightening the layout, which breaks device creation.
+
+	const c::CharString pushName = c::CharString_createRefCStrConst("pushed");
+
+	c::DescriptorBinding push = {
+		.registerType = c::ESHRegisterType_Sampler,
+		.count = 1,
+		.binding = { .space = 0, .binding = 0 },
+		.visibility = c::U32_MAX
+	};
+
+	c::DescriptorLayoutInfo sampInfo{};
+	sampInfo.flags = c::EDescriptorLayoutFlags_HasPushDescriptors;
+	c::ListDescriptorBinding_createRefConst(&push, 1, &sampInfo.bindings, nullptr);
+	c::ListCharString_createRefConst(&pushName, 1, &sampInfo.bindingNames, nullptr);
+
+	DescriptorLayout layout;
+
+	c::Test_assert(t, "samplerPushRefused", !dev.createDescriptorLayout(sampInfo, "Push class layout", layout, nullptr));
+	c::Test_assert(t, "samplerPushNoLayout", !layout.valid());
+
+	//A texture push builds, which is what the device's own copy layout depends on
+
+	push.registerType = c::ESHRegisterType_Texture2D;
+
+	c::DescriptorLayoutInfo texInfo{};
+	texInfo.flags = c::EDescriptorLayoutFlags_HasPushDescriptors;
+	c::ListDescriptorBinding_createRefConst(&push, 1, &texInfo.bindings, nullptr);
+	c::ListCharString_createRefConst(&pushName, 1, &texInfo.bindingNames, nullptr);
+
+	c::Test_assert(t, "texturePushAccepted", dev.createDescriptorLayout(texInfo, "Push class layout", layout, &t->err));
+
+	//As does the buffer class the recorder can actually emit
+
+	push.registerType = (c::ESHRegisterType) (c::ESHRegisterType_ByteAddressBuffer | c::ESHRegisterType_IsWrite);
+
+	c::DescriptorLayoutInfo bufInfo{};
+	bufInfo.flags = c::EDescriptorLayoutFlags_HasPushDescriptors;
+	c::ListDescriptorBinding_createRefConst(&push, 1, &bufInfo.bindings, nullptr);
+	c::ListCharString_createRefConst(&pushName, 1, &bufInfo.bindingNames, nullptr);
+
+	c::Test_assert(t, "bufferPushAccepted", dev.createDescriptorLayout(bufInfo, "Push class layout", layout, &t->err));
+
+	//A rotation is out of range rather than merely unsupported past 3
+
+	CommandList commandList;
+	RenderTexture src, dst, readWrite;
+	DescriptorHeap pushHeap;
+	c::Error *e_rr = &t->err;
+
+	if(
+		!c::Test_assert(t, "srcCreate", dev.createRenderTexture(
+			8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_ShaderRead, "Push class src", src,
+			c::EMSAASamples_Off, nullptr, e_rr
+		)) ||
+		!c::Test_assert(t, "dstCreate", dev.createRenderTexture(
+			8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_ShaderWrite, "Push class dst", dst,
+			c::EMSAASamples_Off, nullptr, e_rr
+		)) ||
+		!c::Test_assert(t, "readWriteCreate", dev.createRenderTexture(
+			8, 8, c::ETextureFormatId_RGBA8,
+			(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderRead | c::EGraphicsResourceFlag_ShaderWrite),
+			"Push class read write", readWrite, c::EMSAASamples_Off, nullptr, e_rr
+		)) ||
+		!c::Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 32, 16, commandList, true, e_rr))
+	)
+		return;
+
+	//A rotated copy takes its two transient descriptors from the push ring of the heap the CALLER bound;
+	// nothing binds one behind the caller's back, since a hidden SetDescriptorHeaps is exactly the cost the
+	// explicit bind exists to keep visible.
+
+	c::DescriptorHeapInfo pushHeapInfo = { .maxDescriptorTables = 1, .maxPushDescriptors = 4 };
+
+	if(!c::Test_assert(t, "pushHeapCreate", dev.createDescriptorHeap(pushHeapInfo, "Push class heap", pushHeap, e_rr)))
+		return;
+
+	c::Test_assert(t, "begin", commandList.begin(true, e_rr));
+
+	{
+		CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+		c::Test_assert(t, "scope", (c::Bool) scope);
+
+		//Out of range and merely unimplemented are different refusals, and both have to be refusals: a
+		// rotation that fell through would hand back a silently unrotated image.
+
+		c::Test_assert(t, "rotationOutOfRange", !scope.copyImage(
+			src.handle(), dst.handle(), { .outputRotation = 4 }, nullptr
+		));
+
+		//A rotation with no heap bound yet is refused rather than binding one silently
+
+		c::Test_assert(t, "rotationNeedsHeap", !scope.copyImage(
+			src.handle(), dst.handle(), { .outputRotation = 2 }, nullptr
+		));
+
+		c::Test_assert(t, "bindPushHeap", scope.bindDescriptorHeap(pushHeap, e_rr));
+
+		//A rotation reads src through a sampled descriptor and writes dst through a storage one, which a
+		// texture only has if it was created asking for it.
+		//Both backends gate that on the flag, so a texture without it has to be refused HERE.
+		//Left to the backend, D3D12 builds a UAV over a resource that never allowed one and only the debug
+		// layer notices, while Vulkan cannot create the view at all and the copy silently does not happen.
+		//dst carries ShaderWrite alone and src ShaderRead alone, so each is exactly the wrong way round for
+		// one of the two checks.
+
+		c::Test_assert(t, "rotationSrcNeedsShaderRead", !scope.copyImage(
+			dst.handle(), readWrite.handle(), { .outputRotation = 2 }, nullptr
+		));
+
+		c::Test_assert(t, "rotationDstNeedsShaderWrite", !scope.copyImage(
+			readWrite.handle(), src.handle(), { .outputRotation = 2 }, nullptr
+		));
+
+		c::Test_assert(t, "copyUnrotated", scope.copyImage(src.handle(), dst.handle(), { 0 }, e_rr));
+
+		c::Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
+
+	{
+		//The same pair unrotated is a plain transfer on both backends and stays allowed, neither shader flag
+		// being needed for one.
+		//It copies the other way round, which is why it cannot share the scope above: a scope puts an image
+		// in ONE state, so src being a copy destination here and a copy source there is the transition
+		// conflict the recorder refuses.
+
+		CommandScope unrotated = commandList.scope({}, 2, {}, e_rr);
+		c::Test_assert(t, "unrotatedScope", (c::Bool) unrotated);
+
+		c::Test_assert(t, "copyUnrotatedNoShaderFlags", unrotated.copyImage(
+			dst.handle(), src.handle(), { 0 }, e_rr
+		));
+
+		c::Test_assert(t, "unrotatedScopeEnd", unrotated.end(e_rr));
+	}
+
+	c::Test_assert(t, "end", commandList.end(e_rr));
+
+	//And a rotation that actually runs.
+	//An image copy cannot express one on either API, so the recorder puts
+	// the command on the device's own copy shader instead; this is the only thing that exercises that path,
+	// and the only thing that proves the shader's rotation math rather than that a dispatch happened.
+	//180 degrees is the case needing no reasoning about which axis swapped: every texel lands diagonally
+	// opposite, so dst(x, y) has to be src(7 - x, 7 - y).
+
+	DeviceTexture pattern;
+	CommandList emptyList;
+
+	c::U32 texels[64];
+
+	for(c::U32 y = 0; y < 8; ++y)
+		for(c::U32 x = 0; x < 8; ++x)
+			texels[y * 8 + x] = 0xFF000000u | (y << 8) | x;        //R = x, G = y, so a flip shows up per axis
+
+	c::Buffer texelRef = c::Buffer_createRefConst(texels, sizeof(texels));
+
+	if(
+		!c::Test_assert(t, "patternCreate", dev.createTexture(
+			c::ETextureType_2D, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_ShaderRead, 8, 8, 1,
+			"Push class pattern", &texelRef, pattern, nullptr, e_rr
+		)) ||
+		!c::Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
+	)
+		return;
+
+	c::Test_assert(t, "beginEmptyList", emptyList.begin(true, e_rr));
+	c::Test_assert(t, "endEmptyList", emptyList.end(e_rr));
+
+	c::Test_assert(t, "beginRotate", commandList.begin(true, e_rr));
+
+	{
+		//No transitions declared here: copyImage records its own for both images, and naming them again is a
+		// write hazard in the same scope.
+		//It picks shader read/write rather than transfer ones precisely
+		// because a rotation is replayed as a dispatch.
+
+		CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+		c::Test_assert(t, "rotateScope", (c::Bool) scope);
+
+		c::Test_assert(t, "rotateBindHeap", scope.bindDescriptorHeap(pushHeap, e_rr));
+
+		c::Test_assert(t, "copyRotated180", scope.copyImage(
+			pattern.handle(), dst.handle(), { .outputRotation = 2 }, e_rr
+		));
+
+		c::Test_assert(t, "rotateScopeEnd", scope.end(e_rr));
+	}
+
+	c::Test_assert(t, "endRotate", commandList.end(e_rr));
+
+	if (gfxtest::submitAndWait(t, dev, commandList)) {
+
+		c::TestShaderPixels pixels{};
+
+		if (gfxtest::pullPixels(t, dev, emptyList, dst.handle(), pixels)) {
+
+			c::U32 matching = 0;
+
+			for(c::U32 y = 0; y < 8; ++y)
+				for(c::U32 x = 0; x < 8; ++x)
+					matching += pixels.pixels[y * 8 + x] == texels[(7 - y) * 8 + (7 - x)];
+
+			c::Test_assert(t, "rotated180Pixels", matching == 64);
+		}
+	}
 }

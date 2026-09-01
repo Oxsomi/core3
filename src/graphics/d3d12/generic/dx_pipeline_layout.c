@@ -20,6 +20,7 @@
 
 //graphics/d3d12/generic/dx_pipeline_layout.c
 
+#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
@@ -28,6 +29,9 @@
 #include "platforms/logx.h"
 #include "types/container/string_unicode.h"
 #include "types/container/list_basic_types.h"
+
+TList(D3D12_STATIC_SAMPLER_DESC);
+TListImpl(D3D12_STATIC_SAMPLER_DESC)
 
 void DX_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, const Allocator *alloc) {
 
@@ -65,6 +69,43 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 		.Version = D3D_ROOT_SIGNATURE_VERSION_1_1,
 		.Desc_1_1 = (D3D12_ROOT_SIGNATURE_DESC1) { .Flags = flags }
 	};
+
+	//Static samplers are described BY VALUE in the root signature rather than being root parameters, so they
+	// cost none of the 64 DWORD budget and need no heap slot.
+	//Gathered from both descriptor layouts, because Vulkan carries the declaration on the set layout and
+	// D3D12 here, so a binding declares it in one place either way.
+
+	ListD3D12_STATIC_SAMPLER_DESC staticSamplers = (ListD3D12_STATIC_SAMPLER_DESC) { 0 };
+
+	DescriptorLayoutRef *samplerSources[2] = { layout->info.bindings, layout->info.pushDescriptors };
+
+	for (U64 k = 0; k < 2; ++k) {
+
+		if(!samplerSources[k])
+			continue;
+
+		const DescriptorLayout *desc = DescriptorLayoutRef_ptr(samplerSources[k]);
+
+		for (U64 i = 0; i < desc->info.bindings.length; ++i) {
+
+			const DescriptorBinding b = desc->info.bindings.ptr[i];
+
+			const U32 immutableId = DescriptorBinding_immutableSamplerId(b);
+
+			if(!immutableId)
+				continue;
+
+			const SamplerInfo sinfo =
+				SamplerRef_ptr(desc->info.immutableSamplers.ptr[immutableId - 1])->info;
+
+			gotoIfError3(clean, ListD3D12_STATIC_SAMPLER_DESC_pushBack(
+				&staticSamplers, DxSampler_toStaticDesc(sinfo, b.binding, b.visibility), alloc, e_rr
+			));
+		}
+	}
+
+	rootSig.Desc_1_1.NumStaticSamplers = (U32) staticSamplers.length;
+	rootSig.Desc_1_1.pStaticSamplers = staticSamplers.ptr;
 
 	D3D12_ROOT_PARAMETER1 pushConstants = (D3D12_ROOT_PARAMETER1) { 0 };
 
@@ -182,6 +223,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 	}
 
 clean:
+	ListD3D12_STATIC_SAMPLER_DESC_free(&staticSamplers, alloc);
 	ListD3D12_ROOT_PARAMETER1_free(&rootParams, alloc);
 	ListU16_free(&nameUtf16, alloc);
 	if(rootSigBlob) rootSigBlob->lpVtbl->Release(rootSigBlob);

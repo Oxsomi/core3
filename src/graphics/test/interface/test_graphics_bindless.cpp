@@ -333,17 +333,7 @@ extern "C" void Test_graphicsBindlessInterleave(oxc::c::Test *t, oxc::c::Graphic
 
 	//Neither table holds a reference of its own, so their descriptors go back before the buffers do.
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &a, &b;
-
-		~TableGuard() {
-			(void) a.unset(0, 0, 1, nullptr);
-			(void) a.unset(1, 0, 1, nullptr);
-			(void) b.unset(0, 0, 1, nullptr);
-			(void) b.unset(1, 0, 1, nullptr);
-		}
-	} tableGuard{ tableA, tableB };
+	gfxtest::TableGuard tableGuard{ { &tableA, &tableB } };
 
 	const c::Descriptor srcDesc = c::Descriptor_buffer(src.handle(), 0, 0, NULL, 0);
 	const c::Descriptor dstADesc = c::Descriptor_buffer(dstA.handle(), 0, 0, NULL, 0);
@@ -529,10 +519,7 @@ extern "C" void Test_graphicsBindlessEverywhere(oxc::c::Test *t, oxc::c::Graphic
 
 	//The table holds no reference of its own, so the descriptor goes back before the buffer does.
 
-	struct TableGuard {
-		gfx::DescriptorTable &table;
-		~TableGuard() { (void) table.unset(0, 0, 1, nullptr); }
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, NULL, 0);
 
@@ -764,5 +751,129 @@ extern "C" void Test_graphicsFrameGlobals(oxc::c::Test *t, oxc::c::GraphicsDevic
 
 			Test_assert(t, "frameIdAdvanced", values[0] > firstFrameId);
 			Test_assert(t, "timeMovesForward", secondTime >= firstTime);
+		}
+}
+
+//The bindless SAMPLER array, which no other test in the suite indexes.
+//_samplers owns Vulkan descriptor set 0 by itself while every resource array shares set 1, and it is what
+// EGraphicsDeviceFlags_EnableDynamicSamplers switches off.
+//Without something that actually samples through it, making it opt in would look free.
+
+extern "C" void Test_graphicsBindlessSampler(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
+
+	using namespace oxc;
+	using namespace oxc::gfx;
+
+	c::Error *e_rr = &t->err;
+	const c::Allocator *alloc = c::Platform_instance->alloc;
+
+	Test_setModule(t, "Bindless/sampler");
+
+	Device dev = Device::share(deviceRef);
+
+	if(!(dev.info().capabilities.features & c::EGraphicsFeatures_Bindless)) {
+		Test_print(t, "Bindless unsupported on this device, skipping bindless sampler tests");
+		return;
+	}
+
+	gfxtest::OwnedSHFile shader(alloc);
+
+	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindless_sampler.oiSH", &shader.list)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping bindless sampler tests");
+		return;
+	}
+
+	//R = x and G = y, so a texel fetched from the wrong place reads as the wrong coordinate
+
+	c::U32 texels[64];
+
+	for(c::U32 y = 0; y < 8; ++y)
+		for(c::U32 x = 0; x < 8; ++x)
+			texels[y * 8 + x] = 0xFF000000u | (y << 8) | x;
+
+	c::Buffer texelRef = c::Buffer_createRefConst(texels, sizeof(texels));
+
+	DeviceTexture pattern;
+	DeviceBuffer output;
+	Sampler samp;
+
+	if(!Test_assert(t, "patternCreate", dev.createTexture(
+		c::ETextureType_2D, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_ShaderReadBindless, 8, 8, 1,
+		"Bindless sampler pattern", &texelRef, pattern, nullptr, e_rr
+	)))
+		return;
+
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag)(c::EGraphicsResourceFlag_ShaderWriteBindless | c::EGraphicsResourceFlag_CPUBacked),
+		"Bindless sampler output", 64 * sizeof(c::U32), output, nullptr, e_rr
+	)))
+		return;
+
+	//Point sampling with clamped addressing, so SampleLevel at a texel centre returns that texel unchanged
+	// and the comparison below is exact rather than approximate.
+
+	c::SamplerInfo samplerInfo{};
+	samplerInfo.filter = c::ESamplerFilterMode_Nearest;
+	samplerInfo.addressU = samplerInfo.addressV = samplerInfo.addressW = c::ESamplerAddressMode_ClampToEdge;
+
+	if(!Test_assert(t, "samplerCreate", dev.createSampler(samplerInfo, "Bindless sampler", samp, nullptr, false, e_rr)))
+		return;
+
+	//The whole point of the array: the shader reaches the sampler by this index rather than by a binding.
+
+	const c::U32 samplerId = samp.data()->samplerLocation;
+
+	Test_assert(t, "samplerHasBindlessSlot", samplerId != c::U32_MAX);
+
+	Pipeline pipeline;
+	PipelineLayout bindlessLayout;
+
+	if(!gfxtest::computePipelinePush(t, dev, shader.list, pipeline, bindlessLayout))
+		return;
+
+	CommandList commandList, emptyList;
+
+	if(
+		!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)) ||
+		!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
+	)
+		return;
+
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
+
+	const c::U32 pushData[4] = { pattern.readHandle(), samplerId, output.writeHandle(), 0 };
+
+	const c::Transition transitions[2] = {
+		{ .resource = pattern.handle(), .stage = c::EPipelineStage_Compute },
+		{ .resource = output.handle(),  .stage = c::EPipelineStage_Compute, .isWrite = true }
+	};
+
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
+
+	{
+		CommandScope scope = commandList.scope({ transitions[0], transitions[1] }, 1, {}, e_rr);
+
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "push", scope.setPushConstants(pushData, e_rr));
+		Test_assert(t, "dispatch", scope.dispatch2D(1, 1, e_rr));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
+
+	Test_assert(t, "end", commandList.end(e_rr));
+
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
+
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
+
+			c::Bool match = true;
+
+			for(c::U32 i = 0; i < 64; ++i)
+				match &= values[i] == texels[i];
+
+			Test_assert(t, "bindlessSamplerResults", match);
 		}
 }

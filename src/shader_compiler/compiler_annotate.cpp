@@ -276,6 +276,18 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
+		case C8x2('D', 'y'):    //DynamicSamplers
+
+			if (
+				stageNameLen == 15 &&
+				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('n', 'a', 'm', 'i', 'c', 'S', 'a', 'm') &&
+				Buffer_readU32(buf, 10, NULL, NULL) == C8x4('p', 'l', 'e', 'r') &&
+				extensionName.ptr[14] == 's'
+			)
+				return ESHExtension_DynamicSamplers;
+
+			break;
+
 		case C8x2('D', 'e'):    //DescriptorHeap
 
 			if (

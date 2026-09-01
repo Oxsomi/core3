@@ -110,17 +110,7 @@ extern "C" void Test_graphicsBindfulRays(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	//The table holds no reference of its own, so its descriptors go back before the resources they name do.
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table) {
-				(void) table.unset(0, 0, 1, nullptr);
-				(void) table.unset(1, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	//The same one triangle scene the bindless rays module uses
 
@@ -631,17 +621,7 @@ extern "C" void Test_graphicsBindfulOmm(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	gfx::DeviceBuffer positions, output;
 	gfx::CommandList emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table) {
-				(void) table.unset(0, 0, 1, nullptr);
-				(void) table.unset(1, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	const c::F32 triangle[12] = {
 		0, 0, 0, 1,
@@ -784,15 +764,7 @@ extern "C" void Test_graphicsBindfulRayQueryGraphics(oxc::c::Test *t, oxc::c::Gr
 	gfx::RenderTexture target;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table)
-				(void) table.unset(0, 0, 1, nullptr);
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	//The same one triangle scene the other raytracing modules use
 

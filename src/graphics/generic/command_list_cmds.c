@@ -31,6 +31,7 @@
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/texture_format.h"
@@ -298,6 +299,8 @@ Bool CommandListRef_copyImageRegions(
 
 	//Validate copy
 
+	Bool anyRotation = false;
+
 	for(U64 i = 0; i < regions.length; ++i) {
 
 		CopyImageRegion clearImage = regions.ptr[i];
@@ -307,6 +310,62 @@ Bool CommandListRef_copyImageRegions(
 		if(clearImage.dstLevelId || clearImage.srcLevelId)        //TODO: Allow levels
 			retError(clean, Error_invalidParameter(
 				1, 6, "CommandListRef_copyImage()::regions[i].src/dstLevelId is out of bounds"
+			));
+
+		if(clearImage.outputRotation > 3)
+			retError(clean, Error_invalidParameter(
+				1, 7, "CommandListRef_copyImage()::regions[i].outputRotation must be 0 to 3 (0, 90, 180, 270)"
+			));
+
+		//A rotation cannot be expressed as an image copy on either API, so those regions are replayed as a
+		// dispatch of the device's own copy shader instead.
+		//That reads src and writes dst through descriptors
+		// rather than as transfer resources, which needs different transitions, decided once below for the
+		// whole command.
+
+		anyRotation |= !!clearImage.outputRotation;
+	}
+
+	//A rotated region is a dispatch, so src is sampled and dst is stored to.
+	//Both backends only give a texture that capability when it was created asking for it:
+	// D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS and VK_IMAGE_USAGE_STORAGE_BIT are both gated on
+	// ShaderWrite, and the sampled side on ShaderRead.
+	//Caught at record time because neither backend fails usefully later.
+	//D3D12 would build a UAV over a resource that never allowed one, which the debug layer reports and
+	// nothing else does, and Vulkan cannot even create the view, which leaves the copy silently not
+	// happening.
+
+	if (anyRotation) {
+
+		//The replay's two descriptors come from the push ring of the heap the caller bound: a heap the
+		// replay picked itself would need a SetDescriptorHeaps behind the caller's back, and that switch is
+		// heavy (it can drain the GPU on NV), which is the entire reason heap binds are explicit.
+		//Vulkan needs no heap, but recording is refused on both backends so a command list that records on
+		// one records on the other.
+
+		const DescriptorHeap *boundHeap =
+			commandList->boundDescriptorHeap ? DescriptorHeapRef_ptr(commandList->boundDescriptorHeap) : NULL;
+
+		if(!boundHeap || boundHeap->info.maxPushDescriptors < 2)
+			retError(clean, Error_invalidOperation(
+				2,
+				"CommandListRef_copyImage() a rotated region is replayed as a dispatch and needs a bound "
+				"descriptor heap with maxPushDescriptors >= 2 (CommandListRef_bindDescriptorHeap); binding "
+				"one behind the caller's back would hide a heap switch"
+			));
+
+		if(!(src.resource.flags & EGraphicsResourceFlag_ShaderRead))
+			retError(clean, Error_unsupportedOperation(
+				1,
+				"CommandListRef_copyImage()::src of a rotated region is read through a descriptor and "
+				"requires EGraphicsResourceFlag_ShaderRead"
+			));
+
+		if(!(dst.resource.flags & EGraphicsResourceFlag_ShaderWrite))
+			retError(clean, Error_unsupportedOperation(
+				1,
+				"CommandListRef_copyImage()::dst of a rotated region is written through a descriptor and "
+				"requires EGraphicsResourceFlag_ShaderWrite"
 			));
 	}
 
@@ -320,12 +379,23 @@ Bool CommandListRef_copyImageRegions(
 
 	//Add transitions
 
-	ETransitionType types[2] = { ETransitionType_CopyRead, ETransitionType_CopyWrite };
+	//A rotated region is a dispatch of the copy shader, so src is sampled and dst is stored to rather than
+	// either being a transfer resource.
+	//One rotated region puts the WHOLE command on that path, so the
+	// recorder and the backend never disagree about what state the images are in.
+
+	ETransitionType types[2] = {
+		anyRotation ? ETransitionType_ShaderRead : ETransitionType_CopyRead,
+		anyRotation ? ETransitionType_ShaderWrite : ETransitionType_CopyWrite
+	};
+
+	const EPipelineStage stage = anyRotation ? EPipelineStage_Compute : EPipelineStage_Count;
+
 	RefPtr *ptrs[2] = { srcRef, dstRef };
 
 	for(U64 i = 0; i < 2; ++i)
 		gotoIfError3(clean, CommandListRef_transitionImage(
-			commandList, ptrs[i], (ImageRange) { 0 }, types[i], EPipelineStage_Count, e_rr
+			commandList, ptrs[i], (ImageRange) { 0 }, types[i], stage, e_rr
 		));
 
 	//Copy buffer

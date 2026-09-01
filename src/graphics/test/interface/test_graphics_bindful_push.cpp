@@ -40,8 +40,8 @@ namespace {
 	//graphics.hpp already has the guard these were: OwnedList frees its list on every exit path, error
 	//returns included.
 
-	using OwnedSHFile = oxc::gfx::OwnedList<oxc::c::SHFile, oxc::c::SHFile_free>;
-	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo, oxc::c::DescriptorLayoutInfo_free>;
+	using OwnedSHFile = oxc::gfx::OwnedList<oxc::c::SHFile>;
+	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo>;
 }
 
 //Root descriptors rather than table entries: both resources ride in the command stream, so this module
@@ -220,5 +220,167 @@ extern "C" void Test_graphicsBindfulPushDescriptors(oxc::c::Test *t, oxc::c::Gra
 
 			Test_assert(t, "pushDescriptorFirstResults", firstMatch);
 			Test_assert(t, "pushDescriptorSecondResults", secondMatch);
+		}
+}
+
+//A texture push descriptor, which is the half a root descriptor cannot hold.
+//D3D12 gives it a single entry descriptor table filled from the bound heap's push ring and Vulkan pushes an
+// image descriptor; the buffer beside it stays a root descriptor on both, so one dispatch covers both forms.
+
+extern "C" void Test_graphicsBindfulPushTexture(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
+
+	using namespace oxc;
+	using namespace oxc::gfx;
+
+	c::Error *e_rr = &t->err;
+	const c::Allocator *alloc = c::Platform_instance->alloc;
+
+	Test_setModule(t, "Bindful/pushTexture");
+
+	Device dev = Device::share(deviceRef);
+
+	OwnedSHFile shader(alloc);
+
+	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_pushtex.oiSH", &shader.list)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping texture push tests");
+		return;
+	}
+
+	const c::U32 entryId = TestShaders_entry(t, deviceRef, &shader.list, "main");
+
+	if(entryId == c::U32_MAX)
+		return;
+
+	OwnedLayoutInfo layoutInfo(alloc);
+	OwnedLayoutInfo pushInfo(alloc);
+
+	if(!Test_assert(t, "detectLayout", dev.detectLayout(
+		shader.list, entryId, layoutInfo.list, nullptr, nullptr, { "_input", "output" }, &pushInfo.list,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
+	)))
+		return;
+
+	Test_assert(t, "noOrdinaryBindings", !layoutInfo.list.bindings.length);
+
+	if(!Test_assert(t, "detectedPushDescriptors", pushInfo.list.bindings.length == 2))
+		return;
+
+	DescriptorLayout pushLayout;
+
+	if(!dev.createDescriptorLayout(pushInfo.list, "Texture push layout", pushLayout, nullptr)) {
+		Test_print(t, "Push descriptor layouts unsupported on this device, skipping");
+		return;
+	}
+
+	Test_assert(t, "pushLayoutCreate", pushLayout.valid());
+
+	//R = x and G = y, so a texel that came from the wrong place shows up as the wrong coordinate rather
+	// than merely as a mismatch.
+
+	c::U32 texels[64];
+
+	for(c::U32 y = 0; y < 8; ++y)
+		for(c::U32 x = 0; x < 8; ++x)
+			texels[y * 8 + x] = 0xFF000000u | (y << 8) | x;
+
+	c::Buffer texelRef = c::Buffer_createRefConst(texels, sizeof(texels));
+
+	DeviceTexture pattern;
+	DeviceBuffer output;
+
+	if(!Test_assert(t, "patternCreate", dev.createTexture(
+		c::ETextureType_2D, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_ShaderRead, 8, 8, 1,
+		"Texture push pattern", &texelRef, pattern, nullptr, e_rr
+	)))
+		return;
+
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag)(c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Texture push output", 64 * sizeof(c::U32), output, nullptr, e_rr
+	)))
+		return;
+
+	c::PipelineLayoutInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.pushDescriptors = pushLayout.handle();
+
+	PipelineLayout pipelineLayout;
+
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Texture push pipeline layout", pipelineLayout, e_rr
+	)))
+		return;
+
+	Pipeline pipeline;
+
+	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		shader.list, "main", "Texture push pipeline", pipeline, {}, &pipelineLayout, e_rr
+	)))
+		return;
+
+	CommandList commandList, emptyList;
+	DescriptorHeap pushHeap;
+
+	if(
+		!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)) ||
+		!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
+	)
+		return;
+
+	//The texture push takes its shader visible slot from the push ring of the heap the CALLER bound; the
+	// layout is push only (no runtime bindless set), so nothing else would ever bind one, and a heap bound
+	// behind the caller's back would hide a SetDescriptorHeaps.
+
+	c::DescriptorHeapInfo pushHeapInfo = { .maxDescriptorTables = 1, .maxPushDescriptors = 4 };
+
+	if(!Test_assert(t, "pushHeapCreate", dev.createDescriptorHeap(pushHeapInfo, "Texture push heap", pushHeap, e_rr)))
+		return;
+
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
+
+	const c::Descriptor inputDesc = c::Descriptor_texture(pattern.handle(), 0, 1, 0, 0, 0, 0);
+	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, nullptr, 0);
+
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
+
+	{
+		//Nothing declared at scope start: the push descriptor's own transition is what has to put the
+		// texture into shader read, exactly as it does for the buffer beside it.
+
+		//Without the heap the dispatch is refused, since the slot has to come from somewhere the caller
+		// chose; its own scope because a refused work op hides the whole scope.
+
+		{
+			CommandScope neg = commandList.scope({}, 1, {}, e_rr);
+			Test_assert(t, "scopeNeg", (c::Bool) neg);
+			Test_assert(t, "bindPipelineNeg", neg.setComputePipeline(pipeline, e_rr));
+			Test_assert(t, "setPushNeg", neg.setPushDescriptors({ inputDesc, outputDesc }, e_rr));
+			Test_assert(t, "dispatchNeedsHeap", !neg.dispatch2D(1, 1, nullptr));
+			Test_assert(t, "scopeNegEnd", neg.end(e_rr));
+		}
+
+		CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindPushHeap", scope.bindDescriptorHeap(pushHeap, e_rr));
+		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "setPush", scope.setPushDescriptors({ inputDesc, outputDesc }, e_rr));
+		Test_assert(t, "dispatch", scope.dispatch2D(1, 1, e_rr));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
+
+	Test_assert(t, "end", commandList.end(e_rr));
+
+	if (TestShaders_submitAndWait(t, deviceRef, commandList.handle()))
+		if (TestShaders_pullBuffer(t, deviceRef, emptyList.handle(), output.handle())) {
+
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
+
+			c::Bool match = true;
+
+			for(c::U32 i = 0; i < 64; ++i)
+				match &= values[i] == texels[i];
+
+			Test_assert(t, "pushTextureResults", match);
 		}
 }
