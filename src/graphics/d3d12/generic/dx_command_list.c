@@ -245,28 +245,39 @@ static void DxCommandBufferState_bindDescriptors(
 			DxDescriptorTable *bindlessTable =
 				DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Dx);
 
-			ID3D12DescriptorHeap *heaps[2] = { bindlessHeap->resourcesHeap.heap, bindlessHeap->samplerHeap.heap };
-
 			//Sampler descriptors are not the same size as CBV/SRV/UAV ones on every adapter, so each offset
 			// scales by its own heap's increment.
+			//Without EnableDynamicSamplers there is no sampler heap and the root signature has no sampler
+			// table, so both lists carry exactly what exists: the sampler table at root param 0 when present
+			// (it is the first binding of the default layout), resources at the next.
 
-			const D3D12_GPU_DESCRIPTOR_HANDLE tables[2] = {
-				{
+			ID3D12DescriptorHeap *heaps[2];
+			D3D12_GPU_DESCRIPTOR_HANDLE tables[2];
+			U32 tableCount = 0;
+
+			if (bindlessHeap->samplerHeap.heap) {
+
+				heaps[tableCount] = bindlessHeap->samplerHeap.heap;
+
+				tables[tableCount++] = (D3D12_GPU_DESCRIPTOR_HANDLE) {
 					bindlessHeap->samplerHeap.gpuHandle.ptr +
 					bindlessTable->allocationLocations[1] * bindlessHeap->samplerHeap.gpuIncrement
-				},
-				{
-					bindlessHeap->resourcesHeap.gpuHandle.ptr +
-					bindlessTable->allocationLocations[0] * bindlessHeap->resourcesHeap.gpuIncrement
-				}
+				};
+			}
+
+			heaps[tableCount] = bindlessHeap->resourcesHeap.heap;
+
+			tables[tableCount++] = (D3D12_GPU_DESCRIPTOR_HANDLE) {
+				bindlessHeap->resourcesHeap.gpuHandle.ptr +
+				bindlessTable->allocationLocations[0] * bindlessHeap->resourcesHeap.gpuIncrement
 			};
 
 			if(temp->lastBoundHeap != device->defaultDescriptorHeaps) {
-				buffer->lpVtbl->SetDescriptorHeaps(buffer, 2, heaps);
+				buffer->lpVtbl->SetDescriptorHeaps(buffer, tableCount, heaps);
 				temp->lastBoundHeap = device->defaultDescriptorHeaps;
 			}
 
-			for(U32 i = 0; i < 2; ++i) {
+			for(U32 i = 0; i < tableCount; ++i) {
 
 				if(isCompute)
 					buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, i, tables[i]);

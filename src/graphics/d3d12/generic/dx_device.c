@@ -629,21 +629,37 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 
 	DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(device->defaultDescriptorHeaps), Dx);
 
-	ID3D12DescriptorHeap *descriptorHeaps[2] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };
-
 	DxDescriptorTable *table = DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Dx);
+
 	//Each heap's increment comes from GetDescriptorHandleIncrementSize for its own descriptor type,
 	// and sampler descriptors are not the same size as CBV/SRV/UAV ones on every adapter.
 	//So the sampler offset has to scale by the sampler heap's stride.
 	//Using the resource heap's happens to work only where the two coincide,
 	// and lands somewhere else entirely on hardware where they don't.
+	//Without EnableDynamicSamplers the device has NO sampler heap and the root signature no sampler table,
+	// so both lists carry exactly what exists: the sampler table at root param 0 when present (it is the
+	// first binding of the default layout), resources at the next.
 
-	D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[2] = {
-		{ heap->samplerHeap.gpuHandle.ptr + table->allocationLocations[1] * heap->samplerHeap.gpuIncrement },
-		{ heap->resourcesHeap.gpuHandle.ptr + table->allocationLocations[0] * heap->resourcesHeap.gpuIncrement }
+	ID3D12DescriptorHeap *descriptorHeaps[2];
+	D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[2];
+	U32 descriptorCount = 0;
+
+	if (heap->samplerHeap.heap) {
+
+		descriptorHeaps[descriptorCount] = heap->samplerHeap.heap;
+
+		descriptorTable[descriptorCount++] = (D3D12_GPU_DESCRIPTOR_HANDLE) {
+			heap->samplerHeap.gpuHandle.ptr + table->allocationLocations[1] * heap->samplerHeap.gpuIncrement
+		};
+	}
+
+	descriptorHeaps[descriptorCount] = heap->resourcesHeap.heap;
+
+	descriptorTable[descriptorCount++] = (D3D12_GPU_DESCRIPTOR_HANDLE) {
+		heap->resourcesHeap.gpuHandle.ptr + table->allocationLocations[0] * heap->resourcesHeap.gpuIncrement
 	};
 
-	commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, 2, descriptorHeaps);
+	commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, descriptorCount, descriptorHeaps);
 
 	PipelineLayout *defaultLayout = PipelineLayoutRef_ptr(device->defaultPipelineLayout);
 	DxPipelineLayout *defaultLayoutExt = PipelineLayout_ext(defaultLayout, Dx);
@@ -651,7 +667,7 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 	commandBuffer->lpVtbl->SetComputeRootSignature(commandBuffer, defaultLayoutExt->rootSig);
 	commandBuffer->lpVtbl->SetGraphicsRootSignature(commandBuffer, defaultLayoutExt->rootSig);
 
-	for(U32 i = 0; i < 2; ++i) {
+	for(U32 i = 0; i < descriptorCount; ++i) {
 		commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
 		commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
 	}
