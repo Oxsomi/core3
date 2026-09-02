@@ -293,10 +293,21 @@ Bool DX_WRAP_FUNC(BLASRef_prepareCompact)(GraphicsDeviceRef *deviceRef, BLASRef 
 	blas->base.compactionQuery = U32_MAX;
 	GraphicsDevice_releaseCompactionQuery(device, query, alloc);
 
-	//A driver is allowed to report no saving. Leaving recorded false keeps a pointless copy out of the
+	//A driver that declines to compact reports the ORIGINAL size 1:1 (confirmed for WARP and lavapipe);
+	// ZERO is not a size a conformant driver can produce, so reading one means the readback was consumed
+	// before the copy that fills it ran, and silently treating it as "no saving" would bury a sync bug.
+
+	if(!compactedSize)
+		retError(clean, Error_invalidState(
+			1,
+			"D3D12BLASRef_prepareCompact() the compacted size read back as 0, which no conformant driver "
+			"returns; the postbuild info copy has not executed yet and reading it raced the GPU"
+		));
+
+	//No saving is a legitimate driver answer. Leaving recorded false keeps a pointless copy out of the
 	// command buffer entirely.
 
-	if(!compactedSize || compactedSize >= DeviceBufferRef_ptr(blas->base.asBuffer)->resource.size) {
+	if(compactedSize >= DeviceBufferRef_ptr(blas->base.asBuffer)->resource.size) {
 		blas->base.isCompacted = true;
 		goto clean;
 	}
