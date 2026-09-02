@@ -586,6 +586,19 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	if(deviceExt->adapter4)
 		deviceExt->adapter4->lpVtbl->Release(deviceExt->adapter4);
 
+	//The compaction pools go back BEFORE the live object report below: they are real ID3D12Resources (and
+	// the last allocations in their memory blocks), so releasing them after the report shows them as leaks
+	// that never were.
+
+	for(U64 i = 0; i < deviceExt->compactionEmitPools.length; ++i)
+		RefPtr_dec((RefPtr**) &deviceExt->compactionEmitPools.ptrNonConst[i]);
+
+	for(U64 i = 0; i < deviceExt->compactionReadbackPools.length; ++i)
+		RefPtr_dec((RefPtr**) &deviceExt->compactionReadbackPools.ptrNonConst[i]);
+
+	ListRefPtr_free(&deviceExt->compactionEmitPools, alloc);
+	ListRefPtr_free(&deviceExt->compactionReadbackPools, alloc);
+
 	//Validate exit for leaks, before the info queues go away so the report is still drained and counted below
 
 	if(deviceExt->debugDevice)
@@ -612,15 +625,6 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	ListDxCommandAllocator_free(&deviceExt->commandPools, alloc);
 
 	//Free temp storage
-
-	for(U64 i = 0; i < deviceExt->compactionEmitPools.length; ++i)
-		RefPtr_dec((RefPtr**) &deviceExt->compactionEmitPools.ptrNonConst[i]);
-
-	for(U64 i = 0; i < deviceExt->compactionReadbackPools.length; ++i)
-		RefPtr_dec((RefPtr**) &deviceExt->compactionReadbackPools.ptrNonConst[i]);
-
-	ListRefPtr_free(&deviceExt->compactionEmitPools, alloc);
-	ListRefPtr_free(&deviceExt->compactionReadbackPools, alloc);
 
 	ListD3D12_BUFFER_BARRIER_free(&deviceExt->bufferTransitions, alloc);
 	ListD3D12_TEXTURE_BARRIER_free(&deviceExt->imageTransitions, alloc);
