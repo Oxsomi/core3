@@ -42,6 +42,10 @@ endfunction()
 # INITIAL_MEMORY is what the module commits at instantiation, before it does any work, so it stays small
 # and ALLOW_MEMORY_GROWTH sizes it to the workload; a phone should not hand over half a gigabyte just to
 # load the module. DXC grows this a lot while compiling, but only for the run that needs it.
+# ASan starts bigger: wasm-ld refuses to link unless the data segment plus stack fit inside INITIAL_MEMORY,
+# and the global redzones grow DXC's statics to ~50MB, past what the unsanitized figure holds.
+# The shadow region is no part of this figure; emcc adds an eighth of MAXIMUM_MEMORY on top of
+# INITIAL_MEMORY by itself.
 
 function(apply_web_link_options target)
 
@@ -53,12 +57,18 @@ function(apply_web_link_options target)
 		return()
 	endif()
 
+	if(EnableASAN)
+		set(initialMemory 128MB)
+	else()
+		set(initialMemory 32MB)
+	endif()
+
 	target_link_options(${target} PRIVATE
 		"-sENVIRONMENT=node"
 		"-sNODERAWFS=1"
 		"-sEXIT_RUNTIME=1"
 		"-sALLOW_MEMORY_GROWTH=1"
-		"-sINITIAL_MEMORY=32MB"
+		"-sINITIAL_MEMORY=${initialMemory}"
 		"-sMAXIMUM_MEMORY=16GB"
 		"-sSTACK_SIZE=8MB"
 	)

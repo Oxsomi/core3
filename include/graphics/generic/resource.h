@@ -131,15 +131,19 @@ typedef union DevicePendingRange {
 
 //Reading back from the device (pullRegion).
 //The callback fires once the frame containing the read completed and the data landed in the resource's cpuData.
+//resource is the RefPtr* the pull was queued on.
+//The pointer parameters are void* because C++ sees the C structs inside a wrapper namespace, which changes the
+// function type's identity, and -fsanitize=function checks that identity on every indirect call;
+// void* names the same type in both languages, so an implementation on either side stays a true match.
 
-typedef void (*DevicePullCallback)(RefPtr *resource, void *context);
+typedef void (*DevicePullCallback)(void *resource, void *context);
 
 //Same timing, but for textures without a cpuData to land in (RenderTexture, DepthStencil, Swapchain).
-//The data buffer holds the region in tight rows and belongs to the runtime; move it out to keep it,
+//data is the Buffer* holding the region in tight rows; it belongs to the runtime, so move it out to keep it,
 // anything left in it is freed right after the callback returns.
 //The buffer is allocated when the pull is queued, so by the time the callback fires it always holds data.
 
-typedef void (*TexturePullCallback)(RefPtr *resource, Buffer *data, void *context);
+typedef void (*TexturePullCallback)(void *resource, void *data, void *context);
 
 typedef struct DevicePendingPull {
 

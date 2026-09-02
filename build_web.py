@@ -105,8 +105,9 @@ def webOptionArgs(tests, hostCrypto=False, asan=False, ubsan=False):
 		"enableHostCrypto": "True" if hostCrypto else "False",
 
 		# The emscripten linker adds the ASan shadow region (an eighth of MAXIMUM_MEMORY) to INITIAL_MEMORY
-		# itself whenever ALLOW_MEMORY_GROWTH is on, which apply_web_link_options (cmake/oxc3.cmake) sets,
-		# so the 32MB the module starts with covers a sanitized build and nothing here has to raise it.
+		# itself whenever ALLOW_MEMORY_GROWTH is on, which apply_web_link_options (cmake/oxc3.cmake) sets.
+		# What that does not cover is the data segment: ASan's global redzones grow DXC's statics past the
+		# unsanitized start size, so apply_web_link_options picks a larger INITIAL_MEMORY when EnableASAN is on.
 		# Raising it from here is not possible anyway: those are target_link_options,
 		# which land after anything conan can put in the linker flags, and emcc takes the last -s setting.
 

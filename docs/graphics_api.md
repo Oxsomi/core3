@@ -631,6 +631,8 @@ The staging memory that carries pulls back to the CPU is created at the first pu
 
 Texture pulls follow the same region semantics as markDirty: zero for an axis means the rest of that axis, and for block compressed formats the region snaps outward to whole blocks, so slightly more than asked can be refreshed. Compressed formats are supported; the pulled data lands in cpuData in the same tight block rows the upload reads from.
 
+The completion callbacks (DevicePullCallback, TexturePullCallback) take their pointers as `void*`: `resource` is the RefPtr* the pull was queued on, and `data` is the Buffer* a texture without a cpuData hands its region over in. They are untyped so that an implementation compiled as C++ (where the wrapper namespace changes the struct types' identity) still matches the exact function type the runtime's C side calls through, which -fsanitize=function verifies on every completion.
+
 ## UnifiedTexture
 
 A UnifiedTexture can represent the following types: DepthStencil, RenderTexture, Swapchain, DeviceTexture. It was chosen to not be only one interface because the four types are very distinct in use, so only the base functionality had to be unified like this.

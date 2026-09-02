@@ -435,27 +435,25 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 	if(isMoltenVk)
 		instanceInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 
-	if(hasDebugLayer & 1) {
+	//Maximum validation.
+	//The chained structs live at function scope because vkCreateInstance reads the pNext chain during the call;
+	// a layer copies the chain there, long after a block scoped struct would have died.
 
-		//Maximum validation
+	VkValidationFeatureEnableEXT enables[] = {
+		VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT
+	};
 
-		VkValidationFeatureEnableEXT enables[] = {
-			VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT
-		};
+	VkValidationFeaturesEXT features = (VkValidationFeaturesEXT) {
+		.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+		.enabledValidationFeatureCount = instance->flags & EGraphicsInstanceFlags_DisableGPUBV ? 2 : 4,
+		.pEnabledValidationFeatures = enables
+	};
 
-		U32 count = instance->flags & EGraphicsInstanceFlags_DisableGPUBV ? 2 : 4;
-
-		VkValidationFeaturesEXT features = (VkValidationFeaturesEXT) {
-			.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
-			.enabledValidationFeatureCount = count,
-			.pEnabledValidationFeatures = enables
-		};
-
+	if(hasDebugLayer & 1)
 		instanceInfo.pNext = &features;
-	}
 
 	if(instance->flags & EGraphicsInstanceFlags_IsVerbose) {
 

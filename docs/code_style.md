@@ -42,6 +42,9 @@ _malloc_ and _free_ shouldn't be used if the goal is a cross platform applicatio
 
 ## Functions
 
+Empty parameter lists are written `f()`, never `f(void)`.
+
+
 No inline should be used; aside from short two/four liners. This is useful to provide a clean overview of the functionality and reduce compile time.
 
 C "Member functions" should be using ClassName_functionName. This makes it clear that it's either a helper function or a member function. Using direct structs `T t` instead of `const T *t` is recommended only if the struct isn't too big (16+ bytes) to be copied, though the compiler might inline. Data passed that is const should be marked as such. The only exception is for example string (24-byte or <=32 bytes) where extremely simple helper functions are allowed to pass by value.
@@ -171,6 +174,10 @@ Functions should be preferred over macros, unless macros greatly reduce copy + p
 Macros should try to align the `\` required to do multi-line macros on the same column.
 
 ## Comments
+
+American English throughout (color, not colour), in comments, identifiers and docs alike. Docs use real
+punctuation rather than em dashes.
+
 
 If using code snippets from other places, make sure to reference the link to ensure the original source can be compared or an explanation can be found if needed in the future and to provide credits to the original author.
 
