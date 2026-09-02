@@ -64,7 +64,8 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 	"COOPFP8",
 	"COOPVECTRAINING",
 	"DESCRIPTORHEAP",
-	"SUBGROUPQUAD"
+	"SUBGROUPQUAD",
+	"DYNAMICSAMPLERS"          //resources.hlsli declares _samplers[] behind __OXC_EXT_DYNAMICSAMPLERS
 };
 
 const C8 *ESHExtension_names[ESHExtension_Count] = {
@@ -94,7 +95,8 @@ const C8 *ESHExtension_names[ESHExtension_Count] = {
 	"CoopFP8",
 	"CoopVecTraining",
 	"DescriptorHeap",
-	"SubgroupQuad"
+	"SubgroupQuad",
+	"DynamicSamplers"
 };
 
 const C8 *ESHVendor_names[ESHVendor_Count + 1] = {
@@ -252,6 +254,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 	U32 sets[4] = { 0 };
 	U8 setCounters = 0;
 	Bool unboundArraySize = false;
+	Bool dynamicSamplers = false;
 
 	for (U64 i = 0; i < binaries->registers.length; ++i) {
 
@@ -297,8 +300,16 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 			case ESHRegisterType_Sampler:
 			case ESHRegisterType_SamplerComparisonState:
+
 				if(hasSPIRV) counters[Counter_SamplerSPIRV] += regs;
 				if(hasDXIL)  counters[Counter_SamplerDXIL]  += regs;
+
+				//An ARRAY of samplers is indexed at runtime, which only the bindless _samplers[] array can
+				// serve; a singular sampler is a binding or a static sampler and needs none of it.
+
+				if(reg.arrays.length)
+					dynamicSamplers = true;
+
 				break;
 
 			case ESHRegisterType_SubpassInput:
@@ -378,6 +389,14 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 		counters[Counter_SRV] > 128 ||
 		counters[Counter_UAV] > 64 ||
 		totalSPIRV > 44;
+
+	//Independent of bindless: a sampler array needs the device to have declared _samplers[], which is its
+	// own opt in rather than part of the bindless layout being present at all.
+	//[[oxc::extension("DynamicSamplers")]] is the front door and already set the bit before compiling;
+	// this inference is the backstop for a shader declaring a sampler array of its own without it.
+
+	if(dynamicSamplers)
+		binaries->identifier.extensions |= ESHExtension_DynamicSamplers;
 
 	if (bindless || unboundArraySize) {
 
@@ -575,7 +594,8 @@ Bool SHBinaryIdentifier_equals(const SHBinaryIdentifier *a, const SHBinaryIdenti
 	//If they're merged, bindless will be required for both.
 	//Another reason is SPIRV might strip resources that are kept in dxil with -fhlsl-unused-resources=keep-all
 
-	ESHExtension toIgnore = ESHExtension_Bindless | ESHExtension_UnboundArraySize;
+	ESHExtension toIgnore =
+		ESHExtension_Bindless | ESHExtension_UnboundArraySize | ESHExtension_DynamicSamplers;
 
 	ESHExtension extensionsA = a->extensions & ~toIgnore;
 	ESHExtension extensionsB = b->extensions &~ toIgnore;

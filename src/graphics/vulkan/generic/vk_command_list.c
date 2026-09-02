@@ -161,20 +161,18 @@ static void VkCommandBufferState_bindDescriptors(
 	//A custom layout that declares OxC3's per frame globals gets them pushed here: the default layout's own
 	// bind never runs for it, so _frameId/_time would otherwise be whatever the set last held.
 	//Tracked with the same pair as the caller's push descriptors, since a layout carries one or the other.
+	//The set index is the space the cbuffer layout declares (see resources.hlsli's vk::binding for the
+	// globals), because on SPIR-V the space IS the set index; it used to be "the first slot past the
+	// bindings", which only agreed with the shader while the bindings happened to fill every lower set.
 
 	if (PipelineLayout_hasRuntimeGlobals(layout) && (
 		!temp->pushDescriptorsEmitted[bindPointId] || temp->lastPushDescLayout[bindPointId] != *layoutExt
 	)) {
 
-		U32 globalsSet = 0;
+		const VkDescriptorLayout *cbufferExt =
+			DescriptorLayout_ext(DescriptorLayoutRef_ptr(layout->info.pushDescriptors), Vk);
 
-		if (layout->info.bindings) {
-
-			VkDescriptorLayout *bindExt = DescriptorLayout_ext(DescriptorLayoutRef_ptr(layout->info.bindings), Vk);
-
-			while(globalsSet < 4 && bindExt->layouts[globalsSet])
-				++globalsSet;
-		}
+		const U32 globalsSet = cbufferExt->setIds[0];
 
 		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
 
@@ -218,31 +216,39 @@ static void VkCommandBufferState_bindDescriptors(
 
 		const DescriptorLayout *pushLayout = DescriptorLayoutRef_ptr(layout->info.pushDescriptors);
 
-		//The push set sits after whatever sets the ordinary bindings occupy, which is exactly how
-		// vk_pipeline_layout.c stacked them
-
-		U32 pushSet = 0;
-
-		if (layout->info.bindings) {
-
-			VkDescriptorLayout *bindExt = DescriptorLayout_ext(DescriptorLayoutRef_ptr(layout->info.bindings), Vk);
-
-			while(pushSet < 4 && bindExt->layouts[pushSet])
-				++pushSet;
-		}
+		//Each push goes to the set its binding's space names, for the same reason the pipeline layout places
+		// the sets by space.
+		//A push layout can span more than one space, so the writes are pushed one set at
+		// a time: the sets are few and sorted, so one pass per set over a handful of writes is nothing.
 
 		VkWriteDescriptorSet writes[OXC3_MAX_PUSH_DESCRIPTORS];
 		VkDescriptorBufferInfo buffers[OXC3_MAX_PUSH_DESCRIPTORS];
+		VkDescriptorImageInfo images[OXC3_MAX_PUSH_DESCRIPTORS];
 		VkWriteDescriptorSetAccelerationStructureKHR accelerations[OXC3_MAX_PUSH_DESCRIPTORS];
 		VkAccelerationStructureKHR handles[OXC3_MAX_PUSH_DESCRIPTORS];
+		U32 writeSets[OXC3_MAX_PUSH_DESCRIPTORS];
 
 		U32 writeCount = 0;
 
-		for (U8 i = 0; i < temp->pushDescriptorCount && i < pushLayout->info.bindings.length; ++i) {
+		//An immutable sampler is baked into the set layout, so it takes a binding but no write and no
+		// descriptor: writeId walks the caller's descriptors while i walks the bindings.
 
-			Descriptor d = temp->pushDescriptors[i];
+		U8 writeId = 0;
+
+		for (U8 i = 0; i < pushLayout->info.bindings.length; ++i) {
+
 			const DescriptorBinding binding = pushLayout->info.bindings.ptr[i];
+
+			if(DescriptorBinding_immutableSamplerId(binding))
+				continue;
+
+			if(writeId >= temp->pushDescriptorCount)
+				break;
+
+			Descriptor d = temp->pushDescriptors[writeId++];
 			const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
+
+			writeSets[writeCount] = binding.binding.space;
 
 			writes[writeCount] = (VkWriteDescriptorSet) {
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -262,6 +268,35 @@ static void VkCommandBufferState_bindDescriptors(
 
 				writes[writeCount].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
 				writes[writeCount].pNext = &accelerations[writeCount];
+			}
+
+			//A texture pushes as a plain image descriptor here.
+			//Vulkan has no root descriptor distinction, so this is the whole of what D3D12 needs a heap slot
+			// and a descriptor table for.
+			//The recorder already proved the texture allows the access and transitioned it, so the layout is
+			// whatever that transition put it in.
+
+			else if (type >= ESHRegisterType_TextureStart && type < ESHRegisterType_SubpassInput) {
+
+				const Bool isWrite = (binding.registerType & ESHRegisterType_IsWrite) != 0;
+
+				VkImageView view = NULL;
+				U32 viewId = U32_MAX;
+
+				if(!VkUnifiedTexture_getView(d, binding.registerType, &view, &viewId, NULL)) {
+					Log_errorLnx("VkUnifiedTexture_getView failed for a push descriptor, skipping the bind");
+					continue;
+				}
+
+				images[writeCount] = (VkDescriptorImageInfo) {
+					.imageView = view,
+					.imageLayout = isWrite ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				};
+
+				writes[writeCount].descriptorType =
+					isWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+
+				writes[writeCount].pImageInfo = &images[writeCount];
 			}
 
 			else {
@@ -289,8 +324,25 @@ static void VkCommandBufferState_bindDescriptors(
 			++writeCount;
 		}
 
-		if(writeCount)
-			deviceExt->cmdPushDescriptorSet(temp->buffer, bindPoint, *layoutExt, pushSet, writeCount, writes);
+		//One push per set: the writes that name it are gathered into a contiguous list, since the push takes
+		// an array and the writes above are in binding order rather than set order.
+
+		const VkDescriptorLayout *pushExt = DescriptorLayout_ext((DescriptorLayout*) pushLayout, Vk);
+
+		for (U8 k = 0; k < 4 && pushExt->layouts[k]; ++k) {
+
+			const U32 set = pushExt->setIds[k];
+
+			VkWriteDescriptorSet setWrites[OXC3_MAX_PUSH_DESCRIPTORS];
+			U32 setWriteCount = 0;
+
+			for(U32 i = 0; i < writeCount; ++i)
+				if(writeSets[i] == set)
+					setWrites[setWriteCount++] = writes[i];
+
+			if(setWriteCount)
+				deviceExt->cmdPushDescriptorSet(temp->buffer, bindPoint, *layoutExt, set, setWriteCount, setWrites);
+		}
 
 		temp->pushDescriptorsEmitted[bindPointId] = true;
 		temp->lastPushDescLayout[bindPointId] = *layoutExt;
@@ -518,6 +570,179 @@ void VK_WRAP_FUNC(CommandList_process)(
 			VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
 
 			UnifiedTexture src = TextureRef_getUnifiedTexture(copyImage.src, NULL);
+
+			//A rotation is not something either API's image copy can express, so those regions are replayed as
+			// a dispatch of the device's own copy shader instead (image_copy.oiSH's mainSingle, whose ROTATE
+			// permutation is copyShaders[1]).
+			//The recorder put the WHOLE command on this path as soon as one region rotates, because the images
+			// were transitioned for shader access rather than transfer; see CommandListRef_copyImageRegions.
+			//The shader's two textures are its own push descriptors and are written straight here rather than
+			// through the recorder's push descriptor state: this is the engine's own pipeline, and going
+			// through the public path would mean a texture push descriptor the recorder deliberately refuses.
+
+			Bool anyRotation = false;
+
+			for(U64 i = 0; i < copyImage.regionCount && !anyRotation; ++i)
+				anyRotation = !!copyImageRegions[i].outputRotation;
+
+			if (anyRotation) {
+
+				const PipelineLayout *copyLayout = PipelineLayoutRef_ptr(device->copyPipelineLayout);
+				VkPipelineLayout *copyLayoutExt = PipelineLayout_ext((PipelineLayout*)copyLayout, Vk);
+
+				const DescriptorLayout *pushLayout = DescriptorLayoutRef_ptr(device->copyDescPushDesc);
+				const VkDescriptorLayout *pushExt = DescriptorLayout_ext((DescriptorLayout*)pushLayout, Vk);
+
+				const VkShaderStageFlags pushStages =
+					vkGetShaderStagesDevice(device, copyLayout->info.pushConstants.visibility);
+
+				//The shader is compiled per numeric class, because a view's format is the image's own and
+				// Vulkan requires its numeric type to match the sampled type declared. src and dst share a
+				// format here: copyImage already refuses a mismatched pair.
+
+				const ETexturePrimitive prim =
+					ETextureFormat_getPrimitive(ETextureFormatId_unpack[src.textureFormatId]);
+
+				const U64 isFloat =
+					prim == ETexturePrimitive_UNorm || prim == ETexturePrimitive_SNorm ||
+					prim == ETexturePrimitive_Float || prim == ETexturePrimitive_UNormBGR;
+
+				//Two views for the whole command: every region reads the same src and writes the same dst
+
+				VkImageView views[2] = { NULL, NULL };
+				Bool gotViews = true;
+
+				for (U64 i = 0; i < pushLayout->info.bindings.length && i < 2; ++i) {
+
+					const DescriptorBinding binding = pushLayout->info.bindings.ptr[i];
+					const Bool isWrite = !!(binding.registerType & ESHRegisterType_IsWrite);
+
+					const Descriptor d = Descriptor_texture(
+						isWrite ? copyImage.dst : copyImage.src, 0, 1, 0, 0, 0, 0
+					);
+
+					U32 viewId = U32_MAX;
+
+					if(!VkUnifiedTexture_getView(d, binding.registerType, &views[i], &viewId, NULL)) {
+						Log_errorLnx("VkUnifiedTexture_getView failed for a rotated copy, skipping it");
+						gotViews = false;
+						break;
+					}
+				}
+
+				//Regions are emitted grouped by permutation, unrotated first and rotated second, rather
+				// than in caller order: the pipeline is the only state that differs between them, so the
+				// dedup below binds at most twice per command however the caller interleaved.
+				//Regions never overlap in dst (see the recorder), so their order is free to change.
+
+				for (U64 rotatePass = 0; rotatePass < 2 && gotViews; ++rotatePass) {
+					for (U64 i = 0; i < copyImage.regionCount; ++i) {
+
+						CopyImageRegion image = copyImageRegions[i];
+
+						if((U64) !!image.outputRotation != rotatePass)
+							continue;
+
+						if(!image.width)
+							image.width = src.width - image.srcX;
+
+						if(!image.height)
+							image.height = src.height - image.srcY;
+
+						if(!image.length)
+							image.length = src.length - image.srcZ;
+
+						//An unrotated region in a rotated command still goes through the shader, since the images
+						// are in shader state rather than transfer state; it just takes the plain permutation.
+
+						PipelineRef *shader = device->copyShaders[rotatePass | (isFloat << 1)];
+
+						if(temp->pipelines[EPipelineType_Compute] != shader) {
+
+							temp->pipelines[EPipelineType_Compute] = shader;
+
+							deviceExt->cmdBindPipeline(
+								buffer, VK_PIPELINE_BIND_POINT_COMPUTE, *Pipeline_ext(PipelineRef_ptr(shader), Vk)
+							);
+						}
+
+						//The shader unpacks each U32 as a pair of 16 bit values (see CopyImageRegion's getSrc)
+
+						struct {
+							U32 regionCount, pad3;
+							U32 src[2], dst[2], sizRot[2];
+						} cmd = {
+							.regionCount = 1,
+							.src = { image.srcX | ((U32)image.srcY << 16), image.srcZ },
+							.dst = { image.dstX | ((U32)image.dstY << 16), image.dstZ },
+							.sizRot = {
+								image.width | ((U32)image.height << 16),
+								image.length | ((U32)image.outputRotation << 16)
+							}
+						};
+
+						deviceExt->cmdPushConstants(buffer, *copyLayoutExt, pushStages, 0, sizeof(cmd), &cmd);
+
+						VkDescriptorImageInfo images[2];
+						VkWriteDescriptorSet writes[2];
+						U32 writeCount = 0;
+
+						for (U64 j = 0; j < pushLayout->info.bindings.length && j < 2; ++j) {
+
+							const DescriptorBinding binding = pushLayout->info.bindings.ptr[j];
+							const Bool isWrite = !!(binding.registerType & ESHRegisterType_IsWrite);
+
+							images[writeCount] = (VkDescriptorImageInfo) {
+								.imageView = views[j],
+								.imageLayout =
+									isWrite ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+							};
+
+							writes[writeCount] = (VkWriteDescriptorSet) {
+								.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+								.dstBinding = binding.binding.binding,
+								.descriptorCount = 1,
+								.descriptorType =
+									isWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+								.pImageInfo = &images[writeCount]
+							};
+
+							++writeCount;
+						}
+
+						if(writeCount)
+							deviceExt->cmdPushDescriptorSet(
+								buffer, VK_PIPELINE_BIND_POINT_COMPUTE, *copyLayoutExt,
+								pushExt->setIds[0], writeCount, writes
+							);
+
+						//numthreads(16, 8, 1) in image_copy.hlsl
+
+						deviceExt->cmdDispatch(
+							buffer,
+							(image.width + 15) / 16,
+							(image.height + 7) / 8,
+							image.length
+						);
+					}
+				}
+
+				//This bound a pipeline, push constants and a descriptor set of its own against a layout the
+				// caller never asked for, so everything the work ops cache about the compute bind point is
+				// stale from here on and has to be re-emitted.
+
+				temp->pipelines[EPipelineType_Compute] = NULL;
+				temp->tempPipelines[EPipelineType_Compute] = NULL;
+				temp->lastBoundLayout[0] = VK_NULL_HANDLE;        //0 is the compute bind point
+				temp->lastBoundTable[0] = NULL;
+				temp->lastPushLayout[0] = VK_NULL_HANDLE;
+				temp->lastPushDescLayout[0] = VK_NULL_HANDLE;
+				temp->pushConstantsEmitted[0] = false;
+				temp->pushDescriptorsEmitted[0] = false;
+				temp->defaultDescriptorsBound = false;
+
+				break;
+			}
 
 			for(U64 i = 0; i < copyImage.regionCount; ++i) {
 
@@ -1409,7 +1634,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 							// stages, and this stage becomes the next barrier's source, so leaving LATE out
 							// lets a later write race reads that hadn't finished.
 
-							//A colour attachment is read by the blend and load machinery at the attachment output
+							//A color attachment is read by the blend and load machinery at the attachment output
 							// stage rather than inside the fragment shader; naming the shader stage left the
 							// read outside every later barrier's source scope.
 							//The access stays read only because this case is exactly the readOnly attachment.
@@ -1431,8 +1656,8 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 						case ETransitionType_ResolveTargetWrite:
 
-							//A fixed function resolve writes its target at the colour attachment output stage
-							// with colour attachment access, even when the attachment being resolved is depth
+							//A fixed function resolve writes its target at the color attachment output stage
+							// with color attachment access, even when the attachment being resolved is depth
 							// stencil: the validator asks for exactly that scope on a depth resolve.
 							//Only the layout stays depth stencil, since that is the layout the resolve
 							// attachment itself has to be in.
@@ -1443,7 +1668,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 								VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
 
 							//ATTACHMENT_OPTIMAL rather than the depth specific layout: it is valid for a depth
-							// attachment too, and it is the one that agrees with colour attachment access, which
+							// attachment too, and it is the one that agrees with color attachment access, which
 							// the validator requires the pairing to match.
 
 							layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;

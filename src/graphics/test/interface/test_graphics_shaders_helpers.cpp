@@ -467,7 +467,7 @@ namespace oxc { namespace c {
 				)) {
 					created = Test_assert(t, "createOwnDevice", GraphicsDeviceRef_create(
 						*ownInstanceRef, &deviceInfos.ptr[i], EGraphicsDeviceFlags_None,
-						EGraphicsBufferingMode_Default, NULL, ownDeviceRef, &t->err
+						EGraphicsBufferingMode_Default, NULL, NULL, ownDeviceRef, &t->err
 					));
 					break;
 				}

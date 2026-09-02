@@ -356,6 +356,11 @@ Bool DX_WRAP_FUNC(BLASRef_compact)(
 
 	blas->base.pendingCompactBuffer = NULL;
 
+	//The address REALLY changes here, so dependents are marked again: a pending TLAS build riding this same
+	// submit may have resolved the old address and cleared the record time mark already.
+
+	gotoIfError3(clean, GraphicsDeviceRef_markTlasesStaleForBLAS(deviceRef, blasRef, true, e_rr));
+
 clean:
 	return s_uccess;
 }
@@ -424,8 +429,12 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 			CharString emitName = CharString_createRefCStrConst("BLAS compacted sizes");
 			DeviceBufferRef *emitPool = NULL;
 
+			//InternalWeakDeviceRef, because the DEVICE owns these pools: a strong ref here would be a
+			// cycle (pool holds device, device holds pool) that keeps both alive forever, and the pools are
+			// already released in the device's own teardown.
+
 			gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
-				blas->base.device, EDeviceBufferUsage_ScratchExt, EGraphicsResourceFlag_None,
+				blas->base.device, EDeviceBufferUsage_ScratchExt, EGraphicsResourceFlag_InternalWeakDeviceRef,
 				NULL, &emitName, poolBytes, &emitPool, e_rr
 			));
 
@@ -436,7 +445,8 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 
 			gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 				blas->base.device, EDeviceBufferUsage_None,
-				EGraphicsResourceFlag_CPUAllocatedBit | EGraphicsResourceFlag_CPUReadBit,
+				EGraphicsResourceFlag_CPUAllocatedBit | EGraphicsResourceFlag_CPUReadBit |
+				EGraphicsResourceFlag_InternalWeakDeviceRef,
 				NULL, &readbackName, poolBytes, &readbackPool, e_rr
 			));
 

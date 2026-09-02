@@ -105,15 +105,7 @@ extern "C" void Test_graphicsBindful(oxc::c::Test *t, oxc::c::GraphicsDeviceRef 
 
 	//The table holds no reference of its own, so its descriptor goes back before the buffer it names does.
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table)
-				(void) table.unset(0, 0, 1, nullptr);
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	//The reflection knows the registers, so the layout comes from the shader rather than being restated
 
@@ -274,23 +266,7 @@ extern "C" void Test_graphicsBindfulAdvanced(oxc::c::Test *t, oxc::c::GraphicsDe
 
 	//Only the two real tables ever hold descriptors; the twin and the foreign one exist to be refused.
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &a, &b;
-
-		~TableGuard() {
-
-			if (a) {
-				(void) a.unset(0, 0, 1, nullptr);
-				(void) a.unset(1, 0, 1, nullptr);
-			}
-
-			if (b) {
-				(void) b.unset(0, 0, 1, nullptr);
-				(void) b.unset(1, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ tableA, tableB };
+	gfxtest::TableGuard tableGuard{ { &tableA, &tableB } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc()), layoutTwinInfo(dev.alloc());
 
@@ -511,21 +487,7 @@ extern "C" void Test_graphicsBindfulLayoutSwitch(oxc::c::Test *t, oxc::c::Graphi
 	gfx::DeviceBuffer bufW, src, bufC;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &w, &c;
-
-		~TableGuard() {
-
-			if(w)
-				(void) w.unset(0, 0, 1, nullptr);
-
-			if (c) {
-				(void) c.unset(0, 0, 1, nullptr);
-				(void) c.unset(1, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ tableW, tableC };
+	gfxtest::TableGuard tableGuard{ { &tableW, &tableC } };
 
 	gfxtest::OwnedLayoutInfo layoutWInfo(dev.alloc()), layoutCInfo(dev.alloc());
 
@@ -717,18 +679,7 @@ extern "C" void Test_graphicsBindfulTableUpdate(oxc::c::Test *t, oxc::c::Graphic
 	gfx::DeviceBuffer srcA, srcB, output;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-
-			if (table) {
-				(void) table.unset(0, 0, 1, nullptr);
-				(void) table.unset(1, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
@@ -903,15 +854,7 @@ extern "C" void Test_graphicsBindfulHeapRecycle(oxc::c::Test *t, oxc::c::Graphic
 	gfx::DeviceBuffer output;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table)
-				(void) table.unset(0, 0, 1, nullptr);
-		}
-	} tableGuard{ tableRecycled };
+	gfxtest::TableGuard tableGuard{ { &tableRecycled } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
@@ -1019,14 +962,32 @@ extern "C" void Test_graphicsBindfulHeapRecycle(oxc::c::Test *t, oxc::c::Graphic
 		}
 }
 
-// -- 56. The push descriptor boundary -------------------------------------------
+// -- 56. A layout that MIXES push descriptors with ordinary bindings -------------
 
-//Push descriptors and push constants are phase 2: no command writes them yet, so a pipeline whose layout
-// declares push descriptors would read whatever the backend happened to leave behind. The work ops refuse
-// it instead, and this pins that refusal so the day it becomes supported is a deliberate change here
-// rather than a silent one.
-//The refusal is checked with a heap and a table already bound, since the push descriptor check runs before
-// the unbound heap check and would otherwise pass for the wrong reason.
+//Module 41's layouts are all bindings and the push descriptor module's are all push descriptors; this is the
+// only place the two live in ONE layout, which is the shape a real frame has: a per draw buffer pushed into
+// the command stream while everything else comes from the table.
+//Vulkan puts them in different descriptor sets and D3D12 in different root parameters, so the two halves are
+// bound by entirely separate paths and only a layout carrying both proves they agree on one pipeline.
+//The shader keeps its two registers in different spaces on purpose: Vulkan refuses a pipeline layout whose
+// push descriptors and normal bindings land in the same set.
+//
+//This used to pin push descriptors as UNSUPPORTED ("phase 2, no command writes them yet").
+//They are written
+// now, and the dispatch below was still being refused for a different reason than the comment claimed - the
+// layout declares a push descriptor the test never wrote - so the assert passed while testing nothing the
+// push descriptor module did not already cover.
+//
+//The positive half used to lose the device on Vulkan (VK_ERROR_DEVICE_LOST): the pipeline layout packed
+// the ordinary bindings' sets first and the push descriptor sets after them, and the push emission derived
+// its set the same way, while SPIR-V numbers sets by register SPACE.
+//This shader's push descriptor (input,
+// space0) wants set 0 and its table binding (output, space1) set 1; the packing handed them out the other way
+// round, the shader read its input through the UAV's descriptor and the GPU faulted.
+//The two orders only
+// agreed when one half was empty, which was every other layout in the suite.
+//Every Vulkan bind now places a
+// set at the index its space names, and this is the test that keeps it that way.
 
 extern "C" void Test_graphicsBindfulPushDescriptorBoundary(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
@@ -1052,15 +1013,17 @@ extern "C" void Test_graphicsBindfulPushDescriptorBoundary(oxc::c::Test *t, oxc:
 	gfx::DescriptorTable table;
 	gfx::PipelineLayout pipelineLayout;
 	gfx::Pipeline pipeline;
-	gfx::DeviceBuffer output;
-	gfx::CommandList commandList;
+	gfx::DeviceBuffer input, output;
+	gfx::CommandList commandList, emptyList;
+
+	//The table holds no reference of its own, so its descriptor goes back before the buffer it names does.
+
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc()), pushInfo(dev.alloc());
 
-	//Naming one register makes it a push descriptor while the other stays a normal binding, which is the
-	// mixed layout the work ops have to refuse. The assume-all flag would leave no normal bindings at all.
-	//This shader keeps its two registers in different spaces on purpose: Vulkan refuses a pipeline layout
-	// whose push descriptors and normal bindings land in the same set.
+	//Naming one register makes it a push descriptor while the other stays an ordinary binding.
+	//The assume-all flag would leave no ordinary bindings at all, which is the shape being avoided here.
 
 	if(!Test_assert(t, "detectLayout", dev.detectLayout(
 		file.list, entryId, layoutInfo.list, nullptr, nullptr, { "input" }, &pushInfo.list,
@@ -1104,6 +1067,28 @@ extern "C" void Test_graphicsBindfulPushDescriptorBoundary(oxc::c::Test *t, oxc:
 	)))
 		return;
 
+	//The shader is space0's input times 5 plus 3 into space1's output, so the values prove BOTH halves of the
+	// layout arrived: a wrong push descriptor breaks the input and a wrong table breaks where it landed.
+
+	c::U32 inputData[64];
+
+	for(c::U32 i = 0; i < 64; ++i)
+		inputData[i] = i;
+
+	c::Buffer inputRef = c::Buffer_createRefConst(inputData, sizeof(inputData));
+
+	if(!Test_assert(t, "inputCreate", dev.createBufferData(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead,
+		"Push boundary input", &inputRef, input, nullptr, e_rr
+	)))
+		return;
+
+	//The table half of the layout: output is the ordinary binding, input arrives as the push descriptor
+
+	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, NULL, 0);
+
+	Test_assert(t, "setOutput", table.setByName("output", outputDesc, 0, false, e_rr));
+
 	c::PipelineLayoutInfo pipelineLayoutInfo = {
 		.bindings = layout.handle(), .pushDescriptors = pushLayout.handle()
 	};
@@ -1121,24 +1106,64 @@ extern "C" void Test_graphicsBindfulPushDescriptorBoundary(oxc::c::Test *t, oxc:
 	if(!Test_assert(t, "listCreate", dev.createCommandList(2 * c::KIBI, 32, 16, commandList, true, e_rr)))
 		return;
 
-	const c::Transition transition = {
-		.resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true
+	if(!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)))
+		return;
+
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
+
+	const c::Transition transitions[2] = {
+		{ .resource = input.handle(), .stage = c::EPipelineStage_Compute },
+		{ .resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true }
 	};
 
-	//Everything a normal dispatch needs is in place, so the only thing left to refuse it is the layout's
-	// push descriptors. The scope stays unsubmitted: a refused work op invalidates it and end() hides it.
+	//The refusal first, in its own scope: everything an ordinary dispatch needs is bound, so the only thing
+	// left to reject it is the push descriptor the layout declares and nothing has written.
+	//A refused work op invalidates its scope, which endScope hides wholesale, so the real dispatch below gets
+	// a scope of its own and rebinds (scope end resets pipeline, heap and table alike).
 
 	Test_assert(t, "begin", commandList.begin(true, e_rr));
 
 	{
-		gfx::CommandScope scope = commandList.scope({ transition }, 1, {}, e_rr);
+		gfx::CommandScope scope = commandList.scopeSpan(transitions, 2, 1, nullptr, 0, e_rr);
+		Test_assert(t, "scopeNeg", (c::Bool) scope);
+		Test_assert(t, "bindHeapNeg", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindTableNeg", scope.bindDescriptorTable(table, e_rr));
+		Test_assert(t, "bindPipelineNeg", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "dispatchRefused", !scope.dispatch1D(1, nullptr));
+		Test_assert(t, "scopeNegEnd", scope.end(e_rr));
+	}
+
+	//And the same dispatch with the push descriptor written, which has to RUN: the values prove BOTH halves
+	// of the layout arrived at the set the shader reads them from.
+
+	{
+		gfx::CommandScope scope = commandList.scopeSpan(transitions, 2, 2, nullptr, 0, e_rr);
 		Test_assert(t, "scope", (c::Bool) scope);
 		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
 		Test_assert(t, "bindTable", scope.bindDescriptorTable(table, e_rr));
 		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
-		Test_assert(t, "dispatchRefused", !scope.dispatch1D(1, nullptr));
+
+		Test_assert(t, "setPushDescriptor", scope.setPushDescriptors(
+			{ c::Descriptor_buffer(input.handle(), 0, 0, NULL, 0) }, e_rr
+		));
+
+		Test_assert(t, "dispatch", scope.dispatch1D(1, e_rr));
 		Test_assert(t, "scopeEnd", scope.end(e_rr));
 	}
 
 	Test_assert(t, "end", commandList.end(e_rr));
+
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
+
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
+
+			c::Bool allMatch = true;
+
+			for(c::U32 i = 0; i < 64; ++i)
+				allMatch &= values[i] == i * 5 + 3;
+
+			Test_assert(t, "mixedLayoutResults", allMatch);
+		}
 }

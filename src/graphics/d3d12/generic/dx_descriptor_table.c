@@ -34,6 +34,180 @@
 #include "types/container/string.h"
 #include "types/container/string.h"
 
+//Building a texture's SRV or UAV is the same work whether it lands in a descriptor table or in the push
+// ring a texture push descriptor takes its single entry table from.
+//Kept in one place so the two can never disagree about a dimension, a mip range or a depth plane's
+// format.
+
+void DxDescriptorTable_writeTexture(
+	DxGraphicsDevice *deviceExt,
+	const Descriptor *d,
+	ESHRegisterType registerType,
+	D3D12_CPU_DESCRIPTOR_HANDLE dst
+) {
+
+	const Bool isWrite = (registerType & ESHRegisterType_IsWrite) != 0;
+
+	DXGI_FORMAT dxFormat = DXGI_FORMAT_UNKNOWN;
+	UnifiedTexture tex = (UnifiedTexture) { 0 };
+	DxUnifiedTexture *texExt = NULL;
+
+	if (d->resource) {
+		tex = TextureRef_getUnifiedTexture(d->resource, NULL);
+		texExt = d->resource ? TextureRef_getImgExtT(d->resource, Dx, 0, d->texture.imageId) : NULL;
+	}
+
+	if(tex.depthFormat)
+		switch(tex.depthFormat) {
+
+			default:
+			case EDepthStencilFormat_D32:  dxFormat = DXGI_FORMAT_R32_FLOAT;  break;
+			case EDepthStencilFormat_D16:  dxFormat = DXGI_FORMAT_R16_UNORM;  break;
+
+			case EDepthStencilFormat_D32S8X24Ext:
+				dxFormat = d->texture.planeId ? DXGI_FORMAT_X32_TYPELESS_G8X24_UINT : DXGI_FORMAT_R32_FLOAT;
+				break;
+
+			case EDepthStencilFormat_D24S8Ext:
+				dxFormat = d->texture.planeId ?
+					DXGI_FORMAT_X24_TYPELESS_G8_UINT : DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+				break;
+		}
+
+	else dxFormat = ETextureFormatId_toDXFormat(tex.textureFormatId);
+
+	if (!isWrite) {
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC srv = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
+			.Format = dxFormat,
+			.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
+		};
+
+		switch(registerType & (ESHRegisterType_TypeMask | ESHRegisterType_IsArray)) {
+
+			case ESHRegisterType_Texture3D:
+				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+				srv.Texture3D = (D3D12_TEX3D_SRV) {
+					.MostDetailedMip = d->texture.mipId,
+					.MipLevels = d->texture.mipCount
+				};
+				break;
+
+			case ESHRegisterType_TextureCube | ESHRegisterType_IsArray:
+				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+				srv.TextureCubeArray = (D3D12_TEXCUBE_ARRAY_SRV) {
+					.MostDetailedMip = d->texture.mipId,
+					.MipLevels = d->texture.mipCount,
+					.First2DArrayFace = d->texture.arrayId,
+					.NumCubes = d->texture.arrayCount / 6
+				};
+				break;
+
+			case ESHRegisterType_TextureCube:
+				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+				srv.TextureCube = (D3D12_TEXCUBE_SRV) {
+					.MostDetailedMip = d->texture.mipId,
+					.MipLevels = d->texture.mipCount
+				};
+				break;
+
+			case ESHRegisterType_Texture2DMS | ESHRegisterType_IsArray:
+				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
+				srv.Texture2DMSArray = (D3D12_TEX2DMS_ARRAY_SRV) {
+					.FirstArraySlice = d->texture.arrayId,
+					.ArraySize = d->texture.arrayCount
+				};
+				break;
+
+			case ESHRegisterType_Texture2DMS:
+				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+				srv.Texture2DMS = (D3D12_TEX2DMS_SRV) { 0 };
+				break;
+
+			case ESHRegisterType_Texture2D | ESHRegisterType_IsArray:
+				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+				srv.Texture2DArray = (D3D12_TEX2D_ARRAY_SRV) {
+					.MostDetailedMip = d->texture.mipId,
+					.MipLevels = d->texture.mipCount,
+					.FirstArraySlice = d->texture.arrayId,
+					.ArraySize = d->texture.arrayCount,
+					.PlaneSlice = d->texture.planeId
+				};
+				break;
+
+			case ESHRegisterType_Texture2D:
+			default:
+				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+				srv.Texture2D = (D3D12_TEX2D_SRV) {
+					.MostDetailedMip = d->texture.mipId,
+					.MipLevels = d->texture.mipCount,
+					.PlaneSlice = d->texture.planeId
+				};
+				break;
+		}
+
+		deviceExt->device->lpVtbl->CreateShaderResourceView(
+			deviceExt->device,
+			texExt ? texExt->image : NULL,
+			&srv,
+			dst
+		);
+
+	} else {
+
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) { .Format = dxFormat };
+
+		switch(registerType & (ESHRegisterType_TypeMask | ESHRegisterType_IsArray)) {
+
+			case ESHRegisterType_Texture3D:
+				uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+				uav.Texture3D = (D3D12_TEX3D_UAV) {
+					.MipSlice = d->texture.mipId,
+					.FirstWSlice = d->texture.arrayId,
+					.WSize = d->texture.arrayCount
+				};
+				break;
+
+			case ESHRegisterType_Texture2DMS | ESHRegisterType_IsArray:
+				uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DMSARRAY;
+				uav.Texture2DMSArray = (D3D12_TEX2DMS_ARRAY_UAV) {
+					.FirstArraySlice = d->texture.arrayId,
+					.ArraySize = d->texture.arrayCount
+				};
+				break;
+
+			case ESHRegisterType_Texture2DMS:
+				uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DMS;
+				uav.Texture2DMS = (D3D12_TEX2DMS_UAV) { 0 };
+				break;
+
+			case ESHRegisterType_Texture2D | ESHRegisterType_IsArray:
+				uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+				uav.Texture2DArray = (D3D12_TEX2D_ARRAY_UAV) {
+					.MipSlice = d->texture.mipId,
+					.FirstArraySlice = d->texture.arrayId,
+					.ArraySize = d->texture.arrayCount
+				};
+				break;
+
+			case ESHRegisterType_Texture2D:
+			default:
+				uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+				uav.Texture2D = (D3D12_TEX2D_UAV) { .MipSlice = d->texture.mipId };
+				break;
+		}
+
+		deviceExt->device->lpVtbl->CreateUnorderedAccessView(
+			deviceExt->device,
+			texExt ? texExt->image : NULL,
+			NULL,
+			&uav,
+			dst
+		);
+	}
+
+}
+
 void DX_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, const Allocator *alloc) {
 	(void) alloc;
 	DxDescriptorHeap *heapExt = DescriptorHeap_ext(DescriptorHeapRef_ptr(table->parent), Dx);
@@ -95,6 +269,99 @@ D3D12_TEXTURE_ADDRESS_MODE mapDxAddressMode(ESamplerAddressMode addressMode) {
 		case ESamplerAddressMode_ClampToBorder:  return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 		default:                                 return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 	}
+}
+
+//The filter a SamplerInfo maps to, comparison bit included.
+//Shared because a sampler written into a descriptor table and one baked into a root signature as a
+// static sampler have to describe the same thing.
+
+D3D12_FILTER DxSampler_toFilter(SamplerInfo sinfo) {
+
+	D3D12_FILTER filter = D3D12_FILTER_ANISOTROPIC;
+
+	if(!sinfo.aniso)
+		switch(sinfo.filter) {
+
+			case ESamplerFilterMode_Nearest:
+				filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+				break;
+
+			case ESamplerFilterMode_LinearMagNearestMinMip:
+				filter = D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
+				break;
+
+			case ESamplerFilterMode_LinearMinNearestMagMip:
+				filter = D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+				break;
+
+			case ESamplerFilterMode_LinearMagMinNearestMip:
+				filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+				break;
+
+			case ESamplerFilterMode_LinearMipNearestMagMin:
+				filter = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR;
+				break;
+
+			case ESamplerFilterMode_LinearMagMipNearestMin:
+				filter = D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR;
+				break;
+
+			case ESamplerFilterMode_LinearMinMipNearestMag:
+				filter = D3D12_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
+				break;
+
+			case ESamplerFilterMode_Linear:
+				filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+				break;
+		}
+
+	if(sinfo.enableComparison)
+		filter |= 0x80;        //Signal we want comparison sampler
+
+	return filter;
+}
+
+//A static sampler costs none of the root signature's 64 DWORDs: it is described by value in the signature
+// itself rather than being a root parameter.
+//Border color is an enum here rather than a float4, which is exactly what OxC3's ESamplerBorderColor
+// already is, so every sampler it can express is expressible as a static one.
+
+D3D12_STATIC_SAMPLER_DESC DxSampler_toStaticDesc(SamplerInfo sinfo, SHBinding binding, U32 visibility) {
+
+	D3D12_STATIC_BORDER_COLOR border = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+
+	switch (sinfo.borderColor) {
+
+		case ESamplerBorderColor_OpaqueBlackFloat:
+		case ESamplerBorderColor_OpaqueBlackInt:
+			border = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
+			break;
+
+		case ESamplerBorderColor_OpaqueWhiteFloat:
+		case ESamplerBorderColor_OpaqueWhiteInt:
+			border = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
+			break;
+
+		default:
+			break;        //Transparent black
+	}
+
+	return (D3D12_STATIC_SAMPLER_DESC) {
+		.Filter = DxSampler_toFilter(sinfo),
+		.AddressU = mapDxAddressMode(sinfo.addressU),
+		.AddressV = mapDxAddressMode(sinfo.addressV),
+		.AddressW = mapDxAddressMode(sinfo.addressW),
+		.MipLODBias = F16_castF32(sinfo.mipBias),
+		.MaxAnisotropy = sinfo.aniso,
+		.ComparisonFunc = sinfo.enableComparison ?
+			mapDxCompareOp(sinfo.comparisonFunction) : D3D12_COMPARISON_FUNC_NEVER,
+		.BorderColor = border,
+		.MinLOD = F16_castF32(sinfo.minLod),
+		.MaxLOD = F16_castF32(sinfo.maxLod),
+		.ShaderRegister = binding.binding,
+		.RegisterSpace = binding.space,
+		.ShaderVisibility = DxDescriptorLayout_convertVisibility(visibility)
+	};
 }
 
 //Takes a count and not a ListDescriptor: the interface table's slot is
@@ -207,43 +474,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 					//Allocate descriptor
 
-					D3D12_FILTER filter = D3D12_FILTER_ANISOTROPIC;
-
-					if(!sinfo.aniso)
-						switch(sinfo.filter) {
-
-							case ESamplerFilterMode_Nearest:
-								filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-								break;
-
-							case ESamplerFilterMode_LinearMagNearestMinMip:
-								filter = D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
-								break;
-
-							case ESamplerFilterMode_LinearMinNearestMagMip:
-								filter = D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
-								break;
-
-							case ESamplerFilterMode_LinearMagMinNearestMip:
-								filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-								break;
-
-							case ESamplerFilterMode_LinearMipNearestMagMin:
-								filter = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR;
-								break;
-
-							case ESamplerFilterMode_LinearMagMipNearestMin:
-								filter = D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR;
-								break;
-
-							case ESamplerFilterMode_LinearMinMipNearestMag:
-								filter = D3D12_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
-								break;
-
-							case ESamplerFilterMode_Linear:
-								filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-								break;
-						}
+					const D3D12_FILTER filter = DxSampler_toFilter(sinfo);
 
 					samplerView = (D3D12_SAMPLER_DESC) {
 						.Filter = filter,
@@ -285,10 +516,10 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 							break;        //Already null initialized
 					}
 
-					if(sinfo.enableComparison) {
+					//The comparison bit already rode in on the filter above
+
+					if(sinfo.enableComparison)
 						samplerView.ComparisonFunc = mapDxCompareOp(sinfo.comparisonFunction);
-						samplerView.Filter |= 0x80;        //Signal we want comparison sampler
-					}
 				}
 
 				else samplerView = (D3D12_SAMPLER_DESC) {
@@ -447,163 +678,10 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			case ESHRegisterType_TextureCube:
 			case ESHRegisterType_Texture2DMS: {
 
-				DXGI_FORMAT dxFormat = DXGI_FORMAT_UNKNOWN;
-				UnifiedTexture tex = (UnifiedTexture) { 0 };
-				DxUnifiedTexture *texExt = NULL;
-
-				if (d.resource) {
-					tex = TextureRef_getUnifiedTexture(d.resource, NULL);
-					texExt = d.resource ? TextureRef_getImgExtT(d.resource, Dx, 0, d.texture.imageId) : NULL;
-				}
-
-				if(tex.depthFormat)
-					switch(tex.depthFormat) {
-
-						default:
-						case EDepthStencilFormat_D32:  dxFormat = DXGI_FORMAT_R32_FLOAT;  break;
-						case EDepthStencilFormat_D16:  dxFormat = DXGI_FORMAT_R16_UNORM;  break;
-
-						case EDepthStencilFormat_D32S8X24Ext:
-							dxFormat = d.texture.planeId ? DXGI_FORMAT_X32_TYPELESS_G8X24_UINT : DXGI_FORMAT_R32_FLOAT;
-							break;
-
-						case EDepthStencilFormat_D24S8Ext:
-							dxFormat = d.texture.planeId ?
-								DXGI_FORMAT_X24_TYPELESS_G8_UINT : DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-							break;
-					}
-
-				else dxFormat = ETextureFormatId_toDXFormat(tex.textureFormatId);
-
-				if (!isWrite) {
-
-					D3D12_SHADER_RESOURCE_VIEW_DESC srv = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
-						.Format = dxFormat,
-						.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
-					};
-
-					switch(registerType & (ESHRegisterType_TypeMask | ESHRegisterType_IsArray)) {
-
-						case ESHRegisterType_Texture3D:
-							srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
-							srv.Texture3D = (D3D12_TEX3D_SRV) {
-								.MostDetailedMip = d.texture.mipId,
-								.MipLevels = d.texture.mipCount
-							};
-							break;
-
-						case ESHRegisterType_TextureCube | ESHRegisterType_IsArray:
-							srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
-							srv.TextureCubeArray = (D3D12_TEXCUBE_ARRAY_SRV) {
-								.MostDetailedMip = d.texture.mipId,
-								.MipLevels = d.texture.mipCount,
-								.First2DArrayFace = d.texture.arrayId,
-								.NumCubes = d.texture.arrayCount / 6
-							};
-							break;
-
-						case ESHRegisterType_TextureCube:
-							srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-							srv.TextureCube = (D3D12_TEXCUBE_SRV) {
-								.MostDetailedMip = d.texture.mipId,
-								.MipLevels = d.texture.mipCount
-							};
-							break;
-
-						case ESHRegisterType_Texture2DMS | ESHRegisterType_IsArray:
-							srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
-							srv.Texture2DMSArray = (D3D12_TEX2DMS_ARRAY_SRV) {
-								.FirstArraySlice = d.texture.arrayId,
-								.ArraySize = d.texture.arrayCount
-							};
-							break;
-
-						case ESHRegisterType_Texture2DMS:
-							srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
-							srv.Texture2DMS = (D3D12_TEX2DMS_SRV) { 0 };
-							break;
-
-						case ESHRegisterType_Texture2D | ESHRegisterType_IsArray:
-							srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-							srv.Texture2DArray = (D3D12_TEX2D_ARRAY_SRV) {
-								.MostDetailedMip = d.texture.mipId,
-								.MipLevels = d.texture.mipCount,
-								.FirstArraySlice = d.texture.arrayId,
-								.ArraySize = d.texture.arrayCount,
-								.PlaneSlice = d.texture.planeId
-							};
-							break;
-
-						case ESHRegisterType_Texture2D:
-						default:
-							srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-							srv.Texture2D = (D3D12_TEX2D_SRV) {
-								.MostDetailedMip = d.texture.mipId,
-								.MipLevels = d.texture.mipCount,
-								.PlaneSlice = d.texture.planeId
-							};
-							break;
-					}
-
-					deviceExt->device->lpVtbl->CreateShaderResourceView(
-						deviceExt->device,
-						texExt ? texExt->image : NULL,
-						&srv,
-						(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heapPtrRes + heapIncRes * offsetCbvSrvUav++ }
-					);
-
-				} else {
-
-					D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) { .Format = dxFormat };
-
-					switch(registerType & (ESHRegisterType_TypeMask | ESHRegisterType_IsArray)) {
-
-						case ESHRegisterType_Texture3D:
-							uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
-							uav.Texture3D = (D3D12_TEX3D_UAV) {
-								.MipSlice = d.texture.mipId,
-								.FirstWSlice = d.texture.arrayId,
-								.WSize = d.texture.arrayCount
-							};
-							break;
-
-						case ESHRegisterType_Texture2DMS | ESHRegisterType_IsArray:
-							uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DMSARRAY;
-							uav.Texture2DMSArray = (D3D12_TEX2DMS_ARRAY_UAV) {
-								.FirstArraySlice = d.texture.arrayId,
-								.ArraySize = d.texture.arrayCount
-							};
-							break;
-
-						case ESHRegisterType_Texture2DMS:
-							uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DMS;
-							uav.Texture2DMS = (D3D12_TEX2DMS_UAV) { 0 };
-							break;
-
-						case ESHRegisterType_Texture2D | ESHRegisterType_IsArray:
-							uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-							uav.Texture2DArray = (D3D12_TEX2D_ARRAY_UAV) {
-								.MipSlice = d.texture.mipId,
-								.FirstArraySlice = d.texture.arrayId,
-								.ArraySize = d.texture.arrayCount
-							};
-							break;
-
-						case ESHRegisterType_Texture2D:
-						default:
-							uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-							uav.Texture2D = (D3D12_TEX2D_UAV) { .MipSlice = d.texture.mipId };
-							break;
-					}
-
-					deviceExt->device->lpVtbl->CreateUnorderedAccessView(
-						deviceExt->device,
-						texExt ? texExt->image : NULL,
-						NULL,
-						&uav,
-						(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heapPtrRes + heapIncRes * offsetCbvSrvUav++ }
-					);
-				}
+				DxDescriptorTable_writeTexture(
+					deviceExt, &d, registerType,
+					(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heapPtrRes + heapIncRes * offsetCbvSrvUav++ }
+				);
 
 				break;
 			}

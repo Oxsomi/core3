@@ -621,6 +621,11 @@ Bool VK_WRAP_FUNC(BLASRef_compact)(
 	blasExt->pendingAs = NULL;
 	blas->base.pendingCompactBuffer = NULL;
 
+	//The address REALLY changes here, so dependents are marked again: a pending TLAS build riding this same
+	// submit may have resolved the old address and cleared the record time mark already.
+
+	gotoIfError3(clean, GraphicsDeviceRef_markTlasesStaleForBLAS(deviceRef, blasRef, true, e_rr));
+
 clean:
 	return s_uccess;
 }

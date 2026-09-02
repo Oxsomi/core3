@@ -243,6 +243,18 @@ BLASCreateInfo BLASCreateInfo_indexedWithOmmExt(
 //Internal to CommandListRef_compactBLASExt, which is the entry point a caller uses. Reports recorded =
 //false when there is nothing to do, keeping a copy that would move nothing out of the recording.
 
+//Marks every live CPU instanced TLAS referencing the structure as AddressesStale | InstancesDirty.
+//Called when a compaction is RECORDED (the pessimistic mark) and again when it is ADOPTED at submit time,
+// because a pending TLAS build in the same submit can resolve the old address and clear the record time
+// mark before the copy that moves the structure has even run.
+
+//duringSubmit says the caller runs inside submit processing, where the submit counter has already
+// advanced past the submit being processed; the stamp corrects for that so the grace stays one submit.
+
+Bool GraphicsDeviceRef_markTlasesStaleForBLAS(
+	GraphicsDeviceRef *deviceRef, BLASRef *blasRef, Bool duringSubmit, Error *e_rr
+);
+
 Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef *blasRef, Bool *recorded, Error *e_rr);
 
 //Backend facing: claim and return a compacted-size slot. needsPool reports that the claim crossed into a

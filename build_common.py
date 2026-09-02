@@ -690,11 +690,53 @@ def saveHashCache(cache):
 	with open(HASH_CACHE_FILE, "w") as f:
 		json.dump(cache, f, indent=2)
 
-def conanCreateIfChanged(packagePath, profile, mode, profileArgs, cache, key=None, options=""):
+def pruneDeadGenerators(buildDir):
+	"""Drop CMakeDeps files pointing at a package folder that is no longer in the conan cache.
+
+	conan writes one set of generator files per build type into a shared folder,
+	and <pkg>Targets.cmake globs every one of them back in,
+	so a config this run never installs is still included.
+	Evict that config's package and the configure dies on a library it cannot find,
+	for a build type nobody asked for.
+	A generator file whose package folder is gone has nothing left to offer, so it goes.
+	"""
+
+	generators = os.path.join(buildDir, "build", "generators")
+
+	if not os.path.isdir(generators):
+		return
+
+	for name in sorted(os.listdir(generators)):
+
+		# conan names these <package>-<config>-<arch>-data.cmake, alongside <package>-Target-<config>.cmake
+
+		match = re.fullmatch(r"(.+)-([^-]+)-[^-]+-data\.cmake", name)
+
+		if not match:
+			continue
+
+		path = os.path.join(generators, name)
+
+		with open(path, "r", encoding="utf-8", errors="ignore") as f:
+			folder = re.search(r'set\([A-Za-z0-9_]*PACKAGE_FOLDER[A-Za-z0-9_]*\s+"([^"]+)"\)', f.read())
+
+		if not folder or os.path.isdir(folder.group(1)):
+			continue
+
+		package, config = match.group(1), match.group(2)
+
+		print(f"-- Dropping stale {package} {config} generator files, its package left the conan cache")
+
+		for dead in [ path, os.path.join(generators, f"{package}-Target-{config}.cmake") ]:
+			if os.path.isfile(dead):
+				os.remove(dead)
+
+def conanCreateIfChanged(packagePath, profile, mode, profileArgs, cache, key=None, options="", force=False):
 	"""conan create a dependency, skipping it when neither the recipe nor the profile changed.
 
 	`key` disambiguates the same recipe built for different targets (host vs android) in one cache.
 	Paths are resolved against the repo so this works no matter what the caller's cwd is.
+	`force` builds even on a hash hit, for a caller that found the binary itself gone from the conan cache.
 	"""
 
 	# options is part of the identity: the same recipe and profile built with and without a sanitizer are
@@ -705,7 +747,7 @@ def conanCreateIfChanged(packagePath, profile, mode, profileArgs, cache, key=Non
 	profilePath = profile if os.path.isabs(profile) else os.path.join(ROOT, profile)
 	currentHash = hashPackage(resolved, profilePath, mode)
 
-	if cache.get(key) == currentHash:
+	if not force and cache.get(key) == currentHash:
 		print(f"-- Skipping {packagePath} ({mode}), unchanged")
 		return
 
@@ -866,10 +908,35 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 
 			tablegenDir = hostTablegenDir(mode=shaderMode, compiler=compiler)
 
-			if tablegenDir:
-				dxcTablegenConf = f' -c:h user.dxc:tablegen_dir="{tablegenDir}"'
-			else:
-				print("-- WARNING: no host DXC tablegen found; sanitized Windows DXC will try to build its own")
+			# The create above skips on an unchanged recipe and profile,
+			# which is a claim about what this script built, not about what is still in the conan cache.
+			# A cache clean evicts the binary while the local hash goes on claiming it is there,
+			# and the host package is nothing's dependency, so no --build=missing ever brings it back.
+			# Build it again ignoring that claim rather than leaving the graph Missing.
+
+			if not tablegenDir:
+
+				print("-- Host DXC tablegen is gone from the conan cache, rebuilding it")
+
+				conanCreateIfChanged(
+					"packages/dxc", shaderProfile, shaderMode, shaderArgs, cache,
+					key="packages/dxc::host_tablegen", options="", force=True
+				)
+
+				tablegenDir = hostTablegenDir(mode=shaderMode, compiler=compiler)
+
+			# Going on without it is not a degraded build but a guaranteed failure:
+			# DXC compiles its own tablegens with ASan and then RUNS them mid-build,
+			# where they abort with STATUS_ENTRYPOINT_NOT_FOUND for want of the sanitizer runtime.
+			# Say so here rather than half an hour later inside someone else's CMake.
+
+			if not tablegenDir:
+				raise RuntimeError(
+					"No host DXC tablegen available and a sanitized Windows DXC cannot build its own. "
+					"Check that packages/dxc creates cleanly unsanitized for this profile."
+				)
+
+			dxcTablegenConf = f' -c:h user.dxc:tablegen_dir="{tablegenDir}"'
 
 		for package in SHADER_COMPILER_DEPS:
 			depOptions = (sanitizerOptions + dxcTablegenConf) if package == "packages/dxc" else sanitizerOptions

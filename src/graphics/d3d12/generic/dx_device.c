@@ -586,6 +586,19 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	if(deviceExt->adapter4)
 		deviceExt->adapter4->lpVtbl->Release(deviceExt->adapter4);
 
+	//The compaction pools go back BEFORE the live object report below: they are real ID3D12Resources (and
+	// the last allocations in their memory blocks), so releasing them after the report shows them as leaks
+	// that never were.
+
+	for(U64 i = 0; i < deviceExt->compactionEmitPools.length; ++i)
+		RefPtr_dec((RefPtr**) &deviceExt->compactionEmitPools.ptrNonConst[i]);
+
+	for(U64 i = 0; i < deviceExt->compactionReadbackPools.length; ++i)
+		RefPtr_dec((RefPtr**) &deviceExt->compactionReadbackPools.ptrNonConst[i]);
+
+	ListRefPtr_free(&deviceExt->compactionEmitPools, alloc);
+	ListRefPtr_free(&deviceExt->compactionReadbackPools, alloc);
+
 	//Validate exit for leaks, before the info queues go away so the report is still drained and counted below
 
 	if(deviceExt->debugDevice)
@@ -612,15 +625,6 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	ListDxCommandAllocator_free(&deviceExt->commandPools, alloc);
 
 	//Free temp storage
-
-	for(U64 i = 0; i < deviceExt->compactionEmitPools.length; ++i)
-		RefPtr_dec((RefPtr**) &deviceExt->compactionEmitPools.ptrNonConst[i]);
-
-	for(U64 i = 0; i < deviceExt->compactionReadbackPools.length; ++i)
-		RefPtr_dec((RefPtr**) &deviceExt->compactionReadbackPools.ptrNonConst[i]);
-
-	ListRefPtr_free(&deviceExt->compactionEmitPools, alloc);
-	ListRefPtr_free(&deviceExt->compactionReadbackPools, alloc);
 
 	ListD3D12_BUFFER_BARRIER_free(&deviceExt->bufferTransitions, alloc);
 	ListD3D12_TEXTURE_BARRIER_free(&deviceExt->imageTransitions, alloc);
@@ -713,21 +717,37 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 
 	DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(device->defaultDescriptorHeaps), Dx);
 
-	ID3D12DescriptorHeap *descriptorHeaps[2] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };
-
 	DxDescriptorTable *table = DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Dx);
+
 	//Each heap's increment comes from GetDescriptorHandleIncrementSize for its own descriptor type,
 	// and sampler descriptors are not the same size as CBV/SRV/UAV ones on every adapter.
 	//So the sampler offset has to scale by the sampler heap's stride.
 	//Using the resource heap's happens to work only where the two coincide,
 	// and lands somewhere else entirely on hardware where they don't.
+	//Without EnableDynamicSamplers the device has NO sampler heap and the root signature no sampler table,
+	// so both lists carry exactly what exists: the sampler table at root param 0 when present (it is the
+	// first binding of the default layout), resources at the next.
 
-	D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[2] = {
-		{ heap->samplerHeap.gpuHandle.ptr + table->allocationLocations[1] * heap->samplerHeap.gpuIncrement },
-		{ heap->resourcesHeap.gpuHandle.ptr + table->allocationLocations[0] * heap->resourcesHeap.gpuIncrement }
+	ID3D12DescriptorHeap *descriptorHeaps[2];
+	D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[2];
+	U32 descriptorCount = 0;
+
+	if (heap->samplerHeap.heap) {
+
+		descriptorHeaps[descriptorCount] = heap->samplerHeap.heap;
+
+		descriptorTable[descriptorCount++] = (D3D12_GPU_DESCRIPTOR_HANDLE) {
+			heap->samplerHeap.gpuHandle.ptr + table->allocationLocations[1] * heap->samplerHeap.gpuIncrement
+		};
+	}
+
+	descriptorHeaps[descriptorCount] = heap->resourcesHeap.heap;
+
+	descriptorTable[descriptorCount++] = (D3D12_GPU_DESCRIPTOR_HANDLE) {
+		heap->resourcesHeap.gpuHandle.ptr + table->allocationLocations[0] * heap->resourcesHeap.gpuIncrement
 	};
 
-	commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, 2, descriptorHeaps);
+	commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, descriptorCount, descriptorHeaps);
 
 	PipelineLayout *defaultLayout = PipelineLayoutRef_ptr(device->defaultPipelineLayout);
 	DxPipelineLayout *defaultLayoutExt = PipelineLayout_ext(defaultLayout, Dx);
@@ -735,7 +755,7 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 	commandBuffer->lpVtbl->SetComputeRootSignature(commandBuffer, defaultLayoutExt->rootSig);
 	commandBuffer->lpVtbl->SetGraphicsRootSignature(commandBuffer, defaultLayoutExt->rootSig);
 
-	for(U32 i = 0; i < 2; ++i) {
+	for(U32 i = 0; i < descriptorCount; ++i) {
 		commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
 		commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
 	}

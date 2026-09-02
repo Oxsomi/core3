@@ -493,11 +493,54 @@ clean:
 	return s_uccess;
 }
 
+Bool DescriptorLayoutInfo_addImmutableSampler(
+	DescriptorLayoutInfo *info,
+	SamplerRef *sampler,
+	U32 *id,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!info || !sampler || !id)
+		retError(clean, Error_nullPointer(
+			0, "DescriptorLayoutInfo_addImmutableSampler()::info, sampler and id are required"
+		));
+
+	if(sampler->refPtrType->typeId != (TypeId) EGraphicsTypeId_Sampler)
+		retError(clean, Error_invalidParameter(
+			1, 0, "DescriptorLayoutInfo_addImmutableSampler()::sampler has to be a Sampler"
+		));
+
+	//The id is 1 based so a binding that names none can leave the union zeroed
+
+	if(info->immutableSamplers.length >= U32_MAX - 1)
+		retError(clean, Error_outOfBounds(
+			0, info->immutableSamplers.length, U32_MAX - 1,
+			"DescriptorLayoutInfo_addImmutableSampler()::info has too many immutable samplers"
+		));
+
+	//The ref is taken only once the list is holding it, since a failed push would otherwise leak one.
+
+	gotoIfError3(clean, ListRefPtr_pushBack(&info->immutableSamplers, sampler, alloc, e_rr));
+	RefPtr_inc(sampler);
+
+	*id = (U32) info->immutableSamplers.length;
+
+clean:
+	return s_uccess;
+}
+
 void DescriptorLayoutInfo_free(DescriptorLayoutInfo *info, const Allocator *alloc) {
 
 	if(!info)
 		return;
 
+	for(U64 i = 0; i < info->immutableSamplers.length; ++i)
+		RefPtr_dec(&info->immutableSamplers.ptrNonConst[i]);
+
+	ListRefPtr_free(&info->immutableSamplers, alloc);
 	ListDescriptorBinding_free(&info->bindings, alloc);
 	ListCharString_freeUnderlying(&info->bindingNames, alloc);
 }
@@ -614,6 +657,45 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 				"provide them using a pipeline layout instead"
 			));
 
+		//Immutable samplers are baked into the layout, so only a sampler can name one and only an id the
+		// info actually carries.
+
+		const ESHRegisterType bindingType = (ESHRegisterType)(b.registerType & ESHRegisterType_TypeMask);
+
+		const Bool isSamplerBinding =
+			bindingType == ESHRegisterType_Sampler || bindingType == ESHRegisterType_SamplerComparisonState;
+
+		if (isSamplerBinding && b.immutableSamplerId) {
+
+			if(b.immutableSamplerId > info->immutableSamplers.length)
+				retError(clean, Error_outOfBounds(
+					0, b.immutableSamplerId, info->immutableSamplers.length,
+					"GraphicsDeviceRef_createDescriptorLayout()::info.bindings[i].immutableSamplerId is out of "
+					"bounds of info.immutableSamplers"
+				));
+
+			//A static sampler is one descriptor, not an array of them.
+
+			if(b.count > 1)
+				retError(clean, Error_invalidOperation(
+					2,
+					"GraphicsDeviceRef_createDescriptorLayout() an immutable sampler binding can't be an array; "
+					"a dynamically indexed sampler array needs real descriptors"
+				));
+		}
+
+		//A push descriptor set has no descriptors of its own to write a sampler into, and D3D12 has no root
+		// sampler at all, so a sampler is only expressible there when it is baked.
+		//Vulkan allows immutable samplers in a push descriptor set layout and needs no write for one, which
+		// is what makes the two agree.
+
+		if(isPushDescriptor && isSamplerBinding && !b.immutableSamplerId)
+			retError(clean, Error_unsupportedOperation(
+				2,
+				"GraphicsDeviceRef_createDescriptorLayout() a sampler in a push descriptor layout has to be "
+				"immutable (set immutableSamplerId); there is no root sampler to push one into"
+			));
+
 		//OxC3 binds its own per frame globals in the reserved space, so a caller's binding there would either
 		// be overwritten by the runtime or quietly shadow it.
 		//A shader that genuinely declares this space was built against a different OxC3 than the one running
@@ -671,6 +753,11 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 
 	layout->info.bindingNames = (ListCharString) { 0 };
 	layout->info.bindings = (ListDescriptorBinding) { 0 };
+
+	//Moved rather than copied, like the rest of the info; the refs the caller took come with it.
+
+	layout->info.immutableSamplers = info->immutableSamplers;
+	info->immutableSamplers = (ListRefPtr) { 0 };
 
 	gotoIfError3(clean, ListCharString_move(&info->bindingNames, alloc, &layout->info.bindingNames, e_rr));
 

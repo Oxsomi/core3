@@ -176,7 +176,7 @@ If using code snippets from other places, make sure to reference the link to ens
 
 `//` should be preferred when dealing with small comments, unless a large section is commented out or for documentation; in that case `/*` and `*/` should be used. Another reason for `/**/` is if the current formatting doesn't support it or if in a macro definition (since these don't support normal comments).
 
-Comments are laid out one sentence per line. A line that starts a new sentence begins flush (`//Word`), while a line that continues an unfinished sentence from the line above begins with a single space (`// word`). This keeps a paragraph diffable per sentence: changing one word rewraps one line instead of every line after it. A sentence that fits within the line limit stays on one line; only wrap when it doesn't.
+Comments are laid out one sentence per line. A line that starts a new sentence begins flush (`//Word`), while a line that continues an unfinished sentence from the line above begins with a single space (`// word`). This keeps a paragraph diffable per sentence: changing one word rewraps one line instead of every line after it. A sentence that fits within the line limit stays on one line; only wrap when it doesn't. The 128 character limit is a ceiling and not a target: break at a natural clause boundary well before it, because a comment is read as prose rather than as a filled paragraph.
 
 ```c
 //Callbacks always receive fully qualified paths: absolute for physical entries, //-prefixed for virtual ones.

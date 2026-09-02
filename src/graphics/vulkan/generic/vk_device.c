@@ -1061,6 +1061,18 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	gotoIfError3(clean, VkGraphicsDevice_findAllMemory(deviceExt, e_rr));
 
+	//The empty set layout every pipeline layout can fill its unused set indices with (see vk_device.h)
+
+	{
+		const VkDescriptorSetLayoutCreateInfo emptyInfo = (VkDescriptorSetLayoutCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+		};
+
+		gotoIfError3(clean, checkVkError(deviceExt->createDescriptorSetLayout(
+			deviceExt->device, &emptyInfo, NULL, &deviceExt->emptySetLayout
+		), e_rr));
+	}
+
 clean:
 
 	if(!s_uccess)
@@ -1219,6 +1231,9 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 		if(deviceExt->cbufferPool)
 			deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->cbufferPool, NULL);
+
+		if(deviceExt->emptySetLayout)
+			deviceExt->destroyDescriptorSetLayout(deviceExt->device, deviceExt->emptySetLayout, NULL);
 
 		instanceExt->destroyDevice(deviceExt->device, NULL);
 	}
@@ -1464,13 +1479,21 @@ Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 
 		//The emulated path binds the set that was already written for this frame, so it costs one bind either way.
 
+		//The globals set index is the space the device's cbuffer layout declares (see resources.hlsli's
+		// vk::binding for the globals), which on SPIR-V is the set index itself.
+
+		const VkDescriptorLayout *cbufferLayoutExt =
+			DescriptorLayout_ext(DescriptorLayoutRef_ptr(device->defaultCBufferLayout), Vk);
+
+		const U32 globalsSet = cbufferLayoutExt->setIds[0];
+
 		if (!deviceExt->cmdPushDescriptorSet) {
 
 			deviceExt->cmdBindDescriptorSets(
 				commandBuffer,
 				bindPoint,
 				*defaultLayoutExt,
-				2, 1, &deviceExt->cbufferSets[device->fifId],
+				globalsSet, 1, &deviceExt->cbufferSets[device->fifId],
 				0, NULL
 			);
 
@@ -1499,7 +1522,7 @@ Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 			commandBuffer,
 			bindPoint,
 			*defaultLayoutExt,
-			2,
+			globalsSet,
 			1,
 			&cbv
 		);

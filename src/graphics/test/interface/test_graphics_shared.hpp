@@ -63,8 +63,45 @@ namespace oxc { namespace gfxtest {
 	//returns included, which is what lets a converted module drop its clean label entirely.
 	//An SHFile and a DescriptorLayoutInfo are plain C structs with no handle of their own.
 
-	using OwnedSHFile = gfx::OwnedList<c::SHFile, c::SHFile_free>;
-	using OwnedLayoutInfo = gfx::OwnedList<c::DescriptorLayoutInfo, c::DescriptorLayoutInfo_free>;
+	using OwnedSHFile = gfx::OwnedList<c::SHFile>;
+	using OwnedLayoutInfo = gfx::OwnedList<c::DescriptorLayoutInfo>;
+
+	//Unset releases the resource refs a set descriptor holds, which device teardown checks are all gone;
+	//every bindful module used to write this guard by hand, naming each binding it had set.
+	//The table's own layout already names every binding and its count, so this walks that instead, and a
+	//layout change can no longer silently orphan a descriptor ref behind a hand written list.
+	//An immutable sampler binding never holds a descriptor, so there is nothing to unset for one.
+	//Aggregate initialized with the tables to guard (gfxtest::TableGuard guard{ { &tableA, &tableB } });
+	//a table that never got created is skipped, so the guard can be declared before the creation calls.
+
+	struct TableGuard {
+
+		gfx::DescriptorTable *tables[4] = {};
+
+		~TableGuard() noexcept {
+
+			for (gfx::DescriptorTable *t : tables) {
+
+				if(!t || !t->valid())
+					continue;
+
+				const c::DescriptorLayout *layout = RefPtr_data(t->data()->layout, c::DescriptorLayout);
+
+				if(!layout)
+					continue;
+
+				for (c::U64 i = 0; i < layout->info.bindings.length; ++i) {
+
+					const c::DescriptorBinding b = layout->info.bindings.ptr[i];
+
+					if(c::DescriptorBinding_immutableSamplerId(b))
+						continue;
+
+					(void) t->unset(i, 0, b.count ? b.count : 1, nullptr);
+				}
+			}
+		}
+	};
 
 	//A scope with a render pass already open in it, which is what the draw modules record into.
 	//`render` is declared after `scope` so it destroys FIRST, which is the order the C API requires: a

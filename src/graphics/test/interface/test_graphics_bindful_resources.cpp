@@ -106,19 +106,7 @@ extern "C" void Test_graphicsBindfulSampler(oxc::c::Test *t, oxc::c::GraphicsDev
 	gfx::DeviceBuffer output;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-
-			if (table) {
-				(void) table.unset(0, 0, 1, nullptr);
-				(void) table.unset(1, 0, 1, nullptr);
-				(void) table.unset(2, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(alloc);
 
@@ -147,7 +135,7 @@ extern "C" void Test_graphicsBindfulSampler(oxc::c::Test *t, oxc::c::GraphicsDev
 	//createTexture takes ownership of the data, so the guard only has anything to free on the paths that
 	//never get that far.
 
-	gfx::OwnedList<c::Buffer, c::Buffer_free> texData(alloc);
+	gfx::OwnedList<c::Buffer> texData(alloc);
 
 	if(!Test_assert(t, "texAlloc", c::Buffer_createUninitializedBytes(8 * 8 * 4, alloc, &texData.list, e_rr)))
 		return;
@@ -280,18 +268,7 @@ extern "C" void Test_graphicsBindfulCbuffer(oxc::c::Test *t, oxc::c::GraphicsDev
 	gfx::DeviceBuffer consts, output;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-
-			if (table) {
-				(void) table.unset(0, 0, 1, nullptr);
-				(void) table.unset(1, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
@@ -428,15 +405,7 @@ extern "C" void Test_graphicsBindfulRwTexture(oxc::c::Test *t, oxc::c::GraphicsD
 	gfx::RenderTexture target;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table)
-				(void) table.unset(0, 0, 1, nullptr);
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
@@ -563,21 +532,7 @@ extern "C" void Test_graphicsBindfulArray(oxc::c::Test *t, oxc::c::GraphicsDevic
 	gfx::DeviceBuffer inputs[4], output;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-
-			if (table) {
-
-				for(c::U32 j = 0; j < 4; ++j)
-					(void) table.unset(0, j, 1, nullptr);
-
-				(void) table.unset(1, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
@@ -722,18 +677,7 @@ extern "C" void Test_graphicsBindfulSpaces(oxc::c::Test *t, oxc::c::GraphicsDevi
 	gfx::DeviceBuffer src, output;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-
-			if (table) {
-				(void) table.unset(0, 0, 1, nullptr);
-				(void) table.unset(1, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
@@ -880,15 +824,7 @@ extern "C" void Test_graphicsBindfulSharedRegister(oxc::c::Test *t, oxc::c::Grap
 	gfx::RenderTexture target;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table)
-				(void) table.unset(0, 0, 1, nullptr);
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	//Detecting from both entries at once is what unions the visibility of the register they share
 
@@ -1066,19 +1002,7 @@ extern "C" void Test_graphicsBindfulSamplerCmp(oxc::c::Test *t, oxc::c::Graphics
 	gfx::DeviceBuffer output;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-
-			if (table) {
-				(void) table.unset(0, 0, 1, nullptr);
-				(void) table.unset(1, 0, 1, nullptr);
-				(void) table.unset(2, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
@@ -1268,18 +1192,7 @@ extern "C" void Test_graphicsBindfulStructured(oxc::c::Test *t, oxc::c::Graphics
 	gfx::DeviceBuffer input, output;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-
-			if (table) {
-				(void) table.unset(0, 0, 1, nullptr);
-				(void) table.unset(1, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
@@ -1441,15 +1354,7 @@ extern "C" void Test_graphicsBindfulAppendCounter(oxc::c::Test *t, oxc::c::Graph
 	gfx::DeviceBuffer appended, counter;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table)
-				(void) table.unset(0, 0, 1, nullptr);
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
@@ -1593,15 +1498,7 @@ static void TestBindful_atomicFloatWithWidth(c::Test *t, gfx::Device &dev, c::Bo
 	gfx::DeviceBuffer output;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table)
-				(void) table.unset(0, 0, 1, nullptr);
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	gfxtest::OwnedLayoutInfo layoutInfo(dev.alloc());
 
@@ -1711,4 +1608,203 @@ extern "C" void Test_graphicsBindfulAtomicFloat(oxc::c::Test *t, oxc::c::Graphic
 		TestBindful_atomicFloatWithWidth(t, dev, true);
 
 	else c::Test_print(t, "Device lacks 64 bit float atomics, skipping that width");
+}
+
+//The same shader as Bindful/sampler, but its sampler is IMMUTABLE.
+//A baked sampler is described in the layout itself rather than bound: D3D12 puts it in the root signature as
+// a static sampler, costing none of the 64 DWORD budget and no descriptor range, and Vulkan puts it in the
+// set layout as pImmutableSamplers.
+//Nothing writes it into the table, so a correct result is only possible if the layout carried it.
+
+extern "C" void Test_graphicsBindfulStaticSampler(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
+
+	using namespace oxc;
+
+	c::Test_setModule(t, "Bindful/staticSampler");
+
+	gfx::Device dev = gfx::Device::share(deviceRef);
+	c::Error *e_rr = &t->err;
+
+	const c::Allocator *alloc = dev.alloc();
+
+	gfxtest::OwnedSHFile file(alloc);
+
+	if (!gfxtest::loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_sampler.oiSH", file.list)) {
+		c::Test_print(t, "Test shaders unavailable (built without shader compiler), skipping static sampler tests");
+		return;
+	}
+
+	const c::U32 entryId = gfxtest::entry(t, dev, file.list, "main");
+
+	if(entryId == c::U32_MAX)
+		return;
+
+	gfx::DescriptorHeap heap;
+	gfx::DescriptorLayout layout;
+	gfx::DescriptorTable table;
+	gfx::PipelineLayout pipelineLayout;
+	gfx::Pipeline pipeline;
+	gfx::DeviceTexture texture;
+	gfx::Sampler sampler;
+	gfx::DeviceBuffer output;
+	gfx::CommandList commandList, emptyList;
+
+	gfxtest::TableGuard tableGuard{ { &table } };
+
+	//Created before the layout, because the layout is what bakes it.
+	//Bindless is disallowed on purpose: a baked sampler needs no bindless slot.
+
+	const c::SamplerInfo samplerInfo = { .filter = c::ESamplerFilterMode_Nearest };
+
+	if(!Test_assert(t, "samplerCreate", dev.createSampler(
+		samplerInfo, "Static sampler", sampler, nullptr, true, e_rr
+	)))
+		return;
+
+	gfxtest::OwnedLayoutInfo layoutInfo(alloc);
+
+	if(!Test_assert(t, "detectLayout", dev.detectLayout(
+		file.list, entryId, layoutInfo.list, nullptr, nullptr, {}, nullptr,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
+	)))
+		return;
+
+	//The id is 1 based so a binding naming no sampler can leave the union zeroed.
+
+	c::U32 immutableId = 0;
+
+	if(!Test_assert(t, "addImmutableSampler", c::DescriptorLayoutInfo_addImmutableSampler(
+		&layoutInfo.list, sampler.handle(), &immutableId, alloc, e_rr
+	)))
+		return;
+
+	Test_assert(t, "immutableIdIsOneBased", immutableId == 1);
+
+	//Reflection named the registers, so the sampler is found by the name the shader gave it.
+
+	c::Bool marked = false;
+
+	for (c::U64 i = 0; i < layoutInfo.list.bindingNames.length; ++i) {
+
+		const c::CharString wanted = c::CharString_createRefCStrConst("samp");
+
+		if(!c::CharString_equalsStringSensitive(&layoutInfo.list.bindingNames.ptr[i], &wanted))
+			continue;
+
+		layoutInfo.list.bindings.ptrNonConst[i].immutableSamplerId = immutableId;
+		marked = true;
+		break;
+	}
+
+	if(!Test_assert(t, "foundSamplerBinding", marked))
+		return;
+
+	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(layoutInfo.list, "Static sampler layout", layout, e_rr)))
+		return;
+
+	//maxSamplers is still declared: Vulkan allocates a descriptor for an immutable sampler binding even
+	// though nothing ever writes it, while D3D12 needs none at all.
+
+	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 1,
+		.maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
+	};
+
+	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Static sampler heap", heap, e_rr)))
+		return;
+
+	if(!Test_assert(t, "tableCreate", heap.createTable(
+		layout, "Static sampler table", table, c::EDescriptorTableFlags_None, e_rr
+	)))
+		return;
+
+	gfx::OwnedList<c::Buffer> texData(alloc);
+
+	if(!Test_assert(t, "texAlloc", c::Buffer_createUninitializedBytes(8 * 8 * 4, alloc, &texData.list, e_rr)))
+		return;
+
+	for(c::U64 i = 0; i < 64; ++i) {
+		texData.list.ptrNonConst[i * 4] = (c::U8)(i * 3);
+		texData.list.ptrNonConst[i * 4 + 1] = 0;
+		texData.list.ptrNonConst[i * 4 + 2] = 0;
+		texData.list.ptrNonConst[i * 4 + 3] = 0xFF;
+	}
+
+	if(!Test_assert(t, "textureCreate", dev.createTexture(
+		c::ETextureType_2D, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_ShaderRead, 8, 8, 1,
+		"Static sampler texture", &texData.list, texture, nullptr, e_rr
+	)))
+		return;
+
+	texData.list = c::Buffer_createNull();
+
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Static sampler output", 64 * sizeof(c::U32), output, nullptr, e_rr
+	)))
+		return;
+
+	const c::Descriptor texDesc = c::Descriptor_texture(texture.handle(), 0, 0, 0, 0, 0, 0);
+	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, NULL, 0);
+
+	//"samp" is deliberately NOT set: if the baked sampler did not reach the shader, the sample below reads
+	// through a descriptor nothing ever wrote.
+
+	Test_assert(t, "setTex", table.setByName("tex", texDesc, 0, false, e_rr));
+	Test_assert(t, "setOutput", table.setByName("output", outputDesc, 0, false, e_rr));
+
+	c::PipelineLayoutInfo pipelineLayoutInfo = { .bindings = layout.handle() };
+
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Static sampler pipeline layout", pipelineLayout, e_rr
+	)))
+		return;
+
+	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		file.list, "main", "Static sampler pipeline", pipeline, {}, &pipelineLayout, e_rr
+	)))
+		return;
+
+	if(
+		!Test_assert(t, "listCreate", dev.createCommandList(2 * c::KIBI, 32, 16, commandList, true, e_rr)) ||
+		!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
+	)
+		return;
+
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
+
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
+
+	{
+		gfx::CommandScope scope = commandList.scope(
+			{
+				{ .resource = texture.handle(), .stage = c::EPipelineStage_Compute },
+				{ .resource = output.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true }
+			},
+			1, {}, e_rr
+		);
+
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindTable", scope.bindDescriptorTable(table, e_rr));
+		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "dispatch", scope.dispatch2D(1, 1, e_rr));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
+
+	Test_assert(t, "end", commandList.end(e_rr));
+
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
+
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
+
+			c::Bool match = true;
+
+			for(c::U32 i = 0; i < 64; ++i)
+				match &= values[i] == (c::U32)(i * 3);
+
+			Test_assert(t, "staticSamplerResults", match);
+		}
 }

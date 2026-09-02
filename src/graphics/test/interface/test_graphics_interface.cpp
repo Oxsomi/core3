@@ -366,7 +366,7 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::GraphicsDeviceRef *created = NULL;
 
 	if(!Test_assert(t, "deviceCreate", c::GraphicsDeviceRef_create(
-		instRef, info, c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, NULL, &created, &t->err
+		instRef, info, c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, NULL, NULL, &created, &t->err
 	)))
 		return;
 
@@ -470,7 +470,10 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsBindfulAtomicFloat(t, deviceRef);
 	c::Test_graphicsBindfulPushConstants(t, deviceRef);
 	c::Test_graphicsBindfulPushDescriptors(t, deviceRef);
+	c::Test_graphicsBindfulPushTexture(t, deviceRef);
+	c::Test_graphicsBindfulStaticSampler(t, deviceRef);
 	c::Test_graphicsBindfulReservedSpace(t, deviceRef);
+	c::Test_graphicsBindfulPushClass(t, deviceRef);
 	c::Test_graphicsGpuExecute(t, deviceRef);
 	c::Test_graphicsAccelerationStructures(t, deviceRef);
 
