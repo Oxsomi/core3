@@ -1,0 +1,14 @@
+{#- OxC3 host profile: Emscripten wasm64 with pthreads.
+    Same toolchain as emscripten_wasm64, plus -pthread. Kept as a separate profile rather than a
+    switch so the flag lists that fork package_id are visible in the file that causes the fork.
+    -pthread is ABI: it must be on at COMPILE time as well as link. Compiling without it and linking
+    with it is a hard wasm-ld error, but compiling WITH it and linking without links silently and
+    produces a binary whose pthread_create resolves to a stub, so threads never run and the program
+    exits 0 with the wrong answer.
+    Every dependency has to be rebuilt: objects compiled without -pthread veto --shared-memory. -#}
+include(emscripten_wasm64)
+
+[conf]
+tools.build:cflags=["-fwasm-exceptions", "-m64", "-pthread"]
+tools.build:cxxflags=["-fwasm-exceptions", "-m64", "-pthread"]
+tools.build:exelinkflags=["-fwasm-exceptions", "-m64", "-pthread", "-sALLOW_MEMORY_GROWTH=1", "-sSTACK_SIZE=8MB", "-sMAXIMUM_MEMORY=16GB"]

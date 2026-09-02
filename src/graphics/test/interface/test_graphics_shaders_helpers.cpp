@@ -193,17 +193,18 @@ namespace oxc { namespace gfxtest {
 
 	namespace {
 
-		void countPull(c::RefPtr *resource, void *context) {
+		void countPull(void *resource, void *context) {
 			(void) resource;
 			++*(c::U32*)context;
 		}
 
 		//Texture pulls hand over an owned buffer; the callback copies out the 8x8 payload the checks compare.
 
-		void pixelPull(c::RefPtr *resource, c::Buffer *data, void *context) {
+		void pixelPull(void *resource, void *dataPtr, void *context) {
 
 			(void) resource;
 
+			const c::Buffer *data = (const c::Buffer*) dataPtr;
 			c::TestShaderPixels *result = (c::TestShaderPixels*) context;
 
 			++result->count;
@@ -467,7 +468,7 @@ namespace oxc { namespace c {
 				)) {
 					created = Test_assert(t, "createOwnDevice", GraphicsDeviceRef_create(
 						*ownInstanceRef, &deviceInfos.ptr[i], EGraphicsDeviceFlags_None,
-						EGraphicsBufferingMode_Default, NULL, ownDeviceRef, &t->err
+						EGraphicsBufferingMode_Default, NULL, NULL, ownDeviceRef, &t->err
 					));
 					break;
 				}

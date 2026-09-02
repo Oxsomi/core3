@@ -33,6 +33,9 @@ BUFFER_OP_IMPL(I32x4)
 #if _SIMD == SIMD_SSE
 	#define VEC4I_SSE_GUARD
 	#include "types/math/vec4i_sse.inc.h"
+#elif _SIMD == SIMD_WASM
+	#define VEC4I_WASM_GUARD
+	#include "types/math/vec4i_wasm.inc.h"
 #elif _SIMD == SIMD_NEON
 	#define VEC4I_NEON_GUARD
 	#include "types/math/vec4i_neon.inc.h"
@@ -41,7 +44,7 @@ BUFFER_OP_IMPL(I32x4)
 	#include "types/math/vec4i_none.inc.h"
 #endif
 
-#if _SIMD != SIMD_SSE
+#if _SIMD != SIMD_SSE && _SIMD != SIMD_WASM
 	static inline I32x4 I32x4_negate(I32x4 a) { return I32x4_sub(I32x4_zero(), a); }
 	static inline I32x4 I32x4_one() { return I32x4_xxxx4(1); }
 #endif

@@ -43,7 +43,20 @@ static const U32 U32_MAX = 0xFFFFFFFFu;
 	#define _vkBinding(a, b)
 #endif
 
-_binding( 0, 0, s0, 		SamplerState _samplers[1024]);
+//The bindless sampler array is opt in, because it owns a whole descriptor set on SPIRV (set 0, while every
+//array below shares set 1) and forces a sampler heap on both backends.
+//A shader only needs it to index samplers DYNAMICALLY; a sampler known at layout time is a static sampler
+//instead and costs nothing (see DescriptorLayoutInfo::immutableSamplers).
+//Asked for with [[oxc::extension("DynamicSamplers")]], which sets __OXC_EXT_DYNAMICSAMPLERS like every
+//other extension define; the binary then requires EGraphicsDeviceFlags_EnableDynamicSamplers, which a
+//device without the flag refuses to run rather than binding a set it never declared.
+//The annotation discovery pass defines every extension define up front (Compiler_parse pretends all
+//extensions are enabled), so the declaration is visible there without any extra guard.
+//The arrays below keep their own set and bindings either way, so turning this off renumbers nothing.
+
+#ifdef __OXC_EXT_DYNAMICSAMPLERS
+	_binding( 0, 0, s0, 		SamplerState _samplers[996]);
+#endif
 
 _binding( 0, 1, t0, 		Texture2D _textures2D[131072]);
 _binding( 1, 1, t131072, 	TextureCube _textureCubes[32768]);
@@ -86,8 +99,13 @@ _vkBinding( 0, 2) cbuffer globals : register(b0, OXC3_RESERVED_SPACE) {	//Global
 U32 getReadSwapchain(U32 offset) { return offset & 1 ? _swapchains[offset >> 1].z : _swapchains[offset >> 1].x; }
 U32 getWriteSwapchain(U32 offset) { return offset & 1 ? _swapchains[offset >> 1].w : _swapchains[offset >> 1].y; }
 
-#define samplerUniform(i) _samplers[i & ResourceId_mask]
-#define sampler(i) _samplers[NonUniformResourceIndex(i & ResourceId_mask)]
+//Only defined alongside the array itself, so a shader that reaches for one without asking for dynamic
+//samplers fails to compile rather than binding nothing.
+
+#ifdef __OXC_EXT_DYNAMICSAMPLERS
+	#define samplerUniform(i) _samplers[i & ResourceId_mask]
+	#define sampler(i) _samplers[NonUniformResourceIndex(i & ResourceId_mask)]
+#endif
 
 #define tlasExtUniform(i) _tlasExt[i & ResourceId_mask]
 #define tlasExt(i) _tlasExt[NonUniformResourceIndex(i & ResourceId_mask)]

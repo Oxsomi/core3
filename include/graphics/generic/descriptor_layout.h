@@ -23,6 +23,7 @@
 #pragma once
 #include "formats/oiSH/sh_file.h"
 #include "types/container/list.h"
+#include "types/container/ref_ptr.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -79,10 +80,34 @@ typedef struct DescriptorBinding {
 		U32 structedBufferStride;
 		U32 constantBufferSize;
 		SHTextureFormat textureFormat;
+
+		//Sampler bindings only: 1 + an index into DescriptorLayoutInfo::immutableSamplers, 0 for none.
+		//An immutable sampler is baked into the layout rather than bound, so it needs no heap slot and no
+		// write: D3D12 puts it in the root signature as a static sampler and Vulkan in the set layout as
+		// pImmutableSamplers.
+		//An index rather than the ref itself, because a pointer does not fit in this union and widening it
+		// would grow every binding.
+
+		U32 immutableSamplerId;
+
 		U32 data;
 	};
 
 } DescriptorBinding;
+
+//immutableSamplerId shares the union above with every other class's data (a texture's format, a buffer's
+// stride), so reading the field raw misreads any non sampler binding whose union is nonzero as an immutable
+// sampler; THIS is the only way it may be read.
+
+static inline U32 DescriptorBinding_immutableSamplerId(DescriptorBinding b) {
+
+	const ESHRegisterType type = (ESHRegisterType)(b.registerType & ESHRegisterType_TypeMask);
+
+	if(type != ESHRegisterType_Sampler && type != ESHRegisterType_SamplerComparisonState)
+		return 0;
+
+	return b.immutableSamplerId;
+}
 
 Bool DescriptorBinding_overlaps(
 	const DescriptorBinding *binding,
@@ -95,6 +120,12 @@ Bool DescriptorBinding_overlaps(
 
 TList(DescriptorBinding);
 
+//Samplers a binding can name with immutableSamplerId.
+//Held by ref rather than by value so several layouts naming the same sampler share one VkSampler instead of
+// each minting its own; D3D12 never makes an object of one at all and only reads its info.
+
+typedef RefPtr SamplerRef;
+
 typedef struct DescriptorLayoutInfo {
 
 	EDescriptorLayoutFlags flags;
@@ -103,7 +134,22 @@ typedef struct DescriptorLayoutInfo {
 	ListDescriptorBinding bindings;
 	ListCharString bindingNames;
 
+	//Owned: DescriptorLayoutInfo_free releases a ref on each, and createDescriptorLayout moves the list into
+	// the layout along with everything else here.
+
+	ListRefPtr immutableSamplers;
+
 } DescriptorLayoutInfo;
+
+//Takes a ref and hands back the id to put in a sampler binding's immutableSamplerId (never 0).
+
+Bool DescriptorLayoutInfo_addImmutableSampler(
+	DescriptorLayoutInfo *info,
+	SamplerRef *sampler,
+	U32 *id,
+	const Allocator *alloc,
+	Error *e_rr
+);
 
 typedef enum EDetectDescriptorLayoutFlags {
 

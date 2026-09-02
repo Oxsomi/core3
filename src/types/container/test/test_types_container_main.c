@@ -37,6 +37,10 @@ OXC3_TEST_MAIN(types_container) {
 	Test_crc32c(&t);
 	Test_sha256(&t);
 
+	#if _PLATFORM_TYPE == PLATFORM_WEB
+		Test_hostCrypto(&t);
+	#endif
+
 	Test_textureFormat(&t);
 
 	Test_allocationBuffer(&t);

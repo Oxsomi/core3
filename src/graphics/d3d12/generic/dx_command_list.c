@@ -200,10 +200,11 @@ static void DxCommandBufferState_bindDescriptors(
 			temp->defaultDescriptorsBound = true;
 			GraphicsDevice_rebindDescriptors(device, buffer);
 
-			//The rebind switched the heap and root signatures back to the defaults, so the custom path's
-			// trackers no longer describe what is bound.
+			//The rebind switched the root signatures back to the defaults, so the custom path's trackers no
+			// longer describe what is bound; the heap however is KNOWN (the device's own), so recording it
+			// keeps a following explicit defaultHeap() bind or rotated copy from re-emitting it.
 
-			temp->lastBoundHeap = NULL;
+			temp->lastBoundHeap = device->defaultDescriptorHeaps;
 			temp->lastBoundTable[0] = temp->lastBoundTable[1] = NULL;
 			temp->lastRootSig[0] = temp->lastRootSig[1] = NULL;
 		}
@@ -244,28 +245,39 @@ static void DxCommandBufferState_bindDescriptors(
 			DxDescriptorTable *bindlessTable =
 				DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Dx);
 
-			ID3D12DescriptorHeap *heaps[2] = { bindlessHeap->resourcesHeap.heap, bindlessHeap->samplerHeap.heap };
-
 			//Sampler descriptors are not the same size as CBV/SRV/UAV ones on every adapter, so each offset
 			// scales by its own heap's increment.
+			//Without EnableDynamicSamplers there is no sampler heap and the root signature has no sampler
+			// table, so both lists carry exactly what exists: the sampler table at root param 0 when present
+			// (it is the first binding of the default layout), resources at the next.
 
-			const D3D12_GPU_DESCRIPTOR_HANDLE tables[2] = {
-				{
+			ID3D12DescriptorHeap *heaps[2];
+			D3D12_GPU_DESCRIPTOR_HANDLE tables[2];
+			U32 tableCount = 0;
+
+			if (bindlessHeap->samplerHeap.heap) {
+
+				heaps[tableCount] = bindlessHeap->samplerHeap.heap;
+
+				tables[tableCount++] = (D3D12_GPU_DESCRIPTOR_HANDLE) {
 					bindlessHeap->samplerHeap.gpuHandle.ptr +
 					bindlessTable->allocationLocations[1] * bindlessHeap->samplerHeap.gpuIncrement
-				},
-				{
-					bindlessHeap->resourcesHeap.gpuHandle.ptr +
-					bindlessTable->allocationLocations[0] * bindlessHeap->resourcesHeap.gpuIncrement
-				}
+				};
+			}
+
+			heaps[tableCount] = bindlessHeap->resourcesHeap.heap;
+
+			tables[tableCount++] = (D3D12_GPU_DESCRIPTOR_HANDLE) {
+				bindlessHeap->resourcesHeap.gpuHandle.ptr +
+				bindlessTable->allocationLocations[0] * bindlessHeap->resourcesHeap.gpuIncrement
 			};
 
 			if(temp->lastBoundHeap != device->defaultDescriptorHeaps) {
-				buffer->lpVtbl->SetDescriptorHeaps(buffer, 2, heaps);
+				buffer->lpVtbl->SetDescriptorHeaps(buffer, tableCount, heaps);
 				temp->lastBoundHeap = device->defaultDescriptorHeaps;
 			}
 
-			for(U32 i = 0; i < 2; ++i) {
+			for(U32 i = 0; i < tableCount; ++i) {
 
 				if(isCompute)
 					buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, i, tables[i]);
@@ -312,24 +324,98 @@ static void DxCommandBufferState_bindDescriptors(
 		temp->pushConstantsEmitted[bindPoint] = true;
 	}
 
-	//Push descriptors are root descriptors: one raw GPU virtual address per binding. That is also why only
-	//buffer class resources can be one, since a texture's format, mip and swizzle have nowhere to live in an
-	//address; createDescriptorLayout refuses the rest up front.
+	//A buffer class push descriptor is a root descriptor: one raw GPU virtual address per binding.
+	//A texture cannot be one, since an address has nowhere to carry a format, mip or swizzle, so the layout
+	// gave it a single entry descriptor TABLE instead and this fills that table from the bound heap's push
+	// ring (see DescriptorHeapInfo::maxPushDescriptors).
 	//Emitted here for the same reason as the constants: the table work below returns early for a layout that
-	//has no ordinary bindings at all.
+	// has no ordinary bindings at all.
 
 	if (temp->pushDescriptorCount && !temp->pushDescriptorsEmitted[bindPoint] && layout->info.pushDescriptors) {
 
 		const DescriptorLayout *pushLayout = DescriptorLayoutRef_ptr(layout->info.pushDescriptors);
 		DxDescriptorLayout *pushExt = DescriptorLayout_ext((DescriptorLayout*)pushLayout, Dx);
 
-		for (U8 i = 0; i < temp->pushDescriptorCount && i < pushLayout->info.bindings.length; ++i) {
+		DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-			const Descriptor d = temp->pushDescriptors[i];
+		//Resolved the way the recorder resolved it when it checked maxPushDescriptors, so the heap validated
+		// against is the heap written to: the caller's own bound heap, or the device's bindless heap when
+		// the layout uses the runtime bindless set, because THAT pipeline binds the device heap for itself
+		// either way and the push adds no switch.
+		//There is deliberately no other fallback: a heap this emit picked itself would need a background
+		// SetDescriptorHeaps, and that switch is heavy (it can drain the GPU on NV), which is the entire
+		// reason heap binds are explicit.
+
+		DescriptorHeapRef *pushHeapRef = temp->boundDescriptorHeap;
+
+		if(!pushHeapRef && PipelineLayout_usesRuntimeBindless(layout))
+			pushHeapRef = device->defaultDescriptorHeaps;
+
+		DxDescriptorHeap *pushHeap =
+			pushHeapRef ? DescriptorHeap_ext(DescriptorHeapRef_ptr(pushHeapRef), Dx) : NULL;
+
+		//A baked sampler is a static sampler in the root signature: it takes a binding but no descriptor and
+		// no root parameter, so writeId walks the caller's descriptors while i walks the bindings.
+
+		U8 writeId = 0;
+
+		for (U8 i = 0; i < pushLayout->info.bindings.length; ++i) {
+
 			const DescriptorBinding binding = pushLayout->info.bindings.ptr[i];
+
+			if(DescriptorBinding_immutableSamplerId(binding))
+				continue;
+
+			if(writeId >= temp->pushDescriptorCount)
+				break;
+
+			const Descriptor d = temp->pushDescriptors[writeId++];
 			const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
 
 			const U32 rootParam = layoutExt->rootParamPushDescriptors + pushExt->rootParamOffsets.ptr[i];
+
+			if (type >= ESHRegisterType_TextureStart && type < ESHRegisterType_SubpassInput) {
+
+				U32 slot = 0;
+
+				if (!pushHeap || !DxDescriptorHeap_allocTransient(pushHeap, device->fifId, 1, &slot)) {
+					Log_errorLnx("A texture push descriptor needs a bound heap with maxPushDescriptors > 0");
+					continue;
+				}
+
+				//D3D12 wants the heap current BEFORE a root table names one of its descriptors; the only
+				// bind ever emitted here is the caller's own (or the bindless heap its pipeline binds
+				// anyway), realized lazily, never a heap this emit picked itself.
+				//The table work below re-checks the same tracker, so binding early only makes it a no-op.
+
+				if (temp->lastBoundHeap != pushHeapRef) {
+
+					ID3D12DescriptorHeap *heaps[2] = {
+						pushHeap->resourcesHeap.heap, pushHeap->samplerHeap.heap
+					};
+
+					buffer->lpVtbl->SetDescriptorHeaps(buffer, pushHeap->samplerHeap.heap ? 2 : 1, heaps);
+					temp->lastBoundHeap = pushHeapRef;
+				}
+
+				DxDescriptorTable_writeTexture(
+					deviceExt, &d, binding.registerType,
+					(D3D12_CPU_DESCRIPTOR_HANDLE) {
+						.ptr = pushHeap->resourcesHeap.cpuHandle.ptr + slot * pushHeap->resourcesHeap.cpuIncrement
+					}
+				);
+
+				const D3D12_GPU_DESCRIPTOR_HANDLE table = (D3D12_GPU_DESCRIPTOR_HANDLE) {
+					.ptr = pushHeap->resourcesHeap.gpuHandle.ptr + slot * pushHeap->resourcesHeap.gpuIncrement
+				};
+
+				if(isCompute)
+					buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, rootParam, table);
+
+				else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, rootParam, table);
+
+				continue;
+			}
 
 			D3D12_GPU_VIRTUAL_ADDRESS addr =
 				type == ESHRegisterType_AccelerationStructure ?
@@ -408,8 +494,16 @@ static void DxCommandBufferState_bindDescriptors(
 
 	for (U64 i = 0; i < descLayout->info.bindings.length; ++i) {
 
-		const ESHRegisterType type =
-			(ESHRegisterType)(descLayout->info.bindings.ptr[i].registerType & ESHRegisterType_TypeMask);
+		const DescriptorBinding binding = descLayout->info.bindings.ptr[i];
+		const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
+
+		//An immutable sampler is a static sampler in the root signature, so the layout gave it no root
+		// parameter and never wrote it an offset.
+		//Reading one here would name whatever the list happened to hold and bind the sampler table at the
+		// resource table's parameter.
+
+		if(DescriptorBinding_immutableSamplerId(binding))
+			continue;
 
 		const Bool isSampler = type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState;
 
@@ -624,6 +718,191 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			DxUnifiedTexture *srcExt = TextureRef_getCurrImgExtT(copyImage.src, Dx, 0);
 			DxUnifiedTexture *dstExt = TextureRef_getCurrImgExtT(copyImage.dst, Dx, 0);
+
+			//A rotation is not something CopyTextureRegion can express, so those regions are replayed as a
+			// dispatch of the device's own copy shader instead (image_copy.oiSH's mainSingle).
+			//The recorder put the WHOLE command on this path as soon as one region rotates, because the images
+			// were transitioned for shader access rather than for a copy; see CommandListRef_copyImageRegions.
+			//The shader's two textures are its own push descriptors, which on D3D12 are single entry
+			// descriptor TABLES rather than root descriptors, so each dispatch needs two shader visible
+			// descriptors.
+			//They come from the push ring of the heap the USER bound (the recorder refused the command
+			// without one): a heap this replay picked itself would need a SetDescriptorHeaps behind the
+			// caller's back, and that switch is heavy (it can drain the GPU on NV), which is the entire
+			// reason heap binds are explicit.
+			//Per command that is two descriptor writes; the only heap bind ever emitted is the caller's own.
+
+			Bool anyRotation = false;
+
+			for(U64 i = 0; i < copyImage.regionCount && !anyRotation; ++i)
+				anyRotation = !!copyImageRegions[i].outputRotation;
+
+			if (anyRotation) {
+
+				const PipelineLayout *copyLayout = PipelineLayoutRef_ptr(device->copyPipelineLayout);
+				DxPipelineLayout *copyLayoutExt = PipelineLayout_ext((PipelineLayout*)copyLayout, Dx);
+
+				const DescriptorLayout *pushLayout = DescriptorLayoutRef_ptr(device->copyDescPushDesc);
+				DxDescriptorLayout *pushExt = DescriptorLayout_ext((DescriptorLayout*)pushLayout, Dx);
+
+				//The shader is compiled per numeric class, because a view's format is the image's own and the
+				// shader's declared texel type has to match it. src and dst share a format here.
+
+				const ETexturePrimitive prim =
+					ETextureFormat_getPrimitive(ETextureFormatId_unpack[src.textureFormatId]);
+
+				const U64 isFloat =
+					prim == ETexturePrimitive_UNorm || prim == ETexturePrimitive_SNorm ||
+					prim == ETexturePrimitive_Float || prim == ETexturePrimitive_UNormBGR;
+
+				const DXGI_FORMAT viewFormat = ETextureFormatId_toDXFormat(src.textureFormatId);
+
+				//Two descriptors for the whole command: every region reads the same src and writes the same dst
+
+				DxDescriptorHeap *pushHeap =
+					temp->boundDescriptorHeap ?
+					DescriptorHeap_ext(DescriptorHeapRef_ptr(temp->boundDescriptorHeap), Dx) : NULL;
+
+				U32 slot = 0;
+
+				if (!pushHeap || !DxDescriptorHeap_allocTransient(pushHeap, device->fifId, 2, &slot)) {
+					Log_errorLnx("Rotated copy needs a bound descriptor heap with maxPushDescriptors >= 2");
+					break;
+				}
+
+				const U64 cpuBase =
+					pushHeap->resourcesHeap.cpuHandle.ptr + slot * pushHeap->resourcesHeap.cpuIncrement;
+
+				const U64 gpuBase =
+					pushHeap->resourcesHeap.gpuHandle.ptr + slot * pushHeap->resourcesHeap.gpuIncrement;
+
+				D3D12_SHADER_RESOURCE_VIEW_DESC srv = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
+					.Format = viewFormat,
+					.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY,
+					.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+					.Texture2DArray = (D3D12_TEX2D_ARRAY_SRV) { .MipLevels = 1, .ArraySize = src.length }
+				};
+
+				deviceExt->device->lpVtbl->CreateShaderResourceView(
+					deviceExt->device, srcExt->image, &srv, (D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = cpuBase }
+				);
+
+				D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) {
+					.Format = viewFormat,
+					.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY,
+					.Texture2DArray = (D3D12_TEX2D_ARRAY_UAV) { .ArraySize = src.length }
+				};
+
+				deviceExt->device->lpVtbl->CreateUnorderedAccessView(
+					deviceExt->device,
+					dstExt->image,
+					NULL,
+					&uav,
+					(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = cpuBase + pushHeap->resourcesHeap.cpuIncrement }
+				);
+
+				//The only heap bind ever emitted is the caller's own, realized lazily here if no work op
+				// got to it first; a heap of this path's choosing would be a background switch.
+
+				if (temp->lastBoundHeap != temp->boundDescriptorHeap) {
+
+					ID3D12DescriptorHeap *heaps[2] = {
+						pushHeap->resourcesHeap.heap, pushHeap->samplerHeap.heap
+					};
+
+					buffer->lpVtbl->SetDescriptorHeaps(buffer, pushHeap->samplerHeap.heap ? 2 : 1, heaps);
+					temp->lastBoundHeap = temp->boundDescriptorHeap;
+				}
+
+				buffer->lpVtbl->SetComputeRootSignature(buffer, copyLayoutExt->rootSig);
+
+				for (U64 i = 0; i < pushLayout->info.bindings.length && i < 2; ++i) {
+
+					const Bool isWrite = !!(pushLayout->info.bindings.ptr[i].registerType & ESHRegisterType_IsWrite);
+
+					buffer->lpVtbl->SetComputeRootDescriptorTable(
+						buffer,
+						copyLayoutExt->rootParamPushDescriptors + pushExt->rootParamOffsets.ptr[i],
+						(D3D12_GPU_DESCRIPTOR_HANDLE) {
+							.ptr = gpuBase + (isWrite ? pushHeap->resourcesHeap.gpuIncrement : 0)
+						}
+					);
+				}
+
+				//Regions are emitted grouped by permutation, unrotated first and rotated second, rather
+				// than in caller order: the pipeline is the only state that differs between them, so
+				// grouping caps SetPipelineState at two per command however the caller interleaved.
+				//Regions never overlap in dst (see the recorder), so their order is free to change.
+
+				for (U64 rotatePass = 0; rotatePass < 2; ++rotatePass) {
+
+					Bool boundPass = false;
+
+					for (U64 i = 0; i < copyImage.regionCount; ++i) {
+
+						CopyImageRegion image = copyImageRegions[i];
+
+						if((U64) !!image.outputRotation != rotatePass)
+							continue;
+
+						if (!boundPass) {
+
+							//An unrotated region in a rotated command still goes through the shader, since the
+							// images are in shader state rather than copy state; it takes the plain permutation.
+
+							PipelineRef *shader = device->copyShaders[rotatePass | (isFloat << 1)];
+
+							buffer->lpVtbl->SetPipelineState(buffer, Pipeline_ext(PipelineRef_ptr(shader), Dx)->pso);
+							boundPass = true;
+						}
+
+						if(!image.width)
+							image.width = src.width - image.srcX;
+
+						if(!image.height)
+							image.height = src.height - image.srcY;
+
+						if(!image.length)
+							image.length = src.length - image.srcZ;
+
+						//The shader unpacks each U32 as a pair of 16 bit values (see CopyImageRegion's getSrc)
+
+						const U32 cmd[8] = {
+							1, 0,
+							image.srcX | ((U32)image.srcY << 16), image.srcZ,
+							image.dstX | ((U32)image.dstY << 16), image.dstZ,
+							image.width | ((U32)image.height << 16),
+							image.length | ((U32)image.outputRotation << 16)
+						};
+
+						buffer->lpVtbl->SetComputeRoot32BitConstants(
+							buffer, copyLayoutExt->rootParamPushConstants, 8, cmd, 0
+						);
+
+						//numthreads(16, 8, 1) in image_copy.hlsl
+
+						buffer->lpVtbl->Dispatch(
+							buffer, (image.width + 15) / 16, (image.height + 7) / 8, image.length
+						);
+						}
+				}
+
+				//This bound a root signature, a pipeline and root arguments of its own, so what the work ops
+				// cache about the compute bind point is stale; only the EMITTED trackers reset, never the
+				// recorder's intent (boundDescriptorTable/boundDescriptorHeap), which the next work op
+				// re-emits against the caller's own binds.
+				//The heap was the caller's and never changed, so lastBoundHeap stays accurate.
+
+				temp->pipeline = NULL;
+				temp->tempPipelines[EPipelineType_Compute] = NULL;
+				temp->lastRootSig[1] = NULL;                  //D3D12 numbers these [0] graphics, [1] compute
+				temp->lastBoundTable[1] = NULL;
+				temp->defaultDescriptorsBound = false;
+				temp->pushConstantsEmitted[1] = false;
+				temp->pushDescriptorsEmitted[1] = false;
+
+				break;
+			}
 
 			for(U64 i = 0; i < copyImage.regionCount; ++i) {
 
@@ -1302,6 +1581,13 @@ void DX_WRAP_FUNC(CommandList_process)(
 		case ECommandOp_UpdateBLASExt:
 
 			if(!(DX_WRAP_FUNC(BLASRef_flush))(temp, deviceRef, *(BLASRef**)data, e_rr))
+				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
+			break;
+
+		case ECommandOp_CompactBLASExt:
+
+			if(!(DX_WRAP_FUNC(BLASRef_compact))(temp, deviceRef, *(BLASRef**)data, e_rr))
 				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
 
 			break;

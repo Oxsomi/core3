@@ -341,6 +341,8 @@ namespace oxc {
 		//RenderTexture, DeviceTexture and Swapchain are all one to the C API, so they inherit this rather than
 		// each spelling the same six calls out, or callers reaching past the wrapper for them.
 		//CRTP because a Handle knows its own C type: the mixin needs handle(), which only the derived class has.
+		//The mixin is always the FIRST base: the MSVC ABI places a trailing empty base one past the object's end,
+		// and UBSan's object size check rejects every member call made through that address.
 
 		template<typename Self>
 		struct TextureHandleOps {
@@ -402,7 +404,7 @@ namespace oxc {
 			}
 		};
 
-		class RenderTexture : public Handle<c::RenderTexture>, public TextureHandleOps<RenderTexture> {
+		class RenderTexture : public TextureHandleOps<RenderTexture>, public Handle<c::RenderTexture> {
 		public:
 			using Handle::Handle;
 
@@ -423,7 +425,7 @@ namespace oxc {
 			}
 		};
 
-		class DeviceTexture : public Handle<c::DeviceTexture>, public TextureHandleOps<DeviceTexture> {
+		class DeviceTexture : public TextureHandleOps<DeviceTexture>, public Handle<c::DeviceTexture> {
 		public:
 			using Handle::Handle;
 
@@ -451,7 +453,7 @@ namespace oxc {
 			}
 		};
 
-		class DepthStencil : public Handle<c::DepthStencil>, public TextureHandleOps<DepthStencil> {
+		class DepthStencil : public TextureHandleOps<DepthStencil>, public Handle<c::DepthStencil> {
 		public:
 			using Handle::Handle;
 
@@ -470,7 +472,7 @@ namespace oxc {
 			}
 		};
 
-		class Swapchain : public Handle<c::Swapchain>, public TextureHandleOps<Swapchain> {
+		class Swapchain : public TextureHandleOps<Swapchain>, public Handle<c::Swapchain> {
 		public:
 			using Handle::Handle;
 
@@ -1032,6 +1034,13 @@ namespace oxc {
 				return c::CommandListRef_dispatchRaysIndirectExt(list, buffer.handle(), offset, raygenLocalId, e_rr);
 			}
 
+			//Records the compacting copy. See GraphicsDeviceRef_prepareCompactBLAS for the ordering and
+			//timing rules, all of which are checked here rather than left to the caller.
+
+			[[nodiscard]] c::Bool compactBlas(const Blas &b, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_compactBLASExt(list, b.handle(), e_rr);
+			}
+
 			[[nodiscard]] c::Bool updateBlas(const Blas &b, c::Error *e_rr = nullptr) noexcept {
 				return c::CommandListRef_updateBLASExt(list, b.handle(), e_rr);
 			}
@@ -1391,14 +1400,55 @@ namespace oxc {
 		//Frees on every exit path, including the error returns,
 		// which is why the factories can bail mid-build without leaking.
 
-		template<typename T, void (*Free)(T*, const c::Allocator*)>
+		//Which free a type gets is a trait rather than a function pointer template parameter,
+		// because a call through a pointer is INDIRECT and that is exactly what UBSan's -fsanitize=function
+		// instruments.
+		//The C headers are included into oxc::c here, so a C function's type on this side is
+		// void (oxc::c::T*, const oxc::c::Allocator*), while its definition over in the C translation unit has type
+		// void (T*, const Allocator*).
+		//The check compares mangled function types and those two spellings mangle differently,
+		// so it reports a mismatch on a call that is ABI identical.
+		//Calling a trait's static member is a direct call, so there is nothing left for it to instrument,
+		// and a free that genuinely did not match now fails to compile instead of surfacing at runtime.
+
+		//Give a new list type an OwnedList by adding a specialization; the primary is left undefined on purpose.
+
+		template<typename T> struct OwnedListFree;
+
+		template<> struct OwnedListFree<c::Buffer> {
+			static void run(c::Buffer *l, const c::Allocator *alloc) noexcept { c::Buffer_free(l, alloc); }
+		};
+
+		template<> struct OwnedListFree<c::SHFile> {
+			static void run(c::SHFile *l, const c::Allocator *alloc) noexcept { c::SHFile_free(l, alloc); }
+		};
+
+		template<> struct OwnedListFree<c::DescriptorLayoutInfo> {
+			static void run(c::DescriptorLayoutInfo *l, const c::Allocator *alloc) noexcept {
+				c::DescriptorLayoutInfo_free(l, alloc);
+			}
+		};
+
+		template<> struct OwnedListFree<c::ListPipelineStage> {
+			static void run(c::ListPipelineStage *l, const c::Allocator *alloc) noexcept {
+				c::ListPipelineStage_free(l, alloc);
+			}
+		};
+
+		template<> struct OwnedListFree<c::ListPipelineRaytracingGroup> {
+			static void run(c::ListPipelineRaytracingGroup *l, const c::Allocator *alloc) noexcept {
+				c::ListPipelineRaytracingGroup_free(l, alloc);
+			}
+		};
+
+		template<typename T>
 		struct OwnedList {
 
 			T list{};
 			const c::Allocator *alloc;
 
 			explicit OwnedList(const c::Allocator *a) noexcept : alloc(a) {}
-			~OwnedList() noexcept { Free(&list, alloc); }
+			~OwnedList() noexcept { OwnedListFree<T>::run(&list, alloc); }
 
 			OwnedList(const OwnedList&) = delete;
 			OwnedList &operator=(const OwnedList&) = delete;
@@ -1579,13 +1629,16 @@ namespace oxc {
 				Device &result,
 				c::EGraphicsBufferingMode bufferingMode = c::EGraphicsBufferingMode_Default,
 				const c::DescriptorLayoutInfo *bindlessLayout = nullptr,
+				const c::DescriptorHeapInfo *reservedDescriptors = nullptr,
 				c::Error *e_rr = nullptr
 			) noexcept {
 
 				result = Device();
 				c::GraphicsDeviceRef *raw = nullptr;
 
-				if(!c::GraphicsDeviceRef_create(instance.handle(), &info, flags, bufferingMode, bindlessLayout, &raw, e_rr))
+				if(!c::GraphicsDeviceRef_create(
+					instance.handle(), &info, flags, bufferingMode, bindlessLayout, reservedDescriptors, &raw, e_rr
+				))
 					return false;
 
 				result.ref = RefPtr<c::GraphicsDevice>::adopt(raw);
@@ -1608,6 +1661,16 @@ namespace oxc {
 
 			[[nodiscard]] DescriptorTable defaultTable() const noexcept {
 				return DescriptorTable(RefPtr<c::DescriptorTable>::share(ref.data()->defaultDescriptorTable));
+			}
+
+			//The device's own bindless heap, which reserves a push ring of its own
+			// (OXC3_MAX_PUSH_DESCRIPTORS * 64 per frame in flight), so a bindless app can bind THIS heap
+			// explicitly and rotate or push textures without creating a heap just for the ring.
+			//The bind stays the caller's: nothing binds it behind their back, and a scope already running
+			// bindless work has it current anyway, making the explicit bind free.
+
+			[[nodiscard]] DescriptorHeap defaultHeap() const noexcept {
+				return DescriptorHeap(RefPtr<c::DescriptorHeap>::share(ref.data()->defaultDescriptorHeaps));
 			}
 
 			//The two layouts a custom pipeline layout composes with to keep the bindless handles and the per
@@ -1878,8 +1941,8 @@ namespace oxc {
 				// so a real scene passes far more than a fixed array would hold.
 				//The runtime still bounds recursion depth and payload size.
 
-				OwnedList<c::ListPipelineStage, c::ListPipelineStage_free> stages(alloc);
-				OwnedList<c::ListPipelineRaytracingGroup, c::ListPipelineRaytracingGroup_free> groups(alloc);
+				OwnedList<c::ListPipelineStage> stages(alloc);
+				OwnedList<c::ListPipelineRaytracingGroup> groups(alloc);
 
 				if(
 					!c::ListPipelineStage_resize(&stages.list, stageCount, alloc, e_rr) ||
@@ -2014,7 +2077,7 @@ namespace oxc {
 			}
 
 			//msaa as in createRenderTexture: a depth buffer attached to a multisampled pass has to carry the
-			//same count as the colour target and the pipeline.
+			//same count as the color target and the pipeline.
 
 			[[nodiscard]] c::Bool createDepthStencil(
 				c::U16 width, c::U16 height, c::EDepthStencilFormat format, c::Bool allowShaderRead,
@@ -2185,6 +2248,9 @@ namespace oxc {
 			// buffer needs EDeviceBufferUsage_ASReadExt like every RTAS input,
 			// and build recording stays manual (updateBlas in a scope), exactly like the triangle path.
 
+			//Swap a built BLAS for a compacted copy. The build must have COMPLETED (submit, then wait), and
+			//every TLAS referencing it must be created after, because compaction moves the structure.
+
 			[[nodiscard]] c::Bool createBlasProcedural(
 				c::ERTASBuildFlags buildFlags, c::EBLASFlag blasFlags,
 				c::U32 aabbStride, c::U32 aabbOffset, c::DeviceData buffer,
@@ -2269,7 +2335,7 @@ namespace oxc {
 
 				const c::Allocator *alloc = c::GraphicsDeviceRef_getAlloc(handle());
 
-				OwnedList<c::ListPipelineStage, c::ListPipelineStage_free> stages(alloc);
+				OwnedList<c::ListPipelineStage> stages(alloc);
 
 				if(!c::ListPipelineStage_resize(&stages.list, stageCount, alloc, e_rr))
 					return false;

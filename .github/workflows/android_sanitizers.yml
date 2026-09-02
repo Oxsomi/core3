@@ -1,0 +1,82 @@
+name: Android Vulkan (emulator run, ASan + UBSan)
+
+# Nightly rather than per push for the same reason as the other sanitizer jobs, see
+# linux_clang_sanitizers.yml.
+#
+# The per commit android jobs prove it compiles, and the emulator one proves it starts and the suites pass.
+# Neither can see a use after free that happens to land on a page that is still mapped.
+# Bionic's allocator is not glibc's, Darwin's or the Windows heap, so which reads fall in freed memory and
+# which fall in something still live differs again from every host sanitizer job.
+#
+# This is also the only sanitized job that compiles the android platform layer at all: the asset manager
+# paths, the NativeActivity window and looper glue and the JNI entry, none of which a host job builds.
+#
+# The emulator shape rather than a build only one, because a sanitizer that never runs catches nothing.
+# x86_64 for the reason android_emulator.yml gives: an arm64 image on an x86_64 runner is software emulated
+# and never finishes, so the arm64 NEON paths stay with the unsanitized arm64 build jobs.
+#
+# No sanitized android run has happened yet, so the first results measure the platform layer rather than
+# report a regression in it.
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+
+  # build_flags is consumed in _build.yml, and the android path runs build_android.py from steps of its own
+  # rather than the build.py step the host jobs share, so nothing in this file can show whether the flags
+  # below reach a build at all.
+  # A job whose flags are dropped there builds and runs the plain android target, passes, and reads as proof
+  # that a sanitized android build is clean, which is worse than having no sanitized android job: a flag that
+  # quietly does nothing buys false confidence, which is why CMakeLists.txt makes an unsupported sanitizer
+  # request a hard error instead of a silent no-op.
+  #
+  # Two steps have to carry them, because android splits building from packaging.
+  # The build step is what compiles instrumented, and the emulator's `--skip_build --apk --run` step is what
+  # puts the NDK's sanitizer runtimes and wrap.sh into lib/<abi> and marks the manifest debuggable.
+  # Without the second one the apk installs, starts, instruments nothing and still reports a pass.
+  #
+  # So both are checked before anything is built, and this job is also what catches either being removed
+  # again later.
+
+  guard:
+    name: build_flags forwarding
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that _build.yml's android steps forward build_flags
+        run: |
+          forwarded=$(grep 'build_android\.py' .github/workflows/_build.yml | grep 'inputs\.build_flags' || true)
+          if ! echo "$forwarded" | grep -- '--skip_host_package' | grep -q -- '-arch x64'; then
+            echo "::error::_build.yml's android emulator build step drops build_flags, so nothing is sanitized"
+            exit 1
+          fi
+          if ! echo "$forwarded" | grep -q -- '--skip_build'; then
+            echo "::error::_build.yml's android apk step drops build_flags, so the apk carries no ASan runtime"
+            exit 1
+          fi
+
+  build:
+    needs: guard
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Android Vulkan (emulator run, ASan + UBSan)
+      runner: ubuntu-latest
+      os: android
+      build_flags: '-asan True -ubsan True'
+      # Its own cache group: the sanitized android dependencies are different conan packages than the plain
+      # emulator job's, so sharing that group would miss everything and then never save its own.
+      cache_name: emulator_sanitizers
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      android_run: true
+      # Sets the runner's ASAN_OPTIONS/UBSAN_OPTIONS, which is what the host half of the build runs under.
+      # What the app runs under on device comes from the wrap.sh build_android.py packages instead, since
+      # nothing carries a runner environment across adb.
+      sanitizers: true
+      hook_name: Android-emulator-run-sanitizers
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

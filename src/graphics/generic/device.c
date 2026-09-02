@@ -345,7 +345,7 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 	if(!device)
 		return;
 
-	for(U64 i = 0; i < 2; ++i)
+	for(U64 i = 0; i < 4; ++i)
 		RefPtr_dec(&device->copyShaders[i]);
 
 	RefPtr_dec(&device->copyPipelineLayout);        //Even though it's 'ref counted' it's internal so destruction order matters
@@ -392,6 +392,8 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 	ListGraphicsTiming_freeUnderlying(&device->timings, alloc);
 	ListU64_free(&device->timingStack, alloc);
+	ListU32_free(&device->compactionFreeQueries, alloc);
+	ListRefPtr_free(&device->liveTlases, alloc);
 
 	SpinLock_lock(&device->lock, U64_MAX);
 	SpinLock_lock(&device->allocator.lock, U64_MAX);
@@ -481,6 +483,11 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 	gotoIfError3(clean, SHFile_read((StreamRef*)tempStream, &streamOffset, false, alloc, &tmpBinary, e_rr));
 
 	//ROTATE is a uniform (not a define), so select the permutation by its stringified value ("false" / "true").
+	//TEXEL is a DEFINE, because it types the shader's two textures and a uniform is a spec constant that
+	// cannot.
+	//A view's format is always the image's own and Vulkan requires the view's numeric type to match
+	// what the shader declares, so the copy exists once per numeric class as well as once per rotation:
+	// index = rotate | (isFloat << 1).
 
 	CharString uniformsFalse[2] = {
 		CharString_createRefCStrConst("ROTATE"), CharString_createRefCStrConst("false")
@@ -490,10 +497,25 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 		CharString_createRefCStrConst("ROTATE"), CharString_createRefCStrConst("true")
 	};
 
-	for(U64 i = 0; i < 2; ++i) {
+	CharString definesUint[2] = {
+		CharString_createRefCStrConst("TEXEL"), CharString_createRefCStrConst("U32x4")
+	};
+
+	CharString definesFloat[2] = {
+		CharString_createRefCStrConst("TEXEL"), CharString_createRefCStrConst("F32x4")
+	};
+
+	for(U64 i = 0; i < 4; ++i) {
 
 		ListCharString uniformsList = (ListCharString) { 0 };
-		gotoIfError3(clean, ListCharString_createRefConst(i ? uniformsTrue : uniformsFalse, 2, &uniformsList, e_rr));
+		gotoIfError3(clean, ListCharString_createRefConst(
+			(i & 1) ? uniformsTrue : uniformsFalse, 2, &uniformsList, e_rr
+		));
+
+		ListCharString definesList = (ListCharString) { 0 };
+		gotoIfError3(clean, ListCharString_createRefConst(
+			(i & 2) ? definesFloat : definesUint, 2, &definesList, e_rr
+		));
 
 		CharString entry = CharString_createRefCStrConst("mainSingle");
 
@@ -501,7 +523,7 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 			deviceRef,
 			&tmpBinary,
 			&entry,
-			NULL,                  //defines
+			&definesList,          //defines: select the texel type
 			&uniformsList,         //uniforms: select the ROTATE permutation
 			ESHExtension_None,
 			ESHExtension_None
@@ -603,7 +625,7 @@ typedef enum EDescriptorTypeCount {
 	EDescriptorTypeCount_RWTexture2Di       = 16384,
 	EDescriptorTypeCount_RWTexture2Du       = 16384,
 
-	EDescriptorTypeCount_Sampler            = 1024,
+	EDescriptorTypeCount_Sampler            = 996,
 	EDescriptorTypeCount_TLASExt            = 16,
 
 	//DirectX bindings
@@ -704,6 +726,7 @@ static DescriptorHeapInfo GraphicsDevice_heapForLayout(const DescriptorLayoutInf
 Bool GraphicsDevice_defaultBindlessLayout(
 	const GraphicsDeviceInfo *info,
 	ESHBinaryType binaryType,
+	EGraphicsDeviceFlags flags,
 	DescriptorLayoutInfo *result,
 	const Allocator *alloc,
 	Error *e_rr
@@ -877,6 +900,22 @@ Bool GraphicsDevice_defaultBindlessLayout(
 
 	U64 descBindings = 12;
 
+	//_samplers is first in both arrays, so dropping it is a shift of everything after it.
+	//Done before the raytracing append below, which writes at descBindings.
+	//Without it the layout declares no sampler at all, which means no sampler heap (heapForLayout derives
+	// maxSamplers from the bindings), no sampler root table on D3D12, and one fewer descriptor set on
+	// Vulkan, where sets are capped at 4.
+
+	if (!(flags & EGraphicsDeviceFlags_EnableDynamicSamplers)) {
+
+		for (U64 i = 1; i < descBindings; ++i) {
+			bindings[i - 1] = bindings[i];
+			bindingNames[i - 1] = bindingNames[i];
+		}
+
+		--descBindings;
+	}
+
 	if(info->capabilities.features & EGraphicsFeatures_Raytracing)
 		bindings[descBindings++] = (DescriptorBinding) {
 			.registerType = ESHRegisterType_AccelerationStructure,
@@ -910,6 +949,7 @@ Bool GraphicsDeviceRef_create(
 	EGraphicsDeviceFlags flags,
 	EGraphicsBufferingMode bufferMode,
 	const DescriptorLayoutInfo *bindlessLayout,
+	const DescriptorHeapInfo *reservedDescriptors,
 	GraphicsDeviceRef **deviceRef,
 	Error *e_rr
 ) {
@@ -1091,7 +1131,7 @@ Bool GraphicsDeviceRef_create(
 		}
 
 		else gotoIfError3(clean, GraphicsDevice_defaultBindlessLayout(
-			&device->info, binaryType, &descLayoutInfo, alloc, e_rr
+			&device->info, binaryType, flags, &descLayoutInfo, alloc, e_rr
 		));
 
 		//The device holds this layout for its entire lifetime, so the layout must not keep the device alive in turn.
@@ -1112,6 +1152,47 @@ Bool GraphicsDeviceRef_create(
 
 		if(heapInfo.maxConstantBuffers < MAX_FRAMES_IN_FLIGHT)
 			heapInfo.maxConstantBuffers = MAX_FRAMES_IN_FLIGHT;
+
+		//The push ring: texture push descriptors and rotated copies take transient slots from the bound
+		// heap, and binding THIS heap (Device defaultHeap) is how a bindless app serves them without a heap
+		// of its own.
+		//Sized for the pushes of a whole frame rather than of a single bind, since every emission needs its
+		// own slot and the earlier ones stay live until the frame retires.
+		//A few hundred descriptors is tens of kilobytes, which is far cheaper than the path not working at
+		// all for anyone who did not size a heap themselves.
+
+		heapInfo.maxPushDescriptors = OXC3_MAX_PUSH_DESCRIPTORS * 64;
+
+		//Extra capacity the caller asked for, so bindful tables can be created from this same heap and live
+		// beside the bindless set without a second heap and the heap switch a second heap costs.
+		//maxDescriptorTables adds too: the default table takes the one the heap starts with.
+		//The U16 sized fields clamp rather than wrap; createDescriptorHeap still enforces the real limits.
+
+		if (reservedDescriptors) {
+
+			heapInfo.maxAccelerationStructures = (U16) U64_min(
+				U16_MAX, (U64) heapInfo.maxAccelerationStructures + reservedDescriptors->maxAccelerationStructures
+			);
+
+			heapInfo.maxSamplers = (U16) U64_min(
+				U16_MAX, (U64) heapInfo.maxSamplers + reservedDescriptors->maxSamplers
+			);
+
+			heapInfo.maxInputAttachments = (U16) U64_min(
+				U16_MAX, (U64) heapInfo.maxInputAttachments + reservedDescriptors->maxInputAttachments
+			);
+
+			heapInfo.maxCombinedSamplers = (U16) U64_min(
+				U16_MAX, (U64) heapInfo.maxCombinedSamplers + reservedDescriptors->maxCombinedSamplers
+			);
+
+			heapInfo.maxTextures += reservedDescriptors->maxTextures;
+			heapInfo.maxTexturesRW += reservedDescriptors->maxTexturesRW;
+			heapInfo.maxBuffersRW += reservedDescriptors->maxBuffersRW;
+			heapInfo.maxConstantBuffers += reservedDescriptors->maxConstantBuffers;
+			heapInfo.maxDescriptorTables += reservedDescriptors->maxDescriptorTables;
+			heapInfo.maxPushDescriptors += reservedDescriptors->maxPushDescriptors;
+		}
 
 		name = CharString_createRefCStrConst("Default heap");
 		gotoIfError3(clean, GraphicsDeviceRef_createDescriptorHeap(
@@ -1533,6 +1614,40 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	else if(!Buffer_length(bin->binaries[ESHBinaryType_SPIRV]))
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() SPIRV binary is missing"));
+
+	//A sampler ARRAY only resolves against the bindless _samplers[] binding, which the device only declares
+	// when it was created with EnableDynamicSamplers.
+	//Checked by name against the layout rather than by flag, because a caller supplying their own bindless
+	// layout decides this too.
+	//Reported here so the failure names the reason instead of surfacing as a binding the layout never had.
+
+	if (extensions & ESHExtension_DynamicSamplers) {
+
+		Bool anySamplerArray = false;
+
+		if (device->defaultDescLayout) {
+
+			const DescriptorLayout *descLayout = DescriptorLayoutRef_ptr(device->defaultDescLayout);
+
+			for (U64 i = 0; i < descLayout->info.bindings.length && !anySamplerArray; ++i) {
+
+				const DescriptorBinding b = descLayout->info.bindings.ptr[i];
+				const ESHRegisterType type = (ESHRegisterType)(b.registerType & ESHRegisterType_TypeMask);
+
+				anySamplerArray =
+					(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState) &&
+					b.count > 1;
+			}
+		}
+
+		if(!anySamplerArray)
+			retError(clean, Error_unsupportedOperation(
+				0,
+				"GraphicsDeviceRef_checkShaderFeatures() the shader indexes a sampler array, which needs a "
+				"device created with EGraphicsDeviceFlags_EnableDynamicSamplers (or a bindless layout that "
+				"declares one). A sampler known at layout time should be an immutable sampler instead"
+			));
+	}
 
 	//The bindless registers have to line up with the layout the device is actually running,
 	// otherwise the descriptor handles the shader indexes with would resolve to the wrong arrays.
@@ -2188,6 +2303,45 @@ Bool GraphicsDeviceRef_submitCommands(
 
 	lockPtr = NULL;
 
+	//A compaction MOVED a structure some TLAS had resolved, and none of the lists in this submit updates
+	//that TLAS. Letting it through would trace against a structure released when the frame completes, which
+	//shows up as missing geometry and a FASTER frame rather than as a fault. Refuse instead.
+	//
+	//The question is asked of the RECORDINGS being submitted rather than of a flag set while recording, so
+	//a list recorded once and submitted many times answers for every one of those submits, and a list that
+	//is recorded and never submitted answers for none.
+	//
+	//Says nothing about a device memory TLAS, which is the caller's; see CommandListRef_compactBLASExt.
+
+	for (U64 i = 0; i < device->liveTlases.length; ++i) {
+
+		TLASRef *tlasRef = (TLASRef*) device->liveTlases.ptr[i];
+		const TLAS *tlas = TLASRef_ptr(tlasRef);
+
+		//The structure the compaction moved is released when the submit holding the copy completes, so this
+		// TLAS is still valid for THAT submit. Anything after it would be tracing released memory.
+
+		if(!TLAS_hasFlag(tlas, ETLASFlag_AddressesStale) || tlas->staleAtSubmitId >= device->submitId)
+			continue;
+
+		Bool updated = false;
+
+		for(U64 j = 0; !updated && j < (!commandLists ? 0 : commandLists->length); ++j) {
+
+			CommandListRef *listRef = commandLists->ptr[j];
+
+			if(listRef && listRef->refPtrType->typeId == (TypeId) EGraphicsTypeId_CommandList)
+				updated = CommandList_updatesTLAS(CommandListRef_ptr(listRef), tlasRef);
+		}
+
+		if(!updated)
+			retError(clean, Error_invalidState(
+				0,
+				"GraphicsDeviceRef_submitCommands() a BLAS was compacted out from under a TLAS that still "
+				"holds its old address, and no list in this submit updates it"
+			));
+	}
+
 	//Validate command lists
 
 	for(U64 i = 0; i < (!commandLists ? 0 : commandLists->length); ++i) {
@@ -2431,6 +2585,10 @@ Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 		retError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_wait() device's lock couldn't be acquired"));
 
 	gotoIfError3(clean, GraphicsDeviceRef_waitExt(deviceRef, e_rr));
+
+	//The device is idle, so every submit recorded so far has finished.
+
+	device->completedSubmitId = device->submitId;
 
 	for (U64 i = 0; i < device->framesInFlight; ++i) {
 

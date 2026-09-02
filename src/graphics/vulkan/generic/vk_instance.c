@@ -108,6 +108,8 @@ static_assert(
 
 			.blasInit = VkBLAS_init,
 			.blasFlush = VkBLASRef_flush,
+			.blasPrepareCompact = VkBLASRef_prepareCompact,
+			.blasCompact = VkBLASRef_compact,
 			.blasFree = VkBLAS_free,
 
 			.opacityMicromapInit = VkOpacityMicromap_init,
@@ -434,27 +436,25 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 	if(isMoltenVk)
 		instanceInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 
-	if(hasDebugLayer & 1) {
+	//Maximum validation.
+	//The chained structs live at function scope because vkCreateInstance reads the pNext chain during the call;
+	// a layer copies the chain there, long after a block scoped struct would have died.
 
-		//Maximum validation
+	VkValidationFeatureEnableEXT enables[] = {
+		VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT
+	};
 
-		VkValidationFeatureEnableEXT enables[] = {
-			VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT
-		};
+	VkValidationFeaturesEXT features = (VkValidationFeaturesEXT) {
+		.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+		.enabledValidationFeatureCount = instance->flags & EGraphicsInstanceFlags_DisableGPUBV ? 2 : 4,
+		.pEnabledValidationFeatures = enables
+	};
 
-		U32 count = instance->flags & EGraphicsInstanceFlags_DisableGPUBV ? 2 : 4;
-
-		VkValidationFeaturesEXT features = (VkValidationFeaturesEXT) {
-			.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
-			.enabledValidationFeatureCount = count,
-			.pEnabledValidationFeatures = enables
-		};
-
+	if(hasDebugLayer & 1)
 		instanceInfo.pNext = &features;
-	}
 
 	if(instance->flags & EGraphicsInstanceFlags_IsVerbose) {
 
@@ -1232,7 +1232,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		requireLimit(maxImageDimension3D, 256);
 		requireLimit(maxImageArrayLayers, 256);
 		requireLimit(maxPushConstantsSize, 128);
-		requireLimit(maxSamplerAllocationCount, 1024);
+		requireLimit(maxSamplerAllocationCount, 996);
 		requireLimitF(maxSamplerAnisotropy, 16);
 		requireLimit(maxStorageBufferRange, 128 * MEGA);
 		requireLimitF(maxSamplerLodBias, 4);
@@ -1524,6 +1524,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		))
 			capabilities.features |= EGraphicsFeatures_MeshShader;
 
+		//Mesh shaders are compiled against SPIRV 1.4, which brings the two below with it, same as raytracing.
+		//Without them the device would advertise mesh shaders and then fail creation on an extension it never
+		// offered, so the feature is dropped instead.
+
+		if(!optExtensions[EOptExtensions_Spirv14] || !optExtensions[EOptExtensions_ShaderFloatControls])
+			capabilities.features &= ~(EGraphicsFeatures)EGraphicsFeatures_MeshShader;
+
 		//The preference and hint properties gate nothing above: prefersCompactPrimitiveOutput and the
 		// maxPreferred* invocation counts are scheduling advice, and the output granularities only say how
 		// coarsely output allocations round (ANV rounds by 8 where NV rounds by 32; smaller is finer).
@@ -1780,13 +1787,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			optExtensions[EOptExtensions_Bindless] &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindInputAttachments >= 8 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindSampledImages >= 1000000 &&
-			bindlessProp.maxDescriptorSetUpdateAfterBindSamplers >= 1024 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindSamplers >= 996 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindStorageBuffers >= 1000000 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindStorageImages >= 1000000 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindUniformBuffers >= 90 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindInputAttachments >= 8 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindSampledImages >= 1000000 &&
-			bindlessProp.maxPerStageDescriptorUpdateAfterBindSamplers >= 1024 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindSamplers >= 996 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageBuffers >= 1000000 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageImages >= 1000000 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindUniformBuffers >= 15 &&

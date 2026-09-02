@@ -26,6 +26,7 @@
 #include "graphics/generic/resource.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
+#include "types/container/list_basic_types.h"
 #include "types/container/string.h"
 
 #ifdef __cplusplus
@@ -63,7 +64,16 @@ typedef enum EGraphicsDeviceFlags {
 	EGraphicsDeviceFlags_IsDebug         = 1 << 1,    //Debug features such as API/RT validation, debug marker/names
 	EGraphicsDeviceFlags_DisableRt       = 1 << 2,    //Don't allow raytracing to be enabled (might reduce driver overhead)
 	EGraphicsDeviceFlags_DisableDebug    = 1 << 3,    //Force disable debugging even on debug mode. NDEBUG is leading otherwise
-	EGraphicsDeviceFlags_DisableBindless = 1 << 4     //No bindless layout, even where the device supports it
+	EGraphicsDeviceFlags_DisableBindless = 1 << 4,    //No bindless layout, even where the device supports it
+
+	//Adds the bindless _samplers[] array to the default layout.
+	//Opt in because that array owns a descriptor set to itself on Vulkan (set 0, while every resource
+	// array shares set 1) and forces a sampler heap on both backends, and a shader only needs it to index
+	// samplers dynamically.
+	//Static samplers cover the ordinary case at no cost; see DescriptorLayoutInfo::immutableSamplers.
+
+	EGraphicsDeviceFlags_EnableDynamicSamplers = 1 << 5
+
 } EGraphicsDeviceFlags;
 
 typedef enum EGraphicsBufferingMode {
@@ -138,6 +148,11 @@ typedef struct GraphicsDevice {
 
 	U64 submitId;
 
+	//Highest submit known to have COMPLETED on the device. Work that has to read back something a submit
+	//produced, such as a compacted acceleration structure size, tests against this instead of blocking.
+
+	U64 completedSubmitId;
+
 	EGraphicsDeviceFlags flags;
 	U16 pad0;
 	U8 framesInFlight;
@@ -152,6 +167,25 @@ typedef struct GraphicsDevice {
 	ListWeakRefPtr pendingResources;                        //Resources pending copy from CPU to device next submit
 
 	ListRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];     //Resources in flight, TODO: HashMap
+
+	//Compacted size slots, handed out per BLAS built with AllowCompaction and returned when the compaction
+	//that reads one consumes it. Only the storage differs per backend, a query pool on Vulkan and a pair of
+	//buffers on D3D12, so the bookkeeping is shared: without it the two would drift.
+	//
+	//Slots are recycled rather than only appended, so the high water mark tracks how many structures await
+	//compaction AT ONCE and not how many a session compacts.
+
+	ListU32 compactionFreeQueries;
+	U32 compactionQueryCount;
+	U32 compactionPadding;
+
+	//Every live TLAS, WITHOUT holding a reference: a compaction walks this to find the structures that
+	//resolved the address it is about to move. A TLAS adds itself on create and removes itself on free,
+	//and that pairing is the whole contract, since a stale entry is a dangling read.
+	//
+	//Guarded by this device's lock, never nested with an RTAS lock in either direction.
+
+	ListRefPtr liveTlases;
 
 	SpinLock lock;                                          //Lock for submission and marking resources dirty
 
@@ -200,7 +234,10 @@ typedef struct GraphicsDevice {
 
 	U64 blockSizeCpu, blockSizeGpu;                  //Block sizes for memory allocator
 
-	PipelineRef *copyShaders[2];                     //[0]: copy single, [1]: copy single, rotated
+	//Indexed rotate | (isFloat << 1): a rotation needs its own permutation, and so does the texel type, since
+	//a view's numeric type has to match what the shader declares (see image_copy.hlsl's TEXEL).
+
+	PipelineRef *copyShaders[4];
 	DescriptorLayoutRef *copyDescLayout;
 	DescriptorLayoutRef *copyDescPushDesc;
 	PipelineLayoutRef *copyPipelineLayout;
@@ -241,9 +278,13 @@ const GraphicsObjectTypes *GraphicsDeviceRef_getTypes(GraphicsDeviceRef *device)
 //It refuses a type it has no numbers for, so adding AIR or WGSL to ESHBinaryType surfaces here as an
 // error rather than as silently reused DXIL registers.
 
+//flags is the same set GraphicsDeviceRef_create takes; only EnableDynamicSamplers changes what comes back,
+// and without it the layout carries no _samplers[] binding at all.
+
 Bool GraphicsDevice_defaultBindlessLayout(
 	const GraphicsDeviceInfo *info,
 	ESHBinaryType binaryType,
+	EGraphicsDeviceFlags flags,
 	DescriptorLayoutInfo *result,
 	const Allocator *alloc,
 	Error *e_rr
@@ -255,6 +296,12 @@ Bool GraphicsDevice_defaultBindlessLayout(
 // in which case there is no default table or pipeline layout and every pipeline has to bring its own.
 //The device copies it, so the caller keeps ownership and can free it right after.
 //Its flags are taken as given, so EDescriptorLayoutFlags_AllowBindlessOnArrays has to be set to allocate bindlessly.
+//reservedDescriptors is optional extra heap capacity added ON TOP of what the bindless set consumes, so
+// bindful descriptor tables can be created from the device's own heap (Device defaultHeap) and live beside
+// the bindless set without a second heap and the heap switch a second heap costs.
+//Every field adds, maxDescriptorTables included, since the default table takes the one the heap starts with.
+
+typedef struct DescriptorHeapInfo DescriptorHeapInfo;
 
 Bool GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef,
@@ -262,6 +309,7 @@ Bool GraphicsDeviceRef_create(
 	EGraphicsDeviceFlags flags,
 	EGraphicsBufferingMode bufferingMode,
 	const DescriptorLayoutInfo *bindlessLayout,        //NULL for OxC3's default layout
+	const DescriptorHeapInfo *reservedDescriptors,     //NULL for no extra capacity
 	GraphicsDeviceRef **device,
 	Error *e_rr
 );

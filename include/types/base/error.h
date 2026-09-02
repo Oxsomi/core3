@@ -21,7 +21,7 @@
 //types/base/error.h
 
 #pragma once
-#include "types/base/types.h"
+#include "types/base/platform_types.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -63,12 +63,20 @@ typedef enum EGenericError {
 
 extern const C8 *EGenericError_TO_STRING[];
 
-//Only direct caller preserved to save space in release mode
+//Only direct caller preserved to save space in release mode.
+//Web spends one entry on the trace ring generation rather than a frame (see the web branch of
+// types/base/platforms/unix/uerror.c), so it needs one more entry to keep the same frame count.
+
+#if _PLATFORM_TYPE == PLATFORM_WEB
+	#define ERROR_STACKTRACE_RESERVED 1
+#else
+	#define ERROR_STACKTRACE_RESERVED 0
+#endif
 
 #ifdef NDEBUG
-	#define ERROR_STACKTRACE 1
+	#define ERROR_STACKTRACE (1 + ERROR_STACKTRACE_RESERVED)
 #else
-	#define ERROR_STACKTRACE STACKTRACE_SIZE
+	#define ERROR_STACKTRACE (STACKTRACE_SIZE + ERROR_STACKTRACE_RESERVED)
 #endif
 
 //
@@ -111,6 +119,25 @@ typedef struct Error {
 } (void) 0
 
 impl void Error_captureStackTrace(void **stackTrace, U8 stackSize, U8 skip);    //May fail if (stackSize + skip + 1 > 128)
+
+#if _PLATFORM_TYPE == PLATFORM_WEB
+
+	//Web keeps the trace text in a small recycled ring and stores the owning generation in stackTrace[0],
+	// with the frames from stackTrace[1] on (see types/base/platforms/unix/uerror.c).
+	//False means the ring has since reused that slot, so the frames now point at an unrelated stack.
+
+	Bool Error_webStackTraceIsLive(const void *const *stackTrace);
+
+	//Anything that prints a trace long after capturing it has to copy the text out of the ring, point the
+	// frames at that copy, and stamp stackTrace[0] with this so a reader knows the frames are owned rather
+	// than a generation to check.
+	//The tracked allocator does exactly that: it captures per allocation and prints at shutdown, by which
+	// point no ring size could still hold the text.
+
+	#define ERROR_WEB_STACKTRACE_OWNED ((void*)(U64) U64_MAX)
+
+#endif
+
 void Error_fillStackTrace(Error *err);
 
 #define Error_base(...) Error err = { __VA_ARGS__ }; Error_fillStackTrace(&err); return err

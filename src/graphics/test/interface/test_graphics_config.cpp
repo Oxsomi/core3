@@ -40,6 +40,7 @@
 //cannot be reached through the c namespace.
 
 #include "types/container/log.hpp"
+#include "test_graphics_shared.hpp"
 
 namespace oxc { namespace c {
 	#include "test_graphics_shared.h"
@@ -85,14 +86,17 @@ namespace {
 		const oxc::c::GraphicsDeviceInfo *info,
 		oxc::c::EGraphicsDeviceFlags flags,
 		oxc::c::EGraphicsBufferingMode mode,
-		const oxc::c::C8 *assertName
+		const oxc::c::C8 *assertName,
+		const oxc::c::DescriptorHeapInfo *reserve = nullptr
 	) noexcept {
 
 		using namespace oxc;
 
 		c::GraphicsDeviceRef *deviceRef = nullptr;
 
-		if(!Test_assert(t, assertName, c::GraphicsDeviceRef_create(instRef, info, flags, mode, nullptr, &deviceRef, &t->err)))
+		if(!Test_assert(t, assertName, c::GraphicsDeviceRef_create(
+			instRef, info, flags, mode, nullptr, reserve, &deviceRef, &t->err
+		)))
 			return gfx::Device();
 
 		gfx::Device dev = gfx::Device::share(deviceRef);
@@ -160,7 +164,108 @@ extern "C" void Test_graphicsConfigVariants(
 		}
 	}
 
-	//39b. DisableBindless clears Bindless and, with it, DescriptorHeap.
+	//39b. EnableDynamicSamplers puts the bindless _samplers[] array back in the default layout.
+	//It is opt in because that array costs a whole descriptor set on Vulkan (set 0, while every resource
+	// array shares set 1) and a sampler heap on both backends, and static samplers cover the ordinary case.
+	//The suite's own device runs WITHOUT it, so this is the only place the array is exercised at all, which
+	// is the point: dropping it by default must not quietly delete a working path.
+
+	{
+		Device dynamicSamplers = Test_createConfigDevice(
+			t, instRef, info,
+			c::EGraphicsDeviceFlags_EnableDynamicSamplers, c::EGraphicsBufferingMode_Default,
+			"configDynamicSamplersCreate"
+		);
+
+		if (dynamicSamplers)
+			Test_graphicsBindlessSampler(t, dynamicSamplers.handle());
+	}
+
+	//39c. reservedDescriptors: extra heap capacity on top of the bindless set, so bindful tables can be
+	// created from the device's own heap and live beside it, without a second heap and the heap switch a
+	// second heap costs.
+	//The negative runs on the base device: without a reserve, the default table consumed the heap's single
+	// table slot, so the same creation there has to fail.
+
+	{
+		c::DescriptorHeapInfo reserve = { .maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1 };
+
+		Device reserved = Test_createConfigDevice(
+			t, instRef, info,
+			c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, "configReserveCreate", &reserve
+		);
+
+		if (reserved && (reserved.info().capabilities.features & c::EGraphicsFeatures_Bindless)) {
+
+			//A tiny bindful layout: one texture and one rw buffer, exactly what the reserve holds
+
+			//Plain aggregate init: a compound literal ((c::T) { ... }) is C, which MSVC refuses in C++
+
+			c::DescriptorBinding bindings[2] = {
+				{
+					.registerType = c::ESHRegisterType_Texture2D,
+					.count = 1,
+					.visibility = c::U32_MAX
+				},
+				{
+					.registerType = (c::ESHRegisterType)
+						(c::ESHRegisterType_ByteAddressBuffer | c::ESHRegisterType_IsWrite),
+					.count = 1,
+					.binding = { .binding = 1 },
+					.visibility = c::U32_MAX
+				}
+			};
+
+			c::ListDescriptorBinding bindingsRef = {};
+			gfxtest::OwnedLayoutInfo layoutInfo(reserved.alloc());
+
+			if (
+				Test_assert(t, "configReserveBindingsRef", c::ListDescriptorBinding_createRefConst(
+					bindings, 2, &bindingsRef, &t->err
+				)) &&
+				Test_assert(t, "configReserveBindings", c::ListDescriptorBinding_createCopy(
+					bindingsRef, reserved.alloc(), &layoutInfo.list.bindings, &t->err
+				))
+			) {
+
+				DescriptorLayout layout;
+				DescriptorTable table;
+				gfxtest::TableGuard tableGuard{ { &table } };
+
+				Test_assert(t, "configReserveLayout", reserved.createDescriptorLayout(
+					layoutInfo.list, "Reserve layout", layout, &t->err
+				));
+
+				//The whole point: the table allocates from the DEVICE's heap, beside the bindless set
+
+				if(layout)
+					Test_assert(t, "configReserveTable", reserved.defaultHeap().createTable(
+						layout, "Reserve table", table, c::EDescriptorTableFlags_None, &t->err
+					));
+
+				//The base device got no reserve, so its heap holds exactly the bindless set and the one
+				// table the default set took; the SAME creation there has to be refused, which is what
+				// proves the reserve did anything at all.
+
+				if (layout && (base.features & c::EGraphicsFeatures_Bindless)) {
+
+					DescriptorLayout baseLayout;
+					DescriptorTable baseTable;
+
+					Test_assert(t, "configNoReserveLayout", baseDev.createDescriptorLayout(
+						layoutInfo.list, "No reserve layout", baseLayout, &t->err
+					));
+
+					if(baseLayout)
+						Test_assert(t, "configNoReserveTableRefused", !baseDev.defaultHeap().createTable(
+							baseLayout, "No reserve table", baseTable, c::EDescriptorTableFlags_None, nullptr
+						));
+				}
+			}
+		}
+	}
+
+	//39d. DisableBindless clears Bindless and, with it, DescriptorHeap.
 	//DescriptorHeap is the interesting half: it is a features2 bit that implies bindless, so a flag that only
 	// cleared the obvious bit would leave a device claiming heap indexing it can no longer set up.
 
@@ -232,7 +337,7 @@ extern "C" void Test_graphicsConfigVariants(
 		}
 	}
 
-	//39c. Both flags at once, to catch one flag's clearing undoing the other's.
+	//39e. Both flags at once, to catch one flag's clearing undoing the other's.
 
 	{
 		Device both = Test_createConfigDevice(
@@ -254,7 +359,7 @@ extern "C" void Test_graphicsConfigVariants(
 		}
 	}
 
-	//39d. Buffering modes land on the frame counts they name.
+	//39f. Buffering modes land on the frame counts they name.
 	//Default is deliberately not pinned to a number, since it is device preferred.
 	//It only has to be one of the counts the enum offers.
 

@@ -110,6 +110,13 @@ typedef enum ESHExtension {
 	// while in a compute shader DXC also emits a derivative group execution mode and BOTH are required.
 	ESHExtension_SubgroupQuad                = 1 << 26,
 
+	//An ARRAY of samplers, which is only servable by the bindless _samplers[] array and so needs
+	// EGraphicsDeviceFlags_EnableDynamicSamplers on the device.
+	//A singular sampler is a plain binding or a static sampler and requires none of this.
+	//Reflection derived like Bindless, never annotation settable.
+
+	ESHExtension_DynamicSamplers             = 1 << 27,
+
 	//Barycentrics is native on BOTH backends:
 	// D3D_SHADER_REQUIRES_BARYCENTRICS and BaryCoordKHR both map to it,
 	// so declared-but-unused demotes to dormant like any other native extension.
@@ -178,7 +185,7 @@ typedef enum ESHExtension {
 	ESHExtension_NoSpirvCompile =                             //DXIL-only to compile: no SPIR-V intrinsic or inline op
 		ESHExtension_MeshTaskTexDeriv,
 
-	ESHExtension_Count                       = 27,
+	ESHExtension_Count                       = 28,
 
 	ESHExtension_All                         = (1 << ESHExtension_Count) - 1
 

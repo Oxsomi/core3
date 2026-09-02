@@ -61,6 +61,11 @@ source_group("Source Files (simd: ${simd})" FILES ${typesContainerSIMDSources})
 source_group("Source Files (unix)" FILES ${typesContainerUnixSources})
 source_group("Header Files (simd: ${simd})" FILES ${typesContainerHeadersSimdTarg})
 
+if(EnableHostCrypto)
+	message("-- Routing SHA-256/AES-GCM to the host crypto on web (-DEnableHostCrypto=ON)")
+	target_compile_definitions(OxC3_types_container PUBLIC -D_OXC3_HOST_CRYPTO)
+endif()
+
 set_target_properties(OxC3_types_container PROPERTIES FOLDER Oxsomi/types)
 target_link_libraries(OxC3_types_container PUBLIC OxC3_types_base OxC3_types_math)
 

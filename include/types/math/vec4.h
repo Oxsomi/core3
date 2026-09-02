@@ -44,6 +44,9 @@
 #if _SIMD == SIMD_SSE
 	#define VEC4_SSE_GUARD
 	#include "types/math/vec4_sse.inc.h"
+#elif _SIMD == SIMD_WASM
+	#define VEC4_WASM_GUARD
+	#include "types/math/vec4_wasm.inc.h"
 #elif _SIMD == SIMD_NEON
 	#define VEC4_NEON_GUARD
 	#include "types/math/vec4_neon.inc.h"

@@ -27,6 +27,7 @@
 #include "types/base/time.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 
@@ -53,6 +54,51 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 	#ifdef __APPLE__
 		#include <mach-o/dyld.h>
 	#endif
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB
+
+		//A frame on web is a pointer into the one callstack string emscripten hands back, at the start of its
+		// line (see the web branch of types/base/platforms/unix/uerror.c).
+		//dladdr would be meaningless on those, so this prints each line as text instead, stopping at the newline
+		// that starts the next frame.
+		//emscripten already formats them as "    at <symbol> (<file>:<line>:<col>)", so the shape matches what
+		// addr2line produces below closely enough to read the same way.
+
+		void Log_printCapturedStackTraceCustom(
+			const Allocator *alloc,
+			const void **stackTrace,
+			U64 stackSize,
+			ELogLevel lvl,
+			ELogOptions opt
+		) {
+			if(!stackTrace || lvl >= ELogLevel_Count)
+				return;
+
+			//stackTrace[0] is the ring generation, not a frame.
+			//If the ring recycled that slot the text now belongs to some later capture, so say the trace is
+			// gone rather than print an unrelated stack as if it were this one.
+
+			if(!Error_webStackTraceIsLive(stackTrace)) {
+				Log_logFormat(alloc, lvl, opt, "Stacktrace: expired (the web trace ring recycled this slot)");
+				return;
+			}
+
+			Log_logFormat(alloc, lvl, opt, "Stacktrace:");
+
+			for(U64 i = 1; i < stackSize && stackTrace[i]; ++i) {
+
+				const C8 *line = (const C8*) stackTrace[i];
+				U64 len = 0;
+
+				while(line[len] && line[len] != '\n')
+					++len;
+
+				const CharString frame = CharString_createRefSizedConst(line, len, false);
+				Log_log(alloc, lvl, opt, &frame);
+			}
+		}
+
+	#else
 
 	void Log_printCapturedStackTraceCustom(
 		const Allocator *alloc,
@@ -82,9 +128,11 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 			dladdr(stackTrace[i], &info);
 			const C8 *mod = info.dli_fname ? info.dli_fname : "";
 
+			const CharString modStr = CharString_createRefCStrConst(mod);
+
 			Bool found = false;
 			for(U64 m = 0; m < moduleCount; ++m)
-				if(strcmp(modules[m], mod) == 0) { found = true; break; }
+				if(CharString_equalsCStringSensitive(&modStr, modules[m])) { found = true; break; }
 
 			if(!found)
 				modules[moduleCount++] = mod;
@@ -109,7 +157,8 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 					Dl_info info = (Dl_info){ 0 };
 					dladdr(stackTrace[i], &info);
 					const C8 *mod = info.dli_fname ? info.dli_fname : "";
-					if(strcmp(mod, modules[m]) == 0) {
+					const CharString modStr = CharString_createRefCStrConst(mod);
+					if(CharString_equalsCStringSensitive(&modStr, modules[m])) {
 						base = info.dli_fbase;
 						break;
 					}
@@ -124,7 +173,8 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 				Dl_info info = (Dl_info){ 0 };
 				dladdr(stackTrace[i], &info);
 				const C8 *mod = info.dli_fname ? info.dli_fname : "";
-				if(strcmp(mod, modules[m]) != 0)
+				const CharString modStr = CharString_createRefCStrConst(mod);
+				if(!CharString_equalsCStringSensitive(&modStr, modules[m]))
 					continue;
 
 				#ifdef __APPLE__
@@ -200,6 +250,8 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 			else Log_logFormat(alloc, lvl, opt | ELogOptions_NewLine, "%p", stackTrace[i]);
 		}
 	}
+
+	#endif
 
 	#define FONT_GREEN  "\e[1;32m"
 	#define FONT_CYAN   "\e[1;36m"

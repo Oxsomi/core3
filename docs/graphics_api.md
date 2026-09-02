@@ -145,7 +145,7 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 - features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild, RayMicromapOpacityActual, RayMicromapOpacityU8, Timestamps.
   - RayReorderActual: SER (RayReorder) means the shader-execution-reordering API is available (always valid to call, but may be a no-op); RayReorderActual means the device actually performs the reordering, so it's worth restructuring shaders around it.
   - RayMicromapOpacityActual: same shape one feature over. RayMicromapOpacity means the API accepts opacity micromaps; this bit means they're likely backed by dedicated hardware rather than emulated, so a real micromap object is worth building. Neither API reports it (D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's VkPhysicalDeviceOpacityMicromapFeaturesEXT is one bool, and an Ampere 3080 reports the same 12/12 subdivision maximum as hardware that has the units), so OxC3 derives it: NVIDIA needs RayReorderActual since the reordering and OMM hardware shipped in the same generation, every other vendor is taken at its word. It is a heuristic, so treat it as "worth it" rather than as a guarantee; special-index-only OMM costs nothing either way.
-  - RayMicromapOpacityU8: 8-bit (R8u) OMM index buffers are legal. D3D12 ships this with opacity micromaps themselves; on Vulkan only the VK_KHR_opacity_micromap promotion permits VK_INDEX_TYPE_UINT8 (the EXT extension forbids it), and since OxC3's KHR path isn't implemented yet no Vulkan device claims the bit today — R8u is rejected at BLAS create there.
+  - RayMicromapOpacityU8: 8-bit (R8u) OMM index buffers are legal. D3D12 ships this with opacity micromaps themselves; on Vulkan only the VK_KHR_opacity_micromap promotion permits VK_INDEX_TYPE_UINT8 (the EXT extension forbids it), and since OxC3's KHR path isn't implemented yet no Vulkan device claims the bit today; R8u is rejected at BLAS create there.
   - DescriptorHeap: full bindless; shaders index the descriptor heap directly without a fixed descriptor layout. D3D12: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) + resource binding tier 3; Vulkan: VK_EXT_descriptor_heap. Always implies Bindless on both APIs.
   - RayClusterAS + RayPartitionedTLAS: mega geometry (RTXMG), split the way Vulkan splits it: cluster acceleration structures (CLAS/cluster BLAS) and partitioned TLAS. Vulkan: VK_NV_cluster_acceleration_structure / VK_NV_partitioned_acceleration_structure; D3D12: NVAPI raytracing caps (cluster operations / partitioned TLAS).
   - Timestamps: the device can write GPU timestamps and reports a period to convert ticks to nanoseconds. Vulkan gates it on timestampComputeAndGraphics with a non-zero timestampValidBits on the submit queue; D3D12 has it on the graphics/compute queues at root-signature level, so it is effectively always present there. It drives the per-scope and manual timing commands (see the Timestamps feature below) and GraphicsDeviceRef_getTimings; the nanoseconds per tick lives in capabilities.timestampPeriod.
@@ -420,6 +420,39 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   ```
 
 - ```c
+  //Record the compacting copy of a built BLAS, typically 30 to 50% smaller and denser to traverse. Every
+  //rule below is checked at record time, so a rejection reaches the caller here and not inside a submit.
+  //
+  //Record it in a LATER submit than the build: the size it needs is what that build produced, and asking too
+  //early errors rather than blocking, so never submitting the build cannot become a hang. It ALLOCATES, and
+  //the structure being replaced lives until the submit holding the copy completes, so peak spans both.
+  //Records nothing, reporting success, when the structure was built without ERTASBuildFlags_AllowCompaction,
+  //is already compacted, or the driver reported no saving.
+  //
+  //Compaction MOVES the structure. Every live TLAS that resolved its address is marked, and the submit after
+  //the copy is refused while any mark stands, so forgetting to update one is an error and not a wrong frame
+  //(a stale TLAS traces released memory, which reads as missing geometry and a FASTER frame). Only TLASes
+  //that reference it are touched. TWO CASES ARE THE CALLER'S:
+  //
+  //1. The mark clears when the TLAS update is RECORDED, not when it executes, since the submit carrying the
+  //   fix would otherwise refuse itself. Record that update into a list you actually submit.
+  //2. A TLAS built with ETLASFlag_UseDeviceMemory owns its instance buffer on the GPU, so its addresses
+  //   cannot be re-resolved here and it is neither marked nor refilled. Rewrite them yourself.
+  Bool CommandListRef_compactBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr);
+  ```
+
+  The mark is satisfied by any command list in the submit that updates the TLAS, regardless of when that
+  list was recorded, so a list recorded once and submitted many times keeps working. It is cleared when the
+  addresses are actually re-resolved, so recording an update into a list that is never submitted does not
+  clear it.
+
+  **One hazard stays with the caller**, because it cannot be closed from inside the API: a TLAS built with
+  `ETLASFlag_UseDeviceMemory` owns its instance buffer on the GPU. Its BLAS addresses are written by the
+  caller, so they cannot be re-resolved here, and whether it even references the structure being compacted
+  cannot be read from the CPU. Such a TLAS is neither marked nor refilled. Rewrite its instance addresses
+  yourself after compacting anything it holds.
+
+- ```c
   Bool createBLASProceduralExt(
   	ERTASBuildFlags buildFlags,
   	EBLASFlag blasFlags,
@@ -598,6 +631,8 @@ The staging memory that carries pulls back to the CPU is created at the first pu
 
 Texture pulls follow the same region semantics as markDirty: zero for an axis means the rest of that axis, and for block compressed formats the region snaps outward to whole blocks, so slightly more than asked can be refreshed. Compressed formats are supported; the pulled data lands in cpuData in the same tight block rows the upload reads from.
 
+The completion callbacks (DevicePullCallback, TexturePullCallback) take their pointers as `void*`: `resource` is the RefPtr* the pull was queued on, and `data` is the Buffer* a texture without a cpuData hands its region over in. They are untyped so that an implementation compiled as C++ (where the wrapper namespace changes the struct types' identity) still matches the exact function type the runtime's C side calls through, which -fsanitize=function verifies on every completion.
+
 ## UnifiedTexture
 
 A UnifiedTexture can represent the following types: DepthStencil, RenderTexture, Swapchain, DeviceTexture. It was chosen to not be only one interface because the four types are very distinct in use, so only the base functionality had to be unified like this.
@@ -611,7 +646,7 @@ A UnifiedTexture contains the following:
 - type: ETextureType; 2D, 3D or Cube.
 - width, height, length: dimensions of the resource. Length needs to be 1 if the type isn't 3D. For cubes the length will be automatically set to 6. The limits are width/height of 16384 and length of 256.
 - levels: how many mip levels are present.
-- images: how many different images are present. This is generally 1, but for Swapchains it is 3 because of versioning.
+- images: how many different images are present. This is 1 for everything but a Swapchain: a physical one requests 3 and the presentation engine may hand back up to 5, a virtual one holds exactly framesInFlight.
 - currentImageId: should only ever be accessed through the graphics API implementation. This value is a lagging value that's unpredictable if it's not in the submitCommands call. However, for Swapchains during that call, this represents what image is currently being rendered to.
 
 The unified texture can be obtained through the RefPtr as follows:
@@ -898,7 +933,9 @@ A DescriptorHeap is the description of many resources are available max during t
 
 ### Summary
 
-A DescriptorLayout is the description of how the resources are bound to the pipeline. In Vulkan this would be VkDescriptorSetLayout[4] while in D3D12 it'd be D3D12_DESCRIPTOR_RANGE1[]. This would then later be able to be turned into a VkPipelineLayout or ID3D12RootSignature. When doing full bindless, there's only one descriptor set layout that is declared when creating a device, this descriptor layout can be used by setting the PipelineLayout's DescriptorLayout to NULL.
+A DescriptorLayout is the description of how the resources are bound to the pipeline. In Vulkan this would be VkDescriptorSetLayout[4] while in D3D12 it'd be D3D12_DESCRIPTOR_RANGE1[]. This would then later be able to be turned into a VkPipelineLayout or ID3D12RootSignature.
+
+On Vulkan a binding's register space **is** its descriptor set index: SPIR-V reflection reports the set as the space, and every bind places a set at the index its space names. That has two consequences. Only spaces 0 to 3 can be bound at all (`maxBoundDescriptorSets` is required to be at least 4), and createDescriptorLayout refuses anything higher. And a pipeline layout's set list is indexed by space across BOTH of its DescriptorLayouts, the ordinary bindings and the push descriptors, with an empty set layout filling any index neither declares; so a layout whose push descriptor lives in space 0 next to table bindings in space 1 binds exactly as the shader declared it, and a layout using spaces 0 and 2 is legal with nothing at 1. The two layouts of one pipeline layout can't share a space, which createPipelineLayout enforces. D3D12 needs none of this: its root ranges carry the register space and bind by (register, space) natively. When doing full bindless, there's only one descriptor set layout that is declared when creating a device, this descriptor layout can be used by setting the PipelineLayout's DescriptorLayout to NULL.
 
 ### Properties
 
@@ -1305,10 +1342,11 @@ Contains the following properties:
 - flagsExt: BLAS or TLAS specific flags; EBLASFlag for a BLAS, ETLASFlag for a TLAS.
 - asConstructionType: the BLAS or TLAS specific construction type.
 - scratchBuffer: temporary data that is only available until the AS has been created and the frame has been completed on the CPU.
-- asBuffer: the buffer resource that represents this acceleration structure.
+- asBuffer: the buffer resource that represents this acceleration structure. Compaction REPLACES this, which is why it also changes the structure's device address.
+- isCompacted: set once compaction has run, or once the driver reported no saving. A compacted structure is never copied twice. The rest of the compaction bookkeeping beside it is internal.
 - flags:
   - AllowUpdate (0): refitting is allowed. This is a faster way of updating acceleration structures, but at the cost of traversal time. See Refitting below.
-  - AllowCompaction (1): compaction is allowed. This reduces memory overhead for the acceleration structures.
+  - AllowCompaction (1): compaction is allowed. The flag on its own changes nothing about memory; it makes `CommandListRef_compactBLASExt` legal on the structure, and recording that copy is what reclaims the space.
   - FastTrace (2): optimize trace times over build times / memory.
   - FastBuild (3): optimize build times over trace times / memory.
   - MinimizeMemory (4): optimize memory over trace times / build times.
@@ -1320,6 +1358,8 @@ Contains the following properties:
 A refit (also called an update) rebuilds an acceleration structure from the one already there instead of from nothing. It is much cheaper than a full build and is what skeletal animation, moving instances and deforming geometry use, at the cost of traversal quality that degrades the further the new data drifts from what the structure was originally built for. Build with `ERTASBuildFlags_AllowUpdate` to allow it.
 
 **A refit is in place and does not produce a new object.** The first build of an AS is a full build; every build recorded after that one refits the same structure from itself, which is what both APIs mean by an update whose source and destination are the same. So the AS, its device address and (for a TLAS) its bindless handle all survive a refit unchanged: nothing that points at it has to be re-pointed, and refitting every frame allocates nothing.
+
+**Compaction is the opposite case.** A refit keeps the address; compaction MOVES the structure and changes it. A refit therefore needs nothing from the TLASes referencing it, while a compaction marks every TLAS that resolved the old address and refuses the submit after the copy until each has been updated. See `CommandListRef_compactBLASExt`.
 
 To refit, change the inputs and record the update again:
 
@@ -1619,6 +1659,25 @@ Clearing multiple ranges at once can be done by calling copyImageRegions with a 
 
 If depth, width or height isn't defined, they are automatically set to res[i] - offset[i].
 
+#### outputRotation
+
+A region can ask for the copied pixels to land rotated, with `outputRotation` set to 0, 1, 2 or 3 for 0, 90, 180 and 270 degrees. Anything above 3 is refused.
+
+Neither API's image copy can express a rotation, so a rotated region is replayed as a dispatch of the device's own copy shader rather than as a transfer. That changes what the command needs:
+
+- A descriptor heap with `maxPushDescriptors >= 2` has to be bound in the scope (`CommandListRef_bindDescriptorHeap`): the replay's two transient descriptors come from that heap's push ring, and the runtime deliberately never binds a heap of its own choosing, because a hidden `SetDescriptorHeaps` is heavy (it can drain the GPU on NV). Vulkan needs no heap, but recording is refused on both backends so a command list that records on one records on the other. A bindless app does not need a heap of its own for this: the device's heap reserves a ring (`OXC3_MAX_PUSH_DESCRIPTORS * 64` per frame in flight, also when the device was created from a user supplied bindless layout), so binding `Device::defaultHeap()` explicitly serves the copy, and a scope already running bindless work has that heap current anyway, making the bind free.
+
+The same heap can also hold **bindful descriptor tables**: `GraphicsDeviceRef_create` takes an optional `reservedDescriptors` (a `DescriptorHeapInfo`), extra capacity added on top of what the bindless set consumes, `maxDescriptorTables` included since the default table takes the one the heap starts with. A bindful table created from `Device::defaultHeap()` then lives beside the bindless set, so interleaving bindful and bindless work never switches heaps at all.
+
+- `src` is read through a sampled descriptor and so requires `EGraphicsResourceFlag_ShaderRead`.
+- `dst` is written through a storage descriptor and so requires `EGraphicsResourceFlag_ShaderWrite`.
+
+Both are checked when the command is recorded, because neither backend fails usefully afterwards: D3D12 would build a UAV over a resource that never allowed one, and Vulkan cannot create the view at all.
+
+One rotated region puts the *whole* command on that path, so every region in it, rotated or not, is copied by the shader and both images transition to shader read/write instead of transfer. A scope that also uses either image as a transfer or render target therefore needs to be split, the same as for any other conflicting usage.
+
+An unrotated copy is unaffected and stays a plain transfer, needing neither flag.
+
 DepthStencil is only compatible with depth stencil and the formats have to be compatible.
 
 Copy image is only allowed on images which aren't currently bound as a render target or for a different use in this scope.
@@ -1838,7 +1897,7 @@ Binds a descriptor heap: any descriptor table bound after this has to belong to 
 
 #### bindDescriptorTable
 
-Bindful: binds the descriptor table that pipelines with a CUSTOM pipeline layout read from. This only sets state; the work ops (draw/dispatch/dispatchRays) are the validators, so bind order never matters: at work time the bound pipeline's layout must reference the exact DescriptorLayout the table was created from, push descriptor layouts are refused until their writes exist, and a pipeline whose layout does not reference the table's DescriptorLayout ignores the bound table entirely rather than emitting it. That covers the device's default (bindless) layout and any custom layout built from the runtime bindless set, which is what lets a bindful dispatch and a bindless one interleave inside one scope: the table stays bound across the pipeline switch, and emitting it against a layout that never declared it would bind sets Vulkan rejects and write root parameters D3D12's signature does not have. Backends emit the actual binds lazily right before the work, which also re-emits the default bindings after a custom root signature dropped them on D3D12. Custom layout pipelines are opted out of the globals/frame data unless their layout declares that slot. There is no table index: a pipeline layout references exactly ONE bindings DescriptorLayout (which itself spans up to 4 spaces/sets on Vulkan and up to 2 root tables on D3D12), so set indices and root parameters are baked into the layout/table pair; a slot index gets added if pipeline layouts ever grow multiple table slots. The table is kept alive by the command list; per resource scope transitions remain the caller's job until auto transitions land. Scope end resets the bind like it does bound pipelines.
+Bindful: binds the descriptor table that pipelines with a CUSTOM pipeline layout read from. This only sets state; the work ops (draw/dispatch/dispatchRays) are the validators, so bind order never matters: at work time the bound pipeline's layout must reference the exact DescriptorLayout the table was created from, push descriptor layouts are refused until their writes exist, and a pipeline whose layout does not reference the table's DescriptorLayout ignores the bound table entirely rather than emitting it. That covers the device's default (bindless) layout and any custom layout built from the runtime bindless set, which is what lets a bindful dispatch and a bindless one interleave inside one scope. To be precise about what "stays bound" means there: the RECORDER keeps boundDescriptorTable across the pipeline switch, so the caller does not rebind it; the GPU-side state does not survive. The bindful table lives in the user's heap and the bindless set in the device's own, two different heaps, and each work op that crosses between the two classes lazily re-emits everything for its side, a SetDescriptorHeaps included (D3D12 allows one CBV/SRV/UAV heap bound at a time, so every crossing swaps it). The layout check is what keeps the held table from being emitted against the bindless pipeline in between: doing so would bind sets Vulkan rejects and write root parameters D3D12's signature does not have, so a table whose layout the pipeline does not reference is simply not emitted. Interleaving therefore works, but each direction change costs a heap switch, so batching by pipeline class is still worth it. Backends emit the actual binds lazily right before the work, which also re-emits the default bindings after a custom root signature dropped them on D3D12. Custom layout pipelines are opted out of the globals/frame data unless their layout declares that slot. There is no table index: a pipeline layout references exactly ONE bindings DescriptorLayout (which itself spans up to 4 spaces on Vulkan, each bound at the set index its space names, and up to 2 root tables on D3D12), so set indices and root parameters are baked into the layout/table pair; a slot index gets added if pipeline layouts ever grow multiple table slots. The table is kept alive by the command list; per resource scope transitions remain the caller's job until auto transitions land. Scope end resets the bind like it does bound pipelines.
 
 #### setPushConstants
 
@@ -1852,13 +1911,46 @@ The payload is copied into the command itself rather than referenced, so a repla
 
 Writes every push descriptor the bound pipeline's layout declares, in that layout's own binding order (the order `detectLayoutFromEntry`/`detectLayoutFromEntries` produced into `pushDescriptorInfo`, whose `bindingNames` name them). A push descriptor lives in the command stream rather than in a heap: a root CBV/SRV/UAV on D3D12, `vkCmdPushDescriptorSetKHR` on Vulkan. Nothing about it goes through a DescriptorTable, so no heap or table has to be bound for one.
 
-All of them are written at once rather than one at a time, because a partial set would leave the rest pointing at whatever the previous pipeline bound, and both backends emit the whole set anyway. The work op validates the written count against the layout, refuses a count that doesn't match it, and refuses writes against a layout that declares none — the same three rules push constants follow, and for the same reason they sit ahead of the bind state cache. Scope end resets the write.
+All of them are written at once rather than one at a time, because a partial set would leave the rest pointing at whatever the previous pipeline bound, and both backends emit the whole set anyway. The work op validates the written count against the layout, refuses a count that doesn't match it, and refuses writes against a layout that declares none: the same three rules push constants follow, and for the same reason they sit ahead of the bind state cache. Scope end resets the write.
 
-What can be *recorded* is **buffer class** only: a constant buffer, a byte address or structured buffer, or an acceleration structure. On D3D12 a root descriptor is one raw GPU virtual address, and a texture's format, mip and swizzle have nowhere to live in it (there are no root samplers at all). A layout carrying a texture push descriptor is still legal and both backends build one — D3D12 routes it through a single entry descriptor table, and the device builds exactly such a layout for its own copy shader — so the refusal lands at the work op rather than at `createDescriptorLayout`. Filling that table needs a shader visible heap slot allocated at record time, which doesn't exist yet. At most `OXC3_MAX_PUSH_DESCRIPTORS` can be recorded, since each costs 2 of a D3D12 root signature's 64 DWORDs.
+**Buffer class** push descriptors (a constant buffer, a byte address or structured buffer, or an acceleration structure) are root descriptors on both backends: one raw GPU virtual address, costing 2 of a D3D12 root signature's 64 DWORDs each, which is why at most `OXC3_MAX_PUSH_DESCRIPTORS` can be recorded.
+
+**Textures** can be pushed too, but not as a root descriptor, because an address has nowhere to carry a format, a mip range or a swizzle. D3D12 gives the binding a single entry descriptor table instead and fills it at the work op; Vulkan pushes an image descriptor straight into the set and needs nothing further. That table needs a shader visible slot, and it has to come from a heap the CALLER put in play: a heap the runtime picked itself would need a `SetDescriptorHeaps` behind the caller's back, and that switch is heavy (it can drain the GPU on NV), which is the entire reason heap binds are explicit. So a heap carries a ring of its own for them, sized by `DescriptorHeapInfo::maxPushDescriptors`:
+
+- The slot comes from the bound DescriptorHeap (`bindDescriptorHeap`), or, only when the pipeline layout uses the runtime bindless set, from the device's own heap, since that pipeline binds the device heap for itself either way and the push adds no switch. Anything else is refused at the work op; there is no silent fallback.
+- `maxPushDescriptors` is **per frame in flight**, and every emission takes fresh slots rather than reusing them, because the earlier ones stay live until that frame retires. Size it for a frame's worth of texture pushes, not for a single bind. The device's own heap reserves `OXC3_MAX_PUSH_DESCRIPTORS * 64`. Exhausting it mid frame logs an error and wraps.
+- The texture needs `EGraphicsResourceFlag_ShaderRead`, or `EGraphicsResourceFlag_ShaderWrite` when the binding writes, since that is what makes the backend give it `ALLOW_UNORDERED_ACCESS` / `VK_IMAGE_USAGE_STORAGE_BIT` at creation. Checked when the work op records.
+- The requirement is enforced on Vulkan too, even though it pushes images directly, so a layout that records on one backend records on both.
+
+**Samplers** cannot be pushed as descriptors, but they do not need to be: declare them **immutable** instead. `DescriptorLayoutInfo::immutableSamplers` holds `SamplerRef`s and a sampler binding names one through `immutableSamplerId` (1 based, 0 meaning none), added with `DescriptorLayoutInfo_addImmutableSampler`. A sampler in a push descriptor layout **has** to be immutable, since there is no root sampler on D3D12 to push one into.
+
+An immutable sampler is baked into the layout rather than bound:
+
+- **D3D12** puts it in the root signature as a `D3D12_STATIC_SAMPLER_DESC`, which costs none of the 64 DWORDs and needs no descriptor range or heap slot.
+- **Vulkan** puts it in the set layout as `pImmutableSamplers`. Immutable samplers are legal in a push descriptor set layout and need no write, which is what lets the two backends agree.
+- It takes a binding but **no descriptor**, so `setPushDescriptors` writes only the bindings that need one and the baked samplers are skipped in that order.
+- Held by ref rather than by value so several layouts naming the same sampler share one `VkSampler`; D3D12 never makes an object of one and only reads its `SamplerInfo`.
+- It cannot be an array. A dynamically indexed sampler array needs real descriptors.
+
+`ESamplerBorderColor` is already the enumerated set a static sampler allows (transparent black, opaque black, opaque white), so every sampler OxC3 can express is expressible as an immutable one.
+
+#### Dynamic samplers are opt in
+
+The bindless `_samplers[]` array is **not** in the default layout unless the device was created with `EGraphicsDeviceFlags_EnableDynamicSamplers`. It is the one bindless array that owns a descriptor set to itself on Vulkan (set 0, while every resource array shares set 1, out of the four sets `maxBoundDescriptorSets` guarantees), and declaring it forces a sampler heap on both backends and a sampler root table on D3D12.
+
+Without the flag:
+
+- The default layout carries no sampler binding, so `heapForLayout` derives `maxSamplers = 0` and no sampler heap is created.
+- Nothing renumbers: the resource arrays keep their own set and binding numbers, since only set 0 held the sampler.
+- `_samplers`, `sampler(i)` and `samplerUniform(i)` are not declared in `resources.hlsli`. A shader wanting them annotates `[[oxc::extension("DynamicSamplers")]]`, which sets `__OXC_EXT_DYNAMICSAMPLERS` exactly like every other extension define and is what makes the reference compile at all.
+
+`ESHExtension_DynamicSamplers` is set by the annotation, and reflection also infers it for any binary declaring a sampler **array** of its own, the same way `ESHExtension_Bindless` is derived. `GraphicsDeviceRef_checkShaderFeatures` refuses such a binary on a device whose layout has no sampler array, naming the flag, instead of letting it resolve against a binding that was never declared. A singular sampler is unaffected: it is a plain binding, or better, an immutable one.
+
+Prefer immutable samplers. Dynamic samplers only pay for themselves when the sampler is genuinely selected by an index the shader computes.
 
 The resources are kept alive by the command list, like a bound table's are, and per resource scope transitions remain the caller's job until auto transitions land.
 
-**Known gap:** on Vulkan a caller owned push descriptor layout currently requires `VK_KHR_push_descriptor` (the `PerformantPushDescriptor` capability) and is refused at layout creation without it. The device's own globals layout is exempt because it carries its own emulation — one descriptor set per frame in flight, written once and bound unchanged — which works only because that buffer is fixed for the whole frame. A caller's push descriptors change per work op, so the general emulation needs a set allocated per push from a per frame pool. Android emulators are the case that hits this, since gfxstream drops the extension from the guest even where the host driver exposes it.
+**Known gap:** on Vulkan a caller owned push descriptor layout currently requires `VK_KHR_push_descriptor` (the `PerformantPushDescriptor` capability) and is refused at layout creation without it. The device's own globals layout is exempt because it carries its own emulation (one descriptor set per frame in flight, written once and bound unchanged), which works only because that buffer is fixed for the whole frame. A caller's push descriptors change per work op, so the general emulation needs a set allocated per push from a per frame pool. Android emulators are the case that hits this, since gfxstream drops the extension from the guest even where the host driver exposes it.
 
 ### Raytracing feature
 

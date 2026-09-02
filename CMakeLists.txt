@@ -258,7 +258,51 @@ set(DynamicLinkingShaderCompiler ON CACHE BOOL "Turn on/off OxC3 shader compiler
 
 # Set general compile options
 
-if("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "ARM64|arm64|aarch64|armv8" OR "${ANDROID_ABI}" MATCHES "arm64-v8a")
+if(EMSCRIPTEN)
+
+	message("-- Targeting wasm64 (emscripten)")
+	set(ARM OFF)
+
+	# Every web flavor gets a target name of its own, so no two of them share an output directory.
+	# -pthread is ABI and a sanitized build links sanitized dependencies, so the flavors are not
+	# interchangeable, while their binaries all carry the same names.
+	# Sharing a bin/ therefore means whichever built last wins and the other flavor's artifacts
+	# silently become the wrong ones.
+	#
+	# This block is authoritative for the web flavor name: wasm64, then _mt when the compile flags carry
+	# -pthread, then _asan, then _ubsan, in that order.
+	# build_web.py (webFlavorSuffix) and conanfile.py (package) rebuild the same name to find what this
+	# wrote, so a change here is a change in all three.
+
+	set(target "wasm64")
+
+	if(CMAKE_C_FLAGS MATCHES "-pthread")
+		set(target "${target}_mt")
+		message("-- pthreads are on: -sDEFAULT_PTHREAD_STACK_SIZE applies and the page must be cross origin isolated")
+	endif()
+
+	if(EnableASAN)
+		set(target "${target}_asan")
+	endif()
+
+	if(EnableUBSAN)
+		set(target "${target}_ubsan")
+	endif()
+
+	# LLVM's middle end folds I32x4_clmul64Fallback to zero at -O3 on wasm64, which fails types_math.
+	# It is a constant folding bug: only operands the compiler can see as constants are affected, so
+	# runtime keys and data are computed correctly and the AES-GCM suites pass either way. It also
+	# only reproduces when I32x4 is the scalar struct, so it hits _SIMD == SIMD_NONE and not
+	# SIMD_WASM, where I32x4 is v128_t. Confirmed on emsdk 6.0.6: SIMD off fails types_math at -O3,
+	# SIMD on passes all 15 suites. See docs/bug_wasm64_o3_constfold.md for the standalone repro.
+	# Pin only the affected configuration, so the default web build keeps -O3.
+
+	if(NOT EnableSIMD)
+		set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+		set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+	endif()
+
+elseif("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "ARM64|arm64|aarch64|armv8" OR "${ANDROID_ABI}" MATCHES "arm64-v8a")
 	message("-- Enabling ARM specific optimizations")
 	set(ARM ON)
 	set(target "arm64")
@@ -268,15 +312,58 @@ else()
 	set(target "x64")
 endif()
 
-if(ANDROID AND DynamicLinkingGraphics)
-	message(FATAL_ERROR "-- FATAL configuration (dynamic linking graphics) not compatible with Android")
+# wasm: no dlopen without MAIN_MODULE (which taxes every module), so both dynamic linking
+# flavors are off, same as android.
+
+# wasm keeps SIMD on, but only for the vector math, which runs on the native wasm_simd128.h
+# intrinsics in types/math/vec4*_wasm.inc.h. There is no AES-NI, SHA or PCLMULQDQ equivalent in
+# SIMD128, so the crypto and hash backends stay scalar.
+# That split is what SIMD_WASM means; see include/types/base/platform_types.h.
+
+# Graphics needs Vulkan or D3D12; the web target has neither until a WebGPU backend exists,
+# so the whole module (and the graphics CLI) is off there.
+
+# Routes SHA-256/AES-GCM to the host's hardware crypto on web, where OxC3's own kernels have no
+# AES/SHA instructions to use (1.27 MB/s AES). Needs a cross origin isolated page and the module
+# running in a Worker; falls back to the built in kernels whenever that isn't the case.
+# Default follows -pthread, because the threaded flavor already requires a cross origin isolated page
+# for its shared memory, so routing costs it nothing and it is the flavor that wants the throughput.
+# The single threaded flavor stays off by default: it loads on any page, and defaulting it on would
+# make a page that cannot isolate carry a bridge that never initialises.
+
+if(EMSCRIPTEN AND CMAKE_C_FLAGS MATCHES "-pthread")
+	set(EnableHostCryptoDefault ON)
+else()
+	set(EnableHostCryptoDefault OFF)
+endif()
+
+set(EnableHostCrypto ${EnableHostCryptoDefault} CACHE BOOL "Route crypto to the host (web only; needs COOP/COEP + Worker)")
+
+if(EnableHostCrypto AND NOT EMSCRIPTEN)
+	message("-- Host crypto off: only implemented for the web target")
+	set(EnableHostCrypto OFF)
+endif()
+
+set(EnableGraphics ON CACHE BOOL "Turn off/on OxC3 graphics (off on platforms without a backend)")
+
+if(EMSCRIPTEN AND EnableGraphics)
+	message("-- Graphics off: no WebGPU backend yet, wasm builds are headless")
+	set(EnableGraphics OFF)
+endif()
+
+if(NOT EnableGraphics AND CLIGraphics)
+	set(CLIGraphics OFF)
+endif()
+
+if((ANDROID OR EMSCRIPTEN) AND DynamicLinkingGraphics)
+	message(FATAL_ERROR "-- FATAL configuration (dynamic linking graphics) not compatible with Android/wasm")
 endif()
 
 # Coerced rather than fatal, because this defaults to ON: a platform that can't do it, or a build with
 # no shader compiler to share, shouldn't fail on a value nobody asked for.
 
-if(DynamicLinkingShaderCompiler AND ANDROID)
-	message("-- Shader compiler dynamic linking off: not supported on Android")
+if(DynamicLinkingShaderCompiler AND (ANDROID OR EMSCRIPTEN))
+	message("-- Shader compiler dynamic linking off: not supported on Android/wasm")
 	set(DynamicLinkingShaderCompiler OFF)
 endif()
 
@@ -561,7 +648,19 @@ if(MSVC)
 
 else()
 
-	if(ARM)
+	if(EMSCRIPTEN)
+
+		# wasm floats are IEEE 754 strict by spec, so nothing is needed for float behaviour, and the x86/arm
+		# -march flags below are invalid here.
+		# The math uses wasm_simd128.h directly through vec4*_wasm.inc.h (see SIMD_WASM in
+		# types/base/platform_types.h), so -msimd128 is the only flag needed. Emscripten does ship SSE
+		# compat headers in sysroot/include/compat, but they misparse under the -fms-extensions the C++
+		# TUs require, so that route is not taken and no -msse/-mfma flag belongs here.
+
+		if(EnableSIMD)
+			add_compile_options(-msimd128)    #Native SIMD128; no SSE shims, so no -msse/-mfma
+		endif()
+	elseif(ARM)
 		if(EnableSIMD)
 			add_compile_options(-march=armv8-a+simd+crypto+crc)
 		else()
@@ -596,7 +695,16 @@ else()
 
 	set(useLTO TRUE)
 
-	if(CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT APPLE AND NOT ANDROID)
+	if(EMSCRIPTEN)
+
+		# Nor emscripten, which is also clang-but-not-apple-not-android and would otherwise take the
+		# branch below and get -fuse-ld=lld handed to emcc. Bitcode archives would additionally force
+		# every consumer link through LTO (DXC alone is ~500 MB of archives, and wasm-ld's LTO is
+		# single threaded), for marginal gain.
+
+		set(useLTO FALSE)
+
+	elseif(CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT APPLE AND NOT ANDROID)
 
 		find_program(OXC3_LLD NAMES ld.lld lld)
 
@@ -803,15 +911,29 @@ endif()
 
 if(EnableSIMD)
 	message("-- Enabling SIMD (-DEnableSIMD=ON)")
-	if(ARM)
+	if(EMSCRIPTEN)
+
+		# Two axes, not one. 'simd' picks the container crypto and hash backend, which stays scalar because
+		# wasm has no AES-NI, SHA or PCLMULQDQ equivalent; 'simdMath' picks the vector math sources, which
+		# do have a native wasm path in vec4*_wasm.inc.h. Everywhere else the two agree.
+		# -msimd128 changes codegen for every consumer, so it belongs with -m64 and -fwasm-exceptions in
+		# packages/conan/profiles/emscripten_wasm64 rather than only here.
+
+		message("-- SIMD on wasm covers the vector math only (crypto and hash stay scalar)")
+		set(simd none)
+		set(simdMath wasm)
+	elseif(ARM)
 		set(simd neon)
+		set(simdMath neon)
 	else()
 		set(simd sse)
+		set(simdMath sse)
 	endif()
 	set(SIMD 1)
 else()
 	message("-- Disabling SIMD (-DEnableSIMD=OFF)")
 	set(simd none)
+	set(simdMath none)
 	set(SIMD 0)
 endif()
 
@@ -835,6 +957,9 @@ elseif(APPLE)
 elseif(ANDROID)
 	message("-- Enabling Android support...")
 	set(platform android)
+elseif(EMSCRIPTEN)
+	message("-- Enabling web (emscripten) support...")
+	set(platform web)
 else()
 	message("-- Enabling Linux support...")
 	set(platform linux)
@@ -858,7 +983,13 @@ set(archDir "${target}")
 if(NOT ANDROID)
 	if(WIN32 AND CMAKE_C_COMPILER_ID MATCHES "Clang")
 		set(archDir "${target}_clang")
-	elseif(UNIX AND NOT APPLE AND NOT CMAKE_C_COMPILER_ID STREQUAL "GNU")
+	elseif(UNIX AND NOT APPLE AND NOT EMSCRIPTEN AND NOT CMAKE_C_COMPILER_ID STREQUAL "GNU")
+
+		# Not emscripten: the suffix exists so a gcc and a clang build of the same target can't inherit
+		# each other's archives, and emscripten only ever has the one toolchain. Suffixing it would also
+		# desync conanfile.py's package(), which appends _clang for windows and linux only and would
+		# then collect nothing, plus build_web.py and src/test/web's ctest paths.
+
 		set(archDir "${target}_clang")
 	endif()
 endif()

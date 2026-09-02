@@ -154,6 +154,30 @@ void TLAS_free(void *tlasGeneric, const Allocator *alloc) {
 
 	(void)alloc;
 
+	//Out of the device's registry BEFORE anything else: an entry left behind is a dangling pointer the
+	// next compaction would read. Under the device lock, and taken before this TLAS's own lock rather than
+	// inside it, since the marking path holds the device lock while touching TLASes.
+
+	if(tlas->base.device) {
+
+		GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
+		const ELockAcquire acq = SpinLock_lock(&device->lock, U64_MAX);
+
+		if(acq >= ELockAcquire_Success) {
+
+			RefPtr *self = ((RefPtr*) tlas) - 1;
+
+			for (U64 i = 0; i < device->liveTlases.length; ++i)
+				if (device->liveTlases.ptr[i] == self) {
+					ListRefPtr_popLocation(&device->liveTlases, i, NULL, NULL);
+					break;
+				}
+
+			if(acq == ELockAcquire_Acquired)
+				SpinLock_unlock(&device->lock);
+		}
+	}
+
 	SpinLock_lock(&tlas->base.lock, U64_MAX);
 
 	TLAS_freeExt(tlas);
@@ -207,6 +231,10 @@ Bool GraphicsDeviceRef_createTLAS(
 	//See the matching fields in TLAS; only the CPU instance path below can prove anything.
 
 	ETLASFlag dataAccessFlags = ETLASFlag_None;
+
+	//Set when an adopted structure has a compaction recorded but not yet executed.
+
+	Bool pendingCompaction = false;
 
 	//Validate
 
@@ -291,6 +319,13 @@ Bool GraphicsDeviceRef_createTLAS(
 
 					if(!(BLASRef_ptr(dat.blasCpu)->base.flags & ERTASBuildFlags_AllowDataAccessExt))
 						dataAccessFlags &=~ ETLASFlag_BlasDataAccessAll;
+
+					//This structure has a compaction recorded but not yet executed, so the address resolved
+					// here is the one that copy is about to replace. The compaction already walked the live
+					// TLASes and this one did not exist yet, so it marks itself.
+
+					if(BLASRef_ptr(dat.blasCpu)->base.pendingCompactBuffer)
+						pendingCompaction = true;
 				}
 
 				if(!(dat.instanceId24_mask8 >> 24))
@@ -332,6 +367,36 @@ Bool GraphicsDeviceRef_createTLAS(
 
 	gotoIfError3(clean, RefPtr_inc(dev));
 	tlasPtr->base.device = dev;
+
+	//Registered so a compaction can find this TLAS and tell it its addresses moved. No reference is taken;
+	// TLAS_free removes the entry.
+
+	{
+		GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
+		const ELockAcquire regAcq = SpinLock_lock(&device->lock, U64_MAX);
+
+		if(regAcq < ELockAcquire_Success)
+			retError(clean, Error_invalidState(
+				15, "GraphicsDeviceRef_createTLAS() couldn't acquire device lock to register the TLAS"
+			));
+
+		const Bool registered = ListRefPtr_pushBack(
+			&device->liveTlases, (RefPtr*) *tlasRef, GraphicsDeviceRef_getAlloc(dev), NULL
+		);
+
+		if(regAcq == ELockAcquire_Acquired)
+			SpinLock_unlock(&device->lock);
+
+		if(!registered)
+			retError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createTLAS() couldn't register the TLAS"));
+	}
+
+	//The submit after that copy refuses until this TLAS is updated.
+
+	if(pendingCompaction) {
+		tlasPtr->base.flagsExt |= (U8) (ETLASFlag_AddressesStale | ETLASFlag_InstancesDirty);
+		tlasPtr->staleAtSubmitId = GraphicsDeviceRef_ptr(dev)->submitId;
+	}
 
 	if (tlas->base.asConstructionType == ETLASConstructionType_Serialized) {
 		tlasPtr->cpuData = Buffer_createNull();

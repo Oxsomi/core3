@@ -102,12 +102,11 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 			(pushRef && !PipelineLayout_hasRuntimeGlobals(PipelineLayoutRef_ptr(layoutRef))) ?
 			DescriptorLayoutRef_ptr(pushRef)->info.bindings.length : 0;
 
-		//Only buffer class push descriptors can actually be emitted: on D3D12 a root descriptor is one raw
-		// GPU virtual address, with nowhere to carry a texture's format, mip or swizzle.
-		//The LAYOUT is legal either way and both backends build it (D3D12 routes a texture through a single
-		// entry descriptor table), which is why this sits here and not at createDescriptorLayout: the device
-		// builds exactly such a layout for its own copy shader and simply never pushes it.
-		//Filling that table needs a shader visible heap slot allocated at record time, which doesn't exist.
+		//Buffer class push descriptors are root descriptors on both backends, one raw GPU virtual address.
+		//A texture cannot be one, since an address has nowhere to carry a format, mip or swizzle, so D3D12
+		// routes it through a single entry descriptor table whose slot comes out of the bound heap's push
+		// ring (DescriptorHeapInfo::maxPushDescriptors).
+		//Samplers stay refused: they would need the same again in the separate SAMPLER heap.
 
 		if (pushCount) {
 
@@ -129,26 +128,108 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 					EPipelineStage_Vertex : EPipelineStage_RtStart
 				);
 
+			//Bindings that need a descriptor, which is every one except the baked samplers.
+			//Checked BEFORE the loop below reads any of them: an under written push would otherwise be
+			// reported as whatever the stale descriptor happens to fail, rather than as the missing write.
+
+			U64 pushWrites = pushBindings.length;
+
+			for(U64 i = 0; i < pushBindings.length; ++i)
+				if(DescriptorBinding_immutableSamplerId(pushBindings.ptr[i]))
+					--pushWrites;
+
+			if(commandList->pushDescriptorCount != pushWrites)
+				retError(clean, Error_invalidOperation(
+					6,
+					"CommandList_validateBindState() the pipeline's layout declares push descriptors that "
+					"weren't all written (CommandListRef_setPushDescriptors); immutable samplers take no write"
+				));
+
+			U32 texturePushes = 0;
+
+			//An immutable sampler is baked into the layout, so it takes a binding but NO descriptor: the
+			// caller writes only the bindings that need one, and writeId is what the descriptors are indexed
+			// by while i indexes the bindings.
+
+			U64 writeId = 0;
+
 			for(U64 i = 0; i < pushBindings.length; ++i) {
 
 				const DescriptorBinding binding = pushBindings.ptr[i];
 				const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
 
-				if(type < ESHRegisterType_BufferStart || type > ESHRegisterType_BufferEnd)
+				if(DescriptorBinding_immutableSamplerId(binding))
+					continue;
+
+				//A sampler has no push form on D3D12 at all.
+				//It would need a slot in the SAMPLER heap, which is a second ring this does not carry, so it
+				// stays refused rather than working on one backend.
+
+				//Only a BAKED sampler is expressible; createDescriptorLayout already refuses the rest, so
+				// reaching here means a layout built before that check.
+
+				if(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState)
 					retError(clean, Error_unsupportedOperation(
 						1,
-						"CommandList_validateBindState() only buffer class push descriptors can be recorded "
-						"(constant, byte address, structured or acceleration structure); a texture or sampler "
-						"push descriptor has no record time path yet"
+						"CommandList_validateBindState() a sampler push descriptor has to be immutable; "
+						"there is no root sampler to push one into"
+					));
+
+				//A subpass input is only meaningful inside a render pass' attachment set, never as a push.
+
+				if(type == ESHRegisterType_SubpassInput)
+					retError(clean, Error_unsupportedOperation(
+						1, "CommandList_validateBindState() a subpass input cannot be a push descriptor"
+					));
+
+				const Bool isTexture = type >= ESHRegisterType_TextureStart && type < ESHRegisterType_SubpassInput;
+
+				if(!isTexture && (type < ESHRegisterType_BufferStart || type > ESHRegisterType_BufferEnd))
+					retError(clean, Error_unsupportedOperation(
+						1,
+						"CommandList_validateBindState() a push descriptor has to be a buffer class resource "
+						"(constant, byte address, structured or acceleration structure) or a texture"
 					));
 
 				//The count was already proven to match the layout, so every binding has its descriptor
 
-				const Descriptor d = commandList->pushDescriptors[i];
+				const Descriptor d = commandList->pushDescriptors[writeId++];
 
 				const ETransitionType transition =
 					binding.registerType & ESHRegisterType_IsWrite ?
 					ETransitionType_ShaderWrite : ETransitionType_ShaderRead;
+
+				//A texture push is a single entry descriptor TABLE on D3D12, not a root descriptor, so it
+				// needs a shader visible slot in the heap that is already bound.
+				//The texture also has to allow the access the shader will make of it,
+				// since ALLOW_UNORDERED_ACCESS and VK_IMAGE_USAGE_STORAGE_BIT are only set when it was
+				// created asking for them.
+
+				if (isTexture) {
+
+					const Bool isWrite = (binding.registerType & ESHRegisterType_IsWrite) != 0;
+
+					UnifiedTexture tex = TextureRef_getUnifiedTexture(d.resource, NULL);
+
+					const EGraphicsResourceFlag needed =
+						isWrite ? EGraphicsResourceFlag_ShaderWrite : EGraphicsResourceFlag_ShaderRead;
+
+					if(!(tex.resource.flags & needed))
+						retError(clean, Error_unsupportedOperation(
+							1,
+							"CommandList_validateBindState() a texture push descriptor requires "
+							"EGraphicsResourceFlag_ShaderWrite when the binding writes and "
+							"EGraphicsResourceFlag_ShaderRead when it reads"
+						));
+
+					++texturePushes;
+
+					gotoIfError3(clean, CommandListRef_transitionImage(
+						commandList, d.resource, (ImageRange) { 0 }, transition, stage, e_rr
+					));
+
+					continue;
+				}
 
 				if (type == ESHRegisterType_AccelerationStructure) {
 					gotoIfError3(clean, CommandListRef_transitionRTAS(commandList, d.resource, transition, stage, e_rr));
@@ -162,14 +243,39 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 
 				gotoIfError3(clean, CommandListRef_transitionBuffer(commandList, d.resource, range, transition, stage, e_rr));
 			}
-		}
 
-		if(pushCount && commandList->pushDescriptorCount != pushCount)
-			retError(clean, Error_invalidOperation(
-				6,
-				"CommandList_validateBindState() the pipeline's layout declares push descriptors that weren't "
-				"all written (CommandListRef_setPushDescriptors)"
-			));
+			//Which heap the slots come from, resolved the same way the D3D12 backend resolves it, so a
+			// layout that records here is one the backend can actually emit: the caller's own bound heap,
+			// or the device's bindless heap when the layout uses the runtime bindless set, since that
+			// pipeline binds the device heap for itself either way and the push adds no switch.
+			//No other fallback exists on purpose: it would hide a heap switch, which is heavy on NV.
+
+			if (texturePushes) {
+
+				DescriptorHeapRef *pushHeapRef = commandList->boundDescriptorHeap;
+
+				if(!pushHeapRef && PipelineLayout_usesRuntimeBindless(PipelineLayoutRef_ptr(layoutRef)))
+					pushHeapRef = GraphicsDeviceRef_ptr(commandList->device)->defaultDescriptorHeaps;
+
+				if(!pushHeapRef)
+					retError(clean, Error_invalidOperation(
+						8,
+						"CommandList_validateBindState() a texture push descriptor takes a shader visible "
+						"slot from the bound descriptor heap and no heap is bound "
+						"(CommandListRef_bindDescriptorHeap); binding one behind the caller's back would "
+						"hide a heap switch"
+					));
+
+				const U32 maxPush = DescriptorHeapRef_ptr(pushHeapRef)->info.maxPushDescriptors;
+
+				if(maxPush < texturePushes)
+					retError(clean, Error_outOfBounds(
+						0, texturePushes, maxPush,
+						"CommandList_validateBindState() the bound descriptor heap's maxPushDescriptors is "
+						"too small for the texture push descriptors this layout declares"
+					));
+			}
+		}
 
 		if(!pushCount && commandList->pushDescriptorCount)
 			retError(clean, Error_invalidOperation(
@@ -1074,6 +1180,109 @@ Bool CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas, Er
 
 Bool CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr) {
 	return CommandListRef_updateRTASExt(commandList, blas, true, e_rr);
+}
+
+//The CPU half runs HERE rather than at submit: the size is what sizes the allocation, and every rule about
+//when compaction is legal then reaches the caller instead of surfacing inside a submit.
+
+Bool CommandListRef_compactBLASExt(CommandListRef *commandListRef, BLASRef *blas, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!I32x2_all(I32x2_eq(commandList->currentSize, I32x2_zero)))
+		retError(clean, Error_invalidOperation(
+			0, "CommandListRef_compactBLASExt() is disallowed during render calls"
+		));
+
+	if(!blas || blas->refPtrType->typeId != (TypeId) EGraphicsTypeId_BLASExt)
+		retError(clean, Error_unsupportedOperation(0, "CommandListRef_compactBLASExt() requires a BLAS"));
+
+	//Everything about whether this may happen at all, plus the backend's allocation of the destination.
+	//A structure that reports nothing to do leaves no op behind, so the recording stays empty rather than
+	// carrying a copy that would do nothing.
+
+	Bool recorded = false;
+
+	//A COMPLETED TLAS without AllowUpdate can never re-resolve: its flush early outs forever, so marking
+	// it stale would refuse every later submit with no way out. Refused here instead, while the caller can
+	// still choose an updatable TLAS or compact before building.
+	//A not yet completed TLAS is fine: its first build rides a later submit and resolves the new address.
+
+	{
+		GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
+
+		const ELockAcquire strandAcq = SpinLock_lock(&device->lock, U64_MAX);
+
+		if(strandAcq < ELockAcquire_Success)
+			retError(clean, Error_invalidState(
+				2, "CommandListRef_compactBLASExt() couldn't acquire device lock to check dependent TLASes"
+			));
+
+		Bool stranded = false;
+
+		for (U64 i = 0; i < device->liveTlases.length && !stranded; ++i) {
+
+			const TLAS *tlas = TLASRef_ptr((TLASRef*) device->liveTlases.ptr[i]);
+
+			if(TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
+				continue;
+
+			if(!tlas->base.isCompleted || (tlas->base.flags & ERTASBuildFlags_AllowUpdate))
+				continue;
+
+			for (U64 j = 0; j < tlas->cpuInstances.length && !stranded; ++j) {
+
+				TLASInstanceData dat = (TLASInstanceData) { 0 };
+				TLAS_getInstanceDataCpu(tlas, j, &dat);
+				stranded = dat.blasCpu == blas;
+			}
+		}
+
+		if(strandAcq == ELockAcquire_Acquired)
+			SpinLock_unlock(&device->lock);
+
+		if(stranded)
+			retError(clean, Error_invalidState(
+				3,
+				"CommandListRef_compactBLASExt() a completed TLAS without ERTASBuildFlags_AllowUpdate "
+				"references this BLAS; compacting would strand it on the old address forever. Use an "
+				"updatable TLAS or compact before building it"
+			));
+	}
+
+	gotoIfError3(clean, GraphicsDeviceRef_prepareCompactBLAS(commandList->device, blas, &recorded, e_rr));
+
+	if(!recorded)
+		goto clean;
+
+	//Every live TLAS that resolved this structure's address is about to be holding a stale one. Marking
+	// them is what turns "traced a structure that moved" from a silently wrong frame into a refused submit;
+	// recording an update of the TLAS clears it again, because that update re-resolves the addresses.
+	//The adopt marks AGAIN at submit time (see GraphicsDeviceRef_markTlasesStaleForBLAS), because a pending
+	// TLAS build riding the same submit resolves the old address and clears this mark before the move runs.
+
+	gotoIfError3(clean, GraphicsDeviceRef_markTlasesStaleForBLAS(commandList->device, blas, false, e_rr));
+
+	gotoIfError3(clean, CommandListRef_transitionRTAS(
+		commandList, blas, ETransitionType_ShaderWrite, EPipelineStage_RTASBuild, e_rr
+	));
+
+	BLASRef *args[2] = { blas, NULL };
+
+	gotoIfError3(clean, CommandList_append(
+		commandList, ECommandOp_CompactBLASExt, Buffer_createRefConst(args, sizeof(args)), 0, e_rr
+	));
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
 }
 
 //Bindful: only SETS state; the work ops validate it against the bound pipeline's layout.

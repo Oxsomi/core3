@@ -27,6 +27,7 @@
 #if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
 	#include <Security/SecRandom.h>
 #else
+	#include <stddef.h> //Before sys/random.h: emscripten's compat header uses size_t without declaring it
 	#include <sys/random.h>
 #endif
 
@@ -37,6 +38,18 @@ Bool Buffer_csprng(const Buffer target) {
 
 	#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
 		return !SecRandomCopyBytes(kSecRandomDefault, Buffer_length(target), target.ptrNonConst);
+	#elif _PLATFORM_TYPE == PLATFORM_WEB
+
+		//emscripten's libc implements getentropy (crypto.getRandomValues / node crypto) but not getrandom,
+		// and a single getentropy request caps at 256 bytes, so fill in chunks.
+
+		U64 len = Buffer_length(target);
+
+		for(U64 off = 0; off < len; off += 256)
+			if(getentropy(target.ptrNonConst + off, len - off > 256 ? 256 : len - off))
+				return false;
+
+		return true;
 	#else
 		size_t bytes = getrandom(target.ptrNonConst, Buffer_length(target), GRND_NONBLOCK);
 		return bytes == Buffer_length(target);

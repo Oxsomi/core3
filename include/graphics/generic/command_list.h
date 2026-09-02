@@ -154,3 +154,8 @@ Bool GraphicsDeviceRef_createCommandList(
 #ifdef __cplusplus
 	}
 #endif
+
+//Does this recording update the given TLAS? Used at submit to decide whether a compaction's follow up is
+//actually part of the work being submitted.
+
+Bool CommandList_updatesTLAS(const CommandList *commandList, TLASRef *tlas);

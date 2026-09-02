@@ -22,6 +22,7 @@
 
 #include "graphics/generic/interface.h"
 #include "graphics/generic/sampler.h"
+#include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "graphics/generic/descriptor_table.h"
@@ -75,8 +76,22 @@ Bool GraphicsDeviceRef_createSampler(
 			"GraphicsDeviceRef_createSampler()::bindlessDescriptorTable should be valid if non NULL"
 		));
 
-	if (!disallowBindlessDescriptor && !bindlessDescriptorTable)
-		bindlessDescriptorTable = GraphicsDeviceRef_ptr(dev)->defaultDescriptorTable;
+	//A device whose layout declares no sampler array has nowhere to put a bindless sampler, which is the
+	// default now that EGraphicsDeviceFlags_EnableDynamicSamplers is opt in.
+	//Taking the table anyway would fail every plain createSampler on such a device, for a slot the caller
+	// never asked for; the sampler still works bound, or better, as an immutable one.
+	//Same shape as a device without bindless at all, where defaultDescriptorTable is simply absent.
+
+	if (!disallowBindlessDescriptor && !bindlessDescriptorTable) {
+
+		const GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
+
+		const DescriptorLayout *defaultLayout =
+			device->defaultDescLayout ? DescriptorLayoutRef_ptr(device->defaultDescLayout) : NULL;
+
+		if(defaultLayout && defaultLayout->anySampler)
+			bindlessDescriptorTable = device->defaultDescriptorTable;
+	}
 
 	if(info.filter &~ ESamplerFilterMode_All)
 		retError(clean, Error_invalidParameter(

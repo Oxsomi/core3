@@ -106,6 +106,17 @@ typedef struct GraphicsObjectSizes {
 	typedef Bool (*BLAS_initImpl)(BLAS *blas, Error *e_rr);
 	typedef Bool (*BLASRef_flushImpl)(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr);
 
+	//Compaction in two halves; the generic layer has already checked that it may happen at all.
+	//
+	//prepareCompact runs at RECORD time: read the postbuild size and allocate the destination, reporting
+	//recorded = false when the driver found no saving.
+	//
+	//compact runs at SUBMIT time with the live command buffer: record the copy, swap the structure over,
+	//and hand the old one to the frame's in-flight list. Neither half waits on the device.
+
+	typedef Bool (*BLASRef_prepareCompactImpl)(GraphicsDeviceRef *deviceRef, BLASRef *blas, Bool *recorded, Error *e_rr);
+	typedef Bool (*BLASRef_compactImpl)(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *blas, Error *e_rr);
+
 	typedef void (*TLAS_freeImpl)(TLAS *tlas);
 	typedef Bool (*TLAS_initImpl)(TLAS *tlas, Error *e_rr);
 	typedef Bool (*TLASRef_flushImpl)(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending, Error *e_rr);
@@ -339,6 +350,8 @@ typedef struct GraphicsObjectSizes {
 
 		BLAS_initImpl                                    blasInit;
 		BLASRef_flushImpl                                blasFlush;
+		BLASRef_prepareCompactImpl                       blasPrepareCompact;
+		BLASRef_compactImpl                              blasCompact;
 		BLAS_freeImpl                                    blasFree;
 
 		OpacityMicromap_initImpl                         opacityMicromapInit;
@@ -439,6 +452,8 @@ Bool OpacityMicromapRef_flushExt(
 void BLAS_freeExt(BLAS *blas);
 Bool BLAS_initExt(BLAS *blas, Error *e_rr);
 Bool BLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr);
+Bool BLASRef_prepareCompactExt(GraphicsDeviceRef *deviceRef, BLASRef *blas, Bool *recorded, Error *e_rr);
+Bool BLASRef_compactExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *blas, Error *e_rr);
 
 void TLAS_freeExt(TLAS *tlas);
 Bool TLAS_initExt(TLAS *tlas, Error *e_rr);

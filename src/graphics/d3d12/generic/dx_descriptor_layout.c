@@ -154,6 +154,16 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 		if(isPushDescriptors) {
 
+			//An immutable sampler is baked into the root signature as a static sampler, which costs no root
+			// parameter and is never emitted, so it gets no offset either.
+			//createDescriptorLayout already refused a non immutable sampler in a push layout, so this is the
+			// only shape a sampler takes here.
+
+			if (DescriptorBinding_immutableSamplerId(*binding)) {
+				layoutExt->rootParamOffsets.ptrNonConst[i] = U8_MAX;
+				continue;
+			}
+
 			layoutExt->rootParamOffsets.ptrNonConst[i] = (U8) layoutExt->rootParams.length;
 
 			//Textures can't be bound as root SRV/UAV descriptors in D3D12 (only buffers, AS and CBVs can).
@@ -227,6 +237,12 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			binding->registerType == ESHRegisterType_Sampler ||
 			binding->registerType  == ESHRegisterType_SamplerComparisonState
 		) {
+
+			//Baked into the root signature instead, so it takes no range, no sampler heap slot and no place
+			// in the sampler root table.
+
+			if(DescriptorBinding_immutableSamplerId(*binding))
+				continue;
 
 			visibility2 |= binding->visibility;
 

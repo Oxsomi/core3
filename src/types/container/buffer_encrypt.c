@@ -23,6 +23,7 @@
 #include "types/base/error.h"
 #include "types/container/buffer_encrypt.h"
 #include "types/container/buffer.h"
+#include "types/container/host_crypto.h"
 #include "types/container/simd/aes_encryption_helpers.h"
 #include "types/math/u128_base.h"
 #include "types/math/vec4i_swizzle.h"
@@ -2044,6 +2045,16 @@ static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *restrict en
 			retError(clean, Error_invalidState(1, "AESEncryptionContext_encrypt() couldn't generate key"));
 	}
 
+	//Key and IV are generated above by OxC3 either way; only the GCM itself is handed off.
+	//A false return means the host couldn't service it (no bridge, too big, subtle refused),
+	// so the software path below runs unchanged.
+	//See types/container/host_crypto.h.
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB && defined(_OXC3_HOST_CRYPTO)
+		if(HostCrypto_aesGcm(encrypt, true))
+			goto clean;
+	#endif
+
 	if (encrypt->target)
 		Buffer_prefetch(*encrypt->target);
 
@@ -2144,6 +2155,15 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *restrict de
 	Bool s_uccess = true;
 
 	//Create context
+
+	//As with encrypt.
+	//A tag mismatch also comes back false, and the software path below then rejects it for the same reason,
+	// so authentication failures stay authentication failures.
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB && defined(_OXC3_HOST_CRYPTO)
+		if(HostCrypto_aesGcm(decrypt, false))
+			goto clean;
+	#endif
 
 	if (decrypt->target)
 		Buffer_prefetch(*decrypt->target);

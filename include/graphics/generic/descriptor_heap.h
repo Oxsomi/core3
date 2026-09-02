@@ -57,6 +57,19 @@ typedef struct DescriptorHeapInfo {
 
 	U32 maxDescriptorTables;
 
+	//How many push descriptors a single frame may point at textures, per frame in flight.
+	//A texture push descriptor needs a slot in a shader visible heap,
+	// because D3D12 root descriptors are plain GPU addresses with no room for a format or a mip range.
+	//It has to come from the heap already bound, since D3D12 allows only one CBV/SRV/UAV heap at a time and
+	// switching would drop the bindless and table state the draw is relying on.
+	//So the heap carries a ring of its own beyond the maxima above, and this sizes it.
+	//Buffer and acceleration structure push descriptors are root descriptors on both backends and cost
+	// nothing here.
+	//0 refuses texture push descriptors against this heap.
+	//Vulkan pushes image descriptors directly and ignores this.
+
+	U32 maxPushDescriptors;
+
 } DescriptorHeapInfo;
 
 typedef struct RefPtr RefPtr;

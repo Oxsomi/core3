@@ -48,6 +48,7 @@ TListImpl(VkSemaphore);
 TListImpl(VkResult);
 TListImpl(VkSwapchainKHR);
 TListImpl(VkPipelineStageFlags);
+TListImpl(VkQueryPool);
 
 #define bindNextVkStruct(T, condition, ...) \
 	T tmp##T = __VA_ARGS__;                 \
@@ -573,9 +574,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 				on = feat & (EGraphicsFeatures_VariableRateShading | EGraphicsFeatures_DirectRendering);
 				break;
 
+			//VK_EXT_mesh_shader depends on VK_KHR_spirv_1_4 the same way the raytracing extensions do, and
+			// spirv_1_4 is only core from Vulkan 1.2 while the instance asks for 1.1, so it stays an
+			// extension that has to be listed explicitly.
+			//Leaving mesh shaders out here enables VK_EXT_mesh_shader without its dependency, which fails
+			// vkCreateDevice with VUID-vkCreateDevice-ppEnabledExtensionNames-01387.
+
 			case EOptExtensions_Spirv14:
 			case EOptExtensions_ShaderFloatControls:
-				on = feat & (EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery);
+				on = feat & (EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery | EGraphicsFeatures_MeshShader);
 				break;
 
 			default:
@@ -820,6 +827,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		getVkFunctionDevice(clean, vkCmdBuildAccelerationStructuresKHR, deviceExt->cmdBuildAccelerationStructures);
 		getVkFunctionDevice(clean, vkCreateAccelerationStructureKHR, deviceExt->createAccelerationStructure);
 		getVkFunctionDevice(clean, vkCmdCopyAccelerationStructureKHR, deviceExt->copyAccelerationStructure);
+		getVkFunctionDevice(
+			clean, vkCmdWriteAccelerationStructuresPropertiesKHR, deviceExt->writeAccelerationStructuresProperties
+		);
 		getVkFunctionDevice(clean, vkDestroyAccelerationStructureKHR, deviceExt->destroyAccelerationStructure);
 		getVkFunctionDevice(clean, vkGetAccelerationStructureBuildSizesKHR, deviceExt->getAccelerationStructureBuildSizes);
 		getVkFunctionDevice(
@@ -1069,6 +1079,18 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	gotoIfError3(clean, VkGraphicsDevice_findAllMemory(deviceExt, e_rr));
 
+	//The empty set layout every pipeline layout can fill its unused set indices with (see vk_device.h)
+
+	{
+		const VkDescriptorSetLayoutCreateInfo emptyInfo = (VkDescriptorSetLayoutCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+		};
+
+		gotoIfError3(clean, checkVkError(deviceExt->createDescriptorSetLayout(
+			deviceExt->device, &emptyInfo, NULL, &deviceExt->emptySetLayout
+		), e_rr));
+	}
+
 clean:
 
 	if(!s_uccess)
@@ -1211,10 +1233,25 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 			if(deviceExt->timestampPool[i])
 				deviceExt->destroyQueryPool(deviceExt->device, deviceExt->timestampPool[i], NULL);
 
+		for(U64 i = 0; i < deviceExt->compactionPools.length; ++i)
+			deviceExt->destroyQueryPool(deviceExt->device, deviceExt->compactionPools.ptr[i], NULL);
+
+		//The structures a compaction replaced outlive the frame that retired them, so a device torn down
+		// before their fence came back still owns them.
+		//They go here rather than with the lists below: destroying them is a DEVICE level entry point, and
+		// leaving them alive across vkDestroyDevice trips VUID-vkDestroyDevice-device-05137.
+
+		for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+			for(U64 j = 0; j < deviceExt->retiredAs[i].length; ++j)
+				deviceExt->destroyAccelerationStructure(deviceExt->device, deviceExt->retiredAs[i].ptr[j], NULL);
+
 		//Only set when push descriptors were emulated; destroying the pool frees the sets with it.
 
 		if(deviceExt->cbufferPool)
 			deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->cbufferPool, NULL);
+
+		if(deviceExt->emptySetLayout)
+			deviceExt->destroyDescriptorSetLayout(deviceExt->device, deviceExt->emptySetLayout, NULL);
 
 		instanceExt->destroyDevice(deviceExt->device, NULL);
 	}
@@ -1226,6 +1263,10 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 	ListVkPipelineStageFlags_free(&deviceExt->waitStages, alloc);
 	ListVkSemaphore_free(&deviceExt->waitSemaphoresList, alloc);
+	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+		ListVkAccelerationStructureKHR_free(&deviceExt->retiredAs[i], alloc);
+
+	ListVkQueryPool_free(&deviceExt->compactionPools, alloc);
 	ListVkResult_free(&deviceExt->results, alloc);
 	ListU32_free(&deviceExt->swapchainIndices, alloc);
 	ListVkSwapchainKHR_free(&deviceExt->swapchainHandles, alloc);
@@ -1456,13 +1497,21 @@ Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 
 		//The emulated path binds the set that was already written for this frame, so it costs one bind either way.
 
+		//The globals set index is the space the device's cbuffer layout declares (see resources.hlsli's
+		// vk::binding for the globals), which on SPIR-V is the set index itself.
+
+		const VkDescriptorLayout *cbufferLayoutExt =
+			DescriptorLayout_ext(DescriptorLayoutRef_ptr(device->defaultCBufferLayout), Vk);
+
+		const U32 globalsSet = cbufferLayoutExt->setIds[0];
+
 		if (!deviceExt->cmdPushDescriptorSet) {
 
 			deviceExt->cmdBindDescriptorSets(
 				commandBuffer,
 				bindPoint,
 				*defaultLayoutExt,
-				2, 1, &deviceExt->cbufferSets[device->fifId],
+				globalsSet, 1, &deviceExt->cbufferSets[device->fifId],
 				0, NULL
 			);
 
@@ -1491,7 +1540,7 @@ Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 			commandBuffer,
 			bindPoint,
 			*defaultLayoutExt,
-			2,
+			globalsSet,
 			1,
 			&cbv
 		);
@@ -1564,6 +1613,16 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		), e_rr));
 
 		gotoIfError3(clean, checkVkError(deviceExt->resetFences(deviceExt->device, 1, fence), e_rr));
+
+		//That fence also proves any compaction copy recorded in this slot has run, so the structures it
+		// replaced can go. Their buffers ride resourcesInFlight; only the handles are left to us.
+
+		ListVkAccelerationStructureKHR *retired = &deviceExt->retiredAs[device->fifId];
+
+		for(U64 i = 0; i < retired->length; ++i)
+			deviceExt->destroyAccelerationStructure(deviceExt->device, retired->ptr[i], NULL);
+
+		gotoIfError3(clean, ListVkAccelerationStructureKHR_clear(retired, e_rr));
 	}
 
 	//Read back and resolve the timestamps of the frame that used this slot framesInFlight submits ago, now that its

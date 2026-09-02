@@ -222,6 +222,27 @@ typedef RefPtr BLASRef;
 Bool CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas, Error *e_rr);
 Bool CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr);
 
+//Record the compacting copy of a built BLAS, typically 30 to 50% smaller and denser to traverse. Every
+//rule below is checked at record time, so a rejection reaches the caller here and not inside a submit.
+//
+//Record it in a LATER submit than the build: the size it needs is what that build produced, and asking too
+//early errors rather than blocking, so never submitting the build cannot become a hang. It ALLOCATES, and
+//the structure being replaced lives until the submit holding the copy completes, so peak spans both.
+//Records nothing, reporting success, when the structure was built without ERTASBuildFlags_AllowCompaction,
+//is already compacted, or the driver reported no saving.
+//
+//Compaction MOVES the structure. Every live TLAS that resolved its address is marked, and the submit after
+//the copy is refused while any mark stands, so forgetting to update one is an error and not a wrong frame
+//(a stale TLAS traces released memory, which reads as missing geometry and a FASTER frame). Only TLASes
+//that reference it are touched, and the mark is satisfied by any list IN the submit that updates the TLAS,
+//whenever that list was recorded.
+//
+//ONE CASE IS THE CALLER'S: a TLAS built with ETLASFlag_UseDeviceMemory owns its instance buffer on the GPU,
+//so its addresses cannot be re-resolved here and it is neither marked nor refilled. Rewrite them yourself
+//after compacting anything it holds.
+
+Bool CommandListRef_compactBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr);
+
 //Builds an opacity micromap, which has to be recorded before any BLAS build that links it.
 //A micromap has no update mode, so recording it again after it completed is a no-op.
 
