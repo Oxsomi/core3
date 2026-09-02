@@ -341,6 +341,8 @@ namespace oxc {
 		//RenderTexture, DeviceTexture and Swapchain are all one to the C API, so they inherit this rather than
 		// each spelling the same six calls out, or callers reaching past the wrapper for them.
 		//CRTP because a Handle knows its own C type: the mixin needs handle(), which only the derived class has.
+		//The mixin is always the FIRST base: the MSVC ABI places a trailing empty base one past the object's end,
+		// and UBSan's object size check rejects every member call made through that address.
 
 		template<typename Self>
 		struct TextureHandleOps {
@@ -402,7 +404,7 @@ namespace oxc {
 			}
 		};
 
-		class RenderTexture : public Handle<c::RenderTexture>, public TextureHandleOps<RenderTexture> {
+		class RenderTexture : public TextureHandleOps<RenderTexture>, public Handle<c::RenderTexture> {
 		public:
 			using Handle::Handle;
 
@@ -423,7 +425,7 @@ namespace oxc {
 			}
 		};
 
-		class DeviceTexture : public Handle<c::DeviceTexture>, public TextureHandleOps<DeviceTexture> {
+		class DeviceTexture : public TextureHandleOps<DeviceTexture>, public Handle<c::DeviceTexture> {
 		public:
 			using Handle::Handle;
 
@@ -451,7 +453,7 @@ namespace oxc {
 			}
 		};
 
-		class DepthStencil : public Handle<c::DepthStencil>, public TextureHandleOps<DepthStencil> {
+		class DepthStencil : public TextureHandleOps<DepthStencil>, public Handle<c::DepthStencil> {
 		public:
 			using Handle::Handle;
 
@@ -470,7 +472,7 @@ namespace oxc {
 			}
 		};
 
-		class Swapchain : public Handle<c::Swapchain>, public TextureHandleOps<Swapchain> {
+		class Swapchain : public TextureHandleOps<Swapchain>, public Handle<c::Swapchain> {
 		public:
 			using Handle::Handle;
 
