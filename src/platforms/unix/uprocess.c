@@ -31,6 +31,7 @@
 #include "types/container/list_basic_types.h"
 #include "types/base/error.h"
 #include "types/base/time.h"
+#include "types/base/mathi.h"
 
 #include <unistd.h>
 #include <sys/wait.h>
