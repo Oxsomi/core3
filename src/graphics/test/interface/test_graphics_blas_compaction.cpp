@@ -387,7 +387,9 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 							gfx::CommandList discarded;
 
 							if (
-								c::Test_assert(t, "createDiscarded", dev.createCommandList(c::KIBI, 32, 32, discarded, true, e_rr)) &&
+								c::Test_assert(t, "createDiscarded", dev.createCommandList(
+									c::KIBI, 32, 32, discarded, true, e_rr
+								)) &&
 								c::Test_assert(t, "beginDiscarded", discarded.begin(true, e_rr))
 							) {
 								{
@@ -406,7 +408,9 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 							gfx::CommandList unrelated;
 
 							if (
-								c::Test_assert(t, "createUnrelated", dev.createCommandList(c::KIBI, 32, 32, unrelated, true, e_rr)) &&
+								c::Test_assert(t, "createUnrelated", dev.createCommandList(
+									c::KIBI, 32, 32, unrelated, true, e_rr
+								)) &&
 								c::Test_assert(t, "beginUnrelated", unrelated.begin(true, e_rr)) &&
 								c::Test_assert(t, "endUnrelated", unrelated.end(e_rr))
 							)
@@ -424,7 +428,9 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 						gfx::CommandList rebuild;
 
 						if (
-							c::Test_assert(t, "createRebuildList", dev.createCommandList(c::KIBI, 32, 32, rebuild, true, e_rr)) &&
+							c::Test_assert(t, "createRebuildList", dev.createCommandList(
+								c::KIBI, 32, 32, rebuild, true, e_rr
+							)) &&
 							c::Test_assert(t, "beginRebuild", rebuild.begin(true, e_rr))
 						) {
 							{

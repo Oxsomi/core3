@@ -1,14 +1,14 @@
 ; gfx1100  SGPRs 5  VGPRs 5  code 52 B  instrs 12  scratch 0  lds 0
 _amdgpu_ps_main:
-	v_cvt_f32_u32_e32 v0, s1                                   // 000000000000: 7E000C01
-	v_cvt_f32_u32_e32 v1, s2                                   // 000000000004: 7E020C02
-	v_mov_b32_e32 v4, 1.0                                      // 000000000008: 7E0802F2
-	s_delay_alu instid0(VALU_DEP_3) | instskip(NEXT) | instid1(VALU_DEP_2)// 00000000000C: BF870113
-	v_rcp_iflag_f32_e32 v0, v0                                 // 000000000010: 7E005700
-	v_rcp_iflag_f32_e32 v1, v1                                 // 000000000014: 7E025701
-	s_waitcnt_depctr 0xfff                                     // 000000000018: BF880FFF
-	v_mul_f32_e32 v0, v2, v0                                   // 00000000001C: 10000102
-	v_mul_f32_e32 v1, v3, v1                                   // 000000000020: 10020303
-	v_mov_b32_e32 v2, 0                                        // 000000000024: 7E040280
-	exp mrt0, v0, v1, v2, v4 done                              // 000000000028: F800080F 04020100
-	s_endpgm                                                   // 000000000030: BFB00000
+	v_cvt_f32_u32_e32 v0, s1                                   // 000000000000
+	v_cvt_f32_u32_e32 v1, s2                                   // 000000000004
+	v_mov_b32_e32 v4, 1.0                                      // 000000000008
+	s_delay_alu instid0(VALU_DEP_3) | instskip(NEXT) | instid1(VALU_DEP_2)// 00000000000C
+	v_rcp_iflag_f32_e32 v0, v0                                 // 000000000010
+	v_rcp_iflag_f32_e32 v1, v1                                 // 000000000014
+	s_waitcnt_depctr 0xfff                                     // 000000000018
+	v_mul_f32_e32 v0, v2, v0                                   // 00000000001C
+	v_mul_f32_e32 v1, v3, v1                                   // 000000000020
+	v_mov_b32_e32 v2, 0                                        // 000000000024
+	exp mrt0 v0, v1, v2, v4 done                               // 000000000028
+	s_endpgm                                                   // 000000000030

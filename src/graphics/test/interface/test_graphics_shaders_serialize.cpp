@@ -222,9 +222,20 @@ extern "C" void Test_graphicsShaderPipelineSerialize(oxc::c::Test *t, oxc::c::Gr
 		return;
 
 	//An SPFile is a plain C struct with no handle of its own, so it gets the same guard the files have.
+	//Local rather than gfx::OwnedList: that takes its free through an OwnedListFree<T> specialization, and
+	// teaching graphics.hpp about an oiSP type just for a test isn't worth the coupling.
 
-	using OwnedSPFile = gfx::OwnedList<c::SPFile, c::SPFile_free>;
-	OwnedSPFile sp(alloc);
+	struct OwnedSPFile {
+
+		c::SPFile list = {};
+		const c::Allocator *alloc;
+
+		explicit OwnedSPFile(const c::Allocator *a) : alloc(a) {}
+		~OwnedSPFile() { c::SPFile_free(&list, alloc); }
+
+		OwnedSPFile(const OwnedSPFile&) = delete;
+		OwnedSPFile &operator=(const OwnedSPFile&) = delete;
+	} sp(alloc);
 
 	if(!Test_assert(t, "createSP", c::SPFile_create(c::ESPSettingsFlags_None, alloc, &sp.list, &t->err)))
 		return;

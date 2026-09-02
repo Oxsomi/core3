@@ -123,6 +123,12 @@ If an error isn't returned but a function will fail, document clearly what value
 
 Lines should be a maximum of 128.
 
+Width is measured in COLUMNS, not characters: a tab advances to the next multiple of the tab width, so a
+line indented with two tabs is already at column 8. Any tool that enforces or emits within the limit has to
+measure the same way; `len(line)` understates an indented line by three columns per leading tab and lets it
+past. This has bitten twice, first in check_style itself and then in generate_hpp.py, which emitted wrapped
+signatures that check_style then rejected and that no edit to the generated file could fix.
+
 Curly braces align to the end of a line.
 
 Pointers align to the right (unfortunately C declares they belong to the variable to the right, not the type itself). The only exception being casts, where it does belong to the type.

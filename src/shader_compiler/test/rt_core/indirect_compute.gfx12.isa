@@ -1,29 +1,29 @@
 ; gfx1201  SGPRs 12  VGPRs 3  code 156 B  instrs 27  scratch 0  lds 0
 _amdgpu_cs_main:
-	s_getpc_b64 s[10:11]                                       // 000000000000: BE8A4700
-	s_mov_b32 s0, s3                                           // 000000000004: BE800003
-	s_sext_i32_i16 s11, s11                                    // 000000000008: BE8B0F0B
-	s_lshl_b32 s0, s0, 4                                       // 00000000000C: 84008400
-	s_mov_b32 s3, s11                                          // 000000000010: BE83000B
-	s_mov_b32 s8, s1                                           // 000000000014: BE880001
-	s_load_b128 s[4:7], s[2:3], 0x0                            // 000000000018: F4004101 F8000000
-	s_mov_b32 s9, s11                                          // 000000000020: BE89000B
-	s_and_b32 s0, s0, 0x1ffff0                                 // 000000000024: 8B00FF00 001FFFF0
-	s_load_b128 s[0:3], s[8:9], s0 offset:0x0                  // 00000000002C: F4004004 00000000
-	s_wait_kmcnt 0x0                                           // 000000000034: BFC70000
-	s_buffer_load_b32 s4, s[4:7], 0x4                          // 000000000038: F4020102 F8000004
-	s_wait_kmcnt 0x0                                           // 000000000040: BFC70000
-	s_mul_f32 s5, s4, 0x3da2f983                               // 000000000044: A205FF04 3DA2F983
-	s_mul_f32 s6, s4, 0x3d22f983                               // 00000000004C: A206FF04 3D22F983
-	s_mul_f32 s4, s4, 0x3ca2f983                               // 000000000054: A204FF04 3CA2F983
-	s_delay_alu instid0(SALU_CYCLE_1) | instskip(NEXT) | instid1(SALU_CYCLE_1)// 00000000005C: BF870499
-	v_sin_f32_e32 v0, s5                                       // 000000000060: 7E006A05
-	v_sin_f32_e32 v1, s6                                       // 000000000064: 7E026A06
-	s_delay_alu instid0(SALU_CYCLE_1) | instskip(NEXT) | instid1(TRANS32_DEP_3)// 000000000068: BF870399
-	v_sin_f32_e32 v2, s4                                       // 00000000006C: 7E046A04
-	v_fma_f32 v0, v0, 0.5, 0.5                                 // 000000000070: D6130000 03C1E100
-	s_delay_alu instid0(TRANS32_DEP_2) | instskip(NEXT) | instid1(TRANS32_DEP_1)// 000000000078: BF870296
-	v_fma_f32 v1, v1, 0.5, 0.5                                 // 00000000007C: D6130001 03C1E101
-	v_fma_f32 v2, v2, 0.5, 0.5                                 // 000000000084: D6130002 03C1E102
-	buffer_store_b96 v[0:2], off, s[0:3], null                 // 00000000008C: C407007C 00800000 00000000
-	s_endpgm                                                   // 000000000098: BFB00000
+	s_getpc_b64 s[10:11]                                       // 000000000000
+	s_mov_b32 s0, s3                                           // 000000000004
+	s_sext_i32_i16 s11, s11                                    // 000000000008
+	s_lshl_b32 s0, s0, 4                                       // 00000000000C
+	s_mov_b32 s3, s11                                          // 000000000010
+	s_mov_b32 s8, s1                                           // 000000000014
+	s_load_b128 s[4:7], s[2:3], 0x0                            // 000000000018
+	s_mov_b32 s9, s11                                          // 000000000020
+	s_and_b32 s0, s0, 0x1ffff0                                 // 000000000024
+	s_load_b128 s[0:3], s[8:9], s0 offset:0x0                  // 00000000002C
+	s_wait_kmcnt 0x0                                           // 000000000034
+	s_buffer_load_b32 s4, s[4:7], 0x4                          // 000000000038
+	s_wait_kmcnt 0x0                                           // 000000000040
+	s_mul_f32 s5, s4, 0x3da2f983                               // 000000000044
+	s_mul_f32 s6, s4, 0x3d22f983                               // 00000000004C
+	s_mul_f32 s4, s4, 0x3ca2f983                               // 000000000054
+	s_delay_alu instid0(SALU_CYCLE_1) | instskip(NEXT) | instid1(SALU_CYCLE_1)// 00000000005C
+	v_sin_f32_e32 v0, s5                                       // 000000000060
+	v_sin_f32_e32 v1, s6                                       // 000000000064
+	s_delay_alu instid0(SALU_CYCLE_1) | instskip(NEXT) | instid1(TRANS32_DEP_3)// 000000000068
+	v_sin_f32_e32 v2, s4                                       // 00000000006C
+	v_fma_f32 v0, v0, 0.5, 0.5                                 // 000000000070
+	s_delay_alu instid0(TRANS32_DEP_2) | instskip(NEXT) | instid1(TRANS32_DEP_1)// 000000000078
+	v_fma_f32 v1, v1, 0.5, 0.5                                 // 00000000007C
+	v_fma_f32 v2, v2, 0.5, 0.5                                 // 000000000084
+	buffer_store_b96 v[0:2], off, s[0:3], null                 // 00000000008C
+	s_endpgm                                                   // 000000000098

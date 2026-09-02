@@ -677,7 +677,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 	}
 
 	//--- ISA snapshot: for each corpus shader whose stage has an offline AMD ISA path, disassemble its SPIR-V to AMD
-	//--- ISA text (via the bundled amdllpc + amdgpu-dis) for two architectures and pin it byte-for-byte, like the
+	//--- ISA text (via the bundled amdllpc) for two architectures and pin it byte-for-byte, like the
 	//--- oiSH/oiSR snapshots.
 	//--- amdllpc's ISA is deterministic and path/timestamp-free, so it's a stable reference.
 	//--- amdllpc drives closer-to-final ISA than a device-independent path.
@@ -759,7 +759,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 						if (!isaAvailable)
 							Log_warnLn(
 								alloc,
-								"ISA snapshot skipped: amdllpc/amdgpu-dis not found next to the test (rga/utils not bundled)"
+								"ISA snapshot skipped: amdllpc not found next to the test (rga/utils not bundled)"
 							);
 					}
 

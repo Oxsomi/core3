@@ -90,8 +90,6 @@ Bool writeToDisk(const FileInfo *info, void *outputGeneric, const Allocator *all
 	CharString subDir = CharString_createNull();
 	CharString tmp = CharString_createNull();
 
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
-
 	const U64 start = CharString_length(output->base) == 1 && output->base.ptr[0] == '.' ? 0 : CharString_length(output->base);
 
 	if (!CharString_cut(&info->path, start, 0, &subDir))
@@ -101,14 +99,9 @@ Bool writeToDisk(const FileInfo *info, void *outputGeneric, const Allocator *all
 	gotoIfError3(clean, CharString_appendString(&tmp, &subDir, alloc, e_rr));
 
 	if (info->type == EFileType_File) {
-
-		Bool isValid = false;
-		Buffer data = CAFile_getDataConst(output->sourceArchive, CAFile_resolve(output->sourceArchive, info->path), &isValid);
-
-		if (!isValid)
-			retError(clean, Error_invalidState(0, "writeToDisk()::info.path file data lookup failed"));
-
-		gotoIfError3(clean, File_write(&data, &tmp, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+		gotoIfError3(clean, CLI_extractArchiveEntry(
+			output->sourceArchive, CAFile_resolve(output->sourceArchive, info->path), &tmp, alloc, e_rr
+		));
 	}
 
 	else gotoIfError3(clean, File_add(&tmp, EFileType_Folder, false, alloc, e_rr));
@@ -120,33 +113,57 @@ clean:
 
 //Showing the entire file or a part to disk or to log
 
-Bool CLI_showFile(const ParsedArgs *args, Buffer b, U64 start, U64 length, Bool isUTF8, Bool showEntireFile) {
+//The display cap: a dump is meant to be read, so only this much is ever pulled out of the stream.
 
-	if(!args) return false;
+#define CLI_SHOW_MAX (32 * 32)
+
+//How the shown bytes are rendered.
+//Detect decides from the bytes that get shown, which is all that is read; validating an entire entry to
+// pick a rendering for a capped window would read the whole thing back for nothing.
+
+typedef enum ECLIShowFormat {
+	ECLIShowFormat_Binary,
+	ECLIShowFormat_UTF8,
+	ECLIShowFormat_Detect
+} ECLIShowFormat;
+
+Bool CLI_showFileStream(
+	const ParsedArgs *args,
+	StreamRef *stream,
+	U64 base,
+	U64 size,
+	U64 start,
+	U64 length,
+	ECLIShowFormat format,
+	Bool showEntireFile
+) {
+
+	if(!args || !stream) return false;
 
 	//Validate offset
 
-	if (start + (!!Buffer_length(b)) > Buffer_length(b)) {
+	if (start + (!!size) > size) {
 		Log_debugLnx("Section out of bounds.");
 		return false;
 	}
 
-	//Output it to a folder on disk was requested
-
-	Error err = Error_none(), *e_rr = &err;        //Surface File_write failures (e.g. a path outside the working dir)
+	Error err = Error_none(), *e_rr = &err;        //Surface write failures (e.g. a path outside the working dir)
 	CharString tmp = CharString_createNull();
 	CharString tmp1 = CharString_createNull();
+	Buffer window = Buffer_createNull();
+	StreamCursor cur = (StreamCursor) { 0 };
 	Bool s_uccess = false;
 
 	const Allocator *alloc = Platform_instance->alloc;
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
+
+	//Output it to a folder on disk was requested
 
 	if (args->parameters & EOperationHasParameter_Output) {
 
 		if(!length)
-			length = Buffer_length(b) - start;
+			length = size - start;
 
-		if (start + length > Buffer_length(b)) {
+		if (start + length > size) {
 			Log_debugLnx("Section out of bounds.");
 			goto clean;
 		}
@@ -158,34 +175,46 @@ Bool CLI_showFile(const ParsedArgs *args, Buffer b, U64 start, U64 length, Bool 
 			goto clean;
 		}
 
-		Buffer subBuffer = Buffer_createRefConst(b.ptr + start, length);
-		gotoIfError3(clean, File_write(&subBuffer, &out, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+		//Straight from the source stream to the file, so the entry's size never bounds what can be written.
+
+		gotoIfError3(clean, CLI_writeStreamRegion(stream, base + start, length, &out, alloc, e_rr));
 	}
 
 	//More info about a single entry
 
 	else {
 
-		if (!Buffer_length(b)) {
+		if (!size) {
 			Log_debugLnx("Section is empty.");
 			goto clean;
 		}
 
-		Log_debugLnx("Section has %"PRIu64" bytes.", Buffer_length(b));
+		Log_debugLnx("Section has %"PRIu64" bytes.", size);
 
 		//Get length
 
-		U64 max = 32 * 32;
-
 		if(!length)
-			length = showEntireFile ? Buffer_length(b) - start : U64_min(max, Buffer_length(b) - start);
+			length = showEntireFile ? size - start : U64_min(CLI_SHOW_MAX, size - start);
 
-		else length = U64_min(max * 2, length);
+		else length = U64_min(CLI_SHOW_MAX * 2, length);
 
-		if (start + length > Buffer_length(b)) {
+		if (start + length > size) {
 			Log_debugLnx("Section out of bounds.");
 			goto clean;
 		}
+
+		//Only the bytes that get displayed are pulled in.
+
+		gotoIfError3(clean, Buffer_createUninitializedBytes(length, alloc, &window, e_rr));
+		gotoIfError3(clean, StreamCursor_create(stream, CLI_STREAM_CACHE, false, alloc, &cur, e_rr));
+		gotoIfError3(clean, StreamCursor_read(&cur, window, base + start, 0, length, true, alloc, e_rr));
+
+		const U8 *w = (const U8*) window.ptr;
+
+		const Bool isUTF8 =
+			format == ECLIShowFormat_Detect ?
+			CharString_isValidUTF8(CharString_createRefSizedConst((const C8*) w, length, false)) :
+			format == ECLIShowFormat_UTF8;
 
 		//Show what offset is being displayed
 
@@ -195,7 +224,7 @@ Bool CLI_showFile(const ParsedArgs *args, Buffer b, U64 start, U64 length, Bool 
 		//UTF8 can be directly output to log
 
 		if (isUTF8) {
-			tmp = CharString_createRefSizedConst((const C8*)b.ptr + start, length, false);
+			tmp = CharString_createRefSizedConst((const C8*) w, length, false);
 			Log_debugLnx("%.*s", CharString_length(tmp), tmp.ptr);
 			tmp = CharString_createNull();
 		}
@@ -206,16 +235,16 @@ Bool CLI_showFile(const ParsedArgs *args, Buffer b, U64 start, U64 length, Bool 
 
 			const CharString newLine = CharString_newLine();
 
-			for (U64 i = start, j = i + length, k = 0; i < j; ++i, ++k) {
+			for (U64 i = 0; i < length; ++i) {
 
 				gotoIfError3(clean, CharString_createHex(&(CharStringCreateNumber) {
-					.v = b.ptr[i], .leadingZeros = 2, .allocator = alloc, .result = &tmp1
+					.v = w[i], .leadingZeros = 2, .allocator = alloc, .result = &tmp1
 				}, e_rr));
 				gotoIfError3(clean, CharString_popFrontCount(&tmp1, 2, e_rr));
 				gotoIfError3(clean, CharString_appendString(&tmp, &tmp1, alloc, e_rr));
 				gotoIfError3(clean, CharString_append(&tmp, ' ', alloc, e_rr));
 
-				if (!((k + 1) & 31))
+				if (!((i + 1) & 31))
 					gotoIfError3(clean, CharString_appendString(&tmp, &newLine, alloc, e_rr));
 
 				CharString_free(&tmp1, alloc);
@@ -232,8 +261,43 @@ clean:
 	if(err.genericError)
 		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
 
+	StreamCursor_close(&cur, alloc);
+	Buffer_free(&window, alloc);
 	CharString_free(&tmp1, alloc);
 	CharString_free(&tmp, alloc);
+	return s_uccess;
+}
+
+//A buffer already in memory is shown through the same path, as a stream over its own bytes.
+
+Bool CLI_showFile(const ParsedArgs *args, Buffer b, U64 start, U64 length, ECLIShowFormat format, Bool showEntireFile) {
+
+	if(!args) return false;
+
+	Error err = Error_none(), *e_rr = &err;
+	Bool s_uccess = false;
+	MemoryStreamRef *ms = NULL;
+
+	const Allocator *alloc = Platform_instance->alloc;
+	const RefPtrType memType = MemoryStream_makeType(alloc);
+	const U64 size = Buffer_length(b);
+
+	//An explicit ref, because a memory stream takes ownership of a buffer that owns its allocation and b
+	// belongs to the caller.
+
+	const Buffer ref = Buffer_createRefConst(b.ptr, size);
+
+	gotoIfError3(clean, MemoryStream_createFromBufferRegion(
+		ref, 0, size, EMemoryStreamFlags_None, &memType, &ms, e_rr
+	));
+
+	s_uccess = CLI_showFileStream(args, ms, 0, size, start, length, format, showEntireFile);
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
+
+	RefPtr_dec(&ms);
 	return s_uccess;
 }
 
@@ -301,10 +365,14 @@ Bool CLI_storeFileOrFolder(const ParsedArgs *args, const CAFile *a, CAHandle han
 
 	else {
 
-		Bool isValid = false;
-		Buffer data = CAFile_getDataConst(a, handle, &isValid);
+		StreamRef *entry = NULL;
+		U64 base = 0, size = 0;
+		const RefPtrType memType = MemoryStream_makeType(alloc);        //Outlives entry
 
-		CLI_showFile(args, data, start, len, false, false);
+		gotoIfError3(clean, CLI_openArchiveEntry(a, handle, &memType, &entry, &base, &size, e_rr));
+
+		CLI_showFileStream(args, entry, base, size, start, len, ECLIShowFormat_Binary, false);
+		RefPtr_dec(&entry);
 		s_uccess = true;
 		goto clean;
 	}
@@ -572,19 +640,21 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 					else {
 
-						Bool isValid = false;
-						Buffer data = CAFile_getDataConst(&file, handle, &isValid);
+						StreamRef *entryStream = NULL;
+						U64 base = 0, size = 0;
+						const RefPtrType memType = MemoryStream_makeType(alloc);        //Outlives entryStream
 
-						Bool isUTF8 = CharString_isValidUTF8(
-							CharString_createRefSizedConst((const C8*) data.ptr, Buffer_length(data), false)
-						);
+						gotoIfError3(cleanCa, CLI_openArchiveEntry(
+							&file, handle, &memType, &entryStream, &base, &size, e_rr
+						));
 
 						CharString entryPath = CharString_createNull();
 						gotoIfError3(cleanCa, CAFile_getFullName(&file, handle, alloc, &entryPath, e_rr));
 						Log_debugLnx("%.*s", CharString_length(entryPath), entryPath.ptr);
 						CharString_free(&entryPath, alloc);
 
-						CLI_showFile(args, data, start, length, isUTF8, false);
+						CLI_showFileStream(args, entryStream, base, size, start, length, ECLIShowFormat_Detect, false);
+						RefPtr_dec(&entryStream);
 						goto cleanCa;
 					}
 
@@ -727,7 +797,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 					isAscii ? CharString_bufferConst(file.entryStrings.ptr[entryI]) :
 					file.entryBuffers.ptr[entryI];
 
-				if(!CLI_showFile(args, b, start, length, isAscii, false))
+				if(!CLI_showFile(args, b, start, length, isAscii ? ECLIShowFormat_UTF8 : ECLIShowFormat_Binary, false))
 					goto cleanDl;
 			}
 
@@ -918,7 +988,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 										binary, isaAsic, file.binaries.ptr[entryI].identifier.entrypoint, &isaText, alloc, e_rr
 									));
 
-									if(!CLI_showFile(args, isaText, start, length, true, true))
+									if(!CLI_showFile(args, isaText, start, length, ECLIShowFormat_UTF8, true))
 										goto cleanSh;
 
 									goto cleanSh;
@@ -942,7 +1012,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 									goto cleanSh;
 								}
 
-								if(!CLI_showFile(args, CharString_bufferConst(tmp), start, length, true, true))
+								if(!CLI_showFile(args, CharString_bufferConst(tmp), start, length, ECLIShowFormat_UTF8, true))
 									goto cleanSh;
 
 								goto cleanSh;
@@ -950,7 +1020,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 						#endif
 
-						if(!CLI_showFile(args, binary, start, length, false, false))
+						if(!CLI_showFile(args, binary, start, length, ECLIShowFormat_Binary, false))
 							goto cleanSh;
 					}
 

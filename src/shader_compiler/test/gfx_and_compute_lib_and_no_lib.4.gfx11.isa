@@ -1,32 +1,32 @@
 ; gfx1100  SGPRs 10  VGPRs 6  code 148 B  instrs 30  scratch 0  lds 0
 _amdgpu_cs_main:
-	v_and_b32_e32 v1, 0x3ff, v0                                // 000000000000: 360200FF 000003FF
-	v_bfe_u32 v2, v0, 10, 10                                   // 000000000008: D6100002 02291500
-	s_mov_b32 s6, s1                                           // 000000000010: BE860001
-	s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_2)// 000000000014: BF870112
-	v_lshl_add_u32 v0, s4, 3, v1                               // 000000000018: D6460000 04050604
-	v_lshl_add_u32 v1, s5, 3, v2                               // 000000000020: D6460001 04090605
-	s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_2)// 000000000028: BF870112
-	v_cmp_gt_u32_e32 vcc_lo, s2, v0                            // 00000000002C: 7C980002
-	v_cmp_gt_u32_e64 s0, s3, v1                                // 000000000030: D44C0000 00020203
-	s_and_b64 s[0:1], vcc, s[0:1]                              // 000000000038: 8B80006A
-	s_delay_alu instid0(SALU_CYCLE_1)                          // 00000000003C: BF870009
-	s_and_saveexec_b64 s[4:5], s[0:1]                          // 000000000040: BE842100
-	s_cbranch_execz _L0                                        // 000000000044: BFA50012
-	s_getpc_b64 s[0:1]                                         // 000000000048: BE804700
-	v_cvt_f32_u32_e32 v2, s2                                   // 00000000004C: 7E040C02
-	s_mov_b32 s7, s1                                           // 000000000050: BE870001
-	v_cvt_f32_u32_e32 v3, s3                                   // 000000000054: 7E060C03
-	s_load_b256 s[0:7], s[6:7], null                           // 000000000058: F40C0003 F8000000
-	v_cvt_f32_u32_e32 v4, v0                                   // 000000000060: 7E080D00
-	v_rcp_iflag_f32_e32 v2, v2                                 // 000000000064: 7E045702
-	v_cvt_f32_u32_e32 v5, v1                                   // 000000000068: 7E0A0D01
-	v_rcp_iflag_f32_e32 v3, v3                                 // 00000000006C: 7E065703
-	s_waitcnt_depctr 0xfff                                     // 000000000070: BF880FFF
-	v_mul_f32_e32 v2, v4, v2                                   // 000000000074: 10040504
-	v_mov_b32_e32 v4, 0                                        // 000000000078: 7E080280
-	v_mul_f32_e32 v3, v5, v3                                   // 00000000007C: 10060705
-	v_mov_b32_e32 v5, 1.0                                      // 000000000080: 7E0A02F2
-	s_waitcnt lgkmcnt(0)                                       // 000000000084: BF89FC07
-	image_store v[2:5], v[0:1], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D unorm// 000000000088: F0180F84 00000200
-	s_endpgm                                                   // 000000000090: BFB00000
+	v_and_b32_e32 v1, 0x3ff, v0                                // 000000000000
+	v_bfe_u32 v2, v0, 10, 10                                   // 000000000008
+	s_mov_b32 s6, s1                                           // 000000000010
+	s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_2)// 000000000014
+	v_lshl_add_u32 v0, s4, 3, v1                               // 000000000018
+	v_lshl_add_u32 v1, s5, 3, v2                               // 000000000020
+	s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_2)// 000000000028
+	v_cmp_gt_u32_e32 vcc, s2, v0                               // 00000000002C
+	v_cmp_gt_u32_e64 s[0:1], s3, v1                            // 000000000030
+	s_and_b64 s[0:1], vcc, s[0:1]                              // 000000000038
+	s_delay_alu instid0(SALU_CYCLE_1)                          // 00000000003C
+	s_and_saveexec_b64 s[4:5], s[0:1]                          // 000000000040
+	s_cbranch_execz .LBB0_2                                    // 000000000044
+	s_getpc_b64 s[0:1]                                         // 000000000048
+	v_cvt_f32_u32_e32 v2, s2                                   // 00000000004C
+	s_mov_b32 s7, s1                                           // 000000000050
+	v_cvt_f32_u32_e32 v3, s3                                   // 000000000054
+	s_load_b256 s[0:7], s[6:7], 0x0                            // 000000000058
+	v_cvt_f32_u32_e32 v4, v0                                   // 000000000060
+	v_rcp_iflag_f32_e32 v2, v2                                 // 000000000064
+	v_cvt_f32_u32_e32 v5, v1                                   // 000000000068
+	v_rcp_iflag_f32_e32 v3, v3                                 // 00000000006C
+	s_waitcnt_depctr 0xfff                                     // 000000000070
+	v_mul_f32_e32 v2, v4, v2                                   // 000000000074
+	v_mov_b32_e32 v4, 0                                        // 000000000078
+	v_mul_f32_e32 v3, v5, v3                                   // 00000000007C
+	v_mov_b32_e32 v5, 1.0                                      // 000000000080
+	s_waitcnt lgkmcnt(0)                                       // 000000000084
+	image_store v[2:5], v[0:1], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D unorm// 000000000088
+	s_endpgm                                                   // 000000000090

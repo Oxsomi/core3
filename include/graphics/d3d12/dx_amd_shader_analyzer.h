@@ -20,6 +20,31 @@
 
 //graphics/d3d12/dx_amd_shader_analyzer.h
 
+/*  The AmdExtD3D* structure, enum and COM interface declarations in this file are transcribed from
+*  AmdExtD3DShaderAnalyzerApi.h and AmdExtD3D.h in the Radeon GPU Analyzer package
+*  (source/utils/dx12/backend/extension), which carry the following notice:
+*
+*  Copyright (c) 2016-2025 Advanced Micro Devices, Inc. All rights reserved.
+*
+*  Permission is hereby granted, free of charge, to any person obtaining a copy
+*  of this software and associated documentation files (the "Software"), to deal
+*  in the Software without restriction, including without limitation the rights
+*  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+*  copies of the Software, and to permit persons to whom the Software is
+*  furnished to do so, subject to the following conditions:
+*
+*  The above copyright notice and this permission notice shall be included in
+*  all copies or substantial portions of the Software.
+*
+*  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+*  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+*  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+*  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+*  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+*  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+*  THE SOFTWARE.
+*/
+
 #pragma once
 #include "graphics/generic/pipeline_structs.h"
 #include "types/container/list.h"
@@ -45,8 +70,7 @@ typedef struct ListPipelineExecutable ListPipelineExecutable;
 typedef void *AmdExtD3DPipelineHandle;
 
 //The driver's own numbers, which map onto PipelineStatistic once read.
-//Transcribed from AmdExtD3DShaderAnalyzerApi.h in the Radeon GPU Analyzer package this build already depends on
-// (source/utils/dx12/backend/extension); AMD ships it C++ only, and this backend is C.
+//Transcribed under the notice at the top of this file, because AMD ships the header C++ only and this backend is C.
 //The UUIDs in the .c pin what is transcribed, since COM gives a changed layout a new interface id.
 
 typedef struct AmdExtD3DShaderUsageStats {

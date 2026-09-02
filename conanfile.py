@@ -251,7 +251,7 @@ class oxc3(ConanFile):
 			# commands. Only exists where AMD prebuilds them (Windows/Linux x64); run=True so the tools' bin dir
 			# reaches the run environment (RGA_PATH/PATH) for tests and the OxC3 CLI.
 			if self.settings.os in ("Windows", "Linux") and self.settings.arch == "x86_64":
-				self.requires("radeon_gpu_analyzer/2026.08.02", run=True)
+				self.requires("radeon_gpu_analyzer/2026.09.02", run=True)
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")

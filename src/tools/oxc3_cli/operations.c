@@ -114,8 +114,10 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Read the 32-byte AES key from a file (64/66-char hex or a raw 32-byte binary) instead of a plaintext argument.",
 	"AMD GPU/arch for ISA operations: a gfx target (e.g. gfx1100), or 'live[:index]'. Use '?' or 'isa devices' to list.",
 	"Write the pipeline the disassembly was taken from as an oiSP, so it can be inspected or loaded later.",
-	"Supply pipeline fields by the path the report prints, e.g. \"blend.enable=1,rtv.format[0]=rgba16f\"; "
-		"any field, so nothing has to stay assumed.",
+	(
+		"Supply pipeline fields by the path the report prints, e.g. \"blend.enable=1,rtv.format[0]=rgba16f\"; "
+		"any field, so nothing has to stay assumed."
+	),
 	"Replay a stored oiSP (from -pso-output) over the derived pipeline, so a run can be repeated or edited."
 };
 

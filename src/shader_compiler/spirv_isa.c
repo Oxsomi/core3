@@ -19,8 +19,8 @@
 */
 
 //shader_compiler/spirv_isa.c
-//Offline SPIR-V -> AMD ISA by driving the bundled amdllpc + amdgpu-dis directly (rga.exe's own vk-spv-offline wrapper
-// is unreliable).
+//Offline SPIR-V -> AMD ISA by driving the bundled amdllpc directly, so OxC3 controls the exact flags and
+// output format the ISA snapshots are pinned against, rather than going through rga.exe's vk-spv-offline wrapper.
 //Shared by the CLI's `isa` category and the shader-compiler ISA snapshot test so both produce the exact same ISA text.
 
 #include "shader_compiler/spirv_isa.h"
@@ -184,7 +184,7 @@ clean:
 	return s_uccess;
 }
 
-//Parses the unsigned value (decimal or 0x-hex) after `key` on any line of the amdgpu-dis text, returning the max
+//Parses the unsigned value (decimal or 0x-hex) after `key` on any line of the PAL metadata, returning the max
 // across occurrences (a pipeline can list several hardware stages) or 0 if the key never appears.
 
 static U64 SpvISA_metaU64(Buffer text, const C8 *key) {
@@ -237,73 +237,74 @@ static U64 SpvISA_metaU64(Buffer text, const C8 *key) {
 	return best;
 }
 
-//For a disassembly line "<mnemonic> ... // <hexaddr>: <8hex> [<8hex> ...]", returns hexaddr + 4 * (number of encoding
-// words), i.e. the byte offset just past this instruction; 0 if the line carries no "// addr: bytes" encoding comment.
+//Parses the "; encoding: [..]" comment LLVM's assembly writer appends under --show-encoding and returns the
+// number of bytes the instruction occupies.
+//A byte is either a literal (0x..) or a fixup placeholder (A), which is what a branch's target bytes are until
+// the assembler resolves them; both count towards the size, which is what the address stream needs.
+//Returns 0 when the line carries no encoding comment.
+//`codeLen` receives the length of the instruction text in front of the comment, with trailing padding removed.
 
-static U64 SpvISA_instrEnd(const C8 *l, U64 len) {
+static U64 SpvISA_encodingBytes(const C8 *l, U64 len, U64 *codeLen) {
 
-	U64 i = 0;
+	static const C8 key[] = "; encoding: [";
+	const U64 kl = sizeof(key) - 1;
 
-	for(; i + 1 < len; ++i)
-		if(l[i] == '/' && l[i + 1] == '/') { i += 2; break; }
+	U64 at = U64_MAX;
 
-	if(i + 1 >= len)
-		return 0;
+	for(U64 i = 0; i + kl <= len; ++i) {
 
-	while(i < len && l[i] == ' ')
-		++i;
+		Bool match = true;
 
-	U64 addr = 0;
-	Bool anyAddr = false;
+		for(U64 j = 0; j < kl; ++j)
+			if(l[i + j] != key[j]) { match = false; break; }
 
-	for(; i < len && l[i] != ':'; ++i) {
-		const C8 c = l[i];
-		if(c >= '0' && c <= '9') addr = (addr << 4) | (U64) (c - '0');
-		else if(c >= 'a' && c <= 'f') addr = (addr << 4) | (U64) (c - 'a' + 10);
-		else if(c >= 'A' && c <= 'F') addr = (addr << 4) | (U64) (c - 'A' + 10);
-		else return 0;
-		anyAddr = true;
+		if(match) { at = i; break; }
 	}
 
-	if(!anyAddr || i >= len)
+	if(at == U64_MAX)
 		return 0;
 
-	++i;        //skip ':'
+	U64 end = at;
 
-	U64 words = 0;
+	while(end && (l[end - 1] == ' ' || l[end - 1] == '\t'))
+		--end;
 
-	while(i < len) {
+	if(codeLen)
+		*codeLen = end;
 
-		while(i < len && l[i] == ' ')
-			++i;
+	//One byte per comma separated token; the values themselves are never printed, only the size is used
 
-		U64 digits = 0;
+	U64 bytes = 0;
+	Bool inTok = false;
 
-		while(i < len && ((l[i] >= '0' && l[i] <= '9') || (l[i] >= 'a' && l[i] <= 'f') || (l[i] >= 'A' && l[i] <= 'F'))) {
-			++i;
-			++digits;
-		}
+	for(U64 i = at + kl; i < len && l[i] != ']'; ++i) {
 
-		if(!digits)
-			break;
+		if(l[i] == ',') { inTok = false; continue; }
 
-		++words;
+		if(l[i] == ' ' || l[i] == '\t')
+			continue;
+
+		if(!inTok) { inTok = true; ++bytes; }
 	}
 
-	return addr + words * 4;
+	return bytes;
 }
 
-//Trims raw amdgpu-dis output down to what's useful for inspection and lines it up with the mesa spirv2isa backend:
-// a one-line register/resource-usage summary (SGPRs/VGPRs/code/instrs/scratch/lds, matching mesa's field set, from
-// the ELF PAL metadata plus the disassembly) followed by just the instructions and function labels.
-//The bulk of the raw output (assembler directives, the s_code_end 0xbf9f0000 padding, and the ELF/PAL metadata block)
-// is dropped.
+//Trims amdllpc's assembly output down to what's useful for inspection and lines it up with the mesa spirv2isa
+// backend: a one-line register/resource-usage summary (SGPRs/VGPRs/code/instrs/scratch/lds, matching mesa's field
+// set, from the PAL metadata the assembly carries) followed by just the instructions and function labels.
+//Assembler directives, the s_code_end padding (.p2alignl/.fill) and the PAL metadata block are dropped.
+//Each instruction keeps its byte address, accumulated from the --show-encoding sizes.
+//The encoding WORDS aren't printed: a branch's target bytes are still unresolved fixups at this stage, so the
+// only honest choice is an address for every instruction rather than exact bytes for most and wrong ones for
+// branches. Sizes are exact either way, which is what keeps the addresses and the code total right.
 
 static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString body = CharString_createNull();
 	CharString res = CharString_createNull();
+	CharString line = CharString_createNull();
 
 	const C8 *p = (const C8*) raw.ptr;
 	const U64 n = Buffer_length(raw);
@@ -313,33 +314,48 @@ static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error 
 	const U64 lds     = SpvISA_metaU64(raw, ".lds_size:");
 	const U64 scratch = SpvISA_metaU64(raw, ".scratch_memory_size:");
 
-	//Target name from the leading `// llvm-mc ... -mcpu=<t> ...` line
+	//Target name from the leading `.amdgcn_target "amdgcn--amdpal--<t>"` directive
 
 	CharString mcpu = CharString_createRefCStrConst("gfx?");
 
 	{
-		const C8 *keyMcpu = "-mcpu=";
+		static const C8 keyTarget[] = ".amdgcn_target";
+		const U64 kl = sizeof(keyTarget) - 1;
 
-		for(U64 i = 0; i + 6 <= n; ++i) {
+		for(U64 i = 0; i + kl <= n; ++i) {
 
 			Bool match = true;
 
-			for(U64 j = 0; j < 6; ++j)
-				if(p[i + j] != keyMcpu[j]) { match = false; break; }
+			for(U64 j = 0; j < kl; ++j)
+				if(p[i + j] != keyTarget[j]) { match = false; break; }
 
 			if(!match)
 				continue;
 
-			U64 s = i + 6, e = s;
-			while(e < n && p[e] != ' ' && p[e] != '\t' && p[e] != '\r' && p[e] != '\n') ++e;
-			mcpu = CharString_createRefSizedConst(p + s, e - s, false);
+			//The triple is "amdgcn--amdpal--gfxNNNN"; the target is what follows the last separator
+
+			U64 e = i + kl;
+			while(e < n && p[e] != '\n' && p[e] != '"') ++e;
+			if(e >= n || p[e] != '"') break;
+
+			const U64 q = ++e;
+			while(e < n && p[e] != '"') ++e;
+
+			U64 sIdx = q;
+			for(U64 k = q; k + 1 < e; ++k)
+				if(p[k] == '-' && p[k + 1] == '-') sIdx = k + 2;
+
+			if(e > sIdx)
+				mcpu = CharString_createRefSizedConst(p + sIdx, e - sIdx, false);
+
 			break;
 		}
 	}
 
 	//Keep only real code: instruction lines (tab + mnemonic) and _amdgpu* function labels; drop directives, the
-	// s_code_end padding and the ELF/PAL metadata.
-	//Tally the instruction count and code size (mesa reports both) here.
+	// s_code_end padding and the PAL metadata.
+	//Tally the instruction count and code size (mesa reports both) here; the size is the running byte offset, which
+	// is also what each instruction's printed address is.
 
 	const CharString amdgpuPfx = CharString_createRefCStrConst("_amdgpu");
 	const CharString symendSfx = CharString_createRefCStrConst("_symend:");
@@ -360,33 +376,78 @@ static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error 
 		const C8 *l = p + lineStart;
 		lineStart = i + 1;
 
-		//Instruction: a tab then a mnemonic letter (directives and .long padding are a tab then '.')
+		//Instruction: a tab then a mnemonic letter (directives and .fill padding are a tab then '.')
 
 		const Bool isInstr =
 			len >= 2 && l[0] == '\t' && ((l[1] >= 'a' && l[1] <= 'z') || (l[1] >= 'A' && l[1] <= 'Z'));
 
+		U64 codeLen = len;
+
+		//Function label: `_amdgpu..._main:` (but not the `_symend:` end marker).
+		//Under --show-encoding a label carries a trailing `; @name` comment, so the name is measured without it.
+
 		Bool keep = isInstr;
 
-		//Function label: `_amdgpu..._main:` (but not the `_symend:` end marker)
+		if(!keep && len >= 2 && l[0] == '_') {
 
-		if(!keep && len >= 2 && l[0] == '_' && l[len - 1] == ':') {
-			const CharString lbl = CharString_createRefSizedConst(l, len, false);
-			keep =
-				CharString_startsWithStringInsensitive(&lbl, &amdgpuPfx, 0) &&
-				!CharString_endsWithStringInsensitive(&lbl, &symendSfx, 0);
+			U64 e = 0;
+			while(e < len && l[e] != ';') ++e;
+			while(e && (l[e - 1] == ' ' || l[e - 1] == '\t')) --e;
+
+			if(e >= 2 && l[e - 1] == ':') {
+
+				const CharString lbl = CharString_createRefSizedConst(l, e, false);
+
+				keep =
+					CharString_startsWithStringInsensitive(&lbl, &amdgpuPfx, 0) &&
+					!CharString_endsWithStringInsensitive(&lbl, &symendSfx, 0);
+
+				if(keep)
+					codeLen = e;
+			}
 		}
 
 		if(!keep)
 			continue;
 
+		CharString_free(&line, alloc);
+
 		if(isInstr) {
+
 			++instrCount;
-			const U64 end = SpvISA_instrEnd(l, len);
-			if(end > codeSize)
-				codeSize = end;
+
+			const U64 bytes = SpvISA_encodingBytes(l, len, &codeLen);
+
+			if(bytes) {
+
+				//The instruction is left justified in 59 columns after the tab, so every address starts at the same column
+
+				gotoIfError3(clean, CharString_format(
+					alloc, &line, e_rr, "\t%.*s", (int) (codeLen - 1), l + 1
+				));
+
+				while(CharString_length(line) < 60)
+					gotoIfError3(clean, CharString_append(&line, ' ', alloc, e_rr));
+
+				CharString addr = CharString_createNull();
+				gotoIfError3(clean, CharString_format(alloc, &addr, e_rr, "// %012"PRIX64, codeSize));
+
+				if(!CharString_appendString(&line, &addr, alloc, e_rr)) {
+					CharString_free(&addr, alloc);
+					retError(clean, Error_invalidState(0, "SpvISA_clean() couldn't append the address"));
+				}
+
+				CharString_free(&addr, alloc);
+				codeSize += bytes;
+			}
+
+			//No encoding comment: keep the instruction as written rather than inventing an address
+
+			else gotoIfError3(clean, CharString_format(alloc, &line, e_rr, "%.*s", (int) codeLen, l));
 		}
 
-		const CharString line = CharString_createRefSizedConst(l, len, false);
+		else gotoIfError3(clean, CharString_format(alloc, &line, e_rr, "%.*s", (int) codeLen, l));
+
 		gotoIfError3(clean, CharString_appendString(&body, &line, alloc, e_rr));
 		gotoIfError3(clean, CharString_append(&body, '\n', alloc, e_rr));
 	}
@@ -402,6 +463,7 @@ static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error 
 	gotoIfError3(clean, Buffer_createCopy(CharString_bufferConst(res), alloc, out, e_rr));
 
 clean:
+	CharString_free(&line, alloc);
 	CharString_free(&body, alloc);
 	CharString_free(&res, alloc);
 	return s_uccess;
@@ -415,12 +477,11 @@ Bool SpvISA_disassemble(
 
 	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
-	CharString tmpDir = CharString_createNull(), tmpSpv = CharString_createNull(), tmpElf = CharString_createNull();
+	CharString tmpDir = CharString_createNull(), tmpSpv = CharString_createNull(), tmpAsm = CharString_createNull();
 	CharString gfxip = CharString_createNull(), gfxipArg = CharString_createNull(), inputArg = CharString_createNull();
-	Buffer elf = Buffer_createNull();
+	Buffer asmText = Buffer_createNull();
 	Buffer llpcOut = Buffer_createNull(), llpcErr = Buffer_createNull();
-	Buffer disOut = Buffer_createNull(), disErr = Buffer_createNull();
-	ListCharString llpcArgs = (ListCharString) { 0 }, disArgs = (ListCharString) { 0 };
+	ListCharString llpcArgs = (ListCharString) { 0 };
 	Bool madeTmp = false;
 
 	if(!isaOut || isaOut->ptr)
@@ -428,7 +489,7 @@ Bool SpvISA_disassemble(
 
 	gotoIfError3(clean, SpvISA_gfxipArg(gfxTarget, alloc, &gfxip, e_rr));
 
-	//Work in a fresh temp dir so concurrent invocations don't collide on the shader.spv / shader.elf names
+	//Work in a fresh temp dir so concurrent invocations don't collide on the shader.spv / shader.s names
 
 	gotoIfError3(clean, CharString_format(alloc, &tmpDir, e_rr, ".oxc3_isa_%"PRIu64, (U64) Time_now()));
 	gotoIfError3(clean, File_add(&tmpDir, EFileType_Folder, false, alloc, e_rr));
@@ -438,23 +499,28 @@ Bool SpvISA_disassemble(
 		alloc, &tmpSpv, e_rr, "%.*s/shader.spv", (int) CharString_length(tmpDir), tmpDir.ptr
 	));
 	gotoIfError3(clean, CharString_format(
-		alloc, &tmpElf, e_rr, "%.*s/shader.elf", (int) CharString_length(tmpDir), tmpDir.ptr
+		alloc, &tmpAsm, e_rr, "%.*s/shader.s", (int) CharString_length(tmpDir), tmpDir.ptr
 	));
 	gotoIfError3(clean, File_write(&spirv, &tmpSpv, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
 
 	const Bool isWin = _PLATFORM_TYPE == PLATFORM_WINDOWS;
 
-	//1. amdllpc -gfxip=<major.minor.step> --auto-layout-desc <shader.spv[,entrypoint]> -o <shader.elf>
-	//   SPIR-V carries no pipeline layout, so --auto-layout-desc derives descriptor bindings from resource usage.
-	//   The "<spv>,<entrypoint>" form selects one entrypoint of a multi-entry (library) module; without it amdllpc
-	//   lowers only the module's first entrypoint, which would misrepresent every other stage in a library.
+	//amdllpc -gfxip=<major.minor.step> --auto-layout-desc --filetype=asm --show-encoding <shader.spv[,entrypoint]>
+	//  -o <shader.s>
+	//SPIR-V carries no pipeline layout, so --auto-layout-desc derives descriptor bindings from resource usage.
+	//The "<spv>,<entrypoint>" form selects one entrypoint of a multi-entry (library) module; without it amdllpc
+	// lowers only the module's first entrypoint, which would misrepresent every other stage in a library.
+	//--filetype=asm makes amdllpc emit the ISA as text itself, which is why no separate disassembler is needed;
+	// --show-encoding keeps the per instruction encodings the addresses and code size are derived from.
 
 	gotoIfError3(clean, CharString_format(alloc, &gfxipArg, e_rr, "-gfxip=%.*s", (int) CharString_length(gfxip), gfxip.ptr));
 
 	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, gfxipArg, alloc, e_rr));
 	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, CharString_createRefCStrConst("--auto-layout-desc"), alloc, e_rr));
+	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, CharString_createRefCStrConst("--filetype=asm"), alloc, e_rr));
+	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, CharString_createRefCStrConst("--show-encoding"), alloc, e_rr));
 	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, CharString_createRefCStrConst("-o"), alloc, e_rr));
-	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, tmpElf, alloc, e_rr));
+	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, tmpAsm, alloc, e_rr));
 
 	//Only use the "<spv>,<entrypoint>" selector when `entrypoint` is genuinely one of the module's OpEntryPoints.
 	//The oiSH identifier keeps the original HLSL name, but a single-entry module's SPIR-V is normalized to "main", so a
@@ -493,13 +559,14 @@ Bool SpvISA_disassemble(
 		&llpcArgs, &llpcOut, &llpcErr, &llpcExit, alloc, e_rr
 	));
 
-	//amdllpc can exit 0 yet emit nothing (an unsupported gfxip prints "Invalid gfxip" and produces no ELF), so a
-	// missing/empty ELF is a failure too.
+	//amdllpc can exit 0 yet emit nothing (an unsupported gfxip prints "Invalid gfxip" and produces no output), so a
+	// missing/empty listing is a failure too.
 	//Surface amdllpc's own diagnostic (stderr, else stdout).
 
-	const Bool elfOk = !llpcExit && File_read(&tmpElf, 1 * SECOND, 0, 0, &fileHandleType, &elf, NULL) && Buffer_length(elf);
+	const Bool asmOk =
+		!llpcExit && File_read(&tmpAsm, 1 * SECOND, 0, 0, &fileHandleType, &asmText, NULL) && Buffer_length(asmText);
 
-	if(!elfOk) {
+	if(!asmOk) {
 
 		const Buffer diag = Buffer_length(llpcErr) ? llpcErr : llpcOut;
 
@@ -507,34 +574,13 @@ Bool SpvISA_disassemble(
 			Log_warnLnx("amdllpc: %.*s", (int) Buffer_length(diag), (const C8*) diag.ptr);
 
 		retError(clean, Error_invalidState(
-			1, "SpvISA_disassemble() amdllpc produced no ELF (unsupported gfxip? offline ISA supports gfx11xx/gfx12xx)"
+			1, "SpvISA_disassemble() amdllpc produced no ISA (unsupported gfxip? offline ISA supports gfx11xx/gfx12xx)"
 		));
 	}
 
-	//2. amdgpu-dis <shader.elf>  ->  ISA text on stdout
+	//Trim to a register-usage summary + the instructions; the directives, PAL metadata and padding aren't useful here
 
-	gotoIfError3(clean, ListCharString_pushBack(&disArgs, tmpElf, alloc, e_rr));
-
-	I32 disExit = 0;
-	gotoIfError3(clean, SpvISA_runTool(
-		CharString_createRefCStrConst(
-			isWin ? "rga/utils/lc/disassembler/amdgpu-dis.exe" : "rga/utils/lc/disassembler/amdgpu-dis"
-		),
-		CharString_createRefCStrConst(isWin ? "amdgpu-dis.exe" : "amdgpu-dis"),
-		&disArgs, &disOut, &disErr, &disExit, alloc, e_rr
-	));
-
-	if(disExit || !Buffer_length(disOut)) {
-
-		if(Buffer_length(disErr))
-			Log_warnLnx("amdgpu-dis: %.*s", (int) Buffer_length(disErr), (const C8*) disErr.ptr);
-
-		retError(clean, Error_invalidState(1, "SpvISA_disassemble() amdgpu-dis produced no ISA text"));
-	}
-
-	//Trim to a register-usage summary + the instructions; the raw ELF/PAL-metadata + padding dump isn't useful here
-
-	gotoIfError3(clean, SpvISA_clean(disOut, alloc, isaOut, e_rr));
+	gotoIfError3(clean, SpvISA_clean(asmText, alloc, isaOut, e_rr));
 
 clean:
 	if(madeTmp)
@@ -542,17 +588,14 @@ clean:
 
 	CharString_free(&tmpDir, alloc);
 	CharString_free(&tmpSpv, alloc);
-	CharString_free(&tmpElf, alloc);
+	CharString_free(&tmpAsm, alloc);
 	CharString_free(&gfxip, alloc);
 	CharString_free(&gfxipArg, alloc);
 	CharString_free(&inputArg, alloc);
-	Buffer_free(&elf, alloc);
+	Buffer_free(&asmText, alloc);
 	Buffer_free(&llpcOut, alloc);
 	Buffer_free(&llpcErr, alloc);
-	Buffer_free(&disOut, alloc);
-	Buffer_free(&disErr, alloc);
 	ListCharString_free(&llpcArgs, alloc);        //Elements are refs into owned strings freed above
-	ListCharString_free(&disArgs, alloc);
 	return s_uccess;
 }
 

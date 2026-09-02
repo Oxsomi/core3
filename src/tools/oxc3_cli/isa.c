@@ -59,7 +59,7 @@
 //Prints the AMD gfx targets the bundled amdllpc can actually compile for, probed live so the list matches what this
 // build accepts.
 //Used by 'isa devices', the '?' shorthand, and as a hint after an unknown -asic.
-//amdllpc + amdgpu-dis do the disassembly directly, and amdllpc reports its own target set.
+//amdllpc does the disassembly directly and reports its own target set.
 
 //The shader analyzer lives in the AMD driver and binds to a device, so a machine that mixes vendors has to pick
 // the AMD adapter rather than whichever one enumerated first.
@@ -128,7 +128,7 @@ static Bool CLI_isaPrintLiveTargets(const Allocator *alloc, Error *e_rr) {
 
 		if(!GraphicsDeviceRef_create(
 			instanceRef, &infos.ptr[amdDevice], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default,
-			NULL, &deviceRef, &gErr
+			NULL, NULL, &deviceRef, &gErr
 		))
 			goto clean;
 
@@ -225,7 +225,7 @@ clean:
 }
 
 //Disassembles a SPIR-V module to AMD ISA text for `asic`, returning the ISA in `isaOut` (caller frees).
-//The actual amdllpc + amdgpu-dis driving lives in the shared SpvISA_ module, so this and the corpus ISA snapshot test
+//The actual amdllpc driving lives in the shared SpvISA_ module, so this and the corpus ISA snapshot test
 // produce identical output; here we just reject stages with no offline path early, with a clearer error than amdllpc's.
 
 Bool CLI_isaDisassembleSpirv(
@@ -286,7 +286,7 @@ clean:
 		const CharString noIsa = CharString_createRefCStrConst(
 			";   (this driver returned statistics only, no ISA disassembly. Whether the ISA text is exposed is "
 			"driver-dependent: the open-source Mesa drivers (RADV / ANV / Turnip / NVK / PanVK, i.e. Linux) and "
-			"AMD's own driver return it; other vendors' proprietary drivers keep it to their own tooling. For "
+			"AMD's own driver return it, and support varies across the other closed-source drivers. For "
 			"deterministic offline AMD ISA use '-asic <gfxN>' instead of live)\n"
 		);
 
@@ -890,7 +890,7 @@ clean:
 
 		gotoIfError3(clean, GraphicsDeviceRef_create(
 			instanceRef, &infos.ptr[deviceId], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default,
-			NULL, &deviceRef, e_rr
+			NULL, NULL, &deviceRef, e_rr
 		));
 
 		//Without introspection the run still builds the pipeline, which validates the binary and the state; it just
