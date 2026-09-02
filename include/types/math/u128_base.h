@@ -223,7 +223,12 @@ static inline I32x4 I32x4_clmul64Fallback(I32x4 avec, I32x4 bvec, U8 imm) {
 	return I32x4_fromU128(r);
 }
 
-#if _SIMD == SIMD_NONE
+//SIMD_WASM shares the scalar path here: carryless multiply is PCLMUL on x86 and PMULL on arm, and wasm
+// SIMD128 has neither, nor does emscripten shim wmmintrin.h.
+//Vector math is vectorised on wasm, crypto primitives are not; see SIMD_WASM in
+// types/base/platform_types.h.
+
+#if _SIMD == SIMD_NONE || _SIMD == SIMD_WASM
 	static inline I32x4 I32x4_clmul64(I32x4 avec, I32x4 bvec, U8 imm) {
 		return I32x4_clmul64Fallback(avec, bvec, imm);
 	}

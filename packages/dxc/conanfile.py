@@ -139,6 +139,42 @@ class dxc(ConanFile):
 			else:
 				tc.variables["LLVM_INFERRED_HOST_TRIPLE"] = "aarch64-linux-android"
 
+		elif self.settings.os == "Emscripten":
+			# Skip config.guess (would report the build machine's triple).
+			# arch=wasm64 exists on conan >= 2.18; on older conan the profile
+			# uses arch=wasm and carries -m64 in tools.build flags.
+			wasm64 = "64" in str(self.settings.arch)
+			tc.variables["LLVM_INFERRED_HOST_TRIPLE"] = \
+				"wasm64-unknown-emscripten" if wasm64 else "wasm32-unknown-emscripten"
+
+			# Threads follow the profile's -pthread instead of a conan option, since an option that disagrees
+			# with the actual flag builds a silently broken binary.
+			# With threads off llvm::sys::ThreadLocal degrades to a process global, which a threaded build
+			# can't have: OxC3 compiles shaders with a thread per compile
+			# (src/shader_compiler/compiler_helper_jobs.c fans out over a JobGroup).
+			# The profile lists tools.build:cflags in tools.info.package_id:confs
+			# (packages/conan/profiles/emscripten_wasm64), so both flavors get their own package id.
+
+			pthreads = any(
+				"-pthread" in self.conf.get(f"tools.build:{flags}", default=[], check_type=list)
+				for flags in ("cflags", "cxxflags")
+			)
+			tc.variables["LLVM_ENABLE_THREADS"] = pthreads
+
+			# Wasm static archives have no PIC concept, and emscripten only emits position independent code for
+			# MAIN_MODULE/SIDE_MODULE, which web builds turn off
+			# (dynamicLinkingGraphics and dynamicLinkingShaderCompiler are both False there).
+
+			tc.variables["LLVM_ENABLE_PIC"] = False
+
+			# Emscripten ships zlib as a port, so config-ix finds the header but linking it would need -sUSE_ZLIB.
+			# DXC doesn't need zlib to compile HLSL.
+
+			tc.variables["LLVM_ENABLE_ZLIB"] = False
+
+			# NOTE: -fwasm-exceptions and -m64 come from the profile
+			# (tools.build:cflags/cxxflags and exelinkflags) so lib and consumers stay in sync.
+
 		# TableGen runs during the build, so a cross build needs one built for the *build* machine.
 		# LLVM's answer is the NATIVE sub build, but it configures itself with default options
 		# (LLVM_ENABLE_EH=OFF) and then can't compile this fork's LLVMSupport, and it inherits
@@ -286,7 +322,34 @@ class dxc(ConanFile):
 		else:
 			cmake.configure()
 
-		cmake.build()
+		if cross_building(self):
+			# Build exactly the libraries package_info() exposes: the default
+			# "all" target also links executables (clang driver, LLVM tools),
+			# which is slow/fragile on cross targets like wasm and not shipped.
+			# Target names differ from lib names for two entries:
+			# clang -> libclang, SPIRV-Tools -> SPIRV-Tools-static.
+			targets = [
+				"dxcompiler", "dxcvalidator", "dxcreflection", "dxcreflectioncontainer",
+				"libclang", "LLVMDxilHash", "LLVMDxilValidation", "LLVMDxrFallback",
+				"clangFrontendTool", "clangCodeGen", "LLVMTarget",
+				"LLVMScalarOpts", "LLVMPassPrinters", "LLVMProfileData",
+				"LLVMDxilCompression", "LLVMOption", "LLVMDxilDia", "LLVMDxilPdbInfo",
+				"LLVMPasses", "LLVMDxilRootSignature", "LLVMInstCombine",
+				"LLVMDxilPIXPasses", "LLVMVectorize",
+				"clangRewriteFrontend", "clangTooling", "clangSPIRV",
+				"SPIRV-Tools-opt", "SPIRV-Tools-static",
+				"clangFrontend", "clangDriver", "clangParse", "clangASTMatchers",
+				"clangIndex", "clangFormat", "clangToolingCore", "clangRewrite",
+				"clangSema", "clangAST", "clangEdit", "clangLex", "clangBasic",
+				"LLVMLinker", "LLVMDxilContainer", "LLVMTransformUtils", "LLVMipa",
+				"LLVMAnalysis", "LLVMDxcBindingTable", "LLVMDXIL", "LLVMIRReader",
+				"LLVMBitWriter", "LLVMBitReader", "LLVMAsmParser", "LLVMTableGen",
+				"LLVMDxcSupport", "LLVMCore", "LLVMSupport", "LLVMMSSupport",
+			]
+			# With Ninja, args after "--" are plain targets.
+			cmake.build(build_tool_args=targets)
+		else:
+			cmake.build()
 
 	def package(self):
 

@@ -600,6 +600,19 @@ static D3D12_BARRIER_SYNC DxBarrierSync_fromMask(U32 stageMask) {
 	return sync;
 }
 
+//Writes one timestamp to the frame's query heap at the current cursor when timing is active, then advances it.
+//The cursor advances even where the heap is absent, so it stays in lockstep with GraphicsDevice_buildTimings.
+
+static void dxTimestampWrite(DxGraphicsDevice *deviceExt, U8 fifId, DxCommandBuffer *buffer) {
+
+	if(deviceExt->timestampHeap[fifId] && deviceExt->timestampCursor < deviceExt->timestampCapacity[fifId])
+		buffer->lpVtbl->EndQuery(
+			buffer, deviceExt->timestampHeap[fifId], D3D12_QUERY_TYPE_TIMESTAMP, deviceExt->timestampCursor
+		);
+
+	++deviceExt->timestampCursor;
+}
+
 void DX_WRAP_FUNC(CommandList_process)(
 	CommandList *commandList,
 	GraphicsDeviceRef *deviceRef,
@@ -1572,6 +1585,13 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			break;
 
+		case ECommandOp_CompactBLASExt:
+
+			if(!(DX_WRAP_FUNC(BLASRef_compact))(temp, deviceRef, *(BLASRef**)data, e_rr))
+				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
+			break;
+
 		case ECommandOp_UpdateTLASExt:
 
 			if(!(DX_WRAP_FUNC(TLASRef_flush))(temp, deviceRef, *(TLASRef**)data, e_rr))
@@ -1633,7 +1653,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			break;
 
-		//case ECommandOp_DispatchRaysIndirect:
+		case ECommandOp_DispatchRaysIndirect:
 		case ECommandOp_DispatchRaysExt: {
 
 			Pipeline *raytracingPipeline = PipelineRef_ptr(temp->tempPipelines[EPipelineType_RaytracingExt]);
@@ -1731,27 +1751,137 @@ void DX_WRAP_FUNC(CommandList_process)(
 				buffer->lpVtbl->DispatchRays(buffer, &dispatchRays);
 			}
 
-			/*else {
+			else {
 
 				DispatchRaysIndirectExt dispatch = *(const DispatchRaysIndirectExt*)data;
-				raygen.SizeInBytes += raytracingShaderAlignment * dispatch.raygenId;
+				raygen.StartAddress += raytracingShaderAlignment * dispatch.raygenId;
 
-				DxDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Dx);
+				//ExecuteIndirect wants the whole D3D12_DISPATCH_RAYS_DESC in the argument buffer, yet the shader binding
+				// table is not dynamic, so only the three thread counts come from the caller. The pipeline's known SBT
+				// ranges are written into a per frame intermediate slot and the counts copied in beside them, leaving a
+				// conformant desc. Vulkan reads the caller buffer directly and has no such copy, which is why the caller
+				// buffer becomes a copy source here at runtime rather than through the scope.
 
-				ID3D12CommandSignature *dispatchIndirect = deviceExt->commandSigs[EExecuteIndirectCommand_DispatchRays];
+				D3D12_DISPATCH_RAYS_DESC desc = (D3D12_DISPATCH_RAYS_DESC) {
+					.RayGenerationShaderRecord = raygen,
+					.MissShaderTable = miss,
+					.HitGroupTable = hit,
+					.CallableShaderTable = callable
+				};
 
-				//TODO: Copy to intermediate buffer bufferExt->buffer, because we don't allow dynamic SBT
-				//https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#d3d12_dispatch_rays_desc
-				//&raygen, &miss, &hit, &callable,
+				DeviceBufferRef *argsRef = deviceExt->dispatchRaysIndirect[device->fifId];
+				const U64 stride = sizeof(D3D12DispatchRaysIndirect);
+				const U32 capacity = argsRef ? (U32) (DeviceBufferRef_ptr(argsRef)->resource.size / stride) : 0;
+				U32 slot = deviceExt->dispatchRaysIndirectCursor;
 
-				buffer->lpVtbl->ExecuteIndirect(
-					buffer,
-					dispatchIndirect,
-					1,
-					bufferExt->buffer, dispatch.offset,
-					NULL, 0
-				);
-			}*/
+				if(!argsRef || slot >= capacity)
+					Log_errorLnx("DispatchRaysIndirect argument buffer could not grow (out of memory), dropping one dispatch");
+
+				else {
+
+					++deviceExt->dispatchRaysIndirectCursor;
+
+					const U64 argOffset = (U64) slot * stride;
+					const Bool wbi = !!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_WriteBufferImmediate);
+
+					DxDeviceBuffer *argsBuf = DeviceBuffer_ext(DeviceBufferRef_ptr(argsRef), Dx);
+					DxDeviceBuffer *callerBuf = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Dx);
+
+					//Group A: the caller becomes a copy source (the scope left it an indirect argument for Vulkan, which reads
+					// it directly; this copy is the D3D12 only runtime divergence) and the slot a copy destination. Both go
+					// through DxDeviceBuffer_transition, which tracks each buffer's prior state so the barriers are automatic.
+
+					D3D12_BARRIER_GROUP depA = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+
+					if(
+						!DxDeviceBuffer_transition(
+							callerBuf, D3D12_BARRIER_SYNC_COPY, D3D12_BARRIER_ACCESS_COPY_SOURCE,
+							&deviceExt->bufferTransitions, &depA, alloc, e_rr
+						) ||
+						!DxDeviceBuffer_transition(
+							argsBuf, D3D12_BARRIER_SYNC_COPY, D3D12_BARRIER_ACCESS_COPY_DEST,
+							&deviceExt->bufferTransitions, &depA, alloc, e_rr
+						)
+					)
+						Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
+					if(depA.NumBarriers)
+						buffer->lpVtbl->Barrier(buffer, 1, &depA);
+
+					ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+
+					//The 88-byte SBT ranges are CPU known. On a direct queue that supports WriteBufferImmediate they are poked
+					// straight into the slot (no staging buffer); otherwise they are written into the mapped UPLOAD staging
+					// slot at record time and copied in. The three thread counts always arrive by copy from the caller.
+
+					const U32 sbtBytes =
+						(U32)(sizeof(D3D12_GPU_VIRTUAL_ADDRESS_RANGE) + 3 * sizeof(D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE));
+
+					if(wbi) {
+
+						const U32 *sbtWords = (const U32*) &desc;
+						const D3D12_GPU_VIRTUAL_ADDRESS argAddress =
+							DeviceBufferRef_ptr(argsRef)->resource.deviceAddress + argOffset;
+
+						D3D12_WRITEBUFFERIMMEDIATE_PARAMETER params[sizeof(D3D12_DISPATCH_RAYS_DESC) / sizeof(U32)];
+
+						for(U32 i = 0; i < sbtBytes / (U32) sizeof(U32); ++i)
+							params[i] = (D3D12_WRITEBUFFERIMMEDIATE_PARAMETER) {
+								.Dest = argAddress + (U64) i * sizeof(U32), .Value = sbtWords[i]
+							};
+
+						buffer->lpVtbl->WriteBufferImmediate(buffer, sbtBytes / (U32) sizeof(U32), params, NULL);
+
+						//WriteBufferImmediate DEFAULT mode's completion is not clearly covered by SYNC_COPY, so widen the
+						// slot's next drain to SYNC_ALL by nudging its tracked sync; the ->INDIRECT_ARGUMENT transition below
+						// then emits SyncBefore = SYNC_ALL while keeping DxDeviceBuffer's state consistent.
+
+						argsBuf->lastSync = D3D12_BARRIER_SYNC_ALL;
+					}
+
+					else {
+
+						DeviceBufferRef *stagingRef = deviceExt->dispatchRaysIndirectStaging[device->fifId];
+						DxDeviceBuffer *stagingBuf = DeviceBuffer_ext(DeviceBufferRef_ptr(stagingRef), Dx);
+						U8 *stagingMap = (U8*) DeviceBufferRef_ptr(stagingRef)->resource.mappedMemoryExt;
+
+						Buffer_memcpy(
+							Buffer_createRef(stagingMap + argOffset, sbtBytes),
+							Buffer_createRefConst(&desc, sbtBytes)
+						);
+
+						buffer->lpVtbl->CopyBufferRegion(
+							buffer, argsBuf->buffer, argOffset, stagingBuf->buffer, argOffset, sbtBytes
+						);
+					}
+
+					buffer->lpVtbl->CopyBufferRegion(
+						buffer, argsBuf->buffer, argOffset + sbtBytes,
+						callerBuf->buffer, dispatch.offset, sizeof(U32) * 3
+					);
+
+					//Group B: the slot flips to an indirect argument. SyncBefore comes from its tracked state, SYNC_COPY for
+					// the copy path and SYNC_ALL after the WBI nudge, so both the SBT write and the counts copy are drained.
+
+					D3D12_BARRIER_GROUP depB = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+
+					if(!DxDeviceBuffer_transition(
+						argsBuf, D3D12_BARRIER_SYNC_EXECUTE_INDIRECT, D3D12_BARRIER_ACCESS_INDIRECT_ARGUMENT,
+						&deviceExt->bufferTransitions, &depB, alloc, e_rr
+					))
+						Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
+					if(depB.NumBarriers)
+						buffer->lpVtbl->Barrier(buffer, 1, &depB);
+
+					ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+
+					buffer->lpVtbl->ExecuteIndirect(
+						buffer, deviceExt->commandSigs[EExecuteIndirectCommand_DispatchRays],
+						1, argsBuf->buffer, argOffset, NULL, 0
+					);
+				}
+			}
 
 			break;
 		}
@@ -1776,6 +1906,34 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
 			++temp->scopeCounter;
+
+			//A scope may bracket its work in a timestamp pair and/or a named debug region;
+			// the flags carry both decisions to EndScope.
+			//A DebugRegion scope has its name in the StartScope payload (data).
+
+			temp->curScopeFlags = (U8) scope.flags;
+
+			if((temp->curScopeFlags & ECommandScopeInternalFlags_DebugRegion)) {
+
+				U64 encoded[62] = { 0 };
+				encoded[0] = (U64) 0x002 << 10;
+				encoded[1] = 0xFF000000 | 0x6699E6;
+				encoded[2] = ((U64) 8 << 55) | ((U64) 1 << 54);        //Address alignment = 8 and indicate "ansi"
+
+				const C8 *scopeName = (const C8*) data + sizeof(CommandScopePredicate);
+				const U32 strLen = (U32) CharString_calcStrLen(scopeName, sizeof(encoded) - sizeof(U64) * 3 - 1);
+				const U32 len = (U32) sizeof(U64) * 3 + strLen;
+
+				Buffer_memcpy(
+					Buffer_createRef(&encoded[3], sizeof(encoded) - sizeof(U64) * 3),
+					Buffer_createRefConst(scopeName, strLen)
+				);
+
+				buffer->lpVtbl->BeginEvent(buffer, 2, encoded, (len + 7) &~ 7);
+			}
+
+			if((temp->curScopeFlags & ECommandScopeInternalFlags_Timed))
+				dxTimestampWrite(deviceExt, device->fifId, buffer);
 
 			for (U64 i = scope.transitionOffset; i < scope.transitionOffset + scope.transitionCount; ++i) {
 
@@ -1914,6 +2072,11 @@ void DX_WRAP_FUNC(CommandList_process)(
 							access = D3D12_BARRIER_ACCESS_INDIRECT_ARGUMENT;
 							break;
 
+						case ETransitionType_Predicate:
+							pipelineStage = D3D12_BARRIER_SYNC_PREDICATION;
+							access = D3D12_BARRIER_ACCESS_PREDICATION;
+							break;
+
 						case ETransitionType_Index:
 							pipelineStage = D3D12_BARRIER_SYNC_INDEX_INPUT;
 							access = D3D12_BARRIER_ACCESS_INDEX_BUFFER;
@@ -1983,6 +2146,21 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
 			ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions, e_rr);
+
+			//AFTER the barriers, so the predicate write this scope waits on is visible; EQUAL_ZERO skips
+			// while the U64 reads zero, the same polarity Vulkan's nonzero-runs convention lands on.
+
+			if(temp->curScopeFlags & ECommandScopeInternalFlags_Predicated) {
+
+				const CommandScopePredicate pred = *(const CommandScopePredicate*) data;
+
+				buffer->lpVtbl->SetPredication(
+					buffer,
+					DeviceBuffer_ext(DeviceBufferRef_ptr(pred.buffer), Dx)->buffer,
+					pred.offset, D3D12_PREDICATION_OP_EQUAL_ZERO
+				);
+			}
+
 			break;
 		}
 
@@ -2027,9 +2205,27 @@ void DX_WRAP_FUNC(CommandList_process)(
 			break;
 		}
 
-		//No-op, only used for virtual command list
+		//Emits nothing itself; the end timestamp write lands here in the measurement pass.
+
+		case ECommandOp_StartTimingRegion:
+		case ECommandOp_EndTimingRegion:
+		case ECommandOp_InsertTiming:
+			dxTimestampWrite(deviceExt, device->fifId, buffer);
+			break;
+
+		//The end timestamp and end debug region of a scope; the barriers ran at StartScope.
 
 		case ECommandOp_EndScope:
+
+			if(temp->curScopeFlags & ECommandScopeInternalFlags_Predicated)
+				buffer->lpVtbl->SetPredication(buffer, NULL, 0, D3D12_PREDICATION_OP_EQUAL_ZERO);
+
+			if((temp->curScopeFlags & ECommandScopeInternalFlags_Timed))
+				dxTimestampWrite(deviceExt, device->fifId, buffer);
+
+			if((temp->curScopeFlags & ECommandScopeInternalFlags_DebugRegion))
+				buffer->lpVtbl->EndEvent(buffer);
+
 			break;
 
 		//Unsupported

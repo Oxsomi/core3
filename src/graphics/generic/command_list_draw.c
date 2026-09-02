@@ -24,6 +24,7 @@
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/commands.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
@@ -912,6 +913,59 @@ clean:
 	return s_uccess;
 }
 
+Bool CommandListRef_dispatchRaysIndirectExt(
+	CommandListRef *commandListRef, DeviceBufferRef *buffer, U64 offset, U32 raygenLocalId, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean);
+	GraphicsDeviceRef *device = commandList->device;
+
+	PipelineRef *rayPipeline = commandList->pipeline[EPipelineType_RaytracingExt];
+
+	if(!rayPipeline)
+		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysIndirectExt() requires bound raytracing pipeline"));
+
+	gotoIfError3(clean, CommandList_validateBindState(commandList, rayPipeline, e_rr));
+	gotoIfError3(clean, CommandList_validateRayTriPosition(commandList, rayPipeline, e_rr));
+
+	if(raygenLocalId >= Pipeline_info(PipelineRef_ptr(rayPipeline), PipelineRaytracingInfo)->raygenCount)
+		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysIndirectExt() raygen index out of bounds"));
+
+	//The argument buffer holds three U32 thread counts the GPU wrote, VkTraceRaysIndirectCommandKHR on Vulkan and
+	// the trailing Width, Height and Depth of D3D12_DISPATCH_RAYS_DESC on D3D12. Aligned to 4, the alignment
+	// vkCmdTraceRaysIndirectKHR requires and the natural alignment of those counts on D3D12.
+
+	if(offset & 3)
+		retError(clean, Error_invalidParameter(
+			2, 0, "CommandListRef_dispatchRaysIndirectExt()::offset has to be 4-byte aligned"
+		));
+
+	gotoIfError3(clean, CommandListRef_checkDispatchBuffer(device, buffer, offset, sizeof(U32) * 3, e_rr));
+
+	const BufferRange range = (BufferRange) { .startRange = offset, .endRange = offset + sizeof(U32) * 3 };
+	gotoIfError3(clean, CommandListRef_transitionBuffer(
+		commandList, buffer, range, ETransitionType_Indirect, EPipelineStage_Count, e_rr
+	));
+
+	const DispatchRaysIndirectExt dispatch =
+		(DispatchRaysIndirectExt) { .buffer = buffer, .offset = offset, .raygenId = raygenLocalId };
+
+	gotoIfError3(clean, CommandList_append(
+		commandList, ECommandOp_DispatchRaysIndirect, Buffer_createRefConst(&dispatch, sizeof(dispatch)), 0, e_rr
+	));
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
 Bool CommandList_drawIndirectBase(
 	CommandList *commandList,
 	DeviceBufferRef *buffer,
@@ -1124,6 +1178,109 @@ Bool CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas, Er
 
 Bool CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr) {
 	return CommandListRef_updateRTASExt(commandList, blas, true, e_rr);
+}
+
+//The CPU half runs HERE rather than at submit: the size is what sizes the allocation, and every rule about
+//when compaction is legal then reaches the caller instead of surfacing inside a submit.
+
+Bool CommandListRef_compactBLASExt(CommandListRef *commandListRef, BLASRef *blas, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!I32x2_all(I32x2_eq(commandList->currentSize, I32x2_zero)))
+		retError(clean, Error_invalidOperation(
+			0, "CommandListRef_compactBLASExt() is disallowed during render calls"
+		));
+
+	if(!blas || blas->refPtrType->typeId != (TypeId) EGraphicsTypeId_BLASExt)
+		retError(clean, Error_unsupportedOperation(0, "CommandListRef_compactBLASExt() requires a BLAS"));
+
+	//Everything about whether this may happen at all, plus the backend's allocation of the destination.
+	//A structure that reports nothing to do leaves no op behind, so the recording stays empty rather than
+	// carrying a copy that would do nothing.
+
+	Bool recorded = false;
+
+	//A COMPLETED TLAS without AllowUpdate can never re-resolve: its flush early outs forever, so marking
+	// it stale would refuse every later submit with no way out. Refused here instead, while the caller can
+	// still choose an updatable TLAS or compact before building.
+	//A not yet completed TLAS is fine: its first build rides a later submit and resolves the new address.
+
+	{
+		GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
+
+		const ELockAcquire strandAcq = SpinLock_lock(&device->lock, U64_MAX);
+
+		if(strandAcq < ELockAcquire_Success)
+			retError(clean, Error_invalidState(
+				2, "CommandListRef_compactBLASExt() couldn't acquire device lock to check dependent TLASes"
+			));
+
+		Bool stranded = false;
+
+		for (U64 i = 0; i < device->liveTlases.length && !stranded; ++i) {
+
+			const TLAS *tlas = TLASRef_ptr((TLASRef*) device->liveTlases.ptr[i]);
+
+			if(TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
+				continue;
+
+			if(!tlas->base.isCompleted || (tlas->base.flags & ERTASBuildFlags_AllowUpdate))
+				continue;
+
+			for (U64 j = 0; j < tlas->cpuInstances.length && !stranded; ++j) {
+
+				TLASInstanceData dat = (TLASInstanceData) { 0 };
+				TLAS_getInstanceDataCpu(tlas, j, &dat);
+				stranded = dat.blasCpu == blas;
+			}
+		}
+
+		if(strandAcq == ELockAcquire_Acquired)
+			SpinLock_unlock(&device->lock);
+
+		if(stranded)
+			retError(clean, Error_invalidState(
+				3,
+				"CommandListRef_compactBLASExt() a completed TLAS without ERTASBuildFlags_AllowUpdate "
+				"references this BLAS; compacting would strand it on the old address forever. Use an "
+				"updatable TLAS or compact before building it"
+			));
+	}
+
+	gotoIfError3(clean, GraphicsDeviceRef_prepareCompactBLAS(commandList->device, blas, &recorded, e_rr));
+
+	if(!recorded)
+		goto clean;
+
+	//Every live TLAS that resolved this structure's address is about to be holding a stale one. Marking
+	// them is what turns "traced a structure that moved" from a silently wrong frame into a refused submit;
+	// recording an update of the TLAS clears it again, because that update re-resolves the addresses.
+	//The adopt marks AGAIN at submit time (see GraphicsDeviceRef_markTlasesStaleForBLAS), because a pending
+	// TLAS build riding the same submit resolves the old address and clears this mark before the move runs.
+
+	gotoIfError3(clean, GraphicsDeviceRef_markTlasesStaleForBLAS(commandList->device, blas, false, e_rr));
+
+	gotoIfError3(clean, CommandListRef_transitionRTAS(
+		commandList, blas, ETransitionType_ShaderWrite, EPipelineStage_RTASBuild, e_rr
+	));
+
+	BLASRef *args[2] = { blas, NULL };
+
+	gotoIfError3(clean, CommandList_append(
+		commandList, ECommandOp_CompactBLASExt, Buffer_createRefConst(args, sizeof(args)), 0, e_rr
+	));
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
 }
 
 //Bindful: only SETS state; the work ops validate it against the bound pipeline's layout.

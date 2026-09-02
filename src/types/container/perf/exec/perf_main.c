@@ -29,6 +29,18 @@
 
 #include <stdlib.h>
 
+//OxC3's widest type is I32x4, alignas(16) on every SIMD backend (see types/math/vec4_*.inc.h),
+// so an allocator feeding OxC3 has to return memory that can hold one.
+//malloc only promises alignof(max_align_t): that IS 16 on the x64/arm64 ABIs, but only 8 on wasm.
+//See the allocator contract in types/base/allocator.h.
+
+#if _PLATFORM_TYPE == PLATFORM_WEB
+	//aligned_alloc wants a size that's a multiple of the alignment (C11 7.22.3.1)
+	#define OXC3_RAW_ALLOC(len) aligned_alloc(16, (len) ? (((len) + 15) &~ (U64)15) : 16)
+#else
+	#define OXC3_RAW_ALLOC(len) malloc(len)
+#endif
+
 static AtomicI64 allocCounter = { 0 };
 static AtomicI64 allocBytes = { 0 };
 
@@ -41,7 +53,7 @@ Bool ourAlloc(void *allocator, U64 length, Buffer *output, Error *e_rr) {
 	if (!output)
 		retError(clean, Error_nullPointer(2, "ourAlloc()::output is required"));
 
-	void *ptr = malloc(length);
+	void *ptr = OXC3_RAW_ALLOC(length);
 
 	if (!ptr)
 		retError(clean, Error_outOfMemory(0, "ourAlloc() malloc failed"));

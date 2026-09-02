@@ -142,12 +142,13 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 
 - experimentalFeatures: the subset of `features` that is experimental/preview on this device+build (not final; may change or be removed across SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled best-effort via the preview Agility SDK + D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions so this stays empty. Check it if you want to opt into preview features knowingly.
   - RayValidation: extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot.
-- features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild, RayMicromapOpacityActual, RayMicromapOpacityU8.
+- features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild, RayMicromapOpacityActual, RayMicromapOpacityU8, Timestamps.
   - RayReorderActual: SER (RayReorder) means the shader-execution-reordering API is available (always valid to call, but may be a no-op); RayReorderActual means the device actually performs the reordering, so it's worth restructuring shaders around it.
   - RayMicromapOpacityActual: same shape one feature over. RayMicromapOpacity means the API accepts opacity micromaps; this bit means they're likely backed by dedicated hardware rather than emulated, so a real micromap object is worth building. Neither API reports it (D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's VkPhysicalDeviceOpacityMicromapFeaturesEXT is one bool, and an Ampere 3080 reports the same 12/12 subdivision maximum as hardware that has the units), so OxC3 derives it: NVIDIA needs RayReorderActual since the reordering and OMM hardware shipped in the same generation, every other vendor is taken at its word. It is a heuristic, so treat it as "worth it" rather than as a guarantee; special-index-only OMM costs nothing either way.
   - RayMicromapOpacityU8: 8-bit (R8u) OMM index buffers are legal. D3D12 ships this with opacity micromaps themselves; on Vulkan only the VK_KHR_opacity_micromap promotion permits VK_INDEX_TYPE_UINT8 (the EXT extension forbids it), and since OxC3's KHR path isn't implemented yet no Vulkan device claims the bit today; R8u is rejected at BLAS create there.
   - DescriptorHeap: full bindless; shaders index the descriptor heap directly without a fixed descriptor layout. D3D12: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) + resource binding tier 3; Vulkan: VK_EXT_descriptor_heap. Always implies Bindless on both APIs.
   - RayClusterAS + RayPartitionedTLAS: mega geometry (RTXMG), split the way Vulkan splits it: cluster acceleration structures (CLAS/cluster BLAS) and partitioned TLAS. Vulkan: VK_NV_cluster_acceleration_structure / VK_NV_partitioned_acceleration_structure; D3D12: NVAPI raytracing caps (cluster operations / partitioned TLAS).
+  - Timestamps: the device can write GPU timestamps and reports a period to convert ticks to nanoseconds. Vulkan gates it on timestampComputeAndGraphics with a non-zero timestampValidBits on the submit queue; D3D12 has it on the graphics/compute queues at root-signature level, so it is effectively always present there. It drives the per-scope and manual timing commands (see the Timestamps feature below) and GraphicsDeviceRef_getTimings; the nanoseconds per tick lives in capabilities.timestampPeriod.
   - RayIndirectASBuild: GPU-driven acceleration structure builds. Vulkan: accelerationStructureIndirectBuild (vkCmdBuildAccelerationStructuresIndirectKHR for classic AS); D3D12: implied by either mega geometry bit, since those builds are indirect by design.
 - dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
   - MSAA4 and MSAA1 (off) are supported by default.
@@ -264,6 +265,10 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   ```
 
   - Be aware that allowWrite doesn't work for all APIs and all devices. Compute to the swapchain is optional.
+
+  - `info.window` may be **virtual**, which is what lets one renderer drive a window and a machine with GPUs and no display without branching. Such a swapchain has no surface to acquire from and nothing to present to, so the device allocates the images itself (a ring, exactly as a presented one has, so frames in flight don't overwrite each other) and the frame ends in memory. Everything above the backend is unchanged: it is created, rendered into and submitted through the same calls, and `TextureRef_pullRegion` reads the finished frame back, which is what an encoder or an image sequence consumes. The window's `cpuVisibleBuffer` and `Window_storeCPUBufferToDisk` are the other half of that path.
+
+    Only the acquire and the present differ, and only inside the backend: the next image is the next one in the ring, no semaphore is waited on, nothing is transitioned to a present layout, and a frame whose swapchains are all virtual presents nothing and signals nothing. Both backends implement it. Vulkan binds the N images at stride offsets into one allocation; D3D12 makes them N `CreatePlacedResource2` at the same offsets, which is what placed resources are for, and skips the committed-resource path a large render target would otherwise take since a committed resource owns its whole heap and can only ever back one image.
 
 - ```c
   Bool createCommandList(
@@ -413,6 +418,39 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   	Error *e_rr
   );
   ```
+
+- ```c
+  //Record the compacting copy of a built BLAS, typically 30 to 50% smaller and denser to traverse. Every
+  //rule below is checked at record time, so a rejection reaches the caller here and not inside a submit.
+  //
+  //Record it in a LATER submit than the build: the size it needs is what that build produced, and asking too
+  //early errors rather than blocking, so never submitting the build cannot become a hang. It ALLOCATES, and
+  //the structure being replaced lives until the submit holding the copy completes, so peak spans both.
+  //Records nothing, reporting success, when the structure was built without ERTASBuildFlags_AllowCompaction,
+  //is already compacted, or the driver reported no saving.
+  //
+  //Compaction MOVES the structure. Every live TLAS that resolved its address is marked, and the submit after
+  //the copy is refused while any mark stands, so forgetting to update one is an error and not a wrong frame
+  //(a stale TLAS traces released memory, which reads as missing geometry and a FASTER frame). Only TLASes
+  //that reference it are touched. TWO CASES ARE THE CALLER'S:
+  //
+  //1. The mark clears when the TLAS update is RECORDED, not when it executes, since the submit carrying the
+  //   fix would otherwise refuse itself. Record that update into a list you actually submit.
+  //2. A TLAS built with ETLASFlag_UseDeviceMemory owns its instance buffer on the GPU, so its addresses
+  //   cannot be re-resolved here and it is neither marked nor refilled. Rewrite them yourself.
+  Bool CommandListRef_compactBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr);
+  ```
+
+  The mark is satisfied by any command list in the submit that updates the TLAS, regardless of when that
+  list was recorded, so a list recorded once and submitted many times keeps working. It is cleared when the
+  addresses are actually re-resolved, so recording an update into a list that is never submitted does not
+  clear it.
+
+  **One hazard stays with the caller**, because it cannot be closed from inside the API: a TLAS built with
+  `ETLASFlag_UseDeviceMemory` owns its instance buffer on the GPU. Its BLAS addresses are written by the
+  caller, so they cannot be re-resolved here, and whether it even references the structure being compacted
+  cannot be read from the CPU. Such a TLAS is neither marked nor refilled. Rewrite its instance addresses
+  yourself after compacting anything it holds.
 
 - ```c
   Bool createBLASProceduralExt(
@@ -606,7 +644,7 @@ A UnifiedTexture contains the following:
 - type: ETextureType; 2D, 3D or Cube.
 - width, height, length: dimensions of the resource. Length needs to be 1 if the type isn't 3D. For cubes the length will be automatically set to 6. The limits are width/height of 16384 and length of 256.
 - levels: how many mip levels are present.
-- images: how many different images are present. This is generally 1, but for Swapchains it is 3 because of versioning.
+- images: how many different images are present. This is 1 for everything but a Swapchain: a physical one requests 3 and the presentation engine may hand back up to 5, a virtual one holds exactly framesInFlight.
 - currentImageId: should only ever be accessed through the graphics API implementation. This value is a lagging value that's unpredictable if it's not in the submitCommands call. However, for Swapchains during that call, this represents what image is currently being rendered to.
 
 The unified texture can be obtained through the RefPtr as follows:
@@ -1302,10 +1340,11 @@ Contains the following properties:
 - flagsExt: BLAS or TLAS specific flags; EBLASFlag for a BLAS, ETLASFlag for a TLAS.
 - asConstructionType: the BLAS or TLAS specific construction type.
 - scratchBuffer: temporary data that is only available until the AS has been created and the frame has been completed on the CPU.
-- asBuffer: the buffer resource that represents this acceleration structure.
+- asBuffer: the buffer resource that represents this acceleration structure. Compaction REPLACES this, which is why it also changes the structure's device address.
+- isCompacted: set once compaction has run, or once the driver reported no saving. A compacted structure is never copied twice. The rest of the compaction bookkeeping beside it is internal.
 - flags:
   - AllowUpdate (0): refitting is allowed. This is a faster way of updating acceleration structures, but at the cost of traversal time. See Refitting below.
-  - AllowCompaction (1): compaction is allowed. This reduces memory overhead for the acceleration structures.
+  - AllowCompaction (1): compaction is allowed. The flag on its own changes nothing about memory; it makes `CommandListRef_compactBLASExt` legal on the structure, and recording that copy is what reclaims the space.
   - FastTrace (2): optimize trace times over build times / memory.
   - FastBuild (3): optimize build times over trace times / memory.
   - MinimizeMemory (4): optimize memory over trace times / build times.
@@ -1317,6 +1356,8 @@ Contains the following properties:
 A refit (also called an update) rebuilds an acceleration structure from the one already there instead of from nothing. It is much cheaper than a full build and is what skeletal animation, moving instances and deforming geometry use, at the cost of traversal quality that degrades the further the new data drifts from what the structure was originally built for. Build with `ERTASBuildFlags_AllowUpdate` to allow it.
 
 **A refit is in place and does not produce a new object.** The first build of an AS is a full build; every build recorded after that one refits the same structure from itself, which is what both APIs mean by an update whose source and destination are the same. So the AS, its device address and (for a TLAS) its bindless handle all survive a refit unchanged: nothing that points at it has to be re-pointed, and refitting every frame allocates nothing.
+
+**Compaction is the opposite case.** A refit keeps the address; compaction MOVES the structure and changes it. A refit therefore needs nothing from the TLASes referencing it, while a compaction marks every TLAS that resolved the old address and refuses the submit after the copy until each has been updated. See `CommandListRef_compactBLASExt`.
 
 To refit, change the inputs and record the update again:
 
@@ -1767,6 +1808,42 @@ gotoIfError3(clean, CommandListRef_endRegionDebugExt(commandList, e_rr));
 
 The same syntax as startRegionDebugExt can be used for addMarkerDebugExt. Except a marker doesn't need any end, it's just 1 event on the timeline. Every end region needs to correspond with a start region and vice versa.
 
+### Timestamps feature
+
+The Timestamps feature measures GPU time. It is a device capability (EGraphicsFeatures2_Timestamps): when it is absent the timing commands are still recorded but resolve to nothing and GraphicsDeviceRef_getTimings returns empty, so a caller need not branch on it. capabilities.timestampPeriod is the nanoseconds per tick used to convert results.
+
+There are two ways to time. AUTO times every scope: call CommandListRef_setScopeTimingExt(commandList, true) before recording, and from then on each scope gets a begin and end timestamp keyed by its scopeId, with no per-command markup. A scope that does little, or that the caller times itself, opts out by passing ECommandScopeFlags_DisableTimestamp to startScope, so it spends no query slots and reports nothing.
+
+A scope can also carry a debug name, passed to startScope (the C++ scope() overloads take it too). When the scope is timed, its GraphicsTiming carries that name alongside its id. The same name drives CommandListRef_setScopeDebugExt(commandList, true), the debug twin of setScopeTimingExt: with it on, every NAMED scope emits a begin and end debug region labelled by the name, so a scope shows up in a GPU debugger as well as in getTimings, and opts out of that region with ECommandScopeFlags_DisableDebug. The two toggles are independent, so a scope can be timed, debug-labelled, both or neither.
+
+MANUAL times a named span or a point. startTimingRegionExt and endTimingRegionExt bracket a span, nestable like a debug region and balanced within one scope; insertTimingExt records a single point in time that the caller diffs against another. Each takes a U32 id and an optional name: the id is a hot-path key read back without comparing strings, the name is a convenience. The name is copied at record time, so its storage need not outlive the call.
+
+```c
+gotoIfError3(clean, CommandListRef_setScopeTimingExt(commandList, true, e_rr));   //Time every scope of this list
+
+//... record scopes as usual; each is timed by its scopeId ...
+
+//Or a manual region inside a scope:
+
+gotoIfError3(clean, CommandListRef_startTimingRegionExt(
+    commandList, 							//See "Command list"
+    1, 										//id, a hot-path key
+    CharString_createConstRefCStr("Shadows")	//optional name
+));
+
+//... work to time ...
+
+gotoIfError3(clean, CommandListRef_endTimingRegionExt(commandList, e_rr));
+```
+
+The query pool grows to fit any frame that records more timestamps than it currently holds, so a scope-heavy frame is never silently dropped; only a frame past a runaway ceiling loses its timing.
+
+Results are read back with GraphicsDeviceRef_getTimings, one GraphicsTiming per timed scope, region or insert, keyed by its id, with the name reported alongside when the scope or region was named. gpuNs is a span's delta or a point's absolute tick time. Results are LATENT by framesInFlight submits, since a timestamp is only readable once its frame's fence has signalled, so what comes back describes a frame a few submits ago. The caller owns the returned list, names and all, and frees it with ListGraphicsTiming_freeUnderlying; a list a previous call filled may be handed back, whose contents are released first.
+
+### Predicated scopes feature
+
+A scope can carry a PREDICATE (`EGraphicsFeatures2_Predication`): pass a `DeviceBufferRef` with `EDeviceBufferUsage_Predicate` and an 8-byte-aligned offset to `CommandListRef_startScope`. When the scope executes, the GPU reads a `U64` at that offset; zero skips the scope's draws and dispatches while its barriers still run, so a pass whose input count a shader computed can cost almost nothing on the frames it has no work. Writers fill all 64 bits: Vulkan (`VK_EXT_conditional_rendering`) reads the low word, D3D12 (`SetPredication`, core) reads the whole thing with `EQUAL_ZERO`, and the shared convention is NONZERO RUNS. The buffer is transitioned and kept alive by the scope itself and must not also appear in the scope's transitions. Without the capability, requesting a predicate is refused at record time, and `EDeviceBufferUsage_Predicate` is refused at buffer creation, matching how `startRenderExt` treats DirectRendering: silently running a scope the caller asked to be conditional would be correct only for the skip-empty-work use and silently wrong for any predicate that guards correctness. A caller that wants the run-anyway behavior branches on the capability and passes no predicate. Only Vulkan devices can lack it (D3D12's SetPredication is core). A predicated scope only takes draws and dispatches, enforced at record time: copies, clears, acceleration structure updates and ray dispatches are refused with an error. D3D12 predication suppresses copies, clears, resolves, ray dispatches and acceleration structure builds (its documented operation list predates DXR; the D3D12 team confirms RT work predicates), where Vulkan's conditional rendering is limited to draws, compute dispatches and attachment clears: the spec defines ray work as unaffected, so it executes regardless of the predicate (measured on NVIDIA), an omission likely unintended given that D3D12 supports predicating it. The refusal is therefore a portability rule, not an API limit; should Vulkan ever add the interaction, the record gate can admit ray work behind that capability. Draws and dispatches are the subset both APIs suppress identically; everything outside it skips on D3D12 and executes on Vulkan, so allowing it would give one command list two meanings.
+
 ### DirectRendering feature
 
 DirectRendering allows rendering without render passes (default behavior in DirectX). This makes development for desktop a lot easier since MSFT (Warp), AMD, Intel and NVIDIA aren't using tiled based deferred rendering (TBDR). However, all other vendors (such as Qualcomm, ARM, Imgtec) do use TBDR (mostly mobile architectures). The user is allowed to decide that this is a limitation they accept and can use this feature to greatly simplify the difficulty of the graphics layer (especially porting from existing apps). The user can also set up two different render engines; one that can deal with direct rendering and one that can't. The latter is targeted at mobile (lower hardware tier) and the former is for desktop/console. The two commands that are related to this feature are: startRenderExt and endRenderExt. They require the feature to be present and will return an error (and won't be inserted into the command list) otherwise.
@@ -1936,6 +2013,13 @@ Because a scope hoists the transitions of operations such as clearImages, copyIm
 All startRenderExts in a scope should be ended and all startRegionDebugExts as well. Since a scope should be self contained.
 
 A scope that never records one of the "keeps scope alive" operations is rewound at endScope as if it never happened: its commands, transitions and scope id are all discarded and it won't appear in activeScopes or execute at submit. State setters (pipelines, viewport, primitive buffers, debug markers) never keep a scope alive on their own. A render pass counts as alive when any of its attachments uses a Clear load, since the clear is a side effect all by itself; a pass that only loads/preserves and never draws is dead weight and gets rewound with the rest.
+
+
+#### dispatchRaysIndirectExt
+
+Ray dispatch whose width/height/depth come from a buffer the GPU wrote, so a ray count computed on the device by a GPU driven pass never has to be read back to size the launch. The buffer holds three `U32`s (width, height, depth) at `offset`, needs `EDeviceBufferUsage_Indirect`, and is aligned to 4 (`vkCmdTraceRaysIndirectKHR`'s address requirement). The shader binding table for the bound raytracing pipeline is supplied by the runtime as with the direct form; only the dimensions come from the buffer.
+
+**Both backends.** Vulkan reads the caller's buffer directly through `vkCmdTraceRaysIndirectKHR`. D3D12's `ExecuteIndirect` for `DISPATCH_RAYS` instead wants the whole `D3D12_DISPATCH_RAYS_DESC` in the argument buffer, the SBT GPU addresses as well as the dimensions, while the caller writes only the three dimensions. The D3D12 backend bridges that with a per-frame intermediate: it writes the pipeline's CPU-known SBT addresses into a slot with `WriteBufferImmediate`, copies the caller's three dimensions in beside them, then runs `ExecuteIndirect` over the slot (`D3D12DispatchRaysIndirect` and its command signature). Because the caller's buffer is a copy source on D3D12 but a direct indirect read on Vulkan, its transition to copy-source is a D3D12-runtime step rather than a recorded scope transition, so both backends stay spec-conformant.
 
 #### Transitions
 

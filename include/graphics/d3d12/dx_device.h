@@ -24,6 +24,7 @@
 #include "graphics/d3d12/direct3d12.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/sampler.h"
+#include "graphics/generic/device.h"
 #include "types/container/list.h"
 #include "types/container/list_predeclare.h"
 #include "types/container/allocation_buffer.h"
@@ -50,6 +51,8 @@ typedef enum EDxCommandQueue {
 	EDxCommandQueue_Count
 
 } EDxCommandQueue;
+
+#define GRAPHICS_DISPATCH_RAYS_INDIRECT_ARGS 64           //Initial ExecuteIndirect(DispatchRays) slots; grows to fit
 
 typedef struct D3D12DispatchRaysIndirect {    //Intermediate, this one is created from a more sparse version
 	D3D12_DISPATCH_RAYS_DESC desc;
@@ -177,12 +180,36 @@ typedef struct DxGraphicsDevice {
 
 	IDXGIAdapter4 *adapter4;
 
+	//Compacted size storage, indexed by the slot the shared allocator hands out. D3D12 has no query pool
+	//for this, and EmitRaytracingAccelerationStructurePostbuildInfo cannot target a readback heap (it needs
+	//UNORDERED_ACCESS), so a size is emitted into the emit pool and copied into the same slot of the CPU
+	//readable one.
+
+	#define DX_COMPACTION_QUERIES_BASE 256                      //First pool; each one after it doubles
+
+	ListRefPtr compactionEmitPools;
+	ListRefPtr compactionReadbackPools;
+
 	//Temporary storage for submit time stuff
 
 	ListD3D12_BUFFER_BARRIER bufferTransitions;
 	ListD3D12_TEXTURE_BARRIER imageTransitions;
 
 	U64 fenceId;
+
+	//Timing (EGraphicsFeatures2_Timestamps): one query heap and one readback buffer per frame in flight, read a
+	// frame later once its fence has signalled. timestampPeriod is nanoseconds per tick, timestampCursor the
+	// transient next slot while an op walk records.
+
+	ID3D12QueryHeap *timestampHeap[MAX_FRAMES_IN_FLIGHT];
+	DeviceBufferRef *timestampReadback[MAX_FRAMES_IN_FLIGHT];   //Readback DeviceBuffer the query results resolve into
+	DeviceBufferRef *dispatchRaysIndirect[MAX_FRAMES_IN_FLIGHT];   //ExecuteIndirect args, an Indirect DeviceBuffer
+	DeviceBufferRef *dispatchRaysIndirectStaging[MAX_FRAMES_IN_FLIGHT];   //SBT upload staging, only when WBI is absent
+	U32 timestampCapacity[MAX_FRAMES_IN_FLIGHT];
+	F32 timestampPeriod;
+	U32 timestampCursor;
+	U32 dispatchRaysIndirectCursor;                //Argument slots used this frame; reset each submit
+
 	U64 padding;
 
 } DxGraphicsDevice;
@@ -247,8 +274,10 @@ typedef struct DxCommandBufferState {
 	U8 inRender;
 
 	U16 scopeCounter;
+	U8 curScopeFlags;                                  //ECommandScopeInternalFlags of the open scope, StartScope -> EndScope
 	U8 colorCount;                                    //If inRender, how many colors are bound (upper mask = has depth)
 	U8 anyResolve;
+	U8 padding5[3];
 
 	I32x2 size;                                       //If inRender,    defines current size
 	I32x2 offset;                                     //^               defines offset

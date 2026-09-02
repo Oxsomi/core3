@@ -396,6 +396,55 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		SHEntryRuntime_getCombinationsCompiled(&r.shEntriesRuntime.ptr[0]) == 2
 	);
 
+	//--- An extension needing a newer model than the entry declared is PROMOTED, not refused. ---
+	//The declared model is a floor: AtomicI64 needs 6.6, 6.5 is what's given, and the combination lands on
+	//6.6. This used to be a parse error, which is what forced an entry to declare the highest model any of
+	//its extensions needed and pulled every other permutation up to it.
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::extension(\"AtomicI64\")]]\n"
+		"[[oxc::model(\"6.5\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+
+	{
+		SHBinaryIdentifier promoted = (SHBinaryIdentifier) { 0 };
+		Error promoteErr = Error_none();
+
+		Test_assert(
+			t, "extension needing a higher model than declared is promoted",
+			parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+			SHEntryRuntime_asBinaryIdentifier(&r.shEntriesRuntime.ptr[0], 0, &promoted, &promoteErr) &&
+			promoted.shaderVersion == OISH_SHADER_MODEL(6, 6)
+		);
+	}
+
+	//Promotion RAISES, it never lowers: a declared model above the extension's minimum is left alone.
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::extension(\"AtomicI64\")]]\n"
+		"[[oxc::model(\"6.8\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+
+	{
+		SHBinaryIdentifier kept = (SHBinaryIdentifier) { 0 };
+		Error keptErr = Error_none();
+
+		Test_assert(
+			t, "declared model above the extension minimum is kept",
+			parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+			SHEntryRuntime_asBinaryIdentifier(&r.shEntriesRuntime.ptr[0], 0, &kept, &keptErr) &&
+			kept.shaderVersion == OISH_SHADER_MODEL(6, 8)
+		);
+	}
+
 	//--- [[oxc::uniforms(...)]] records uniform permutations. Uniforms are illegal together with
 	//--- [[oxc::stage(...)]] (they compile as a lib), so the entrypoint uses the [shader(...)] intrinsic.
 
@@ -452,10 +501,6 @@ void Test_shaderCompilerAnnotations(Test *t) {
 
 			{ "shader model below the 6.5 floor rejected",
 				"[[oxc::model(\"6.0\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
-
-			{ "extension needing a higher model than declared rejected",   //AtomicI64 needs 6.6, only 6.5 given
-				"[[oxc::extension(\"AtomicI64\")]]\n[[oxc::model(\"6.5\")]]\n[[oxc::stage(\"compute\")]]\n"
-				"[numthreads(1,1,1)]\nvoid main() {}\n" },
 
 			{ "oxc::uniforms together with oxc::stage rejected",
 				"[[oxc::uniforms(B1 X = true)]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },

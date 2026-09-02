@@ -147,6 +147,10 @@ BANNED_SYMBOLS: list[dict] = [
         "allow_paths": (
             "src/shader_compiler/compiler.cpp",
         ),
+        # C++ new/delete cannot appear in a C translation unit, so a hit in a .c file is always a false
+        # positive. In practice it is JavaScript inside EM_JS bodies (new Uint8ClampedArray, new Worker),
+        # which this rule can't tell from C++. Scoping beats listing every web file that embeds JS.
+        "extensions": (".cpp", ".hpp"),
     },
     # B3, printf family
     {
@@ -160,7 +164,12 @@ BANNED_SYMBOLS: list[dict] = [
             "src/platforms/test/functional/test_platforms_functional_input.c",
             # F32x4x4_format is a debug dump of 16 floats. OxC3_types_math sits below OxC3_types_container,
             # so CharString_format (the alternative this rule points at) isn't reachable from it.
-            "src/types/math/mat.c"
+            "src/types/math/mat.c",
+            # The node test runner writes a machine readable protocol on stdout (OXC3_TEST_BEGIN,
+            # RUN/PASS/FAIL per suite, OXC3_TEST_END) that the build scripts parse to decide the result.
+            # Log_* would decorate those lines with a level prefix and ANSI colour (see FONT_GREEN in
+            # ulog.c), so the reporter has to write them undecorated.
+            "src/test/web/wtest_main.c",
         ),
     },
     # B4, assert
@@ -218,9 +227,7 @@ BANNED_SYMBOLS: list[dict] = [
     {
         "pattern": re.compile(r'\b(strcmp|strstr)\s*\('),
         "message": "'{}', use CharString_equalsStringSensitive or Buffer_cmp on CharString_bufferConst",
-        "allow_paths": (
-            "src/platforms/unix/ufile.c"
-        ),
+        "allow_paths": (),
     },
     # B13, C time functions
     {
@@ -233,7 +240,8 @@ BANNED_SYMBOLS: list[dict] = [
         "pattern": re.compile(r'\bsystem\s*\('),
         "message": "'system()', always forbidden",
         "allow_paths": (
-            "src/platforms/test/functional/test_platforms_functional.c"
+            # Functional tests shell out to set up window-manager / input state before asserting on it.
+            "src/platforms/test/functional/",
         ),
     },
     # B15, rand / srand
@@ -539,6 +547,7 @@ def check_file(
     in_unix_dir |= "/linux/" in rel or rel.startswith("linux/")
     in_unix_dir |= "/android/" in rel or rel.startswith("android/")
     in_unix_dir |= "/osx/" in rel or rel.startswith("osx/")
+    in_unix_dir |= "/web/" in rel or rel.startswith("web/")     # emscripten is a unix flavor (MEMFS/NODERAWFS)
     if not in_unix_dir:
         for lineno, line in enumerate(lines, start=1):
             m = _POSIX_INCLUDE_RE.match(line)
@@ -562,6 +571,7 @@ def check_file(
     active_rules = [
         rule for rule in BANNED_SYMBOLS
         if not any(ap in rel for ap in rule["allow_paths"])
+        and (not rule.get("extensions") or rel.endswith(rule["extensions"]))
     ]
 
     # ── Per-line checks ───────────────────────────────────────────────────

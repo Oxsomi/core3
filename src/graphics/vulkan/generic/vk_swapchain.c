@@ -492,7 +492,10 @@ void VK_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, const Allocator *alloc) 
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
-	for(U8 i = 0; i < swapchain->base.images; ++i) {
+	//Bounded by the semaphore list rather than by the image count:
+	// a swapchain that owns its images never created any, so the two no longer move together.
+
+	for(U64 i = 0; i < swapchainExt->semaphores.length; ++i) {
 
 		const VkSemaphore semaphore = swapchainExt->semaphores.ptr[i];
 

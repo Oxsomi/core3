@@ -100,6 +100,12 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 
 			Bool missing = false;
 
+			//Set equality, not positional: requested pair k must exist ANYWHERE in the binary's set.
+			//Indexing the request by the inner counter compared the same positions on both sides and
+			//accepted a binary when ANY position agreed, which with two defines resolves a sibling
+			//permutation whose code differs only where this pipeline never branches: images stay
+			//right and the occupancy quietly belongs to the wrong subtype.
+
 			for (U64 k = 0; k < (defines ? defines->length / 2 : 0); ++k) {
 
 				Bool contains = false;
@@ -107,9 +113,9 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 				for (U64 l = 0; l < defines->length / 2; ++l) {
 
 					if (
-						!CharString_equalsString(&(defines->ptr[l << 1]), &(defines2.ptr[l << 1]), EStringCase_Sensitive) ||
+						!CharString_equalsString(&(defines->ptr[k << 1]), &(defines2.ptr[l << 1]), EStringCase_Sensitive) ||
 						!CharString_equalsString(
-							&(defines->ptr[(l << 1) | 1]),
+							&(defines->ptr[(k << 1) | 1]),
 							&(defines2.ptr[(l << 1) | 1]),
 							EStringCase_Sensitive
 						)
@@ -192,14 +198,16 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 			//Error_print logs the message at the caller's level but the stack trace unconditionally at Error,
 			// so a lookup that goes on to succeed still reads as a crash; the reason goes out at Debug instead,
 			// and the real failure, U32_MAX out of the whole loop, stays the caller's to report.
+			//The check's own message rides along: which of features/features2/dataTypes/featuresDx/vendor/binary
+			// type rejected the candidate is the whole content of the line, and every one of them ends up here as
+			// "missing a feature" otherwise, leaving a failed lookup with nothing to go on but guesswork.
 
 			if(!GraphicsDeviceRef_checkShaderFeatures(deviceRef, &binInfo, &entry, &err)) {
 
 				Log_debugLn(
 					GraphicsDeviceRef_getAlloc(deviceRef),
-					"GraphicsDeviceRef_getFirstShaderEntry(): skipped entry %"PRIu64" binary %"PRIu64", "
-					"the device is missing a feature it needs",
-					i, j
+					"GraphicsDeviceRef_getFirstShaderEntry(): skipped entry %"PRIu64" binary %"PRIu64": %s",
+					i, j, err.errorStr ? err.errorStr : "the device is missing a feature it needs"
 				);
 
 				continue;

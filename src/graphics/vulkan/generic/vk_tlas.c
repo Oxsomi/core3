@@ -89,6 +89,9 @@ static Bool VkTLAS_fillInstances(GraphicsDeviceRef *deviceRef, TLAS *tlas, Error
 		*(U64*)((U8*)mem + offset) = deviceExt->getAccelerationStructureDeviceAddress(
 			deviceExt->device, &addressInfo
 		);
+
+		//A snapshot. A compaction that later moves one of these structures marks this TLAS, and the
+		// refill on its next build re-resolves them; see CommandListRef_compactBLASExt.
 	}
 
 	acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
@@ -114,7 +117,9 @@ static Bool VkTLAS_fillInstances(GraphicsDeviceRef *deviceRef, TLAS *tlas, Error
 		gotoIfError3(clean, checkVkError(deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &mappedRange), e_rr));
 	}
 
-	tlas->base.flagsExt &=~ (U8) ETLASFlag_InstancesDirty;
+	//These addresses have just been resolved, so whatever a compaction invalidated is current again.
+
+	tlas->base.flagsExt &=~ (U8) (ETLASFlag_InstancesDirty | ETLASFlag_AddressesStale);
 
 clean:
 

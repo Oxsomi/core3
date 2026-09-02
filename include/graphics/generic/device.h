@@ -26,6 +26,8 @@
 #include "graphics/generic/resource.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
+#include "types/container/list_basic_types.h"
+#include "types/container/string.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -82,6 +84,8 @@ typedef enum EGraphicsBufferingMode {
 } EGraphicsBufferingMode;
 
 #define MAX_FRAMES_IN_FLIGHT 3           //Don't touch
+#define GRAPHICS_TIMESTAMP_QUERIES 2048          //Initial per frame-in-flight timestamp capacity; the pool grows past it
+#define GRAPHICS_TIMESTAMP_QUERIES_MAX (1u << 20)  //Ceiling; a frame needing more is a runaway, so its timing is skipped
 
 //One time runtime hints, so a message fires once per device rather than on every call that notices the
 // same thing.
@@ -111,6 +115,31 @@ typedef enum EGraphicsDeviceMessage {
 
 } EGraphicsDeviceMessage;
 
+//The GPU time of one timestamp result, keyed by both a caller id and a name so a hot path reads it back by id
+// without comparing strings while a casual caller uses the name. gpuNs is a region's delta or a point's absolute
+// tick time, and is 0 when the query did not resolve.
+
+typedef struct GraphicsTiming {
+	U32 id;
+	U32 padding;
+	U64 gpuNs;
+	CharString name;
+} GraphicsTiming;
+
+TList(GraphicsTiming);
+
+//What a submit records per timestamp so a result can be paired with its name and id once the frame completes.
+// nameIndex points into that frame's owned timingNames, or U32_MAX for none; endSlot is U32_MAX for a point sample.
+
+typedef struct TimingEntry {
+	U32 id;
+	U32 nameIndex;
+	U32 beginSlot;
+	U32 endSlot;
+} TimingEntry;
+
+TList(TimingEntry);
+
 typedef struct GraphicsDevice {
 
 	GraphicsInstanceRef *instance;
@@ -118,6 +147,11 @@ typedef struct GraphicsDevice {
 	GraphicsDeviceInfo info;
 
 	U64 submitId;
+
+	//Highest submit known to have COMPLETED on the device. Work that has to read back something a submit
+	//produced, such as a compacted acceleration structure size, tests against this instead of blocking.
+
+	U64 completedSubmitId;
 
 	EGraphicsDeviceFlags flags;
 	U16 pad0;
@@ -133,6 +167,25 @@ typedef struct GraphicsDevice {
 	ListWeakRefPtr pendingResources;                        //Resources pending copy from CPU to device next submit
 
 	ListRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];     //Resources in flight, TODO: HashMap
+
+	//Compacted size slots, handed out per BLAS built with AllowCompaction and returned when the compaction
+	//that reads one consumes it. Only the storage differs per backend, a query pool on Vulkan and a pair of
+	//buffers on D3D12, so the bookkeeping is shared: without it the two would drift.
+	//
+	//Slots are recycled rather than only appended, so the high water mark tracks how many structures await
+	//compaction AT ONCE and not how many a session compacts.
+
+	ListU32 compactionFreeQueries;
+	U32 compactionQueryCount;
+	U32 compactionPadding;
+
+	//Every live TLAS, WITHOUT holding a reference: a compaction walks this to find the structures that
+	//resolved the address it is about to move. A TLAS adds itself on create and removes itself on free,
+	//and that pairing is the whole contract, since a stale entry is a dangling read.
+	//
+	//Guarded by this device's lock, never nested with an RTAS lock in either direction.
+
+	ListRefPtr liveTlases;
 
 	SpinLock lock;                                          //Lock for submission and marking resources dirty
 
@@ -156,6 +209,17 @@ typedef struct GraphicsDevice {
 	//Graphics constants (globals) accessible by all shaders
 
 	DeviceBufferRef *frameData[MAX_FRAMES_IN_FLIGHT];
+
+	//Timing (EGraphicsFeatures2_Timestamps): per frame in flight, the owned name copies and the descriptors of the
+	// timestamps that frame recorded, kept from submit until that frame recycles, plus the resolved results of the
+	// most recently completed frame that GraphicsDeviceRef_getTimings hands back.
+
+	ListCharString timingNames[MAX_FRAMES_IN_FLIGHT];
+	ListTimingEntry timingEntries[MAX_FRAMES_IN_FLIGHT];
+	ListGraphicsTiming timings;
+	ListU64 timingStack;                                    //Transient: pending entry indices for begin/end matching
+	U32 timingCursor;                                       //Transient: next slot while building; total slot count after
+	U32 timingSlots[MAX_FRAMES_IN_FLIGHT];                  //Query slots each frame in flight wrote, for the delayed read
 
 	//Temporary for processing command list and to avoid allocations
 
@@ -294,6 +358,28 @@ Bool GraphicsDeviceRef_submitCommands(
 
 //Wait on previously submitted commands
 Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr);
+
+//Copies the GPU timings of the most recently completed frame into a caller-owned list, one per manual region,
+// insert or timed scope, keyed by id and name.
+//Latent by framesInFlight submits, since a timestamp is only readable once its frame's fence signals.
+//The caller owns the result, names and all, and frees it with ListGraphicsTiming_freeUnderlying;
+// a list a previous call filled may be passed back, its old contents are released first.
+
+Bool GraphicsDeviceRef_getTimings(GraphicsDeviceRef *deviceRef, ListGraphicsTiming *timings, Error *e_rr);
+
+//Frees a list filled by GraphicsDeviceRef_getTimings: the owned name copies, then the array.
+
+void ListGraphicsTiming_freeUnderlying(ListGraphicsTiming *timings, const Allocator *alloc);
+
+//Timing internals used by the backends. buildTimings assigns query slots and builds the frame's timing entries
+// from the submitted lists, returning the slot count it used (0 when timing is off, over capacity, or on failure).
+// resolveTimings pairs resolved raw ticks (already masked to the queue's valid bits) with those entries into
+// device->timings, converting by nsPerTick.
+
+U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListCommandListRef *lists, const Allocator *alloc);
+Bool GraphicsDevice_resolveTimings(
+	GraphicsDevice *device, U8 fifId, const U64 *ticks, U32 tickCount, F32 nsPerTick, const Allocator *alloc, Error *e_rr
+);
 
 //True exactly once per device per message, so the caller logs on true and stays silent forever after.
 

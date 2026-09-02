@@ -33,110 +33,45 @@
 
 set(testRoot ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
-file(GLOB_RECURSE androidTestSources CONFIGURE_DEPENDS
-	"${testRoot}/types/base/test/*.c"
-	"${testRoot}/types/base/test/*.cpp"
-	"${testRoot}/types/math/test/*.c"
-	"${testRoot}/types/math/test/*.cpp"
-	"${testRoot}/types/container/test/*.c"
-	"${testRoot}/types/container/test/*.cpp"
-	"${testRoot}/formats/*/test/*.c"
-	"${testRoot}/formats/*/test/*.cpp"
-	"${testRoot}/audio/test/interface/*.c"
-	"${testRoot}/audio/test/interface/*.cpp"
+# Extra suites android bundles on top of the shared set: it has a GPU, and its functional suites are
+# gated behind debug.oxc3.interactive rather than dropped.
+
+file(GLOB_RECURSE androidExtraSources CONFIGURE_DEPENDS
 	"${testRoot}/audio/test/functional/*.c"
 	"${testRoot}/audio/test/functional/*.cpp"
 	"${testRoot}/platforms/test/functional/*.c"
 	"${testRoot}/platforms/test/functional/*.cpp"
 	"${testRoot}/graphics/test/interface/*.c"
 	"${testRoot}/graphics/test/interface/*.cpp"
-	"${testRoot}/platforms/test/interface/*.c"
-	"${testRoot}/platforms/test/interface/*.cpp"
 )
 
+set(androidExtraLibs OxC3_graphics)
+
 if(EnableShaderCompiler)
+
 	file(GLOB shaderCompilerTestSources CONFIGURE_DEPENDS
 		"${testRoot}/shader_compiler/test/*.c"
 		"${testRoot}/shader_compiler/test/*.cpp"
 	)
-	list(APPEND androidTestSources ${shaderCompilerTestSources})
+
+	list(APPEND androidExtraSources ${shaderCompilerTestSources})
+	list(APPEND androidExtraLibs OxC3_shader_compiler)
 endif()
-
-add_library(OxC3_atest SHARED
-	${androidTestSources}
-	atest_main.c
-	CMakeLists.txt
-)
-
-# _OXC3_TEST_VFS_TARGET: platforms_interface reaches its test data through the virtual file system, and a
-# section is namespaced by the target that packaged it. add_virtual_files below registers it under
-# OxC3_atest, not OxC3_plinttst as the desktop build does, so the suite is told which name to expect.
-
-target_compile_definitions(OxC3_atest PRIVATE _OXC3_TEST_BUNDLED _OXC3_TEST_VFS_TARGET="OxC3_atest")
-
-if(EnableShaderCompiler)
-	target_link_libraries(OxC3_atest PUBLIC OxC3_shader_compiler)
-	target_compile_definitions(OxC3_atest PRIVATE _OXC3_TEST_SHADER_COMPILER)
-endif()
-
-target_link_libraries(OxC3_atest PUBLIC
-	OxC3_platforms
-	OxC3_graphics
-	OxC3_audio
-	OxC3_formats_bmp OxC3_formats_dds OxC3_formats_oiBC OxC3_formats_oiCA
-	OxC3_formats_oiDL OxC3_formats_oiSB OxC3_formats_oiSH OxC3_formats_wav
-	OxC3_types_test
-	OxC3_types_container_test_util
-)
-
-# Test_dynamicLibrary dlopens this by bare name; it only has to end up in the apk's lib/<abi>/, which
-# build_android.py fills from every .so the build produced, so a dependency is all that's needed.
-
-add_dependencies(OxC3_atest OxC3_platforms_interface_dylib_test)
-
-# platforms_interface reads these through the virtual file system, same as OxC3_plinttst does
 
 include(${testRoot}/../cmake/oxc3.cmake)
 
-add_virtual_files(
+oxc3_add_bundled_test(
 	TARGET  OxC3_atest
-	NAME    testdata
-	ROOT    ${testRoot}/platforms/test/interface/res
+	ROOT    ${testRoot}
 	SELF    ${testRoot}/..
-	FORCE_PACKAGER
+	ENTRY   atest_main.c
+	SHARED
+	SOURCES ${androidExtraSources}
+	LIBS    ${androidExtraLibs}
 )
 
-# shader_compiler reads its HLSL off disk when ctest runs it from src/shader_compiler/test; an apk has no
-# such working directory, so the same tree is bundled and the suite reads it back through //OxC3_atest.
-# -raw is what keeps it readable: the packager otherwise compiles .hlsl into oiSH, and these tests want
-# the source (they drive the compiler themselves).
-# The .c/.h next to it aren't staged, since add_virtual_files packages a whole directory.
-
 if(EnableShaderCompiler)
-
-	set(shaderRes ${CMAKE_CURRENT_BINARY_DIR}/shaderdata)
-
-	file(GLOB_RECURSE shaderTestData CONFIGURE_DEPENDS
-		"${testRoot}/shader_compiler/test/*/*.hlsl"
-		"${testRoot}/shader_compiler/test/*/*.hlsli"
-		"${testRoot}/shader_compiler/test/*.oiSH"
-	)
-
-	foreach(f ${shaderTestData})
-		file(RELATIVE_PATH rel "${testRoot}/shader_compiler/test" "${f}")
-		get_filename_component(relDir "${rel}" DIRECTORY)
-		file(COPY "${f}" DESTINATION "${shaderRes}/${relDir}")
-	endforeach()
-
-	add_virtual_files(
-		TARGET  OxC3_atest
-		NAME    shaderdata
-		ROOT    ${shaderRes}
-		SELF    ${testRoot}/..
-		FORCE_PACKAGER
-		ARGS    -raw
-	)
-
+	target_compile_definitions(OxC3_atest PRIVATE _OXC3_TEST_SHADER_COMPILER)
 endif()
 
 # audio_functional reads its wavs through the virtual file system here, since an apk has no working directory to fopen out of.

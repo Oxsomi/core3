@@ -57,6 +57,282 @@ TListNamedImpl(ListSpinLockPtr);
 TListNamedImpl(ListCommandListRef);
 TListNamedImpl(ListSwapchainRef);
 TListImpl(DevicePendingPull);
+TListImpl(GraphicsTiming);
+TListImpl(TimingEntry);
+
+//Frees a timings list filled by GraphicsDeviceRef_getTimings: its owned name copies, then the array itself.
+
+void ListGraphicsTiming_freeUnderlying(ListGraphicsTiming *timings, const Allocator *alloc) {
+
+	if(!timings)
+		return;
+
+	for(U64 i = 0; i < timings->length; ++i)
+		CharString_free(&timings->ptrNonConst[i].name, alloc);
+
+	ListGraphicsTiming_free(timings, alloc);
+}
+
+//Copies the most recently completed frame's timings into a caller-owned list, names and all,
+// so the result outlives the next submit that overwrites the device's own copy.
+//The caller frees it with ListGraphicsTiming_freeUnderlying; a list a previous call filled may be passed back,
+// its old contents are released first.
+
+Bool GraphicsDeviceRef_getTimings(GraphicsDeviceRef *deviceRef, ListGraphicsTiming *timings, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_getTimings()::deviceRef is required"));
+
+	if(!timings)
+		retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_getTimings()::timings is required"));
+
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	ListGraphicsTiming_freeUnderlying(timings, alloc);
+
+	for(U64 i = 0; i < device->timings.length; ++i) {
+
+		GraphicsTiming t = device->timings.ptr[i];
+		t.name = CharString_createNull();
+
+		if(CharString_length(device->timings.ptr[i].name))
+			gotoIfError3(clean, CharString_createCopy(device->timings.ptr[i].name, alloc, &t.name, e_rr));
+
+		if(!ListGraphicsTiming_pushBack(timings, t, alloc, e_rr)) {
+			CharString_free(&t.name, alloc);
+			s_uccess = false;
+			goto clean;
+		}
+	}
+
+clean:
+	return s_uccess;
+}
+
+//Walks the frame's submitted lists in op order, assigning a query slot to each timing point
+// and building the entry that will pair with its raw ticks later.
+//The backend op walk assigns the SAME slots in the same order via its own cursor, so the two never diverge.
+//Slots are counted, never per-op reserved, so an opted-out or hidden scope costs nothing.
+//Returns the slot count (0 when timing is off, over the pool, or an allocation failed).
+
+U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListCommandListRef *lists, const Allocator *alloc) {
+
+	device->timingCursor = 0;
+	ListTimingEntry_clear(&device->timingEntries[fifId], NULL);
+	ListCharString_freeUnderlying(&device->timingNames[fifId], alloc);
+	ListU64_clear(&device->timingStack, NULL);
+
+	U64 total = 0;
+
+	for(U64 i = 0; i < (lists ? lists->length : 0); ++i)
+		total += CommandListRef_ptr(lists->ptr[i])->timingSlotCount;
+
+	if(!total)
+		return 0;
+
+	if(total > GRAPHICS_TIMESTAMP_QUERIES_MAX) {
+		Log_warnLnx(
+			"Timestamps: %"PRIu64" query slots this frame exceed the %u ceiling, timing skipped for the frame",
+			total, (U32) GRAPHICS_TIMESTAMP_QUERIES_MAX
+		);
+		return 0;
+	}
+
+	Bool ok = true;
+
+	for(U64 i = 0; ok && i < lists->length; ++i) {
+
+		CommandList *cl = CommandListRef_ptr(lists->ptr[i]);
+		const U8 *ptr = cl->data.ptr;
+		U32 scopeCounter = 0;
+		Bool curScopeTimed = false;
+
+		for(U64 j = 0; ok && j < cl->commandOps.length; ++j) {
+
+			const CommandOpInfo info = cl->commandOps.ptr[j];
+			const U8 *data = ptr;
+			ptr += info.opSize;
+
+			switch(info.op) {
+
+				case ECommandOp_StartScope: {
+
+					const CommandScope scope = cl->activeScopes.ptr[scopeCounter++];
+					curScopeTimed = (scope.flags & ECommandScopeInternalFlags_Timed) != 0;
+
+					if(curScopeTimed) {
+
+						//A named scope carries its name in the StartScope payload; a timed named scope reports it, keyed by
+						// its id all the same.
+
+						U32 nameIndex = U32_MAX;
+
+						if(
+							info.opSize > sizeof(CommandScopePredicate) &&
+							((const C8*) data)[sizeof(CommandScopePredicate)]
+						) {
+							CharString copy = CharString_createNull();
+							if(CharString_createCopy(
+								CharString_createRefCStrConst((const C8*) data + sizeof(CommandScopePredicate)),
+								alloc, &copy, NULL
+							)) {
+								nameIndex = (U32) device->timingNames[fifId].length;
+								if(!ListCharString_pushBack(&device->timingNames[fifId], copy, alloc, NULL)) {
+									CharString_free(&copy, alloc);
+									ok = false;
+								}
+							}
+						}
+
+						const TimingEntry e = (TimingEntry) {
+							.id = scope.scopeId, .nameIndex = nameIndex,
+							.beginSlot = device->timingCursor++, .endSlot = U32_MAX
+						};
+
+						ok &= ListU64_pushBack(&device->timingStack, device->timingEntries[fifId].length, alloc, NULL);
+						ok &= ListTimingEntry_pushBack(&device->timingEntries[fifId], e, alloc, NULL);
+					}
+
+					break;
+				}
+
+				case ECommandOp_EndScope:
+
+					if(curScopeTimed && device->timingStack.length) {
+						const U32 idx = (U32) device->timingStack.ptr[device->timingStack.length - 1];
+						ListU64_popBack(&device->timingStack, NULL, NULL);
+						device->timingEntries[fifId].ptrNonConst[idx].endSlot = device->timingCursor++;
+					}
+
+					break;
+
+				//A manual region records its id and name; an insert is the same minus the end.
+				//The name was copied into the command buffer at record time and is copied again here into the frame's owned storage,
+				// so the caller's original string never has to outlive either.
+
+				case ECommandOp_StartTimingRegion:
+				case ECommandOp_InsertTiming: {
+
+					const U32 id = ((const TimingRegionCmd*) data)->id;
+					const C8 *namePtr = (const C8*)(data + sizeof(TimingRegionCmd));
+					U32 nameIndex = U32_MAX;
+
+					if(namePtr[0]) {
+						CharString copy = CharString_createNull();
+						if(CharString_createCopy(CharString_createRefCStrConst(namePtr), alloc, &copy, NULL)) {
+							nameIndex = (U32) device->timingNames[fifId].length;
+							if(!ListCharString_pushBack(&device->timingNames[fifId], copy, alloc, NULL)) {
+								CharString_free(&copy, alloc);
+								ok = false;
+							}
+						}
+					}
+
+					const TimingEntry e = (TimingEntry) {
+						.id = id, .nameIndex = nameIndex,
+						.beginSlot = device->timingCursor++, .endSlot = U32_MAX
+					};
+
+					if(info.op == ECommandOp_StartTimingRegion)
+						ok &= ListU64_pushBack(&device->timingStack, device->timingEntries[fifId].length, alloc, NULL);
+
+					ok &= ListTimingEntry_pushBack(&device->timingEntries[fifId], e, alloc, NULL);
+					break;
+				}
+
+				case ECommandOp_EndTimingRegion:
+
+					if(device->timingStack.length) {
+						const U32 idx = (U32) device->timingStack.ptr[device->timingStack.length - 1];
+						ListU64_popBack(&device->timingStack, NULL, NULL);
+						device->timingEntries[fifId].ptrNonConst[idx].endSlot = device->timingCursor++;
+					}
+
+					break;
+
+				default:
+					break;
+			}
+		}
+	}
+
+	//An allocation failed mid-build, so the entries are incomplete and the slot total no longer matches what the
+	// backend would write. Drop the whole frame's timing rather than report or size against a partial set.
+
+	if(!ok) {
+		ListTimingEntry_clear(&device->timingEntries[fifId], NULL);
+		ListCharString_freeUnderlying(&device->timingNames[fifId], alloc);
+		device->timingCursor = 0;
+	}
+
+	return device->timingCursor;
+}
+
+//Pairs the resolved raw ticks with the entries built above into device->timings.
+//A span reports the delta, a point its absolute tick time; both times are nanoseconds.
+//device->timings takes owned copies of the names, freed when it is next refilled or the device is torn down.
+
+Bool GraphicsDevice_resolveTimings(
+	GraphicsDevice *device, U8 fifId, const U64 *ticks, U32 tickCount, F32 nsPerTick, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	//device->timings owns its name copies; free the previous frame's before refilling, since the timingNames they
+	// were copied from is freed by buildTimings this same submit.
+
+	for(U64 i = 0; i < device->timings.length; ++i)
+		CharString_free(&device->timings.ptrNonConst[i].name, alloc);
+
+	gotoIfError3(clean, ListGraphicsTiming_clear(&device->timings, e_rr));
+
+	const ListTimingEntry entries = device->timingEntries[fifId];
+	const ListCharString names = device->timingNames[fifId];
+
+	for(U64 i = 0; i < entries.length; ++i) {
+
+		const TimingEntry e = entries.ptr[i];
+
+		if(e.beginSlot >= tickCount)
+			continue;
+
+		U64 gpuNs;
+
+		if(e.endSlot == U32_MAX)
+			gpuNs = (U64)((F64) ticks[e.beginSlot] * nsPerTick);
+
+		else {
+
+			if(e.endSlot >= tickCount || ticks[e.endSlot] < ticks[e.beginSlot])
+				continue;                //Out of range, or a counter that wrapped within its valid bits: drop the one span
+
+			gpuNs = (U64)((F64)(ticks[e.endSlot] - ticks[e.beginSlot]) * nsPerTick);
+		}
+
+		CharString nameCopy = CharString_createNull();
+
+		if(e.nameIndex != U32_MAX && e.nameIndex < names.length && CharString_length(names.ptr[e.nameIndex]))
+			gotoIfError3(clean, CharString_createCopy(names.ptr[e.nameIndex], alloc, &nameCopy, e_rr));
+
+		const GraphicsTiming t = (GraphicsTiming) {
+			.id = e.id,
+			.gpuNs = gpuNs,
+			.name = nameCopy
+		};
+
+		if(!ListGraphicsTiming_pushBack(&device->timings, t, alloc, e_rr)) {
+			CharString_free(&nameCopy, alloc);
+			s_uccess = false;
+			goto clean;
+		}
+	}
+
+clean:
+	return s_uccess;
+}
 
 static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId);
 
@@ -107,7 +383,17 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 		ListDevicePendingPull_free(&device->pullsInFlight[j], alloc);
 		AllocationBuffer_free(&device->stagingReadbackAllocations[j], alloc);
+
+		//timingNames owns its name copies, so freeUnderlying releases the strings too.
+
+		ListCharString_freeUnderlying(&device->timingNames[j], alloc);
+		ListTimingEntry_free(&device->timingEntries[j], alloc);
 	}
+
+	ListGraphicsTiming_freeUnderlying(&device->timings, alloc);
+	ListU64_free(&device->timingStack, alloc);
+	ListU32_free(&device->compactionFreeQueries, alloc);
+	ListRefPtr_free(&device->liveTlases, alloc);
 
 	SpinLock_lock(&device->lock, U64_MAX);
 	SpinLock_lock(&device->allocator.lock, U64_MAX);
@@ -339,7 +625,7 @@ typedef enum EDescriptorTypeCount {
 	EDescriptorTypeCount_RWTexture2Di       = 16384,
 	EDescriptorTypeCount_RWTexture2Du       = 16384,
 
-	EDescriptorTypeCount_Sampler            = 1024,
+	EDescriptorTypeCount_Sampler            = 996,
 	EDescriptorTypeCount_TLASExt            = 16,
 
 	//DirectX bindings
@@ -761,6 +1047,51 @@ Bool GraphicsDeviceRef_create(
 	device->allocator = (DeviceMemoryAllocator) { .device = device };
 	gotoIfError3(clean, ListDeviceMemoryBlock_reserve(&device->allocator.blocks, 16, alloc, e_rr));
 
+	//These configure the allocator, so they have to be known before anything can allocate device memory.
+	//GraphicsDevice_initExt already creates buffers of its own (d3d12's timestamp readbacks for one),
+	// and a zero block size divides by zero in DeviceMemoryAllocator_allocateExt.
+	//Everything below reads only info, which was copied in full above and is untouched by initExt.
+
+	//Determine some flushing and block size sizes for the current GPU
+
+	//Determine when we need to flush.
+	//As a rule of thumb I decided for 20% occupied mem by just copies.
+	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too
+	// (as long as it doesn't exceed 33%).
+	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
+	//TODO: Instead, we should base this on a quick PCIE benchmark,
+	// which is tricky because there might be other things using PCIE right now.
+	//Maybe we can read out this speed directly?
+	//It's more future proof than this (PCIE8 for example could be so much faster)
+
+	const Bool isDistinct = device->info.type == EGraphicsDeviceType_Dedicated;
+	U64 cpuHeapSize = device->info.capabilities.sharedMemory;
+	U64 gpuHeapSize = device->info.capabilities.dedicatedMemory;
+
+	device->flushThreshold = U64_min(
+		4 * GIBI,
+		isDistinct ? U64_min(gpuHeapSize / 3, cpuHeapSize / 10 + gpuHeapSize / 5) :
+		cpuHeapSize / 5
+	);
+
+	//20M vertices per frame limit (TODO: Base this on build time benchmark too)
+	device->flushThresholdPrimitives = 20 * MIBI / 3;
+
+	//Block sizes based on memory of each device (CPU or GPU):
+	// 0 -  6GB ("4GB"):   64MB
+	// 6 - 12GB ("8GB"):  128MB
+	//12 - 24GB ("16GB"): 256MB
+	//24GB+     ("32GB"): 512MB
+	//E.g. Memory allocated CPU visible with a dGPU with 32GB available would use 512MB chunks
+
+	if (!isDistinct) {        //Assume 50/50 split to take a conservative block size approach
+		cpuHeapSize >>= 1;
+		gpuHeapSize >>= 1;
+	}
+
+	device->blockSizeCpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)cpuHeapSize)) - 32, 0, 3);
+	device->blockSizeGpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)gpuHeapSize)) - 32, 0, 3);
+
 	//Create in flight resource refs
 
 	for(U64 i = 0; i < device->framesInFlight; ++i)
@@ -927,46 +1258,6 @@ Bool GraphicsDeviceRef_create(
 			*deviceRef, &pipelineLayoutInfo, &name, &device->defaultPipelineLayout, e_rr
 		));
 	}
-
-	//Determine some flushing and block size sizes for the current GPU
-
-	//Determine when we need to flush.
-	//As a rule of thumb I decided for 20% occupied mem by just copies.
-	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too
-	// (as long as it doesn't exceed 33%).
-	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
-	//TODO: Instead, we should base this on a quick PCIE benchmark,
-	// which is tricky because there might be other things using PCIE right now.
-	//Maybe we can read out this speed directly?
-	//It's more future proof than this (PCIE8 for example could be so much faster)
-
-	const Bool isDistinct = device->info.type == EGraphicsDeviceType_Dedicated;
-	U64 cpuHeapSize = device->info.capabilities.sharedMemory;
-	U64 gpuHeapSize = device->info.capabilities.dedicatedMemory;
-
-	device->flushThreshold = U64_min(
-		4 * GIBI,
-		isDistinct ? U64_min(gpuHeapSize / 3, cpuHeapSize / 10 + gpuHeapSize / 5) :
-		cpuHeapSize / 5
-	);
-
-	//20M vertices per frame limit (TODO: Base this on build time benchmark too)
-	device->flushThresholdPrimitives = 20 * MIBI / 3;
-
-	//Block sizes based on memory of each device (CPU or GPU):
-	// 0 -  6GB ("4GB"):   64MB
-	// 6 - 12GB ("8GB"):  128MB
-	//12 - 24GB ("16GB"): 256MB
-	//24GB+     ("32GB"): 512MB
-	//E.g. Memory allocated CPU visible with a dGPU with 32GB available would use 512MB chunks
-
-	if (!isDistinct) {        //Assume 50/50 split to take a conservative block size approach
-		cpuHeapSize >>= 1;
-		gpuHeapSize >>= 1;
-	}
-
-	device->blockSizeCpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)cpuHeapSize)) - 32, 0, 3);
-	device->blockSizeGpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)gpuHeapSize)) - 32, 0, 3);
 
 	//Create constant buffer and staging buffer / allocators
 
@@ -1234,6 +1525,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	if(extensions & ESHExtension_SubgroupOperations)        features |= EGraphicsFeatures_SubgroupOperations;
 	if(extensions & ESHExtension_SubgroupArithmetic)        features |= EGraphicsFeatures_SubgroupArithmetic;
 	if(extensions & ESHExtension_SubgroupShuffle)           features |= EGraphicsFeatures_SubgroupShuffle;
+	if(extensions & ESHExtension_SubgroupQuad)              features |= EGraphicsFeatures_SubgroupQuad;
 
 	if(extensions & ESHExtension_Multiview)                 features |= EGraphicsFeatures_Multiview;
 
@@ -2011,6 +2303,45 @@ Bool GraphicsDeviceRef_submitCommands(
 
 	lockPtr = NULL;
 
+	//A compaction MOVED a structure some TLAS had resolved, and none of the lists in this submit updates
+	//that TLAS. Letting it through would trace against a structure released when the frame completes, which
+	//shows up as missing geometry and a FASTER frame rather than as a fault. Refuse instead.
+	//
+	//The question is asked of the RECORDINGS being submitted rather than of a flag set while recording, so
+	//a list recorded once and submitted many times answers for every one of those submits, and a list that
+	//is recorded and never submitted answers for none.
+	//
+	//Says nothing about a device memory TLAS, which is the caller's; see CommandListRef_compactBLASExt.
+
+	for (U64 i = 0; i < device->liveTlases.length; ++i) {
+
+		TLASRef *tlasRef = (TLASRef*) device->liveTlases.ptr[i];
+		const TLAS *tlas = TLASRef_ptr(tlasRef);
+
+		//The structure the compaction moved is released when the submit holding the copy completes, so this
+		// TLAS is still valid for THAT submit. Anything after it would be tracing released memory.
+
+		if(!TLAS_hasFlag(tlas, ETLASFlag_AddressesStale) || tlas->staleAtSubmitId >= device->submitId)
+			continue;
+
+		Bool updated = false;
+
+		for(U64 j = 0; !updated && j < (!commandLists ? 0 : commandLists->length); ++j) {
+
+			CommandListRef *listRef = commandLists->ptr[j];
+
+			if(listRef && listRef->refPtrType->typeId == (TypeId) EGraphicsTypeId_CommandList)
+				updated = CommandList_updatesTLAS(CommandListRef_ptr(listRef), tlasRef);
+		}
+
+		if(!updated)
+			retError(clean, Error_invalidState(
+				0,
+				"GraphicsDeviceRef_submitCommands() a BLAS was compacted out from under a TLAS that still "
+				"holds its old address, and no list in this submit updates it"
+			));
+	}
+
 	//Validate command lists
 
 	for(U64 i = 0; i < (!commandLists ? 0 : commandLists->length); ++i) {
@@ -2254,6 +2585,10 @@ Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 		retError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_wait() device's lock couldn't be acquired"));
 
 	gotoIfError3(clean, GraphicsDeviceRef_waitExt(deviceRef, e_rr));
+
+	//The device is idle, so every submit recorded so far has finished.
+
+	device->completedSubmitId = device->submitId;
 
 	for (U64 i = 0; i < device->framesInFlight; ++i) {
 

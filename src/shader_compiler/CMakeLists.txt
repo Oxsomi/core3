@@ -154,9 +154,15 @@ if(EnableTests AND OxC3TestExecutables)
 	# Appended rather than assigned: the caller sets options of its own that the whole suite depends on,
 	# and a plain ENVIRONMENT would replace them instead of adding to them.
 
+	# Through oxc3_test_env rather than set_tests_properties: a test property reaches ctest only, and this
+	# suite also runs at build time behind its stamp, where it would abort on the very mismatch these
+	# options exist to allow.
+
 	if(EnableASAN)
-		set_tests_properties(OxC3_shader_compiler_test PROPERTIES ENVIRONMENT_MODIFICATION
-			"ASAN_OPTIONS=string_append:,new_delete_type_mismatch=0;LSAN_OPTIONS=string_append:,suppressions=${CMAKE_SOURCE_DIR}/cmake/lsan_suppressions.txt")
+		oxc3_test_env(OxC3_shader_compiler_test
+			"ASAN_OPTIONS=string_append:,new_delete_type_mismatch=0"
+			"LSAN_OPTIONS=string_append:,suppressions=${CMAKE_SOURCE_DIR}/cmake/lsan_suppressions.txt"
+		)
 	endif()
 
 endif()

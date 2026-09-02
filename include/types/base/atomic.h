@@ -55,6 +55,12 @@ typedef struct AtomicI64 {
 
 		AtomicI64() = default;
 
+		//Declaring the two above costs the struct its aggregate status, and with it `= { 0 }`, which is how
+		// a lock at file scope is written everywhere in the codebase and still works in C and on Windows.
+		//Taking the value back restores that spelling rather than making every such site platform specific.
+
+		AtomicI64(I64 value) : atomic(value) {}
+
 		AtomicI64(const AtomicI64 &other) { atomic.store(other.atomic.load()); }
 
 		AtomicI64 &operator=(const AtomicI64 &other) {

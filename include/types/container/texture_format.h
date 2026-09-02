@@ -184,6 +184,16 @@ typedef enum ETextureFormat {
 
 	ETextureFormat_BGR10A2            = _ETextureFormat(ETexturePrimitive_UNormBGR, 10, 10, 10, 2),
 
+	//Shared exponent HDR: three 9 bit mantissas over one 5 bit exponent, 32 bits total.
+	//The exponent rides in the ALPHA field because the encoding has nowhere else to put it, and the odd
+	// mantissa widths don't survive the >>1 storage, so the per channel accessors special case this format
+	// rather than decoding it. ETextureFormat_isExponentialEncode is what says to read it that way.
+	//What the raw encoding still gets right is the part everything depends on: the size field is the SUM of
+	// the four counts, which is even, so getBits and getSize are exact with no special case at all.
+	//The value is unique: it would otherwise decode as a Float 8/8/8/4, which is not a format that exists.
+
+	ETextureFormat_RGB9E5             = _ETextureFormat(ETexturePrimitive_Float, 9, 9, 9, 5),
+
 	//Compression formats
 
 	//Desktop
@@ -391,19 +401,36 @@ static inline U64 ETextureFormat_getBits(ETextureFormat f) {
 	return length << (isCompressed ? 6 : 2);
 }
 
+//True when the channels share one exponent, so they are NOT independent bit fields and can't be masked
+// out of the texel individually. The rgb counts are mantissa widths and there is no alpha.
+
+static inline Bool ETextureFormat_isExponentialEncode(ETextureFormat f) {
+	return f == ETextureFormat_RGB9E5;
+}
+
+//Shared exponent width, 0 for every format that doesn't have one.
+
+static inline U64 ETextureFormat_getExponentBits(ETextureFormat f) {
+	return f == ETextureFormat_RGB9E5 ? 5 : 0;
+}
+
 static inline U64 ETextureFormat_getAlphaBits(ETextureFormat f) {
+	if(ETextureFormat_isExponentialEncode(f)) return 0;        //The alpha field holds the exponent, not alpha
 	return ETextureFormat_getIsCompressed(f) ? f & 7 : (f & 077) << 1;
 }
 
 static inline U64 ETextureFormat_getBlueBits(ETextureFormat f) {
+	if(ETextureFormat_isExponentialEncode(f)) return 9;        //Mantissa width; >>1 storage can't hold an odd count
 	return ETextureFormat_getIsCompressed(f) ? (f >> 6) & 7 : ((f >> 6) & 077) << 1;
 }
 
 static inline U64 ETextureFormat_getGreenBits(ETextureFormat f) {
+	if(ETextureFormat_isExponentialEncode(f)) return 9;
 	return ETextureFormat_getIsCompressed(f) ? (f >> 12) & 7 : ((f >> 12) & 077) << 1;
 }
 
 static inline U64 ETextureFormat_getRedBits(ETextureFormat f) {
+	if(ETextureFormat_isExponentialEncode(f)) return 9;
 	return ETextureFormat_getIsCompressed(f) ? (f >> 18) & 7 : ((f >> 18) & 077) << 1;
 }
 
@@ -571,6 +598,11 @@ typedef enum ETextureFormatId {
 	ETextureFormatId_ASTC_12x10,    ETextureFormatId_ASTC_12x10_sRGB,
 	ETextureFormatId_ASTC_12x12,    ETextureFormatId_ASTC_12x12_sRGB,
 
+	//Appended rather than grouped with BGR10A2 under "Special format": these ids are stored, so inserting
+	// one in the middle would renumber every BCn and ASTC entry and change what already written files mean.
+
+	ETextureFormatId_RGB9E5,
+
 	ETextureFormatId_Count        //Ensure Count < 0xF0, because depth stencil might occupy it.
 
 } ETextureFormatId;
@@ -585,20 +617,20 @@ static const ETextureFormat ETextureFormatId_unpack[] = {
 
 	//Standard formats
 
-	ETextureFormat_R8,                ETextureFormat_RG8,            ETextureFormat_RGBA8,        ETextureFormat_BGRA8,
-	ETextureFormat_R8s,                ETextureFormat_RG8s,        ETextureFormat_RGBA8s,
-	ETextureFormat_R8u,                ETextureFormat_RG8u,        ETextureFormat_RGBA8u,
-	ETextureFormat_R8i,                ETextureFormat_RG8i,        ETextureFormat_RGBA8i,
+	ETextureFormat_R8,              ETextureFormat_RG8,          ETextureFormat_RGBA8,        ETextureFormat_BGRA8,
+	ETextureFormat_R8s,             ETextureFormat_RG8s,         ETextureFormat_RGBA8s,
+	ETextureFormat_R8u,             ETextureFormat_RG8u,         ETextureFormat_RGBA8u,
+	ETextureFormat_R8i,             ETextureFormat_RG8i,         ETextureFormat_RGBA8i,
 
-	ETextureFormat_R16,                ETextureFormat_RG16,        ETextureFormat_RGBA16,
+	ETextureFormat_R16,             ETextureFormat_RG16,         ETextureFormat_RGBA16,
 	ETextureFormat_R16s,            ETextureFormat_RG16s,        ETextureFormat_RGBA16s,
 	ETextureFormat_R16u,            ETextureFormat_RG16u,        ETextureFormat_RGBA16u,
 	ETextureFormat_R16i,            ETextureFormat_RG16i,        ETextureFormat_RGBA16i,
 	ETextureFormat_R16f,            ETextureFormat_RG16f,        ETextureFormat_RGBA16f,
 
-	ETextureFormat_R32u,            ETextureFormat_RG32u,        ETextureFormat_RGB32u,        ETextureFormat_RGBA32u,
-	ETextureFormat_R32i,            ETextureFormat_RG32i,        ETextureFormat_RGB32i,        ETextureFormat_RGBA32i,
-	ETextureFormat_R32f,            ETextureFormat_RG32f,        ETextureFormat_RGB32f,        ETextureFormat_RGBA32f,
+	ETextureFormat_R32u,            ETextureFormat_RG32u,        ETextureFormat_RGB32u,       ETextureFormat_RGBA32u,
+	ETextureFormat_R32i,            ETextureFormat_RG32i,        ETextureFormat_RGB32i,       ETextureFormat_RGBA32i,
+	ETextureFormat_R32f,            ETextureFormat_RG32f,        ETextureFormat_RGB32f,       ETextureFormat_RGBA32f,
 
 	//Special format
 
@@ -606,8 +638,8 @@ static const ETextureFormat ETextureFormatId_unpack[] = {
 
 	//BCn
 
-	ETextureFormat_BC4,                ETextureFormat_BC5,            ETextureFormat_BC6H,        ETextureFormat_BC7,
-	ETextureFormat_BC4s,            ETextureFormat_BC5s,                                    ETextureFormat_BC7_sRGB,
+	ETextureFormat_BC4,             ETextureFormat_BC5,          ETextureFormat_BC6H,         ETextureFormat_BC7,
+	ETextureFormat_BC4s,            ETextureFormat_BC5s,                                      ETextureFormat_BC7_sRGB,
 
 	//ASTC
 
@@ -623,13 +655,15 @@ static const ETextureFormat ETextureFormatId_unpack[] = {
 	ETextureFormat_ASTC_8x6,        ETextureFormat_ASTC_8x6_sRGB,
 	ETextureFormat_ASTC_8x8,        ETextureFormat_ASTC_8x8_sRGB,
 
-	ETextureFormat_ASTC_10x5,        ETextureFormat_ASTC_10x5_sRGB,
-	ETextureFormat_ASTC_10x6,        ETextureFormat_ASTC_10x6_sRGB,
-	ETextureFormat_ASTC_10x8,        ETextureFormat_ASTC_10x8_sRGB,
-	ETextureFormat_ASTC_10x10,        ETextureFormat_ASTC_10x10_sRGB,
+	ETextureFormat_ASTC_10x5,       ETextureFormat_ASTC_10x5_sRGB,
+	ETextureFormat_ASTC_10x6,       ETextureFormat_ASTC_10x6_sRGB,
+	ETextureFormat_ASTC_10x8,       ETextureFormat_ASTC_10x8_sRGB,
+	ETextureFormat_ASTC_10x10,      ETextureFormat_ASTC_10x10_sRGB,
 
-	ETextureFormat_ASTC_12x10,        ETextureFormat_ASTC_12x10_sRGB,
-	ETextureFormat_ASTC_12x12,        ETextureFormat_ASTC_12x12_sRGB
+	ETextureFormat_ASTC_12x10,      ETextureFormat_ASTC_12x10_sRGB,
+	ETextureFormat_ASTC_12x12,      ETextureFormat_ASTC_12x12_sRGB,
+
+	ETextureFormat_RGB9E5
 };
 
 //Mapping between DXGI_FORMAT and ETextureFormat
@@ -639,19 +673,19 @@ typedef U32 DXFormat;            //DXGI_FORMAT (Can't use Windows.h, bloated and
 static const U8 DXFormat_toTextureFormatIdArr[100] = {
 	ETextureFormatId_Undefined,                // 0
 	ETextureFormatId_Undefined,                // 1
-	ETextureFormatId_RGBA32f,                // 2
-	ETextureFormatId_RGBA32u,                // 3
-	ETextureFormatId_RGBA32i,                // 4
+	ETextureFormatId_RGBA32f,                  // 2
+	ETextureFormatId_RGBA32u,                  // 3
+	ETextureFormatId_RGBA32i,                  // 4
 	ETextureFormatId_Undefined,                // 5
-	ETextureFormatId_RGB32f,                // 6
-	ETextureFormatId_RGB32u,                // 7
-	ETextureFormatId_RGB32i,                // 8
+	ETextureFormatId_RGB32f,                   // 6
+	ETextureFormatId_RGB32u,                   // 7
+	ETextureFormatId_RGB32i,                   // 8
 	ETextureFormatId_Undefined,                // 9
-	ETextureFormatId_RGBA16f,                // 10
-	ETextureFormatId_RGBA16,                // 11
-	ETextureFormatId_RGBA16u,                // 12
-	ETextureFormatId_RGBA16s,                // 13
-	ETextureFormatId_RGBA16i,                // 14
+	ETextureFormatId_RGBA16f,                  // 10
+	ETextureFormatId_RGBA16,                   // 11
+	ETextureFormatId_RGBA16u,                  // 12
+	ETextureFormatId_RGBA16s,                  // 13
+	ETextureFormatId_RGBA16i,                  // 14
 	ETextureFormatId_Undefined,                // 15
 	ETextureFormatId_RG32f,                    // 16
 	ETextureFormatId_RG32u,                    // 17
@@ -661,50 +695,50 @@ static const U8 DXFormat_toTextureFormatIdArr[100] = {
 	ETextureFormatId_Undefined,                // 21
 	ETextureFormatId_Undefined,                // 22
 	ETextureFormatId_Undefined,                // 23
-	ETextureFormatId_BGR10A2,                // 24
+	ETextureFormatId_BGR10A2,                  // 24
 	ETextureFormatId_Undefined,                // 25
 	ETextureFormatId_Undefined,                // 26
 	ETextureFormatId_Undefined,                // 27
 	ETextureFormatId_RGBA8,                    // 28
 	ETextureFormatId_Undefined,                // 29
-	ETextureFormatId_RGBA8u,                // 30
-	ETextureFormatId_RGBA8s,                // 31
-	ETextureFormatId_RGBA8i,                // 32
+	ETextureFormatId_RGBA8u,                   // 30
+	ETextureFormatId_RGBA8s,                   // 31
+	ETextureFormatId_RGBA8i,                   // 32
 	ETextureFormatId_Undefined,                // 33
 	ETextureFormatId_RG16f,                    // 34
-	ETextureFormatId_RG16,                    // 35
+	ETextureFormatId_RG16,                     // 35
 	ETextureFormatId_RG16u,                    // 36
 	ETextureFormatId_RG16s,                    // 37
 	ETextureFormatId_RG16i,                    // 38
 	ETextureFormatId_Undefined,                // 39
 	EDepthStencilFormat_D32 + 0xF0,            // 40 (DepthStencil)
-	ETextureFormatId_R32f,                    // 41
-	ETextureFormatId_R32u,                    // 42
-	ETextureFormatId_R32i,                    // 43
+	ETextureFormatId_R32f,                     // 41
+	ETextureFormatId_R32u,                     // 42
+	ETextureFormatId_R32i,                     // 43
 	ETextureFormatId_Undefined,                // 44
-	EDepthStencilFormat_D24S8Ext + 0xF0,    // 45 (DepthStencil)
+	EDepthStencilFormat_D24S8Ext + 0xF0,       // 45 (DepthStencil)
 	ETextureFormatId_Undefined,                // 46
 	ETextureFormatId_Undefined,                // 47
 	ETextureFormatId_Undefined,                // 48
-	ETextureFormatId_RG8,                    // 49
-	ETextureFormatId_RG8u,                    // 50
-	ETextureFormatId_RG8s,                    // 51
-	ETextureFormatId_RG8i,                    // 52
+	ETextureFormatId_RG8,                      // 49
+	ETextureFormatId_RG8u,                     // 50
+	ETextureFormatId_RG8s,                     // 51
+	ETextureFormatId_RG8i,                     // 52
 	ETextureFormatId_Undefined,                // 53
-	ETextureFormatId_R16f,                    // 54
+	ETextureFormatId_R16f,                     // 54
 	EDepthStencilFormat_D16 + 0xF0,            // 55 (DepthStencil)
-	ETextureFormatId_R16,                    // 56
-	ETextureFormatId_R16u,                    // 57
-	ETextureFormatId_R16s,                    // 58
-	ETextureFormatId_R16i,                    // 59
+	ETextureFormatId_R16,                      // 56
+	ETextureFormatId_R16u,                     // 57
+	ETextureFormatId_R16s,                     // 58
+	ETextureFormatId_R16i,                     // 59
 	ETextureFormatId_Undefined,                // 60
-	ETextureFormatId_R8,                    // 61
-	ETextureFormatId_R8u,                    // 62
-	ETextureFormatId_R8s,                    // 63
-	ETextureFormatId_R8i,                    // 64
+	ETextureFormatId_R8,                       // 61
+	ETextureFormatId_R8u,                      // 62
+	ETextureFormatId_R8s,                      // 63
+	ETextureFormatId_R8i,                      // 64
 	ETextureFormatId_Undefined,                // 65
 	ETextureFormatId_Undefined,                // 66
-	ETextureFormatId_Undefined,                // 67
+	ETextureFormatId_RGB9E5,                   // 67
 	ETextureFormatId_Undefined,                // 68
 	ETextureFormatId_Undefined,                // 69
 	ETextureFormatId_Undefined,                // 70
@@ -717,11 +751,11 @@ static const U8 DXFormat_toTextureFormatIdArr[100] = {
 	ETextureFormatId_Undefined,                // 77
 	ETextureFormatId_Undefined,                // 78
 	ETextureFormatId_Undefined,                // 79
-	ETextureFormatId_BC4,                    // 80
-	ETextureFormatId_BC4s,                    // 81
+	ETextureFormatId_BC4,                      // 80
+	ETextureFormatId_BC4s,                     // 81
 	ETextureFormatId_Undefined,                // 82
-	ETextureFormatId_BC5,                    // 83
-	ETextureFormatId_BC5s,                    // 84
+	ETextureFormatId_BC5,                      // 83
+	ETextureFormatId_BC5s,                     // 84
 	ETextureFormatId_Undefined,                // 85
 	ETextureFormatId_Undefined,                // 86
 	ETextureFormatId_BGRA8,                    // 87
@@ -732,11 +766,11 @@ static const U8 DXFormat_toTextureFormatIdArr[100] = {
 	ETextureFormatId_Undefined,                // 92
 	ETextureFormatId_Undefined,                // 93
 	ETextureFormatId_Undefined,                // 94
-	ETextureFormatId_BC6H,                    // 95
+	ETextureFormatId_BC6H,                     // 95
 	ETextureFormatId_Undefined,                // 96
 	ETextureFormatId_Undefined,                // 97
-	ETextureFormatId_BC7,                    // 98
-	ETextureFormatId_BC7_sRGB                // 99
+	ETextureFormatId_BC7,                      // 98
+	ETextureFormatId_BC7_sRGB                  // 99
 };
 
 static inline ETextureFormatId DXFormat_toTextureFormatId(DXFormat format) {
@@ -788,7 +822,9 @@ static const U8 ETextureFormatId_toDXFormatArr[ETextureFormatId_Count] = {
 	0, 0, 0, 0,
 	0, 0, 0, 0,
 	0, 0, 0, 0,
-	0, 0, 0, 0
+	0, 0, 0, 0,
+
+	67        // ETextureFormatId_RGB9E5 -> DXGI_FORMAT_R9G9B9E5_SHAREDEXP
 };
 
 static inline DXFormat ETextureFormatId_toDXFormat(ETextureFormatId format) {

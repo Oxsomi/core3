@@ -81,6 +81,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_NV_partitioned_acceleration_structure (.partitionedAccelerationStructure) as RayPartitionedTLAS (features2; mega geometry PTLAS)
   - VK_KHR_acceleration_structure .accelerationStructureIndirectBuild as RayIndirectASBuild (features2; GPU-driven classic AS builds)
   - VK_EXT_descriptor_heap (.descriptorHeap) as DescriptorHeap (features2); only reported when Bindless also passed, so the feature implies the same baseline on both APIs
+  - VkPhysicalDeviceLimits.timestampComputeAndGraphics, with a non-zero timestampValidBits on the graphics queue family, as Timestamps (features2); limits.timestampPeriod gives the nanoseconds per tick stored in capabilities.timestampPeriod, and results are masked to timestampValidBits before conversion
   - VK_NV_cooperative_vector as CoopVec (cooperative vectors; .cooperativeVectorTraining as CoopVecTraining)
   - VK_KHR_cooperative_matrix as CoopMat (cooperative matrix / GEMM)
   - VK_EXT_shader_float8 as CoopFP8 (.shaderFloat8 - the additive FP8 e4m3/e5m2 cooperative tier)
@@ -114,7 +115,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxFramebufferWidth, maxFramebufferHeight, maxImageDimension1D,  maxImageDimension2D, maxImageDimensionCube, maxViewportDimensions[i] of 16Ki or higher.
 - maxFramebufferLayers, maxImageDimension3D, maxImageArrayLayers of 256 or higher.
 - maxPushConstantsSize of 128 or higher.
-- maxSamplerAllocationCount of 1024 or higher.
+- maxSamplerAllocationCount of 996 or higher (see "Why 996 samplers" below).
 - maxSamplerAnisotropy of 16 or higher.
 - maxStorageBufferRange of 128MiB or higher.
 - maxSamplerLodBias of 4 or higher.
@@ -164,13 +165,13 @@ Bindless is supported when the GPU has the following capabilities:
   - on: shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
 - maxDescriptorSetUpdateAfterBindInputAttachments 8
 - maxDescriptorSetUpdateAfterBindSampledImages 1000000
-- maxDescriptorSetUpdateAfterBindSamplers 1024
+- maxDescriptorSetUpdateAfterBindSamplers 996
 - maxDescriptorSetUpdateAfterBindStorageBuffers 1000000
 - maxDescriptorSetUpdateAfterBindStorageImages 1000000
 - maxDescriptorSetUpdateAfterBindUniformBuffers 90
 - maxPerStageDescriptorUpdateAfterBindInputAttachments 8
 - maxPerStageDescriptorUpdateAfterBindSampledImages 1000000
-- maxPerStageDescriptorUpdateAfterBindSamplers 1024
+- maxPerStageDescriptorUpdateAfterBindSamplers 996
 - maxPerStageDescriptorUpdateAfterBindStorageBuffers 1000000
 - maxPerStageDescriptorUpdateAfterBindStorageImages 1000000
 - maxPerStageDescriptorUpdateAfterBindUniformBuffers 15
@@ -191,6 +192,39 @@ Without bindless, it should be guaranteed that at least the following are availa
 - maxDescriptorSetSampledImages of 96 or higher.
 - maxDescriptorSetStorageImages of 24 or higher.
 - 16 acceleration structures if RT is supported.
+
+##### Why 996 samplers
+
+The sampler heap is 996 entries rather than a round 1024 because Metal caps the number of samplers
+reachable per stage from an argument buffer at 996 on Apple7 and Apple8 (M1/M2, A14 through A16); it only
+rises to 500,000 at Apple9 (M3, A17 Pro). A 1024 entry heap excluded every Apple GPU below M3 from
+Bindless.
+
+It also excluded them from running OxC3 at all, but that is a placement choice rather than a consequence:
+maxSamplerAllocationCount is checked with the hard minimum spec limits, where a miss rejects the device,
+even though the value itself is derived from the bindless sampler heap. The bindful path needs only the
+baseline further down (16 per stage, 80 per set), and EGraphicsDeviceFlags_DisableBindless exists, so a
+device that cannot host the heap could still run bindfully. Moving that one requireLimit into the Bindless
+capability check would turn a rejection into a missing feature bit. That applies to a future native
+Metal backend and to Vulkan through MoltenVK alike, since MoltenVK reports Metal's argument buffer
+sampler cap as its sampler limit.
+
+996 costs nothing elsewhere. OxC3 itself refuses any heap above 2048 samplers
+(DescriptorHeapInfo validation in graphics/generic/descriptor_heap.c, matching D3D12's shader visible
+sampler heap limit), and maxSamplers is a U16, so 996 is well inside what can actually be created.
+The count reaches a real heap on both backends: the default bindless layout in device.c contributes it to
+heapInfo.maxSamplers, which becomes NumDescriptors on D3D12 and a VkDescriptorPoolSize on Vulkan. Samplers are
+also the one descriptor type with no packing consequence: EDescriptorTypeOffset_Sampler is 0 and samplers
+live in their own heap, so unlike the texture and buffer counts this value shifts no other descriptor's
+offset. ResourceId_mask is a shared 17 bit handle mask rather than a per array bound, so the array size
+does not have to be a power of two.
+
+Two values have to stay in sync: EDescriptorTypeCount_Sampler in src/graphics/generic/device.c and the
+_samplers array in include/shader_compiler/shaders/resources.hlsli.
+
+This covers the update after bind limits only. maxPerStageDescriptorSamplers and maxDescriptorSetSamplers
+are separate Vulkan limits and are still required at 2048; whether MoltenVK reports those above 996 on
+Apple7/Apple8 is unverified, and is one of the things a macOS runtime test would answer.
 
 #### Multi draw indirect count
 
@@ -221,7 +255,8 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
   - maxRayRecursionDepth >= 1.
   - maxShaderGroupStride >= 4096.
   - shaderGroupHandleSize should be 32.
-- shaderGroupBaseAlignment should be 32 or 64.
+- shaderGroupBaseAlignment should be a power of two of at most 64; the alignment is a divisor
+  requirement, so the shader binding table laid out at 64 satisfies any of them (ANV reports 16).
   - rayTraversalPrimitiveCulling and rayTracingPipelineTraceRaysIndirect should be enabled.
 
 #### Mesh shaders
@@ -229,7 +264,6 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
 Requires task shaders to be present.
 
 - Limits of:
-  - maxMeshMultiviewViewCount >= 4.
   - maxMeshOutputComponents of >= 127.
   - maxMeshOutputLayers of >= 8.
   - maxMeshOutputMemorySize of >= 32Ki.
@@ -239,14 +273,19 @@ Requires task shaders to be present.
   - maxMeshWorkGroupCount[i], maxTaskWorkGroupCount[i] of >= U16_MAX.
   - maxMeshWorkGroupInvocations, maxMeshWorkGroupSize[i], maxTaskWorkGroupInvocations, maxTaskWorkGroupSize[i] of >=128.
   - maxMeshWorkGroupTotalCount of >=4Mi.
-  - maxPreferredMeshWorkGroupInvocations of >=32.
-  - maxPreferredTaskWorkGroupInvocations of >= 32.
   - maxTaskPayloadAndSharedMemorySize of >= 32Ki.
   - maxTaskPayloadSize of >= 16Ki.
   - maxTaskSharedMemorySize of >= 32Ki.
   - maxTaskWorkGroupTotalCount of >= 4 Mi.
-  - meshOutputPerPrimitiveGranularity, meshOutputPerVertexGranularity of >= 32.
-  - prefersCompactPrimitiveOutput of true.
+
+The preference and hint properties are NOT required: prefersCompactPrimitiveOutput and the
+maxPreferred*WorkGroupInvocations values are scheduling advice, and the meshOutputPer*Granularity
+values only describe how coarsely output allocations round (ANV 8, NV 32); a device may report any
+of them.
+
+MeshShader does NOT guarantee the multiview interplay: ANV reports maxMeshMultiviewViewCount of 1
+with multiviewMeshShader disabled, so combining mesh shaders with multiview means checking those
+properties yourself.
 
 #### Atomics
 
@@ -291,6 +330,18 @@ The following lossless formats have to be supported for a valid OxC3 implementat
 - RGBA32u, RGBA32i, RGBA32f
 - BGRA8, BGR10A2
 
+RGB9E5 (shared exponent HDR) is required for READING only: sampling and linear filtering it are available
+on effectively every device OxC3 targets. Writing it is optional, see the data type list below.
+
+Linear filtering is NOT implied by any of the above. Two families are commonly sampleable but not filterable,
+and the hardware missing each is almost disjoint, splitting by vendor rather than by tier:
+
+- 16 bit unorm/snorm (R16, RG16, RGBA16 and their snorm twins), gated by `EGraphicsDataTypes_LinearFilter16Norm`
+- 32 bit float (R32f, RG32f, RGBA32f), gated by `EGraphicsDataTypes_LinearFilter32f`
+
+Use `GraphicsDeviceInfo_supportsFormatLinearFilter` before attaching a linear sampler to one of these. A device
+without the bit either fails validation or silently point samples, so this is not a case that reports itself.
+
 The following are required with VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT only:
 
 - RGB32u, RGB32i, RGB32f
@@ -316,6 +367,11 @@ Lossy formats:
   - VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT
 - All ASTC formats have to be supported if EGraphicsDataTypes_ASTC is on.
 - All BCn formats have to be supported if EGraphicsDataTypes_BCn is on.
+
+RGB9E5 writing is a single optional tier: `EGraphicsDataTypes_WriteRGB9E5` covers both storage image and
+render target use, since a device that lacks one essentially always lacks the other. Reading is required and
+so is never gated. Anything that PRODUCES the format rather than consuming it has to check this and carry a
+fallback; `GraphicsDeviceInfo_supportsRenderTextureFormat` already returns false for it without the bit.
 
 The following are optional: If they're not properly supported `GraphicsDeviceInfo_supportsFormat` or `GraphicsDeviceInfo_supportsDepthStencilFormat` will return false.
 
@@ -382,6 +438,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - DerivativesInMeshAndAmplificationShadersSupported as MeshTaskTexDeriv.
 - ShaderModel 6.6 support as ComputeDeriv.
 - ShaderModel 6.6 support + resource binding tier 3 as DescriptorHeap (features2) - SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) on top of Bindless.
+- Timestamps (features2) is always set: D3D12 supports timestamp queries on the direct and compute queues, and ID3D12CommandQueue::GetTimestampFrequency gives the ticks per second, inverted to the nanoseconds per tick stored in capabilities.timestampPeriod. There is no per-queue valid-bits concept, so results are full 64-bit and unmasked.
 - NVAPI NvAPI_D3D12_GetRaytracingCaps cluster operations as RayClusterAS and partitioned TLAS as RayPartitionedTLAS (features2, mega geometry; NVAPI only until a vendor-neutral query exists). Either one also implies RayIndirectASBuild (features2): the mega geometry builds (BUILD_BLAS_FROM_CLAS cluster op, NvAPI_D3D12_BuildRaytracingPartitionedTlasIndirect) are GPU-driven by design, while classic BuildRaytracingAccelerationStructure(Ex) has no indirect variant on D3D12.
 - ShaderModel 6.10 support as EGraphicsFeatures_CoopVec + CoopMat + CoopFP8 + CoopVecTraining + RayTriPosition (D3D12 has no separate caps query; SM6.10 is the proxy - the cooperative-vector TIER_1_0 Minimum Support Set already includes FP16/INT8/FP8; TIER_1_1 not yet a real query). These are gated on enabling D3D12ExperimentalShaderModels on both device factories at instance creation (best-effort: needs the preview Agility SDK + Windows Developer Mode; on failure they're simply not reported). Because they're preview, they're also flagged in GraphicsDeviceCapabilities.experimentalFeatures (a subset of `features` that isn't final); on Vulkan they're real extensions so experimentalFeatures stays empty.
 - D3D12_FEATURE_ASYNC_COMMANDS Supported (Agility 1.720-preview) as EDxGraphicsFeatures_BatchedAsyncCommandList.

@@ -358,6 +358,12 @@ void UnifiedTexture_free(TextureRef *textureRef) {
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 	GraphicsDeviceRef *device = texture->resource.device;
 
+	//A half built texture (its create failed before the device was attached) owns nothing: the ext
+	// free and the resource free both dispatch through the device, so a zeroed object must stop here.
+
+	if(!device)
+		return;
+
 	if(texture->resource.flags & EGraphicsResourceFlag_ExposeBindless) {
 
 		const UnifiedTextureImage *img = TextureRef_getImageIntern(textureRef, 0, 0);
@@ -433,7 +439,18 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 		));
 
 	if (texture.resource.type == EResourceType_Swapchain) {
-		if(texture.images < 3 || texture.images > 5)
+
+		//A swapchain that owns its images holds one per frame in flight, which is two on Android, so it is held
+		// to the device's count rather than to the floor a presentation engine hands a physical one.
+
+		if (texture.resource.flags & EGraphicsResourceFlag_InternalOwnsImages) {
+			if(texture.images != GraphicsDeviceRef_ptr(texture.resource.device)->framesInFlight)
+				retError(clean, Error_invalidParameter(
+					1, 0, "UnifiedTexture_create()::texturePtr->images has to be framesInFlight for a virtual swapchain"
+				));
+		}
+
+		else if(texture.images < 3 || texture.images > 5)
 			retError(clean, Error_invalidParameter(
 				1, 0, "UnifiedTexture_create()::texturePtr->images is only allowed to be 3-5 swapchains"
 			));

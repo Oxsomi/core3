@@ -48,7 +48,16 @@ Ns Time_now() {
 	return (Ns)ts.tv_sec * SECOND + (Ns)ts.tv_nsec;
 }
 
-#ifdef __clang__
+#if _PLATFORM_TYPE == PLATFORM_WEB
+
+	//__builtin_readcyclecounter lowers to 0 on wasm; use the monotonic sub-ms timer instead.
+	//Nanoseconds rather than cycles, which is fine: callers only use this for relative measurement.
+
+	#include <emscripten/emscripten.h>
+	U64 Time_clocks() {
+		return (U64) (emscripten_get_now() * 1e6);
+	}
+#elif defined(__clang__)
 	U64 Time_clocks() {
 		return __builtin_readcyclecounter();
 	}

@@ -72,7 +72,15 @@ typedef enum ETLASFlag {
 
 	ETLASFlag_InstancesDirty             = 1 << 4,
 
-	ETLASFlag_Count                      = 5
+	//A compaction MOVED a structure this TLAS resolved, so the addresses it holds name memory that is
+	//being released. Recording the compaction sets this; recording an update of this TLAS clears it,
+	//because that update re-resolves them. A submit refuses to go out while any live TLAS still carries
+	//it, so the window where a TLAS could be traced against a structure that moved is an ERROR and not a
+	//silently wrong frame.
+
+	ETLASFlag_AddressesStale             = 1 << 5,
+
+	ETLASFlag_Count                      = 6
 
 } ETLASFlag;
 
@@ -119,6 +127,12 @@ typedef struct TLAS {
 	BindlessDescriptor handle;
 
 	U32 padding0;
+
+	//Submit that was being recorded when a compaction invalidated this TLAS's addresses. The structure it
+	//moved lives until THAT submit completes, so the TLAS is still valid for it; every submit after it is
+	//refused until an update re-resolves.
+
+	U64 staleAtSubmitId;
 
 	DeviceBufferRef *tempInstanceBuffer;        //If cpuInstances, temp upload heap
 

@@ -55,7 +55,7 @@ static const U32 U32_MAX = 0xFFFFFFFFu;
 //The arrays below keep their own set and bindings either way, so turning this off renumbers nothing.
 
 #ifdef __OXC_EXT_DYNAMICSAMPLERS
-	_binding( 0, 0, s0, 		SamplerState _samplers[1024]);
+	_binding( 0, 0, s0, 		SamplerState _samplers[996]);
 #endif
 
 _binding( 0, 1, t0, 		Texture2D _textures2D[131072]);

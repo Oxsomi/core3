@@ -22,6 +22,7 @@
 
 #include "graphics/generic/interface.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/tlas.h"
 #include "graphics/generic/opacity_micromap.h"
 #include "platforms/logx.h"
 #include "graphics/generic/device_buffer.h"
@@ -41,8 +42,25 @@ void BLAS_free(void *blasGeneric, const Allocator *alloc) {
 	BLAS_freeExt(blas);
 	CharString_free(&blas->base.name, alloc);
 
+	//The build claims a slot and prepareCompactBLAS hands it back, so a structure destroyed between the two,
+	// or one whose compaction is never prepared at all, is the one path left that can return it.
+	//Without this the slot stays claimed for the rest of the session and the pools grow by one every time.
+
+	if(blas->base.compactionQuery != U32_MAX) {
+
+		GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
+
+		GraphicsDevice_releaseCompactionQuery(device, blas->base.compactionQuery, alloc);
+		blas->base.compactionQuery = U32_MAX;
+	}
+
 	RefPtr_dec(&blas->base.asBuffer);
 	RefPtr_dec(&blas->base.tempScratchBuffer);
+
+	//The destination of a compaction that was prepared but never recorded; BLAS_freeExt above has already
+	// destroyed whatever the backend put in it.
+
+	RefPtr_dec(&blas->base.pendingCompactBuffer);
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
 		Buffer_free(&blas->cpuData, alloc);
@@ -360,6 +378,13 @@ Bool GraphicsDeviceRef_createBLAS(
 	*blasPtr = *blas;
 	blasPtr->base.name = CharString_createNull();
 
+	//U32_MAX means no compacted size slot is claimed, which is what the free path reads to decide whether it
+	// has one to hand back.
+	//Set from the copied struct here rather than in a backend's init, so the sentinel holds for both backends
+	// and for a creation that fails before the backend ever ran.
+
+	blasPtr->base.compactionQuery = U32_MAX;
+
 	//Set as soon as the object exists rather than once it is fully built.
 	//A failure below frees the half built BLAS, and BLAS_freeExt reaches the backend through base.device,
 	// so leaving it for the end turned any late failure into a crash.
@@ -654,3 +679,208 @@ Bool GraphicsDeviceRef_createBLASProceduralExt(
 //
 //    return GraphicsDeviceRef_createBLAS(dev, &blasInfo, name, blas, e_rr);
 //}
+
+//Slot bookkeeping for the compacted size. The backend owns the storage this indexes into; WHICH slot is
+//shared, so the two backends cannot drift apart on recycling or on when the storage has to grow.
+
+//Pool k holds base << k slots, so the storage doubles: tens of thousands of pending structures need a
+//handful of pools, and a scene with a few never allocates past the first.
+
+Bool GraphicsDevice_claimCompactionQuery(
+	GraphicsDevice *device, U32 base, U32 *query, Bool *needsPool, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	*needsPool = false;
+
+	//A returned slot before a new one, so a scene that compacts as it builds never grows the storage at all.
+
+	if(device->compactionFreeQueries.length) {
+		*query = device->compactionFreeQueries.ptr[device->compactionFreeQueries.length - 1];
+		gotoIfError3(clean, ListU32_popBack(&device->compactionFreeQueries, NULL, e_rr));
+		goto clean;
+	}
+
+	//The pools together hold base * (2^n - 1) slots, so the count landing exactly on that boundary is what
+	// says the next slot has no storage behind it yet.
+
+	U32 covered = 0, size = base;
+
+	while(covered + size <= device->compactionQueryCount) {
+		covered += size;
+		size <<= 1;
+	}
+
+	*needsPool = covered == device->compactionQueryCount;
+	*query = device->compactionQueryCount++;
+
+clean:
+	return s_uccess;
+}
+
+//The size of the pool a new slot needs, which is the one the caller is about to create.
+
+U32 GraphicsDevice_compactionPoolSize(const GraphicsDevice *device, U32 base) {
+
+	U32 covered = 0, size = base;
+
+	while(covered + size <= device->compactionQueryCount) {
+		covered += size;
+		size <<= 1;
+	}
+
+	return size;
+}
+
+void GraphicsDevice_compactionQueryPool(U32 query, U32 base, U32 *pool, U32 *index) {
+
+	U32 covered = 0, size = base, i = 0;
+
+	while(covered + size <= query) {
+		covered += size;
+		size <<= 1;
+		++i;
+	}
+
+	*pool = i;
+	*index = query - covered;
+}
+
+//Failing to recycle would leak one slot, which is not worth failing the compaction that just succeeded.
+
+void GraphicsDevice_releaseCompactionQuery(GraphicsDevice *device, U32 query, const Allocator *alloc) {
+	ListU32_pushBack(&device->compactionFreeQueries, query, alloc, NULL);
+}
+
+//Everything about whether a compaction may happen at all, which is all that can be decided without
+//touching an API. The backend reads the size and allocates the destination.
+//
+//Runs while the copy is being RECORDED, so a rejection reaches the caller there rather than from inside a
+//submit. See CommandListRef_compactBLASExt for what the rules mean to a caller.
+
+Bool GraphicsDeviceRef_markTlasesStaleForBLAS(GraphicsDeviceRef *deviceRef, BLASRef *blasRef, Bool duringSubmit, Error *e_rr) {
+
+	Bool s_uccess = true;
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	//liveTlases is device state a create or a free on another thread can be mutating.
+	//Reentrant by the lock's own convention: only an Acquired result unlocks, so a caller already holding
+	// the device lock (submit processing) passes straight through.
+
+	const ELockAcquire liveAcq = SpinLock_lock(&device->lock, U64_MAX);
+
+	if(liveAcq < ELockAcquire_Success)
+		retError(clean, Error_invalidState(
+			2, "GraphicsDeviceRef_markTlasesStaleForBLAS() couldn't acquire device lock"
+		));
+
+	for (U64 i = 0; i < device->liveTlases.length; ++i) {
+
+		TLAS *tlas = TLASRef_ptr((TLASRef*) device->liveTlases.ptr[i]);
+
+		//A device memory TLAS writes its own instance addresses, so whether it references this structure
+		// cannot be read from here and its addresses could not be re-resolved anyway. Skipped, and the
+		// caller owns it; see CommandListRef_compactBLASExt.
+
+		if(TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
+			continue;
+
+		for (U64 j = 0; j < tlas->cpuInstances.length; ++j) {
+
+			TLASInstanceData dat = (TLASInstanceData) { 0 };
+			TLAS_getInstanceDataCpu(tlas, j, &dat);
+
+			if (dat.blasCpu == blasRef) {
+
+				//InstancesDirty is what makes the next build actually re-resolve: an update on its own
+				// refits without refilling, so the TLAS would otherwise rebuild around the old address.
+
+				tlas->base.flagsExt |= (U8) (ETLASFlag_AddressesStale | ETLASFlag_InstancesDirty);
+
+				//staleAtSubmitId names the LAST submit the old address is valid for, which the refusal
+				// grace compares against (staleAtSubmitId >= submitId passes).
+				//At record time that is the upcoming submit (submitId); during submit processing the
+				// counter already advanced past the submit being processed, so it is submitId - 1: stamping
+				// the raw counter there would gift the NEXT submit the grace and let a stale trace through.
+
+				tlas->staleAtSubmitId = device->submitId - (duringSubmit ? 1 : 0);
+				break;
+			}
+		}
+	}
+
+	if(liveAcq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->lock);
+
+clean:
+	return s_uccess;
+}
+
+Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef *blasRef, Bool *recorded, Error *e_rr) {
+
+	Bool s_uccess = true;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	BLAS *blas = NULL;
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_prepareCompactBLAS()::deviceRef is required"));
+
+	if(!blasRef || blasRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_BLASExt)
+		retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_prepareCompactBLAS()::blasRef is required"));
+
+	if(!recorded)
+		retError(clean, Error_nullPointer(2, "GraphicsDeviceRef_prepareCompactBLAS()::recorded is required"));
+
+	*recorded = false;
+	blas = BLASRef_ptr(blasRef);
+
+	//Nothing to do rather than an error, so a caller can sweep everything it owns without first sorting out
+	// what was built compactable, and recording twice is harmless.
+
+	if(blas->base.isCompacted || !(blas->base.flags & ERTASBuildFlags_AllowCompaction))
+		goto clean;
+
+	if(!blas->base.isCompleted)
+		retError(clean, Error_invalidOperation(
+			0, "GraphicsDeviceRef_prepareCompactBLAS() the structure has to be built first"
+		));
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(blas->base.compactionQuery == U32_MAX)
+		retError(clean, Error_invalidState(
+			2,
+			"GraphicsDeviceRef_prepareCompactBLAS() no compacted size was recorded for this structure, "
+			"its build predates the compaction path or the backend doesn't support it"
+		));
+
+	//The size is produced BY the build, so it does not exist until that build's submit has run. A submit is
+	// done if the device was waited since, or if framesInFlight submits have been queued behind it, which
+	// is what forced its fence to be waited.
+
+	const Bool completed =
+		device->completedSubmitId >= blas->base.compactionSubmitId ||
+		device->submitId >= blas->base.compactionSubmitId + device->framesInFlight;
+
+	if(!completed)
+		retError(clean, Error_invalidState(
+			3,
+			"GraphicsDeviceRef_prepareCompactBLAS() the build's submit hasn't completed, so the compacted "
+			"size isn't readable yet, record the compaction in a later submit than the build"
+		));
+
+	if((acq = SpinLock_lock(&blas->base.lock, U64_MAX)) < ELockAcquire_Success)
+		retError(clean, Error_invalidOperation(
+			4, "GraphicsDeviceRef_prepareCompactBLAS() couldn't acquire the RTAS lock"
+		));
+
+	gotoIfError3(clean, BLASRef_prepareCompactExt(deviceRef, blasRef, recorded, e_rr));
+
+clean:
+
+	if(blas && acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&blas->base.lock);
+
+	return s_uccess;
+}

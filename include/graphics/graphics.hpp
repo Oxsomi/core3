@@ -858,6 +858,34 @@ namespace oxc {
 			}
 		};
 
+		//Timing region sub-scope (Timestamps feature), mirroring CommandDebugRegion: nothing records "on" it, you keep
+		// recording through the owning scope while it is alive, and it only guarantees endTimingRegionExt across early
+		// returns. Made by CommandScope::timingRegion.
+
+		class CommandTimingRegion {
+
+			c::CommandListRef *list;
+
+		public:
+
+			explicit CommandTimingRegion(c::CommandListRef *l) noexcept : list(l) {}
+			~CommandTimingRegion() noexcept { end(); }
+
+			CommandTimingRegion(const CommandTimingRegion&) = delete;
+			CommandTimingRegion &operator=(const CommandTimingRegion&) = delete;
+			CommandTimingRegion(CommandTimingRegion &&other) noexcept : list(other.list) { other.list = nullptr; }
+			CommandTimingRegion &operator=(CommandTimingRegion&&) = delete;
+
+			[[nodiscard]] explicit operator bool() const noexcept { return list; }
+
+			c::Bool end(c::Error *e_rr = nullptr) noexcept {
+				if(!list) return true;
+				c::CommandListRef *l = list;
+				list = nullptr;
+				return c::CommandListRef_endTimingRegionExt(l, e_rr);
+			}
+		};
+
 		class CommandScope {
 
 			c::CommandListRef *list;
@@ -991,6 +1019,22 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool dispatch2DRays(c::U32 raygenLocalId, c::U32 x, c::U32 y, c::Error *e_rr = nullptr) noexcept {
 				return c::CommandListRef_dispatch2DRaysExt(list, raygenLocalId, x, y, e_rr);
+			}
+
+			//Ray dispatch sized by three U32s (width, height, depth) the GPU wrote into buffer at offset, so a count
+			// computed on the device never has to be read back. Portable across both backends; see the C entry point.
+
+			[[nodiscard]] c::Bool dispatchRaysIndirect(
+				const DeviceBuffer &buffer, c::U64 offset, c::U32 raygenLocalId = 0, c::Error *e_rr = nullptr
+			) noexcept {
+				return c::CommandListRef_dispatchRaysIndirectExt(list, buffer.handle(), offset, raygenLocalId, e_rr);
+			}
+
+			//Records the compacting copy. See GraphicsDeviceRef_prepareCompactBLAS for the ordering and
+			//timing rules, all of which are checked here rather than left to the caller.
+
+			[[nodiscard]] c::Bool compactBlas(const Blas &b, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_compactBLASExt(list, b.handle(), e_rr);
 			}
 
 			[[nodiscard]] c::Bool updateBlas(const Blas &b, c::Error *e_rr = nullptr) noexcept {
@@ -1152,6 +1196,51 @@ namespace oxc {
 				return CommandDebugRegion(list);
 			}
 
+			//Timestamps feature.
+			//id is a hot path key read back without comparing strings (0 when unused); name is a convenience
+			// (nullptr when unused). Prefer timingRegion() below; the raw pair is for regions that cannot nest lexically.
+
+			[[nodiscard]] c::Bool startTimingRegion(
+				c::U32 id, const c::C8 *regionName = nullptr, c::Error *e_rr = nullptr
+			) noexcept {
+
+				if(!regionName)
+					return c::CommandListRef_startTimingRegionExt(list, id, nullptr, e_rr);
+
+				const c::CharString n = name(regionName);
+				return c::CommandListRef_startTimingRegionExt(list, id, &n, e_rr);
+			}
+
+			[[nodiscard]] c::Bool endTimingRegion(c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_endTimingRegionExt(list, e_rr);
+			}
+
+			[[nodiscard]] c::Bool insertTiming(
+				c::U32 id, const c::C8 *pointName = nullptr, c::Error *e_rr = nullptr
+			) noexcept {
+
+				if(!pointName)
+					return c::CommandListRef_insertTimingExt(list, id, nullptr, e_rr);
+
+				const c::CharString n = name(pointName);
+				return c::CommandListRef_insertTimingExt(list, id, &n, e_rr);
+			}
+
+			//Timing region sub-scope, mirroring regionDebug():
+			// a refused start returns a null region and endTimingRegionExt runs on destruction.
+
+			[[nodiscard]] CommandTimingRegion timingRegion(
+				c::U32 id, const c::C8 *regionName = nullptr, c::Error *e_rr = nullptr
+			) noexcept {
+
+				const c::CharString n = regionName ? name(regionName) : c::CharString{};
+
+				if(!c::CommandListRef_startTimingRegionExt(list, id, regionName ? &n : nullptr, e_rr))
+					return CommandTimingRegion(nullptr);
+
+				return CommandTimingRegion(list);
+			}
+
 			//Escape hatch:
 			// a command this layer has not wrapped yet must never force abandoning the RAII layer - record it as
 			// c::CommandListRef_*(scope.raw(), ...) while the scope is open.
@@ -1174,23 +1263,74 @@ namespace oxc {
 			//A refused scope invalidates the recording, see CommandScope for what that costs. e_rr carries the reason;
 			// check the returned scope and stop recording if it is falsy.
 
+			//Timestamps feature: turn per scope GPU timing on/off for this list before recording. Once on, every
+			// scope gets a begin and end timestamp keyed by its id unless it passes ECommandScopeFlags_DisableTimestamp.
+
+			[[nodiscard]] c::Bool setScopeTiming(c::Bool enable, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_setScopeTimingExt(handle(), enable, e_rr);
+			}
+
+			//Timestamps/DebugMarkers: turn per scope auto debug regions on/off before recording. Once on, every scope
+			// given a name (see scope()) emits a labelled begin/end debug region, unless it disables it.
+
+			[[nodiscard]] c::Bool setScopeDebug(c::Bool enable, c::Error *e_rr = nullptr) noexcept {
+				return c::CommandListRef_setScopeDebugExt(handle(), enable, e_rr);
+			}
+
 			[[nodiscard]] CommandScope scope(
 				std::initializer_list<c::Transition> transitions,
 				c::U32 id = 0,
 				std::initializer_list<c::CommandScopeDependency> deps = {},
 				c::Error *e_rr = nullptr
 			) noexcept {
+				return scope(ScopeDesc{ .transitions = transitions, .deps = deps, .id = id }, e_rr);
+			}
+
+			//Everything beyond the bare form rides in ONE descriptor, so a new scope option is a field rather
+			// than another overload. Designated initializers keep call sites readable: transitions and deps are
+			// initializer lists living for the full call expression, name turns on the debug label, and a
+			// predicate (with its 8-byte aligned offset) makes the scope CONDITIONAL, see
+			// CommandListRef_startScope for the contract.
+
+			struct ScopeDesc {
+
+				//MSVC does not implement list initialization in a non static data member initializer for an
+				// initializer_list member (C2797), so these two default through an explicit call rather than {}.
+				//Its default constructor already gives the empty list {} would have.
+
+				using Transitions = std::initializer_list<c::Transition>;
+				using Deps = std::initializer_list<c::CommandScopeDependency>;
+
+				Transitions transitions = Transitions();
+				Deps deps = Deps();
+				c::U32 id{};
+				c::ECommandScopeFlags flags = c::ECommandScopeFlags_None;
+				const c::C8 *name{};
+				const DeviceBuffer *predicate{};
+				c::U64 predicateOffset{};
+			};
+
+			[[nodiscard]] CommandScope scope(const ScopeDesc &desc, c::Error *e_rr = nullptr) noexcept {
 
 				c::ListTransition transitionList{};
 				c::ListCommandScopeDependency depList{};
 
-				if(transitions.size())
-					(void) c::ListTransition_createRefConst(transitions.begin(), transitions.size(), &transitionList, nullptr);
+				if(desc.transitions.size())
+					(void) c::ListTransition_createRefConst(
+						desc.transitions.begin(), desc.transitions.size(), &transitionList, nullptr
+					);
 
-				if(deps.size())
-					(void) c::ListCommandScopeDependency_createRefConst(deps.begin(), deps.size(), &depList, nullptr);
+				if(desc.deps.size())
+					(void) c::ListCommandScopeDependency_createRefConst(
+						desc.deps.begin(), desc.deps.size(), &depList, nullptr
+					);
 
-				if(!c::CommandListRef_startScope(handle(), &transitionList, id, &depList, e_rr))
+				const c::CharString n = desc.name ? name(desc.name) : c::CharString{};
+
+				if(!c::CommandListRef_startScope(
+					handle(), &transitionList, desc.id, &depList, desc.flags, desc.name ? &n : nullptr,
+					desc.predicate ? desc.predicate->handle() : nullptr, desc.predicateOffset, e_rr
+				))
 					return CommandScope(nullptr);
 
 				return CommandScope(handle());
@@ -1205,6 +1345,20 @@ namespace oxc {
 				const c::CommandScopeDependency *deps = nullptr, c::U64 depCount = 0,
 				c::Error *e_rr = nullptr
 			) noexcept {
+				return scopeSpan(transitions, transitionCount, id, deps, depCount, c::ECommandScopeFlags_None, nullptr, e_rr);
+			}
+
+			//Flags overload, as scope() above; id, deps and depCount are required so it never collides with the form
+			// above.
+
+			[[nodiscard]] CommandScope scopeSpan(
+				const c::Transition *transitions, c::U64 transitionCount,
+				c::U32 id,
+				const c::CommandScopeDependency *deps, c::U64 depCount,
+				c::ECommandScopeFlags flags,
+				const c::C8 *scopeName = nullptr,
+				c::Error *e_rr = nullptr
+			) noexcept {
 
 				c::ListTransition transitionList{};
 				c::ListCommandScopeDependency depList{};
@@ -1215,7 +1369,11 @@ namespace oxc {
 				if(depCount)
 					(void) c::ListCommandScopeDependency_createRefConst(deps, depCount, &depList, nullptr);
 
-				if(!c::CommandListRef_startScope(handle(), &transitionList, id, &depList, e_rr))
+				const c::CharString n = scopeName ? name(scopeName) : c::CharString{};
+
+				if(!c::CommandListRef_startScope(
+					handle(), &transitionList, id, &depList, flags, scopeName ? &n : nullptr, nullptr, 0, e_rr
+				))
 					return CommandScope(nullptr);
 
 				return CommandScope(handle());
@@ -1304,6 +1462,31 @@ namespace oxc {
 		// defines/uniforms params).
 		//BORROWED, like every other initializer_list here:
 		// build it in the call expression, never store it.
+
+		//One entry of a pipeline, optionally carrying its OWN variant.
+		//
+		//Resolution is already per entry: the wrapper calls resolveEntry once per name and hands the C
+		//layer resolved binary ids, which carry no variant at all. A single pipeline-wide variant was a
+		//property of this signature rather than of the pipeline, and it made a permutation of ONE entry
+		//inexpressible. A binary's define set must EQUAL the requested one, so asking for a raygen's
+		//defines asked them of every miss and hit shader that declares none, and those stopped resolving.
+		//
+		//Implicit from const C8*, so a plain { "a", "b" } list still means "use the pipeline default".
+		//The variant is BORROWED: one passed inline lives to the end of the full expression, the same
+		//lifetime ShaderVariant's own initializer_list members already depend on.
+
+		struct ShaderVariant;
+
+		struct ShaderEntry {
+
+			const c::C8 *name = nullptr;
+			const ShaderVariant *variant = nullptr;
+
+			ShaderEntry(const c::C8 *name) noexcept : name(name) {}
+
+			ShaderEntry(const c::C8 *name, const ShaderVariant &variant) noexcept :
+				name(name), variant(&variant) {}
+		};
 
 		struct ShaderVariant {
 			c::ESHExtension prefer = c::ESHExtension_None;
@@ -1499,6 +1682,13 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool wait(c::Error *e_rr = nullptr) noexcept {
 				return c::GraphicsDeviceRef_wait(handle(), e_rr);
+			}
+
+			//Timestamps feature: copies the most recently completed frame's GPU timings into out, keyed by id and
+			// name, latent by framesInFlight submits. out is caller-owned; free it with c::ListGraphicsTiming_freeUnderlying.
+
+			[[nodiscard]] c::Bool timings(c::ListGraphicsTiming &out, c::Error *e_rr = nullptr) noexcept {
+				return c::GraphicsDeviceRef_getTimings(handle(), &out, e_rr);
 			}
 
 			//---- factories (each adopts the C factory's reference)
@@ -1723,8 +1913,8 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool createRaytracingPipeline(
 				const c::SHFile &shFile,
-				std::initializer_list<const c::C8*> raygenEntries,
-				const c::C8 *missEntry, std::initializer_list<const c::C8*> closestHitEntries,
+				std::initializer_list<ShaderEntry> raygenEntries,
+				ShaderEntry missEntry, std::initializer_list<ShaderEntry> closestHitEntries,
 				const c::C8 *debugName, Pipeline &result,
 				const ShaderVariant &variant = {},
 				c::U8 maxRecursionDepth = 1,
@@ -1758,9 +1948,11 @@ namespace oxc {
 
 				c::U64 n = 0;
 
-				auto resolve = [&](const c::C8 *entry) noexcept -> c::Bool {
+				//An entry's own variant wins; the pipeline's is only the default for entries without one.
 
-					const c::U32 id = resolveEntry(shFile, entry, variant);
+				auto resolve = [&](const ShaderEntry &entry) noexcept -> c::Bool {
+
+					const c::U32 id = resolveEntry(shFile, entry.name, entry.variant ? *entry.variant : variant);
 
 					if(id == c::U32_MAX)
 						return false;
@@ -1769,7 +1961,7 @@ namespace oxc {
 					return true;
 				};
 
-				for(const c::C8 *entry : raygenEntries)
+				for(const ShaderEntry &entry : raygenEntries)
 					if(!resolve(entry)) {
 						if(e_rr) *e_rr = c::Error_notFound(0, 0, "raygen entry not found or unsupported");
 						return false;
@@ -1782,7 +1974,7 @@ namespace oxc {
 
 				c::U64 groupCount = 0;
 
-				for(const c::C8 *entry : closestHitEntries) {
+				for(const ShaderEntry &entry : closestHitEntries) {
 
 					if(!resolve(entry)) {
 						if(e_rr) *e_rr = c::Error_notFound(2, 0, "closesthit entry not found or unsupported");
@@ -2051,6 +2243,9 @@ namespace oxc {
 			// so none of the position/index format business applies. aabbStride is 8 byte aligned;
 			// buffer needs EDeviceBufferUsage_ASReadExt like every RTAS input,
 			// and build recording stays manual (updateBlas in a scope), exactly like the triangle path.
+
+			//Swap a built BLAS for a compacted copy. The build must have COMPLETED (submit, then wait), and
+			//every TLAS referencing it must be created after, because compaction moves the structure.
 
 			[[nodiscard]] c::Bool createBlasProcedural(
 				c::ERTASBuildFlags buildFlags, c::EBLASFlag blasFlags,

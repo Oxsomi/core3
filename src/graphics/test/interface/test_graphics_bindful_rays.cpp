@@ -264,6 +264,64 @@ extern "C" void Test_graphicsBindfulRays(oxc::c::Test *t, oxc::c::GraphicsDevice
 			Test_assert(t, "bindfulRayResults", values[0] == 1 && values[1] == 1 && !values[2] && !values[3]);
 		}
 
+	//dispatchRaysIndirect: the same four rays, but sized by a buffer instead of the record, into a fresh output so
+	// the result can only come from the indirect trace. Vulkan reads the buffer directly; D3D12 copies its three
+	// counts into an ExecuteIndirect argument buffer beside the pipeline's shader binding table.
+
+	{
+		const c::U32 dims[3] = { 4, 1, 1 };
+		c::Buffer dimsData = c::Buffer_createRefConst(dims, sizeof(dims));
+
+		gfx::DeviceBuffer indirectDims, indirectOutput;
+
+		const c::Bool indirectReady =
+			Test_assert(t, "indirectDimsCreate", dev.createBufferData(
+				c::EDeviceBufferUsage_Indirect, c::EGraphicsResourceFlag_CPUBacked,
+				"Indirect ray dims", &dimsData, indirectDims, nullptr, e_rr
+			)) &&
+			Test_assert(t, "indirectOutputCreate", dev.createBuffer(
+				c::EDeviceBufferUsage_None,
+				(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+				"Indirect rays output", 4 * sizeof(c::U32), indirectOutput, nullptr, e_rr
+			));
+
+		if(indirectReady) {
+
+			const c::Descriptor indirectOutputDesc = c::Descriptor_buffer(indirectOutput.handle(), 0, 0, NULL, 0);
+			Test_assert(t, "setIndirectOutput", table.setByName("output", indirectOutputDesc, 0, false, e_rr));
+
+			const c::Transition indirectTransitions[2] = {
+				{ .resource = indirectOutput.handle(), .stage = c::EPipelineStage_RaygenExt, .isWrite = true },
+				{ .resource = tlas.handle(), .stage = c::EPipelineStage_RaygenExt }
+			};
+
+			Test_assert(t, "beginIndirect", commandList.begin(true, e_rr));
+
+			{
+				gfx::CommandScope scope = commandList.scopeSpan(indirectTransitions, 2, 4, nullptr, 0, e_rr);
+				Test_assert(t, "scopeIndirect", (c::Bool) scope);
+				Test_assert(t, "bindHeapIndirect", scope.bindDescriptorHeap(heap, e_rr));
+				Test_assert(t, "bindTableIndirect", scope.bindDescriptorTable(table, e_rr));
+				Test_assert(t, "bindPipelineIndirect", scope.setRaytracingPipeline(pipeline, e_rr));
+				Test_assert(t, "traceIndirect", scope.dispatchRaysIndirect(indirectDims, 0, 0, e_rr));
+				Test_assert(t, "scopeIndirectEnd", scope.end(e_rr));
+			}
+
+			Test_assert(t, "endIndirect", commandList.end(e_rr));
+
+			if(gfxtest::submitAndWait(t, dev, commandList))
+				if(gfxtest::pullBuffer(t, dev, emptyList, indirectOutput)) {
+					const c::U32 *v = (const c::U32*) indirectOutput.data()->cpuData.ptr;
+					Test_assert(t, "indirectRayResults", v[0] == 1 && v[1] == 1 && !v[2] && !v[3]);
+				}
+
+			//Restore the shared output binding for the refit phases that follow.
+
+			const c::Descriptor restoreDesc = c::Descriptor_buffer(output.handle(), 0, 0, NULL, 0);
+			Test_assert(t, "restoreOutput", table.setByName("output", restoreDesc, 0, false, e_rr));
+		}
+	}
+
 	//Refit in place: the same TLAS object gets new instance data and is rebuilt rather than recreated, so
 	// the descriptor written into the table earlier has to keep addressing it. Moving the instance far along
 	// Z takes it out of every ray's path, so all four rays must miss without the table being touched again.

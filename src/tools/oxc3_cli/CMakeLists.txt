@@ -64,9 +64,16 @@ add_executable(
 set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi/CLI)
 target_link_libraries(OxC3 PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3CLI)
 
+
 include(../../../cmake/oxc3.cmake)
+
+apply_web_link_options(OxC3)
 configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
-add_virtual_dependencies(TARGET OxC3 DEPENDENCIES OxC3_graphics)
+
+if(CLIGraphics)
+	add_virtual_dependencies(TARGET OxC3 DEPENDENCIES OxC3_graphics)
+endif()
+
 apply_dependencies(OxC3)
 
 # Done automatically by apply_dependencies in things that use OxC3 as a conan package

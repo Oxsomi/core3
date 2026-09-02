@@ -92,6 +92,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_SubgroupShuffle)
 			Log_debugLnx("\t\tSubgroup shuffle");
 
+		if(feat & EGraphicsFeatures_SubgroupQuad)
+			Log_debugLnx("\t\tSubgroup quad");
+
 		if(feat & EGraphicsFeatures_Multiview)
 			Log_debugLnx("\t\tMultiview");
 
@@ -137,6 +140,12 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(cap.features2 & EGraphicsFeatures2_RayIndirectASBuild)
 			Log_debugLnx("\t\tRaytracing indirect acceleration structure builds");
+
+		if(cap.features2 & EGraphicsFeatures2_Timestamps)
+			Log_debugLnx("\t\tGPU timestamps (%f ns/tick)", (F64) cap.timestampPeriod);
+
+		if(cap.features2 & EGraphicsFeatures2_Predication)
+			Log_debugLnx("\t\tPredicated scopes");
 
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
@@ -240,6 +249,15 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(dat & EGraphicsDataTypes_RGB32i)
 			Log_debugLnx("\t\tETextureFormat_RGBA32i for use in textures (not just vertex input)");
+
+		if(dat & EGraphicsDataTypes_LinearFilter16Norm)
+			Log_debugLnx("\t\tLinear filtering of 16 bit unorm/snorm textures");
+
+		if(dat & EGraphicsDataTypes_LinearFilter32f)
+			Log_debugLnx("\t\tLinear filtering of 32 bit float textures");
+
+		if(dat & EGraphicsDataTypes_WriteRGB9E5)
+			Log_debugLnx("\t\tWriting RGB9E5 (storage image and render target)");
 
 		//API specific features
 
@@ -378,7 +396,50 @@ Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETe
 	}
 }
 
+Bool GraphicsDeviceInfo_supportsFormatLinearFilter(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format) {
+
+	if(!deviceInfo)
+		return false;
+
+	//Integer formats can't be filtered at all, by the spec rather than by device.
+
+	const ETexturePrimitive prim = ETextureFormat_getPrimitive(format);
+
+	if(prim == ETexturePrimitive_UInt || prim == ETexturePrimitive_SInt)
+		return false;
+
+	switch (format) {
+
+		//The two families that split by vendor (see EGraphicsDataTypes_LinearFilter*).
+
+		case ETextureFormat_R16:        case ETextureFormat_R16s:
+		case ETextureFormat_RG16:       case ETextureFormat_RG16s:
+		case ETextureFormat_RGBA16:     case ETextureFormat_RGBA16s:
+			return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_LinearFilter16Norm;
+
+		case ETextureFormat_R32f:       case ETextureFormat_RG32f:      case ETextureFormat_RGBA32f:
+			return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_LinearFilter32f;
+
+		//Shared exponent is its own hardware path and measures at 100%, so it does NOT inherit the 32 bit
+		// float family's gap even though its primitive says Float.
+
+		case ETextureFormat_RGB9E5:
+			return true;
+
+		//Everything else that OxC3 requires at all is filterable wherever it is sampleable.
+
+		default:
+			return GraphicsDeviceInfo_supportsFormat(deviceInfo, format);
+	}
+}
+
 Bool GraphicsDeviceInfo_supportsRenderTextureFormat(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format) {
+
+	//Sampling RGB9E5 is required, writing it is not; a render texture is the writing half.
+
+	if(format == ETextureFormat_RGB9E5)
+		return deviceInfo && (deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_WriteRGB9E5);
+
 	return !ETextureFormat_getIsCompressed(format) && GraphicsDeviceInfo_supportsFormat(deviceInfo, format);
 }
 

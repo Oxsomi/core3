@@ -88,6 +88,8 @@ TList(VkSemaphore);
 TList(VkResult);
 TList(VkSwapchainKHR);
 TList(VkPipelineStageFlags);
+TList(VkQueryPool);
+TList(VkAccelerationStructureKHR);
 
 //The highest descriptor set index OxC3 will bind on Vulkan, and so the highest register space a layout may
 //name there: on SPIR-V a space IS a set index, and a pipeline layout has to describe EVERY index up to the
@@ -121,6 +123,33 @@ typedef struct VkGraphicsDevice {
 	//When false that wait, and its reset, is skipped and the still-unsignaled fence is reused directly.
 	//This self-heals once submits succeed again.
 	Bool commitFencePending[MAX_FRAMES_IN_FLIGHT];
+
+	//Timing (EGraphicsFeatures2_Timestamps): one query pool per frame in flight, host-read at the fence-gated
+	// recycle a frame later. timestampPeriod is nanoseconds per tick, timestampValidBits the meaningful low bits on
+	// the graphics queue, and timestampCursor the transient next slot while an op walk records.
+
+	VkQueryPool timestampPool[MAX_FRAMES_IN_FLIGHT];
+
+	//Compacted-size queries, one slot per BLAS awaiting compaction. The size only exists once the build has
+	//EXECUTED, so it cannot be read inside the build's own submit.
+	//
+	//Slots return to the free list as compactions consume them, so what is bounded is how many structures
+	//await compaction AT ONCE, and the storage grows for that too.
+
+	#define VK_COMPACTION_QUERIES_BASE 256                      //First pool; each one after it doubles
+
+	ListVkQueryPool compactionPools;                        //Slot i is index i % N of pool i / N
+
+	//Structures a compaction replaced. The buffer under one is a RefPtr and rides the frame's in-flight
+	//list, but the acceleration structure handle is not, so it is destroyed here when the fence for the
+	//frame that recorded the copy proves that copy done.
+
+	ListVkAccelerationStructureKHR retiredAs[MAX_FRAMES_IN_FLIGHT];
+	U32 timestampCapacity[MAX_FRAMES_IN_FLIGHT];
+	F32 timestampPeriod;
+	U32 timestampValidBits;
+	U32 timestampCursor;
+	U32 padding4;
 
 	//Push descriptor emulation, only allocated on a device that lacks VK_KHR_push_descriptor.
 	//One set per frame in flight, each pointing at that frame's globals buffer for the lifetime of the device,
@@ -165,6 +194,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkCmdBuildAccelerationStructuresKHR cmdBuildAccelerationStructures;
 	PFN_vkCreateAccelerationStructureKHR createAccelerationStructure;
 	PFN_vkCmdCopyAccelerationStructureKHR copyAccelerationStructure;
+	PFN_vkCmdWriteAccelerationStructuresPropertiesKHR writeAccelerationStructuresProperties;
 	PFN_vkDestroyAccelerationStructureKHR destroyAccelerationStructure;
 	PFN_vkGetAccelerationStructureBuildSizesKHR getAccelerationStructureBuildSizes;
 	PFN_vkGetAccelerationStructureDeviceAddressKHR getAccelerationStructureDeviceAddress;
@@ -184,6 +214,14 @@ typedef struct VkGraphicsDevice {
 	PFN_vkGetRayTracingShaderGroupHandlesKHR getRayTracingShaderGroupHandles;
 
 	PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2;
+
+	PFN_vkCreateQueryPool createQueryPool;
+	PFN_vkDestroyQueryPool destroyQueryPool;
+	PFN_vkCmdResetQueryPool cmdResetQueryPool;
+	PFN_vkCmdWriteTimestamp cmdWriteTimestamp;
+	PFN_vkCmdBeginConditionalRenderingEXT cmdBeginConditionalRendering;   //NULL without Predication
+	PFN_vkCmdEndConditionalRenderingEXT cmdEndConditionalRendering;
+	PFN_vkGetQueryPoolResults getQueryPoolResults;
 
 	//These functions are manually loaded because the runtime will load them anyways.
 	//However, some of these might not be present when statically linked or on the device itself.
@@ -333,6 +371,8 @@ typedef struct VkCommandBufferState {
 	U16 padding;
 
 	U32 scopeCounter;
+	U8 curScopeFlags;                                  //ECommandScopeInternalFlags of the open scope, StartScope -> EndScope
+	U8 padding5[3];
 
 	VkCommandBuffer buffer;
 
@@ -355,7 +395,6 @@ typedef struct VkDescriptorLayout {
 
 TList(VkDescriptorBufferInfo);
 TList(VkDescriptorImageInfo);
-TList(VkAccelerationStructureKHR);
 
 typedef struct VkDescriptorTableRange {
 

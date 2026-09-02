@@ -134,6 +134,30 @@ Using tabs instead of space; spaces are only for formatting if the alignment is 
 
 Using LF instead of CRLF.
 
+When a call doesn't fit on one line, the closing `)` goes on its own line at the indent of the line that
+OPENED it, and never trails the last argument. The arguments sit one level deeper.
+
+```c
+gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+	deviceRef, EDeviceBufferUsage_ASExt, EGraphicsResourceFlag_None, NULL,
+	&blas->base.name, compactedSize, &blas->base.pendingCompactBuffer, e_rr
+));
+```
+
+A condition that spans lines puts `if (` alone on its line, each operand one level deeper, and the `)` back
+at the `if`'s indent, so the operands read as a list and the body keeps its own indentation. A call nested
+in an operand closes on its own line as well, which is what keeps the operand and its `&&` on one line.
+
+```c
+if (
+	Test_assert(t, "createTlas", dev.createTlas(
+		ERTASBuildFlags_DefaultTLAS, &inst, 1, "Test TLAS", tlas, true, e_rr
+	)) &&
+	compactAndRun(t, dev, blas, "compact")
+)
+	return false;
+```
+
 ## Defines & Macros
 
 Constants as defines should only be used if required; e.g. An array is typedeffed and needs it to be constexpr. But since C doesn't have constexpr, a define should be used. If it's just a constant that's not used for that purpose, it should just be defined as extern.
@@ -152,16 +176,23 @@ If using code snippets from other places, make sure to reference the link to ens
 
 `//` should be preferred when dealing with small comments, unless a large section is commented out or for documentation; in that case `/*` and `*/` should be used. Another reason for `/**/` is if the current formatting doesn't support it or if in a macro definition (since these don't support normal comments).
 
-A comment line holds at most one sentence, and a sentence never starts in the middle of a line. A sentence too long for one line continues on the next rather than sharing a line with the sentence after it. The 128 character limit is a ceiling and not a target here: break at a natural clause boundary well before it, because a comment is read as prose rather than as a filled paragraph.
-
-A line that starts a sentence uses `//`, a line that continues one uses `// ` with a space. That makes the shape of a multi-sentence comment visible without reading it:
+Comments are laid out one sentence per line. A line that starts a new sentence begins flush (`//Word`), while a line that continues an unfinished sentence from the line above begins with a single space (`// word`). This keeps a paragraph diffable per sentence: changing one word rewraps one line instead of every line after it. A sentence that fits within the line limit stays on one line; only wrap when it doesn't. The 128 character limit is a ceiling and not a target: break at a natural clause boundary well before it, because a comment is read as prose rather than as a filled paragraph.
 
 ```c
-//pSetLayouts[i] is descriptor set i, and on SPIR-V a binding's space IS its set index (reflection reports
-// the set as the space), so every set goes at the index its space names, whichever of the two layouts
-// declares it.
-//Packing them from 0 in declaration order, as this once did, matched the shader only while one layout
-// was empty or its spaces happened to start at 0 and run contiguously.
+//Callbacks always receive fully qualified paths: absolute for physical entries, //-prefixed for virtual ones.
+//Either form is itself a valid input for the other File_* functions,
+// so foreach output can be fed straight back in (read, getInfo, ...) without the caller re-rooting anything.
 ```
 
-The same holds for the `#` comments in the build scripts, except that `#` always takes a space after it.
+`#` comments in CMake and python follow the same one sentence per line rule, but have no continuation marker; a sentence too long for one line is broken at a clause boundary and every line starts with `# `.
+
+```cmake
+# Android has no exec, so the per-suite executables ctest runs elsewhere are useless here.
+# This target compiles the same test sources a second time with _OXC3_TEST_BUNDLED,
+# which turns each suite's main() into a named entry (see OXC3_TEST_MAIN / OXC3_TEST_ENTRY in types/test/test.h)
+# that atest_main.c calls in turn.
+```
+
+Comments belong above the thing they explain, never inside an argument list; a `target_link_options` call keeps its rationale in one block above the command rather than interleaved between the flags.
+
+Generated headers are exempt from the sentence-per-line rule: `src/tools/generate_hpp.py` emits doc lines as `\t//{docLine}` with no continuation form, and the `check_generated_hpp` target rejects hand edits to them.

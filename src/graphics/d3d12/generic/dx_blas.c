@@ -228,12 +228,20 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		blas->base.name.ptr
 	));
 
+	//TODO: cache the scratch buffer on the device rather than allocating one per structure.
+	// Scratch is only live between a build and the submit that runs it, so structures built in the same
+	// submit could share one buffer sized to the largest of them, and a build that is not a refit could
+	// hand it straight back. That is a real saving on a scene of many structures, where the scratch can
+	// rival the structures themselves in peak footprint.
+
 	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+
 		blas->base.device,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		NULL,
 		&tmp,
+
 		//One scratch buffer serves both, since the same object now does the full build and every refit after
 		// it; the update size is not required to be the smaller of the two, so neither is assumed.
 
@@ -248,6 +256,115 @@ clean:
 	return s_uccess;
 }
 
+//Compaction, in the two halves the interface splits it into. See the Vulkan pair for the reasoning; the
+//only difference here is that a D3D12 acceleration structure IS its buffer, addressed by that buffer's GPU
+//virtual address, so there is no separate structure object and repointing the buffer is the whole swap.
+
+Bool DX_WRAP_FUNC(BLASRef_prepareCompact)(GraphicsDeviceRef *deviceRef, BLASRef *blasRef, Bool *recorded, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	BLAS *blas = BLASRef_ptr(blasRef);
+
+	const U32 query = blas->base.compactionQuery;
+	U32 pool = 0, slot = 0;
+	GraphicsDevice_compactionQueryPool(query, DX_COMPACTION_QUERIES_BASE, &pool, &slot);
+
+	const U64 offset = (U64) slot * sizeof(U64);
+
+	if(pool >= deviceExt->compactionReadbackPools.length)
+		retError(clean, Error_invalidState(
+			0, "D3D12BLASRef_prepareCompact() the compacted size slot has no storage behind it"
+		));
+
+	DeviceBufferRef *readbackRef = (DeviceBufferRef*) deviceExt->compactionReadbackPools.ptrNonConst[pool];
+
+	const U64 compactedSize = *(const U64*) (
+		(const U8*) DeviceBufferRef_ptr(readbackRef)->resource.mappedMemoryExt + offset
+	);
+
+	//The slot has been consumed either way, so it goes back before any early out below can take it out of
+	// circulation.
+
+	blas->base.compactionQuery = U32_MAX;
+	GraphicsDevice_releaseCompactionQuery(device, query, alloc);
+
+	//A driver is allowed to report no saving. Leaving recorded false keeps a pointless copy out of the
+	// command buffer entirely.
+
+	if(!compactedSize || compactedSize >= DeviceBufferRef_ptr(blas->base.asBuffer)->resource.size) {
+		blas->base.isCompacted = true;
+		goto clean;
+	}
+
+	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+		deviceRef, EDeviceBufferUsage_ASExt, EGraphicsResourceFlag_None, NULL,
+		&blas->base.name, compactedSize, &blas->base.pendingCompactBuffer, e_rr
+	));
+
+	*recorded = true;
+
+clean:
+
+	if(!s_uccess)
+		RefPtr_dec(&blas->base.pendingCompactBuffer);
+
+	return s_uccess;
+}
+
+Bool DX_WRAP_FUNC(BLASRef_compact)(
+	void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *blasRef, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	BLAS *blas = BLASRef_ptr(blasRef);
+
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
+
+	if(!blas->base.pendingCompactBuffer)
+		retError(clean, Error_invalidState(0, "D3D12BLASRef_compact() nothing was prepared for this structure"));
+
+	//Reserved before the copy is recorded, because once it is in the command buffer the structure it reads
+	// cannot be released and a failed retirement would have no undo.
+
+	gotoIfError3(clean, ListRefPtr_reserve(currentFlight, currentFlight->length + 1, alloc, e_rr));
+
+	commandBuffer->buffer->lpVtbl->CopyRaytracingAccelerationStructure(
+		commandBuffer->buffer,
+		DeviceBufferRef_ptr(blas->base.pendingCompactBuffer)->resource.deviceAddress,
+		DeviceBufferRef_ptr(blas->base.asBuffer)->resource.deviceAddress,
+		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT
+	);
+
+	//The structure being replaced cannot go back yet: the copy that reads it has only been recorded. Its
+	// reference MOVES to the flight list, which releases it once this submit completes.
+
+	ListRefPtr_pushBack(currentFlight, blas->base.asBuffer, alloc, NULL);
+
+	blas->base.asBuffer = blas->base.pendingCompactBuffer;
+	blas->base.isCompacted = true;
+
+	blas->base.pendingCompactBuffer = NULL;
+
+	//The address REALLY changes here, so dependents are marked again: a pending TLAS build riding this same
+	// submit may have resolved the old address and cleared the record time mark already.
+
+	gotoIfError3(clean, GraphicsDeviceRef_markTlasesStaleForBLAS(deviceRef, blasRef, true, e_rr));
+
+clean:
+	return s_uccess;
+}
+
 Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -256,6 +373,7 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
@@ -265,7 +383,8 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
 		return s_uccess;
 
-	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(blas->base.asBuffer)->resource.deviceAddress;
+	DeviceBuffer *asBuffer = DeviceBufferRef_ptr(blas->base.asBuffer);
+	D3D12_GPU_VIRTUAL_ADDRESS dstAS = asBuffer->resource.deviceAddress;
 
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildAs = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC) {
 		.DestAccelerationStructureData = dstAS,
@@ -284,6 +403,117 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	}
 
 	commandBuffer->buffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer->buffer, &buildAs, 0, NULL);
+
+	//The compacted size is a property of the BUILT structure, so it is emitted right behind the build and
+	// read back later, once the submit holding both has completed.
+
+	const Bool wantsCompaction =
+		(blas->base.flags & ERTASBuildFlags_AllowCompaction) &&
+		!blas->base.isCompacted &&
+		blas->base.compactionQuery == U32_MAX;
+
+	if (wantsCompaction) {
+
+		U32 query = U32_MAX;
+		Bool needsPool = false;
+
+		const U64 poolBytes =
+			(U64) GraphicsDevice_compactionPoolSize(device, DX_COMPACTION_QUERIES_BASE) * sizeof(U64);
+
+		gotoIfError3(clean, GraphicsDevice_claimCompactionQuery(
+			device, DX_COMPACTION_QUERIES_BASE, &query, &needsPool, e_rr
+		));
+
+		if(needsPool) {
+
+			CharString emitName = CharString_createRefCStrConst("BLAS compacted sizes");
+			DeviceBufferRef *emitPool = NULL;
+
+			gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+				blas->base.device, EDeviceBufferUsage_ScratchExt, EGraphicsResourceFlag_None,
+				NULL, &emitName, poolBytes, &emitPool, e_rr
+			));
+
+			gotoIfError3(clean, ListRefPtr_pushBack(&deviceExt->compactionEmitPools, emitPool, alloc, e_rr));
+
+			CharString readbackName = CharString_createRefCStrConst("BLAS compacted sizes readback");
+			DeviceBufferRef *readbackPool = NULL;
+
+			gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+				blas->base.device, EDeviceBufferUsage_None,
+				EGraphicsResourceFlag_CPUAllocatedBit | EGraphicsResourceFlag_CPUReadBit,
+				NULL, &readbackName, poolBytes, &readbackPool, e_rr
+			));
+
+			gotoIfError3(clean, ListRefPtr_pushBack(&deviceExt->compactionReadbackPools, readbackPool, alloc, e_rr));
+		}
+
+		U32 pool = 0, slot = 0;
+		GraphicsDevice_compactionQueryPool(query, DX_COMPACTION_QUERIES_BASE, &pool, &slot);
+
+		const U64 offset = (U64) slot * sizeof(U64);
+
+		DeviceBufferRef *emitRef = (DeviceBufferRef*) deviceExt->compactionEmitPools.ptr[pool];
+		DeviceBufferRef *readbackRef = (DeviceBufferRef*) deviceExt->compactionReadbackPools.ptr[pool];
+
+		DxDeviceBuffer *emitExt = DeviceBuffer_ext(DeviceBufferRef_ptr(emitRef), Dx);
+
+		D3D12_BARRIER_GROUP dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+
+		//The pool is shared, so the previous structure in this same list left it in COPY_SOURCE. The emit
+		// writes as a UAV, so it has to come back before the write and go again before the copy.
+
+		gotoIfError3(clean, DxDeviceBuffer_transition(
+			emitExt, D3D12_BARRIER_SYNC_EMIT_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO,
+			D3D12_BARRIER_ACCESS_UNORDERED_ACCESS, &deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		gotoIfError3(clean, DxDeviceBuffer_transition(
+			DeviceBuffer_ext(asBuffer, Dx),
+			D3D12_BARRIER_SYNC_EMIT_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO,
+			D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		if(dependency.NumBarriers) {
+			commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dependency);
+			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+		}
+
+		const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC postbuild =
+			(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC) {
+				.DestBuffer = DeviceBufferRef_ptr(emitRef)->resource.deviceAddress + offset,
+				.InfoType = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE
+			};
+
+		commandBuffer->buffer->lpVtbl->EmitRaytracingAccelerationStructurePostbuildInfo(
+			commandBuffer->buffer, &postbuild, 1, &dstAS
+		);
+
+		dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+
+		gotoIfError3(clean, DxDeviceBuffer_transition(
+			emitExt, D3D12_BARRIER_SYNC_COPY, D3D12_BARRIER_ACCESS_COPY_SOURCE,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		if(dependency.NumBarriers) {
+			commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dependency);
+			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+		}
+
+		//The readback lives on a readback heap, which is created in COPY_DEST and cannot leave it, so it is
+		// the one buffer here that is never transitioned.
+
+		commandBuffer->buffer->lpVtbl->CopyBufferRegion(
+			commandBuffer->buffer,
+			DeviceBuffer_ext(DeviceBufferRef_ptr(readbackRef), Dx)->buffer, offset,
+			emitExt->buffer, offset, sizeof(U64)
+		);
+
+		blas->base.compactionQuery = query;
+		blas->base.compactionSubmitId = device->submitId;
+	}
 
 	//Add as flight and ensure flushes are done if too many ASes are queued this frame
 

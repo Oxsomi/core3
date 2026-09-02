@@ -333,9 +333,17 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
-		case C8x2('S', 'u'):    //SubgroupArithmetic, SubgroupShuffle, SubgroupOperations
+		case C8x2('S', 'u'):    //SubgroupArithmetic, SubgroupShuffle, SubgroupQuad, SubgroupOperations
 
-			if(stageNameLen == 15) {            //SubgroupShuffle
+			if(stageNameLen == 12) {            //SubgroupQuad
+				if(
+					Buffer_readU64(buf, 0, NULL, NULL) == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
+					Buffer_readU64(buf, 4, NULL, NULL) == C8x8('r', 'o', 'u', 'p', 'Q', 'u', 'a', 'd')
+				)
+					return ESHExtension_SubgroupQuad;
+			}
+
+			else if(stageNameLen == 15) {       //SubgroupShuffle
 				if(
 					Buffer_readU64(buf, 0, NULL, NULL) == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
 					Buffer_readU64(buf, 7, NULL, NULL) == C8x8('p', 'S', 'h', 'u', 'f', 'f', 'l', 'e')
@@ -635,7 +643,12 @@ Bool Compiler_consumeIdentifier(const C8 *&str, const C8 *&start, Error *e_rr) {
 	start = str;
 	C8 c;
 
-	while ((c = *str) != '\0' && !C8_isWhitespace(c) && !C8_isSymbol(c))
+	//Underscore is an identifier character, not a separator. C8_isSymbol groups it with [\]^` since it
+	// sits between 'Z' and 'a', so stopping on every symbol truncated a name at its first underscore and
+	// left the caller looking at '_' where it expected '='. Compiler_registerUniform's own validator
+	// advertises [A-Za-z_]+[0-9A-Za-z_]*, which no name reaching it could ever have satisfied.
+
+	while ((c = *str) != '\0' && !C8_isWhitespace(c) && (!C8_isSymbol(c) || c == '_'))
 		++str;
 
 clean:

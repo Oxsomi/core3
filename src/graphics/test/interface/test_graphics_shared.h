@@ -87,6 +87,7 @@ void Test_graphicsBindfulStaticSampler(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulReservedSpace(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulPushClass(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBlasCompaction(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsSamplerAndData(Test *t, GraphicsDeviceRef *deviceRef);
@@ -94,11 +95,15 @@ void Test_graphicsPipelineLayout(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderReflection(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsSubmit(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsVirtualSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsPhysicalSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsShaderCompute(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsTimestamps(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsPredication(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef);
 
