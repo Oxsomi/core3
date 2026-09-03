@@ -49,9 +49,9 @@ if(EnableShaderCompiler)
 	target_compile_definitions(OxC3CLI PUBLIC -DCLI_SHADER_COMPILER)
 
 	# RGA (AMD ISA) integration: only useful alongside the shader compiler (you disassemble shaders you compiled).
-	# The Radeon GPU Analyzer ships prebuilt offline compilers for Windows/Linux x64 only, so the isa commands exist
-	# there (spawned via the Process API). CLI_RGA implies CLI_SHADER_COMPILER; more targets can be added later.
-	if(CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	# The isa commands spawn the offline compiler via the Process API, so they exist exactly where it is prebuilt.
+	# CLI_RGA implies CLI_SHADER_COMPILER; more targets can be added later.
+	if(OfflineIsaSupported)
 		target_compile_definitions(OxC3CLI PUBLIC -DCLI_RGA)
 	endif()
 endif()
@@ -101,7 +101,7 @@ endif()
 # relative to the app directory, working from any cwd - the same reason the Agility SDK is placed by app dir.
 # The rga package has settings os/arch only, so all build configs point at the same bin; the per-config genex
 # just picks whichever is populated. copy_directory_if_different keeps rebuilds cheap.
-if(CLIGraphics AND EnableShaderCompiler AND (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+if(CLIGraphics AND EnableShaderCompiler AND OfflineIsaSupported)
 
 	find_package(radeon_gpu_analyzer QUIET)
 

@@ -683,6 +683,11 @@ void Test_shaderCompilerCorpus(Test *t) {
 	//--- amdllpc drives closer-to-final ISA than a device-independent path.
 	//--- The tools are bundled next to the exe (rga/utils, copied by the CLI build); if they aren't present the whole
 	//--- phase is skipped rather than failed.
+	//--- The phase only exists where AMD prebuilds amdllpc (Windows/Linux x64). On every other target there is no
+	//--- compiler to spawn, and an x64 binary that can't exec returns empty output rather than a not-found, which
+	//--- the runtime probe below would read as a real disassembly failure.
+
+	#ifdef SHADER_COMPILER_OFFLINE_ISA
 
 	{
 		const RefPtrType msTypeIsa = MemoryStream_makeType(alloc);
@@ -834,6 +839,8 @@ void Test_shaderCompilerCorpus(Test *t) {
 			SHFile_free(&sh, alloc);
 		}
 	}
+
+	#endif
 
 	//--- DXIL coverage: compile the same on-disk corpus for DXIL too, so it isn't SPIRV-only.
 	//--- There's no byte-snapshot here (the SPIRV pass above is the byte reference; DXIL is exercised for compile +

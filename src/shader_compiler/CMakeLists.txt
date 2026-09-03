@@ -97,6 +97,13 @@ if(DynamicLinkingShaderCompiler)
 	endif()
 
 endif()
+# Where there is no amdllpc to spawn, anything pinning its output has to compile out rather than discover that at
+# runtime: an x64 binary that can't exec returns empty output, which reads as a disassembly failure.
+
+if(OfflineIsaSupported)
+	target_compile_definitions(OxC3_shader_compiler PUBLIC -DSHADER_COMPILER_OFFLINE_ISA)
+endif()
+
 target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_formats_oiSR)
 target_link_libraries(OxC3_shader_compiler PUBLIC dxc::dxc spirv_reflect::spirv_reflect)
 

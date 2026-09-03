@@ -304,8 +304,11 @@ Bool DxAmdShaderAnalyzer_init(ID3D12Device *device, DxAmdShaderAnalyzer *analyze
 	if(!umd)
 		return false;
 
+	//Through void*, because casting GetProcAddress's FARPROC straight to the entry's own signature is a cast
+	// between incompatible function types, which clang rejects.
+
 	const PFNAmdExtD3DCreateInterface createInterface =
-		(PFNAmdExtD3DCreateInterface) GetProcAddress(umd, "AmdExtD3DCreateInterface");
+		(PFNAmdExtD3DCreateInterface)(void*) GetProcAddress(umd, "AmdExtD3DCreateInterface");
 
 	if(!createInterface)
 		return false;

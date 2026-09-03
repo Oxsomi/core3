@@ -223,9 +223,12 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 						st->format = EPipelineStatisticFormat_U64; st->value = stats[j].value.u64; break;
 
 					case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_FLOAT64_KHR: {
+
+						//The bits travel through a union: reading an F64's address as a U64 breaks strict aliasing.
+
+						union { F64 f; U64 u; } bits = { .f = stats[j].value.f64 };
 						st->format = EPipelineStatisticFormat_F64;
-						F64 d = stats[j].value.f64;
-						st->value = *(const U64*) &d;
+						st->value = bits.u;
 						break;
 					}
 				}
