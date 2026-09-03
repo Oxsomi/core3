@@ -25,11 +25,11 @@
 #include "types/base/error.h"
 
 #define BUTTON(name) gotoIfError3(clean, InputDevice_createButton(                                                \
-		result, EMouseButton_##name  - EMouseButton_Begin, "EMouseButton_" #name, &res, e_rr                    \
+		result, EMouseButton_##name  - EMouseButton_Begin, "EMouseButton_" #name, &res, e_rr                      \
 	))
 
 #define AXIS(name, resetOnUnfocus) gotoIfError3(clean, InputDevice_createAxis(                                    \
-		result, EMouseAxis_##name - EMouseAxis_Begin, "EMouseAxis_" #name, 0, resetOnUnfocus, &res, e_rr        \
+		result, EMouseAxis_##name - EMouseAxis_Begin, "EMouseAxis_" #name, 0, resetOnUnfocus, &res, e_rr          \
 	))
 
 Bool Mouse_create(Mouse *result, const Allocator *alloc, Error *e_rr) {

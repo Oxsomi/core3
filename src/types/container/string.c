@@ -1092,53 +1092,53 @@ Bool ListCharString_combine(const ListCharStringConcat *concat, Error *e_rr) {
 
 //TODO: Clean this somehow..
 
-#define CharString_createNum(maxVal, func, prefixRaw, ...)                                                                    \
+#define CharString_createNum(maxVal, func, prefixRaw, ...)                                                                  \
 																															\
-	Bool s_uccess = true;                                                                                                    \
-	const Allocator *allocator = NULL;                                                                                        \
-	CharString *result = NULL;                                                                                                \
+	Bool s_uccess = true;                                                                                                   \
+	const Allocator *allocator = NULL;                                                                                      \
+	CharString *result = NULL;                                                                                              \
 																															\
-	if (!number || !number->result)                                                                                            \
+	if (!number || !number->result)                                                                                         \
 		retError(clean, Error_nullPointer(3, "CharString_createNum()::number and number->result are required"));            \
 																															\
 	result = number->result;                                                                                                \
-	CharString prefix = CharString_createRefCStrConst(prefixRaw);                                                            \
+	CharString prefix = CharString_createRefCStrConst(prefixRaw);                                                           \
 																															\
 	if (result->ptr)                                                                                                        \
-		retError(clean, Error_invalidOperation(0, "CharString_createNum()::result wasn't empty, might indicate memleak"));    \
+		retError(clean, Error_invalidOperation(0, "CharString_createNum()::result wasn't empty, might indicate memleak"));  \
 																															\
-	gotoIfError3(clean, CharString_reserve(                                                                                    \
-		result, maxVal + CharString_length(prefix) + 1, number->allocator, e_rr                                                \
-	));                                                                                                                        \
+	gotoIfError3(clean, CharString_reserve(                                                                                 \
+		result, maxVal + CharString_length(prefix) + 1, number->allocator, e_rr                                             \
+	));                                                                                                                     \
 																															\
-	allocator = number->allocator;                                                                                            \
+	allocator = number->allocator;                                                                                          \
 																															\
-	gotoIfError3(clean, CharString_appendString(result, &prefix, allocator, e_rr));                                            \
+	gotoIfError3(clean, CharString_appendString(result, &prefix, allocator, e_rr));                                         \
 																															\
-	U64 v = number->v;                                                                                                        \
-	U8 leadingZeros = number->leadingZeros;                                                                                    \
+	U64 v = number->v;                                                                                                      \
+	U8 leadingZeros = number->leadingZeros;                                                                                 \
 																															\
-	Bool foundFirstNonZero = false;                                                                                            \
+	Bool foundFirstNonZero = false;                                                                                         \
 																															\
-	for (U64 i = maxVal - 1; i != U64_MAX; --i) {                                                                            \
+	for (U64 i = maxVal - 1; i != U64_MAX; --i) {                                                                           \
 																															\
 		C8 c = C8_create##func(__VA_ARGS__);                                                                                \
 																															\
-		if (!foundFirstNonZero)                                                                                                \
-			foundFirstNonZero = c != '0' || i < leadingZeros;                                                                \
+		if (!foundFirstNonZero)                                                                                             \
+			foundFirstNonZero = c != '0' || i < leadingZeros;                                                               \
 																															\
-		if (foundFirstNonZero)                                                                                                \
-			gotoIfError3(clean, CharString_append(result, c, allocator, e_rr));                                                \
-	}                                                                                                                        \
+		if (foundFirstNonZero)                                                                                              \
+			gotoIfError3(clean, CharString_append(result, c, allocator, e_rr));                                             \
+	}                                                                                                                       \
 																															\
 	/* Ensure we don't return an empty string on 0 */                                                                        \
 																															\
-	if (!v && !foundFirstNonZero)                                                                                            \
-		gotoIfError3(clean, CharString_append(result, '0', allocator, e_rr));                                                \
+	if (!v && !foundFirstNonZero)                                                                                           \
+		gotoIfError3(clean, CharString_append(result, '0', allocator, e_rr));                                               \
 																															\
-	result->ptrNonConst[CharString_length(*result)] = '\0';                                                                    \
-clean:                                                                                                                        \
-	if(allocator && !s_uccess) CharString_free(result, allocator);                                                            \
+	result->ptrNonConst[CharString_length(*result)] = '\0';                                                                 \
+clean:                                                                                                                      \
+	if(allocator && !s_uccess) CharString_free(result, allocator);                                                          \
 	return s_uccess;
 
 Bool CharString_createNyto(const CharStringCreateNumber *number, Error *e_rr) {

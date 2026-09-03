@@ -101,16 +101,16 @@ typedef struct BufferEncrypt {
 	union {
 
 		struct {
-			const U32 *restrict key;        //Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
+			const U32 *restrict key;          //Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
 			const I32x4 *restrict tag;        //Tag that was generated to verify integrity of encrypted data.
-			const I32x4 *restrict iv;        //Iv was the 12-byte random number that was used to encrypt the data.
+			const I32x4 *restrict iv;         //Iv was the 12-byte random number that was used to encrypt the data.
 		} constDecrypt;
 
 		//For Buffer_encryptAdvanced can be accessed only if the Generate flag is true.
 		//Tag is always generated.
 		struct NonConstEncrypt {
-			U32 *restrict key;                //& GenerateKey: Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
-			I32x4 *restrict tag;            //Tag is always generated if encryption type supports it (non zero).
+			U32 *restrict key;                 //& GenerateKey: Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
+			I32x4 *restrict tag;               //Tag is always generated if encryption type supports it (non zero).
 			I32x4 *restrict iv;                //!(& StopCreateIv): Iv should be random 12 bytes. Generated unless flag is set.
 		} nonConstEncrypt;
 	};

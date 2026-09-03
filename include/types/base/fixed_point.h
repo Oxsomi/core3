@@ -29,15 +29,15 @@
 
 //Fixed point
 		
-#define FixedPoint(frac, integ)                                                                            \
+#define FixedPoint(frac, integ)                                                                          \
 																										\
-typedef I64 FP##integ##f##frac;                                                                            \
+typedef I64 FP##integ##f##frac;                                                                          \
 																										\
-static inline FP##integ##f##frac FP##integ##f##frac##_add(FP##integ##f##frac a, FP##integ##f##frac b) {    \
+static inline FP##integ##f##frac FP##integ##f##frac##_add(FP##integ##f##frac a, FP##integ##f##frac b) {  \
 	return a + b;                                                                                        \
 }                                                                                                        \
 																										\
-static inline FP##integ##f##frac FP##integ##f##frac##_sub(FP##integ##f##frac a, FP##integ##f##frac b) {    \
+static inline FP##integ##f##frac FP##integ##f##frac##_sub(FP##integ##f##frac a, FP##integ##f##frac b) {  \
 	return a - b;                                                                                        \
 }                                                                                                        \
 																										\
@@ -45,8 +45,8 @@ static inline FP##integ##f##frac FP##integ##f##frac##_fromDouble(F64 v) {       
 	return (FP##integ##f##frac)(v * ((FP##integ##f##frac)1 << frac));                                    \
 }                                                                                                        \
 																										\
-static inline F64 FP##integ##f##frac##_toDouble(FP##integ##f##frac value) {                                \
-	return (F64)value / ((FP##integ##f##frac)1 << frac);                                                \
+static inline F64 FP##integ##f##frac##_toDouble(FP##integ##f##frac value) {                              \
+	return (F64)value / ((FP##integ##f##frac)1 << frac);                                                 \
 }
 
 //Fixed point 42 (FP37f4): 4 fract, 37 integer, 1 sign.

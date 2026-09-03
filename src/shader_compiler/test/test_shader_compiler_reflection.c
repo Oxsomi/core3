@@ -90,7 +90,7 @@ void Test_shaderCompilerReflection(Test *t) {
 
 		//Assert a register's base type (+ optionally the IsWrite bit) by name.
 		//Name-matched, so it's immune to register ordering differences between the SPIRV and DXIL reflectors.
-		#define ASSERT_REG(nm, wantType, wantWrite) do {                                                  \
+		#define ASSERT_REG(nm, wantType, wantWrite) do {                                                   \
 			const SHRegisterRuntime *r = ok ? findReg(&sh, nm) : NULL;                                     \
 			const Bool isW = r && (r->reg.registerType & ESHRegisterType_IsWrite);                         \
 			if (!CharString_format(alloc, &label, &err, "%s: %s (%s)", nm, #wantType, bk))                 \

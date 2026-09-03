@@ -216,31 +216,31 @@ static inline Bool Buffer_append(Buffer *buf, const void *v, U64 length, Error *
 
 Bool Buffer_consume(Buffer *buf, void *v, U64 length, Error *e_rr);
 
-#define BUFFER_OP_IMPL(T)                                                                    \
+#define BUFFER_OP_IMPL(T)                                                                   \
 																							\
 static inline Bool Buffer_append##T(Buffer *buf, T v, Error *e_rr) {                        \
-	return Buffer_append(buf, &v, sizeof(v), e_rr);                                            \
-}                                                                                            \
+	return Buffer_append(buf, &v, sizeof(v), e_rr);                                         \
+}                                                                                           \
 																							\
-static inline Bool Buffer_consume##T(Buffer *buf, T *v, Error *e_rr) {                        \
+static inline Bool Buffer_consume##T(Buffer *buf, T *v, Error *e_rr) {                      \
 	return Buffer_consume(buf, v, sizeof(*v), e_rr);                                        \
-}                                                                                            \
+}                                                                                           \
 																							\
-static inline T Buffer_read##T(Buffer buf, U64 off, Bool *success, Error *e_rr) {            \
+static inline T Buffer_read##T(Buffer buf, U64 off, Bool *success, Error *e_rr) {           \
 																							\
 	buf = Buffer_createRefFromBuffer(buf, true);                                            \
 	T v = { 0 };                                                                            \
-	if(!Buffer_offset(&buf, off, e_rr)) { if(success) *success = false; return v; }            \
+	if(!Buffer_offset(&buf, off, e_rr)) { if(success) *success = false; return v; }         \
 																							\
 	Bool ok = Buffer_consume##T(&buf, &v, e_rr);                                            \
-	if(success) *success = ok;                                                                \
-	return v;                                                                                \
-}                                                                                            \
+	if(success) *success = ok;                                                              \
+	return v;                                                                               \
+}                                                                                           \
 																							\
-static inline Bool Buffer_write##T(Buffer buf, U64 off, T v, Error *e_rr) {                    \
-	buf = Buffer_createRefFromBuffer(buf, false);                                            \
-	if(!Buffer_offset(&buf, off, e_rr)) return false;                                        \
-	return Buffer_append##T(&buf, v, e_rr);                                                    \
+static inline Bool Buffer_write##T(Buffer buf, U64 off, T v, Error *e_rr) {                 \
+	buf = Buffer_createRefFromBuffer(buf, false);                                           \
+	if(!Buffer_offset(&buf, off, e_rr)) return false;                                       \
+	return Buffer_append##T(&buf, v, e_rr);                                                 \
 }
 
 BUFFER_OP_IMPL(U64);

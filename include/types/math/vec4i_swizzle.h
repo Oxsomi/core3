@@ -33,15 +33,15 @@
 #define I32x4_expand4(xv, x0, yv, y0, zv, z0, wv, w0)                                            \
 static inline I32x4 I32x4_##xv##yv##zv##wv(I32x4 a) { return vecShufflei(a, x0, y0, z0, w0); }
 
-#define I32x4_expand3(...)                                                                        \
+#define I32x4_expand3(...)                                                                         \
 I32x4_expand4(__VA_ARGS__, x, 0); I32x4_expand4(__VA_ARGS__, y, 1);                                \
 I32x4_expand4(__VA_ARGS__, z, 2); I32x4_expand4(__VA_ARGS__, w, 3);
 
-#define I32x4_expand2(...)                                                                        \
+#define I32x4_expand2(...)                                                                         \
 I32x4_expand3(__VA_ARGS__, x, 0); I32x4_expand3(__VA_ARGS__, y, 1);                                \
 I32x4_expand3(__VA_ARGS__, z, 2); I32x4_expand3(__VA_ARGS__, w, 3);
 
-#define I32x4_expand(...)                                                                        \
+#define I32x4_expand(...)                                                                          \
 I32x4_expand2(__VA_ARGS__, x, 0); I32x4_expand2(__VA_ARGS__, y, 1);                                \
 I32x4_expand2(__VA_ARGS__, z, 2); I32x4_expand2(__VA_ARGS__, w, 3);
 
@@ -56,7 +56,7 @@ I32x4_expand(w, 3);
 static inline I32x4 I32x4_##xv##yv##zv(I32x4 a) { return I32x4_trunc3(I32x4_##xv##yv##zv##x(a)); }
 
 #define I32x3_expand2(...)                                                                        \
-I32x3_expand3(__VA_ARGS__, x); I32x3_expand3(__VA_ARGS__, y);                                    \
+I32x3_expand3(__VA_ARGS__, x); I32x3_expand3(__VA_ARGS__, y);                                     \
 I32x3_expand3(__VA_ARGS__, z); I32x3_expand3(__VA_ARGS__, w);
 
 #define I32x3_expand(...)                                                                        \
@@ -70,7 +70,7 @@ I32x3_expand(w);
 
 //2D swizzles
 
-#define I32x2_expand2(xv, yv)                                                                    \
+#define I32x2_expand2(xv, yv)                                                                     \
 static inline I32x4 I32x4_##xv##yv##4(I32x4 a) { return I32x4_trunc2(I32x4_##xv##yv##xx(a)); }    \
 static inline I32x2 I32x4_##xv##yv(I32x4 a) { return I32x2_fromI32x4(I32x4_##xv##yv##xx(a)); }
 

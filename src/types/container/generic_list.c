@@ -984,7 +984,7 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction f, void *context) 
 }
 
 #define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) {    \
-	return GenericList_sortCustom(l, sort##T, NULL);                     \
+	return GenericList_sortCustom(l, sort##T, NULL);                      \
 }
 
 TGenericList_sorts(TGenericList_sort);

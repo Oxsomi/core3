@@ -66,8 +66,8 @@ typedef struct CapturedStackTrace {
 static const WORD COLORS[] = {
 	2,    //green
 	3,    //cyan
-	14,    //yellow
-	4    //red
+	14,   //yellow
+	4     //red
 };
 
 SpinLock LogInitLock = { 0 };

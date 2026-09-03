@@ -158,7 +158,7 @@ typedef struct CompilerComboCtx {
 
 typedef struct CompilerLeafCtx {
 	CompilerComboCtx *combo;                //Parent; alive until this combination's finalize (after all leaves)
-	const Allocator *alloc;                        //Self-contained so the destructor never derefs sibling contexts
+	const Allocator *alloc;                 //Self-contained so the destructor never derefs sibling contexts
 	U64 linkIndex;                          //Index into combo->linkEntries
 } CompilerLeafCtx;
 

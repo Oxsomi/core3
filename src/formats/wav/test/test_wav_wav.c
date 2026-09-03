@@ -954,12 +954,12 @@ void Test_WAVReadExtended(Test *t) {
 		40, 0, 0, 0,            //fmt chunk body size = 40
  
 		//WAVEFORMATEX body (16 bytes)
-		0xFE, 0xFF,                //wFormatTag = WAVE_FORMAT_EXTENSIBLE (0xFFFE little-endian)
+		0xFE, 0xFF,              //wFormatTag = WAVE_FORMAT_EXTENSIBLE (0xFFFE little-endian)
 		2, 0,                    //nChannels = 2
 		0x44, 0xAC, 0, 0,        //nSamplesPerSec = 44100 (0xAC44)
-		0x20, 0x62, 0x05, 0x00,    //nAvgBytesPerSec = 352800
+		0x20, 0x62, 0x05, 0x00,  //nAvgBytesPerSec = 352800
 		8, 0,                    //nBlockAlign = 8
-		32, 0,                    //wBitsPerSample = 32 (container)
+		32, 0,                   //wBitsPerSample = 32 (container)
  
 		//cbSize + extension body (24 bytes)
 		22, 0,                    //cbSize = 22

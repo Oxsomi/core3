@@ -226,7 +226,7 @@ static inline U64 EFloatType_convertExponent(
 		const U64 round = mantissaDiscarded > mantissaDiscardHalf;
 
 		m >>= mantissaDiscardShift;                    //Correct to correct exponent
-		m |= (U64)1 << (mbit2 - missingBits - 1);    //Shift the 1.x into the DeN
+		m |= (U64)1 << (mbit2 - missingBits - 1);      //Shift the 1.x into the DeN
 		m += round;                                    //Ensure correct rounding
 
 		//Special case; round causes exponent to increment

@@ -425,19 +425,19 @@ void GenericList_free(GenericList *result, const Allocator *allocator);
 
 //TList template helper
 
-#define TListWrapModifying(Name, ...) {                                                                                    \
+#define TListWrapModifying(Name, ...) {                                                                                 \
 																														\
-	Bool s_uccess = true;                                                                                                \
+	Bool s_uccess = true;                                                                                               \
 																														\
-	if(!l)                                                                                                                \
-		retError(clean, Error_nullPointer(0, #Name " TListWrapNullCheck::l is required"));                                \
+	if(!l)                                                                                                              \
+		retError(clean, Error_nullPointer(0, #Name " TListWrapNullCheck::l is required"));                              \
 																														\
-	GenericList list = Name##_toList(*l);                                                                                \
+	GenericList list = Name##_toList(*l);                                                                               \
 	__VA_ARGS__;                                                                                                        \
 																														\
-	*l = (Name) { 0 };                                                                                                    \
+	*l = (Name) { 0 };                                                                                                  \
 	gotoIfError3(clean, Name##_fromList(list, l, e_rr));                                                                \
-clean:                                                                                                                    \
+clean:                                                                                                                  \
 	return s_uccess;                                                                                                    \
 }
 

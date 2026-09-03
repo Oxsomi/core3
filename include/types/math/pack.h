@@ -102,26 +102,26 @@ static inline Bool U64_setPacked21x3(U64 *packed, U8 off, U32 v) {
 	return true;
 }
 
-#define GET_BIT_OP(T)                                        \
-static inline Bool T##_getBit(T packed, U8 off) {            \
+#define GET_BIT_OP(T)                                       \
+static inline Bool T##_getBit(T packed, U8 off) {           \
 															\
-	if (off >= sizeof(T) * 8)                                \
-		return false;                                        \
+	if (off >= sizeof(T) * 8)                               \
+		return false;                                       \
 															\
-	return (packed >> off) & 1;                                \
-}                                                            \
+	return (packed >> off) & 1;                             \
+}                                                           \
 															\
-static inline Bool T##_setBit(T *packed, U8 off, Bool b) {    \
+static inline Bool T##_setBit(T *packed, U8 off, Bool b) {  \
 															\
-	if (off >= sizeof(T) * 8)                                \
-		return false;                                        \
+	if (off >= sizeof(T) * 8)                               \
+		return false;                                       \
 															\
-	T shift = (T)1 << off;                                    \
+	T shift = (T)1 << off;                                  \
 															\
-	if (b)                                                    \
-		*packed |= shift;                                    \
+	if (b)                                                  \
+		*packed |= shift;                                   \
 															\
-	else *packed &= ~shift;                                    \
+	else *packed &= ~shift;                                 \
 															\
 	return true;                                            \
 }

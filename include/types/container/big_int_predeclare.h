@@ -56,7 +56,7 @@ typedef struct BigInt {
 static inline BigInt BigInt_createNull() { BigInt bi = { 0 }; return bi; }
 
 Bool BigInt_create(U16 bitCount, const Allocator *allocator, BigInt *big, Error *e_rr);        //Aligns bitCount to 64.
-Bool BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big, Error *e_rr);                    //ref U64 ptr[ptrCount]
+Bool BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big, Error *e_rr);                       //ref U64 ptr[ptrCount]
 Bool BigInt_createRefConst(const U64 *ptr, U64 ptrCount, BigInt *big, Error *e_rr);            //const ref U64 ptr[ptrCount]
 Bool BigInt_createCopy(BigInt *a, const Allocator *alloc, BigInt *b, Error *e_rr);
 

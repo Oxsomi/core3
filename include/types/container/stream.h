@@ -253,12 +253,12 @@ static inline Bool StreamCursor_appendBuffer(
 }
 
 #define STREAM_CURSOR_OP_IMPL(T)                                                                                        \
-static inline Bool StreamCursor_consume##T(StreamCursor *cursor, U64 *it, T *t, const Allocator *alloc, Error *e_rr) {    \
-	return StreamCursor_consume(cursor, it, t, sizeof(T), alloc, e_rr);                                                    \
-}                                                                                                                        \
+static inline Bool StreamCursor_consume##T(StreamCursor *cursor, U64 *it, T *t, const Allocator *alloc, Error *e_rr) {  \
+	return StreamCursor_consume(cursor, it, t, sizeof(T), alloc, e_rr);                                                 \
+}                                                                                                                       \
 																														\
 static inline Bool StreamCursor_append##T(StreamCursor *cursor, U64 *it, T t, const Allocator *alloc, Error *e_rr) {    \
-	return StreamCursor_append(cursor, it, &t, sizeof(T), alloc, e_rr);                                                    \
+	return StreamCursor_append(cursor, it, &t, sizeof(T), alloc, e_rr);                                                 \
 }
 
 STREAM_CURSOR_OP_IMPL(U64);
