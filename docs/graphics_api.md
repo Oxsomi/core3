@@ -1922,13 +1922,13 @@ All of them are written at once rather than one at a time, because a partial set
 - The texture needs `EGraphicsResourceFlag_ShaderRead`, or `EGraphicsResourceFlag_ShaderWrite` when the binding writes, since that is what makes the backend give it `ALLOW_UNORDERED_ACCESS` / `VK_IMAGE_USAGE_STORAGE_BIT` at creation. Checked when the work op records.
 - The requirement is enforced on Vulkan too, even though it pushes images directly, so a layout that records on one backend records on both.
 
-**Samplers** cannot be pushed as descriptors, but they do not need to be: declare them **immutable** instead. `DescriptorLayoutInfo::immutableSamplers` holds `SamplerRef`s and a sampler binding names one through `immutableSamplerId` (1 based, 0 meaning none), added with `DescriptorLayoutInfo_addImmutableSampler`. A sampler in a push descriptor layout **has** to be immutable, since there is no root sampler on D3D12 to push one into.
+**Samplers** cannot be in a push descriptor layout at all, immutable or not: D3D12 has no root sampler, and a baked one becomes a root signature static sampler whichever layout declared it, so the push descriptor set it sits in would mean something on Vulkan and nothing on D3D12. Declare a sampler in the regular layout, as an ordinary binding or as an **immutable** one. `DescriptorLayoutInfo::immutableSamplers` holds `SamplerRef`s and a sampler binding names one through `immutableSamplerId` (1 based, 0 meaning none), added with `DescriptorLayoutInfo_addImmutableSampler`. A sampler in a push descriptor layout **has** to be immutable, since there is no root sampler on D3D12 to push one into.
 
 An immutable sampler is baked into the layout rather than bound:
 
 - **D3D12** puts it in the root signature as a `D3D12_STATIC_SAMPLER_DESC`, which costs none of the 64 DWORDs and needs no descriptor range or heap slot.
-- **Vulkan** puts it in the set layout as `pImmutableSamplers`. Immutable samplers are legal in a push descriptor set layout and need no write, which is what lets the two backends agree.
-- It takes a binding but **no descriptor**, so `setPushDescriptors` writes only the bindings that need one and the baked samplers are skipped in that order.
+- **Vulkan** puts it in the set layout as `pImmutableSamplers`.
+- It takes a binding but **no descriptor**, so nothing is written for it.
 - Held by ref rather than by value so several layouts naming the same sampler share one `VkSampler`; D3D12 never makes an object of one and only reads its `SamplerInfo`.
 - It cannot be an array. A dynamically indexed sampler array needs real descriptors.
 

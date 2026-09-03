@@ -1213,7 +1213,7 @@ void Test_SPFieldNames(Test *t) {
 	Test_assert(t, "msaaIsNotIndexed", !ESPField_isIndexed(ESPField_Msaa));
 }
 
-int main() {
+OXC3_TEST_MAIN(formats_oiSP) {
 
 	const Allocator alloc = BasicAllocator_instance;
 

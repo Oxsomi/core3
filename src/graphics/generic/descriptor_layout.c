@@ -685,15 +685,19 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 		}
 
 		//A push descriptor set has no descriptors of its own to write a sampler into, and D3D12 has no root
-		// sampler at all, so a sampler is only expressible there when it is baked.
-		//Vulkan allows immutable samplers in a push descriptor set layout and needs no write for one, which
-		// is what makes the two agree.
+		// sampler at all.
+		//Baking one there doesn't rescue it either: D3D12 emits every immutable sampler as a root signature
+		// static sampler regardless of which layout declared it, so the push descriptor set it sits in means
+		// something on Vulkan and nothing on D3D12.
+		//Rather than carry a distinction only one backend can express, a sampler belongs in the regular
+		// layout, immutable or not.
 
-		if(isPushDescriptor && isSamplerBinding && !b.immutableSamplerId)
+		if(isPushDescriptor && isSamplerBinding)
 			retError(clean, Error_unsupportedOperation(
 				2,
-				"GraphicsDeviceRef_createDescriptorLayout() a sampler in a push descriptor layout has to be "
-				"immutable (set immutableSamplerId); there is no root sampler to push one into"
+				"GraphicsDeviceRef_createDescriptorLayout() a sampler can't be in a push descriptor layout; "
+				"declare it in the regular layout instead (immutable via immutableSamplerId, or as an "
+				"ordinary sampler binding)"
 			));
 
 		//OxC3 binds its own per frame globals in the reserved space, so a caller's binding there would either

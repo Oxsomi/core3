@@ -77,14 +77,11 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 
 	ListD3D12_STATIC_SAMPLER_DESC staticSamplers = (ListD3D12_STATIC_SAMPLER_DESC) { 0 };
 
-	DescriptorLayoutRef *samplerSources[2] = { layout->info.bindings, layout->info.pushDescriptors };
+	//Only the regular layout can hold a sampler, so that is the only one carrying immutable ones.
 
-	for (U64 k = 0; k < 2; ++k) {
+	if (layout->info.bindings) {
 
-		if(!samplerSources[k])
-			continue;
-
-		const DescriptorLayout *desc = DescriptorLayoutRef_ptr(samplerSources[k]);
+		const DescriptorLayout *desc = DescriptorLayoutRef_ptr(layout->info.bindings);
 
 		for (U64 i = 0; i < desc->info.bindings.length; ++i) {
 

@@ -3,7 +3,7 @@
 Honest, per-feature maturity so nobody designs against something that doesn't exist yet.
 Legend: ✅ implemented + tested · 🟡 implemented, caveats · 🚧 in progress · 📄 spec/design only · ❌ not planned near-term
 
-Last updated: 2026-08-04 (branch `android`, v3.2.104). Update this table in the same PR as the feature.
+Last updated: 2026-08-04 (v3.2.105). Update this table in the same PR as the feature.
 
 ## Core (types_*)
 
@@ -40,7 +40,7 @@ Last updated: 2026-08-04 (branch `android`, v3.2.104). Update this table in the 
 
 | Area | Windows | Linux | OS X | Android | Web (wasm64) |
 | --- | --- | --- | --- | --- | --- |
-| Platform init / CPU topology | ✅ | ✅ | ✅ | ✅ | 🟡 single threaded, no `-pthread` yet |
+| Platform init / CPU topology | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Tracked allocator + leak report | ✅ | ✅ | ✅ | ✅ | ✅ (aligned_alloc, wasm max_align_t is 8) |
 | Sandboxed file IO + FileStream | ✅ | ✅ | ✅ | ✅ (assets read-only via AAsset) | 🟡 read-only, NODERAWFS |
 | Virtual FS (embedded oiCA) | ✅ | ✅ | ✅ | ✅ (apk `section_*` workaround) | ✅ (packaged oiCA) |
@@ -61,7 +61,6 @@ Last updated: 2026-08-04 (branch `android`, v3.2.104). Update this table in the 
 | Compute/graphics pipelines | ✅ | ✅ | Android: render passes missing |
 | Raytracing (pipeline + query, BLAS/TLAS) | ✅ | ✅ | Micromap/reorder behind extension flags |
 | Mesh shaders / VRS | ✅ | ✅ | |
-| Workgraphs | 🚧 | 🚧 | Lib-link specialization actively being fixed (see recent commits) |
 | Metal | 📄 | — | Enum reserved; needs SPIRV-Cross MSL path |
 | WebGPU | 📄 | — | |
 | Android swapchain pre-rotation | ✅ | — |  |

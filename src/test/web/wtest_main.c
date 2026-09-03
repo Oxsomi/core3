@@ -51,6 +51,8 @@ WTEST_SUITE(formats_hdr);
 WTEST_SUITE(formats_oiDL);
 WTEST_SUITE(formats_oiSB);
 WTEST_SUITE(formats_oiSH);
+WTEST_SUITE(formats_oiSP);
+WTEST_SUITE(formats_oiSR);
 WTEST_SUITE(formats_wav);
 WTEST_SUITE(audio_interface);
 WTEST_SUITE(platforms_interface);
@@ -88,6 +90,8 @@ static const WTestSuite WTest_suites[] = {
 	{ "formats_oiDL",        OxC3_test_formats_oiDL,        EWTestDir_Default      },
 	{ "formats_oiSB",        OxC3_test_formats_oiSB,        EWTestDir_Default      },
 	{ "formats_oiSH",        OxC3_test_formats_oiSH,        EWTestDir_Default      },
+	{ "formats_oiSP",        OxC3_test_formats_oiSP,        EWTestDir_Default      },
+	{ "formats_oiSR",        OxC3_test_formats_oiSR,        EWTestDir_Default      },
 	{ "formats_wav",         OxC3_test_formats_wav,         EWTestDir_Default      },
 
 	{ "audio_interface",     OxC3_test_audio_interface,     EWTestDir_Default      },

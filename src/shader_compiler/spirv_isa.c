@@ -122,6 +122,20 @@ static Bool SpvISA_runTool(
 			retError(clean, Error_timedOut(0, 60 * SECOND, "SpvISA_runTool() tool timed out"));
 		}
 
+		//A child that fails to exec still counts as launched, because the fork itself succeeded: it exits 126 (found
+		// but not executable) or 127 (not found) without writing to either stream.
+		//The parent can't otherwise tell that apart from a tool that ran and stayed silent, and reporting it as a
+		// disassembly failure makes every shader fail on a platform that simply hasn't got the tool, instead of the
+		// caller's availability probe skipping the phase once.
+
+		if((res.exitCode == 126 || res.exitCode == 127) && !Buffer_length(out) && !Buffer_length(err)) {
+			Buffer_free(&out, alloc);
+			Buffer_free(&err, alloc);
+			retError(clean, Error_notFound(
+				1, 0, "SpvISA_runTool() the tool exists but couldn't be executed (not executable, or a missing loader)"
+			));
+		}
+
 		if(exitCode)
 			*exitCode = res.exitCode;
 
@@ -570,8 +584,17 @@ Bool SpvISA_disassemble(
 
 		const Buffer diag = Buffer_length(llpcErr) ? llpcErr : llpcOut;
 
+		//The exit code goes out even when both streams are empty, because that combination is the interesting one:
+		// a tool that ran and complained says so on stderr, while one that produced nothing anywhere died before it
+		// could, and only the code distinguishes those.
+
 		if(Buffer_length(diag))
-			Log_warnLnx("amdllpc: %.*s", (int) Buffer_length(diag), (const C8*) diag.ptr);
+			Log_warnLnx("amdllpc: exit %"PRIi32", %.*s", llpcExit, (int) Buffer_length(diag), (const C8*) diag.ptr);
+
+		else Log_warnLnx(
+			"amdllpc: exit %"PRIi32" with no output on stdout, stderr or %.*s",
+			llpcExit, (int) CharString_length(tmpAsm), tmpAsm.ptr
+		);
 
 		retError(clean, Error_invalidState(
 			1, "SpvISA_disassemble() amdllpc produced no ISA (unsupported gfxip? offline ISA supports gfx11xx/gfx12xx)"

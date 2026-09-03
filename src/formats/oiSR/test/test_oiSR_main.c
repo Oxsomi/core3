@@ -379,7 +379,7 @@ clean:
 	SRFile_free(&sr, t->alloc);
 }
 
-int main() {
+OXC3_TEST_MAIN(formats_oiSR) {
 
 	const Allocator alloc = BasicAllocator_instance;
 	Test t = (Test) { 0 };
