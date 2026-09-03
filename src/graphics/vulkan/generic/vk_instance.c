@@ -125,6 +125,7 @@ static_assert(
 			.pipelineCreateRt = VkGraphicsDevice_createPipelineRaytracingInternal,
 			.pipelineFree = VkPipeline_free,
 			.pipelineGetExecutables = VkPipeline_getExecutables,
+			.deviceListShaderTargets = VK_WRAP_FUNC(GraphicsDeviceRef_listShaderTargets),
 
 			.samplerCreate = VkGraphicsDeviceRef_createSampler,
 			.samplerFree = VkSampler_free,

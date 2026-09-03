@@ -112,6 +112,21 @@ void VK_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 	deviceExt->destroyPipeline(deviceExt->device, *Pipeline_ext(pipeline, Vk), NULL);
 }
 
+//Listing compile targets is a D3D12 concept: AMD's driver extension there compiles for a whole generation and
+// reports those as virtual GPUs.
+//Vulkan exposes nothing equivalent, so the list stays empty, which the frontend treats as "nothing to add" rather
+// than as an error.
+//It still has to exist: a static build resolves GraphicsDeviceRef_listShaderTargetsExt straight to the backend's
+// own definition, with no table to leave an entry out of.
+
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_listShaderTargets)(
+	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+) {
+
+	(void) deviceRef; (void) alloc; (void) result; (void) e_rr;
+	return true;
+}
+
 Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 	Pipeline *pipeline,
 	const Allocator *alloc,
