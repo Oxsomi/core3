@@ -444,6 +444,10 @@ void Test_shaderCompilerCorpus(Test *t) {
 	const Bool disasmCompCreated = Compiler_create(alloc, &disasmComp, &err);
 	err = Error_none();
 
+	//The oiSR snapshot runs through this compiler, so losing it would drop every reference check silently
+
+	Test_assert(t, "reflection compiler", disasmCompCreated);
+
 	//Enumerate + resolve every .hlsl entrypoint in the corpus folder, targeting SPIRV for the byte-snapshot.
 	//A separate DXIL compile+reflect coverage pass follows below; SPIRV and DXIL are snapshotted separately, see that
 	// pass for the reason.
@@ -594,14 +598,15 @@ void Test_shaderCompilerCorpus(Test *t) {
 			//Reflect with a path relative to the corpus (forward slashes), not the absolute enumerator path: the
 			// source filename is baked into the oiSR (symbol locations), so an absolute path would make the committed
 			// reference machine-specific.
-			//The output ref is <name>.oiSH -> <name>.oiSR next to the oiSH references.
+			//The output ref is <name>.oiSH -> <name>.oiSR next to the oiSH references, re-rooted like those:
+			// bundled, a bare name resolves into the app's writable storage instead of the virtual file system.
 
 			CharString out = allOutputs.ptr[i];
 			U64 baseLen = CharString_length(out) >= 5 ? CharString_length(out) - 5 : CharString_length(out);
 
 			if (
 				!CharString_format(alloc, &relPath, &err, "hlsl/%.*s.hlsl", (int) baseLen, out.ptr) ||
-				!CharString_format(alloc, &ref, &err, "%.*s.oiSR", (int) baseLen, out.ptr)
+				!CharString_format(alloc, &ref, &err, TEST_SHADER_ROOT "%.*s.oiSR", (int) baseLen, out.ptr)
 			) {
 				err = Error_none();
 				Test_assert(t, "oiSR reference path", false);
@@ -663,8 +668,20 @@ void Test_shaderCompilerCorpus(Test *t) {
 				goto cleanRefl;
 			}
 
+			//The rooted run's own bytes carry the virtual root, so only its reference's presence is checked here;
+			// the byte comparison stays a desktop check.
+
 			if (rootedReflect) {
-				Test_assert(t, ref.ptr, true);          //Reflection ran; the reference is a desktop check
+
+				const Bool present = File_has(&ref, alloc);
+
+				if(!present)
+					Log_errorLn(
+						alloc, "oiSR reference %.*s is missing from the bundled corpus",
+						(int) CharString_length(ref), ref.ptr
+					);
+
+				Test_assert(t, ref.ptr, present);
 			}
 
 			else if (File_has(&ref, alloc)) {
@@ -828,9 +845,12 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 					const Bool made = multi ?
 						CharString_format(
-							alloc, &ref, &err, "%.*s.%"PRIu64".%s.isa", (int) baseLen, out.ptr, b, isaSuffix[tI]
+							alloc, &ref, &err, TEST_SHADER_ROOT "%.*s.%"PRIu64".%s.isa",
+							(int) baseLen, out.ptr, b, isaSuffix[tI]
 						) :
-						CharString_format(alloc, &ref, &err, "%.*s.%s.isa", (int) baseLen, out.ptr, isaSuffix[tI]);
+						CharString_format(
+							alloc, &ref, &err, TEST_SHADER_ROOT "%.*s.%s.isa", (int) baseLen, out.ptr, isaSuffix[tI]
+						);
 
 					if (!made) {
 						err = Error_none();
@@ -856,6 +876,14 @@ void Test_shaderCompilerCorpus(Test *t) {
 							err = Error_none();
 							Test_assert(t, ref.ptr, false);
 						}
+					}
+
+					else if (!corpusWritable) {
+						Log_errorLn(
+							alloc, "ISA reference %.*s is missing from the bundled corpus",
+							(int) CharString_length(ref), ref.ptr
+						);
+						Test_assert(t, ref.ptr, false);     //Can't regenerate from a read only bundle; fix on desktop
 					}
 
 					else {
