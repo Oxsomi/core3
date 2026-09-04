@@ -616,7 +616,33 @@ void Test_shaderCompilerCorpus(Test *t) {
 				.includeDirs = includeDirs
 			};
 
-			if (!Compiler_reflect(&disasmComp, &rs, alloc, &reflection, &err)) {
+			Bool reflected = Compiler_reflect(&disasmComp, &rs, alloc, &reflection, &err);
+
+			//A shader's own includes resolve against the directory of the path it is reflected under, which a
+			// bundle has no working directory to anchor.
+			//Rooting the path anchors them again, but that root reaches the symbol locations the reference
+			// pins, so a shader that needs it proves reflection runs and leaves the byte comparison to desktop.
+
+			Bool rootedReflect = false;
+
+			if (!reflected && !corpusWritable) {
+
+				err = Error_none();
+				SRFile_free(&reflection, alloc);
+				CharString_free(&relPath, alloc);
+
+				if (!CharString_format(alloc, &relPath, &err, TEST_SHADER_ROOT "hlsl/%.*s.hlsl", (int) baseLen, out.ptr)) {
+					err = Error_none();
+					Test_assert(t, "oiSR rooted reference path", false);
+					goto cleanRefl;
+				}
+
+				rs.path = relPath;
+				reflected = Compiler_reflect(&disasmComp, &rs, alloc, &reflection, &err);
+				rootedReflect = true;
+			}
+
+			if (!reflected) {
 				Log_errorLn(alloc, "reflect failed for %.*s", (int) CharString_length(relPath), relPath.ptr);
 				Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 				err = Error_none();
@@ -637,7 +663,11 @@ void Test_shaderCompilerCorpus(Test *t) {
 				goto cleanRefl;
 			}
 
-			if (File_has(&ref, alloc)) {
+			if (rootedReflect) {
+				Test_assert(t, ref.ptr, true);          //Reflection ran; the reference is a desktop check
+			}
+
+			else if (File_has(&ref, alloc)) {
 
 				Buffer_free(&golden, alloc);
 
@@ -656,6 +686,14 @@ void Test_shaderCompilerCorpus(Test *t) {
 				}
 
 				Test_assert(t, ref.ptr, matches);
+			}
+
+			else if (!corpusWritable) {
+				Log_errorLn(
+					alloc, "oiSR reference %.*s is missing from the bundled corpus",
+					(int) CharString_length(ref), ref.ptr
+				);
+				Test_assert(t, ref.ptr, false);         //Can't regenerate from a read only bundle; fix on desktop
 			}
 
 			else {

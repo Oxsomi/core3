@@ -242,6 +242,7 @@ function(oxc3_add_bundled_test)
 			"${T_ROOT}/shader_compiler/test/*/*.hlsl"
 			"${T_ROOT}/shader_compiler/test/*/*.hlsli"
 			"${T_ROOT}/shader_compiler/test/*.oiSH"
+			"${T_ROOT}/shader_compiler/test/*.oiSR"
 		)
 
 		foreach(f ${shaderTestData})
