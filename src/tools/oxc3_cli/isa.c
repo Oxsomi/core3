@@ -849,6 +849,35 @@ clean:
 	// ASIC name to the adapter it belongs to, which is what stops the child resolving the name a second time.
 	//stdout and stderr stay inherited, so the child's disassembly and errors come out as this run's own.
 
+	//Which single pipeline a file forms, as a count per kind plus the one that wins.
+	//A file may hold compute, graphics and ray tracing stages side by side; those are separate pipelines, so the
+	// first kind present is taken, compute before graphics before ray tracing. 3 means it holds none of them.
+	//Read before the instance exists as well as after, because whether validation can be left on depends on it.
+
+	static U8 CLI_isaChosenKind(const SHFile *shFile, U64 kindCounts[3]) {
+
+		kindCounts[0] = kindCounts[1] = kindCounts[2] = 0;
+
+		for (U64 i = 0; i < shFile->entries.length; ++i) {
+
+			const U8 stage = shFile->entries.ptr[i].stage;
+
+			if(stage == EGfxPipelineStage_Compute)
+				++kindCounts[0];
+
+			else if(
+				stage == EGfxPipelineStage_Vertex || stage == EGfxPipelineStage_Pixel || stage == EGfxPipelineStage_Hull ||
+				stage == EGfxPipelineStage_Domain || stage == EGfxPipelineStage_GeometryExt
+			)
+				++kindCounts[1];
+
+			else if(stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt)
+				++kindCounts[2];
+		}
+
+		return kindCounts[0] ? 0 : kindCounts[1] ? 1 : kindCounts[2] ? 2 : 3;
+	}
+
 	static Bool CLI_isaRerunForTarget(
 		U64 deviceId, Bool hasOutput, CharString outputStr, Bool assumeDefaults,
 		Bool hasPipelineOutput, CharString pipelineOutputStr, CharString psoSet, CharString psoInput,
@@ -996,8 +1025,23 @@ clean:
 			.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 		};
 
+		//D3D12's GPU based validation instruments a DXIL library and then refuses its own injections, so a ray
+		// tracing state object can't be created while it is on. It is the only validation dropped, and only for
+		// the one kind it breaks, so compute and graphics keep it and so does every Vulkan run.
+
+		U64 kindCounts[3] = { 0, 0, 0 };
+		const U8 chosenKind = CLI_isaChosenKind(&shFile, kindCounts);
+		const Bool dropGpuValidation = api == EGraphicsApi_Direct3D12 && chosenKind == 2;
+
+		if(dropGpuValidation)
+			Log_debugLnx(
+				"D3D12: GPU based validation left off, since it rejects the DXIL library a ray tracing state object "
+				"is built from; the rest of the debug layer stays on."
+			);
+
 		gotoIfError3(clean, GraphicsInstance_create(
-			&appInfo, api, EGraphicsInstanceFlags_None, alloc, &instanceType, &instanceRef, e_rr
+			&appInfo, api, dropGpuValidation ? EGraphicsInstanceFlags_DisableGPUBV : EGraphicsInstanceFlags_None,
+			alloc, &instanceType, &instanceRef, e_rr
 		));
 
 		gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr));
@@ -1154,27 +1198,7 @@ clean:
 
 		SPStageRef stageRefs[16];
 		U8 stageRefCount = 0;
-		U64 kindCounts[3] = { 0, 0, 0 };        //compute, graphics, ray tracing entries in the file
 		U64 computeE = U64_MAX, vertexE = U64_MAX, pixelE = U64_MAX, hullE = U64_MAX, domainE = U64_MAX, geomE = U64_MAX;
-
-		for (U64 i = 0; i < shFile.entries.length; ++i) {
-
-			const U8 stage = shFile.entries.ptr[i].stage;
-
-			if(stage == EGfxPipelineStage_Compute)
-				++kindCounts[0];
-
-			else if(
-				stage == EGfxPipelineStage_Vertex || stage == EGfxPipelineStage_Pixel || stage == EGfxPipelineStage_Hull ||
-				stage == EGfxPipelineStage_Domain || stage == EGfxPipelineStage_GeometryExt
-			)
-				++kindCounts[1];
-
-			else if(stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt)
-				++kindCounts[2];
-		}
-
-		const U8 chosenKind = kindCounts[0] ? 0 : kindCounts[1] ? 1 : kindCounts[2] ? 2 : 3;
 
 		if(chosenKind == 3)
 			retError(clean, Error_unsupportedOperation(
