@@ -484,8 +484,14 @@ jobs:
           if (Test-Path $vswhere) {
             $vsRoot = & $vswhere -latest -products * -property installationPath
             if ($vsRoot) {
-              $candidate = Join-Path $vsRoot "VC\Tools\Llvm\x64\bin"
-              if (Test-Path (Join-Path $candidate "clang-cl.exe")) { $clangDir = $candidate }
+              # Visual Studio lays its LLVM out per host architecture, so an arm64 install has no x64
+              # directory at all; the host's own comes first and the other is a fallback, since arm64
+              # Windows runs the x64 build under emulation while the reverse never resolves.
+              $archOrder = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { @('ARM64', 'x64') } else { @('x64', 'ARM64') }
+              foreach ($arch in $archOrder) {
+                $candidate = Join-Path $vsRoot "VC\Tools\Llvm\$arch\bin"
+                if (Test-Path (Join-Path $candidate "clang-cl.exe")) { $clangDir = $candidate; break }
+              }
             }
           }
 
