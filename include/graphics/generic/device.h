@@ -407,6 +407,16 @@ Bool GraphicsDeviceRef_listShaderTargets(
 	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
 );
 
+//Picks which of those the NEXT device created in this process compiles for, by a name the list reported.
+//An empty or absent name returns to the real GPU.
+//The driver reads the choice while initializing the adapter, so it cannot apply to a device that already
+// exists: a run targeting another ASIC creates one device to enumerate and select with, releases it, and
+// creates a second one to compile with.
+//The choice is process wide, so it stays in effect until it is cleared.
+//A backend whose driver compiles for the device alone refuses any name but the empty one.
+
+Bool GraphicsDeviceRef_selectShaderTarget(GraphicsDeviceRef *deviceRef, const CharString *name, Error *e_rr);
+
 #ifdef __cplusplus
 	}
 #endif

@@ -108,6 +108,7 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderNamedEntry(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderPipelineSerialize(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsShaderPipelineIsa(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsTextureShapes(Test *t, GraphicsDeviceRef *deviceRef);

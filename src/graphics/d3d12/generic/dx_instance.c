@@ -25,6 +25,7 @@
 #include "graphics/generic/interface.h"
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/d3d12/dx_device.h"
+#include "graphics/d3d12/dx_amd_shader_analyzer.h"
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/d3d12/dx_swapchain.h"
 #include "graphics/generic/instance.h"
@@ -125,6 +126,7 @@ static_assert(
 			.pipelineFree = D3D12Pipeline_free,
 			.pipelineGetExecutables = DX_WRAP_FUNC(Pipeline_getExecutables),
 			.deviceListShaderTargets = DX_WRAP_FUNC(GraphicsDeviceRef_listShaderTargets),
+			.deviceSelectShaderTarget = DX_WRAP_FUNC(GraphicsDeviceRef_selectShaderTarget),
 
 			.samplerCreate = D3D12GraphicsDeviceRef_createSampler,
 			.samplerFree = D3D12Sampler_free,
@@ -226,6 +228,15 @@ Bool DX_WRAP_FUNC(GraphicsInstance_create)(
 
 	//Braced so the else unambiguously belongs to the FAILED check, which is what it always meant.
 	//A debug factory that came up fine skips the non-debug creation below.
+
+	//A virtual GPU and the debug layer can't be had together: the AMD driver faults reading its settings as soon
+	// as one is selected. Compiling for another ASIC is what the run asked for, so the layer is what gives way,
+	// and it says so rather than leaving validation quietly off.
+
+	if ((instance->flags & EGraphicsInstanceFlags_IsDebug) && DxAmdShaderAnalyzer_virtualGpuSelected()) {
+		Log_debugLnx("D3D12: debug layer left off, since it faults in the AMD driver while a virtual GPU is selected");
+		instance->flags &=~ EGraphicsInstanceFlags_IsDebug;
+	}
 
 	if (instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
@@ -1078,13 +1089,19 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		//The video memory one is withheld when ARCHITECTURE1 failed, because a zeroed arch reads as non-UMA,
 		// which would report a UMA device as having no video memory on top of the query failure that already rejected it.
 
-		if (sharedMem < 512 * MIBI)
+		//An emulated ASIC reports the memory that ASIC would have rather than the machine's, so the floor would
+		// reject exactly the target the run exists to reach. It only ever compiles, so it holds no workload for
+		// the floor to protect.
+
+		const Bool ignoreMemoryFloor = DxAmdShaderAnalyzer_virtualGpuSelected();
+
+		if (!ignoreMemoryFloor && sharedMem < 512 * MIBI)
 			deviceUnsupported(
 				"DXGI: Unsupported device %"PRIu64", not enough system memory (%"PRIu64" MiB, needs 512 MiB)",
 				i, sharedMem / MIBI
 			);
 
-		if (hasArch && dedicatedMem < 512 * MIBI)
+		if (!ignoreMemoryFloor && hasArch && dedicatedMem < 512 * MIBI)
 			deviceUnsupported(
 				"DXGI: Unsupported device %"PRIu64", not enough video memory (%"PRIu64" MiB, needs 512 MiB)",
 				i, dedicatedMem / MIBI

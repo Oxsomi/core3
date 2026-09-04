@@ -777,6 +777,45 @@ static Bool SPFile_deriveLayout(
 		}
 	}
 
+	//A push constant is ONE declaration that reflects as two registers.
+	//SPIRV gives it a push constant block named after the variable, while DXIL has no push constant concept and
+	// DXC folds the loose global into its implicit $Globals constant buffer, so the two never share a name and
+	// the reflection merge, which matches by name, leaves them apart.
+	//The root signature binds the constants at that b register, so the push constant row takes it rather than
+	// letting $Globals stay a binding row: a row is a descriptor the runtime would have to fill, and it has no
+	// SPIRV pair at all, which is refused the moment a Vulkan device instantiates the layout.
+	//DXIL rounds a constant buffer up to 16 bytes, so the two sizes differ for a block that isn't a multiple of
+	// it and the range has to cover both, which is the larger.
+
+	if (layout.hasPushConstant && layout.pushConstant.bindings.arrU64[EGfxBinaryType_DXIL] == U64_MAX)
+		for (U64 i = 0; i < layout.bindings.length; ++i) {
+
+			const PLDescriptorBinding row = layout.bindings.ptr[i];
+			const U32 rowName = PLDescriptorBinding_name(row);
+
+			if(
+				(row.registerType & EGfxRegisterType_TypeMask) != EGfxRegisterType_ConstantBuffer ||
+				row.bindings.arrU64[EGfxBinaryType_SPIRV] != U64_MAX ||
+				row.bindings.arrU64[EGfxBinaryType_DXIL] == U64_MAX ||
+				rowName == PLDescriptorBinding_NAME_NONE
+			)
+				continue;
+
+			const CharString rowStr = layout.names.entryStrings.ptr[rowName];
+
+			if(!CharString_equalsCStringSensitive(&rowStr, "$Globals"))
+				continue;
+
+			layout.pushConstant.bindings.arrU64[EGfxBinaryType_DXIL] = row.bindings.arrU64[EGfxBinaryType_DXIL];
+			layout.pushConstant.visibility |= row.visibility;
+
+			if(row.strideOrLength > layout.pushConstant.strideOrLength)
+				layout.pushConstant.strideOrLength = row.strideOrLength;
+
+			gotoIfError3(clean, ListPLDescriptorBinding_erase(&layout.bindings, i, e_rr));
+			break;
+		}
+
 	//The push constant's DXIL b register occupies its slot like any class B row
 
 	if (layout.hasPushConstant)

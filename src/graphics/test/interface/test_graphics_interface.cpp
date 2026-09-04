@@ -62,7 +62,8 @@
 //  test_graphics_resources.c    - 23, 25, 26, 27
 //  test_graphics_execute.c      - 16, 28, 29, 30 (submission, readback, acceleration structures)
 //  test_graphics_shaders_*.cpp  - 31, 32, 33 (shader execution against the //OxC3_gtest test shaders; the
-//                                 serialize module creates a named entrypoint pair and round trips an oiSP)
+//                                 serialize module creates a named entrypoint pair, round trips an oiSP and
+//                                 instantiates a derived one against the driver's own introspection)
 //  test_graphics_formats_frames.c - 34, 35, 36 (per format round trips, shape gates, frame ring)
 //  test_graphics_capabilities.c - 37 (capability bit invariants and feature gated API agreement)
 //  test_graphics_caps_exec.c    - 38 (a shader dispatched per capability, results verified)
@@ -482,8 +483,9 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsGpuExecute(t, deviceRef);
 	c::Test_graphicsAccelerationStructures(t, deviceRef);
 
-	//31-33. Shader execution: real dispatches, draws and traces with verified results, plus the graphics
-	// pipelines that only have to create: a named entrypoint pair, and one stored as an oiSP and rebuilt
+	//31-33. Shader execution: real dispatches, draws and traces with verified results, plus the pipelines
+	// that only have to create: a named entrypoint pair, one stored as an oiSP and rebuilt, and one whose
+	// derived oiSP layout is made real and handed to the driver's own introspection
 
 	c::Test_graphicsShaderCompute(t, deviceRef);
 	c::Test_graphicsTimestamps(t, deviceRef);
@@ -492,6 +494,7 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsShaderNamedEntry(t, deviceRef);
 	c::Test_graphicsShaderRays(t, deviceRef);
 	c::Test_graphicsShaderPipelineSerialize(t, deviceRef);
+	c::Test_graphicsShaderPipelineIsa(t, deviceRef);
 
 	//34-36. Resource round trips and the frame ring, rather than what a shader computes
 

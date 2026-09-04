@@ -126,6 +126,7 @@ static_assert(
 			.pipelineFree = VkPipeline_free,
 			.pipelineGetExecutables = VkPipeline_getExecutables,
 			.deviceListShaderTargets = VK_WRAP_FUNC(GraphicsDeviceRef_listShaderTargets),
+			.deviceSelectShaderTarget = VK_WRAP_FUNC(GraphicsDeviceRef_selectShaderTarget),
 
 			.samplerCreate = VkGraphicsDeviceRef_createSampler,
 			.samplerFree = VkSampler_free,

@@ -777,8 +777,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 		CharString_createRefCStrConst("_rwTextures3Du"),
 		CharString_createRefCStrConst("_rwTextures2D"),
 		CharString_createRefCStrConst("_rwTextures2Di"),
-		CharString_createRefCStrConst("_rwTextures2Du"),
-		CharString_createRefCStrConst("_tlasExt")
+		CharString_createRefCStrConst("_rwTextures2Du")
 	};
 
 	DescriptorBinding bindings[13] = {
@@ -916,7 +915,15 @@ Bool GraphicsDevice_defaultBindlessLayout(
 		--descBindings;
 	}
 
-	if(info->capabilities.features & EGraphicsFeatures_Raytracing)
+	//The name is written at the same index as the row, since dropping _samplers above moves every later one
+	// down: a name sitting at a fixed slot would belong to whichever row ended up there instead.
+	//Which matters beyond the name itself, because the names ARE how a derived layout tells the runtime's
+	// own registers from a caller's (GraphicsDeviceRef_isRuntimeRegister).
+
+	if (info->capabilities.features & EGraphicsFeatures_Raytracing) {
+
+		bindingNames[descBindings] = CharString_createRefCStrConst("_tlasExt");
+
 		bindings[descBindings++] = (DescriptorBinding) {
 			.registerType = EGfxRegisterType_AccelerationStructure,
 			.count = EDescriptorTypeCount_TLASExt,
@@ -926,6 +933,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			},
 			.visibility = U32_MAX
 		};
+	}
 
 	//Both stack arrays have to be copied out, since the result outlives this function.
 
@@ -2651,6 +2659,19 @@ Bool GraphicsDeviceRef_listShaderTargets(
 		));
 
 	gotoIfError3(clean, GraphicsDeviceRef_listShaderTargetsExt(deviceRef, alloc, result, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+Bool GraphicsDeviceRef_selectShaderTarget(GraphicsDeviceRef *deviceRef, const CharString *name, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!deviceRef)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_selectShaderTarget()::deviceRef is required"));
+
+	gotoIfError3(clean, GraphicsDeviceRef_selectShaderTargetExt(deviceRef, name, e_rr));
 
 clean:
 	return s_uccess;

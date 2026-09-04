@@ -137,7 +137,8 @@ static Bool CLI_isaPrintLiveTargets(const Allocator *alloc, Error *e_rr) {
 
 		Log_debugLnx("");
 		Log_debugLnx(
-			"Live DXIL targets (%s driver; pass one as -asic with -compile-output dxil):", infos.ptr[amdDevice].name
+			"DXIL targets %s's driver can compile for (pass one as -asic with -compile-output dxil):",
+			infos.ptr[amdDevice].name
 		);
 
 		for(U64 i = 0; i < liveTargets.length; ++i)
@@ -843,8 +844,99 @@ clean:
 		return found ? recorded : CharString_createNull();
 	}
 
+	//Runs this executable again for the ASIC the driver was just handed, and reports what it did.
+	//Every value the parent was given is passed on, since the child does the whole run: only -asic changes, from the
+	// ASIC name to the adapter it belongs to, which is what stops the child resolving the name a second time.
+	//stdout and stderr stay inherited, so the child's disassembly and errors come out as this run's own.
+
+	static Bool CLI_isaRerunForTarget(
+		U64 deviceId, Bool hasOutput, CharString outputStr, Bool assumeDefaults,
+		Bool hasPipelineOutput, CharString pipelineOutputStr, CharString psoSet, CharString psoInput,
+		CharString shaderName, const Allocator *alloc, Error *e_rr
+	) {
+
+		Bool s_uccess = true;
+
+		ListCharString args = (ListCharString) { 0 };
+		CharString asicArg = CharString_createNull();
+		ProcessResult result = (ProcessResult) { 0 };
+
+		gotoIfError3(clean, CharString_format(alloc, &asicArg, e_rr, "live:%"PRIu64, deviceId));
+
+		const CharString fixed[8] = {
+			CharString_createRefCStrConst("isa"),
+			CharString_createRefCStrConst("disassemble"),
+			CharString_createRefCStrConst("-input"),
+			shaderName,
+			CharString_createRefCStrConst("-asic"),
+			asicArg,
+			CharString_createRefCStrConst("-compile-output"),
+			CharString_createRefCStrConst("dxil")
+		};
+
+		gotoIfError3(clean, ListCharString_reserve(&args, 16, alloc, e_rr));
+
+		for(U8 i = 0; i < 8; ++i)
+			gotoIfError3(clean, ListCharString_pushBack(&args, fixed[i], alloc, e_rr));
+
+		if(assumeDefaults)
+			gotoIfError3(clean, ListCharString_pushBack(
+				&args, CharString_createRefCStrConst("--assume-defaults"), alloc, e_rr
+			));
+
+		const CharString optionalNames[4] = {
+			CharString_createRefCStrConst("-output"),
+			CharString_createRefCStrConst("-pso-output"),
+			CharString_createRefCStrConst("-pso-set"),
+			CharString_createRefCStrConst("-pso-input")
+		};
+
+		const CharString optionalValues[4] = { outputStr, pipelineOutputStr, psoSet, psoInput };
+		const Bool optionalPresent[4] = {
+			hasOutput, hasPipelineOutput, !!CharString_length(psoSet), !!CharString_length(psoInput)
+		};
+
+		for (U8 i = 0; i < 4; ++i) {
+
+			if(!optionalPresent[i])
+				continue;
+
+			gotoIfError3(clean, ListCharString_pushBack(&args, optionalNames[i], alloc, e_rr));
+			gotoIfError3(clean, ListCharString_pushBack(&args, optionalValues[i], alloc, e_rr));
+		}
+
+		//The environment carries the selection, which is the whole reason for the second process.
+
+		const CharString self = CharString_createRefCStrConst("OxC3.exe");
+
+		gotoIfError3(clean, Process_run(self, true, &args, NULL, 0, NULL, NULL, &result, e_rr));
+
+		//The AMD driver fail-fasts (STATUS_STACK_BUFFER_OVERRUN) with a virtual GPU selected, and where it does so
+		// varies: a compute run gets its disassembly out first and dies tearing the GPU down, while a ray tracing
+		// one dies before producing anything.
+		//A fail-fast bypasses the child's own error reporting, so which of the two happened can only be read off
+		// what the child managed to emit, and this says exactly that rather than claiming either.
+
+		if(result.exitCode == (I32) 0xC0000409)
+			Log_warnLnx(
+				"The driver crashed with the virtual GPU selected. Anything the run printed or wrote above is the "
+				"disassembly for the requested ASIC; nothing past that point ran."
+			);
+
+		else if(result.exitCode)
+			retError(clean, Error_invalidState(
+				0, "CLI_isaRerunForTarget() the run for the requested ASIC failed; its own error is above"
+			));
+
+	clean:
+		CharString_free(&asicArg, alloc);
+		ListCharString_free(&args, alloc);
+		return s_uccess;
+	}
+
 	static Bool CLI_isaDisassembleLive(
-		SHFile shFile, EGfxBinaryType binaryType, U64 deviceId, Bool hasOutput, CharString outputStr,
+		SHFile shFile, EGfxBinaryType binaryType, U64 deviceId, CharString liveTarget,
+		Bool hasOutput, CharString outputStr,
 		const RefPtrType *fileHandleType, Bool assumeDefaults,
 		Bool hasPipelineOutput, CharString pipelineOutputStr, CharString psoSet, CharString psoInput,
 		CharString shaderName,
@@ -856,6 +948,8 @@ clean:
 		RefPtrType instanceType = (RefPtrType) { 0 };
 		GraphicsInstanceRef *instanceRef = NULL;
 		GraphicsDeviceRef *deviceRef = NULL;
+		GraphicsDeviceRef *targetRef = NULL;
+		Bool targetSelected = false;
 		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
 		PipelineRef *pipeline = NULL;
 		ListPipelineExecutable execs = (ListPipelineExecutable) { 0 };
@@ -864,6 +958,7 @@ clean:
 		SPFile spFile = (SPFile) { 0 };
 		PipelineLayoutRef *pipelineLayout = NULL;
 		ListCharString runtimeNames = (ListCharString) { 0 };
+		ListCharString liveTargets = (ListCharString) { 0 };
 		StreamRef *pipelineStream = NULL;
 		const RefPtrType memStreamType = MemoryStream_makeType(alloc);
 		U32 pipelineId = U32_MAX;
@@ -930,6 +1025,99 @@ clean:
 			retError(clean, Error_outOfBounds(
 				0, deviceId, infos.length, "CLI_isaDisassembleLive() -asic live:<index> device index out of range"
 			));
+
+		//An ASIC other than the adapter itself takes two processes, because its two halves can't share one.
+		//Resolving the name needs the driver's own list, which needs a device; applying it needs the driver to
+		// read the choice while it initializes the adapter, which it has already done by the time a device
+		// exists. So this process resolves and hands over, and a second one does the work.
+
+		if (CharString_length(liveTarget)) {
+
+			gotoIfError3(clean, GraphicsDeviceRef_create(
+				instanceRef, &infos.ptr[deviceId], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default,
+				NULL, NULL, &targetRef, e_rr
+			));
+
+			//Resolving is what names a target the driver hasn't got, so that is reported here rather than reaching
+			// the second process as an adapter that compiled for the wrong thing.
+			//A name is a gpu and a gfxIp that belong together, so the two halves of one that doesn't exist almost
+			// always name two rows that do; those are pointed at rather than leaving the whole list to be reread.
+
+			gotoIfError3(clean, GraphicsDeviceRef_listShaderTargets(targetRef, alloc, &liveTargets, e_rr));
+
+			Bool known = false;
+
+			for(U64 i = 0; i < liveTargets.length && !known; ++i)
+				known = CharString_equalsStringInsensitive(&liveTargets.ptr[i], &liveTarget);
+
+			if (!known) {
+
+				Log_errorLnx(
+					"%.*s isn't a target %s's driver reports.",
+					(int) CharString_length(liveTarget), liveTarget.ptr, infos.ptr[deviceId].name
+				);
+
+				const U64 split = CharString_findFirstSensitive(&liveTarget, ':', 0, 0);
+
+				for (U64 i = 0; i < liveTargets.length && split != U64_MAX; ++i) {
+
+					const CharString target = liveTargets.ptr[i];
+					const U64 targetSplit = CharString_findFirstSensitive(&target, ':', 0, 0);
+
+					if(targetSplit == U64_MAX)
+						continue;
+
+					//Either half matching is what makes a row worth naming: one of them is what was meant.
+
+					const CharString wantedGpu = CharString_createRefSizedConst(liveTarget.ptr, split, false);
+					const CharString targetGpu = CharString_createRefSizedConst(target.ptr, targetSplit, false);
+
+					const CharString wantedIp = CharString_createRefSizedConst(
+						liveTarget.ptr + split + 1, CharString_length(liveTarget) - split - 1, false
+					);
+
+					const CharString targetIp = CharString_createRefSizedConst(
+						target.ptr + targetSplit + 1, CharString_length(target) - targetSplit - 1, false
+					);
+
+					if(
+						!CharString_equalsStringInsensitive(&wantedGpu, &targetGpu) &&
+						!CharString_equalsStringInsensitive(&wantedIp, &targetIp)
+					)
+						continue;
+
+					Log_errorLnx("\tDid you mean %.*s?", (int) CharString_length(target), target.ptr);
+				}
+
+				Log_errorLnx("\tRun 'OxC3 isa devices' for the whole list.");
+
+				retError(clean, Error_notFound(
+					0, 0, "CLI_isaDisassembleLive() -asic named a target this driver doesn't report"
+				));
+			}
+
+			gotoIfError3(clean, GraphicsDeviceRef_selectShaderTarget(targetRef, &liveTarget, e_rr));
+			targetSelected = true;
+
+			Log_debugLnx(
+				"Compiling for %.*s rather than for %s itself.",
+				(int) CharString_length(liveTarget), liveTarget.ptr, infos.ptr[deviceId].name
+			);
+
+			//The driver has the choice now, but it read its settings when this process first touched D3D12, so this
+			// process can never compile for it. A second one starting from the selection can: it inherits the
+			// environment and initializes the adapter as the target ASIC, which is why the work is handed over
+			// rather than done here.
+			//The child is asked for the adapter by index, so it takes the ordinary live path and needs to know
+			// nothing about virtual GPUs.
+
+			gotoIfError3(clean, CLI_isaRerunForTarget(
+				deviceId, hasOutput, outputStr, assumeDefaults, hasPipelineOutput, pipelineOutputStr,
+				psoSet, psoInput, shaderName, alloc, e_rr
+			));
+
+			goto clean;
+		}
 
 		gotoIfError3(clean, GraphicsDeviceRef_create(
 			instanceRef, &infos.ptr[deviceId], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default,
@@ -1481,6 +1669,7 @@ clean:
 	clean:
 		CharString_free(&stageLine, alloc);
 		ListCharString_free(&runtimeNames, alloc);
+		ListCharString_freeUnderlying(&liveTargets, alloc);
 		RefPtr_dec(&pipelineLayout);
 		RefPtr_dec(&pipelineStream);
 		SPFile_free(&spFile, alloc);
@@ -1490,6 +1679,15 @@ clean:
 		ListPipelineExecutable_freeUnderlying(&execs, alloc);
 		RefPtr_dec(&pipeline);
 		RefPtr_dec(&deviceRef);
+
+		//The choice lives in this process's environment, which is how the run above inherited it, so anything
+		// else started from here would inherit it too. It's given back once the run that wanted it is done.
+		//Cleared through the device that made it, which is still alive here for exactly that.
+
+		if(targetSelected)
+			GraphicsDeviceRef_selectShaderTarget(targetRef, NULL, NULL);
+
+		RefPtr_dec(&targetRef);
 		RefPtr_dec(&instanceRef);
 		ListGraphicsDeviceInfo_free(&infos, alloc);
 		return s_uccess;
@@ -1544,6 +1742,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 		Bool live = CharString_equalsStringInsensitive(&asic, &liveStr);
 		U64 deviceId = U64_MAX;
+		CharString liveTarget = CharString_createNull();
 
 		if(!live && CharString_startsWithStringInsensitive(&asic, &livePfx, 0)) {
 
@@ -1561,6 +1760,16 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 				));
 		}
 
+		//A driver reported ASIC ("NAVI31:gfx1100") is a live target too, since only an installed driver can
+		// compile for one; 'isa devices' lists them next to the offline ones.
+		//The colon is what tells the two apart: an offline target is a gfxN or a major.minor.step, neither of
+		// which carries one, and the live: forms were already taken above.
+
+		else if (!live && CharString_containsSensitive(&asic, ':', 0, 0)) {
+			live = true;
+			liveTarget = asic;
+		}
+
 		if(live) {
 
 			gotoIfError3(clean, File_read(&inputStr, 1 * SECOND, 0, 0, &fileHandleType, &input, e_rr));
@@ -1572,8 +1781,8 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 			gotoIfError3(clean, SHFile_read((StreamRef*)readStream, &liveOff, false, alloc, &shFile, e_rr));
 
 			//Which binary is run decides the backend: SPIR-V goes to Vulkan, DXIL to D3D12.
-			//-compile-output picks when the file holds both; otherwise the one that's present is used, preferring
-			// SPIR-V because it's the only one any driver disassembles today.
+			//-compile-output picks when the file holds both, and so does naming a driver ASIC; otherwise the one
+			// that's present is used, preferring SPIR-V because it's the only one any driver disassembles today.
 
 			EGfxBinaryType liveType = EGfxBinaryType_Count;
 			CharString liveMode = CharString_createNull();
@@ -1591,7 +1800,23 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 				));
 			}
 
-			else for (U64 i = 0; i < shFile.binaries.length && liveType == EGfxBinaryType_Count; ++i) {
+			//A driver reported ASIC only exists on the D3D12 side, so naming one decides the binary just as much
+			// as -compile-output would, and the two have to agree rather than one quietly winning.
+
+			if (CharString_length(liveTarget)) {
+
+				if(liveType == EGfxBinaryType_SPIRV)
+					retError(clean, Error_invalidParameter(
+						0, 0,
+						"CLI_isaDisassemble() -asic <driver ASIC> compiles DXIL, so -compile-output spv contradicts it"
+					));
+
+				liveType = EGfxBinaryType_DXIL;
+			}
+
+			//Neither said which, so the one the file holds is taken.
+
+			for (U64 i = 0; i < shFile.binaries.length && liveType == EGfxBinaryType_Count; ++i) {
 
 				if(Buffer_length(shFile.binaries.ptr[i].binaries[EGfxBinaryType_SPIRV]))
 					liveType = EGfxBinaryType_SPIRV;
@@ -1602,6 +1827,42 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 			if(liveType == EGfxBinaryType_Count)
 				retError(clean, Error_notFound(0, 0, "CLI_isaDisassemble() the oiSH holds no SPIR-V or DXIL binary"));
+
+			//-compile-output can name a type the file doesn't carry, which the detection above never runs into.
+			//Saying so here keeps it the missing binary it is: a layout is derived from the stage's binary, whose
+			// registers only carry pairs for the types that binary was compiled for, so the run would otherwise
+			// fail much further down as a register that has no pair for this device.
+
+			Bool holdsLiveType = false;
+
+			for(U64 i = 0; i < shFile.binaries.length && !holdsLiveType; ++i)
+				holdsLiveType = Buffer_length(shFile.binaries.ptr[i].binaries[liveType]) != 0;
+
+			if (!holdsLiveType) {
+
+				Log_errorLnx(
+					"This oiSH holds no %s binary, which is what -compile-output asked for.",
+					EGfxBinaryType_names[liveType]
+				);
+
+				for (U8 i = 0; i < EGfxBinaryType_Count; ++i) {
+
+					Bool holds = false;
+
+					for(U64 j = 0; j < shFile.binaries.length && !holds; ++j)
+						holds = Buffer_length(shFile.binaries.ptr[j].binaries[i]) != 0;
+
+					if(holds)
+						Log_errorLnx(
+							"\tIt does hold %s; pass that instead, or recompile the shader for %s.",
+							EGfxBinaryType_names[i], EGfxBinaryType_names[liveType]
+						);
+				}
+
+				retError(clean, Error_notFound(
+					1, 0, "CLI_isaDisassemble() the oiSH holds no binary of the type -compile-output asked for"
+				));
+			}
 
 			const Bool assumeDefaults = (args->flags & EOperationFlags_AssumeDefaults) != 0;
 
@@ -1615,7 +1876,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 				CharString_length(pipelineOutputStr);
 
 			gotoIfError3(clean, CLI_isaDisassembleLive(
-				shFile, liveType, deviceId, hasOutput, outputStr, &fileHandleType, assumeDefaults,
+				shFile, liveType, deviceId, liveTarget, hasOutput, outputStr, &fileHandleType, assumeDefaults,
 				hasPipelineOutput, pipelineOutputStr, psoSetStr, psoInputStr, inputStr, alloc, e_rr
 			));
 			goto clean;

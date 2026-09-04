@@ -127,6 +127,25 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_listShaderTargets)(
 	return true;
 }
 
+//With nothing to select from, the only choice that can be honoured is the empty one, which is the state a
+//Vulkan device is always in. Naming a target here would otherwise read as having compiled for it.
+
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_selectShaderTarget)(
+	GraphicsDeviceRef *deviceRef, const CharString *name, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	(void) deviceRef;
+
+	if(name && CharString_length(*name))
+		retError(clean, Error_unsupportedOperation(
+			0, "GraphicsDeviceRef_selectShaderTarget() Vulkan compiles for the device itself only"
+		));
+
+clean:
+	return s_uccess;
+}
+
 Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 	Pipeline *pipeline,
 	const Allocator *alloc,

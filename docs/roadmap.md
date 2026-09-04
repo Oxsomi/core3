@@ -26,6 +26,14 @@ Last full revision: 2026-09-02.
   flight, which works because that buffer is fixed for the whole frame); a caller-owned push descriptor
   layout is refused at creation without the extension. The general emulation needs a set allocated per push
   from a per-frame pool, since a caller's push descriptors change per work op.
+- **AMD's driver fail-fasts tearing a virtual GPU down.** Targeting another ASIC for DXIL ISA works
+  (`-asic <name>` resolves the name, hands it to the driver and re-runs itself so the adapter initializes as
+  the target), but the second process dies with STATUS_STACK_BUFFER_OVERRUN on the way out, after the
+  disassembly is produced. A fail-fast bypasses the child's own reporting, so the parent can only say which
+  half of the run the driver reached. Two other quirks are already handled and worth not rediscovering: the
+  D3D12 debug layer faults in the same driver as soon as a virtual GPU is selected, and an emulated ASIC
+  reports that ASIC's memory rather than the machine's, which the 512 MiB device requirement rejected it
+  over. All three want a discrete AMD card to check whether they are specific to an integrated adapter.
 - **NV returns 1:1 nondeterministically.** Measured on an RTX 3080: the same geometry compacts to ~35-70%
   on most runs and reports no saving on others. The compaction test's staleness asserts are gated on the
   structure actually having moved for exactly this reason; any assert downstream of "compaction shrank" is
@@ -99,6 +107,24 @@ Roughly ordered by how often the gap bites.
   AND each backend DLL, so an incremental build after changing a shared graphics struct can mix layouts and
   produce a deterministic bogus crash. Clean-build OxC3_graphics + both backends + the test before trusting
   such a crash.
+- **clang-cl ASan can fail to start at all on a new Windows build, and it surfaces as a build error.** On
+  Windows 11 26200 every ASan instrumented binary segfaults before main, printing
+  `interception_win: unhandled instruction at <addr>: 44 0f b6 1a 4c 8b d2 48` first: the runtime cannot
+  decode the prologue of a system function it wants to hook, gives up, and faults. What is seen first is
+  not that, it is `MSB8066 ... exited with code -1073741819` on the packaging rules, because those run a
+  freshly built host tool as part of the build. Confirm in one command rather than reading the build log:
+  run any instrumented test binary with no arguments, and if it faults too, nothing in the tree is
+  implicated. The `windows_hook_rtl_allocators=0` and `windows_hook_legacy_allocators=0` ASAN_OPTIONS do
+  not help. A newer LLVM is the fix; meanwhile clang-cl without `-asan` still gives the compiler coverage
+  that is the reason to run it on Windows, and the sanitizer legs are Linux's anyway.
+- **A lost device makes GPU-AV report nonsense, and the nonsense looks like the bug.** An unaligned shader
+  binding table (the SBT base was not aligned to shaderGroupBaseAlignment) lost the device mid-suite on
+  NVIDIA. What the log showed was not that: it was GPU-AV claiming `(set = 1, binding = 4) Descriptor index
+  0 is uninitialized` for `_rwBuffer`, bindless dispatches reading back wrong values, and thirty-odd
+  unrelated modules failing on submit afterwards. Turning the layer off made the suite pass, which reads as
+  "the layer is at fault" and is exactly the wrong conclusion: it only removed the instrumentation that made
+  the misalignment fatal. Suspect a real fault before the layer whenever a device is lost, and confirm a
+  layer verdict by fixing the fault rather than by silencing the layer.
 - **The D3D12 info-queue drain prints stored messages late** (at the next failure), so message position in
   a log can lie about when the message occurred. Win11's live callback does not have this problem.
 - **A fail-fast (stack cookie, heap corruption, debug-layer break with no debugger) kills the process

@@ -1556,6 +1556,101 @@ static void Test_SPLayoutDxilNamespaces(Test *t) {
 	SPFile_free(&sp, t->alloc);
 }
 
+//A push constant is one declaration reflected twice: SPIRV names it after the variable, DXIL folds the loose
+//global into its implicit $Globals cbuffer, and the two carry different names so no reflection merge joins
+//them.
+//Derivation has to, or the row would be a descriptor with no SPIRV pair at all and the push constant would
+//reach a root signature without the b register that binds it.
+
+static void Test_SPLayoutPcGlobalsMerge(Test *t) {
+
+	Test_setModule(t, "SPFile: the DXIL $Globals cbuffer is the push constant, not a binding row");
+
+	SHRegisterRuntime regs[3];
+
+	for(U8 i = 0; i < 3; ++i)
+		regs[i] = (SHRegisterRuntime) { 0 };
+
+	//The SPIRV half: a push constant block, which carries no binding pair on any side
+
+	regs[0].reg.bindings = GfxBindings_dummy();
+	regs[0].reg.registerType = EGfxRegisterType_PushConstants;
+	regs[0].name = CharString_createRefCStrConst("_push");
+	regs[0].shaderBuffer.bufferSize = 4;
+
+	//The DXIL half, rounded up to a cbuffer's 16 bytes
+
+	regs[1].reg.bindings = GfxBindings_dummy();
+	regs[1].reg.bindings.arr[EGfxBinaryType_DXIL] = (GfxBinding) { .space = 0, .binding = 0 };
+	regs[1].reg.registerType = EGfxRegisterType_ConstantBuffer;
+	regs[1].name = CharString_createRefCStrConst("$Globals");
+	regs[1].shaderBuffer.bufferSize = 16;
+
+	//A cbuffer the shader really declared stays a row, since only $Globals is the push constant's other half
+
+	regs[2].reg.bindings = GfxBindings_dummy();
+	regs[2].reg.bindings.arr[EGfxBinaryType_SPIRV] = (GfxBinding) { .space = 0, .binding = 1 };
+	regs[2].reg.bindings.arr[EGfxBinaryType_DXIL] = (GfxBinding) { .space = 0, .binding = 1 };
+	regs[2].reg.registerType = EGfxRegisterType_ConstantBuffer;
+	regs[2].name = CharString_createRefCStrConst("material");
+	regs[2].shaderBuffer.bufferSize = 64;
+
+	SHBinaryInfo bin = (SHBinaryInfo) { 0 };
+	ListSHRegisterRuntime_createRefConst(regs, 3, &bin.registers, NULL);
+
+	U16 binId = 0;
+
+	SHEntry cs = entryOf("main", EGfxPipelineStage_Compute);
+	ListU16_createRefConst(&binId, 1, &cs.binaryIds, NULL);
+
+	SHFile sh = fileOf(&cs, 1);
+	ListSHBinaryInfo_createRefConst(&bin, 1, &sh.binaries, NULL);
+
+	ListSHFile files = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(&sh, 1, &files, NULL);
+
+	SPFile sp = (SPFile) { 0 };
+	Test_assert(t, "create", SPFile_create(ESPSettingsFlags_None, t->alloc, &sp, &t->err));
+
+	SPStageRef stage = refOf(0, 0);
+	U32 pipelineId = U32_MAX;
+
+	if (Test_assert(t, "derive", SPFile_derivePipeline(
+		&sp, &files, NULL, CharString_createNull(), &stage, 1, NULL, t->alloc, &pipelineId, &t->err
+	))) {
+
+		const SPPipelineBase base = sp.pipelines.ptr[pipelineId];
+
+		if (Test_assert(t, "hasLayout", base.layoutIndex != U32_MAX)) {
+
+			const PLFile *layout = &sp.layouts.ptr[base.layoutIndex];
+
+			Test_assert(t, "globalsIsNoRow", layout->bindings.length == 1);
+			Test_assert(t, "hasPushConstant", layout->hasPushConstant);
+
+			const GfxBinding pcDxil = layout->pushConstant.bindings.arr[EGfxBinaryType_DXIL];
+
+			Test_assert(t, "pcTookDxilRegister", pcDxil.space == 0 && pcDxil.binding == 0);
+			Test_assert(t, "pcNoSpirvPair", layout->pushConstant.bindings.arrU64[EGfxBinaryType_SPIRV] == U64_MAX);
+
+			//The range has to cover both halves, so the DXIL rounding wins over the 4 the block declares
+
+			Test_assert(t, "pcRangeCoversBoth", layout->pushConstant.strideOrLength == 16);
+
+			const PLDescriptorBinding row = layout->bindings.ptr[0];
+			const U32 rowName = PLDescriptorBinding_name(row);
+
+			Test_assert(
+				t, "declaredCbufferKept",
+				rowName != PLDescriptorBinding_NAME_NONE &&
+				CharString_equalsCStringSensitive(&layout->names.entryStrings.ptr[rowName], "material")
+			);
+		}
+	}
+
+	SPFile_free(&sp, t->alloc);
+}
+
 OXC3_TEST_MAIN(formats_oiSP) {
 
 	const Allocator alloc = BasicAllocator_instance;
@@ -1581,6 +1676,7 @@ OXC3_TEST_MAIN(formats_oiSP) {
 	Test_SPLayoutDxilNamespaces(&t);
 	Test_SPLayoutDxilArrayOverlap(&t);
 	Test_SPLayoutPcRegisterClash(&t);
+	Test_SPLayoutPcGlobalsMerge(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

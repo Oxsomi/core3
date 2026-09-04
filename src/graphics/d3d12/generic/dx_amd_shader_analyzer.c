@@ -432,6 +432,10 @@ Bool DxAmdShaderAnalyzer_clearVirtualGpu() {
 	return SetEnvironmentVariableA(AmdExtVirtualGpuIdEnvVar, NULL);
 }
 
+Bool DxAmdShaderAnalyzer_virtualGpuSelected() {
+	return GetEnvironmentVariableA(AmdExtVirtualGpuIdEnvVar, NULL, 0) != 0;
+}
+
 void DxAmdShaderAnalyzer_free(DxAmdShaderAnalyzer *analyzer) {
 
 	if(!analyzer)

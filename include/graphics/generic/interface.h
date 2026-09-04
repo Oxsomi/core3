@@ -163,6 +163,12 @@ typedef struct GraphicsObjectSizes {
 		GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
 	);
 
+	//Which of those the next device created in this process compiles for.
+
+	typedef Bool (*GraphicsDeviceRef_selectShaderTargetImpl)(
+		GraphicsDeviceRef *deviceRef, const CharString *name, Error *e_rr
+	);
+
 	//Sampler
 
 	typedef Bool (*GraphicsDeviceRef_createSamplerImpl)(
@@ -368,6 +374,7 @@ typedef struct GraphicsObjectSizes {
 		Pipeline_freeImpl                                pipelineFree;
 		Pipeline_getExecutablesImpl                      pipelineGetExecutables;
 		GraphicsDeviceRef_listShaderTargetsImpl          deviceListShaderTargets;
+		GraphicsDeviceRef_selectShaderTargetImpl         deviceSelectShaderTarget;
 
 		GraphicsDeviceRef_createSamplerImpl              samplerCreate;
 		Sampler_freeImpl                                 samplerFree;
@@ -495,6 +502,8 @@ Bool Pipeline_getExecutablesExt(Pipeline *pipeline, const Allocator *alloc, List
 Bool GraphicsDeviceRef_listShaderTargetsExt(
 	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
 );
+
+Bool GraphicsDeviceRef_selectShaderTargetExt(GraphicsDeviceRef *deviceRef, const CharString *name, Error *e_rr);
 
 //Sampler
 

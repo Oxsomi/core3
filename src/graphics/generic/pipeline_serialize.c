@@ -374,6 +374,26 @@ clean:
 	return s_uccess;
 }
 
+//Whether two layouts each declare a binding in one and the same space.
+//Only SPIRV can ever answer true: DXIL keeps the runtime's own registers in the reserved space, which a
+// file's rows are refused from, while on SPIRV they are ordinary sets a bindful layout may legitimately own.
+
+static Bool DescriptorLayouts_shareSpace(DescriptorLayoutRef *a, DescriptorLayoutRef *b) {
+
+	if(!a || !b)
+		return false;
+
+	const ListDescriptorBinding lhs = DescriptorLayoutRef_ptr(a)->info.bindings;
+	const ListDescriptorBinding rhs = DescriptorLayoutRef_ptr(b)->info.bindings;
+
+	for(U64 i = 0; i < lhs.length; ++i)
+		for(U64 j = 0; j < rhs.length; ++j)
+			if(lhs.ptr[i].binding.space == rhs.ptr[j].binding.space)
+				return true;
+
+	return false;
+}
+
 //An unbounded array (count 0) is refused rather than guessed: its real capacity is a heap decision the file
 // can't make, so the caller has to supply the count first.
 
@@ -499,8 +519,22 @@ Bool PLFile_createPipelineLayout(
 		gotoIfError3(clean, GraphicsDeviceRef_createDescriptorLayout(deviceRef, &info, &descName, &descRef, e_rr));
 	}
 
+	//An oiPL describes only the registers the caller owns.
+	//The runtime's own (the bindless set and the per frame globals) were left out when the layout was derived,
+	// since they belong to the device's layout rather than to a custom one, so putting them back is what makes
+	// an instantiated layout describe the whole shader again.
+	//Wanting push constants is exactly what makes a shader need a layout of its own, so without this it loses
+	// the bindless set and _frameId/_time in the same breath and the driver rejects the pipeline for using
+	// descriptors its layout never declared.
+	//A file that declares bindings of its own is bindful and owns those spaces, so it keeps them and only the
+	// device parts that can't collide with it are added.
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
 	PipelineLayoutInfo pipelineLayout = (PipelineLayoutInfo) {
-		.bindings = descRef
+		.bindings = descRef ? descRef : device->defaultDescLayout,
+		.pushDescriptors =
+			DescriptorLayouts_shareSpace(descRef, device->defaultCBufferLayout) ? NULL : device->defaultCBufferLayout
 	};
 
 	if (plFile->hasPushConstant) {

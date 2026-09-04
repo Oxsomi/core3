@@ -164,6 +164,13 @@ Bool DxAmdShaderAnalyzer_listVirtualGpus(
 Bool DxAmdShaderAnalyzer_selectVirtualGpu(U32 gpuId);
 Bool DxAmdShaderAnalyzer_clearVirtualGpu();
 
+//Whether this process already carries a selection, which it does when it inherited one.
+//Two things follow from it and neither is the caller's to remember: the D3D12 debug layer faults inside the AMD
+// driver as soon as a virtual GPU is selected, and an emulated ASIC reports that ASIC's memory rather than the
+// machine's, which the device requirements would reject it over.
+
+Bool DxAmdShaderAnalyzer_virtualGpuSelected();
+
 //Loads the driver extension for this device; false (with the struct zeroed) on any machine that has no AMD driver,
 // which is a normal outcome rather than an error.
 
