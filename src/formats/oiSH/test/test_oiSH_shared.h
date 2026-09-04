@@ -100,6 +100,7 @@ void Test_SHFileRegisterAddSampler(Test *t);
 void Test_SHFileRegisterAddSamplerComparisonState(Test *t);
 void Test_SHFileRegisterDuplicateNameRejected(Test *t);
 void Test_SHFileRegisterDuplicateSPIRVBindingRejected(Test *t);
+void Test_SHFileRegisterDxilRangeOverlapRejected(Test *t);
 void Test_SHFileRegisterAddTexture(Test *t);
 void Test_SHFileRegisterAddRWTexture(Test *t);
 void Test_SHFileRegisterArray(Test *t);

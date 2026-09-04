@@ -112,6 +112,41 @@ void Test_SHFileRegisterDuplicateSPIRVBindingRejected(Test *t) {
 	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
 }
 
+void Test_SHFileRegisterDxilRangeOverlapRejected(Test *t) {
+
+	Test_setModule(t, "SHFile register: a DXIL register inside an array's range is rejected");
+
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
+
+	U32 dims[1] = { 4 };
+	ListU32 arr = (ListU32) { 0 };
+	Test_assert(t, "createRef", ListU32_createRefConst(dims, 1, &arr, &t->err));
+
+	CharString arrayName = CharString_createRefCStrConst("texArray");
+	CharString insideName = CharString_createRefCStrConst("inside");
+	GfxBindings arrayB = makeDualBinding(0, 0, 0);
+	GfxBindings insideB = makeDualBinding(0, 1, 2);
+
+	Test_assert(t, "add tex[4]",
+		ListSHRegisterRuntime_addTexture(
+			&info.registers, ESHTextureType_Texture2D, false, false, 0x3,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
+			&arrayName, &arr, arrayB, t->alloc, &t->err
+		)
+	);
+
+	Test_assert(t, "t2 inside t0..t3 rejected",
+		!ListSHRegisterRuntime_addTexture(
+			&info.registers, ESHTextureType_Texture2D, false, false, 0x3,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
+			&insideName, NULL, insideB, t->alloc, NULL
+		)
+	);
+
+	Test_assert(t, "count 1", info.registers.length == 1);
+	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
+}
+
 void Test_SHFileRegisterAddTexture(Test *t) {
 
 	Test_setModule(t, "SHFile register: add Texture2D accepted, IsWrite not set");

@@ -212,6 +212,7 @@ typedef struct BinaryInfoFixedSize {
 typedef enum EGfxRegisterType {
 
 	EGfxRegisterType_Sampler,
+	EGfxRegisterType_SamplerComparisonState,
 
 	EGfxRegisterType_ConstantBuffer,					//UBO or CBuffer
 	EGfxRegisterType_PushConstants,					//Push constants or CBuffer (DXIL)
@@ -269,7 +270,8 @@ typedef struct GfxBinding {
 } GfxBinding;
 
 //U32_MAX for both space and binding indicates 'not present'
-typedef struct GfxBindings {
+typedef union GfxBindings {
+	U64 arrU64[EGfxBinaryType_Count];
 	GfxBinding arr[EGfxBinaryType_Count];
 } GfxBindings;
 

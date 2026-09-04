@@ -109,6 +109,9 @@ Bool PLFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	if(hasPushConstant)
 		gotoIfError3(clean, PLDescriptorBinding_validate(&pushConstant, nameCount, samplers.length, false, e_rr));
 
+	for(U64 i = 0; i < samplers.length; ++i)
+		gotoIfError3(clean, PLSamplerInfo_validate(&samplers.ptr[i], e_rr));
+
 	*plFile = (PLFile) {
 		.names = names,
 		.bindings = bindings,

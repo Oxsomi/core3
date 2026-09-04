@@ -1121,7 +1121,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 			break;
 		}
 
-		//oiSR file (frontend symbol AST reflection)
+		//oiPL file (pipeline layout)
 
 		case PLHeader_MAGIC: {
 

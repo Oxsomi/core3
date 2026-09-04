@@ -1226,7 +1226,7 @@ void Test_SPFieldNames(Test *t) {
 
 static void Test_SPLayoutDeriveSupplyRoundTrip(Test *t) {
 
-	Test_setModule(t, "SPFile: descriptor layout derive, supply, transplant and round trip");
+	Test_setModule(t, "SPFile: descriptor layout derive, supply and round trip");
 
 	//A compute entry whose binary declares a push constant, a structured buffer, a sampler and one register
 	//the runtime owns; the layout must describe the first three and never the fourth.
@@ -1368,6 +1368,14 @@ static void Test_SPLayoutDeriveSupplyRoundTrip(Test *t) {
 		Test_assert(t, "provenanceSurvives", PLDescriptorBinding_source(rlayout->bindings.ptr[0]) == EPLSource_Supplied);
 		Test_assert(t, "pcSurvives", rlayout->hasPushConstant && rlayout->pushConstant.strideOrLength == 32);
 		Test_assert(t, "hashMatches", reread.hash == sp.hash);
+
+		//The NULL stream form has to reserve exactly the bytes the streamed write produced
+
+		const MemoryStream *ms = RefPtr_data(archive, MemoryStream);
+		U64 sizeOnly = 0;
+
+		Test_assert(t, "sizeOnly", SPFile_write(&sp, t->alloc, NULL, &sizeOnly, &t->err));
+		Test_assert(t, "sizeOnlyMatches", sizeOnly == Buffer_length(ms->data));
 	}
 
 	SPFile_free(&reread, t->alloc);
@@ -1421,6 +1429,57 @@ static void Test_SPLayoutDxilArrayOverlap(Test *t) {
 	U32 pipelineId = U32_MAX;
 
 	Test_assert(t, "overlapRefused", !SPFile_derivePipeline(
+		&sp, &files, NULL, CharString_createNull(), &stage, 1, NULL, t->alloc, &pipelineId, NULL
+	));
+
+	SPFile_free(&sp, t->alloc);
+}
+
+//The push constant occupies its DXIL b register like any class B row, so a cbuffer at the same register
+//can't share the layout.
+
+static void Test_SPLayoutPcRegisterClash(Test *t) {
+
+	Test_setModule(t, "SPFile: the push constant's DXIL register can't collide with a binding row");
+
+	SHRegisterRuntime regs[2];
+
+	for(U8 i = 0; i < 2; ++i)
+		regs[i] = (SHRegisterRuntime) { 0 };
+
+	regs[0].reg.bindings = GfxBindings_dummy();
+	regs[0].reg.bindings.arr[EGfxBinaryType_DXIL] = (GfxBinding) { .space = 0, .binding = 7 };
+	regs[0].reg.registerType = EGfxRegisterType_ConstantBuffer;
+	regs[0].name = CharString_createRefCStrConst("globalsCustom");
+	regs[0].shaderBuffer.bufferSize = 64;
+
+	regs[1].reg.bindings = GfxBindings_dummy();
+	regs[1].reg.bindings.arr[EGfxBinaryType_DXIL] = (GfxBinding) { .space = 0, .binding = 7 };
+	regs[1].reg.registerType = EGfxRegisterType_PushConstants;
+	regs[1].name = CharString_createRefCStrConst("consts");
+	regs[1].shaderBuffer.bufferSize = 32;
+
+	SHBinaryInfo bin = (SHBinaryInfo) { 0 };
+	ListSHRegisterRuntime_createRefConst(regs, 2, &bin.registers, NULL);
+
+	U16 binId = 0;
+
+	SHEntry cs = entryOf("main", EGfxPipelineStage_Compute);
+	ListU16_createRefConst(&binId, 1, &cs.binaryIds, NULL);
+
+	SHFile sh = fileOf(&cs, 1);
+	ListSHBinaryInfo_createRefConst(&bin, 1, &sh.binaries, NULL);
+
+	ListSHFile files = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(&sh, 1, &files, NULL);
+
+	SPFile sp = (SPFile) { 0 };
+	Test_assert(t, "create", SPFile_create(ESPSettingsFlags_None, t->alloc, &sp, &t->err));
+
+	SPStageRef stage = refOf(0, 0);
+	U32 pipelineId = U32_MAX;
+
+	Test_assert(t, "pcClashRefused", !SPFile_derivePipeline(
 		&sp, &files, NULL, CharString_createNull(), &stage, 1, NULL, t->alloc, &pipelineId, NULL
 	));
 
@@ -1521,6 +1580,7 @@ OXC3_TEST_MAIN(formats_oiSP) {
 	Test_SPLayoutDeriveSupplyRoundTrip(&t);
 	Test_SPLayoutDxilNamespaces(&t);
 	Test_SPLayoutDxilArrayOverlap(&t);
+	Test_SPLayoutPcRegisterClash(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

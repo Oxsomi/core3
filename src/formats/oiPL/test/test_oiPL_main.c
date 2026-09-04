@@ -26,7 +26,6 @@
 #include "types/container/string.h"
 #include "types/base/error.h"
 #include "formats/oiPL/pl_file.h"
-#include "formats/oiSH/sh_registers.h"
 
 static Bool buildLayout(Test *t, PLFile *pl) {
 
@@ -89,6 +88,43 @@ static Bool buildLayout(Test *t, PLFile *pl) {
 		Test_assert(t, "push1", ListPLDescriptorBinding_pushBack(&pl->bindings, buffer, t->alloc, &t->err)) &&
 		Test_assert(t, "push2", ListPLDescriptorBinding_pushBack(&pl->bindings, baked, t->alloc, &t->err)) &&
 		Test_assert(t, "pushSampler", ListPLSamplerInfo_pushBack(&pl->samplers, sampler, t->alloc, &t->err));
+}
+
+//A parent format reserves through the NULL stream form, so it has to agree with the streamed write
+//from any starting offset, including the unaligned one an embedded layout gets.
+
+static void Test_PLSizeOnlyParity(Test *t) {
+
+	Test_setModule(t, "PLFile: a NULL stream reserves exactly what a streamed write commits");
+
+	PLFile pl = (PLFile) { 0 };
+	StreamRef *stream = NULL;
+	const RefPtrType msType = MemoryStream_makeType(t->alloc);
+
+	if(!buildLayout(t, &pl))
+		goto clean;
+
+	if(!Test_assert(t, "finalize", PLFile_finalize(&pl, t->alloc, &t->err)))
+		goto clean;
+
+	if(!Test_assert(t, "createStream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &stream, &t->err)))
+		goto clean;
+
+	U64 off = 0;
+
+	if(!Test_assert(t, "firstWrite", PLFile_write(&pl, t->alloc, stream, &off, &t->err)))
+		goto clean;
+
+	const U64 mid = off;
+	U64 sizeOnly = mid;
+
+	Test_assert(t, "sizeOnly", PLFile_write(&pl, t->alloc, NULL, &sizeOnly, &t->err));
+	Test_assert(t, "secondWrite", PLFile_write(&pl, t->alloc, stream, &off, &t->err));
+	Test_assert(t, "parity", sizeOnly == off);
+
+clean:
+	RefPtr_dec(&stream);
+	PLFile_free(&pl, t->alloc);
 }
 
 static void Test_PLRoundTrip(Test *t) {
@@ -227,6 +263,11 @@ static void Test_PLTamper(Test *t) {
 
 	tamper(t, "sourceInvalid", stream, B + 40 + 35, 9);
 
+	//The sampler pool sits after the three rows and the push constant row (B + 160)
+
+	tamper(t, "samplerFilterInvalid", stream, B + 160 + 0, 0xFF);
+	tamper(t, "samplerBoolInvalid", stream, B + 160 + 7, 2);
+
 clean:
 	RefPtr_dec(&stream);
 	PLFile_free(&pl, t->alloc);
@@ -296,6 +337,14 @@ static void Test_PLValidate(Test *t) {
 	Test_assert(t, "absentEverywhereRefused", !PLDescriptorBinding_validate(&half, U64_MAX, U64_MAX, false, NULL));
 	Test_assert(t, "pcNeedsNoPair", PLDescriptorBinding_validate(&pl.pushConstant, U64_MAX, U64_MAX, false, NULL));
 
+	PLDescriptorBinding flags = pl.bindings.ptr[1];
+	flags.strideOrLength = 16;
+	flags.registerType |= 0x80000000;
+	Test_assert(t, "unknownBitsRefused", !PLDescriptorBinding_validate(&flags, U64_MAX, U64_MAX, false, NULL));
+
+	flags.registerType = EGfxRegisterType_StructuredBuffer | EGfxRegisterType_IsArray;
+	Test_assert(t, "textureFlagOnBufferRefused", !PLDescriptorBinding_validate(&flags, U64_MAX, U64_MAX, false, NULL));
+
 	//Only the whole pair is the absence sentinel; a lone U32_MAX member is a real, if odd, location
 
 	const GfxBinding halfPair = (GfxBinding) { .space = U32_MAX, .binding = 3 };
@@ -328,6 +377,7 @@ OXC3_TEST_MAIN(formats_oiPL) {
 	t.alloc = &alloc;
 
 	Test_PLRoundTrip(&t);
+	Test_PLSizeOnlyParity(&t);
 	Test_PLCopy(&t);
 	Test_PLTamper(&t);
 	Test_PLValidate(&t);

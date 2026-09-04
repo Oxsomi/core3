@@ -248,7 +248,7 @@ Hashes are generated like following:
 - The seed is `hasPushConstant` FNVed as a single U64.
 - The whole `bindings[]` byte buffer is FNVed, then `samplers[]`.
 - The push constant row is FNVed by its bytes when present.
-- Every string in the pool (in order) is FNVed by its bytes.
+- Every string in the pool (in order) is FNVed as its length (one U64) followed by its bytes, so two pools sharing one concatenation can't collide.
 
 This hash is refreshed by `PLFile_finalize` (and on read), doubles as a cache and dedup key for instantiated layouts, and folds into the hash of any oiSP that embeds the layout, so a standalone oiPL and an embedded one can never disagree. It is only available at runtime.
 

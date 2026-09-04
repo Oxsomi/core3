@@ -113,7 +113,7 @@ typedef struct PipelineExecutable {
 	CharString name;                            //Driver's name, e.g. "Compute Shader"
 	CharString description;
 	CharString disassembly;                     //ISA text (first text internal representation), or empty
-	U32 stages;                                 //ESHPipelineStageFlags this executable covers
+	U32 stages;                                 //Bit mask of EGfxPipelineStage this executable covers
 	U32 subgroupSize;
 	ListPipelineStatistic statistics;
 } PipelineExecutable;

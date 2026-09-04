@@ -93,7 +93,7 @@ typedef enum EGfxRegisterType {
 	EGfxRegisterType_BufferEnd              = EGfxRegisterType_AccelerationStructure,
 
 	EGfxRegisterType_TextureStart           = EGfxRegisterType_Texture1D,
-	EGfxRegisterType_TextureEnd             = EGfxRegisterType_SubpassInput, //>= to see if real texture, > means 'invalid'
+	EGfxRegisterType_TextureEnd             = EGfxRegisterType_SubpassInput,
 
 	EGfxRegisterType_TypeMask               = 0xF,
 	EGfxRegisterType_IsArray                = 1 << 4,    //Only valid on textures
@@ -144,8 +144,13 @@ static inline GfxBindings GfxBindings_dummy() {
 	return bindings;
 }
 
-//The register space the runtime owns for its bindless set on DXIL (types.hlsli mirrors it as space195).
-//A user layout can never bind there.
+//The register space the runtime keeps for itself on DXIL, where the per frame globals and the bindless set
+// live. Space 0 was the old home and is far too easy to pick by accident: it is what anyone writing their
+// first constant buffer types, and custom layouts made that a real collision.
+//A user layout can never bind here on any binary type, even though only DXIL places the runtime's own
+// registers in it (SPIRV keeps them in their own descriptor sets).
+//Keep this in sync with OXC3_RESERVED_SPACE in shader_compiler/shaders/types.hlsli; a shader compiled
+// against a different value binds somewhere this runtime doesn't look.
 
 #define OXC3_RESERVED_SPACE 0xC3
 

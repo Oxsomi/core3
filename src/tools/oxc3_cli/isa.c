@@ -640,7 +640,8 @@ clean:
 	}
 
 	//Applies "path[idx]=value,..." to a derived pipeline through SPFile_supply, by the paths the report prints.
-	//rtv.format takes a texture format name, the F32 fields a float literal, everything else an integer.
+	//rtv.format takes a texture format name, the F32 fields and the F16 sampler lod fields a float literal,
+	// everything else an integer.
 
 	static Bool CLI_isaApplyPipelineSet(SPFile *spFile, U32 pipelineId, CharString set, Error *e_rr) {
 

@@ -104,6 +104,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileRegisterAddSamplerComparisonState(&t);
 	Test_SHFileRegisterDuplicateNameRejected(&t);
 	Test_SHFileRegisterDuplicateSPIRVBindingRejected(&t);
+	Test_SHFileRegisterDxilRangeOverlapRejected(&t);
 	Test_SHFileRegisterAddTexture(&t);
 	Test_SHFileRegisterAddRWTexture(&t);
 	Test_SHFileRegisterArray(&t);

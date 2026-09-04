@@ -46,10 +46,10 @@ Bool PLFile_write(const PLFile *plFile, const Allocator *alloc, StreamRef *strea
 	headerSize += ListPLDescriptorBinding_bytes(plFile->bindings);
 	headerSize += plFile->hasPushConstant ? sizeof(PLDescriptorBinding) : 0;
 	headerSize += ListPLSamplerInfo_bytes(plFile->samplers);
-	headerSize = (headerSize + 15) & ~15;
 
 	if (!stream) {
 		*offset += headerSize;
+		*offset = (*offset + 15) & ~(U64)15;
 		gotoIfError3(clean, DLFile_write(&plFile->names, alloc, NULL, NULL, I32x4_zero(), offset, e_rr));
 		goto clean;
 	}
@@ -57,7 +57,7 @@ Bool PLFile_write(const PLFile *plFile, const Allocator *alloc, StreamRef *strea
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 
 	if(stream->reserve)
-		gotoIfError3(clean, stream->reserve(stream, *offset + headerSize, alloc, e_rr));
+		gotoIfError3(clean, stream->reserve(stream, *offset + headerSize + 15, alloc, e_rr));
 
 	const PLHeader header = (PLHeader) {
 		.version = EPLVersion_V1_1,

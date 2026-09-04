@@ -155,7 +155,8 @@ typedef struct PLFile {
 	ListPLSamplerInfo samplers;
 
 	//The push constant range sits beside the bindings rather than among them, since it takes no descriptor.
-	//Its binding pairs are unused; strideOrLength is the byte size.
+	//Only its SPIRV pair is unused (a SPIRV push constant binds through no pair); the DXIL pair is the b
+	// register a root signature binds and strideOrLength is the byte size.
 
 	PLDescriptorBinding pushConstant;
 	Bool hasPushConstant;
@@ -195,6 +196,10 @@ Bool PLDescriptorBinding_validate(
 // pipeline: a bad layout names its mismatches before a driver gets to fail on them opaquely.
 
 Bool PLFile_validate(const PLFile *plFile, const Allocator *alloc, ListCharString *issues, Error *e_rr);
+
+//The device free rules a sampler's stored values have to satisfy; the reader runs it on every pooled sampler.
+
+Bool PLSamplerInfo_validate(const PLSamplerInfo *s, Error *e_rr);
 
 Bool PLFile_finalize(PLFile *plFile, const Allocator *alloc, Error *e_rr);
 

@@ -703,25 +703,12 @@ static Bool SPFile_deriveLayout(
 					break;
 				}
 
-			if (match != U64_MAX) {
-
-				const PLDescriptorBinding other = layout.bindings.ptr[match];
-
-				if(
-					other.registerType != reg->reg.registerType ||
-					(hasSpirv && other.bindings.arrU64[EGfxBinaryType_SPIRV] != spv) ||
-					(hasDxil && other.bindings.arrU64[EGfxBinaryType_DXIL] != dxil) ||
-					other.count != count || other.strideOrLength != data
-				)
-					retError(clean, Error_invalidState(
-						0, "SPFile_deriveLayout() stages disagree about a register they both name"
-					));
-
-				layout.bindings.ptrNonConst[match].visibility |= stageBit;
-				continue;
-			}
+			//Overlap is judged against every other row first, so a pair a later stage adds can't collide
 
 			for (U64 k = 0; k < layout.bindings.length; ++k) {
+
+				if(k == match)
+					continue;
 
 				const PLDescriptorBinding o = layout.bindings.ptr[k];
 
@@ -741,6 +728,37 @@ static Bool SPFile_deriveLayout(
 					));
 			}
 
+			if (match != U64_MAX) {
+
+				const PLDescriptorBinding other = layout.bindings.ptr[match];
+				const U64 otherSpv = other.bindings.arrU64[EGfxBinaryType_SPIRV];
+				const U64 otherDxil = other.bindings.arrU64[EGfxBinaryType_DXIL];
+
+				//A pair one side lacks merges in rather than disagreeing, since not every stage compiles
+				// for every binary type
+
+				if(
+					other.registerType != reg->reg.registerType ||
+					(hasSpirv && otherSpv != U64_MAX && otherSpv != spv) ||
+					(hasDxil && otherDxil != U64_MAX && otherDxil != dxil) ||
+					other.count != count || other.strideOrLength != data
+				)
+					retError(clean, Error_invalidState(
+						0, "SPFile_deriveLayout() stages disagree about a register they both name"
+					));
+
+				PLDescriptorBinding *stored = &layout.bindings.ptrNonConst[match];
+
+				if(hasSpirv)
+					stored->bindings.arrU64[EGfxBinaryType_SPIRV] = spv;
+
+				if(hasDxil)
+					stored->bindings.arrU64[EGfxBinaryType_DXIL] = dxil;
+
+				stored->visibility |= stageBit;
+				continue;
+			}
+
 			const PLDescriptorBinding row = (PLDescriptorBinding) {
 				.registerType = reg->reg.registerType,
 				.count = count,
@@ -758,6 +776,23 @@ static Bool SPFile_deriveLayout(
 				));
 		}
 	}
+
+	//The push constant's DXIL b register occupies its slot like any class B row
+
+	if (layout.hasPushConstant)
+		for(U64 i = 0; i < layout.bindings.length; ++i) {
+
+			const PLDescriptorBinding o = layout.bindings.ptr[i];
+
+			if(GfxBinding_overlaps(
+				layout.pushConstant.bindings.arr[EGfxBinaryType_DXIL], layout.pushConstant.registerType,
+				layout.pushConstant.count, o.bindings.arr[EGfxBinaryType_DXIL], o.registerType, o.count,
+				EGfxBinaryType_DXIL
+			))
+				retError(clean, Error_invalidState(
+					0, "SPFile_deriveLayout() the push constant's register overlaps a binding row"
+				));
+		}
 
 	if(!layout.bindings.length && !layout.hasPushConstant)
 		goto clean;

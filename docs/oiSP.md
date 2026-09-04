@@ -295,9 +295,11 @@ typedef enum ESPField {
 	// isn't described by the file, so there is nothing there to address.
 
 	ESPField_LayoutBindingType,         //EGfxRegisterType plus its mask bits
-	ESPField_LayoutBindingSpace,
-	ESPField_LayoutBindingRegister,
 	ESPField_LayoutBindingCount,
+	ESPField_LayoutBindingSpaceSpirv,   //U32_MAX means the register doesn't exist for that api
+	ESPField_LayoutBindingRegisterSpirv,
+	ESPField_LayoutBindingSpaceDxil,
+	ESPField_LayoutBindingRegisterDxil,
 	ESPField_LayoutBindingVisibility,   //Bit mask of EGfxPipelineStage
 	ESPField_LayoutBindingData,         //Stride, cbuffer size, texture format or 1 + sampler id, by the type
 
@@ -519,7 +521,7 @@ A pipeline is exact only when nothing was assumed, so a disassembly taken from a
 
 ### Descriptor layout
 
-`SPPipelineBase.layoutIndex` names one of the file's embedded [oiPL](oiPL.md) subfiles, or `U32_MAX` for the device's default layout, which the file never describes. The layout is part of what a shader compiles into, not just a validation gate: descriptor set pointers and push constants arrive in user SGPRs and consume the root signature's budget, so two layouts that both accept a shader can still produce different ISA. A layout shared by several pipelines is stored once and referenced by index, and one can be lifted out or dropped in whole, which is how a stored layout overrides a derived one: structure (new rows, sampler values) can't travel as per field supplies. Derivation fills the rows from what the stages' binaries reflect, skipping the registers the runtime owns, preferring the SPIR-V binding pair and falling back to DXIL; the row format itself, and its per row provenance tags, are oiPL's and specified in [oiPL.md](oiPL.md). The three F16 sampler fields print as the float value that overrides parse, not as their bit pattern.
+`SPPipelineBase.layoutIndex` names one of the file's embedded [oiPL](oiPL.md) subfiles, or `U32_MAX` for the device's default layout, which the file never describes. The layout is part of what a shader compiles into, not just a validation gate: descriptor set pointers and push constants arrive in user SGPRs and consume the root signature's budget, so two layouts that both accept a shader can still produce different ISA. A layout shared by several pipelines is stored once and referenced by index, and one can be lifted out or dropped in whole, which is how a stored layout overrides a derived one: structure (new rows, sampler values) can't travel as per field supplies. Derivation fills the rows from what the stages' binaries reflect, skipping the registers the runtime owns and carrying both binding pairs, so whichever api consumes the layout finds its own numbering; the row format itself, and its per row provenance tags, are oiPL's and specified in [oiPL.md](oiPL.md). The three F16 sampler fields print as the float value that overrides parse, not as their bit pattern.
 
 ### Sentinels & invariants
 

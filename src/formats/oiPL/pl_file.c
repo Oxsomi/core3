@@ -27,6 +27,7 @@
 #include "types/container/string.h"
 #include "types/base/error.h"
 #include <inttypes.h>
+#include <stddef.h>
 
 TListImpl(PLSamplerInfo);
 TListImpl(PLDescriptorBinding);
@@ -174,8 +175,16 @@ Bool PLDescriptorBinding_validate(
 
 	const U32 classType = b->registerType & EGfxRegisterType_TypeMask;
 
-	if(classType >= EGfxRegisterType_Count)
-		retError(clean, Error_invalidState(0, "PLDescriptorBinding_validate() register type is unknown"));
+	if(b->registerType & ~(U32)(EGfxRegisterType_TypeMask | EGfxRegisterType_Masks))
+		retError(clean, Error_invalidState(0, "PLDescriptorBinding_validate() register type carries unknown bits"));
+
+	if(
+		classType < EGfxRegisterType_TextureStart &&
+		(b->registerType & (EGfxRegisterType_IsArray | EGfxRegisterType_IsCombinedSampler))
+	)
+		retError(clean, Error_invalidState(
+			0, "PLDescriptorBinding_validate() the array and combined sampler flags only exist on textures"
+		));
 
 	if(PLDescriptorBinding_source(*b) >= EPLSource_Count)
 		retError(clean, Error_invalidState(0, "PLDescriptorBinding_validate() source is unknown"));
@@ -253,6 +262,40 @@ clean:
 	return s_uccess;
 }
 
+Bool PLSamplerInfo_validate(const PLSamplerInfo *s, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!s)
+		retError(clean, Error_nullPointer(0, "PLSamplerInfo_validate()::s is required"));
+
+	if(s->filter > ESamplerFilterMode_All)
+		retError(clean, Error_invalidState(0, "PLSamplerInfo_validate() filter carries unknown bits"));
+
+	if(
+		s->addressU >= ESamplerAddressMode_Count || s->addressV >= ESamplerAddressMode_Count ||
+		s->addressW >= ESamplerAddressMode_Count
+	)
+		retError(clean, Error_invalidState(0, "PLSamplerInfo_validate() address mode is unknown"));
+
+	if(s->aniso > 16)
+		retError(clean, Error_invalidState(0, "PLSamplerInfo_validate() aniso has to be 0-16"));
+
+	if(s->borderColor >= ESamplerBorderColor_Count)
+		retError(clean, Error_invalidState(0, "PLSamplerInfo_validate() border color is unknown"));
+
+	if(s->comparisonFunction >= ECompareOp_Count)
+		retError(clean, Error_invalidState(0, "PLSamplerInfo_validate() compare op is unknown"));
+
+	//Read as a raw byte, since a Bool that never held 0 or 1 is already the trap this refuses
+
+	if(((const U8*)s)[offsetof(PLSamplerInfo, enableComparison)] > 1)
+		retError(clean, Error_invalidState(0, "PLSamplerInfo_validate() enableComparison has to be 0 or 1"));
+
+clean:
+	return s_uccess;
+}
+
 static Bool PLFile_pushIssue(
 	ListCharString *issues, const Allocator *alloc, const C8 *label, U64 index, const C8 *what, Error *e_rr
 ) {
@@ -312,7 +355,7 @@ Bool PLFile_validate(const PLFile *plFile, const Allocator *alloc, ListCharStrin
 			);
 
 			if (spirvClash || dxilClash) {
-				
+
 				gotoIfError3(clean, PLFile_pushIssue(
 					issues, alloc, "layout.binding", i, "overlaps an earlier row's register range", e_rr
 				));
@@ -320,6 +363,16 @@ Bool PLFile_validate(const PLFile *plFile, const Allocator *alloc, ListCharStrin
 				break;
 			}
 		}
+	}
+
+	for (U64 i = 0; i < plFile->samplers.length; ++i) {
+
+		Error samplerError = Error_none();
+
+		if(!PLSamplerInfo_validate(&plFile->samplers.ptr[i], &samplerError))
+			gotoIfError3(clean, PLFile_pushIssue(
+				issues, alloc, "layout.sampler", i, samplerError.errorStr ? samplerError.errorStr : "invalid", e_rr
+			));
 	}
 
 	if (plFile->hasPushConstant) {
@@ -362,8 +415,12 @@ Bool PLFile_finalize(PLFile *plFile, const Allocator *alloc, Error *e_rr) {
 			Buffer_createRefConst(&plFile->pushConstant, sizeof(plFile->pushConstant)), hash
 		);
 
-	for(U64 i = 0; i < plFile->names.entryStrings.length; ++i)
+	//Each string hashes as its length then its bytes, so two pools with one concatenation can't collide
+
+	for(U64 i = 0; i < plFile->names.entryStrings.length; ++i) {
+		hash = Buffer_fnv1a64Single(CharString_length(plFile->names.entryStrings.ptr[i]), hash);
 		hash = Buffer_fnv1a64(CharString_bufferConst(plFile->names.entryStrings.ptr[i]), hash);
+	}
 
 	plFile->hash = hash;
 

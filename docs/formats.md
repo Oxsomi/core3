@@ -106,8 +106,8 @@ Where *CASettings* contains the following:
 
 To add binaries and entrypoints to an SHFile:
 
-- Error **SHFile_addBinary**(SHFile *shFile, EGfxBinaryType type, Buffer *entry, Allocator alloc): moves the data from Buffer into the SHFile (or copies if it's a reference). Only allowed if the binary type hasn't already been defined yet. Adds a binary that a graphics API could consume (if the API supports it).
-- Error **SHFile_addEntrypoint**(SHFile *shFile, SHEntry *entry, Allocator alloc): moves entry->name to SHFile's entry (or copies if reference). Adds an entrypoint into the binary to clarify what type of shaders are in the binary.
+- Bool **SHFile_addBinary**(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *alloc, Error *e_rr): moves the binary info (its buffers and registers) into the SHFile. Adds a binary that a graphics API could consume (if the API supports it).
+- Bool **SHFile_addEntrypoint**(SHFile *shFile, SHEntry *entry, const Allocator *alloc, Error *e_rr): moves entry->name and binaryIds into the SHFile. Adds an entrypoint into the binary to clarify what type of shaders are in the binary.
 
 ESHSettingsFlags include HideMagicNumber (if the oiSH is a subfile of another format) and IsUTF8 (if the embedded oiDL that holds the entrypoint names contains any UTF8 strings).
 
