@@ -39,6 +39,7 @@
 #include <poll.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <time.h>
 
 //Captured output is capped so a runaway child can't exhaust memory.
 #define PROCESS_MAX_CAPTURE (64 * MIBI)
@@ -168,7 +169,9 @@ static Bool Process_spawn(
 
 		int timeoutMs = -1;
 
-		if(maxTimeout && maxTimeout != U64_MAX) {
+		//A killed child's pipes reach EOF on their own, so the wait blocks again rather than spinning
+
+		if(!timedOut && maxTimeout && maxTimeout != U64_MAX) {
 			const Ns elapsed = Time_now() - start;
 			timeoutMs = elapsed >= maxTimeout ? 0 : (int) U64_min((maxTimeout - elapsed) / MS, (Ns) I32_MAX);
 		}
@@ -214,10 +217,35 @@ static Bool Process_spawn(
 		}
 	}
 
-	//Reap the child (also collects the exit status)
+	//Reap the child (also collects the exit status).
+	//A run that captures neither pipe never enters the loop above, so the timeout is enforced here too.
 
 	int status = 0;
-	while(waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+
+	for(;;) {
+
+		const pid_t reaped = waitpid(pid, &status, WNOHANG);
+
+		if(reaped == pid)
+			break;
+
+		if(reaped < 0) {
+
+			if(errno == EINTR)
+				continue;
+
+			break;
+		}
+
+		if(!timedOut && maxTimeout && maxTimeout != U64_MAX && Time_now() - start >= maxTimeout) {
+			kill(pid, SIGKILL);
+			timedOut = true;
+		}
+
+		const struct timespec idle = (struct timespec) { .tv_nsec = (long) MS };
+		nanosleep(&idle, NULL);
+	}
+
 	pid = -1;
 
 	I32 exitCode = -1;

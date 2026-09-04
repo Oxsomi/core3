@@ -323,7 +323,7 @@ clean:
 						break;
 
 					case EPipelineStatisticFormat_F64: {
-						F64 d = *(const F64*) &s->value;
+						const F64 d = F64_fromU64Bits(s->value);
 						gotoIfError3(clean, CharString_format(alloc, &line, e_rr, ";   %.*s = %f\n", nl, s->name.ptr, d));
 						break;
 					}
