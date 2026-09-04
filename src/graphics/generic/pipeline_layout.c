@@ -117,11 +117,11 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 		));
 
 	Bool isVulkan = GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_Vulkan;
-	ESHBinaryType binaryType = isVulkan ? ESHBinaryType_SPIRV : ESHBinaryType_DXIL;
+	EGfxBinaryType binaryType = isVulkan ? EGfxBinaryType_SPIRV : EGfxBinaryType_DXIL;
 
 	Bool canBePushConstant =
-		(binaryType == ESHBinaryType_DXIL && info->pushConstants.registerType == ESHRegisterType_ConstantBuffer) ||
-		info->pushConstants.registerType == ESHRegisterType_PushConstants;
+		(binaryType == EGfxBinaryType_DXIL && info->pushConstants.registerType == EGfxRegisterType_ConstantBuffer) ||
+		info->pushConstants.registerType == EGfxRegisterType_PushConstants;
 
 	if(info->pushConstants.count && !canBePushConstant)
 		retError(clean, Error_invalidParameter(
@@ -170,7 +170,7 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 				&bind.binding,
 				bind.count,
 				binaryType,
-				false
+				true
 			))
 				retError(clean, Error_invalidParameter(
 					1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants overlaps with push descriptors"

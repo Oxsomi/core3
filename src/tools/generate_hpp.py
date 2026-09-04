@@ -127,6 +127,23 @@ PRIMITIVES = { "void", "bool", "char", "int", "unsigned", "float", "double", "si
 
 # Must match MAX_LINE_LENGTH in check_style.py, which also scans the generated .hpp files
 MAX_LINE = 128
+TAB_WIDTH = 4
+
+
+def visualLength(line: str, tabWidth: int = TAB_WIDTH) -> int:
+	"""Length of a line in columns, matching check_style.visual_length.
+
+	A tab advances to the next tab stop rather than counting as one character, so measuring with len()
+	understates an indented signature by three columns per leading tab and emits lines the style check
+	then rejects.
+	"""
+
+	col = 0
+
+	for ch in line:
+		col = (col // tabWidth + 1) * tabWidth if ch == "	" else col + 1
+
+	return col
 
 # ---------------------------------------------------------------------------------------------------
 # Parsing
@@ -428,7 +445,7 @@ def emitClass(spec, funcs):
 
 		signature = f"\t\t{nodiscard}{inlineKw}{static}{ret}{method}({decl}){const} noexcept {{"
 
-		if len(signature) > MAX_LINE:
+		if visualLength(signature) > MAX_LINE:
 			add(f"\t\t{nodiscard}{inlineKw}{static}{ret}{method}(")
 			add(f"\t\t\t{decl}")
 			add(f"\t\t){const} noexcept {{")
@@ -441,7 +458,7 @@ def emitClass(spec, funcs):
 
 		call = f"\t\t\t{body}c::{func.name}({call});"
 
-		if len(call) > MAX_LINE:
+		if visualLength(call) > MAX_LINE:
 			inner = call.strip()
 			add(f"\t\t\t{body}c::{func.name}(")
 			add("\t\t\t\t" + inner[inner.index("(") + 1:-2])

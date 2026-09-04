@@ -38,7 +38,7 @@ HOST_TOOL_OPTIONS = {
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.104"
+	version = "3.2.105"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -244,8 +244,14 @@ class oxc3(ConanFile):
 			# feeds a Windows sanitized DXC unsanitized tablegen binaries via user.dxc:tablegen_dir (the same
 			# split the android/web cross builds use). That conf is not part of the package id, so the graph
 			# still just asks for a sanitized DXC here regardless of where its tablegen came from.
-			self.requires("dxc/2026.08.07.03", options=sanitized)
+			self.requires("dxc/2026.08.23", options=sanitized)
 			self.requires("spirv_reflect/2026.08.17", options=sanitized)
+
+			# The AMD offline compilers RGA vendors (amdllpc, amdgpu-dis): offline SPIR-V to AMD ISA for the isa
+			# commands. Only exists where AMD prebuilds them (Windows/Linux x64); run=True so the tools' bin dir
+			# reaches the run environment (RGA_PATH/PATH) for tests and the OxC3 CLI.
+			if self.settings.os in ("Windows", "Linux") and self.settings.arch == "x86_64":
+				self.requires("radeon_gpu_analyzer/2026.09.02", run=True)
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")
@@ -410,7 +416,7 @@ class oxc3(ConanFile):
 		if self.settings.os != "Emscripten":
 			self.cpp_info.libs += [ "OxC3_graphics" ]
 
-		self.cpp_info.libs += [ "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
+		self.cpp_info.libs += [ "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_formats_oiSP", "OxC3_formats_oiPL", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
 
 		# The Vulkan loader is loaded dynamically at runtime (see vk_instance.c) and its headers come from the
 		# vulkan_headers package, so there's no Vulkan import lib, system lib or SDK dir to link/include here.

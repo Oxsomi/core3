@@ -22,6 +22,7 @@
 
 #pragma once
 #include "tools/oxc3_cli/operations.h"
+#include "formats/oiCA/ca_file.h"
 
 #ifdef CLI_SHADER_COMPILER
 	#include "shader_compiler/compiler.h"
@@ -51,6 +52,49 @@ Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr);
 Bool CLI_convertTo(const ParsedArgs *args);
 Bool CLI_convertFrom(const ParsedArgs *args);
 Bool CLI_fileCombine(const ParsedArgs *args);
+
+//Open an oiCA entry as a stream, whichever way the archive is holding its bytes.
+//An entry is either already loaded as a buffer or still backed by a stream, and only the archive knows
+// which, so every reader has to handle both.
+//A loaded entry is wrapped in a memory stream over the archive's own bytes, so neither shape copies and
+// callers get one type back; the archive has to outlive the stream, because that memory belongs to it.
+//The stream is returned with a reference the caller releases through RefPtr_dec, and the entry starts at
+// offset within it rather than at 0.
+//memType is supplied by the caller and has to outlive the returned stream, because a RefPtr keeps a POINTER
+// to its type; a type made here would die with this call and leave the stream's type dangling.
+//No allocator is taken: both shapes wrap what the archive already holds, so nothing is copied.
+Bool CLI_openArchiveEntry(
+	const CAFile *ca,
+	CAHandle h,
+	const RefPtrType *memType,
+	StreamRef **stream,
+	U64 *offset,
+	U64 *size,
+	Error *e_rr
+);
+
+//Stream cursor cache used by the CLI's stream paths; independent of the (bypass-cache) read/write chunk size.
+
+#define CLI_STREAM_CACHE (64 * 1024)
+
+//Write length bytes of src, starting at srcOff, to loc, streaming, so the region never has to fit in memory.
+Bool CLI_writeStreamRegion(
+	StreamRef *src,
+	U64 srcOff,
+	U64 length,
+	const CharString *loc,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+//Write an oiCA entry to loc, streaming it, so an entry never has to fit in memory to be extracted.
+Bool CLI_extractArchiveEntry(
+	const CAFile *ca,
+	CAHandle h,
+	const CharString *loc,
+	const Allocator *alloc,
+	Error *e_rr
+);
 
 Bool CLI_encryptDo(const ParsedArgs *args);
 Bool CLI_encryptUndo(const ParsedArgs *args);
@@ -133,6 +177,7 @@ Bool CLI_compileShader(const ParsedArgs *args);
 
 //shader category
 Bool CLI_shaderReflect(const ParsedArgs *args);
+Bool CLI_shaderReflectSymbols(const ParsedArgs *args);
 Bool CLI_shaderEntrypoints(const ParsedArgs *args);
 Bool CLI_shaderIncludes(const ParsedArgs *args);
 Bool CLI_shaderFeatureSet(const ParsedArgs *args);
@@ -141,6 +186,20 @@ Bool CLI_shaderAssemble(const ParsedArgs *args);
 
 Bool CLI_graphicsDevices(const ParsedArgs *args);
 Bool CLI_graphicsCreate(const ParsedArgs *args);
+
+#ifdef CLI_RGA
+	//ISA category (AMD Radeon GPU Analyzer)
+	Bool CLI_isaDevices(const ParsedArgs *args);
+	Bool CLI_isaDisassemble(const ParsedArgs *args);
+
+	//Reusable core so other paths (e.g. 'file data' on an oiSH) can view a SPIR-V blob as AMD ISA.
+	//CLI_isaResolveAsic prints the device list when `asic` is "?" (sets *handled) or unknown (errors).
+
+	Bool CLI_isaResolveAsic(CharString asic, Bool *handled, const Allocator *alloc, Error *e_rr);
+	Bool CLI_isaDisassembleSpirv(
+		Buffer spirv, CharString asic, CharString entrypoint, Buffer *isaOut, const Allocator *alloc, Error *e_rr
+	);
+#endif
 
 Bool CLI_audioDevices(const ParsedArgs *args);
 Bool CLI_audioConvert(const ParsedArgs *args);

@@ -128,63 +128,44 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 					EPipelineStage_Vertex : EPipelineStage_RtStart
 				);
 
-			//Bindings that need a descriptor, which is every one except the baked samplers.
+			//Every push binding takes a descriptor, so the count is simply the binding count.
 			//Checked BEFORE the loop below reads any of them: an under written push would otherwise be
 			// reported as whatever the stale descriptor happens to fail, rather than as the missing write.
 
-			U64 pushWrites = pushBindings.length;
-
-			for(U64 i = 0; i < pushBindings.length; ++i)
-				if(DescriptorBinding_immutableSamplerId(pushBindings.ptr[i]))
-					--pushWrites;
-
-			if(commandList->pushDescriptorCount != pushWrites)
+			if(commandList->pushDescriptorCount != pushBindings.length)
 				retError(clean, Error_invalidOperation(
 					6,
 					"CommandList_validateBindState() the pipeline's layout declares push descriptors that "
-					"weren't all written (CommandListRef_setPushDescriptors); immutable samplers take no write"
+					"weren't all written (CommandListRef_setPushDescriptors)"
 				));
 
 			U32 texturePushes = 0;
 
-			//An immutable sampler is baked into the layout, so it takes a binding but NO descriptor: the
-			// caller writes only the bindings that need one, and writeId is what the descriptors are indexed
-			// by while i indexes the bindings.
-
-			U64 writeId = 0;
-
-			for(U64 i = 0; i < pushBindings.length; ++i) {
+			for (U64 i = 0; i < pushBindings.length; ++i) {
 
 				const DescriptorBinding binding = pushBindings.ptr[i];
-				const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
+				const EGfxRegisterType type = (EGfxRegisterType)(binding.registerType & EGfxRegisterType_TypeMask);
 
-				if(DescriptorBinding_immutableSamplerId(binding))
-					continue;
+				//A sampler has no push form: D3D12 has no root sampler, and baking one doesn't help either, since
+				// an immutable sampler becomes a root signature static sampler whichever layout declared it, which
+				// makes the push descriptor set it sits in mean something on Vulkan and nothing on D3D12.
+				//createDescriptorLayout already refuses it, so reaching here means a layout built before that check.
 
-				//A sampler has no push form on D3D12 at all.
-				//It would need a slot in the SAMPLER heap, which is a second ring this does not carry, so it
-				// stays refused rather than working on one backend.
-
-				//Only a BAKED sampler is expressible; createDescriptorLayout already refuses the rest, so
-				// reaching here means a layout built before that check.
-
-				if(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState)
+				if(type == EGfxRegisterType_Sampler || type == EGfxRegisterType_SamplerComparisonState)
 					retError(clean, Error_unsupportedOperation(
-						1,
-						"CommandList_validateBindState() a sampler push descriptor has to be immutable; "
-						"there is no root sampler to push one into"
+						1, "CommandList_validateBindState() a sampler can't be a push descriptor"
 					));
 
 				//A subpass input is only meaningful inside a render pass' attachment set, never as a push.
 
-				if(type == ESHRegisterType_SubpassInput)
+				if(type == EGfxRegisterType_SubpassInput)
 					retError(clean, Error_unsupportedOperation(
 						1, "CommandList_validateBindState() a subpass input cannot be a push descriptor"
 					));
 
-				const Bool isTexture = type >= ESHRegisterType_TextureStart && type < ESHRegisterType_SubpassInput;
+				const Bool isTexture = type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_SubpassInput;
 
-				if(!isTexture && (type < ESHRegisterType_BufferStart || type > ESHRegisterType_BufferEnd))
+				if(!isTexture && (type < EGfxRegisterType_BufferStart || type > EGfxRegisterType_BufferEnd))
 					retError(clean, Error_unsupportedOperation(
 						1,
 						"CommandList_validateBindState() a push descriptor has to be a buffer class resource "
@@ -193,10 +174,10 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 
 				//The count was already proven to match the layout, so every binding has its descriptor
 
-				const Descriptor d = commandList->pushDescriptors[writeId++];
+				const Descriptor d = commandList->pushDescriptors[i];
 
 				const ETransitionType transition =
-					binding.registerType & ESHRegisterType_IsWrite ?
+					binding.registerType & EGfxRegisterType_IsWrite ?
 					ETransitionType_ShaderWrite : ETransitionType_ShaderRead;
 
 				//A texture push is a single entry descriptor TABLE on D3D12, not a root descriptor, so it
@@ -207,7 +188,7 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 
 				if (isTexture) {
 
-					const Bool isWrite = (binding.registerType & ESHRegisterType_IsWrite) != 0;
+					const Bool isWrite = (binding.registerType & EGfxRegisterType_IsWrite) != 0;
 
 					UnifiedTexture tex = TextureRef_getUnifiedTexture(d.resource, NULL);
 
@@ -231,7 +212,7 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 					continue;
 				}
 
-				if (type == ESHRegisterType_AccelerationStructure) {
+				if (type == EGfxRegisterType_AccelerationStructure) {
 					gotoIfError3(clean, CommandListRef_transitionRTAS(commandList, d.resource, transition, stage, e_rr));
 					continue;
 				}
@@ -925,7 +906,9 @@ Bool CommandListRef_dispatchRaysIndirectExt(
 	PipelineRef *rayPipeline = commandList->pipeline[EPipelineType_RaytracingExt];
 
 	if(!rayPipeline)
-		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysIndirectExt() requires bound raytracing pipeline"));
+		retError(clean, Error_invalidOperation(
+			1, "CommandListRef_dispatchRaysIndirectExt() requires bound raytracing pipeline"
+		));
 
 	gotoIfError3(clean, CommandList_validateBindState(commandList, rayPipeline, e_rr));
 	gotoIfError3(clean, CommandList_validateRayTriPosition(commandList, rayPipeline, e_rr));

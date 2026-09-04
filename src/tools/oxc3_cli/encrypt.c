@@ -56,7 +56,9 @@ Bool CLI_encryptDo(const ParsedArgs *args) {
 		const CharString oiCA = CharString_createRefCStrConst(".oiCA");
 		gotoIfError3(clean, CharString_createCopy(*argsMut.args.ptr, Platform_instance->alloc, &tmpString, e_rr));
 		gotoIfError3(clean, CharString_appendString(&tmpString, &oiCA, Platform_instance->alloc, e_rr));
-		gotoIfError3(clean, ListCharString_insert(&argsMut.args, generatedOutputIndex, tmpString, Platform_instance->alloc, e_rr));
+		gotoIfError3(clean, ListCharString_insert(
+			&argsMut.args, generatedOutputIndex, tmpString, Platform_instance->alloc, e_rr
+		));
 	}
 
 	const ParsedArgs caArgs = (ParsedArgs) {

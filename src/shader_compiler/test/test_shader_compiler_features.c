@@ -52,11 +52,11 @@
 typedef struct FeatureCase {
 	const C8 *file;
 	ESHExtension ext;       //Expected reflected extension bit
-	U8 backends;            //Mask of (1 << ESHBinaryType) this feature can be expressed on
+	U8 backends;            //Mask of (1 << EGfxBinaryType) this feature can be expressed on
 } FeatureCase;
 
-#define B_SPV  (1 << ESHBinaryType_SPIRV)
-#define B_DXIL (1 << ESHBinaryType_DXIL)
+#define B_SPV  (1 << EGfxBinaryType_SPIRV)
+#define B_DXIL (1 << EGfxBinaryType_DXIL)
 #define B_BOTH (B_SPV | B_DXIL)
 
 void Test_shaderCompilerFeatures(Test *t) {
@@ -156,8 +156,8 @@ void Test_shaderCompilerFeatures(Test *t) {
 	};
 
 	static const struct { U8 mode; const C8 *name; } backends[] = {
-		{ ESHBinaryType_SPIRV, "spirv" },
-		{ ESHBinaryType_DXIL,  "dxil"  }
+		{ EGfxBinaryType_SPIRV, "spirv" },
+		{ EGfxBinaryType_DXIL,  "dxil"  }
 	};
 
 	//Each feature is compiled on every backend it supports.
@@ -241,7 +241,7 @@ void Test_shaderCompilerFeatures(Test *t) {
 		//On SPIRV the heap mode declares the DescriptorHeapEXT capability even without a heap access,
 		// so the binary genuinely requires the feature and the extension stays active there.
 
-		Bool expectDormant = backends[b].mode == ESHBinaryType_DXIL;
+		Bool expectDormant = backends[b].mode == EGfxBinaryType_DXIL;
 
 		Bool unusedOk =
 			compileFileShader(alloc, "features/descriptor_heap_unused.hlsl", backends[b].mode, true, false, &out, &err) &&
@@ -333,18 +333,18 @@ void Test_shaderCompilerFeatures(Test *t) {
 		Bool created = false;
 
 		Bool ok =
-			compileFileShader(alloc, "features/i64.hlsl", ESHBinaryType_SPIRV, true, false, &out, &err) &&
+			compileFileShader(alloc, "features/i64.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) &&
 			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length >= 1;
 
 		if (ok && Compiler_create(alloc, &comp, &err)) {
 
 			created = true;
-			Buffer spirv = shFile.binaries.ptr[0].binaries[ESHBinaryType_SPIRV];
+			Buffer spirv = shFile.binaries.ptr[0].binaries[EGfxBinaryType_SPIRV];
 
 			Bool disOk =
 				Buffer_length(spirv) &&
-				Compiler_disassemble(&comp, ESHBinaryType_SPIRV, spirv, alloc, &disasm, &err) &&
+				Compiler_disassemble(&comp, EGfxBinaryType_SPIRV, spirv, alloc, &disasm, &err) &&
 				CharString_length(disasm) > 0;
 
 			//SPIRV disassembly (SPIRV-Tools) always contains an entrypoint op

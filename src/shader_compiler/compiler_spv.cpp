@@ -256,33 +256,34 @@ extern "C" Bool Compiler_processSPIRV(
 
 		U32 localSize[3] = { 0 };
 
-		ESHPipelineStage stage = ESHPipelineStage_Count;
+		EGfxPipelineStage stage = EGfxPipelineStage_Count;
 
 		switch (entrypoint.spirv_execution_model) {
 
 			case SpvExecutionModelIntersectionKHR:
-				searchIntersection = true;        //Intersection shaders carry only a hit attribute (ReportHit), never a ray payload.
-				stage = ESHPipelineStage_IntersectionExt;
+				//Intersection shaders carry only a hit attribute (ReportHit), never a ray payload.
+				searchIntersection = true;
+				stage = EGfxPipelineStage_IntersectionExt;
 				break;
 
 			case SpvExecutionModelAnyHitKHR:
 				searchPayload = true;
-				stage = ESHPipelineStage_AnyHitExt;
+				stage = EGfxPipelineStage_AnyHitExt;
 				break;
 
 			case SpvExecutionModelClosestHitKHR:
 				searchPayload = true;
-				stage = ESHPipelineStage_ClosestHitExt;
+				stage = EGfxPipelineStage_ClosestHitExt;
 				break;
 
 			case SpvExecutionModelMissKHR:
 				searchPayload = true;
-				stage = ESHPipelineStage_MissExt;
+				stage = EGfxPipelineStage_MissExt;
 				break;
 
 			case SpvExecutionModelCallableKHR:
 				searchPayload = true;
-				stage = ESHPipelineStage_CallableExt;
+				stage = EGfxPipelineStage_CallableExt;
 				break;
 
 			case SpvExecutionModelMeshEXT:
@@ -290,9 +291,9 @@ extern "C" Bool Compiler_processSPIRV(
 			case SpvExecutionModelGLCompute: {
 
 				switch (entrypoint.spirv_execution_model) {
-					case SpvExecutionModelMeshEXT:  stage = ESHPipelineStage_MeshExt;  isMeshTask = true;  break;
-					case SpvExecutionModelTaskEXT:  stage = ESHPipelineStage_TaskExt;  isMeshTask = true;  break;
-					default:                        stage = ESHPipelineStage_Compute;                      break;
+					case SpvExecutionModelMeshEXT:  stage = EGfxPipelineStage_MeshExt;  isMeshTask = true;  break;
+					case SpvExecutionModelTaskEXT:  stage = EGfxPipelineStage_TaskExt;  isMeshTask = true;  break;
+					default:                        stage = EGfxPipelineStage_Compute;                      break;
 
 				}
 
@@ -303,12 +304,12 @@ extern "C" Bool Compiler_processSPIRV(
 				break;
 			}
 
-			case SpvExecutionModelRayGenerationKHR:        stage = ESHPipelineStage_RaygenExt;    break;
-			case SpvExecutionModelVertex:                  stage = ESHPipelineStage_Vertex;       break;
-			case SpvExecutionModelFragment:                stage = ESHPipelineStage_Pixel;        break;
-			case SpvExecutionModelGeometry:                stage = ESHPipelineStage_GeometryExt;  break;
-			case SpvExecutionModelTessellationControl:     stage = ESHPipelineStage_Hull;         break;
-			case SpvExecutionModelTessellationEvaluation:  stage = ESHPipelineStage_Domain;       break;
+			case SpvExecutionModelRayGenerationKHR:        stage = EGfxPipelineStage_RaygenExt;    break;
+			case SpvExecutionModelVertex:                  stage = EGfxPipelineStage_Vertex;       break;
+			case SpvExecutionModelFragment:                stage = EGfxPipelineStage_Pixel;        break;
+			case SpvExecutionModelGeometry:                stage = EGfxPipelineStage_GeometryExt;  break;
+			case SpvExecutionModelTessellationControl:     stage = EGfxPipelineStage_Hull;         break;
+			case SpvExecutionModelTessellationEvaluation:  stage = EGfxPipelineStage_Domain;       break;
 
 			default:
 				retError(clean, Error_invalidState(
@@ -377,13 +378,13 @@ extern "C" Bool Compiler_processSPIRV(
 		if(searchPayload || searchIntersection)
 			isRt = true;
 
-		if(stage == ESHPipelineStage_Count)
+		if(stage == EGfxPipelineStage_Count)
 			retError(clean, Error_invalidState(
-				0, "Compiler_processSPIRV() SPIRV entrypoint couldn't be mapped to ESHPipelineStage"
+				0, "Compiler_processSPIRV() SPIRV entrypoint couldn't be mapped to EGfxPipelineStage"
 			));
 
-		Bool isStageRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
-		Bool isGfx = !isStageRt && stage != ESHPipelineStage_Compute;
+		Bool isStageRt = stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt;
+		Bool isGfx = !isStageRt && stage != EGfxPipelineStage_Compute;
 
 		isRt |= isStageRt;
 
@@ -568,16 +569,16 @@ extern "C" Bool Compiler_processSPIRV(
 			));
 
 			CharString bufferName = CharString_createRefCStrConst(var.name);
-			SHBindings bindings = SHBindings{};
+			GfxBindings bindings = GfxBindings{};
 
-			for(U64 l = 0; l < ESHBinaryType_Count; ++l)
+			for(U64 l = 0; l < EGfxBinaryType_Count; ++l)
 				bindings.arrU64[l] = U64_MAX;
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
 				registers,
 				ESHBufferType_PushConstants,
 				false,
-				(U8)(1 << ESHBinaryType_SPIRV),
+				(U8)(1 << EGfxBinaryType_SPIRV),
 				&bufferName,
 				NULL,
 				&sbFile,
@@ -613,7 +614,7 @@ extern "C" Bool Compiler_processSPIRV(
 
 			for (U64 j = 0; j < registers->length && !found; ++j) {
 
-				SHBinding shBinding = registers->ptr[j].reg.bindings.arr[ESHBinaryType_SPIRV];
+				GfxBinding shBinding = registers->ptr[j].reg.bindings.arr[EGfxBinaryType_SPIRV];
 				found = shBinding.space == binding->set && shBinding.binding == binding->binding;
 			}
 
@@ -710,7 +711,9 @@ extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, const Allocator *alloc, Ch
 	if(!tool.Disassemble((const U32*)resultPtr, binLen >> 2, &str, opts))
 		retError(clean, Error_invalidOperation(0, "Compiler_createDisassembly() SPIRV couldn't be disassembled"));
 
-	gotoIfError3(clean, CharString_createCopy(CharString_createRefSizedConst(str.c_str(), str.size(), true), alloc, result, e_rr));
+	gotoIfError3(clean, CharString_createCopy(
+		CharString_createRefSizedConst(str.c_str(), str.size(), true), alloc, result, e_rr
+	));
 
 clean:
 	return s_uccess;
@@ -791,30 +794,30 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 		
 		const C8 *name = entrypoint.name;
 
-		ESHPipelineStage stage = ESHPipelineStage_Count;
+		EGfxPipelineStage stage = EGfxPipelineStage_Count;
 
 		switch (entrypoint.spirv_execution_model) {
 
-			case SpvExecutionModelRayGenerationKHR:        stage = ESHPipelineStage_RaygenExt;        break;
-			case SpvExecutionModelIntersectionKHR:         stage = ESHPipelineStage_IntersectionExt;  break;
-			case SpvExecutionModelAnyHitKHR:               stage = ESHPipelineStage_AnyHitExt;        break;
-			case SpvExecutionModelClosestHitKHR:           stage = ESHPipelineStage_ClosestHitExt;    break;
-			case SpvExecutionModelMissKHR:                 stage = ESHPipelineStage_MissExt;          break;
-			case SpvExecutionModelCallableKHR:             stage = ESHPipelineStage_CallableExt;      break;
+			case SpvExecutionModelRayGenerationKHR:        stage = EGfxPipelineStage_RaygenExt;        break;
+			case SpvExecutionModelIntersectionKHR:         stage = EGfxPipelineStage_IntersectionExt;  break;
+			case SpvExecutionModelAnyHitKHR:               stage = EGfxPipelineStage_AnyHitExt;        break;
+			case SpvExecutionModelClosestHitKHR:           stage = EGfxPipelineStage_ClosestHitExt;    break;
+			case SpvExecutionModelMissKHR:                 stage = EGfxPipelineStage_MissExt;          break;
+			case SpvExecutionModelCallableKHR:             stage = EGfxPipelineStage_CallableExt;      break;
 
-			case SpvExecutionModelVertex:                  stage = ESHPipelineStage_Vertex;           break;
-			case SpvExecutionModelFragment:                stage = ESHPipelineStage_Pixel;            break;
-			case SpvExecutionModelGeometry:                stage = ESHPipelineStage_GeometryExt;      break;
-			case SpvExecutionModelTessellationControl:     stage = ESHPipelineStage_Hull;             break;
-			case SpvExecutionModelTessellationEvaluation:  stage = ESHPipelineStage_Domain;           break;
+			case SpvExecutionModelVertex:                  stage = EGfxPipelineStage_Vertex;           break;
+			case SpvExecutionModelFragment:                stage = EGfxPipelineStage_Pixel;            break;
+			case SpvExecutionModelGeometry:                stage = EGfxPipelineStage_GeometryExt;      break;
+			case SpvExecutionModelTessellationControl:     stage = EGfxPipelineStage_Hull;             break;
+			case SpvExecutionModelTessellationEvaluation:  stage = EGfxPipelineStage_Domain;           break;
 		
-			case SpvExecutionModelGLCompute:               stage = ESHPipelineStage_Compute;          break;
+			case SpvExecutionModelGLCompute:               stage = EGfxPipelineStage_Compute;          break;
 
 			case SpvExecutionModelTaskEXT:
-			case SpvExecutionModelTaskNV:                  stage = ESHPipelineStage_TaskExt;          break;
+			case SpvExecutionModelTaskNV:                  stage = EGfxPipelineStage_TaskExt;          break;
 
 			case SpvExecutionModelMeshEXT:
-			case SpvExecutionModelMeshNV:                  stage = ESHPipelineStage_MeshExt;          break;
+			case SpvExecutionModelMeshNV:                  stage = EGfxPipelineStage_MeshExt;          break;
 
 			default:
 				retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsSPIRV() had an invalid shader type"));
@@ -827,11 +830,11 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 
 		else {
 
-			if(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) {
+			if(stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt) {
 
 				if(!alreadyContainsLib)
 					gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
-						uniqueEntrypoints, CompilerEntrypoint{ .stage = ESHPipelineStage_Count }, alloc, e_rr));
+						uniqueEntrypoints, CompilerEntrypoint{ .stage = EGfxPipelineStage_Count }, alloc, e_rr));
 
 				alreadyContainsLib = true;
 			}
@@ -860,7 +863,7 @@ extern "C" Bool Compiler_linkSPIRV(
 	const ListSHUniformRuntime *uniforms,
 	Buffer uniformData,
 	const CharString *entrypoint,
-	ESHPipelineStage stage,
+	EGfxPipelineStage stage,
 	ESHExtension exts,
 	ListCompileError *errors,
 	Buffer *result,
@@ -871,16 +874,17 @@ extern "C" Bool Compiler_linkSPIRV(
 	(void) compiler;
 	Bool s_uccess = true;
 
-	Bool isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
+	Bool isRt = stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt;
 
 	isRt |= !!(exts & ESHExtension_RayQuery);
 
 	//Cooperative vectors/matrix compile at vulkan1.3 (SPIR-V 1.6),
 	// so their optimizer/validator must match (mirrors Compiler_processSPIRV).
 	//1.6 is a superset of 1.4, so RT + coop is safe too.
-	Bool isLinalg = !!(exts & (ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining));
+	Bool isLinalg =
+		!!(exts & (ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining));
 
-	Bool isMeshTask = stage == ESHPipelineStage_MeshExt || stage == ESHPipelineStage_TaskExt;
+	Bool isMeshTask = stage == EGfxPipelineStage_MeshExt || stage == EGfxPipelineStage_TaskExt;
 
 	ESpirvVersion spvVer = Compiler_requiredSpirvVersion(isRt, isLinalg, isMeshTask);
 	spv_target_env env =

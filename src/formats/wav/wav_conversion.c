@@ -226,9 +226,9 @@ Bool WAVFile_convert(
 
 	if(info.splitType) {
 		switch (info.splitType) {
-			default:                                        break;
+			default:                                           break;
 			case ESplitType_Right:        right = left = 1;    break;
-			case ESplitType_Average:    right = 1;            break;
+			case ESplitType_Average:      right = 1;           break;
 		}
 	}
 

@@ -176,14 +176,15 @@ jobs:
           echo "$RUNNER_TEMP/ninja-bin" >> "$GITHUB_PATH"
 
       # ── Conan ──────────────────────────────────────────────────────────────
-      # SteamOS container doesn't have pip by default.
+      # SteamOS container doesn't have pip by default, nor git-lfs, which packages/radeon_gpu_analyzer needs to
+      # fetch the vendored AMD offline compilers (the hosted Ubuntu/Windows images ship it already).
       # wayland-protocols is best effort here: the SDK image may already carry it, and the xdg packages fall
       # back to downloading when it is missing, so a failure to install it must not fail the job.
       - name: Install Conan (SteamOS)
         if: inputs.os == 'steamos'
         run: |
           apt-get update -y
-          apt-get install -y python3-pip
+          apt-get install -y python3-pip git-lfs
           apt-get install -y wayland-protocols || true
           pip3 install conan --break-system-packages
 
@@ -483,8 +484,14 @@ jobs:
           if (Test-Path $vswhere) {
             $vsRoot = & $vswhere -latest -products * -property installationPath
             if ($vsRoot) {
-              $candidate = Join-Path $vsRoot "VC\Tools\Llvm\x64\bin"
-              if (Test-Path (Join-Path $candidate "clang-cl.exe")) { $clangDir = $candidate }
+              # Visual Studio lays its LLVM out per host architecture, so an arm64 install has no x64
+              # directory at all; the host's own comes first and the other is a fallback, since arm64
+              # Windows runs the x64 build under emulation while the reverse never resolves.
+              $archOrder = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { @('ARM64', 'x64') } else { @('x64', 'ARM64') }
+              foreach ($arch in $archOrder) {
+                $candidate = Join-Path $vsRoot "VC\Tools\Llvm\$arch\bin"
+                if (Test-Path (Join-Path $candidate "clang-cl.exe")) { $clangDir = $candidate; break }
+              }
             }
           }
 

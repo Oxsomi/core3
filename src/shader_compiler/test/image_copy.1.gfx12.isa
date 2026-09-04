@@ -1,0 +1,51 @@
+; gfx1201  SGPRs 27  VGPRs 7  code 264 B  instrs 49  scratch 0  lds 0
+_amdgpu_cs_main:
+	v_and_b32_e32 v1, 0x3ff, v0                                // 000000000000
+	v_bfe_u32 v0, v0, 10, 10                                   // 000000000008
+	s_and_b32 s0, ttmp7, 0xffff                                // 000000000010
+	s_mov_b32 s8, s1                                           // 000000000018
+	s_and_b32 s1, s6, 0xffff                                   // 00000000001C
+	v_lshl_add_u32 v1, ttmp9, 4, v1                            // 000000000024
+	v_lshl_add_u32 v0, s0, 3, v0                               // 00000000002C
+	s_lshr_b32 s0, s6, 16                                      // 000000000034
+	s_wait_alu 0xfffe                                          // 000000000038
+	s_lshr_b32 s24, ttmp7, 16                                  // 00000000003C
+	s_and_b32 s6, s7, 0xffff                                   // 000000000040
+	v_cmp_gt_u32_e32 vcc, s1, v1                               // 000000000048
+	v_cmp_gt_u32_e64 s[0:1], s0, v0                            // 00000000004C
+	s_cmp_lt_u32 s24, s6                                       // 000000000054
+	s_cselect_b64 s[6:7], -1, 0                                // 000000000058
+	s_and_b64 s[0:1], vcc, s[0:1]                              // 00000000005C
+	s_wait_alu 0xfffe                                          // 000000000060
+	s_and_b64 s[0:1], s[6:7], s[0:1]                           // 000000000064
+	s_wait_alu 0xfffe                                          // 000000000068
+	s_and_saveexec_b64 s[6:7], s[0:1]                          // 00000000006C
+	s_cbranch_execz .LBB0_2                                    // 000000000070
+	s_getpc_b64 s[0:1]                                         // 000000000074
+	s_lshr_b32 s0, s2, 16                                      // 000000000078
+	s_wait_alu 0xfffe                                          // 00000000007C
+	s_sext_i32_i16 s1, s1                                      // 000000000080
+	v_add_nc_u32_e32 v3, s0, v0                                // 000000000084
+	s_wait_alu 0xfffe                                          // 000000000088
+	s_mov_b32 s9, s1                                           // 00000000008C
+	s_and_b32 s1, s2, 0xffff                                   // 000000000090
+	s_load_b512 s[8:23], s[8:9], 0x0                           // 000000000098
+	s_and_b32 s2, s3, 0xffff                                   // 0000000000A0
+	v_add_nc_u32_e32 v2, s1, v1                                // 0000000000A8
+	s_add_co_i32 s1, s24, s2                                   // 0000000000AC
+	s_and_b32 s2, s5, 0xffff                                   // 0000000000B0
+	s_wait_alu 0xfffe                                          // 0000000000B8
+	v_mov_b32_e32 v4, s1                                       // 0000000000BC
+	s_and_b32 s1, s4, 0xffff                                   // 0000000000C0
+	s_lshr_b32 s0, s4, 16                                      // 0000000000C8
+	s_wait_alu 0xfffe                                          // 0000000000CC
+	v_add_nc_u32_e32 v1, s1, v1                                // 0000000000D0
+	s_add_co_i32 s1, s24, s2                                   // 0000000000D4
+	v_add_nc_u32_e32 v0, s0, v0                                // 0000000000D8
+	s_wait_alu 0xfffe                                          // 0000000000DC
+	v_mov_b32_e32 v6, s1                                       // 0000000000E0
+	s_wait_kmcnt 0x0                                           // 0000000000E4
+	image_load v[2:5], [v2, v3, v4], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000000E8
+	s_wait_loadcnt 0x0                                         // 0000000000F4
+	image_store v[2:5], [v1, v0, v6], s[16:23] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000000F8
+	s_endpgm                                                   // 000000000104

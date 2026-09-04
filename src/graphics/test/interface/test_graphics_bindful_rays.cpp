@@ -491,7 +491,8 @@ static void TestBindful_ommWithFormat(
 
 	//One triangle, so each micromap index buffer is exactly one element wide
 
-	const c::U8 ommStride = ommIndexFormat == c::ETextureFormatId_R32u ? 4 : (ommIndexFormat == c::ETextureFormatId_R16u ? 2 : 1);
+	const c::U8 ommStride =
+		ommIndexFormat == c::ETextureFormatId_R32u ? 4 : (ommIndexFormat == c::ETextureFormatId_R16u ? 2 : 1);
 
 	const c::U32 opaqueIndex = c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyOpaque, ommIndexFormat);
 	const c::U32 transparentIndex = c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyTransparent, ommIndexFormat);
@@ -722,7 +723,9 @@ extern "C" void Test_graphicsBindfulOmm(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Bindful OMM heap", heap, e_rr)))
 		return;
 
-	if(!Test_assert(t, "tableCreate", heap.createTable(layout, "Bindful OMM table", table, c::EDescriptorTableFlags_None, e_rr)))
+	if(!Test_assert(t, "tableCreate", heap.createTable(
+		layout, "Bindful OMM table", table, c::EDescriptorTableFlags_None, e_rr
+	)))
 		return;
 
 	if(!Test_assert(t, "outputCreate", dev.createBuffer(

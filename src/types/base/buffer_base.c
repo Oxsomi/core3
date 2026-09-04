@@ -108,34 +108,34 @@ clean:
 	return s_uccess;
 }
 
-#define BitOp(x, dst, src, ...) {                                                                    \
+#define BitOp(x, dst, src, ...) {                                                                   \
 																									\
-	Bool s_uccess = true;                                                                            \
+	Bool s_uccess = true;                                                                           \
 																									\
 	if(!dst.ptr || !src.ptr)                                                                        \
 		retError(clean, Error_nullPointer(!dst.ptr ? 0 : 1, "BitOp::dst and src are required"));    \
 																									\
-	if(Buffer_isConstRef(dst))                                                                        \
+	if(Buffer_isConstRef(dst))                                                                      \
 		retError(clean, Error_constData(0, 0, "BitOp::dst should be writable"));                    \
 																									\
-	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);                                    \
-	U64 l = dstLen <= srcLen ? dstLen : srcLen;                                                        \
+	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);                                   \
+	U64 l = dstLen <= srcLen ? dstLen : srcLen;                                                     \
 																									\
 	if(!((U64)dst.ptr & 7) && !((U64)src.ptr & 7)) {                                                \
 																									\
-		for(U64 i = 0, j = l >> 3; i < j; ++i)                                                        \
-			*((U64*)dst.ptrNonConst + i) x *((const U64*)src.ptr + i);                                \
+		for(U64 i = 0, j = l >> 3; i < j; ++i)                                                      \
+			*((U64*)dst.ptrNonConst + i) x *((const U64*)src.ptr + i);                              \
 																									\
-		for (U64 i = l >> 3 << 3; i < l; ++i)                                                        \
+		for (U64 i = l >> 3 << 3; i < l; ++i)                                                       \
 			dst.ptrNonConst[i] x src.ptr[i];                                                        \
-	}                                                                                                \
+	}                                                                                               \
 																									\
-	else for(U8 i = 0; i < l; ++i)                                                                    \
+	else for(U8 i = 0; i < l; ++i)                                                                  \
 		dst.ptrNonConst[i] x src.ptr[i];                                                            \
 																									\
-	__VA_ARGS__                                                                                        \
+	__VA_ARGS__                                                                                     \
 																									\
-clean:                                                                                                \
+clean:                                                                                              \
 	return s_uccess;                                                                                \
 }
 

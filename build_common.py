@@ -268,19 +268,35 @@ def resolveCompilerExe(exe):
 	if not install:
 		return None
 
+	# Visual Studio lays both toolchains out per host architecture, so an arm64 install has no x64
+	# directory at all and a hardcoded one finds nothing on it. The host's own comes first and the other
+	# is a fallback rather than an alternative: arm64 Windows runs x64 binaries under emulation, so an
+	# x64 toolchain there works and is better than failing, while the reverse never resolves.
+
+	hostFirst = ( "ARM64", "x64" ) if hostArch()[0] == "aarch64" else ( "x64", "ARM64" )
+
 	if exe == "clang-cl":
-		candidate = os.path.join(install, "VC", "Tools", "Llvm", "x64", "bin", "clang-cl.exe")
-		return candidate if os.path.isfile(candidate) else None
+
+		for arch in hostFirst:
+			candidate = os.path.join(install, "VC", "Tools", "Llvm", arch, "bin", "clang-cl.exe")
+			if os.path.isfile(candidate):
+				return candidate
+
+		return None
 
 	toolsets = os.path.join(install, "VC", "Tools", "MSVC")
 
 	if not os.path.isdir(toolsets):
 		return None
 
+	# cl is additionally split by what it targets, and only the native pair is looked for: a cross
+	# compiler would report the same version while building for the wrong architecture.
+
 	for version in sorted(os.listdir(toolsets), reverse=True):
-		candidate = os.path.join(toolsets, version, "bin", "HostX64", "x64", "cl.exe")
-		if os.path.isfile(candidate):
-			return candidate
+		for arch in hostFirst:
+			candidate = os.path.join(toolsets, version, "bin", f"Host{arch}", arch, "cl.exe")
+			if os.path.isfile(candidate):
+				return candidate
 
 	return None
 
@@ -878,6 +894,14 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 
 		conanCreateIfChanged("packages/agility_sdk",        profile, mode, profileArgs, cache)
 		conanCreateIfChanged("packages/nvapi",              profile, mode, profileArgs, cache)
+
+		# RGA is a tool package (settings = os/arch only), so it builds once regardless of mode.
+		# The hash cache makes the repeat calls free.
+		# Windows/Linux x64 only, since it vendors AMD's compilers.
+
+		if system in ("Windows", "Linux") and hostArch()[1] == "x86_64":
+			conanCreateIfChanged("packages/radeon_gpu_analyzer", profile, mode, profileArgs, cache)
+
 		conanCreateIfChanged("packages/vulkan_headers",     profile, mode, profileArgs, cache)
 		# These two follow shaderCompilerDepMode rather than the requested mode
 

@@ -43,7 +43,7 @@ typedef RefPtr DescriptorLayoutRef;
 typedef RefPtr PipelineLayoutRef;
 typedef RefPtr DescriptorHeapRef;
 typedef RefPtr DescriptorTableRef;
-typedef enum ESHBinaryType ESHBinaryType;
+typedef enum EGfxBinaryType EGfxBinaryType;
 
 typedef struct CBufferData {        //TODO: Replace this entirely when we can.
 
@@ -275,7 +275,7 @@ const GraphicsObjectTypes *GraphicsDeviceRef_getTypes(GraphicsDeviceRef *device)
 
 //binaryType picks which backend's binding numbers to emit, since a set/binding pair means something
 // different per backend and the counts are shared.
-//It refuses a type it has no numbers for, so adding AIR or WGSL to ESHBinaryType surfaces here as an
+//It refuses a type it has no numbers for, so adding AIR or WGSL to EGfxBinaryType surfaces here as an
 // error rather than as silently reused DXIL registers.
 
 //flags is the same set GraphicsDeviceRef_create takes; only EnableDynamicSamplers changes what comes back,
@@ -283,7 +283,7 @@ const GraphicsObjectTypes *GraphicsDeviceRef_getTypes(GraphicsDeviceRef *device)
 
 Bool GraphicsDevice_defaultBindlessLayout(
 	const GraphicsDeviceInfo *info,
-	ESHBinaryType binaryType,
+	EGfxBinaryType binaryType,
 	EGraphicsDeviceFlags flags,
 	DescriptorLayoutInfo *result,
 	const Allocator *alloc,
@@ -398,6 +398,24 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 //Records the queued pullRegion reads into the command buffer; called by backends after the frame's commands.
 Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr);
 Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize, Error *e_rr);
+
+//Shader targets this device's driver can compile for besides the device itself; empty on a backend or driver
+// that offers none, which is every one but AMD's D3D12 today.
+//The names are the driver's own and can be passed back as an ISA target.
+
+Bool GraphicsDeviceRef_listShaderTargets(
+	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+);
+
+//Picks which of those the NEXT device created in this process compiles for, by a name the list reported.
+//An empty or absent name returns to the real GPU.
+//The driver reads the choice while initializing the adapter, so it cannot apply to a device that already
+// exists: a run targeting another ASIC creates one device to enumerate and select with, releases it, and
+// creates a second one to compile with.
+//The choice is process wide, so it stays in effect until it is cleared.
+//A backend whose driver compiles for the device alone refuses any name but the empty one.
+
+Bool GraphicsDeviceRef_selectShaderTarget(GraphicsDeviceRef *deviceRef, const CharString *name, Error *e_rr);
 
 #ifdef __cplusplus
 	}

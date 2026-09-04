@@ -847,8 +847,8 @@ extern "C" void Test_graphicsBindfulSharedRegister(oxc::c::Test *t, oxc::c::Grap
 		const c::U32 visibility = layoutInfo.list.bindings.ptr[i].visibility;
 
 		if(
-			(visibility & (1 << c::ESHPipelineStage_Vertex)) &&
-			(visibility & (1 << c::ESHPipelineStage_Pixel))
+			(visibility & (1 << c::EGfxPipelineStage_Vertex)) &&
+			(visibility & (1 << c::EGfxPipelineStage_Pixel))
 		)
 			sharedVisibility = true;
 	}

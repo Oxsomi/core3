@@ -53,7 +53,7 @@ typedef struct DescriptorBinding DescriptorBinding;
 typedef struct Descriptor Descriptor;
 
 typedef U32 BindlessDescriptor;
-typedef enum ESHRegisterType ESHRegisterType;
+typedef enum EGfxRegisterType EGfxRegisterType;
 
 static const BindlessDescriptor BindlessDescriptor_InvalidAllocation = (1 << 21) - 1;
 static const BindlessDescriptor BindlessDescriptor_None    = 0;
@@ -61,7 +61,7 @@ static const BindlessDescriptor BindlessDescriptor_None    = 0;
 Bool GraphicsDeviceRef_allocateDescriptorBindless(
 	GraphicsDeviceRef *device,
 	DescriptorTableRef *descTable,        //Can be NULL in case the device has a default bindless table
-	ESHRegisterType type,
+	EGfxRegisterType type,
 	U32 strideOrLength,                   //For structured/storage buffers
 	Bool maintainRef,                     //Only if the resource isn't in charge of managing the descriptor
 	const Descriptor *desc,

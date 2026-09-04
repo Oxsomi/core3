@@ -28,7 +28,7 @@
 	extern "C" {
 #endif
 
-extern const C8 *ESHBinaryType_names[ESHBinaryType_Count];
+extern const C8 *EGfxBinaryType_names[EGfxBinaryType_Count];
 
 typedef enum ESHExtension {
 
@@ -289,7 +289,7 @@ typedef struct SHBinaryIdentifier {
 
 	ESHExtension extensions;       //Needs 8-byte alignment
 	U16 shaderVersion;             //U8 maj, minor (need 4-byte alignment, is compared together with stageType)
-	U16 stageType;                 //ESHPipelineStage
+	U16 stageType;                 //EGfxPipelineStage
 
 } SHBinaryIdentifier;
 
@@ -304,7 +304,7 @@ typedef struct SHBinaryInfo {
 	Bool hasShaderAnnotation;      //If [shader("")] is used rather than [[oxc::stage("")]]
 	U8 padding[1];
 
-	Buffer binaries[ESHBinaryType_Count];
+	Buffer binaries[EGfxBinaryType_Count];
 
 } SHBinaryInfo;
 

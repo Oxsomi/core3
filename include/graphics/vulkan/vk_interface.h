@@ -76,6 +76,13 @@
 	);
 
 	void VkPipeline_free(Pipeline *pipeline, const Allocator *alloc);
+	Bool VkPipeline_getExecutables(Pipeline *pipeline, const Allocator *alloc, ListPipelineExecutable *result, Error *e_rr);
+
+	Bool VkGraphicsDeviceRef_listShaderTargets(
+		GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+	);
+
+	Bool VkGraphicsDeviceRef_selectShaderTarget(GraphicsDeviceRef *deviceRef, const CharString *name, Error *e_rr);
 
 	//Sampler
 

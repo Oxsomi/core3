@@ -38,7 +38,7 @@ typedef enum ESHVersion {
 typedef struct BinaryInfoFixedSize {
 
 	U8 shaderModel;             //U4 major, minor
-	U8 entrypointType;          //ESHPipelineStage: See entrypointType section in oiSH.md
+	U8 entrypointType;          //EGfxPipelineStage: See entrypointType section in oiSH.md
 	U16 entrypoint;             //U16_MAX if library, otherwise index into stageNames
 
 	U16 vendorMask;             //Bitset of ESHVendor
@@ -56,7 +56,7 @@ typedef struct BinaryInfoFixedSize {
 } BinaryInfoFixedSize;
 
 typedef struct EntryInfoFixedSize {
-	U8 pipelineStage;           //ESHPipelineStage
+	U8 pipelineStage;           //EGfxPipelineStage
 	U8 binaryCount;             //How many binaries this entrypoint references
 } EntryInfoFixedSize;
 

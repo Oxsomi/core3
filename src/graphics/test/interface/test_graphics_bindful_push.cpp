@@ -120,12 +120,14 @@ extern "C" void Test_graphicsBindfulPushDescriptors(oxc::c::Test *t, oxc::c::Gra
 	DeviceBuffer first, second, output;
 
 	if(!Test_assert(t, "firstCreate", dev.createBufferData(
-		c::EDeviceBufferUsage_Uniform, c::EGraphicsResourceFlag_None, "Push descriptor params A", &firstRef, first, nullptr, e_rr
+		c::EDeviceBufferUsage_Uniform, c::EGraphicsResourceFlag_None, "Push descriptor params A", &firstRef, first, nullptr,
+		e_rr
 	)))
 		return;
 
 	if(!Test_assert(t, "secondCreate", dev.createBufferData(
-		c::EDeviceBufferUsage_Uniform, c::EGraphicsResourceFlag_None, "Push descriptor params B", &secondRef, second, nullptr, e_rr
+		c::EDeviceBufferUsage_Uniform, c::EGraphicsResourceFlag_None, "Push descriptor params B", &secondRef, second, nullptr,
+		e_rr
 	)))
 		return;
 

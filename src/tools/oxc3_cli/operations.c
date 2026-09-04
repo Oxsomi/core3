@@ -84,7 +84,11 @@ const C8 *EOperationHasParameter_names[] = {
 	"-graphics-api",
 	"-type",
 	"-oiCA",
-	"-aes-file"
+	"-aes-file",
+	"-asic",
+	"-pso-output",
+	"-pso-set",
+	"-pso-input"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -107,7 +111,14 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Graphics api to use. Default is either all or the native one depending on command.",
 	"Numeric type (e.g. a float format: F8, F16, F32, F64, BF16, TF19, PXR24, FP24).",
 	"Operate inside the given oiCA archive instead of the working directory.",
-	"Read the 32-byte AES key from a file (64/66-char hex or a raw 32-byte binary) instead of a plaintext argument."
+	"Read the 32-byte AES key from a file (64/66-char hex or a raw 32-byte binary) instead of a plaintext argument.",
+	"AMD GPU/arch for ISA operations: a gfx target (e.g. gfx1100), or 'live[:index]'. Use '?' or 'isa devices' to list.",
+	"Write the pipeline the disassembly was taken from as an oiSP, so it can be inspected or loaded later.",
+	(
+		"Supply pipeline fields by the path the report prints, e.g. \"blend.enable=1,rtv.format[0]=rgba16f\"; "
+		"any field, so nothing has to stay assumed."
+	),
+	"Replay a stored oiSP (from -pso-output) over the derived pipeline, so a run can be repeated or edited."
 };
 
 //Flags
@@ -140,7 +151,8 @@ const C8 *EOperationFlags_names[EOperationFlags_Count] = {
 	"--verbose",
 	"--fixed",
 	"--aes-stdin",
-	"--keep-registers"
+	"--keep-registers",
+	"--assume-defaults"
 };
 
 const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
@@ -171,7 +183,8 @@ const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
 	"Print full information to the console.",
 	"Emit a fixed-point value instead of a float format (float convert).",
 	"Read the 32-byte AES key (hex) from one line of stdin instead of a plaintext argument.",
-	"Keep declared but unused resources bound and reflected (stable register layouts across shader variants)."
+	"Keep declared but unused resources bound and reflected (stable register layouts across shader variants).",
+	"Compile with assumed pipeline state instead of refusing; the assumed fields print with the disassembly."
 };
 
 //Operations
@@ -187,6 +200,10 @@ const C8 *EOperationCategory_names[] = {
 
 	#ifdef CLI_GRAPHICS
 		"graphics",
+	#endif
+
+	#ifdef CLI_RGA
+		"isa",
 	#endif
 
 	"audio",
@@ -212,6 +229,10 @@ const C8 *EOperationCategory_description[] = {
 
 	#ifdef CLI_GRAPHICS
 		"Graphics operations such as showing devices.",
+	#endif
+
+	#ifdef CLI_RGA
+		"AMD ISA analysis via the Radeon GPU Analyzer: list target GPUs and disassemble shaders to ISA.",
 	#endif
 
 	"Audio operations such as showing devices.",
@@ -346,6 +367,10 @@ void Operations_init() {
 			EOperationHasParameter_Output |
 			EOperationHasParameter_Entry | EOperationHasParameter_StartOffset | EOperationHasParameter_Length |
 			EOperationHasParameter_ShaderOutputMode
+			#ifdef CLI_RGA
+				//-asic views an oiSH's SPIR-V binary (-entry + --bin -compile-output spv) as AMD ISA instead
+				| EOperationHasParameter_ISAAsic
+			#endif
 	};
 
 	//File utilities (also work on virtual "//" paths)
@@ -674,6 +699,20 @@ void Operations_init() {
 				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
 		};
 
+		Operation_values[EOperation_ShaderReflectSymbols] = (Operation) {
+			.category = EOperationCategory_Shader,
+			.name = "reflect-symbols",
+			.desc =
+				"Reflect a shader source's frontend symbol AST (entrypoints, user types, resources, scopes) into an oiSR. "
+				"Prints the tree to stdout, or writes an .oiSR with -output.",
+			.func = &CLI_shaderReflectSymbols,
+			.isFormatLess = true,
+			.requiredParameters = EOperationHasParameter_Input,
+			.optionalParameters =
+				EOperationHasParameter_Output | EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir,
+			.operationFlags = EOperationFlags_Debug | EOperationFlags_Verbose
+		};
+
 		Operation_values[EOperation_ShaderEntrypoints] = (Operation) {
 			.category = EOperationCategory_Shader,
 			.name = "entrypoints",
@@ -738,7 +777,8 @@ void Operations_init() {
 
 			.isFormatLess = true,
 
-			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg | EOperationHasParameter_GraphicsApi,
+			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg |
+				EOperationHasParameter_GraphicsApi,
 			.operationFlags = EOperationFlags_Verbose
 		};
 
@@ -753,7 +793,50 @@ void Operations_init() {
 
 			.isFormatLess = true,
 
-			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg | EOperationHasParameter_GraphicsApi
+			.optionalParameters =
+				EOperationHasParameter_Entry | EOperationHasParameter_CountArg | EOperationHasParameter_GraphicsApi
+		};
+
+	#endif
+
+	//ISA operations (AMD Radeon GPU Analyzer)
+
+	#ifdef CLI_RGA
+
+		Operation_values[EOperation_ISADevices] = (Operation) {
+
+			.category = EOperationCategory_ISA,
+
+			.name = "devices",
+			.desc = "List the AMD GPUs and architectures the Radeon GPU Analyzer can target.",
+
+			.func = &CLI_isaDevices,
+
+			.isFormatLess = true
+		};
+
+		Operation_values[EOperation_ISADisassemble] = (Operation) {
+
+			.category = EOperationCategory_ISA,
+
+			.name = "disassemble",
+			.desc = "Disassemble a shader to AMD ISA (with VGPR/SGPR/LDS usage) for a chosen ASIC. Input may be "
+				"SPIR-V (.spv) or an oiSH (its SPIR-V binary is extracted; pass -entry to select one). Without "
+				"-output the ISA is printed. DXIL has no offline path; run it with -asic live instead.",
+
+			.func = &CLI_isaDisassemble,
+
+			.isFormatLess = true,
+
+			.requiredParameters = EOperationHasParameter_Input,
+			.optionalParameters =
+				EOperationHasParameter_Output |
+				EOperationHasParameter_ISAAsic | EOperationHasParameter_Entry | EOperationHasParameter_ShaderOutputMode |
+				EOperationHasParameter_IncludeDir | EOperationHasParameter_ThreadCount |
+				EOperationHasParameter_PipelineOutput | EOperationHasParameter_PipelineSet |
+				EOperationHasParameter_PipelineInput,
+
+			.operationFlags = EOperationFlags_Debug | EOperationFlags_Verbose | EOperationFlags_AssumeDefaults
 		};
 
 	#endif
@@ -1106,7 +1189,9 @@ Bool ParsedArgs_getArg(const ParsedArgs *args, EOperationHasParameter parameterI
 	Bool s_uccess = true;
 
 	if(!args || !arg || !parameterId)
-		retError(clean, Error_nullPointer(!args ? 0 : (!arg ? 2 : 1), "ParsedArgs_getArg()::args, arg and parameterId are required"));
+		retError(clean, Error_nullPointer(
+			!args ? 0 : (!arg ? 2 : 1), "ParsedArgs_getArg()::args, arg and parameterId are required"
+		));
 
 	if(!((args->parameters >> parameterId) & 1))
 		retError(clean, Error_notFound(0, 1, "ParsedArgs_getArg()::parameterId not found"));

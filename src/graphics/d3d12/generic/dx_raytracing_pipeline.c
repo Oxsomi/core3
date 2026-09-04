@@ -145,7 +145,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		U16 localId = (U16) identifier;
 
 		const SHBinaryInfo *info = &binaries->ptr[globalId].binaries.ptr[localId];
-		Buffer bin = info->binaries[ESHBinaryType_DXIL];
+		Buffer bin = info->binaries[EGfxBinaryType_DXIL];
 
 		libraries.ptrNonConst[j] = (D3D12_DXIL_LIBRARY_DESC) {
 			.DXILLibrary = (D3D12_SHADER_BYTECODE) {
@@ -297,12 +297,27 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	DxPipeline *dxPipeline = Pipeline_ext(pipeline, Dx);
 	ID3D12StateObject **stateObject = &dxPipeline->stateObject;
 
-	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateStateObject(
-		deviceExt->device,
-		&stateObjectInfo,
-		&IID_ID3D12StateObject,
-		(void**) stateObject
-	), e_rr));
+	//A state object only stays readable back if AMD's extension created it, and only version 2 of that extension
+	// offers DXR at all, so capture falls through to the driver's own path when either is missing.
+
+	const Bool captureIsa =
+		(pipeline->flags & EPipelineFlags_CaptureISA) &&
+		deviceExt->amdAnalyzer.analyzer && deviceExt->amdAnalyzer.hasRaytracing;
+
+	if (captureIsa) {
+		gotoIfError3(clean, DxAmdShaderAnalyzer_createStateObject(
+			&deviceExt->amdAnalyzer, &stateObjectInfo, stateObject, &dxPipeline->amdAnalyzerHandle, e_rr
+		));
+	}
+
+	else {
+		gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateStateObject(
+			deviceExt->device,
+			&stateObjectInfo,
+			&IID_ID3D12StateObject,
+			(void**) stateObject
+		), e_rr));
+	}
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name)) {
 		gotoIfError3(clean, CharString_toUTF16(*name, alloc, &tmp16, e_rr));

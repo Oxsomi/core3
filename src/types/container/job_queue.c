@@ -104,7 +104,9 @@ Bool JobQueue_create(U64 threadCount, const Allocator *alloc, JobQueue *queue, E
 		retError(clean, Error_nullPointer(1, "JobQueue_create()::alloc is required"));
 
 	if(queue->jobs.ptr || queue->threads.ptr)
-		retError(clean, Error_invalidParameter(2, 0, "JobQueue_create()::queue wasn't zero initialized, might indicate memleak"));
+		retError(clean, Error_invalidParameter(
+			2, 0, "JobQueue_create()::queue wasn't zero initialized, might indicate memleak"
+		));
 
 	if(!threadCount)
 		threadCount = 1;

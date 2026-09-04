@@ -22,7 +22,7 @@ Pull requests must follow the code style of this repository and may be rejected 
 6. **Docs**: public API changes update the relevant `docs/*.md`; new formats need a spec doc + entry in `docs/id_registry.md` **with a Status line**.
 7. **Commit hygiene**: imperative subject, explain *why* in the body; link issues. Keep unrelated reformatting out of functional PRs.
 
-## Good first contributions (as of v3.2.104)
+## Good first contributions (as of v3.2.105)
 
 Real, wanted items: see the reviews/TODOs in tree for context:
 

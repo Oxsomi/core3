@@ -69,37 +69,37 @@ typedef enum ESHSettingsFlags {
 
 //Loosely maps to EPipelineStage in OxC3 graphics
 
-typedef enum ESHPipelineStage {
+typedef enum EGfxPipelineStage {
 
-	ESHPipelineStage_Vertex,
-	ESHPipelineStage_Pixel,
-	ESHPipelineStage_Compute,
-	ESHPipelineStage_GeometryExt,		//GeometryShader extension is required
-	ESHPipelineStage_Hull,
-	ESHPipelineStage_Domain,
+	EGfxPipelineStage_Vertex,
+	EGfxPipelineStage_Pixel,
+	EGfxPipelineStage_Compute,
+	EGfxPipelineStage_GeometryExt,		//GeometryShader extension is required
+	EGfxPipelineStage_Hull,
+	EGfxPipelineStage_Domain,
 
 	//RayPipeline extension is required
 
-	ESHPipelineStage_RaygenExt,
-	ESHPipelineStage_CallableExt,
-	ESHPipelineStage_MissExt,
-	ESHPipelineStage_ClosestHitExt,
-	ESHPipelineStage_AnyHitExt,
-	ESHPipelineStage_IntersectionExt,
+	EGfxPipelineStage_RaygenExt,
+	EGfxPipelineStage_CallableExt,
+	EGfxPipelineStage_MissExt,
+	EGfxPipelineStage_ClosestHitExt,
+	EGfxPipelineStage_AnyHitExt,
+	EGfxPipelineStage_IntersectionExt,
 
     //MeshShader extension is required
 
-	ESHPipelineStage_MeshExt,
-	ESHPipelineStage_TaskExt,
+	EGfxPipelineStage_MeshExt,
+	EGfxPipelineStage_TaskExt,
 
 	//Reserved, free to reuse (was the workgraph stage)
 
-	ESHPipelineStage_Reserved
+	EGfxPipelineStage_Reserved
 
-} ESHPipelineStage;
+} EGfxPipelineStage;
 
 typedef struct EntryInfoFixedSize {
-    U8 pipelineStage;			//ESHPipelineStage
+    U8 pipelineStage;			//EGfxPipelineStage
 	U8 binaryCount;				//How many binaries this entrypoint references
 } EntryInfoFixedSize;
 
@@ -209,87 +209,89 @@ typedef struct BinaryInfoFixedSize {
 
 } BinaryInfoFixedSize;
 
-typedef enum ESHRegisterType {
+typedef enum EGfxRegisterType {
 
-	ESHRegisterType_Sampler,
+	EGfxRegisterType_Sampler,
+	EGfxRegisterType_SamplerComparisonState,
 
-	ESHRegisterType_ConstantBuffer,					//UBO or CBuffer
-	ESHRegisterType_PushConstants,					//Push constants or CBuffer (DXIL)
-	ESHRegisterType_ByteAddressBuffer,
-	ESHRegisterType_StructuredBuffer,
-	ESHRegisterType_StructuredBufferAtomic,			//SBuffer + atomic counter
-	ESHRegisterType_StorageBuffer,
-	ESHRegisterType_StorageBufferAtomic,
-	ESHRegisterType_AccelerationStructure,
+	EGfxRegisterType_ConstantBuffer,					//UBO or CBuffer
+	EGfxRegisterType_PushConstants,					//Push constants or CBuffer (DXIL)
+	EGfxRegisterType_ByteAddressBuffer,
+	EGfxRegisterType_StructuredBuffer,
+	EGfxRegisterType_StructuredBufferAtomic,			//SBuffer + atomic counter
+	EGfxRegisterType_StorageBuffer,
+	EGfxRegisterType_StorageBufferAtomic,
+	EGfxRegisterType_AccelerationStructure,
 
-	ESHRegisterType_Texture1D,
-	ESHRegisterType_Texture2D,
-	ESHRegisterType_Texture3D,
-	ESHRegisterType_TextureCube,
-	ESHRegisterType_Texture2DMS,
-	ESHRegisterType_SubpassInput,
+	EGfxRegisterType_Texture1D,
+	EGfxRegisterType_Texture2D,
+	EGfxRegisterType_Texture3D,
+	EGfxRegisterType_TextureCube,
+	EGfxRegisterType_Texture2DMS,
+	EGfxRegisterType_SubpassInput,
 
-	ESHRegisterType_Count,
+	EGfxRegisterType_Count,
 
-	ESHRegisterType_TypeMask			= 0xF,
-	ESHRegisterType_IsArray				= 1 << 4,	//Only valid on textures
-	ESHRegisterType_IsCombinedSampler	= 1 << 5,	//Only valid on textures
+	EGfxRegisterType_TypeMask			= 0xF,
+	EGfxRegisterType_IsArray				= 1 << 4,	//Only valid on textures
+	EGfxRegisterType_IsCombinedSampler	= 1 << 5,	//Only valid on textures
 
 	//Invalid on samplers, AS and CBuffer
 	//Required on append/consume buffer
 	//Valid on everything else (textures and various buffers)
-	ESHRegisterType_IsWrite				= 1 << 6
+	EGfxRegisterType_IsWrite				= 1 << 6
 
-} ESHRegisterType;
+} EGfxRegisterType;
 
 //Consists of primitive type (lower 4-bit) and component count (higher 2-bit)
-typedef enum ESHTexturePrimitive {
+typedef enum EGfxTexturePrimitive {
 
-	ESHTexturePrimitive_UInt,
-	ESHTexturePrimitive_SInt,
-	ESHTexturePrimitive_UNorm,
-	ESHTexturePrimitive_SNorm,
-	ESHTexturePrimitive_Float,
-	ESHTexturePrimitive_Double,
-	ESHTexturePrimitive_Count,
+	EGfxTexturePrimitive_UInt,
+	EGfxTexturePrimitive_SInt,
+	EGfxTexturePrimitive_UNorm,
+	EGfxTexturePrimitive_SNorm,
+	EGfxTexturePrimitive_Float,
+	EGfxTexturePrimitive_Double,
+	EGfxTexturePrimitive_Count,
 
-	ESHTexturePrimitive_TypeMask	= 0x0F,
+	EGfxTexturePrimitive_TypeMask	= 0x0F,
 
-	ESHTexturePrimitive_Component1	= 0x00,		//R
-	ESHTexturePrimitive_Component2	= 0x10,		//RG
-	ESHTexturePrimitive_Component3	= 0x20,		//RGB
-	ESHTexturePrimitive_Component4	= 0x30,		//RGBA
+	EGfxTexturePrimitive_Component1	= 0x00,		//R
+	EGfxTexturePrimitive_Component2	= 0x10,		//RG
+	EGfxTexturePrimitive_Component3	= 0x20,		//RGB
+	EGfxTexturePrimitive_Component4	= 0x30,		//RGBA
 
-	ESHTexturePrimitive_Unused		= 0xC0
+	EGfxTexturePrimitive_Unused		= 0xC0
 
-} ESHTexturePrimitive;
+} EGfxTexturePrimitive;
 
-typedef struct SHBinding {
+typedef struct GfxBinding {
 	U32 space, binding;
-} SHBinding;
+} GfxBinding;
 
 //U32_MAX for both space and binding indicates 'not present'
-typedef struct SHBindings {
-	SHBinding arr[ESHBinaryType_Count];
-} SHBindings;
+typedef union GfxBindings {
+	U64 arrU64[EGfxBinaryType_Count];
+	GfxBinding arr[EGfxBinaryType_Count];
+} GfxBindings;
 
-typedef struct SHTextureFormat {	//Primitive is set for DXIL always and formatId can be set only for SPIRV (only when RW)
-	U8 primitive;					//Optional for readonly registers: ESHTexturePrimitive must match format approximately
+typedef struct GfxTextureFormat {	//Primitive is set for DXIL always and formatId can be set only for SPIRV (only when RW)
+	U8 primitive;					//Optional for readonly registers: EGfxTexturePrimitive must match format approximately
 	U8 formatId;					//Optional for write registers: ETextureFormatId Must match formatPrimitive and uncompressed
-} SHTextureFormat;
+} GfxTextureFormat;
 
 typedef struct SHRegister {
 
-	SHBindings bindings;
+	GfxBindings bindings;
 
-	U8 registerType;				//ESHRegisterType
-	U8 isUsedFlag;					//Per ESHBinaryType if the register is used
+	U8 registerType;				//EGfxRegisterType
+	U8 isUsedFlag;					//Per EGfxBinaryType if the register is used
 
 	union {
 		U16 padding;				//Used for samplers, (RW)BAB or AS (should be 0)
 		U16 shaderBufferId;			//Used only at serialization (Buffer registers only, ex )
 		U16 inputAttachmentId;		//U16_MAX indicates "nothing", otherwise <7, only valid for SubpassInput
-		SHTextureFormat texture;	//Read/write textures
+		GfxTextureFormat texture;	//Read/write textures
 	};
 
     //Used at serialization time only, can't be used on subpass inputs
@@ -420,7 +422,7 @@ CRC32C hashes are used for the source and include directories to see if they're 
 
 ## entrypointType
 
-Entrypoint type clarifies what type of entrypoint was compiled as (ESHPipelineStage). If compiled as a library (e.g. raytracing, etc.), this value should only be looked at from the user perspective if there are duplicates. This is because the entrypointType only has meaning if binary was compiled for a specific target (using [stage("")] for example).
+Entrypoint type clarifies what type of entrypoint was compiled as (EGfxPipelineStage). If compiled as a library (e.g. raytracing, etc.), this value should only be looked at from the user perspective if there are duplicates. This is because the entrypointType only has meaning if binary was compiled for a specific target (using [stage("")] for example).
 
 If this is not the case, then the compiler can decide how to combine entrypoints. It will be allowed for raygen, miss and hit shaders to be compiled in a single go, and for the stage type to be raygen for all of them. But if the stage is determined to need a specialized compile, then it can be combined with only the stages it is compatible with (for example; if pixel and vertex shaders have different internal defines or compiler settings, then they can still be separated if need be).
 
@@ -570,7 +572,7 @@ Tier 1 (with bindless) has the following limits:
 When combining DXIL and SPIRV binaries and/or switching binary type, there are a few quirks that are important to know:
 
 - In DXIL, registers and elements in buffers all get flattened to a 1D array, even if they were from a 2D array. The array is effectively flattened. Combining a SPIRV input with a DXIL input will unflatten this array (since SPIRV maintains this info).
-- In DXIL, samplers and textures are always separated, there exist no combined samplers. As such, they will be presented as two separate registers. When SPIRV is combined or used, it will merge the texture by name into a combined sampler. In this case, the separate sampler itself will not exist for SPIRV (only the texture ala combined sampler) but will for DXIL. In a DXIL+SPIRV merged binary, the texture is marked as combined sampler: ESHRegisterType_IsCombinedSampler and the separate sampler will only be available with DXIL bindings.
+- In DXIL, samplers and textures are always separated, there exist no combined samplers. As such, they will be presented as two separate registers. When SPIRV is combined or used, it will merge the texture by name into a combined sampler. In this case, the separate sampler itself will not exist for SPIRV (only the texture ala combined sampler) but will for DXIL. In a DXIL+SPIRV merged binary, the texture is marked as combined sampler: EGfxRegisterType_IsCombinedSampler and the separate sampler will only be available with DXIL bindings.
 - SPIRV has the concept of subpass inputs, but DXIL doesn't. This means the bindings of input attachments should only be valid for SPIRV.
 - DXIL has the concept of sampler comparison states, but SPIRV just sees them as samplers. If DXIL and SPIRV binaries are merged it will promote sampler register type to sampler comparison register type.
 - DXIL has more info about the texture primitive than SPIRV, though SPIRV can have a format (which DXIL doesn't have). This means that formatId will always come from SPIRV and texture primitive from DXIL. SPIRV's texture primitive is unreliable for use for DXIL.

@@ -89,7 +89,7 @@ Bool CAFile_read(
 	StreamCursor cursor = (StreamCursor) { 0 };
 	Buffer tmp = Buffer_createNull();
 	ListU16 dirParents = (ListU16) { 0 };                //mem-space parent index per directory
-	ListCAFileInfo fileMetas = (ListCAFileInfo) { 0 };    //packed parent + timestamp per file
+	ListCAFileInfo fileMetas = (ListCAFileInfo) { 0 };   //packed parent + timestamp per file
 	ListU16 dirHandles = (ListU16) { 0 };                //disk index -> live handle map
 	I32x4 iv = I32x4_zero();
 	DLFile names = (DLFile) { 0 };
@@ -450,7 +450,8 @@ Bool CAFile_read(
 				contentBuf.ptr >= content.cache.ptr &&
 				contentBuf.ptr < content.cache.ptr + Buffer_length(content.cache)
 			) {
-				Buffer subArea = Buffer_createRef(caFile->content.cache.ptrNonConst + (contentBuf.ptr - content.cache.ptr), bufl);
+				Buffer subArea =
+					Buffer_createRef(caFile->content.cache.ptrNonConst + (contentBuf.ptr - content.cache.ptr), bufl);
 				Buffer_memcpy(subArea, contentBuf);
 				gotoIfError3(clean, CAFile_setData(caFile, fileHandle, alloc, &subArea, e_rr));
 			}

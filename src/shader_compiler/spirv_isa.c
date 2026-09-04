@@ -1,0 +1,690 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//shader_compiler/spirv_isa.c
+//Offline SPIR-V -> AMD ISA by driving the bundled amdllpc directly, so OxC3 controls the exact flags and
+// output format the ISA snapshots are pinned against, rather than going through rga.exe's vk-spv-offline wrapper.
+//Shared by the CLI's `isa` category and the shader-compiler ISA snapshot test so both produce the exact same ISA text.
+
+#include "shader_compiler/spirv_isa.h"
+#include "shader_compiler/compiler.h"
+#include "platforms/process.h"
+#include "platforms/file.h"
+#include "platforms/logx.h"
+#include "types/container/string.h"
+#include "types/container/buffer.h"
+#include "types/container/list_impl.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/error.h"
+#include "types/base/time.h"
+#include "types/base/constants.h"
+
+Bool SpvISA_stageHasOfflinePath(Buffer spirv, const Allocator *alloc) {
+
+	//Reuse the compiler's SPIR-V entrypoint query (it maps each OpEntryPoint's execution model to an EGfxPipelineStage)
+	// rather than parsing the module here.
+	//The compiler argument is unused for the SPIR-V path, so NULL is fine.
+
+	ListCompilerEntrypoint entrypoints = (ListCompilerEntrypoint) { 0 };
+	Error err = Error_none();
+
+	if(!Compiler_getUniqueEntrypoints(NULL, EGfxBinaryType_SPIRV, spirv, true, &entrypoints, alloc, &err)) {
+		ListCompilerEntrypoint_freeUnderlying(&entrypoints, alloc);
+		return false;
+	}
+
+	//amdllpc lowers these to a single hardware stage offline: raster (vertex/hull/domain/geometry/pixel), compute and
+	// mesh/task.
+	//Ray tracing has no single-module offline path here (amdllpc emits an empty code section without the
+	// pipeline/traversal context), so a module qualifies only if every entrypoint is one of the above.
+
+	Bool offline = entrypoints.length > 0;
+
+	for(U64 i = 0; i < entrypoints.length && offline; ++i)
+		switch(entrypoints.ptr[i].stage) {
+
+			case EGfxPipelineStage_Vertex:
+			case EGfxPipelineStage_Hull:
+			case EGfxPipelineStage_Domain:
+			case EGfxPipelineStage_GeometryExt:
+			case EGfxPipelineStage_Pixel:
+			case EGfxPipelineStage_Compute:
+			case EGfxPipelineStage_MeshExt:
+			case EGfxPipelineStage_TaskExt:
+				break;
+
+			default:
+				offline = false;
+				break;
+		}
+
+	ListCompilerEntrypoint_freeUnderlying(&entrypoints, alloc);
+	return offline;
+}
+
+//Runs a tool bundled in the rga/ folder next to the executable (app-dir relative, so it resolves from any working
+// directory), falling back to a same-named tool on PATH.
+//Returns its exit code + captured stdout/stderr (caller frees).
+
+static Bool SpvISA_runTool(
+	CharString appRelPath, CharString sysName, const ListCharString *args,
+	Buffer *stdOut, Buffer *stdErr, I32 *exitCode, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	#ifndef SUPPORTS_PROCESS
+		(void) appRelPath; (void) sysName; (void) args; (void) stdOut; (void) stdErr; (void) exitCode; (void) alloc;
+		retError(clean, Error_unsupportedOperation(0, "SpvISA_runTool() process spawning isn't supported on this platform"));
+	#else
+
+		Buffer out = Buffer_createNull(), err = Buffer_createNull();
+		ProcessResult res = (ProcessResult) { 0 };
+		Error re = Error_none();
+
+		Bool launched = Process_run(appRelPath, true, args, NULL, 60 * SECOND, &out, &err, &res, &re);
+
+		if(!launched) {
+			Buffer_free(&out, alloc);
+			Buffer_free(&err, alloc);
+			out = Buffer_createNull(); err = Buffer_createNull(); res = (ProcessResult) { 0 };
+			launched = Process_runSystem(sysName, args, NULL, 60 * SECOND, &out, &err, &res, &re);
+		}
+
+		if(!launched) {
+			Buffer_free(&out, alloc);
+			Buffer_free(&err, alloc);
+			retError(clean, Error_notFound(
+				0, 0, "SpvISA_runTool() couldn't launch the tool (bundle it in rga/utils next to the exe, or put it on PATH)"
+			));
+		}
+
+		if(res.timedOut) {
+			Buffer_free(&out, alloc);
+			Buffer_free(&err, alloc);
+			retError(clean, Error_timedOut(0, 60 * SECOND, "SpvISA_runTool() tool timed out"));
+		}
+
+		//A child that fails to exec still counts as launched, because the fork itself succeeded: it exits 126 (found
+		// but not executable) or 127 (not found) without writing to either stream.
+		//The parent can't otherwise tell that apart from a tool that ran and stayed silent, and reporting it as a
+		// disassembly failure makes every shader fail on a platform that simply hasn't got the tool, instead of the
+		// caller's availability probe skipping the phase once.
+
+		if((res.exitCode == 126 || res.exitCode == 127) && !Buffer_length(out) && !Buffer_length(err)) {
+			Buffer_free(&out, alloc);
+			Buffer_free(&err, alloc);
+			retError(clean, Error_notFound(
+				1, 0, "SpvISA_runTool() the tool exists but couldn't be executed (not executable, or a missing loader)"
+			));
+		}
+
+		if(exitCode)
+			*exitCode = res.exitCode;
+
+		if(stdOut)
+			*stdOut = out;
+		else Buffer_free(&out, alloc);
+
+		if(stdErr)
+			*stdErr = err;
+		else Buffer_free(&err, alloc);
+
+	#endif
+
+clean:
+	return s_uccess;
+}
+
+//amdllpc's -gfxip only honors the major.minor.step form (e.g. "11.0.0"); the "gfxNNNN" name is silently ignored and
+// falls back to the default target.
+//Converts "gfx1100" -> "11.0.0" (last digit = step, previous = minor, rest = major).
+//A value already starting with a digit is treated as an explicit major.minor.step and passed through as-is.
+
+static Bool SpvISA_gfxipArg(CharString target, const Allocator *alloc, CharString *out, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	const U64 len = CharString_length(target);
+
+	if(!len)
+		retError(clean, Error_invalidParameter(0, 0, "SpvISA_gfxipArg()::target is required"));
+
+	if(target.ptr[0] >= '0' && target.ptr[0] <= '9') {        //Already a major.minor.step
+		gotoIfError3(clean, CharString_createCopy(target, alloc, out, e_rr));
+		goto clean;
+	}
+
+	const CharString gfx = CharString_createRefCStrConst("gfx");
+
+	if(!CharString_startsWithStringInsensitive(&target, &gfx, 0) || len < 3 + 3)
+		retError(clean, Error_invalidParameter(
+			0, 0, "SpvISA_gfxipArg() target must be a gfx target (e.g. gfx1100) or a major.minor.step (e.g. 11.0.0); "
+			"offline ISA supports gfx11xx (RDNA3) and gfx12xx (RDNA4)"
+		));
+
+	const C8 *digits = target.ptr + 3;
+	const U64 digitCount = len - 3;
+
+	for(U64 i = 0; i < digitCount; ++i)
+		if(digits[i] < '0' || digits[i] > '9')
+			retError(clean, Error_invalidParameter(0, 0, "SpvISA_gfxipArg() gfx target must be gfx followed by digits"));
+
+	//gfxWXYZ -> W(X).Y.Z: last digit = step, previous = minor, everything before = major
+
+	gotoIfError3(clean, CharString_format(
+		alloc, out, e_rr, "%.*s.%c.%c",
+		(int) (digitCount - 2), digits, digits[digitCount - 2], digits[digitCount - 1]
+	));
+
+clean:
+	return s_uccess;
+}
+
+//Parses the unsigned value (decimal or 0x-hex) after `key` on any line of the PAL metadata, returning the max
+// across occurrences (a pipeline can list several hardware stages) or 0 if the key never appears.
+
+static U64 SpvISA_metaU64(Buffer text, const C8 *key) {
+
+	const C8 *p = (const C8*) text.ptr;
+	const U64 n = Buffer_length(text);
+
+	U64 kl = 0;
+	while(key[kl]) ++kl;
+
+	U64 best = 0;
+
+	for(U64 i = 0; i + kl <= n; ++i) {
+
+		Bool match = true;
+
+		for(U64 j = 0; j < kl; ++j)
+			if(p[i + j] != key[j]) { match = false; break; }
+
+		if(!match)
+			continue;
+
+		U64 k = i + kl;
+
+		while(k < n && (p[k] == ' ' || p[k] == '\t'))
+			++k;
+
+		U64 v = 0;
+
+		if(k + 1 < n && p[k] == '0' && (p[k + 1] == 'x' || p[k + 1] == 'X')) {
+			k += 2;
+			for(; k < n; ++k) {
+				const C8 c = p[k];
+				if(c >= '0' && c <= '9') v = (v << 4) | (U64) (c - '0');
+				else if(c >= 'a' && c <= 'f') v = (v << 4) | (U64) (c - 'a' + 10);
+				else if(c >= 'A' && c <= 'F') v = (v << 4) | (U64) (c - 'A' + 10);
+				else break;
+			}
+		}
+
+		else for(; k < n && p[k] >= '0' && p[k] <= '9'; ++k)
+			v = v * 10 + (U64) (p[k] - '0');
+
+		if(v > best)
+			best = v;
+
+		i = k;
+	}
+
+	return best;
+}
+
+//Parses the "; encoding: [..]" comment LLVM's assembly writer appends under --show-encoding and returns the
+// number of bytes the instruction occupies.
+//A byte is either a literal (0x..) or a fixup placeholder (A), which is what a branch's target bytes are until
+// the assembler resolves them; both count towards the size, which is what the address stream needs.
+//Returns 0 when the line carries no encoding comment.
+//`codeLen` receives the length of the instruction text in front of the comment, with trailing padding removed.
+
+static U64 SpvISA_encodingBytes(const C8 *l, U64 len, U64 *codeLen) {
+
+	static const C8 key[] = "; encoding: [";
+	const U64 kl = sizeof(key) - 1;
+
+	U64 at = U64_MAX;
+
+	for(U64 i = 0; i + kl <= len; ++i) {
+
+		Bool match = true;
+
+		for(U64 j = 0; j < kl; ++j)
+			if(l[i + j] != key[j]) { match = false; break; }
+
+		if(match) { at = i; break; }
+	}
+
+	if(at == U64_MAX)
+		return 0;
+
+	U64 end = at;
+
+	while(end && (l[end - 1] == ' ' || l[end - 1] == '\t'))
+		--end;
+
+	if(codeLen)
+		*codeLen = end;
+
+	//One byte per comma separated token; the values themselves are never printed, only the size is used
+
+	U64 bytes = 0;
+	Bool inTok = false;
+
+	for(U64 i = at + kl; i < len && l[i] != ']'; ++i) {
+
+		if(l[i] == ',') { inTok = false; continue; }
+
+		if(l[i] == ' ' || l[i] == '\t')
+			continue;
+
+		if(!inTok) { inTok = true; ++bytes; }
+	}
+
+	return bytes;
+}
+
+//Trims amdllpc's assembly output down to what's useful for inspection and lines it up with the mesa spirv2isa
+// backend: a one-line register/resource-usage summary (SGPRs/VGPRs/code/instrs/scratch/lds, matching mesa's field
+// set, from the PAL metadata the assembly carries) followed by just the instructions and function labels.
+//Assembler directives, the s_code_end padding (.p2alignl/.fill) and the PAL metadata block are dropped.
+//Each instruction keeps its byte address, accumulated from the --show-encoding sizes.
+//The encoding WORDS aren't printed: a branch's target bytes are still unresolved fixups at this stage, so the
+// only honest choice is an address for every instruction rather than exact bytes for most and wrong ones for
+// branches. Sizes are exact either way, which is what keeps the addresses and the code total right.
+
+static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error *e_rr) {
+
+	Bool s_uccess = true;
+	CharString body = CharString_createNull();
+	CharString res = CharString_createNull();
+	CharString line = CharString_createNull();
+
+	const C8 *p = (const C8*) raw.ptr;
+	const U64 n = Buffer_length(raw);
+
+	const U64 sgpr    = SpvISA_metaU64(raw, ".sgpr_count:");
+	const U64 vgpr    = SpvISA_metaU64(raw, ".vgpr_count:");
+	const U64 lds     = SpvISA_metaU64(raw, ".lds_size:");
+	const U64 scratch = SpvISA_metaU64(raw, ".scratch_memory_size:");
+
+	//Target name from the leading `.amdgcn_target "amdgcn--amdpal--<t>"` directive
+
+	CharString mcpu = CharString_createRefCStrConst("gfx?");
+
+	{
+		static const C8 keyTarget[] = ".amdgcn_target";
+		const U64 kl = sizeof(keyTarget) - 1;
+
+		for(U64 i = 0; i + kl <= n; ++i) {
+
+			Bool match = true;
+
+			for(U64 j = 0; j < kl; ++j)
+				if(p[i + j] != keyTarget[j]) { match = false; break; }
+
+			if(!match)
+				continue;
+
+			//The triple is "amdgcn--amdpal--gfxNNNN"; the target is what follows the last separator
+
+			U64 e = i + kl;
+			while(e < n && p[e] != '\n' && p[e] != '"') ++e;
+			if(e >= n || p[e] != '"') break;
+
+			const U64 q = ++e;
+			while(e < n && p[e] != '"') ++e;
+
+			U64 sIdx = q;
+			for(U64 k = q; k + 1 < e; ++k)
+				if(p[k] == '-' && p[k + 1] == '-') sIdx = k + 2;
+
+			if(e > sIdx)
+				mcpu = CharString_createRefSizedConst(p + sIdx, e - sIdx, false);
+
+			break;
+		}
+	}
+
+	//Keep only real code: instruction lines (tab + mnemonic) and _amdgpu* function labels; drop directives, the
+	// s_code_end padding and the PAL metadata.
+	//Tally the instruction count and code size (mesa reports both) here; the size is the running byte offset, which
+	// is also what each instruction's printed address is.
+
+	const CharString amdgpuPfx = CharString_createRefCStrConst("_amdgpu");
+	const CharString symendSfx = CharString_createRefCStrConst("_symend:");
+
+	U64 instrCount = 0, codeSize = 0, lineStart = 0;
+
+	for(U64 i = 0; i <= n; ++i) {
+
+		if(i < n && p[i] != '\n')
+			continue;
+
+		U64 lineEnd = i;
+
+		if(lineEnd > lineStart && p[lineEnd - 1] == '\r')
+			--lineEnd;
+
+		const U64 len = lineEnd - lineStart;
+		const C8 *l = p + lineStart;
+		lineStart = i + 1;
+
+		//Instruction: a tab then a mnemonic letter (directives and .fill padding are a tab then '.')
+
+		const Bool isInstr =
+			len >= 2 && l[0] == '\t' && ((l[1] >= 'a' && l[1] <= 'z') || (l[1] >= 'A' && l[1] <= 'Z'));
+
+		U64 codeLen = len;
+
+		//Function label: `_amdgpu..._main:` (but not the `_symend:` end marker).
+		//Under --show-encoding a label carries a trailing `; @name` comment, so the name is measured without it.
+
+		Bool keep = isInstr;
+
+		if(!keep && len >= 2 && l[0] == '_') {
+
+			U64 e = 0;
+			while(e < len && l[e] != ';') ++e;
+			while(e && (l[e - 1] == ' ' || l[e - 1] == '\t')) --e;
+
+			if(e >= 2 && l[e - 1] == ':') {
+
+				const CharString lbl = CharString_createRefSizedConst(l, e, false);
+
+				keep =
+					CharString_startsWithStringInsensitive(&lbl, &amdgpuPfx, 0) &&
+					!CharString_endsWithStringInsensitive(&lbl, &symendSfx, 0);
+
+				if(keep)
+					codeLen = e;
+			}
+		}
+
+		if(!keep)
+			continue;
+
+		CharString_free(&line, alloc);
+
+		if(isInstr) {
+
+			++instrCount;
+
+			const U64 bytes = SpvISA_encodingBytes(l, len, &codeLen);
+
+			if(bytes) {
+
+				//The instruction is left justified in 59 columns after the tab, so every address starts at the same column
+
+				gotoIfError3(clean, CharString_format(
+					alloc, &line, e_rr, "\t%.*s", (int) (codeLen - 1), l + 1
+				));
+
+				while(CharString_length(line) < 60)
+					gotoIfError3(clean, CharString_append(&line, ' ', alloc, e_rr));
+
+				CharString addr = CharString_createNull();
+				gotoIfError3(clean, CharString_format(alloc, &addr, e_rr, "// %012"PRIX64, codeSize));
+
+				if(!CharString_appendString(&line, &addr, alloc, e_rr)) {
+					CharString_free(&addr, alloc);
+					retError(clean, Error_invalidState(0, "SpvISA_clean() couldn't append the address"));
+				}
+
+				CharString_free(&addr, alloc);
+				codeSize += bytes;
+			}
+
+			//No encoding comment: keep the instruction as written rather than inventing an address
+
+			else gotoIfError3(clean, CharString_format(alloc, &line, e_rr, "%.*s", (int) codeLen, l));
+		}
+
+		else gotoIfError3(clean, CharString_format(alloc, &line, e_rr, "%.*s", (int) codeLen, l));
+
+		gotoIfError3(clean, CharString_appendString(&body, &line, alloc, e_rr));
+		gotoIfError3(clean, CharString_append(&body, '\n', alloc, e_rr));
+	}
+
+	gotoIfError3(clean, CharString_format(
+		alloc, &res, e_rr,
+		"; %.*s  SGPRs %"PRIu64"  VGPRs %"PRIu64"  code %"PRIu64" B  instrs %"PRIu64"  scratch %"PRIu64"  lds %"PRIu64"\n",
+		(int) CharString_length(mcpu), mcpu.ptr, sgpr, vgpr, codeSize, instrCount, scratch, lds
+	));
+
+	gotoIfError3(clean, CharString_appendString(&res, &body, alloc, e_rr));
+
+	gotoIfError3(clean, Buffer_createCopy(CharString_bufferConst(res), alloc, out, e_rr));
+
+clean:
+	CharString_free(&line, alloc);
+	CharString_free(&body, alloc);
+	CharString_free(&res, alloc);
+	return s_uccess;
+}
+
+Bool SpvISA_disassemble(
+	Buffer spirv, CharString gfxTarget, CharString entrypoint, Buffer *isaOut, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+
+	CharString tmpDir = CharString_createNull(), tmpSpv = CharString_createNull(), tmpAsm = CharString_createNull();
+	CharString gfxip = CharString_createNull(), gfxipArg = CharString_createNull(), inputArg = CharString_createNull();
+	Buffer asmText = Buffer_createNull();
+	Buffer llpcOut = Buffer_createNull(), llpcErr = Buffer_createNull();
+	ListCharString llpcArgs = (ListCharString) { 0 };
+	Bool madeTmp = false;
+
+	if(!isaOut || isaOut->ptr)
+		retError(clean, Error_invalidParameter(2, 0, "SpvISA_disassemble()::isaOut must be an empty buffer"));
+
+	gotoIfError3(clean, SpvISA_gfxipArg(gfxTarget, alloc, &gfxip, e_rr));
+
+	//Work in a fresh temp dir so concurrent invocations don't collide on the shader.spv / shader.s names
+
+	gotoIfError3(clean, CharString_format(alloc, &tmpDir, e_rr, ".oxc3_isa_%"PRIu64, (U64) Time_now()));
+	gotoIfError3(clean, File_add(&tmpDir, EFileType_Folder, false, alloc, e_rr));
+	madeTmp = true;
+
+	gotoIfError3(clean, CharString_format(
+		alloc, &tmpSpv, e_rr, "%.*s/shader.spv", (int) CharString_length(tmpDir), tmpDir.ptr
+	));
+	gotoIfError3(clean, CharString_format(
+		alloc, &tmpAsm, e_rr, "%.*s/shader.s", (int) CharString_length(tmpDir), tmpDir.ptr
+	));
+	gotoIfError3(clean, File_write(&spirv, &tmpSpv, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+
+	const Bool isWin = _PLATFORM_TYPE == PLATFORM_WINDOWS;
+
+	//amdllpc -gfxip=<major.minor.step> --auto-layout-desc --filetype=asm --show-encoding <shader.spv[,entrypoint]>
+	//  -o <shader.s>
+	//SPIR-V carries no pipeline layout, so --auto-layout-desc derives descriptor bindings from resource usage.
+	//The "<spv>,<entrypoint>" form selects one entrypoint of a multi-entry (library) module; without it amdllpc
+	// lowers only the module's first entrypoint, which would misrepresent every other stage in a library.
+	//--filetype=asm makes amdllpc emit the ISA as text itself, which is why no separate disassembler is needed;
+	// --show-encoding keeps the per instruction encodings the addresses and code size are derived from.
+
+	gotoIfError3(clean, CharString_format(alloc, &gfxipArg, e_rr, "-gfxip=%.*s", (int) CharString_length(gfxip), gfxip.ptr));
+
+	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, gfxipArg, alloc, e_rr));
+	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, CharString_createRefCStrConst("--auto-layout-desc"), alloc, e_rr));
+	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, CharString_createRefCStrConst("--filetype=asm"), alloc, e_rr));
+	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, CharString_createRefCStrConst("--show-encoding"), alloc, e_rr));
+	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, CharString_createRefCStrConst("-o"), alloc, e_rr));
+	gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, tmpAsm, alloc, e_rr));
+
+	//Only use the "<spv>,<entrypoint>" selector when `entrypoint` is genuinely one of the module's OpEntryPoints.
+	//The oiSH identifier keeps the original HLSL name, but a single-entry module's SPIR-V is normalized to "main", so a
+	// mismatched name would make amdllpc error ("failed to identify shader stages by entry-point").
+	//When it doesn't match, dropping the selector lets amdllpc lower the sole entrypoint; the selector only
+	// disambiguates a library.
+
+	Bool useEntry = false;
+
+	if(CharString_length(entrypoint)) {
+
+		ListCompilerEntrypoint eps = (ListCompilerEntrypoint) { 0 };
+		Error epErr = Error_none();
+
+		if(Compiler_getUniqueEntrypoints(NULL, EGfxBinaryType_SPIRV, spirv, true, &eps, alloc, &epErr))
+			for(U64 i = 0; i < eps.length; ++i)
+				if(CharString_equalsStringSensitive(&eps.ptr[i].name, &entrypoint)) { useEntry = true; break; }
+
+		ListCompilerEntrypoint_freeUnderlying(&eps, alloc);
+	}
+
+	if(useEntry) {
+		gotoIfError3(clean, CharString_format(
+			alloc, &inputArg, e_rr, "%.*s,%.*s",
+			(int) CharString_length(tmpSpv), tmpSpv.ptr, (int) CharString_length(entrypoint), entrypoint.ptr
+		));
+		gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, inputArg, alloc, e_rr));
+	}
+
+	else gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, tmpSpv, alloc, e_rr));
+
+	I32 llpcExit = 0;
+	gotoIfError3(clean, SpvISA_runTool(
+		CharString_createRefCStrConst(isWin ? "rga/utils/amdllpc.exe" : "rga/utils/amdllpc"),
+		CharString_createRefCStrConst(isWin ? "amdllpc.exe" : "amdllpc"),
+		&llpcArgs, &llpcOut, &llpcErr, &llpcExit, alloc, e_rr
+	));
+
+	//amdllpc can exit 0 yet emit nothing (an unsupported gfxip prints "Invalid gfxip" and produces no output), so a
+	// missing/empty listing is a failure too.
+	//Surface amdllpc's own diagnostic (stderr, else stdout).
+
+	const Bool asmOk =
+		!llpcExit && File_read(&tmpAsm, 1 * SECOND, 0, 0, &fileHandleType, &asmText, NULL) && Buffer_length(asmText);
+
+	if(!asmOk) {
+
+		const Buffer diag = Buffer_length(llpcErr) ? llpcErr : llpcOut;
+
+		//The exit code goes out even when both streams are empty, because that combination is the interesting one:
+		// a tool that ran and complained says so on stderr, while one that produced nothing anywhere died before it
+		// could, and only the code distinguishes those.
+
+		if(Buffer_length(diag))
+			Log_warnLnx("amdllpc: exit %"PRIi32", %.*s", llpcExit, (int) Buffer_length(diag), (const C8*) diag.ptr);
+
+		else Log_warnLnx(
+			"amdllpc: exit %"PRIi32" with no output on stdout, stderr or %.*s",
+			llpcExit, (int) CharString_length(tmpAsm), tmpAsm.ptr
+		);
+
+		retError(clean, Error_invalidState(
+			1, "SpvISA_disassemble() amdllpc produced no ISA (unsupported gfxip? offline ISA supports gfx11xx/gfx12xx)"
+		));
+	}
+
+	//Trim to a register-usage summary + the instructions; the directives, PAL metadata and padding aren't useful here
+
+	gotoIfError3(clean, SpvISA_clean(asmText, alloc, isaOut, e_rr));
+
+clean:
+	if(madeTmp)
+		File_remove(&tmpDir, 1 * SECOND, alloc, NULL);
+
+	CharString_free(&tmpDir, alloc);
+	CharString_free(&tmpSpv, alloc);
+	CharString_free(&tmpAsm, alloc);
+	CharString_free(&gfxip, alloc);
+	CharString_free(&gfxipArg, alloc);
+	CharString_free(&inputArg, alloc);
+	Buffer_free(&asmText, alloc);
+	Buffer_free(&llpcOut, alloc);
+	Buffer_free(&llpcErr, alloc);
+	ListCharString_free(&llpcArgs, alloc);        //Elements are refs into owned strings freed above
+	return s_uccess;
+}
+
+Bool SpvISA_listSupportedTargets(const Allocator *alloc, ListCharString *out, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	//Candidate AMD targets across GCN..RDNA4; the probe keeps only the ones this amdllpc build accepts.
+	//amdllpc validates -gfxip up front (rejecting unsupported ones with "Invalid gfxip") even with no input file, so no
+	// shader is needed.
+
+	static const struct { const C8 *gfx; const C8 *arch; } candidates[] = {
+		{ "gfx900", "GCN5/Vega" }, { "gfx906", "GCN5/Vega20" },
+		{ "gfx1010", "RDNA1" }, { "gfx1030", "RDNA2" }, { "gfx1032", "RDNA2" }, { "gfx1034", "RDNA2" }, { "gfx1035", "RDNA2" },
+		{ "gfx1100", "RDNA3" }, { "gfx1101", "RDNA3" }, { "gfx1102", "RDNA3" }, { "gfx1103", "RDNA3" },
+		{ "gfx1150", "RDNA3.5" },
+		{ "gfx1200", "RDNA4" }, { "gfx1201", "RDNA4" }
+	};
+
+	const Bool isWin = _PLATFORM_TYPE == PLATFORM_WINDOWS;
+	const CharString needle = CharString_createRefCStrConst("Invalid gfxip");
+
+	CharString gfxip = CharString_createNull(), gfxipArg = CharString_createNull(), line = CharString_createNull();
+	ListCharString args = (ListCharString) { 0 };
+	Buffer llpcOut = Buffer_createNull(), llpcErr = Buffer_createNull();
+
+	for(U64 i = 0; i < sizeof(candidates) / sizeof(candidates[0]); ++i) {
+
+		CharString_free(&gfxip, alloc);
+		CharString_free(&gfxipArg, alloc);
+		Buffer_free(&llpcOut, alloc);
+		Buffer_free(&llpcErr, alloc);
+		ListCharString_free(&args, alloc);
+
+		gotoIfError3(clean, SpvISA_gfxipArg(CharString_createRefCStrConst(candidates[i].gfx), alloc, &gfxip, e_rr));
+		gotoIfError3(clean, CharString_format(
+			alloc, &gfxipArg, e_rr, "-gfxip=%.*s", (int) CharString_length(gfxip), gfxip.ptr
+		));
+		gotoIfError3(clean, ListCharString_pushBack(&args, gfxipArg, alloc, e_rr));
+
+		I32 exitCode = 0;
+		gotoIfError3(clean, SpvISA_runTool(
+			CharString_createRefCStrConst(isWin ? "rga/utils/amdllpc.exe" : "rga/utils/amdllpc"),
+			CharString_createRefCStrConst(isWin ? "amdllpc.exe" : "amdllpc"),
+			&args, &llpcOut, &llpcErr, &exitCode, alloc, e_rr
+		));
+
+		//Supported iff amdllpc didn't reject the gfxip (it then just errors on the missing input file, which is fine)
+
+		const CharString o = CharString_createRefSizedConst((const C8*) llpcOut.ptr, Buffer_length(llpcOut), false);
+		const CharString eo = CharString_createRefSizedConst((const C8*) llpcErr.ptr, Buffer_length(llpcErr), false);
+
+		if(CharString_containsStringSensitive(&o, &needle, 0, 0) || CharString_containsStringSensitive(&eo, &needle, 0, 0))
+			continue;
+
+		gotoIfError3(clean, CharString_format(alloc, &line, e_rr, "%s (%s)", candidates[i].gfx, candidates[i].arch));
+		gotoIfError3(clean, ListCharString_pushBack(out, line, alloc, e_rr));
+		line = CharString_createNull();        //Owned by `out` now
+	}
+
+clean:
+	CharString_free(&gfxip, alloc);
+	CharString_free(&gfxipArg, alloc);
+	CharString_free(&line, alloc);
+	ListCharString_free(&args, alloc);
+	Buffer_free(&llpcOut, alloc);
+	Buffer_free(&llpcErr, alloc);
+	return s_uccess;
+}

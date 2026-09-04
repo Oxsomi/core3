@@ -55,7 +55,7 @@
 
 //Call HLSL reflection API to acquire functions + annotations
 
-ESHPipelineStage Compiler_parseStage(CharString stageName) {
+EGfxPipelineStage Compiler_parseStage(CharString stageName) {
 
 	Buffer buf = CharString_bufferConst(stageName);
 	U64 stageNameLen = CharString_length(stageName);
@@ -69,74 +69,74 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 		case C8x4('v', 'e', 'r', 't'):        //vertex
 
 			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('e', 'x'))
-				return ESHPipelineStage_Vertex;
+				return EGfxPipelineStage_Vertex;
 
 			break;
 
 		case C8x4('d', 'o', 'm', 'a'):        //domain
 
 			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('i', 'n'))
-				return ESHPipelineStage_Domain;
+				return EGfxPipelineStage_Domain;
 
 			break;
 
 		case C8x4('p', 'i', 'x', 'e'):        //pixel
 
 			if(stageNameLen == 5 && stageName.ptr[4] == 'l')
-				return ESHPipelineStage_Pixel;
+				return EGfxPipelineStage_Pixel;
 
 			break;
 
 		case C8x4('g', 'e', 'o', 'm'):        //geometry
 
 			if(stageNameLen == 8 && Buffer_readU32(buf, 4, NULL, NULL) == C8x4('e', 't', 'r', 'y'))
-				return ESHPipelineStage_GeometryExt;
+				return EGfxPipelineStage_GeometryExt;
 
 			break;
 
 		case C8x4('c', 'o', 'm', 'p'):        //compute
 
 			if(stageNameLen == 7 && Buffer_readU32(buf, 3, NULL, NULL) == C8x4('p', 'u', 't', 'e'))
-				return ESHPipelineStage_Compute;
+				return EGfxPipelineStage_Compute;
 
 			break;
 
 		case C8x4('m', 'e', 's', 'h'):        //mesh
-			if(stageNameLen == 4)            return ESHPipelineStage_MeshExt;
+			if(stageNameLen == 4)            return EGfxPipelineStage_MeshExt;
 			break;
 
 		case C8x4('t', 'a', 's', 'k'):        //task
-			if(stageNameLen == 4)            return ESHPipelineStage_TaskExt;
+			if(stageNameLen == 4)            return EGfxPipelineStage_TaskExt;
 			break;
 
 		case C8x4('h', 'u', 'l', 'l'):        //hull
-			if(stageNameLen == 4)            return ESHPipelineStage_Hull;
+			if(stageNameLen == 4)            return EGfxPipelineStage_Hull;
 			break;
 
 		//Raytracing
 
 		case C8x4('m', 'i', 's', 's'):        //miss
-			if(stageNameLen == 4)            return ESHPipelineStage_MissExt;
+			if(stageNameLen == 4)            return EGfxPipelineStage_MissExt;
 			break;
 
 		case C8x4('a', 'n', 'y', 'h'):        //anyhit
 
 			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('i', 't'))
-				return ESHPipelineStage_AnyHitExt;
+				return EGfxPipelineStage_AnyHitExt;
 
 			break;
 
 		case C8x4('c', 'l', 'o', 's'):        //closesthit
 
 			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL, NULL) == C8x8('o', 's', 'e', 's', 't', 'h', 'i', 't'))
-				return ESHPipelineStage_ClosestHitExt;
+				return EGfxPipelineStage_ClosestHitExt;
 
 			break;
 
 		case C8x4('c', 'a', 'l', 'l'):        //callable
 
 			if(stageNameLen == 8 && Buffer_readU32(buf, 4, NULL, NULL) == C8x4('a', 'b', 'l', 'e'))
-				return ESHPipelineStage_CallableExt;
+				return EGfxPipelineStage_CallableExt;
 
 			break;
 
@@ -147,19 +147,19 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 				Buffer_readU64(buf, 4, NULL, NULL) == C8x8('e', 'n', 'e', 'r', 'a', 't', 'i', 'o') &&
 				stageName.ptr[12] == 'n'
 			)
-				return ESHPipelineStage_RaygenExt;
+				return EGfxPipelineStage_RaygenExt;
 
 			break;
 
 		case C8x4('i', 'n', 't', 'e'):        //intersection
 
 			if(stageNameLen == 12 && Buffer_readU64(buf, 4, NULL, NULL) == C8x8('r', 's', 'e', 'c', 't', 'i', 'o', 'n'))
-				return ESHPipelineStage_IntersectionExt;
+				return EGfxPipelineStage_IntersectionExt;
 
 			break;
 	}
 
-	return ESHPipelineStage_Count;
+	return EGfxPipelineStage_Count;
 }
 
 ESHVendor Compiler_parseVendor(CharString vendor) {
@@ -380,7 +380,9 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 					case C8x8('y', 'M', 'i', 'c', 'r', 'o', 'm', 'a'):        //RayMicromapOpacity
 
 						if(
-							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL, NULL) == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
+							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL, NULL) == C8x8(
+								'p', 'O', 'p', 'a', 'c', 'i', 't', 'y'
+							)
 						)
 							return ESHExtension_RayMicromapOpacity;
 
@@ -661,11 +663,11 @@ Bool Compiler_parseShaderStageAnnot(
 	
 	const C8 *annotStart = NULL;
 	const C8 *annotEnd = NULL;
-	ESHPipelineStage stage = ESHPipelineStage_Count;
+	EGfxPipelineStage stage = EGfxPipelineStage_Count;
 
 	Bool s_uccess = true;
 
-	if (entry.entry.stage != ESHPipelineStage_Count)
+	if (entry.entry.stage != EGfxPipelineStage_Count)
 		retError(clean, Error_invalidParameter(
 			0, 0, "Compiler_parseShaderStageAnnot() shader already had shader or stage annotation"
 		));
@@ -687,7 +689,7 @@ Bool Compiler_parseShaderStageAnnot(
 
 	stage = Compiler_parseStage(CharString_createRefSizedConst(annotStart, annotEnd - annotStart, false));
 
-	if (stage == ESHPipelineStage_Count)
+	if (stage == EGfxPipelineStage_Count)
 		retError(clean, Error_invalidParameter(
 			0, 1, "Compiler_parseShaderStageAnnot() unrecognized stage in shader annotation"
 		));
@@ -700,7 +702,7 @@ Bool Compiler_parseShaderStageAnnot(
 
 	entry.runtimeFlags &= (U8)~(ESHEntryRuntimeFlag_IsRt | ESHEntryRuntimeFlag_ContainsGfxOrComp);
 
-	if (stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt)
+	if (stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt)
 		entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_IsRt;
 
 	else entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_ContainsGfxOrComp;
@@ -859,15 +861,15 @@ clean:
 Bool Compiler_registerBinaryType(U8 *binaryTypes, CharString name, Error *e_rr) {
 
 	Bool s_uccess = true;
-	ESHBinaryType type = ESHBinaryType_Count;
+	EGfxBinaryType type = EGfxBinaryType_Count;
 
 	//"spv" / "spirv" -> SPIRV, "dxil" -> DXIL (case insensitive)
 
 	if(CharString_equalsCStringInsensitive(&name, "spv") || CharString_equalsCStringInsensitive(&name, "spirv"))
-		type = ESHBinaryType_SPIRV;
+		type = EGfxBinaryType_SPIRV;
 
 	else if(CharString_equalsCStringInsensitive(&name, "dxil"))
-		type = ESHBinaryType_DXIL;
+		type = EGfxBinaryType_DXIL;
 
 	else retError(clean, Error_invalidParameter(
 		0, 1, "Compiler_registerBinaryType() unrecognized binary type (expected \"spv\"/\"spirv\" or \"dxil\")"

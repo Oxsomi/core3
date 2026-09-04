@@ -312,6 +312,20 @@ else()
 	set(target "x64")
 endif()
 
+# AMD prebuilds the offline shader compiler (amdllpc, vendored by the Radeon GPU Analyzer package) for Windows and
+# Linux x64 only, and conanfile.py requires the package under exactly that condition.
+# Everything that spawns it or pins its output reads this one variable, so the rule can't drift between the targets
+# that depend on it: a build that advertises the isa commands without the compiler having been fetched only fails
+# once something tries to run one.
+
+if((CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND target STREQUAL "x64")
+	set(OfflineIsaSupported ON)
+else()
+	set(OfflineIsaSupported OFF)
+endif()
+
+message("-- Offline AMD ISA (amdllpc): ${OfflineIsaSupported}")
+
 # wasm: no dlopen without MAIN_MODULE (which taxes every module), so both dynamic linking
 # flavors are off, same as android.
 

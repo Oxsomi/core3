@@ -30,35 +30,56 @@
 TListImpl(SHRegister);
 TListImpl(SHRegisterRuntime);
 
-ESHTexturePrimitive ESHTexturePrimitive_fromTextureFormat(ETextureFormat format) {
+EGfxTexturePrimitive EGfxTexturePrimitive_fromTextureFormat(ETextureFormat format) {
 
 	ETexturePrimitive prim = ETextureFormat_getPrimitive(format);
 
 	U8 channels = ETextureFormat_getChannels(format);
-	ESHTexturePrimitive res = (channels - 1) << ESHTexturePrimitive_ComponentShift;
+	EGfxTexturePrimitive res = (channels - 1) << EGfxTexturePrimitive_ComponentShift;
 
 	switch(prim) {
 
-		default:                        return 0xFF;
-		case ETexturePrimitive_UInt:    return res | ESHTexturePrimitive_UInt;
-		case ETexturePrimitive_SInt:    return res | ESHTexturePrimitive_SInt;
-		case ETexturePrimitive_SNorm:    return res | ESHTexturePrimitive_SNorm;
+		default:                         return 0xFF;
+		case ETexturePrimitive_UInt:     return res | EGfxTexturePrimitive_UInt;
+		case ETexturePrimitive_SInt:     return res | EGfxTexturePrimitive_SInt;
+		case ETexturePrimitive_SNorm:    return res | EGfxTexturePrimitive_SNorm;
 
 		case ETexturePrimitive_Compressed:
 		case ETexturePrimitive_Float:
-			return res | ESHTexturePrimitive_Float;
+			return res | EGfxTexturePrimitive_Float;
 
 		case ETexturePrimitive_UNorm:
 		case ETexturePrimitive_UNormBGR:
-			return res | ESHTexturePrimitive_UNorm;
+			return res | EGfxTexturePrimitive_UNorm;
 	}
+}
+
+U64 SHRegister_arrayCount(const ListU32 *arrays) {
+
+	U64 count = 1;
+
+	for(U64 i = 0; i < (arrays ? arrays->length : 0); ++i) {
+
+		const U32 dim = arrays->ptr[i];
+
+		if(!dim)
+			return 0;
+
+		if(count > U64_MAX / dim)
+			return U64_MAX;
+
+		count *= dim;
+	}
+
+	return count;
 }
 
 Bool SHFile_detectDuplicate(
 	const ListSHRegisterRuntime *info,
 	CharString name,
-	SHBindings bindings,
-	ESHRegisterType type,
+	const ListU32 *arrays,
+	GfxBindings bindings,
+	EGfxRegisterType type,
 	Error *e_rr
 ) {
 
@@ -68,44 +89,25 @@ Bool SHFile_detectDuplicate(
 	Bool anyDxilBinding = false;
 	Bool anySpvBinding = false;
 
-	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+	for(U8 i = 0; i < EGfxBinaryType_Count; ++i)
 		if(bindings.arr[i].space != U32_MAX || bindings.arr[i].binding != U32_MAX) {
 
 			anyBinding = true;
 
-			if(i == ESHBinaryType_DXIL)
+			if(i == EGfxBinaryType_DXIL)
 				anyDxilBinding = true;
 
-			if(i == ESHBinaryType_SPIRV)
+			if(i == EGfxBinaryType_SPIRV)
 				anySpvBinding = true;
 		}
 
-	if (!anyBinding && type != ESHRegisterType_PushConstants)
+	if (!anyBinding && type != EGfxRegisterType_PushConstants)
 		retError(clean, Error_invalidState(0, "SHFile_detectDuplicate()::bindings contained no valid bindings"));
 
 	if(!CharString_length(name))
 		retError(clean, Error_invalidParameter(1, 0, "SHFile_detectDuplicate()::name is required"));
 
-	//u, s, b, t registers in DXIL
-
-	U8 registerBindingType = 0;
-
-	switch (type & ESHRegisterType_TypeMask) {
-
-		case ESHRegisterType_Sampler:
-		case ESHRegisterType_SamplerComparisonState:
-			registerBindingType = 2;
-			break;
-
-		case ESHRegisterType_ConstantBuffer:
-		case ESHRegisterType_PushConstants:
-			registerBindingType = 3;
-			break;
-
-		default:
-			registerBindingType = type & ESHRegisterType_IsWrite ? 1 : 0;
-			break;
-	}
+	const U64 count = SHRegister_arrayCount(arrays);
 
 	for(U64 i = 0; i < info->length; ++i) {
 
@@ -117,12 +119,18 @@ Bool SHFile_detectDuplicate(
 
 		else {
 
+			const U64 regCount = SHRegister_arrayCount(&reg.arrays);
+
 			if(anySpvBinding) {
 
-				SHBinding dstBinding = reg.reg.bindings.arr[ESHBinaryType_SPIRV];
-				SHBinding srcBinding = bindings.arr[ESHBinaryType_SPIRV];
+				GfxBinding dstBinding = reg.reg.bindings.arr[EGfxBinaryType_SPIRV];
+				GfxBinding srcBinding = bindings.arr[EGfxBinaryType_SPIRV];
 
-				if(dstBinding.binding == srcBinding.binding && dstBinding.space == srcBinding.space)
+				if(
+					GfxBinding_overlaps(
+						dstBinding, reg.reg.registerType, regCount, srcBinding, type, count, EGfxBinaryType_SPIRV
+					)
+				)
 					retError(clean, Error_invalidState(
 						0, "SHFile_detectDuplicate() SPIRV space & binding combo was already found in SHFile"
 					));
@@ -130,34 +138,16 @@ Bool SHFile_detectDuplicate(
 
 			if (anyDxilBinding) {
 
-				SHBinding dstBinding = reg.reg.bindings.arr[ESHBinaryType_DXIL];
-				SHBinding srcBinding = bindings.arr[ESHBinaryType_DXIL];
-
-				U8 registerBindingTypei = 0;
-
-				switch (reg.reg.registerType & ESHRegisterType_TypeMask) {
-
-					case ESHRegisterType_Sampler:
-					case ESHRegisterType_SamplerComparisonState:
-						registerBindingTypei = 2;
-						break;
-
-					case ESHRegisterType_ConstantBuffer:
-					case ESHRegisterType_PushConstants:
-						registerBindingTypei = 3;
-						break;
-
-					default:
-						registerBindingTypei = reg.reg.registerType & ESHRegisterType_IsWrite ? 1 : 0;
-						break;
-				}
+				GfxBinding dstBinding = reg.reg.bindings.arr[EGfxBinaryType_DXIL];
+				GfxBinding srcBinding = bindings.arr[EGfxBinaryType_DXIL];
 
 				if(
-					registerBindingType == registerBindingTypei &&
-					dstBinding.binding == srcBinding.binding && dstBinding.space == srcBinding.space
+					GfxBinding_overlaps(
+						dstBinding, reg.reg.registerType, regCount, srcBinding, type, count, EGfxBinaryType_DXIL
+					)
 				)
 					retError(clean, Error_invalidState(
-						0, "SHFile_detectDuplicate() DXIL space & binding combo was already found in SHFile"
+						0, "SHFile_detectDuplicate() DXIL register range overlaps one already in SHFile"
 					));
 			}
 		}
@@ -171,8 +161,8 @@ Bool SHFile_validateRegister(
 	const ListSHRegisterRuntime *info,
 	CharString *name,
 	ListU32 *arrays,
-	SHBindings bindings,
-	ESHRegisterType type,
+	GfxBindings bindings,
+	EGfxRegisterType type,
 	Error *e_rr
 ) {
 
@@ -186,7 +176,7 @@ Bool SHFile_validateRegister(
 			1, arrays->length, 32, "SHFile_validateRegister()::arrays.length should be [1, 32]"
 		));
 
-	gotoIfError3(clean, SHFile_detectDuplicate(info, *name, bindings, type, e_rr));
+	gotoIfError3(clean, SHFile_detectDuplicate(info, *name, arrays, bindings, type, e_rr));
 
 clean:
 	return s_uccess;
@@ -221,7 +211,7 @@ Bool SHRegisterRuntime_hash(
 
 	//Compute hash to find register
 
-	static_assert(sizeof(SHRegister) == sizeof(U64) * (ESHBinaryType_Count + 1), "Expected SHRegister as U64[N + 1]");
+	static_assert(sizeof(SHRegister) == sizeof(U64) * (EGfxBinaryType_Count + 1), "Expected SHRegister as U64[N + 1]");
 
 	U64 hash = sbFile ? sbFile->hash : Buffer_fnv1a64Offset;
 
@@ -229,10 +219,10 @@ Bool SHRegisterRuntime_hash(
 	//The bytes go through a properly aligned local instead.
 	//The static_assert above keeps the sizes in sync.
 
-	U64 regU64[ESHBinaryType_Count + 1];
+	U64 regU64[EGfxBinaryType_Count + 1];
 	Buffer_memcpy(Buffer_createRef(regU64, sizeof(regU64)), Buffer_createRefConst(registr, sizeof(SHRegister)));
 
-	for(U64 i = 0; i < ESHBinaryType_Count + 1; ++i)
+	for(U64 i = 0; i < EGfxBinaryType_Count + 1; ++i)
 		hash = Buffer_fnv1a64Single(regU64[i], hash);
 
 	hash = Buffer_fnv1a64Single(CharString_length(*name) | ((arrays ? arrays->length : 0) << 32), hash);
@@ -277,7 +267,7 @@ Bool SHBinaryInfo_addRegisterBase(
 	ListSHRegisterRuntime *registers,
 	CharString *name,
 	ListU32 *arrays,
-	SHBindings bindings,
+	GfxBindings bindings,
 	SHRegister registr,
 	SBFile *sbFile,
 	const Allocator *alloc,
@@ -359,16 +349,6 @@ clean:
 	return s_uccess;
 }
 
-SHBindings SHBindings_dummy() {
-
-	SHBindings bindings = (SHBindings) { 0 };
-
-	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
-		bindings.arr[i] = (SHBinding) { .binding = U32_MAX, .space = U32_MAX };
-
-	return bindings;
-}
-
 Bool ListSHRegisterRuntime_createCopyUnderlying(
 	const ListSHRegisterRuntime *orig,
 	const Allocator *alloc,
@@ -418,7 +398,7 @@ Bool ListSHRegisterRuntime_addSampler(
 	Bool isSamplerComparisonState,
 	CharString *name,
 	ListU32 *arrays,
-	SHBindings bindings,
+	GfxBindings bindings,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -430,7 +410,7 @@ Bool ListSHRegisterRuntime_addSampler(
 		(SHRegister) {
 			.bindings = bindings,
 			.registerType = (U8)(
-				isSamplerComparisonState ? ESHRegisterType_SamplerComparisonState : ESHRegisterType_Sampler
+				isSamplerComparisonState ? EGfxRegisterType_SamplerComparisonState : EGfxRegisterType_Sampler
 			),
 			.isUsedFlag = isUsedFlag
 		},
@@ -448,7 +428,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 	CharString *name,
 	ListU32 *arrays,
 	SBFile *sbFile,
-	SHBindings bindings,
+	GfxBindings bindings,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -521,8 +501,8 @@ Bool ListSHRegisterRuntime_addBuffer(
 		(SHRegister) {
 			.bindings = bindings,
 			.registerType = (U8)(
-				(ESHRegisterType_BufferStart + registerType) |
-				(isWrite ? ESHRegisterType_IsWrite : 0)
+				(EGfxRegisterType_BufferStart + registerType) |
+				(isWrite ? EGfxRegisterType_IsWrite : 0)
 			),
 			.isUsedFlag = isUsedFlag
 		},
@@ -542,11 +522,11 @@ Bool ListSHRegisterRuntime_addTextureBase(
 	Bool isCombinedSampler,
 	Bool isWrite,
 	U8 isUsedFlag,
-	ESHTexturePrimitive textureFormatPrimitive,
+	EGfxTexturePrimitive textureFormatPrimitive,
 	ETextureFormatId textureFormatId,
 	CharString *name,
 	ListU32 *arrays,
-	SHBindings bindings,
+	GfxBindings bindings,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -564,16 +544,16 @@ Bool ListSHRegisterRuntime_addTextureBase(
 		));
 
 	if(
-		(textureFormatPrimitive & ESHTexturePrimitive_TypeMask) > ESHTexturePrimitive_Count ||
-		(textureFormatPrimitive & ESHTexturePrimitive_Unused)
+		(textureFormatPrimitive & EGfxTexturePrimitive_TypeMask) > EGfxTexturePrimitive_Count ||
+		(textureFormatPrimitive & EGfxTexturePrimitive_Unused)
 	)
 		retError(clean, Error_outOfBounds(
-			5, textureFormatPrimitive, ESHTexturePrimitive_Count,
+			5, textureFormatPrimitive, EGfxTexturePrimitive_Count,
 			"ListSHRegisterRuntime_addRWTexture()::textureFormatPrimitive out of bounds"
 		));
 
 	ETextureFormat format = ETextureFormatId_unpack[textureFormatId];
-	ESHTexturePrimitive primitive = ESHTexturePrimitive_Count;
+	EGfxTexturePrimitive primitive = EGfxTexturePrimitive_Count;
 
 	if(textureFormatId) {
 
@@ -582,15 +562,16 @@ Bool ListSHRegisterRuntime_addTextureBase(
 
 		switch (texPrim) {
 
-			case ETexturePrimitive_UInt:    primitive = ESHTexturePrimitive_UInt;        break;
-			case ETexturePrimitive_SInt:    primitive = ESHTexturePrimitive_SInt;        break;
-			case ETexturePrimitive_UNorm:    primitive = ESHTexturePrimitive_UNorm;        break;
-			case ETexturePrimitive_SNorm:    primitive = ESHTexturePrimitive_SNorm;        break;
+			case ETexturePrimitive_UInt:     primitive = EGfxTexturePrimitive_UInt;         break;
+			case ETexturePrimitive_SInt:     primitive = EGfxTexturePrimitive_SInt;         break;
+			case ETexturePrimitive_UNorm:    primitive = EGfxTexturePrimitive_UNorm;        break;
+			case ETexturePrimitive_SNorm:    primitive = EGfxTexturePrimitive_SNorm;        break;
 
 			case ETexturePrimitive_Float:
-				primitive = ESHTexturePrimitive_Float;
+				primitive = EGfxTexturePrimitive_Float;
 				//TODO: 64 bit texture formats
-				//primitive = ETextureFormat_getRedBits(format) == 64 ? ESHTexturePrimitive_Double : ESHTexturePrimitive_Float;
+				//primitive =
+				// ETextureFormat_getRedBits(format) == 64 ? EGfxTexturePrimitive_Double : EGfxTexturePrimitive_Float;
 				break;
 
 			default:
@@ -600,10 +581,10 @@ Bool ListSHRegisterRuntime_addTextureBase(
 		}
 
 		switch (channels) {
-			case 1:        primitive |= ESHTexturePrimitive_Component1;    break;
-			case 2:        primitive |= ESHTexturePrimitive_Component2;    break;
-			case 3:        primitive |= ESHTexturePrimitive_Component3;    break;
-			case 4:        primitive |= ESHTexturePrimitive_Component4;    break;
+			case 1:        primitive |= EGfxTexturePrimitive_Component1;    break;
+			case 2:        primitive |= EGfxTexturePrimitive_Component2;    break;
+			case 3:        primitive |= EGfxTexturePrimitive_Component3;    break;
+			case 4:        primitive |= EGfxTexturePrimitive_Component4;    break;
 			default:
 				retError(clean, Error_invalidState(
 					0, "ListSHRegisterRuntime_addRWTexture() texture format is incompatible"
@@ -616,7 +597,7 @@ Bool ListSHRegisterRuntime_addTextureBase(
 
 		if(
 			textureFormatPrimitive != primitive &&
-			(textureFormatPrimitive & ESHTexturePrimitive_TypeMask) != ESHTexturePrimitive_Count
+			(textureFormatPrimitive & EGfxTexturePrimitive_TypeMask) != EGfxTexturePrimitive_Count
 		)
 			retError(clean, Error_invalidState(
 				0, "ListSHRegisterRuntime_addRWTexture() texture primitive is incompatible"
@@ -633,12 +614,12 @@ Bool ListSHRegisterRuntime_addTextureBase(
 		(SHRegister) {
 			.bindings = bindings,
 			.registerType = (U8)(
-				(ESHRegisterType_TextureStart + registerType) |
-				(isWrite ? ESHRegisterType_IsWrite : 0) |
-				(isCombinedSampler ? ESHRegisterType_IsCombinedSampler : 0) |
-				(isLayeredTexture ? ESHRegisterType_IsArray : 0)
+				(EGfxRegisterType_TextureStart + registerType) |
+				(isWrite ? EGfxRegisterType_IsWrite : 0) |
+				(isCombinedSampler ? EGfxRegisterType_IsCombinedSampler : 0) |
+				(isLayeredTexture ? EGfxRegisterType_IsArray : 0)
 			),
-			.texture = (SHTextureFormat) {
+			.texture = (GfxTextureFormat) {
 				.formatId = textureFormatId,
 				.primitive = textureFormatPrimitive
 			},
@@ -659,10 +640,10 @@ Bool ListSHRegisterRuntime_addTexture(
 	Bool isLayeredTexture,
 	Bool isCombinedSampler,
 	U8 isUsedFlag,
-	ESHTexturePrimitive textureFormatPrimitive,
+	EGfxTexturePrimitive textureFormatPrimitive,
 	CharString *name,
 	ListU32 *arrays,
-	SHBindings bindings,
+	GfxBindings bindings,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -688,11 +669,11 @@ Bool ListSHRegisterRuntime_addRWTexture(
 	ESHTextureType registerType,
 	Bool isLayeredTexture,
 	U8 isUsedFlag,
-	ESHTexturePrimitive textureFormatPrimitive,
+	EGfxTexturePrimitive textureFormatPrimitive,
 	ETextureFormatId textureFormatId,
 	CharString *name,
 	ListU32 *arrays,
-	SHBindings bindings,
+	GfxBindings bindings,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -717,7 +698,7 @@ Bool ListSHRegisterRuntime_addSubpassInput(
 	ListSHRegisterRuntime *registers,
 	U8 isUsedFlag,
 	CharString *name,
-	SHBindings bindings,
+	GfxBindings bindings,
 	U16 inputAttachmentId,
 	const Allocator *alloc,
 	Error *e_rr
@@ -729,8 +710,8 @@ Bool ListSHRegisterRuntime_addSubpassInput(
 			4, inputAttachmentId, 8, "ListSHRegisterRuntime_addSubpassInput()::inputAttachmentId out of bounds"
 		));
 
-	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
-		if(i != ESHBinaryType_SPIRV && (bindings.arr[i].space != U32_MAX || bindings.arr[i].binding != U32_MAX))
+	for(U8 i = 0; i < EGfxBinaryType_Count; ++i)
+		if(i != EGfxBinaryType_SPIRV && (bindings.arr[i].space != U32_MAX || bindings.arr[i].binding != U32_MAX))
 			retError(clean, Error_invalidState(
 				0, "ListSHRegisterRuntime_addSubpassInput() can only have bindings for SPIRV"
 			));
@@ -743,7 +724,7 @@ Bool ListSHRegisterRuntime_addSubpassInput(
 		(SHRegister) {
 			.bindings = bindings,
 			.inputAttachmentId = inputAttachmentId,
-			.registerType = (U8)ESHRegisterType_SubpassInput,
+			.registerType = (U8)EGfxRegisterType_SubpassInput,
 			.isUsedFlag = isUsedFlag
 		},
 		NULL,
@@ -767,20 +748,20 @@ Bool ListSHRegisterRuntime_addRegister(
 
 	Bool s_uccess = true;
 
-	U32 baseRegType = reg.registerType & ESHRegisterType_TypeMask;
+	U32 baseRegType = reg.registerType & EGfxRegisterType_TypeMask;
 
 	switch (baseRegType) {
 
-		case ESHRegisterType_ConstantBuffer:
-		case ESHRegisterType_PushConstants:
-		case ESHRegisterType_ByteAddressBuffer:
-		case ESHRegisterType_StructuredBuffer:
-		case ESHRegisterType_StructuredBufferAtomic:
-		case ESHRegisterType_StorageBuffer:
-		case ESHRegisterType_StorageBufferAtomic:
-		case ESHRegisterType_AccelerationStructure:
+		case EGfxRegisterType_ConstantBuffer:
+		case EGfxRegisterType_PushConstants:
+		case EGfxRegisterType_ByteAddressBuffer:
+		case EGfxRegisterType_StructuredBuffer:
+		case EGfxRegisterType_StructuredBufferAtomic:
+		case EGfxRegisterType_StorageBuffer:
+		case EGfxRegisterType_StorageBufferAtomic:
+		case EGfxRegisterType_AccelerationStructure:
 
-			if (reg.registerType & (ESHRegisterType_Masks & ~ESHRegisterType_IsWrite))
+			if (reg.registerType & (EGfxRegisterType_Masks & ~EGfxRegisterType_IsWrite))
 				retError(clean, Error_invalidParameter(
 					2, 4,
 					"ListSHRegisterRuntime_addRegister()::registerType buffer needs to be R/W only "
@@ -789,8 +770,8 @@ Bool ListSHRegisterRuntime_addRegister(
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
 				registers,
-				(ESHBufferType)(baseRegType - ESHRegisterType_BufferStart),
-				reg.registerType & ESHRegisterType_IsWrite,
+				(ESHBufferType)(baseRegType - EGfxRegisterType_BufferStart),
+				reg.registerType & EGfxRegisterType_IsWrite,
 				reg.isUsedFlag,
 				name,
 				arrays,
@@ -802,11 +783,11 @@ Bool ListSHRegisterRuntime_addRegister(
 
 			break;
 
-		case ESHRegisterType_SamplerComparisonState:
-		case ESHRegisterType_Sampler: {
+		case EGfxRegisterType_SamplerComparisonState:
+		case EGfxRegisterType_Sampler: {
 
 			U32 regType = reg.registerType;
-			Bool isComparisonState = regType == ESHRegisterType_SamplerComparisonState;
+			Bool isComparisonState = regType == EGfxRegisterType_SamplerComparisonState;
 
 			if(reg.padding)
 				retError(clean, Error_invalidParameter(
@@ -832,9 +813,9 @@ Bool ListSHRegisterRuntime_addRegister(
 			break;
 		}
 
-		case ESHRegisterType_SubpassInput:
+		case EGfxRegisterType_SubpassInput:
 
-			if(reg.registerType != ESHRegisterType_SubpassInput)
+			if(reg.registerType != EGfxRegisterType_SubpassInput)
 				retError(clean, Error_invalidParameter(2, 0, "ListSHRegisterRuntime_addRegister()::registerType is invalid"));
 
 			if(arrays)
@@ -861,7 +842,7 @@ Bool ListSHRegisterRuntime_addRegister(
 
 		default:
 
-			if(baseRegType < ESHRegisterType_TextureStart || baseRegType >= ESHRegisterType_TextureEnd)
+			if(baseRegType < EGfxRegisterType_TextureStart || baseRegType >= EGfxRegisterType_TextureEnd)
 				retError(clean, Error_invalidParameter(2, 0, "ListSHRegisterRuntime_addRegister()::registerType is invalid"));
 
 			if(sbFile)
@@ -869,19 +850,19 @@ Bool ListSHRegisterRuntime_addRegister(
 					2, 3, "ListSHRegisterRuntime_addRegister()::sbFile on texture not allowed"
 				));
 
-			if (reg.registerType & ESHRegisterType_IsWrite) {
+			if (reg.registerType & EGfxRegisterType_IsWrite) {
 
-				if(reg.registerType & ESHRegisterType_IsCombinedSampler)
+				if(reg.registerType & EGfxRegisterType_IsCombinedSampler)
 					retError(clean, Error_invalidParameter(
 						2, 0, "ListSHRegisterRuntime_addRegister() RWTexture can't contain combined sampler"
 					));
 
 				gotoIfError3(clean, ListSHRegisterRuntime_addRWTexture(
 					registers,
-					(ESHTextureType)(baseRegType - ESHRegisterType_TextureStart),
-					reg.registerType & ESHRegisterType_IsArray,
+					(ESHTextureType)(baseRegType - EGfxRegisterType_TextureStart),
+					reg.registerType & EGfxRegisterType_IsArray,
 					reg.isUsedFlag,
-					(ESHTexturePrimitive) reg.texture.primitive,
+					(EGfxTexturePrimitive) reg.texture.primitive,
 					(ETextureFormatId) reg.texture.formatId,
 					name,
 					arrays,
@@ -900,11 +881,11 @@ Bool ListSHRegisterRuntime_addRegister(
 
 				gotoIfError3(clean, ListSHRegisterRuntime_addTexture(
 					registers,
-					(ESHTextureType)(baseRegType - ESHRegisterType_TextureStart),
-					reg.registerType & ESHRegisterType_IsArray,
-					reg.registerType & ESHRegisterType_IsCombinedSampler,
+					(ESHTextureType)(baseRegType - EGfxRegisterType_TextureStart),
+					reg.registerType & EGfxRegisterType_IsArray,
+					reg.registerType & EGfxRegisterType_IsCombinedSampler,
 					reg.isUsedFlag,
-					(ESHTexturePrimitive) reg.texture.primitive,
+					(EGfxTexturePrimitive) reg.texture.primitive,
 					name,
 					arrays,
 					reg.bindings,
@@ -920,7 +901,7 @@ clean:
 	return s_uccess;
 }
 
-const C8 *ESHTexturePrimitive_name[ESHTexturePrimitive_CountAll] = {
+const C8 *EGfxTexturePrimitive_name[EGfxTexturePrimitive_CountAll] = {
 	"uint",  "int",  "unorm float",  "snorm float",  "float",  "double",  "", "", "", "", "", "", "", "", "", "",
 	"uint2", "int2", "unorm float2", "snorm float2", "float2", "double2", "", "", "", "", "", "", "", "", "", "",
 	"uint3", "int3", "unorm float3", "snorm float3", "float3", "double3", "", "", "", "", "", "", "", "", "", "",
@@ -928,14 +909,14 @@ const C8 *ESHTexturePrimitive_name[ESHTexturePrimitive_CountAll] = {
 };
 
 void SHRegister_printBindings(
-	ESHRegisterType type,
-	SHBindings bindings,
+	EGfxRegisterType type,
+	GfxBindings bindings,
 	const Allocator *alloc,
 	const C8 *prefix,
 	const C8 *indent
 ) {
 
-	SHBinding spirvBinding = bindings.arr[ESHBinaryType_SPIRV];
+	GfxBinding spirvBinding = bindings.arr[EGfxBinaryType_SPIRV];
 
 	if(spirvBinding.space != U32_MAX || spirvBinding.binding != U32_MAX)
 		Log_debugLn(
@@ -947,15 +928,15 @@ void SHRegister_printBindings(
 			spirvBinding.space
 		);
 
-	SHBinding dxilBinding = bindings.arr[ESHBinaryType_DXIL];
+	GfxBinding dxilBinding = bindings.arr[EGfxBinaryType_DXIL];
 
 	if(dxilBinding.space != U32_MAX || dxilBinding.binding != U32_MAX) {
 
-		Bool isCBV = type == ESHRegisterType_ConstantBuffer || type == ESHRegisterType_PushConstants;
+		Bool isCBV = type == EGfxRegisterType_ConstantBuffer || type == EGfxRegisterType_PushConstants;
 
 		C8 letter = isCBV ? 'b' : (
-			type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState ? 's' : (
-				type & ESHRegisterType_IsWrite ? 'u' : 't'
+			type == EGfxRegisterType_Sampler || type == EGfxRegisterType_SamplerComparisonState ? 's' : (
+				type & EGfxRegisterType_IsWrite ? 'u' : 't'
 			)
 		);
 
@@ -984,35 +965,35 @@ void SHRegister_print(const SHRegister *reg, U64 indenting, Bool isVerbose, cons
 	for(U8 i = 0; i < indenting; ++i) indent[i] = '\t';
 	indent[indenting] = '\0';
 
-	switch (reg->registerType & ESHRegisterType_TypeMask) {
+	switch (reg->registerType & EGfxRegisterType_TypeMask) {
 
-		case ESHRegisterType_SubpassInput:
+		case EGfxRegisterType_SubpassInput:
 			Log_debugLn(alloc, "%sinput_attachment_index = %"PRIu8, indent, reg->inputAttachmentId);
 			break;
 
-		case ESHRegisterType_Sampler:                    Log_debugLn(alloc, "%sSamplerState", indent);                     break;
-		case ESHRegisterType_SamplerComparisonState:    Log_debugLn(alloc, "%sSamplerComparisonState", indent);             break;
-		case ESHRegisterType_ConstantBuffer:            Log_debugLn(alloc, "%sConstantBuffer", indent);                     break;
-		case ESHRegisterType_PushConstants:                Log_debugLn(alloc, "%sPushConstants", indent);                     break;
-		case ESHRegisterType_AccelerationStructure:        Log_debugLn(alloc, "%sRaytracingAccelerationStructure", indent); break;
+		case EGfxRegisterType_Sampler:                   Log_debugLn(alloc, "%sSamplerState", indent);                    break;
+		case EGfxRegisterType_SamplerComparisonState:    Log_debugLn(alloc, "%sSamplerComparisonState", indent);          break;
+		case EGfxRegisterType_ConstantBuffer:            Log_debugLn(alloc, "%sConstantBuffer", indent);                  break;
+		case EGfxRegisterType_PushConstants:             Log_debugLn(alloc, "%sPushConstants", indent);                   break;
+		case EGfxRegisterType_AccelerationStructure:     Log_debugLn(alloc, "%sRaytracingAccelerationStructure", indent); break;
 
-		case ESHRegisterType_ByteAddressBuffer:
-			Log_debugLn(alloc, "%s%sByteAddressBuffer", indent, reg->registerType & ESHRegisterType_IsWrite ? "RW" : "");
+		case EGfxRegisterType_ByteAddressBuffer:
+			Log_debugLn(alloc, "%s%sByteAddressBuffer", indent, reg->registerType & EGfxRegisterType_IsWrite ? "RW" : "");
 			break;
 
-		case ESHRegisterType_StructuredBuffer:
-			Log_debugLn(alloc, "%s%sStructuredBuffer", indent, reg->registerType & ESHRegisterType_IsWrite ? "RW" : "");
+		case EGfxRegisterType_StructuredBuffer:
+			Log_debugLn(alloc, "%s%sStructuredBuffer", indent, reg->registerType & EGfxRegisterType_IsWrite ? "RW" : "");
 			break;
 
-		case ESHRegisterType_StorageBuffer:
-			Log_debugLn(alloc, "%s%sStorageBuffer", indent, reg->registerType & ESHRegisterType_IsWrite ? "RW" : "");
+		case EGfxRegisterType_StorageBuffer:
+			Log_debugLn(alloc, "%s%sStorageBuffer", indent, reg->registerType & EGfxRegisterType_IsWrite ? "RW" : "");
 			break;
 
-		case ESHRegisterType_StorageBufferAtomic:
-			Log_debugLn(alloc, "%s%sStorageBufferAtomic", indent, reg->registerType & ESHRegisterType_IsWrite ? "RW" : "");
+		case EGfxRegisterType_StorageBufferAtomic:
+			Log_debugLn(alloc, "%s%sStorageBufferAtomic", indent, reg->registerType & EGfxRegisterType_IsWrite ? "RW" : "");
 			break;
 
-		case ESHRegisterType_StructuredBufferAtomic:
+		case EGfxRegisterType_StructuredBufferAtomic:
 			Log_debugLn(alloc, "%sAppend/ConsumeBuffer", indent);
 			break;
 
@@ -1020,29 +1001,29 @@ void SHRegister_print(const SHRegister *reg, U64 indenting, Bool isVerbose, cons
 
 			const C8 *dim = "2D";
 
-			switch(reg->registerType & ESHRegisterType_TypeMask) {
+			switch(reg->registerType & EGfxRegisterType_TypeMask) {
 
-				case ESHRegisterType_Texture2D:                        break;
-				case ESHRegisterType_Texture1D:        dim = "1D";        break;
-				case ESHRegisterType_Texture3D:        dim = "3D";        break;
-				case ESHRegisterType_TextureCube:    dim = "Cube";    break;
-				case ESHRegisterType_Texture2DMS:    dim = "2DMS";    break;
+				case EGfxRegisterType_Texture2D:                           break;
+				case EGfxRegisterType_Texture1D:        dim = "1D";        break;
+				case EGfxRegisterType_Texture3D:        dim = "3D";        break;
+				case EGfxRegisterType_TextureCube:      dim = "Cube";      break;
+				case EGfxRegisterType_Texture2DMS:      dim = "2DMS";      break;
 			}
 
 			Log_debugLn(
 				alloc, "%s%s%s%s%s",
 				indent,
-				reg->registerType & ESHRegisterType_IsWrite ? "RW" : "",
-				reg->registerType & ESHRegisterType_IsCombinedSampler ? "sampler" : "Texture",
+				reg->registerType & EGfxRegisterType_IsWrite ? "RW" : "",
+				reg->registerType & EGfxRegisterType_IsCombinedSampler ? "sampler" : "Texture",
 				dim,
-				reg->registerType & ESHRegisterType_IsArray ? "Array" : ""
+				reg->registerType & EGfxRegisterType_IsArray ? "Array" : ""
 			);
 
 			if(reg->texture.formatId)
 				Log_debugLn(alloc, "%s%s", indent, ETextureFormatId_name[reg->texture.formatId]);
 
-			if(reg->texture.primitive != ESHTexturePrimitive_Count)
-				Log_debugLn(alloc, "%s%s", indent, ESHTexturePrimitive_name[reg->texture.primitive]);
+			if(reg->texture.primitive != EGfxTexturePrimitive_Count)
+				Log_debugLn(alloc, "%s%s", indent, EGfxTexturePrimitive_name[reg->texture.primitive]);
 
 			break;
 		}
@@ -1082,13 +1063,13 @@ void SHRegisterRuntime_print(const SHRegisterRuntime *reg, U64 indenting, Bool i
 			reg->arrays.ptr[i]
 		);
 
-	for(U8 i = 0; i < ESHBinaryType_Count; ++i) {
+	for(U8 i = 0; i < EGfxBinaryType_Count; ++i) {
 
-		SHBinding binding = reg->reg.bindings.arr[i];
+		GfxBinding binding = reg->reg.bindings.arr[i];
 
 		Bool validBinding = !(binding.binding == U32_MAX && binding.space == U32_MAX);
 
-		if(reg->reg.registerType == ESHRegisterType_PushConstants && i == ESHBinaryType_SPIRV)
+		if(reg->reg.registerType == EGfxRegisterType_PushConstants && i == EGfxBinaryType_SPIRV)
 			validBinding = (reg->reg.isUsedFlag >> i) & 1;
 
 		if(!validBinding)
@@ -1097,7 +1078,7 @@ void SHRegisterRuntime_print(const SHRegisterRuntime *reg, U64 indenting, Bool i
 		Log_debug(
 			alloc, ELogOptions_None,
 			(reg->reg.isUsedFlag >> i) & 1 ? " (%s: Used)" : " (%s: Unused)",
-			ESHBinaryType_names[i]
+			EGfxBinaryType_names[i]
 		);
 	}
 

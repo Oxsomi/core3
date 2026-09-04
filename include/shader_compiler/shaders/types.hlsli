@@ -272,7 +272,7 @@ F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return mad(a, b, c); }
 
 //The register space OxC3 reserves for its own per frame globals on DXIL. Anything a shader declares there
 //is refused at layout creation, because the runtime binds its own data to it.
-//Keep in sync with OXC3_RESERVED_SPACE in graphics/generic/descriptor_layout.h.
+//Keep in sync with OXC3_RESERVED_SPACE in formats/gfx_util/gfx_util.h.
 
 #define OXC3_RESERVED_SPACE space195        //0xC3
 

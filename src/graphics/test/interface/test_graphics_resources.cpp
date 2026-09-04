@@ -348,7 +348,7 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	//PushConstants is the portable register type, since DXIL additionally accepts a constant buffer
 
 	c::PipelineLayoutInfo pc{};
-	pc.pushConstants.registerType = c::ESHRegisterType_PushConstants;
+	pc.pushConstants.registerType = c::EGfxRegisterType_PushConstants;
 	pc.pushConstants.count = 1;
 	pc.pushConstants.constantBufferSize = 16;
 	pc.pushConstants.visibility = c::U32_MAX;
@@ -362,7 +362,9 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	c::PipelineLayoutRef *badLayout = nullptr;
 
 	Test_assert(t, "nullDevice", !c::GraphicsDeviceRef_createPipelineLayout(nullptr, &pc, &layoutName, &badLayout, nullptr));
-	Test_assert(t, "nullInfo", !c::GraphicsDeviceRef_createPipelineLayout(deviceRef, nullptr, &layoutName, &badLayout, nullptr));
+	Test_assert(
+		t, "nullInfo", !c::GraphicsDeviceRef_createPipelineLayout(deviceRef, nullptr, &layoutName, &badLayout, nullptr)
+	);
 
 	bad = pc;
 	bad.pushConstants.constantBufferSize = 0;
@@ -385,7 +387,7 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	Test_assert(t, "pcTwoRanges", !dev.createPipelineLayout(bad, "Test pipeline layout", layout, nullptr));
 
 	bad = pc;
-	bad.pushConstants.registerType = c::ESHRegisterType_Sampler;
+	bad.pushConstants.registerType = c::EGfxRegisterType_Sampler;
 	Test_assert(t, "pcWrongType", !dev.createPipelineLayout(bad, "Test pipeline layout", layout, nullptr));
 
 	Test_assert(t, "rejectedNothing", !badLayout && !layout);
@@ -397,7 +399,7 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	//Space 3 keeps the constant buffer clear of the default layouts on both apis.
 
 	c::DescriptorBinding cbv{};
-	cbv.registerType = c::ESHRegisterType_ConstantBuffer;
+	cbv.registerType = c::EGfxRegisterType_ConstantBuffer;
 	cbv.count = 1;
 	cbv.binding.space = 3;
 	cbv.binding.binding = 0;
@@ -414,11 +416,11 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	(void) c::ListCharString_createRefConst(&cbvName, 1, &pushInfo.bindingNames, nullptr);
 
 	c::DescriptorBinding bab{};
-	bab.registerType = c::ESHRegisterType_ByteAddressBuffer;
+	bab.registerType = c::EGfxRegisterType_ByteAddressBuffer;
 	bab.count = 1;
 	bab.binding.space = 0;
 	bab.binding.binding = 0;
-	bab.visibility = 1 << c::ESHPipelineStage_Compute;
+	bab.visibility = 1 << c::EGfxPipelineStage_Compute;
 
 	c::CharString babName = name("testPlainBuffer");
 
@@ -525,7 +527,10 @@ extern "C" void Test_graphicsShaderReflection(oxc::c::Test *t, oxc::c::GraphicsD
 	//MemoryStreamRef and the StreamRef the oiSH reader consumes are both bare RefPtr typedefs, so the handle
 	// crosses without the C module's cast.
 
-	if(!stream || !Test_assert(t, "readSHFile", c::SHFile_read(stream.handle(), &streamOffset, false, alloc, &shader.list, e_rr)))
+	if (
+		!stream ||
+		!Test_assert(t, "readSHFile", c::SHFile_read(stream.handle(), &streamOffset, false, alloc, &shader.list, e_rr))
+	)
 		return;
 
 	Test_assert(t, "hasEntries", shader.list.entries.length && shader.list.binaries.length);

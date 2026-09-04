@@ -263,7 +263,8 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	// separates object space from world space.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_raytriposition.oiSH", "rayTriPosition",
-		(c::EGraphicsFeatures) (c::EGraphicsFeatures_RayQuery | c::EGraphicsFeatures_RayTriPosition), (c::EGraphicsDataTypes) (0),
+		(c::EGraphicsFeatures) (c::EGraphicsFeatures_RayQuery | c::EGraphicsFeatures_RayTriPosition),
+		(c::EGraphicsDataTypes) (0),
 		c::ESHExtension_RayTriPosition,
 		{ { 0, 1 }, { 4, 1 } }, 2,
 		false, true

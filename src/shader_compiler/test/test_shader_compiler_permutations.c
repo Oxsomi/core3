@@ -73,7 +73,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 		SHFile sh = (SHFile) { 0 };
 
 		Bool ok =
-			compileFileShader(alloc, "permutations/mixed_extensions.hlsl", ESHBinaryType_SPIRV, true, false, &out, &err) &&
+			compileFileShader(alloc, "permutations/mixed_extensions.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) && readOiSH(alloc, out.ptr[0], &sh, &err);
 
 		Test_assert(t, "per-entrypoint extension isolation (only 1 of 2 binaries has 16BitTypes)",
@@ -93,7 +93,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 		SHFile sh = (SHFile) { 0 };
 
 		Bool ok =
-			compileFileShader(alloc, "permutations/mixed_models.hlsl", ESHBinaryType_SPIRV, true, false, &out, &err) &&
+			compileFileShader(alloc, "permutations/mixed_models.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) && readOiSH(alloc, out.ptr[0], &sh, &err);
 
 		Bool has67 = false, has65 = false;
@@ -124,7 +124,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 		SHFile ssh = (SHFile) { 0 }, dsh = (SHFile) { 0 };
 
 		Bool spvOk =
-			compileFileShader(alloc, "permutations/mixed_binary_lib.hlsl", ESHBinaryType_SPIRV, true, false, &spv, &err) &&
+			compileFileShader(alloc, "permutations/mixed_binary_lib.hlsl", EGfxBinaryType_SPIRV, true, false, &spv, &err) &&
 			spv.length == 1 && Buffer_length(spv.ptr[0]) && readOiSH(alloc, spv.ptr[0], &ssh, &err);
 
 		Test_assert(t, "SPIRV keeps raygen + spv-only miss, drops dxil-only closesthit",
@@ -132,7 +132,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 			hasEntry(&ssh, "mainRaygen") && hasEntry(&ssh, "mainMiss") && !hasEntry(&ssh, "mainCH"));
 
 		Bool dxOk =
-			compileFileShader(alloc, "permutations/mixed_binary_lib.hlsl", ESHBinaryType_DXIL, true, false, &dx, &err) &&
+			compileFileShader(alloc, "permutations/mixed_binary_lib.hlsl", EGfxBinaryType_DXIL, true, false, &dx, &err) &&
 			dx.length == 1 && Buffer_length(dx.ptr[0]) && readOiSH(alloc, dx.ptr[0], &dsh, &err);
 
 		Test_assert(t, "DXIL keeps raygen + dxil-only closesthit, drops spv-only miss",
@@ -154,7 +154,8 @@ void Test_shaderCompilerPermutations(Test *t) {
 		Error e2 = Error_none();
 
 		//enableLogging=false: the failure is expected and asserted on, so keep the compiler quiet.
-		Bool compiled = compileFileShader(alloc, "permutations/mixed_uniforms.hlsl", ESHBinaryType_SPIRV, false, false, &out, &e2);
+		Bool compiled =
+			compileFileShader(alloc, "permutations/mixed_uniforms.hlsl", EGfxBinaryType_SPIRV, false, false, &out, &e2);
 
 		Test_assert(t, "mismatched uniforms across entrypoints rejected", !compiled);
 
@@ -168,7 +169,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 		ListBuffer out = (ListBuffer) { 0 };
 
 		Test_assert(t, "empty defines annotation compiles",
-			compileFileShader(alloc, "permutations/empty_defines.hlsl", ESHBinaryType_SPIRV, true, false, &out, &err)
+			compileFileShader(alloc, "permutations/empty_defines.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err)
 		);
 
 		//An empty defines list still means one combination, so exactly one binary has to come out of it.
@@ -188,10 +189,10 @@ void Test_shaderCompilerPermutations(Test *t) {
 
 		const Bool built =
 			Test_assert(t, "mrt compiles for spirv",
-				compileFileShader(alloc, "stages/pixel_mrt.hlsl", ESHBinaryType_SPIRV, true, false, &spv, &err)
+				compileFileShader(alloc, "stages/pixel_mrt.hlsl", EGfxBinaryType_SPIRV, true, false, &spv, &err)
 			) &&
 			Test_assert(t, "mrt compiles for dxil",
-				compileFileShader(alloc, "stages/pixel_mrt.hlsl", ESHBinaryType_DXIL, true, false, &dxil, &err)
+				compileFileShader(alloc, "stages/pixel_mrt.hlsl", EGfxBinaryType_DXIL, true, false, &dxil, &err)
 			) &&
 			spv.length == 1 && dxil.length == 1 &&
 			Test_assert(t, "mrt spirv oiSH readable", readOiSH(alloc, spv.ptr[0], &spvFile, &err)) &&
@@ -222,10 +223,10 @@ void Test_shaderCompilerPermutations(Test *t) {
 
 		const Bool built =
 			Test_assert(t, "dualsrc compiles for spirv",
-				compileFileShader(alloc, "stages/pixel_dualsrc.hlsl", ESHBinaryType_SPIRV, true, false, &spv, &err)
+				compileFileShader(alloc, "stages/pixel_dualsrc.hlsl", EGfxBinaryType_SPIRV, true, false, &spv, &err)
 			) &&
 			Test_assert(t, "dualsrc compiles for dxil",
-				compileFileShader(alloc, "stages/pixel_dualsrc.hlsl", ESHBinaryType_DXIL, true, false, &dxil, &err)
+				compileFileShader(alloc, "stages/pixel_dualsrc.hlsl", EGfxBinaryType_DXIL, true, false, &dxil, &err)
 			) &&
 			spv.length == 1 && dxil.length == 1 &&
 			Test_assert(t, "dualsrc spirv oiSH readable", readOiSH(alloc, spv.ptr[0], &spvFile, &err)) &&

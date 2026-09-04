@@ -79,7 +79,7 @@ namespace oxc {
 	//Include order is IMPORTANT:
 	// C11 forward declarations (`typedef enum E E;`) are only legal C++ once the enum is DEFINED,
 	// so every defining header must precede its forwarders,
-	// sh_binaries (ESHBinaryType/ESHExtension) before device/pipeline, pipeline_structs (EMSAASamples) before texture,
+	// sh_binaries (EGfxBinaryType/ESHExtension) before device/pipeline, pipeline_structs (EMSAASamples) before texture,
 	// resource (EResourceType) before device's allocator.
 	//EWindowFormat's definition lives in the platforms layer, which this header does not pull in,
 	// so it gets a C++ opaque declaration; layout-compatible with the C enum (int),
@@ -609,7 +609,7 @@ namespace oxc {
 			//strideOrLength 0 means "don't care about size".
 
 			[[nodiscard]] c::Bool allocBindless(
-				c::ESHRegisterType type, c::U32 strideOrLength,
+				c::EGfxRegisterType type, c::U32 strideOrLength,
 				c::U16 &bindId, c::U8 &bindlessTypeId, c::U64 &arrayId, const c::Descriptor &d,
 				c::Bool maintainRef = false, c::Error *e_rr = nullptr
 			) noexcept {
@@ -622,7 +622,7 @@ namespace oxc {
 			//planeId picks a plane of a multi planar resource, which is how a depth buffer's stencil is read.
 
 			[[nodiscard]] c::Bool findBindlessRegister(
-				c::ESHRegisterType type, c::U32 strideOrLength,
+				c::EGfxRegisterType type, c::U32 strideOrLength,
 				c::U16 &bindId, c::U8 &bindlessTypeId, c::RefPtr *resource,
 				c::U8 planeId = 0, c::Error *e_rr = nullptr
 			) const noexcept {
@@ -770,7 +770,9 @@ namespace oxc {
 				return c::CommandListRef_drawIndexed(list, indexCount, instanceCount, e_rr);
 			}
 
-			[[nodiscard]] c::Bool drawUnindexed(c::U32 vertexCount, c::U32 instanceCount = 1, c::Error *e_rr = nullptr) noexcept {
+			[[nodiscard]] c::Bool drawUnindexed(
+				c::U32 vertexCount, c::U32 instanceCount = 1, c::Error *e_rr = nullptr
+			) noexcept {
 				return c::CommandListRef_drawUnindexed(list, vertexCount, instanceCount, e_rr);
 			}
 
@@ -1511,10 +1513,10 @@ namespace oxc {
 		};
 
 		//A graphics pipeline has at most one stage per graphics shader stage (vertex, pixel, geometry, hull,
-		//domain, mesh, task), so ESHPipelineStage_Count bounds any stage list the API can accept and the
+		//domain, mesh, task), so EGfxPipelineStage_Count bounds any stage list the API can accept and the
 		//single-file overload can copy into a span of that size instead of allocating.
 
-		static const c::U64 maxPipelineStages = c::ESHPipelineStage_Count;
+		static const c::U64 maxPipelineStages = c::EGfxPipelineStage_Count;
 
 		class Device {
 

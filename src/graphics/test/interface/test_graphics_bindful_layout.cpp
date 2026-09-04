@@ -246,7 +246,7 @@ extern "C" void Test_graphicsBindfulReservedSpace(oxc::c::Test *t, oxc::c::Graph
 	//A layout that is legal in every respect except the space it asks for
 
 	c::DescriptorBinding reserved = {
-		.registerType = (c::ESHRegisterType) (c::ESHRegisterType_ByteAddressBuffer | c::ESHRegisterType_IsWrite),
+		.registerType = (c::EGfxRegisterType) (c::EGfxRegisterType_ByteAddressBuffer | c::EGfxRegisterType_IsWrite),
 		.count = 1,
 		.binding = { .space = OXC3_RESERVED_SPACE, .binding = 0 },
 		.visibility = c::U32_MAX
@@ -306,7 +306,7 @@ extern "C" void Test_graphicsBindfulPushClass(oxc::c::Test *t, oxc::c::GraphicsD
 	const c::CharString pushName = c::CharString_createRefCStrConst("pushed");
 
 	c::DescriptorBinding push = {
-		.registerType = c::ESHRegisterType_Sampler,
+		.registerType = c::EGfxRegisterType_Sampler,
 		.count = 1,
 		.binding = { .space = 0, .binding = 0 },
 		.visibility = c::U32_MAX
@@ -322,9 +322,52 @@ extern "C" void Test_graphicsBindfulPushClass(oxc::c::Test *t, oxc::c::GraphicsD
 	c::Test_assert(t, "samplerPushRefused", !dev.createDescriptorLayout(sampInfo, "Push class layout", layout, nullptr));
 	c::Test_assert(t, "samplerPushNoLayout", !layout.valid());
 
+	//A BAKED sampler is refused there too, which is the half a push descriptor layout used to accept.
+	//D3D12 emits every immutable sampler as a root signature static sampler whichever layout declared it, so the
+	// push descriptor set it sits in would mean something on Vulkan and nothing on D3D12; the regular layout is
+	// the only place a sampler belongs.
+
+	Sampler immutableSampler;
+
+	const c::SamplerInfo immutableInfo = { .filter = c::ESamplerFilterMode_Nearest };
+
+	if (c::Test_assert(t, "pushClassSamplerCreate", dev.createSampler(
+		immutableInfo, "Push class sampler", immutableSampler, nullptr, true, &t->err
+	))) {
+
+		gfxtest::OwnedLayoutInfo bakedInfo(dev.alloc());
+		bakedInfo.list.flags = c::EDescriptorLayoutFlags_HasPushDescriptors;
+
+		c::U32 immutableId = 0;
+
+		if (c::Test_assert(t, "pushClassAddImmutable", c::DescriptorLayoutInfo_addImmutableSampler(
+			&bakedInfo.list, immutableSampler.handle(), &immutableId, dev.alloc(), &t->err
+		))) {
+
+			c::DescriptorBinding baked = push;
+			baked.immutableSamplerId = immutableId;
+
+			c::ListDescriptorBinding_createRefConst(&baked, 1, &bakedInfo.list.bindings, nullptr);
+			c::ListCharString_createRefConst(&pushName, 1, &bakedInfo.list.bindingNames, nullptr);
+
+			c::Test_assert(t, "immutableSamplerPushRefused", !dev.createDescriptorLayout(
+				bakedInfo.list, "Push class layout", layout, nullptr
+			));
+
+			//The same baked sampler outside a push descriptor layout builds, which is what proves the push
+			// descriptor set is the only objection rather than the sampler or the baking.
+
+			bakedInfo.list.flags = c::EDescriptorLayoutFlags_None;
+
+			c::Test_assert(t, "immutableSamplerRegularAccepted", dev.createDescriptorLayout(
+				bakedInfo.list, "Push class layout", layout, &t->err
+			));
+		}
+	}
+
 	//A texture push builds, which is what the device's own copy layout depends on
 
-	push.registerType = c::ESHRegisterType_Texture2D;
+	push.registerType = c::EGfxRegisterType_Texture2D;
 
 	c::DescriptorLayoutInfo texInfo{};
 	texInfo.flags = c::EDescriptorLayoutFlags_HasPushDescriptors;
@@ -335,7 +378,7 @@ extern "C" void Test_graphicsBindfulPushClass(oxc::c::Test *t, oxc::c::GraphicsD
 
 	//As does the buffer class the recorder can actually emit
 
-	push.registerType = (c::ESHRegisterType) (c::ESHRegisterType_ByteAddressBuffer | c::ESHRegisterType_IsWrite);
+	push.registerType = (c::EGfxRegisterType) (c::EGfxRegisterType_ByteAddressBuffer | c::EGfxRegisterType_IsWrite);
 
 	c::DescriptorLayoutInfo bufInfo{};
 	bufInfo.flags = c::EDescriptorLayoutFlags_HasPushDescriptors;

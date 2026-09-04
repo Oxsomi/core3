@@ -354,7 +354,9 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 						.alignment = 1
 					};
 
-					gotoIfError3(clean, ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i + 1, empty, alloc, e_rr));
+					gotoIfError3(clean, ListAllocationBufferBlock_insert(
+						&allocationBuffer->allocations, i + 1, empty, alloc, e_rr
+					));
 				}
 
 				//Occupied

@@ -880,7 +880,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 			break;
 
 		c::PipelineGraphicsInfo msaaInfo = flatInfo;
-		msaaInfo.msaa = (c::MSAASamples) msaaCounts[m];
+		msaaInfo.msaa = (c::U8) msaaCounts[m];
 
 		if(!TestBindful_graphicsPipeline(t, dev, files, 7, 0, 1, "main", "main", msaaInfo, pipelineLayout, msaaPipeline))
 			break;

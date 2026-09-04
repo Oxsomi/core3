@@ -1418,7 +1418,7 @@ Bool Buffer_aesExpertCreate(
 		case 2:        Buffer_aesExpertExpandHash(ctx,  2, use256Or512Real);    break;
 		case 4:        Buffer_aesExpertExpandHash(ctx,  4, use256Or512Real);    break;
 		case 8:        Buffer_aesExpertExpandHash(ctx,  8, use256Or512Real);    break;
-		case 16:    Buffer_aesExpertExpandHash(ctx, 16, use256Or512Real);    break;
+		case 16:       Buffer_aesExpertExpandHash(ctx, 16, use256Or512Real);    break;
 	}
 
 	//Compute final tag xor
@@ -1522,7 +1522,7 @@ static inline Bool AESEncryptionContext_create(
 			case 2:        Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   2, *use256Or512);    break;
 			case 4:        Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   4, *use256Or512);    break;
 			case 8:        Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   8, *use256Or512);    break;
-			case 16:    Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,  16, *use256Or512);    break;
+			case 16:       Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,  16, *use256Or512);    break;
 		}
 
 clean:
@@ -1595,7 +1595,9 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 
 	#if defined(HAS_CLMUL64x4) && defined(HAS_AESx4)
 		if (blockSizeMax > 8 && (use256Or512 & 2) && next + 16 <= end)
-			AESEncryptionContext_blocks16(&counterForIv, &next, end, iv, ctx->H, ctx->key, &ctx->tag, isEncrypt, ctx->encryptionType);
+			AESEncryptionContext_blocks16(
+				&counterForIv, &next, end, iv, ctx->H, ctx->key, &ctx->tag, isEncrypt, ctx->encryptionType
+			);
 	#endif
 
 	if (next >= end)
@@ -1605,7 +1607,9 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 
 	#if defined(HAS_CLMUL64x2) && defined(HAS_AESx2)
 		if (blockSizeMax > 4 && (use256Or512 & 1) && next + 8 <= end)
-			AESEncryptionContext_blocks8(&counterForIv, &next, end, iv, ctx->H, ctx->key, &ctx->tag, isEncrypt, ctx->encryptionType);
+			AESEncryptionContext_blocks8(
+				&counterForIv, &next, end, iv, ctx->H, ctx->key, &ctx->tag, isEncrypt, ctx->encryptionType
+			);
 	#endif
 
 	if (next >= end)
@@ -2065,7 +2069,7 @@ static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *restrict en
 			case 2:        Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   2, use256Or512);    break;
 			case 4:        Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   4, use256Or512);    break;
 			case 8:        Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   8, use256Or512);    break;
-			case 16:    Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,  16, use256Or512);    break;
+			case 16:       Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,  16, use256Or512);    break;
 		}
 
 	//Finish encryption by appending tag for authentication / verification that the data isn't messed with
@@ -2175,7 +2179,7 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *restrict de
 			case 2:        Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   2, use256Or512);    break;
 			case 4:        Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   4, use256Or512);    break;
 			case 8:        Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   8, use256Or512);    break;
-			case 16:    Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,  16, use256Or512);    break;
+			case 16:       Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,  16, use256Or512);    break;
 		}
 
 	U64 aadLen = decrypt->additionalData ? Buffer_length(*decrypt->additionalData) : 0;

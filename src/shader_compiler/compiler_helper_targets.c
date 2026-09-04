@@ -102,7 +102,7 @@ Bool registerFile(const FileInfo *file, void *shaderFilesGeneric, const Allocato
 
 			Bool foundFirstMode = false;
 
-			for(U8 i = 0; i < ESHBinaryType_Count; ++i) {
+			for(U8 i = 0; i < EGfxBinaryType_Count; ++i) {
 
 				if(!((shaderFiles->compileModeU64 >> i) & 1))
 					continue;
@@ -204,7 +204,9 @@ Bool Compiler_getTargetsFromFile(
 
 		if(output) {
 			Bool isVirtualOut;
-			gotoIfError3(clean, File_resolve(output, &isVirtualOut, 128, &Platform_instance->defaultDir, alloc, &resolved2, e_rr));
+			gotoIfError3(clean, File_resolve(
+				output, &isVirtualOut, 128, &Platform_instance->defaultDir, alloc, &resolved2, e_rr
+			));
 			gotoIfError3(clean, CharString_append(&resolved2, '/', alloc, e_rr));
 		}
 
@@ -241,7 +243,7 @@ Bool Compiler_getTargetsFromFile(
 
 	//We need to add multiple compile modes
 
-	else for(U8 i = 0; i < ESHBinaryType_Count; ++i) {
+	else for(U8 i = 0; i < EGfxBinaryType_Count; ++i) {
 
 		if(!((compileModeU64 >> i) & 1))
 			continue;

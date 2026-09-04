@@ -45,7 +45,7 @@ static Bool parseShader(
 		.string = src,
 		.path = CharString_createRefCStrConst("test_annot.hlsl"),
 		.format = ECompilerFormat_HLSL,
-		.outputType = ESHBinaryType_SPIRV
+		.outputType = EGfxBinaryType_SPIRV
 	};
 
 	Bool ok = Compiler_parse(comp, &settings, alloc, result, &err);
@@ -184,7 +184,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		r.shEntriesRuntime.ptr[0].vendorMask != 0
 	);
 
-	//--- [[oxc::binary(...)]] records a per-entrypoint backend mask (bit = 1 << ESHBinaryType) ---
+	//--- [[oxc::binary(...)]] records a per-entrypoint backend mask (bit = 1 << EGfxBinaryType) ---
 
 	src = CharString_createRefCStrConst(
 		"[[oxc::binary(\"dxil\")]]\n"
@@ -196,7 +196,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	Test_assert(
 		t, "binary(dxil) records DXIL-only mask",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
-		r.shEntriesRuntime.ptr[0].binaryTypes == (1 << ESHBinaryType_DXIL)
+		r.shEntriesRuntime.ptr[0].binaryTypes == (1 << EGfxBinaryType_DXIL)
 	);
 
 	//"spv" and "spirv" are both accepted; listing both backends sets both bits
@@ -211,7 +211,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	Test_assert(
 		t, "binary(spv, dxil) records both bits",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
-		r.shEntriesRuntime.ptr[0].binaryTypes == ((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
+		r.shEntriesRuntime.ptr[0].binaryTypes == ((1 << EGfxBinaryType_SPIRV) | (1 << EGfxBinaryType_DXIL))
 	);
 
 	//Absence of the annotation leaves the mask unset (0), which the driver treats as "all supported"
@@ -229,7 +229,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	);
 
 	//A backend name that isn't a currently-supported binary type is rejected. "air" (Apple IR) is the
-	//reserved name for the planned Apple backend; until ESHBinaryType_AIR exists it's rejected here, so this
+	//reserved name for the planned Apple backend; until EGfxBinaryType_AIR exists it's rejected here, so this
 	//assertion flips (and prompts wiring the mapping) the day AIR support lands.
 
 	src = CharString_createRefCStrConst(
@@ -256,7 +256,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	Test_assert(
 		t, "AtomicF32 entrypoint auto-restricts to SPIRV",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
-		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) == (1 << ESHBinaryType_SPIRV)
+		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) == (1 << EGfxBinaryType_SPIRV)
 	);
 
 	//ComputeDeriv is only natively *detected* on SPIRV (ComputeDerivativeGroupQuads) but DXC compiles compute
@@ -273,7 +273,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		t, "ComputeDeriv entrypoint stays dual-backend (compiles on DXIL too)",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
 		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) ==
-			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
+			((1 << EGfxBinaryType_SPIRV) | (1 << EGfxBinaryType_DXIL))
 	);
 
 	//RayTriPosition (SM6.10 triangle position fetch) has a DXIL-only intrinsic but is reachable on SPIRV via
@@ -290,7 +290,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		t, "RayTriPosition entrypoint stays dual-backend (SPIRV via inline SPIR-V)",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
 		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) ==
-			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
+			((1 << EGfxBinaryType_SPIRV) | (1 << EGfxBinaryType_DXIL))
 	);
 
 	//CoopVec (SM6.10 cooperative vectors) has a DXIL intrinsic and a SPIRV inline route (NV), so it stays dual.
@@ -306,7 +306,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		t, "CoopVec entrypoint stays dual-backend (SPIRV via inline SPIR-V)",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
 		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) ==
-			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
+			((1 << EGfxBinaryType_SPIRV) | (1 << EGfxBinaryType_DXIL))
 	);
 
 	//CoopMat (SM6.10 cooperative matrix) has a DXIL intrinsic and the cross-vendor SPV_KHR_cooperative_matrix, so dual.
@@ -322,7 +322,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		t, "CoopMat entrypoint stays dual-backend (SPIRV via SPV_KHR_cooperative_matrix)",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
 		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) ==
-			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
+			((1 << EGfxBinaryType_SPIRV) | (1 << EGfxBinaryType_DXIL))
 	);
 
 	src = CharString_createRefCStrConst(
@@ -335,7 +335,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		t, "plain compute entrypoint supports both backends",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
 		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) ==
-			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
+			((1 << EGfxBinaryType_SPIRV) | (1 << EGfxBinaryType_DXIL))
 	);
 
 	//--- [[oxc::defines(...)]] records the define name/value pair (not just "parsed ok") ---
@@ -534,8 +534,8 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	Test_assert(
 		t, "binary(spv) restricts effective set to SPIRV",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
-		r.shEntriesRuntime.ptr[0].binaryTypes == (1 << ESHBinaryType_SPIRV) &&
-		SHEntryRuntime_getBinaryTypes(&r.shEntriesRuntime.ptr[0]) == (1 << ESHBinaryType_SPIRV)
+		r.shEntriesRuntime.ptr[0].binaryTypes == (1 << EGfxBinaryType_SPIRV) &&
+		SHEntryRuntime_getBinaryTypes(&r.shEntriesRuntime.ptr[0]) == (1 << EGfxBinaryType_SPIRV)
 	);
 
 clean:

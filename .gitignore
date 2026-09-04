@@ -73,4 +73,7 @@ dkms.conf
 inc/cfg/config.h
 .dep_hashes.json
 __pycache__/
-
+# Local dependency clones for inspection (fetched via conan in CI, not committed)
+/radeon_gpu_analyzer/
+/nvapi/
+/DirectXShaderCompiler/

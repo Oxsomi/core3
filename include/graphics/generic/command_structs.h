@@ -134,7 +134,7 @@ typedef enum ETransitionType {
 	ETransitionType_ResolveTargetWrite,
 	ETransitionType_CopyRead,
 	ETransitionType_CopyWrite,
-	ETransitionType_Predicate,       //Scope predicate read; injected by startScope, never declared by the caller
+	ETransitionType_Predicate,           //Scope predicate read; injected by startScope, never declared by the caller
 	ETransitionType_KeepAlive            //If the only reason of this transition is to keep a resource alive
 } ETransitionType;
 

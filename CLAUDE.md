@@ -83,6 +83,9 @@ And run the suite, not just the build:
   to `true` and drops the error channel. At call sites, spell out every defaulted argument before
   `e_rr` rather than relying on defaults.
 - Overflow-safe bounds checks: write `offset > size || size - offset < needed`, never `offset + needed`.
+- `e_rr` may always be NULL (probe calls pass NULL deliberately). Never dereference it: a failed callee
+  already filled it, so propagate with `gotoIfError3`, or `s_uccess = false; goto clean;` when cleanup
+  has to happen first. `retError(clean, *e_rr)` is both a NULL dereference and a double-set.
 
 ## Style beyond code_style.md
 

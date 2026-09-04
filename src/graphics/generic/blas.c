@@ -230,7 +230,9 @@ Bool GraphicsDeviceRef_createBLAS(
 			}
 
 			default:
-				retError(clean, Error_unsupportedOperation(2, "GraphicsDeviceRef_createBLAS()::indexFormat must be R32u or R16u"));
+				retError(clean, Error_unsupportedOperation(
+					2, "GraphicsDeviceRef_createBLAS()::indexFormat must be R32u or R16u"
+				));
 		}
 
 		//Validate opacity micromaps (stage 1, special indices only)

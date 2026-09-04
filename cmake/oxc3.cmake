@@ -204,7 +204,7 @@ function(oxc3_add_bundled_test)
 		OxC3_audio
 		OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr
 		OxC3_formats_oiBC OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_oiSB
-		OxC3_formats_oiSH OxC3_formats_wav
+		OxC3_formats_oiSH OxC3_formats_oiPL OxC3_formats_oiSP OxC3_formats_oiSR OxC3_formats_wav
 		OxC3_types_test
 		OxC3_types_container_test_util
 		${T_LIBS}
@@ -242,6 +242,7 @@ function(oxc3_add_bundled_test)
 			"${T_ROOT}/shader_compiler/test/*/*.hlsl"
 			"${T_ROOT}/shader_compiler/test/*/*.hlsli"
 			"${T_ROOT}/shader_compiler/test/*.oiSH"
+			"${T_ROOT}/shader_compiler/test/*.oiSR"
 		)
 
 		foreach(f ${shaderTestData})

@@ -57,14 +57,14 @@ void Test_SHFileRoundTripBasic(Test *t) {
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	SHBinaryInfo infoCopy = info;
 
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name   = CharString_createRefCStrConst("csMain");
-	e.stage  = ESHPipelineStage_Compute;
+	e.stage  = EGfxPipelineStage_Compute;
 	e.groupX = e.groupY = e.groupZ = 8;
 
 	U16 bid = 0;
@@ -103,12 +103,12 @@ void Test_SHFileRoundTripInclude(Test *t) {
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name = CharString_createRefCStrConst("cs");
-	e.stage = ESHPipelineStage_Compute;
+	e.stage = EGfxPipelineStage_Compute;
 	e.groupX = e.groupY = e.groupZ = 4;
 	U16 bid = 0;
 	Test_assert(t, "createRef", ListU16_createRefConst(&bid, 1, &e.binaryIds, &t->err));
@@ -142,13 +142,13 @@ void Test_SHFileRoundTripBinaryExtensions(Test *t) {
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	info.identifier.extensions = ESHExtension_F64 | ESHExtension_I64;
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name = CharString_createRefCStrConst("cs");
-	e.stage = ESHPipelineStage_Compute;
+	e.stage = EGfxPipelineStage_Compute;
 	e.groupX = e.groupY = e.groupZ = 8;
 	U16 bid = 0;
 	Test_assert(t, "createRef", ListU16_createRefConst(&bid, 1, &e.binaryIds, &t->err));
@@ -172,12 +172,12 @@ void Test_SHFileRoundTripComputeGroupSize(Test *t) {
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name   = CharString_createRefCStrConst("cs");
-	e.stage  = ESHPipelineStage_Compute;
+	e.stage  = EGfxPipelineStage_Compute;
 	e.groupX = 16; e.groupY = 8; e.groupZ = 2;
 	U16 bid = 0;
 	Test_assert(t, "createRef", ListU16_createRefConst(&bid, 1, &e.binaryIds, &t->err));
@@ -203,14 +203,14 @@ void Test_SHFileRoundTripRTStages(Test *t) {
 
 	//One lib binary shared by all RT stages
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_RaygenExt, NULL, true);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_RaygenExt, NULL, true);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	//raygen (no payload)
 
 	SHEntry rg = (SHEntry) { 0 };
 	rg.name = CharString_createRefCStrConst("rgen");
-	rg.stage = ESHPipelineStage_RaygenExt;
+	rg.stage = EGfxPipelineStage_RaygenExt;
 	U16 raygenId = 0;
 	Test_assert(t, "createRef", ListU16_createRefConst(&raygenId, 1, &rg.binaryIds, &t->err));
 
@@ -221,7 +221,7 @@ void Test_SHFileRoundTripRTStages(Test *t) {
 
 	SHEntry rm = (SHEntry) { 0 };
 	rm.name = CharString_createRefCStrConst("rmiss");
-	rm.stage = ESHPipelineStage_MissExt;
+	rm.stage = EGfxPipelineStage_MissExt;
 	rm.payloadSize = 64;
 	U16 missId = 0;
 	Test_assert(t, "createRef(0)", ListU16_createRefConst(&missId, 1, &rm.binaryIds, &t->err));
@@ -233,7 +233,7 @@ void Test_SHFileRoundTripRTStages(Test *t) {
 
 	SHEntry rh = (SHEntry) { 0 };
 	rh.name = CharString_createRefCStrConst("rchit");
-	rh.stage = ESHPipelineStage_ClosestHitExt;
+	rh.stage = EGfxPipelineStage_ClosestHitExt;
 	rh.payloadSize = 32;
 	rh.intersectionSize = 16;
 	U16 hitId = 0;
@@ -263,10 +263,10 @@ void Test_SHFileRoundTripMultipleBinaries(Test *t) {
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	const struct { ESHPipelineStage stage; const C8 *name; } cases[3] = {
-		{ ESHPipelineStage_Compute, "csMain" },
-		{ ESHPipelineStage_Vertex,  "vsMain" },
-		{ ESHPipelineStage_Pixel,   "psMain" }
+	const struct { EGfxPipelineStage stage; const C8 *name; } cases[3] = {
+		{ EGfxPipelineStage_Compute, "csMain" },
+		{ EGfxPipelineStage_Vertex,  "vsMain" },
+		{ EGfxPipelineStage_Pixel,   "psMain" }
 	};
 
 	SHBinaryInfo copyBin[3];
@@ -285,7 +285,7 @@ void Test_SHFileRoundTripMultipleBinaries(Test *t) {
 		SHEntry e = (SHEntry) { 0 };
 		e.name  = CharString_createRefCStrConst(cases[i].name);
 		e.stage = cases[i].stage;
-		if (cases[i].stage == ESHPipelineStage_Compute)
+		if (cases[i].stage == EGfxPipelineStage_Compute)
 			e.groupX = e.groupY = e.groupZ = 8;
 		ids[i] = i;
 
@@ -316,10 +316,10 @@ void Test_SHFileRoundTripRegisterSurvives(Test *t) {
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 
 	CharString sampName = CharString_createRefCStrConst("gSampler");
-	SHBindings sampB = makeDualBinding(0, 0, 0);
+	GfxBindings sampB = makeDualBinding(0, 0, 0);
 	Test_assert(t, "add sampler",
 		ListSHRegisterRuntime_addSampler(&info.registers, 0x3, false, &sampName, NULL, sampB, t->alloc, &t->err)
 	);
@@ -330,11 +330,11 @@ void Test_SHFileRoundTripRegisterSurvives(Test *t) {
 		sampReg = info.registers.ptr[0].reg;
 
 	CharString texName = CharString_createRefCStrConst("gTexture");
-	SHBindings texB = makeDualBinding(0, 1, 0);
+	GfxBindings texB = makeDualBinding(0, 1, 0);
 	Test_assert(t, "add texture",
 		ListSHRegisterRuntime_addTexture(
 			&info.registers, ESHTextureType_Texture2D, false, false, 0x3,
-			ESHTexturePrimitive_Float | ESHTexturePrimitive_Component4,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
 			&texName, NULL, texB, t->alloc, &t->err
 		)
 	);
@@ -348,7 +348,7 @@ void Test_SHFileRoundTripRegisterSurvives(Test *t) {
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name   = CharString_createRefCStrConst("cs");
-	e.stage  = ESHPipelineStage_Compute;
+	e.stage  = EGfxPipelineStage_Compute;
 	e.groupX = e.groupY = e.groupZ = 8;
 	U16 bid = 0;
 	Test_assert(t, "createRef", ListU16_createRefConst(&bid, 1, &e.binaryIds, &t->err));
@@ -389,7 +389,7 @@ void Test_SHFileRoundTripUniforms(Test *t) {
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 
 	//Build two uniforms: a float scalar and a U32
 
@@ -465,7 +465,7 @@ void Test_SHFileRoundTripDefines(Test *t) {
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 
 	CharString defName0  = CharString_createRefCStrConst("ENABLE_SHADOWS");
 	CharString defVal0   = CharString_createRefCStrConst("1");
@@ -509,7 +509,7 @@ void Test_SHFileRoundTripArrayRegisters(Test *t) {
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 
 	//1-D array [4], triggers the "small array" path (arrayDimOrId = dim directly)
 
@@ -518,12 +518,12 @@ void Test_SHFileRoundTripArrayRegisters(Test *t) {
 	Test_assert(t, "createRef", ListU32_createRefConst(dims1D, 1, &arr1D, &t->err));
 
 	CharString tex1DName = CharString_createRefCStrConst("gTexArray");
-	SHBindings tex1DB = makeDualBinding(0, 0, 0);
+	GfxBindings tex1DB = makeDualBinding(0, 0, 0);
 
 	Test_assert(t, "add tex[4]",
 		ListSHRegisterRuntime_addTexture(
 			&info.registers, ESHTextureType_Texture2D, false, false, 0x3,
-			ESHTexturePrimitive_Float | ESHTexturePrimitive_Component4,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
 			&tex1DName, &arr1D, tex1DB, t->alloc, &t->err
 		)
 	);
@@ -535,12 +535,12 @@ void Test_SHFileRoundTripArrayRegisters(Test *t) {
 	Test_assert(t, "createRef(0)", ListU32_createRefConst(dims2D, 2, &arr2D, &t->err));
 
 	CharString tex2DName = CharString_createRefCStrConst("gTex2DArray");
-	SHBindings tex2DB = makeDualBinding(0, 4, 1);
+	GfxBindings tex2DB = makeDualBinding(0, 4, 4);
 
 	Test_assert(t, "add tex[3][3]",
 		ListSHRegisterRuntime_addTexture(
 			&info.registers, ESHTextureType_Texture2D, false, false, 0x3,
-			ESHTexturePrimitive_Float | ESHTexturePrimitive_Component4,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
 			&tex2DName, &arr2D, tex2DB, t->alloc, &t->err
 		)
 	);
@@ -587,14 +587,14 @@ void Test_SHFileRoundTripSemanticNames(Test *t) {
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Vertex, "vsMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vsMain", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	//Vertex entry: 2 inputs (POSITION, TEXCOORD0), 1 output (SV_POSITION)
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name  = CharString_createRefCStrConst("vsMain");
-	e.stage = ESHPipelineStage_Vertex;
+	e.stage = EGfxPipelineStage_Vertex;
 
 	//inputs[0] = float4 (POSITION), inputs[1] = float2 (TEXCOORD)
 
@@ -680,7 +680,7 @@ void Test_SHFileRoundTripShaderBufferInRegister(Test *t) {
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 
 	SBFile cbSB = makeCBufferSBFileWithFields(t);
 
@@ -691,7 +691,7 @@ void Test_SHFileRoundTripShaderBufferInRegister(Test *t) {
 	U64 originalBufSize = cbSB.bufferSize;
 
 	CharString cbName = CharString_createRefCStrConst("PerFrameCB");
-	SHBindings cbB = makeDualBinding(0, 0, 0);
+	GfxBindings cbB = makeDualBinding(0, 0, 0);
 
 	Test_assert(t, "add ConstantBuffer",
 		ListSHRegisterRuntime_addBuffer(

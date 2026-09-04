@@ -121,7 +121,9 @@ extern "C" void Test_graphicsFormats(oxc::c::Test *t) {
 		c::GraphicsDeviceInfo_supportsDepthStencilFormat(&all, c::EDepthStencilFormat_D24S8Ext)
 	);
 
-	Test_assert(t, "d32s8NeedsType", !c::GraphicsDeviceInfo_supportsDepthStencilFormat(&all, c::EDepthStencilFormat_D32S8X24Ext));
+	Test_assert(
+		t, "d32s8NeedsType", !c::GraphicsDeviceInfo_supportsDepthStencilFormat(&all, c::EDepthStencilFormat_D32S8X24Ext)
+	);
 
 	Test_assert(t, "supportsNullDevice",
 		!c::GraphicsDeviceInfo_supportsFormat(NULL, c::ETextureFormat_RGBA8) &&
@@ -284,16 +286,16 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 	c::DescriptorLayoutInfo result {};
 
 	Test_assert(t, "nullInfo", !c::GraphicsDevice_defaultBindlessLayout(
-		NULL, c::ESHBinaryType_DXIL, c::EGraphicsDeviceFlags_None, &result, alloc, NULL
+		NULL, c::EGfxBinaryType_DXIL, c::EGraphicsDeviceFlags_None, &result, alloc, NULL
 	));
 	Test_assert(t, "nullResult", !c::GraphicsDevice_defaultBindlessLayout(
-		&info, c::ESHBinaryType_DXIL, c::EGraphicsDeviceFlags_None, NULL, alloc, NULL
+		&info, c::EGfxBinaryType_DXIL, c::EGraphicsDeviceFlags_None, NULL, alloc, NULL
 	));
 
 	//A binary type without binding numbers is refused rather than silently handed DXIL's registers
 
 	Test_assert(t, "unknownBinary", !c::GraphicsDevice_defaultBindlessLayout(
-		&info, c::ESHBinaryType_Count, c::EGraphicsDeviceFlags_None, &result, alloc, NULL
+		&info, c::EGfxBinaryType_Count, c::EGraphicsDeviceFlags_None, &result, alloc, NULL
 	));
 
 	Test_assert(t, "unknownLeftEmpty", !result.bindings.ptr && !result.bindingNames.ptr);
@@ -301,7 +303,7 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 	//SPIRV without raytracing: samplers alone in set 0, everything else packed into set 1 in declaration order
 
 	if(Test_assert(t, "spirv", c::GraphicsDevice_defaultBindlessLayout(
-		&info, c::ESHBinaryType_SPIRV, c::EGraphicsDeviceFlags_EnableDynamicSamplers, &result, alloc, &t->err
+		&info, c::EGfxBinaryType_SPIRV, c::EGraphicsDeviceFlags_EnableDynamicSamplers, &result, alloc, &t->err
 	))) {
 
 		Test_assert(t, "spirvCount", result.bindings.length == 12 && result.bindingNames.length == 12);
@@ -310,13 +312,13 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 		//A non empty result is a leak about to happen, so it's refused before anything is written
 
 		Test_assert(t, "nonEmptyRefused", !c::GraphicsDevice_defaultBindlessLayout(
-			&info, c::ESHBinaryType_SPIRV, c::EGraphicsDeviceFlags_EnableDynamicSamplers, &result, alloc, NULL
+			&info, c::EGfxBinaryType_SPIRV, c::EGraphicsDeviceFlags_EnableDynamicSamplers, &result, alloc, NULL
 		));
 
 		const c::DescriptorBinding *b = result.bindings.ptr;
 
 		Test_assert(t, "spirvSampler",
-			b[0].registerType == c::ESHRegisterType_Sampler && !b[0].binding.space && !b[0].binding.binding
+			b[0].registerType == c::EGfxRegisterType_Sampler && !b[0].binding.space && !b[0].binding.binding
 		);
 
 		Test_assert(t, "spirvSamplerName", c::CharString_equalsCStringSensitive(&result.bindingNames.ptr[0], "_samplers"));
@@ -326,7 +328,7 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 
 		for(c::U64 i = 1; i < result.bindings.length; ++i) {
 			packed &= b[i].binding.space == 1 && b[i].binding.binding == i - 1 && b[i].visibility == c::U32_MAX && b[i].count;
-			hasTlas |= b[i].registerType == c::ESHRegisterType_AccelerationStructure;
+			hasTlas |= b[i].registerType == c::EGfxRegisterType_AccelerationStructure;
 		}
 
 		Test_assert(t, "spirvPacked", packed);
@@ -340,7 +342,7 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 	//Everything else keeps its own binding number, since only set 0 held the sampler.
 
 	if(Test_assert(t, "spirvNoDynamicSamplers", c::GraphicsDevice_defaultBindlessLayout(
-		&info, c::ESHBinaryType_SPIRV, c::EGraphicsDeviceFlags_None, &result, alloc, &t->err
+		&info, c::EGfxBinaryType_SPIRV, c::EGraphicsDeviceFlags_None, &result, alloc, &t->err
 	))) {
 
 		Test_assert(t, "noSamplerCount", result.bindings.length == 11 && result.bindingNames.length == 11);
@@ -349,11 +351,11 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 
 		for(c::U64 i = 0; i < result.bindings.length; ++i) {
 
-			const c::ESHRegisterType type =
-				(c::ESHRegisterType)(result.bindings.ptr[i].registerType & c::ESHRegisterType_TypeMask);
+			const c::EGfxRegisterType type =
+				(c::EGfxRegisterType)(result.bindings.ptr[i].registerType & c::EGfxRegisterType_TypeMask);
 
 			anySampler |=
-				type == c::ESHRegisterType_Sampler || type == c::ESHRegisterType_SamplerComparisonState;
+				type == c::EGfxRegisterType_Sampler || type == c::EGfxRegisterType_SamplerComparisonState;
 		}
 
 		Test_assert(t, "noSamplerBinding", !anySampler);
@@ -361,7 +363,7 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 		//The first entry is now what used to sit behind the sampler, still at set 1 binding 0
 
 		Test_assert(t, "noSamplerFirstIsTexture",
-			result.bindings.ptr[0].registerType == c::ESHRegisterType_Texture2D &&
+			result.bindings.ptr[0].registerType == c::EGfxRegisterType_Texture2D &&
 			result.bindings.ptr[0].binding.space == 1 && !result.bindings.ptr[0].binding.binding
 		);
 
@@ -375,7 +377,7 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 	//Raytracing adds exactly one binding at the end rather than reshuffling anything before it
 
 	if(Test_assert(t, "spirvRt", c::GraphicsDevice_defaultBindlessLayout(
-		&infoRt, c::ESHBinaryType_SPIRV, c::EGraphicsDeviceFlags_EnableDynamicSamplers, &result, alloc, &t->err
+		&infoRt, c::EGfxBinaryType_SPIRV, c::EGraphicsDeviceFlags_EnableDynamicSamplers, &result, alloc, &t->err
 	))) {
 
 		Test_assert(t, "spirvRtCount", result.bindings.length == 13);
@@ -383,7 +385,7 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 		const c::DescriptorBinding last = result.bindings.ptr[12];
 
 		Test_assert(t, "spirvRtTlas",
-			last.registerType == c::ESHRegisterType_AccelerationStructure &&
+			last.registerType == c::EGfxRegisterType_AccelerationStructure &&
 			last.binding.space == 1 && last.binding.binding == 11
 		);
 
@@ -399,7 +401,7 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 	// variant; without the flag the sampler binding is gone and every index shifts down one.
 
 	if(Test_assert(t, "dxil", c::GraphicsDevice_defaultBindlessLayout(
-		&infoRt, c::ESHBinaryType_DXIL, c::EGraphicsDeviceFlags_EnableDynamicSamplers, &result, alloc, &t->err
+		&infoRt, c::EGfxBinaryType_DXIL, c::EGraphicsDeviceFlags_EnableDynamicSamplers, &result, alloc, &t->err
 	))) {
 
 		const c::DescriptorBinding *b = result.bindings.ptr;

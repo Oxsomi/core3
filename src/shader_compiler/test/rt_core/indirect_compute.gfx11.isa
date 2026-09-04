@@ -1,0 +1,28 @@
+; gfx1100  SGPRs 17  VGPRs 3  code 160 B  instrs 26  scratch 0  lds 0
+_amdgpu_cs_main:
+	s_getpc_b64 s[10:11]                                       // 000000000000
+	s_mov_b32 s0, s3                                           // 000000000004
+	s_mov_b32 s3, s11                                          // 000000000008
+	s_lshl_b32 s0, s0, 4                                       // 00000000000C
+	s_load_b128 s[4:7], s[2:3], 0x0                            // 000000000010
+	s_mov_b32 s8, s1                                           // 000000000018
+	s_mov_b32 s9, s11                                          // 00000000001C
+	s_and_b32 s0, s0, 0x1ffff0                                 // 000000000020
+	s_load_b128 s[0:3], s[8:9], s0 offset:0x0                  // 000000000028
+	s_waitcnt lgkmcnt(0)                                       // 000000000030
+	s_buffer_load_b32 s4, s[4:7], 0x4                          // 000000000034
+	s_waitcnt lgkmcnt(0)                                       // 00000000003C
+	v_mul_f32_e64 v0, 0x3da2f983, s4                           // 000000000040
+	v_mul_f32_e64 v1, 0x3d22f983, s4                           // 00000000004C
+	v_mul_f32_e64 v2, 0x3ca2f983, s4                           // 000000000058
+	s_delay_alu instid0(VALU_DEP_3) | instskip(NEXT) | instid1(VALU_DEP_2)// 000000000064
+	v_sin_f32_e32 v0, v0                                       // 000000000068
+	v_sin_f32_e32 v1, v1                                       // 00000000006C
+	s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(TRANS32_DEP_3)// 000000000070
+	v_sin_f32_e32 v2, v2                                       // 000000000074
+	v_fma_f32 v0, v0, 0.5, 0.5                                 // 000000000078
+	s_waitcnt_depctr 0xfff                                     // 000000000080
+	v_fma_f32 v1, v1, 0.5, 0.5                                 // 000000000084
+	v_fma_f32 v2, v2, 0.5, 0.5                                 // 00000000008C
+	buffer_store_b96 v[0:2], off, s[0:3], 0                    // 000000000094
+	s_endpgm                                                   // 00000000009C

@@ -96,39 +96,39 @@ void Log_printStackTrace(const Allocator *alloc, U8 skip, ELogLevel lvl, ELogOpt
 	Log_printCapturedStackTrace(alloc, stackTrace, lvl, options);
 }
 
-#define Log_level(lvl)                                                             \
+#define Log_level(lvl)                                                          \
 																				\
-	if(!format)                                                                    \
-		return;                                                                    \
+	if(!format)                                                                 \
+		return;                                                                 \
 																				\
-	CharString res = CharString_createNull();                                    \
+	CharString res = CharString_createNull();                                   \
 																				\
-	va_list arg1;                                                                \
-	va_start(arg1, format);                                                        \
-	Bool s_uccess = CharString_formatVariadic(alloc, &res, NULL, format, arg1);    \
-	va_end(arg1);                                                                \
+	va_list arg1;                                                               \
+	va_start(arg1, format);                                                     \
+	Bool s_uccess = CharString_formatVariadic(alloc, &res, NULL, format, arg1); \
+	va_end(arg1);                                                               \
 																				\
 	if(s_uccess)                                                                \
-		Log_log(alloc, lvl, opt, &res);                                            \
+		Log_log(alloc, lvl, opt, &res);                                         \
 																				\
 	/*The allocator is failing (e.g. OOM); retry from the reserved pool so the message still prints*/    \
-	else {                                                                        \
+	else {                                                                      \
 																				\
-		const ELockAcquire acq = SpinLock_lock(&Log_reservedLock, U64_MAX);        \
+		const ELockAcquire acq = SpinLock_lock(&Log_reservedLock, U64_MAX);     \
 																				\
 		Log_reservedOff = 0;                                                    \
 		CharString_free(&res, alloc);        /*In case the failed attempt left a partial string*/    \
 																				\
-		va_start(arg1, format);                                                    \
+		va_start(arg1, format);                                                 \
 		if(CharString_formatVariadic(&Log_reservedAllocator, &res, NULL, format, arg1))    \
 			Log_log(&Log_reservedAllocator, lvl, opt, &res);                    \
-		va_end(arg1);                                                            \
+		va_end(arg1);                                                           \
 																				\
 		res = CharString_createNull();        /*Pool memory; reclaimed by the next reset, so nothing to free*/    \
 																				\
 		if(acq == ELockAcquire_Acquired)                                        \
-			SpinLock_unlock(&Log_reservedLock);                                    \
-	}                                                                            \
+			SpinLock_unlock(&Log_reservedLock);                                 \
+	}                                                                           \
 																				\
 	CharString_free(&res, alloc);
 

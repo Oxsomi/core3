@@ -1,0 +1,236 @@
+; gfx1201  SGPRs 20  VGPRs 40  code 1320 B  instrs 234  scratch 0  lds 0
+_amdgpu_cs_main:
+	v_and_b32_e32 v0, 0x3ff, v0                                // 000000000000
+	s_mov_b32 s8, s1                                           // 000000000008
+	s_mov_b64 s[0:1], exec                                     // 00000000000C
+	s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)// 000000000010
+	v_lshl_add_u32 v4, ttmp9, 8, v0                            // 000000000014
+	v_cmpx_gt_u32_e32 2, v4                                    // 00000000001C
+	s_cbranch_execz .LBB0_7                                    // 000000000020
+	s_getpc_b64 s[0:1]                                         // 000000000024
+	v_mov_b32_e32 v2, 9                                        // 000000000028
+	v_mov_b32_e32 v0, 6                                        // 00000000002C
+	s_wait_alu 0xfffe                                          // 000000000030
+	s_sext_i32_i16 s1, s1                                      // 000000000034
+	s_mov_b64 s[10:11], exec                                   // 000000000038
+	s_wait_alu 0xfffe                                          // 00000000003C
+	s_mov_b32 s9, s1                                           // 000000000040
+	v_cmpx_eq_u32_e32 0, v4                                    // 000000000044
+	s_cbranch_execz .LBB0_6                                    // 000000000048
+	s_mov_b32 s7, s3                                           // 00000000004C
+	s_mov_b32 s3, s1                                           // 000000000050
+	v_mov_b32_e32 v2, 1.0                                      // 000000000054
+	s_load_b128 s[0:3], s[2:3], 0x0                            // 000000000058
+	v_mov_b32_e32 v5, 1.0                                      // 000000000060
+	s_wait_kmcnt 0x0                                           // 000000000064
+	s_buffer_load_b32 s12, s[0:3], 0xc                         // 000000000068
+	s_wait_kmcnt 0x0                                           // 000000000070
+	s_cmp_eq_u32 s12, 0                                        // 000000000074
+	s_cbranch_scc1 .LBB0_5                                     // 000000000078
+	s_buffer_load_b32 s0, s[0:3], 0x10                         // 00000000007C
+	v_mov_b32_e32 v5, 1.0                                      // 000000000084
+	s_wait_kmcnt 0x0                                           // 000000000088
+	s_cmp_eq_u32 s0, -1                                        // 00000000008C
+	s_cbranch_scc1 .LBB0_5                                     // 000000000090
+	s_lshl_b32 s0, s0, 5                                       // 000000000094
+	s_wait_alu 0xfffe                                          // 000000000098
+	s_and_b32 s0, s0, 0x3fffe0                                 // 00000000009C
+	s_load_b256 s[12:19], s[8:9], s0 offset:0x0                // 0000000000A4
+	s_wait_kmcnt 0x0                                           // 0000000000AC
+	v_alignbit_b32 v0, s14, s13, 30                            // 0000000000B0
+	s_bfe_u32 s0, s14, 0x10000e                                // 0000000000B8
+	s_lshr_b32 s1, s13, 25                                     // 0000000000C0
+	s_wait_alu 0xfffe                                          // 0000000000C4
+	s_add_co_i32 s0, s0, 1                                     // 0000000000C8
+	s_wait_alu 0xfffe                                          // 0000000000CC
+	s_lshr_b32 s0, s0, s1                                      // 0000000000D0
+	v_readfirstlane_b32 s2, v0                                 // 0000000000D4
+	s_wait_alu 0xfffe                                          // 0000000000D8
+	s_max_u32 s0, s0, 1                                        // 0000000000DC
+	s_wait_alu 0xfffe                                          // 0000000000E0
+	s_cvt_f32_u32 s0, s0                                       // 0000000000E4
+	s_and_b32 s2, s2, 0xffff                                   // 0000000000E8
+	s_delay_alu instid0(SALU_CYCLE_1)                          // 0000000000F0
+	s_add_co_i32 s2, s2, 1                                     // 0000000000F4
+	s_wait_alu 0xfffe                                          // 0000000000F8
+	v_rcp_iflag_f32_e32 v0, s0                                 // 0000000000FC
+	s_lshr_b32 s0, s2, s1                                      // 000000000100
+	s_wait_alu 0xfffe                                          // 000000000104
+	s_max_u32 s0, s0, 1                                        // 000000000108
+	s_wait_alu 0xfffe                                          // 00000000010C
+	s_cvt_f32_u32 s0, s0                                       // 000000000110
+	s_wait_alu 0xfffe                                          // 000000000114
+	s_delay_alu instid0(TRANS32_DEP_1) | instid1(SALU_CYCLE_2) // 000000000118
+	v_mul_f32_e32 v5, s0, v0                                   // 00000000011C
+	s_cvt_f32_u32 s0, s6                                       // 000000000120
+	s_delay_alu instid0(VALU_DEP_1)                            // 000000000124
+	v_rcp_f32_e32 v0, v5                                       // 000000000128
+	s_lshl_b32 s1, s5, 4                                       // 00000000012C
+	v_mov_b32_e32 v8, 0                                        // 000000000130
+	s_wait_alu 0xfffe                                          // 000000000134
+	s_mul_f32 s0, s0, 0x3b360b60                               // 000000000138
+	v_mov_b32_e32 v36, 0x3a833405                              // 000000000140
+	v_mov_b32_e32 v37, 0x3dc8e7a8                              // 000000000148
+	s_lshl_b32 s4, s4, 4                                       // 000000000150
+	s_wait_alu 0xfffe                                          // 000000000154
+	v_sin_f32_e32 v1, s0                                       // 000000000158
+	v_cos_f32_e32 v11, s0                                      // 00000000015C
+	s_and_b32 s0, s1, 0x1ffff0                                 // 000000000160
+	v_mul_f32_e32 v14, 0x3f13cd3a, v0                          // 000000000168
+	s_load_b128 s[0:3], s[8:9], s0 offset:0x400000             // 000000000170
+	v_mov_b32_e32 v9, v8                                       // 000000000178
+	v_mov_b32_e32 v12, v8                                      // 00000000017C
+	v_mov_b32_e32 v13, v8                                      // 000000000180
+	v_mov_b32_e32 v35, v8                                      // 000000000184
+	v_readfirstlane_b32 s5, v1                                 // 000000000188
+	v_readfirstlane_b32 s6, v11                                // 00000000018C
+	v_mul_f32_e32 v0, v1, v1                                   // 000000000190
+	v_mul_f32_e32 v21, 0x3d6cb82a, v1                          // 000000000194
+	v_mul_f32_e32 v20, 0x3d6cb82a, v11                         // 00000000019C
+	s_xor_b32 s12, s5, 0x80000000                              // 0000000001A4
+	s_xor_b32 s13, s6, 0x80000000                              // 0000000001AC
+	s_wait_alu 0xfffe                                          // 0000000001B4
+	v_mul_f32_e32 v19, s12, v14                                // 0000000001B8
+	v_mul_f32_e32 v18, s13, v14                                // 0000000001BC
+	s_mul_f32 s6, s6, 0x3f13cd3a                               // 0000000001C0
+	v_fma_f32 v1, v11, v11, v0                                 // 0000000001C8
+	s_mul_f32 s5, s5, 0xbf13cd3a                               // 0000000001D0
+	v_mul_f32_e32 v24, 0xbdcd0148, v19                         // 0000000001D8
+	v_mul_f32_e32 v15, s6, v18                                 // 0000000001E0
+	v_mov_b32_e32 v6, s13                                      // 0000000001E4
+	v_rcp_f32_e32 v3, v1                                       // 0000000001E8
+	v_mov_b32_e32 v7, s12                                      // 0000000001EC
+	v_mul_f32_e32 v16, s5, v24                                 // 0000000001F0
+	v_xor_b32_e32 v17, 0x80000000, v15                         // 0000000001F4
+	v_mov_b32_e32 v10, s12                                     // 0000000001FC
+	v_xor_b32_e32 v0, 0x80000000, v0                           // 000000000200
+	s_wait_kmcnt 0x0                                           // 000000000208
+	s_clause 0x1                                               // 00000000020C
+	buffer_store_b128 v[6:9], off, s[0:3], null                // 000000000210
+	buffer_store_b128 v[10:13], off, s[0:3], null offset:16    // 00000000021C
+	v_add_f32_e32 v26, v3, v3                                  // 000000000228
+	v_fmac_f32_e32 v16, v18, v20                               // 00000000022C
+	v_fmac_f32_e32 v17, s5, v19                                // 000000000230
+	v_bfrev_b32_e32 v10, 1                                     // 000000000234
+	v_mul_f32_e32 v23, s12, v3                                 // 000000000238
+	s_xor_b32 s12, s5, 0x80000000                              // 00000000023C
+	v_fmac_f32_e32 v0, s13, v11                                // 000000000244
+	v_mul_f32_e32 v27, v3, v11                                 // 000000000248
+	v_mul_f32_e32 v31, v1, v26                                 // 00000000024C
+	v_rcp_f32_e32 v26, v16                                     // 000000000250
+	s_wait_alu 0xfffe                                          // 000000000254
+	v_fma_f32 v28, s12, v19, v15                               // 000000000258
+	v_mul_f32_e32 v29, 0x3dc8e7a8, v17                         // 000000000260
+	v_mov_b32_e32 v12, -1.0                                    // 000000000268
+	v_mov_b32_e32 v13, 2.0                                     // 00000000026C
+	v_mov_b32_e32 v11, v8                                      // 000000000270
+	v_mov_b32_e32 v15, v8                                      // 000000000274
+	v_mov_b32_e32 v16, v8                                      // 000000000278
+	v_mov_b32_e32 v17, v8                                      // 00000000027C
+	v_mov_b32_e32 v6, v10                                      // 000000000280
+	v_mov_b32_e32 v7, v8                                       // 000000000284
+	v_mov_b32_e32 v9, v2                                       // 000000000288
+	s_clause 0x1                                               // 00000000028C
+	buffer_store_b128 v[10:13], off, s[0:3], null offset:32    // 000000000290
+	buffer_store_b128 v[6:9], off, s[0:3], null offset:48      // 00000000029C
+	v_mov_b32_e32 v7, 0x3f13cd3a                               // 0000000002A8
+	v_mov_b32_e32 v6, v8                                       // 0000000002B0
+	v_mov_b32_e32 v9, v8                                       // 0000000002B4
+	buffer_store_b128 v[14:17], off, s[0:3], null offset:64    // 0000000002B8
+	v_mov_b32_e32 v16, 0xba833405                              // 0000000002C4
+	v_mov_b32_e32 v17, 0x3dcd0148                              // 0000000002CC
+	v_mov_b32_e32 v14, v8                                      // 0000000002D4
+	v_mul_f32_e32 v22, s13, v3                                 // 0000000002D8
+	v_mul_f32_e32 v30, v3, v0                                  // 0000000002DC
+	v_mul_f32_e32 v34, v1, v3                                  // 0000000002E0
+	v_mov_b32_e32 v0, v8                                       // 0000000002E4
+	v_mov_b32_e32 v1, v8                                       // 0000000002E8
+	v_mov_b32_e32 v3, v8                                       // 0000000002EC
+	buffer_store_b128 v[14:17], off, s[0:3], null offset:96    // 0000000002F0
+	v_mul_f32_e32 v14, v20, v26                                // 0000000002FC
+	v_mul_f32_e32 v32, v21, v26                                // 000000000300
+	v_add_f32_e32 v11, v26, v26                                // 000000000304
+	v_mov_b32_e32 v20, v8                                      // 000000000308
+	v_mov_b32_e32 v21, v8                                      // 00000000030C
+	buffer_store_b128 v[6:9], off, s[0:3], null offset:80      // 000000000310
+	v_mov_b32_e32 v6, s5                                       // 00000000031C
+	v_mov_b32_e32 v7, s6                                       // 000000000320
+	v_mul_f32_e32 v10, 0x3a833405, v28                         // 000000000324
+	buffer_store_b128 v[18:21], off, s[0:3], null offset:128   // 00000000032C
+	v_mul_f32_e32 v20, v28, v11                                // 000000000338
+	v_mul_f32_e32 v21, v29, v26                                // 00000000033C
+	v_mul_f32_e32 v38, v28, v26                                // 000000000340
+	buffer_store_b128 v[6:9], off, s[0:3], null offset:144     // 000000000344
+	v_mov_b32_e32 v28, v8                                      // 000000000350
+	v_mov_b32_e32 v29, v8                                      // 000000000354
+	v_mov_b32_e32 v9, v34                                      // 000000000358
+	v_mov_b32_e32 v6, v8                                       // 00000000035C
+	v_mov_b32_e32 v7, v8                                       // 000000000360
+	v_mul_f32_e32 v25, 0x3dcd0148, v18                         // 000000000364
+	v_mul_f32_e32 v16, 0x3fddb3d8, v5                          // 00000000036C
+	v_mov_b32_e32 v17, v8                                      // 000000000374
+	v_mov_b32_e32 v18, v8                                      // 000000000378
+	v_mov_b32_e32 v19, v8                                      // 00000000037C
+	s_clause 0x1                                               // 000000000380
+	buffer_store_b128 v[28:31], off, s[0:3], null offset:224   // 000000000384
+	buffer_store_b128 v[6:9], off, s[0:3], null offset:240     // 000000000390
+	v_mov_b32_e32 v34, v8                                      // 00000000039C
+	v_mov_b32_e32 v7, 0x3fddb3d8                               // 0000000003A0
+	v_mov_b32_e32 v9, v8                                       // 0000000003A8
+	v_mul_f32_e32 v39, v10, v26                                // 0000000003AC
+	v_mov_b32_e32 v10, v8                                      // 0000000003B0
+	v_mov_b32_e32 v11, v8                                      // 0000000003B4
+	v_mul_f32_e32 v15, v24, v26                                // 0000000003B8
+	v_mul_f32_e32 v33, v25, v26                                // 0000000003BC
+	v_mov_b32_e32 v24, v8                                      // 0000000003C0
+	v_mov_b32_e32 v25, v8                                      // 0000000003C4
+	v_mov_b32_e32 v26, v23                                     // 0000000003C8
+	s_clause 0x2                                               // 0000000003CC
+	buffer_store_b128 v[0:3], off, s[0:3], null offset:112     // 0000000003D0
+	buffer_store_b128 v[16:19], off, s[0:3], null offset:256   // 0000000003DC
+	buffer_store_b128 v[6:9], off, s[0:3], null offset:272     // 0000000003E8
+	v_mov_b32_e32 v7, v8                                       // 0000000003F4
+	v_mov_b32_e32 v9, v2                                       // 0000000003F8
+	v_mov_b32_e32 v16, v8                                      // 0000000003FC
+	v_mov_b32_e32 v2, 0x411fd70a                               // 000000000400
+	v_mov_b32_e32 v3, 0x3c23d70a                               // 000000000408
+	s_clause 0x5                                               // 000000000410
+	buffer_store_b128 v[34:37], off, s[0:3], null offset:160   // 000000000414
+	buffer_store_b128 v[10:13], off, s[0:3], null offset:176   // 000000000420
+	buffer_store_b128 v[22:25], off, s[0:3], null offset:192   // 00000000042C
+	buffer_store_b128 v[26:29], off, s[0:3], null offset:208   // 000000000438
+	buffer_store_b128 v[6:9], off, s[0:3], null offset:288     // 000000000444
+	buffer_store_b128 v[0:3], off, s[0:3], null offset:304     // 000000000450
+	v_mov_b32_e32 v36, v8                                      // 00000000045C
+	v_mov_b32_e32 v37, v8                                      // 000000000460
+	s_and_b32 s4, s4, 0x1ffff0                                 // 000000000464
+	s_clause 0x3                                               // 00000000046C
+	buffer_store_b128 v[14:17], off, s[0:3], null offset:320   // 000000000470
+	buffer_store_b128 v[32:35], off, s[0:3], null offset:336   // 00000000047C
+	buffer_store_b128 v[18:21], off, s[0:3], null offset:352   // 000000000488
+	buffer_store_b128 v[36:39], off, s[0:3], null offset:368   // 000000000494
+	s_load_b128 s[0:3], s[8:9], s4 offset:0x400000             // 0000000004A0
+	v_mov_b32_e32 v5, 1                                        // 0000000004A8
+	v_mov_b32_e32 v2, 6                                        // 0000000004AC
+	v_mov_b32_e32 v0, 3                                        // 0000000004B0
+	s_delay_alu instid0(VALU_DEP_3)                            // 0000000004B4
+	v_mov_b32_e32 v6, v5                                       // 0000000004B8
+	v_mov_b32_e32 v7, v5                                       // 0000000004BC
+	s_wait_kmcnt 0x0                                           // 0000000004C0
+	buffer_store_b96 v[5:7], off, s[0:3], null                 // 0000000004C4
+	s_mov_b32 s3, s7                                           // 0000000004D0
+	s_or_b64 exec, exec, s[10:11]                              // 0000000004D4
+	s_lshl_b32 s0, s3, 4                                       // 0000000004D8
+	v_lshlrev_b32_e32 v4, 5, v4                                // 0000000004DC
+	s_wait_alu 0xfffe                                          // 0000000004E0
+	s_and_b32 s0, s0, 0x1ffff0                                 // 0000000004E4
+	v_mov_b32_e32 v1, 1                                        // 0000000004EC
+	s_load_b128 s[0:3], s[8:9], s0 offset:0x400000             // 0000000004F0
+	v_mov_b32_e32 v3, 0                                        // 0000000004F8
+	s_wait_kmcnt 0x0                                           // 0000000004FC
+	buffer_store_b128 v[0:3], v4, s[0:3], null offen           // 000000000500
+	v_mov_b32_e32 v0, v3                                       // 00000000050C
+	v_mov_b32_e32 v1, v3                                       // 000000000510
+	v_mov_b32_e32 v2, v3                                       // 000000000514
+	buffer_store_b128 v[0:3], v4, s[0:3], null offen offset:16 // 000000000518
+	s_endpgm                                                   // 000000000524

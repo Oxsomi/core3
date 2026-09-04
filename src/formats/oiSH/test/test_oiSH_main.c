@@ -40,7 +40,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHExtensionSetSanity(&t);
 	Test_SHVendorNames(&t);
 	Test_SHBinaryTypeNames(&t);
-	Test_SHBindingsDummy(&t);
+	Test_GfxBindingsDummy(&t);
 
 	Test_SHEntryRuntimeGetCombinations(&t);
 	Test_SHBinaryIdentifierEquals(&t);
@@ -104,6 +104,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileRegisterAddSamplerComparisonState(&t);
 	Test_SHFileRegisterDuplicateNameRejected(&t);
 	Test_SHFileRegisterDuplicateSPIRVBindingRejected(&t);
+	Test_SHFileRegisterDxilRangeOverlapRejected(&t);
 	Test_SHFileRegisterAddTexture(&t);
 	Test_SHFileRegisterAddRWTexture(&t);
 	Test_SHFileRegisterArray(&t);

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # check_style.py
 # Style checks (all files):
-#   1.  No line longer than 128 characters
+#   1.  No line longer than 128 columns (a tab advances to the next multiple of 4)
 #   2.  No trailing tabs or spaces at end of line
 #   3.  No spaces used for indentation (tabs only)
 #   4.  No duplicate filenames anywhere in the scanned tree
@@ -19,6 +19,9 @@
 #   14. POSIX headers (<unistd.h> <pthread.h> etc.) only inside
 #       src/.../unix directories
 #   15. No unmerged Git conflict markers (<<<<<<< / ======= / >>>>>>>)
+#   16. Aligned case tables stay aligned: once any line of a contiguous `case X: stmt` run pads
+#       with 2+ spaces, every statement (and every trailing break;) in the run must share one
+#       column; single-space runs are the unaligned style and stay exempt
 #
 # Banned symbols (with per-path allow-lists):
 #   B1.  malloc / free / realloc / calloc
@@ -91,6 +94,44 @@ ALL_EXTENSIONS    = C_EXTENSIONS
 INC_FRAGMENT_MARKERS = ('.inc.h', '.inc.hpp')
 
 MAX_LINE_LENGTH       = 128
+TAB_WIDTH             = 4
+
+
+def prune_dirs(dirpath: str, dirs: list) -> None:
+    """Drop directories neither the checker nor the fixer should walk into.
+
+    Both the scanner and the in-place fixer use this, so the fixer can never
+    rewrite a directory the checker doesn't even look at, vendored clones most
+    of all: rewriting those would produce a huge diff against upstream.
+
+    Nested checkouts (a dependency fork cloned inside the tree, e.g. spirv-reflect or mesa) are
+    recognised by their own .git rather than by name, so somebody cloning the next one doesn't have
+    to remember to come back here. Their sources are not ours and would never satisfy this checker.
+    Modifying dirs[:] in-place is the os.walk-documented way to control recursion.
+    """
+
+    dirs[:] = [
+        d for d in dirs
+        if not d.startswith('.') and d not in ('build', 'VULKAN_SDK', '__pycache__')
+        and not os.path.exists(os.path.join(dirpath, d, '.git'))
+    ]
+
+
+def visual_length(line: str, tab_width: int = TAB_WIDTH) -> int:
+    """Length of a line in columns, where a tab advances to the next tab stop.
+
+    A tab is up to `tab_width` spaces wide, not one character, so counting raw
+    characters lets a deeply indented line sit far past the limit while still
+    passing.  Measuring in columns is what the limit actually means.
+    """
+
+    col = 0
+
+    for ch in line:
+        col = (col // tab_width + 1) * tab_width if ch == '	' else col + 1
+
+    return col
+
 MAX_WARNINGS_PER_FILE = 20
 
 # ---------------------------------------------------------------------------
@@ -429,6 +470,90 @@ _CONFLICT_MARKER_RE = re.compile(r'^(<{7}|>{7}|={7})(?= |$)')
 # Per-file checker
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Rule 16: aligned case tables
+# ---------------------------------------------------------------------------
+
+_CASE_LINE  = re.compile(r'^(	+)(case [^:]*?:|default:)( +)(\S.*)$')
+_BREAK_TAIL = re.compile(r'^(.*?\S)( +)(break;)$')
+
+
+def check_case_alignment(lines: list[str]) -> list[str]:
+    """A contiguous run of `case X: stmt` lines becomes an aligned table once any line pads its
+    statement, or its trailing break;, with two or more spaces; the whole run must then share one
+    statement column and one break; column. A single space everywhere is the unaligned style and
+    is exempt. Any other line ends the run, so sub-blocks can choose their own columns, and a
+    renamed label can no longer silently shear one row out of a table.
+    """
+
+    issues: list[str] = []
+    run: list[dict] = []
+    run_indent: str | None = None
+
+    def flush() -> None:
+
+        nonlocal run, run_indent
+
+        if len(run) >= 2:
+
+            stmt_intent = any(r['stmt_pad'] >= 2 for r in run if r['stmt_col'] is not None)
+            brk_intent  = any(r['brk_pad'] >= 2 for r in run if r['brk_col'] is not None)
+
+            stmt_cols = sorted({r['stmt_col'] for r in run if r['stmt_col'] is not None})
+            brk_cols  = sorted({r['brk_col'] for r in run if r['brk_col'] is not None})
+
+            span = f"lines {run[0]['lineno']}-{run[-1]['lineno']}"
+
+            if stmt_intent and len(stmt_cols) > 1:
+                issues.append(
+                    f"  {span}: aligned case table drifted, statements start at "
+                    f"columns {', '.join(str(c) for c in stmt_cols)}"
+                )
+
+            if brk_intent and len(brk_cols) > 1:
+                issues.append(
+                    f"  {span}: aligned case table drifted, break; sits at "
+                    f"columns {', '.join(str(c) for c in brk_cols)}"
+                )
+
+        run = []
+        run_indent = None
+
+    for lineno, line in enumerate(lines, start=1):
+
+        m = _CASE_LINE.match(line)
+
+        if not m or (run_indent is not None and m.group(1) != run_indent):
+            flush()
+            if not m:
+                continue
+
+        indent, label, pad, content = m.groups()
+        label_end = visual_length(indent + label)
+
+        entry = {
+            'lineno': lineno, 'stmt_col': None, 'stmt_pad': 0, 'brk_col': None, 'brk_pad': 0,
+        }
+
+        if content == 'break;':
+            entry['brk_col'] = label_end + len(pad) + 1
+            entry['brk_pad'] = len(pad)
+        else:
+            entry['stmt_col'] = label_end + len(pad) + 1
+            entry['stmt_pad'] = len(pad)
+            tail = _BREAK_TAIL.match(content)
+            if tail:
+                entry['brk_col'] = entry['stmt_col'] + len(tail.group(1)) + len(tail.group(2))
+                entry['brk_pad'] = len(tail.group(2))
+
+        run.append(entry)
+        run_indent = indent
+
+    flush()
+    return issues
+
+
+
 def check_file(
     path: str,
     rel: str,
@@ -596,9 +721,11 @@ def check_file(
                 todos.append((lineno, m.group(1).upper(), line.strip()))
 
         # ── 1. Line length ────────────────────────────────────────────────
-        if len(line) > max_line_len:
+        line_cols = visual_length(line)
+        if line_cols > max_line_len:
             if add(f"  line {lineno}, col {max_line_len + 1}: "
-                   f"line too long ({len(line)} > {max_line_len} chars)"):
+                   f"line too long ({line_cols} > {max_line_len} columns, "
+                   f"tabs counted to the next multiple of {TAB_WIDTH})"):
                 return violations, todos
 
         # ── 2. Trailing whitespace ────────────────────────────────────────
@@ -654,6 +781,11 @@ def check_file(
                            f"{rule['message'].format(symbol)}"):
                         return violations, todos
 
+    # ── 16. Aligned case tables ─────────────────────────────────────────
+    for msg in check_case_alignment(lines):
+        if add(msg):
+            return violations, todos
+
     return violations, todos
 
 
@@ -667,7 +799,7 @@ def fix_indentation(root: str) -> tuple[int, int]:
       - Replace every run of 4 leading spaces on a line with one tab
         (applied repeatedly until no leading-space run of 4 remains).
       - Replace any tab that appears after the leading-whitespace indent
-        region (mid-line tab) with 4 spaces.
+        region (mid-line tab) with spaces up to the next tab stop.
 
     Skips files that contain non-ASCII bytes (they would need binary-safe
     handling and are already flagged by check 5).
@@ -678,13 +810,7 @@ def fix_indentation(root: str) -> tuple[int, int]:
     skipped = 0
 
     for dirpath, dirs, filenames in os.walk(root):
-        # Same pruning as the checker below, including nested checkouts: rewriting the indentation of a
-        # dependency's sources would be considerably worse than merely reporting on them.
-        dirs[:] = [
-            d for d in dirs
-            if not d.startswith('.') and d != 'build'
-            and not os.path.exists(os.path.join(dirpath, d, '.git'))
-        ]
+        prune_dirs(dirpath, dirs)
         for fname in filenames:
             ext = os.path.splitext(fname)[1].lower()
             if ext not in ALL_EXTENSIONS:
@@ -723,11 +849,28 @@ def fix_indentation(root: str) -> tuple[int, int]:
                     else:
                         break
 
-                # ── Step 2: mid-line tabs → 4 spaces ─────────────────────
+                # Step 2: mid-line tabs -> spaces up to the next tab stop.
+                # A tab is *up to* tab_width spaces: it advances to the next
+                # multiple of tab_width, so expanding every one to a flat 4
+                # spaces shifts whatever the tab was aligning.  Expanding by
+                # column preserves that alignment.
                 indent_len = len(new_body) - len(new_body.lstrip('\t'))
                 indent     = new_body[:indent_len]
                 rest       = new_body[indent_len:]
-                rest       = rest.replace('\t', '    ')
+
+                if '\t' in rest:
+                    col      = indent_len * TAB_WIDTH        # the indent is all tabs
+                    expanded = []
+                    for ch in rest:
+                        if ch == '\t':
+                            pad = TAB_WIDTH - (col % TAB_WIDTH)
+                            expanded.append(' ' * pad)
+                            col += pad
+                        else:
+                            expanded.append(ch)
+                            col += 1
+                    rest = ''.join(expanded)
+
                 new_body   = indent + rest
 
                 if new_body != body:
@@ -817,18 +960,7 @@ def scan(
     names_to_paths: dict[str, list[str]] = defaultdict(list)
 
     for dirpath, dirs, filenames in os.walk(root):
-        # Prune hidden directories (.git, .cache, .vscode, etc.) so they
-        # are never recursed into.  Modifying dirs[:] in-place is the
-        # os.walk-documented way to control recursion.
-        # Nested checkouts (a dependency fork cloned inside the tree, e.g. spirv-reflect) are pruned by
-        # looking for their own .git rather than by name, so somebody cloning the next one doesn't have to
-        # remember to come back here.
-        # Their sources are not ours and would never satisfy this checker.
-        dirs[:] = [
-            d for d in dirs
-            if not d.startswith('.') and d != 'build' and d != 'VULKAN_SDK' and d != '__pycache__'
-            and not os.path.exists(os.path.join(dirpath, d, '.git'))
-        ]
+        prune_dirs(dirpath, dirs)
         for fname in filenames:
             ext = os.path.splitext(fname)[1].lower()
             if ext not in ALL_EXTENSIONS:
@@ -913,7 +1045,7 @@ def main() -> None:
     parser.add_argument("root", help="Root directory to scan")
     parser.add_argument(
         "--max-line-length", type=int, default=MAX_LINE_LENGTH,
-        metavar="N", help=f"Maximum allowed line length (default: {MAX_LINE_LENGTH})"
+        metavar="N", help=f"Maximum allowed line length in columns (default: {MAX_LINE_LENGTH})"
     )
     parser.add_argument(
         "--max-warnings-per-file", type=int, default=MAX_WARNINGS_PER_FILE,

@@ -96,7 +96,7 @@ UINT_OP(U8);
 #define INT_IOP(T, TUint)                                                                            \
 XINT_OP(T, TUint, (U64)1 << (sizeof(T) * 8 - 1), 1);                                                 \
 static inline T T##_abs(T v) {                                                                       \
-	const TUint mask = (TUint)0 - ((TUint)v >> (sizeof(T) * 8 - 1));                                    \
+	const TUint mask = (TUint)0 - ((TUint)v >> (sizeof(T) * 8 - 1));                                 \
 	return (T)(((TUint)v ^ mask) - mask);                                                            \
 }
 

@@ -154,7 +154,7 @@ Bool GraphicsDeviceRef_createSampler(
 	if(bindlessDescriptorTable && !GraphicsDeviceRef_allocateDescriptorBindless(
 		dev,
 		bindlessDescriptorTable,
-		info.enableComparison ? ESHRegisterType_SamplerComparisonState : ESHRegisterType_Sampler,
+		info.enableComparison ? EGfxRegisterType_SamplerComparisonState : EGfxRegisterType_Sampler,
 		0,
 		false,
 		&sampDesc,

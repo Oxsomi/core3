@@ -170,8 +170,8 @@ Bool Compiler_finalizeEntrypoint(
 	// where 0 stays legal.
 
 	if(!intersectSize && (
-		entry->entry.stage == ESHPipelineStage_ClosestHitExt ||
-		entry->entry.stage == ESHPipelineStage_AnyHitExt
+		entry->entry.stage == EGfxPipelineStage_ClosestHitExt ||
+		entry->entry.stage == EGfxPipelineStage_AnyHitExt
 	))
 		intersectSize = 8;
 
@@ -267,7 +267,7 @@ clean:
 	return s_uccess;
 }
 
-U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSizeType) {
+U16 Compiler_minFeatureSetStage(EGfxPipelineStage stage, U16 waveSizeType) {
 
 	//No stage raises the floor on its own any more: workgraphs were the only one (SM6.8) and they're gone.
 	//The parameter stays because the floor is a per stage question and the next stage to need one goes here.
@@ -470,8 +470,8 @@ Bool Compiler_parseValue(
 
 				switch(bits) {
 					default:    value->vu8[dstOff] = (U8) res;        break;
-					case 16:    value->vu16[dstOff] = (U16) res;    break;
-					case 32:    value->vu32[dstOff] = (U32) res;    break;
+					case 16:    value->vu16[dstOff] = (U16) res;      break;
+					case 32:    value->vu32[dstOff] = (U32) res;      break;
 					case 64:    value->vu64[dstOff] = res;            break;
 				}
 
@@ -519,9 +519,9 @@ Bool Compiler_parseValue(
 
 				switch(bits) {
 					default:    value->vi8[dstOff]  = (I8) res;        break;
-					case 16:    value->vi16[dstOff] = (I16) res;    break;
-					case 32:    value->vi32[dstOff] = (I32) res;    break;
-					case 64:    value->vi64[dstOff] = res;            break;
+					case 16:    value->vi16[dstOff] = (I16) res;       break;
+					case 32:    value->vi32[dstOff] = (I32) res;       break;
+					case 64:    value->vi64[dstOff] = res;             break;
 				}
 
 				++dstOff;
@@ -941,7 +941,7 @@ Bool Compiler_parse(
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr));
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr));
 
-	//if (settings->outputType == ESHBinaryType_SPIRV)
+	//if (settings->outputType == EGfxBinaryType_SPIRV)
 	//    gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr));
 
 	//We will pretend that all extensions are enabled, this will avoid parser errors when extensions are used.
@@ -1053,7 +1053,7 @@ Bool Compiler_parse(
 
 		//We found a potential entrypoint, check for shader or stage annotation
 
-		runtimeEntry.entry.stage = ESHPipelineStage_Count;
+		runtimeEntry.entry.stage = EGfxPipelineStage_Count;
 
 		for (uint32_t j = 0; j < nodeDesc.AnnotationCount; ++j) {
 
@@ -1066,14 +1066,14 @@ Bool Compiler_parse(
 		
 		//If we didn't find a stage, but we did find annotations that match, we need to free them
 
-		if (runtimeEntry.entry.stage == ESHPipelineStage_Count)
+		if (runtimeEntry.entry.stage == EGfxPipelineStage_Count)
 			SHEntryRuntime_free(&runtimeEntry, alloc);
 
 		//Otherwise we found an entry
 
 		else {
 
-			U16 minVersion = Compiler_minFeatureSetStage(ESHPipelineStage(runtimeEntry.entry.stage), 0);
+			U16 minVersion = Compiler_minFeatureSetStage(EGfxPipelineStage(runtimeEntry.entry.stage), 0);
 
 			//Ensure all shader versions are compatible with minimum featureset
 
@@ -1096,13 +1096,13 @@ Bool Compiler_parse(
 			//If there's no model available, then it should be ok.
 
 			Bool isRt =
-				runtimeEntry.entry.stage >= ESHPipelineStage_RtStartExt &&
-				runtimeEntry.entry.stage <= ESHPipelineStage_RtEndExt;
+				runtimeEntry.entry.stage >= EGfxPipelineStage_RtStartExt &&
+				runtimeEntry.entry.stage <= EGfxPipelineStage_RtEndExt;
 
 			for (U64 j = 0; j < runtimeEntry.extensions.length; ++j) {
 
 				if(
-					runtimeEntry.entry.stage != ESHPipelineStage_RaygenExt &&
+					runtimeEntry.entry.stage != EGfxPipelineStage_RaygenExt &&
 					(runtimeEntry.extensions.ptr[j] & ESHExtension_RayReorder)
 				)
 					retError(clean, Error_invalidState(
@@ -1117,9 +1117,9 @@ Bool Compiler_parse(
 					));
 
 				if(
-					runtimeEntry.entry.stage != ESHPipelineStage_Compute &&
-					runtimeEntry.entry.stage != ESHPipelineStage_MeshExt &&
-					runtimeEntry.entry.stage != ESHPipelineStage_TaskExt &&
+					runtimeEntry.entry.stage != EGfxPipelineStage_Compute &&
+					runtimeEntry.entry.stage != EGfxPipelineStage_MeshExt &&
+					runtimeEntry.entry.stage != EGfxPipelineStage_TaskExt &&
 					(runtimeEntry.extensions.ptr[j] & ESHExtension_ComputeDeriv)
 				)
 					retError(clean, Error_invalidState(
@@ -1244,7 +1244,704 @@ clean:
 		CompileResult_free(result, alloc);
 
 	SHEntryRuntime_free(&runtimeEntry, alloc);
-	
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		ListU16_free(&tmpWStr, alloc);
+	#else
+		ListU32_free(&tmpWStr, alloc);
+	#endif
+
+	Compiler_freeStrings;
+	CharString_free(&tmp, alloc);
+	ListCharString_freeUnderlying(&stringsUTF8, alloc);
+	return s_uccess;
+}
+
+//Map a single frontend AST node (and its symbol + annotations) into the neutral SRFile model.
+//The DXC node id and the SRFile node index are kept identical, so parent/child indices carry over directly.
+
+static Bool Compiler_reflectNode(
+	IHLSLReflectionData *reflectionData,
+	U32 nodeId,
+	U32 nodeCount,
+	Bool hasSymbols,
+	SRFile *reflection,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+	//All locals are declared up front: gotoIfError3 jumps to clean, and C++ forbids skipping initializers in scope there.
+
+	Bool s_uccess = true;
+	HRESULT hr = S_OK;
+
+	D3D12_HLSL_NODE nodeDesc;
+	D3D12_HLSL_NODE_SYMBOL symDesc;
+
+	U32 nameId = U32_MAX, semanticId = U32_MAX, fileNameId = U32_MAX;
+	U32 annotationStart = 0;
+
+	SRNode srNode = SRNode{};
+	SRSymbol srSym = SRSymbol{};
+
+	CharString nameStr = CharString_createNull();
+	CharString semStr = CharString_createNull();
+	CharString fileStr = CharString_createNull();
+
+	if (FAILED(hr = reflectionData->GetNodeDesc(nodeId, &nodeDesc)))
+		retError(clean, Error_invalidState(0, "Compiler_reflectNode() failed to get node desc"));
+
+	//Names come from the symbol tier, so they're empty strings when symbols are stripped (-> U32_MAX)
+
+	nameStr = CharString_createRefCStrConst(nodeDesc.Name ? nodeDesc.Name : "");
+	gotoIfError3(clean, SRFile_addString(reflection, &nameStr, alloc, &nameId, e_rr));
+
+	semStr = CharString_createRefCStrConst(nodeDesc.Semantic ? nodeDesc.Semantic : "");
+	gotoIfError3(clean, SRFile_addString(reflection, &semStr, alloc, &semanticId, e_rr));
+
+	//Annotations for this node, appended contiguously into the shared annotation table
+
+	annotationStart = (U32) reflection->annotations.length;
+
+	if (nodeDesc.AnnotationCount > U16_MAX)
+		retError(clean, Error_invalidState(0, "Compiler_reflectNode() node has too many annotations"));
+
+	for (U32 j = 0; j < nodeDesc.AnnotationCount; ++j) {
+
+		D3D12_HLSL_ANNOTATION annot;
+
+		if (FAILED(hr = reflectionData->GetAnnotationByIndex(nodeId, j, &annot)))
+			retError(clean, Error_invalidState(0, "Compiler_reflectNode() failed to get annotation"));
+
+		U32 annotNameId = U32_MAX;
+		CharString annotStr = CharString_createRefCStrConst(annot.Name ? annot.Name : "");
+		gotoIfError3(clean, SRFile_addString(reflection, &annotStr, alloc, &annotNameId, e_rr));
+
+		SRAnnotation srAnnot = SRAnnotation{};
+		srAnnot.nameId = annotNameId;
+		srAnnot.isBuiltin = annot.IsBuiltin ? 1 : 0;
+
+		gotoIfError3(clean, ListSRAnnotation_pushBack(&reflection->annotations, srAnnot, alloc, e_rr));
+	}
+
+	//Node itself.
+	//Root parent (0xFFFF) and "no fwd/back declare" (UINT_MAX) map to our U32_MAX sentinel.
+
+	srNode.nameId = nameId;
+	srNode.semanticId = semanticId;
+	srNode.localId = nodeDesc.LocalId;
+	srNode.parent = (nodeDesc.Parent == U16_MAX || nodeDesc.Parent >= nodeCount) ? U32_MAX : nodeDesc.Parent;
+	srNode.fwdBckDeclareNode = nodeDesc.FwdBckDeclareNode >= nodeCount ? U32_MAX : nodeDesc.FwdBckDeclareNode;
+	srNode.childCount = nodeDesc.ChildCount;
+	srNode.annotationStart = nodeDesc.AnnotationCount ? annotationStart : U32_MAX;
+	srNode.annotationCount = (U16) nodeDesc.AnnotationCount;
+	srNode.type = (U8)(nodeDesc.Type & 0x7F);        //Mask the fwd-declare reserved bit (1 << 7), tracked via flags below
+	srNode.interpolation =
+		(U32) nodeDesc.InterpolationMode < (U32) ESRInterpolation_Count ? (U8) nodeDesc.InterpolationMode : 0;
+	srNode.flags = (U8)(nodeDesc.IsFwdDeclare ? ESRNodeFlag_IsFwdDeclare : ESRNodeFlag_None);
+
+	if (srNode.type >= ESRNodeType_Count)
+		retError(clean, Error_invalidState(0, "Compiler_reflectNode() node had an unrecognized type"));
+
+	gotoIfError3(clean, ListSRNode_pushBack(&reflection->nodes, srNode, alloc, e_rr));
+
+	//Symbol (kept parallel to nodes)
+
+	if (hasSymbols) {
+
+		if (FAILED(hr = reflectionData->GetNodeSymbolDesc(nodeId, &symDesc)))
+			retError(clean, Error_invalidState(0, "Compiler_reflectNode() failed to get node symbol desc"));
+
+		fileStr = CharString_createRefCStrConst(symDesc.FileName ? symDesc.FileName : "");
+		gotoIfError3(clean, SRFile_addString(reflection, &fileStr, alloc, &fileNameId, e_rr));
+
+		srSym.fileNameId = fileNameId;
+		srSym.line = symDesc.LineId;
+		srSym.lineCount = symDesc.LineCount;
+		srSym.columnStart = symDesc.ColumnStart;
+		srSym.columnEnd = symDesc.ColumnEnd;
+
+		gotoIfError3(clean, ListSRSymbol_pushBack(&reflection->symbols, srSym, alloc, e_rr));
+	}
+
+clean:
+	return s_uccess;
+}
+
+//Detail tiers on top of the node tree: function return, resource bind info and enum values.
+//A D3D scalar variable type -> its HLSL base spelling, or nullptr for non-scalar bases (struct/object/void) which
+// have no reconstructible builtin name.
+//Used to name function-parameter types (params carry no type localId + no name).
+
+static const C8 *Compiler_svtBaseName(D3D_SHADER_VARIABLE_TYPE t) {
+	switch (t) {
+		case D3D_SVT_BOOL:    return "bool";
+		case D3D_SVT_INT:     return "int";
+		case D3D_SVT_UINT:    return "uint";
+		case D3D_SVT_UINT8:   return "uint8_t";
+		case D3D_SVT_FLOAT:   return "float";
+		case D3D_SVT_FLOAT16: return "float16_t";
+		case D3D_SVT_DOUBLE:  return "double";
+		case D3D_SVT_INT16:   return "int16_t";
+		case D3D_SVT_UINT16:  return "uint16_t";
+		case D3D_SVT_INT64:   return "int64_t";
+		case D3D_SVT_UINT64:  return "uint64_t";
+		default:              return nullptr;
+	}
+}
+
+//A zero/none-initialised SRType with the structured fields filled + clamped; the caller sets go-to-def / base / array
+//fields as available, then hands it to Compiler_pushType which resolves the name ids.
+
+static SRType Compiler_typeBase(U32 nodeId, U32 typeClass, U32 rows, U32 cols, U32 elements) {
+	SRType ty = SRType{};
+	ty.nodeId = nodeId;
+	ty.typeClass = (U32) typeClass < ESRTypeClass_Count ? (U8) typeClass : (U8) ESRTypeClass_Scalar;
+	ty.rows = rows > 0xFF ? 0xFF : (U8) rows;
+	ty.cols = cols > 0xFF ? 0xFF : (U8) cols;
+	ty.elements = elements;
+	ty.typeNameId = U32_MAX;
+	ty.displayNameId = U32_MAX;
+	ty.defNodeId = U32_MAX;
+	ty.baseNodeId = U32_MAX;
+	ty.arrayDimStart = U32_MAX;
+	ty.arrayDimCount = 0;
+	return ty;
+}
+
+//Pushes the individual lengths of a >=2-dimensional array into the shared pool + returns its (start, count).
+//Single or non-array types keep start = U32_MAX (the flattened count already lives in SRType.elements /
+// SRRegister.bindCount).
+
+static Bool Compiler_pushArrayDims(
+	SRFile *reflection, const D3D12_ARRAY_DESC *ad, U32 *start, U8 *count, const Allocator *alloc, Error *e_rr
+) {
+	Bool s_uccess = true;
+	*start = U32_MAX;
+	*count = 0;
+
+	if (ad && ad->ArrayDims >= 2) {
+		U32 dims = ad->ArrayDims > 32 ? 32 : ad->ArrayDims;
+		*start = (U32) reflection->arrayDims.length;
+		*count = (U8) dims;
+		for (U32 k = 0; k < dims; ++k)
+			gotoIfError3(clean, ListU32_pushBack(&reflection->arrayDims, ad->ArrayLengths[k], alloc, e_rr));
+	}
+
+clean:
+	return s_uccess;
+}
+
+//Resolves the name ids of a prepared SRType (underlyingName/displayName may be nullptr) then pushes it. displayNameId is
+//left U32_MAX when it equals the underlying (the string pool dedups them to the same id).
+
+static Bool Compiler_pushType(
+	SRFile *reflection, SRType ty, const C8 *underlyingName, const C8 *displayName, const Allocator *alloc, Error *e_rr
+) {
+	Bool s_uccess = true;
+
+	ty.typeNameId = U32_MAX;
+	ty.displayNameId = U32_MAX;
+
+	if (underlyingName && underlyingName[0]) {
+		CharString s = CharString_createRefCStrConst(underlyingName);
+		gotoIfError3(clean, SRFile_addString(reflection, &s, alloc, &ty.typeNameId, e_rr));
+	}
+
+	if (displayName && displayName[0]) {
+		CharString s = CharString_createRefCStrConst(displayName);
+		U32 id = 0;
+		gotoIfError3(clean, SRFile_addString(reflection, &s, alloc, &id, e_rr));
+		ty.displayNameId = id == ty.typeNameId ? U32_MAX : id;
+	}
+
+	gotoIfError3(clean, ListSRType_pushBack(&reflection->types, ty, alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+//Reconstructs + pushes a function-parameter's type.
+//Parameters carry no type localId, so builtin scalar/vector/matrix names are rebuilt from the parameter desc (HLSL
+// vector/matrix dims are 1..4); struct/object params keep only their class, since D3D12_PARAMETER_DESC exposes no
+// type name for them.
+
+static Bool Compiler_pushParamType(
+	SRFile *reflection, U32 nodeId, D3D_SHADER_VARIABLE_TYPE svt, U32 typeClass, U32 rows, U32 cols,
+	const Allocator *alloc, Error *e_rr
+) {
+	C8 buf[32];
+	const C8 *name = nullptr;
+	const C8 *base = Compiler_svtBaseName(svt);
+
+	if (base) {
+
+		U64 n = 0;
+
+		for (const C8 *b = base; *b && n < 24; ++b)
+			buf[n++] = *b;
+
+		if (rows > 1 && rows <= 4 && cols >= 1 && cols <= 4) {          //matrix "baseRxC"
+			buf[n++] = (C8) ('0' + rows);
+			buf[n++] = 'x';
+			buf[n++] = (C8) ('0' + cols);
+		}
+
+		else if (cols > 1 && cols <= 4)                                 //vector "baseN"
+			buf[n++] = (C8) ('0' + cols);
+
+		buf[n] = '\0';
+		name = buf;
+	}
+
+	SRType ty = Compiler_typeBase(nodeId, typeClass, rows, cols, 0);
+	return Compiler_pushType(reflection, ty, name, nullptr, alloc, e_rr);
+}
+
+//These use their own reflector index spaces (FunctionCount / ResourceCount via node.localId / EnumCount),
+// each carrying back the node it belongs to, so they attach to the already-built SRFile nodes.
+
+static Bool Compiler_reflectDetails(
+	IHLSLReflectionData *reflectionData,
+	const D3D12_HLSL_REFLECTION_DESC *reflDesc,
+	SRFile *reflection,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+	HRESULT hr = S_OK;
+
+	//Function return: mark Function nodes that return a value (rather than void)
+
+	for (U32 i = 0; i < reflDesc->FunctionCount; ++i) {
+
+		D3D12_HLSL_FUNCTION_DESC funcDesc;
+
+		if (FAILED(hr = reflectionData->GetFunctionDesc(i, &funcDesc)))
+			retError(clean, Error_invalidState(0, "Compiler_reflectDetails() failed to get function desc"));
+
+		if (funcDesc.HasReturn && funcDesc.NodeId < reflection->nodes.length) {
+
+			reflection->nodes.ptrNonConst[funcDesc.NodeId].flags |= ESRNodeFlag_HasReturn;
+
+			//The return value is an extra parameter child right after the real parameters (which are contiguous
+			// after the function node), so it's at funcNode + 1 + parameterCount.
+			//Tag it so it reads as (return).
+
+			U64 retId = (U64) funcDesc.NodeId + 1 + funcDesc.FunctionParameterCount;
+
+			if (retId < reflection->nodes.length && reflection->nodes.ptr[retId].type == ESRNodeType_Parameter) {
+
+				reflection->nodes.ptrNonConst[retId].flags |= ESRNodeFlag_ParamReturn;
+
+				//The return slot's type comes from the special return-parameter reflection, not a type localId
+
+				ID3D12FunctionParameterReflection *retParam =
+					reflectionData->GetFunctionParameter(i, D3D_RETURN_PARAMETER_INDEX);
+
+				D3D12_PARAMETER_DESC rpd;
+
+				if (retParam && !FAILED(retParam->GetDesc(&rpd)))
+					gotoIfError3(clean, Compiler_pushParamType(
+						reflection, (U32) retId, rpd.Type, rpd.Class, rpd.Rows, rpd.Columns, alloc, e_rr));
+			}
+		}
+
+		//Parameter direction (in / out / inout) per real parameter; params are contiguous after the function node
+
+		for (U32 p = 0; p < funcDesc.FunctionParameterCount; ++p) {
+
+			ID3D12FunctionParameterReflection *param = reflectionData->GetFunctionParameter(i, p);
+
+			if (!param)
+				continue;
+
+			D3D12_PARAMETER_DESC pd;
+
+			if (FAILED(param->GetDesc(&pd)))
+				continue;
+
+			U64 pnode = (U64) funcDesc.NodeId + 1 + p;
+
+			if (pnode >= reflection->nodes.length || reflection->nodes.ptr[pnode].type != ESRNodeType_Parameter)
+				continue;
+
+			if (pd.Flags & D3D_PF_IN)
+				reflection->nodes.ptrNonConst[pnode].flags |= ESRNodeFlag_ParamIn;
+
+			if (pd.Flags & D3D_PF_OUT)
+				reflection->nodes.ptrNonConst[pnode].flags |= ESRNodeFlag_ParamOut;
+
+			gotoIfError3(clean, Compiler_pushParamType(
+				reflection, (U32) pnode, pd.Type, pd.Class, pd.Rows, pd.Columns, alloc, e_rr));
+		}
+	}
+
+	//Registers: frontend bind info per Register node (a Register node's localId indexes the resource table)
+
+	for (U64 i = 0; i < reflection->nodes.length; ++i) {
+
+		if (reflection->nodes.ptr[i].type != ESRNodeType_Register)
+			continue;
+
+		D3D12_SHADER_INPUT_BIND_DESC1 bindDesc;
+
+		if (FAILED(reflectionData->GetResourceBindingDesc(reflection->nodes.ptr[i].localId, &bindDesc)))
+			continue;        //Node with no resolvable binding: keep the node, skip the detail
+
+		if (
+			(U32) bindDesc.Desc.Type >= ESRResourceType_Count ||
+			(U32) bindDesc.Desc.Dimension >= ESRResourceDimension_Count ||
+			(U32) bindDesc.Desc.ReturnType >= ESRResourceReturnType_Count
+		)
+			continue;        //Out-of-range kind (shouldn't happen): skip rather than emit an invalid record
+
+		SRRegister reg = SRRegister{};
+		reg.nodeId = (U32) i;
+		reg.type = (U8) bindDesc.Desc.Type;
+		reg.dimension = (U8) bindDesc.Desc.Dimension;
+		reg.returnType = (U8) bindDesc.Desc.ReturnType;
+		reg.bindCount = bindDesc.Desc.BindCount;
+		reg.arrayDimStart = U32_MAX;
+		reg.arrayDimCount = 0;
+
+		//Multi-dimensional resource arrays (Texture2D tex[a][b]): the flattened size is BindCount, the dims come from
+		//the DESC1 ArrayInfo.
+
+		gotoIfError3(clean, Compiler_pushArrayDims(
+			reflection, &bindDesc.ArrayInfo, &reg.arrayDimStart, &reg.arrayDimCount, alloc, e_rr));
+
+		gotoIfError3(clean, ListSRRegister_pushBack(&reflection->registers, reg, alloc, e_rr));
+	}
+
+	//Enum values: enumerators + the parent enum's underlying integer type
+
+	for (U32 i = 0; i < reflDesc->EnumCount; ++i) {
+
+		D3D12_HLSL_ENUM_DESC enumDesc;
+
+		if (FAILED(hr = reflectionData->GetEnumDesc(i, &enumDesc)))
+			retError(clean, Error_invalidState(0, "Compiler_reflectDetails() failed to get enum desc"));
+
+		U8 enumType = (U32) enumDesc.Type < ESREnumType_Count ? (U8) enumDesc.Type : 0;
+
+		for (U32 j = 0; j < enumDesc.ValueCount; ++j) {
+
+			D3D12_HLSL_ENUM_VALUE valDesc;
+
+			if (FAILED(hr = reflectionData->GetEnumValueByIndex(i, j, &valDesc)))
+				retError(clean, Error_invalidState(0, "Compiler_reflectDetails() failed to get enum value"));
+
+			//An enum's value nodes are laid out contiguously right after the enum node, so the j-th value is at
+			//enumNode + 1 + j. (D3D12_HLSL_ENUM_VALUE.NodeId reports the parent enum, not the value node.)
+
+			U64 valueNodeId = (U64) enumDesc.NodeId + 1 + j;
+
+			if (valueNodeId >= reflection->nodes.length ||
+				reflection->nodes.ptr[valueNodeId].type != ESRNodeType_EnumValue)
+				continue;
+
+			SREnumValue ev = SREnumValue{};
+			ev.nodeId = (U32) valueNodeId;
+			ev.enumType = enumType;
+			ev.value = valDesc.Value;
+
+			gotoIfError3(clean, ListSREnumValue_pushBack(&reflection->enumValues, ev, alloc, e_rr));
+		}
+	}
+
+	//Types: for these value nodes the localId indexes the reflector's frontend type table (GetTypeByIndex), which
+	// isn't otherwise serialized; resolve each into an SRType record so the localId stops dangling and hover can show
+	// "float3", "Light", "Texture2D".
+	//These are the kinds the fork guarantees carry a type localId (parameters carry their type in the
+	// function-parameter reflection instead, handled in the function loop above).
+	//GetTypeByIndex hands back a CHLSLReflectionType (an ID3D12ShaderReflectionType1), so GetDesc1 (which adds the
+	// display/alias spelling on top of the underlying name) is safe.
+
+	for (U64 i = 0; i < reflection->nodes.length; ++i) {
+
+		U8 nt = reflection->nodes.ptr[i].type;
+
+		if (nt != ESRNodeType_Variable && nt != ESRNodeType_Typedef && nt != ESRNodeType_Struct &&
+			nt != ESRNodeType_Union && nt != ESRNodeType_StaticVariable && nt != ESRNodeType_GroupsharedVariable)
+			continue;
+
+		ID3D12ShaderReflectionType *rt = nullptr;
+
+		if (reflectionData->GetTypeByIndex(reflection->nodes.ptr[i].localId, &rt) != S_OK || !rt)
+			continue;        //Node with no resolvable type: keep the node, skip the detail
+
+		D3D12_SHADER_TYPE_DESC1 d{};
+
+		if (FAILED(((ID3D12ShaderReflectionType1*) rt)->GetDesc1(&d)))
+			continue;
+
+		SRType ty = Compiler_typeBase((U32) i, d.Desc.Class, d.Desc.Rows, d.Desc.Columns, d.Desc.Elements);
+
+		//Go-to-definition: resolve the type's underlying name to its defining Struct/Union node.
+		//Name matching (not the localId, which the reflector reuses across uses of the same struct) is what links a
+		// value to its definition; self links (a struct node pointing at itself) are dropped so defNodeId always means
+		// "jump elsewhere".
+		//Builtins ("float3") have no struct node so this stays U32_MAX.
+
+		if (d.Desc.Name) {
+			CharString tn = CharString_createRefCStrConst(d.Desc.Name);
+			U32 defNode = SRFile_findNodeByName(reflection, tn, ESRNodeType_Struct);
+			ty.defNodeId = defNode == (U32) i ? U32_MAX : defNode;
+		}
+
+		//Base class (single inheritance) + implemented interfaces: GetBaseClass / GetInterfaceByIndex report types,
+		// resolved to their defining nodes by name.
+		//The concrete base goes on the SRType; each interface is an edge in the separate interfaces table (a struct
+		// can implement several).
+		//These are properties of the type DEFINITION, so only the Struct/Union node itself records them; a variable
+		// of the type reaches them through defNodeId.
+
+		if ((nt == ESRNodeType_Struct || nt == ESRNodeType_Union) && d.Desc.Class == D3D_SVC_STRUCT) {
+
+			ID3D12ShaderReflectionType *baseT = rt->GetBaseClass();
+			D3D12_SHADER_TYPE_DESC bd = {};
+
+			if (baseT && !FAILED(baseT->GetDesc(&bd)) && bd.Name) {
+				CharString bn = CharString_createRefCStrConst(bd.Name);
+				ty.baseNodeId = SRFile_findNodeByName(reflection, bn, ESRNodeType_Struct);
+			}
+
+			UINT numInterfaces = rt->GetNumInterfaces();
+
+			for (UINT k = 0; k < numInterfaces; ++k) {
+
+				ID3D12ShaderReflectionType *it = rt->GetInterfaceByIndex(k);
+				D3D12_SHADER_TYPE_DESC id = {};
+
+				if (!it || FAILED(it->GetDesc(&id)) || !id.Name)
+					continue;
+
+				CharString in = CharString_createRefCStrConst(id.Name);
+				U32 ifaceNode = SRFile_findNodeByName(reflection, in, ESRNodeType_Interface);
+
+				if (ifaceNode == U32_MAX)
+					continue;
+
+				SRInterface itf = SRInterface{};
+				itf.nodeId = (U32) i;
+				itf.interfaceNodeId = ifaceNode;
+				gotoIfError3(clean, ListSRInterface_pushBack(&reflection->interfaces, itf, alloc, e_rr));
+			}
+		}
+
+		//Multi-dimensional arrays: elements already holds the flattened count, GetArrayDesc gives the per-dim lengths.
+
+		D3D12_ARRAY_DESC ad = {};
+
+		if (!FAILED(((ID3D12ShaderReflectionType1*) rt)->GetArrayDesc(&ad)))
+			gotoIfError3(clean, Compiler_pushArrayDims(reflection, &ad, &ty.arrayDimStart, &ty.arrayDimCount, alloc, e_rr));
+
+		gotoIfError3(clean, Compiler_pushType(reflection, ty, d.Desc.Name, d.DisplayName, alloc, e_rr));
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_reflect(
+	const Compiler *comp,
+	const CompilerSettings *settings,
+	const Allocator *alloc,
+	SRFile *reflection,
+	Error *e_rr
+) {
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		ListU16 tmpWStr = ListU16{};
+	#else
+		ListU32 tmpWStr = ListU32{};
+	#endif
+
+	CharString tmp = CharString_createNull();
+	Bool s_uccess = true;
+	Bool allocatedSR = false;
+
+	CompilerInterfaces *interfaces = nullptr;
+
+	Bool hasErrors = false;
+	ListCompileError compileErrors = ListCompileError{};
+
+	OxComPtr<IDxcResult> hlslReflectRes;
+	OxComPtr<IDxcBlob> reflectBinary;
+	OxComPtr<IHLSLReflectionData> reflectionData;
+	OxComPtr<IDxcBlobEncoding> source;
+	D3D12_HLSL_REFLECTION_DESC reflDesc;
+	HRESULT hr = S_OK;
+
+	ListCharString stringsUTF8 = ListCharString{};
+	Compiler_defineStrings;
+
+	if (!reflection)
+		retError(clean, Error_nullPointer(3, "Compiler_reflect()::reflection is required"));
+
+	if (reflection->nodes.length || reflection->names.entryStrings.length)
+		retError(clean, Error_invalidOperation(0, "Compiler_reflect()::reflection isn't empty, might indicate memleak"));
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		gotoIfError3(clean, CharString_toUTF16(settings->path, alloc, &tmpWStr, e_rr));
+	#else
+		gotoIfError3(clean, CharString_toUTF32(settings->path, alloc, &tmpWStr, e_rr));
+	#endif
+
+	interfaces = (CompilerInterfaces*)comp->interfaces;
+
+	if (!interfaces->reflector || !interfaces->utils)
+		retError(clean, Error_nullPointer(3, "Compiler_reflect()::interfaces->reflector & utils are required"));
+
+	if (!CharString_length(settings->string))
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_reflect()::settings->string is required"));
+
+	if (CharString_length(settings->string) >> 32)
+		retError(clean, Error_invalidOperation(0, "Compiler_reflect() string out of bounds"));
+
+	hr = interfaces->utils->CreateBlobFromPinned(
+		settings->string.ptr, (U32) CharString_length(settings->string), DXC_CP_UTF8, &source
+	);
+
+	if (FAILED(hr))
+		retError(clean, Error_invalidState(0, "Compiler_reflect() source couldn't be wrapped into IDxcBlobEncoding"));
+
+	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr));
+
+	//Same reflection setup as Compiler_parse, but we deliberately DON'T pass -reflect-functions.
+	//That flag narrows the reflector to the functions-only feature mask; omitting every -reflect-* narrowing flag
+	// makes it default to the full mask (all node categories), and symbols (names + file/line/column) stay on.
+	//That full tree with locations is exactly what editor intelligence needs.
+
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-payload-qualifiers", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "lib_6_10", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_PREPROCESS", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_EXT_RAYTRACING", alloc, e_rr));
+
+	//Format major, minor, patch and version
+
+	{
+		static const C8 *formats[] = {
+			"-D__OXC_MAJOR=%" PRIu64,
+			"-D__OXC_MINOR=%" PRIu64,
+			"-D__OXC_PATCH=%" PRIu64,
+			"-D__OXC_VERSION=%" PRIu64,
+		};
+
+		static const U64 formatInts[] = {
+			OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH, OXC3_VERSION
+		};
+
+		for (U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
+			gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, formats[i], formatInts[i]));
+			gotoIfError3(clean, ListCharString_pushBack(&stringsUTF8, tmp, alloc, e_rr));
+			tmp = CharString_createNull();
+		}
+	}
+
+	//__OXC_EXT_<X> foreach extension
+
+	for (U32 i = 0; i < ESHExtension_Count; ++i) {
+		gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "-D__OXC_EXT_%s", ESHExtension_defines[i]));
+		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
+		tmp = CharString_createNull();
+	}
+
+	//Reflect at the highest shader model (a SM6.10 library) so every feature is available (see Compiler_parse)
+
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "lib_6_10", alloc, e_rr));
+
+	Compiler_convertToWString(stringsUTF8, clean);
+
+	Compiler_resetIncludeHandler(interfaces->includeHandler);
+
+	hr = interfaces->reflector->FromSource(
+		source,
+		(const wchar_t*)tmpWStr.ptr,
+		(LPCWSTR*) strings.ptr, U32(strings.length),
+		nullptr, 0,
+		Compiler_getIncludeHandler(interfaces->includeHandler),
+		&hlslReflectRes
+	);
+
+	if (hlslReflectRes) {
+
+		OxComPtr<IDxcBlobUtf8> err;
+		hr = hlslReflectRes->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&err), NULL);
+
+		if (FAILED(hr))
+			retError(clean, Error_invalidState(1, "Compiler_reflect() fetch errors failed"));
+
+		if (err && err->GetStringLength()) {
+			CharString errs = CharString_createRefSizedConst(err->GetStringPointer(), err->GetStringLength(), false);
+			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &compileErrors, &hasErrors, e_rr));
+		}
+	}
+
+	if (hasErrors)
+		retError(clean, Error_invalidState(0, "Compiler_reflect() source had compile errors"));
+
+	if (FAILED(hr) || !hlslReflectRes)
+		retError(clean, Error_invalidState(0, "Compiler_reflect() failed to call IHLSLReflector::FromSource"));
+
+	hr = hlslReflectRes->GetResult(&reflectBinary);
+
+	if (FAILED(hr) || !reflectBinary)
+		retError(clean, Error_invalidState(0, "Compiler_reflect() failed to get result binary"));
+
+	hr = interfaces->reflector->FromBlob(reflectBinary, &reflectionData);
+
+	if (FAILED(hr))
+		retError(clean, Error_invalidState(0, "Compiler_reflect() failed to deserialize result binary"));
+
+	if (FAILED(hr = reflectionData->GetDesc(&reflDesc)))
+		retError(clean, Error_invalidState(0, "Compiler_reflect() failed to get reflection desc"));
+
+	//Build the SRFile: the reflector's feature bits map bit-for-bit onto ESRFeature.
+
+	{
+		//Emit the source-location tier (file/line/column) whenever the reflector reports the SymbolInfo feature.
+		//GetNodeSymbolDesc guards the no-file sentinel (uint16_t(-1)), so synthetic/builtin nodes come back with an
+		// empty file name (-> fileNameId U32_MAX) rather than reading out of bounds.
+		//Names/tree/annotations are independent of this tier (names come from GetNodeDesc).
+
+		Bool reflectSymbols = (reflDesc.Features & D3D12_HLSL_REFLECTION_FEATURE_SYMBOL_INFO) != 0;
+
+		U32 features = (U32) reflDesc.Features;
+
+		if (!reflectSymbols)
+			features &= ~(U32) ESRFeature_SymbolInfo;
+
+		gotoIfError3(clean, SRFile_create(
+			reflectSymbols ? ESRSettingsFlags_HasSymbols : ESRSettingsFlags_None,
+			features,
+			alloc, reflection, e_rr
+		));
+		allocatedSR = true;
+
+		for (U32 i = 0; i < reflDesc.NodeCount; ++i)
+			gotoIfError3(clean, Compiler_reflectNode(
+				reflectionData, i, reflDesc.NodeCount, reflectSymbols, reflection, alloc, e_rr
+			));
+
+		gotoIfError3(clean, Compiler_reflectDetails(reflectionData, &reflDesc, reflection, alloc, e_rr));
+
+		gotoIfError3(clean, SRFile_finalize(reflection, alloc, e_rr));
+	}
+
+clean:
+
+	if (!s_uccess && allocatedSR && reflection)
+		SRFile_free(reflection, alloc);
+
+	ListCompileError_freeUnderlying(&compileErrors, alloc);
+
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 		ListU16_free(&tmpWStr, alloc);
 	#else

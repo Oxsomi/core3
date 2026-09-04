@@ -87,7 +87,7 @@
 
 		if(!(args.parameters & EOperationHasParameter_ShaderOutputMode)) {
 			*multipleModes = true;
-			*maskBinaryType = (1 << ESHBinaryType_Count) - 1;
+			*maskBinaryType = (1 << EGfxBinaryType_Count) - 1;
 			return true;
 		}
 
@@ -118,7 +118,7 @@
 				if (CharString_equalsStringInsensitive(splits.ptr[i], modes[j])) {
 
 					if(j == modeCount - 1) {
-						compileModeU64 = (1 << ESHBinaryType_Count) - 1;
+						compileModeU64 = (1 << EGfxBinaryType_Count) - 1;
 						*multipleModes = true;
 					}
 

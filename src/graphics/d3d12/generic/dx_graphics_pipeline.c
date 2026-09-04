@@ -149,7 +149,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 	switch(info->rasterizer.cullMode) {
 		default:                                                                            break;
-		case ECullMode_None:    graphics.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;   break;
+		case ECullMode_None:     graphics.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;  break;
 		case ECullMode_Front:    graphics.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT; break;
 	}
 
@@ -280,7 +280,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 		const SHFile *binary = &binaries->ptr[stage.shFileId];
 		const SHBinaryInfo *binj = &binary->binaries.ptr[binary->entries.ptr[entrypointId].binaryIds.ptr[binaryId]];
-		Buffer bin = binj->binaries[ESHBinaryType_DXIL];
+		Buffer bin = binj->binaries[EGfxBinaryType_DXIL];
 
 		D3D12_SHADER_BYTECODE bytecode = (D3D12_SHADER_BYTECODE) {
 			.pShaderBytecode = bin.ptr,
@@ -298,14 +298,29 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 	//Create
 
-	ID3D12PipelineState **pipelinei = &Pipeline_ext(pipeline, Dx)->pso;
+	DxPipeline *dxPipeline = Pipeline_ext(pipeline, Dx);
+	ID3D12PipelineState **pipelinei = &dxPipeline->pso;
 
-	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateGraphicsPipelineState(
-		deviceExt->device,
-		&graphics,
-		&IID_ID3D12PipelineState,
-		(void**) pipelinei
-	), e_rr));
+	//A pipeline only stays readable back if AMD's extension created it, so capture routes through it and
+	// everything else takes the driver's own entry point untouched.
+
+	const Bool captureIsa =
+		(pipeline->flags & EPipelineFlags_CaptureISA) && deviceExt->amdAnalyzer.analyzer;
+
+	if (captureIsa) {
+		gotoIfError3(clean, DxAmdShaderAnalyzer_createGraphicsPipeline(
+			&deviceExt->amdAnalyzer, &graphics, pipelinei, &dxPipeline->amdAnalyzerHandle, e_rr
+		));
+	}
+
+	else {
+		gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateGraphicsPipelineState(
+			deviceExt->device,
+			&graphics,
+			&IID_ID3D12PipelineState,
+			(void**) pipelinei
+		), e_rr));
+	}
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name)) {
 		gotoIfError3(clean, CharString_toUTF16(*name, alloc, &tmp, e_rr));

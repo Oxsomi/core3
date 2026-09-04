@@ -43,35 +43,35 @@ void DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, const Allocat
 	ListD3D12_ROOT_PARAMETER1_free(&layoutExt->rootParams, alloc);
 }
 
-static inline D3D12_DESCRIPTOR_RANGE_TYPE dxGetDescriptorType(ESHRegisterType regType) {
+static inline D3D12_DESCRIPTOR_RANGE_TYPE dxGetDescriptorType(EGfxRegisterType regType) {
 
-	switch (regType & ESHRegisterType_TypeMask) {
+	switch (regType & EGfxRegisterType_TypeMask) {
 
-		case ESHRegisterType_Sampler:
-		case ESHRegisterType_SamplerComparisonState:
+		case EGfxRegisterType_Sampler:
+		case EGfxRegisterType_SamplerComparisonState:
 			return D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
 
-		case ESHRegisterType_ConstantBuffer:
+		case EGfxRegisterType_ConstantBuffer:
 			return D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
 
-		case ESHRegisterType_AccelerationStructure:
+		case EGfxRegisterType_AccelerationStructure:
 			return D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 
-		case ESHRegisterType_SubpassInput:        //Doesn't exist in D3D12
+		case EGfxRegisterType_SubpassInput:        //Doesn't exist in D3D12
 			return (D3D12_DESCRIPTOR_RANGE_TYPE) -1;
 
 		default:
-		case ESHRegisterType_ByteAddressBuffer:
-		case ESHRegisterType_StructuredBuffer:
-		case ESHRegisterType_StructuredBufferAtomic:
-		case ESHRegisterType_StorageBuffer:
-		case ESHRegisterType_StorageBufferAtomic:
-		case ESHRegisterType_Texture1D:
-		case ESHRegisterType_Texture2D:
-		case ESHRegisterType_Texture3D:
-		case ESHRegisterType_TextureCube:
-		case ESHRegisterType_Texture2DMS:
-			return regType & ESHRegisterType_IsWrite ? D3D12_DESCRIPTOR_RANGE_TYPE_UAV : D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		case EGfxRegisterType_ByteAddressBuffer:
+		case EGfxRegisterType_StructuredBuffer:
+		case EGfxRegisterType_StructuredBufferAtomic:
+		case EGfxRegisterType_StorageBuffer:
+		case EGfxRegisterType_StorageBufferAtomic:
+		case EGfxRegisterType_Texture1D:
+		case EGfxRegisterType_Texture2D:
+		case EGfxRegisterType_Texture3D:
+		case EGfxRegisterType_TextureCube:
+		case EGfxRegisterType_Texture2DMS:
+			return regType & EGfxRegisterType_IsWrite ? D3D12_DESCRIPTOR_RANGE_TYPE_UAV : D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	}
 }
 
@@ -106,14 +106,14 @@ static inline ECompareResult SortingKey_compare(const void *aRaw, const void *bR
 
 D3D12_SHADER_VISIBILITY DxDescriptorLayout_convertVisibility(U32 a) {
 	switch (a) {
-		case 1 << ESHPipelineStage_Vertex:      return D3D12_SHADER_VISIBILITY_VERTEX;
-		case 1 << ESHPipelineStage_Pixel:       return D3D12_SHADER_VISIBILITY_PIXEL;
-		case 1 << ESHPipelineStage_Hull:        return D3D12_SHADER_VISIBILITY_HULL;
-		case 1 << ESHPipelineStage_Domain:      return D3D12_SHADER_VISIBILITY_DOMAIN;
-		case 1 << ESHPipelineStage_GeometryExt: return D3D12_SHADER_VISIBILITY_GEOMETRY;
-		case 1 << ESHPipelineStage_MeshExt:     return D3D12_SHADER_VISIBILITY_MESH;
-		case 1 << ESHPipelineStage_TaskExt:     return D3D12_SHADER_VISIBILITY_AMPLIFICATION;
-		default:                                return D3D12_SHADER_VISIBILITY_ALL;
+		case 1 << EGfxPipelineStage_Vertex:      return D3D12_SHADER_VISIBILITY_VERTEX;
+		case 1 << EGfxPipelineStage_Pixel:       return D3D12_SHADER_VISIBILITY_PIXEL;
+		case 1 << EGfxPipelineStage_Hull:        return D3D12_SHADER_VISIBILITY_HULL;
+		case 1 << EGfxPipelineStage_Domain:      return D3D12_SHADER_VISIBILITY_DOMAIN;
+		case 1 << EGfxPipelineStage_GeometryExt: return D3D12_SHADER_VISIBILITY_GEOMETRY;
+		case 1 << EGfxPipelineStage_MeshExt:     return D3D12_SHADER_VISIBILITY_MESH;
+		case 1 << EGfxPipelineStage_TaskExt:     return D3D12_SHADER_VISIBILITY_AMPLIFICATION;
+		default:                                 return D3D12_SHADER_VISIBILITY_ALL;
 	}
 }
 
@@ -171,10 +171,10 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			//So route texture-like push descriptors through a single-entry descriptor table instead.
 			//The range pointer is patched in after the loop, since pushBack can reallocate the range list.
 
-			if((binding->registerType & ESHRegisterType_TypeMask) >= ESHRegisterType_TextureStart) {
+			if((binding->registerType & EGfxRegisterType_TypeMask) >= EGfxRegisterType_TextureStart) {
 
 				D3D12_DESCRIPTOR_RANGE_TYPE rangeType =
-					binding->registerType & ESHRegisterType_IsWrite ?
+					binding->registerType & EGfxRegisterType_IsWrite ?
 					D3D12_DESCRIPTOR_RANGE_TYPE_UAV : D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 
 				gotoIfError3(clean, ListD3D12_DESCRIPTOR_RANGE1_pushBack(
@@ -201,10 +201,10 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 			D3D12_ROOT_PARAMETER_TYPE type = D3D12_ROOT_PARAMETER_TYPE_SRV;
 
-			if(binding->registerType == ESHRegisterType_ConstantBuffer)
+			if(binding->registerType == EGfxRegisterType_ConstantBuffer)
 				type = D3D12_ROOT_PARAMETER_TYPE_CBV;
 
-			else if(binding->registerType & ESHRegisterType_IsWrite)
+			else if(binding->registerType & EGfxRegisterType_IsWrite)
 				type = D3D12_ROOT_PARAMETER_TYPE_UAV;
 
 			D3D12_ROOT_DESCRIPTOR_FLAGS rootFlags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
@@ -234,8 +234,8 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		//Remember visibility for root params
 
 		if (
-			binding->registerType == ESHRegisterType_Sampler ||
-			binding->registerType  == ESHRegisterType_SamplerComparisonState
+			binding->registerType == EGfxRegisterType_Sampler ||
+			binding->registerType  == EGfxRegisterType_SamplerComparisonState
 		) {
 
 			//Baked into the root signature instead, so it takes no range, no sampler heap slot and no place
@@ -291,7 +291,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 			const DescriptorBinding *bindingi = &info.bindings.ptr[i];
 
-			if((bindingi->registerType & ESHRegisterType_TypeMask) < ESHRegisterType_TextureStart)
+			if((bindingi->registerType & EGfxRegisterType_TypeMask) < EGfxRegisterType_TextureStart)
 				continue;
 
 			layoutExt->rootParams.ptrNonConst[layoutExt->rootParamOffsets.ptr[i]].DescriptorTable.pDescriptorRanges =

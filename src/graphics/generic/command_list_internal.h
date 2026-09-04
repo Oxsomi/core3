@@ -38,7 +38,7 @@ typedef RefPtr RTASRef;
 																												\
 	CommandList *commandList = NULL;                                                                            \
 																												\
-	if(!(v) || (v)->refPtrType->typeId != (TypeId)EGraphicsTypeId_CommandList)                                 \
+	if(!(v) || (v)->refPtrType->typeId != (TypeId)EGraphicsTypeId_CommandList)                                  \
 		retError(clean, Error_nullPointer(0, "CommandListRef_validate() cmdlist is invalid"));                  \
 																												\
 	commandList = CommandListRef_ptr(v);                                                                        \

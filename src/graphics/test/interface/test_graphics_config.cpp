@@ -203,13 +203,13 @@ extern "C" void Test_graphicsConfigVariants(
 
 			c::DescriptorBinding bindings[2] = {
 				{
-					.registerType = c::ESHRegisterType_Texture2D,
+					.registerType = c::EGfxRegisterType_Texture2D,
 					.count = 1,
 					.visibility = c::U32_MAX
 				},
 				{
-					.registerType = (c::ESHRegisterType)
-						(c::ESHRegisterType_ByteAddressBuffer | c::ESHRegisterType_IsWrite),
+					.registerType = (c::EGfxRegisterType)
+						(c::EGfxRegisterType_ByteAddressBuffer | c::EGfxRegisterType_IsWrite),
 					.count = 1,
 					.binding = { .binding = 1 },
 					.visibility = c::U32_MAX

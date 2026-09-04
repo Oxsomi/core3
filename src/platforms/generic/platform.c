@@ -41,9 +41,9 @@ void sigFunc(int signal) {
 
 	switch (signal) {
 		case SIGABRT:    msg = "Abort was called";                    break;
-		case SIGFPE:    msg = "Floating point error occurred";        break;
-		case SIGILL:    msg = "Illegal instruction";                break;
-		case SIGINT:    msg = "Interrupt was called";                break;
+		case SIGFPE:     msg = "Floating point error occurred";       break;
+		case SIGILL:     msg = "Illegal instruction";                 break;
+		case SIGINT:     msg = "Interrupt was called";                break;
 		case SIGSEGV:    msg = "Segfault";                            break;
 		case SIGTERM:    msg = "Terminate was called";                break;
 	}
@@ -84,7 +84,7 @@ TListImpl(DebugAllocation);
 Allocator Allocator_allocationsAllocator;
 Allocator Allocator_trackedAllocator;
 ListDebugAllocation Allocator_allocations;            //TODO: Use hashmap here!
-SpinLock Allocator_lock;                            //Multi threading safety
+SpinLock Allocator_lock;                              //Multi threading safety
 
 #if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
 

@@ -117,7 +117,7 @@ clean:
 
 void SBVar_applyHash(U64 *hashRes, SBVar var, CharString name) {
 
-	const void *structId = &var.structId;                //Interpreted as a U64 and U32
+	const void *structId = &var.structId;                  //Interpreted as a U64 and U32
 	const U32 *structIdU32 = (const U32*) structId;        //[] = (structId, arrayIndex), offset, (type, flags, parentId)
 
 	U64 hash = *hashRes;

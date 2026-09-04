@@ -170,9 +170,9 @@ Bool CLI_rand(const ParsedArgs *args) {
 		switch (outputAsBase) {
 
 			case 2:        maxLen = b;                    break;
-			case 8:        maxLen = (b + 2) / 3;        break;
-			case 16:    maxLen = (b + 3) >> 2;        break;
-			case 64:    maxLen = (b + 5) / 6;        break;
+			case 8:        maxLen = (b + 2) / 3;          break;
+			case 16:       maxLen = (b + 3) >> 2;         break;
+			case 64:       maxLen = (b + 5) / 6;          break;
 
 			default: {
 
@@ -358,8 +358,8 @@ Bool CLI_rand(const ParsedArgs *args) {
 						if(!k && b)
 							switch (outputAsBase) {
 								case 8:        if(b % 3) v &= (1 << (b % 3)) - 1;        break;
-								case 16:    if(b % 4) v &= (1 << (b % 4)) - 1;        break;
-								case 64:    if(b % 6) v &= (1 << (b % 6)) - 1;        break;
+								case 16:       if(b % 4) v &= (1 << (b % 4)) - 1;        break;
+								case 64:       if(b % 6) v &= (1 << (b % 6)) - 1;        break;
 							}
 
 						gotoIfError3(clean, CharString_append(&outputString, options.ptr[v], alloc, e_rr));

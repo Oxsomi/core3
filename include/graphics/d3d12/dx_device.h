@@ -22,6 +22,7 @@
 
 #pragma once
 #include "graphics/d3d12/direct3d12.h"
+#include "graphics/d3d12/dx_amd_shader_analyzer.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
@@ -212,6 +213,10 @@ typedef struct DxGraphicsDevice {
 
 	U64 padding;
 
+	//AMD's driver extension, the only route to a compiled shader on D3D12; zeroed on any other driver.
+
+	DxAmdShaderAnalyzer amdAnalyzer;
+
 } DxGraphicsDevice;
 
 typedef struct GraphicsInstance GraphicsInstance;
@@ -275,7 +280,7 @@ typedef struct DxCommandBufferState {
 
 	U16 scopeCounter;
 	U8 curScopeFlags;                                  //ECommandScopeInternalFlags of the open scope, StartScope -> EndScope
-	U8 colorCount;                                    //If inRender, how many colors are bound (upper mask = has depth)
+	U8 colorCount;                                     //If inRender, how many colors are bound (upper mask = has depth)
 	U8 anyResolve;
 	U8 padding5[3];
 
@@ -300,7 +305,7 @@ Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *
 void DxDescriptorTable_writeTexture(
 	DxGraphicsDevice *deviceExt,
 	const Descriptor *d,
-	ESHRegisterType registerType,
+	EGfxRegisterType registerType,
 	D3D12_CPU_DESCRIPTOR_HANDLE dst
 );
 
@@ -309,7 +314,7 @@ D3D12_SHADER_VISIBILITY DxDescriptorLayout_convertVisibility(U32 visibility);
 //A sampler is described the same way whether it lands in a sampler heap or is baked into a root signature.
 
 D3D12_FILTER DxSampler_toFilter(SamplerInfo sinfo);
-D3D12_STATIC_SAMPLER_DESC DxSampler_toStaticDesc(SamplerInfo sinfo, SHBinding binding, U32 visibility);
+D3D12_STATIC_SAMPLER_DESC DxSampler_toStaticDesc(SamplerInfo sinfo, GfxBinding binding, U32 visibility);
 
 Bool DxGraphicsDevice_createDescriptorHeapSingle(
 	DxGraphicsDevice *deviceExt,

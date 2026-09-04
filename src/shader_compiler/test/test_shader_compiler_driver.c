@@ -69,7 +69,7 @@ void Test_shaderCompilerDriver(Test *t) {
 	//--- Multi-file batch (single-threaded) ---
 
 	ListBuffer single = (ListBuffer) { 0 };
-	Bool okSingle = compileInlineShaders(alloc, shaders, n, ESHBinaryType_SPIRV, 1, "driver_batch", true, &single, &err);
+	Bool okSingle = compileInlineShaders(alloc, shaders, n, EGfxBinaryType_SPIRV, 1, "driver_batch", true, &single, &err);
 
 	U64 produced = 0;
 	if (okSingle)
@@ -94,7 +94,7 @@ void Test_shaderCompilerDriver(Test *t) {
 
 	ListBuffer multi = (ListBuffer) { 0 };
 	Bool okMulti = compileInlineShaders(
-		alloc, shaders, n, ESHBinaryType_SPIRV, driverTestThreads, "driver_batch", true, &multi, &err
+		alloc, shaders, n, EGfxBinaryType_SPIRV, driverTestThreads, "driver_batch", true, &multi, &err
 	);
 
 	Bool deterministic = okMulti && multi.length == single.length;
@@ -115,10 +115,10 @@ void Test_shaderCompilerDriver(Test *t) {
 		SHFile sh = (SHFile) { 0 };
 
 		Bool hasDxil =
-			compileInlineShaders(alloc, one, 1, ESHBinaryType_DXIL, 1, "driver_dxil", true, &dxil, &err) &&
+			compileInlineShaders(alloc, one, 1, EGfxBinaryType_DXIL, 1, "driver_dxil", true, &dxil, &err) &&
 			dxil.length == 1 && Buffer_length(dxil.ptr[0]) &&
 			readOiSH(alloc, dxil.ptr[0], &sh, &err) && sh.binaries.length >= 1 &&
-			Buffer_length(sh.binaries.ptr[0].binaries[ESHBinaryType_DXIL]);
+			Buffer_length(sh.binaries.ptr[0].binaries[EGfxBinaryType_DXIL]);
 
 		Test_assert(t, "DXIL target produces a DXIL binary", hasDxil);
 
@@ -137,7 +137,7 @@ void Test_shaderCompilerDriver(Test *t) {
 		ListBuffer d = (ListBuffer) { 0 };
 		SHFile sd = (SHFile) { 0 };
 		Bool onDxil =
-			compileFileShader(alloc, "driver/binary_rt_lib.hlsl", ESHBinaryType_DXIL, true, false, &d, &err) &&
+			compileFileShader(alloc, "driver/binary_rt_lib.hlsl", EGfxBinaryType_DXIL, true, false, &d, &err) &&
 			d.length == 1 && Buffer_length(d.ptr[0]) &&
 			readOiSH(alloc, d.ptr[0], &sd, &err) && sd.entries.length == 2;
 
@@ -151,7 +151,7 @@ void Test_shaderCompilerDriver(Test *t) {
 		ListBuffer s = (ListBuffer) { 0 };
 		SHFile ss = (SHFile) { 0 };
 		Bool onSpirv =
-			compileFileShader(alloc, "driver/binary_rt_lib.hlsl", ESHBinaryType_SPIRV, true, false, &s, &err) &&
+			compileFileShader(alloc, "driver/binary_rt_lib.hlsl", EGfxBinaryType_SPIRV, true, false, &s, &err) &&
 			s.length == 1 && Buffer_length(s.ptr[0]) &&
 			readOiSH(alloc, s.ptr[0], &ss, &err) && ss.entries.length == 1;
 
@@ -173,7 +173,7 @@ void Test_shaderCompilerDriver(Test *t) {
 		Buffer rewritten = Buffer_createNull();
 
 		Bool readOk =
-			compileInlineShaders(alloc, one, 1, ESHBinaryType_SPIRV, 1, "roundtrip", true, &rt, &err) &&
+			compileInlineShaders(alloc, one, 1, EGfxBinaryType_SPIRV, 1, "roundtrip", true, &rt, &err) &&
 			rt.length == 1 && Buffer_length(rt.ptr[0]) &&
 			readOiSH(alloc, rt.ptr[0], &a, &err);
 
@@ -202,7 +202,7 @@ void Test_shaderCompilerDriver(Test *t) {
 
 		//enableLogging=false: the failure is expected and asserted on below, so keep the compiler quiet
 		//instead of printing DXC diagnostics for a shader we deliberately broke.
-		Bool compiledBad = compileInlineShaders(alloc, bad, 1, ESHBinaryType_SPIRV, 1, "driver_invalid", false, &out, &e2);
+		Bool compiledBad = compileInlineShaders(alloc, bad, 1, EGfxBinaryType_SPIRV, 1, "driver_invalid", false, &out, &e2);
 
 		Test_assert(t, "invalid shader fails cleanly", !compiledBad);
 
