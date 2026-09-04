@@ -804,10 +804,10 @@ Bool CharString_createFromETypeId(TypeId type, const Allocator *alloc, CharStrin
 			createString = true;
 			goto clean;
 
-		case EDataType_Bool:            ptr = "B1";        break;
-		case EDataType_UInt:            ptr = "U";        break;
+		case EDataType_Bool:               ptr = "B1";       break;
+		case EDataType_UInt:               ptr = "U";        break;
 		case EDataType_Int:                ptr = "I";        break;
-		case EDataType_Float:            ptr = "F";        break;
+		case EDataType_Float:              ptr = "F";        break;
 	}
 
 	gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(ptr), alloc, result, e_rr));
@@ -816,7 +816,7 @@ Bool CharString_createFromETypeId(TypeId type, const Allocator *alloc, CharStrin
 	if(dataType != EDataType_Bool) {
 
 		switch(dataTypeStride) {
-			default:                    ptr = "8";        break;
+			default:                    ptr = "8";         break;
 			case EDataTypeStride_16:    ptr = "16";        break;
 			case EDataTypeStride_32:    ptr = "32";        break;
 			case EDataTypeStride_64:    ptr = "64";        break;
@@ -1019,7 +1019,7 @@ TypeId ETypeId_parse(const CharString str) {
 			U8 v = C8_dec(str.ptr[1]);
 
 			switch (v) {
-				case 8: case 1: case 3: case 6:        break;    //8, 16, 32, 64
+				case 8:                             case 1: case 3: case 6:        break;    //8, 16, 32, 64
 				default:                            return (TypeId) ETypeId_Undefined;
 			}
 
@@ -1033,14 +1033,14 @@ TypeId ETypeId_parse(const CharString str) {
 				U8 v2 = C8_dec(str.ptr[2]);
 
 				switch (v2) {
-					case 6: case 2: case 4:            break;
+					case 6:                         case 2: case 4:                    break;
 					default:                        return (TypeId) ETypeId_Undefined;
 				}
 
 				v = v * 10 + v2;
 
 				switch (v) {
-					case 16: case 32: case 64:        break;
+					case 16:                        case 32: case 64:                  break;
 					default:                        return (TypeId) ETypeId_Undefined;
 				}
 
@@ -1053,18 +1053,18 @@ TypeId ETypeId_parse(const CharString str) {
 			EDataType dataType;
 
 			switch (str.ptr[0]) {
-				default:    dataType = EDataType_Float;        break;
+				default:     dataType = EDataType_Float;       break;
 				case 'U':    dataType = EDataType_UInt;        break;
-				case 'I':    dataType = EDataType_Int;        break;
+				case 'I':    dataType = EDataType_Int;         break;
 			}
 
 			EDataTypeStride stride;
 
 			switch (v) {
 				default:    stride = EDataTypeStride_8;        break;
-				case 16:    stride = EDataTypeStride_16;    break;
-				case 32:    stride = EDataTypeStride_32;    break;
-				case 64:    stride = EDataTypeStride_64;    break;
+				case 16:    stride = EDataTypeStride_16;       break;
+				case 32:    stride = EDataTypeStride_32;       break;
+				case 64:    stride = EDataTypeStride_64;       break;
 			}
 
 			if(strl == start)

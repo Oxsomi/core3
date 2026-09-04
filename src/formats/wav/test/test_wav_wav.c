@@ -976,7 +976,7 @@ void Test_WAVReadExtended(Test *t) {
  
 		//2 stereo frames of 32-bit PCM (8 bytes)
 		0x00, 0x00, 0x00, 0x12,    //frame 0 left
-		0x00, 0x00, 0x00, 0x34    //frame 0 right
+		0x00, 0x00, 0x00, 0x34     //frame 0 right
 	};
  
 	if (!makeSampleStream(t, wav, sizeof(wav), &type, &sr)) {

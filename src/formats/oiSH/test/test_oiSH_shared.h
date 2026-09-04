@@ -34,7 +34,7 @@ void Test_SHPipelineStagePrefixes(Test *t);
 void Test_SHExtensionSetSanity(Test *t);
 void Test_SHVendorNames(Test *t);
 void Test_SHBinaryTypeNames(Test *t);
-void Test_SHBindingsDummy(Test *t);
+void Test_GfxBindingsDummy(Test *t);
 
 void Test_SHEntryRuntimeGetCombinations(Test *t);
 void Test_SHBinaryIdentifierEquals(Test *t);
@@ -142,19 +142,19 @@ static inline Bool Test_SHFileCreate(Test *t, SHFile *sh) {
 
 static const U8 kDummySPIRV[4] = { 0x03, 0x02, 0x23, 0x07 };
 
-static inline SHBindings makeDualBinding(U32 set, U32 spirvBinding, U32 dxilBinding) {
-	SHBindings b = SHBindings_dummy();
-	b.arr[ESHBinaryType_SPIRV].space = set;
-	b.arr[ESHBinaryType_SPIRV].binding = spirvBinding;
-	b.arr[ESHBinaryType_DXIL].space = set;
-	b.arr[ESHBinaryType_DXIL].binding = dxilBinding;
+static inline GfxBindings makeDualBinding(U32 set, U32 spirvBinding, U32 dxilBinding) {
+	GfxBindings b = GfxBindings_dummy();
+	b.arr[EGfxBinaryType_SPIRV].space = set;
+	b.arr[EGfxBinaryType_SPIRV].binding = spirvBinding;
+	b.arr[EGfxBinaryType_DXIL].space = set;
+	b.arr[EGfxBinaryType_DXIL].binding = dxilBinding;
 	return b;
 }
 
 //Build a minimal valid SHBinaryInfo.
 //Pass entrypoint = NULL + hasShaderAnnotation = true for a lib binary.
 static inline SHBinaryInfo makeBinaryInfo(
-	ESHPipelineStage stage,
+	EGfxPipelineStage stage,
 	const C8 *entrypoint,
 	Bool hasShaderAnnotation
 ) {
@@ -171,7 +171,7 @@ static inline SHBinaryInfo makeBinaryInfo(
 		.hasShaderAnnotation = hasShaderAnnotation
 	};
 
-	info.binaries[ESHBinaryType_SPIRV] = Buffer_createRefConst(kDummySPIRV, sizeof(kDummySPIRV));
+	info.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(kDummySPIRV, sizeof(kDummySPIRV));
 	return info;
 }
 
@@ -187,7 +187,7 @@ static inline Bool addComputeEntry(
 ) {
 	SHEntry e = (SHEntry) { 0 };
 	e.name = CharString_createRefCStrConst(name);
-	e.stage = ESHPipelineStage_Compute;
+	e.stage = EGfxPipelineStage_Compute;
 	e.groupX = gx;
 	e.groupY = gy;
 	e.groupZ = gz;

@@ -23,6 +23,7 @@
 #pragma once
 #include "types/base/types.h"
 #include "types/math/flp.h"
+#include "formats/oiPL/pl_file.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -32,58 +33,7 @@ typedef struct CharString CharString;
 typedef struct RefPtr RefPtr;
 typedef struct Error Error;
 
-typedef enum ESamplerFilterMode {
-
-	ESamplerFilterMode_Nearest,
-	ESamplerFilterMode_LinearMagNearestMinMip,
-	ESamplerFilterMode_LinearMinNearestMagMip,
-	ESamplerFilterMode_LinearMagMinNearestMip,
-	ESamplerFilterMode_LinearMipNearestMagMin,
-	ESamplerFilterMode_LinearMagMipNearestMin,
-	ESamplerFilterMode_LinearMinMipNearestMag,
-	ESamplerFilterMode_Linear,
-
-	ESamplerFilterMode_None             = 0,
-
-	ESamplerFilterMode_LinearMag        = 1 << 0,
-	ESamplerFilterMode_LinearMin        = 1 << 1,
-	ESamplerFilterMode_LinearMip        = 1 << 2,
-
-	ESamplerFilterMode_PropertyCount    = 3,
-	ESamplerFilterMode_All              = (1 << ESamplerFilterMode_PropertyCount) - 1
-
-} ESamplerFilterMode;
-
-typedef enum ESamplerAddressMode {
-	ESamplerAddressMode_Repeat,
-	ESamplerAddressMode_MirrorRepeat,
-	ESamplerAddressMode_ClampToEdge,
-	ESamplerAddressMode_ClampToBorder,
-	ESamplerAddressMode_Count
-} ESamplerAddressMode;
-
-typedef enum ESamplerBorderColor {
-	ESamplerBorderColor_TransparentBlack,        //0.xxxx
-	ESamplerBorderColor_OpaqueBlackFloat,        //0.xxx, 1.f
-	ESamplerBorderColor_OpaqueBlackInt,          //0.xxx, 1
-	ESamplerBorderColor_OpaqueWhiteFloat,        //1.f.xxxx
-	ESamplerBorderColor_OpaqueWhiteInt,          //1.xxxx
-	ESamplerBorderColor_Count
-} ESamplerBorderColor;
-
-typedef struct SamplerInfo {
-
-	U8 filter;                            //ESamplerFilterMode
-	U8 addressU, addressV, addressW;      //ESamplerAddressMode[3] (3 bits each)
-
-	U8 aniso;                             //0-16
-	U8 borderColor;                       //ESamplerBorderColor
-	U8 comparisonFunction;                //ECompareOp
-	Bool enableComparison;
-
-	F16 mipBias, minLod, maxLod;
-
-} SamplerInfo;
+typedef PLSamplerInfo SamplerInfo;
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr SamplerRef;

@@ -46,6 +46,7 @@
 #include "formats/oiSB/sb_file.h"
 #include "formats/oiSR/sr_file.h"
 #include "formats/oiSP/sp_file.h"
+#include "formats/oiPL/pl_file.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
@@ -532,7 +533,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 		goto clean;
 	}
 
-	ESHBinaryType binaryType = ESHBinaryType_Count;
+	EGfxBinaryType binaryType = EGfxBinaryType_Count;
 
 	if (args->parameters & EOperationHasParameter_ShaderOutputMode) {
 
@@ -548,10 +549,10 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 		}
 
 		if(CharString_equalsCStringInsensitive(&shaderOutputMode, "DXIL"))
-			binaryType = ESHBinaryType_DXIL;
+			binaryType = EGfxBinaryType_DXIL;
 
 		else if(CharString_equalsCStringInsensitive(&shaderOutputMode, "SPV"))
-			binaryType = ESHBinaryType_SPIRV;
+			binaryType = EGfxBinaryType_SPIRV;
 
 		else {
 			Log_errorLnx("Invalid argument. Expected: -compile-output <spv/dxil>.");
@@ -888,14 +889,14 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 					binaryMode = true;
 
-					if(binaryType == ESHBinaryType_Count)
-						binaryType = ESHBinaryType_SPIRV;
+					if(binaryType == EGfxBinaryType_Count)
+						binaryType = EGfxBinaryType_SPIRV;
 				}
 
 			#endif
 
 			if((args->parameters & EOperationHasParameter_Output) && (
-				binaryType == ESHBinaryType_Count ||
+				binaryType == EGfxBinaryType_Count ||
 				!binaryMode ||
 				!(args->parameters & EOperationHasParameter_Entry)
 			)) {
@@ -959,12 +960,12 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 					//Compile mode was selected
 
-					if (binaryType != ESHBinaryType_Count) {
+					if (binaryType != EGfxBinaryType_Count) {
 
 						Buffer binary = file.binaries.ptr[entryI].binaries[binaryType];
 
 						if (!Buffer_length(binary)) {
-							Log_errorLnx("%s binary is missing at index %"PRIu64, ESHBinaryType_names[binaryType], entryI);
+							Log_errorLnx("%s binary is missing at index %"PRIu64, EGfxBinaryType_names[binaryType], entryI);
 							goto cleanSh;
 						}
 
@@ -975,11 +976,11 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 							if(hasAsic) {
 
-								if(binaryType != ESHBinaryType_SPIRV)
+								if(binaryType != EGfxBinaryType_SPIRV)
 									Log_warnLnx(
 										"-asic has no offline ISA path for %s (that needs the live AMD device via 'OxC3 isa'); "
 										"showing %s disassembly instead",
-										ESHBinaryType_names[binaryType], ESHBinaryType_names[binaryType]
+										EGfxBinaryType_names[binaryType], EGfxBinaryType_names[binaryType]
 									);
 
 								else {
@@ -1007,7 +1008,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 								if (!Compiler_disassemble(&comp, binaryType, binary, alloc, &tmp, e_rr)) {
 									Log_errorLnx(
-										"%s disassembly failed at index %"PRIu64, ESHBinaryType_names[binaryType], entryI
+										"%s disassembly failed at index %"PRIu64, EGfxBinaryType_names[binaryType], entryI
 									);
 									goto cleanSh;
 								}
@@ -1121,6 +1122,52 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 		}
 
 		//oiSR file (frontend symbol AST reflection)
+
+		case PLHeader_MAGIC: {
+
+			if(encryptionKey)
+				retError(clean, Error_invalidState(0, "CLI_inspectData() oiPL doesn't have aes support!"));
+
+			PLFile pl = (PLFile) { 0 };
+			U64 plOff = 0;
+
+			gotoIfError3(clean, PLFile_read(stream, &plOff, false, alloc, &pl, e_rr));
+
+			Log_debugLnx(
+				"oiPL with %"PRIu64" binding(s), %"PRIu64" sampler(s)%s:",
+				pl.bindings.length, pl.samplers.length, pl.hasPushConstant ? ", a push constant" : ""
+			);
+
+			for (U64 i = 0; i < pl.bindings.length; ++i) {
+
+				const PLDescriptorBinding b = pl.bindings.ptr[i];
+				const U32 bNameId = PLDescriptorBinding_name(b);
+				const GfxBinding spv = b.bindings.arr[EGfxBinaryType_SPIRV];
+				const GfxBinding dxil = b.bindings.arr[EGfxBinaryType_DXIL];
+
+				const CharString bName =
+					bNameId != PLDescriptorBinding_NAME_NONE && bNameId < pl.names.entryStrings.length ?
+					pl.names.entryStrings.ptr[bNameId] : CharString_createNull();
+
+				Log_debugLnx(
+					"\t[%"PRIu64"] type %"PRIu32" spirv %"PRIu32":%"PRIu32" dxil %"PRIu32":%"PRIu32" "
+					"count %"PRIu32" visibility %"PRIx32" value %"PRIu32"%s%.*s",
+					i, b.registerType, spv.space, spv.binding, dxil.space, dxil.binding,
+					b.count, b.visibility, b.strideOrLength,
+					CharString_length(bName) ? " " : "", (int) CharString_length(bName), bName.ptr
+				);
+			}
+
+			if(pl.hasPushConstant)
+				Log_debugLnx(
+					"\tpush constant: %"PRIu32" bytes, visibility %"PRIx32,
+					pl.pushConstant.strideOrLength, pl.pushConstant.visibility
+				);
+
+			PLFile_free(&pl, alloc);
+			s_uccess = true;
+			goto clean;
+		}
 
 		case SPHeader_MAGIC: {
 

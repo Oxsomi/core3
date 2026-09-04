@@ -114,7 +114,7 @@ static inline Bool File_hasFolder(const CharString *loc, const Allocator *alloc)
 
 typedef enum EFileOpenType {
 	EFileOpenType_Read,                //Read only
-	EFileOpenType_Write,            //E.g. ios::ate or wb
+	EFileOpenType_Write,               //E.g. ios::ate or wb
 	EFileOpenType_ReadWrite
 } EFileOpenType;
 
@@ -134,7 +134,7 @@ typedef U8 FileOpenType;
 
 typedef struct FileHandle {
 	void *ext;                        //HANDLE or int (fd)
-	U64 fileSizeType;                //(EFileOpenType << 62) | fileSize
+	U64 fileSizeType;                 //(EFileOpenType << 62) | fileSize
 } FileHandle;
 
 static inline U64 FileHandle_makeFileSizeType(U64 fileSize, EFileOpenType type) {

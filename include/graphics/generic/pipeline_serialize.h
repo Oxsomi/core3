@@ -78,6 +78,29 @@ Bool Pipeline_toSPFile(
 // its entrypoint has to exist in that oiSH, so a pipeline stored on one run can be rebuilt on the next.
 //A stage whose source hash no longer matches the oiSH it resolves to is reported rather than silently accepted.
 
+//Instantiates a serialized layout on a device, the way a D3D12 serialized root signature becomes a real one.
+//The caller owns the returned ref; passing it to a pipeline create keeps working after releasing it, since
+// the pipeline holds its own.
+
+Bool PLFile_createPipelineLayout(
+	GraphicsDeviceRef *deviceRef,
+	const PLFile *plFile,
+	const Allocator *alloc,
+	PipelineLayoutRef **layoutRef,
+	Error *e_rr
+);
+
+//The SPFile form resolves the pipeline's layout, or hands back NULL for the device's default one.
+
+Bool SPFile_createPipelineLayout(
+	GraphicsDeviceRef *deviceRef,
+	const SPFile *spFile,
+	U32 pipelineId,
+	const Allocator *alloc,
+	PipelineLayoutRef **layoutRef,
+	Error *e_rr
+);
+
 Bool GraphicsDeviceRef_createPipelineFromSPFile(
 	GraphicsDeviceRef *deviceRef,
 	const SPFile *spFile,

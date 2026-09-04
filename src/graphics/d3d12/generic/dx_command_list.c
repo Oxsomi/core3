@@ -370,11 +370,11 @@ static void DxCommandBufferState_bindDescriptors(
 				break;
 
 			const Descriptor d = temp->pushDescriptors[writeId++];
-			const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
+			const EGfxRegisterType type = (EGfxRegisterType)(binding.registerType & EGfxRegisterType_TypeMask);
 
 			const U32 rootParam = layoutExt->rootParamPushDescriptors + pushExt->rootParamOffsets.ptr[i];
 
-			if (type >= ESHRegisterType_TextureStart && type < ESHRegisterType_SubpassInput) {
+			if (type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_SubpassInput) {
 
 				U32 slot = 0;
 
@@ -418,11 +418,11 @@ static void DxCommandBufferState_bindDescriptors(
 			}
 
 			D3D12_GPU_VIRTUAL_ADDRESS addr =
-				type == ESHRegisterType_AccelerationStructure ?
+				type == EGfxRegisterType_AccelerationStructure ?
 				DeviceBufferRef_ptr(TLASRef_ptr(d.resource)->base.asBuffer)->resource.deviceAddress :
 				DeviceBufferRef_ptr(d.resource)->resource.deviceAddress + Descriptor_startBuffer(&d);
 
-			if (type == ESHRegisterType_ConstantBuffer) {
+			if (type == EGfxRegisterType_ConstantBuffer) {
 
 				if(isCompute)
 					buffer->lpVtbl->SetComputeRootConstantBufferView(buffer, rootParam, addr);
@@ -430,7 +430,7 @@ static void DxCommandBufferState_bindDescriptors(
 				else buffer->lpVtbl->SetGraphicsRootConstantBufferView(buffer, rootParam, addr);
 			}
 
-			else if (binding.registerType & ESHRegisterType_IsWrite) {
+			else if (binding.registerType & EGfxRegisterType_IsWrite) {
 
 				if(isCompute)
 					buffer->lpVtbl->SetComputeRootUnorderedAccessView(buffer, rootParam, addr);
@@ -495,7 +495,7 @@ static void DxCommandBufferState_bindDescriptors(
 	for (U64 i = 0; i < descLayout->info.bindings.length; ++i) {
 
 		const DescriptorBinding binding = descLayout->info.bindings.ptr[i];
-		const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
+		const EGfxRegisterType type = (EGfxRegisterType)(binding.registerType & EGfxRegisterType_TypeMask);
 
 		//An immutable sampler is a static sampler in the root signature, so the layout gave it no root
 		// parameter and never wrote it an offset.
@@ -505,7 +505,7 @@ static void DxCommandBufferState_bindDescriptors(
 		if(DescriptorBinding_immutableSamplerId(binding))
 			continue;
 
-		const Bool isSampler = type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState;
+		const Bool isSampler = type == EGfxRegisterType_Sampler || type == EGfxRegisterType_SamplerComparisonState;
 
 		if(isSampler && samplerParam == U8_MAX)
 			samplerParam = descLayoutExt->rootParamOffsets.ptr[i];
@@ -818,7 +818,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				for (U64 i = 0; i < pushLayout->info.bindings.length && i < 2; ++i) {
 
-					const Bool isWrite = !!(pushLayout->info.bindings.ptr[i].registerType & ESHRegisterType_IsWrite);
+					const Bool isWrite = !!(pushLayout->info.bindings.ptr[i].registerType & EGfxRegisterType_IsWrite);
 
 					buffer->lpVtbl->SetComputeRootDescriptorTable(
 						buffer,
@@ -1069,7 +1069,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 					.NumRects = hasRect ? 1 : 0,
 					.pRects = hasRect ? &rect : NULL,
 					.FirstSubresource = 0,        //TODO: Ensure all are valid
-					.NumSubresources = 1        //TODO: ^
+					.NumSubresources = 1          //TODO: ^
 				};
 
 				Bool preserveDepth = startRender->flags & EStartRenderFlags_PreserveDepth;
@@ -1167,7 +1167,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 						.NumRects = hasRect ? 1 : 0,
 						.pRects = hasRect ? &rect : NULL,
 						.FirstSubresource = 0,        //TODO: Ensure all are valid
-						.NumSubresources = 1        //TODO: ^
+						.NumSubresources = 1          //TODO: ^
 					};
 
 					buffer->lpVtbl->DiscardResource(buffer, resolveExt->image, &region);
@@ -1268,10 +1268,10 @@ void DX_WRAP_FUNC(CommandList_process)(
 					switch(utex.depthFormat) {
 
 						default:
-						case EDepthStencilFormat_D32:            format = DXGI_FORMAT_R32_FLOAT;               break;
-						case EDepthStencilFormat_D16:            format = DXGI_FORMAT_R16_UNORM;               break;
+						case EDepthStencilFormat_D32:            format = DXGI_FORMAT_R32_FLOAT;                break;
+						case EDepthStencilFormat_D16:            format = DXGI_FORMAT_R16_UNORM;                break;
 						case EDepthStencilFormat_D32S8X24Ext:    format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS; break;
-						case EDepthStencilFormat_D24S8Ext:       format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;   break;
+						case EDepthStencilFormat_D24S8Ext:       format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;    break;
 					}
 
 				else format = ETextureFormatId_toDXFormat(utex.textureFormatId);
@@ -1283,7 +1283,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 				D3D12_RESOLVE_MODE resolveMode = D3D12_RESOLVE_MODE_AVERAGE;
 
 				switch(temp->resolveModes[i == count ? 8 : i]) {
-					default:                    break;
+					default:                                                          break;
 					case EMSAAResolveMode_Min:  resolveMode = D3D12_RESOLVE_MODE_MIN; break;
 					case EMSAAResolveMode_Max:  resolveMode = D3D12_RESOLVE_MODE_MAX; break;
 				}
@@ -1379,19 +1379,19 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			else switch(graphicsShader->topologyMode) {
 
-				default:                                topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;            break;
-				case ETopologyMode_TriangleStrip:        topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;        break;
+				default:                                 topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;           break;
+				case ETopologyMode_TriangleStrip:        topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;          break;
 
-				case ETopologyMode_LineList:            topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;                break;
-				case ETopologyMode_LineStrip:            topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;            break;
+				case ETopologyMode_LineList:             topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;               break;
+				case ETopologyMode_LineStrip:            topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;              break;
 
 				case ETopologyMode_PointList:            topology = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;            break;
 
 				case ETopologyMode_TriangleListAdj:        topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ;        break;
-				case ETopologyMode_TriangleStripAdj:    topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ;    break;
+				case ETopologyMode_TriangleStripAdj:       topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ;       break;
 
 				case ETopologyMode_LineListAdj:            topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ;            break;
-				case ETopologyMode_LineStripAdj:        topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ;        break;
+				case ETopologyMode_LineStripAdj:           topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ;           break;
 			}
 
 			if (temp->boundPrimitiveTopology != topology) {

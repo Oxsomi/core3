@@ -42,7 +42,7 @@ typedef struct CharString CharString;
 typedef struct BigInt {
 
 	union {
-		const U64 *data;    //Aligned
+		const U64 *data;      //Aligned
 		U64 *dataNonConst;    //Only if !isConst
 	};
 

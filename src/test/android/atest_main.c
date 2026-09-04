@@ -55,6 +55,7 @@ ATEST_SUITE(formats_oiCA);
 ATEST_SUITE(formats_oiDL);
 ATEST_SUITE(formats_oiSB);
 ATEST_SUITE(formats_oiSH);
+ATEST_SUITE(formats_oiPL);
 ATEST_SUITE(formats_oiSP);
 ATEST_SUITE(formats_oiSR);
 ATEST_SUITE(formats_wav);
@@ -98,6 +99,7 @@ static const ATestSuite ATest_suites[] = {
 	{ "formats_oiDL",         OxC3_test_formats_oiDL,         false, false },
 	{ "formats_oiSB",         OxC3_test_formats_oiSB,         false, false },
 	{ "formats_oiSH",         OxC3_test_formats_oiSH,         false, false },
+	{ "formats_oiPL",         OxC3_test_formats_oiPL,         false, false },
 	{ "formats_oiSP",         OxC3_test_formats_oiSP,         false, false },
 	{ "formats_oiSR",         OxC3_test_formats_oiSR,         false, false },
 	{ "formats_wav",          OxC3_test_formats_wav,          false, false },

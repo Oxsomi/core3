@@ -116,7 +116,7 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 
 				if(
 					result->fmt.stride != 8 && result->fmt.stride != 16 && result->fmt.stride != 24 &&        //Int
-					result->fmt.stride != 32 && result->fmt.stride != 64                                    //Float ext
+					result->fmt.stride != 32 && result->fmt.stride != 64                                      //Float ext
 				)
 					retError(clean, Error_invalidState(0, "WAV_read() bit count unsupported"));
 

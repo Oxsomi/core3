@@ -554,7 +554,7 @@ static Bool DxAmdShaderAnalyzer_addExecutable(
 	const C8 *name,
 	const C8 *disassembly,
 	const AmdExtD3DShaderStats *stats,
-	ESHPipelineStage stage,
+	EGfxPipelineStage stage,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -637,9 +637,9 @@ static Bool DxAmdShaderAnalyzer_addRaytracingExecutable(
 
 	PipelineExecutable exec = (PipelineExecutable) {
 		.stages =
-			(1 << ESHPipelineStage_RaygenExt) | (1 << ESHPipelineStage_MissExt) |
-			(1 << ESHPipelineStage_ClosestHitExt) | (1 << ESHPipelineStage_AnyHitExt) |
-			(1 << ESHPipelineStage_IntersectionExt) | (1 << ESHPipelineStage_CallableExt)
+			(1 << EGfxPipelineStage_RaygenExt) | (1 << EGfxPipelineStage_MissExt) |
+			(1 << EGfxPipelineStage_ClosestHitExt) | (1 << EGfxPipelineStage_AnyHitExt) |
+			(1 << EGfxPipelineStage_IntersectionExt) | (1 << EGfxPipelineStage_CallableExt)
 	};
 
 	gotoIfError3(clean, CharString_createCopy(name, alloc, &exec.name, e_rr));
@@ -877,7 +877,7 @@ Bool DxAmdShaderAnalyzer_getExecutables(
 
 		gotoIfError3(clean, DxAmdShaderAnalyzer_addExecutable(
 			&executables, "Compute shader", disassembly.computeDisassembly, &stats.base,
-			ESHPipelineStage_Compute, alloc, e_rr
+			EGfxPipelineStage_Compute, alloc, e_rr
 		));
 	}
 
@@ -885,9 +885,9 @@ Bool DxAmdShaderAnalyzer_getExecutables(
 
 		const C8 *names[5] = { "Vertex shader", "Hull shader", "Domain shader", "Geometry shader", "Pixel shader" };
 
-		const ESHPipelineStage stages[5] = {
-			ESHPipelineStage_Vertex, ESHPipelineStage_Hull, ESHPipelineStage_Domain,
-			ESHPipelineStage_GeometryExt, ESHPipelineStage_Pixel
+		const EGfxPipelineStage stages[5] = {
+			EGfxPipelineStage_Vertex, EGfxPipelineStage_Hull, EGfxPipelineStage_Domain,
+			EGfxPipelineStage_GeometryExt, EGfxPipelineStage_Pixel
 		};
 
 		const C8 *disassemblies[5] = {

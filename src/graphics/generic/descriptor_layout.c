@@ -23,6 +23,7 @@
 #include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/descriptor_layout.h"
+#include "formats/oiPL/pl_file.h"
 #include "graphics/generic/device.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/container/ref_ptr.h"
@@ -33,52 +34,29 @@
 
 TListImpl(DescriptorBinding);
 
-static inline U8 getDxilRegisterType(ESHRegisterType type) {
-
-	U8 regType = type & ESHRegisterType_TypeMask;
-
-	if(regType == ESHRegisterType_ConstantBuffer || regType == ESHRegisterType_PushConstants)
-		return 2;
-
-	if(regType == ESHRegisterType_Sampler || regType == ESHRegisterType_SamplerComparisonState)
-		return 3;
-
-	return type & ESHRegisterType_IsWrite;
-}
-
 Bool DescriptorBinding_overlaps(
 	const DescriptorBinding *binding,
-	ESHRegisterType regType,
-	const SHBinding *b,
+	EGfxRegisterType regType,
+	const GfxBinding *b,
 	U32 bcount,
-	ESHBinaryType type,
+	EGfxBinaryType type,
 	Bool isPushConstant
 ) {
 
 	if(!binding || !b)
 		return false;
 
-	SHBinding a = binding->binding;
+	//A push constant takes no SPIRV binding slot, so it can only collide through its DXIL b register
 
-	switch (type) {
+	if(type == EGfxBinaryType_SPIRV && isPushConstant)
+		return false;
 
-		//SPIRV; register intersection only happens if they're identical
+	//The device has no unbounded rows, so a count of 0 occupies one slot rather than a whole range
 
-		case ESHBinaryType_SPIRV:
-			return a.space == b->space && a.binding == b->binding && !isPushConstant;
-
-		//DXIL; register intersection happens when the range overlaps
-
-		case ESHBinaryType_DXIL:
-
-			if (a.space == b->space && regType == getDxilRegisterType(binding->registerType))
-				return a.binding + binding->count > b->binding && a.binding < b->binding + bcount;
-
-			return false;
-
-		default:
-			return false;
-	}
+	return GfxBinding_overlaps(
+		binding->binding, binding->registerType, binding->count ? binding->count : 1,
+		*b, regType, bcount ? bcount : 1, type
+	);
 }
 
 //Whether a reflected register is one of the runtime's own rather than the caller's.
@@ -107,6 +85,40 @@ Bool GraphicsDeviceRef_isRuntimeRegister(GraphicsDeviceRef *dev, const CharStrin
 	}
 
 	return false;
+}
+
+//Collects those names as refs into the device's own layouts, so a caller can hand them to
+// SPFile_derivePipeline as the registers a custom layout must not describe.
+//The refs live as long as the device does; only the list itself belongs to the caller.
+
+Bool GraphicsDeviceRef_runtimeRegisterNames(
+	GraphicsDeviceRef *dev, ListCharString *out, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!dev || !out)
+		retError(clean, Error_nullPointer(!dev ? 0 : 1, "GraphicsDeviceRef_runtimeRegisterNames()::dev and out required"));
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
+
+	DescriptorLayoutRef *owned[2] = { device->defaultDescLayout, device->defaultCBufferLayout };
+
+	for (U64 i = 0; i < 2; ++i) {
+
+		if(!owned[i])
+			continue;
+
+		const ListCharString names = DescriptorLayoutRef_ptr(owned[i])->info.bindingNames;
+
+		for(U64 j = 0; j < names.length; ++j)
+			gotoIfError3(clean, ListCharString_pushBack(
+				out, CharString_createRefStrConst(names.ptr[j]), alloc, e_rr
+			));
+	}
+
+clean:
+	return s_uccess;
 }
 
 Bool GraphicsDeviceRef_detectLayoutFromEntries(
@@ -183,9 +195,9 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 	gotoIfError3(clean, ListDescriptorBinding_reserve(&info->bindings, 24, alloc, e_rr));
 	gotoIfError3(clean, ListCharString_reserve(&info->bindingNames, 24, alloc, e_rr));
 
-	ESHBinaryType binaryType =
+	EGfxBinaryType binaryType =
 		GraphicsInstanceRef_ptr(GraphicsDeviceRef_ptr(dev)->instance)->api == EGraphicsApi_Direct3D12 ?
-		ESHBinaryType_DXIL : ESHBinaryType_SPIRV;
+		EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
 
 	CharString tmp = CharString_createNull();
 
@@ -226,10 +238,10 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			const SHRegisterRuntime *pushReg = &bin->registers.ptr[j];
 
-			if(pushReg->reg.registerType != ESHRegisterType_PushConstants)
+			if(pushReg->reg.registerType != EGfxRegisterType_PushConstants)
 				continue;
 
-			const SHBinding *pushBinding = &pushReg->reg.bindings.arr[binaryType];
+			const GfxBinding *pushBinding = &pushReg->reg.bindings.arr[binaryType];
 
 			if(pushBinding->binding == U32_MAX && pushBinding->space == U32_MAX)
 				continue;
@@ -247,7 +259,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			const SHRegisterRuntime *reg = &bin->registers.ptr[j];
 			U64 registerNameMatch = U64_MAX;
 			U64 registerBindingsMatch = U64_MAX;
-			const SHBinding *regMatch = &reg->reg.bindings.arr[binaryType];
+			const GfxBinding *regMatch = &reg->reg.bindings.arr[binaryType];
 
 			U32 count = 1;
 
@@ -260,7 +272,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			Bool validBinding = !(regMatch->binding == U32_MAX && regMatch->space == U32_MAX);
 			Bool anyBinding = validBinding;
 
-			if(reg->reg.registerType == ESHRegisterType_PushConstants && binaryType == ESHBinaryType_SPIRV)
+			if(reg->reg.registerType == EGfxRegisterType_PushConstants && binaryType == EGfxBinaryType_SPIRV)
 				validBinding = (reg->reg.isUsedFlag >> binaryType) & 1;
 
 			if(!validBinding)    //Doesn't exist in current binary type
@@ -278,8 +290,6 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			if(GraphicsDeviceRef_isRuntimeRegister(dev, &reg->name))
 				continue;
 
-			U8 regType = getDxilRegisterType(reg->reg.registerType);
-
 			//Find matching register by name or binding
 
 			for(U64 k = 0; k < info->bindingNames.length; ++k) {
@@ -289,7 +299,9 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 				if(
 					anyBinding &&
-					DescriptorBinding_overlaps(&info->bindings.ptr[k], regType, regMatch, count, binaryType, false)
+					DescriptorBinding_overlaps(
+						&info->bindings.ptr[k], reg->reg.registerType, regMatch, count, binaryType, false
+					)
 				) {
 
 					if(
@@ -318,17 +330,17 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			//Unique register, create another
 
-			ESHRegisterType regType4 = reg->reg.registerType & ESHRegisterType_TypeMask;
-			Bool isCBuffer = regType4 == ESHRegisterType_ConstantBuffer;
+			EGfxRegisterType regType4 = reg->reg.registerType & EGfxRegisterType_TypeMask;
+			Bool isCBuffer = regType4 == EGfxRegisterType_ConstantBuffer;
 
 			Bool hasStrideOrLen =
 				isCBuffer ||
-				reg->reg.registerType == ESHRegisterType_PushConstants ||
-				regType4 == ESHRegisterType_StructuredBuffer ||
-				regType4 == ESHRegisterType_StructuredBufferAtomic;
+				reg->reg.registerType == EGfxRegisterType_PushConstants ||
+				regType4 == EGfxRegisterType_StructuredBuffer ||
+				regType4 == EGfxRegisterType_StructuredBufferAtomic;
 
-			Bool isTexture = regType4 >= ESHRegisterType_TextureStart && regType4 <= ESHRegisterType_TextureEnd;
-			Bool isSampler = regType4 == ESHRegisterType_Sampler || regType4 == ESHRegisterType_SamplerComparisonState;
+			Bool isTexture = regType4 >= EGfxRegisterType_TextureStart && regType4 <= EGfxRegisterType_TextureEnd;
+			Bool isSampler = regType4 == EGfxRegisterType_Sampler || regType4 == EGfxRegisterType_SamplerComparisonState;
 
 			DescriptorBinding binding = (DescriptorBinding) {
 				.registerType = reg->reg.registerType,
@@ -345,7 +357,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			//Push constants don't generate any descriptor bindings to allow sharing DescriptorLayout
 
-			Bool isPushConstants = regType4 == ESHRegisterType_PushConstants;
+			Bool isPushConstants = regType4 == EGfxRegisterType_PushConstants;
 
 			if ((!hasPushConstants && isCBuffer) || isPushConstants) {
 
@@ -559,39 +571,44 @@ void DescriptorLayout_free(void *layoutGeneric, const Allocator *alloc) {
 	DescriptorLayoutInfo_free(&layout->info, alloc);
 }
 
-Bool DescriptorBinding_validate(GraphicsDevice *device, DescriptorBinding b, Bool isPushDescriptor, Error *e_rr) {
+Bool DescriptorBinding_validate(
+	GraphicsDevice *device, DescriptorBinding b, Bool isPushDescriptor, Bool allowReservedSpace, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 
-	ESHRegisterType type = b.registerType & ESHRegisterType_TypeMask;
+	EGfxRegisterType type = b.registerType & EGfxRegisterType_TypeMask;
 
 	if(
-		type == ESHRegisterType_AccelerationStructure &&
+		type == EGfxRegisterType_AccelerationStructure &&
 		!(device->info.capabilities.features & EGraphicsFeatures_Raytracing)
 	)
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorLayout()::info.bindings has an RTAS, but device doesn't have RT"
 		));
 
-	Bool isCBV = type == ESHRegisterType_ConstantBuffer || type == ESHRegisterType_PushConstants;
+	//The device free rules (size and stride bounds, write flag legality, the reserved space) are oiPL's,
+	// so the format's validator and this create can never disagree about what a valid row is.
+	//The name and sampler bounds are skipped: they belong to a file's pools, which this info doesn't carry.
 
-	if(isCBV && (!b.constantBufferSize || b.constantBufferSize > 64 * KIBI))
-		retError(clean, Error_invalidOperation(
-			0,
-			"GraphicsDeviceRef_createDescriptorLayout() requires strideOrLength to be equal to the constant buffer size "
-			"(0 < x < 64KiB)"
-		));
+	PLDescriptorBinding shared = (PLDescriptorBinding) {
+		.registerType = b.registerType,
+		.count = b.count ? b.count : 1,
+		.visibility = b.visibility,
+		.name24_source8 = PLDescriptorBinding_pack(PLDescriptorBinding_NAME_NONE, EPLSource_Supplied)
+	};
 
-	if(
-		(type == ESHRegisterType_StructuredBuffer || type == ESHRegisterType_StructuredBufferAtomic) &&
-		!b.structedBufferStride
-	)
-		retError(clean, Error_invalidOperation(
-			0, "GraphicsDeviceRef_createDescriptorLayout() requires strideOrLength to be equal to the structured buffer size"
-		));
+	shared.strideOrLength = b.data;
+
+	//The device's single numbering fills every pair, since the shared rules don't depend on the binary type
+
+	for(U8 i = 0; i < EGfxBinaryType_Count; ++i)
+		shared.bindings.arr[i] = b.binding;
+
+	gotoIfError3(clean, PLDescriptorBinding_validate(&shared, U64_MAX, U64_MAX, allowReservedSpace, e_rr));
 
 	if(isPushDescriptor)
-		if(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState)
+		if(type == EGfxRegisterType_Sampler || type == EGfxRegisterType_SamplerComparisonState)
 			retError(clean, Error_invalidOperation(
 				0, "GraphicsDeviceRef_createDescriptorLayout() can't create a push descriptor for a sampler"
 			));
@@ -650,7 +667,7 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 		DescriptorBinding b = info->bindings.ptr[i];
 		bindingCount += b.count;
 
-		if(b.registerType == ESHRegisterType_PushConstants)
+		if(b.registerType == EGfxRegisterType_PushConstants)
 			retError(clean, Error_invalidOperation(
 				0,
 				"GraphicsDeviceRef_createDescriptorLayout() can't contain push constants as a descriptor layout, "
@@ -660,10 +677,10 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 		//Immutable samplers are baked into the layout, so only a sampler can name one and only an id the
 		// info actually carries.
 
-		const ESHRegisterType bindingType = (ESHRegisterType)(b.registerType & ESHRegisterType_TypeMask);
+		const EGfxRegisterType bindingType = (EGfxRegisterType)(b.registerType & EGfxRegisterType_TypeMask);
 
 		const Bool isSamplerBinding =
-			bindingType == ESHRegisterType_Sampler || bindingType == ESHRegisterType_SamplerComparisonState;
+			bindingType == EGfxRegisterType_Sampler || bindingType == EGfxRegisterType_SamplerComparisonState;
 
 		if (isSamplerBinding && b.immutableSamplerId) {
 
@@ -700,26 +717,16 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 				"ordinary sampler binding)"
 			));
 
-		//OxC3 binds its own per frame globals in the reserved space, so a caller's binding there would either
-		// be overwritten by the runtime or quietly shadow it.
-		//A shader that genuinely declares this space was built against a different OxC3 than the one running
-		// it: either newer, or modified to lay its globals out elsewhere. Neither can be honoured here.
-		//The device's own layouts are exempt, since they are what occupies the space in the first place.
-
-		if(!(info->flags & EDescriptorLayoutFlags_InternalWeakDeviceRef) && b.binding.space == OXC3_RESERVED_SPACE)
-			retError(clean, Error_invalidOperation(
-				1,
-				"GraphicsDeviceRef_createDescriptorLayout() register space 0xC3 is reserved for OxC3's own per "
-				"frame globals. A shader binding there was built against a different (newer or modified) OxC3 "
-				"than this runtime, which binds its globals to that space itself"
-			));
-
-		if(b.registerType == ESHRegisterType_Sampler || b.registerType == ESHRegisterType_SamplerComparisonState)
+		if(b.registerType == EGfxRegisterType_Sampler || b.registerType == EGfxRegisterType_SamplerComparisonState)
 			anySampler = true;
 
 		else anyResource = true;
 
-			gotoIfError3(clean, DescriptorBinding_validate(device, b, isPushDescriptor, e_rr));
+		gotoIfError3(clean, DescriptorBinding_validate(
+			device, b, isPushDescriptor,
+			!!(info->flags & EDescriptorLayoutFlags_InternalWeakDeviceRef),        //Only the device's own layouts bind 0xC3
+			e_rr
+		));
 
 		if ((info->flags & EDescriptorLayoutFlags_AllowBindlessAny) && b.count > 1)
 			++bindlessTypes;

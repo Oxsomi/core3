@@ -170,8 +170,8 @@ Bool Compiler_finalizeEntrypoint(
 	// where 0 stays legal.
 
 	if(!intersectSize && (
-		entry->entry.stage == ESHPipelineStage_ClosestHitExt ||
-		entry->entry.stage == ESHPipelineStage_AnyHitExt
+		entry->entry.stage == EGfxPipelineStage_ClosestHitExt ||
+		entry->entry.stage == EGfxPipelineStage_AnyHitExt
 	))
 		intersectSize = 8;
 
@@ -267,7 +267,7 @@ clean:
 	return s_uccess;
 }
 
-U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSizeType) {
+U16 Compiler_minFeatureSetStage(EGfxPipelineStage stage, U16 waveSizeType) {
 
 	//No stage raises the floor on its own any more: workgraphs were the only one (SM6.8) and they're gone.
 	//The parameter stays because the floor is a per stage question and the next stage to need one goes here.
@@ -470,8 +470,8 @@ Bool Compiler_parseValue(
 
 				switch(bits) {
 					default:    value->vu8[dstOff] = (U8) res;        break;
-					case 16:    value->vu16[dstOff] = (U16) res;    break;
-					case 32:    value->vu32[dstOff] = (U32) res;    break;
+					case 16:    value->vu16[dstOff] = (U16) res;      break;
+					case 32:    value->vu32[dstOff] = (U32) res;      break;
 					case 64:    value->vu64[dstOff] = res;            break;
 				}
 
@@ -519,9 +519,9 @@ Bool Compiler_parseValue(
 
 				switch(bits) {
 					default:    value->vi8[dstOff]  = (I8) res;        break;
-					case 16:    value->vi16[dstOff] = (I16) res;    break;
-					case 32:    value->vi32[dstOff] = (I32) res;    break;
-					case 64:    value->vi64[dstOff] = res;            break;
+					case 16:    value->vi16[dstOff] = (I16) res;       break;
+					case 32:    value->vi32[dstOff] = (I32) res;       break;
+					case 64:    value->vi64[dstOff] = res;             break;
 				}
 
 				++dstOff;
@@ -941,7 +941,7 @@ Bool Compiler_parse(
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr));
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr));
 
-	//if (settings->outputType == ESHBinaryType_SPIRV)
+	//if (settings->outputType == EGfxBinaryType_SPIRV)
 	//    gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr));
 
 	//We will pretend that all extensions are enabled, this will avoid parser errors when extensions are used.
@@ -1053,7 +1053,7 @@ Bool Compiler_parse(
 
 		//We found a potential entrypoint, check for shader or stage annotation
 
-		runtimeEntry.entry.stage = ESHPipelineStage_Count;
+		runtimeEntry.entry.stage = EGfxPipelineStage_Count;
 
 		for (uint32_t j = 0; j < nodeDesc.AnnotationCount; ++j) {
 
@@ -1066,14 +1066,14 @@ Bool Compiler_parse(
 		
 		//If we didn't find a stage, but we did find annotations that match, we need to free them
 
-		if (runtimeEntry.entry.stage == ESHPipelineStage_Count)
+		if (runtimeEntry.entry.stage == EGfxPipelineStage_Count)
 			SHEntryRuntime_free(&runtimeEntry, alloc);
 
 		//Otherwise we found an entry
 
 		else {
 
-			U16 minVersion = Compiler_minFeatureSetStage(ESHPipelineStage(runtimeEntry.entry.stage), 0);
+			U16 minVersion = Compiler_minFeatureSetStage(EGfxPipelineStage(runtimeEntry.entry.stage), 0);
 
 			//Ensure all shader versions are compatible with minimum featureset
 
@@ -1096,13 +1096,13 @@ Bool Compiler_parse(
 			//If there's no model available, then it should be ok.
 
 			Bool isRt =
-				runtimeEntry.entry.stage >= ESHPipelineStage_RtStartExt &&
-				runtimeEntry.entry.stage <= ESHPipelineStage_RtEndExt;
+				runtimeEntry.entry.stage >= EGfxPipelineStage_RtStartExt &&
+				runtimeEntry.entry.stage <= EGfxPipelineStage_RtEndExt;
 
 			for (U64 j = 0; j < runtimeEntry.extensions.length; ++j) {
 
 				if(
-					runtimeEntry.entry.stage != ESHPipelineStage_RaygenExt &&
+					runtimeEntry.entry.stage != EGfxPipelineStage_RaygenExt &&
 					(runtimeEntry.extensions.ptr[j] & ESHExtension_RayReorder)
 				)
 					retError(clean, Error_invalidState(
@@ -1117,9 +1117,9 @@ Bool Compiler_parse(
 					));
 
 				if(
-					runtimeEntry.entry.stage != ESHPipelineStage_Compute &&
-					runtimeEntry.entry.stage != ESHPipelineStage_MeshExt &&
-					runtimeEntry.entry.stage != ESHPipelineStage_TaskExt &&
+					runtimeEntry.entry.stage != EGfxPipelineStage_Compute &&
+					runtimeEntry.entry.stage != EGfxPipelineStage_MeshExt &&
+					runtimeEntry.entry.stage != EGfxPipelineStage_TaskExt &&
 					(runtimeEntry.extensions.ptr[j] & ESHExtension_ComputeDeriv)
 				)
 					retError(clean, Error_invalidState(

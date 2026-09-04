@@ -144,28 +144,28 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 			for (U64 i = 0; i < pushBindings.length; ++i) {
 
 				const DescriptorBinding binding = pushBindings.ptr[i];
-				const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
+				const EGfxRegisterType type = (EGfxRegisterType)(binding.registerType & EGfxRegisterType_TypeMask);
 
 				//A sampler has no push form: D3D12 has no root sampler, and baking one doesn't help either, since
 				// an immutable sampler becomes a root signature static sampler whichever layout declared it, which
 				// makes the push descriptor set it sits in mean something on Vulkan and nothing on D3D12.
 				//createDescriptorLayout already refuses it, so reaching here means a layout built before that check.
 
-				if(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState)
+				if(type == EGfxRegisterType_Sampler || type == EGfxRegisterType_SamplerComparisonState)
 					retError(clean, Error_unsupportedOperation(
 						1, "CommandList_validateBindState() a sampler can't be a push descriptor"
 					));
 
 				//A subpass input is only meaningful inside a render pass' attachment set, never as a push.
 
-				if(type == ESHRegisterType_SubpassInput)
+				if(type == EGfxRegisterType_SubpassInput)
 					retError(clean, Error_unsupportedOperation(
 						1, "CommandList_validateBindState() a subpass input cannot be a push descriptor"
 					));
 
-				const Bool isTexture = type >= ESHRegisterType_TextureStart && type < ESHRegisterType_SubpassInput;
+				const Bool isTexture = type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_SubpassInput;
 
-				if(!isTexture && (type < ESHRegisterType_BufferStart || type > ESHRegisterType_BufferEnd))
+				if(!isTexture && (type < EGfxRegisterType_BufferStart || type > EGfxRegisterType_BufferEnd))
 					retError(clean, Error_unsupportedOperation(
 						1,
 						"CommandList_validateBindState() a push descriptor has to be a buffer class resource "
@@ -177,7 +177,7 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 				const Descriptor d = commandList->pushDescriptors[i];
 
 				const ETransitionType transition =
-					binding.registerType & ESHRegisterType_IsWrite ?
+					binding.registerType & EGfxRegisterType_IsWrite ?
 					ETransitionType_ShaderWrite : ETransitionType_ShaderRead;
 
 				//A texture push is a single entry descriptor TABLE on D3D12, not a root descriptor, so it
@@ -188,7 +188,7 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 
 				if (isTexture) {
 
-					const Bool isWrite = (binding.registerType & ESHRegisterType_IsWrite) != 0;
+					const Bool isWrite = (binding.registerType & EGfxRegisterType_IsWrite) != 0;
 
 					UnifiedTexture tex = TextureRef_getUnifiedTexture(d.resource, NULL);
 
@@ -212,7 +212,7 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 					continue;
 				}
 
-				if (type == ESHRegisterType_AccelerationStructure) {
+				if (type == EGfxRegisterType_AccelerationStructure) {
 					gotoIfError3(clean, CommandListRef_transitionRTAS(commandList, d.resource, transition, stage, e_rr));
 					continue;
 				}

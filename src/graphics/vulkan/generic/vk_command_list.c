@@ -59,7 +59,7 @@ static inline Bool addResolveImage(AttachmentInfoInternal attachment, VkRenderin
 	VkImageView view = NULL;
 
 	Descriptor descriptor = (Descriptor) { .resource = attachment.resolveImage };
-	ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
+	EGfxRegisterType registerType = EGfxRegisterType_Texture2D;        //TODO: Add support for other resources
 
 	if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL))
 		return false;
@@ -246,7 +246,7 @@ static void VkCommandBufferState_bindDescriptors(
 				break;
 
 			Descriptor d = temp->pushDescriptors[writeId++];
-			const ESHRegisterType type = (ESHRegisterType)(binding.registerType & ESHRegisterType_TypeMask);
+			const EGfxRegisterType type = (EGfxRegisterType)(binding.registerType & EGfxRegisterType_TypeMask);
 
 			writeSets[writeCount] = binding.binding.space;
 
@@ -256,7 +256,7 @@ static void VkCommandBufferState_bindDescriptors(
 				.descriptorCount = 1
 			};
 
-			if (type == ESHRegisterType_AccelerationStructure) {
+			if (type == EGfxRegisterType_AccelerationStructure) {
 
 				handles[writeCount] = TLAS_ext(TLASRef_ptr(d.resource), Vk)->as;
 
@@ -276,9 +276,9 @@ static void VkCommandBufferState_bindDescriptors(
 			//The recorder already proved the texture allows the access and transitioned it, so the layout is
 			// whatever that transition put it in.
 
-			else if (type >= ESHRegisterType_TextureStart && type < ESHRegisterType_SubpassInput) {
+			else if (type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_SubpassInput) {
 
-				const Bool isWrite = (binding.registerType & ESHRegisterType_IsWrite) != 0;
+				const Bool isWrite = (binding.registerType & EGfxRegisterType_IsWrite) != 0;
 
 				VkImageView view = NULL;
 				U32 viewId = U32_MAX;
@@ -315,7 +315,7 @@ static void VkCommandBufferState_bindDescriptors(
 				};
 
 				writes[writeCount].descriptorType =
-					type == ESHRegisterType_ConstantBuffer ?
+					type == EGfxRegisterType_ConstantBuffer ?
 					VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
 				writes[writeCount].pBufferInfo = &buffers[writeCount];
@@ -615,7 +615,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				for (U64 i = 0; i < pushLayout->info.bindings.length && i < 2; ++i) {
 
 					const DescriptorBinding binding = pushLayout->info.bindings.ptr[i];
-					const Bool isWrite = !!(binding.registerType & ESHRegisterType_IsWrite);
+					const Bool isWrite = !!(binding.registerType & EGfxRegisterType_IsWrite);
 
 					const Descriptor d = Descriptor_texture(
 						isWrite ? copyImage.dst : copyImage.src, 0, 1, 0, 0, 0, 0
@@ -690,7 +690,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 						for (U64 j = 0; j < pushLayout->info.bindings.length && j < 2; ++j) {
 
 							const DescriptorBinding binding = pushLayout->info.bindings.ptr[j];
-							const Bool isWrite = !!(binding.registerType & ESHRegisterType_IsWrite);
+							const Bool isWrite = !!(binding.registerType & EGfxRegisterType_IsWrite);
 
 							images[writeCount] = (VkDescriptorImageInfo) {
 								.imageView = views[j],
@@ -852,7 +852,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				VkImageView view = NULL;
 
 				Descriptor descriptor = (Descriptor) { .resource = attachmentsj->image };
-				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
+				EGfxRegisterType registerType = EGfxRegisterType_Texture2D;        //TODO: Add support for other resources
 
 				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
 					Log_errorLnx("VkUnifiedTexture_getView color at ECommandOp_StartRenderingExt, this is problematic!");
@@ -933,7 +933,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					.texture = (TextureDescriptorRange) { .planeId = 0xFF }
 				};
 
-				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
+				EGfxRegisterType registerType = EGfxRegisterType_Texture2D;        //TODO: Add support for other resources
 
 				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
 					Log_errorLnx("VkUnifiedTexture_getView depth at ECommandOp_StartRenderingExt, this is problematic!");
@@ -986,7 +986,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					.texture = (TextureDescriptorRange) { .planeId = 0xFF }
 				};
 
-				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
+				EGfxRegisterType registerType = EGfxRegisterType_Texture2D;        //TODO: Add support for other resources
 
 				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
 					Log_errorLnx("VkUnifiedTexture_getView stencil at ECommandOp_StartRenderingExt, this is problematic!");

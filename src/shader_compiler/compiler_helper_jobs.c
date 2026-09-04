@@ -85,7 +85,7 @@ TListImpl(CompilerShaderFileJob);
 Bool Compiler_registerShaderBinary(
 	SHFile *shFile,
 	CompileResult *tempResult,
-	ESHBinaryType compileMode,
+	EGfxBinaryType compileMode,
 	CharString sourceFile,
 	const SHEntryRuntime *runtimeEntry,
 	const SHBinaryIdentifier *binaryIdentifier,
@@ -132,7 +132,7 @@ typedef struct CompilerFileCtx {
 
 	JobGroup group;                         //File latch; finalize = Compiler_finalizeShaderFile
 
-	ESHBinaryType binaryType;
+	EGfxBinaryType binaryType;
 	U8 padding[4];
 
 } CompilerFileCtx;
@@ -286,7 +286,7 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 			entry = combo->uniqueEntrypoints.ptr[l];
 		}
 
-		else entry.stage = ESHPipelineStage_Count;      //Mark as lib
+		else entry.stage = EGfxPipelineStage_Count;      //Mark as lib
 
 		tempResult2.type = ECompileResultType_Binary;
 
@@ -311,8 +311,8 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 		binaryIdentifier.stageType = entry.stage;
 
 		Bool currGfxOrComp = !(
-			(entry.stage >= ESHPipelineStage_RtStartExt && entry.stage >= ESHPipelineStage_RtEndExt) ||
-			entry.stage >= ESHPipelineStage_Count
+			(entry.stage >= EGfxPipelineStage_RtStartExt && entry.stage >= EGfxPipelineStage_RtEndExt) ||
+			entry.stage >= EGfxPipelineStage_Count
 		);
 
 		if(currGfxOrComp)
@@ -346,7 +346,7 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 	// linking" rather than to a concrete stage.
 
 	if (linkEntry.entrypointId == U16_MAX)
-		binaryIdentifier.stageType = combo->isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_Count;
+		binaryIdentifier.stageType = combo->isRt ? EGfxPipelineStage_RtStartExt : EGfxPipelineStage_Count;
 
 	//Register the binary and link its runtime entries to it.
 	//binaryId is derived from the current const SHFile *size,
@@ -501,7 +501,7 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		Log_debugLn(
 			alloc, "Reflecting entrypoints: %.*s (%s, %"PRIu32":%"PRIu32", %"PRIu64" bytes @ 0x%"PRIx64"%s)",
 			(int) CharString_length(inputPath), inputPath.ptr,
-			file->binaryType == ESHBinaryType_SPIRV ? "spirv" : "dxil",
+			file->binaryType == EGfxBinaryType_SPIRV ? "spirv" : "dxil",
 			(U32) ctx->runtimeEntryId, (U32) ctx->combinationId,
 			Buffer_length(ctx->tempResult.binary), (U64) ctx->tempResult.binary.ptr,
 			Buffer_isRef(ctx->tempResult.binary) ? ", ref" : ""
@@ -525,7 +525,7 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		Log_debugLn(
 			alloc, "Reflected entrypoints: %.*s (%s, %"PRIu32":%"PRIu32")",
 			(int) CharString_length(inputPath), inputPath.ptr,
-			file->binaryType == ESHBinaryType_SPIRV ? "spirv" : "dxil",
+			file->binaryType == EGfxBinaryType_SPIRV ? "spirv" : "dxil",
 			(U32) ctx->runtimeEntryId, (U32) ctx->combinationId
 		);
 
@@ -647,7 +647,7 @@ Bool Compiler_binaryOrderLess(const SHBinaryInfo *a, const SHBinaryInfo *b) {
 	//are the last tiebreaker. Blobs that hash the same are interchangeable, so any order between them is
 	//stable by definition.
 
-	for (U64 i = 0; i < ESHBinaryType_Count; ++i) {
+	for (U64 i = 0; i < EGfxBinaryType_Count; ++i) {
 
 		const U32 crcA = Buffer_crc32c(a->binaries[i]);
 		const U32 crcB = Buffer_crc32c(b->binaries[i]);
@@ -776,7 +776,7 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 
 	CharString inputPath = job->allFiles.ptr[i];
 	CharString inputData = job->allShaderText.ptr[i];
-	ESHBinaryType binaryType = (ESHBinaryType) job->allCompileOutputs.ptr[i];
+	EGfxBinaryType binaryType = (EGfxBinaryType) job->allCompileOutputs.ptr[i];
 
 	ListSHEntryRuntime runtimeEntries = (ListSHEntryRuntime) { 0 };
 	ListU32 compileCombinations = (ListU32) { 0 };
@@ -968,7 +968,7 @@ Bool Compiler_compileShaderFileJob(void *data, U64 threadId, JobQueue *queue) {
 Bool Compiler_registerShaderBinary(
 	SHFile *shFile,
 	CompileResult *tempResult,
-	ESHBinaryType compileMode,
+	EGfxBinaryType compileMode,
 	CharString sourceFile,
 	const SHEntryRuntime *runtimeEntry,
 	const SHBinaryIdentifier *binaryIdentifier,        //Make sure this binary identifier only contains references

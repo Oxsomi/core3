@@ -25,6 +25,7 @@
 #include "types/base/string_read_helper.h"
 #include "types/math/type_cast.h"
 #include "formats/oiSH/sh_file.h"
+#include "formats/oiSH/sh_registers.h"
 #include "formats/oiDL/dl_entry.h"
 #include "formats/oiDL/dl_load.h"
 #include "formats/oiSB/sb_variable.h"
@@ -106,7 +107,42 @@ static const SPFieldInfo SPField_info[ESPField_Count] = {
 	{ "rt.maxRecursionDepth", false,
 		"recursion depth is a pipeline limit, not something a shader declares", "1 or higher" },
 	{ "rt.flags", false, "skip triangles, skip AABBs and null shader rules are pipeline state",
-		"EPipelineRaytracingFlags bits" }
+		"EPipelineRaytracingFlags bits" },
+
+	{ "layout.binding.type", true, "reflection only sees the registers this shader declares",
+		"EGfxRegisterType plus mask bits" },
+	{ "layout.binding.count", true, "an array can be sized wider than the shader indexes it", "1 or higher" },
+	{ "layout.binding.spaceSpirv", true, "reflection only sees the registers this shader declares",
+		"set index, U32_MAX = absent" },
+	{ "layout.binding.registerSpirv", true, "reflection only sees the registers this shader declares",
+		"binding, U32_MAX = absent" },
+	{ "layout.binding.spaceDxil", true, "reflection only sees the registers this shader declares",
+		"space, U32_MAX = absent" },
+	{ "layout.binding.registerDxil", true, "reflection only sees the registers this shader declares",
+		"register, U32_MAX = absent" },
+	{ "layout.binding.visibility", true, "a layout can expose a register to more stages than declared it",
+		"EGfxPipelineStage bits" },
+	{ "layout.binding.data", true, "stride, size and format follow the register type",
+		"stride, cbuffer size, texture format or 1 + sampler id" },
+
+	{ "layout.pushConstant.size", false, "a shipping layout can reserve a bigger range than this shader uses",
+		"bytes, 128 or less" },
+	{ "layout.pushConstant.visibility", false, "a layout can expose the range to more stages than declared it",
+		"EGfxPipelineStage bits" },
+
+	//Sampler values never come from reflection, so these rows exist only once a stored layout supplied them
+
+	{ "layout.sampler.filter", true, "reflection can never produce sampler values", "ESamplerFilterMode" },
+	{ "layout.sampler.addressU", true, "reflection can never produce sampler values", "ESamplerAddressMode" },
+	{ "layout.sampler.addressV", true, "reflection can never produce sampler values", "ESamplerAddressMode" },
+	{ "layout.sampler.addressW", true, "reflection can never produce sampler values", "ESamplerAddressMode" },
+	{ "layout.sampler.aniso", true, "reflection can never produce sampler values", "0-16" },
+	{ "layout.sampler.border", true, "reflection can never produce sampler values", "ESamplerBorderColor" },
+	{ "layout.sampler.compareOp", true, "reflection can never produce sampler values", "ECompareOp" },
+	{ "layout.sampler.compareEnable", true, "reflection can never produce sampler values", "0 or 1" },
+	{ "layout.sampler.mipBias", true, "reflection can never produce sampler values", "float, stored as F16" },
+	{ "layout.sampler.minLod", true, "reflection can never produce sampler values", "float, stored as F16" },
+	{ "layout.sampler.maxLod", true, "reflection can never produce sampler values", "float, stored as F16" }
 };
 
 const C8 *ESPField_name(ESPField field) {
@@ -121,6 +157,12 @@ U8 ESPField_indexCount(ESPField field) {
 
 	if(field >= ESPField_Count || !SPField_info[field].indexed)
 		return 1;
+
+	//A layout's binding and sampler rows are bounded by the pipeline's own layout rather than a fixed array,
+	// so the parse accepts the full index range and SPFile_supply bounds-checks against the actual row count.
+
+	if(field >= ESPField_LayoutBindingType)
+		return U8_MAX;
 
 	return field == ESPField_VertexBufferStride || field == ESPField_VertexBufferRate ? 16 : 8;
 }
@@ -183,6 +225,64 @@ const C8 *ESPField_domain(ESPField field) {
 	return field < ESPField_Count ? SPField_info[field].domain : "";
 }
 
+U32 ESPField_maxValue(ESPField field) {
+
+	switch (field) {
+
+		case ESPField_LayoutSamplerCompareEnable:
+		case ESPField_BlendEnable:
+		case ESPField_BlendIndependent:
+		case ESPField_VertexBufferRate:
+			return 1;
+
+		case ESPField_VertexBufferStride:
+			return 4095;
+
+		case ESPField_LayoutSamplerFilter:
+		case ESPField_LayoutSamplerAddressU:
+		case ESPField_LayoutSamplerAddressV:
+		case ESPField_LayoutSamplerAddressW:
+		case ESPField_LayoutSamplerAniso:
+		case ESPField_LayoutSamplerBorder:
+		case ESPField_LayoutSamplerCompareOp:
+		case ESPField_RenderTargetFormat:
+		case ESPField_RenderTargetCount:
+		case ESPField_BlendTargetMask:
+		case ESPField_BlendLogicOp:
+		case ESPField_BlendWriteMask:
+		case ESPField_BlendSrc:
+		case ESPField_BlendDst:
+		case ESPField_BlendSrcAlpha:
+		case ESPField_BlendDstAlpha:
+		case ESPField_BlendOp:
+		case ESPField_BlendOpAlpha:
+		case ESPField_DepthFormat:
+		case ESPField_DepthStencilFlags:
+		case ESPField_DepthCompare:
+		case ESPField_StencilCompare:
+		case ESPField_StencilFail:
+		case ESPField_StencilPass:
+		case ESPField_StencilDepthFail:
+		case ESPField_StencilWriteMask:
+		case ESPField_StencilReadMask:
+		case ESPField_Msaa:
+		case ESPField_TopologyMode:
+		case ESPField_MaxRecursionDepth:
+		case ESPField_RaytracingFlags:
+			return U8_MAX;
+
+		case ESPField_LayoutSamplerMipBias:
+		case ESPField_LayoutSamplerMinLod:
+		case ESPField_LayoutSamplerMaxLod:
+		case ESPField_CullMode:
+		case ESPField_RasterizerFlags:
+			return U16_MAX;
+
+		default:
+			return U32_MAX;
+	}
+}
+
 Bool SPFile_create(ESPSettingsFlags flags, const Allocator *alloc, SPFile *spFile, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -236,6 +336,7 @@ void SPFile_free(SPFile *spFile, const Allocator *alloc) {
 	ListSPRaytracingState_free(&spFile->raytracingStates, alloc);
 	ListSPStage_free(&spFile->stages, alloc);
 	ListSPSpecialization_free(&spFile->specializations, alloc);
+	ListPLFile_freeUnderlying(&spFile->layouts, alloc);
 
 	*spFile = (SPFile) { 0 };
 }
@@ -423,14 +524,254 @@ static const SHEntry *SPFile_entryOf(const ListSHFile *files, SPStageRef ref, U8
 }
 
 static Bool SPStage_isRt(U8 stage) {
-	return stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
+	return stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt;
 }
 
 static Bool SPStage_isGraphics(U8 stage) {
 	return
-		stage == ESHPipelineStage_Vertex || stage == ESHPipelineStage_Pixel ||
-		stage == ESHPipelineStage_Hull || stage == ESHPipelineStage_Domain ||
-		stage == ESHPipelineStage_GeometryExt;
+		stage == EGfxPipelineStage_Vertex || stage == EGfxPipelineStage_Pixel ||
+		stage == EGfxPipelineStage_Hull || stage == EGfxPipelineStage_Domain ||
+		stage == EGfxPipelineStage_GeometryExt;
+}
+
+//Derives the layout from what the stages' binaries reflect, as its own oiPL appended to layouts.
+//Registers named in excludedRegisters are the runtime's own (the bindless set and the per frame globals),
+// so they belong to the device's layout rather than a custom one; with everything excluded and no push
+// constants there is nothing custom to describe and layoutIndex stays U32_MAX, which means exactly that.
+//Each stage derives from its entry's first binary: permutations of one entrypoint reflect identical inputs,
+// so the first one speaks for all of them.
+
+static Bool SPFile_deriveLayout(
+	SPFile *spFile,
+	SPPipelineBase *base,
+	const ListSHFile *files,
+	const SPStageRef *stages,
+	U8 stageCount,
+	const ListCharString *excludedRegisters,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Bool moved = false;
+
+	PLFile layout = (PLFile) { 0 };
+	gotoIfError3(clean, PLFile_create(EPLSettingsFlags_HideMagicNumber, alloc, &layout, e_rr));
+
+	for (U8 i = 0; i < stageCount; ++i) {
+
+		const SHEntry *entry = SPFile_entryOf(files, stages[i], i, e_rr);
+
+		if(!entry) {
+			s_uccess = false;
+			goto clean;
+		}
+
+		if(!entry->binaryIds.length)
+			continue;
+
+		const SHFile *file = &files->ptr[stages[i].fileId];
+		const SHBinaryInfo *bin = &file->binaries.ptr[entry->binaryIds.ptr[0]];
+		const U32 stageBit = (U32)1 << entry->stage;
+
+		for (U64 j = 0; j < bin->registers.length; ++j) {
+
+			const SHRegisterRuntime *reg = &bin->registers.ptr[j];
+
+			Bool excluded = false;
+
+			if(excludedRegisters)
+				for(U64 k = 0; k < excludedRegisters->length; ++k)
+					if(CharString_equalsStringSensitive(&excludedRegisters->ptr[k], &reg->name)) {
+						excluded = true;
+						break;
+					}
+
+			if(excluded)
+				continue;
+
+			const U64 count64 = SHRegister_arrayCount(&reg->arrays);
+
+			if(count64 > U32_MAX)
+				retError(clean, Error_outOfBounds(
+					0, count64, U32_MAX, "SPFile_deriveLayout() a register's array is larger than a layout stores"
+				));
+
+			const U32 count = (U32) count64;
+
+			U32 data = 0;
+
+			switch (reg->reg.registerType & EGfxRegisterType_TypeMask) {
+
+				//The cbuffer's own size, or the element layout's size, which is the stride
+
+				case EGfxRegisterType_ConstantBuffer:
+				case EGfxRegisterType_PushConstants:
+				case EGfxRegisterType_StructuredBuffer:
+				case EGfxRegisterType_StructuredBufferAtomic:
+				case EGfxRegisterType_StorageBuffer:
+				case EGfxRegisterType_StorageBufferAtomic:
+					data = reg->shaderBuffer.bufferSize;
+					break;
+
+				default:
+
+					if(
+						reg->reg.registerType & EGfxRegisterType_IsWrite &&
+						(reg->reg.registerType & EGfxRegisterType_TypeMask) >= EGfxRegisterType_TextureStart
+					)
+						//GfxTextureFormat's own bytes
+						data = (U32) reg->reg.texture.primitive | ((U32) reg->reg.texture.formatId << 8);
+
+					break;
+			}
+
+			//A push constant is identified by its type alone: the SPIRV side never gives it a binding pair,
+			// so requiring one would silently drop exactly the register this layout exists to describe
+
+			if ((reg->reg.registerType & EGfxRegisterType_TypeMask) == EGfxRegisterType_PushConstants) {
+
+				if (layout.hasPushConstant) {
+
+					if(layout.pushConstant.strideOrLength != data)
+						retError(clean, Error_invalidState(
+							0, "SPFile_deriveLayout() stages disagree about the push constant's size"
+						));
+
+					//The root signature binds the constants at one register, so every stage has to name the same one
+
+					for(U8 m = 0; m < EGfxBinaryType_Count; ++m) {
+
+						const U64 mine = layout.pushConstant.bindings.arrU64[m];
+						const U64 theirs = reg->reg.bindings.arrU64[m];
+
+						if(mine != U64_MAX && theirs != U64_MAX && mine != theirs)
+							retError(clean, Error_invalidState(
+								0, "SPFile_deriveLayout() stages disagree about the push constant's register"
+							));
+
+						if(mine == U64_MAX)
+							layout.pushConstant.bindings.arrU64[m] = theirs;
+					}
+
+					layout.pushConstant.visibility |= stageBit;
+					continue;
+				}
+
+				U32 nameId = U32_MAX;
+				CharString regName = reg->name;
+				gotoIfError3(clean, PLFile_addString(&layout, &regName, alloc, &nameId, e_rr));
+
+				layout.pushConstant = (PLDescriptorBinding) {
+					.registerType = reg->reg.registerType,
+					.count = count,
+					.bindings = reg->reg.bindings,
+					.visibility = stageBit,
+					.strideOrLength = data,
+					.name24_source8 = PLDescriptorBinding_pack(nameId, EPLSource_Derived)
+				};
+
+				layout.hasPushConstant = true;
+				continue;
+			}
+
+			const U64 spv = reg->reg.bindings.arrU64[EGfxBinaryType_SPIRV];
+			const U64 dxil = reg->reg.bindings.arrU64[EGfxBinaryType_DXIL];
+
+			const Bool hasSpirv = spv != U64_MAX;
+			const Bool hasDxil = dxil != U64_MAX;
+
+			if(!hasSpirv && !hasDxil)
+				continue;
+
+			U32 nameId = U32_MAX;
+			CharString regName = reg->name;
+			gotoIfError3(clean, PLFile_addString(&layout, &regName, alloc, &nameId, e_rr));
+
+			const U32 packed = PLDescriptorBinding_pack(nameId, EPLSource_Derived);
+
+			//The register's name is its identity: another stage naming it again widens visibility and has
+			// to agree about everything else.
+			//A DIFFERENT register may share a number when its DXIL namespace differs (t0 next to b0), so
+			// only a same-namespace clash at one space and binding is a real collision, checked per api.
+
+			U64 match = U64_MAX;
+
+			for(U64 k = 0; k < layout.bindings.length; ++k)
+				if(PLDescriptorBinding_name(layout.bindings.ptr[k]) == nameId && nameId != U32_MAX) {
+					match = k;
+					break;
+				}
+
+			if (match != U64_MAX) {
+
+				const PLDescriptorBinding other = layout.bindings.ptr[match];
+
+				if(
+					other.registerType != reg->reg.registerType ||
+					(hasSpirv && other.bindings.arrU64[EGfxBinaryType_SPIRV] != spv) ||
+					(hasDxil && other.bindings.arrU64[EGfxBinaryType_DXIL] != dxil) ||
+					other.count != count || other.strideOrLength != data
+				)
+					retError(clean, Error_invalidState(
+						0, "SPFile_deriveLayout() stages disagree about a register they both name"
+					));
+
+				layout.bindings.ptrNonConst[match].visibility |= stageBit;
+				continue;
+			}
+
+			for (U64 k = 0; k < layout.bindings.length; ++k) {
+
+				const PLDescriptorBinding o = layout.bindings.ptr[k];
+
+				const Bool spirvClash = GfxBinding_overlaps(
+					reg->reg.bindings.arr[EGfxBinaryType_SPIRV], reg->reg.registerType, count,
+					o.bindings.arr[EGfxBinaryType_SPIRV], o.registerType, o.count, EGfxBinaryType_SPIRV
+				);
+
+				const Bool dxilClash = GfxBinding_overlaps(
+					reg->reg.bindings.arr[EGfxBinaryType_DXIL], reg->reg.registerType, count,
+					o.bindings.arr[EGfxBinaryType_DXIL], o.registerType, o.count, EGfxBinaryType_DXIL
+				);
+
+				if(spirvClash || dxilClash)
+					retError(clean, Error_invalidState(
+						0, "SPFile_deriveLayout() two registers overlap at one space, register range and namespace"
+					));
+			}
+
+			const PLDescriptorBinding row = (PLDescriptorBinding) {
+				.registerType = reg->reg.registerType,
+				.count = count,
+				.bindings = reg->reg.bindings,
+				.visibility = stageBit,
+				.strideOrLength = data,
+				.name24_source8 = packed
+			};
+
+			gotoIfError3(clean, ListPLDescriptorBinding_pushBack(&layout.bindings, row, alloc, e_rr));
+
+			if(layout.bindings.length > 255)
+				retError(clean, Error_outOfBounds(
+					0, layout.bindings.length, 255, "SPFile_deriveLayout() a layout is limited to 255 bindings"
+				));
+		}
+	}
+
+	if(!layout.bindings.length && !layout.hasPushConstant)
+		goto clean;
+
+	base->layoutIndex = (U32) spFile->layouts.length;
+	gotoIfError3(clean, ListPLFile_pushBack(&spFile->layouts, layout, alloc, e_rr));
+	moved = true;
+
+clean:
+
+	if(!moved)
+		PLFile_free(&layout, alloc);
+
+	return s_uccess;
 }
 
 Bool SPFile_derivePipeline(
@@ -440,6 +781,7 @@ Bool SPFile_derivePipeline(
 	CharString name,
 	const SPStageRef *stages,
 	U8 stageCount,
+	const ListCharString *excludedRegisters,
 	const Allocator *alloc,
 	U32 *pipelineId,
 	Error *e_rr
@@ -447,6 +789,7 @@ Bool SPFile_derivePipeline(
 
 	Bool s_uccess = true;
 	const U64 stageStart = spFile->stages.length;
+	const U64 layoutStart = spFile->layouts.length;
 	const U64 specializationStart = spFile->specializations.length;
 	const U64 graphicsStart = spFile->graphicsStates.length;
 	const U64 raytracingStart = spFile->raytracingStates.length;
@@ -466,7 +809,8 @@ Bool SPFile_derivePipeline(
 		.name = U32_MAX,
 		.stageStart = (U8) stageStart,
 		.specializationStart = (U32) specializationStart,
-		.stateIndex = U32_MAX
+		.stateIndex = U32_MAX,
+		.layoutIndex = U32_MAX
 	};
 
 	SPGraphicsState gfx = (SPGraphicsState) { 0 };
@@ -501,20 +845,20 @@ Bool SPFile_derivePipeline(
 				));
 		}
 
-		if(entry->stage == ESHPipelineStage_Compute)
+		if(entry->stage == EGfxPipelineStage_Compute)
 			++computeCount;
 
 		else if (SPStage_isGraphics(entry->stage)) {
 
 			++graphicsCount;
 
-			if(entry->stage == ESHPipelineStage_Vertex)
+			if(entry->stage == EGfxPipelineStage_Vertex)
 				vs = entry;
 
-			else if(entry->stage == ESHPipelineStage_Pixel)
+			else if(entry->stage == EGfxPipelineStage_Pixel)
 				ps = entry;
 
-			else if(entry->stage == ESHPipelineStage_Hull)
+			else if(entry->stage == EGfxPipelineStage_Hull)
 				hs = entry;
 		}
 
@@ -672,6 +1016,8 @@ Bool SPFile_derivePipeline(
 
 append:
 
+	gotoIfError3(clean, SPFile_deriveLayout(spFile, &base, files, stages, stageCount, excludedRegisters, alloc, e_rr));
+
 	gotoIfError3(clean, ListSPPipelineBase_pushBack(&spFile->pipelines, base, alloc, e_rr));
 	appended = true;
 
@@ -684,6 +1030,10 @@ clean:
 
 	if (!s_uccess && !appended) {
 		ListSPStage_resize(&spFile->stages, stageStart, alloc, NULL);
+		for(U64 i = layoutStart; i < spFile->layouts.length; ++i)
+			PLFile_free(&spFile->layouts.ptrNonConst[i], alloc);
+
+		ListPLFile_resize(&spFile->layouts, layoutStart, alloc, NULL);
 		ListSPSpecialization_resize(&spFile->specializations, specializationStart, alloc, NULL);
 		ListSPGraphicsState_resize(&spFile->graphicsStates, graphicsStart, alloc, NULL);
 		ListSPRaytracingState_resize(&spFile->raytracingStates, raytracingStart, alloc, NULL);
@@ -715,6 +1065,11 @@ Bool SPFile_supply(SPFile *spFile, U32 pipelineId, ESPField field, U8 index, U32
 	if(field >= ESPField_Count)
 		retError(clean, Error_invalidParameter(2, 0, "SPFile_supply()::field is unknown"));
 
+	if(value > ESPField_maxValue(field))
+		retError(clean, Error_outOfBounds(
+			4, value, ESPField_maxValue(field), "SPFile_supply()::value is wider than the field stores"
+		));
+
 	const Bool indexed = SPField_info[field].indexed;
 	const U8 limit = ESPField_indexCount(field);
 
@@ -727,6 +1082,85 @@ Bool SPFile_supply(SPFile *spFile, U32 pipelineId, ESPField field, U8 index, U32
 	SPPipelineBase *base = &spFile->pipelines.ptrNonConst[pipelineId];
 	SPGraphicsState *gfx = SPFile_graphicsStateMut(spFile, pipelineId);
 	SPRaytracingState *rt = SPFile_raytracingStateMut(spFile, pipelineId);
+
+	//Layout fields apply to any pipeline kind and edit the pipeline's oiPL rather than the state, so they
+	// resolve through layoutIndex and return before the kind gate below.
+	//Editing marks the row supplied; new rows can't be created here, since structure comes through replacing
+	// the whole layout (-pso-input) rather than through per field supplies.
+
+	if (field >= ESPField_LayoutBindingType) {
+
+		if(base->layoutIndex == U32_MAX)
+			retError(clean, Error_invalidOperation(
+				2, "SPFile_supply() the pipeline uses the device's default layout, which the file doesn't describe; "
+				"supply one through a stored oiSP first"
+			));
+
+		PLFile *layout = &spFile->layouts.ptrNonConst[base->layoutIndex];
+
+		if (field >= ESPField_LayoutSamplerFilter) {
+
+			if(index >= layout->samplers.length)
+				retError(clean, Error_outOfBounds(
+					3, index, layout->samplers.length, "SPFile_supply()::index has no sampler"
+				));
+
+			PLSamplerInfo *smp = &layout->samplers.ptrNonConst[index];
+
+			switch (field) {
+				case ESPField_LayoutSamplerFilter:        smp->filter = (U8) value;                    break;
+				case ESPField_LayoutSamplerAddressU:      smp->addressU = (U8) value;                  break;
+				case ESPField_LayoutSamplerAddressV:      smp->addressV = (U8) value;                  break;
+				case ESPField_LayoutSamplerAddressW:      smp->addressW = (U8) value;                  break;
+				case ESPField_LayoutSamplerAniso:         smp->aniso = (U8) value;                     break;
+				case ESPField_LayoutSamplerBorder:        smp->borderColor = (U8) value;               break;
+				case ESPField_LayoutSamplerCompareOp:     smp->comparisonFunction = (U8) value;        break;
+				case ESPField_LayoutSamplerCompareEnable: smp->enableComparison = value != 0;          break;
+				case ESPField_LayoutSamplerMipBias:       smp->mipBias = (F16) value;                  break;
+				case ESPField_LayoutSamplerMinLod:        smp->minLod = (F16) value;                   break;
+				default:                                  smp->maxLod = (F16) value;                   break;
+			}
+		}
+
+		else if (field >= ESPField_LayoutPushConstantSize) {
+
+			if(!layout->hasPushConstant)
+				retError(clean, Error_invalidOperation(2, "SPFile_supply() the layout has no push constant"));
+
+			if(field == ESPField_LayoutPushConstantSize)
+				layout->pushConstant.strideOrLength = value;
+
+			else layout->pushConstant.visibility = value;
+
+			layout->pushConstant.name24_source8 =
+				PLDescriptorBinding_pack(PLDescriptorBinding_name(layout->pushConstant), EPLSource_Supplied);
+		}
+
+		else {
+
+			if(index >= layout->bindings.length)
+				retError(clean, Error_outOfBounds(
+					3, index, layout->bindings.length, "SPFile_supply()::index has no binding"
+				));
+
+			PLDescriptorBinding *row = &layout->bindings.ptrNonConst[index];
+
+			switch (field) {
+				case ESPField_LayoutBindingType:            row->registerType = value;                               break;
+				case ESPField_LayoutBindingCount:           row->count = value;                                      break;
+				case ESPField_LayoutBindingSpaceSpirv:      row->bindings.arr[EGfxBinaryType_SPIRV].space = value;   break;
+				case ESPField_LayoutBindingRegisterSpirv:   row->bindings.arr[EGfxBinaryType_SPIRV].binding = value; break;
+				case ESPField_LayoutBindingSpaceDxil:       row->bindings.arr[EGfxBinaryType_DXIL].space = value;    break;
+				case ESPField_LayoutBindingRegisterDxil:    row->bindings.arr[EGfxBinaryType_DXIL].binding = value;  break;
+				case ESPField_LayoutBindingVisibility:      row->visibility = value;                                 break;
+				default:                                    row->strideOrLength = value;                             break;
+			}
+
+			row->name24_source8 = PLDescriptorBinding_pack(PLDescriptorBinding_name(*row), EPLSource_Supplied);
+		}
+
+		goto clean;
+	}
 
 	//A field belongs to one kind of pipeline, so supplying a graphics field on a compute pipeline is a mistake worth
 	// reporting rather than a write into state that doesn't exist.
@@ -778,11 +1212,11 @@ Bool SPFile_supply(SPFile *spFile, U32 pipelineId, ESPField field, U8 index, U32
 		case ESPField_CullMode:             gfx->rasterizer.cullMode = (U16) value;                         break;
 		case ESPField_RasterizerFlags:      gfx->rasterizer.flags = (U16) value;                            break;
 		case ESPField_DepthBiasConstant:    gfx->rasterizer.depthBiasConstantFactor = (I32) value;          break;
-		case ESPField_DepthBiasClamp:       gfx->rasterizer.depthBiasClamp = F32_fromU32Bits(value);       break;
-		case ESPField_DepthBiasSlope:       gfx->rasterizer.depthBiasSlopeFactor = F32_fromU32Bits(value); break;
+		case ESPField_DepthBiasClamp:       gfx->rasterizer.depthBiasClamp = F32_fromU32Bits(value);        break;
+		case ESPField_DepthBiasSlope:       gfx->rasterizer.depthBiasSlopeFactor = F32_fromU32Bits(value);  break;
 
 		case ESPField_Msaa:                 gfx->msaa = (U8) value;                                         break;
-		case ESPField_MsaaMinSampleShading: gfx->msaaMinSampleShading = F32_fromU32Bits(value);            break;
+		case ESPField_MsaaMinSampleShading: gfx->msaaMinSampleShading = F32_fromU32Bits(value);             break;
 		case ESPField_TopologyMode:         gfx->inputAssembler.topologyMode = (U8) value;                  break;
 		case ESPField_PatchControlPoints:   gfx->inputAssembler.patchControlPoints = value;                 break;
 
@@ -881,6 +1315,11 @@ Bool SPFile_validate(
 	const SPRaytracingState *rt = SPFile_raytracingState(spFile, pipelineId);
 	const SPGraphicsState *gfx = SPFile_graphicsState(spFile, pipelineId);
 
+	//The layout validates through its own format, so a bad row names itself here rather than at the driver
+
+	if(base.layoutIndex != U32_MAX && base.layoutIndex < spFile->layouts.length)
+		gotoIfError3(clean, PLFile_validate(&spFile->layouts.ptr[base.layoutIndex], alloc, issues, e_rr));
+
 	//Checks every pipeline shares, whatever kind it is.
 
 	const SHEntry *vs = NULL, *ps = NULL, *hs = NULL, *ds = NULL;
@@ -895,11 +1334,11 @@ Bool SPFile_validate(
 		}
 
 		switch (entry->stage) {
-			case ESHPipelineStage_Vertex:  vs = entry;  break;
-			case ESHPipelineStage_Pixel:   ps = entry;  break;
-			case ESHPipelineStage_Hull:    hs = entry;  break;
-			case ESHPipelineStage_Domain:  ds = entry;  break;
-			default:                                    break;
+			case EGfxPipelineStage_Vertex:  vs = entry;  break;
+			case EGfxPipelineStage_Pixel:   ps = entry;  break;
+			case EGfxPipelineStage_Hull:    hs = entry;  break;
+			case EGfxPipelineStage_Domain:  ds = entry;  break;
+			default:                                     break;
 		}
 	}
 
@@ -1096,6 +1535,135 @@ Bool SPFile_print(const SPFile *spFile, U32 pipelineId, const Allocator *alloc, 
 		CharString_free(&line, alloc);
 	}
 
+	//The layout the pipeline was built against, one settable path per row so overriding needs no other syntax.
+	//The three F16 fields print as the float value -pso-set parses, not as their bit pattern.
+
+	if (base.layoutIndex != U32_MAX) {
+
+		const PLFile *layout = &spFile->layouts.ptr[base.layoutIndex];
+
+		static const ESPField bindingFields[8] = {
+			ESPField_LayoutBindingType, ESPField_LayoutBindingCount,
+			ESPField_LayoutBindingSpaceSpirv, ESPField_LayoutBindingRegisterSpirv,
+			ESPField_LayoutBindingSpaceDxil, ESPField_LayoutBindingRegisterDxil,
+			ESPField_LayoutBindingVisibility, ESPField_LayoutBindingData
+		};
+
+		for (U32 i = 0; i < (U32) layout->bindings.length; ++i) {
+
+			const PLDescriptorBinding row = layout->bindings.ptr[i];
+			const U32 rowNameId = PLDescriptorBinding_name(row);
+			const EPLSource rowSource = PLDescriptorBinding_source(row);
+			const C8 *source = rowSource < EPLSource_Count ? sourceNames[rowSource] : "<unknown>";
+
+			if (rowNameId != PLDescriptorBinding_NAME_NONE && rowNameId < layout->names.entryStrings.length) {
+
+				const CharString rowName = layout->names.entryStrings.ptr[rowNameId];
+
+				gotoIfError3(clean, CharString_format(
+					alloc, &line, e_rr, ";   layout.binding[%"PRIu32"] '%.*s'\n",
+					i, (int) CharString_length(rowName), rowName.ptr
+				));
+
+				gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
+				CharString_free(&line, alloc);
+			}
+
+			const GfxBinding spvPair = row.bindings.arr[EGfxBinaryType_SPIRV];
+			const GfxBinding dxilPair = row.bindings.arr[EGfxBinaryType_DXIL];
+
+			const U32 values[8] = {
+				row.registerType, row.count, spvPair.space, spvPair.binding, dxilPair.space, dxilPair.binding,
+				row.visibility, row.strideOrLength
+			};
+
+			for (U8 j = 0; j < 8; ++j) {
+
+				gotoIfError3(clean, CharString_format(
+					alloc, &line, e_rr, ";   %s[%"PRIu32"] = %"PRIu32" (%s; %s)\n",
+					ESPField_name(bindingFields[j]), i, values[j], source, ESPField_domain(bindingFields[j])
+				));
+
+				gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
+				CharString_free(&line, alloc);
+			}
+		}
+
+		static const ESPField samplerFields[11] = {
+			ESPField_LayoutSamplerFilter, ESPField_LayoutSamplerAddressU, ESPField_LayoutSamplerAddressV,
+			ESPField_LayoutSamplerAddressW, ESPField_LayoutSamplerAniso, ESPField_LayoutSamplerBorder,
+			ESPField_LayoutSamplerCompareOp, ESPField_LayoutSamplerCompareEnable, ESPField_LayoutSamplerMipBias,
+			ESPField_LayoutSamplerMinLod, ESPField_LayoutSamplerMaxLod
+		};
+
+		for (U32 i = 0; i < (U32) layout->samplers.length; ++i) {
+
+			const PLSamplerInfo smp = layout->samplers.ptr[i];
+
+			const U32 values[8] = {
+				smp.filter, smp.addressU, smp.addressV, smp.addressW, smp.aniso, smp.borderColor,
+				smp.comparisonFunction, smp.enableComparison
+			};
+
+			for (U8 j = 0; j < 8; ++j) {
+
+				gotoIfError3(clean, CharString_format(
+					alloc, &line, e_rr, ";   %s[%"PRIu32"] = %"PRIu32" (supplied; %s)\n",
+					ESPField_name(samplerFields[j]), i, values[j], ESPField_domain(samplerFields[j])
+				));
+
+				gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
+				CharString_free(&line, alloc);
+			}
+
+			const F16 lods[3] = { smp.mipBias, smp.minLod, smp.maxLod };
+
+			for (U8 j = 0; j < 3; ++j) {
+
+				const F32 lod = F32_fromU32Bits((U32) EFloatType_convert(EFloatType_F16, lods[j], EFloatType_F32));
+
+				gotoIfError3(clean, CharString_format(
+					alloc, &line, e_rr, ";   %s[%"PRIu32"] = %f (supplied; %s)\n",
+					ESPField_name(samplerFields[8 + j]), i, lod, ESPField_domain(samplerFields[8 + j])
+				));
+
+				gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
+				CharString_free(&line, alloc);
+			}
+		}
+
+		if (layout->hasPushConstant) {
+
+			const PLDescriptorBinding pc = layout->pushConstant;
+			const EPLSource pcSource = PLDescriptorBinding_source(pc);
+			const C8 *source = pcSource < EPLSource_Count ? sourceNames[pcSource] : "<unknown>";
+
+			gotoIfError3(clean, CharString_format(
+				alloc, &line, e_rr, ";   %s = %"PRIu32" (%s; %s)\n",
+				ESPField_name(ESPField_LayoutPushConstantSize), pc.strideOrLength, source,
+				ESPField_domain(ESPField_LayoutPushConstantSize)
+			));
+
+			gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
+			CharString_free(&line, alloc);
+
+			gotoIfError3(clean, CharString_format(
+				alloc, &line, e_rr, ";   %s = %"PRIu32" (%s; %s)\n",
+				ESPField_name(ESPField_LayoutPushConstantVisibility), pc.visibility, source,
+				ESPField_domain(ESPField_LayoutPushConstantVisibility)
+			));
+
+			gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
+			CharString_free(&line, alloc);
+		}
+	}
+
+	else {
+
+		CharString note = CharString_createRefCStrConst(";   NOTE: the pipeline uses the device's default layout\n");
+		gotoIfError3(clean, CharString_appendString(result, &note, alloc, e_rr));
+	}
+
 clean:
 	CharString_free(&line, alloc);
 	return s_uccess;
@@ -1263,6 +1831,12 @@ Bool SPFile_finalize(SPFile *spFile, const Allocator *alloc, Error *e_rr) {
 	hash = Buffer_fnv1a64(ListSPSpecialization_bufferConst(spFile->specializations), hash);
 	hash = Buffer_fnv1a64(ListSPGraphicsState_bufferConst(spFile->graphicsStates), hash);
 	hash = Buffer_fnv1a64(ListSPRaytracingState_bufferConst(spFile->raytracingStates), hash);
+	//Each layout hashes itself, so a standalone oiPL and an embedded one can never disagree
+
+	for (U64 i = 0; i < spFile->layouts.length; ++i) {
+		gotoIfError3(clean, PLFile_finalize(&spFile->layouts.ptrNonConst[i], alloc, e_rr));
+		hash = Buffer_fnv1a64Single(spFile->layouts.ptr[i].hash, hash);
+	}
 
 	for(U64 i = 0; i < spFile->names.entryStrings.length; ++i)
 		hash = Buffer_fnv1a64(CharString_bufferConst(spFile->names.entryStrings.ptr[i]), hash);

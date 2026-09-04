@@ -389,7 +389,7 @@ Bool CLI_execute(ListCharString argList) {
 					));
 				}
 
-				++j;            //Skip next argument
+				++j;             //Skip next argument
 				continue;        //Don't break, we wanna detect duplicates!
 			}
 

@@ -41,9 +41,9 @@
 
 	//Map a file extension to a binary type: ".dxil" -> DXIL, otherwise SPIRV (".spv"/".spv.txt").
 
-	static ESHBinaryType CLI_shaderBinaryType(CharString path) {
+	static EGfxBinaryType CLI_shaderBinaryType(CharString path) {
 		const CharString dxil = CharString_createRefCStrConst(".dxil");
-		return CharString_endsWithStringInsensitive(&path, &dxil, 0) ? ESHBinaryType_DXIL : ESHBinaryType_SPIRV;
+		return CharString_endsWithStringInsensitive(&path, &dxil, 0) ? EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
 	}
 
 	//Read a raw file (the -input, unless a specific path is given) into a Buffer.
@@ -182,9 +182,9 @@
 				(U32)(id->shaderVersion >> 8), (U32)(id->shaderVersion & 0xFF)
 			);
 
-			for(U8 j = 0; j < ESHBinaryType_Count; ++j)
+			for(U8 j = 0; j < EGfxBinaryType_Count; ++j)
 				if(Buffer_length(bin->binaries[j]))
-					Log_debugLnx("\t\t%s: %"PRIu64" bytes", ESHBinaryType_names[j], Buffer_length(bin->binaries[j]));
+					Log_debugLnx("\t\t%s: %"PRIu64" bytes", EGfxBinaryType_names[j], Buffer_length(bin->binaries[j]));
 
 			for(U8 j = 0; j < ESHExtension_Count; ++j)
 				if(id->extensions & (1 << j))
@@ -313,7 +313,7 @@
 
 			SHBinaryInfo *bin = &file.binaries.ptrNonConst[i];
 
-			for(U8 j = 0; j < ESHBinaryType_Count; ++j)
+			for(U8 j = 0; j < EGfxBinaryType_Count; ++j)
 				Buffer_free(&bin->binaries[j], alloc);
 		}
 
@@ -431,7 +431,7 @@
 			.string = CharString_createRefSizedConst((const C8*) buf.ptr, Buffer_length(buf), false),
 			.path = input,
 			.format = ECompilerFormat_HLSL,
-			.outputType = ESHBinaryType_SPIRV,
+			.outputType = EGfxBinaryType_SPIRV,
 			.includeDirs = includeDirs
 		};
 

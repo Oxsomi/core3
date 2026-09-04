@@ -754,7 +754,7 @@ Bool Compiler_handleExtraWarnings(const SHFile *file, ECompilerWarning warning, 
 			SHRegisterRuntime reg = file->binaries.ptr[i].registers.ptr[j];
 			Bool hadFirstPaddingScan = false;
 
-			for (U8 k = 0; k < ESHBinaryType_Count; ++k) {
+			for (U8 k = 0; k < EGfxBinaryType_Count; ++k) {
 
 				//Unused register
 
@@ -765,7 +765,7 @@ Bool Compiler_handleExtraWarnings(const SHFile *file, ECompilerWarning warning, 
 					Log_warnLn(
 						alloc, "Binary %"PRIu64":%s has unused register \"%.*s\"",
 						i,
-						ESHBinaryType_names[k],
+						EGfxBinaryType_names[k],
 						(int) CharString_length(reg.name), reg.name.ptr
 					);
 
@@ -793,7 +793,7 @@ Bool Compiler_handleExtraWarnings(const SHFile *file, ECompilerWarning warning, 
 							Log_warnLn(
 								alloc, "Binary %"PRIu64":%s has unused constant \"%.*s.%.*s\"",
 								i,
-								ESHBinaryType_names[k],
+								EGfxBinaryType_names[k],
 								(int) CharString_length(reg.name), reg.name.ptr,
 								(int) CharString_length(varName), varName.ptr
 							);
@@ -822,18 +822,18 @@ Bool Compiler_disassembleSPIRV(Buffer buf, const Allocator *alloc, CharString *r
 Bool Compiler_disassembleDXIL(const Compiler *comp, Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr);
 
 Bool Compiler_disassemble(
-	const Compiler *comp, ESHBinaryType type, Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr
+	const Compiler *comp, EGfxBinaryType type, Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr
 ) {
 
 	Bool s_uccess = true;
 
 	switch (type) {
 
-		case ESHBinaryType_SPIRV:
+		case EGfxBinaryType_SPIRV:
 			gotoIfError3(clean, Compiler_disassembleSPIRV(buf, alloc, result, e_rr));
 			break;
 
-		case ESHBinaryType_DXIL:
+		case EGfxBinaryType_DXIL:
 			gotoIfError3(clean, Compiler_disassembleDXIL(comp, buf, alloc, result, e_rr));
 			break;
 
@@ -849,18 +849,18 @@ Bool Compiler_assembleSPIRV(CharString text, const Allocator *alloc, Buffer *res
 Bool Compiler_assembleDXIL(const Compiler *comp, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr);
 
 Bool Compiler_assemble(
-	const Compiler *comp, ESHBinaryType type, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr
+	const Compiler *comp, EGfxBinaryType type, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr
 ) {
 
 	Bool s_uccess = true;
 
 	switch (type) {
 
-		case ESHBinaryType_SPIRV:
+		case EGfxBinaryType_SPIRV:
 			gotoIfError3(clean, Compiler_assembleSPIRV(text, alloc, result, e_rr));
 			break;
 
-		case ESHBinaryType_DXIL:
+		case EGfxBinaryType_DXIL:
 			gotoIfError3(clean, Compiler_assembleDXIL(comp, text, alloc, result, e_rr));
 			break;
 
@@ -903,7 +903,7 @@ Bool Compiler_processDXIL(
 
 Bool Compiler_process(
 	const Compiler *compiler,
-	ESHBinaryType type,
+	EGfxBinaryType type,
 	Buffer *result,
 	ListSHRegisterRuntime *registers,
 	Bool isDebug,
@@ -922,7 +922,7 @@ Bool Compiler_process(
 
 	switch (type) {
 
-		case ESHBinaryType_SPIRV:
+		case EGfxBinaryType_SPIRV:
 
 			gotoIfError3(clean, Compiler_processSPIRV(
 				result, registers, isDebug, keepRegisters, toCompile, lock, entries, isLib, demotions, errors, alloc, e_rr
@@ -930,7 +930,7 @@ Bool Compiler_process(
 
 			break;
 
-		case ESHBinaryType_DXIL:
+		case EGfxBinaryType_DXIL:
 
 			gotoIfError3(clean, Compiler_processDXIL(
 				compiler, result, registers, isDebug, toCompile, lock, entries, demotions, errors, alloc, e_rr
@@ -952,7 +952,7 @@ Bool Compiler_linkSPIRV(
 	const ListSHUniformRuntime *uniforms,  //Uniform descriptions (to index uniformData and to link)
 	Buffer uniformData,                    //Contents of the current compilation
 	const CharString *entrypoint,          //Entrypoint specialization (empty = keep as lib, otherwise specialize)
-	ESHPipelineStage stage,                //Whether or not to be a final executable (ESHPipelineStage_Count = keep library)
+	EGfxPipelineStage stage,               //Whether or not to be a final executable (EGfxPipelineStage_Count = keep library)
 	ESHExtension exts,
 	ListCompileError *errors,
 	Buffer *result,                        //Output SPIRV: Either library or specialized binary (PS/GS/CS/etc.)
@@ -967,7 +967,7 @@ Bool Compiler_linkDXIL(
 	Buffer uniformData,                    //Contents of the current compilation
 	const CharString *entrypoint,          //Entrypoint specialization (empty = keep as lib, otherwise specialize)
 	U16 shaderVersion,                     //U8 maj, minor
-	ESHPipelineStage stageType,
+	EGfxPipelineStage stageType,
 	ESHExtension exts,
 	ListCompileError *errors,
 	Buffer *result,                        //Output DXIL: Either library or specialized binary (PS/GS/CS/etc.)
@@ -977,13 +977,13 @@ Bool Compiler_linkDXIL(
 
 Bool Compiler_link(
 	const Compiler *compiler,
-	ESHBinaryType type,
+	EGfxBinaryType type,
 	const ListBuffer *inputs,
 	const ListSHUniformRuntime *uniforms,
 	Buffer uniformData,
 	const CharString *entrypoint,
 	U16 shaderVersion,
-	ESHPipelineStage stageType,
+	EGfxPipelineStage stageType,
 	ESHExtension exts,
 	ListCompileError *errors,
 	Buffer *result,
@@ -998,7 +998,7 @@ Bool Compiler_link(
 
 	switch (type) {
 
-		case ESHBinaryType_SPIRV:
+		case EGfxBinaryType_SPIRV:
 
 			gotoIfError3(clean, Compiler_linkSPIRV(
 				compiler, inputs, uniforms, uniformData, entrypoint, stageType, exts, errors, result, alloc, e_rr
@@ -1006,7 +1006,7 @@ Bool Compiler_link(
 
 			break;
 
-		case ESHBinaryType_DXIL:
+		case EGfxBinaryType_DXIL:
 
 			gotoIfError3(clean, Compiler_linkDXIL(
 				compiler, inputs, uniforms, uniformData, entrypoint, shaderVersion, stageType, exts, errors, result,

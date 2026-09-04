@@ -2,9 +2,7 @@
 
 *The oiSP format is an [oiXX format](oiXX.md), as such it inherits the properties from that such as compression, encryption and endianness (though enc/comp is not supported, since oiSP is most often packaged alongside an oiSH, or inside an oiCA/oiDL file).*
 
-oiSP stores **pipelines**: the compute, graphics and ray tracing state that sits *around* a shader, together with which shader stages the pipeline is built from. It completes the shader family: [oiSH](oiSH.md) holds the compiled binaries and their backend reflection, [oiSR](oiSR.md) the frontend symbol AST, [oiSB](oiSB.md) the buffer layouts, and oiSP what a shader is actually *compiled into*.
-
-It exists because a shader alone doesn't describe a pipeline. A pixel shader's signature proves it writes a `float4` to `SV_Target0`, but nothing in it says whether that target is `RGBA8` or `RGBA16f`, whether blending is on, how many samples the pipeline runs at, or how vertex locations pack into buffers. Those are pipeline decisions and they change the compiled ISA, so a disassembly is only reproducible if they're recorded. Storing them means the same oiSP plus the same oiSH gives the same pipeline, on a device or offline.
+oiSP stores pipelines: the compute, graphics and ray tracing state that sits around a shader, together with which shader stages the pipeline is built from and which descriptor layout it was created against. Pipeline state changes the compiled ISA, so the same oiSP plus the same [oiSH](oiSH.md) reproduces the same pipeline, on a device or offline.
 
 Just like any oiXX file it's made with the following things in mind:
 
@@ -39,6 +37,8 @@ typedef struct SPHeader {       //Should be aligned to 4-byte
 
 	U32 vertexAttributeCount;   //Only the input locations that carry a format are stored
 
+	U32 layoutCount;            //oiPL subfiles, referenced by SPPipelineBase.layoutIndex
+
 } SPHeader;
 
 typedef struct SPPipelineBase { //What every pipeline has, whatever kind it is
@@ -55,6 +55,8 @@ typedef struct SPPipelineBase { //What every pipeline has, whatever kind it is
 
 	U32 stateIndex;             //Into graphicsStates[] or raytracingStates[]; unused by compute
 
+	U32 layoutIndex;            //Into layouts[], U32_MAX when the pipeline takes the device's default layout
+
 } SPPipelineBase;
 
 typedef struct SPStage {        //One stage of a pipeline
@@ -65,7 +67,7 @@ typedef struct SPStage {        //One stage of a pipeline
 
 	U32 sourceHash;             //SHFile.sourceHash when the pipeline was made, 0 if unknown
 
-	U8 stage;                   //ESHPipelineStage
+	U8 stage;                   //EGfxPipelineStage
 	U8 padding[3];
 
 } SPStage;
@@ -73,7 +75,7 @@ typedef struct SPStage {        //One stage of a pipeline
 typedef struct SPSpecialization {   //One field that reflection couldn't prove
 
 	U8 field;                       //ESPField
-	U8 index;                       //Sub index for indexed fields (render target, vertex buffer)
+	U8 index;                       //Sub index for indexed fields (render target, vertex buffer, layout row)
 	U8 source;                      //ESPFieldSource: Derived, Supplied, Assumed
 	U8 padding;
 
@@ -81,11 +83,58 @@ typedef struct SPSpecialization {   //One field that reflection couldn't prove
 
 } SPSpecialization;
 
-//Two of these have a runtime form and a stored form, because a pipeline binds more state than a file has reason to
-//keep. Nothing is lost between them: what the stored form leaves out is state no pipeline can reach.
-//The runtime forms are further down; they're what the graphics layer aliases and what a pipeline is created from.
+//These are identical between the file and a live pipeline, so they're stored exactly as a pipeline binds them.
 
-typedef struct SPBlendStateStored { //What the file holds; SPBlendStateRuntime is what a pipeline binds
+typedef struct SPDepthState {
+
+	U8 flags;                   //EDepthStencilFlags
+	U8 depthCompare;            //ECompareOp
+	U8 stencilCompare;          //ECompareOp
+	U8 stencilFail;             //EStencilOp
+
+	U8 stencilPass;             //EStencilOp
+	U8 stencilDepthFail;        //EStencilOp
+	U8 stencilWriteMask;
+	U8 stencilReadMask;
+
+} SPDepthState;
+
+typedef struct SPRasterizerState {
+
+	U16 cullMode;               //ECullMode
+	U16 flags;                  //ERasterizerFlags
+
+	F32 depthBiasClamp;
+
+	I32 depthBiasConstantFactor;
+
+	F32 depthBiasSlopeFactor;
+
+} SPRasterizerState;
+
+typedef struct SPBlendAttachment {      //How one render target combines with what's already there
+
+	U8 srcBlend, dstBlend;              //EBlend
+
+	U8 srcBlendAlpha, dstBlendAlpha;    //EBlend
+
+	U8 blendOp, blendOpAlpha;           //EBlendOp
+
+} SPBlendAttachment;
+
+typedef struct SPVertexAttribute {  //One vertex input location
+
+	U16 offset11;                   //Byte offset within its buffer, 11 bits
+	U8 bufferId4;                   //Which buffer it fetches from, 4 bits
+	U8 format;                      //ETextureFormatId; must not be compressed
+
+} SPVertexAttribute;
+
+//A pipeline binds more state than a file has reason to keep, so blend state and the vertex layout exist twice: as the
+// runtime form a pipeline is created from (SPBlendStateRuntime, SPVertexLayoutRuntime in sp_state.h) and as the
+// stored form below. Nothing is lost between them; what the stored form leaves out is state no pipeline can reach.
+
+typedef struct SPBlendStateStored {
 
 	Bool enable;
 	Bool allowIndependentBlend;     //0 = every target uses attachments[0]
@@ -94,18 +143,18 @@ typedef struct SPBlendStateStored { //What the file holds; SPBlendStateRuntime i
 
 	U8 writeMask[8];                //EWriteMask
 
-	//The attachments go to blendAttachments[], and only the ones a pipeline can reach:
+	//The attachments go to blendAttachments[], and only the ones the state can reach:
 	//N = enable ? (allowIndependentBlend ? popcount(renderTargetMask) : 1) : 0
 
 } SPBlendStateStored;
 
-typedef struct SPVertexLayoutStored {   //What the file holds; SPVertexLayoutRuntime is what a pipeline binds
+typedef struct SPVertexLayoutStored {
 
 	//A vertex layout is sparse by index rather than by count (location 3 can be filled while 0 to 2 aren't), so which
-	//entries were stored travels as a mask. They go to vertexBuffers[] and vertexAttributes[].
+	// entries were stored travels as a mask. They go to vertexBuffers[] and vertexAttributes[].
 
-	U16 bufferMask;                     //Bit per vertex buffer that carries a stride or an instance rate
-	U16 attributeMask;                  //Bit per input location that carries a format
+	U16 bufferMask;                 //Bit per vertex buffer that carries a stride or an instance rate
+	U16 attributeMask;              //Bit per input location that carries a format
 
 } SPVertexLayoutStored;
 
@@ -138,110 +187,10 @@ typedef struct SPGraphicsStateStored {  //One record of graphicsStates[]; 64 byt
 
 } SPGraphicsStateStored;
 
-//These are identical on both sides, so they're stored exactly as a pipeline binds them.
-
-typedef struct SPBlendAttachment {      //How one render target combines with what's already there
-
-	U8 srcBlend, dstBlend;              //EBlend
-
-	U8 srcBlendAlpha, dstBlendAlpha;    //EBlend
-
-	U8 blendOp, blendOpAlpha;           //EBlendOp
-
-} SPBlendAttachment;
-
-//And these are the runtime forms: what a pipeline is created from, and what the graphics layer aliases.
-//A file never holds them; the reader expands the stored forms into these and the writer folds them back.
-
-typedef struct SPBlendStateRuntime {    //What a pipeline binds; the file stores SPBlendStateStored instead
-
-	Bool enable;
-	Bool allowIndependentBlend;         //0 = every target uses attachments[0]
-	U8 renderTargetMask;                //Bit per render target
-	U8 logicOpExt;                      //ELogicOpExt; replaces blending when set
-
-	U8 writeMask[8];                    //EWriteMask
-
-	SPBlendAttachment attachments[8];
-
-} SPBlendStateRuntime;
-
-typedef struct SPDepthState {
-
-	U8 flags;                   //EDepthStencilFlags
-	U8 depthCompare;            //ECompareOp
-	U8 stencilCompare;          //ECompareOp
-	U8 stencilFail;             //EStencilOp
-
-	U8 stencilPass;             //EStencilOp
-	U8 stencilDepthFail;        //EStencilOp
-	U8 stencilWriteMask;
-	U8 stencilReadMask;
-
-} SPDepthState;
-
-typedef struct SPRasterizerState {
-
-	U16 cullMode;               //ECullMode
-	U16 flags;                  //ERasterizerFlags
-
-	F32 depthBiasClamp;
-
-	I32 depthBiasConstantFactor;
-
-	F32 depthBiasSlopeFactor;
-
-} SPRasterizerState;
-
-typedef struct SPVertexAttribute {  //One vertex input location
-
-	U16 offset11;                   //Byte offset within its buffer, 11 bits
-	U8 bufferId4;                   //Which buffer it fetches from, 4 bits
-	U8 format;                      //ETextureFormatId; must not be compressed
-
-} SPVertexAttribute;
-
-typedef struct SPVertexLayoutRuntime {      //What a pipeline binds; the file stores SPVertexLayoutStored instead
-
-	U16 bufferStrides12_isInstance1[16];    //Per buffer: stride in bits 0-11, per instance in bit 12
-
-	SPVertexAttribute attributes[16];       //Per shader input location
-
-} SPVertexLayoutRuntime;
-
-typedef struct SPInputAssembler {
-
-	U8 topologyMode;            //ETopologyMode
-	U8 padding[3];
-
-	U32 patchControlPoints;     //1..32 with tessellation, else 0
-
-	SPVertexLayoutRuntime vertexLayout;
-
-} SPInputAssembler;
-
-typedef struct SPGraphicsState {        //What a pipeline is created from; the file stores SPGraphicsStateStored
-
-	U8 msaa;                            //EMSAASamples
-	U8 renderTargetCount;               //0..8
-	U8 depthFormat;                     //EDepthStencilFormat; 0 = no depth attachment
-	U8 padding;
-
-	F32 msaaMinSampleShading;           //0 = off, else the 0..1 sample fraction
-
-	U8 renderTargetFormats[8];          //ETextureFormatId
-
-	SPBlendStateRuntime blend;          //Its attachments trail the file, not this struct
-	SPDepthState depth;
-	SPRasterizerState rasterizer;
-	SPInputAssembler inputAssembler;    //Its vertex layout trails the file too
-
-} SPGraphicsState;
-
-typedef struct SPRaytracingState {
+typedef struct SPRaytracingState {  //Compute has no extra state, so a compute pipeline is just its base record
 
 	U8 maxRecursionDepth;
-	U8 raytracingFlags;         //EPipelineRaytracingFlags
+	U8 raytracingFlags;             //EPipelineRaytracingFlags
 	U16 padding;
 
 } SPRaytracingState;
@@ -253,7 +202,10 @@ typedef enum ESPPipelineType {
 	ESPPipelineType_Count
 } ESPPipelineType;
 
-typedef enum ESPFieldSource {   //Where a field's value came from
+//Where a field's value came from.
+//The values mirror EPLSource (see oiPL.md), so a layout row's tag and a field's tag mean the same thing everywhere.
+
+typedef enum ESPFieldSource {
 	ESPFieldSource_Derived,     //Proven by the shader's reflection
 	ESPFieldSource_Supplied,    //The caller chose it
 	ESPFieldSource_Assumed,     //Nobody chose it, a value was picked
@@ -279,23 +231,29 @@ typedef enum ESPFlag {
 } ESPFlag;
 
 //Every field of a pipeline that reflection can't prove.
+//This mirrors PipelineGraphicsInfo and PipelineRaytracingInfo field for field, so a pipeline that supplies every
+// field reported for it is complete, never partial.
 //Indexed fields address an array element through SPSpecialization.index; the rest must have index 0.
 
 typedef enum ESPField {
 
+	//Render targets and blending
+
 	ESPField_RenderTargetFormat,    //Indexed by render target; ETextureFormatId
 	ESPField_RenderTargetCount,
 	ESPField_BlendEnable,
-	ESPField_BlendIndependent,
-	ESPField_BlendTargetMask,
+	ESPField_BlendIndependent,      //allowIndependentBlend
+	ESPField_BlendTargetMask,       //renderTargetMask
 	ESPField_BlendLogicOp,          //ELogicOpExt
-	ESPField_BlendWriteMask,        //Indexed; EWriteMask
-	ESPField_BlendSrc,              //Indexed; EBlend
+	ESPField_BlendWriteMask,        //Indexed by render target; EWriteMask
+	ESPField_BlendSrc,              //Indexed by render target; EBlend
 	ESPField_BlendDst,              //Indexed; EBlend
 	ESPField_BlendSrcAlpha,         //Indexed; EBlend
 	ESPField_BlendDstAlpha,         //Indexed; EBlend
 	ESPField_BlendOp,               //Indexed; EBlendOp
 	ESPField_BlendOpAlpha,          //Indexed; EBlendOp
+
+	//Depth and stencil
 
 	ESPField_DepthFormat,           //EDepthStencilFormat
 	ESPField_DepthStencilFlags,     //EDepthStencilFlags
@@ -307,56 +265,61 @@ typedef enum ESPField {
 	ESPField_StencilWriteMask,
 	ESPField_StencilReadMask,
 
+	//Rasterizer
+
 	ESPField_CullMode,              //ECullMode
 	ESPField_RasterizerFlags,       //ERasterizerFlags
 	ESPField_DepthBiasConstant,     //I32 stored in the U32
 	ESPField_DepthBiasClamp,        //F32 bits stored in the U32
 	ESPField_DepthBiasSlope,        //F32 bits stored in the U32
 
+	//Multisampling, topology, tessellation
+
 	ESPField_Msaa,                  //EMSAASamples
 	ESPField_MsaaMinSampleShading,  //F32 bits stored in the U32
 	ESPField_TopologyMode,          //ETopologyMode
 	ESPField_PatchControlPoints,
 
+	//Vertex input
+
 	ESPField_VertexBufferStride,    //Indexed by vertex buffer
 	ESPField_VertexBufferRate,      //Indexed by vertex buffer
+
+	//Ray tracing
 
 	ESPField_MaxRecursionDepth,
 	ESPField_RaytracingFlags,       //EPipelineRaytracingFlags
 
+	//Descriptor layout (any pipeline kind); indexed fields index the pipeline layout's own binding/sampler rows.
+	//These only exist when the pipeline carries a layout (layoutIndex != U32_MAX): the device's default layout
+	// isn't described by the file, so there is nothing there to address.
+
+	ESPField_LayoutBindingType,         //EGfxRegisterType plus its mask bits
+	ESPField_LayoutBindingSpace,
+	ESPField_LayoutBindingRegister,
+	ESPField_LayoutBindingCount,
+	ESPField_LayoutBindingVisibility,   //Bit mask of EGfxPipelineStage
+	ESPField_LayoutBindingData,         //Stride, cbuffer size, texture format or 1 + sampler id, by the type
+
+	ESPField_LayoutPushConstantSize,
+	ESPField_LayoutPushConstantVisibility,
+
+	ESPField_LayoutSamplerFilter,       //ESamplerFilterMode
+	ESPField_LayoutSamplerAddressU,     //ESamplerAddressMode
+	ESPField_LayoutSamplerAddressV,
+	ESPField_LayoutSamplerAddressW,
+	ESPField_LayoutSamplerAniso,
+	ESPField_LayoutSamplerBorder,       //ESamplerBorderColor
+	ESPField_LayoutSamplerCompareOp,    //ECompareOp
+	ESPField_LayoutSamplerCompareEnable,
+	ESPField_LayoutSamplerMipBias,      //F16 bits in the low half
+	ESPField_LayoutSamplerMinLod,       //F16 bits in the low half
+	ESPField_LayoutSamplerMaxLod,       //F16 bits in the low half
+
 	ESPField_Count
+
 } ESPField;
 ```
-
-Enum-valued fields are stored as integers naming the enum they mirror in a comment, the same way oiSH stores an `ESBType` as `U8`. The state enums (`EBlend`, `ECompareOp`, `EPipelineRaytracingFlags`, ...) are oiSP's own, declared in `sp_state.h` below; only `ETextureFormatId` and `EDepthStencilFormat` come from the texture format tables, which carry no graphics dependency either, so the format stays readable without a device.
-
-`SPRasterizerState`, `SPDepthState`, `SPBlendAttachment`, `SPBlendStateRuntime`, `SPVertexAttribute` and
-`SPVertexLayoutRuntime` are not merely byte compatible with the state a graphics pipeline binds, they are that state:
-they're declared in `oiSP/sp_state.h` and the graphics layer aliases them, so there is one definition rather than two
-that could drift. Lowering a stored pipeline is therefore a struct copy, and a graphics pipeline's whole state is
-204 bytes.
-
-Because those structs are shared, a field added on the graphics side would silently change the on disk layout, so every
-size above is pinned with a `static_assert` in `sp_file.h`. Adding a field is a format change and needs a version bump.
-
-Blend state and the vertex layout are the two that exist twice, as a `Stored` struct and a `Runtime` one, because most
-of what a pipeline binds is state no pipeline can read back. Blending reaches an attachment only when it's on, and then
-only through `attachments[0]` (independent blending off) or the targets `renderTargetMask` selects (independent
-blending on), so `SPBlendStateStored` keeps the switches and sends the attachments to their own section.
-
-A vertex layout is sparse the same way, but by index rather than by count: a buffer is real once its packed `U16` is
-non-zero and an input location once it has a format, and since location 3 can be filled while 0 to 2 aren't,
-`SPVertexLayoutStored` is a pair of masks rather than a count.
-
-So `SPGraphicsStateStored` is 64 bytes against `SPGraphicsState`'s 204, and a trivial vertex shader with one buffer and
-one attribute costs 64 + 2 + 4. `SPGraphicsState_store` and `SPGraphicsStateStored_expand` are the whole of the
-conversion; a reader never sees a runtime struct with holes in it.
-
-None of the per-state counts are stored, since the blend state and the two masks already imply them. The header's
-`blendAttachmentCount`, `vertexBufferCount` and `vertexAttributeCount` are the totals, and a reader that derives
-different ones rejects the file. On read an entry goes back to the index it was written for rather than the slot it was
-stored in, and every index that stores nothing reads as zero. `SPFile_finalize` clears those same entries in memory, so
-the content hash describes bytes that survive a write.
 
 Sections are laid out in the order the header declares them:
 
@@ -377,7 +340,7 @@ SPFile {                    //Has to be 16-byte aligned
 
 	SPRaytracingState raytracingStates[header.raytracingStateCount];
 
-	//Then the entries those states actually use, each in its own section, per graphics state and in index order.
+	//Then the entries those states select, each in its own section, per graphics state and in index order.
 	//The three counts in the header are the totals; a reader derives them itself and rejects the file if they differ.
 
 	blendAttachments[header.blendAttachmentCount]:
@@ -388,7 +351,7 @@ SPFile {                    //Has to be 16-byte aligned
 	vertexBuffers[header.vertexBufferCount]:
 		for i < header.graphicsStateCount:
 			for j < 16 where bufferMask has bit j:
-				U16 bufferStride12_isInstance1
+				U16 bufferStride12_isInstance1      //Stride in bits 0-11, per instance in bit 12
 
 	vertexAttributes[header.vertexAttributeCount]:
 		for i < header.graphicsStateCount:
@@ -397,20 +360,30 @@ SPFile {                    //Has to be 16-byte aligned
 
 	U8[N] pad;              //Padding to align to 16-byte
 
-	DLFile names;           //Pipeline names, shader file names and entrypoint names (see oiDL.md)
+	//No encryption/compression; string list (see oiDL.md).
+	//Pipeline names, shader file names and entrypoint names, referenced by string id.
+	//Each string must be below 32Ki characters.
+	DLFile names;           //16-byte aligned
+
+	PLFile layouts[header.layoutCount];     //oiPL subfiles, one per stored descriptor layout, see oiPL.md
 }
 ```
 
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer, `F<X>` x-bit float.
 
-The magic number can only be absent if embedded in another file.
+The magic number in the header can only be absent if embedded in another file.
+
+On read a stored graphics state is expanded into the runtime form (`SPGraphicsStateStored_expand`) and on write folded back (`SPGraphicsState_store`); the runtime forms (`SPBlendStateRuntime`, `SPVertexLayoutRuntime`, `SPGraphicsState`, 204 bytes) are what a pipeline is created from and never appear in a file. An entry goes back to the index it was written for rather than the slot it was stored in, and every index that stores nothing reads as zero; `SPFile_finalize` clears those same entries in memory, so the content hash describes bytes that survive a write.
+
+`SPRasterizerState`, `SPDepthState`, `SPBlendAttachment`, `SPBlendStateRuntime`, `SPVertexAttribute` and `SPVertexLayoutRuntime` are declared in `oiSP/sp_state.h` and aliased by `graphics/generic/pipeline_structs.h` as `Rasterizer`, `DepthStencilState`, `BlendStateAttachment`, `BlendState`, `VertexAttribute` and `VertexBindingLayout`, so there is one definition rather than two that could drift and lowering a stored pipeline is a struct copy. Because those structs are shared and written to disk verbatim, every size is pinned with a `static_assert` in `sp_file.h`; adding a field is a format change and needs a version bump. `SPFile_toGraphicsInfo` and `SPFile_toRaytracingInfo` lower a pipeline into a create info; compute has no state to lower, so `SPFile_toComputeStage` yields the single stage a compute pipeline binds.
+
+Every pipeline is an `SPPipelineBase` regardless of kind, with the kind specific state hanging off `stateIndex`: anything that walks stages, names or provenance takes the base and never learns which kind it got, and a compute pipeline is 24 bytes rather than carrying a payload it never uses.
+
+Stages are stored by name rather than by an index into a list that only existed at build time: the oiSH the stage came from, the entrypoint within it and that oiSH's `sourceHash` at the time, so a loader resolves the name and can tell when the shader has moved on. Stages of one pipeline may come from several oiSH files, the same shape a pipeline is created from at runtime; mixing compute, graphics and ray tracing stages in one pipeline is rejected.
 
 ### State enums
 
-A pipeline's integer fields carry values from the enums below. They're declared in `oiSP/sp_state.h` alongside the
-structs that store them, because a field kept as a raw integer means nothing without the set it came from, and a reader
-has to make sense of a file with no device present. The graphics layer includes them from here rather than declaring
-its own. `ESHPipelineStage` is the one exception: it belongs to [oiSH](oiSH.md) and is specified there.
+A pipeline's integer fields carry values from the enums below. They're declared in `oiSP/sp_state.h` alongside the structs that store them, because a field kept as a raw integer means nothing without the set it came from, and a reader has to make sense of a file with no device present; the graphics layer includes them from here rather than declaring its own. `EGfxPipelineStage` is the one exception: it belongs to [oiSH](oiSH.md) and is specified there.
 
 ```c
 typedef enum EMSAASamples {
@@ -466,9 +439,10 @@ typedef enum EDepthStencilFlags {
 	EDepthStencilFlags_DepthTest     = 1 << 0,
 	EDepthStencilFlags_DepthWriteBit = 1 << 1,  //Use DepthWrite instead
 	EDepthStencilFlags_StencilTest   = 1 << 2,
-	EDepthStencilFlags_DepthWrite    = DepthTest | DepthWriteBit
+	EDepthStencilFlags_DepthWrite    = EDepthStencilFlags_DepthTest | EDepthStencilFlags_DepthWriteBit
 } EDepthStencilFlags;
 
+//Owned by the shared graphics format vocabulary (formats/gfx_util/gfx_util.h), normative here:
 typedef enum ECompareOp {
 	ECompareOp_Gt, ECompareOp_Geq,
 	ECompareOp_Eq, ECompareOp_Neq,
@@ -494,7 +468,7 @@ typedef enum EBlend {
 	EBlend_BlendFactor, EBlend_InvBlendFactor,
 	EBlend_AlphaFactor, EBlend_InvAlphaFactor,
 	EBlend_SrcAlphaSat,
-	EBlend_Src1ColorExt, EBlend_Src1AlphaExt,   //Dual source; needs the extension
+	EBlend_Src1ColorExt, EBlend_Src1AlphaExt,   //Dual source; needs the dualSrcBlend feature
 	EBlend_InvSrc1ColorExt, EBlend_InvSrc1AlphaExt,
 	EBlend_Count
 } EBlend;
@@ -529,27 +503,9 @@ typedef enum ELogicOpExt {
 	ELogicOpExt_OrInvert,
 	ELogicOpExt_Count
 } ELogicOpExt;
-
-typedef enum EPipelineRaytracingFlags {
-	EPipelineRaytracingFlags_SkipTriangles      = 1 << 0,
-	EPipelineRaytracingFlags_SkipAABBs          = 1 << 1,
-	EPipelineRaytracingFlags_Reserved2          = 1 << 2,   //Reserved, free to reuse
-	EPipelineRaytracingFlags_NoNullAnyHit       = 1 << 3,
-	EPipelineRaytracingFlags_NoNullClosestHit   = 1 << 4,
-	EPipelineRaytracingFlags_NoNullMiss         = 1 << 5,
-	EPipelineRaytracingFlags_NoNullIntersection = 1 << 6,
-	EPipelineRaytracingFlags_AllowOpacityMicromapExt = 1 << 7,   //Requires the RayMicromapOpacity feature
-	EPipelineRaytracingFlags_Count              = 8,
-	EPipelineRaytracingFlags_Default            = SkipAABBs
-} EPipelineRaytracingFlags;
 ```
 
-`ETextureFormatId` (render target and vertex input formats) and `EDepthStencilFormat` (`None`, `D16`, `D32`, `D24S8Ext`,
-`D32S8X24Ext`) are the shared texture format enums from `types/container/texture_format.h`, used unchanged.
-
-### Common ancestor
-
-Every pipeline is an `SPPipelineBase` regardless of kind, and the kind specific state hangs off `stateIndex`. Anything that walks stages, names or provenance (a state template, a sweep, a form, an inspector) takes the base and never learns which kind it got. It also keeps the packing honest: a compute pipeline is 20 bytes rather than carrying a graphics payload it never uses, and validation shared by all three kinds is written once against the base.
+`ETextureFormatId` (render target and vertex input formats) and `EDepthStencilFormat` (`None`, `D16`, `D32`, `D24S8Ext`, `D32S8X24Ext`) are the shared texture format enums from `types/container/texture_format.h`, used unchanged.
 
 ### Provenance
 
@@ -559,30 +515,32 @@ Every field a pipeline needs but a shader can't prove is recorded in `specializa
 - **Supplied**: the caller chose it.
 - **Assumed**: nobody chose it, so a value was picked.
 
-Serializing this is the point of keeping it. A pipeline assembled from guesses still says which of its fields nobody chose, so a disassembly taken from it is never mistaken for an exact one, and a tool can ask for exactly the fields that are missing. Because the field set mirrors `PipelineGraphicsInfo` and `PipelineRaytracingInfo` completely, supplying everything a pipeline reports yields a whole pipeline rather than a partially specified one.
+A pipeline is exact only when nothing was assumed, so a disassembly taken from a guessed pipeline is never mistaken for an exact one, and a tool can ask for exactly the fields that are missing. Fields are addressed by a stable path name (`rtv.format`, `blend.src[2]`, `msaa.minSampleShading`, `rt.maxRecursionDepth`, `layout.sampler.filter[0]`, ...) with a sub index for indexed ones; that single vocabulary serves the specialization report, a state template, sweep axes and a web form, so they can never disagree about what a field is called.
 
-Fields are addressed by a stable path name (`rtv.format`, `blend.op`, `msaa.minSampleShading`, `rt.maxRecursionDepth`, ...) with a sub-index for indexed ones. That single vocabulary serves the specialization report, a state template, sweep axes and a web form, so they can never disagree about what a field is called or which values are legal.
+### Descriptor layout
 
-### Stages
-
-Stages are stored by **name**, not by an index into a list that only existed at build time: the oiSH the stage came from, the entrypoint within it, and that oiSH's `sourceHash` at the time. A loader resolves the name and can tell from the hash when the shader has moved on. Stages of one pipeline may come from several oiSH files, which is the same shape a pipeline is created from at runtime.
-
-Compute, graphics and ray tracing stages sitting in one oiSH are *separate* pipelines; a pipeline names exactly the stages it uses, and mixing kinds in one pipeline is rejected.
+`SPPipelineBase.layoutIndex` names one of the file's embedded [oiPL](oiPL.md) subfiles, or `U32_MAX` for the device's default layout, which the file never describes. The layout is part of what a shader compiles into, not just a validation gate: descriptor set pointers and push constants arrive in user SGPRs and consume the root signature's budget, so two layouts that both accept a shader can still produce different ISA. A layout shared by several pipelines is stored once and referenced by index, and one can be lifted out or dropped in whole, which is how a stored layout overrides a derived one: structure (new rows, sampler values) can't travel as per field supplies. Derivation fills the rows from what the stages' binaries reflect, skipping the registers the runtime owns, preferring the SPIR-V binding pair and falling back to DXIL; the row format itself, and its per row provenance tags, are oiPL's and specified in [oiPL.md](oiPL.md). The three F16 sampler fields print as the float value that overrides parse, not as their bit pattern.
 
 ### Sentinels & invariants
 
-- `name == U32_MAX` means unnamed, and so does `shaderFile`/`entrypoint == U32_MAX` on a stage. All other string ids must be `< strings.length`.
-- `type < ESPPipelineType_Count`; `flags` may not contain `ESPPipelineFlag_Unsupported` bits; `stage < ESHPipelineStage_Count`.
-- `specializations[k].field < ESPField_Count` and `source < ESPFieldSource_Count`. A non-zero `index` is only legal on a field `ESPField_isIndexed` reports as indexed.
-- `stageStart + stageCount <= stageCount` of the file, and `specializationStart + specializationCount <= specializationCount`; every pipeline has at least one stage.
+- `name == U32_MAX` means unnamed, and so does `shaderFile`/`entrypoint == U32_MAX` on a stage. All other string ids must be `< names.length`.
+- `type < ESPPipelineType_Count`; `flags` may not contain `ESPPipelineFlag_Unsupported` bits; `stage < EGfxPipelineStage_Count`.
+- `specializations[k].field < ESPField_Count` and `source < ESPFieldSource_Count`; `index` must be below the field's index count (1 for a field without indices).
+- `stageStart + stageCount` and `specializationStart + specializationCount` must sit inside their pools; every pipeline has at least one stage.
 - A graphics pipeline's `stateIndex < graphicsStateCount`, a ray tracing pipeline's `stateIndex < raytracingStateCount`. Compute ignores `stateIndex`.
+- `layoutIndex` is `U32_MAX` or `< layoutCount`.
 - `graphicsStates[k].renderTargetCount <= 8`.
 
 ### Validation
 
-`SPFile_validate` performs the checks that need **no device**, so a mismatch names itself long before a driver returns an opaque error: the pixel stage writing more render targets than the pipeline declares, a declared target with no format, depth state with no depth attachment, a vertex input the pipeline has no format for, half a tessellation pair or a control point count outside 1..32 (or set without tessellation), a render target count above 8, a blend target mask enabling targets that don't exist, blending enabled with nothing masked, sample shading outside 0..1, and a ray tracing pipeline that can't trace a single ray.
+`SPFile_read` refuses:
 
-Device-dependent validation stays with the backend, since it needs capabilities rather than the pipeline alone: whether a format is supported as a vertex input or color attachment, which MSAA counts the device offers, and whether features like dual-source blending, wireframe, depth bias or geometry shaders exist. Enum *bounds* checking stays there too: the reader keeps every stored integer as is and the backend rejects a value it can't map, so a newer file's value never turns into a silently different one here.
+- A misaligned (non 16-byte) offset, a wrong magic number, a version other than 1.1 or any `ESPFlag_Unsupported` bit.
+- Header counts that don't match what the stored blend states and masks imply for `blendAttachmentCount`, `vertexBufferCount` and `vertexAttributeCount`.
+- Any sentinel or invariant above that doesn't hold.
+- A names oiDL that isn't a plain string list (compressed or encrypted), a string that isn't fully loaded, or a string of 32Ki characters or more.
+
+`SPFile_validate` performs the structural checks that need no device, against the shader signatures a pipeline is built from: the pixel stage writing more render targets than the pipeline declares, a declared target with no format, depth state with no depth attachment, a vertex input the pipeline has no format for, half a tessellation pair or a control point count outside 1..32 (or set without tessellation), a render target count above 8, a blend target mask enabling targets that don't exist, blending enabled with nothing masked, sample shading outside 0..1, and a ray tracing pipeline that can't trace a single ray. Device validation (format support, sample counts, feature bits) stays with the backend, and so does enum bounds checking: the reader keeps every stored integer as is and the backend rejects a value it can't map, so a newer file's value never turns into a silently different one.
 
 ## Hashing & comparing
 
@@ -591,36 +549,14 @@ Pipelines, stages and specializations are appended in producer order. This deter
 Hashes are generated like following:
 
 - FNV-1a64 is used (64-bit FNV-1a).
-- The seed is `flags & ~HideMagicNumber` FNVed (HideMagicNumber is a serialization detail and never influences the hash).
-- The whole `pipelines[]` byte buffer is FNVed, then `stages[]`, then `specializations[]`, then `graphicsStates[]`, then `raytracingStates[]`.
+- First, every blend attachment no target reaches and every vertex attribute without a format is cleared in memory, so the hash describes bytes that survive a write.
+- The seed is `flags & ~HideMagicNumber` FNVed as a single U64 (HideMagicNumber is a serialization detail and never influences the hash).
+- The whole `pipelines[]` byte buffer is FNVed, then `stages[]`, then `specializations[]`, then `graphicsStates[]` (the runtime form), then `raytracingStates[]`.
+- Every embedded layout is finalized and its own oiPL hash is FNVed as a single U64, in order, so a standalone oiPL and an embedded one can never disagree.
 - Every string in the pool (in order) is FNVed by its bytes.
 
 This hash is refreshed by `SPFile_finalize` (and on read). It can be used for quick comparison, for example to tell whether two stored pipelines describe the same state, and is only available at runtime.
 
-## Relationship to the graphics layer
-
-The state goes the other way round from the rest of the format: rather than oiSP describing what the graphics layer
-holds, `oiSP/sp_state.h` declares it and `graphics/generic/pipeline_structs.h` aliases it, so `Rasterizer`,
-`DepthStencilState`, `BlendState`, `BlendStateAttachment`, `VertexAttribute` and `VertexBindingLayout` are
-`SPRasterizerState`, `SPDepthState`, `SPBlendStateRuntime`, `SPBlendAttachment`, `SPVertexAttribute` and
-`SPVertexLayoutRuntime` under their graphics names, and the enums above are the same declarations both sides read. None of it needs a
-device, which is what lets the format keep its side of the bargain.
-
-`BlendState` and `VertexBindingLayout` alias the `Runtime` forms specifically, since those are what a pipeline binds.
-The `Stored` forms never leave the format: the graphics layer has no reason to know a file drops what it can't reach.
-
-Lowering has no compute counterpart to `SPFile_toGraphicsInfo` and `SPFile_toRaytracingInfo` because compute has no
-state to lower. `SPFile_toComputeStage` stands in its place, yielding the single stage a compute pipeline is allowed to
-bind; there's no `fromComputeInfo` either, since deriving a compute pipeline is already exact.
-
-Everything above that boundary is still the graphics layer's: it owns `PipelineGraphicsInfo`, so it provides the
-interop, lowering an oiSP pipeline into a create-info and dumping a live pipeline back into an oiSP. Because the state
-is shared, lowering copies the structs whole and only the fields oiSP stores differently (render target formats, the
-topology and patch count the input assembler carries) are moved across by hand.
-
-The result is that a file loads in tooling that has no device (a web inspector, an offline ISA run) and a renderer can
-round-trip its own pipelines through it, without two definitions of the same state drifting apart.
-
 ## Changelog
 
-1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Carries the pipeline records with their common base (name, kind, stage range, specialization range, kind specific state index), the shared stage pool naming each stage's oiSH + entrypoint + source hash, the specialization pool recording every field a shader can't prove along with whether it was derived, supplied or assumed, and the kind specific graphics and ray tracing state pools. The graphics state covers `PipelineGraphicsInfo` completely, including the rasterizer, full depth/stencil, per-target blend factors and write masks, sample-rate shading and tessellation control points, so a pipeline that supplies every reported field is whole rather than partial; the state structs and the enums they store are declared here and aliased by the graphics layer rather than duplicated. Blend state and the vertex layout exist as a `Stored` and a `Runtime` form, since a blend state can only reach the attachments blending selects and a vertex layout only the buffers and input locations it fills in, so a graphics state costs 64 bytes on disk against the 204 a pipeline binds. A derived ray tracing pipeline assumes `rt.flags = EPipelineRaytracingFlags_Default` (skip AABBs), the same default the graphics layer creates with.
+1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Pipeline records with their common base (name, kind, stage range, specialization range, kind specific state index, layout index), the shared stage pool naming each stage's oiSH + entrypoint + source hash, the specialization pool recording every field a shader can't prove along with whether it was derived, supplied or assumed, and the kind specific graphics and ray tracing state pools. The graphics state covers `PipelineGraphicsInfo` completely, so a pipeline that supplies every reported field is whole rather than partial; the state structs and enums are declared here and aliased by the graphics layer. Blend state and the vertex layout exist as a `Stored` and a `Runtime` form, so a graphics state costs 64 bytes on disk against the 204 a pipeline binds. A derived ray tracing pipeline assumes `rt.flags = EPipelineRaytracingFlags_Default` (skip AABBs), the same default the graphics layer creates with. Carries each pipeline's descriptor layout as an embedded [oiPL](oiPL.md) subfile (`SPPipelineBase.layoutIndex` into `layouts[]`), whose own hash folds into the file hash.

@@ -145,7 +145,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		U16 localId = (U16) identifier;
 
 		const SHBinaryInfo *info = &binaries->ptr[globalId].binaries.ptr[localId];
-		Buffer bin = info->binaries[ESHBinaryType_DXIL];
+		Buffer bin = info->binaries[EGfxBinaryType_DXIL];
 
 		libraries.ptrNonConst[j] = (D3D12_DXIL_LIBRARY_DESC) {
 			.DXILLibrary = (D3D12_SHADER_BYTECODE) {

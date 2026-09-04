@@ -148,7 +148,7 @@ static Bool shNormalize(const Allocator *alloc, Buffer in, Buffer *out) {
 
 	for(U64 i = 0; i < file.binaries.length; ++i) {
 
-		const Buffer spirv = file.binaries.ptr[i].binaries[ESHBinaryType_SPIRV];
+		const Buffer spirv = file.binaries.ptr[i].binaries[EGfxBinaryType_SPIRV];
 		Bool readMagic = false;
 
 		if(Buffer_length(spirv) < sizeof(U32) * 5 || Buffer_isConstRef(spirv))
@@ -342,7 +342,7 @@ static void dumpDisasmDiff(
 	if(!fp.binaries.length || !fg.binaries.length)
 		goto clean;
 
-	const ESHBinaryType types[2] = { ESHBinaryType_SPIRV, ESHBinaryType_DXIL };
+	const EGfxBinaryType types[2] = { EGfxBinaryType_SPIRV, EGfxBinaryType_DXIL };
 	const C8 *exts[2] = { "spvasm", "dxil" };
 
 	for(U64 k = 0; k < 2; ++k) {
@@ -451,7 +451,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 	gotoIfError3(clean, Compiler_getTargetsFromFile(
 		here,
 		ECompileType_Compile,
-		(U64)1 << ESHBinaryType_SPIRV,      //Single SPIRV target (byte-snapshot)
+		(U64)1 << EGfxBinaryType_SPIRV,     //Single SPIRV target (byte-snapshot)
 		false,                              //multipleModes
 		true,                               //combineFlag
 		true,                               //enableLogging
@@ -612,7 +612,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 				.string = allShaderText.ptr[i],
 				.path = relPath,
 				.format = ECompilerFormat_HLSL,
-				.outputType = ESHBinaryType_SPIRV,
+				.outputType = EGfxBinaryType_SPIRV,
 				.includeDirs = includeDirs
 			};
 
@@ -738,7 +738,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 			for (U64 b = 0; b < sh.binaries.length && (!isaProbed || isaAvailable); ++b) {
 
-				const Buffer spv = sh.binaries.ptr[b].binaries[ESHBinaryType_SPIRV];
+				const Buffer spv = sh.binaries.ptr[b].binaries[EGfxBinaryType_SPIRV];
 
 				if (!Buffer_length(spv) || !SpvISA_stageHasOfflinePath(spv, alloc))
 					continue;
@@ -867,7 +867,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 		Bool dxCompiled =
 			Compiler_getTargetsFromFile(
-				here, ECompileType_Compile, (U64)1 << ESHBinaryType_DXIL, false, true, true,
+				here, ECompileType_Compile, (U64)1 << EGfxBinaryType_DXIL, false, true, true,
 				alloc, &dxFolder, NULL, &dxFiles, &dxText, &dxOutputs, &dxModes
 			) &&
 			Compiler_compileShaders(

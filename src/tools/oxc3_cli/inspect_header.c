@@ -245,11 +245,11 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 	switch (*(const U32*)buf.ptr) {
 
 		case CAHeader_MAGIC:    reqLen = sizeof(CAHeader);                    break;
-		case DLHeader_MAGIC:    reqLen = sizeof(DLHeader) + sizeof(U32);    break;
-		case SHHeader_MAGIC:    reqLen = sizeof(SHHeader) + sizeof(U32);    break;
-		case SBHeader_MAGIC:    reqLen = sizeof(SBHeader) + sizeof(U32);    break;
-		case SRHeader_MAGIC:    reqLen = sizeof(SRHeader) + sizeof(U32);    break;
-		case SPHeader_MAGIC:    reqLen = sizeof(SPHeader) + sizeof(U32);    break;
+		case DLHeader_MAGIC:    reqLen = sizeof(DLHeader) + sizeof(U32);      break;
+		case SHHeader_MAGIC:    reqLen = sizeof(SHHeader) + sizeof(U32);      break;
+		case SBHeader_MAGIC:    reqLen = sizeof(SBHeader) + sizeof(U32);      break;
+		case SRHeader_MAGIC:    reqLen = sizeof(SRHeader) + sizeof(U32);      break;
+		case SPHeader_MAGIC:    reqLen = sizeof(SPHeader) + sizeof(U32);      break;
 		default:
 			Log_errorLnx("File wasn't recognized.");
 			goto clean;

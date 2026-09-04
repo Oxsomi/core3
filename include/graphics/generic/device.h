@@ -43,7 +43,7 @@ typedef RefPtr DescriptorLayoutRef;
 typedef RefPtr PipelineLayoutRef;
 typedef RefPtr DescriptorHeapRef;
 typedef RefPtr DescriptorTableRef;
-typedef enum ESHBinaryType ESHBinaryType;
+typedef enum EGfxBinaryType EGfxBinaryType;
 
 typedef struct CBufferData {        //TODO: Replace this entirely when we can.
 
@@ -275,7 +275,7 @@ const GraphicsObjectTypes *GraphicsDeviceRef_getTypes(GraphicsDeviceRef *device)
 
 //binaryType picks which backend's binding numbers to emit, since a set/binding pair means something
 // different per backend and the counts are shared.
-//It refuses a type it has no numbers for, so adding AIR or WGSL to ESHBinaryType surfaces here as an
+//It refuses a type it has no numbers for, so adding AIR or WGSL to EGfxBinaryType surfaces here as an
 // error rather than as silently reused DXIL registers.
 
 //flags is the same set GraphicsDeviceRef_create takes; only EnableDynamicSamplers changes what comes back,
@@ -283,7 +283,7 @@ const GraphicsObjectTypes *GraphicsDeviceRef_getTypes(GraphicsDeviceRef *device)
 
 Bool GraphicsDevice_defaultBindlessLayout(
 	const GraphicsDeviceInfo *info,
-	ESHBinaryType binaryType,
+	EGfxBinaryType binaryType,
 	EGraphicsDeviceFlags flags,
 	DescriptorLayoutInfo *result,
 	const Allocator *alloc,

@@ -38,14 +38,14 @@
 
 Bool SpvISA_stageHasOfflinePath(Buffer spirv, const Allocator *alloc) {
 
-	//Reuse the compiler's SPIR-V entrypoint query (it maps each OpEntryPoint's execution model to an ESHPipelineStage)
+	//Reuse the compiler's SPIR-V entrypoint query (it maps each OpEntryPoint's execution model to an EGfxPipelineStage)
 	// rather than parsing the module here.
 	//The compiler argument is unused for the SPIR-V path, so NULL is fine.
 
 	ListCompilerEntrypoint entrypoints = (ListCompilerEntrypoint) { 0 };
 	Error err = Error_none();
 
-	if(!Compiler_getUniqueEntrypoints(NULL, ESHBinaryType_SPIRV, spirv, true, &entrypoints, alloc, &err)) {
+	if(!Compiler_getUniqueEntrypoints(NULL, EGfxBinaryType_SPIRV, spirv, true, &entrypoints, alloc, &err)) {
 		ListCompilerEntrypoint_freeUnderlying(&entrypoints, alloc);
 		return false;
 	}
@@ -60,14 +60,14 @@ Bool SpvISA_stageHasOfflinePath(Buffer spirv, const Allocator *alloc) {
 	for(U64 i = 0; i < entrypoints.length && offline; ++i)
 		switch(entrypoints.ptr[i].stage) {
 
-			case ESHPipelineStage_Vertex:
-			case ESHPipelineStage_Hull:
-			case ESHPipelineStage_Domain:
-			case ESHPipelineStage_GeometryExt:
-			case ESHPipelineStage_Pixel:
-			case ESHPipelineStage_Compute:
-			case ESHPipelineStage_MeshExt:
-			case ESHPipelineStage_TaskExt:
+			case EGfxPipelineStage_Vertex:
+			case EGfxPipelineStage_Hull:
+			case EGfxPipelineStage_Domain:
+			case EGfxPipelineStage_GeometryExt:
+			case EGfxPipelineStage_Pixel:
+			case EGfxPipelineStage_Compute:
+			case EGfxPipelineStage_MeshExt:
+			case EGfxPipelineStage_TaskExt:
 				break;
 
 			default:
@@ -549,7 +549,7 @@ Bool SpvISA_disassemble(
 		ListCompilerEntrypoint eps = (ListCompilerEntrypoint) { 0 };
 		Error epErr = Error_none();
 
-		if(Compiler_getUniqueEntrypoints(NULL, ESHBinaryType_SPIRV, spirv, true, &eps, alloc, &epErr))
+		if(Compiler_getUniqueEntrypoints(NULL, EGfxBinaryType_SPIRV, spirv, true, &eps, alloc, &epErr))
 			for(U64 i = 0; i < eps.length; ++i)
 				if(CharString_equalsStringSensitive(&eps.ptr[i].name, &entrypoint)) { useEntry = true; break; }
 

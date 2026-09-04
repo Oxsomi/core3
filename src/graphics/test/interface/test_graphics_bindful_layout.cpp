@@ -246,7 +246,7 @@ extern "C" void Test_graphicsBindfulReservedSpace(oxc::c::Test *t, oxc::c::Graph
 	//A layout that is legal in every respect except the space it asks for
 
 	c::DescriptorBinding reserved = {
-		.registerType = (c::ESHRegisterType) (c::ESHRegisterType_ByteAddressBuffer | c::ESHRegisterType_IsWrite),
+		.registerType = (c::EGfxRegisterType) (c::EGfxRegisterType_ByteAddressBuffer | c::EGfxRegisterType_IsWrite),
 		.count = 1,
 		.binding = { .space = OXC3_RESERVED_SPACE, .binding = 0 },
 		.visibility = c::U32_MAX
@@ -306,7 +306,7 @@ extern "C" void Test_graphicsBindfulPushClass(oxc::c::Test *t, oxc::c::GraphicsD
 	const c::CharString pushName = c::CharString_createRefCStrConst("pushed");
 
 	c::DescriptorBinding push = {
-		.registerType = c::ESHRegisterType_Sampler,
+		.registerType = c::EGfxRegisterType_Sampler,
 		.count = 1,
 		.binding = { .space = 0, .binding = 0 },
 		.visibility = c::U32_MAX
@@ -367,7 +367,7 @@ extern "C" void Test_graphicsBindfulPushClass(oxc::c::Test *t, oxc::c::GraphicsD
 
 	//A texture push builds, which is what the device's own copy layout depends on
 
-	push.registerType = c::ESHRegisterType_Texture2D;
+	push.registerType = c::EGfxRegisterType_Texture2D;
 
 	c::DescriptorLayoutInfo texInfo{};
 	texInfo.flags = c::EDescriptorLayoutFlags_HasPushDescriptors;
@@ -378,7 +378,7 @@ extern "C" void Test_graphicsBindfulPushClass(oxc::c::Test *t, oxc::c::GraphicsD
 
 	//As does the buffer class the recorder can actually emit
 
-	push.registerType = (c::ESHRegisterType) (c::ESHRegisterType_ByteAddressBuffer | c::ESHRegisterType_IsWrite);
+	push.registerType = (c::EGfxRegisterType) (c::EGfxRegisterType_ByteAddressBuffer | c::EGfxRegisterType_IsWrite);
 
 	c::DescriptorLayoutInfo bufInfo{};
 	bufInfo.flags = c::EDescriptorLayoutFlags_HasPushDescriptors;

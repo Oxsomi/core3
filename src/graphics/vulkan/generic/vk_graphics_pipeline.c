@@ -358,7 +358,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		// a file holding several graphics stages compiles them into one shared module, while the oiSH records the
 		// HLSL name either way; the module is the only place that knows which name each stage really binds.
 
-		const Buffer stageSpirv = buf->binaries[ESHBinaryType_SPIRV];
+		const Buffer stageSpirv = buf->binaries[EGfxBinaryType_SPIRV];
 		const C8 *entryPoint = VkGraphicsPipeline_spirvEntrypoint(stageSpirv, entry->name, executionModel);
 
 		VkShaderModule module = NULL;

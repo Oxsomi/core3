@@ -80,7 +80,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	}
 
 	gotoIfError3(clean, createShaderModule(
-		buf->binaries[ESHBinaryType_SPIRV],
+		buf->binaries[EGfxBinaryType_SPIRV],
 		&shaderModule,
 		deviceExt,
 		instanceExt,

@@ -23,6 +23,10 @@
 #include "graphics/generic/pipeline_serialize.h"
 #include "types/math/type_cast.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
+#include "graphics/generic/descriptor_layout.h"
+#include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/sampler.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/container/string.h"
 #include "types/base/buffer_base.h"
@@ -255,6 +259,7 @@ Bool Pipeline_toSPFile(
 
 	Bool s_uccess = true;
 	U32 derivedId = U32_MAX;
+	ListCharString runtimeNames = (ListCharString) { 0 };
 
 	if(!pipelineRef || !files || !spFile)
 		retError(clean, Error_nullPointer(0, "Pipeline_toSPFile()::pipelineRef, files and spFile are required"));
@@ -278,8 +283,10 @@ Bool Pipeline_toSPFile(
 		};
 	}
 
+	gotoIfError3(clean, GraphicsDeviceRef_runtimeRegisterNames(pipeline->device, &runtimeNames, alloc, e_rr));
+
 	gotoIfError3(clean, SPFile_derivePipeline(
-		spFile, files, shaderNames, name, stages, (U8) pipeline->stages.length, alloc, &derivedId, e_rr
+		spFile, files, shaderNames, name, stages, (U8) pipeline->stages.length, &runtimeNames, alloc, &derivedId, e_rr
 	));
 
 	//Deriving fills in what reflection proves and assumes the rest; recording the info the pipeline was really
@@ -309,6 +316,8 @@ Bool Pipeline_toSPFile(
 		*pipelineId = derivedId;
 
 clean:
+
+	ListCharString_free(&runtimeNames, alloc);
 	return s_uccess;
 }
 
@@ -365,6 +374,200 @@ clean:
 	return s_uccess;
 }
 
+//An unbounded array (count 0) is refused rather than guessed: its real capacity is a heap decision the file
+// can't make, so the caller has to supply the count first.
+
+Bool PLFile_createPipelineLayout(
+	GraphicsDeviceRef *deviceRef,
+	const PLFile *plFile,
+	const Allocator *alloc,
+	PipelineLayoutRef **layoutRef,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	DescriptorLayoutInfo info = (DescriptorLayoutInfo) { 0 };
+	ListDescriptorBinding bindings = (ListDescriptorBinding) { 0 };
+	ListCharString bindingNames = (ListCharString) { 0 };
+	DescriptorLayoutRef *descRef = NULL;
+	SamplerRef *sampler = NULL;
+
+	if(!deviceRef || !plFile || !layoutRef)
+		retError(clean, Error_nullPointer(0, "PLFile_createPipelineLayout()::deviceRef, plFile and layoutRef required"));
+
+	*layoutRef = NULL;
+
+	//The device consumes its own numbering: SPIRV pairs on Vulkan, DXIL pairs on D3D12
+
+	const Bool isDxil =
+		GraphicsInstanceRef_ptr(GraphicsDeviceRef_ptr(deviceRef)->instance)->api == EGraphicsApi_Direct3D12;
+
+	if (plFile->bindings.length) {
+
+		for (U64 i = 0; i < plFile->bindings.length; ++i) {
+
+			const PLDescriptorBinding row = plFile->bindings.ptr[i];
+			const EGfxRegisterType classType = (EGfxRegisterType)(row.registerType & EGfxRegisterType_TypeMask);
+
+			if(!row.count)
+				retError(clean, Error_invalidState(
+					0, "PLFile_createPipelineLayout() an unbounded array needs a supplied layout.binding.count"
+				));
+
+			const GfxBinding pair = row.bindings.arr[isDxil ? EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV];
+
+			if(pair.space == U32_MAX && pair.binding == U32_MAX)
+				retError(clean, Error_invalidState(
+					0, "PLFile_createPipelineLayout() a binding doesn't exist for the device's own binary type"
+				));
+
+			DescriptorBinding binding = (DescriptorBinding) {
+				.registerType = (EGfxRegisterType) row.registerType,
+				.count = row.count,
+				.binding = pair,
+				.visibility = row.visibility
+			};
+
+			switch (classType) {
+
+				case EGfxRegisterType_ConstantBuffer:
+					binding.constantBufferSize = row.strideOrLength;
+					break;
+
+				case EGfxRegisterType_StructuredBuffer:
+				case EGfxRegisterType_StructuredBufferAtomic:
+				case EGfxRegisterType_StorageBuffer:
+				case EGfxRegisterType_StorageBufferAtomic:
+					binding.structedBufferStride = row.strideOrLength;
+					break;
+
+				case EGfxRegisterType_Sampler:
+				case EGfxRegisterType_SamplerComparisonState:
+
+					if (row.samplerId) {
+
+						if(row.samplerId - 1 >= plFile->samplers.length)
+							retError(clean, Error_outOfBounds(
+								0, row.samplerId - 1, plFile->samplers.length,
+								"PLFile_createPipelineLayout() sampler row references a sampler the file hasn't got"
+							));
+
+						const CharString samplerName = CharString_createRefCStrConst("oiPL baked sampler");
+
+						gotoIfError3(clean, GraphicsDeviceRef_createSampler(
+							deviceRef, plFile->samplers.ptr[row.samplerId - 1], true, NULL, &samplerName, &sampler, e_rr
+						));
+
+						U32 immutableId = 0;
+
+						gotoIfError3(clean, DescriptorLayoutInfo_addImmutableSampler(
+							&info, sampler, &immutableId, alloc, e_rr
+						));
+
+						RefPtr_dec(&sampler);
+						binding.immutableSamplerId = immutableId;
+					}
+
+					break;
+
+				default:
+
+					if(row.registerType & EGfxRegisterType_IsWrite && classType >= EGfxRegisterType_TextureStart)
+						binding.textureFormat = row.texture;
+
+					break;
+			}
+
+			CharString rowName = CharString_createNull();
+			const U32 rowNameId = PLDescriptorBinding_name(row);
+
+			if(rowNameId != PLDescriptorBinding_NAME_NONE && rowNameId < plFile->names.entryStrings.length)
+				rowName = CharString_createRefStrConst(plFile->names.entryStrings.ptr[rowNameId]);
+
+			gotoIfError3(clean, ListDescriptorBinding_pushBack(&bindings, binding, alloc, e_rr));
+			gotoIfError3(clean, ListCharString_pushBack(&bindingNames, rowName, alloc, e_rr));
+		}
+
+		info.flags = (EDescriptorLayoutFlags) 0;
+		info.bindings = bindings;
+		info.bindingNames = bindingNames;
+		bindings = (ListDescriptorBinding) { 0 };
+		bindingNames = (ListCharString) { 0 };
+
+		const CharString descName = CharString_createRefCStrConst("oiPL descriptor layout");
+		gotoIfError3(clean, GraphicsDeviceRef_createDescriptorLayout(deviceRef, &info, &descName, &descRef, e_rr));
+	}
+
+	PipelineLayoutInfo pipelineLayout = (PipelineLayoutInfo) {
+		.bindings = descRef
+	};
+
+	if (plFile->hasPushConstant) {
+
+		//The root signature binds the constants at this exact register, so a D3D12 device can't guess it
+
+		if(isDxil && plFile->pushConstant.bindings.arrU64[EGfxBinaryType_DXIL] == U64_MAX)
+			retError(clean, Error_invalidState(
+				0, "PLFile_createPipelineLayout() the push constants carry no DXIL b register for this device"
+			));
+
+		pipelineLayout.pushConstants = (DescriptorBinding) {
+			.registerType = EGfxRegisterType_PushConstants,
+			.count = 1,
+			.binding = plFile->pushConstant.bindings.arr[isDxil ? EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV],
+			.visibility = plFile->pushConstant.visibility,
+			.constantBufferSize = plFile->pushConstant.strideOrLength
+		};
+	}
+
+	const CharString layoutName = CharString_createRefCStrConst("oiPL pipeline layout");
+	gotoIfError3(clean, GraphicsDeviceRef_createPipelineLayout(deviceRef, &pipelineLayout, &layoutName, layoutRef, e_rr));
+
+clean:
+
+	//createDescriptorLayout zeroes info once it owns it, so this only frees what never made it in
+
+	DescriptorLayoutInfo_free(&info, alloc);
+	ListDescriptorBinding_free(&bindings, alloc);
+	ListCharString_free(&bindingNames, alloc);
+	RefPtr_dec(&sampler);
+	RefPtr_dec(&descRef);
+	return s_uccess;
+}
+
+Bool SPFile_createPipelineLayout(
+	GraphicsDeviceRef *deviceRef,
+	const SPFile *spFile,
+	U32 pipelineId,
+	const Allocator *alloc,
+	PipelineLayoutRef **layoutRef,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!deviceRef || !spFile || !layoutRef)
+		retError(clean, Error_nullPointer(0, "SPFile_createPipelineLayout()::deviceRef, spFile and layoutRef required"));
+
+	if(pipelineId >= spFile->pipelines.length)
+		retError(clean, Error_outOfBounds(
+			2, pipelineId, spFile->pipelines.length, "SPFile_createPipelineLayout()::pipelineId invalid"
+		));
+
+	*layoutRef = NULL;
+
+	const SPPipelineBase base = spFile->pipelines.ptr[pipelineId];
+
+	if(base.layoutIndex != U32_MAX)
+		gotoIfError3(clean, PLFile_createPipelineLayout(
+			deviceRef, &spFile->layouts.ptr[base.layoutIndex], alloc, layoutRef, e_rr
+		));
+
+clean:
+	return s_uccess;
+}
+
 Bool GraphicsDeviceRef_createPipelineFromSPFile(
 	GraphicsDeviceRef *deviceRef,
 	const SPFile *spFile,
@@ -380,6 +583,7 @@ Bool GraphicsDeviceRef_createPipelineFromSPFile(
 	Bool s_uccess = true;
 	ListPipelineStage stageList = (ListPipelineStage) { 0 };
 	ListPipelineRaytracingGroup groupList = (ListPipelineRaytracingGroup) { 0 };
+	PipelineLayoutRef *ownedLayout = NULL;
 
 	if(!deviceRef || !spFile || !files || !pipelineRef)
 		retError(clean, Error_nullPointer(0, "createPipelineFromSPFile()::deviceRef, spFile, files and out are required"));
@@ -417,6 +621,13 @@ Bool GraphicsDeviceRef_createPipelineFromSPFile(
 	}
 
 	CharString name = base.name != U32_MAX ? spFile->names.entryStrings.ptr[base.name] : CharString_createNull();
+
+	//A caller supplied layout wins; otherwise the file's own is created, and NULL still means the device default
+
+	if(!layout && base.layoutIndex != U32_MAX) {
+		gotoIfError3(clean, SPFile_createPipelineLayout(deviceRef, spFile, pipelineId, alloc, &ownedLayout, e_rr));
+		layout = ownedLayout;
+	}
 
 	switch (base.type) {
 
@@ -457,10 +668,10 @@ Bool GraphicsDeviceRef_createPipelineFromSPFile(
 
 			for (U8 i = 0; i < base.stageCount; ++i)
 				switch (spFile->stages.ptr[base.stageStart + i].stage) {
-					case ESHPipelineStage_ClosestHitExt:    closestHit = i;    break;
-					case ESHPipelineStage_AnyHitExt:        anyHit = i;        break;
-					case ESHPipelineStage_IntersectionExt:  intersection = i;  break;
-					default:                                                   break;
+					case EGfxPipelineStage_ClosestHitExt:    closestHit = i;    break;
+					case EGfxPipelineStage_AnyHitExt:        anyHit = i;        break;
+					case EGfxPipelineStage_IntersectionExt:  intersection = i;  break;
+					default:                                                    break;
 				}
 
 			if (closestHit != U32_MAX || anyHit != U32_MAX || intersection != U32_MAX) {
@@ -487,6 +698,8 @@ Bool GraphicsDeviceRef_createPipelineFromSPFile(
 	}
 
 clean:
+
+	RefPtr_dec(&ownedLayout);
 
 	//Both create calls move their lists, so anything left here is only from a path that never reached them.
 

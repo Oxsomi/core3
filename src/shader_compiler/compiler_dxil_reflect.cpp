@@ -525,12 +525,12 @@ Bool Compiler_convertRegisterDXIL(
 	Bool s_uccess = true;
 	CharString name = CharString_createRefCStrConst(input->Name);
 
-	SHBindings bindings;
+	GfxBindings bindings;
 
-	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
-		bindings.arr[i] = SHBinding{ .space = U32_MAX, .binding = U32_MAX };
+	for(U8 i = 0; i < EGfxBinaryType_Count; ++i)
+		bindings.arr[i] = GfxBinding{ .space = U32_MAX, .binding = U32_MAX };
 
-	bindings.arr[ESHBinaryType_DXIL] = SHBinding{ .space = input->Space, .binding = input->BindPoint };
+	bindings.arr[EGfxBinaryType_DXIL] = GfxBinding{ .space = input->Space, .binding = input->BindPoint };
 
 	ListU32 arrays{};
 
@@ -544,13 +544,13 @@ Bool Compiler_convertRegisterDXIL(
 		input->Dimension >= D3D_SRV_DIMENSION_TEXTURE1D &&
 		input->Dimension <= D3D_SRV_DIMENSION_TEXTURECUBEARRAY;
 
-	ESHTexturePrimitive prim = ESHTexturePrimitive_Count;
+	EGfxTexturePrimitive prim = EGfxTexturePrimitive_Count;
 	ESHTextureType registerType = ESHTextureType_Count;
 	Bool isArray = false;
 	Bool emptyBuffer = false;
 	SBFile sbFile = SBFile{};
 
-	U8 isUsedFlag = (!(input->uFlags & D3D_SIF_UNUSED)) << ESHBinaryType_DXIL;
+	U8 isUsedFlag = (!(input->uFlags & D3D_SIF_UNUSED)) << EGfxBinaryType_DXIL;
 
 	if(input->Type == D3D_SIT_CBUFFER) {
 
@@ -580,17 +580,17 @@ Bool Compiler_convertRegisterDXIL(
 
 		switch (input->ReturnType) {
 
-			case D3D_RETURN_TYPE_UNORM:  prim = ESHTexturePrimitive_UNorm;  break;
-			case D3D_RETURN_TYPE_SNORM:  prim = ESHTexturePrimitive_SNorm;  break;
-			case D3D_RETURN_TYPE_UINT:   prim = ESHTexturePrimitive_UInt;   break;
-			case D3D_RETURN_TYPE_SINT:   prim = ESHTexturePrimitive_SInt;   break;
-			case D3D_RETURN_TYPE_FLOAT:  prim = ESHTexturePrimitive_Float;  break;
+			case D3D_RETURN_TYPE_UNORM:  prim = EGfxTexturePrimitive_UNorm;  break;
+			case D3D_RETURN_TYPE_SNORM:  prim = EGfxTexturePrimitive_SNorm;  break;
+			case D3D_RETURN_TYPE_UINT:   prim = EGfxTexturePrimitive_UInt;   break;
+			case D3D_RETURN_TYPE_SINT:   prim = EGfxTexturePrimitive_SInt;   break;
+			case D3D_RETURN_TYPE_FLOAT:  prim = EGfxTexturePrimitive_Float;  break;
 
 			default:
 				retError(clean, Error_invalidState(0, "Compiler_convertRegisterDXIL()::input returnType unsupported"));
 		}
 
-		prim = (ESHTexturePrimitive)(prim | (((input->uFlags >> 2) & 3) << 4));
+		prim = (EGfxTexturePrimitive)(prim | (((input->uFlags >> 2) & 3) << 4));
 
 		if(input->NumSamples && input->NumSamples != U32_MAX)
 			retError(clean, Error_invalidState(0, "Compiler_convertRegisterDXIL() num samples must be U32_MAX or 0"));

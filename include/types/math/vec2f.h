@@ -75,14 +75,14 @@ static inline void F32x2_setRefY(F32x2 *a, F32 v) { if (a) a->v[1] = v; }
 static inline void F32x2_setRef(F32x2 *a, U8 i, F32 v) {
 	switch (i) {
 		case 0:        F32x2_setRefX(a, v);    break;
-		default:    F32x2_setRefY(a, v);    break;
+		default:       F32x2_setRefY(a, v);    break;
 	}
 }
 
 static inline F32 F32x2_get(F32x2 a, U8 i) {
 	switch (i) {
 		case 0:        return F32x2_x(a);
-		default:    return F32x2_y(a);
+		default:       return F32x2_y(a);
 	}
 }
 

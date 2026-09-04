@@ -146,7 +146,7 @@ static inline Buffer Buffer_createVirtualRefConst(U64 length) {
 //Bit manipulation
 
 Bool Buffer_memcpy(const Buffer dst, const Buffer src);            //Copies bytes from two separate ranges
-Bool Buffer_memmove(const Buffer dst, const Buffer src);        //Copies bytes from two overlapping ranges
+Bool Buffer_memmove(const Buffer dst, const Buffer src);           //Copies bytes from two overlapping ranges
 
 Bool Buffer_setAllToU8(const Buffer buf, U8 b8, Error *e_rr);
 void Buffer_clearAllSecure(Buffer buf);                            //Clear all without allowing optimization (sensitive data)

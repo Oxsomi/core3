@@ -55,7 +55,7 @@ Bool compileInlineShaders(
 	const Allocator *alloc,
 	const C8 *const *srcs,
 	U64 count,
-	U8 mode,                //ESHBinaryType
+	U8 mode,                //EGfxBinaryType
 	U64 threadCount,
 	const C8 *namePrefix,   //Names each shader "<prefix>N.hlsl" so logs/errors are identifiable
 	Bool enableLogging,
@@ -85,7 +85,7 @@ Bool compileInlineShaders(
 Bool compileFileShader(
 	const Allocator *alloc,
 	const C8 *path,
-	U8 mode,                //ESHBinaryType
+	U8 mode,                //EGfxBinaryType
 	Bool enableLogging,
 	Bool keepRegisters,
 	ListBuffer *out,

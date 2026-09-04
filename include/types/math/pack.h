@@ -87,7 +87,7 @@ static inline Bool U64_setPacked20x3u4(U64 *packed, U8 off, U32 v) {
 
 	off *= 20;
 	*packed &= ~((U64)((1 << 20) - 1) << off);        //Reset bits
-	*packed |= (U64)v << off;                        //Set bits
+	*packed |= (U64)v << off;                         //Set bits
 	return true;
 }
 
@@ -98,7 +98,7 @@ static inline Bool U64_setPacked21x3(U64 *packed, U8 off, U32 v) {
 
 	off *= 21;
 	*packed &= ~((U64)((1 << 21) - 1) << off);        //Reset bits
-	*packed |= (U64)v << off;                        //Set bits
+	*packed |= (U64)v << off;                         //Set bits
 	return true;
 }
 

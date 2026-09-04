@@ -107,7 +107,7 @@ static inline I32x4 I32x4_lshElements(I32x4 a, U8 elements) {
 		case 1:        return vextq_s32(I32x4_zero(), a, 3);
 		case 2:        return vextq_s32(I32x4_zero(), a, 2);
 		case 3:        return vextq_s32(I32x4_zero(), a, 1);
-		default:    return I32x4_zero();
+		default:       return I32x4_zero();
 	}
 }
 
@@ -117,7 +117,7 @@ static inline I32x4 I32x4_rshElements(I32x4 a, U8 elements) {
 		case 1:        return vextq_s32(a, I32x4_zero(), 1);
 		case 2:        return vextq_s32(a, I32x4_zero(), 2);
 		case 3:        return vextq_s32(a, I32x4_zero(), 3);
-		default:    return I32x4_zero();
+		default:       return I32x4_zero();
 	}
 }
 

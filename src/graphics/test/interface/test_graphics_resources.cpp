@@ -348,7 +348,7 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	//PushConstants is the portable register type, since DXIL additionally accepts a constant buffer
 
 	c::PipelineLayoutInfo pc{};
-	pc.pushConstants.registerType = c::ESHRegisterType_PushConstants;
+	pc.pushConstants.registerType = c::EGfxRegisterType_PushConstants;
 	pc.pushConstants.count = 1;
 	pc.pushConstants.constantBufferSize = 16;
 	pc.pushConstants.visibility = c::U32_MAX;
@@ -387,7 +387,7 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	Test_assert(t, "pcTwoRanges", !dev.createPipelineLayout(bad, "Test pipeline layout", layout, nullptr));
 
 	bad = pc;
-	bad.pushConstants.registerType = c::ESHRegisterType_Sampler;
+	bad.pushConstants.registerType = c::EGfxRegisterType_Sampler;
 	Test_assert(t, "pcWrongType", !dev.createPipelineLayout(bad, "Test pipeline layout", layout, nullptr));
 
 	Test_assert(t, "rejectedNothing", !badLayout && !layout);
@@ -399,7 +399,7 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	//Space 3 keeps the constant buffer clear of the default layouts on both apis.
 
 	c::DescriptorBinding cbv{};
-	cbv.registerType = c::ESHRegisterType_ConstantBuffer;
+	cbv.registerType = c::EGfxRegisterType_ConstantBuffer;
 	cbv.count = 1;
 	cbv.binding.space = 3;
 	cbv.binding.binding = 0;
@@ -416,11 +416,11 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	(void) c::ListCharString_createRefConst(&cbvName, 1, &pushInfo.bindingNames, nullptr);
 
 	c::DescriptorBinding bab{};
-	bab.registerType = c::ESHRegisterType_ByteAddressBuffer;
+	bab.registerType = c::EGfxRegisterType_ByteAddressBuffer;
 	bab.count = 1;
 	bab.binding.space = 0;
 	bab.binding.binding = 0;
-	bab.visibility = 1 << c::ESHPipelineStage_Compute;
+	bab.visibility = 1 << c::EGfxPipelineStage_Compute;
 
 	c::CharString babName = name("testPlainBuffer");
 

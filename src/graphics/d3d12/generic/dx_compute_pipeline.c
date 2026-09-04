@@ -47,7 +47,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	ListU16 tmp = (ListU16) { 0 };
-	Buffer dxil = binary->binaries[ESHBinaryType_DXIL];
+	Buffer dxil = binary->binaries[EGfxBinaryType_DXIL];
 
 	//TODO: Push constants
 

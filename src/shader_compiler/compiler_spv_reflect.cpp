@@ -564,12 +564,12 @@ Bool Compiler_convertRegisterSPIRV(
 		"Compiler_convertRegisterSPIRV() expected SpvReflectBlockVariable to be made of 43 U64s + 2x U32 and be aligned"
 	);
 
-	SHBindings bindings;
+	GfxBindings bindings;
 
-	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
-		bindings.arr[i] = SHBinding{ .space = U32_MAX, .binding = U32_MAX };
+	for(U8 i = 0; i < EGfxBinaryType_Count; ++i)
+		bindings.arr[i] = GfxBinding{ .space = U32_MAX, .binding = U32_MAX };
 
-	bindings.arr[ESHBinaryType_SPIRV] = SHBinding{ .space = binding->set, .binding = binding->binding };
+	bindings.arr[EGfxBinaryType_SPIRV] = GfxBinding{ .space = binding->set, .binding = binding->binding };
 
 	if(expectedSet != binding->set)
 		retError(clean, Error_invalidState(1, "Compiler_convertRegisterSPIRV() binding->set != parent->set"));
@@ -785,7 +785,7 @@ Bool Compiler_convertRegisterSPIRV(
 				registers,
 				ESHBufferType_ConstantBuffer,
 				false,
-				(U8)((!isUnused) << ESHBinaryType_SPIRV),
+				(U8)((!isUnused) << EGfxBinaryType_SPIRV),
 				&name,
 				NULL,
 				&sbFile,
@@ -810,7 +810,7 @@ Bool Compiler_convertRegisterSPIRV(
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addSampler(
 				registers,
-				(U8)((!isUnused) << ESHBinaryType_SPIRV),
+				(U8)((!isUnused) << EGfxBinaryType_SPIRV),
 				false,
 				&name,
 				arrays.length ? &arrays : NULL,
@@ -905,8 +905,8 @@ Bool Compiler_convertRegisterSPIRV(
 					type,
 					isArray,
 					false,
-					(U8)((!isUnused) << ESHBinaryType_SPIRV),
-					ESHTexturePrimitive_Count,
+					(U8)((!isUnused) << EGfxBinaryType_SPIRV),
+					EGfxTexturePrimitive_Count,
 					&name,
 					arrays.length ? &arrays : NULL,
 					bindings,
@@ -973,8 +973,8 @@ Bool Compiler_convertRegisterSPIRV(
 					registers,
 					type,
 					isArray,
-					(U8)((!isUnused) << ESHBinaryType_SPIRV),
-					ESHTexturePrimitive_Count,
+					(U8)((!isUnused) << EGfxBinaryType_SPIRV),
+					EGfxTexturePrimitive_Count,
 					formatId,
 					&name,
 					arrays.ptr ? &arrays : NULL,
@@ -1017,7 +1017,7 @@ Bool Compiler_convertRegisterSPIRV(
 				registers,
 				bufferType,
 				isWrite,
-				(U8)((!isUnused) << ESHBinaryType_SPIRV),
+				(U8)((!isUnused) << EGfxBinaryType_SPIRV),
 				&name,
 				arrays.length ? &arrays : NULL,
 				hasSBFile ? &sbFile : NULL,
@@ -1043,7 +1043,7 @@ Bool Compiler_convertRegisterSPIRV(
 				registers,
 				ESHBufferType_AccelerationStructure,
 				false,
-				(U8)((!isUnused) << ESHBinaryType_SPIRV),
+				(U8)((!isUnused) << EGfxBinaryType_SPIRV),
 				&name,
 				arrays.length ? &arrays : NULL,
 				NULL,
@@ -1074,7 +1074,7 @@ Bool Compiler_convertRegisterSPIRV(
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addSubpassInput(
 				registers,
-				(U8)((!isUnused) << ESHBinaryType_SPIRV),
+				(U8)((!isUnused) << EGfxBinaryType_SPIRV),
 				&name,
 				bindings,
 				(U16) binding->input_attachment_index,

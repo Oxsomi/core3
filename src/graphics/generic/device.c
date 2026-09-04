@@ -674,34 +674,34 @@ static DescriptorHeapInfo GraphicsDevice_heapForLayout(const DescriptorLayoutInf
 	for (U64 i = 0; i < layout->bindings.length; ++i) {
 
 		const DescriptorBinding b = layout->bindings.ptr[i];
-		const ESHRegisterType type = (ESHRegisterType)(b.registerType & ESHRegisterType_TypeMask);
-		const Bool isWrite = (b.registerType & ESHRegisterType_IsWrite) != 0;
+		const EGfxRegisterType type = (EGfxRegisterType)(b.registerType & EGfxRegisterType_TypeMask);
+		const Bool isWrite = (b.registerType & EGfxRegisterType_IsWrite) != 0;
 
 		switch (type) {
 
-			case ESHRegisterType_Sampler:
-			case ESHRegisterType_SamplerComparisonState:
+			case EGfxRegisterType_Sampler:
+			case EGfxRegisterType_SamplerComparisonState:
 				heapInfo.maxSamplers = (U16) U64_min(U16_MAX, (U64) heapInfo.maxSamplers + b.count);
 				break;
 
-			case ESHRegisterType_AccelerationStructure:
+			case EGfxRegisterType_AccelerationStructure:
 				heapInfo.maxAccelerationStructures =
 					(U16) U64_min(U16_MAX, (U64) heapInfo.maxAccelerationStructures + b.count);
 				break;
 
-			case ESHRegisterType_SubpassInput:
+			case EGfxRegisterType_SubpassInput:
 				heapInfo.maxInputAttachments = (U16) U64_min(U16_MAX, (U64) heapInfo.maxInputAttachments + b.count);
 				break;
 
-			case ESHRegisterType_ConstantBuffer:
+			case EGfxRegisterType_ConstantBuffer:
 				heapInfo.maxConstantBuffers += b.count;
 				break;
 
 			default:
 
-				if (type >= ESHRegisterType_TextureStart && type <= ESHRegisterType_TextureEnd) {
+				if (type >= EGfxRegisterType_TextureStart && type <= EGfxRegisterType_TextureEnd) {
 
-					if (b.registerType & ESHRegisterType_IsCombinedSampler)
+					if (b.registerType & EGfxRegisterType_IsCombinedSampler)
 						heapInfo.maxCombinedSamplers =
 							(U16) U64_min(U16_MAX, (U64) heapInfo.maxCombinedSamplers + b.count);
 
@@ -713,7 +713,7 @@ static DescriptorHeapInfo GraphicsDevice_heapForLayout(const DescriptorLayoutInf
 
 				//Every remaining buffer kind, readable or writable, comes out of the same pool
 
-				else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_AccelerationStructure)
+				else if (type >= EGfxRegisterType_BufferStart && type < EGfxRegisterType_AccelerationStructure)
 					heapInfo.maxBuffersRW += b.count;
 
 				break;
@@ -725,7 +725,7 @@ static DescriptorHeapInfo GraphicsDevice_heapForLayout(const DescriptorLayoutInf
 
 Bool GraphicsDevice_defaultBindlessLayout(
 	const GraphicsDeviceInfo *info,
-	ESHBinaryType binaryType,
+	EGfxBinaryType binaryType,
 	EGraphicsDeviceFlags flags,
 	DescriptorLayoutInfo *result,
 	const Allocator *alloc,
@@ -751,17 +751,17 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			2, 0, "GraphicsDevice_defaultBindlessLayout()::result wasn't empty, probably indicates memleak"
 		));
 
-	//Only the two binary types that exist today have binding numbers here, and ESHBinaryType already reserves
+	//Only the two binary types that exist today have binding numbers here, and EGfxBinaryType already reserves
 	// AIR and WGSL, so anything else is refused rather than quietly handed DXIL's registers.
 	//That is the whole reason this takes the enum instead of a bool: a third backend would have silently
 	// inherited whichever branch the bool fell through to.
 
-	if(binaryType != ESHBinaryType_SPIRV && binaryType != ESHBinaryType_DXIL)
+	if(binaryType != EGfxBinaryType_SPIRV && binaryType != EGfxBinaryType_DXIL)
 		retError(clean, Error_unsupportedOperation(
 			0, "GraphicsDevice_defaultBindlessLayout() has no default layout for this binary type"
 		));
 
-	const Bool isSpirv = binaryType == ESHBinaryType_SPIRV;
+	const Bool isSpirv = binaryType == EGfxBinaryType_SPIRV;
 
 	//These names are string literals, so the refs to them stay valid for as long as the process does.
 
@@ -783,118 +783,118 @@ Bool GraphicsDevice_defaultBindlessLayout(
 
 	DescriptorBinding bindings[13] = {
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Sampler,
+			.registerType = EGfxRegisterType_Sampler,
 			.count = EDescriptorTypeCount_Sampler,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 0 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 0 : EDescriptorTypeOffset_Sampler
 			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture2D,
+			.registerType = EGfxRegisterType_Texture2D,
 			.count = EDescriptorTypeCount_Texture2D,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 0 : EDescriptorTypeOffset_Texture2D
 			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_TextureCube,
+			.registerType = EGfxRegisterType_TextureCube,
 			.count = EDescriptorTypeCount_TextureCube,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 1 : EDescriptorTypeOffset_TextureCube
 			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture3D,
+			.registerType = EGfxRegisterType_Texture3D,
 			.count = EDescriptorTypeCount_Texture3D,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 2 : EDescriptorTypeOffset_Texture3D
 			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_ByteAddressBuffer,
+			.registerType = EGfxRegisterType_ByteAddressBuffer,
 			.count = EDescriptorTypeCount_Buffer,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 3 : EDescriptorTypeOffset_Buffer
 			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
+			.registerType = EGfxRegisterType_ByteAddressBuffer | EGfxRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWBuffer,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 4 : EDescriptorTypeOffset_RWBuffer
 			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
+			.registerType = EGfxRegisterType_Texture3D | EGfxRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3D,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 5 : EDescriptorTypeOffset_RWTexture3D
 			},
 			.visibility = U32_MAX,
-			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_Float }
+			.textureFormat = (GfxTextureFormat) { .primitive = EGfxTexturePrimitive_Float }
 		},
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
+			.registerType = EGfxRegisterType_Texture3D | EGfxRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Di,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 6 : EDescriptorTypeOffset_RWTexture3Di
 			},
 			.visibility = U32_MAX,
-			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_SInt }
+			.textureFormat = (GfxTextureFormat) { .primitive = EGfxTexturePrimitive_SInt }
 		},
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
+			.registerType = EGfxRegisterType_Texture3D | EGfxRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Du,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 7 : EDescriptorTypeOffset_RWTexture3Du
 			},
 			.visibility = U32_MAX,
-			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_UInt }
+			.textureFormat = (GfxTextureFormat) { .primitive = EGfxTexturePrimitive_UInt }
 		},
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
+			.registerType = EGfxRegisterType_Texture2D | EGfxRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2D,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 8 : EDescriptorTypeOffset_RWTexture2D
 			},
 			.visibility = U32_MAX,
-			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_UNorm }
+			.textureFormat = (GfxTextureFormat) { .primitive = EGfxTexturePrimitive_UNorm }
 		},
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
+			.registerType = EGfxRegisterType_Texture2D | EGfxRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Di,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 9 : EDescriptorTypeOffset_RWTexture2Di
 			},
 			.visibility = U32_MAX,
-			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_SInt }
+			.textureFormat = (GfxTextureFormat) { .primitive = EGfxTexturePrimitive_SInt }
 		},
 		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
+			.registerType = EGfxRegisterType_Texture2D | EGfxRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Du,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 10 : EDescriptorTypeOffset_RWTexture2Du
 			},
 			.visibility = U32_MAX,
-			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_UInt }
+			.textureFormat = (GfxTextureFormat) { .primitive = EGfxTexturePrimitive_UInt }
 		}
 	};
 
@@ -918,9 +918,9 @@ Bool GraphicsDevice_defaultBindlessLayout(
 
 	if(info->capabilities.features & EGraphicsFeatures_Raytracing)
 		bindings[descBindings++] = (DescriptorBinding) {
-			.registerType = ESHRegisterType_AccelerationStructure,
+			.registerType = EGfxRegisterType_AccelerationStructure,
 			.count = EDescriptorTypeCount_TLASExt,
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 1 : OXC3_RESERVED_SPACE,
 				.binding = isSpirv ? 11 : EDescriptorTypeOffset_TLASExt
 			},
@@ -1112,10 +1112,10 @@ Bool GraphicsDeviceRef_create(
 		//Either way the device copies it, since the layout has to outlive whatever the caller passed in.
 
 		CharString name = CharString_createRefCStrConst("Default descriptor layout");
-		const ESHBinaryType binaryType =
-			instance->api == EGraphicsApi_Direct3D12 ? ESHBinaryType_DXIL : ESHBinaryType_SPIRV;
+		const EGfxBinaryType binaryType =
+			instance->api == EGraphicsApi_Direct3D12 ? EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
 
-		const Bool isSpirv = binaryType == ESHBinaryType_SPIRV;
+		const Bool isSpirv = binaryType == EGfxBinaryType_SPIRV;
 
 		if (bindlessLayout) {
 
@@ -1222,12 +1222,12 @@ Bool GraphicsDeviceRef_create(
 		};
 
 		DescriptorBinding cbv = (DescriptorBinding) {
-			.registerType = ESHRegisterType_ConstantBuffer,
+			.registerType = EGfxRegisterType_ConstantBuffer,
 			.count = 1,
 			//Vulkan keeps it in its own set; DXIL uses the reserved space so a custom layout's b0 can't land
 			// on top of it
 
-			.binding = (SHBinding) {
+			.binding = (GfxBinding) {
 				.space = isSpirv ? 2 : OXC3_RESERVED_SPACE,
 				.binding = 0
 			},
@@ -1305,30 +1305,30 @@ clean:
 
 //Only used to name a register in an error, so the base type plus the RW prefix is as much detail as is useful.
 
-static const C8 *getRegisterTypeName(ESHRegisterType type) {
+static const C8 *getRegisterTypeName(EGfxRegisterType type) {
 
-	const Bool isWrite = !!(type & ESHRegisterType_IsWrite);
+	const Bool isWrite = !!(type & EGfxRegisterType_IsWrite);
 
-	switch (type & ESHRegisterType_TypeMask) {
+	switch (type & EGfxRegisterType_TypeMask) {
 
-		case ESHRegisterType_Sampler:                   return "SamplerState";
-		case ESHRegisterType_SamplerComparisonState:    return "SamplerComparisonState";
-		case ESHRegisterType_ConstantBuffer:            return "ConstantBuffer";
-		case ESHRegisterType_PushConstants:             return "PushConstants";
-		case ESHRegisterType_AccelerationStructure:     return "RaytracingAccelerationStructure";
-		case ESHRegisterType_SubpassInput:              return "SubpassInput";
+		case EGfxRegisterType_Sampler:                   return "SamplerState";
+		case EGfxRegisterType_SamplerComparisonState:    return "SamplerComparisonState";
+		case EGfxRegisterType_ConstantBuffer:            return "ConstantBuffer";
+		case EGfxRegisterType_PushConstants:             return "PushConstants";
+		case EGfxRegisterType_AccelerationStructure:     return "RaytracingAccelerationStructure";
+		case EGfxRegisterType_SubpassInput:              return "SubpassInput";
 
-		case ESHRegisterType_ByteAddressBuffer:         return isWrite ? "RWByteAddressBuffer" : "ByteAddressBuffer";
-		case ESHRegisterType_StructuredBuffer:          return isWrite ? "RWStructuredBuffer" : "StructuredBuffer";
-		case ESHRegisterType_StructuredBufferAtomic:    return "Append/ConsumeBuffer";
-		case ESHRegisterType_StorageBuffer:             return isWrite ? "RWStorageBuffer" : "StorageBuffer";
-		case ESHRegisterType_StorageBufferAtomic:       return isWrite ? "RWStorageBufferAtomic" : "StorageBufferAtomic";
+		case EGfxRegisterType_ByteAddressBuffer:         return isWrite ? "RWByteAddressBuffer" : "ByteAddressBuffer";
+		case EGfxRegisterType_StructuredBuffer:          return isWrite ? "RWStructuredBuffer" : "StructuredBuffer";
+		case EGfxRegisterType_StructuredBufferAtomic:    return "Append/ConsumeBuffer";
+		case EGfxRegisterType_StorageBuffer:             return isWrite ? "RWStorageBuffer" : "StorageBuffer";
+		case EGfxRegisterType_StorageBufferAtomic:       return isWrite ? "RWStorageBufferAtomic" : "StorageBufferAtomic";
 
-		case ESHRegisterType_Texture1D:                 return isWrite ? "RWTexture1D" : "Texture1D";
-		case ESHRegisterType_Texture2D:                 return isWrite ? "RWTexture2D" : "Texture2D";
-		case ESHRegisterType_Texture3D:                 return isWrite ? "RWTexture3D" : "Texture3D";
-		case ESHRegisterType_TextureCube:               return isWrite ? "RWTextureCube" : "TextureCube";
-		case ESHRegisterType_Texture2DMS:               return isWrite ? "RWTexture2DMS" : "Texture2DMS";
+		case EGfxRegisterType_Texture1D:                 return isWrite ? "RWTexture1D" : "Texture1D";
+		case EGfxRegisterType_Texture2D:                 return isWrite ? "RWTexture2D" : "Texture2D";
+		case EGfxRegisterType_Texture3D:                 return isWrite ? "RWTexture3D" : "Texture3D";
+		case EGfxRegisterType_TextureCube:               return isWrite ? "RWTextureCube" : "TextureCube";
+		case EGfxRegisterType_Texture2DMS:               return isWrite ? "RWTexture2DMS" : "Texture2DMS";
 
 		default:                                        return "Unknown";
 	}
@@ -1346,7 +1346,7 @@ static const C8 *getRegisterTypeName(ESHRegisterType type) {
 // so it only requires the slot to be an array at all.
 
 static Bool GraphicsDevice_checkShaderBindless(
-	const GraphicsDevice *device, const SHBinaryInfo *bin, ESHBinaryType binaryType, Error *e_rr
+	const GraphicsDevice *device, const SHBinaryInfo *bin, EGfxBinaryType binaryType, Error *e_rr
 ) {
 
 	Bool s_uccess = true;
@@ -1357,7 +1357,7 @@ static Bool GraphicsDevice_checkShaderBindless(
 	for (U64 i = 0; i < bin->registers.length; ++i) {
 
 		const SHRegisterRuntime *reg = &bin->registers.ptr[i];
-		const SHBinding *regBinding = &reg->reg.bindings.arr[binaryType];
+		const GfxBinding *regBinding = &reg->reg.bindings.arr[binaryType];
 
 		//U32_MAX for both space and binding means the register isn't present in this binary type at all.
 
@@ -1366,7 +1366,7 @@ static Bool GraphicsDevice_checkShaderBindless(
 
 		//Push constants are a pipeline layout concept, they never resolve through a descriptor table.
 
-		if((reg->reg.registerType & ESHRegisterType_TypeMask) == ESHRegisterType_PushConstants)
+		if((reg->reg.registerType & EGfxRegisterType_TypeMask) == EGfxRegisterType_PushConstants)
 			continue;
 
 		U32 count = 1;
@@ -1406,7 +1406,7 @@ static Bool GraphicsDevice_checkShaderBindless(
 
 		const DescriptorLayoutInfo *info = &layout->info;
 
-		const U32 typeMask = ~(U32) ESHRegisterType_IsCombinedSampler;
+		const U32 typeMask = ~(U32) EGfxRegisterType_IsCombinedSampler;
 		const U32 regType = (U32) reg->reg.registerType & typeMask;
 
 		U64 match = U64_MAX;
@@ -1567,9 +1567,9 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	if(entry->waveSize >> 4)                                featuresDx |= EDxGraphicsFeatures_WaveSizeMinMax;
 	else if(entry->waveSize)                                featuresDx |= EDxGraphicsFeatures_WaveSize;
 
-	const ESHBinaryType binaryType =
+	const EGfxBinaryType binaryType =
 		GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_Direct3D12 ?
-		ESHBinaryType_DXIL : ESHBinaryType_SPIRV;
+		EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
 
 	//Bindless is the one feature a caller can take away from a device that has it,
 	// so it says as much instead of leaving it to the generic message below.
@@ -1601,18 +1601,18 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	//Check for D3D12 features, shader models and DXIL
 
-	if(binaryType == ESHBinaryType_DXIL) {
+	if(binaryType == EGfxBinaryType_DXIL) {
 
 		if((device->info.capabilities.featuresExt & (U32)featuresDx) != (U32)featuresDx)
 			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the featuresDx is missing"));
 
-		if(!Buffer_length(bin->binaries[ESHBinaryType_DXIL]))
+		if(!Buffer_length(bin->binaries[EGfxBinaryType_DXIL]))
 			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() DXIL binary is missing"));
 	}
 
 	//Check for SPIRV
 
-	else if(!Buffer_length(bin->binaries[ESHBinaryType_SPIRV]))
+	else if(!Buffer_length(bin->binaries[EGfxBinaryType_SPIRV]))
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() SPIRV binary is missing"));
 
 	//A sampler ARRAY only resolves against the bindless _samplers[] binding, which the device only declares
@@ -1632,10 +1632,10 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 			for (U64 i = 0; i < descLayout->info.bindings.length && !anySamplerArray; ++i) {
 
 				const DescriptorBinding b = descLayout->info.bindings.ptr[i];
-				const ESHRegisterType type = (ESHRegisterType)(b.registerType & ESHRegisterType_TypeMask);
+				const EGfxRegisterType type = (EGfxRegisterType)(b.registerType & EGfxRegisterType_TypeMask);
 
 				anySamplerArray =
-					(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState) &&
+					(type == EGfxRegisterType_Sampler || type == EGfxRegisterType_SamplerComparisonState) &&
 					b.count > 1;
 			}
 		}

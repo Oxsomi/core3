@@ -43,33 +43,33 @@ void VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, const Allocat
 			deviceExt->destroyDescriptorSetLayout(deviceExt->device, layoutExt->layouts[i], NULL);
 }
 
-VkDescriptorType vkGetDescriptorType(ESHRegisterType regType) {
+VkDescriptorType vkGetDescriptorType(EGfxRegisterType regType) {
 
-	switch (regType & ESHRegisterType_TypeMask) {
+	switch (regType & EGfxRegisterType_TypeMask) {
 
-		case ESHRegisterType_Sampler:
-		case ESHRegisterType_SamplerComparisonState:
-			return regType & ESHRegisterType_IsCombinedSampler ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER :
+		case EGfxRegisterType_Sampler:
+		case EGfxRegisterType_SamplerComparisonState:
+			return regType & EGfxRegisterType_IsCombinedSampler ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER :
 				VK_DESCRIPTOR_TYPE_SAMPLER;
 
-		case ESHRegisterType_ByteAddressBuffer:
-		case ESHRegisterType_StructuredBuffer:
-		case ESHRegisterType_StructuredBufferAtomic:
-		case ESHRegisterType_StorageBuffer:
-		case ESHRegisterType_StorageBufferAtomic:
+		case EGfxRegisterType_ByteAddressBuffer:
+		case EGfxRegisterType_StructuredBuffer:
+		case EGfxRegisterType_StructuredBufferAtomic:
+		case EGfxRegisterType_StorageBuffer:
+		case EGfxRegisterType_StorageBufferAtomic:
 			return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
-		case ESHRegisterType_ConstantBuffer:            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		case ESHRegisterType_AccelerationStructure:     return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-		case ESHRegisterType_SubpassInput:              return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		case EGfxRegisterType_ConstantBuffer:            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		case EGfxRegisterType_AccelerationStructure:     return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+		case EGfxRegisterType_SubpassInput:              return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
 
 		default:
-		case ESHRegisterType_Texture1D:
-		case ESHRegisterType_Texture2D:
-		case ESHRegisterType_Texture3D:
-		case ESHRegisterType_TextureCube:
-		case ESHRegisterType_Texture2DMS:
-			return regType & ESHRegisterType_IsWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		case EGfxRegisterType_Texture1D:
+		case EGfxRegisterType_Texture2D:
+		case EGfxRegisterType_Texture3D:
+		case EGfxRegisterType_TextureCube:
+		case EGfxRegisterType_Texture2DMS:
+			return regType & EGfxRegisterType_IsWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	}
 }
 
@@ -77,46 +77,46 @@ VkShaderStageFlags vkGetShaderStages(U32 vis) {
 
 	VkShaderStageFlags stageFlags = 0;
 
-	if((vis >> ESHPipelineStage_Vertex) & 1)
+	if((vis >> EGfxPipelineStage_Vertex) & 1)
 		stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
 
-	if((vis >> ESHPipelineStage_Pixel) & 1)
+	if((vis >> EGfxPipelineStage_Pixel) & 1)
 		stageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	if((vis >> ESHPipelineStage_Compute) & 1)
+	if((vis >> EGfxPipelineStage_Compute) & 1)
 		stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
 
-	if((vis >> ESHPipelineStage_GeometryExt) & 1)
+	if((vis >> EGfxPipelineStage_GeometryExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
 
-	if((vis >> ESHPipelineStage_Hull) & 1)
+	if((vis >> EGfxPipelineStage_Hull) & 1)
 		stageFlags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
 
-	if((vis >> ESHPipelineStage_Domain) & 1)
+	if((vis >> EGfxPipelineStage_Domain) & 1)
 		stageFlags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 
-	if((vis >> ESHPipelineStage_RaygenExt) & 1)
+	if((vis >> EGfxPipelineStage_RaygenExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_CallableExt) & 1)
+	if((vis >> EGfxPipelineStage_CallableExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_CALLABLE_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_MissExt) & 1)
+	if((vis >> EGfxPipelineStage_MissExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_MISS_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_ClosestHitExt) & 1)
+	if((vis >> EGfxPipelineStage_ClosestHitExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_AnyHitExt) & 1)
+	if((vis >> EGfxPipelineStage_AnyHitExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_IntersectionExt) & 1)
+	if((vis >> EGfxPipelineStage_IntersectionExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_MeshExt) & 1)
+	if((vis >> EGfxPipelineStage_MeshExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_MESH_BIT_EXT;
 
-	if((vis >> ESHPipelineStage_TaskExt) & 1)
+	if((vis >> EGfxPipelineStage_TaskExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_TASK_BIT_EXT;
 
 	return stageFlags;

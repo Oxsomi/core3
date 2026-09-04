@@ -276,10 +276,10 @@ static inline void MD5State_update(MD5State *stateOut, const Buffer buf) {
 			U32 e;
 
 			switch (j) {
-				case 0:        e = (b & c) | ((~b) & d);    break;
-				case 1:        e = (b & d) | ((~d) & c);    break;
+				case 0:        e = (b & c) | ((~b) & d);     break;
+				case 1:        e = (b & d) | ((~d) & c);     break;
 				case 2:        e = b ^ c ^ d;                break;
-				default:    e = c ^ (b | (~d));            break;
+				default:       e = c ^ (b | (~d));           break;
 			}
 
 			a = a + e + f;

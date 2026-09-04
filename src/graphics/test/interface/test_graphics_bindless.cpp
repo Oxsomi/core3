@@ -90,7 +90,7 @@ extern "C" void Test_graphicsBindlessDescriptor(oxc::c::Test *t, oxc::c::Graphic
 	//NULL as the table means the device's default one.
 
 	Test_assert(t, "allocate", c::GraphicsDeviceRef_allocateDescriptorBindless(
-		deviceRef, NULL, c::ESHRegisterType_ByteAddressBuffer, 0, false, &desc, &handle, &t->err
+		deviceRef, NULL, c::EGfxRegisterType_ByteAddressBuffer, 0, false, &desc, &handle, &t->err
 	));
 
 	Test_assert(t, "handleNotNone", handle != c::BindlessDescriptor_None);
@@ -105,13 +105,13 @@ extern "C" void Test_graphicsBindlessDescriptor(oxc::c::Test *t, oxc::c::Graphic
 	//Allocation validation; a descriptor is required and so is somewhere to put the handle.
 
 	Test_assert(t, "allocateNoDevice", !c::GraphicsDeviceRef_allocateDescriptorBindless(
-		NULL, NULL, c::ESHRegisterType_ByteAddressBuffer, 0, false, &desc, &handle, NULL
+		NULL, NULL, c::EGfxRegisterType_ByteAddressBuffer, 0, false, &desc, &handle, NULL
 	));
 
 	c::BindlessDescriptor unused = c::BindlessDescriptor_None;
 
 	Test_assert(t, "allocateNoDescriptor", !c::GraphicsDeviceRef_allocateDescriptorBindless(
-		deviceRef, NULL, c::ESHRegisterType_ByteAddressBuffer, 0, false, NULL, &unused, NULL
+		deviceRef, NULL, c::EGfxRegisterType_ByteAddressBuffer, 0, false, NULL, &unused, NULL
 	));
 
 	Test_assert(t, "allocateNothingLeaked", unused == c::BindlessDescriptor_None);
@@ -123,7 +123,7 @@ extern "C" void Test_graphicsBindlessDescriptor(oxc::c::Test *t, oxc::c::Graphic
 	c::BindlessDescriptor reused = c::BindlessDescriptor_None;
 
 	Test_assert(t, "reallocate", c::GraphicsDeviceRef_allocateDescriptorBindless(
-		deviceRef, NULL, c::ESHRegisterType_ByteAddressBuffer, 0, false, &desc, &reused, &t->err
+		deviceRef, NULL, c::EGfxRegisterType_ByteAddressBuffer, 0, false, &desc, &reused, &t->err
 	));
 
 	Test_assert(t, "slotReused", reused == handle);

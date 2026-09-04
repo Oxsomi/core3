@@ -564,7 +564,7 @@ clean:
 	//Compiles the stand-ins to an oiSH entirely in memory, so nothing is written next to the user's files.
 
 	static Bool CLI_isaCompileStandIns(
-		const SHEntry *vsTarget, const SHEntry *psSource, ESHBinaryType binaryType,
+		const SHEntry *vsTarget, const SHEntry *psSource, EGfxBinaryType binaryType,
 		SHFile *out, const Allocator *alloc, Error *e_rr
 	) {
 
@@ -707,6 +707,17 @@ clean:
 			else if(isF32 && CharString_parseFloat(valueStr, &f))
 				value = U32_fromF32Bits(f);
 
+			//The sampler lod fields store F16 bits in the low half, so a float literal converts down
+
+			else if (
+				(
+					field == ESPField_LayoutSamplerMipBias || field == ESPField_LayoutSamplerMinLod ||
+					field == ESPField_LayoutSamplerMaxLod
+				) &&
+				CharString_parseFloat(valueStr, &f)
+			)
+				value = (U32) EFloatType_convert(EFloatType_F32, U32_fromF32Bits(f), EFloatType_F16);
+
 			else if(CharString_parseU64(valueStr, &parsed) && !(parsed >> 32))
 				value = (U32) parsed;
 
@@ -757,6 +768,35 @@ clean:
 			gotoIfError3(clean, SPFile_supply(spFile, pipelineId, (ESPField) spec.field, spec.index, spec.value, e_rr));
 		}
 
+		//A stored layout replaces the derived one wholesale, since structure can't travel as field supplies.
+		//Every copied row counts as supplied: the caller chose this layout, whatever produced it originally.
+		//The derived layout stays in the list unreferenced, which costs bytes and nothing else.
+
+		if (src.layoutIndex != U32_MAX) {
+
+			PLFile copied = (PLFile) { 0 };
+			gotoIfError3(clean, PLFile_copy(&stored.layouts.ptr[src.layoutIndex], alloc, &copied, e_rr));
+
+			for(U64 i = 0; i < copied.bindings.length; ++i)
+				copied.bindings.ptrNonConst[i].name24_source8 = PLDescriptorBinding_pack(
+					PLDescriptorBinding_name(copied.bindings.ptr[i]), EPLSource_Supplied
+				);
+
+			copied.pushConstant.name24_source8 = PLDescriptorBinding_pack(
+				PLDescriptorBinding_name(copied.pushConstant), EPLSource_Supplied
+			);
+
+			const U32 copiedAt = (U32) spFile->layouts.length;
+
+			if (!ListPLFile_pushBack(&spFile->layouts, copied, alloc, e_rr)) {
+				PLFile_free(&copied, alloc);
+				s_uccess = false;
+				goto clean;
+			}
+
+			spFile->pipelines.ptrNonConst[pipelineId].layoutIndex = copiedAt;
+		}
+
 	clean:
 		SPFile_free(&stored, alloc);
 		RefPtr_dec(&stream);
@@ -785,7 +825,7 @@ clean:
 		if(binaryId >= shFile->binaries.length)
 			return CharString_createNull();
 
-		const Buffer spirv = shFile->binaries.ptr[binaryId].binaries[ESHBinaryType_SPIRV];
+		const Buffer spirv = shFile->binaries.ptr[binaryId].binaries[EGfxBinaryType_SPIRV];
 
 		if(!Buffer_length(spirv))
 			return CharString_createNull();
@@ -794,7 +834,7 @@ clean:
 		Error epErr = Error_none();
 		Bool found = false;
 
-		if(Compiler_getUniqueEntrypoints(NULL, ESHBinaryType_SPIRV, spirv, true, &eps, alloc, &epErr))
+		if(Compiler_getUniqueEntrypoints(NULL, EGfxBinaryType_SPIRV, spirv, true, &eps, alloc, &epErr))
 			for(U64 i = 0; i < eps.length && !found; ++i)
 				found = CharString_equalsStringSensitive(&eps.ptr[i].name, &recorded);
 
@@ -803,7 +843,7 @@ clean:
 	}
 
 	static Bool CLI_isaDisassembleLive(
-		SHFile shFile, ESHBinaryType binaryType, U64 deviceId, Bool hasOutput, CharString outputStr,
+		SHFile shFile, EGfxBinaryType binaryType, U64 deviceId, Bool hasOutput, CharString outputStr,
 		const RefPtrType *fileHandleType, Bool assumeDefaults,
 		Bool hasPipelineOutput, CharString pipelineOutputStr, CharString psoSet, CharString psoInput,
 		CharString shaderName,
@@ -821,6 +861,8 @@ clean:
 		CharString text = CharString_createNull();
 		CharString stageLine = CharString_createNull();
 		SPFile spFile = (SPFile) { 0 };
+		PipelineLayoutRef *pipelineLayout = NULL;
+		ListCharString runtimeNames = (ListCharString) { 0 };
 		StreamRef *pipelineStream = NULL;
 		const RefPtrType memStreamType = MemoryStream_makeType(alloc);
 		U32 pipelineId = U32_MAX;
@@ -840,13 +882,13 @@ clean:
 		//SPIR-V is compiled by Vulkan and DXIL by D3D12, so the binary the oiSH holds picks the backend.
 		//Everything below is the generic graphics interface, so only this choice differs between them.
 
-		const EGraphicsApi api = binaryType == ESHBinaryType_DXIL ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan;
+		const EGraphicsApi api = binaryType == EGfxBinaryType_DXIL ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan;
 		const C8 *apiName = EGraphicsApi_name[api];
 
 		if (!GraphicsInterface_supportsApi(api)) {
 
 			Log_errorLnx("%s isn't available on this machine, which is what %s binaries are compiled by.", apiName,
-				ESHBinaryType_names[binaryType]);
+				EGfxBinaryType_names[binaryType]);
 
 			retError(clean, Error_unsupportedOperation(0, "CLI_isaDisassembleLive() the required graphics API is unavailable"));
 		}
@@ -902,9 +944,9 @@ clean:
 				"disassembling it.", apiName
 			);
 
-		//A NULL layout takes the device's default bindless layout (@resources.hlsli), which is what OxC3 compiles
-		// shaders against, so the pipeline is valid as-is; a per-shader detected layout would instead omit the bindless
-		// set and fail validation, so NULL is the correct choice here.
+		//The device is created with its default bindless layout (@resources.hlsli), which is what OxC3 compiles
+		// shaders against; a shader declaring registers of its own additionally gets the pipeline layout its oiSP
+		// derivation describes, while one declaring nothing custom keeps NULL, meaning that same default.
 
 		const CharString pName = CharString_createRefCStrConst("isa live pipeline");
 
@@ -930,16 +972,16 @@ clean:
 
 			const U8 stage = shFile.entries.ptr[i].stage;
 
-			if(stage == ESHPipelineStage_Compute)
+			if(stage == EGfxPipelineStage_Compute)
 				++kindCounts[0];
 
 			else if(
-				stage == ESHPipelineStage_Vertex || stage == ESHPipelineStage_Pixel || stage == ESHPipelineStage_Hull ||
-				stage == ESHPipelineStage_Domain || stage == ESHPipelineStage_GeometryExt
+				stage == EGfxPipelineStage_Vertex || stage == EGfxPipelineStage_Pixel || stage == EGfxPipelineStage_Hull ||
+				stage == EGfxPipelineStage_Domain || stage == EGfxPipelineStage_GeometryExt
 			)
 				++kindCounts[1];
 
-			else if(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt)
+			else if(stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt)
 				++kindCounts[2];
 		}
 
@@ -969,16 +1011,16 @@ clean:
 			U64 *slot = NULL;
 
 			switch (stage) {
-				case ESHPipelineStage_Compute:      if(chosenKind == 0) slot = &computeE;  break;
-				case ESHPipelineStage_Vertex:       if(chosenKind == 1) slot = &vertexE;   break;
-				case ESHPipelineStage_Pixel:        if(chosenKind == 1) slot = &pixelE;    break;
-				case ESHPipelineStage_Hull:         if(chosenKind == 1) slot = &hullE;     break;
-				case ESHPipelineStage_Domain:       if(chosenKind == 1) slot = &domainE;   break;
-				case ESHPipelineStage_GeometryExt:  if(chosenKind == 1) slot = &geomE;     break;
-				default:                                                                   break;
+				case EGfxPipelineStage_Compute:      if(chosenKind == 0) slot = &computeE;  break;
+				case EGfxPipelineStage_Vertex:       if(chosenKind == 1) slot = &vertexE;   break;
+				case EGfxPipelineStage_Pixel:        if(chosenKind == 1) slot = &pixelE;    break;
+				case EGfxPipelineStage_Hull:         if(chosenKind == 1) slot = &hullE;     break;
+				case EGfxPipelineStage_Domain:       if(chosenKind == 1) slot = &domainE;   break;
+				case EGfxPipelineStage_GeometryExt:  if(chosenKind == 1) slot = &geomE;     break;
+				default:                                                                    break;
 			}
 
-			const Bool isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
+			const Bool isRt = stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt;
 
 			if (slot) {
 
@@ -1012,8 +1054,13 @@ clean:
 		ListCharString shaderNames = (ListCharString) { 0 };
 		gotoIfError3(clean, ListCharString_createRefConst(&shaderName, 1, &shaderNames, e_rr));
 
+		//The runtime's own registers belong to the device's layout, so derivation must not describe them
+
+		gotoIfError3(clean, GraphicsDeviceRef_runtimeRegisterNames(deviceRef, &runtimeNames, alloc, e_rr));
+
 		gotoIfError3(clean, SPFile_derivePipeline(
-			&spFile, &fileList, &shaderNames, CharString_createNull(), stageRefs, stageRefCount, alloc, &pipelineId, e_rr
+			&spFile, &fileList, &shaderNames, CharString_createNull(), stageRefs, stageRefCount, &runtimeNames,
+			alloc, &pipelineId, e_rr
 		));
 
 		//-pso-input replays a stored pipeline's values over the derived one, so a run can be repeated or edited from
@@ -1026,6 +1073,10 @@ clean:
 
 		if(CharString_length(psoSet))
 			gotoIfError3(clean, CLI_isaApplyPipelineSet(&spFile, pipelineId, psoSet, e_rr));
+
+		//The layout the file now describes becomes a real one exactly once, after every override had its say.
+
+		gotoIfError3(clean, SPFile_createPipelineLayout(deviceRef, &spFile, pipelineId, alloc, &pipelineLayout, e_rr));
 
 		//Structural validation runs before the driver sees the pipeline, so a mismatch names itself instead of
 		// surfacing as an opaque driver error.
@@ -1104,14 +1155,14 @@ clean:
 				retError(clean, Error_invalidState(
 					0,
 					"CLI_isaDisassembleLive() no compatible binary for the compute stage (see the reason above; "
-					"a custom descriptor layout can't be supplied yet)"
+					"a shader needing its own BINDLESS layout still fails the device's feature check)"
 				));
 
 			const CharString spvEntry = CLI_isaSpirvEntry(&shFile, entry, entryName, alloc);
 
 			gotoIfError3(clean, GraphicsDeviceRef_createPipelineCompute(
 				deviceRef, &shFile, &pName, entry, CharString_length(spvEntry) ? &spvEntry : NULL,
-				EPipelineFlags_CaptureISA, NULL, &pipeline, e_rr
+				EPipelineFlags_CaptureISA, pipelineLayout, &pipeline, e_rr
 			));
 		}
 
@@ -1124,9 +1175,9 @@ clean:
 
 			const U64 chainEntry[5] = { vertexE, hullE, domainE, geomE, pixelE };
 
-			static const ESHPipelineStage chainStage[5] = {
-				ESHPipelineStage_Vertex, ESHPipelineStage_Hull, ESHPipelineStage_Domain,
-				ESHPipelineStage_GeometryExt, ESHPipelineStage_Pixel
+			static const EGfxPipelineStage chainStage[5] = {
+				EGfxPipelineStage_Vertex, EGfxPipelineStage_Hull, EGfxPipelineStage_Domain,
+				EGfxPipelineStage_GeometryExt, EGfxPipelineStage_Pixel
 			};
 
 			//Tessellation can't be expressed here yet.
@@ -1231,7 +1282,7 @@ clean:
 					retError(clean, Error_invalidState(
 						0,
 						"CLI_isaDisassembleLive() no compatible binary for a graphics stage (see the reason above; "
-						"a custom descriptor layout can't be supplied yet)"
+						"a shader needing its own BINDLESS layout still fails the device's feature check)"
 					));
 
 				stages[stageCount++] = (PipelineStage) { .binaryId = id, .shFileId = generated ? 1 : 0 };
@@ -1254,7 +1305,7 @@ clean:
 			gotoIfError3(clean, SPFile_toGraphicsInfo(&spFile, pipelineId, &info, e_rr));
 
 			gotoIfError3(clean, GraphicsDeviceRef_createPipelineGraphics(
-				deviceRef, &fileList, &stageList, &info, &pName, EPipelineFlags_CaptureISA, NULL, &pipeline, e_rr
+				deviceRef, &fileList, &stageList, &info, &pName, EPipelineFlags_CaptureISA, pipelineLayout, &pipeline, e_rr
 			));
 		}
 
@@ -1272,7 +1323,7 @@ clean:
 
 				const SHEntry *entry = &shFile.entries.ptr[i];
 
-				if(entry->stage < ESHPipelineStage_RtStartExt || entry->stage > ESHPipelineStage_RtEndExt)
+				if(entry->stage < EGfxPipelineStage_RtStartExt || entry->stage > EGfxPipelineStage_RtEndExt)
 					continue;
 
 				CharString name = entry->name;
@@ -1285,7 +1336,7 @@ clean:
 					retError(clean, Error_invalidState(
 						0,
 						"CLI_isaDisassembleLive() no compatible binary for a ray tracing stage (see the reason above; "
-						"a custom descriptor layout can't be supplied yet)"
+						"a shader needing its own BINDLESS layout still fails the device's feature check)"
 					));
 
 				//A hit shader is remembered by kind so the groups can reference its stage index.
@@ -1293,16 +1344,16 @@ clean:
 				U8 kind = 0xFF;
 
 				switch (entry->stage) {
-					case ESHPipelineStage_ClosestHitExt:    kind = 0;  break;
-					case ESHPipelineStage_AnyHitExt:        kind = 1;  break;
-					case ESHPipelineStage_IntersectionExt:  kind = 2;  break;
-					default:                                           break;
+					case EGfxPipelineStage_ClosestHitExt:    kind = 0;  break;
+					case EGfxPipelineStage_AnyHitExt:        kind = 1;  break;
+					case EGfxPipelineStage_IntersectionExt:  kind = 2;  break;
+					default:                                            break;
 				}
 
 				if(kind != 0xFF && hitCount[kind] < 8)
 					hitIndex[kind][hitCount[kind]++] = stageCount;
 
-				if(entry->stage == ESHPipelineStage_RaygenExt && !CharString_length(entryName))
+				if(entry->stage == EGfxPipelineStage_RaygenExt && !CharString_length(entryName))
 					entryName = entry->name;
 
 				stages[stageCount++] = (PipelineStage) { .binaryId = id };
@@ -1347,7 +1398,8 @@ clean:
 			};
 
 			gotoIfError3(clean, GraphicsDeviceRef_createPipelineRaytracingExt(
-				deviceRef, &stageList, &fileList, &groupList, &info, &pName, EPipelineFlags_CaptureISA, NULL, &pipeline, e_rr
+				deviceRef, &stageList, &fileList, &groupList, &info, &pName, EPipelineFlags_CaptureISA, pipelineLayout,
+				&pipeline, e_rr
 			));
 		}
 
@@ -1427,6 +1479,8 @@ clean:
 
 	clean:
 		CharString_free(&stageLine, alloc);
+		ListCharString_free(&runtimeNames, alloc);
+		RefPtr_dec(&pipelineLayout);
 		RefPtr_dec(&pipelineStream);
 		SPFile_free(&spFile, alloc);
 		SHFile_free(&standIns, alloc);
@@ -1520,32 +1574,32 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 			//-compile-output picks when the file holds both; otherwise the one that's present is used, preferring
 			// SPIR-V because it's the only one any driver disassembles today.
 
-			ESHBinaryType liveType = ESHBinaryType_Count;
+			EGfxBinaryType liveType = EGfxBinaryType_Count;
 			CharString liveMode = CharString_createNull();
 
 			if (ParsedArgs_getArg(args, EOperationHasParameter_ShaderOutputModeShift, &liveMode, NULL)) {
 
 				if(CharString_equalsCStringInsensitive(&liveMode, "DXIL"))
-					liveType = ESHBinaryType_DXIL;
+					liveType = EGfxBinaryType_DXIL;
 
 				else if(CharString_equalsCStringInsensitive(&liveMode, "SPV"))
-					liveType = ESHBinaryType_SPIRV;
+					liveType = EGfxBinaryType_SPIRV;
 
 				else retError(clean, Error_invalidParameter(
 					0, 0, "CLI_isaDisassemble() -compile-output has to be spv or dxil"
 				));
 			}
 
-			else for (U64 i = 0; i < shFile.binaries.length && liveType == ESHBinaryType_Count; ++i) {
+			else for (U64 i = 0; i < shFile.binaries.length && liveType == EGfxBinaryType_Count; ++i) {
 
-				if(Buffer_length(shFile.binaries.ptr[i].binaries[ESHBinaryType_SPIRV]))
-					liveType = ESHBinaryType_SPIRV;
+				if(Buffer_length(shFile.binaries.ptr[i].binaries[EGfxBinaryType_SPIRV]))
+					liveType = EGfxBinaryType_SPIRV;
 
-				else if(Buffer_length(shFile.binaries.ptr[i].binaries[ESHBinaryType_DXIL]))
-					liveType = ESHBinaryType_DXIL;
+				else if(Buffer_length(shFile.binaries.ptr[i].binaries[EGfxBinaryType_DXIL]))
+					liveType = EGfxBinaryType_DXIL;
 			}
 
-			if(liveType == ESHBinaryType_Count)
+			if(liveType == EGfxBinaryType_Count)
 				retError(clean, Error_notFound(0, 0, "CLI_isaDisassemble() the oiSH holds no SPIR-V or DXIL binary"));
 
 			const Bool assumeDefaults = (args->flags & EOperationFlags_AssumeDefaults) != 0;
@@ -1650,7 +1704,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 			chosen = &shFile.binaries.ptr[idx];
 
-			if(!Buffer_length(chosen->binaries[ESHBinaryType_SPIRV]))
+			if(!Buffer_length(chosen->binaries[EGfxBinaryType_SPIRV]))
 				retError(clean, Error_invalidParameter(
 					0, 1, "CLI_isaDisassemble() binary at -entry has no SPIR-V; the offline path lowers SPIR-V "
 					"only, so use '-asic live' "
@@ -1665,7 +1719,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 			U64 spvCount = 0;
 
 			for(U64 i = 0; i < shFile.binaries.length; ++i)
-				if(Buffer_length(shFile.binaries.ptr[i].binaries[ESHBinaryType_SPIRV])) {
+				if(Buffer_length(shFile.binaries.ptr[i].binaries[EGfxBinaryType_SPIRV])) {
 					chosen = &shFile.binaries.ptr[i];
 					++spvCount;
 				}
@@ -1684,7 +1738,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 				));
 		}
 
-		const Buffer spv = chosen->binaries[ESHBinaryType_SPIRV];
+		const Buffer spv = chosen->binaries[EGfxBinaryType_SPIRV];
 		spirv = Buffer_createRefConst(spv.ptr, Buffer_length(spv));
 		entrypoint = chosen->identifier.entrypoint;        //Selects this stage from a multi-entry (library) module
 	}

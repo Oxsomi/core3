@@ -32,7 +32,7 @@
 typedef struct Error Error;
 typedef struct SHFile SHFile;
 typedef struct RefPtr RefPtr;
-typedef enum ESHRegisterType ESHRegisterType;
+typedef enum EGfxRegisterType EGfxRegisterType;
 
 typedef RefPtr GraphicsDeviceRef;
 
@@ -43,8 +43,6 @@ typedef RefPtr GraphicsDeviceRef;
 //too few to hide a reservation in.
 //Keep this in sync with OXC3_RESERVED_SPACE in shader_compiler/shaders/types.hlsli; a shader compiled
 //against a different value binds somewhere this runtime doesn't look.
-
-#define OXC3_RESERVED_SPACE 0xC3
 
 //How many push descriptors one layout may hold. On D3D12 each is a root descriptor costing 2 of the root
 //signature's 64 DWORDs, and Vulkan only guarantees a maxPushDescriptors at all where the extension exists.
@@ -68,18 +66,18 @@ typedef U16 DescriptorBindingFlags;
 
 typedef struct DescriptorBinding {
 
-	ESHRegisterType registerType;
+	EGfxRegisterType registerType;
 
 	U32 count;
 
-	SHBinding binding;
+	GfxBinding binding;
 
-	U32 visibility;            //Bit mask of ESHPipelineStage
+	U32 visibility;            //Bit mask of EGfxPipelineStage
 
 	union {
 		U32 structedBufferStride;
 		U32 constantBufferSize;
-		SHTextureFormat textureFormat;
+		GfxTextureFormat textureFormat;
 
 		//Sampler bindings only: 1 + an index into DescriptorLayoutInfo::immutableSamplers, 0 for none.
 		//An immutable sampler is baked into the layout rather than bound, so it needs no heap slot and no
@@ -101,9 +99,9 @@ typedef struct DescriptorBinding {
 
 static inline U32 DescriptorBinding_immutableSamplerId(DescriptorBinding b) {
 
-	const ESHRegisterType type = (ESHRegisterType)(b.registerType & ESHRegisterType_TypeMask);
+	const EGfxRegisterType type = (EGfxRegisterType)(b.registerType & EGfxRegisterType_TypeMask);
 
-	if(type != ESHRegisterType_Sampler && type != ESHRegisterType_SamplerComparisonState)
+	if(type != EGfxRegisterType_Sampler && type != EGfxRegisterType_SamplerComparisonState)
 		return 0;
 
 	return b.immutableSamplerId;
@@ -111,10 +109,10 @@ static inline U32 DescriptorBinding_immutableSamplerId(DescriptorBinding b) {
 
 Bool DescriptorBinding_overlaps(
 	const DescriptorBinding *binding,
-	ESHRegisterType regType,
-	const SHBinding *b,
+	EGfxRegisterType regType,
+	const GfxBinding *b,
 	U32 bcount,
-	ESHBinaryType type,
+	EGfxBinaryType type,
 	Bool isPushConstant
 );
 
@@ -169,6 +167,12 @@ typedef enum EDetectDescriptorLayoutFlags {
 //rather than the caller's. Names, not spaces: the spaces differ per backend.
 
 Bool GraphicsDeviceRef_isRuntimeRegister(GraphicsDeviceRef *dev, const CharString *name);
+
+//Every runtime owned register name as refs into the device's layouts; the list is the caller's, the refs the device's.
+
+Bool GraphicsDeviceRef_runtimeRegisterNames(
+	GraphicsDeviceRef *dev, ListCharString *out, const Allocator *alloc, Error *e_rr
+);
 
 Bool GraphicsDeviceRef_detectLayoutFromEntries(
 	GraphicsDeviceRef *dev,

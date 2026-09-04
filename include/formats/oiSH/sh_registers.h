@@ -22,23 +22,12 @@
 
 #pragma once
 #include "formats/oiSB/sb_file.h"
+#include "formats/gfx_util/gfx_util.h"
 #include "types/container/texture_format.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
-
-typedef enum ESHBinaryType {
-
-	ESHBinaryType_SPIRV,
-	ESHBinaryType_DXIL,
-
-	//ESHBinaryType_AIR,
-	//ESHBinaryType_WGSL,
-
-	ESHBinaryType_Count
-
-} ESHBinaryType;
 
 typedef enum ESHBufferType {
 	ESHBufferType_ConstantBuffer,                   //UBO or CBuffer
@@ -61,110 +50,24 @@ typedef enum ESHTextureType {
 	ESHTextureType_Count
 } ESHTextureType;
 
-typedef enum ESHTexturePrimitive {
+extern const C8 *EGfxTexturePrimitive_name[EGfxTexturePrimitive_CountAll];
 
-	ESHTexturePrimitive_UInt,
-	ESHTexturePrimitive_SInt,
-	ESHTexturePrimitive_UNorm,
-	ESHTexturePrimitive_SNorm,
-	ESHTexturePrimitive_Float,
-	ESHTexturePrimitive_Double,
-	ESHTexturePrimitive_Count,
-
-	ESHTexturePrimitive_TypeMask          = 0x0F,
-
-	ESHTexturePrimitive_ComponentShift    = 4,
-
-	ESHTexturePrimitive_Component1        = 0x00,        //R
-	ESHTexturePrimitive_Component2        = 0x10,        //RG
-	ESHTexturePrimitive_Component3        = 0x20,        //RGB
-	ESHTexturePrimitive_Component4        = 0x30,        //RGBA
-
-	ESHTexturePrimitive_CountAll          = 0x40,
-
-	ESHTexturePrimitive_Unused            = 0xC0
-
-} ESHTexturePrimitive;
-
-extern const C8 *ESHTexturePrimitive_name[ESHTexturePrimitive_CountAll];
-
-ESHTexturePrimitive ESHTexturePrimitive_fromTextureFormat(ETextureFormat format);
-
-typedef struct SHBinding {
-	U32 space;                        //Space or set, depending on binary type
-	U32 binding;
-} SHBinding;
-
-//U32_MAX for both space and binding indicates 'not present'
-typedef union SHBindings {
-	U64 arrU64[ESHBinaryType_Count];
-	SHBinding arr[ESHBinaryType_Count];
-} SHBindings;
-
-SHBindings SHBindings_dummy();
-
-typedef struct SHTextureFormat {      //Primitive is set for DXIL always and formatId is only for SPIRV (only when RW)
-	U8 primitive;                     //Opt for readonly registers: ESHTexturePrimitive must match format approximately
-	U8 formatId;                      //Opt for write registers: ETextureFormatId Must match formatPrimitive and uncompressed
-} SHTextureFormat;
-
-typedef enum ESHRegisterType {
-
-	ESHRegisterType_Sampler,
-	ESHRegisterType_SamplerComparisonState,
-
-	ESHRegisterType_ConstantBuffer,                    //UBO or CBuffer
-	ESHRegisterType_PushConstants,                     //Push constants or CBuffer (DXIL)
-	ESHRegisterType_ByteAddressBuffer,
-	ESHRegisterType_StructuredBuffer,
-	ESHRegisterType_StructuredBufferAtomic,            //SBuffer + atomic counter
-	ESHRegisterType_StorageBuffer,
-	ESHRegisterType_StorageBufferAtomic,
-	ESHRegisterType_AccelerationStructure,
-
-	ESHRegisterType_Texture1D,
-	ESHRegisterType_Texture2D,
-	ESHRegisterType_Texture3D,
-	ESHRegisterType_TextureCube,
-	ESHRegisterType_Texture2DMS,
-	ESHRegisterType_SubpassInput,
-
-	ESHRegisterType_Count,
-
-	ESHRegisterType_BufferStart            = ESHRegisterType_ConstantBuffer,
-	ESHRegisterType_BufferEnd              = ESHRegisterType_AccelerationStructure,
-
-	ESHRegisterType_TextureStart           = ESHRegisterType_Texture1D,
-	ESHRegisterType_TextureEnd             = ESHRegisterType_SubpassInput, //>= to see if real texture, > means 'texture'-like
-
-	ESHRegisterType_TypeMask               = 0xF,
-	ESHRegisterType_IsArray                = 1 << 4,    //Only valid on textures
-	ESHRegisterType_IsCombinedSampler      = 1 << 5,    //Only valid on textures
-
-	//Invalid on samplers, AS and CBuffer
-	//Required on append/consume buffer
-	//Valid on everything else (textures and various buffers)
-	ESHRegisterType_IsWrite                = 1 << 6,
-
-	ESHRegisterType_Masks                  =
-		ESHRegisterType_IsArray | ESHRegisterType_IsCombinedSampler | ESHRegisterType_IsWrite
-
-} ESHRegisterType;
+EGfxTexturePrimitive EGfxTexturePrimitive_fromTextureFormat(ETextureFormat format);
 
 typedef U8 SHRegisterType;
 
 typedef struct SHRegister {            //Treated as U64[N + 1]
 
-	SHBindings bindings;               //Treated as U64[N]
+	GfxBindings bindings;               //Treated as U64[N]
 
 	SHRegisterType registerType;
-	U8 isUsedFlag;                     //Per ESHBinaryType if the register is used
+	U8 isUsedFlag;                     //Per EGfxBinaryType if the register is used
 
 	union {
 		U16 padding;                   //Used for samplers, (RW)BAB or AS (should be 0)
 		U16 shaderBufferId;            //Used only at serialization (Buffer registers only)
 		U16 inputAttachmentId;         //U16_MAX indicates "nothing", otherwise <7, only valid for SubpassInput
-		SHTextureFormat texture;       //Read/write textures
+		GfxTextureFormat texture;      //Read/write textures
 	};
 
 	U16 arrayDimOrId;                  //<= 32767 represents a 1D array with a dimension, else represents an arrayId
@@ -205,7 +108,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 	CharString *name,
 	ListU32 *arrays,
 	SBFile *sbFile,
-	SHBindings bindings,
+	GfxBindings bindings,
 	const Allocator *alloc,
 	Error *e_rr
 );
@@ -216,10 +119,10 @@ Bool ListSHRegisterRuntime_addTexture(
 	Bool isLayeredTexture,
 	Bool isCombinedSampler,
 	U8 isUsedFlag,
-	ESHTexturePrimitive textureFormatPrimitive,        //ESHTexturePrimitive_Count = none
+	EGfxTexturePrimitive textureFormatPrimitive,        //EGfxTexturePrimitive_Count = none
 	CharString *name,
 	ListU32 *arrays,
-	SHBindings bindings,
+	GfxBindings bindings,
 	const Allocator *alloc,
 	Error *e_rr
 );
@@ -229,11 +132,11 @@ Bool ListSHRegisterRuntime_addRWTexture(
 	ESHTextureType registerType,
 	Bool isLayeredTexture,
 	U8 isUsedFlag,
-	ESHTexturePrimitive textureFormatPrimitive,        //ESHTexturePrimitive_Count = auto detect from formatId
+	EGfxTexturePrimitive textureFormatPrimitive,        //EGfxTexturePrimitive_Count = auto detect from formatId
 	ETextureFormatId textureFormatId,                  //!textureFormatId = only allowed if primitive is set
 	CharString *name,
 	ListU32 *arrays,
-	SHBindings bindings,
+	GfxBindings bindings,
 	const Allocator *alloc,
 	Error *e_rr
 );
@@ -242,7 +145,7 @@ Bool ListSHRegisterRuntime_addSubpassInput(
 	ListSHRegisterRuntime *registers,
 	U8 isUsedFlag,
 	CharString *name,
-	SHBindings bindings,
+	GfxBindings bindings,
 	U16 attachmentId,
 	const Allocator *alloc,
 	Error *e_rr
@@ -254,10 +157,15 @@ Bool ListSHRegisterRuntime_addSampler(
 	Bool isSamplerComparisonState,
 	CharString *name,
 	ListU32 *arrays,
-	SHBindings bindings,
+	GfxBindings bindings,
 	const Allocator *alloc,
 	Error *e_rr
 );
+
+//The flattened descriptor count of a register's array dims: 0 for an unbounded array (any 0 dim),
+// saturating at U64_MAX so an absurd product can't wrap into a small bounded range.
+
+U64 SHRegister_arrayCount(const ListU32 *arrays);
 
 Bool ListSHRegisterRuntime_addRegister(
 	ListSHRegisterRuntime *registers,

@@ -35,7 +35,7 @@ typedef enum ECompareResult {
 
 typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr, void *context);
 typedef Bool (*EqualsFunction)(const void *aPtr, const void *bPtr);        //Passing NULL as func indicates raw buffer compare
-typedef U64 (*HashFunction)(const void *aPtr);                            //Passing NULL as func indicates raw buffer hash
+typedef U64 (*HashFunction)(const void *aPtr);                             //Passing NULL as func indicates raw buffer hash
 
 //A comparator coming from another language, whose signature mentions no struct or enum type on purpose.
 //Such a comparator is compiled in its own language, where a type like ECompareResult is only reachable under

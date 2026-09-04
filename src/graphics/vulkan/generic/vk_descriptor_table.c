@@ -86,11 +86,11 @@ void VkDescriptorTable_loseRef(DescriptorTable *table, U64 i, U64 j) {
 	DescriptorBinding layoutBind = layout->info.bindings.ptr[i];
 	DescriptorTableBinding tableBind = table->bindings.ptr[i];
 
-	ESHRegisterType type = layoutBind.registerType & ESHRegisterType_TypeMask;
+	EGfxRegisterType type = layoutBind.registerType & EGfxRegisterType_TypeMask;
 
 	//Clean up the views
 
-	if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd) {
+	if(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd) {
 
 		if(layoutBind.count > 1)
 			VkDescriptor_loseRef(tableBind.multiple.resources.ptr[j], tableBind.multiple.textures.ptr[j]);
@@ -121,18 +121,18 @@ void VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, const Allocator 
 
 		VkDescriptorTableRange *range = &tableExt->ranges.ptrNonConst[i];
 
-		ESHRegisterType type = layout->info.bindings.ptr[i].registerType & ESHRegisterType_TypeMask;
+		EGfxRegisterType type = layout->info.bindings.ptr[i].registerType & EGfxRegisterType_TypeMask;
 
-		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+		if(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd)
 			ListVkDescriptorImageInfo_free(&range->updateImages, alloc);
 
-		else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
+		else if(type >= EGfxRegisterType_BufferStart && type < EGfxRegisterType_BufferEnd)
 			ListVkDescriptorBufferInfo_free(&range->updateBuffers, alloc);
 
-		else if(type == ESHRegisterType_AccelerationStructure)
+		else if(type == EGfxRegisterType_AccelerationStructure)
 			ListVkAccelerationStructureKHR_free(&range->tlases, alloc);
 
-		else if(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState)
+		else if(type == EGfxRegisterType_Sampler || type == EGfxRegisterType_SamplerComparisonState)
 			ListVkDescriptorImageInfo_free(&range->updateImages, alloc);
 
 		for(U64 j = 0; j < range->views.length; ++j) {
@@ -188,9 +188,9 @@ Bool VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(
 
 	for (U64 i = 0; i < tableExt->ranges.length; ++i) {
 
-		ESHRegisterType type = layout->info.bindings.ptr[i].registerType & ESHRegisterType_TypeMask;
+		EGfxRegisterType type = layout->info.bindings.ptr[i].registerType & EGfxRegisterType_TypeMask;
 
-		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+		if(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd)
 			gotoIfError3(clean, ListU32_resize(
 				&tableExt->ranges.ptrNonConst[i].views,
 				layout->info.bindings.ptr[i].count,
@@ -266,11 +266,11 @@ Bool VK_WRAP_FUNC(DescriptorTable_unsetDescriptors)(
 	(void) e_rr;
 
 	DescriptorLayout *layout = DescriptorLayoutRef_ptr(table->layout);
-	ESHRegisterType type = layout->info.bindings.ptr[bindId].registerType & ESHRegisterType_TypeMask;
+	EGfxRegisterType type = layout->info.bindings.ptr[bindId].registerType & EGfxRegisterType_TypeMask;
 
 	//unsetDescriptors can free views, but only textures have views
 
-	if(!(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd))
+	if(!(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd))
 		return true;
 
 	VkDescriptorTable *tableExt = DescriptorTable_ext(table, Vk);
@@ -303,9 +303,9 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 	ListDescriptorBinding bindings = layout->info.bindings;
 	DescriptorBinding binding = bindings.ptr[bindId];
 
-	ESHRegisterType type = binding.registerType & ESHRegisterType_TypeMask;
-	Bool isWrite = binding.registerType & ESHRegisterType_IsWrite;
-	Bool isArrayType = binding.registerType & ESHRegisterType_IsArray;
+	EGfxRegisterType type = binding.registerType & EGfxRegisterType_TypeMask;
+	Bool isWrite = binding.registerType & EGfxRegisterType_IsWrite;
+	Bool isArrayType = binding.registerType & EGfxRegisterType_IsArray;
 
 	VkDescriptorSet set = NULL;
 	CharString temp = CharString_createNull();
@@ -345,7 +345,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 	switch (type) {
 
-		case ESHRegisterType_ConstantBuffer: {
+		case EGfxRegisterType_ConstantBuffer: {
 
 			if(darr->length > 1)
 				gotoIfError3(clean, ListVkDescriptorBufferInfo_resize(&range->updateBuffers, darr->length, alloc, e_rr));
@@ -376,8 +376,8 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			break;
 		}
 
-		case ESHRegisterType_Sampler:
-		case ESHRegisterType_SamplerComparisonState: {
+		case EGfxRegisterType_Sampler:
+		case EGfxRegisterType_SamplerComparisonState: {
 
 			if(darr->length > 1)
 				gotoIfError3(clean, ListVkDescriptorImageInfo_resize(&range->updateImages, darr->length, alloc, e_rr));
@@ -399,7 +399,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			break;
 		}
 
-		case ESHRegisterType_AccelerationStructure: {
+		case EGfxRegisterType_AccelerationStructure: {
 
 			if(darr->length > 1)
 				gotoIfError3(clean, ListVkAccelerationStructureKHR_resize(&range->tlases, darr->length, alloc, e_rr));
@@ -424,11 +424,11 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			break;
 		}
 
-		case ESHRegisterType_ByteAddressBuffer:
-		case ESHRegisterType_StorageBuffer:
-		case ESHRegisterType_StorageBufferAtomic:
-		case ESHRegisterType_StructuredBuffer:
-		case ESHRegisterType_StructuredBufferAtomic: {
+		case EGfxRegisterType_ByteAddressBuffer:
+		case EGfxRegisterType_StorageBuffer:
+		case EGfxRegisterType_StorageBufferAtomic:
+		case EGfxRegisterType_StructuredBuffer:
+		case EGfxRegisterType_StructuredBufferAtomic: {
 
 			if(darr->length > 1)
 				gotoIfError3(clean, ListVkDescriptorBufferInfo_resize(&range->updateBuffers, darr->length, alloc, e_rr));
@@ -464,11 +464,11 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			break;
 		}
 
-		case ESHRegisterType_Texture1D:
-		case ESHRegisterType_Texture2D:
-		case ESHRegisterType_Texture3D:
-		case ESHRegisterType_TextureCube:
-		case ESHRegisterType_Texture2DMS: {
+		case EGfxRegisterType_Texture1D:
+		case EGfxRegisterType_Texture2D:
+		case EGfxRegisterType_Texture3D:
+		case EGfxRegisterType_TextureCube:
+		case EGfxRegisterType_Texture2DMS: {
 
 			if(darr->length > 1) {
 				gotoIfError3(clean, ListVkDescriptorImageInfo_resize(&range->updateImages, darr->length, alloc, e_rr));
@@ -535,8 +535,8 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			break;
 		}
 
-		case ESHRegisterType_SubpassInput:                //Doesn't do anything
-		case ESHRegisterType_PushConstants:
+		case EGfxRegisterType_SubpassInput:                //Doesn't do anything
+		case EGfxRegisterType_PushConstants:
 		default:
 			descriptor.descriptorCount = 0;
 			break;

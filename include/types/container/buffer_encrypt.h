@@ -186,7 +186,7 @@ Bool Buffer_aesExpertCreate(
 	U64 oneTimeHint,
 
 	U8 use256Or512Override,            //Put to 0xFF to detect
-	U8 *restrict blockSizeMax,        //Outputs block size if requested
+	U8 *restrict blockSizeMax,         //Outputs block size if requested
 	U8 *restrict use256Or512,
 
 	AESEncryptionContext *restrict ctx,

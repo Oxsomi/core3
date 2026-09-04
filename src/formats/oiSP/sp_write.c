@@ -55,6 +55,9 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 	if(spFile->specializations.length >> 32)
 		retError(clean, Error_invalidOperation(0, "SPFile_write()::specializations out of bounds"));
 
+	if(spFile->layouts.length >> 32)
+		retError(clean, Error_invalidOperation(0, "SPFile_write()::layouts out of bounds"));
+
 	if((spFile->graphicsStates.length >> 32) || (spFile->raytracingStates.length >> 32))
 		retError(clean, Error_invalidOperation(0, "SPFile_write()::states out of bounds"));
 
@@ -121,8 +124,13 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 	headerSize = (headerSize + 15) & ~15;
 
 	if (!stream) {
+
 		*offset += headerSize;
 		gotoIfError3(clean, DLFile_write(&spFile->names, alloc, NULL, NULL, I32x4_zero(), offset, e_rr));
+
+		for(U64 i = 0; i < spFile->layouts.length; ++i)
+			gotoIfError3(clean, PLFile_write(&spFile->layouts.ptr[i], alloc, NULL, offset, e_rr));
+
 		goto clean;
 	}
 
@@ -141,7 +149,8 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 		.raytracingStateCount = (U32) spFile->raytracingStates.length,
 		.blendAttachmentCount = (U32) blendAttachmentCount,
 		.vertexBufferCount = (U32) vertexBufferCount,
-		.vertexAttributeCount = (U32) vertexAttributeCount
+		.vertexAttributeCount = (U32) vertexAttributeCount,
+		.layoutCount = (U32) spFile->layouts.length
 	};
 
 	if(!(spFile->flags & ESPSettingsFlags_HideMagicNumber))
@@ -220,6 +229,9 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 
 	StreamCursor_close(&cursor, alloc);
 	gotoIfError3(clean, DLFile_write(&spFile->names, alloc, streamRef, NULL, I32x4_zero(), offset, e_rr));
+
+	for(U64 i = 0; i < spFile->layouts.length; ++i)
+		gotoIfError3(clean, PLFile_write(&spFile->layouts.ptr[i], alloc, streamRef, offset, e_rr));
 
 clean:
 	StreamCursor_close(&cursor, alloc);

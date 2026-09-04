@@ -44,6 +44,7 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	ListSPRaytracingState raytracingStates = (ListSPRaytracingState) { 0 };
 	DLFile names = (DLFile) { 0 };
 	ListSPVertexLayoutStored vertexMasks = (ListSPVertexLayoutStored) { 0 };
+	ListPLFile layouts = (ListPLFile) { 0 };
 
 	if(!offset || !spFile)
 		retError(clean, Error_nullPointer(!offset ? 1 : 4, "SPFile_read()::spFile and offset are required"));
@@ -190,6 +191,11 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, false, alloc, NULL, &names, e_rr));
 	didAllocate = true;
 
+	gotoIfError3(clean, ListPLFile_resize(&layouts, header.layoutCount, alloc, e_rr));
+
+	for(U64 i = 0; i < header.layoutCount; ++i)
+		gotoIfError3(clean, PLFile_read(streamRef, offset, true, alloc, &layouts.ptrNonConst[i], e_rr));
+
 	if(
 		names.settings.dataType != EDLDataType_String ||
 		names.settings.encryptionType ||
@@ -216,7 +222,7 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		const SPStage stage = stages.ptr[i];
 
-		if(stage.stage >= ESHPipelineStage_Count)
+		if(stage.stage >= EGfxPipelineStage_Count)
 			retError(clean, Error_invalidState(0, "SPFile_read() stage had an invalid pipeline stage"));
 
 		if(stage.shaderFile != U32_MAX && stage.shaderFile >= nameCount)
@@ -285,6 +291,10 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			retError(clean, Error_invalidState(0, "SPFile_read() pipeline has no stages"));
 	}
 
+	for (U64 i = 0; i < pipelines.length; ++i)
+		if(pipelines.ptr[i].layoutIndex != U32_MAX && pipelines.ptr[i].layoutIndex >= layouts.length)
+			retError(clean, Error_invalidState(0, "SPFile_read() pipeline layoutIndex out of bounds"));
+
 	*spFile = (SPFile) {
 		.names = names,
 		.pipelines = pipelines,
@@ -292,6 +302,7 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		.specializations = specializations,
 		.graphicsStates = graphicsStates,
 		.raytracingStates = raytracingStates,
+		.layouts = layouts,
 		.flags = isSubFile ? ESPSettingsFlags_HideMagicNumber : ESPSettingsFlags_None
 	};
 
@@ -301,6 +312,7 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	specializations = (ListSPSpecialization) { 0 };
 	graphicsStates = (ListSPGraphicsState) { 0 };
 	raytracingStates = (ListSPRaytracingState) { 0 };
+	layouts = (ListPLFile) { 0 };
 
 	gotoIfError3(clean, SPFile_finalize(spFile, alloc, e_rr));
 
@@ -315,6 +327,7 @@ clean:
 	ListSPGraphicsState_free(&graphicsStates, alloc);
 	ListSPRaytracingState_free(&raytracingStates, alloc);
 	ListSPVertexLayoutStored_free(&vertexMasks, alloc);
+	ListPLFile_freeUnderlying(&layouts, alloc);
 	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
 }

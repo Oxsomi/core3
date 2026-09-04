@@ -90,7 +90,7 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		.string = CharString_createRefCStrConst(src),
 		.path = CharString_createRefCStrConst("test_reflect_sr.hlsl"),
 		.format = ECompilerFormat_HLSL,
-		.outputType = ESHBinaryType_SPIRV
+		.outputType = EGfxBinaryType_SPIRV
 	};
 
 	gotoIfError3(clean, Compiler_reflect(&comp, &settings, alloc, &reflection, e_rr));

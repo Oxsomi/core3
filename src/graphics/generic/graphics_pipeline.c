@@ -204,12 +204,12 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 	//Invalidate compute or raytracing stages
 
-	if(stageFlags & (1 << ESHPipelineStage_Compute))
+	if(stageFlags & (1 << EGfxPipelineStage_Compute))
 		retError(clean, Error_invalidOperation(
 			5, "GraphicsDeviceRef_createPipelinesGraphics()::info contains a compute stage"
 		));
 
-	if(stageFlags & (((1 << ESHPipelineStage_RtEndExt) - 1) &~ ((1 << ESHPipelineStage_RtStartExt) - 1)))
+	if(stageFlags & (((1 << EGfxPipelineStage_RtEndExt) - 1) &~ ((1 << EGfxPipelineStage_RtStartExt) - 1)))
 		retError(clean, Error_invalidOperation(6, "GraphicsDeviceRef_createPipelineGraphics()::info contains RT stage(s)"));
 
 	//Validate if stages are allowed due to GeometryShader
@@ -506,11 +506,11 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 		switch(entry->stage) {
 
-			case ESHPipelineStage_Vertex:       stage->stageType = EPipelineStage_Vertex;       break;
-			case ESHPipelineStage_Pixel:        stage->stageType = EPipelineStage_Pixel;        break;
-			case ESHPipelineStage_GeometryExt:  stage->stageType = EPipelineStage_GeometryExt;  break;
-			case ESHPipelineStage_Hull:         stage->stageType = EPipelineStage_Hull;         break;
-			case ESHPipelineStage_Domain:       stage->stageType = EPipelineStage_Domain;       break;
+			case EGfxPipelineStage_Vertex:       stage->stageType = EPipelineStage_Vertex;       break;
+			case EGfxPipelineStage_Pixel:        stage->stageType = EPipelineStage_Pixel;        break;
+			case EGfxPipelineStage_GeometryExt:  stage->stageType = EPipelineStage_GeometryExt;  break;
+			case EGfxPipelineStage_Hull:         stage->stageType = EPipelineStage_Hull;         break;
+			case EGfxPipelineStage_Domain:       stage->stageType = EPipelineStage_Domain;       break;
 
 			//TODO: Mesh and task shaders
 

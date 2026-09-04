@@ -184,7 +184,7 @@ static inline a b##_cast##a(b v) {                                  \
 		case 2:        v64 = *(const U16*) vptr;        break;      \
 		case 4:        v64 = *(const U32*) vptr;        break;      \
 		case 8:        v64 = *(const U64*) vptr;        break;      \
-		default:    v64 = *(const U8*) vptr;        break;          \
+		default:       v64 = *(const U8*) vptr;        break;          \
 	}                                                               \
 																	\
 	v64 = EFloatType_convert(EFloatType_##b, v64, EFloatType_##a);  \

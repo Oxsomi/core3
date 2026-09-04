@@ -35,7 +35,7 @@
 //The shader entries are built by hand and referenced, rather than added through SHFile_addEntrypoint, so a case can
 // describe exactly the signature it wants without satisfying every unrelated rule that adding an entrypoint enforces.
 
-static SHEntry entryOf(const C8 *name, ESHPipelineStage stage) {
+static SHEntry entryOf(const C8 *name, EGfxPipelineStage stage) {
 	SHEntry e = (SHEntry) { 0 };
 	e.name = CharString_createRefCStrConst(name);
 	e.stage = (SHPipelineStage) stage;
@@ -105,7 +105,7 @@ void Test_SPFileRoundTrip(Test *t) {
 
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
-	SHEntry entries[2] = { entryOf("mainVS", ESHPipelineStage_Vertex), entryOf("mainPS", ESHPipelineStage_Pixel) };
+	SHEntry entries[2] = { entryOf("mainVS", EGfxPipelineStage_Vertex), entryOf("mainPS", EGfxPipelineStage_Pixel) };
 	entries[0].inputs[0] = ESBType_F32x3;
 	entries[1].outputs[0] = ESBType_F32x4;
 
@@ -129,7 +129,7 @@ void Test_SPFileRoundTrip(Test *t) {
 	CharString pipeName = CharString_createRefCStrConst("opaque");
 
 	if(!Test_assert(t, "derive", SPFile_derivePipeline(
-		&sp, &files, &names, pipeName, stages, 2, t->alloc, &pipelineId, &t->err
+		&sp, &files, &names, pipeName, stages, 2, NULL, t->alloc, &pipelineId, &t->err
 	)))
 		goto clean;
 
@@ -205,10 +205,10 @@ void Test_SPFileManyPipelines(Test *t) {
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
 	SHEntry entries[4] = {
-		entryOf("mainCompute", ESHPipelineStage_Compute),
-		entryOf("mainVS", ESHPipelineStage_Vertex),
-		entryOf("mainPS", ESHPipelineStage_Pixel),
-		entryOf("mainRaygen", ESHPipelineStage_RaygenExt)
+		entryOf("mainCompute", EGfxPipelineStage_Compute),
+		entryOf("mainVS", EGfxPipelineStage_Vertex),
+		entryOf("mainPS", EGfxPipelineStage_Pixel),
+		entryOf("mainRaygen", EGfxPipelineStage_RaygenExt)
 	};
 
 	entries[2].outputs[0] = ESBType_F32x4;
@@ -231,15 +231,15 @@ void Test_SPFileManyPipelines(Test *t) {
 	CharString none = CharString_createNull();
 
 	Test_assert(t, "deriveCompute", SPFile_derivePipeline(
-		&sp, &files, NULL, none, computeStage, 1, t->alloc, &computeId, &t->err
+		&sp, &files, NULL, none, computeStage, 1, NULL, t->alloc, &computeId, &t->err
 	));
 
 	Test_assert(t, "deriveGraphics", SPFile_derivePipeline(
-		&sp, &files, NULL, none, gfxStages, 2, t->alloc, &gfxId, &t->err
+		&sp, &files, NULL, none, gfxStages, 2, NULL, t->alloc, &gfxId, &t->err
 	));
 
 	Test_assert(t, "deriveRaytracing", SPFile_derivePipeline(
-		&sp, &files, NULL, none, rtStage, 1, t->alloc, &rtId, &t->err
+		&sp, &files, NULL, none, rtStage, 1, NULL, t->alloc, &rtId, &t->err
 	));
 
 	Test_assert(t, "computeExact", SPFile_isExact(&sp, computeId));
@@ -255,7 +255,7 @@ void Test_SPFileManyPipelines(Test *t) {
 	const SPStageRef mixed[2] = { refOf(0, 0), refOf(0, 1) };
 	U32 mixedId = U32_MAX;
 
-	Test_assert(t, "mixRefused", !SPFile_derivePipeline(&sp, &files, NULL, none, mixed, 2, t->alloc, &mixedId, NULL));
+	Test_assert(t, "mixRefused", !SPFile_derivePipeline(&sp, &files, NULL, none, mixed, 2, NULL, t->alloc, &mixedId, NULL));
 
 	//A refused derive must not leave orphaned stages or specializations behind.
 
@@ -287,8 +287,8 @@ void Test_SPFileStagesAcrossFiles(Test *t) {
 
 	Test_setModule(t, "SPFile: stages can come from different shader files");
 
-	SHEntry vsEntries[1] = { entryOf("mainVS", ESHPipelineStage_Vertex) };
-	SHEntry psEntries[1] = { entryOf("mainPS", ESHPipelineStage_Pixel) };
+	SHEntry vsEntries[1] = { entryOf("mainVS", EGfxPipelineStage_Vertex) };
+	SHEntry psEntries[1] = { entryOf("mainPS", EGfxPipelineStage_Pixel) };
 	psEntries[0].outputs[0] = ESBType_F32x4;
 
 	SHFile shs[2] = { fileOf(vsEntries, 1), fileOf(psEntries, 1) };
@@ -305,7 +305,7 @@ void Test_SPFileStagesAcrossFiles(Test *t) {
 	CharString none = CharString_createNull();
 
 	if (Test_assert(t, "derive", SPFile_derivePipeline(
-		&sp, &files, NULL, none, stages, 2, t->alloc, &pipelineId, &t->err
+		&sp, &files, NULL, none, stages, 2, NULL, t->alloc, &pipelineId, &t->err
 	))) {
 		Test_assert(t, "twoStages", sp.pipelines.ptr[pipelineId].stageCount == 2);
 		Test_assert(t, "isGraphics", sp.pipelines.ptr[pipelineId].type == (U8) ESPPipelineType_Graphics);
@@ -316,7 +316,7 @@ void Test_SPFileStagesAcrossFiles(Test *t) {
 	const SPStageRef bad[1] = { refOf(2, 0) };
 	U32 badId = U32_MAX;
 
-	Test_assert(t, "badFileRefused", !SPFile_derivePipeline(&sp, &files, NULL, none, bad, 1, t->alloc, &badId, NULL));
+	Test_assert(t, "badFileRefused", !SPFile_derivePipeline(&sp, &files, NULL, none, bad, 1, NULL, t->alloc, &badId, NULL));
 
 clean:
 	SPFile_free(&sp, t->alloc);
@@ -331,7 +331,7 @@ void Test_SPFileValidate(Test *t) {
 
 	Test_setModule(t, "SPFile: validation catches state that disagrees with the shader");
 
-	SHEntry entries[2] = { entryOf("mainVS", ESHPipelineStage_Vertex), entryOf("mainPS", ESHPipelineStage_Pixel) };
+	SHEntry entries[2] = { entryOf("mainVS", EGfxPipelineStage_Vertex), entryOf("mainPS", EGfxPipelineStage_Pixel) };
 	entries[1].outputs[0] = ESBType_F32x4;
 	entries[1].outputs[1] = ESBType_F32x4;        //Writes two targets
 
@@ -350,7 +350,7 @@ void Test_SPFileValidate(Test *t) {
 	CharString none = CharString_createNull();
 
 	if (Test_assert(t, "derive", SPFile_derivePipeline(
-		&sp, &files, NULL, none, stages, 2, t->alloc, &pipelineId, &t->err
+		&sp, &files, NULL, none, stages, 2, NULL, t->alloc, &pipelineId, &t->err
 	))) {
 
 		Test_assert(t, "validateClean", SPFile_validate(&sp, pipelineId, &files, stages, t->alloc, &issues, &t->err));
@@ -389,10 +389,10 @@ void Test_SPFileReportCoversWholePipeline(Test *t) {
 	Test_setModule(t, "SPFile: supplying every reported field makes a pipeline exact");
 
 	SHEntry entries[4] = {
-		entryOf("mainVS", ESHPipelineStage_Vertex),
-		entryOf("mainHS", ESHPipelineStage_Hull),
-		entryOf("mainDS", ESHPipelineStage_Domain),
-		entryOf("mainPS", ESHPipelineStage_Pixel)
+		entryOf("mainVS", EGfxPipelineStage_Vertex),
+		entryOf("mainHS", EGfxPipelineStage_Hull),
+		entryOf("mainDS", EGfxPipelineStage_Domain),
+		entryOf("mainPS", EGfxPipelineStage_Pixel)
 	};
 
 	entries[0].inputs[0] = ESBType_F32x3;
@@ -413,7 +413,7 @@ void Test_SPFileReportCoversWholePipeline(Test *t) {
 	CharString none = CharString_createNull();
 
 	if (Test_assert(t, "derive", SPFile_derivePipeline(
-		&sp, &files, NULL, none, stages, 4, t->alloc, &pipelineId, &t->err
+		&sp, &files, NULL, none, stages, 4, NULL, t->alloc, &pipelineId, &t->err
 	))) {
 
 		//The rasterizer, stencil, sample shading and tessellation fields all have to be reported, since a caller that
@@ -462,7 +462,7 @@ void Test_SPFileSubFileAndSize(Test *t) {
 
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
-	SHEntry entries[1] = { entryOf("mainCompute", ESHPipelineStage_Compute) };
+	SHEntry entries[1] = { entryOf("mainCompute", EGfxPipelineStage_Compute) };
 	SHFile sh = fileOf(entries, 1);
 	ListSHFile files = (ListSHFile) { 0 };
 	ListSHFile_createRefConst(&sh, 1, &files, NULL);
@@ -477,7 +477,7 @@ void Test_SPFileSubFileAndSize(Test *t) {
 	const SPStageRef stages[1] = { refOf(0, 0) };
 	CharString none = CharString_createNull();
 
-	Test_assert(t, "derive", SPFile_derivePipeline(&sp, &files, NULL, none, stages, 1, t->alloc, NULL, &t->err));
+	Test_assert(t, "derive", SPFile_derivePipeline(&sp, &files, NULL, none, stages, 1, NULL, t->alloc, NULL, &t->err));
 	Test_assert(t, "finalize", SPFile_finalize(&sp, t->alloc, &t->err));
 
 	//Length-only write has to match what an actual write produces.
@@ -510,8 +510,8 @@ void Test_SPFileBlendAttachmentPacking(Test *t) {
 	Test_setModule(t, "SPFile: a blend state only stores the attachments it can reach");
 
 	SHEntry entries[2] = {
-		entryOf("mainVS", ESHPipelineStage_Vertex),
-		entryOf("mainPS", ESHPipelineStage_Pixel)
+		entryOf("mainVS", EGfxPipelineStage_Vertex),
+		entryOf("mainPS", EGfxPipelineStage_Pixel)
 	};
 
 	entries[1].outputs[0] = ESBType_F32x4;
@@ -533,7 +533,7 @@ void Test_SPFileBlendAttachmentPacking(Test *t) {
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
 	if(!Test_assert(t, "derive", SPFile_derivePipeline(
-		&sp, &files, NULL, none, stages, 2, t->alloc, &pipelineId, &t->err
+		&sp, &files, NULL, none, stages, 2, NULL, t->alloc, &pipelineId, &t->err
 	)))
 		goto clean;
 
@@ -625,8 +625,8 @@ void Test_SPFileVertexLayoutPacking(Test *t) {
 	Test_setModule(t, "SPFile: a vertex layout only stores the entries it fills in");
 
 	SHEntry entries[2] = {
-		entryOf("mainVS", ESHPipelineStage_Vertex),
-		entryOf("mainPS", ESHPipelineStage_Pixel)
+		entryOf("mainVS", EGfxPipelineStage_Vertex),
+		entryOf("mainPS", EGfxPipelineStage_Pixel)
 	};
 
 	//Location 1 stays empty, so the layout can't be stored as a prefix.
@@ -652,7 +652,7 @@ void Test_SPFileVertexLayoutPacking(Test *t) {
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
 	if(!Test_assert(t, "derive", SPFile_derivePipeline(
-		&sp, &files, NULL, none, stages, 2, t->alloc, &pipelineId, &t->err
+		&sp, &files, NULL, none, stages, 2, NULL, t->alloc, &pipelineId, &t->err
 	)))
 		goto clean;
 
@@ -750,7 +750,7 @@ void Test_SPReadTamperRecords(Test *t) {
 
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
-	SHEntry entries[2] = { entryOf("mainVS", ESHPipelineStage_Vertex), entryOf("mainPS", ESHPipelineStage_Pixel) };
+	SHEntry entries[2] = { entryOf("mainVS", EGfxPipelineStage_Vertex), entryOf("mainPS", EGfxPipelineStage_Pixel) };
 	entries[0].inputs[0] = ESBType_F32x3;
 	entries[1].outputs[0] = ESBType_F32x4;
 
@@ -768,7 +768,7 @@ void Test_SPReadTamperRecords(Test *t) {
 	const SPStageRef stages[2] = { refOf(0, 0), refOf(0, 1) };
 	CharString none = CharString_createNull();
 
-	if(!Test_assert(t, "derive", SPFile_derivePipeline(&sp, &files, NULL, none, stages, 2, t->alloc, NULL, &t->err)))
+	if(!Test_assert(t, "derive", SPFile_derivePipeline(&sp, &files, NULL, none, stages, 2, NULL, t->alloc, NULL, &t->err)))
 		goto clean;
 
 	Test_assert(t, "finalize", SPFile_finalize(&sp, t->alloc, &t->err));
@@ -791,8 +791,8 @@ void Test_SPReadTamperRecords(Test *t) {
 	}
 
 	const U64 H = 4;                                           //SPHeader after the magic
-	const U64 P = H + 36;                                      //pipelines[] (SPHeader is 36 bytes)
-	const U64 S = P + 20 * sp.pipelines.length;                //stages[]
+	const U64 P = H + 40;                                      //pipelines[] (SPHeader is 40 bytes)
+	const U64 S = P + 24 * sp.pipelines.length;                //stages[]
 	const U64 X = S + 16 * sp.stages.length;                   //specializations[]
 	const U64 G = X + 8 * sp.specializations.length;           //graphicsStates[] (stored form)
 
@@ -806,6 +806,11 @@ void Test_SPReadTamperRecords(Test *t) {
 	tamper(t, "pipelineFlagsUnsupported", stream, P + 5, 0x80);
 	tamper(t, "pipelineStageStartOutOfBounds", stream, P + 6, 0xFF);
 	tamper(t, "pipelineNoStages", stream, P + 7, 0);
+
+	//layoutIndex is the last U32 of the record and defaults to U32_MAX, so one byte is enough to make it name
+	// a pipeline layout the file hasn't got.
+
+	tamper(t, "pipelineLayoutIndexOutOfBounds", stream, P + 20, 1);
 	tamper(t, "pipelineStageRangeOutOfBounds", stream, P + 7, 0xFF);
 	tamper(t, "pipelineSpecializationStartOutOfBounds", stream, P + 8, 0xFF);
 	tamper(t, "pipelineStateIndexOutOfBounds", stream, P + 16, 0xFF);
@@ -879,9 +884,9 @@ void Test_SPDeriveRefusals(Test *t) {
 	Test_setModule(t, "SPFile: deriving refuses what can't form one pipeline and rolls back");
 
 	SHEntry entries[5] = {
-		entryOf("vsA", ESHPipelineStage_Vertex), entryOf("vsB", ESHPipelineStage_Vertex),
-		entryOf("mainCS", ESHPipelineStage_Compute), entryOf("mainMS", ESHPipelineStage_MeshExt),
-		entryOf("mainPS", ESHPipelineStage_Pixel)
+		entryOf("vsA", EGfxPipelineStage_Vertex), entryOf("vsB", EGfxPipelineStage_Vertex),
+		entryOf("mainCS", EGfxPipelineStage_Compute), entryOf("mainMS", EGfxPipelineStage_MeshExt),
+		entryOf("mainPS", EGfxPipelineStage_Pixel)
 	};
 
 	SHFile sh = fileOf(entries, 5);
@@ -897,26 +902,26 @@ void Test_SPDeriveRefusals(Test *t) {
 	const U64 namesBefore = sp.names.entryStrings.length;
 
 	const SPStageRef twoVertex[2] = { refOf(0, 0), refOf(0, 1) };
-	Test_assert(t, "sameKindTwice", !SPFile_derivePipeline(&sp, &files, NULL, name, twoVertex, 2, t->alloc, NULL, NULL));
+	Test_assert(t, "sameKindTwice", !SPFile_derivePipeline(&sp, &files, NULL, name, twoVertex, 2, NULL, t->alloc, NULL, NULL));
 
 	const SPStageRef mesh[1] = { refOf(0, 3) };
-	Test_assert(t, "meshRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, mesh, 1, t->alloc, NULL, NULL));
+	Test_assert(t, "meshRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, mesh, 1, NULL, t->alloc, NULL, NULL));
 
 	const SPStageRef mixed[2] = { refOf(0, 2), refOf(0, 4) };
-	Test_assert(t, "mixedKindsRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, mixed, 2, t->alloc, NULL, NULL));
+	Test_assert(t, "mixedKindsRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, mixed, 2, NULL, t->alloc, NULL, NULL));
 
 	const SPStageRef badFile[1] = { refOf(7, 0) };
-	Test_assert(t, "fileIdRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, badFile, 1, t->alloc, NULL, NULL));
+	Test_assert(t, "fileIdRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, badFile, 1, NULL, t->alloc, NULL, NULL));
 
 	const SPStageRef badEntry[1] = { refOf(0, 9) };
-	Test_assert(t, "entryIdRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, badEntry, 1, t->alloc, NULL, NULL));
+	Test_assert(t, "entryIdRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, badEntry, 1, NULL, t->alloc, NULL, NULL));
 
 	SPStageRef tooMany[17];
 
 	for(U8 i = 0; i < 17; ++i)
 		tooMany[i] = refOf(0, 0);
 
-	Test_assert(t, "tooManyRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, tooMany, 17, t->alloc, NULL, NULL));
+	Test_assert(t, "tooManyRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, tooMany, 17, NULL, t->alloc, NULL, NULL));
 
 	//Nothing a refused derive touched survives, the name it added included
 
@@ -928,7 +933,7 @@ void Test_SPDeriveRefusals(Test *t) {
 	//And the same file still derives a valid pipeline afterwards
 
 	const SPStageRef ok[1] = { refOf(0, 2) };
-	Test_assert(t, "stillDerives", SPFile_derivePipeline(&sp, &files, NULL, name, ok, 1, t->alloc, NULL, &t->err));
+	Test_assert(t, "stillDerives", SPFile_derivePipeline(&sp, &files, NULL, name, ok, 1, NULL, t->alloc, NULL, &t->err));
 	Test_assert(t, "onePipeline", sp.pipelines.length == 1);
 
 clean:
@@ -944,9 +949,9 @@ void Test_SPSupplyAndPaths(Test *t) {
 	Test_setModule(t, "SPFile: supply validates its arguments and field paths parse back");
 
 	SHEntry entries[3] = {
-		entryOf("mainCS", ESHPipelineStage_Compute),
-		entryOf("mainVS", ESHPipelineStage_Vertex),
-		entryOf("mainPS", ESHPipelineStage_Pixel)
+		entryOf("mainCS", EGfxPipelineStage_Compute),
+		entryOf("mainVS", EGfxPipelineStage_Vertex),
+		entryOf("mainPS", EGfxPipelineStage_Pixel)
 	};
 
 	SHFile sh = fileOf(entries, 3);
@@ -962,8 +967,8 @@ void Test_SPSupplyAndPaths(Test *t) {
 
 	const SPStageRef cs[1] = { refOf(0, 0) };
 	const SPStageRef gfx[2] = { refOf(0, 1), refOf(0, 2) };
-	Test_assert(t, "deriveCompute", SPFile_derivePipeline(&sp, &files, NULL, none, cs, 1, t->alloc, &computeId, &t->err));
-	Test_assert(t, "deriveGraphics", SPFile_derivePipeline(&sp, &files, NULL, none, gfx, 2, t->alloc, &gfxId, &t->err));
+	Test_assert(t, "deriveCompute", SPFile_derivePipeline(&sp, &files, NULL, none, cs, 1, NULL, t->alloc, &computeId, &t->err));
+	Test_assert(t, "deriveGraphics", SPFile_derivePipeline(&sp, &files, NULL, none, gfx, 2, NULL, t->alloc, &gfxId, &t->err));
 
 	Test_assert(t, "badPipelineId", !SPFile_supply(&sp, 9, ESPField_TopologyMode, 0, 0, NULL));
 	Test_assert(t, "unknownField", !SPFile_supply(&sp, gfxId, ESPField_Count, 0, 0, NULL));
@@ -1035,8 +1040,8 @@ void Test_SPValidateAndPrint(Test *t) {
 	Test_setModule(t, "SPFile: validation names every mismatch and print states what was generated");
 
 	SHEntry entries[4] = {
-		entryOf("mainVS", ESHPipelineStage_Vertex), entryOf("mainPS", ESHPipelineStage_Pixel),
-		entryOf("mainHS", ESHPipelineStage_Hull), entryOf("mainDS", ESHPipelineStage_Domain)
+		entryOf("mainVS", EGfxPipelineStage_Vertex), entryOf("mainPS", EGfxPipelineStage_Pixel),
+		entryOf("mainHS", EGfxPipelineStage_Hull), entryOf("mainDS", EGfxPipelineStage_Domain)
 	};
 
 	entries[1].outputs[0] = ESBType_F32x4;
@@ -1058,9 +1063,9 @@ void Test_SPValidateAndPrint(Test *t) {
 	const SPStageRef tess[4] = { refOf(0, 0), refOf(0, 2), refOf(0, 3), refOf(0, 1) };
 	const SPStageRef lone[2] = { refOf(0, 0), refOf(0, 2) };
 
-	Test_assert(t, "deriveGraphics", SPFile_derivePipeline(&sp, &files, NULL, none, gfx, 2, t->alloc, &gfxId, &t->err));
-	Test_assert(t, "deriveTess", SPFile_derivePipeline(&sp, &files, NULL, none, tess, 4, t->alloc, &tessId, &t->err));
-	Test_assert(t, "deriveLoneHull", SPFile_derivePipeline(&sp, &files, NULL, none, lone, 2, t->alloc, &loneId, &t->err));
+	Test_assert(t, "deriveGraphics", SPFile_derivePipeline(&sp, &files, NULL, none, gfx, 2, NULL, t->alloc, &gfxId, &t->err));
+	Test_assert(t, "deriveTess", SPFile_derivePipeline(&sp, &files, NULL, none, tess, 4, NULL, t->alloc, &tessId, &t->err));
+	Test_assert(t, "deriveLoneHull", SPFile_derivePipeline(&sp, &files, NULL, none, lone, 2, NULL, t->alloc, &loneId, &t->err));
 
 	//blend.targetMask past the declared targets, depth state with no attachment, a sample shading fraction outside
 	// 0..1, then blend.enable with an empty mask
@@ -1101,7 +1106,9 @@ void Test_SPValidateAndPrint(Test *t) {
 	{
 		const SPStageRef vsOnly[1] = { refOf(0, 0) };
 		U32 vsId = U32_MAX;
-		Test_assert(t, "deriveVsOnly", SPFile_derivePipeline(&sp, &files, NULL, none, vsOnly, 1, t->alloc, &vsId, &t->err));
+		Test_assert(t, "deriveVsOnly", SPFile_derivePipeline(
+			&sp, &files, NULL, none, vsOnly, 1, NULL, t->alloc, &vsId, &t->err
+		));
 
 		//The stand-in itself is generated by the caller that binds it, which records that on the pipeline
 
@@ -1133,7 +1140,7 @@ void Test_SPReadTamper(Test *t) {
 
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
-	SHEntry entries[1] = { entryOf("mainCompute", ESHPipelineStage_Compute) };
+	SHEntry entries[1] = { entryOf("mainCompute", EGfxPipelineStage_Compute) };
 	SHFile sh = fileOf(entries, 1);
 	ListSHFile files = (ListSHFile) { 0 };
 	ListSHFile_createRefConst(&sh, 1, &files, NULL);
@@ -1147,7 +1154,7 @@ void Test_SPReadTamper(Test *t) {
 	const SPStageRef stages[1] = { refOf(0, 0) };
 	CharString none = CharString_createNull();
 
-	Test_assert(t, "derive", SPFile_derivePipeline(&sp, &files, NULL, none, stages, 1, t->alloc, NULL, &t->err));
+	Test_assert(t, "derive", SPFile_derivePipeline(&sp, &files, NULL, none, stages, 1, NULL, t->alloc, NULL, &t->err));
 
 	if(!Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &stream, &t->err)))
 		goto clean;
@@ -1213,6 +1220,283 @@ void Test_SPFieldNames(Test *t) {
 	Test_assert(t, "msaaIsNotIndexed", !ESPField_isIndexed(ESPField_Msaa));
 }
 
+//The derived layout: what reflection proves lands as rows, runtime registers stay the device's, a SPIRV
+//push constant needs no binding pair, DXIL-only registers keep their namespaces apart, overrides flip
+//provenance and structure survives a round trip.
+
+static void Test_SPLayoutDeriveSupplyRoundTrip(Test *t) {
+
+	Test_setModule(t, "SPFile: descriptor layout derive, supply, transplant and round trip");
+
+	//A compute entry whose binary declares a push constant, a structured buffer, a sampler and one register
+	//the runtime owns; the layout must describe the first three and never the fourth.
+	//The push constant carries NO binding pair on any side, exactly as the SPIRV compiler reflects one.
+
+	SHRegisterRuntime regs[4];
+
+	for(U8 i = 0; i < 4; ++i)
+		regs[i] = (SHRegisterRuntime) { 0 };
+
+	regs[0].reg.bindings = GfxBindings_dummy();
+	regs[0].reg.registerType = EGfxRegisterType_PushConstants;
+	regs[0].name = CharString_createRefCStrConst("pc");
+	regs[0].shaderBuffer.bufferSize = 32;
+
+	regs[1].reg.bindings = GfxBindings_dummy();
+	regs[1].reg.bindings.arr[EGfxBinaryType_SPIRV] = (GfxBinding) { .space = 1, .binding = 3 };
+	regs[1].reg.registerType = EGfxRegisterType_StructuredBuffer;
+	regs[1].name = CharString_createRefCStrConst("verts");
+	regs[1].shaderBuffer.bufferSize = 16;
+
+	regs[2].reg.bindings = GfxBindings_dummy();
+	regs[2].reg.bindings.arr[EGfxBinaryType_SPIRV] = (GfxBinding) { .space = 0, .binding = 2 };
+	regs[2].reg.registerType = EGfxRegisterType_Sampler;
+	regs[2].name = CharString_createRefCStrConst("smp");
+
+	regs[3].reg.bindings = GfxBindings_dummy();
+	regs[3].reg.bindings.arr[EGfxBinaryType_SPIRV] = (GfxBinding) { .space = 2, .binding = 0 };
+	regs[3].reg.registerType = EGfxRegisterType_Texture2D;
+	regs[3].name = CharString_createRefCStrConst("_textures2D");
+
+	SHBinaryInfo bin = (SHBinaryInfo) { 0 };
+	ListSHRegisterRuntime_createRefConst(regs, 4, &bin.registers, NULL);
+
+	U16 binId = 0;
+
+	SHEntry cs = entryOf("main", EGfxPipelineStage_Compute);
+	ListU16_createRefConst(&binId, 1, &cs.binaryIds, NULL);
+
+	SHFile sh = fileOf(&cs, 1);
+	ListSHBinaryInfo_createRefConst(&bin, 1, &sh.binaries, NULL);
+
+	ListSHFile files = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(&sh, 1, &files, NULL);
+
+	CharString excludedName = CharString_createRefCStrConst("_textures2D");
+	ListCharString excluded = (ListCharString) { 0 };
+	ListCharString_createRefConst(&excludedName, 1, &excluded, NULL);
+
+	SPFile sp = (SPFile) { 0 };
+	Test_assert(t, "create", SPFile_create(ESPSettingsFlags_None, t->alloc, &sp, &t->err));
+
+	SPStageRef stage = refOf(0, 0);
+	U32 pipelineId = U32_MAX;
+
+	if (!Test_assert(t, "derive", SPFile_derivePipeline(
+		&sp, &files, NULL, CharString_createNull(), &stage, 1, &excluded, t->alloc, &pipelineId, &t->err
+	))) {
+		SPFile_free(&sp, t->alloc);
+		return;
+	}
+
+	//Derived shape: one oiPL with two rows (the excluded register never lands) and a push constant
+
+	const SPPipelineBase base = sp.pipelines.ptr[pipelineId];
+	Test_assert(t, "hasLayout", base.layoutIndex != U32_MAX);
+
+	const PLFile *layout = &sp.layouts.ptr[base.layoutIndex];
+	Test_assert(t, "twoRows", layout->bindings.length == 2);
+	Test_assert(t, "noSamplerValues", layout->samplers.length == 0);
+	Test_assert(t, "unboundPcDerived", layout->hasPushConstant && layout->pushConstant.strideOrLength == 32);
+	Test_assert(t, "pcDerivedSource", PLDescriptorBinding_source(layout->pushConstant) == EPLSource_Derived);
+
+	const PLDescriptorBinding row0 = layout->bindings.ptr[0];
+	const PLDescriptorBinding row1 = layout->bindings.ptr[1];
+
+	Test_assert(t, "strideDerived", row0.registerType == EGfxRegisterType_StructuredBuffer && row0.strideOrLength == 16);
+	Test_assert(t, "samplerDynamic", row1.registerType == EGfxRegisterType_Sampler && row1.samplerId == 0);
+	Test_assert(
+		t, "rowsDerived",
+		PLDescriptorBinding_source(row0) == EPLSource_Derived && PLDescriptorBinding_source(row1) == EPLSource_Derived
+	);
+	Test_assert(t, "visibility", row0.visibility == ((U32)1 << EGfxPipelineStage_Compute));
+	const GfxBinding row0Spv = row0.bindings.arr[EGfxBinaryType_SPIRV];
+
+	Test_assert(t, "spirvPairKept", row0Spv.space == 1 && row0Spv.binding == 3);
+	Test_assert(t, "dxilAbsent", row0.bindings.arrU64[EGfxBinaryType_DXIL] == U64_MAX);
+
+	//The report lists the rows as settable paths
+
+	CharString printed = CharString_createNull();
+	Test_assert(t, "print", SPFile_print(&sp, pipelineId, t->alloc, &printed, &t->err));
+
+	CharString needle = CharString_createRefCStrConst("layout.binding.spaceSpirv[0]");
+	Test_assert(t, "printsBindingPath", CharString_findFirstStringSensitive(&printed, &needle, 0, 0) != U64_MAX);
+
+	needle = CharString_createRefCStrConst("layout.pushConstant.size");
+	Test_assert(t, "printsPcPath", CharString_findFirstStringSensitive(&printed, &needle, 0, 0) != U64_MAX);
+
+	CharString_free(&printed, t->alloc);
+
+	//Supplying a row flips its provenance; a sampler value can't be supplied where none exists
+
+	Test_assert(t, "supplyCount", SPFile_supply(&sp, pipelineId, ESPField_LayoutBindingCount, 0, 8, &t->err));
+
+	const PLDescriptorBinding row0b = sp.layouts.ptr[base.layoutIndex].bindings.ptr[0];
+	Test_assert(t, "supplied", row0b.count == 8 && PLDescriptorBinding_source(row0b) == EPLSource_Supplied);
+
+	Test_assert(t, "samplerRefused", !SPFile_supply(&sp, pipelineId, ESPField_LayoutSamplerFilter, 0, 1, NULL));
+
+	//A value wider than the field would truncate instead of landing, so supply refuses it
+
+	const PLSamplerInfo samplerValue = (PLSamplerInfo) { .filter = ESamplerFilterMode_Linear };
+	Test_assert(
+		t, "pushSamplerValue",
+		ListPLSamplerInfo_pushBack(&sp.layouts.ptrNonConst[base.layoutIndex].samplers, samplerValue, t->alloc, &t->err)
+	);
+
+	Test_assert(t, "supplyF16", SPFile_supply(&sp, pipelineId, ESPField_LayoutSamplerMipBias, 0, 0x3C00, &t->err));
+	Test_assert(t, "f16Landed", sp.layouts.ptr[base.layoutIndex].samplers.ptr[0].mipBias == 0x3C00);
+	Test_assert(t, "wideF16Refused", !SPFile_supply(&sp, pipelineId, ESPField_LayoutSamplerMipBias, 0, 0x10000, NULL));
+	Test_assert(t, "wideBoolRefused", !SPFile_supply(&sp, pipelineId, ESPField_LayoutSamplerCompareEnable, 0, 2, NULL));
+
+	//Structure survives serialization
+
+	StreamRef *archive = NULL;
+	SPFile reread = (SPFile) { 0 };
+	const RefPtrType msType = MemoryStream_makeType(t->alloc);
+
+	Test_assert(t, "finalize", SPFile_finalize(&sp, t->alloc, &t->err));
+
+	if (Test_assert(t, "roundTrip", spRoundTrip(t, &sp, false, &archive, &reread, &msType))) {
+
+		const SPPipelineBase rbase = reread.pipelines.ptr[pipelineId];
+		Test_assert(t, "layoutSurvives", rbase.layoutIndex != U32_MAX);
+
+		const PLFile *rlayout = &reread.layouts.ptr[rbase.layoutIndex];
+		Test_assert(t, "rowsSurvive", rlayout->bindings.length == 2 && rlayout->bindings.ptr[0].count == 8);
+		Test_assert(t, "provenanceSurvives", PLDescriptorBinding_source(rlayout->bindings.ptr[0]) == EPLSource_Supplied);
+		Test_assert(t, "pcSurvives", rlayout->hasPushConstant && rlayout->pushConstant.strideOrLength == 32);
+		Test_assert(t, "hashMatches", reread.hash == sp.hash);
+	}
+
+	SPFile_free(&reread, t->alloc);
+	RefPtr_dec(&archive);
+	SPFile_free(&sp, t->alloc);
+}
+
+//A DXIL array occupies a whole register range: an unbounded texture array at t0 reaches a texture at t2,
+//which is one collision even though the start registers differ.
+
+static void Test_SPLayoutDxilArrayOverlap(Test *t) {
+
+	Test_setModule(t, "SPFile: DXIL register ranges can't overlap");
+
+	SHRegisterRuntime regs[2];
+
+	for(U8 i = 0; i < 2; ++i)
+		regs[i] = (SHRegisterRuntime) { 0 };
+
+	U32 dims = 0;
+
+	regs[0].reg.bindings = GfxBindings_dummy();
+	regs[0].reg.bindings.arr[EGfxBinaryType_DXIL] = (GfxBinding) { .space = 0, .binding = 0 };
+	regs[0].reg.registerType = EGfxRegisterType_Texture2D | EGfxRegisterType_IsArray;
+	regs[0].name = CharString_createRefCStrConst("bindlessTextures");
+	ListU32_createRefConst(&dims, 1, &regs[0].arrays, NULL);
+
+	regs[1].reg.bindings = GfxBindings_dummy();
+	regs[1].reg.bindings.arr[EGfxBinaryType_DXIL] = (GfxBinding) { .space = 0, .binding = 2 };
+	regs[1].reg.registerType = EGfxRegisterType_Texture2D;
+	regs[1].name = CharString_createRefCStrConst("albedo");
+
+	SHBinaryInfo bin = (SHBinaryInfo) { 0 };
+	ListSHRegisterRuntime_createRefConst(regs, 2, &bin.registers, NULL);
+
+	U16 binId = 0;
+
+	SHEntry cs = entryOf("main", EGfxPipelineStage_Compute);
+	ListU16_createRefConst(&binId, 1, &cs.binaryIds, NULL);
+
+	SHFile sh = fileOf(&cs, 1);
+	ListSHBinaryInfo_createRefConst(&bin, 1, &sh.binaries, NULL);
+
+	ListSHFile files = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(&sh, 1, &files, NULL);
+
+	SPFile sp = (SPFile) { 0 };
+	Test_assert(t, "create", SPFile_create(ESPSettingsFlags_None, t->alloc, &sp, &t->err));
+
+	SPStageRef stage = refOf(0, 0);
+	U32 pipelineId = U32_MAX;
+
+	Test_assert(t, "overlapRefused", !SPFile_derivePipeline(
+		&sp, &files, NULL, CharString_createNull(), &stage, 1, NULL, t->alloc, &pipelineId, NULL
+	));
+
+	SPFile_free(&sp, t->alloc);
+}
+
+//DXIL-only registers share numbers across their namespaces: a cbuffer at b0 and a texture at t0 both carry
+//the DXIL pair (0, 0), which is two registers rather than one collision.
+
+static void Test_SPLayoutDxilNamespaces(Test *t) {
+
+	Test_setModule(t, "SPFile: DXIL-only registers keep their namespaces apart");
+
+	SHRegisterRuntime regs[3];
+
+	for(U8 i = 0; i < 3; ++i)
+		regs[i] = (SHRegisterRuntime) { 0 };
+
+	regs[0].reg.bindings = GfxBindings_dummy();
+	regs[0].reg.bindings.arr[EGfxBinaryType_DXIL] = (GfxBinding) { .space = 0, .binding = 0 };
+	regs[0].reg.registerType = EGfxRegisterType_ConstantBuffer;
+	regs[0].name = CharString_createRefCStrConst("globalsCustom");
+	regs[0].shaderBuffer.bufferSize = 64;
+
+	regs[1].reg.bindings = GfxBindings_dummy();
+	regs[1].reg.bindings.arr[EGfxBinaryType_DXIL] = (GfxBinding) { .space = 0, .binding = 0 };
+	regs[1].reg.registerType = EGfxRegisterType_Texture2D;
+	regs[1].name = CharString_createRefCStrConst("albedo");
+
+	//The DXIL push constant is a real b register, which the layout has to carry for the root signature
+
+	regs[2].reg.bindings = GfxBindings_dummy();
+	regs[2].reg.bindings.arr[EGfxBinaryType_DXIL] = (GfxBinding) { .space = 0, .binding = 7 };
+	regs[2].reg.registerType = EGfxRegisterType_PushConstants;
+	regs[2].name = CharString_createRefCStrConst("consts");
+	regs[2].shaderBuffer.bufferSize = 32;
+
+	SHBinaryInfo bin = (SHBinaryInfo) { 0 };
+	ListSHRegisterRuntime_createRefConst(regs, 3, &bin.registers, NULL);
+
+	U16 binId = 0;
+
+	SHEntry cs = entryOf("main", EGfxPipelineStage_Compute);
+	ListU16_createRefConst(&binId, 1, &cs.binaryIds, NULL);
+
+	SHFile sh = fileOf(&cs, 1);
+	ListSHBinaryInfo_createRefConst(&bin, 1, &sh.binaries, NULL);
+
+	ListSHFile files = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(&sh, 1, &files, NULL);
+
+	SPFile sp = (SPFile) { 0 };
+	Test_assert(t, "create", SPFile_create(ESPSettingsFlags_None, t->alloc, &sp, &t->err));
+
+	SPStageRef stage = refOf(0, 0);
+	U32 pipelineId = U32_MAX;
+
+	Test_assert(t, "derive", SPFile_derivePipeline(
+		&sp, &files, NULL, CharString_createNull(), &stage, 1, NULL, t->alloc, &pipelineId, &t->err
+	));
+
+	const SPPipelineBase base = sp.pipelines.ptr[pipelineId];
+
+	if (Test_assert(t, "hasLayout", base.layoutIndex != U32_MAX)) {
+		const PLFile *layout = &sp.layouts.ptr[base.layoutIndex];
+		Test_assert(t, "bothRows", layout->bindings.length == 2);
+		Test_assert(t, "pcRow", layout->hasPushConstant && layout->pushConstant.strideOrLength == 32);
+
+		const GfxBinding pcDxil = layout->pushConstant.bindings.arr[EGfxBinaryType_DXIL];
+		Test_assert(t, "pcKeepsDxilRegister", pcDxil.space == 0 && pcDxil.binding == 7);
+		Test_assert(t, "pcNoSpirvPair", layout->pushConstant.bindings.arrU64[EGfxBinaryType_SPIRV] == U64_MAX);
+	}
+
+	SPFile_free(&sp, t->alloc);
+}
+
 OXC3_TEST_MAIN(formats_oiSP) {
 
 	const Allocator alloc = BasicAllocator_instance;
@@ -1234,6 +1518,9 @@ OXC3_TEST_MAIN(formats_oiSP) {
 	Test_SPSupplyAndPaths(&t);
 	Test_SPValidateAndPrint(&t);
 	Test_SPFieldNames(&t);
+	Test_SPLayoutDeriveSupplyRoundTrip(&t);
+	Test_SPLayoutDxilNamespaces(&t);
+	Test_SPLayoutDxilArrayOverlap(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

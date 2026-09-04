@@ -261,18 +261,18 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 
 	#define printColor(lvl, str, ...)                                                                     \
 		switch(lvl) {                                                                                     \
-			default:                    printf(FONT_GREEN  str FONT_RESET, __VA_ARGS__);        break;    \
+			default:                       printf(FONT_GREEN  str FONT_RESET, __VA_ARGS__);        break;    \
 			case ELogLevel_Performance:    printf(FONT_CYAN   str FONT_RESET, __VA_ARGS__);        break; \
-			case ELogLevel_Warn:        printf(FONT_YELLOW str FONT_RESET, __VA_ARGS__);        break;    \
-			case ELogLevel_Error:        printf(FONT_RED    str FONT_RESET, __VA_ARGS__);        break;   \
+			case ELogLevel_Warn:           printf(FONT_YELLOW str FONT_RESET, __VA_ARGS__);        break;    \
+			case ELogLevel_Error:          printf(FONT_RED    str FONT_RESET, __VA_ARGS__);        break;   \
 		}
 
 	#define printColorSimple(lvl, str)                                                                       \
 		switch(lvl) {                                                                                        \
-			default:                    printf(FONT_GREEN  str FONT_RESET);        break;                    \
+			default:                       printf(FONT_GREEN  str FONT_RESET);        break;                    \
 			case ELogLevel_Performance:    printf(FONT_CYAN   str FONT_RESET);        break;                 \
-			case ELogLevel_Warn:        printf(FONT_YELLOW str FONT_RESET);        break;                    \
-			case ELogLevel_Error:        printf(FONT_RED    str FONT_RESET);        break;                   \
+			case ELogLevel_Warn:           printf(FONT_YELLOW str FONT_RESET);        break;                    \
+			case ELogLevel_Error:          printf(FONT_RED    str FONT_RESET);        break;                   \
 		}
 
 	void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const CharString *arg) {

@@ -42,11 +42,11 @@
 void DxDescriptorTable_writeTexture(
 	DxGraphicsDevice *deviceExt,
 	const Descriptor *d,
-	ESHRegisterType registerType,
+	EGfxRegisterType registerType,
 	D3D12_CPU_DESCRIPTOR_HANDLE dst
 ) {
 
-	const Bool isWrite = (registerType & ESHRegisterType_IsWrite) != 0;
+	const Bool isWrite = (registerType & EGfxRegisterType_IsWrite) != 0;
 
 	DXGI_FORMAT dxFormat = DXGI_FORMAT_UNKNOWN;
 	UnifiedTexture tex = (UnifiedTexture) { 0 };
@@ -83,9 +83,9 @@ void DxDescriptorTable_writeTexture(
 			.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
 		};
 
-		switch(registerType & (ESHRegisterType_TypeMask | ESHRegisterType_IsArray)) {
+		switch(registerType & (EGfxRegisterType_TypeMask | EGfxRegisterType_IsArray)) {
 
-			case ESHRegisterType_Texture3D:
+			case EGfxRegisterType_Texture3D:
 				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
 				srv.Texture3D = (D3D12_TEX3D_SRV) {
 					.MostDetailedMip = d->texture.mipId,
@@ -93,7 +93,7 @@ void DxDescriptorTable_writeTexture(
 				};
 				break;
 
-			case ESHRegisterType_TextureCube | ESHRegisterType_IsArray:
+			case EGfxRegisterType_TextureCube | EGfxRegisterType_IsArray:
 				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
 				srv.TextureCubeArray = (D3D12_TEXCUBE_ARRAY_SRV) {
 					.MostDetailedMip = d->texture.mipId,
@@ -103,7 +103,7 @@ void DxDescriptorTable_writeTexture(
 				};
 				break;
 
-			case ESHRegisterType_TextureCube:
+			case EGfxRegisterType_TextureCube:
 				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
 				srv.TextureCube = (D3D12_TEXCUBE_SRV) {
 					.MostDetailedMip = d->texture.mipId,
@@ -111,7 +111,7 @@ void DxDescriptorTable_writeTexture(
 				};
 				break;
 
-			case ESHRegisterType_Texture2DMS | ESHRegisterType_IsArray:
+			case EGfxRegisterType_Texture2DMS | EGfxRegisterType_IsArray:
 				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
 				srv.Texture2DMSArray = (D3D12_TEX2DMS_ARRAY_SRV) {
 					.FirstArraySlice = d->texture.arrayId,
@@ -119,12 +119,12 @@ void DxDescriptorTable_writeTexture(
 				};
 				break;
 
-			case ESHRegisterType_Texture2DMS:
+			case EGfxRegisterType_Texture2DMS:
 				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
 				srv.Texture2DMS = (D3D12_TEX2DMS_SRV) { 0 };
 				break;
 
-			case ESHRegisterType_Texture2D | ESHRegisterType_IsArray:
+			case EGfxRegisterType_Texture2D | EGfxRegisterType_IsArray:
 				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
 				srv.Texture2DArray = (D3D12_TEX2D_ARRAY_SRV) {
 					.MostDetailedMip = d->texture.mipId,
@@ -135,7 +135,7 @@ void DxDescriptorTable_writeTexture(
 				};
 				break;
 
-			case ESHRegisterType_Texture2D:
+			case EGfxRegisterType_Texture2D:
 			default:
 				srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 				srv.Texture2D = (D3D12_TEX2D_SRV) {
@@ -157,9 +157,9 @@ void DxDescriptorTable_writeTexture(
 
 		D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) { .Format = dxFormat };
 
-		switch(registerType & (ESHRegisterType_TypeMask | ESHRegisterType_IsArray)) {
+		switch(registerType & (EGfxRegisterType_TypeMask | EGfxRegisterType_IsArray)) {
 
-			case ESHRegisterType_Texture3D:
+			case EGfxRegisterType_Texture3D:
 				uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
 				uav.Texture3D = (D3D12_TEX3D_UAV) {
 					.MipSlice = d->texture.mipId,
@@ -168,7 +168,7 @@ void DxDescriptorTable_writeTexture(
 				};
 				break;
 
-			case ESHRegisterType_Texture2DMS | ESHRegisterType_IsArray:
+			case EGfxRegisterType_Texture2DMS | EGfxRegisterType_IsArray:
 				uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DMSARRAY;
 				uav.Texture2DMSArray = (D3D12_TEX2DMS_ARRAY_UAV) {
 					.FirstArraySlice = d->texture.arrayId,
@@ -176,12 +176,12 @@ void DxDescriptorTable_writeTexture(
 				};
 				break;
 
-			case ESHRegisterType_Texture2DMS:
+			case EGfxRegisterType_Texture2DMS:
 				uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DMS;
 				uav.Texture2DMS = (D3D12_TEX2DMS_UAV) { 0 };
 				break;
 
-			case ESHRegisterType_Texture2D | ESHRegisterType_IsArray:
+			case EGfxRegisterType_Texture2D | EGfxRegisterType_IsArray:
 				uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
 				uav.Texture2DArray = (D3D12_TEX2D_ARRAY_UAV) {
 					.MipSlice = d->texture.mipId,
@@ -190,7 +190,7 @@ void DxDescriptorTable_writeTexture(
 				};
 				break;
 
-			case ESHRegisterType_Texture2D:
+			case EGfxRegisterType_Texture2D:
 			default:
 				uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 				uav.Texture2D = (D3D12_TEX2D_UAV) { .MipSlice = d->texture.mipId };
@@ -237,14 +237,14 @@ Bool DX_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(
 
 		DescriptorBinding b = layout->info.bindings.ptr[i];
 
-		switch (b.registerType & ESHRegisterType_TypeMask) {
+		switch (b.registerType & EGfxRegisterType_TypeMask) {
 
-			case ESHRegisterType_Sampler:
-			case ESHRegisterType_SamplerComparisonState:
+			case EGfxRegisterType_Sampler:
+			case EGfxRegisterType_SamplerComparisonState:
 				samplers += b.count;
 				break;
 
-			case ESHRegisterType_SubpassInput:        //Non existent
+			case EGfxRegisterType_SubpassInput:        //Non existent
 				break;
 
 			default:
@@ -326,7 +326,7 @@ D3D12_FILTER DxSampler_toFilter(SamplerInfo sinfo) {
 //Border color is an enum here rather than a float4, which is exactly what OxC3's ESamplerBorderColor
 // already is, so every sampler it can express is expressible as a static one.
 
-D3D12_STATIC_SAMPLER_DESC DxSampler_toStaticDesc(SamplerInfo sinfo, SHBinding binding, U32 visibility) {
+D3D12_STATIC_SAMPLER_DESC DxSampler_toStaticDesc(SamplerInfo sinfo, GfxBinding binding, U32 visibility) {
 
 	D3D12_STATIC_BORDER_COLOR border = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
 
@@ -398,7 +398,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 	DescriptorLayout *layout = DescriptorLayoutRef_ptr(table->layout);
 	const ListDescriptorBinding *bindings = &layout->info.bindings;
 	const DescriptorBinding *binding = &bindings->ptr[bindId];
-	ESHRegisterType registerType = binding->registerType;
+	EGfxRegisterType registerType = binding->registerType;
 
 	U64 offsetCbvSrvUav = arrayId + DescriptorLayout_ext(layout, Dx)->bindingOffsets.ptr[bindId];
 	U64 offsetSamplers = offsetCbvSrvUav;
@@ -406,9 +406,9 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 	offsetCbvSrvUav += tableExt->allocationLocations[0];
 	offsetSamplers += tableExt->allocationLocations[1];
 
-	ESHRegisterType type = registerType & ESHRegisterType_TypeMask;
-	Bool isWrite = registerType & ESHRegisterType_IsWrite;
-	Bool isArrayType = registerType & ESHRegisterType_IsArray;
+	EGfxRegisterType type = registerType & EGfxRegisterType_TypeMask;
+	Bool isWrite = registerType & EGfxRegisterType_IsWrite;
+	Bool isArrayType = registerType & EGfxRegisterType_IsArray;
 
 	U64 heapPtrRes = heapExt->resourcesHeap.cpuHandle.ptr;
 	U64 heapIncRes = heapExt->resourcesHeap.cpuIncrement;
@@ -419,14 +419,14 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 		if(d.resource) {
 
-			if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd) {
+			if (type >= EGfxRegisterType_BufferStart && type < EGfxRegisterType_BufferEnd) {
 
 				U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
 
 				if(!Descriptor_endBuffer(&d))
 					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(&d);
 
-			} else if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd) {
+			} else if(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd) {
 
 				UnifiedTexture tex = TextureRef_getUnifiedTexture(d.resource, NULL);
 
@@ -445,7 +445,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 		switch (type) {
 
-			case ESHRegisterType_ConstantBuffer: {
+			case EGfxRegisterType_ConstantBuffer: {
 
 				D3D12_CONSTANT_BUFFER_VIEW_DESC cbv = (D3D12_CONSTANT_BUFFER_VIEW_DESC) { 0 };
 
@@ -463,8 +463,8 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				break;
 			}
 
-			case ESHRegisterType_Sampler:
-			case ESHRegisterType_SamplerComparisonState: {
+			case EGfxRegisterType_Sampler:
+			case EGfxRegisterType_SamplerComparisonState: {
 
 				D3D12_SAMPLER_DESC samplerView;
 
@@ -546,7 +546,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				break;
 			}
 
-			case ESHRegisterType_AccelerationStructure: {
+			case EGfxRegisterType_AccelerationStructure: {
 
 				D3D12_GPU_VIRTUAL_ADDRESS dstAS = 0;
 
@@ -571,7 +571,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				break;
 			}
 
-			case ESHRegisterType_ByteAddressBuffer: {
+			case EGfxRegisterType_ByteAddressBuffer: {
 
 				DxDeviceBuffer *deviceBuffer = d.resource ? DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Dx) : NULL;
 
@@ -620,8 +620,8 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				break;
 			}
 
-			case ESHRegisterType_StructuredBuffer:
-			case ESHRegisterType_StructuredBufferAtomic: {
+			case EGfxRegisterType_StructuredBuffer:
+			case EGfxRegisterType_StructuredBufferAtomic: {
 
 				DxDeviceBuffer *deviceBuffer = d.resource ? DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Dx) : NULL;
 				U32 reflStride = binding->structedBufferStride;
@@ -672,11 +672,11 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				break;
 			}
 
-			case ESHRegisterType_Texture1D:
-			case ESHRegisterType_Texture2D:
-			case ESHRegisterType_Texture3D:
-			case ESHRegisterType_TextureCube:
-			case ESHRegisterType_Texture2DMS: {
+			case EGfxRegisterType_Texture1D:
+			case EGfxRegisterType_Texture2D:
+			case EGfxRegisterType_Texture3D:
+			case EGfxRegisterType_TextureCube:
+			case EGfxRegisterType_Texture2DMS: {
 
 				DxDescriptorTable_writeTexture(
 					deviceExt, &d, registerType,
@@ -686,9 +686,9 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				break;
 			}
 
-			case ESHRegisterType_StorageBuffer:
-			case ESHRegisterType_StorageBufferAtomic:
-			case ESHRegisterType_SubpassInput:                //Doesn't do anything
+			case EGfxRegisterType_StorageBuffer:
+			case EGfxRegisterType_StorageBufferAtomic:
+			case EGfxRegisterType_SubpassInput:                //Doesn't do anything
 			default:
 				break;
 		}

@@ -139,11 +139,11 @@ namespace oxc { namespace gfxtest {
 		//named here.
 
 		pushConstants.visibility =
-			((c::U32)1 << c::ESHPipelineStage_Vertex) | ((c::U32)1 << c::ESHPipelineStage_Pixel) |
-			((c::U32)1 << c::ESHPipelineStage_Compute) |
-			((c::U32)1 << c::ESHPipelineStage_RaygenExt) | ((c::U32)1 << c::ESHPipelineStage_CallableExt) |
-			((c::U32)1 << c::ESHPipelineStage_MissExt) | ((c::U32)1 << c::ESHPipelineStage_ClosestHitExt) |
-			((c::U32)1 << c::ESHPipelineStage_AnyHitExt) | ((c::U32)1 << c::ESHPipelineStage_IntersectionExt);
+			((c::U32)1 << c::EGfxPipelineStage_Vertex) | ((c::U32)1 << c::EGfxPipelineStage_Pixel) |
+			((c::U32)1 << c::EGfxPipelineStage_Compute) |
+			((c::U32)1 << c::EGfxPipelineStage_RaygenExt) | ((c::U32)1 << c::EGfxPipelineStage_CallableExt) |
+			((c::U32)1 << c::EGfxPipelineStage_MissExt) | ((c::U32)1 << c::EGfxPipelineStage_ClosestHitExt) |
+			((c::U32)1 << c::EGfxPipelineStage_AnyHitExt) | ((c::U32)1 << c::EGfxPipelineStage_IntersectionExt);
 
 		c::PipelineLayoutInfo pipelineLayoutInfo{};
 		pipelineLayoutInfo.bindings = dev.defaultDescLayout();
