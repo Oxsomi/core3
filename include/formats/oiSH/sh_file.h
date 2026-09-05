@@ -144,6 +144,15 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SHFile *combined, Error *e_rr);
 
+//The opposite of SHFile_combine: keep only what the given binary type carries.
+//Binaries without code for it are dropped, as are the entrypoints left pointing at nothing and the registers the
+// other type had on its own.
+//A reflection only oiSH has no code to select binaries on, since which backend a binary was for is written as
+// which of its buffers carry code, so there it keeps every binary and entrypoint and splits the registers alone.
+//It is not a lossless inverse; a register that survives keeps the reflection it gained from being merged, so two
+// splits of one file keep agreeing with eachother (see docs/oiSH.md).
+Bool SHFile_split(const SHFile *a, EGfxBinaryType type, const Allocator *alloc, SHFile *split, Error *e_rr);
+
 void SHFile_print(const SHFile *a, Bool isVerbose, const Allocator *alloc);
 
 //Runtime check: true only if every binary carries compiled code for at least one backend.

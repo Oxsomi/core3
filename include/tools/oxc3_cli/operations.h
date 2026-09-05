@@ -212,6 +212,7 @@ typedef enum EOperation {
 	EOperation_FileTo,
 	EOperation_FileFrom,
 	EOperation_FileCombine,
+	EOperation_FileSplit,
 
 	EOperation_HashFile,
 	EOperation_HashString,

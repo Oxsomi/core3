@@ -52,6 +52,7 @@ Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr);
 Bool CLI_convertTo(const ParsedArgs *args);
 Bool CLI_convertFrom(const ParsedArgs *args);
 Bool CLI_fileCombine(const ParsedArgs *args);
+Bool CLI_fileSplit(const ParsedArgs *args);          //The opposite of combine, one oiSH per binary type
 
 //Open an oiCA entry as a stream, whichever way the archive is holding its bytes.
 //An entry is either already loaded as a buffer or still backed by a stream, and only the archive knows

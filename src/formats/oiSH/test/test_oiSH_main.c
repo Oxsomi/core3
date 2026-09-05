@@ -124,6 +124,15 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileCombineBinaryIdRemapping(&t);
 	Test_SHFileCombineRegistersMerged(&t);
 
+	Test_SHFileSplitNullGuards(&t);
+	Test_SHFileSplitReflectionOnlyFiltersRegisters(&t);
+	Test_SHFileSplitMissingTypeRejected(&t);
+	Test_SHFileSplitKeepsOnlyRequestedType(&t);
+	Test_SHFileSplitDropsUnboundRegisters(&t);
+	Test_SHFileSplitKeepsSpirvPushConstant(&t);
+	Test_SHFileSplitDropsEntrypointAndRemapsIds(&t);
+	Test_SHFileSplitCombineRoundTrip(&t);
+
 	Test_SHFileRoundTripBasic(&t);
 	Test_SHFileRoundTripInclude(&t);
 	Test_SHFileRoundTripBinaryExtensions(&t);

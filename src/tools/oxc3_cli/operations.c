@@ -278,11 +278,16 @@ void Operations_init() {
 		.supportedCategories = { EOperationCategory_File }
 	};
 
+	//Input2 is optional here like it is for oiCA and oiDL, because combine is no longer the only operation on an
+	// oiSH; split takes one file apart and has nothing to merge with.
+	//CLI_fileCombine checks for it itself and refuses without it, so nothing got laxer than it was.
+
 	Format_values[EFormat_oiSH] = (Format) {
 		.name = "oiSH",
 		.desc = "Oxsomi SHader; compiled shader binaries by entrypoint and metadata.",
 		.operationFlags = EOperationFlags_None,
-		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_Input2,
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
+		.optionalParameters = EOperationHasParameter_Input2 | EOperationHasParameter_ShaderOutputMode,
 		.flags = EFormatFlags_SupportFiles,
 		.supportedCategories = { EOperationCategory_File }
 	};
@@ -306,6 +311,13 @@ void Operations_init() {
 		.name = "combine",
 		.desc = "Combine multiple files of one type into one.",
 		.func = &CLI_fileCombine
+	};
+
+	Operation_values[EOperation_FileSplit] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "split",
+		.desc = "Split an oiSH into one file per binary type; the opposite of combine.",
+		.func = &CLI_fileSplit
 	};
 
 	//Encryption

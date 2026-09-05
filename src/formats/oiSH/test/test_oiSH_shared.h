@@ -118,6 +118,15 @@ void Test_SHFileCombineEquivalentToSequential(Test *t);
 void Test_SHFileCombineIncludesMatchSequential(Test *t);
 void Test_SHFileCombineConflictingBinaryContents(Test *t);
 
+void Test_SHFileSplitNullGuards(Test *t);
+void Test_SHFileSplitReflectionOnlyFiltersRegisters(Test *t);
+void Test_SHFileSplitMissingTypeRejected(Test *t);
+void Test_SHFileSplitKeepsOnlyRequestedType(Test *t);
+void Test_SHFileSplitDropsUnboundRegisters(Test *t);
+void Test_SHFileSplitKeepsSpirvPushConstant(Test *t);
+void Test_SHFileSplitDropsEntrypointAndRemapsIds(Test *t);
+void Test_SHFileSplitCombineRoundTrip(Test *t);
+
 void Test_SHFileRoundTripBasic(Test *t);
 void Test_SHFileRoundTripInclude(Test *t);
 void Test_SHFileRoundTripBinaryExtensions(Test *t);

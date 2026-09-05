@@ -1033,6 +1033,20 @@ void SHRegister_print(const SHRegister *reg, U64 indenting, Bool isVerbose, cons
 		SHRegister_printBindings(reg->registerType, reg->bindings, alloc, "", indent);
 }
 
+Bool SHRegister_isPresentIn(const SHRegister *reg, EGfxBinaryType type) {
+
+	if(!reg || type >= EGfxBinaryType_Count)
+		return false;
+
+	//A SPIRV push constant lives in no descriptor set, so it has no binding to go by
+
+	if(reg->registerType == EGfxRegisterType_PushConstants && type == EGfxBinaryType_SPIRV)
+		return (reg->isUsedFlag >> type) & 1;
+
+	const GfxBinding binding = reg->bindings.arr[type];
+	return !(binding.binding == U32_MAX && binding.space == U32_MAX);
+}
+
 void SHRegisterRuntime_print(const SHRegisterRuntime *reg, U64 indenting, Bool isVerbose, const Allocator *alloc) {
 
 	if (!reg)
@@ -1065,14 +1079,7 @@ void SHRegisterRuntime_print(const SHRegisterRuntime *reg, U64 indenting, Bool i
 
 	for(U8 i = 0; i < EGfxBinaryType_Count; ++i) {
 
-		GfxBinding binding = reg->reg.bindings.arr[i];
-
-		Bool validBinding = !(binding.binding == U32_MAX && binding.space == U32_MAX);
-
-		if(reg->reg.registerType == EGfxRegisterType_PushConstants && i == EGfxBinaryType_SPIRV)
-			validBinding = (reg->reg.isUsedFlag >> i) & 1;
-
-		if(!validBinding)
+		if(!SHRegister_isPresentIn(&reg->reg, (EGfxBinaryType) i))
 			continue;
 
 		Log_debug(

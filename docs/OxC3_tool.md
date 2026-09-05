@@ -129,7 +129,7 @@ These are left out by default, because often, file timestamps aren't very import
 
 ### oiSH format
 
-An oiSH (Oxsomi SHader) file holds compiled shader binaries by entrypoint and metadata. Most oiSH files come from the shader compiler (see `shader compile` / `compile shaders`) rather than `file to`. When produced through `file to -format oiSH`, all three of `-input`, `-output` and `-input2` are required (the two shader inputs are merged into a single oiSH).
+An oiSH (Oxsomi SHader) file holds compiled shader binaries by entrypoint and metadata. oiSH files come from the shader compiler (see `shader compile` / `compile shaders`); `file to` / `file from` don't convert them. The file operations that do accept one are `combine` and `split` below, plus the inspection ones (`file header`, `file data`).
 
 ### Combine
 
@@ -140,6 +140,16 @@ This is only supported if it can logically be merged:
 - For oiSH, this means that it has to be compiled from the same source(s), so matching relative includes should have the same hash, the source hash needs to be the same and the compiler settings. This allows combining two lean files into a single one.
 - **TODO**: For oiCA, this would mean combining two archives into one. This can only succeed if the two have similar settings and if the archive files don't overlap (archiveA/a.txt and archiveB/a.txt would conflict, unless the crc is the same).
 - **TODO**: For oiDL, this simply means the second entries are appended to the other, provided the two oiDL settings are the same (UTF8, ascii, data).
+
+### Split
+
+`OxC3 file split -format oiSH -input c.oiSH -output c` is the opposite of combine: it takes one oiSH apart into one file per binary type. `-output` names the pair rather than a single file, so the example above writes `c.spv.oiSH` and `c.dxil.oiSH`; a trailing `.oiSH` is dropped first, and the names match what `shader compile --split` produces. `-compile-output spv` (or `dxil`, `all`, or a list such as `spv,dxil`) restricts which halves are written. Without it, every type the file actually carries is written, so splitting an oiSH that only ever compiled to SPIRV (an `AtomicF32` shader, for example) writes the one half it has instead of failing; naming a type the file doesn't carry is an error.
+
+Only oiSH is supported, since it is the only oiXX format whose contents are per binary type.
+
+A split is not a lossless inverse of a combine. Binaries without code for the requested type are dropped, entrypoints left pointing at nothing go with them (which is how a `[[oxc::binary()]]` annotation naming only the other type disappears), and so do registers the other type had on its own. Everything that survives is carried over as it was found, including the reflection that was only gained by merging the two, so both halves keep agreeing with eachother. See "Quirks between DXIL and SPIRV" in [oiSH.md](oiSH.md) for what that means per register.
+
+A reflection-only oiSH (from `shader reflect`) can be split too, but only per register. Which backend a binary was for is recorded as which of its buffers carry code, and stripping a file to reflection takes that with it, so every binary and entrypoint is kept and both halves are always written. The registers still know which backend bound them, so each half is the reflection that backend would have had on its own.
 
 ### File utilities
 

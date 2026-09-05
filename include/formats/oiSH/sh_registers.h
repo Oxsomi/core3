@@ -87,6 +87,13 @@ typedef struct SHRegisterRuntime {
 TList(SHRegister);
 TList(SHRegisterRuntime);
 
+//Whether a register is part of the given binary type at all.
+//Normally that is whether it has a binding, since a register the other backend bound on its own reads U64_MAX
+// here (a standalone DXIL sampler, a SPIRV subpass input).
+//A SPIRV push constant is the exception: Vulkan never binds it to a set, so the used flag is what says it is
+// there, which is also why printing a register special cases it.
+Bool SHRegister_isPresentIn(const SHRegister *reg, EGfxBinaryType type);
+
 Bool SHRegisterRuntime_hash(
 	const SHRegister *reg, const CharString *name, ListU32 *arrays, SBFile *shaderBuffer, U64 *res, Error *e_rr
 );
