@@ -201,7 +201,7 @@ class oxc3(ConanFile):
 		# Cross building needs it regardless of enableShaderCompiler: what matters is being able to *run* the packager,
 		# and a cross build's binaries target the device.
 		# Android can't even produce the executable (Platform_defineEntrypoint gives android_main, not main),
-		# and the wasm build's own OxC3_package is a .js the build machine can't exec either,
+		# and web doesn't build one either (a .js the build machine couldn't exec anyway),
 		# so without this add_virtual_files' find_program picks up whatever OxC3_package happens to be on PATH,
 		# which is how a months-old one out of the conan cache ended up packaging the shader tests.
 

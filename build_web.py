@@ -25,8 +25,8 @@ ordinary executable (OxC3_wtest.js + .wasm) with an exit code.
 The shader compiler is on by default here, where android leaves it off. That is a default, not a
 capability: DXC cross compiles for both, but it more than doubles the build, and compiling HLSL in
 the browser is the point of this port. The host packager is still tool_required, because the cross
-build's own OxC3_package is a .js the build machine can't find_program, which is why
-conanfile.build_requirements() also fires on cross_building.
+build has no OxC3_package of its own (a .js the build machine couldn't exec, so web skips the
+executable entirely), which is why conanfile.build_requirements() also fires on cross_building.
 
 Needs a local emsdk (env EMSDK, default ~/emsdk); --run_tests uses the node the SDK ships and only
 falls back to PATH, because emsdk_env is what puts that node on PATH and a plain shell hasn't sourced it.

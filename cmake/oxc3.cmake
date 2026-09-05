@@ -493,7 +493,7 @@ macro(add_virtual_files)
 	# OxC3; Full executable with all functionality.
 	
 	# When cross compiling, an in-build packager target can't run on the build machine
-	# (the wasm build DOES build OxC3_package, but as a .js/.wasm), so prefer the host
+	# (android and web don't build the executable at all), so prefer the host
 	# tool from tool_requires (on PATH); see conanfile.build_requirements().
 
 	if(_ARGS_FORCE_PACKAGER)
