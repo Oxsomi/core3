@@ -78,7 +78,7 @@ function renderCommands(activeName, project) {
     const lib = prof === "lib";
     /* one representative binary of this group carries model/extensions for the flags */
     const rep = doc.binaries.find(b => lib ? b.lib : (!b.lib && ents.some(e => e.name === b.entrypoint))) || doc.binaries[0];
-    const model = (rep ? rep.model : "6.5").replace(".", "_");
+    const model = (rep ? rep.model : window.OxMock.MIN_MODEL).replace(".", "_");
     const exts = rep ? rep.extensions : [];
     const is16 = exts.includes("16BitTypes");
     const defs = ["-D__OXC", `-D__OXC_MAJOR=${V.major}`, `-D__OXC_MINOR=${V.minor}`, `-D__OXC_PATCH=${V.patch}`,

@@ -175,8 +175,8 @@ js/wasm.js             THE MODULE BOUNDARY: the call frame every export answers 
 js/mock_data.js        GENERATED (dev/gen_mock_data.js): real builtin sources and real oiSH/oiSR/oiSP
                        documents, recorded so the no-module fallback shows something faithful
 samples/               THE SAMPLE PROJECT: real .hlsl files, the single source of truth. Edit them here,
-                       then `node dev/gen_mock_data.js` embeds them (plus fresh recordings) into
-                       js/mock_data.js so the page has them at first paint. The desktop suite compiles
+                       then `build_web.py --frontend` (or `node dev/gen_mock_data.js` by hand) embeds
+                       them, plus fresh recordings, into js/mock_data.js so the page has them at first paint. The desktop suite compiles
                        every one of them for both backends (OxC3_web_samples_test), so a sample that
                        breaks fails CI rather than the demo.
 js/mock.js             THE FALLBACK, part 1: heuristic HLSL analyzer producing SHDocument,
@@ -409,5 +409,6 @@ directly: CodeMirror measures character widths to lay a document out and jsdom c
 mocks, compiles, walks all three modes and the Symbols / Pipeline / ISA tabs. It covers the
 rendering, which the other suites deliberately don't touch.
 
-`dev/gen_mock_data.js` regenerates `js/mock_data.js` from a real run; do that whenever the sample
-project, the built-in includes or one of the three document contracts changes.
+`build_web.py --frontend` regenerates `js/mock_data.js` from the module it just built, so the recording
+follows the sample project, the built-in includes and the three document contracts on its own;
+`node dev/gen_mock_data.js` does the same by hand.

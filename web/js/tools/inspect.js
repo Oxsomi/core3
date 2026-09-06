@@ -8,6 +8,20 @@
 const { $, esc, hex8, fmtBytes } = window.OxUtil;
 const U = window.OxUtil;
 
+/* The annotation vocabularies the Assemble card offers, handed over once the page has asked the compiler
+ * (live module, or the recording taken from it), so no list here can drift from the enums again. */
+let VOCAB = { extensions: [], vendors: [], stages: [] };
+function setVocab(v) { VOCAB = v || VOCAB; }
+
+/* Every model from the compiler's floor to its ceiling, spelled the way [[oxc::model]] takes them. */
+function modelList(range) {
+  if (!range || !range.min || !range.max) return [];
+  const [maj, lo] = range.min.split(".").map(Number), hi = Number(range.max.split(".")[1]);
+  const out = [];
+  for (let m = lo; m <= hi; m++) out.push(`${maj}.${m}`);
+  return out;
+}
+
 /* ---------------------------------------------------------------- small bits */
 
 const clsCss = { CBV: "reg-cbv", SRV: "reg-srv", UAV: "reg-uav", SMP: "reg-smp" };
@@ -166,8 +180,8 @@ function serializedTypes(doc) {
 /* A standalone binary has no oiSH yet: the tab offers to assemble one (the planned `shader assemble -> oiSH`). */
 function assembleCardHTML(doc) {
   const e = doc.entries[0], b = doc.binaries[0];
-  const stages = window.OxMock.STAGES;
-  const models = ["6.5", "6.6", "6.7", "6.8", "6.9", "6.10"];
+  const stages = (VOCAB.stages || []).map(s => s.name);
+  const models = modelList(VOCAB.shaderModels);
   return `<div class="card mb-3"><div class="card-body">
     <div class="d-flex align-items-center gap-2 mb-2"><span class="fw-semibold">Assemble into oiSH</span>
       <span class="chip chip-muted" title="no CLI verb yet: shader assemble only produces a .spv">planned</span>
@@ -178,10 +192,10 @@ function assembleCardHTML(doc) {
       <div><label class="small text-body-secondary">Stage</label><select id="asmStage" class="form-select form-select-sm">${stages.map(s => `<option ${s === e.stage ? "selected" : ""}>${s}</option>`).join("")}</select></div>
       <div><label class="small text-body-secondary">[[oxc::model]]</label><select id="asmModel" class="form-select form-select-sm">${models.map(m => `<option ${m === (b.model || "6.5") ? "selected" : ""}>${m}</option>`).join("")}</select></div>
       <div style="min-width:220px"><label class="small text-body-secondary">[[oxc::extension]]</label>
-        <div id="asmExts" class="asm-checklist">${window.OxMock.EXTENSIONS.map(x =>
+        <div id="asmExts" class="asm-checklist">${VOCAB.extensions.map(x =>
           `<label class="form-check small d-block m-0"><input class="form-check-input" type="checkbox" value="${x}"> ${x}</label>`).join("")}</div></div>
       <div style="min-width:140px"><label class="small text-body-secondary">[[oxc::vendor]] (none = all)</label>
-        <div id="asmVendors" class="asm-checklist">${window.OxMock.VENDORS.map(v =>
+        <div id="asmVendors" class="asm-checklist">${VOCAB.vendors.map(v =>
           `<label class="form-check small d-block m-0"><input class="form-check-input" type="checkbox" value="${v}"> ${v}</label>`).join("")}</div></div>
       <div><label class="small text-body-secondary">Output</label><input id="asmName" class="form-control form-control-sm" value="${esc(doc.name.replace(/\.(spv|dxil)$/i, ""))}.oiSH"></div>
       <button id="asmOishGo" class="btn btn-sm btn-teal"><i class="bi bi-box-arrow-in-down me-1"></i>Assemble</button>
@@ -295,5 +309,5 @@ async function showBinary(doc, row, switchTab = true, activeFile = null) {
   }
 }
 
-window.OxInspect = { reflectionHTML, oishViewHTML, assembleCardHTML, binRows, showBinary, annoLines };
+window.OxInspect = { setVocab, reflectionHTML, oishViewHTML, assembleCardHTML, binRows, showBinary, annoLines };
 })();

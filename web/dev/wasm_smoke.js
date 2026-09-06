@@ -655,6 +655,26 @@ async function main() {
   try { await OxWasm.assemble("dxil", "; nothing"); } catch (e) { dxilAssemblyRefused = true; }
   assert("DXIL assembly of garbage is refused", dxilAssemblyRefused);
 
+  /* ---- vocabularies: what the page and the mock tier reason with, straight off the compiler ------- */
+
+  {
+    const v = await OxWasm.annotationEnums();
+    const byName = Object.fromEntries((v.stages || []).map(s => [s.name, s]));
+    assert("the vocabularies carry every stage with its library flag and profile",
+      byName.compute && byName.compute.lib === false && byName.compute.profile === "cs" &&
+      byName.raygeneration && byName.raygeneration.lib === true && byName.raygeneration.profile === "lib",
+      JSON.stringify(v.stages));
+    assert("and the backend masks", Array.isArray(v.extensionsNoDxil) && v.extensionsNoDxil.includes("AtomicF32") &&
+      Array.isArray(v.extensionsNoSpirv) && v.extensionsNoSpirv.includes("MeshTaskTexDeriv"),
+      JSON.stringify([v.extensionsNoDxil, v.extensionsNoSpirv]));
+    assert("and the compiler's version", v.version && Number.isInteger(v.version.major) && v.version.major >= 3,
+      JSON.stringify(v.version));
+    assert("and the shader model range with each extension's floor",
+      v.shaderModels && v.shaderModels.min === "6.5" && /^6\.\d+$/.test(v.shaderModels.max) &&
+      v.extensionMinModel && v.extensionMinModel.CoopVec === "6.10",
+      JSON.stringify([v.shaderModels, v.extensionMinModel]));
+  }
+
   /* ---- pipelines (oiSP) ---------------------------------------------------------------------- */
 
   const computePipeline = await OxWasm.spDerive(compute.bytes, "compute.oiSH", []);

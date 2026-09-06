@@ -1448,7 +1448,78 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_annotationEnums() {
 		gotoIfError3(clean, Json_cstr(&json, ESHVendor_names[i], alloc, e_rr));
 	}
 
-	gotoIfError3(clean, Json_raw(&json, "]}", alloc, e_rr));
+	//The extensions only one backend can compile, by the compiler's own masks
+
+	gotoIfError3(clean, Json_raw(&json, "],\"extensionsNoDxil\":[", alloc, e_rr));
+
+	{
+		Bool first = true;
+
+		for (U64 i = 0; i < ESHExtension_Count; ++i)
+			if (ESHExtension_NoDxilCompile & ((U64)1 << i)) {
+				gotoIfError3(clean, Json_next(&json, &first, alloc, e_rr));
+				gotoIfError3(clean, Json_cstr(&json, ESHExtension_names[i], alloc, e_rr));
+			}
+	}
+
+	gotoIfError3(clean, Json_raw(&json, "],\"extensionsNoSpirv\":[", alloc, e_rr));
+
+	{
+		Bool first = true;
+
+		for (U64 i = 0; i < ESHExtension_Count; ++i)
+			if (ESHExtension_NoSpirvCompile & ((U64)1 << i)) {
+				gotoIfError3(clean, Json_next(&json, &first, alloc, e_rr));
+				gotoIfError3(clean, Json_cstr(&json, ESHExtension_names[i], alloc, e_rr));
+			}
+	}
+
+	//Every pipeline stage: its name, whether it is a library stage, and the DXC target prefix it compiles as
+
+	gotoIfError3(clean, Json_raw(&json, "],\"stages\":[", alloc, e_rr));
+
+	for (U64 i = 0; i < EGfxPipelineStage_Count; ++i) {
+
+		const Bool lib = i >= EGfxPipelineStage_RtStartExt && i <= EGfxPipelineStage_RtEndExt;
+
+		gotoIfError3(clean, Json_fmt(
+			&json, alloc, e_rr, "%s{\"name\":\"%s\",\"lib\":%s,\"profile\":\"%s\"}",
+			i ? "," : "", SHEntry_stageNames[i], lib ? "true" : "false",
+			EGfxPipelineStage_getStagePrefix((EGfxPipelineStage) i)
+		));
+	}
+
+	//The shader models a binary may declare, and the floor an extension raises it to where it has one
+
+	gotoIfError3(clean, Json_fmt(
+		&json, alloc, e_rr, "],\"shaderModels\":{\"min\":\"%u.%u\",\"max\":\"%u.%u\"},\"extensionMinModel\":{",
+		(U32) (OISH_SHADER_MODEL_MIN >> 8), (U32) (OISH_SHADER_MODEL_MIN & 0xFF),
+		(U32) (OISH_SHADER_MODEL_MAX >> 8), (U32) (OISH_SHADER_MODEL_MAX & 0xFF)
+	));
+
+	{
+		Bool first = true;
+
+		for (U64 i = 0; i < ESHExtension_Count; ++i) {
+
+			const U16 minModel = ESHExtension_minShaderModel((ESHExtension)((U64)1 << i));
+
+			if(minModel <= OISH_SHADER_MODEL_MIN)
+				continue;
+
+			gotoIfError3(clean, Json_fmt(
+				&json, alloc, e_rr, "%s\"%s\":\"%u.%u\"",
+				first ? "" : ",", ESHExtension_names[i], (U32) (minModel >> 8), (U32) (minModel & 0xFF)
+			));
+
+			first = false;
+		}
+	}
+
+	gotoIfError3(clean, Json_fmt(
+		&json, alloc, e_rr, "},\"version\":{\"major\":%u,\"minor\":%u,\"patch\":%u}}",
+		(U32) OXC3_MAJOR, (U32) OXC3_MINOR, (U32) OXC3_PATCH
+	));
 	frame = Wasm_frame(&json, NULL);
 
 clean:

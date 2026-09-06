@@ -218,7 +218,18 @@ const SP_FIELD = Object.fromEntries(SP_FIELDS.map(f => [f.field, f]));
 const GRAPHICS_STAGES = ["vertex", "hull", "domain", "geometry", "pixel", "mesh", "task"];
 const RT_STAGES = ["raygeneration", "miss", "closesthit", "anyhit", "intersection", "callable"];
 const HIT_STAGES = ["closesthit", "anyhit", "intersection"];
-const RGBA8 = 3;                                     // ETextureFormatId_RGBA8, the assumed color target
+/* An enum value by the name the compiler's own tables give it (recorded as spVocab), so no numeric literal
+ * here can drift from the enum. A bit flag enum answers with the bit. Unknown names throw: silent zero would
+ * hide exactly the drift this exists to catch. */
+function enumValue(enumName, valueName) {
+  const names = ((window.OxMockData && window.OxMockData.spVocab) || {})[enumName];
+  const i = names ? names.indexOf(valueName) : -1;
+  if (i < 0) throw new Error(`mock: ${enumName}.${valueName} is not in the recorded vocabulary`);
+  return i;
+}
+const flagValue = (enumName, valueName) => 1 << enumValue(enumName, valueName);
+
+const RGBA8 = enumValue("ETextureFormatId", "RGBA8");                                     // ETextureFormatId_RGBA8, the assumed color target
 
 function esbBytes(t) {
   const m = String(t).match(/^([FIU])(8|16|32|64)(?:x([2-4]))?(?:x([2-4]))?$/);
@@ -320,7 +331,7 @@ function derivePipeline(doc, pick) {
     const perKind = HIT_STAGES.map(s => stages.filter(x => x.stage === s).length);
     if (perKind.some(n => n > 1)) flags.push("AssumedHitGrouping");
     F("rt.maxRecursionDepth", 0, 1, "assumed");
-    F("rt.flags", 0, 2, "assumed");                    // EPipelineRaytracingFlags_Default = SkipAABBs
+    F("rt.flags", 0, flagValue("EPipelineRaytracingFlags", "SkipAABBs"), "assumed");
   }
 
   const base = doc.name.replace(/\.(oiSH|hlsl)$/i, "");
@@ -415,8 +426,8 @@ function seedOispDocs() {
     supply(post, 0, "rtv.format", 0, 28);             // rgba16f, the way -pso-set rtv.format[0]=rgba16f supplies it
     supply(post, 0, "blend.enable", 0, 1);
     supply(post, 0, "blend.targetMask", 0, 1);
-    supply(post, 0, "blend.src", 0, 2);               // EBlend_SrcAlpha
-    supply(post, 0, "blend.dst", 0, 3);               // EBlend_OneMinusSrcAlpha
+    supply(post, 0, "blend.src", 0, enumValue("EBlend", "SrcAlpha"));
+    supply(post, 0, "blend.dst", 0, enumValue("EBlend", "InvSrcAlpha"));
     supply(post, 0, "topology", 0, 0);
     out[post.name] = post;
   }
@@ -425,7 +436,7 @@ function seedOispDocs() {
   const trace = derivePipeline(traceDoc, { lib: traceDoc.binaries.length - 1 });
   if (!trace.refused) {
     supply(trace, 0, "rt.maxRecursionDepth", 0, 2);   // -pso-set rt.maxRecursionDepth=2
-    supply(trace, 0, "rt.flags", 0, 2);               // EPipelineRaytracingFlags_Default (skip AABBs)
+    supply(trace, 0, "rt.flags", 0, flagValue("EPipelineRaytracingFlags", "SkipAABBs"));
     out[trace.name] = trace;
   }
   return out;

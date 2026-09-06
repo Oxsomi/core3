@@ -1849,6 +1849,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   {
     const enums = await window.OxAPI.annotationEnums();
+    window.OxInspect.setVocab(enums);
     if (enums.extensions.length)
       $("#extList").innerHTML = enums.extensions.map(e => `<span class="tok">${esc(e)}</span>`).join("");
     if (enums.vendors.length)

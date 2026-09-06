@@ -470,7 +470,10 @@ window.OxAPI = {
     return W().caUnpack(bytes);
   },
 
-  /* Extension + vendor names for the syntax reference; the recording keeps the mock tier honest. */
+  /* The compiler's own vocabularies: {extensions, vendors, extensionsNoDxil, extensionsNoSpirv,
+   * stages:[{name, lib, profile}], shaderModels:{min, max}, extensionMinModel:{name: model},
+   * version:{major, minor, patch}}. The syntax reference, the Assemble card
+   * and the mock tier all read these, off the module or off the recording taken from it. */
   async annotationEnums() {
     if (wasm()) {
       try { return await W().annotationEnums(); } catch (e) { /* fall through to the recording */ }

@@ -1946,7 +1946,7 @@ Without the flag:
 - Nothing renumbers: the resource arrays keep their own set and binding numbers, since only set 0 held the sampler.
 - `_samplers`, `sampler(i)` and `samplerUniform(i)` are not declared in `resources.hlsli`. A shader wanting them annotates `[[oxc::extension("DynamicSamplers")]]`, which sets `__OXC_EXT_DYNAMICSAMPLERS` exactly like every other extension define and is what makes the reference compile at all.
 
-`ESHExtension_DynamicSamplers` is set by the annotation, and reflection also infers it for any binary declaring a sampler **array** of its own, the same way `ESHExtension_Bindless` is derived. `GraphicsDeviceRef_checkShaderFeatures` refuses such a binary on a device whose layout has no sampler array, naming the flag, instead of letting it resolve against a binding that was never declared. A singular sampler is unaffected: it is a plain binding, or better, an immutable one.
+`ESHExtension_DynamicSamplers` is set by the annotation, and reflection also infers it for any binary declaring a sampler **array** of its own, the same way `ESHExtension_Bindless` is derived. Unlike Bindless it stays part of a binary's identity: a permutation declared with it and one declared without are two binaries, which is how the sample project's bindless.hlsl ships a static-sampler build first and the dynamic one second. `GraphicsDeviceRef_checkShaderFeatures` refuses such a binary on a device whose layout has no sampler array, naming the flag, instead of letting it resolve against a binding that was never declared. A singular sampler is unaffected: it is a plain binding, or better, an immutable one.
 
 Prefer immutable samplers. Dynamic samplers only pay for themselves when the sampler is genuinely selected by an index the shader computes.
 

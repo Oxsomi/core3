@@ -13,26 +13,17 @@ const U = window.OxUtil;
 
 /* ------------------------------------------------------------------ constants (match core3) */
 
-const VERSION = { major: 3, minor: 2, patch: 102 };                  // OXC3_MAJOR/MINOR/PATCH
+/* Every compiler fact the mock reasons with comes from the recording gen_mock_data.js took off the module's
+ * own vocabularies (js/mock_data.js), never from a copy kept here: the version stamp, the stages with their
+ * library flag and DXC profile prefix, and which extensions only one backend compiles. */
+const ENUMS = (window.OxMockData && window.OxMockData.enums) || {};
+const VERSION = ENUMS.version || { major: 0, minor: 0, patch: 0 };
+const STAGES = (ENUMS.stages || []).map(s => s.name);
+const LIB_STAGES = new Set((ENUMS.stages || []).filter(s => s.lib).map(s => s.name));
+const STAGE_PROFILE = Object.fromEntries((ENUMS.stages || []).filter(s => !s.lib).map(s => [s.name, s.profile]));
 
-const STAGES = [                                                     // SHEntry_stageNames
-  "vertex", "pixel", "compute", "geometry", "hull", "domain",
-  "raygeneration", "callable", "miss", "closesthit", "anyhit", "intersection",
-  "mesh", "task"
-];
-const LIB_STAGES = new Set(["raygeneration", "callable", "miss", "closesthit", "anyhit", "intersection"]);
-const STAGE_PROFILE = { vertex: "vs", pixel: "ps", geometry: "gs", hull: "hs", domain: "ds", compute: "cs", mesh: "ms", task: "as" };
-
-const EXTENSIONS = [                                                 // ESHExtension_names
-  "F64", "I64", "16BitTypes", "AtomicI64", "AtomicF32", "AtomicF64", "DynamicSamplers",
-  "SubgroupArithmetic", "SubgroupShuffle", "RayQuery", "RayMicromapOpacity", "RayTriPosition",
-  "RayMotionBlur", "RayReorder", "Multiview", "ComputeDeriv", "PAQ", "MeshTaskTexDeriv",
-  "WriteMSTexture", "Bindless", "UnboundArraySize", "SubgroupOperations",
-  "CoopVec", "CoopMat", "CoopFP8", "CoopVecTraining", "DescriptorHeap"
-];
-const EXT_SPV_ONLY  = new Set(["AtomicF32", "AtomicF64", "SubgroupArithmetic", "SubgroupShuffle", "RayMotionBlur"]); // ESHExtension_NoDxilCompile
-const EXT_DXIL_ONLY = new Set(["MeshTaskTexDeriv"]);                                                                // ESHExtension_NoSpirvCompile
-const VENDORS = ["NV", "AMD", "ARM", "QCOM", "INTC", "IMGT", "MSFT", "APPL", "SMSG", "HWEI", "GOGL", "MESA"];   // ESHVendor
+const EXT_SPV_ONLY  = new Set(ENUMS.extensionsNoDxil || []);
+const EXT_DXIL_ONLY = new Set(ENUMS.extensionsNoSpirv || []);
 
 /* ------------------------------------------------------------------ builtin includes (@…) */
 /* The compiler embeds these and serves them through Compiler_builtInIncludeAt, so they are recorded
@@ -172,15 +163,15 @@ function resolveIncludes(rootName, project) {
 
 /* ------------------------------------------------------------------ the analyzer */
 
-const MIN_MODEL = "6.5";                             // OISH_SHADER_MODEL_MIN … 6.10 max
+const MIN_MODEL = (ENUMS.shaderModels && ENUMS.shaderModels.min) || "6.5";
 function modelNum(m) { const [a, b] = m.split("."); return (+a) * 100 + (+b); }
 function minModelFor(stage, exts, wave) {
   let min = MIN_MODEL;
   const bump = v => { if (modelNum(v) > modelNum(min)) min = v; };
   if (wave && (wave.min || wave.max || wave.rec)) bump("6.8"); else if (wave && wave.req) bump("6.6");
   for (const e of exts) {
-    if (e === "CoopVec" || e === "CoopMat" || e === "CoopFP8" || e === "CoopVecTraining" || e === "RayTriPosition") bump("6.10");
-    if (e === "AtomicI64" || e === "ComputeDeriv" || e === "PAQ" || e === "MeshTaskTexDeriv" || e === "DescriptorHeap") bump("6.6");
+    const floor = (ENUMS.extensionMinModel || {})[e];   // the compiler's own floor per extension
+    if (floor) bump(floor);
   }
   return min;
 }
@@ -722,7 +713,7 @@ function assembleOiSH(doc, ident) {
   return out;
 }
 
-window.OxMock = { VERSION, STAGES, LIB_STAGES, STAGE_PROFILE, EXTENSIONS, VENDORS, BUILTINS,
+window.OxMock = { VERSION, MIN_MODEL, STAGES, LIB_STAGES, STAGE_PROFILE, BUILTINS,
   SAMPLE_FILES, analyze, compileFile, seedOishDocs, parseOiSHBytes, disasm, oishBytes, binBytes,
   sampleStandaloneBins, lightingVariantProject, spvEnvFor, backendsFor, parseStructs, normTypeExport: normType,
   parseDxcArgv, compileRaw, reflectBinary, assembleOiSH };

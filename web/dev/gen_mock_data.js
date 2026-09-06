@@ -8,8 +8,9 @@
  *
  *   node web/dev/gen_mock_data.js [path/to/OxC3_wasm.js]
  *
- * Re-run it when the sample project, the built-in includes or any of the three document contracts
- * change; js/mock_data.js is generated and committed, so nobody needs a wasm build to read it.
+ * build_web.py --frontend runs it against the module it just built, so the recording follows the sample
+ * project, the built-in includes and the three document contracts on its own. js/mock_data.js is
+ * generated and committed, so nobody needs a wasm build to read it.
  *
  * File bytes are deliberately not recorded. They would roughly double the file, and the fallback has
  * no reader for them: a download without a module still goes through the mock's own serializer.
@@ -118,7 +119,7 @@ async function main() {
 
   const data = { samples, builtins: {}, oish: {}, oisr: {}, oisp: {} };
 
-  /* The annotation vocabularies, exactly as the oiSH enums spell them. */
+  /* Every vocabulary the page and its mock tier reason with, exactly as the compiler spells them. */
   data.enums = await OxWasm.annotationEnums();
   data.spVocab = await OxWasm.spFieldVocab();
 

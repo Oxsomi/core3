@@ -597,8 +597,9 @@ Bool SHBinaryIdentifier_equals(const SHBinaryIdentifier *a, const SHBinaryIdenti
 	//If they're merged, bindless will be required for both.
 	//Another reason is SPIRV might strip resources that are kept in dxil with -fhlsl-unused-resources=keep-all
 
-	ESHExtension toIgnore =
-		ESHExtension_Bindless | ESHExtension_UnboundArraySize | ESHExtension_DynamicSamplers;
+	//DynamicSamplers is part of the identity: a permutation declared with it and one declared without are two
+	// binaries, and its inferred form comes from a reflected sampler array that both backends agree on.
+	ESHExtension toIgnore = ESHExtension_Bindless | ESHExtension_UnboundArraySize;
 
 	ESHExtension extensionsA = a->extensions & ~toIgnore;
 	ESHExtension extensionsB = b->extensions &~ toIgnore;

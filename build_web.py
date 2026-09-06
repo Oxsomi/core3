@@ -297,6 +297,14 @@ def stageFrontend(mode, singleFile=False):
 	if singleFile:
 		return print(f"-- Staged {stagedName} into {os.path.relpath(outDir, common.ROOT)}")
 
+	# The recording the page falls back to is taken from the module just built, so js/mock_data.js can't
+	# drift from the samples, the builtin includes or the document contracts it mirrors. The committed copy
+	# is what the module free tests read, so a rebuild that changes it is a change to review like any other.
+
+	subprocess.run(
+		[emsdkNode(), os.path.join(common.ROOT, WEB_FRONTEND, "dev", "gen_mock_data.js"), moduleJs], check=True
+	)
+
 	# Precompressed siblings belong to the module they were made from: serveFrontend (and a real host)
 	# prefers them, so a stale one would silently shadow the fresh module. --precompress recreates them.
 	for leftover in (f"{WEB_MODULE}.js.br", f"{WEB_MODULE}.wasm.br"):

@@ -105,6 +105,11 @@ Reflection and the wasm serializers
   which means a switch on the page and a parameter on the writer rather than a fixed rule.
 - The JSON strings should reserve up front, so a document does not reallocate repeatedly while the
   first fields are written.
+- The mock tier takes every compiler fact from the recording of the module's vocabularies (stages,
+  profiles, backend masks, model floors, version, enum value names). What it still invents is its own:
+  the regexes that guess which extensions a source uses, the SPIR-V capability names it prints per
+  extension, the DXC argument line the Command tab reconstructs, and the wave-op model bumps. Each is
+  a stand-in for something only the module can answer; the Command tab's is listed as not wired.
 - Texture and StructuredBuffer inner type names: IHLSLReflection appears to give us the inner type,
   and hover does not show it.
 
