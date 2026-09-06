@@ -369,10 +369,12 @@ def precompressFrontend():
 		print(f"-- {name}: {os.path.getsize(src):,} -> {os.path.getsize(src + '.br'):,} bytes (.br)")
 
 def runFrontendTests(mode):
-	"""Drive the staged module through the frontend's own boundary (web/js/wasm.js), headless.
-
-	This is the regression net for the boundary rather than for the page: the call frame, wasm64
-	pointer marshalling, the project tree #includes resolve against, and every document serializer.
+	"""Drive the staged module through the frontend's own boundary (web/js/wasm.js), headless, then the
+	page's own module free tests.
+	The two smokes are the regression net for the boundary: the call frame, wasm64 pointer marshalling,
+	the project tree #includes resolve against, and every document serializer. The other three cover the
+	page against the recording: the pure cores, the editor's HLSL mode against the real CodeMirror, and
+	the whole page under jsdom on the mock tier.
 	"""
 
 	smoke = os.path.join(common.ROOT, WEB_FRONTEND, "dev", "wasm_smoke.js")
@@ -387,6 +389,25 @@ def runFrontendTests(mode):
 
 		result = subprocess.run(f"\"{emsdkNode()}\" \"{suite}\" \"{module}\"", shell=True)
 
+		if result.returncode:
+			print("-- Frontend tests FAILED", file=sys.stderr)
+			sys.exit(result.returncode)
+
+	# The page's own tests need no module but do need its dev dependencies (jsdom, the real CodeMirror), which
+	# the npm beside the emsdk's node installs once when web/node_modules is absent, the CI case.
+
+	webDir = os.path.join(common.ROOT, WEB_FRONTEND)
+	node = emsdkNode()
+
+	if not os.path.isdir(os.path.join(webDir, "node_modules")):
+		npm = os.path.join(os.path.dirname(node), "npm")
+		result = subprocess.run(f"\"{node}\" \"{npm}\" ci --no-audit --no-fund", shell=True, cwd=webDir)
+		if result.returncode:
+			print("-- npm ci for the frontend tests FAILED", file=sys.stderr)
+			sys.exit(result.returncode)
+
+	for script in ("frontend_unit.js", "editor_test.js", "smoke.js"):
+		result = subprocess.run(f"\"{node}\" \"{os.path.join('dev', script)}\"", shell=True, cwd=webDir)
 		if result.returncode:
 			print("-- Frontend tests FAILED", file=sys.stderr)
 			sys.exit(result.returncode)

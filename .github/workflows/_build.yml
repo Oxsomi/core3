@@ -359,6 +359,19 @@ jobs:
         if: inputs.os == 'web' && inputs.upload_prebuilts
         run: ${{ inputs.python_cmd }} build_web.py -mode Release --run_tests --skip_host_package --frontend --precompress ${{ inputs.build_flags }}
 
+      # Staging just regenerated js/mock_data.js from the module it built. The recorder is deterministic, so
+      # a diff here means the committed recording is stale: a sample, a builtin include or a document contract
+      # changed and the regenerated copy was never reviewed and committed with it.
+      - name: Check the committed recording matches the module
+        if: inputs.os == 'web' && inputs.upload_prebuilts
+        run: git diff --exit-code -- web/js/mock_data.js
+
+      # The page's own tests: the two smokes against the staged module, then the module free ones against
+      # the recording just checked.
+      - name: Run the frontend tests
+        if: inputs.os == 'web' && inputs.upload_prebuilts
+        run: ${{ inputs.python_cmd }} build_web.py -mode Release --run_frontend_tests --skip_build
+
       # ── Build: Android ─────────────────────────────────────────────────────
       # An android build can't run its own packager, so it tool_requires a host oxc3 that has OxC3_package in it,
       # as set up by conanfile.py's build_requirements.

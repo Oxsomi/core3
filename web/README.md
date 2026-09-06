@@ -411,4 +411,6 @@ rendering, which the other suites deliberately don't touch.
 
 `build_web.py --frontend` regenerates `js/mock_data.js` from the module it just built, so the recording
 follows the sample project, the built-in includes and the three document contracts on its own;
-`node dev/gen_mock_data.js` does the same by hand.
+`node dev/gen_mock_data.js` does the same by hand. The recording stays committed, since the page's first
+paint and the module free tests read it without a build; the release job regenerates it and fails when
+the committed copy differs, and then runs every test here through `build_web.py --run_frontend_tests`.
