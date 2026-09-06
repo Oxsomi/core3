@@ -148,13 +148,13 @@ void DescriptorTable_free(void *tableGeneric, const Allocator *alloc) {
 
 	for(U64 i = 0; i < table->bindings.length; ++i) {
 
-		ESHRegisterType type = bindings.ptr[i].registerType & ESHRegisterType_TypeMask;
+		EGfxRegisterType type = bindings.ptr[i].registerType & EGfxRegisterType_TypeMask;
 		U8 type8 = 2;
 
-		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+		if(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd)
 			type8 = 0;
 
-		else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
+		else if(type >= EGfxRegisterType_BufferStart && type < EGfxRegisterType_BufferEnd)
 			type8 = 1;
 
 		if(bindings.ptr[i].count > 1)
@@ -257,13 +257,13 @@ Bool DescriptorHeapRef_createDescriptorTable(
 		if(GraphicsDeviceRef_ptr(dev)->flags & EGraphicsDeviceFlags_IsDebug)
 			gotoIfError3(clean, ListDescriptorStackTrace_resize(&multiple->stackTraces, j, alloc, e_rr));
 
-		ESHRegisterType type = bindings.ptr[i].registerType & ESHRegisterType_TypeMask;
+		EGfxRegisterType type = bindings.ptr[i].registerType & EGfxRegisterType_TypeMask;
 
-		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd) {
+		if(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd) {
 			gotoIfError3(clean, ListTextureDescriptorRange_resize(&multiple->textures, j, alloc, e_rr));
 		}
 
-		else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
+		else if(type >= EGfxRegisterType_BufferStart && type < EGfxRegisterType_BufferEnd)
 			gotoIfError3(clean, ListBufferDescriptorRange_resize(&multiple->buffers, j, alloc, e_rr));
 	}
 
@@ -529,7 +529,7 @@ clean:
 	return s_uccess;
 }
 
-Bool Descriptor_eq(const Descriptor *a, const DescriptorTableBindingSingle *b, ESHRegisterType type) {
+Bool Descriptor_eq(const Descriptor *a, const DescriptorTableBindingSingle *b, EGfxRegisterType type) {
 
 	if (!a || !b || a->resource != b->resource)
 		return false;
@@ -544,10 +544,10 @@ Bool Descriptor_eq(const Descriptor *a, const DescriptorTableBindingSingle *b, E
 		"Descriptor_eq() checks for texture by using data[0, 1 and 2] (U64[3])"
 	);
 
-	if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+	if(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd)
 		return a->data[0] == b->data[0];
 
-	else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
+	else if (type >= EGfxRegisterType_BufferStart && type < EGfxRegisterType_BufferEnd)
 		return Buffer_eq(
 			Buffer_createRefConst(a->data, sizeof(U64) * 3),
 			Buffer_createRefConst(b->data, sizeof(U64) * 3)
@@ -591,7 +591,7 @@ Bool DescriptorTableRef_setDescriptors(
 		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_setDescriptors() called on a push descriptor"));
 
 	const DescriptorBinding *b = &bindings.ptr[bindId];
-	ESHRegisterType type = b->registerType & ESHRegisterType_TypeMask;
+	EGfxRegisterType type = b->registerType & EGfxRegisterType_TypeMask;
 
 	if(arrayId >= b->count)
 		retError(clean, Error_outOfBounds(0, arrayId, b->count, "DescriptorTableRef_setDescriptors()::arrayId out of bounds"));
@@ -659,7 +659,7 @@ Bool DescriptorTableRef_setDescriptors(
 							3, 0, "DescriptorTableRef_setDescriptors() counter must be a buffer"
 						));
 
-					if(type != ESHRegisterType_StructuredBufferAtomic)
+					if(type != EGfxRegisterType_StructuredBufferAtomic)
 						retError(clean, Error_invalidParameter(
 							3, 0,
 							"DescriptorTableRef_setDescriptors() can't set a counter resource if the type isn't "
@@ -682,7 +682,7 @@ Bool DescriptorTableRef_setDescriptors(
 				GraphicsResource res = DeviceBufferRef_ptr(d.resource)->resource;
 				U64 len = res.size;
 
-				if(!(res.flags & EGraphicsResourceFlag_ShaderWrite) && (b->registerType & ESHRegisterType_IsWrite))
+				if(!(res.flags & EGraphicsResourceFlag_ShaderWrite) && (b->registerType & EGfxRegisterType_IsWrite))
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() resource isn't allowed to be written by shader"
 					));
@@ -700,12 +700,12 @@ Bool DescriptorTableRef_setDescriptors(
 
 				U64 descLen = Descriptor_bufferLength(&d);
 
-				if(!(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd))
+				if(!(type >= EGfxRegisterType_BufferStart && type < EGfxRegisterType_BufferEnd))
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() buffer resource set at a non buffer register"
 					));
 
-				if(type == ESHRegisterType_ConstantBuffer) {
+				if(type == EGfxRegisterType_ConstantBuffer) {
 
 					if(start & 255)
 						retError(clean, Error_invalidParameter(
@@ -735,17 +735,17 @@ Bool DescriptorTableRef_setDescriptors(
 
 				//ShaderRead is not used for ConstantBuffer; it's EDeviceBufferUsage_Uniform
 
-				else if(!(res.flags & EGraphicsResourceFlag_ShaderRead) && !(b->registerType & ESHRegisterType_IsWrite))
+				else if(!(res.flags & EGraphicsResourceFlag_ShaderRead) && !(b->registerType & EGfxRegisterType_IsWrite))
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() resource isn't allowed to be read by shader"
 					));
 
-				if(descLen > 2 * GIBI && type == ESHRegisterType_ByteAddressBuffer)
+				if(descLen > 2 * GIBI && type == EGfxRegisterType_ByteAddressBuffer)
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() byte address buffer is limited to 2GiB"
 					));
 
-				if (type == ESHRegisterType_StructuredBuffer || type == ESHRegisterType_StructuredBufferAtomic) {
+				if (type == EGfxRegisterType_StructuredBuffer || type == EGfxRegisterType_StructuredBufferAtomic) {
 
 					if(descLen / b->structedBufferStride > 2 * GIBI)
 						retError(clean, Error_invalidParameter(
@@ -764,7 +764,7 @@ Bool DescriptorTableRef_setDescriptors(
 						));
 				}
 
-				if (type == ESHRegisterType_ByteAddressBuffer) {
+				if (type == EGfxRegisterType_ByteAddressBuffer) {
 
 					if(descLen % 4)
 						retError(clean, Error_invalidParameter(
@@ -777,7 +777,7 @@ Bool DescriptorTableRef_setDescriptors(
 						));
 				}
 
-				if (type == ESHRegisterType_StorageBuffer || type == ESHRegisterType_StorageBufferAtomic)
+				if (type == EGfxRegisterType_StorageBuffer || type == EGfxRegisterType_StorageBufferAtomic)
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() storage buffer isn't supported yet"        //TODO:
 					));
@@ -789,7 +789,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 			case EGraphicsTypeId_TLASExt:
 
-				if(type != ESHRegisterType_AccelerationStructure)
+				if(type != EGfxRegisterType_AccelerationStructure)
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() tlas set at a non tlas register"
 					));
@@ -808,7 +808,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 			case EGraphicsTypeId_Sampler:
 
-				if(type != ESHRegisterType_Sampler && type != ESHRegisterType_SamplerComparisonState)
+				if(type != EGfxRegisterType_Sampler && type != EGfxRegisterType_SamplerComparisonState)
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() sampler set at a non sampler register"
 					));
@@ -822,7 +822,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 				if(
 					d.resource &&
-					type == ESHRegisterType_SamplerComparisonState &&
+					type == EGfxRegisterType_SamplerComparisonState &&
 					!SamplerRef_ptr(d.resource)->info.enableComparison
 				)
 					retError(clean, Error_invalidParameter(
@@ -850,32 +850,32 @@ Bool DescriptorTableRef_setDescriptors(
 			case EGraphicsTypeId_RenderTexture:
 			case EGraphicsTypeId_DeviceTexture: {
 
-				if(!(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd))
+				if(!(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd))
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() texture resource set at a non texture register"
 					));
 
-				if (type == ESHRegisterType_Texture1D)
+				if (type == EGfxRegisterType_Texture1D)
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() Texture1D isn't supported"
 					));
 
 				UnifiedTexture tex = TextureRef_getUnifiedTexture(d.resource, NULL);
 
-				Bool isArray = b->registerType & ESHRegisterType_IsArray;
-				Bool isWrite = b->registerType & ESHRegisterType_IsWrite;
+				Bool isArray = b->registerType & EGfxRegisterType_IsArray;
+				Bool isWrite = b->registerType & EGfxRegisterType_IsWrite;
 				Bool isDepthBuffer = d.resource->refPtrType->typeId == (TypeId) EGraphicsTypeId_DepthStencil;
 				Bool hasStencil = false;
 
 				if(isDepthBuffer)
 					hasStencil = tex.depthFormat >= EDepthStencilFormat_StencilStart;
 
-				if(!(tex.resource.flags & EGraphicsResourceFlag_ShaderRead) && !(b->registerType & ESHRegisterType_IsWrite))
+				if(!(tex.resource.flags & EGraphicsResourceFlag_ShaderRead) && !(b->registerType & EGfxRegisterType_IsWrite))
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() resource isn't allowed to be read by shader"
 					));
 
-				if(!(tex.resource.flags & EGraphicsResourceFlag_ShaderWrite) && (b->registerType & ESHRegisterType_IsWrite))
+				if(!(tex.resource.flags & EGraphicsResourceFlag_ShaderWrite) && (b->registerType & EGfxRegisterType_IsWrite))
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() resource isn't allowed to be written by shader"
 					));
@@ -906,7 +906,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 				//Only arrays are allowed to have arrayCount and arrayId (excluding 3D textures and cubes)
 
-				Bool isArrayType = isArray || type == ESHRegisterType_TextureCube || type == ESHRegisterType_Texture3D;
+				Bool isArrayType = isArray || type == EGfxRegisterType_TextureCube || type == EGfxRegisterType_Texture3D;
 
 				if(!isArrayType && (d.texture.arrayId || (d.texture.arrayCount != tex.length && d.texture.arrayCount)))
 					retError(clean, Error_invalidParameter(
@@ -926,7 +926,7 @@ Bool DescriptorTableRef_setDescriptors(
 						0, "DescriptorTableRef_setDescriptors() (RW)Texture2DMS doesn't support specifying a subresource"
 					));
 
-				if(tex.sampleCount && type != ESHRegisterType_Texture2DMS)
+				if(tex.sampleCount && type != EGfxRegisterType_Texture2DMS)
 					retError(clean, Error_unsupportedOperation(
 						0, "DescriptorTableRef_setDescriptors() (RW)Texture2DMS can't be used as a regular texture"
 					));
@@ -938,7 +938,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 				//TextureCube validation
 
-				if(type == ESHRegisterType_TextureCube) {
+				if(type == EGfxRegisterType_TextureCube) {
 
 					if((d.texture.arrayCount % 6) || !d.texture.arrayCount)
 						retError(clean, Error_invalidState(
@@ -954,7 +954,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 				//Only Texture2D(Array) can have a planeId
 
-				if(type != ESHRegisterType_Texture2D && d.texture.planeId)
+				if(type != EGfxRegisterType_Texture2D && d.texture.planeId)
 					retError(clean, Error_invalidState(
 						0, "DescriptorTableRef_setDescriptors() Texture2D(Array) is the only one permitted to have a planeId"
 					));
@@ -1005,10 +1005,10 @@ Bool DescriptorTableRef_setDescriptors(
 
 			single.resource = binding->multiple.resources.ptr[j];
 
-			if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+			if(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd)
 				single.texture = binding->multiple.textures.ptr[j];
 
-			else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
+			else if (type >= EGfxRegisterType_BufferStart && type < EGfxRegisterType_BufferEnd)
 				single.buffer = binding->multiple.buffers.ptr[j];
 
 			if (!Descriptor_eq(&darr->ptr[j - arrayId], &single, type)) {
@@ -1076,10 +1076,10 @@ Bool DescriptorTableRef_setDescriptors(
 			if(binding->multiple.stackTraces.ptr)
 				binding->multiple.stackTraces.ptrNonConst[j] = stack;
 
-			if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+			if(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd)
 				binding->multiple.textures.ptrNonConst[j] = darr->ptr[j - arrayId].texture;
 
-			else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
+			else if(type >= EGfxRegisterType_BufferStart && type < EGfxRegisterType_BufferEnd)
 				binding->multiple.buffers.ptrNonConst[j] = darr->ptr[j - arrayId].buffer;
 		}
 
@@ -1089,10 +1089,10 @@ Bool DescriptorTableRef_setDescriptors(
 		binding->single.stackTrace = stack;
 		binding->single.maintainRef = maintainRef;
 
-		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+		if(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd)
 			binding->single.texture = darr->ptr[0].texture;
 
-		else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
+		else if(type >= EGfxRegisterType_BufferStart && type < EGfxRegisterType_BufferEnd)
 			binding->single.buffer = darr->ptr[0].buffer;
 	}
 
@@ -1226,7 +1226,7 @@ clean:
 
 Bool DescriptorTableRef_findBindlessRegister(
 	DescriptorTableRef *table,
-	ESHRegisterType regType,
+	EGfxRegisterType regType,
 	U32 strideOrLength,
 	U16 *bindId,
 	U8 *bindlessTypeId,
@@ -1261,7 +1261,7 @@ Bool DescriptorTableRef_findBindlessRegister(
 
 	if(TextureRef_isTexture(resource)) {
 
-		if(isDepthStencil && (regType & ESHRegisterType_IsWrite))
+		if(isDepthStencil && (regType & EGfxRegisterType_IsWrite))
 			retError(clean, Error_invalidOperation(
 				0, "DescriptorTableRef_findBindlessRegister() DepthStencil is not permitted on RW texture"
 			));
@@ -1302,20 +1302,20 @@ Bool DescriptorTableRef_findBindlessRegister(
 			0, "DescriptorTableRef_findBindlessRegister() depth stencil is the only one allowed a planeId"
 		));
 
-	ESHRegisterType type = regType & ESHRegisterType_TypeMask;
+	EGfxRegisterType type = regType & EGfxRegisterType_TypeMask;
 
 	U8 otherResourceType = 0;
 
-	if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+	if(type >= EGfxRegisterType_TextureStart && type < EGfxRegisterType_TextureEnd)
 		otherResourceType = 0;
 
-	else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
+	else if(type >= EGfxRegisterType_BufferStart && type < EGfxRegisterType_BufferEnd)
 		otherResourceType = 1;
 
-	else if(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState)
+	else if(type == EGfxRegisterType_Sampler || type == EGfxRegisterType_SamplerComparisonState)
 		otherResourceType = 2;
 
-	else if(type == ESHRegisterType_AccelerationStructure)
+	else if(type == EGfxRegisterType_AccelerationStructure)
 		otherResourceType = 3;
 
 	else {
@@ -1361,23 +1361,23 @@ Bool DescriptorTableRef_findBindlessRegister(
 					tex.depthFormat == EDepthStencilFormat_D16 ? ETextureFormatId_R16 : ETextureFormatId_R32f
 				);
 
-			ESHTexturePrimitive targPrim = bind.textureFormat.primitive & ESHTexturePrimitive_TypeMask;
+			EGfxTexturePrimitive targPrim = bind.textureFormat.primitive & EGfxTexturePrimitive_TypeMask;
 
-			if((bind.registerType & ESHRegisterType_IsWrite) && targPrim != ESHTexturePrimitive_Count) {
+			if((bind.registerType & EGfxRegisterType_IsWrite) && targPrim != EGfxTexturePrimitive_Count) {
 
-				ESHTexturePrimitive prim =
-					ESHTexturePrimitive_fromTextureFormat(ETextureFormatId_unpack[formatId]) & ESHTexturePrimitive_TypeMask;
+				EGfxTexturePrimitive prim =
+					EGfxTexturePrimitive_fromTextureFormat(ETextureFormatId_unpack[formatId]) & EGfxTexturePrimitive_TypeMask;
 
 				Bool compatible = false;
 
 				switch (targPrim) {
 
-					case ESHTexturePrimitive_Float:
-					case ESHTexturePrimitive_Double:
+					case EGfxTexturePrimitive_Float:
+					case EGfxTexturePrimitive_Double:
 
 						compatible =
-							prim == ESHTexturePrimitive_Float || prim == ESHTexturePrimitive_Double ||
-							prim == ESHTexturePrimitive_SNorm || prim == ESHTexturePrimitive_UNorm;
+							prim == EGfxTexturePrimitive_Float || prim == EGfxTexturePrimitive_Double ||
+							prim == EGfxTexturePrimitive_SNorm || prim == EGfxTexturePrimitive_UNorm;
 
 						break;
 
@@ -1500,7 +1500,7 @@ clean:
 
 Bool DescriptorTableRef_allocDescriptorBindless(
 	DescriptorTableRef *table,
-	ESHRegisterType type,
+	EGfxRegisterType type,
 	U32 strideOrLength,
 	U16 *bindId,
 	U8 *bindlessTypeId,
@@ -1512,8 +1512,8 @@ Bool DescriptorTableRef_allocDescriptorBindless(
 
 	Bool s_uccess = true;
 
-	ESHRegisterType type4 = type & ESHRegisterType_TypeMask;
-	Bool isTexture = type4 >= ESHRegisterType_TextureStart && type4 < ESHRegisterType_TextureEnd;
+	EGfxRegisterType type4 = type & EGfxRegisterType_TypeMask;
+	Bool isTexture = type4 >= EGfxRegisterType_TextureStart && type4 < EGfxRegisterType_TextureEnd;
 
 	if(!d)
 		retError(clean, Error_nullPointer(7, "DescriptorTableRef_allocDescriptorBindless()::d is required"));

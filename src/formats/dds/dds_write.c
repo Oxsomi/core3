@@ -136,9 +136,9 @@ Bool DDS_write(
 
 			case ETextureFormatId_RGBA8:
 			case ETextureFormatId_RG16:
-			case ETextureFormatId_BC4:        case ETextureFormatId_BC4s:
-			case ETextureFormatId_BC5:        case ETextureFormatId_BC5s:
-			case ETextureFormatId_RGBA16:    case ETextureFormatId_RGBA16s:
+			case ETextureFormatId_BC4:         case ETextureFormatId_BC4s:
+			case ETextureFormatId_BC5:         case ETextureFormatId_BC5s:
+			case ETextureFormatId_RGBA16:      case ETextureFormatId_RGBA16s:
 			case ETextureFormatId_R16f:        case ETextureFormatId_RG16f:        case ETextureFormatId_RGBA16f:
 			case ETextureFormatId_R32f:        case ETextureFormatId_RG32f:        case ETextureFormatId_RGBA32f:
 				break;
@@ -256,21 +256,21 @@ Bool DDS_write(
 			// without forcing a DXT10 header and are widely accepted,
 			// but a reader that only understands DXT10 would need the DXT10 path instead.
 
-			case ETextureFormat_BC4:        pixelFormat.magicNumber = EDDSFormatMagic_BC4;        break;
+			case ETextureFormat_BC4:         pixelFormat.magicNumber = EDDSFormatMagic_BC4;         break;
 			case ETextureFormat_BC4s:        pixelFormat.magicNumber = EDDSFormatMagic_BC4s;        break;
-			case ETextureFormat_BC5:        pixelFormat.magicNumber = EDDSFormatMagic_BC5;        break;
+			case ETextureFormat_BC5:         pixelFormat.magicNumber = EDDSFormatMagic_BC5;         break;
 			case ETextureFormat_BC5s:        pixelFormat.magicNumber = EDDSFormatMagic_BC5s;        break;
 
 			case ETextureFormat_RGBA16:        pixelFormat.magicNumber = EDDSFormatMagic_RGBA16;    break;
-			case ETextureFormat_RGBA16s:    pixelFormat.magicNumber = EDDSFormatMagic_RGBA16s;    break;
+			case ETextureFormat_RGBA16s:       pixelFormat.magicNumber = EDDSFormatMagic_RGBA16s;   break;
 
-			case ETextureFormat_R16f:        pixelFormat.magicNumber = EDDSFormatMagic_R16f;        break;
-			case ETextureFormat_RG16f:        pixelFormat.magicNumber = EDDSFormatMagic_RG16f;    break;
-			case ETextureFormat_RGBA16f:    pixelFormat.magicNumber = EDDSFormatMagic_RGBA16f;    break;
+			case ETextureFormat_R16f:         pixelFormat.magicNumber = EDDSFormatMagic_R16f;       break;
+			case ETextureFormat_RG16f:        pixelFormat.magicNumber = EDDSFormatMagic_RG16f;      break;
+			case ETextureFormat_RGBA16f:      pixelFormat.magicNumber = EDDSFormatMagic_RGBA16f;    break;
 
-			case ETextureFormat_R32f:        pixelFormat.magicNumber = EDDSFormatMagic_R32f;        break;
-			case ETextureFormat_RG32f:        pixelFormat.magicNumber = EDDSFormatMagic_RG32f;    break;
-			case ETextureFormat_RGBA32f:    pixelFormat.magicNumber = EDDSFormatMagic_RGBA32f;    break;
+			case ETextureFormat_R32f:         pixelFormat.magicNumber = EDDSFormatMagic_R32f;       break;
+			case ETextureFormat_RG32f:        pixelFormat.magicNumber = EDDSFormatMagic_RG32f;      break;
+			case ETextureFormat_RGBA32f:      pixelFormat.magicNumber = EDDSFormatMagic_RGBA32f;    break;
 
 			default:                                                                             break;
 		}

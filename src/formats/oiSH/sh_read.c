@@ -263,12 +263,12 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		//Validate binary
 
-		if (binary.entrypointType > ESHPipelineStage_Count)
+		if (binary.entrypointType > EGfxPipelineStage_Count)
 			retError(clean, Error_invalidState(
 				1, "SHFile_read() binary had invalid stageType"
 			));
 
-		if (!(binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation) && binary.entrypointType >= ESHPipelineStage_Count)
+		if (!(binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation) && binary.entrypointType >= EGfxPipelineStage_Count)
 			retError(clean, Error_invalidState(
 				1, "SHFile_read() binary not marked as shader annotation but had no valid stageType"
 			));
@@ -495,10 +495,10 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			}
 
 			SBFile *sbFile = NULL;
-			U8 regType = reg->registerType & ESHRegisterType_TypeMask;
+			U8 regType = reg->registerType & EGfxRegisterType_TypeMask;
 
 			if (
-				regType >= ESHRegisterType_BufferStart && regType <= ESHRegisterType_BufferEnd &&
+				regType >= EGfxRegisterType_BufferStart && regType <= EGfxRegisterType_BufferEnd &&
 				reg->shaderBufferId != U16_MAX
 			) {
 
@@ -520,7 +520,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		//Read binary sizes and data
 
-		for (U8 i = 0; i < ESHBinaryType_Count; ++i) {
+		for (U8 i = 0; i < EGfxBinaryType_Count; ++i) {
 
 			if (!((binary.binaryFlags >> i) & 1))
 				continue;
@@ -536,7 +536,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			gotoIfError3(clean, Buffer_createUninitializedBytes(binarySize, alloc, &binaryInfo.binaries[i], e_rr));
 		}
 
-		for (U8 i = 0; i < ESHBinaryType_Count; ++i) {
+		for (U8 i = 0; i < EGfxBinaryType_Count; ++i) {
 
 			if (!((binary.binaryFlags >> i) & 1))
 				continue;
@@ -554,7 +554,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	for (U64 i = 0; i < header.stageCount; ++i) {
 
-		if (fixedEntryInfo[i].pipelineStage >= ESHPipelineStage_Count)
+		if (fixedEntryInfo[i].pipelineStage >= EGfxPipelineStage_Count)
 			retError(clean, Error_invalidParameter(0, 0, "SHFile_read() stage[i].pipelineStage out of bounds"));
 
 		entry = (SHEntry) { .stage = fixedEntryInfo[i].pipelineStage };
@@ -621,13 +621,13 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 					gotoIfError3(clean, StreamCursor_consume(&cursor, offset, entry.outputSemanticNames, outputs, alloc, e_rr));
 				}
 
-				if (entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
+				if (entry.stage != EGfxPipelineStage_MeshExt && entry.stage != EGfxPipelineStage_TaskExt)
 					break;
 			}
 
 			// fallthrough
 
-			case ESHPipelineStage_Compute: {
+			case EGfxPipelineStage_Compute: {
 
 				SHGroups groups = (SHGroups) { 0 };
 				gotoIfError3(clean, StreamCursor_consume(&cursor, offset, &groups, sizeof(groups), alloc, e_rr));
@@ -637,7 +637,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 				entry.groupZ   = groups.z;
 				entry.waveSize = groups.waveSize;
 
-				if (entry.waveSize && entry.stage != ESHPipelineStage_Compute)
+				if (entry.waveSize && entry.stage != EGfxPipelineStage_Compute)
 					retError(clean, Error_invalidParameter(
 						0, 0, "SHFile_read() waveSize not supported by mesh or task shader"
 					));
@@ -651,17 +651,17 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 				break;
 			}
 
-			case ESHPipelineStage_RaygenExt:
+			case EGfxPipelineStage_RaygenExt:
 				break;
 
-			case ESHPipelineStage_ClosestHitExt:
-			case ESHPipelineStage_AnyHitExt:
-			case ESHPipelineStage_IntersectionExt:
+			case EGfxPipelineStage_ClosestHitExt:
+			case EGfxPipelineStage_AnyHitExt:
+			case EGfxPipelineStage_IntersectionExt:
 				gotoIfError3(clean, StreamCursor_consumeU8(&cursor, offset, &entry.intersectionSize, alloc, e_rr));
 				// fallthrough
 
-			case ESHPipelineStage_CallableExt:
-			case ESHPipelineStage_MissExt:
+			case EGfxPipelineStage_CallableExt:
+			case EGfxPipelineStage_MissExt:
 				gotoIfError3(clean, StreamCursor_consumeU8(&cursor, offset, &entry.payloadSize, alloc, e_rr));
 				break;
 		}

@@ -70,7 +70,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 
 	const SHEntry *entry = &shaderBinary->entries.ptr[entrypointId];
 
-	if(entry->stage != ESHPipelineStage_Compute)
+	if(entry->stage != EGfxPipelineStage_Compute)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute() entry is not a compute shader"

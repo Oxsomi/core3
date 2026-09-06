@@ -43,7 +43,7 @@
 // a resource silently dropped) is caught semantically instead of as an opaque corpus byte diff.
 
 //The shader lives at reflection/resources.hlsl: one compute entrypoint with one of (almost) every
-//ESHRegisterType, each actually used so DXC keeps it (RayQuery yields the AccelerationStructure register).
+//EGfxRegisterType, each actually used so DXC keeps it (RayQuery yields the AccelerationStructure register).
 
 //Find a reflected register by name across all binaries (registers hang off each SHBinaryInfo).
 static const SHRegisterRuntime *findReg(const SHFile *sh, const C8 *nm) {
@@ -70,8 +70,8 @@ void Test_shaderCompilerReflection(Test *t) {
 	Error err = Error_none();
 
 	static const struct { U8 mode; const C8 *name; } targets[] = {
-		{ ESHBinaryType_SPIRV, "spirv" },
-		{ ESHBinaryType_DXIL,  "dxil"  }
+		{ EGfxBinaryType_SPIRV, "spirv" },
+		{ EGfxBinaryType_DXIL,  "dxil"  }
 	};
 
 	for (U64 tg = 0; tg < sizeof(targets) / sizeof(targets[0]); ++tg) {
@@ -90,39 +90,39 @@ void Test_shaderCompilerReflection(Test *t) {
 
 		//Assert a register's base type (+ optionally the IsWrite bit) by name.
 		//Name-matched, so it's immune to register ordering differences between the SPIRV and DXIL reflectors.
-		#define ASSERT_REG(nm, wantType, wantWrite) do {                                                  \
+		#define ASSERT_REG(nm, wantType, wantWrite) do {                                                   \
 			const SHRegisterRuntime *r = ok ? findReg(&sh, nm) : NULL;                                     \
-			const Bool isW = r && (r->reg.registerType & ESHRegisterType_IsWrite);                         \
+			const Bool isW = r && (r->reg.registerType & EGfxRegisterType_IsWrite);                         \
 			if (!CharString_format(alloc, &label, &err, "%s: %s (%s)", nm, #wantType, bk))                 \
 				label = CharString_createRefCStrConst(nm);                                                 \
 			Test_assert(t, label.ptr,                                                                      \
-				r && (r->reg.registerType & ESHRegisterType_TypeMask) == (wantType) && isW == (wantWrite));\
+				r && (r->reg.registerType & EGfxRegisterType_TypeMask) == (wantType) && isW == (wantWrite));\
 			CharString_free(&label, alloc);                                                                \
 		} while (0)
 
-		ASSERT_REG("inBuf",  ESHRegisterType_StructuredBuffer,     false);
-		ASSERT_REG("outBuf", ESHRegisterType_StructuredBuffer,     true);
-		ASSERT_REG("rawIn",  ESHRegisterType_ByteAddressBuffer,    false);
-		ASSERT_REG("rawOut", ESHRegisterType_ByteAddressBuffer,    true);
-		ASSERT_REG("tex1d",  ESHRegisterType_Texture1D,            false);
-		ASSERT_REG("tex",    ESHRegisterType_Texture2D,            false);
-		ASSERT_REG("tex3d",  ESHRegisterType_Texture3D,            false);
-		ASSERT_REG("texCube",ESHRegisterType_TextureCube,          false);
-		ASSERT_REG("texMS",  ESHRegisterType_Texture2DMS,          false);
-		ASSERT_REG("shadowMap", ESHRegisterType_Texture2D,         false);
-		ASSERT_REG("img",    ESHRegisterType_Texture2D,            true);
-		ASSERT_REG("samp",   ESHRegisterType_Sampler,              false);
-		ASSERT_REG("tlas",   ESHRegisterType_AccelerationStructure, false);
+		ASSERT_REG("inBuf",  EGfxRegisterType_StructuredBuffer,     false);
+		ASSERT_REG("outBuf", EGfxRegisterType_StructuredBuffer,     true);
+		ASSERT_REG("rawIn",  EGfxRegisterType_ByteAddressBuffer,    false);
+		ASSERT_REG("rawOut", EGfxRegisterType_ByteAddressBuffer,    true);
+		ASSERT_REG("tex1d",  EGfxRegisterType_Texture1D,            false);
+		ASSERT_REG("tex",    EGfxRegisterType_Texture2D,            false);
+		ASSERT_REG("tex3d",  EGfxRegisterType_Texture3D,            false);
+		ASSERT_REG("texCube",EGfxRegisterType_TextureCube,          false);
+		ASSERT_REG("texMS",  EGfxRegisterType_Texture2DMS,          false);
+		ASSERT_REG("shadowMap", EGfxRegisterType_Texture2D,         false);
+		ASSERT_REG("img",    EGfxRegisterType_Texture2D,            true);
+		ASSERT_REG("samp",   EGfxRegisterType_Sampler,              false);
+		ASSERT_REG("tlas",   EGfxRegisterType_AccelerationStructure, false);
 
 		//SamplerComparisonState: DXIL has a dedicated comparison-sampler type; SPIRV only sees a plain sampler
 		//(documented DXIL/SPIRV quirk in oiSH.md), so the expected register type is backend-dependent.
 		{
 			const SHRegisterRuntime *r = ok ? findReg(&sh, "sampCmp") : NULL;
-			const U8 want = mode == ESHBinaryType_DXIL
-				? ESHRegisterType_SamplerComparisonState : ESHRegisterType_Sampler;
+			const U8 want = mode == EGfxBinaryType_DXIL
+				? EGfxRegisterType_SamplerComparisonState : EGfxRegisterType_Sampler;
 			if (!CharString_format(alloc, &label, &err, "sampCmp comparison sampler (%s)", bk))
 				label = CharString_createRefCStrConst("sampCmp");
-			Test_assert(t, label.ptr, r && (r->reg.registerType & ESHRegisterType_TypeMask) == want);
+			Test_assert(t, label.ptr, r && (r->reg.registerType & EGfxRegisterType_TypeMask) == want);
 			CharString_free(&label, alloc);
 		}
 
@@ -132,8 +132,8 @@ void Test_shaderCompilerReflection(Test *t) {
 			if (!CharString_format(alloc, &label, &err, "texArr Texture2D[4] descriptor array (%s)", bk))
 				label = CharString_createRefCStrConst("texArr");
 			Test_assert(t, label.ptr,
-				r && (r->reg.registerType & ESHRegisterType_TypeMask) == ESHRegisterType_Texture2D &&
-				!(r->reg.registerType & ESHRegisterType_IsArray) &&
+				r && (r->reg.registerType & EGfxRegisterType_TypeMask) == EGfxRegisterType_Texture2D &&
+				!(r->reg.registerType & EGfxRegisterType_IsArray) &&
 				r->arrays.length == 1 && r->arrays.ptr[0] == 4);
 			CharString_free(&label, alloc);
 		}

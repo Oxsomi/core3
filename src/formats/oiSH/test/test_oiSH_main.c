@@ -40,7 +40,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHExtensionSetSanity(&t);
 	Test_SHVendorNames(&t);
 	Test_SHBinaryTypeNames(&t);
-	Test_SHBindingsDummy(&t);
+	Test_GfxBindingsDummy(&t);
 
 	Test_SHEntryRuntimeGetCombinations(&t);
 	Test_SHBinaryIdentifierEquals(&t);
@@ -105,6 +105,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileRegisterAddSamplerComparisonState(&t);
 	Test_SHFileRegisterDuplicateNameRejected(&t);
 	Test_SHFileRegisterDuplicateSPIRVBindingRejected(&t);
+	Test_SHFileRegisterDxilRangeOverlapRejected(&t);
 	Test_SHFileRegisterAddTexture(&t);
 	Test_SHFileRegisterAddRWTexture(&t);
 	Test_SHFileRegisterArray(&t);
@@ -123,6 +124,15 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileCombineConflictingBinaryContents(&t);
 	Test_SHFileCombineBinaryIdRemapping(&t);
 	Test_SHFileCombineRegistersMerged(&t);
+
+	Test_SHFileSplitNullGuards(&t);
+	Test_SHFileSplitReflectionOnlyFiltersRegisters(&t);
+	Test_SHFileSplitMissingTypeRejected(&t);
+	Test_SHFileSplitKeepsOnlyRequestedType(&t);
+	Test_SHFileSplitDropsUnboundRegisters(&t);
+	Test_SHFileSplitKeepsSpirvPushConstant(&t);
+	Test_SHFileSplitDropsEntrypointAndRemapsIds(&t);
+	Test_SHFileSplitCombineRoundTrip(&t);
 
 	Test_SHFileRoundTripBasic(&t);
 	Test_SHFileRoundTripInclude(&t);

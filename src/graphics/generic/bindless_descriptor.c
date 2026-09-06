@@ -58,7 +58,7 @@ Bool BindlessDescriptor_isValid(GraphicsDeviceRef *deviceRef, DescriptorTableRef
 Bool GraphicsDeviceRef_allocateDescriptorBindless(
 	GraphicsDeviceRef *deviceRef,
 	DescriptorTableRef *descTableRef,
-	ESHRegisterType type,
+	EGfxRegisterType type,
 	U32 strideOrLength,
 	Bool maintainRef,
 	const Descriptor *desc,

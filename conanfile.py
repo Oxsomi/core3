@@ -38,7 +38,7 @@ HOST_TOOL_OPTIONS = {
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.104"
+	version = "3.2.105"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -201,7 +201,7 @@ class oxc3(ConanFile):
 		# Cross building needs it regardless of enableShaderCompiler: what matters is being able to *run* the packager,
 		# and a cross build's binaries target the device.
 		# Android can't even produce the executable (Platform_defineEntrypoint gives android_main, not main),
-		# and the wasm build's own OxC3_package is a .js the build machine can't exec either,
+		# and web doesn't build one either (a .js the build machine couldn't exec anyway),
 		# so without this add_virtual_files' find_program picks up whatever OxC3_package happens to be on PATH,
 		# which is how a months-old one out of the conan cache ended up packaging the shader tests.
 
@@ -251,7 +251,7 @@ class oxc3(ConanFile):
 			# commands. Only exists where AMD prebuilds them (Windows/Linux x64); run=True so the tools' bin dir
 			# reaches the run environment (RGA_PATH/PATH) for tests and the OxC3 CLI.
 			if self.settings.os in ("Windows", "Linux") and self.settings.arch == "x86_64":
-				self.requires("radeon_gpu_analyzer/2026.08.02", run=True)
+				self.requires("radeon_gpu_analyzer/2026.09.02", run=True)
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")
@@ -422,7 +422,7 @@ class oxc3(ConanFile):
 		if self.settings.os != "Emscripten":
 			self.cpp_info.libs += [ "OxC3_graphics" ]
 
-		self.cpp_info.libs += [ "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
+		self.cpp_info.libs += [ "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_formats_oiSP", "OxC3_formats_oiPL", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
 
 		# The Vulkan loader is loaded dynamically at runtime (see vk_instance.c) and its headers come from the
 		# vulkan_headers package, so there's no Vulkan import lib, system lib or SDK dir to link/include here.

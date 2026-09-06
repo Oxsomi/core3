@@ -125,7 +125,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		const SHBinaryInfo *info = &binaries->ptr[shFileId].binaries.ptr[realBinaryId];
 
 		gotoIfError3(clean, createShaderModule(
-			info->binaries[ESHBinaryType_SPIRV], &modules.ptrNonConst[j],
+			info->binaries[EGfxBinaryType_SPIRV], &modules.ptrNonConst[j],
 			deviceExt, instanceExt, &temp, EPipelineStage_RtStart, alloc, e_rr
 		));
 
@@ -167,8 +167,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 		switch (stage->stageType) {
 
-			default:                                shaderStage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;            break;
-			case EPipelineStage_ClosestHitExt:      shaderStage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;        break;
+			default:                                shaderStage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;             break;
+			case EPipelineStage_ClosestHitExt:      shaderStage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;         break;
 			case EPipelineStage_IntersectionExt:    shaderStage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;        break;
 
 			case EPipelineStage_MissExt:

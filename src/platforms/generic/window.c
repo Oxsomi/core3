@@ -233,7 +233,7 @@ Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTim
 	};
 
 	switch (w->format) {
-		default:                        info.textureFormatId = ETextureFormatId_BGRA8;        break;
+		default:                           info.textureFormatId = ETextureFormatId_BGRA8;      break;
 		case EWindowFormat_BGR10A2:        info.textureFormatId = ETextureFormatId_BGR10A2;    break;
 		case EWindowFormat_RGBA16f:        info.textureFormatId = ETextureFormatId_RGBA16f;    break;
 		case EWindowFormat_RGBA32f:        info.textureFormatId = ETextureFormatId_RGBA32f;    break;

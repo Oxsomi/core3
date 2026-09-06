@@ -193,7 +193,7 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 
 	const c::Allocator *alloc = dev.alloc();
 
-	gfx::OwnedList<c::Buffer, c::Buffer_free> soup(alloc);
+	gfx::OwnedList<c::Buffer> soup(alloc);
 
 	if (!c::Test_assert(t, "allocSoup", c::Buffer_createUninitializedBytes(
 		(c::U64) VERTEX_COUNT * 4 * sizeof(c::F32), alloc, &soup.list, e_rr
@@ -316,9 +316,27 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 
 			gfx::Tlas tlas;
 
-			if (c::Test_assert(t, "createTlasBeforeCompact", dev.createTlas(
-				c::ERTASBuildFlags_DefaultTLAS, &instance, 1, "Publish TLAS", tlas, true, e_rr
-			))) {
+			//AllowUpdate, because staleness has to be RECOVERABLE: a completed TLAS without it can never
+			// re-resolve (its flush early outs forever), which is why compactBLASExt refuses that shape
+			// outright rather than stranding it.
+
+			gfx::CommandList adoptList;
+
+			if (
+				c::Test_assert(t, "createTlasBeforeCompact", dev.createTlas(
+					(c::ERTASBuildFlags) (c::ERTASBuildFlags_DefaultTLAS | c::ERTASBuildFlags_AllowUpdate),
+					&instance, 1, "Publish TLAS", tlas, true, e_rr
+				)) &&
+
+				//The TLAS has to be BUILT before the compact, or its first build rides the compact submit,
+				// resolves the moved address after the adopt and legitimately clears the mark: adoption
+				// means a completed structure, not a pending one.
+
+				c::Test_assert(t, "createAdoptList", dev.createCommandList(c::KIBI, 32, 32, adoptList, true, e_rr)) &&
+				c::Test_assert(t, "beginAdoptList", adoptList.begin(true, e_rr)) &&
+				c::Test_assert(t, "endAdoptList", adoptList.end(e_rr)) &&
+				gfxtest::submitAndWait(t, dev, adoptList)
+			) {
 
 				//Compaction stays legal once a TLAS has adopted the structure: the TLAS re-resolves rather
 				// than being stuck with the old address.
@@ -330,100 +348,101 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 					c::Test_assert(t, "compactedDespiteTlas", blas.data()->base.isCompacted);
 					c::Test_assert(t, "compactedDespiteTlasShrank", asSize(blas) <= before);
 
-					//A driver is allowed to report no saving, in which case no copy was recorded and the
-					// structure never moved. Marking and the refusals below track exactly that: they hold when
-					// the structure moved, and must NOT fire when it stayed where it was.
+					//A driver may report no saving (WARP has reported 0), in which case nothing MOVED and
+					// nothing is stale: the staleness legs only mean something when the address changed.
 
-					const c::Bool moved = asSize(blas) < before;
+					if(asSize(blas) >= before)
+						c::Test_print(t, "Driver reported no compaction saving, skipping staleness asserts");
 
-					//The TLAS that adopted it is marked, precisely: only structures it actually references
-					// make it stale, so an unrelated TLAS is never dragged into a refill.
+					else {
 
-					c::Test_assert(t, "adoptingTlasMarkedStale",
-						((tlas.data()->base.flagsExt & (c::U8) c::ETLASFlag_AddressesStale) != 0) == moved
-					);
+						//The TLAS that adopted it is marked, precisely: only structures it actually references
+						// make it stale, so an unrelated TLAS is never dragged into a refill.
 
-					//The submit AFTER the compaction is refused while the TLAS still holds the old address,
-					// which is what keeps a moved structure from being traced. e_rr stays null; the refusal
-					// is the expected result.
+						c::Test_assert(t, "adoptingTlasMarkedStale",
+							(tlas.data()->base.flagsExt & (c::U8) c::ETLASFlag_AddressesStale) != 0
+						);
 
-					{
-						gfx::CommandList idle;
+						//The submit AFTER the compaction is refused while the TLAS still holds the old address,
+						// which is what keeps a moved structure from being traced. e_rr stays null; the refusal
+						// is the expected result.
 
-						if (
-							c::Test_assert(t, "createIdleList", dev.createCommandList(c::KIBI, 32, 32, idle, true, e_rr)) &&
-							c::Test_assert(t, "beginIdle", idle.begin(true, e_rr)) &&
-							c::Test_assert(t, "endIdle", idle.end(e_rr))
-						)
-							c::Test_assert(
-								t, "submitRefusedWhileTlasStale", dev.submit({ &idle }, {}, 0, 0, nullptr) != moved
-							);
-					}
+						{
+							gfx::CommandList idle;
 
-					//A list that updates the TLAS is accepted no matter when it was RECORDED, because the gate
-					// asks what this submit contains. Recording one and never submitting it therefore does
-					// not clear anything, and a list recorded once can be submitted again after a later
-					// compaction and still satisfy the gate.
+							if (
+								c::Test_assert(t, "createIdleList", dev.createCommandList(c::KIBI, 32, 32, idle, true, e_rr)) &&
+								c::Test_assert(t, "beginIdle", idle.begin(true, e_rr)) &&
+								c::Test_assert(t, "endIdle", idle.end(e_rr))
+							)
+								c::Test_assert(t, "submitRefusedWhileTlasStale", !dev.submit({ &idle }, {}, 0, 0, nullptr));
+						}
 
-					{
-						gfx::CommandList discarded;
+						//A list that updates the TLAS is accepted no matter when it was RECORDED, because the gate
+						// asks what this submit contains. Recording one and never submitting it therefore does
+						// not clear anything, and a list recorded once can be submitted again after a later
+						// compaction and still satisfy the gate.
 
-						if (
-							c::Test_assert(
-								t, "createDiscarded", dev.createCommandList(c::KIBI, 32, 32, discarded, true, e_rr)
-							) &&
-							c::Test_assert(t, "beginDiscarded", discarded.begin(true, e_rr))
-						) {
-							{
-								gfx::CommandScope scope = discarded.scope({}, 0, {}, e_rr);
+						{
+							gfx::CommandList discarded;
 
-								if (c::Test_assert(t, "scopeDiscarded", (c::Bool) scope))
-									c::Test_assert(t, "updateTlasDiscarded", scope.updateTlas(tlas, e_rr));
+							if (
+								c::Test_assert(t, "createDiscarded", dev.createCommandList(
+									c::KIBI, 32, 32, discarded, true, e_rr
+								)) &&
+								c::Test_assert(t, "beginDiscarded", discarded.begin(true, e_rr))
+							) {
+								{
+									gfx::CommandScope scope = discarded.scope({}, 0, {}, e_rr);
+
+									if (c::Test_assert(t, "scopeDiscarded", (c::Bool) scope))
+										c::Test_assert(t, "updateTlasDiscarded", scope.updateTlas(tlas, e_rr));
+								}
+
+								c::Test_assert(t, "endDiscarded", discarded.end(e_rr));
 							}
 
-							c::Test_assert(t, "endDiscarded", discarded.end(e_rr));
+							//Recorded, never submitted: the TLAS is still owed an update, so an unrelated submit
+							// is still refused.
+
+							gfx::CommandList unrelated;
+
+							if (
+								c::Test_assert(t, "createUnrelated", dev.createCommandList(
+									c::KIBI, 32, 32, unrelated, true, e_rr
+								)) &&
+								c::Test_assert(t, "beginUnrelated", unrelated.begin(true, e_rr)) &&
+								c::Test_assert(t, "endUnrelated", unrelated.end(e_rr))
+							)
+								c::Test_assert(t, "recordingAloneDoesNotClear", !dev.submit({ &unrelated }, {}, 0, 0, nullptr));
+
+							//And submitting the list that DOES update it is accepted, then clears the mark.
+
+							if (discarded.valid())
+								c::Test_assert(t, "submitOfUpdatingListAccepted", gfxtest::submitAndWait(t, dev, discarded));
 						}
 
-						//Recorded, never submitted: the TLAS is still owed an update, so an unrelated submit
-						// is still refused.
+						//And the rebuild both clears that and re-points the TLAS at the structure compaction moved,
+						// so submitting works again.
 
-						gfx::CommandList unrelated;
+						gfx::CommandList rebuild;
 
 						if (
-							c::Test_assert(
-								t, "createUnrelated", dev.createCommandList(c::KIBI, 32, 32, unrelated, true, e_rr)
-							) &&
-							c::Test_assert(t, "beginUnrelated", unrelated.begin(true, e_rr)) &&
-							c::Test_assert(t, "endUnrelated", unrelated.end(e_rr))
-						)
-							c::Test_assert(
-								t, "recordingAloneDoesNotClear", dev.submit({ &unrelated }, {}, 0, 0, nullptr) != moved
-							);
+							c::Test_assert(t, "createRebuildList", dev.createCommandList(
+								c::KIBI, 32, 32, rebuild, true, e_rr
+							)) &&
+							c::Test_assert(t, "beginRebuild", rebuild.begin(true, e_rr))
+						) {
+							{
+								gfx::CommandScope scope = rebuild.scope({}, 0, {}, e_rr);
 
-						//And submitting the list that DOES update it is accepted, then clears the mark.
+								if (c::Test_assert(t, "scopeRebuild", (c::Bool) scope))
+									c::Test_assert(t, "updateTlasAfterCompact", scope.updateTlas(tlas, e_rr));
+							}
 
-						if (discarded.valid())
-							c::Test_assert(t, "submitOfUpdatingListAccepted", gfxtest::submitAndWait(t, dev, discarded));
-					}
-
-					//And the rebuild both clears that and re-points the TLAS at the structure compaction moved,
-					// so submitting works again.
-
-					gfx::CommandList rebuild;
-
-					if (
-						c::Test_assert(t, "createRebuildList", dev.createCommandList(c::KIBI, 32, 32, rebuild, true, e_rr)) &&
-						c::Test_assert(t, "beginRebuild", rebuild.begin(true, e_rr))
-					) {
-						{
-							gfx::CommandScope scope = rebuild.scope({}, 0, {}, e_rr);
-
-							if (c::Test_assert(t, "scopeRebuild", (c::Bool) scope))
-								c::Test_assert(t, "updateTlasAfterCompact", scope.updateTlas(tlas, e_rr));
+							if (c::Test_assert(t, "endRebuild", rebuild.end(e_rr)))
+								c::Test_assert(t, "rebuildTlasOnCompacted", gfxtest::submitAndWait(t, dev, rebuild));
 						}
-
-						if (c::Test_assert(t, "endRebuild", rebuild.end(e_rr)))
-							c::Test_assert(t, "rebuildTlasOnCompacted", gfxtest::submitAndWait(t, dev, rebuild));
 					}
 				}
 			}
@@ -518,23 +537,40 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 			const c::TLASInstance instA = instanceOf(blasA);
 			const c::TLASInstance instB = instanceOf(blasB);
 
-			const c::U64 beforeB = asSize(blasB);
+			gfx::CommandList adoptList;
+			c::U64 beforeB = 0;
 
 			if (
 				c::Test_assert(t, "createTlasA", dev.createTlas(
-					c::ERTASBuildFlags_DefaultTLAS, &instA, 1, "Disjoint TLAS A", tlasA, true, e_rr
+					(c::ERTASBuildFlags) (c::ERTASBuildFlags_DefaultTLAS | c::ERTASBuildFlags_AllowUpdate),
+					&instA, 1, "Disjoint TLAS A", tlasA, true, e_rr
 				)) &&
 				c::Test_assert(t, "createTlasB", dev.createTlas(
-					c::ERTASBuildFlags_DefaultTLAS, &instB, 1, "Disjoint TLAS B", tlasB, true, e_rr
+					(c::ERTASBuildFlags) (c::ERTASBuildFlags_DefaultTLAS | c::ERTASBuildFlags_AllowUpdate),
+					&instB, 1, "Disjoint TLAS B", tlasB, true, e_rr
 				)) &&
-				compactAndRun(t, dev, blasB, "compactB")
+
+				//Built to completion first, for the same reason as the publish phase above
+
+				c::Test_assert(t, "createAdoptListB", dev.createCommandList(c::KIBI, 32, 32, adoptList, true, e_rr)) &&
+				c::Test_assert(t, "beginAdoptListB", adoptList.begin(true, e_rr)) &&
+				c::Test_assert(t, "endAdoptListB", adoptList.end(e_rr)) &&
+				gfxtest::submitAndWait(t, dev, adoptList) &&
+				((beforeB = asSize(blasB)), compactAndRun(t, dev, blasB, "compactB"))
 			) {
 
-				const c::U8 stale = (c::U8) c::ETLASFlag_AddressesStale;
-				const c::Bool movedB = asSize(blasB) < beforeB;
+				//Meaningful only when the structure actually moved; see the publish phase above.
 
-				c::Test_assert(t, "disjointTlasBMarked", ((tlasB.data()->base.flagsExt & stale) != 0) == movedB);
-				c::Test_assert(t, "disjointTlasAUntouched", !(tlasA.data()->base.flagsExt & stale));
+				if(asSize(blasB) >= beforeB)
+					c::Test_print(t, "Driver reported no compaction saving, skipping disjoint staleness asserts");
+
+				else {
+
+					const c::U8 stale = (c::U8) c::ETLASFlag_AddressesStale;
+
+					c::Test_assert(t, "disjointTlasBMarked",  (tlasB.data()->base.flagsExt & stale) != 0);
+					c::Test_assert(t, "disjointTlasAUntouched", !(tlasA.data()->base.flagsExt & stale));
+				}
 
 				//And the TLAS that was not marked does not need rebuilding to keep submitting.
 

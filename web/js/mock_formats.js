@@ -324,11 +324,12 @@ function derivePipeline(doc, pick) {
   }
 
   const base = doc.name.replace(/\.(oiSH|hlsl)$/i, "");
-  const pipeline = { name: base, type: kind, flags, stages, fields, notes,
+  /* The mock cannot derive a descriptor layout, which needs the reflection only the module has. */
+  const pipeline = { name: base, type: kind, flags, stages, fields, notes, layoutIndex: -1,
     vertexAttributes: fields.vertexAttributes || 0, binaryIdx: stages.find(s => !s.generated)?.binaryIdx ?? 0 };
   delete fields.vertexAttributes;
   const counts = spCounts([pipeline]);
-  return { name: base + ".oiSP", sourceName: doc.name, header: { version: "1.1", counts }, pipelines: [pipeline] };
+  return { name: base + ".oiSP", sourceName: doc.name, header: { version: "1.1", counts }, pipelines: [pipeline], layouts: [] };
 }
 
 function spCounts(pipelines) {
@@ -442,7 +443,7 @@ function parseOiSPBytes(name, bytes) {
   const src = ["lighting.hlsl", "post.hlsl", "trace.hlsl"][pick];
   const doc = M().analyze(src, M().SAMPLE_FILES);
   const sp = derivePipeline(doc, { pixel: doc.binaries.findIndex(b => b.stage === "pixel"), lib: doc.binaries.findIndex(b => b.lib) });
-  if (sp.refused) return { name, mockParsed: true, header: { version: "1.1", counts: spCounts([]) }, pipelines: [], refused: sp.refused };
+  if (sp.refused) return { name, mockParsed: true, header: { version: "1.1", counts: spCounts([]) }, pipelines: [], layouts: [], refused: sp.refused };
   sp.name = name; sp.mockParsed = true; sp.byteLength = bytes.length;
   return sp;
 }

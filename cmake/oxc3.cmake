@@ -50,6 +50,10 @@ endfunction()
 # INITIAL_MEMORY is what the module commits at instantiation, before it does any work, so it stays small
 # and ALLOW_MEMORY_GROWTH sizes it to the workload; a phone should not hand over half a gigabyte just to
 # load the module. DXC grows this a lot while compiling, but only for the run that needs it.
+# ASan starts bigger: wasm-ld refuses to link unless the data segment plus stack fit inside INITIAL_MEMORY,
+# and the global redzones grow DXC's statics to ~50MB, past what the unsanitized figure holds.
+# The shadow region is no part of this figure; emcc adds an eighth of MAXIMUM_MEMORY on top of
+# INITIAL_MEMORY by itself.
 
 function(apply_web_link_options target)
 
@@ -92,9 +96,15 @@ function(apply_web_link_options target)
 	# STACK_OVERFLOW_CHECK turns a blown stack into a loud abort at the guard, instead of a silent heap
 	# smash that surfaces later as an unrelated allocation failing.
 
+	if(EnableASAN)
+		set(initialMemory 128MB)
+	else()
+		set(initialMemory 32MB)
+	endif()
+
 	target_link_options(${target} PRIVATE
 		"-sALLOW_MEMORY_GROWTH=1"
-		"-sINITIAL_MEMORY=32MB"
+		"-sINITIAL_MEMORY=${initialMemory}"
 		"-sMAXIMUM_MEMORY=16GB"
 		"-sSTACK_SIZE=8MB"
 		"-sSTACK_OVERFLOW_CHECK=1"
@@ -231,7 +241,7 @@ function(oxc3_add_bundled_test)
 		OxC3_audio
 		OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr
 		OxC3_formats_oiBC OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_oiSB
-		OxC3_formats_oiSH OxC3_formats_oiSP OxC3_formats_oiSR OxC3_formats_wav
+		OxC3_formats_oiSH OxC3_formats_oiPL OxC3_formats_oiSP OxC3_formats_oiSR OxC3_formats_wav
 		OxC3_types_test
 		OxC3_types_container_test_util
 		${T_LIBS}
@@ -520,7 +530,7 @@ macro(add_virtual_files)
 	# OxC3; Full executable with all functionality.
 	
 	# When cross compiling, an in-build packager target can't run on the build machine
-	# (the wasm build DOES build OxC3_package, but as a .js/.wasm), so prefer the host
+	# (android and web don't build the executable at all), so prefer the host
 	# tool from tool_requires (on PATH); see conanfile.build_requirements().
 
 	if(_ARGS_FORCE_PACKAGER)

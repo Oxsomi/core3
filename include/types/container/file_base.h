@@ -67,7 +67,7 @@ Bool File_resolve(
 
 Bool File_makeRelative(
 	const CharString absoluteDir,        //Can't escape absoluteDir with baseFolder or subFile. Must end with /
-	const CharString base,                //File in which the parent is located (e.g. myFolder/test.txt)
+	const CharString base,               //File in which the parent is located (e.g. myFolder/test.txt)
 	const CharString subFile,            //File to made relative to the parent of base (e.g. myOtherFolder/test.txt)
 	U64 maxFilePathLimit,
 	const Allocator *alloc,

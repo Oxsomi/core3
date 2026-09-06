@@ -32,7 +32,7 @@
 TListImpl(SHBinaryInfo);
 TListImpl(SHBinaryIdentifier);
 
-const C8 *ESHBinaryType_names[ESHBinaryType_Count] = {
+const C8 *EGfxBinaryType_names[EGfxBinaryType_Count] = {
 	"SPV",
 	"DXIL"
 };
@@ -64,7 +64,8 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 	"COOPFP8",
 	"COOPVECTRAINING",
 	"DESCRIPTORHEAP",
-	"SUBGROUPQUAD"
+	"SUBGROUPQUAD",
+	"DYNAMICSAMPLERS"          //resources.hlsli declares _samplers[] behind __OXC_EXT_DYNAMICSAMPLERS
 };
 
 const C8 *ESHExtension_names[ESHExtension_Count] = {
@@ -94,7 +95,8 @@ const C8 *ESHExtension_names[ESHExtension_Count] = {
 	"CoopFP8",
 	"CoopVecTraining",
 	"DescriptorHeap",
-	"SubgroupQuad"
+	"SubgroupQuad",
+	"DynamicSamplers"
 };
 
 const C8 *ESHVendor_names[ESHVendor_Count + 1] = {
@@ -125,7 +127,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 	Bool containsBinary = false;
 
-	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+	for(U8 i = 0; i < EGfxBinaryType_Count; ++i)
 		if(Buffer_length(binaries->binaries[i])) {
 			containsBinary = true;
 			break;
@@ -150,7 +152,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 	if(binaries->identifier.extensions >> ESHExtension_Count)
 		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.extensions out of bounds"));
 
-	if(binaries->identifier.stageType >= ESHPipelineStage_Count)
+	if(binaries->identifier.stageType >= EGfxPipelineStage_Count)
 		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.stageType out of bounds"));
 
 	if(binaries->identifier.defines.length & 1)
@@ -229,7 +231,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 			2, 0, "SHFile_addBinary()::binaries->identifier.shaderVersion is unsupported must be 6.5 -> 6.10"
 		));
 
-	if(Buffer_length(binaries->binaries[ESHBinaryType_SPIRV]) & 3)
+	if(Buffer_length(binaries->binaries[EGfxBinaryType_SPIRV]) & 3)
 		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->binaries[SPIRV] needs to be a U32[]"));
 
 	//Ensure bindless extension is correctly identified
@@ -255,6 +257,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 	U32 sets[4] = { 0 };
 	U8 setCounters = 0;
 	Bool unboundArraySize = false;
+	Bool dynamicSamplers = false;
 
 	for (U64 i = 0; i < binaries->registers.length; ++i) {
 
@@ -270,15 +273,15 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 		//Keep track of current sets
 
-		Bool hasSPIRV = reg.reg.bindings.arrU64[ESHBinaryType_SPIRV] != U64_MAX;
-		Bool hasDXIL = reg.reg.bindings.arrU64[ESHBinaryType_DXIL] != U64_MAX;
+		Bool hasSPIRV = reg.reg.bindings.arrU64[EGfxBinaryType_SPIRV] != U64_MAX;
+		Bool hasDXIL = reg.reg.bindings.arrU64[EGfxBinaryType_DXIL] != U64_MAX;
 
 		if (hasSPIRV) {
 
 			U8 j = 0;
 
 			for(; j < setCounters; ++j)
-				if(sets[j] == reg.reg.bindings.arr[ESHBinaryType_SPIRV].space)
+				if(sets[j] == reg.reg.bindings.arr[EGfxBinaryType_SPIRV].space)
 					break;
 
 			//Insert new
@@ -288,7 +291,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 				if(setCounters == 4)
 					retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more than 4 descriptor sets"));
 
-				sets[setCounters++] = reg.reg.bindings.arr[ESHBinaryType_SPIRV].space;
+				sets[setCounters++] = reg.reg.bindings.arr[EGfxBinaryType_SPIRV].space;
 			}
 		}
 
@@ -296,19 +299,27 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 		U8 regType = reg.reg.registerType;
 
-		switch (regType & ESHRegisterType_TypeMask) {
+		switch (regType & EGfxRegisterType_TypeMask) {
 
-			case ESHRegisterType_Sampler:
-			case ESHRegisterType_SamplerComparisonState:
+			case EGfxRegisterType_Sampler:
+			case EGfxRegisterType_SamplerComparisonState:
+
 				if(hasSPIRV) counters[Counter_SamplerSPIRV] += regs;
 				if(hasDXIL)  counters[Counter_SamplerDXIL]  += regs;
+
+				//An ARRAY of samplers is indexed at runtime, which only the bindless _samplers[] array can
+				// serve; a singular sampler is a binding or a static sampler and needs none of it.
+
+				if(reg.arrays.length)
+					dynamicSamplers = true;
+
 				break;
 
-			case ESHRegisterType_SubpassInput:
+			case EGfxRegisterType_SubpassInput:
 				counters[Counter_SubpassInput] += regs;
 				break;
 
-			case ESHRegisterType_AccelerationStructure:
+			case EGfxRegisterType_AccelerationStructure:
 
 				if(hasSPIRV) counters[Counter_RTASSPIRV] += regs;
 
@@ -319,32 +330,32 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 				break;
 
-			case ESHRegisterType_ConstantBuffer:
+			case EGfxRegisterType_ConstantBuffer:
 				if(hasSPIRV) counters[Counter_UBO] += regs;
 				if(hasDXIL)  counters[Counter_CBV] += regs;
 				break;
 				
-			case ESHRegisterType_PushConstants:
+			case EGfxRegisterType_PushConstants:
 				if(hasDXIL)     counters[Counter_CBV] += regs;
 				counters[Counter_PushConstants] += regs;        //SPV is the only one that can make type push constants
 				break;
 
-			case ESHRegisterType_ByteAddressBuffer:
-			case ESHRegisterType_StructuredBuffer:
-			case ESHRegisterType_StructuredBufferAtomic:
-			case ESHRegisterType_StorageBuffer:
-			case ESHRegisterType_StorageBufferAtomic:
+			case EGfxRegisterType_ByteAddressBuffer:
+			case EGfxRegisterType_StructuredBuffer:
+			case EGfxRegisterType_StructuredBufferAtomic:
+			case EGfxRegisterType_StorageBuffer:
+			case EGfxRegisterType_StorageBufferAtomic:
 				if(hasSPIRV) counters[Counter_SSBO] += regs;
-				if(hasDXIL)  counters[regType & ESHRegisterType_IsWrite ? Counter_UAV : Counter_SRV] += regs;
+				if(hasDXIL)  counters[regType & EGfxRegisterType_IsWrite ? Counter_UAV : Counter_SRV] += regs;
 				break;
 
-			case ESHRegisterType_Texture1D:
-			case ESHRegisterType_Texture2D:
-			case ESHRegisterType_Texture3D:
-			case ESHRegisterType_TextureCube:
-			case ESHRegisterType_Texture2DMS:
-				if(hasSPIRV) counters[regType & ESHRegisterType_IsWrite ? Counter_Image : Counter_Texture] += regs;
-				if(hasDXIL)  counters[regType & ESHRegisterType_IsWrite ? Counter_UAV : Counter_SRV] += regs;
+			case EGfxRegisterType_Texture1D:
+			case EGfxRegisterType_Texture2D:
+			case EGfxRegisterType_Texture3D:
+			case EGfxRegisterType_TextureCube:
+			case EGfxRegisterType_Texture2DMS:
+				if(hasSPIRV) counters[regType & EGfxRegisterType_IsWrite ? Counter_Image : Counter_Texture] += regs;
+				if(hasDXIL)  counters[regType & EGfxRegisterType_IsWrite ? Counter_UAV : Counter_SRV] += regs;
 				break;
 		}
 	}
@@ -381,6 +392,14 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 		counters[Counter_SRV] > 128 ||
 		counters[Counter_UAV] > 64 ||
 		totalSPIRV > 44;
+
+	//Independent of bindless: a sampler array needs the device to have declared _samplers[], which is its
+	// own opt in rather than part of the bindless layout being present at all.
+	//[[oxc::extension("DynamicSamplers")]] is the front door and already set the bit before compiling;
+	// this inference is the backstop for a shader declaring a sampler array of its own without it.
+
+	if(dynamicSamplers)
+		binaries->identifier.extensions |= ESHExtension_DynamicSamplers;
 
 	if (bindless || unboundArraySize) {
 
@@ -440,7 +459,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 	//Copy buffers
 
-	for(U8 i = 0; i < ESHBinaryType_Count; ++i) {
+	for(U8 i = 0; i < EGfxBinaryType_Count; ++i) {
 
 		Buffer *entry = &binaries->binaries[i];
 		Buffer *result = &info.binaries[i];
@@ -578,19 +597,20 @@ Bool SHBinaryIdentifier_equals(const SHBinaryIdentifier *a, const SHBinaryIdenti
 	//If they're merged, bindless will be required for both.
 	//Another reason is SPIRV might strip resources that are kept in dxil with -fhlsl-unused-resources=keep-all
 
-	ESHExtension toIgnore = ESHExtension_Bindless | ESHExtension_UnboundArraySize;
+	ESHExtension toIgnore =
+		ESHExtension_Bindless | ESHExtension_UnboundArraySize | ESHExtension_DynamicSamplers;
 
 	ESHExtension extensionsA = a->extensions & ~toIgnore;
 	ESHExtension extensionsB = b->extensions &~ toIgnore;
 
-	ESHPipelineStage stageA = a->stageType;
-	ESHPipelineStage stageB = b->stageType;
+	EGfxPipelineStage stageA = a->stageType;
+	EGfxPipelineStage stageB = b->stageType;
 
-	if (stageA >= ESHPipelineStage_RtStartExt && stageA <= ESHPipelineStage_RtEndExt)
-		stageA = ESHPipelineStage_RtStartExt;
+	if (stageA >= EGfxPipelineStage_RtStartExt && stageA <= EGfxPipelineStage_RtEndExt)
+		stageA = EGfxPipelineStage_RtStartExt;
 
-	if (stageB >= ESHPipelineStage_RtStartExt && stageB <= ESHPipelineStage_RtEndExt)
-		stageB = ESHPipelineStage_RtStartExt;
+	if (stageB >= EGfxPipelineStage_RtStartExt && stageB <= EGfxPipelineStage_RtEndExt)
+		stageB = EGfxPipelineStage_RtStartExt;
 
 	if(
 		extensionsA != extensionsB ||
@@ -605,7 +625,7 @@ Bool SHBinaryIdentifier_equals(const SHBinaryIdentifier *a, const SHBinaryIdenti
 	//Split up RT compile from other compiles, since RT will enable access to RTAS and other functionality.
 	//(Though by enabling inline RT you can still access this)
 
-	if((stageA == ESHPipelineStage_RtStartExt) != (stageB == ESHPipelineStage_RtStartExt))
+	if((stageA == EGfxPipelineStage_RtStartExt) != (stageB == EGfxPipelineStage_RtStartExt))
 		return false;
 
 	for(U64 i = 0; i < a->defines.length; ++i)
@@ -660,7 +680,7 @@ Bool SHBinaryInfo_equalsExact(const SHBinaryInfo *a, const SHBinaryInfo *b) {
 		if (a->registers.ptr[i].hash != b->registers.ptr[i].hash)
 			return false;
 
-	for (U8 i = 0; i < ESHBinaryType_Count; ++i)
+	for (U8 i = 0; i < EGfxBinaryType_Count; ++i)
 		if (Buffer_neq(a->binaries[i], b->binaries[i]))
 			return false;
 
@@ -824,9 +844,9 @@ void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Alloca
 
 	Log_debugLn(alloc, "\tBinaries:");
 
-	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+	for(U8 i = 0; i < EGfxBinaryType_Count; ++i)
 		if(Buffer_length(binary->binaries[i]))
-			Log_debugLn(alloc, "\t\t%s: %"PRIu64, ESHBinaryType_names[i], Buffer_length(binary->binaries[i]));
+			Log_debugLn(alloc, "\t\t%s: %"PRIu64, EGfxBinaryType_names[i], Buffer_length(binary->binaries[i]));
 
 	ListSHRegisterRuntime_print(&binary->registers, 1, isVerbose, alloc);
 }
@@ -880,6 +900,6 @@ void SHBinaryInfo_free(SHBinaryInfo *info, const Allocator *alloc) {
 	SHBinaryIdentifier_free(&info->identifier, alloc);
 	ListSHRegisterRuntime_freeUnderlying(&info->registers, alloc);
 
-	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+	for(U8 i = 0; i < EGfxBinaryType_Count; ++i)
 		Buffer_free(&info->binaries[i], alloc);
 }

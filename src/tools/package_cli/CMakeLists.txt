@@ -56,10 +56,13 @@ target_include_directories(OxC3_package_CLI PUBLIC include/tools/package_cli)
 #
 # Not on android: Platform_defineEntrypoint gives android_main rather than main there, so an executable
 # doesn't link (ld.lld: undefined symbol: main), and an apk couldn't run one anyway.
+# Not on web either: it links, but the build machine can't exec the resulting .js, and node users get the
+# same commands from OxC3.js (which links OxC3_package_CLI), so the executable would only repeat the DXC
+# sized link with nobody to run it.
 # Nothing is lost by skipping it, since a cross build packages its virtual files with the host
 # OxC3_package it tool_requires; the library above is still built and linked into the app.
 
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT EMSCRIPTEN)
 
 	file(GLOB sources CONFIGURE_DEPENDS "executable/*.c")
 

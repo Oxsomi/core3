@@ -85,6 +85,8 @@
 		GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
 	);
 
+	Bool D3D12GraphicsDeviceRef_selectShaderTarget(GraphicsDeviceRef *deviceRef, const CharString *name, Error *e_rr);
+
 	//Sampler
 
 	Bool D3D12GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, Sampler *sampler, const CharString *name, Error *e_rr);

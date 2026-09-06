@@ -31,7 +31,7 @@
 
 Bool Compiler_precompileShader(
 	const Compiler *compiler,
-	ESHBinaryType outputType,
+	EGfxBinaryType outputType,
 	Bool isDebug,
 	Bool noOpt,
 	CharString inputPath,
@@ -221,7 +221,7 @@ Bool Compiler_getUniqueCompiles(
 			if(compileCombinations) {
 
 				Bool isRt =
-					runtime.entry.stage >= ESHPipelineStage_RtStartExt && runtime.entry.stage <= ESHPipelineStage_RtEndExt;
+					runtime.entry.stage >= EGfxPipelineStage_RtStartExt && runtime.entry.stage <= EGfxPipelineStage_RtEndExt;
 
 				if (isRt)
 					compileCombinations->ptrNonConst[k] |= 1 << 15;
@@ -263,7 +263,7 @@ void Compiler_printErrors(ListCompileError errors, const Allocator *alloc) {
 	}
 }
 void Compiler_logStatus(
-	ESHBinaryType binaryType,
+	EGfxBinaryType binaryType,
 	const C8 *type,
 	CharString inputPath,
 	U16 runtimeEntryId,
@@ -272,7 +272,7 @@ void Compiler_logStatus(
 	Bool s_uccess
 ) {
 	
-	const C8 *binType = binaryType == ESHBinaryType_SPIRV ? "spirv" : "dxil";
+	const C8 *binType = binaryType == EGfxBinaryType_SPIRV ? "spirv" : "dxil";
 
 		if(s_uccess)
 			Log_debugLn(
@@ -309,7 +309,7 @@ Bool Compiler_getUniqueEntrypointsSPIRV(
 
 Bool Compiler_getUniqueEntrypoints(
 	const Compiler *compiler,
-	ESHBinaryType binaryType,
+	EGfxBinaryType binaryType,
 	Buffer binary,
 	Bool showAll,
 	ListCompilerEntrypoint *uniqueEntrypoints,
@@ -321,11 +321,11 @@ Bool Compiler_getUniqueEntrypoints(
 
 	switch (binaryType) {
 
-		case ESHBinaryType_SPIRV:
+		case EGfxBinaryType_SPIRV:
 			gotoIfError3(clean, Compiler_getUniqueEntrypointsSPIRV(compiler, binary, showAll, uniqueEntrypoints, alloc, e_rr));
 			break;
 
-		case ESHBinaryType_DXIL:
+		case EGfxBinaryType_DXIL:
 			gotoIfError3(clean, Compiler_getUniqueEntrypointsDXIL(compiler, binary, showAll, uniqueEntrypoints, alloc, e_rr));
 			break;
 
@@ -339,7 +339,7 @@ clean:
 
 Bool Compiler_compileShaderSingle(
 	const Compiler *compiler,
-	ESHBinaryType binaryType,
+	EGfxBinaryType binaryType,
 	Bool isDebug,
 	Bool noOpt,
 	Bool keepRegisters,
@@ -411,13 +411,13 @@ Bool Compiler_linkSingle(
 	CharString path,
 	U16 runtimeEntryId,
 	U16 combinationId,
-	ESHBinaryType type,
+	EGfxBinaryType type,
 	const ListBuffer *inputs,
 	const ListSHUniformRuntime *uniforms,
 	Buffer uniformData,
 	CharString entrypoint,
 	U16 shaderVersion,
-	ESHPipelineStage stageType,
+	EGfxPipelineStage stageType,
 	ESHExtension exts,
 	Bool keepRegisters,
 	Bool enableLogging,
@@ -458,7 +458,7 @@ Bool Compiler_processSingle(
 	CharString path,
 	U16 runtimeEntryId,
 	U16 combinationId,
-	ESHBinaryType binaryType,
+	EGfxBinaryType binaryType,
 	CompileResult *tempResult,
 	Bool isDebug,
 	Bool keepRegisters,

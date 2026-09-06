@@ -58,6 +58,17 @@ Bool GraphicsDeviceRef_createDescriptorHeap(
 		(U64) info->maxAccelerationStructures + info->maxTextures + info->maxConstantBuffers +
 		info->maxTexturesRW + info->maxBuffersRW;
 
+	//The push ring is real descriptors in the same heap, one copy per frame in flight, so it counts against
+	// the same budget rather than being free.
+
+	if(info->maxPushDescriptors > 65536)
+		retError(clean, Error_outOfBounds(
+			0, info->maxPushDescriptors, 65536,
+			"GraphicsDeviceRef_createDescriptorHeap()::info.maxPushDescriptors must not exceed 65536"
+		));
+
+	srvCbvUav += (U64) info->maxPushDescriptors * GraphicsDeviceRef_ptr(dev)->framesInFlight;
+
 	if(srvCbvUav > 1000000)
 		retError(clean, Error_outOfBounds(
 			0, srvCbvUav, 1000000,

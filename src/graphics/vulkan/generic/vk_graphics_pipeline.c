@@ -358,7 +358,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		// a file holding several graphics stages compiles them into one shared module, while the oiSH records the
 		// HLSL name either way; the module is the only place that knows which name each stage really binds.
 
-		const Buffer stageSpirv = buf->binaries[ESHBinaryType_SPIRV];
+		const Buffer stageSpirv = buf->binaries[EGfxBinaryType_SPIRV];
 		const C8 *entryPoint = VkGraphicsPipeline_spirvEntrypoint(stageSpirv, entry->name, executionModel);
 
 		VkShaderModule module = NULL;
@@ -617,9 +617,23 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		.scissorCount = 1
 	};
 
+	//Capture ISA + statistics for live disassembly when requested and supported
+	// (VK_KHR_pipeline_executable_properties)
+
+	VkPipelineCreateFlags createFlags = 0;
+
+	if(
+		(pipeline->flags & EPipelineFlags_CaptureISA) &&
+		(device->info.capabilities.features2 & EGraphicsFeatures2_PipelineExecutableInfo)
+	)
+		createFlags =
+			VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR |
+			VK_PIPELINE_CREATE_CAPTURE_INTERNAL_REPRESENTATIONS_BIT_KHR;
+
 	currentInfo = (VkGraphicsPipelineCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = dynamicRendering.sType ? &dynamicRendering : NULL,
+		.flags = createFlags,
 		.stageCount = (U32) stages.length,
 		.pStages = stages.ptr,
 		.pVertexInputState = &vertexInput,

@@ -69,12 +69,12 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 		I32x4_createFromU64x2(0x1E376C0819A4C116, 0x34B0BCB52748774C),        //48-51
 		I32x4_createFromU64x2(0x4ED8AA4A391C0CB3, 0x682E6FF35B9CCA4F),        //52-55
 		I32x4_createFromU64x2(0x78A5636F748F82EE, 0x8CC7020884C87814),        //56-59
-		I32x4_createFromU64x2(0xA4506CEB90BEFFFA, 0xC67178F2BEF9A3F7)        //60-63
+		I32x4_createFromU64x2(0xA4506CEB90BEFFFA, 0xC67178F2BEF9A3F7)         //60-63
 	};
 
 	//Initialize state
 
-	I32x4 tmp = I32x4_yxwz(I32x4_load4((const I32*) SHA256_STATE));                //_mm_shuffle_epi32(tmp, 0xB1)
+	I32x4 tmp = I32x4_yxwz(I32x4_load4((const I32*) SHA256_STATE));               //_mm_shuffle_epi32(tmp, 0xB1)
 	I32x4 state1 = I32x4_wzyx(I32x4_load4((const I32*) SHA256_STATE + 4));        //_mm_shuffle_epi32(state1, 0x1B)
 	I32x4 state0 =    I32x4_combineRightShift(tmp, state1, 2);                    //_mm_alignr_epi8(tmp, state1, 8);
 	state1 = I32x4_blend(state1, tmp, 0b1100);                                    //_mm_blend_epi16(state1, tmp, 0xF0)
@@ -237,8 +237,8 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 	//Post process
 
 	tmp = I32x4_wzyx(state0);                            //_mm_shuffle_epi32(state0, 0x1B)
-	state1 = I32x4_yxwz(state1);                        //_mm_shuffle_epi32(state1, 0xB1)
-	state0 = I32x4_blend(tmp, state1, 0b1100);            //_mm_blend_epi16(tmp, state1, 0xF0);
+	state1 = I32x4_yxwz(state1);                         //_mm_shuffle_epi32(state1, 0xB1)
+	state0 = I32x4_blend(tmp, state1, 0b1100);           //_mm_blend_epi16(tmp, state1, 0xF0);
 	state1 = I32x4_combineRightShift(state1, tmp, 2);    //_mm_alignr_epi8(a, b, 2)
 
 	//Store output

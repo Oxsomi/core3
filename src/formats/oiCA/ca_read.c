@@ -89,7 +89,7 @@ Bool CAFile_read(
 	StreamCursor cursor = (StreamCursor) { 0 };
 	Buffer tmp = Buffer_createNull();
 	ListU16 dirParents = (ListU16) { 0 };                //mem-space parent index per directory
-	ListCAFileInfo fileMetas = (ListCAFileInfo) { 0 };    //packed parent + timestamp per file
+	ListCAFileInfo fileMetas = (ListCAFileInfo) { 0 };   //packed parent + timestamp per file
 	ListU16 dirHandles = (ListU16) { 0 };                //disk index -> live handle map
 	I32x4 iv = I32x4_zero();
 	DLFile names = (DLFile) { 0 };

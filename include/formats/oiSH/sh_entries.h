@@ -22,51 +22,15 @@
 
 #pragma once
 #include "formats/oiSH/sh_binaries.h"
+#include "formats/gfx_util/gfx_util.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-typedef enum ESHPipelineStage {
-
-	ESHPipelineStage_Vertex,
-	ESHPipelineStage_Pixel,
-	ESHPipelineStage_Compute,
-	ESHPipelineStage_GeometryExt,        //GeometryShader extension is required
-	ESHPipelineStage_Hull,
-	ESHPipelineStage_Domain,
-
-	//RayPipeline extension is required
-
-	ESHPipelineStage_RaygenExt,
-	ESHPipelineStage_CallableExt,
-	ESHPipelineStage_MissExt,
-	ESHPipelineStage_ClosestHitExt,
-	ESHPipelineStage_AnyHitExt,
-	ESHPipelineStage_IntersectionExt,
-
-	ESHPipelineStage_RtStartExt = ESHPipelineStage_RaygenExt,
-	ESHPipelineStage_RtEndExt   = ESHPipelineStage_IntersectionExt,
-
-	//MeshShader extension is required
-
-	ESHPipelineStage_MeshExt,
-	ESHPipelineStage_TaskExt,
-
-	//Reserved, free to reuse.
-	//Was the workgraph (node) stage, removed 2026-08-18: D3D12 disables work graphs from SM 6.10+, there is no
-	// Vulkan equivalent, and OxC3 never had a runtime pipeline for them.
-	//The slot stays because the stage id is serialized in oiSH and indexes SHEntry_stageNames.
-
-	ESHPipelineStage_Reserved,
-
-	ESHPipelineStage_Count
-
-} ESHPipelineStage;
-
 typedef U8 SHPipelineStage;
 
-const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage);
+const C8 *EGfxPipelineStage_getStagePrefix(EGfxPipelineStage stage);
 
 //Deserialized SHEntry (in oiSH file)
 //Though SHEntry on disk is more compact, with only the relevant data.
@@ -132,7 +96,7 @@ typedef struct SHEntry {
 
 } SHEntry;
 
-extern const C8 *SHEntry_stageNames[ESHPipelineStage_Count];
+extern const C8 *SHEntry_stageNames[EGfxPipelineStage_Count];
 
 typedef enum ESHEntryRuntimeFlag {
 	ESHEntryRuntimeFlag_None              = 0,
@@ -149,7 +113,7 @@ typedef struct SHEntryRuntime {
 	U8 isInitializedFlags;                //1 = init, 2 = init oxc::uniforms
 
 	U8 runtimeFlags;                      //ESHEntryRuntimeFlag (folds isRt / containsGfxOrComp)
-	U8 binaryTypes;                       //[[oxc::binary(...)]] mask of (1 << ESHBinaryType); 0 = unset (all supported)
+	U8 binaryTypes;                       //[[oxc::binary(...)]] mask of (1 << EGfxBinaryType); 0 = unset (all supported)
 	U16 uniformStride;                    //How many bytes all uniforms combined take
 
 	ListU32 extensions;                   //Explicitly enabled extensions (ESHExtension[])
@@ -166,7 +130,7 @@ typedef struct SHEntryRuntime {
 
 typedef struct SHBinaryIdentifier SHBinaryIdentifier;
 typedef struct SHBinaryInfo SHBinaryInfo;
-typedef enum ESHBinaryType ESHBinaryType;
+typedef enum EGfxBinaryType EGfxBinaryType;
 typedef enum ESHExtension ESHExtension;
 
 static inline Bool SHEntryRuntime_isRt(SHEntryRuntime runtime) {
@@ -177,7 +141,7 @@ static inline Bool SHEntryRuntime_containsGfxOrComp(SHEntryRuntime runtime) {
 	return (runtime.runtimeFlags & ESHEntryRuntimeFlag_ContainsGfxOrComp) != 0;
 }
 
-//Backends (mask of 1 << ESHBinaryType) this entrypoint's stage + extensions can be expressed on, ignoring the annotation.
+//Backends (mask of 1 << EGfxBinaryType) this entrypoint's stage + extensions can be expressed on, ignoring the annotation.
 //Uniform across all entrypoints sharing a compile, so it's safe to skip a whole compile with.
 U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime);
 
@@ -191,7 +155,7 @@ U32 SHEntryRuntime_getCombinationsCompiled(const SHEntryRuntime *runtime);     /
 Bool SHEntryRuntime_asBinaryInfo(
 	const SHEntryRuntime *runtime,
 	const SHBinaryIdentifier *identifier,
-	ESHBinaryType binaryType,
+	EGfxBinaryType binaryType,
 	Buffer buf,
 	ESHExtension dormantExtensions,
 	SHBinaryInfo *binaryInfo,

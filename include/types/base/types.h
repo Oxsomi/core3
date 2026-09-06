@@ -68,7 +68,7 @@ typedef float F32;
 typedef double F64;
 
 typedef U64 Ns;        //Time since Unix epoch in Ns
-typedef I64 DNs;    //Delta Ns
+typedef I64 DNs;       //Delta Ns
 
 typedef char C8;
 

@@ -1,13 +1,13 @@
 ; gfx1201  SGPRs 16  VGPRs 5  code 64 B  instrs 11  scratch 0  lds 0
 _amdgpu_cs_main:
-	s_getpc_b64 s[2:3]                                         // 000000000000: BE824700
-	s_mov_b32 s0, s1                                           // 000000000004: BE800001
-	s_sext_i32_i16 s3, s3                                      // 000000000008: BE830F03
-	v_mov_b32_e32 v4, 0                                        // 00000000000C: 7E080280
-	s_mov_b32 s1, s3                                           // 000000000010: BE810003
-	s_load_b512 s[0:15], s[0:1], 0x0                           // 000000000014: F4008000 F8000000
-	s_wait_kmcnt 0x0                                           // 00000000001C: BFC70000
-	image_load v[0:3], v4, s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D a16// 000000000020: D3C00041 00000000 00000004
-	s_wait_loadcnt 0x0                                         // 00000000002C: BFC00000
-	image_store v[0:3], v4, s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D a16// 000000000030: D3C18041 00001000 00000004
-	s_endpgm                                                   // 00000000003C: BFB00000
+	s_getpc_b64 s[2:3]                                         // 000000000000
+	s_mov_b32 s0, s1                                           // 000000000004
+	s_sext_i32_i16 s3, s3                                      // 000000000008
+	v_mov_b32_e32 v4, 0                                        // 00000000000C
+	s_mov_b32 s1, s3                                           // 000000000010
+	s_load_b512 s[0:15], s[0:1], 0x0                           // 000000000014
+	s_wait_kmcnt 0x0                                           // 00000000001C
+	image_load v[0:3], v4, s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D a16// 000000000020
+	s_wait_loadcnt 0x0                                         // 00000000002C
+	image_store v[0:3], v4, s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D a16// 000000000030
+	s_endpgm                                                   // 00000000003C

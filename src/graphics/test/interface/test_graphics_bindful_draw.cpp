@@ -20,7 +20,7 @@
 
 //graphics/test/interface/test_graphics_bindful_draw.cpp
 //
-//Bindful draws: a graphics pipeline sourcing its colour through a table, indirect dispatch from CPU and
+//Bindful draws: a graphics pipeline sourcing its color through a table, indirect dispatch from CPU and
 //GPU written arguments, and the fixed function suite on a layout with no bindings at all.
 //Split out of test_graphics_bindful.c, which had grown to 24 modules in one file.
 
@@ -184,15 +184,7 @@ extern "C" void Test_graphicsBindfulDraw(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	//The table holds no reference of its own, so its descriptor goes back before the buffer it names does.
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table)
-				(void) table.unset(0, 0, 1, nullptr);
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	//Only the pixel shader owns a register, but the layout comes from both stages on principle
 
@@ -339,17 +331,7 @@ extern "C" void Test_graphicsBindfulIndirect(oxc::c::Test *t, oxc::c::GraphicsDe
 	gfx::DeviceBuffer outputCpu, outputGpu, cpuArgs, gpuArgs;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &cpu, &gpu, &args;
-
-		~TableGuard() {
-
-			if(cpu) (void) cpu.unset(0, 0, 1, nullptr);
-			if(gpu) (void) gpu.unset(0, 0, 1, nullptr);
-			if(args) (void) args.unset(0, 0, 1, nullptr);
-		}
-	} tableGuard{ tableCpu, tableGpu, tableArgs };
+	gfxtest::TableGuard tableGuard{ { &tableCpu, &tableGpu, &tableArgs } };
 
 	gfxtest::OwnedLayoutInfo layoutWriteInfo(dev.alloc()), layoutArgsInfo(dev.alloc());
 
@@ -577,29 +559,29 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 		"//OxC3_gtest/test_shaders/test_depth_vs.oiSH",               //2: three triangles at fixed depths
 		"//OxC3_gtest/test_shaders/test_depth_ps.oiSH",               //3: interpolated color
 		"//OxC3_gtest/test_shaders/test_vertex_vs.oiSH",              //4: vertex buffer + instancing
-		"//OxC3_gtest/test_shaders/test_draw_mrt_ps.oiSH"             //5: two targets, constant colors
+		"//OxC3_gtest/test_shaders/test_draw_mrt_ps.oiSH",            //5: two targets, constant colors
+		"//OxC3_gtest/test_shaders/test_depth_partial_vs.oiSH"        //6: partial coverage, for the resolve leg
 	};
 
-	//Six of them, so one guard covers the set rather than six OwnedSHFile members that each carry the same
-	//allocator.
+	//One guard covers the set rather than a per file OwnedSHFile that each carry the same allocator.
 
-	c::SHFile files[6] = {};
+	c::SHFile files[7] = {};
 
 	struct FileGuard {
 
-		c::SHFile (&files)[6];
+		c::SHFile (&files)[7];
 		const c::Allocator *alloc;
 
 		~FileGuard() {
 
-			for(c::U64 i = 0; i < 6; ++i)
+			for(c::U64 i = 0; i < 7; ++i)
 				c::SHFile_free(&files[i], alloc);
 		}
 	} fileGuard{ files, dev.alloc() };
 
 	c::Bool loadedAll = true;
 
-	for(c::U64 i = 0; i < 6; ++i)
+	for(c::U64 i = 0; i < 7; ++i)
 		loadedAll &= gfxtest::loadFile(t, shaderPaths[i], files[i]);
 
 	if (!loadedAll) {
@@ -637,7 +619,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 		.attachmentCountExt = 1
 	};
 
-	if(!TestBindful_graphicsPipeline(t, dev, files, 6, 0, 1, "main", "main", flatInfo, pipelineLayout, flatPipeline))
+	if(!TestBindful_graphicsPipeline(t, dev, files, 7, 0, 1, "main", "main", flatInfo, pipelineLayout, flatPipeline))
 		return;
 
 	if(!Test_assert(t, "listCreate", dev.createCommandList(8 * c::KIBI, 128, 32, commandList, true, e_rr)))
@@ -707,7 +689,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 
 	if (
 		depth &&
-		TestBindful_graphicsPipeline(t, dev, files, 6, 2, 3, "main", "main", depthInfo, pipelineLayout, depthPipeline)
+		TestBindful_graphicsPipeline(t, dev, files, 7, 2, 3, "main", "main", depthInfo, pipelineLayout, depthPipeline)
 	) {
 
 		Test_assert(t, "beginDepth", commandList.begin(true, e_rr));
@@ -784,7 +766,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 
 	if (
 		vertexBuffer && indexBuffer &&
-		TestBindful_graphicsPipeline(t, dev, files, 6, 4, 1, "main", "main", vertexInfo, pipelineLayout, vertexPipeline)
+		TestBindful_graphicsPipeline(t, dev, files, 7, 4, 1, "main", "main", vertexInfo, pipelineLayout, vertexPipeline)
 	) {
 
 		Test_assert(t, "beginVertex", commandList.begin(true, e_rr));
@@ -845,7 +827,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 
 	if (
 		mrtTarget &&
-		TestBindful_graphicsPipeline(t, dev, files, 6, 0, 5, "main", "mainMrt", mrtInfo, pipelineLayout, mrtPipeline)
+		TestBindful_graphicsPipeline(t, dev, files, 7, 0, 5, "main", "mainMrt", mrtInfo, pipelineLayout, mrtPipeline)
 	) {
 
 		Test_assert(t, "beginMrt", commandList.begin(true, e_rr));
@@ -900,7 +882,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 		c::PipelineGraphicsInfo msaaInfo = flatInfo;
 		msaaInfo.msaa = (c::U8) msaaCounts[m];
 
-		if(!TestBindful_graphicsPipeline(t, dev, files, 6, 0, 1, "main", "main", msaaInfo, pipelineLayout, msaaPipeline))
+		if(!TestBindful_graphicsPipeline(t, dev, files, 7, 0, 1, "main", "main", msaaInfo, pipelineLayout, msaaPipeline))
 			break;
 
 		Test_assert(t, "beginMsaa", commandList.begin(true, e_rr));
@@ -929,7 +911,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 	}
 
 	//A multisampled DEPTH attachment resolving into a single sample one, which nothing exercised before and
-	// which turned out to be broken on both backends: Vulkan wanted a colour attachment scope for the resolve
+	// which turned out to be broken on both backends: Vulkan wanted a color attachment scope for the resolve
 	// even on depth, and D3D12 was handing ResolveSubresource a DSV format it refuses outright.
 	//
 	//The geometry covers only PART of the pixels it touches (mainPartial's diagonal), which is what makes the
@@ -961,7 +943,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 		));
 
 		madeDepthResolve &= Test_assert(t, "msaaDepthColorCreate", dev.createRenderTexture(
-			8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Fixed function MSAA depth colour",
+			8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Fixed function MSAA depth color",
 			msaaDepthColor, c::EMSAASamples_x2Ext, nullptr, e_rr
 		));
 
@@ -974,7 +956,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 		msaaDepthInfo.msaa = c::EMSAASamples_x2Ext;
 
 		madeDepthResolve = madeDepthResolve && TestBindful_graphicsPipeline(
-			t, dev, files, 6, 2, 3, "mainPartial", "main", msaaDepthInfo, pipelineLayout, msaaDepthPipeline
+			t, dev, files, 7, 6, 3, "main", "main", msaaDepthInfo, pipelineLayout, msaaDepthPipeline
 		);
 
 		//Min and Max only. Average is what startRenderExt now refuses for a depth plane, since it is the zero

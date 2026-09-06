@@ -24,6 +24,7 @@
 #include "graphics/d3d12/direct3d12.h"
 #include "graphics/d3d12/dx_amd_shader_analyzer.h"
 #include "graphics/generic/command_list.h"
+#include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
 #include "types/container/list.h"
 #include "types/container/list_predeclare.h"
@@ -98,9 +99,23 @@ typedef struct DxDescriptorHeapSingle {
 } DxDescriptorHeapSingle;
 
 typedef struct DxDescriptorHeap {
+
 	DxDescriptorHeapSingle samplerHeap, resourcesHeap;
 	AllocationBuffer allocators[2];
 	SpinLock locks[2];
+
+	//A push descriptor naming a texture needs a shader visible slot, and it has to be in THIS heap: D3D12
+	// binds one CBV/SRV/UAV heap at a time and swapping would drop the bindless and table state the draw
+	// still needs (see DescriptorHeapInfo::maxPushDescriptors).
+	//The ring sits past the declared maxima so allocators[0] never hands any of it out,
+	// and each frame in flight owns a window that resets when that frame comes back around.
+
+	//pushRingFrame is the frame in flight the offset belongs to, so the window resets exactly once when
+	// that frame comes back around rather than on every bind.
+
+	U32 pushRingBase, pushRingPerFrame, pushRingOffset;
+	U32 pushRingFrame;
+
 } DxDescriptorHeap;
 
 TList(D3D12_DESCRIPTOR_RANGE1);
@@ -130,6 +145,10 @@ typedef struct DxDescriptorTable {
 } DxDescriptorTable;
 
 Bool DxDescriptorHeap_freeTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table);
+
+//Bump allocates transient shader visible slots from the heap's push ring; never binds the heap itself.
+
+Bool DxDescriptorHeap_allocTransient(DxDescriptorHeap *heapExt, U32 fifId, U32 count, U32 *slot);
 Bool DxDescriptorHeap_allocTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table, const Allocator *alloc, Error *e_rr);
 
 typedef enum EExecuteIndirectCommand {
@@ -261,7 +280,7 @@ typedef struct DxCommandBufferState {
 
 	U16 scopeCounter;
 	U8 curScopeFlags;                                  //ECommandScopeInternalFlags of the open scope, StartScope -> EndScope
-	U8 colorCount;                                    //If inRender, how many colors are bound (upper mask = has depth)
+	U8 colorCount;                                     //If inRender, how many colors are bound (upper mask = has depth)
 	U8 anyResolve;
 	U8 padding5[3];
 
@@ -278,6 +297,24 @@ typedef struct DxCommandBufferState {
 } DxCommandBufferState;
 
 Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer, Error *e_rr);
+
+//Builds a texture's SRV or UAV at dst.
+//Shared so a descriptor table and a texture push descriptor's single entry table cannot end up disagreeing
+// about a dimension, a mip range or a depth plane's format.
+
+void DxDescriptorTable_writeTexture(
+	DxGraphicsDevice *deviceExt,
+	const Descriptor *d,
+	EGfxRegisterType registerType,
+	D3D12_CPU_DESCRIPTOR_HANDLE dst
+);
+
+D3D12_SHADER_VISIBILITY DxDescriptorLayout_convertVisibility(U32 visibility);
+
+//A sampler is described the same way whether it lands in a sampler heap or is baked into a root signature.
+
+D3D12_FILTER DxSampler_toFilter(SamplerInfo sinfo);
+D3D12_STATIC_SAMPLER_DESC DxSampler_toStaticDesc(SamplerInfo sinfo, GfxBinding binding, U32 visibility);
 
 Bool DxGraphicsDevice_createDescriptorHeapSingle(
 	DxGraphicsDevice *deviceExt,

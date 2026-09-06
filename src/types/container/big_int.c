@@ -206,10 +206,10 @@ Bool BigInt_createFromBase2Type(const BigIntCreate *bigIntCreate, EIntEncoding t
 		U8 v = 0;
 
 		switch (type) {
-			default:                v = C8_hex(textPtr[i]);        break;
-			case EIntEncoding_Bin:    v = C8_bin(textPtr[i]);        break;
-			case EIntEncoding_Oct:    v = C8_oct(textPtr[i]);        break;
-			case EIntEncoding_Nyto:    v = C8_nyto(textPtr[i]);    break;
+			default:                   v = C8_hex(textPtr[i]);       break;
+			case EIntEncoding_Bin:     v = C8_bin(textPtr[i]);       break;
+			case EIntEncoding_Oct:     v = C8_oct(textPtr[i]);       break;
+			case EIntEncoding_Nyto:    v = C8_nyto(textPtr[i]);      break;
 		}
 
 		if(v == U8_MAX)
@@ -217,7 +217,7 @@ Bool BigInt_createFromBase2Type(const BigIntCreate *bigIntCreate, EIntEncoding t
 
 		switch (type) {
 
-			default:                ((U8*)big->data)[j >> 1] |= v << (countPerChar * (j & 1));    break;
+			default:                  ((U8*)big->data)[j >> 1] |= v << (countPerChar * (j & 1));    break;
 			case EIntEncoding_Bin:    ((U8*)big->data)[j >> 3] |= v << (countPerChar * (j & 7));    break;
 
 			case EIntEncoding_Nyto:
@@ -731,10 +731,10 @@ Bool BigInt_base2(const BigIntStringify *stringify, EIntEncoding type, BigInt b,
 			continue;
 
 		switch(type) {
-			default:                resultPtr[i - j] = C8_createHex((U8)v);        break;
-			case EIntEncoding_Bin:    resultPtr[i - j] = C8_createBin((U8)v);        break;
-			case EIntEncoding_Oct:    resultPtr[i - j] = C8_createOct((U8)v);        break;
-			case EIntEncoding_Nyto:    resultPtr[i - j] = C8_createNyto((U8)v);    break;
+			default:                   resultPtr[i - j] = C8_createHex((U8)v);       break;
+			case EIntEncoding_Bin:     resultPtr[i - j] = C8_createBin((U8)v);       break;
+			case EIntEncoding_Oct:     resultPtr[i - j] = C8_createOct((U8)v);       break;
+			case EIntEncoding_Nyto:    resultPtr[i - j] = C8_createNyto((U8)v);      break;
 		}
 
 		firstLoc = j + 1;

@@ -66,7 +66,7 @@ static inline Bool EDataType_isSigned(EDataType type) { return type & EDataType_
 #define makeTypeId(libId, typeId, width, height, dataTypeStride, dataType)                                                \
 	(                                                                                                                     \
 		((U32)(libId) << 19) | ((U32)(typeId) << 9) |                                                                     \
-		(((U32)(width) - 1) << 7) | (((U32)(height) - 1) << 5) | ((U32)(dataTypeStride) << 3) | (U32)(dataType)            \
+		(((U32)(width) - 1) << 7) | (((U32)(height) - 1) << 5) | ((U32)(dataTypeStride) << 3) | (U32)(dataType)           \
 	)
 
 #define makeObjectId(libId, typeId, properties) \

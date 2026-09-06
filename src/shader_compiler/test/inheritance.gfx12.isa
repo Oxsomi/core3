@@ -1,28 +1,28 @@
 ; gfx1201  SGPRs 3  VGPRs 9  code 156 B  instrs 26  scratch 0  lds 0
 _amdgpu_ps_main:
-	s_mov_b64 s[0:1], exec                                     // 000000000000: BE80017E
-	s_wqm_b64 exec, exec                                       // 000000000004: BEFE1D7E
-	s_mov_b32 m0, s2                                           // 000000000008: BEFD0002
-	ds_param_load v2, attr0.x wait_va_vdst:15 wait_vm_vsrc:1   // 00000000000C: CE8F0002
-	ds_param_load v3, attr0.y wait_va_vdst:15 wait_vm_vsrc:1   // 000000000010: CE8F0103
-	ds_param_load v4, attr0.z wait_va_vdst:15 wait_vm_vsrc:1   // 000000000014: CE8F0204
-	ds_param_load v5, attr0.w wait_va_vdst:15 wait_vm_vsrc:1   // 000000000018: CE8F0305
-	s_mov_b64 exec, s[0:1]                                     // 00000000001C: BEFE0100
-	v_interp_p10_f32 v6, v2, v0, v2 wait_exp:3                 // 000000000020: CD000306 040A0102
-	v_interp_p10_f32 v7, v3, v0, v3 wait_exp:2                 // 000000000028: CD000207 040E0103
-	v_interp_p10_f32 v8, v4, v0, v4 wait_exp:1                 // 000000000030: CD000108 04120104
-	v_interp_p10_f32 v0, v5, v0, v5 wait_exp:0                 // 000000000038: CD000000 04160105
-	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000040: BF870214
-	v_interp_p2_f32 v2, v2, v1, v6 wait_exp:7                  // 000000000044: CD010702 041A0302
-	v_interp_p2_f32 v3, v3, v1, v7 wait_exp:7                  // 00000000004C: CD010703 041E0303
-	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000054: BF870214
-	v_interp_p2_f32 v4, v4, v1, v8 wait_exp:7                  // 000000000058: CD010704 04220304
-	v_interp_p2_f32 v0, v5, v1, v0 wait_exp:7                  // 000000000060: CD010700 04020305
-	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000068: BF870214
-	v_mul_f32_e32 v1, 0x40c00000, v2                           // 00000000006C: 100204FF 40C00000
-	v_mul_f32_e32 v2, 0x40c00000, v3                           // 000000000074: 100406FF 40C00000
-	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 00000000007C: BF870214
-	v_mul_f32_e32 v3, 0x40c00000, v4                           // 000000000080: 100608FF 40C00000
-	v_mul_f32_e32 v0, 0x40c00000, v0                           // 000000000088: 100000FF 40C00000
-	export mrt0, v1, v2, v3, v0 done                           // 000000000090: F800080F 00030201
-	s_endpgm                                                   // 000000000098: BFB00000
+	s_mov_b64 s[0:1], exec                                     // 000000000000
+	s_wqm_b64 exec, exec                                       // 000000000004
+	s_mov_b32 m0, s2                                           // 000000000008
+	ds_param_load v2, attr0.x wait_va_vdst:15 wait_vm_vsrc:1   // 00000000000C
+	ds_param_load v3, attr0.y wait_va_vdst:15 wait_vm_vsrc:1   // 000000000010
+	ds_param_load v4, attr0.z wait_va_vdst:15 wait_vm_vsrc:1   // 000000000014
+	ds_param_load v5, attr0.w wait_va_vdst:15 wait_vm_vsrc:1   // 000000000018
+	s_mov_b64 exec, s[0:1]                                     // 00000000001C
+	v_interp_p10_f32 v6, v2, v0, v2 wait_exp:3                 // 000000000020
+	v_interp_p10_f32 v7, v3, v0, v3 wait_exp:2                 // 000000000028
+	v_interp_p10_f32 v8, v4, v0, v4 wait_exp:1                 // 000000000030
+	v_interp_p10_f32 v0, v5, v0, v5 wait_exp:0                 // 000000000038
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000040
+	v_interp_p2_f32 v2, v2, v1, v6 wait_exp:7                  // 000000000044
+	v_interp_p2_f32 v3, v3, v1, v7 wait_exp:7                  // 00000000004C
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000054
+	v_interp_p2_f32 v4, v4, v1, v8 wait_exp:7                  // 000000000058
+	v_interp_p2_f32 v0, v5, v1, v0 wait_exp:7                  // 000000000060
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000068
+	v_mul_f32_e32 v1, 0x40c00000, v2                           // 00000000006C
+	v_mul_f32_e32 v2, 0x40c00000, v3                           // 000000000074
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 00000000007C
+	v_mul_f32_e32 v3, 0x40c00000, v4                           // 000000000080
+	v_mul_f32_e32 v0, 0x40c00000, v0                           // 000000000088
+	export mrt0 v1, v2, v3, v0 done                            // 000000000090
+	s_endpgm                                                   // 000000000098

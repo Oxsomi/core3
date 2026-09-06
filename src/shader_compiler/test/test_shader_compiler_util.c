@@ -263,7 +263,7 @@ static Bool shNormalize(const Allocator *alloc, Buffer in, Buffer *out) {
 
 	for(U64 i = 0; i < file.binaries.length; ++i) {
 
-		const Buffer spirv = file.binaries.ptr[i].binaries[ESHBinaryType_SPIRV];
+		const Buffer spirv = file.binaries.ptr[i].binaries[EGfxBinaryType_SPIRV];
 		Bool readMagic = false;
 
 		if(Buffer_length(spirv) < sizeof(U32) * 5 || Buffer_isConstRef(spirv))

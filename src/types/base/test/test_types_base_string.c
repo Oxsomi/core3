@@ -224,7 +224,7 @@ void Test_baseString(Test *test) {
 	CharString ownedStr = (CharString) {
 		.ptrNonConst = ownedBuf,
 		.lenAndNullTerminated = 4 | ((U64)1 << 63),        //4 chars, null terminated
-		.capacityAndRefInfo = 64                        //Pretend we own 64 bytes
+		.capacityAndRefInfo = 64                           //Pretend we own 64 bytes
 	};
 	
 	Test_assert(test, "Owned string setup", CharString_length(ownedStr) == 4);

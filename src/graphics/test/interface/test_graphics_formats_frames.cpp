@@ -58,7 +58,7 @@ namespace {
 
 	using namespace oxc;
 
-	void pullCompleted(c::RefPtr *resource, void *context) {
+	void pullCompleted(void *resource, void *context) {
 		(void) resource;
 		++*(c::U32*)context;
 	}

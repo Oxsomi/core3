@@ -34,6 +34,8 @@
 //Only ever a pointer here, so the definition stays in types/base/allocator.h
 typedef struct Allocator Allocator;
 
+typedef enum EGfxRegisterType EGfxRegisterType;
+
 typedef struct SHFile SHFile;
 typedef struct SRFile SRFile;
 typedef struct SPFile SPFile;
@@ -86,6 +88,12 @@ Bool Json_cstr(CharString *out, const C8 *v, const Allocator *alloc, Error *e_rr
 Bool Json_bool(CharString *out, Bool v, const Allocator *alloc, Error *e_rr);
 Bool Json_key(CharString *out, const C8 *key, Bool *first, const Allocator *alloc, Error *e_rr);
 Bool Json_next(CharString *out, Bool *first, const Allocator *alloc, Error *e_rr);
+
+//How a register spells itself in a document: its class (buffer, texture, sampler, ...) and the HLSL type name the
+//class and access add up to. The oiSH registers and the oiPL layout rows share both.
+
+const C8 *WasmJson_registerClass(EGfxRegisterType type);
+const C8 *WasmJson_registerBaseName(EGfxRegisterType type, Bool isWrite);
 
 //Serializers onto the document contracts the page consumes (documented at the top of web/js/api.js).
 //They mirror the C structs, so each is a walk rather than a translation.

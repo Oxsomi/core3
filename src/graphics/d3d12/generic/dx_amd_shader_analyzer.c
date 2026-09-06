@@ -20,6 +20,31 @@
 
 //graphics/d3d12/generic/dx_amd_shader_analyzer.c
 
+/*  The AmdExtD3D* structure, enum and COM interface declarations in this file are transcribed from
+*  AmdExtD3DShaderAnalyzerApi.h and AmdExtD3D.h in the Radeon GPU Analyzer package
+*  (source/utils/dx12/backend/extension), which carry the following notice:
+*
+*  Copyright (c) 2016-2025 Advanced Micro Devices, Inc. All rights reserved.
+*
+*  Permission is hereby granted, free of charge, to any person obtaining a copy
+*  of this software and associated documentation files (the "Software"), to deal
+*  in the Software without restriction, including without limitation the rights
+*  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+*  copies of the Software, and to permit persons to whom the Software is
+*  furnished to do so, subject to the following conditions:
+*
+*  The above copyright notice and this permission notice shall be included in
+*  all copies or substantial portions of the Software.
+*
+*  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+*  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+*  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+*  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+*  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+*  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+*  THE SOFTWARE.
+*/
+
 #include "graphics/d3d12/dx_amd_shader_analyzer.h"
 #include "graphics/d3d12/direct3d12.h"
 #include "graphics/generic/pipeline.h"
@@ -279,8 +304,11 @@ Bool DxAmdShaderAnalyzer_init(ID3D12Device *device, DxAmdShaderAnalyzer *analyze
 	if(!umd)
 		return false;
 
+	//Through void*, because casting GetProcAddress's FARPROC straight to the entry's own signature is a cast
+	// between incompatible function types, which clang rejects.
+
 	const PFNAmdExtD3DCreateInterface createInterface =
-		(PFNAmdExtD3DCreateInterface) GetProcAddress(umd, "AmdExtD3DCreateInterface");
+		(PFNAmdExtD3DCreateInterface)(void*) GetProcAddress(umd, "AmdExtD3DCreateInterface");
 
 	if(!createInterface)
 		return false;
@@ -402,6 +430,10 @@ Bool DxAmdShaderAnalyzer_selectVirtualGpu(U32 gpuId) {
 
 Bool DxAmdShaderAnalyzer_clearVirtualGpu() {
 	return SetEnvironmentVariableA(AmdExtVirtualGpuIdEnvVar, NULL);
+}
+
+Bool DxAmdShaderAnalyzer_virtualGpuSelected() {
+	return GetEnvironmentVariableA(AmdExtVirtualGpuIdEnvVar, NULL, 0) != 0;
 }
 
 void DxAmdShaderAnalyzer_free(DxAmdShaderAnalyzer *analyzer) {
@@ -526,7 +558,7 @@ static Bool DxAmdShaderAnalyzer_addExecutable(
 	const C8 *name,
 	const C8 *disassembly,
 	const AmdExtD3DShaderStats *stats,
-	ESHPipelineStage stage,
+	EGfxPipelineStage stage,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -609,9 +641,9 @@ static Bool DxAmdShaderAnalyzer_addRaytracingExecutable(
 
 	PipelineExecutable exec = (PipelineExecutable) {
 		.stages =
-			(1 << ESHPipelineStage_RaygenExt) | (1 << ESHPipelineStage_MissExt) |
-			(1 << ESHPipelineStage_ClosestHitExt) | (1 << ESHPipelineStage_AnyHitExt) |
-			(1 << ESHPipelineStage_IntersectionExt) | (1 << ESHPipelineStage_CallableExt)
+			(1 << EGfxPipelineStage_RaygenExt) | (1 << EGfxPipelineStage_MissExt) |
+			(1 << EGfxPipelineStage_ClosestHitExt) | (1 << EGfxPipelineStage_AnyHitExt) |
+			(1 << EGfxPipelineStage_IntersectionExt) | (1 << EGfxPipelineStage_CallableExt)
 	};
 
 	gotoIfError3(clean, CharString_createCopy(name, alloc, &exec.name, e_rr));
@@ -849,7 +881,7 @@ Bool DxAmdShaderAnalyzer_getExecutables(
 
 		gotoIfError3(clean, DxAmdShaderAnalyzer_addExecutable(
 			&executables, "Compute shader", disassembly.computeDisassembly, &stats.base,
-			ESHPipelineStage_Compute, alloc, e_rr
+			EGfxPipelineStage_Compute, alloc, e_rr
 		));
 	}
 
@@ -857,9 +889,9 @@ Bool DxAmdShaderAnalyzer_getExecutables(
 
 		const C8 *names[5] = { "Vertex shader", "Hull shader", "Domain shader", "Geometry shader", "Pixel shader" };
 
-		const ESHPipelineStage stages[5] = {
-			ESHPipelineStage_Vertex, ESHPipelineStage_Hull, ESHPipelineStage_Domain,
-			ESHPipelineStage_GeometryExt, ESHPipelineStage_Pixel
+		const EGfxPipelineStage stages[5] = {
+			EGfxPipelineStage_Vertex, EGfxPipelineStage_Hull, EGfxPipelineStage_Domain,
+			EGfxPipelineStage_GeometryExt, EGfxPipelineStage_Pixel
 		};
 
 		const C8 *disassemblies[5] = {

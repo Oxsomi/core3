@@ -245,11 +245,12 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 	switch (*(const U32*)buf.ptr) {
 
 		case CAHeader_MAGIC:    reqLen = sizeof(CAHeader);                    break;
-		case DLHeader_MAGIC:    reqLen = sizeof(DLHeader) + sizeof(U32);    break;
-		case SHHeader_MAGIC:    reqLen = sizeof(SHHeader) + sizeof(U32);    break;
-		case SBHeader_MAGIC:    reqLen = sizeof(SBHeader) + sizeof(U32);    break;
-		case SRHeader_MAGIC:    reqLen = sizeof(SRHeader) + sizeof(U32);    break;
-		case SPHeader_MAGIC:    reqLen = sizeof(SPHeader) + sizeof(U32);    break;
+		case DLHeader_MAGIC:    reqLen = sizeof(DLHeader) + sizeof(U32);      break;
+		case SHHeader_MAGIC:    reqLen = sizeof(SHHeader) + sizeof(U32);      break;
+		case SBHeader_MAGIC:    reqLen = sizeof(SBHeader) + sizeof(U32);      break;
+		case SRHeader_MAGIC:    reqLen = sizeof(SRHeader) + sizeof(U32);      break;
+		case SPHeader_MAGIC:    reqLen = sizeof(SPHeader) + sizeof(U32);      break;
+		case PLHeader_MAGIC:    reqLen = sizeof(PLHeader) + sizeof(U32);      break;
 		default:
 			Log_errorLnx("File wasn't recognized.");
 			goto clean;
@@ -261,6 +262,24 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 	}
 
 	switch (*(const U32*)buf.ptr) {
+
+		//oiPL header
+
+		case PLHeader_MAGIC: {
+
+			const PLHeader plHeader = *(const PLHeader*)(buf.ptr + sizeof(U32));
+
+			Log_debugLnx("Detected oiPL file with following info:");
+			Log_debugLnx("Version: %s", plHeader.version == EPLVersion_V1_1 ? "1.1" : "<unknown>");
+
+			Log_debugLnx(
+				"%"PRIu8" binding(s), %"PRIu8" sampler(s), push constant: %s",
+				plHeader.bindingCount, plHeader.samplerCount,
+				plHeader.flags & EPLFlag_HasPushConstant ? "yes" : "no"
+			);
+
+			break;
+		}
 
 		//oiSH header
 

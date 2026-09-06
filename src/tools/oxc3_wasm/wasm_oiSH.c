@@ -33,46 +33,46 @@
 //Derived from the register type the same way the DXIL binding letter is (SHRegister_printBindings), so the two
 // can never disagree about what a register is.
 
-static const C8 *WasmJson_registerClass(ESHRegisterType type) {
+const C8 *WasmJson_registerClass(EGfxRegisterType type) {
 
-	ESHRegisterType base = (ESHRegisterType)(type & ESHRegisterType_TypeMask);
+	EGfxRegisterType base = (EGfxRegisterType)(type & EGfxRegisterType_TypeMask);
 
-	if(base == ESHRegisterType_Sampler || base == ESHRegisterType_SamplerComparisonState)
+	if(base == EGfxRegisterType_Sampler || base == EGfxRegisterType_SamplerComparisonState)
 		return "SMP";
 
-	if(base == ESHRegisterType_ConstantBuffer || base == ESHRegisterType_PushConstants)
+	if(base == EGfxRegisterType_ConstantBuffer || base == EGfxRegisterType_PushConstants)
 		return "CBV";
 
-	return type & ESHRegisterType_IsWrite ? "UAV" : "SRV";
+	return type & EGfxRegisterType_IsWrite ? "UAV" : "SRV";
 }
 
 //The HLSL spelling of a register's type, the same set SHRegister_print logs.
 //Texture types compose from three flags, so they are built by the caller instead of coming from here.
 
-static const C8 *WasmJson_registerBaseName(ESHRegisterType type, Bool isWrite) {
+const C8 *WasmJson_registerBaseName(EGfxRegisterType type, Bool isWrite) {
 
-	switch (type & ESHRegisterType_TypeMask) {
+	switch (type & EGfxRegisterType_TypeMask) {
 
-		case ESHRegisterType_Sampler:                  return "SamplerState";
-		case ESHRegisterType_SamplerComparisonState:   return "SamplerComparisonState";
-		case ESHRegisterType_ConstantBuffer:           return "ConstantBuffer";
-		case ESHRegisterType_PushConstants:            return "PushConstants";
-		case ESHRegisterType_AccelerationStructure:    return "RaytracingAccelerationStructure";
-		case ESHRegisterType_SubpassInput:             return "SubpassInput";
-		case ESHRegisterType_ByteAddressBuffer:        return isWrite ? "RWByteAddressBuffer" : "ByteAddressBuffer";
-		case ESHRegisterType_StructuredBuffer:         return isWrite ? "RWStructuredBuffer" : "StructuredBuffer";
-		case ESHRegisterType_StorageBuffer:            return isWrite ? "RWStorageBuffer" : "StorageBuffer";
-		case ESHRegisterType_StorageBufferAtomic:      return isWrite ? "RWStorageBufferAtomic" : "StorageBufferAtomic";
-		case ESHRegisterType_StructuredBufferAtomic:   return "Append/ConsumeBuffer";
-		default:                                       return NULL;
+		case EGfxRegisterType_Sampler:                  return "SamplerState";
+		case EGfxRegisterType_SamplerComparisonState:   return "SamplerComparisonState";
+		case EGfxRegisterType_ConstantBuffer:           return "ConstantBuffer";
+		case EGfxRegisterType_PushConstants:            return "PushConstants";
+		case EGfxRegisterType_AccelerationStructure:    return "RaytracingAccelerationStructure";
+		case EGfxRegisterType_SubpassInput:             return "SubpassInput";
+		case EGfxRegisterType_ByteAddressBuffer:        return isWrite ? "RWByteAddressBuffer" : "ByteAddressBuffer";
+		case EGfxRegisterType_StructuredBuffer:         return isWrite ? "RWStructuredBuffer" : "StructuredBuffer";
+		case EGfxRegisterType_StorageBuffer:            return isWrite ? "RWStorageBuffer" : "StorageBuffer";
+		case EGfxRegisterType_StorageBufferAtomic:      return isWrite ? "RWStorageBufferAtomic" : "StorageBufferAtomic";
+		case EGfxRegisterType_StructuredBufferAtomic:   return "Append/ConsumeBuffer";
+		default:                                        return NULL;
 	}
 }
 
-static Bool WasmJson_registerTypeName(ESHRegisterType type, CharString *out, const Allocator *alloc, Error *e_rr) {
+static Bool WasmJson_registerTypeName(EGfxRegisterType type, CharString *out, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	Bool isWrite = (type & ESHRegisterType_IsWrite) != 0;
+	Bool isWrite = (type & EGfxRegisterType_IsWrite) != 0;
 	const C8 *base = WasmJson_registerBaseName(type, isWrite);
 
 	if (base) {
@@ -82,20 +82,20 @@ static Bool WasmJson_registerTypeName(ESHRegisterType type, CharString *out, con
 
 	const C8 *dim = "2D";
 
-	switch (type & ESHRegisterType_TypeMask) {
-		case ESHRegisterType_Texture1D:    dim = "1D";     break;
-		case ESHRegisterType_Texture3D:    dim = "3D";     break;
-		case ESHRegisterType_TextureCube:  dim = "Cube";   break;
-		case ESHRegisterType_Texture2DMS:  dim = "2DMS";   break;
-		default:                                           break;
+	switch (type & EGfxRegisterType_TypeMask) {
+		case EGfxRegisterType_Texture1D:    dim = "1D";     break;
+		case EGfxRegisterType_Texture3D:    dim = "3D";     break;
+		case EGfxRegisterType_TextureCube:  dim = "Cube";   break;
+		case EGfxRegisterType_Texture2DMS:  dim = "2DMS";   break;
+		default:                                            break;
 	}
 
 	gotoIfError3(clean, Json_fmt(
 		out, alloc, e_rr, "\"%s%s%s%s\"",
 		isWrite ? "RW" : "",
-		type & ESHRegisterType_IsCombinedSampler ? "sampler" : "Texture",
+		type & EGfxRegisterType_IsCombinedSampler ? "sampler" : "Texture",
 		dim,
-		type & ESHRegisterType_IsArray ? "Array" : ""
+		type & EGfxRegisterType_IsArray ? "Array" : ""
 	));
 
 clean:
@@ -244,14 +244,14 @@ static Bool WasmJson_register(
 
 	Bool s_uccess = true;
 
-	ESHRegisterType type = (ESHRegisterType) reg->reg.registerType;
-	ESHRegisterType base = (ESHRegisterType)(type & ESHRegisterType_TypeMask);
+	EGfxRegisterType type = (EGfxRegisterType) reg->reg.registerType;
+	EGfxRegisterType base = (EGfxRegisterType)(type & EGfxRegisterType_TypeMask);
 
 	//A subpass input is texture-like and sits in the texture range, but the union it shares with a
 	//texture's format holds its attachment id instead, so only a real texture reports one.
 
-	Bool isTexture = base >= ESHRegisterType_TextureStart && base < ESHRegisterType_SubpassInput;
-	Bool isBuffer = base >= ESHRegisterType_BufferStart && base <= ESHRegisterType_BufferEnd;
+	Bool isTexture = base >= EGfxRegisterType_TextureStart && base < EGfxRegisterType_SubpassInput;
+	Bool isBuffer = base >= EGfxRegisterType_BufferStart && base <= EGfxRegisterType_BufferEnd;
 
 	gotoIfError3(clean, Json_raw(out, "{", alloc, e_rr));
 
@@ -276,18 +276,18 @@ static Bool WasmJson_register(
 
 	gotoIfError3(clean, Json_key(out, "flags", &first, alloc, e_rr));
 	gotoIfError3(clean, Json_raw(out, "{\"write\":", alloc, e_rr));
-	gotoIfError3(clean, Json_bool(out, (type & ESHRegisterType_IsWrite) != 0, alloc, e_rr));
+	gotoIfError3(clean, Json_bool(out, (type & EGfxRegisterType_IsWrite) != 0, alloc, e_rr));
 	gotoIfError3(clean, Json_raw(out, ",\"array\":", alloc, e_rr));
-	gotoIfError3(clean, Json_bool(out, (type & ESHRegisterType_IsArray) != 0 || reg->arrays.length != 0, alloc, e_rr));
+	gotoIfError3(clean, Json_bool(out, (type & EGfxRegisterType_IsArray) != 0 || reg->arrays.length != 0, alloc, e_rr));
 	gotoIfError3(clean, Json_raw(out, ",\"combined\":", alloc, e_rr));
-	gotoIfError3(clean, Json_bool(out, (type & ESHRegisterType_IsCombinedSampler) != 0, alloc, e_rr));
+	gotoIfError3(clean, Json_bool(out, (type & EGfxRegisterType_IsCombinedSampler) != 0, alloc, e_rr));
 	gotoIfError3(clean, Json_raw(out, "}", alloc, e_rr));
 
 	//A binding of U32_MAX in both halves is how the format spells "not present"; push constants are the case
 	// that reaches the page as a null SPIR-V binding, since they are a block rather than a descriptor.
 
-	SHBinding spirv = reg->reg.bindings.arr[ESHBinaryType_SPIRV];
-	SHBinding dxil = reg->reg.bindings.arr[ESHBinaryType_DXIL];
+	GfxBinding spirv = reg->reg.bindings.arr[EGfxBinaryType_SPIRV];
+	GfxBinding dxil = reg->reg.bindings.arr[EGfxBinaryType_DXIL];
 
 	gotoIfError3(clean, Json_key(out, "bindings", &first, alloc, e_rr));
 	gotoIfError3(clean, Json_raw(out, "{\"spirv\":", alloc, e_rr));
@@ -308,9 +308,9 @@ static Bool WasmJson_register(
 
 	else {
 
-		C8 letter = base == ESHRegisterType_ConstantBuffer || base == ESHRegisterType_PushConstants ? 'b' : (
-			base == ESHRegisterType_Sampler || base == ESHRegisterType_SamplerComparisonState ? 's' : (
-				type & ESHRegisterType_IsWrite ? 'u' : 't'
+		C8 letter = base == EGfxRegisterType_ConstantBuffer || base == EGfxRegisterType_PushConstants ? 'b' : (
+			base == EGfxRegisterType_Sampler || base == EGfxRegisterType_SamplerComparisonState ? 's' : (
+				type & EGfxRegisterType_IsWrite ? 'u' : 't'
 			)
 		);
 
@@ -324,13 +324,13 @@ static Bool WasmJson_register(
 
 	gotoIfError3(clean, Json_key(out, "used", &first, alloc, e_rr));
 	gotoIfError3(clean, Json_raw(out, "{\"spirv\":", alloc, e_rr));
-	gotoIfError3(clean, Json_bool(out, (reg->reg.isUsedFlag >> ESHBinaryType_SPIRV) & 1, alloc, e_rr));
+	gotoIfError3(clean, Json_bool(out, (reg->reg.isUsedFlag >> EGfxBinaryType_SPIRV) & 1, alloc, e_rr));
 	gotoIfError3(clean, Json_raw(out, ",\"dxil\":", alloc, e_rr));
-	gotoIfError3(clean, Json_bool(out, (reg->reg.isUsedFlag >> ESHBinaryType_DXIL) & 1, alloc, e_rr));
+	gotoIfError3(clean, Json_bool(out, (reg->reg.isUsedFlag >> EGfxBinaryType_DXIL) & 1, alloc, e_rr));
 	gotoIfError3(clean, Json_raw(out, "}", alloc, e_rr));
 
 	gotoIfError3(clean, Json_key(out, "push", &first, alloc, e_rr));
-	gotoIfError3(clean, Json_bool(out, base == ESHRegisterType_PushConstants, alloc, e_rr));
+	gotoIfError3(clean, Json_bool(out, base == EGfxRegisterType_PushConstants, alloc, e_rr));
 
 	//Texture format info is split by direction: a read texture carries the primitive it approximately matches,
 	// a written one the exact format id SPIR-V demands. Either half can be absent.
@@ -345,11 +345,11 @@ static Bool WasmJson_register(
 
 		gotoIfError3(clean, Json_raw(out, "{\"primitive\":", alloc, e_rr));
 
-		if(reg->reg.texture.primitive == ESHTexturePrimitive_Count) {
+		if(reg->reg.texture.primitive == EGfxTexturePrimitive_Count) {
 			gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
 		}
 
-		else gotoIfError3(clean, Json_cstr(out, ESHTexturePrimitive_name[reg->reg.texture.primitive], alloc, e_rr));
+		else gotoIfError3(clean, Json_cstr(out, EGfxTexturePrimitive_name[reg->reg.texture.primitive], alloc, e_rr));
 
 		gotoIfError3(clean, Json_raw(out, ",\"format\":", alloc, e_rr));
 
@@ -366,7 +366,7 @@ static Bool WasmJson_register(
 
 	gotoIfError3(clean, Json_key(out, "inputAttachment", &first, alloc, e_rr));
 
-	if (base == ESHRegisterType_SubpassInput && reg->reg.inputAttachmentId != U16_MAX) {
+	if (base == EGfxRegisterType_SubpassInput && reg->reg.inputAttachmentId != U16_MAX) {
 		gotoIfError3(clean, Json_fmt(out, alloc, e_rr, "%"PRIu16, reg->reg.inputAttachmentId));
 	}
 
@@ -453,7 +453,7 @@ static Bool WasmJson_entryIO(
 
 		CharString semantic =
 			semanticNameId ? entry->semanticNames.ptr[semanticNameId - 1 + semanticOff] : (
-				isOutput && entry->stage == ESHPipelineStage_Pixel ?
+				isOutput && entry->stage == EGfxPipelineStage_Pixel ?
 				CharString_createRefCStrConst("SV_TARGET") : CharString_createRefCStrConst("TEXCOORD")
 			);
 
@@ -484,11 +484,11 @@ static Bool WasmJson_entry(
 	Bool s_uccess = true;
 
 	const SHEntry *entry = &file->entries.ptr[entryId];
-	ESHPipelineStage stage = (ESHPipelineStage) entry->stage;
+	EGfxPipelineStage stage = (EGfxPipelineStage) entry->stage;
 
-	Bool isCompute = stage == ESHPipelineStage_Compute;
-	Bool isMeshy = stage == ESHPipelineStage_MeshExt || stage == ESHPipelineStage_TaskExt;
-	Bool isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
+	Bool isCompute = stage == EGfxPipelineStage_Compute;
+	Bool isMeshy = stage == EGfxPipelineStage_MeshExt || stage == EGfxPipelineStage_TaskExt;
+	Bool isRt = stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt;
 
 	gotoIfError3(clean, Json_raw(out, "{", alloc, e_rr));
 
@@ -752,12 +752,12 @@ static Bool WasmJson_binary(
 
 	Bool firstBackend = true;
 
-	if (Buffer_length(binary->binaries[ESHBinaryType_SPIRV])) {
+	if (Buffer_length(binary->binaries[EGfxBinaryType_SPIRV])) {
 		gotoIfError3(clean, Json_next(out, &firstBackend, alloc, e_rr));
 		gotoIfError3(clean, Json_raw(out, "\"spv\"", alloc, e_rr));
 	}
 
-	if (Buffer_length(binary->binaries[ESHBinaryType_DXIL])) {
+	if (Buffer_length(binary->binaries[EGfxBinaryType_DXIL])) {
 		gotoIfError3(clean, Json_next(out, &firstBackend, alloc, e_rr));
 		gotoIfError3(clean, Json_raw(out, "\"dxil\"", alloc, e_rr));
 	}
@@ -767,7 +767,7 @@ static Bool WasmJson_binary(
 	gotoIfError3(clean, Json_key(out, "sizes", &first, alloc, e_rr));
 	gotoIfError3(clean, Json_fmt(
 		out, alloc, e_rr, "{\"spirv\":%"PRIu64",\"dxil\":%"PRIu64"}",
-		Buffer_length(binary->binaries[ESHBinaryType_SPIRV]), Buffer_length(binary->binaries[ESHBinaryType_DXIL])
+		Buffer_length(binary->binaries[EGfxBinaryType_SPIRV]), Buffer_length(binary->binaries[EGfxBinaryType_DXIL])
 	));
 
 	gotoIfError3(clean, Json_key(out, "registers", &first, alloc, e_rr));
@@ -835,10 +835,10 @@ Bool WasmJson_shFile(
 	//The size types a rewrite would pick, which is what the header of this file carries: they are recomputed
 	// from the binaries rather than kept on SHFile, so this reports the same thing SHFile_write would store.
 
-	U8 sizeTypes[ESHBinaryType_Count] = { 0 };
+	U8 sizeTypes[EGfxBinaryType_Count] = { 0 };
 
 	for(U64 i = 0; i < file->binaries.length; ++i)
-		for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
+		for (U8 j = 0; j < EGfxBinaryType_Count; ++j) {
 
 			U64 length = Buffer_length(file->binaries.ptr[i].binaries[j]);
 			U8 required = length <= U8_MAX ? 0 : (length <= U16_MAX ? 1 : (length <= U32_MAX ? 2 : 3));
@@ -850,7 +850,7 @@ Bool WasmJson_shFile(
 	gotoIfError3(clean, Json_key(out, "header", &first, alloc, e_rr));
 	gotoIfError3(clean, Json_fmt(
 		out, alloc, e_rr, "{\"version\":\"1.2\",\"sizeTypes\":{\"spirv\":\"%s\",\"dxil\":\"%s\"}}",
-		sizeTypeNames[sizeTypes[ESHBinaryType_SPIRV]], sizeTypeNames[sizeTypes[ESHBinaryType_DXIL]]
+		sizeTypeNames[sizeTypes[EGfxBinaryType_SPIRV]], sizeTypeNames[sizeTypes[EGfxBinaryType_DXIL]]
 	));
 
 	//The highest model any binary asked for, which is the model the file as a whole requires.

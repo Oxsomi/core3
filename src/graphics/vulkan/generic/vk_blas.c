@@ -524,19 +524,18 @@ Bool VK_WRAP_FUNC(BLASRef_prepareCompact)(GraphicsDeviceRef *deviceRef, BLASRef 
 	blas->base.compactionQuery = U32_MAX;
 	GraphicsDevice_releaseCompactionQuery(device, query, alloc);
 
-	//A built structure occupies something, so a size of zero is not the driver reporting no saving, it is
-	//the query never having produced one. Refused rather than folded into the case below, because marking
-	//the structure compacted there retires it silently: the memory compaction was asked to reclaim stays
-	//where it is, the structure can never be compacted again, and nothing names either.
+	//A driver that declines to compact reports the ORIGINAL size 1:1 (confirmed for WARP and lavapipe);
+	// ZERO is not a size a conformant driver can produce, so reading one means the query was consumed
+	// before the copy that fills it ran, and silently treating it as "no saving" would bury a sync bug.
 
 	if(!compactedSize)
 		retError(clean, Error_invalidState(
-			0,
-			"VkBLASRef_prepareCompact() the compacted size query returned zero for a built structure, so this "
-			"device's compacted size cannot be trusted"
+			1,
+			"VkBLASRef_prepareCompact() the compacted size read back as 0, which no conformant driver "
+			"returns; the query result has not been written yet and reading it raced the GPU"
 		));
 
-	//A driver is allowed to report no saving. Leaving recorded false keeps a pointless copy out of the
+	//No saving is a legitimate driver answer. Leaving recorded false keeps a pointless copy out of the
 	// command buffer entirely.
 
 	if(compactedSize >= DeviceBufferRef_ptr(blas->base.asBuffer)->resource.size) {
@@ -632,6 +631,11 @@ Bool VK_WRAP_FUNC(BLASRef_compact)(
 
 	blasExt->pendingAs = NULL;
 	blas->base.pendingCompactBuffer = NULL;
+
+	//The address REALLY changes here, so dependents are marked again: a pending TLAS build riding this same
+	// submit may have resolved the old address and cleared the record time mark already.
+
+	gotoIfError3(clean, GraphicsDeviceRef_markTlasesStaleForBLAS(deviceRef, blasRef, true, e_rr));
 
 clean:
 	return s_uccess;

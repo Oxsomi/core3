@@ -17,7 +17,6 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-
 file(GLOB formatsSPHeaders CONFIGURE_DEPENDS "../../../include/formats/oiSP/*.h")
 file(GLOB formatsSPSources CONFIGURE_DEPENDS "*.c")
 
@@ -30,7 +29,9 @@ add_library(
 )
 
 set_target_properties(OxC3_formats_oiSP PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_oiSP PUBLIC OxC3_types_base OxC3_types_container OxC3_formats_oiDL OxC3_formats_oiSH)
+target_link_libraries(OxC3_formats_oiSP PUBLIC
+	OxC3_types_base OxC3_types_container OxC3_formats_oiDL OxC3_formats_oiSH OxC3_formats_oiPL
+)
 
 if(EnableTests AND OxC3TestExecutables)
 

@@ -37,7 +37,6 @@
 #include "types/base/time.h"
 #include "types/base/error.h"
 #include "types/base/string_read_helper.h"
-#include "platforms/process.h"
 
 //Parse an in-memory oiSH and dump its reflection, so a snapshot mismatch shows *what* changed.
 static void printOiSH(const Allocator *alloc, Buffer buf, const C8 *label) {
@@ -258,7 +257,7 @@ static void dumpDisasmDiff(
 	if(!fp.binaries.length || !fg.binaries.length)
 		goto clean;
 
-	const ESHBinaryType types[2] = { ESHBinaryType_SPIRV, ESHBinaryType_DXIL };
+	const EGfxBinaryType types[2] = { EGfxBinaryType_SPIRV, EGfxBinaryType_DXIL };
 	const C8 *exts[2] = { "spvasm", "dxil" };
 
 	for(U64 k = 0; k < 2; ++k) {
@@ -360,6 +359,10 @@ void Test_shaderCompilerCorpus(Test *t) {
 	const Bool disasmCompCreated = Compiler_create(alloc, &disasmComp, &err);
 	err = Error_none();
 
+	//The oiSR snapshot runs through this compiler, so losing it would drop every reference check silently
+
+	Test_assert(t, "reflection compiler", disasmCompCreated);
+
 	//Enumerate + resolve every .hlsl entrypoint in the corpus folder, targeting SPIRV for the byte-snapshot.
 	//A separate DXIL compile+reflect coverage pass follows below; SPIRV and DXIL are snapshotted separately, see that
 	// pass for the reason.
@@ -367,7 +370,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 	gotoIfError3(clean, Compiler_getTargetsFromFile(
 		here,
 		ECompileType_Compile,
-		(U64)1 << ESHBinaryType_SPIRV,      //Single SPIRV target (byte-snapshot)
+		(U64)1 << EGfxBinaryType_SPIRV,     //Single SPIRV target (byte-snapshot)
 		false,                              //multipleModes
 		true,                               //combineFlag
 		true,                               //enableLogging
@@ -521,14 +524,15 @@ void Test_shaderCompilerCorpus(Test *t) {
 			//Reflect with a path relative to the corpus (forward slashes), not the absolute enumerator path: the
 			// source filename is baked into the oiSR (symbol locations), so an absolute path would make the committed
 			// reference machine-specific.
-			//The output ref is <name>.oiSH -> <name>.oiSR next to the oiSH references.
+			//The output ref is <name>.oiSH -> <name>.oiSR next to the oiSH references, re-rooted like those:
+			// bundled, a bare name resolves into the app's writable storage instead of the virtual file system.
 
 			CharString out = allOutputs.ptr[i];
 			U64 baseLen = CharString_length(out) >= 5 ? CharString_length(out) - 5 : CharString_length(out);
 
 			if (
 				!CharString_format(alloc, &relPath, &err, "hlsl/%.*s.hlsl", (int) baseLen, out.ptr) ||
-				!CharString_format(alloc, &ref, &err, "%s%.*s.oiSR", TEST_SHADER_ROOT, (int) baseLen, out.ptr)
+				!CharString_format(alloc, &ref, &err, TEST_SHADER_ROOT "%.*s.oiSR", (int) baseLen, out.ptr)
 			) {
 				err = Error_none();
 				Test_assert(t, "oiSR reference path", false);
@@ -558,11 +562,37 @@ void Test_shaderCompilerCorpus(Test *t) {
 				.string = allShaderText.ptr[i],
 				.path = relPath,
 				.format = ECompilerFormat_HLSL,
-				.outputType = ESHBinaryType_SPIRV,
+				.outputType = EGfxBinaryType_SPIRV,
 				.includeDirs = reflectIncludes
 			};
 
-			if (!Compiler_reflect(&disasmComp, &rs, alloc, &reflection, &err)) {
+			Bool reflected = Compiler_reflect(&disasmComp, &rs, alloc, &reflection, &err);
+
+			//A shader's own includes resolve against the directory of the path it is reflected under, which a
+			// bundle has no working directory to anchor.
+			//Rooting the path anchors them again, but that root reaches the symbol locations the reference
+			// pins, so a shader that needs it proves reflection runs and leaves the byte comparison to desktop.
+
+			Bool rootedReflect = false;
+
+			if (!reflected && !corpusWritable) {
+
+				err = Error_none();
+				SRFile_free(&reflection, alloc);
+				CharString_free(&relPath, alloc);
+
+				if (!CharString_format(alloc, &relPath, &err, TEST_SHADER_ROOT "hlsl/%.*s.hlsl", (int) baseLen, out.ptr)) {
+					err = Error_none();
+					Test_assert(t, "oiSR rooted reference path", false);
+					goto cleanRefl;
+				}
+
+				rs.path = relPath;
+				reflected = Compiler_reflect(&disasmComp, &rs, alloc, &reflection, &err);
+				rootedReflect = true;
+			}
+
+			if (!reflected) {
 				Log_errorLn(alloc, "reflect failed for %.*s", (int) CharString_length(relPath), relPath.ptr);
 				Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 				err = Error_none();
@@ -583,7 +613,23 @@ void Test_shaderCompilerCorpus(Test *t) {
 				goto cleanRefl;
 			}
 
-			if (File_has(&ref, alloc)) {
+			//The rooted run's own bytes carry the virtual root, so only its reference's presence is checked here;
+			// the byte comparison stays a desktop check.
+
+			if (rootedReflect) {
+
+				const Bool present = File_has(&ref, alloc);
+
+				if(!present)
+					Log_errorLn(
+						alloc, "oiSR reference %.*s is missing from the bundled corpus",
+						(int) CharString_length(ref), ref.ptr
+					);
+
+				Test_assert(t, ref.ptr, present);
+			}
+
+			else if (File_has(&ref, alloc)) {
 
 				Buffer_free(&golden, alloc);
 
@@ -602,6 +648,14 @@ void Test_shaderCompilerCorpus(Test *t) {
 				}
 
 				Test_assert(t, ref.ptr, matches);
+			}
+
+			else if (!corpusWritable) {
+				Log_errorLn(
+					alloc, "oiSR reference %.*s is missing from the bundled corpus",
+					(int) CharString_length(ref), ref.ptr
+				);
+				Test_assert(t, ref.ptr, false);         //Can't regenerate from a read only bundle; fix on desktop
 			}
 
 			else {
@@ -626,14 +680,17 @@ void Test_shaderCompilerCorpus(Test *t) {
 	}
 
 	//--- ISA snapshot: for each corpus shader whose stage has an offline AMD ISA path, disassemble its SPIR-V to AMD
-	//--- ISA text (via the bundled amdllpc + amdgpu-dis) for two architectures and pin it byte-for-byte, like the
+	//--- ISA text (via the bundled amdllpc) for two architectures and pin it byte-for-byte, like the
 	//--- oiSH/oiSR snapshots.
 	//--- amdllpc's ISA is deterministic and path/timestamp-free, so it's a stable reference.
 	//--- amdllpc drives closer-to-final ISA than a device-independent path.
 	//--- The tools are bundled next to the exe (rga/utils, copied by the CLI build); if they aren't present the whole
-	//--- phase is skipped rather than failed, as it is on a platform that cannot spawn them at all.
+	//--- phase is skipped rather than failed.
+	//--- The phase only exists where AMD prebuilds amdllpc (Windows/Linux x64). On every other target there is no
+	//--- compiler to spawn, and an x64 binary that can't exec returns empty output rather than a not-found, which
+	//--- the runtime probe below would read as a real disassembly failure.
 
-	#ifdef SUPPORTS_PROCESS
+	#ifdef SHADER_COMPILER_OFFLINE_ISA
 	{
 		const RefPtrType msTypeIsa = MemoryStream_makeType(alloc);
 
@@ -683,7 +740,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 			for (U64 b = 0; b < sh.binaries.length && (!isaProbed || isaAvailable); ++b) {
 
-				const Buffer spv = sh.binaries.ptr[b].binaries[ESHBinaryType_SPIRV];
+				const Buffer spv = sh.binaries.ptr[b].binaries[EGfxBinaryType_SPIRV];
 
 				if (!Buffer_length(spv) || !SpvISA_stageHasOfflinePath(spv, alloc))
 					continue;
@@ -709,7 +766,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 						if (!isaAvailable)
 							Log_warnLn(
 								alloc,
-								"ISA snapshot skipped: amdllpc/amdgpu-dis not found next to the test (rga/utils not bundled)"
+								"ISA snapshot skipped: amdllpc not found next to the test (rga/utils not bundled)"
 							);
 					}
 
@@ -735,9 +792,12 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 					const Bool made = multi ?
 						CharString_format(
-							alloc, &ref, &err, "%.*s.%"PRIu64".%s.isa", (int) baseLen, out.ptr, b, isaSuffix[tI]
+							alloc, &ref, &err, TEST_SHADER_ROOT "%.*s.%"PRIu64".%s.isa",
+							(int) baseLen, out.ptr, b, isaSuffix[tI]
 						) :
-						CharString_format(alloc, &ref, &err, "%.*s.%s.isa", (int) baseLen, out.ptr, isaSuffix[tI]);
+						CharString_format(
+							alloc, &ref, &err, TEST_SHADER_ROOT "%.*s.%s.isa", (int) baseLen, out.ptr, isaSuffix[tI]
+						);
 
 					if (!made) {
 						err = Error_none();
@@ -765,6 +825,14 @@ void Test_shaderCompilerCorpus(Test *t) {
 						}
 					}
 
+					else if (!corpusWritable) {
+						Log_errorLn(
+							alloc, "ISA reference %.*s is missing from the bundled corpus",
+							(int) CharString_length(ref), ref.ptr
+						);
+						Test_assert(t, ref.ptr, false);     //Can't regenerate from a read only bundle; fix on desktop
+					}
+
 					else {
 						File_write(&isa, &ref, 0, 0, 1 * SECOND, true, &fileHandleType, &err);
 						err = Error_none();
@@ -784,8 +852,6 @@ void Test_shaderCompilerCorpus(Test *t) {
 			SHFile_free(&sh, alloc);
 		}
 	}
-	#else
-	Log_warnLn(alloc, "ISA snapshot skipped: this platform cannot spawn amdllpc/amdgpu-dis");
 	#endif
 
 	//--- DXIL coverage: compile the same on-disk corpus for DXIL too, so it isn't SPIRV-only.
@@ -813,7 +879,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 		Bool dxCompiled =
 			Compiler_getTargetsFromFile(
-				here, ECompileType_Compile, (U64)1 << ESHBinaryType_DXIL, false, true, true,
+				here, ECompileType_Compile, (U64)1 << EGfxBinaryType_DXIL, false, true, true,
 				alloc, &dxFolder, NULL, &dxFiles, &dxText, &dxOutputs, &dxModes
 			) &&
 			Compiler_compileShaders(

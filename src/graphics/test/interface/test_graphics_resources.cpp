@@ -47,15 +47,15 @@ namespace {
 	//graphics.hpp already has the guard these were: OwnedList frees its list on every exit path, error
 	//returns included.
 
-	using OwnedSHFile = oxc::gfx::OwnedList<oxc::c::SHFile, oxc::c::SHFile_free>;
-	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo, oxc::c::DescriptorLayoutInfo_free>;
+	using OwnedSHFile = oxc::gfx::OwnedList<oxc::c::SHFile>;
+	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo>;
 }
 
 // -- 23. TextureRef predicates and accessors -------------------------------------
 
 //These decide what a resource is allowed to be used as, so they gate real behaviour rather than only describing it.
-//isRenderTargetWritable is what clearImages and the colour attachments check, and isDepthStencil is what tells a
-// depth attachment apart from a colour one, so getting either wrong silently misroutes a resource.
+//isRenderTargetWritable is what clearImages and the color attachments check, and isDepthStencil is what tells a
+// depth attachment apart from a color one, so getting either wrong silently misroutes a resource.
 
 extern "C" void Test_graphicsTextureRef(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
@@ -348,7 +348,7 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	//PushConstants is the portable register type, since DXIL additionally accepts a constant buffer
 
 	c::PipelineLayoutInfo pc{};
-	pc.pushConstants.registerType = c::ESHRegisterType_PushConstants;
+	pc.pushConstants.registerType = c::EGfxRegisterType_PushConstants;
 	pc.pushConstants.count = 1;
 	pc.pushConstants.constantBufferSize = 16;
 	pc.pushConstants.visibility = c::U32_MAX;
@@ -387,7 +387,7 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	Test_assert(t, "pcTwoRanges", !dev.createPipelineLayout(bad, "Test pipeline layout", layout, nullptr));
 
 	bad = pc;
-	bad.pushConstants.registerType = c::ESHRegisterType_Sampler;
+	bad.pushConstants.registerType = c::EGfxRegisterType_Sampler;
 	Test_assert(t, "pcWrongType", !dev.createPipelineLayout(bad, "Test pipeline layout", layout, nullptr));
 
 	Test_assert(t, "rejectedNothing", !badLayout && !layout);
@@ -399,7 +399,7 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	//Space 3 keeps the constant buffer clear of the default layouts on both apis.
 
 	c::DescriptorBinding cbv{};
-	cbv.registerType = c::ESHRegisterType_ConstantBuffer;
+	cbv.registerType = c::EGfxRegisterType_ConstantBuffer;
 	cbv.count = 1;
 	cbv.binding.space = 3;
 	cbv.binding.binding = 0;
@@ -416,11 +416,11 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	(void) c::ListCharString_createRefConst(&cbvName, 1, &pushInfo.bindingNames, nullptr);
 
 	c::DescriptorBinding bab{};
-	bab.registerType = c::ESHRegisterType_ByteAddressBuffer;
+	bab.registerType = c::EGfxRegisterType_ByteAddressBuffer;
 	bab.count = 1;
 	bab.binding.space = 0;
 	bab.binding.binding = 0;
-	bab.visibility = 1 << c::ESHPipelineStage_Compute;
+	bab.visibility = 1 << c::EGfxPipelineStage_Compute;
 
 	c::CharString babName = name("testPlainBuffer");
 
@@ -544,27 +544,34 @@ extern "C" void Test_graphicsShaderReflection(oxc::c::Test *t, oxc::c::GraphicsD
 	c::CharString uniformsFalse[2] = { name("ROTATE"), name("false") };
 	c::CharString uniformsTrue[2] = { name("ROTATE"), name("true") };
 
+	//Every binary of this shader also carries a TEXEL define (it types the copy's two textures, see
+	// image_copy.hlsl), so a lookup that names no define matches nothing at all.
+
+	c::CharString definesUint[2] = { name("TEXEL"), name("U32x4") };
+
 	c::ListCharString listFalse{};
 	c::ListCharString listTrue{};
+	c::ListCharString listDefines{};
 	(void) c::ListCharString_createRefConst(uniformsFalse, 2, &listFalse, nullptr);
 	(void) c::ListCharString_createRefConst(uniformsTrue, 2, &listTrue, nullptr);
+	(void) c::ListCharString_createRefConst(definesUint, 2, &listDefines, nullptr);
 
 	//Device::getFirstShaderEntry pins defines and uniforms to null, so it cannot select between two variants
 	// compiled from the same source, which is exactly what these four look up; they stay on the C entry point.
 
 	const c::U32 idFalse = c::GraphicsDeviceRef_getFirstShaderEntry(
-		deviceRef, &shader.list, &entryName, nullptr, &listFalse, c::ESHExtension_None, c::ESHExtension_None
+		deviceRef, &shader.list, &entryName, &listDefines, &listFalse, c::ESHExtension_None, c::ESHExtension_None
 	);
 
 	const c::U32 idTrue = c::GraphicsDeviceRef_getFirstShaderEntry(
-		deviceRef, &shader.list, &entryName, nullptr, &listTrue, c::ESHExtension_None, c::ESHExtension_None
+		deviceRef, &shader.list, &entryName, &listDefines, &listTrue, c::ESHExtension_None, c::ESHExtension_None
 	);
 
 	Test_assert(t, "entryFound", idFalse != c::U32_MAX);
 	Test_assert(t, "entryFoundTrue", idTrue != c::U32_MAX && idTrue != idFalse);
 
 	Test_assert(t, "entryMissing", c::GraphicsDeviceRef_getFirstShaderEntry(
-		deviceRef, &shader.list, &missingName, nullptr, &listFalse, c::ESHExtension_None, c::ESHExtension_None
+		deviceRef, &shader.list, &missingName, &listDefines, &listFalse, c::ESHExtension_None, c::ESHExtension_None
 	) == c::U32_MAX);
 
 	//The copy shader doesn't use ray query, so requiring it can't find anything

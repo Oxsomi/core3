@@ -318,7 +318,7 @@ Bool GraphicsDeviceRef_createBufferIntern(
 		!GraphicsDeviceRef_allocateDescriptorBindless(
 			dev,
 			bindlessDescriptorTable,
-			ESHRegisterType_ByteAddressBuffer,
+			EGfxRegisterType_ByteAddressBuffer,
 			0,
 			false,
 			&bufferDesc,
@@ -333,7 +333,7 @@ Bool GraphicsDeviceRef_createBufferIntern(
 		!GraphicsDeviceRef_allocateDescriptorBindless(
 			dev,
 			bindlessDescriptorTable,
-			ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
+			EGfxRegisterType_ByteAddressBuffer | EGfxRegisterType_IsWrite,
 			0,
 			false,
 			&bufferDesc,

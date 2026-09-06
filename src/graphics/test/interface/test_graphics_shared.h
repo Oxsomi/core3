@@ -55,6 +55,7 @@ void Test_graphicsDescriptorTable(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessDescriptor(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBufferBindless(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindlessSampler(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsDescriptorAlloc(Test *t, GraphicsDeviceRef *deviceRef);
@@ -81,7 +82,10 @@ void Test_graphicsBindfulRayQueryGraphics(Test *t, GraphicsDeviceRef *deviceRef)
 void Test_graphicsBindfulAtomicFloat(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulPushDescriptors(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulPushTexture(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulStaticSampler(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulReservedSpace(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulPushClass(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBlasCompaction(Test *t, GraphicsDeviceRef *deviceRef);
 
@@ -104,6 +108,7 @@ void Test_graphicsShaderDraw(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderNamedEntry(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderRays(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderPipelineSerialize(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsShaderPipelineIsa(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsFormatRoundTrip(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsTextureShapes(Test *t, GraphicsDeviceRef *deviceRef);

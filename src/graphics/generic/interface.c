@@ -232,6 +232,27 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return s_uccess;
 	}
 
+	//A backend with no targets to select from can only be asked to clear, which it already is.
+
+	Bool GraphicsDeviceRef_selectShaderTargetExt(GraphicsDeviceRef *deviceRef, const CharString *name, Error *e_rr) {
+
+		Bool s_uccess = true;
+		GraphicsDeviceRef_selectShaderTargetImpl selectFn = WrapperFunction(deviceRef, deviceSelectShaderTarget);
+
+		if (selectFn) {
+			gotoIfError3(clean, selectFn(deviceRef, name, e_rr));
+			goto clean;
+		}
+
+		if(name && CharString_length(*name))
+			retError(clean, Error_unsupportedOperation(
+				0, "GraphicsDeviceRef_selectShaderTarget() this backend compiles for the device itself only"
+			));
+
+	clean:
+		return s_uccess;
+	}
+
 	Bool Pipeline_getExecutablesExt(Pipeline *pipeline, const Allocator *alloc, ListPipelineExecutable *result, Error *e_rr) {
 
 		Bool s_uccess = true;

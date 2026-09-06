@@ -804,10 +804,10 @@ Bool CharString_createFromETypeId(TypeId type, const Allocator *alloc, CharStrin
 			createString = true;
 			goto clean;
 
-		case EDataType_Bool:            ptr = "B1";        break;
-		case EDataType_UInt:            ptr = "U";        break;
+		case EDataType_Bool:               ptr = "B1";       break;
+		case EDataType_UInt:               ptr = "U";        break;
 		case EDataType_Int:                ptr = "I";        break;
-		case EDataType_Float:            ptr = "F";        break;
+		case EDataType_Float:              ptr = "F";        break;
 	}
 
 	gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(ptr), alloc, result, e_rr));
@@ -816,7 +816,7 @@ Bool CharString_createFromETypeId(TypeId type, const Allocator *alloc, CharStrin
 	if(dataType != EDataType_Bool) {
 
 		switch(dataTypeStride) {
-			default:                    ptr = "8";        break;
+			default:                    ptr = "8";         break;
 			case EDataTypeStride_16:    ptr = "16";        break;
 			case EDataTypeStride_32:    ptr = "32";        break;
 			case EDataTypeStride_64:    ptr = "64";        break;
@@ -1019,7 +1019,7 @@ TypeId ETypeId_parse(const CharString str) {
 			U8 v = C8_dec(str.ptr[1]);
 
 			switch (v) {
-				case 8: case 1: case 3: case 6:        break;    //8, 16, 32, 64
+				case 8:                             case 1: case 3: case 6:        break;    //8, 16, 32, 64
 				default:                            return (TypeId) ETypeId_Undefined;
 			}
 
@@ -1033,14 +1033,14 @@ TypeId ETypeId_parse(const CharString str) {
 				U8 v2 = C8_dec(str.ptr[2]);
 
 				switch (v2) {
-					case 6: case 2: case 4:            break;
+					case 6:                         case 2: case 4:                    break;
 					default:                        return (TypeId) ETypeId_Undefined;
 				}
 
 				v = v * 10 + v2;
 
 				switch (v) {
-					case 16: case 32: case 64:        break;
+					case 16:                        case 32: case 64:                  break;
 					default:                        return (TypeId) ETypeId_Undefined;
 				}
 
@@ -1053,18 +1053,18 @@ TypeId ETypeId_parse(const CharString str) {
 			EDataType dataType;
 
 			switch (str.ptr[0]) {
-				default:    dataType = EDataType_Float;        break;
+				default:     dataType = EDataType_Float;       break;
 				case 'U':    dataType = EDataType_UInt;        break;
-				case 'I':    dataType = EDataType_Int;        break;
+				case 'I':    dataType = EDataType_Int;         break;
 			}
 
 			EDataTypeStride stride;
 
 			switch (v) {
 				default:    stride = EDataTypeStride_8;        break;
-				case 16:    stride = EDataTypeStride_16;    break;
-				case 32:    stride = EDataTypeStride_32;    break;
-				case 64:    stride = EDataTypeStride_64;    break;
+				case 16:    stride = EDataTypeStride_16;       break;
+				case 32:    stride = EDataTypeStride_32;       break;
+				case 64:    stride = EDataTypeStride_64;       break;
 			}
 
 			if(strl == start)
@@ -1092,53 +1092,53 @@ Bool ListCharString_combine(const ListCharStringConcat *concat, Error *e_rr) {
 
 //TODO: Clean this somehow..
 
-#define CharString_createNum(maxVal, func, prefixRaw, ...)                                                                    \
+#define CharString_createNum(maxVal, func, prefixRaw, ...)                                                                  \
 																															\
-	Bool s_uccess = true;                                                                                                    \
-	const Allocator *allocator = NULL;                                                                                        \
-	CharString *result = NULL;                                                                                                \
+	Bool s_uccess = true;                                                                                                   \
+	const Allocator *allocator = NULL;                                                                                      \
+	CharString *result = NULL;                                                                                              \
 																															\
-	if (!number || !number->result)                                                                                            \
+	if (!number || !number->result)                                                                                         \
 		retError(clean, Error_nullPointer(3, "CharString_createNum()::number and number->result are required"));            \
 																															\
 	result = number->result;                                                                                                \
-	CharString prefix = CharString_createRefCStrConst(prefixRaw);                                                            \
+	CharString prefix = CharString_createRefCStrConst(prefixRaw);                                                           \
 																															\
 	if (result->ptr)                                                                                                        \
-		retError(clean, Error_invalidOperation(0, "CharString_createNum()::result wasn't empty, might indicate memleak"));    \
+		retError(clean, Error_invalidOperation(0, "CharString_createNum()::result wasn't empty, might indicate memleak"));  \
 																															\
-	gotoIfError3(clean, CharString_reserve(                                                                                    \
-		result, maxVal + CharString_length(prefix) + 1, number->allocator, e_rr                                                \
-	));                                                                                                                        \
+	gotoIfError3(clean, CharString_reserve(                                                                                 \
+		result, maxVal + CharString_length(prefix) + 1, number->allocator, e_rr                                             \
+	));                                                                                                                     \
 																															\
-	allocator = number->allocator;                                                                                            \
+	allocator = number->allocator;                                                                                          \
 																															\
-	gotoIfError3(clean, CharString_appendString(result, &prefix, allocator, e_rr));                                            \
+	gotoIfError3(clean, CharString_appendString(result, &prefix, allocator, e_rr));                                         \
 																															\
-	U64 v = number->v;                                                                                                        \
-	U8 leadingZeros = number->leadingZeros;                                                                                    \
+	U64 v = number->v;                                                                                                      \
+	U8 leadingZeros = number->leadingZeros;                                                                                 \
 																															\
-	Bool foundFirstNonZero = false;                                                                                            \
+	Bool foundFirstNonZero = false;                                                                                         \
 																															\
-	for (U64 i = maxVal - 1; i != U64_MAX; --i) {                                                                            \
+	for (U64 i = maxVal - 1; i != U64_MAX; --i) {                                                                           \
 																															\
 		C8 c = C8_create##func(__VA_ARGS__);                                                                                \
 																															\
-		if (!foundFirstNonZero)                                                                                                \
-			foundFirstNonZero = c != '0' || i < leadingZeros;                                                                \
+		if (!foundFirstNonZero)                                                                                             \
+			foundFirstNonZero = c != '0' || i < leadingZeros;                                                               \
 																															\
-		if (foundFirstNonZero)                                                                                                \
-			gotoIfError3(clean, CharString_append(result, c, allocator, e_rr));                                                \
-	}                                                                                                                        \
+		if (foundFirstNonZero)                                                                                              \
+			gotoIfError3(clean, CharString_append(result, c, allocator, e_rr));                                             \
+	}                                                                                                                       \
 																															\
 	/* Ensure we don't return an empty string on 0 */                                                                        \
 																															\
-	if (!v && !foundFirstNonZero)                                                                                            \
-		gotoIfError3(clean, CharString_append(result, '0', allocator, e_rr));                                                \
+	if (!v && !foundFirstNonZero)                                                                                           \
+		gotoIfError3(clean, CharString_append(result, '0', allocator, e_rr));                                               \
 																															\
-	result->ptrNonConst[CharString_length(*result)] = '\0';                                                                    \
-clean:                                                                                                                        \
-	if(allocator && !s_uccess) CharString_free(result, allocator);                                                            \
+	result->ptrNonConst[CharString_length(*result)] = '\0';                                                                 \
+clean:                                                                                                                      \
+	if(allocator && !s_uccess) CharString_free(result, allocator);                                                          \
 	return s_uccess;
 
 Bool CharString_createNyto(const CharStringCreateNumber *number, Error *e_rr) {

@@ -35,7 +35,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-import time
+import threading
 import zipfile
 from pathlib import Path
 
@@ -665,11 +665,16 @@ def runApk(args):
 
 	# android:testOnly follows android:debuggable in the manifest, and a sanitized apk is debuggable in every
 	# mode, so the install needs -t there too or it is refused with INSTALL_FAILED_TEST_ONLY.
+	# A sanitized apk also installs --no-incremental: wrap.sh only takes effect when it exists as a real file
+	# in the app's library directory, and an incremental install streams the apk on demand instead of
+	# extracting, so the shim never runs and the ASan runtime is never preloaded (see the NDK's ASan guide).
 
-	if args.mode == "Release" and args.asan != "True" and args.ubsan != "True":
+	sanitized = args.asan == "True" or args.ubsan == "True"
+
+	if args.mode == "Release" and not sanitized:
 		common.run(f"{adb} install -r {apkFile}")
 	else:
-		common.run(f"{adb} install -t -r {apkFile}")
+		common.run(f"{adb} install -t -r {'--no-incremental ' if sanitized else ''}{apkFile}")
 
 	if args.mode == "Release" and args.tests != "True":
 		print("-- Installed apk file, but Release mode has android:exported turned off for security reasons, please manually launch the app")
@@ -706,10 +711,9 @@ def tailTestRun(adb, args):
 	and this looks for the latter. Interactive runs get no timeout, a human is driving them.
 	"""
 
-	print("-- Waiting for the test run (OXC3_TEST_END)")
+	print("-- Waiting for the test run (OXC3_TEST_END)", flush=True)
 
 	timeout = None if args.interactive else args.test_timeout
-	deadline = None if timeout is None else time.monotonic() + timeout
 
 	# encoding is named rather than left to the locale: logcat is UTF-8 and the suites print non-ASCII
 	# (the unicode tests), while text=True on its own decodes with the console codepage, which on windows
@@ -721,32 +725,52 @@ def tailTestRun(adb, args):
 		text=True, encoding="utf-8", errors="replace", bufsize=1
 	)
 
-	result = None
+	# The deadline lives on an event a reader thread sets, never inside the read loop: an app that dies
+	# before its first tagged line leaves logcat silent, and a blocked readline would outlive any deadline
+	# checked between lines.
+	# Prints flush per line because CI pipes block-buffer python's stdout, which otherwise holds the whole
+	# run back until exit.
 
-	try:
+	finished = threading.Event()
+	verdicts = []
+
+	def tail():
+
 		for line in process.stdout:
 
 			line = line.rstrip()
 
 			if line:
-				print(line)
+				print(line, flush=True)
 
 			if "OXC3_TEST_END" in line:
-				result = "result=PASSED" in line
+				verdicts.append("result=PASSED" in line)
 				break
 
-			if deadline is not None and time.monotonic() > deadline:
-				print(f"-- No result after {timeout}s, giving up", file=sys.stderr)
-				break
+		# EOF without a verdict (adb died) reports as no result rather than waiting out the clock
 
-	finally:
-		process.kill()
+		finished.set()
 
-	if result is None:
+	threading.Thread(target=tail, daemon=True).start()
+
+	if not finished.wait(timeout):
+
+		# The unfiltered tail is the only place a startup death shows up, since it never logs under OxC3
+
+		print(f"-- No result after {timeout}s, giving up; the tail of the full log follows", file=sys.stderr, flush=True)
+
+		try:
+			subprocess.run(f"{adb} logcat -d -t 400", shell=True, timeout=60)
+		except subprocess.TimeoutExpired:
+			pass
+
+	process.kill()
+
+	if not verdicts:
 		print("-- Test run didn't report a result (crash, or the app never started)", file=sys.stderr)
 		sys.exit(1)
 
-	if not result:
+	if not verdicts[0]:
 		print("-- Tests FAILED", file=sys.stderr)
 		sys.exit(1)
 

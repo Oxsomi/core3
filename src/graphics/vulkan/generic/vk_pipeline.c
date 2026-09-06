@@ -113,6 +113,40 @@ void VK_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 	deviceExt->destroyPipeline(deviceExt->device, *Pipeline_ext(pipeline, Vk), NULL);
 }
 
+//Listing compile targets is a D3D12 concept: AMD's driver extension there compiles for a whole generation and
+// reports those as virtual GPUs.
+//Vulkan exposes nothing equivalent, so the list stays empty, which the frontend treats as "nothing to add" rather
+// than as an error.
+//It still has to exist: a static build resolves GraphicsDeviceRef_listShaderTargetsExt straight to the backend's
+// own definition, with no table to leave an entry out of.
+
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_listShaderTargets)(
+	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+) {
+
+	(void) deviceRef; (void) alloc; (void) result; (void) e_rr;
+	return true;
+}
+
+//With nothing to select from, the only choice that can be honoured is the empty one, which is the state a
+//Vulkan device is always in. Naming a target here would otherwise read as having compiled for it.
+
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_selectShaderTarget)(
+	GraphicsDeviceRef *deviceRef, const CharString *name, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	(void) deviceRef;
+
+	if(name && CharString_length(*name))
+		retError(clean, Error_unsupportedOperation(
+			0, "GraphicsDeviceRef_selectShaderTarget() Vulkan compiles for the device itself only"
+		));
+
+clean:
+	return s_uccess;
+}
+
 Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 	Pipeline *pipeline,
 	const Allocator *alloc,
@@ -295,14 +329,4 @@ clean:
 	Buffer_free(&irsBuf, alloc);
 	Buffer_free(&irData, alloc);
 	return s_uccess;
-}
-
-//Vulkan exposes no cross target compile: a driver compiles for the device it is running, so the only
-//shader target is the device itself and the list stays empty.
-
-Bool VK_WRAP_FUNC(GraphicsDeviceRef_listShaderTargets)(
-	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
-) {
-	(void) deviceRef; (void) alloc; (void) result; (void) e_rr;
-	return true;
 }

@@ -23,10 +23,10 @@
 #include "test_oiSH_shared.h"
 #include "types/container/list_basic_types.h"
 
-static inline SHBindings makeSPIRVBinding(U32 set, U32 binding) {
-	SHBindings b = SHBindings_dummy();
-	b.arr[ESHBinaryType_SPIRV].space = set;
-	b.arr[ESHBinaryType_SPIRV].binding = binding;
+static inline GfxBindings makeSPIRVBinding(U32 set, U32 binding) {
+	GfxBindings b = GfxBindings_dummy();
+	b.arr[EGfxBinaryType_SPIRV].space = set;
+	b.arr[EGfxBinaryType_SPIRV].binding = binding;
 	return b;
 }
 
@@ -34,9 +34,9 @@ void Test_SHFileRegisterAddSampler(Test *t) {
 
 	Test_setModule(t, "SHFile register: add sampler accepted");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	CharString name = CharString_createRefCStrConst("mySampler");
-	SHBindings b = makeSPIRVBinding(0, 0);
+	GfxBindings b = makeSPIRVBinding(0, 0);
 
 	Test_assert(t, "add sampler",
 		ListSHRegisterRuntime_addSampler(&info.registers, 0x1, false, &name, NULL, b, t->alloc, &t->err)
@@ -44,7 +44,7 @@ void Test_SHFileRegisterAddSampler(Test *t) {
 
 	Test_assert(t, "count 1", info.registers.length == 1);
 	Test_assert(t, "type is Sampler",
-		(info.registers.ptr[0].reg.registerType & ESHRegisterType_TypeMask) == ESHRegisterType_Sampler
+		(info.registers.ptr[0].reg.registerType & EGfxRegisterType_TypeMask) == EGfxRegisterType_Sampler
 	);
 
 	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
@@ -54,16 +54,16 @@ void Test_SHFileRegisterAddSamplerComparisonState(Test *t) {
 
 	Test_setModule(t, "SHFile register: add SamplerComparisonState accepted");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Pixel, "psMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Pixel, "psMain", false);
 	CharString name = CharString_createRefCStrConst("myCmpSampler");
-	SHBindings b = makeSPIRVBinding(0, 1);
+	GfxBindings b = makeSPIRVBinding(0, 1);
 
 	Test_assert(t, "add cmp sampler",
 		ListSHRegisterRuntime_addSampler(&info.registers, 0x1, true, &name, NULL, b, t->alloc, &t->err)
 	);
 
 	Test_assert(t, "type is SamplerComparisonState",
-		(info.registers.ptr[0].reg.registerType & ESHRegisterType_TypeMask) == ESHRegisterType_SamplerComparisonState
+		(info.registers.ptr[0].reg.registerType & EGfxRegisterType_TypeMask) == EGfxRegisterType_SamplerComparisonState
 	);
 
 	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
@@ -73,12 +73,12 @@ void Test_SHFileRegisterDuplicateNameRejected(Test *t) {
 
 	Test_setModule(t, "SHFile register: duplicate register name rejected");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 
 	CharString n1 = CharString_createRefCStrConst("myBuf");
-	SHBindings  b1 = makeSPIRVBinding(0, 0);
+	GfxBindings  b1 = makeSPIRVBinding(0, 0);
 	CharString n2 = CharString_createRefCStrConst("myBuf");
-	SHBindings  b2 = makeSPIRVBinding(0, 1);    //different binding, same name
+	GfxBindings  b2 = makeSPIRVBinding(0, 1);    //different binding, same name
 
 	Test_assert(t, "first ok",
 		ListSHRegisterRuntime_addSampler(&info.registers, 0x1, false, &n1, NULL, b1, t->alloc, NULL)
@@ -95,11 +95,11 @@ void Test_SHFileRegisterDuplicateSPIRVBindingRejected(Test *t) {
 
 	Test_setModule(t, "SHFile register: duplicate SPIRV set+binding rejected");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 
 	CharString n1 = CharString_createRefCStrConst("sampA");
 	CharString n2 = CharString_createRefCStrConst("sampB");
-	SHBindings  b  = makeSPIRVBinding(0, 0);    //same set + binding for both
+	GfxBindings  b  = makeSPIRVBinding(0, 0);    //same set + binding for both
 
 	Test_assert(t, "first ok",
 		ListSHRegisterRuntime_addSampler(&info.registers, 0x1, false, &n1, NULL, b, t->alloc, NULL)
@@ -112,13 +112,48 @@ void Test_SHFileRegisterDuplicateSPIRVBindingRejected(Test *t) {
 	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
 }
 
+void Test_SHFileRegisterDxilRangeOverlapRejected(Test *t) {
+
+	Test_setModule(t, "SHFile register: a DXIL register inside an array's range is rejected");
+
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
+
+	U32 dims[1] = { 4 };
+	ListU32 arr = (ListU32) { 0 };
+	Test_assert(t, "createRef", ListU32_createRefConst(dims, 1, &arr, &t->err));
+
+	CharString arrayName = CharString_createRefCStrConst("texArray");
+	CharString insideName = CharString_createRefCStrConst("inside");
+	GfxBindings arrayB = makeDualBinding(0, 0, 0);
+	GfxBindings insideB = makeDualBinding(0, 1, 2);
+
+	Test_assert(t, "add tex[4]",
+		ListSHRegisterRuntime_addTexture(
+			&info.registers, ESHTextureType_Texture2D, false, false, 0x3,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
+			&arrayName, &arr, arrayB, t->alloc, &t->err
+		)
+	);
+
+	Test_assert(t, "t2 inside t0..t3 rejected",
+		!ListSHRegisterRuntime_addTexture(
+			&info.registers, ESHTextureType_Texture2D, false, false, 0x3,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
+			&insideName, NULL, insideB, t->alloc, NULL
+		)
+	);
+
+	Test_assert(t, "count 1", info.registers.length == 1);
+	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
+}
+
 void Test_SHFileRegisterAddTexture(Test *t) {
 
 	Test_setModule(t, "SHFile register: add Texture2D accepted, IsWrite not set");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Pixel, "psMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Pixel, "psMain", false);
 	CharString name = CharString_createRefCStrConst("myTex");
-	SHBindings b = makeSPIRVBinding(0, 0);
+	GfxBindings b = makeSPIRVBinding(0, 0);
 
 	Test_assert(t, "add texture",
 		ListSHRegisterRuntime_addTexture(
@@ -127,18 +162,18 @@ void Test_SHFileRegisterAddTexture(Test *t) {
 			false,    //not array
 			false,    //not combined sampler
 			0x1,
-			ESHTexturePrimitive_Float | ESHTexturePrimitive_Component4,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
 			&name, NULL, b, t->alloc, &t->err
 		)
 	);
 
 	Test_assert(t, "count 1", info.registers.length == 1);
 	Test_assert(t, "is Texture2D",
-		(info.registers.ptr[0].reg.registerType & ESHRegisterType_TypeMask) == ESHRegisterType_Texture2D
+		(info.registers.ptr[0].reg.registerType & EGfxRegisterType_TypeMask) == EGfxRegisterType_Texture2D
 	);
 
 	Test_assert(t, "not write",
-		!(info.registers.ptr[0].reg.registerType & ESHRegisterType_IsWrite)
+		!(info.registers.ptr[0].reg.registerType & EGfxRegisterType_IsWrite)
 	);
 
 	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
@@ -148,9 +183,9 @@ void Test_SHFileRegisterAddRWTexture(Test *t) {
 
 	Test_setModule(t, "SHFile register: add RWTexture2D accepted, IsWrite is set");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	CharString name = CharString_createRefCStrConst("myRWTex");
-	SHBindings b = makeSPIRVBinding(0, 0);
+	GfxBindings b = makeSPIRVBinding(0, 0);
 
 	Test_assert(t, "add RW texture",
 		ListSHRegisterRuntime_addRWTexture(
@@ -158,14 +193,14 @@ void Test_SHFileRegisterAddRWTexture(Test *t) {
 			ESHTextureType_Texture2D,
 			false,
 			0x1,
-			ESHTexturePrimitive_Count,    /* auto-detect from format */
+			EGfxTexturePrimitive_Count,    /* auto-detect from format */
 			ETextureFormatId_RGBA8,
 			&name, NULL, b, t->alloc, &t->err
 		));
 
 	Test_assert(t, "count 1", info.registers.length == 1);
 	Test_assert(t, "is write",
-		info.registers.ptr[0].reg.registerType & ESHRegisterType_IsWrite
+		info.registers.ptr[0].reg.registerType & EGfxRegisterType_IsWrite
 	);
 
 	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
@@ -175,11 +210,11 @@ void Test_SHFileRegisterArray(Test *t) {
 
 	Test_setModule(t, "SHFile register: 1D array[4] accepted; >32 dimensions rejected");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 
 	//Valid: 1 dimension with count 4
 	CharString n1 = CharString_createRefCStrConst("arrSamp");
-	SHBindings b1 = makeSPIRVBinding(0, 0);
+	GfxBindings b1 = makeSPIRVBinding(0, 0);
 	U32 dim4 = 4;
 	ListU32 arr4 = (ListU32) { 0 };
 	Test_assert(t, "createRef", ListU32_createRefConst(&dim4, 1, &arr4, &t->err));
@@ -189,7 +224,7 @@ void Test_SHFileRegisterArray(Test *t) {
 
 	//Invalid: 33 dimensions (> 32)
 	CharString n2 = CharString_createRefCStrConst("arrSamp2");
-	SHBindings b2 = makeSPIRVBinding(0, 10);
+	GfxBindings b2 = makeSPIRVBinding(0, 10);
 	U32 dims[33];
 	for (U8 i = 0; i < 33; ++i) dims[i] = 1;
 	ListU32 arr33 = (ListU32) { 0 };
@@ -205,15 +240,15 @@ void Test_SHFileRegisterHashDedup(Test *t) {
 
 	Test_setModule(t, "SHFile register: identical register hash is silently skipped");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	CharString n1 = CharString_createRefCStrConst("myTex");
 	CharString n2 = CharString_createRefCStrConst("myTex");
-	SHBindings b = makeSPIRVBinding(0, 0);
+	GfxBindings b = makeSPIRVBinding(0, 0);
 
 	Test_assert(t, "first ok",
 		ListSHRegisterRuntime_addTexture(
 			&info.registers, ESHTextureType_Texture2D, false, false, 0x1,
-			ESHTexturePrimitive_Float | ESHTexturePrimitive_Component4,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
 			&n1, NULL, b, t->alloc, &t->err
 		)
 	);
@@ -222,7 +257,7 @@ void Test_SHFileRegisterHashDedup(Test *t) {
 	Test_assert(t, "identical silently skipped",
 		ListSHRegisterRuntime_addTexture(
 			&info.registers, ESHTextureType_Texture2D, false, false, 0x1,
-			ESHTexturePrimitive_Float | ESHTexturePrimitive_Component4,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
 			&n2, NULL, b, t->alloc, &t->err
 		)
 	);
@@ -236,22 +271,22 @@ void Test_SHFileRegisterSubpassInput(Test *t) {
 
 	Test_setModule(t, "SHFile register: subpass input id 0..7 accepted, id >= 8 rejected");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Pixel, "psMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Pixel, "psMain", false);
 
 	CharString n1 = CharString_createRefCStrConst("subpass0");
-	SHBindings b1 = makeSPIRVBinding(0, 0);
+	GfxBindings b1 = makeSPIRVBinding(0, 0);
 	Test_assert(t, "id = 0 accepted",
 		ListSHRegisterRuntime_addSubpassInput(&info.registers, 0x1, &n1, b1, 0, t->alloc, &t->err)
 	);
 
 	CharString n2 = CharString_createRefCStrConst("subpass7");
-	SHBindings b2 = makeSPIRVBinding(0, 1);
+	GfxBindings b2 = makeSPIRVBinding(0, 1);
 	Test_assert(t, "id = 7 accepted",
 		ListSHRegisterRuntime_addSubpassInput(&info.registers, 0x1, &n2, b2, 7, t->alloc, &t->err)
 	);
 
 	CharString n3 = CharString_createRefCStrConst("subpass8");
-	SHBindings b3 = makeSPIRVBinding(0, 2);
+	GfxBindings b3 = makeSPIRVBinding(0, 2);
 	Test_assert(t, "id = 8 rejected",
 		!ListSHRegisterRuntime_addSubpassInput(&info.registers, 0x1, &n3, b3, 8, t->alloc, NULL)
 	);
@@ -268,20 +303,20 @@ void Test_SHFileRegisterStoredInBinary(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 
 	CharString sampName = CharString_createRefCStrConst("gSampler");
-	SHBindings sampB = makeSPIRVBinding(0, 0);
+	GfxBindings sampB = makeSPIRVBinding(0, 0);
 	Test_assert(t, "add sampler to info",
 		ListSHRegisterRuntime_addSampler(&info.registers, 0x1, false, &sampName, NULL, sampB, t->alloc, &t->err)
 	);
 
 	CharString texName = CharString_createRefCStrConst("gTexture");
-	SHBindings texB = makeSPIRVBinding(0, 1);
+	GfxBindings texB = makeSPIRVBinding(0, 1);
 	Test_assert(t, "add texture to info",
 		ListSHRegisterRuntime_addTexture(
 			&info.registers, ESHTextureType_Texture2D, false, false, 0x1,
-			ESHTexturePrimitive_Float | ESHTexturePrimitive_Component4,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
 			&texName, NULL, texB, t->alloc, &t->err
 		)
 	);
@@ -360,10 +395,10 @@ void Test_SHFileRegisterAddConstantBuffer(Test *t) {
 
 	Test_setModule(t, "SHFile register: add ConstantBuffer accepted, type and write flag correct");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	SBFile cbSB = makeCBufferSBFile(t);
 	CharString name = CharString_createRefCStrConst("MyCB");
-	SHBindings b = makeSPIRVBinding(0, 0);
+	GfxBindings b = makeSPIRVBinding(0, 0);
 
 	Test_assert(t, "add CB",
 		ListSHRegisterRuntime_addBuffer(
@@ -374,11 +409,11 @@ void Test_SHFileRegisterAddConstantBuffer(Test *t) {
 
 	Test_assert(t, "count 1", info.registers.length == 1);
 	Test_assert(t, "type is ConstantBuffer",
-		(info.registers.ptr[0].reg.registerType & ESHRegisterType_TypeMask) == ESHRegisterType_ConstantBuffer
+		(info.registers.ptr[0].reg.registerType & EGfxRegisterType_TypeMask) == EGfxRegisterType_ConstantBuffer
 	);
 
 	Test_assert(t, "not write",
-		!(info.registers.ptr[0].reg.registerType & ESHRegisterType_IsWrite)
+		!(info.registers.ptr[0].reg.registerType & EGfxRegisterType_IsWrite)
 	);
 
 	SBFile_free(&cbSB, t->alloc);
@@ -389,9 +424,9 @@ void Test_SHFileRegisterAddByteAddressBuffer(Test *t) {
 
 	Test_setModule(t, "SHFile register: add ByteAddressBuffer (read and write variants)");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	CharString n1 = CharString_createRefCStrConst("myBAB");
-	SHBindings b1 = makeSPIRVBinding(0, 0);
+	GfxBindings b1 = makeSPIRVBinding(0, 0);
 
 	Test_assert(t, "add BAB read",
 		ListSHRegisterRuntime_addBuffer(
@@ -402,11 +437,11 @@ void Test_SHFileRegisterAddByteAddressBuffer(Test *t) {
 
 	Test_assert(t, "count 1", info.registers.length == 1);
 	Test_assert(t, "BAB not write",
-		!(info.registers.ptr[0].reg.registerType & ESHRegisterType_IsWrite)
+		!(info.registers.ptr[0].reg.registerType & EGfxRegisterType_IsWrite)
 	);
 
 	CharString n2 = CharString_createRefCStrConst("myRWBAB");
-	SHBindings b2 = makeSPIRVBinding(0, 1);
+	GfxBindings b2 = makeSPIRVBinding(0, 1);
 	Test_assert(t, "add BAB write",
 		ListSHRegisterRuntime_addBuffer(
 			&info.registers, ESHBufferType_ByteAddressBuffer, true, 0x1,
@@ -416,7 +451,7 @@ void Test_SHFileRegisterAddByteAddressBuffer(Test *t) {
 
 	Test_assert(t, "count 2", info.registers.length == 2);
 	Test_assert(t, "RW BAB write flag set",
-		info.registers.ptr[1].reg.registerType & ESHRegisterType_IsWrite
+		info.registers.ptr[1].reg.registerType & EGfxRegisterType_IsWrite
 	);
 
 	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
@@ -426,10 +461,10 @@ void Test_SHFileRegisterAddStructuredBuffer(Test *t) {
 
 	Test_setModule(t, "SHFile register: add StructuredBuffer and RWStructuredBuffer accepted");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	SBFile sbRead = makeTightSBFile(t);
 	CharString n1 = CharString_createRefCStrConst("mySB");
-	SHBindings b1 = makeSPIRVBinding(0, 0);
+	GfxBindings b1 = makeSPIRVBinding(0, 0);
 
 	Test_assert(t, "add SB read",
 		ListSHRegisterRuntime_addBuffer(
@@ -440,12 +475,12 @@ void Test_SHFileRegisterAddStructuredBuffer(Test *t) {
 
 	Test_assert(t, "count 1", info.registers.length == 1);
 	Test_assert(t, "SB type",
-		(info.registers.ptr[0].reg.registerType & ESHRegisterType_TypeMask) == ESHRegisterType_StructuredBuffer
+		(info.registers.ptr[0].reg.registerType & EGfxRegisterType_TypeMask) == EGfxRegisterType_StructuredBuffer
 	);
 
 	SBFile sbWrite = makeTightSBFile(t);
 	CharString n2 = CharString_createRefCStrConst("myRWSB");
-	SHBindings b2 = makeSPIRVBinding(0, 1);
+	GfxBindings b2 = makeSPIRVBinding(0, 1);
 	Test_assert(t, "add RW SB",
 		ListSHRegisterRuntime_addBuffer(
 			&info.registers, ESHBufferType_StructuredBuffer, true, 0x1,
@@ -455,7 +490,7 @@ void Test_SHFileRegisterAddStructuredBuffer(Test *t) {
 
 	Test_assert(t, "count 2", info.registers.length == 2);
 	Test_assert(t, "RW SB write flag set",
-		info.registers.ptr[1].reg.registerType & ESHRegisterType_IsWrite
+		info.registers.ptr[1].reg.registerType & EGfxRegisterType_IsWrite
 	);
 
 	SBFile_free(&sbRead,  t->alloc);
@@ -467,9 +502,9 @@ void Test_SHFileRegisterAddAccelerationStructure(Test *t) {
 
 	Test_setModule(t, "SHFile register: add AccelerationStructure accepted; write flag rejected");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	CharString n1 = CharString_createRefCStrConst("myTLAS");
-	SHBindings b1 = makeSPIRVBinding(0, 0);
+	GfxBindings b1 = makeSPIRVBinding(0, 0);
 
 	Test_assert(t, "AS read accepted",
 		ListSHRegisterRuntime_addBuffer(
@@ -480,11 +515,11 @@ void Test_SHFileRegisterAddAccelerationStructure(Test *t) {
 
 	Test_assert(t, "count 1", info.registers.length == 1);
 	Test_assert(t, "AS type",
-		(info.registers.ptr[0].reg.registerType & ESHRegisterType_TypeMask) == ESHRegisterType_AccelerationStructure
+		(info.registers.ptr[0].reg.registerType & EGfxRegisterType_TypeMask) == EGfxRegisterType_AccelerationStructure
 	);
 
 	CharString n2 = CharString_createRefCStrConst("myRWTLAS");
-	SHBindings b2 = makeSPIRVBinding(0, 1);
+	GfxBindings b2 = makeSPIRVBinding(0, 1);
 
 	Test_assert(t, "AS write rejected",
 		!ListSHRegisterRuntime_addBuffer(
@@ -502,10 +537,10 @@ void Test_SHFileRegisterBufferWriteFlagRejections(Test *t) {
 
 	Test_setModule(t, "SHFile register: ConstantBuffer and PushConstants reject isWrite");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	SBFile cbSB = makeCBufferSBFile(t);
 	CharString name = CharString_createRefCStrConst("badCB");
-	SHBindings b = makeSPIRVBinding(0, 0);
+	GfxBindings b = makeSPIRVBinding(0, 0);
 
 	Test_assert(t, "CB + write rejected",
 		!ListSHRegisterRuntime_addBuffer(
@@ -524,10 +559,10 @@ void Test_SHFileRegisterConstantBufferSizeLimit(Test *t) {
 
 	Test_setModule(t, "SHFile register: ConstantBuffer exceeding 64 KiB rejected");
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	SBFile bigCB = makeCBufferSBFileOfSize(64 * 1024 + 4, t);
 	CharString name = CharString_createRefCStrConst("tooBig");
-	SHBindings b = makeSPIRVBinding(0, 0);
+	GfxBindings b = makeSPIRVBinding(0, 0);
 
 	Test_assert(t, "oversized CB rejected",
 		!ListSHRegisterRuntime_addBuffer(

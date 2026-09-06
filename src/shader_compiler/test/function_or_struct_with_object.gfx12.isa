@@ -1,18 +1,18 @@
 ; gfx1201  SGPRs 16  VGPRs 8  code 88 B  instrs 16  scratch 0  lds 0
 _amdgpu_ps_main:
-	s_getpc_b64 s[2:3]                                         // 000000000000: BE824700
-	s_mov_b32 s0, s1                                           // 000000000004: BE800001
-	s_sext_i32_i16 s3, s3                                      // 000000000008: BE830F03
-	v_mov_b32_e32 v4, 0                                        // 00000000000C: 7E080280
-	s_mov_b32 s1, s3                                           // 000000000010: BE810003
-	s_load_b512 s[0:15], s[0:1], 0x0                           // 000000000014: F4008000 F8000000
-	s_wait_kmcnt 0x0                                           // 00000000001C: BFC70000
-	image_load v[0:3], v4, s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D a16// 000000000020: D3C00041 00000000 00000004
-	image_load v[4:7], v4, s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D a16// 00000000002C: D3C00041 00001004 00000004
-	s_wait_loadcnt 0x0                                         // 000000000038: BFC00000
-	v_mul_f32_e32 v0, v4, v0                                   // 00000000003C: 10000104
-	v_mul_f32_e32 v1, v5, v1                                   // 000000000040: 10020305
-	v_mul_f32_e32 v2, v6, v2                                   // 000000000044: 10040506
-	v_mul_f32_e32 v3, v7, v3                                   // 000000000048: 10060707
-	export mrt0, v0, v1, v2, v3 done                           // 00000000004C: F800080F 03020100
-	s_endpgm                                                   // 000000000054: BFB00000
+	s_getpc_b64 s[2:3]                                         // 000000000000
+	s_mov_b32 s0, s1                                           // 000000000004
+	s_sext_i32_i16 s3, s3                                      // 000000000008
+	v_mov_b32_e32 v4, 0                                        // 00000000000C
+	s_mov_b32 s1, s3                                           // 000000000010
+	s_load_b512 s[0:15], s[0:1], 0x0                           // 000000000014
+	s_wait_kmcnt 0x0                                           // 00000000001C
+	image_load v[0:3], v4, s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D a16// 000000000020
+	image_load v[4:7], v4, s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D a16// 00000000002C
+	s_wait_loadcnt 0x0                                         // 000000000038
+	v_mul_f32_e32 v0, v4, v0                                   // 00000000003C
+	v_mul_f32_e32 v1, v5, v1                                   // 000000000040
+	v_mul_f32_e32 v2, v6, v2                                   // 000000000044
+	v_mul_f32_e32 v3, v7, v3                                   // 000000000048
+	export mrt0 v0, v1, v2, v3 done                            // 00000000004C
+	s_endpgm                                                   // 000000000054

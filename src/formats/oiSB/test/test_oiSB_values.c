@@ -25,8 +25,8 @@
 
 //Helper macro: assert all four fields of a type identifier in one line.
 #define assertType(t, id, stride, prim, vec, mat)                                                    \
-	Test_assert(t, #id " stride", ESBType_getStride(id)    == (stride));                            \
-	Test_assert(t, #id " prim",   ESBType_getPrimitive(id) == (prim));                                \
+	Test_assert(t, #id " stride", ESBType_getStride(id)    == (stride));                             \
+	Test_assert(t, #id " prim",   ESBType_getPrimitive(id) == (prim));                               \
 	Test_assert(t, #id " vec",    ESBType_getVector(id)    == (vec));                                \
 	Test_assert(t, #id " mat",    ESBType_getMatrix(id)    == (mat))
 

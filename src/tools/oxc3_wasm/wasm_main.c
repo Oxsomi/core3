@@ -323,7 +323,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_compileShaders(const C8 *name, const C8 *source,
 	if(!CharString_length(nameStr))
 		retError(clean, Error_invalidParameter(0, 0, "oxc3_compileShaders()::name is required"));
 
-	if(!(targetMask & ((1 << ESHBinaryType_Count) - 1)))
+	if(!(targetMask & ((1 << EGfxBinaryType_Count) - 1)))
 		retError(clean, Error_invalidParameter(2, 0, "oxc3_compileShaders()::targetMask names no backend"));
 
 	//The output name is shared by every backend on purpose: Compiler_compileShaders combines the results that
@@ -331,7 +331,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_compileShaders(const C8 *name, const C8 *source,
 
 	CharString output = CharString_createRefCStrConst("out.oiSH");
 
-	for (U8 i = 0; i < ESHBinaryType_Count; ++i) {
+	for (U8 i = 0; i < EGfxBinaryType_Count; ++i) {
 
 		if(!((targetMask >> i) & 1))
 			continue;
@@ -388,7 +388,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_compileShaders(const C8 *name, const C8 *source,
 		file.flags |= ESHSettingsFlags_ReflectionOnly;
 
 		for(U64 i = 0; i < file.binaries.length; ++i)
-			for(U8 j = 0; j < ESHBinaryType_Count; ++j)
+			for(U8 j = 0; j < EGfxBinaryType_Count; ++j)
 				Buffer_free(&file.binaries.ptrNonConst[i].binaries[j], alloc);
 
 		Buffer_free(&blob, alloc);
@@ -505,7 +505,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_shExtractBinary(const U8 *ptr, U32 length, U32 b
 			2, binaryId, file.binaries.length, "oxc3_shExtractBinary()::binaryId out of bounds"
 		));
 
-	if(binaryType >= ESHBinaryType_Count)
+	if(binaryType >= EGfxBinaryType_Count)
 		retError(clean, Error_invalidParameter(3, 0, "oxc3_shExtractBinary()::binaryType is spirv or dxil"));
 
 	Buffer stored = file.binaries.ptr[binaryId].binaries[binaryType];
@@ -600,11 +600,11 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_disassemble(U32 binaryType, const U8 *ptr, U32 l
 	CharString json = CharString_createNull();
 	void *frame = NULL;
 
-	if(binaryType >= ESHBinaryType_Count)
+	if(binaryType >= EGfxBinaryType_Count)
 		retError(clean, Error_invalidParameter(0, 0, "oxc3_disassemble()::binaryType is spirv or dxil"));
 
 	gotoIfError3(clean, Compiler_disassemble(
-		&wasmCompiler, (ESHBinaryType) binaryType, Wasm_input(ptr, length), alloc, &text, e_rr
+		&wasmCompiler, (EGfxBinaryType) binaryType, Wasm_input(ptr, length), alloc, &text, e_rr
 	));
 
 	gotoIfError3(clean, Json_raw(&json, "{\"text\":", alloc, e_rr));
@@ -635,11 +635,11 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_assemble(U32 binaryType, const C8 *text) {
 	CharString json = CharString_createNull();
 	void *frame = NULL;
 
-	if(binaryType >= ESHBinaryType_Count)
+	if(binaryType >= EGfxBinaryType_Count)
 		retError(clean, Error_invalidParameter(0, 0, "oxc3_assemble()::binaryType is spirv or dxil"));
 
 	gotoIfError3(clean, Compiler_assemble(
-		&wasmCompiler, (ESHBinaryType) binaryType, Wasm_string(text), alloc, &blob, e_rr
+		&wasmCompiler, (EGfxBinaryType) binaryType, Wasm_string(text), alloc, &blob, e_rr
 	));
 
 	gotoIfError3(clean, Json_fmt(&json, alloc, e_rr, "{\"length\":%"PRIu64"}", Buffer_length(blob)));
@@ -667,11 +667,11 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_uniqueEntrypoints(U32 binaryType, const U8 *ptr,
 	CharString json = CharString_createNull();
 	void *frame = NULL;
 
-	if(binaryType >= ESHBinaryType_Count)
+	if(binaryType >= EGfxBinaryType_Count)
 		retError(clean, Error_invalidParameter(0, 0, "oxc3_uniqueEntrypoints()::binaryType is spirv or dxil"));
 
 	gotoIfError3(clean, Compiler_getUniqueEntrypoints(
-		&wasmCompiler, (ESHBinaryType) binaryType, Wasm_input(ptr, length), showAll != 0, &entrypoints, alloc, e_rr
+		&wasmCompiler, (EGfxBinaryType) binaryType, Wasm_input(ptr, length), showAll != 0, &entrypoints, alloc, e_rr
 	));
 
 	gotoIfError3(clean, Json_raw(&json, "{\"entrypoints\":[", alloc, e_rr));
@@ -681,7 +681,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_uniqueEntrypoints(U32 binaryType, const U8 *ptr,
 		gotoIfError3(clean, Json_raw(&json, i ? ",{\"name\":" : "{\"name\":", alloc, e_rr));
 		gotoIfError3(clean, Json_str(&json, entrypoints.ptr[i].name, alloc, e_rr));
 		gotoIfError3(clean, Json_raw(&json, ",\"stage\":", alloc, e_rr));
-		gotoIfError3(clean, Json_cstr(&json, entrypoints.ptr[i].stage < ESHPipelineStage_Count ?
+		gotoIfError3(clean, Json_cstr(&json, entrypoints.ptr[i].stage < EGfxPipelineStage_Count ?
 			SHEntry_stageNames[entrypoints.ptr[i].stage] : "unknown", alloc, e_rr
 		));
 		gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
@@ -763,7 +763,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_reflectSymbols(
 		.string = Wasm_string(source),
 		.path = nameStr,
 		.format = ECompilerFormat_HLSL,
-		.outputType = ESHBinaryType_SPIRV,
+		.outputType = EGfxBinaryType_SPIRV,
 		.reflectAllowErrors = allowErrors != 0,
 		.reflectDisabledExt = (ESHExtension) disabledExt,
 		.reflectDefines = definePairs
@@ -854,17 +854,17 @@ static Bool Wasm_selectPipelineStages(
 
 		U8 stage = file->entries.ptr[i].stage;
 
-		if(stage == ESHPipelineStage_Compute)
+		if(stage == EGfxPipelineStage_Compute)
 			++kindCounts[0];
 
 		else if(
-			stage == ESHPipelineStage_Vertex || stage == ESHPipelineStage_Pixel || stage == ESHPipelineStage_Hull ||
-			stage == ESHPipelineStage_Domain || stage == ESHPipelineStage_GeometryExt ||
-			stage == ESHPipelineStage_MeshExt || stage == ESHPipelineStage_TaskExt
+			stage == EGfxPipelineStage_Vertex || stage == EGfxPipelineStage_Pixel || stage == EGfxPipelineStage_Hull ||
+			stage == EGfxPipelineStage_Domain || stage == EGfxPipelineStage_GeometryExt ||
+			stage == EGfxPipelineStage_MeshExt || stage == EGfxPipelineStage_TaskExt
 		)
 			++kindCounts[1];
 
-		else if(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt)
+		else if(stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt)
 			++kindCounts[2];
 	}
 
@@ -889,18 +889,18 @@ static Bool Wasm_selectPipelineStages(
 		U64 *slot = NULL;
 
 		switch (stage) {
-			case ESHPipelineStage_Compute:      if(!chosenKind)      slot = &slots[0];  break;
-			case ESHPipelineStage_Vertex:       if(chosenKind == 1)  slot = &slots[1];  break;
-			case ESHPipelineStage_Pixel:        if(chosenKind == 1)  slot = &slots[2];  break;
-			case ESHPipelineStage_Hull:         if(chosenKind == 1)  slot = &slots[3];  break;
-			case ESHPipelineStage_Domain:       if(chosenKind == 1)  slot = &slots[4];  break;
-			case ESHPipelineStage_GeometryExt:  if(chosenKind == 1)  slot = &slots[5];  break;
-			case ESHPipelineStage_MeshExt:      if(chosenKind == 1)  slot = &slots[6];  break;
-			case ESHPipelineStage_TaskExt:      if(chosenKind == 1)  slot = &slots[7];  break;
-			default:                                                                    break;
+			case EGfxPipelineStage_Compute:      if(!chosenKind)      slot = &slots[0];  break;
+			case EGfxPipelineStage_Vertex:       if(chosenKind == 1)  slot = &slots[1];  break;
+			case EGfxPipelineStage_Pixel:        if(chosenKind == 1)  slot = &slots[2];  break;
+			case EGfxPipelineStage_Hull:         if(chosenKind == 1)  slot = &slots[3];  break;
+			case EGfxPipelineStage_Domain:       if(chosenKind == 1)  slot = &slots[4];  break;
+			case EGfxPipelineStage_GeometryExt:  if(chosenKind == 1)  slot = &slots[5];  break;
+			case EGfxPipelineStage_MeshExt:      if(chosenKind == 1)  slot = &slots[6];  break;
+			case EGfxPipelineStage_TaskExt:      if(chosenKind == 1)  slot = &slots[7];  break;
+			default:                                                                     break;
 		}
 
-		Bool isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
+		Bool isRt = stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt;
 
 		if (slot) {
 
@@ -1042,7 +1042,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spDerive(const U8 *ptr, U32 length, const C8 *sh
 	gotoIfError3(clean, ListCharString_createRefConst(&shaderNameStr, 1, &shaderNames, e_rr));
 
 	gotoIfError3(clean, SPFile_derivePipeline(
-		&spFile, &files, &shaderNames, CharString_createNull(), stages, stageCount, alloc, &pipelineId, e_rr
+		&spFile, &files, &shaderNames, CharString_createNull(), stages, stageCount, NULL, alloc, &pipelineId, e_rr
 	));
 
 	gotoIfError3(clean, Wasm_writeSP(&spFile, &blob, alloc, e_rr));
@@ -1474,11 +1474,11 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_validate(U32 binaryType, const U8 *ptr, U32 leng
 	CharString json = CharString_createNull();
 	void *frame = NULL;
 
-	if(binaryType >= ESHBinaryType_Count)
+	if(binaryType >= EGfxBinaryType_Count)
 		retError(clean, Error_invalidParameter(0, 0, "oxc3_validate()::binaryType is spirv or dxil"));
 
 	gotoIfError3(clean, Compiler_validate(
-		&wasmCompiler, (ESHBinaryType) binaryType, Wasm_input(ptr, length), alloc, &valid, &message, e_rr
+		&wasmCompiler, (EGfxBinaryType) binaryType, Wasm_input(ptr, length), alloc, &valid, &message, e_rr
 	));
 
 	gotoIfError3(clean, Json_raw(&json, valid ? "{\"valid\":true,\"message\":" : "{\"valid\":false,\"message\":", alloc, e_rr));

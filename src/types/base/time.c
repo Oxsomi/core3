@@ -189,10 +189,10 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 
 			case 0:        date.year = (U16) curr;        break;
 			case 1:        date.month = (U8) curr;        break;
-			case 2:        date.day = (U8) curr;        break;
-			case 3:        date.hour = (U8) curr;        break;
-			case 4:        date.minute = (U8) curr;    break;
-			case 5:        date.second = (U8) curr;    break;
+			case 2:        date.day = (U8) curr;          break;
+			case 3:        date.hour = (U8) curr;         break;
+			case 4:        date.minute = (U8) curr;       break;
+			case 5:        date.second = (U8) curr;       break;
 
 			case 6: {    //Nanoseconds
 

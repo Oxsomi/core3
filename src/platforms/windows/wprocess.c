@@ -294,7 +294,16 @@ clean:
 	if(errRd) CloseHandle(errRd);
 	if(errWr) CloseHandle(errWr);
 
-	if(haveProc) {
+	if (haveProc) {
+
+		//If we bailed before the child exited (e.g. capture-too-large), don't leave a runaway process:
+		// closing the handle drops the last way anything has to stop it
+
+		if(!s_uccess) {
+			TerminateProcess(pi.hProcess, 1);
+			WaitForSingleObject(pi.hProcess, INFINITE);
+		}
+
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
 	}

@@ -22,11 +22,174 @@
 
 #include "tools/oxc3_wasm/wasm_bridge.h"
 #include "formats/oiSP/sp_file.h"
+#include "formats/oiPL/pl_file.h"
+#include "formats/gfx_util/gfx_util.h"
 #include "formats/oiSH/sh_entries.h"
 #include <inttypes.h>
 
 static const C8 *spPipelineTypeNames[ESPPipelineType_Count] = { "compute", "graphics", "raytracing" };
 static const C8 *spFieldSourceNames[ESPFieldSource_Count] = { "derived", "supplied", "assumed" };
+
+//The keys the rest of the document uses for a binary type, so a layout row's pair reads like a binary's sizes.
+static const C8 *spBinaryKeys[EGfxBinaryType_Count] = { "spirv", "dxil" };
+
+//One oiPL row: a binding, or the push constant range that sits beside them. The active union member follows
+//the register class, which is why the class is spelled out before it.
+
+static Bool WasmJson_plBinding(
+	const PLFile *layout, PLDescriptorBinding b, CharString *out, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Bool first = true;
+
+	const EGfxRegisterType base = (EGfxRegisterType)(b.registerType & EGfxRegisterType_TypeMask);
+	const Bool isWrite = (b.registerType & EGfxRegisterType_IsWrite) != 0;
+	const Bool isSampler = base == EGfxRegisterType_Sampler || base == EGfxRegisterType_SamplerComparisonState;
+	const Bool isTexture = base >= EGfxRegisterType_Texture1D && base <= EGfxRegisterType_Texture2DMS;
+	const U32 nameId = PLDescriptorBinding_name(b);
+	const EPLSource source = PLDescriptorBinding_source(b);
+
+	gotoIfError3(clean, Json_raw(out, "{", alloc, e_rr));
+
+	gotoIfError3(clean, Json_key(out, "name", &first, alloc, e_rr));
+
+	if(nameId != PLDescriptorBinding_NAME_NONE && nameId < layout->names.entryStrings.length) {
+		gotoIfError3(clean, Json_str(out, layout->names.entryStrings.ptr[nameId], alloc, e_rr));
+	}
+
+	else {
+		gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
+	}
+
+	gotoIfError3(clean, Json_key(out, "source", &first, alloc, e_rr));
+	gotoIfError3(clean, Json_cstr(
+		out, (U32) source < ESPFieldSource_Count ? spFieldSourceNames[source] : "unknown", alloc, e_rr
+	));
+
+	gotoIfError3(clean, Json_key(out, "class", &first, alloc, e_rr));
+	gotoIfError3(clean, Json_cstr(out, WasmJson_registerClass(base), alloc, e_rr));
+
+	gotoIfError3(clean, Json_key(out, "type", &first, alloc, e_rr));
+	gotoIfError3(clean, Json_cstr(out, WasmJson_registerBaseName(base, isWrite), alloc, e_rr));
+
+	gotoIfError3(clean, Json_key(out, "isWrite", &first, alloc, e_rr));
+	gotoIfError3(clean, Json_bool(out, isWrite, alloc, e_rr));
+
+	gotoIfError3(clean, Json_key(out, "isArray", &first, alloc, e_rr));
+	gotoIfError3(clean, Json_bool(out, (b.registerType & EGfxRegisterType_IsArray) != 0, alloc, e_rr));
+
+	gotoIfError3(clean, Json_key(out, "count", &first, alloc, e_rr));
+	gotoIfError3(clean, Json_fmt(out, alloc, e_rr, "%"PRIu32, b.count));
+
+	//The stages that see the row, by name, since the page never reasons about the mask itself
+
+	gotoIfError3(clean, Json_key(out, "visibility", &first, alloc, e_rr));
+	gotoIfError3(clean, Json_raw(out, "[", alloc, e_rr));
+
+	{
+		Bool firstStage = true;
+
+		for (U32 st = 0; st < EGfxPipelineStage_Count && st < 32; ++st)
+			if (b.visibility & ((U32)1 << st)) {
+				gotoIfError3(clean, Json_next(out, &firstStage, alloc, e_rr));
+				gotoIfError3(clean, Json_cstr(out, SHEntry_stageNames[st], alloc, e_rr));
+			}
+	}
+
+	gotoIfError3(clean, Json_raw(out, "]", alloc, e_rr));
+
+	gotoIfError3(clean, Json_key(out, "bindings", &first, alloc, e_rr));
+	gotoIfError3(clean, Json_raw(out, "{", alloc, e_rr));
+
+	for (U32 t = 0; t < EGfxBinaryType_Count; ++t)
+		gotoIfError3(clean, Json_fmt(
+			out, alloc, e_rr, "%s\"%s\":{\"space\":%"PRIu32",\"binding\":%"PRIu32"}",
+			t ? "," : "", spBinaryKeys[t], b.bindings.arr[t].space, b.bindings.arr[t].binding
+		));
+
+	gotoIfError3(clean, Json_raw(out, "}", alloc, e_rr));
+
+	if (isSampler) {
+		gotoIfError3(clean, Json_key(out, "samplerId", &first, alloc, e_rr));
+		gotoIfError3(clean, Json_fmt(out, alloc, e_rr, "%"PRIu32, b.samplerId));
+	}
+
+	else if (isTexture && isWrite) {
+		gotoIfError3(clean, Json_key(out, "texture", &first, alloc, e_rr));
+		gotoIfError3(clean, Json_fmt(
+			out, alloc, e_rr, "{\"primitive\":%u,\"formatId\":%u}", (U32) b.texture.primitive, (U32) b.texture.formatId
+		));
+	}
+
+	else {
+		gotoIfError3(clean, Json_key(out, "strideOrLength", &first, alloc, e_rr));
+		gotoIfError3(clean, Json_fmt(out, alloc, e_rr, "%"PRIu32, b.strideOrLength));
+	}
+
+	gotoIfError3(clean, Json_raw(out, "}", alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+//One embedded oiPL: its rows, the samplers the rows index into, and the push constant range if it has one
+
+static Bool WasmJson_plFile(const PLFile *layout, CharString *out, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Bool first = true;
+
+	gotoIfError3(clean, Json_raw(out, "{", alloc, e_rr));
+
+	gotoIfError3(clean, Json_key(out, "bindings", &first, alloc, e_rr));
+	gotoIfError3(clean, Json_raw(out, "[", alloc, e_rr));
+
+	for (U64 i = 0; i < layout->bindings.length; ++i) {
+
+		if(i)
+			gotoIfError3(clean, Json_raw(out, ",", alloc, e_rr));
+
+		gotoIfError3(clean, WasmJson_plBinding(layout, layout->bindings.ptr[i], out, alloc, e_rr));
+	}
+
+	gotoIfError3(clean, Json_raw(out, "]", alloc, e_rr));
+
+	gotoIfError3(clean, Json_key(out, "samplers", &first, alloc, e_rr));
+	gotoIfError3(clean, Json_raw(out, "[", alloc, e_rr));
+
+	for (U64 i = 0; i < layout->samplers.length; ++i) {
+
+		const PLSamplerInfo sm = layout->samplers.ptr[i];
+
+		gotoIfError3(clean, Json_fmt(
+			out, alloc, e_rr,
+			"%s{\"filter\":%u,\"addressU\":%u,\"addressV\":%u,\"addressW\":%u,\"aniso\":%u,\"borderColor\":%u,"
+			"\"comparisonFunction\":%u,\"enableComparison\":%s,\"mipBias\":%g,\"minLod\":%g,\"maxLod\":%g}",
+			i ? "," : "",
+			(U32) sm.filter, (U32) sm.addressU, (U32) sm.addressV, (U32) sm.addressW, (U32) sm.aniso,
+			(U32) sm.borderColor, (U32) sm.comparisonFunction, sm.enableComparison ? "true" : "false",
+			(F64) F32_castF16(sm.mipBias), (F64) F32_castF16(sm.minLod), (F64) F32_castF16(sm.maxLod)
+		));
+	}
+
+	gotoIfError3(clean, Json_raw(out, "]", alloc, e_rr));
+
+	gotoIfError3(clean, Json_key(out, "pushConstant", &first, alloc, e_rr));
+
+	if(layout->hasPushConstant) {
+		gotoIfError3(clean, WasmJson_plBinding(layout, layout->pushConstant, out, alloc, e_rr));
+	}
+
+	else {
+		gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
+	}
+
+	gotoIfError3(clean, Json_raw(out, "}", alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
 
 static U64 WasmJson_bitCount(U16 mask) {
 
@@ -118,6 +281,13 @@ Bool WasmJson_spFile(
 			out, pipeline.type < ESPPipelineType_Count ? spPipelineTypeNames[pipeline.type] : "unknown", alloc, e_rr
 		));
 
+		//Into layouts below, or -1 for the device's default layout
+
+		gotoIfError3(clean, Json_key(out, "layoutIndex", &firstField, alloc, e_rr));
+		gotoIfError3(clean, Json_fmt(
+			out, alloc, e_rr, "%"PRIi64, pipeline.layoutIndex == U32_MAX ? (I64) -1 : (I64) pipeline.layoutIndex
+		));
+
 		gotoIfError3(clean, Json_key(out, "flags", &firstField, alloc, e_rr));
 		gotoIfError3(clean, Json_raw(out, "[", alloc, e_rr));
 
@@ -159,7 +329,7 @@ Bool WasmJson_spFile(
 
 			gotoIfError3(clean, Json_raw(out, j ? ",{\"stage\":" : "{\"stage\":", alloc, e_rr));
 			gotoIfError3(clean, Json_cstr(
-				out, stage.stage < ESHPipelineStage_Count ? SHEntry_stageNames[stage.stage] : "unknown", alloc, e_rr
+				out, stage.stage < EGfxPipelineStage_Count ? SHEntry_stageNames[stage.stage] : "unknown", alloc, e_rr
 			));
 			gotoIfError3(clean, Json_raw(out, ",\"shaderFile\":", alloc, e_rr));
 			gotoIfError3(clean, Json_str(out, WasmJson_spString(file, stage.shaderFile), alloc, e_rr));
@@ -220,6 +390,21 @@ Bool WasmJson_spFile(
 		gotoIfError3(clean, Json_raw(out, "[]", alloc, e_rr));
 
 		gotoIfError3(clean, Json_raw(out, "}", alloc, e_rr));
+	}
+
+	gotoIfError3(clean, Json_raw(out, "]", alloc, e_rr));
+
+	//Every oiPL the file embeds, indexed by a pipeline's layoutIndex
+
+	gotoIfError3(clean, Json_key(out, "layouts", &first, alloc, e_rr));
+	gotoIfError3(clean, Json_raw(out, "[", alloc, e_rr));
+
+	for (U64 i = 0; i < file->layouts.length; ++i) {
+
+		if(i)
+			gotoIfError3(clean, Json_raw(out, ",", alloc, e_rr));
+
+		gotoIfError3(clean, WasmJson_plFile(&file->layouts.ptr[i], out, alloc, e_rr));
 	}
 
 	gotoIfError3(clean, Json_raw(out, "]", alloc, e_rr));

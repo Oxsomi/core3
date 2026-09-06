@@ -208,6 +208,16 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 			requirements.memoryRequirements.alignment
 		);
 
+	//A shader binding table's regions are addressed by device address, and each one has to be a multiple of
+	// shaderGroupBaseAlignment (VUID-vkCmdTraceRaysKHR-pRayGenShaderBindingTable-03682 and its miss and hit
+	// siblings). That is a rule about the address rather than about the buffer, so the memory requirements never
+	// carry it and the regions land wherever the allocator's tighter alignment happened to put them.
+	//64 satisfies every device this can run on: a smaller base alignment is a weaker divisor requirement, and
+	// instance creation already drops raytracing on an adapter reporting anything but a power of two up to 64.
+
+	if (buf->usage & EDeviceBufferUsage_SBTExt)
+		requirements.memoryRequirements.alignment = U64_max(64, requirements.memoryRequirements.alignment);
+
 	DeviceMemoryBlock block;
 	gotoIfError3(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		&device->allocator,

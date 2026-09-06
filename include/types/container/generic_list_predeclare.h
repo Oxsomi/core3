@@ -27,12 +27,12 @@
 	extern "C" {
 #endif
 
-#define TListDefinition(T, Name) typedef T Name##_Type; typedef struct Name {                                            \
+#define TListDefinition(T, Name) typedef T Name##_Type; typedef struct Name {                                              \
 																														\
 	union {                                                                                                                \
 		const Name##_Type *ptr;                                                                                            \
-		Name##_Type *ptrNonConst;        /* check if !const first */                                                        \
-	};                                                                                                                    \
+		Name##_Type *ptrNonConst;        /* check if !const first */                                                       \
+	};                                                                                                                     \
 																														\
 	U64 length;                                                                                                            \
 	U64 capacityAndRefInfo;                                                                                                \

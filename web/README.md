@@ -255,7 +255,8 @@ The output tabs, each labelled with the command it mirrors:
 **Inspect oiSH / oiSR / oiSP**: load any of the three ([oiSH](../docs/oiSH.md) compiled shaders,
 oiSR symbol ASTs, oiSP pipelines; the CLI sniffs the magic, here the extension is the fallback
 for mock bytes). The rail groups them by format; an oiSH opens in Reflection (+ its derived
-Pipeline and ISA), an oiSR in Symbols, an oiSP in Pipeline (read-only, `file data` style). The
+Pipeline and ISA), an oiSR in Symbols, an oiSP in Pipeline (read-only, `file data` style, with the
+descriptor layout the file embeds for each pipeline, its [oiPL](../docs/oiPL.md), beneath the stages). The
 Reflection/oiSH/Diff/Combine flows are unchanged: Diff A↔B covers the whole reflection and the
 **binary diff by entrypoint** (pairs on entrypoint/lib × stage × extensions × define names,
 model excluded so a bumped `[[oxc::model]]` still pairs), "Combine A+B" mirrors

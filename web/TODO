@@ -49,8 +49,19 @@ Compiler and CLI, as the page uses them
 - Reflect a bare .spv / .dxil has no CLI verb yet, though the page does it. The web CLI map says so.
 - Parse-only permutation listing, so the page's "IntelliSense follows" picker can fill before any
   compile. Compiler_parse already yields the SHEntryRuntime this needs.
-- Descriptor layout overrides in the pipeline editor, with the assumed fields filling in from the
-  shader's own root signature when there is only one.
+- Descriptor layout overrides in the pipeline editor. The format exists now (oiPL, embedded in oiSP)
+  and the page shows the derived layout read only; what is missing is editing a row and supplying one.
+- The page derives layouts with no excluded registers, so the runtime's own registers (the bindless
+  arrays, the per frame globals) show up as rows the device would own. The CLI's exclusion list should
+  reach the module's derive call.
+- A shader that indexes samplers dynamically now needs [[oxc::extension("DynamicSamplers")]], since the
+  bindless sampler array became opt in. A visitor pasting an older shader sees "undeclared identifier
+  samplerUniform"; the diagnostic could say why.
+- build_web.py --skip_host_package fails with conan's own "Unable to find oxc3/<version>" whenever the
+  version moved and the cached host package is older; a hint naming --host_package_only would save a
+  puzzled minute.
+- docs/roadmap.md on main and the roadmap section of STATUS.md now say overlapping things; one should
+  absorb the other, and this file should point at whichever survives.
 - SBFile_combine mismatch errors should name the buffer and both sizes.
 - coop_vec compiles to different DXIL from run to run. The same source, compiled repeatedly through the
   CLI, yields several distinct oiSH: the container hash moves and so do scattered bytes inside the DXIL

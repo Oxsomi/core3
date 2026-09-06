@@ -25,6 +25,7 @@
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
 #include "types/container/string.h"
+#include "platforms/logx.h"
 
 void DX_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, const Allocator *alloc) {
 
@@ -64,11 +65,20 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(
 		(U32) info.maxAccelerationStructures + info.maxTextures + info.maxConstantBuffers +
 		info.maxTexturesRW + info.maxBuffersRW;
 
-	if (srvCbvUav) {
+	//The push ring lives past the declared maxima, so the heap is bigger than what allocators[0] covers.
+	//That is what keeps a table allocation from ever being handed a slot a push descriptor is using.
+
+	heapExt->pushRingPerFrame = info.maxPushDescriptors;
+	heapExt->pushRingBase = srvCbvUav;
+	heapExt->pushRingOffset = 0;
+
+	const U32 pushRing = heapExt->pushRingPerFrame * device->framesInFlight;
+
+	if (srvCbvUav || pushRing) {
 
 		D3D12_DESCRIPTOR_HEAP_DESC heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
 			.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-			.NumDescriptors = srvCbvUav,
+			.NumDescriptors = srvCbvUav + pushRing,
 			.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
 		};
 
@@ -86,14 +96,17 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(
 			deviceExt, heapDesc, &tmpName, &heapExt->resourcesHeap, true, alloc, e_rr
 		));
 
-		AllocationBufferCreate create = (AllocationBufferCreate){
-			.size = srvCbvUav,
-			.nonLinearAlignment = 1,
-			.alloc = alloc,
-			.allocationBuffer = &heapExt->allocators[0]
-		};
+		if (srvCbvUav) {
 
-		gotoIfError3(clean, AllocationBuffer_create(&create, true, e_rr));
+			AllocationBufferCreate create = (AllocationBufferCreate){
+				.size = srvCbvUav,
+				.nonLinearAlignment = 1,
+				.alloc = alloc,
+				.allocationBuffer = &heapExt->allocators[0]
+			};
+
+			gotoIfError3(clean, AllocationBuffer_create(&create, true, e_rr));
+		}
 	}
 
 	if (info.maxSamplers) {
@@ -131,6 +144,33 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(
 clean:
 	CharString_free(&tmpName, alloc);
 	return s_uccess;
+}
+
+//Bump allocates count transient slots from the heap's push ring (see DescriptorHeapInfo::maxPushDescriptors).
+//Each frame in flight owns a window that resets exactly once when its frame comes back around; wrapping
+//WITHIN a frame is never safe, because descriptors are written at record time and read at execution, so a
+//reused slot makes the earlier command read the newer descriptor. That wrap logs and continues.
+//Never binds anything: the caller is responsible for the heap already being bound, since a background
+//SetDescriptorHeaps is exactly the cost the explicit heap bind exists to keep visible.
+
+Bool DxDescriptorHeap_allocTransient(DxDescriptorHeap *heapExt, U32 fifId, U32 count, U32 *slot) {
+
+	if(!heapExt || !heapExt->pushRingPerFrame || !slot || count > heapExt->pushRingPerFrame)
+		return false;
+
+	if (heapExt->pushRingFrame != fifId) {
+		heapExt->pushRingFrame = fifId;
+		heapExt->pushRingOffset = 0;
+	}
+
+	if (heapExt->pushRingOffset + count > heapExt->pushRingPerFrame) {
+		Log_errorLnx("Push descriptor ring wrapped mid frame; raise maxPushDescriptors");
+		heapExt->pushRingOffset = 0;
+	}
+
+	*slot = heapExt->pushRingBase + fifId * heapExt->pushRingPerFrame + heapExt->pushRingOffset;
+	heapExt->pushRingOffset += count;
+	return true;
 }
 
 Bool DxDescriptorHeap_freeTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table) {

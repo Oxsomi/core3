@@ -59,7 +59,7 @@
 //Prints the AMD gfx targets the bundled amdllpc can actually compile for, probed live so the list matches what this
 // build accepts.
 //Used by 'isa devices', the '?' shorthand, and as a hint after an unknown -asic.
-//amdllpc + amdgpu-dis do the disassembly directly, and amdllpc reports its own target set.
+//amdllpc does the disassembly directly and reports its own target set.
 
 //The shader analyzer lives in the AMD driver and binds to a device, so a machine that mixes vendors has to pick
 // the AMD adapter rather than whichever one enumerated first.
@@ -128,7 +128,7 @@ static Bool CLI_isaPrintLiveTargets(const Allocator *alloc, Error *e_rr) {
 
 		if(!GraphicsDeviceRef_create(
 			instanceRef, &infos.ptr[amdDevice], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default,
-			NULL, &deviceRef, &gErr
+			NULL, NULL, &deviceRef, &gErr
 		))
 			goto clean;
 
@@ -137,7 +137,8 @@ static Bool CLI_isaPrintLiveTargets(const Allocator *alloc, Error *e_rr) {
 
 		Log_debugLnx("");
 		Log_debugLnx(
-			"Live DXIL targets (%s driver; pass one as -asic with -compile-output dxil):", infos.ptr[amdDevice].name
+			"DXIL targets %s's driver can compile for (pass one as -asic with -compile-output dxil):",
+			infos.ptr[amdDevice].name
 		);
 
 		for(U64 i = 0; i < liveTargets.length; ++i)
@@ -225,7 +226,7 @@ clean:
 }
 
 //Disassembles a SPIR-V module to AMD ISA text for `asic`, returning the ISA in `isaOut` (caller frees).
-//The actual amdllpc + amdgpu-dis driving lives in the shared SpvISA_ module, so this and the corpus ISA snapshot test
+//The actual amdllpc driving lives in the shared SpvISA_ module, so this and the corpus ISA snapshot test
 // produce identical output; here we just reject stages with no offline path early, with a clearer error than amdllpc's.
 
 Bool CLI_isaDisassembleSpirv(
@@ -286,7 +287,7 @@ clean:
 		const CharString noIsa = CharString_createRefCStrConst(
 			";   (this driver returned statistics only, no ISA disassembly. Whether the ISA text is exposed is "
 			"driver-dependent: the open-source Mesa drivers (RADV / ANV / Turnip / NVK / PanVK, i.e. Linux) and "
-			"AMD's own driver return it; other vendors' proprietary drivers keep it to their own tooling. For "
+			"AMD's own driver return it, and support varies across the other closed-source drivers. For "
 			"deterministic offline AMD ISA use '-asic <gfxN>' instead of live)\n"
 		);
 
@@ -323,7 +324,7 @@ clean:
 						break;
 
 					case EPipelineStatisticFormat_F64: {
-						F64 d = F64_fromU64Bits(s->value);
+						const F64 d = F64_fromU64Bits(s->value);
 						gotoIfError3(clean, CharString_format(alloc, &line, e_rr, ";   %.*s = %f\n", nl, s->name.ptr, d));
 						break;
 					}
@@ -564,7 +565,7 @@ clean:
 	//Compiles the stand-ins to an oiSH entirely in memory, so nothing is written next to the user's files.
 
 	static Bool CLI_isaCompileStandIns(
-		const SHEntry *vsTarget, const SHEntry *psSource, ESHBinaryType binaryType,
+		const SHEntry *vsTarget, const SHEntry *psSource, EGfxBinaryType binaryType,
 		SHFile *out, const Allocator *alloc, Error *e_rr
 	) {
 
@@ -641,7 +642,8 @@ clean:
 	}
 
 	//Applies "path[idx]=value,..." to a derived pipeline through SPFile_supply, by the paths the report prints.
-	//rtv.format takes a texture format name, the F32 fields a float literal, everything else an integer.
+	//rtv.format takes a texture format name, the F32 fields and the F16 sampler lod fields a float literal,
+	// everything else an integer.
 
 	static Bool CLI_isaApplyPipelineSet(SPFile *spFile, U32 pipelineId, CharString set, Error *e_rr) {
 
@@ -708,6 +710,17 @@ clean:
 			else if(isF32 && CharString_parseFloat(valueStr, &f))
 				value = U32_fromF32Bits(f);
 
+			//The sampler lod fields store F16 bits in the low half, so a float literal converts down
+
+			else if (
+				(
+					field == ESPField_LayoutSamplerMipBias || field == ESPField_LayoutSamplerMinLod ||
+					field == ESPField_LayoutSamplerMaxLod
+				) &&
+				CharString_parseFloat(valueStr, &f)
+			)
+				value = (U32) EFloatType_convert(EFloatType_F32, U32_fromF32Bits(f), EFloatType_F16);
+
 			else if(CharString_parseU64(valueStr, &parsed) && !(parsed >> 32))
 				value = (U32) parsed;
 
@@ -758,6 +771,35 @@ clean:
 			gotoIfError3(clean, SPFile_supply(spFile, pipelineId, (ESPField) spec.field, spec.index, spec.value, e_rr));
 		}
 
+		//A stored layout replaces the derived one wholesale, since structure can't travel as field supplies.
+		//Every copied row counts as supplied: the caller chose this layout, whatever produced it originally.
+		//The derived layout stays in the list unreferenced, which costs bytes and nothing else.
+
+		if (src.layoutIndex != U32_MAX) {
+
+			PLFile copied = (PLFile) { 0 };
+			gotoIfError3(clean, PLFile_copy(&stored.layouts.ptr[src.layoutIndex], alloc, &copied, e_rr));
+
+			for(U64 i = 0; i < copied.bindings.length; ++i)
+				copied.bindings.ptrNonConst[i].name24_source8 = PLDescriptorBinding_pack(
+					PLDescriptorBinding_name(copied.bindings.ptr[i]), EPLSource_Supplied
+				);
+
+			copied.pushConstant.name24_source8 = PLDescriptorBinding_pack(
+				PLDescriptorBinding_name(copied.pushConstant), EPLSource_Supplied
+			);
+
+			const U32 copiedAt = (U32) spFile->layouts.length;
+
+			if (!ListPLFile_pushBack(&spFile->layouts, copied, alloc, e_rr)) {
+				PLFile_free(&copied, alloc);
+				s_uccess = false;
+				goto clean;
+			}
+
+			spFile->pipelines.ptrNonConst[pipelineId].layoutIndex = copiedAt;
+		}
+
 	clean:
 		SPFile_free(&stored, alloc);
 		RefPtr_dec(&stream);
@@ -786,7 +828,7 @@ clean:
 		if(binaryId >= shFile->binaries.length)
 			return CharString_createNull();
 
-		const Buffer spirv = shFile->binaries.ptr[binaryId].binaries[ESHBinaryType_SPIRV];
+		const Buffer spirv = shFile->binaries.ptr[binaryId].binaries[EGfxBinaryType_SPIRV];
 
 		if(!Buffer_length(spirv))
 			return CharString_createNull();
@@ -795,7 +837,7 @@ clean:
 		Error epErr = Error_none();
 		Bool found = false;
 
-		if(Compiler_getUniqueEntrypoints(NULL, ESHBinaryType_SPIRV, spirv, true, &eps, alloc, &epErr))
+		if(Compiler_getUniqueEntrypoints(NULL, EGfxBinaryType_SPIRV, spirv, true, &eps, alloc, &epErr))
 			for(U64 i = 0; i < eps.length && !found; ++i)
 				found = CharString_equalsStringSensitive(&eps.ptr[i].name, &recorded);
 
@@ -803,8 +845,128 @@ clean:
 		return found ? recorded : CharString_createNull();
 	}
 
+	//Runs this executable again for the ASIC the driver was just handed, and reports what it did.
+	//Every value the parent was given is passed on, since the child does the whole run: only -asic changes, from the
+	// ASIC name to the adapter it belongs to, which is what stops the child resolving the name a second time.
+	//stdout and stderr stay inherited, so the child's disassembly and errors come out as this run's own.
+
+	//Which single pipeline a file forms, as a count per kind plus the one that wins.
+	//A file may hold compute, graphics and ray tracing stages side by side; those are separate pipelines, so the
+	// first kind present is taken, compute before graphics before ray tracing. 3 means it holds none of them.
+	//Read before the instance exists as well as after, because whether validation can be left on depends on it.
+
+	static U8 CLI_isaChosenKind(const SHFile *shFile, U64 kindCounts[3]) {
+
+		kindCounts[0] = kindCounts[1] = kindCounts[2] = 0;
+
+		for (U64 i = 0; i < shFile->entries.length; ++i) {
+
+			const U8 stage = shFile->entries.ptr[i].stage;
+
+			if(stage == EGfxPipelineStage_Compute)
+				++kindCounts[0];
+
+			else if(
+				stage == EGfxPipelineStage_Vertex || stage == EGfxPipelineStage_Pixel || stage == EGfxPipelineStage_Hull ||
+				stage == EGfxPipelineStage_Domain || stage == EGfxPipelineStage_GeometryExt
+			)
+				++kindCounts[1];
+
+			else if(stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt)
+				++kindCounts[2];
+		}
+
+		return kindCounts[0] ? 0 : kindCounts[1] ? 1 : kindCounts[2] ? 2 : 3;
+	}
+
+	static Bool CLI_isaRerunForTarget(
+		U64 deviceId, Bool hasOutput, CharString outputStr, Bool assumeDefaults,
+		Bool hasPipelineOutput, CharString pipelineOutputStr, CharString psoSet, CharString psoInput,
+		CharString shaderName, const Allocator *alloc, Error *e_rr
+	) {
+
+		Bool s_uccess = true;
+
+		ListCharString args = (ListCharString) { 0 };
+		CharString asicArg = CharString_createNull();
+		ProcessResult result = (ProcessResult) { 0 };
+
+		gotoIfError3(clean, CharString_format(alloc, &asicArg, e_rr, "live:%"PRIu64, deviceId));
+
+		const CharString fixed[8] = {
+			CharString_createRefCStrConst("isa"),
+			CharString_createRefCStrConst("disassemble"),
+			CharString_createRefCStrConst("-input"),
+			shaderName,
+			CharString_createRefCStrConst("-asic"),
+			asicArg,
+			CharString_createRefCStrConst("-compile-output"),
+			CharString_createRefCStrConst("dxil")
+		};
+
+		gotoIfError3(clean, ListCharString_reserve(&args, 16, alloc, e_rr));
+
+		for(U8 i = 0; i < 8; ++i)
+			gotoIfError3(clean, ListCharString_pushBack(&args, fixed[i], alloc, e_rr));
+
+		if(assumeDefaults)
+			gotoIfError3(clean, ListCharString_pushBack(
+				&args, CharString_createRefCStrConst("--assume-defaults"), alloc, e_rr
+			));
+
+		const CharString optionalNames[4] = {
+			CharString_createRefCStrConst("-output"),
+			CharString_createRefCStrConst("-pso-output"),
+			CharString_createRefCStrConst("-pso-set"),
+			CharString_createRefCStrConst("-pso-input")
+		};
+
+		const CharString optionalValues[4] = { outputStr, pipelineOutputStr, psoSet, psoInput };
+		const Bool optionalPresent[4] = {
+			hasOutput, hasPipelineOutput, !!CharString_length(psoSet), !!CharString_length(psoInput)
+		};
+
+		for (U8 i = 0; i < 4; ++i) {
+
+			if(!optionalPresent[i])
+				continue;
+
+			gotoIfError3(clean, ListCharString_pushBack(&args, optionalNames[i], alloc, e_rr));
+			gotoIfError3(clean, ListCharString_pushBack(&args, optionalValues[i], alloc, e_rr));
+		}
+
+		//The environment carries the selection, which is the whole reason for the second process.
+
+		const CharString self = CharString_createRefCStrConst("OxC3.exe");
+
+		gotoIfError3(clean, Process_run(self, true, &args, NULL, 0, NULL, NULL, &result, e_rr));
+
+		//The AMD driver fail-fasts (STATUS_STACK_BUFFER_OVERRUN) with a virtual GPU selected, and where it does so
+		// varies: a compute run gets its disassembly out first and dies tearing the GPU down, while a ray tracing
+		// one dies before producing anything.
+		//A fail-fast bypasses the child's own error reporting, so which of the two happened can only be read off
+		// what the child managed to emit, and this says exactly that rather than claiming either.
+
+		if(result.exitCode == (I32) 0xC0000409)
+			Log_warnLnx(
+				"The driver crashed with the virtual GPU selected. Anything the run printed or wrote above is the "
+				"disassembly for the requested ASIC; nothing past that point ran."
+			);
+
+		else if(result.exitCode)
+			retError(clean, Error_invalidState(
+				0, "CLI_isaRerunForTarget() the run for the requested ASIC failed; its own error is above"
+			));
+
+	clean:
+		CharString_free(&asicArg, alloc);
+		ListCharString_free(&args, alloc);
+		return s_uccess;
+	}
+
 	static Bool CLI_isaDisassembleLive(
-		SHFile shFile, ESHBinaryType binaryType, U64 deviceId, Bool hasOutput, CharString outputStr,
+		SHFile shFile, EGfxBinaryType binaryType, U64 deviceId, CharString liveTarget,
+		Bool hasOutput, CharString outputStr,
 		const RefPtrType *fileHandleType, Bool assumeDefaults,
 		Bool hasPipelineOutput, CharString pipelineOutputStr, CharString psoSet, CharString psoInput,
 		CharString shaderName,
@@ -816,12 +978,17 @@ clean:
 		RefPtrType instanceType = (RefPtrType) { 0 };
 		GraphicsInstanceRef *instanceRef = NULL;
 		GraphicsDeviceRef *deviceRef = NULL;
+		GraphicsDeviceRef *targetRef = NULL;
+		Bool targetSelected = false;
 		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
 		PipelineRef *pipeline = NULL;
 		ListPipelineExecutable execs = (ListPipelineExecutable) { 0 };
 		CharString text = CharString_createNull();
 		CharString stageLine = CharString_createNull();
 		SPFile spFile = (SPFile) { 0 };
+		PipelineLayoutRef *pipelineLayout = NULL;
+		ListCharString runtimeNames = (ListCharString) { 0 };
+		ListCharString liveTargets = (ListCharString) { 0 };
 		StreamRef *pipelineStream = NULL;
 		const RefPtrType memStreamType = MemoryStream_makeType(alloc);
 		U32 pipelineId = U32_MAX;
@@ -841,14 +1008,13 @@ clean:
 		//SPIR-V is compiled by Vulkan and DXIL by D3D12, so the binary the oiSH holds picks the backend.
 		//Everything below is the generic graphics interface, so only this choice differs between them.
 
-		const EGraphicsApi api = binaryType == ESHBinaryType_DXIL ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan;
+		const EGraphicsApi api = binaryType == EGfxBinaryType_DXIL ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan;
 		const C8 *apiName = EGraphicsApi_name[api];
 
 		if (!GraphicsInterface_supportsApi(api)) {
 
 			Log_errorLnx("%s isn't available on this machine, which is what %s binaries are compiled by.", apiName,
-				ESHBinaryType_names[binaryType]
-			);
+				EGfxBinaryType_names[binaryType]);
 
 			retError(clean, Error_unsupportedOperation(0, "CLI_isaDisassembleLive() the required graphics API is unavailable"));
 		}
@@ -860,8 +1026,23 @@ clean:
 			.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 		};
 
+		//D3D12's GPU based validation instruments a DXIL library and then refuses its own injections, so a ray
+		// tracing state object can't be created while it is on. It is the only validation dropped, and only for
+		// the one kind it breaks, so compute and graphics keep it and so does every Vulkan run.
+
+		U64 kindCounts[3] = { 0, 0, 0 };
+		const U8 chosenKind = CLI_isaChosenKind(&shFile, kindCounts);
+		const Bool dropGpuValidation = api == EGraphicsApi_Direct3D12 && chosenKind == 2;
+
+		if(dropGpuValidation)
+			Log_debugLnx(
+				"D3D12: GPU based validation left off, since it rejects the DXIL library a ray tracing state object "
+				"is built from; the rest of the debug layer stays on."
+			);
+
 		gotoIfError3(clean, GraphicsInstance_create(
-			&appInfo, api, EGraphicsInstanceFlags_None, alloc, &instanceType, &instanceRef, e_rr
+			&appInfo, api, dropGpuValidation ? EGraphicsInstanceFlags_DisableGPUBV : EGraphicsInstanceFlags_None,
+			alloc, &instanceType, &instanceRef, e_rr
 		));
 
 		gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr));
@@ -890,9 +1071,102 @@ clean:
 				0, deviceId, infos.length, "CLI_isaDisassembleLive() -asic live:<index> device index out of range"
 			));
 
+		//An ASIC other than the adapter itself takes two processes, because its two halves can't share one.
+		//Resolving the name needs the driver's own list, which needs a device; applying it needs the driver to
+		// read the choice while it initializes the adapter, which it has already done by the time a device
+		// exists. So this process resolves and hands over, and a second one does the work.
+
+		if (CharString_length(liveTarget)) {
+
+			gotoIfError3(clean, GraphicsDeviceRef_create(
+				instanceRef, &infos.ptr[deviceId], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default,
+				NULL, NULL, &targetRef, e_rr
+			));
+
+			//Resolving is what names a target the driver hasn't got, so that is reported here rather than reaching
+			// the second process as an adapter that compiled for the wrong thing.
+			//A name is a gpu and a gfxIp that belong together, so the two halves of one that doesn't exist almost
+			// always name two rows that do; those are pointed at rather than leaving the whole list to be reread.
+
+			gotoIfError3(clean, GraphicsDeviceRef_listShaderTargets(targetRef, alloc, &liveTargets, e_rr));
+
+			Bool known = false;
+
+			for(U64 i = 0; i < liveTargets.length && !known; ++i)
+				known = CharString_equalsStringInsensitive(&liveTargets.ptr[i], &liveTarget);
+
+			if (!known) {
+
+				Log_errorLnx(
+					"%.*s isn't a target %s's driver reports.",
+					(int) CharString_length(liveTarget), liveTarget.ptr, infos.ptr[deviceId].name
+				);
+
+				const U64 split = CharString_findFirstSensitive(&liveTarget, ':', 0, 0);
+
+				for (U64 i = 0; i < liveTargets.length && split != U64_MAX; ++i) {
+
+					const CharString target = liveTargets.ptr[i];
+					const U64 targetSplit = CharString_findFirstSensitive(&target, ':', 0, 0);
+
+					if(targetSplit == U64_MAX)
+						continue;
+
+					//Either half matching is what makes a row worth naming: one of them is what was meant.
+
+					const CharString wantedGpu = CharString_createRefSizedConst(liveTarget.ptr, split, false);
+					const CharString targetGpu = CharString_createRefSizedConst(target.ptr, targetSplit, false);
+
+					const CharString wantedIp = CharString_createRefSizedConst(
+						liveTarget.ptr + split + 1, CharString_length(liveTarget) - split - 1, false
+					);
+
+					const CharString targetIp = CharString_createRefSizedConst(
+						target.ptr + targetSplit + 1, CharString_length(target) - targetSplit - 1, false
+					);
+
+					if(
+						!CharString_equalsStringInsensitive(&wantedGpu, &targetGpu) &&
+						!CharString_equalsStringInsensitive(&wantedIp, &targetIp)
+					)
+						continue;
+
+					Log_errorLnx("\tDid you mean %.*s?", (int) CharString_length(target), target.ptr);
+				}
+
+				Log_errorLnx("\tRun 'OxC3 isa devices' for the whole list.");
+
+				retError(clean, Error_notFound(
+					0, 0, "CLI_isaDisassembleLive() -asic named a target this driver doesn't report"
+				));
+			}
+
+			gotoIfError3(clean, GraphicsDeviceRef_selectShaderTarget(targetRef, &liveTarget, e_rr));
+			targetSelected = true;
+
+			Log_debugLnx(
+				"Compiling for %.*s rather than for %s itself.",
+				(int) CharString_length(liveTarget), liveTarget.ptr, infos.ptr[deviceId].name
+			);
+
+			//The driver has the choice now, but it read its settings when this process first touched D3D12, so this
+			// process can never compile for it. A second one starting from the selection can: it inherits the
+			// environment and initializes the adapter as the target ASIC, which is why the work is handed over
+			// rather than done here.
+			//The child is asked for the adapter by index, so it takes the ordinary live path and needs to know
+			// nothing about virtual GPUs.
+
+			gotoIfError3(clean, CLI_isaRerunForTarget(
+				deviceId, hasOutput, outputStr, assumeDefaults, hasPipelineOutput, pipelineOutputStr,
+				psoSet, psoInput, shaderName, alloc, e_rr
+			));
+
+			goto clean;
+		}
+
 		gotoIfError3(clean, GraphicsDeviceRef_create(
 			instanceRef, &infos.ptr[deviceId], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default,
-			NULL, &deviceRef, e_rr
+			NULL, NULL, &deviceRef, e_rr
 		));
 
 		//Without introspection the run still builds the pipeline, which validates the binary and the state; it just
@@ -904,9 +1178,9 @@ clean:
 				"disassembling it.", apiName
 			);
 
-		//A NULL layout takes the device's default bindless layout (@resources.hlsli), which is what OxC3 compiles
-		// shaders against, so the pipeline is valid as-is; a per-shader detected layout would instead omit the bindless
-		// set and fail validation, so NULL is the correct choice here.
+		//The device is created with its default bindless layout (@resources.hlsli), which is what OxC3 compiles
+		// shaders against; a shader declaring registers of its own additionally gets the pipeline layout its oiSP
+		// derivation describes, while one declaring nothing custom keeps NULL, meaning that same default.
 
 		const CharString pName = CharString_createRefCStrConst("isa live pipeline");
 
@@ -925,28 +1199,7 @@ clean:
 
 		SPStageRef stageRefs[16];
 		U8 stageRefCount = 0;
-		U64 kindCounts[3] = { 0, 0, 0 };        //compute, graphics, ray tracing entries in the file
 		U64 computeE = U64_MAX, vertexE = U64_MAX, pixelE = U64_MAX, hullE = U64_MAX, domainE = U64_MAX, geomE = U64_MAX;
-
-		for (U64 i = 0; i < shFile.entries.length; ++i) {
-
-			const U8 stage = shFile.entries.ptr[i].stage;
-
-			if(stage == ESHPipelineStage_Compute)
-				++kindCounts[0];
-
-			else if(
-				stage == ESHPipelineStage_Vertex || stage == ESHPipelineStage_Pixel || stage == ESHPipelineStage_Hull ||
-				stage == ESHPipelineStage_Domain || stage == ESHPipelineStage_GeometryExt ||
-				stage == ESHPipelineStage_MeshExt || stage == ESHPipelineStage_TaskExt
-			)
-				++kindCounts[1];
-
-			else if(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt)
-				++kindCounts[2];
-		}
-
-		const U8 chosenKind = kindCounts[0] ? 0 : kindCounts[1] ? 1 : kindCounts[2] ? 2 : 3;
 
 		if(chosenKind == 3)
 			retError(clean, Error_unsupportedOperation(
@@ -972,16 +1225,16 @@ clean:
 			U64 *slot = NULL;
 
 			switch (stage) {
-				case ESHPipelineStage_Compute:      if(chosenKind == 0) slot = &computeE;  break;
-				case ESHPipelineStage_Vertex:       if(chosenKind == 1) slot = &vertexE;   break;
-				case ESHPipelineStage_Pixel:        if(chosenKind == 1) slot = &pixelE;    break;
-				case ESHPipelineStage_Hull:         if(chosenKind == 1) slot = &hullE;     break;
-				case ESHPipelineStage_Domain:       if(chosenKind == 1) slot = &domainE;   break;
-				case ESHPipelineStage_GeometryExt:  if(chosenKind == 1) slot = &geomE;     break;
-				default:                                                                   break;
+				case EGfxPipelineStage_Compute:      if(chosenKind == 0) slot = &computeE;  break;
+				case EGfxPipelineStage_Vertex:       if(chosenKind == 1) slot = &vertexE;   break;
+				case EGfxPipelineStage_Pixel:        if(chosenKind == 1) slot = &pixelE;    break;
+				case EGfxPipelineStage_Hull:         if(chosenKind == 1) slot = &hullE;     break;
+				case EGfxPipelineStage_Domain:       if(chosenKind == 1) slot = &domainE;   break;
+				case EGfxPipelineStage_GeometryExt:  if(chosenKind == 1) slot = &geomE;     break;
+				default:                                                                    break;
 			}
 
-			const Bool isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
+			const Bool isRt = stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt;
 
 			if (slot) {
 
@@ -1015,8 +1268,13 @@ clean:
 		ListCharString shaderNames = (ListCharString) { 0 };
 		gotoIfError3(clean, ListCharString_createRefConst(&shaderName, 1, &shaderNames, e_rr));
 
+		//The runtime's own registers belong to the device's layout, so derivation must not describe them
+
+		gotoIfError3(clean, GraphicsDeviceRef_runtimeRegisterNames(deviceRef, &runtimeNames, alloc, e_rr));
+
 		gotoIfError3(clean, SPFile_derivePipeline(
-			&spFile, &fileList, &shaderNames, CharString_createNull(), stageRefs, stageRefCount, alloc, &pipelineId, e_rr
+			&spFile, &fileList, &shaderNames, CharString_createNull(), stageRefs, stageRefCount, &runtimeNames,
+			alloc, &pipelineId, e_rr
 		));
 
 		//-pso-input replays a stored pipeline's values over the derived one, so a run can be repeated or edited from
@@ -1029,6 +1287,10 @@ clean:
 
 		if(CharString_length(psoSet))
 			gotoIfError3(clean, CLI_isaApplyPipelineSet(&spFile, pipelineId, psoSet, e_rr));
+
+		//The layout the file now describes becomes a real one exactly once, after every override had its say.
+
+		gotoIfError3(clean, SPFile_createPipelineLayout(deviceRef, &spFile, pipelineId, alloc, &pipelineLayout, e_rr));
 
 		//Structural validation runs before the driver sees the pipeline, so a mismatch names itself instead of
 		// surfacing as an opaque driver error.
@@ -1107,14 +1369,14 @@ clean:
 				retError(clean, Error_invalidState(
 					0,
 					"CLI_isaDisassembleLive() no compatible binary for the compute stage (see the reason above; "
-					"a custom descriptor layout can't be supplied yet)"
+					"a shader needing its own BINDLESS layout still fails the device's feature check)"
 				));
 
 			const CharString spvEntry = CLI_isaSpirvEntry(&shFile, entry, entryName, alloc);
 
 			gotoIfError3(clean, GraphicsDeviceRef_createPipelineCompute(
 				deviceRef, &shFile, &pName, entry, CharString_length(spvEntry) ? &spvEntry : NULL,
-				EPipelineFlags_CaptureISA, NULL, &pipeline, e_rr
+				EPipelineFlags_CaptureISA, pipelineLayout, &pipeline, e_rr
 			));
 		}
 
@@ -1127,9 +1389,9 @@ clean:
 
 			const U64 chainEntry[5] = { vertexE, hullE, domainE, geomE, pixelE };
 
-			static const ESHPipelineStage chainStage[5] = {
-				ESHPipelineStage_Vertex, ESHPipelineStage_Hull, ESHPipelineStage_Domain,
-				ESHPipelineStage_GeometryExt, ESHPipelineStage_Pixel
+			static const EGfxPipelineStage chainStage[5] = {
+				EGfxPipelineStage_Vertex, EGfxPipelineStage_Hull, EGfxPipelineStage_Domain,
+				EGfxPipelineStage_GeometryExt, EGfxPipelineStage_Pixel
 			};
 
 			//Tessellation can't be expressed here yet.
@@ -1150,8 +1412,8 @@ clean:
 
 			for (U64 i = 0; i < shFile.entries.length; ++i)
 				if(
-					shFile.entries.ptr[i].stage == ESHPipelineStage_MeshExt ||
-					shFile.entries.ptr[i].stage == ESHPipelineStage_TaskExt
+					shFile.entries.ptr[i].stage == EGfxPipelineStage_MeshExt ||
+					shFile.entries.ptr[i].stage == EGfxPipelineStage_TaskExt
 				)
 					retError(clean, Error_unsupportedOperation(
 						1, "CLI_isaDisassembleLive() mesh pipelines aren't supported by the live route yet"
@@ -1245,7 +1507,7 @@ clean:
 					retError(clean, Error_invalidState(
 						0,
 						"CLI_isaDisassembleLive() no compatible binary for a graphics stage (see the reason above; "
-						"a custom descriptor layout can't be supplied yet)"
+						"a shader needing its own BINDLESS layout still fails the device's feature check)"
 					));
 
 				stages[stageCount++] = (PipelineStage) { .binaryId = id, .shFileId = generated ? 1 : 0 };
@@ -1268,7 +1530,7 @@ clean:
 			gotoIfError3(clean, SPFile_toGraphicsInfo(&spFile, pipelineId, &info, e_rr));
 
 			gotoIfError3(clean, GraphicsDeviceRef_createPipelineGraphics(
-				deviceRef, &fileList, &stageList, &info, &pName, EPipelineFlags_CaptureISA, NULL, &pipeline, e_rr
+				deviceRef, &fileList, &stageList, &info, &pName, EPipelineFlags_CaptureISA, pipelineLayout, &pipeline, e_rr
 			));
 		}
 
@@ -1286,7 +1548,7 @@ clean:
 
 				const SHEntry *entry = &shFile.entries.ptr[i];
 
-				if(entry->stage < ESHPipelineStage_RtStartExt || entry->stage > ESHPipelineStage_RtEndExt)
+				if(entry->stage < EGfxPipelineStage_RtStartExt || entry->stage > EGfxPipelineStage_RtEndExt)
 					continue;
 
 				CharString name = entry->name;
@@ -1299,7 +1561,7 @@ clean:
 					retError(clean, Error_invalidState(
 						0,
 						"CLI_isaDisassembleLive() no compatible binary for a ray tracing stage (see the reason above; "
-						"a custom descriptor layout can't be supplied yet)"
+						"a shader needing its own BINDLESS layout still fails the device's feature check)"
 					));
 
 				//A hit shader is remembered by kind so the groups can reference its stage index.
@@ -1307,16 +1569,16 @@ clean:
 				U8 kind = 0xFF;
 
 				switch (entry->stage) {
-					case ESHPipelineStage_ClosestHitExt:    kind = 0;  break;
-					case ESHPipelineStage_AnyHitExt:        kind = 1;  break;
-					case ESHPipelineStage_IntersectionExt:  kind = 2;  break;
-					default:                                           break;
+					case EGfxPipelineStage_ClosestHitExt:    kind = 0;  break;
+					case EGfxPipelineStage_AnyHitExt:        kind = 1;  break;
+					case EGfxPipelineStage_IntersectionExt:  kind = 2;  break;
+					default:                                            break;
 				}
 
 				if(kind != 0xFF && hitCount[kind] < 8)
 					hitIndex[kind][hitCount[kind]++] = stageCount;
 
-				if(entry->stage == ESHPipelineStage_RaygenExt && !CharString_length(entryName))
+				if(entry->stage == EGfxPipelineStage_RaygenExt && !CharString_length(entryName))
 					entryName = entry->name;
 
 				stages[stageCount++] = (PipelineStage) { .binaryId = id };
@@ -1361,7 +1623,8 @@ clean:
 			};
 
 			gotoIfError3(clean, GraphicsDeviceRef_createPipelineRaytracingExt(
-				deviceRef, &stageList, &fileList, &groupList, &info, &pName, EPipelineFlags_CaptureISA, NULL, &pipeline, e_rr
+				deviceRef, &stageList, &fileList, &groupList, &info, &pName, EPipelineFlags_CaptureISA, pipelineLayout,
+				&pipeline, e_rr
 			));
 		}
 
@@ -1441,6 +1704,9 @@ clean:
 
 	clean:
 		CharString_free(&stageLine, alloc);
+		ListCharString_free(&runtimeNames, alloc);
+		ListCharString_freeUnderlying(&liveTargets, alloc);
+		RefPtr_dec(&pipelineLayout);
 		RefPtr_dec(&pipelineStream);
 		SPFile_free(&spFile, alloc);
 		SHFile_free(&standIns, alloc);
@@ -1449,6 +1715,15 @@ clean:
 		ListPipelineExecutable_freeUnderlying(&execs, alloc);
 		RefPtr_dec(&pipeline);
 		RefPtr_dec(&deviceRef);
+
+		//The choice lives in this process's environment, which is how the run above inherited it, so anything
+		// else started from here would inherit it too. It's given back once the run that wanted it is done.
+		//Cleared through the device that made it, which is still alive here for exactly that.
+
+		if(targetSelected)
+			GraphicsDeviceRef_selectShaderTarget(targetRef, NULL, NULL);
+
+		RefPtr_dec(&targetRef);
 		RefPtr_dec(&instanceRef);
 		ListGraphicsDeviceInfo_free(&infos, alloc);
 		return s_uccess;
@@ -1503,6 +1778,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 		Bool live = CharString_equalsStringInsensitive(&asic, &liveStr);
 		U64 deviceId = U64_MAX;
+		CharString liveTarget = CharString_createNull();
 
 		if(!live && CharString_startsWithStringInsensitive(&asic, &livePfx, 0)) {
 
@@ -1520,6 +1796,16 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 				));
 		}
 
+		//A driver reported ASIC ("NAVI31:gfx1100") is a live target too, since only an installed driver can
+		// compile for one; 'isa devices' lists them next to the offline ones.
+		//The colon is what tells the two apart: an offline target is a gfxN or a major.minor.step, neither of
+		// which carries one, and the live: forms were already taken above.
+
+		else if (!live && CharString_containsSensitive(&asic, ':', 0, 0)) {
+			live = true;
+			liveTarget = asic;
+		}
+
 		if(live) {
 
 			gotoIfError3(clean, File_read(&inputStr, 1 * SECOND, 0, 0, &fileHandleType, &input, e_rr));
@@ -1531,36 +1817,88 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 			gotoIfError3(clean, SHFile_read((StreamRef*)readStream, &liveOff, false, alloc, &shFile, e_rr));
 
 			//Which binary is run decides the backend: SPIR-V goes to Vulkan, DXIL to D3D12.
-			//-compile-output picks when the file holds both; otherwise the one that's present is used, preferring
-			// SPIR-V because it's the only one any driver disassembles today.
+			//-compile-output picks when the file holds both, and so does naming a driver ASIC; otherwise the one
+			// that's present is used, preferring SPIR-V because it's the only one any driver disassembles today.
 
-			ESHBinaryType liveType = ESHBinaryType_Count;
+			EGfxBinaryType liveType = EGfxBinaryType_Count;
 			CharString liveMode = CharString_createNull();
 
 			if (ParsedArgs_getArg(args, EOperationHasParameter_ShaderOutputModeShift, &liveMode, NULL)) {
 
 				if(CharString_equalsCStringInsensitive(&liveMode, "DXIL"))
-					liveType = ESHBinaryType_DXIL;
+					liveType = EGfxBinaryType_DXIL;
 
 				else if(CharString_equalsCStringInsensitive(&liveMode, "SPV"))
-					liveType = ESHBinaryType_SPIRV;
+					liveType = EGfxBinaryType_SPIRV;
 
 				else retError(clean, Error_invalidParameter(
 					0, 0, "CLI_isaDisassemble() -compile-output has to be spv or dxil"
 				));
 			}
 
-			else for (U64 i = 0; i < shFile.binaries.length && liveType == ESHBinaryType_Count; ++i) {
+			//A driver reported ASIC only exists on the D3D12 side, so naming one decides the binary just as much
+			// as -compile-output would, and the two have to agree rather than one quietly winning.
 
-				if(Buffer_length(shFile.binaries.ptr[i].binaries[ESHBinaryType_SPIRV]))
-					liveType = ESHBinaryType_SPIRV;
+			if (CharString_length(liveTarget)) {
 
-				else if(Buffer_length(shFile.binaries.ptr[i].binaries[ESHBinaryType_DXIL]))
-					liveType = ESHBinaryType_DXIL;
+				if(liveType == EGfxBinaryType_SPIRV)
+					retError(clean, Error_invalidParameter(
+						0, 0,
+						"CLI_isaDisassemble() -asic <driver ASIC> compiles DXIL, so -compile-output spv contradicts it"
+					));
+
+				liveType = EGfxBinaryType_DXIL;
 			}
 
-			if(liveType == ESHBinaryType_Count)
+			//Neither said which, so the one the file holds is taken.
+
+			for (U64 i = 0; i < shFile.binaries.length && liveType == EGfxBinaryType_Count; ++i) {
+
+				if(Buffer_length(shFile.binaries.ptr[i].binaries[EGfxBinaryType_SPIRV]))
+					liveType = EGfxBinaryType_SPIRV;
+
+				else if(Buffer_length(shFile.binaries.ptr[i].binaries[EGfxBinaryType_DXIL]))
+					liveType = EGfxBinaryType_DXIL;
+			}
+
+			if(liveType == EGfxBinaryType_Count)
 				retError(clean, Error_notFound(0, 0, "CLI_isaDisassemble() the oiSH holds no SPIR-V or DXIL binary"));
+
+			//-compile-output can name a type the file doesn't carry, which the detection above never runs into.
+			//Saying so here keeps it the missing binary it is: a layout is derived from the stage's binary, whose
+			// registers only carry pairs for the types that binary was compiled for, so the run would otherwise
+			// fail much further down as a register that has no pair for this device.
+
+			Bool holdsLiveType = false;
+
+			for(U64 i = 0; i < shFile.binaries.length && !holdsLiveType; ++i)
+				holdsLiveType = Buffer_length(shFile.binaries.ptr[i].binaries[liveType]) != 0;
+
+			if (!holdsLiveType) {
+
+				Log_errorLnx(
+					"This oiSH holds no %s binary, which is what -compile-output asked for.",
+					EGfxBinaryType_names[liveType]
+				);
+
+				for (U8 i = 0; i < EGfxBinaryType_Count; ++i) {
+
+					Bool holds = false;
+
+					for(U64 j = 0; j < shFile.binaries.length && !holds; ++j)
+						holds = Buffer_length(shFile.binaries.ptr[j].binaries[i]) != 0;
+
+					if(holds)
+						Log_errorLnx(
+							"\tIt does hold %s; pass that instead, or recompile the shader for %s.",
+							EGfxBinaryType_names[i], EGfxBinaryType_names[liveType]
+						);
+				}
+
+				retError(clean, Error_notFound(
+					1, 0, "CLI_isaDisassemble() the oiSH holds no binary of the type -compile-output asked for"
+				));
+			}
 
 			const Bool assumeDefaults = (args->flags & EOperationFlags_AssumeDefaults) != 0;
 
@@ -1574,7 +1912,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 				CharString_length(pipelineOutputStr);
 
 			gotoIfError3(clean, CLI_isaDisassembleLive(
-				shFile, liveType, deviceId, hasOutput, outputStr, &fileHandleType, assumeDefaults,
+				shFile, liveType, deviceId, liveTarget, hasOutput, outputStr, &fileHandleType, assumeDefaults,
 				hasPipelineOutput, pipelineOutputStr, psoSetStr, psoInputStr, inputStr, alloc, e_rr
 			));
 			goto clean;
@@ -1664,7 +2002,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 			chosen = &shFile.binaries.ptr[idx];
 
-			if(!Buffer_length(chosen->binaries[ESHBinaryType_SPIRV]))
+			if(!Buffer_length(chosen->binaries[EGfxBinaryType_SPIRV]))
 				retError(clean, Error_invalidParameter(
 					0, 1, "CLI_isaDisassemble() binary at -entry has no SPIR-V; the offline path lowers SPIR-V "
 					"only, so use '-asic live' "
@@ -1679,7 +2017,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 			U64 spvCount = 0;
 
 			for(U64 i = 0; i < shFile.binaries.length; ++i)
-				if(Buffer_length(shFile.binaries.ptr[i].binaries[ESHBinaryType_SPIRV])) {
+				if(Buffer_length(shFile.binaries.ptr[i].binaries[EGfxBinaryType_SPIRV])) {
 					chosen = &shFile.binaries.ptr[i];
 					++spvCount;
 				}
@@ -1698,7 +2036,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 				));
 		}
 
-		const Buffer spv = chosen->binaries[ESHBinaryType_SPIRV];
+		const Buffer spv = chosen->binaries[EGfxBinaryType_SPIRV];
 		spirv = Buffer_createRefConst(spv.ptr, Buffer_length(spv));
 		entrypoint = chosen->identifier.entrypoint;        //Selects this stage from a multi-entry (library) module
 	}

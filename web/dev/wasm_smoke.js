@@ -662,6 +662,15 @@ async function main() {
   if (computePipeline.doc) {
     const p = computePipeline.doc.pipelines[0];
     assert("it is a compute pipeline with one stage", p.type === "compute" && p.stages.length === 1);
+
+    /* A derived pipeline carries its descriptor layout as an embedded oiPL: the compute shader binds
+     * registers, so the layout has rows, each proven by reflection and naming both backends' pair. */
+    const layout = computePipeline.doc.layouts && computePipeline.doc.layouts[p.layoutIndex];
+    assert("its descriptor layout is embedded", p.layoutIndex >= 0 && !!layout, JSON.stringify(p.layoutIndex));
+    assert("with reflected rows that name both bindings",
+      !!layout && layout.bindings.length > 0 && layout.bindings.every(b =>
+        b.source === "derived" && typeof b.bindings.spirv.binding === "number" && typeof b.bindings.dxil.binding === "number"),
+      layout && JSON.stringify(layout.bindings.slice(0, 2)));
     assert("compute is exact: nothing is assumed", p.fields.every(f => f.source !== "assumed"),
       JSON.stringify(p.fields));
     assert("the stage names the shader it came from", p.stages[0].shaderFile === "compute.oiSH");

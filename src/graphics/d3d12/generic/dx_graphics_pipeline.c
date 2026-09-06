@@ -149,7 +149,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 	switch(info->rasterizer.cullMode) {
 		default:                                                                            break;
-		case ECullMode_None:    graphics.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;   break;
+		case ECullMode_None:     graphics.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;  break;
 		case ECullMode_Front:    graphics.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT; break;
 	}
 
@@ -280,7 +280,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 		const SHFile *binary = &binaries->ptr[stage.shFileId];
 		const SHBinaryInfo *binj = &binary->binaries.ptr[binary->entries.ptr[entrypointId].binaryIds.ptr[binaryId]];
-		Buffer bin = binj->binaries[ESHBinaryType_DXIL];
+		Buffer bin = binj->binaries[EGfxBinaryType_DXIL];
 
 		D3D12_SHADER_BYTECODE bytecode = (D3D12_SHADER_BYTECODE) {
 			.pShaderBytecode = bin.ptr,

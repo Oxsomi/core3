@@ -81,7 +81,7 @@ static inline Bool C8_isSymbol(C8 c) {
 	Bool symbolRange0 = c > ' ' && c < '0';        //~"#%&'()*+,-./$
 	Bool symbolRange1 = c > '9' && c < 'A';        //:;<=>?@
 	Bool symbolRange2 = c > 'Z' && c < 'a';        //[\]^`_
-	Bool symbolRange3 = c > 'z' && c < 0x7F;    //{|}~
+	Bool symbolRange3 = c > 'z' && c < 0x7F;       //{|}~
 
 	return symbolRange0 || symbolRange1 || symbolRange2 || symbolRange3;
 }

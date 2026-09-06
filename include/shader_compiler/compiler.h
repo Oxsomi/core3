@@ -77,7 +77,7 @@ typedef struct CompilerSettings {
 	CharString path;
 
 	ECompilerFormat format;
-	ESHBinaryType outputType;
+	EGfxBinaryType outputType;
 
 	ListCharString includeDirs; //Optional extra include dirs to search
 
@@ -111,7 +111,7 @@ typedef enum ECompileErrorType {
 
 typedef struct CompileError {
 
-	U32 compileIndex;           //Compile index. % ESHBinaryType_Count = binaryType, / ESHBinaryType = i of strings[i]
+	U32 compileIndex;           //Compile index. % EGfxBinaryType_Count = binaryType, / EGfxBinaryType = i of strings[i]
 
 	U16 lineId;
 	U8 typeLineId;              //ECompileErrorType in the top bit and lineId upper 7 bits
@@ -196,7 +196,7 @@ TList(IncludedFile);
 
 typedef struct CompilerEntrypoint {
 	CharString name;
-	ESHPipelineStage stage;
+	EGfxPipelineStage stage;
 	U32 padding;
 } CompilerEntrypoint;
 
@@ -266,13 +266,13 @@ void Compiler_shutdown();
 //Generate disassembly from buffer
 
 Bool Compiler_disassemble(
-	const Compiler *comp, ESHBinaryType type, Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr
+	const Compiler *comp, EGfxBinaryType type, Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr
 );
 
 //Assemble text back into a binary (SPIRV text via spirv-tools, DXIL LL text via DXC's IDxcAssembler)
 
 Bool Compiler_assemble(
-	const Compiler *comp, ESHBinaryType type, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr
+	const Compiler *comp, EGfxBinaryType type, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr
 );
 
 //Judge a standalone binary before anything trusts it: spirv-val for SPIR-V, DXC's validator for a DXIL container.
@@ -280,7 +280,7 @@ Bool Compiler_assemble(
 // failure of this call; errorText carries the validator's own message.
 
 Bool Compiler_validate(
-	const Compiler *comp, ESHBinaryType type, Buffer binary, const Allocator *alloc, Bool *valid, CharString *errorText,
+	const Compiler *comp, EGfxBinaryType type, Buffer binary, const Allocator *alloc, Bool *valid, CharString *errorText,
 	Error *e_rr
 );
 
@@ -288,7 +288,7 @@ Bool Compiler_validate(
 
 Bool Compiler_getUniqueEntrypoints(
 	const Compiler *compiler,
-	ESHBinaryType binaryType,
+	EGfxBinaryType binaryType,
 	Buffer binary,                                   //Must be a lib
 	Bool showAll,                                    //true: show all entrypoints, false: only show targets to link
 	ListCompilerEntrypoint *uniqueEntrypoints,
@@ -300,7 +300,7 @@ Bool Compiler_getUniqueEntrypoints(
 
 Bool Compiler_process(
 	const Compiler *compiler,           //To be able to get reflection data
-	ESHBinaryType type,
+	EGfxBinaryType type,
 	Buffer *result,                     //Required; input & output binary
 	ListSHRegisterRuntime *registers,   //Required; Output registers
 	Bool isDebug,
@@ -317,13 +317,13 @@ Bool Compiler_process(
 
 Bool Compiler_link(
 	const Compiler *compiler,
-	ESHBinaryType type,
+	EGfxBinaryType type,
 	const ListBuffer *inputs,              //Input binary/binaries
 	const ListSHUniformRuntime *uniforms,  //Uniform descriptions (to index uniformData and to link)
 	Buffer uniformData,                    //Contents of the current compilation
 	const CharString *entrypoint,          //Entrypoint specialization (empty = keep as lib, otherwise specialize)
 	U16 shaderVersion,                     //U8 maj, minor
-	ESHPipelineStage stageType,
+	EGfxPipelineStage stageType,
 	ESHExtension exts,
 	Bool keepRegisters,                    //Keep unused resources through the link's own codegen pass too
 	ListCompileError *errors,
@@ -355,7 +355,7 @@ Bool Compiler_finalizeEntrypoint(       //Push reflection data into final entryp
 Bool Compiler_mergeIncludeInfo(Compiler *comp, const Allocator *alloc, ListIncludeInfo *infos, Error *e_rr);
 
 //Determine what minimum shader version is required
-U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSize);
+U16 Compiler_minFeatureSetStage(EGfxPipelineStage stage, U16 waveSize);
 U16 Compiler_minFeatureSetExtension(ESHExtension ext);
 
 Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr);
@@ -433,7 +433,7 @@ Bool Compiler_getTargetsFromFile(
 	ListCharString *allFiles,         //Fully resolved file names (may contain duplicates per compile mode)
 	ListCharString *allShaderText,    //Per file name: Input shader files
 	ListCharString *allOutputs,       //Per file name: Output shader file names
-	ListU8 *allCompileModes           //Per file name: ESHBinaryType
+	ListU8 *allCompileModes           //Per file name: EGfxBinaryType
 );
 
 Bool Compiler_compileShaders(

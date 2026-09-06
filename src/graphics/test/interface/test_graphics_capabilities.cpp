@@ -54,7 +54,7 @@ namespace {
 	//graphics.hpp already has the guard this was: OwnedList frees its list on every exit path, error
 	//returns included.
 
-	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo, oxc::c::DescriptorLayoutInfo_free>;
+	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo>;
 
 	//Names are only for the coverage log, so a run says which bits this adapter actually exercised rather than
 	// leaving "it passed" ambiguous between "tested" and "skipped".

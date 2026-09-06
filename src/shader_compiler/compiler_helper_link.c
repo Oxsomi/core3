@@ -66,7 +66,7 @@ Bool Compiler_getLinkEntries(
 	const Compiler *compiler,
 	const ListSHEntryRuntime *runtimeEntries,
 	const SHBinaryIdentifier *binaryIdentifier,
-	ESHBinaryType binaryType,
+	EGfxBinaryType binaryType,
 	Buffer *binary,
 	ListCompilerEntrypoint *entrypoints,
 	ListLinkEntry *linkEntries,
@@ -80,13 +80,13 @@ Bool Compiler_getLinkEntries(
 	Bool freeLinkEntries = false;
 
 	Bool isRt =
-		binaryIdentifier->stageType >= ESHPipelineStage_RtStartExt &&
-		binaryIdentifier->stageType <= ESHPipelineStage_RtEndExt;
+		binaryIdentifier->stageType >= EGfxPipelineStage_RtStartExt &&
+		binaryIdentifier->stageType <= EGfxPipelineStage_RtEndExt;
 
 	Bool isLib = isRt;
 
 	Bool isLibTarget = isLib;
-	isLib = isLibTarget || (binaryIdentifier->stageType == ESHPipelineStage_Count);
+	isLib = isLibTarget || (binaryIdentifier->stageType == EGfxPipelineStage_Count);
 
 	if (!isLib) {
 		

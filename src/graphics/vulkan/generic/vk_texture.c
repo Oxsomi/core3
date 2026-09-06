@@ -282,7 +282,7 @@ clean:
 	return s_uccess;
 }
 
-Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *view, U32 *viewIdOutput, Error *e_rr) {
+Bool VkUnifiedTexture_getView(Descriptor d, EGfxRegisterType type, VkImageView *view, U32 *viewIdOutput, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -385,22 +385,22 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 		}
 	};
 
-	Bool isArray = type & ESHRegisterType_IsArray;
-	type = type & ESHRegisterType_TypeMask;
+	Bool isArray = type & EGfxRegisterType_IsArray;
+	type = type & EGfxRegisterType_TypeMask;
 
 	switch (type) {
 
 		default:
-		case ESHRegisterType_Texture2D:
-		case ESHRegisterType_Texture2DMS:
+		case EGfxRegisterType_Texture2D:
+		case EGfxRegisterType_Texture2DMS:
 			viewCreate.viewType = isArray ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
 			break;
 
-		case ESHRegisterType_TextureCube:
+		case EGfxRegisterType_TextureCube:
 			viewCreate.viewType = isArray ? VK_IMAGE_VIEW_TYPE_CUBE_ARRAY : VK_IMAGE_VIEW_TYPE_CUBE;
 			break;
 
-		case ESHRegisterType_Texture3D:
+		case EGfxRegisterType_Texture3D:
 			viewCreate.viewType = VK_IMAGE_VIEW_TYPE_3D;
 			break;
 	}

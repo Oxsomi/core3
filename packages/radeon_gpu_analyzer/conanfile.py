@@ -9,9 +9,11 @@ required_conan_version = ">=2.0"
 
 # The AMD offline shader compilers Radeon GPU Analyzer vendors, packaged as a command line tool package.
 #
-# What this provides: amdllpc (SPIR-V -> AMD ISA ELF, per gfxip) and amdgpu-dis (ELF -> ISA text), which is all
-# OxC3 drives for its `isa` commands; the rga CLI itself isn't built or shipped, since OxC3 spawns the two
-# compilers directly and rga would only add a Boost dependency and a sizeable C++ build on every CI runner.
+# What this provides: amdllpc (SPIR-V -> AMD ISA text, per gfxip), which is all OxC3 drives for its `isa`
+# commands; the rga CLI itself isn't built or shipped, since OxC3 spawns amdllpc directly and rga would only add
+# a Boost dependency and a sizeable C++ build on every CI runner.
+# amdgpu-dis isn't shipped: amdllpc's own --filetype=asm emits the ISA text, so the separate ELF disassembler is
+# 20 MB and a subprocess spawn for something the compiler already does.
 #
 # Platform reality check: the compilers are prebuilt AMD binaries vendored in the repo (git-lfs) for Windows and
 # Linux x64 only, so that's where this package exists; everywhere else (macOS/Android/wasm) the root conanfile
@@ -20,12 +22,12 @@ required_conan_version = ">=2.0"
 class radeon_gpu_analyzer(ConanFile):
 
 	name = "radeon_gpu_analyzer"
-	version = "2026.08.02"
+	version = "2026.09.02"
 
-	license = "MIT (RGA); bundled AMD offline compilers are proprietary redistributables, see EULA.txt/RGA_NOTICES.txt"
+	license = "MIT (RGA); the bundled amdllpc build carries the third party notices in RGA_NOTICES.txt"
 	author = "AMD (original) & Oxsomi (modifications only)"
 	url = "https://github.com/Oxsomi/radeon_gpu_analyzer"
-	description = "AMD's offline shader compilers (amdllpc, amdgpu-dis) as vendored by Radeon GPU Analyzer"
+	description = "AMD's offline shader compiler (amdllpc) as vendored by Radeon GPU Analyzer"
 	topics = ("amd", "isa", "shader-analysis", "spirv", "gpu")
 
 	package_type = "application"
@@ -45,9 +47,9 @@ class radeon_gpu_analyzer(ConanFile):
 	def _repo(self):
 		return os.path.join(self.source_folder, "radeon_gpu_analyzer")
 
-	# The two tools per platform, as (path inside the repo, path inside the package's bin/).
-	# The bin/ layout mirrors where rga's own build puts them, which is the layout OxC3 looks them up in
-	# (rga/utils/amdllpc, rga/utils/lc/disassembler/amdgpu-dis next to the executable).
+	# The tool per platform, as (path inside the repo, path inside the package's bin/).
+	# The bin/ layout mirrors where rga's own build puts it, which is the layout OxC3 looks it up in
+	# (rga/utils/amdllpc next to the executable).
 
 	@staticmethod
 	def _toolsFor(windows):
@@ -59,10 +61,6 @@ class radeon_gpu_analyzer(ConanFile):
 			(
 				"external/vulkan_offline/" + platform + "/amdllpc" + ext,
 				os.path.join("utils", "amdllpc" + ext)
-			),
-			(
-				"external/lc/disassembler/" + platform + "/amdgpu-dis" + ext,
-				os.path.join("utils", "lc", "disassembler", "amdgpu-dis" + ext)
 			),
 		]
 
@@ -81,9 +79,9 @@ class radeon_gpu_analyzer(ConanFile):
 
 		# The compilers are git-lfs blobs; without git-lfs the checkout silently contains pointer files and the
 		# tools are useless, so pull them explicitly and fail loud.
-		# Only the files OxC3 uses are pulled, which keeps the download at their size rather than every vendored
+		# Only the file OxC3 uses is pulled, which keeps the download at its size rather than every vendored
 		# compiler's. Both platforms' are pulled, since source() is shared by every configuration and may not
-		# consult the settings; package() then takes the pair for the one being built.
+		# consult the settings; package() then takes the one for the platform being built.
 
 		include = ",".join(src for windows in (True, False) for src, _ in self._toolsFor(windows))
 

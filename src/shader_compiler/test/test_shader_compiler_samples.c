@@ -88,7 +88,7 @@ void Test_shaderCompilerSamples(Test *t) {
 
 	for (U64 backend = 0; backend < 2; ++backend) {
 
-		const ESHBinaryType type = backend ? ESHBinaryType_DXIL : ESHBinaryType_SPIRV;
+		const EGfxBinaryType type = backend ? EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
 		Bool isFolder = false;
 
 		ListCharString_freeUnderlying(&allFiles, alloc);
@@ -134,7 +134,7 @@ void Test_shaderCompilerSamples(Test *t) {
 			Log_debugLn(
 				alloc, "sample %.*s (%s): %s",
 				(int) CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr,
-				type == ESHBinaryType_DXIL ? "dxil" : "spirv",
+				type == EGfxBinaryType_DXIL ? "dxil" : "spirv",
 				produced ? "compiled" : "no binary"
 			);
 
@@ -148,7 +148,7 @@ void Test_shaderCompilerSamples(Test *t) {
 			//suite flaky. Its SPIR-V is stable and stays pinned, as does every other sample on both backends.
 
 			const Bool unstable =
-				type == ESHBinaryType_DXIL &&
+				type == EGfxBinaryType_DXIL &&
 				CharString_findFirstStringSensitive(&allFiles.ptr[i], &coopVecName, 0, 0) != U64_MAX;
 
 			if(unstable)
@@ -164,7 +164,7 @@ void Test_shaderCompilerSamples(Test *t) {
 
 			gotoIfError3(clean, CharString_format(
 				alloc, &refPath, e_rr, "%s/%.*s.%s.oiSH",
-				goldenRoot, (int) baseLen, out.ptr, type == ESHBinaryType_DXIL ? "dxil" : "spirv"
+				goldenRoot, (int) baseLen, out.ptr, type == EGfxBinaryType_DXIL ? "dxil" : "spirv"
 			));
 
 			if (File_has(&refPath, alloc)) {

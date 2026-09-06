@@ -22,6 +22,7 @@
 
 #pragma once
 #include "types/base/types.h"
+#include "formats/gfx_util/gfx_util.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -44,18 +45,6 @@ typedef enum ERasterizerFlags {
 	ERasterizerFlags_EnableDepthClamp       = 1 << 2,
 	ERasterizerFlags_EnableDepthBias        = 1 << 3
 } ERasterizerFlags;
-
-typedef enum ECompareOp {
-	ECompareOp_Gt,
-	ECompareOp_Geq,
-	ECompareOp_Eq,
-	ECompareOp_Neq,
-	ECompareOp_Leq,
-	ECompareOp_Lt,
-	ECompareOp_Always,
-	ECompareOp_Never,
-	ECompareOp_Count
-} ECompareOp;
 
 typedef enum EStencilOp {
 	EStencilOp_Keep,

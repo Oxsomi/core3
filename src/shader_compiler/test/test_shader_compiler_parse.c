@@ -56,7 +56,7 @@ void Test_shaderCompilerParse(Test *t) {
 		.string = CharString_createRefCStrConst(src),
 		.path = CharString_createRefCStrConst("test_parse.hlsl"),
 		.format = ECompilerFormat_HLSL,
-		.outputType = ESHBinaryType_SPIRV
+		.outputType = EGfxBinaryType_SPIRV
 	};
 
 	gotoIfError3(clean, Compiler_parse(&comp, &settings, alloc, &result, e_rr));

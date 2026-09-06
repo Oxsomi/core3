@@ -32,7 +32,7 @@
 //Helper function to expand switch case
 
 #define FUNC_EXPAND2(offset, func, var)                        \
-		case offset:        return func(var, offset);        \
+		case offset:        return func(var, offset);          \
 		case offset + 1:    return func(var, offset + 1)
 
 #define FUNC_EXPAND4(offset, func, var) FUNC_EXPAND2(offset, func, var); FUNC_EXPAND2((offset) + 2, func, var)

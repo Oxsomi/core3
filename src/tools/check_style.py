@@ -19,6 +19,9 @@
 #   14. POSIX headers (<unistd.h> <pthread.h> etc.) only inside
 #       src/.../unix directories
 #   15. No unmerged Git conflict markers (<<<<<<< / ======= / >>>>>>>)
+#   16. Aligned case tables stay aligned: once any line of a contiguous `case X: stmt` run pads
+#       with 2+ spaces, every statement (and every trailing break;) in the run must share one
+#       column; single-space runs are the unaligned style and stay exempt
 #
 # Banned symbols (with per-path allow-lists):
 #   B1.  malloc / free / realloc / calloc
@@ -467,6 +470,90 @@ _CONFLICT_MARKER_RE = re.compile(r'^(<{7}|>{7}|={7})(?= |$)')
 # Per-file checker
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Rule 16: aligned case tables
+# ---------------------------------------------------------------------------
+
+_CASE_LINE  = re.compile(r'^(	+)(case [^:]*?:|default:)( +)(\S.*)$')
+_BREAK_TAIL = re.compile(r'^(.*?\S)( +)(break;)$')
+
+
+def check_case_alignment(lines: list[str]) -> list[str]:
+    """A contiguous run of `case X: stmt` lines becomes an aligned table once any line pads its
+    statement, or its trailing break;, with two or more spaces; the whole run must then share one
+    statement column and one break; column. A single space everywhere is the unaligned style and
+    is exempt. Any other line ends the run, so sub-blocks can choose their own columns, and a
+    renamed label can no longer silently shear one row out of a table.
+    """
+
+    issues: list[str] = []
+    run: list[dict] = []
+    run_indent: str | None = None
+
+    def flush() -> None:
+
+        nonlocal run, run_indent
+
+        if len(run) >= 2:
+
+            stmt_intent = any(r['stmt_pad'] >= 2 for r in run if r['stmt_col'] is not None)
+            brk_intent  = any(r['brk_pad'] >= 2 for r in run if r['brk_col'] is not None)
+
+            stmt_cols = sorted({r['stmt_col'] for r in run if r['stmt_col'] is not None})
+            brk_cols  = sorted({r['brk_col'] for r in run if r['brk_col'] is not None})
+
+            span = f"lines {run[0]['lineno']}-{run[-1]['lineno']}"
+
+            if stmt_intent and len(stmt_cols) > 1:
+                issues.append(
+                    f"  {span}: aligned case table drifted, statements start at "
+                    f"columns {', '.join(str(c) for c in stmt_cols)}"
+                )
+
+            if brk_intent and len(brk_cols) > 1:
+                issues.append(
+                    f"  {span}: aligned case table drifted, break; sits at "
+                    f"columns {', '.join(str(c) for c in brk_cols)}"
+                )
+
+        run = []
+        run_indent = None
+
+    for lineno, line in enumerate(lines, start=1):
+
+        m = _CASE_LINE.match(line)
+
+        if not m or (run_indent is not None and m.group(1) != run_indent):
+            flush()
+            if not m:
+                continue
+
+        indent, label, pad, content = m.groups()
+        label_end = visual_length(indent + label)
+
+        entry = {
+            'lineno': lineno, 'stmt_col': None, 'stmt_pad': 0, 'brk_col': None, 'brk_pad': 0,
+        }
+
+        if content == 'break;':
+            entry['brk_col'] = label_end + len(pad) + 1
+            entry['brk_pad'] = len(pad)
+        else:
+            entry['stmt_col'] = label_end + len(pad) + 1
+            entry['stmt_pad'] = len(pad)
+            tail = _BREAK_TAIL.match(content)
+            if tail:
+                entry['brk_col'] = entry['stmt_col'] + len(tail.group(1)) + len(tail.group(2))
+                entry['brk_pad'] = len(tail.group(2))
+
+        run.append(entry)
+        run_indent = indent
+
+    flush()
+    return issues
+
+
+
 def check_file(
     path: str,
     rel: str,
@@ -693,6 +780,11 @@ def check_file(
                     if add(f"  line {lineno}, col {m.start() + 1}: "
                            f"{rule['message'].format(symbol)}"):
                         return violations, todos
+
+    # ── 16. Aligned case tables ─────────────────────────────────────────
+    for msg in check_case_alignment(lines):
+        if add(msg):
+            return violations, todos
 
     return violations, todos
 

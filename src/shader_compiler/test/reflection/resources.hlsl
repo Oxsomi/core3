@@ -1,4 +1,4 @@
-//A single compute entrypoint with one of (almost) every ESHRegisterType, each actually used so DXC keeps it.
+//A single compute entrypoint with one of (almost) every EGfxRegisterType, each actually used so DXC keeps it.
 //RayQuery gives us an AccelerationStructure register and compiles inline RT on both backends (SM6.5).
 //Driven by test_shader_compiler_reflection.c, which asserts each reflected register's type/write/array/stride.
 

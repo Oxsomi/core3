@@ -950,7 +950,7 @@ OXC3_TEST_MAIN(audio_functional) {
 
 	//Spatial sweeps
 	Test_audioSourceSpatialSweep(&ctx, false);    //Mono
-	Test_audioSourceSpatialSweep(&ctx, true);    //Stereo with flattenSound
+	Test_audioSourceSpatialSweep(&ctx, true);     //Stereo with flattenSound
 
 	//Listener sweeps
 	Test_audioListenerPositionSweep(&ctx);

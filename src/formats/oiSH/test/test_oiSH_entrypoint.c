@@ -32,10 +32,10 @@ void Test_SHFileAddEntryNullGuards(Test *t) {
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name   = CharString_createRefCStrConst("main");
-	e.stage  = ESHPipelineStage_Compute;
+	e.stage  = EGfxPipelineStage_Compute;
 	e.groupX = e.groupY = e.groupZ = 4;
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	U16 binId = 0;
@@ -66,9 +66,9 @@ void Test_SHFileAddEntryInvalidStage(Test *t) {
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 	SHEntry e = (SHEntry) { 0 };
 	e.name  = CharString_createRefCStrConst("bad");
-	e.stage = (SHPipelineStage)ESHPipelineStage_Count;
+	e.stage = (SHPipelineStage)EGfxPipelineStage_Count;
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	U16 binId = 0;
@@ -85,7 +85,7 @@ void Test_SHFileAddEntryComputeInvalidGroup(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	U16 binId = 0;
@@ -115,9 +115,9 @@ void Test_SHFileAddEntryGraphicsCannotHaveGroup(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	const ESHPipelineStage gfx[] = {
-		ESHPipelineStage_Vertex, ESHPipelineStage_Pixel,
-		ESHPipelineStage_GeometryExt, ESHPipelineStage_Hull, ESHPipelineStage_Domain
+	const EGfxPipelineStage gfx[] = {
+		EGfxPipelineStage_Vertex, EGfxPipelineStage_Pixel,
+		EGfxPipelineStage_GeometryExt, EGfxPipelineStage_Hull, EGfxPipelineStage_Domain
 	};
 
 	for (U8 i = 0; i < 5; ++i) {
@@ -139,9 +139,9 @@ void Test_SHFileAddEntryMeshNeedsGroup(Test *t) {
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 	SHEntry e = (SHEntry) { 0 };
 	e.name  = CharString_createRefCStrConst("meshMain");
-	e.stage = ESHPipelineStage_MeshExt;
+	e.stage = EGfxPipelineStage_MeshExt;
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_MeshExt, NULL, true);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_MeshExt, NULL, true);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	U16 binId = 0;
@@ -161,9 +161,9 @@ void Test_SHFileAddEntryTaskNeedsGroup(Test *t) {
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 	SHEntry e = (SHEntry) { 0 };
 	e.name  = CharString_createRefCStrConst("taskMain");
-	e.stage = ESHPipelineStage_TaskExt;
+	e.stage = EGfxPipelineStage_TaskExt;
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_TaskExt, NULL, true);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_TaskExt, NULL, true);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	U16 binId = 0;
@@ -184,10 +184,10 @@ void Test_SHFileAddEntryWaveSizeOnNonCompute(Test *t) {
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name     = CharString_createRefCStrConst("vsMain");
-	e.stage    = ESHPipelineStage_Vertex;
+	e.stage    = EGfxPipelineStage_Vertex;
 	e.waveSize = 0x0003;
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Vertex, "vs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	U16 binId = 0;
@@ -204,7 +204,7 @@ void Test_SHFileAddEntryWaveSizeInvalidNibbles(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	//Each nibble position loaded with 0xA (=10 > 9)
@@ -214,7 +214,7 @@ void Test_SHFileAddEntryWaveSizeInvalidNibbles(Test *t) {
 
 		SHEntry e = (SHEntry) { 0 };
 		e.name     = CharString_createRefCStrConst("cs");
-		e.stage    = ESHPipelineStage_Compute;
+		e.stage    = EGfxPipelineStage_Compute;
 		e.groupX   = 8; e.groupY = 8; e.groupZ = 1;
 		e.waveSize = badWaves[i];
 
@@ -227,7 +227,7 @@ void Test_SHFileAddEntryWaveSizeInvalidNibbles(Test *t) {
 	//nibble value 3 (maps to wave-8) is valid
 	SHEntry good = (SHEntry) { 0 };
 	good.name     = CharString_createRefCStrConst("cs");
-	good.stage    = ESHPipelineStage_Compute;
+	good.stage    = EGfxPipelineStage_Compute;
 	good.groupX   = 8; good.groupY = 8; good.groupZ = 1;
 	good.waveSize = 0x0003;
 
@@ -246,12 +246,12 @@ void Test_SHFileAddEntryMissMustHavePayload(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_MissExt, NULL, true);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_MissExt, NULL, true);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name  = CharString_createRefCStrConst("missMain");
-	e.stage = ESHPipelineStage_MissExt;
+	e.stage = EGfxPipelineStage_MissExt;
 
 	U16 binId = 0;
 	e.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
@@ -274,12 +274,12 @@ void Test_SHFileAddEntryCallablePayload(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_CallableExt, NULL, true);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_CallableExt, NULL, true);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name  = CharString_createRefCStrConst("callMain");
-	e.stage = ESHPipelineStage_CallableExt;
+	e.stage = EGfxPipelineStage_CallableExt;
 
 	U16 binId = 0;
 	e.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
@@ -297,18 +297,18 @@ void Test_SHFileAddEntryHitStageSizes(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_ClosestHitExt, NULL, true);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_ClosestHitExt, NULL, true);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
-	const ESHPipelineStage hitStages[] = {
-		ESHPipelineStage_ClosestHitExt,
-		ESHPipelineStage_AnyHitExt,
-		ESHPipelineStage_IntersectionExt
+	const EGfxPipelineStage hitStages[] = {
+		EGfxPipelineStage_ClosestHitExt,
+		EGfxPipelineStage_AnyHitExt,
+		EGfxPipelineStage_IntersectionExt
 	};
 
 	for (U8 i = 0; i < 3; ++i) {
 
-		Bool isIntersection = hitStages[i] == ESHPipelineStage_IntersectionExt;
+		Bool isIntersection = hitStages[i] == EGfxPipelineStage_IntersectionExt;
 
 		SHEntry e = (SHEntry) { 0 };
 		e.name        = CharString_createRefCStrConst("hit");
@@ -351,10 +351,10 @@ void Test_SHFileAddEntryIntersectionOnWrongStage(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_MissExt, NULL, true);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_MissExt, NULL, true);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
-	const ESHPipelineStage wrong[] = { ESHPipelineStage_MissExt, ESHPipelineStage_CallableExt };
+	const EGfxPipelineStage wrong[] = { EGfxPipelineStage_MissExt, EGfxPipelineStage_CallableExt };
 
 	for (U8 i = 0; i < 2; ++i) {
 
@@ -380,12 +380,12 @@ void Test_SHFileAddEntryRaygenNoPayload(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_RaygenExt, NULL, true);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_RaygenExt, NULL, true);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name  = CharString_createRefCStrConst("rgen");
-	e.stage = ESHPipelineStage_RaygenExt;
+	e.stage = EGfxPipelineStage_RaygenExt;
 
 	U16 binId = 0;
 	e.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
@@ -394,7 +394,7 @@ void Test_SHFileAddEntryRaygenNoPayload(Test *t) {
 
 	SHEntry e2 = (SHEntry) { 0 };
 	e2.name        = CharString_createRefCStrConst("rgen2");
-	e2.stage       = ESHPipelineStage_RaygenExt;
+	e2.stage       = EGfxPipelineStage_RaygenExt;
 	e2.payloadSize = 16;
 	e2.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
 
@@ -410,15 +410,15 @@ void Test_SHFileAddEntryNonRTPayloadRejected(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Vertex, "vs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
-	info = makeBinaryInfo(ESHPipelineStage_Compute, "comp", false);
+	info = makeBinaryInfo(EGfxPipelineStage_Compute, "comp", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	//Vertex + payload
 	SHEntry ev = (SHEntry) { 0 };
-	ev.name = CharString_createRefCStrConst("vs"); ev.stage = ESHPipelineStage_Vertex;
+	ev.name = CharString_createRefCStrConst("vs"); ev.stage = EGfxPipelineStage_Vertex;
 	ev.payloadSize = 16;
 
 	U16 binId = 0;
@@ -428,7 +428,7 @@ void Test_SHFileAddEntryNonRTPayloadRejected(Test *t) {
 
 	//Compute + payload
 	SHEntry ec = (SHEntry) { 0 };
-	ec.name = CharString_createRefCStrConst("cs"); ec.stage = ESHPipelineStage_Compute;
+	ec.name = CharString_createRefCStrConst("cs"); ec.stage = EGfxPipelineStage_Compute;
 	ec.groupX = ec.groupY = ec.groupZ = 4;
 	ec.payloadSize = 16;
 
@@ -447,15 +447,15 @@ void Test_SHFileAddEntryIOOnlyGraphics(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "comp", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "comp", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
-	info = makeBinaryInfo(ESHPipelineStage_RaygenExt, NULL, true);
+	info = makeBinaryInfo(EGfxPipelineStage_RaygenExt, NULL, true);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	//Compute with non-zero output
 	SHEntry ec = (SHEntry) { 0 };
-	ec.name = CharString_createRefCStrConst("cs"); ec.stage = ESHPipelineStage_Compute;
+	ec.name = CharString_createRefCStrConst("cs"); ec.stage = EGfxPipelineStage_Compute;
 	ec.groupX = ec.groupY = ec.groupZ = 4;
 	ec.outputsU64[0] = 0x01;
 
@@ -466,7 +466,7 @@ void Test_SHFileAddEntryIOOnlyGraphics(Test *t) {
 
 	//Raygen with non-zero input
 	SHEntry er = (SHEntry) { 0 };
-	er.name = CharString_createRefCStrConst("rgen"); er.stage = ESHPipelineStage_RaygenExt;
+	er.name = CharString_createRefCStrConst("rgen"); er.stage = EGfxPipelineStage_RaygenExt;
 	er.inputsU64[0] = 0x01;
 
 	U16 binId0 = 1;
@@ -484,12 +484,12 @@ void Test_SHFileAddEntryUniqueInputSemanticsLimit(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Vertex, "vs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name                 = CharString_createRefCStrConst("vsMain");
-	e.stage                = ESHPipelineStage_Vertex;
+	e.stage                = EGfxPipelineStage_Vertex;
 	e.uniqueInputSemantics = 16;
 
 	U16 binId = 0;
@@ -506,12 +506,12 @@ void Test_SHFileAddEntrySemanticNamesLessThanUniqueInputs(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Vertex, "vs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name                 = CharString_createRefCStrConst("vsMain");
-	e.stage                = ESHPipelineStage_Vertex;
+	e.stage                = EGfxPipelineStage_Vertex;
 	e.uniqueInputSemantics = 2;
 
 	U16 binId = 0;
@@ -533,7 +533,7 @@ void Test_SHFileAddEntryBinaryIdOutOfBounds(Test *t) {
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name   = CharString_createRefCStrConst("cs");
-	e.stage  = ESHPipelineStage_Compute;
+	e.stage  = EGfxPipelineStage_Compute;
 	e.groupX = e.groupY = e.groupZ = 4;
 
 	//Point to binary index 0 even though no binaries exist
@@ -555,12 +555,12 @@ void Test_SHFileEntryAndBinaryLinked(Test *t) {
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
 	//Add binary first, then entry that references it at index 0
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	Test_assert(t, "addBinary ok", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name = CharString_createRefCStrConst("csMain");
-	e.stage = ESHPipelineStage_Compute;
+	e.stage = EGfxPipelineStage_Compute;
 	e.groupX = 8; e.groupY = 8; e.groupZ = 1;
 	U16 binaryId = 0;
 	Test_assert(t, "createRef", ListU16_createRefConst(&binaryId, 1, &e.binaryIds, &t->err));

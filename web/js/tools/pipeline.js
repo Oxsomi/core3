@@ -36,6 +36,29 @@ function stagesTable(p) {
   </tbody></table>`;
 }
 
+/* The descriptor layout the pipeline compiles against, read out of the oiPL the file embeds for it.
+ * -1 means the device's default layout, which has no rows of its own to show. A row's source says who
+ * decided it, the same vocabulary the fields table uses. */
+function layoutTable(sp, p) {
+  const layout = p.layoutIndex >= 0 && sp.layouts ? sp.layouts[p.layoutIndex] : null;
+  if (!layout)
+    return `<div class="small text-body-secondary mb-2"><i class="bi bi-layout-text-sidebar"></i> Descriptor layout: the device's default</div>`;
+  const pair = (b, k) => b.bindings && b.bindings[k] ? `${b.bindings[k].space}:${b.bindings[k].binding}` : "-";
+  const extra = b => "samplerId" in b ? (b.samplerId ? `static sampler #${b.samplerId - 1}` : "dynamic sampler")
+    : "texture" in b ? `format ${b.texture.formatId}` : b.strideOrLength ? `${b.strideOrLength} B` : "";
+  const row = (b, label) => `<tr><td>${label ? `<span class="badge text-bg-secondary">${esc(label)}</span> ` : ""}${esc(b.name || "(unnamed)")}</td>
+      <td><span class="tname">${esc(b.type)}</span>${b.count !== 1 ? ` <span class="text-body-secondary">[${b.count || "unbounded"}]</span>` : ""}</td>
+      <td class="text-body-secondary">${esc(b.visibility.join(", ") || "-")}</td>
+      <td>${esc(pair(b, "spirv"))}</td><td>${esc(pair(b, "dxil"))}</td>
+      <td class="text-body-secondary">${esc(extra(b))}</td>
+      <td><span class="chip prov-${esc(b.source)}">${esc(b.source)}</span></td></tr>`;
+  return `<div class="small fw-semibold mb-1">Descriptor layout <span class="text-body-secondary fw-normal">(oiPL #${p.layoutIndex}, ${layout.bindings.length} rows, ${layout.samplers.length} static samplers)</span></div>
+  <table class="ox mb-2"><thead><tr><th>Name</th><th>Type</th><th>Visible to</th><th>SPIR-V set:binding</th><th>DXIL space:register</th><th></th><th>Source</th></tr></thead><tbody>
+    ${layout.bindings.map(b => row(b)).join("")}
+    ${layout.pushConstant ? row(layout.pushConstant, "push") : ""}
+  </tbody></table>`;
+}
+
 /* The -pso-set argument that reproduces every supplied field, by the exact path the report prints. */
 function psoSetArg(sp, pipelineIdx) {
   const p = sp && sp.pipelines[pipelineIdx];
@@ -114,6 +137,7 @@ function pipelineCard(sp, idx, opts) {
     </div>
     ${p.notes.map(n => `<div class="small text-warning mb-2"><i class="bi bi-info-circle"></i> ${esc(n)}</div>`).join("")}
     ${stagesTable(p)}
+    ${layoutTable(sp, p)}
     ${fieldsTable(p, idx, !!opts.editable)}
     ${opts.editable ? `<div class="small text-body-secondary mt-2">${exact ? "Every field is derived or supplied, so the CLI compiles this without <code>--assume-defaults</code>." : "The CLI <b>refuses</b> to compile while any field is assumed and lists exactly these, with why and what's legal; <code>--assume-defaults</code> proceeds and prints every assumption above the ISA."} Changing a value here is <code>SPFile_supply</code>: the CLI line above grows a <code>-pso-set</code> with every supplied field (the CLI's only override, taking any field by the path printed), and <code>-pso-input</code> replays a downloaded .oiSP. That's how you see what one PSO change does to the ISA.</div>` : ""}
   </div></div>`;

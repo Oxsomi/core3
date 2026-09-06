@@ -64,7 +64,7 @@ typedef struct StreamCursor {
 
 	Buffer cacheData;            //Temporary cache
 
-	U64 lastLocation;            //Last location the cache was fetched from
+	U64 lastLocation;             //Last location the cache was fetched from
 	U64 lastWriteLocation;        //If writable only, TODO: Maybe lastReadLocation to allow switching mode? (reduce overhead)
 
 	Bool readOnly;                //Only allowed to read or write once at a time
@@ -112,7 +112,7 @@ Bool StreamCursor_create(
 
 Bool StreamCursor_createWithCache(
 	StreamRef *stream,
-	Buffer *cache,                //Takes ownership of cache
+	Buffer *cache,                 //Takes ownership of cache
 	Bool writeOnly,                //By default a RW stream is readonly, needs to be made writeOnly
 	StreamCursor *cursor,
 	Error *e_rr
@@ -253,12 +253,12 @@ static inline Bool StreamCursor_appendBuffer(
 }
 
 #define STREAM_CURSOR_OP_IMPL(T)                                                                                        \
-static inline Bool StreamCursor_consume##T(StreamCursor *cursor, U64 *it, T *t, const Allocator *alloc, Error *e_rr) {    \
-	return StreamCursor_consume(cursor, it, t, sizeof(T), alloc, e_rr);                                                    \
-}                                                                                                                        \
+static inline Bool StreamCursor_consume##T(StreamCursor *cursor, U64 *it, T *t, const Allocator *alloc, Error *e_rr) {  \
+	return StreamCursor_consume(cursor, it, t, sizeof(T), alloc, e_rr);                                                 \
+}                                                                                                                       \
 																														\
 static inline Bool StreamCursor_append##T(StreamCursor *cursor, U64 *it, T t, const Allocator *alloc, Error *e_rr) {    \
-	return StreamCursor_append(cursor, it, &t, sizeof(T), alloc, e_rr);                                                    \
+	return StreamCursor_append(cursor, it, &t, sizeof(T), alloc, e_rr);                                                 \
 }
 
 STREAM_CURSOR_OP_IMPL(U64);

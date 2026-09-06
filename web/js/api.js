@@ -70,9 +70,18 @@
  *            blendAttachments, vertexBuffers, vertexAttributes}},                      // SPHeader
  *   pipelines: [{                                        // SPPipelineBase + its state
  *     name, type:'compute|graphics|raytracing', flags:['GeneratedVertexStage',..],      // ESPPipelineFlag
+ *     layoutIndex,                                       // into layouts, -1 = the device's default layout
  *     stages:[{stage, shaderFile, entrypoint, sourceHash, generated}],                  // SPStage
  *     fields:[{field, index, value, source:'derived|supplied|assumed', reason, domain, indexed}], // SPSpecialization + ESPField
  *     notes:[]
+ *   }],
+ *   layouts: [{                                          // every embedded oiPL (PLFile)
+ *     bindings:[{name, source, class, type, isWrite, isArray, count, visibility:[stage,..],
+ *                bindings:{spirv:{space,binding}, dxil:{space,binding}},
+ *                strideOrLength | samplerId | texture:{primitive, formatId}}],           // PLDescriptorBinding
+ *     samplers:[{filter, addressU, addressV, addressW, aniso, borderColor, comparisonFunction,
+ *                enableComparison, mipBias, minLod, maxLod}],                           // PLSamplerInfo
+ *     pushConstant: row | null
  *   }],
  *   bytes: Uint8Array
  * }

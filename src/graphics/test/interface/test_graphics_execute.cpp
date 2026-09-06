@@ -201,10 +201,9 @@ extern "C" void Test_graphicsDeviceMemory(oxc::c::Test *t, oxc::c::GraphicsDevic
 
 //Everything before this only ever submitted empty command lists, so the backend replay of clears, copies, scope
 // barriers and the initial data upload had never actually run on a device.
-//Results can't be asserted yet because pullRegion (the GPU to CPU readback the docs describe) isn't implemented,
-// so this verifies the recording executes and the device survives it, which is still the whole replay path.
+//pullRegion carries the results back, so the values the GPU wrote are asserted rather than just survived.
 
-static void Test_pullCallback(c::RefPtr *resource, void *context) {
+static void Test_pullCallback(void *resource, void *context) {
 	(void) resource;
 	++*(c::U32*)context;
 }
@@ -217,10 +216,11 @@ typedef struct TestTexturePull {
 	c::U64 len;
 } TestTexturePull;
 
-static void Test_texturePullCallback(c::RefPtr *resource, c::Buffer *data, void *context) {
+static void Test_texturePullCallback(void *resource, void *dataPtr, void *context) {
 
 	(void) resource;
 
+	const c::Buffer *data = (const c::Buffer*) dataPtr;
 	TestTexturePull *result = (TestTexturePull*) context;
 
 	++result->count;

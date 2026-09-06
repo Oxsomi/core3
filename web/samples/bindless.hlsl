@@ -16,9 +16,13 @@ PUSH_CONSTANT DrawData _draw;
 
 // vendor narrows which GPUs may run this binary (metadata, no extra compiles); binary narrows which
 // backends it is emitted for, ANDed with -compile-output.
+// The bindless sampler array is opt in: it owns a whole descriptor set on SPIR-V and forces a sampler
+// heap on both backends, so a shader that indexes samplers dynamically asks for it by name. A sampler
+// known at layout time is a static sampler instead and costs nothing.
 [[oxc::model("6.6")]]
 [[oxc::vendor("NV", "AMD")]]
 [[oxc::binary("spv", "dxil")]]
+[[oxc::extension("DynamicSamplers")]]
 [[oxc::stage("compute")]]
 [numthreads(64, 1, 1)]
 void main(U32 i : SV_DispatchThreadID) {

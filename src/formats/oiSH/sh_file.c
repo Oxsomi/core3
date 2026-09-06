@@ -51,7 +51,7 @@ void SHFile_print(const SHFile *a, Bool isVerbose, const Allocator *alloc) {
 
 	Bool anyBinaryType = false;
 
-	for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
+	for (U8 j = 0; j < EGfxBinaryType_Count; ++j) {
 
 		Bool has = false;
 
@@ -60,7 +60,7 @@ void SHFile_print(const SHFile *a, Bool isVerbose, const Allocator *alloc) {
 				has = true;
 
 		if (has) {
-			Log_debug(alloc, ELogOptions_None, " %s", ESHBinaryType_names[j]);
+			Log_debug(alloc, ELogOptions_None, " %s", EGfxBinaryType_names[j]);
 			anyBinaryType = true;
 		}
 	}
@@ -126,7 +126,7 @@ Bool SHFile_isComplete(const SHFile *shFile) {
 		const SHBinaryInfo *binary = &shFile->binaries.ptr[i];
 		Bool hasBinary = false;
 
-		for(U64 j = 0; j < ESHBinaryType_Count; ++j)
+		for(U64 j = 0; j < EGfxBinaryType_Count; ++j)
 			if(Buffer_length(binary->binaries[j])) {
 				hasBinary = true;
 				break;
@@ -161,7 +161,7 @@ void SHFile_free(SHFile *shFile, const Allocator *alloc) {
 		ListSHUniformRuntime_freeUnderlying(&binary->identifier.uniforms, alloc);
 		ListU8_free(&binary->identifier.uniformData, alloc);
 
-		for(U64 i = 0; i < ESHBinaryType_Count; ++i)
+		for(U64 i = 0; i < EGfxBinaryType_Count; ++i)
 			Buffer_free(&binary->binaries[i], alloc);
 	}
 
@@ -235,8 +235,8 @@ static Bool SHValue_stringifyOne(
 
 				switch (stride) {
 					default:                    v = F16_castF64(value->vu16[*counter]);        break;
-					case EDataTypeStride_32:    v = value->vf32[*counter];                    break;
-					case EDataTypeStride_64:    v = value->vf64[*counter];                    break;
+					case EDataTypeStride_32:    v = value->vf32[*counter];                     break;
+					case EDataTypeStride_64:    v = value->vf64[*counter];                     break;
 				}
 
 				gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "%g", v));
@@ -248,7 +248,7 @@ static Bool SHValue_stringifyOne(
 				I64 vi;
 
 				switch (stride) {
-					default:                    vi = value->vi8[*counter];    break;
+					default:                    vi = value->vi8[*counter];     break;
 					case EDataTypeStride_16:    vi = value->vi16[*counter];    break;
 					case EDataTypeStride_32:    vi = value->vi32[*counter];    break;
 					case EDataTypeStride_64:    vi = value->vi64[*counter];    break;
@@ -267,7 +267,7 @@ static Bool SHValue_stringifyOne(
 				U64 v;
 
 				switch (stride) {
-					default:                    v = value->vu8[*counter];    break;
+					default:                    v = value->vu8[*counter];     break;
 					case EDataTypeStride_16:    v = value->vu16[*counter];    break;
 					case EDataTypeStride_32:    v = value->vu32[*counter];    break;
 					case EDataTypeStride_64:    v = value->vu64[*counter];    break;

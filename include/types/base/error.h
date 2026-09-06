@@ -105,17 +105,17 @@ typedef struct Error {
 //Error handling; functions return Bool success and set an optional Error.
 //(void) 0 is a trick to require a ; after the statement
 
-#define gotoIfError3(x, ...) {        \
-	if(!(__VA_ARGS__)) {            \
+#define gotoIfError3(x, ...) {       \
+	if(!(__VA_ARGS__)) {             \
 		s_uccess = false;            \
-		goto x;                        \
+		goto x;                      \
 	}                                \
 } (void) 0
 
-#define retError(x, ...) {            \
+#define retError(x, ...) {           \
 	if(e_rr) *e_rr = __VA_ARGS__;    \
 	s_uccess = false;                \
-	goto x;                            \
+	goto x;                          \
 } (void) 0
 
 impl void Error_captureStackTrace(void **stackTrace, U8 stackSize, U8 skip);    //May fail if (stackSize + skip + 1 > 128)

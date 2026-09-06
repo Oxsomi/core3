@@ -29,7 +29,7 @@ void Test_fixedPoint(Test *test) {
 
 	{
 		const FP37f4 a = FP37f4_fromDouble(123.25);            //123.25
-		const FP37f4 b = FP37f4_fromDouble(0.75);            //0.75
+		const FP37f4 b = FP37f4_fromDouble(0.75);              //0.75
 
 		Test_assert(test, "FP37f4_fromDouble", a == (FP37f4)(0b0100 | (123 << 4)));
 		Test_assert(test, "FP37f4_toDouble", FP37f4_toDouble(a) == 123.25);
@@ -44,7 +44,7 @@ void Test_fixedPoint(Test *test) {
 	Test_setModule(test, "FP46f6 (fixed point)");
 
 	{
-		const FP46f6 a = FP46f6_fromDouble(1000000.0625);    //1e6 + 1/16
+		const FP46f6 a = FP46f6_fromDouble(1000000.0625);      //1e6 + 1/16
 		const FP46f6 b = FP46f6_fromDouble(0.9375);            //15/16
 
 		Test_assert(test, "FP46f6_fromDouble", a == (FP46f6)(0b000100 | (1000000 << 6)));

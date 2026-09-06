@@ -24,7 +24,7 @@ const LIB_STAGES = new Set(["raygeneration", "callable", "miss", "closesthit", "
 const STAGE_PROFILE = { vertex: "vs", pixel: "ps", geometry: "gs", hull: "hs", domain: "ds", compute: "cs", mesh: "ms", task: "as" };
 
 const EXTENSIONS = [                                                 // ESHExtension_names
-  "F64", "I64", "16BitTypes", "AtomicI64", "AtomicF32", "AtomicF64",
+  "F64", "I64", "16BitTypes", "AtomicI64", "AtomicF32", "AtomicF64", "DynamicSamplers",
   "SubgroupArithmetic", "SubgroupShuffle", "RayQuery", "RayMicromapOpacity", "RayTriPosition",
   "RayMotionBlur", "RayReorder", "Multiview", "ComputeDeriv", "PAQ", "MeshTaskTexDeriv",
   "WriteMSTexture", "Bindless", "UnboundArraySize", "SubgroupOperations",

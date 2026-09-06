@@ -1,14 +1,14 @@
 ; gfx1201  SGPRs 5  VGPRs 5  code 52 B  instrs 12  scratch 0  lds 0
 _amdgpu_ps_main:
-	s_cvt_f32_u32 s0, s1                                       // 000000000000: BE806501
-	s_cvt_f32_u32 s1, s2                                       // 000000000004: BE816502
-	v_mov_b32_e32 v4, 1.0                                      // 000000000008: 7E0802F2
-	s_delay_alu instid0(SALU_CYCLE_1) | instskip(NEXT) | instid1(SALU_CYCLE_1)// 00000000000C: BF870499
-	v_rcp_iflag_f32_e32 v0, s0                                 // 000000000010: 7E005600
-	v_rcp_iflag_f32_e32 v1, s1                                 // 000000000014: 7E025601
-	s_delay_alu instid0(TRANS32_DEP_2) | instskip(NEXT) | instid1(TRANS32_DEP_1)// 000000000018: BF870296
-	v_mul_f32_e32 v0, v2, v0                                   // 00000000001C: 10000102
-	v_mul_f32_e32 v1, v3, v1                                   // 000000000020: 10020303
-	v_mov_b32_e32 v2, 0                                        // 000000000024: 7E040280
-	export mrt0, v0, v1, v2, v4 done                           // 000000000028: F800080F 04020100
-	s_endpgm                                                   // 000000000030: BFB00000
+	s_cvt_f32_u32 s0, s1                                       // 000000000000
+	s_cvt_f32_u32 s1, s2                                       // 000000000004
+	v_mov_b32_e32 v4, 1.0                                      // 000000000008
+	s_delay_alu instid0(SALU_CYCLE_1) | instskip(NEXT) | instid1(SALU_CYCLE_1)// 00000000000C
+	v_rcp_iflag_f32_e32 v0, s0                                 // 000000000010
+	v_rcp_iflag_f32_e32 v1, s1                                 // 000000000014
+	s_delay_alu instid0(TRANS32_DEP_2) | instskip(NEXT) | instid1(TRANS32_DEP_1)// 000000000018
+	v_mul_f32_e32 v0, v2, v0                                   // 00000000001C
+	v_mul_f32_e32 v1, v3, v1                                   // 000000000020
+	v_mov_b32_e32 v2, 0                                        // 000000000024
+	export mrt0 v0, v1, v2, v4 done                            // 000000000028
+	s_endpgm                                                   // 000000000030

@@ -39,7 +39,7 @@ static inline I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 		case 7:        return _mm_aeskeygenassist_si128(a, 0x40);
 		case 8:        return _mm_aeskeygenassist_si128(a, 0x80);
 		case 9:        return _mm_aeskeygenassist_si128(a, 0x1B);
-		default:    return _mm_aeskeygenassist_si128(a, 0x36);
+		default:       return _mm_aeskeygenassist_si128(a, 0x36);
 	}
 }
 

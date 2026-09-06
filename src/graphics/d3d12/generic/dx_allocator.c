@@ -60,7 +60,11 @@ D3D12_HEAP_DESC getDxHeapDesc(
 			.Type =
 				readback ? D3D12_HEAP_TYPE_READBACK :
 				(forceCpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_CUSTOM : D3D12_HEAP_TYPE_DEFAULT)),
-			.MemoryPoolPreference = isGpu && hasReBAR ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0,
+			//ReBAR is a window for CPU WRITES into video memory, so a readback heap has no business in L1: reading
+			// it back wants WRITE_BACK, which is only legal beside L0, and the two together are refused outright
+			// rather than downgraded. Every heap here becomes CUSTOM below, so nothing else catches it.
+
+			.MemoryPoolPreference = isGpu && hasReBAR && !readback ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0,
 			.CPUPageProperty = readback ? D3D12_CPU_PAGE_PROPERTY_WRITE_BACK : D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
 		},
 		.Flags = D3D12_HEAP_FLAG_CREATE_NOT_ZEROED,        //Equal to vulkan behavior, clear manually

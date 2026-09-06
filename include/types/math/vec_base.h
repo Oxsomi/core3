@@ -23,12 +23,12 @@
 #pragma once
 #include "types/base/types.h"
 
-#define NONE_OP_SELF_T(T, N, ...)            \
+#define NONE_OP_SELF_T(T, N, ...)           \
 											\
-	T res = { 0 };                            \
+	T res = { 0 };                          \
 											\
-	for (U8 i = 0; i < N; ++i)                \
-		T##_setRef(&res, i, (__VA_ARGS__));    \
+	for (U8 i = 0; i < N; ++i)              \
+		T##_setRef(&res, i, (__VA_ARGS__)); \
 											\
 	return res
 

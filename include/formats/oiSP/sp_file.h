@@ -22,6 +22,7 @@
 
 #pragma once
 #include "formats/oiSP/sp_state.h"
+#include "formats/oiPL/pl_file.h"
 #include "formats/oiDL/dl_file.h"
 #include "formats/oiSH/sh_entries.h"
 #include "types/container/list.h"
@@ -51,11 +52,13 @@ typedef enum ESPPipelineType {
 // compiled ISA and an invented value produces a real but unrelated disassembly.
 //Serializing this is the point of keeping it: a stored pipeline still knows which of its fields nobody chose.
 
+//The values mirror EPLSource so a layout row's tag and a field's tag mean the same thing everywhere.
+
 typedef enum ESPFieldSource {
-	ESPFieldSource_Derived,
-	ESPFieldSource_Supplied,
-	ESPFieldSource_Assumed,
-	ESPFieldSource_Count
+	ESPFieldSource_Derived  = EPLSource_Derived,
+	ESPFieldSource_Supplied = EPLSource_Supplied,
+	ESPFieldSource_Assumed  = EPLSource_Assumed,
+	ESPFieldSource_Count    = EPLSource_Count
 } ESPFieldSource;
 
 //Every field of a pipeline that reflection can't prove gets an id, so one vocabulary serves the specialization
@@ -119,6 +122,34 @@ typedef enum ESPField {
 	ESPField_MaxRecursionDepth,
 	ESPField_RaytracingFlags,           //EPipelineRaytracingFlags
 
+	//Descriptor layout (any pipeline kind); indexed fields index the pipeline layout's own binding/sampler rows.
+	//These only exist when the pipeline carries a layout (layoutIndex != U32_MAX): the device's default layout
+	//isn't described by the file, so there is nothing there to address.
+
+	ESPField_LayoutBindingType,         //EGfxRegisterType plus its mask bits
+	ESPField_LayoutBindingCount,
+	ESPField_LayoutBindingSpaceSpirv,   //U32_MAX means the register doesn't exist for that api
+	ESPField_LayoutBindingRegisterSpirv,
+	ESPField_LayoutBindingSpaceDxil,
+	ESPField_LayoutBindingRegisterDxil,
+	ESPField_LayoutBindingVisibility,   //Bit mask of EGfxPipelineStage
+	ESPField_LayoutBindingData,         //The class typed slot: stride, cbuffer size, texture format or sampler id
+
+	ESPField_LayoutPushConstantSize,
+	ESPField_LayoutPushConstantVisibility,
+
+	ESPField_LayoutSamplerFilter,       //ESamplerFilterMode
+	ESPField_LayoutSamplerAddressU,     //ESamplerAddressMode
+	ESPField_LayoutSamplerAddressV,
+	ESPField_LayoutSamplerAddressW,
+	ESPField_LayoutSamplerAniso,
+	ESPField_LayoutSamplerBorder,       //ESamplerBorderColor
+	ESPField_LayoutSamplerCompareOp,    //ECompareOp
+	ESPField_LayoutSamplerCompareEnable,
+	ESPField_LayoutSamplerMipBias,      //F16 bits in the low half
+	ESPField_LayoutSamplerMinLod,       //F16 bits in the low half
+	ESPField_LayoutSamplerMaxLod,       //F16 bits in the low half
+
 	ESPField_Count
 
 } ESPField;
@@ -141,6 +172,10 @@ Bool ESPField_parsePath(CharString path, ESPField *field, U8 *index);
 
 const C8 *ESPField_reason(ESPField field);
 const C8 *ESPField_domain(ESPField field);
+
+//The widest value a field stores; SPFile_supply refuses anything above it rather than truncating.
+
+U32 ESPField_maxValue(ESPField field);
 
 //One field the caller has to specialize, carrying the value that would be used and where it came from.
 
@@ -167,7 +202,7 @@ typedef struct SPStage {
 
 	U32 sourceHash;                             //SHFile.sourceHash when the pipeline was made, 0 if unknown
 
-	U8 stage;                                   //ESHPipelineStage
+	U8 stage;                                   //EGfxPipelineStage
 	U8 padding[3];
 
 } SPStage;
@@ -197,6 +232,13 @@ typedef struct SPPipelineBase {
 	U32 specializationCount;
 
 	U32 stateIndex;                             //Into graphicsStates or raytracingStates; unused by compute
+
+	//Into layouts, U32_MAX when the pipeline takes the device's default one.
+	//The layout is part of what the shader compiles into, not just a validation gate: descriptor set pointers and
+	// push constants arrive in user SGPRs and eat the root signature's budget, so two layouts that both accept a
+	// shader can still produce different ISA.
+
+	U32 layoutIndex;
 
 } SPPipelineBase;
 
@@ -363,6 +405,11 @@ typedef struct SPFile {
 	ListSPGraphicsState graphicsStates;
 	ListSPRaytracingState raytracingStates;
 
+	//Every pipeline layout as its own oiPL, indexed by SPPipelineBase.layoutIndex, so a layout shared by
+	// several pipelines is stored once and one entry can be lifted out or dropped in whole.
+
+	ListPLFile layouts;
+
 	ESPSettingsFlags flags;
 	U32 padding;
 	U64 hash;                    //Refreshed by SPFile_finalize
@@ -391,6 +438,8 @@ typedef struct SPStageRef {
 
 //Derives a pipeline from the given stages, filling everything reflection can prove and recording the rest as
 // specializations holding the value that would be used, then appends it to the file.
+//The descriptor layout is derived the same way (see SPPipelineBase.layoutIndex); excludedRegisters names the
+// registers the runtime owns, and NULL means none are, which only a caller without a device should pass.
 //A mix of compute, graphics and ray tracing stages in one call is an error, since that can't be one pipeline, and so
 // is the same stage kind twice.
 //shaderNames is optional and parallel to `files`: the name each file is stored under, so the pipeline can be resolved
@@ -403,6 +452,7 @@ Bool SPFile_derivePipeline(
 	CharString name,                          //Optional pipeline name
 	const SPStageRef *stages,
 	U8 stageCount,
+	const ListCharString *excludedRegisters,
 	const Allocator *alloc,
 	U32 *pipelineId,
 	Error *e_rr
@@ -492,6 +542,8 @@ typedef struct SPHeader {
 	U32 vertexBufferCount;              //Only the buffers that carry a stride or instance rate are stored
 
 	U32 vertexAttributeCount;           //Only the input locations that carry a format are stored
+
+	U32 layoutCount;                    //oiPL subfiles, referenced by SPPipelineBase.layoutIndex
 
 } SPHeader;
 

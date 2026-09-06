@@ -567,7 +567,7 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 				!GraphicsDeviceRef_allocateDescriptorBindless(
 					deviceRef,
 					bindlessDescriptorTable,
-					texture.type == ETextureType_2D ? ESHRegisterType_Texture2D : ESHRegisterType_Texture3D,
+					texture.type == ETextureType_2D ? EGfxRegisterType_Texture2D : EGfxRegisterType_Texture3D,
 					0,
 					false,
 					&textureDesc,
@@ -582,8 +582,8 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 				!GraphicsDeviceRef_allocateDescriptorBindless(
 					deviceRef,
 					bindlessDescriptorTable,
-					(texture.type == ETextureType_2D ? ESHRegisterType_Texture2D : ESHRegisterType_Texture3D) |
-					ESHRegisterType_IsWrite,
+					(texture.type == ETextureType_2D ? EGfxRegisterType_Texture2D : EGfxRegisterType_Texture3D) |
+					EGfxRegisterType_IsWrite,
 					0,
 					false,
 					&textureDesc,
