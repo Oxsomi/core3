@@ -330,11 +330,17 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 					c::Test_assert(t, "compactedDespiteTlas", blas.data()->base.isCompacted);
 					c::Test_assert(t, "compactedDespiteTlasShrank", asSize(blas) <= before);
 
+					//A driver is allowed to report no saving, in which case no copy was recorded and the
+					// structure never moved. Marking and the refusals below track exactly that: they hold when
+					// the structure moved, and must NOT fire when it stayed where it was.
+
+					const c::Bool moved = asSize(blas) < before;
+
 					//The TLAS that adopted it is marked, precisely: only structures it actually references
 					// make it stale, so an unrelated TLAS is never dragged into a refill.
 
 					c::Test_assert(t, "adoptingTlasMarkedStale",
-						(tlas.data()->base.flagsExt & (c::U8) c::ETLASFlag_AddressesStale) != 0
+						((tlas.data()->base.flagsExt & (c::U8) c::ETLASFlag_AddressesStale) != 0) == moved
 					);
 
 					//The submit AFTER the compaction is refused while the TLAS still holds the old address,
@@ -349,7 +355,9 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 							c::Test_assert(t, "beginIdle", idle.begin(true, e_rr)) &&
 							c::Test_assert(t, "endIdle", idle.end(e_rr))
 						)
-							c::Test_assert(t, "submitRefusedWhileTlasStale", !dev.submit({ &idle }, {}, 0, 0, nullptr));
+							c::Test_assert(
+								t, "submitRefusedWhileTlasStale", dev.submit({ &idle }, {}, 0, 0, nullptr) != moved
+							);
 					}
 
 					//A list that updates the TLAS is accepted no matter when it was RECORDED, because the gate
@@ -361,7 +369,9 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 						gfx::CommandList discarded;
 
 						if (
-							c::Test_assert(t, "createDiscarded", dev.createCommandList(c::KIBI, 32, 32, discarded, true, e_rr)) &&
+							c::Test_assert(
+								t, "createDiscarded", dev.createCommandList(c::KIBI, 32, 32, discarded, true, e_rr)
+							) &&
 							c::Test_assert(t, "beginDiscarded", discarded.begin(true, e_rr))
 						) {
 							{
@@ -380,11 +390,15 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 						gfx::CommandList unrelated;
 
 						if (
-							c::Test_assert(t, "createUnrelated", dev.createCommandList(c::KIBI, 32, 32, unrelated, true, e_rr)) &&
+							c::Test_assert(
+								t, "createUnrelated", dev.createCommandList(c::KIBI, 32, 32, unrelated, true, e_rr)
+							) &&
 							c::Test_assert(t, "beginUnrelated", unrelated.begin(true, e_rr)) &&
 							c::Test_assert(t, "endUnrelated", unrelated.end(e_rr))
 						)
-							c::Test_assert(t, "recordingAloneDoesNotClear", !dev.submit({ &unrelated }, {}, 0, 0, nullptr));
+							c::Test_assert(
+								t, "recordingAloneDoesNotClear", dev.submit({ &unrelated }, {}, 0, 0, nullptr) != moved
+							);
 
 						//And submitting the list that DOES update it is accepted, then clears the mark.
 
@@ -504,6 +518,8 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 			const c::TLASInstance instA = instanceOf(blasA);
 			const c::TLASInstance instB = instanceOf(blasB);
 
+			const c::U64 beforeB = asSize(blasB);
+
 			if (
 				c::Test_assert(t, "createTlasA", dev.createTlas(
 					c::ERTASBuildFlags_DefaultTLAS, &instA, 1, "Disjoint TLAS A", tlasA, true, e_rr
@@ -515,8 +531,9 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 			) {
 
 				const c::U8 stale = (c::U8) c::ETLASFlag_AddressesStale;
+				const c::Bool movedB = asSize(blasB) < beforeB;
 
-				c::Test_assert(t, "disjointTlasBMarked",  (tlasB.data()->base.flagsExt & stale) != 0);
+				c::Test_assert(t, "disjointTlasBMarked", ((tlasB.data()->base.flagsExt & stale) != 0) == movedB);
 				c::Test_assert(t, "disjointTlasAUntouched", !(tlasA.data()->base.flagsExt & stale));
 
 				//And the TLAS that was not marked does not need rebuilding to keep submitting.

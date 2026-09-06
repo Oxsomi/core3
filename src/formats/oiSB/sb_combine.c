@@ -112,16 +112,20 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 		U16 oldId = U16_MAX;
 
 		{
+			//The name pool holds the struct names first and the variable names after them, so a variable's
+			//name id is structs.length + its index and the search range is the second half of the pool.
+			//j is therefore a name id throughout and only becomes a variable id once, below.
+
 			U64 j = a->structs.length, k = j + a->vars.length;
 
 			for (; j < k; ++j) {        //TODO: HashMap
 
-				j = DLFile_findLoadedString(&a->names, j, a->vars.length, &b->names.entryStrings.ptr[i]);
+				j = DLFile_findLoadedString(&a->names, j, k, &name);
 
 				if (j >= k)
 					break;
 
-				if (combined->vars.ptr[j].parentId == parent)
+				if (combined->vars.ptr[j - a->structs.length].parentId == parent)
 					break;
 			}
 

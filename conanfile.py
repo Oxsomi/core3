@@ -244,7 +244,7 @@ class oxc3(ConanFile):
 			# feeds a Windows sanitized DXC unsanitized tablegen binaries via user.dxc:tablegen_dir (the same
 			# split the android/web cross builds use). That conf is not part of the package id, so the graph
 			# still just asks for a sanitized DXC here regardless of where its tablegen came from.
-			self.requires("dxc/2026.08.23", options=sanitized)
+			self.requires("dxc/2026.09.06", options=sanitized)
 			self.requires("spirv_reflect/2026.08.17", options=sanitized)
 
 			# The AMD offline compilers RGA vendors (amdllpc, amdgpu-dis): offline SPIR-V to AMD ISA for the isa
@@ -354,6 +354,12 @@ class oxc3(ConanFile):
 
 		elif platform == "linux" and str(self.settings.compiler) != "gcc":
 			archName += "_clang"
+
+		# The same tag CMakeLists appends (OxC3OutputTag), so package() collects the flavor this build
+		# produced rather than whatever another configuration of the toolchain left in the untagged tree.
+		tag = self.conf.get("tools.cmake.cmaketoolchain:extra_variables", default={}, check_type=dict).get("OxC3OutputTag", "")
+		if tag:
+			archName += f"_{tag}"
 
 		input_dir        = os.path.join(out_root, archName)
 		OxC3_package_dir = os.path.join(out_root, "packages")

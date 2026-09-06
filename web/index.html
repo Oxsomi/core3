@@ -4,10 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>shader.oxsomi.com, prototype</title>
+<meta name="description" content="OxC3 shader playground: compile HLSL to SPIR-V and DXIL in the browser, inspect reflection, symbols and pipelines, map disassembly back to source.">
+<meta property="og:title" content="OxC3 shader playground">
+<meta property="og:description" content="Compile HLSL to SPIR-V and DXIL in the browser with the real OxC3 compiler; reflection, symbol AST, pipeline state and AMD ISA inspection included.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#212529">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23212529'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='14' font-weight='bold' fill='%232dd4bf' text-anchor='middle'%3EC3%3C/text%3E%3C/svg%3E">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/material-darker.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/hint/show-hint.min.css" rel="stylesheet">
 <link href="css/app.css" rel="stylesheet">
 </head>
 <body>
@@ -19,8 +26,16 @@
     <button id="shareBtn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-share"></i> Share</button>
     <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="offcanvas" data-bs-target="#syntaxRef"><i class="bi bi-braces"></i> Syntax</button>
     <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="offcanvas" data-bs-target="#cliRef"><i class="bi bi-terminal"></i> CLI map</button>
-    <a href="#" class="btn btn-sm btn-outline-secondary"><i class="bi bi-tools"></i> tool.oxsomi.com</a>
-    <button id="themeBtn" class="btn btn-sm btn-outline-secondary" title="Toggle theme"><i class="bi bi-moon-stars"></i></button>
+    <span class="btn btn-sm btn-outline-secondary disabled" aria-disabled="true"
+      title="not up yet: this page is the only OxC3 tooling on the web so far"><i class="bi bi-tools"></i> tool.oxsomi.com</span>
+    <div class="dropdown">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+        title="Appearance"><i class="bi bi-palette"></i></button>
+      <ul id="appearanceMenu" class="dropdown-menu dropdown-menu-end" style="min-width:230px"></ul>
+    </div>
+    <a class="btn btn-sm btn-outline-secondary" href="https://github.com/Oxsomi/core3/tree/main/web"
+      target="_blank" rel="noopener" title="Source and issues: github.com/Oxsomi/core3 (this page lives in web/)">
+      <i class="bi bi-github"></i></a>
   </div>
 </nav>
 
@@ -46,6 +61,8 @@
         <input class="form-check-input" type="checkbox" id="optRefl"><label class="form-check-label small" for="optRefl">Reflection only</label></div>
       <div class="form-check form-switch mb-0" title="--debug: embed debug info (-Zi -Qembed_debug / -fspv-debug=vulkan-with-source)">
         <input class="form-check-input" type="checkbox" id="optDebug"><label class="form-check-label small" for="optDebug">--debug</label></div>
+      <div class="form-check form-switch mb-0" title="-Od: keep the codegen unoptimized, so --debug's line mapping survives per statement">
+        <input class="form-check-input" type="checkbox" id="optNoOpt"><label class="form-check-label small" for="optNoOpt">--no-opt</label></div>
       <div class="form-check form-switch mb-0" title="--split: one lean oiSH per backend (x.spv.oiSH + x.dxil.oiSH) instead of one bulky file">
         <input class="form-check-input" type="checkbox" id="optSplit"><label class="form-check-label small" for="optSplit">--split</label></div>
       <div class="form-check form-switch">
@@ -73,20 +90,22 @@
     <!-- OISH-mode controls -->
     <div id="oishTools" class="d-flex flex-wrap align-items-center gap-3 d-none">
       <button id="loadOishBtn" class="btn btn-sm btn-outline-secondary" title="file header / file data on an oiSH (compiled shader), oiSR (frontend symbol AST) or oiSP (pipeline state with provenance)"><i class="bi bi-upload"></i> Load .oiSH / .oiSR / .oiSP</button>
-      <div class="d-flex align-items-center gap-2"><label class="text-body-secondary small mb-0">Diff A</label>
-        <select id="diffA" class="form-select form-select-sm" style="width:auto"></select></div>
-      <div class="d-flex align-items-center gap-2"><label class="text-body-secondary small mb-0">B</label>
-        <select id="diffB" class="form-select form-select-sm" style="width:auto"></select></div>
-      <button id="combineBtn" class="btn btn-sm btn-outline-secondary"
-        title="OxC3 file combine -format oiSH -input A -input2 B -output C — merge two lean oiSH into one (same sources, includes and compiler settings required)">
-        <i class="bi bi-union"></i> Combine A+B</button>
+      <div id="oishDiffBar" class="d-flex flex-wrap align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2"><label class="text-body-secondary small mb-0">Diff A</label>
+          <select id="diffA" class="form-select form-select-sm" style="width:auto"></select></div>
+        <div class="d-flex align-items-center gap-2"><label class="text-body-secondary small mb-0">B</label>
+          <select id="diffB" class="form-select form-select-sm" style="width:auto"></select></div>
+        <button id="combineBtn" class="btn btn-sm btn-outline-secondary"
+          title="OxC3 file combine -format oiSH -input A -input2 B -output C: merge two lean oiSH into one (same sources, includes and compiler settings required)">
+          <i class="bi bi-union"></i> Combine A+B</button>
+      </div>
     </div>
 
     <!-- SPV/DXIL-mode controls -->
     <div id="binsTools" class="d-flex flex-wrap align-items-center gap-3 d-none">
       <button id="loadBinBtn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-upload"></i> Load .spv / .dxil</button>
-      <span class="small text-body-secondary" title="a bare binary is reflected from its bytes into a one-binary document, so Reflection, disassembly, ISA, the pipeline and Diff apply to it; the oiSH tab assembles it into an oiSH"><i class="bi bi-info-circle"></i> standalone binaries — reflected from the bytes · shader disassemble / assemble · isa disassemble · assemble into oiSH</span>
-      <div class="d-flex align-items-center gap-2 ms-auto"><label class="text-body-secondary small mb-0">Diff A</label>
+      <span class="small text-body-secondary" title="a bare binary is reflected from its bytes into a one-binary document, so Reflection, disassembly, ISA, the pipeline and Diff apply to it; the oiSH tab assembles it into an oiSH"><i class="bi bi-info-circle"></i> standalone binaries: reflected from the bytes · shader disassemble / assemble · isa disassemble · assemble into oiSH</span>
+      <div id="binsDiffBar" class="d-flex align-items-center gap-2 ms-auto"><label class="text-body-secondary small mb-0">Diff A</label>
         <select id="diffA2" class="form-select form-select-sm" style="width:auto"></select>
         <label class="text-body-secondary small mb-0">B</label>
         <select id="diffB2" class="form-select form-select-sm" style="width:auto"></select></div>
@@ -97,12 +116,30 @@
   </div>
 </div>
 
+<!-- Only shown when the module didn't load: everything below js/api.js is fabricated then, and the
+     difference is invisible until a result is wrong (see renderMockBanner). -->
+<div id="mockBanner" class="alert alert-warning alert-dismissible rounded-0 border-0 border-bottom mb-0 py-2 px-3 small d-none" role="alert">
+  <span id="mockBannerText"></span>
+  <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+
 <div class="app-main">
 
   <!-- file rail -->
   <div class="rail">
-    <div class="rail-grp"><span id="railTitle">Project</span>
+    <div class="rail-grp">
+      <div class="dropdown" style="min-width:0">
+        <button id="wsBtn" class="btn btn-sm btn-link p-0 text-body-secondary dropdown-toggle text-truncate"
+          data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Workspaces: every project on this page,
+saved in this browser. Share links open as their own workspace."
+          style="max-width:150px; font-size:inherit; text-transform:inherit; letter-spacing:inherit">
+          <span id="railTitle">Project</span></button>
+        <ul id="wsMenu" class="dropdown-menu" style="min-width:260px"></ul>
+      </div>
       <span class="ms-auto d-flex gap-2">
+        <button id="upProject" class="btn btn-sm btn-link p-0 text-body-secondary"
+          title="Upload files: .hlsl/.hlsli sources or an .oiCA project snapshot. Dropping them on the project works too."><i class="bi bi-upload"></i></button>
+        <input id="upProjectFile" type="file" multiple hidden>
         <button id="addFolder" class="btn btn-sm btn-link p-0 text-body-secondary" title="New folder"><i class="bi bi-folder-plus"></i></button>
         <button id="addFile" class="btn btn-sm btn-link p-0 text-body-secondary" title="New file"><i class="bi bi-file-earmark-plus"></i></button>
       </span></div>
@@ -114,9 +151,17 @@
   <!-- editor (compile mode) -->
   <div class="editor-pane" id="editorPane">
     <div class="px-3 py-1 border-bottom bg-body-tertiary d-flex align-items-center flex-shrink-0">
-      <span class="small text-body-secondary"><i class="bi bi-file-earmark-code"></i> <span id="fileName">lighting.hlsl</span></span>
-      <span id="roBadge" class="badge text-bg-secondary ms-2 ro-badge d-none"><i class="bi bi-lock"></i> builtin · read-only</span>
-      <span class="ms-auto small text-body-secondary">HLSL</span>
+      <div id="editorTabs" class="etabs"></div>
+      <span id="roBadge" class="badge text-bg-secondary ms-2 ro-badge d-none flex-shrink-0"><i class="bi bi-lock"></i> builtin · read-only</span>
+      <span class="ms-auto d-flex align-items-center gap-2 flex-shrink-0 ps-2 small">
+        <span class="text-body-secondary"
+          title="Which permutation IntelliSense parses as (hover, squiggles, the Symbols tree). The default enables every extension with no defines, so nothing errors; following one of the compile's binaries uses ITS defines, uniforms and extensions, so half, PAQ and preprocessor branches mean what they mean in that binary.">
+          <i class="bi bi-eye"></i></span>
+        <select id="reflectFollow" class="form-select form-select-sm w-auto" style="max-width:340px">
+          <option value="">IntelliSense: all extensions, no defines</option>
+        </select>
+        <span class="text-body-secondary">HLSL</span>
+      </span>
     </div>
     <div class="pane-body p-0"><textarea id="src"></textarea></div>
   </div>
@@ -155,7 +200,7 @@
       <div class="fail-overlay" id="failOverlay" style="display:none">
         <div><i class="bi bi-x-octagon-fill text-danger fs-1"></i>
           <div class="mt-2 fw-semibold">Compilation failed</div>
-          <div class="text-body-secondary small">No binary produced — see <a href="#" class="st-link" id="failProblemsLink">Problems</a>.</div></div>
+          <div class="text-body-secondary small">No binary produced: see <a href="#" class="st-link" id="failProblemsLink">Problems</a>.</div></div>
       </div>
 
       <div class="tab-pane fade show active h-100" id="p-refl"><div id="reflView"></div></div>
@@ -174,7 +219,7 @@
 
       <div class="tab-pane fade h-100" id="p-cmd">
         <div class="px-3 py-2 border-bottom bg-body-tertiary small text-body-secondary">
-          The CLI line this run maps to, and the DXC invocation OxC3 derives per compile group — from each entrypoint's
+          The CLI line this run maps to, and the DXC invocation OxC3 derives per compile group: from each entrypoint's
           <code>[shader]</code>/<code>[[oxc::stage]]</code>, <code>[[oxc::model]]</code>, extensions and the requested targets.
           <code>[[oxc::stage]]</code> entries compile standalone with <code>-E</code>; <code>[shader]</code> entries share one <code>lib_6_x</code> compile.
         </div>
@@ -223,7 +268,8 @@
   <div class="d-flex align-items-center px-3 py-1 bg-body-tertiary border-bottom flex-shrink-0">
     <span class="small fw-semibold"><i class="bi bi-exclamation-diamond"></i> Problems</span>
     <span id="probCount" class="small text-body-secondary ms-2">no problems</span>
-    <button class="btn btn-sm btn-link ms-auto p-0 text-body-secondary" id="probToggle"><i class="bi bi-chevron-down"></i></button>
+    <button class="btn btn-sm btn-link ms-auto p-0 text-body-secondary" id="probCopy" title="copy every problem as file:line:col: severity: message"><i class="bi bi-clipboard"></i></button>
+    <button class="btn btn-sm btn-link p-0 text-body-secondary" id="probToggle"><i class="bi bi-chevron-down"></i></button>
   </div>
   <div class="problems-body" id="probBody"><div class="text-body-secondary small p-3">Compile to see diagnostics.</div></div>
 </div>
@@ -235,7 +281,7 @@
   <span id="stProblems" class="st-link text-body-secondary"></span>
   <span class="ms-auto d-flex align-items-center gap-2"><span class="text-body-secondary">backend</span>
     <span class="chip chip-spv">SPIR-V ✓</span><span class="chip chip-dxil">DXIL ✓</span>
-    <span class="badge text-bg-warning" title="No WASM backend yet — everything below js/api.js is mocked (js/mock.js + js/mock_formats.js)">mock</span></span>
+    <span id="stBackend" class="badge text-bg-warning" title="loading">mock</span></span>
 </div>
 
 <!-- syntax reference -->
@@ -243,27 +289,27 @@
   <div class="offcanvas-header border-bottom"><h5 class="offcanvas-title"><i class="bi bi-braces brand-dot"></i> OxC3 HLSL syntax</h5>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button></div>
   <div class="offcanvas-body syn">
-    <p class="text-body-secondary small">Standard HLSL plus a small set of <code>[[oxc::…]]</code> annotations, <code>@</code>-includes and type aliases —
+    <p class="text-body-secondary small">Standard HLSL plus a small set of <code>[[oxc::…]]</code> annotations, <code>@</code>-includes and type aliases -
       one source, both SPIR-V and DXIL. Stage and shader model live in the <b>source</b> (not the toolbar), so a single file can hold many
       entrypoints, each producing its own binaries.</p>
 
     <h6>Entrypoint stage</h6>
     <div class="row-item"><span class="sig">[shader("compute")]</span>
       <div class="desc"><b>Preferred.</b> DXC's shader annotation. Library types (<code>lib_6_x</code>):
-        <code>raygeneration · closesthit · anyhit · miss · intersection · callable · node</code> — and it also accepts the
+        <code>raygeneration · closesthit · anyhit · miss · intersection · callable · node</code>: and it also accepts the
         standalone stages below. Required when <code>[[oxc::uniforms]]</code> is used (uniforms need a lib compile).</div></div>
     <div class="row-item"><span class="sig">[[oxc::stage("vertex")]]</span>
       <div class="desc">Standalone compilation per entrypoint: <code>vertex · pixel · compute · geometry · hull · domain · mesh · task</code>.</div>
-      <div class="note"><i class="bi bi-exclamation-triangle"></i> Deprecated in favour of <code>[shader]</code> (kept for compatibility; each stage costs a full compile and can't use uniforms).</div></div>
+      <div class="note"><i class="bi bi-exclamation-triangle"></i> Deprecated in favor of <code>[shader]</code> (kept for compatibility; each stage costs a full compile and can't use uniforms).</div></div>
 
     <h6>Annotations</h6>
     <div class="row-item"><span class="sig">[[oxc::model("6.8")]]</span><div class="desc">Minimum shader model, per entrypoint (6.5 … 6.10). Repeat the annotation to compile the same entrypoint at multiple models; the runtime picks the highest available. <code>__SHADER_TARGET_MAJOR/_MINOR</code> distinguish them at compile time.</div></div>
-    <div class="row-item"><span class="sig">[[oxc::extension("16BitTypes", "RayQuery")]]</span><div class="desc">Required extensions — sets <code>__OXC_EXT_&lt;NAME&gt;</code>. Repeating the annotation makes one compile per set (e.g. with and without <code>RayReorder</code>); the runtime picks top to bottom.</div>
-      <div class="desc mt-1">One of: <span class="tok">F64</span><span class="tok">I64</span><span class="tok">16BitTypes</span><span class="tok">AtomicI64</span><span class="tok">AtomicF32</span><span class="tok">AtomicF64</span><span class="tok">SubgroupArithmetic</span><span class="tok">SubgroupShuffle</span><span class="tok">SubgroupOperations</span><span class="tok">RayQuery</span><span class="tok">RayMicromapOpacity</span><span class="tok">RayTriPosition</span><span class="tok">RayMotionBlur</span><span class="tok">RayReorder</span><span class="tok">Multiview</span><span class="tok">ComputeDeriv</span><span class="tok">PAQ</span><span class="tok">MeshTaskTexDeriv</span><span class="tok">WriteMSTexture</span><span class="tok">Bindless</span><span class="tok">UnboundArraySize</span><span class="tok">CoopVec</span><span class="tok">CoopMat</span><span class="tok">CoopFP8</span><span class="tok">CoopVecTraining</span><span class="tok">DescriptorHeap</span></div></div>
-    <div class="row-item"><span class="sig">[[oxc::defines("HAS_SHADOWS", "TAPS" = "4")]]</span><div class="desc">Preprocessor defines, referenced as <code>$NAME</code>. Each annotation is one variant — a full extra HLSL compile, so prefer uniforms.</div></div>
-    <div class="row-item"><span class="sig">[[oxc::uniforms(U32 x = 45, F32 y = 90.f)]]</span><div class="desc">Spec constants (SPIR-V) / library exports (DXIL), referenced as <code>$$x</code>. Fossilized by linking after compile — much cheaper than defines. Types: <code>(U/I/F)(8/16/32/64)</code> or <code>B1</code>. Requires <code>[shader]</code>.</div></div>
-    <div class="row-item"><span class="sig">[[oxc::vendor("NV")]]</span><div class="desc">Restrict a binary to vendors: <code>NV · AMD · ARM · QCOM · INTC · IMGT · MSFT · APPL · SMSG · HWEI · GOGL · MESA</code>. Absent = all. One annotation only (it never induces a compile per vendor).</div></div>
-    <div class="row-item"><span class="sig">[[oxc::binary("spv", "dxil")]]</span><div class="desc">Narrow which requested backends this entrypoint is emitted for (no extra compiles; ANDed with <code>-compile-output</code> and what the stage/extensions can express — workgraphs are DXIL-only, SubgroupArithmetic/Shuffle, AtomicF32/F64 and RayMotionBlur are SPIR-V-only, MeshTaskTexDeriv is DXIL-only).</div></div>
+    <div class="row-item"><span class="sig">[[oxc::extension("16BitTypes", "RayQuery")]]</span><div class="desc">Required extensions: sets <code>__OXC_EXT_&lt;NAME&gt;</code>. Repeating the annotation makes one compile per set (e.g. with and without <code>RayReorder</code>); the runtime picks top to bottom.</div>
+      <div class="desc mt-1">One of: <span id="extList"><span class="tok">loading…</span></span></div></div>
+    <div class="row-item"><span class="sig">[[oxc::defines("HAS_SHADOWS", "TAPS" = "4")]]</span><div class="desc">Preprocessor defines, referenced as <code>$NAME</code>. Each annotation is one variant: a full extra HLSL compile, so prefer uniforms.</div></div>
+    <div class="row-item"><span class="sig">[[oxc::uniforms(U32 x = 45, F32 y = 90.f)]]</span><div class="desc">Spec constants (SPIR-V) / library exports (DXIL), referenced as <code>$$x</code>. Fossilized by linking after compile: much cheaper than defines. Types: <code>(U/I/F)(8/16/32/64)</code> or <code>B1</code>. Requires <code>[shader]</code>.</div></div>
+    <div class="row-item"><span class="sig">[[oxc::vendor("NV")]]</span><div class="desc">Restrict a binary to vendors: <code id="vendorList">loading…</code>. Absent = all. One annotation only (it never induces a compile per vendor).</div></div>
+    <div class="row-item"><span class="sig">[[oxc::binary("spv", "dxil")]]</span><div class="desc">Narrow which requested backends this entrypoint is emitted for (no extra compiles; ANDed with <code>-compile-output</code> and what the stage/extensions can express: SubgroupArithmetic/Shuffle and AtomicF32/F64 are SPIR-V-only, MeshTaskTexDeriv is DXIL-only).</div></div>
 
     <h6>Includes</h6>
     <div class="row-item"><span class="sig">#include "common.hlsli"</span><div class="desc">Relative include, resolved from the file tree (roots act as <code>-include-dir</code>). Escaping the working directory is prohibited. Every resolved include lands in the oiSH with its CRC32C.</div></div>
@@ -276,12 +322,11 @@
 
     <h6>Builtin defines</h6>
     <div class="row-item"><div class="desc"><span class="tok">__OXC</span><span class="tok">__OXC_PREPROCESS</span><span class="tok">__OXC_MAJOR</span><span class="tok">__OXC_MINOR</span><span class="tok">__OXC_PATCH</span><span class="tok">__OXC_VERSION</span><span class="tok">__OXC_EXT_&lt;X&gt;</span><span class="tok">__OXC_EXT_RAYTRACING</span><span class="tok">__SHADER_TARGET_MAJOR</span><span class="tok">__SHADER_TARGET_MINOR</span>
-      <div class="mt-1">During the <code>__OXC_PREPROCESS</code> pass all extensions are on but no uniforms/defines are set — guard with <code>#ifdef</code>.</div></div></div>
+      <div class="mt-1">During the <code>__OXC_PREPROCESS</code> pass all extensions are on but no uniforms/defines are set: guard with <code>#ifdef</code>.</div></div></div>
 
     <h6>Type aliases <span class="text-body-secondary" style="text-transform:none;letter-spacing:0">(from @types.hlsli)</span></h6>
-    <div class="row-item"><div class="desc mb-1">Always available — scalar, <code>x2/x3/x4</code> vectors, matrices <code>xNxM</code> (columns×rows, so HLSL <code>float4x3</code> = <code>F32x3x4</code>):</div>
-      <span class="tok">F32</span><span class="tok">F32x4</span><span class="tok">F32x4x4</span><span class="tok">I32x3</span><span class="tok">U32x4</span><span class="tok">Bool</span><span class="tok">Boolx4</span></div>
-    <div class="row-item"><div class="desc mb-1">Under <code>16BitTypes</code>: <span class="tok">F16</span><span class="tok">F16x4</span><span class="tok">I16</span><span class="tok">U16x4</span> · under <code>F64</code>/<code>I64</code>: <span class="tok">F64x4</span><span class="tok">U64</span><span class="tok">I64x3</span></div></div>
+    <div class="row-item"><div class="desc mb-1">Read out of the builtin headers themselves, grouped by the header that declares them (the extension ones only exist when their extension is on). Matrices are <code>xNxM</code> (columns×rows, so HLSL <code>float4x3</code> = <code>F32x3x4</code>):</div>
+      <div id="aliasList"><span class="tok">loading…</span></div></div>
 
     <h6>Resource keywords &amp; macros</h6>
     <div class="row-item"><span class="sig">PUSH_CONSTANT MyCmd cmd;</span><div class="desc">Root / push constants (SPIR-V <code>[[vk::push_constant]]</code>, DXIL root CBV).</div></div>
@@ -300,13 +345,27 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/hint/show-hint.min.js"></script>
 
-<!-- load order matters (plain scripts, no bundler): util → mocks → api → editor → tools → app -->
+<!-- The wasm module, when a build was staged into web/wasm/ (build_web.py --frontend). It is optional:
+     the page falls back to the mocks when it is absent, so index.html still opens from file://.
+     js/wasmload.js picks WHICH build loads (wasm/versions.json, hosted sites only) and writes the tag;
+     MODULARIZE means that only defines createOxC3Module; nothing instantiates until OxAPI.init(). -->
+<script src="js/wasmload.js"></script>
+
+<!-- load order matters (plain scripts, no bundler): util → data → mocks → wasm → api → editor → tools → app -->
 <script src="js/util.js"></script>
+<script src="js/workspace.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/mock_data.js"></script>
 <script src="js/mock.js"></script>
 <script src="js/mock_formats.js"></script>
+<script src="js/wasm.js"></script>
+<script src="js/wasm_rpc.js"></script>
 <script src="js/api.js"></script>
 <script src="js/editor.js"></script>
+<script src="js/intellisense.js"></script>
+<script src="js/asmmap.js"></script>
 <script src="js/tools/compile.js"></script>
 <script src="js/tools/inspect.js"></script>
 <script src="js/tools/symbols.js"></script>

@@ -243,7 +243,53 @@
 		return s_uccess;
 	}
 
-	//shader assemble: assemble SPIR-V text into a .spv binary (DXIL assembly isn't supported yet).
+	//shader validate: the validator's verdict on a standalone binary, exit status included, so a script can gate on it.
+
+	Bool CLI_shaderValidate(const ParsedArgs *args) {
+
+		if(!args) return false;
+
+		Bool s_uccess = true;
+		Error err = Error_none(), *e_rr = &err;
+		const Allocator *alloc = Platform_instance->alloc;
+
+		Buffer buf = Buffer_createNull();
+		CharString message = CharString_createNull();
+		Compiler comp = (Compiler) { 0 };
+		Bool hasCompiler = false, valid = false;
+		CharString input = (CharString) { 0 };
+
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, e_rr));
+		gotoIfError3(clean, CLI_shaderReadFile(input, &buf, e_rr));
+		gotoIfError3(clean, Compiler_create(alloc, &comp, e_rr));
+		hasCompiler = true;
+
+		gotoIfError3(clean, Compiler_validate(&comp, CLI_shaderBinaryType(input), buf, alloc, &valid, &message, e_rr));
+
+		if(valid)
+			Log_debugLnx("%.*s is valid", (int) CharString_length(input), input.ptr);
+
+		else {
+
+			Log_errorLnx(
+				"%.*s is invalid: %.*s",
+				(int) CharString_length(input), input.ptr, (int) CharString_length(message), message.ptr
+			);
+
+			s_uccess = false;
+		}
+
+	clean:
+		if(hasCompiler)
+			Compiler_free(&comp, alloc);
+
+		CharString_free(&message, alloc);
+		Buffer_free(&buf, alloc);
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+		return s_uccess;
+	}
+
+	//shader assemble: SPIR-V text into a .spv through spirv-tools, DXIL LL text into a .dxil container through DXC.
 
 	Bool CLI_shaderAssemble(const ParsedArgs *args) {
 

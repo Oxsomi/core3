@@ -1,4 +1,4 @@
-/* mock_formats.js — the mock for everything past oiSH: oiSR (frontend symbol AST),
+/* mock_formats.js: the mock for everything past oiSH: oiSR (frontend symbol AST),
  * oiSP (pipelines with provenance) and the ISA paths (offline amdllpc / live driver).
  *
  * Same rules as mock.js: js/api.js is the only consumer, everything derived is fabricated
@@ -20,10 +20,6 @@ const SR_KINDS = ["Register", "Function", "Enum", "EnumValue", "Namespace", "Var
 /* ESRFeature tiers a file carries. */
 const SR_FEATURES = ["Basics", "Functions", "Namespaces", "UserTypes", "Scopes", "SymbolInfo"];
 
-/* Symbol counts the real built-in includes reflect to; `shader reflect-symbols` collapses them into one
- * summary line per file (the four measured ones are real, the rest follow the same rule as any mock size). */
-const BUILTIN_SYMBOLS = { "@types.hlsli": 141, "@mat.hlsli": 90, "@fixed_point.hlsli": 27, "@indirect.hlsli": 17 };
-const builtinSymbolCount = name => BUILTIN_SYMBOLS[name] || (8 + U.crc32c(name) % 40);
 
 /* D3D12 resource dimension / return-type codes the Register record carries (D3D_SRV_DIMENSION, D3D_RESOURCE_RETURN_TYPE). */
 const DIM = { Texture1D: 2, Texture1DArray: 3, Texture2D: 4, Texture2DArray: 5, Texture2DMS: 6, Texture3D: 8, TextureCube: 9, TextureCubeArray: 10 };
@@ -58,6 +54,22 @@ function findLine(lines, re, from) {
  * Every node has a source location (ESRFeature_SymbolInfo) so the tree can drive go-to-definition. */
 function reflectSymbols(name, project) {
   const src = String(project[name]?.src ?? project[name] ?? "");
+
+  /* The recording is what the real compiler produced for this file as the sample ships it, built-in include
+   * symbols and all, which the parse below cannot reproduce: it reads the source in front of it and the
+   * built-ins are not in it. So an unedited sample file gets the recording and behaves like the real
+   * backend, and anything else falls through to the parse, which describes what it can see. */
+
+  const recorded = window.OxMockData && window.OxMockData.oisr;
+  const shipped = M().SAMPLE_FILES[name];
+
+  if (recorded && shipped && String(shipped.src) === src) {
+
+    const key = name.replace(/\.hlsl$/i, ".oiSR");
+
+    if (recorded[key])
+      return JSON.parse(JSON.stringify(recorded[key]));
+  }
   const lines = src.split("\n");
   const structs = M().parseStructs(src);
   const nodes = [];
@@ -143,10 +155,14 @@ function reflectSymbols(name, project) {
     }
   }
 
-  /* built-in includes: the symbols exist in the file, the CLI collapses them per include */
-  const builtins = doc.includes.filter(i => i.path.startsWith("@")).map(i => ({ file: i.path, count: builtinSymbolCount(i.path) }));
+  /* No built-in include symbols: this parse reads the source in front of it, and the built-ins are not in
+   * it. Naming them with a count anyway claimed symbols nothing here can produce, which left the tree
+   * saying it had hundreds collapsed and the --includes switch with nothing to expand. Recorded documents
+   * carry the real ones (see the top of this function); this path says it has none, because it has none. */
+
+  const builtins = [];
   const counts = {
-    nodes: nodes.length + builtins.reduce((s, b) => s + b.count, 0),
+    nodes: nodes.length,
     annotations: nodes.reduce((s, n) => s + n.annotations.length, 0),
     registers: nodes.filter(n => n.kind === "Register").length,
     enumValues: 0, types: nodes.filter(n => n.type).length,
@@ -199,7 +215,7 @@ const SP_FIELDS = [
 ].map(([field, indexed, reason, domain]) => ({ field, indexed, reason, domain }));
 const SP_FIELD = Object.fromEntries(SP_FIELDS.map(f => [f.field, f]));
 
-const GRAPHICS_STAGES = ["vertex", "hull", "domain", "geometry", "pixel"];
+const GRAPHICS_STAGES = ["vertex", "hull", "domain", "geometry", "pixel", "mesh", "task"];
 const RT_STAGES = ["raygeneration", "miss", "closesthit", "anyhit", "intersection", "callable"];
 const HIT_STAGES = ["closesthit", "anyhit", "intersection"];
 const RGBA8 = 3;                                     // ETextureFormatId_RGBA8, the assumed color target
@@ -221,7 +237,7 @@ function derivePipeline(doc, pick) {
   const stagesOf = b => b.lib ? doc.entries.filter(e => b.entryNames.includes(e.name)).map(e => e.stage) : [b.stage];
   const kindOf = b => {
     const s = stagesOf(b);
-    return s.some(x => x === "compute" || x === "node") ? "compute" : s.some(x => GRAPHICS_STAGES.includes(x)) ? "graphics" : s.some(x => RT_STAGES.includes(x)) ? "raytracing" : null;
+    return s.some(x => x === "compute") ? "compute" : s.some(x => GRAPHICS_STAGES.includes(x)) ? "graphics" : s.some(x => RT_STAGES.includes(x)) ? "raytracing" : null;
   };
   const kinds = [...new Set(bins.map(kindOf).filter(Boolean))];
   const kind = kinds.includes("compute") ? "compute" : kinds.includes("graphics") ? "graphics" : kinds.includes("raytracing") ? "raytracing" : null;
@@ -255,11 +271,16 @@ function derivePipeline(doc, pick) {
       if (b) stages.push(stageOf(s, b, doc.entries.find(e => e.stage === s && (b.lib ? b.entryNames.includes(e.name) : e.name === b.entrypoint))));
     }
     const has = s => stages.some(x => x.stage === s);
+    const hasMesh = has("mesh") || has("task");
+    if (hasMesh && ["vertex", "hull", "domain", "geometry"].some(has))
+      return { refused: "mesh and vertex-chain stages can't be one pipeline: the mesh stage replaces the vertex chain" };
+    if (has("task") && !has("mesh"))
+      return { refused: "a task stage without the mesh stage it would feed can't form a pipeline" };
     if ((has("hull") || has("domain")) && !(has("hull") && has("domain")))
       return { refused: "a lone hull or domain stage is refused: generating the other half of a tessellation pair isn't supported yet" };
     if (has("hull")) return { refused: "tessellation stages aren't inspectable yet: ETopologyMode has no patch-list topology, which Vulkan requires whenever they're present" };
     /* stand-ins for the missing ends of the chain */
-    if (!has("vertex")) { stages.unshift({ stage: "vertex", shaderFile: "(generated)", entrypoint: "main", sourceHash: 0, generated: true }); flags.push("GeneratedVertexStage"); }
+    if (!has("vertex") && !hasMesh) { stages.unshift({ stage: "vertex", shaderFile: "(generated)", entrypoint: "main", sourceHash: 0, generated: true }); flags.push("GeneratedVertexStage"); }
     if (!has("pixel")) { stages.push({ stage: "pixel", shaderFile: "(generated)", entrypoint: "main", sourceHash: 0, generated: true }); flags.push("GeneratedPixelStage"); }
 
     const vsE = doc.entries.find(e => e.name === (stages.find(s => s.stage === "vertex") || {}).entrypoint && e.stage === "vertex");
@@ -275,7 +296,10 @@ function derivePipeline(doc, pick) {
     for (const f of ["blend.enable", "blend.independent", "blend.targetMask", "blend.logicOp", "depth.format", "depth.flags", "depth.compare",
       "stencil.compare", "stencil.fail", "stencil.pass", "stencil.depthFail", "stencil.writeMask", "stencil.readMask",
       "raster.cullMode", "raster.flags", "raster.depthBiasConstant", "raster.depthBiasClamp", "raster.depthBiasSlope",
-      "msaa", "msaa.minSampleShading", "topology"]) F(f, 0, 0, "assumed");
+      "msaa", "msaa.minSampleShading", "topology"]) {
+      if (hasMesh && f === "topology") continue;      //the mesh stage owns its output topology
+      F(f, 0, 0, "assumed");
+    }
     /* vertex layout: formats derive from the VS inputs, packing into a buffer doesn't */
     const inputs = vsE ? vsE.inputs.filter(io => !/^SV_/.test(io.semantic)) : [];
     if (inputs.length) {
@@ -366,6 +390,9 @@ const srBytes = sr => mockBytes(SR_MAGIC, 4 + 48 + sr.header.counts.nodes * 12 +
 /* Preloaded examples for Inspect mode, derived from the sample project: two symbol ASTs and one pipeline of each kind,
  * the graphics and ray tracing ones with a few fields supplied so every provenance shows. */
 function seedOisrDocs() {
+  /* Recorded real reflect-symbols output when there is any; the heuristic parse is the fallback. */
+  const recorded = window.OxMockData && window.OxMockData.oisr;
+  if (recorded && Object.keys(recorded).length) return JSON.parse(JSON.stringify(recorded));
   const out = {};
   for (const src of ["lighting.hlsl", "post.hlsl"]) {
     const sr = reflectSymbols(src, M().SAMPLE_FILES);
@@ -374,6 +401,9 @@ function seedOisrDocs() {
   return out;
 }
 function seedOispDocs() {
+  /* Recorded real pipelines when there are any, supplied fields and all. */
+  const recorded = window.OxMockData && window.OxMockData.oisp;
+  if (recorded && Object.keys(recorded).length) return JSON.parse(JSON.stringify(recorded));
   const out = {};
   const lighting = derivePipeline(M().analyze("lighting.hlsl", M().SAMPLE_FILES), {});
   out[lighting.name] = lighting;

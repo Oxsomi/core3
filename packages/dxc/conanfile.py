@@ -1,10 +1,12 @@
 from conan import ConanFile
+from conan.errors import ConanInvalidConfiguration
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 from conan.tools.build import cross_building
 from conan.tools.scm import Git
 from conan.tools.files import collect_libs, copy, rename, replace_in_file
 import os
 import platform
+import shutil
 import subprocess
 
 required_conan_version = ">=2.0"
@@ -12,7 +14,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2026.08.23"
+	version = "2026.09.06"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -274,6 +276,39 @@ class dxc(ConanFile):
 		tc.generate()
 
 	def source(self):
+
+		# A working tree instead of the pinned clone, for iterating on the fork before the change is pushed:
+		#     -c user.dxc:source_dir=<path to a DirectXShaderCompiler checkout>
+		# conandata.yml still decides what an ordinary build gets, so nothing changes for anyone who doesn't
+		# pass it. The tree is copied rather than linked because the build writes generated headers into it,
+		# and .git is skipped since it is half the bytes and nothing in the build reads it.
+
+		local = self.conf.get("user.dxc:source_dir", default=None)
+
+		if local:
+
+			local = os.path.abspath(str(local))
+
+			if not os.path.isdir(local):
+				raise ConanInvalidConfiguration(f"user.dxc:source_dir does not exist: {local}")
+
+			# A fresh clone leaves the submodule directories empty, and copying those produces a CMake error
+			# deep in the configure ("SPIRV-Headers was not found") that says nothing about the real cause.
+
+			for submodule in ("external/SPIRV-Headers", "external/SPIRV-Tools", "external/DirectX-Headers"):
+				if not os.path.isfile(os.path.join(local, submodule, "CMakeLists.txt")):
+					raise ConanInvalidConfiguration(
+						f"user.dxc:source_dir={local} has no {submodule}; run "
+						"'git submodule update --init --recursive' in that checkout first"
+					)
+
+			self.output.warning(f"Building DXC from {local} rather than the pin; this is not a reproducible package")
+			shutil.copytree(
+				local, os.path.join(self.source_folder, "DirectXShaderCompiler"),
+				symlinks=True, ignore=shutil.ignore_patterns(".git")
+			)
+			return
+
 		git = Git(self)
 		git.clone(url=self.conan_data["sources"][self.version]["url"])
 		git.folder = os.path.join(self.source_folder, "DirectXShaderCompiler")

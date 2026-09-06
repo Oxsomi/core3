@@ -335,6 +335,25 @@ void Test_SHFileAddBinUniformUnderscoreStart(Test *t) {
 	SHFile_free(&sh, t->alloc);
 }
 
+void Test_SHFileAddBinUniformUnderscoreInside(Test *t) {
+
+	Test_setModule(t, "SHFile addBinary: uniform name with an inner underscore accepted");
+
+	SHFile sh = (SHFile) { 0 };
+	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
+
+	//'_' is an identifier character everywhere, not only first: SHFile_read accepts one here, so writing
+	//must too, otherwise a name survives a round trip it was never allowed to be written with.
+
+	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHUniformRuntime uni = { .name = CharString_createRefCStrConst("MAX_LIGHTS"), .typeIdShort = 0, .dataOffset = 0 };
+	static U8 udata[4] = { 0 };
+	Test_assert(t, "createRef", ListU8_createRefConst(udata, 4, &info.identifier.uniformData, &t->err));
+	Test_assert(t, "createRef(1)", ListSHUniformRuntime_createRefConst(&uni, 1, &info.identifier.uniforms, &t->err));
+	Test_assert(t, "inner underscore accepted", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
+	SHFile_free(&sh, t->alloc);
+}
+
 void Test_SHFileAddBinUniformInvalidBodyChar(Test *t) {
 
 	Test_setModule(t, "SHFile addBinary: uniform name with invalid body character rejected");

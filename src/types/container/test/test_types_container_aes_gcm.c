@@ -295,7 +295,7 @@ void Test_aesValidation(Test *t) {
 		return;
 	}
 
-	Buffer_unsetAllBits(full, &t->err);
+	Test_assert(t, "Clear full buffer", Buffer_unsetAllBits(full, &t->err));
 
 	for (U64 l = 0; l < sizeof(cryptoState) / sizeof(cryptoState[0]); ++l) {
 
@@ -320,7 +320,7 @@ void Test_aesValidation(Test *t) {
 			if (!aesCreateCtx(t, "Enc aesCreateCtx", -16, cryptoState[l], key, &ctx, &blockSizeMax, &use256Or512))
 				continue;
 
-			Buffer_unsetAllBits(unit, &t->err);
+			Test_assert(t, "Clear unit buffer", Buffer_unsetAllBits(unit, &t->err));
 			Buffer_aesExpertEncUpdate(&ctx, unit, 0, blockSizeMax, use256Or512);
 			Buffer_aesExpertFinalize(&ctx, 0, siz, I32x4_zero());
 
@@ -352,7 +352,7 @@ void Test_aesValidation(Test *t) {
 			//Decrypting all-zeros with the same key/IV should yield all-zeros back
 
 			Buffer zeroBuf = Buffer_createRef(full.ptrNonConst + siz, siz);
-			Buffer_unsetAllBits(zeroBuf, &t->err);
+			Test_assert(t, "Clear zero buffer", Buffer_unsetAllBits(zeroBuf, &t->err));
 			Test_assert(t, "Dec round-trip", !Buffer_neq(unit, zeroBuf));
 		}
 	}

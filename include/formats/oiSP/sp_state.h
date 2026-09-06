@@ -217,6 +217,26 @@ typedef enum EPipelineRaytracingFlags {
 
 } EPipelineRaytracingFlags;
 
+//Value names for every enum-typed field, in enum order, so a reader (the CLI's print, the web page's
+//field editors) can spell values without owning a copy of these lists. Definitions in sp_file.c are
+//sized by the _Count, which is what keeps them from drifting when an enum grows.
+
+extern const C8 *ECullMode_names[ECullMode_Count];
+extern const C8 *ECompareOp_names[ECompareOp_Count];
+extern const C8 *EStencilOp_names[EStencilOp_Count];
+extern const C8 *ELogicOpExt_names[ELogicOpExt_Count];
+extern const C8 *EBlend_names[EBlend_Count];
+extern const C8 *EBlendOp_names[EBlendOp_Count];
+extern const C8 *EMSAASamples_names[EMSAASamples_Count];
+extern const C8 *ETopologyMode_names[EToplogyMode_Count];
+
+//Per-bit names for the mask-valued fields (NULL = reserved bit).
+
+extern const C8 *ERasterizerFlags_bitNames[4];
+extern const C8 *EDepthStencilFlags_bitNames[3];
+extern const C8 *EWriteMask_bitNames[4];
+extern const C8 *EPipelineRaytracingFlags_bitNames[8];
+
 //The pipeline state a backend binds, which is the same state oiSP stores.
 //It's defined here rather than in the graphics layer because a stored pipeline has to stay readable without a device,
 // and the graphics layer aliases these, so state moves between a file and a live pipeline as a copy.

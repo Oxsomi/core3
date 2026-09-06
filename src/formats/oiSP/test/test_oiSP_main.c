@@ -435,7 +435,7 @@ void Test_SPFileReportCoversWholePipeline(Test *t) {
 
 			const SPSpecialization spec = sp.specializations.ptr[pipeline.specializationStart + i];
 
-			supplied &= SPFile_supply(&sp, pipelineId, (ESPField) spec.field, spec.index, spec.value, &t->err);
+			supplied = supplied && SPFile_supply(&sp, pipelineId, (ESPField) spec.field, spec.index, spec.value, &t->err);
 		}
 
 		Test_assert(t, "allSupplied", supplied);
@@ -899,9 +899,6 @@ void Test_SPDeriveRefusals(Test *t) {
 	const SPStageRef twoVertex[2] = { refOf(0, 0), refOf(0, 1) };
 	Test_assert(t, "sameKindTwice", !SPFile_derivePipeline(&sp, &files, NULL, name, twoVertex, 2, t->alloc, NULL, NULL));
 
-	const SPStageRef mesh[1] = { refOf(0, 3) };
-	Test_assert(t, "meshRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, mesh, 1, t->alloc, NULL, NULL));
-
 	const SPStageRef mixed[2] = { refOf(0, 2), refOf(0, 4) };
 	Test_assert(t, "mixedKindsRefused", !SPFile_derivePipeline(&sp, &files, NULL, name, mixed, 2, t->alloc, NULL, NULL));
 
@@ -930,6 +927,11 @@ void Test_SPDeriveRefusals(Test *t) {
 	const SPStageRef ok[1] = { refOf(0, 2) };
 	Test_assert(t, "stillDerives", SPFile_derivePipeline(&sp, &files, NULL, name, ok, 1, t->alloc, NULL, &t->err));
 	Test_assert(t, "onePipeline", sp.pipelines.length == 1);
+
+	//A mesh stage is a graphics kind on its own: it derives like a lone vertex stage does, with a pixel stand-in
+	const SPStageRef mesh[1] = { refOf(0, 3) };
+	Test_assert(t, "meshDerives", SPFile_derivePipeline(&sp, &files, NULL, name, mesh, 1, t->alloc, NULL, &t->err));
+	Test_assert(t, "twoPipelines", sp.pipelines.length == 2);
 
 clean:
 	SPFile_free(&sp, t->alloc);
@@ -1213,7 +1215,7 @@ void Test_SPFieldNames(Test *t) {
 	Test_assert(t, "msaaIsNotIndexed", !ESPField_isIndexed(ESPField_Msaa));
 }
 
-int main() {
+OXC3_TEST_MAIN(formats_oiSP) {
 
 	const Allocator alloc = BasicAllocator_instance;
 

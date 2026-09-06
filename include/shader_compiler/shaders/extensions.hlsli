@@ -21,6 +21,19 @@
 //Umbrella for the per-extension helpers that abstract the DXIL/SPIR-V split behind one oxc:: API.
 //Each header is pulled in only when its extension is enabled (OxC3 defines __OXC_EXT_<NAME> per [[oxc::extension]]).
 
+//The type extensions come first, so a helper below can be written in terms of their aliases.
+#ifdef __OXC_EXT_16BITTYPES
+	#include "@extension.16BitTypes.hlsli"
+#endif
+
+#if defined(__OXC_EXT_F64) || defined(__OXC_EXT_ATOMICF64)
+	#include "@extension.F64.hlsli"
+#endif
+
+#ifdef __OXC_EXT_I64
+	#include "@extension.I64.hlsli"
+#endif
+
 //RayTriPosition is included before RayReorder so the hit-object triangle-position accessor can reuse its types.
 #ifdef __OXC_EXT_RAYTRIPOSITION
 	#include "@extension.RayTriPosition.hlsli"

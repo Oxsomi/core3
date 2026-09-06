@@ -111,6 +111,114 @@ clean:
 	return s_uccess;
 }
 
+//DXC dereferences a container's part table before it validates it, so a bad offset crashes the process instead of
+// failing validation; the table is bounds checked here first so the gate can answer with a verdict.
+
+static const C8 *DXIL_containerProblem(Buffer binary) {
+
+	const U64 len = Buffer_length(binary);
+
+	if(len < 32 || Buffer_readU32(binary, 0, NULL, NULL) != C8x4('D', 'X', 'B', 'C'))
+		return "not a DXIL container (bad size or magic)";
+
+	const U32 size = Buffer_readU32(binary, 24, NULL, NULL);
+	const U32 partCount = Buffer_readU32(binary, 28, NULL, NULL);
+
+	if(size < 32 || size > len)
+		return "container size doesn't fit the data";
+
+	if(partCount > (size - 32) / 4)
+		return "part table exceeds the container";
+
+	const U32 tableEnd = 32 + partCount * 4;
+
+	for(U32 i = 0; i < partCount; ++i) {
+
+		const U32 off = Buffer_readU32(binary, 32 + (U64) i * 4, NULL, NULL);
+
+		if(off < tableEnd || off > size - 8)
+			return "part offset out of range";
+
+		if(Buffer_readU32(binary, off + 4, NULL, NULL) > size - 8 - off)
+			return "part size out of range";
+	}
+
+	return NULL;
+}
+
+extern "C" Bool Compiler_validateDXIL(
+	const Compiler *comp, Buffer binary, const Allocator *alloc, Bool *valid, CharString *errorText, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const U64 binLen = Buffer_length(binary);
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp->interfaces;
+
+	HRESULT hr = 0, status = 0;
+	IDxcBlobEncoding *blob = NULL;
+	IDxcValidator *validator = NULL;
+	IDxcOperationResult *opResult = NULL;
+	IDxcBlobEncoding *errors = NULL;
+	const C8 *problem = NULL;
+
+	if(!valid)
+		retError(clean, Error_nullPointer(3, "Compiler_validateDXIL()::valid is required"));
+
+	*valid = false;
+
+	//A malformed container is a verdict about the input, like the SPIR-V magic check
+
+	problem = DXIL_containerProblem(binary);
+
+	if(problem) {
+
+		if(errorText)
+			gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(problem), alloc, errorText, e_rr));
+
+		goto clean;
+	}
+
+	hr = interfaces->utils->CreateBlobFromPinned(binary.ptr, (U32) binLen, DXC_CP_ACP, &blob);
+
+	if(FAILED(hr))
+		retError(clean, Error_invalidOperation(0, "Compiler_validateDXIL() couldn't wrap the container"));
+
+	hr = DxcCreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(&validator));
+
+	if(FAILED(hr))
+		retError(clean, Error_invalidOperation(1, "Compiler_validateDXIL() couldn't create the validator"));
+
+	hr = validator->Validate(blob, DxcValidatorFlags_Default, &opResult);
+
+	if(FAILED(hr) || !opResult)
+		retError(clean, Error_invalidOperation(2, "Compiler_validateDXIL() the validator didn't answer"));
+
+	opResult->GetStatus(&status);
+	*valid = SUCCEEDED(status);
+
+	if(!*valid && errorText) {
+
+		opResult->GetErrorBuffer(&errors);
+
+		const C8 *text = errors ? (const C8*) errors->GetBufferPointer() : NULL;
+		const U64 textLen = text ? strnlen(text, errors->GetBufferSize()) : 0;
+
+		gotoIfError3(clean, CharString_createCopy(
+			textLen ?
+				CharString_createRefSizedConst(text, textLen, false) :
+				CharString_createRefCStrConst("the DXIL validator rejected the container"),
+			alloc, errorText, e_rr
+		));
+	}
+
+clean:
+	if(errors) errors->Release();
+	if(opResult) opResult->Release();
+	if(validator) validator->Release();
+	if(blob) blob->Release();
+	return s_uccess;
+}
+
 extern "C" Bool Compiler_assembleDXIL(
 	const Compiler *comp, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr
 ) {
@@ -150,6 +258,30 @@ extern "C" Bool Compiler_assembleDXIL(
 	hr = opResult->GetResult(&container);
 	if(FAILED(hr) || !container)
 		retError(clean, Error_invalidOperation(3, "Compiler_assembleDXIL() couldn't get the assembled container"));
+
+	//Assembled doesn't mean well formed and nothing downstream checks again, so the container is judged here
+	// with the validator's reason in the log, as the SPIR-V half does.
+	{
+		Bool valid = false;
+		CharString validationError = CharString_createNull();
+
+		gotoIfError3(clean, Compiler_validateDXIL(
+			comp, Buffer_createRefConst(container->GetBufferPointer(), container->GetBufferSize()), alloc,
+			&valid, &validationError, e_rr
+		));
+
+		if (!valid) {
+
+			Log_errorLn(
+				alloc, "dxil validator: %.*s", (int) CharString_length(validationError), validationError.ptr
+			);
+
+			CharString_free(&validationError, alloc);
+			retError(clean, Error_invalidState(0, "Compiler_assembleDXIL() the assembled DXIL failed validation"));
+		}
+
+		CharString_free(&validationError, alloc);
+	}
 
 	gotoIfError3(clean, Buffer_createCopy(
 		Buffer_createRefConst(container->GetBufferPointer(), (U64) container->GetBufferSize()), alloc, result, e_rr
@@ -192,6 +324,30 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 
 	if(uniqueEntrypoints->length)
 		retError(clean, Error_invalidParameter(3, 0, "Compiler_getUniqueEntrypointsDXIL() uniqueEntrypoints should be empty"));
+
+	//A container from anywhere is judged before it is reflected, as the SPIR-V half does, so a broken one is
+	// refused with the validator's reason rather than trusted.
+	{
+		Bool valid = false;
+		CharString validationError = CharString_createNull();
+
+		gotoIfError3(clean, Compiler_validateDXIL(compiler, binary, alloc, &valid, &validationError, e_rr));
+
+		if (!valid) {
+
+			Log_errorLn(
+				alloc, "dxil validator: %.*s", (int) CharString_length(validationError), validationError.ptr
+			);
+
+			CharString_free(&validationError, alloc);
+
+			retError(clean, Error_invalidState(
+				2, "Compiler_getUniqueEntrypointsDXIL() the DXIL failed validation, refusing to reflect it"
+			));
+		}
+
+		CharString_free(&validationError, alloc);
+	}
 
 	freeEp = true;
 
@@ -307,6 +463,7 @@ extern "C" Bool Compiler_linkDXIL(
 	U16 shaderVersion,
 	ESHPipelineStage stageType,
 	ESHExtension exts,
+	Bool keepRegisters,
 	ListCompileError *errors,
 	Buffer *finalResult,
 	const Allocator *alloc,
@@ -544,17 +701,23 @@ extern "C" Bool Compiler_linkDXIL(
 
 	CharString_free(&tempStr, alloc);
 
-	//Link
+	//Link. The linker runs its own codegen pass over the merged module, which reverts to dropping
+	//unused resources unless it is told the same thing every per-library compile was told; without
+	//this, --keep-registers held for [[oxc::stage]] entries but silently not for [shader] ones.
 
-	hr = linker->Link(
-		tmpWStr2.ptr ? (const wchar_t*) tmpWStr2.ptr : NULL,
-		(const wchar_t*) tmpWStr3.ptr,
-		(const LPCWSTR*) wstrConstArr.ptr,
-		(U32) wstrConstArr.length,
-		nullptr,
-		0,
-		&result
-	);
+	{
+		LPCWSTR linkArgs[] = { L"-fhlsl-unused-resource-bindings=keep-all" };
+
+		hr = linker->Link(
+			tmpWStr2.ptr ? (const wchar_t*) tmpWStr2.ptr : NULL,
+			(const wchar_t*) tmpWStr3.ptr,
+			(const LPCWSTR*) wstrConstArr.ptr,
+			(U32) wstrConstArr.length,
+			keepRegisters ? linkArgs : nullptr,
+			keepRegisters ? 1 : 0,
+			&result
+		);
+	}
 
 	if (SUCCEEDED(result->GetErrorBuffer(&errs)) && errs && errs->GetBufferSize()) {
 		CharString errStr = CharString_createRefSizedConst((const C8*)errs->GetBufferPointer(), errs->GetBufferSize(), false);

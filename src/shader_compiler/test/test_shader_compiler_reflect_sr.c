@@ -76,11 +76,13 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		"RWByteAddressBuffer buf;\n"
 		"StructuredBuffer<Light> lights;\n"
 		"uint dbl(uint x) { return x * 2; }\n"
+		"void bump(inout Light l) { l.pos.x += 1; }\n"
 		"[[oxc::stage(\"compute\")]]\n"
 		"[numthreads(1, 1, 1)]\n"
 		"void main(uint id : SV_DispatchThreadID) {\n"
 		"\tCircle c; c.r = 2;\n"
-		"\tbuf.Store<uint>(id * 4, dbl(id) + (uint) lights[0].pos.x + (uint) c.area());\n"
+		"\tLight l = lights[0]; bump(l);\n"
+		"\tbuf.Store<uint>(id * 4, dbl(id) + (uint) l.pos.x + (uint) c.area());\n"
 		"}\n";
 
 	gotoIfError3(clean, Compiler_create(alloc, &comp, e_rr));
@@ -146,7 +148,8 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		if (posTy) {
 
 			Test_assert(t, "member pos type is a 3-wide vector",
-				posTy->typeClass == ESRTypeClass_Vector && posTy->cols == 3);
+				posTy->typeClass == ESRTypeClass_Vector && posTy->cols == 3
+			);
 
 			CharString tn = posTy->typeNameId != U32_MAX ?
 				reflection.names.entryStrings.ptr[posTy->typeNameId] : CharString_createNull();
@@ -220,7 +223,41 @@ void Test_shaderCompilerReflectSR(Test *t) {
 				reflection.names.entryStrings.ptr[idTy->typeNameId] : CharString_createNull();
 			CharString u = CharString_createRefCStrConst("uint");
 			Test_assert(t, "parameter id type is uint",
-				idTy->typeClass == ESRTypeClass_Scalar && CharString_equalsStringSensitive(&tn, &u));
+				idTy->typeClass == ESRTypeClass_Scalar && CharString_equalsStringSensitive(&tn, &u
+			));
+		}
+	}
+
+	//A parameter whose type is a struct names that struct, rather than falling back to the class alone: without
+	//that, an editor outline shows every struct parameter as "Struct" and cannot navigate to its definition.
+
+	U32 lParam = srFindNode(&reflection, ESRNodeType_Parameter, "l");
+	Test_assert(t, "struct parameter reflected", lParam != U32_MAX);
+
+	if (lParam != U32_MAX) {
+
+		const SRType *lTy = NULL;
+
+		for (U64 i = 0; i < reflection.types.length; ++i)
+			if (reflection.types.ptr[i].nodeId == lParam) { lTy = &reflection.types.ptr[i]; break; }
+
+		Test_assert(t, "struct parameter has a type", lTy != NULL);
+
+		if (lTy) {
+
+			CharString tn = lTy->typeNameId != U32_MAX ?
+				reflection.names.entryStrings.ptr[lTy->typeNameId] : CharString_createNull();
+			CharString expected = CharString_createRefCStrConst("Light");
+
+			Test_assert(t, "struct parameter type is named Light",
+				lTy->typeClass == ESRTypeClass_Struct && CharString_equalsStringSensitive(&tn, &expected
+			));
+
+			//And it points back at the struct's own node, which is what makes go-to-definition possible.
+
+			Test_assert(t, "struct parameter type points at the struct definition",
+				lTy->defNodeId == lightId
+			);
 		}
 	}
 
@@ -253,7 +290,8 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		Test_assert(t, "round-trip annotation count", roundTrip.annotations.length == reflection.annotations.length);
 		Test_assert(t, "round-trip type count", roundTrip.types.length == reflection.types.length);
 		Test_assert(t, "round-trip interface count",
-			roundTrip.interfaces.length == reflection.interfaces.length && reflection.interfaces.length > 0);
+			roundTrip.interfaces.length == reflection.interfaces.length && reflection.interfaces.length > 0
+		);
 		Test_assert(t, "round-trip hash matches", roundTrip.hash == reflection.hash);
 	}
 

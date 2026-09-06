@@ -52,6 +52,14 @@ CMakeFiles/*
 .tmp_versions/
 builds/*
 build/*
+
+# The wasm module the web frontend loads, staged there by build_web.py --frontend.
+# It's a 21 MB build artifact, so it's produced rather than committed; the page falls back to the
+# mocks (and js/mock_data.js, which IS committed) when it isn't there.
+web/wasm/*
+
+# jsdom, which web/dev/smoke.js asks for with `npm i jsdom` (see web/README.md).
+web/node_modules/
 .vs/*
 CMakeUserPresets.json
 compile_commands.json

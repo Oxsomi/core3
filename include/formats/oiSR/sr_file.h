@@ -406,8 +406,9 @@ Bool SRFile_addString(SRFile *srFile, CharString *str, const Allocator *alloc, U
 // reuses type indices across uses of the same type).
 U32 SRFile_findNodeByName(const SRFile *srFile, CharString name, ESRNodeType type);
 
-//Recompute the content hash.
-//Call once the nodes/symbols/annotations/strings are finalized.
+//Validate every reference against the pool it names, then recompute the content hash.
+//Call once the nodes/symbols/annotations/strings are finalized; a file that fails here must not be handed on,
+// since a walker follows these references without checking them again.
 Bool SRFile_finalize(SRFile *srFile, const Allocator *alloc, Error *e_rr);
 
 Bool SRFile_write(

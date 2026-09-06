@@ -431,6 +431,27 @@ def main():
 			run(exe, ["shader", "disassemble", "-input", dxil, "-output", p("s.dxil.txt")])
 			run(exe, ["shader", "assemble", "-input", p("s.dxil.txt"), "-output", p("s2.dxil")], contains=["Assembled"])
 			run(exe, ["shader", "disassemble", "-input", p("s2.dxil")], contains=["target triple"])
+			# validate: the validator's verdict on both standalone binaries, exit status included. The SPIR-V loses its
+			# closing OpFunctionEnd. One container has its first part offset pointed past the end (the table walk has to
+			# refuse it before DXC touches it), the other keeps a sound table with its DXIL part zeroed, so the verdict
+			# comes from DXC's validator itself.
+			run(exe, ["shader", "validate", "-input", p("s2.spv")], contains=["is valid"])
+			run(exe, ["shader", "validate", "-input", p("s2.dxil")], contains=["is valid"])
+			spvBytes = open(p("s2.spv"), "rb").read()
+			open(p("bad.spv"), "wb").write(spvBytes[:-4])
+			dxilBytes = bytearray(open(p("s2.dxil"), "rb").read())
+			dxilBytes[32:36] = b"\xff\xff\xff\xff"
+			open(p("bad.dxil"), "wb").write(dxilBytes)
+			run(exe, ["shader", "validate", "-input", p("bad.spv")], want_fail=True, contains=["is invalid"])
+			run(exe, ["shader", "validate", "-input", p("bad.dxil")], want_fail=True, contains=["is invalid"])
+			zeroed = bytearray(open(p("s2.dxil"), "rb").read())
+			for i in range(int.from_bytes(zeroed[28:32], "little")):
+				off = int.from_bytes(zeroed[32 + 4 * i:36 + 4 * i], "little")
+				if zeroed[off:off + 4] == b"DXIL":
+					size = int.from_bytes(zeroed[off + 4:off + 8], "little")
+					zeroed[off + 8:off + 8 + size] = bytes(size)
+			open(p("zeroed.dxil"), "wb").write(zeroed)
+			run(exe, ["shader", "validate", "-input", p("zeroed.dxil")], want_fail=True, contains=["is invalid"])
 		else:
 			skip("shader", "shader compiler not in this build")
 

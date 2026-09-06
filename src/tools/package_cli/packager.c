@@ -824,6 +824,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 					&dirtyFiles, &dirtyText, &dirtyOutputs, &dirtyCompileOutputs,
 					settings->threadCount,
 					settings->isDebug,
+					false,                        //noOpt; packaged shaders stay optimized even with symbols on
 					false,                        //keepRegisters; engine shaders keep the default (strip-friendly) mode
 					settings->extraWarnings,
 					settings->ignoreEmptyFiles,

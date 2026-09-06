@@ -532,6 +532,41 @@ Bool Compiler_convertRegisterDXIL(
 
 	bindings.arr[ESHBinaryType_DXIL] = SHBinding{ .space = input->Space, .binding = input->BindPoint };
 
+	//A library reports resources per FUNCTION, so one register reaches this converter once per entry
+	//that binds it (and, under keep-all, once per entry full stop). The same declaration merges: the
+	//used flag is the union, and only a same-name register with a DIFFERENT binding stays an error
+	//(which SHFile_detectDuplicate below raises as before).
+
+	//Plain returns rather than goto clean: nothing is allocated yet, and a goto from here would jump
+	//over the initializations below, which C++ refuses.
+
+	for (U64 i = 0; i < registers->length; ++i) {
+
+		SHRegisterRuntime *reg = &registers->ptrNonConst[i];
+
+		if (!CharString_equalsStringSensitive(&reg->name, &name))
+			continue;
+
+		const SHBinding prev = reg->reg.bindings.arr[ESHBinaryType_DXIL];
+
+		if (prev.space == input->Space && prev.binding == input->BindPoint) {
+
+			const U8 usedBit = (U8)((!(input->uFlags & D3D_SIF_UNUSED)) << ESHBinaryType_DXIL);
+
+			//The used flag participates in the row's identity hash, so a flip rehashes.
+
+			if (usedBit & ~reg->reg.isUsedFlag) {
+
+				reg->reg.isUsedFlag |= usedBit;
+
+				if (!SHRegisterRuntime_hash(&reg->reg, &reg->name, &reg->arrays, &reg->shaderBuffer, &reg->hash, e_rr))
+					return false;
+			}
+
+			return s_uccess;
+		}
+	}
+
 	ListU32 arrays{};
 
 	U32 texFlags = D3D_SIF_TEXTURE_COMPONENT_0 | D3D_SIF_TEXTURE_COMPONENT_1;

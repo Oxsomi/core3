@@ -193,6 +193,152 @@ void Test_shaderCompilerDriver(Test *t) {
 		err = Error_none();
 	}
 
+	//--- Includes are recorded whichever annotation the entrypoint uses.
+	//--- A [shader("")] entry compiles as a library and is then linked, and the link reads no files of its
+	//--- own, so the binary that gets registered is the link's while the includes are the compile's.
+	//--- Builtin includes are used here because they resolve without touching the filesystem. ---
+
+	{
+		static const C8 *annotated[2] = {
+
+			"#include \"@types.hlsli\"\n"
+			"RWStructuredBuffer<F32> _out;\n"
+			"[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\n"
+			"void main() { _out[0] = 1; }\n",
+
+			"#include \"@types.hlsli\"\n"
+			"RWStructuredBuffer<F32> _out;\n"
+			"[shader(\"compute\")]\n[numthreads(1,1,1)]\n"
+			"void main() { _out[0] = 1; }\n"
+		};
+
+		ListBuffer inc = (ListBuffer) { 0 };
+		SHFile direct = (SHFile) { 0 }, lib = (SHFile) { 0 };
+
+		Bool compiledInc =
+			compileInlineShaders(alloc, annotated, 2, ESHBinaryType_SPIRV, 1, "driver_includes", true, &inc, &err) &&
+			inc.length == 2 &&
+			readOiSH(alloc, inc.ptr[0], &direct, &err) &&
+			readOiSH(alloc, inc.ptr[1], &lib, &err);
+
+		Test_assert(t, "[[oxc::stage]] records its includes", compiledInc && direct.includes.length);
+		Test_assert(t, "[shader()] records the same includes", compiledInc && lib.includes.length == direct.includes.length);
+
+		SHFile_free(&direct, alloc);
+		SHFile_free(&lib, alloc);
+		ListBuffer_freeUnderlying(&inc, alloc);
+		err = Error_none();
+	}
+
+	//--- --no-opt (-Od) exists so the optimizer stops folding what --debug's line info describes. ---
+	//--- Asserted on DXIL: rich SPIRV debug info already holds the spirv-opt passes off, so -Od changes ---
+	//--- nothing there; DXIL runs LLVM's full pipeline and folds the helper's body lines away unless ---
+	//--- -Od keeps them. Strictly more distinct DILocation lines with the flag is the whole contract, ---
+	//--- and equal counts would mean -Od never reached DXC. ---
+
+	{
+		static const C8 *foldable[1] = {
+			"RWStructuredBuffer<float> _out;\n"
+			"float helper(float v) {\n"
+			"    float a = v * 2;\n"
+			"    float b = a + 3;\n"
+			"    float c = b * b;\n"
+			"    return c - a;\n"
+			"}\n"
+			"[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\n"
+			"void main(uint i : SV_DispatchThreadID) {\n"
+			"    float x = 1.5;\n"
+			"    float y = helper(x);\n"
+			"    float z = helper(y);\n"
+			"    _out[i] = z;\n"
+			"}\n"
+		};
+
+		U64 lines[2] = { 0 };
+		Bool okBoth = true;
+
+		for (U64 pass = 0; pass < 2 && okBoth; ++pass) {
+
+			ListCharString files = (ListCharString) { 0 }, texts = (ListCharString) { 0 }, outs = (ListCharString) { 0 };
+			ListCharString includeDirs = (ListCharString) { 0 };
+			ListU8 modes = (ListU8) { 0 };
+			ListBuffer buffers = (ListBuffer) { 0 };
+			SHFile sh = (SHFile) { 0 };
+			CharString disasm = CharString_createNull();
+			Compiler disasmComp = (Compiler) { 0 };
+			Error e2 = Error_none();
+
+			okBoth &=
+				ListCharString_pushBack(&files, CharString_createRefCStrConst("noopt.hlsl"), alloc, NULL) &&
+				ListCharString_pushBack(&texts, CharString_createRefCStrConst(foldable[0]), alloc, NULL) &&
+				ListCharString_pushBack(&outs, CharString_createRefCStrConst("noopt.oiSH"), alloc, NULL) &&
+				ListU8_pushBack(&modes, (U8) ESHBinaryType_DXIL, alloc, NULL) &&
+				Compiler_compileShaders(
+					&files, &texts, &outs, &modes,
+					1,
+					true,                       //isDebug: the line info -Od exists to protect
+					pass == 1,                  //noOpt on the second pass only
+					false, (ECompilerWarning) 0, false, ECompileType_Compile,
+					&includeDirs, false, alloc, &buffers, &e2
+				) &&
+				buffers.length == 1 &&
+				readOiSH(alloc, buffers.ptr[0], &sh, &e2) &&
+				sh.binaries.length >= 1 &&
+				Compiler_create(alloc, &disasmComp, &e2) &&
+				Compiler_disassemble(
+					&disasmComp, ESHBinaryType_DXIL, sh.binaries.ptr[0].binaries[ESHBinaryType_DXIL], alloc, &disasm, &e2
+				);
+
+			//Distinct `!DILocation(line: N` values, collected into a bitset of the small line numbers this
+			// shader can produce.
+
+			if (okBoth) {
+
+				U64 seen = 0;
+				CharString needle = CharString_createRefCStrConst("!DILocation(line: ");
+				U64 off = 0;
+
+				while (true) {
+
+					U64 at = CharString_findFirstStringSensitive(&disasm, &needle, off, 0);
+
+					if(at == U64_MAX)
+						break;
+
+					off = at + CharString_length(needle);
+
+					U64 v = 0;
+
+					for (U64 i = off; i < CharString_length(disasm) && C8_isDec(disasm.ptr[i]); ++i)
+						v = v * 10 + (U64)(disasm.ptr[i] - '0');
+
+					if(v && v < 64)
+						seen |= (U64) 1 << v;
+				}
+
+				U64 count = 0;
+
+				for(U64 i = 0; i < 64; ++i)
+					count += (seen >> i) & 1;
+
+				lines[pass] = count;
+			}
+
+			CharString_free(&disasm, alloc);
+			if(disasmComp.interfaces[0]) Compiler_free(&disasmComp, alloc);
+			SHFile_free(&sh, alloc);
+			ListBuffer_freeUnderlying(&buffers, alloc);
+			ListCharString_free(&files, alloc);
+			ListCharString_free(&texts, alloc);
+			ListCharString_free(&outs, alloc);
+			ListCharString_free(&includeDirs, alloc);
+			ListU8_free(&modes, alloc);
+		}
+
+		Test_assert(t, "both --no-opt passes compiled and disassembled", okBoth);
+		Test_assert(t, "--no-opt keeps strictly more source lines alive", okBoth && lines[1] > lines[0]);
+	}
+
 	//--- Invalid HLSL is reported as failure, not a crash ---
 
 	{

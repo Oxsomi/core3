@@ -1,0 +1,134 @@
+OxC3 web frontend, outstanding work
+===================================
+
+What is left to do on shader.oxsomi.com and the compiler paths behind it. STATUS.md holds the
+capability table and the wider roadmap; this file is the working list for the frontend, kept at the
+level of "what would someone pick up next".
+
+An item leaves this list by landing WITH its tests and its documentation, per FOR_CONTRIBUTORS.md.
+
+
+Before this goes out
+--------------------
+
+- web/* still needs a manual read-through by Niels. Nothing in it has had a human pass end to end.
+- It needs an Astra review as well.
+
+
+Next big thing
+--------------
+
+- Live AMD ISA in the browser, through a spirv2isa Mesa fork compiled to wasm. This is the last
+  greyed-out capability on the page: the ISA tab works on desktop through amdllpc + amdgpu-dis, and
+  in the browser it refuses because those cannot be spawned. Marked in STATUS.md as needing the fork.
+
+
+Editor intelligence
+-------------------
+
+- Let the IntelliSense binary dropdown drive the selected binary, so the SPIR-V and DXIL views follow
+  whichever permutation the editor is on. The catch is a recompile whose entrypoints no longer match
+  the previous one's; that case needs a stale marker near the compile button rather than a silent
+  mismatch.
+
+- HLSL builtin intrinsics in hover and completion, with real signatures and a short description.
+  Today hover resolves symbols the reflector emits, so a user's own declarations work and every
+  builtin (mul, saturate, InterlockedAdd) is silent, which reads as a gap rather than a boundary.
+- Doc comments: carry the comment above a declaration through the reflector into the hover card.
+- Longer term, gated on a DXC IntelliSense seam: signature help while typing, an outline view, and
+  rename / find-references.
+
+
+Compiler and CLI, as the page uses them
+---------------------------------------
+
+- Extension x model validation table (for example PAQ below its minimum shader model), shared by the
+  CLI and the web assemble card, so an illegal combination greys out instead of failing late.
+- `shader assemble` into a real oiSH (an SHFile built from a binary plus an identifier). The web
+  round-trip check would then refuse rather than warn.
+- Reflect a bare .spv / .dxil has no CLI verb yet, though the page does it. The web CLI map says so.
+- Parse-only permutation listing, so the page's "IntelliSense follows" picker can fill before any
+  compile. Compiler_parse already yields the SHEntryRuntime this needs.
+- Descriptor layout overrides in the pipeline editor, with the assumed fields filling in from the
+  shader's own root signature when there is only one.
+- SBFile_combine mismatch errors should name the buffer and both sizes.
+- coop_vec compiles to different DXIL from run to run. The same source, compiled repeatedly through the
+  CLI, yields several distinct oiSH: the container hash moves and so do scattered bytes inside the DXIL
+  bitcode, while SPIR-V stays stable and every other sample is stable on both backends. The sample
+  suite therefore pins coop_vec's SPIR-V and skips its DXIL. Worth a reduced repro against the DXC fork
+  the way the multi-base and new/delete ones were done, then re-enable the pin.
+- No way to request a SPIR-V version. DXIL has the shader model (`[[oxc::model]]` and the CLI's
+  `-model`), and SPIR-V has no equivalent, so a shader cannot say which SPIR-V version it targets and
+  the toolchain's default is the only one available. The page's validator already reads the version
+  out of a module's header, so the reader half exists; what is missing is the annotation, the CLI
+  flag, the oiSH field to carry it, and passing it through to the SPIR-V backend.
+
+
+JSON serialization belongs in the formats
+-----------------------------------------
+
+OxC3_wasm should probably be temporary. It currently owns the JSON writing for oiSH, oiSR and oiSP,
+and that shape belongs to each format instead, so the output can be diffed rather than only viewed.
+
+- Generalize JsonWriter enough that a format can carry its own serializer, and move the per-format
+  writers out of src/tools/oxc3_wasm into the formats. oiSB's is already a different format's job and
+  should live with oiSB rather than beside the others.
+- `file data` could expose it under `--json`. That needs a pretty printer to be worth reading: oiSP's
+  specializations come out as bare values today, which are neither readable nor editable.
+- Under `--verbose`, DXIL and SPIR-V could carry a disassembly. In the long run that could replace the
+  binary goldens, or sit alongside them.
+- It might make sense to replace the normal print system with this, and to do the same for the other
+  oi formats, oiDL and oiCA among them. Each one's shape is straightforward enough on its own.
+- A deserializer is needed at some point too, not just a writer.
+- For the writer's shape, the one added for IHLSLReflection in the DXC fork was simple and is worth a
+  look before designing a new one.
+
+
+Reflection and the wasm serializers
+-----------------------------------
+
+- Nodes should know their children when the AST is built. Emitting a node's child list currently scans
+  every node looking for one whose parent is this node, which is quadratic in the node count and is by
+  far the heaviest part of writing an oiSR document.
+- Builtin includes are always collapsed in the oiSR output. Whether to fold them should be an option,
+  which means a switch on the page and a parameter on the writer rather than a fixed rule.
+- The JSON strings should reserve up front, so a document does not reallocate repeatedly while the
+  first fields are written.
+- Texture and StructuredBuffer inner type names: IHLSLReflection appears to give us the inner type,
+  and hover does not show it.
+
+
+Maintenance
+-----------
+
+- Split src/tools/oxc3_wasm/wasm_main.c. It holds every export in one file; the per-format serializers
+  already moved out, and the exports should follow the same split.
+- Cap the size of an oiCA the page will accept, so a shared archive cannot flood the receiver's memory
+  just because someone packed a large one. The number needs choosing; the check itself is a line.
+
+- Split web/js/app.js into feature modules. Share and restore, the binary strip, and the tabs are the
+  first three; new features already land as their own modules.
+- UBSan (clang, -fsanitize=function) reports calls through mismatched function pointer types in the
+  graphics C/C++ interop, because the oxc:: C++ twins of the C structs make the callback signatures
+  distinct types. Harmless on current ABIs, but it is 25 reports of noise in every sanitizer run.
+
+
+Parked
+------
+
+- Mouse back/forward navigating page state.
+- Side-by-side against upstream DXC; an upstream binary is too large to fetch casually.
+- GLSL and Slang input: HLSL only by design, stated in the docs.
+
+
+Notes for whoever picks this up
+-------------------------------
+
+- This machine has no node or npm on PATH. The emsdk's node is the only one, and everything under
+  web/dev needs it.
+- The wasm bundle and the desktop build are two configurations of one toolchain. Alternating build.py
+  and build_web.py needs no wipe, because the host tools get their own output tree through
+  OxC3OutputTag. If a link ever shows "multiple definition" walls in graphics code nobody touched, a
+  tree is being shared again and the tag is the fix.
+- The DXC fork's dev tree and the three files that pin it are described in CLAUDE.md and the fork's
+  own notes. Fork edits carry an `HLSL Change:` marker at most, matching upstream LLVM's sparseness.

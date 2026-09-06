@@ -33,6 +33,7 @@ Bool Compiler_precompileShader(
 	const Compiler *compiler,
 	ESHBinaryType outputType,
 	Bool isDebug,
+	Bool noOpt,
 	CharString inputPath,
 	CharString input,
 	ListSHEntryRuntime *shEntriesRuntime,
@@ -45,6 +46,7 @@ Bool Compiler_precompileShader(
 		.string = input,
 		.path = inputPath,
 		.debug = isDebug,
+		.noOptimization = noOpt,
 		.format = ECompilerFormat_HLSL,
 		.outputType = outputType,
 		.infoAboutIncludes = false,
@@ -339,6 +341,7 @@ Bool Compiler_compileShaderSingle(
 	const Compiler *compiler,
 	ESHBinaryType binaryType,
 	Bool isDebug,
+	Bool noOpt,
 	Bool keepRegisters,
 	Bool isRt,
 	Bool isGfxOrComp,
@@ -366,6 +369,7 @@ Bool Compiler_compileShaderSingle(
 		.string = input,
 		.path = inputPath,
 		.debug = isDebug,
+		.noOptimization = noOpt,
 		.keepUnusedRegisters = keepRegisters,
 		.isRt = isRt,
 		.containsGfxOrComp = isGfxOrComp,
@@ -415,6 +419,7 @@ Bool Compiler_linkSingle(
 	U16 shaderVersion,
 	ESHPipelineStage stageType,
 	ESHExtension exts,
+	Bool keepRegisters,
 	Bool enableLogging,
 	Buffer *result,
 	const Allocator *alloc
@@ -431,8 +436,8 @@ Bool Compiler_linkSingle(
 		retError(clean, Error_invalidParameter(5, 0, "Compiler_linkSingle()::result was present, but not empty"));
 
 	gotoIfError3(clean, Compiler_link(
-		compiler, type, inputs, uniforms, uniformData, &entrypoint, shaderVersion, stageType, exts, &errors, result,
-		alloc, e_rr
+		compiler, type, inputs, uniforms, uniformData, &entrypoint, shaderVersion, stageType, exts, keepRegisters,
+		&errors, result, alloc, e_rr
 	));
 
 	if (enableLogging)

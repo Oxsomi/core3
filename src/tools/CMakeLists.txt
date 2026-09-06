@@ -45,3 +45,10 @@ set_target_properties(check_generated_hpp PROPERTIES FOLDER Oxsomi/tools)
 if(EnableOxC3CLI)
     add_subdirectory(oxc3_cli)
 endif()
+
+# The module the web frontend calls into. It is the shader tooling as a library rather than as a program, so
+# it needs the shader compiler; without one there is nothing on the other side of the boundary to call.
+
+if(EMSCRIPTEN AND EnableShaderCompiler)
+    add_subdirectory(oxc3_wasm)
+endif()

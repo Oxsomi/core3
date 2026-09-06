@@ -349,8 +349,15 @@ jobs:
         run: ${{ inputs.python_cmd }} build_web.py --host_package_only
 
       - name: Build Web Release and run the test bundle
-        if: inputs.os == 'web'
+        if: inputs.os == 'web' && !inputs.upload_prebuilts
         run: ${{ inputs.python_cmd }} build_web.py -mode Release --run_tests --skip_host_package ${{ inputs.build_flags }}
+
+      # The release also stages the frontend module. Both flavors, since the embedded one is a relink rather
+      # than a copy, and the brotli siblings a host serves as-is, so deploying is unpacking web/wasm/ next
+      # to the page with no local --precompress step (see web/README.md, "Hosting for real").
+      - name: Build Web Release, stage the frontend module with brotli siblings, run the test bundle
+        if: inputs.os == 'web' && inputs.upload_prebuilts
+        run: ${{ inputs.python_cmd }} build_web.py -mode Release --run_tests --skip_host_package --frontend --precompress ${{ inputs.build_flags }}
 
       # ── Build: Android ─────────────────────────────────────────────────────
       # An android build can't run its own packager, so it tool_requires a host oxc3 that has OxC3_package in it,
@@ -541,6 +548,17 @@ jobs:
       # The contents come from conanfile.py's package() via -deploy above; the only thing subtracted here
       # is debug symbols, which dwarf everything else (the shader compiler's pdb alone is ~360 MB) and are
       # not what a prebuilt is for.
+
+      # Named prebuilt-* like the others so the release's publish job zips it without knowing it is different:
+      # the zip is web/wasm/ itself, OxC3_wasm.js + .wasm + their .br and OxC3_wasm_sf.js.
+      - name: Upload frontend module
+        if: success() && inputs.upload_prebuilts && inputs.os == 'web'
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuilt-${{ inputs.hook_name }}
+          path: web/wasm/**
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload prebuilts
         if: success() && inputs.upload_prebuilts && inputs.os != 'android' && inputs.os != 'web'

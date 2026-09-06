@@ -75,6 +75,7 @@ void Test_ESBTypeNameInvalidSlots(Test *t);
 void Test_ESBTypeNameUniqueness(Test *t);
 
 void Test_SBFileCombineFlags(Test *t);
+void Test_SBFileCombineStruct(Test *t);
 void Test_SBFileCombineBufferSizeMismatch(Test *t);
 void Test_SBFileCombineMissingVariable(Test *t);
 void Test_SBFileCombineTypeMismatch(Test *t);

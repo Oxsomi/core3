@@ -81,6 +81,7 @@ OXC3_TEST_MAIN(formats_oiSB) {
 	Test_ESBTypeNameUniqueness(&t);
 
 	Test_SBFileCombineFlags(&t);
+	Test_SBFileCombineStruct(&t);
 	Test_SBFileCombineBufferSizeMismatch(&t);
 	Test_SBFileCombineMissingVariable(&t);
 	Test_SBFileCombineTypeMismatch(&t);

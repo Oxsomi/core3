@@ -71,6 +71,16 @@ And run the suite, not just the build:
   `test_graphics_interface.cpp`.
 - The debug build's tracked allocator reports leaks with stacktraces at shutdown; tests stay clean,
   also under ASan.
+- build.py (tests on, CLI graphics on) and build_web.py's host tools (tests off, graphics dylib) are two
+  configurations of one toolchain, so the host tools get their own output tree, build/<mode>/<platform>/
+  <arch>_host (OxC3OutputTag in CMakeLists, set by buildHostToolPackage). Alternating the two scripts
+  needs no wipe. If a link ever shows "multiple definition" walls in graphics code nobody touched, a tree is
+  being shared again; the tag is the fix, not a wipe.
+- The first test run after wiping a build tree can race the RGA staging (88 ISA failures once), so rerun
+  before believing either failure.
+- OxC3_shader_compiler_test must run from src/shader_compiler/test (ctest does): started elsewhere, the
+  corpus pre-creates its output tree at whatever the CWD is, littering empty driver/ features/ hlsl/ ...
+  folders there before every compile fails on the missing corpus.
 - Consumers fetch core3 from the github main branch through conan. A local edit is INVISIBLE to a
   consumer build until pushed: a consumer links the cached library, not this tree. After a push the
   consumer needs a fresh conan resolve, because conan caches the clone per recipe revision.
@@ -125,3 +135,9 @@ And run the suite, not just the build:
   code; some SDK releases false-positive there where upstream main is fixed.
 - Functional tests that present to a physical swapchain are run by a human, never automated; measured
   or headless runs go through a nested compositor, not the desktop session.
+- Device tests DO run under ASan, through `oxc3SanitizerDeviceTestEnv`: the NVIDIA driver dlopens
+  libnvidia-gpucomp with RTLD_DEEPBIND, which the sanitizer runtime refuses (google/sanitizers#611), so
+  cmake/linux/asan_no_deepbind.c is preloaded to strip that flag, and the shadow gap protection comes off.
+  The preload only wins the interception when the ASan runtime is SHARED, hence `-shared-libasan` for
+  clang: with the default static runtime the executable's own interceptor outranks LD_PRELOAD, the shim
+  never sees a dlopen, and the failure looks like a driver bug (vkCreateDevice fails, no diagnostic).

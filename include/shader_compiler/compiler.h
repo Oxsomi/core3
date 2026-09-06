@@ -82,12 +82,24 @@ typedef struct CompilerSettings {
 	ListCharString includeDirs; //Optional extra include dirs to search
 
 	Bool debug;
+	Bool noOptimization;        //-Od: keep the codegen unoptimized, so debug line info survives per statement
 	Bool infoAboutIncludes;     //Saves extra include info, useful for debugging includes or hot shader reload
 	Bool isLib;
 	Bool containsGfxOrComp;
 	Bool isRt;
 	Bool keepUnusedRegisters;   //Keep declared but unused resources bound and reflected (stable layouts across variants)
-	U8 padding[2];
+
+	//Compiler_reflect only: describe what parsed even when the source has errors.
+	//A build wants nothing from a source that doesn't compile, but an editor navigating a file being typed
+	//wants the declarations that did parse, and refusing on one bad token means no outline at all.
+	Bool reflectAllowErrors;
+
+	//Compiler_reflect only: the permutation the reflection parses as. Zero-init keeps the historical
+	//behavior (every extension's define on, no $-defines): the everything-enabled parse an editor shows
+	//by default. Following one binary instead passes ~its extension set and its uniforms, so `half`,
+	//PAQ and friends mean what they mean in THAT permutation.
+	ESHExtension reflectDisabledExt;    //extensions whose __OXC_EXT_* define (and gated flags) are omitted
+	ListCharString reflectDefines;      //name,value pairs as -D$name[=value]; a $-prefixed name as is ($$name is a uniform)
 
 } CompilerSettings;
 
@@ -263,6 +275,15 @@ Bool Compiler_assemble(
 	const Compiler *comp, ESHBinaryType type, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr
 );
 
+//Judge a standalone binary before anything trusts it: spirv-val for SPIR-V, DXC's validator for a DXIL container.
+//The verdict comes back through valid/errorText, since an invalid binary is an answer about the input rather than a
+// failure of this call; errorText carries the validator's own message.
+
+Bool Compiler_validate(
+	const Compiler *comp, ESHBinaryType type, Buffer binary, const Allocator *alloc, Bool *valid, CharString *errorText,
+	Error *e_rr
+);
+
 //Query entrypoints embedded in a binary
 
 Bool Compiler_getUniqueEntrypoints(
@@ -304,6 +325,7 @@ Bool Compiler_link(
 	U16 shaderVersion,                     //U8 maj, minor
 	ESHPipelineStage stageType,
 	ESHExtension exts,
+	Bool keepRegisters,                    //Keep unused resources through the link's own codegen pass too
 	ListCompileError *errors,
 	Buffer *result,                        //Output binary: Either library or specialized binary (PS/GS/CS/etc.)
 	const Allocator *alloc,
@@ -350,9 +372,17 @@ Bool Compiler_parse(
 );
 
 //Walk the frontend HLSL reflection (source-level symbol AST) into a backend-neutral SRFile (oiSR).
+//With settings->reflectAllowErrors the result is partial rather than absent when the source has errors.
 //Unlike Compiler_parse (which keeps only annotated entrypoints), this preserves the full node tree
 // with source locations, so it can drive editor intelligence (semantic highlighting, outline, go-to-definition).
 //Reflection runs on the preprocessed source, so settings->string / defines determine which code paths are visible.
+//spirv-val's verdict on arbitrary bytes; valid is the answer, errorText the validator's own message
+//(allocated when invalid and errorText is given). The error channel is for the call itself failing.
+Bool Compiler_validateSPIRV(Buffer binary, const Allocator *alloc, Bool *valid, CharString *errorText, Error *e_rr);
+Bool Compiler_validateDXIL(
+	const Compiler *comp, Buffer binary, const Allocator *alloc, Bool *valid, CharString *errorText, Error *e_rr
+);
+
 Bool Compiler_reflect(
 	const Compiler *comp,
 	const CompilerSettings *settings,
@@ -413,6 +443,7 @@ Bool Compiler_compileShaders(
 	const ListU8 *allCompileOutputs,
 	U64 threadCount,
 	Bool isDebug,
+	Bool noOpt,                       //-Od; only meaningful with isDebug, where line info is the point
 	Bool keepRegisters,               //Keep declared but unused resources bound and reflected
 	ECompilerWarning extraWarnings,
 	Bool ignoreEmptyFiles,

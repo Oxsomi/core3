@@ -690,6 +690,43 @@ def saveHashCache(cache):
 	with open(HASH_CACHE_FILE, "w") as f:
 		json.dump(cache, f, indent=2)
 
+# Not a package build, so it can't collide with the "<package>::<mode>[::<options>]" entries beside it.
+DXC_SOURCE_KEY = "packages/dxc::source"
+
+
+def dxcSourceFingerprint(path):
+	"""What the fork's working tree currently is, as a short hash, or None when git can't say.
+
+	conan runs source() once per recipe revision and caches the copy, so an edit to the fork is invisible to
+	the next build: the recipe hasn't changed, and neither has the profile. --force_deps doesn't help either,
+	since it forces the build and not the copy. This is what tells the caller the copy is stale, and it asks
+	git rather than walking the tree because a DXC checkout is far too large to hash per build.
+	"""
+
+	try:
+
+		head = subprocess.run(
+			["git", "-C", path, "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+		).stdout
+
+		# Committed state alone would miss the uncommitted edit that is the whole point of -dxc_source, so
+		# the dirty state goes in too: the diff for tracked files, the porcelain listing for new ones.
+
+		dirty = subprocess.run(
+			["git", "-C", path, "diff", "HEAD"], capture_output=True, text=True, check=True
+		).stdout
+
+		untracked = subprocess.run(
+			["git", "-C", path, "status", "--porcelain", "--untracked-files=normal"],
+			capture_output=True, text=True, check=True
+		).stdout
+
+		return hashlib.sha256((head + dirty + untracked).encode("utf-8")).hexdigest()[:16]
+
+	except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+		return None
+
+
 def conanCreateIfChanged(packagePath, profile, mode, profileArgs, cache, key=None, options=""):
 	"""conan create a dependency, skipping it when neither the recipe nor the profile changed.
 
@@ -806,8 +843,15 @@ def shaderCompilerDepArgs(debugShaderCompiler):
 
 	return " ".join(args)
 
-def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None, asan=False, ubsan=False):
-	"""Create everything oxc3 needs for a *host* build (which includes the OxC3_package tool build)."""
+def buildHostDependencies(
+	modes, cache, debugShaderCompiler=False, compiler=None, asan=False, ubsan=False, dxcSource=None
+):
+	"""Create everything oxc3 needs for a *host* build (which includes the OxC3_package tool build).
+
+	dxcSource builds DXC from a working tree rather than from the pin (see packages/dxc). It has to reach
+	the host build too, not just the cross one: the host packager links the same shader compiler, so a
+	change to the fork's headers has to be present in both or one of them stops compiling.
+	"""
 
 	system = hostSystem()
 
@@ -879,8 +923,37 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 			else:
 				print("-- WARNING: no host DXC tablegen found; sanitized Windows DXC will try to build its own")
 
+		dxcSourceConf = f' -c:h user.dxc:source_dir="{os.path.abspath(dxcSource)}"' if dxcSource else ""
+
+		# A changed fork needs the cached source copy dropped, not just a rebuild, so the recipe goes with it.
+		# Only when it actually changed: this costs a full DXC build, and the fingerprint is there to make that
+		# the exception rather than the price of every -dxc_source build.
+
+		if dxcSource:
+
+			fingerprint = dxcSourceFingerprint(os.path.abspath(dxcSource))
+
+			if fingerprint is None:
+				print("-- WARNING: can't fingerprint the DXC working tree; conan may build a stale copy of it")
+
+			elif cache.get(DXC_SOURCE_KEY) != fingerprint:
+
+				print("-- DXC working tree changed, dropping the cached recipe so its source is copied again")
+				run("conan remove \"dxc/*\" -c", cwd=ROOT)
+
+				# The hash cache keys off the recipe and profile, neither of which moved, so it would skip the
+				# package that was just removed. Dropping its entries is what turns the removal into a rebuild.
+
+				for stale in [k for k in cache if k.startswith("packages/dxc::") and k != DXC_SOURCE_KEY]:
+					del cache[stale]
+
+				cache[DXC_SOURCE_KEY] = fingerprint
+
 		for package in SHADER_COMPILER_DEPS:
-			depOptions = (sanitizerOptions + dxcTablegenConf) if package == "packages/dxc" else sanitizerOptions
+			depOptions = (
+				(sanitizerOptions + dxcTablegenConf + dxcSourceConf) if package == "packages/dxc"
+				else sanitizerOptions
+			)
 			conanCreateIfChanged(package, shaderProfile, shaderMode, shaderArgs, cache, options=depOptions.strip())
 		conanCreateIfChanged("packages/openal_soft",        profile, mode, profileArgs, cache, options=sanitizerOptions)
 
@@ -892,7 +965,7 @@ def buildHostDependencies(modes, cache, debugShaderCompiler=False, compiler=None
 # The host tool package
 # ---------------------------------------------------------------------------------------------------
 
-def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False, compiler=None):
+def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False, compiler=None, dxcSource=None):
 	"""Build and export oxc3 for the host with the shader compiler + CLI enabled, so that a build which
 	can't run its own packager (android, or any cross build) can tool_requires it.
 
@@ -905,7 +978,7 @@ def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False, compiler=None):
 		os.remove(HASH_CACHE_FILE)
 
 	cache = loadHashCache()
-	buildHostDependencies([ mode ], cache, compiler=compiler)
+	buildHostDependencies([ mode ], cache, compiler=compiler, dxcSource=dxcSource)
 	saveHashCache(cache)
 
 	profileArgs = hostProfileArgs(mode, compiler)
@@ -938,7 +1011,12 @@ def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False, compiler=None):
 	if (compiler or defaultCompiler()) != defaultCompiler():
 		archName += f"_{compiler}"
 
-	binDir = os.path.join(ROOT, "build", mode, hostPlatformName(), archName, "bin")
+	# Its own output directory, as a second configuration of the default toolchain: OxC3OutputTag in
+	# CMakeLists says why, and why it is a cmake variable rather than a conan option.
+
+	tagConf   = "-c tools.cmake.cmaketoolchain:extra_variables=\"{'OxC3OutputTag': 'host'}\""
+	archName += "_host"
+	binDir    = os.path.join(ROOT, "build", mode, hostPlatformName(), archName, "bin")
 
 	for name in ("OxC3_shader_compiler.dll", "libOxC3_shader_compiler.so", "libOxC3_shader_compiler.dylib"):
 
@@ -948,5 +1026,5 @@ def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False, compiler=None):
 			print(f"-- Removing stale {name} before packaging the static host tool")
 			os.remove(stale)
 
-	run(f"conan build . -of {outputFolder} {profileArgs} -s build_type={mode} {options} --build=missing", cwd=ROOT)
-	run(f"conan export-pkg . -of {outputFolder} {profileArgs} -s build_type={mode} {options}", cwd=ROOT)
+	run(f"conan build . -of {outputFolder} {profileArgs} -s build_type={mode} {options} {tagConf} --build=missing", cwd=ROOT)
+	run(f"conan export-pkg . -of {outputFolder} {profileArgs} -s build_type={mode} {options} {tagConf}", cwd=ROOT)

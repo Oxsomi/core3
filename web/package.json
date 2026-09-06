@@ -1,0 +1,12 @@
+{
+  "name": "oxc3-shader-frontend-dev",
+  "private": true,
+  "description": "Dev dependencies for the web frontend's test harnesses (the page itself has none).",
+  "devDependencies": {
+    "codemirror": "5.65.16",
+    "jsdom": "^24.0.0"
+  },
+  "scripts": {
+    "test": "node dev/frontend_unit.js && node dev/editor_test.js && node dev/smoke.js"
+  }
+}

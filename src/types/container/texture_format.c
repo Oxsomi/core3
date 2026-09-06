@@ -22,6 +22,10 @@
 
 #include "types/container/texture_format.h"
 
+const C8 *EDepthStencilFormat_names[EDepthStencilFormat_Count] = {
+	"None", "D16", "D32", "D24S8Ext", "D32S8X24Ext", "S8X24Ext"
+};
+
 const C8 *ETextureFormatId_name[ETextureFormatId_Count] = {
 
 	"Undefined",

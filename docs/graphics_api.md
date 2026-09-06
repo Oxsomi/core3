@@ -427,7 +427,9 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   //early errors rather than blocking, so never submitting the build cannot become a hang. It ALLOCATES, and
   //the structure being replaced lives until the submit holding the copy completes, so peak spans both.
   //Records nothing, reporting success, when the structure was built without ERTASBuildFlags_AllowCompaction,
-  //is already compacted, or the driver reported no saving.
+  //is already compacted, or the driver reported no saving. A driver that reports a size of ZERO for a built
+  //structure is REFUSED instead: that is a broken query rather than a structure which cannot shrink, and
+  //accepting it would retire the structure with the memory still held.
   //
   //Compaction MOVES the structure. Every live TLAS that resolved its address is marked, and the submit after
   //the copy is refused while any mark stands, so forgetting to update one is an error and not a wrong frame
@@ -1339,7 +1341,7 @@ Contains the following properties:
 - asConstructionType: the BLAS or TLAS specific construction type.
 - scratchBuffer: temporary data that is only available until the AS has been created and the frame has been completed on the CPU.
 - asBuffer: the buffer resource that represents this acceleration structure. Compaction REPLACES this, which is why it also changes the structure's device address.
-- isCompacted: set once compaction has run, or once the driver reported no saving. A compacted structure is never copied twice. The rest of the compaction bookkeeping beside it is internal.
+- isCompacted: set once compaction has run, or once the driver reported no saving. A compacted size query that returns zero is refused and leaves it clear. A compacted structure is never copied twice. The rest of the compaction bookkeeping beside it is internal.
 - flags:
   - AllowUpdate (0): refitting is allowed. This is a faster way of updating acceleration structures, but at the cost of traversal time. See Refitting below.
   - AllowCompaction (1): compaction is allowed. The flag on its own changes nothing about memory; it makes `CommandListRef_compactBLASExt` legal on the structure, and recording that copy is what reclaims the space.

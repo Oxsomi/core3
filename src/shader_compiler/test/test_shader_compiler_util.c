@@ -28,6 +28,7 @@
 #include "types/container/string.h"
 #include "types/container/buffer.h"
 #include "types/container/list_basic_types.h"
+#include "types/container/log.h"
 #include "types/container/memory_stream.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/time.h"
@@ -79,6 +80,7 @@ Bool compileInlineShaders(
 		&allFiles, &allShaderText, &allOutputs, &allCompileModes,
 		threadCount,
 		false,                              //isDebug
+		false,                              //noOpt
 		false,                              //keepRegisters
 		(ECompilerWarning) 0,
 		false,                              //ignoreEmptyFiles: we expect real output
@@ -152,8 +154,8 @@ Bool compileFileShader(
 
 	gotoIfError3(clean, Compiler_compileShaders(
 		&allFiles, &allShaderText, &allOutputs, &allCompileModes,
-		1, false, keepRegisters, (ECompilerWarning) 0, false, ECompileType_Compile, &includeDirs, enableLogging, alloc,
-		out, e_rr
+		1, false, false, keepRegisters, (ECompilerWarning) 0, false, ECompileType_Compile, &includeDirs, enableLogging,
+		alloc, out, e_rr
 	));
 
 clean:
@@ -224,4 +226,77 @@ Bool writeOiSH(const Allocator *alloc, const SHFile *file, Buffer *out, Error *e
 clean:
 	RefPtr_dec(&ms);
 	return s_uccess;
+}
+
+//Re-serialize an oiSH with the fields that churn without the OUTPUT changing blanked out.
+//
+//Two of them are metadata about the build rather than about what was compiled: the OxC3 version stamped into
+// every header, which moves on every release, and the CRC32C recorded per include, which moves when any
+// embedded header is touched even for whitespace.
+//Neither can change the bytecode or the reflection on its own, so letting them fail the snapshot meant all 32
+// references churned for a version bump or a stray space in types.hlsli.
+//
+//sourceHash is deliberately NOT blanked: that one moves when the corpus shader itself changes, which is
+// exactly when the reference should be looked at again.
+//
+//The header's own hash covers the include CRCs, so it is recomputed rather than patched; writing the file out
+// again does that.
+
+static Bool shNormalize(const Allocator *alloc, Buffer in, Buffer *out) {
+
+	SHFile file = (SHFile) { 0 };
+	Error err = Error_none();
+	Bool ok = false;
+
+	if(!readOiSH(alloc, in, &file, &err))
+		goto clean;
+
+	file.compilerVersion = 0;
+
+	for(U64 i = 0; i < file.includes.length; ++i)
+		file.includes.ptrNonConst[i].crc32c = 0;
+
+	//A rebuilt DXC restamps the generator word of every SPIRV header (word 2, holding the tool's id in the
+	// high half and the tool's own version in the low half) while emitting byte identical instructions,
+	// so keeping that low half turns the entire corpus red whenever the toolchain package is rebuilt.
+	//Only the version half is dropped, so a binary that came out of a different tool is still caught.
+
+	for(U64 i = 0; i < file.binaries.length; ++i) {
+
+		const Buffer spirv = file.binaries.ptr[i].binaries[ESHBinaryType_SPIRV];
+		Bool readMagic = false;
+
+		if(Buffer_length(spirv) < sizeof(U32) * 5 || Buffer_isConstRef(spirv))
+			continue;
+
+		if(Buffer_readU32(spirv, 0, &readMagic, NULL) != 0x07230203 || !readMagic)
+			continue;
+
+		const U32 generator = Buffer_readU32(spirv, sizeof(U32) * 2, NULL, NULL);
+		Buffer_writeU32(spirv, sizeof(U32) * 2, generator & 0xFFFF0000, NULL);
+	}
+
+	ok = writeOiSH(alloc, &file, out, &err);
+
+clean:
+
+	if(!ok && err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	SHFile_free(&file, alloc);
+	return ok;
+}
+
+Bool oiSHContentMatches(const Allocator *alloc, Buffer a, Buffer b) {
+
+	Buffer na = Buffer_createNull(), nb = Buffer_createNull();
+
+	const Bool match =
+		shNormalize(alloc, a, &na) &&
+		shNormalize(alloc, b, &nb) &&
+		Buffer_eq(na, nb);
+
+	Buffer_free(&na, alloc);
+	Buffer_free(&nb, alloc);
+	return match;
 }

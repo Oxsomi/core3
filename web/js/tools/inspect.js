@@ -1,4 +1,4 @@
-/* tools/inspect.js — everything that renders an SHDocument.
+/* tools/inspect.js: everything that renders an SHDocument.
  * Shared by Compile mode (the doc it just produced) and Inspect-oiSH mode (loaded docs).
  * The level of detail intentionally matches `OxC3 file data` / SHFile_print --verbose:
  * per-binary identifiers, dual-backend bindings + used flags, oiSB buffer layouts,
@@ -6,10 +6,16 @@
 (function () {
 "use strict";
 const { $, esc, hex8, fmtBytes } = window.OxUtil;
+const U = window.OxUtil;
 
 /* ---------------------------------------------------------------- small bits */
 
 const clsCss = { CBV: "reg-cbv", SRV: "reg-srv", UAV: "reg-uav", SMP: "reg-smp" };
+
+/* An include is a file the project (or the compiler) holds, so it opens like one. The path is what the
+ * compiler resolved, which is the project path or an @builtin; app.js takes it from there. */
+const includeLink = path =>
+  `<a class="tname inc-link" href="#" data-openfile="${esc(path)}" title="open ${esc(path)}">${esc(path)}</a>`;
 const stageBadge = e =>
   `<span class="badge ${e.lib ? "text-bg-warning" : "text-bg-secondary"}">${esc(e.stage)}</span>`;
 const usedTag = (u, label) =>
@@ -60,9 +66,9 @@ function sbHTML(reg) {
 
 function bindingsHTML(r) {
   const d = r.bindings.dxil, s = r.bindings.spirv;
-  const dxil = d ? `<code>register(${d.letter}${d.binding}, space${d.space})</code>` : "—";
+  const dxil = d ? `<code>register(${d.letter}${d.binding}, space${d.space})</code>` : "-";
   const spv = s ? `<code>[[vk::binding(${s.binding}, ${s.set})]]</code>`
-    : (r.push ? `<span class="text-body-secondary">push_constant</span>` : "—");
+    : (r.push ? `<span class="text-body-secondary">push_constant</span>` : "-");
   return { dxil, spv };
 }
 function registerRow(r) {
@@ -147,7 +153,7 @@ function reflectionHTML(doc) {
   out += node(`<span class="tname">Binaries</span> <span class="text-body-secondary">${doc.binaries.length}</span>`, true,
     doc.binaries.map(binNode).join("") || `<li class="px-3 text-body-secondary">none${doc.flags.reflectionOnly ? " (reflection-only)" : ""}</li>`);
   out += node(`<span class="tname">Includes</span> <span class="text-body-secondary">${doc.includes.length}</span>`, true,
-    doc.includes.map((inc, i) => leaf(`<span class="text-body-secondary">${i}</span> <span class="tname">${esc(inc.path)}</span> <span class="toff">CRC32C ${hex8(inc.crc32c)}</span>`)).join("") || `<li class="px-3 text-body-secondary">none</li>`);
+    doc.includes.map((inc, i) => leaf(`<span class="text-body-secondary">${i}</span> ${includeLink(inc.path)} <span class="toff">CRC32C ${hex8(inc.crc32c)}</span>`)).join("") || `<li class="px-3 text-body-secondary">none</li>`);
   return `<ul class="tree">${out}</ul>`;
 }
 function serializedTypes(doc) {
@@ -171,8 +177,12 @@ function assembleCardHTML(doc) {
       <div><label class="small text-body-secondary">Entrypoint</label><input id="asmEntry" class="form-control form-control-sm" value="${esc(e.name)}"></div>
       <div><label class="small text-body-secondary">Stage</label><select id="asmStage" class="form-select form-select-sm">${stages.map(s => `<option ${s === e.stage ? "selected" : ""}>${s}</option>`).join("")}</select></div>
       <div><label class="small text-body-secondary">[[oxc::model]]</label><select id="asmModel" class="form-select form-select-sm">${models.map(m => `<option ${m === (b.model || "6.5") ? "selected" : ""}>${m}</option>`).join("")}</select></div>
-      <div style="min-width:220px"><label class="small text-body-secondary">[[oxc::extension]]</label><select id="asmExts" class="form-select form-select-sm" multiple size="4">${window.OxMock.EXTENSIONS.map(x => `<option>${x}</option>`).join("")}</select></div>
-      <div style="min-width:140px"><label class="small text-body-secondary">[[oxc::vendor]] (none = all)</label><select id="asmVendors" class="form-select form-select-sm" multiple size="4">${window.OxMock.VENDORS.map(v => `<option>${v}</option>`).join("")}</select></div>
+      <div style="min-width:220px"><label class="small text-body-secondary">[[oxc::extension]]</label>
+        <div id="asmExts" class="asm-checklist">${window.OxMock.EXTENSIONS.map(x =>
+          `<label class="form-check small d-block m-0"><input class="form-check-input" type="checkbox" value="${x}"> ${x}</label>`).join("")}</div></div>
+      <div style="min-width:140px"><label class="small text-body-secondary">[[oxc::vendor]] (none = all)</label>
+        <div id="asmVendors" class="asm-checklist">${window.OxMock.VENDORS.map(v =>
+          `<label class="form-check small d-block m-0"><input class="form-check-input" type="checkbox" value="${v}"> ${v}</label>`).join("")}</div></div>
       <div><label class="small text-body-secondary">Output</label><input id="asmName" class="form-control form-control-sm" value="${esc(doc.name.replace(/\.(spv|dxil)$/i, ""))}.oiSH"></div>
       <button id="asmOishGo" class="btn btn-sm btn-teal"><i class="bi bi-box-arrow-in-down me-1"></i>Assemble</button>
     </div>
@@ -209,9 +219,9 @@ function oishViewHTML(doc) {
     <table class="ox"><thead><tr><th>Binary</th><th>SM</th><th>Sizes</th><th>Extensions (dormant struck)</th><th>Vendors</th></tr></thead><tbody>
     ${doc.binaries.map((b, i) => `<tr>
       <td>#${i} ${b.lib ? `<span class="chip chip-lib">lib</span> ${esc(b.entryNames.join(", "))}` : esc(b.entrypoint) + " · " + esc(b.stage)}</td>
-      <td>${b.model ? esc(b.model) : "—"}</td>
-      <td>${b.sizes.spirv ? "spv " + fmtBytes(b.sizes.spirv) : ""}${b.sizes.spirv && b.sizes.dxil ? " · " : ""}${b.sizes.dxil ? "dxil " + fmtBytes(b.sizes.dxil) : ""}${!b.sizes.spirv && !b.sizes.dxil ? "—" : ""}</td>
-      <td>${b.extensions.map(e => b.dormant.includes(e) ? `<s class="text-body-secondary" title="dormant: declared but not detected in the executable">${esc(e)}</s>` : esc(e)).join(", ") || "—"}</td>
+      <td>${b.model ? esc(b.model) : "-"}</td>
+      <td>${b.sizes.spirv ? "spv " + fmtBytes(b.sizes.spirv) : ""}${b.sizes.spirv && b.sizes.dxil ? " · " : ""}${b.sizes.dxil ? "dxil " + fmtBytes(b.sizes.dxil) : ""}${!b.sizes.spirv && !b.sizes.dxil ? "-" : ""}</td>
+      <td>${b.extensions.map(e => b.dormant.includes(e) ? `<s class="text-body-secondary" title="dormant: declared but not detected in the executable">${esc(e)}</s>` : esc(e)).join(", ") || "-"}</td>
       <td>${b.vendors ? esc(b.vendors.join(", ")) : "all"}</td></tr>`).join("")}
     </tbody></table>
   </div></div>`;
@@ -220,7 +230,7 @@ function oishViewHTML(doc) {
   <div class="card mb-3"><div class="card-body">
     <div class="d-flex align-items-center mb-2"><span class="fw-semibold">Entrypoints</span>
       <span class="ms-auto small text-body-secondary cli">OxC3 shader entrypoints -input ${esc(doc.name)} --verbose</span></div>
-    <div class="small">${doc.entries.map(e => `${esc(e.name)} <span class="text-body-secondary">(${esc(e.stage)}${e.group ? " · " + e.group.join("×") : ""}${e.payloadSize != null ? " · payload " + e.payloadSize + " B" : ""})</span>`).join(" · ") || "—"}</div>
+    <div class="small">${doc.entries.map(e => `${esc(e.name)} <span class="text-body-secondary">(${esc(e.stage)}${e.group ? " · " + e.group.join("×") : ""}${e.payloadSize != null ? " · payload " + e.payloadSize + " B" : ""})</span>`).join(" · ") || "-"}</div>
     <div class="small text-body-secondary mt-1">Full per-entry reflection (IO semantics, wave sizes, binary refs) lives in the Reflection tab.</div>
   </div></div>`;
 
@@ -228,7 +238,7 @@ function oishViewHTML(doc) {
   <div class="card mb-3"><div class="card-body">
     <div class="d-flex align-items-center mb-2"><span class="fw-semibold">Includes</span>
       <span class="ms-auto small text-body-secondary cli">OxC3 shader includes -input ${esc(doc.name)}</span></div>
-    ${doc.includes.map(i => `<span class="badge text-bg-secondary me-1 mb-1">${esc(i.path)} <span class="text-body-secondary">CRC ${hex8(i.crc32c)}</span></span>`).join("") || '<span class="small text-body-secondary">none</span>'}
+    ${doc.includes.map(i => `<span class="badge text-bg-secondary me-1 mb-1">${includeLink(i.path)} <span class="text-body-secondary">CRC ${hex8(i.crc32c)}</span></span>`).join("") || '<span class="small text-body-secondary">none</span>'}
     <div class="small text-body-secondary mt-2">Include CRCs are what <code>file combine</code> checks, and what a hot-reload file watcher would compare.</div>
   </div></div>`;
 
@@ -253,7 +263,7 @@ function binRows(doc, backends) {
   return rows;
 }
 
-async function showBinary(doc, row, switchTab = true) {
+async function showBinary(doc, row, switchTab = true, activeFile = null) {
   const bin = doc.binaries[row.binIdx];
   const isSpv = row.backend === "spirv";
   const size = fmtBytes(bin.sizes[row.backend]);
@@ -270,13 +280,17 @@ async function showBinary(doc, row, switchTab = true) {
     $("#spvHead").innerHTML = `<span class="chip chip-spv">SPIR-V ${env.ver}</span>
       <span class="ms-2 text-body-secondary">${esc(bin.lib ? bin.entryNames.join(", ") : bin.entrypoint)} · ${env.env} · ${size}</span>
       <span class="float-end text-body-secondary cli">OxC3 ${esc(cli)}</span>`;
-    $("#spvAsm").textContent = text;
+    window.OxAsmMap.mount($("#spvAsm"), text, "spirv", activeFile);
+    $("#spvHead").insertAdjacentHTML("beforeend", $("#spvAsm")._asmAny ? "" :
+      ` <span class="text-body-secondary small asm-hint">(compile with -Zi for source line mapping)</span>`);
     if (switchTab) document.querySelector('[data-bs-target="#p-spv"]').click();
   } else {
     $("#dxilHead").innerHTML = `<span class="chip chip-dxil">DXIL ${sm}</span>
       <span class="ms-2 text-body-secondary">${esc(bin.lib ? bin.entryNames.join(", ") : bin.entrypoint)} · ${size}</span>
       <span class="float-end text-body-secondary cli">OxC3 ${esc(cli)}</span>`;
-    $("#dxilAsm").textContent = text;
+    window.OxAsmMap.mount($("#dxilAsm"), text, "dxil", activeFile);
+    $("#dxilHead").insertAdjacentHTML("beforeend", $("#dxilAsm")._asmAny ? "" :
+      ` <span class="text-body-secondary small asm-hint">(compile with -Zi for source line mapping)</span>`);
     if (switchTab) document.querySelector('[data-bs-target="#p-dxil"]').click();
   }
 }

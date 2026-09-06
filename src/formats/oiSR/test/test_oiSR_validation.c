@@ -473,7 +473,8 @@ void Test_SRFileStructuralRoundTrips(Test *t) {
 			Test_assert(t, "large-N file round-trips", ok);
 			Test_assert(t, "large-N node count", ok && result.nodes.length == N);
 			Test_assert(t, "interpolation field survives",
-				ok && result.nodes.length == N && result.nodes.ptr[1].interpolation == ESRInterpolation_LinearNoperspective);
+				ok && result.nodes.length == N && result.nodes.ptr[1].interpolation == ESRInterpolation_LinearNoperspective
+			);
 			Test_assert(t, "large-N hash preserved", ok && result.hash == sr.hash);
 		}
 		else Test_assert(t, "create large-N", false);
@@ -543,13 +544,15 @@ void Test_SRFileCreateAndWriteGuards(Test *t) {
 	{
 		SRFile sr = { 0 };
 		Test_assert(t, "create rejects invalid flags",
-			!SRFile_create((ESRSettingsFlags) 0x80000000, ESRFeature_All, t->alloc, &sr, NULL));
+			!SRFile_create((ESRSettingsFlags) 0x80000000, ESRFeature_All, t->alloc, &sr, NULL
+		));
 		SRFile_free(&sr, t->alloc);
 	}
 	{
 		SRFile sr = { 0 };
 		Test_assert(t, "create rejects unknown feature bits",
-			!SRFile_create(ESRSettingsFlags_None, (U32) (1 << 20), t->alloc, &sr, NULL));
+			!SRFile_create(ESRSettingsFlags_None, (U32) (1 << 20), t->alloc, &sr, NULL
+		));
 		SRFile_free(&sr, t->alloc);
 	}
 
@@ -558,7 +561,8 @@ void Test_SRFileCreateAndWriteGuards(Test *t) {
 		SRFile sr = { 0 };
 		if(srBuildMinimal(t, &sr))
 			Test_assert(t, "create rejects non-empty target",
-				!SRFile_create(ESRSettingsFlags_None, ESRFeature_All, t->alloc, &sr, NULL));
+				!SRFile_create(ESRSettingsFlags_None, ESRFeature_All, t->alloc, &sr, NULL
+			));
 		SRFile_free(&sr, t->alloc);
 	}
 
@@ -588,6 +592,34 @@ void Test_SRFileCreateAndWriteGuards(Test *t) {
 				Test_assert(t, "write rejects symbol/node mismatch", !SRFile_write(&sr, t->alloc, s, &off, NULL));
 			}
 			RefPtr_dec(&s);
+		}
+		SRFile_free(&sr, t->alloc);
+	}
+
+	//A reference that lands outside the pool it names is refused before the file is handed on, whether it was
+	//read off disk or built in memory: every walker follows these without checking them again.
+
+	{
+		SRFile sr = { 0 };
+		if(srBuildMinimal(t, &sr)) {
+			sr.nodes.ptrNonConst[1].parent = 7;      //Only nodes 0 and 1 exist, and a parent must precede its child
+			Test_assert(t, "finalize rejects an out-of-range parent", !SRFile_finalize(&sr, t->alloc, NULL));
+		}
+		SRFile_free(&sr, t->alloc);
+	}
+
+	{
+		SRFile sr = { 0 };
+		if(srBuildMinimal(t, &sr)) {
+
+			SRType ty = (SRType) {
+				.nodeId = 9,                         //No such node
+				.typeNameId = U32_MAX, .displayNameId = U32_MAX, .defNodeId = U32_MAX, .baseNodeId = U32_MAX,
+				.arrayDimStart = U32_MAX, .typeClass = ESRTypeClass_Scalar, .rows = 1, .cols = 1
+			};
+
+			ListSRType_pushBack(&sr.types, ty, t->alloc, &t->err);
+			Test_assert(t, "finalize rejects a type pointing at no node", !SRFile_finalize(&sr, t->alloc, NULL));
 		}
 		SRFile_free(&sr, t->alloc);
 	}

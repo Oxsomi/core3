@@ -194,8 +194,11 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] name[0] must start with [A-Za-z_]"
 			));
 
+		//'_' is part of an identifier after the first character too, which is what the message says and what
+		//SHFile_read accepts; without it the writer refuses names its own reader takes back.
+
 		for(U64 j = 1; j < CharString_length(uniform.name); ++j)
-			if(!C8_isAlphaNumeric(uniform.name.ptr[j]))
+			if(!C8_isAlphaNumeric(uniform.name.ptr[j]) && uniform.name.ptr[j] != '_')
 				retError(clean, Error_invalidParameter(
 					2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] name[j] must be [A-Za-z0-9_]"
 				));

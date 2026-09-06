@@ -38,6 +38,7 @@
 #include "types/container/file_base.h"
 #include "platforms/platform.h"
 #include "shader_compiler/compiler.h"
+#include "compiler_helper_internal.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
@@ -1460,15 +1461,36 @@ clean:
 	return s_uccess;
 }
 
-//Reconstructs + pushes a function-parameter's type.
-//Parameters carry no type localId, so builtin scalar/vector/matrix names are rebuilt from the parameter desc (HLSL
-// vector/matrix dims are 1..4); struct/object params keep only their class, since D3D12_PARAMETER_DESC exposes no
-// type name for them.
+//Pushes a function-parameter's type.
+//The reflector's type record is asked for first (GetParameterTypeByNode), since that is the only thing that names a
+// record type: D3D12_PARAMETER_DESC carries the scalar shape alone, so `inout Payload p` is otherwise just "a struct".
+//A builtin scalar/vector/matrix has no such record, and its name is rebuilt from the desc instead (HLSL vector/matrix
+// dims are 1..4).
 
 static Bool Compiler_pushParamType(
-	SRFile *reflection, U32 nodeId, D3D_SHADER_VARIABLE_TYPE svt, U32 typeClass, U32 rows, U32 cols,
-	const Allocator *alloc, Error *e_rr
+	IHLSLReflectionData *reflectionData, SRFile *reflection, U32 nodeId, D3D_SHADER_VARIABLE_TYPE svt, U32 typeClass,
+	U32 rows, U32 cols, const Allocator *alloc, Error *e_rr
 ) {
+	ID3D12ShaderReflectionType *paramType = nullptr;
+
+	if (reflectionData->GetParameterTypeByNode(nodeId, &paramType) == S_OK && paramType) {
+
+		D3D12_SHADER_TYPE_DESC1 d{};
+
+		if (SUCCEEDED(((ID3D12ShaderReflectionType1*) paramType)->GetDesc1(&d)) && d.Desc.Name) {
+
+			SRType ty = Compiler_typeBase(nodeId, d.Desc.Class, d.Desc.Rows, d.Desc.Columns, d.Desc.Elements);
+
+			//Go-to-definition, resolved by name exactly as the value-node pass does it.
+
+			CharString tn = CharString_createRefCStrConst(d.Desc.Name);
+			U32 defNode = SRFile_findNodeByName(reflection, tn, ESRNodeType_Struct);
+			ty.defNodeId = defNode == nodeId ? U32_MAX : defNode;
+
+			return Compiler_pushType(reflection, ty, d.Desc.Name, d.DisplayName, alloc, e_rr);
+		}
+	}
+
 	C8 buf[32];
 	const C8 *name = nullptr;
 	const C8 *base = Compiler_svtBaseName(svt);
@@ -1542,7 +1564,9 @@ static Bool Compiler_reflectDetails(
 
 				if (retParam && !FAILED(retParam->GetDesc(&rpd)))
 					gotoIfError3(clean, Compiler_pushParamType(
-						reflection, (U32) retId, rpd.Type, rpd.Class, rpd.Rows, rpd.Columns, alloc, e_rr));
+						reflectionData, reflection, (U32) retId, rpd.Type, rpd.Class, rpd.Rows, rpd.Columns,
+						alloc, e_rr
+					));
 			}
 		}
 
@@ -1572,7 +1596,8 @@ static Bool Compiler_reflectDetails(
 				reflection->nodes.ptrNonConst[pnode].flags |= ESRNodeFlag_ParamOut;
 
 			gotoIfError3(clean, Compiler_pushParamType(
-				reflection, (U32) pnode, pd.Type, pd.Class, pd.Rows, pd.Columns, alloc, e_rr));
+				reflectionData, reflection, (U32) pnode, pd.Type, pd.Class, pd.Rows, pd.Columns, alloc, e_rr
+			));
 		}
 	}
 
@@ -1608,7 +1633,8 @@ static Bool Compiler_reflectDetails(
 		//the DESC1 ArrayInfo.
 
 		gotoIfError3(clean, Compiler_pushArrayDims(
-			reflection, &bindDesc.ArrayInfo, &reg.arrayDimStart, &reg.arrayDimCount, alloc, e_rr));
+			reflection, &bindDesc.ArrayInfo, &reg.arrayDimStart, &reg.arrayDimCount, alloc, e_rr
+		));
 
 		gotoIfError3(clean, ListSRRegister_pushBack(&reflection->registers, reg, alloc, e_rr));
 	}
@@ -1760,6 +1786,7 @@ Bool Compiler_reflect(
 	CharString tmp = CharString_createNull();
 	Bool s_uccess = true;
 	Bool allocatedSR = false;
+	ESHExtension reflectOn;
 
 	CompilerInterfaces *interfaces = nullptr;
 
@@ -1813,8 +1840,19 @@ Bool Compiler_reflect(
 	// makes it default to the full mask (all node categories), and symbols (names + file/line/column) stay on.
 	//That full tree with locations is exactly what editor intelligence needs.
 
-	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr));
-	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-payload-qualifiers", alloc, e_rr));
+	//The flags an extension gates follow the permutation mask, exactly like its __OXC_EXT_* define:
+	//16bit off turns `half` back into float in the parse, which is what the picked binary would see.
+	//Assigned rather than initialized: the validation retErrors above this point jump to clean, and
+	//C++ refuses a goto across an initialization.
+
+	reflectOn = (ESHExtension) ~settings->reflectDisabledExt;
+
+	if(reflectOn & ESHExtension_16BitTypes)
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr));
+
+	if(reflectOn & ESHExtension_PAQ)
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-payload-qualifiers", alloc, e_rr));
+
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "lib_6_10", alloc, e_rr));
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr));
@@ -1822,6 +1860,27 @@ Bool Compiler_reflect(
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr));
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr));
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_EXT_RAYTRACING", alloc, e_rr));
+
+	//A bare name is a $<X> define. A name that already carries its prefix is used as is, which is how a
+	// uniform arrives as $$<X>, the macro the compile leg defines for it, so `#ifdef $$<X>` holds here too.
+
+	for (U64 i = 0; i + 1 < settings->reflectDefines.length; i += 2) {
+
+		const CharString defineName = settings->reflectDefines.ptr[i];
+		const CharString defineValue = settings->reflectDefines.ptr[i + 1];
+		const C8 *prefix = CharString_length(defineName) && defineName.ptr[0] == '$' ? "" : "$";
+
+		gotoIfError3(clean, CharString_format(
+			alloc, &tmp, e_rr,
+			!CharString_length(defineValue) ? "-D%s%.*s" : "-D%s%.*s=%.*s",
+			prefix,
+			(int) CharString_length(defineName), defineName.ptr,
+			(int) CharString_length(defineValue), defineValue.ptr
+		));
+
+		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
+		tmp = CharString_createNull();
+	}
 
 	//Format major, minor, patch and version
 
@@ -1844,9 +1903,13 @@ Bool Compiler_reflect(
 		}
 	}
 
-	//__OXC_EXT_<X> foreach extension
+	//__OXC_EXT_<X> foreach extension the permutation keeps
 
 	for (U32 i = 0; i < ESHExtension_Count; ++i) {
+
+		if (!((reflectOn >> i) & 1))
+			continue;
+
 		gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "-D__OXC_EXT_%s", ESHExtension_defines[i]));
 		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
 		tmp = CharString_createNull();
@@ -1856,6 +1919,9 @@ Bool Compiler_reflect(
 
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "lib_6_10", alloc, e_rr));
+
+	if(settings->reflectAllowErrors)
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-reflect-allow-errors", alloc, e_rr));
 
 	Compiler_convertToWString(stringsUTF8, clean);
 
@@ -1884,7 +1950,15 @@ Bool Compiler_reflect(
 		}
 	}
 
-	if (hasErrors)
+	//Printed the way a compile prints its own, ahead of the refusal below so the diagnostics reach the log
+	//either way: an editor squiggles off them while it reflects between keystrokes, where a compile never runs.
+
+	Compiler_printErrors(compileErrors, alloc);
+
+	//The diagnostics are still parsed and still reported to the caller; what changes is whether they are
+	//fatal to the reflection. See CompilerSettings::reflectAllowErrors.
+
+	if (hasErrors && !settings->reflectAllowErrors)
 		retError(clean, Error_invalidState(0, "Compiler_reflect() source had compile errors"));
 
 	if (FAILED(hr) || !hlslReflectRes)

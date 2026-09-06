@@ -30,6 +30,7 @@
 #include "types/container/file_base.h"
 #include "types/container/list_basic_types.h"
 #include "types/base/error.h"
+#include "types/base/mathi.h"
 #include "types/base/time.h"
 
 #include <unistd.h>

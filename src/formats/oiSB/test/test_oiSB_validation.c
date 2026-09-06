@@ -69,6 +69,71 @@ void Test_SBFileCombineFlags(Test *t) {
 	}
 }
 
+//SBFile_combine merges a layout that holds a struct, where a variable's name id is offset past the
+//struct names rather than being its own index.
+//A layout with no struct never separates the two, so this is the case that tells them apart.
+void Test_SBFileCombineStruct(Test *t) {
+
+	Test_setModule(t, "SBFile combine: layout holding a struct");
+
+	{
+		SBFile a        = { 0 };
+		SBFile b        = { 0 };
+		SBFile combined = { 0 };
+
+		if (
+			!SBFile_create(ESBSettingsFlags_None, 32, t->alloc, &a, &t->err) ||
+			!SBFile_create(ESBSettingsFlags_None, 32, t->alloc, &b, &t->err)
+		) {
+			Test_assert(t, "create a and b", false);
+			goto doneCombineStruct;
+		}
+
+		//The same layout twice, each seen as used by one backend: MyStruct { F32x4 pos; F32x4 col; }
+
+		SBStruct myStruct = { .stride = 32 };
+		SBFile *files[2] = { &a, &b };
+		ESBVarFlag used[2] = { ESBVarFlag_IsUsedVarSPIRV, ESBVarFlag_IsUsedVarDXIL };
+		Bool built = true;
+
+		for (U8 i = 0; i < 2; ++i) {
+
+			CharString structName = CharString_createRefCStrConst("MyStruct");
+			CharString rootName = CharString_createRefCStrConst("myVar");
+			CharString posName = CharString_createRefCStrConst("pos");
+			CharString colName = CharString_createRefCStrConst("col");
+
+			built = built &&
+				SBFile_addStruct(files[i], &structName, myStruct, t->alloc, &t->err) &&
+				SBFile_addVariableAsStruct(files[i], &rootName, 0, U16_MAX, 0, used[i], NULL, t->alloc, &t->err) &&
+				SBFile_addVariableAsType(files[i], &posName, 0, 0, ESBType_F32x4, used[i], NULL, t->alloc, &t->err) &&
+				SBFile_addVariableAsType(files[i], &colName, 16, 0, ESBType_F32x4, used[i], NULL, t->alloc, &t->err);
+		}
+
+		Test_assert(t, "build both layouts", built);
+		Test_assert(t, "combine", SBFile_combine(&a, &b, t->alloc, &combined, &t->err));
+
+		Test_assert(t, "combined struct count", combined.structs.length == 1);
+		Test_assert(t, "combined vars count", combined.vars.length == 3);
+
+		//Every variable is matched by name, so every one of them carries both backends' use flags.
+
+		Bool merged = combined.vars.length == 3;
+
+		for(U64 i = 0; merged && i < combined.vars.length; ++i)
+			merged =
+				(combined.vars.ptr[i].flags & ESBVarFlag_IsUsedVarSPIRV) &&
+				(combined.vars.ptr[i].flags & ESBVarFlag_IsUsedVarDXIL);
+
+		Test_assert(t, "use flags merged on every variable", merged);
+
+	doneCombineStruct:
+		SBFile_free(&a,        t->alloc);
+		SBFile_free(&b,        t->alloc);
+		SBFile_free(&combined, t->alloc);
+	}
+}
+
 //SBFile_combine rejects files with mismatched buffer sizes.
 void Test_SBFileCombineBufferSizeMismatch(Test *t) {
 

@@ -1,4 +1,4 @@
-/* tools/isa.js — the ISA tab: device-specific assembly for the selected binary.
+/* tools/isa.js: the ISA tab: device-specific assembly for the selected binary.
  * Two routes, mirroring `OxC3 isa disassemble -asic <x>`:
  *  - offline: the bundled amdllpc (SPIR-V -> ELF -> amdgpu-dis), gfx11xx/gfx12xx, raster/compute/mesh only,
  *    prepended with the register/resource usage line; reproducible, the corpus goldens pin it. It compiles the
@@ -11,7 +11,7 @@
  *    replayed with `-pso-input`. */
 (function () {
 "use strict";
-const { $, esc, fmtBytes } = window.OxUtil;
+const { $, esc, fmtBytes, highlightAsm, highlightPipeline } = window.OxUtil;
 
 function statsLine(s) {
   return [["SGPRs", s.sgprs], ["VGPRs", s.vgprs], ["code", fmtBytes(s.codeBytes)], ["instrs", s.instrs], ["scratch", s.scratch], ["lds", s.lds]]
@@ -32,6 +32,14 @@ function html(ctx) {
     <p class="small">Compile something or load an oiSH, pick a binary in the strip, then disassemble it to AMD ISA for a gfx target. RDNA ISA, VGPR/SGPR pressure, scratch and LDS; what DXIL/SPIR-V hide.</p></div>`;
   const { doc, bin, row, caps } = ctx;
   const liveOk = !!(caps && caps.liveIsa);
+
+  /* No offline route means there is nothing to disassemble with: it drives the bundled amdllpc as a
+   * child process, which a browser can't, and the device-free SPIR-V to ISA path that could run here
+   * isn't in the CLI yet. The controls say so rather than offering a run that only fails. */
+  const offlineOk = !!(caps && caps.offlineIsa);
+  const isaOk = offlineOk || liveOk;
+  const offTitle = "no ISA route in the browser: the offline one spawns the bundled amdllpc, and a "
+    + "device-free SPIR-V to ISA path isn't in the CLI yet. Run it natively, or host this page in VS Code.";
   const who = bin.lib ? `lib(${bin.entryNames.join(",")})` : `${bin.entrypoint} · ${bin.stage}`;
   const entryOpts = bin.lib ? `<select id="isaEntry" class="form-select form-select-sm w-auto" title="-entry picks a binary index; inside a lib the entrypoint to lower">
       ${bin.entryNames.map(n => `<option ${n === ctx.entrypoint ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : "";
@@ -39,12 +47,16 @@ function html(ctx) {
   const head = `<div class="px-3 py-2 border-bottom bg-body-tertiary small d-flex align-items-center gap-2 flex-wrap">
       <span class="fw-semibold"><i class="bi bi-cpu"></i> ISA</span>
       <span class="text-body-secondary">#${row.binIdx} ${esc(who)} · ${row.backend === "spirv" ? "SPIR-V" : "DXIL"}</span>
-      <select id="isaAsic" class="form-select form-select-sm w-auto" title="-asic: a gfx target the bundled offline compiler accepts (isa devices), or live">
+      <select id="isaAsic" class="form-select form-select-sm w-auto" ${offlineOk ? "" : "disabled"}
+        title="${offlineOk ? "-asic: a gfx target the bundled offline compiler accepts (isa devices), or live" : esc(offTitle)}">
         ${ctx.targets.map(t => `<option value="${t.asic}" ${t.asic === ctx.asic ? "selected" : ""}>${t.asic} (${t.arch})</option>`).join("")}
+        ${offlineOk || ctx.targets.length ? "" : `<option value="" selected>no target available</option>`}
         <option value="live" ${ctx.asic === "live" ? "selected" : ""} ${liveOk ? "" : "disabled"} title="${esc(liveTitle)}">live${liveOk ? "" : " (native only)"}</option>
       </select>
       ${entryOpts}
-      <button id="isaRun" class="btn btn-sm btn-teal" ${ctx.busy || (ctx.asic === "live" && !liveOk) ? "disabled" : ""}><i class="bi bi-braces-asterisk me-1"></i>Disassemble</button>
+      <button id="isaRun" class="btn btn-sm btn-teal"
+        ${ctx.busy || !isaOk || (ctx.asic === "live" && !liveOk) ? "disabled" : ""}
+        ${isaOk ? "" : `title="${esc(offTitle)}"`}><i class="bi bi-braces-asterisk me-1"></i>Disassemble</button>
       <button id="isaState" class="btn btn-sm btn-outline-secondary" title="the pipeline state a live run compiles, with every field overridable (-pso-set)">
         <i class="bi bi-sliders"></i> Pipeline state${ctx.sp ? ` <span class="badge ${ctx.exact ? "text-bg-success" : "text-bg-warning"}">${ctx.exact ? "exact" : ctx.sp.pipelines[0].fields.filter(f => f.source === "assumed").length + " assumed"}</span>` : ""}</button>
       <span class="ms-auto text-body-secondary cli">${esc(cliFor(ctx))}</span>
@@ -76,7 +88,7 @@ function html(ctx) {
           <p class="mb-0">Every graphics stage the shader declares is bound and only the missing ends of the chain are generated (a pixel-only shader gets a vertex stand-in, a vertex-only one a pixel stand-in); every stage of a ray tracing lib is bound and hit shaders are grouped by order. Tessellation and mesh/task aren't inspectable live yet.</p>
         </div>
       </div></div>
-      ${ctx.printText != null ? `<div class="mb-1 small text-body-secondary">Pipeline state that prints above the ISA</div><pre class="asm cmdcard">${esc(ctx.printText)}</pre>` : ""}
+      ${ctx.printText != null ? `<div class="mb-1 small text-body-secondary">Pipeline state that prints above the ISA</div><pre class="asm cmdcard">${highlightPipeline(ctx.printText)}</pre>` : ""}
     </div>`;
   } else if (ctx.error) {
     body = `<div class="p-3"><div class="alert alert-danger small mb-2"><i class="bi bi-x-octagon"></i> ${esc(ctx.error)}</div>
@@ -85,7 +97,7 @@ function html(ctx) {
     const r = ctx.result;
     body = `<div class="px-3 py-1 border-bottom small d-flex align-items-center gap-3 flex-wrap isa-stats">
         <span class="chip chip-isa">${esc(r.asic)} · ${esc(r.arch)}</span><span class="text-body-secondary">${esc(r.entrypoint)} · ${esc(r.stage)}</span>${statsLine(r.stats)}
-      </div>${r.report ? `<pre class="asm cmdcard m-3 mb-0">${esc(r.report)}</pre>` : ""}<pre class="asm"><code id="isaText">${esc(r.text)}</code></pre>`;
+      </div>${r.report ? `<pre class="asm cmdcard m-3 mb-0">${esc(r.report)}</pre>` : ""}<pre class="asm"><code id="isaText">${highlightAsm(r.text)}</code></pre>`;
   } else {
     body = `<div class="p-3 small text-body-secondary">Pick a target and hit Disassemble. The offline path compiles the stored SPIR-V with the bundled <code>amdllpc</code> for that gfx target and disassembles the ELF with <code>amdgpu-dis</code>, so it's reproducible (the corpus goldens pin it); it supports gfx11xx (RDNA3), gfx1150 (RDNA3.5) and gfx12xx (RDNA4). The same view is available inline as <code>file data -input x.oiSH -asic gfx1100</code>.</div>`;
   }

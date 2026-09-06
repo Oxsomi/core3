@@ -80,6 +80,14 @@ jobs:
             setup_python: true
             python_version: '3.10'
             hook_name: macOS-arm64-static
+          - name: Web wasm64
+            runner: ubuntu-latest
+            os: web
+            build_flags: ''
+            python_cmd: python3
+            setup_python: false
+            python_version: ''
+            hook_name: Web-wasm64
 
     uses: ./.github/workflows/_build.yml
     with:

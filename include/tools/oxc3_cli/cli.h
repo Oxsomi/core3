@@ -138,6 +138,7 @@ Bool CLI_shaderEntrypoints(const ParsedArgs *args);
 Bool CLI_shaderIncludes(const ParsedArgs *args);
 Bool CLI_shaderFeatureSet(const ParsedArgs *args);
 Bool CLI_shaderDisassemble(const ParsedArgs *args);
+Bool CLI_shaderValidate(const ParsedArgs *args);
 Bool CLI_shaderAssemble(const ParsedArgs *args);
 
 Bool CLI_graphicsDevices(const ParsedArgs *args);

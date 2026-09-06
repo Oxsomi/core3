@@ -1,4 +1,4 @@
-/* tools/compile.js — Compile-mode logic: gather toolbar options (they map 1:1 to
+/* tools/compile.js: Compile-mode logic: gather toolbar options (they map 1:1 to
  * `OxC3 shader compile` flags), run the compile through OxAPI, and render the Command tab. */
 (function () {
 "use strict";
@@ -14,6 +14,7 @@ function opts() {
     targets: targets(),
     reflectionOnly: $("#optRefl").checked,
     debug: $("#optDebug").checked,
+    noOpt: $("#optNoOpt").checked,
     split: $("#optSplit").checked,
     keepRegisters: $("#optKeepReg").checked,
     warnUnusedRegisters: $("#wUnusedReg").checked,
@@ -29,6 +30,7 @@ function cliLine(fileName, o) {
   const t = o.targets.length === 2 ? "all" : o.targets[0];
   if (t !== "all") parts.push(`-compile-output ${t}`);           // default is all
   if (o.debug) parts.push("--debug");
+  if (o.noOpt) parts.push("--no-opt");
   if (o.split) parts.push("--split");
   if (o.keepRegisters) parts.push("--keep-registers");
   if (o.warnUnusedRegisters) parts.push("--warn-unused-registers");
@@ -39,7 +41,7 @@ function cliLine(fileName, o) {
     .replace(/ -compile-output \w+/, "");                        // reflect has no -compile-output
   return parts.join(" ");
   // Also valid: `OxC3 compile shaders -format HLSL …` (the pre-`shader`-category spelling),
-  // and `-threads 0|50%|4` / `-include-dir <dir>` — the web version uses the file tree as roots.
+  // and `-threads 0|50%|4` / `-include-dir <dir>`: the web version uses the file tree as roots.
 }
 
 /* ---- derived DXC invocations --------------------------------------------------------- */
@@ -114,7 +116,7 @@ function renderCommands(activeName, project) {
     <textarea class="asm cmdcard dxc-line form-control" data-dxc="raw" rows="3" spellcheck="false">${first}</textarea>
     <pre id="dxcLog" class="asm cmdcard mt-2 d-none"></pre>`;
 
-  $("#cmdList").innerHTML = html || `<div class="text-body-secondary small">No entrypoints in this file — nothing to compile (see --ignore-empty-files).</div>`;
+  $("#cmdList").innerHTML = html || `<div class="text-body-secondary small">No entrypoints in this file: nothing to compile (see --ignore-empty-files).</div>`;
   $("#cmdNote").textContent = o.reflectionOnly
     ? "Reflection only (OxC3 shader reflect): same compiles, then binaries are stripped and the oiSH is rewritten with ESHSettingsFlags_ReflectionOnly."
     : (o.split ? "--split: each backend is written to its own lean file (x.spv.oiSH, x.dxil.oiSH) instead of one bulky oiSH." : "");
@@ -149,7 +151,7 @@ async function run(state) {
 function wire(onOptionChange, onRawResult) {
   rawHandler = onRawResult || null;
   $$('input[name="target"]').forEach(r => r.addEventListener("change", onOptionChange));
-  ["optRefl", "optDebug", "optSplit", "optKeepReg", "wUnusedReg", "wUnusedConst", "wPad", "wIgnoreEmpty"]
+  ["optRefl", "optDebug", "optNoOpt", "optSplit", "optKeepReg", "wUnusedReg", "wUnusedConst", "wPad", "wIgnoreEmpty"]
     .forEach(id => $("#" + id).addEventListener("change", onOptionChange));
 }
 

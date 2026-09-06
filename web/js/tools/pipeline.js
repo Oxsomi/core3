@@ -1,4 +1,4 @@
-/* tools/pipeline.js — the Pipeline (oiSP) tab: a pipeline derived from the compiled/loaded
+/* tools/pipeline.js: the Pipeline (oiSP) tab: a pipeline derived from the compiled/loaded
  * oiSH the way `isa disassemble` derives it (SPFile_derivePipeline), every field reflection
  * can't prove listed with its provenance (derived / supplied / assumed), supply controls so
  * the assumed ones can be chosen (-pso-set on the CLI, which takes any field by its path), the
@@ -6,7 +6,7 @@
  * it would otherwise have to guess between two stages of the same kind. */
 (function () {
 "use strict";
-const { $, esc, hex8 } = window.OxUtil;
+const { $, esc, hex8, highlightPipeline } = window.OxUtil;
 
 const PROV = { derived: ["prov-derived", "proven by the shader's reflection"], supplied: ["prov-supplied", "you chose it"], assumed: ["prov-assumed", "nobody chose it, a value was picked"] };
 const provChip = s => `<span class="chip ${PROV[s][0]}" title="${PROV[s][1]}">${s}</span>`;
@@ -32,7 +32,7 @@ function stagesTable(p) {
   return `<table class="ox mb-2"><thead><tr><th>Stage</th><th>Shader</th><th>Entrypoint</th><th>Source hash</th></tr></thead><tbody>
     ${p.stages.map(s => `<tr class="${s.generated ? "opacity-75" : ""}"><td><span class="badge ${s.generated ? "text-bg-warning" : "text-bg-secondary"}">${esc(s.stage)}</span></td>
       <td>${esc(s.shaderFile)}${s.generated ? ' <span class="text-body-secondary">stand-in</span>' : ""}</td><td><span class="tname">${esc(s.entrypoint)}</span></td>
-      <td class="text-body-secondary">${s.generated ? "—" : hex8(s.sourceHash)}</td></tr>`).join("")}
+      <td class="text-body-secondary">${s.generated ? "-" : hex8(s.sourceHash)}</td></tr>`).join("")}
   </tbody></table>`;
 }
 
@@ -44,12 +44,54 @@ function psoSetArg(sp, pipelineIdx) {
   return parts.length ? ` -pso-set "${parts.join(",")}"` : "";
 }
 
+/* Value vocabularies for the enum-typed fields (oxc3_spFieldVocab: the name tables beside the enums in
+ * sp_state.h), set once at boot; empty means every editor falls back to the raw number input. */
+let VOCAB = {};
+function setVocab(v) { VOCAB = v || {}; }
+
+/* The editor a field's domain earns: enum domains get their value names, mask domains get a checkbox
+ * per bit, a binary choice gets a toggle, and anything free stays the number input. Every editor
+ * supplies the same numeric value the CLI's -pso-set takes. */
+function fieldEditor(f, pipelineIdx, i) {
+
+  const ds = `data-supply="${pipelineIdx}:${i}"`;
+  const title = 'title="SPFile_supply: choosing a value marks the field supplied"';
+  const num = () =>
+    `<input class="form-control form-control-sm sp-val" type="number" min="0" step="1" value="${f.value}" ${ds} ${title}>`;
+  const enumSel = names =>
+    `<select class="form-select form-select-sm sp-val" ${ds} ${title}>` +
+    names.map((n, v) => n == null ? "" :
+      `<option value="${v}" ${v === f.value ? "selected" : ""}>${esc(n)}</option>`).join("") + "</select>";
+  const bits = (names, count) =>
+    `<div class="sp-bits" ${ds} ${title}>` + Array.from({ length: count }, (_, b) =>
+      names && names[b] === null ? "" :
+      `<label class="form-check-label small me-2 text-nowrap"><input type="checkbox" class="form-check-input" data-bit="${b}"` +
+      ` ${(f.value >> b) & 1 ? "checked" : ""}> ${esc(names ? names[b] : "target " + b)}</label>`).join("") + "</div>";
+
+  const d = f.domain || "";
+  if (VOCAB[d] && VOCAB[d].length) return enumSel(VOCAB[d]);
+  if (d === "EWriteMask bits" && VOCAB.EWriteMask) return bits(VOCAB.EWriteMask, 4);
+  if (d === "EDepthStencilFlags bits" && VOCAB.EDepthStencilFlags) return bits(VOCAB.EDepthStencilFlags, 3);
+  if (d === "ERasterizerFlags bits" && VOCAB.ERasterizerFlags) return bits(VOCAB.ERasterizerFlags, 4);
+  if (d.startsWith("EPipelineRaytracingFlags bits") && VOCAB.EPipelineRaytracingFlags)
+    return bits(VOCAB.EPipelineRaytracingFlags, 8);
+  if (d === "bit per render target") return bits(null, 8);
+  if (d === "any color format" && (VOCAB.ETextureFormatIdColor || VOCAB.ETextureFormatId))
+    return enumSel(VOCAB.ETextureFormatIdColor || VOCAB.ETextureFormatId);
+  if (d === "0 = none, else a depth format" && VOCAB.EDepthStencilFormat)
+    return enumSel(VOCAB.EDepthStencilFormat);
+  if (d === "0 = 1 sample, 1 = 2, 2 = 4, 3 = 8" && VOCAB.EMSAASamples) return enumSel(VOCAB.EMSAASamples);
+  if (/^0 = [^,=]+, 1 = [^,=]+$/.test(d))
+    return `<input type="checkbox" class="form-check-input sp-val" ${ds} ${title} ${f.value ? "checked" : ""}>`;
+  return num();
+}
+
 function fieldsTable(p, pipelineIdx, editable) {
   if (!p.fields.length) return `<div class="small text-body-secondary">No field to specialize: a ${p.type} pipeline derives completely from its shader, so it's exact.</div>`;
   return `<table class="ox"><thead><tr><th>Field</th><th>Value</th><th>Source</th><th>Why reflection can't prove it</th><th>Legal</th></tr></thead><tbody>
     ${p.fields.map((f, i) => `<tr>
       <td><span class="tname">${esc(f.field)}${f.indexed ? `[${f.index}]` : ""}</span></td>
-      <td>${editable ? `<input class="form-control form-control-sm sp-val" type="number" min="0" step="1" value="${f.value}" data-supply="${pipelineIdx}:${i}" title="SPFile_supply: choosing a value marks the field supplied">` : f.value}</td>
+      <td>${editable ? fieldEditor(f, pipelineIdx, i) : f.value}</td>
       <td>${provChip(f.source)}</td>
       <td class="text-body-secondary">${esc(f.reason)}</td><td class="text-body-secondary">${esc(f.domain)}</td></tr>`).join("")}
   </tbody></table>`;
@@ -97,7 +139,7 @@ function printCard(sp, idx, text) {
   return `<div class="card mb-3"><div class="card-body">
     <div class="d-flex align-items-center mb-2"><span class="fw-semibold">file data</span>
       <span class="ms-auto small text-body-secondary cli">OxC3 file data -input ${esc(sp.name)}</span></div>
-    <pre class="asm cmdcard mb-0">${esc(text)}</pre>
+    <pre class="asm cmdcard mb-0">${highlightPipeline(text)}</pre>
     <div class="small text-body-secondary mt-2">This is what prints above the disassembly of a live ISA run, so an assumed value is never mistaken for something the shader declared.</div>
   </div></div>`;
 }
@@ -112,13 +154,25 @@ function html(ctx) {
 }
 
 /* mount + wire supply inputs and -entry picks */
+/* One numeric value out of whatever editor the field earned: a bit group sums its checked bits, a
+ * toggle is 0/1, everything else is its value. change bubbles, so the group's container listens. */
+function supplyValue(ctrl) {
+  if (ctrl.classList.contains("sp-bits")) {
+    let v = 0;
+    ctrl.querySelectorAll("input[data-bit]:checked").forEach(c => { v |= 1 << +c.dataset.bit; });
+    return v;
+  }
+  if (ctrl.type === "checkbox") return ctrl.checked ? 1 : 0;
+  return Number(ctrl.value);
+}
+
 function mount(el, ctx, handlers) {
   handlers = handlers || {};
   el.innerHTML = html(ctx);
   el.querySelectorAll("[data-supply]").forEach(inp => inp.addEventListener("change", () => {
     const [pi, fi] = inp.dataset.supply.split(":").map(Number);
     const f = ctx.sp.pipelines[pi].fields[fi];
-    if (handlers.onSupply) handlers.onSupply(pi, f.field, f.index, Number(inp.value));
+    if (handlers.onSupply) handlers.onSupply(pi, f.field, f.index, supplyValue(inp));
   }));
   el.querySelectorAll("[data-pick]").forEach(sel => sel.addEventListener("change", () => {
     if (sel.value !== "" && handlers.onPick) handlers.onPick(sel.dataset.pick, Number(sel.value));
@@ -133,9 +187,9 @@ function wireSupply(el, sp, handlers) {
   el.querySelectorAll("[data-supply]").forEach(inp => inp.addEventListener("change", () => {
     const [pi, fi] = inp.dataset.supply.split(":").map(Number);
     const f = sp.pipelines[pi].fields[fi];
-    if (handlers.onSupply) handlers.onSupply(pi, f.field, f.index, Number(inp.value));
+    if (handlers.onSupply) handlers.onSupply(pi, f.field, f.index, supplyValue(inp));
   }));
 }
 
-window.OxPipeline = { html, mount, fieldsHTML, wireSupply, psoSetArg };
+window.OxPipeline = { html, mount, fieldsHTML, wireSupply, psoSetArg, setVocab };
 })();

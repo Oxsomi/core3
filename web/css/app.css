@@ -1,10 +1,42 @@
-/* shader.oxsomi.com — styles. Split out of the single-file prototype; same visual identity
+/* shader.oxsomi.com: styles. Split out of the single-file prototype; same visual identity
    (Bootstrap dark, teal brand dot, mono chips), extended for the richer oiSH inspector. */
 
-:root{ --ox-mono: ui-monospace,"Cascadia Code","JetBrains Mono",Consolas,monospace; }
+:root{
+  --ox-mono: ui-monospace,"Cascadia Code","JetBrains Mono",Consolas,monospace;
+  --ox-accent: #2dd4bf;                 /* the teal everything accent-ish keys off */
+  --ox-accent-soft: #5eead4;            /* the lighter reading tint (CLI lines) */
+  --ox-accent-ink: #0f172a;             /* text ON the accent (buttons) */
+  --ox-editor-size: 13px;
+}
+
+/* ---- appearance themes (data-ox-theme on <html>) ----
+ * Each theme only moves CSS variables: Bootstrap components read the --bs-* ones, everything OxC3
+ * reads --ox-accent*. The editor blends in through the .CodeMirror overrides below. */
+html[data-ox-theme="midnight"]{
+  --ox-accent:#a78bfa; --ox-accent-soft:#c4b5fd; --ox-accent-ink:#150f2a;
+  --bs-body-bg:#0b0e1a; --bs-tertiary-bg:#121631; --bs-secondary-bg:#0f1226;
+  --bs-border-color:#252b52; --bs-border-color-translucent:#252b5280;
+}
+html[data-ox-theme="slate"]{
+  --ox-accent:#f59e0b; --ox-accent-soft:#fbbf24; --ox-accent-ink:#1c1917;
+  --bs-body-bg:#191c20; --bs-tertiary-bg:#22262c; --bs-secondary-bg:#1e2126;
+  --bs-border-color:#343a42; --bs-border-color-translucent:#343a4280;
+}
+html[data-ox-theme="hicontrast"]{
+  --ox-accent:#ffd400; --ox-accent-soft:#ffe561; --ox-accent-ink:#000;
+  --bs-body-bg:#000; --bs-tertiary-bg:#111; --bs-secondary-bg:#0a0a0a;
+  --bs-body-color:#fff; --bs-border-color:#777; --bs-border-color-translucent:#77777780;
+}
+html[data-ox-theme="crt"]{
+  --ox-accent:#22ff88; --ox-accent-soft:#7dffb8; --ox-accent-ink:#02180b;
+  --bs-body-bg:#04130a; --bs-tertiary-bg:#082013; --bs-secondary-bg:#061a0f;
+  --bs-body-color:#a8ffcf; --bs-border-color:#14532d; --bs-border-color-translucent:#14532d80;
+}
+html[data-ox-theme] .CodeMirror{ background:var(--bs-tertiary-bg); color:var(--bs-body-color); }
+html[data-ox-theme] .CodeMirror-gutters{ background:var(--bs-body-bg); border-color:var(--bs-border-color); }
 html,body{ height:100%; }
 body{ display:flex; flex-direction:column; overflow:hidden; }
-.brand-dot{ color:#2dd4bf; }
+.brand-dot{ color:var(--ox-accent); }
 .app-main{ flex:1 1 auto; min-height:0; display:flex; }
 .rail{ flex:0 0 232px; border-right:1px solid var(--bs-border-color); display:flex; flex-direction:column; min-height:0; overflow:auto; }
 .editor-pane{ flex:1 1 0; min-width:0; border-right:1px solid var(--bs-border-color); display:flex; flex-direction:column; min-height:0; }
@@ -16,7 +48,7 @@ body{ display:flex; flex-direction:column; overflow:hidden; }
   padding:9px 12px 4px; display:flex; align-items:center; }
 .fitem{ display:flex; align-items:center; gap:7px; padding:4px 12px; font-family:var(--ox-mono); font-size:12.5px; cursor:pointer; }
 .fitem:hover{ background:var(--bs-tertiary-bg); }
-.fitem.active{ background:var(--bs-tertiary-bg); box-shadow:inset 2px 0 0 #2dd4bf; }
+.fitem.active{ background:var(--bs-tertiary-bg); box-shadow:inset 2px 0 0 var(--ox-accent); }
 .fitem .bi{ color:var(--bs-secondary-color); }
 .fitem.builtin .name{ color:#86efac; }
 .fitem.folder{ cursor:default; color:var(--bs-secondary-color); }
@@ -26,13 +58,13 @@ body{ display:flex; flex-direction:column; overflow:hidden; }
 .fitem .tag{ margin-left:auto; font-size:10px; }
 
 /* ---- CodeMirror ---- */
-.CodeMirror{ height:100%; font-family:var(--ox-mono); font-size:13px; }
+.CodeMirror{ height:100%; font-family:var(--ox-editor-font, var(--ox-mono)); font-size:var(--ox-editor-size); }
 .cm-oxc-anno{ color:#c4b5fd; } .cm-oxc-macro{ color:#f0abfc; } .cm-oxc-include{ color:#86efac; }
 .cm-oxc-type{ color:#5eead4; } .cm-oxc-shader{ color:#fbbf24; }
 .diag-line-error{ background:#f8717115; } .diag-line-warn{ background:#fbbf240f; }
 .cm-underline-error{ text-decoration:underline wavy #f87171; text-decoration-skip-ink:none; }
 .cm-underline-warn{ text-decoration:underline wavy #fbbf24; text-decoration-skip-ink:none; }
-.diag-line-flash{ background:#2dd4bf33 !important; transition:background .5s; }
+.diag-line-flash{ background:color-mix(in srgb, var(--ox-accent) 25%, transparent) !important; transition:background .5s; }
 .gutter-diag{ font-size:12px; text-align:center; }
 .gutter-diag.error{ color:#f87171; } .gutter-diag.warn{ color:#fbbf24; }
 
@@ -74,9 +106,9 @@ table.ox tr.unused td{ opacity:.55; }
 .sb .nest{ margin-left:18px; border-left:1px dashed var(--bs-border-color); padding-left:10px; }
 
 /* CLI hint (which OxC3 command a view corresponds to) + teal action button */
-.cli{ font-family:var(--ox-mono); font-size:12px; color:#5eead4; }
-.btn-teal{ --bs-btn-color:#0f172a; --bs-btn-bg:#2dd4bf; --bs-btn-border-color:#2dd4bf;
-  --bs-btn-hover-bg:#5eead4; --bs-btn-hover-border-color:#5eead4; --bs-btn-hover-color:#0f172a;
+.cli{ font-family:var(--ox-mono); font-size:12px; color:var(--ox-accent-soft); }
+.btn-teal{ --bs-btn-color:var(--ox-accent-ink); --bs-btn-bg:var(--ox-accent); --bs-btn-border-color:var(--ox-accent);
+  --bs-btn-hover-bg:var(--ox-accent-soft); --bs-btn-hover-border-color:var(--ox-accent-soft); --bs-btn-hover-color:var(--ox-accent-ink);
   --bs-btn-active-bg:#14b8a6; --bs-btn-active-border-color:#14b8a6; }
 
 pre.asm{ font-family:var(--ox-mono); font-size:12.5px; line-height:1.5; margin:0; padding:14px 16px; white-space:pre-wrap; }
@@ -97,8 +129,9 @@ body.divonly .diff-row:not(.diff-diverge):not(.diff-head):not(.diff-sect){ displ
 /* ---- disassembly line diff (binary diff by entrypoint) ---- */
 .bdiff{ display:block; }
 .bdiff .ln{ display:block; padding:0 16px; white-space:pre-wrap; }
-.bdiff .ln.add{ background:#34d3991a; color:#34d399; }
-.bdiff .ln.del{ background:#f871711a; color:#f87171; }
+/* changed lines keep their verdict as a background tint, so the asm token colors stay readable on top */
+.bdiff .ln.add{ background:#34d39926; box-shadow:inset 3px 0 0 #34d399; }
+.bdiff .ln.del{ background:#f8717126; box-shadow:inset 3px 0 0 #f87171; }
 .bdiff .ln.ctx{ color:var(--bs-secondary-color); }
 .bdiff .ln.skip{ color:var(--bs-secondary-color); background:var(--bs-tertiary-bg); text-align:center; font-size:11px; padding:2px 16px; }
 
@@ -119,14 +152,14 @@ body.prob-collapsed .problems{ height:auto; } body.prob-collapsed .problems-body
 .empty-hint{ text-align:center; color:var(--bs-secondary-color); max-width:480px; margin:44px auto; }
 
 /* ---- offcanvas (syntax + CLI map) ---- */
-.syn h6{ color:#2dd4bf; text-transform:uppercase; letter-spacing:.06em; font-size:11px; margin:20px 0 8px; }
+.syn h6{ color:var(--ox-accent); text-transform:uppercase; letter-spacing:.06em; font-size:11px; margin:20px 0 8px; }
 .syn h6:first-child{ margin-top:0; }
 .syn .row-item{ padding:6px 0; border-bottom:1px solid var(--bs-border-color-translucent); }
 .syn .sig{ font-family:var(--ox-mono); font-size:12.5px; color:#c4b5fd; }
 .syn .desc{ font-size:12.5px; color:var(--bs-secondary-color); }
 .syn .tok{ font-family:var(--ox-mono); font-size:12px; padding:2px 6px; border-radius:4px; background:var(--bs-tertiary-bg); display:inline-block; margin:2px 3px 2px 0; }
 .syn .note{ font-size:11.5px; color:#fbbf24; }
-.syn .cli{ font-family:var(--ox-mono); font-size:12px; color:#5eead4; }
+.syn .cli{ font-family:var(--ox-mono); font-size:12px; color:var(--ox-accent-soft); }
 .syn .badge{ font-size:10px; }
 
 /* ---- SPV/DXIL standalone tools ---- */
@@ -146,6 +179,7 @@ body.prob-collapsed .problems{ height:auto; } body.prob-collapsed .problems-body
 /* ---- oiSP provenance ---- */
 .prov-derived{ color:#34d399; background:#34d3991e; } .prov-supplied{ color:#38bdf8; background:#38bdf81e; } .prov-assumed{ color:#fbbf24; background:#fbbf241e; }
 .sp-val{ width:110px; font-family:var(--ox-mono); font-size:12px; padding:1px 6px; }
+input[type="checkbox"].sp-val{ width:1.1em; height:1.1em; padding:0; }
 
 /* ---- ISA ---- */
 .isa-stats{ font-family:var(--ox-mono); font-size:12px; } .isa-stat{ white-space:nowrap; }
@@ -153,3 +187,104 @@ body.prob-collapsed .problems{ height:auto; } body.prob-collapsed .problems-body
 textarea.dxc-line{ font-family:var(--ox-mono); font-size:12.5px; white-space:pre; resize:vertical; }
 #binPane textarea{ font-family:var(--ox-mono); font-size:12.5px; }
 #isaAsic option:disabled{ color:var(--bs-secondary-color); }
+
+/* Syntax highlighting for the disassembly and pipeline text views (OxUtil.highlightAsm /
+   highlightPipeline). Tuned against the same palette the chips use, so a provenance word reads the
+   same in the print as it does in the table. */
+.asm .hl-cmt   { color: var(--bs-secondary-color); font-style: italic; }
+.asm .hl-str   { color: #b5cea8; }
+.asm .hl-id    { color: #9cdcfe; }
+.asm .hl-op    { color: #c586c0; font-weight: 600; }
+.asm .hl-kw    { color: #569cd6; font-weight: 600; }
+.asm .hl-num   { color: #b5cea8; }
+.asm .hl-head  { color: var(--bs-emphasis-color); font-weight: 600; }
+.asm .hl-note  { color: #d7ba7d; }
+.asm .hl-field { color: #9cdcfe; }
+.asm .prov-derived  { color: #6a9955; font-weight: 600; }
+.asm .prov-supplied { color: #4fc1ff; font-weight: 600; }
+.asm .prov-assumed  { color: #ce9178; font-weight: 600; }
+
+[data-bs-theme="light"] .asm .hl-str,
+[data-bs-theme="light"] .asm .hl-num   { color: #0a7d3f; }
+[data-bs-theme="light"] .asm .hl-id,
+[data-bs-theme="light"] .asm .hl-field { color: #0b6a9e; }
+[data-bs-theme="light"] .asm .hl-op    { color: #8b2fa0; }
+[data-bs-theme="light"] .asm .hl-kw    { color: #0b5cad; }
+[data-bs-theme="light"] .asm .hl-note  { color: #8a6d1a; }
+[data-bs-theme="light"] .asm .prov-derived  { color: #1a6b2f; }
+[data-bs-theme="light"] .asm .prov-supplied { color: #0b6a9e; }
+[data-bs-theme="light"] .asm .prov-assumed  { color: #a4531f; }
+
+/* The provenance chip is the narrowest thing in the oiSP table and the column it sits in is sized by
+   the field paths beside it, so it needs to keep its own line rather than wrap mid-word. */
+table.ox td .chip { white-space: nowrap; }
+table.ox td:has(> .chip) { width: 1%; white-space: nowrap; }
+
+/* An include path in the reflection is a link to the file it resolved to. */
+.inc-link { text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
+.inc-link:hover { text-decoration: none; border-bottom-style: solid; }
+
+/* A type the reflection reports without a name: shown as its kind, not as a type called that. */
+.ttype-unnamed { font-style: italic; opacity: .75; }
+
+/* ---- source to disassembly line mapping (asmmap.js) ---- */
+.asm-line{ white-space:pre; min-height:1.2em; }
+.asm-mapped{ background:hsla(var(--asm-h),45%,50%,.055); cursor:pointer; }
+.asm-mapped:hover{ background:hsla(var(--asm-h),50%,50%,.14); }
+.asm-cur{ outline:1px solid hsla(var(--asm-h),70%,55%,.75); background:hsla(var(--asm-h),50%,50%,.18); }
+.ox-ctrl .CodeMirror-code{ cursor:pointer; }
+.asm-hint{ position:sticky; top:0; }
+
+/* ---- hover card (intellisense.js) ---- */
+.ox-hover{ position:fixed; z-index:4000; display:none; max-width:460px; padding:6px 10px; border-radius:6px;
+  background:var(--bs-body-bg); border:1px solid var(--bs-border-color); box-shadow:0 4px 14px rgba(0,0,0,.25);
+  font-size:12.5px; pointer-events:none; }
+.ox-hover-title{ font-family:var(--ox-mono); }
+.ox-hover-loc{ color:var(--bs-secondary-color); font-size:11.5px; }
+.CodeMirror-hints{ z-index:4000; font-size:12.5px; font-family:var(--ox-mono); }
+
+/* editor tabs */
+.etabs{ display:flex; align-items:flex-end; gap:2px; overflow-x:auto; scrollbar-width:thin; flex:1; min-width:0; }
+.etab .bi-pin-fill{ font-size:10px; color:var(--ox-accent); }
+.etab-dot{ font-size:8px; color:var(--ox-accent); line-height:1; }
+.ox-hover-doc{ color:var(--bs-secondary-color); white-space:pre-wrap; margin:4px 0 2px; max-width:60ch; }
+.asm-line.asm-sel{ background:color-mix(in srgb, var(--ox-accent) 14%, transparent); box-shadow:inset 3px 0 0 var(--ox-accent); }
+.etab{
+  display:inline-flex; align-items:center; gap:5px; padding:2px 4px 2px 10px; font-size:12px; cursor:pointer;
+  border-radius:6px 6px 0 0; border-bottom:2px solid transparent; color:var(--bs-secondary-color); white-space:nowrap;
+  font-family:var(--ox-mono); flex-shrink:0;
+}
+.etab:hover{ background:var(--bs-secondary-bg); }
+.etab.active{ color:var(--bs-body-color); border-bottom-color:var(--ox-accent); }
+.etab .bi{ font-size:10px; opacity:.7; }
+.etab-x{ border:0; background:none; color:inherit; opacity:.35; font-size:14px; line-height:1; padding:0 3px; cursor:pointer; }
+.etab:hover .etab-x, .etab.active .etab-x{ opacity:.8; }
+.etab-x:hover{ opacity:1; color:var(--ox-accent); }
+.drop-hint{ outline:2px dashed var(--ox-accent); outline-offset:-4px; }
+
+/* command cards wrap instead of scrolling sideways, so the whole line stays visible and editable.
+ * field-sizing lets a textarea grow with its content where supported; rows=3 is the fallback. */
+.cmdcard{ white-space:pre-wrap; word-break:break-all; }
+textarea.cmdcard{ field-sizing:content; min-height:3em; resize:vertical; }
+
+/* checkbox lists for mask-valued pickers (extensions, vendors): plain clicks toggle, no ctrl needed */
+.asm-checklist{
+  max-height:110px; overflow-y:auto; border:1px solid var(--bs-border-color); border-radius:6px;
+  padding:4px 8px; background:var(--bs-body-bg);
+}
+
+/* an editable field with real highlighting: the painted copy sits behind a transparent textarea.
+ * The two MUST share metrics (font, size, line height, padding) or the paint drifts off the caret. */
+.hl-edit{ position:relative; }
+.hl-edit-ta, .hl-edit-bg{
+  font-family:var(--ox-mono); font-size:12px; line-height:1.5; tab-size:4; white-space:pre;
+  padding:.375rem .75rem;
+}
+.hl-edit-ta{
+  position:relative; z-index:1; background:transparent; color:transparent;
+  caret-color:var(--bs-body-color); resize:vertical; overflow:auto;
+}
+.hl-edit-bg{
+  position:absolute; inset:0; margin:0; border:1px solid transparent; border-radius:var(--bs-border-radius);
+  overflow:hidden; pointer-events:none; background:var(--bs-body-bg);
+}

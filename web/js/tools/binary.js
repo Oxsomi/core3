@@ -1,4 +1,4 @@
-/* tools/binary.js — the standalone "SPV / DXIL" mode's own tools. A loaded binary is a document like any
+/* tools/binary.js: the standalone "SPV / DXIL" mode's own tools. A loaded binary is a document like any
  * other (reflected from its bytes, see OxAPI.reflectBinary), so Reflection / SPIR-V / DXIL / ISA / Pipeline / Diff
  * and the oiSH tab (assemble into oiSH) are the regular tabs. What's left here is the strip above them:
  * `OxC3 shader assemble` (SPIR-V text -> .spv) and Compiler_getUniqueEntrypoints (no CLI verb yet). */
@@ -16,7 +16,7 @@ function render(state, handlers) {
     <div class="d-flex align-items-center gap-2 flex-wrap small">
       <span class="text-body-secondary"><i class="bi bi-file-binary"></i> ${entry ? `${esc(name)} · ${entry.type === "spirv" ? "SPIR-V" : "DXIL"} · ${fmtBytes(entry.bytes.length)}` : "no binary selected"}</span>
       <button id="sbEntries" class="btn btn-sm btn-outline-secondary" ${entry ? "" : "disabled"}
-        title="Compiler_getUniqueEntrypoints — list entrypoints embedded in a (lib) binary; no CLI verb yet">List entrypoints</button>
+        title="Compiler_getUniqueEntrypoints: list entrypoints embedded in a (lib) binary; no CLI verb yet">List entrypoints</button>
       <button id="sbDl" class="btn btn-sm btn-outline-secondary" ${entry ? "" : "disabled"}><i class="bi bi-download me-1"></i>disassembly .txt</button>
       <button id="asmToggle" class="btn btn-sm btn-outline-secondary ms-auto"><i class="bi bi-hammer me-1"></i>Assemble SPIR-V text → .spv</button>
     </div>
@@ -26,11 +26,12 @@ function render(state, handlers) {
         <span class="text-body-secondary cli">OxC3 shader assemble -input x.txt -output x.spv</span>
         <select id="asmType" class="form-select form-select-sm w-auto ms-auto">
           <option value="spirv">SPIR-V (spirv-as)</option>
-          <option value="dxil" disabled title="mirrors the CLI: DXIL assembly not supported yet">DXIL — not supported yet</option>
+          <option value="dxil">DXIL (LL text)</option>
         </select>
         <button id="asmGo" class="btn btn-sm btn-teal"><i class="bi bi-hammer me-1"></i>Assemble</button>
       </div>
-      <textarea id="asmIn" class="form-control font-monospace" rows="7" spellcheck="false">; SPIR-V assembly text (spirv-as syntax)
+      <div class="hl-edit"><pre id="asmHl" class="asm hl-edit-bg" aria-hidden="true"></pre>
+      <textarea id="asmIn" class="form-control hl-edit-ta" rows="7" spellcheck="false">; SPIR-V assembly text (spirv-as syntax)
                OpCapability Shader
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
@@ -40,16 +41,39 @@ function render(state, handlers) {
        %main = OpFunction %void None %3
           %5 = OpLabel
                OpReturn
-               OpFunctionEnd</textarea>
+               OpFunctionEnd</textarea></div>
       <div id="asmMsg" class="small text-body-secondary mt-1"></div>
     </div>`;
 
   $("#asmToggle").addEventListener("click", () => { open = !open; $("#asmCard").classList.toggle("d-none", !open); });
 
+  /* The editable assembly gets the same highlighting as the read-only views: a painted copy sits
+   * behind a transparent textarea, kept in step on every edit and scroll. */
+  {
+    const ta = $("#asmIn"), hl = $("#asmHl");
+    const paint = () => {
+      hl.innerHTML = ta.value.split("\n").map(l => window.OxUtil.highlightAsm(l) || "&nbsp;").join("\n");
+    };
+    ta.addEventListener("input", paint);
+    ta.addEventListener("scroll", () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; });
+    paint();
+  }
+
+  /* The card edits THE SELECTED BINARY: switching binaries reloads its real disassembly into the
+   * textarea, so the editable text and the disassembly view can never be two different documents.
+   * Only SPIR-V assembles; with nothing selected (or a DXIL binary) the placeholder example stays. */
+  if (entry && entry.type === "spirv")
+    window.OxAPI.disassemble("spirv", entry.bytes).then(text => {
+      const ta = $("#asmIn");
+      if (!ta) return;                   //the strip re-rendered while we were disassembling
+      ta.value = text;
+      ta.dispatchEvent(new Event("input"));
+    }).catch(() => { });
+
   $("#sbEntries").addEventListener("click", async () => {
     if (!entry) return;
     const eps = await window.OxAPI.getUniqueEntrypoints(entry.type, entry.bytes);
-    $("#sbMeta").innerHTML = `${esc(name)} — entrypoints: ` +
+    $("#sbMeta").innerHTML = `${esc(name)}: entrypoints: ` +
       eps.map(e => `<code>${esc(e.name)}</code> <span class="text-body-secondary">(${esc(e.stage)})</span>`).join(", ") +
       (eps[0] && eps[0].note ? ` <span class="text-warning">· ${esc(eps[0].note)}</span>` : "");
   });
@@ -62,10 +86,11 @@ function render(state, handlers) {
 
   $("#asmGo").addEventListener("click", async () => {
     try {
-      const bytes = await window.OxAPI.assemble($("#asmType").value, $("#asmIn").value);
-      const outName = `assembled.${Object.keys(state.standalone).length}.spv`;
-      $("#asmMsg").innerHTML = `<span class="text-success">assembled ${fmtBytes(bytes.length)} → ${esc(outName)}</span> <span class="text-body-secondary">(mock bytes until Compiler_assemble is wired; the result is a document like any loaded binary)</span>`;
-      if (handlers.onAssembled) handlers.onAssembled(outName, { type: "spirv", bytes });
+      const type = $("#asmType").value;
+      const bytes = await window.OxAPI.assemble(type, $("#asmIn").value);
+      const outName = `assembled.${Object.keys(state.standalone).length}.${type === "dxil" ? "dxil" : "spv"}`;
+      $("#asmMsg").innerHTML = `<span class="text-success">assembled ${fmtBytes(bytes.length)} → ${esc(outName)}</span> <span class="text-body-secondary">(a document like any loaded binary)</span>`;
+      if (handlers.onAssembled) handlers.onAssembled(outName, { type, bytes });
     } catch (err) {
       $("#asmMsg").innerHTML = `<span class="text-danger">${esc(err.message)}</span>`;
     }

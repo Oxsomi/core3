@@ -323,7 +323,7 @@ clean:
 						break;
 
 					case EPipelineStatisticFormat_F64: {
-						F64 d = *(const F64*) &s->value;
+						F64 d = F64_fromU64Bits(s->value);
 						gotoIfError3(clean, CharString_format(alloc, &line, e_rr, ";   %.*s = %f\n", nl, s->name.ptr, d));
 						break;
 					}
@@ -599,6 +599,7 @@ clean:
 			&files, &texts, &outputs, &modes,
 			1,                                  //threadCount: one tiny shader
 			false,                              //isDebug
+			false,                              //noOpt
 			false,                              //keepRegisters
 			(ECompilerWarning) 0,
 			false,                              //ignoreEmptyFiles
@@ -846,7 +847,8 @@ clean:
 		if (!GraphicsInterface_supportsApi(api)) {
 
 			Log_errorLnx("%s isn't available on this machine, which is what %s binaries are compiled by.", apiName,
-				ESHBinaryType_names[binaryType]);
+				ESHBinaryType_names[binaryType]
+			);
 
 			retError(clean, Error_unsupportedOperation(0, "CLI_isaDisassembleLive() the required graphics API is unavailable"));
 		}
@@ -935,7 +937,8 @@ clean:
 
 			else if(
 				stage == ESHPipelineStage_Vertex || stage == ESHPipelineStage_Pixel || stage == ESHPipelineStage_Hull ||
-				stage == ESHPipelineStage_Domain || stage == ESHPipelineStage_GeometryExt
+				stage == ESHPipelineStage_Domain || stage == ESHPipelineStage_GeometryExt ||
+				stage == ESHPipelineStage_MeshExt || stage == ESHPipelineStage_TaskExt
 			)
 				++kindCounts[1];
 
@@ -1142,6 +1145,17 @@ clean:
 					"CLI_isaDisassembleLive() tessellation isn't supported yet: a patch list topology is required and "
 					"ETopologyMode has no patch list, so the pipeline would be invalid"
 				));
+
+			//Mesh pipelines create through a different PSO path and must not get a generated vertex stage.
+
+			for (U64 i = 0; i < shFile.entries.length; ++i)
+				if(
+					shFile.entries.ptr[i].stage == ESHPipelineStage_MeshExt ||
+					shFile.entries.ptr[i].stage == ESHPipelineStage_TaskExt
+				)
+					retError(clean, Error_unsupportedOperation(
+						1, "CLI_isaDisassembleLive() mesh pipelines aren't supported by the live route yet"
+					));
 
 			//A generated vertex stage has to feed whichever stage comes first, and a generated pixel stage receives
 			// from whichever comes last.

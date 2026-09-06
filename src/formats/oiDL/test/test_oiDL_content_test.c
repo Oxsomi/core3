@@ -276,6 +276,28 @@ void Test_DLRoundtripPlain(Test *t) {
 			!DLFile_read(ms, &readOff, NULL, iv, false, false, t->alloc, NULL, &f3, NULL)
 		);
 
+		//A parent format keeps the DLFile it read and serializes it again (oiSB, oiSR and oiSP all do), so
+		//what comes back has to still be a subfile: writing a magic here would shift everything after it.
+
+		Test_assert(t, "SubFile: stays hidden after a read", f2.settings.flags & EDLSettingsFlags_HideMagicNumber);
+
+		{
+			MemoryStreamRef *rewritten = NULL;
+			DLFile f4 = { 0 };
+			U64 writeOff = 0, rereadOff = 0;
+
+			Bool roundTrips =
+				MemoryStream_create(1 * MIBI, EMemoryStreamFlags_WriteResize, &memStreamType, &rewritten, &t->err) &&
+				DLFile_write(&f2, t->alloc, rewritten, NULL, iv, &writeOff, &t->err) &&
+				DLFile_read(rewritten, &rereadOff, NULL, iv, true, false, t->alloc, NULL, &f4, &t->err);
+
+			Test_assert(t, "SubFile: read, write, read round-trips", roundTrips);
+			Test_assert(t, "SubFile: round-trip keeps the entry", roundTrips && DLFile_entryCount(&f4) == 1);
+
+			RefPtr_dec(&rewritten);
+			DLFile_free(&f4, t->alloc);
+		}
+
 	cleanSubFile:
 		Buffer_free(&buf, t->alloc);
 		RefPtr_dec(&ms);

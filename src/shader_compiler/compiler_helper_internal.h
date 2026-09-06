@@ -31,10 +31,15 @@
 //Internal declarations shared between the compiler_helper*.c translation units.
 //These were file-local to compiler_helper.c before it was split and are not part of the public API.
 
+//Logs each diagnostic at its severity, in the `file:line:col: message` shape the log consumers parse.
+
+void Compiler_printErrors(ListCompileError errors, const Allocator *alloc);
+
 Bool Compiler_precompileShader(
 	const Compiler *compiler,
 	ESHBinaryType outputType,
 	Bool isDebug,
+	Bool noOpt,
 	CharString inputPath,
 	CharString input,
 	ListSHEntryRuntime *shEntriesRuntime,
@@ -54,6 +59,7 @@ Bool Compiler_compileShaderSingle(
 	const Compiler *compiler,
 	ESHBinaryType binaryType,
 	Bool isDebug,
+	Bool noOpt,
 	Bool keepRegisters,
 	Bool isRt,
 	Bool isGfxOrComp,
@@ -81,6 +87,7 @@ Bool Compiler_linkSingle(
 	U16 shaderVersion,
 	ESHPipelineStage stageType,
 	ESHExtension exts,
+	Bool keepRegisters,
 	Bool enableLogging,
 	Buffer *result,
 	const Allocator *alloc

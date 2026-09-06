@@ -89,6 +89,7 @@ void Test_SHFileAddBinValidDefines(Test *t);
 void Test_SHFileAddBinUniformEmptyName(Test *t);
 void Test_SHFileAddBinUniformDigitFirstChar(Test *t);
 void Test_SHFileAddBinUniformUnderscoreStart(Test *t);
+void Test_SHFileAddBinUniformUnderscoreInside(Test *t);
 void Test_SHFileAddBinUniformInvalidBodyChar(Test *t);
 void Test_SHFileAddBinUniformDuplicateName(Test *t);
 void Test_SHFileAddBinValid(Test *t);

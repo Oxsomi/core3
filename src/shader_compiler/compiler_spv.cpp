@@ -719,13 +719,92 @@ clean:
 	return s_uccess;
 }
 
+//The env has to match the module's own version: rules differ per version (BufferBlock is legal up to
+//1.3 and an error after), so judging a 1.3 module under a 1.6 env would refuse valid input.
+
+static spv_target_env SPIRV_envForVersion(U32 versionWord) {
+
+	const U32 minor = (versionWord >> 16) == 1 ? (versionWord >> 8) & 0xFF : 6;
+
+	switch (minor) {
+		case 0:  return SPV_ENV_UNIVERSAL_1_0;
+		case 1:  return SPV_ENV_UNIVERSAL_1_1;
+		case 2:  return SPV_ENV_UNIVERSAL_1_2;
+		case 3:  return SPV_ENV_UNIVERSAL_1_3;
+		case 4:  return SPV_ENV_UNIVERSAL_1_4;
+		case 5:  return SPV_ENV_UNIVERSAL_1_5;
+		default: return SPV_ENV_UNIVERSAL_1_6;
+	}
+}
+
+//The verdict comes back through valid/errorText rather than the error channel: an invalid module is an
+//answer about the INPUT, not a failure of this call. errorText carries the validator's own message.
+
+extern "C" Bool Compiler_validateSPIRV(
+	Buffer binary, const Allocator *alloc, Bool *valid, CharString *errorText, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	std::string message;
+	std::vector<U32> copied;
+
+	const void *resultPtr = binary.ptr;
+	const U64 binLen = Buffer_length(binary);
+
+	if(!valid)
+		retError(clean, Error_nullPointer(2, "Compiler_validateSPIRV()::valid is required"));
+
+	*valid = false;
+
+	if(
+		binLen < 0x8 ||
+		(binLen & 3) ||
+		Buffer_readU32(binary, 0, NULL, NULL) != 0x07230203
+	) {
+		if(errorText)
+			gotoIfError3(clean, CharString_createCopy(
+				CharString_createRefCStrConst("not a SPIR-V module (bad size, alignment or magic)"),
+				alloc, errorText, e_rr
+			));
+		goto clean;
+	}
+
+	if ((U64)resultPtr & 3) {        //Fix alignment
+		copied.resize(binLen >> 2);
+		Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
+		resultPtr = copied.data();
+	}
+
+	{
+		spvtools::SpirvTools tool{ SPIRV_envForVersion(((const U32*)resultPtr)[1]) };
+
+		tool.SetMessageConsumer([&message](spv_message_level_t, const C8*, const spv_position_t&, const C8 *m) {
+			if(!message.empty()) message += '\n';
+			message += m;
+		});
+
+		*valid = tool.Validate((const U32*)resultPtr, binLen >> 2);
+	}
+
+	if(!*valid && errorText)
+		gotoIfError3(clean, CharString_createCopy(
+			CharString_createRefSizedConst(message.c_str(), message.size(), true), alloc, errorText, e_rr
+		));
+
+clean:
+	return s_uccess;
+}
+
 extern "C" Bool Compiler_assembleSPIRV(CharString text, const Allocator *alloc, Buffer *result, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	//Assemble at the highest env (superset grammar) so text from SPIR-V 1.6 modules (cooperative vectors/matrix)
-	//parses; the assembler stamps the version the text itself requests.
-	spvtools::SpirvTools tool{ SPV_ENV_UNIVERSAL_1_6 };
+	//The assembler stamps its env's version into the module header, so the env follows the version the
+	//disassembly header comment declares ("; Version: 1.3"); text without one gets the highest env,
+	//whose grammar is a superset.
+
+	spv_target_env env = SPV_ENV_UNIVERSAL_1_6;
 	std::vector<U32> spirv;
 
 	if(!result)
@@ -734,8 +813,53 @@ extern "C" Bool Compiler_assembleSPIRV(CharString text, const Allocator *alloc, 
 	if(!CharString_length(text))
 		retError(clean, Error_invalidParameter(0, 0, "Compiler_assembleSPIRV()::text is empty"));
 
-	if(!tool.Assemble(std::string(text.ptr, (size_t) CharString_length(text)), &spirv))
-		retError(clean, Error_invalidOperation(0, "Compiler_assembleSPIRV() SPIRV text couldn't be assembled"));
+	{
+		const CharString versionTag = CharString_createRefCStrConst("; Version: 1.");
+		const U64 at = CharString_findFirstStringSensitive(&text, &versionTag, 0, 0);
+
+		U64 minor = 0;
+
+		if(
+			at != U64_MAX && at + CharString_length(versionTag) < CharString_length(text) &&
+			CharString_parseU64(
+				CharString_createRefSizedConst(text.ptr + at + CharString_length(versionTag), 1, false), &minor
+			)
+		)
+			env = SPIRV_envForVersion((1 << 16) | ((U32) minor << 8));
+	}
+
+	{
+		spvtools::SpirvTools tool{ env };
+
+		if(!tool.Assemble(std::string(text.ptr, (size_t) CharString_length(text)), &spirv))
+			retError(clean, Error_invalidOperation(0, "Compiler_assembleSPIRV() SPIRV text couldn't be assembled"));
+	}
+
+	//Assembled doesn't mean well formed: everything downstream (spirv-reflect first of all) trusts its
+	//input, so an invalid module is refused here with the validator's reason in the log.
+
+	{
+		Bool valid = false;
+		CharString validationError = CharString_createNull();
+
+		gotoIfError3(clean, Compiler_validateSPIRV(
+			Buffer_createRefConst(spirv.data(), (U64) spirv.size() * sizeof(U32)), alloc,
+			&valid, &validationError, e_rr
+		));
+
+		if (!valid) {
+
+			Log_errorLn(
+				alloc, "spirv-val: %.*s",
+				(int) CharString_length(validationError), validationError.ptr
+			);
+
+			CharString_free(&validationError, alloc);
+			retError(clean, Error_invalidState(0, "Compiler_assembleSPIRV() the assembled SPIR-V failed validation"));
+		}
+
+		CharString_free(&validationError, alloc);
+	}
 
 	gotoIfError3(clean, Buffer_createCopy(
 		Buffer_createRefConst(spirv.data(), (U64) spirv.size() * sizeof(U32)), alloc, result, e_rr
@@ -770,6 +894,31 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 		Buffer_readU32(binary, 0, NULL, NULL) != 0x07230203
 	)
 		retError(clean, Error_invalidState(2, "Compiler_getUniqueEntrypointsSPIRV() SPIRV returned is invalid"));
+
+	//spirv-reflect trusts its input (see the NO_COPY note below), so arbitrary bytes go through
+	//spirv-val first and an invalid module is refused with the validator's reason in the log.
+
+	{
+		Bool valid = false;
+		CharString validationError = CharString_createNull();
+
+		gotoIfError3(clean, Compiler_validateSPIRV(binary, alloc, &valid, &validationError, e_rr));
+
+		if (!valid) {
+
+			Log_errorLn(
+				alloc, "spirv-val: %.*s",
+				(int) CharString_length(validationError), validationError.ptr
+			);
+
+			CharString_free(&validationError, alloc);
+			retError(clean, Error_invalidState(
+				2, "Compiler_getUniqueEntrypointsSPIRV() the SPIR-V failed validation, refusing to reflect it"
+			));
+		}
+
+		CharString_free(&validationError, alloc);
+	}
 
 	//Reflect binary information, since our own parser doesn't have the info yet.
 

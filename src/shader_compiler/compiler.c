@@ -872,6 +872,31 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_validate(
+	const Compiler *comp, ESHBinaryType type, Buffer binary, const Allocator *alloc, Bool *valid, CharString *errorText,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	switch (type) {
+
+		case ESHBinaryType_SPIRV:
+			gotoIfError3(clean, Compiler_validateSPIRV(binary, alloc, valid, errorText, e_rr));
+			break;
+
+		case ESHBinaryType_DXIL:
+			gotoIfError3(clean, Compiler_validateDXIL(comp, binary, alloc, valid, errorText, e_rr));
+			break;
+
+		default:
+			retError(clean, Error_unimplemented(0, "Compiler_validate() has invalid type"));
+	}
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_processSPIRV(
 	Buffer *result,                      //Required; input & output SPIRV (will be optimized)
 	ListSHRegisterRuntime *registers,    //Required; Output registers
@@ -969,6 +994,7 @@ Bool Compiler_linkDXIL(
 	U16 shaderVersion,                     //U8 maj, minor
 	ESHPipelineStage stageType,
 	ESHExtension exts,
+	Bool keepRegisters,                    //Keep unused resources through the link's own codegen pass too
 	ListCompileError *errors,
 	Buffer *result,                        //Output DXIL: Either library or specialized binary (PS/GS/CS/etc.)
 	const Allocator *alloc,
@@ -985,6 +1011,7 @@ Bool Compiler_link(
 	U16 shaderVersion,
 	ESHPipelineStage stageType,
 	ESHExtension exts,
+	Bool keepRegisters,
 	ListCompileError *errors,
 	Buffer *result,
 	const Allocator *alloc,
@@ -1009,8 +1036,8 @@ Bool Compiler_link(
 		case ESHBinaryType_DXIL:
 
 			gotoIfError3(clean, Compiler_linkDXIL(
-				compiler, inputs, uniforms, uniformData, entrypoint, shaderVersion, stageType, exts, errors, result,
-				alloc, e_rr
+				compiler, inputs, uniforms, uniformData, entrypoint, shaderVersion, stageType, exts, keepRegisters,
+				errors, result, alloc, e_rr
 			));
 
 			break;

@@ -37,6 +37,7 @@ in packages/conan/profiles/emscripten_wasm64 and must match in every consumer li
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 
@@ -116,7 +117,10 @@ def webOptionArgs(tests, hostCrypto=False, asan=False, ubsan=False):
 
 	return " ".join(f"-o \"&:{k}={v}\"" for k, v in options.items())
 
-def doBuild(mode, doInstall, tests, cache, hostCrypto=False, threads=False, asan=False, ubsan=False):
+def doBuild(
+	mode, doInstall, tests, cache, hostCrypto=False, threads=False, asan=False, ubsan=False, singleFile=False,
+	dxcSource=None
+):
 
 	profile      = webProfile(threads)
 	buildProfile = common.crossBuildProfileArgs()
@@ -171,6 +175,13 @@ def doBuild(mode, doInstall, tests, cache, hostCrypto=False, threads=False, asan
 
 	tablegenConf = f"-c:h user.dxc:tablegen_dir=\"{tablegenDir}\""
 
+	# Building the fork from a working tree rather than from the pin in packages/dxc/conandata.yml, so a
+	# change to it can be tested before it is pushed. The package this produces is not reproducible, which
+	# is why it takes an explicit path rather than defaulting to a sibling checkout.
+
+	if dxcSource:
+		tablegenConf += f" -c:h user.dxc:source_dir=\"{os.path.abspath(dxcSource)}\""
+
 	shaderMode = common.shaderCompilerDepMode(mode, False)
 
 	# Both of them take their sanitizer wiring from a python_requires, which has to be resolvable from the
@@ -188,8 +199,18 @@ def doBuild(mode, doInstall, tests, cache, hostCrypto=False, threads=False, asan
 	options      = webOptionArgs(tests, hostCrypto, asan, ubsan)
 	shaderArgs   = common.shaderCompilerDepArgs(False)
 
+	# How the frontend module ships its wasm is a link choice on one target, not an ABI one, so it rides
+	# in as a cmake variable rather than as a conan option: an option would fork package_id and rebuild
+	# every dependency for something no consumer links against.
+
+	frontendArgs = ""
+
+	if singleFile:
+		frontendArgs = "-c tools.cmake.cmaketoolchain:extra_variables=\"{'WebFrontendSingleFile': 'ON'}\""
+
 	common.run(
-		f"conan build . -of {outputFolder} {options} -s build_type={mode} {profileArgs} {shaderArgs} --build=missing"
+		f"conan build . -of {outputFolder} {options} -s build_type={mode} {profileArgs} {shaderArgs} "
+		f"{frontendArgs} --build=missing"
 	)
 
 	if doInstall:
@@ -246,6 +267,172 @@ def runTests(mode, suite=None, threads=False, asan=False, ubsan=False):
 
 	print("-- Tests passed")
 
+WEB_FRONTEND = "web"
+WEB_MODULE = "OxC3_wasm"
+
+def stageFrontend(mode, singleFile=False):
+	"""Copy the module the page loads into web/wasm/.
+
+	Two flavors coexist so a rebuild can never break the other one's page: the two file build stages as
+	OxC3_wasm.js + .wasm (what js/wasm_rpc.js's worker asks for on http), the embedded build as
+	OxC3_wasm_sf.js (what js/wasmload.js asks for on file://, where the sidecar .wasm can't be fetched).
+	They're build artifacts (21+ MB), hence copied rather than committed; .gitignore covers the folder.
+	"""
+
+	binDir = os.path.join(common.ROOT, "build", mode, "web", "wasm64", "bin")
+	outDir = os.path.join(common.ROOT, WEB_FRONTEND, "wasm")
+
+	stagedName = f"{WEB_MODULE}_sf.js" if singleFile else f"{WEB_MODULE}.js"
+	moduleJs = os.path.join(binDir, f"{WEB_MODULE}.js")
+
+	if not os.path.isfile(moduleJs):
+		print(f"-- No {WEB_MODULE}.js at {binDir} (the module only builds with the shader compiler on)", file=sys.stderr)
+		sys.exit(1)
+
+	os.makedirs(outDir, exist_ok=True)
+	shutil.copy2(moduleJs, os.path.join(outDir, stagedName))
+	staged = [stagedName]
+
+	if singleFile:
+		return print(f"-- Staged {stagedName} into {os.path.relpath(outDir, common.ROOT)}")
+
+	# Precompressed siblings belong to the module they were made from: serveFrontend (and a real host)
+	# prefers them, so a stale one would silently shadow the fresh module. --precompress recreates them.
+	for leftover in (f"{WEB_MODULE}.js.br", f"{WEB_MODULE}.wasm.br"):
+		if os.path.isfile(os.path.join(outDir, leftover)):
+			os.remove(os.path.join(outDir, leftover))
+
+	# A single file build embeds the wasm and emits none, so a leftover one from an earlier build has to
+	# go: it would sit there as a stale 21 MB file the page never reads.
+	# Which build this is comes from the module itself, since it names the file it will ask for and a
+	# single file one names nothing. Timestamps can't tell them apart: emcc writes the wasm first, so it
+	# is always fractionally older than the js beside it, even when both are fresh.
+
+	moduleWasm = os.path.join(binDir, f"{WEB_MODULE}.wasm")
+	stagedWasm = os.path.join(outDir, f"{WEB_MODULE}.wasm")
+
+	with open(moduleJs, "r", encoding="utf-8", errors="ignore") as f:
+		needsWasm = f"{WEB_MODULE}.wasm" in f.read()
+
+	if needsWasm:
+
+		if not os.path.isfile(moduleWasm):
+			print(f"-- {WEB_MODULE}.js asks for a .wasm that isn't in {binDir}", file=sys.stderr)
+			sys.exit(1)
+
+		shutil.copy2(moduleWasm, stagedWasm)
+		staged.append(f"{WEB_MODULE}.wasm")
+
+	elif os.path.isfile(stagedWasm):
+		os.remove(stagedWasm)
+
+	print(f"-- Staged {', '.join(staged)} into {os.path.relpath(outDir, common.ROOT)}")
+
+def precompressFrontend():
+	"""Write .br siblings next to the staged module, which serveFrontend and a real host serve.
+
+	Brotli turns the ~21 MB module into ~5.5 MB, the difference between a painful first load and an ok
+	one. Node's zlib does the compressing because the emsdk already ships node; no extra tool needed.
+	"""
+
+	outDir = os.path.join(common.ROOT, WEB_FRONTEND, "wasm")
+	node = emsdkNode()
+
+	for name in (f"{WEB_MODULE}.js", f"{WEB_MODULE}.wasm"):
+
+		src = os.path.join(outDir, name)
+
+		if not os.path.isfile(src):
+			continue
+
+		subprocess.run(
+			[
+				node, "-e",
+				"const z=require('zlib'),f=require('fs'),p=process.argv[1];"
+				"f.writeFileSync(p+'.br',z.brotliCompressSync(f.readFileSync(p),"
+				"{params:{[z.constants.BROTLI_PARAM_QUALITY]:11,"
+				"[z.constants.BROTLI_PARAM_SIZE_HINT]:f.statSync(p).size}}))",
+				src
+			],
+			check=True
+		)
+
+		print(f"-- {name}: {os.path.getsize(src):,} -> {os.path.getsize(src + '.br'):,} bytes (.br)")
+
+def runFrontendTests(mode):
+	"""Drive the staged module through the frontend's own boundary (web/js/wasm.js), headless.
+
+	This is the regression net for the boundary rather than for the page: the call frame, wasm64
+	pointer marshalling, the project tree #includes resolve against, and every document serializer.
+	"""
+
+	smoke = os.path.join(common.ROOT, WEB_FRONTEND, "dev", "wasm_smoke.js")
+	workerSmoke = os.path.join(common.ROOT, WEB_FRONTEND, "dev", "worker_smoke.js")
+	module = os.path.join(common.ROOT, "build", mode, "web", "wasm64", "bin", f"{WEB_MODULE}.js")
+
+	if not os.path.isfile(module):
+		print(f"-- No module at {module} (build with --frontend first)", file=sys.stderr)
+		sys.exit(1)
+
+	for suite in (smoke, workerSmoke):
+
+		result = subprocess.run(f"\"{emsdkNode()}\" \"{suite}\" \"{module}\"", shell=True)
+
+		if result.returncode:
+			print("-- Frontend tests FAILED", file=sys.stderr)
+			sys.exit(result.returncode)
+
+def serveFrontend(port):
+	"""Serve web/ over http, which loading a .wasm needs (file:// blocks the fetch).
+
+	Cross origin isolation is sent even though the single threaded module doesn't need it: it costs
+	nothing here and it's what a threaded flavor would require, so a page that works under this server
+	works under the one that has to ship those headers.
+	"""
+
+	import functools
+	import http.server
+
+	class Handler(http.server.SimpleHTTPRequestHandler):
+
+		def send_head(self):
+
+			# A precompressed sibling (--precompress) is served the way a real host serves it, so first
+			# load measured here matches the deployed site rather than the 21 MB raw module.
+			if "br" in self.headers.get("Accept-Encoding", ""):
+
+				path = self.translate_path(self.path)
+
+				if os.path.isfile(path + ".br"):
+					f = open(path + ".br", "rb")
+					self.send_response(200)
+					self.send_header("Content-Type", self.guess_type(path))
+					self.send_header("Content-Encoding", "br")
+					self.send_header("Content-Length", str(os.fstat(f.fileno()).st_size))
+					self.end_headers()
+					return f
+
+			return super().send_head()
+
+		def end_headers(self):
+			self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+			self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+			self.send_header("Cache-Control", "no-store")
+			super().end_headers()
+
+	Handler.extensions_map[".wasm"] = "application/wasm"
+
+	root = os.path.join(common.ROOT, WEB_FRONTEND)
+	handler = functools.partial(Handler, directory=root)
+
+	print(f"-- Serving {os.path.relpath(root, common.ROOT)} on http://localhost:{port} (ctrl+c to stop)")
+
+	with http.server.ThreadingHTTPServer(("localhost", port), handler) as server:
+		try:
+			server.serve_forever()
+		except KeyboardInterrupt:
+			print()
+
 def main():
 
 	common.ensureCorrectEnvironment(__file__)
@@ -275,6 +462,30 @@ def main():
 		"-ubsan", type=str, default="False", choices=["True", "False"],
 		help="Build with UndefinedBehaviorSanitizer. Its own flavor as well, for the same reason as -asan"
 	)
+	parser.add_argument(
+		"--frontend", action="store_true",
+		help="Stage OxC3_wasm into web/wasm/ so the web frontend runs against the real compiler instead of its mocks"
+	)
+	parser.add_argument(
+		"-dxc_source", type=str, default=None, metavar="PATH",
+		help="Build DXC from this checkout instead of the pinned clone, for iterating on the fork"
+	)
+	parser.add_argument(
+		"--single_file", action="store_true",
+		help="Embed the wasm in the frontend module's js, so web/index.html runs from file:// with no server"
+	)
+	parser.add_argument(
+		"--run_frontend_tests", action="store_true",
+		help="Run web/dev/wasm_smoke.js + worker_smoke.js against the built module (the boundary's regression nets)"
+	)
+	parser.add_argument(
+		"--precompress", action="store_true",
+		help="Write brotli .br siblings next to the staged module; --serve and real hosts prefer them"
+	)
+	parser.add_argument(
+		"--serve", nargs="?", type=int, const=8000, default=None, metavar="PORT",
+		help="Serve web/ on http://localhost:PORT (default 8000) with COOP/COEP; a .wasm can't load from file://"
+	)
 	parser.add_argument("--run_tests", help="Run the test bundle under node after building", action="store_true")
 	parser.add_argument("--skip_build", help="Skip the build (e.g. to only run tests)", action="store_true")
 	parser.add_argument("--install", help="conan export-pkg the result", action="store_true")
@@ -286,7 +497,7 @@ def main():
 	args = parser.parse_args()
 
 	if args.host_package_only:
-		common.buildHostToolPackage(forceDeps=args.force_deps)
+		common.buildHostToolPackage(forceDeps=args.force_deps, dxcSource=args.dxc_source)
 		return
 
 	ensureEmsdk()
@@ -294,7 +505,7 @@ def main():
 	if not args.skip_build:
 
 		if not args.skip_host_package:
-			common.buildHostToolPackage(forceDeps=args.force_deps)
+			common.buildHostToolPackage(forceDeps=args.force_deps, dxcSource=args.dxc_source)
 
 		common.ensureDefaultProfile()
 
@@ -310,13 +521,44 @@ def main():
 
 		doBuild(
 			args.mode, args.install, args.tests == "True", cache, args.host_crypto or threads, threads,
-			args.asan == "True", args.ubsan == "True"
+			args.asan == "True", args.ubsan == "True", args.single_file, args.dxc_source
 		)
+
+		# The frontend ships both flavors, and the embed switch is a cmake variable on one target, so
+		# the second flavor is a reconfigure + relink of the same objects, not a rebuild. Staging runs
+		# between the two because both land at the same build path. --single_file skips the pair for a
+		# quick local iteration and stages only the embedded flavor.
+
+		if args.frontend and not args.single_file:
+
+			stageFrontend(args.mode, singleFile=False)
+
+			doBuild(
+				args.mode, False, args.tests == "True", cache, args.host_crypto or threads, threads,
+				args.asan == "True", args.ubsan == "True", True, args.dxc_source
+			)
+
+			stageFrontend(args.mode, singleFile=True)
+
+		elif args.frontend:
+			stageFrontend(args.mode, singleFile=True)
 
 		common.saveHashCache(cache)
 
+	if args.frontend and args.skip_build:
+		stageFrontend(args.mode, singleFile=args.single_file)
+
+	if args.precompress:
+		precompressFrontend()
+
+	if args.run_frontend_tests:
+		runFrontendTests(args.mode)
+
 	if args.run_tests:
 		runTests(args.mode, args.suite, args.threads == "True", args.asan == "True", args.ubsan == "True")
+
+	if args.serve is not None:
+		serveFrontend(args.serve)
 
 if __name__ == "__main__":
 	main()

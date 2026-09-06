@@ -254,7 +254,13 @@ Bool DLFile_read(
 		.compressionType = (XXCompressionType) (header.type >> 4),
 		.encryptionType = (XXEncryptionType) (header.type & 0xF),
 		.dataType = header.flags & EDLFlags_IsString ? EDLDataType_String : EDLDataType_Data,
-		.flags = EDLSettingsFlags_None,
+
+		//HideMagicNumber is derived from whether we're a subfile, the same way every format that embeds
+		//one derives its own flag on read.
+		//A parent that keeps the DLFile it read and serializes it again (oiSB, oiSR and oiSP all do) would
+		//otherwise write a magic where its own reader skips one, shifting everything after it by 4 bytes.
+
+		.flags = isSubFile ? EDLSettingsFlags_HideMagicNumber : EDLSettingsFlags_None,
 		.chunkSize = (U32)chunkSize
 	};
 

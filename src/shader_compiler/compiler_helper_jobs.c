@@ -72,10 +72,11 @@ typedef struct CompilerShaderFileJob {
 
 	Bool success;                       //Output; only written by this job
 	Bool isDebug;
+	Bool noOpt;
 	Bool keepRegisters;
 	Bool ignoreEmptyFiles;
 	Bool enableLogging;
-	U8 padding[3];
+	U8 padding[2];
 
 } CompilerShaderFileJob;
 
@@ -303,6 +304,7 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 			binaryIdentifier.shaderVersion,
 			entry.stage,
 			binaryIdentifier.extensions,
+			job->keepRegisters,
 			job->enableLogging,
 			&tempResult2.binary,
 			alloc
@@ -358,6 +360,17 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 	locked = true;
 
 	U16 binaryId = (U16) file->shFile.binaries.length;
+
+	//A linked binary is the link's, but the includes are the compile's: linking reads no files of its own,
+	//so the result registered below would otherwise carry none and `shader includes` would report nothing
+	//for every library shader.
+	//Moved rather than copied, because the SHFile takes the strings and every leaf of this combo links the
+	//same compile output, so they are contributed exactly once.
+
+	if (tempResult2.binary.ptr) {
+		tempResult2.includeInfo = combo->tempResult.includeInfo;
+		combo->tempResult.includeInfo = (ListIncludeInfo) { 0 };
+	}
 
 	gotoIfError3(clean, Compiler_registerShaderBinary(
 		&file->shFile,
@@ -459,6 +472,7 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		compiler,
 		file->binaryType,
 		job->isDebug,
+		job->noOpt,
 		job->keepRegisters,
 		ctx->isRt,
 		ctx->isGfxOrComp,
@@ -791,7 +805,8 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 	//Preprocess to get information necessary for real compiles.
 
 	if(!Compiler_precompileShader(
-		compiler, binaryType, job->isDebug, inputPath, inputData, &runtimeEntries, &job->includeDirs, job->enableLogging, alloc
+		compiler, binaryType, job->isDebug, job->noOpt, inputPath, inputData, &runtimeEntries, &job->includeDirs,
+		job->enableLogging, alloc
 	)) {
 
 		if(job->enableLogging)
@@ -1106,6 +1121,7 @@ Bool Compiler_compileShaders(
 	const ListU8 *allCompileOutputs,
 	U64 threadCount,
 	Bool isDebug,
+	Bool noOpt,
 	Bool keepRegisters,
 	ECompilerWarning extraWarnings,
 	Bool ignoreEmptyFiles,
@@ -1170,6 +1186,7 @@ Bool Compiler_compileShaders(
 			.fileId = i,
 
 			.isDebug = isDebug,
+			.noOpt = noOpt,
 			.keepRegisters = keepRegisters,
 			.ignoreEmptyFiles = ignoreEmptyFiles,
 			.enableLogging = enableLogging

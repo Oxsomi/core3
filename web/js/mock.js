@@ -1,11 +1,11 @@
-/* mock.js — the mock backend.
+/* mock.js: the mock backend.
  *
  * Everything in this file fabricates plausible data so the UI is fully explorable before the
  * WASM port exists. js/api.js is the only consumer; once the real compiler is wired up there,
  * this file can be deleted wholesale.
  *
  * The document shape produced here ("SHDocument") mirrors formats/oiSH (SHFile / SHEntry /
- * SHBinaryInfo / SHRegisterRuntime / SBFile) — see the contract comment at the top of js/api.js.
+ * SHBinaryInfo / SHRegisterRuntime / SBFile): see the contract comment at the top of js/api.js.
  */
 (function () {
 "use strict";
@@ -18,9 +18,9 @@ const VERSION = { major: 3, minor: 2, patch: 102 };                  // OXC3_MAJ
 const STAGES = [                                                     // SHEntry_stageNames
   "vertex", "pixel", "compute", "geometry", "hull", "domain",
   "raygeneration", "callable", "miss", "closesthit", "anyhit", "intersection",
-  "mesh", "task", "node"
+  "mesh", "task"
 ];
-const LIB_STAGES = new Set(["raygeneration", "callable", "miss", "closesthit", "anyhit", "intersection", "node"]);
+const LIB_STAGES = new Set(["raygeneration", "callable", "miss", "closesthit", "anyhit", "intersection"]);
 const STAGE_PROFILE = { vertex: "vs", pixel: "ps", geometry: "gs", hull: "hs", domain: "ds", compute: "cs", mesh: "ms", task: "as" };
 
 const EXTENSIONS = [                                                 // ESHExtension_names
@@ -35,255 +35,30 @@ const EXT_DXIL_ONLY = new Set(["MeshTaskTexDeriv"]);                            
 const VENDORS = ["NV", "AMD", "ARM", "QCOM", "INTC", "IMGT", "MSFT", "APPL", "SMSG", "HWEI", "GOGL", "MESA"];   // ESHVendor
 
 /* ------------------------------------------------------------------ builtin includes (@…) */
-/* Real builtin list from src/shader_compiler/compiler.cpp — excerpts only; the full sources
- * live in include/shader_compiler/shaders/. types/resources are umbrellas: mat, indirect and
- * fixed_point were split out of types.hlsli, buffer and appdata out of resources.hlsli, and the
- * umbrellas include them so a shader that only says @types.hlsli still sees everything. */
+/* The compiler embeds these and serves them through Compiler_builtInIncludeAt, so they are recorded
+ * into js/mock_data.js rather than excerpted by hand; the page uses the module's own copies when it
+ * has one. types/resources are umbrellas: mat, indirect and fixed_point were split out of
+ * types.hlsli, buffer and appdata out of resources.hlsli, and the umbrellas include them so a shader
+ * that only says @types.hlsli still sees everything. */
 
-const BUILTINS = {
-  "@types.hlsli":
-`#pragma once
-// @types.hlsli (excerpt) — portable type aliases + macros (umbrella: pulls mat, indirect, fixed_point).
-#include "@mat.hlsli"
-#include "@indirect.hlsli"
-#include "@fixed_point.hlsli"
-typedef uint  U32;   typedef float  F32;   typedef int  I32;   typedef bool Bool;
-typedef uint2 U32x2; typedef float2 F32x2; typedef int2 I32x2;
-typedef uint3 U32x3; typedef float3 F32x3; typedef int3 I32x3;
-typedef uint4 U32x4; typedef float4 F32x4; typedef int4 I32x4;
-typedef float4x4 F32x4x4; typedef float3x3 F32x3x3; /* … all xNxM (HLSL float4x3 = F32x3x4) … */
-#ifdef __OXC_EXT_16BITTYPES
-  typedef float16_t F16;  typedef float16_t4 F16x4; /* … I16/U16 + matrices … */
-#endif
-#ifdef __OXC_EXT_F64
-  typedef double F64; typedef double4 F64x4; /* … */
-#endif
-#define _bind(x) TEXCOORD##x
-#define _flat nointerpolation
-#ifdef __spirv__
-  #define UNKNOWN_FORMAT [[vk::image_format("unknown")]]
-  #define PUSH_CONSTANT [[vk::push_constant]]
-#else
-  #define UNKNOWN_FORMAT
-  #define PUSH_CONSTANT
-#endif`,
-
-  "@mat.hlsli":
-`#pragma once
-// @mat.hlsli (excerpt) — matrix helpers split out of types.hlsli: F32x4x4 transforms,
-// quaternion <-> matrix, orthonormal bases, compose/decompose.`,
-
-  "@indirect.hlsli":
-`#pragma once
-// @indirect.hlsli (excerpt) — indirect command structs (draw, draw indexed, dispatch,
-// dispatch rays) laid out the way OxC3's indirect buffers expect them.`,
-
-  "@fixed_point.hlsli":
-`#pragma once
-// @fixed_point.hlsli (excerpt) — fixed point packing helpers (Qm.n <-> float, saturating ops).`,
-
-  "@resources.hlsli":
-`#pragma once
-#include "@types.hlsli"
-#include "@buffer.hlsli"
-#include "@appdata.hlsli"
-// @resources.hlsli (excerpt) — OxC3's bindless resource access (umbrella: pulls buffer, appdata).
-static const U32 ResourceId_mask = (1 << 17) - 1;
-// getReadTexture2DF32x4(id) / getRWBuffer(id) / … descriptor-heap style accessors,
-// so most shaders don't declare registers directly.`,
-
-  "@buffer.hlsli":
-`#pragma once
-// @buffer.hlsli (excerpt) — typed loads/stores over OxC3's bindless buffers by ResourceId.`,
-
-  "@appdata.hlsli":
-`#pragma once
-// @appdata.hlsli (excerpt) — the per-frame app data buffer (the generated vertex stand-in a live
-// ISA run binds reads its values from here, so the driver can't fold them into the pixel stage).`,
-
-  "@extensions.hlsli":
-`#pragma once
-// @extensions.hlsli — umbrella pulling each enabled extension's helpers
-// (one #include "@extension.<X>.hlsli" per __OXC_EXT_<X> define).`,
-
-  "@extension.CoopVec.hlsli":
-`#pragma once
-// @extension.CoopVec.hlsli (excerpt) — per-thread matrix×vector (SM6.10):
-// DXIL dx::linalg, SPIR-V SPV_NV_cooperative_vector, hidden behind macros.
-#define OXC_COOPVEC_MATRIX_BUFFER(name) /* BAB (DXIL) / RWStructuredBuffer (SPIRV) */
-#define OXC_COOPVEC_VECTOR_BUFFER(name)
-// OXC_COOPVEC_MATVEC_4X4_F16(mat, off, v)  (+ _BIAS, _FP8W, _I8 variants)
-// OXC_COOPVEC_OUTER_PRODUCT_ACCUMULATE_4X4_F16(mat, off, a, b)  (CoopVecTraining)`,
-
-  "@extension.CoopMat.hlsli":
-`#pragma once
-// @extension.CoopMat.hlsli (excerpt) — subgroup GEMM (SM6.10):
-// DXIL dx::linalg, SPIR-V SPV_KHR_cooperative_matrix.
-// OXC_COOPMAT_GEMM_16_F16(a, b)`,
-
-  "@extension.RayReorder.hlsli":
-`#pragma once
-// @extension.RayReorder.hlsli (excerpt) — Shader Execution Reordering
-// (dx::HitObject wrappers; raygeneration only).`,
-
-  "@extension.RayTriPosition.hlsli":
-`#pragma once
-// @extension.RayTriPosition.hlsli (excerpt) — SM6.10 triangle vertex position fetch
-// (RayQuery + ray pipeline).`,
-
-  "@extension.RayMicromapOpacity.hlsli":
-`#pragma once
-// @extension.RayMicromapOpacity.hlsli (excerpt) — opacity micromaps.`,
-
-  "@extension.AtomicF32.hlsli":
-`#pragma once
-// @extension.AtomicF32.hlsli (excerpt) — float32 atomics (SPIR-V only to compile).`,
-
-  "@extension.AtomicF64.hlsli":
-`#pragma once
-// @extension.AtomicF64.hlsli (excerpt) — float64 atomics (SPIR-V only to compile).`
-};
+const BUILTINS = (window.OxMockData && window.OxMockData.builtins) || {};
 
 /* ------------------------------------------------------------------ sample project */
 
-const SAMPLE_FILES = {
-  "lighting.hlsl": { diags: [
-      { sev: "warn", line: 21, ch0: 8, ch1: 13, msg: "implicit truncation of vector type", code: "W_conversion" }],
-    src:
-`#include "@types.hlsli"
-#include "include/light.hlsli"
+/* The sources live as real files in web/samples/ (the single source of truth: the desktop test suite
+ * compiles every one of them) and reach the page through the generated mock_data.js, so the project is
+ * there at first paint without waiting for the module. The diags below are the mock tier's fabricated
+ * compile results for the two files that have any; the real backend produces its own. */
 
-[[oxc::uniforms(U32 MAX_LIGHTS = 64)]]
-cbuffer Globals : register(b0) {
-    F32x4x4 viewProj;
-    F32x3   cameraPos;
-    U32     lightCount;
+const SAMPLE_DIAGS = {
+  "lighting.hlsl": [{ sev: "warn", line: 21, ch0: 8, ch1: 13, msg: "implicit truncation of vector type", code: "W_conversion" }],
+  "broken.hlsl": [{ sev: "error", line: 8, ch0: 22, ch1: 30, msg: "use of undeclared identifier 'position'", code: "E_undeclared" }]
 };
 
-StructuredBuffer<Light> _lights : register(t0);
-Texture2D<F32x4>        _albedo : register(t1);
-SamplerState            _sampler: register(s0);
-RWTexture2D<F32x4>      _output : register(u0);
-
-[shader("compute")]
-[numthreads(8, 8, 1)]
-void main(U32x3 id : SV_DispatchThreadID) {
-    F32x4 c = _albedo.Load(int3(id.xy, 0));
-    for (U32 i = 0; i < lightCount; ++i)
-        c.rgb += shadeLight(_lights[i], cameraPos);
-    _output[id.xy] = c;
-}` },
-
-  "include/light.hlsli": { diags: [], src:
-`#pragma once
-#include "@types.hlsli"
-
-struct Light {
-    F32x3 position;
-    F32   radius;
-    F32x3 color;
-    F32   intensity;
-};
-
-F32x3 shadeLight(Light l, F32x3 cam) {
-    F32x3 d = l.position - cam;
-    return l.color * l.intensity / (1.0 + dot(d, d));
-}` },
-
-  "post.hlsl": { diags: [], src:
-`#include "@types.hlsli"
-
-struct PostCmd {
-    F32x2 invRes;
-    F32   exposure;
-    U32   flags;
-    F32x3 tint;
-};
-
-PUSH_CONSTANT PostCmd cmd;
-
-Texture2D<F32x4> _color   : register(t0);
-SamplerState     _sampler : register(s0);
-
-struct VSOut {
-    F32x4 pos : SV_Position;
-    F32x2 uv  : TEXCOORD0;
-};
-
-[[oxc::stage("vertex")]]
-VSOut vsMain(U32 vid : SV_VertexID) {
-    VSOut o;
-    o.uv  = F32x2((vid << 1) & 2, vid & 2);
-    o.pos = F32x4(o.uv * 2 - 1, 0, 1);
-    return o;
-}
-
-[[oxc::defines("TONEMAP_ACES")]]
-[[oxc::defines()]]
-[[oxc::stage("pixel")]]
-F32x4 psMain(VSOut i) : SV_Target {
-    F32x4 c = _color.SampleLevel(_sampler, i.uv, 0) * cmd.exposure;
-#ifdef $TONEMAP_ACES
-    c.rgb = saturate((c.rgb * (2.51 * c.rgb + 0.03)) / (c.rgb * (2.43 * c.rgb + 0.59) + 0.14));
-#endif
-    return c * F32x4(cmd.tint, 1);
-}` },
-
-  "trace.hlsl": { diags: [], src:
-`#include "@types.hlsli"
-
-struct Payload { F32x4 color; U32 depth; };
-
-RaytracingAccelerationStructure _tlas : register(t0);
-RWTexture2D<F32x4>              _out  : register(u0);
-
-// Two extension sets on rgen -> two lib compiles; chit joins the empty-set one.
-[[oxc::model("6.5")]]
-[[oxc::extension("RayQuery")]]
-[[oxc::extension()]]
-[shader("raygeneration")]
-void rgen() {
-    Payload p = (Payload)0;
-    // TraceRay(_tlas, ...);
-    _out[DispatchRaysIndex().xy] = p.color;
-}
-
-[shader("closesthit")]
-void chit(inout Payload p, BuiltInTriangleIntersectionAttributes attr) {
-    p.color = F32x4(attr.barycentrics, 0, 1);
-}` },
-
-  "coop_vec.hlsl": { diags: [], src:
-`#include "@types.hlsli"
-#include "@extension.CoopVec.hlsli"
-
-OXC_COOPVEC_MATRIX_BUFFER(_weights)     : register(u0);
-OXC_COOPVEC_VECTOR_BUFFER(_activations) : register(u1);
-
-[[oxc::model("6.10")]]
-[[oxc::extension("CoopVec", "16BitTypes")]]
-[[oxc::vendor("NV")]]
-[shader("compute")]
-[WaveSize(32)]
-[numthreads(64, 1, 1)]
-void main(U32x3 id : SV_DispatchThreadID) {
-    // per-thread matrix × vector (FP16):
-    // OXC_COOPVEC_MATVEC_4X4_F16(_weights, 0, _activations[id.x])
-}` },
-
-  "broken.hlsl": { diags: [
-      { sev: "error", line: 8, ch0: 22, ch1: 30, msg: "use of undeclared identifier 'position'", code: "E_undeclared" }],
-    src:
-`#include "@types.hlsli"
-
-RWTexture2D<F32x4> _output : register(u0);
-
-[shader("compute")]
-[numthreads(8, 8, 1)]
-void main(U32x3 id : SV_DispatchThreadID) {
-    _output[id.xy] = position;
-}` }
-};
+const SAMPLE_FILES = Object.fromEntries(
+  Object.entries((window.OxMockData && window.OxMockData.samples) || {})
+    .map(([name, src]) => [name, { src, diags: SAMPLE_DIAGS[name] || [] }])
+);
 
 /* ------------------------------------------------------------------ type helpers */
 
@@ -402,7 +177,6 @@ function modelNum(m) { const [a, b] = m.split("."); return (+a) * 100 + (+b); }
 function minModelFor(stage, exts, wave) {
   let min = MIN_MODEL;
   const bump = v => { if (modelNum(v) > modelNum(min)) min = v; };
-  if (stage === "node") bump("6.8");
   if (wave && (wave.min || wave.max || wave.rec)) bump("6.8"); else if (wave && wave.req) bump("6.6");
   for (const e of exts) {
     if (e === "CoopVec" || e === "CoopMat" || e === "CoopFP8" || e === "CoopVecTraining" || e === "RayTriPosition") bump("6.10");
@@ -486,7 +260,7 @@ function analyze(name, project, opts) {
         _uniforms: pend.uniforms || [], _vendors: pend.vendors, _binAnno: pend.binAnno };
 
       /* stage-specific reflection (SHEntry union) */
-      if (["compute", "node", "mesh", "task"].includes(e.stage)) { e.group = pend.nt || [1, 1, 1]; e.waveSize = pend.wave; }
+      if (["compute", "mesh", "task"].includes(e.stage)) { e.group = pend.nt || [1, 1, 1]; e.waveSize = pend.wave; }
       const params = inner.split(/,(?![^()]*\))/).map(s => s.trim()).filter(Boolean).map(p => {
         const pm = p.match(/^((?:in|out|inout|_flat|nointerpolation|linear|centroid|sample|precise)\s+)*([A-Za-z_]\w*(?:x\d(?:x\d)?)?)\s+([A-Za-z_]\w*)\s*(?::\s*([A-Za-z_]\w*\d*))?/);
         return pm ? { mods: pm[1] || "", type: pm[2], name: pm[3], semantic: pm[4] || null } : null;
@@ -650,7 +424,6 @@ function mergeVendors(bin, vendors) {
 }
 function backendsFor(stage, exts, binAnno) {
   let out = ["spv", "dxil"];
-  if (stage === "node") out = ["dxil"];
   for (const e of exts) {
     if (EXT_SPV_ONLY.has(e)) out = out.filter(b => b === "spv");
     if (EXT_DXIL_ONLY.has(e)) out = out.filter(b => b === "dxil");
@@ -741,7 +514,7 @@ function disasm(doc, bin, backend) {
   } else {
     const modelTag = (bin.model || "6.x").replace(".", "_");              // a standalone binary carries no identifier
     const prof = bin.lib ? `lib_${modelTag}` : `${STAGE_PROFILE[bin.stage] || "cs"}_${modelTag}`;
-    L.push(`; DXIL — mock of Compiler_disassemble (${prof})`,
+    L.push(`; DXIL: mock of Compiler_disassemble (${prof})`,
       'target datalayout = "e-m:e-p:32:32-i1:32-i8:32-i16:32-i32:32-i64:64-f16:32-f32:32-f64:64-n8:16:32:64"',
       'target triple = "dxil-ms-dx"', "");
     L.push("%dx.types.Handle = type { i8* }");
@@ -801,22 +574,36 @@ function compileFile(name, project, opts) {
         msg: `'${r.name}' layout introduces ${r.buffer.padding} byte(s) of padding (--warn-buffer-padding)`, code: "W_buffer_padding" });
   if (!doc.entries.length && !opts.ignoreEmptyFiles)
     diags.push({ sev: "error", line: 1, ch0: 0, ch1: 1, file: name,
-      msg: "no entrypoints found — name include-only files .hlsli, or pass --ignore-empty-files", code: "E_no_entrypoints" });
+      msg: "no entrypoints found: name include-only files .hlsli, or pass --ignore-empty-files", code: "E_no_entrypoints" });
 
   return { doc, diags };
 }
 
 /* ------------------------------------------------------------------ preloaded oiSH docs + uploads */
 
-function seedOishDocs() {
-  const p1 = { "lighting.hlsl": SAMPLE_FILES["lighting.hlsl"], "include/light.hlsli": SAMPLE_FILES["include/light.hlsli"] };
-  const v2src = SAMPLE_FILES["lighting.hlsl"].src
-    .replace('RWTexture2D<F32x4>      _output : register(u0);',
-             'RWTexture2D<F32x4>      _output : register(u0);\nRWStructuredBuffer<U32>  _histogram : register(u1);')
+/* The second version of the sample the Diff A<->B demo pairs against the first: one register more, a
+ * bumped model and a changed include, which is what makes the reflection and binary diffs show
+ * something. It's the sample project's own content, so it lives here rather than in whatever builds
+ * the examples (js/api.js against the module, dev/gen_mock_data.js when recording them). */
+function lightingVariantProject() {
+  const src = SAMPLE_FILES["lighting.hlsl"].src
+    .replace(/RWTexture2D<F32x4>\s+_output;/, m => m + '\nRWStructuredBuffer<U32> _histogram;')
     .replace('[shader("compute")]', '[[oxc::model("6.8")]]\n[shader("compute")]')
-    .replace('_output[id.xy] = c;', '_output[id.xy] = c;\n    // InterlockedAdd(_histogram[luma(c)], 1);');
-  const l2 = SAMPLE_FILES["include/light.hlsli"].src.replace("(1.0 + dot(d, d))", "max(dot(d, d), 1e-4)");
-  const p2 = { "lighting.hlsl": { src: v2src, diags: [] }, "include/light.hlsli": { src: l2, diags: [] } };
+    .replace('_output[id.xy] = c;', '_output[id.xy] = c;\n    InterlockedAdd(_histogram[0], 1);');
+  /* A missed anchor would silently hand back v1, and the compile would then fail on a symbol that was
+   * never declared; better to say which edit of the sample broke the derivation. */
+  for (const need of ["_histogram;", '[[oxc::model("6.8")]]', "InterlockedAdd(_histogram"])
+    if (!src.includes(need)) throw new Error("lighting v2: anchor for " + need + " no longer matches lighting.hlsl");
+  const include = SAMPLE_FILES["include/light.hlsli"].src.replace("(1.0 + dot(d, d))", "max(dot(d, d), 1e-4)");
+  return { "lighting.hlsl": { src, diags: [] }, "include/light.hlsli": { src: include, diags: [] } };
+}
+
+function seedOishDocs() {
+  /* Recorded real compiles when there are any; the heuristic below is what's left when there aren't. */
+  const recorded = window.OxMockData && window.OxMockData.oish;
+  if (recorded && Object.keys(recorded).length) return JSON.parse(JSON.stringify(recorded));
+  const p1 = { "lighting.hlsl": SAMPLE_FILES["lighting.hlsl"], "include/light.hlsli": SAMPLE_FILES["include/light.hlsli"] };
+  const p2 = lightingVariantProject();
   return {
     "lighting.v1.oiSH": analyze("lighting.hlsl", p1, { rename: "lighting.v1.oiSH", forceModel: "6.7" }),
     "lighting.v2.oiSH": analyze("lighting.hlsl", p2, { rename: "lighting.v2.oiSH" })
@@ -937,6 +724,6 @@ function assembleOiSH(doc, ident) {
 
 window.OxMock = { VERSION, STAGES, LIB_STAGES, STAGE_PROFILE, EXTENSIONS, VENDORS, BUILTINS,
   SAMPLE_FILES, analyze, compileFile, seedOishDocs, parseOiSHBytes, disasm, oishBytes, binBytes,
-  sampleStandaloneBins, spvEnvFor, backendsFor, parseStructs, normTypeExport: normType,
+  sampleStandaloneBins, lightingVariantProject, spvEnvFor, backendsFor, parseStructs, normTypeExport: normType,
   parseDxcArgv, compileRaw, reflectBinary, assembleOiSH };
 })();

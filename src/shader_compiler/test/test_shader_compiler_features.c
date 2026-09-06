@@ -72,6 +72,12 @@ void Test_shaderCompilerFeatures(Test *t) {
 		{ "features/i64.hlsl",                 ESHExtension_I64,                B_BOTH },
 		{ "features/f64.hlsl",                 ESHExtension_F64,                B_BOTH },
 		{ "features/bit16.hlsl",               ESHExtension_16BitTypes,         B_BOTH },
+
+		//The built in headers declare the oxc aliases (F16x4, U64x3, ...) only behind their extension, split
+		//per extension. These reach them by the two routes that exist: the @extensions.hlsli umbrella and
+		//@types.hlsli, which both include the per extension header.
+		{ "features/type_aliases_16bit.hlsl",  ESHExtension_16BitTypes,         B_BOTH },
+		{ "features/type_aliases_i64.hlsl",    ESHExtension_I64,                B_BOTH },
 		{ "features/atomic_i64.hlsl",          ESHExtension_AtomicI64,          B_BOTH },
 		{ "features/multiview.hlsl",           ESHExtension_Multiview,          B_BOTH },
 		{ "features/subgroup_operations.hlsl", ESHExtension_SubgroupOperations, B_BOTH },

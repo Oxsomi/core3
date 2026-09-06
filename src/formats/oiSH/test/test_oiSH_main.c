@@ -93,6 +93,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileAddBinUniformEmptyName(&t);
 	Test_SHFileAddBinUniformDigitFirstChar(&t);
 	Test_SHFileAddBinUniformUnderscoreStart(&t);
+	Test_SHFileAddBinUniformUnderscoreInside(&t);
 	Test_SHFileAddBinUniformInvalidBodyChar(&t);
 	Test_SHFileAddBinUniformDuplicateName(&t);
 	Test_SHFileAddBinValid(&t);

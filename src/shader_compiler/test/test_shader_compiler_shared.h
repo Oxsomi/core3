@@ -33,6 +33,8 @@ typedef struct SHFile SHFile;
 
 void Test_shaderCompilerParse(Test *t);           //Parse annotations -> SHEntryRuntime reflection
 void Test_shaderCompilerReflectSR(Test *t);       //Frontend symbol AST -> SRFile (oiSR) + round-trip
+void Test_shaderCompilerReflectErrors(Test *t);   //Same, over sources that don't compile (editor path)
+void Test_shaderCompilerSamples(Test *t);         //web/samples compiles both backends (desktop only)
 void Test_shaderCompilerBuiltInIncludes(Test *t); //The enumerable @-prefixed built-in include table
 void Test_shaderCompilerAnnotations(Test *t);     //oxc:: extensions / model / vendor / defines / uniforms / stages / binary
 void Test_shaderCompilerFeatures(Test *t);        //Shaders *using* extension features -> compiled + reflected
@@ -100,3 +102,8 @@ Bool writeOiSH(const Allocator *alloc, const SHFile *file, Buffer *out, Error *e
 
 //Verify a produced oiSH buffer round-trips: read it, serialize it back, and require byte-for-byte identity.
 Bool oiSHRoundtrips(const Allocator *alloc, Buffer produced, Error *e_rr);
+
+//True when two oiSH carry the same compiled output, ignoring the fields that churn without the output changing:
+// the stamped compiler version, the per-include CRC32C, and the SPIR-V generator word's version half.
+//A snapshot comparison uses this only after an exact match has already failed.
+Bool oiSHContentMatches(const Allocator *alloc, Buffer a, Buffer b);

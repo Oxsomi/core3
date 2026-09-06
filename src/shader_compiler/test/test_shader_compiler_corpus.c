@@ -37,6 +37,7 @@
 #include "types/base/time.h"
 #include "types/base/error.h"
 #include "types/base/string_read_helper.h"
+#include "platforms/process.h"
 
 //Parse an in-memory oiSH and dump its reflection, so a snapshot mismatch shows *what* changed.
 static void printOiSH(const Allocator *alloc, Buffer buf, const C8 *label) {
@@ -108,91 +109,6 @@ static Bool shReadFile(const Allocator *alloc, Buffer buf, SHFile *out) {
 		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 
 	return ok;
-}
-
-//Re-serialize an oiSH with the fields that churn without the OUTPUT changing blanked out.
-//
-//Two of them are metadata about the build rather than about what was compiled: the OxC3 version stamped into
-// every header, which moves on every release, and the CRC32C recorded per include, which moves when any
-// embedded header is touched even for whitespace.
-//Neither can change the bytecode or the reflection on its own, so letting them fail the snapshot meant all 32
-// references churned for a version bump or a stray space in types.hlsli.
-//
-//sourceHash is deliberately NOT blanked: that one moves when the corpus shader itself changes, which is
-// exactly when the reference should be looked at again.
-//
-//The header's own hash covers the include CRCs, so it is recomputed rather than patched; writing the file out
-// again does that.
-
-static Bool shNormalize(const Allocator *alloc, Buffer in, Buffer *out) {
-
-	SHFile file = (SHFile) { 0 };
-	const RefPtrType msType = MemoryStream_makeType(alloc);
-	MemoryStreamRef *ms = NULL;
-	Error err = Error_none();
-	U64 off = 0;
-	Bool ok = false;
-
-	if(!shReadFile(alloc, in, &file))
-		goto clean;
-
-	file.compilerVersion = 0;
-
-	for(U64 i = 0; i < file.includes.length; ++i)
-		file.includes.ptrNonConst[i].crc32c = 0;
-
-	//A rebuilt DXC restamps the generator word of every SPIRV header (word 2, holding the tool's id in the
-	// high half and the tool's own version in the low half) while emitting byte identical instructions,
-	// so keeping that low half turns the entire corpus red whenever the toolchain package is rebuilt.
-	//Only the version half is dropped, so a binary that came out of a different tool is still caught.
-
-	for(U64 i = 0; i < file.binaries.length; ++i) {
-
-		const Buffer spirv = file.binaries.ptr[i].binaries[ESHBinaryType_SPIRV];
-		Bool readMagic = false;
-
-		if(Buffer_length(spirv) < sizeof(U32) * 5 || Buffer_isConstRef(spirv))
-			continue;
-
-		if(Buffer_readU32(spirv, 0, &readMagic, NULL) != 0x07230203 || !readMagic)
-			continue;
-
-		const U32 generator = Buffer_readU32(spirv, sizeof(U32) * 2, NULL, NULL);
-		Buffer_writeU32(spirv, sizeof(U32) * 2, generator & 0xFFFF0000, NULL);
-	}
-
-	if(!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &ms, &err))
-		goto clean;
-
-	if(!SHFile_write((StreamRef*) ms, &off, &file, alloc, &err))
-		goto clean;
-
-	ok = MemoryStream_move(&ms, out, &err);
-
-clean:
-
-	if(!ok && err.genericError)
-		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
-
-	RefPtr_dec(&ms);
-	SHFile_free(&file, alloc);
-	return ok;
-}
-
-//True when two oiSH carry the same compiled output, ignoring only the churn shNormalize blanks.
-
-static Bool shContentMatches(const Allocator *alloc, Buffer a, Buffer b) {
-
-	Buffer na = Buffer_createNull(), nb = Buffer_createNull();
-
-	const Bool match =
-		shNormalize(alloc, a, &na) &&
-		shNormalize(alloc, b, &nb) &&
-		Buffer_eq(na, nb);
-
-	Buffer_free(&na, alloc);
-	Buffer_free(&nb, alloc);
-	return match;
 }
 
 //Resolve the semantic name for one I/O slot.
@@ -485,6 +401,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 		&allFiles, &allShaderText, &allOutputs, &allCompileModes,
 		1,                                  //threadCount (single-threaded, deterministic)
 		false,                              //isDebug
+		false,                              //noOpt
 		false,                              //keepRegisters
 		(ECompilerWarning) 0,               //no extra warnings
 		true,                               //ignoreEmptyFiles
@@ -528,11 +445,11 @@ void Test_shaderCompilerCorpus(Test *t) {
 			gotoIfError3(clean, File_read(&ref, 1 * SECOND, 0, 0, &fileHandleType, &golden, e_rr));
 
 			//Exact first, so an untouched reference is still compared byte for byte.
-			//Only when that fails does the version/include-CRC tolerance get a say; see shContentMatches.
+			//Only when that fails does the version/include-CRC tolerance get a say; see oiSHContentMatches.
 
 			Bool matches = Buffer_eq(produced, golden);
 
-			if(!matches && shContentMatches(alloc, produced, golden)) {
+			if(!matches && oiSHContentMatches(alloc, produced, golden)) {
 				Log_warnLn(
 					alloc, "\toiSH differs from %.*s only in version/include metadata, content is identical",
 					(int) CharString_length(ref), ref.ptr
@@ -583,6 +500,15 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 		const RefPtrType msType = MemoryStream_makeType(alloc);
 
+		//DXC records an include under the first name it asks for, relative to the includer and root free, and on
+		// desktop that name resolves because ctest runs the suite from the test folder. The bundle's corpus lives
+		// in a virtual section, so the section is the working directory for the reflection, or every recorded
+		// name carries the section's root and no golden matches.
+		const CharString savedDefaultDir = Platform_instance->defaultDir;
+
+		if (sizeof(TEST_SHADER_ROOT) > 1)
+			Platform_instance->defaultDir = CharString_createRefCStrConst(TEST_SHADER_ROOT);
+
 		for (U64 i = 0; i < allFiles.length; ++i) {
 
 			SRFile reflection = (SRFile) { 0 };
@@ -590,6 +516,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 			Buffer produced = Buffer_createNull();
 			CharString ref = CharString_createNull();
 			CharString relPath = CharString_createNull();
+			CharString ownDir = CharString_createNull();
 
 			//Reflect with a path relative to the corpus (forward slashes), not the absolute enumerator path: the
 			// source filename is baked into the oiSR (symbol locations), so an absolute path would make the committed
@@ -601,19 +528,38 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 			if (
 				!CharString_format(alloc, &relPath, &err, "hlsl/%.*s.hlsl", (int) baseLen, out.ptr) ||
-				!CharString_format(alloc, &ref, &err, "%.*s.oiSR", (int) baseLen, out.ptr)
+				!CharString_format(alloc, &ref, &err, "%s%.*s.oiSR", TEST_SHADER_ROOT, (int) baseLen, out.ptr)
 			) {
 				err = Error_none();
 				Test_assert(t, "oiSR reference path", false);
 				goto cleanRefl;
 			}
 
+			//A sibling include resolves against the including file's directory, which the unrooted path above
+			// only reaches through the working directory. The rooted directory is handed over as an include dir
+			// instead, so the reflect finds it wherever the corpus is mounted.
+
+			const U64 dirEnd = CharString_findLastSensitive(&relPath, '/', 0, 0);
+
+			if (
+				dirEnd != U64_MAX &&
+				!CharString_format(alloc, &ownDir, &err, TEST_SHADER_ROOT "%.*s", (int) dirEnd, relPath.ptr)
+			) {
+				err = Error_none();
+				Test_assert(t, "oiSR include dir", false);
+				goto cleanRefl;
+			}
+
+			const CharString reflectIncludeArr[2] = { here, ownDir };
+			ListCharString reflectIncludes = (ListCharString) { 0 };
+			ListCharString_createRefConst(reflectIncludeArr, CharString_length(ownDir) ? 2 : 1, &reflectIncludes, NULL);
+
 			CompilerSettings rs = (CompilerSettings) {
 				.string = allShaderText.ptr[i],
 				.path = relPath,
 				.format = ECompilerFormat_HLSL,
 				.outputType = ESHBinaryType_SPIRV,
-				.includeDirs = includeDirs
+				.includeDirs = reflectIncludes
 			};
 
 			if (!Compiler_reflect(&disasmComp, &rs, alloc, &reflection, &err)) {
@@ -668,12 +614,15 @@ void Test_shaderCompilerCorpus(Test *t) {
 			}
 
 		cleanRefl:
+			CharString_free(&ownDir, alloc);
 			CharString_free(&relPath, alloc);
 			CharString_free(&ref, alloc);
 			Buffer_free(&produced, alloc);
 			RefPtr_dec(&ws);
 			SRFile_free(&reflection, alloc);
 		}
+
+		Platform_instance->defaultDir = savedDefaultDir;
 	}
 
 	//--- ISA snapshot: for each corpus shader whose stage has an offline AMD ISA path, disassemble its SPIR-V to AMD
@@ -682,8 +631,9 @@ void Test_shaderCompilerCorpus(Test *t) {
 	//--- amdllpc's ISA is deterministic and path/timestamp-free, so it's a stable reference.
 	//--- amdllpc drives closer-to-final ISA than a device-independent path.
 	//--- The tools are bundled next to the exe (rga/utils, copied by the CLI build); if they aren't present the whole
-	//--- phase is skipped rather than failed.
+	//--- phase is skipped rather than failed, as it is on a platform that cannot spawn them at all.
 
+	#ifdef SUPPORTS_PROCESS
 	{
 		const RefPtrType msTypeIsa = MemoryStream_makeType(alloc);
 
@@ -834,6 +784,9 @@ void Test_shaderCompilerCorpus(Test *t) {
 			SHFile_free(&sh, alloc);
 		}
 	}
+	#else
+	Log_warnLn(alloc, "ISA snapshot skipped: this platform cannot spawn amdllpc/amdgpu-dis");
+	#endif
 
 	//--- DXIL coverage: compile the same on-disk corpus for DXIL too, so it isn't SPIRV-only.
 	//--- There's no byte-snapshot here (the SPIRV pass above is the byte reference; DXIL is exercised for compile +
@@ -864,7 +817,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 				alloc, &dxFolder, NULL, &dxFiles, &dxText, &dxOutputs, &dxModes
 			) &&
 			Compiler_compileShaders(
-				&dxFiles, &dxText, &dxOutputs, &dxModes, 1, false, false, (ECompilerWarning) 0, true,
+				&dxFiles, &dxText, &dxOutputs, &dxModes, 1, false, false, false, (ECompilerWarning) 0, true,
 				ECompileType_Compile, &includeDirs, true, alloc, &dxBuffers, &dxErr
 			);
 

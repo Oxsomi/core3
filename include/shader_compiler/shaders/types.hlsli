@@ -26,90 +26,11 @@
 #pragma once
 
 #ifdef __OXC_EXT_16BITTYPES
-
-	typedef float16_t F16;
-	typedef float16_t2 F16x2;
-	typedef float16_t3 F16x3;
-	typedef float16_t4 F16x4;
-
-	//Float16 matrices
-
-	typedef float16_t4x4 F16x4x4;
-	typedef float16_t3x4 F16x3x4;
-	typedef float16_t2x4 F16x2x4;
-
-	typedef float16_t4x3 F16x4x3;
-	typedef float16_t3x3 F16x3x3;
-	typedef float16_t2x3 F16x2x3;
-
-	typedef float16_t4x2 F16x4x2;
-	typedef float16_t3x2 F16x3x2;
-	typedef float16_t2x2 F16x2x2;
-
-	typedef int16_t I16;
-	typedef int16_t2 I16x2;
-	typedef int16_t3 I16x3;
-	typedef int16_t4 I16x4;
-
-	typedef uint16_t U16;
-	typedef uint16_t2 U16x2;
-	typedef uint16_t3 U16x3;
-	typedef uint16_t4 U16x4;
-
-	//Int16 matrices
-
-	typedef int16_t4x4 I16x4x4;
-	typedef int16_t3x4 I16x3x4;
-	typedef int16_t2x4 I16x2x4;
-
-	typedef int16_t4x3 I16x4x3;
-	typedef int16_t3x3 I16x3x3;
-	typedef int16_t2x3 I16x2x3;
-
-	typedef int16_t4x2 I16x4x2;
-	typedef int16_t3x2 I16x3x2;
-	typedef int16_t2x2 I16x2x2;
-
-	//Uint16 matrices
-
-	typedef uint16_t4x4 U16x4x4;
-	typedef uint16_t3x4 U16x3x4;
-	typedef uint16_t2x4 U16x2x4;
-
-	typedef uint16_t4x3 U16x4x3;
-	typedef uint16_t3x3 U16x3x3;
-	typedef uint16_t2x3 U16x2x3;
-
-	typedef uint16_t4x2 U16x4x2;
-	typedef uint16_t3x2 U16x3x2;
-	typedef uint16_t2x2 U16x2x2;
-
+	#include "@extension.16BitTypes.hlsli"
 #endif
 
-//AtomicF64 implies the double types: its intrinsic takes a double by reference, so a shader that enables
-//the atomic without the type could never call it, and the SPIRV capability check refuses that pairing anyway.
-
 #if defined(__OXC_EXT_F64) || defined(__OXC_EXT_ATOMICF64)
-
-	typedef double F64;
-	typedef double2 F64x2;
-	typedef double3 F64x3;
-	typedef double4 F64x4;
-
-	//Float64 matrices
-
-	typedef double4x4 F64x4x4;
-	typedef double3x4 F64x3x4;
-	typedef double2x4 F64x2x4;
-
-	typedef double4x3 F64x4x3;
-	typedef double3x3 F64x3x3;
-	typedef double2x3 F64x2x3;
-
-	typedef double4x2 F64x4x2;
-	typedef double3x2 F64x3x2;
-	typedef double2x2 F64x2x2;
-
+	#include "@extension.F64.hlsli"
 #endif
 
 typedef uint U32;
@@ -173,45 +94,7 @@ typedef uint3x2 U32x3x2;
 typedef uint2x2 U32x2x2;
 
 #ifdef __OXC_EXT_I64
-
-	typedef uint64_t U64;
-	typedef uint64_t2 U64x2;
-	typedef uint64_t3 U64x3;
-	typedef uint64_t4 U64x4;
-
-	typedef int64_t I64;
-	typedef int64_t2 I64x2;
-	typedef int64_t3 I64x3;
-	typedef int64_t4 I64x4;
-
-	//Uint64 matrices
-
-	typedef uint64_t4x4 U64x4x4;
-	typedef uint64_t3x4 U64x3x4;
-	typedef uint64_t2x4 U64x2x4;
-
-	typedef uint64_t4x3 U64x4x3;
-	typedef uint64_t3x3 U64x3x3;
-	typedef uint64_t2x3 U64x2x3;
-
-	typedef uint64_t4x2 U64x4x2;
-	typedef uint64_t3x2 U64x3x2;
-	typedef uint64_t2x2 U64x2x2;
-
-	//Int64 matrices
-
-	typedef int64_t4x4 I64x4x4;
-	typedef int64_t3x4 I64x3x4;
-	typedef int64_t2x4 I64x2x4;
-
-	typedef int64_t4x3 I64x4x3;
-	typedef int64_t3x3 I64x3x3;
-	typedef int64_t2x3 I64x2x3;
-
-	typedef int64_t4x2 I64x4x2;
-	typedef int64_t3x2 I64x3x2;
-	typedef int64_t2x2 I64x2x2;
-
+	#include "@extension.I64.hlsli"
 #endif
 
 //Bool

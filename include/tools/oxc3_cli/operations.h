@@ -198,7 +198,9 @@ typedef enum EOperationFlags {
 
 	EOperationFlags_AssumeDefaults      = 1 << 28,        //--assume-defaults: compile with assumed pipeline state anyway
 
-	EOperationFlags_Count               = 29
+	EOperationFlags_NoOpt               = 1 << 29,        //--no-opt: -Od, so debug line info survives per statement
+
+	EOperationFlags_Count               = 30
 
 } EOperationFlags;
 
@@ -256,6 +258,7 @@ typedef enum EOperation {
 		EOperation_ShaderFeatureSet,
 		EOperation_ShaderDisassemble,
 		EOperation_ShaderAssemble,
+		EOperation_ShaderValidate,
 	#endif
 
 	//EOperation_CompileChimera,

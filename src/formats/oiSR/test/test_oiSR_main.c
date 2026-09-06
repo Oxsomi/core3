@@ -55,17 +55,17 @@ static Bool buildSample(Test *t, SRFile *sr) {
 	CharString sV3    = CharString_createRefCStrConst("vec3");
 
 	Bool ok = true;
-	ok &= SRFile_addString(sr, &sNs,    t->alloc, &nsName,    &t->err);
-	ok &= SRFile_addString(sr, &sLight, t->alloc, &lightName, &t->err);
-	ok &= SRFile_addString(sr, &sPos,   t->alloc, &posName,   &t->err);
-	ok &= SRFile_addString(sr, &sCol,   t->alloc, &colName,   &t->err);
-	ok &= SRFile_addString(sr, &sMain,  t->alloc, &mainName,  &t->err);
-	ok &= SRFile_addString(sr, &sUv,    t->alloc, &uvName,    &t->err);
-	ok &= SRFile_addString(sr, &sSem,   t->alloc, &sem,       &t->err);
-	ok &= SRFile_addString(sr, &sAnno,  t->alloc, &anno,      &t->err);
-	ok &= SRFile_addString(sr, &sFile,  t->alloc, &file,      &t->err);
-	ok &= SRFile_addString(sr, &sF3,    t->alloc, &f3Name,    &t->err);
-	ok &= SRFile_addString(sr, &sV3,    t->alloc, &v3Name,    &t->err);
+	ok = ok && SRFile_addString(sr, &sNs,    t->alloc, &nsName,    &t->err);
+	ok = ok && SRFile_addString(sr, &sLight, t->alloc, &lightName, &t->err);
+	ok = ok && SRFile_addString(sr, &sPos,   t->alloc, &posName,   &t->err);
+	ok = ok && SRFile_addString(sr, &sCol,   t->alloc, &colName,   &t->err);
+	ok = ok && SRFile_addString(sr, &sMain,  t->alloc, &mainName,  &t->err);
+	ok = ok && SRFile_addString(sr, &sUv,    t->alloc, &uvName,    &t->err);
+	ok = ok && SRFile_addString(sr, &sSem,   t->alloc, &sem,       &t->err);
+	ok = ok && SRFile_addString(sr, &sAnno,  t->alloc, &anno,      &t->err);
+	ok = ok && SRFile_addString(sr, &sFile,  t->alloc, &file,      &t->err);
+	ok = ok && SRFile_addString(sr, &sF3,    t->alloc, &f3Name,    &t->err);
+	ok = ok && SRFile_addString(sr, &sV3,    t->alloc, &v3Name,    &t->err);
 
 	if(!ok)
 		return false;
@@ -210,7 +210,8 @@ static void assertSampleContent(Test *t, const SRFile *r) {
 
 		Test_assert(t, "type keys node 2", r->types.ptr[0].nodeId == 2);
 		Test_assert(t, "type is vector 1x3",
-			r->types.ptr[0].typeClass == ESRTypeClass_Vector && r->types.ptr[0].rows == 1 && r->types.ptr[0].cols == 3);
+			r->types.ptr[0].typeClass == ESRTypeClass_Vector && r->types.ptr[0].rows == 1 && r->types.ptr[0].cols == 3
+		);
 
 		CharString f3 = CharString_createRefCStrConst("float3");
 		Test_assert(t, "underlying type name resolves to float3",
@@ -225,13 +226,15 @@ static void assertSampleContent(Test *t, const SRFile *r) {
 		//Go-to-definition points at the Light struct (node 1)
 
 		Test_assert(t, "type def node is the struct", r->types.ptr[0].defNodeId == 1 &&
-			r->nodes.ptr[r->types.ptr[0].defNodeId].type == ESRNodeType_Struct);
+			r->nodes.ptr[r->types.ptr[0].defNodeId].type == ESRNodeType_Struct
+		);
 
 		//Multi-dimensional array [2][3] round-tripped through the shared pool
 
 		Test_assert(t, "type has 2 array dims", r->types.ptr[0].arrayDimCount == 2 && r->types.ptr[0].arrayDimStart == 0);
 		Test_assert(t, "array dims are [2][3]",
-			r->arrayDims.length == 2 && r->arrayDims.ptr[0] == 2 && r->arrayDims.ptr[1] == 3);
+			r->arrayDims.length == 2 && r->arrayDims.ptr[0] == 2 && r->arrayDims.ptr[1] == 3
+		);
 	}
 }
 
@@ -379,7 +382,7 @@ clean:
 	SRFile_free(&sr, t->alloc);
 }
 
-int main() {
+OXC3_TEST_MAIN(formats_oiSR) {
 
 	const Allocator alloc = BasicAllocator_instance;
 	Test t = (Test) { 0 };

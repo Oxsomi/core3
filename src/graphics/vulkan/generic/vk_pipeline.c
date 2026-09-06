@@ -26,6 +26,7 @@
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "types/base/error.h"
+#include "types/math/type_cast.h"
 
 TListImpl(VkPipelineShaderStageCreateInfo);
 
@@ -222,12 +223,10 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 					case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_UINT64_KHR:
 						st->format = EPipelineStatisticFormat_U64; st->value = stats[j].value.u64; break;
 
-					case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_FLOAT64_KHR: {
+					case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_FLOAT64_KHR:
 						st->format = EPipelineStatisticFormat_F64;
-						F64 d = stats[j].value.f64;
-						st->value = *(const U64*) &d;
+						st->value = U64_fromF64Bits(stats[j].value.f64);
 						break;
-					}
 				}
 			}
 		}
@@ -296,4 +295,14 @@ clean:
 	Buffer_free(&irsBuf, alloc);
 	Buffer_free(&irData, alloc);
 	return s_uccess;
+}
+
+//Vulkan exposes no cross target compile: a driver compiles for the device it is running, so the only
+//shader target is the device itself and the list stays empty.
+
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_listShaderTargets)(
+	GraphicsDeviceRef *deviceRef, const Allocator *alloc, ListCharString *result, Error *e_rr
+) {
+	(void) deviceRef; (void) alloc; (void) result; (void) e_rr;
+	return true;
 }

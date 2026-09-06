@@ -426,9 +426,9 @@ static void Test_stringList(Test *t) {
 	ListCharString list = (ListCharString) { 0 };
 	Bool ok = true;
 
-	ok &= ListCharString_pushBack(&list, S("banana"), t->alloc, &t->err);
-	ok &= ListCharString_pushBack(&list, S("Apple"), t->alloc, &t->err);
-	ok &= ListCharString_pushBack(&list, S("cherry"), t->alloc, &t->err);
+	ok = ok && ListCharString_pushBack(&list, S("banana"), t->alloc, &t->err);
+	ok = ok && ListCharString_pushBack(&list, S("Apple"), t->alloc, &t->err);
+	ok = ok && ListCharString_pushBack(&list, S("cherry"), t->alloc, &t->err);
 	Test_assert(t, "pushBack refs", ok && list.length == 3);
 
 	//A deep copy has to duplicate the memory, so freeing the original leaves the copy intact

@@ -84,6 +84,11 @@ def main():
 	parser.add_argument("--force_deps", action="store_true", help="Ignore hash cache and rebuild all dependencies")
 
 	parser.add_argument(
+		"-dxc_source", type=str, default=None, metavar="PATH",
+		help="Build DXC from this checkout instead of the pinned clone, for iterating on the fork"
+	)
+
+	parser.add_argument(
 		"-deploy", type=str, default=None,
 		help="After building, export the conan package and lay it out in this folder. Use it to produce a "
 		     "prebuilt without restating what belongs in one: the contents come from conanfile.py's "
@@ -157,7 +162,7 @@ def main():
 	debugShaderCompiler = args.debug_shader_compiler == "True"
 
 	common.buildHostDependencies(
-		dep_modes, cache, debugShaderCompiler, compiler, args.asan == "True", args.ubsan == "True"
+		dep_modes, cache, debugShaderCompiler, compiler, args.asan == "True", args.ubsan == "True", args.dxc_source
 	)
 	common.saveHashCache(cache)
 

@@ -240,6 +240,15 @@ set(EnableUBSAN OFF CACHE BOOL "Build with UndefinedBehaviorSanitizer (clang/gcc
 set(EnableOxC3CLI OFF CACHE BOOL "Turn on/off OxC3 CLI")
 set(DynamicLinkingGraphics OFF CACHE BOOL "Turn on/off OxC3 graphics dynamic linking")
 
+# How OxC3_wasm ships the module the web frontend loads (src/tools/oxc3_wasm).
+# Off, the wasm sits beside the js and the browser streams and caches it as its own resource, which is
+# what a hosted page wants.
+# On, it is embedded in the js instead, so the page needs no second request and therefore no server at
+# all: web/index.html opens from file://. That costs the streaming compile and roughly a tenth more
+# bytes, so it is the local flavor rather than the deployed one.
+
+set(WebFrontendSingleFile OFF CACHE BOOL "Embed the wasm in the frontend module's js, so it loads from file://")
+
 # Independent of DynamicLinkingGraphics on purpose: they solve different problems.
 # Graphics dynamic linking exists so Vulkan and D3D12 can sit side by side and be picked at runtime:
 # Each backend is its own module exporting one factory (GraphicsInterface_getTable).
@@ -751,6 +760,27 @@ else()
 	if(EnableASAN)
 		add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
 		add_link_options(-fsanitize=address)
+
+		# clang defaults to linking the ASan runtime statically into every executable, and an executable's
+		# symbols outrank LD_PRELOAD in lookup order, so the no_deepbind preload below would never see a
+		# dlopen: the driver's call binds straight to the interceptor in the executable. The shared runtime
+		# restores normal interposition order, which is what gcc (shared libasan by default) already has.
+		# The runtime lives in clang's resource dir, which the loader doesn't search, hence the rpath.
+
+		if(CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+
+			execute_process(
+				COMMAND ${CMAKE_C_COMPILER} -print-file-name=libclang_rt.asan-${CMAKE_SYSTEM_PROCESSOR}.so
+				OUTPUT_VARIABLE asanSharedRuntime OUTPUT_STRIP_TRAILING_WHITESPACE
+			)
+
+			if(NOT EXISTS "${asanSharedRuntime}")
+				message(FATAL_ERROR "clang ASan build needs its shared runtime; -print-file-name gave ${asanSharedRuntime}")
+			endif()
+
+			get_filename_component(asanSharedRuntimeDir "${asanSharedRuntime}" DIRECTORY)
+			add_link_options(-shared-libasan "-Wl,-rpath,${asanSharedRuntimeDir}")
+		endif()
 	endif()
 
 	# A proprietary driver has two quarrels with a sanitized process, and both surface only as
@@ -992,6 +1022,18 @@ if(NOT ANDROID)
 
 		set(archDir "${target}_clang")
 	endif()
+endif()
+
+# Two configurations of one toolchain must not share bin/ and lib/: the host tool build (static shader
+# compiler, dynamic graphics, no tests) and a plain build.py run (the reverse) would otherwise hand each
+# other stale archives, and a link then sees every symbol twice. The tag keeps them apart the way the
+# compiler suffix above keeps toolchains apart; it is a cmake variable rather than a conan option so it
+# cannot fork the package id that tool_requires resolves against.
+
+set(OxC3OutputTag "" CACHE STRING "Suffix on the output directory, for a second configuration of the same toolchain")
+
+if(OxC3OutputTag)
+	set(archDir "${archDir}_${OxC3OutputTag}")
 endif()
 
 # Where the built artifacts land.

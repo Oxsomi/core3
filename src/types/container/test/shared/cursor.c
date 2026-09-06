@@ -420,12 +420,17 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 	{
 		magic = 0xBABABABABABABABA;
 
-		StreamCursor_write(&cursor, magicBuf, 0, 0,             sizeof(magic), false, t->alloc, &t->err);
-		StreamCursor_write(&cursor, magicBuf, 0, 32 * KIBI - 8, sizeof(magic), false, t->alloc, &t->err);
-		StreamCursor_write(&cursor, magicBuf, 0, 32 * KIBI,     sizeof(magic), false, t->alloc, &t->err);
-		StreamCursor_write(&cursor, magicBuf, 0, 64 * KIBI - 8, sizeof(magic), false, t->alloc, &t->err);
-		StreamCursor_write(&cursor, magicBuf, 0, 64 * KIBI,     sizeof(magic), false, t->alloc, &t->err);
-		StreamCursor_write(&cursor, magicBuf, 0, 96 * KIBI - 8, sizeof(magic), false, t->alloc, &t->err);
+		if (
+			!StreamCursor_write(&cursor, magicBuf, 0, 0,             sizeof(magic), false, t->alloc, &t->err) ||
+			!StreamCursor_write(&cursor, magicBuf, 0, 32 * KIBI - 8, sizeof(magic), false, t->alloc, &t->err) ||
+			!StreamCursor_write(&cursor, magicBuf, 0, 32 * KIBI,     sizeof(magic), false, t->alloc, &t->err) ||
+			!StreamCursor_write(&cursor, magicBuf, 0, 64 * KIBI - 8, sizeof(magic), false, t->alloc, &t->err) ||
+			!StreamCursor_write(&cursor, magicBuf, 0, 64 * KIBI,     sizeof(magic), false, t->alloc, &t->err) ||
+			!StreamCursor_write(&cursor, magicBuf, 0, 96 * KIBI - 8, sizeof(magic), false, t->alloc, &t->err)
+		) {
+			Test_assert(t, "Partial writes: write", false);
+			goto clean;
+		}
 
 		if (!StreamCursor_flush(&cursor, t->alloc, &t->err)) {
 			Test_assert(t, "Partial writes: flush", false);

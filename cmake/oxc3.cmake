@@ -31,19 +31,41 @@ function(configure_icon target icon)
 
 endfunction()
 
-# Link options every wasm64 executable needs.
-# Both of the web targets (the CLI and the test bundle) are node programs, so they take the same set; a
-# browser consumer would embed the libraries and choose its own -sENVIRONMENT instead.
+# Link options every wasm64 module needs, in the flavor the caller asks for:
 #
-# NODERAWFS mounts the real filesystem, so packages/ resolves through plain POSIX paths from the working
-# directory rather than needing anything preloaded.
-# The memory and stack settings are hard requirements: DXC recursion overflows the 64KB default stack
-# silently, and 2GB is the default memory cap.
+#   apply_web_link_options(<target> [MODE node|browser])
+#
+# MODE node (the default) is what an executable the emsdk's node runs takes: NODERAWFS mounts the real
+# filesystem, so packages/ resolves through plain POSIX paths from the working directory rather than
+# needing anything preloaded, and EXIT_RUNTIME tears the runtime down when main() returns.
+#
+# MODE browser is what a module a page loads and then calls into takes. A browser has no host filesystem
+# for NODERAWFS to bind to, so the module keeps emscripten's own MEMFS and the page fills it. The runtime
+# has to survive past its entry point as well, since every call arrives after that point.
+# node is kept in its ENVIRONMENT list so the same artifact can be driven headless by a test script; it
+# reaches MEMFS there too, which is exactly what a browser runs.
+#
+# The memory and stack settings are hard requirements for both: DXC recursion overflows the 64KB default
+# stack silently, and 2GB is the default memory cap.
 # INITIAL_MEMORY is what the module commits at instantiation, before it does any work, so it stays small
 # and ALLOW_MEMORY_GROWTH sizes it to the workload; a phone should not hand over half a gigabyte just to
 # load the module. DXC grows this a lot while compiling, but only for the run that needs it.
 
 function(apply_web_link_options target)
+
+	set(oneValue MODE)
+	cmake_parse_arguments(W "" "${oneValue}" "" ${ARGN})
+
+	# Same reasoning as oxc3_add_bundled_test: a misspelled keyword otherwise vanishes and the target
+	# silently links for the wrong host, which only shows up as a page that cannot load the module.
+
+	if(W_UNPARSED_ARGUMENTS)
+		message(FATAL_ERROR "apply_web_link_options: unrecognized arguments: ${W_UNPARSED_ARGUMENTS}")
+	endif()
+
+	if(W_KEYWORDS_MISSING_VALUES)
+		message(FATAL_ERROR "apply_web_link_options: arguments missing a value: ${W_KEYWORDS_MISSING_VALUES}")
+	endif()
 
 	if(NOT TARGET ${target})
 		message(FATAL_ERROR "apply_web_link_options: target ${target} not present.")
@@ -53,18 +75,33 @@ function(apply_web_link_options target)
 		return()
 	endif()
 
+	if(NOT W_MODE)
+		set(W_MODE "node")
+	endif()
+
+	if(W_MODE STREQUAL "node")
+		target_link_options(${target} PRIVATE "-sENVIRONMENT=node" "-sNODERAWFS=1" "-sEXIT_RUNTIME=1")
+
+	elseif(W_MODE STREQUAL "browser")
+		target_link_options(${target} PRIVATE "-sENVIRONMENT=web,worker,node" "-sEXIT_RUNTIME=0")
+
+	else()
+		message(FATAL_ERROR "apply_web_link_options: MODE is node or browser, got ${W_MODE}")
+	endif()
+
+	# STACK_OVERFLOW_CHECK turns a blown stack into a loud abort at the guard, instead of a silent heap
+	# smash that surfaces later as an unrelated allocation failing.
+
 	target_link_options(${target} PRIVATE
-		"-sENVIRONMENT=node"
-		"-sNODERAWFS=1"
-		"-sEXIT_RUNTIME=1"
 		"-sALLOW_MEMORY_GROWTH=1"
 		"-sINITIAL_MEMORY=32MB"
 		"-sMAXIMUM_MEMORY=16GB"
 		"-sSTACK_SIZE=8MB"
+		"-sSTACK_OVERFLOW_CHECK=1"
 	)
 
-	# ENVIRONMENT stays 'node' for the threaded flavor too: emscripten appends 'worker' itself once
-	# shared memory is on. A browser flavor would need web,worker and no NODERAWFS instead.
+	# ENVIRONMENT needs no 'worker' spelled out for the threaded flavor: emscripten appends it itself once
+	# shared memory is on.
 	# A worker inherits STACK_SIZE otherwise, so every thread would reserve the main thread's 8 MB out
 	# of a heap that starts at 32 MB. Sized down explicitly, and it is a starting point rather than a
 	# measured one: DXC recurses deeply, so raise it if a threaded shader compile overflows.
@@ -194,7 +231,7 @@ function(oxc3_add_bundled_test)
 		OxC3_audio
 		OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr
 		OxC3_formats_oiBC OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_oiSB
-		OxC3_formats_oiSH OxC3_formats_wav
+		OxC3_formats_oiSH OxC3_formats_oiSP OxC3_formats_oiSR OxC3_formats_wav
 		OxC3_types_test
 		OxC3_types_container_test_util
 		${T_LIBS}
@@ -232,6 +269,7 @@ function(oxc3_add_bundled_test)
 			"${T_ROOT}/shader_compiler/test/*/*.hlsl"
 			"${T_ROOT}/shader_compiler/test/*/*.hlsli"
 			"${T_ROOT}/shader_compiler/test/*.oiSH"
+			"${T_ROOT}/shader_compiler/test/*.oiSR"
 		)
 
 		foreach(f ${shaderTestData})

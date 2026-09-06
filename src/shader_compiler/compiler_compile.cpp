@@ -159,6 +159,11 @@ Bool Compiler_compile(
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qembed_debug", alloc, e_rr));
 		}
 
+		//The optimizer folds most of what the debug info describes, so line mapping per statement needs it off.
+
+		if(settings->noOptimization)
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Od", alloc, e_rr));
+
 		if(toCompile->extensions & ESHExtension_16BitTypes)
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr));
 
@@ -172,8 +177,16 @@ Bool Compiler_compile(
 			if(settings->keepUnusedRegisters)
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-preserve-bindings", alloc, e_rr));
 
-			if(settings->debug)
+			//The rich debug info this asks for lowers to the NonSemantic Shader.DebugInfo.100 instruction set,
+			// and -fspv-extension is an allow list, so the extension it rides on has to be granted here or DXC
+			// refuses the whole compile.
+
+			if (settings->debug) {
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-debug=vulkan-with-source", alloc, e_rr));
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_KHR_non_semantic_info", alloc, e_rr
+				));
+			}
 
 			ESHExtension vk13 = (ESHExtension) (
 				ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining
@@ -412,10 +425,16 @@ Bool Compiler_compile(
 				CharString_free(&tempStr2, alloc);
 			}
 
-			{
-				const CharString lineStr = CharString_createRefCStrConst("#line 1\n");
-				gotoIfError3(clean, CharString_appendString(&tmpFile, &lineStr, alloc, e_rr));
-			}
+			//A bare #line 1 keeps the presumed file, so every user line after the injected header would stay
+			// attributed to "Spec constants" in the debug info; naming the real file hands the mapping back.
+
+			gotoIfError3(clean, CharString_format(
+				alloc, &tempStr, e_rr, "#line 1 \"%.*s\"\n",
+				(int) CharString_length(settings->path), settings->path.ptr
+			));
+			gotoIfError3(clean, CharString_appendString(&tmpFile, &tempStr, alloc, e_rr));
+			CharString_free(&tempStr, alloc);
+
 			gotoIfError3(clean, CharString_appendString(&tmpFile, &settings->string, alloc, e_rr));
 		}
 

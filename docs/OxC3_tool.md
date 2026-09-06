@@ -195,6 +195,8 @@ When operating on a folder, it will attempt to find `.hlsl` files and then proce
 
 `@myFile.hlsl` specifies builtin shaders, such as `@types.hlsl` and `@resources.hlsl` which are bindings to be compatible with OxC3. This can also access NV specific HLSL extensions when DXIL is used as a target and the `extension` annotation is used.
 
+Anything an extension adds lives in its own `@extension.<Name>.hlsli`, guarded by the `__OXC_EXT_<NAME>` define OxC3 sets from `[[oxc::extension]]`. `@extensions.hlsli` is the umbrella that conditionally includes all of them, so a shader that includes it gets exactly the extensions its entrypoints enabled and nothing else. The type extensions (`16BitTypes`, `F64`, `I64`) are also reached through `@types.hlsli`, which includes their headers behind the same guards, so the `F16`/`F64`/`U64` aliases stay available to everything already built on it. `AtomicF64` pulls in the `F64` aliases too, since its intrinsic takes a double by reference.
+
 ### Compile
 
 Compile mode (default) will turn the text into shaders ready for consumption by a graphics API. This could be DXIL, SPIRV or even text representations (MSL, WGSL or even GLSL in the future). These are then stored in an oiSH file, which contains information about the defines, inputs/outputs, basic reflection info and entrypoint binary/name as well as other metadata. These oiSH files can be either bulky (works for every backend) or lean (works only for the target(s)).
@@ -287,6 +289,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
 #### Special flags
 
 - `--debug` is used to toggle debug info in the binary.
+- `--no-opt` compiles with `-Od`, so the optimizer doesn't fold what `--debug`'s line info describes; pair it with `--debug` when stepping through a shader or reading the source to disassembly mapping.
 - `--ignore-empty-files` is used to hide the error when no entrypoints are found to compile. This is off by default because include files should be named as .hlsli, but to support both use cases, this can be used to silence the error.
 - `--split` is used to split up every oiSH file into its own file. This is very useful when building for 1 dedicated target. By default this is turned off, to make sure every shader can be ran with every backend.
 - `--keep-registers` keeps declared but unused resources bound and reflected (DXIL `-fhlsl-unused-resource-bindings=keep-all`, SPIRV additionally `-fspv-preserve-bindings`). Useful for stable register layouts across shader variants; off by default so unused resources are stripped (their slots are still reserved via reserve-all).
@@ -304,7 +307,8 @@ Alongside the older `OxC3 compile shaders` operation (which still exists and is 
 - `OxC3 shader includes -input <file.oiSH>`: List the include files (relative path + CRC32C) an oiSH shader was compiled from.
 - `OxC3 shader feature_set -input <file.oiSH>`: Show the extensions, shader models and binary types used across an oiSH shader's binaries.
 - `OxC3 shader disassemble -input <file.spv|.dxil>`: Disassemble a standalone .spv or .dxil binary to text (stdout, or `-output <file>`).
-- `OxC3 shader assemble -input <file.spv.txt> -output <file.spv>`: Assemble SPIR-V text (.spv.txt) into a .spv binary. DXIL assembly isn't supported yet.
+- `OxC3 shader validate -input <file.spv|.dxil>`: Validate a standalone binary, spirv-val for .spv and DXC's validator for .dxil; exits non-zero with the validator's reason when it is rejected.
+- `OxC3 shader assemble -input <file.spv.txt> -output <file.spv>`: Assemble SPIR-V text (.spv.txt) into a .spv binary, or DXIL LL text (.dxil.txt) into a .dxil container.
 
 ## Show GPU/graphics device info
 

@@ -62,7 +62,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
     owns that buffer for the lifetime of the device, so OxC3 allocates one descriptor set per frame instead, writes
     each once and binds it unchanged from then on. There is no per frame update, so no set is ever rewritten while
     still in flight. The sets are built on the first submit rather than at device creation, because the globals
-    buffers don't exist yet when the Vulkan device is initialised.
+    buffers don't exist yet when the Vulkan device is initialized.
     A one time performance warning is logged on the first submit that takes the emulated path.
     Android emulators are the common case, since gfxstream drops the extension from the guest even when the host
     driver exposes it.

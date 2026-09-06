@@ -55,6 +55,45 @@ typedef struct SPFieldInfo {
 	const C8 *domain;
 } SPFieldInfo;
 
+const C8 *ECullMode_names[ECullMode_Count] = { "Back", "None", "Front" };
+
+const C8 *ECompareOp_names[ECompareOp_Count] = { "Gt", "Geq", "Eq", "Neq", "Leq", "Lt", "Always", "Never" };
+
+const C8 *EStencilOp_names[EStencilOp_Count] = {
+	"Keep", "Zero", "Replace", "IncClamp", "DecClamp", "Invert", "IncWrap", "DecWrap"
+};
+
+const C8 *ELogicOpExt_names[ELogicOpExt_Count] = {
+	"Off", "Clear", "Set", "Copy", "CopyInvert", "None", "Invert", "And", "Nand", "Or", "Nor", "Xor",
+	"Equiv", "AndReverse", "AndInvert", "OrReverse", "OrInvert"
+};
+
+const C8 *EBlend_names[EBlend_Count] = {
+	"Zero", "One", "SrcColor", "InvSrcColor", "DstColor", "InvDstColor", "SrcAlpha", "InvSrcAlpha",
+	"DstAlpha", "InvDstAlpha", "BlendFactor", "InvBlendFactor", "AlphaFactor", "InvAlphaFactor",
+	"SrcAlphaSat", "Src1ColorExt", "Src1AlphaExt", "InvSrc1ColorExt", "InvSrc1AlphaExt"
+};
+
+const C8 *EBlendOp_names[EBlendOp_Count] = { "Add", "Subtract", "ReverseSubtract", "Min", "Max" };
+
+const C8 *EMSAASamples_names[EMSAASamples_Count] = { "x1", "x2Ext", "x4", "x8Ext" };
+
+const C8 *ETopologyMode_names[EToplogyMode_Count] = {
+	"TriangleList", "TriangleStrip", "LineList", "LineStrip", "PointList",
+	"TriangleListAdj", "TriangleStripAdj", "LineListAdj", "LineStripAdj"
+};
+
+const C8 *ERasterizerFlags_bitNames[4] = { "IsClockWise", "IsWireframeExt", "EnableDepthClamp", "EnableDepthBias" };
+
+const C8 *EDepthStencilFlags_bitNames[3] = { "DepthTest", "DepthWriteBit", "StencilTest" };
+
+const C8 *EWriteMask_bitNames[4] = { "R", "G", "B", "A" };
+
+const C8 *EPipelineRaytracingFlags_bitNames[8] = {
+	"SkipTriangles", "SkipAABBs", NULL, "NoNullAnyHit", "NoNullClosestHit", "NoNullMiss",
+	"NoNullIntersection", "AllowOpacityMicromapExt"
+};
+
 static const SPFieldInfo SPField_info[ESPField_Count] = {
 
 	{ "rtv.format", true,
@@ -430,7 +469,8 @@ static Bool SPStage_isGraphics(U8 stage) {
 	return
 		stage == ESHPipelineStage_Vertex || stage == ESHPipelineStage_Pixel ||
 		stage == ESHPipelineStage_Hull || stage == ESHPipelineStage_Domain ||
-		stage == ESHPipelineStage_GeometryExt;
+		stage == ESHPipelineStage_GeometryExt ||
+		stage == ESHPipelineStage_MeshExt || stage == ESHPipelineStage_TaskExt;
 }
 
 Bool SPFile_derivePipeline(
@@ -478,6 +518,7 @@ Bool SPFile_derivePipeline(
 	//A file may carry compute, graphics and ray tracing stages side by side; the caller picks which pipeline it means.
 
 	const SHEntry *vs = NULL, *ps = NULL, *hs = NULL;
+	Bool hasMesh = false, hasTask = false, hasVertexChain = false;
 	U8 computeCount = 0, graphicsCount = 0, rtCount = 0;
 
 	for (U8 i = 0; i < stageCount; ++i) {
@@ -516,13 +557,22 @@ Bool SPFile_derivePipeline(
 
 			else if(entry->stage == ESHPipelineStage_Hull)
 				hs = entry;
+
+			if(entry->stage == ESHPipelineStage_MeshExt)
+				hasMesh = true;
+
+			else if(entry->stage == ESHPipelineStage_TaskExt)
+				hasTask = true;
+
+			else if(entry->stage != ESHPipelineStage_Pixel)
+				hasVertexChain = true;
 		}
 
 		else if(SPStage_isRt(entry->stage))
 			++rtCount;
 
 		else retError(clean, Error_unsupportedOperation(
-			0, "SPFile_derivePipeline()::stages has a stage kind no pipeline here is built from (mesh, task, node)"
+			0, "SPFile_derivePipeline()::stages has a stage kind no pipeline here is built from"
 		));
 
 		//The stage records the shader by name, so the pipeline can be resolved again after a load.
@@ -549,6 +599,18 @@ Bool SPFile_derivePipeline(
 	if((computeCount != 0) + (graphicsCount != 0) + (rtCount != 0) != 1)
 		retError(clean, Error_invalidParameter(
 			4, 0, "SPFile_derivePipeline()::stages mixes compute, graphics and ray tracing, which can't be one pipeline"
+		));
+
+	//A mesh pipeline replaces the vertex chain entirely, and a task stage only exists to feed a mesh stage.
+
+	if(hasMesh && hasVertexChain)
+		retError(clean, Error_invalidParameter(
+			4, 0, "SPFile_derivePipeline()::stages mixes mesh and vertex-chain stages, which can't be one pipeline"
+		));
+
+	if(hasTask && !hasMesh)
+		retError(clean, Error_invalidParameter(
+			4, 0, "SPFile_derivePipeline()::stages has a task stage without the mesh stage it would feed"
 		));
 
 	//Compute needs nothing beyond the shader itself, so its state is exact and it carries no extra record at all.
@@ -658,8 +720,15 @@ Bool SPFile_derivePipeline(
 		ESPField_Msaa, ESPField_MsaaMinSampleShading, ESPField_TopologyMode
 	};
 
-	for(U64 i = 0; i < sizeof(unprovable) / sizeof(unprovable[0]); ++i)
+	for(U64 i = 0; i < sizeof(unprovable) / sizeof(unprovable[0]); ++i) {
+
+		//The mesh stage owns its output topology, so a mesh pipeline has no input assembly topology to pick.
+
+		if(hasMesh && unprovable[i] == ESPField_TopologyMode)
+			continue;
+
 		gotoIfError3(clean, SPFile_assume(spFile, &base, unprovable[i], 0, 0, alloc, e_rr));
+	}
 
 	//Tessellation needs a control point count the hull stage never declares, and nothing otherwise.
 

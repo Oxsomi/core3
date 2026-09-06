@@ -43,6 +43,9 @@ typedef enum EDepthStencilFormat {
 
 } EDepthStencilFormat;
 
+//In enum order, so a reader can spell a stored depth format without owning a copy of the list.
+extern const C8 *EDepthStencilFormat_names[EDepthStencilFormat_Count];
+
 typedef enum ETexturePrimitive {
 	ETexturePrimitive_Undefined,
 	ETexturePrimitive_UNorm,

@@ -108,3 +108,4 @@ clean:
 | A file format | `formats` + spec doc + id registration + tests |
 | A GPU feature | `graphics/generic` first, then both backends symmetrically |
 | A new CLI verb | `src/tools/oxc3_cli/<verb>.c` + registration in `operations.c` |
+| Web frontend work | `web/` (MIT, own README); the wasm boundary is `src/tools/oxc3_wasm` |

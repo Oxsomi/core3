@@ -1236,13 +1236,17 @@ Bool Compiler_parseOxcAnnot(
 
 	annotLen = annotEnd - str;
 
-	if (annotLen < 5 || annotLen > 9)    //Skip unknown
-		goto clean;
+	//Everything that got this far IS an [[oxc::...]] annotation. A name nothing below recognizes
+	// (a typo like extensions or define) must refuse rather than parse as nothing, or the permutation
+	// the author asked for quietly never exists.
 
-	buf = Buffer_createRefConst(str, annotLen);
-	c8x4 = Buffer_readU32(buf, 0, NULL, NULL);
+	if (annotLen >= 4) {
 
-	switch (c8x4) {
+		buf = Buffer_createRefConst(str, annotLen);
+		c8x4 = Buffer_readU32(buf, 0, NULL, NULL);
+	}
+
+	switch (annotLen >= 4 ? c8x4 : 0) {
 
 	case C8x4('s', 't', 'a', 'g'):        //oxc::stage()
 
@@ -1251,9 +1255,10 @@ Bool Compiler_parseOxcAnnot(
 		if (annotLen == 5 && str[4] == 'e') {
 			str += 5;
 			gotoIfError3(clean, Compiler_parseStageAnnot(entry, functionName, str, alloc, e_rr));
+			goto clean;
 		}
 
-		goto clean;
+		goto unrecognized;
 
 	case C8x4('m', 'o', 'd', 'e'):        //oxc::model()
 
@@ -1262,9 +1267,10 @@ Bool Compiler_parseOxcAnnot(
 		if (annotLen == 5 && str[4] == 'l') {
 			str += 5;
 			gotoIfError3(clean, Compiler_parseModelAnnot(entry, str, alloc, e_rr));
+			break;
 		}
 
-		break;
+		goto unrecognized;
 
 	case C8x4('v', 'e', 'n', 'd'):        //oxc::vendor()
 
@@ -1273,9 +1279,10 @@ Bool Compiler_parseOxcAnnot(
 		if (annotLen == 6 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('o', 'r')) {
 			str += 6;
 			gotoIfError3(clean, Compiler_parseVendorAnnot(entry, str, e_rr));
+			break;
 		}
 
-		break;
+		goto unrecognized;
 
 	case C8x4('b', 'i', 'n', 'a'):        //oxc::binary()
 
@@ -1284,9 +1291,10 @@ Bool Compiler_parseOxcAnnot(
 		if (annotLen == 6 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('r', 'y')) {
 			str += 6;
 			gotoIfError3(clean, Compiler_parseBinaryAnnot(entry, str, e_rr));
+			break;
 		}
 
-		break;
+		goto unrecognized;
 
 	case C8x4('d', 'e', 'f', 'i'):        //oxc::defines()
 
@@ -1296,9 +1304,10 @@ Bool Compiler_parseOxcAnnot(
 		if (annotLen == 7 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('n', 'e') && buf.ptr[6] == 's') {
 			str += 7;
 			gotoIfError3(clean, Compiler_parseDefinesAnnot(entry, str, alloc, e_rr));
+			break;
 		}
 
-		break;
+		goto unrecognized;
 
 	case C8x4('u', 'n', 'i', 'f'):        //oxc::uniforms()
 
@@ -1308,9 +1317,10 @@ Bool Compiler_parseOxcAnnot(
 		if (annotLen == 8 && Buffer_readU32(buf, 4, NULL, NULL) == C8x4('o', 'r', 'm', 's')) {
 			str += 8;
 			gotoIfError3(clean, Compiler_parseUniformsAnnot(entry, str, alloc, e_rr));
+			break;
 		}
 
-		break;
+		goto unrecognized;
 
 	case C8x4('e', 'x', 't', 'e'):        //oxc::extension()
 
@@ -1322,9 +1332,18 @@ Bool Compiler_parseOxcAnnot(
 		) {
 			str += 9;
 			gotoIfError3(clean, Compiler_parseExtensionAnnot(entry, str, alloc, e_rr));
+			break;
 		}
 
-		break;
+		goto unrecognized;
+
+	default:
+	unrecognized:
+		retError(clean, Error_invalidState(
+			0,
+			"Compiler_parseOxcAnnot() unrecognized [[oxc::...]] annotation; "
+			"known: stage, model, vendor, binary, defines, uniforms, extension"
+		));
 	}
 
 clean:

@@ -524,10 +524,22 @@ Bool VK_WRAP_FUNC(BLASRef_prepareCompact)(GraphicsDeviceRef *deviceRef, BLASRef 
 	blas->base.compactionQuery = U32_MAX;
 	GraphicsDevice_releaseCompactionQuery(device, query, alloc);
 
+	//A built structure occupies something, so a size of zero is not the driver reporting no saving, it is
+	//the query never having produced one. Refused rather than folded into the case below, because marking
+	//the structure compacted there retires it silently: the memory compaction was asked to reclaim stays
+	//where it is, the structure can never be compacted again, and nothing names either.
+
+	if(!compactedSize)
+		retError(clean, Error_invalidState(
+			0,
+			"VkBLASRef_prepareCompact() the compacted size query returned zero for a built structure, so this "
+			"device's compacted size cannot be trusted"
+		));
+
 	//A driver is allowed to report no saving. Leaving recorded false keeps a pointless copy out of the
 	// command buffer entirely.
 
-	if(!compactedSize || compactedSize >= DeviceBufferRef_ptr(blas->base.asBuffer)->resource.size) {
+	if(compactedSize >= DeviceBufferRef_ptr(blas->base.asBuffer)->resource.size) {
 		blas->base.isCompacted = true;
 		goto clean;
 	}

@@ -1,17 +1,53 @@
-/* editor.js — CodeMirror setup + diagnostics rendering. No app state; app.js drives it. */
+/* editor.js: CodeMirror setup + diagnostics rendering. No app state; app.js drives it. */
 (function () {
 "use strict";
 const { $ } = window.OxUtil;
 
 function mk(s) { const o = {}; s.split(" ").forEach(w => o[w] = true); return o; }
 
+/* One lexicon for the mode, the completions and anything else that needs to know what HLSL spells:
+ * declared once here so the highlighter and IntelliSense can never disagree about what a keyword is. */
+const LEX = {
+  keywords: "if else for while do switch case default return break continue struct class interface cbuffer tbuffer register numthreads WaveSize void in out inout const static uniform typedef template groupshared precise sizeof namespace using nointerpolation linear centroid sample true false export",
+  types: "void bool int uint float double int2 int3 int4 uint2 uint3 uint4 float2 float3 float4 float2x2 float3x3 float4x4 min16float half float16_t int16_t uint16_t int64_t uint64_t Texture1D Texture2D Texture3D TextureCube Texture2DMS Texture2DArray RWTexture1D RWTexture2D RWTexture3D Buffer RWBuffer ByteAddressBuffer RWByteAddressBuffer StructuredBuffer RWStructuredBuffer AppendStructuredBuffer ConsumeStructuredBuffer ConstantBuffer SamplerState SamplerComparisonState RaytracingAccelerationStructure BuiltInTriangleIntersectionAttributes RayDesc RayQuery",
+  intrinsics: "mul dot cross normalize length lerp saturate clamp min max abs pow exp log sqrt sin cos tan floor ceil frac step smoothstep asfloat asuint asint reflect refract distance TraceRay TraceRayInline ReportHit CallShader DispatchRaysIndex DispatchRaysDimensions WorldRayOrigin WorldRayDirection RayTCurrent InterlockedAdd InterlockedCompareExchange GetDimensions SampleLevel Sample Load Store any all transpose ddx ddy",
+  semantics: "SV_Position SV_Target SV_DispatchThreadID SV_GroupID SV_GroupThreadID SV_GroupIndex SV_VertexID SV_InstanceID SV_DomainLocation SV_TessFactor SV_InsideTessFactor SV_PrimitiveID COLOR NORMAL TEXCOORD0",
+  oxcTypes: "F16 F32 F64 I8 I16 I32 I64 U8 U16 U32 U64 Bool F32x2 F32x3 F32x4 F32x4x4 U32x2 U32x3 U32x4 I32x2 I32x3 I32x4 F16x2 F16x4 U64x3",
+  annotations: "stage extension model vendor uniforms defines"
+};
+
+/* A preprocessor line, tokenized whole so the mode sees it as meta rather than as an expression.
+ * clike ends a statement on ';', and a directive has none, so without this every line after an #include
+ * or a #define is indented as the continuation of one. A trailing backslash continues onto the next line,
+ * which is why the hook can reinstall itself. */
+
+function preprocessorLine(stream, state) {
+
+  if (!state.startOfLine)
+    return false;
+
+  let next = null;
+
+  for (let ch; (ch = stream.peek());) {
+
+    if (ch === "\\" && stream.match(/^.$/)) { next = preprocessorLine; break; }
+    if (ch === "/" && stream.match(/^\/[\/*]/, false)) break;     // a comment ends the directive
+
+    stream.next();
+  }
+
+  state.tokenize = next;
+  return "meta";
+}
+
 CodeMirror.defineMIME("x-shader/x-hlsl", {
   name: "clike",
-  keywords: mk("if else for while do switch case default return break continue struct class interface cbuffer tbuffer register numthreads WaveSize void in out inout const static uniform typedef template groupshared precise sizeof namespace using nointerpolation linear centroid sample true false export"),
-  types: mk("void bool int uint float double int2 int3 int4 uint2 uint3 uint4 float2 float3 float4 float2x2 float3x3 float4x4 min16float half float16_t int16_t uint16_t int64_t uint64_t Texture1D Texture2D Texture3D TextureCube Texture2DMS Texture2DArray RWTexture1D RWTexture2D RWTexture3D Buffer RWBuffer ByteAddressBuffer RWByteAddressBuffer StructuredBuffer RWStructuredBuffer AppendStructuredBuffer ConsumeStructuredBuffer ConstantBuffer SamplerState SamplerComparisonState RaytracingAccelerationStructure BuiltInTriangleIntersectionAttributes"),
-  builtin: mk("SV_Position SV_Target SV_DispatchThreadID SV_GroupID SV_GroupThreadID SV_GroupIndex SV_VertexID SV_InstanceID mul dot cross normalize length lerp saturate clamp min max abs pow exp log sqrt sin cos tan floor ceil frac step smoothstep asfloat asuint asint reflect refract distance TraceRay TraceRayInline ReportHit CallShader DispatchRaysIndex DispatchRaysDimensions InterlockedAdd"),
+  keywords: mk(LEX.keywords),
+  types: mk(LEX.types),
+  builtin: mk(LEX.semantics + " " + LEX.intrinsics),
   atoms: mk("true false"), blockKeywords: mk("case do else for if switch while struct"),
-  defKeywords: mk("struct"), typeFirstDefinitions: true, indentSwitch: false
+  defKeywords: mk("struct"), typeFirstDefinitions: true, indentSwitch: false,
+  hooks: { "#": preprocessorLine }
 });
 
 const oxcOverlay = { token(stream) {
@@ -26,7 +62,8 @@ const oxcOverlay = { token(stream) {
   return null;
 } };
 
-let cm = null, marks = [], flashLine = null, changeCb = null;
+let cm = null, marks = [], flashLine = null, changeCb = null, lastDiagKey = null;
+let docs = new Map();                    // open-tab key -> CodeMirror.Doc (its own undo history + cursor)
 
 const OxEditor = {
 
@@ -44,24 +81,42 @@ const OxEditor = {
   },
 
   onChange(cb) { changeCb = cb; },
+  onCursor(cb) { cm.on("cursorActivity", () => cm.getCursor && cb(cm.getCursor().line + 1)); },
+  cmHandle() { return cm; },
+  LEX,
   value() { return cm.getValue(); },
 
-  open(text, readOnly) {
+  /* key identifies the tab; with one, the file gets its own Doc so switching tabs keeps undo
+   * history, cursor and scroll per file. Without one (or under a stub), plain setValue. */
+  open(text, readOnly, key) {
     const prev = changeCb; changeCb = null;         // don't echo programmatic loads back into state
-    cm.setValue(text);
+    if (key && CodeMirror.Doc && cm.swapDoc) {
+      let doc = docs.get(key);
+      if (!doc) { doc = new CodeMirror.Doc(text, "x-shader/x-hlsl"); docs.set(key, doc); }
+      else if (doc.getValue() !== text) doc.setValue(text);   // replaced from outside (share, snapshot)
+      if (cm.getDoc() !== doc) cm.swapDoc(doc);
+    } else
+      cm.setValue(text);
     cm.setOption("readOnly", readOnly ? "nocursor" : false);
     changeCb = prev;
     this.clearDiags();
   },
 
+  closeDoc(key) { docs.delete(key); },
+  resetDocs() { docs.clear(); },
+
   clearDiags() {
+    lastDiagKey = null;
     marks.forEach(m => m.clear()); marks = [];
     cm.clearGutter("diag-gutter");
     cm.eachLine(l => { cm.removeLineClass(l, "background", "diag-line-error"); cm.removeLineClass(l, "background", "diag-line-warn"); });
   },
 
   markDiags(diags) {
+    const key = JSON.stringify(diags);
+    if (key === lastDiagKey) return;                //unchanged between reflects, the common case
     this.clearDiags();
+    lastDiagKey = key;
     diags.forEach(d => {
       if (d.sev === "info") return;
       const ln = d.line - 1, cls = d.sev === "error" ? "error" : "warn";
@@ -84,7 +139,10 @@ const OxEditor = {
     setTimeout(() => { cm.removeLineClass(ln, "background", "diag-line-flash"); if (flashLine === ln) flashLine = null; }, 700);
   },
 
-  setTheme(dark) { cm.setOption("theme", dark ? "material-darker" : "default"); }
+  setTheme(theme) {
+    if (!cm) return;                     //applied again right after init(), so a pre-init call is fine to drop
+    cm.setOption("theme", theme || "default"); cm.refresh();
+  }
 };
 
 window.OxEditor = OxEditor;

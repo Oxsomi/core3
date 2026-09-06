@@ -114,8 +114,12 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Read the 32-byte AES key from a file (64/66-char hex or a raw 32-byte binary) instead of a plaintext argument.",
 	"AMD GPU/arch for ISA operations: a gfx target (e.g. gfx1100), or 'live[:index]'. Use '?' or 'isa devices' to list.",
 	"Write the pipeline the disassembly was taken from as an oiSP, so it can be inspected or loaded later.",
-	"Supply pipeline fields by the path the report prints, e.g. \"blend.enable=1,rtv.format[0]=rgba16f\"; "
-		"any field, so nothing has to stay assumed.",
+	//Parenthesised so the split reads as one string rather than as a missing comma, which is what clang's
+	//-Wstring-concatenation flags inside an array initializer.
+	(
+		"Supply pipeline fields by the path the report prints, e.g. \"blend.enable=1,rtv.format[0]=rgba16f\"; "
+		"any field, so nothing has to stay assumed."
+	),
 	"Replay a stored oiSP (from -pso-output) over the derived pipeline, so a run can be repeated or edited."
 };
 
@@ -150,7 +154,8 @@ const C8 *EOperationFlags_names[EOperationFlags_Count] = {
 	"--fixed",
 	"--aes-stdin",
 	"--keep-registers",
-	"--assume-defaults"
+	"--assume-defaults",
+	"--no-opt"
 };
 
 const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
@@ -182,7 +187,8 @@ const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
 	"Emit a fixed-point value instead of a float format (float convert).",
 	"Read the 32-byte AES key (hex) from one line of stdin instead of a plaintext argument.",
 	"Keep declared but unused resources bound and reflected (stable register layouts across shader variants).",
-	"Compile with assumed pipeline state instead of refusing; the assumed fields print with the disassembly."
+	"Compile with assumed pipeline state instead of refusing; the assumed fields print with the disassembly.",
+	"Compile with -Od, so the optimizer doesn't fold what --debug's line info describes; pair it with --debug."
 };
 
 //Operations
@@ -634,7 +640,7 @@ void Operations_init() {
 				EOperationHasParameter_IncludeDir | EOperationHasParameter_ShaderOutputMode,
 
 			.operationFlags =
-				EOperationFlags_Debug | EOperationFlags_Split |
+				EOperationFlags_Debug | EOperationFlags_NoOpt | EOperationFlags_Split |
 				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
 		};
 
@@ -646,7 +652,7 @@ void Operations_init() {
 			.desc = "High Level Shading Language; Microsoft's shading language for DirectX and Vulkan.",
 
 			.operationFlags =
-				EOperationFlags_Debug | EOperationFlags_Split | EOperationFlags_KeepRegisters |
+				EOperationFlags_Debug | EOperationFlags_NoOpt | EOperationFlags_Split | EOperationFlags_KeepRegisters |
 				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles,
 
 			.requiredParameters =
@@ -680,7 +686,7 @@ void Operations_init() {
 				EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir |
 				EOperationHasParameter_ShaderCompileMode | EOperationHasParameter_ShaderOutputMode,
 			.operationFlags =
-				EOperationFlags_Debug | EOperationFlags_Split | EOperationFlags_KeepRegisters |
+				EOperationFlags_Debug | EOperationFlags_NoOpt | EOperationFlags_Split | EOperationFlags_KeepRegisters |
 				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
 		};
 
@@ -693,7 +699,7 @@ void Operations_init() {
 			.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
 			.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir,
 			.operationFlags =
-				EOperationFlags_Debug | EOperationFlags_KeepRegisters |
+				EOperationFlags_Debug | EOperationFlags_NoOpt | EOperationFlags_KeepRegisters |
 				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
 		};
 
@@ -752,10 +758,19 @@ void Operations_init() {
 		Operation_values[EOperation_ShaderAssemble] = (Operation) {
 			.category = EOperationCategory_Shader,
 			.name = "assemble",
-			.desc = "Assemble SPIR-V text (.spv.txt) into a .spv binary. DXIL assembly isn't supported yet.",
+			.desc = "Assemble SPIR-V text (.spv.txt) into a .spv binary, or DXIL LL text (.dxil.txt) into a .dxil container.",
 			.func = &CLI_shaderAssemble,
 			.isFormatLess = true,
 			.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output
+		};
+
+		Operation_values[EOperation_ShaderValidate] = (Operation) {
+			.category = EOperationCategory_Shader,
+			.name = "validate",
+			.desc = "Validate a standalone .spv or .dxil binary with spirv-val or DXC's validator; fails with its reason.",
+			.func = &CLI_shaderValidate,
+			.isFormatLess = true,
+			.requiredParameters = EOperationHasParameter_Input
 		};
 
 	#endif
@@ -854,9 +869,9 @@ void Operations_init() {
 		.name = "WAV",
 		.desc = "Waveform Audio Format",
 
-		.operationFlags =
-			EOperationFlags_Debug | EOperationFlags_Split |
-			EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles,
+		//No flags: audio convert reads none of them, so offering the shader compiler's here would
+		// advertise switches that do nothing.
+		.operationFlags = EOperationFlags_None,
 
 		.requiredParameters =
 			EOperationHasParameter_Input | EOperationHasParameter_Output,
