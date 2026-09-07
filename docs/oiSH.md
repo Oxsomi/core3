@@ -585,6 +585,15 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 - Combining DXIL and SPIRV underestimates dormant extensions, it could be possible a certain extension isn't present in DXIL or SPIRV, however if it can't be queried by the underlying format then it's impossible to tell. In this case, it will assume the extension the shader was compiled with is leading and so remove it from being dormant.
   - Dormant extensions include all extensions that are supported by the shader mode (DXIL or SPIRV) but that weren't detected. This allows easy merging of dormant extensions by just bitwise ANDing them and getting an underestimated version of dormant extensions.
 
+## JSON view
+
+`SHFile_writeJson` (formats/oiSH/sh_file.h) writes the file as one JSON object mirroring the structs: compiler
+version, source hash, flags, the header view, the highest shader model any binary asked for, entries, binaries with
+their identifiers and registers, includes, and the file's register union. `SHFile_writeJsonMembers` writes the same
+members into an object the caller opened, which is how the web frontend puts the file's name before them. The shape
+is the SHDocument contract at the top of web/js/api.js; the oiSH suite pins the fragments a reader keys on and the
+frontend's recording pins the bytes end to end.
+
 ## Changelog
 
 0.1: Old ocore1 specification. Represented multiple shaders and had too much reflection information that is now irrelevant.

@@ -147,6 +147,8 @@ void Test_SHFileRegisterAddAccelerationStructure(Test *t);
 void Test_SHFileRegisterBufferWriteFlagRejections(Test *t);
 void Test_SHFileRegisterConstantBufferSizeLimit(Test *t);
 
+void Test_SHFileWriteJson(Test *t);          //The JSON view: entries, binaries, registers, and the members form
+
 static inline Bool Test_SHFileCreate(Test *t, SHFile *sh) {
 	return SHFile_create(ESHSettingsFlags_None, OXC3_VERSION, 0xCAFE, t->alloc, sh, &t->err);
 }

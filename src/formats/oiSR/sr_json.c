@@ -18,10 +18,10 @@
 *  This is called dual licensing.
 */
 
-//tools/oxc3_wasm/wasm_oiSR.c
+//formats/oiSR/sr_json.c
 
-#include "tools/oxc3_wasm/wasm_bridge.h"
 #include "formats/oiSR/sr_file.h"
+#include "formats/json/json_writer.h"
 #include "types/container/string.h"
 #include "types/base/string_read_helper.h"
 #include <inttypes.h>
@@ -29,12 +29,12 @@
 //The reflection tiers, in bit order, so a features list reads the same way the CLI prints one.
 //SymbolInfo sits at bit 16 and is named separately rather than being padded into this table.
 
-static const C8 *srFeatureNames[5] = { "Basics", "Functions", "Namespaces", "UserTypes", "Scopes" };
+static const C8 *SRFile_jsonFeatureNames[5] = { "Basics", "Functions", "Namespaces", "UserTypes", "Scopes" };
 
-//The descriptor class a frontend resource kind lands in, which is the grouping the symbol view sorts by.
+//The descriptor class a frontend resource kind lands in, which is the grouping a symbol view sorts by.
 //Frontend reflection has no space or binding, so this is all a Register node can say about where it binds.
 
-static const C8 *WasmJson_srRegisterClass(ESRResourceType type) {
+static const C8 *SRFile_jsonRegisterClass(ESRResourceType type) {
 
 	switch (type) {
 
@@ -59,26 +59,11 @@ static const C8 *WasmJson_srRegisterClass(ESRResourceType type) {
 	}
 }
 
-//A node is from a builtin include if its source file's basename starts with '@' (e.g. @types.hlsli).
-//Same rule SRFile_print collapses on, so the page's tree folds exactly what the CLI folds.
-
-static Bool WasmJson_srIsBuiltin(CharString file) {
-
-	U64 length = CharString_length(file);
-	U64 base = 0;
-
-	for(U64 i = 0; i < length; ++i)
-		if(file.ptr[i] == '/' || file.ptr[i] == '\\')
-			base = i + 1;
-
-	return base < length && file.ptr[base] == '@';
-}
-
 //The first quoted argument of an annotation, e.g. compute out of oxc::stage("compute").
 //The annotation's text is all the format keeps (a name id covering name and arguments both), so a stage is read
 // back out of it rather than being a field of its own.
 
-static CharString WasmJson_srAnnotationArgument(CharString annotation) {
+static CharString SRFile_jsonAnnotationArgument(CharString annotation) {
 
 	U64 length = CharString_length(annotation);
 	U64 start = length;
@@ -100,26 +85,19 @@ static CharString WasmJson_srAnnotationArgument(CharString annotation) {
 //One node's collapsed bit. False when the set was never built, which is the no-symbols case: without a
 //source file per node there is no builtin include to fold in the first place.
 
-static Bool WasmJson_srCollapsed(Buffer collapsed, U64 i) {
+static Bool SRFile_jsonCollapsed(Buffer collapsed, U64 i) {
 	Bool bit = false;
 	return Buffer_getBit(collapsed, i, &bit, NULL) && bit;
 }
 
-Bool WasmJson_srFile(
-	const SRFile *file,
-	CharString name,
-	CharString sourceName,
-	JsonWriter *w,
-	const Allocator *alloc,
-	Error *e_rr
-) {
+Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	Buffer collapsed = Buffer_createNull();
 	CharString annotationText = CharString_createNull();
 
 	if(!file || !w)
-		retError(clean, Error_nullPointer(!file ? 0 : 3, "WasmJson_srFile()::file and w are required"));
+		retError(clean, Error_nullPointer(!file ? 0 : 1, "SRFile_writeJsonMembers()::file and w are required"));
 
 	Bool hasSymbols = (file->flags & ESRSettingsFlags_HasSymbols) != 0;
 
@@ -135,20 +113,14 @@ Bool WasmJson_srFile(
 
 		Bool builtin =
 			i < file->symbols.length && file->symbols.ptr[i].fileNameId != U32_MAX &&
-			WasmJson_srIsBuiltin(file->names.entryStrings.ptr[file->symbols.ptr[i].fileNameId]);
+			SRFile_isBuiltinInclude(file->names.entryStrings.ptr[file->symbols.ptr[i].fileNameId]);
 
 		if(!builtin && node.parent != U32_MAX && node.parent < i)
-			builtin = WasmJson_srCollapsed(collapsed, node.parent);
+			builtin = SRFile_jsonCollapsed(collapsed, node.parent);
 
 		if(builtin)
 			gotoIfError3(clean, Buffer_setBit(collapsed, i, e_rr));
 	}
-
-	gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
-
-	gotoIfError3(clean, JsonWriter_keyStr(w, "name", name, e_rr));
-
-	gotoIfError3(clean, JsonWriter_keyStr(w, "sourceName", sourceName, e_rr));
 
 	gotoIfError3(clean, (
 		JsonWriter_keyObject(w, "compilerVersion", e_rr) &&
@@ -167,16 +139,14 @@ Bool WasmJson_srFile(
 		JsonWriter_keyObject(w, "header", e_rr) &&
 		JsonWriter_keyCstr(w, "version", "1.1", e_rr) &&
 		JsonWriter_keyObject(w, "flags", e_rr) &&
-		JsonWriter_keyBool(w, "hasSymbols", hasSymbols, e_rr)
-	));
-	gotoIfError3(clean, (
+		JsonWriter_keyBool(w, "hasSymbols", hasSymbols, e_rr) &&
 		JsonWriter_endObject(w, e_rr) &&
 		JsonWriter_keyArray(w, "features", e_rr)
 	));
 
-	for(U64 i = 0; i < sizeof(srFeatureNames) / sizeof(srFeatureNames[0]); ++i)
+	for(U64 i = 0; i < sizeof(SRFile_jsonFeatureNames) / sizeof(SRFile_jsonFeatureNames[0]); ++i)
 		if ((file->features >> i) & 1) {
-			gotoIfError3(clean, JsonWriter_cstr(w, srFeatureNames[i], e_rr));
+			gotoIfError3(clean, JsonWriter_cstr(w, SRFile_jsonFeatureNames[i], e_rr));
 		}
 
 	if (file->features & ESRFeature_SymbolInfo) {
@@ -224,7 +194,7 @@ Bool WasmJson_srFile(
 
 		else gotoIfError3(clean, JsonWriter_str(w, file->names.entryStrings.ptr[node.nameId], e_rr));
 
-		//A root has no parent, which the page tests for with a negative id rather than a sentinel it would have
+		//A root has no parent, which a reader tests for with a negative id rather than a sentinel it would have
 		// to know the width of.
 
 		gotoIfError3(clean, JsonWriter_keyI64(w, "parent", node.parent == U32_MAX ? (I64) -1 : (I64) node.parent, e_rr));
@@ -257,9 +227,7 @@ Bool WasmJson_srFile(
 
 			gotoIfError3(clean, (
 				JsonWriter_beginObject(w, e_rr) &&
-				JsonWriter_keyStr(w, "file", file->names.entryStrings.ptr[symbol.fileNameId], e_rr)
-			));
-			gotoIfError3(clean, (
+				JsonWriter_keyStr(w, "file", file->names.entryStrings.ptr[symbol.fileNameId], e_rr) &&
 				JsonWriter_keyU64(w, "line", symbol.line, e_rr) &&
 				JsonWriter_keyU64(w, "col", symbol.columnStart, e_rr) &&
 				JsonWriter_keyU64(
@@ -352,8 +320,9 @@ Bool WasmJson_srFile(
 			}
 
 			else gotoIfError3(clean, JsonWriter_null(w, e_rr));
-			gotoIfError3(clean, JsonWriter_keyCstr(w, "cls", ESRTypeClass_name((ESRTypeClass) type->typeClass), e_rr));
+
 			gotoIfError3(clean, (
+				JsonWriter_keyCstr(w, "cls", ESRTypeClass_name((ESRTypeClass) type->typeClass), e_rr) &&
 				JsonWriter_keyU64(w, "rows", type->rows, e_rr) &&
 				JsonWriter_keyU64(w, "cols", type->cols, e_rr) &&
 				JsonWriter_keyI64(w, "def", type->defNodeId == U32_MAX ? (I64) -1 : (I64) type->defNodeId, e_rr) &&
@@ -362,22 +331,20 @@ Bool WasmJson_srFile(
 			));
 		}
 
-		//Array lengths list per dimension when the pool holds them, otherwise the flattened element count, which
-		// is the same fallback SRFile_print reads. Bounds are rechecked so a truncated file can't over read.
-
 		gotoIfError3(clean, JsonWriter_keyArray(w, "implements", e_rr));
 
-		{
-			for (U64 j = 0; j < file->interfaces.length; ++j) {
+		for (U64 j = 0; j < file->interfaces.length; ++j) {
 
-				if(file->interfaces.ptr[j].nodeId != i)
-					continue;
+			if(file->interfaces.ptr[j].nodeId != i)
+				continue;
 
-				gotoIfError3(clean, JsonWriter_u64(w, file->interfaces.ptr[j].interfaceNodeId, e_rr));
-			}
+			gotoIfError3(clean, JsonWriter_u64(w, file->interfaces.ptr[j].interfaceNodeId, e_rr));
 		}
 
 		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+
+		//Array lengths list per dimension when the pool holds them, otherwise the flattened element count, which
+		// is the same fallback SRFile_print reads. Bounds are rechecked so a truncated file can't over read.
 
 		gotoIfError3(clean, JsonWriter_keyArray(w, "arrays", e_rr));
 
@@ -389,8 +356,7 @@ Bool WasmJson_srFile(
 
 			if (multiDim) {
 				for(U8 k = 0; k < type->arrayDimCount; ++k)
-					gotoIfError3(clean, JsonWriter_u64(w, file->arrayDims.ptr[type->arrayDimStart + k]
-					, e_rr));
+					gotoIfError3(clean, JsonWriter_u64(w, file->arrayDims.ptr[type->arrayDimStart + k], e_rr));
 			}
 
 			else if(type->elements)
@@ -407,7 +373,7 @@ Bool WasmJson_srFile(
 
 		else gotoIfError3(clean, JsonWriter_str(w, file->names.entryStrings.ptr[node.semanticId], e_rr));
 
-		//A parameter's direction, written as HLSL writes it; the return slot is its own direction so the page can
+		//A parameter's direction, written as HLSL writes it; the return slot is its own direction so a reader can
 		// tell it apart from an out parameter.
 
 		gotoIfError3(clean, JsonWriter_key(w, "direction", e_rr));
@@ -438,18 +404,13 @@ Bool WasmJson_srFile(
 			gotoIfError3(clean, JsonWriter_null(w, e_rr));
 		}
 
-		else {
-
-			gotoIfError3(clean, (
-				JsonWriter_beginObject(w, e_rr) &&
-				JsonWriter_keyCstr(w, "info", ESRResourceType_name((ESRResourceType) reg->type), e_rr)
-			));
-			gotoIfError3(clean, (
-				JsonWriter_keyU64(w, "count", reg->bindCount, e_rr) &&
-				JsonWriter_keyCstr(w, "cls", WasmJson_srRegisterClass((ESRResourceType) reg->type), e_rr)
-			));
-			gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
-		}
+		else gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyCstr(w, "info", ESRResourceType_name((ESRResourceType) reg->type), e_rr) &&
+			JsonWriter_keyU64(w, "count", reg->bindCount, e_rr) &&
+			JsonWriter_keyCstr(w, "cls", SRFile_jsonRegisterClass((ESRResourceType) reg->type), e_rr) &&
+			JsonWriter_endObject(w, e_rr)
+		));
 
 		//An enumerator's value with the enum's underlying integer type, the pair the CLI prints as `= 2 (U32)`.
 		//The value is 64 bits wide and a JSON number silently rounds past 2^53, so one beyond that travels as decimal
@@ -510,7 +471,7 @@ Bool WasmJson_srFile(
 				if(!isStage)
 					continue;
 
-				stage = WasmJson_srAnnotationArgument(text);
+				stage = SRFile_jsonAnnotationArgument(text);
 				isLibEntry = annotation.isBuiltin;
 			}
 
@@ -518,12 +479,12 @@ Bool WasmJson_srFile(
 			gotoIfError3(clean, JsonWriter_null(w, e_rr));
 		}
 
-		else {
-
-			gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_keyStr(w, "stage", stage, e_rr)));
-			gotoIfError3(clean, JsonWriter_keyBool(w, "lib", isLibEntry, e_rr));
-			gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
-		}
+		else gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyStr(w, "stage", stage, e_rr) &&
+			JsonWriter_keyBool(w, "lib", isLibEntry, e_rr) &&
+			JsonWriter_endObject(w, e_rr)
+		));
 
 		gotoIfError3(clean, JsonWriter_keyBool(w, "returns", (node.flags & ESRNodeFlag_HasReturn) != 0, e_rr));
 
@@ -531,7 +492,7 @@ Bool WasmJson_srFile(
 		//This is what the summary counts and what a reader folds on, so the same tree can be shown collapsed
 		// the way the CLI prints it or expanded in full.
 
-		gotoIfError3(clean, JsonWriter_keyBool(w, "builtin", WasmJson_srCollapsed(collapsed, i), e_rr));
+		gotoIfError3(clean, JsonWriter_keyBool(w, "builtin", SRFile_jsonCollapsed(collapsed, i), e_rr));
 
 		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
@@ -544,7 +505,7 @@ Bool WasmJson_srFile(
 
 	for (U64 i = 0; i < file->nodes.length && collapsed.ptr; ++i) {
 
-		if(!WasmJson_srCollapsed(collapsed, i) || i >= file->symbols.length || file->symbols.ptr[i].fileNameId == U32_MAX)
+		if(!SRFile_jsonCollapsed(collapsed, i) || i >= file->symbols.length || file->symbols.ptr[i].fileNameId == U32_MAX)
 			continue;
 
 		U32 fileNameId = file->symbols.ptr[i].fileNameId;
@@ -554,7 +515,7 @@ Bool WasmJson_srFile(
 		for (U64 j = 0; j < file->nodes.length; ++j) {
 
 			if(
-				!WasmJson_srCollapsed(collapsed, j) || j >= file->symbols.length ||
+				!SRFile_jsonCollapsed(collapsed, j) || j >= file->symbols.length ||
 				file->symbols.ptr[j].fileNameId != fileNameId
 			)
 				continue;
@@ -570,9 +531,7 @@ Bool WasmJson_srFile(
 
 		gotoIfError3(clean, (
 			JsonWriter_beginObject(w, e_rr) &&
-			JsonWriter_keyStr(w, "file", file->names.entryStrings.ptr[fileNameId], e_rr)
-		));
-		gotoIfError3(clean, (
+			JsonWriter_keyStr(w, "file", file->names.entryStrings.ptr[fileNameId], e_rr) &&
 			JsonWriter_keyU64(w, "count", count, e_rr) &&
 			JsonWriter_endObject(w, e_rr)
 		));
@@ -580,10 +539,15 @@ Bool WasmJson_srFile(
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
-	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
-
 clean:
 	CharString_free(&annotationText, alloc);
 	Buffer_free(&collapsed, alloc);
 	return s_uccess;
+}
+
+Bool SRFile_writeJson(const SRFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr) {
+	return
+		JsonWriter_beginObject(w, e_rr) &&
+		SRFile_writeJsonMembers(file, w, alloc, e_rr) &&
+		JsonWriter_endObject(w, e_rr);
 }

@@ -88,6 +88,7 @@ OXC3_TEST_MAIN(formats_oiSB) {
 	Test_SBFileCombineUnflatten(&t);
 	Test_SBFileCombineFlatSizeMismatch(&t);
 	Test_SBFileHashConsistency(&t);
+	Test_SBFileWriteJson(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

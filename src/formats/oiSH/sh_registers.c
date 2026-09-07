@@ -951,6 +951,54 @@ void SHRegister_printBindings(
 	}
 }
 
+//The class follows the register type the same way the DXIL binding letter does (SHRegister_printBindings), so the
+// two can never disagree about what a register is.
+
+const C8 *SHRegister_className(EGfxRegisterType type) {
+
+	const EGfxRegisterType base = (EGfxRegisterType)(type & EGfxRegisterType_TypeMask);
+
+	if(base == EGfxRegisterType_Sampler || base == EGfxRegisterType_SamplerComparisonState)
+		return "SMP";
+
+	if(base == EGfxRegisterType_ConstantBuffer || base == EGfxRegisterType_PushConstants)
+		return "CBV";
+
+	return type & EGfxRegisterType_IsWrite ? "UAV" : "SRV";
+}
+
+const C8 *SHRegister_baseTypeName(EGfxRegisterType type) {
+
+	const Bool isWrite = (type & EGfxRegisterType_IsWrite) != 0;
+
+	switch (type & EGfxRegisterType_TypeMask) {
+
+		case EGfxRegisterType_Sampler:                  return "SamplerState";
+		case EGfxRegisterType_SamplerComparisonState:   return "SamplerComparisonState";
+		case EGfxRegisterType_ConstantBuffer:           return "ConstantBuffer";
+		case EGfxRegisterType_PushConstants:            return "PushConstants";
+		case EGfxRegisterType_AccelerationStructure:    return "RaytracingAccelerationStructure";
+		case EGfxRegisterType_SubpassInput:             return "SubpassInput";
+		case EGfxRegisterType_ByteAddressBuffer:        return isWrite ? "RWByteAddressBuffer" : "ByteAddressBuffer";
+		case EGfxRegisterType_StructuredBuffer:         return isWrite ? "RWStructuredBuffer" : "StructuredBuffer";
+		case EGfxRegisterType_StorageBuffer:            return isWrite ? "RWStorageBuffer" : "StorageBuffer";
+		case EGfxRegisterType_StorageBufferAtomic:      return isWrite ? "RWStorageBufferAtomic" : "StorageBufferAtomic";
+		case EGfxRegisterType_StructuredBufferAtomic:   return "Append/ConsumeBuffer";
+		default:                                        return NULL;
+	}
+}
+
+const C8 *SHRegister_textureDimension(EGfxRegisterType type) {
+
+	switch (type & EGfxRegisterType_TypeMask) {
+		case EGfxRegisterType_Texture1D:    return "1D";
+		case EGfxRegisterType_Texture3D:    return "3D";
+		case EGfxRegisterType_TextureCube:  return "Cube";
+		case EGfxRegisterType_Texture2DMS:  return "2DMS";
+		default:                            return "2D";
+	}
+}
+
 void SHRegister_print(const SHRegister *reg, U64 indenting, Bool isVerbose, const Allocator *alloc) {
 
 	if (!reg)
@@ -965,68 +1013,31 @@ void SHRegister_print(const SHRegister *reg, U64 indenting, Bool isVerbose, cons
 	for(U8 i = 0; i < indenting; ++i) indent[i] = '\t';
 	indent[indenting] = '\0';
 
-	switch (reg->registerType & EGfxRegisterType_TypeMask) {
+	const EGfxRegisterType type = (EGfxRegisterType) reg->registerType;
+	const C8 *base = SHRegister_baseTypeName(type);
 
-		case EGfxRegisterType_SubpassInput:
-			Log_debugLn(alloc, "%sinput_attachment_index = %"PRIu8, indent, reg->inputAttachmentId);
-			break;
+	if((type & EGfxRegisterType_TypeMask) == EGfxRegisterType_SubpassInput)
+		Log_debugLn(alloc, "%sinput_attachment_index = %"PRIu8, indent, reg->inputAttachmentId);
 
-		case EGfxRegisterType_Sampler:                   Log_debugLn(alloc, "%sSamplerState", indent);                    break;
-		case EGfxRegisterType_SamplerComparisonState:    Log_debugLn(alloc, "%sSamplerComparisonState", indent);          break;
-		case EGfxRegisterType_ConstantBuffer:            Log_debugLn(alloc, "%sConstantBuffer", indent);                  break;
-		case EGfxRegisterType_PushConstants:             Log_debugLn(alloc, "%sPushConstants", indent);                   break;
-		case EGfxRegisterType_AccelerationStructure:     Log_debugLn(alloc, "%sRaytracingAccelerationStructure", indent); break;
+	else if(base)
+		Log_debugLn(alloc, "%s%s", indent, base);
 
-		case EGfxRegisterType_ByteAddressBuffer:
-			Log_debugLn(alloc, "%s%sByteAddressBuffer", indent, reg->registerType & EGfxRegisterType_IsWrite ? "RW" : "");
-			break;
+	else {
 
-		case EGfxRegisterType_StructuredBuffer:
-			Log_debugLn(alloc, "%s%sStructuredBuffer", indent, reg->registerType & EGfxRegisterType_IsWrite ? "RW" : "");
-			break;
+		Log_debugLn(
+			alloc, "%s%s%s%s%s",
+			indent,
+			type & EGfxRegisterType_IsWrite ? "RW" : "",
+			type & EGfxRegisterType_IsCombinedSampler ? "sampler" : "Texture",
+			SHRegister_textureDimension(type),
+			type & EGfxRegisterType_IsArray ? "Array" : ""
+		);
 
-		case EGfxRegisterType_StorageBuffer:
-			Log_debugLn(alloc, "%s%sStorageBuffer", indent, reg->registerType & EGfxRegisterType_IsWrite ? "RW" : "");
-			break;
+		if(reg->texture.formatId)
+			Log_debugLn(alloc, "%s%s", indent, ETextureFormatId_name[reg->texture.formatId]);
 
-		case EGfxRegisterType_StorageBufferAtomic:
-			Log_debugLn(alloc, "%s%sStorageBufferAtomic", indent, reg->registerType & EGfxRegisterType_IsWrite ? "RW" : "");
-			break;
-
-		case EGfxRegisterType_StructuredBufferAtomic:
-			Log_debugLn(alloc, "%sAppend/ConsumeBuffer", indent);
-			break;
-
-		default: {
-
-			const C8 *dim = "2D";
-
-			switch(reg->registerType & EGfxRegisterType_TypeMask) {
-
-				case EGfxRegisterType_Texture2D:                           break;
-				case EGfxRegisterType_Texture1D:        dim = "1D";        break;
-				case EGfxRegisterType_Texture3D:        dim = "3D";        break;
-				case EGfxRegisterType_TextureCube:      dim = "Cube";      break;
-				case EGfxRegisterType_Texture2DMS:      dim = "2DMS";      break;
-			}
-
-			Log_debugLn(
-				alloc, "%s%s%s%s%s",
-				indent,
-				reg->registerType & EGfxRegisterType_IsWrite ? "RW" : "",
-				reg->registerType & EGfxRegisterType_IsCombinedSampler ? "sampler" : "Texture",
-				dim,
-				reg->registerType & EGfxRegisterType_IsArray ? "Array" : ""
-			);
-
-			if(reg->texture.formatId)
-				Log_debugLn(alloc, "%s%s", indent, ETextureFormatId_name[reg->texture.formatId]);
-
-			if(reg->texture.primitive != EGfxTexturePrimitive_Count)
-				Log_debugLn(alloc, "%s%s", indent, EGfxTexturePrimitive_name[reg->texture.primitive]);
-
-			break;
-		}
+		if(reg->texture.primitive != EGfxTexturePrimitive_Count)
+			Log_debugLn(alloc, "%s%s", indent, EGfxTexturePrimitive_name[reg->texture.primitive]);
 	}
 
 	if(isVerbose)

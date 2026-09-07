@@ -559,9 +559,7 @@ clean:
 	return s_uccess;
 }
 
-//A node is from a builtin include if its source file's basename starts with '@' (e.g. @types.hlsli).
-
-static Bool srFileIsBuiltin(CharString file) {
+Bool SRFile_isBuiltinInclude(CharString file) {
 
 	U64 len = CharString_length(file);
 	U64 base = 0;
@@ -639,7 +637,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 
 			if(
 				i < srFile->symbols.length && srFile->symbols.ptr[i].fileNameId != U32_MAX &&
-				srFileIsBuiltin(srFile->names.entryStrings.ptr[srFile->symbols.ptr[i].fileNameId])
+				SRFile_isBuiltinInclude(srFile->names.entryStrings.ptr[srFile->symbols.ptr[i].fileNameId])
 			) {
 				builtin = true;
 				fileId = srFile->symbols.ptr[i].fileNameId;

@@ -82,3 +82,5 @@ void Test_SBFileCombineTypeMismatch(Test *t);
 void Test_SBFileCombineUnflatten(Test *t);
 void Test_SBFileCombineFlatSizeMismatch(Test *t);
 void Test_SBFileHashConsistency(Test *t);
+
+void Test_SBFileWriteJson(Test *t);          //The JSON view, exact bytes

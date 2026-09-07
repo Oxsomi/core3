@@ -154,6 +154,14 @@ This hash can be used for quick comparison and is only available at runtime.
 
 The biggest quirk between DXIL and SPIRV is that DXIL doesn't have anything beyond flattened arrays, though SPIRV does. To support this, oiSB will flatten arrays too when DXIL is used and unflatten if SPIRV is used. If DXIL and SPIRV oiSB files are merged through SBFile_combine it is safe to merge one way (so from flattened to unflattened). For example: `[16]` could be recast to `[4][4]` or `[8][2]`. But once it has been unflattened, it can never be flattened again and can't merge with incompatible multi dimensional arrays (or ones with a mismatching flattened count). So merging DXIL and SPIRV will always result in the array info that SPIRV has. Other than that, it forces SPIRV to use DX-like alignment rules for structured/storage buffers and constant buffers.
 
+## JSON view
+
+`SBFile_writeJson` (formats/oiSB/sb_file.h) writes a layout as one JSON object through the formats/json writer: the
+buffer's size, the padding the layout spent on alignment, whether it is tightly packed, and the variable tree with
+each variable's offset, type, stride, array dimensions, which backends use it and its children. It is the `buffer`
+object of an oiSH register in the SHDocument contract at the top of web/js/api.js, and the oiSB suite pins its
+bytes.
+
 ## Changelog
 
 0.1: Old ocore1 specification. A lot was still relevant, but some useful functionality is missing (such as marking data as 'unused', which can be useful for optimization).

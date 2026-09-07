@@ -559,6 +559,14 @@ Hashes are generated like following:
 
 This hash is refreshed by `SPFile_finalize` (and on read). It can be used for quick comparison, for example to tell whether two stored pipelines describe the same state, and is only available at runtime.
 
+## JSON view
+
+`SPFile_writeJson` (formats/oiSP/sp_file.h) writes the file as one JSON object: the header counts as a write would
+store them, every pipeline with its stages and every field reflection could not prove, and every embedded oiPL
+layout. `SPFile_writeJsonLayout` writes one layout on its own; it lives here rather than in oiPL because oiPL has
+no print or view of its own and the stage names its rows spell come from oiSH. `SPFile_writeJsonMembers` splits
+the way `SHFile`'s does. The shape is the SPDocument contract at the top of web/js/api.js.
+
 ## Changelog
 
 1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Pipeline records with their common base (name, kind, stage range, specialization range, kind specific state index, layout index), the shared stage pool naming each stage's oiSH + entrypoint + source hash, the specialization pool recording every field a shader can't prove along with whether it was derived, supplied or assumed, and the kind specific graphics and ray tracing state pools. The graphics state covers `PipelineGraphicsInfo` completely, so a pipeline that supplies every reported field is whole rather than partial; the state structs and enums are declared here and aliased by the graphics layer. Blend state and the vertex layout exist as a `Stored` and a `Runtime` form, so a graphics state costs 64 bytes on disk against the 204 a pipeline binds. A derived ray tracing pipeline assumes `rt.flags = EPipelineRaytracingFlags_Default` (skip AABBs), the same default the graphics layer creates with. Carries each pipeline's descriptor layout as an embedded [oiPL](oiPL.md) subfile (`SPPipelineBase.layoutIndex` into `layouts[]`), whose own hash folds into the file hash.

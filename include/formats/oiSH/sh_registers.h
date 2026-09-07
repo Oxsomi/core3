@@ -184,6 +184,14 @@ Bool ListSHRegisterRuntime_addRegister(
 	Error *e_rr
 );
 
+//How a register spells itself in text: the descriptor class it lands in (CBV, SRV, UAV or SMP) and the HLSL type
+// name its kind and access add up to. A texture's name composes from its flags (RW, sampler or Texture, the
+// dimension, Array), so baseTypeName is NULL for one and textureDimension gives the middle part.
+
+const C8 *SHRegister_className(EGfxRegisterType type);
+const C8 *SHRegister_baseTypeName(EGfxRegisterType type);
+const C8 *SHRegister_textureDimension(EGfxRegisterType type);
+
 void SHRegister_print(const SHRegister *reg, U64 indenting, Bool isVerbose, const Allocator *alloc);
 void SHRegisterRuntime_print(const SHRegisterRuntime *reg, U64 indenting, Bool isVerbose, const Allocator *alloc);
 void ListSHRegisterRuntime_print(const ListSHRegisterRuntime *reg, U64 indenting, Bool isVerbose, const Allocator *alloc);

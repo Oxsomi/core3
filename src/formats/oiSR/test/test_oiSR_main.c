@@ -32,7 +32,7 @@
 //Build a small but representative reflection tree:
 //  Namespace "MyNS" { Struct "Light" { Variable "pos"; Variable "color"; } }
 //  Function "main" [shader] ( Parameter "uv" : TEXCOORD0 )
-static Bool buildSample(Test *t, SRFile *sr) {
+Bool Test_SRBuildSample(Test *t, SRFile *sr) {
 
 	if(!SRFile_create(
 		ESRSettingsFlags_HasSymbols, ESRFeature_All | ESRFeature_SymbolInfo, t->alloc, sr, &t->err
@@ -246,7 +246,7 @@ static void Test_SRFileRoundTrip(Test *t) {
 	SRFile sr = { 0 }, result = { 0 };
 	StreamRef *archiveSr = NULL;
 
-	if(!buildSample(t, &sr)) {
+	if(!Test_SRBuildSample(t, &sr)) {
 		Test_assert(t, "build sample", false);
 		goto clean;
 	}
@@ -273,7 +273,7 @@ static void Test_SRFileSubFileRoundTrip(Test *t) {
 	SRFile sr = { 0 }, result = { 0 };
 	StreamRef *stream = NULL;
 
-	if(!buildSample(t, &sr)) {
+	if(!Test_SRBuildSample(t, &sr)) {
 		Test_assert(t, "build sample", false);
 		goto clean;
 	}
@@ -309,7 +309,7 @@ static void Test_SRFileCreateCopy(Test *t) {
 
 	SRFile sr = { 0 }, copy = { 0 };
 
-	if(!buildSample(t, &sr)) {
+	if(!Test_SRBuildSample(t, &sr)) {
 		Test_assert(t, "build sample", false);
 		goto clean;
 	}
@@ -332,7 +332,7 @@ static void Test_SRFileSizeConsistency(Test *t) {
 	SRFile sr = { 0 };
 	MemoryStreamRef *ms = NULL;
 
-	if(!buildSample(t, &sr)) {
+	if(!Test_SRBuildSample(t, &sr)) {
 		Test_assert(t, "build sample", false);
 		goto clean;
 	}
@@ -402,6 +402,7 @@ OXC3_TEST_MAIN(formats_oiSR) {
 	Test_SRFileStructuralRoundTrips(&t);
 	Test_SRFileHashAndName(&t);
 	Test_SRFileCreateAndWriteGuards(&t);
+	Test_SRFileWriteJson(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

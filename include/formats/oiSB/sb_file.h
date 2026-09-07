@@ -31,6 +31,7 @@
 
 typedef struct RefPtr RefPtr;
 typedef RefPtr StreamRef;
+typedef struct JsonWriter JsonWriter;
 
 typedef enum ESBSettingsFlags {
 	ESBSettingsFlags_None                = 0,
@@ -112,6 +113,11 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 //Logs stringified SBFile directly
 void SBFile_print(const SBFile *sbFile, U64 indenting, U16 parent, Bool isRecursive, const Allocator *alloc);
+
+//Writes the layout as one JSON object: size, padding (what the layout spent on alignment beyond its root
+// variables), packed, and vars, the variable tree with each variable's offset, type, stride, array dimensions,
+// which backends use it and its children. The shape is the buffer object web/js/api.js documents.
+Bool SBFile_writeJson(const SBFile *sbFile, JsonWriter *w, Error *e_rr);
 
 //Doesn't work on layouts that mismatch (only order of structs/variables or some flags may vary)
 Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SBFile *combined, Error *e_rr);

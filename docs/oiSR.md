@@ -263,6 +263,15 @@ A struct that contains itself, or derives from itself, only exists in a source t
 
 `ESRNodeType`, `ESRInterpolation` and `ESRFeature` mirror the fork-custom `IHLSLReflectionData` model (`D3D12_HLSL_NODE_TYPE`, `D3D_INTERPOLATION_MODE`, `D3D12_HLSL_REFLECTION_FEATURE`) bit-for-bit / order-for-order, so the DXC walk (`Compiler_reflect`) is a validated cast. The root-parent sentinel `0xFFFF` and "no fwd/back declare" `UINT_MAX` from that API are both normalized to the oiSR `U32_MAX`. A different producer (e.g. Slang) maps its own declaration tree + source locations onto the same structs; consumers only ever see SRFile.
 
+## JSON view
+
+`SRFile_writeJson` (formats/oiSR/sr_file.h) writes the file as one JSON object: the header view with its features
+and counts, and every node with its kind, name, parent and children, source span, annotations in the bracket form
+they were written in, resolved type and array shape, semantic, direction, register, enumerator value, entry stage,
+and whether it comes from a builtin include, followed by the per include summary those nodes add up to. Builtin
+includes are folded on the same rule `SRFile_print` uses, `SRFile_isBuiltinInclude`. `SRFile_writeJsonMembers`
+splits the way `SHFile`'s does. The shape is the SRDocument contract at the top of web/js/api.js.
+
 ## Changelog
 
 1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Carries the node tree (kinds, parent/child topology, names, semantics, forward-declaration links, annotations), the optional per-node source-location tier, and the detail tiers: per-Register frontend bind info, per-EnumValue enumerator values, a `HasReturn` flag on Function nodes, per-Parameter direction (`ParamReturn`/`ParamIn`/`ParamOut`, `in`+`out` = `inout`), and the per-node type tier (`SRType`, `header.typeCount`) giving each value node a serialized type (underlying name + display/alias name + class + rows/cols + array elements; a tooltip shows the alias, e.g. `Variable pos (myvec)`, with verbose adding `aka float3`). Types are resolved for `Variable`/`Typedef`/`Struct`/`Union`/`StaticVariable`/`GroupsharedVariable` nodes (whose `localId` indexes the frontend type table) and for `Parameter` nodes including the return slot (typed from the reflector's parameter type record, falling back to the function-parameter reflection with builtin scalar/vector/matrix names reconstructed from its shape). Each `SRType` also carries the type graph: `defNodeId` links a value to the Struct/Union node defining its type (go-to-definition; members are child nodes so their types + go-to-def come for free), `baseNodeId` links a struct to its single base class, and the separate `SRInterface` table (`header.interfaceCount`) records each interface a struct implements. Base class + interfaces are recorded on the type DEFINITION only (a variable reaches them via `defNodeId`). Multi-dimensional value/resource arrays list their per-dim lengths in the shared `arrayDims` pool (`header.arrayDimCount`) referenced by `SRType`/`SRRegister`. Deferred: constant-buffer byte layouts (backend-specific packing -> oiSH/oiSB).

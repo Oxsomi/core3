@@ -23,6 +23,12 @@
 #pragma once
 #include "types/test/test.h"
 
+typedef struct SRFile SRFile;
+
+//The sample tree the suites share:
+// Namespace MyNS { Struct Light { pos; color; } } and Function main [shader] (Parameter uv)
+Bool Test_SRBuildSample(Test *t, SRFile *sr);
+
 //test_oiSR_validation.c: read-side rejection paths and structural round-trips beyond the happy path.
 
 void Test_SRReadHeaderTamper(Test *t);              //magic/version/unsupported flags/unknown features/feature-flag mismatch
@@ -33,3 +39,4 @@ void Test_SRReadStreamShape(Test *t);               //truncated stream, trailing
 void Test_SRFileStructuralRoundTrips(Test *t);      //empty, anonymous node, 1-node, large-N, interpolation + fwd field
 void Test_SRFileHashAndName(Test *t);               //hash determinism + content sensitivity, ESRNodeType_name coverage
 void Test_SRFileCreateAndWriteGuards(Test *t);      //create flag/feature/memleak guards, write/finalize symbol-parallel guards
+void Test_SRFileWriteJson(Test *t);                 //The JSON view of the sample tree, and the members form

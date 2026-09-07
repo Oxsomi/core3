@@ -28,6 +28,8 @@
 #include "types/container/list.h"
 #include "types/container/list_basic_types.h"
 
+typedef struct JsonWriter JsonWriter;
+
 #ifdef __cplusplus
 	extern "C" {
 #endif
@@ -494,6 +496,13 @@ Bool SPFile_validate(
 Bool SPFile_print(
 	const SPFile *spFile, U32 pipelineId, const Allocator *alloc, CharString *result, Error *e_rr
 );
+
+//The JSON view of the file, the SPDocument contract web/js/api.js documents; writeJson and writeJsonMembers split
+// the way SHFile's do. A layout writes as one object of its own here rather than in oiPL, which has no print or
+// view of its own, since the stage names its rows spell come from oiSH.
+Bool SPFile_writeJson(const SPFile *file, JsonWriter *w, Error *e_rr);
+Bool SPFile_writeJsonMembers(const SPFile *file, JsonWriter *w, Error *e_rr);
+Bool SPFile_writeJsonLayout(const PLFile *layout, JsonWriter *w, Error *e_rr);
 
 //Recompute the content hash; call once the pipelines are finalized.
 

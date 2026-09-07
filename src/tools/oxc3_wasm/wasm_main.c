@@ -29,6 +29,7 @@
 // runs through the ordinary File_read path against the working directory and nothing here has to bridge it.
 
 #include "tools/oxc3_wasm/wasm_bridge.h"
+#include "formats/json/json_writer.h"
 #include "shader_compiler/compiler.h"
 #include "shader_compiler/spirv_isa.h"
 #include "platforms/file.h"
@@ -306,6 +307,40 @@ clean:
 //One compile is queued per requested backend under a single output name, which is what makes the results
 // combine into one oiSH the way the CLI does without --split.
 
+//A document as the page consumes it: the name it knows the file by first, since a file stores none of its own,
+// then the file's own members. The three formats share the shape.
+
+static Bool Wasm_shDocument(
+	const SHFile *file, CharString name, CharString sourceName, JsonWriter *w, const Allocator *alloc, Error *e_rr
+) {
+	return
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyStr(w, "name", name, e_rr) &&
+		JsonWriter_keyStr(w, "sourceName", sourceName, e_rr) &&
+		SHFile_writeJsonMembers(file, w, alloc, e_rr) &&
+		JsonWriter_endObject(w, e_rr);
+}
+
+static Bool Wasm_srDocument(
+	const SRFile *file, CharString name, CharString sourceName, JsonWriter *w, const Allocator *alloc, Error *e_rr
+) {
+	return
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyStr(w, "name", name, e_rr) &&
+		JsonWriter_keyStr(w, "sourceName", sourceName, e_rr) &&
+		SRFile_writeJsonMembers(file, w, alloc, e_rr) &&
+		JsonWriter_endObject(w, e_rr);
+}
+
+static Bool Wasm_spDocument(const SPFile *file, CharString name, CharString sourceName, JsonWriter *w, Error *e_rr) {
+	return
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyStr(w, "name", name, e_rr) &&
+		JsonWriter_keyStr(w, "sourceName", sourceName, e_rr) &&
+		SPFile_writeJsonMembers(file, w, e_rr) &&
+		JsonWriter_endObject(w, e_rr);
+}
+
 EMSCRIPTEN_KEEPALIVE void *oxc3_compileShaders(const C8 *name, const C8 *source, U32 targetMask, U32 flags) {
 
 	const Allocator *alloc = Wasm_allocator();
@@ -408,7 +443,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_compileShaders(const C8 *name, const C8 *source,
 		gotoIfError3(clean, Wasm_writeSH(&file, &blob, alloc, e_rr));
 	}
 
-	gotoIfError3(clean, WasmJson_shFile(&file, nameStr, nameStr, w, alloc, e_rr));
+	gotoIfError3(clean, Wasm_shDocument(&file, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -448,7 +483,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_shRead(const U8 *ptr, U32 length, const C8 *name
 	CharString nameStr = Wasm_string(name);
 
 	gotoIfError3(clean, Wasm_readSH(Wasm_input(ptr, length), &file, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_shFile(&file, nameStr, nameStr, w, alloc, e_rr));
+	gotoIfError3(clean, Wasm_shDocument(&file, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -486,7 +521,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_shCombine(
 	gotoIfError3(clean, Wasm_readSH(Wasm_input(bPtr, bLength), &b, alloc, e_rr));
 	gotoIfError3(clean, SHFile_combine(&a, &b, alloc, &combined, e_rr));
 	gotoIfError3(clean, Wasm_writeSH(&combined, &blob, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_shFile(&combined, nameStr, nameStr, w, alloc, e_rr));
+	gotoIfError3(clean, Wasm_shDocument(&combined, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -583,7 +618,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_fileHeader(const U8 *ptr, U32 length) {
 			JsonWriter_keyCstr(w, "format", "oiSR", e_rr) &&
 			JsonWriter_key(w, "document", e_rr)
 		));
-		gotoIfError3(clean, WasmJson_srFile(&srFile, CharString_createNull(), CharString_createNull(), w, alloc, e_rr));
+		gotoIfError3(clean, Wasm_srDocument(&srFile, CharString_createNull(), CharString_createNull(), w, alloc, e_rr));
 		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
 
@@ -594,7 +629,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_fileHeader(const U8 *ptr, U32 length) {
 			JsonWriter_keyCstr(w, "format", "oiSP", e_rr) &&
 			JsonWriter_key(w, "document", e_rr)
 		));
-		gotoIfError3(clean, WasmJson_spFile(&spFile, CharString_createNull(), CharString_createNull(), w, alloc, e_rr));
+		gotoIfError3(clean, Wasm_spDocument(&spFile, CharString_createNull(), CharString_createNull(), w, e_rr));
 		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
 
@@ -605,7 +640,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_fileHeader(const U8 *ptr, U32 length) {
 			JsonWriter_keyCstr(w, "format", "oiSH", e_rr) &&
 			JsonWriter_key(w, "document", e_rr)
 		));
-		gotoIfError3(clean, WasmJson_shFile(&shFile, CharString_createNull(), CharString_createNull(), w, alloc, e_rr));
+		gotoIfError3(clean, Wasm_shDocument(&shFile, CharString_createNull(), CharString_createNull(), w, alloc, e_rr));
 		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
 
@@ -819,7 +854,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_reflectSymbols(
 
 	gotoIfError3(clean, Compiler_reflect(&wasmCompiler, &settings, alloc, &reflection, e_rr));
 	gotoIfError3(clean, Wasm_writeSR(&reflection, &blob, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_srFile(&reflection, nameStr, nameStr, w, alloc, e_rr));
+	gotoIfError3(clean, Wasm_srDocument(&reflection, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -849,7 +884,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_srRead(const U8 *ptr, U32 length, const C8 *name
 	CharString nameStr = Wasm_string(name);
 
 	gotoIfError3(clean, Wasm_readSR(Wasm_input(ptr, length), &file, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_srFile(&file, nameStr, nameStr, w, alloc, e_rr));
+	gotoIfError3(clean, Wasm_srDocument(&file, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -1091,7 +1126,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spDerive(const U8 *ptr, U32 length, const C8 *sh
 	));
 
 	gotoIfError3(clean, Wasm_writeSP(&spFile, &blob, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_spFile(&spFile, shaderNameStr, shaderNameStr, w, alloc, e_rr));
+	gotoIfError3(clean, Wasm_spDocument(&spFile, shaderNameStr, shaderNameStr, w, e_rr));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -1139,7 +1174,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spSupply(
 	gotoIfError3(clean, Wasm_readSP(Wasm_input(ptr, length), &file, alloc, e_rr));
 	gotoIfError3(clean, SPFile_supply(&file, pipelineId, field, index, value, e_rr));
 	gotoIfError3(clean, Wasm_writeSP(&file, &blob, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_spFile(&file, nameStr, nameStr, w, alloc, e_rr));
+	gotoIfError3(clean, Wasm_spDocument(&file, nameStr, nameStr, w, e_rr));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -1202,7 +1237,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spRead(const U8 *ptr, U32 length, const C8 *name
 	CharString nameStr = Wasm_string(name);
 
 	gotoIfError3(clean, Wasm_readSP(Wasm_input(ptr, length), &file, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_spFile(&file, nameStr, nameStr, w, alloc, e_rr));
+	gotoIfError3(clean, Wasm_spDocument(&file, nameStr, nameStr, w, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:

@@ -26,6 +26,8 @@
 #include "types/container/string.h"
 #include "types/base/type_id.h"
 
+typedef struct JsonWriter JsonWriter;
+
 #ifdef __cplusplus
 	extern "C" {
 #endif
@@ -154,6 +156,12 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 Bool SHFile_split(const SHFile *a, EGfxBinaryType type, const Allocator *alloc, SHFile *split, Error *e_rr);
 
 void SHFile_print(const SHFile *a, Bool isVerbose, const Allocator *alloc);
+
+//The JSON view of the file, the SHDocument contract web/js/api.js documents, mirroring the structs so it is a walk
+// rather than a translation. writeJson writes the whole object; writeJsonMembers writes its members into an object
+// the caller opened, so an embedder can put its own keys beside them. oiSR and oiSP split the same way.
+Bool SHFile_writeJson(const SHFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr);
+Bool SHFile_writeJsonMembers(const SHFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr);
 
 //Runtime check: true only if every binary carries compiled code for at least one backend.
 //A reflection-only oiSH (e.g. produced by a reflect pass) returns false; creating a pipeline from it is invalid.

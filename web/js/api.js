@@ -7,7 +7,8 @@
  * can be honest about it rather than the reader having to guess.
  *
  * ---------------------------------------------------------------------------------------
- * SHDocument: the JSON contract the UI consumes, mirroring formats/oiSH (core3):
+ * SHDocument: the JSON contract the UI consumes, written by SHFile_writeJson (formats/oiSH, core3) with the
+ * module adding name and sourceName in front:
  * {
  *   name, sourceName,
  *   compilerVersion: {major, minor, patch},              // SHFile::compilerVersion
@@ -41,7 +42,7 @@
  *   bytes: Uint8Array                                    // the oiSH itself, present on every real document
  * }
  *
- * SRDocument: formats/oiSR, the frontend symbol AST (`shader reflect-symbols`):
+ * SRDocument: SRFile_writeJson (formats/oiSR), the frontend symbol AST (`shader reflect-symbols`):
  * {
  *   name, sourceName, compilerVersion, hash /*16 hex digits: 64 bits don't survive a JSON number* /,
  *   header: {version:'1.1', flags:{hasSymbols}, features:['Basics',..,'SymbolInfo'],   // SRHeader + ESRFeature
@@ -63,7 +64,7 @@
  *   bytes: Uint8Array
  * }
  *
- * SPDocument: formats/oiSP, a pipeline plus where each field's value came from (`-pso-output`):
+ * SPDocument: SPFile_writeJson (formats/oiSP), a pipeline plus where each field's value came from (`-pso-output`):
  * {
  *   name, sourceName,
  *   header: {version:'1.1', counts:{pipelines, stages, specializations, graphicsStates, raytracingStates,

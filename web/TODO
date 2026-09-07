@@ -49,19 +49,19 @@ Compiler and CLI, as the page uses them
 - Reflect a bare .spv / .dxil has no CLI verb yet, though the page does it. The web CLI map says so.
 - Parse-only permutation listing, so the page's "IntelliSense follows" picker can fill before any
   compile. Compiler_parse already yields the SHEntryRuntime this needs.
-- Descriptor layout overrides in the pipeline editor. The format exists now (oiPL, embedded in oiSP)
-  and the page shows the derived layout read only; what is missing is editing a row and supplying one.
+- Descriptor layout overrides in the pipeline editor: the page shows the derived oiPL read only, and
+  editing a row and supplying one is missing.
 - The page derives layouts with no excluded registers, so the runtime's own registers (the bindless
   arrays, the per frame globals) show up as rows the device would own. The CLI's exclusion list should
   reach the module's derive call.
-- A shader that indexes samplers dynamically now needs [[oxc::extension("DynamicSamplers")]], since the
-  bindless sampler array became opt in. A visitor pasting an older shader sees "undeclared identifier
-  samplerUniform"; the diagnostic could say why.
+- A visitor pasting an older shader that indexes samplers dynamically sees "undeclared identifier
+  samplerUniform", because the bindless sampler array is opt in through
+  [[oxc::extension("DynamicSamplers")]]; the diagnostic could say why.
 - build_web.py --skip_host_package fails with conan's own "Unable to find oxc3/<version>" whenever the
   version moved and the cached host package is older; a hint naming --host_package_only would save a
   puzzled minute.
-- docs/roadmap.md on main and the roadmap section of STATUS.md now say overlapping things; one should
-  absorb the other, and this file should point at whichever survives.
+- docs/roadmap.md and the roadmap section of STATUS.md overlap; one should absorb the other, and this
+  file should point at whichever survives.
 - SBFile_combine mismatch errors should name the buffer and both sizes.
 - coop_vec compiles to different DXIL from run to run. The same source, compiled repeatedly through the
   CLI, yields several distinct oiSH: the container hash moves and so do scattered bytes inside the DXIL
@@ -78,13 +78,9 @@ Compiler and CLI, as the page uses them
 JSON serialization belongs in the formats
 -----------------------------------------
 
-OxC3_wasm should probably be temporary. It currently owns the JSON writing for oiSH, oiSR and oiSP,
-and that shape belongs to each format instead, so the output can be diffed rather than only viewed.
+Each format writes its own JSON view through OxC3_formats_json (formats/json/json_writer.h) and
+src/tools/oxc3_wasm only frames it. What is left is reaching those views from the CLI and widening them.
 
-- The writer is its own format library, OxC3_formats_json (formats/json/json_writer.h, with key-and-value
-  helpers), and the wasm serializers write through it with their output byte-identical. Next, move the
-  per-format writers out of src/tools/oxc3_wasm into the formats. oiSB's is already a different format's
-  job and should live with oiSB rather than beside the others.
 - `file data` could expose it under `--json`. That needs a pretty printer to be worth reading: oiSP's
   specializations come out as bare values today, which are neither readable nor editable.
 - Under `--verbose`, DXIL and SPIR-V could carry a disassembly. In the long run that could replace the
@@ -92,25 +88,22 @@ and that shape belongs to each format instead, so the output can be diffed rathe
 - It might make sense to replace the normal print system with this, and to do the same for the other
   oi formats, oiDL and oiCA among them. Each one's shape is straightforward enough on its own.
 - A deserializer is needed at some point too, not just a writer.
-- For the writer's shape, the one added for IHLSLReflection in the DXC fork was simple and is worth a
-  look before designing a new one.
 
 
-Reflection and the wasm serializers
------------------------------------
+Reflection and the JSON views
+-----------------------------
 
 - Nodes should know their children when the AST is built. Emitting a node's child list currently scans
   every node looking for one whose parent is this node, which is quadratic in the node count and is by
   far the heaviest part of writing an oiSR document.
-- Builtin includes are always collapsed in the oiSR output. Whether to fold them should be an option,
-  which means a switch on the page and a parameter on the writer rather than a fixed rule.
+- The page always folds builtin includes in the symbol tree. Expanding them should be a switch; the
+  document already carries every node with its builtin flag, so this is page work only.
 - The JSON strings should reserve up front, so a document does not reallocate repeatedly while the
   first fields are written.
-- The mock tier takes every compiler fact from the recording of the module's vocabularies (stages,
-  profiles, backend masks, model floors, version, enum value names). What it still invents is its own:
-  the regexes that guess which extensions a source uses, the SPIR-V capability names it prints per
-  extension, the DXC argument line the Command tab reconstructs, and the wave-op model bumps. Each is
-  a stand-in for something only the module can answer; the Command tab's is listed as not wired.
+- The mock tier still invents four things: the regexes that guess which extensions a source uses, the
+  SPIR-V capability names it prints per extension, the DXC argument line the Command tab reconstructs,
+  and the wave-op model bumps. Each is a stand-in for something only the module can answer; the
+  Command tab's is listed as not wired.
 - Texture and StructuredBuffer inner type names: IHLSLReflection appears to give us the inner type,
   and hover does not show it.
 
@@ -118,8 +111,8 @@ Reflection and the wasm serializers
 Maintenance
 -----------
 
-- Split src/tools/oxc3_wasm/wasm_main.c. It holds every export in one file; the per-format serializers
-  already moved out, and the exports should follow the same split.
+- Split src/tools/oxc3_wasm/wasm_main.c into one file per export family; it holds every export in one
+  file.
 - Cap the size of an oiCA the page will accept, so a shared archive cannot flood the receiver's memory
   just because someone packed a large one. The number needs choosing; the check itself is a line.
 

@@ -421,12 +421,23 @@ Bool SRFile_write(
 
 Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Allocator *alloc, SRFile *srFile, Error *e_rr);
 
+typedef struct JsonWriter JsonWriter;
+
 //Logs a stringified SRFile tree directly.
 //isVerbose dumps every field (ids, localId, parent/child, flags, full source spans, and the raw register/enum-value
 // records) so a serialized oiSR can be reviewed exactly.
 //collapseBuiltins folds nodes from builtin includes (@types.hlsli etc.) and their descendants into a per-file
 // summary, so a shader's own symbols aren't buried under the couple hundred builtin symbols the includes pull in.
 void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool collapseBuiltins, const Allocator *alloc);
+
+//A node is from a builtin include if its source file's basename starts with '@' (e.g. @types.hlsli); the print and
+// the JSON view fold on this one rule.
+Bool SRFile_isBuiltinInclude(CharString file);
+
+//The JSON view of the file, the SRDocument contract web/js/api.js documents; writeJson and writeJsonMembers split
+// the way SHFile's do.
+Bool SRFile_writeJson(const SRFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr);
+Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr);
 
 //File headers (file spec: docs/oiSR.md)
 

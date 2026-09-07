@@ -21,6 +21,7 @@
 //tools/oxc3_wasm/wasm_json.c
 
 #include "tools/oxc3_wasm/wasm_bridge.h"
+#include "formats/json/json_writer.h"
 #include "types/container/log.h"
 #include "platforms/platform.h"
 #include "types/base/error.h"

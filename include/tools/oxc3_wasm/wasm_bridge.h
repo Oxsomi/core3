@@ -26,20 +26,10 @@
 #include "types/base/string_base.h"
 #include "types/base/buffer_base.h"
 #include "types/base/error.h"
-#include "formats/json/json_writer.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
-
-//Only ever a pointer here, so the definition stays in types/base/allocator.h
-typedef struct Allocator Allocator;
-
-typedef enum EGfxRegisterType EGfxRegisterType;
-
-typedef struct SHFile SHFile;
-typedef struct SRFile SRFile;
-typedef struct SPFile SPFile;
 
 //Every call across the boundary answers with one allocation, so the page frees exactly one thing per call
 // whatever the call produced:
@@ -77,43 +67,6 @@ void *Wasm_errorFrame(const C8 *message);
 // rather than a generic failure.
 
 void *Wasm_errorFrameFromError(const Error *err, const C8 *fallback);
-
-//How a register spells itself in a document: its class (buffer, texture, sampler, ...) and the HLSL type name the
-//class and access add up to. The oiSH registers and the oiPL layout rows share both.
-
-const C8 *WasmJson_registerClass(EGfxRegisterType type);
-const C8 *WasmJson_registerBaseName(EGfxRegisterType type, Bool isWrite);
-
-//Serializers onto the document contracts the page consumes (documented at the top of web/js/api.js).
-//They mirror the C structs, so each is a walk rather than a translation, and they write into the caller's writer,
-// so a document nests inside a frame as the value of a key like anything else.
-
-Bool WasmJson_shFile(
-	const SHFile *file,
-	CharString name,
-	CharString sourceName,
-	JsonWriter *w,
-	const Allocator *alloc,
-	Error *e_rr
-);
-
-Bool WasmJson_srFile(
-	const SRFile *file,
-	CharString name,
-	CharString sourceName,
-	JsonWriter *w,
-	const Allocator *alloc,
-	Error *e_rr
-);
-
-Bool WasmJson_spFile(
-	const SPFile *file,
-	CharString name,
-	CharString sourceName,
-	JsonWriter *w,
-	const Allocator *alloc,
-	Error *e_rr
-);
 
 #ifdef __cplusplus
 	}

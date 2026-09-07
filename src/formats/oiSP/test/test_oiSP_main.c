@@ -21,6 +21,7 @@
 //formats/oiSP/test/test_oiSP_main.c
 
 #include "formats/oiSP/sp_file.h"
+#include "formats/json/json_writer.h"
 #include "types/math/type_cast.h"
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiSB/sb_variable.h"
@@ -1653,6 +1654,150 @@ static void Test_SPLayoutPcGlobalsMerge(Test *t) {
 	SPFile_free(&sp, t->alloc);
 }
 
+//The JSON view: a compute pipeline with its derived layout, pinned by the fragments a reader keys on
+
+static Bool jsonHas(const CharString *doc, const C8 *needle) {
+	const CharString n = CharString_createRefCStrConst(needle);
+	return CharString_findFirstStringSensitive(doc, &n, 0, 0) != U64_MAX;
+}
+
+static void Test_SPFileWriteJson(Test *t) {
+
+	Test_setModule(t, "SPFile: JSON view");
+
+	//A compute entry whose binary declares a push constant, a structured buffer, a sampler and a written buffer
+
+	SHRegisterRuntime regs[4];
+
+	for(U8 i = 0; i < 4; ++i)
+		regs[i] = (SHRegisterRuntime) { 0 };
+
+	regs[0].reg.bindings = GfxBindings_dummy();
+	regs[0].reg.registerType = EGfxRegisterType_PushConstants;
+	regs[0].name = CharString_createRefCStrConst("pc");
+	regs[0].shaderBuffer.bufferSize = 32;
+
+	regs[1].reg.bindings = GfxBindings_dummy();
+	regs[1].reg.bindings.arr[EGfxBinaryType_SPIRV] = (GfxBinding) { .space = 1, .binding = 3 };
+	regs[1].reg.registerType = EGfxRegisterType_StructuredBuffer;
+	regs[1].name = CharString_createRefCStrConst("verts");
+	regs[1].shaderBuffer.bufferSize = 16;
+
+	regs[2].reg.bindings = GfxBindings_dummy();
+	regs[2].reg.bindings.arr[EGfxBinaryType_SPIRV] = (GfxBinding) { .space = 0, .binding = 2 };
+	regs[2].reg.registerType = EGfxRegisterType_Sampler;
+	regs[2].name = CharString_createRefCStrConst("smp");
+
+	regs[3].reg.bindings = GfxBindings_dummy();
+	regs[3].reg.bindings.arr[EGfxBinaryType_SPIRV] = (GfxBinding) { .space = 1, .binding = 4 };
+	regs[3].reg.registerType = EGfxRegisterType_StructuredBuffer | EGfxRegisterType_IsWrite;
+	regs[3].name = CharString_createRefCStrConst("counts");
+	regs[3].shaderBuffer.bufferSize = 16;
+
+	SHBinaryInfo bin = (SHBinaryInfo) { 0 };
+	ListSHRegisterRuntime_createRefConst(regs, 4, &bin.registers, NULL);
+
+	U16 binId = 0;
+	SHEntry cs = entryOf("main", EGfxPipelineStage_Compute);
+	ListU16_createRefConst(&binId, 1, &cs.binaryIds, NULL);
+
+	SHFile sh = fileOf(&cs, 1);
+	ListSHBinaryInfo_createRefConst(&bin, 1, &sh.binaries, NULL);
+
+	ListSHFile files = (ListSHFile) { 0 };
+	ListSHFile_createRefConst(&sh, 1, &files, NULL);
+
+	ListCharString names = (ListCharString) { 0 };
+	CharString shaderName = CharString_createRefCStrConst("scene.oiSH");
+	ListCharString_createRefConst(&shaderName, 1, &names, NULL);
+
+	SPFile sp = (SPFile) { 0 };
+	CharString whole = CharString_createNull();
+	CharString layout = CharString_createNull();
+	CharString wrapped = CharString_createNull();
+	U32 pipelineId = U32_MAX;
+
+	if(!Test_assert(t, "create", SPFile_create(ESPSettingsFlags_None, t->alloc, &sp, &t->err)))
+		goto clean;
+
+	SPStageRef stage = refOf(0, 0);
+
+	Test_assert(t, "derive", SPFile_derivePipeline(
+		&sp, &files, &names, CharString_createRefCStrConst("cull"), &stage, 1, NULL, t->alloc, &pipelineId, &t->err
+	));
+
+	Test_assert(t, "finalize", SPFile_finalize(&sp, t->alloc, &t->err));
+
+	JsonWriter w = JsonWriter_create(&whole, false, t->alloc);
+
+	Test_assert(t, "writes a complete document", SPFile_writeJson(&sp, &w, &t->err) && JsonWriter_isComplete(&w));
+
+	Test_assert(t, "the pipeline and its stage", jsonHas(
+		&whole,
+		"\"pipelines\":[{\"name\":\"cull\",\"type\":\"compute\",\"layoutIndex\":0,\"flags\":[],"
+		"\"stages\":[{\"stage\":\"compute\",\"shaderFile\":\"scene.oiSH\",\"entrypoint\":\"main\",\"sourceHash\":0,"
+		"\"generated\":false}]"
+	));
+
+	Test_assert(t, "the layout's buffer row", jsonHas(
+		&whole,
+		"\"name\":\"verts\",\"source\":\"derived\",\"class\":\"SRV\",\"type\":\"StructuredBuffer\","
+		"\"isWrite\":false,\"isArray\":false"
+	));
+
+	Test_assert(t, "the layout's sampler row", jsonHas(
+		&whole, "\"name\":\"smp\",\"source\":\"derived\",\"class\":\"SMP\",\"type\":\"SamplerState\""
+	));
+
+	//The class follows the access the way the register's own view does: a written buffer is a UAV row
+
+	Test_assert(t, "a written buffer row is a UAV", jsonHas(
+		&whole,
+		"\"name\":\"counts\",\"source\":\"derived\",\"class\":\"UAV\",\"type\":\"RWStructuredBuffer\","
+		"\"isWrite\":true,\"isArray\":false"
+	));
+
+	Test_assert(t, "rows name the stages that see them", jsonHas(&whole, "\"visibility\":[\"compute\"]"));
+
+	Test_assert(t, "the push constant range", jsonHas(
+		&whole, "\"pushConstant\":{\"name\":\"pc\",\"source\":\"derived\",\"class\":\"CBV\",\"type\":\"PushConstants\""
+	));
+
+	//A layout also writes as one object of its own
+
+	JsonWriter wl = JsonWriter_create(&layout, false, t->alloc);
+
+	Test_assert(t, "a layout writes on its own",
+		sp.layouts.length == 1 &&
+		SPFile_writeJsonLayout(&sp.layouts.ptr[0], &wl, &t->err) && JsonWriter_isComplete(&wl)
+	);
+
+	Test_assert(t, "as one object", CharString_startsWithCStringSensitive(&layout, "{\"bindings\":[{", 0));
+
+	//The members form lands inside an object the embedder opened, which is how a frame puts a name before them
+
+	JsonWriter wm = JsonWriter_create(&wrapped, false, t->alloc);
+
+	Test_assert(t, "the members write into an open object",
+		JsonWriter_beginObject(&wm, &t->err) &&
+		JsonWriter_keyCstr(&wm, "name", "x", &t->err) &&
+		SPFile_writeJsonMembers(&sp, &wm, &t->err) &&
+		JsonWriter_endObject(&wm, &t->err) && JsonWriter_isComplete(&wm)
+	);
+
+	Test_assert(t, "after the embedder's own keys", CharString_startsWithCStringSensitive(
+		&wrapped, "{\"name\":\"x\",\"header\":{", 0
+	));
+
+	Test_assert(t, "a missing file is refused", !SPFile_writeJson(NULL, &w, NULL));
+
+clean:
+	CharString_free(&whole, t->alloc);
+	CharString_free(&layout, t->alloc);
+	CharString_free(&wrapped, t->alloc);
+	SPFile_free(&sp, t->alloc);
+}
+
 OXC3_TEST_MAIN(formats_oiSP) {
 
 	const Allocator alloc = BasicAllocator_instance;
@@ -1679,6 +1824,7 @@ OXC3_TEST_MAIN(formats_oiSP) {
 	Test_SPLayoutDxilArrayOverlap(&t);
 	Test_SPLayoutPcRegisterClash(&t);
 	Test_SPLayoutPcGlobalsMerge(&t);
+	Test_SPFileWriteJson(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

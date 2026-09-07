@@ -18,85 +18,37 @@
 *  This is called dual licensing.
 */
 
-//tools/oxc3_wasm/wasm_oiSH.c
+//formats/oiSH/sh_json.c
 
-#include "tools/oxc3_wasm/wasm_bridge.h"
 #include "formats/oiSH/sh_file.h"
+#include "formats/oiSH/sh_registers.h"
 #include "formats/oiSB/sb_file.h"
-#include "types/container/list_basic_types.h"
+#include "formats/json/json_writer.h"
 #include "types/container/texture_format.h"
 #include "types/base/type_id.h"
 #include "types/base/string_read_helper.h"
 #include <inttypes.h>
 
-//A register's descriptor class, the grouping the reflection view sorts by.
-//Derived from the register type the same way the DXIL binding letter is (SHRegister_printBindings), so the two
-// can never disagree about what a register is.
+//The HLSL spelling of a register's type: the base name when the kind has one, otherwise the texture composition
 
-const C8 *WasmJson_registerClass(EGfxRegisterType type) {
-
-	EGfxRegisterType base = (EGfxRegisterType)(type & EGfxRegisterType_TypeMask);
-
-	if(base == EGfxRegisterType_Sampler || base == EGfxRegisterType_SamplerComparisonState)
-		return "SMP";
-
-	if(base == EGfxRegisterType_ConstantBuffer || base == EGfxRegisterType_PushConstants)
-		return "CBV";
-
-	return type & EGfxRegisterType_IsWrite ? "UAV" : "SRV";
-}
-
-//The HLSL spelling of a register's type, the same set SHRegister_print logs.
-//Texture types compose from three flags, so they are built by the caller instead of coming from here.
-
-const C8 *WasmJson_registerBaseName(EGfxRegisterType type, Bool isWrite) {
-
-	switch (type & EGfxRegisterType_TypeMask) {
-
-		case EGfxRegisterType_Sampler:                  return "SamplerState";
-		case EGfxRegisterType_SamplerComparisonState:   return "SamplerComparisonState";
-		case EGfxRegisterType_ConstantBuffer:           return "ConstantBuffer";
-		case EGfxRegisterType_PushConstants:            return "PushConstants";
-		case EGfxRegisterType_AccelerationStructure:    return "RaytracingAccelerationStructure";
-		case EGfxRegisterType_SubpassInput:             return "SubpassInput";
-		case EGfxRegisterType_ByteAddressBuffer:        return isWrite ? "RWByteAddressBuffer" : "ByteAddressBuffer";
-		case EGfxRegisterType_StructuredBuffer:         return isWrite ? "RWStructuredBuffer" : "StructuredBuffer";
-		case EGfxRegisterType_StorageBuffer:            return isWrite ? "RWStorageBuffer" : "StorageBuffer";
-		case EGfxRegisterType_StorageBufferAtomic:      return isWrite ? "RWStorageBufferAtomic" : "StorageBufferAtomic";
-		case EGfxRegisterType_StructuredBufferAtomic:   return "Append/ConsumeBuffer";
-		default:                                        return NULL;
-	}
-}
-
-static Bool WasmJson_registerTypeName(EGfxRegisterType type, JsonWriter *w, Error *e_rr) {
+static Bool SHFile_jsonRegisterTypeName(EGfxRegisterType type, JsonWriter *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	Bool isWrite = (type & EGfxRegisterType_IsWrite) != 0;
-	const C8 *base = WasmJson_registerBaseName(type, isWrite);
+	const C8 *base = SHRegister_baseTypeName(type);
 
 	if (base) {
 		gotoIfError3(clean, JsonWriter_cstr(w, base, e_rr));
 		goto clean;
 	}
 
-	const C8 *dim = "2D";
-
-	switch (type & EGfxRegisterType_TypeMask) {
-		case EGfxRegisterType_Texture1D:    dim = "1D";     break;
-		case EGfxRegisterType_Texture3D:    dim = "3D";     break;
-		case EGfxRegisterType_TextureCube:  dim = "Cube";   break;
-		case EGfxRegisterType_Texture2DMS:  dim = "2DMS";   break;
-		default:                                            break;
-	}
-
 	gotoIfError3(clean, JsonWriter_fmt(
 		w,
 		e_rr,
 		"\"%s%s%s%s\"",
-		isWrite ? "RW" : "",
+		type & EGfxRegisterType_IsWrite ? "RW" : "",
 		type & EGfxRegisterType_IsCombinedSampler ? "sampler" : "Texture",
-		dim,
+		SHRegister_textureDimension(type),
 		type & EGfxRegisterType_IsArray ? "Array" : ""
 	));
 
@@ -104,134 +56,7 @@ clean:
 	return s_uccess;
 }
 
-//The lengths of a variable's array dimensions.
-//A dimension either fits inline or is an id into the shared pool, split on the top bit exactly as SBFile_print
-// reads it; a zero means the variable isn't an array at all.
-
-static ListU32 WasmJson_sbArrays(const SBFile *sbFile, const SBVar *var, U32 *inlineDim) {
-
-	ListU32 dims = (ListU32) { 0 };
-
-	if(!var->arrayDimOrArrayId)
-		return dims;
-
-	if(var->arrayDimOrArrayId >> 15)
-		return sbFile->arrays.ptr[var->arrayDimOrArrayId & (U16) I16_MAX];
-
-	*inlineDim = var->arrayDimOrArrayId;
-	ListU32_createRefConst(inlineDim, 1, &dims, NULL);
-	return dims;
-}
-
-//What a variable occupies in its parent, which is its element size times every array dimension.
-//This is what makes the buffer's padding visible: the difference between it and the declared buffer size is
-// what the layout spent on alignment.
-
-static U64 WasmJson_sbVarSize(const SBFile *sbFile, const SBVar *var) {
-
-	U64 size = var->structId != U16_MAX ? sbFile->structs.ptr[var->structId].stride : ESBType_getSize(
-		(ESBType) var->type, (sbFile->flags & ESBSettingsFlags_IsTightlyPacked) != 0
-	);
-
-	U32 inlineDim = 0;
-	ListU32 dims = WasmJson_sbArrays(sbFile, var, &inlineDim);
-
-	for(U64 i = 0; i < dims.length; ++i)
-		size *= dims.ptr[i];
-
-	return size;
-}
-
-//One oiSB variable and its children, which is the layout view of a constant buffer.
-//Children are found by parent id rather than being stored as a range, so this recurses over the flat list the
-// same way SBFile_print walks it.
-
-static Bool WasmJson_sbVars(
-	const SBFile *sbFile,
-	U16 parent,
-	JsonWriter *w, const Allocator *alloc,
-	Error *e_rr
-) {
-
-	Bool s_uccess = true;
-
-	gotoIfError3(clean, JsonWriter_beginArray(w, e_rr));
-
-	for (U64 i = 0; i < sbFile->vars.length; ++i) {
-
-		SBVar var = sbFile->vars.ptr[i];
-
-		if(var.parentId != parent)
-			continue;
-
-		gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
-
-		//Variable names sit in the second half of the name pool, behind the struct names.
-
-		gotoIfError3(clean, JsonWriter_keyStr(w, "name", sbFile->names.entryStrings.ptr[sbFile->structs.length + i], e_rr));
-
-		gotoIfError3(clean, JsonWriter_keyU64(w, "offset", var.offset, e_rr));
-
-		//A variable is either a struct instance or a plain type; the struct case reports the stride the layout
-		// gives it, the plain one the size of its own type.
-
-		gotoIfError3(clean, JsonWriter_key(w, "type", e_rr));
-
-		if(var.structId != U16_MAX) {
-			gotoIfError3(clean, JsonWriter_str(w, sbFile->names.entryStrings.ptr[var.structId], e_rr));
-		}
-
-		else gotoIfError3(clean, JsonWriter_cstr(w, ESBType_name((ESBType) var.type), e_rr));
-
-		gotoIfError3(clean, JsonWriter_key(w, "stride", e_rr));
-
-		if(var.structId != U16_MAX) {
-			gotoIfError3(clean, JsonWriter_u64(w, sbFile->structs.ptr[var.structId].stride, e_rr));
-		}
-
-		else gotoIfError3(clean, JsonWriter_u64(
-			w, ESBType_getSize((ESBType) var.type, (sbFile->flags & ESBSettingsFlags_IsTightlyPacked) != 0), e_rr
-		));
-
-		gotoIfError3(clean, JsonWriter_keyArray(w, "arrays", e_rr));
-
-		U32 inlineDim = 0;
-		ListU32 dims = WasmJson_sbArrays(sbFile, &var, &inlineDim);
-
-		for(U64 j = 0; j < dims.length; ++j)
-			gotoIfError3(clean, JsonWriter_u64(w, dims.ptr[j], e_rr));
-
-		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
-
-		gotoIfError3(clean, (
-			JsonWriter_keyObject(w, "used", e_rr) &&
-			JsonWriter_keyBool(w, "spirv", (var.flags & ESBVarFlag_IsUsedVarSPIRV) != 0, e_rr)
-		));
-		gotoIfError3(clean, JsonWriter_keyBool(w, "dxil", (var.flags & ESBVarFlag_IsUsedVarDXIL) != 0, e_rr));
-		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
-
-		gotoIfError3(clean, JsonWriter_key(w, "children", e_rr));
-
-		if(var.structId != U16_MAX) {
-			gotoIfError3(clean, WasmJson_sbVars(sbFile, (U16) i, w, alloc, e_rr));
-		}
-
-		else gotoIfError3(clean, (JsonWriter_beginArray(w, e_rr) && JsonWriter_endArray(w, e_rr)));
-
-		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
-	}
-
-	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
-
-clean:
-	return s_uccess;
-}
-
-static Bool WasmJson_register(
-	const SHRegisterRuntime *reg,
-	JsonWriter *w, const Allocator *alloc,
-	Error *e_rr
-) {
+static Bool SHFile_jsonRegister(const SHRegisterRuntime *reg, JsonWriter *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -256,22 +81,20 @@ static Bool WasmJson_register(
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_key(w, "typeStr", e_rr));
-	gotoIfError3(clean, WasmJson_registerTypeName(type, w, e_rr));
+	gotoIfError3(clean, SHFile_jsonRegisterTypeName(type, w, e_rr));
 
-	gotoIfError3(clean, JsonWriter_keyCstr(w, "cls", WasmJson_registerClass(type), e_rr));
+	gotoIfError3(clean, JsonWriter_keyCstr(w, "cls", SHRegister_className(type), e_rr));
 
 	gotoIfError3(clean, (
 		JsonWriter_keyObject(w, "flags", e_rr) &&
-		JsonWriter_keyBool(w, "write", (type & EGfxRegisterType_IsWrite) != 0, e_rr)
+		JsonWriter_keyBool(w, "write", (type & EGfxRegisterType_IsWrite) != 0, e_rr) &&
+		JsonWriter_keyBool(w, "array", (type & EGfxRegisterType_IsArray) != 0 || reg->arrays.length != 0, e_rr) &&
+		JsonWriter_keyBool(w, "combined", (type & EGfxRegisterType_IsCombinedSampler) != 0, e_rr) &&
+		JsonWriter_endObject(w, e_rr)
 	));
-	gotoIfError3(clean, JsonWriter_keyBool(
-		w, "array", (type & EGfxRegisterType_IsArray) != 0 || reg->arrays.length != 0, e_rr
-	));
-	gotoIfError3(clean, JsonWriter_keyBool(w, "combined", (type & EGfxRegisterType_IsCombinedSampler) != 0, e_rr));
-	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 
 	//A binding of U32_MAX in both halves is how the format spells "not present"; push constants are the case
-	// that reaches the page as a null SPIR-V binding, since they are a block rather than a descriptor.
+	// that reaches a reader as a null SPIR-V binding, since they are a block rather than a descriptor.
 
 	GfxBinding spirv = reg->reg.bindings.arr[EGfxBinaryType_SPIRV];
 	GfxBinding dxil = reg->reg.bindings.arr[EGfxBinaryType_DXIL];
@@ -317,10 +140,10 @@ static Bool WasmJson_register(
 
 	gotoIfError3(clean, (
 		JsonWriter_keyObject(w, "used", e_rr) &&
-		JsonWriter_keyBool(w, "spirv", (reg->reg.isUsedFlag >> EGfxBinaryType_SPIRV) & 1, e_rr)
+		JsonWriter_keyBool(w, "spirv", (reg->reg.isUsedFlag >> EGfxBinaryType_SPIRV) & 1, e_rr) &&
+		JsonWriter_keyBool(w, "dxil", (reg->reg.isUsedFlag >> EGfxBinaryType_DXIL) & 1, e_rr) &&
+		JsonWriter_endObject(w, e_rr)
 	));
-	gotoIfError3(clean, JsonWriter_keyBool(w, "dxil", (reg->reg.isUsedFlag >> EGfxBinaryType_DXIL) & 1, e_rr));
-	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_keyBool(w, "push", base == EGfxRegisterType_PushConstants, e_rr));
 
@@ -372,38 +195,7 @@ static Bool WasmJson_register(
 		gotoIfError3(clean, JsonWriter_null(w, e_rr));
 	}
 
-	else {
-
-		const SBFile *sb = &reg->shaderBuffer;
-
-		//Padding is what the layout spends on alignment: the buffer's own size minus what its root variables
-		// take, which is what makes --warn-buffer-padding's finding visible in the view.
-
-		U64 used = 0;
-
-		for (U64 i = 0; i < sb->vars.length; ++i) {
-
-			SBVar var = sb->vars.ptr[i];
-
-			if(var.parentId != U16_MAX)
-				continue;
-
-			U64 end = (U64) var.offset + WasmJson_sbVarSize(sb, &var);
-
-			if(end > used)
-				used = end;
-		}
-
-		gotoIfError3(clean, (
-			JsonWriter_beginObject(w, e_rr) &&
-			JsonWriter_keyU64(w, "size", sb->bufferSize, e_rr) &&
-			JsonWriter_keyU64(w, "padding", sb->bufferSize > used ? sb->bufferSize - used : 0, e_rr) &&
-			JsonWriter_keyBool(w, "packed", (sb->flags & ESBSettingsFlags_IsTightlyPacked) != 0, e_rr)
-		));
-		gotoIfError3(clean, JsonWriter_key(w, "vars", e_rr));
-		gotoIfError3(clean, WasmJson_sbVars(sb, U16_MAX, w, alloc, e_rr));
-		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
-	}
+	else gotoIfError3(clean, SBFile_writeJson(&reg->shaderBuffer, w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 
@@ -413,14 +205,9 @@ clean:
 
 //The signature halves of a graphics entry.
 //A slot is empty when its type is 0; the semantic id follows the same "0 means the stage's default" rule
-// SHEntry_print uses, so the page shows what the driver will see rather than a blank.
+// SHEntry_print uses, so a reader shows what the driver will see rather than a blank.
 
-static Bool WasmJson_entryIO(
-	const SHEntry *entry,
-	Bool isOutput,
-	JsonWriter *w,
-	Error *e_rr
-) {
+static Bool SHFile_jsonEntryIO(const SHEntry *entry, Bool isOutput, JsonWriter *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -447,9 +234,10 @@ static Bool WasmJson_entryIO(
 				CharString_createRefCStrConst("SV_TARGET") : CharString_createRefCStrConst("TEXCOORD")
 			);
 
-		gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_keyCstr(w, "type", ESBType_name(type), e_rr)));
-		gotoIfError3(clean, JsonWriter_keyStr(w, "semantic", semantic, e_rr));
 		gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyCstr(w, "type", ESBType_name(type), e_rr) &&
+			JsonWriter_keyStr(w, "semantic", semantic, e_rr) &&
 			JsonWriter_keyU64(w, "idx", hasSemantics ? (U8)(semanticValue & 0xF) : i, e_rr) &&
 			JsonWriter_endObject(w, e_rr)
 		));
@@ -461,12 +249,7 @@ clean:
 	return s_uccess;
 }
 
-static Bool WasmJson_entry(
-	const SHFile *file,
-	U64 entryId,
-	JsonWriter *w,
-	Error *e_rr
-) {
+static Bool SHFile_jsonEntry(const SHFile *file, U64 entryId, JsonWriter *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -506,12 +289,12 @@ static Bool WasmJson_entry(
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_key(w, "inputs", e_rr));
-	gotoIfError3(clean, WasmJson_entryIO(entry, false, w, e_rr));
+	gotoIfError3(clean, SHFile_jsonEntryIO(entry, false, w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_key(w, "outputs", e_rr));
-	gotoIfError3(clean, WasmJson_entryIO(entry, true, w, e_rr));
+	gotoIfError3(clean, SHFile_jsonEntryIO(entry, true, w, e_rr));
 
-	//Group size and wave size only exist for the stages that dispatch; the rest report null so the page never
+	//Group size and wave size only exist for the stages that dispatch; the rest report null so a reader never
 	// has to know which stages carry them.
 
 	gotoIfError3(clean, JsonWriter_key(w, "group", e_rr));
@@ -544,9 +327,7 @@ static Bool WasmJson_entry(
 	));
 
 	if (isRt) {
-
 		gotoIfError3(clean, JsonWriter_keyU64(w, "payloadSize", entry->payloadSize, e_rr));
-
 		gotoIfError3(clean, JsonWriter_keyU64(w, "intersectionSize", entry->intersectionSize, e_rr));
 	}
 
@@ -556,12 +337,7 @@ clean:
 	return s_uccess;
 }
 
-static Bool WasmJson_binary(
-	const SHFile *file,
-	U64 binaryId,
-	JsonWriter *w, const Allocator *alloc,
-	Error *e_rr
-) {
+static Bool SHFile_jsonBinary(const SHFile *file, U64 binaryId, JsonWriter *w, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString typeName = CharString_createNull();
@@ -586,7 +362,7 @@ static Bool WasmJson_binary(
 
 	gotoIfError3(clean, JsonWriter_keyBool(w, "lib", lib, e_rr));
 
-	//Which entries resolve to this binary. A lib holds several, a stage binary exactly one, and the page reads
+	//Which entries resolve to this binary. A lib holds several, a stage binary exactly one, and a reader takes
 	// the list either way rather than branching on the kind.
 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "entryNames", e_rr));
@@ -609,10 +385,10 @@ static Bool WasmJson_binary(
 		w, e_rr, "\"%"PRIu8".%"PRIu8"\"", (U8)(identifier->shaderVersion >> 8), (U8) identifier->shaderVersion
 	));
 
-	//Declared extensions and the subset of them the final executable never showed. The page renders the
+	//Declared extensions and the subset of them the final executable never showed. A reader renders the
 	// difference (active = extensions minus dormant), so both lists travel rather than only the result.
 	//dormantExtensions can carry detected bits outside the declared set; the CLI implicitly masks them by
-	// only ever printing declared bits, so the same mask applies here or the page lists phantom dormants.
+	// only ever printing declared bits, so the same mask applies here or a reader lists phantom dormants.
 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "extensions", e_rr));
 
@@ -634,15 +410,13 @@ static Bool WasmJson_binary(
 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "defines", e_rr));
 
-	for (U64 i = 0; i < identifier->defines.length / 2; ++i) {
-
+	for (U64 i = 0; i < identifier->defines.length / 2; ++i)
 		gotoIfError3(clean, (
 			JsonWriter_beginObject(w, e_rr) &&
-			JsonWriter_keyStr(w, "name", identifier->defines.ptr[i << 1], e_rr)
+			JsonWriter_keyStr(w, "name", identifier->defines.ptr[i << 1], e_rr) &&
+			JsonWriter_keyStr(w, "value", identifier->defines.ptr[(i << 1) | 1], e_rr) &&
+			JsonWriter_endObject(w, e_rr)
 		));
-		gotoIfError3(clean, JsonWriter_keyStr(w, "value", identifier->defines.ptr[(i << 1) | 1], e_rr));
-		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
-	}
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
@@ -668,10 +442,13 @@ static Bool WasmJson_binary(
 		if(!SHValue_stringify(&uniformValue, typeId, alloc, &value, NULL))
 			value = CharString_createRefCStrConst("unknown");
 
-		gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_keyStr(w, "type", typeName, e_rr)));
-		gotoIfError3(clean, JsonWriter_keyStr(w, "name", uniform.name, e_rr));
-		gotoIfError3(clean, JsonWriter_keyStr(w, "value", value, e_rr));
-		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
+		gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyStr(w, "type", typeName, e_rr) &&
+			JsonWriter_keyStr(w, "name", uniform.name, e_rr) &&
+			JsonWriter_keyStr(w, "value", value, e_rr) &&
+			JsonWriter_endObject(w, e_rr)
+		));
 	}
 
 	CharString_free(&typeName, alloc);
@@ -679,7 +456,7 @@ static Bool WasmJson_binary(
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
-	//A mask covering every vendor means the binary named none, which the page shows as "all" rather than as a
+	//A mask covering every vendor means the binary named none, which a reader shows as "all" rather than as a
 	// list of twelve.
 
 	U16 anyVendor = ESHVendor_allMask(ESHVendor_Count);
@@ -703,7 +480,7 @@ static Bool WasmJson_binary(
 	}
 
 	//[[oxc::binary(...)]] is an entry level annotation that never reaches a stored binary, so nothing here can
-	// report it; the page renders the annotation block without that line rather than inventing one.
+	// report it; a reader renders the annotation block without that line rather than inventing one.
 
 	gotoIfError3(clean, JsonWriter_keyNull(w, "binAnno", e_rr));
 
@@ -728,10 +505,8 @@ static Bool WasmJson_binary(
 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "registers", e_rr));
 
-	for (U64 i = 0; i < binary->registers.length; ++i) {
-
-		gotoIfError3(clean, WasmJson_register(&binary->registers.ptr[i], w, alloc, e_rr));
-	}
+	for (U64 i = 0; i < binary->registers.length; ++i)
+		gotoIfError3(clean, SHFile_jsonRegister(&binary->registers.ptr[i], w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
@@ -743,43 +518,26 @@ clean:
 	return s_uccess;
 }
 
-Bool WasmJson_shFile(
-	const SHFile *file,
-	CharString name,
-	CharString sourceName,
-	JsonWriter *w,
-	const Allocator *alloc,
-	Error *e_rr
-) {
+Bool SHFile_writeJsonMembers(const SHFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	if(!file || !w)
-		retError(clean, Error_nullPointer(!file ? 0 : 3, "WasmJson_shFile()::file and w are required"));
+		retError(clean, Error_nullPointer(!file ? 0 : 1, "SHFile_writeJsonMembers()::file and w are required"));
 
 	static const C8 *sizeTypeNames[4] = { "U8", "U16", "U32", "U64" };
-
-	gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
-
-	gotoIfError3(clean, JsonWriter_keyStr(w, "name", name, e_rr));
-
-	gotoIfError3(clean, JsonWriter_keyStr(w, "sourceName", sourceName, e_rr));
 
 	gotoIfError3(clean, (
 		JsonWriter_keyObject(w, "compilerVersion", e_rr) &&
 		JsonWriter_keyU64(w, "major", OXC3_GET_MAJOR(file->compilerVersion), e_rr) &&
 		JsonWriter_keyU64(w, "minor", OXC3_GET_MINOR(file->compilerVersion), e_rr) &&
 		JsonWriter_keyU64(w, "patch", OXC3_GET_PATCH(file->compilerVersion), e_rr) &&
+		JsonWriter_endObject(w, e_rr) &&
+		JsonWriter_keyU64(w, "sourceHash", file->sourceHash, e_rr) &&
+		JsonWriter_keyObject(w, "flags", e_rr) &&
+		JsonWriter_keyBool(w, "reflectionOnly", (file->flags & ESHSettingsFlags_ReflectionOnly) != 0, e_rr) &&
 		JsonWriter_endObject(w, e_rr)
 	));
-
-	gotoIfError3(clean, JsonWriter_keyU64(w, "sourceHash", file->sourceHash, e_rr));
-
-	gotoIfError3(clean, (
-		JsonWriter_keyObject(w, "flags", e_rr) &&
-		JsonWriter_keyBool(w, "reflectionOnly", (file->flags & ESHSettingsFlags_ReflectionOnly) != 0, e_rr)
-	));
-	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 
 	//The size types a rewrite would pick, which is what the header of this file carries: they are recomputed
 	// from the binaries rather than kept on SHFile, so this reports the same thing SHFile_write would store.
@@ -800,10 +558,8 @@ Bool WasmJson_shFile(
 		JsonWriter_keyObject(w, "header", e_rr) &&
 		JsonWriter_keyCstr(w, "version", "1.2", e_rr) &&
 		JsonWriter_keyObject(w, "sizeTypes", e_rr) &&
-		JsonWriter_key(w, "spirv", e_rr) &&
-		JsonWriter_fmt(w, e_rr, "\"%s\"", sizeTypeNames[sizeTypes[EGfxBinaryType_SPIRV]]) &&
-		JsonWriter_key(w, "dxil", e_rr) &&
-		JsonWriter_fmt(w, e_rr, "\"%s\"", sizeTypeNames[sizeTypes[EGfxBinaryType_DXIL]]) &&
+		JsonWriter_keyCstr(w, "spirv", sizeTypeNames[sizeTypes[EGfxBinaryType_SPIRV]], e_rr) &&
+		JsonWriter_keyCstr(w, "dxil", sizeTypeNames[sizeTypes[EGfxBinaryType_DXIL]], e_rr) &&
 		JsonWriter_endObject(w, e_rr) &&
 		JsonWriter_endObject(w, e_rr)
 	));
@@ -821,39 +577,31 @@ Bool WasmJson_shFile(
 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "entries", e_rr));
 
-	for (U64 i = 0; i < file->entries.length; ++i) {
-
-		gotoIfError3(clean, WasmJson_entry(file, i, w, e_rr));
-	}
+	for (U64 i = 0; i < file->entries.length; ++i)
+		gotoIfError3(clean, SHFile_jsonEntry(file, i, w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "binaries", e_rr));
 
-	for (U64 i = 0; i < file->binaries.length; ++i) {
-
-		gotoIfError3(clean, WasmJson_binary(file, i, w, alloc, e_rr));
-	}
+	for (U64 i = 0; i < file->binaries.length; ++i)
+		gotoIfError3(clean, SHFile_jsonBinary(file, i, w, alloc, e_rr));
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "includes", e_rr));
 
-	for (U64 i = 0; i < file->includes.length; ++i) {
-
+	for (U64 i = 0; i < file->includes.length; ++i)
 		gotoIfError3(clean, (
 			JsonWriter_beginObject(w, e_rr) &&
-			JsonWriter_keyStr(w, "path", file->includes.ptr[i].relativePath, e_rr)
-		));
-		gotoIfError3(clean, (
+			JsonWriter_keyStr(w, "path", file->includes.ptr[i].relativePath, e_rr) &&
 			JsonWriter_keyU64(w, "crc32c", file->includes.ptr[i].crc32c, e_rr) &&
 			JsonWriter_endObject(w, e_rr)
 		));
-	}
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
-	//The file's register set, which is what the reflection diff compares two files by.
+	//The file's register set, which is what a reflection diff compares two files by.
 	//Registers live per binary, so this is their union in first seen order; a name can only appear once, since
 	// the compiler binds one register per name across every variant of a file.
 
@@ -884,14 +632,19 @@ Bool WasmJson_shFile(
 			if(seen)
 				continue;
 
-			gotoIfError3(clean, WasmJson_register(reg, w, alloc, e_rr));
+			gotoIfError3(clean, SHFile_jsonRegister(reg, w, e_rr));
 		}
 	}
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
-	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
-
 clean:
 	return s_uccess;
+}
+
+Bool SHFile_writeJson(const SHFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr) {
+	return
+		JsonWriter_beginObject(w, e_rr) &&
+		SHFile_writeJsonMembers(file, w, alloc, e_rr) &&
+		JsonWriter_endObject(w, e_rr);
 }

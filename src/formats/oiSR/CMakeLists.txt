@@ -29,7 +29,7 @@ add_library(
 )
 
 set_target_properties(OxC3_formats_oiSR PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_oiSR PUBLIC OxC3_types_base OxC3_types_container OxC3_formats_oiDL)
+target_link_libraries(OxC3_formats_oiSR PUBLIC OxC3_types_base OxC3_types_container OxC3_formats_oiDL OxC3_formats_json)
 
 if(EnableTests AND OxC3TestExecutables)
 

@@ -18,27 +18,25 @@
 *  This is called dual licensing.
 */
 
-//tools/oxc3_wasm/wasm_oiSP.c
+//formats/oiSP/sp_json.c
 
-#include "tools/oxc3_wasm/wasm_bridge.h"
 #include "formats/oiSP/sp_file.h"
 #include "formats/oiPL/pl_file.h"
-#include "formats/gfx_util/gfx_util.h"
+#include "formats/oiSH/sh_registers.h"
 #include "formats/oiSH/sh_entries.h"
-#include <inttypes.h>
+#include "formats/gfx_util/gfx_util.h"
+#include "formats/json/json_writer.h"
 
-static const C8 *spPipelineTypeNames[ESPPipelineType_Count] = { "compute", "graphics", "raytracing" };
-static const C8 *spFieldSourceNames[ESPFieldSource_Count] = { "derived", "supplied", "assumed" };
+static const C8 *SPFile_jsonPipelineTypeNames[ESPPipelineType_Count] = { "compute", "graphics", "raytracing" };
+static const C8 *SPFile_jsonFieldSourceNames[ESPFieldSource_Count] = { "derived", "supplied", "assumed" };
 
 //The keys the rest of the document uses for a binary type, so a layout row's pair reads like a binary's sizes.
-static const C8 *spBinaryKeys[EGfxBinaryType_Count] = { "spirv", "dxil" };
+static const C8 *SPFile_jsonBinaryKeys[EGfxBinaryType_Count] = { "spirv", "dxil" };
 
 //One oiPL row: a binding, or the push constant range that sits beside them. The active union member follows
 //the register class, which is why the class is spelled out before it.
 
-static Bool WasmJson_plBinding(
-	const PLFile *layout, PLDescriptorBinding b, JsonWriter *w, Error *e_rr
-) {
+static Bool SPFile_jsonBinding(const PLFile *layout, PLDescriptorBinding b, JsonWriter *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -57,35 +55,27 @@ static Bool WasmJson_plBinding(
 		gotoIfError3(clean, JsonWriter_str(w, layout->names.entryStrings.ptr[nameId], e_rr));
 	}
 
-	else {
-		gotoIfError3(clean, JsonWriter_null(w, e_rr));
-	}
+	else gotoIfError3(clean, JsonWriter_null(w, e_rr));
 
-	gotoIfError3(clean, JsonWriter_keyCstr(
-		w, "source", (U32) source < ESPFieldSource_Count ? spFieldSourceNames[source] : "unknown", e_rr
+	gotoIfError3(clean, (
+		JsonWriter_keyCstr(
+			w, "source", (U32) source < ESPFieldSource_Count ? SPFile_jsonFieldSourceNames[source] : "unknown", e_rr
+		) &&
+		JsonWriter_keyCstr(w, "class", SHRegister_className((EGfxRegisterType) b.registerType), e_rr) &&
+		JsonWriter_keyCstr(w, "type", SHRegister_baseTypeName((EGfxRegisterType) b.registerType), e_rr) &&
+		JsonWriter_keyBool(w, "isWrite", isWrite, e_rr) &&
+		JsonWriter_keyBool(w, "isArray", (b.registerType & EGfxRegisterType_IsArray) != 0, e_rr) &&
+		JsonWriter_keyU64(w, "count", b.count, e_rr)
 	));
 
-	gotoIfError3(clean, JsonWriter_keyCstr(w, "class", WasmJson_registerClass(base), e_rr));
-
-	gotoIfError3(clean, JsonWriter_keyCstr(w, "type", WasmJson_registerBaseName(base, isWrite), e_rr));
-
-	gotoIfError3(clean, JsonWriter_keyBool(w, "isWrite", isWrite, e_rr));
-
-	gotoIfError3(clean, JsonWriter_keyBool(w, "isArray", (b.registerType & EGfxRegisterType_IsArray) != 0, e_rr));
-
-	gotoIfError3(clean, JsonWriter_keyU64(w, "count", b.count, e_rr));
-
-	//The stages that see the row, by name, since the page never reasons about the mask itself
+	//The stages that see the row, by name, since a reader never reasons about the mask itself
 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "visibility", e_rr));
 
-	{
-
-		for (U32 st = 0; st < EGfxPipelineStage_Count && st < 32; ++st)
-			if (b.visibility & ((U32)1 << st)) {
-				gotoIfError3(clean, JsonWriter_cstr(w, SHEntry_stageNames[st], e_rr));
-			}
-	}
+	for (U32 st = 0; st < EGfxPipelineStage_Count && st < 32; ++st)
+		if (b.visibility & ((U32)1 << st)) {
+			gotoIfError3(clean, JsonWriter_cstr(w, SHEntry_stageNames[st], e_rr));
+		}
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
@@ -93,7 +83,7 @@ static Bool WasmJson_plBinding(
 
 	for (U32 t = 0; t < EGfxBinaryType_Count; ++t)
 		gotoIfError3(clean, (
-			JsonWriter_keyObject(w, spBinaryKeys[t], e_rr) &&
+			JsonWriter_keyObject(w, SPFile_jsonBinaryKeys[t], e_rr) &&
 			JsonWriter_keyU64(w, "space", b.bindings.arr[t].space, e_rr) &&
 			JsonWriter_keyU64(w, "binding", b.bindings.arr[t].binding, e_rr) &&
 			JsonWriter_endObject(w, e_rr)
@@ -114,9 +104,7 @@ static Bool WasmJson_plBinding(
 		));
 	}
 
-	else {
-		gotoIfError3(clean, JsonWriter_keyU64(w, "strideOrLength", b.strideOrLength, e_rr));
-	}
+	else gotoIfError3(clean, JsonWriter_keyU64(w, "strideOrLength", b.strideOrLength, e_rr));
 
 	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 
@@ -124,20 +112,19 @@ clean:
 	return s_uccess;
 }
 
-//One embedded oiPL: its rows, the samplers the rows index into, and the push constant range if it has one
-
-static Bool WasmJson_plFile(const PLFile *layout, JsonWriter *w, Error *e_rr) {
+Bool SPFile_writeJsonLayout(const PLFile *layout, JsonWriter *w, Error *e_rr) {
 
 	Bool s_uccess = true;
+
+	if(!layout || !w)
+		retError(clean, Error_nullPointer(!layout ? 0 : 1, "SPFile_writeJsonLayout()::layout and w are required"));
 
 	gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "bindings", e_rr));
 
-	for (U64 i = 0; i < layout->bindings.length; ++i) {
-
-		gotoIfError3(clean, WasmJson_plBinding(layout, layout->bindings.ptr[i], w, e_rr));
-	}
+	for (U64 i = 0; i < layout->bindings.length; ++i)
+		gotoIfError3(clean, SPFile_jsonBinding(layout, layout->bindings.ptr[i], w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
@@ -169,12 +156,10 @@ static Bool WasmJson_plFile(const PLFile *layout, JsonWriter *w, Error *e_rr) {
 	gotoIfError3(clean, JsonWriter_key(w, "pushConstant", e_rr));
 
 	if(layout->hasPushConstant) {
-		gotoIfError3(clean, WasmJson_plBinding(layout, layout->pushConstant, w, e_rr));
+		gotoIfError3(clean, SPFile_jsonBinding(layout, layout->pushConstant, w, e_rr));
 	}
 
-	else {
-		gotoIfError3(clean, JsonWriter_null(w, e_rr));
-	}
+	else gotoIfError3(clean, JsonWriter_null(w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 
@@ -182,7 +167,7 @@ clean:
 	return s_uccess;
 }
 
-static U64 WasmJson_bitCount(U16 mask) {
+static U64 SPFile_jsonBitCount(U16 mask) {
 
 	U64 count = 0;
 
@@ -192,35 +177,20 @@ static U64 WasmJson_bitCount(U16 mask) {
 	return count;
 }
 
-//A string id of U32_MAX is how the pools spell "unnamed", which reaches the page as an empty string rather than
+//A string id of U32_MAX is how the pools spell "unnamed", which reaches a reader as an empty string rather than
 // as an index it would have to know the sentinel of.
 
-static CharString WasmJson_spString(const SPFile *file, U32 id) {
+static CharString SPFile_jsonString(const SPFile *file, U32 id) {
 	return id == U32_MAX || id >= file->names.entryStrings.length ?
 		CharString_createNull() : file->names.entryStrings.ptr[id];
 }
 
-Bool WasmJson_spFile(
-	const SPFile *file,
-	CharString name,
-	CharString sourceName,
-	JsonWriter *w,
-	const Allocator *alloc,
-	Error *e_rr
-) {
+Bool SPFile_writeJsonMembers(const SPFile *file, JsonWriter *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	(void) alloc;        //The three serializers share one signature; this one allocates nothing of its own
-
 	if(!file || !w)
-		retError(clean, Error_nullPointer(!file ? 0 : 3, "WasmJson_spFile()::file and w are required"));
-
-	gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
-
-	gotoIfError3(clean, JsonWriter_keyStr(w, "name", name, e_rr));
-
-	gotoIfError3(clean, JsonWriter_keyStr(w, "sourceName", sourceName, e_rr));
+		retError(clean, Error_nullPointer(!file ? 0 : 1, "SPFile_writeJsonMembers()::file and w are required"));
 
 	//What a write would store rather than what the runtime state holds: a blend attachment only travels when
 	// blending can reach it, and a vertex entry only when it carries something, so the counts are recomputed
@@ -233,8 +203,8 @@ Bool WasmJson_spFile(
 		SPGraphicsState state = file->graphicsStates.ptr[i];
 
 		blendAttachments += SPBlendStateRuntime_storedAttachmentCount(state.blend);
-		vertexBuffers += WasmJson_bitCount(SPVertexLayoutRuntime_bufferMask(state.inputAssembler.vertexLayout));
-		vertexAttributes += WasmJson_bitCount(SPVertexLayoutRuntime_attributeMask(state.inputAssembler.vertexLayout));
+		vertexBuffers += SPFile_jsonBitCount(SPVertexLayoutRuntime_bufferMask(state.inputAssembler.vertexLayout));
+		vertexAttributes += SPFile_jsonBitCount(SPVertexLayoutRuntime_attributeMask(state.inputAssembler.vertexLayout));
 	}
 
 	gotoIfError3(clean, (
@@ -259,13 +229,13 @@ Bool WasmJson_spFile(
 
 		SPPipelineBase pipeline = file->pipelines.ptr[i];
 
-		gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
-
-		gotoIfError3(clean, JsonWriter_keyStr(w, "name", WasmJson_spString(file, pipeline.name), e_rr));
-
-		gotoIfError3(clean, JsonWriter_key(w, "type", e_rr));
-		gotoIfError3(clean, JsonWriter_cstr(
-			w, pipeline.type < ESPPipelineType_Count ? spPipelineTypeNames[pipeline.type] : "unknown", e_rr
+		gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyStr(w, "name", SPFile_jsonString(file, pipeline.name), e_rr) &&
+			JsonWriter_keyCstr(
+				w, "type",
+				pipeline.type < ESPPipelineType_Count ? SPFile_jsonPipelineTypeNames[pipeline.type] : "unknown", e_rr
+			)
 		));
 
 		//Into layouts below, or -1 for the device's default layout
@@ -302,28 +272,28 @@ Bool WasmJson_spFile(
 			SPStage stage = file->stages.ptr[stageId];
 
 			//A stage with no shader name behind it is a stand in the pipeline generated rather than one the
-			// shader declared, which the page marks so its disassembly is never read as the shader's own.
+			// shader declared, which a reader marks so its disassembly is never read as the shader's own.
 
 			Bool generated = stage.shaderFile == U32_MAX;
 
-			gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_key(w, "stage", e_rr)));
-			gotoIfError3(clean, JsonWriter_cstr(
-				w, stage.stage < EGfxPipelineStage_Count ? SHEntry_stageNames[stage.stage] : "unknown", e_rr
-			));
-			gotoIfError3(clean, JsonWriter_keyStr(w, "shaderFile", WasmJson_spString(file, stage.shaderFile), e_rr));
-			gotoIfError3(clean, JsonWriter_keyStr(w, "entrypoint", WasmJson_spString(file, stage.entrypoint), e_rr));
 			gotoIfError3(clean, (
+				JsonWriter_beginObject(w, e_rr) &&
+				JsonWriter_keyCstr(
+					w, "stage", stage.stage < EGfxPipelineStage_Count ? SHEntry_stageNames[stage.stage] : "unknown", e_rr
+				) &&
+				JsonWriter_keyStr(w, "shaderFile", SPFile_jsonString(file, stage.shaderFile), e_rr) &&
+				JsonWriter_keyStr(w, "entrypoint", SPFile_jsonString(file, stage.entrypoint), e_rr) &&
 				JsonWriter_keyU64(w, "sourceHash", stage.sourceHash, e_rr) &&
-				JsonWriter_keyBool(w, "generated", generated, e_rr)
+				JsonWriter_keyBool(w, "generated", generated, e_rr) &&
+				JsonWriter_endObject(w, e_rr)
 			));
-			gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 		}
 
 		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
 		//Every field reflection could not prove, with the value that would be used, where it came from, why it
 		// could not be proven and which values are legal. The last two are static text keyed off the field, so
-		// this is the only place the page has to read them from.
+		// this is the only place a reader has to take them from.
 
 		gotoIfError3(clean, JsonWriter_keyArray(w, "fields", e_rr));
 
@@ -339,30 +309,28 @@ Bool WasmJson_spFile(
 
 			gotoIfError3(clean, (
 				JsonWriter_beginObject(w, e_rr) &&
-				JsonWriter_keyCstr(w, "field", ESPField_name(field), e_rr)
-			));
-			gotoIfError3(clean, (
+				JsonWriter_keyCstr(w, "field", ESPField_name(field), e_rr) &&
 				JsonWriter_keyU64(w, "index", specialization.index, e_rr) &&
 				JsonWriter_keyU64(w, "value", specialization.value, e_rr) &&
-				JsonWriter_key(w, "source", e_rr)
+				JsonWriter_keyCstr(
+					w, "source",
+					specialization.source < ESPFieldSource_Count ?
+					SPFile_jsonFieldSourceNames[specialization.source] : "unknown",
+					e_rr
+				) &&
+				JsonWriter_keyCstr(w, "reason", ESPField_reason(field), e_rr) &&
+				JsonWriter_keyCstr(w, "domain", ESPField_domain(field), e_rr) &&
+				JsonWriter_keyBool(w, "indexed", ESPField_isIndexed(field), e_rr) &&
+				JsonWriter_endObject(w, e_rr)
 			));
-
-			gotoIfError3(clean, JsonWriter_cstr(
-				w, specialization.source < ESPFieldSource_Count ? spFieldSourceNames[specialization.source] : "unknown", e_rr
-			));
-
-			gotoIfError3(clean, JsonWriter_keyCstr(w, "reason", ESPField_reason(field), e_rr));
-			gotoIfError3(clean, JsonWriter_keyCstr(w, "domain", ESPField_domain(field), e_rr));
-			gotoIfError3(clean, JsonWriter_keyBool(w, "indexed", ESPField_isIndexed(field), e_rr));
-			gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 		}
 
 		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
-		//The prose a generated stage or an inferred hit grouping needs is what SPFile_print writes, which the
-		// page shows as the `file data` card, so nothing is restated here.
+		//The prose a generated stage or an inferred hit grouping needs is what SPFile_print writes, so nothing is
+		// restated here.
 
-			gotoIfError3(clean, (JsonWriter_keyArray(w, "notes", e_rr) && JsonWriter_endArray(w, e_rr)));
+		gotoIfError3(clean, (JsonWriter_keyArray(w, "notes", e_rr) && JsonWriter_endArray(w, e_rr)));
 
 		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
@@ -373,15 +341,18 @@ Bool WasmJson_spFile(
 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "layouts", e_rr));
 
-	for (U64 i = 0; i < file->layouts.length; ++i) {
-
-		gotoIfError3(clean, WasmJson_plFile(&file->layouts.ptr[i], w, e_rr));
-	}
+	for (U64 i = 0; i < file->layouts.length; ++i)
+		gotoIfError3(clean, SPFile_writeJsonLayout(&file->layouts.ptr[i], w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
-	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
-
 clean:
 	return s_uccess;
+}
+
+Bool SPFile_writeJson(const SPFile *file, JsonWriter *w, Error *e_rr) {
+	return
+		JsonWriter_beginObject(w, e_rr) &&
+		SPFile_writeJsonMembers(file, w, e_rr) &&
+		JsonWriter_endObject(w, e_rr);
 }
