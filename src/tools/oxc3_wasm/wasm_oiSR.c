@@ -109,7 +109,7 @@ Bool WasmJson_srFile(
 	const SRFile *file,
 	CharString name,
 	CharString sourceName,
-	CharString *out,
+	JsonWriter *w,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -118,8 +118,8 @@ Bool WasmJson_srFile(
 	Buffer collapsed = Buffer_createNull();
 	CharString annotationText = CharString_createNull();
 
-	if(!file || !out)
-		retError(clean, Error_nullPointer(!file ? 0 : 3, "WasmJson_srFile()::file and out are required"));
+	if(!file || !w)
+		retError(clean, Error_nullPointer(!file ? 0 : 3, "WasmJson_srFile()::file and w are required"));
 
 	Bool hasSymbols = (file->flags & ESRSettingsFlags_HasSymbols) != 0;
 
@@ -144,140 +144,135 @@ Bool WasmJson_srFile(
 			gotoIfError3(clean, Buffer_setBit(collapsed, i, e_rr));
 	}
 
-	gotoIfError3(clean, Json_raw(out, "{", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
 
-	Bool first = true;
+	gotoIfError3(clean, JsonWriter_keyStr(w, "name", name, e_rr));
 
-	gotoIfError3(clean, Json_key(out, "name", &first, alloc, e_rr));
-	gotoIfError3(clean, Json_str(out, name, alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_keyStr(w, "sourceName", sourceName, e_rr));
 
-	gotoIfError3(clean, Json_key(out, "sourceName", &first, alloc, e_rr));
-	gotoIfError3(clean, Json_str(out, sourceName, alloc, e_rr));
-
-	gotoIfError3(clean, Json_key(out, "compilerVersion", &first, alloc, e_rr));
-	gotoIfError3(clean, Json_fmt(
-		out, alloc, e_rr, "{\"major\":%u,\"minor\":%u,\"patch\":%u}", OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH
+	gotoIfError3(clean, (
+		JsonWriter_keyObject(w, "compilerVersion", e_rr) &&
+		JsonWriter_keyU64(w, "major", OXC3_MAJOR, e_rr) &&
+		JsonWriter_keyU64(w, "minor", OXC3_MINOR, e_rr) &&
+		JsonWriter_keyU64(w, "patch", OXC3_PATCH, e_rr) &&
+		JsonWriter_endObject(w, e_rr)
 	));
 
 	//A content hash is 64 bits, which a JSON number silently rounds past 2^53, so it travels as hex text.
 
-	gotoIfError3(clean, Json_key(out, "hash", &first, alloc, e_rr));
-	gotoIfError3(clean, Json_fmt(out, alloc, e_rr, "\"%016"PRIx64"\"", file->hash));
+	gotoIfError3(clean, JsonWriter_key(w, "hash", e_rr));
+	gotoIfError3(clean, JsonWriter_fmt(w, e_rr, "\"%016"PRIx64"\"", file->hash));
 
-	gotoIfError3(clean, Json_key(out, "header", &first, alloc, e_rr));
-	gotoIfError3(clean, Json_raw(out, "{\"version\":\"1.1\",\"flags\":{\"hasSymbols\":", alloc, e_rr));
-	gotoIfError3(clean, Json_bool(out, hasSymbols, alloc, e_rr));
-	gotoIfError3(clean, Json_raw(out, "},\"features\":[", alloc, e_rr));
-
-	Bool firstFeature = true;
+	gotoIfError3(clean, (
+		JsonWriter_keyObject(w, "header", e_rr) &&
+		JsonWriter_keyCstr(w, "version", "1.1", e_rr) &&
+		JsonWriter_keyObject(w, "flags", e_rr) &&
+		JsonWriter_keyBool(w, "hasSymbols", hasSymbols, e_rr)
+	));
+	gotoIfError3(clean, (
+		JsonWriter_endObject(w, e_rr) &&
+		JsonWriter_keyArray(w, "features", e_rr)
+	));
 
 	for(U64 i = 0; i < sizeof(srFeatureNames) / sizeof(srFeatureNames[0]); ++i)
 		if ((file->features >> i) & 1) {
-			gotoIfError3(clean, Json_next(out, &firstFeature, alloc, e_rr));
-			gotoIfError3(clean, Json_cstr(out, srFeatureNames[i], alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_cstr(w, srFeatureNames[i], e_rr));
 		}
 
 	if (file->features & ESRFeature_SymbolInfo) {
-		gotoIfError3(clean, Json_next(out, &firstFeature, alloc, e_rr));
-		gotoIfError3(clean, Json_cstr(out, "SymbolInfo", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_cstr(w, "SymbolInfo", e_rr));
 	}
 
-	gotoIfError3(clean, Json_fmt(
-		out, alloc, e_rr,
-		"],\"counts\":{\"nodes\":%"PRIu64",\"annotations\":%"PRIu64",\"registers\":%"PRIu64",\"enumValues\":%"PRIu64
-		",\"types\":%"PRIu64",\"arrayDims\":%"PRIu64",\"interfaces\":%"PRIu64"}}",
-		(U64) file->nodes.length, (U64) file->annotations.length, (U64) file->registers.length,
-		(U64) file->enumValues.length, (U64) file->types.length, (U64) file->arrayDims.length,
-		(U64) file->interfaces.length
+	gotoIfError3(clean, (
+		JsonWriter_endArray(w, e_rr) &&
+		JsonWriter_keyObject(w, "counts", e_rr) &&
+		JsonWriter_keyU64(w, "nodes", (U64) file->nodes.length, e_rr) &&
+		JsonWriter_keyU64(w, "annotations", (U64) file->annotations.length, e_rr) &&
+		JsonWriter_keyU64(w, "registers", (U64) file->registers.length, e_rr) &&
+		JsonWriter_keyU64(w, "enumValues", (U64) file->enumValues.length, e_rr) &&
+		JsonWriter_keyU64(w, "types", (U64) file->types.length, e_rr) &&
+		JsonWriter_keyU64(w, "arrayDims", (U64) file->arrayDims.length, e_rr) &&
+		JsonWriter_keyU64(w, "interfaces", (U64) file->interfaces.length, e_rr) &&
+		JsonWriter_endObject(w, e_rr) &&
+		JsonWriter_endObject(w, e_rr)
 	));
 
-	gotoIfError3(clean, Json_key(out, "nodes", &first, alloc, e_rr));
-	gotoIfError3(clean, Json_raw(out, "[", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_keyArray(w, "nodes", e_rr));
 
 	for (U64 i = 0; i < file->nodes.length; ++i) {
 
 		SRNode node = file->nodes.ptr[i];
 
-		if(i)
-			gotoIfError3(clean, Json_raw(out, ",", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
 
-		gotoIfError3(clean, Json_raw(out, "{", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_keyU64(w, "id", i, e_rr));
 
-		Bool firstField = true;
-
-		gotoIfError3(clean, Json_key(out, "id", &firstField, alloc, e_rr));
-		gotoIfError3(clean, Json_fmt(out, alloc, e_rr, "%"PRIu64, i));
-
-		gotoIfError3(clean, Json_key(out, "kind", &firstField, alloc, e_rr));
-		gotoIfError3(clean, Json_cstr(out, ESRNodeType_name((ESRNodeType) node.type), alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_keyCstr(w, "kind", ESRNodeType_name((ESRNodeType) node.type), e_rr));
 
 		//The return slot has no name of its own, and an anonymous node never had one; both are spelled the way
 		// the CLI spells them so the two views read the same.
 
-		gotoIfError3(clean, Json_key(out, "name", &firstField, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_key(w, "name", e_rr));
 
 		if(node.flags & ESRNodeFlag_ParamReturn) {
-			gotoIfError3(clean, Json_cstr(out, "(return)", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_cstr(w, "(return)", e_rr));
 		}
 
 		else if(node.nameId == U32_MAX) {
-			gotoIfError3(clean, Json_cstr(out, "(anonymous)", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_cstr(w, "(anonymous)", e_rr));
 		}
 
-		else gotoIfError3(clean, Json_str(out, file->names.entryStrings.ptr[node.nameId], alloc, e_rr));
+		else gotoIfError3(clean, JsonWriter_str(w, file->names.entryStrings.ptr[node.nameId], e_rr));
 
 		//A root has no parent, which the page tests for with a negative id rather than a sentinel it would have
 		// to know the width of.
 
-		gotoIfError3(clean, Json_key(out, "parent", &firstField, alloc, e_rr));
-		gotoIfError3(clean, Json_fmt(
-			out, alloc, e_rr, "%"PRIi64, node.parent == U32_MAX ? (I64) -1 : (I64) node.parent
-		));
+		gotoIfError3(clean, JsonWriter_keyI64(w, "parent", node.parent == U32_MAX ? (I64) -1 : (I64) node.parent, e_rr));
 
 		//Children are found by parent id rather than stored as a range.
 		//Every child travels, builtin or not: which of them to fold away is the reader's decision, and the
 		// `builtin` flag below is what it decides on. Leaving them out here would make the fold permanent.
 
-		gotoIfError3(clean, Json_key(out, "children", &firstField, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(out, "[", alloc, e_rr));
-
-		Bool firstChild = true;
+		gotoIfError3(clean, JsonWriter_keyArray(w, "children", e_rr));
 
 		for(U64 j = 0; j < file->nodes.length; ++j)
 			if (file->nodes.ptr[j].parent == i) {
-				gotoIfError3(clean, Json_next(out, &firstChild, alloc, e_rr));
-				gotoIfError3(clean, Json_fmt(out, alloc, e_rr, "%"PRIu64, j));
+				gotoIfError3(clean, JsonWriter_u64(w, j, e_rr));
 			}
 
-		gotoIfError3(clean, Json_raw(out, "]", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
 		//The source span, which is what makes the tree an outline with go to definition.
 		//Absent when the file was written without the SymbolInfo tier.
 
-		gotoIfError3(clean, Json_key(out, "loc", &firstField, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_key(w, "loc", e_rr));
 
 		if(i >= file->symbols.length || file->symbols.ptr[i].fileNameId == U32_MAX) {
-			gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_null(w, e_rr));
 		}
 
 		else {
 
 			SRSymbol symbol = file->symbols.ptr[i];
 
-			gotoIfError3(clean, Json_raw(out, "{\"file\":", alloc, e_rr));
-			gotoIfError3(clean, Json_str(out, file->names.entryStrings.ptr[symbol.fileNameId], alloc, e_rr));
-			gotoIfError3(clean, Json_fmt(
-				out, alloc, e_rr, ",\"line\":%"PRIu32",\"col\":%"PRIu32",\"len\":%"PRIu32",\"lines\":%"PRIu32"}",
-				symbol.line, symbol.columnStart,
-				symbol.columnEnd > symbol.columnStart ? symbol.columnEnd - symbol.columnStart : 0,
-				symbol.lineCount
+			gotoIfError3(clean, (
+				JsonWriter_beginObject(w, e_rr) &&
+				JsonWriter_keyStr(w, "file", file->names.entryStrings.ptr[symbol.fileNameId], e_rr)
+			));
+			gotoIfError3(clean, (
+				JsonWriter_keyU64(w, "line", symbol.line, e_rr) &&
+				JsonWriter_keyU64(w, "col", symbol.columnStart, e_rr) &&
+				JsonWriter_keyU64(
+					w, "len", symbol.columnEnd > symbol.columnStart ? symbol.columnEnd - symbol.columnStart : 0, e_rr
+				) &&
+				JsonWriter_keyU64(w, "lines", symbol.lineCount, e_rr) &&
+				JsonWriter_endObject(w, e_rr)
 			));
 		}
 
 		//Annotations keep the bracket form they were written in: [name] is a builtin, [[name]] a custom attribute.
 
-		gotoIfError3(clean, Json_key(out, "annotations", &firstField, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(out, "[", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_keyArray(w, "annotations", e_rr));
 
 		for (U16 a = 0; a < node.annotationCount; ++a) {
 
@@ -295,13 +290,10 @@ Bool WasmJson_srFile(
 				(int) CharString_length(text), text.ptr
 			));
 
-			if(a)
-				gotoIfError3(clean, Json_raw(out, ",", alloc, e_rr));
-
-			gotoIfError3(clean, Json_str(out, annotationText, alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_str(w, annotationText, e_rr));
 		}
 
-		gotoIfError3(clean, Json_raw(out, "]", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
 		//The resolved type of a value node, plus the array shape that goes with it.
 		//`name` is the frontend spelling the type resolves to and `display` the alias the source wrote, which is
@@ -313,10 +305,10 @@ Bool WasmJson_srFile(
 			if(file->types.ptr[j].nodeId == i)
 				type = &file->types.ptr[j];
 
-		gotoIfError3(clean, Json_key(out, "type", &firstField, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_key(w, "type", e_rr));
 
 		if(!type) {
-			gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_null(w, e_rr));
 		}
 
 		else {
@@ -345,57 +337,49 @@ Bool WasmJson_srFile(
 			CharString display = type->displayNameId != U32_MAX ?
 				file->names.entryStrings.ptr[type->displayNameId] : under;
 
-			gotoIfError3(clean, Json_raw(out, "{\"name\":", alloc, e_rr));
+			gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_key(w, "name", e_rr)));
 
 			if (named) {
-				gotoIfError3(clean, Json_str(out, under, alloc, e_rr));
+				gotoIfError3(clean, JsonWriter_str(w, under, e_rr));
 			}
 
-			else gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
+			else gotoIfError3(clean, JsonWriter_null(w, e_rr));
 
-			gotoIfError3(clean, Json_raw(out, ",\"display\":", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_key(w, "display", e_rr));
 
 			if (named || type->displayNameId != U32_MAX) {
-				gotoIfError3(clean, Json_str(out, display, alloc, e_rr));
+				gotoIfError3(clean, JsonWriter_str(w, display, e_rr));
 			}
 
-			else gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
-			gotoIfError3(clean, Json_raw(out, ",\"cls\":", alloc, e_rr));
-			gotoIfError3(clean, Json_cstr(out, ESRTypeClass_name((ESRTypeClass) type->typeClass), alloc, e_rr));
-			gotoIfError3(clean, Json_fmt(
-				out, alloc, e_rr, ",\"rows\":%"PRIu8",\"cols\":%"PRIu8",\"def\":%"PRIi64",\"base\":%"PRIi64"}",
-				type->rows, type->cols,
-				type->defNodeId == U32_MAX ? (I64) -1 : (I64) type->defNodeId,
-				type->baseNodeId == U32_MAX ? (I64) -1 : (I64) type->baseNodeId
+			else gotoIfError3(clean, JsonWriter_null(w, e_rr));
+			gotoIfError3(clean, JsonWriter_keyCstr(w, "cls", ESRTypeClass_name((ESRTypeClass) type->typeClass), e_rr));
+			gotoIfError3(clean, (
+				JsonWriter_keyU64(w, "rows", type->rows, e_rr) &&
+				JsonWriter_keyU64(w, "cols", type->cols, e_rr) &&
+				JsonWriter_keyI64(w, "def", type->defNodeId == U32_MAX ? (I64) -1 : (I64) type->defNodeId, e_rr) &&
+				JsonWriter_keyI64(w, "base", type->baseNodeId == U32_MAX ? (I64) -1 : (I64) type->baseNodeId, e_rr) &&
+				JsonWriter_endObject(w, e_rr)
 			));
 		}
 
 		//Array lengths list per dimension when the pool holds them, otherwise the flattened element count, which
 		// is the same fallback SRFile_print reads. Bounds are rechecked so a truncated file can't over read.
 
-		gotoIfError3(clean, Json_key(out, "implements", &firstField, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(out, "[", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_keyArray(w, "implements", e_rr));
 
 		{
-			Bool firstIface = true;
-
 			for (U64 j = 0; j < file->interfaces.length; ++j) {
 
 				if(file->interfaces.ptr[j].nodeId != i)
 					continue;
 
-				if(!firstIface)
-					gotoIfError3(clean, Json_raw(out, ",", alloc, e_rr));
-
-				firstIface = false;
-				gotoIfError3(clean, Json_fmt(out, alloc, e_rr, "%"PRIu32, file->interfaces.ptr[j].interfaceNodeId));
+				gotoIfError3(clean, JsonWriter_u64(w, file->interfaces.ptr[j].interfaceNodeId, e_rr));
 			}
 		}
 
-		gotoIfError3(clean, Json_raw(out, "]", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
-		gotoIfError3(clean, Json_key(out, "arrays", &firstField, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(out, "[", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_keyArray(w, "arrays", e_rr));
 
 		if (type) {
 
@@ -405,32 +389,31 @@ Bool WasmJson_srFile(
 
 			if (multiDim) {
 				for(U8 k = 0; k < type->arrayDimCount; ++k)
-					gotoIfError3(clean, Json_fmt(
-						out, alloc, e_rr, k ? ",%"PRIu32 : "%"PRIu32, file->arrayDims.ptr[type->arrayDimStart + k]
-					));
+					gotoIfError3(clean, JsonWriter_u64(w, file->arrayDims.ptr[type->arrayDimStart + k]
+					, e_rr));
 			}
 
 			else if(type->elements)
-				gotoIfError3(clean, Json_fmt(out, alloc, e_rr, "%"PRIu32, type->elements));
+				gotoIfError3(clean, JsonWriter_u64(w, type->elements, e_rr));
 		}
 
-		gotoIfError3(clean, Json_raw(out, "]", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
-		gotoIfError3(clean, Json_key(out, "semantic", &firstField, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_key(w, "semantic", e_rr));
 
 		if(node.semanticId == U32_MAX) {
-			gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_null(w, e_rr));
 		}
 
-		else gotoIfError3(clean, Json_str(out, file->names.entryStrings.ptr[node.semanticId], alloc, e_rr));
+		else gotoIfError3(clean, JsonWriter_str(w, file->names.entryStrings.ptr[node.semanticId], e_rr));
 
 		//A parameter's direction, written as HLSL writes it; the return slot is its own direction so the page can
 		// tell it apart from an out parameter.
 
-		gotoIfError3(clean, Json_key(out, "direction", &firstField, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_key(w, "direction", e_rr));
 
 		if (node.type != ESRNodeType_Parameter) {
-			gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_null(w, e_rr));
 		}
 
 		else {
@@ -438,12 +421,12 @@ Bool WasmJson_srFile(
 			Bool in = (node.flags & ESRNodeFlag_ParamIn) != 0;
 			Bool outward = (node.flags & ESRNodeFlag_ParamOut) != 0;
 
-			gotoIfError3(clean, Json_cstr(out, node.flags & ESRNodeFlag_ParamReturn ? "return" : (
+			gotoIfError3(clean, JsonWriter_cstr(w, node.flags & ESRNodeFlag_ParamReturn ? "return" : (
 				in && outward ? "inout" : outward ? "out" : "in"
-			), alloc, e_rr));
+			), e_rr));
 		}
 
-		gotoIfError3(clean, Json_key(out, "register", &firstField, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_key(w, "register", e_rr));
 
 		const SRRegister *reg = NULL;
 
@@ -452,23 +435,27 @@ Bool WasmJson_srFile(
 				reg = &file->registers.ptr[j];
 
 		if(!reg) {
-			gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_null(w, e_rr));
 		}
 
 		else {
 
-			gotoIfError3(clean, Json_raw(out, "{\"info\":", alloc, e_rr));
-			gotoIfError3(clean, Json_cstr(out, ESRResourceType_name((ESRResourceType) reg->type), alloc, e_rr));
-			gotoIfError3(clean, Json_fmt(out, alloc, e_rr, ",\"count\":%"PRIu32",\"cls\":", reg->bindCount));
-			gotoIfError3(clean, Json_cstr(out, WasmJson_srRegisterClass((ESRResourceType) reg->type), alloc, e_rr));
-			gotoIfError3(clean, Json_raw(out, "}", alloc, e_rr));
+			gotoIfError3(clean, (
+				JsonWriter_beginObject(w, e_rr) &&
+				JsonWriter_keyCstr(w, "info", ESRResourceType_name((ESRResourceType) reg->type), e_rr)
+			));
+			gotoIfError3(clean, (
+				JsonWriter_keyU64(w, "count", reg->bindCount, e_rr) &&
+				JsonWriter_keyCstr(w, "cls", WasmJson_srRegisterClass((ESRResourceType) reg->type), e_rr)
+			));
+			gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 		}
 
 		//An enumerator's value with the enum's underlying integer type, the pair the CLI prints as `= 2 (U32)`.
 		//The value is 64 bits wide and a JSON number silently rounds past 2^53, so one beyond that travels as decimal
 		// text instead; a reader prints either as it is.
 
-		gotoIfError3(clean, Json_key(out, "enumValue", &firstField, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_key(w, "enumValue", e_rr));
 
 		const SREnumValue *enumValue = NULL;
 
@@ -478,30 +465,29 @@ Bool WasmJson_srFile(
 					enumValue = &file->enumValues.ptr[j];
 
 		if(!enumValue) {
-			gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_null(w, e_rr));
 		}
 
 		else {
 
 			const I64 exactMax = (I64) 1 << 53;
 
-			gotoIfError3(clean, Json_raw(out, "{\"value\":", alloc, e_rr));
+			gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_key(w, "value", e_rr)));
 
 			if(enumValue->value >= -exactMax && enumValue->value <= exactMax) {
-				gotoIfError3(clean, Json_fmt(out, alloc, e_rr, "%"PRIi64, enumValue->value));
+				gotoIfError3(clean, JsonWriter_i64(w, enumValue->value, e_rr));
 			}
 
-			else gotoIfError3(clean, Json_fmt(out, alloc, e_rr, "\"%"PRIi64"\"", enumValue->value));
+			else gotoIfError3(clean, JsonWriter_fmt(w, e_rr, "\"%"PRIi64"\"", enumValue->value));
 
-			gotoIfError3(clean, Json_raw(out, ",\"type\":", alloc, e_rr));
-			gotoIfError3(clean, Json_cstr(out, ESREnumType_name((ESREnumType) enumValue->enumType), alloc, e_rr));
-			gotoIfError3(clean, Json_raw(out, "}", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_keyCstr(w, "type", ESREnumType_name((ESREnumType) enumValue->enumType), e_rr));
+			gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 		}
 
 		//An entrypoint is a function carrying a stage annotation, and the bracket form says which kind: the
 		// builtin [shader("...")] is the library form, [[oxc::stage("...")]] the direct one.
 
-		gotoIfError3(clean, Json_key(out, "entry", &firstField, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_key(w, "entry", e_rr));
 
 		CharString stage = CharString_createNull();
 		Bool isLibEntry = false;
@@ -529,39 +515,32 @@ Bool WasmJson_srFile(
 			}
 
 		if(!CharString_length(stage)) {
-			gotoIfError3(clean, Json_raw(out, "null", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_null(w, e_rr));
 		}
 
 		else {
 
-			gotoIfError3(clean, Json_raw(out, "{\"stage\":", alloc, e_rr));
-			gotoIfError3(clean, Json_str(out, stage, alloc, e_rr));
-			gotoIfError3(clean, Json_raw(out, ",\"lib\":", alloc, e_rr));
-			gotoIfError3(clean, Json_bool(out, isLibEntry, alloc, e_rr));
-			gotoIfError3(clean, Json_raw(out, "}", alloc, e_rr));
+			gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_keyStr(w, "stage", stage, e_rr)));
+			gotoIfError3(clean, JsonWriter_keyBool(w, "lib", isLibEntry, e_rr));
+			gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 		}
 
-		gotoIfError3(clean, Json_key(out, "returns", &firstField, alloc, e_rr));
-		gotoIfError3(clean, Json_bool(out, (node.flags & ESRNodeFlag_HasReturn) != 0, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_keyBool(w, "returns", (node.flags & ESRNodeFlag_HasReturn) != 0, e_rr));
 
 		//Whether the node came from a builtin include, or descends from one that did.
 		//This is what the summary counts and what a reader folds on, so the same tree can be shown collapsed
 		// the way the CLI prints it or expanded in full.
 
-		gotoIfError3(clean, Json_key(out, "builtin", &firstField, alloc, e_rr));
-		gotoIfError3(clean, Json_bool(out, WasmJson_srCollapsed(collapsed, i), alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_keyBool(w, "builtin", WasmJson_srCollapsed(collapsed, i), e_rr));
 
-		gotoIfError3(clean, Json_raw(out, "}", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
 
-	gotoIfError3(clean, Json_raw(out, "]", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
 	//The per include summary the collapsed nodes add up to, in the order the includes were first seen.
 
-	gotoIfError3(clean, Json_key(out, "builtinCollapsed", &first, alloc, e_rr));
-	gotoIfError3(clean, Json_raw(out, "[", alloc, e_rr));
-
-	Bool firstBuiltin = true;
+	gotoIfError3(clean, JsonWriter_keyArray(w, "builtinCollapsed", e_rr));
 
 	for (U64 i = 0; i < file->nodes.length && collapsed.ptr; ++i) {
 
@@ -589,15 +568,19 @@ Bool WasmJson_srFile(
 		if(seen)
 			continue;
 
-		gotoIfError3(clean, Json_next(out, &firstBuiltin, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(out, "{\"file\":", alloc, e_rr));
-		gotoIfError3(clean, Json_str(out, file->names.entryStrings.ptr[fileNameId], alloc, e_rr));
-		gotoIfError3(clean, Json_fmt(out, alloc, e_rr, ",\"count\":%"PRIu64"}", count));
+		gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyStr(w, "file", file->names.entryStrings.ptr[fileNameId], e_rr)
+		));
+		gotoIfError3(clean, (
+			JsonWriter_keyU64(w, "count", count, e_rr) &&
+			JsonWriter_endObject(w, e_rr)
+		));
 	}
 
-	gotoIfError3(clean, Json_raw(out, "]", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
-	gotoIfError3(clean, Json_raw(out, "}", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 
 clean:
 	CharString_free(&annotationText, alloc);

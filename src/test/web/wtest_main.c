@@ -55,6 +55,7 @@ WTEST_SUITE(formats_oiPL);
 WTEST_SUITE(formats_oiSP);
 WTEST_SUITE(formats_oiSR);
 WTEST_SUITE(formats_wav);
+WTEST_SUITE(formats_json);
 WTEST_SUITE(audio_interface);
 WTEST_SUITE(platforms_interface);
 WTEST_SUITE(shader_compiler);
@@ -95,6 +96,7 @@ static const WTestSuite WTest_suites[] = {
 	{ "formats_oiSP",        OxC3_test_formats_oiSP,        EWTestDir_Default      },
 	{ "formats_oiSR",        OxC3_test_formats_oiSR,        EWTestDir_Default      },
 	{ "formats_wav",         OxC3_test_formats_wav,         EWTestDir_Default      },
+	{ "formats_json",        OxC3_test_formats_json,        EWTestDir_Default      },
 
 	{ "audio_interface",     OxC3_test_audio_interface,     EWTestDir_Default      },
 	{ "platforms_interface", OxC3_test_platforms_interface, EWTestDir_Packages     },

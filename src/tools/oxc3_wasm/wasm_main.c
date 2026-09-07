@@ -191,6 +191,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_init() {
 	Compiler_setPlatform(Platform_instance);
 
 	const Allocator *alloc = Wasm_allocator();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 
 	gotoIfError3(clean, Compiler_create(alloc, &wasmCompiler, e_rr));
 	wasmHasCompiler = true;
@@ -207,10 +209,16 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_init() {
 		offlineIsa = true;
 	#endif
 
-	gotoIfError3(clean, Json_fmt(
-		&json, alloc, e_rr,
-		"{\"version\":\"%u.%u.%u\",\"capabilities\":{\"liveIsa\":false,\"offlineIsa\":%s,\"threads\":%"PRIu64"}}",
-		OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH, offlineIsa ? "true" : "false", Platform_getThreads()
+	gotoIfError3(clean, (
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_key(w, "version", e_rr) &&
+		JsonWriter_fmt(w, e_rr, "\"%u.%u.%u\"", OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH) &&
+		JsonWriter_keyObject(w, "capabilities", e_rr) &&
+		JsonWriter_keyBool(w, "liveIsa", false, e_rr) &&
+		JsonWriter_keyBool(w, "offlineIsa", offlineIsa, e_rr) &&
+		JsonWriter_keyU64(w, "threads", Platform_getThreads(), e_rr) &&
+		JsonWriter_endObject(w, e_rr) &&
+		JsonWriter_endObject(w, e_rr)
 	));
 
 	frame = Wasm_frame(&json, NULL);
@@ -261,9 +269,14 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_builtinIncludes() {
 	Error err = Error_none(), *e_rr = &err;
 	Bool s_uccess = true;
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
-	gotoIfError3(clean, Json_raw(&json, "{\"includes\":[", alloc, e_rr));
+	gotoIfError3(clean, (
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyArray(w, "includes", e_rr)
+	));
 
 	U64 count = Compiler_builtInIncludeCount();
 
@@ -274,14 +287,12 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_builtinIncludes() {
 		if(!include)
 			continue;
 
-		gotoIfError3(clean, Json_raw(&json, i ? ",{\"name\":" : "{\"name\":", alloc, e_rr));
-		gotoIfError3(clean, Json_cstr(&json, include->name, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, ",\"src\":", alloc, e_rr));
-		gotoIfError3(clean, Json_cstr(&json, include->source, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+		gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_keyCstr(w, "name", include->name, e_rr)));
+		gotoIfError3(clean, JsonWriter_keyCstr(w, "src", include->source, e_rr));
+		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
 
-	gotoIfError3(clean, Json_raw(&json, "]}", alloc, e_rr));
+	gotoIfError3(clean, (JsonWriter_endArray(w, e_rr) && JsonWriter_endObject(w, e_rr)));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -315,6 +326,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_compileShaders(const C8 *name, const C8 *source,
 	SHFile file = (SHFile) { 0 };
 	Buffer blob = Buffer_createNull();
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	CharString nameStr = Wasm_string(name);
@@ -395,7 +408,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_compileShaders(const C8 *name, const C8 *source,
 		gotoIfError3(clean, Wasm_writeSH(&file, &blob, alloc, e_rr));
 	}
 
-	gotoIfError3(clean, WasmJson_shFile(&file, nameStr, nameStr, &json, alloc, e_rr));
+	gotoIfError3(clean, WasmJson_shFile(&file, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -428,12 +441,14 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_shRead(const U8 *ptr, U32 length, const C8 *name
 
 	SHFile file = (SHFile) { 0 };
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	CharString nameStr = Wasm_string(name);
 
 	gotoIfError3(clean, Wasm_readSH(Wasm_input(ptr, length), &file, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_shFile(&file, nameStr, nameStr, &json, alloc, e_rr));
+	gotoIfError3(clean, WasmJson_shFile(&file, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -461,6 +476,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_shCombine(
 	SHFile a = (SHFile) { 0 }, b = (SHFile) { 0 }, combined = (SHFile) { 0 };
 	Buffer blob = Buffer_createNull();
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	CharString nameStr = Wasm_string(name);
@@ -469,7 +486,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_shCombine(
 	gotoIfError3(clean, Wasm_readSH(Wasm_input(bPtr, bLength), &b, alloc, e_rr));
 	gotoIfError3(clean, SHFile_combine(&a, &b, alloc, &combined, e_rr));
 	gotoIfError3(clean, Wasm_writeSH(&combined, &blob, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_shFile(&combined, nameStr, nameStr, &json, alloc, e_rr));
+	gotoIfError3(clean, WasmJson_shFile(&combined, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -496,6 +513,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_shExtractBinary(const U8 *ptr, U32 length, U32 b
 	SHFile file = (SHFile) { 0 };
 	Buffer blob = Buffer_createNull();
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	gotoIfError3(clean, Wasm_readSH(Wasm_input(ptr, length), &file, alloc, e_rr));
@@ -514,7 +533,11 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_shExtractBinary(const U8 *ptr, U32 length, U32 b
 		retError(clean, Error_notFound(0, 0, "oxc3_shExtractBinary() this binary holds no code for that backend"));
 
 	gotoIfError3(clean, Buffer_createCopy(stored, alloc, &blob, e_rr));
-	gotoIfError3(clean, Json_fmt(&json, alloc, e_rr, "{\"length\":%"PRIu64"}", Buffer_length(blob)));
+	gotoIfError3(clean, (
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyU64(w, "length", Buffer_length(blob), e_rr) &&
+		JsonWriter_endObject(w, e_rr)
+	));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -541,6 +564,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_fileHeader(const U8 *ptr, U32 length) {
 	SRFile srFile = (SRFile) { 0 };
 	SPFile spFile = (SPFile) { 0 };
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	Buffer input = Wasm_input(ptr, length);
@@ -553,23 +578,35 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_fileHeader(const U8 *ptr, U32 length) {
 
 	if (magic == SRHeader_MAGIC) {
 		gotoIfError3(clean, Wasm_readSR(input, &srFile, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, "{\"format\":\"oiSR\",\"document\":", alloc, e_rr));
-		gotoIfError3(clean, WasmJson_srFile(&srFile, CharString_createNull(), CharString_createNull(), &json, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+		gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyCstr(w, "format", "oiSR", e_rr) &&
+			JsonWriter_key(w, "document", e_rr)
+		));
+		gotoIfError3(clean, WasmJson_srFile(&srFile, CharString_createNull(), CharString_createNull(), w, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
 
 	else if (magic == SPHeader_MAGIC) {
 		gotoIfError3(clean, Wasm_readSP(input, &spFile, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, "{\"format\":\"oiSP\",\"document\":", alloc, e_rr));
-		gotoIfError3(clean, WasmJson_spFile(&spFile, CharString_createNull(), CharString_createNull(), &json, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+		gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyCstr(w, "format", "oiSP", e_rr) &&
+			JsonWriter_key(w, "document", e_rr)
+		));
+		gotoIfError3(clean, WasmJson_spFile(&spFile, CharString_createNull(), CharString_createNull(), w, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
 
 	else if (magic == SHHeader_MAGIC) {
 		gotoIfError3(clean, Wasm_readSH(input, &shFile, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, "{\"format\":\"oiSH\",\"document\":", alloc, e_rr));
-		gotoIfError3(clean, WasmJson_shFile(&shFile, CharString_createNull(), CharString_createNull(), &json, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+		gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyCstr(w, "format", "oiSH", e_rr) &&
+			JsonWriter_key(w, "document", e_rr)
+		));
+		gotoIfError3(clean, WasmJson_shFile(&shFile, CharString_createNull(), CharString_createNull(), w, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
 
 	else retError(clean, Error_invalidParameter(0, 0, "oxc3_fileHeader() the magic is not oiSH, oiSR or oiSP"));
@@ -598,6 +635,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_disassemble(U32 binaryType, const U8 *ptr, U32 l
 
 	CharString text = CharString_createNull();
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	if(binaryType >= EGfxBinaryType_Count)
@@ -607,9 +646,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_disassemble(U32 binaryType, const U8 *ptr, U32 l
 		&wasmCompiler, (EGfxBinaryType) binaryType, Wasm_input(ptr, length), alloc, &text, e_rr
 	));
 
-	gotoIfError3(clean, Json_raw(&json, "{\"text\":", alloc, e_rr));
-	gotoIfError3(clean, Json_str(&json, text, alloc, e_rr));
-	gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+	gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_keyStr(w, "text", text, e_rr)));
+	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -633,6 +671,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_assemble(U32 binaryType, const C8 *text) {
 
 	Buffer blob = Buffer_createNull();
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	if(binaryType >= EGfxBinaryType_Count)
@@ -642,7 +682,11 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_assemble(U32 binaryType, const C8 *text) {
 		&wasmCompiler, (EGfxBinaryType) binaryType, Wasm_string(text), alloc, &blob, e_rr
 	));
 
-	gotoIfError3(clean, Json_fmt(&json, alloc, e_rr, "{\"length\":%"PRIu64"}", Buffer_length(blob)));
+	gotoIfError3(clean, (
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyU64(w, "length", Buffer_length(blob), e_rr) &&
+		JsonWriter_endObject(w, e_rr)
+	));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -665,6 +709,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_uniqueEntrypoints(U32 binaryType, const U8 *ptr,
 
 	ListCompilerEntrypoint entrypoints = (ListCompilerEntrypoint) { 0 };
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	if(binaryType >= EGfxBinaryType_Count)
@@ -674,20 +720,20 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_uniqueEntrypoints(U32 binaryType, const U8 *ptr,
 		&wasmCompiler, (EGfxBinaryType) binaryType, Wasm_input(ptr, length), showAll != 0, &entrypoints, alloc, e_rr
 	));
 
-	gotoIfError3(clean, Json_raw(&json, "{\"entrypoints\":[", alloc, e_rr));
+	gotoIfError3(clean, (
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyArray(w, "entrypoints", e_rr)
+	));
 
 	for (U64 i = 0; i < entrypoints.length; ++i) {
 
-		gotoIfError3(clean, Json_raw(&json, i ? ",{\"name\":" : "{\"name\":", alloc, e_rr));
-		gotoIfError3(clean, Json_str(&json, entrypoints.ptr[i].name, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, ",\"stage\":", alloc, e_rr));
-		gotoIfError3(clean, Json_cstr(&json, entrypoints.ptr[i].stage < EGfxPipelineStage_Count ?
-			SHEntry_stageNames[entrypoints.ptr[i].stage] : "unknown", alloc, e_rr
-		));
-		gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+		gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_keyStr(w, "name", entrypoints.ptr[i].name, e_rr)));
+		gotoIfError3(clean, JsonWriter_keyCstr(w, "stage", entrypoints.ptr[i].stage < EGfxPipelineStage_Count ?
+			SHEntry_stageNames[entrypoints.ptr[i].stage] : "unknown", e_rr));
+		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
 
-	gotoIfError3(clean, Json_raw(&json, "]}", alloc, e_rr));
+	gotoIfError3(clean, (JsonWriter_endArray(w, e_rr) && JsonWriter_endObject(w, e_rr)));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -722,6 +768,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_reflectSymbols(
 	SRFile reflection = (SRFile) { 0 };
 	Buffer blob = Buffer_createNull();
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	ListCharString definePairs = (ListCharString) { 0 };
 	void *frame = NULL;
 
@@ -771,7 +819,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_reflectSymbols(
 
 	gotoIfError3(clean, Compiler_reflect(&wasmCompiler, &settings, alloc, &reflection, e_rr));
 	gotoIfError3(clean, Wasm_writeSR(&reflection, &blob, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_srFile(&reflection, nameStr, nameStr, &json, alloc, e_rr));
+	gotoIfError3(clean, WasmJson_srFile(&reflection, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -794,12 +842,14 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_srRead(const U8 *ptr, U32 length, const C8 *name
 
 	SRFile file = (SRFile) { 0 };
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	CharString nameStr = Wasm_string(name);
 
 	gotoIfError3(clean, Wasm_readSR(Wasm_input(ptr, length), &file, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_srFile(&file, nameStr, nameStr, &json, alloc, e_rr));
+	gotoIfError3(clean, WasmJson_srFile(&file, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -871,7 +921,7 @@ static Bool Wasm_selectPipelineStages(
 	U8 chosenKind = kindCounts[0] ? 0 : kindCounts[1] ? 1 : kindCounts[2] ? 2 : 3;
 
 	if (chosenKind == 3) {
-		
+
 		gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(
 			"This file has no compute, graphics or ray tracing stage, so there is no pipeline to derive."
 		), alloc, refusal, e_rr));
@@ -936,13 +986,11 @@ clean:
 //The stage kinds a refusal is about, with the entries that clash, so the page can offer the same choice
 // -entry offers.
 
-static Bool Wasm_refusalCandidates(const SHFile *file, CharString *json, const Allocator *alloc, Error *e_rr) {
+static Bool Wasm_refusalCandidates(const SHFile *file, JsonWriter *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	gotoIfError3(clean, Json_raw(json, "{", alloc, e_rr));
-
-	Bool firstStage = true;
+	gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
 
 	for (U64 i = 0; i < file->entries.length; ++i) {
 
@@ -964,24 +1012,20 @@ static Bool Wasm_refusalCandidates(const SHFile *file, CharString *json, const A
 		if(seen || count < 2)
 			continue;
 
-		gotoIfError3(clean, Json_key(json, SHEntry_stageNames[stage], &firstStage, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(json, "[", alloc, e_rr));
-
-		Bool firstEntry = true;
+			gotoIfError3(clean, JsonWriter_keyArray(w, SHEntry_stageNames[stage], e_rr));
 
 		for (U64 j = 0; j < file->entries.length; ++j) {
 
 			if(file->entries.ptr[j].stage != stage)
 				continue;
 
-			gotoIfError3(clean, Json_next(json, &firstEntry, alloc, e_rr));
-			gotoIfError3(clean, Json_fmt(json, alloc, e_rr, "%"PRIu64, j));
+			gotoIfError3(clean, JsonWriter_u64(w, j, e_rr));
 		}
 
-		gotoIfError3(clean, Json_raw(json, "]", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 	}
 
-	gotoIfError3(clean, Json_raw(json, "}", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 
 clean:
 	return s_uccess;
@@ -1007,6 +1051,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spDerive(const U8 *ptr, U32 length, const C8 *sh
 	CharString refusal = CharString_createNull();
 	Buffer blob = Buffer_createNull();
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	CharString shaderNameStr = Wasm_string(shaderName);
@@ -1027,11 +1073,10 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spDerive(const U8 *ptr, U32 length, const C8 *sh
 				"No entry of this file forms a pipeline."
 			), alloc, &refusal, e_rr));
 
-		gotoIfError3(clean, Json_raw(&json, "{\"refused\":", alloc, e_rr));
-		gotoIfError3(clean, Json_str(&json, refusal, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, ",\"candidates\":", alloc, e_rr));
-		gotoIfError3(clean, Wasm_refusalCandidates(&shFile, &json, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+		gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_keyStr(w, "refused", refusal, e_rr)));
+		gotoIfError3(clean, JsonWriter_key(w, "candidates", e_rr));
+		gotoIfError3(clean, Wasm_refusalCandidates(&shFile, w, e_rr));
+		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 
 		frame = Wasm_frame(&json, NULL);
 		goto clean;
@@ -1046,7 +1091,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spDerive(const U8 *ptr, U32 length, const C8 *sh
 	));
 
 	gotoIfError3(clean, Wasm_writeSP(&spFile, &blob, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_spFile(&spFile, shaderNameStr, shaderNameStr, &json, alloc, e_rr));
+	gotoIfError3(clean, WasmJson_spFile(&spFile, shaderNameStr, shaderNameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -1079,6 +1124,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spSupply(
 	SPFile file = (SPFile) { 0 };
 	Buffer blob = Buffer_createNull();
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	CharString nameStr = Wasm_string(name);
@@ -1092,7 +1139,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spSupply(
 	gotoIfError3(clean, Wasm_readSP(Wasm_input(ptr, length), &file, alloc, e_rr));
 	gotoIfError3(clean, SPFile_supply(&file, pipelineId, field, index, value, e_rr));
 	gotoIfError3(clean, Wasm_writeSP(&file, &blob, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_spFile(&file, nameStr, nameStr, &json, alloc, e_rr));
+	gotoIfError3(clean, WasmJson_spFile(&file, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -1118,14 +1165,15 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spPrint(const U8 *ptr, U32 length, U32 pipelineI
 	SPFile file = (SPFile) { 0 };
 	CharString text = CharString_createNull();
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	gotoIfError3(clean, Wasm_readSP(Wasm_input(ptr, length), &file, alloc, e_rr));
 	gotoIfError3(clean, SPFile_print(&file, pipelineId, alloc, &text, e_rr));
 
-	gotoIfError3(clean, Json_raw(&json, "{\"text\":", alloc, e_rr));
-	gotoIfError3(clean, Json_str(&json, text, alloc, e_rr));
-	gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+	gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_keyStr(w, "text", text, e_rr)));
+	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -1147,12 +1195,14 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spRead(const U8 *ptr, U32 length, const C8 *name
 
 	SPFile file = (SPFile) { 0 };
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	CharString nameStr = Wasm_string(name);
 
 	gotoIfError3(clean, Wasm_readSP(Wasm_input(ptr, length), &file, alloc, e_rr));
-	gotoIfError3(clean, WasmJson_spFile(&file, nameStr, nameStr, &json, alloc, e_rr));
+	gotoIfError3(clean, WasmJson_spFile(&file, nameStr, nameStr, w, alloc, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -1175,11 +1225,15 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_isaHasOfflinePath(const U8 *ptr, U32 length) {
 	Bool s_uccess = true;
 
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
-	gotoIfError3(clean, Json_raw(&json, "{\"offline\":", alloc, e_rr));
-	gotoIfError3(clean, Json_bool(&json, SpvISA_stageHasOfflinePath(Wasm_input(ptr, length), alloc), alloc, e_rr));
-	gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+	gotoIfError3(clean, (
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyBool(w, "offline", SpvISA_stageHasOfflinePath(Wasm_input(ptr, length), alloc), e_rr)
+	));
+	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -1293,6 +1347,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_caPack() {
 	StreamRef *stream = NULL;
 	const RefPtrType streamType = MemoryStream_makeType(alloc);
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	Buffer packed = Buffer_createNull();
 	void *frame = NULL;
 
@@ -1313,7 +1369,11 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_caPack() {
 	gotoIfError3(clean, CAFile_write(&ca, NULL, stream, &offset, alloc, e_rr));
 	gotoIfError3(clean, MemoryStream_move(&stream, &packed, e_rr));
 
-	gotoIfError3(clean, Json_fmt(&json, alloc, e_rr, "{\"bytes\":%"PRIu64"}", Buffer_length(packed)));
+	gotoIfError3(clean, (
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyU64(w, "bytes", Buffer_length(packed), e_rr) &&
+		JsonWriter_endObject(w, e_rr)
+	));
 	frame = Wasm_frame(&json, &packed);
 
 clean:
@@ -1329,16 +1389,17 @@ clean:
 
 typedef struct WasmCaUnpack {
 	const CAFile *ca;
-	CharString *json;
+	JsonWriter *w;
 	RefPtrType fileHandleType;
-	Bool first;
-	U8 padding[7];
 } WasmCaUnpack;
 
 static Bool WasmCaUnpack_each(const FileInfo *info, void *ctx0, const Allocator *alloc, Error *e_rr) {
 
 	WasmCaUnpack *ctx = (WasmCaUnpack*) ctx0;
+	JsonWriter *w = ctx->w;
 	Bool s_uccess = true;
+
+	(void) alloc;        //The writer allocates; the parameter is the callback signature's
 
 	if(info->type != EFileType_File)
 		return true;
@@ -1354,15 +1415,10 @@ static Bool WasmCaUnpack_each(const FileInfo *info, void *ctx0, const Allocator 
 
 	gotoIfError3(clean, File_write(&data, &info->path, 0, 0, 100 * MS, true, &ctx->fileHandleType, e_rr));
 
-	if(!ctx->first)
-		gotoIfError3(clean, Json_raw(ctx->json, ",", alloc, e_rr));
-
-	ctx->first = false;
-	gotoIfError3(clean, Json_str(ctx->json, info->path, alloc, e_rr));
-	gotoIfError3(clean, Json_raw(ctx->json, ":", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_keyString(w, info->path, e_rr));
 	{
 		const CharString text = CharString_createRefSizedConst((const C8*)data.ptr, Buffer_length(data), false);
-		gotoIfError3(clean, Json_str(ctx->json, text, alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_str(w, text, e_rr));
 	}
 
 clean:
@@ -1384,6 +1440,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_caUnpack(const U8 *ptr, U32 length) {
 	StreamRef *stream = NULL;
 	const RefPtrType streamType = MemoryStream_makeType(alloc);
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	{
@@ -1395,14 +1453,17 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_caUnpack(const U8 *ptr, U32 length) {
 	gotoIfError3(clean, CAFile_read(stream, NULL, offset, NULL, alloc, &ca, e_rr));
 	caCreated = true;
 
-	gotoIfError3(clean, Json_raw(&json, "{\"files\":{", alloc, e_rr));
+	gotoIfError3(clean, (
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyObject(w, "files", e_rr)
+	));
 
 	WasmCaUnpack ctx = (WasmCaUnpack) {
-		.ca = &ca, .json = &json, .fileHandleType = FileHandle_makeType(alloc), .first = true
+		.ca = &ca, .w = w, .fileHandleType = FileHandle_makeType(alloc)
 	};
 	gotoIfError3(clean, CAFile_foreach(&ca, CAHandle_Root, WasmCaUnpack_each, &ctx, true, alloc, e_rr));
 
-	gotoIfError3(clean, Json_raw(&json, "}}", alloc, e_rr));
+	gotoIfError3(clean, (JsonWriter_endObject(w, e_rr) && JsonWriter_endObject(w, e_rr)));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -1426,80 +1487,86 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_annotationEnums() {
 	Bool s_uccess = true;
 
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
-	gotoIfError3(clean, Json_raw(&json, "{\"extensions\":[", alloc, e_rr));
+	gotoIfError3(clean, (
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyArray(w, "extensions", e_rr)
+	));
 
 	for (U64 i = 0; i < ESHExtension_Count; ++i) {
 
-		if(i)
-			gotoIfError3(clean, Json_raw(&json, ",", alloc, e_rr));
-
-		gotoIfError3(clean, Json_cstr(&json, ESHExtension_names[i], alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_cstr(w, ESHExtension_names[i], e_rr));
 	}
 
-	gotoIfError3(clean, Json_raw(&json, "],\"vendors\":[", alloc, e_rr));
+	gotoIfError3(clean, (JsonWriter_endArray(w, e_rr) && JsonWriter_keyArray(w, "vendors", e_rr)));
 
 	for (U64 i = 0; i < ESHVendor_Count; ++i) {
 
-		if(i)
-			gotoIfError3(clean, Json_raw(&json, ",", alloc, e_rr));
-
-		gotoIfError3(clean, Json_cstr(&json, ESHVendor_names[i], alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_cstr(w, ESHVendor_names[i], e_rr));
 	}
 
 	//The extensions only one backend can compile, by the compiler's own masks
 
-	gotoIfError3(clean, Json_raw(&json, "],\"extensionsNoDxil\":[", alloc, e_rr));
+	gotoIfError3(clean, (
+		JsonWriter_endArray(w, e_rr) &&
+		JsonWriter_keyArray(w, "extensionsNoDxil", e_rr)
+	));
 
 	{
-		Bool first = true;
-
 		for (U64 i = 0; i < ESHExtension_Count; ++i)
 			if (ESHExtension_NoDxilCompile & ((U64)1 << i)) {
-				gotoIfError3(clean, Json_next(&json, &first, alloc, e_rr));
-				gotoIfError3(clean, Json_cstr(&json, ESHExtension_names[i], alloc, e_rr));
+				gotoIfError3(clean, JsonWriter_cstr(w, ESHExtension_names[i], e_rr));
 			}
 	}
 
-	gotoIfError3(clean, Json_raw(&json, "],\"extensionsNoSpirv\":[", alloc, e_rr));
+	gotoIfError3(clean, (
+		JsonWriter_endArray(w, e_rr) &&
+		JsonWriter_keyArray(w, "extensionsNoSpirv", e_rr)
+	));
 
 	{
-		Bool first = true;
-
 		for (U64 i = 0; i < ESHExtension_Count; ++i)
 			if (ESHExtension_NoSpirvCompile & ((U64)1 << i)) {
-				gotoIfError3(clean, Json_next(&json, &first, alloc, e_rr));
-				gotoIfError3(clean, Json_cstr(&json, ESHExtension_names[i], alloc, e_rr));
+				gotoIfError3(clean, JsonWriter_cstr(w, ESHExtension_names[i], e_rr));
 			}
 	}
 
 	//Every pipeline stage: its name, whether it is a library stage, and the DXC target prefix it compiles as
 
-	gotoIfError3(clean, Json_raw(&json, "],\"stages\":[", alloc, e_rr));
+	gotoIfError3(clean, (JsonWriter_endArray(w, e_rr) && JsonWriter_keyArray(w, "stages", e_rr)));
 
 	for (U64 i = 0; i < EGfxPipelineStage_Count; ++i) {
 
 		const Bool lib = i >= EGfxPipelineStage_RtStartExt && i <= EGfxPipelineStage_RtEndExt;
 
-		gotoIfError3(clean, Json_fmt(
-			&json, alloc, e_rr, "%s{\"name\":\"%s\",\"lib\":%s,\"profile\":\"%s\"}",
-			i ? "," : "", SHEntry_stageNames[i], lib ? "true" : "false",
-			EGfxPipelineStage_getStagePrefix((EGfxPipelineStage) i)
+		gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_key(w, "name", e_rr) &&
+			JsonWriter_fmt(w, e_rr, "\"%s\"", SHEntry_stageNames[i]) &&
+			JsonWriter_keyBool(w, "lib", lib, e_rr) &&
+			JsonWriter_key(w, "profile", e_rr) &&
+			JsonWriter_fmt(w, e_rr, "\"%s\"", EGfxPipelineStage_getStagePrefix((EGfxPipelineStage) i)) &&
+			JsonWriter_endObject(w, e_rr)
 		));
 	}
 
 	//The shader models a binary may declare, and the floor an extension raises it to where it has one
 
-	gotoIfError3(clean, Json_fmt(
-		&json, alloc, e_rr, "],\"shaderModels\":{\"min\":\"%u.%u\",\"max\":\"%u.%u\"},\"extensionMinModel\":{",
-		(U32) (OISH_SHADER_MODEL_MIN >> 8), (U32) (OISH_SHADER_MODEL_MIN & 0xFF),
-		(U32) (OISH_SHADER_MODEL_MAX >> 8), (U32) (OISH_SHADER_MODEL_MAX & 0xFF)
+	gotoIfError3(clean, (
+		JsonWriter_endArray(w, e_rr) &&
+		JsonWriter_keyObject(w, "shaderModels", e_rr) &&
+		JsonWriter_key(w, "min", e_rr) &&
+		JsonWriter_fmt(w, e_rr, "\"%u.%u\"", (U32) (OISH_SHADER_MODEL_MIN >> 8), (U32) (OISH_SHADER_MODEL_MIN & 0xFF)) &&
+		JsonWriter_key(w, "max", e_rr) &&
+		JsonWriter_fmt(w, e_rr, "\"%u.%u\"", (U32) (OISH_SHADER_MODEL_MAX >> 8), (U32) (OISH_SHADER_MODEL_MAX & 0xFF)) &&
+		JsonWriter_endObject(w, e_rr) &&
+		JsonWriter_keyObject(w, "extensionMinModel", e_rr)
 	));
 
 	{
-		Bool first = true;
-
 		for (U64 i = 0; i < ESHExtension_Count; ++i) {
 
 			const U16 minModel = ESHExtension_minShaderModel((ESHExtension)((U64)1 << i));
@@ -1507,18 +1574,21 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_annotationEnums() {
 			if(minModel <= OISH_SHADER_MODEL_MIN)
 				continue;
 
-			gotoIfError3(clean, Json_fmt(
-				&json, alloc, e_rr, "%s\"%s\":\"%u.%u\"",
-				first ? "" : ",", ESHExtension_names[i], (U32) (minModel >> 8), (U32) (minModel & 0xFF)
+			gotoIfError3(clean, (
+				JsonWriter_key(w, ESHExtension_names[i], e_rr) &&
+				JsonWriter_fmt(w, e_rr, "\"%u.%u\"", (U32) (minModel >> 8), (U32) (minModel & 0xFF))
 			));
-
-			first = false;
 		}
 	}
 
-	gotoIfError3(clean, Json_fmt(
-		&json, alloc, e_rr, "},\"version\":{\"major\":%u,\"minor\":%u,\"patch\":%u}}",
-		(U32) OXC3_MAJOR, (U32) OXC3_MINOR, (U32) OXC3_PATCH
+	gotoIfError3(clean, (
+		JsonWriter_endObject(w, e_rr) &&
+		JsonWriter_keyObject(w, "version", e_rr) &&
+		JsonWriter_keyU64(w, "major", (U32) OXC3_MAJOR, e_rr) &&
+		JsonWriter_keyU64(w, "minor", (U32) OXC3_MINOR, e_rr) &&
+		JsonWriter_keyU64(w, "patch", (U32) OXC3_PATCH, e_rr) &&
+		JsonWriter_endObject(w, e_rr) &&
+		JsonWriter_endObject(w, e_rr)
 	));
 	frame = Wasm_frame(&json, NULL);
 
@@ -1543,6 +1613,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_validate(U32 binaryType, const U8 *ptr, U32 leng
 	Bool valid = false;
 	CharString message = CharString_createNull();
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	if(binaryType >= EGfxBinaryType_Count)
@@ -1552,9 +1624,12 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_validate(U32 binaryType, const U8 *ptr, U32 leng
 		&wasmCompiler, (EGfxBinaryType) binaryType, Wasm_input(ptr, length), alloc, &valid, &message, e_rr
 	));
 
-	gotoIfError3(clean, Json_raw(&json, valid ? "{\"valid\":true,\"message\":" : "{\"valid\":false,\"message\":", alloc, e_rr));
-	gotoIfError3(clean, Json_str(&json, message, alloc, e_rr));
-	gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+	gotoIfError3(clean, (
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyBool(w, "valid", valid, e_rr) &&
+		JsonWriter_keyStr(w, "message", message, e_rr)
+	));
+	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -1579,6 +1654,8 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spFieldVocab() {
 	Bool s_uccess = true;
 
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	const struct { const C8 *key; const C8 *const *names; U64 count; } vocabs[] = {
@@ -1598,55 +1675,46 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_spFieldVocab() {
 		{ "ETextureFormatId", ETextureFormatId_name, ETextureFormatId_Count }
 	};
 
-	Bool first = true;
-	gotoIfError3(clean, Json_raw(&json, "{", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
 
 	for (U64 v = 0; v < sizeof(vocabs) / sizeof(vocabs[0]); ++v) {
 
-		gotoIfError3(clean, Json_key(&json, vocabs[v].key, &first, alloc, e_rr));
-		gotoIfError3(clean, Json_raw(&json, "[", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_keyArray(w, vocabs[v].key, e_rr));
 
 		for (U64 i = 0; i < vocabs[v].count; ++i) {
 
-			if(i)
-				gotoIfError3(clean, Json_raw(&json, ",", alloc, e_rr));
-
 			if(vocabs[v].names[i]) {
-				gotoIfError3(clean, Json_cstr(&json, vocabs[v].names[i], alloc, e_rr));
+				gotoIfError3(clean, JsonWriter_cstr(w, vocabs[v].names[i], e_rr));
 			}
 
 			else {
-				gotoIfError3(clean, Json_raw(&json, "null", alloc, e_rr));
+				gotoIfError3(clean, JsonWriter_null(w, e_rr));
 			}
 		}
 
-		gotoIfError3(clean, Json_raw(&json, "]", alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 	}
 
 	//The color-target subset of the formats: what rtv.format may legally hold. Undefined and the
 	//compressed formats can't be rendered to, so they travel as null and a picker skips them while
 	//the indices keep lining up with the enum's values.
 
-	gotoIfError3(clean, Json_key(&json, "ETextureFormatIdColor", &first, alloc, e_rr));
-	gotoIfError3(clean, Json_raw(&json, "[", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_keyArray(w, "ETextureFormatIdColor", e_rr));
 
 	for (U64 i = 0; i < ETextureFormatId_Count; ++i) {
 
-		if(i)
-			gotoIfError3(clean, Json_raw(&json, ",", alloc, e_rr));
-
 		if(!i || ETextureFormat_getIsCompressed(ETextureFormatId_unpack[i])) {
-			gotoIfError3(clean, Json_raw(&json, "null", alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_null(w, e_rr));
 		}
 
 		else {
-			gotoIfError3(clean, Json_cstr(&json, ETextureFormatId_name[i], alloc, e_rr));
+			gotoIfError3(clean, JsonWriter_cstr(w, ETextureFormatId_name[i], e_rr));
 		}
 	}
 
-	gotoIfError3(clean, Json_raw(&json, "]", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
-	gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -1666,21 +1734,23 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_isaTargets() {
 
 	ListCharString targets = (ListCharString) { 0 };
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	gotoIfError3(clean, SpvISA_listSupportedTargets(alloc, &targets, e_rr));
 
-	gotoIfError3(clean, Json_raw(&json, "{\"targets\":[", alloc, e_rr));
+	gotoIfError3(clean, (
+		JsonWriter_beginObject(w, e_rr) &&
+		JsonWriter_keyArray(w, "targets", e_rr)
+	));
 
 	for (U64 i = 0; i < targets.length; ++i) {
 
-		if(i)
-			gotoIfError3(clean, Json_raw(&json, ",", alloc, e_rr));
-
-		gotoIfError3(clean, Json_str(&json, targets.ptr[i], alloc, e_rr));
+		gotoIfError3(clean, JsonWriter_str(w, targets.ptr[i], e_rr));
 	}
 
-	gotoIfError3(clean, Json_raw(&json, "]}", alloc, e_rr));
+	gotoIfError3(clean, (JsonWriter_endArray(w, e_rr) && JsonWriter_endObject(w, e_rr)));
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -1703,17 +1773,19 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_isaDisassemble(
 
 	Buffer isa = Buffer_createNull();
 	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
 	void *frame = NULL;
 
 	gotoIfError3(clean, SpvISA_disassemble(
 		Wasm_input(ptr, length), Wasm_string(gfxTarget), Wasm_string(entrypoint), &isa, alloc, e_rr
 	));
 
-	gotoIfError3(clean, Json_raw(&json, "{\"text\":", alloc, e_rr));
-	gotoIfError3(clean, Json_str(
-		&json, CharString_createRefSizedConst((const C8*) isa.ptr, Buffer_length(isa), false), alloc, e_rr
+	gotoIfError3(clean, (JsonWriter_beginObject(w, e_rr) && JsonWriter_key(w, "text", e_rr)));
+	gotoIfError3(clean, JsonWriter_str(
+		w, CharString_createRefSizedConst((const C8*) isa.ptr, Buffer_length(isa), false), e_rr
 	));
-	gotoIfError3(clean, Json_raw(&json, "}", alloc, e_rr));
+	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
 clean:

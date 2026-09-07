@@ -509,8 +509,9 @@ void Test_shaderCompilerCorpus(Test *t) {
 		// name carries the section's root and no golden matches.
 		const CharString savedDefaultDir = Platform_instance->defaultDir;
 
-		if (sizeof(TEST_SHADER_ROOT) > 1)
+		#ifdef TEST_SHADER_SECTION
 			Platform_instance->defaultDir = CharString_createRefCStrConst(TEST_SHADER_ROOT);
+		#endif
 
 		for (U64 i = 0; i < allFiles.length; ++i) {
 

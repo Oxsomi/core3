@@ -81,9 +81,10 @@ JSON serialization belongs in the formats
 OxC3_wasm should probably be temporary. It currently owns the JSON writing for oiSH, oiSR and oiSP,
 and that shape belongs to each format instead, so the output can be diffed rather than only viewed.
 
-- Generalize JsonWriter enough that a format can carry its own serializer, and move the per-format
-  writers out of src/tools/oxc3_wasm into the formats. oiSB's is already a different format's job and
-  should live with oiSB rather than beside the others.
+- The writer is its own format library, OxC3_formats_json (formats/json/json_writer.h, with key-and-value
+  helpers), and the wasm serializers write through it with their output byte-identical. Next, move the
+  per-format writers out of src/tools/oxc3_wasm into the formats. oiSB's is already a different format's
+  job and should live with oiSB rather than beside the others.
 - `file data` could expose it under `--json`. That needs a pretty printer to be worth reading: oiSP's
   specializations come out as bare values today, which are neither readable nor editable.
 - Under `--verbose`, DXIL and SPIR-V could carry a disassembly. In the long run that could replace the

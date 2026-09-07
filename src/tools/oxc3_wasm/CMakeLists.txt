@@ -48,7 +48,7 @@ set_target_properties(OxC3_wasm PROPERTIES FOLDER Oxsomi/CLI)
 
 target_link_libraries(
 	OxC3_wasm PUBLIC
-	OxC3_types_base OxC3_types_math OxC3_types_container
+	OxC3_types_base OxC3_types_math OxC3_types_container OxC3_formats_json
 	OxC3_platforms
 	OxC3_formats_oiSB OxC3_formats_oiSR OxC3_formats_oiSH OxC3_formats_oiSP
 	OxC3_shader_compiler

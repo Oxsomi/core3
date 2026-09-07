@@ -60,6 +60,7 @@ ATEST_SUITE(formats_oiPL);
 ATEST_SUITE(formats_oiSP);
 ATEST_SUITE(formats_oiSR);
 ATEST_SUITE(formats_wav);
+ATEST_SUITE(formats_json);
 ATEST_SUITE(audio_interface);
 ATEST_SUITE(platforms_interface);
 ATEST_SUITE(graphics_interface);
@@ -105,6 +106,7 @@ static const ATestSuite ATest_suites[] = {
 	{ "formats_oiSP",         OxC3_test_formats_oiSP,         false, false },
 	{ "formats_oiSR",         OxC3_test_formats_oiSR,         false, false },
 	{ "formats_wav",          OxC3_test_formats_wav,          false, false },
+	{ "formats_json",         OxC3_test_formats_json,         false, false },
 
 	{ "audio_interface",      OxC3_test_audio_interface,      false, false },
 	{ "platforms_interface",  OxC3_test_platforms_interface,  false, false },

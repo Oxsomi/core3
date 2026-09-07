@@ -17,17 +17,29 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-add_subdirectory(oiXX)
-add_subdirectory(oiDL)
-add_subdirectory(oiCA)
-add_subdirectory(oiBC)
-add_subdirectory(dds)
-add_subdirectory(oiSB)
-add_subdirectory(oiSR)
-add_subdirectory(oiSH)
-add_subdirectory(oiPL)
-add_subdirectory(oiSP)
-add_subdirectory(bmp)
-add_subdirectory(wav)
-add_subdirectory(hdr)
-add_subdirectory(json)
+file(GLOB formatsJsonHeaders CONFIGURE_DEPENDS "../../../include/formats/json/*.h")
+file(GLOB formatsJsonSources CONFIGURE_DEPENDS "*.c")
+
+add_library(
+	OxC3_formats_json
+	STATIC
+	${formatsJsonHeaders}
+	${formatsJsonSources}
+	CMakeLists.txt
+)
+
+set_target_properties(OxC3_formats_json PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_json PUBLIC OxC3_types_base OxC3_types_container)
+
+if(EnableTests AND OxC3TestExecutables)
+
+	include(../../../cmake/oxc3.cmake)
+
+	oxc3_add_test(
+		NAME     OxC3_formats_json_test
+		FOLDER   Oxsomi/test/formats
+		LIBS     OxC3_types_container_test_util OxC3_formats_json
+		INCLUDES "../../../include"
+	)
+
+endif()

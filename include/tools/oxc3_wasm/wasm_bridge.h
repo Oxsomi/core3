@@ -26,6 +26,7 @@
 #include "types/base/string_base.h"
 #include "types/base/buffer_base.h"
 #include "types/base/error.h"
+#include "formats/json/json_writer.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -77,18 +78,6 @@ void *Wasm_errorFrame(const C8 *message);
 
 void *Wasm_errorFrameFromError(const Error *err, const C8 *fallback);
 
-//JSON writing.
-//`first` tracks whether a separator is due inside the object or array being written; Json_key and Json_next
-// consume and clear it.
-
-Bool Json_raw(CharString *out, const C8 *v, const Allocator *alloc, Error *e_rr);
-Bool Json_fmt(CharString *out, const Allocator *alloc, Error *e_rr, const C8 *format, ...);
-Bool Json_str(CharString *out, CharString v, const Allocator *alloc, Error *e_rr);
-Bool Json_cstr(CharString *out, const C8 *v, const Allocator *alloc, Error *e_rr);
-Bool Json_bool(CharString *out, Bool v, const Allocator *alloc, Error *e_rr);
-Bool Json_key(CharString *out, const C8 *key, Bool *first, const Allocator *alloc, Error *e_rr);
-Bool Json_next(CharString *out, Bool *first, const Allocator *alloc, Error *e_rr);
-
 //How a register spells itself in a document: its class (buffer, texture, sampler, ...) and the HLSL type name the
 //class and access add up to. The oiSH registers and the oiPL layout rows share both.
 
@@ -96,13 +85,14 @@ const C8 *WasmJson_registerClass(EGfxRegisterType type);
 const C8 *WasmJson_registerBaseName(EGfxRegisterType type, Bool isWrite);
 
 //Serializers onto the document contracts the page consumes (documented at the top of web/js/api.js).
-//They mirror the C structs, so each is a walk rather than a translation.
+//They mirror the C structs, so each is a walk rather than a translation, and they write into the caller's writer,
+// so a document nests inside a frame as the value of a key like anything else.
 
 Bool WasmJson_shFile(
 	const SHFile *file,
 	CharString name,
 	CharString sourceName,
-	CharString *out,
+	JsonWriter *w,
 	const Allocator *alloc,
 	Error *e_rr
 );
@@ -111,7 +101,7 @@ Bool WasmJson_srFile(
 	const SRFile *file,
 	CharString name,
 	CharString sourceName,
-	CharString *out,
+	JsonWriter *w,
 	const Allocator *alloc,
 	Error *e_rr
 );
@@ -120,7 +110,7 @@ Bool WasmJson_spFile(
 	const SPFile *file,
 	CharString name,
 	CharString sourceName,
-	CharString *out,
+	JsonWriter *w,
 	const Allocator *alloc,
 	Error *e_rr
 );
