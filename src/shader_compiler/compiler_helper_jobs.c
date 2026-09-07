@@ -837,7 +837,7 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 		goto clean;
 	}
 
-	U32 crc32c = Buffer_crc32c(CharString_bufferConst(inputData));
+	U32 crc32c = Compiler_hashSource(inputData);
 
 	gotoIfError3(clean, SHFile_create(ESHSettingsFlags_None, OXC3_VERSION, crc32c, alloc, &shFile, e_rr));
 	gotoIfError3(clean, Compiler_getUniqueCompiles(&runtimeEntries, &compileCombinations, alloc, e_rr));

@@ -357,3 +357,43 @@ void Test_shaderCompilerDriver(Test *t) {
 
 	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 }
+
+//The source hash names the content, not the checkout's line endings: the same shader with LF and CRLF hashes the
+// same, and that value is the plain CRC32C of the LF text, so a hash computed outside the compiler agrees with it.
+
+void Test_shaderCompilerSourceHash(Test *t) {
+
+	Test_setModule(t, "Source hash: line endings");
+
+	static const C8 *lf = "[shader(\"compute\")]\n[numthreads(1,1,1)]\nvoid main() {}\n";
+	static const C8 *crlf = "[shader(\"compute\")]\r\n[numthreads(1,1,1)]\r\nvoid main() {}\r\n";
+
+	const CharString lfStr = CharString_createRefCStrConst(lf);
+	const CharString crlfStr = CharString_createRefCStrConst(crlf);
+	const U32 plain = Buffer_crc32c(CharString_bufferConst(lfStr));
+
+	Test_assert(t, "the helper skips carriage returns", Compiler_hashSource(crlfStr) == plain);
+	Test_assert(t, "and is the plain CRC32C of LF text", Compiler_hashSource(lfStr) == plain);
+	Test_assert(t, "an empty text hashes like an empty buffer", Compiler_hashSource(CharString_createNull()) == 0);
+
+	const C8 *srcs[2] = { lf, crlf };
+	ListBuffer out = (ListBuffer) { 0 };
+	SHFile a = (SHFile) { 0 }, b = (SHFile) { 0 };
+
+	if(!Test_assert(t, "both line endings compile", compileInlineShaders(
+		t->alloc, srcs, 2, EGfxBinaryType_SPIRV, 1, "hash", true, &out, &t->err
+	)))
+		goto clean;
+
+	if(!Test_assert(t, "into two files", out.length == 2 && Buffer_length(out.ptr[0]) && Buffer_length(out.ptr[1])))
+		goto clean;
+
+	Test_assert(t, "the LF file reads", readOiSH(t->alloc, out.ptr[0], &a, &t->err));
+	Test_assert(t, "the CRLF file reads", readOiSH(t->alloc, out.ptr[1], &b, &t->err));
+	Test_assert(t, "both carry the plain hash", a.sourceHash == plain && b.sourceHash == plain);
+
+clean:
+	SHFile_free(&a, t->alloc);
+	SHFile_free(&b, t->alloc);
+	ListBuffer_freeUnderlying(&out, t->alloc);
+}

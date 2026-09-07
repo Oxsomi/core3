@@ -30,6 +30,8 @@
 from __future__ import annotations
 
 import os
+import re
+import json
 import sys
 import platform
 import subprocess
@@ -423,6 +425,17 @@ def main():
 			# reflect: strips binaries -> reflection-only oiSH (round-trips back through entrypoints)
 			run(exe, ["shader", "reflect", "-input", sh, "-output", p("sr.oiSH")], contains=["reflection-only"])
 			run(exe, ["shader", "entrypoints", "-input", p("sr.oiSH.spv.oiSH")], contains=["main"])
+			# --json: the whole oiSH as one pretty printed document, the view the web frontend reads. It has to parse,
+			# name the entry, write the identical document through -output, and refuse the per entry modes.
+			out = run(exe, ["file", "data", "-input", soiSH, "--json"], contains=['"entries"'])
+			plain = re.sub(r"\x1b\[[0-9;]*m", "", out)
+			doc = json.loads(plain[plain.index("{"):plain.rindex("}") + 1])
+			check(doc["entries"][0]["name"] == "main" and doc["entries"][0]["stage"] == "compute",
+				"file data --json parses and names the entry")
+			run(exe, ["file", "data", "-input", soiSH, "--json", "-output", p("s.json")])
+			with open(p("s.json"), "r", encoding="utf-8") as f:
+				check(json.load(f) == doc, "file data --json -output writes the same document")
+			run(exe, ["file", "data", "-input", soiSH, "--json", "--bin"], want_fail=True)
 			# disassemble + assemble round-trip on a standalone .spv extracted from the oiSH
 			spv = p("s.spv")
 			run(exe, ["file", "data", "-input", soiSH, "--bin", "-compile-output", "spv", "-entry", "0", "-output", spv])

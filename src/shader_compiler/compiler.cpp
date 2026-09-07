@@ -282,10 +282,7 @@ public:
 
 						Buffer_free(&tempBuffer, alloc);
 
-						if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
-							retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource couldn't erase \\rs"));
-
-						U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
+						U32 crc32c = Compiler_hashSource(tempFile);
 						CharString_free(&tempFile, alloc);
 
 						if(crc32c != prevInclude.crc32c)
@@ -363,7 +360,7 @@ public:
 				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
 					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"));
 
-				U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
+				U32 crc32c = Compiler_hashSource(tempFile);
 
 				IncludedFile inc = IncludedFile{};
 				inc.includeInfo = IncludeInfo{
@@ -404,7 +401,7 @@ public:
 				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
 					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"));
 
-				U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
+				U32 crc32c = Compiler_hashSource(tempFile);
 
 				IncludedFile inc = IncludedFile{};
 

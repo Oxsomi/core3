@@ -36,6 +36,7 @@ in packages/conan/profiles/emscripten_wasm64 and must match in every consumer li
 """
 
 import argparse
+import hashlib
 import os
 import shutil
 import subprocess
@@ -270,6 +271,39 @@ def runTests(mode, suite=None, threads=False, asan=False, ubsan=False):
 
 WEB_FRONTEND = "web"
 WEB_MODULE = "OxC3_wasm"
+WEB_VENDOR = "vendor"
+
+# The third party the page loads, pinned to the exact versions web/index.html asks for and verified by content
+# hash, so a fetch is either the file that was reviewed or a failure. These are upstream's own minified builds;
+# nothing here minifies further, which would need a tool the tree doesn't carry.
+# The icon font's CSS asks for its faces by a relative path, so the two woff files keep that layout on disk.
+
+VENDOR_BASE = "https://cdn.jsdelivr.net/npm/"
+
+VENDOR = [
+	("bootstrap@5.3.3/dist/css/bootstrap.min.css",
+		"bootstrap.min.css",             "3c8f27e6009ccfd710a905e6dcf12d0ee3c6f2ac7da05b0572d3e0d12e736fc8"),
+	("bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js",
+		"bootstrap.bundle.min.js",       "0833b2e9c3a26c258476c46266e6877fc75218625162e0460be9a3a098a61c6c"),
+	("bootstrap-icons@1.11.3/font/bootstrap-icons.min.css",
+		"bootstrap-icons.min.css",       "f643d6fe7e679f9de3e16311600c5ef5cd6b098f7a3a8828fcc29255d2b33e62"),
+	("bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff2",
+		"fonts/bootstrap-icons.woff2",   "476adf42b40325098fcfa8b36ab3e769186bb4f6ce6a249753e2e1a9c22bf99e"),
+	("bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff",
+		"fonts/bootstrap-icons.woff",    "bb1de989b83970f6f4e54de1cd974c5cba55b73582da5e1b225a6d0edf029483"),
+	("codemirror@5.65.16/lib/codemirror.min.css",
+		"codemirror.min.css",            "c176f3906cb706151ddbfe37b7856f17b4e612c6c6583a56a290561c9f5996a7"),
+	("codemirror@5.65.16/lib/codemirror.min.js",
+		"codemirror.min.js",             "d230e4614ed889647dc357e34f343bde5669ca37a0a14d05121e04d0d5ae435a"),
+	("codemirror@5.65.16/theme/material-darker.min.css",
+		"material-darker.min.css",       "0628206286d728b5ea6a9cc5ee8ce2550303bb9a32afbec52b96741324ac5f0b"),
+	("codemirror@5.65.16/addon/hint/show-hint.min.css",
+		"show-hint.min.css",             "051307de158d3e48b3f23d03946e629427e1b93d597cba4e0703bcf8b03a7bdf"),
+	("codemirror@5.65.16/addon/hint/show-hint.min.js",
+		"show-hint.min.js",              "d05a900beee36278ad3efbe9cd99a4aad37f2c8f0ae529252d04a827bbe213ac"),
+	("codemirror@5.65.16/mode/clike/clike.min.js",
+		"clike.min.js",                  "efa90429ef1d2f8891f52e5e8b63ff1717a58778cfb954ee727db799f183afc0")
+]
 
 def stageFrontend(mode, singleFile=False):
 	"""Copy the module the page loads into web/wasm/.
@@ -337,36 +371,230 @@ def stageFrontend(mode, singleFile=False):
 
 	print(f"-- Staged {', '.join(staged)} into {os.path.relpath(outDir, common.ROOT)}")
 
-def precompressFrontend():
-	"""Write .br siblings next to the staged module, which serveFrontend and a real host serve.
+def compressStatic(paths):
+	"""Write .br and .gz siblings for each path, which is what a host serves instead of the file itself.
 
-	Brotli turns the ~21 MB module into ~5.5 MB, the difference between a painful first load and an ok
-	one. Node's zlib does the compressing because the emsdk already ships node; no extra tool needed.
+	Node's zlib does both because the emsdk already ships node, so nothing else has to be installed. Brotli
+	is what a current browser takes; the gzip sibling is for a host that only speaks that.
+	"""
+
+	if not paths:
+		return
+
+	subprocess.run(
+		[
+			emsdkNode(), "-e",
+			"const z=require('zlib'),f=require('fs');"
+			"for(const p of process.argv.slice(1)){"
+			"const b=f.readFileSync(p);"
+			"f.writeFileSync(p+'.br',z.brotliCompressSync(b,{params:{"
+			"[z.constants.BROTLI_PARAM_QUALITY]:11,[z.constants.BROTLI_PARAM_SIZE_HINT]:b.length}}));"
+			"f.writeFileSync(p+'.gz',z.gzipSync(b,{level:9}));}"
+		] + list(paths),
+		check=True
+	)
+
+def vendorFrontend(force=False):
+	"""Fetch the third party the page loads into web/vendor, verified and precompressed.
+
+	The page asks for these by a local path, so a visitor's browser talks to one host and a build is the
+	only thing that reaches a CDN. It is also what the VS Code webview needs, since its CSP blocks
+	remote resources outright.
+	A file already on disk with the right hash is left alone, so this costs one read per file after the
+	first run; one that doesn't match is fetched again, so a half written or edited file heals itself. A
+	download that doesn't match the pin fails the build instead, since that is the CDN handing over
+	something nobody reviewed.
+	"""
+
+	import urllib.request
+
+	outDir = os.path.join(common.ROOT, WEB_FRONTEND, WEB_VENDOR)
+	fetched, compress = 0, []
+
+	for source, name, digest in VENDOR:
+
+		path = os.path.join(outDir, *name.split("/"))
+		os.makedirs(os.path.dirname(path), exist_ok=True)
+
+		if not force and os.path.isfile(path):
+			with open(path, "rb") as f:
+				if hashlib.sha256(f.read()).hexdigest() == digest:
+					continue
+
+		with urllib.request.urlopen(VENDOR_BASE + source, timeout=60) as response:
+			data = response.read()
+
+		actual = hashlib.sha256(data).hexdigest()
+
+		if actual != digest:
+			raise RuntimeError(f"{source} hashed {actual}, expected {digest}")
+
+		with open(path, "wb") as f:
+			f.write(data)
+
+		fetched += 1
+
+	# A font file is already compressed, so a .br of one costs a request's worth of nothing
+
+	for _, name, _ in VENDOR:
+		if not name.startswith("fonts/"):
+			compress.append(os.path.join(outDir, *name.split("/")))
+
+	compressStatic(compress)
+
+	print(
+		f"-- Vendored {len(VENDOR)} file(s) into {os.path.relpath(outDir, common.ROOT)}"
+		f" ({fetched} fetched, {len(VENDOR) - fetched} already current)"
+	)
+
+def precompressedSibling(source, accepted):
+	"""Which precompressed sibling of `source` to serve for an Accept-Encoding, or None for the file itself.
+
+	Brotli is preferred over gzip because every current browser takes it and it is the smaller of the two.
+	A sibling older than the file it came from is refused: during development that is an edit the visitor
+	would otherwise never see, and serving the file itself is always right.
+	"""
+
+	for suffix, encoding in ((".br", "br"), (".gz", "gzip")):
+
+		if encoding not in accepted:
+			continue
+
+		path = source + suffix
+
+		if os.path.isfile(path) and os.path.getmtime(path) >= os.path.getmtime(source):
+			return path, encoding
+
+	return None
+
+def frontendStatic():
+	"""The page's own files a browser fetches: the markup, its styles and its scripts.
+
+	web/wasm and web/vendor are left out because the steps that produce them compress their own output,
+	and web/dev, web/samples and web/node_modules never reach a browser.
+	"""
+
+	root = os.path.join(common.ROOT, WEB_FRONTEND)
+	paths = [os.path.join(root, "index.html")]
+
+	for folder in ("css", "js", os.path.join("js", "tools")):
+
+		here = os.path.join(root, folder)
+
+		if not os.path.isdir(here):
+			continue
+
+		for name in sorted(os.listdir(here)):
+			if name.endswith((".css", ".js")) and os.path.isfile(os.path.join(here, name)):
+				paths.append(os.path.join(here, name))
+
+	return [p for p in paths if os.path.isfile(p)]
+
+def frontendPackageFiles():
+	"""Every file a host has to serve, relative to web/, in a stable order.
+
+	This is the deploy set rather than the folder: the tests, the dev dependencies, the sample sources
+	(they reach the page inside the recording) and the project's own docs stay behind, and the
+	precompressed siblings come along because they are what a host actually hands over.
+	"""
+
+	root = os.path.join(common.ROOT, WEB_FRONTEND)
+	files = []
+
+	for name in ("index.html", "favicon.png", "icon.png", "robots.txt", "sitemap.xml", "LICENSE"):
+		if os.path.isfile(os.path.join(root, name)):
+			files.append(name)
+
+	for folder in ("css", "js", WEB_VENDOR, "wasm"):
+
+		here = os.path.join(root, folder)
+
+		for base, _, names in os.walk(here):
+			for name in names:
+				full = os.path.join(base, name)
+				files.append(os.path.relpath(full, root).replace(os.sep, "/"))
+
+	# The siblings of the files above, which os.walk already found inside those folders
+
+	for name in list(files):
+		for suffix in (".br", ".gz"):
+			sibling = name + suffix
+			if sibling not in files and os.path.isfile(os.path.join(root, *sibling.split("/"))):
+				files.append(sibling)
+
+	return sorted(set(files))
+
+def packageFrontend(target):
+	"""Zip the deploy set, so a host unpacks one file instead of learning which folders matter.
+
+	Refused rather than shipped incomplete: a zip missing the module or a vendored file is a site that
+	half loads, and that is worth failing a build over.
+	"""
+
+	import zipfile
+
+	root = os.path.join(common.ROOT, WEB_FRONTEND)
+	files = frontendPackageFiles()
+
+	for required in (f"wasm/{WEB_MODULE}.js", f"wasm/{WEB_MODULE}.wasm"):
+		if required not in files:
+			raise RuntimeError(f"{required} is missing; stage the module first (--frontend)")
+
+	for _, name, _ in VENDOR:
+		if f"{WEB_VENDOR}/{name}" not in files:
+			raise RuntimeError(f"{WEB_VENDOR}/{name} is missing; fetch the third party first (--vendor)")
+
+	if not any(name.endswith(".br") for name in files):
+		print("-- No .br siblings in the package; run --precompress or a host serves everything raw", file=sys.stderr)
+
+	os.makedirs(os.path.dirname(os.path.abspath(target)) or ".", exist_ok=True)
+
+	# Already compressed bytes are stored rather than deflated again, which only costs time
+
+	stored = (".br", ".gz", ".png", ".woff", ".woff2")
+
+	with zipfile.ZipFile(target, "w") as zip:
+		for name in files:
+			zip.write(
+				os.path.join(root, *name.split("/")), name,
+				compress_type=zipfile.ZIP_STORED if name.endswith(stored) else zipfile.ZIP_DEFLATED
+			)
+
+	raw = sum(os.path.getsize(os.path.join(root, *name.split("/"))) for name in files)
+
+	print(
+		f"-- Packaged {len(files)} file(s), {raw:,} bytes, into "
+		f"{os.path.relpath(target, common.ROOT)} ({os.path.getsize(target):,} bytes)"
+	)
+
+def precompressFrontend():
+	"""Write .br and .gz siblings for everything a visitor downloads, which is what a real host serves.
+
+	Brotli turns the ~21 MB module into ~5.5 MB and the page's own scripts into about a fifth of
+	themselves, which is the difference between a painful first load and an ok one. Node's zlib does the
+	compressing because the emsdk already ships node; no extra tool needed.
 	"""
 
 	outDir = os.path.join(common.ROOT, WEB_FRONTEND, "wasm")
-	node = emsdkNode()
+	staged = [
+		os.path.join(outDir, name)
+		for name in (f"{WEB_MODULE}.js", f"{WEB_MODULE}.wasm")
+		if os.path.isfile(os.path.join(outDir, name))
+	]
 
-	for name in (f"{WEB_MODULE}.js", f"{WEB_MODULE}.wasm"):
+	page = frontendStatic()
 
-		src = os.path.join(outDir, name)
+	compressStatic(staged + page)
 
-		if not os.path.isfile(src):
-			continue
-
-		subprocess.run(
-			[
-				node, "-e",
-				"const z=require('zlib'),f=require('fs'),p=process.argv[1];"
-				"f.writeFileSync(p+'.br',z.brotliCompressSync(f.readFileSync(p),"
-				"{params:{[z.constants.BROTLI_PARAM_QUALITY]:11,"
-				"[z.constants.BROTLI_PARAM_SIZE_HINT]:f.statSync(p).size}}))",
-				src
-			],
-			check=True
+	for src in staged:
+		print(
+			f"-- {os.path.basename(src)}: {os.path.getsize(src):,} -> "
+			f"{os.path.getsize(src + '.br'):,} bytes (.br)"
 		)
 
-		print(f"-- {name}: {os.path.getsize(src):,} -> {os.path.getsize(src + '.br'):,} bytes (.br)")
+	if page:
+		raw = sum(os.path.getsize(p) for p in page)
+		print(f"-- page ({len(page)} files): {raw:,} -> {sum(os.path.getsize(p + '.br') for p in page):,} bytes (.br)")
 
 def runFrontendTests(mode):
 	"""Drive the staged module through the frontend's own boundary (web/js/wasm.js), headless, then the
@@ -412,6 +640,16 @@ def runFrontendTests(mode):
 			print("-- Frontend tests FAILED", file=sys.stderr)
 			sys.exit(result.returncode)
 
+	# What a host serves and what the third party is pinned to, which is python rather than page code
+
+	result = subprocess.run(
+		f"\"{sys.executable}\" \"{os.path.join('dev', 'hosting_test.py')}\"", shell=True, cwd=webDir
+	)
+
+	if result.returncode:
+		print("-- Hosting tests FAILED", file=sys.stderr)
+		sys.exit(result.returncode)
+
 def serveFrontend(port):
 	"""Serve web/ over http, which loading a .wasm needs (file:// blocks the fetch).
 
@@ -427,20 +665,24 @@ def serveFrontend(port):
 
 		def send_head(self):
 
-			# A precompressed sibling (--precompress) is served the way a real host serves it, so first
-			# load measured here matches the deployed site rather than the 21 MB raw module.
-			if "br" in self.headers.get("Accept-Encoding", ""):
+			# A precompressed sibling (--precompress, --vendor) is served the way a real host serves it, so
+			# first load measured here matches the deployed site rather than the 21 MB raw module.
 
-				path = self.translate_path(self.path)
+			source = self.translate_path(self.path)
+			sibling = precompressedSibling(source, self.headers.get("Accept-Encoding", "")) \
+				if os.path.isfile(source) else None
 
-				if os.path.isfile(path + ".br"):
-					f = open(path + ".br", "rb")
-					self.send_response(200)
-					self.send_header("Content-Type", self.guess_type(path))
-					self.send_header("Content-Encoding", "br")
-					self.send_header("Content-Length", str(os.fstat(f.fileno()).st_size))
-					self.end_headers()
-					return f
+			if sibling:
+
+				path, encoding = sibling
+				f = open(path, "rb")
+
+				self.send_response(200)
+				self.send_header("Content-Type", self.guess_type(source))
+				self.send_header("Content-Encoding", encoding)
+				self.send_header("Content-Length", str(os.fstat(f.fileno()).st_size))
+				self.end_headers()
+				return f
 
 			return super().send_head()
 
@@ -509,8 +751,16 @@ def main():
 		help="Run web/dev/wasm_smoke.js + worker_smoke.js against the built module (the boundary's regression nets)"
 	)
 	parser.add_argument(
+		"--vendor", action="store_true",
+		help="Fetch the page's third party (bootstrap, codemirror) into web/vendor, hash checked and precompressed"
+	)
+	parser.add_argument(
 		"--precompress", action="store_true",
-		help="Write brotli .br siblings next to the staged module; --serve and real hosts prefer them"
+		help="Write .br and .gz siblings for the staged module and the page's own html/css/js; --serve and real hosts prefer them"
+	)
+	parser.add_argument(
+		"--zip", nargs="?", type=str, const="", default=None, metavar="PATH",
+		help="Zip everything a host has to serve (page, third party, module and their siblings) for deployment"
 	)
 	parser.add_argument(
 		"--serve", nargs="?", type=int, const=8000, default=None, metavar="PORT",
@@ -531,6 +781,11 @@ def main():
 		return
 
 	ensureEmsdk()
+
+	# The page can't load without these, and they don't depend on the module, so a --vendor run needs no build
+
+	if args.vendor or args.frontend:
+		vendorFrontend()
 
 	if not args.skip_build:
 
@@ -580,6 +835,9 @@ def main():
 
 	if args.precompress:
 		precompressFrontend()
+
+	if args.zip is not None:
+		packageFrontend(args.zip or os.path.join(common.ROOT, "build", args.mode, "web", "OxC3-web.zip"))
 
 	if args.run_frontend_tests:
 		runFrontendTests(args.mode)

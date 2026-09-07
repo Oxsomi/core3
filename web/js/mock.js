@@ -140,12 +140,12 @@ function normPath(p) {
 }
 
 /* Recursively resolve #include "…" through the project tree + @builtins.
- * Mirrors the CLI: every resolved include lands in the oiSH with its content CRC32C
- * (with '\r' stripped first). Escaping the tree is not modelled here. */
+ * Mirrors the compiler: every resolved include lands in the oiSH with its content CRC32C, and the
+ * source hash is the root text's own, both with '\r' stripped first (Compiler_hashSource), so a mock
+ * document carries the hashes the compiler would write. Escaping the tree is not modelled here. */
 function resolveIncludes(rootName, project) {
-  const includes = [], seen = new Set(); let all = "";
+  const includes = [], seen = new Set();
   const visit = (name, text) => {
-    all += text.replace(/\r/g, "") + "\n";
     for (const m of text.matchAll(/#\s*include\s+"([^"]+)"/g)) {
       const inc = m[1];
       const path = inc.startsWith("@") ? inc : normPath(dirOf(name) + inc);
@@ -158,7 +158,7 @@ function resolveIncludes(rootName, project) {
   };
   const rootSrc = project[rootName]?.src ?? project[rootName] ?? "";
   visit(rootName, String(rootSrc));
-  return { includes, sourceHash: U.crc32c(all) };
+  return { includes, sourceHash: U.crc32c(String(rootSrc).replace(/\r/g, "")) };
 }
 
 /* ------------------------------------------------------------------ the analyzer */

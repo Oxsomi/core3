@@ -418,7 +418,7 @@ The magic number in the header can only be absent if embedded in another file. A
 
 ## CRC32C
 
-CRC32C hashes are used for the source and include directories to see if they're dirty. CRC32C first checks for \r and removes it. This is because Windows uses \r\n and Unix/OSX use \n. Windows can allow either, but will sometimes pick \r\n and sometimes \n. To mitigate this triggering random recompiles, even though the real source isn't dirty. CRC32C is a variation of CRC32 optimized for performance, since there is integrated hardware support for it.
+CRC32C hashes are used for the source and include directories to see if they're dirty. CRC32C first checks for \r and removes it. This is because Windows uses \r\n and Unix/OSX use \n. Windows can allow either, but will sometimes pick \r\n and sometimes \n. To mitigate this triggering random recompiles, even though the real source isn't dirty. CRC32C is a variation of CRC32 optimized for performance, since there is integrated hardware support for it. In the compiler this rule is `Compiler_hashSource`, which the source hash and every include hash go through, so either value is the plain CRC32C of the text as it reads with LF endings.
 
 ## entrypointType
 

@@ -56,23 +56,109 @@ function mulberry32(seed) {
 }
 
 /* Line diff (LCS). Returns ops: {t:'=', a}|{t:'-', a}|{t:'+', b}. Inputs are arrays of lines.
-   O(n*m): fine for disassembly-sized inputs; swap for Myers if real disassemblies get huge. */
+   The table is one cell per pair of lines, so two things keep it from being the size of the product:
+   equal lines at both ends are trimmed off first, which is most of two disassemblies of the same
+   shader, and what is left is capped. Past the cap the differing middle is reported as one block
+   replaced by another rather than allocating hundreds of megabytes for a pair of large listings.
+   The cap also keeps every count inside the Uint16 cells, since a subsequence can be no longer than
+   the shorter side. */
+
+const DIFF_MAX_CELLS = 4e6;   //8 MB of table, which is a 2000 by 2000 diff done exactly
+
 function lineDiff(A, B) {
+
+  const ops = [];
+
+  /* The shared head and tail, which never need a table */
+
+  let head = 0, endA = A.length, endB = B.length;
+
+  while (head < endA && head < endB && A[head] === B[head])
+    head++;
+
+  while (endA > head && endB > head && A[endA - 1] === B[endB - 1]) {
+    endA--;
+    endB--;
+  }
+
+  for (let i = 0; i < head; i++)
+    ops.push({ t: "=", a: A[i] });
+
+  const a = A.slice(head, endA), b = B.slice(head, endB);
+  const n = a.length, m = b.length;
+
+  const middle = n && m && n * m <= DIFF_MAX_CELLS ? lcsOps(a, b) : null;
+
+  if (middle)
+    ops.push(...middle);
+
+  else {
+
+    /* One side is empty, or the pair is too large to align line by line */
+
+    for (let i = 0; i < n; i++) ops.push({ t: "-", a: a[i] });
+    for (let j = 0; j < m; j++) ops.push({ t: "+", b: b[j] });
+  }
+
+  for (let i = endA; i < A.length; i++)
+    ops.push({ t: "=", a: A[i] });
+
+  return ops;
+}
+
+function lcsOps(A, B) {
+
   const n = A.length, m = B.length;
+
+  /* L[i][j] = how many lines the longest common subsequence of A[i..] and B[j..] holds. Filled from the
+     end backwards so each cell only reads ones already written, and kept in one flat array because a
+     row of arrays costs an allocation per line. The row past the end stays 0, which is what makes the
+     first real row correct. */
+
   const L = new Uint16Array((n + 1) * (m + 1));
   const at = (i, j) => i * (m + 1) + j;
+
   for (let i = n - 1; i >= 0; i--)
     for (let j = m - 1; j >= 0; j--)
-      L[at(i, j)] = A[i] === B[j] ? L[at(i + 1, j + 1)] + 1 : Math.max(L[at(i + 1, j)], L[at(i, j + 1)]);
+      L[at(i, j)] =
+        A[i] === B[j]
+          ? L[at(i + 1, j + 1)] + 1
+          : Math.max(L[at(i + 1, j)], L[at(i, j + 1)]);
+
+  /* Walk both sides forwards, taking the step the table says loses nothing: equal lines are kept, and
+     otherwise whichever of dropping A[i] or taking B[j] leaves the longer subsequence. The tie goes to
+     the deletion, so a replaced line reads as its removal followed by its addition. */
+
   const ops = [];
   let i = 0, j = 0;
+
   while (i < n && j < m) {
-    if (A[i] === B[j]) { ops.push({ t: "=", a: A[i] }); i++; j++; }
-    else if (L[at(i + 1, j)] >= L[at(i, j + 1)]) { ops.push({ t: "-", a: A[i] }); i++; }
-    else { ops.push({ t: "+", b: B[j] }); j++; }
+
+    if (A[i] === B[j]) {
+      ops.push({ t: "=", a: A[i] });
+      i++;
+      j++;
+    }
+
+    else if (L[at(i + 1, j)] >= L[at(i, j + 1)]) {
+      ops.push({ t: "-", a: A[i] });
+      i++;
+    }
+
+    else {
+      ops.push({ t: "+", b: B[j] });
+      j++;
+    }
   }
-  while (i < n) ops.push({ t: "-", a: A[i++] });
-  while (j < m) ops.push({ t: "+", b: B[j++] });
+
+  /* Whatever is left on one side once the other ran out is a pure removal or addition. */
+
+  while (i < n)
+    ops.push({ t: "-", a: A[i++] });
+
+  while (j < m)
+    ops.push({ t: "+", b: B[j++] });
+
   return ops;
 }
 
@@ -100,6 +186,66 @@ async function encodeShare(obj) {
 }
 
 /* Returns the object, or throws with a reason a toast can show (truncated, corrupt, unknown format). */
+/* A link is a stranger's bytes. The checksum only says it arrived whole, so the payload is checked for
+   shape before anything downstream believes it, and every refusal throws the way a corrupt link does:
+   the caller already turns that into one message.
+   The size cap is against the compressed form lying about what it holds, since a small link can
+   decompress into gigabytes. */
+
+const SHARE_MAX_BYTES = 16 * 1024 * 1024;
+const SHARE_MAX_FILES = 512;
+const SHARE_MAX_NAME = 512;
+
+function shareRefuse(why) {
+  throw new Error("the link doesn't hold a project (" + why + ")");
+}
+
+function checkSharePayload(p) {
+
+  if (!p || typeof p !== "object" || Array.isArray(p))
+    shareRefuse("it isn't an object");
+
+  /* The optional scalars: the active file, the mode, and the single file form older links carry */
+
+  for (const k of ["f", "m", "src"])
+    if (p[k] != null && typeof p[k] !== "string")
+      shareRefuse(k + " isn't text");
+
+  /* The optional objects: compile options and the view to restore */
+
+  for (const k of ["o", "v"])
+    if (p[k] != null && (typeof p[k] !== "object" || Array.isArray(p[k])))
+      shareRefuse(k + " isn't an object");
+
+  if (p.files == null)
+    return p;
+
+  if (typeof p.files !== "object" || Array.isArray(p.files))
+    shareRefuse("its file set isn't an object");
+
+  const names = Object.keys(p.files);
+
+  if (names.length > SHARE_MAX_FILES)
+    shareRefuse(names.length + " files");
+
+  for (const name of names) {
+
+    /* A name reaches the file tree and the editor's tabs, so it stays a plain relative path: no
+       absolute root, and no segment that climbs out of the project. */
+
+    if (!name || name.length > SHARE_MAX_NAME)
+      shareRefuse("a file name is empty or too long");
+
+    if (name.startsWith("/") || name.startsWith("\\") || /(^|[\\/])\.\.([\\/]|$)/.test(name))
+      shareRefuse("a file name climbs out of the project");
+
+    if (typeof p.files[name] !== "string")
+      shareRefuse("the contents of " + name + " aren't text");
+  }
+
+  return p;
+}
+
 async function decodeShare(hash) {
 
   let m;
@@ -108,14 +254,16 @@ async function decodeShare(hash) {
     let raw;
     try { raw = await pipeThrough(unb64(m[1]), new DecompressionStream("gzip")); }
     catch (e) { throw new Error("the link is truncated or corrupt (its checksum doesn't match)"); }
-    return JSON.parse(new TextDecoder().decode(raw));
+    if (raw.length > SHARE_MAX_BYTES) shareRefuse("it unpacks to more than the page will hold");
+    return checkSharePayload(JSON.parse(new TextDecoder().decode(raw)));
   }
 
   if ((m = /s=([^&]+)(?:&c=([0-9a-f]+))?/.exec(hash))) {
     const json = decodeURIComponent(escape(atob(m[1])));
     if (m[2] && crc32c(new TextEncoder().encode(json)) !== parseInt(m[2], 16))
       throw new Error("the link is truncated or corrupt (its checksum doesn't match)");
-    return JSON.parse(json);
+    if (json.length > SHARE_MAX_BYTES) shareRefuse("it unpacks to more than the page will hold");
+    return checkSharePayload(JSON.parse(json));
   }
 
   throw new Error("no share payload in the URL");
@@ -190,5 +338,5 @@ const highlightPipeline = text => scan(text, PIPELINE_RULES);
 
 window.OxUtil = {
   highlightAsm, highlightPipeline, $, $$, esc, crc32c, hex8, fmtBytes, download, mulberry32, lineDiff, debounce,
-  encodeShare, decodeShare };
+  encodeShare, decodeShare, checkSharePayload };
 })();

@@ -93,9 +93,10 @@ redistributed: the [DirectXShaderCompiler fork](https://github.com/Oxsomi/Direct
 
 # For contributors
 
-Everything below is about building, hosting and changing the page. A static, dependency-free (CDN
-Bootstrap + CodeMirror only) frontend for `OxC3 shader …`, `OxC3 file …` and `OxC3 isa …`, running
-the real compiler as wasm64.
+Everything below is about building, hosting and changing the page. A static frontend for
+`OxC3 shader …`, `OxC3 file …` and `OxC3 isa …`, running the real compiler as wasm64. Its own code
+has no dependencies; Bootstrap and CodeMirror are vendored into `web/vendor/` by the build and
+served from the same host as the page.
 
 ## Building and serving
 
@@ -103,8 +104,9 @@ the real compiler as wasm64.
 python build_web.py -mode Release --frontend --serve
 ```
 
-That stages both module flavors into `web/wasm/`, `OxC3_wasm.js` + `.wasm` (two file) and
-`OxC3_wasm_sf.js` (the same build with the wasm embedded in its js), and serves the page on
+That fetches the page's third party into `web/vendor/` (see below), stages both module flavors into
+`web/wasm/`, `OxC3_wasm.js` + `.wasm` (two file) and `OxC3_wasm_sf.js` (the same build with the wasm
+embedded in its js), and serves the page on
 http://localhost:8000. Nothing is compiled on that server: it hands over the module and the page
 does the rest in the browser, so it is a file server, not a backend. It exists because a browser
 refuses to fetch a sibling `.wasm` from `file://`; opened straight from disk, `web/index.html`
@@ -114,6 +116,25 @@ The embedded flavor costs the streaming compile and about a tenth more bytes, so
 flavor; a hosted page wants the two file one, where the browser streams and caches the wasm as its
 own resource, and its worker only ever asks for that one. To iterate quickly without relinking
 both, `--single_file` builds and stages only the embedded flavor.
+
+## Third party
+
+`index.html` loads Bootstrap, its icon font and CodeMirror by a local path, so a visitor's browser
+talks to one host and only a build ever reaches a CDN. `--vendor` fetches them:
+
+```
+python build_web.py --vendor --skip_build
+```
+
+The set is pinned in build_web.py's `VENDOR` table, upstream's own minified builds at the exact
+versions `index.html` asks for, each verified against a recorded SHA-256. A file already on disk with
+the right hash is left alone and one that doesn't match is fetched again, so a second run costs one
+read per file and an edited file heals itself; a download that doesn't match the pin fails the build,
+since that is the CDN handing over something nobody reviewed. `.br` and `.gz` siblings are written next to each one (the
+two font files are already compressed, so they get neither). `--frontend` runs this step too, and the
+directory is gitignored: it is fetched, not checked in.
+
+This is also what the VS Code webview needs, since its CSP blocks remote resources outright.
 
 ## Hosting for real
 
@@ -127,8 +148,25 @@ python build_web.py -mode Release --frontend --precompress --serve
 A tagged release ships this exact folder as `OxC3-<tag>-Web-wasm64.zip`, `.br` siblings included, so a
 host can unpack it next to the page and skip the local step entirely.
 
-`--precompress` writes `.br` siblings next to the staged module and `--serve` prefers them exactly
-like a real host should: `Content-Encoding: br` with the original content type, and
+`--zip` packages the whole deployable site rather than just the module:
+
+```
+python build_web.py -mode Release --frontend --vendor --precompress --zip
+```
+
+That writes `build/<mode>/web/OxC3-web.zip` (or the path you pass) holding the page, its styles and
+scripts, the vendored third party, the module in both flavors and every `.br` / `.gz` sibling, and
+nothing else: the dev scripts, node_modules, the sample sources (they travel inside the recording) and
+this README stay behind. It refuses rather than shipping half a site if the module was never staged or
+the third party was never fetched, and warns when there are no siblings to serve. `dev/hosting_test.py`
+checks that every local path `index.html` loads is in that set, so a new asset can't quietly miss it.
+
+`--precompress` writes `.br` and `.gz` siblings for the staged module and for the page's own markup,
+styles and scripts, the way `--vendor` does for the third party. That matters more than it looks: the
+page's own files are ~840 KB raw and ~155 KB brotli, so serving them uncompressed costs more than the
+compressed module does. `--serve` prefers the siblings exactly like a real host should: brotli first,
+then gzip, and a sibling older than the file it came from is ignored, so an edit is never hidden
+behind a stale one. `Content-Encoding` is set with the original content type, and
 `application/wasm` on the `.wasm` so `instantiateStreaming` kicks in. Any static host reproduces
 this with its precompressed-asset setting (nginx `brotli_static on;`); a host that re-compresses on
 the fly at a low quality wastes most of the win, which is why the siblings are written at build
@@ -310,6 +348,8 @@ edits real workspace files and passes paths). The public site stays full web: th
 `OxAPI` backed by the WASM build instead, at reduced capability (no live device, no spawned
 amdllpc; the device-free Mesa route is what closes most of that gap). Both hosts are first-class
 behind the one boundary, and nothing in the UI is allowed to depend on which it's on.
+The order to build the host in, and what is already in place for it, is under "The VS Code host" in
+web/TODO.
 
 Everything on this page is pure compute over bytes except two things, and the page greys them
 out instead of pretending. `OxAPI.capabilities()` is the one place that says what the host can
@@ -400,6 +440,10 @@ node web/dev/wasm_smoke.js [path/to/OxC3_wasm.js]        # or run it directly
 `dev/frontend_unit.js` runs the pure cores of `js/asmmap.js` (source to disassembly line mapping, read
 out of SPIR-V OpLine / NonSemantic DebugLine and DXIL !dbg metadata) and `js/intellisense.js` (hover and
 completion off the oiSR reflection) against fixed inputs, no DOM and no module.
+
+`dev/hosting_test.py` covers what a host serves rather than what the page does: which precompressed
+sibling is chosen for an `Accept-Encoding`, that one older than the file it came from is refused, and
+that every `vendor/` path `index.html` loads is one the `VENDOR` table produces with a pinned hash.
 
 `dev/editor_test.js` (dev deps via `npm i` in web/, see package.json) asks the HLSL mode what it would
 indent the next line by, which is the decision behind every Enter in the editor. It runs the mode

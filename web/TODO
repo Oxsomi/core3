@@ -23,6 +23,85 @@ Next big thing
   in the browser it refuses because those cannot be spawned. Marked in STATUS.md as needing the fork.
 
 
+The VS Code host
+----------------
+
+What it is for decides most of the scope. Hover and go-to-definition on real files is HLSL-LSP's
+ground and it does that well. What nothing else offers is the oiSH, pipeline and ISA views on the
+user's own project against a real device, so the host is built for those, and the editor
+intelligence it gets is whatever the existing symbol path gives for free. web/README.md describes
+the design; this is the order to build it in.
+
+Already in place:
+
+- The page side of the transport. wasm_rpc.js forwards every OxAPI call uniformly, so a postMessage
+  transport to the extension is that file with the Worker swapped out.
+- Extension-local resources: web/vendor is exactly what the webview's CSP demands.
+- Document reads: `file data --json` gives every oiSH, oiSR, oiSP, oiSB and oiPL as the page's own
+  document, so the host writes a file and asks.
+- Detection: OxAPI.host and capabilities(). The vscode branch currently promises liveIsa and
+  offlineIsa unconditionally, which step 1 turns into an answer from the host.
+
+Steps, each done with its test:
+
+1. Transport and a walking skeleton. Extension scaffold (package.json, activation, one command that
+   opens the webview), the CSP with local resources, vscode_rpc.js mirroring wasm_rpc.js, and
+   capabilities() answered by the host after probing the binary (`isa devices`, whether RGA is
+   bundled). Done when the page opens in the webview on the mock tier and reports what the host can
+   do. Test: jsdom with acquireVsCodeApi stubbed, asserting every OxAPI method reaches the transport
+   and none falls back to a mock. That test is what makes a new page feature fail loudly in the host
+   instead of quietly mocking.
+2. Compile and inspect over the verbs that exist. compileFile and compileRaw over `shader compile`,
+   reflectSymbols over `shader reflect-symbols` then `file data --json`, the parse and header reads
+   over `file data --json`, extractBinary over `file data --bin`, disassemble, assemble, validate,
+   entrypoints and combine over their shader verbs, snapshots over `file to` and `file from`, the
+   ISA calls over `isa`. One temp directory per session, one spawn per call, stdout captured, the
+   binary's errors mapped onto the page's diagnostics shape. Done when the samples compile and every
+   tab renders from the native binary.
+3. The verbs the page needs and the CLI lacks. Three are already listed under Compiler and CLI:
+   reflecting a bare .spv or .dxil, assembling into a real oiSH, and the parse-only permutation
+   listing. New here: `--json` on the vocabularies (the annotation enums, the pipeline field table,
+   the builtin include table), since every dropdown on the page is built from them, and pipeline
+   derive, supply and print as verbs of their own rather than inside `isa`. Each ships with a
+   tools/test.py case.
+4. Real files. The page owns a virtual project; the extension maps it onto the workspace: the active
+   file's folder as the root, includes resolved against it, a recompile on save. Decide up front that
+   the page is a viewer over workspace files rather than a second editor, so edits flow one way and
+   there is no merge to get wrong. This is where the two hosts diverge and where most of the bugs
+   will live.
+5. Process lifetime. One spawn per call is right for a compile and wrong for reflection on every
+   keystroke. A persistent process with a request loop (a `--server` mode on the CLI) replaces the
+   per-call spawn for reflect-symbols and parse. Gated on step 4 showing the latency actually hurts,
+   since HLSL-LSP already covers the keystroke path and this host is not competing there.
+6. Live ISA on the device: `isa disassemble -asic live` with `-pso-output` through the host. This is
+   the feature no other tool has and the reason the extension exists. Done when changing a pipeline
+   field in the page reruns the live route and the ISA diff shows the change.
+7. Semantic highlighting in the editor itself, off by default behind one setting. oiSR already carries
+   what a token provider needs (a kind and a source span per node), so the mapping is small, and the
+   page's own editor already colours from it. The reason to offer it is not a second general
+   highlighter: it is that these tokens know what the compiled binary did, so a register no binary
+   used, a symbol outside the selected permutation, and anything from a builtin include can each read
+   differently. That is the colouring nobody else can produce.
+   Default off because a token provider is global to the language rather than scoped to the webview,
+   so installing this must never change how someone's existing setup renders, and two providers for
+   one language is not a fight a user can reason about (HLSL-LSP already documents that collision with
+   HLSL Tools). No TextMate grammar is shipped either: the static layer is where conflicts are worst
+   and where there is nothing to add.
+   HLSL-LSP running alongside is the expected setup, not a fallback: it owns the language surface and
+   this owns the binaries, the pipelines and the ISA. Taking .hlsl over is for the project that writes
+   the oxc:: annotations, where the entrypoint selector is the thing being improved: permutations,
+   their stages and which binary each one produces come out of this tree and cannot come out of a
+   frontend that does not read the annotations.
+   Two rules make it usable rather than annoying. Tokens come from the last reflection that produced a
+   tree, so a file mid-edit keeps its previous colouring instead of losing it, and the provider says so
+   rather than silently lagging. And it stays gated on step 5, since colouring on every keystroke is
+   the case that needs the persistent process.
+
+Sizing: 1 and 2 are days, 3 is CLI work with tests and docs, 4 is the bulk, 6 is small once 4
+exists, 7 is small in itself but only sensible after 5. Rename, references and signature help stay
+out; they are under Editor intelligence and gated on the DXC IntelliSense seam either way.
+
+
 Editor intelligence
 -------------------
 
@@ -81,8 +160,8 @@ JSON serialization belongs in the formats
 Each format writes its own JSON view through OxC3_formats_json (formats/json/json_writer.h) and
 src/tools/oxc3_wasm only frames it. What is left is reaching those views from the CLI and widening them.
 
-- `file data` could expose it under `--json`. That needs a pretty printer to be worth reading: oiSP's
-  specializations come out as bare values today, which are neither readable nor editable.
+- oiSP's specializations come out of the JSON view as bare numbers, the enum value rather than the name the
+  CLI print uses, which makes a stored pipeline hard to read and edit as a document.
 - Under `--verbose`, DXIL and SPIR-V could carry a disassembly. In the long run that could replace the
   binary goldens, or sit alongside them.
 - It might make sense to replace the normal print system with this, and to do the same for the other
@@ -118,17 +197,53 @@ Maintenance
 
 - Split web/js/app.js into feature modules. Share and restore, the binary strip, and the tabs are the
   first three; new features already land as their own modules.
+- Minifying the page's own js and css would take another fifth off what a visitor downloads (155 KB
+  brotli today, ~124 KB with comments and indentation gone). It needs a minifier as a dev dependency
+  and a place to put the output, since index.html names the sources; the compression siblings already
+  took the larger win.
 - UBSan (clang, -fsanitize=function) reports calls through mismatched function pointer types in the
   graphics C/C++ interop, because the oxc:: C++ twins of the C structs make the callback signatures
   distinct types. Harmless on current ABIs, but it is 25 reports of noise in every sanitizer run.
+- Split the build scripts, after the release rather than before it: this touches every build path and
+  CI with nothing to catch a mistake, so it is the wrong thing to be holding while shipping.
+  build_common.py (1113 lines, 40 functions) goes first, since the other three depend on it, and it
+  already reads as three concerns that share only the run helper: host and toolchain discovery
+  (platform names, compiler resolution and version detection, profiles), conan mechanics (recipe
+  constants, hashing, the generator prune, create-if-changed), and the host tool package with its
+  dependency builds. A package behind the same name moves the code without touching a call site.
+  build_web.py (852) and build_android.py (970) come after. In build_web the hosting half is the clean
+  seam: the vendor fetch, compression, the deploy package and the local server have no relationship to
+  the conan build above them, and they are about a third of the file.
 
 
 Parked
 ------
 
 - Mouse back/forward navigating page state.
-- Side-by-side against upstream DXC; an upstream binary is too large to fetch casually.
-- GLSL and Slang input: HLSL only by design, stated in the docs.
+- GLSL input: HLSL only by design, stated in the docs.
+
+- Slang input. Not a second front end inside the compiler: the annotations, the register model, the
+  oiSB layouts and the oiSR symbol tree are all shaped by DXC's reflection, so a Slang path means a
+  second implementation producing the same SHEntryRuntime and oiSH, and every divergence between the
+  two surfaces as a user's bug rather than a build error. It would also mean two HLSL front ends in
+  one wasm module, against a download the page's whole pitch rests on. ECompilerFormat has one member
+  and nothing dispatches on it, so the enum is not the cost. What Slang users can be given instead
+  costs nothing here: they run slangc themselves and bring the SPIR-V or DXIL, which the page already
+  validates, reflects and disassembles, and `shader assemble` into a real oiSH closes the rest.
+  Revisit when engines that matter here ship Slang as their default authoring language.
+- Metal and WebGPU output is a separate question from the above, and Slang is a detour for it: the
+  SPIR-V already exists, so SPIRV-Cross and Tint translate what is there instead of replacing the
+  front end (DXIL -> AIR also exists, but can't be in the browser).
+- Clang HLSL as a second module, which also subsumes the parked side-by-side against upstream DXC.
+  Same language and same annotations, so unlike Slang it changes nothing about what a user writes,
+  and tracking it is eventually maintenance rather than a feature. What decides it is reflection
+  parity: DXC is used here for IDxcContainerReflection and IDxcIntelliSense as much as for codegen,
+  and a path that lacks an equivalent surface does not replace DXC, it adds a weaker one beside it.
+  Shipping it as its own module rather than linking both into one keeps the download honest, since
+  wasmload.js already picks a module folder per version; comparing the fork against upstream on the
+  same shader then becomes a dropdown. Compression is not the argument either way: the shared
+  ancestry is in the sources, not in the compiled bytes, and memory and instantiation cost both
+  modules whatever the transfer compressed to.
 
 
 Notes for whoever picks this up

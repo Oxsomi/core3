@@ -155,7 +155,8 @@ const C8 *EOperationFlags_names[EOperationFlags_Count] = {
 	"--aes-stdin",
 	"--keep-registers",
 	"--assume-defaults",
-	"--no-opt"
+	"--no-opt",
+	"--json"
 };
 
 const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
@@ -188,7 +189,8 @@ const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
 	"Read the 32-byte AES key (hex) from one line of stdin instead of a plaintext argument.",
 	"Keep declared but unused resources bound and reflected (stable register layouts across shader variants).",
 	"Compile with assumed pipeline state instead of refusing; the assumed fields print with the disassembly.",
-	"Compile with -Od, so the optimizer doesn't fold what --debug's line info describes; pair it with --debug."
+	"Compile with -Od, so the optimizer doesn't fold what --debug's line info describes; pair it with --debug.",
+	"Show the file as one pretty printed JSON document, the view the web frontend reads (oiSH, oiSB, oiSR, oiSP, oiPL)."
 };
 
 //Operations
@@ -376,7 +378,7 @@ void Operations_init() {
 		.func = &CLI_inspectData,
 
 		.isFormatLess = true,
-		.operationFlags = EOperationFlags_Bin | EOperationFlags_Includes | EOperationFlags_Verbose,
+		.operationFlags = EOperationFlags_Bin | EOperationFlags_Includes | EOperationFlags_Verbose | EOperationFlags_Json,
 		.requiredParameters = EOperationHasParameter_Input,
 		.optionalParameters =
 			EOperationHasParameter_AES | EOperationHasParameter_AESFile |

@@ -58,6 +58,13 @@ build/*
 # mocks (and js/mock_data.js, which IS committed) when it isn't there.
 web/wasm/*
 
+# The page's third party, fetched and hash checked by build_web.py --vendor (pinned in its VENDOR table).
+web/vendor/
+
+# Precompressed siblings for the page's own files, written by build_web.py --precompress.
+web/**/*.br
+web/**/*.gz
+
 # jsdom, which web/dev/smoke.js asks for with `npm i jsdom` (see web/README.md).
 web/node_modules/
 .vs/*

@@ -41,6 +41,7 @@ void Test_shaderCompilerFeatures(Test *t);        //Shaders *using* extension fe
 void Test_shaderCompilerStages(Test *t);          //One shader per pipeline stage -> reflected stage matches
 void Test_shaderCompilerReflection(Test *t);      //Resource registers reflect with correct type/write/array/stride
 void Test_shaderCompilerDriver(Test *t);          //compiler_helper compile driver: threads / modes / errors / round-trip
+void Test_shaderCompilerSourceHash(Test *t);      //The same shader with LF and CRLF hashes the same
 void Test_shaderCompilerPermutations(Test *t);    //Multi-entrypoint files with disagreeing oxc:: annotations
 void Test_shaderCompilerCorpus(Test *t);          //Compile the whole test/hlsl corpus (SPIRV snapshot + DXIL coverage)
 

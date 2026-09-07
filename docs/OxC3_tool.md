@@ -76,6 +76,7 @@ The following flags are commonly used in any format:
 - `--not-recursive`: If folder is selected, blocks recursive file searching. Can be handy if only the direct directory should be included.
 - `--verbose`: Print full information to the console. Used by `file data`, `shader entrypoints` and `graphics devices`.
 - `--includes`: Display includes. Used by `file data` to request the include list of an oiSH.
+- `--json`: Show the file as one pretty printed JSON document. Used by `file data` on oiSH, oiSB, oiSR, oiSP and oiPL.
 - `--aes-stdin`: Read the 32-byte AES key (hex) from one line of stdin instead of a plaintext argument.
 
 The following parameters are commonly used in any format:
@@ -382,6 +383,8 @@ For oiSH files, it is possible to supply `--bin` can be used  to fetch the binar
 For oiSP files, `file header` shows the pipeline/stage/specialization counts and `file data` prints every pipeline: the stages it binds (each naming the oiSH and entrypoint it came from, with that shader's source hash), followed by the full pipeline state with each field's provenance. A field marked *assumed* is one nobody chose, so a stored pipeline never hides which of its values were guessed. See [oiSP](oiSP.md).
 
 For oiPL files (a standalone pipeline layout, see [oiPL](oiPL.md)), `file data` prints every binding row with its type, space, binding, count, visibility and data, the push constant range and the sampler count.
+
+`file data --json` shows an oiSH, oiSB, oiSR, oiSP or oiPL as one pretty printed JSON document instead of the prints above. It is the same view the web frontend reads, written by each format's own writer (`SHFile_writeJson` and relatives, described in the format docs), so a file can be diffed against another or fed to a script. `-output <file>` writes the document instead of showing it, `-start` and `-length` page it like any text view, and `--bin`, `--includes` and `-entry` can't combine with it since it always covers the whole file. oiCA and oiDL have no JSON view yet.
 
 On a build with RGA (see the ISA section), `-asic <asic>` views an oiSH binary's SPIR-V as AMD ISA instead of the raw/disassembled binary: `file data -input test.oiSH -asic gfx1100`. `-asic` implies `--bin` + SPIR-V, so `-compile-output` isn't needed. `-entry <index>` picks the binary; it may be omitted when there's a single binary (and without it on a multi-binary oiSH the binaries are listed so you can choose an index). `-asic ?` lists devices, and a DXIL-only binary warns and falls back to DXIL disassembly.
 

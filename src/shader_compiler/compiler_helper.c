@@ -29,6 +29,26 @@
 #include "shader_compiler/compiler.h"
 #include "compiler_helper_internal.h"
 
+U32 Compiler_hashSource(CharString text) {
+
+	U32 crc = 0;
+	U64 runStart = 0;
+	const U64 length = CharString_length(text);
+
+	//Chained over the runs between carriage returns, so nothing is copied to drop them
+
+	for (U64 i = 0; i <= length; ++i)
+		if (i == length || text.ptr[i] == '\r') {
+
+			if(i > runStart)
+				crc = Buffer_crc32cChained(Buffer_createRefConst(text.ptr + runStart, i - runStart), crc);
+
+			runStart = i + 1;
+		}
+
+	return crc;
+}
+
 Bool Compiler_precompileShader(
 	const Compiler *compiler,
 	EGfxBinaryType outputType,

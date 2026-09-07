@@ -26,7 +26,14 @@ global.localStorage = {
   removeItem(k) { delete lsData[k]; }
 };
 
-for (const f of ["js/util.js", "js/workspace.js", "js/editor.js", "js/intellisense.js", "js/asmmap.js", "js/tools/symbols.js"])
+/* wasmload.js runs at parse time in a page: it picks a module folder and writes the script tag for it.
+   Only the picking is exercised here, so the tag is never written (a worker capable origin takes the
+   other branch) and the versions fetch has nothing to reach. */
+
+global.location = { protocol: "https:" };
+global.Worker = function () {};
+
+for (const f of ["js/util.js", "js/wasmload.js", "js/workspace.js", "js/editor.js", "js/intellisense.js", "js/asmmap.js", "js/tools/symbols.js"])
   new Function(fs.readFileSync(path.join(ROOT, f), "utf8")).call(global);
 
 let failures = 0;
@@ -393,6 +400,114 @@ const IS = window.OxIntelliSense;
   /* Nothing left to evict: the save reports failure instead of looping or throwing. */
   lsQuota = 10;
   check("ws: an unsatisfiable save fails loudly", await WS.save(bigProject) === false && WS.isDirty());
+
+  /* ---- lineDiff: the ops, and the guards that keep the table from being the size of the product ---- */
+
+  const D = U2.lineDiff;
+  const ops = (a, b) => D(a, b).map(o => o.t + (o.t === "+" ? o.b : o.a)).join(" ");
+
+  check("diff: identical input is all equal", ops(["a", "b"], ["a", "b"]) === "=a =b");
+  check("diff: a replaced line removes then adds", ops(["a", "x", "c"], ["a", "y", "c"]) === "=a -x +y =c");
+  check("diff: an insertion in the middle", ops(["a", "c"], ["a", "b", "c"]) === "=a +b =c");
+  check("diff: an insertion at the head", ops(["b"], ["a", "b"]) === "+a =b");
+  check("diff: an insertion at the tail", ops(["a"], ["a", "b"]) === "=a +b");
+  check("diff: an empty side is all additions", ops([], ["a", "b"]) === "+a +b");
+  check("diff: the other empty side is all removals", ops(["a", "b"], []) === "-a -b");
+  check("diff: a common head and tail survive a changed middle",
+    ops(["h", "1", "t"], ["h", "2", "t"]) === "=h -1 +2 =t");
+
+  /* A shared head and tail is what two disassemblies of one shader look like: the table is never built
+     for them, so a large pair stays instant. */
+
+  {
+    const A = [], B = [];
+    for (let i = 0; i < 20000; i++) { A.push("l" + i); B.push("l" + i); }
+    B[10000] = "changed";
+    const t0 = Date.now();
+    const out = D(A, B);
+    const ms = Date.now() - t0;
+    check("diff: 20k lines with one change stays instant", ms < 500, ms + "ms");
+    check("diff: and reports exactly that one change",
+      out.filter(o => o.t !== "=").map(o => o.t).join("") === "-+");
+  }
+
+  /* Past the cap the middle is one block replaced by another, rather than a table of n*m cells. */
+
+  {
+    const A = [], B = [];
+    for (let i = 0; i < 3000; i++) { A.push("a" + i); B.push("b" + i); }
+    const t0 = Date.now();
+    const out = D(A, B);
+    const ms = Date.now() - t0;
+    check("diff: a large all-different pair falls back instead of allocating", ms < 500, ms + "ms");
+    check("diff: and still accounts for every line",
+      out.filter(o => o.t === "-").length === 3000 && out.filter(o => o.t === "+").length === 3000);
+  }
+
+  /* ---- share payloads: a link that arrives whole can still hold anything ---------------------- */
+
+  const refused = p => {
+    try { U2.checkSharePayload(p); return false; }
+    catch (e) { return /doesn't hold a project/.test(e.message); }
+  };
+
+  check("share: what encodeShare produces is accepted",
+    !refused({ m: "compile", f: "a.hlsl", files: { "a.hlsl": "x", "dir/b.hlsli": "y" }, o: {}, v: {} }));
+  check("share: the older single file form is accepted", !refused({ f: "a.hlsl", src: "x" }));
+  check("share: an array is refused", refused([1, 2]));
+  check("share: a bare string is refused", refused("nope"));
+  check("share: null is refused", refused(null));
+  check("share: a file set that isn't an object is refused", refused({ files: "a.hlsl" }));
+  check("share: a file set as an array is refused", refused({ files: ["a.hlsl"] }));
+  check("share: contents that aren't text are refused", refused({ files: { "a.hlsl": { toString: 1 } } }));
+  check("share: an absolute file name is refused", refused({ files: { "/etc/passwd": "x" } }));
+  check("share: a name climbing out of the project is refused", refused({ files: { "../../x": "x" } }));
+  check("share: a name climbing in the middle is refused", refused({ files: { "a/../../x": "x" } }));
+  check("share: a windows style climb is refused", refused({ files: { "a\\..\\..\\x": "x" } }));
+  check("share: a dotted name that does not climb is accepted", !refused({ files: { "a..b.hlsl": "x" } }));
+  check("share: an empty name is refused", refused({ files: { "": "x" } }));
+  check("share: an active file that isn't text is refused", refused({ f: 3 }));
+  check("share: options that aren't an object are refused", refused({ o: "all" }));
+
+  {
+    const many = {};
+    for (let i = 0; i < 600; i++) many["f" + i + ".hlsl"] = "x";
+    check("share: an unreasonable file count is refused", refused({ files: many }));
+  }
+
+  /* ---- the module path a remembered version names ------------------------------------------- */
+
+  const mb = window.OxWasmVersion.moduleBase;
+
+  check("wasmload: no pick is the default folder", mb(null) === "wasm/" && mb("") === "wasm/");
+  check("wasmload: 'current' is the default folder", mb("current") === "wasm/");
+  check("wasmload: a version names a subfolder", mb("3.2.104") === "wasm/3.2.104/");
+  check("wasmload: a slash is filtered out", mb("a/b") === "wasm/ab/");
+  check("wasmload: a name that filters down to nothing falls back", mb("///") === "wasm/");
+  check("wasmload: dots alone fall back", mb("..") === "wasm/");
+
+  /* Whatever the stored value is, the path it names stays one folder under wasm/. */
+
+  for (const hostile of ["../../etc", "a/../../b", "//evil.example/x", "..\\..\\x", "<script>", "%2e%2e%2f", "\u0000"]) {
+    const out = mb(hostile);
+    check("wasmload: " + JSON.stringify(hostile) + " stays under wasm/",
+      /^wasm\/([\w.-]+\/)?$/.test(out) && !/(^|\/)\.\.(\/|$)/.test(out.slice(5)), out);
+  }
+
+  /* ---- highlighting: the classes and, more importantly, the escaping ------------------------- */
+
+  check("highlight: an opcode and an id are classed",
+    U2.highlightAsm("%1 = OpLoad") ===
+    '<span class="hl-id">%1</span> = <span class="hl-op">OpLoad</span>');
+  check("highlight: a comment swallows what follows",
+    U2.highlightAsm("; OpLoad") === '<span class="hl-cmt">; OpLoad</span>');
+  check("highlight: markup in the text is escaped, not emitted",
+    U2.highlightAsm("<img src=x>").indexOf("<img") === -1 &&
+    U2.highlightAsm("<img src=x>").indexOf("&lt;img") !== -1);
+  check("highlight: a pipeline field keeps its provenance colour",
+    U2.highlightPipeline("blend.enable = derived").indexOf('class="prov-derived"') !== -1);
+  check("highlight: pipeline text escapes markup too",
+    U2.highlightPipeline('"<b>"').indexOf("<b>") === -1);
 
   console.log(failures ? `\n${failures} FAILURE(S)` : "\nALL PASS");
   process.exit(failures ? 1 : 0);

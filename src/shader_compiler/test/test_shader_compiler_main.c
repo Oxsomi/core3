@@ -66,6 +66,7 @@ OXC3_TEST_ENTRY(shader_compiler) {
 	Test_shaderCompilerStages(&t);
 	Test_shaderCompilerReflection(&t);
 	Test_shaderCompilerDriver(&t);
+	Test_shaderCompilerSourceHash(&t);
 	Test_shaderCompilerPermutations(&t);
 	//Runs bundled too: the corpus and its committed reference oiSHs ship in the virtual file system
 	// (see TEST_SHADER_ROOT), where the test compares byte for byte but never regenerates,

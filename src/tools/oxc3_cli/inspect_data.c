@@ -47,6 +47,7 @@
 #include "formats/oiSR/sr_file.h"
 #include "formats/oiSP/sp_file.h"
 #include "formats/oiPL/pl_file.h"
+#include "formats/json/json_writer.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
@@ -387,6 +388,20 @@ clean:
 //Handle inspection of individual data.
 //Also handles info about the file in general.
 
+//The whole file as one pretty printed JSON document, the view the web frontend reads, shown the way a text view
+// is: paged by -start and -length, or written to -output as it is.
+
+static Bool CLI_showJson(const ParsedArgs *args, CharString json, U64 start, U64 length, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!CLI_showFile(args, CharString_bufferConst(json), start, length, ECLIShowFormat_UTF8, true))
+		retError(clean, Error_invalidState(0, "CLI_showJson() the document couldn't be shown"));
+
+clean:
+	return s_uccess;
+}
+
 Bool CLI_inspectData(const ParsedArgs *args) {
 
 	if(!args) return false;
@@ -559,6 +574,13 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 			goto clean;
 		}
 	}
+
+	//--json is each format's own view, which oiCA and oiDL do not have yet
+
+	const Bool jsonMode = (args->flags & EOperationFlags_Json) != 0;
+
+	if(jsonMode && (magic == CAHeader_MAGIC || magic == DLHeader_MAGIC))
+		retError(clean, Error_invalidParameter(0, 0, "CLI_inspectData() --json has no view for oiCA or oiDL yet"));
 
 	switch (magic) {
 
@@ -869,6 +891,21 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 				goto cleanSh;
 			}
 
+			//--json is the whole file, so the per entry and per binary modes have nothing left to select
+
+			if (jsonMode) {
+
+				if(binaryMode || includesMode || (args->parameters & EOperationHasParameter_Entry))
+					retError(cleanSh, Error_invalidParameter(
+						0, 0, "CLI_inspectData() --json covers the whole oiSH, so --bin, --includes and -entry can't join it"
+					));
+
+				JsonWriter w = JsonWriter_create(&tmp, true, alloc);
+				gotoIfError3(cleanSh, SHFile_writeJson(&file, &w, alloc, e_rr));
+				gotoIfError3(cleanSh, CLI_showJson(args, tmp, start, length, e_rr));
+				goto cleanSh;
+			}
+
 			#ifdef CLI_RGA
 
 				//-asic views a shader binary as AMD ISA. '?' just lists devices; a concrete ASIC implies viewing
@@ -1107,6 +1144,13 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 			U64 sbOff = 0;
 			gotoIfError3(cleanSb, SBFile_read(stream, &sbOff, false, alloc, &file, e_rr));
 
+			if (jsonMode) {
+				JsonWriter w = JsonWriter_create(&tmp, true, alloc);
+				gotoIfError3(cleanSb, SBFile_writeJson(&file, &w, e_rr));
+				gotoIfError3(cleanSb, CLI_showJson(args, tmp, start, length, e_rr));
+				goto cleanSb;
+			}
+
 			SBFile_print(&file, 0, U16_MAX, true, alloc);        //TODO: parent
 
 		cleanSb:
@@ -1132,6 +1176,13 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 			U64 plOff = 0;
 
 			gotoIfError3(clean, PLFile_read(stream, &plOff, false, alloc, &pl, e_rr));
+
+			if (jsonMode) {
+				JsonWriter w = JsonWriter_create(&tmp, true, alloc);
+				s_uccess = SPFile_writeJsonLayout(&pl, &w, e_rr) && CLI_showJson(args, tmp, start, length, e_rr);
+				PLFile_free(&pl, alloc);
+				goto clean;
+			}
 
 			Log_debugLnx(
 				"oiPL with %"PRIu64" binding(s), %"PRIu64" sampler(s)%s:",
@@ -1179,6 +1230,13 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 			U64 spOff = 0;
 			gotoIfError3(cleanSp, SPFile_read(stream, &spOff, false, alloc, &file, e_rr));
+
+			if (jsonMode) {
+				JsonWriter w = JsonWriter_create(&tmp, true, alloc);
+				gotoIfError3(cleanSp, SPFile_writeJson(&file, &w, e_rr));
+				gotoIfError3(cleanSp, CLI_showJson(args, tmp, start, length, e_rr));
+				goto cleanSp;
+			}
 
 			Log_debugLnx("oiSP with %"PRIu64" pipeline(s):", file.pipelines.length);
 
@@ -1248,6 +1306,13 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 			U64 srOff = 0;
 			gotoIfError3(cleanSr, SRFile_read(stream, &srOff, false, alloc, &file, e_rr));
+
+			if (jsonMode) {
+				JsonWriter w = JsonWriter_create(&tmp, true, alloc);
+				gotoIfError3(cleanSr, SRFile_writeJson(&file, &w, alloc, e_rr));
+				gotoIfError3(cleanSr, CLI_showJson(args, tmp, start, length, e_rr));
+				goto cleanSr;
+			}
 
 			SRFile_print(
 				&file, 0,

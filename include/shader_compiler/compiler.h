@@ -257,6 +257,10 @@ const CompilerBuiltInInclude *Compiler_findBuiltInInclude(CharString name);
 
 //A separate Compiler should be created per thread
 
+//CRC32C of a source with every carriage return skipped, so a text hashes the same under either line ending. The
+// source hash and every include hash are this, and nothing else hashes source.
+U32 Compiler_hashSource(CharString text);
+
 Bool Compiler_create(const Allocator *alloc, Compiler *comp, Error *e_rr);
 void Compiler_free(Compiler *comp, const Allocator *alloc);
 

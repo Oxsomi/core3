@@ -200,7 +200,9 @@ typedef enum EOperationFlags {
 
 	EOperationFlags_NoOpt               = 1 << 29,        //--no-opt: -Od, so debug line info survives per statement
 
-	EOperationFlags_Count               = 30
+	EOperationFlags_Json                = 1 << 30,        //--json: file data shows the file as one pretty printed JSON document
+
+	EOperationFlags_Count               = 31
 
 } EOperationFlags;
 
