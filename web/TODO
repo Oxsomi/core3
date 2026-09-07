@@ -11,7 +11,16 @@ An item leaves this list by landing WITH its tests and its documentation, per FO
 Before this goes out
 --------------------
 
-- web/* still needs a manual read-through by Niels. Nothing in it has had a human pass end to end.
+- web/* still needs a manual read-through by Niels. These are what is left:
+
+    isa.js, asmmap.js, symbols.js, editor.js, compile.js, gen_mock_data.js, pipeline.js, diff.js,
+    frontend_unit.js, wasm.js, mock.js, mock_formats.js, smoke.js, wasm_smoke.js, intellisense.js,
+    app.js, api.js, inspect.js
+
+  api.js and app.js carry the most: api.js is the contract everything downstream believes, and app.js
+  is a third of the frontend and holds most of the places that build HTML. The share restore inside
+  app.js is the only path a stranger's bytes reach, so it is worth reading against the validation in
+  util.js rather than on its own.
 - It needs an Astra review as well.
 
 
