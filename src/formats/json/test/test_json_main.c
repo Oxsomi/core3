@@ -20,9 +20,9 @@
 
 //formats/json/test/test_json_main.c
 
-#include "types/test/test.h"
 #include "test_json_shared.h"
 #include "types/container/test/basic_alloc.h"
+#include "types/test/test.h"
 
 OXC3_TEST_MAIN(formats_json) {
 

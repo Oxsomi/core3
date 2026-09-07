@@ -23,6 +23,7 @@
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiSH/sh_registers.h"
 #include "formats/oiSB/sb_file.h"
+#include "formats/oiXX/oiXX.h"
 #include "formats/json/json_writer.h"
 #include "types/container/texture_format.h"
 #include "types/base/type_id.h"
@@ -525,8 +526,6 @@ Bool SHFile_writeJsonMembers(const SHFile *file, JsonWriter *w, const Allocator 
 	if(!file || !w)
 		retError(clean, Error_nullPointer(!file ? 0 : 1, "SHFile_writeJsonMembers()::file and w are required"));
 
-	static const C8 *sizeTypeNames[4] = { "U8", "U16", "U32", "U64" };
-
 	gotoIfError3(clean, (
 		JsonWriter_keyObject(w, "compilerVersion", e_rr) &&
 		JsonWriter_keyU64(w, "major", OXC3_GET_MAJOR(file->compilerVersion), e_rr) &&
@@ -558,8 +557,10 @@ Bool SHFile_writeJsonMembers(const SHFile *file, JsonWriter *w, const Allocator 
 		JsonWriter_keyObject(w, "header", e_rr) &&
 		JsonWriter_keyCstr(w, "version", "1.2", e_rr) &&
 		JsonWriter_keyObject(w, "sizeTypes", e_rr) &&
-		JsonWriter_keyCstr(w, "spirv", sizeTypeNames[sizeTypes[EGfxBinaryType_SPIRV]], e_rr) &&
-		JsonWriter_keyCstr(w, "dxil", sizeTypeNames[sizeTypes[EGfxBinaryType_DXIL]], e_rr) &&
+		JsonWriter_keyCstr(
+			w, "spirv", EXXDataSizeType_name((EXXDataSizeType) sizeTypes[EGfxBinaryType_SPIRV]), e_rr
+		) &&
+		JsonWriter_keyCstr(w, "dxil", EXXDataSizeType_name((EXXDataSizeType) sizeTypes[EGfxBinaryType_DXIL]), e_rr) &&
 		JsonWriter_endObject(w, e_rr) &&
 		JsonWriter_endObject(w, e_rr)
 	));

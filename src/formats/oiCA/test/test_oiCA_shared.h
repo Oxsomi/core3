@@ -46,6 +46,8 @@ void Test_CAForeach(Test *t);
 
 void Test_CASetTime(Test *t);
 void Test_CASetStream(Test *t);
+
+void Test_CAWriteJson(Test *t);          //The JSON view: the header's counts and the shape of each entry
 void Test_CASetData(Test *t);
 
 void Test_CACompare(Test *t);

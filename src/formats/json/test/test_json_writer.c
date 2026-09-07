@@ -96,6 +96,24 @@ void Test_jsonWriter(Test *t) {
 		));
 	}
 
+	//Bytes travel as lowercase hex, two characters each, and an empty buffer is an empty string
+
+	CharString_free(&out, t->alloc);
+
+	{
+		JsonWriter w = JsonWriter_create(&out, false, t->alloc);
+		static const U8 bytes[4] = { 0x00, 0x0F, 0xA5, 0xFF };
+
+		Test_assert(t, "hex writes", (
+			JsonWriter_beginObject(&w, &t->err) &&
+			JsonWriter_keyHex(&w, "b", Buffer_createRefConst(bytes, sizeof(bytes)), &t->err) &&
+			JsonWriter_keyHex(&w, "empty", Buffer_createNull(), &t->err) &&
+			JsonWriter_endObject(&w, &t->err) && JsonWriter_isComplete(&w)
+		));
+
+		Test_assert(t, "as two lowercase characters a byte", jsonEquals(&out, "{\"b\":\"000fa5ff\",\"empty\":\"\"}"));
+	}
+
 	//Misuse is refused rather than emitted, since a document that is not JSON helps nobody downstream
 
 	CharString_free(&out, t->alloc);

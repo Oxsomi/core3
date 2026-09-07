@@ -26,6 +26,21 @@
 #include "formats/oiXX/oiXX.h"
 #include "types/base/constants.h"
 
+const C8 *EXXCompressionType_name(EXXCompressionType type) {
+	static const C8 *names[] = { "None" };
+	return type >= EXXCompressionType_Count ? "Invalid" : names[type];
+}
+
+const C8 *EXXEncryptionType_name(EXXEncryptionType type) {
+	static const C8 *names[] = { "None", "AES256GCM" };
+	return type >= EXXEncryptionType_Count ? "Invalid" : names[type];
+}
+
+const C8 *EXXDataSizeType_name(EXXDataSizeType type) {
+	static const C8 *names[] = { "U8", "U16", "U32", "U64" };
+	return type >= EXXDataSizeType_Count ? "Invalid" : names[type];
+}
+
 Bool Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result, Error *e_rr) {
 
 	Bool s_uccess = true;

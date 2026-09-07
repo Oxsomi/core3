@@ -77,6 +77,7 @@ OXC3_TEST_MAIN(formats_oiCA) {
 	Test_CASerializeEncrypted(&t);
 	Test_CASerializeMultipleFiles(&t);
 	Test_CASerializeStreamBacked(&t);
+	Test_CAWriteJson(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 

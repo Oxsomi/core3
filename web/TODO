@@ -163,10 +163,17 @@ src/tools/oxc3_wasm only frames it. What is left is reaching those views from th
 - oiSP's specializations come out of the JSON view as bare numbers, the enum value rather than the name the
   CLI print uses, which makes a stored pipeline hard to read and edit as a document.
 - Under `--verbose`, DXIL and SPIR-V could carry a disassembly. In the long run that could replace the
-  binary goldens, or sit alongside them.
-- It might make sense to replace the normal print system with this, and to do the same for the other
-  oi formats, oiDL and oiCA among them. Each one's shape is straightforward enough on its own.
+  binary goldens, or sit alongside them. It follows oiDL's rule for contents: the shape by default, the
+  bytes only when asked, and a stated omission with the size when they are too big to carry.
+- It might make sense to replace the normal print system with this. oiCA and oiDL have their views
+  already; oiBC and the image formats are what is left, and each one's shape is straightforward.
 - A deserializer is needed at some point too, not just a writer.
+- Base64 as a second encoding for bytes in a document. Hex is what the writer has, because it matches
+  what `file data` prints for binary and stays readable at the sizes contents actually travel at (a
+  held entry, so at most the format's medium tier). It costs 2x where base64 costs 1.33x, which only
+  starts mattering if whole binaries travel, which is the --verbose disassembly item. There is no
+  base64 codec in the tree, so this is an encoder and its tests, and a decoder too once anything reads
+  a document back.
 
 
 Reflection and the JSON views

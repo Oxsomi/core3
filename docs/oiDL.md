@@ -130,6 +130,21 @@ If ASCII or UTF8 is used, certain characters are blacklisted to avoid problems a
 - 0x9 (Tab), 0xA (Newline \n), 0xD (Carriage return \r).
 - Any other UTF-8 character if UTF8 flag is set (e.g. codepoint >=0xC280). As long as it's a valid UTF-8 codepoint. See https://www.charset.org/utf-8, https://en.wikipedia.org/wiki/UTF-8.
 
+## JSON view
+
+`DLFile_writeJson` (formats/oiDL/dl_file.h) writes the file as one JSON object through the formats/json
+writer: its data type, its encryption and compression, whether it hides its magic number, the entry count,
+and every entry's id, size and whether the reader holds it or left it as a stream.
+
+`type`, `encryption` and `compression` each carry the name of the enum value rather than a boolean derived
+from it, so the document still means what it meant when the enum grows: a reader asking whether the file is
+compressed compares `compression` against `None`.
+
+Contents are opt in. With them asked for, an entry the reader holds carries itself: a string entry as text,
+a data entry as lowercase hex, which is what `file data` prints for binary anyway. A stream-backed entry
+never does, since that is one the reader chose not to hold (`DLFile_isFullyLoaded`), so a document about a
+large file stays the size of one about a small file. `file data --json --verbose` is what asks.
+
 ## Changelog
 
 1.0: Basic format specification.

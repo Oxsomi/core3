@@ -274,6 +274,31 @@ Bool JsonWriter_cstr(JsonWriter *w, const C8 *v, Error *e_rr) {
 	return JsonWriter_str(w, v ? CharString_createRefCStrConst(v) : CharString_createNull(), e_rr);
 }
 
+Bool JsonWriter_hex(JsonWriter *w, Buffer v, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	gotoIfError3(clean, JsonWriter_valuePrefix(w, e_rr));
+
+	//One resize for the whole run, since a hex string is exactly two characters per byte plus its quotes
+
+	const U64 length = Buffer_length(v);
+	const U64 at = CharString_length(*w->out);
+
+	gotoIfError3(clean, CharString_resize(w->out, at + (length << 1) + 2, '"', w->alloc, e_rr));
+
+	C8 *out = w->out->ptrNonConst + at + 1;
+
+	for (U64 i = 0; i < length; ++i) {
+		static const C8 digits[] = "0123456789abcdef";
+		out[i << 1] = digits[v.ptr[i] >> 4];
+		out[(i << 1) | 1] = digits[v.ptr[i] & 0xF];
+	}
+
+clean:
+	return s_uccess;
+}
+
 Bool JsonWriter_raw(JsonWriter *w, const C8 *v, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -357,4 +382,8 @@ Bool JsonWriter_keyF64(JsonWriter *w, const C8 *key, F64 v, Error *e_rr) {
 
 Bool JsonWriter_keyRaw(JsonWriter *w, const C8 *key, const C8 *v, Error *e_rr) {
 	return JsonWriter_key(w, key, e_rr) && JsonWriter_raw(w, v, e_rr);
+}
+
+Bool JsonWriter_keyHex(JsonWriter *w, const C8 *key, Buffer v, Error *e_rr) {
+	return JsonWriter_key(w, key, e_rr) && JsonWriter_hex(w, v, e_rr);
 }

@@ -100,6 +100,12 @@ def run(exe, args, contains=None, want_fail=False, xfail=None):
 	return out
 
 
+def strip_ansi(out):
+	"""The log is coloured; a document has to come back out of it before json.parse sees it."""
+	plain = re.sub(r"\x1b\[[0-9;]*m", "", out)
+	return plain[plain.index("{"):plain.rindex("}") + 1]
+
+
 def check(cond, label):
 	"""Assert a Python-side condition (e.g. a round-trip file comparison)."""
 	global passed
@@ -209,6 +215,19 @@ def main():
 		run(exe, ["file", "header", "-input", ca], contains=["oiCA"])
 		run(exe, ["file", "data", "-input", ca], contains=["a.txt"])
 
+		# --json on an archive is its table: every entry with its path and size, and no file bytes anywhere.
+		out = run(exe, ["file", "data", "-input", ca, "--json"], contains=['"entries"'])
+		doc = json.loads(strip_ansi(out))
+		check(any(e["path"].endswith("a.txt") and e["type"] == "file" and e["size"] == 5 for e in doc["entries"]),
+			"file data --json lists the archive's files with their sizes")
+		check(any(e["type"] == "folder" and e["size"] is None for e in doc["entries"]),
+			"file data --json gives a folder no size")
+		check(all(e["contents"] is None for e in doc["entries"]), "file data --json withholds archive bytes by default")
+		verbose = json.loads(strip_ansi(run(exe, ["file", "data", "-input", ca, "--json", "--verbose"])))
+		check(any(e["contents"] == "616c706861" for e in verbose["entries"]),
+			"file data --json --verbose carries a held file's bytes as hex")        # "alpha"
+		run(exe, ["file", "data", "-input", ca, "--json", "-entry", "0"], want_fail=True)
+
 		# oiDL from a folder: each entry holds a file's raw bytes.
 		# Assert the exact per-entry byte lengths.
 		dld = p("dld"); os.makedirs(dld)
@@ -226,6 +245,14 @@ def main():
 		run(exe, ["file", "to", "-format", "oiDL", "-input", lines, "-output", oiDLtext, "--ascii"], contains=["Converted"])
 		out = run(exe, ["file", "data", "-input", oiDLtext], contains=["length = 5", "length = 4"])
 		check(out.count("length =") == 3, "oiDL --ascii -> exactly 3 line entries")
+
+		# --json lists the entries by size; only --verbose asks for the text of the ones it holds.
+		doc = json.loads(strip_ansi(run(exe, ["file", "data", "-input", oiDLtext, "--json"], contains=['"entries"'])))
+		check([e["size"] for e in doc["entries"]] == [5, 4, 5], "file data --json reports each oiDL entry's size")
+		check(all(e["contents"] is None for e in doc["entries"]), "file data --json withholds contents by default")
+		verbose = json.loads(strip_ansi(run(exe, ["file", "data", "-input", oiDLtext, "--json", "--verbose"])))
+		check([e["contents"] for e in verbose["entries"]] == ["alpha", "beta", "gamma"],
+			"file data --json --verbose carries the text of the entries it holds")
 
 		# oiDL combine concatenates entries: 3 + 2 -> 5.
 		lines2 = p("lines2.txt"); write(lines2, "delta\nepsilon")
@@ -428,8 +455,7 @@ def main():
 			# --json: the whole oiSH as one pretty printed document, the view the web frontend reads. It has to parse,
 			# name the entry, write the identical document through -output, and refuse the per entry modes.
 			out = run(exe, ["file", "data", "-input", soiSH, "--json"], contains=['"entries"'])
-			plain = re.sub(r"\x1b\[[0-9;]*m", "", out)
-			doc = json.loads(plain[plain.index("{"):plain.rindex("}") + 1])
+			doc = json.loads(strip_ansi(out))
 			check(doc["entries"][0]["name"] == "main" and doc["entries"][0]["stage"] == "compute",
 				"file data --json parses and names the entry")
 			run(exe, ["file", "data", "-input", soiSH, "--json", "-output", p("s.json")])

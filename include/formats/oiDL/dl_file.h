@@ -33,6 +33,7 @@
 typedef struct RefPtr RefPtr;
 typedef struct RefPtrType RefPtrType;
 typedef RefPtr StreamRef;
+typedef struct JsonWriter JsonWriter;
 
 typedef enum EDLDataType {
 	EDLDataType_Data,                                    //(default, Buffer)
@@ -41,6 +42,8 @@ typedef enum EDLDataType {
 } EDLDataType;
 
 typedef U8 DLDataType;            //EDLDataType
+
+const C8 *EDLDataType_name(EDLDataType type);
 
 typedef enum EDLSettingsFlags {
 	EDLSettingsFlags_None               = 0,
@@ -123,6 +126,13 @@ static inline U64 DLFile_entrySize(const DLFile *file, U64 i) {
 		CharString_length(file->entryStrings.ptr[i]) :
 		Buffer_length(file->entryBuffers.ptr[i]);
 }
+
+//The JSON view of the file: the settings, the entry count, and every entry's id, size and whether the reader
+// holds it or left it as a stream. withContents adds the text of a string entry it holds; a data entry's bytes
+// are binary and never travel, and a stream-backed entry is one the reader chose not to hold, so neither does.
+//writeJson writes the whole object; writeJsonMembers writes its members into an object the caller opened.
+Bool DLFile_writeJson(const DLFile *file, Bool withContents, JsonWriter *w, Error *e_rr);
+Bool DLFile_writeJsonMembers(const DLFile *file, Bool withContents, JsonWriter *w, Error *e_rr);
 
 Bool DLFile_create(const DLSettings *settings, U64 cacheSize, const Allocator *alloc, DLFile *dlFile, Error *e_rr);
 void DLFile_free(DLFile *dlFile, const Allocator *alloc);

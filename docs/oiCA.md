@@ -161,6 +161,23 @@ The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed 
 
 All oiDL notes apply, see [oiDL format](oiDL.md).
 
+## JSON view
+
+`CAFile_writeJson` (formats/oiCA/ca_file.h) writes the archive as one JSON object through the formats/json
+writer: its encryption and compression, which date flags it carries, the recursive file and folder counts,
+and the flattened tree with each entry's full path, its kind, and for a file its size, its timestamp when the
+archive stores one, and whether the reader holds its data or left it as a stream.
+
+`encryption` and `compression` carry the name of the type (`EXXEncryptionType_name`,
+`EXXCompressionType_name`) rather than a yes or no. A document that said `"compressed": true` would have
+nothing left to say once the format carries more than one compression, so a reader asking whether an archive
+is compressed compares against `None` and keeps working when it does.
+
+A file's bytes travel only when they are asked for and only when the reader holds them, as lowercase hex.
+That bound follows `CAFile_isLoaded` rather than a size this view picks: an entry left as a stream is one the
+reader decided not to hold, so it reports its size and says so, and `file data -entry <path>` reads it
+instead. `file data --json --verbose` is what asks for the rest.
+
 ## Changelog
 
 1.0: Basic format specification.

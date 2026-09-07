@@ -29,6 +29,8 @@
 	extern "C" {
 #endif
 
+typedef struct JsonWriter JsonWriter;
+
 typedef enum ECASettingsFlags {
 
 	ECASettingsFlags_None                = 0,
@@ -121,6 +123,15 @@ Bool CAFile_create(
 );
 
 Bool CAFile_createCopy(const CAFile *caFile, const Allocator *alloc, CAFile *result, Error *e_rr);
+
+//The JSON view of the archive: its settings, its counts, and the flattened tree with each entry's full path,
+// size, timestamp and whether the reader holds its data or left it as a stream. withContents adds the bytes of
+// a file it holds, as hex; one left as a stream never carries them, and `file data -entry <path>` reads that.
+//writeJson writes the whole object; writeJsonMembers writes its members into an object the caller opened.
+Bool CAFile_writeJson(const CAFile *caFile, Bool withContents, JsonWriter *w, const Allocator *alloc, Error *e_rr);
+Bool CAFile_writeJsonMembers(
+	const CAFile *caFile, Bool withContents, JsonWriter *w, const Allocator *alloc, Error *e_rr
+);
 
 void CAFile_free(CAFile *caFile, const Allocator *alloc);
 

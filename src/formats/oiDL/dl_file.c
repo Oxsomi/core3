@@ -30,6 +30,11 @@
 
 TListImpl(DLEntryStream);
 
+const C8 *EDLDataType_name(EDLDataType type) {
+	static const C8 *names[] = { "Data", "String" };
+	return type >= EDLDataType_Count ? "Invalid" : names[type];
+}
+
 Bool DLFile_createInternal(
 	const DLSettings *settings,
 	U64 cacheSize,

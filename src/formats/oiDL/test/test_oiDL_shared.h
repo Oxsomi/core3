@@ -38,5 +38,8 @@ void Test_DLCombine(Test *t);
 void Test_DLFindLoadedString(Test *t);
 void Test_DLStreams(Test *t);
 void Test_DLStress(Test *t);
+
+void Test_DLWriteJson(Test *t);          //The JSON view, exact bytes, and the text a held entry carries
+void Test_DLWriteJsonData(Test *t);      //A data file's bytes stay out of the document
 void Test_DLWriteSizeConsistency(Test *t);
 void Test_DLWriteSizeConsistencyEncrypted(Test *t);

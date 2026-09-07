@@ -59,6 +59,13 @@ typedef enum EXXDataSizeType {       //Can be represented as a 2-bit array for e
 
 typedef U8 XXDataSizeType;           //EXXDataSizeType
 
+//How each of these spells itself. A document that carries the name rather than a derived boolean keeps
+// meaning what it meant when the enum grows: a reader still asking "is it compressed" compares against None.
+
+const C8 *EXXCompressionType_name(EXXCompressionType type);
+const C8 *EXXEncryptionType_name(EXXEncryptionType type);
+const C8 *EXXDataSizeType_name(EXXDataSizeType type);
+
 static const U8 SIZE_BYTE_TYPE[4] = { 1, 2, 4, 8 };
 
 Bool Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result, Error *e_rr);

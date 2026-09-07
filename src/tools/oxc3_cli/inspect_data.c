@@ -575,12 +575,9 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 		}
 	}
 
-	//--json is each format's own view, which oiCA and oiDL do not have yet
+	//--json is each format's own view of itself
 
 	const Bool jsonMode = (args->flags & EOperationFlags_Json) != 0;
-
-	if(jsonMode && (magic == CAHeader_MAGIC || magic == DLHeader_MAGIC))
-		retError(clean, Error_invalidParameter(0, 0, "CLI_inspectData() --json has no view for oiCA or oiDL yet"));
 
 	switch (magic) {
 
@@ -599,6 +596,23 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 			if(encryptionKey)
 				Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
+
+			//--json is the whole table, and --verbose is what asks for the bytes of the files it holds
+
+			if (jsonMode) {
+
+				if(args->parameters & EOperationHasParameter_Entry)
+					retError(cleanCa, Error_invalidParameter(
+						0, 0, "CLI_inspectData() --json covers the whole oiCA, so -entry can't join it"
+					));
+
+				JsonWriter w = JsonWriter_create(&tmp, true, alloc);
+				gotoIfError3(cleanCa, CAFile_writeJson(
+					&file, (args->flags & EOperationFlags_Verbose) != 0, &w, alloc, e_rr
+				));
+				gotoIfError3(cleanCa, CLI_showJson(args, tmp, start, length, e_rr));
+				goto cleanCa;
+			}
 
 			//Specific entry was requested
 
@@ -788,6 +802,25 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 			if(encryptionKey)
 				Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
+
+			//--json is the whole file, and --verbose is what asks for the text of the entries it holds
+
+			if (jsonMode) {
+
+				if(args->parameters & EOperationHasParameter_Entry)
+					retError(cleanDl, Error_invalidParameter(
+						0, 0, "CLI_inspectData() --json covers the whole oiDL, so -entry can't join it"
+					));
+
+				JsonWriter w = JsonWriter_create(&tmp, true, alloc);
+
+				gotoIfError3(cleanDl, DLFile_writeJson(
+					&file, (args->flags & EOperationFlags_Verbose) != 0, &w, e_rr
+				));
+
+				gotoIfError3(cleanDl, CLI_showJson(args, tmp, start, length, e_rr));
+				goto cleanDl;
+			}
 
 			U64 end = 0;
 

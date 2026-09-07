@@ -31,10 +31,14 @@ Last updated: 2026-09-06 (branch `web_frontend`, v3.2.105). Update this table in
 | oiDL | ✅ | ✅ | ✅ | |
 | oiSH | ✅ | ✅ | – | v1.2; golden corpus in shader_compiler tests |
 | oiSB | ✅ | ✅ | – | |
+| oiSR | ✅ | ✅ | – | Frontend symbol AST; reference validation lives in `SRFile_finalize` |
+| oiSP | ✅ | ✅ | – | Pipelines with per-field provenance; embeds oiPL |
+| oiPL | ✅ | ✅ | – | Descriptor layout; embedded in oiSP |
 | oiBC (Chimera) | 📄 | 📄 | – | Spec draft + stub only |
 | BMP | 🟡 | 🟡 | – | BGRA8/BGR8 only, ≤2 GiB |
 | DDS | 🟡 | 🟡 | – | Modern DXGI subset; no YUV/depth/legacy |
 | WAV | ✅ | ✅ | – | |
+| JSON | ❌ | ✅ | – | Write only (`OxC3_formats_json`): every oi format above writes a view of itself, reachable as `file data --json`. A reader is wanted, since nothing reads a document back yet |
 
 ## Platforms
 

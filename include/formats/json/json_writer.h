@@ -22,6 +22,7 @@
 
 #pragma once
 #include "types/base/string_base.h"
+#include "types/base/buffer_base.h"
 #include "types/base/error.h"
 
 #ifdef __cplusplus
@@ -73,6 +74,11 @@ Bool JsonWriter_u64(JsonWriter *w, U64 v, Error *e_rr);
 Bool JsonWriter_i64(JsonWriter *w, I64 v, Error *e_rr);
 Bool JsonWriter_f64(JsonWriter *w, F64 v, Error *e_rr);
 
+//Bytes as a lowercase hex string, two characters per byte and no separators, which is how a document carries
+// something binary that a reader may want to decode again.
+
+Bool JsonWriter_hex(JsonWriter *w, Buffer v, Error *e_rr);
+
 //A value the caller spelled itself, appended verbatim in value position: a number in a particular notation,
 // or a fragment another writer produced. The caller is responsible for it being one JSON value.
 
@@ -92,6 +98,7 @@ Bool JsonWriter_keyU64(JsonWriter *w, const C8 *key, U64 v, Error *e_rr);
 Bool JsonWriter_keyI64(JsonWriter *w, const C8 *key, I64 v, Error *e_rr);
 Bool JsonWriter_keyF64(JsonWriter *w, const C8 *key, F64 v, Error *e_rr);
 Bool JsonWriter_keyRaw(JsonWriter *w, const C8 *key, const C8 *v, Error *e_rr);
+Bool JsonWriter_keyHex(JsonWriter *w, const C8 *key, Buffer v, Error *e_rr);
 
 //True once every container opened has been closed, which is what makes the string a document
 
