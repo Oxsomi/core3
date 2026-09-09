@@ -104,7 +104,7 @@ Bool Compiler_compile(
 
 	try {
 
-		Compiler_resetIncludeHandler(interfaces->includeHandler);        //Ensure we don't reuse stale caches
+		Compiler_resetIncludeHandler(interfaces->includeHandler, settings->path);    //Ensure we don't reuse stale caches
 
 		result->isSuccess = false;
 

@@ -33,7 +33,8 @@ global.localStorage = {
 global.location = { protocol: "https:" };
 global.Worker = function () {};
 
-for (const f of ["js/util.js", "js/wasmload.js", "js/workspace.js", "js/editor.js", "js/intellisense.js", "js/asmmap.js", "js/tools/symbols.js"])
+for (const f of ["js/util.js", "js/wasmload.js", "js/workspace.js", "js/intrinsics_data.js", "js/editor.js",
+  "js/intellisense.js", "js/asmmap.js", "js/tools/symbols.js", "js/tools/inspect.js"])
   new Function(fs.readFileSync(path.join(ROOT, f), "utf8")).call(global);
 
 let failures = 0;
@@ -123,7 +124,8 @@ const DOC = { nodes: [
   { id: 1, kind: "Struct", name: "Light", parent: 0, children: [2, 3], annotations: [],
     loc: { file: "lighting.hlsl", line: 4, col: 1, len: 6 } },
   { id: 2, kind: "Variable", name: "pos", parent: 1, children: [], annotations: [],
-    type: { name: "float3", display: "F32x3", cls: "Vector", def: -1 } },
+    type: { name: "float3", display: "F32x3", cls: "Vector", def: -1 },
+    loc: { file: "lighting.hlsl", line: 6, col: 5, len: 3 } },
   { id: 3, kind: "Variable", name: "color", parent: 1, children: [], annotations: [],
     type: { name: "float3", display: "F32x3", cls: "Vector", def: -1 } },
   { id: 4, kind: "Variable", name: "sun", parent: 0, children: [], annotations: [],
@@ -155,7 +157,30 @@ const DOC = { nodes: [
   { id: 17, kind: "EnumValue", name: "Linear", parent: 15, children: [], annotations: [], enumValue: { value: 1, type: "uint" } },
   { id: 18, kind: "Enum", name: "Wide", parent: 0, children: [19], annotations: [] },
   { id: 19, kind: "EnumValue", name: "Huge", parent: 18, children: [], annotations: [],
-    enumValue: { value: "9007199254740993", type: "uint64_t" } }
+    enumValue: { value: "9007199254740993", type: "uint64_t" } },
+  /* A struct holding another struct, so a chain has somewhere to walk: rig.head.pos. */
+  { id: 20, kind: "Struct", name: "Rig", parent: 0, children: [21], annotations: [],
+    loc: { file: "lighting.hlsl", line: 30, col: 1, len: 3 } },
+  { id: 21, kind: "Variable", name: "head", parent: 20, children: [], annotations: [],
+    type: { name: "Light", display: "Light", cls: "Struct", def: 1 },
+    loc: { file: "lighting.hlsl", line: 31, col: 5, len: 4 } },
+  { id: 22, kind: "Variable", name: "rig", parent: 0, children: [], annotations: [],
+    type: { name: "Rig", display: "Rig", cls: "Struct", def: 20 },
+    loc: { file: "lighting.hlsl", line: 34, col: 1, len: 3 } },
+  /* A second struct with a member of the same name, which by-name lookup cannot tell apart. */
+  { id: 23, kind: "Struct", name: "Camera", parent: 0, children: [24], annotations: [] },
+  { id: 24, kind: "Variable", name: "pos", parent: 23, children: [], annotations: [],
+    type: { name: "float4", display: "F32x4", cls: "Vector", def: -1 } },
+  { id: 25, kind: "Variable", name: "cam", parent: 0, children: [], annotations: [],
+    type: { name: "Camera", display: "Camera", cls: "Struct", def: 23 } },
+  /* A builtin-typed value, whose members live in the builtin table rather than in any oiSR. */
+  { id: 26, kind: "Variable", name: "ray", parent: 0, children: [], annotations: [],
+    type: { name: "RayDesc", display: "RayDesc", cls: "Struct", def: -1 } },
+  /* Builtin-typed values: the type graph has no def for these, the builtin tables answer instead. */
+  { id: 20, kind: "Variable", name: "ray", parent: 0, children: [], annotations: [],
+    type: { name: "RayDesc", display: "RayDesc", cls: "Struct", def: -1 } },
+  { id: 21, kind: "Variable", name: "rq", parent: 0, children: [], annotations: [],
+    type: { name: "RayQuery<5>", display: "RayQuery<5>", cls: "Struct", def: -1 } }
 ] };
 DOC.nodes[5].children = [6, 8];
 
@@ -262,7 +287,17 @@ const IS = window.OxIntelliSense;
     m && m.list.map(c => c.text).sort().join(",") === "color,pos", m && JSON.stringify(m.list));
   const mp = IS.completions(DOC, {}, "    sun.po", 10);
   check("completion: a member prefix narrows", mp && mp.list.length === 1 && mp.list[0].text === "pos");
-  check("completion: an unknown object offers nothing", IS.completions(DOC, {}, "nope.", 5) === null);
+
+  /* A dot on a resource register (or an unresolvable receiver) offers the builtin methods; a resolved
+   * vector stays quiet because a dot there is a swizzle. */
+  const tex = IS.completions(DOC, {}, "  _bare.Samp", 12);
+  check("completion: a register's dot offers the builtin methods",
+    tex && tex.list.some(c => c.text === "SampleLevel"), tex && JSON.stringify(tex.list.slice(0, 4)));
+  const un = IS.completions(DOC, {}, "nope.Gather", 11);
+  check("completion: an unresolved receiver still offers methods",
+    un && un.list.some(c => c.text === "GatherRed"), un && JSON.stringify(un.list.slice(0, 4)));
+  check("completion: a vector's dot stays quiet (swizzles live there)",
+    IS.completions(DOC, {}, "  id.", 5) === null);
 }
 
 {
@@ -289,6 +324,243 @@ const IS = window.OxIntelliSense;
     al && JSON.stringify(al.list));
   check("completion: and macros from the includes", mc && mc.list.some(c => c.text === "texture2DUniform"),
     mc && JSON.stringify(mc.list));
+}
+
+/* ---- builtin intrinsics (js/intrinsics_data.js, generated from the DXC fork's table) --------- */
+
+{
+  const data = window.OxIntrinsicsData;
+  check("intrinsics: the generated table is substantial",
+    data && Object.keys(data.fns).length > 180 && Object.keys(data.methods).length > 100,
+    data && `${Object.keys(data.fns).length} fns, ${Object.keys(data.methods).length} methods`);
+
+  const mulSig = "numeric mul(numeric a, numeric b)";
+  const h = IS.hoverInfo(DOC, "mul", CTX);
+  check("intrinsics: hover speaks the real signature", h && h.title === mulSig, h && h.title);
+  check("intrinsics: with a description", h && h.doc && h.doc.includes("multiply"), h && h.doc);
+  check("intrinsics: and the overload count", h && h.more === 8, h && String(h.more));
+
+  const me = IS.hoverInfo(DOC, "SampleCmp", CTX);
+  check("intrinsics: a method hover names its objects",
+    me && me.sub.startsWith("method of ") && me.sub.includes("Texture"), me && me.sub);
+
+  const vk = IS.hoverInfo(DOC, "RawBufferLoad", CTX);
+  check("intrinsics: a vk:: intrinsic spells its namespace",
+    vk && vk.title.includes("vk::RawBufferLoad("), vk && vk.title);
+
+  /* A user declaration or macro of the same name shadows the builtin, like it does in the language. */
+  const sh = IS.hoverInfo(DOC, "shade", CTX);
+  check("intrinsics: a declared symbol still outranks the table", sh && sh.node, sh && sh.sub);
+
+  const co = IS.completions(DOC, {}, "  satur", 7);
+  check("intrinsics: completion carries the signature as the hint",
+    co && co.list.some(c => c.text === "saturate" && /saturate\(/.test(c.hint)),
+    co && JSON.stringify(co.list.slice(0, 3)));
+
+  const ns = IS.completions(DOC, {}, "  vk::Raw", 9);
+  check("intrinsics: vk:: completes its namespace",
+    ns && ns.list.some(c => c.text === "RawBufferLoad"), ns && JSON.stringify(ns && ns.list));
+  check("intrinsics: the bare vk name doesn't complete outside vk::",
+    !(IS.completions(DOC, {}, "  RawBuf", 8) || { list: [] }).list.some(c => c.text === "RawBufferLoad"));
+}
+
+/* ---- member chains: nested completion and member-aware hover --------------------------------- */
+
+{
+  /* Completion walks the whole receiver, so a chain offers the last segment's members. */
+  const one = IS.completions(DOC, {}, "  rig.", 6);
+  check("members: a struct-typed member is offered", one && one.list.some(c => c.text === "head"),
+    one && JSON.stringify(one.list));
+  const two = IS.completions(DOC, {}, "  rig.head.", 11);
+  check("members: and the chain continues past the first dot",
+    two && two.list.map(c => c.text).sort().join(",") === "color,pos", two && JSON.stringify(two.list));
+  const narrowed = IS.completions(DOC, {}, "  rig.head.po", 13);
+  check("members: a prefix still narrows down the chain",
+    narrowed && narrowed.list.length === 1 && narrowed.list[0].text === "pos");
+  check("members: a chain that goes nowhere offers nothing",
+    IS.completions(DOC, {}, "  rig.nope.", 11) === null);
+
+  /* Hover resolves through the receiver, which is what tells two same-named members apart. */
+  const viaSun = IS.hoverInfo(DOC, "pos", CTX, { line: 40, prefix: "  sun." });
+  check("members: hover through the receiver picks that struct's member",
+    viaSun && viaSun.title === "F32x3 pos" && viaSun.sub === "Variable of Light", viaSun && viaSun.sub);
+  const viaCam = IS.hoverInfo(DOC, "pos", CTX, { line: 40, prefix: "  cam." });
+  check("members: and the other struct's member of the same name",
+    viaCam && viaCam.title === "F32x4 pos" && viaCam.sub === "Variable of Camera", viaCam && viaCam.title);
+  const nested = IS.hoverInfo(DOC, "pos", CTX, { line: 40, prefix: "  rig.head." });
+  check("members: a nested receiver resolves too", nested && nested.title === "F32x3 pos", nested && nested.title);
+
+  /* The doc comment above the member's own declaration, not above whatever shares its name. */
+  const files = { "lighting.hlsl": { src: ["", "", "", "", "// where the light sits", "    F32x3 pos;"].join(String.fromCharCode(10)) } };
+  const withDoc = IS.hoverInfo(DOC, "pos", { files, builtins: null }, { line: 40, prefix: "  sun." });
+  check("members: a member's own doc comment rides along",
+    withDoc && withDoc.doc === "where the light sits", withDoc && JSON.stringify(withDoc.doc));
+
+  /* A builtin struct's fields live in the builtin table rather than in any oiSR. */
+  const rd = IS.hoverInfo(DOC, "TMin", CTX, { line: 40, prefix: "  ray." });
+  check("members: a builtin struct's field hovers with its type",
+    rd && rd.title === "float TMin" && rd.sub === "member of RayDesc", rd && rd.title);
+
+  /* A type written by name is a receiver in its own right: nothing declares RayDesc in any source the
+   * page holds, so the name has to stand in for the type. */
+  const byType = IS.hoverInfo(DOC, "Origin", CTX, { line: 40, prefix: "  RayDesc." });
+  check("members: a builtin type name is a receiver too",
+    byType && byType.title === "float3 Origin" && byType.sub === "member of RayDesc", byType && byType.title);
+  check("members: a field that type does not have stays silent",
+    IS.hoverInfo(DOC, "Nope", CTX, { line: 40, prefix: "  RayDesc." }) === null);
+  const structType = IS.hoverInfo(DOC, "pos", CTX, { line: 40, prefix: "  Light." });
+  check("members: a user struct's name resolves its member as well",
+    structType && structType.title === "F32x3 pos" && structType.sub === "Variable of Light",
+    structType && structType.sub);
+  const ct = IS.completions(DOC, {}, "  RayDesc.", 11);
+  check("members: completing off a type name offers its fields",
+    ct && ct.list.map(c => c.text).join(",") === "Origin,TMin,Direction,TMax", ct && JSON.stringify(ct.list));
+  const cs = IS.completions(DOC, {}, "  Light.", 9);
+  check("members: and off a user struct's name too",
+    cs && cs.list.map(c => c.text).sort().join(",") === "color,pos", cs && JSON.stringify(cs.list));
+
+  /* Without a receiver nothing changes: the by-name lookup still answers. */
+  const plain = IS.hoverInfo(DOC, "Light", CTX, { line: 40, prefix: "  " });
+  check("members: a bare name still resolves the old way", plain && plain.title.startsWith("struct Light"));
+  check("members: an unfollowable receiver falls back rather than going silent",
+    (IS.hoverInfo(DOC, "pos", CTX, { line: 40, prefix: "  arr[i]." }) || {}).title === "F32x3 pos");
+}
+
+/* ---- the hover card ------------------------------------------------------------------------- */
+
+{
+  const card = info => IS.tipHtml(info);
+
+  /* The signature is code, so it is highlighted rather than dumped flat. */
+  const sig = card({ title: "T4 GatherRed(float2 x)", sub: "intrinsic", doc: null, loc: null, more: 0 });
+  check("hover card: the signature is highlighted as code",
+    sig.includes('<span class="hl-fn">GatherRed</span>') && sig.includes('<span class="hl-type">float2</span>'),
+    sig);
+
+  /* Nothing declares an intrinsic, so the card must not offer to jump to it. */
+  check("hover card: nothing to go to means no ctrl+click hint", !sig.includes("ctrl+click"), sig);
+
+  const decl = card({ title: "F32x3 pos", sub: "Variable of Light", doc: "where the light sits",
+    loc: "lighting.hlsl:4", more: 2 });
+  check("hover card: a declared symbol names where it is and offers the jump",
+    decl.includes("lighting.hlsl:4") && decl.includes("ctrl+click to go"), decl);
+  check("hover card: its doc rides along", decl.includes("where the light sits"));
+  check("hover card: overloads past the first are counted", decl.includes("+2 more"));
+
+  /* The kind line is written as ` · ` separated parts; each becomes its own chip. */
+  const chips = card({ title: "float x", sub: "intrinsic · takes scalars, vectors and matrices · SM 6.6+",
+    doc: null, loc: null, more: 0 });
+  check("hover card: the kind line becomes one chip per part",
+    (chips.match(/ox-hover-kind|ox-hover-note/g) || []).length === 3, chips);
+
+  /* A title is escaped through the highlighter, never handed to innerHTML raw. */
+  const nasty = card({ title: "void f(<img src=x>)", sub: "intrinsic", doc: null, loc: null, more: 0 });
+  check("hover card: a signature can't inject markup", !nasty.includes("<img"), nasty);
+}
+
+/* ---- builtin types, semantics, annotations and attributes ------------------------------------ */
+
+{
+  const st = IS.hoverInfo(DOC, "SamplerState", CTX);
+  check("types: a builtin resource type documents itself",
+    st && st.sub === "builtin type" && /filter/i.test(st.doc), st && st.doc);
+  const heap = IS.hoverInfo(DOC, "ResourceDescriptorHeap", CTX);
+  check("types: the SM 6.6 heap globals document themselves",
+    heap && heap.sub === "builtin global" && heap.doc.includes("SRV"), heap && heap.doc);
+  const tex = IS.hoverInfo(DOC, "RWStructuredBuffer", CTX);
+  check("types: a templated type spells its parameter",
+    tex && tex.title === "RWStructuredBuffer<T>", tex && tex.title);
+  check("types: the RT attribute struct documents itself",
+    ((IS.hoverInfo(DOC, "BuiltInTriangleIntersectionAttributes", CTX) || {}).title || "").includes("float2 barycentrics"));
+  const rd = IS.hoverInfo(DOC, "RayDesc", CTX);
+  check("types: a builtin struct previews its members like a user struct does",
+    rd && rd.title === "struct RayDesc { float3 Origin; float TMin; float3 Direction; float TMax }",
+    rd && rd.title);
+
+  /* Dot completion on builtin-typed values: a builtin struct offers its members, a builtin object its
+   * own methods rather than all of them, and a typed register narrows the same way. */
+  const rayM = IS.completions(DOC, {}, "  ray.T", 7);
+  check("types: a builtin struct completes its members",
+    rayM && rayM.list.map(c => c.text).sort().join(",") === "TMax,TMin", rayM && JSON.stringify(rayM.list));
+  const rqM = IS.completions(DOC, {}, "  rq.", 5);
+  check("types: a RayQuery value offers RayQuery methods only",
+    rqM && rqM.list.some(c => c.text === "Proceed") && !rqM.list.some(c => c.text === "Sample"),
+    rqM && JSON.stringify(rqM.list.slice(0, 4)));
+  const texM = IS.completions(DOC, {}, "  _layers.", 10);
+  check("types: a register whose info names its type narrows to that type's methods",
+    texM && texM.list.some(c => c.text === "Sample") && !texM.list.some(c => c.text === "Proceed"),
+    texM && JSON.stringify((texM.list || []).slice(0, 4)));
+
+  /* The rest of the Sema-declared structs and the object method previews. */
+  const tp = IS.typeInfo("BuiltInTrianglePositions");
+  check("types: triangle positions preview their three vertices",
+    tp && tp.title.includes("float3 p0") && tp.title.includes("float3 p2"), tp && tp.title);
+  const hg = IS.typeInfo("TriangleHitGroup");
+  check("types: RT subobject structs carry their fields",
+    hg && hg.title.includes("string AnyHit") && hg.title.includes("string ClosestHit"), hg && hg.title);
+  const rqT = IS.typeInfo("RayQuery");
+  check("types: an object type previews its methods off the generated table",
+    rqT && rqT.doc.includes("Methods: ") && rqT.doc.includes("Proceed"), rqT && rqT.doc);
+  const t2 = IS.typeInfo("Texture2D");
+  check("types: textures preview theirs too", t2 && /Methods: .*Gather/.test(t2.doc), t2 && t2.doc);
+  const v = IS.typeInfo("float3");
+  check("types: vectors derive from their base", v && v.doc === "3-component vector of float.", v && v.doc);
+  const mtx = IS.typeInfo("float4x4");
+  check("types: matrices too", mtx && mtx.doc === "4x4 matrix of float.", mtx && mtx.doc);
+  check("types: an unknown name derives nothing", IS.typeInfo("float9") === null && IS.typeInfo("Blah") === null);
+
+  const sem = IS.semanticInfo("SV_Target3");
+  check("semantics: the index strips to the family",
+    sem.title === "SV_Target[n]" && sem.sub === "system-value semantic", sem.title);
+  check("semantics: matching is case-insensitive", IS.semanticInfo("sv_position").title === "SV_Position");
+  const user = IS.semanticInfo("TEXCOORD4");
+  check("semantics: anything else is a user semantic",
+    user.sub === "user semantic" && user.doc.includes("by semantic"), user.sub);
+
+  check("semantics: position detection wants a single colon",
+    IS.semanticAt("  F32x4 pos : SV_Position;", 16) === "SV_Position" &&
+    IS.semanticAt("  a = b::c;", 9) === null &&
+    IS.semanticAt('  F32 x : register(b0);', 12) === null);
+
+  check("annotations: the oxc name resolves at its span",
+    JSON.stringify(IS.annotationAt('[[oxc::stage("vertex")]]', 8)) === '{"kind":"oxc","name":"stage"}',
+    JSON.stringify(IS.annotationAt('[[oxc::stage("vertex")]]', 8)));
+  check("annotations: outside the name there is nothing", IS.annotationAt('[[oxc::stage("vertex")]]', 15) === null);
+  check("annotations: [shader] counts as one",
+    (IS.annotationAt('[shader("compute")]', 3) || {}).name === "shader");
+  check("annotations: a known attribute resolves case-insensitively",
+    (IS.annotationAt("[NumThreads(8, 8, 1)]", 4) || {}).name === "numthreads");
+  check("annotations: array indexing is not an attribute", IS.annotationAt("  x = arr[i];", 10) === null);
+}
+
+/* ---- parse combinations vs compiled binaries (the IntelliSense picker driving the strip) ----- */
+
+{
+  const I = window.OxInspect;
+  const combo = { entrypoint: "mainVS", stage: "vertex", lib: false, model: "6.5",
+    extensions: ["F64"], defines: [{ name: "X", value: "1" }], uniforms: [{ type: "F32", name: "s", value: "2" }] };
+  const bin = over => ({ ...combo, entryNames: ["mainVS"], ...over });
+  const libBin = { entrypoint: null, stage: "lib", lib: true, entryNames: ["rgen", "rmiss"],
+    model: "6.5", extensions: [], defines: [], uniforms: [] };
+  const doc = { binaries: [bin({ entrypoint: "mainPS", stage: "pixel" }), bin({}),
+    bin({ defines: [{ name: "X", value: "2" }] }), libBin] };
+  const libCombo = { entrypoint: null, stage: "lib", lib: true, model: "6.5",
+    extensions: [], defines: [], uniforms: [] };
+
+  check("picker: a combination finds its binary by identity", I.matchBinary(doc, combo, "mainVS") === 1,
+    String(I.matchBinary(doc, combo, "mainVS")));
+  check("picker: a changed define value doesn't pair",
+    I.matchBinary(doc, { ...combo, defines: [{ name: "X", value: "3" }] }, "mainVS") === -1);
+  check("picker: a renamed entrypoint doesn't pair",
+    I.matchBinary(doc, { ...combo, entrypoint: "mainVS2" }, "mainVS2") === -1);
+  check("picker: a lib combination pairs through the binary's entry list",
+    I.matchBinary(doc, libCombo, "rmiss") === 3);
+  check("picker: a lib entry the binary doesn't hold doesn't pair",
+    I.matchBinary(doc, libCombo, "gone") === -1);
+  check("picker: keys separate what makes permutations differ",
+    I.comboKey("m", combo) !== I.comboKey("m", { ...combo, extensions: [] }));
+  check("picker: the label spells the permutation",
+    I.comboLabel("mainVS", combo) === "mainVS · vertex · [X=1] · s=2 · F64", I.comboLabel("mainVS", combo));
 }
 
 /* ---- share codec ---------------------------------------------------------------------------- */
@@ -318,6 +590,14 @@ const IS = window.OxIntelliSense;
   let threw2 = null;
   try { await U2.decodeShare("#s=" + legacy.slice(2, legacy.length - 6) + "&c=" + crc); } catch (e) { threw2 = e.message; }
   check("share codec: a truncated legacy link with a checksum fails loudly", !!threw2, threw2);
+
+  /* A link that inflates past the cap is refused while inflating, not after the memory exists: 17 MB
+     of one repeated character travels as a few kilobytes of gzip, which is the bomb shape. */
+  const bomb = await U2.encodeShare({ files: { "a.hlsl": "x".repeat(17 * 1024 * 1024) } });
+  let threw3 = null;
+  try { await U2.decodeShare("#" + bomb); } catch (e) { threw3 = e.message; }
+  check("share codec: a link inflating past the cap is refused",
+    threw3 && /more than the page will hold/.test(threw3), threw3);
 
   /* ---- same-name resolution (interface method vs implementations) --------------------------- */
 
@@ -473,6 +753,31 @@ const IS = window.OxIntelliSense;
     const many = {};
     for (let i = 0; i < 600; i++) many["f" + i + ".hlsl"] = "x";
     check("share: an unreasonable file count is refused", refused({ files: many }));
+  }
+
+  {
+    check("share: contents past the byte cap are refused",
+      refused({ files: { "a.hlsl": "x".repeat(17 * 1024 * 1024) } }));
+  }
+
+  /* ---- snapshots: the .oiCA door passes the same rules with its own wording ------------------- */
+
+  {
+    const snapRefused = fn => {
+      try { fn(); return false; }
+      catch (e) { return /archive can't be restored/.test(e.message); }
+    };
+
+    check("snapshot: reasonable bytes pass through",
+      U2.checkSnapshotBytes(new Uint8Array(64)).length === 64);
+    check("snapshot: an archive past the cap is refused before unpacking",
+      snapRefused(() => U2.checkSnapshotBytes(new Uint8Array(17 * 1024 * 1024))));
+    check("snapshot: a sane unpacked file set passes through",
+      U2.checkSnapshotFiles({ "a.hlsl": "x" })["a.hlsl"] === "x");
+    check("snapshot: an unpacked set past the byte cap is refused",
+      snapRefused(() => U2.checkSnapshotFiles({ "a.hlsl": "x".repeat(17 * 1024 * 1024) })));
+    check("snapshot: a climbing name is refused with the archive wording",
+      snapRefused(() => U2.checkSnapshotFiles({ "../a.hlsl": "x" })));
   }
 
   /* ---- the module path a remembered version names ------------------------------------------- */

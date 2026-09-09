@@ -189,8 +189,9 @@ async function encodeShare(obj) {
 /* A link is a stranger's bytes. The checksum only says it arrived whole, so the payload is checked for
    shape before anything downstream believes it, and every refusal throws the way a corrupt link does:
    the caller already turns that into one message.
-   The size cap is against the compressed form lying about what it holds, since a small link can
-   decompress into gigabytes. */
+   The size caps are against the compressed form lying about what it holds, since a small link can
+   decompress into gigabytes: the packed bytes are bounded before inflating starts, and the inflate is
+   read in chunks so it is refused as it crosses the cap rather than after the memory exists. */
 
 const SHARE_MAX_BYTES = 16 * 1024 * 1024;
 const SHARE_MAX_FILES = 512;
@@ -198,6 +199,44 @@ const SHARE_MAX_NAME = 512;
 
 function shareRefuse(why) {
   throw new Error("the link doesn't hold a project (" + why + ")");
+}
+
+/* The rules a stranger's file set has to pass before it becomes the working project, shared by the
+   link and snapshot doors; `refuse` supplies each door's own wording. */
+function checkProjectFiles(files, refuse) {
+
+  if (!files || typeof files !== "object" || Array.isArray(files))
+    refuse("its file set isn't an object");
+
+  const names = Object.keys(files);
+
+  if (names.length > SHARE_MAX_FILES)
+    refuse(names.length + " files");
+
+  let total = 0;
+
+  for (const name of names) {
+
+    /* A name reaches the file tree and the editor's tabs, so it stays a plain relative path: no
+       absolute root, and no segment that climbs out of the project. */
+
+    if (!name || name.length > SHARE_MAX_NAME)
+      refuse("a file name is empty or too long");
+
+    if (name.startsWith("/") || name.startsWith("\\") || /(^|[\\/])\.\.([\\/]|$)/.test(name))
+      refuse("a file name climbs out of the project");
+
+    if (typeof files[name] !== "string")
+      refuse("the contents of " + name + " aren't text");
+
+    total += files[name].length;
+  }
+
+  /* The compressed forms already bound what travels; this bounds what an archive inflated to. */
+  if (total > SHARE_MAX_BYTES)
+    refuse("it unpacks to more than the page will hold");
+
+  return files;
 }
 
 function checkSharePayload(p) {
@@ -220,30 +259,47 @@ function checkSharePayload(p) {
   if (p.files == null)
     return p;
 
-  if (typeof p.files !== "object" || Array.isArray(p.files))
-    shareRefuse("its file set isn't an object");
+  checkProjectFiles(p.files, shareRefuse);
+  return p;
+}
 
-  const names = Object.keys(p.files);
+/* An .oiCA snapshot is the other door a stranger's bytes come through. The archive is bounded before
+   the module unpacks it (the unpack allocates and writes into the module's file tree), and the file
+   set it inflated to passes the same rules a share link's does. */
 
-  if (names.length > SHARE_MAX_FILES)
-    shareRefuse(names.length + " files");
+const SNAPSHOT_MAX_BYTES = 16 * 1024 * 1024;
 
-  for (const name of names) {
+function snapshotRefuse(why) {
+  throw new Error("the archive can't be restored (" + why + ")");
+}
 
-    /* A name reaches the file tree and the editor's tabs, so it stays a plain relative path: no
-       absolute root, and no segment that climbs out of the project. */
+function checkSnapshotBytes(bytes) {
+  if (bytes.length > SNAPSHOT_MAX_BYTES)
+    snapshotRefuse("it is bigger than the page will accept, " + fmtBytes(SNAPSHOT_MAX_BYTES));
+  return bytes;
+}
 
-    if (!name || name.length > SHARE_MAX_NAME)
-      shareRefuse("a file name is empty or too long");
+const checkSnapshotFiles = files => checkProjectFiles(files, snapshotRefuse);
 
-    if (name.startsWith("/") || name.startsWith("\\") || /(^|[\\/])\.\.([\\/]|$)/.test(name))
-      shareRefuse("a file name climbs out of the project");
+/* Inflates a share payload, or returns null once the output crosses the cap. */
+async function inflateShare(bytes) {
 
-    if (typeof p.files[name] !== "string")
-      shareRefuse("the contents of " + name + " aren't text");
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip")).getReader();
+  const chunks = [];
+  let total = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > SHARE_MAX_BYTES) { reader.cancel().catch(() => { }); return null; }
+    chunks.push(value);
   }
 
-  return p;
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) { out.set(c, at); at += c.length; }
+  return out;
 }
 
 async function decodeShare(hash) {
@@ -252,9 +308,14 @@ async function decodeShare(hash) {
 
   if ((m = /z=([A-Za-z0-9+/=]+)/.exec(hash))) {
     let raw;
-    try { raw = await pipeThrough(unb64(m[1]), new DecompressionStream("gzip")); }
+    try {
+      /* gzip grows what it cannot compress by well under a percent, so packed bytes past the cap plus
+         slack cannot inflate to anything the page would keep, and never reach the inflater at all. */
+      const packed = unb64(m[1]);
+      raw = packed.length > SHARE_MAX_BYTES + 65536 ? null : await inflateShare(packed);
+    }
     catch (e) { throw new Error("the link is truncated or corrupt (its checksum doesn't match)"); }
-    if (raw.length > SHARE_MAX_BYTES) shareRefuse("it unpacks to more than the page will hold");
+    if (!raw) shareRefuse("it unpacks to more than the page will hold");
     return checkSharePayload(JSON.parse(new TextDecoder().decode(raw)));
   }
 
@@ -333,10 +394,27 @@ const PIPELINE_RULES = [
   ["hl-cmt", /^;/my]
 ];
 
+/* One HLSL declaration, the way a hover card shows it: `float3 Origin`, `T4 GatherRed(float2 x)`,
+ * `struct RayDesc { ... }`. There is no parse behind this and there does not need to be, because a
+ * signature is written in declaration order: what precedes a name is its type, what precedes a `(` is
+ * the thing being called. Both are lookahead, so a token is classified by where it sits rather than by
+ * a vocabulary that would have to list every type the compiler knows. */
+const SIGNATURE_RULES = [
+  ["hl-str", /"(?:[^"\\\n]|\\.)*"/y],
+  ["hl-kw", /\b(?:static|const|in|out|inout|uniform|struct|enum|class|interface|namespace|template|typedef|groupshared|precise|nointerpolation|centroid|linear|sample)\b/y],
+  ["hl-kw", /\bSV_\w+/y],
+  ["hl-type", /(?<=\b(?:struct|enum|class|interface)\s+)[A-Za-z_]\w*/y],
+  ["hl-type", /[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*(?:<[^<>]*>)?(?=\s+[A-Za-z_])/y],
+  ["hl-fn", /[A-Za-z_]\w*(?=\s*\()/y],
+  ["hl-num", /-?\b\d+(?:\.\d+)?\b/y],
+  ["hl-punc", /[(),;{}[\]]/y]
+];
+
 const highlightAsm = text => scan(text, ASM_RULES);
 const highlightPipeline = text => scan(text, PIPELINE_RULES);
+const highlightSignature = text => scan(text, SIGNATURE_RULES);
 
 window.OxUtil = {
-  highlightAsm, highlightPipeline, $, $$, esc, crc32c, hex8, fmtBytes, download, mulberry32, lineDiff, debounce,
-  encodeShare, decodeShare, checkSharePayload };
+  highlightAsm, highlightPipeline, highlightSignature, $, $$, esc, crc32c, hex8, fmtBytes, download, mulberry32, lineDiff, debounce,
+  encodeShare, decodeShare, checkSharePayload, checkSnapshotBytes, checkSnapshotFiles };
 })();

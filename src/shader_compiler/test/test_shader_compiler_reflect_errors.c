@@ -223,7 +223,7 @@ void Test_shaderCompilerReflectErrors(Test *t) {
 			.string = CharString_createRefCStrConst(test->src),
 			.path = CharString_createRefCStrConst("broken.hlsl"),
 			.format = ECompilerFormat_HLSL,
-			.outputType = EGfxBinaryType_SPIRV,
+			.outputType = EGfxBinaryType_DXIL,
 			.reflectAllowErrors = true
 		};
 
@@ -263,7 +263,7 @@ void Test_shaderCompilerReflectErrors(Test *t) {
 			.string = CharString_createRefCStrConst(brokenCases[0].src),
 			.path = CharString_createRefCStrConst("broken.hlsl"),
 			.format = ECompilerFormat_HLSL,
-			.outputType = EGfxBinaryType_SPIRV
+			.outputType = EGfxBinaryType_DXIL
 		};
 
 		Test_assert(t, "without reflectAllowErrors a broken source is refused",
@@ -289,7 +289,7 @@ void Test_shaderCompilerReflectErrors(Test *t) {
 			.string = CharString_createRefCStrConst(valid),
 			.path = CharString_createRefCStrConst("valid.hlsl"),
 			.format = ECompilerFormat_HLSL,
-			.outputType = EGfxBinaryType_SPIRV,
+			.outputType = EGfxBinaryType_DXIL,
 			.reflectAllowErrors = true
 		};
 

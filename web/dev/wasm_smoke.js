@@ -33,7 +33,7 @@ global.window = global.window || { addEventListener() {} };
 
 const OxWasm = require(path.join(__dirname, "..", "js", "wasm.js"));
 
-for (const f of ["js/util.js", "js/mock_data.js", "js/mock.js", "js/mock_formats.js", "js/api.js"])
+for (const f of ["js/util.js", "js/mock_data.js", "js/mock.js", "js/mock_formats.js", "js/api.js", "js/tools/inspect.js"])
   new Function(fs.readFileSync(path.join(__dirname, "..", f), "utf8"))();
 
 const OxAPI = global.window.OxAPI;
@@ -161,6 +161,123 @@ async function main() {
     assert(`a broken source still outlines: ${label}`,
       !!broken.doc && broken.doc.nodes.some(n => n.name === expect),
       broken.error || JSON.stringify((broken.doc ? broken.doc.nodes : []).map(n => n.name)));
+  }
+
+  /* ---- parse-only entrypoints (Compiler_parse) -----------------------------------------------
+   *
+   * The listing behind the "IntelliSense follows" picker: entrypoints and their permutations off one
+   * reflection pass, no compile. Its combinations must pair with what a compile of the same source
+   * stores, through the page's own matcher, or the picker could never drive the binary strip. */
+
+  {
+    const listed = await OxWasm.parseEntrypoints("compute.hlsl", PROJECT);
+    assert("parse lists the compute entry",
+      !!listed && listed.length === 1 && listed[0].name === "main" &&
+      listed[0].stage === "compute" && listed[0].lib === false, JSON.stringify(listed));
+    assert("an unannotated entry is one combination",
+      listed && listed[0].combinations.length === 1, listed && listed[0].combinations.length);
+
+    /* Uniforms are link-time values the compiler only accepts on [shader] library entries. A compute
+     * [shader] entry links into binaries SPECIALIZED to its entrypoint and stage, so the listing shows
+     * concrete combinations rather than lib ones, matching what the compile below stores. */
+
+    const permProject = { "perm.hlsl": { src:
+`[[oxc::extension("F64")]]
+[[oxc::extension()]]
+[[oxc::defines("FANCY"="1")]]
+[[oxc::defines()]]
+[[oxc::uniforms(F32 gain = 2.0)]]
+[[oxc::uniforms(F32 gain = 3.0)]]
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main() {}
+` } };
+
+    const perm = await OxWasm.parseEntrypoints("perm.hlsl", permProject);
+    const combos = perm && perm[0] ? perm[0].combinations : [];
+    assert("the entry lists as specialized compute", !!perm && perm[0].name === "main" &&
+      perm[0].stage === "compute" && perm[0].lib === false, JSON.stringify(perm));
+    assert("the annotation axes multiply into combinations", combos.length === 8, combos.length);
+    assert("a combination spells its axes the way a compiled binary does",
+      combos.some(c =>
+        c.entrypoint === "main" && c.stage === "compute" &&
+        c.extensions.join() === "F64" &&
+        c.defines.length === 1 && c.defines[0].name === "FANCY" && c.defines[0].value === "1" &&
+        c.uniforms.length === 1 && c.uniforms[0].name === "gain"),
+      JSON.stringify(combos.slice(0, 2)));
+    assert("the uniform rows keep distinct values",
+      new Set(combos.map(c => c.uniforms[0] && c.uniforms[0].value)).size === 2,
+      JSON.stringify(combos.map(c => c.uniforms)));
+
+    const compiled = await OxWasm.compile("perm.hlsl", permProject, { targets: ["spv"] });
+    if (assert("the permutation source compiles", !!compiled.doc, JSON.stringify((compiled.diags || []).slice(0, 2)))) {
+      const I = global.window.OxInspect;
+      const unmatched = combos.filter(c => I.matchBinary(compiled.doc, c, perm[0].name) < 0);
+      assert("every combination pairs with a compiled binary", unmatched.length === 0,
+        JSON.stringify(unmatched.slice(0, 2)));
+    }
+
+    /* The illegal pairing refuses through the compiler's own validation; the page's api layer turns
+     * any refusal into null and keeps its previous listing, so the boundary may throw, not lie. */
+
+    let illegal = null;
+    try {
+      await OxWasm.parseEntrypoints("mix.hlsl", { "mix.hlsl": { src:
+`[[oxc::uniforms(F32 gain = 1)]]
+[[oxc::stage("compute")]]
+[numthreads(1, 1, 1)]
+void main() {}
+` } });
+    } catch (e) { illegal = e.message; }
+    assert("uniforms on a non-lib entry refuse with the compiler's reason",
+      !!illegal && /uniforms/.test(illegal), illegal);
+
+    const rt = await OxWasm.parseEntrypoints("rt.hlsl", { "rt.hlsl": { src:
+`struct P { float4 c; };
+[shader("miss")]
+void miss(inout P p) { p.c = (float4) 0; }
+` } });
+    assert("a [shader] entry lists as a lib combination",
+      !!rt && rt[0] && rt[0].lib === true && rt[0].combinations.length === 1 &&
+      rt[0].combinations[0].lib === true && rt[0].combinations[0].entrypoint === null &&
+      rt[0].combinations[0].stage === "lib",
+      JSON.stringify(rt));
+
+    const bad = await OxWasm.parseEntrypoints("bad.hlsl", { "bad.hlsl": { src: "void oops( {" } });
+    assert("a source that doesn't parse answers null", bad === null, JSON.stringify(bad));
+  }
+
+  /* ---- reflection corner cases and the backend view ------------------------------------------ */
+
+  {
+    /* Every builtin include has to reflect when driven as the main file, the way the page opens
+     * them read-only; @resources.hlsli is the regression, its include chain reaches back to itself. */
+    const builtins = await OxWasm.builtinIncludes();
+    const broken = [];
+    for (const b of builtins) {
+      const name = "@" + b.name;
+      const r = await OxWasm.reflectSymbols(name, { [name]: { src: b.src } });
+      if (!r.doc) broken.push(name + ": " + (r.error || "no doc"));
+    }
+    assert("every builtin include reflects as a main file", broken.length === 0, JSON.stringify(broken));
+
+    /* Legal-but-empty buffers, and a cbuffer redefinition whose duplicate serializes childless: both
+     * used to be refused by the reflector's own deserializer. */
+    const odd = await OxWasm.reflectSymbols("e.hlsl", { "e.hlsl": { src:
+      "cbuffer g {};\ncbuffer h { float x; };\ncbuffer h { float x; };\n" } });
+    assert("an empty cbuffer and a redefined one still reflect", !!odd.doc, odd.error);
+
+    /* The backend view: the SPIR-V leg defines __spirv__ (and vk::) the way its compile would, the
+     * DXIL leg leaves them out; the page's dropdown rides on cfg.backend, defaulting to DXIL. */
+    const SPV_SRC = "#ifdef __spirv__\nfloat spvOnly;\n#endif\nfloat always;\n";
+    const dx = await OxWasm.reflectSymbols("b.hlsl", { "b.hlsl": { src: SPV_SRC } });
+    const sv = await OxWasm.reflectSymbols("b.hlsl", { "b.hlsl": { src: SPV_SRC } }, undefined, { backend: "spirv" });
+    assert("the DXIL view hides __spirv__ code",
+      !!dx.doc && !dx.doc.nodes.some(n => n.name === "spvOnly") && dx.doc.nodes.some(n => n.name === "always"),
+      dx.doc ? JSON.stringify(dx.doc.nodes.map(n => n.name).slice(0, 8)) : dx.error);
+    assert("the SPIR-V view reflects it",
+      !!sv.doc && sv.doc.nodes.some(n => n.name === "spvOnly"),
+      sv.doc ? JSON.stringify(sv.doc.nodes.map(n => n.name).slice(0, 8)) : sv.error);
   }
 
   /* Source to disassembly mapping: with -Zi on, both backends' debug info names the page's own file,

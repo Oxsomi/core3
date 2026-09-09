@@ -3,7 +3,7 @@
  * through OxAPI (see js/api.js for the wasm porting notes). */
 (function () {
 "use strict";
-const { $, $$, esc, fmtBytes, download, debounce } = window.OxUtil;
+const { $, $$, esc, fmtBytes, download, debounce, checkSnapshotBytes, checkSnapshotFiles } = window.OxUtil;
 const M = window.OxMock;
 
 /* ------------------------------------------------------------------ state */
@@ -29,7 +29,11 @@ const state = {
   binRowsArr: [],                        // rows currently in #binSel
   builtins: { ...M.BUILTINS },           // "@name" -> source; the module serves the real ones once it loads
   symOpts: { verbose: false, builtins: false, hlslTypes: false },  // Symbols display switches, kept across re-reflects
-  diagEpoch: 0                           // bumped whenever a compile draws its diagnostics, see refreshSymbols
+  diagEpoch: 0,                          // bumped whenever a compile draws its diagnostics, see refreshSymbols
+  parsed: null,                          // {name, entries}: the active file's parse-only entrypoint listing
+  reflectRows: [],                       // rows currently in #reflectFollow (see reflectFollowOptions)
+  reflectPickByFile: {},                 // file -> picked row key, so a pick survives a file switch and a reparse
+  reflectBackend: "dxil"                 // which leg's view IntelliSense reflects (#reflectBackend)
 };
 
 /* ------------------------------------------------------------------ toast */
@@ -121,14 +125,17 @@ function openFile(name) {
   $("#roBadge").classList.add("d-none");
   window.OxEditor.open(state.files[name].src, false, "f:" + name);
   reflectFollowOptions();
+  refreshParsedEntries();                //the picker refills from this file's own parse listing
   if (state.compiled) window.OxEditor.markDiags(state.compiled.diags.filter(d => d.file === name));
-  renderRail(); renderTabs(); scheduleCommands(); scheduleSymbols(true);
+  renderRail(); renderTabs(); scheduleCommands();
+  refreshSymbols(true);                  //a switch reflects now; the debounce is for typing, not this
 }
 function openBuiltin(name) {
   state.activeBuiltin = name;
   ensureTab(name, true);
   $("#roBadge").classList.remove("d-none");
   window.OxEditor.open(state.builtins[name], true, "b:" + name);
+  refreshSymbols();                      //the outline and hover follow the builtin, read-only or not
   renderRail(); renderTabs();
 }
 
@@ -562,13 +569,16 @@ function applyFailOverlay() {
 }
 
 /* Entering a binary tab keeps the selector honest: a row picked for the other backend renders into the
- * other pane, so this one would sit stale or empty. The first row of this tab's backend takes over. */
+ * other pane, so this one would sit stale or empty. The SAME binary on this tab's backend takes over,
+ * so a permutation picked by hand or by the IntelliSense picker survives switching panes; only when
+ * that binary has no build for this backend does the first row of the backend stand in. */
 function syncBinTab(tab) {
   const backend = tab === "spv" ? "spirv" : tab === "dxil" ? "dxil" : null;
   if (!backend || !state.binRowsArr.length) return;
   const cur = state.binRowsArr[+$("#binSel").value];
   if (cur && cur.backend === backend) return;
-  const i = state.binRowsArr.findIndex(r => r.backend === backend);
+  let i = cur ? state.binRowsArr.findIndex(r => r.backend === backend && r.binIdx === cur.binIdx) : -1;
+  if (i < 0) i = state.binRowsArr.findIndex(r => r.backend === backend);
   if (i < 0) return;
   $("#binSel").value = String(i);
   showSelectedBinary(true);
@@ -654,10 +664,10 @@ async function doCompile() {
   state.compiled = res;
   state.compiledAt = Date.now();
   renderTabs();                          //compiling clears the edited-since-compile dots
-  reflectFollowOptions();
   state.pipeline = { sp: null, refused: null, pick: {} };
   state.isa.result = null; state.isa.error = null;
   renderCompiled();
+  reflectFollowOptions();                //after the strip exists, so a picked permutation can drive it
   await refreshSymbols();
   await refreshPipeline();
 }
@@ -776,70 +786,178 @@ const scheduleCommands = debounce(() => {
 /* `shader reflect-symbols` runs on the source, not the oiSH, so it follows the editor (debounced) rather than the compile */
 /* Edits and file switches pass applyDiags, so the squiggles follow both; the epoch check inside
  * refreshSymbols is what keeps a slow refresh from overwriting a compile that landed meanwhile. */
-const scheduleSymbols = debounce(applyDiags => { if (state.mode === "compile" && !state.activeBuiltin) refreshSymbols(applyDiags); }, 500);
+/* Both followers need the module: without it reflection and the parse listing refuse, so they are
+ * never scheduled rather than throwing once per keystroke. */
+const hasModule = () => window.OxAPI.backend === "wasm";
+const scheduleSymbols = debounce(applyDiags => {
+  if (hasModule() && state.mode === "compile" && !state.activeBuiltin) refreshSymbols(applyDiags);
+}, 500);
 
 /* "IntelliSense follows": which permutation the reflection parses as. Default = every extension on
- * and no defines (nothing errors); following one of the last compile's binaries uses ITS extension
- * set and uniforms, so `half`, PAQ and friends mean what they mean in that permutation. The
- * extension list from the compiler is in enum-bit order, which is what makes the mask. */
+ * and no defines (nothing errors); following a permutation uses ITS extension set and uniforms, so
+ * `half`, PAQ and friends mean what they mean in that permutation. The extension list from the
+ * compiler is in enum-bit order, which is what makes the mask. */
 
 let extEnumNames = null;
 
+/* The compiled doc, only while it describes the ACTIVE file: a picker or a binary drive built on
+ * another file's compile would apply a config that belongs to a different source. */
+function freshCompiledDoc() {
+  const doc = state.compiled && state.compiled.doc;
+  return doc && (doc.sourceName || "").replace(/^\.\//, "") === state.active ? doc : null;
+}
+
+/* The permutations come off Compiler_parse (refreshParsedEntries), so the picker fills and refollows
+ * while the file is edited, before anything compiles. Each row keeps the combination's identity, and
+ * a remembered pick is restored by that identity rather than by option index: after an edit that
+ * removes the picked permutation, the pick falls back to the default instead of landing on whatever
+ * permutation owns that slot now. Without a listing (an old module and nothing parsed yet), the last
+ * compile's binaries fill the picker the way they always did. */
 function reflectFollowOptions() {
 
   const sel = $("#reflectFollow");
   if (!sel) return;
 
-  /* The options describe ONE compiled file's binaries; reflection follows the ACTIVE file. On any
-   * other file the picker falls back to the default parse rather than applying a config that
-   * belongs to a different source, and comes back when its file is active again. */
-  let doc = state.compiled && state.compiled.doc;
-  if (doc && (doc.sourceName || "").replace(/^\.\//, "") !== state.active) doc = null;
+  const I = window.OxInspect;
+  const entries = state.parsed && state.parsed.name === state.active ? state.parsed.entries : null;
+  const rows = [];
+  const seen = new Set();
 
-  const prev = sel.value;
+  if (entries) {
+    for (const e of entries)
+      for (const c of e.combinations || []) {
+        /* Model promotion can collapse two combinations onto one identifier; one row is the truth. */
+        const key = I.comboKey(e.name, c);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        rows.push({ key, label: I.comboLabel(e.name, c), combo: c, entryName: e.name });
+      }
+  } else {
+    const doc = freshCompiledDoc();
+    (doc ? doc.binaries : []).forEach((b, i) => {
+      const entryName = b.lib ? (b.entryNames || []).join(",") : b.entrypoint;
+      rows.push({ key: I.comboKey(entryName, b), label: `#${i} ` + I.comboLabel(entryName, b), binIdx: i, combo: b, entryName });
+    });
+  }
 
-  /* Same-named entries separate by exactly what makes them different permutations: their $defines,
-   * uniform values and extension set, plus the #index the -entry flag would take. */
+  state.reflectRows = rows;
   sel.innerHTML = '<option value="">IntelliSense: all extensions, no defines</option>' +
-    (doc ? doc.binaries : []).map((b, i) => {
-      const label = `#${i} ` + (b.lib ? `lib(${b.entryNames.join(",")})` : `${b.entrypoint} · ${b.stage}`) +
-        ((b.defines || []).length ? ` · [${b.defines.map(d => d.value != null && d.value !== "" ? `${d.name}=${d.value}` : d.name).join(",")}]` : "") +
-        ((b.uniforms || []).length ? " · " + b.uniforms.map(u => `${u.name}=${u.value}`).join(",") : "") +
-        (b.extensions.length ? " · " + b.extensions.join("+") : "");
-      return `<option value="${i}">${esc(label)}</option>`;
-    }).join("");
+    rows.map((r, i) => `<option value="${i}">${esc(r.label)}</option>`).join("");
 
-  sel.value = [...sel.options].some(o => o.value === prev) ? prev : "";
+  const keep = rows.findIndex(r => r.key === (state.reflectPickByFile[state.active] || ""));
+  sel.value = keep >= 0 ? String(keep) : "";
   applyReflectFollow();
 }
 
 async function applyReflectFollow() {
 
   const sel = $("#reflectFollow");
-  let doc = state.compiled && state.compiled.doc;
-  if (doc && (doc.sourceName || "").replace(/^\.\//, "") !== state.active) doc = null;
-  const b = sel && sel.value !== "" && doc ? doc.binaries[+sel.value] : null;
+  const row = sel && sel.value !== "" ? state.reflectRows[+sel.value] : null;
+  state.reflectPickByFile[state.active] = row ? row.key : "";
 
-  if (!b)
+  if (!row)
     state.reflectCfg = null;
 
   else {
+    const c = row.combo;
     if (!extEnumNames) extEnumNames = (await window.OxAPI.annotationEnums()).extensions;
 
     let disabled = 0;
-    extEnumNames.forEach((n, i) => { if (!b.extensions.includes(n)) disabled |= 1 << i; });
+    extEnumNames.forEach((n, i) => { if (!(c.extensions || []).includes(n)) disabled |= 1 << i; });
 
     const defines = {};
-    for (const d of (b.defines || [])) defines[d.name] = d.value == null ? "" : d.value;
-    for (const u of (b.uniforms || [])) defines["$$" + u.name] = u.value;   // the macro the compile defines for it
+    for (const d of (c.defines || [])) defines[d.name] = d.value == null ? "" : d.value;
+    for (const u of (c.uniforms || [])) defines["$$" + u.name] = u.value;   // the macro the compile defines for it
 
     state.reflectCfg = { disabledExt: disabled >>> 0, defines };
   }
 
+  driveSelectedBinary(row);
   scheduleSymbols(true);
 }
 
 $("#reflectFollow").addEventListener("change", applyReflectFollow);
+
+$("#reflectBackend").addEventListener("change", () => {
+
+  state.reflectBackend = $("#reflectBackend").value;
+
+  /* The pane follows the view: reading SPIR-V and switching to the DXIL view means the DXIL of the
+   * same permutation is what you asked to see. Only from an asm tab, so the switch never yanks the
+   * view away from the pipeline or the ISA. */
+
+  const tab = activeTab();
+
+  if (tab === "spv" || tab === "dxil") {
+    const want = state.reflectBackend === "spirv" ? "spv" : "dxil";
+    if (want !== tab && visibleTabs().includes(want)) clickTab(want);
+  }
+
+  refreshSymbols(true);                  //a deliberate toggle reflects now, like a file switch does
+});
+
+/* The picker drives the binary strip, so the SPIR-V and DXIL views follow whichever permutation the
+ * editor is on. The pick lands by identity, never by index: a pick the last compile can't answer (the
+ * permutation is new, renamed or gone since) leaves the strip alone and lights the stale marker next
+ * to the compile button instead of silently showing some other permutation's binary. */
+function driveSelectedBinary(row) {
+
+  const doc = freshCompiledDoc();
+  let missing = false;
+
+  if (row && doc && !compileFailed()) {
+
+    const binIdx = row.binIdx != null ? row.binIdx : window.OxInspect.matchBinary(doc, row.combo, row.entryName);
+
+    if (binIdx < 0)
+      missing = true;
+
+    else if (state.binRowsArr.length) {
+      /* Of the matched binary's rows, the one on the backend already being looked at. */
+      const cur = state.binRowsArr[+$("#binSel").value];
+      let i = state.binRowsArr.findIndex(r => r.binIdx === binIdx && cur && r.backend === cur.backend);
+      if (i < 0) i = state.binRowsArr.findIndex(r => r.binIdx === binIdx);
+      if (i >= 0 && +$("#binSel").value !== i) {
+        $("#binSel").value = String(i);
+        binSelectionChanged();
+      }
+    }
+  }
+
+  const mark = $("#staleMark");
+  if (mark) mark.classList.toggle("d-none", !missing);
+}
+
+/* Compiler_parse follows the editor: the entrypoints of the active file and the permutations each one
+ * expands into, listed without compiling anything. One parse in flight at a time, the way
+ * refreshSymbols coalesces; a source that doesn't parse keeps the previous listing, so the picker
+ * doesn't blank on a half-typed line. */
+let parseBusy = false, parseRerun = false;
+
+async function refreshParsedEntries() {
+
+  if (!hasModule()) return;
+
+  if (!state.files[state.active]) return;
+
+  if (parseBusy) { parseRerun = true; return; }
+  parseBusy = true;
+
+  try {
+    const name = state.active;
+    const entries = await window.OxAPI.parseEntrypoints(name, state.files);
+    if (entries && name === state.active) {
+      state.parsed = { name, entries };
+      reflectFollowOptions();
+    }
+  } catch (err) { /* the previous listing stands */ }
+  finally {
+    parseBusy = false;
+    if (parseRerun) { parseRerun = false; refreshParsedEntries(); }
+  }
+}
+
+const scheduleParse = debounce(() => { if (hasModule() && state.mode === "compile" && !state.activeBuiltin) refreshParsedEntries(); }, 500);
 
 /* One reflect in flight at a time: a change arriving mid-reflect coalesces into a single rerun,
  * so fast typing can't stack a queue of stale reflects behind the current one. */
@@ -847,7 +965,15 @@ let symbolsBusy = false, symbolsRerun = false, symbolsRerunApply = false;
 
 async function refreshSymbols(applyDiags) {
 
-  if (!state.files[state.active]) return;
+  if (!hasModule()) return;
+
+  /* A builtin include open in the editor reflects like any other file, driven as the main file with
+   * its own source, so hover and the outline work inside it too; the follows config stays off there,
+   * since it describes the project file's permutations. */
+  const name = state.activeBuiltin || state.active;
+  const files = state.activeBuiltin ? { ...state.files, [name]: { src: state.builtins[name] } } : state.files;
+
+  if (!files[name]) return;
 
   if (symbolsBusy) {
     symbolsRerun = true;
@@ -858,11 +984,13 @@ async function refreshSymbols(applyDiags) {
   try {
 
   const epoch = state.diagEpoch;
-  const name = state.active;
   let diags = [];
 
   try {
-    const r = await window.OxAPI.reflectSymbols(name, state.files, state.reflectCfg);
+    /* The backend view rides along whatever the follows picker built; the picker's config never
+     * carries one itself, so the two compose. */
+    const cfg = { ...(state.activeBuiltin ? null : state.reflectCfg), backend: state.reflectBackend };
+    const r = await window.OxAPI.reflectSymbols(name, files, cfg);
     state.symbols = r.doc;
     diags = r.diags || [];
   } catch (err) { state.symbols = null; }
@@ -933,11 +1061,20 @@ function gotoSymbol(loc) {
 
 /* ------------------------------------------------------------------ pipeline (oiSP) */
 
+/* A derivation reads the oiSH's bytes, so a document without any (one the assemble card fabricated,
+ * which api.js marks `mock`) cannot have a pipeline. That is a missing feature rather than a failure,
+ * so the pane says nothing is derivable instead of the refusal reaching the page as an error. */
+async function derived(doc, pick) {
+  try { return await window.OxAPI.derivePipeline(doc, pick); }
+  catch (err) { return null; }
+}
+
 async function refreshPipeline() {
   const doc = state.compiled && !state.compiled.diags.some(d => d.sev === "error") ? state.compiled.doc : null;
   if (!doc || doc.flags.reflectionOnly) { state.pipeline.sp = null; state.pipeline.refused = null; renderPipeline(); renderIsa(); return; }
-  const r = await window.OxAPI.derivePipeline(doc, state.pipeline.pick);
-  if (r.refused) { state.pipeline.sp = null; state.pipeline.refused = r; }
+  const r = await derived(doc, state.pipeline.pick);
+  if (!r) { state.pipeline.sp = null; state.pipeline.refused = null; }
+  else if (r.refused) { state.pipeline.sp = null; state.pipeline.refused = r; }
   else { state.pipeline.sp = r; state.pipeline.refused = null; }
   await renderPipeline(); renderIsa();
   buildDlMenu();                         //the derivation decides whether the .oiSP download exists
@@ -948,7 +1085,9 @@ async function renderPipeline() {
   const sp = inspectingSp ? state.oispDocs[state.inspected] : state.pipeline.sp;
   const doc = inspectingSp ? null : currentDoc();
   const refused = inspectingSp ? null : state.pipeline.refused;
-  const printText = sp && sp.pipelines.length ? await window.OxAPI.printPipeline(sp, 0) : null;
+  /* The print reads the oiSP's bytes, which a document recorded without them (js/mock_data.js keeps
+   * the shape, not the file) doesn't have. That costs the `file data` card, not the pipeline. */
+  const printText = sp && sp.pipelines.length && sp.bytes ? await window.OxAPI.printPipeline(sp, 0) : null;
   state.pipeline.printText = printText;
   window.OxPipeline.mount(el, { sp, refused, doc, editable: !inspectingSp, printText }, {
     onSupply: (pi, field, index, value) => supplyField(sp, pi, field, index, value),
@@ -1073,7 +1212,8 @@ function wireAssembleCard(doc) {
 /* raw DXC output (Command tab → Run with DXC) is a standalone binary, never an oiSH */
 function onRawDxc(r) {
   state.standalone[r.name] = { type: r.type, bytes: r.bytes, text: r.text, origin: r.origin, raw: true };
-  toast(`<b>DXC:</b> ${esc(r.name)}: standalone ${r.type === "spirv" ? "SPIR-V" : "DXIL"}, ${fmtBytes(r.bytes.length)}. No oiSH and no annotations were processed; assemble one from its oiSH tab.`, "success");
+  toast(`<b>MOCK! NOT REAL DATA YET!</b> ${esc(r.name)} was NOT produced by DXC: nothing ran, the bytes are fabricated. ` +
+    "Running an edited flag line needs the compiler to expose its own argv plus a raw compile entry (see api.js compileRaw).", "danger");
   $("#mBins").checked = true; setMode("bins");
   state.binActive = r.name; openStandalone(r.name);
 }
@@ -1118,7 +1258,7 @@ async function openInspect(name, kind) {
     if (state.binRowsArr.length) showSelectedBinary(true);
     renderSymbols(null);
     state.pipeline = { sp: null, refused: null, pick: {} };
-    const r = doc.flags.reflectionOnly ? null : await window.OxAPI.derivePipeline(doc, {});
+    const r = doc.flags.reflectionOnly ? null : await derived(doc, {});
     if (r && r.refused) state.pipeline.refused = r; else state.pipeline.sp = r;
     await renderPipeline(); renderIsa();
   } else if (kind === "oisr") {
@@ -1161,7 +1301,8 @@ function fillBinStrip() {
   sel.innerHTML = state.binRowsArr.map((r, i) => `<option value="${i}">${esc(r.label)}</option>`).join("");
   $("#binMeta").textContent = "";
 }
-$("#binSel").addEventListener("change", () => {
+/* Shared by the strip's own dropdown and the IntelliSense picker driving it (driveSelectedBinary). */
+function binSelectionChanged() {
   state.isa.result = null; state.isa.error = null; state.isa.entrypoint = null;
   /* Picking a binary refreshes every view, but only changes TAB when an asm tab is already open
    * (there the pick decides SPIR-V vs DXIL); on ISA or Pipeline it must not yank the view away. */
@@ -1169,7 +1310,8 @@ $("#binSel").addEventListener("change", () => {
   const tab = cur && cur.closest("[data-tab]") ? cur.closest("[data-tab]").dataset.tab : null;
   showSelectedBinary(!(tab === "spv" || tab === "dxil"));
   renderIsa();
-});
+}
+$("#binSel").addEventListener("change", binSelectionChanged);
 async function showSelectedBinary(auto) {
   const row = state.binRowsArr[+$("#binSel").value];
   const doc = currentDoc();
@@ -1229,7 +1371,9 @@ function currentDoc() {
 
 async function importSnapshotFile(f, bytes) {
   try {
-    const files = await window.OxAPI.importSnapshot(bytes);
+    /* A snapshot is a stranger's bytes the way a share link is: the archive is bounded before the
+       module allocates for it, and what it unpacked to passes the same file-set rules a link does. */
+    const files = checkSnapshotFiles(await window.OxAPI.importSnapshot(checkSnapshotBytes(bytes)));
     if (!Object.keys(files).length) throw new Error("the archive holds no files");
     await saveWorkspaceNow();
     window.OxWorkspace.switchTo(window.OxWorkspace.create(f.name.replace(/\.oiCA$/i, ""), "import").id);
@@ -1749,15 +1893,29 @@ function renderMockBanner() {
     return;
   }
 
-  const why = api.loadError
-    ? `The compiler module didn't load (${esc(api.loadError)}).`
-    : "No compiler module is staged in web/wasm/.";
+  /* Two audiences, and the wrong advice is useless to either. A visitor's module almost always fails
+   * for one reason (their browser has no wasm64, which is every Safari at the time of writing), and
+   * telling them to run a build script is noise; a contributor opening a checkout has no module staged
+   * and needs exactly that command. The two cases are distinguishable: a staged module that refused to
+   * load reports why, an absent one doesn't. */
+
+  const memory64 = (() => {
+    try { return !!new WebAssembly.Memory({ initial: 1, maximum: 1, index: "u64" }); }
+    catch (e) { return false; }
+  })();
+
+  const why = !memory64
+    ? "This browser can't run the compiler: it has no WebAssembly 64-bit memory. " +
+      "Chrome, Edge and Firefox have it; Safari does not yet. "
+    : api.loadError
+      ? `The compiler module didn't load (${esc(api.loadError)}). `
+      : "No compiler module is staged in <code>web/wasm/</code>. Build one with " +
+        "<code>build_web.py --frontend</code> (add <code>--single_file</code> to open this page from file://). ";
 
   $("#mockBannerText").innerHTML =
-    `<i class="bi bi-exclamation-triangle-fill"></i> <b>Mock data.</b> ${why} ` +
-    "Everything on this page is fabricated: compiles succeed that shouldn't, and the symbol tree is a guess " +
-    "at the source. Build it with <code>build_web.py --frontend</code>, and add <code>--single_file</code> " +
-    "to open this page from file:// (the two-file build has to fetch its .wasm, which file:// refuses).";
+    `<i class="bi bi-exclamation-triangle-fill"></i> <b>The compiler isn't running.</b> ${why}` +
+    "Compiling, editor intelligence and every view derived from them are switched off rather than faked; " +
+    "the sample project and the documents recorded from a real run are still here to read.";
 
   el.classList.remove("d-none");
 }
@@ -1869,8 +2027,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.OxEditor.init();
   window.OxTheme.init();
   window.OxEditor.onCursor(line => syncAsmCursor(line));
-  window.OxIntelliSense.attach(window.OxEditor, () => state.symbols, () => state.files,
-    () => state.builtins, gotoSymbol);
+
+  /* Without the module nothing here can answer for real, so the features that would have to invent are
+   * switched off rather than faked: no compile, no editor intelligence, no derived views. The editor
+   * still opens the sample project and the recorded documents stay readable. */
+
+  if (window.OxAPI.backend === "wasm")
+    window.OxIntelliSense.attach(window.OxEditor, () => state.symbols, () => state.files,
+      () => state.builtins, gotoSymbol);
+
+  else {
+    const btn = $("#compileBtn");
+    btn.disabled = true;
+    btn.title = "The compiler module isn't running, so there is nothing to compile with";
+  }
   window.OxEditor.onChange(src => {
     if (state.activeBuiltin) return;
     const f = state.files[state.active];
@@ -1879,7 +2049,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     f.editedAt = Date.now();
     if (wasClean) renderTabs();          //the dot appears on the first edit only, not per keystroke
     touchWorkspace();
-    scheduleCommands(); scheduleSymbols(true);
+    scheduleCommands(); scheduleSymbols(true); scheduleParse();
   });
   window.OxCompile.wire(() => { touchWorkspace(); scheduleCommands(); if (state.compiled) buildDlMenu(); }, onRawDxc);
   window.OxDiff.initBinaryDiffControls();

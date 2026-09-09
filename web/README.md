@@ -9,9 +9,9 @@ compiler is the real thing, not an approximation: the same one OxC3's command li
 Microsoft's DirectXShaderCompiler plus SPIRV-Tools, compiled to WebAssembly. It runs on your
 machine, in a Web Worker, and nothing you type is sent anywhere.
 
-It is a prototype. The status bar badge says at every moment whether you are looking at compiler
-output (`OxC3 3.2.104`) or at a stand-in (`mock`), and its tooltip lists exactly what the stand-in
-covers, so nothing has to be taken on trust.
+It is a prototype. The status bar badge says at every moment whether the compiler is running
+(`OxC3 3.2.104`), and its tooltip lists the few things it cannot answer for yet. Where a view would
+have to invent, it says so instead: nothing here has to be taken on trust.
 
 ## What you can do
 
@@ -47,8 +47,9 @@ from a checkout: it works from `file://`, with no server and no build step beyon
 module (see below).
 
 The compiler module is WebAssembly with 64-bit memory, which needs a current Chrome, Edge or
-Firefox. Where the module cannot load, the page still works on the stand-in tier and the badge
-says `mock`.
+Firefox; Safari has no wasm64 yet. Where it cannot load, compiling and editor intelligence are
+switched off rather than faked, and the page says which of the two reasons applies. The sample
+project and the documents recorded from a real run stay readable.
 
 ## What is real and what is not
 
@@ -64,10 +65,13 @@ the library does not have yet rather than a shortcut taken here:
 | ISA disassembly | the offline route spawns the bundled amdllpc, and `SUPPORTS_PROCESS` is off in wasm. The device-free Mesa route is the one that could run here and isn't in the CLI yet |
 | `-asic live` | needs a real device through `VK_KHR_pipeline_executable_properties` |
 
-Without a module at all, the sample project's oiSH, oiSR and oiSP documents and the built-in
-include sources are still real (recorded from a real run by `dev/gen_mock_data.js`), while
-anything derived from an edit you made in the browser (diagnostics, binding assignment, sizes,
-disassembly, symbol locations, parsed uploads) is fabricated deterministically by the mocks.
+Each of those says **MOCK! NOT REAL DATA YET!** where it is read, since the badge cannot warn about
+them: it reports the compiler as running, which it is.
+
+Without a module at all nothing is fabricated either. Every call that would have to invent refuses,
+the Compile button and editor intelligence are switched off, and what is left is what
+`dev/gen_mock_data.js` recorded from a real run: the sample sources, the built-in includes, the
+vocabularies and the example oiSH / oiSR / oiSP documents.
 
 ## License
 
@@ -99,6 +103,18 @@ has no dependencies; Bootstrap and CodeMirror are vendored into `web/vendor/` by
 served from the same host as the page.
 
 ## Building and serving
+
+The module builds with the [emscripten SDK](https://github.com/emscripten-core/emsdk): point `EMSDK` at
+a checkout with a toolchain installed (`emsdk install latest` + `emsdk activate latest`), or put it at
+`~/emsdk`, where build_web.py looks by default. Nothing needs `emsdk_env` sourced: the build resolves
+the compiler and the SDK's own node from `EMSDK` itself, and that node is also what runs the frontend
+test suites, so no separate node or npm install is needed.
+
+One Windows bootstrap wrinkle: `emsdk.bat` needs a python 3.10+ and finds it by taking the first
+`python` on PATH (`EMSDK_PYTHON` only reaches the emscripten tool wrappers, not the bootstrap). With an
+older python on PATH, run the entry point directly once with a modern interpreter,
+`<python3.10+> emsdk.py install latest` (and `activate latest` the same way); the install lands emsdk's
+own bundled python, which the .bat prefers from then on, so PATH stops mattering.
 
 ```
 python build_web.py -mode Release --frontend --serve
@@ -212,6 +228,11 @@ js/wasm.js             THE MODULE BOUNDARY: the call frame every export answers 
                        marshalling, the project tree #includes resolve against, diagnostics out of the log
 js/mock_data.js        GENERATED (dev/gen_mock_data.js): real builtin sources and real oiSH/oiSR/oiSP
                        documents, recorded so the no-module fallback shows something faithful
+js/intrinsics_data.js  GENERATED (dev/gen_intrinsics.py, off the dxc conan package): the HLSL builtin
+                       intrinsics with signatures and short docs. The intrinsic file is parsed by the
+                       fork's OWN loader (hctdb.py) and the object names come out of SemaHLSL.cpp, so
+                       nothing signature-shaped is hand-written; --run_frontend_tests regenerates it
+                       against the pinned fork commit and fails when the committed copy differs
 samples/               THE SAMPLE PROJECT: real .hlsl files, the single source of truth. Edit them here,
                        then `build_web.py --frontend` (or `node dev/gen_mock_data.js` by hand) embeds
                        them, plus fresh recordings, into js/mock_data.js so the page has them at first paint. The desktop suite compiles
@@ -263,7 +284,20 @@ The output tabs, each labelled with the command it mirrors:
   with its base and interfaces, an enum with its enumerators and their values, an enumerator as `Linear = 1`
   with its enum and underlying type as the small print, the underlying type as `aka` when an alias
   differs) and where it lives, and Ctrl+Space (or just typing) completes symbols, struct members (via
-  the type graph), HLSL keywords and intrinsics, `[[oxc::` annotations and `#include` targets.
+  the type graph, including nested `a.b.c`), HLSL keywords and intrinsics, `[[oxc::` annotations and
+  `#include` targets. A member hovers as the member of what it is written on rather than by name, so
+  two structs with a `pos` don't answer for each other and the card carries that field's own comment. What
+  HLSL declares rather than the user hovers too: intrinsics with real signatures and a short
+  description (generated from the DXC fork's own tables into `js/intrinsics_data.js`), builtin types
+  and the SM 6.6 heap globals, semantics, attributes, and the `[[oxc::]]` / `[shader]` annotations,
+  whose docs come from the syntax reference offcanvas so it stays their single home. The card shows
+  the signature highlighted the way the disassembly views are, since it is code, then the description,
+  then the kind, where it is declared and how many overloads follow; Ctrl+click is only offered where
+  there is a declaration to reach, so an intrinsic never promises a jump that goes nowhere. The
+  "IntelliSense follows" picker fills from a parse-only pass as you edit (no compile needed) and
+  drives the SPIR-V / DXIL views to the picked permutation's binary, matched by identity; a pick the
+  last compile cannot answer lights a stale marker instead of showing the wrong binary. A view switch
+  beside it reflects as either leg, so `#ifdef __spirv__` code appears only under the SPIR-V view.
   `--verbose` shows the frontend type behind each alias (`uint : Scalar 1x1`) and node ids.
   **HLSL types** swaps the whole tree over to the builtin spelling instead, so `F64x4` reads as
   `double4` and `float64_t` as `double`; it changes what is displayed, not what is asked of the
@@ -420,9 +454,9 @@ page opened without a module at all; what they serve for the sample project is r
 ## What is still missing
 
 [TODO](TODO) is the working list for this frontend: the next big item (AMD ISA in the browser through
-a spirv2isa Mesa fork), the editor intelligence gaps (builtin intrinsics in hover, doc comments), and
-the compiler and CLI work the page is waiting on. STATUS.md at the repository root holds the wider
-capability table.
+a spirv2isa Mesa fork), the remaining editor intelligence gaps (doc comments through the reflector,
+signature help), and the compiler and CLI work the page is waiting on. STATUS.md at the repository
+root holds the wider capability table.
 
 ## Tests
 
@@ -458,3 +492,11 @@ follows the sample project, the built-in includes and the three document contrac
 `node dev/gen_mock_data.js` does the same by hand. The recording stays committed, since the page's first
 paint and the module free tests read it without a build; the release job regenerates it and fails when
 the committed copy differs, and then runs every test here through `build_web.py --run_frontend_tests`.
+
+`js/intrinsics_data.js` gets the same discipline from the other direction: it is generated from the DXC
+fork's sources rather than from the module, so `--run_frontend_tests` regenerates it and fails when the
+committed copy differs, and the hover and completion signatures cannot quietly describe an older
+compiler. The sources come out of the dxc conan package, which carries the three files the generator
+reads (`res/dxc_intrinsics`, packaged by `packages/dxc/conanfile.py`): that is the same package the
+module was built against, so the tables are the pin's without a second fetch that could disagree with
+it. `-dxc_source <checkout>` points it at a working tree instead, for iterating on the fork.

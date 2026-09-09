@@ -58,6 +58,13 @@ function renderCommands(activeName, project) {
   const o = opts();
   $("#cmdCli").textContent = cliLine(activeName, o);
 
+  //TODO: MOCK! NOT REAL DATA YET! Two fabrications live in this function, both with the module loaded.
+  // 1. The entry/binary grouping below comes from OxMock.analyze, a regex read of the source, not from
+  //    the compiler's own parse. OxAPI.parseEntrypoints (Compiler_parse) now answers exactly this and
+  //    should replace it.
+  // 2. Every dxc line printed under it is RECONSTRUCTED from the flag set by hand, so it is a good
+  //    guess at what OxC3 runs rather than what it ran. The compiler exposing its argv
+  //    (getCompileArgs) is what turns this into the real invocation.
   const doc = window.OxMock.analyze(activeName, project);        // preview only; wasm port can reuse its parse step
   const groups = new Map();                                       // profile -> entries
   for (const e of doc.entries) {
@@ -72,7 +79,9 @@ function renderCommands(activeName, project) {
     `<div class="mb-1 mt-2 d-flex align-items-center gap-2"><span class="chip ${css}">${esc(label)}</span>
       <button class="btn btn-sm btn-outline-secondary dxc-run ms-auto" data-dxc="${cardId}" title="run this line as is through DXC; the output is a standalone binary (no oiSH, no annotations processed)"><i class="bi bi-play-fill"></i> Run with DXC</button></div>` +
     `<textarea class="asm cmdcard dxc-line form-control" data-dxc="${cardId++}" rows="3" spellcheck="false">${esc(cmd)}</textarea>`;
-  let html = "";
+  let html = `<div class="alert alert-danger py-2 px-3 fw-bold mb-2"><i class="bi bi-exclamation-octagon-fill"></i>
+    MOCK! NOT REAL DATA YET! These dxc lines are reconstructed from the flag set, not read back from the
+    compiler, so they can differ from what OxC3 actually ran. "Run with DXC" does not run DXC either.</div>`;
 
   for (const [prof, ents] of groups) {
     const lib = prof === "lib";

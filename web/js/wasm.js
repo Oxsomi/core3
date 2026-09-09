@@ -187,9 +187,11 @@ function mkdirp(dir) {
 }
 
 /* Mirrors the page's project into the module's filesystem, dropping what the page removed so a
- * deleted include stops resolving instead of lingering as a stale file. */
+ * deleted include stops resolving instead of lingering as a stale file. @names stay out: they are the
+ * compiler's builtin includes, resolved through Compiler_builtInIncludeAt rather than the tree, and a
+ * reflect driving one as its main file must not shadow them on disk. */
 function syncProject(files) {
-  const names = Object.keys(files || {});
+  const names = Object.keys(files || {}).filter(n => !n.startsWith("@"));
   const wanted = new Set(names);
   for (const name of written)
     if (!wanted.has(name)) {
@@ -286,9 +288,11 @@ function reflectDiags(name) {
 /* OxC3 shader reflect-symbols: runs on source, so it takes the project rather than a compile. */
 /* allowErrors: describe what parsed instead of refusing outright, which is what an editor wants while
  * a file is being typed. The diagnostics still come back either way. */
-/* cfg (optional): { disabledExt, defines }, the "IntelliSense follows this binary" permutation.
- * disabledExt masks extensions OUT of the parse; defines is {NAME: value} appended the way a
- * binary's uniforms are. Absent cfg = the everything-enabled default parse. */
+/* cfg (optional): { disabledExt, defines, backend }, the "IntelliSense follows this binary"
+ * permutation. disabledExt masks extensions OUT of the parse; defines is {NAME: value} appended the
+ * way a binary's uniforms are; backend ("dxil" default | "spirv") picks which leg's view is
+ * reflected, so `#ifdef __spirv__` and vk:: mean what they mean there. Absent cfg = the
+ * everything-enabled default parse. */
 api.reflectSymbols = async function reflectSymbols(name, files, allowErrors, cfg) {
   syncProject(files);
   beginCapture();
@@ -300,7 +304,8 @@ api.reflectSymbols = async function reflectSymbols(name, files, allowErrors, cfg
       const result = M._oxc3_reflectSymbols(
         hold(putString(name)), hold(putString(files[name] ? files[name].src : "")),
         allowErrors === false ? 0 : 1,
-        (cfg && cfg.disabledExt) >>> 0, hold(putString(defines))
+        (cfg && cfg.disabledExt) >>> 0, hold(putString(defines)),
+        BACKEND[(cfg && cfg.backend) || "dxil"]
       );
       const { doc, blob } = frame(result, "reflectSymbols");
       return { doc, bytes: blob, diags: reflectDiags(name) };
@@ -308,6 +313,26 @@ api.reflectSymbols = async function reflectSymbols(name, files, allowErrors, cfg
   } catch (e) {
     return { doc: null, bytes: null, diags: reflectDiags(name), error: e.message };
   }
+};
+
+/* Compiler_parse: the annotated entrypoints of the source and every permutation each one expands
+ * into, without compiling any of them. Follows the editor the way reflectSymbols does.
+ * Returns the entries array, or null when the source doesn't parse (the page keeps its previous
+ * listing rather than flashing empty on a half-typed line). A module built before this export
+ * refuses cleanly, so the caller can fall back to the last compile's binaries. */
+api.parseEntrypoints = async function parseEntrypoints(name, files) {
+  if (typeof M._oxc3_parseEntrypoints !== "function")
+    throw new Error("parseEntrypoints: this module build has no parse-only listing");
+  syncProject(files);
+  /* The capture only keeps the console clean: this runs per edit, and a half-typed line's parse
+   * messages already reach the editor through reflectSymbols. */
+  beginCapture();
+  try {
+    return withPointers(hold =>
+      frame(M._oxc3_parseEntrypoints(
+        hold(putString(name)), hold(putString(files[name] ? files[name].src : ""))
+      ), "parseEntrypoints").doc.entries);
+  } finally { endCapture(); }
 };
 
 api.shRead = async function shRead(name, bytes) {

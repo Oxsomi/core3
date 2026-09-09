@@ -79,7 +79,10 @@ Bool Compiler_setupIncludePaths(ListCharString *dst, const CompilerSettings *set
 
 Bool Compiler_copyIncludes(CompileResult *result, IncludeHandler *includeHandler, const Allocator *alloc, Error *e_rr);
 
-void Compiler_resetIncludeHandler(IncludeHandler *includeHandler);
+//mainFile lets the handler recognize a builtin include driven as the main file (the web page opens one
+// read-only and reflects it), so an include chain reaching back to it serves empty instead of doubling
+// every symbol; a ref into the caller's settings, read only during the call it resets for.
+void Compiler_resetIncludeHandler(IncludeHandler *includeHandler, CharString mainFile);
 
 IDxcIncludeHandler *Compiler_getIncludeHandler(IncludeHandler *includeHandler);
 

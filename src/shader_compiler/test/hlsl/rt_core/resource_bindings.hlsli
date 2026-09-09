@@ -20,6 +20,7 @@
 
 #pragma once
 #include "@resources.hlsli"
+#include "@buffer.hlsli"
 
 enum EResourceBinding {
 

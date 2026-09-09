@@ -988,7 +988,7 @@ Bool Compiler_parse(
 
 	Compiler_convertToWString(stringsUTF8, clean);
 
-	Compiler_resetIncludeHandler(interfaces->includeHandler);        //Ensure we don't reuse stale caches
+	Compiler_resetIncludeHandler(interfaces->includeHandler, settings->path);    //Ensure we don't reuse stale caches
 
 	hr = interfaces->reflector->FromSource(
 		source,
@@ -1920,12 +1920,20 @@ Bool Compiler_reflect(
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "lib_6_10", alloc, e_rr));
 
+	//outputType picks which backend's view of the source is reflected: -spirv defines __spirv__ and
+	// declares the vk:: namespace exactly as the SPIR-V compile leg would, so `#ifdef __spirv__` code
+	// reflects; without it the parse reads as the DXIL leg. Reflection never generates code, so this
+	// only moves the preprocessor and Sema.
+
+	if(settings->outputType == EGfxBinaryType_SPIRV)
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr));
+
 	if(settings->reflectAllowErrors)
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-reflect-allow-errors", alloc, e_rr));
 
 	Compiler_convertToWString(stringsUTF8, clean);
 
-	Compiler_resetIncludeHandler(interfaces->includeHandler);
+	Compiler_resetIncludeHandler(interfaces->includeHandler, settings->path);
 
 	hr = interfaces->reflector->FromSource(
 		source,

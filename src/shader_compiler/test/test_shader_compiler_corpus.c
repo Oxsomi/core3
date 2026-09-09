@@ -563,7 +563,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 				.string = allShaderText.ptr[i],
 				.path = relPath,
 				.format = ECompilerFormat_HLSL,
-				.outputType = EGfxBinaryType_SPIRV,
+				.outputType = EGfxBinaryType_DXIL,    //The default leg reflection reads as (no -spirv)
 				.includeDirs = reflectIncludes
 			};
 

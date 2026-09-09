@@ -38,6 +38,7 @@ in packages/conan/profiles/emscripten_wasm64 and must match in every consumer li
 import argparse
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -75,11 +76,34 @@ def ensureEmsdk():
 
 	emsdk = os.environ.get("EMSDK", os.path.join(os.path.expanduser("~"), "emsdk"))
 
-	if not os.path.isfile(os.path.join(emsdk, "upstream", "emscripten", "emcc")):
-		print(f"-- No emsdk at {emsdk} (set EMSDK or install to ~/emsdk)", file=sys.stderr)
+	# The launcher's spelling depends on platform and SDK age: the bare sh wrapper on unix, emcc.bat
+	# historically on Windows, emcc.exe on current Windows releases. Any of them is an installed SDK.
+	emscripten = os.path.join(emsdk, "upstream", "emscripten")
+
+	if not any(os.path.isfile(os.path.join(emscripten, "emcc" + ext)) for ext in ("", ".exe", ".bat")):
+		print(f"-- No emsdk at {emsdk} (set EMSDK, or install + activate one at ~/emsdk)", file=sys.stderr)
 		sys.exit(1)
 
 	os.environ["EMSDK"] = emsdk
+
+	# emcc launches through whatever python EMSDK_PYTHON or PATH offers, and a too-old PATH python fails
+	# with a SyntaxError deep inside the cmake configure. The SDK ships its own interpreter for exactly
+	# this, so it is resolved here the way the SDK's node is, unless the caller already picked one.
+
+	if "EMSDK_PYTHON" not in os.environ:
+
+		pyRoot = os.path.join(emsdk, "python")
+		versions = sorted(os.listdir(pyRoot), reverse=True) if os.path.isdir(pyRoot) else []
+		bundled = next((
+			c for entry in versions for c in (
+				os.path.join(pyRoot, entry, "python.exe"),
+				os.path.join(pyRoot, entry, "bin", "python3")
+			) if os.path.isfile(c)
+		), None)
+
+		if bundled:
+			os.environ["EMSDK_PYTHON"] = bundled
+
 	return emsdk
 
 def webOptionArgs(tests, hostCrypto=False, asan=False, ubsan=False):
@@ -199,7 +223,11 @@ def doBuild(
 
 	outputFolder = f"\"build/{mode}/web/{target}\""
 	options      = webOptionArgs(tests, hostCrypto, asan, ubsan)
-	shaderArgs   = common.shaderCompilerDepArgs(False)
+
+	# msvcRuntime off: the emscripten host profile has no compiler.runtime_type, so pinning one here
+	# would ask for a dxc package_id the create step above never produced.
+
+	shaderArgs   = common.shaderCompilerDepArgs(False, msvcRuntime=False)
 
 	# How the frontend module ships its wasm is a link choice on one target, not an ABI one, so it rides
 	# in as a cmake variable rather than as a conan option: an option would fork package_id and rebuild
@@ -223,9 +251,11 @@ def doBuild(
 def emsdkNode():
 	"""The node the emsdk ships, falling back to PATH.
 
-	emsdk installs node under $EMSDK/node/<version>/bin and only puts it on PATH through emsdk_env, which a
-	plain shell (and CI) hasn't sourced. Resolving it here means --run_tests works from a bare checkout with
-	nothing but EMSDK set, instead of failing with command-not-found that reads like a broken test bundle.
+	emsdk installs node under $EMSDK/node/<version>/bin (or the version directory itself on Windows) and
+	only puts it on PATH through emsdk_env, which a plain shell (and CI) hasn't sourced. Resolving it here
+	means --run_tests works from a bare checkout with nothing but EMSDK set, instead of failing with
+	command-not-found that reads like a broken test bundle; a PATH node may also simply be too old for the
+	dev dependencies where the SDK's never is.
 	"""
 
 	emsdk = os.environ.get("EMSDK")
@@ -236,9 +266,12 @@ def emsdkNode():
 
 		if os.path.isdir(nodeRoot):
 			for entry in sorted(os.listdir(nodeRoot), reverse=True):
-				candidate = os.path.join(nodeRoot, entry, "bin", "node")
-				if os.path.isfile(candidate):
-					return candidate
+				for candidate in (
+					os.path.join(nodeRoot, entry, "bin", "node"),
+					os.path.join(nodeRoot, entry, "node.exe")
+				):
+					if os.path.isfile(candidate):
+						return candidate
 
 	return "node"
 
@@ -596,13 +629,14 @@ def precompressFrontend():
 		raw = sum(os.path.getsize(p) for p in page)
 		print(f"-- page ({len(page)} files): {raw:,} -> {sum(os.path.getsize(p + '.br') for p in page):,} bytes (.br)")
 
-def runFrontendTests(mode):
+def runFrontendTests(mode, dxcSource=None):
 	"""Drive the staged module through the frontend's own boundary (web/js/wasm.js), headless, then the
 	page's own module free tests.
 	The two smokes are the regression net for the boundary: the call frame, wasm64 pointer marshalling,
 	the project tree #includes resolve against, and every document serializer. The other three cover the
 	page against the recording: the pure cores, the editor's HLSL mode against the real CodeMirror, and
-	the whole page under jsdom on the mock tier.
+	the whole page under jsdom on the mock tier. The intrinsics data closes the set: it is generated
+	from the DXC fork rather than from the module, so it gets its own regenerate-and-compare.
 	"""
 
 	smoke = os.path.join(common.ROOT, WEB_FRONTEND, "dev", "wasm_smoke.js")
@@ -628,7 +662,20 @@ def runFrontendTests(mode):
 	node = emsdkNode()
 
 	if not os.path.isdir(os.path.join(webDir, "node_modules")):
-		npm = os.path.join(os.path.dirname(node), "npm")
+
+		# npm is run as a script through the node above rather than as a command, so the pair can't split
+		# between the SDK's node and some PATH npm. The entry point's home differs per platform: next to
+		# node_modules beside node.exe on Windows, under lib/ one level up on unix; the bare `npm` sibling
+		# is the unix symlink to the same file and stands in when neither spells out.
+
+		home = os.path.dirname(node)
+		npm = next((
+			p for p in (
+				os.path.join(home, "node_modules", "npm", "bin", "npm-cli.js"),
+				os.path.join(home, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js")
+			) if os.path.isfile(p)
+		), os.path.join(home, "npm"))
+
 		result = subprocess.run(f"\"{node}\" \"{npm}\" ci --no-audit --no-fund", shell=True, cwd=webDir)
 		if result.returncode:
 			print("-- npm ci for the frontend tests FAILED", file=sys.stderr)
@@ -649,6 +696,122 @@ def runFrontendTests(mode):
 	if result.returncode:
 		print("-- Hosting tests FAILED", file=sys.stderr)
 		sys.exit(result.returncode)
+
+	checkIntrinsics(dxcSource)
+
+def resolveDxcSource(explicit):
+	"""Where the intrinsic tables are read from: the -dxc_source tree when one is given, else the dxc conan
+	package, which carries them (res/dxc_intrinsics, see packages/dxc/conanfile.py).
+
+	The package is the one the module was built against, so the tables belong to the pin by construction
+	rather than by a second fetch that could disagree with it. Any package conan resolved into this build
+	tree will do, since the sources are the same for every profile, but one built before the current pin is
+	named rather than quietly checked against.
+	"""
+
+	if explicit:
+		return os.path.abspath(explicit)
+
+	with open(os.path.join(common.ROOT, "packages", "dxc", "conandata.yml")) as f:
+		pin = re.search(r'checkout:\s*"([0-9a-f]{40})"', f.read())
+
+	if not pin:
+		print("-- packages/dxc/conandata.yml no longer spells checkout", file=sys.stderr)
+		sys.exit(1)
+
+	pin = pin.group(1)
+	found = []
+
+	# CMakeDeps writes the package folder into the data file beside the config it generates, so the path
+	# comes out of the build tree conan already populated rather than out of a `conan cache path` guess at
+	# the package id.
+
+	for root, dirs, files in os.walk(os.path.join(common.ROOT, "build")):
+
+		# Object trees hold most of the entries here and no generator output, so they are stepped over
+		# rather than descended into; the walk then costs the same as the tree grows.
+
+		dirs[:] = [d for d in dirs if d not in ("CMakeFiles", "node_modules", ".git")]
+
+		for name in files:
+
+			if not name.startswith("dxc-") or not name.endswith("-data.cmake"):
+				continue
+
+			with open(os.path.join(root, name)) as f:
+				folder = re.search(r'set\(dxc_PACKAGE_FOLDER_\w+ "([^"]+)"\)', f.read())
+
+			if not folder:
+				continue
+
+			source = os.path.join(folder.group(1), "res", "dxc_intrinsics")
+			stamp = os.path.join(source, "DXC_COMMIT")
+
+			if not os.path.isfile(stamp):
+				found.append(f"{source} predates the packaged tables")
+				continue
+
+			with open(stamp) as f:
+				head = f.read().strip()
+
+			if head == pin:
+				return source
+
+			found.append(f"{source} is {head[:12]}")
+
+	print(f"-- No dxc package carrying the tables for the pin ({pin[:12]})", file=sys.stderr)
+
+	# Nothing resolved at all and a package that is simply older are different problems, and only one of
+	# them is fixed by building.
+
+	if not found:
+		print(
+			"--   Nothing in build/ names a dxc package yet, so build the module before this check, or\n"
+			"--   pass -dxc_source <DirectXShaderCompiler checkout> to check against a working tree.",
+			file=sys.stderr
+		)
+
+	else:
+
+		for line in found:
+			print("--   " + line, file=sys.stderr)
+
+		print(
+			"--   These were built before the recipe packaged them, or against another pin. The next\n"
+			"--   build rebuilds dxc, since packages/dxc/conanfile.py changing is a new recipe revision.",
+			file=sys.stderr
+		)
+
+	sys.exit(1)
+
+def checkIntrinsics(dxcSource):
+	"""js/intrinsics_data.js is generated from the DXC fork's sources, which are not part of this
+	repository, so nothing else can diff it in CI; regenerating against the pin and comparing here is
+	what keeps the committed copy from quietly describing an older compiler."""
+
+	src = resolveDxcSource(dxcSource)
+	fresh = os.path.join(common.ROOT, "build", "dxc_intrinsics", "intrinsics_data.js")
+	committed = os.path.join(common.ROOT, WEB_FRONTEND, "js", "intrinsics_data.js")
+	os.makedirs(os.path.dirname(fresh), exist_ok=True)
+
+	result = subprocess.run([
+		sys.executable, os.path.join(common.ROOT, WEB_FRONTEND, "dev", "gen_intrinsics.py"), src, "-o", fresh
+	])
+
+	if result.returncode:
+		print("-- Regenerating the intrinsics data FAILED", file=sys.stderr)
+		sys.exit(result.returncode)
+
+	with open(committed, "rb") as a, open(fresh, "rb") as b:
+		if a.read() != b.read():
+			print(
+				"-- web/js/intrinsics_data.js is stale against the fork: regenerate with\n"
+				f"--   python web/dev/gen_intrinsics.py \"{src}\"\n"
+				"-- and commit the result", file=sys.stderr
+			)
+			sys.exit(1)
+
+	print("-- intrinsics data matches the fork's tables")
 
 def serveFrontend(port):
 	"""Serve web/ over http, which loading a .wasm needs (file:// blocks the fetch).
@@ -740,7 +903,8 @@ def main():
 	)
 	parser.add_argument(
 		"-dxc_source", type=str, default=None, metavar="PATH",
-		help="Build DXC from this checkout instead of the pinned clone, for iterating on the fork"
+		help="Build DXC from this checkout instead of the pinned clone, for iterating on the fork; "
+			"--run_frontend_tests then checks the intrinsics data against it rather than against the package"
 	)
 	parser.add_argument(
 		"--single_file", action="store_true",
@@ -840,7 +1004,7 @@ def main():
 		packageFrontend(args.zip or os.path.join(common.ROOT, "build", args.mode, "web", "OxC3-web.zip"))
 
 	if args.run_frontend_tests:
-		runFrontendTests(args.mode)
+		runFrontendTests(args.mode, args.dxc_source)
 
 	if args.run_tests:
 		runTests(args.mode, args.suite, args.threads == "True", args.asan == "True", args.ubsan == "True")

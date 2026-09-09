@@ -14,7 +14,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2026.09.06"
+	version = "2026.09.09"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -307,6 +307,7 @@ class dxc(ConanFile):
 				local, os.path.join(self.source_folder, "DirectXShaderCompiler"),
 				symlinks=True, ignore=shutil.ignore_patterns(".git")
 			)
+			self._writeCommit(self._headOf(local))
 			return
 
 		git = Git(self)
@@ -314,6 +315,28 @@ class dxc(ConanFile):
 		git.folder = os.path.join(self.source_folder, "DirectXShaderCompiler")
 		git.checkout(self.conan_data["sources"][self.version]["checkout"])
 		git.run("submodule update --init --recursive")
+		self._writeCommit(self.conan_data["sources"][self.version]["checkout"])
+
+	def _headOf(self, tree):
+
+		try:
+			head = subprocess.run(
+				["git", "-C", tree, "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10
+			)
+			return head.stdout.strip() if head.returncode == 0 else "unknown"
+		except Exception:
+			return "unknown"
+
+	def _writeCommit(self, commit):
+
+		"""What the packaged sources are, for a consumer that has the package rather than a checkout.
+
+		The intrinsic tables below travel without .git, and the web frontend stamps the commit into the
+		table it generates from them, so the answer has to be written down while a tree still exists.
+		"""
+
+		with open(os.path.join(self.source_folder, "DXC_COMMIT"), "w") as f:
+			f.write(commit + "\n")
 
 	def _relaxAssertOnlyWarnings(self):
 		"""Let dxcreflection compile LLVM headers with assertions off.
@@ -423,6 +446,29 @@ class dxc(ConanFile):
 
 			wsl_stubs_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include/wsl/stubs")
 			copy(self, "*.h", wsl_stubs_src, include_dir)
+
+		# The web frontend generates its intrinsics table (web/js/intrinsics_data.js) out of three of the
+		# fork's sources, and checks the committed copy against them on every frontend test run. That check
+		# has the package, not a checkout, so the package carries them: 1.2 MB next to a gigabyte of libs.
+		# The fork's own layout is kept, so the generator reads a package exactly the way it reads a
+		# checkout, and DXC_COMMIT stands in for the HEAD it would otherwise ask git for.
+
+		intrinsics_src = os.path.join(self.source_folder, "DirectXShaderCompiler")
+		intrinsics_dst = os.path.join(self.package_folder, "res/dxc_intrinsics")
+
+		copy(self, "DXC_COMMIT", self.source_folder, intrinsics_dst)
+		copy(
+			self, "hctdb.py", os.path.join(intrinsics_src, "utils/hct"),
+			os.path.join(intrinsics_dst, "utils/hct")
+		)
+		copy(
+			self, "gen_intrin_main.txt", os.path.join(intrinsics_src, "utils/hct"),
+			os.path.join(intrinsics_dst, "utils/hct")
+		)
+		copy(
+			self, "SemaHLSL.cpp", os.path.join(intrinsics_src, "tools/clang/lib/Sema"),
+			os.path.join(intrinsics_dst, "tools/clang/lib/Sema")
+		)
 
 		# Host builds carry the tablegens so a cross build of this same recipe can borrow them rather
 		# than running LLVM's NATIVE sub build; see the LLVM_USE_HOST_TOOLS note in generate().

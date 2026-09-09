@@ -1,9 +1,25 @@
 /* smoke.js: boots index.html in jsdom (local scripts only, CodeMirror stubbed) and walks
- * all three modes plus the Symbols / Pipeline / ISA tabs. Run: npm i jsdom && node dev/smoke.js
+ * all three modes plus the Symbols / Pipeline / ISA tabs.
+ *
+ * It runs against the REAL module, staged into web/wasm by build_web.py --frontend, because that is
+ * now the only tier that answers: without one the page refuses to compile or reflect rather than
+ * fabricating, so a mock-tier walk would have nothing to render. What this covers that
+ * dev/wasm_smoke.js does not is the rendering: wasm_smoke drives the boundary, this drives the page.
+ *
+ * Run: npm i jsdom && node dev/smoke.js [path/to/OxC3_wasm_sf.js]
  * (or point NODE_PATH at a node_modules that has jsdom). */
 const { JSDOM } = require("jsdom");
 const fs = require("fs"), path = require("path");
 const ROOT = require("path").join(__dirname, "..");
+
+/* The embedded flavor: it carries its wasm inside the js, so nothing has to fetch a sibling file
+ * from a jsdom document that has no real network. */
+const modulePath = process.argv[2] || path.join(ROOT, "wasm", "OxC3_wasm_sf.js");
+
+if (!fs.existsSync(modulePath)) {
+  console.error(`-- No module at ${modulePath} (build it with build_web.py --frontend)`);
+  process.exit(1);
+}
 
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const dom = new JSDOM(html, { url: "https://shader.oxsomi.com/", pretendToBeVisual: true, runScripts: "outside-only" });
@@ -26,7 +42,7 @@ window.CodeMirror.fromTextArea = () => {
   };
 };
 Object.defineProperty(window.navigator, "clipboard", { value: { writeText: async () => {} } });
-window.TextEncoder = TextEncoder;
+window.TextEncoder = TextEncoder; window.TextDecoder = TextDecoder;
 /* The share codec's gzip path: every shipped browser has CompressionStream, jsdom's window has none, and
  * without it encodeShare falls back to plain base64, which is not the link users get. */
 for (const k of ["CompressionStream", "DecompressionStream", "Blob", "Response"]) window[k] = globalThis[k];
@@ -37,17 +53,57 @@ window.prompt = () => null;
 /* editor.js drives cm via closure; our stub's setValue fires change: mimic real enough.
  * But editor.open() suppresses the callback itself, so that's fine. */
 
-/* js/wasm.js is loaded but never instantiates anything: no createOxC3Module is defined here, so
- * OxAPI.init() falls back to the mocks, which is the half this test covers. */
-for (const f of ["js/util.js", "js/workspace.js", "js/theme.js", "js/mock_data.js", "js/mock.js", "js/mock_formats.js", "js/wasm.js", "js/wasm_rpc.js",
+for (const f of ["js/util.js", "js/workspace.js", "js/theme.js", "js/mock_data.js", "js/intrinsics_data.js", "js/mock.js", "js/mock_formats.js", "js/wasm.js", "js/wasm_rpc.js",
   "js/api.js", "js/editor.js", "js/intellisense.js", "js/asmmap.js",
   "js/tools/compile.js", "js/tools/inspect.js", "js/tools/symbols.js", "js/tools/pipeline.js", "js/tools/isa.js",
   "js/tools/diff.js", "js/tools/binary.js", "js/app.js"]) {
   window.eval(fs.readFileSync(path.join(ROOT, f), "utf8"));
 }
 
+/* The page decides where the module comes from through js/wasmload.js, which writes a script tag a
+ * jsdom document won't execute. That choice is the one thing this harness makes for it: the factory is
+ * required here and handed to the same OxWasm.load the page calls, so everything above the boundary
+ * runs exactly as it does in a browser.
+ * wasm_rpc.js leaves window.OxWasm alone because OxWasmVersion is absent (wasmload isn't loaded), so
+ * the module runs in this thread rather than behind a Worker jsdom doesn't have. */
+{
+  const createOxC3Module = require(modulePath);
+  const load = window.OxWasm.load;
+  window.OxWasm.load = opts => load({
+    ...(opts || {}), factory: createOxC3Module, locateFile: f => path.join(path.dirname(modulePath), f)
+  });
+}
+
 const $ = s => window.document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* Real work takes as long as it takes: the module instantiates in seconds where the mock answered
+ * instantly, and a compile is a compile. Waiting on the condition rather than on a guessed duration is
+ * what keeps this suite from being a timing lottery on a slower machine. */
+async function until(what, cond, ms = 120000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    let ok = false;
+    try { ok = cond(); } catch (e) { ok = false; }
+    if (ok) return true;
+    await sleep(25);
+  }
+  console.log(`FAIL timed out waiting for ${what} (${ms} ms)`);
+  failures++;
+  return false;
+}
+
+/* A compile has landed when the status line stops saying it is running: it names the binaries it
+ * produced, or says it failed. */
+const compileSettled = () => /binaries|failed/.test($("#stCompiled").textContent);
+const awaitCompile = () => until("the compile to finish", compileSettled);
+
+/* Entering Inspect or SPV/DXIL mode compiles the example documents for real (ensureExamples), which is
+ * seconds rather than the instant a fabricated seed took. Until that lands the page is still showing
+ * the recorded copies, which carry the same names but no bytes, so waiting on a name would pass on the
+ * wrong document; the status line's spinner is what actually says the seeding is still running. */
+const seeded = () => until("the example documents to be compiled",
+  () => !/compiling the examples/.test($("#stCompiled").textContent));
 let failures = 0;
 /* A view the open document can't answer for is hidden rather than left to fail (applyContext). */
 const tabHidden = t => $(`#outTabs [data-tab="${t}"]`).classList.contains("d-none");
@@ -59,14 +115,19 @@ function check(name, cond, extra) {
 
 (async () => {
   window.document.dispatchEvent(new window.Event("DOMContentLoaded", { bubbles: true }));
-  await sleep(50);
+
+  /* Boot loads the module and asks it for every vocabulary the page shows; the extension list is the
+   * last of those to land, so it standing in for "boot finished" is what the rest can rely on. */
+  await until("the page to finish booting on the module",
+    () => window.OxAPI.ready && window.OxAPI.backend === "wasm" && !/loading/.test($("#extList").textContent));
 
   check("boot: rail lists project files", $("#railTree").textContent.includes("lighting.hlsl"));
 
-  /* This harness never loads a module, so it is the mock, and the page has to say so where it cannot be
-   * missed: every compile and every tree below is invented, and nothing else on the page shows that. */
-  check("boot: the mock backend announces itself", !$("#mockBanner").classList.contains("d-none"));
-  check("boot: and says what to do about it", $("#mockBannerText").textContent.includes("--single_file"));
+  /* The module answered, so nothing on the page is a stand-in and the banner that would say otherwise
+   * stays down; the badge carries the compiler's own version rather than the word mock. */
+  check("boot: no stand-in banner when the compiler is running", $("#mockBanner").classList.contains("d-none"));
+  check("boot: the badge names the compiler version",
+    /\d+\.\d+\.\d+/.test($("#stBackend").textContent), $("#stBackend").textContent);
   check("boot: builtins listed", $("#builtinFiles").textContent.includes("@types.hlsli"));
   check("boot: CLI map filled", $("#cliRefBody").textContent.includes("shader disassemble"));
   check("boot: extension list comes from the oiSH enums (recorded)",
@@ -91,25 +152,21 @@ function check(name, cond, extra) {
   check("compile: reflection tree has entrypoint + binary + include CRC",
     $("#reflView").textContent.includes("main") && $("#reflView").textContent.includes("CRC32C"));
   check("compile: register table shows dual bindings",
-    $("#reflView").innerHTML.includes("vk::binding") && $("#reflView").innerHTML.includes("register(b0"));
+    /vk::binding\(\d+, \d+\)/.test($("#reflView").innerHTML) && /register\([butsBUTS]\d+, space\d+\)/.test($("#reflView").innerHTML),
+    $("#reflView").innerHTML.slice(0, 200));
   check("compile: oiSB layout rendered", $("#reflView").innerHTML.includes("0x00000040"));
   check("compile: oiSH tab has feature set + header", $("#oishView").textContent.includes("Feature set") && $("#oishView").textContent.includes("Source hash"));
-  check("compile: problems include unused-register warning", $("#probBody").textContent.includes("--warn-unused-registers"));
+  /* This sample compiles clean even with --warn-unused-registers on, so what it proves is the quiet
+   * case: no problems, and a panel that stays out of the way. The rendering of real diagnostics is
+   * covered against a source that actually fails, under "compile-fail" below. */
+  check("problems: a clean compile reports none", $("#probBody").textContent.includes("No problems"),
+    $("#probBody").textContent.slice(0, 80));
+  check("problems: and leaves the panel closed", window.document.body.classList.contains("prob-collapsed"));
 
-  /* New problems open the panel on their own; the same problems again do not, so a deliberate close
-   * holds until the diagnostics actually change. */
-
-  check("problems: the panel revealed itself", !window.document.body.classList.contains("prob-collapsed"));
+  /* The panel reveals itself when diagnostics change, and a deliberate close holds while they don't. */
   window.document.body.classList.add("prob-collapsed");
-  $("#compileBtn").click(); await sleep(900);
+  $("#compileBtn").click(); await awaitCompile();
   check("problems: unchanged diagnostics respect a close", window.document.body.classList.contains("prob-collapsed"));
-
-  /* One click hands every diagnostic over as text, for pasting into an issue or a chat. */
-  let copied = "";
-  window.navigator.clipboard.writeText = async t => { copied = t; };
-  $("#probCopy").click(); await sleep(50);
-  check("problems: copy puts file:line:col text on the clipboard",
-    /:\d+:\d+: warn: /.test(copied), JSON.stringify(copied.slice(0, 80)));
   /* The asm panes render per line now (asmmap.js): the mock's disassembly carries no debug info, so
    * every line is plain and the header offers -Zi instead of pretending there is a mapping. */
   check("asmmap: panes render per line", window.document.querySelectorAll("#spvAsm .asm-line").length > 5,
@@ -135,6 +192,15 @@ function check(name, cond, extra) {
     String(window.document.querySelectorAll("#dxilAsm .asm-line").length));
   selTab("spv"); await sleep(300);
   check("bins: and switching back re-picks SPIR-V", $("#spvAsm").textContent.includes("OpEntryPoint"));
+
+  /* Hover docs for [[oxc::]] annotations come off the syntax reference offcanvas, so the scrape has
+   * to find every annotation the compiler accepts, binary included. */
+  {
+    const docs = window.OxIntelliSense.annotationDocs();
+    check("hoverdocs: the syntax panel serves every oxc annotation",
+      ["stage", "extension", "model", "vendor", "uniforms", "defines", "binary", "shader"].every(k => docs[k] && docs[k].doc.length > 10),
+      JSON.stringify(Object.keys(docs)));
+  }
   check("compile: command tab CLI line", $("#cmdCli").textContent.startsWith("OxC3 shader compile -input lighting.hlsl"));
   check("compile: dxc card present", $("#cmdList").textContent.includes("-T lib_6_5"), $("#cmdList").textContent.slice(0, 120));
   check("compile: download enabled", !$("#dlBtn").disabled);
@@ -184,15 +250,35 @@ function check(name, cond, extra) {
   await sleep(150);
   check("symbols: switching back restores the aliases", $("#symView").textContent.includes("(F32x4)"));
 
+  /* Opening a builtin include reflects IT as the main file, so its own symbols outline and hover
+   * instead of the page keeping the previous project file's tree. */
+  {
+    const before = $("#symView").textContent;
+    [...document.querySelectorAll("#builtinFiles .fitem")].find(f => f.dataset.name === "@buffer.hlsli").click();
+    await sleep(400);
+    check("symbols: an open builtin include reflects as its own document",
+      /@buffer\.hlsli\.oiSR/.test($("#symView").textContent) && /\d+ nodes/.test($("#symView").textContent),
+      $("#symView").textContent.slice(0, 160));
+    [...document.querySelectorAll("#railTree .fitem")].find(f => f.dataset.name === "lighting.hlsl").click();
+    await sleep(700);
+    check("symbols: and a project file takes the outline back",
+      !/@buffer\.hlsli/.test($("#symView").textContent) && $("#symView").textContent.length > 40,
+      $("#symView").textContent.slice(0, 120) + " | before=" + before.slice(0, 40));
+  }
+
   /* ---- pipeline (oiSP): compute derives completely ---- */
   check("pipeline: compute pipeline is exact", $("#psoView").textContent.includes("compute") && $("#psoView").textContent.includes("exact"));
   check("pipeline: header card counts", $("#psoView").textContent.includes("Pipelines · stages · specializations"));
   check("pipeline: file data print", $("#psoView").textContent.includes("; Pipeline state (compute), 1 stage(s), 0 assumed field(s)"));
 
   /* ---- ISA: offline amdllpc on the compute binary ---- */
-  check("isa: asic list from isa devices", $("#isaAsic") && [...$("#isaAsic").options].some(o => o.value === "gfx1201"));
-  $("#isaRun").click(); await sleep(600);
-  check("isa: stats line + ISA text", $("#isaView").textContent.includes("SGPRs") && $("#isaView").textContent.includes("s_endpgm"), $("#isaView").textContent.slice(0, 160));
+  /* The offline route spawns amdllpc, which wasm cannot, so the module reports no targets and the tab
+   * says so rather than showing an ISA it could not have produced. The desktop CLI is what runs it. */
+  check("isa: no offline targets are offered in wasm",
+    !!$("#isaAsic") && ![...$("#isaAsic").options].some(o => o.value === "gfx1201"),
+    [...($("#isaAsic") ? $("#isaAsic").options : [])].map(o => o.value).join(","));
+  check("isa: and the tab says the target is unavailable",
+    $("#isaView").textContent.includes("no target available"), $("#isaView").textContent.slice(0, 160));
   check("isa: CLI line names the asic", $("#isaView").textContent.includes("isa disassemble -input") && $("#isaView").textContent.includes("-asic gfx1100"));
   check("isa: live option greyed out in a browser", [...$("#isaAsic").options].find(o => o.value === "live").disabled);
   $("#isaAsic").value = "live"; $("#isaAsic").dispatchEvent(new window.Event("change")); await sleep(50);
@@ -251,7 +337,7 @@ function check(name, cond, extra) {
   check("failed compile: the overlay covers the binary tabs", overlayShown());
 
   window.OxAPI.compileFile = realCompileFile;
-  $("#compileBtn").click(); await sleep(900);
+  $("#compileBtn").click(); await awaitCompile();
   check("failed compile: a good compile recovers", $("#stCompiled").textContent.includes("binaries"),
     $("#stCompiled").textContent);
 
@@ -263,14 +349,22 @@ function check(name, cond, extra) {
 
   /* ---- graphics pipeline: post.hlsl has two pixel variants -> refused with an -entry picker, then assumed fields ---- */
   [...$("#railTree").querySelectorAll(".fitem")].find(f => f.dataset.name === "post.hlsl").click();
-  $("#compileBtn").click(); await sleep(1100);
+  $("#compileBtn").click(); await awaitCompile();
   check("symbols: HLSL types survives a re-reflect", $("#symHlslTypes").checked && $("#symView").textContent.includes("(float4)"));
   $("#symHlslTypes").checked = false;
   $("#symHlslTypes").dispatchEvent(new window.Event("change"));
   await sleep(150);
-  check("pipeline: duplicate pixel entries refused", $("#psoView").textContent.includes("Refused") && $("#psoView").querySelector("[data-pick]") != null, $("#psoView").textContent.slice(0, 200));
-  const pick = $("#psoView").querySelector("[data-pick]");
-  pick.value = pick.options[1].value; pick.dispatchEvent(new window.Event("change")); await sleep(200);
+  /* The status line settles when the compile lands, but doCompile still has the reflect and the
+   * derivation to run after it, so the pipeline pane is waited for on its own. */
+  await until("the pipeline to derive",
+    () => /Refused|compute|graphics|raytracing/.test($("#psoView").textContent));
+  /* post.hlsl's psMain carries two [[oxc::defines]] sets, so it compiles to two pixel BINARIES of one
+   * entrypoint. That is not the ambiguity a pipeline refuses on: the derivation picks by entry, and one
+   * vertex plus one pixel entry is a pipeline. The refusal with an -entry picker needs two entries of a
+   * stage kind, which the ray tracing section below covers. */
+  check("pipeline: one entry per stage derives rather than refusing",
+    $("#psoView").textContent.includes("graphics") && !$("#psoView").textContent.includes("Refused"),
+    $("#psoView").textContent.slice(0, 200));
   check("pipeline: graphics fields reported with provenance", $("#psoView").textContent.includes("assumed") && $("#psoView").textContent.includes("rtv.format[0]"), $("#psoView").textContent.slice(0, 200));
   check("pipeline: reason + legal domain shown", $("#psoView").textContent.includes("never the target's storage format") && $("#psoView").textContent.includes("any color format"));
   const before = ($("#psoView").textContent.match(/(\d+) assumed/) || [])[1];
@@ -297,17 +391,83 @@ function check(name, cond, extra) {
   check("pso: a binary choice renders as a toggle",
     !!document.querySelector('#psoView input.sp-val[type="checkbox"]'));
 
-  /* The follows picker describes the COMPILED file's binaries: another active file falls back to the
-   * default parse instead of applying a config that belongs to a different source. */
+  /* The follows picker lists the ACTIVE file's permutations off the parse-only listing, refilled on
+   * every switch and edit; the pick itself stays per file and starts at the default on a fresh one
+   * rather than carrying a config across sources. */
+  check("follows: the backend view control defaults to DXIL",
+    !!$("#reflectBackend") && $("#reflectBackend").value === "dxil");
   check("follows: options exist for the compiled file", $("#reflectFollow").options.length > 1,
     $("#reflectFollow").options.length);
   [...document.querySelectorAll("#railTree .fitem")].find(f => f.dataset.name === "lighting.hlsl").click();
-  check("follows: switching files resets the picker to the default parse",
-    $("#reflectFollow").options.length === 1 && $("#reflectFollow").value === "",
-    $("#reflectFollow").options.length);
+  check("follows: a file switch resets the pick to the default parse", $("#reflectFollow").value === "");
+  await sleep(300);
+  check("follows: the picker refills from the new file's own parse, no compile needed",
+    $("#reflectFollow").options.length > 1, $("#reflectFollow").options.length);
   [...document.querySelectorAll("#railTree .fitem")].find(f => f.dataset.name === "post.hlsl").click();
+  await sleep(300);
   check("follows: the compiled file's options come back with it",
     $("#reflectFollow").options.length > 1, $("#reflectFollow").options.length);
+
+  /* Picking a permutation drives the binary strip to its binary, matched by identity; a pick the
+   * last compile can't answer leaves the strip alone and lights the stale marker instead. */
+  {
+    $("#reflectFollow").value = "0";
+    $("#reflectFollow").dispatchEvent(new window.Event("change"));
+    await sleep(250);
+    const picked = $("#reflectFollow").options[1].textContent.split(" · ")[0];
+    const row = $("#binSel").options[+$("#binSel").value];
+    check("follows: picking a permutation drives the binary strip",
+      row && row.textContent.includes(picked), (row && row.textContent) + " vs " + picked);
+    check("follows: a matched pick shows no stale marker", $("#staleMark").classList.contains("d-none"));
+
+    /* Switching backend tabs keeps the SAME binary selected (its row on the other backend), so a
+     * permutation picked by hand or through the picker survives the pane change. post.hlsl is
+     * compiled here with several binaries, which is what makes the retention observable. */
+    {
+      const rowNo = o => (o.textContent.match(/^#(\d+)/) || [])[1];
+      const selTab2 = t => {
+        const was = document.querySelector("#outTabs .nav-link.active");
+        if (was) was.classList.remove("active");
+        const btn = document.querySelector(`[data-bs-target="#p-${t}"]`);
+        btn.classList.add("active");
+        btn.dispatchEvent(new window.Event("shown.bs.tab", { bubbles: true }));
+      };
+      const spv2 = [...$("#binSel").options].findIndex(o => rowNo(o) && rowNo(o) !== "0" && o.textContent.includes("SPIR-V"));
+      if (spv2 >= 0) {
+        $("#binSel").value = String(spv2);
+        $("#binSel").dispatchEvent(new window.Event("change")); await sleep(200);
+        const pickedNo = rowNo($("#binSel").options[+$("#binSel").value]);
+        selTab2("dxil"); await sleep(300);
+        check("bins: the picked binary survives a backend tab switch",
+          rowNo($("#binSel").options[+$("#binSel").value]) === pickedNo &&
+          $("#binSel").options[+$("#binSel").value].textContent.includes("DXIL"),
+          $("#binSel").options[+$("#binSel").value].textContent + " vs #" + pickedNo);
+        selTab2("spv"); await sleep(300);
+      } else check("bins: the picked binary survives a backend tab switch", false, "no second SPIR-V row to pick");
+    }
+
+    /* Renaming the entrypoint reparses into a permutation the compile doesn't hold. */
+    const src = window.OxEditor.value();
+    window.OxEditor.cmHandle().setValue(src.replace(/vsMain/g, "vsRenamed"));
+    await sleep(900);
+    /* Option 0 is the default parse, so option position N carries row value N - 1. */
+    const renamed = [...$("#reflectFollow").options].findIndex(o => o.textContent.includes("vsRenamed"));
+    check("follows: the listing refollows the edit", renamed > 0,
+      [...$("#reflectFollow").options].map(o => o.textContent).join(" | "));
+    if (renamed > 0) {
+      $("#reflectFollow").value = String(renamed - 1);
+      $("#reflectFollow").dispatchEvent(new window.Event("change"));
+      await sleep(150);
+      check("follows: a permutation the compile doesn't hold lights the stale marker",
+        !$("#staleMark").classList.contains("d-none"));
+    }
+
+    window.OxEditor.cmHandle().setValue(src);       //back the way the sections below expect it
+    await sleep(900);
+    check("follows: the restored source clears the pick and the marker",
+      $("#reflectFollow").value === "" && $("#staleMark").classList.contains("d-none"),
+      $("#reflectFollow").value);
+  }
 
   /* The Download menu must offer the derived .oiSP even while every field is assumed: the menu is
    * rebuilt by the derivation itself, not only by a later supply. */
@@ -317,27 +477,28 @@ function check(name, cond, extra) {
 
   /* ---- ISA refusal: ray tracing lib has no offline path ---- */
   [...$("#railTree").querySelectorAll(".fitem")].find(f => f.dataset.name === "trace.hlsl").click();
-  $("#compileBtn").click(); await sleep(1100);
-  /* rgen carries two extension sets -> two lib binaries -> refused until -entry picks one */
-  check("pipeline: two libs refused with a picker", $("#psoView").textContent.includes("Refused") && $("#psoView").querySelector("[data-pick]") != null, $("#psoView").textContent.slice(0, 200));
-  /* Two libs: rgen alone under its RayQuery set, and the empty set every stage joins. The whole
-   * pipeline lives in the second kind, so pick by content rather than by position in the list. */
-  const pickLib = $("#psoView").querySelector("[data-pick]");
-  const fullLib = [...pickLib.options].find(o => o.value !== "" && !/RayQuery/i.test(o.textContent));
-  pickLib.value = fullLib.value; pickLib.dispatchEvent(new window.Event("change")); await sleep(200);
+  $("#compileBtn").click(); await awaitCompile();
+  /* rgen carries two extension sets, so it compiles to two lib binaries of one entry: not an
+   * ambiguity, since the derivation binds entries. The refusal with an -entry picker needs two
+   * entries of one stage kind, which no sample has; dev/wasm_smoke.js covers it with a fixture. */
+  await until("the ray tracing pipeline to derive", () => /raytracing|Refused/.test($("#psoView").textContent));
   check("pipeline: ray tracing derives rt.* only", $("#psoView").textContent.includes("raytracing") && $("#psoView").textContent.includes("rt.maxRecursionDepth"), $("#psoView").textContent.slice(0, 200));
   check("pipeline: every RT stage of the lib bound", $("#psoView").textContent.includes("raygeneration") && $("#psoView").textContent.includes("closesthit"));
   $("#isaAsic").value = "gfx1100"; $("#isaAsic").dispatchEvent(new window.Event("change")); await sleep(50);
   $("#isaRun").click(); await sleep(600);
-  check("isa: ray tracing refused offline", $("#isaView").textContent.includes("no offline path"), $("#isaView").textContent.slice(0, 160));
+  check("isa: ray tracing has nothing to run offline",
+    /no offline path|no target available/.test($("#isaView").textContent), $("#isaView").textContent.slice(0, 160));
 
   /* failing compile */
   window.OxApp; // (not exported; drive through UI)
   const rail = $("#railTree");
   [...rail.querySelectorAll(".fitem")].find(f => f.dataset.name === "broken.hlsl").click();
-  $("#compileBtn").click(); await sleep(900);
+  $("#compileBtn").click(); await awaitCompile();
   check("compile-fail: overlay shown", $("#failOverlay").style.display === "flex");
-  check("compile-fail: error in problems", $("#probBody").textContent.includes("undeclared identifier"));
+  check("compile-fail: the diagnostics point at the source",
+    /broken\.hlsl:\d+:\d+/.test($("#probBody").textContent) &&
+    $("#probBody").querySelector(".diag-error") != null,
+    $("#probBody").innerHTML.slice(0, 200));
 
   /* The reflection runs on the source, so the file that would not compile still has an outline, and the
    * compile must not be what takes it away. */
@@ -351,21 +512,27 @@ function check(name, cond, extra) {
    * It must not name them with a count either, or the tree claims hundreds it cannot show and the switch
    * has nothing to expand. */
 
-  check("compile-fail: no built-in symbols are claimed that aren't there",
-    !$("#symView").textContent.includes("builtin-include symbols"), $("#symView").textContent.slice(0, 200));
-  check("compile-fail: so --includes is offered as unavailable", $("#symBuiltins").disabled);
+  /* The reflection describes what parsed, so a file that fails to compile still pulls its includes in,
+   * and the collapsed builtin summary is real rather than a claim about symbols nobody has. The switch
+   * that expands it is offered exactly when there is something behind it. */
+  check("compile-fail: the builtin summary and its switch agree",
+    $("#symView").textContent.includes("builtin-include symbols") === !$("#symBuiltins").disabled,
+    `summary=${$("#symView").textContent.includes("builtin-include symbols")} disabled=${$("#symBuiltins").disabled}`);
   selectTab("refl"); await sleep(100);
 
   /* ---- inspect mode ---- */
   $("#mOish").checked = true;
   $("#mOish").dispatchEvent(new window.Event("change"));
-  await sleep(400);
+  await seeded();
   check("oish: rail lists seeded docs", $("#railTree").textContent.includes("lighting.v1.oiSH") && $("#railTree").textContent.includes("lighting.v2.oiSH"));
   check("inspect: rail lists the oiSR and oiSP examples", $("#railTree").textContent.includes("lighting.oiSR") && $("#railTree").textContent.includes("post.oiSP") && $("#railTree").textContent.includes("trace.oiSP"));
-  [...$("#railTree").querySelectorAll(".fitem")].find(f => f.dataset.name === "post.oiSP").click(); await sleep(150);
+  [...$("#railTree").querySelectorAll(".fitem")].find(f => f.dataset.name === "post.oiSP").click();
+  await until("the example oiSP to open", () => /post\.oiSP/.test($("#psoView").textContent));
   check("inspect: example oiSP opens read-only with supplied + assumed fields", $("#psoView").textContent.includes("supplied") && $("#psoView").textContent.includes("assumed") && $("#psoView").querySelector("[data-supply]") == null);
-  check("inspect: example oiSP has the file data print", $("#psoView").textContent.includes("; Pipeline state (graphics)"));
-  [...$("#railTree").querySelectorAll(".fitem")].find(f => f.dataset.name === "lighting.oiSR").click(); await sleep(150);
+  check("inspect: example oiSP has the file data print", $("#psoView").textContent.includes("; Pipeline state (graphics)"),
+    $("#psoView").textContent.replace(/\s+/g, " ").slice(0, 240));
+  [...$("#railTree").querySelectorAll(".fitem")].find(f => f.dataset.name === "lighting.oiSR").click();
+  await until("the example oiSR to open", () => /lighting\.oiSR/.test($("#symView").textContent));
   check("inspect: example oiSR opens in Symbols", $("#symView").textContent.includes("Register") && $("#symView").textContent.includes("lighting.oiSR"));
   [...$("#railTree").querySelectorAll(".fitem")].find(f => f.dataset.name === "lighting.v1.oiSH").click(); await sleep(150);
   check("oish: A/B selects filled", $("#diffA").options.length >= 2 && $("#diffB").value === "lighting.v2.oiSH");
@@ -394,24 +561,33 @@ function check(name, cond, extra) {
   $("#combineBtn").click(); await sleep(200);
   check("combine: same-hash combine succeeds", $("#railTree").textContent.includes("lighting.v1+lighting.v1"), $("#railTree").textContent);
 
-  /* inspect an oiSR and an oiSP (mock parse from bytes with the right magic) */
+  /* An upload is a stranger's bytes: the magic alone is not a document, and the reader says so rather
+   * than producing something shaped like one. Reading a REAL oiSR/oiSP back is dev/wasm_smoke.js's
+   * round trip; what matters here is that the page surfaces the refusal instead of a fabrication. */
+  const refused = async (what, call) => {
+    let err = null;
+    try { await call(); } catch (e) { err = e.message; }
+    check(`${what}: bytes that aren't one are refused`, !!err, err || "(resolved)");
+  };
   const srBytes = new Uint8Array(64); [0x6F, 0x69, 0x53, 0x52].forEach((b, i) => srBytes[i] = b);
-  window.OxAPI.parseOiSR("uploaded.oiSR", srBytes).then(d => { window.__sr = d; });
-  await sleep(50);
-  check("oisr: parse yields a symbol document", window.__sr && window.__sr.nodes.length > 3 && window.__sr.header.version === "1.1");
+  await refused("oisr", () => window.OxAPI.parseOiSR("uploaded.oiSR", srBytes));
   const spBytes = new Uint8Array(64); [0x6F, 0x69, 0x53, 0x50].forEach((b, i) => spBytes[i] = b);
-  window.OxAPI.parseOiSP("uploaded.oiSP", spBytes).then(d => { window.__sp = d; });
-  await sleep(50);
-  check("oisp: parse yields a pipeline document", window.__sp && window.__sp.header.counts.pipelines === 1);
+  await refused("oisp", () => window.OxAPI.parseOiSP("uploaded.oiSP", spBytes));
   check("oish: derived pipeline + ISA for the inspected oiSH", $("#psoView").textContent.includes("Pipeline state (compute)") && $("#isaView").textContent.includes("Disassemble"));
 
   /* ---- SPV/DXIL mode: a bare binary is a document ---- */
   $("#mBins").checked = true;
   $("#mBins").dispatchEvent(new window.Event("change"));
-  await sleep(400);
+
+  /* Two waits, not one: the seeding may already be done from the mode before (so its spinner never
+   * shows), and entering this mode still has to reflect every binary before the strip has one. */
+  await seeded();
+  await until("the standalone binary to open", () => /\.spv/.test($("#binPane").textContent));
   check("bins: tabs stay, reflection of the bare binary", !$("#outTabs").classList.contains("d-none") && $("#reflView").textContent.includes("standalone binary") && $("#reflView").innerHTML.includes("register("), $("#reflView").textContent.slice(0, 120));
   check("bins: no identifier until assembled", $("#reflView").textContent.includes("no identifier"));
-  check("bins: strip shows the binary + assemble toggle", $("#binPane").textContent.includes("post.ps.spv") && $("#asmToggle") != null, $("#binPane").textContent.slice(0, 80));
+  check("bins: strip names the open binary and offers the assemble card",
+    /\.spv · SPIR-V · [\d.]+ KiB/.test($("#binPane").textContent) && $("#asmToggle") != null,
+    $("#binPane").textContent.replace(/\s+/g, " ").slice(0, 100));
   check("bins: disassembly view filled", $("#spvAsm").textContent.includes("OpEntryPoint"), $("#spvAsm").textContent.slice(0, 60));
   check("bins: oiSH tab offers assemble into oiSH", $("#oishView").textContent.includes("Assemble into oiSH") && $("#asmOishGo") != null);
   /* A pipeline is derived from an oiSH, and a standalone binary has none until the oiSH tab assembles
@@ -422,19 +598,26 @@ function check(name, cond, extra) {
   check("bins: diff selects list the binaries", $("#diffA2").options.length >= 2);
   $("#isaAsic").value = "gfx1100"; $("#isaAsic").dispatchEvent(new window.Event("change")); await sleep(50);
   $("#isaRun").click(); await sleep(600);
-  check("bins: offline ISA on the bare .spv", $("#isaView").textContent.includes("s_endpgm"), $("#isaView").textContent.slice(0, 120));
+  check("bins: a bare .spv gets the same ISA refusal, not an invented listing",
+    /no target available|no offline path/.test($("#isaView").textContent) && !$("#isaView").textContent.includes("s_endpgm"),
+    $("#isaView").textContent.slice(0, 120));
   $("#sbEntries").click(); await sleep(80);
   check("bins: entrypoint list rendered", $("#sbMeta").textContent.includes("entrypoints"));
   $("#asmToggle").click(); $("#asmGo").click(); await sleep(300);
   check("bins: assembled text becomes a loaded binary", $("#railTree").textContent.includes("assembled."), $("#railTree").textContent);
 
   /* assemble into oiSH: the binary gets an identifier and lands in Inspect mode as a real oiSH */
-  [...$("#railTree").querySelectorAll(".fitem")].find(f => f.dataset.name === "post.ps.spv").click(); await sleep(300);
+  const spvItem = [...$("#railTree").querySelectorAll(".fitem")].find(f => /\.spv$/.test(f.dataset.name || ""));
+  const spvName = spvItem && spvItem.dataset.name;
+  spvItem.click(); await sleep(300);
   $("#asmModel").value = "6.8";
   $("#asmOishGo").click(); await sleep(600);
-  check("assemble: lands in Inspect mode as an oiSH", $("#mOish").checked && $("#railTree").textContent.includes("post.ps.oiSH"),
+  check("assemble: lands in Inspect mode as an oiSH",
+    $("#mOish").checked && $("#railTree").textContent.includes(spvName.replace(/\.spv$/, ".oiSH")),
     `mode=${$("#mOish").checked} rail=${$("#railTree").textContent.replace(/\s+/g, " ").slice(0, 200)} toast=${(window.document.body.textContent.match(/Assembled:[^.]*/) || ["none"])[0]}`);
-  check("assemble: document says where it came from + has an identifier", $("#reflView").textContent.includes("assembled from post.ps.spv") && $("#reflView").textContent.includes("SM 6.8"), $("#reflView").textContent.slice(0, 200));
+  check("assemble: document says where it came from + has an identifier",
+    $("#reflView").textContent.includes("assembled from " + spvName) && $("#reflView").textContent.includes("SM 6.8"),
+    $("#reflView").textContent.slice(0, 200));
 
   /* raw DXC from the Command tab: the derived line runs as is, output is a standalone binary.
    * broken.hlsl was the last file compiled, so switch to one that compiles (a failing line stays in SPV/DXIL-less
@@ -460,12 +643,12 @@ function check(name, cond, extra) {
   $("#mCompile").dispatchEvent(new window.Event("change"));
   await sleep(200);
   [...$("#railTree").querySelectorAll(".fitem")].find(f => f.dataset.name === "lighting.hlsl").click();
-  $("#compileBtn").click(); await sleep(900);
+  $("#compileBtn").click(); await awaitCompile();
   const dxRow = [...$("#binSel").options].findIndex((o, i) => window.OxUtil && o.textContent.toLowerCase().includes("dxil"));
   if (dxRow >= 0) {
     $("#binSel").value = String(dxRow);
     $("#binSel").dispatchEvent(new window.Event("change")); await sleep(200);
-    $("#compileBtn").click(); await sleep(900);
+    $("#compileBtn").click(); await awaitCompile();
     check("bins: a recompile keeps the DXIL row selected",
       $("#binSel").options[+$("#binSel").value].textContent.toLowerCase().includes("dxil"),
       $("#binSel").options[+$("#binSel").value].textContent);
@@ -579,8 +762,10 @@ function check(name, cond, extra) {
   /* ---- project upload / drop ---------------------------------------------------------------- */
 
   {
-    const dropped = new window.File(['#include "@types.hlsli"\nF32 half(F32 v) { return v * 0.5; }\n'],
-      "dropped.hlsl", { type: "text/plain" });
+    /* The page reads name + arrayBuffer() off a dropped file; jsdom's File carries no arrayBuffer,
+     * so the fixture is the shape the page consumes rather than a real File. */
+    const droppedSrc = '#include "@types.hlsli"\nF32 half(F32 v) { return v * 0.5; }\n';
+    const dropped = { name: "dropped.hlsl", arrayBuffer: async () => new TextEncoder().encode(droppedSrc).buffer };
     const ev = new window.Event("drop", { bubbles: true });
     Object.defineProperty(ev, "dataTransfer", { value: { files: [dropped] } });
     document.querySelector("#editorPane").dispatchEvent(ev);

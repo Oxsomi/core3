@@ -102,6 +102,9 @@
         <i class="bi bi-diagram-3"></i> all entrypoints · includes from tree</span>
       <button id="compileBtn" class="btn btn-sm btn-primary ms-auto">
         <span id="spin" class="spinner-border spinner-border-sm d-none"></span><i class="bi bi-play-fill"></i> Compile project</button>
+      <span id="staleMark" class="small text-warning d-none"
+        title="The picked IntelliSense permutation isn't among the last compile's binaries: the source changed since. Recompile to let the SPIR-V / DXIL views follow it.">
+        <i class="bi bi-exclamation-triangle"></i> not in last compile</span>
     </div>
 
     <!-- OISH-mode controls -->
@@ -172,10 +175,15 @@ saved in this browser. Share links open as their own workspace."
       <span id="roBadge" class="badge text-bg-secondary ms-2 ro-badge d-none flex-shrink-0"><i class="bi bi-lock"></i> builtin · read-only</span>
       <span class="ms-auto d-flex align-items-center gap-2 flex-shrink-0 ps-2 small">
         <span class="text-body-secondary"
-          title="Which permutation IntelliSense parses as (hover, squiggles, the Symbols tree). The default enables every extension with no defines, so nothing errors; following one of the compile's binaries uses ITS defines, uniforms and extensions, so half, PAQ and preprocessor branches mean what they mean in that binary.">
+          title="Which permutation IntelliSense parses as (hover, squiggles, the Symbols tree). The default enables every extension with no defines, so nothing errors; following a permutation uses ITS defines, uniforms and extensions, so half, PAQ and preprocessor branches mean what they mean there. The list comes from parsing the source as you edit, no compile needed, and picking one also drives the SPIR-V / DXIL views to that binary once a compile has it.">
           <i class="bi bi-eye"></i></span>
         <select id="reflectFollow" class="form-select form-select-sm w-auto" style="max-width:340px">
           <option value="">IntelliSense: all extensions, no defines</option>
+        </select>
+        <select id="reflectBackend" class="form-select form-select-sm w-auto"
+          title="Which backend's view IntelliSense reflects: the SPIR-V view defines __spirv__ and declares vk::, the DXIL view leaves them out. Display only; it doesn't change what compiles.">
+          <option value="dxil">DXIL view</option>
+          <option value="spirv">SPIR-V view</option>
         </select>
         <span class="text-body-secondary">HLSL</span>
       </span>
@@ -387,6 +395,7 @@ saved in this browser. Share links open as their own workspace."
 <script src="js/workspace.js"></script>
 <script src="js/theme.js"></script>
 <script src="js/mock_data.js"></script>
+<script src="js/intrinsics_data.js"></script>
 <script src="js/mock.js"></script>
 <script src="js/mock_formats.js"></script>
 <script src="js/wasm.js"></script>

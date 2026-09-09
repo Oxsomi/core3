@@ -139,7 +139,6 @@ U32 getWriteSwapchain(U32 offset) { return offset & 1 ? _swapchains[offset >> 1]
 #define rwTexture2Di(i) _rwTextures2Di[NonUniformResourceIndex(i & ResourceId_mask)]
 #define rwTexture2Du(i) _rwTextures2Du[NonUniformResourceIndex(i & ResourceId_mask)]
 
-//Split out of this header once it got too broad to read; included here so @resources.hlsli stays
-//the one include a shader needs. It is self sufficient if you'd rather include it directly.
-
-#include "@buffer.hlsli"
+//The buffer access helpers (bufferBytes, getAtUniform and friends) live in @buffer.hlsli, which
+//includes this header; include it directly where they are used. This header does not include it
+//back, so the two are not mutually recursive and either one can be compiled on its own.

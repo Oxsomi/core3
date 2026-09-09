@@ -880,11 +880,21 @@ SHADER_COMPILER_DEPS = ( "packages/dxc", "packages/spirv_reflect" )
 def shaderCompilerDepMode(mode, debugShaderCompiler):
 	return mode if debugShaderCompiler else "Release"
 
-def shaderCompilerDepArgs(debugShaderCompiler):
-	"""Per-package settings so a Debug consumer still resolves the Release dxc/spirv_reflect packages."""
+def shaderCompilerDepArgs(debugShaderCompiler, msvcRuntime=None):
+	"""Per-package settings so a Debug consumer still resolves the Release dxc/spirv_reflect packages.
+
+	msvcRuntime says whether to pin compiler.runtime_type as well, and defaults to building-on-Windows,
+	which is right for the desktop build where the host profile is the MSVC family. A cross build (web)
+	passes False: its host compiler carries no runtime_type, so grafting one onto the consumer's graph
+	forks the dependency's package_id away from what the create step produced, and conan rebuilds the
+	package inside the graph without the tablegen conf the create carries.
+	"""
 
 	if debugShaderCompiler:
 		return ""
+
+	if msvcRuntime is None:
+		msvcRuntime = hostSystem() == "Windows"
 
 	args = []
 
@@ -896,7 +906,7 @@ def shaderCompilerDepArgs(debugShaderCompiler):
 		# Pinning it is safe rather than an ABI mismatch because CMakeLists.txt sets CMAKE_MSVC_RUNTIME_LIBRARY to the static
 		# release CRT for every config anyway.
 
-		if hostSystem() == "Windows":
+		if msvcRuntime:
 			args.append(f"-s {package}/*:compiler.runtime_type=Release")
 
 	return " ".join(args)

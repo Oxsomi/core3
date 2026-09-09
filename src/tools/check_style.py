@@ -76,6 +76,8 @@ from __future__ import annotations        # PEP 585/604 style hints must not be 
 import os
 import re
 import sys
+import json
+import hashlib
 import argparse
 from collections import defaultdict
 
@@ -112,7 +114,7 @@ def prune_dirs(dirpath: str, dirs: list) -> None:
 
     dirs[:] = [
         d for d in dirs
-        if not d.startswith('.') and d not in ('build', 'VULKAN_SDK', '__pycache__')
+        if not d.startswith('.') and d not in ('build', 'VULKAN_SDK', '__pycache__', 'node_modules')
         and not os.path.exists(os.path.join(dirpath, d, '.git'))
     ]
 
@@ -950,6 +952,67 @@ def check_embedded_shader_headers(root: str) -> int:
 # Directory scanner
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Per-file result cache
+#
+# The cache lives in the build tree rather than beside the sources: it is derived, that directory is
+# already ignored, and prune_dirs never walks into it. An entry is only valid for the rules AND the
+# limits it was produced under, so a run at a different --max-line-length starts from nothing rather
+# than reporting a pass that was measured against another column count.
+# ---------------------------------------------------------------------------
+
+CACHE_VERSION = 1
+
+
+def _cache_path(root: str) -> str:
+    return os.path.join(root, "build", ".check_style_cache.json")
+
+
+def _checker_fingerprint() -> str:
+    """This file's own bytes: a changed rule has to re-check everything it used to pass."""
+
+    try:
+        with open(os.path.abspath(__file__), "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return ""
+
+
+def _load_cache(root: str, limits: list) -> dict:
+
+    try:
+        with open(_cache_path(root), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+    if (
+        data.get("version") != CACHE_VERSION
+        or data.get("checker") != _checker_fingerprint()
+        or data.get("limits") != limits
+    ):
+        return {}
+
+    return data.get("files", {})
+
+
+def _save_cache(root: str, files: dict, limits: list) -> None:
+
+    path = _cache_path(root)
+
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({
+                "version": CACHE_VERSION,
+                "checker": _checker_fingerprint(),
+                "limits": limits,
+                "files": files
+            }, f)
+    except OSError:
+        pass                             # a read-only or absent build tree just means no caching
+
+
 def scan(
     root: str,
     max_line_len: int,
@@ -990,6 +1053,17 @@ def scan(
         print()
 
     # ── Per-file checks ───────────────────────────────────────────────────
+    #
+    # The build runs this on every compile, of every configuration, so the work that matters is the
+    # SECOND run: a file nobody touched is checked again for nothing. A file that passed is remembered
+    # by size and mtime and skipped while both hold, along with the TODO lines it contributed so the
+    # report stays whole. A file that failed is never remembered, so it keeps reporting until it is
+    # fixed, and a rule or limit change invalidates the lot through the cache's own key.
+
+    limits  = [max_line_len, max_warn]
+    cache   = _load_cache(root, limits)
+    fresh   = {}
+    checked = 0
     for path in sorted(all_files):
         fname_lower     = os.path.basename(path).lower()
         ext             = os.path.splitext(path)[1].lower()
@@ -998,9 +1072,31 @@ def scan(
         is_inc_fragment = any(fname_lower.endswith(m) for m in INC_FRAGMENT_MARKERS)
         is_header       = (ext in HEADER_EXTENSIONS) and not is_inc_fragment
         rel             = _norm(os.path.relpath(path, root))
+
+        try:
+            st    = os.stat(path)
+            stamp = [int(st.st_mtime_ns), st.st_size]
+        except OSError:
+            stamp = None
+
+        hit = cache.get(rel) if stamp else None
+
+        # A run that skipped the report never learned this file's todo lines, so its entry carries null
+        # there and a reporting run has to read the file again. Everything else is a hit.
+
+        if hit and hit[0] == stamp and not (collect_todos and hit[1] is None):
+            fresh[rel] = hit
+            for lineno, tag, text in (hit[1] or []):
+                all_todos.append((rel, lineno, tag, text))
+            continue
+
+        checked += 1
         viols, todos = check_file(
             path, rel, max_line_len, max_warn, is_header, collect_todos
         )
+
+        if not viols and stamp is not None:
+            fresh[rel] = [stamp, [list(t) for t in todos] if collect_todos else None]
         if viols:
             bad_files += 1
             print(f"FAIL  {rel}")
@@ -1020,6 +1116,14 @@ def scan(
                 cur_file = rel
             print(f"    line {lineno:>5}  [{tag}]  {text}")
         print()
+
+    # Written by both modes, since the build is the --no-todo-report caller and is exactly the one that
+    # runs this over and over; entries it writes say "todos unknown" so a reporting run re-reads those.
+
+    _save_cache(root, fresh, limits)
+
+    if checked != len(all_files):
+        print(f"  (checked {checked} of {len(all_files)} files; the rest were unchanged)", flush=True)
 
     return bad_files
 

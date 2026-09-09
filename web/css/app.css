@@ -188,29 +188,30 @@ textarea.dxc-line{ font-family:var(--ox-mono); font-size:12.5px; white-space:pre
 #binPane textarea{ font-family:var(--ox-mono); font-size:12.5px; }
 #isaAsic option:disabled{ color:var(--bs-secondary-color); }
 
-/* Syntax highlighting for the disassembly and pipeline text views (OxUtil.highlightAsm /
-   highlightPipeline). Tuned against the same palette the chips use, so a provenance word reads the
-   same in the print as it does in the table. */
-.asm .hl-cmt   { color: var(--bs-secondary-color); font-style: italic; }
-.asm .hl-str   { color: #b5cea8; }
-.asm .hl-id    { color: #9cdcfe; }
-.asm .hl-op    { color: #c586c0; font-weight: 600; }
-.asm .hl-kw    { color: #569cd6; font-weight: 600; }
-.asm .hl-num   { color: #b5cea8; }
-.asm .hl-head  { color: var(--bs-emphasis-color); font-weight: 600; }
-.asm .hl-note  { color: #d7ba7d; }
-.asm .hl-field { color: #9cdcfe; }
+/* Syntax highlighting for the disassembly and pipeline text views and for the hover card's
+   signature (OxUtil.highlightAsm / highlightPipeline / highlightSignature). Tuned against the same
+   palette the chips use, so a provenance word reads the same in the print as it does in the table,
+   and a type reads the same in a hover as in the disassembly under it. */
+:is(.asm, .ox-hover) .hl-cmt   { color: var(--bs-secondary-color); font-style: italic; }
+:is(.asm, .ox-hover) .hl-str   { color: #b5cea8; }
+:is(.asm, .ox-hover) .hl-id    { color: #9cdcfe; }
+:is(.asm, .ox-hover) .hl-op    { color: #c586c0; font-weight: 600; }
+:is(.asm, .ox-hover) .hl-kw    { color: #569cd6; font-weight: 600; }
+:is(.asm, .ox-hover) .hl-num   { color: #b5cea8; }
+:is(.asm, .ox-hover) .hl-head  { color: var(--bs-emphasis-color); font-weight: 600; }
+:is(.asm, .ox-hover) .hl-note  { color: #d7ba7d; }
+:is(.asm, .ox-hover) .hl-field { color: #9cdcfe; }
 .asm .prov-derived  { color: #6a9955; font-weight: 600; }
 .asm .prov-supplied { color: #4fc1ff; font-weight: 600; }
 .asm .prov-assumed  { color: #ce9178; font-weight: 600; }
 
-[data-bs-theme="light"] .asm .hl-str,
-[data-bs-theme="light"] .asm .hl-num   { color: #0a7d3f; }
-[data-bs-theme="light"] .asm .hl-id,
-[data-bs-theme="light"] .asm .hl-field { color: #0b6a9e; }
-[data-bs-theme="light"] .asm .hl-op    { color: #8b2fa0; }
-[data-bs-theme="light"] .asm .hl-kw    { color: #0b5cad; }
-[data-bs-theme="light"] .asm .hl-note  { color: #8a6d1a; }
+[data-bs-theme="light"] :is(.asm, .ox-hover) .hl-str,
+[data-bs-theme="light"] :is(.asm, .ox-hover) .hl-num   { color: #0a7d3f; }
+[data-bs-theme="light"] :is(.asm, .ox-hover) .hl-id,
+[data-bs-theme="light"] :is(.asm, .ox-hover) .hl-field { color: #0b6a9e; }
+[data-bs-theme="light"] :is(.asm, .ox-hover) .hl-op    { color: #8b2fa0; }
+[data-bs-theme="light"] :is(.asm, .ox-hover) .hl-kw    { color: #0b5cad; }
+[data-bs-theme="light"] :is(.asm, .ox-hover) .hl-note  { color: #8a6d1a; }
 [data-bs-theme="light"] .asm .prov-derived  { color: #1a6b2f; }
 [data-bs-theme="light"] .asm .prov-supplied { color: #0b6a9e; }
 [data-bs-theme="light"] .asm .prov-assumed  { color: #a4531f; }
@@ -236,18 +237,34 @@ table.ox td:has(> .chip) { width: 1%; white-space: nowrap; }
 .asm-hint{ position:sticky; top:0; }
 
 /* ---- hover card (intellisense.js) ---- */
-.ox-hover{ position:fixed; z-index:4000; display:none; max-width:460px; padding:6px 10px; border-radius:6px;
-  background:var(--bs-body-bg); border:1px solid var(--bs-border-color); box-shadow:0 4px 14px rgba(0,0,0,.25);
+/* The hover card. A signature, optional prose under a hairline, then the kind, where it is declared
+   and what ctrl+click would do, as chips rather than one grey sentence. */
+.ox-hover{ position:fixed; z-index:4000; display:none; max-width:520px; padding:8px 11px 7px; border-radius:8px;
+  background:var(--bs-body-bg); border:1px solid var(--bs-border-color);
+  box-shadow:0 6px 20px rgba(0,0,0,.28), 0 1px 3px rgba(0,0,0,.2);
   font-size:12.5px; pointer-events:none; }
-.ox-hover-title{ font-family:var(--ox-mono); }
-.ox-hover-loc{ color:var(--bs-secondary-color); font-size:11.5px; }
+.ox-hover-title{ font-family:var(--ox-mono); font-size:13px; color:var(--bs-emphasis-color);
+  white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.45; }
+.ox-hover-doc{ color:var(--bs-secondary-color); white-space:pre-wrap; max-width:64ch; line-height:1.5;
+  margin-top:6px; padding-top:6px; border-top:1px solid var(--bs-border-color); }
+.ox-hover-meta{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 6px; margin-top:7px; font-size:11px; }
+.ox-hover-kind{ font-weight:600; padding:1px 7px; border-radius:5px; color:var(--bs-emphasis-color);
+  background:color-mix(in srgb, var(--ox-accent) 16%, transparent); }
+.ox-hover-note{ color:var(--bs-secondary-color); padding:1px 6px; border-radius:5px;
+  background:var(--bs-secondary-bg); }
+.ox-hover-loc{ color:var(--bs-secondary-color); font-family:var(--ox-mono); }
+.ox-hover-hint{ margin-left:auto; color:var(--bs-secondary-color); opacity:.75; white-space:nowrap; }
+.ox-hover .hl-fn{ color:#dcdcaa; }
+.ox-hover .hl-type{ color:#4ec9b0; }
+.ox-hover .hl-punc{ color:var(--bs-secondary-color); }
+[data-bs-theme="light"] .ox-hover .hl-fn{ color:#7a5c00; }
+[data-bs-theme="light"] .ox-hover .hl-type{ color:#0f766e; }
 .CodeMirror-hints{ z-index:4000; font-size:12.5px; font-family:var(--ox-mono); }
 
 /* editor tabs */
 .etabs{ display:flex; align-items:flex-end; gap:2px; overflow-x:auto; scrollbar-width:thin; flex:1; min-width:0; }
 .etab .bi-pin-fill{ font-size:10px; color:var(--ox-accent); }
 .etab-dot{ font-size:8px; color:var(--ox-accent); line-height:1; }
-.ox-hover-doc{ color:var(--bs-secondary-color); white-space:pre-wrap; margin:4px 0 2px; max-width:60ch; }
 .asm-line.asm-sel{ background:color-mix(in srgb, var(--ox-accent) 14%, transparent); box-shadow:inset 3px 0 0 var(--ox-accent); }
 .etab{
   display:inline-flex; align-items:center; gap:5px; padding:2px 4px 2px 10px; font-size:12px; cursor:pointer;

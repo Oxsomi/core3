@@ -781,15 +781,217 @@ clean:
 	return s_uccess ? frame : Wasm_errorFrameFromError(&err, "oxc3_uniqueEntrypoints() failed");
 }
 
+//One parse combination, spelled with SHFile_jsonBinary's field names and vocabularies, so the page can
+// match a combination against a compiled document's binaries without a second dialect.
+
+static Bool Wasm_jsonParseCombination(
+	const SHEntryRuntime *runtime, U16 combinationId, JsonWriter *w, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	CharString typeName = CharString_createNull();
+	CharString value = CharString_createNull();
+
+	SHBinaryIdentifier identifier = (SHBinaryIdentifier) { 0 };     //Refs into the runtime, nothing to free
+	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtime, combinationId, &identifier, e_rr));
+
+	//A graphics or compute [shader] entry always links, and the link stores the binary specialized to
+	//its entrypoint and concrete stage (Compiler_compileLinkJob); only ray tracing entries stay libs.
+	//The listing mirrors that, or none of these combinations would pair with what a compile stores.
+
+	if (runtime->isShaderAnnotation && SHEntryRuntime_containsGfxOrComp(*runtime)) {
+		identifier.entrypoint = CharString_createRefStrConst(runtime->entry.name);
+		identifier.stageType = runtime->entry.stage;
+	}
+
+	Bool lib = !CharString_length(identifier.entrypoint);
+
+	gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
+	gotoIfError3(clean, JsonWriter_key(w, "entrypoint", e_rr));
+
+	if(lib) {
+		gotoIfError3(clean, JsonWriter_null(w, e_rr));
+	}
+
+	else gotoIfError3(clean, JsonWriter_str(w, identifier.entrypoint, e_rr));
+
+	gotoIfError3(clean, JsonWriter_keyCstr(w, "stage", lib ? "lib" : SHEntry_stageNames[identifier.stageType], e_rr));
+	gotoIfError3(clean, JsonWriter_keyBool(w, "lib", lib, e_rr));
+
+	gotoIfError3(clean, JsonWriter_key(w, "model", e_rr));
+	gotoIfError3(clean, JsonWriter_fmt(
+		w, e_rr, "\"%"PRIu8".%"PRIu8"\"", (U8)(identifier.shaderVersion >> 8), (U8) identifier.shaderVersion
+	));
+
+	gotoIfError3(clean, JsonWriter_keyArray(w, "extensions", e_rr));
+
+	for(U64 i = 0; i < ESHExtension_Count; ++i)
+		if ((identifier.extensions >> i) & 1) {
+			gotoIfError3(clean, JsonWriter_cstr(w, ESHExtension_names[i], e_rr));
+		}
+
+	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+
+	gotoIfError3(clean, JsonWriter_keyArray(w, "defines", e_rr));
+
+	for (U64 i = 0; i < identifier.defines.length / 2; ++i)
+		gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyStr(w, "name", identifier.defines.ptr[i << 1], e_rr) &&
+			JsonWriter_keyStr(w, "value", identifier.defines.ptr[(i << 1) | 1], e_rr) &&
+			JsonWriter_endObject(w, e_rr)
+		));
+
+	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+
+	gotoIfError3(clean, JsonWriter_keyArray(w, "uniforms", e_rr));
+
+	for (U64 i = 0; i < identifier.uniforms.length; ++i) {
+
+		SHUniformRuntime uniform = identifier.uniforms.ptr[i];
+		TypeId typeId = ETypeId_arr[uniform.typeIdShort];
+
+		CharString_free(&typeName, alloc);
+		CharString_free(&value, alloc);
+
+		if(!CharString_createFromETypeId(typeId, alloc, &typeName, NULL))
+			typeName = CharString_createRefCStrConst("unknown");
+
+		SHValue uniformValue = (SHValue) { 0 };
+		Buffer_memcpy(
+			Buffer_createRef(&uniformValue, sizeof(uniformValue)),
+			Buffer_createRefConst(identifier.uniformData.ptr + uniform.dataOffset, ETypeId_getBytes(typeId))
+		);
+
+		if(!SHValue_stringify(&uniformValue, typeId, alloc, &value, NULL))
+			value = CharString_createRefCStrConst("unknown");
+
+		gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyStr(w, "type", typeName, e_rr) &&
+			JsonWriter_keyStr(w, "name", uniform.name, e_rr) &&
+			JsonWriter_keyStr(w, "value", value, e_rr) &&
+			JsonWriter_endObject(w, e_rr)
+		));
+	}
+
+	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
+
+clean:
+	CharString_free(&typeName, alloc);
+	CharString_free(&value, alloc);
+	return s_uccess;
+}
+
+//Compiler_parse: the annotated entrypoints of a source and every permutation each one expands into,
+// without compiling any of them. This is what fills the page's "IntelliSense follows" picker while the
+// file is being edited, so it has to stay a parse: one reflection pass, no DXC codegen.
+//A source that doesn't parse answers entries: null (plus the parser's own messages), so the page keeps
+// the previous listing instead of flashing empty on a half-typed line.
+
+EMSCRIPTEN_KEEPALIVE void *oxc3_parseEntrypoints(const C8 *name, const C8 *source) {
+
+	const Allocator *alloc = Wasm_allocator();
+
+	if(!alloc || !wasmHasCompiler)
+		return Wasm_errorFrame("oxc3_parseEntrypoints() the module isn't initialized");
+
+	Error err = Error_none(), *e_rr = &err;
+	Bool s_uccess = true;
+
+	CompileResult result = (CompileResult) { 0 };
+	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
+	void *frame = NULL;
+
+	CharString nameStr = Wasm_string(name);
+
+	if(!CharString_length(nameStr))
+		retError(clean, Error_invalidParameter(0, 0, "oxc3_parseEntrypoints()::name is required"));
+
+	CompilerSettings settings = (CompilerSettings) {
+		.string = Wasm_string(source),
+		.path = nameStr,
+		.format = ECompilerFormat_HLSL,
+		.outputType = EGfxBinaryType_SPIRV      //Ignored by parse; it reflects stage and backend agnostic
+	};
+
+	gotoIfError3(clean, Compiler_parse(&wasmCompiler, &settings, alloc, &result, e_rr));
+
+	gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
+
+	if (!result.isSuccess || result.type != ECompileResultType_SHEntryRuntime) {
+
+		gotoIfError3(clean, JsonWriter_keyNull(w, "entries", e_rr));
+		gotoIfError3(clean, JsonWriter_keyArray(w, "errors", e_rr));
+
+		for (U64 i = 0; i < result.compileErrors.length; ++i)
+			gotoIfError3(clean, JsonWriter_str(w, result.compileErrors.ptr[i].error, e_rr));
+
+		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+	}
+
+	else {
+
+		gotoIfError3(clean, JsonWriter_keyArray(w, "entries", e_rr));
+
+		for (U64 i = 0; i < result.shEntriesRuntime.length; ++i) {
+
+			const SHEntryRuntime *runtime = &result.shEntriesRuntime.ptr[i];
+
+			gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
+			gotoIfError3(clean, JsonWriter_keyStr(w, "name", runtime->entry.name, e_rr));
+			gotoIfError3(clean, JsonWriter_keyCstr(w, "stage", runtime->entry.stage < EGfxPipelineStage_Count ?
+				SHEntry_stageNames[runtime->entry.stage] : "unknown", e_rr));
+
+			//lib says what the STORED binaries are, matching entries[].lib in a compiled document: a
+			//graphics or compute [shader] entry links into specialized binaries, so it is not one.
+
+			gotoIfError3(clean, JsonWriter_keyBool(
+				w, "lib", runtime->isShaderAnnotation && !SHEntryRuntime_containsGfxOrComp(*runtime), e_rr
+			));
+
+			//A combination id is a U16 by contract, so the space is capped rather than wrapped; a file
+			// anywhere near the cap is degenerate, not a workflow.
+
+			U32 combinations = SHEntryRuntime_getCombinations(runtime);
+
+			if (combinations > U16_MAX)
+				combinations = U16_MAX;
+
+			gotoIfError3(clean, JsonWriter_keyArray(w, "combinations", e_rr));
+
+			for (U32 j = 0; j < combinations; ++j)
+				gotoIfError3(clean, Wasm_jsonParseCombination(runtime, (U16) j, w, alloc, e_rr));
+
+			gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+			gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
+		}
+
+		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+	}
+
+	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
+	frame = Wasm_frame(&json, NULL);
+
+clean:
+	CompileResult_free(&result, alloc);
+	CharString_free(&json, alloc);
+	return s_uccess ? frame : Wasm_errorFrameFromError(&err, "oxc3_parseEntrypoints() failed");
+}
+
 //OxC3 shader reflect-symbols: the frontend symbol AST of the source, as an oiSR.
 //This runs on source rather than on a compile, so it follows the editor instead of the compile button.
 
 //disabledExt masks extensions out of the parse (0 = the everything-enabled default) and defines carries
 //the followed binary's uniforms as newline separated NAME=VALUE lines; together they are the page's
-//"IntelliSense follows this binary" picker.
+//"IntelliSense follows this binary" picker. backend (EGfxBinaryType) picks which leg's view of the
+//source is reflected: SPIRV adds -spirv, so __spirv__ and the vk:: namespace mean what they mean there.
 
 EMSCRIPTEN_KEEPALIVE void *oxc3_reflectSymbols(
-	const C8 *name, const C8 *source, U32 allowErrors, U32 disabledExt, const C8 *defines
+	const C8 *name, const C8 *source, U32 allowErrors, U32 disabledExt, const C8 *defines, U32 backend
 ) {
 
 	const Allocator *alloc = Wasm_allocator();
@@ -842,11 +1044,14 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_reflectSymbols(
 	//The page reflects on every edit, so it asks for what parsed rather than for nothing: an outline that
 	//vanishes on a half-typed line is worse than one that is briefly incomplete.
 
+	if(backend >= EGfxBinaryType_Count)
+		retError(clean, Error_invalidParameter(5, 0, "oxc3_reflectSymbols()::backend is spirv or dxil"));
+
 	CompilerSettings settings = (CompilerSettings) {
 		.string = Wasm_string(source),
 		.path = nameStr,
 		.format = ECompilerFormat_HLSL,
-		.outputType = EGfxBinaryType_SPIRV,
+		.outputType = (EGfxBinaryType) backend,
 		.reflectAllowErrors = allowErrors != 0,
 		.reflectDisabledExt = (ESHExtension) disabledExt,
 		.reflectDefines = definePairs

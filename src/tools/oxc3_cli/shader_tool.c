@@ -477,7 +477,7 @@
 			.string = CharString_createRefSizedConst((const C8*) buf.ptr, Buffer_length(buf), false),
 			.path = input,
 			.format = ECompilerFormat_HLSL,
-			.outputType = EGfxBinaryType_SPIRV,
+			.outputType = EGfxBinaryType_DXIL,        //Reflect the DXIL leg's view; SPIRV would add -spirv
 			.includeDirs = includeDirs
 		};
 

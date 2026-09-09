@@ -122,6 +122,7 @@ class IncludeHandler : public IDxcIncludeHandler {
 	ListU64 isPresent{};
 	const Allocator *alloc;
 	U64 counter{};            //Unique file counter in the current file
+	CharString mainFile{};    //Ref into the caller's settings->path, valid for the call reset() started
 
 public:
 
@@ -129,9 +130,10 @@ public:
 
 	//Useful so includes can be cached instead of re-fetched from file each time.
 	//This has to be called in between compiles to ensure the include handler knows it's the first time re-using.
-	inline void reset() {
+	inline void reset(CharString mainFilePath) {
 
 		counter = 0;
+		mainFile = mainFilePath;
 
 		for (U64 i = 0; i < includedFiles.length; ++i)
 			includedFiles.ptrNonConst[i].includeInfo.counter = 0;
@@ -239,6 +241,23 @@ public:
 
 				else CharString_free(&virtualized, alloc);
 			}
+		}
+
+		//The main file can itself be a builtin include (the web page opens one read-only and reflects it
+		// as the main file). An include chain that reaches back to it has to see it as already included,
+		// or every symbol in the main text doubles; DXC's own pragma once can't catch that, because it
+		// tracks the main file under its own name rather than the builtin's.
+
+		if (isBuiltin && CharString_equalsStringSensitive(&resolved, &mainFile)) {
+
+			hr = utils->CreateBlobFromPinned("", 0, DXC_CP_ACP, &encoding);
+
+			if (!hr) {
+				*ppIncludeSource = encoding;
+				encoding = NULL;
+			}
+
+			goto clean;
 		}
 
 		for (; i < includedFiles.length; ++i)
@@ -749,8 +768,8 @@ clean:
 
 //Helpers so other TUs can use the include handler without seeing the class definition.
 
-void Compiler_resetIncludeHandler(IncludeHandler *includeHandler) {
-	includeHandler->reset();
+void Compiler_resetIncludeHandler(IncludeHandler *includeHandler, CharString mainFile) {
+	includeHandler->reset(mainFile);
 }
 
 IDxcIncludeHandler *Compiler_getIncludeHandler(IncludeHandler *includeHandler) {

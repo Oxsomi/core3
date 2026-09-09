@@ -6,14 +6,16 @@ const { $ } = window.OxUtil;
 function mk(s) { const o = {}; s.split(" ").forEach(w => o[w] = true); return o; }
 
 /* One lexicon for the mode, the completions and anything else that needs to know what HLSL spells:
- * declared once here so the highlighter and IntelliSense can never disagree about what a keyword is. */
+ * declared once here so the highlighter and IntelliSense can never disagree about what a keyword is.
+ * The builtin intrinsics come off the compiler's own table (js/intrinsics_data.js, generated); the
+ * short list here is the fallback for a page loaded without it. */
 const LEX = {
   keywords: "if else for while do switch case default return break continue struct class interface cbuffer tbuffer register numthreads WaveSize void in out inout const static uniform typedef template groupshared precise sizeof namespace using nointerpolation linear centroid sample true false export",
   types: "void bool int uint float double int2 int3 int4 uint2 uint3 uint4 float2 float3 float4 float2x2 float3x3 float4x4 min16float half float16_t int16_t uint16_t int64_t uint64_t Texture1D Texture2D Texture3D TextureCube Texture2DMS Texture2DArray RWTexture1D RWTexture2D RWTexture3D Buffer RWBuffer ByteAddressBuffer RWByteAddressBuffer StructuredBuffer RWStructuredBuffer AppendStructuredBuffer ConsumeStructuredBuffer ConstantBuffer SamplerState SamplerComparisonState RaytracingAccelerationStructure BuiltInTriangleIntersectionAttributes RayDesc RayQuery",
   intrinsics: "mul dot cross normalize length lerp saturate clamp min max abs pow exp log sqrt sin cos tan floor ceil frac step smoothstep asfloat asuint asint reflect refract distance TraceRay TraceRayInline ReportHit CallShader DispatchRaysIndex DispatchRaysDimensions WorldRayOrigin WorldRayDirection RayTCurrent InterlockedAdd InterlockedCompareExchange GetDimensions SampleLevel Sample Load Store any all transpose ddx ddy",
   semantics: "SV_Position SV_Target SV_DispatchThreadID SV_GroupID SV_GroupThreadID SV_GroupIndex SV_VertexID SV_InstanceID SV_DomainLocation SV_TessFactor SV_InsideTessFactor SV_PrimitiveID COLOR NORMAL TEXCOORD0",
   oxcTypes: "F16 F32 F64 I8 I16 I32 I64 U8 U16 U32 U64 Bool F32x2 F32x3 F32x4 F32x4x4 U32x2 U32x3 U32x4 I32x2 I32x3 I32x4 F16x2 F16x4 U64x3",
-  annotations: "stage extension model vendor uniforms defines"
+  annotations: "stage extension model vendor uniforms defines binary"
 };
 
 /* A preprocessor line, tokenized whole so the mode sees it as meta rather than as an expression.
@@ -40,11 +42,18 @@ function preprocessorLine(stream, state) {
   return "meta";
 }
 
+/* Every intrinsic and method name the compiler's table declares highlights as a builtin; without the
+ * generated data the hand list above still covers the common ones. */
+const intrinsicNames = () => {
+  const d = window.OxIntrinsicsData;
+  return d ? [...Object.keys(d.fns), ...Object.keys(d.methods)].join(" ") : LEX.intrinsics;
+};
+
 CodeMirror.defineMIME("x-shader/x-hlsl", {
   name: "clike",
   keywords: mk(LEX.keywords),
   types: mk(LEX.types),
-  builtin: mk(LEX.semantics + " " + LEX.intrinsics),
+  builtin: mk(LEX.semantics + " " + intrinsicNames()),
   atoms: mk("true false"), blockKeywords: mk("case do else for if switch while struct"),
   defKeywords: mk("struct"), typeFirstDefinitions: true, indentSwitch: false,
   hooks: { "#": preprocessorLine }

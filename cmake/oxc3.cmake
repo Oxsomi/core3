@@ -600,12 +600,18 @@ macro(add_virtual_files)
 
 	# When adding from external package manager, it's already been installed
 
+	# The packager has to be a dependency of the step that RUNS it, not only of the target that consumes
+	# the archive: naming it on the consumer alone leaves the two siblings unordered, so a parallel build
+	# is free to run the packaging command before the tool is linked. That only shows on a clean tree,
+	# where the executable isn't there yet from an earlier build, and reads as "OxC3_package.exe is not
+	# recognized" (exit 9009) rather than as a missing dependency.
+
+	add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME})
+
 	if(_ARGS_FORCE_PACKAGER AND TARGET OxC3_package)
-		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3_package)
+		add_dependencies(${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3_package)
 	elseif(TARGET OxC3)
-		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3)
-	else()
-		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME})
+		add_dependencies(${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3)
 	endif()
 
 	get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)

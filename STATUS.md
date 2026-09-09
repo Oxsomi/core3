@@ -91,10 +91,10 @@ Last updated: 2026-09-06 (branch `web_frontend`, v3.2.105). Update this table in
 | Real compiler as wasm64 (worker-hosted on http, in-page on file://) | ✅ | Both flavors staged side by side (two file for hosting, embedded for file://); brotli precompress + serving in build_web.py |
 | Mock tier (page works with no module) | ✅ | Recordings regenerated from the real module (gen_mock_data) |
 | Compile / Inspect / SPV-DXIL modes, diffs, pipeline + ISA views | ✅ | Offline ISA needs process spawning: browser shows the refusal, native hosts will run it |
-| Editor: squiggles, hover, completion, go-to-def, source↔disasm mapping | 🟡 | Symbol-driven; HLSL builtin intrinsics have no signatures/docs yet |
-| "IntelliSense follows" a binary (defines/uniforms/extensions) | ✅ | Options appear after a compile; parse-only permutation listing wanted |
+| Editor: squiggles, hover, completion, go-to-def, source↔disasm mapping | ✅ | Symbol-driven; builtins hover too: intrinsics off the DXC table (gen_intrinsics), types/semantics/attributes, oxc annotations off the syntax panel; builtin includes reflect when opened |
+| "IntelliSense follows" a permutation (defines/uniforms/extensions) | ✅ | Fills from the parse-only listing while editing (`oxc3_parseEntrypoints`); a pick drives the SPIR-V/DXIL views, stale picks flag instead of mismatching |
 | Workspaces (share links open as their own; pin/evict) | ✅ | localStorage; the durable form is an .oiCA download |
-| Share links (gzip hash, view + line carried) + .oiCA snapshots | ✅ | Truncated links fail loudly |
+| Share links (gzip hash, view + line carried) + .oiCA snapshots | ✅ | Truncated links fail loudly; links and snapshots are size-capped against decompression floods |
 | Pipeline field editors (enum dropdowns, bit checkboxes) | ✅ | Vocabularies from the compiler's own name tables |
 | Mesh/task pipeline derivation | ✅ | Derives like vertex+pixel; live ISA route still refuses mesh |
 | Descriptor layouts (oiPL) in the pipeline view | ✅ | Read only: the embedded layout's rows, samplers and push constant, with each row's source; overrides are roadmap |
@@ -113,12 +113,11 @@ Near-term, in no particular order; an item leaves this list by landing WITH its 
   refuses instead of warning.
 - Descriptor layout overrides in the pipeline editor, with assumed fields filling from the shader's
   own root signature when it is the only one.
-- Parse-only permutation listing (`Compiler_parse` already yields SHEntryRuntime) so the web's
-  "IntelliSense follows" picker fills before any compile.
+- Parse-only permutation listing as a CLI verb; the page already gets it from the module's
+  `oxc3_parseEntrypoints` (Compiler_parse), so this is the CLI/`--json` half.
 - `SBFile_combine` mismatch errors should name the buffer and both sizes.
 
 **Editor intelligence**
-- HLSL builtin intrinsics with real signatures and short docs in hover/completion.
 - Longer term: signature help while typing, outline, rename/find-references, gated on a DXC
   IntelliSense seam.
 

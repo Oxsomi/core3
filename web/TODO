@@ -29,7 +29,9 @@ Next big thing
 
 - Live AMD ISA in the browser, through a spirv2isa Mesa fork compiled to wasm. This is the last
   greyed-out capability on the page: the ISA tab works on desktop through amdllpc + amdgpu-dis, and
-  in the browser it refuses because those cannot be spawned. Marked in STATUS.md as needing the fork.
+  in the browser it refuses because those cannot be spawned.
+  The bridge itself is done, so wiring it into the page is around a day; what it waits on is the
+  review of that bridge rather than the work. Wanted for the first pre-release.
 
 
 The VS Code host
@@ -114,15 +116,30 @@ out; they are under Editor intelligence and gated on the DXC IntelliSense seam e
 Editor intelligence
 -------------------
 
-- Let the IntelliSense binary dropdown drive the selected binary, so the SPIR-V and DXIL views follow
-  whichever permutation the editor is on. The catch is a recompile whose entrypoints no longer match
-  the previous one's; that case needs a stale marker near the compile button rather than a silent
-  mismatch.
-
-- HLSL builtin intrinsics in hover and completion, with real signatures and a short description.
-  Today hover resolves symbols the reflector emits, so a user's own declarations work and every
-  builtin (mul, saturate, InterlockedAdd) is silent, which reads as a gap rather than a boundary.
+- #define needs a real source instead of a scrape. macroIndex in intellisense.js reads the sources with
+  a regex and takes the FIRST definition of a name, which is wrong the moment a macro is conditional:
+  _vkBinding is defined twice in @resources.hlsli, once under #ifdef __spirv__ and once not, so hover
+  shows the SPIR-V spelling even under the DXIL view, and would show the same thing if the condition
+  were reversed. Every macro behind #ifdef has this.
+  Two ways to fix it, and only one of them is in the spirit of the rest:
+    Evaluating the conditionals in the page means writing a second preprocessor in JS, keeping track of
+    which names are defined (__spirv__, the __OXC_EXT_* set, the followed permutation's defines) and
+    getting #if arithmetic right. It would drift from DXC the way every hand-kept table here has.
+    Asking the compiler does not. DXC has already run the preprocessor by the time it reflects, so the
+    macro table that survived is sitting there: name, parameters, body, the file and line it was defined
+    at, and whether it came from a builtin include. Carried in the oiSR next to the symbol tree it comes
+    from, hover reads it the way it reads every other node, and the answer follows the backend view and
+    the followed permutation for free, because the reflect call already takes both.
+  That makes the oiSR the whole editor picture (symbols + macros) rather than symbols plus a guess, and
+  deletes the scraper. Wants an SRFile field, the reflector filling it, and the page reading it.
 - Doc comments: carry the comment above a declaration through the reflector into the hover card.
+  (Hover already reads the `//` block above a declaration out of the project and builtin sources;
+  the reflector route is what would cover sources the page doesn't hold.)
+- Member chains through an expression. `a.b.c` and hover on a member now resolve through the receiver
+  (oiSR links a member to its declaring node), but anything needing the expression parsed does not:
+  `arr[i].x`, a call's return value, and swizzles fall back to the by-name lookup. Doing those means
+  either an HLSL expression parser in the page or asking the compiler what the cursor is on, which is
+  the DXC IntelliSense seam below.
 - Longer term, gated on a DXC IntelliSense seam: signature help while typing, an outline view, and
   rename / find-references.
 
@@ -135,8 +152,9 @@ Compiler and CLI, as the page uses them
 - `shader assemble` into a real oiSH (an SHFile built from a binary plus an identifier). The web
   round-trip check would then refuse rather than warn.
 - Reflect a bare .spv / .dxil has no CLI verb yet, though the page does it. The web CLI map says so.
-- Parse-only permutation listing, so the page's "IntelliSense follows" picker can fill before any
-  compile. Compiler_parse already yields the SHEntryRuntime this needs.
+- Parse-only permutation listing as a CLI verb. The page already gets it from the module's
+  oxc3_parseEntrypoints (Compiler_parse behind it), so what is left is the CLI/--json half the VS Code
+  host would call.
 - Descriptor layout overrides in the pipeline editor: the page shows the derived oiPL read only, and
   editing a row and supplying one is missing.
 - The page derives layouts with no excluded registers, so the runtime's own registers (the bindless
@@ -195,10 +213,21 @@ Reflection and the JSON views
   document already carries every node with its builtin flag, so this is page work only.
 - The JSON strings should reserve up front, so a document does not reallocate repeatedly while the
   first fields are written.
-- The mock tier still invents four things: the regexes that guess which extensions a source uses, the
-  SPIR-V capability names it prints per extension, the DXC argument line the Command tab reconstructs,
-  and the wave-op model bumps. Each is a stand-in for something only the module can answer; the
-  Command tab's is listed as not wired.
+- What is still fabricated, and where. Without a module nothing is: every call that would have to
+  invent refuses (api.js noModule) and the page switches compiling and editor intelligence off, so the
+  only thing left in that tier is what js/mock_data.js recorded from a real run.
+  WITH the module three things still fabricate, which is worse, because the badge says the compiler is
+  running. Each carries `mock` and every view that renders one says MOCK! NOT REAL DATA YET!, and each
+  has a //TODO at the call naming the library call that would replace it:
+    reflectBinary   a bare .spv/.dxil's registers, bindings and IO are invented rather than read.
+                    Needs Compiler_process' backend reflection to take a binary on its own.
+    compileRaw      "Run with DXC" runs nothing. Needs getCompileArgs plus a raw compile entry.
+    assembleOiSH    no SHFile is built. Needs `shader assemble` producing a real oiSH.
+  The Command tab is the fourth: its dxc lines are reconstructed from the flag set by hand (so they can
+  differ from what OxC3 ran), and it still groups entries with OxMock.analyze, a regex read of the
+  source, where OxAPI.parseEntrypoints now answers the same question off Compiler_parse.
+  Deleting the last of it means those four, after which js/mock.js and js/mock_formats.js are only the
+  recordings' readers and most of both files goes.
 - Texture and StructuredBuffer inner type names: IHLSLReflection appears to give us the inner type,
   and hover does not show it.
 
@@ -208,8 +237,6 @@ Maintenance
 
 - Split src/tools/oxc3_wasm/wasm_main.c into one file per export family; it holds every export in one
   file.
-- Cap the size of an oiCA the page will accept, so a shared archive cannot flood the receiver's memory
-  just because someone packed a large one. The number needs choosing; the check itself is a line.
 
 - Split web/js/app.js into feature modules. Share and restore, the binary strip, and the tabs are the
   first three; new features already land as their own modules.
@@ -265,8 +292,9 @@ Parked
 Notes for whoever picks this up
 -------------------------------
 
-- This machine has no node or npm on PATH. The emsdk's node is the only one, and everything under
-  web/dev needs it.
+- The emsdk's node is the one everything under web/dev is run with (build_web.py resolves it itself);
+  a node that happens to be on PATH may be too old for the dev dependencies (jsdom wants 18+), which
+  fails half way through the suites rather than up front.
 - The wasm bundle and the desktop build are two configurations of one toolchain. Alternating build.py
   and build_web.py needs no wipe, because the host tools get their own output tree through
   OxC3OutputTag. If a link ever shows "multiple definition" walls in graphics code nobody touched, a

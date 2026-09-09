@@ -100,6 +100,24 @@ const W = () => window.OxWasm;
 
 const wasm = () => window.OxAPI.backend === "wasm";
 
+/* Without the module there is nothing real to answer with, and a fabricated answer is impossible to
+ * tell from a real one once it is on screen. So every call that would have to invent refuses, and the
+ * page switches the features that need one off rather than showing something made up.
+ * What survives is what js/mock_data.js recorded from a real run: the sample sources, the builtin
+ * includes, the vocabularies and the example documents. That is real output, just not of anything the
+ * visitor typed. */
+function noModule(what) {
+  throw new Error(what + " needs the compiler module, which isn't running");
+}
+
+/* The calls that still fabricate WITH the module, because the library has no answer for them yet.
+ * These are worse than the no-module tier: the badge says the compiler is running, so nothing warns
+ * the reader. Everything they produce carries `mock`, and every view that renders one says so. */
+function markMock(doc, why) {
+  if (doc && typeof doc === "object") doc.mock = why;
+  return doc;
+}
+
 /* What the module can't answer, and why. The page shows this rather than letting a fabricated
  * result pass for a real one; each entry names the library call that would replace it. */
 const STUBS = [
@@ -116,6 +134,24 @@ const STUBS = [
   { what: "`-asic live`",
     why: "it needs a real device through VK_KHR_pipeline_executable_properties" }
 ];
+
+/* The pipeline fields the seeded examples supply, so every provenance shows in the UI: a derived one,
+ * a supplied one and an assumed one. dev/gen_mock_data.js carries the same list for the recorded
+ * copies of these documents; they are a pair and are meant to agree. */
+const EXAMPLE_SUPPLIED = {
+  "post.oiSP": [
+    ["rtv.format", 0, 28],            // rgba16f, the way -pso-set rtv.format[0]=rgba16f supplies it
+    ["blend.enable", 0, 1],
+    ["blend.src", 0, 2],              // EBlend_SrcAlpha
+    ["blend.dst", 0, 3],              // EBlend_OneMinusSrcAlpha
+    ["topology", 0, 0]
+  ],
+  "trace.oiSP": [
+    ["rt.maxRecursionDepth", 0, 2],
+    ["rt.flags", 0, 2]
+  ],
+  "lighting.oiSP": []                 // compute derives completely, so there is nothing to supply
+};
 
 window.OxAPI = {
 
@@ -204,8 +240,22 @@ window.OxAPI = {
       const compiled = await this.compileFile(source, project, { targets: ["spv", "dxil"] });
       if (!compiled.doc) continue;
       compiled.doc.name = source.replace(/\.hlsl$/i, "") + ".oiSH";
-      const sp = await this.derivePipeline(compiled.doc, {});
-      if (!sp.refused) seeded.oisp[sp.name] = sp;
+      let sp = await this.derivePipeline(compiled.doc, {});
+      if (sp.refused) continue;
+
+      /* A few fields supplied so the examples show every provenance rather than only derived and
+       * assumed. dev/gen_mock_data.js keeps the same list for the recorded copies; the two exist for
+       * the same reason and are meant to match. A field this pipeline doesn't report is skipped, since
+       * which fields a stage reports is the library's decision. */
+
+      for (const [field, index, value] of (EXAMPLE_SUPPLIED[sp.name] || [])) {
+        if (!sp.pipelines.some(pl => pl.fields.some(f => f.field === field)))
+          continue;
+        try { sp = await this.supplyPipeline(sp, 0, field, index, value); }
+        catch (e) { /* the pipeline refused this one; the example is still worth having */ }
+      }
+
+      seeded.oisp[sp.name] = sp;
 
     }
 
@@ -237,33 +287,39 @@ window.OxAPI = {
       if (r.doc) r.doc.bytes = r.bytes;
       return { doc: r.doc, diags: r.diags };
     }
-    await fakeLatency(250, 650);
-    return M().compileFile(name, project, opts);
+    noModule("compiling");
   },
 
   /* ---- raw DXC (Compile mode -> Command tab -> Run with DXC) --------------------------- */
   async compileRaw(argv, name, project) {
-    // TODO(wasm): run an (edited) DXC flag line through the same DXC instance the compile path uses. The line the
-    // Command tab pre-fills is what OxC3 derives; exposing the real argv (getCompileArgs) plus a raw compile entry
-    // is what this needs, and neither exists. The output would be a standalone binary, never an oiSH: no annotations
-    // were processed and nothing was reflected into an identifier.
+    //TODO: MOCK! NOT REAL DATA YET! This does not run DXC. The binary it hands back is fabricated,
+    // and it is fabricated even with the module loaded, so nothing else on the page warns about it.
+    // What it needs: the compiler exposing its own argv (getCompileArgs) plus a raw compile entry, so
+    // an edited flag line runs through the same DXC instance the compile path uses. The output would
+    // be a standalone binary, never an oiSH: no annotations processed, nothing reflected into an
+    // identifier. Until then every result carries `mock` and the views render the warning.
     await fakeLatency(200, 500);
-    return M().compileRaw(argv, name, project);
+    return markMock(M().compileRaw(argv, name, project), "this binary was not produced by DXC");
   },
 
   /* ---- standalone binaries as documents ---------------------------------------------- */
   async reflectBinary(name, type, bytes, origin) {
-    // TODO(wasm): the backend reflection the compiler already runs while building an oiSH (spirv-reflect over SPIR-V,
-    // DXC's IDxcContainerReflection over DXIL) applied to a bare binary. Compiler_process does it, but only as part of
-    // a compile: it wants the entry's runtime reflection to check against, so there's no call that takes a bare binary.
+    //TODO: MOCK! NOT REAL DATA YET! Nothing here reads the binary: the registers, bindings and IO are
+    // invented from its bytes, with the module loaded as much as without it.
+    // What it needs: the backend reflection the compiler already runs while building an oiSH
+    // (spirv-reflect over SPIR-V, IDxcContainerReflection over DXIL) applied to a BARE binary.
+    // Compiler_process does exactly this, but only inside a compile, since it checks the result
+    // against the entry's runtime reflection; no call takes a binary on its own.
     void origin;
-    return M().reflectBinary(name, type, bytes, origin);
+    return markMock(M().reflectBinary(name, type, bytes, origin), "this reflection was not read from the binary");
   },
 
   async assembleOiSH(doc, identifier) {
-    // TODO(wasm): the planned `shader assemble -> oiSH`: wrap standalone binaries into an SHFile with the identifier the
-    // source would have declared, so a pipeline can be created from it. The CLI's `shader assemble` only produces a .spv.
-    return M().assembleOiSH(doc, identifier);
+    //TODO: MOCK! NOT REAL DATA YET! No oiSH is built here; the document is fabricated around the
+    // identifier you typed, with the module loaded as much as without it.
+    // What it needs: `shader assemble` producing a real SHFile (a binary plus the identifier its
+    // source would have declared) rather than a bare .spv, so a pipeline can be derived from it.
+    return markMock(M().assembleOiSH(doc, identifier), "this oiSH was not assembled by the compiler");
   },
 
   /* ---- OxC3 shader reflect-symbols (oiSR) ------------------------------------------- */
@@ -279,8 +335,21 @@ window.OxAPI = {
       }
       return { doc: r.doc, diags: r.diags || [] };
     }
-    await fakeLatency(60, 160);
-    return { doc: MF().reflectSymbols(name, project), diags: [] };
+    noModule("editor intelligence");
+  },
+
+  /* ---- Compiler_parse: entrypoints and permutations without a compile ----------------- */
+  /* Returns [{name, stage, lib, combinations:[{entrypoint|null, stage|'lib', lib, model,
+   *   extensions:[], defines:[{name,value}], uniforms:[{type,name,value}]}]}] with the same
+   * spellings SHDocument.binaries uses, so a combination can be matched against a compiled
+   * binary. Null when nothing could be listed: the source doesn't parse, or the module predates
+   * the export; the caller keeps what it had (a mid-edit listing) or falls back to the compile. */
+  async parseEntrypoints(name, project) {
+    if (wasm()) {
+      try { return await W().parseEntrypoints(name, project); }
+      catch (err) { return null; }
+    }
+    return null;                        // no module, no listing; the picker keeps its default row
   },
 
   async parseOiSR(name, bytes) {
@@ -289,12 +358,12 @@ window.OxAPI = {
       doc.bytes = bytes;
       return doc;
     }
-    return MF().parseOiSRBytes(name, bytes);
+    noModule("reading an oiSR");
   },
 
   async writeOiSR(sr) {
     if (wasm() && sr.bytes) return sr.bytes;       // SRFile_write already produced these
-    return MF().srBytes(sr);
+    noModule("writing an oiSR");
   },
 
   /* ---- OxC3 file data / shader entrypoints / includes / feature_set ------------------ */
@@ -304,7 +373,7 @@ window.OxAPI = {
       doc.bytes = bytes;
       return doc;
     }
-    return M().parseOiSHBytes(name, bytes);
+    noModule("reading an oiSH");
   },
 
   /* `OxC3 file header`: sniff the magic (oiSH / oiSR / oiSP) and read what follows it. */
@@ -319,14 +388,7 @@ window.OxAPI = {
         binaryCount: d.binaries.length, stageCount: d.entries.length,
         includeFileCount: d.includes.length };
     }
-    const magic = String.fromCharCode(...bytes.slice(0, 4));
-    if (magic === "oiSR") { const d = MF().parseOiSRBytes("header", bytes); return { format: "oiSR", ...d.header }; }
-    if (magic === "oiSP") { const d = MF().parseOiSPBytes("header", bytes); return { format: "oiSP", ...d.header }; }
-    const doc = M().parseOiSHBytes("header", bytes);
-    return { format: "oiSH", version: doc.header.version, compilerVersion: doc.compilerVersion,
-      sourceHash: doc.sourceHash, sizeTypes: doc.header.sizeTypes,
-      binaryCount: doc.binaries.length, stageCount: doc.entries.length,
-      includeFileCount: doc.includes.length };
+    noModule("reading a file header");
   },
 
   /* A real document already carries the bytes SHFile_write produced, so the full file is those.
@@ -343,7 +405,7 @@ window.OxAPI = {
         "compile with -compile-output " + (backend === "spirv" ? "spv" : "dxil") + " to get one"
       );
     }
-    return M().oishBytes(doc);
+    noModule("writing an oiSH");
   },
 
   async extractBinary(doc, bin, backend) {
@@ -353,26 +415,23 @@ window.OxAPI = {
       if (!doc.bytes) throw new Error("this document has no oiSH behind it (it wasn't compiled or loaded here)");
       return W().shExtractBinary(doc.bytes, doc.binaries.indexOf(bin), backend);
     }
-    return M().binBytes(bin, backend);
+    noModule("extracting a binary");
   },
 
   /* ---- OxC3 shader disassemble / assemble -------------------------------------------- */
   async disassemble(type /* 'spirv'|'dxil' */, bytes) {
     if (wasm()) return W().disassemble(type, bytes);
-    return "; The mock only knows how to disassemble binaries it fabricated itself.\n" +
-           "; Build the wasm module (build_web.py --frontend) for Compiler_disassemble over these bytes.";
+    noModule("disassembling");
   },
 
   async disassembleDocBinary(doc, bin, backend) {
     if (wasm()) return this.disassemble(backend, await this.extractBinary(doc, bin, backend));
-    return M().disasm(doc, bin, backend);
+    noModule("disassembling");
   },
 
   async assemble(type, text) {
     if (wasm()) return W().assemble(type, text);
-    if (type !== "spirv") throw new Error("the mock can't assemble DXIL; the module does.");
-    const enc = new TextEncoder().encode(text);
-    return M().binBytes({ identKey: "assembled|" + OxUtil.crc32c(enc), sizes: { spirv: 256 + enc.length % 512, dxil: 0 } }, "spirv");
+    noModule("assembling");
   },
 
   /* The validator's verdict on arbitrary bytes (spirv-val, or DXC's validator for a DXIL container); the
@@ -381,12 +440,12 @@ window.OxAPI = {
     if (wasm()) {
       try { return await W().validate(backend, bytes); } catch (e) { return { valid: false, message: e.message }; }
     }
-    return { valid: true, message: "" };
+    noModule("validating");
   },
 
   async getUniqueEntrypoints(type, bytes) {
     if (wasm()) return W().uniqueEntrypoints(type, bytes, true);
-    return [{ name: "main", stage: "compute", note: "mock - build the wasm module for Compiler_getUniqueEntrypoints" }];
+    noModule("listing entrypoints");
   },
 
   /* ---- OxC3 file combine -format oiSH ------------------------------------------------ */
@@ -399,12 +458,7 @@ window.OxAPI = {
       r.doc.combinedFrom = [a.name, b.name];
       return r.doc;
     }
-    if (a.sourceHash !== b.sourceHash)
-      throw new Error(`source hash mismatch (${OxUtil.hex8(a.sourceHash)} vs ${OxUtil.hex8(b.sourceHash)}) - combine requires the same source(s), includes and compiler settings.`);
-    const doc = JSON.parse(JSON.stringify(a));
-    doc.name = (a.name.replace(/\.oiSH$/i, "") + "+" + b.name.replace(/\.oiSH$/i, "")) + ".oiSH";
-    doc.combinedFrom = [a.name, b.name];
-    return doc;
+    noModule("combining");
   },
 
   /* ---- oiSP: pipeline state with provenance ----------------------------------------- */
@@ -422,7 +476,7 @@ window.OxAPI = {
       r.doc.name = doc.name.replace(/\.oiSH$/i, "") + ".oiSP";
       return r.doc;
     }
-    return MF().derivePipeline(doc, pick);
+    noModule("deriving a pipeline");
   },
 
   async supplyPipeline(sp, pipelineIdx, field, index, value) {
@@ -434,12 +488,12 @@ window.OxAPI = {
       r.doc.name = sp.name;
       return r.doc;
     }
-    return MF().supply(sp, pipelineIdx, field, index, value);
+    noModule("supplying a pipeline field");
   },
 
   async printPipeline(sp, pipelineIdx) {
     if (wasm()) return W().spPrint(sp.bytes, pipelineIdx);
-    return MF().spPrint(sp, pipelineIdx);
+    noModule("printing a pipeline");
   },
 
   async parseOiSP(name, bytes) {
@@ -448,12 +502,12 @@ window.OxAPI = {
       doc.bytes = bytes;
       return doc;
     }
-    return MF().parseOiSPBytes(name, bytes);
+    noModule("reading an oiSP");
   },
 
   async writeOiSP(sp) {
     if (wasm() && sp.bytes) return sp.bytes;       // SPFile_finalize + SPFile_write already produced these
-    return MF().spBytes(sp);
+    noModule("writing an oiSP");
   },
 
   /* ---- OxC3 isa devices / isa disassemble -------------------------------------------- */
@@ -495,7 +549,7 @@ window.OxAPI = {
     if (wasm()) {
       try { return await W().isaTargets(); } catch (e) { return []; }
     }
-    return MF().isaTargets();
+    return [];                         // no module, no target list to offer
   },
 
   async isaDisassemble(doc, bin, asic, entrypoint) {
@@ -506,7 +560,7 @@ window.OxAPI = {
       return { asic, entrypoint, text: await W().isaDisassemble(spirv, asic, entrypoint) };
     }
     await fakeLatency(120, 400);
-    return MF().isaDisassemble(doc, bin, asic, entrypoint);
+    noModule("ISA disassembly");
   },
 
   async isaLive(doc, bin, sp, opts) {

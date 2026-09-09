@@ -155,9 +155,16 @@ function binNode(bin, i) {
 
 /* ---------------------------------------------------------------- top-level views */
 
+/* A document the compiler did not produce says so where it is read, not only in a tooltip somewhere:
+ * these are fabricated with the module loaded, so the badge is no warning at all (see api.js markMock). */
+const mockWarning = doc => doc && doc.mock
+  ? `<li class="p-2 text-danger fw-bold"><i class="bi bi-exclamation-octagon-fill"></i>
+      MOCK! NOT REAL DATA YET! ${esc(doc.mock)}.</li>`
+  : "";
+
 function reflectionHTML(doc) {
   if (!doc) return `<ul class="tree"><li class="p-3 text-body-secondary">Nothing to reflect yet.</li></ul>`;
-  let out = "";
+  let out = mockWarning(doc);
   out += node(`<i class="bi bi-file-earmark-binary text-info"></i><span class="tname">${esc(doc.name)}</span>
       <span class="text-body-secondary">${doc.standalone ? "standalone binary · reflected from the bytes · content" : `OxC3 ${doc.compilerVersion.major}.${doc.compilerVersion.minor}.${doc.compilerVersion.patch} · source`} ${hex8(doc.sourceHash)}${doc.flags.reflectionOnly ? " · reflection-only" : ""}${doc.mockParsed ? " · mock parse" : ""}${doc.assembledFrom ? " · assembled from " + esc(doc.assembledFrom) : ""}</span>`,
     true,
@@ -207,6 +214,10 @@ function assembleCardHTML(doc) {
 function oishViewHTML(doc) {
   if (!doc) return `<div class="empty-hint"><i class="bi bi-box fs-1"></i><p class="small mt-2">Compile something or load an .oiSH.</p></div>`;
   if (doc.standalone) return assembleCardHTML(doc);
+  const mockLine = doc.mock
+    ? `<div class="alert alert-danger py-2 px-3 fw-bold"><i class="bi bi-exclamation-octagon-fill"></i>
+        MOCK! NOT REAL DATA YET! ${esc(doc.mock)}.</div>`
+    : "";
   const v = doc.compilerVersion;
   const head = `
   <div class="card mb-3"><div class="card-body">
@@ -256,7 +267,7 @@ function oishViewHTML(doc) {
     <div class="small text-body-secondary mt-2">Include CRCs are what <code>file combine</code> checks, and what a hot-reload file watcher would compare.</div>
   </div></div>`;
 
-  return head + feat + entries + incs;
+  return mockLine + head + feat + entries + incs;
 }
 
 /* ---------------------------------------------------------------- binary strip + disassembly */
@@ -275,6 +286,49 @@ function binRows(doc, backends) {
     }
   });
   return rows;
+}
+
+/* ---------------------------------------------------------------- parse combinations vs binaries */
+
+/* A parse combination (OxAPI.parseEntrypoints) against a compiled document's binaries. Both sides come
+ * off SHEntryRuntime_asBinaryIdentifier with the same spellings, so equality is field for field: the
+ * entrypoint (or, for a lib, membership in the binary's entry list), the stage, the promoted model, and
+ * the extension, define and uniform sets in their declared order. */
+
+const nv = d => `${d.name}=${d.value == null ? "" : d.value}`;
+const sameList = (a, b, f) => (a || []).length === (b || []).length && (a || []).every((x, i) => f(x) === f(b[i]));
+
+function matchBinary(doc, combo, entryName) {
+  if (!doc || !doc.binaries) return -1;
+  return doc.binaries.findIndex(b =>
+    !!b.lib === !!combo.lib &&
+    (combo.lib
+      ? (b.entryNames || []).includes(entryName)
+      : b.entrypoint === combo.entrypoint && b.stage === combo.stage) &&
+    b.model === combo.model &&
+    sameList(b.extensions, combo.extensions, x => x) &&
+    sameList(b.defines, combo.defines, nv) &&
+    sameList(b.uniforms, combo.uniforms, nv));
+}
+
+/* The identity a picker row keeps across reparses, so an edit that removes the picked permutation drops
+ * the pick instead of letting its old index land on whatever permutation owns that slot now. */
+function comboKey(entryName, combo) {
+  return [
+    entryName, combo.lib ? "lib" : combo.entrypoint, combo.stage, combo.model,
+    (combo.extensions || []).join("+"), (combo.defines || []).map(nv).join(","),
+    (combo.uniforms || []).map(nv).join(",")
+  ].join("|");
+}
+
+/* The picker's text for one combination, spelled like the binary strip's rows. */
+function comboLabel(entryName, combo) {
+  return (combo.lib ? `lib(${entryName})` : `${combo.entrypoint} · ${combo.stage}`) +
+    ((combo.defines || []).length
+      ? ` · [${combo.defines.map(d => d.value != null && d.value !== "" ? `${d.name}=${d.value}` : d.name).join(",")}]`
+      : "") +
+    ((combo.uniforms || []).length ? " · " + combo.uniforms.map(u => `${u.name}=${u.value}`).join(",") : "") +
+    ((combo.extensions || []).length ? " · " + combo.extensions.join("+") : "");
 }
 
 async function showBinary(doc, row, switchTab = true, activeFile = null) {
@@ -309,5 +363,8 @@ async function showBinary(doc, row, switchTab = true, activeFile = null) {
   }
 }
 
-window.OxInspect = { setVocab, reflectionHTML, oishViewHTML, assembleCardHTML, binRows, showBinary, annoLines };
+window.OxInspect = {
+  setVocab, reflectionHTML, oishViewHTML, assembleCardHTML, binRows, showBinary, annoLines,
+  matchBinary, comboKey, comboLabel
+};
 })();
