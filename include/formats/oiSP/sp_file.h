@@ -173,6 +173,11 @@ Bool ESPField_parsePath(CharString path, ESPField *field, U8 *index);
 //Why reflection can't prove a field, and which values are legal; both are static text keyed off the field.
 
 const C8 *ESPField_reason(ESPField field);
+
+//The value's own name where the field is enum typed and the value is in range; NULL for a mask, a
+//boolean, a free number or an out of range value, which keep their numeric spelling.
+
+const C8 *ESPField_valueName(ESPField field, U32 value);
 const C8 *ESPField_domain(ESPField field);
 
 //The widest value a field stores; SPFile_supply refuses anything above it rather than truncating.

@@ -1393,6 +1393,65 @@ static const C8 *Compiler_svtBaseName(D3D_SHADER_VARIABLE_TYPE t) {
 //A zero/none-initialised SRType with the structured fields filled + clamped; the caller sets go-to-def / base / array
 //fields as available, then hands it to Compiler_pushType which resolves the name ids.
 
+//The HLSL spelling of a register's declared class: cbuffer and friends spell themselves, a typed
+//texture or buffer picks its dimensioned name and templates on the return type below.
+static const C8 *Compiler_registerClassName(ESRResourceType type, ESRResourceDimension dim, Bool *outTyped) {
+
+	*outTyped = false;
+
+	switch (type) {
+
+		case ESRResourceType_Texture:
+		case ESRResourceType_UAVRWTyped: {
+
+			const Bool rw = type == ESRResourceType_UAVRWTyped;
+			*outTyped = true;
+
+			switch (dim) {
+				case ESRResourceDimension_Buffer:            return rw ? "RWBuffer" : "Buffer";
+				case ESRResourceDimension_Texture1D:         return rw ? "RWTexture1D" : "Texture1D";
+				case ESRResourceDimension_Texture1DArray:    return rw ? "RWTexture1DArray" : "Texture1DArray";
+				case ESRResourceDimension_Texture2D:         return rw ? "RWTexture2D" : "Texture2D";
+				case ESRResourceDimension_Texture2DArray:    return rw ? "RWTexture2DArray" : "Texture2DArray";
+				case ESRResourceDimension_Texture2DMS:       return "Texture2DMS";
+				case ESRResourceDimension_Texture2DMSArray:  return "Texture2DMSArray";
+				case ESRResourceDimension_Texture3D:         return rw ? "RWTexture3D" : "Texture3D";
+				case ESRResourceDimension_TextureCube:       return "TextureCube";
+				case ESRResourceDimension_TextureCubeArray:  return "TextureCubeArray";
+				default:                                     *outTyped = false; return NULL;
+			}
+		}
+
+		case ESRResourceType_Sampler:                             return "SamplerState";
+		case ESRResourceType_ByteAddress:                         return "ByteAddressBuffer";
+		case ESRResourceType_UAVRWByteAddress:                    return "RWByteAddressBuffer";
+		case ESRResourceType_Structured:                          return "StructuredBuffer";
+		case ESRResourceType_UAVRWStructured:                     return "RWStructuredBuffer";
+		case ESRResourceType_UAVAppendStructured:                 return "AppendStructuredBuffer";
+		case ESRResourceType_UAVConsumeStructured:                return "ConsumeStructuredBuffer";
+		case ESRResourceType_UAVRWStructuredWithCounter:          return "RWStructuredBuffer";
+		case ESRResourceType_RaytracingAccelerationStructure:     return "RaytracingAccelerationStructure";
+
+		//cbuffer/tbuffer spell as the syntax they were declared with; feedback textures stay untyped here.
+
+		default:                                             return NULL;
+	}
+}
+
+//The template argument of a typed texture/buffer: return type scalar plus the component count the
+//D3D_SIF_TEXTURE_COMPONENT bits carry (their two bits spell count - 1).
+static const C8 *Compiler_registerScalarName(U32 returnType) {
+	switch (returnType) {
+		case ESRResourceReturnType_UNorm:   return "unorm float";
+		case ESRResourceReturnType_SNorm:   return "snorm float";
+		case ESRResourceReturnType_SInt:    return "int";
+		case ESRResourceReturnType_UInt:    return "uint";
+		case ESRResourceReturnType_Float:   return "float";
+		case ESRResourceReturnType_Double:  return "double";
+		default:                            return NULL;
+	}
+}
+
 static SRType Compiler_typeBase(U32 nodeId, U32 typeClass, U32 rows, U32 cols, U32 elements) {
 	SRType ty = SRType{};
 	ty.nodeId = nodeId;
@@ -1637,6 +1696,109 @@ static Bool Compiler_reflectDetails(
 		));
 
 		gotoIfError3(clean, ListSRRegister_pushBack(&reflection->registers, reg, alloc, e_rr));
+
+		//The node's own type, so hover spells what the source declared: a typed texture or buffer
+		// templates on its return type and component count, a structured buffer on the element the
+		// bind info buffer carries, and the element's struct node becomes go-to-definition.
+
+		{
+			Bool typed = false;
+			const C8 *className = Compiler_registerClassName(
+				(ESRResourceType) reg.type, (ESRResourceDimension) reg.dimension, &typed
+			);
+
+			if (!className)
+				continue;
+
+			SRType ty = Compiler_typeBase((U32) i, ESRTypeClass_Object, 0, 0, 0);
+			ty.elements = reg.bindCount > 1 ? reg.bindCount : 0;
+			ty.arrayDimStart = reg.arrayDimStart;
+			ty.arrayDimCount = reg.arrayDimCount;
+
+			const C8 *element = NULL;
+			const C8 *elementDisplay = NULL;
+			C8 scalarBuf[16];
+
+			if (typed) {
+
+				const C8 *scalar = Compiler_registerScalarName(reg.returnType);
+				const U32 components = ((bindDesc.Desc.uFlags >> 2) & 3) + 1;
+
+				if (scalar && components > 1) {
+					U64 sn = 0;
+					while (scalar[sn]) { scalarBuf[sn] = scalar[sn]; ++sn; }
+					scalarBuf[sn] = (C8) ('0' + components);
+					scalarBuf[sn + 1] = 0;
+					element = scalarBuf;
+				}
+
+				else element = scalar;
+			}
+
+			else if (
+				reg.type == ESRResourceType_Structured || reg.type == ESRResourceType_UAVRWStructured ||
+				reg.type == ESRResourceType_UAVAppendStructured ||
+				reg.type == ESRResourceType_UAVConsumeStructured ||
+				reg.type == ESRResourceType_UAVRWStructuredWithCounter
+			) {
+
+				//The element type lives in the resource's bind info buffer, as its only variable.
+
+				ID3D12ShaderReflectionConstantBuffer *bindInfo =
+					reflectionData->GetConstantBufferByName(bindDesc.Desc.Name);
+
+				D3D12_SHADER_BUFFER_DESC bufDesc{};
+				D3D12_SHADER_TYPE_DESC1 elemDesc{};
+
+				if (
+					bindInfo && SUCCEEDED(bindInfo->GetDesc(&bufDesc)) &&
+					bufDesc.Type == D3D_CT_RESOURCE_BIND_INFO && bufDesc.Variables == 1
+				) {
+
+					ID3D12ShaderReflectionVariable *var = bindInfo->GetVariableByIndex(0);
+					ID3D12ShaderReflectionType *elemType = var ? var->GetType() : NULL;
+
+					if (
+						elemType && SUCCEEDED(((ID3D12ShaderReflectionType1*) elemType)->GetDesc1(&elemDesc)) &&
+						elemDesc.Desc.Name
+					) {
+
+						element = elemDesc.Desc.Name;
+						elementDisplay = elemDesc.DisplayName;
+
+						CharString en = CharString_createRefCStrConst(element);
+						U32 defNode = SRFile_findNodeByName(reflection, en, ESRNodeType_Struct);
+						ty.defNodeId = defNode == (U32) i ? U32_MAX : defNode;
+					}
+				}
+			}
+
+			//Freed on every path below, so a failed format can't strand the other string on the way out.
+
+			CharString spelled = CharString_createNull();
+			CharString spelledDisplay = CharString_createNull();
+
+			Bool pushed =
+				(!element || CharString_format(alloc, &spelled, e_rr, "%s<%s>", className, element)) &&
+				(
+					!element || !elementDisplay || !elementDisplay[0] ||
+					CharString_format(alloc, &spelledDisplay, e_rr, "%s<%s>", className, elementDisplay)
+				) &&
+				Compiler_pushType(
+					reflection, ty,
+					element ? spelled.ptr : className,
+					spelledDisplay.ptr ? spelledDisplay.ptr : NULL,
+					alloc, e_rr
+				);
+
+			CharString_free(&spelled, alloc);
+			CharString_free(&spelledDisplay, alloc);
+
+			if (!pushed) {
+				s_uccess = false;
+				goto clean;
+			}
+		}
 	}
 
 	//Enum values: enumerators + the parent enum's underlying integer type

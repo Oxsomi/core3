@@ -75,6 +75,9 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		"struct Circle : IArea { float r; float area() { return r * r; } };\n"
 		"RWByteAddressBuffer buf;\n"
 		"StructuredBuffer<Light> lights;\n"
+		"RWStructuredBuffer<Light> rwLights;\n"
+		"Texture2D<float4> tex;\n"
+		"RWTexture2D<float4> rwTex;\n"
 		"uint dbl(uint x) { return x * 2; }\n"
 		"void bump(inout Light l) { l.pos.x += 1; }\n"
 		"[[oxc::stage(\"compute\")]]\n"
@@ -82,7 +85,8 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		"void main(uint id : SV_DispatchThreadID) {\n"
 		"\tCircle c; c.r = 2;\n"
 		"\tLight l = lights[0]; bump(l);\n"
-		"\tbuf.Store<uint>(id * 4, dbl(id) + (uint) l.pos.x + (uint) c.area());\n"
+		"\trwLights[0].pos.x += rwTex[uint2(0, 0)].x;\n"
+		"\tbuf.Store<uint>(id * 4, dbl(id) + (uint) l.pos.x + (uint) c.area() + (uint) tex.Load(int3(0, 0, 0)).x);\n"
 		"}\n";
 
 	gotoIfError3(clean, Compiler_create(alloc, &comp, e_rr));
@@ -122,6 +126,73 @@ void Test_shaderCompilerReflectSR(Test *t) {
 
 	if (mainId != U32_MAX)
 		Test_assert(t, "main has annotations", reflection.nodes.ptr[mainId].annotationCount > 0);
+
+	//Register nodes carry their declared type: hover spells Texture2D<float4> and
+	//StructuredBuffer<Light>, and the structured element doubles as go-to-definition.
+
+	{
+		U32 texId = srFindNode(&reflection, ESRNodeType_Register, "tex");
+		U32 lightsId = srFindNode(&reflection, ESRNodeType_Register, "lights");
+
+		Test_assert(t, "tex and lights registers reflected", texId != U32_MAX && lightsId != U32_MAX);
+
+		const SRType *texTy = NULL, *lightsTy = NULL;
+
+		for (U64 i = 0; i < reflection.types.length; ++i) {
+			if (texId != U32_MAX && reflection.types.ptr[i].nodeId == texId) texTy = &reflection.types.ptr[i];
+			if (lightsId != U32_MAX && reflection.types.ptr[i].nodeId == lightsId) lightsTy = &reflection.types.ptr[i];
+		}
+
+		Test_assert(t, "both registers carry a type", texTy != NULL && lightsTy != NULL);
+
+		if (texTy) {
+			CharString tn = texTy->typeNameId != U32_MAX ?
+				reflection.names.entryStrings.ptr[texTy->typeNameId] : CharString_createNull();
+			CharString expected = CharString_createRefCStrConst("Texture2D<float4>");
+			Test_assert(t, "a typed texture spells its template", CharString_equalsStringSensitive(&tn, &expected));
+		}
+
+		if (lightsTy) {
+
+			CharString tn = lightsTy->typeNameId != U32_MAX ?
+				reflection.names.entryStrings.ptr[lightsTy->typeNameId] : CharString_createNull();
+			CharString expected = CharString_createRefCStrConst("StructuredBuffer<Light>");
+			Test_assert(
+				t, "a structured buffer spells its element", CharString_equalsStringSensitive(&tn, &expected)
+			);
+
+			U32 lightNode = srFindNode(&reflection, ESRNodeType_Struct, "Light");
+			Test_assert(
+				t, "and the element is its go-to-definition",
+				lightNode != U32_MAX && lightsTy->defNodeId == lightNode
+			);
+		}
+	}
+
+	//The UAV shapes type the same way their SRV twins do.
+
+	{
+		U32 rwTexId = srFindNode(&reflection, ESRNodeType_Register, "rwTex");
+		U32 rwLightsId = srFindNode(&reflection, ESRNodeType_Register, "rwLights");
+
+		const SRType *rwTexTy = NULL, *rwLightsTy = NULL;
+
+		for (U64 i = 0; i < reflection.types.length; ++i) {
+			if (rwTexId != U32_MAX && reflection.types.ptr[i].nodeId == rwTexId) rwTexTy = &reflection.types.ptr[i];
+			if (rwLightsId != U32_MAX && reflection.types.ptr[i].nodeId == rwLightsId)
+				rwLightsTy = &reflection.types.ptr[i];
+		}
+
+		CharString a = rwTexTy && rwTexTy->typeNameId != U32_MAX ?
+			reflection.names.entryStrings.ptr[rwTexTy->typeNameId] : CharString_createNull();
+		CharString ea = CharString_createRefCStrConst("RWTexture2D<float4>");
+		Test_assert(t, "a UAV texture spells its template", CharString_equalsStringSensitive(&a, &ea));
+
+		CharString b = rwLightsTy && rwLightsTy->typeNameId != U32_MAX ?
+			reflection.names.entryStrings.ptr[rwLightsTy->typeNameId] : CharString_createNull();
+		CharString eb = CharString_createRefCStrConst("RWStructuredBuffer<Light>");
+		Test_assert(t, "a UAV structured buffer spells its element", CharString_equalsStringSensitive(&b, &eb));
+	}
 
 	//Detail tiers: resource bind info (buf), enum values (ModeA/ModeB), function return (dbl)
 

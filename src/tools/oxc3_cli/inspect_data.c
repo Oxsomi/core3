@@ -402,6 +402,18 @@ clean:
 	return s_uccess;
 }
 
+#ifdef CLI_SHADER_COMPILER
+
+//SHFile_writeJson's injected disassembler: the formats layer can't disassemble, the compiler can.
+
+static Bool CLI_shJsonDisassemble(
+	void *ctx, EGfxBinaryType type, Buffer binary, const Allocator *alloc, CharString *text, Error *e_rr
+) {
+	return Compiler_disassemble((const Compiler*) ctx, type, binary, alloc, text, e_rr);
+}
+
+#endif
+
 Bool CLI_inspectData(const ParsedArgs *args) {
 
 	if(!args) return false;
@@ -934,7 +946,22 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 					));
 
 				JsonWriter w = JsonWriter_create(&tmp, true, alloc);
-				gotoIfError3(cleanSh, SHFile_writeJson(&file, &w, alloc, e_rr));
+
+				//--verbose is what asks for the disassembly, the same ask oiDL's --verbose makes for its
+				// entry contents; without the shader compiler in this build there is nothing to render it.
+
+				#ifdef CLI_SHADER_COMPILER
+
+					if (isVerbose) {
+						gotoIfError3(cleanSh, Compiler_create(alloc, &comp, e_rr));
+						gotoIfError3(cleanSh, SHFile_writeJson(&file, CLI_shJsonDisassemble, &comp, &w, alloc, e_rr));
+					}
+
+					else gotoIfError3(cleanSh, SHFile_writeJson(&file, NULL, NULL, &w, alloc, e_rr));
+
+				#else
+					gotoIfError3(cleanSh, SHFile_writeJson(&file, NULL, NULL, &w, alloc, e_rr));
+				#endif
 				gotoIfError3(cleanSh, CLI_showJson(args, tmp, start, length, e_rr));
 				goto cleanSh;
 			}

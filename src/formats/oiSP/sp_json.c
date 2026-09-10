@@ -307,11 +307,17 @@ Bool SPFile_writeJsonMembers(const SPFile *file, JsonWriter *w, Error *e_rr) {
 			SPSpecialization specialization = file->specializations.ptr[specializationId];
 			ESPField field = (ESPField) specialization.field;
 
+			//An enum typed field also spells its value by name, the numeric form staying what a reader
+			// and -pso-set consume; a mask, boolean or free number has no single name and writes none.
+
+			const C8 *valueName = ESPField_valueName(field, specialization.value);
+
 			gotoIfError3(clean, (
 				JsonWriter_beginObject(w, e_rr) &&
 				JsonWriter_keyCstr(w, "field", ESPField_name(field), e_rr) &&
 				JsonWriter_keyU64(w, "index", specialization.index, e_rr) &&
 				JsonWriter_keyU64(w, "value", specialization.value, e_rr) &&
+				(!valueName || JsonWriter_keyCstr(w, "valueName", valueName, e_rr)) &&
 				JsonWriter_keyCstr(
 					w, "source",
 					specialization.source < ESPFieldSource_Count ?

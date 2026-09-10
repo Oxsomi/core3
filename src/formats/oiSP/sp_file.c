@@ -264,6 +264,52 @@ const C8 *ESPField_domain(ESPField field) {
 	return field < ESPField_Count ? SPField_info[field].domain : "";
 }
 
+const C8 *ESPField_valueName(ESPField field, U32 value) {
+
+	switch (field) {
+
+		case ESPField_RenderTargetFormat:
+			return value < ETextureFormatId_Count ? ETextureFormatId_name[value] : NULL;
+
+		case ESPField_BlendLogicOp:
+			return value < ELogicOpExt_Count ? ELogicOpExt_names[value] : NULL;
+
+		case ESPField_BlendSrc:
+		case ESPField_BlendDst:
+		case ESPField_BlendSrcAlpha:
+		case ESPField_BlendDstAlpha:
+			return value < EBlend_Count ? EBlend_names[value] : NULL;
+
+		case ESPField_BlendOp:
+		case ESPField_BlendOpAlpha:
+			return value < EBlendOp_Count ? EBlendOp_names[value] : NULL;
+
+		case ESPField_DepthFormat:
+			return value < EDepthStencilFormat_Count ? EDepthStencilFormat_names[value] : NULL;
+
+		case ESPField_DepthCompare:
+		case ESPField_StencilCompare:
+			return value < ECompareOp_Count ? ECompareOp_names[value] : NULL;
+
+		case ESPField_StencilFail:
+		case ESPField_StencilPass:
+		case ESPField_StencilDepthFail:
+			return value < EStencilOp_Count ? EStencilOp_names[value] : NULL;
+
+		case ESPField_CullMode:
+			return value < ECullMode_Count ? ECullMode_names[value] : NULL;
+
+		case ESPField_Msaa:
+			return value < EMSAASamples_Count ? EMSAASamples_names[value] : NULL;
+
+		case ESPField_TopologyMode:
+			return value < EToplogyMode_Count ? ETopologyMode_names[value] : NULL;
+
+		default:
+			return NULL;
+	}
+}
+
 U32 ESPField_maxValue(ESPField field) {
 
 	switch (field) {

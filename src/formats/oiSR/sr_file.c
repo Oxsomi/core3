@@ -477,7 +477,8 @@ Bool SRFile_finalize(SRFile *srFile, const Allocator *alloc, Error *e_rr) {
 			retError(clean, Error_invalidState(0, "SRFile_finalize() enumValue had an invalid enumType"));
 	}
 
-	//Types must reference a value node (variable-like) and carry a valid class + name reference
+	//Types must reference a value node (variable-like, a Register included: it is a declared variable
+	// whose type spells the resource, e.g. Texture2D<float4>) and carry a valid class + name reference
 
 	for(U64 i = 0; i < srFile->types.length; ++i) {
 
@@ -490,7 +491,8 @@ Bool SRFile_finalize(SRFile *srFile, const Allocator *alloc, Error *e_rr) {
 
 		if(nt != ESRNodeType_Variable && nt != ESRNodeType_Parameter && nt != ESRNodeType_StaticVariable &&
 			nt != ESRNodeType_GroupsharedVariable && nt != ESRNodeType_Typedef && nt != ESRNodeType_Struct &&
-			nt != ESRNodeType_Union)
+			nt != ESRNodeType_Union && nt != ESRNodeType_Register
+		)
 			retError(clean, Error_invalidState(0, "SRFile_finalize() type.nodeId doesn't reference a value node"));
 
 		if(ty.typeClass >= ESRTypeClass_Count)

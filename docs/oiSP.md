@@ -563,7 +563,9 @@ This hash is refreshed by `SPFile_finalize` (and on read). It can be used for qu
 
 `SPFile_writeJson` (formats/oiSP/sp_file.h) writes the file as one JSON object: the header counts as a write would
 store them, every pipeline with its stages and every field reflection could not prove, and every embedded oiPL
-layout. `SPFile_writeJsonLayout` writes one layout on its own; it lives here rather than in oiPL because oiPL has
+layout. An enum typed field spells its value by name beside the number (`"valueName": "SrcAlpha"`,
+`ESPField_valueName` off the same name tables the field editors read); masks, booleans and free numbers stay
+numeric, and the name is a projection of the number rather than stored state, so the pair cannot disagree at rest. `SPFile_writeJsonLayout` writes one layout on its own; it lives here rather than in oiPL because oiPL has
 no print or view of its own and the stage names its rows spell come from oiSH. `SPFile_writeJsonMembers` splits
 the way `SHFile`'s does. The shape is the SPDocument contract at the top of web/js/api.js.
 

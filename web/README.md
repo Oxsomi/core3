@@ -286,7 +286,9 @@ The output tabs, each labelled with the command it mirrors:
   differs) and where it lives, and Ctrl+Space (or just typing) completes symbols, struct members (via
   the type graph, including nested `a.b.c`), HLSL keywords and intrinsics, `[[oxc::` annotations and
   `#include` targets. A member hovers as the member of what it is written on rather than by name, so
-  two structs with a `pos` don't answer for each other and the card carries that field's own comment. What
+  two structs with a `pos` don't answer for each other and the card carries that field's own comment. A
+  register titles as its declared type (`Texture2D<F32x4>`, `StructuredBuffer<Material>`, underlying
+  spelling as `aka` when an alias differs), and a structured buffer's element is its go-to-definition. What
   HLSL declares rather than the user hovers too: intrinsics with real signatures and a short
   description (generated from the DXC fork's own tables into `js/intrinsics_data.js`), builtin types
   and the SM 6.6 heap globals, semantics, attributes, and the `[[oxc::]]` / `[shader]` annotations,

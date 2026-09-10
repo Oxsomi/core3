@@ -191,18 +191,16 @@ JSON serialization belongs in the formats
 Each format writes its own JSON view through OxC3_formats_json (formats/json/json_writer.h) and
 src/tools/oxc3_wasm only frames it. What is left is reaching those views from the CLI and widening them.
 
-- oiSP's specializations come out of the JSON view as bare numbers, the enum value rather than the name the
-  CLI print uses, which makes a stored pipeline hard to read and edit as a document.
-- Under `--verbose`, DXIL and SPIR-V could carry a disassembly. In the long run that could replace the
-  binary goldens, or sit alongside them. It follows oiDL's rule for contents: the shape by default, the
-  bytes only when asked, and a stated omission with the size when they are too big to carry.
 - It might make sense to replace the normal print system with this. oiCA and oiDL have their views
   already; oiBC and the image formats are what is left, and each one's shape is straightforward.
-- A deserializer is needed at some point too, not just a writer.
+- A deserializer is needed at some point too, not just a writer. Where a document spells a value
+  twice (oiSP's numeric value + its valueName projection), the reader accepts either alone and
+  refuses both-present-but-disagreeing, since silent precedence would hide exactly the typo the
+  name exists to prevent.
 - Base64 as a second encoding for bytes in a document. Hex is what the writer has, because it matches
   what `file data` prints for binary and stays readable at the sizes contents actually travel at (a
   held entry, so at most the format's medium tier). It costs 2x where base64 costs 1.33x, which only
-  starts mattering if whole binaries travel, which is the --verbose disassembly item. There is no
+  starts mattering if whole binaries travel, which the oiSH view's --verbose disassembly now does. There is no
   base64 codec in the tree, so this is an encoder and its tests, and a decoder too once anything reads
   a document back.
 
@@ -232,8 +230,6 @@ Reflection and the JSON views
   source, where OxAPI.parseEntrypoints now answers the same question off Compiler_parse.
   Deleting the last of it means those four, after which js/mock.js and js/mock_formats.js are only the
   recordings' readers and most of both files goes.
-- Texture and StructuredBuffer inner type names: IHLSLReflection appears to give us the inner type,
-  and hover does not show it.
 
 
 Maintenance

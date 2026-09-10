@@ -589,7 +589,11 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 
 `SHFile_writeJson` (formats/oiSH/sh_file.h) writes the file as one JSON object mirroring the structs: compiler
 version, source hash, flags, the header view, the highest shader model any binary asked for, entries, binaries with
-their identifiers and registers, includes, and the file's register union. `SHFile_writeJsonMembers` writes the same
+their identifiers and registers, includes, and the file's register union. A caller may hand `SHFile_writeJson` a
+disassembler (`SHDisassemble`; the CLI does under `--verbose`, through the shader compiler the formats layer cannot
+own): each binary then carries a `disassembly` object per backend, text where code is held, `null` where none is,
+and a stated omission with its size once the text outgrows what a document carries, which is oiDL's rule for entry
+contents. `SHFile_writeJsonMembers` writes the same
 members into an object the caller opened, which is how the web frontend puts the file's name before them. The shape
 is the SHDocument contract at the top of web/js/api.js; the oiSH suite pins the fragments a reader keys on and the
 frontend's recording pins the bytes end to end.

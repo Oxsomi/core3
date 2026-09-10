@@ -180,7 +180,14 @@ const DOC = { nodes: [
   { id: 20, kind: "Variable", name: "ray", parent: 0, children: [], annotations: [],
     type: { name: "RayDesc", display: "RayDesc", cls: "Struct", def: -1 } },
   { id: 21, kind: "Variable", name: "rq", parent: 0, children: [], annotations: [],
-    type: { name: "RayQuery<5>", display: "RayQuery<5>", cls: "Struct", def: -1 } }
+    type: { name: "RayQuery<5>", display: "RayQuery<5>", cls: "Struct", def: -1 } },
+  /* Typed registers: the declared type titles the hover, the bind-class only stands in without one. */
+  { id: 29, kind: "Register", name: "_mats", parent: 0, children: [], annotations: [],
+    register: { info: "StructuredBuffer", count: 1, cls: "SRV" },
+    type: { name: "StructuredBuffer<Material>", display: "StructuredBuffer<Material>", cls: "Object", def: -1 } },
+  { id: 30, kind: "Register", name: "_areas", parent: 0, children: [], annotations: [],
+    register: { info: "RWStructuredBuffer", count: 1, cls: "UAV" },
+    type: { name: "RWStructuredBuffer<float>", display: "RWStructuredBuffer<F32>", cls: "Object", def: -1 } }
 ] };
 DOC.nodes[5].children = [6, 8];
 
@@ -212,6 +219,16 @@ const IS = window.OxIntelliSense;
   const rc = IS.hoverInfo(DOC, "_bare");
   check("hover: a register array size comes from the bind count too",
     rc && rc.title === "Texture _bare[4]", rc && rc.title);
+
+  /* A register with a reflected type titles as the declaration, not as the bind class. */
+  const rt = IS.hoverInfo(DOC, "_mats");
+  check("hover: a typed register titles as its declared type",
+    rt && rt.title === "StructuredBuffer<Material> _mats", rt && rt.title);
+
+  const ra = IS.hoverInfo(DOC, "_areas");
+  check("hover: the alias titles and the underlying rides as aka",
+    ra && ra.title === "RWStructuredBuffer<F32> _areas" && / aka RWStructuredBuffer<float>/.test(ra.sub),
+    ra && (ra.title + " | " + ra.sub));
 
   const st = IS.hoverInfo(DOC, "Circle");
   check("hover: a struct spells its base and interfaces the HLSL way",

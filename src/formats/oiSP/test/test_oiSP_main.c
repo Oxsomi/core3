@@ -1789,6 +1789,57 @@ static void Test_SPFileWriteJson(Test *t) {
 		&wrapped, "{\"name\":\"x\",\"header\":{", 0
 	));
 
+	//A graphics pipeline's enum typed fields also spell their value by name, so the document reads
+	//without the enum tables at hand; a mask keeps its numeric spelling since no single name fits.
+
+	{
+		SHEntry gfxEntries[2] = {
+			entryOf("mainVS", EGfxPipelineStage_Vertex),
+			entryOf("mainPS", EGfxPipelineStage_Pixel)
+		};
+
+		gfxEntries[1].outputs[0] = ESBType_F32x4;
+
+		U16 gfxBinId = 0;
+		ListU16_createRefConst(&gfxBinId, 1, &gfxEntries[0].binaryIds, NULL);
+		ListU16_createRefConst(&gfxBinId, 1, &gfxEntries[1].binaryIds, NULL);
+
+		SHFile gfxSh = fileOf(gfxEntries, 2);
+		ListSHBinaryInfo_createRefConst(&bin, 1, &gfxSh.binaries, NULL);
+
+		ListSHFile gfxFiles = (ListSHFile) { 0 };
+		ListSHFile_createRefConst(&gfxSh, 1, &gfxFiles, NULL);
+
+		SPFile gfxSp = (SPFile) { 0 };
+		CharString gfxJson = CharString_createNull();
+		U32 gfxId = U32_MAX;
+		const SPStageRef gfxStages[2] = { refOf(0, 0), refOf(0, 1) };
+		CharString none = CharString_createNull();
+
+		Bool named =
+			SPFile_create(ESPSettingsFlags_None, t->alloc, &gfxSp, &t->err) &&
+			SPFile_derivePipeline(&gfxSp, &gfxFiles, NULL, none, gfxStages, 2, NULL, t->alloc, &gfxId, &t->err) &&
+			SPFile_supply(&gfxSp, gfxId, ESPField_BlendEnable, 0, 1, &t->err) &&
+			SPFile_supply(&gfxSp, gfxId, ESPField_BlendSrc, 0, EBlend_SrcAlpha, &t->err) &&
+			SPFile_supply(&gfxSp, gfxId, ESPField_BlendTargetMask, 0, 11, &t->err) &&
+			SPFile_finalize(&gfxSp, t->alloc, &t->err);
+
+		JsonWriter wg = JsonWriter_create(&gfxJson, false, t->alloc);
+
+		named = named && SPFile_writeJson(&gfxSp, &wg, &t->err) && JsonWriter_isComplete(&wg);
+
+		Test_assert(t, "an enum field's value carries its name", named && jsonHas(
+			&gfxJson, "\"field\":\"blend.src\",\"index\":0,\"value\":6,\"valueName\":\"SrcAlpha\",\"source\":\"supplied\""
+		));
+
+		Test_assert(t, "a mask field stays numeric", named && jsonHas(
+			&gfxJson, "\"field\":\"blend.targetMask\",\"index\":0,\"value\":11,\"source\":\"supplied\""
+		));
+
+		CharString_free(&gfxJson, t->alloc);
+		SPFile_free(&gfxSp, t->alloc);
+	}
+
 	Test_assert(t, "a missing file is refused", !SPFile_writeJson(NULL, &w, NULL));
 
 clean:

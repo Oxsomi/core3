@@ -338,11 +338,15 @@ clean:
 	return s_uccess;
 }
 
-static Bool SHFile_jsonBinary(const SHFile *file, U64 binaryId, JsonWriter *w, const Allocator *alloc, Error *e_rr) {
+static Bool SHFile_jsonBinary(
+	const SHFile *file, U64 binaryId, SHDisassemble disassemble, void *disassembleCtx, JsonWriter *w,
+	const Allocator *alloc, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 	CharString typeName = CharString_createNull();
 	CharString value = CharString_createNull();
+	CharString disassembly = CharString_createNull();
 
 	const SHBinaryInfo *binary = &file->binaries.ptr[binaryId];
 	const SHBinaryIdentifier *identifier = &binary->identifier;
@@ -504,6 +508,46 @@ static Bool SHFile_jsonBinary(const SHFile *file, U64 binaryId, JsonWriter *w, c
 		JsonWriter_endObject(w, e_rr)
 	));
 
+	//Only when the caller handed a disassembler in (the CLI's --verbose): text per backend, null for a
+	// backend without code, and a stated omission with the size once the text outgrows what a document
+	// carries. That is oiDL's rule for contents: the shape always, the bytes only when asked and small
+	// enough to travel.
+
+	if (disassemble) {
+
+		static const U64 disassemblyCap = 4 * 1024 * 1024;
+
+		gotoIfError3(clean, JsonWriter_keyObject(w, "disassembly", e_rr));
+
+		for (U8 j = 0; j < 2; ++j) {
+
+			const EGfxBinaryType type = j ? EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
+			const Buffer code = binary->binaries[type];
+
+			gotoIfError3(clean, JsonWriter_key(w, j ? "dxil" : "spirv", e_rr));
+
+			if (!Buffer_length(code)) {
+				gotoIfError3(clean, JsonWriter_null(w, e_rr));
+				continue;
+			}
+
+			CharString_free(&disassembly, alloc);
+			gotoIfError3(clean, disassemble(disassembleCtx, type, code, alloc, &disassembly, e_rr));
+
+			if (CharString_length(disassembly) > disassemblyCap) {
+				gotoIfError3(clean, (
+					JsonWriter_beginObject(w, e_rr) &&
+					JsonWriter_keyU64(w, "omitted", CharString_length(disassembly), e_rr) &&
+					JsonWriter_endObject(w, e_rr)
+				));
+			}
+
+			else gotoIfError3(clean, JsonWriter_str(w, disassembly, e_rr));
+		}
+
+		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
+	}
+
 	gotoIfError3(clean, JsonWriter_keyArray(w, "registers", e_rr));
 
 	for (U64 i = 0; i < binary->registers.length; ++i)
@@ -516,10 +560,14 @@ static Bool SHFile_jsonBinary(const SHFile *file, U64 binaryId, JsonWriter *w, c
 clean:
 	CharString_free(&typeName, alloc);
 	CharString_free(&value, alloc);
+	CharString_free(&disassembly, alloc);
 	return s_uccess;
 }
 
-Bool SHFile_writeJsonMembers(const SHFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr) {
+Bool SHFile_writeJsonMembers(
+	const SHFile *file, SHDisassemble disassemble, void *disassembleCtx, JsonWriter *w, const Allocator *alloc,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
 
@@ -586,7 +634,7 @@ Bool SHFile_writeJsonMembers(const SHFile *file, JsonWriter *w, const Allocator 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "binaries", e_rr));
 
 	for (U64 i = 0; i < file->binaries.length; ++i)
-		gotoIfError3(clean, SHFile_jsonBinary(file, i, w, alloc, e_rr));
+		gotoIfError3(clean, SHFile_jsonBinary(file, i, disassemble, disassembleCtx, w, alloc, e_rr));
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
@@ -643,9 +691,12 @@ clean:
 	return s_uccess;
 }
 
-Bool SHFile_writeJson(const SHFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr) {
+Bool SHFile_writeJson(
+	const SHFile *file, SHDisassemble disassemble, void *disassembleCtx, JsonWriter *w, const Allocator *alloc,
+	Error *e_rr
+) {
 	return
 		JsonWriter_beginObject(w, e_rr) &&
-		SHFile_writeJsonMembers(file, w, alloc, e_rr) &&
+		SHFile_writeJsonMembers(file, disassemble, disassembleCtx, w, alloc, e_rr) &&
 		JsonWriter_endObject(w, e_rr);
 }

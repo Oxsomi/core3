@@ -514,10 +514,13 @@ function signature(doc, n) {
   if (n.kind === "EnumValue")
     return `${n.name}${enumValueText(n)}`;
 
-  /* A register array's size lives in its bind count when it is one-dimensional. */
+  /* A register array's size lives in its bind count when it is one-dimensional. The declared type is
+   * the title (Texture2D<F32x4>, StructuredBuffer<Material>); the bind-class name only stands in for
+   * a document old enough to carry no register types. */
   if (n.kind === "Register") {
     const arr = arrText(n) || (n.register && n.register.count > 1 ? `[${n.register.count}]` : "");
-    return `${n.register ? n.register.info + " " : ""}${n.name}${arr}`;
+    const ty = typeText(n) || (n.register ? n.register.info : "");
+    return `${ty ? ty + " " : ""}${n.name}${arr}`;
   }
 
   if (n.kind === "Typedef")

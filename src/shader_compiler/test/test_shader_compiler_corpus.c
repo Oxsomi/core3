@@ -88,10 +88,12 @@ static void printOiSR(const Allocator *alloc, Buffer buf, const C8 *label) {
 	RefPtr_dec(&ms);
 }
 
-//Read an in-memory oiSH into an SHFile (returns false + prints on failure).
 //ISA references are text, and a Windows checkout hands them back CRLF (core.autocrlf) while
 //amdllpc emits LF, so the comparison is on lines rather than bytes: a \r before a \n is skipped on
 //both sides and any other byte has to match exactly.
+//Guarded with its only caller: targets without the bundled amdllpc compile no ISA phase, and an
+//unused static is an error under -Werror.
+#ifdef SHADER_COMPILER_OFFLINE_ISA
 static Bool isaTextEq(Buffer a, Buffer b) {
 
 	U64 i = 0, j = 0;
@@ -110,7 +112,9 @@ static Bool isaTextEq(Buffer a, Buffer b) {
 
 	return i == lenA && j == lenB;
 }
+#endif
 
+//Read an in-memory oiSH into an SHFile (returns false + prints on failure).
 static Bool shReadFile(const Allocator *alloc, Buffer buf, SHFile *out) {
 
 	Error err = Error_none();

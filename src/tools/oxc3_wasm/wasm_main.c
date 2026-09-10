@@ -317,7 +317,7 @@ static Bool Wasm_shDocument(
 		JsonWriter_beginObject(w, e_rr) &&
 		JsonWriter_keyStr(w, "name", name, e_rr) &&
 		JsonWriter_keyStr(w, "sourceName", sourceName, e_rr) &&
-		SHFile_writeJsonMembers(file, w, alloc, e_rr) &&
+		SHFile_writeJsonMembers(file, NULL, NULL, w, alloc, e_rr) &&
 		JsonWriter_endObject(w, e_rr);
 }
 

@@ -53,6 +53,24 @@ static U64 jsonCount(const CharString *doc, const C8 *needle) {
 	return count;
 }
 
+//SHDisassemble stubs: the formats test proves the plumbing without owning a compiler.
+
+static Bool stubDisassemble(
+	void *ctx, EGfxBinaryType type, Buffer binary, const Allocator *alloc, CharString *text, Error *e_rr
+) {
+	(void) ctx; (void) binary;
+	return CharString_format(
+		alloc, text, e_rr, "STUB DISASSEMBLY (%s)", type == EGfxBinaryType_SPIRV ? "spirv" : "dxil"
+	);
+}
+
+static Bool hugeDisassemble(
+	void *ctx, EGfxBinaryType type, Buffer binary, const Allocator *alloc, CharString *text, Error *e_rr
+) {
+	(void) ctx; (void) type; (void) binary;
+	return CharString_create('x', 4 * 1024 * 1024 + 1, alloc, text, e_rr);
+}
+
 void Test_SHFileWriteJson(Test *t) {
 
 	Test_setModule(t, "SHFile: JSON view");
@@ -92,7 +110,12 @@ void Test_SHFileWriteJson(Test *t) {
 
 	JsonWriter w = JsonWriter_create(&whole, false, t->alloc);
 
-	Test_assert(t, "writes a complete document", SHFile_writeJson(&sh, &w, t->alloc, &t->err) && JsonWriter_isComplete(&w));
+	Test_assert(
+		t, "writes a complete document",
+		SHFile_writeJson(&sh, NULL, NULL, &w, t->alloc, &t->err) && JsonWriter_isComplete(&w)
+	);
+
+	Test_assert(t, "no disassembler means no disassembly section", !jsonCount(&whole, "\"disassembly\""));
 
 	Test_assert(t, "the entry", jsonCount(
 		&whole,
@@ -130,7 +153,7 @@ void Test_SHFileWriteJson(Test *t) {
 	Test_assert(t, "the members write into an open object",
 		JsonWriter_beginObject(&wm, &t->err) &&
 		JsonWriter_keyCstr(&wm, "name", "x", &t->err) &&
-		SHFile_writeJsonMembers(&sh, &wm, t->alloc, &t->err) &&
+		SHFile_writeJsonMembers(&sh, NULL, NULL, &wm, t->alloc, &t->err) &&
 		JsonWriter_endObject(&wm, &t->err) && JsonWriter_isComplete(&wm)
 	);
 
@@ -138,7 +161,62 @@ void Test_SHFileWriteJson(Test *t) {
 		&wrapped, "{\"name\":\"x\",\"compilerVersion\":{", 0
 	));
 
-	Test_assert(t, "a missing file is refused", !SHFile_writeJson(NULL, &w, t->alloc, NULL));
+	//An injected disassembler renders each backend's code as text; a backend without code stays null,
+	//and text past what a document carries becomes a stated omission with its size, oiDL's rule.
+
+	{
+		SHBinaryInfo di = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
+
+		const C8 spvBytes[8] = { 3, 2, 35, 7, 0, 0, 0, 0 };
+		di.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(spvBytes, sizeof(spvBytes));
+
+		SHFile dsh = (SHFile) { 0 };
+		CharString dj = CharString_createNull();
+
+		Bool wrote =
+			Test_SHFileCreate(t, &dsh) &&
+			SHFile_addBinary(&dsh, &di, t->alloc, &t->err);
+
+		JsonWriter dw = JsonWriter_create(&dj, false, t->alloc);
+
+		wrote =
+			wrote && SHFile_writeJson(&dsh, stubDisassemble, NULL, &dw, t->alloc, &t->err) &&
+			JsonWriter_isComplete(&dw);
+
+		Test_assert(t, "an injected disassembler renders the held backend as text", wrote && jsonCount(
+			&dj, "\"disassembly\":{\"spirv\":\"STUB DISASSEMBLY (spirv)\",\"dxil\":null}"
+		));
+
+		CharString_free(&dj, t->alloc);
+		SHFile_free(&dsh, t->alloc);
+
+		//The oversized form: the stub hands back more text than a document carries.
+
+		SHBinaryInfo bi = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
+		bi.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(spvBytes, sizeof(spvBytes));
+
+		SHFile bsh = (SHFile) { 0 };
+		CharString bj = CharString_createNull();
+
+		Bool omitted =
+			Test_SHFileCreate(t, &bsh) &&
+			SHFile_addBinary(&bsh, &bi, t->alloc, &t->err);
+
+		JsonWriter bw = JsonWriter_create(&bj, false, t->alloc);
+
+		omitted =
+			omitted && SHFile_writeJson(&bsh, hugeDisassemble, NULL, &bw, t->alloc, &t->err) &&
+			JsonWriter_isComplete(&bw);
+
+		Test_assert(t, "text past the cap becomes a stated omission with its size", omitted && jsonCount(
+			&bj, "\"disassembly\":{\"spirv\":{\"omitted\":4194305},\"dxil\":null}"
+		));
+
+		CharString_free(&bj, t->alloc);
+		SHFile_free(&bsh, t->alloc);
+	}
+
+	Test_assert(t, "a missing file is refused", !SHFile_writeJson(NULL, NULL, NULL, &w, t->alloc, NULL));
 
 clean:
 	CharString_free(&whole, t->alloc);
