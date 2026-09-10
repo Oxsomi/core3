@@ -1,13 +1,12 @@
 #include "@types.hlsli"
 
 // Full bindless, SM6.6 style: resources come straight off the descriptor heap by index, no descriptor
-// layout at all. DXIL uses ResourceDescriptorHeap/SamplerDescriptorHeap natively; SPIR-V lowers the same
-// code to VK_EXT_descriptor_heap.
+// layout at all, through ResourceDescriptorHeap/SamplerDescriptorHeap.
 //
-// The one thing NOT taken from the heap is the output UAV, and only because this sample compiles for
-// both backends: the DXC fork's SPIR-V path rejects a UAV through a non-emulated heap for now ("UAV
-// support not implemented with non-emulated heaps"), while on DXIL `RWStructuredBuffer<F32x4> outBuf =
-// ResourceDescriptorHeap[0];` works today. A [[oxc::binary("dxil")]] shader can go all the way.
+// DXIL only for now, hence [[oxc::binary("dxil")]]: the compiler refuses the SPIRV leg of any
+// DescriptorHeap shader until DXC's SPV_EXT_descriptor_heap lowering is integrated upstream (see
+// Compiler_compile), and the annotation is what lets the DXIL leg compile alone. The annotation comes
+// off, and the output UAV can move onto the heap too, once that lands.
 
 RWStructuredBuffer<F32x4> _out : register(u0);
 
@@ -20,6 +19,7 @@ PUSH_CONSTANT Blur _blur;
 // $BLUR_TAPS is a preprocessor define: each [[oxc::defines]] annotation is one full variant compile,
 // so this oiSH carries a 5-tap and a 9-tap binary of the same entrypoint.
 
+[[oxc::binary("dxil")]]
 [[oxc::extension("DescriptorHeap")]]
 [[oxc::model("6.6")]]
 [[oxc::defines("BLUR_TAPS" = "5")]]

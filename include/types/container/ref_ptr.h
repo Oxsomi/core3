@@ -82,6 +82,9 @@ static inline U64 RefPtrType_alignment(const RefPtrType *type) {
 	return (U64)1 << (type->lengthAndAlignment >> 24);
 }
 
+//The type is kept by pointer, not copied, so it has to outlive every reference to the object.
+//RefPtr_dec reads it back to free, which is usually long after whoever created the object let go.
+
 typedef struct RefPtr {
 	AtomicI64 refCount;
 	const RefPtrType *refPtrType;

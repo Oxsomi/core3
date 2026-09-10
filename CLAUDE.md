@@ -76,8 +76,6 @@ And run the suite, not just the build:
   <arch>_host (OxC3OutputTag in CMakeLists, set by buildHostToolPackage). Alternating the two scripts
   needs no wipe. If a link ever shows "multiple definition" walls in graphics code nobody touched, a tree is
   being shared again; the tag is the fix, not a wipe.
-- The first test run after wiping a build tree can race the RGA staging (88 ISA failures once), so rerun
-  before believing either failure.
 - OxC3_shader_compiler_test must run from src/shader_compiler/test (ctest does): started elsewhere, the
   corpus pre-creates its output tree at whatever the CWD is, littering empty driver/ features/ hlsl/ ...
   folders there before every compile fails on the missing corpus.

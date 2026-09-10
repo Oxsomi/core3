@@ -49,6 +49,10 @@ void Test_CAWriteJson(Test *t) {
 	CharString out = CharString_createNull();
 	Buffer data = Buffer_createNull();
 
+	//The stream's type has to outlive every reference to it, and the archive still holds one until
+	//clean: a RefPtr keeps the type by pointer and RefPtr_dec reads it back to free the object.
+	const RefPtrType memType = MemoryStream_makeType(t->alloc);
+
 	if(!Test_assert(t, "create", CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err)))
 		goto clean;
 
@@ -110,7 +114,6 @@ void Test_CAWriteJson(Test *t) {
 	//A file the reader left as a stream reports itself as not held, which is what the rule is for
 
 	{
-		const RefPtrType memType = MemoryStream_makeType(t->alloc);
 		StreamRef *sr = NULL;
 
 		if (Test_assert(t, "stream", MemoryStream_create(8, EMemoryStreamFlags_None, &memType, &sr, &t->err))) {

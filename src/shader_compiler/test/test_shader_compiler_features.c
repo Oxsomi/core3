@@ -101,8 +101,10 @@ void Test_shaderCompilerFeatures(Test *t) {
 		//natively detected on SPIRV (see SHEntryRuntime_getSupportedBinaryTypes).
 		{ "features/compute_deriv.hlsl",       ESHExtension_ComputeDeriv,       B_BOTH },
 
-		//SM6.6 dynamic resources (full bindless): native on DXIL, lowered to SPV_EXT_descriptor_heap on SPIRV.
-		{ "features/descriptor_heap.hlsl",     ESHExtension_DescriptorHeap,     B_BOTH },
+		//SM6.6 dynamic resources (full bindless): native on DXIL. The SPIRV leg is refused by
+		//Compiler_compile until DXC's SPV_EXT_descriptor_heap lowering is integrated upstream, which the
+		//heap block below asserts.
+		{ "features/descriptor_heap.hlsl",     ESHExtension_DescriptorHeap,     B_DXIL },
 
 		//DXIL-only: DXC's SPIR-V backend genuinely fails to compile these (verified: SPIRV compile error)
 		{ "features/mesh_task_tex_deriv.hlsl", ESHExtension_MeshTaskTexDeriv,   B_DXIL },
@@ -208,13 +210,34 @@ void Test_shaderCompilerFeatures(Test *t) {
 	#undef B_DXIL
 	#undef B_BOTH
 
-	//--- Full bindless (DescriptorHeap): active vs dormant + register reflection, on both backends ---
+	//--- Full bindless (DescriptorHeap): DXIL active vs dormant + register reflection; SPIRV refuses ---
 	//The table above already asserts the used shader reflects the bit; this block additionally asserts
 	// 1) using the heaps does NOT mark the extension dormant (native detection sees the usage),
 	// 2) heap accesses create no named register entries (full bindless bypasses the binding table),
-	// 3) declaring the extension without using it DOES mark it dormant (native detection on both backends).
+	// 3) declaring the extension without using it DOES mark it dormant (native detection),
+	// 4) the SPIRV leg is refused outright, so nothing provisional reaches a consumer however the
+	//    compile is spelled; this expectation lifts together with the refusal in Compiler_compile.
+
+	{
+		ListBuffer out = (ListBuffer) { 0 };
+
+		//enableLogging=false: the refusal is expected and asserted on, so the compiler stays quiet.
+
+		Bool refused = !(
+			compileFileShader(alloc, "features/descriptor_heap.hlsl", EGfxBinaryType_SPIRV, false, false, &out, &err) &&
+			out.length == 1 && Buffer_length(out.ptr[0])
+		);
+
+		Test_assert(t, "descriptor heap refuses SPIRV until DXC integrates the lowering", refused);
+
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
 
 	for (U64 b = 0; b < sizeof(backends) / sizeof(backends[0]); ++b) {
+
+		if (backends[b].mode != EGfxBinaryType_DXIL)
+			continue;
 
 		ListBuffer out = (ListBuffer) { 0 };
 		SHFile shFile = (SHFile) { 0 };
@@ -243,11 +266,9 @@ void Test_shaderCompilerFeatures(Test *t) {
 		ListBuffer_freeUnderlying(&out, alloc);
 		err = Error_none();
 
-		//Declared but unused: demoted to dormant by native detection on DXIL (no requires flags emitted).
-		//On SPIRV the heap mode declares the DescriptorHeapEXT capability even without a heap access,
-		// so the binary genuinely requires the feature and the extension stays active there.
+		//Declared but unused: demoted to dormant by native detection (no requires flags emitted).
 
-		Bool expectDormant = backends[b].mode == EGfxBinaryType_DXIL;
+		const Bool expectDormant = true;
 
 		Bool unusedOk =
 			compileFileShader(alloc, "features/descriptor_heap_unused.hlsl", backends[b].mode, true, false, &out, &err) &&

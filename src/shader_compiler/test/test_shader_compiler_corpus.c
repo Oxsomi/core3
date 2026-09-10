@@ -89,6 +89,28 @@ static void printOiSR(const Allocator *alloc, Buffer buf, const C8 *label) {
 }
 
 //Read an in-memory oiSH into an SHFile (returns false + prints on failure).
+//ISA references are text, and a Windows checkout hands them back CRLF (core.autocrlf) while
+//amdllpc emits LF, so the comparison is on lines rather than bytes: a \r before a \n is skipped on
+//both sides and any other byte has to match exactly.
+static Bool isaTextEq(Buffer a, Buffer b) {
+
+	U64 i = 0, j = 0;
+	const U64 lenA = Buffer_length(a), lenB = Buffer_length(b);
+
+	while (i < lenA && j < lenB) {
+
+		if (a.ptr[i] == '\r' && i + 1 < lenA && a.ptr[i + 1] == '\n') { ++i; continue; }
+		if (b.ptr[j] == '\r' && j + 1 < lenB && b.ptr[j + 1] == '\n') { ++j; continue; }
+
+		if (a.ptr[i] != b.ptr[j])
+			return false;
+
+		++i; ++j;
+	}
+
+	return i == lenA && j == lenB;
+}
+
 static Bool shReadFile(const Allocator *alloc, Buffer buf, SHFile *out) {
 
 	Error err = Error_none();
@@ -812,7 +834,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 						if (File_read(&ref, 1 * SECOND, 0, 0, &fileHandleType, &golden, &err)) {
 
-							const Bool matches = Buffer_eq(isa, golden);
+							const Bool matches = isaTextEq(isa, golden);
 
 							if (!matches)
 								Log_errorLn(alloc, "ISA mismatch vs reference %.*s", (int) CharString_length(ref), ref.ptr);

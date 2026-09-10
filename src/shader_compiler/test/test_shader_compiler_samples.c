@@ -122,10 +122,19 @@ void Test_shaderCompilerSamples(Test *t) {
 		const CharString brokenName = CharString_createRefCStrConst("broken.hlsl");
 		const CharString coopVecName = CharString_createRefCStrConst("coop_vec.hlsl");
 
+		//descriptor_heap is annotated [[oxc::binary("dxil")]] while the compiler refuses DescriptorHeap
+		//on SPIRV (see the sample itself), so its SPIRV pass produces nothing rather than a binary.
+
+		const CharString dxilOnlyName = CharString_createRefCStrConst("descriptor_heap.hlsl");
+
 		for (U64 i = 0; i < buffers.length && i < allFiles.length; ++i) {
 
 			const Bool isBroken =
 				CharString_findFirstStringSensitive(&allFiles.ptr[i], &brokenName, 0, 0) != U64_MAX;
+
+			const Bool skipsBackend =
+				type != EGfxBinaryType_DXIL &&
+				CharString_findFirstStringSensitive(&allFiles.ptr[i], &dxilOnlyName, 0, 0) != U64_MAX;
 
 			const Bool produced = Buffer_length(buffers.ptr[i]) > 0;
 
@@ -138,9 +147,9 @@ void Test_shaderCompilerSamples(Test *t) {
 				produced ? "compiled" : "no binary"
 			);
 
-			Test_assert(t, allFiles.ptr[i].ptr, isBroken ? !produced : produced);
+			Test_assert(t, allFiles.ptr[i].ptr, isBroken || skipsBackend ? !produced : produced);
 
-			if(!produced)                    //broken.hlsl compiles to nothing, so there is nothing to pin
+			if(!produced)                    //Nothing compiled (broken, or a backend the file skips): nothing to pin
 				continue;
 
 			//coop_vec's DXIL is not reproducible: the same source compiles to different bitcode from run to

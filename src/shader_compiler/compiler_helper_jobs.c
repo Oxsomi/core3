@@ -765,7 +765,14 @@ Bool Compiler_finalizeShaderFile(void *data, U64 threadId, JobQueue *queue) {
 	else if(!Compiler_registerShaderEntries(&ctx->shFile, &ctx->runtimeEntries, ctx->binaryIndices, alloc, &errTmp))
 		s_uccess = false;
 
-	if(s_uccess) {
+	//A file whose every entrypoint is annotated onto the other backend compiles to zero entries here,
+	// and an oiSH without entries is not a document (SHFile_read refuses stageCount 0). The job succeeds
+	// with an empty result instead, which the consumer already treats as "nothing to merge or write".
+
+	if(s_uccess && !ctx->shFile.entries.length)
+		ctx->job->success = true;
+
+	else if(s_uccess) {
 		ctx->job->result = ctx->shFile;             //Move to the job's output slot
 		ctx->shFile = (SHFile) { 0 };
 		ctx->job->success = true;
@@ -877,7 +884,21 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 	gotoIfError3(cleanCtx, JobGroup_enter(&ctx->group, 1, e_rr));    //Self token held while spawning
 	enteredSelf = true;
 
-	for(U64 j = 0; j < ctx->compileCombinations.length; ++j) {
+	//The union of what the file's entrypoints target after their [[oxc::binary(...)]] annotations.
+	//A backend nothing in the file targets spawns no compiles at all, so a file annotated for the other
+	// backend alone succeeds even where this backend's compile would error; that is the annotation's
+	// purpose. Finer than the file is not safe here: identical binary identifiers share one compile
+	// across entrypoints (Compiler_getUniqueCompiles dedupes), so a single entry's annotation cannot
+	// speak for a combination.
+
+	U8 fileBinaryTypes = 0;
+
+	for(U64 j = 0; j < ctx->runtimeEntries.length; ++j)
+		fileBinaryTypes |= SHEntryRuntime_getBinaryTypes(&ctx->runtimeEntries.ptr[j]);
+
+	U64 combinationCount = (fileBinaryTypes >> binaryType) & 1 ? ctx->compileCombinations.length : 0;
+
+	for(U64 j = 0; j < combinationCount; ++j) {
 
 		U16 runtimeEntryId = (U16) (ctx->compileCombinations.ptr[j] >> 16);
 		U16 combinationId  = (U16) ctx->compileCombinations.ptr[j];
@@ -891,9 +912,8 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 		//Skip compiling this combination entirely if the entry's stage / extensions can't be expressed
 		// on the backend we're compiling for (e.g. a workgraph on SPIRV, or an inline-SPIRV atomic on DXIL).
 		//This prevents a guaranteed compile failure.
-		//Only the stage/extension support is checked here (not the [[oxc::binary(...)]] annotation),
-		// because it's identical for every entrypoint sharing this compile.
-		//The annotation is applied per-entrypoint later at link time (Compiler_getLinkEntries).
+		//Only the stage/extension support is checked per combination (the annotation gates per file
+		// above); the per-entrypoint annotation is applied at link time (Compiler_getLinkEntries).
 
 		if (!((SHEntryRuntime_getSupportedBinaryTypes(&ctx->runtimeEntries.ptr[runtimeEntryId]) >> binaryType) & 1))
 			continue;
@@ -1215,7 +1235,8 @@ Bool Compiler_compileShaders(
 		if(!job->success)
 			errorInPrevious = true;
 
-		//Merge into the group's accumulator (empty results come from ignored empty files)
+		//Merge into the group's accumulator (empty results come from ignored empty files and from
+		// backends every entrypoint was annotated away from)
 
 		else if (job->result.entries.ptr) {
 

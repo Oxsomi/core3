@@ -270,25 +270,25 @@ Bool Compiler_compile(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_fragment_shader_barycentric", alloc, e_rr
 				));
 
-			//Full bindless (ResourceDescriptorHeap/SamplerDescriptorHeap lowered to SPV_EXT_descriptor_heap).
-			//-fspv-use-descriptor-heap opts into the real heap lowering (the default is emulation through
-			// descriptor indexing runtime arrays, which OxC3 doesn't accept as registers).
-			//The -fspv-extension list is an allow list, so the extension must also be added for it to be legal.
+			//Full bindless (ResourceDescriptorHeap/SamplerDescriptorHeap) has no SPIRV leg yet: DXC's
+			//SPV_EXT_descriptor_heap lowering is incomplete (its own validator rejects the output; the heap
+			//runtime array carries no ArrayStrideIdEXT) and the proper integration is in progress upstream.
+			//Refused here so nothing provisional is ever emitted rather than failing deep inside validation.
+			//The emulated lowering is no way out either: it produces descriptor indexing runtime arrays,
+			//which OxC3 doesn't accept as registers.
+			//Once the integration lands, this refusal becomes the flag block below, which is what the leg
+			//took while it briefly worked against a patched fork (the -fspv-extension list is an allow
+			//list, so both extensions must be admitted for the heap lowering to be legal):
+			//    Compiler_registerArgCStr(&stringsUTF8, "-fspv-use-descriptor-heap", alloc, e_rr)
+			//    Compiler_registerArgCStr(&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_heap", alloc, e_rr)
+			//    Compiler_registerArgCStr(&stringsUTF8, "-fspv-extension=SPV_KHR_untyped_pointers", alloc, e_rr)
 
-			if(toCompile->extensions & ESHExtension_DescriptorHeap) {
-
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-use-descriptor-heap", alloc, e_rr));
-
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_heap", alloc, e_rr
+			if(toCompile->extensions & ESHExtension_DescriptorHeap)
+				retError(clean, Error_unsupportedOperation(
+					0,
+					"Compiler_compile() DescriptorHeap can't target SPIRV until DXC's SPV_EXT_descriptor_heap "
+					"lowering is integrated; annotate the entrypoint [[oxc::binary(\"dxil\")]] to compile DXIL alone"
 				));
-
-				//The heap lowering accesses the heaps through OpUntypedAccessChainKHR
-
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_KHR_untyped_pointers", alloc, e_rr
-				));
-			}
 
 			//NOTE: F32/F64 atomics have no native HLSL intrinsic and are expressed via inline SPIR-V
 			// ([[vk::ext_extension("SPV_EXT_shader_atomic_float_add")]] on the atomic function).

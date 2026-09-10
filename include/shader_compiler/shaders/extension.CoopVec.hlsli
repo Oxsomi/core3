@@ -213,7 +213,10 @@ namespace oxc {
 		using namespace dx::linalg;
 		using MatrixT = Matrix<ComponentType::F8_E4M3FN, 4, 4, MatrixUse::A, MatrixScope::Thread>;
 		MatrixT mat = MatrixT::Load<MatrixLayoutEnum::ColMajor>(matBuf, offset, /* byte stride = 4 rows * 1 byte */ 4);
-		return Multiply<half>(mat, input);
+		//The vector's own interpretation, spelled explicitly: the plain-vector Multiply assumes the input is
+		// interpreted as the MATRIX type, and an FP8 interpretation makes the validator expect K/4 packed
+		// scalars where these are 4 unpacked halves. Only the weights are FP8; the activations stay F16.
+		return Multiply<half>(mat, MakeInterpretedVector<ComponentType::F16>(input));
 	}
 
 	//Quantized: 4x4 FP8 (e5m2) weight matrix * F16 vector -> F16. Column-major, 1 byte/element.
@@ -223,7 +226,8 @@ namespace oxc {
 		using namespace dx::linalg;
 		using MatrixT = Matrix<ComponentType::F8_E5M2, 4, 4, MatrixUse::A, MatrixScope::Thread>;
 		MatrixT mat = MatrixT::Load<MatrixLayoutEnum::ColMajor>(matBuf, offset, /* byte stride = 4 rows * 1 byte */ 4);
-		return Multiply<half>(mat, input);
+		//Same explicit interpretation as the e4m3 helper above and for the same reason.
+		return Multiply<half>(mat, MakeInterpretedVector<ComponentType::F16>(input));
 	}
 
 	//Quantized: 4x4 INT8 weight matrix * INT8 activations -> INT32 accumulate. Column-major, 1 byte/element.

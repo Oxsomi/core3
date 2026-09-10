@@ -339,6 +339,218 @@ void Test_shaderCompilerDriver(Test *t) {
 		Test_assert(t, "--no-opt keeps strictly more source lines alive", okBoth && lines[1] > lines[0]);
 	}
 
+	//--- [[oxc::binary(...)]] gates the compile, not just the link: a backend no entrypoint in the
+	//--- file targets spawns no compile and produces no oiSH, without that counting as a failure.
+	//--- The #error arms only when the excluded backend's compile actually runs (the parse never
+	//--- defines __spirv__), which is the annotation's point: a file that cannot compile on the other
+	//--- backend still succeeds. ---
+
+	{
+		const C8 *gatedSrc =
+			"#ifdef __spirv__\n"
+			"#error this file is annotated dxil-only, its spirv leg must never compile\n"
+			"#endif\n"
+			"RWStructuredBuffer<uint> g;\n"
+			"[[oxc::binary(\"dxil\")]]\n"
+			"[[oxc::stage(\"compute\")]]\n[numthreads(8,1,1)]\n"
+			"void main(uint i : SV_DispatchThreadID) { g[i] = i; }\n";
+
+		//The excluded backend alone: nothing compiles, nothing is produced, and that is success.
+		//A zero-entry oiSH written anyway (an unreadable document) shows up as a non-empty buffer here.
+
+		const C8 *gated[1] = { gatedSrc };
+		ListBuffer spv = (ListBuffer) { 0 };
+		Error e2 = Error_none();
+
+		//enableLogging=false: if the gate regresses, the compile hits the #error, and that diagnostic
+		//belongs in the asserts below rather than in the log.
+		Bool okSpv = compileInlineShaders(alloc, gated, 1, EGfxBinaryType_SPIRV, 1, "driver_gated", false, &spv, &e2);
+
+		Test_assert(
+			t, "a backend the file is annotated away from produces nothing, successfully",
+			okSpv && spv.length == 1 && !Buffer_length(spv.ptr[0])
+		);
+
+		ListBuffer_freeUnderlying(&spv, alloc);
+
+		//Both backends into one output, which is how `-compile-output all` compiles a dxil-only file.
+		//A failed job anywhere in a group suppresses the whole group's document, so if the excluded
+		//backend's compile runs at all (and trips the #error), the dxil document below never appears.
+
+		ListCharString files = (ListCharString) { 0 }, texts = (ListCharString) { 0 }, outs = (ListCharString) { 0 };
+		ListCharString includeDirs = (ListCharString) { 0 };
+		ListU8 modes = (ListU8) { 0 };
+		ListBuffer buffers = (ListBuffer) { 0 };
+		SHFile sh = (SHFile) { 0 };
+
+		Bool okBoth =
+			ListCharString_pushBack(&files, CharString_createRefCStrConst("gated.hlsl"), alloc, NULL) &&
+			ListCharString_pushBack(&texts, CharString_createRefCStrConst(gatedSrc), alloc, NULL) &&
+			ListCharString_pushBack(&outs, CharString_createRefCStrConst("gated.oiSH"), alloc, NULL) &&
+			ListU8_pushBack(&modes, (U8) EGfxBinaryType_SPIRV, alloc, NULL) &&
+			ListCharString_pushBack(&files, CharString_createRefCStrConst("gated.hlsl"), alloc, NULL) &&
+			ListCharString_pushBack(&texts, CharString_createRefCStrConst(gatedSrc), alloc, NULL) &&
+			ListCharString_pushBack(&outs, CharString_createRefCStrConst("gated.oiSH"), alloc, NULL) &&
+			ListU8_pushBack(&modes, (U8) EGfxBinaryType_DXIL, alloc, NULL) &&
+			Compiler_compileShaders(
+				&files, &texts, &outs, &modes,
+				1, false, false, false, (ECompilerWarning) 0, false, ECompileType_Compile,
+				&includeDirs, false, alloc, &buffers, &e2
+			) &&
+			buffers.length == 2 &&
+			Buffer_length(buffers.ptr[1]) &&
+			readOiSH(alloc, buffers.ptr[1], &sh, &e2) &&
+			sh.entries.length == 1 && sh.binaries.length >= 1 &&
+			Buffer_length(sh.binaries.ptr[0].binaries[EGfxBinaryType_DXIL]) &&
+			!Buffer_length(sh.binaries.ptr[0].binaries[EGfxBinaryType_SPIRV]);
+
+		Test_assert(t, "requesting both backends still produces the dxil-only document", okBoth);
+
+		SHFile_free(&sh, alloc);
+		ListBuffer_freeUnderlying(&buffers, alloc);
+		ListCharString_free(&files, alloc);
+		ListCharString_free(&texts, alloc);
+		ListCharString_free(&outs, alloc);
+		ListCharString_free(&includeDirs, alloc);
+		ListU8_free(&modes, alloc);
+	}
+
+	//--- Mixed per-entrypoint [[oxc::binary(...)]] in one file: the file-level gate unions the
+	//--- entrypoints, so a file holding a spv-only and a dxil-only entry still compiles BOTH legs, and
+	//--- the narrowing happens per entrypoint at link. Each annotation style has its own compile shape
+	//--- ([shader] links entries out of shared lib compiles, [[oxc::stage]] compiles per entry), so the
+	//--- same expectations run against both. ---
+
+	{
+		//Entry names, their annotation, and the backends each entry's binary must carry, per style.
+		//split: one entry per backend. half: one restricted, the other on every backend.
+
+		static const struct MixedCase {
+			const C8 *src;
+			Bool aHasSpv, aHasDxil;                  //Entry "a"'s expected binaries
+			Bool bHasSpv, bHasDxil;                  //Entry "b"'s
+		} mixedCases[] = {
+
+			//[[oxc::stage]] style, one entry per backend
+
+			{
+				"RWStructuredBuffer<uint> g;\n"
+				"[[oxc::binary(\"spv\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(8,1,1)]\n"
+				"void a(uint i : SV_DispatchThreadID) { g[i] = i; }\n"
+				"[[oxc::binary(\"dxil\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(8,1,1)]\n"
+				"void b(uint i : SV_DispatchThreadID) { g[i] = i * 2; }\n",
+				true, false, false, true
+			},
+
+			//[[oxc::stage]] style, one restricted and one everywhere
+
+			{
+				"RWStructuredBuffer<uint> g;\n"
+				"[[oxc::binary(\"dxil\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(8,1,1)]\n"
+				"void a(uint i : SV_DispatchThreadID) { g[i] = i; }\n"
+				"[[oxc::stage(\"compute\")]]\n[numthreads(8,1,1)]\n"
+				"void b(uint i : SV_DispatchThreadID) { g[i] = i * 2; }\n",
+				false, true, true, true
+			},
+
+			//[shader] style, one entry per backend (entries link out of a shared lib compile, which is
+			//exactly where a per-entry compile gate would have dropped the other entry's leg)
+
+			{
+				"RWStructuredBuffer<uint> g;\n"
+				"[[oxc::binary(\"spv\")]]\n[shader(\"compute\")]\n[numthreads(8,1,1)]\n"
+				"void a(uint i : SV_DispatchThreadID) { g[i] = i; }\n"
+				"[[oxc::binary(\"dxil\")]]\n[shader(\"compute\")]\n[numthreads(8,1,1)]\n"
+				"void b(uint i : SV_DispatchThreadID) { g[i] = i * 2; }\n",
+				true, false, false, true
+			},
+
+			//[shader] style, one restricted and one everywhere
+
+			{
+				"RWStructuredBuffer<uint> g;\n"
+				"[[oxc::binary(\"spv\")]]\n[shader(\"compute\")]\n[numthreads(8,1,1)]\n"
+				"void a(uint i : SV_DispatchThreadID) { g[i] = i; }\n"
+				"[shader(\"compute\")]\n[numthreads(8,1,1)]\n"
+				"void b(uint i : SV_DispatchThreadID) { g[i] = i * 2; }\n",
+				true, false, true, true
+			}
+		};
+
+		static const C8 *mixedNames[] = {
+			"mixed binary annotations: oxc style, one entry per backend",
+			"mixed binary annotations: oxc style, one restricted one everywhere",
+			"mixed binary annotations: [shader] style, one entry per backend",
+			"mixed binary annotations: [shader] style, one restricted one everywhere"
+		};
+
+		for (U64 c = 0; c < sizeof(mixedCases) / sizeof(mixedCases[0]); ++c) {
+
+			const struct MixedCase *mixed = &mixedCases[c];
+
+			ListCharString files = (ListCharString) { 0 }, texts = (ListCharString) { 0 }, outs = (ListCharString) { 0 };
+			ListCharString includeDirs = (ListCharString) { 0 };
+			ListU8 modes = (ListU8) { 0 };
+			ListBuffer buffers = (ListBuffer) { 0 };
+			SHFile sh = (SHFile) { 0 };
+			Error e2 = Error_none();
+
+			Bool ok =
+				ListCharString_pushBack(&files, CharString_createRefCStrConst("mixed.hlsl"), alloc, NULL) &&
+				ListCharString_pushBack(&texts, CharString_createRefCStrConst(mixed->src), alloc, NULL) &&
+				ListCharString_pushBack(&outs, CharString_createRefCStrConst("mixed.oiSH"), alloc, NULL) &&
+				ListU8_pushBack(&modes, (U8) EGfxBinaryType_SPIRV, alloc, NULL) &&
+				ListCharString_pushBack(&files, CharString_createRefCStrConst("mixed.hlsl"), alloc, NULL) &&
+				ListCharString_pushBack(&texts, CharString_createRefCStrConst(mixed->src), alloc, NULL) &&
+				ListCharString_pushBack(&outs, CharString_createRefCStrConst("mixed.oiSH"), alloc, NULL) &&
+				ListU8_pushBack(&modes, (U8) EGfxBinaryType_DXIL, alloc, NULL) &&
+				Compiler_compileShaders(
+					&files, &texts, &outs, &modes,
+					1, false, false, false, (ECompilerWarning) 0, false, ECompileType_Compile,
+					&includeDirs, false, alloc, &buffers, &e2
+				) &&
+				buffers.length == 2 && Buffer_length(buffers.ptr[1]) &&
+				readOiSH(alloc, buffers.ptr[1], &sh, &e2) &&
+				sh.entries.length == 2;
+
+			//Which backends each entry's binaries carry, unioned over its binaryIds: exactly the
+			//annotated set, nothing dropped and nothing leaking in from the other entry.
+
+			for (U64 e = 0; ok && e < 2; ++e) {
+
+				const CharString wanted = CharString_createRefCStrConst(e ? "b" : "a");
+				const SHEntry *entry = NULL;
+				Bool hasSpv = false, hasDxil = false;
+
+				for (U64 i = 0; i < sh.entries.length; ++i)
+					if (CharString_equalsStringSensitive(&sh.entries.ptr[i].name, &wanted))
+						entry = &sh.entries.ptr[i];
+
+				ok &= entry != NULL;
+
+				for (U64 i = 0; entry && i < entry->binaryIds.length; ++i) {
+					const SHBinaryInfo *bin = &sh.binaries.ptr[entry->binaryIds.ptr[i]];
+					hasSpv |= Buffer_length(bin->binaries[EGfxBinaryType_SPIRV]) > 0;
+					hasDxil |= Buffer_length(bin->binaries[EGfxBinaryType_DXIL]) > 0;
+				}
+
+				ok &=
+					hasSpv == (e ? mixed->bHasSpv : mixed->aHasSpv) &&
+					hasDxil == (e ? mixed->bHasDxil : mixed->aHasDxil);
+			}
+
+			Test_assert(t, mixedNames[c], ok);
+
+			SHFile_free(&sh, alloc);
+			ListBuffer_freeUnderlying(&buffers, alloc);
+			ListCharString_free(&files, alloc);
+			ListCharString_free(&texts, alloc);
+			ListCharString_free(&outs, alloc);
+			ListCharString_free(&includeDirs, alloc);
+			ListU8_free(&modes, alloc);
+		}
+	}
+
 	//--- Invalid HLSL is reported as failure, not a crash ---
 
 	{

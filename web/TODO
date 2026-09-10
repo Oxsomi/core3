@@ -152,6 +152,10 @@ Compiler and CLI, as the page uses them
 - `shader assemble` into a real oiSH (an SHFile built from a binary plus an identifier). The web
   round-trip check would then refuse rather than warn.
 - Reflect a bare .spv / .dxil has no CLI verb yet, though the page does it. The web CLI map says so.
+- DescriptorHeap shaders refuse the SPIRV leg (Compiler_compile): DXC's SPV_EXT_descriptor_heap
+  lowering emits SPIR-V its own validator rejects, and the proper integration is being done upstream.
+  When that lands: bump the pin, lift the refusal and its feature-test assert, take
+  [[oxc::binary("dxil")]] off the descriptor_heap sample, and pin its SPIRV golden.
 - Parse-only permutation listing as a CLI verb. The page already gets it from the module's
   oxc3_parseEntrypoints (Compiler_parse behind it), so what is left is the CLI/--json half the VS Code
   host would call.

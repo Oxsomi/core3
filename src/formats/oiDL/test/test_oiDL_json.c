@@ -44,6 +44,10 @@ void Test_DLWriteJson(Test *t) {
 	DLFile file = (DLFile) { 0 };
 	CharString out = CharString_createNull();
 
+	//The stream's type has to outlive every reference to it, and the file still holds one until
+	//clean: a RefPtr keeps the type by pointer and RefPtr_dec reads it back to free the object.
+	const RefPtrType memType = MemoryStream_makeType(t->alloc);
+
 	const DLSettings settings = { .dataType = EDLDataType_String };
 
 	if(!Test_assert(t, "create", DLFile_create(&settings, 0, t->alloc, &file, &t->err)))
@@ -96,7 +100,6 @@ void Test_DLWriteJson(Test *t) {
 	CharString_free(&out, t->alloc);
 
 	{
-		const RefPtrType memType = MemoryStream_makeType(t->alloc);
 		StreamRef *ms = NULL;
 
 		if (Test_assert(t, "stream", MemoryStream_create(4, EMemoryStreamFlags_None, &memType, &ms, &t->err))) {
