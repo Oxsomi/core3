@@ -608,6 +608,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      # ── Golden mismatches ──────────────────────────────────────────────────
+      # A pinned-output mismatch writes the produced file beside its reference as *.new. On a runner those
+      # bytes are otherwise unreachable, and a byte level diff against the committed golden is the only way
+      # to attribute the difference, so they ship as an artifact whenever a run leaves any behind.
+
+      - name: Collect golden mismatches
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-mismatches-${{ inputs.hook_name }}
+          path: src/shader_compiler/test/**/*.new
+          if-no-files-found: ignore
+          retention-days: 14
+
       # ── Cleanup before cache save ──────────────────────────────────────────
       # The LRU pass matters because restore-keys chains caches across conanfile changes.
       # Without it every superseded dxc build would ride along in each newly saved cache forever.
