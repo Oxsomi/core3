@@ -357,6 +357,61 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_describeCompile(
+	const SHEntryRuntime *entry,
+	U16 combinationId,
+	EGfxBinaryType binaryType,
+	Bool isDebug,
+	Bool noOpt,
+	Bool keepRegisters,
+	Bool isRt,
+	Bool isGfxOrComp,
+	CharString inputPath,
+	CharString input,
+	const ListCharString *includeDirs,
+	CompilerSettings *settings,
+	SHBinaryIdentifier *identifier,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!entry || !settings || !identifier)
+		retError(clean, Error_nullPointer(
+			!entry ? 0 : (!settings ? 11 : 12),
+			"Compiler_describeCompile()::entry, settings and identifier are required"
+		));
+
+	*settings = (CompilerSettings) {
+		.string = input,
+		.path = inputPath,
+		.debug = isDebug,
+		.noOptimization = noOpt,
+		.keepUnusedRegisters = keepRegisters,
+		.isRt = isRt,
+		.containsGfxOrComp = isGfxOrComp,
+		.format = ECompilerFormat_HLSL,
+		.outputType = binaryType,
+		.infoAboutIncludes = true,        //Required to supply oiSH info about includes
+		.includeDirs = includeDirs ? *includeDirs : (ListCharString) { 0 }
+	};
+
+	*identifier = (SHBinaryIdentifier) { 0 };
+	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(entry, combinationId, identifier, e_rr));
+
+	//isRt and isGfxOrComp stay the caller's aggregates over every entry sharing the compile, the same
+	// values the link step follows (Compiler_compileLinkJob), so a single entry never speaks for a
+	// shared compile. Today a shared compile is always flag homogeneous, since asBinaryIdentifier keeps
+	// RT and non RT identifiers apart, so the aggregate equals the stored entry's own flags; the
+	// aggregate must keep governing if that combining ever widens (see the TODO in
+	// Compiler_getUniqueCompiles).
+
+	settings->isLib = entry->isShaderAnnotation;
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_compileShaderSingle(
 	const Compiler *compiler,
 	EGfxBinaryType binaryType,
@@ -385,30 +440,17 @@ Bool Compiler_compileShaderSingle(
 	if(dest->binary.ptr || dest->compileErrors.ptr || dest->includeInfo.ptr)
 		retError(clean, Error_invalidParameter(5, 0, "Compiler_compileShaderSingle()::dest was present, but not empty"));
 
-	CompilerSettings settings = (CompilerSettings) {
-		.string = input,
-		.path = inputPath,
-		.debug = isDebug,
-		.noOptimization = noOpt,
-		.keepUnusedRegisters = keepRegisters,
-		.isRt = isRt,
-		.containsGfxOrComp = isGfxOrComp,
-		.format = ECompilerFormat_HLSL,
-		.outputType = binaryType,
-		.infoAboutIncludes = true,        //Required to supply oiSH info about includes
-		.includeDirs = *includeDirs
-	};
-
-	//First we need to go from text with includes and defines to easy to parse text
-	//Accessing SHEntryRuntime here without locking is safe, since we don't access these properties from asBinaryIdentifier
-
-	SHEntryRuntime entry = runtimeEntries->ptrNonConst[runtimeEntryId];
+	CompilerSettings settings = (CompilerSettings) { 0 };
 	SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
-	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&entry, combinationId, &binaryIdentifier, e_rr));
 
-	settings.isLib = entry.isShaderAnnotation;
-	settings.containsGfxOrComp = SHEntryRuntime_containsGfxOrComp(entry);
-	settings.isRt = SHEntryRuntime_isRt(entry);
+	//No lock around the shared entry: asBinaryIdentifier only reads fields the link jobs never mutate.
+
+	gotoIfError3(clean, Compiler_describeCompile(
+		&runtimeEntries->ptr[runtimeEntryId], combinationId, binaryType,
+		isDebug, noOpt, keepRegisters, isRt, isGfxOrComp,
+		inputPath, input, includeDirs,
+		&settings, &binaryIdentifier, e_rr
+	));
 
 	gotoIfError3(clean, Compiler_compile(compiler, &settings, &binaryIdentifier, alloc, dest, e_rr));
 

@@ -58,7 +58,7 @@ the library does not have yet rather than a shortcut taken here:
 
 | Not wired | Why |
 | --- | --- |
-| Raw DXC (Command tab) | the compiler exposes neither its own argv (`getCompileArgs`) nor a raw compile entry |
+| Raw DXC (Command tab, the Run button) | the argv is real (`oxc3_getCompileArgs`), but a raw compile entry running an edited flag line doesn't exist yet |
 | Reflecting a standalone SPV / DXIL | backend reflection only runs inside a compile (`Compiler_process` wants the entry's runtime reflection to check against), so no call takes a bare binary |
 | Assemble a binary into an oiSH | `shader assemble` produces a `.spv`; wrapping one into an `SHFile` with an identifier isn't a CLI verb |
 | Per-backend lean oiSH download | `file split -format oiSH` is planned; compiling with one `-compile-output` produces one today |
@@ -267,8 +267,10 @@ Plain scripts with IIFE namespaces (`OxUtil`, `OxTheme`, `OxMock`, `OxMockFormat
 the *source* (`[shader]`, `[[oxc::model]]`, `[[oxc::extension]]`, …) exactly like the CLI; the
 toolbar only carries the flags the CLI has (`-compile-output`, `--debug`, `--split`,
 `--keep-registers`, the three `--warn-*`, `--ignore-empty-files`, and `shader reflect` as the
-"Reflection only" switch). The Command tab prints the equivalent CLI line plus the DXC
-invocation per compile group, built from the real flag set in `src/shader_compiler/compiler.cpp`.
+"Reflection only" switch). The Command tab prints the equivalent CLI line plus one DXC invocation
+per compile, read back from the compiler itself (`Compiler_buildCompileArgs` behind
+`oxc3_getCompileArgs`), so each line is exactly what that compile runs; without the module the DXC
+lines refuse like everything else that needs the compiler, and only the CLI line renders.
 
 The output tabs, each labelled with the command it mirrors:
 

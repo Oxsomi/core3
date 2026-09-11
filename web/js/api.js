@@ -121,8 +121,8 @@ function markMock(doc, why) {
 /* What the module can't answer, and why. The page shows this rather than letting a fabricated
  * result pass for a real one; each entry names the library call that would replace it. */
 const STUBS = [
-  { what: "Raw DXC (Command tab)",
-    why: "the compiler doesn't expose its own argv or a raw compile entry (getCompileArgs), so there's nothing to call" },
+  { what: "Raw DXC (Command tab, the Run button)",
+    why: "the argv is real (getCompileArgs), but a raw compile entry running an edited flag line doesn't exist yet" },
   { what: "Reflecting a standalone SPV / DXIL binary",
     why: "backend reflection only runs as part of building an oiSH (Compiler_process); no call takes a bare binary" },
   { what: "Assembling a binary into an oiSH",
@@ -290,12 +290,25 @@ window.OxAPI = {
     noModule("compiling");
   },
 
+  /* ---- Compiler_buildCompileArgs: the dxc argv per compile, from the compiler itself ----- */
+  /* Returns [{entryId, combination, binaryType, entrypoint|null, stage, lib, requiresLink,
+   *   args:[], amendedSource|null}], one element per compile the driver would spawn, or null when
+   *   it can't answer (no module, a module predating the export, or a source that doesn't parse);
+   *   the Command tab then refuses (no module) or keeps its previous listing (mid-edit). */
+  async getCompileArgs(name, project, opts) {
+    if (wasm()) {
+      try { return await W().getCompileArgs(name, project, opts); }
+      catch (err) { return null; }
+    }
+    return null;
+  },
+
   /* ---- raw DXC (Compile mode -> Command tab -> Run with DXC) --------------------------- */
   async compileRaw(argv, name, project) {
     //TODO: MOCK! NOT REAL DATA YET! This does not run DXC. The binary it hands back is fabricated,
     // and it is fabricated even with the module loaded, so nothing else on the page warns about it.
-    // What it needs: the compiler exposing its own argv (getCompileArgs) plus a raw compile entry, so
-    // an edited flag line runs through the same DXC instance the compile path uses. The output would
+    // The argv half is real now (getCompileArgs above); what remains is a raw compile entry, so an
+    // edited flag line runs through the same DXC instance the compile path uses. The output would
     // be a standalone binary, never an oiSH: no annotations processed, nothing reflected into an
     // identifier. Until then every result carries `mock` and the views render the warning.
     await fakeLatency(200, 500);

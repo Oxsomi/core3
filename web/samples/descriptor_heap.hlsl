@@ -5,7 +5,7 @@
 //
 // DXIL only for now, hence [[oxc::binary("dxil")]]: the compiler refuses the SPIRV leg of any
 // DescriptorHeap shader until DXC's SPV_EXT_descriptor_heap lowering is integrated upstream (see
-// Compiler_compile), and the annotation is what lets the DXIL leg compile alone. The annotation comes
+// Compiler_buildCompileArgs), and the annotation is what lets the DXIL leg compile alone. The annotation comes
 // off, and the output UAV can move onto the heap too, once that lands.
 
 RWStructuredBuffer<F32x4> _out : register(u0);

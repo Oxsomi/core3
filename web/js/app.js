@@ -1213,7 +1213,7 @@ function wireAssembleCard(doc) {
 function onRawDxc(r) {
   state.standalone[r.name] = { type: r.type, bytes: r.bytes, text: r.text, origin: r.origin, raw: true };
   toast(`<b>MOCK! NOT REAL DATA YET!</b> ${esc(r.name)} was NOT produced by DXC: nothing ran, the bytes are fabricated. ` +
-    "Running an edited flag line needs the compiler to expose its own argv plus a raw compile entry (see api.js compileRaw).", "danger");
+    "The argv is real now, but running an edited flag line still needs a raw compile entry (see api.js compileRaw).", "danger");
   $("#mBins").checked = true; setMode("bins");
   state.binActive = r.name; openStandalone(r.name);
 }
@@ -1857,7 +1857,7 @@ const OxCliMap = [
   { c: "OxC3 shader assemble -input x.txt -output x.spv|x.dxil", w: "SPV/DXIL mode → the strip's Assemble card; the result is a loaded binary like any other. SPIR-V text or DXIL LL text; either result is judged by the validator before it loads.", s: "live" },
   { c: "reflect a bare .spv / .dxil (spirv-reflect / DXC container reflection; no CLI verb yet)", w: "SPV/DXIL mode: a loaded binary is reflected from its bytes into a one-binary document, so Reflection, ISA, Pipeline and Diff A↔B apply to it; it has no identifier until assembled.", s: "planned" },
   { c: "shader assemble → oiSH (planned: -stage, -model, -extensions, -vendors, a previous oiSH to merge into)", w: "SPV/DXIL mode → oiSH tab → “Assemble into oiSH”: gives a bare binary the identifier its source would have declared; the result lands in Inspect mode as a real oiSH (Combine with the other backend's file, pipelines, downloads).", s: "planned" },
-  { c: "raw DXC: dxc <any flags> x.hlsl (no CLI verb yet; the wasm entry is getCompileArgs + a raw compile)", w: "Compile mode → Command tab: every derived DXC line is editable and runnable (“Run with DXC”), plus a free line. Output is a standalone binary in SPV/DXIL mode, never an oiSH: no annotations processed, nothing reflected into an identifier.", s: "planned" },
+  { c: "raw DXC: dxc <any flags> x.hlsl (no CLI verb yet; oxc3_getCompileArgs is live, the raw compile entry isn't)", w: "Compile mode → Command tab: each derived DXC line is the compiler's own argv (Compiler_buildCompileArgs), editable, plus a free line. Running one (“Run with DXC”) stays planned; the output would be a standalone binary in SPV/DXIL mode, never an oiSH: no annotations processed, nothing reflected into an identifier.", s: "planned" },
   { c: "OxC3 file combine -format oiSH -input a.oiSH -input2 b.oiSH -output c.oiSH",
     w: "Inspect mode → “Combine A+B” (requires same source hash / includes / settings; errors surface as a toast).", s: "live" },
   { c: "OxC3 file split -format oiSH …", w: "Download menu → per-backend lean files (x.spv.oiSH / x.dxil.oiSH). The CLI verb itself is still marked TODO upstream.", s: "planned" },

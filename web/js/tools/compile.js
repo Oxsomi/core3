@@ -45,77 +45,66 @@ function cliLine(fileName, o) {
 }
 
 /* ---- derived DXC invocations --------------------------------------------------------- */
-/* Illustrative but built from the flags the real compiler passes (src/shader_compiler/compiler.cpp):
- * -T/-E/-HV, __OXC* defines, -Zi -Qembed_debug vs -O3, -Wconversion -Wdouble-promotion,
- * -enable-16bit-types, -enable-payload-qualifiers, and on SPIR-V: -spirv -fvk-use-dx-layout,
- * -fspv-target-env=…, -fspv-extension=…, -fhlsl-unused-resource-bindings=reserve-all,
- * -fvk-invert-y -fvk-use-dx-position-w (gfx), -fspv-entrypoint-name=main (standalone stages). */
-const SPV_EXT_FLAG = { RayQuery: "SPV_KHR_ray_query", Multiview: "SPV_KHR_multiview", "16BitTypes": "SPV_KHR_16bit_storage",
-  ComputeDeriv: "SPV_NV_compute_shader_derivatives", RayMotionBlur: "SPV_NV_ray_tracing_motion_blur",
-  DescriptorHeap: "SPV_EXT_descriptor_heap" };
 
-function renderCommands(activeName, project) {
+/* An argv element the shell would split or unquote gets quoted, so a printed line pastes back as run. */
+function quoteArg(a) {
+  return /[\s"']/.test(a) ? '"' + a.replace(/(["\\])/g, "\\$1") + '"' : a;
+}
+
+/* The real lens: one card per compile the driver spawns, each line the argv the compiler itself built
+ * (Compiler_buildCompileArgs through oxc3_getCompileArgs), so nothing here can drift from the run. */
+function realCommandsHtml(compiles, card) {
+  let html = `<div class="small text-body-secondary mb-2"><i class="bi bi-check-circle"></i>
+    argv read back from the compiler: these are the exact dxc invocations this compile runs.</div>`;
+  for (const c of compiles) {
+    const t = c.args.indexOf("-T");
+    const profile = t >= 0 ? c.args[t + 1] : "";
+    const label = `${c.binaryType === "spirv" ? "SPIR-V" : "DXIL"} · ${profile}`
+      + (c.lib ? " library" : (c.entrypoint ? ` (${c.entrypoint})` : ""))
+      + (c.requiresLink ? " + link" : "");
+    html += card(label, c.binaryType === "spirv" ? "chip-spv" : "chip-dxil", "dxc " + c.args.map(quoteArg).join(" "));
+    if (c.amendedSource)
+      html += `<details class="small mt-1"><summary>uniforms amend the input source; this line compiles the
+        amended text below, then the link step specializes it</summary>
+        <pre class="asm cmdcard mt-1">${esc(c.amendedSource)}</pre></details>`;
+  }
+  return html;
+}
+
+let renderSeq = 0;
+
+async function renderCommands(activeName, project) {
   const o = opts();
   $("#cmdCli").textContent = cliLine(activeName, o);
+  $("#cmdNote").textContent = o.reflectionOnly
+    ? "Reflection only (OxC3 shader reflect): same compiles, then binaries are stripped and the oiSH is rewritten with ESHSettingsFlags_ReflectionOnly."
+    : (o.split ? "--split: each backend is written to its own lean file (x.spv.oiSH, x.dxil.oiSH) instead of one bulky oiSH." : "");
 
-  //TODO: MOCK! NOT REAL DATA YET! Two fabrications live in this function, both with the module loaded.
-  // 1. The entry/binary grouping below comes from OxMock.analyze, a regex read of the source, not from
-  //    the compiler's own parse. OxAPI.parseEntrypoints (Compiler_parse) now answers exactly this and
-  //    should replace it.
-  // 2. Every dxc line printed under it is RECONSTRUCTED from the flag set by hand, so it is a good
-  //    guess at what OxC3 runs rather than what it ran. The compiler exposing its argv
-  //    (getCompileArgs) is what turns this into the real invocation.
-  const doc = window.OxMock.analyze(activeName, project);        // preview only; wasm port can reuse its parse step
-  const groups = new Map();                                       // profile -> entries
-  for (const e of doc.entries) {
-    const key = e.lib ? "lib" : (window.OxMock.STAGE_PROFILE[e.stage] || "cs");
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(e);
-  }
-  const V = window.OxMock.VERSION;
   /* each derived line is editable and runnable: that's the "raw DXC" lens, starting from what OxC3 would run */
   let cardId = 0;
   const card = (label, css, cmd) =>
     `<div class="mb-1 mt-2 d-flex align-items-center gap-2"><span class="chip ${css}">${esc(label)}</span>
       <button class="btn btn-sm btn-outline-secondary dxc-run ms-auto" data-dxc="${cardId}" title="run this line as is through DXC; the output is a standalone binary (no oiSH, no annotations processed)"><i class="bi bi-play-fill"></i> Run with DXC</button></div>` +
     `<textarea class="asm cmdcard dxc-line form-control" data-dxc="${cardId++}" rows="3" spellcheck="false">${esc(cmd)}</textarea>`;
-  let html = `<div class="alert alert-danger py-2 px-3 fw-bold mb-2"><i class="bi bi-exclamation-octagon-fill"></i>
-    MOCK! NOT REAL DATA YET! These dxc lines are reconstructed from the flag set, not read back from the
-    compiler, so they can differ from what OxC3 actually ran. "Run with DXC" does not run DXC either.</div>`;
 
-  for (const [prof, ents] of groups) {
-    const lib = prof === "lib";
-    /* one representative binary of this group carries model/extensions for the flags */
-    const rep = doc.binaries.find(b => lib ? b.lib : (!b.lib && ents.some(e => e.name === b.entrypoint))) || doc.binaries[0];
-    const model = (rep ? rep.model : window.OxMock.MIN_MODEL).replace(".", "_");
-    const exts = rep ? rep.extensions : [];
-    const is16 = exts.includes("16BitTypes");
-    const defs = ["-D__OXC", `-D__OXC_MAJOR=${V.major}`, `-D__OXC_MINOR=${V.minor}`, `-D__OXC_PATCH=${V.patch}`,
-      ...exts.map(e => `-D__OXC_EXT_${e.toUpperCase()}`),
-      ...(ents.some(e => window.OxMock.LIB_STAGES.has(e.stage) && e.stage !== "node") ? ["-D__OXC_EXT_RAYTRACING"] : [])].join(" ");
-    const dbg = o.debug ? "-Zi -Qembed_debug " : "-O3 ";
-    const common = `-T ${lib ? "lib" : prof}_${model} -HV 2021 ${is16 ? "-enable-16bit-types " : ""}${exts.includes("PAQ") ? "-enable-payload-qualifiers " : ""}${dbg}-Wconversion -Wdouble-promotion ${defs} -I .`;
-    const label = lib
-      ? `library lib_${model} (${ents.map(e => e.name + " [" + e.stage + "]").join(", ")})`
-      : `${prof}_${model} (${ents.map(e => e.name).join(", ")})`;
-    const perEntry = lib ? [""] : ents.map(e => `-E ${e.name} `);
+  const seq = ++renderSeq;
+  const real = await window.OxAPI.getCompileArgs(activeName, project, o);
+  if (seq !== renderSeq) return;                     // superseded by a newer render while awaiting
 
-    if (o.targets.includes("spv")) {
-      const env = window.OxMock.spvEnvFor(rep || { extensions: [], lib, entryNames: [] }, doc.entries).env;
-      const spvExt = exts.map(e => SPV_EXT_FLAG[e]).filter(Boolean).map(x => `-fspv-extension=${x}`).join(" ");
-      //--keep-registers upgrades the unused-binding mode from reserve-all to keep-all and preserves SPIRV bindings
-      const spvKeep = o.keepRegisters
-        ? "-fhlsl-unused-resource-bindings=keep-all -fspv-preserve-bindings "
-        : "-fhlsl-unused-resource-bindings=reserve-all ";
-      for (const ee of perEntry)
-        html += card("SPIR-V · " + label, "chip-spv",
-          `dxc ${common} ${ee}${lib ? "" : "-fspv-entrypoint-name=main "}-spirv -fvk-use-dx-layout -fvk-invert-y -fvk-use-dx-position-w -fspv-target-env=${env} ${spvKeep}${spvExt ? spvExt + " " : ""}${activeName}`);
-    }
-    if (o.targets.includes("dxil"))
-      for (const ee of perEntry)
-        html += card("DXIL · " + label, "chip-dxil",
-          `dxc ${common} ${ee}${o.keepRegisters ? "-fhlsl-unused-resource-bindings=keep-all " : ""}${lib ? "-Qkeep_reflect_in_dxil -reflect-functions " : ""}${activeName}`);
+  if (!real) {
+
+    /* Without a module this refuses the way every compiler answer does (api.js noModule): the CLI line
+     * above is only flag spelling, so it stays; nothing fabricated renders under it. With the module a
+     * null answer means the source doesn't parse right now, and the previous listing stays rather than
+     * flashing away mid-edit (the parseEntrypoints convention). */
+    if (window.OxAPI.backend !== "wasm")
+      $("#cmdList").innerHTML = `<div class="text-body-secondary small">The derived dxc lines need the
+        compiler module, which isn't running. The OxC3 CLI line above applies either way.</div>`;
+
+    return;
   }
+
+  let html = realCommandsHtml(real, card);
 
   /* and a free line for anything DXC accepts, pre-filled with the first derived one */
   const first = (html.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/) || [])[1] || `dxc -T cs_6_5 -E main -HV 2021 -O3 -spirv ${esc(activeName)}`;
@@ -126,9 +115,6 @@ function renderCommands(activeName, project) {
     <pre id="dxcLog" class="asm cmdcard mt-2 d-none"></pre>`;
 
   $("#cmdList").innerHTML = html || `<div class="text-body-secondary small">No entrypoints in this file: nothing to compile (see --ignore-empty-files).</div>`;
-  $("#cmdNote").textContent = o.reflectionOnly
-    ? "Reflection only (OxC3 shader reflect): same compiles, then binaries are stripped and the oiSH is rewritten with ESHSettingsFlags_ReflectionOnly."
-    : (o.split ? "--split: each backend is written to its own lean file (x.spv.oiSH, x.dxil.oiSH) instead of one bulky oiSH." : "");
 
   $("#cmdList").querySelectorAll(".dxc-run").forEach(btn => btn.addEventListener("click", async () => {
     const line = $("#cmdList").querySelector(`textarea[data-dxc="${btn.dataset.dxc}"]`).value.replace(/^\s*dxc\s+/, "");

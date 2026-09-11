@@ -62,51 +62,51 @@ typedef struct CompilerInterfaces {
 	IHLSLReflector *reflector;
 } CompilerInterfaces;
 
-Bool Compiler_compile(
-	const Compiler *comp,
+Bool Compiler_buildCompileArgs(
 	const CompilerSettings *settings,
 	const SHBinaryIdentifier *toCompile,
+	ListCharString *args,
+	CharString *amendedSource,
 	const Allocator *alloc,
-	CompileResult *result,
 	Error *e_rr
 ) {
 
-	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp->interfaces;
-
 	Bool s_uccess = true;
-	IDxcResult *dxcResult = NULL;
-	IDxcBlobUtf8 *error = NULL;
-	IDxcBlob *resultBlob = NULL;
-	Bool hasErrors = false;
 	CharString tempStr = CharString_createNull();
 	CharString tempStr1 = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
 	CharString tmpFile = CharString_createNull();
-	ListCharString stringsUTF8 = ListCharString{};        //One day, Microsoft will fix their stuff, I hope.
+	ListCharString stringsUTF8 = ListCharString{};
 
-	Bool requiresLink = toCompile->uniforms.length || (settings->isLib && settings->containsGfxOrComp);
+	if(!settings || !toCompile || !args || !amendedSource)
+		retError(clean, Error_nullPointer(
+			!settings ? 0 : (!toCompile ? 1 : (!args ? 2 : 3)),
+			"Compiler_buildCompileArgs()::settings, toCompile, args and amendedSource are required"
+		));
 
-	Compiler_defineStrings;
-
-	if(!interfaces->utils || !result)
-		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_compile()::comp is required"));
+	if(args->ptr || amendedSource->ptr)
+		retError(clean, Error_invalidOperation(
+			0, "Compiler_buildCompileArgs()::args and amendedSource are non zero, could indicate memleak"
+		));
 
 	if(!CharString_length(settings->string))
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings->string is required"));
+		retError(clean, Error_invalidParameter(0, 0, "Compiler_buildCompileArgs()::settings->string is required"));
 
 	if(toCompile->defines.length & 1)
-		retError(clean, Error_invalidParameter(2, 0, "Compiler_compile()::toCompile->defines.length should be aligned to 2"));
+		retError(clean, Error_invalidParameter(
+			1, 0, "Compiler_buildCompileArgs()::toCompile->defines.length should be aligned to 2"
+		));
 
 	if(settings->outputType >= EGfxBinaryType_Count || settings->format >= ECompilerFormat_Count)
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings contains invalid format or outputType"));
+		retError(clean, Error_invalidParameter(
+			0, 0, "Compiler_buildCompileArgs()::settings contains invalid format or outputType"
+		));
 
 	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr));
 
-	try {
-
-		Compiler_resetIncludeHandler(interfaces->includeHandler, settings->path);    //Ensure we don't reuse stale caches
-
-		result->isSuccess = false;
+	//Scoped so the gotos above never jump past a live initializer.
+	{
+		Bool requiresLink = toCompile->uniforms.length || (settings->isLib && settings->containsGfxOrComp);
 
 		U32 lastExtension = 0;
 
@@ -152,7 +152,7 @@ Bool Compiler_compile(
 		// included, which makes the emitter read each OpSource file off disk to embed its text.
 		//Every include of ours is virtual, so each of those reads fails and DXC throws an exception it catches
 		// itself, once per include, and a release SPIRV binary ends up carrying the whole source for nothing.
-		//So SPIRV only gets it when debug info was actually asked for, where line 168 also narrows it down.
+		//So SPIRV only gets it when debug info was actually asked for, where -fspv-debug below also narrows it down.
 
 		if(settings->debug || (requiresLink && settings->outputType != EGfxBinaryType_SPIRV)) {
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zi", alloc, e_rr));
@@ -286,7 +286,7 @@ Bool Compiler_compile(
 			if(toCompile->extensions & ESHExtension_DescriptorHeap)
 				retError(clean, Error_unsupportedOperation(
 					0,
-					"Compiler_compile() DescriptorHeap can't target SPIRV until DXC's SPV_EXT_descriptor_heap "
+					"Compiler_buildCompileArgs() DescriptorHeap can't target SPIRV until DXC's SPV_EXT_descriptor_heap "
 					"lowering is integrated; annotate the entrypoint [[oxc::binary(\"dxil\")]] to compile DXIL alone"
 				));
 
@@ -490,6 +490,54 @@ Bool Compiler_compile(
 			gotoIfError3(clean, ListCharString_pushBack(&stringsUTF8, tempStr, alloc, e_rr));
 			tempStr = CharString_createNull();
 		}
+	}
+
+	//Handed over only when fully built, so a failed build never leaves the caller partial state to free.
+	*args = stringsUTF8;
+	*amendedSource = tmpFile;
+	stringsUTF8 = ListCharString{};
+	tmpFile = CharString_createNull();
+
+clean:
+	CharString_free(&tempStr, alloc);
+	CharString_free(&tempStr1, alloc);
+	CharString_free(&tempStr2, alloc);
+	CharString_free(&tmpFile, alloc);
+	ListCharString_freeUnderlying(&stringsUTF8, alloc);
+	return s_uccess;
+}
+
+Bool Compiler_compile(
+	const Compiler *comp,
+	const CompilerSettings *settings,
+	const SHBinaryIdentifier *toCompile,
+	const Allocator *alloc,
+	CompileResult *result,
+	Error *e_rr
+) {
+
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp->interfaces;
+
+	Bool s_uccess = true;
+	IDxcResult *dxcResult = NULL;
+	IDxcBlobUtf8 *error = NULL;
+	IDxcBlob *resultBlob = NULL;
+	Bool hasErrors = false;
+	CharString tmpFile = CharString_createNull();
+	ListCharString stringsUTF8 = ListCharString{};        //One day, Microsoft will fix their stuff, I hope.
+
+	Compiler_defineStrings;
+
+	if(!interfaces->utils || !result)
+		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_compile()::comp is required"));
+
+	gotoIfError3(clean, Compiler_buildCompileArgs(settings, toCompile, &stringsUTF8, &tmpFile, alloc, e_rr));
+
+	try {
+
+		Compiler_resetIncludeHandler(interfaces->includeHandler, settings->path);    //Ensure we don't reuse stale caches
+
+		result->isSuccess = false;
 
 		Compiler_convertToWString(stringsUTF8, clean)
 
@@ -575,9 +623,6 @@ clean:
 		error->Release();
 
 	Compiler_freeStrings;
-	CharString_free(&tempStr, alloc);
-	CharString_free(&tempStr1, alloc);
-	CharString_free(&tempStr2, alloc);
 	CharString_free(&tmpFile, alloc);
 	ListCharString_freeUnderlying(&stringsUTF8, alloc);
 	return s_uccess;

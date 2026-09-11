@@ -982,6 +982,174 @@ clean:
 	return s_uccess ? frame : Wasm_errorFrameFromError(&err, "oxc3_parseEntrypoints() failed");
 }
 
+//The exact dxc invocations a compile of this source would run: parse the entrypoints, dedupe their
+// combinations the way the compile driver does (Compiler_getUniqueCompiles), gate backends the way it
+// gates them, and per compile hand back the argv Compiler_compile passes dxc plus the amended source
+// when uniforms inject one. Everything comes from the driver's own helpers, so a printed line can't
+// drift from what pressing compile runs.
+//A source that doesn't parse answers compiles: null (plus the parser's own messages), matching
+// oxc3_parseEntrypoints, so the page keeps the previous listing while a line is half typed.
+
+EMSCRIPTEN_KEEPALIVE void *oxc3_getCompileArgs(const C8 *name, const C8 *source, U32 targetMask, U32 flags) {
+
+	const Allocator *alloc = Wasm_allocator();
+
+	if(!alloc || !wasmHasCompiler)
+		return Wasm_errorFrame("oxc3_getCompileArgs() the module isn't initialized");
+
+	Error err = Error_none(), *e_rr = &err;
+	Bool s_uccess = true;
+
+	CompileResult result = (CompileResult) { 0 };
+	ListU32 compiles = (ListU32) { 0 };
+	ListCharString args = (ListCharString) { 0 };
+	CharString amended = CharString_createNull();
+	CharString json = CharString_createNull();
+	JsonWriter writer = JsonWriter_create(&json, false, alloc);
+	JsonWriter *w = &writer;
+	void *frame = NULL;
+
+	CharString nameStr = Wasm_string(name);
+
+	if(!CharString_length(nameStr))
+		retError(clean, Error_invalidParameter(0, 0, "oxc3_getCompileArgs()::name is required"));
+
+	if(!(targetMask & ((1 << EGfxBinaryType_Count) - 1)))
+		retError(clean, Error_invalidParameter(2, 0, "oxc3_getCompileArgs()::targetMask names no backend"));
+
+	CompilerSettings parseSettings = (CompilerSettings) {
+		.string = Wasm_string(source),
+		.path = nameStr,
+		.format = ECompilerFormat_HLSL,
+		.outputType = EGfxBinaryType_SPIRV      //Ignored by parse; it reflects stage and backend agnostic
+	};
+
+	gotoIfError3(clean, Compiler_parse(&wasmCompiler, &parseSettings, alloc, &result, e_rr));
+
+	gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
+
+	if (!result.isSuccess || result.type != ECompileResultType_SHEntryRuntime) {
+
+		gotoIfError3(clean, JsonWriter_keyNull(w, "compiles", e_rr));
+		gotoIfError3(clean, JsonWriter_keyArray(w, "errors", e_rr));
+
+		for (U64 i = 0; i < result.compileErrors.length; ++i)
+			gotoIfError3(clean, JsonWriter_str(w, result.compileErrors.ptr[i].error, e_rr));
+
+		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+	}
+
+	else {
+
+		gotoIfError3(clean, Compiler_getUniqueCompiles(&result.shEntriesRuntime, &compiles, alloc, e_rr));
+
+		//The union of what the file's entrypoints target after [[oxc::binary(...)]]: a backend nothing
+		// in the file targets spawns no compiles, so it prints no lines either (the same gate
+		// Compiler_compileShaderFile applies).
+
+		U8 fileBinaryTypes = 0;
+
+		for(U64 i = 0; i < result.shEntriesRuntime.length; ++i)
+			fileBinaryTypes |= SHEntryRuntime_getBinaryTypes(&result.shEntriesRuntime.ptr[i]);
+
+		gotoIfError3(clean, JsonWriter_keyArray(w, "compiles", e_rr));
+
+		for (U8 bt = 0; bt < EGfxBinaryType_Count; ++bt) {
+
+			if(!((targetMask >> bt) & 1) || !((fileBinaryTypes >> bt) & 1))
+				continue;
+
+			for (U64 i = 0; i < compiles.length; ++i) {
+
+				U16 runtimeEntryId = (U16) (compiles.ptr[i] >> 16);
+				U16 combinationId  = (U16) compiles.ptr[i];
+
+				Bool isRt = combinationId >> 15;
+				Bool isGfxOrComp = runtimeEntryId >> 15;
+
+				runtimeEntryId &= (U16) I16_MAX;
+				combinationId  &= (U16) I16_MAX;
+
+				const SHEntryRuntime *runtime = &result.shEntriesRuntime.ptr[runtimeEntryId];
+
+				//Per combination the driver skips a backend the stage or extensions can't express
+
+				if (!((SHEntryRuntime_getSupportedBinaryTypes(runtime) >> bt) & 1))
+					continue;
+
+				CompilerSettings settings = (CompilerSettings) { 0 };
+				SHBinaryIdentifier identifier = (SHBinaryIdentifier) { 0 };
+
+				gotoIfError3(clean, Compiler_describeCompile(
+					runtime, combinationId, (EGfxBinaryType) bt,
+					(flags & EWasmCompileFlag_Debug) != 0,
+					(flags & EWasmCompileFlag_NoOpt) != 0,
+					(flags & EWasmCompileFlag_KeepRegisters) != 0,
+					isRt, isGfxOrComp,
+					nameStr, parseSettings.string, NULL,
+					&settings, &identifier, e_rr
+				));
+
+				gotoIfError3(clean, Compiler_buildCompileArgs(&settings, &identifier, &args, &amended, alloc, e_rr));
+
+				Bool lib = !CharString_length(identifier.entrypoint);
+				Bool requiresLink = identifier.uniforms.length || (settings.isLib && settings.containsGfxOrComp);
+
+				gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
+				gotoIfError3(clean, JsonWriter_keyU64(w, "entryId", runtimeEntryId, e_rr));
+				gotoIfError3(clean, JsonWriter_keyU64(w, "combination", combinationId, e_rr));
+				gotoIfError3(clean, JsonWriter_keyCstr(w, "binaryType", bt == EGfxBinaryType_SPIRV ? "spirv" : "dxil", e_rr));
+				gotoIfError3(clean, JsonWriter_key(w, "entrypoint", e_rr));
+
+				if(lib) {
+					gotoIfError3(clean, JsonWriter_null(w, e_rr));
+				}
+
+				else gotoIfError3(clean, JsonWriter_str(w, identifier.entrypoint, e_rr));
+
+				gotoIfError3(clean, JsonWriter_keyCstr(
+					w, "stage", lib ? "lib" : SHEntry_stageNames[identifier.stageType], e_rr
+				));
+
+				gotoIfError3(clean, JsonWriter_keyBool(w, "lib", lib, e_rr));
+				gotoIfError3(clean, JsonWriter_keyBool(w, "requiresLink", requiresLink, e_rr));
+
+				gotoIfError3(clean, JsonWriter_keyArray(w, "args", e_rr));
+
+				for(U64 j = 0; j < args.length; ++j)
+					gotoIfError3(clean, JsonWriter_str(w, args.ptr[j], e_rr));
+
+				gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+				gotoIfError3(clean, JsonWriter_key(w, "amendedSource", e_rr));
+
+				if(amended.ptr) {
+					gotoIfError3(clean, JsonWriter_str(w, amended, e_rr));
+				}
+
+				else gotoIfError3(clean, JsonWriter_null(w, e_rr));
+
+				gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
+
+				ListCharString_freeUnderlying(&args, alloc);
+				CharString_free(&amended, alloc);
+			}
+		}
+
+		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+	}
+
+	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
+	frame = Wasm_frame(&json, NULL);
+
+clean:
+	ListCharString_freeUnderlying(&args, alloc);
+	CharString_free(&amended, alloc);
+	ListU32_free(&compiles, alloc);
+	CompileResult_free(&result, alloc);
+	CharString_free(&json, alloc);
+	return s_uccess ? frame : Wasm_errorFrameFromError(&err, "oxc3_getCompileArgs() failed");
+}
+
 //OxC3 shader reflect-symbols: the frontend symbol AST of the source, as an oiSR.
 //This runs on source rather than on a compile, so it follows the editor instead of the compile button.
 

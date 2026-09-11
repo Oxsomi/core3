@@ -48,13 +48,6 @@ Bool Compiler_precompileShader(
 	const Allocator *alloc
 );
 
-Bool Compiler_getUniqueCompiles(
-	const ListSHEntryRuntime *runtimeEntries,
-	ListU32 *compileCombinations,
-	const Allocator *alloc,
-	Error *e_rr
-);
-
 Bool Compiler_compileShaderSingle(
 	const Compiler *compiler,
 	EGfxBinaryType binaryType,

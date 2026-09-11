@@ -152,7 +152,7 @@ Compiler and CLI, as the page uses them
 - `shader assemble` into a real oiSH (an SHFile built from a binary plus an identifier). The web
   round-trip check would then refuse rather than warn.
 - Reflect a bare .spv / .dxil has no CLI verb yet, though the page does it. The web CLI map says so.
-- DescriptorHeap shaders refuse the SPIRV leg (Compiler_compile): DXC's SPV_EXT_descriptor_heap
+- DescriptorHeap shaders refuse the SPIRV leg (Compiler_buildCompileArgs): DXC's SPV_EXT_descriptor_heap
   lowering emits SPIR-V its own validator rejects, and the proper integration is being done upstream.
   When that lands: bump the pin, lift the refusal and its feature-test assert, take
   [[oxc::binary("dxil")]] off the descriptor_heap sample, and pin its SPIRV golden.
@@ -223,12 +223,14 @@ Reflection and the JSON views
   has a //TODO at the call naming the library call that would replace it:
     reflectBinary   a bare .spv/.dxil's registers, bindings and IO are invented rather than read.
                     Needs Compiler_process' backend reflection to take a binary on its own.
-    compileRaw      "Run with DXC" runs nothing. Needs getCompileArgs plus a raw compile entry.
+    compileRaw      "Run with DXC" runs nothing. The argv half is real now (oxc3_getCompileArgs);
+                    what remains is a raw compile entry running the flag line through the module's DXC.
     assembleOiSH    no SHFile is built. Needs `shader assemble` producing a real oiSH.
-  The Command tab is the fourth: its dxc lines are reconstructed from the flag set by hand (so they can
-  differ from what OxC3 ran), and it still groups entries with OxMock.analyze, a regex read of the
-  source, where OxAPI.parseEntrypoints now answers the same question off Compiler_parse.
-  Deleting the last of it means those four, after which js/mock.js and js/mock_formats.js are only the
+  The Command tab's dxc lines are real with the module: oxc3_getCompileArgs walks the compile driver's
+  own expansion (Compiler_getUniqueCompiles + Compiler_describeCompile + Compiler_buildCompileArgs), so
+  each card is the exact argv of one compile. Without a module the tab refuses like every other
+  compiler answer; only the OxC3 CLI line renders, which is flag spelling and real by construction.
+  Deleting the last of it means those three, after which js/mock.js and js/mock_formats.js are only the
   recordings' readers and most of both files goes.
 
 

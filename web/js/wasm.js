@@ -335,6 +335,29 @@ api.parseEntrypoints = async function parseEntrypoints(name, files) {
   } finally { endCapture(); }
 };
 
+/* Compiler_buildCompileArgs behind oxc3_getCompileArgs: the dxc argv of every compile this source
+ * expands into, per backend, from the compile driver's own helpers rather than a reconstruction.
+ * opts mirrors the toolbar the way compile's do. Returns the compiles array, or null when the source
+ * doesn't parse (the caller keeps what it had, matching parseEntrypoints). */
+api.getCompileArgs = async function getCompileArgs(name, files, opts) {
+  if (typeof M._oxc3_getCompileArgs !== "function")
+    throw new Error("getCompileArgs: this module build has no argv query");
+  const o = opts || {};
+  syncProject(files);
+  let mask = 0;
+  for (const t of (o.targets && o.targets.length ? o.targets : ["spv", "dxil"]))
+    mask |= 1 << BACKEND[t];
+  let flags = 0;
+  for (const key of Object.keys(FLAG)) if (o[key]) flags |= FLAG[key];
+  beginCapture();
+  try {
+    return withPointers(hold =>
+      frame(M._oxc3_getCompileArgs(
+        hold(putString(name)), hold(putString(files[name] ? files[name].src : "")), mask, flags
+      ), "getCompileArgs").doc.compiles);
+  } finally { endCapture(); }
+};
+
 api.shRead = async function shRead(name, bytes) {
   return withPointers(hold =>
     frame(M._oxc3_shRead(hold(put(bytes)), bytes.length, hold(putString(name))), "shRead").doc);

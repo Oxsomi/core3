@@ -412,6 +412,60 @@ Bool Compiler_compile(
 	Error *e_rr
 );
 
+//Builds the exact dxc invocation for one binary of one entrypoint.
+//args receives every argument Compiler_compile hands IDxcCompiler3, in CLI spelling, so the list is also
+// the dxc command line that reproduces the binary.
+//When toCompile has uniforms the input source is amended as well: amendedSource receives the full input
+// (the spec constant preamble, a #line mapping, then the original text); otherwise it stays empty and
+// settings->string is the input as is.
+//Compiler_compile builds its own invocation through this function, so the answer can't drift from what ran.
+//args and amendedSource must come in empty and are only written on success.
+Bool Compiler_buildCompileArgs(
+	const CompilerSettings *settings,
+	const SHBinaryIdentifier *toCompile,
+	ListCharString *args,
+	CharString *amendedSource,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+//The deduped compiles a parsed entry list expands into, exactly as the compile driver spawns them.
+//One U32 per unique compile: combinationId in b0..14, runtimeEntryId in b16..30; b15 is set when any
+// entry sharing the compile is raytracing and b31 when any is graphics or compute. Both the compile
+// (Compiler_describeCompile) and the link follow those aggregates, so a single entry never speaks for
+// a shared compile.
+//Uniform combinations collapse to one compile here and specialize at link.
+Bool Compiler_getUniqueCompiles(
+	const ListSHEntryRuntime *runtimeEntries,
+	ListU32 *compileCombinations,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+//The CompilerSettings and SHBinaryIdentifier one (entry, combination) compiles as, built exactly the
+// way the compile driver builds them, so an argv query can never drift from the compile it describes.
+//isRt and isGfxOrComp are the aggregates Compiler_getUniqueCompiles packs (b15 and b31), never a single
+// entry's own flags.
+//settings and identifier only reference the entry and the inputs; they own nothing and must not
+// outlive them. includeDirs may be NULL for none.
+//Feed the results to Compiler_buildCompileArgs for the dxc invocation, or Compiler_compile to run it.
+Bool Compiler_describeCompile(
+	const SHEntryRuntime *entry,
+	U16 combinationId,
+	EGfxBinaryType binaryType,
+	Bool isDebug,
+	Bool noOpt,
+	Bool keepRegisters,
+	Bool isRt,
+	Bool isGfxOrComp,
+	CharString inputPath,
+	CharString input,
+	const ListCharString *includeDirs,
+	CompilerSettings *settings,
+	SHBinaryIdentifier *identifier,
+	Error *e_rr
+);
+
 //Extra warnings useful for debugging purposes and optimization.
 
 typedef enum ECompilerWarning ECompilerWarning;

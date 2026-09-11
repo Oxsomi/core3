@@ -32,6 +32,7 @@ typedef struct SHFile SHFile;
 //Declared in invocation order (see test_shader_compiler_main.c).
 
 void Test_shaderCompilerParse(Test *t);           //Parse annotations -> SHEntryRuntime reflection
+void Test_shaderCompilerBuildArgs(Test *t);       //Compiler_buildCompileArgs argv query: backend flags + guards
 void Test_shaderCompilerReflectSR(Test *t);       //Frontend symbol AST -> SRFile (oiSR) + round-trip
 void Test_shaderCompilerReflectErrors(Test *t);   //Same, over sources that don't compile (editor path)
 void Test_shaderCompilerSamples(Test *t);         //web/samples compiles both backends (desktop only)

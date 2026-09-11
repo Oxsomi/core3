@@ -103,7 +103,13 @@ class dxc(ConanFile):
 		tc.variables["CLANG_ENABLE_ARCMT"] = False
 		tc.variables["SPIRV_BUILD_TESTS"] = False
 		tc.variables["HLSL_BUILD_DXILCONV"] = False
-		tc.variables["HLSL_ENABLE_FIXED_VER"] = False
+
+		# The version this bakes into every emitted DXIL module (llvm.ident and the shader hash with it)
+		# must not depend on how the source was obtained: a git checkout embeds its commit count and hash
+		# where a copied tree embeds zeros, and the golden tests pin DXIL byte for byte across machines.
+		# Fixed means the checked-in utils/version/version.inc, identical everywhere and across pin bumps.
+		tc.variables["HLSL_ENABLE_FIXED_VER"] = True
+
 		tc.variables["HLSL_OFFICIAL_BUILD"] = False
 		tc.variables["HLSL_OPTIONAL_PROJS_IN_DEFAULT"] = False
 		tc.variables["LLVM_ENABLE_TERMINFO"] = False

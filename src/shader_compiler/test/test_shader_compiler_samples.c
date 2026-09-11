@@ -212,6 +212,27 @@ void Test_shaderCompilerSamples(Test *t) {
 						alloc, "\tproduced oiSH written to %.*s",
 						(int) CharString_length(newPath), newPath.ptr
 					);
+
+					//The lengths and first differing offset go into the log itself: a CI run hands back its
+					// log long before anyone fetches an artifact, and that offset usually names the guilty
+					// section (header, a binary blob, the trailing metadata) on its own.
+
+					{
+						const U64 lenNew = Buffer_length(buffers.ptr[i]);
+						const U64 lenRef = Buffer_length(golden);
+						const U64 minLen = lenNew < lenRef ? lenNew : lenRef;
+
+						U64 firstDiff = 0;
+
+						while(firstDiff < minLen && buffers.ptr[i].ptr[firstDiff] == golden.ptr[firstDiff])
+							++firstDiff;
+
+						Log_warnLn(
+							alloc,
+							"\tproduced %" PRIu64 " bytes vs reference %" PRIu64 ", first difference at offset %" PRIu64,
+							lenNew, lenRef, firstDiff
+						);
+					}
 				}
 
 				Test_assert(t, refPath.ptr, matches);

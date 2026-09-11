@@ -657,9 +657,48 @@ Bool Compiler_binaryOrderLess(const SHBinaryInfo *a, const SHBinaryInfo *b) {
 	if(name != ECompareResult_Eq)
 		return name == ECompareResult_Lt;
 
-	//Two binaries can still share an identifier (different defines or uniform data), so the compiled bytes
-	//are the last tiebreaker. Blobs that hash the same are interchangeable, so any order between them is
-	//stable by definition.
+	//Permutations of one entry differ in the rest of the identifier: defines and uniform values.
+	//Ordering by those keeps the order a property of the inputs, where ordering by the compiled bytes
+	//would reshuffle binaries whenever the compiler's output shifts by a single byte.
+
+	if(a->identifier.defines.length != b->identifier.defines.length)
+		return a->identifier.defines.length < b->identifier.defines.length;
+
+	for (U64 i = 0; i < a->identifier.defines.length; ++i) {
+
+		const ECompareResult define =
+			CharString_compareSensitive(&a->identifier.defines.ptr[i], &b->identifier.defines.ptr[i]);
+
+		if(define != ECompareResult_Eq)
+			return define == ECompareResult_Lt;
+	}
+
+	if(a->identifier.uniforms.length != b->identifier.uniforms.length)
+		return a->identifier.uniforms.length < b->identifier.uniforms.length;
+
+	for (U64 i = 0; i < a->identifier.uniforms.length; ++i) {
+
+		const SHUniformRuntime *uniformA = &a->identifier.uniforms.ptr[i];
+		const SHUniformRuntime *uniformB = &b->identifier.uniforms.ptr[i];
+
+		const ECompareResult uniform = CharString_compareSensitive(&uniformA->name, &uniformB->name);
+
+		if(uniform != ECompareResult_Eq)
+			return uniform == ECompareResult_Lt;
+
+		if(uniformA->typeIdShort != uniformB->typeIdShort)
+			return uniformA->typeIdShort < uniformB->typeIdShort;
+	}
+
+	if(a->identifier.uniformData.length != b->identifier.uniformData.length)
+		return a->identifier.uniformData.length < b->identifier.uniformData.length;
+
+	for (U64 i = 0; i < a->identifier.uniformData.length; ++i)
+		if(a->identifier.uniformData.ptr[i] != b->identifier.uniformData.ptr[i])
+			return a->identifier.uniformData.ptr[i] < b->identifier.uniformData.ptr[i];
+
+	//Fully equal identifiers are interchangeable, so the compiled bytes are the final fallback that keeps
+	//the order total even then.
 
 	for (U64 i = 0; i < EGfxBinaryType_Count; ++i) {
 

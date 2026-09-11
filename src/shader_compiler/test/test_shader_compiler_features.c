@@ -102,7 +102,7 @@ void Test_shaderCompilerFeatures(Test *t) {
 		{ "features/compute_deriv.hlsl",       ESHExtension_ComputeDeriv,       B_BOTH },
 
 		//SM6.6 dynamic resources (full bindless): native on DXIL. The SPIRV leg is refused by
-		//Compiler_compile until DXC's SPV_EXT_descriptor_heap lowering is integrated upstream, which the
+		//Compiler_buildCompileArgs until DXC's SPV_EXT_descriptor_heap lowering is integrated upstream, which the
 		//heap block below asserts.
 		{ "features/descriptor_heap.hlsl",     ESHExtension_DescriptorHeap,     B_DXIL },
 
@@ -216,7 +216,7 @@ void Test_shaderCompilerFeatures(Test *t) {
 	// 2) heap accesses create no named register entries (full bindless bypasses the binding table),
 	// 3) declaring the extension without using it DOES mark it dormant (native detection),
 	// 4) the SPIRV leg is refused outright, so nothing provisional reaches a consumer however the
-	//    compile is spelled; this expectation lifts together with the refusal in Compiler_compile.
+	//    compile is spelled; this expectation lifts together with the refusal in Compiler_buildCompileArgs.
 
 	{
 		ListBuffer out = (ListBuffer) { 0 };
