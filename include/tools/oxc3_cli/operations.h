@@ -262,6 +262,7 @@ typedef enum EOperation {
 		EOperation_ShaderDisassemble,
 		EOperation_ShaderAssemble,
 		EOperation_ShaderValidate,
+		EOperation_ShaderCommands,
 	#endif
 
 	//EOperation_CompileChimera,

@@ -54,15 +54,6 @@
 #include <exception>
 #include "compiler_private.hpp"
 
-class IncludeHandler;
-
-typedef struct CompilerInterfaces {
-	IDxcUtils *utils;
-	IDxcCompiler3 *compiler;
-	IncludeHandler *includeHandler;
-	IHLSLReflector *reflector;
-} CompilerInterfaces;
-
 Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr) {
 
 	Bool s_uccess = true;

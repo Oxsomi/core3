@@ -52,6 +52,7 @@
 #include "directx/d3d12shader.h"
 #include "dxcompiler/dxcreflect.h"
 #include <exception>
+#include "compiler_private.hpp"
 
 static inline Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtension *demotion, Error *e_rr) {
 
@@ -201,15 +202,6 @@ Bool Compiler_convertRegisterDXIL(
 	const Allocator *alloc,
 	Error *e_rr
 );
-
-class IncludeHandler;
-
-typedef struct CompilerInterfaces {
-	IDxcUtils *utils;
-	IDxcCompiler3 *compiler;
-	IncludeHandler *includeHandler;
-	IHLSLReflector *reflector;
-} CompilerInterfaces;
 
 extern "C" Bool Compiler_processDXIL(
 	const Compiler *compiler,

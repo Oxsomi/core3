@@ -312,10 +312,7 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 
 		binaryIdentifier.stageType = entry.stage;
 
-		Bool currGfxOrComp = !(
-			(entry.stage >= EGfxPipelineStage_RtStartExt && entry.stage >= EGfxPipelineStage_RtEndExt) ||
-			entry.stage >= EGfxPipelineStage_Count
-		);
+		Bool currGfxOrComp = !Compiler_linksAsLib(entry.stage);
 
 		if(currGfxOrComp)
 			binaryIdentifier.entrypoint = CharString_createRefStrConst(entry.name);

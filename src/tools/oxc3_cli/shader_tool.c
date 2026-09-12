@@ -516,10 +516,324 @@
 		return s_uccess;
 	}
 
+	//An argv element appended the way a shell needs it: wrapped and escaped when it holds whitespace or quotes.
+
+	static Bool CLI_shaderAppendArg(CharString arg, const Allocator *alloc, CharString *out, Error *e_rr) {
+
+		Bool s_uccess = true;
+		Bool needsQuotes = !CharString_length(arg);
+
+		for (U64 i = 0; i < CharString_length(arg) && !needsQuotes; ++i)
+			needsQuotes = arg.ptr[i] == ' ' || arg.ptr[i] == '\t' || arg.ptr[i] == '"' || arg.ptr[i] == '\'';
+
+		if (!needsQuotes) {
+			gotoIfError3(clean, CharString_appendString(out, &arg, alloc, e_rr));
+			goto clean;
+		}
+
+		gotoIfError3(clean, CharString_append(out, '"', alloc, e_rr));
+
+		for (U64 i = 0; i < CharString_length(arg); ++i) {
+
+			if (arg.ptr[i] == '"' || arg.ptr[i] == '\\')
+				gotoIfError3(clean, CharString_append(out, '\\', alloc, e_rr));
+
+			gotoIfError3(clean, CharString_append(out, arg.ptr[i], alloc, e_rr));
+		}
+
+		gotoIfError3(clean, CharString_append(out, '"', alloc, e_rr));
+
+	clean:
+		return s_uccess;
+	}
+
+	//The args joined into one command line behind a command name ("dxc <args...>").
+
+	static Bool CLI_shaderJoinArgs(
+		const C8 *command, const ListCharString *args, const Allocator *alloc, CharString *out, Error *e_rr
+	) {
+
+		Bool s_uccess = true;
+		const CharString commandStr = CharString_createRefCStrConst(command);
+
+		gotoIfError3(clean, CharString_appendString(out, &commandStr, alloc, e_rr));
+
+		for (U64 i = 0; i < args->length; ++i) {
+			gotoIfError3(clean, CharString_append(out, ' ', alloc, e_rr));
+			gotoIfError3(clean, CLI_shaderAppendArg(args->ptr[i], alloc, out, e_rr));
+		}
+
+	clean:
+		return s_uccess;
+	}
+
+	//shader commands: the dxc argv, amended source and link steps each unique compile of a source runs,
+	// read back from the driver's own helpers (Compiler_getUniqueCompiles, Compiler_describeCompile,
+	// Compiler_buildCompileArgs, Compiler_getLinkSteps), so a printed line can't drift from a compile.
+
+	Bool CLI_shaderCommands(const ParsedArgs *args) {
+
+		if(!args) return false;
+
+		Bool s_uccess = true;
+		Error err = Error_none(), *e_rr = &err;
+		const Allocator *alloc = Platform_instance->alloc;
+
+		Buffer buf = Buffer_createNull();
+		Compiler comp = (Compiler) { 0 };
+		Bool hasCompiler = false;
+		CharString input = (CharString) { 0 };
+		ListCharString includeDirs = (ListCharString) { 0 };
+		CompileResult result = (CompileResult) { 0 };
+		ListU32 compiles = (ListU32) { 0 };
+		ListCharString argv = (ListCharString) { 0 };
+		CharString amended = CharString_createNull();
+		CharString line = CharString_createNull();
+		ListCompilerLinkStep steps = (ListCompilerLinkStep) { 0 };
+
+		U64 targetMask = 0;
+		Bool multipleModes = false;
+
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, e_rr));
+		gotoIfError3(clean, CLI_shaderReadFile(input, &buf, e_rr));
+
+		if(!CLI_parseCompileTypes(args, &targetMask, &multipleModes))
+			retError(clean, Error_invalidParameter(0, 0, "CLI_shaderCommands() -compile-output isn't a valid mode"));
+
+		CharString includeDir = (CharString) { 0 };
+
+		if (args->parameters & EOperationHasParameter_IncludeDir)
+			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir, e_rr));
+
+		if (CharString_length(includeDir)) {
+			CharStringSplit split = (CharStringSplit) {
+				.s = &includeDir, .allocator = alloc, .result = &includeDirs
+			};
+			gotoIfError3(clean, CharString_splitSensitive(&split, ';', e_rr));
+		}
+
+		gotoIfError3(clean, Compiler_create(alloc, &comp, e_rr));
+		hasCompiler = true;
+
+		CompilerSettings parseSettings = (CompilerSettings) {
+			.string = CharString_createRefSizedConst((const C8*) buf.ptr, Buffer_length(buf), false),
+			.path = input,
+			.format = ECompilerFormat_HLSL,
+			.outputType = EGfxBinaryType_SPIRV        //Ignored by parse; it reflects stage and backend agnostic
+		};
+
+		gotoIfError3(clean, Compiler_parse(&comp, &parseSettings, alloc, &result, e_rr));
+
+		if (!result.isSuccess || result.type != ECompileResultType_SHEntryRuntime) {
+
+			for (U64 i = 0; i < result.compileErrors.length; ++i) {
+				CharString e = result.compileErrors.ptr[i].error;
+				Log_errorLnx("%.*s", (int) CharString_length(e), e.ptr);
+			}
+
+			retError(clean, Error_invalidState(0, "CLI_shaderCommands() the source didn't parse"));
+		}
+
+		gotoIfError3(clean, Compiler_getUniqueCompiles(&result.shEntriesRuntime, &compiles, alloc, e_rr));
+
+		//The union of what the file's entrypoints target after [[oxc::binary(...)]]: a backend nothing
+		// in the file targets spawns no compiles, so it prints no lines either (the same gate
+		// Compiler_compileShaderFile applies).
+
+		U8 fileBinaryTypes = 0;
+
+		for(U64 i = 0; i < result.shEntriesRuntime.length; ++i)
+			fileBinaryTypes |= SHEntryRuntime_getBinaryTypes(&result.shEntriesRuntime.ptr[i]);
+
+		const Bool isDebug = (args->flags & EOperationFlags_Debug) != 0;
+		const Bool noOpt = (args->flags & EOperationFlags_NoOpt) != 0;
+		const Bool keepRegisters = (args->flags & EOperationFlags_KeepRegisters) != 0;
+
+		for (U8 bt = 0; bt < EGfxBinaryType_Count; ++bt) {
+
+			if(!((targetMask >> bt) & 1) || !((fileBinaryTypes >> bt) & 1))
+				continue;
+
+			const C8 *btName = bt == EGfxBinaryType_SPIRV ? "spirv" : "dxil";
+
+			for (U64 i = 0; i < compiles.length; ++i) {
+
+				U16 runtimeEntryId = (U16) (compiles.ptr[i] >> 16);
+				U16 combinationId  = (U16) compiles.ptr[i];
+
+				Bool isRt = combinationId >> 15;
+				Bool isGfxOrComp = runtimeEntryId >> 15;
+
+				runtimeEntryId &= (U16) I16_MAX;
+				combinationId  &= (U16) I16_MAX;
+
+				const SHEntryRuntime *runtime = &result.shEntriesRuntime.ptr[runtimeEntryId];
+
+				//Per combination the driver skips a backend the stage or extensions can't express
+
+				if (!((SHEntryRuntime_getSupportedBinaryTypes(runtime) >> bt) & 1))
+					continue;
+
+				CompilerSettings settings = (CompilerSettings) { 0 };
+				SHBinaryIdentifier identifier = (SHBinaryIdentifier) { 0 };
+
+				gotoIfError3(clean, Compiler_describeCompile(
+					runtime, combinationId, (EGfxBinaryType) bt,
+					isDebug, noOpt, keepRegisters, isRt, isGfxOrComp,
+					input, parseSettings.string, &includeDirs,
+					&settings, &identifier, e_rr
+				));
+
+				gotoIfError3(clean, Compiler_buildCompileArgs(&settings, &identifier, &argv, &amended, alloc, e_rr));
+
+				if(CharString_length(identifier.entrypoint))
+					Log_debugLnx(
+						"== %s %s %.*s, combination %"PRIu16,
+						btName, SHEntry_stageNames[identifier.stageType],
+						(int) CharString_length(identifier.entrypoint), identifier.entrypoint.ptr,
+						combinationId
+					);
+
+				else Log_debugLnx("== %s library, combination %"PRIu16, btName, combinationId);
+
+				gotoIfError3(clean, CLI_shaderJoinArgs("dxc", &argv, alloc, &line, e_rr));
+				Log_debugLnx("%.*s", (int) CharString_length(line), line.ptr);
+				CharString_free(&line, alloc);
+
+				//Only the injected preamble is worth reading: everything after the second #line marker
+				// is the file's own text restated verbatim, so the print cuts there.
+
+				if (amended.ptr) {
+
+					const CharString marker = CharString_createRefCStrConst("#line 1 \"");
+					const U64 at = CharString_findFirstStringSensitive(&amended, &marker, 1, 0);
+					const U64 end = at == U64_MAX ? U64_MAX : CharString_findFirstSensitive(&amended, '\n', at, 0);
+					const U64 cut = end == U64_MAX ? CharString_length(amended) : end + 1;
+
+					Log_debugLnx(
+						"uniforms prepend this to the input source (the file's own text follows unchanged):\n%.*s",
+						(int) cut, amended.ptr
+					);
+				}
+
+				gotoIfError3(clean, Compiler_getLinkSteps(
+					&result.shEntriesRuntime, &identifier, runtimeEntryId, (EGfxBinaryType) bt,
+					keepRegisters, &steps, alloc, e_rr
+				));
+
+				for (U64 j = 0; j < steps.length; ++j) {
+
+					const CompilerLinkStep *step = &steps.ptr[j];
+					const CharString entry = step->identifier.entrypoint;
+
+					if(CharString_length(entry))
+						Log_debugLnx(
+							"then %.*s (%.*s), combination %"PRIu16":",
+							(int) CharString_length(entry), entry.ptr,
+							(int) CharString_length(step->profile), step->profile.ptr,
+							step->combinationId
+						);
+
+					else Log_debugLnx(
+						"then library (%.*s), combination %"PRIu16":",
+						(int) CharString_length(step->profile), step->profile.ptr,
+						step->combinationId
+					);
+
+					if (bt == EGfxBinaryType_SPIRV) {
+
+						if (!step->spirvOpt.length) {
+							Log_debugLnx("\t(copies the compiled binary unchanged)");
+							continue;
+						}
+
+						gotoIfError3(clean, CLI_shaderJoinArgs("\tspirv-opt", &step->spirvOpt, alloc, &line, e_rr));
+
+						Log_debugLnx(
+							"%.*s in.spv -o out.spv",
+							(int) CharString_length(line), line.ptr
+						);
+
+						CharString_free(&line, alloc);
+						continue;
+					}
+
+					if(CharString_length(entry)) {
+						gotoIfError3(clean, CharString_format(
+							alloc, &line, e_rr, "\tIDxcLinker -E %.*s -T %.*s over libs",
+							(int) CharString_length(entry), entry.ptr,
+							(int) CharString_length(step->profile), step->profile.ptr
+						));
+					}
+
+					else gotoIfError3(clean, CharString_format(
+						alloc, &line, e_rr, "\tIDxcLinker -T %.*s over libs",
+						(int) CharString_length(step->profile), step->profile.ptr
+					));
+
+					for (U64 k = 0; k < step->libs.length; ++k) {
+
+						if(k)
+							gotoIfError3(clean, CharString_append(&line, ',', alloc, e_rr));
+
+						gotoIfError3(clean, CharString_append(&line, ' ', alloc, e_rr));
+						gotoIfError3(clean, CLI_shaderAppendArg(step->libs.ptr[k], alloc, &line, e_rr));
+					}
+
+					for (U64 k = 0; k < step->linkArgs.length; ++k) {
+						gotoIfError3(clean, CharString_append(&line, ' ', alloc, e_rr));
+						gotoIfError3(clean, CLI_shaderAppendArg(step->linkArgs.ptr[k], alloc, &line, e_rr));
+					}
+
+					Log_debugLnx(
+						"%.*s (programmatic; dxc has no CLI spelling for this link)",
+						(int) CharString_length(line), line.ptr
+					);
+
+					CharString_free(&line, alloc);
+
+					if (CharString_length(step->uniformsHlsl)) {
+
+						gotoIfError3(clean, CLI_shaderJoinArgs("dxc", &step->uniformsArgs, alloc, &line, e_rr));
+
+						Log_debugLnx(
+							"\tits \"uniforms\" library, compiled with %.*s:\n%.*s",
+							(int) CharString_length(line), line.ptr,
+							(int) CharString_length(step->uniformsHlsl), step->uniformsHlsl.ptr
+						);
+
+						CharString_free(&line, alloc);
+					}
+				}
+
+				ListCompilerLinkStep_freeUnderlying(&steps, alloc);
+				ListCharString_freeUnderlying(&argv, alloc);
+				CharString_free(&amended, alloc);
+			}
+		}
+
+	clean:
+
+		if(hasCompiler)
+			Compiler_free(&comp, alloc);
+
+		ListCompilerLinkStep_freeUnderlying(&steps, alloc);
+		ListCharString_freeUnderlying(&argv, alloc);
+		CharString_free(&amended, alloc);
+		CharString_free(&line, alloc);
+		ListU32_free(&compiles, alloc);
+		CompileResult_free(&result, alloc);
+		ListCharString_free(&includeDirs, alloc);        //Elements are refs into includeDir; free the list only
+		Buffer_free(&buf, alloc);
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+		return s_uccess;
+	}
+
 #else
 
 	Bool CLI_shaderReflect(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }
 	Bool CLI_shaderReflectSymbols(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }
+	Bool CLI_shaderCommands(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }
 	Bool CLI_shaderEntrypoints(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }
 	Bool CLI_shaderIncludes(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }
 	Bool CLI_shaderFeatureSet(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }

@@ -53,15 +53,6 @@
 #include <exception>
 #include "compiler_private.hpp"
 
-class IncludeHandler;
-
-typedef struct CompilerInterfaces {
-	IDxcUtils *utils;
-	IDxcCompiler3 *compiler;
-	IncludeHandler *includeHandler;
-	IHLSLReflector *reflector;
-} CompilerInterfaces;
-
 Bool Compiler_buildCompileArgs(
 	const CompilerSettings *settings,
 	const SHBinaryIdentifier *toCompile,

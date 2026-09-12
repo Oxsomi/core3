@@ -52,15 +52,7 @@
 #include "directx/d3d12shader.h"
 #include "dxcompiler/dxcreflect.h"
 #include <exception>
-
-class IncludeHandler;
-
-typedef struct CompilerInterfaces {
-	IDxcUtils *utils;
-	IDxcCompiler3 *compiler;
-	IncludeHandler *includeHandler;
-	IHLSLReflector *reflector;
-} CompilerInterfaces;
+#include "compiler_private.hpp"
 
 extern "C" Bool Compiler_disassembleDXIL(
 	const Compiler *comp, Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr
@@ -493,9 +485,7 @@ extern "C" Bool Compiler_linkDXIL(
 		ListU32PtrConst wstrConstArr = ListU32PtrConst{};
 	#endif
 
-	Bool isShaderAnnotation =
-		(stageType >= EGfxPipelineStage_RtStartExt && stageType >= EGfxPipelineStage_RtEndExt) ||
-		stageType >= EGfxPipelineStage_Count;            //Maintain lib linking
+	Bool isShaderAnnotation = Compiler_linksAsLib(stageType);
 
 	Bool hasErrors = false;
 

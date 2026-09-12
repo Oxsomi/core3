@@ -89,6 +89,16 @@ static inline ESpirvVersion Compiler_linkSpirvVersion(EGfxPipelineStage stage, E
 	return Compiler_requiredSpirvVersion(isRt, isCoop, isMeshTask);
 }
 
+//A link with this stage stays a library: every raytracing stage and the no-stage sentinel; only
+// graphics and compute entries specialize to a single entrypoint. The link jobs, the DXIL link and
+// the link step descriptions all classify through this.
+
+static inline Bool Compiler_linksAsLib(EGfxPipelineStage stage) {
+	return
+		(stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt) ||
+		stage >= EGfxPipelineStage_Count;
+}
+
 //One spelling for the flag that keeps unused resource bindings bound: the compile, the printed link
 // steps and (as a wide string literal) the DXIL link all pass it.
 

@@ -322,6 +322,7 @@ Alongside the older `OxC3 compile shaders` operation (which still exists and is 
 - `OxC3 shader disassemble -input <file.spv|.dxil>`: Disassemble a standalone .spv or .dxil binary to text (stdout, or `-output <file>`).
 - `OxC3 shader validate -input <file.spv|.dxil>`: Validate a standalone binary, spirv-val for .spv and DXC's validator for .dxil; exits non-zero with the validator's reason when it is rejected.
 - `OxC3 shader assemble -input <file.spv.txt> -output <file.spv>`: Assemble SPIR-V text (.spv.txt) into a .spv binary, or DXIL LL text (.dxil.txt) into a .dxil container.
+- `OxC3 shader commands -input <src>`: Print the dxc arguments, amended source and link steps each unique compile of a shader source runs, without compiling. Everything is read back from the compile driver's own helpers, so a printed line cannot drift from what a compile runs; a source that does not parse refuses with the parser's messages. Accepts `-include-dir`, `-compile-output` and the `--debug`, `--no-opt` and `--keep-registers` flags, which change the printed arguments the way they change a compile.
 
 ## Show GPU/graphics device info
 

@@ -787,6 +787,19 @@ void Operations_init() {
 			.requiredParameters = EOperationHasParameter_Input
 		};
 
+		Operation_values[EOperation_ShaderCommands] = (Operation) {
+			.category = EOperationCategory_Shader,
+			.name = "commands",
+			.desc =
+				"Print the dxc arguments, amended source and link steps each unique compile of a shader source "
+				"runs, without compiling.",
+			.func = &CLI_shaderCommands,
+			.isFormatLess = true,
+			.requiredParameters = EOperationHasParameter_Input,
+			.optionalParameters = EOperationHasParameter_IncludeDir | EOperationHasParameter_ShaderOutputMode,
+			.operationFlags = EOperationFlags_Debug | EOperationFlags_NoOpt | EOperationFlags_KeepRegisters
+		};
+
 	#endif
 
 	//List graphics devices

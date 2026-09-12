@@ -24,13 +24,23 @@
 #include "shader_compiler/compiler.h"
 
 //Internal helpers shared between the DXC wrapper TUs.
-// (compiler.cpp, compiler_compile.cpp, compiler_annotate.cpp, compiler_parse.cpp)
+// (compiler.cpp, compiler_compile.cpp, compiler_annotate.cpp, compiler_parse.cpp, compiler_dxil.cpp,
+//  compiler_dxil_link.cpp)
 //These have C++ linkage and are not part of the public compiler interface.
 //Include this after dxcapi.h and dxcreflect.h, since it references DXC interface types.
 
 class IncludeHandler;
 struct IDxcIncludeHandler;
 struct D3D12_HLSL_ANNOTATION;
+
+//The DXC interface bundle behind Compiler::interfaces, in its one definition.
+
+typedef struct CompilerInterfaces {
+	IDxcUtils *utils;
+	IDxcCompiler3 *compiler;
+	IncludeHandler *includeHandler;
+	IHLSLReflector *reflector;
+} CompilerInterfaces;
 
 //What's wrong with UTF8?
 

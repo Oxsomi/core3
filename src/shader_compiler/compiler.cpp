@@ -106,15 +106,6 @@ extern "C" {
 //This file is only because DXC doesn't have a C interface.
 //So we need to wrap C++ in C, so we can call it from C.
 
-typedef class IncludeHandler IncludeHandler;
-
-typedef struct CompilerInterfaces {        //Also defined in compiler_dxil
-	IDxcUtils *utils;
-	IDxcCompiler3 *compiler;
-	IncludeHandler *includeHandler;
-	IHLSLReflector *reflector;
-} CompilerInterfaces;
-
 class IncludeHandler : public IDxcIncludeHandler {
 
 	IDxcUtils *utils;

@@ -496,6 +496,58 @@ def main():
 					zeroed[off + 8:off + 8 + size] = bytes(size)
 			open(p("zeroed.dxil"), "wb").write(zeroed)
 			run(exe, ["shader", "validate", "-input", p("zeroed.dxil")], want_fail=True, contains=["is invalid"])
+			# commands: the dxc argv, uniforms preamble and link steps each unique compile runs, without compiling.
+			# A [shader] compute with uniforms compiles as a lib and links per uniform combination, so all three
+			# layers appear. The whole output is pinned line for line (only the machine path and the __OXC version
+			# defines are normalized), so any change to the printed arguments has to change this pin with it.
+			shc = p("sc.hlsl")
+			write(shc,
+				"RWByteAddressBuffer buf;\n[[oxc::uniforms(U32 COUNT = 4)]]\n[shader(\"compute\")]\n"
+				"[numthreads(1, 1, 1)]\nvoid mainU(uint id : SV_DispatchThreadID) { buf.Store<uint>(id * 4, 1); }\n")
+			out = run(exe, ["shader", "commands", "-input", shc, "-compile-output", "all"])
+			plain = re.sub(r"\x1b\[[0-9;]*m", "", out)
+			plain = re.sub(r'"?\S*sc\.hlsl"?', "<src>", plain)
+			plain = re.sub(r"-I \S+", "-I <dir>", plain)
+			plain = re.sub(r"-D__OXC_(MAJOR|MINOR|PATCH|VERSION)=\d+", r"-D__OXC_\1=<v>", plain)
+			got = [l.rstrip() for l in plain.splitlines() if l.strip()]
+			want = [
+				"== spirv library, combination 0",
+				"dxc <src> -I <dir> -fhlsl-unused-resource-bindings=reserve-all -D__OXC -Zpc -O3 -HV 202x"
+					" -Wconversion -Wdouble-promotion -spirv -fvk-use-dx-layout -fspv-target-env=vulkan1.1"
+					" -fvk-invert-y -fvk-use-dx-position-w -fspv-extension=SPV_EXT_descriptor_indexing -T lib_6_5"
+					" -D$$COUNT=$$specConst_COUNT -D__OXC_MAJOR=<v> -D__OXC_MINOR=<v> -D__OXC_PATCH=<v>"
+					" -D__OXC_VERSION=<v>",
+				"uniforms prepend this to the input source (the file's own text follows unchanged):",
+				'#line 1 "Spec constants (SPIRV)"',
+				"[[vk::constant_id(0)]] const uint $$specConst_COUNT = 0;",
+				"#line 1 <src>",
+				"then mainU (cs_6_5), combination 0:",
+				"\tspirv-opt --target-env=vulkan1.1 --set-spec-const-default-value=0:4 --freeze-spec-const -O"
+					" in.spv -o out.spv",
+				"== dxil library, combination 0",
+				"dxc <src> -I <dir> -fhlsl-unused-resource-bindings=reserve-all -Qkeep_reflect_in_dxil -D__OXC"
+					" -Zpc -O3 -HV 202x -Wconversion -Wdouble-promotion -Zi -Qembed_debug -auto-binding-space 0"
+					" -T lib_6_5 -D$$COUNT=($$specConst_COUNT()) -D__OXC_MAJOR=<v> -D__OXC_MINOR=<v>"
+					" -D__OXC_PATCH=<v> -D__OXC_VERSION=<v>",
+				"uniforms prepend this to the input source (the file's own text follows unchanged):",
+				'#line 1 "Spec constants (DXIL)"',
+				"uint $$specConst_COUNT();",
+				"#line 1 <src>",
+				"then mainU (cs_6_5), combination 0:",
+				"\tIDxcLinker -E mainU -T cs_6_5 over libs uniforms, 0"
+					" (programmatic; dxc has no CLI spelling for this link)",
+				'\tits "uniforms" library, compiled with dxc -T lib_6_3:',
+				"export uint $$specConst_COUNT() { return 4; }",
+			]
+			if got != want:
+				for a, b in zip(got + ["<missing>"] * len(want), want + ["<missing>"] * len(got)):
+					if a != b:
+						print(f"        got  {a}")
+						print(f"        want {b}")
+			check(got == want, "shader commands pins the exact dxc and link lines")
+			# a source that doesn't parse refuses instead of printing stale lines
+			write(p("scbad.hlsl"), "[shader(\"compute\")]\nvoid mainU( {}\n")
+			run(exe, ["shader", "commands", "-input", p("scbad.hlsl")], want_fail=True)
 		else:
 			skip("shader", "shader compiler not in this build")
 

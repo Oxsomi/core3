@@ -457,11 +457,7 @@ Bool Compiler_getLinkSteps(
 	// a lib's entrypoints are the [shader] entries sharing this compile, which is what the compiled
 	// binary's reflection lists for it.
 
-	Bool isRt =
-		compiled->stageType >= EGfxPipelineStage_RtStartExt &&
-		compiled->stageType <= EGfxPipelineStage_RtEndExt;
-
-	Bool isLib = isRt || compiled->stageType == EGfxPipelineStage_Count;
+	Bool isLib = Compiler_linksAsLib(compiled->stageType);
 
 	if (!isLib) {
 		gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
