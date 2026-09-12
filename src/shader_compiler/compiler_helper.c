@@ -20,14 +20,14 @@
 
 //shader_compiler/compiler_helper.c
 
+#include "compiler_helper_internal.h"
+#include "shader_compiler/compiler.h"
+#include "formats/oiSH/sh_file.h"
 #include "types/container/string.h"
 #include "types/container/log.h"
 #include "types/container/buffer.h"
-#include "types/base/allocator.h"
 #include "types/container/list_basic_types.h"
-#include "formats/oiSH/sh_file.h"
-#include "shader_compiler/compiler.h"
-#include "compiler_helper_internal.h"
+#include "types/base/allocator.h"
 
 U32 Compiler_hashSource(CharString text) {
 
@@ -217,11 +217,15 @@ Bool Compiler_getUniqueCompiles(
 			SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
 			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtime, (U16) j, &binaryIdentifier, e_rr));
 
-			//Find SHBinaryIdentifier or not
+			//Find SHBinaryIdentifier or not.
+			//Deliberately never combined across the RT / non RT [shader] split, which asBinaryIdentifier
+			// keeps apart by stageType: the groups compile with different flags (-Zi for the linked
+			// gfx/comp libs, the raytracing define and SPIRV env for RT), so one shared compile would
+			// change what __OXC_EXT_RAYTRACING means per leg. The args test pins the separation.
 
 			U64 k = 0;
 
-			for(; k < identifiers.length; ++k)    //TODO: This one should combine compilations if isShaderAnnotation
+			for(; k < identifiers.length; ++k)
 				if(SHBinaryIdentifier_equals(&binaryIdentifier, &identifiers.ptr[k]))
 					break;
 
@@ -392,19 +396,21 @@ Bool Compiler_describeCompile(
 		.containsGfxOrComp = isGfxOrComp,
 		.format = ECompilerFormat_HLSL,
 		.outputType = binaryType,
-		.infoAboutIncludes = true,        //Required to supply oiSH info about includes
-		.includeDirs = includeDirs ? *includeDirs : (ListCharString) { 0 }
+		.infoAboutIncludes = true         //Required to supply oiSH info about includes
 	};
+
+	if (includeDirs)
+		settings->includeDirs = *includeDirs;
 
 	*identifier = (SHBinaryIdentifier) { 0 };
 	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(entry, combinationId, identifier, e_rr));
 
 	//isRt and isGfxOrComp stay the caller's aggregates over every entry sharing the compile, the same
 	// values the link step follows (Compiler_compileLinkJob), so a single entry never speaks for a
-	// shared compile. Today a shared compile is always flag homogeneous, since asBinaryIdentifier keeps
-	// RT and non RT identifiers apart, so the aggregate equals the stored entry's own flags; the
-	// aggregate must keep governing if that combining ever widens (see the TODO in
-	// Compiler_getUniqueCompiles).
+	// shared compile. A shared compile is always flag homogeneous, since the RT and non RT [shader]
+	// groups deliberately never combine (Compiler_getUniqueCompiles says why), so the aggregate equals
+	// the stored entry's own flags; following the aggregate keeps that a property of the dedup rules
+	// rather than of whichever entry happened to be stored.
 
 	settings->isLib = entry->isShaderAnnotation;
 

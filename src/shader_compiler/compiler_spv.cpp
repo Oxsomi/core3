@@ -869,6 +869,59 @@ clean:
 	return s_uccess;
 }
 
+extern "C" Bool Compiler_canonicalizeSPIRV(Buffer binary, const Allocator *alloc, Buffer *result, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	const void *resultPtr = binary.ptr;
+	const U64 binLen = Buffer_length(binary);
+
+	std::vector<U32> copied;
+	std::vector<U32> canonical;
+
+	if(!result)
+		retError(clean, Error_nullPointer(2, "Compiler_canonicalizeSPIRV()::result is required"));
+
+	if(
+		binLen < 0x14 ||
+		(binLen & 3) ||
+		Buffer_readU32(binary, 0, NULL, NULL) != 0x07230203
+	)
+		retError(clean, Error_invalidParameter(
+			0, 0, "Compiler_canonicalizeSPIRV()::binary isn't a SPIR-V module (bad size, alignment or magic)"
+		));
+
+	if ((U64)resultPtr & 3) {        //Fix alignment
+		copied.resize(binLen >> 2);
+		Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
+		resultPtr = copied.data();
+	}
+
+	//compact-ids renumbers every id in first-use order, which only depends on instruction order, so two
+	// modules that differ only in id numbering land on identical words. The header's bound follows the
+	// renumbering and the generator word is tooling identity, cleared below.
+
+	{
+		spvtools::Optimizer opt{ SPIRV_envForVersion(((const U32*)resultPtr)[1]) };
+		opt.RegisterPass(spvtools::CreateCompactIdsPass());
+
+		if(!opt.Run((const U32*)resultPtr, binLen >> 2, &canonical))
+			retError(clean, Error_invalidState(0, "Compiler_canonicalizeSPIRV() compact ids failed"));
+	}
+
+	if(canonical.size() < 5)
+		retError(clean, Error_invalidState(0, "Compiler_canonicalizeSPIRV() the canonical module lost its header"));
+
+	canonical[2] = 0;
+
+	gotoIfError3(clean, Buffer_createCopy(
+		Buffer_createRefConst(canonical.data(), (U64) canonical.size() * sizeof(U32)), alloc, result, e_rr
+	));
+
+clean:
+	return s_uccess;
+}
+
 extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 	const Compiler *compiler,
 	Buffer binary,
@@ -1023,19 +1076,10 @@ extern "C" Bool Compiler_linkSPIRV(
 	(void) compiler;
 	Bool s_uccess = true;
 
-	Bool isRt = stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt;
-
-	isRt |= !!(exts & ESHExtension_RayQuery);
-
 	//Cooperative vectors/matrix compile at vulkan1.3 (SPIR-V 1.6),
 	// so their optimizer/validator must match (mirrors Compiler_processSPIRV).
 	//1.6 is a superset of 1.4, so RT + coop is safe too.
-	Bool isLinalg =
-		!!(exts & (ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining));
-
-	Bool isMeshTask = stage == EGfxPipelineStage_MeshExt || stage == EGfxPipelineStage_TaskExt;
-
-	ESpirvVersion spvVer = Compiler_requiredSpirvVersion(isRt, isLinalg, isMeshTask);
+	ESpirvVersion spvVer = Compiler_linkSpirvVersion(stage, exts);
 	spv_target_env env =
 		spvVer == ESpirvVersion_1_6 ? SPV_ENV_UNIVERSAL_1_6 :
 		(spvVer == ESpirvVersion_1_4 ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3);

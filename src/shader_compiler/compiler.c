@@ -741,6 +741,91 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_buildUniformExportsHLSL(
+	const ListSHUniformRuntime *uniforms,
+	Buffer uniformData,
+	ESHExtension exts,
+	const Allocator *alloc,
+	CharString *out,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	CharString typeName = CharString_createNull();
+	CharString line = CharString_createNull();
+
+	if(!uniforms || !out)
+		retError(clean, Error_nullPointer(
+			!uniforms ? 0 : 4, "Compiler_buildUniformExportsHLSL()::uniforms and out are required"
+		));
+
+	if(out->ptr)
+		retError(clean, Error_invalidOperation(
+			0, "Compiler_buildUniformExportsHLSL()::out is non zero, could indicate memleak"
+		));
+
+	EHLSLStringifyFlags flags = EHLSLStringifyFlags_None;
+
+	if (exts & ESHExtension_16BitTypes)
+		flags = (EHLSLStringifyFlags)(flags | EHLSLStringifyFlags_Has16Bit);
+
+	if (exts & ESHExtension_F64)
+		flags = (EHLSLStringifyFlags)(flags | EHLSLStringifyFlags_HasF64);
+
+	if (exts & ESHExtension_I64)
+		flags = (EHLSLStringifyFlags)(flags | EHLSLStringifyFlags_HasI64);
+
+	//export Type $$specConst_Name() { return ...; } per uniform, which is the whole library
+
+	for (U64 i = 0; i < uniforms->length; ++i) {
+
+		SHUniformRuntime uniform = uniforms->ptr[i];
+
+		if(uniform.typeIdShort >= ETypeId_Max)
+			retError(clean, Error_invalidState(0, "Compiler_buildUniformExportsHLSL() typeIdShort out of bounds"));
+
+		TypeId typeId = ETypeId_arr[uniform.typeIdShort];
+		U64 len = ETypeId_getBytes(typeId);
+
+		if(uniform.dataOffset + len > Buffer_length(uniformData))
+			retError(clean, Error_invalidState(0, "Compiler_buildUniformExportsHLSL() uniformData out of bounds"));
+
+		gotoIfError3(clean, CharString_createFromETypeIdHLSL(typeId, flags, alloc, &typeName, e_rr));
+
+		gotoIfError3(clean, CharString_format(alloc, &line, e_rr,
+			"export %s $$specConst_%.*s() { return ",
+			typeName.ptr,
+			(int) CharString_length(uniform.name), uniform.name.ptr
+		));
+
+		CharString_free(&typeName, alloc);
+		gotoIfError3(clean, CharString_appendString(out, &line, alloc, e_rr));
+		CharString_free(&line, alloc);
+
+		SHValue value = (SHValue) { 0 };
+		Buffer_memcpy(
+			Buffer_createRef(&value, sizeof(value)),
+			Buffer_createRefConst(uniformData.ptr + uniform.dataOffset, len)
+		);
+
+		gotoIfError3(clean, SHValue_stringifyHLSL(&value, typeId, flags, alloc, &line, e_rr));
+		gotoIfError3(clean, CharString_appendString(out, &line, alloc, e_rr));
+		CharString_free(&line, alloc);
+
+		CharString close = CharString_createRefCStrConst("; }\n");
+		gotoIfError3(clean, CharString_appendString(out, &close, alloc, e_rr));
+	}
+
+clean:
+
+	if(!s_uccess && out)
+		CharString_free(out, alloc);
+
+	CharString_free(&typeName, alloc);
+	CharString_free(&line, alloc);
+	return s_uccess;
+}
+
 Bool Compiler_handleExtraWarnings(const SHFile *file, ECompilerWarning warning, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;

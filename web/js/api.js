@@ -292,9 +292,12 @@ window.OxAPI = {
 
   /* ---- Compiler_buildCompileArgs: the dxc argv per compile, from the compiler itself ----- */
   /* Returns [{entryId, combination, binaryType, entrypoint|null, stage, lib, requiresLink,
-   *   args:[], amendedSource|null}], one element per compile the driver would spawn, or null when
-   *   it can't answer (no module, a module predating the export, or a source that doesn't parse);
-   *   the Command tab then refuses (no module) or keeps its previous listing (mid-edit). */
+   *   args:[], amendedSource|null, links:[{entrypoint|null, stage, combination, profile,
+   *   uniforms:[{type,name,value}], dxil: uniformsHlsl|null + uniformsArgs + libs + linkArgs,
+   *   spirv: spirvOpt}]}], one element per compile the driver would spawn with the link steps that
+   *   finish each permutation, or null when it can't answer (no module, a module predating the
+   *   export, or a source that doesn't parse); the Command tab then refuses (no module), keeps its
+   *   listing (mid-edit of the same file) or says the source doesn't parse (file switch). */
   async getCompileArgs(name, project, opts) {
     if (wasm()) {
       try { return await W().getCompileArgs(name, project, opts); }

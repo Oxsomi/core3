@@ -244,6 +244,7 @@ js/mock_formats.js     THE FALLBACK, part 2: oiSR symbol ASTs, oiSP pipelines + 
                        Both prefer js/mock_data.js where it has an answer.
 js/api.js              THE BACKEND BOUNDARY. Routes every call to js/wasm.js or to the fallback, and
                        carries the SHDocument / SRDocument / SPDocument contracts on top.
+js/layout.js           Pane splitters: drag resizes rail/editor/output/problems, double-click collapses
 js/editor.js           CodeMirror wrapper (HLSL mode + oxc overlay, diagnostics, goto)
 js/intellisense.js     PURE CORE: hover, completion, signatures, go-to-definition over SRDocument
 js/asmmap.js           PURE CORE: source ↔ disassembly line mapping out of SPIR-V/DXIL debug info
@@ -349,14 +350,14 @@ mode, with Combine, pipelines and downloads; that's the planned `shader assemble
 strip above the tabs keeps `shader assemble` (SPIR-V text → .spv, result loaded as a binary) and
 `Compiler_getUniqueEntrypoints` ("List entrypoints", no CLI verb yet).
 
-**Raw DXC** lives in Compile mode's Command tab: every derived DXC line is an editable textarea
-with "Run with DXC", plus a free line for anything DXC accepts. It starts from exactly what OxC3
-would run, so it's a lens on the gap between OxC3's derivation and DXC's behaviour (`-O` levels,
-an extra `-fspv-extension`, `-Zi`), not a second compiler: the output is always a standalone
-binary in SPV/DXIL mode, never an oiSH (no annotations processed, nothing reflected into an
-identifier). The native counterpart is exposing the real argv (`getCompileArgs`) plus a raw
-compile entry; neither is a CLI verb yet, so the CLI map marks it planned, like the reflect and
-assemble-to-oiSH entries.
+**Raw DXC** lives in Compile mode's Command tab: every derived DXC line is an editable textarea,
+plus a free line for anything DXC accepts. Each line is the compiler's own argv
+(`oxc3_getCompileArgs`), so it's a lens on the gap between OxC3's derivation and DXC's behaviour
+(`-O` levels, an extra `-fspv-extension`, `-Zi`), not a second compiler. Running an edited line
+("Run with DXC") is not wired up yet — the buttons sit disabled until the compiler grows a raw
+compile entry — and when it lands the output is always a standalone binary in SPV/DXIL mode,
+never an oiSH (no annotations processed, nothing reflected into an identifier). The CLI map marks
+it planned, like the reflect and assemble-to-oiSH entries.
 
 The full command↔UI map ships in-app: navbar → **CLI map**.
 

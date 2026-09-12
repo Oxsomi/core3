@@ -37,27 +37,63 @@
 //Unlike the annotation module (which only checks an extension can be *declared*),
 // this exercises the real DXC/SPIRV|DXIL code path behind each extension.
 //These live in test/features (not the hlsl/ corpus) because they're semantic reflection tests, not byte-snapshots.
-//Each carries its own backend target: SPIRV-native features, plus DXIL-native ones.
-//
-//A few backend-specific quirks worth knowing:
-// - PAQ declares the payload-access qualifiers on *both* entrypoints (raygen + closesthit share the payload);
-//   Compiler_convertMemberDXIL reflects the opaque RWStructuredBuffer<float4> $Element (D3D_SVT_VOID on DXIL)
-//   as a raw 32-bit block.
-// - WriteMSTexture: DxilMapToESHExtension folds ADVANCED_TEXTURE_OPS (which DXC co-reports with
-//   WRITEABLE_MSAA_TEXTURES for an RWTexture2DMS write) into ESHExtension_WriteMSTexture.
-// - AtomicF32/F64: the inline [[vk::ext_extension]] on the atomic function declares the extension, so OxC3
-//   doesn't also pass -fspv-extension=SPV_EXT_shader_atomic_float_add (DXC rejects it as unknown); DXC emits
-//   OpAtomicFAddEXT.
+//The backend folds some rows lean on are documented where they're implemented: DxilMapToESHExtension
+// (extension folding), Compiler_convertMemberDXIL (opaque elements), Compiler_buildCompileArgs (the
+// SPIRV extension allow list).
 
 typedef struct FeatureCase {
 	const C8 *file;
 	ESHExtension ext;       //Expected reflected extension bit
 	U8 backends;            //Mask of (1 << EGfxBinaryType) this feature can be expressed on
+	U8 pad[3];
 } FeatureCase;
 
 #define B_SPV  (1 << EGfxBinaryType_SPIRV)
 #define B_DXIL (1 << EGfxBinaryType_DXIL)
 #define B_BOTH (B_SPV | B_DXIL)
+
+//A disassembly with comment and blank lines removed, so DXIL round trips compare exactly: LLVM's
+// printer derives %N and !N numbering from structure, so semantically identical modules print the same
+// text once dxc's banner and hash comments are gone. out has to come in empty.
+
+static Bool disasmStripped(CharString text, const Allocator *alloc, CharString *out, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U64 lineStart = 0;
+
+	gotoIfError3(clean, CharString_reserve(out, CharString_length(text), alloc, e_rr));
+
+	for (U64 i = 0; i <= CharString_length(text); ++i) {
+
+		if (i != CharString_length(text) && text.ptr[i] != '\n')
+			continue;
+
+		U64 lineEnd = i;
+
+		if (lineEnd > lineStart && text.ptr[lineEnd - 1] == '\r')
+			--lineEnd;
+
+		U64 j = lineStart;
+
+		while (j < lineEnd && (text.ptr[j] == ' ' || text.ptr[j] == '\t'))
+			++j;
+
+		if (j < lineEnd && text.ptr[j] != ';') {
+			CharString line = CharString_createRefSizedConst(text.ptr + lineStart, lineEnd - lineStart, false);
+			gotoIfError3(clean, CharString_appendString(out, &line, alloc, e_rr));
+			gotoIfError3(clean, CharString_append(out, '\n', alloc, e_rr));
+		}
+
+		lineStart = i + 1;
+	}
+
+clean:
+
+	if (!s_uccess)
+		CharString_free(out, alloc);
+
+	return s_uccess;
+}
 
 void Test_shaderCompilerFeatures(Test *t) {
 
@@ -350,45 +386,127 @@ void Test_shaderCompilerFeatures(Test *t) {
 			err = Error_none();
 		}
 
-	//--- Disassembly: a compiled SPIRV binary round-trips to non-empty, plausible SPIRV text ---
+	//--- Disassembly round-trip on both backends: a compiled binary disassembles, the text assembles
+	//--- back into a validated binary semantically identical to the original (SPIRV byte for byte after
+	//--- compact-ids canonicalization since the assembler renumbers ids, DXIL by comment-stripped
+	//--- disassembly), and assembling that binary's own disassembly reproduces it byte for byte ---
 
 	{
-		ListBuffer out = (ListBuffer) { 0 };
-		SHFile shFile = (SHFile) { 0 };
-		Compiler comp = (Compiler) { 0 };
-		CharString disasm = CharString_createNull();
-		Bool created = false;
+		static const struct RoundTrip {
+			EGfxBinaryType type;
+			const C8 *name;
+			const C8 *needle;       //A token every honest disassembly of this backend contains
+		} roundTrips[] = {
+			{ EGfxBinaryType_SPIRV, "SPIRV", "OpEntryPoint" },
+			{ EGfxBinaryType_DXIL,  "DXIL",  "define " }
+		};
 
-		Bool ok =
-			compileFileShader(alloc, "features/i64.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err) &&
-			out.length == 1 && Buffer_length(out.ptr[0]) &&
-			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length >= 1;
+		for (U64 r = 0; r < sizeof(roundTrips) / sizeof(roundTrips[0]); ++r) {
 
-		if (ok && Compiler_create(alloc, &comp, &err)) {
+			ListBuffer out = (ListBuffer) { 0 };
+			SHFile shFile = (SHFile) { 0 };
+			Compiler comp = (Compiler) { 0 };
+			CharString disasm = CharString_createNull();
+			CharString disasm2 = CharString_createNull();
+			CharString stripA = CharString_createNull();
+			CharString stripB = CharString_createNull();
+			CharString label = CharString_createNull();
+			Buffer reassembled = Buffer_createNull();
+			Buffer reassembled2 = Buffer_createNull();
+			Buffer canonA = Buffer_createNull();
+			Buffer canonB = Buffer_createNull();
+			Bool created = false;
 
-			created = true;
-			Buffer spirv = shFile.binaries.ptr[0].binaries[EGfxBinaryType_SPIRV];
+			Bool disOk = false, asOk = false, identical = false, fixedPoint = false;
 
-			Bool disOk =
-				Buffer_length(spirv) &&
-				Compiler_disassemble(&comp, EGfxBinaryType_SPIRV, spirv, alloc, &disasm, &err) &&
-				CharString_length(disasm) > 0;
+			Bool ok =
+				compileFileShader(alloc, "features/i64.hlsl", roundTrips[r].type, true, false, &out, &err) &&
+				out.length == 1 && Buffer_length(out.ptr[0]) &&
+				readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length >= 1;
 
-			//SPIRV disassembly (SPIRV-Tools) always contains an entrypoint op
-			CharString needle = CharString_createRefCStrConst("OpEntryPoint");
-			Bool looksLikeSpirv = disOk && CharString_containsStringSensitive(&disasm, &needle, 0, 0);
+			if (ok && Compiler_create(alloc, &comp, &err)) {
 
-			Test_assert(t, "SPIRV disassembly is valid", looksLikeSpirv);
+				created = true;
+				Buffer bin = shFile.binaries.ptr[0].binaries[roundTrips[r].type];
+
+				CharString needle = CharString_createRefCStrConst(roundTrips[r].needle);
+
+				disOk =
+					Buffer_length(bin) &&
+					Compiler_disassemble(&comp, roundTrips[r].type, bin, alloc, &disasm, &err) &&
+					CharString_length(disasm) > 0 &&
+					CharString_containsStringSensitive(&disasm, &needle, 0, 0);
+
+				asOk =
+					disOk &&
+					Compiler_assemble(&comp, roundTrips[r].type, disasm, alloc, &reassembled, &err) &&
+					Buffer_length(reassembled) > 0;
+
+				if (asOk && Compiler_disassemble(&comp, roundTrips[r].type, reassembled, alloc, &disasm2, &err)) {
+
+					if (roundTrips[r].type == EGfxBinaryType_SPIRV)
+						identical =
+							Compiler_canonicalizeSPIRV(bin, alloc, &canonA, &err) &&
+							Compiler_canonicalizeSPIRV(reassembled, alloc, &canonB, &err) &&
+							Buffer_length(canonA) > 0 &&
+							Buffer_eq(canonA, canonB);
+
+					else identical =
+						disasmStripped(disasm, alloc, &stripA, &err) &&
+						disasmStripped(disasm2, alloc, &stripB, &err) &&
+						CharString_length(stripA) > 0 &&
+						CharString_equalsStringSensitive(&stripA, &stripB);
+				}
+
+				fixedPoint =
+					identical &&
+					Compiler_assemble(&comp, roundTrips[r].type, disasm2, alloc, &reassembled2, &err) &&
+					Buffer_eq(reassembled, reassembled2);
+			}
+
+			if (!fixedPoint)
+				Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+			if (!CharString_format(alloc, &label, &err, "%s disassembly is valid", roundTrips[r].name))
+				label = CharString_createRefCStrConst("disassembly is valid");
+
+			Test_assert(t, label.ptr, disOk);
+			CharString_free(&label, alloc);
+
+			if (!CharString_format(alloc, &label, &err, "%s disassembly assembles back", roundTrips[r].name))
+				label = CharString_createRefCStrConst("disassembly assembles back");
+
+			Test_assert(t, label.ptr, asOk);
+			CharString_free(&label, alloc);
+
+			if (!CharString_format(alloc, &label, &err, "%s reassembly is semantically identical", roundTrips[r].name))
+				label = CharString_createRefCStrConst("reassembly is semantically identical");
+
+			Test_assert(t, label.ptr, identical);
+			CharString_free(&label, alloc);
+
+			if (!CharString_format(alloc, &label, &err, "%s assembly converges byte for byte", roundTrips[r].name))
+				label = CharString_createRefCStrConst("assembly converges byte for byte");
+
+			Test_assert(t, label.ptr, fixedPoint);
+			CharString_free(&label, alloc);
+
+			CharString_free(&disasm, alloc);
+			CharString_free(&disasm2, alloc);
+			CharString_free(&stripA, alloc);
+			CharString_free(&stripB, alloc);
+			Buffer_free(&reassembled, alloc);
+			Buffer_free(&reassembled2, alloc);
+			Buffer_free(&canonA, alloc);
+			Buffer_free(&canonB, alloc);
+
+			if (created)
+				Compiler_free(&comp, alloc);
+
+			SHFile_free(&shFile, alloc);
+			ListBuffer_freeUnderlying(&out, alloc);
+			err = Error_none();
 		}
-
-		else Test_assert(t, "SPIRV disassembly is valid", false);
-
-		CharString_free(&disasm, alloc);
-		if (created)
-			Compiler_free(&comp, alloc);
-		SHFile_free(&shFile, alloc);
-		ListBuffer_freeUnderlying(&out, alloc);
-		err = Error_none();
 	}
 
 	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);

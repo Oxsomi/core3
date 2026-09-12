@@ -60,6 +60,40 @@ static inline ESpirvVersion Compiler_requiredSpirvVersion(Bool isRt, Bool isCoop
 	return ESpirvVersion_1_3;
 }
 
+//The Vulkan target env spelling of each version, shared by the -fspv-target-env the compile passes
+// and the spirv-opt spelling the link steps print, so the two can't drift.
+
+static inline const C8 *Compiler_spirvTargetEnvName(ESpirvVersion version) {
+	switch (version) {
+		case ESpirvVersion_1_6:    return "vulkan1.3";
+		case ESpirvVersion_1_4:    return "vulkan1.1spirv1.4";
+		default:                   return "vulkan1.1";
+	}
+}
+
+//The version one final binary's LINK runs its SPIR-V tooling at, from that binary's own stage and
+// extensions (a lib link passes EGfxPipelineStage_Count); Compiler_linkSPIRV and the link step
+// descriptions both derive it here.
+
+static inline ESpirvVersion Compiler_linkSpirvVersion(EGfxPipelineStage stage, ESHExtension exts) {
+
+	Bool isRt = stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt;
+	isRt |= !!(exts & ESHExtension_RayQuery);
+
+	Bool isCoop = !!(exts & (
+		ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining
+	));
+
+	Bool isMeshTask = stage == EGfxPipelineStage_MeshExt || stage == EGfxPipelineStage_TaskExt;
+
+	return Compiler_requiredSpirvVersion(isRt, isCoop, isMeshTask);
+}
+
+//One spelling for the flag that keeps unused resource bindings bound: the compile, the printed link
+// steps and (as a wide string literal) the DXIL link all pass it.
+
+#define COMPILER_KEEP_ALL_BINDINGS "-fhlsl-unused-resource-bindings=keep-all"
+
 //Each compiler
 
 typedef struct Compiler {
@@ -279,6 +313,12 @@ Bool Compiler_assemble(
 	const Compiler *comp, EGfxBinaryType type, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr
 );
 
+//Canonical form for semantic comparison: every id is renumbered compactly in first-use order and the
+// generator word is cleared, so two modules that differ only in id numbering or producing tool compare
+// byte for byte equal.
+
+Bool Compiler_canonicalizeSPIRV(Buffer binary, const Allocator *alloc, Buffer *result, Error *e_rr);
+
 //Judge a standalone binary before anything trusts it: spirv-val for SPIR-V, DXC's validator for a DXIL container.
 //The verdict comes back through valid/errorText, since an invalid binary is an answer about the input rather than a
 // failure of this call; errorText carries the validator's own message.
@@ -442,6 +482,19 @@ Bool Compiler_getUniqueCompiles(
 	Error *e_rr
 );
 
+//The HLSL source the DXIL link compiles as its "uniforms" library for one permutation: one
+// export $$specConst_<name>() function per uniform, returning that permutation's value.
+//Compiler_linkDXIL builds its own library through this, so a caller printing the link recipe reads
+// the code path that runs it. out must come in empty and is only written on success.
+Bool Compiler_buildUniformExportsHLSL(
+	const ListSHUniformRuntime *uniforms,
+	Buffer uniformData,
+	ESHExtension exts,
+	const Allocator *alloc,
+	CharString *out,
+	Error *e_rr
+);
+
 //The CompilerSettings and SHBinaryIdentifier one (entry, combination) compiles as, built exactly the
 // way the compile driver builds them, so an argv query can never drift from the compile it describes.
 //isRt and isGfxOrComp are the aggregates Compiler_getUniqueCompiles packs (b15 and b31), never a single
@@ -463,6 +516,57 @@ Bool Compiler_describeCompile(
 	const ListCharString *includeDirs,
 	CompilerSettings *settings,
 	SHBinaryIdentifier *identifier,
+	Error *e_rr
+);
+
+//One link step that turns a compile's output into a final binary: which permutation it freezes, how
+// it is targeted, and the arguments each backend's step runs with.
+//identifier is the FINAL binary's identifier (entrypoint and stage specialized for gfx/comp [shader]
+// entries, uniforms carrying this permutation's values); it references the entries and owns nothing.
+//profile, uniformsHlsl and the lists are owned; free with ListCompilerLinkStep_freeUnderlying.
+
+typedef struct CompilerLinkStep {
+
+	SHBinaryIdentifier identifier;
+
+	CharString profile;           //lib_M_m for a lib link, <stage>_M_m for a specialized entrypoint
+	CharString uniformsHlsl;      //DXIL: the "uniforms" library source; empty without uniforms
+
+	ListCharString uniformsArgs;  //DXIL: the dxc args compiling that library
+	ListCharString libs;          //DXIL: the library names handed to IDxcLinker, in registration order
+	ListCharString linkArgs;      //DXIL: extra IDxcLinker arguments
+	ListCharString spirvOpt;      //SPIRV: the spirv-opt spelling of this step; empty when the link copies as is
+
+	U16 runtimeEntryId;           //The stored entry the driver resolves this link through
+	U16 combinationId;            //Its full combination id, uniform values included
+	U32 padding;
+
+} CompilerLinkStep;
+
+TList(CompilerLinkStep);
+
+void ListCompilerLinkStep_freeUnderlying(ListCompilerLinkStep *steps, const Allocator *alloc);
+
+//The profile string a link targets. Compiler_linkDXIL formats its own through this as well, so the
+// printed step and the executed link share one spelling.
+Bool Compiler_linkProfile(
+	Bool isLib, EGfxPipelineStage stage, U16 shaderVersion, const Allocator *alloc, CharString *out, Error *e_rr
+);
+
+//The link steps that finish one compile: enumerated by the same matching core the link jobs run
+// (Compiler_getLinkEntries over the parsed entries instead of the binary's reflection) and described
+// with the same helpers the links execute, so a printed step can't drift from the link it describes.
+//compiled is the compile's identifier and storedEntryId the entry the driver stores for it (both come
+// out of Compiler_getUniqueCompiles). [[oxc::stage]] entries never link and produce no steps;
+// [shader] entries always link.
+Bool Compiler_getLinkSteps(
+	const ListSHEntryRuntime *entries,
+	const SHBinaryIdentifier *compiled,
+	U16 storedEntryId,
+	EGfxBinaryType type,
+	Bool keepRegisters,
+	ListCompilerLinkStep *steps,
+	const Allocator *alloc,
 	Error *e_rr
 );
 

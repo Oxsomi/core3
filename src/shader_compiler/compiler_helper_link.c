@@ -22,6 +22,7 @@
 
 #include "types/container/list_impl.h"
 #include "types/container/string.h"
+#include "types/container/log.h"
 #include "types/container/buffer.h"
 #include "types/base/allocator.h"
 #include "types/container/list_basic_types.h"
@@ -36,6 +37,7 @@ TList(ListSHEntryRuntime);
 TListImpl(ListSHEntryRuntime);
 
 TListImpl(LinkEntry);
+TListImpl(CompilerLinkStep);
 
 void ListListSHEntryRuntime_freeUnderlying(ListListSHEntryRuntime *entry, const Allocator *alloc) {
 
@@ -62,13 +64,18 @@ void ListLinkEntry_freeUnderlying(ListLinkEntry* entries, const Allocator *alloc
 	ListLinkEntry_free(entries, alloc);
 }
 
-Bool Compiler_getLinkEntries(
-	const Compiler *compiler,
+//The matching half of Compiler_getLinkEntries, over an already discovered entrypoint list: which
+// parsed entry each entrypoint is, whether this backend keeps it, which combination the binary's
+// identifier maps back to (model promotion included), and one link entry per uniform permutation,
+// with RT libs sharing one per permutation across their entries.
+//Pure on purpose: Compiler_getLinkSteps runs this identical matching over the parse, where the
+// link jobs run it over the compiled binary's reflection, so the two can't diverge.
+
+static Bool Compiler_matchLinkEntries(
 	const ListSHEntryRuntime *runtimeEntries,
 	const SHBinaryIdentifier *binaryIdentifier,
 	EGfxBinaryType binaryType,
-	Buffer *binary,
-	ListCompilerEntrypoint *entrypoints,
+	const ListCompilerEntrypoint *entrypoints,
 	ListLinkEntry *linkEntries,
 	const Allocator *alloc,
 	Error *e_rr
@@ -76,37 +83,10 @@ Bool Compiler_getLinkEntries(
 
 	Bool s_uccess = true;
 	ListU16 tmpEntries = (ListU16) { 0 };
-	Bool freeEntrypoints = false;
-	Bool freeLinkEntries = false;
 
-	Bool isRt =
+	Bool isLibTarget =
 		binaryIdentifier->stageType >= EGfxPipelineStage_RtStartExt &&
 		binaryIdentifier->stageType <= EGfxPipelineStage_RtEndExt;
-
-	Bool isLib = isRt;
-
-	Bool isLibTarget = isLib;
-	isLib = isLibTarget || (binaryIdentifier->stageType == EGfxPipelineStage_Count);
-
-	if (!isLib) {
-		
-		gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
-			entrypoints, (CompilerEntrypoint) { .stage = binaryIdentifier->stageType }, alloc, e_rr
-		));
-
-		freeEntrypoints = true;
-
-		gotoIfError3(clean, CharString_createCopy(
-			binaryIdentifier->entrypoint,
-			alloc,
-			&ListCompilerEntrypoint_last(*entrypoints)->name,
-			e_rr
-		));
-	}
-	
-	else gotoIfError3(clean, Compiler_getUniqueEntrypoints(compiler, binaryType, *binary, true, entrypoints, alloc, e_rr));
-
-	freeEntrypoints = true;
 
 	ListCompilerEntrypoint entrypointL = *entrypoints;
 	ListSHEntryRuntime runtimeEntryL = *runtimeEntries;
@@ -326,12 +306,63 @@ Bool Compiler_getLinkEntries(
 
 			gotoIfError3(clean, ListLinkEntry_pushBack(linkEntries, linkEntry, alloc, e_rr));
 			tmpEntries = (ListU16) { 0 };    //Moved
-			freeLinkEntries = true;
 		}
 	}
 
 	if (linkEntries->length >> 32)
-		retError(clean, Error_invalidState(0, "Compiler_getLinkEntries() must return <32bit entries"));
+		retError(clean, Error_invalidState(0, "Compiler_matchLinkEntries() must return <32bit entries"));
+
+clean:
+	ListU16_free(&tmpEntries, alloc);
+	return s_uccess;
+}
+
+Bool Compiler_getLinkEntries(
+	const Compiler *compiler,
+	const ListSHEntryRuntime *runtimeEntries,
+	const SHBinaryIdentifier *binaryIdentifier,
+	EGfxBinaryType binaryType,
+	Buffer *binary,
+	ListCompilerEntrypoint *entrypoints,
+	ListLinkEntry *linkEntries,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Bool freeEntrypoints = false;
+	Bool freeLinkEntries = false;
+
+	Bool isRt =
+		binaryIdentifier->stageType >= EGfxPipelineStage_RtStartExt &&
+		binaryIdentifier->stageType <= EGfxPipelineStage_RtEndExt;
+
+	Bool isLib = isRt || binaryIdentifier->stageType == EGfxPipelineStage_Count;
+
+	if (!isLib) {
+		
+		gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
+			entrypoints, (CompilerEntrypoint) { .stage = binaryIdentifier->stageType }, alloc, e_rr
+		));
+
+		freeEntrypoints = true;
+
+		gotoIfError3(clean, CharString_createCopy(
+			binaryIdentifier->entrypoint,
+			alloc,
+			&ListCompilerEntrypoint_last(*entrypoints)->name,
+			e_rr
+		));
+	}
+	
+	else gotoIfError3(clean, Compiler_getUniqueEntrypoints(compiler, binaryType, *binary, true, entrypoints, alloc, e_rr));
+
+	freeEntrypoints = true;
+	freeLinkEntries = true;
+
+	gotoIfError3(clean, Compiler_matchLinkEntries(
+		runtimeEntries, binaryIdentifier, binaryType, entrypoints, linkEntries, alloc, e_rr
+	));
 
 clean:
 
@@ -344,6 +375,288 @@ clean:
 			ListLinkEntry_freeUnderlying(linkEntries, alloc);
 	}
 
-	ListU16_free(&tmpEntries, alloc);
+	return s_uccess;
+}
+
+void ListCompilerLinkStep_freeUnderlying(ListCompilerLinkStep *steps, const Allocator *alloc) {
+
+	if(!steps)
+		return;
+
+	for (U64 i = 0; i < steps->length; ++i) {
+
+		CompilerLinkStep *step = &steps->ptrNonConst[i];
+
+		CharString_free(&step->profile, alloc);
+		CharString_free(&step->uniformsHlsl, alloc);
+		ListCharString_freeUnderlying(&step->uniformsArgs, alloc);
+		ListCharString_freeUnderlying(&step->libs, alloc);
+		ListCharString_freeUnderlying(&step->linkArgs, alloc);
+		ListCharString_freeUnderlying(&step->spirvOpt, alloc);
+	}
+
+	ListCompilerLinkStep_free(steps, alloc);
+}
+
+Bool Compiler_linkProfile(
+	Bool isLib, EGfxPipelineStage stage, U16 shaderVersion, const Allocator *alloc, CharString *out, Error *e_rr
+) {
+
+	if (isLib)
+		return CharString_format(
+			alloc, out, e_rr, "lib_%" PRIu8 "_%" PRIu8, (U8)(shaderVersion >> 8), (U8) shaderVersion
+		);
+
+	return CharString_format(
+		alloc, out, e_rr, "%s_%" PRIu8 "_%" PRIu8,
+		EGfxPipelineStage_getStagePrefix(stage), (U8)(shaderVersion >> 8), (U8) shaderVersion
+	);
+}
+
+Bool Compiler_getLinkSteps(
+	const ListSHEntryRuntime *entries,
+	const SHBinaryIdentifier *compiled,
+	U16 storedEntryId,
+	EGfxBinaryType type,
+	Bool keepRegisters,
+	ListCompilerLinkStep *steps,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ListCompilerEntrypoint entrypoints = (ListCompilerEntrypoint) { 0 };
+	ListLinkEntry linkEntries = (ListLinkEntry) { 0 };
+	CompilerLinkStep step = (CompilerLinkStep) { 0 };
+	CharString scratch = CharString_createNull();
+	CharString pair = CharString_createNull();
+	CharString value = CharString_createNull();
+
+	if(!entries || !compiled || !steps)
+		retError(clean, Error_nullPointer(
+			!entries ? 0 : (!compiled ? 1 : 5), "Compiler_getLinkSteps()::entries, compiled and steps are required"
+		));
+
+	if(steps->ptr)
+		retError(clean, Error_invalidOperation(
+			0, "Compiler_getLinkSteps()::steps are non zero, could indicate memleak"
+		));
+
+	if(storedEntryId >= entries->length)
+		retError(clean, Error_outOfBounds(
+			2, storedEntryId, entries->length, "Compiler_getLinkSteps()::storedEntryId out of bounds"
+		));
+
+	//[[oxc::stage]] entries never link: their one link entry only drives reflection
+	// (Compiler_compileLinkJob), so there is no step to describe.
+
+	if (!entries->ptr[storedEntryId].isShaderAnnotation)
+		goto clean;
+
+	//Discovery mirrors Compiler_getLinkEntries: a non lib identifier is its own single entrypoint, and
+	// a lib's entrypoints are the [shader] entries sharing this compile, which is what the compiled
+	// binary's reflection lists for it.
+
+	Bool isRt =
+		compiled->stageType >= EGfxPipelineStage_RtStartExt &&
+		compiled->stageType <= EGfxPipelineStage_RtEndExt;
+
+	Bool isLib = isRt || compiled->stageType == EGfxPipelineStage_Count;
+
+	if (!isLib) {
+		gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
+			&entrypoints,
+			(CompilerEntrypoint) {
+				.name = CharString_createRefStrConst(compiled->entrypoint),
+				.stage = compiled->stageType
+			},
+			alloc, e_rr
+		));
+	}
+
+	else for (U64 e = 0; e < entries->length; ++e) {
+
+		const SHEntryRuntime *runtime = &entries->ptr[e];
+
+		if (!runtime->isShaderAnnotation || !((SHEntryRuntime_getBinaryTypes(runtime) >> type) & 1))
+			continue;
+
+		Bool shares = false;
+		U32 compiledCombos = SHEntryRuntime_getCombinationsCompiled(runtime);
+
+		for (U32 jc = 0; jc < compiledCombos && !shares; ++jc) {
+
+			SHBinaryIdentifier compiledId = (SHBinaryIdentifier) { 0 };
+			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtime, (U16) jc, &compiledId, e_rr));
+
+			shares = SHBinaryIdentifier_equals(&compiledId, compiled);
+		}
+
+		if (shares)
+			gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
+				&entrypoints,
+				(CompilerEntrypoint) {
+					.name = CharString_createRefStrConst(runtime->entry.name),
+					.stage = runtime->entry.stage
+				},
+				alloc, e_rr
+			));
+	}
+
+	gotoIfError3(clean, Compiler_matchLinkEntries(entries, compiled, type, &entrypoints, &linkEntries, alloc, e_rr));
+
+	for (U64 i = 0; i < linkEntries.length; ++i) {
+
+		LinkEntry linkEntry = linkEntries.ptr[i];
+
+		step = (CompilerLinkStep) {
+			.runtimeEntryId = storedEntryId,
+			.combinationId = linkEntry.combinationId
+		};
+
+		gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(
+			&entries->ptr[storedEntryId], linkEntry.combinationId, &step.identifier, e_rr
+		));
+
+		//The specialization the link job applies: a named entrypoint pins its own stage, a lib link
+		// keeps the lib identifier (Compiler_compileLinkJob marks it EGfxPipelineStage_Count).
+
+		Bool isLibStep = linkEntry.entrypointId == U16_MAX;
+		EGfxPipelineStage stage = EGfxPipelineStage_Count;
+
+		if (!isLibStep) {
+
+			const SHEntryRuntime *owner = &entries->ptr[linkEntry.entrypointId];
+
+			step.identifier.entrypoint = CharString_createRefStrConst(owner->entry.name);
+			step.identifier.stageType = owner->entry.stage;
+			stage = (EGfxPipelineStage) owner->entry.stage;
+		}
+
+		gotoIfError3(clean, Compiler_linkProfile(
+			isLibStep, stage, step.identifier.shaderVersion, alloc, &step.profile, e_rr
+		));
+
+		if (type == EGfxBinaryType_DXIL) {
+
+			if (step.identifier.uniforms.length) {
+
+				gotoIfError3(clean, Compiler_buildUniformExportsHLSL(
+					&step.identifier.uniforms,
+					Buffer_createRefConst(step.identifier.uniformData.ptr, step.identifier.uniformData.length),
+					step.identifier.extensions, alloc, &step.uniformsHlsl, e_rr
+				));
+
+				gotoIfError3(clean, ListCharString_pushBack(
+					&step.uniformsArgs, CharString_createRefCStrConst("-T"), alloc, e_rr
+				));
+
+				gotoIfError3(clean, ListCharString_pushBack(
+					&step.uniformsArgs, CharString_createRefCStrConst("lib_6_3"), alloc, e_rr
+				));
+
+				if (step.identifier.extensions & ESHExtension_16BitTypes)
+					gotoIfError3(clean, ListCharString_pushBack(
+						&step.uniformsArgs, CharString_createRefCStrConst("-enable-16bit-types"), alloc, e_rr
+					));
+
+				gotoIfError3(clean, ListCharString_pushBack(
+					&step.libs, CharString_createRefCStrConst("uniforms"), alloc, e_rr
+				));
+			}
+
+			gotoIfError3(clean, ListCharString_pushBack(
+				&step.libs, CharString_createRefCStrConst("0"), alloc, e_rr
+			));
+
+			if (keepRegisters)
+				gotoIfError3(clean, ListCharString_pushBack(
+					&step.linkArgs, CharString_createRefCStrConst(COMPILER_KEEP_ALL_BINDINGS), alloc, e_rr
+				));
+		}
+
+		//Mirrors Compiler_linkSPIRV: the optimizer only runs when uniforms or an entrypoint ask for it;
+		// a lib link without uniforms copies the module as is and the step stays empty.
+
+		else if (step.identifier.uniforms.length || CharString_length(step.identifier.entrypoint)) {
+
+			gotoIfError3(clean, CharString_format(
+				alloc, &scratch, e_rr, "--target-env=%s",
+				Compiler_spirvTargetEnvName(Compiler_linkSpirvVersion(stage, step.identifier.extensions))
+			));
+
+			gotoIfError3(clean, ListCharString_pushBack(&step.spirvOpt, scratch, alloc, e_rr));
+			scratch = CharString_createNull();
+
+			if (step.identifier.uniforms.length) {
+
+				gotoIfError3(clean, CharString_createCopy(
+					CharString_createRefCStrConst("--set-spec-const-default-value="), alloc, &scratch, e_rr
+				));
+
+				//constant_id i is the uniform's declaration order in the compile's spec constant preamble
+
+				for (U64 j = 0; j < step.identifier.uniforms.length; ++j) {
+
+					SHUniformRuntime uniform = step.identifier.uniforms.ptr[j];
+					TypeId typeId = ETypeId_arr[uniform.typeIdShort];
+
+					SHValue uniformValue = (SHValue) { 0 };
+					Buffer_memcpy(
+						Buffer_createRef(&uniformValue, sizeof(uniformValue)),
+						Buffer_createRefConst(
+							step.identifier.uniformData.ptr + uniform.dataOffset, ETypeId_getBytes(typeId)
+						)
+					);
+
+					CharString_free(&value, alloc);
+
+					if(!SHValue_stringify(&uniformValue, typeId, alloc, &value, NULL))
+						value = CharString_createRefCStrConst("unknown");
+
+					gotoIfError3(clean, CharString_format(
+						alloc, &pair, e_rr, "%s%" PRIu64 ":%.*s",
+						j ? " " : "", j, (int) CharString_length(value), value.ptr
+					));
+
+					gotoIfError3(clean, CharString_appendString(&scratch, &pair, alloc, e_rr));
+					CharString_free(&pair, alloc);
+				}
+
+				gotoIfError3(clean, ListCharString_pushBack(&step.spirvOpt, scratch, alloc, e_rr));
+				scratch = CharString_createNull();
+
+				gotoIfError3(clean, ListCharString_pushBack(
+					&step.spirvOpt, CharString_createRefCStrConst("--freeze-spec-const"), alloc, e_rr
+				));
+			}
+
+			gotoIfError3(clean, ListCharString_pushBack(
+				&step.spirvOpt, CharString_createRefCStrConst("-O"), alloc, e_rr
+			));
+		}
+
+		gotoIfError3(clean, ListCompilerLinkStep_pushBack(steps, step, alloc, e_rr));
+		step = (CompilerLinkStep) { 0 };    //Moved
+	}
+
+clean:
+
+	if (!s_uccess) {
+
+		CharString_free(&step.profile, alloc);
+		CharString_free(&step.uniformsHlsl, alloc);
+		ListCharString_freeUnderlying(&step.uniformsArgs, alloc);
+		ListCharString_freeUnderlying(&step.libs, alloc);
+		ListCharString_freeUnderlying(&step.linkArgs, alloc);
+		ListCharString_freeUnderlying(&step.spirvOpt, alloc);
+		ListCompilerLinkStep_freeUnderlying(steps, alloc);
+	}
+
+	CharString_free(&scratch, alloc);
+	CharString_free(&pair, alloc);
+	CharString_free(&value, alloc);
+	ListCompilerEntrypoint_freeUnderlying(&entrypoints, alloc);
+	ListLinkEntry_freeUnderlying(&linkEntries, alloc);
 	return s_uccess;
 }

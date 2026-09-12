@@ -156,6 +156,18 @@ Compiler and CLI, as the page uses them
   lowering emits SPIR-V its own validator rejects, and the proper integration is being done upstream.
   When that lands: bump the pin, lift the refusal and its feature-test assert, take
   [[oxc::binary("dxil")]] off the descriptor_heap sample, and pin its SPIRV golden.
+- Narrow screens: the three pane row should stack into a column under a breakpoint. The splitters
+  (js/layout.js) already resize, collapse and persist; a media query driven stacking is the missing
+  half of making the page responsive.
+- Re-enable the disabled corpus shaders (test/hlsl/**/*.hlsl.disabled): they were disabled because
+  they break, and what breaks for us breaks for anyone writing similar shaders.
+  - rt_core/graphics_test.hlsl: OxC3's spirv-opt run reorders two OpDecorate Location decorations,
+    so the byte snapshot is non deterministic. Same pointer-order disease as upstream DXC #8899;
+    the fix likely belongs in SPIRV-Tools or in pinning our own pass order, and the snapshot proves
+    it once re-enabled.
+  - acompute/compute/compute_no_pad_struct (plus their rt_core twins): re-triage why each fails and
+    fix or file upstream; the reason isn't recorded in the files.
+  - multi_dimensional_register_array: waiting on upstream DXC issue #7922 (noted in the file).
 - Parse-only permutation listing as a CLI verb. The page already gets it from the module's
   oxc3_parseEntrypoints (Compiler_parse behind it), so what is left is the CLI/--json half the VS Code
   host would call.

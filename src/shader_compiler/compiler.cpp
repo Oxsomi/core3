@@ -20,6 +20,9 @@
 
 //shader_compiler/compiler.cpp
 
+#include "shader_compiler/compiler.h"
+#include "platforms/file.h"
+#include "platforms/platform.h"
 #include "types/container/list_impl.h"
 #include "types/container/list_basic_types.h"
 #include "types/container/string.h"
@@ -27,17 +30,14 @@
 #include "types/container/log.h"
 #include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
+#include "types/container/file_base.h"
+#include "types/math/flp.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/string_mut_helper.h"
 #include "types/base/allocator.h"
 #include "types/base/c8.h"
 #include "types/base/mathi.h"
-#include "types/math/flp.h"
 #include "types/base/constants.h"
-#include "platforms/file.h"
-#include "types/container/file_base.h"
-#include "platforms/platform.h"
-#include "shader_compiler/compiler.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
@@ -174,6 +174,7 @@ public:
 		Bool isBuiltin = false;
 		U64 i = 0;
 		U64 lastAt = U64_MAX;
+		const CharString atStr = CharString_createRefCStrConst("@");
 
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 			gotoIfError3(clean, CharString_createFromUTF16((const U16*)fileNameStr, U64_MAX, alloc, &fileName, e_rr));
@@ -188,10 +189,7 @@ public:
 		//Little hack to handle builtin shaders, by using "virtual files" //myTest.hlsli
 
 		//Braced so the earlier gotoIfError3(clean, ...) doesn't jump across atStr's initializer (GCC C++).
-		{
-			const CharString atStr = CharString_createRefCStrConst("@");
-			lastAt = CharString_findLastStringSensitive(&fileName, &atStr, 0, 0);
-		}
+		lastAt = CharString_findLastStringSensitive(&fileName, &atStr, 0, 0);
 		isBuiltin = lastAt != U64_MAX;
 
 		if (isBuiltin) {
@@ -537,12 +535,15 @@ Bool Compiler_create(const Allocator *alloc, Compiler *comp, Error *e_rr) {
 
 	try {
 
-		//Note: DxcCreateInstance2 with a custom IMalloc was tried (size-prefixed blocks so Free can recover {ptr, len}).
-		//It instantly hard-crashes inside DxcReflector::FromSource (unordered_map in dxcreflection_from_ast).
-		//DXC routes global new/delete through the thread-local IMalloc, but some allocations cross allocator
-		// boundaries (allocated under the default CRT allocator, freed under the custom one or vice versa),
-		// so any pointer-rewriting IMalloc corrupts the heap.
-		//Until the DXC fork guarantees symmetric alloc/free through a single IMalloc this can't be tracked.
+		//Every instance stays on DXC's default allocator; a custom per instance IMalloc through
+		// DxcCreateInstance2 corrupts the heap (STATUS_HEAP_CORRUPTION, still at fork commit d55a805).
+		//The fork pins the instance's IMalloc thread locally at every API entry, but dxcmem.cpp routes
+		// this whole module's replaced operator new and delete through whatever IMalloc the current
+		// thread has pinned at that moment, so any allocation whose lifetime crosses a pin boundary
+		// (llvm globals, caches that outlive one call) is freed by a different allocator than made it.
+		//The ASan dxc packages cannot even attempt it: they set DXC_DISABLE_ALLOCATOR_OVERRIDES
+		// (ASan owns operator new), which makes DxcCreateInstance2 refuse every custom IMalloc
+		// with E_INVALIDARG.
 
 		//Create utils
 

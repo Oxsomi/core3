@@ -22,9 +22,9 @@
 
 #include "test_shader_compiler_shared.h"
 #include "shader_compiler/compiler.h"
+#include "platforms/platform.h"
 #include "formats/oiSH/sh_entries.h"
 #include "formats/oiSH/sh_file.h"
-#include "platforms/platform.h"
 #include "types/container/string.h"
 #include "types/container/buffer.h"
 #include "types/container/list_basic_types.h"

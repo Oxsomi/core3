@@ -43,6 +43,14 @@ body{ display:flex; flex-direction:column; overflow:hidden; }
 .output-pane{ flex:1.15 1 0; min-width:0; display:flex; flex-direction:column; min-height:0; }
 .pane-body{ flex:1 1 auto; min-height:0; overflow:auto; position:relative; }
 
+/* ---- pane splitters (js/layout.js): drag resizes, double-click collapses, sizes persist ---- */
+.split-v{ flex:0 0 5px; margin-left:-1px; cursor:col-resize; touch-action:none; }
+.split-h{ height:5px; flex-shrink:0; cursor:row-resize; touch-action:none; }
+.split-v:hover, .split-h:hover, .split-v.dragging, .split-h.dragging{ background:var(--ox-accent); }
+body.rail-collapsed .rail{ display:none; }
+body.out-collapsed .output-pane{ display:none; }
+body.out-collapsed .editor-pane{ border-right:0; }
+
 /* ---- file rail ---- */
 .rail-grp{ font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--bs-secondary-color);
   padding:9px 12px 4px; display:flex; align-items:center; }

@@ -168,6 +168,8 @@ saved in this browser. Share links open as their own workspace."
     <div id="builtinFiles"></div>
   </div>
 
+  <div class="split-v" id="splitRail" title="Drag to resize; double-click collapses the file rail"></div>
+
   <!-- editor (compile mode) -->
   <div class="editor-pane" id="editorPane">
     <div class="px-3 py-1 border-bottom bg-body-tertiary d-flex align-items-center flex-shrink-0">
@@ -190,6 +192,8 @@ saved in this browser. Share links open as their own workspace."
     </div>
     <div class="pane-body p-0"><textarea id="src"></textarea></div>
   </div>
+
+  <div class="split-v" id="splitOut" title="Drag to resize; double-click collapses the output pane"></div>
 
   <!-- output -->
   <div class="output-pane">
@@ -244,9 +248,10 @@ saved in this browser. Share links open as their own workspace."
 
       <div class="tab-pane fade h-100" id="p-cmd">
         <div class="px-3 py-2 border-bottom bg-body-tertiary small text-body-secondary">
-          The CLI line this run maps to, and the DXC invocation OxC3 derives per compile group: from each entrypoint's
-          <code>[shader]</code>/<code>[[oxc::stage]]</code>, <code>[[oxc::model]]</code>, extensions and the requested targets.
-          <code>[[oxc::stage]]</code> entries compile standalone with <code>-E</code>; <code>[shader]</code> entries share one <code>lib_6_x</code> compile.
+          The CLI line this run maps to, and per compile the exact DXC invocation read back from the compiler
+          (<code>Compiler_buildCompileArgs</code>), with the link steps that finish each permutation.
+          <code>[[oxc::stage]]</code> entries compile standalone with <code>-E</code>; <code>[shader]</code> entries share one <code>lib_6_x</code> compile
+          and specialize at link.
         </div>
         <div class="p-3">
           <div class="mb-1 small text-body-secondary">Equivalent CLI</div>
@@ -289,6 +294,7 @@ saved in this browser. Share links open as their own workspace."
 </div>
 
 <!-- problems -->
+<div class="split-h" id="splitProb" title="Drag to resize; double-click collapses the problems pane"></div>
 <div class="problems border-top flex-shrink-0" id="problems">
   <div class="d-flex align-items-center px-3 py-1 bg-body-tertiary border-bottom flex-shrink-0">
     <span class="small fw-semibold"><i class="bi bi-exclamation-diamond"></i> Problems</span>
@@ -394,6 +400,7 @@ saved in this browser. Share links open as their own workspace."
 <script src="js/util.js"></script>
 <script src="js/workspace.js"></script>
 <script src="js/theme.js"></script>
+<script src="js/layout.js"></script>
 <script src="js/mock_data.js"></script>
 <script src="js/intrinsics_data.js"></script>
 <script src="js/mock.js"></script>

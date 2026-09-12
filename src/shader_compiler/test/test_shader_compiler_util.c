@@ -21,7 +21,6 @@
 //shader_compiler/test/test_shader_compiler_util.c
 
 #include "test_shader_compiler_shared.h"
-#include <inttypes.h>
 #include "shader_compiler/compiler.h"
 #include "formats/oiSH/sh_file.h"
 #include "platforms/file.h"
@@ -32,6 +31,8 @@
 #include "types/container/memory_stream.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/time.h"
+
+#include <inttypes.h>
 
 Bool compileInlineShaders(
 	const Allocator *alloc,

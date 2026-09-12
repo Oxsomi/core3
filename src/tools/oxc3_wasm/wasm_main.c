@@ -781,6 +781,56 @@ clean:
 	return s_uccess ? frame : Wasm_errorFrameFromError(&err, "oxc3_uniqueEntrypoints() failed");
 }
 
+//An identifier's uniform values as `"uniforms": [{type, name, value}]`, the spelling every listing
+// shares (the parse combinations, and the link steps of the argv query).
+
+static Bool Wasm_jsonUniformValues(
+	const SHBinaryIdentifier *identifier, JsonWriter *w, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	CharString typeName = CharString_createNull();
+	CharString value = CharString_createNull();
+
+	gotoIfError3(clean, JsonWriter_keyArray(w, "uniforms", e_rr));
+
+	for (U64 i = 0; i < identifier->uniforms.length; ++i) {
+
+		SHUniformRuntime uniform = identifier->uniforms.ptr[i];
+		TypeId typeId = ETypeId_arr[uniform.typeIdShort];
+
+		CharString_free(&typeName, alloc);
+		CharString_free(&value, alloc);
+
+		if(!CharString_createFromETypeId(typeId, alloc, &typeName, NULL))
+			typeName = CharString_createRefCStrConst("unknown");
+
+		SHValue uniformValue = (SHValue) { 0 };
+		Buffer_memcpy(
+			Buffer_createRef(&uniformValue, sizeof(uniformValue)),
+			Buffer_createRefConst(identifier->uniformData.ptr + uniform.dataOffset, ETypeId_getBytes(typeId))
+		);
+
+		if(!SHValue_stringify(&uniformValue, typeId, alloc, &value, NULL))
+			value = CharString_createRefCStrConst("unknown");
+
+		gotoIfError3(clean, (
+			JsonWriter_beginObject(w, e_rr) &&
+			JsonWriter_keyStr(w, "type", typeName, e_rr) &&
+			JsonWriter_keyStr(w, "name", uniform.name, e_rr) &&
+			JsonWriter_keyStr(w, "value", value, e_rr) &&
+			JsonWriter_endObject(w, e_rr)
+		));
+	}
+
+	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+
+clean:
+	CharString_free(&typeName, alloc);
+	CharString_free(&value, alloc);
+	return s_uccess;
+}
+
 //One parse combination, spelled with SHFile_jsonBinary's field names and vocabularies, so the page can
 // match a combination against a compiled document's binaries without a second dialect.
 
@@ -789,8 +839,6 @@ static Bool Wasm_jsonParseCombination(
 ) {
 
 	Bool s_uccess = true;
-	CharString typeName = CharString_createNull();
-	CharString value = CharString_createNull();
 
 	SHBinaryIdentifier identifier = (SHBinaryIdentifier) { 0 };     //Refs into the runtime, nothing to free
 	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtime, combinationId, &identifier, e_rr));
@@ -844,43 +892,10 @@ static Bool Wasm_jsonParseCombination(
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
-	gotoIfError3(clean, JsonWriter_keyArray(w, "uniforms", e_rr));
-
-	for (U64 i = 0; i < identifier.uniforms.length; ++i) {
-
-		SHUniformRuntime uniform = identifier.uniforms.ptr[i];
-		TypeId typeId = ETypeId_arr[uniform.typeIdShort];
-
-		CharString_free(&typeName, alloc);
-		CharString_free(&value, alloc);
-
-		if(!CharString_createFromETypeId(typeId, alloc, &typeName, NULL))
-			typeName = CharString_createRefCStrConst("unknown");
-
-		SHValue uniformValue = (SHValue) { 0 };
-		Buffer_memcpy(
-			Buffer_createRef(&uniformValue, sizeof(uniformValue)),
-			Buffer_createRefConst(identifier.uniformData.ptr + uniform.dataOffset, ETypeId_getBytes(typeId))
-		);
-
-		if(!SHValue_stringify(&uniformValue, typeId, alloc, &value, NULL))
-			value = CharString_createRefCStrConst("unknown");
-
-		gotoIfError3(clean, (
-			JsonWriter_beginObject(w, e_rr) &&
-			JsonWriter_keyStr(w, "type", typeName, e_rr) &&
-			JsonWriter_keyStr(w, "name", uniform.name, e_rr) &&
-			JsonWriter_keyStr(w, "value", value, e_rr) &&
-			JsonWriter_endObject(w, e_rr)
-		));
-	}
-
-	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+	gotoIfError3(clean, Wasm_jsonUniformValues(&identifier, w, alloc, e_rr));
 	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 
 clean:
-	CharString_free(&typeName, alloc);
-	CharString_free(&value, alloc);
 	return s_uccess;
 }
 
@@ -982,11 +997,100 @@ clean:
 	return s_uccess ? frame : Wasm_errorFrameFromError(&err, "oxc3_parseEntrypoints() failed");
 }
 
+//The link steps that finish one compile, serialized straight from Compiler_getLinkSteps, which
+// enumerates and describes them with the compile driver's own code; nothing here re-derives any
+// compiler behavior, so the printed steps can't drift from the links that run.
+
+static Bool Wasm_jsonStringList(const C8 *key, const ListCharString *list, JsonWriter *w, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	gotoIfError3(clean, JsonWriter_keyArray(w, key, e_rr));
+
+	for (U64 i = 0; i < list->length; ++i)
+		gotoIfError3(clean, JsonWriter_str(w, list->ptr[i], e_rr));
+
+	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+static Bool Wasm_jsonCompileLinks(
+	const ListSHEntryRuntime *entries,
+	const SHBinaryIdentifier *cardIdentifier,
+	U16 storedEntryId,
+	EGfxBinaryType bt,
+	Bool keepRegisters,
+	JsonWriter *w,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ListCompilerLinkStep steps = (ListCompilerLinkStep) { 0 };
+
+	gotoIfError3(clean, Compiler_getLinkSteps(
+		entries, cardIdentifier, storedEntryId, bt, keepRegisters, &steps, alloc, e_rr
+	));
+
+	gotoIfError3(clean, JsonWriter_keyArray(w, "links", e_rr));
+
+	for (U64 i = 0; i < steps.length; ++i) {
+
+		const CompilerLinkStep *step = &steps.ptr[i];
+		Bool lib = !CharString_length(step->identifier.entrypoint);
+
+		gotoIfError3(clean, JsonWriter_beginObject(w, e_rr));
+		gotoIfError3(clean, JsonWriter_key(w, "entrypoint", e_rr));
+
+		if (lib) {
+			gotoIfError3(clean, JsonWriter_null(w, e_rr));
+		}
+
+		else gotoIfError3(clean, JsonWriter_str(w, step->identifier.entrypoint, e_rr));
+
+		gotoIfError3(clean, JsonWriter_keyCstr(
+			w, "stage", lib ? "lib" : SHEntry_stageNames[step->identifier.stageType], e_rr
+		));
+
+		gotoIfError3(clean, JsonWriter_keyU64(w, "combination", step->combinationId, e_rr));
+		gotoIfError3(clean, JsonWriter_keyStr(w, "profile", step->profile, e_rr));
+		gotoIfError3(clean, Wasm_jsonUniformValues(&step->identifier, w, alloc, e_rr));
+
+		if (bt == EGfxBinaryType_DXIL) {
+
+			gotoIfError3(clean, JsonWriter_key(w, "uniformsHlsl", e_rr));
+
+			if (CharString_length(step->uniformsHlsl)) {
+				gotoIfError3(clean, JsonWriter_str(w, step->uniformsHlsl, e_rr));
+			}
+
+			else gotoIfError3(clean, JsonWriter_null(w, e_rr));
+
+			gotoIfError3(clean, Wasm_jsonStringList("uniformsArgs", &step->uniformsArgs, w, e_rr));
+			gotoIfError3(clean, Wasm_jsonStringList("libs", &step->libs, w, e_rr));
+			gotoIfError3(clean, Wasm_jsonStringList("linkArgs", &step->linkArgs, w, e_rr));
+		}
+
+		else gotoIfError3(clean, Wasm_jsonStringList("spirvOpt", &step->spirvOpt, w, e_rr));
+
+		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
+	}
+
+	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+
+clean:
+	ListCompilerLinkStep_freeUnderlying(&steps, alloc);
+	return s_uccess;
+}
+
 //The exact dxc invocations a compile of this source would run: parse the entrypoints, dedupe their
 // combinations the way the compile driver does (Compiler_getUniqueCompiles), gate backends the way it
-// gates them, and per compile hand back the argv Compiler_compile passes dxc plus the amended source
-// when uniforms inject one. Everything comes from the driver's own helpers, so a printed line can't
-// drift from what pressing compile runs.
+// gates them, and per compile hand back the argv Compiler_compile passes dxc, the amended source when
+// uniforms inject one, and the link steps that finish each permutation (Wasm_jsonCompileLinks).
+//Everything comes from the driver's own helpers, so a printed line can't drift from what pressing
+// compile runs.
 //A source that doesn't parse answers compiles: null (plus the parser's own messages), matching
 // oxc3_parseEntrypoints, so the page keeps the previous listing while a line is half typed.
 
@@ -1127,6 +1231,11 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_getCompileArgs(const C8 *name, const C8 *source,
 				}
 
 				else gotoIfError3(clean, JsonWriter_null(w, e_rr));
+
+				gotoIfError3(clean, Wasm_jsonCompileLinks(
+					&result.shEntriesRuntime, &identifier, runtimeEntryId, (EGfxBinaryType) bt,
+					(flags & EWasmCompileFlag_KeepRegisters) != 0, w, alloc, e_rr
+				));
 
 				gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 

@@ -83,6 +83,9 @@ void Test_shaderCompilerBuildArgs(Test *t) {
 	Compiler comp = (Compiler) { 0 };
 	CompileResult parsed = (CompileResult) { 0 };
 	ListU32 compiles = (ListU32) { 0 };
+	ListCompilerLinkStep steps = (ListCompilerLinkStep) { 0 };
+	ListBuffer outBufs = (ListBuffer) { 0 };
+	SHFile shFile = (SHFile) { 0 };
 	Bool created = false;
 
 	SHBinaryIdentifier id = (SHBinaryIdentifier) {
@@ -186,17 +189,17 @@ void Test_shaderCompilerBuildArgs(Test *t) {
 
 		const SHEntryRuntime *runtime = &parsed.shEntriesRuntime.ptr[entryId];
 
-		CompilerSettings settings = (CompilerSettings) { 0 };
+		CompilerSettings entrySettings = (CompilerSettings) { 0 };
 		SHBinaryIdentifier identifier = (SHBinaryIdentifier) { 0 };
 
 		gotoIfError3(clean, Compiler_describeCompile(
 			runtime, combinationId, EGfxBinaryType_SPIRV,
 			false, false, false, aggRt, aggGfxComp,
 			parseSettings.path, parseSettings.string, NULL,
-			&settings, &identifier, e_rr
+			&entrySettings, &identifier, e_rr
 		));
 
-		gotoIfError3(clean, Compiler_buildCompileArgs(&settings, &identifier, &args, &amended, alloc, e_rr));
+		gotoIfError3(clean, Compiler_buildCompileArgs(&entrySettings, &identifier, &args, &amended, alloc, e_rr));
 
 		//-E carries the entry's own name and -T its stage's profile, which is what tells compiles apart
 
@@ -223,11 +226,11 @@ void Test_shaderCompilerBuildArgs(Test *t) {
 	Test_assert(t, "each compile spells its own entrypoint", entriesSpelled);
 	Test_assert(t, "each profile follows its entry's stage", profilesMatch);
 
-	//A mixed [shader] file: RT and non RT identifiers never combine (asBinaryIdentifier keeps their
-	// stageType apart), so every shared compile is flag homogeneous and the packed aggregates equal the
-	// stored entry's own flags. This pins that rule: if combining ever widens (the TODO in
-	// Compiler_getUniqueCompiles), these asserts demand the flag semantics be re decided rather than
-	// silently following one entry, because -Zi and the raytracing define hang off them.
+	//A mixed [shader] file: the RT and non RT groups deliberately never combine (see
+	// Compiler_getUniqueCompiles), so every shared compile is flag homogeneous and the packed
+	// aggregates equal the stored entry's own flags. These asserts pin that decision: anyone changing
+	// it has to re decide the flag semantics rather than silently follow one entry, because -Zi and
+	// the raytracing define hang off them.
 
 	CompileResult_free(&parsed, alloc);
 	ListU32_free(&compiles, alloc);
@@ -253,7 +256,7 @@ void Test_shaderCompilerBuildArgs(Test *t) {
 
 	Test_assert(t, "RT and non RT libs stay separate compiles", compiles.length == 2);
 
-	Bool flagsHomogeneous = true, libsSpellZi = true;
+	Bool flagsHomogeneous = true, libsSpellZi = true, mixedStepsPin = true;
 
 	for (U64 i = 0; i < compiles.length; ++i) {
 
@@ -268,22 +271,42 @@ void Test_shaderCompilerBuildArgs(Test *t) {
 			aggRt == SHEntryRuntime_isRt(*runtime) &&
 			aggGfxComp == SHEntryRuntime_containsGfxOrComp(*runtime);
 
-		CompilerSettings settings = (CompilerSettings) { 0 };
+		CompilerSettings libSettings = (CompilerSettings) { 0 };
 		SHBinaryIdentifier identifier = (SHBinaryIdentifier) { 0 };
 
 		gotoIfError3(clean, Compiler_describeCompile(
 			runtime, combinationId, EGfxBinaryType_DXIL,
 			false, false, false, aggRt, aggGfxComp,
 			parseSettings.path, parseSettings.string, NULL,
-			&settings, &identifier, e_rr
+			&libSettings, &identifier, e_rr
 		));
 
-		gotoIfError3(clean, Compiler_buildCompileArgs(&settings, &identifier, &args, &amended, alloc, e_rr));
+		gotoIfError3(clean, Compiler_buildCompileArgs(&libSettings, &identifier, &args, &amended, alloc, e_rr));
 
 		//A gfx or compute lib links per entrypoint, so its compile carries -Zi for the metadata to
 		// survive the link; an RT lib without uniforms stays a lib and doesn't.
 
 		libsSpellZi &= argsContain(&args, "-Zi") == aggGfxComp;
+
+		//The link steps come from the driver's own matching: the RT lib links ONCE as a lib (its
+		// entries share the binary), the compute [shader] entry links once specialized to itself.
+
+		gotoIfError3(clean, Compiler_getLinkSteps(
+			&parsed.shEntriesRuntime, &identifier, entryId, EGfxBinaryType_DXIL, false, &steps, alloc, e_rr
+		));
+
+		if (aggRt)
+			mixedStepsPin &= steps.length == 1 && !CharString_length(steps.ptr[0].identifier.entrypoint);
+
+		else {
+			CharString expectedName = CharString_createRefCStrConst("mainCS");
+			mixedStepsPin &=
+				steps.length == 1 &&
+				CharString_equalsStringSensitive(&steps.ptr[0].identifier.entrypoint, &expectedName);
+		}
+
+		ListCompilerLinkStep_freeUnderlying(&steps, alloc);
+		steps = (ListCompilerLinkStep) { 0 };
 
 		ListCharString_freeUnderlying(&args, alloc);
 		CharString_free(&amended, alloc);
@@ -291,6 +314,159 @@ void Test_shaderCompilerBuildArgs(Test *t) {
 
 	Test_assert(t, "aggregate flags match each compile's stored entry", flagsHomogeneous);
 	Test_assert(t, "a linked lib compile carries -Zi, an RT lib doesn't", libsSpellZi);
+	Test_assert(t, "an RT lib links once as a lib, a compute lib once specialized", mixedStepsPin);
+
+	//A uniforms entry compiles once and links per permutation. The DXIL link's "uniforms" library
+	// source comes from Compiler_buildUniformExportsHLSL; this pins the expansion counts the link
+	// enumeration rests on and the library's spelling for one permutation.
+
+	CompileResult_free(&parsed, alloc);
+	ListU32_free(&compiles, alloc);
+	parsed = (CompileResult) { 0 };
+	compiles = (ListU32) { 0 };
+
+	//Uniforms require the [shader] annotation: they resolve by linking libraries (the parse refuses
+	// them on [[oxc::stage]] entries), so this entry is a gfx/comp lib the way arrays.hlsl is.
+
+	static const C8 *uniformSrc =
+		"RWByteAddressBuffer buf;\n"
+		"[[oxc::uniforms(U32 COUNT = 4)]]\n"
+		"[[oxc::uniforms(U32 COUNT = 8)]]\n"
+		"[shader(\"compute\")]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void mainU(uint id : SV_DispatchThreadID) { buf.Store<uint>(id * 4, 1); }\n";
+
+	parseSettings.string = CharString_createRefCStrConst(uniformSrc);
+	parseSettings.path = CharString_createRefCStrConst("args_uniforms.hlsl");
+
+	gotoIfError3(clean, Compiler_parse(&comp, &parseSettings, alloc, &parsed, e_rr));
+
+	Test_assert(t, "uniforms entry parses", parsed.isSuccess && parsed.shEntriesRuntime.length == 1);
+
+	const SHEntryRuntime *uniformEntry = &parsed.shEntriesRuntime.ptr[0];
+
+	Test_assert(
+		t, "two permutations share one compile",
+		SHEntryRuntime_getCombinations(uniformEntry) == 2 &&
+		SHEntryRuntime_getCombinationsCompiled(uniformEntry) == 1
+	);
+
+	{
+		CompilerSettings uniformSettings = (CompilerSettings) { 0 };
+		SHBinaryIdentifier identifier = (SHBinaryIdentifier) { 0 };
+
+		gotoIfError3(clean, Compiler_describeCompile(
+			uniformEntry, 0, EGfxBinaryType_DXIL,
+			false, false, false, false, true,
+			parseSettings.path, parseSettings.string, NULL,
+			&uniformSettings, &identifier, e_rr
+		));
+
+		gotoIfError3(clean, Compiler_buildCompileArgs(&uniformSettings, &identifier, &args, &amended, alloc, e_rr));
+
+		Test_assert(t, "a uniforms compile amends its source", amended.ptr != NULL);
+
+		ListCharString_freeUnderlying(&args, alloc);
+		CharString_free(&amended, alloc);
+	}
+
+	//Each permutation's library pins exactly, so the exports spelling and the value each combination
+	// resolves to cannot drift. Combination ids count permutations from the LAST annotation up, which
+	// the two pins encode: 0 returns the second line's value, 1 the first's.
+
+	static const struct ExportPin { U16 combinationId; const C8 *expected; } exportPins[] = {
+		{ 0, "export uint $$specConst_COUNT() { return 8; }\n" },
+		{ 1, "export uint $$specConst_COUNT() { return 4; }\n" }
+	};
+
+	{
+		Bool exportsMatch = true;
+
+		for (U64 i = 0; i < sizeof(exportPins) / sizeof(exportPins[0]); ++i) {
+
+			SHBinaryIdentifier fullId = (SHBinaryIdentifier) { 0 };
+			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(uniformEntry, exportPins[i].combinationId, &fullId, e_rr));
+
+			gotoIfError3(clean, Compiler_buildUniformExportsHLSL(
+				&fullId.uniforms,
+				Buffer_createRefConst(fullId.uniformData.ptr, fullId.uniformData.length),
+				fullId.extensions, alloc, &amended, e_rr
+			));
+
+			CharString expected = CharString_createRefCStrConst(exportPins[i].expected);
+			Bool matches = CharString_equalsStringSensitive(&amended, &expected);
+
+			if (!matches)
+				Log_debugLn(
+					alloc, "exports library of combination %" PRIu64 " was: %.*s",
+					i, (int) CharString_length(amended), amended.ptr
+				);
+
+			exportsMatch &= matches;
+			CharString_free(&amended, alloc);
+		}
+
+		Test_assert(t, "each permutation's exports library pins exactly", exportsMatch);
+	}
+
+	//The link steps of the uniforms compile, from the driver's own matching: one step per permutation,
+	// specialized to the entry, each carrying the library the exports pins spelled out.
+
+	{
+		SHBinaryIdentifier compiledId = (SHBinaryIdentifier) { 0 };
+		gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(uniformEntry, 0, &compiledId, e_rr));
+
+		gotoIfError3(clean, Compiler_getLinkSteps(
+			&parsed.shEntriesRuntime, &compiledId, 0, EGfxBinaryType_DXIL, false, &steps, alloc, e_rr
+		));
+
+		CharString expectedProfile = CharString_createRefCStrConst("cs_6_5");
+		CharString expectedName = CharString_createRefCStrConst("mainU");
+
+		Bool stepsPin = steps.length == 2;
+
+		for (U64 i = 0; i < steps.length && stepsPin; ++i) {
+
+			const CompilerLinkStep *step = &steps.ptr[i];
+			CharString expectedHlsl = CharString_createRefCStrConst(exportPins[i].expected);
+
+			stepsPin &=
+				step->combinationId == exportPins[i].combinationId &&
+				CharString_equalsStringSensitive(&step->profile, &expectedProfile) &&
+				CharString_equalsStringSensitive(&step->identifier.entrypoint, &expectedName) &&
+				CharString_equalsStringSensitive(&step->uniformsHlsl, &expectedHlsl);
+		}
+
+		Test_assert(t, "the link steps pin both permutations", stepsPin);
+	}
+
+	//Convergence with the real driver: compile the same source and require the stored binaries to be
+	// exactly the predicted steps' identifiers, which is what keeps this query honest.
+
+	{
+		const C8 *srcs[] = { uniformSrc };
+
+		gotoIfError3(clean, compileInlineShaders(
+			alloc, srcs, 1, (U8) EGfxBinaryType_DXIL, 1, "args_uniforms", true, &outBufs, e_rr
+		));
+
+		Bool converges =
+			outBufs.length == 1 && Buffer_length(outBufs.ptr[0]) &&
+			readOiSH(alloc, outBufs.ptr[0], &shFile, e_rr) &&
+			shFile.binaries.length == steps.length;
+
+		for (U64 i = 0; converges && i < steps.length; ++i) {
+
+			Bool found = false;
+
+			for (U64 j = 0; j < shFile.binaries.length && !found; ++j)
+				found = SHBinaryIdentifier_equals(&steps.ptr[i].identifier, &shFile.binaries.ptr[j].identifier);
+
+			converges &= found;
+		}
+
+		Test_assert(t, "the driver stores exactly the predicted binaries", converges);
+	}
 
 clean:
 

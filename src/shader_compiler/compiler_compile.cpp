@@ -125,7 +125,7 @@ Bool Compiler_buildCompileArgs(
 		gotoIfError3(clean, Compiler_registerArgCStr(
 			&stringsUTF8,
 			settings->keepUnusedRegisters ?
-			"-fhlsl-unused-resource-bindings=keep-all" : "-fhlsl-unused-resource-bindings=reserve-all",
+			COMPILER_KEEP_ALL_BINDINGS : "-fhlsl-unused-resource-bindings=reserve-all",
 			alloc, e_rr
 		));
 
@@ -197,15 +197,13 @@ Bool Compiler_buildCompileArgs(
 				toCompile->stageType == EGfxPipelineStage_MeshExt ||
 				toCompile->stageType == EGfxPipelineStage_TaskExt;
 
-			const C8 *targetEnvArg;
+			gotoIfError3(clean, CharString_format(
+				alloc, &tempStr, e_rr, "-fspv-target-env=%s",
+				Compiler_spirvTargetEnvName(Compiler_requiredSpirvVersion(isRt, isCoop, isMeshTask))
+			));
 
-			switch(Compiler_requiredSpirvVersion(isRt, isCoop, isMeshTask)) {
-				case ESpirvVersion_1_6:    targetEnvArg = "-fspv-target-env=vulkan1.3";          break;    //SPIR-V 1.6
-				case ESpirvVersion_1_4:    targetEnvArg = "-fspv-target-env=vulkan1.1spirv1.4";  break;    //SPIR-V 1.4
-				default:                   targetEnvArg = "-fspv-target-env=vulkan1.1";          break;    //SPIR-V 1.3
-			}
-
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, targetEnvArg, alloc, e_rr));
+			gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
+			tempStr = CharString_createNull();
 				
 			if(
 				toCompile->stageType == EGfxPipelineStage_Vertex ||

@@ -479,8 +479,6 @@ extern "C" Bool Compiler_linkDXIL(
 	IDxcBlobEncoding *temp = nullptr;
 	IDxcBlobEncoding *errs = nullptr;
 	CharString tempStr = CharString_createNull();
-	CharString tempStr2 = CharString_createNull();
-	CharString tempStr3 = CharString_createNull();
 	IDxcResult *dxcResult = NULL;
 	IDxcBlobUtf8 *error = NULL;
 	IDxcBlob *resultBlob = NULL;
@@ -513,68 +511,8 @@ extern "C" Bool Compiler_linkDXIL(
 
 	if(uniforms && uniforms->length) {
 
-		EHLSLStringifyFlags flags = EHLSLStringifyFlags_None;
+		gotoIfError3(clean, Compiler_buildUniformExportsHLSL(uniforms, uniformData, exts, alloc, &tempStr, e_rr));
 
-		if (has16Bit)
-			flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_Has16Bit);
-
-		if (exts & ESHExtension_F64)
-			flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_HasF64);
-
-		if (exts & ESHExtension_I64)
-			flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_HasI64);
-
-		//Stringify uniforms into exports
-		//export Type $$specConst_Name() { return ...; }
-
-		for (U64 i = 0; i < uniforms->length; ++i) {
-
-			//Uniform info
-
-			SHUniformRuntime uniform = uniforms->ptr[i];
-
-			if(uniform.typeIdShort >= ETypeId_Max)
-				retError(clean, Error_invalidState(2, "Compiler_linkDXIL() typeIdShort out of bounds"));
-
-			TypeId typeId = ETypeId_arr[uniform.typeIdShort];
-			U64 len = ETypeId_getBytes(typeId);
-			
-			if(uniform.dataOffset + len > Buffer_length(uniformData))
-				retError(clean, Error_invalidState(2, "Compiler_linkDXIL() uniformData out of bounds"));
-
-			//Format start of function export
-
-			gotoIfError3(clean, CharString_createFromETypeIdHLSL(typeId, flags, alloc, &tempStr3, e_rr));
-
-			gotoIfError3(clean, CharString_format(alloc, &tempStr2, e_rr,
-				"export %s $$specConst_%.*s() { return ",
-				tempStr3.ptr,
-				(int) CharString_length(uniform.name), uniform.name.ptr
-			));
-
-			CharString_free(&tempStr3, alloc);
-
-			gotoIfError3(clean, CharString_appendString(&tempStr, &tempStr2, alloc, e_rr));
-			CharString_free(&tempStr2, alloc);
-
-			//Turn uniform into real constructor
-
-			SHValue value = SHValue{};
-			Buffer_memcpy(
-				Buffer_createRef(&value, sizeof(value)),
-				Buffer_createRefConst(uniformData.ptr + uniform.dataOffset, len)
-			);
-
-			gotoIfError3(clean, SHValue_stringifyHLSL(&value, typeId, flags, alloc, &tempStr2, e_rr));
-			gotoIfError3(clean, CharString_appendString(&tempStr, &tempStr2, alloc, e_rr));
-			CharString_free(&tempStr2, alloc);
-
-			//Finish function export
-
-			CharString appendClose = CharString_createRefCStrConst("; }\n");
-			gotoIfError3(clean, CharString_appendString(&tempStr, &appendClose, alloc, e_rr));
-		}
-		
 		//Compile binary
 
 		DxcBuffer buffer = DxcBuffer{
@@ -682,16 +620,7 @@ extern "C" Bool Compiler_linkDXIL(
 		#endif
 	}
 
-	if (isShaderAnnotation) {
-		gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "lib_%" PRIu8 "_%" PRIu8,
-			(U8)(shaderVersion >> 8), (U8)shaderVersion
-		));
-	}
-
-	else gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "%s_%" PRIu8 "_%" PRIu8,
-		EGfxPipelineStage_getStagePrefix(stageType),
-		(U8)(shaderVersion >> 8), (U8)shaderVersion
-	));
+	gotoIfError3(clean, Compiler_linkProfile(isShaderAnnotation, stageType, shaderVersion, alloc, &tempStr, e_rr));
 
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 		gotoIfError3(clean, CharString_toUTF16(tempStr, alloc, &tmpWStr3, e_rr));
@@ -780,7 +709,5 @@ clean:
 	#endif
 
 	CharString_free(&tempStr, alloc);
-	CharString_free(&tempStr2, alloc);
-	CharString_free(&tempStr3, alloc);
 	return s_uccess;
 }
