@@ -47,7 +47,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	ListU16 tmp = (ListU16) { 0 };
-	Buffer dxil = binary->binaries[ESHBinaryType_DXIL];
+	Buffer dxil = binary->binaries[EGfxBinaryType_DXIL];
 
 	//TODO: Push constants
 
@@ -59,14 +59,29 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 		}
 	};
 
-	ID3D12PipelineState **pipelinei = &Pipeline_ext(pipeline, Dx)->pso;
+	DxPipeline *dxPipeline = Pipeline_ext(pipeline, Dx);
+	ID3D12PipelineState **pipelinei = &dxPipeline->pso;
 
-	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateComputePipelineState(
-		deviceExt->device,
-		&compute,
-		&IID_ID3D12PipelineState,
-		(void**) pipelinei
-	), e_rr));
+	//A pipeline only stays readable back if AMD's extension created it, so capture routes through it and
+	// everything else takes the driver's own entry point untouched.
+
+	const Bool captureIsa =
+		(pipeline->flags & EPipelineFlags_CaptureISA) && deviceExt->amdAnalyzer.analyzer;
+
+	if (captureIsa) {
+		gotoIfError3(clean, DxAmdShaderAnalyzer_createComputePipeline(
+			&deviceExt->amdAnalyzer, &compute, pipelinei, &dxPipeline->amdAnalyzerHandle, e_rr
+		));
+	}
+
+	else {
+		gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateComputePipelineState(
+			deviceExt->device,
+			&compute,
+			&IID_ID3D12PipelineState,
+			(void**) pipelinei
+		), e_rr));
+	}
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name)) {
 		gotoIfError3(clean, CharString_toUTF16(*name, alloc, &tmp, e_rr));

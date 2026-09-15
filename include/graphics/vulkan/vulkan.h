@@ -94,9 +94,9 @@ typedef struct VkUnifiedTexture {
 } VkUnifiedTexture;
 
 typedef struct Descriptor Descriptor;
-typedef enum ESHRegisterType ESHRegisterType;
+typedef enum EGfxRegisterType EGfxRegisterType;
 
-Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *view, U32 *viewId, Error *e_rr);
+Bool VkUnifiedTexture_getView(Descriptor d, EGfxRegisterType type, VkImageView *view, U32 *viewId, Error *e_rr);
 
 typedef enum ECompareOp ECompareOp;
 
@@ -169,7 +169,7 @@ VkShaderStageFlags vkGetShaderStages(U32 vis);
 
 typedef struct GraphicsDevice GraphicsDevice;
 VkShaderStageFlags vkGetShaderStagesDevice(const GraphicsDevice *device, U32 vis);
-VkDescriptorType vkGetDescriptorType(ESHRegisterType regType);
+VkDescriptorType vkGetDescriptorType(EGfxRegisterType regType);
 
 //Transitions entire resource rather than sub-resources
 

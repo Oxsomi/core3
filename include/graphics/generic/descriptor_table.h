@@ -50,7 +50,7 @@ typedef RefPtr DeviceBufferRef;
 typedef RefPtr TLASRef;
 typedef RefPtr SamplerRef;
 
-typedef enum ESHRegisterType ESHRegisterType;
+typedef enum EGfxRegisterType EGfxRegisterType;
 
 typedef struct TextureDescriptorRange {
 
@@ -241,7 +241,7 @@ Bool DescriptorTableRef_allocDescriptor(
 //This will only try to find it if the register type matches.
 Bool DescriptorTableRef_findBindlessRegister(
 	DescriptorTableRef *table,
-	ESHRegisterType type,
+	EGfxRegisterType type,
 	U32 strideOrLength,     //Used to find a resource of this size (can be 0)
 	U16 *bindId,
 	U8 *bindlessTypeId,
@@ -255,7 +255,7 @@ Bool DescriptorTableRef_findBindlessRegister(
 //This even works with normal descriptor sets.
 Bool DescriptorTableRef_allocDescriptorBindless(
 	DescriptorTableRef *table,
-	ESHRegisterType type,
+	EGfxRegisterType type,
 	U32 strideOrLength,     //Used to find a resource of this size (can be 0)
 	U16 *bindId,            //ListDescriptorBinding[i]
 	U8 *bindlessTypeId,     //Index for bindless handle

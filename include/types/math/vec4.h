@@ -32,7 +32,7 @@
 //Helper function to expand switch case
 
 #define FUNC_EXPAND2(offset, func, var)                        \
-		case offset:        return func(var, offset);        \
+		case offset:        return func(var, offset);          \
 		case offset + 1:    return func(var, offset + 1)
 
 #define FUNC_EXPAND4(offset, func, var) FUNC_EXPAND2(offset, func, var); FUNC_EXPAND2((offset) + 2, func, var)
@@ -44,6 +44,9 @@
 #if _SIMD == SIMD_SSE
 	#define VEC4_SSE_GUARD
 	#include "types/math/vec4_sse.inc.h"
+#elif _SIMD == SIMD_WASM
+	#define VEC4_WASM_GUARD
+	#include "types/math/vec4_wasm.inc.h"
 #elif _SIMD == SIMD_NEON
 	#define VEC4_NEON_GUARD
 	#include "types/math/vec4_neon.inc.h"

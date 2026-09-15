@@ -241,43 +241,9 @@ clean:
 typedef struct CAFileExtractRecursion {
 	CAFile *archive;
 	CharString outputPath;
-	const RefPtrType *fileHandleType;
 } CAFileExtractRecursion;
 
-//Fetch a file's data into an owned buffer, whether it's fully loaded or still stream-backed.
-
-static Bool CLI_readCAFileData(const CAFile *caFile, CAHandle handle, const Allocator *alloc, Buffer *output, Error *e_rr) {
-
-	Bool s_uccess = true;
-	StreamRef *streamRef = NULL;
-	U64 streamOff = U64_MAX;
-
-	streamRef = CAFile_getDataStream(caFile, handle, &streamOff);
-
-	if (streamRef && streamOff != U64_MAX) {
-
-		U64 fileSize = CAFile_fileSize(caFile, handle);
-		gotoIfError3(clean, Buffer_createUninitializedBytes(fileSize, alloc, output, e_rr));
-
-		OxStream *stream = RefPtr_data(streamRef, OxStream);
-		gotoIfError3(clean, stream->read(stream, streamOff, fileSize, *output, alloc, e_rr));
-	}
-
-	else {
-
-		Bool isValid = false;
-		Buffer tmp = CAFile_getDataConst(caFile, handle, &isValid);
-
-		if (!isValid)
-			retError(clean, Error_invalidOperation(0, "CLI_readCAFileData() CAFile_getDataConst returned invalid"));
-
-		gotoIfError3(clean, Buffer_createCopy(tmp, alloc, output, e_rr));
-	}
-
-clean:
-	RefPtr_dec(&streamRef);
-	return s_uccess;
-}
+//Write a file's data to disk, whether the archive holds it loaded or still stream-backed.
 
 static Bool extractCAFileEntry(const FileInfo *file, void *extractGeneric, const Allocator *alloc, Error *e_rr) {
 
@@ -285,7 +251,6 @@ static Bool extractCAFileEntry(const FileInfo *file, void *extractGeneric, const
 
 	Bool s_uccess = true;
 	CharString loc = CharString_createNull();
-	Buffer data = Buffer_createNull();
 
 	gotoIfError3(clean, CharString_createCopy(extract->outputPath, alloc, &loc, e_rr));
 	gotoIfError3(clean, CharString_appendString(&loc, &file->path, alloc, e_rr));
@@ -301,12 +266,10 @@ static Bool extractCAFileEntry(const FileInfo *file, void *extractGeneric, const
 		if (handle == CAHandle_Invalid)
 			retError(clean, Error_invalidState(0, "extractCAFileEntry() couldn't resolve file"));
 
-		gotoIfError3(clean, CLI_readCAFileData(extract->archive, handle, alloc, &data, e_rr));
-		gotoIfError3(clean, File_write(&data, &loc, 0, 0, 1 * SECOND, true, extract->fileHandleType, e_rr));
+		gotoIfError3(clean, CLI_extractArchiveEntry(extract->archive, handle, &loc, alloc, e_rr));
 	}
 
 clean:
-	Buffer_free(&data, alloc);
 	CharString_free(&loc, alloc);
 	return s_uccess;
 }
@@ -320,7 +283,6 @@ Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr) {
 	Bool s_uccess = true;
 
 	Buffer buf = Buffer_createNull();
-	Buffer data = Buffer_createNull();
 	CharString outputPath = CharString_createNull();
 
 	CAFile file = (CAFile) { 0 };
@@ -356,10 +318,8 @@ Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr) {
 
 		CAHandle only = CAFile_fileObjectAt(&file, CAHandle_Root, 0);
 
-		if(CAHandle_isFile(only)) {
-			gotoIfError3(clean, CLI_readCAFileData(&file, only, alloc, &data, e_rr));
-			gotoIfError3(clean, File_write(&data, convert->output, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
-		}
+		if(CAHandle_isFile(only))
+			gotoIfError3(clean, CLI_extractArchiveEntry(&file, only, convert->output, alloc, e_rr));
 	}
 
 	else {
@@ -375,8 +335,7 @@ Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr) {
 
 		CAFileExtractRecursion extract = (CAFileExtractRecursion) {
 			.archive = &file,
-			.outputPath = outputPath,
-			.fileHandleType = &fileHandleType
+			.outputPath = outputPath
 		};
 
 		gotoIfError3(clean, CAFile_foreach(
@@ -394,7 +353,6 @@ clean:
 	CAFile_free(&file, alloc);
 	RefPtr_dec(&memStream);
 	Buffer_free(&buf, alloc);
-	Buffer_free(&data, alloc);
 	CharString_free(&outputPath, alloc);
 	return s_uccess;
 }

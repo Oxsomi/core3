@@ -123,7 +123,9 @@ namespace oxc {
 			return c::Buffer_combine(&self, b, alloc, output, e_rr);
 		}
 
-		[[nodiscard]] c::Bool readAsUTF8(c::U64 i, c::UnicodeCodePointInfo *codepoint, c::Error *e_rr = nullptr) const noexcept {
+		[[nodiscard]] c::Bool readAsUTF8(
+			c::U64 i, c::UnicodeCodePointInfo *codepoint, c::Error *e_rr = nullptr
+		) const noexcept {
 			return c::Buffer_readAsUTF8(self, i, codepoint, e_rr);
 		}
 
@@ -133,7 +135,9 @@ namespace oxc {
 			return c::Buffer_writeAsUTF8(self, i, codepoint, bytes, e_rr);
 		}
 
-		[[nodiscard]] c::Bool readAsUTF16(c::U64 i, c::UnicodeCodePointInfo *codepoint, c::Error *e_rr = nullptr) const noexcept {
+		[[nodiscard]] c::Bool readAsUTF16(
+			c::U64 i, c::UnicodeCodePointInfo *codepoint, c::Error *e_rr = nullptr
+		) const noexcept {
 			return c::Buffer_readAsUTF16(self, i, codepoint, e_rr);
 		}
 

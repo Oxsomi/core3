@@ -105,8 +105,8 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 	U64 dataSize = 0;
 
-	U64 binaryCount[ESHBinaryType_Count] = { 0 };
-	U8 requiredTypes[ESHBinaryType_Count] = { 0 };
+	U64 binaryCount[EGfxBinaryType_Count] = { 0 };
+	U8 requiredTypes[EGfxBinaryType_Count] = { 0 };
 
 	for(U64 i = 0; i < shFile->binaries.length; ++i) {
 
@@ -135,7 +135,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			binary.identifier.defines.length * sizeof(U16) +
 			binary.registers.length * sizeof(SHRegister);
 
-		for(U8 j = 0; j < ESHBinaryType_Count; ++j) {
+		for(U8 j = 0; j < EGfxBinaryType_Count; ++j) {
 
 			U64 leni = Buffer_length(binary.binaries[j]);
 			dataSize += leni;
@@ -321,27 +321,27 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 				)
 					dataSize += 1 + inputs + outputs;
 
-				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
+				if(entry.stage != EGfxPipelineStage_MeshExt && entry.stage != EGfxPipelineStage_TaskExt)
 					break;
 			}
 
 			// fallthrough
 
-			case ESHPipelineStage_Compute:
+			case EGfxPipelineStage_Compute:
 				dataSize += sizeof(U16) * 4;            //group x, y, z, waveSize
 				break;
 
-			case ESHPipelineStage_RaygenExt:
+			case EGfxPipelineStage_RaygenExt:
 				break;
 
-			case ESHPipelineStage_ClosestHitExt:
-			case ESHPipelineStage_AnyHitExt:
-			case ESHPipelineStage_IntersectionExt:
+			case EGfxPipelineStage_ClosestHitExt:
+			case EGfxPipelineStage_AnyHitExt:
+			case EGfxPipelineStage_IntersectionExt:
 				dataSize += sizeof(U8);                //intersectionSize
 				// fallthrough
 
-			case ESHPipelineStage_CallableExt:
-			case ESHPipelineStage_MissExt:
+			case EGfxPipelineStage_CallableExt:
+			case EGfxPipelineStage_MissExt:
 				dataSize += sizeof(U8);                //payloadSize
 				break;
 		}
@@ -426,7 +426,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 	U8 sizeTypes = 0;
 
-	for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
+	for (U8 j = 0; j < EGfxBinaryType_Count; ++j) {
 		len += SIZE_BYTE_TYPE[requiredTypes[j]] * binaryCount[j];
 		sizeTypes |= requiredTypes[j] << (j << 1);
 	}
@@ -500,7 +500,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 		if (binary.hasShaderAnnotation)
 			binaryFlags |= ESHBinaryFlags_HasShaderAnnotation;
 
-		for (U8 j = 0; j < ESHBinaryType_Count; ++j)
+		for (U8 j = 0; j < EGfxBinaryType_Count; ++j)
 			if (Buffer_length(binary.binaries[j]))
 				binaryFlags |= 1 << j;
 
@@ -630,9 +630,9 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 					}
 			}
 
-			U8 realReg = reg.reg.registerType & ESHRegisterType_TypeMask;
+			U8 realReg = reg.reg.registerType & EGfxRegisterType_TypeMask;
 
-			if(realReg >= ESHRegisterType_BufferStart && realReg <= ESHRegisterType_BufferEnd)
+			if(realReg >= EGfxRegisterType_BufferStart && realReg <= EGfxRegisterType_BufferEnd)
 				reg.reg.shaderBufferId = U16_MAX;
 
 			if(reg.shaderBuffer.vars.ptr) {
@@ -653,7 +653,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			&cursor, offset, ListU8_bufferConst(binary.identifier.uniformData), alloc, e_rr
 		));
 
-		for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
+		for (U8 j = 0; j < EGfxBinaryType_Count; ++j) {
 
 			U64 length = Buffer_length(binary.binaries[j]);
 
@@ -661,7 +661,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 				gotoIfError3(clean, StreamCursor_appendSizeType(&cursor, offset, length, requiredTypes[j], alloc, e_rr));
 		}
 
-		for (U8 j = 0; j < ESHBinaryType_Count; ++j)
+		for (U8 j = 0; j < EGfxBinaryType_Count; ++j)
 			gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, binary.binaries[j], alloc, e_rr));
 	}
 
@@ -703,33 +703,37 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 					gotoIfError3(clean, StreamCursor_appendU8(&cursor, offset, semanticCounts, alloc, e_rr));
 
-					gotoIfError3(clean, StreamCursor_append(&cursor, offset, entry.inputSemanticNames, inputs * sizeof(U8), alloc, e_rr));
-					gotoIfError3(clean, StreamCursor_append(&cursor, offset, entry.outputSemanticNames, outputs * sizeof(U8), alloc, e_rr));
+					gotoIfError3(clean, StreamCursor_append(
+						&cursor, offset, entry.inputSemanticNames, inputs * sizeof(U8), alloc, e_rr
+					));
+					gotoIfError3(clean, StreamCursor_append(
+						&cursor, offset, entry.outputSemanticNames, outputs * sizeof(U8), alloc, e_rr
+					));
 				}
 
-				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
+				if(entry.stage != EGfxPipelineStage_MeshExt && entry.stage != EGfxPipelineStage_TaskExt)
 					break;
 			}
 
 			// fallthrough
 
-			case ESHPipelineStage_Compute: {
+			case EGfxPipelineStage_Compute: {
 				SHGroups groups = { .x = entry.groupX, .y = entry.groupY, .z = entry.groupZ, .waveSize = entry.waveSize };
 				gotoIfError3(clean, StreamCursor_append(&cursor, offset, &groups, sizeof(groups), alloc, e_rr));
 				break;
 			}
 
-			case ESHPipelineStage_RaygenExt:
+			case EGfxPipelineStage_RaygenExt:
 				break;
 
-			case ESHPipelineStage_ClosestHitExt:
-			case ESHPipelineStage_AnyHitExt:
-			case ESHPipelineStage_IntersectionExt:
+			case EGfxPipelineStage_ClosestHitExt:
+			case EGfxPipelineStage_AnyHitExt:
+			case EGfxPipelineStage_IntersectionExt:
 				gotoIfError3(clean, StreamCursor_appendU8(&cursor, offset, entry.intersectionSize, alloc, e_rr));
 				//fallthrough
 
-			case ESHPipelineStage_CallableExt:
-			case ESHPipelineStage_MissExt:
+			case EGfxPipelineStage_CallableExt:
+			case EGfxPipelineStage_MissExt:
 				gotoIfError3(clean, StreamCursor_appendU8(&cursor, offset, entry.payloadSize, alloc, e_rr));
 				break;
 		}

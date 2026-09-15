@@ -481,7 +481,7 @@ Bool GraphicsDeviceRef_createTLAS(
 	if(bindlessDescriptorTable && !GraphicsDeviceRef_allocateDescriptorBindless(
 		dev,
 		bindlessDescriptorTable,
-		ESHRegisterType_AccelerationStructure,
+		EGfxRegisterType_AccelerationStructure,
 		0,
 		false,
 		&tlasDesc,

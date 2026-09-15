@@ -1,0 +1,45 @@
+name: Linux x64 Vulkan static (gcc, ASan + UBSan)
+
+# Nightly rather than per push for the same reason as the other sanitizer jobs, see linux_clang_sanitizers.yml.
+#
+# gcc is what Linux builds with by default and clang is the alternate that exists to catch what the default
+# misses (see the toolchain table in README.md), yet every other sanitized job runs clang.
+# Sanitizer coverage therefore exercised the alternate toolchain and skipped the default one, which inverts
+# the reason for having an alternate at all.
+#
+# This runs alongside the clang job rather than replacing it, because the two sanitize different things.
+# ASan sees only what the compiler it is built into kept, and gcc and clang inline and lay memory out
+# differently, so an object one of them optimizes away is one the other can still overrun.
+# Their UBSan differs in which checks -fsanitize=undefined turns on by default as well.
+# Each finds defects the other does not, so a clean run under one says nothing about the other.
+#
+# MSVC stays unsanitized on purpose, its sanitizers aren't trusted here.
+# That is an argument about MSVC alone: CMakeLists.txt has accepted gcc's sanitizers next to clang's the
+# whole time, and no job was using them.
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Linux x64 Vulkan static (gcc, ASan + UBSan)
+      runner: ubuntu-latest
+      os: linux
+      build_flags: '-compiler gcc -asan True -ubsan True'
+      # Its own cache group: sanitized dependencies are different packages than the plain gcc job's, and
+      # conan keys package ids on the compiler, so they differ from the clang sanitizer job's again.
+      cache_name: gcc_sanitizers
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      # A sanitizer run without a driver skips every device test and still goes green, which is the
+      # worst outcome: graphics is where the allocators, descriptor tables and command buffers live.
+      vulkan_icd: true
+      sanitizers: true
+      hook_name: Linux-x64-static-gcc-sanitizers
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

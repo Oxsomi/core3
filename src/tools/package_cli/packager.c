@@ -879,7 +879,9 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 				)
 					continue;
 
-				retError(clean, Error_invalidState(0, "Packager_package() one of the shaders didn't compile, aborting packaging"));
+				retError(clean, Error_invalidState(
+					0, "Packager_package() one of the shaders didn't compile, aborting packaging"
+				));
 			}
 
 			//allOutputs[i] is an archive-relative path (same rooting as packageFile's subPath),

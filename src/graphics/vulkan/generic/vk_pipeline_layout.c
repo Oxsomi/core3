@@ -54,27 +54,41 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
-	VkDescriptorSetLayout layouts[4];
+	//pSetLayouts[i] is descriptor set i, and on SPIR-V a binding's space IS its set index (reflection reports
+	// the set as the space), so every set goes at the index its space names, whichever of the two layouts
+	// declares it.
+	//Packing them from 0 in declaration order, as this once did, matched the shader only while
+	// one layout was empty or its spaces happened to start at 0 and run contiguously; a push descriptor in
+	// space 0 next to table bindings in space 1 ended up the other way round, and the GPU faulted.
+	//Indices no layout declares are filled with the device's empty set layout, so a layout using spaces 0
+	// and 2 is legal without anything living at 1. createDescriptorLayout already bounds every space below
+	// OXC3_VK_MAX_BOUND_SETS and createPipelineLayout refuses the two layouts sharing a space, so the loop
+	// below stays in range and cannot collide.
+
+	VkDescriptorSetLayout layouts[OXC3_VK_MAX_BOUND_SETS];
 	U32 count = 0;
 
-	if(layout->info.bindings) {
+	const DescriptorLayoutRef *sources[2] = { layout->info.bindings, layout->info.pushDescriptors };
 
-		DescriptorLayout *desc = DescriptorLayoutRef_ptr(layout->info.bindings);
-		VkDescriptorLayout *descExt = DescriptorLayout_ext(desc, Vk);
+	for(U32 s = 0; s < OXC3_VK_MAX_BOUND_SETS; ++s)
+		layouts[s] = deviceExt->emptySetLayout;
 
-		for(; count < 4 && descExt->layouts[count]; ++count)
-			layouts[count] = descExt->layouts[count];
-	}
+	for (U32 k = 0; k < 2; ++k) {
 
-	if(layout->info.pushDescriptors) {
+		if(!sources[k])
+			continue;
 
-		DescriptorLayout *desc = DescriptorLayoutRef_ptr(layout->info.pushDescriptors);
-		VkDescriptorLayout *descExt = DescriptorLayout_ext(desc, Vk);
+		const VkDescriptorLayout *descExt = DescriptorLayout_ext(DescriptorLayoutRef_ptr(sources[k]), Vk);
 
-		U32 startCount = count;
+		for (U32 i = 0; i < 4 && descExt->layouts[i]; ++i) {
 
-		for(; count < 4 && descExt->layouts[count - startCount]; ++count)
-			layouts[count] = descExt->layouts[count - startCount];
+			const U32 space = descExt->setIds[i];
+
+			layouts[space] = descExt->layouts[i];
+
+			if(space + 1 > count)
+				count = space + 1;
+		}
 	}
 
 	VkPipelineLayoutCreateInfo create = (VkPipelineLayoutCreateInfo) {

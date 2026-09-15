@@ -19,7 +19,7 @@
 
 file(GLOB_RECURSE typesMathHeaders CONFIGURE_DEPENDS "../../../include/types/math/*.h")
 file(GLOB typesMathSources CONFIGURE_DEPENDS "*.c")
-file(GLOB_RECURSE typesMathSIMDSources CONFIGURE_DEPENDS "simd/${simd}/*.c")
+file(GLOB_RECURSE typesMathSIMDSources CONFIGURE_DEPENDS "simd/${simdMath}/*.c")
 
 add_library(
 	OxC3_types_math
@@ -32,7 +32,7 @@ add_library(
 )
 
 source_group("Source Files (${platform})" FILES ${typesMathPlatformSources})
-source_group("Source Files (simd: ${simd})" FILES ${typesMathSIMDSources})
+source_group("Source Files (simd: ${simdMath})" FILES ${typesMathSIMDSources})
 
 set_target_properties(OxC3_types_math PROPERTIES FOLDER Oxsomi/types)
 target_link_libraries(OxC3_types_math PUBLIC OxC3_types_base)

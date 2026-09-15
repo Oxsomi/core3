@@ -112,7 +112,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 		//TODO: Old binaries to new binary id
 
 		if (j == b->binaries.length)
-			for(U8 k = 0; k < ESHBinaryType_Count; ++k)
+			for(U8 k = 0; k < EGfxBinaryType_Count; ++k)
 				c.binaries[k] = Buffer_createRefFromBuffer(ai.binaries[k], true);
 
 		//Otherwise validate and merge binaries
@@ -131,14 +131,14 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 					(U32) i, "SHFile_combine()::a and b have binary with mismatching vendorMask or hasShaderAnnotation"
 				));
 
-			for(U8 k = 0; k < ESHBinaryType_Count; ++k)
+			for(U8 k = 0; k < EGfxBinaryType_Count; ++k)
 
 				if(Buffer_length(ai.binaries[k]) && Buffer_length(bi.binaries[k])) {
 
 					if(Buffer_neq(ai.binaries[k], bi.binaries[k]))
 						retError(clean, Error_invalidState(
 							(U32) i,
-							"SHFile_combine()::a and b have binary of same ESHBinaryType that didn't have the same contents"
+							"SHFile_combine()::a and b have binary of same EGfxBinaryType that didn't have the same contents"
 						));
 
 					c.binaries[k] = Buffer_createRefFromBuffer(ai.binaries[k], true);
@@ -260,21 +260,21 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 				//CombinedSampler SPIRV = (no flag) DXIL
 				//So we need to promote these two to eachother to unify them.
 
-				Bool isCmpSamplerA = rega.reg.registerType == ESHRegisterType_SamplerComparisonState;
-				Bool isSamplerA = rega.reg.registerType == ESHRegisterType_Sampler || isCmpSamplerA;
+				Bool isCmpSamplerA = rega.reg.registerType == EGfxRegisterType_SamplerComparisonState;
+				Bool isSamplerA = rega.reg.registerType == EGfxRegisterType_Sampler || isCmpSamplerA;
 
-				Bool isCmpSamplerB = regb.reg.registerType == ESHRegisterType_SamplerComparisonState;
-				Bool isSamplerB = regb.reg.registerType == ESHRegisterType_Sampler || isCmpSamplerB;
+				Bool isCmpSamplerB = regb.reg.registerType == EGfxRegisterType_SamplerComparisonState;
+				Bool isSamplerB = regb.reg.registerType == EGfxRegisterType_Sampler || isCmpSamplerB;
 
 				if(
-					regb.reg.registerType == ESHRegisterType_PushConstants &&
-					rega.reg.registerType == ESHRegisterType_ConstantBuffer
+					regb.reg.registerType == EGfxRegisterType_PushConstants &&
+					rega.reg.registerType == EGfxRegisterType_ConstantBuffer
 				)
-					merged.registerType = ESHRegisterType_PushConstants;
+					merged.registerType = EGfxRegisterType_PushConstants;
 
-				if(merged.registerType == ESHRegisterType_PushConstants && (
-					regb.reg.registerType != ESHRegisterType_PushConstants &&
-					rega.reg.registerType != ESHRegisterType_ConstantBuffer
+				if(merged.registerType == EGfxRegisterType_PushConstants && (
+					regb.reg.registerType != EGfxRegisterType_PushConstants &&
+					rega.reg.registerType != EGfxRegisterType_ConstantBuffer
 				))
 					retError(clean, Error_invalidState(
 						0, "SHFile_combine() has mismatching register types (expected push constants)"
@@ -282,21 +282,21 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 
 				if(
 					(isSamplerA != isSamplerB) &&
-					merged.registerType != ESHRegisterType_PushConstants &&
-					(rega.reg.registerType &~ ESHRegisterType_IsCombinedSampler) !=
-					(regb.reg.registerType &~ ESHRegisterType_IsCombinedSampler)
+					merged.registerType != EGfxRegisterType_PushConstants &&
+					(rega.reg.registerType &~ EGfxRegisterType_IsCombinedSampler) !=
+					(regb.reg.registerType &~ EGfxRegisterType_IsCombinedSampler)
 				)
 					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register types"));
 
 				if(isCmpSamplerB)
-					merged.registerType = ESHRegisterType_SamplerComparisonState;
+					merged.registerType = EGfxRegisterType_SamplerComparisonState;
 
 				else merged.registerType =
-					rega.reg.registerType | (regb.reg.registerType & ESHRegisterType_IsCombinedSampler);
+					rega.reg.registerType | (regb.reg.registerType & EGfxRegisterType_IsCombinedSampler);
 
 				//Merge bindings
 
-				for (U8 m = 0; m < ESHBinaryType_Count; ++m) {
+				for (U8 m = 0; m < EGfxBinaryType_Count; ++m) {
 
 					U64 bindingA = rega.reg.bindings.arrU64[m];
 					U64 bindingB = regb.reg.bindings.arrU64[m];
@@ -318,19 +318,19 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 				//Merge input attachment
 
 				if(
-					rega.reg.registerType == ESHRegisterType_SubpassInput &&
+					rega.reg.registerType == EGfxRegisterType_SubpassInput &&
 					rega.reg.inputAttachmentId != regb.reg.inputAttachmentId
 				)
 					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching input attachment id"));
 
 				//Merge texture info
 
-				U8 typeOnly = rega.reg.registerType & ESHRegisterType_TypeMask;
+				U8 typeOnly = rega.reg.registerType & EGfxRegisterType_TypeMask;
 
-				if (typeOnly >= ESHRegisterType_TextureStart && typeOnly < ESHRegisterType_TextureEnd) {
+				if (typeOnly >= EGfxRegisterType_TextureStart && typeOnly < EGfxRegisterType_TextureEnd) {
 
-					Bool hasTexturePrimitiveA = rega.reg.texture.primitive != ESHTexturePrimitive_Count;
-					Bool hasTexturePrimitiveB = regb.reg.texture.primitive != ESHTexturePrimitive_Count;
+					Bool hasTexturePrimitiveA = rega.reg.texture.primitive != EGfxTexturePrimitive_Count;
+					Bool hasTexturePrimitiveB = regb.reg.texture.primitive != EGfxTexturePrimitive_Count;
 
 					//Ensure both primitives are the same
 
@@ -451,7 +451,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 			.hasShaderAnnotation = bi.hasShaderAnnotation
 		};
 
-		for (U8 k = 0; k < ESHBinaryType_Count; ++k)
+		for (U8 k = 0; k < EGfxBinaryType_Count; ++k)
 			c.binaries[k] = Buffer_createRefFromBuffer(bi.binaries[k], true);
 
 		//Same misaligned U64 move as above, done as a byte copy.

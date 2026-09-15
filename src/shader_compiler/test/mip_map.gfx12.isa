@@ -1,0 +1,722 @@
+; gfx1201  SGPRs 18  VGPRs 78  code 4276 B  instrs 720  scratch 0  lds 5632
+_amdgpu_cs_main:
+	s_getpc_b64 s[2:3]                                         // 000000000000
+	s_mov_b32 s0, s1                                           // 000000000004
+	s_sext_i32_i16 s3, s3                                      // 000000000008
+	v_and_b32_e32 v19, 0x3ff, v0                               // 00000000000C
+	s_mov_b32 s1, s3                                           // 000000000014
+	v_bfe_u32 v20, v0, 10, 10                                  // 000000000018
+	s_load_b512 s[0:15], s[0:1], 0x0                           // 000000000020
+	s_lshl_b32 s16, ttmp9, 9                                   // 000000000028
+	s_and_b32 s17, ttmp7, 0xffff                               // 00000000002C
+	v_lshl_add_u32 v18, v19, 6, s16                            // 000000000034
+	s_lshl_b32 s16, s17, 9                                     // 00000000003C
+	s_wait_alu 0xfffe                                          // 000000000040
+	v_lshl_add_u32 v17, v20, 6, s16                            // 000000000044
+	s_delay_alu instid0(VALU_DEP_2) | instskip(SKIP_2) | instid1(VALU_DEP_4)// 00000000004C
+	v_or_b32_e32 v23, 2, v18                                   // 000000000050
+	v_or_b32_e32 v26, 1, v18                                   // 000000000054
+	v_or_b32_e32 v24, 3, v18                                   // 000000000058
+	v_or_b32_e32 v76, 2, v17                                   // 00000000005C
+	v_or_b32_e32 v21, 1, v17                                   // 000000000060
+	v_or_b32_e32 v22, 3, v17                                   // 000000000064
+	v_lshrrev_b32_e32 v27, 1, v18                              // 000000000068
+	v_lshrrev_b32_e32 v77, 1, v17                              // 00000000006C
+	v_lshrrev_b32_e32 v25, 1, v23                              // 000000000070
+	s_wait_kmcnt 0x0                                           // 000000000074
+	s_clause 0xf                                               // 000000000078
+	image_load v[1:4], [v18, v17], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 00000000007C
+	image_load v[5:8], [v26, v17], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000088
+	image_load v[9:12], [v23, v17], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000094
+	image_load v[13:16], [v24, v17], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000000A0
+	image_load v[28:31], [v18, v76], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000000AC
+	image_load v[32:35], [v26, v76], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000000B8
+	image_load v[36:39], [v23, v76], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000000C4
+	image_load v[40:43], [v24, v76], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000000D0
+	image_load v[44:47], [v18, v21], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000000DC
+	image_load v[48:51], [v23, v21], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000000E8
+	image_load v[52:55], [v18, v22], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000000F4
+	image_load v[56:59], [v23, v22], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000100
+	image_load v[60:63], [v26, v21], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 00000000010C
+	image_load v[64:67], [v24, v21], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000118
+	image_load v[68:71], [v26, v22], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000124
+	image_load v[72:75], [v24, v22], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000130
+	v_mov_b32_e32 v22, 0                                       // 00000000013C
+	v_lshrrev_b32_e32 v21, 10, v0                              // 000000000140
+	s_and_b32 s16, s12, 0x3fff                                 // 000000000144
+	v_lshrrev_b32_e32 v76, 1, v76                              // 00000000014C
+	s_wait_alu 0xfffe                                          // 000000000150
+	s_cmp_eq_u32 s16, 0                                        // 000000000154
+	s_wait_loadcnt 0xe                                         // 000000000158
+	v_add_f32_e32 v1, v5, v1                                   // 00000000015C
+	v_add_f32_e32 v2, v6, v2                                   // 000000000160
+	v_add_f32_e32 v3, v7, v3                                   // 000000000164
+	v_add_f32_e32 v4, v8, v4                                   // 000000000168
+	s_wait_loadcnt 0xc                                         // 00000000016C
+	v_add_f32_e32 v5, v13, v9                                  // 000000000170
+	v_add_f32_e32 v6, v14, v10                                 // 000000000174
+	v_add_f32_e32 v7, v15, v11                                 // 000000000178
+	v_add_f32_e32 v8, v16, v12                                 // 00000000017C
+	s_wait_loadcnt 0xa                                         // 000000000180
+	v_add_f32_e32 v9, v32, v28                                 // 000000000184
+	v_add_f32_e32 v10, v33, v29                                // 000000000188
+	v_add_f32_e32 v11, v34, v30                                // 00000000018C
+	v_add_f32_e32 v12, v35, v31                                // 000000000190
+	s_wait_loadcnt 0x8                                         // 000000000194
+	v_add_f32_e32 v13, v40, v36                                // 000000000198
+	v_add_f32_e32 v14, v41, v37                                // 00000000019C
+	v_add_f32_e32 v15, v42, v38                                // 0000000001A0
+	v_add_f32_e32 v16, v43, v39                                // 0000000001A4
+	s_wait_loadcnt 0x7                                         // 0000000001A8
+	v_add_f32_e32 v1, v1, v44                                  // 0000000001AC
+	v_add_f32_e32 v2, v2, v45                                  // 0000000001B0
+	v_add_f32_e32 v3, v3, v46                                  // 0000000001B4
+	v_add_f32_e32 v4, v4, v47                                  // 0000000001B8
+	s_wait_loadcnt 0x6                                         // 0000000001BC
+	v_add_f32_e32 v5, v5, v48                                  // 0000000001C0
+	v_add_f32_e32 v6, v6, v49                                  // 0000000001C4
+	v_add_f32_e32 v7, v7, v50                                  // 0000000001C8
+	v_add_f32_e32 v8, v8, v51                                  // 0000000001CC
+	s_wait_loadcnt 0x5                                         // 0000000001D0
+	v_add_f32_e32 v9, v9, v52                                  // 0000000001D4
+	v_add_f32_e32 v10, v10, v53                                // 0000000001D8
+	v_add_f32_e32 v11, v11, v54                                // 0000000001DC
+	v_add_f32_e32 v12, v12, v55                                // 0000000001E0
+	s_wait_loadcnt 0x4                                         // 0000000001E4
+	v_add_f32_e32 v13, v13, v56                                // 0000000001E8
+	v_add_f32_e32 v14, v14, v57                                // 0000000001EC
+	v_add_f32_e32 v15, v15, v58                                // 0000000001F0
+	v_add_f32_e32 v16, v16, v59                                // 0000000001F4
+	s_wait_loadcnt 0x3                                         // 0000000001F8
+	v_add_f32_e32 v1, v1, v60                                  // 0000000001FC
+	v_add_f32_e32 v2, v2, v61                                  // 000000000200
+	v_add_f32_e32 v3, v3, v62                                  // 000000000204
+	v_add_f32_e32 v4, v4, v63                                  // 000000000208
+	s_wait_loadcnt 0x2                                         // 00000000020C
+	v_add_f32_e32 v5, v5, v64                                  // 000000000210
+	v_add_f32_e32 v6, v6, v65                                  // 000000000214
+	v_add_f32_e32 v7, v7, v66                                  // 000000000218
+	v_add_f32_e32 v8, v8, v67                                  // 00000000021C
+	s_wait_loadcnt 0x1                                         // 000000000220
+	v_add_f32_e32 v9, v9, v68                                  // 000000000224
+	v_add_f32_e32 v10, v10, v69                                // 000000000228
+	v_add_f32_e32 v11, v11, v70                                // 00000000022C
+	v_add_f32_e32 v12, v12, v71                                // 000000000230
+	s_wait_loadcnt 0x0                                         // 000000000234
+	v_add_f32_e32 v28, v13, v72                                // 000000000238
+	v_add_f32_e32 v29, v14, v73                                // 00000000023C
+	v_add_f32_e32 v30, v15, v74                                // 000000000240
+	v_add_f32_e32 v31, v16, v75                                // 000000000244
+	v_mul_f32_e32 v1, 0x3e800000, v1                           // 000000000248
+	v_mul_f32_e32 v2, 0x3e800000, v2                           // 000000000250
+	v_mul_f32_e32 v3, 0x3e800000, v3                           // 000000000258
+	v_mul_f32_e32 v4, 0x3e800000, v4                           // 000000000260
+	v_mul_f32_e32 v13, 0x3e800000, v5                          // 000000000268
+	v_mul_f32_e32 v14, 0x3e800000, v6                          // 000000000270
+	v_mul_f32_e32 v15, 0x3e800000, v7                          // 000000000278
+	v_mul_f32_e32 v16, 0x3e800000, v8                          // 000000000280
+	v_mul_f32_e32 v9, 0x3e800000, v9                           // 000000000288
+	v_mul_f32_e32 v10, 0x3e800000, v10                         // 000000000290
+	v_mul_f32_e32 v11, 0x3e800000, v11                         // 000000000298
+	v_mul_f32_e32 v12, 0x3e800000, v12                         // 0000000002A0
+	v_mul_f32_e32 v5, 0x3e800000, v28                          // 0000000002A8
+	v_mul_f32_e32 v6, 0x3e800000, v29                          // 0000000002B0
+	v_mul_f32_e32 v7, 0x3e800000, v30                          // 0000000002B8
+	v_mul_f32_e32 v8, 0x3e800000, v31                          // 0000000002C0
+	s_clause 0x3                                               // 0000000002C8
+	image_store v[1:4], [v27, v77, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000002CC
+	image_store v[13:16], [v25, v77, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000002D8
+	image_store v[9:12], [v27, v76, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000002E4
+	image_store v[5:8], [v25, v76, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000002F0
+	s_cbranch_scc1 .LBB0_15                                    // 0000000002FC
+	v_add_f32_e32 v1, v13, v1                                  // 000000000300
+	v_add_f32_e32 v2, v14, v2                                  // 000000000304
+	v_add_f32_e32 v3, v15, v3                                  // 000000000308
+	v_add_f32_e32 v4, v16, v4                                  // 00000000030C
+	v_or_b32_e32 v14, 16, v17                                  // 000000000310
+	v_add_f32_e32 v1, v1, v9                                   // 000000000314
+	v_add_f32_e32 v2, v2, v10                                  // 000000000318
+	v_add_f32_e32 v3, v3, v11                                  // 00000000031C
+	v_add_f32_e32 v4, v4, v12                                  // 000000000320
+	v_or_b32_e32 v15, 17, v17                                  // 000000000324
+	v_add_f32_e32 v1, v1, v5                                   // 000000000328
+	v_add_f32_e32 v5, v2, v6                                   // 00000000032C
+	v_add_f32_e32 v6, v3, v7                                   // 000000000330
+	v_add_f32_e32 v7, v4, v8                                   // 000000000334
+	v_lshrrev_b32_e32 v16, 1, v14                              // 000000000338
+	v_mul_f32_e32 v2, 0x3e800000, v1                           // 00000000033C
+	v_mul_f32_e32 v3, 0x3e800000, v5                           // 000000000344
+	v_mul_f32_e32 v4, 0x3e800000, v6                           // 00000000034C
+	v_mul_f32_e32 v5, 0x3e800000, v7                           // 000000000354
+	v_mov_b32_e32 v1, 1                                        // 00000000035C
+	v_or_b32_e32 v38, 19, v17                                  // 000000000360
+	s_add_co_i32 s16, s16, 1                                   // 000000000364
+	s_wait_alu 0xfffe                                          // 000000000368
+	s_cmp_eq_u32 s16, 2                                        // 00000000036C
+	image_store v[2:5], [v18, v17, v1], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000000370
+	ds_store_b128 v22, v[2:5]                                  // 00000000037C
+	s_clause 0x3                                               // 000000000384
+	image_load v[2:5], [v18, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000388
+	image_load v[6:9], [v26, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000394
+	image_load v[10:13], [v18, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000003A0
+	image_load v[28:31], [v26, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000003AC
+	s_wait_loadcnt 0x2                                         // 0000000003B8
+	v_add_f32_e32 v2, v6, v2                                   // 0000000003BC
+	v_add_f32_e32 v3, v7, v3                                   // 0000000003C0
+	v_add_f32_e32 v4, v8, v4                                   // 0000000003C4
+	v_add_f32_e32 v5, v9, v5                                   // 0000000003C8
+	s_wait_loadcnt 0x1                                         // 0000000003CC
+	v_add_f32_e32 v2, v2, v10                                  // 0000000003D0
+	v_add_f32_e32 v3, v3, v11                                  // 0000000003D4
+	v_add_f32_e32 v4, v4, v12                                  // 0000000003D8
+	v_add_f32_e32 v5, v5, v13                                  // 0000000003DC
+	s_wait_loadcnt 0x0                                         // 0000000003E0
+	v_add_f32_e32 v2, v2, v28                                  // 0000000003E4
+	v_add_f32_e32 v3, v3, v29                                  // 0000000003E8
+	v_add_f32_e32 v4, v4, v30                                  // 0000000003EC
+	v_add_f32_e32 v5, v5, v31                                  // 0000000003F0
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 0000000003F4
+	v_mul_f32_e32 v2, 0x3e800000, v2                           // 0000000003F8
+	v_mul_f32_e32 v3, 0x3e800000, v3                           // 000000000400
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000408
+	v_mul_f32_e32 v4, 0x3e800000, v4                           // 00000000040C
+	v_mul_f32_e32 v5, 0x3e800000, v5                           // 000000000414
+	image_store v[2:5], [v27, v16, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 00000000041C
+	s_clause 0x3                                               // 000000000428
+	image_load v[6:9], [v23, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 00000000042C
+	image_load v[10:13], [v24, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000438
+	image_load v[28:31], [v23, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000444
+	image_load v[32:35], [v24, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000450
+	s_wait_loadcnt 0x2                                         // 00000000045C
+	v_add_f32_e32 v6, v10, v6                                  // 000000000460
+	v_add_f32_e32 v7, v11, v7                                  // 000000000464
+	v_add_f32_e32 v8, v12, v8                                  // 000000000468
+	v_add_f32_e32 v9, v13, v9                                  // 00000000046C
+	s_wait_loadcnt 0x1                                         // 000000000470
+	v_add_f32_e32 v6, v6, v28                                  // 000000000474
+	v_add_f32_e32 v7, v7, v29                                  // 000000000478
+	v_add_f32_e32 v8, v8, v30                                  // 00000000047C
+	v_add_f32_e32 v9, v9, v31                                  // 000000000480
+	s_wait_loadcnt 0x0                                         // 000000000484
+	v_add_f32_e32 v14, v6, v32                                 // 000000000488
+	v_add_f32_e32 v15, v7, v33                                 // 00000000048C
+	v_add_f32_e32 v36, v8, v34                                 // 000000000490
+	v_add_f32_e32 v37, v9, v35                                 // 000000000494
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000498
+	v_mul_f32_e32 v6, 0x3e800000, v14                          // 00000000049C
+	v_mul_f32_e32 v7, 0x3e800000, v15                          // 0000000004A4
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 0000000004AC
+	v_mul_f32_e32 v8, 0x3e800000, v36                          // 0000000004B0
+	v_mul_f32_e32 v9, 0x3e800000, v37                          // 0000000004B8
+	v_fmac_f32_e32 v2, 0x3e800000, v14                         // 0000000004C0
+	v_fmac_f32_e32 v3, 0x3e800000, v15                         // 0000000004C8
+	v_fmac_f32_e32 v4, 0x3e800000, v36                         // 0000000004D0
+	v_fmac_f32_e32 v5, 0x3e800000, v37                         // 0000000004D8
+	image_store v[6:9], [v25, v16, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000004E0
+	v_or_b32_e32 v16, 18, v17                                  // 0000000004EC
+	s_clause 0x3                                               // 0000000004F0
+	image_load v[6:9], [v18, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000004F4
+	image_load v[10:13], [v26, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000500
+	image_load v[28:31], [v18, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 00000000050C
+	image_load v[32:35], [v26, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000518
+	v_lshrrev_b32_e32 v43, 1, v16                              // 000000000524
+	v_or_b32_e32 v14, 32, v17                                  // 000000000528
+	v_or_b32_e32 v15, 33, v17                                  // 00000000052C
+	s_wait_loadcnt 0x2                                         // 000000000530
+	v_add_f32_e32 v6, v10, v6                                  // 000000000534
+	v_add_f32_e32 v7, v11, v7                                  // 000000000538
+	v_add_f32_e32 v8, v12, v8                                  // 00000000053C
+	v_add_f32_e32 v9, v13, v9                                  // 000000000540
+	s_wait_loadcnt 0x1                                         // 000000000544
+	v_add_f32_e32 v6, v6, v28                                  // 000000000548
+	v_add_f32_e32 v7, v7, v29                                  // 00000000054C
+	v_add_f32_e32 v8, v8, v30                                  // 000000000550
+	v_add_f32_e32 v9, v9, v31                                  // 000000000554
+	s_wait_loadcnt 0x0                                         // 000000000558
+	v_add_f32_e32 v39, v6, v32                                 // 00000000055C
+	v_add_f32_e32 v40, v7, v33                                 // 000000000560
+	v_add_f32_e32 v41, v8, v34                                 // 000000000564
+	v_add_f32_e32 v42, v9, v35                                 // 000000000568
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 00000000056C
+	v_mul_f32_e32 v6, 0x3e800000, v39                          // 000000000570
+	v_mul_f32_e32 v7, 0x3e800000, v40                          // 000000000578
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000580
+	v_mul_f32_e32 v8, 0x3e800000, v41                          // 000000000584
+	v_mul_f32_e32 v9, 0x3e800000, v42                          // 00000000058C
+	v_fmac_f32_e32 v2, 0x3e800000, v39                         // 000000000594
+	v_fmac_f32_e32 v3, 0x3e800000, v40                         // 00000000059C
+	v_fmac_f32_e32 v4, 0x3e800000, v41                         // 0000000005A4
+	v_fmac_f32_e32 v5, 0x3e800000, v42                         // 0000000005AC
+	image_store v[6:9], [v27, v43, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000005B4
+	s_clause 0x3                                               // 0000000005C0
+	image_load v[6:9], [v23, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000005C4
+	image_load v[10:13], [v24, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000005D0
+	image_load v[28:31], [v23, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000005DC
+	image_load v[32:35], [v24, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000005E8
+	v_lshrrev_b32_e32 v16, 1, v14                              // 0000000005F4
+	v_or_b32_e32 v38, 35, v17                                  // 0000000005F8
+	s_wait_loadcnt 0x2                                         // 0000000005FC
+	v_add_f32_e32 v6, v10, v6                                  // 000000000600
+	v_add_f32_e32 v7, v11, v7                                  // 000000000604
+	v_add_f32_e32 v8, v12, v8                                  // 000000000608
+	v_add_f32_e32 v9, v13, v9                                  // 00000000060C
+	s_wait_loadcnt 0x1                                         // 000000000610
+	v_add_f32_e32 v6, v6, v28                                  // 000000000614
+	v_add_f32_e32 v7, v7, v29                                  // 000000000618
+	v_add_f32_e32 v8, v8, v30                                  // 00000000061C
+	v_add_f32_e32 v9, v9, v31                                  // 000000000620
+	s_wait_loadcnt 0x0                                         // 000000000624
+	v_add_f32_e32 v10, v6, v32                                 // 000000000628
+	v_add_f32_e32 v11, v7, v33                                 // 00000000062C
+	v_add_f32_e32 v12, v8, v34                                 // 000000000630
+	v_add_f32_e32 v13, v9, v35                                 // 000000000634
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000638
+	v_mul_f32_e32 v6, 0x3e800000, v10                          // 00000000063C
+	v_mul_f32_e32 v7, 0x3e800000, v11                          // 000000000644
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 00000000064C
+	v_mul_f32_e32 v8, 0x3e800000, v12                          // 000000000650
+	v_mul_f32_e32 v9, 0x3e800000, v13                          // 000000000658
+	v_fmac_f32_e32 v2, 0x3e800000, v10                         // 000000000660
+	v_fmac_f32_e32 v3, 0x3e800000, v11                         // 000000000668
+	v_fmac_f32_e32 v4, 0x3e800000, v12                         // 000000000670
+	v_fmac_f32_e32 v5, 0x3e800000, v13                         // 000000000678
+	image_store v[6:9], [v25, v43, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000000680
+	v_mul_f32_e32 v2, 0x3e800000, v2                           // 00000000068C
+	v_mul_f32_e32 v3, 0x3e800000, v3                           // 000000000694
+	v_mul_f32_e32 v4, 0x3e800000, v4                           // 00000000069C
+	v_mul_f32_e32 v5, 0x3e800000, v5                           // 0000000006A4
+	v_or_b32_e32 v6, 4, v17                                    // 0000000006AC
+	image_store v[2:5], [v18, v6, v1], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000006B0
+	ds_store_b128 v22, v[2:5] offset:1024                      // 0000000006BC
+	s_clause 0x3                                               // 0000000006C4
+	image_load v[2:5], [v18, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000006C8
+	image_load v[6:9], [v26, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000006D4
+	image_load v[10:13], [v18, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000006E0
+	image_load v[28:31], [v26, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 0000000006EC
+	s_wait_loadcnt 0x2                                         // 0000000006F8
+	v_add_f32_e32 v2, v6, v2                                   // 0000000006FC
+	v_add_f32_e32 v3, v7, v3                                   // 000000000700
+	v_add_f32_e32 v4, v8, v4                                   // 000000000704
+	v_add_f32_e32 v5, v9, v5                                   // 000000000708
+	s_wait_loadcnt 0x1                                         // 00000000070C
+	v_add_f32_e32 v2, v2, v10                                  // 000000000710
+	v_add_f32_e32 v3, v3, v11                                  // 000000000714
+	v_add_f32_e32 v4, v4, v12                                  // 000000000718
+	v_add_f32_e32 v5, v5, v13                                  // 00000000071C
+	s_wait_loadcnt 0x0                                         // 000000000720
+	v_add_f32_e32 v2, v2, v28                                  // 000000000724
+	v_add_f32_e32 v3, v3, v29                                  // 000000000728
+	v_add_f32_e32 v4, v4, v30                                  // 00000000072C
+	v_add_f32_e32 v5, v5, v31                                  // 000000000730
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000734
+	v_mul_f32_e32 v2, 0x3e800000, v2                           // 000000000738
+	v_mul_f32_e32 v3, 0x3e800000, v3                           // 000000000740
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000748
+	v_mul_f32_e32 v4, 0x3e800000, v4                           // 00000000074C
+	v_mul_f32_e32 v5, 0x3e800000, v5                           // 000000000754
+	image_store v[2:5], [v27, v16, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 00000000075C
+	s_clause 0x3                                               // 000000000768
+	image_load v[6:9], [v23, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 00000000076C
+	image_load v[10:13], [v24, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000778
+	image_load v[28:31], [v23, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000784
+	image_load v[32:35], [v24, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000790
+	s_wait_loadcnt 0x2                                         // 00000000079C
+	v_add_f32_e32 v6, v10, v6                                  // 0000000007A0
+	v_add_f32_e32 v7, v11, v7                                  // 0000000007A4
+	v_add_f32_e32 v8, v12, v8                                  // 0000000007A8
+	v_add_f32_e32 v9, v13, v9                                  // 0000000007AC
+	s_wait_loadcnt 0x1                                         // 0000000007B0
+	v_add_f32_e32 v6, v6, v28                                  // 0000000007B4
+	v_add_f32_e32 v7, v7, v29                                  // 0000000007B8
+	v_add_f32_e32 v8, v8, v30                                  // 0000000007BC
+	v_add_f32_e32 v9, v9, v31                                  // 0000000007C0
+	s_wait_loadcnt 0x0                                         // 0000000007C4
+	v_add_f32_e32 v14, v6, v32                                 // 0000000007C8
+	v_add_f32_e32 v15, v7, v33                                 // 0000000007CC
+	v_add_f32_e32 v36, v8, v34                                 // 0000000007D0
+	v_add_f32_e32 v37, v9, v35                                 // 0000000007D4
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 0000000007D8
+	v_mul_f32_e32 v6, 0x3e800000, v14                          // 0000000007DC
+	v_mul_f32_e32 v7, 0x3e800000, v15                          // 0000000007E4
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 0000000007EC
+	v_mul_f32_e32 v8, 0x3e800000, v36                          // 0000000007F0
+	v_mul_f32_e32 v9, 0x3e800000, v37                          // 0000000007F8
+	v_fmac_f32_e32 v2, 0x3e800000, v14                         // 000000000800
+	v_fmac_f32_e32 v3, 0x3e800000, v15                         // 000000000808
+	v_fmac_f32_e32 v4, 0x3e800000, v36                         // 000000000810
+	v_fmac_f32_e32 v5, 0x3e800000, v37                         // 000000000818
+	image_store v[6:9], [v25, v16, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000000820
+	v_or_b32_e32 v16, 34, v17                                  // 00000000082C
+	s_clause 0x3                                               // 000000000830
+	image_load v[6:9], [v18, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000834
+	image_load v[10:13], [v26, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000840
+	image_load v[28:31], [v18, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 00000000084C
+	image_load v[32:35], [v26, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000858
+	v_lshrrev_b32_e32 v43, 1, v16                              // 000000000864
+	v_or_b32_e32 v14, 48, v17                                  // 000000000868
+	v_or_b32_e32 v15, 49, v17                                  // 00000000086C
+	s_wait_loadcnt 0x2                                         // 000000000870
+	v_add_f32_e32 v6, v10, v6                                  // 000000000874
+	v_add_f32_e32 v7, v11, v7                                  // 000000000878
+	v_add_f32_e32 v8, v12, v8                                  // 00000000087C
+	v_add_f32_e32 v9, v13, v9                                  // 000000000880
+	s_wait_loadcnt 0x1                                         // 000000000884
+	v_add_f32_e32 v6, v6, v28                                  // 000000000888
+	v_add_f32_e32 v7, v7, v29                                  // 00000000088C
+	v_add_f32_e32 v8, v8, v30                                  // 000000000890
+	v_add_f32_e32 v9, v9, v31                                  // 000000000894
+	s_wait_loadcnt 0x0                                         // 000000000898
+	v_add_f32_e32 v39, v6, v32                                 // 00000000089C
+	v_add_f32_e32 v40, v7, v33                                 // 0000000008A0
+	v_add_f32_e32 v41, v8, v34                                 // 0000000008A4
+	v_add_f32_e32 v42, v9, v35                                 // 0000000008A8
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 0000000008AC
+	v_mul_f32_e32 v6, 0x3e800000, v39                          // 0000000008B0
+	v_mul_f32_e32 v7, 0x3e800000, v40                          // 0000000008B8
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 0000000008C0
+	v_mul_f32_e32 v8, 0x3e800000, v41                          // 0000000008C4
+	v_mul_f32_e32 v9, 0x3e800000, v42                          // 0000000008CC
+	v_fmac_f32_e32 v2, 0x3e800000, v39                         // 0000000008D4
+	v_fmac_f32_e32 v3, 0x3e800000, v40                         // 0000000008DC
+	v_fmac_f32_e32 v4, 0x3e800000, v41                         // 0000000008E4
+	v_fmac_f32_e32 v5, 0x3e800000, v42                         // 0000000008EC
+	image_store v[6:9], [v27, v43, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000008F4
+	s_clause 0x3                                               // 000000000900
+	image_load v[6:9], [v23, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000904
+	image_load v[10:13], [v24, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000910
+	image_load v[28:31], [v23, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 00000000091C
+	image_load v[32:35], [v24, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000928
+	v_lshrrev_b32_e32 v16, 1, v14                              // 000000000934
+	v_or_b32_e32 v38, 51, v17                                  // 000000000938
+	s_wait_loadcnt 0x2                                         // 00000000093C
+	v_add_f32_e32 v6, v10, v6                                  // 000000000940
+	v_add_f32_e32 v7, v11, v7                                  // 000000000944
+	v_add_f32_e32 v8, v12, v8                                  // 000000000948
+	v_add_f32_e32 v9, v13, v9                                  // 00000000094C
+	s_wait_loadcnt 0x1                                         // 000000000950
+	v_add_f32_e32 v6, v6, v28                                  // 000000000954
+	v_add_f32_e32 v7, v7, v29                                  // 000000000958
+	v_add_f32_e32 v8, v8, v30                                  // 00000000095C
+	v_add_f32_e32 v9, v9, v31                                  // 000000000960
+	s_wait_loadcnt 0x0                                         // 000000000964
+	v_add_f32_e32 v10, v6, v32                                 // 000000000968
+	v_add_f32_e32 v11, v7, v33                                 // 00000000096C
+	v_add_f32_e32 v12, v8, v34                                 // 000000000970
+	v_add_f32_e32 v13, v9, v35                                 // 000000000974
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000978
+	v_mul_f32_e32 v6, 0x3e800000, v10                          // 00000000097C
+	v_mul_f32_e32 v7, 0x3e800000, v11                          // 000000000984
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 00000000098C
+	v_mul_f32_e32 v8, 0x3e800000, v12                          // 000000000990
+	v_mul_f32_e32 v9, 0x3e800000, v13                          // 000000000998
+	v_fmac_f32_e32 v2, 0x3e800000, v10                         // 0000000009A0
+	v_fmac_f32_e32 v3, 0x3e800000, v11                         // 0000000009A8
+	v_fmac_f32_e32 v4, 0x3e800000, v12                         // 0000000009B0
+	v_fmac_f32_e32 v5, 0x3e800000, v13                         // 0000000009B8
+	image_store v[6:9], [v25, v43, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000009C0
+	v_mul_f32_e32 v2, 0x3e800000, v2                           // 0000000009CC
+	v_mul_f32_e32 v3, 0x3e800000, v3                           // 0000000009D4
+	v_mul_f32_e32 v4, 0x3e800000, v4                           // 0000000009DC
+	v_mul_f32_e32 v5, 0x3e800000, v5                           // 0000000009E4
+	v_or_b32_e32 v6, 8, v17                                    // 0000000009EC
+	image_store v[2:5], [v18, v6, v1], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 0000000009F0
+	ds_store_b128 v22, v[2:5] offset:2048                      // 0000000009FC
+	s_clause 0x3                                               // 000000000A04
+	image_load v[2:5], [v18, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000A08
+	image_load v[6:9], [v26, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000A14
+	image_load v[10:13], [v18, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000A20
+	image_load v[28:31], [v26, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000A2C
+	s_wait_loadcnt 0x2                                         // 000000000A38
+	v_add_f32_e32 v2, v6, v2                                   // 000000000A3C
+	v_add_f32_e32 v3, v7, v3                                   // 000000000A40
+	v_add_f32_e32 v4, v8, v4                                   // 000000000A44
+	v_add_f32_e32 v5, v9, v5                                   // 000000000A48
+	s_wait_loadcnt 0x1                                         // 000000000A4C
+	v_add_f32_e32 v2, v2, v10                                  // 000000000A50
+	v_add_f32_e32 v3, v3, v11                                  // 000000000A54
+	v_add_f32_e32 v4, v4, v12                                  // 000000000A58
+	v_add_f32_e32 v5, v5, v13                                  // 000000000A5C
+	s_wait_loadcnt 0x0                                         // 000000000A60
+	v_add_f32_e32 v2, v2, v28                                  // 000000000A64
+	v_add_f32_e32 v3, v3, v29                                  // 000000000A68
+	v_add_f32_e32 v4, v4, v30                                  // 000000000A6C
+	v_add_f32_e32 v5, v5, v31                                  // 000000000A70
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000A74
+	v_mul_f32_e32 v2, 0x3e800000, v2                           // 000000000A78
+	v_mul_f32_e32 v3, 0x3e800000, v3                           // 000000000A80
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000A88
+	v_mul_f32_e32 v4, 0x3e800000, v4                           // 000000000A8C
+	v_mul_f32_e32 v5, 0x3e800000, v5                           // 000000000A94
+	image_store v[2:5], [v27, v16, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000000A9C
+	s_clause 0x3                                               // 000000000AA8
+	image_load v[6:9], [v23, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000AAC
+	image_load v[10:13], [v24, v14], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000AB8
+	image_load v[28:31], [v23, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000AC4
+	image_load v[32:35], [v24, v15], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000AD0
+	s_wait_loadcnt 0x2                                         // 000000000ADC
+	v_add_f32_e32 v6, v10, v6                                  // 000000000AE0
+	v_add_f32_e32 v7, v11, v7                                  // 000000000AE4
+	v_add_f32_e32 v8, v12, v8                                  // 000000000AE8
+	v_add_f32_e32 v9, v13, v9                                  // 000000000AEC
+	s_wait_loadcnt 0x1                                         // 000000000AF0
+	v_add_f32_e32 v6, v6, v28                                  // 000000000AF4
+	v_add_f32_e32 v7, v7, v29                                  // 000000000AF8
+	v_add_f32_e32 v8, v8, v30                                  // 000000000AFC
+	v_add_f32_e32 v9, v9, v31                                  // 000000000B00
+	s_wait_loadcnt 0x0                                         // 000000000B04
+	v_add_f32_e32 v14, v6, v32                                 // 000000000B08
+	v_add_f32_e32 v15, v7, v33                                 // 000000000B0C
+	v_add_f32_e32 v36, v8, v34                                 // 000000000B10
+	v_add_f32_e32 v37, v9, v35                                 // 000000000B14
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000B18
+	v_mul_f32_e32 v6, 0x3e800000, v14                          // 000000000B1C
+	v_mul_f32_e32 v7, 0x3e800000, v15                          // 000000000B24
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000B2C
+	v_mul_f32_e32 v8, 0x3e800000, v36                          // 000000000B30
+	v_mul_f32_e32 v9, 0x3e800000, v37                          // 000000000B38
+	v_fmac_f32_e32 v2, 0x3e800000, v14                         // 000000000B40
+	v_fmac_f32_e32 v3, 0x3e800000, v15                         // 000000000B48
+	v_fmac_f32_e32 v4, 0x3e800000, v36                         // 000000000B50
+	v_fmac_f32_e32 v5, 0x3e800000, v37                         // 000000000B58
+	image_store v[6:9], [v25, v16, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000000B60
+	v_or_b32_e32 v16, 50, v17                                  // 000000000B6C
+	s_clause 0x3                                               // 000000000B70
+	image_load v[6:9], [v18, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000B74
+	image_load v[10:13], [v26, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000B80
+	image_load v[28:31], [v18, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000B8C
+	image_load v[32:35], [v26, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000B98
+	v_lshrrev_b32_e32 v41, 1, v16                              // 000000000BA4
+	s_wait_loadcnt 0x2                                         // 000000000BA8
+	v_add_f32_e32 v6, v10, v6                                  // 000000000BAC
+	v_add_f32_e32 v7, v11, v7                                  // 000000000BB0
+	v_add_f32_e32 v8, v12, v8                                  // 000000000BB4
+	v_add_f32_e32 v9, v13, v9                                  // 000000000BB8
+	s_wait_loadcnt 0x1                                         // 000000000BBC
+	v_add_f32_e32 v6, v6, v28                                  // 000000000BC0
+	v_add_f32_e32 v7, v7, v29                                  // 000000000BC4
+	v_add_f32_e32 v8, v8, v30                                  // 000000000BC8
+	v_add_f32_e32 v9, v9, v31                                  // 000000000BCC
+	s_wait_loadcnt 0x0                                         // 000000000BD0
+	v_add_f32_e32 v39, v6, v32                                 // 000000000BD4
+	v_add_f32_e32 v40, v7, v33                                 // 000000000BD8
+	v_add_f32_e32 v34, v8, v34                                 // 000000000BDC
+	v_add_f32_e32 v35, v9, v35                                 // 000000000BE0
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000BE4
+	v_mul_f32_e32 v6, 0x3e800000, v39                          // 000000000BE8
+	v_mul_f32_e32 v7, 0x3e800000, v40                          // 000000000BF0
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000BF8
+	v_mul_f32_e32 v8, 0x3e800000, v34                          // 000000000BFC
+	v_mul_f32_e32 v9, 0x3e800000, v35                          // 000000000C04
+	v_fmac_f32_e32 v2, 0x3e800000, v39                         // 000000000C0C
+	v_fmac_f32_e32 v3, 0x3e800000, v40                         // 000000000C14
+	v_fmac_f32_e32 v4, 0x3e800000, v34                         // 000000000C1C
+	v_fmac_f32_e32 v5, 0x3e800000, v35                         // 000000000C24
+	image_store v[6:9], [v27, v41, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000000C2C
+	s_clause 0x3                                               // 000000000C38
+	image_load v[6:9], [v23, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000C3C
+	image_load v[10:13], [v24, v16], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000C48
+	image_load v[26:29], [v23, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000C54
+	image_load v[30:33], [v24, v38], s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D// 000000000C60
+	s_wait_loadcnt 0x2                                         // 000000000C6C
+	v_add_f32_e32 v6, v10, v6                                  // 000000000C70
+	v_add_f32_e32 v7, v11, v7                                  // 000000000C74
+	v_add_f32_e32 v8, v12, v8                                  // 000000000C78
+	v_add_f32_e32 v9, v13, v9                                  // 000000000C7C
+	s_wait_loadcnt 0x1                                         // 000000000C80
+	v_add_f32_e32 v6, v6, v26                                  // 000000000C84
+	v_add_f32_e32 v7, v7, v27                                  // 000000000C88
+	v_add_f32_e32 v8, v8, v28                                  // 000000000C8C
+	v_add_f32_e32 v9, v9, v29                                  // 000000000C90
+	s_wait_loadcnt 0x0                                         // 000000000C94
+	v_add_f32_e32 v10, v6, v30                                 // 000000000C98
+	v_add_f32_e32 v11, v7, v31                                 // 000000000C9C
+	v_add_f32_e32 v12, v8, v32                                 // 000000000CA0
+	v_add_f32_e32 v13, v9, v33                                 // 000000000CA4
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000CA8
+	v_mul_f32_e32 v6, 0x3e800000, v10                          // 000000000CAC
+	v_mul_f32_e32 v7, 0x3e800000, v11                          // 000000000CB4
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000CBC
+	v_mul_f32_e32 v8, 0x3e800000, v12                          // 000000000CC0
+	v_mul_f32_e32 v9, 0x3e800000, v13                          // 000000000CC8
+	v_fmac_f32_e32 v2, 0x3e800000, v10                         // 000000000CD0
+	v_fmac_f32_e32 v3, 0x3e800000, v11                         // 000000000CD8
+	v_fmac_f32_e32 v4, 0x3e800000, v12                         // 000000000CE0
+	v_fmac_f32_e32 v5, 0x3e800000, v13                         // 000000000CE8
+	image_store v[6:9], [v25, v41, v22], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000000CF0
+	v_mul_f32_e32 v2, 0x3e800000, v2                           // 000000000CFC
+	v_mul_f32_e32 v3, 0x3e800000, v3                           // 000000000D04
+	v_mul_f32_e32 v4, 0x3e800000, v4                           // 000000000D0C
+	v_mul_f32_e32 v5, 0x3e800000, v5                           // 000000000D14
+	v_or_b32_e32 v6, 12, v17                                   // 000000000D1C
+	image_store v[2:5], [v18, v6, v1], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000000D20
+	ds_store_b128 v22, v[2:5] offset:3072                      // 000000000D2C
+	s_cbranch_scc1 .LBB0_15                                    // 000000000D34
+	s_cmp_eq_u32 s16, 3                                        // 000000000D38
+	s_wait_dscnt 0x0                                           // 000000000D3C
+	s_cbranch_scc1 .LBB0_15                                    // 000000000D40
+	v_or_b32_e32 v0, v0, v21                                   // 000000000D44
+	s_mov_b64 s[0:1], exec                                     // 000000000D48
+	s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)// 000000000D4C
+	v_and_b32_e32 v1, 0x3f8, v0                                // 000000000D50
+	v_cmpx_eq_u32_e32 0, v1                                    // 000000000D58
+	s_cbranch_execz .LBB0_5                                    // 000000000D5C
+	v_lshlrev_b32_e32 v1, 5, v19                               // 000000000D60
+	v_mov_b32_e32 v21, 2                                       // 000000000D64
+	s_delay_alu instid0(VALU_DEP_2)                            // 000000000D68
+	v_lshl_add_u32 v13, v20, 9, v1                             // 000000000D6C
+	ds_load_b128 v[1:4], v13                                   // 000000000D74
+	ds_load_b128 v[5:8], v13 offset:16                         // 000000000D7C
+	ds_load_b128 v[9:12], v13 offset:256                       // 000000000D84
+	ds_load_b128 v[13:16], v13 offset:272                      // 000000000D8C
+	s_wait_dscnt 0x2                                           // 000000000D94
+	v_add_f32_e32 v1, v5, v1                                   // 000000000D98
+	v_add_f32_e32 v2, v6, v2                                   // 000000000D9C
+	v_add_f32_e32 v3, v7, v3                                   // 000000000DA0
+	v_add_f32_e32 v4, v8, v4                                   // 000000000DA4
+	v_lshlrev_b32_e32 v7, 4, v19                               // 000000000DA8
+	s_wait_dscnt 0x1                                           // 000000000DAC
+	v_add_f32_e32 v1, v1, v9                                   // 000000000DB0
+	v_add_f32_e32 v2, v2, v10                                  // 000000000DB4
+	v_add_f32_e32 v3, v3, v11                                  // 000000000DB8
+	v_add_f32_e32 v4, v4, v12                                  // 000000000DBC
+	v_lshrrev_b32_e32 v5, 2, v18                               // 000000000DC0
+	s_wait_dscnt 0x0                                           // 000000000DC4
+	v_add_f32_e32 v1, v1, v13                                  // 000000000DC8
+	v_add_f32_e32 v2, v2, v14                                  // 000000000DCC
+	v_add_f32_e32 v3, v3, v15                                  // 000000000DD0
+	v_add_f32_e32 v4, v4, v16                                  // 000000000DD4
+	v_lshrrev_b32_e32 v6, 2, v17                               // 000000000DD8
+	v_mul_f32_e32 v1, 0x3e800000, v1                           // 000000000DDC
+	v_mul_f32_e32 v2, 0x3e800000, v2                           // 000000000DE4
+	v_mul_f32_e32 v3, 0x3e800000, v3                           // 000000000DEC
+	v_mul_f32_e32 v4, 0x3e800000, v4                           // 000000000DF4
+	v_lshl_add_u32 v7, v20, 7, v7                              // 000000000DFC
+	image_store v[1:4], [v5, v6, v21], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000000E04
+	ds_store_b128 v7, v[1:4] offset:4096                       // 000000000E10
+	s_or_b64 exec, exec, s[0:1]                                // 000000000E18
+	s_cmp_eq_u32 s16, 4                                        // 000000000E1C
+	s_wait_dscnt 0x0                                           // 000000000E20
+	s_cbranch_scc1 .LBB0_15                                    // 000000000E24
+	v_and_b32_e32 v1, 0x3fc, v0                                // 000000000E28
+	s_mov_b64 s[0:1], exec                                     // 000000000E30
+	s_delay_alu instid0(VALU_DEP_1)                            // 000000000E34
+	v_cmpx_eq_u32_e32 0, v1                                    // 000000000E38
+	s_cbranch_execz .LBB0_8                                    // 000000000E3C
+	v_lshlrev_b32_e32 v1, 5, v19                               // 000000000E40
+	v_mov_b32_e32 v21, 3                                       // 000000000E44
+	s_delay_alu instid0(VALU_DEP_2)                            // 000000000E48
+	v_lshl_add_u32 v13, v20, 8, v1                             // 000000000E4C
+	ds_load_b128 v[1:4], v13 offset:4096                       // 000000000E54
+	ds_load_b128 v[5:8], v13 offset:4112                       // 000000000E5C
+	ds_load_b128 v[9:12], v13 offset:4224                      // 000000000E64
+	ds_load_b128 v[13:16], v13 offset:4240                     // 000000000E6C
+	s_wait_dscnt 0x2                                           // 000000000E74
+	v_add_f32_e32 v1, v5, v1                                   // 000000000E78
+	v_add_f32_e32 v2, v6, v2                                   // 000000000E7C
+	v_add_f32_e32 v3, v7, v3                                   // 000000000E80
+	v_add_f32_e32 v4, v8, v4                                   // 000000000E84
+	v_lshlrev_b32_e32 v7, 4, v19                               // 000000000E88
+	s_wait_dscnt 0x1                                           // 000000000E8C
+	v_add_f32_e32 v1, v1, v9                                   // 000000000E90
+	v_add_f32_e32 v2, v2, v10                                  // 000000000E94
+	v_add_f32_e32 v3, v3, v11                                  // 000000000E98
+	v_add_f32_e32 v4, v4, v12                                  // 000000000E9C
+	v_lshrrev_b32_e32 v5, 3, v18                               // 000000000EA0
+	s_wait_dscnt 0x0                                           // 000000000EA4
+	v_add_f32_e32 v1, v1, v13                                  // 000000000EA8
+	v_add_f32_e32 v2, v2, v14                                  // 000000000EAC
+	v_add_f32_e32 v3, v3, v15                                  // 000000000EB0
+	v_add_f32_e32 v4, v4, v16                                  // 000000000EB4
+	v_lshrrev_b32_e32 v6, 3, v17                               // 000000000EB8
+	v_mul_f32_e32 v1, 0x3e800000, v1                           // 000000000EBC
+	v_mul_f32_e32 v2, 0x3e800000, v2                           // 000000000EC4
+	v_mul_f32_e32 v3, 0x3e800000, v3                           // 000000000ECC
+	v_mul_f32_e32 v4, 0x3e800000, v4                           // 000000000ED4
+	v_lshl_add_u32 v7, v20, 6, v7                              // 000000000EDC
+	image_store v[1:4], [v5, v6, v21], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000000EE4
+	ds_store_b128 v7, v[1:4] offset:5120                       // 000000000EF0
+	s_or_b64 exec, exec, s[0:1]                                // 000000000EF8
+	s_cmp_eq_u32 s16, 5                                        // 000000000EFC
+	s_wait_dscnt 0x0                                           // 000000000F00
+	s_cbranch_scc1 .LBB0_15                                    // 000000000F04
+	v_and_b32_e32 v1, 0x3fe, v0                                // 000000000F08
+	s_mov_b64 s[0:1], exec                                     // 000000000F10
+	s_delay_alu instid0(VALU_DEP_1)                            // 000000000F14
+	v_cmpx_eq_u32_e32 0, v1                                    // 000000000F18
+	s_cbranch_execz .LBB0_11                                   // 000000000F1C
+	v_lshlrev_b32_e32 v1, 5, v19                               // 000000000F20
+	v_mov_b32_e32 v21, 4                                       // 000000000F24
+	s_delay_alu instid0(VALU_DEP_2)                            // 000000000F28
+	v_lshl_add_u32 v13, v20, 7, v1                             // 000000000F2C
+	ds_load_b128 v[1:4], v13 offset:5120                       // 000000000F34
+	ds_load_b128 v[5:8], v13 offset:5136                       // 000000000F3C
+	ds_load_b128 v[9:12], v13 offset:5184                      // 000000000F44
+	ds_load_b128 v[13:16], v13 offset:5200                     // 000000000F4C
+	s_wait_dscnt 0x2                                           // 000000000F54
+	v_add_f32_e32 v1, v5, v1                                   // 000000000F58
+	v_add_f32_e32 v2, v6, v2                                   // 000000000F5C
+	v_add_f32_e32 v3, v7, v3                                   // 000000000F60
+	v_add_f32_e32 v4, v8, v4                                   // 000000000F64
+	v_lshlrev_b32_e32 v7, 4, v19                               // 000000000F68
+	s_wait_dscnt 0x1                                           // 000000000F6C
+	v_add_f32_e32 v1, v1, v9                                   // 000000000F70
+	v_add_f32_e32 v2, v2, v10                                  // 000000000F74
+	v_add_f32_e32 v3, v3, v11                                  // 000000000F78
+	v_add_f32_e32 v4, v4, v12                                  // 000000000F7C
+	v_lshrrev_b32_e32 v5, 4, v18                               // 000000000F80
+	s_wait_dscnt 0x0                                           // 000000000F84
+	v_add_f32_e32 v1, v1, v13                                  // 000000000F88
+	v_add_f32_e32 v2, v2, v14                                  // 000000000F8C
+	v_add_f32_e32 v3, v3, v15                                  // 000000000F90
+	v_add_f32_e32 v4, v4, v16                                  // 000000000F94
+	v_lshrrev_b32_e32 v6, 4, v17                               // 000000000F98
+	v_mul_f32_e32 v1, 0x3e800000, v1                           // 000000000F9C
+	v_mul_f32_e32 v2, 0x3e800000, v2                           // 000000000FA4
+	v_mul_f32_e32 v3, 0x3e800000, v3                           // 000000000FAC
+	v_mul_f32_e32 v4, 0x3e800000, v4                           // 000000000FB4
+	v_lshl_add_u32 v7, v20, 5, v7                              // 000000000FBC
+	image_store v[1:4], [v5, v6, v21], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000000FC4
+	ds_store_b128 v7, v[1:4] offset:5376                       // 000000000FD0
+	s_or_b64 exec, exec, s[0:1]                                // 000000000FD8
+	s_cmp_eq_u32 s16, 6                                        // 000000000FDC
+	s_wait_dscnt 0x0                                           // 000000000FE0
+	s_cbranch_scc1 .LBB0_15                                    // 000000000FE4
+	v_and_b32_e32 v0, 0x3ff, v0                                // 000000000FE8
+	s_mov_b64 s[0:1], exec                                     // 000000000FF0
+	s_delay_alu instid0(VALU_DEP_1)                            // 000000000FF4
+	v_cmpx_eq_u32_e32 0, v0                                    // 000000000FF8
+	s_cbranch_execz .LBB0_14                                   // 000000000FFC
+	v_lshlrev_b32_e32 v0, 5, v19                               // 000000001000
+	s_delay_alu instid0(VALU_DEP_1)                            // 000000001004
+	v_lshl_add_u32 v12, v20, 6, v0                             // 000000001008
+	ds_load_b128 v[0:3], v12 offset:5376                       // 000000001010
+	ds_load_b128 v[4:7], v12 offset:5392                       // 000000001018
+	ds_load_b128 v[8:11], v12 offset:5408                      // 000000001020
+	ds_load_b128 v[12:15], v12 offset:5424                     // 000000001028
+	s_wait_dscnt 0x2                                           // 000000001030
+	v_add_f32_e32 v0, v4, v0                                   // 000000001034
+	v_add_f32_e32 v1, v5, v1                                   // 000000001038
+	v_add_f32_e32 v2, v6, v2                                   // 00000000103C
+	v_add_f32_e32 v3, v7, v3                                   // 000000001040
+	v_mov_b32_e32 v4, 5                                        // 000000001044
+	s_wait_dscnt 0x1                                           // 000000001048
+	v_add_f32_e32 v0, v0, v8                                   // 00000000104C
+	v_add_f32_e32 v1, v1, v9                                   // 000000001050
+	v_add_f32_e32 v2, v2, v10                                  // 000000001054
+	v_add_f32_e32 v3, v3, v11                                  // 000000001058
+	v_lshrrev_b32_e32 v5, 5, v18                               // 00000000105C
+	s_wait_dscnt 0x0                                           // 000000001060
+	v_add_f32_e32 v0, v0, v12                                  // 000000001064
+	v_add_f32_e32 v1, v1, v13                                  // 000000001068
+	v_add_f32_e32 v2, v2, v14                                  // 00000000106C
+	v_add_f32_e32 v3, v3, v15                                  // 000000001070
+	v_lshrrev_b32_e32 v6, 5, v17                               // 000000001074
+	v_mul_f32_e32 v0, 0x3e800000, v0                           // 000000001078
+	v_mul_f32_e32 v1, 0x3e800000, v1                           // 000000001080
+	v_mul_f32_e32 v2, 0x3e800000, v2                           // 000000001088
+	v_mul_f32_e32 v3, 0x3e800000, v3                           // 000000001090
+	image_store v[0:3], [v5, v6, v4], s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY// 000000001098
+	s_or_b64 exec, exec, s[0:1]                                // 0000000010A4
+	s_nop 0                                                    // 0000000010A8
+	s_sendmsg sendmsg(MSG_DEALLOC_VGPRS)                       // 0000000010AC
+	s_endpgm                                                   // 0000000010B0

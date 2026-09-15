@@ -1,0 +1,60 @@
+name: Web wasm64 (Linux host, ASan + UBSan)
+
+# Nightly rather than per push for the same reason as the other sanitizer jobs, see
+# linux_clang_sanitizers.yml.
+#
+# What this covers that no host sanitizer job can: wasm linear memory has no guard pages and no unmapped
+# addresses, so an overrun or a use after free lands on another live object and the web run stays green
+# while the very same bug is a segfault everywhere else.
+# ASan is what turns one into a report here, and it works at every optimization level on wasm64, so this
+# keeps the -O3 the plain web job builds at rather than dropping to -O0 for the sanitizer.
+#
+# Emscripten sizes the ASan shadow region itself, so nothing here or in build_web.py adjusts the module's
+# memory; see the note next to enableASAN in build_web.py.
+
+on:
+  schedule:
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+
+jobs:
+
+  # build_flags is consumed in _build.yml, and the web path runs build_web.py rather than build.py, so
+  # nothing in this file can show whether the sanitizer flags below reach a build at all.
+  # A job whose flags are dropped there builds the plain web target, passes, and reads as proof that a
+  # sanitized web build is clean, which is worse than having no sanitized web job: a flag that quietly does
+  # nothing buys false confidence, which is why CMakeLists.txt makes an unsupported sanitizer request a hard
+  # error instead of a silent no-op.
+  # So the forwarding is checked before anything is built, and this job is also what catches it being
+  # removed again later.
+
+  guard:
+    name: build_flags forwarding
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that _build.yml's web step forwards build_flags
+        run: |
+          if ! grep -q 'build_web.py.*inputs\.build_flags' .github/workflows/_build.yml; then
+            echo "::error::_build.yml's web step drops build_flags, so -asan/-ubsan never reach build_web.py"
+            exit 1
+          fi
+
+  build:
+    needs: guard
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Web wasm64 (Linux host, ASan + UBSan)
+      runner: ubuntu-latest
+      os: web
+      build_flags: '-asan True -ubsan True'
+      # Its own cache group: a sanitized wasm64 dxc is a different conan package than the plain web job's,
+      # so sharing that job's cache would miss everything and then never get to save its own.
+      cache_name: web_sanitizers
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      sanitizers: true
+      hook_name: Web-wasm64-Linux-sanitizers
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

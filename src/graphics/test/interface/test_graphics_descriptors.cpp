@@ -42,7 +42,7 @@ namespace {
 	//visible, so one maker keeps each declaration to a line rather than four assignments.
 
 	oxc::c::DescriptorBinding Test_makeBinding(
-		oxc::c::ESHRegisterType registerType, oxc::c::U32 count, oxc::c::U32 space, oxc::c::U32 binding
+		oxc::c::EGfxRegisterType registerType, oxc::c::U32 count, oxc::c::U32 space, oxc::c::U32 binding
 	) noexcept {
 
 		oxc::c::DescriptorBinding out{};
@@ -50,7 +50,7 @@ namespace {
 		out.count = count;
 		out.binding.space = space;
 		out.binding.binding = binding;
-		out.visibility = 1 << oxc::c::ESHPipelineStage_Compute;
+		out.visibility = 1 << oxc::c::EGfxPipelineStage_Compute;
 		return out;
 	}
 
@@ -121,9 +121,9 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 	c::CharString bindingNames[3] = { name("testBuffers"), name("testRWBuffers"), name("testBuffer") };
 
 	c::DescriptorBinding bindings[3] = {
-		Test_makeBinding(c::ESHRegisterType_ByteAddressBuffer, 4, 0, 0),
-		Test_makeBinding((c::ESHRegisterType)(c::ESHRegisterType_ByteAddressBuffer | c::ESHRegisterType_IsWrite), 4, 0, 4),
-		Test_makeBinding(c::ESHRegisterType_ByteAddressBuffer, 1, 0, 8)
+		Test_makeBinding(c::EGfxRegisterType_ByteAddressBuffer, 4, 0, 0),
+		Test_makeBinding((c::EGfxRegisterType)(c::EGfxRegisterType_ByteAddressBuffer | c::EGfxRegisterType_IsWrite), 4, 0, 4),
+		Test_makeBinding(c::EGfxRegisterType_ByteAddressBuffer, 1, 0, 8)
 	};
 
 	const c::CharString layoutName = name("Test descriptor layout");
@@ -156,9 +156,9 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 
 	//A constant buffer has to declare its size and push constants belong in a pipeline layout, not a descriptor layout.
 
-	c::DescriptorBinding sizelessCBuffer = Test_makeBinding(c::ESHRegisterType_ConstantBuffer, 1, 0, 0);
+	c::DescriptorBinding sizelessCBuffer = Test_makeBinding(c::EGfxRegisterType_ConstantBuffer, 1, 0, 0);
 
-	c::DescriptorBinding pushConstant = Test_makeBinding(c::ESHRegisterType_PushConstants, 1, 0, 0);
+	c::DescriptorBinding pushConstant = Test_makeBinding(c::EGfxRegisterType_PushConstants, 1, 0, 0);
 	pushConstant.constantBufferSize = 16;
 
 	c::DescriptorLayoutInfo cbufferInfo{};
@@ -201,9 +201,13 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 	const c::CharString heapName = name("Test descriptor heap");
 	c::DescriptorHeapRef *badHeap = nullptr;
 
-	Test_assert(t, "heapNullDevice", !c::GraphicsDeviceRef_createDescriptorHeap(nullptr, &heapInfo, &heapName, &badHeap, nullptr));
+	Test_assert(
+		t, "heapNullDevice", !c::GraphicsDeviceRef_createDescriptorHeap(nullptr, &heapInfo, &heapName, &badHeap, nullptr)
+	);
 
-	Test_assert(t, "heapNullInfo", !c::GraphicsDeviceRef_createDescriptorHeap(deviceRef, nullptr, &heapName, &badHeap, nullptr));
+	Test_assert(
+		t, "heapNullInfo", !c::GraphicsDeviceRef_createDescriptorHeap(deviceRef, nullptr, &heapName, &badHeap, nullptr)
+	);
 
 	Test_assert(t, "heapNoDescriptors", !dev.createDescriptorHeap(emptyHeapInfo, "Test descriptor heap", heap));
 
@@ -296,7 +300,8 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 	//A buffer to point descriptors at; the read only bindings above require ShaderRead on the resource.
 
 	if(!Test_assert(t, "bufferCreate", dev.createBuffer(
-		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead, "Test descriptor table buffer", 256, buffer, nullptr, e_rr
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRead, "Test descriptor table buffer", 256, buffer, nullptr,
+		e_rr
 	)))
 		return;
 
@@ -311,7 +316,9 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 	//The wrapper hands the slot back through a reference, so a null out parameter is another one that only the
 	// C entry point can spell.
 
-	Test_assert(t, "allocNullArrayId", !c::DescriptorTableRef_allocDescriptor(table.handle(), 0, nullptr, false, &desc, nullptr));
+	Test_assert(
+		t, "allocNullArrayId", !c::DescriptorTableRef_allocDescriptor(table.handle(), 0, nullptr, false, &desc, nullptr)
+	);
 
 	//That single descriptor is set through its binding index instead.
 	//maintainRef stays false, so the table doesn't take ownership of the resource.
@@ -368,7 +375,7 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 		c::U8 bindlessTypeId = c::U8_MAX;
 
 		Test_assert(t, "allocBindless", table.allocBindless(
-			c::ESHRegisterType_ByteAddressBuffer, 0, bindId, bindlessTypeId, arrayId, desc, false, e_rr
+			c::EGfxRegisterType_ByteAddressBuffer, 0, bindId, bindlessTypeId, arrayId, desc, false, e_rr
 		));
 
 		Test_assert(t, "allocBindlessBinding", !bindId);
@@ -382,13 +389,13 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 		c::U8 foundType = c::U8_MAX;
 
 		Test_assert(t, "findRegister", table.findBindlessRegister(
-			c::ESHRegisterType_ByteAddressBuffer, 0, foundBind, foundType, buffer.handle(), 0, e_rr
+			c::EGfxRegisterType_ByteAddressBuffer, 0, foundBind, foundType, buffer.handle(), 0, e_rr
 		));
 
 		Test_assert(t, "findRegisterBinding", !foundBind && !foundType);
 
 		Test_assert(t, "findRegisterMissing", !table.findBindlessRegister(
-			c::ESHRegisterType_Sampler, 0, foundBind, foundType, buffer.handle()
+			c::EGfxRegisterType_Sampler, 0, foundBind, foundType, buffer.handle()
 		));
 
 		//Resources can be routed into a table of the caller's own, which is what every creator's trailing
@@ -451,7 +458,7 @@ extern "C" void Test_graphicsDescriptorAlloc(oxc::c::Test *t, oxc::c::GraphicsDe
 	const c::U64 count = 8;
 
 	c::CharString bindingName = name("allocBuffers");
-	c::DescriptorBinding binding = Test_makeBinding(c::ESHRegisterType_ByteAddressBuffer, 8, 0, 0);
+	c::DescriptorBinding binding = Test_makeBinding(c::EGfxRegisterType_ByteAddressBuffer, 8, 0, 0);
 
 	c::DescriptorLayoutInfo info{};
 

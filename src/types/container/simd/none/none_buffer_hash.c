@@ -23,6 +23,7 @@
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
+#include "types/container/host_crypto.h"
 #include "types/base/mathi.h"
 
 U32 Buffer_crc32cChained(const Buffer buf, U32 prevCrc) {
@@ -33,6 +34,15 @@ void Buffer_sha256(const Buffer buf, U32 output[8]) {
 
 	if(!output)
 		return;
+
+	//Same shape as the SSE backend's ECPUFeatures_HwSHA256 check: use the fast path when the platform actually has one,
+	// otherwise the software fallback.
+	//On web "the platform" is the host's crypto.subtle rather than a CPU instruction (see types/container/host_crypto.h).
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB && defined(_OXC3_HOST_CRYPTO)
+		if(HostCrypto_sha256(buf, output))
+			return;
+	#endif
 
 	Buffer_sha256Fallback(buf, output);
 }

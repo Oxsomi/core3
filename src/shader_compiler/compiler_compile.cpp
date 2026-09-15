@@ -97,7 +97,7 @@ Bool Compiler_compile(
 	if(toCompile->defines.length & 1)
 		retError(clean, Error_invalidParameter(2, 0, "Compiler_compile()::toCompile->defines.length should be aligned to 2"));
 
-	if(settings->outputType >= ESHBinaryType_Count || settings->format >= ECompilerFormat_Count)
+	if(settings->outputType >= EGfxBinaryType_Count || settings->format >= ECompilerFormat_Count)
 		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings contains invalid format or outputType"));
 
 	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr));
@@ -133,7 +133,7 @@ Bool Compiler_compile(
 		//DXC moves reflection metadata out of the DXIL part into a separate STAT part by default, and the linker
 		//keeps only the DXIL parts, so the linked module reflects every cbuffer with 0 variables.
 		//Keep reflection in the DXIL part for libraries so the struct annotations survive linking.
-		if(settings->isLib && settings->outputType == ESHBinaryType_DXIL)
+		if(settings->isLib && settings->outputType == EGfxBinaryType_DXIL)
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qkeep_reflect_in_dxil", alloc, e_rr));
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr));
@@ -154,7 +154,7 @@ Bool Compiler_compile(
 		// itself, once per include, and a release SPIRV binary ends up carrying the whole source for nothing.
 		//So SPIRV only gets it when debug info was actually asked for, where line 168 also narrows it down.
 
-		if(settings->debug || (requiresLink && settings->outputType != ESHBinaryType_SPIRV)) {
+		if(settings->debug || (requiresLink && settings->outputType != EGfxBinaryType_SPIRV)) {
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zi", alloc, e_rr));
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qembed_debug", alloc, e_rr));
 		}
@@ -162,7 +162,7 @@ Bool Compiler_compile(
 		if(toCompile->extensions & ESHExtension_16BitTypes)
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr));
 
-		if (settings->outputType == ESHBinaryType_SPIRV) {
+		if (settings->outputType == EGfxBinaryType_SPIRV) {
 
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr));
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-layout", alloc, e_rr));
@@ -181,8 +181,8 @@ Bool Compiler_compile(
 
 			Bool isCoop = !!(toCompile->extensions & vk13);
 			Bool isMeshTask =
-				toCompile->stageType == ESHPipelineStage_MeshExt ||
-				toCompile->stageType == ESHPipelineStage_TaskExt;
+				toCompile->stageType == EGfxPipelineStage_MeshExt ||
+				toCompile->stageType == EGfxPipelineStage_TaskExt;
 
 			const C8 *targetEnvArg;
 
@@ -195,15 +195,15 @@ Bool Compiler_compile(
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, targetEnvArg, alloc, e_rr));
 				
 			if(
-				toCompile->stageType == ESHPipelineStage_Vertex ||
-				toCompile->stageType == ESHPipelineStage_Domain ||
-				toCompile->stageType == ESHPipelineStage_GeometryExt ||
-				toCompile->stageType == ESHPipelineStage_MeshExt ||
+				toCompile->stageType == EGfxPipelineStage_Vertex ||
+				toCompile->stageType == EGfxPipelineStage_Domain ||
+				toCompile->stageType == EGfxPipelineStage_GeometryExt ||
+				toCompile->stageType == EGfxPipelineStage_MeshExt ||
 				settings->isLib
 			)
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-invert-y", alloc, e_rr));
 
-			if(toCompile->stageType == ESHPipelineStage_Pixel || settings->isLib)
+			if(toCompile->stageType == EGfxPipelineStage_Pixel || settings->isLib)
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-position-w", alloc, e_rr));
 
 			if(CharString_length(toCompile->entrypoint))
@@ -214,16 +214,16 @@ Bool Compiler_compile(
 			));
 
 			if(
-				toCompile->stageType >= ESHPipelineStage_RtStartExt &&
-				toCompile->stageType <= ESHPipelineStage_RtEndExt
+				toCompile->stageType >= EGfxPipelineStage_RtStartExt &&
+				toCompile->stageType <= EGfxPipelineStage_RtEndExt
 			)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_tracing", alloc, e_rr
 				));
 
 			if(
-				toCompile->stageType == ESHPipelineStage_MeshExt ||
-				toCompile->stageType == ESHPipelineStage_TaskExt
+				toCompile->stageType == EGfxPipelineStage_MeshExt ||
+				toCompile->stageType == EGfxPipelineStage_TaskExt
 			)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_EXT_mesh_shader", alloc, e_rr
@@ -305,8 +305,8 @@ Bool Compiler_compile(
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
 
-		const C8 *targetPrefix = ESHPipelineStage_getStagePrefix(
-			settings->isLib ? ESHPipelineStage_Count : (ESHPipelineStage) toCompile->stageType
+		const C8 *targetPrefix = EGfxPipelineStage_getStagePrefix(
+			settings->isLib ? EGfxPipelineStage_Count : (EGfxPipelineStage) toCompile->stageType
 		);
 
 		U32 major = toCompile->shaderVersion >> 8;
@@ -320,7 +320,7 @@ Bool Compiler_compile(
 		//Define $$<X> as a real preprocessor macro for BOTH backends, so `#ifdef $$<X>` works either way.
 		//DXIL points it at the function export, SPIRV at the spec-constant global (both named $$specConst_<X>).
 
-		Bool isDXIL = settings->outputType == ESHBinaryType_DXIL;
+		Bool isDXIL = settings->outputType == EGfxBinaryType_DXIL;
 
 		for (U32 i = 0; i < toCompile->uniforms.length; ++i) {
 

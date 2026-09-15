@@ -38,7 +38,7 @@ HOST_TOOL_OPTIONS = {
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.104"
+	version = "3.2.105"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -62,6 +62,7 @@ class oxc3(ConanFile):
 		"dynamicLinkingGraphics": [ True, False ],
 		"dynamicLinkingShaderCompiler": [ True, False ],
 		"debugShaderCompiler": [ True, False ],
+		"enableHostCrypto": [ True, False ],
 		"enableASAN": [ True, False ],
 		"enableUBSAN": [ True, False ]
 	}
@@ -89,6 +90,11 @@ class oxc3(ConanFile):
 
 		"dynamicLinkingShaderCompiler": True,
 		"debugShaderCompiler": False,
+
+		# Web only: routes SHA-256/AES-GCM to the host's crypto (needs COOP/COEP + a Worker).
+		# Off here, and build_web.py turns it on for the threaded flavor, which needs isolation anyway.
+
+		"enableHostCrypto": False,
 
 		# Diagnostic only, and clang/gcc only.
 		# CMakeLists turns a request under MSVC into a hard error rather than ignoring it.
@@ -142,6 +148,7 @@ class oxc3(ConanFile):
 		tc.cache_variables["EnableShaderCompiler"] = self.options.enableShaderCompiler
 		tc.cache_variables["CLIGraphics"] = self.options.cliGraphics
 		tc.cache_variables["DynamicLinkingGraphics"] = self.options.dynamicLinkingGraphics
+		tc.cache_variables["EnableHostCrypto"] = self.options.enableHostCrypto
 		tc.cache_variables["EnableASAN"] = self.options.enableASAN
 		tc.cache_variables["EnableUBSAN"] = self.options.enableUBSAN
 
@@ -194,6 +201,7 @@ class oxc3(ConanFile):
 		# Cross building needs it regardless of enableShaderCompiler: what matters is being able to *run* the packager,
 		# and a cross build's binaries target the device.
 		# Android can't even produce the executable (Platform_defineEntrypoint gives android_main, not main),
+		# and web doesn't build one either (a .js the build machine couldn't exec anyway),
 		# so without this add_virtual_files' find_program picks up whatever OxC3_package happens to be on PATH,
 		# which is how a months-old one out of the conan cache ended up packaging the shader tests.
 
@@ -236,8 +244,14 @@ class oxc3(ConanFile):
 			# feeds a Windows sanitized DXC unsanitized tablegen binaries via user.dxc:tablegen_dir (the same
 			# split the android/web cross builds use). That conf is not part of the package id, so the graph
 			# still just asks for a sanitized DXC here regardless of where its tablegen came from.
-			self.requires("dxc/2026.08.07.03", options=sanitized)
+			self.requires("dxc/2026.08.23", options=sanitized)
 			self.requires("spirv_reflect/2026.08.17", options=sanitized)
+
+			# The AMD offline compilers RGA vendors (amdllpc, amdgpu-dis): offline SPIR-V to AMD ISA for the isa
+			# commands. Only exists where AMD prebuilds them (Windows/Linux x64); run=True so the tools' bin dir
+			# reaches the run environment (RGA_PATH/PATH) for tests and the OxC3 CLI.
+			if self.settings.os in ("Windows", "Linux") and self.settings.arch == "x86_64":
+				self.requires("radeon_gpu_analyzer/2026.09.02", run=True)
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")
@@ -246,7 +260,9 @@ class oxc3(ConanFile):
 		# Vulkan headers come from the Oxsomi fork (headers-only), so building no longer needs a system VULKAN_SDK.
 		# The loader is still loaded dynamically at runtime.
 		# Required wherever the Vulkan backend is compiled.
+		# No graphics module on the web target yet (no WebGPU backend), so no Vulkan headers either.
 		usesVulkan = self.settings.os != "Windows" or self.options.forceVulkan or self.options.dynamicLinkingGraphics
+		usesVulkan = usesVulkan and self.settings.os != "Emscripten"
 
 		if usesVulkan:
 			self.requires("vulkan_headers/2026.07.28")
@@ -256,7 +272,9 @@ class oxc3(ConanFile):
 		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
 			self.requires("vulkan_validation_layers/1.4.357.0-oxc1")
 
-		self.requires("openal_soft/2026.08.06", options=sanitized)
+		# emscripten ships its own OpenAL (WebAudio-backed); openal_soft has no web backend.
+		if self.settings.os != "Emscripten":
+			self.requires("openal_soft/2026.08.06", options=sanitized)
 
 	def package(self):
 
@@ -281,7 +299,28 @@ class oxc3(ConanFile):
 		lib_dst = os.path.join(self.package_folder, "lib")
 		bin_dst = os.path.join(self.package_folder, "bin")
 
-		if self.settings.arch == "x86_64":
+		# The web target has one output directory per flavor, and CMakeLists.txt's EMSCRIPTEN block is
+		# authoritative for its name: wasm64, then _mt when the compile flags carry -pthread, then _asan,
+		# then _ubsan, in that order.
+		# Rebuild the same name here or package() collects another flavor's binaries, or none at all.
+		# CMakeToolchain feeds tools.build:cflags into CMAKE_C_FLAGS_INIT, which is the CMAKE_C_FLAGS that
+		# block matches -pthread against, so reading that conf is reading the flags CMake saw.
+		# build_web.py's webFlavorSuffix() is the third copy of the rule.
+
+		if self.settings.os == "Emscripten":
+
+			archName = "wasm64"
+
+			if "-pthread" in self.conf.get("tools.build:cflags", default=[], check_type=list):
+				archName += "_mt"
+
+			if self.options.enableASAN:
+				archName += "_asan"
+
+			if self.options.enableUBSAN:
+				archName += "_ubsan"
+
+		elif self.settings.arch == "x86_64":
 			archName = "x64"
 		else:
 			archName = "arm64"
@@ -292,6 +331,8 @@ class oxc3(ConanFile):
 			platform = "osx"
 		elif self.settings.os == "Android":
 			platform = "android"
+		elif self.settings.os == "Emscripten":
+			platform = "web"
 		else:
 			platform = "linux"
 
@@ -362,11 +403,20 @@ class oxc3(ConanFile):
 		elif self.settings.os == "Macos" or self.settings.os == "iOS" or self.settings.os == "watchOS":
 			self.cpp_info.frameworks = [ "Security", "CoreFoundation", "ApplicationServices", "AppKit" ]
 
+		elif self.settings.os == "Emscripten":
+			# -lopenal resolves to emscripten's built-in OpenAL (WebAudio-backed)
+			self.cpp_info.system_libs = [ "openal" ]
+
 		else:
 			self.cpp_info.system_libs = [ "m", "xkbcommon", "wayland-cursor" ]
 
 		self.cpp_info.libs = [ "OxC3_formats_bmp", "OxC3_formats_oiBC", "OxC3_formats_hdr", "OxC3_formats_mesh" ]
-		self.cpp_info.libs += [ "OxC3_graphics", "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
+
+		# Headless: no graphics module on the web target (no WebGPU backend yet)
+		if self.settings.os != "Emscripten":
+			self.cpp_info.libs += [ "OxC3_graphics" ]
+
+		self.cpp_info.libs += [ "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_formats_oiSP", "OxC3_formats_oiPL", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
 
 		# The Vulkan loader is loaded dynamically at runtime (see vk_instance.c) and its headers come from the
 		# vulkan_headers package, so there's no Vulkan import lib, system lib or SDK dir to link/include here.

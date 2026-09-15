@@ -139,7 +139,7 @@ void Test_buffer(Test *test) {
 
 	Buffer_memcpy(
 		Buffer_createRef(dat1 + 4, 16),        //Into dat1[4], dat1[5]
-		Buffer_createRefConst(dat + 2, 16)    //Copy dat[2], dat[3]
+		Buffer_createRefConst(dat + 2, 16)     //Copy dat[2], dat[3]
 	);
 
 	for (i = 0; i < 4; ++i)

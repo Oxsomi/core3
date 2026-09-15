@@ -1,0 +1,12 @@
+; gfx1100  SGPRs 17  VGPRs 5  code 52 B  instrs 10  scratch 0  lds 0
+_amdgpu_cs_main:
+	s_getpc_b64 s[2:3]                                         // 000000000000
+	s_mov_b32 s0, s1                                           // 000000000004
+	s_mov_b32 s1, s3                                           // 000000000008
+	v_mov_b32_e32 v4, 0                                        // 00000000000C
+	s_load_b512 s[0:15], s[0:1], 0x0                           // 000000000010
+	s_waitcnt lgkmcnt(0)                                       // 000000000018
+	image_load v[0:3], v4, s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D unorm a16// 00000000001C
+	s_waitcnt vmcnt(0)                                         // 000000000024
+	image_store v[0:3], v4, s[8:15] dmask:0xf dim:SQ_RSRC_IMG_2D unorm a16// 000000000028
+	s_endpgm                                                   // 000000000030

@@ -750,7 +750,9 @@ Bool GenericList_resizeInternal(GenericList *list, U64 size, const Allocator *al
 
 	if(doClear)
 		gotoIfError3(clean, Buffer_unsetAllBits(
-			Buffer_createRef((U8*)list->ptrNonConst + list->stride * list->length, (size * 3 / 2 - list->length) * list->stride),
+			Buffer_createRef(
+				(U8*)list->ptrNonConst + list->stride * list->length, (size * 3 / 2 - list->length) * list->stride
+			),
 			e_rr
 		));
 
@@ -982,7 +984,7 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction f, void *context) 
 }
 
 #define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) {    \
-	return GenericList_sortCustom(l, sort##T, NULL);                     \
+	return GenericList_sortCustom(l, sort##T, NULL);                      \
 }
 
 TGenericList_sorts(TGenericList_sort);

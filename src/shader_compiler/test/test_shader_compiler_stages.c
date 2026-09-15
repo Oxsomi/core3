@@ -40,14 +40,14 @@
 //The only remaining parked stage is inheritance
 // (an upstream DXC SPIR-V assert on multi-base-class structs, unrelated to a specific stage).
 
-#define ST_SPIRV (1 << ESHBinaryType_SPIRV)
-#define ST_DXIL  (1 << ESHBinaryType_DXIL)
+#define ST_SPIRV (1 << EGfxBinaryType_SPIRV)
+#define ST_DXIL  (1 << EGfxBinaryType_DXIL)
 #define ST_BOTH  (ST_SPIRV | ST_DXIL)
 
 typedef struct StageCase {
 	const C8 *file;
 	const C8 *stageName;    //Expected SHEntry_stageName (identical on both backends)
-	U8 backends;            //Bitmask of (1 << ESHBinaryType_*) this stage is expected to compile on
+	U8 backends;            //Bitmask of (1 << EGfxBinaryType_*) this stage is expected to compile on
 } StageCase;
 
 void Test_shaderCompilerStages(Test *t) {
@@ -75,8 +75,8 @@ void Test_shaderCompilerStages(Test *t) {
 
 	//Each stage is exercised on BOTH backends: the reflected stage must be identical on SPIRV and DXIL.
 	static const struct { U8 mode; const C8 *name; } targets[] = {
-		{ ESHBinaryType_SPIRV, "spirv" },
-		{ ESHBinaryType_DXIL,  "dxil"  }
+		{ EGfxBinaryType_SPIRV, "spirv" },
+		{ EGfxBinaryType_DXIL,  "dxil"  }
 	};
 
 	for (U64 i = 0; i < sizeof(stages) / sizeof(stages[0]); ++i)

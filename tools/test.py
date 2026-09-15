@@ -23,7 +23,7 @@
 # The harder surfaces are covered on purpose: virtual "//" files, -oiCA operations, encryption round-trips,
 # and negative cases that must fail.
 # Environment-dependent categories (graphics/audio/compile) are probed and skipped when the feature isn't in the build.
-# The one genuinely deferred command (graphics create, the embedded-shader binary isn't ready yet) is marked xfail.
+# A category can also be compiled in yet have no driver behind it (headless CI); those report SKIP at run time.
 #
 # Usage: python test.py <dir-containing-OxC3[.exe]>
 
@@ -39,6 +39,7 @@ import shutil
 SHA256_HELLO = "64EC88CA00B268E5BA1A35678A1B5316D212F4F366B2477232534A8AECA37F3C"  # SHA256("Hello world")
 CRC32C_HELLO = "72B51F78"                                                          # CRC32C("Hello world")
 F32_ONE_HALF = "0x3fc00000"                                                        # IEEE-754 of 1.5
+HEADLESS_GPU = "headless / no driver"                                              # the CLI's marker for a graphics build running without a driver/ICD
 AES_KEY      = "CD00324F4CBAAE3467924E0578012F155A8F573AA066652DDDB8C2E1F76AF7FE"
 
 passed = 0
@@ -371,7 +372,11 @@ def main():
 		# devices all dumps CPU + GPU + audio.
 		# Live VRAM needs a created device (deferred prebuilt binary),
 		# but the command degrades gracefully ("Memory in use: unavailable") and still succeeds.
-		run(exe, ["devices", "all"], contains=["CPU:", "graphics devices"])
+		# Without a driver/ICD (headless CI) there is no GPU list either, just the CLI's headless marker,
+		# so the GPU expectation only applies when that marker is absent.
+		_, all_out = call(exe, ["devices", "all"])
+		gpu_expect = [] if HEADLESS_GPU in all_out else ["graphics devices"]
+		run(exe, ["devices", "all"], contains=["CPU:"] + gpu_expect)
 
 		# ---- help (categories, operations-in-category, one operation, one format) -----------------
 		section("help")
@@ -434,10 +439,16 @@ def main():
 		else:
 			skip("shader", "shader compiler not in this build")
 
-		# ---- graphics (probed; create is deferred) ------------------------------------------------
+		# ---- graphics (probed) --------------------------------------------------------------------
 		section("graphics")
 		if available(exe, "graphics", "devices"):
-			run(exe, ["graphics", "devices"], contains=["device"])
+			# The listing also succeeds on a machine whose compiled-in graphics stack has no driver/ICD behind
+			# it (headless CI); it prints the headless marker per API then and names no device, which is a skip.
+			_, gpu_out = call(exe, ["graphics", "devices"])
+			if HEADLESS_GPU in gpu_out and "device" not in gpu_out:
+				skip("graphics devices", "no driver (headless CI)")
+			else:
+				run(exe, ["graphics", "devices"], contains=["device"])
 			# create passes on a real GPU (creates + destroys each device) and on headless CI (no interface/driver ->
 			# nothing to create, still success); a genuine device-create failure on a machine that HAS a GPU still fails.
 			run(exe, ["graphics", "create"])

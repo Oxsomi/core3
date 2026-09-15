@@ -58,6 +58,7 @@ OXC3_TEST_ENTRY(shader_compiler) {
 	#endif
 
 	Test_shaderCompilerParse(&t);
+	Test_shaderCompilerReflectSR(&t);
 	Test_shaderCompilerBuiltInIncludes(&t);
 	Test_shaderCompilerAnnotations(&t);
 	Test_shaderCompilerFeatures(&t);

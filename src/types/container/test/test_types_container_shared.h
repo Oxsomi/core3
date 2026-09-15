@@ -43,3 +43,7 @@ void Test_encryptionStream(Test *test);
 void Test_textureFormat(Test *test);
 void Test_allocationBuffer(Test *test);
 void Test_logOOM(Test *test);
+
+#if _PLATFORM_TYPE == PLATFORM_WEB
+	void Test_hostCrypto(Test *test);   //host routed crypto vs OxC3 kernels
+#endif

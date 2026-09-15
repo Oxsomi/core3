@@ -759,7 +759,7 @@ extern "C" void Test_graphicsShaderDraw(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 			continue;
 
 		c::PipelineGraphicsInfo msaaInfo = flatInfo;
-		msaaInfo.msaa = (c::MSAASamples) msaaCases[m].samples;
+		msaaInfo.msaa = (c::U8) msaaCases[m].samples;
 
 		if (TestShaders_graphicsPipeline(t, dev, &fileList, 0, 1, &msaaInfo, msaaPipeline)) {
 

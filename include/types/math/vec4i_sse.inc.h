@@ -103,7 +103,7 @@ static inline I32x4 I32x4_lshElements(I32x4 a, U8 elementCount) {
 		case 1:        return _mm_slli_si128(a,  4);
 		case 2:        return _mm_slli_si128(a,  8);
 		case 3:        return _mm_slli_si128(a, 12);
-		default:    return I32x4_zero();
+		default:       return I32x4_zero();
 	}
 }
 
@@ -113,7 +113,7 @@ static inline I32x4 I32x4_rshElements(I32x4 a, U8 elementCount) {
 		case 1:        return _mm_srli_si128(a,  4);
 		case 2:        return _mm_srli_si128(a,  8);
 		case 3:        return _mm_srli_si128(a, 12);
-		default:    return I32x4_zero();
+		default:       return I32x4_zero();
 	}
 }
 
@@ -159,7 +159,7 @@ static inline I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v) {
 		case 1:        return _mm_alignr_epi8(a, b, 4);
 		case 2:        return _mm_alignr_epi8(a, b, 8);
 		case 3:        return _mm_alignr_epi8(a, b, 12);
-		default:    return I32x4_zero();
+		default:       return I32x4_zero();
 	}
 }
 

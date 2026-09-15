@@ -83,52 +83,52 @@ void Test_SHFileCreateInvalidFlags(Test *t) {
 
 void Test_SHPipelineStagePrefixes(Test *t) {
 
-	Test_setModule(t, "ESHPipelineStage getStagePrefix");
+	Test_setModule(t, "EGfxPipelineStage getStagePrefix");
 
-	Test_assert(t, "vs", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_Vertex),       "vs"));
-	Test_assert(t, "ps", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_Pixel),        "ps"));
-	Test_assert(t, "cs", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_Compute),      "cs"));
-	Test_assert(t, "gs", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_GeometryExt),  "gs"));
-	Test_assert(t, "hs", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_Hull),         "hs"));
-	Test_assert(t, "ds", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_Domain),       "ds"));
-	Test_assert(t, "ms", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_MeshExt),      "ms"));
-	Test_assert(t, "as", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_TaskExt),      "as"));
+	Test_assert(t, "vs", cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_Vertex),       "vs"));
+	Test_assert(t, "ps", cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_Pixel),        "ps"));
+	Test_assert(t, "cs", cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_Compute),      "cs"));
+	Test_assert(t, "gs", cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_GeometryExt),  "gs"));
+	Test_assert(t, "hs", cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_Hull),         "hs"));
+	Test_assert(t, "ds", cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_Domain),       "ds"));
+	Test_assert(t, "ms", cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_MeshExt),      "ms"));
+	Test_assert(t, "as", cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_TaskExt),      "as"));
 
 	//All RT stages -> "lib"
 
-	Test_assert(t, "raygen=lib",       cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_RaygenExt),      "lib"));
-	Test_assert(t, "miss=lib",         cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_MissExt),        "lib"));
-	Test_assert(t, "callable=lib",     cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_CallableExt),    "lib"));
-	Test_assert(t, "closesthit=lib",   cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_ClosestHitExt),  "lib"));
-	Test_assert(t, "anyhit=lib",       cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_AnyHitExt),      "lib"));
-	Test_assert(t, "intersection=lib", cmpstr(ESHPipelineStage_getStagePrefix(ESHPipelineStage_IntersectionExt),"lib"));
+	Test_assert(t, "raygen=lib",       cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_RaygenExt),      "lib"));
+	Test_assert(t, "miss=lib",         cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_MissExt),        "lib"));
+	Test_assert(t, "callable=lib",     cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_CallableExt),    "lib"));
+	Test_assert(t, "closesthit=lib",   cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_ClosestHitExt),  "lib"));
+	Test_assert(t, "anyhit=lib",       cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_AnyHitExt),      "lib"));
+	Test_assert(t, "intersection=lib", cmpstr(EGfxPipelineStage_getStagePrefix(EGfxPipelineStage_IntersectionExt),"lib"));
 
 	//Every stage must return a non-null prefix
 
-	for (U8 i = 0; i < ESHPipelineStage_Count; ++i)
+	for (U8 i = 0; i < EGfxPipelineStage_Count; ++i)
 		Test_assert(t, "prefix non-null",
-			ESHPipelineStage_getStagePrefix((ESHPipelineStage)i) != NULL);
+			EGfxPipelineStage_getStagePrefix((EGfxPipelineStage)i) != NULL);
 }
 
 void Test_SHEntryStageName(Test *t) {
 
 	Test_setModule(t, "SHEntry stageName");
 
-	static const struct { ESHPipelineStage stage; const C8 *name; } cases[] = {
-		{ ESHPipelineStage_Vertex,         "vertex"         },
-		{ ESHPipelineStage_Pixel,          "pixel"          },
-		{ ESHPipelineStage_Compute,        "compute"        },
-		{ ESHPipelineStage_GeometryExt,    "geometry"       },
-		{ ESHPipelineStage_Hull,           "hull"           },
-		{ ESHPipelineStage_Domain,         "domain"         },
-		{ ESHPipelineStage_RaygenExt,      "raygeneration"  },
-		{ ESHPipelineStage_CallableExt,    "callable"       },
-		{ ESHPipelineStage_MissExt,        "miss"           },
-		{ ESHPipelineStage_ClosestHitExt,  "closesthit"     },
-		{ ESHPipelineStage_AnyHitExt,      "anyhit"         },
-		{ ESHPipelineStage_IntersectionExt,"intersection"   },
-		{ ESHPipelineStage_MeshExt,        "mesh"           },
-		{ ESHPipelineStage_TaskExt,        "task"           },
+	static const struct { EGfxPipelineStage stage; const C8 *name; } cases[] = {
+		{ EGfxPipelineStage_Vertex,         "vertex"         },
+		{ EGfxPipelineStage_Pixel,          "pixel"          },
+		{ EGfxPipelineStage_Compute,        "compute"        },
+		{ EGfxPipelineStage_GeometryExt,    "geometry"       },
+		{ EGfxPipelineStage_Hull,           "hull"           },
+		{ EGfxPipelineStage_Domain,         "domain"         },
+		{ EGfxPipelineStage_RaygenExt,      "raygeneration"  },
+		{ EGfxPipelineStage_CallableExt,    "callable"       },
+		{ EGfxPipelineStage_MissExt,        "miss"           },
+		{ EGfxPipelineStage_ClosestHitExt,  "closesthit"     },
+		{ EGfxPipelineStage_AnyHitExt,      "anyhit"         },
+		{ EGfxPipelineStage_IntersectionExt,"intersection"   },
+		{ EGfxPipelineStage_MeshExt,        "mesh"           },
+		{ EGfxPipelineStage_TaskExt,        "task"           },
 	};
 
 	SHEntry e = (SHEntry) { 0 };
@@ -177,21 +177,21 @@ void Test_SHVendorNames(Test *t) {
 
 void Test_SHBinaryTypeNames(Test *t) {
 
-	Test_setModule(t, "ESHBinaryType names array");
+	Test_setModule(t, "EGfxBinaryType names array");
 
-	for (U8 i = 0; i < ESHBinaryType_Count; ++i)
-		Test_assert(t, "name non-null", ESHBinaryType_names[i] != NULL);
+	for (U8 i = 0; i < EGfxBinaryType_Count; ++i)
+		Test_assert(t, "name non-null", EGfxBinaryType_names[i] != NULL);
 
-	Test_assert(t, "SPIRV = SPV",  cmpstr(ESHBinaryType_names[ESHBinaryType_SPIRV], "SPV"));
-	Test_assert(t, "DXIL = DXIL",  cmpstr(ESHBinaryType_names[ESHBinaryType_DXIL],  "DXIL"));
+	Test_assert(t, "SPIRV = SPV",  cmpstr(EGfxBinaryType_names[EGfxBinaryType_SPIRV], "SPV"));
+	Test_assert(t, "DXIL = DXIL",  cmpstr(EGfxBinaryType_names[EGfxBinaryType_DXIL],  "DXIL"));
 }
 
-void Test_SHBindingsDummy(Test *t) {
+void Test_GfxBindingsDummy(Test *t) {
 
-	Test_setModule(t, "SHBindings_dummy: all slots invalid");
+	Test_setModule(t, "GfxBindings_dummy: all slots invalid");
 
-	SHBindings b = SHBindings_dummy();
-	for (U8 i = 0; i < ESHBinaryType_Count; ++i) {
+	GfxBindings b = GfxBindings_dummy();
+	for (U8 i = 0; i < EGfxBinaryType_Count; ++i) {
 		Test_assert(t, "binding = U32_MAX", b.arr[i].binding == U32_MAX);
 		Test_assert(t, "space = U32_MAX",   b.arr[i].space   == U32_MAX);
 	}
@@ -314,7 +314,7 @@ void Test_SHBinaryIdentifierEquals(Test *t) {
 		.entrypoint    = CharString_createRefCStrConst("main"),
 		.extensions    = ESHExtension_F64,
 		.shaderVersion = OISH_SHADER_MODEL_MIN,
-		.stageType     = ESHPipelineStage_Compute
+		.stageType     = EGfxPipelineStage_Compute
 	};
 
 	SHBinaryIdentifier b = a;
@@ -352,22 +352,22 @@ void Test_SHBinaryIdentifierEquals(Test *t) {
 	b.extensions = a.extensions;
 
 	//RT stage grouping: all RT stages treated as RtStart for comparisons
-	a.stageType  = ESHPipelineStage_RaygenExt;
-	b.stageType  = ESHPipelineStage_MissExt;
+	a.stageType  = EGfxPipelineStage_RaygenExt;
+	b.stageType  = EGfxPipelineStage_MissExt;
 	a.entrypoint = CharString_createNull();
 	b.entrypoint = CharString_createNull();
 	Test_assert(t, "raygen == miss (RT group)", SHBinaryIdentifier_equals(&a, &b));
 
-	b.stageType = ESHPipelineStage_ClosestHitExt;
+	b.stageType = EGfxPipelineStage_ClosestHitExt;
 	Test_assert(t, "raygen == closesthit",      SHBinaryIdentifier_equals(&a, &b));
 
 	//RT vs non-RT must differ
-	b.stageType = ESHPipelineStage_Compute;
+	b.stageType = EGfxPipelineStage_Compute;
 	Test_assert(t, "RT != compute",             !SHBinaryIdentifier_equals(&a, &b));
 
 	//Different defines.length
-	a.stageType = ESHPipelineStage_Compute;
-	b.stageType = ESHPipelineStage_Compute;
+	a.stageType = EGfxPipelineStage_Compute;
+	b.stageType = EGfxPipelineStage_Compute;
 	a.entrypoint = b.entrypoint = CharString_createRefCStrConst("main");
 	a.extensions = b.extensions = ESHExtension_None;
 

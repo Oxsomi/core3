@@ -31,7 +31,10 @@ if(EnableShaderCompiler)
 	add_subdirectory(tools/package_cli)			# OxC3_graphics uses the packager
 endif()
 
-add_subdirectory(graphics)
+if(EnableGraphics)
+	add_subdirectory(graphics)
+endif()
+
 add_subdirectory(audio)
 add_subdirectory(tools)
 
@@ -42,6 +45,8 @@ add_subdirectory(tools)
 if(EnableTests AND NOT OxC3TestExecutables)
 	if(ANDROID)
 		add_subdirectory(test/android)
+	elseif(EMSCRIPTEN)
+		add_subdirectory(test/web)
 	else()
 		message(FATAL_ERROR "No test bundle for this platform yet, add one under src/test/")
 	endif()

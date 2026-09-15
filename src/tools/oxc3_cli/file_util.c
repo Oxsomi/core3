@@ -34,6 +34,7 @@
 #include "types/container/encryption_stream.h"
 #include "types/container/string.h"
 #include "formats/oiCA/ca_file.h"
+#include "formats/oiCA/ca_compare.h"
 #include "formats/oiCA/ca_lookup.h"
 #include "formats/oiCA/ca_props.h"
 #include "formats/oiCA/ca_edit.h"
@@ -61,7 +62,6 @@
 //Multiple of 64 so it's block-aligned for AES-GMAC's chunked AAD and 16-aligned for hexdump lines.
 
 #define CLI_FILE_CHUNK (1024 * 1024)
-#define CLI_STREAM_CACHE (64 * 1024)        //Stream cursor cache; independent of the (bypass-cache) read/write chunk size
 
 //Helper: fetch an input path argument
 
@@ -940,36 +940,130 @@ clean:
 	return s_uccess;
 }
 
-//Read an oiCA entry's bytes (loaded buffer or stream-backed) into out as an owned copy.
-
-static Bool CLI_caReadEntry(const CAFile *ca, CAHandle h, const Allocator *alloc, Buffer *out, Error *e_rr) {
+Bool CLI_openArchiveEntry(
+	const CAFile *ca,
+	CAHandle h,
+	const RefPtrType *memType,
+	StreamRef **stream,
+	U64 *offset,
+	U64 *size,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
-	StreamRef *ds = NULL;
-	StreamCursor dc = (StreamCursor) { 0 };
+	MemoryStreamRef *ms = NULL;
+
+	if(!stream || !offset || !size || !memType)
+		retError(clean, Error_nullPointer(
+			0, "CLI_openArchiveEntry()::stream, offset, size and memType are required"
+		));
+
+	*stream = NULL;
+	*offset = 0;
+	*size = 0;
 
 	Bool valid = false;
 	const Buffer data = CAFile_getDataConst(ca, h, &valid);
 
-	if(valid) {
-		gotoIfError3(clean, Buffer_createCopy(data, alloc, out, e_rr));
+	//A loaded entry becomes a stream over the archive's own bytes, so the two shapes converge without a copy.
+	//It has to go in as an explicit ref: a memory stream takes ownership of a buffer that owns its allocation,
+	// and these bytes belong to the archive, which frees them itself.
+
+	if (valid) {
+
+		const Buffer ref = Buffer_createRefConst(data.ptr, Buffer_length(data));
+
+		gotoIfError3(clean, MemoryStream_createFromBufferRegion(
+			ref, 0, Buffer_length(ref), EMemoryStreamFlags_None, memType, &ms, e_rr
+		));
+
+		*stream = ms;
+		*size = Buffer_length(data);
+		ms = NULL;
 		goto clean;
 	}
 
 	U64 streamOff = 0;
-	ds = CAFile_getDataStream(ca, h, &streamOff);
+	StreamRef *ds = CAFile_getDataStream(ca, h, &streamOff);
 
-	if(!ds || streamOff == U64_MAX)
-		retError(clean, Error_invalidState(0, "file diff: couldn't read archive entry data."));
+	//getDataStream hands back a reference even when the offset says the entry isn't readable, so it has to go
+	// back before erroring.
 
-	const U64 size = CAFile_fileSize(ca, h);
-	gotoIfError3(clean, Buffer_createUninitializedBytes(size, alloc, out, e_rr));
-	gotoIfError3(clean, StreamCursor_create(ds, CLI_STREAM_CACHE, false, alloc, &dc, e_rr));
-	gotoIfError3(clean, StreamCursor_read(&dc, *out, streamOff, 0, size, true, alloc, e_rr));
+	if (!ds || streamOff == U64_MAX) {
+		RefPtr_dec(&ds);
+		retError(clean, Error_invalidState(0, "CLI_openArchiveEntry() couldn't read archive entry data."));
+	}
+
+	*stream = ds;
+	*offset = streamOff;
+	*size = CAFile_fileSize(ca, h);
 
 clean:
-	StreamCursor_close(&dc, alloc);
-	RefPtr_dec(&ds);
+	RefPtr_dec(&ms);
+	return s_uccess;
+}
+
+Bool CLI_writeStreamRegion(
+	StreamRef *src,
+	U64 srcOff,
+	U64 length,
+	const CharString *loc,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	StreamRef *dst = NULL;
+	StreamCursor srcCur = (StreamCursor) { 0 }, dstCur = (StreamCursor) { 0 };
+
+	if(!src || !loc)
+		retError(clean, Error_nullPointer(0, "CLI_writeStreamRegion()::src and loc are required"));
+
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	const RefPtrType streamType = FileStream_makeType(alloc);
+
+	gotoIfError3(clean, File_openStream(
+		loc, 1 * SECOND, EFileOpenType_Write, true, &fileHandleType, &streamType, &dst, e_rr
+	));
+
+	gotoIfError3(clean, StreamCursor_create(src, CLI_STREAM_CACHE, false, alloc, &srcCur, e_rr));
+	gotoIfError3(clean, StreamCursor_create(dst, CLI_STREAM_CACHE, true, alloc, &dstCur, e_rr));
+
+	//An empty region still has to produce the file, and copyStream reads length 0 as "all remaining bytes".
+
+	if(length)
+		gotoIfError3(clean, StreamCursor_copyStream(&dstCur, &srcCur, srcOff, 0, length, alloc, e_rr));
+
+	gotoIfError3(clean, StreamCursor_flush(&dstCur, alloc, e_rr));
+
+clean:
+	StreamCursor_close(&dstCur, alloc);
+	StreamCursor_close(&srcCur, alloc);
+	RefPtr_dec(&dst);
+	return s_uccess;
+}
+
+Bool CLI_extractArchiveEntry(
+	const CAFile *ca,
+	CAHandle h,
+	const CharString *loc,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	StreamRef *src = NULL;
+
+	//Outlives src, which is released before this returns.
+
+	const RefPtrType memType = MemoryStream_makeType(alloc);
+
+	U64 off = 0, size = 0;
+	gotoIfError3(clean, CLI_openArchiveEntry(ca, h, &memType, &src, &off, &size, e_rr));
+	gotoIfError3(clean, CLI_writeStreamRegion(src, off, size, loc, alloc, e_rr));
+
+clean:
+	RefPtr_dec(&src);
 	return s_uccess;
 }
 
@@ -985,7 +1079,6 @@ static Bool CLI_diffEntryAB(const FileInfo *info, void *userData, const Allocato
 	Bool s_uccess = true;
 	CLIDiffState *st = (CLIDiffState*) userData;
 	FileInfo infoB = (FileInfo) { 0 };
-	Buffer da = Buffer_createNull(), db = Buffer_createNull();
 
 	const CAHandle hb = CAFile_resolve(st->b, info->path);
 
@@ -1017,11 +1110,14 @@ static Bool CLI_diffEntryAB(const FileInfo *info, void *userData, const Allocato
 
 	//Equal size: compare content byte-for-byte.
 
-	const CAHandle ha = CAFile_resolveFile(st->a, info->path);
-	gotoIfError3(clean, CLI_caReadEntry(st->a, ha, alloc, &da, e_rr));
-	gotoIfError3(clean, CLI_caReadEntry(st->b, hb, alloc, &db, e_rr));
+	//CAFile_dataEqual walks whichever shape each side is in, so neither entry has to be materialized.
 
-	if(!Buffer_eq(da, db)) {
+	const CAHandle ha = CAFile_resolveFile(st->a, info->path);
+
+	ECompareResult cmp = ECompareResult_Eq;
+	gotoIfError3(clean, CAFile_dataEqual(st->a, ha, st->b, hb, alloc, &cmp, e_rr));
+
+	if(cmp != ECompareResult_Eq) {
 		Log_debugLnx(
 			"  ~ %.*s (%"PRIu64" bytes, content differs)",
 			(int) CharString_length(info->path), info->path.ptr, info->fileSize
@@ -1033,8 +1129,6 @@ static Bool CLI_diffEntryAB(const FileInfo *info, void *userData, const Allocato
 
 clean:
 	FileInfo_free(&infoB, alloc);
-	Buffer_free(&da, alloc);
-	Buffer_free(&db, alloc);
 	return s_uccess;
 }
 
@@ -1279,7 +1373,10 @@ Bool CLI_fileHexdump(const ParsedArgs *args) {
 	const Bool hasLength = (args->parameters & EOperationHasParameter_Length) != 0;
 	CharString tmp = CharString_createNull();
 
-	if((args->parameters & EOperationHasParameter_StartOffset) && CLI_fileArg(args, EOperationHasParameter_StartOffsetShift, &tmp))
+	if(
+		(args->parameters & EOperationHasParameter_StartOffset) &&
+		CLI_fileArg(args, EOperationHasParameter_StartOffsetShift, &tmp)
+	)
 		if(!CharString_parseDec(tmp, &start))
 			start = 0;
 

@@ -12,6 +12,9 @@ jobs:
       python_cmd: python
       setup_python: true
       python_version: '3.10'
+      # One per platform+arch: this is the Apple Silicon macOS job that gets a MoltenVK driver,
+      # so the graphics suite actually runs instead of skipping for want of an ICD.
+      vulkan_icd: true
       hook_name: macOS-arm64-static
     secrets:
       WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

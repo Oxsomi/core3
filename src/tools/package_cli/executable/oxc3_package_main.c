@@ -88,7 +88,7 @@ Platform_defineEntrypoint() {
 
 		warnings = ECompilerWarning_BufferPadding | ECompilerWarning_UnusedRegisters;
 
-		compileMode = 1 << ESHBinaryType_SPIRV;
+		compileMode = 1 << EGfxBinaryType_SPIRV;
 
 		//Always both formats on Windows rather than whichever the packager's own graphics config prefers.
 		//The packaged oiCA outlives one configuration: a tree's four configs (and its bin/) share these
@@ -98,7 +98,7 @@ Platform_defineEntrypoint() {
 
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 			multipleModes = true;
-			compileMode |= 1 << ESHBinaryType_DXIL;
+			compileMode |= 1 << EGfxBinaryType_DXIL;
 		#endif
 
 	#endif

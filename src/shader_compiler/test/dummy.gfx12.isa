@@ -1,0 +1,15 @@
+; gfx1201  SGPRs 4  VGPRs 2  code 72 B  instrs 13  scratch 0  lds 0
+_amdgpu_cs_main:
+	s_getpc_b64 s[2:3]                                         // 000000000000
+	s_mov_b32 s0, s1                                           // 000000000004
+	s_sext_i32_i16 s3, s3                                      // 000000000008
+	v_lshlrev_b32_e32 v0, 2, v0                                // 00000000000C
+	s_mov_b32 s1, s3                                           // 000000000010
+	v_mov_b32_e32 v1, 1                                        // 000000000014
+	s_load_b128 s[0:3], s[0:1], 0x0                            // 000000000018
+	s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_1)// 000000000020
+	v_and_b32_e32 v0, 0xffc, v0                                // 000000000024
+	v_lshl_add_u32 v0, ttmp9, 6, v0                            // 00000000002C
+	s_wait_kmcnt 0x0                                           // 000000000034
+	buffer_store_b32 v1, v0, s[0:3], null offen                // 000000000038
+	s_endpgm                                                   // 000000000044

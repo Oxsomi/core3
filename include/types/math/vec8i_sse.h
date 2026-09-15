@@ -47,7 +47,7 @@ static inline I32x8 I32x8_lshElements(I32x8 a, U8 elementCount) {
 		case 1:        return _mm256_slli_si256(a,  4);
 		case 2:        return _mm256_slli_si256(a,  8);
 		case 3:        return _mm256_slli_si256(a, 12);
-		default:    return I32x8_zero();
+		default:       return I32x8_zero();
 	}
 }
 
@@ -57,14 +57,14 @@ static inline I32x8 I32x8_rshElements(I32x8 a, U8 elementCount) {
 		case 1:        return _mm256_srli_si256(a,  4);
 		case 2:        return _mm256_srli_si256(a,  8);
 		case 3:        return _mm256_srli_si256(a, 12);
-		default:    return I32x8_zero();
+		default:       return I32x8_zero();
 	}
 }
 
 static inline I32x4 I32x8_getI32x4(I32x8 v, U8 i) {
 	switch (i) {
 		case 1:        return _mm256_extracti128_si256(v, 1);
-		default:    return _mm256_castsi256_si128(v);
+		default:       return _mm256_castsi256_si128(v);
 	}
 }
 
@@ -76,7 +76,7 @@ static inline I32x8 I32x8_clmul64(I32x8 a, I32x8 b, U8 imm) {
 		case 0x00:    return _mm256_clmulepi64_epi128(a, b, 0x00);
 		case 0x01:    return _mm256_clmulepi64_epi128(a, b, 0x01);
 		case 0x10:    return _mm256_clmulepi64_epi128(a, b, 0x10);
-		default:    return _mm256_clmulepi64_epi128(a, b, 0x11);
+		default:      return _mm256_clmulepi64_epi128(a, b, 0x11);
 	}
 }
 

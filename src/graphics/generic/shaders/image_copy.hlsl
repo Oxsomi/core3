@@ -49,14 +49,31 @@ struct CopyImageCommand {
 
 PUSH_CONSTANT CopyImageCommand cmd;
 
-Texture2DArray<U32x4> _input;
-UNKNOWN_FORMAT RWTexture2DArray<U32x4> _output;
+//A view's format has to be the image's own, and Vulkan requires the view's numeric type to match the sampled
+//type the shader declares.
+//So the texel type is a DEFINE rather than a uniform (a uniform is a spec constant
+//and cannot type a declaration) and the copy is compiled once per numeric class: TEXEL is U32x4 for integer
+//formats and F32x4 for the UNORM/SNORM/float ones, which is every color format a rotation is used on.
+//Both are bit exact for their class: a UNORM texel round trips through fp32 losslessly at these widths, and
+//the integer path never converts at all.
+
+//The precompile pass that discovers the annotations below runs before any define is set, so the texel type
+//needs a value to parse with; the permutations override it.
+
+#ifndef $TEXEL
+	#define $TEXEL U32x4
+#endif
+
+Texture2DArray<$TEXEL> _input;
+UNKNOWN_FORMAT RWTexture2DArray<$TEXEL> _output;
 
 //Simplest variant, only 1 dispatch, allows us to use root constants and works everywhere.
 //Only turn on rotate if sizRot.w != 0
 
 [[oxc::uniforms(B1 ROTATE = false)]]
 [[oxc::uniforms(B1 ROTATE = true)]]
+[[oxc::defines("TEXEL" = "U32x4")]]
+[[oxc::defines("TEXEL" = "F32x4")]]
 [shader("compute")]
 [numthreads(16, 8, 1)]
 void mainSingle(U32x3 id : SV_DispatchThreadID) {

@@ -50,7 +50,7 @@ static inline Bool BigInt_createFromNyto(const BigIntCreate *bigIntCreate, Error
 
 //Arithmetic
 
-Bool BigInt_mul(BigInt *a, BigInt b, const Allocator *allocator, Error *e_rr);    //Multiply on self and keep bit count
+Bool BigInt_mul(BigInt *a, BigInt b, const Allocator *allocator, Error *e_rr);   //Multiply on self and keep bit count
 Bool BigInt_add(BigInt *a, BigInt b);                                            //Add on self and keep bit count
 Bool BigInt_sub(BigInt *a, BigInt b);                                            //Subtract on self and keep bit count
 

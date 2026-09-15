@@ -129,7 +129,8 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	//The spec requires UAV alongside, since builds write the AS through unordered access behind the scenes
 
 	if(buf->usage & EDeviceBufferUsage_ASExt)
-		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		resourceDesc.Flags |=
+			D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 	#if D3D12_SDK_VERSION >= 618
 		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment) {
@@ -343,7 +344,9 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	const Bool cpuAccessible = !(buf->usage & EDeviceBufferUsage_ASExt);
 
-	if (cpuAccessible && (!(block.allocationTypeExt & 1) || (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR)))
+	if (
+		cpuAccessible && (!(block.allocationTypeExt & 1) || (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR))
+	)
 		gotoIfError3(clean, dxCheck(bufExt->buffer->lpVtbl->Map(
 			bufExt->buffer, 0, NULL, (void**) &buf->resource.mappedMemoryExt
 		), e_rr));
@@ -472,7 +475,8 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 			DxDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Dx);
 			U8 *location = stagingResource->resource.mappedMemoryExt;
 
-			ID3D12ManualWriteTrackingResource *tracking = (ID3D12ManualWriteTrackingResource*) stagingResource->resource.debugExt;
+			ID3D12ManualWriteTrackingResource *tracking =
+				(ID3D12ManualWriteTrackingResource*) stagingResource->resource.debugExt;
 
 			//Copy into our buffer
 
@@ -624,7 +628,8 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 					));
 
 					RefPtr_inc(device->staging);
-					gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, device->staging, alloc, e_rr));        //Add to in flight
+					//Add to in flight
+					gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, device->staging, alloc, e_rr));
 				}
 
 				if(dependency.NumBarriers) {

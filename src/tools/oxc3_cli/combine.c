@@ -64,6 +64,14 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 		goto clean;
 	}
 
+	//oiSH accepts -compile-output so `file split` can pick a binary type, but merging never chooses one
+
+	if (args->parameters & EOperationHasParameter_ShaderOutputMode) {
+		Log_debugLnx("CLI_fileCombine() failed, -compile-output can't be used");
+		s_uccess = false;
+		goto clean;
+	}
+
 	if (!(args->parameters & EOperationHasParameter_Input2)) {
 		Log_debugLnx("CLI_fileCombine() failed, -input2 is required");
 		s_uccess = false;

@@ -457,6 +457,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
+		VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR,
+		feat2 & EGraphicsFeatures2_PipelineExecutableInfo,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR,
+			.pipelineExecutableInfo = true
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceShaderAtomicInt64Features,
 		types & EGraphicsDataTypes_AtomicI64,
 		{
@@ -532,28 +541,29 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_DeviceAddressCommands:
 				on = featEx & EVkGraphicsFeatures_OpacityMicromapKHR;
 				break;
-			case EOptExtensions_AtomicF32:                  on = types & EGraphicsDataTypes_AtomicF32;              break;
-			case EOptExtensions_DeferredHostOperations:     on = feat & EGraphicsFeatures_Raytracing;               break;
-			case EOptExtensions_RaytracingValidation:       on = feat & EGraphicsFeatures_RayValidation;            break;
-			case EOptExtensions_ComputeDeriv:               on = feat & EGraphicsFeatures_ComputeDeriv;             break;
-			case EOptExtensions_Maintenance4:               on = featEx & EVkGraphicsFeatures_Maintenance4;         break;
-			case EOptExtensions_BufferDeviceAddress:        on = featEx & EVkGraphicsFeatures_BufferDeviceAddress;  break;
-			case EOptExtensions_Bindless:                   on = feat & EGraphicsFeatures_Bindless;                 break;
-			case EOptExtensions_DriverProperties:           on = featEx & EVkGraphicsFeatures_DriverProperties;     break;
-			case EOptExtensions_AtomicI64:                  on = types & EGraphicsDataTypes_AtomicI64;              break;
-			case EOptExtensions_F16:                        on = types & EGraphicsDataTypes_F16;                    break;
-			case EOptExtensions_MultiDrawIndirectCount:     on = feat & EGraphicsFeatures_MultiDrawIndirectCount;   break;
-			case EOptExtensions_MemoryBudget:               on = featEx & EVkGraphicsFeatures_MemoryBudget;         break;
-			case EOptExtensions_CooperativeVector:          on = feat & EGraphicsFeatures_CoopVec;                  break;
-			case EOptExtensions_CooperativeMatrix:          on = feat & EGraphicsFeatures_CoopMat;                  break;
-			case EOptExtensions_ShaderFloat8:               on = feat & EGraphicsFeatures_CoopFP8;                  break;
-			case EOptExtensions_RayTriPosition:             on = feat & EGraphicsFeatures_RayTriPosition;           break;
-			case EOptExtensions_Barycentrics:               on = feat & EGraphicsFeatures_Barycentrics;             break;
-			case EOptExtensions_DescriptorHeap:             on = feat2 & EGraphicsFeatures2_DescriptorHeap;         break;
-			case EOptExtensions_RayClusterAS:               on = feat2 & EGraphicsFeatures2_RayClusterAS;           break;
-			case EOptExtensions_RayPartitionedTLAS:         on = feat2 & EGraphicsFeatures2_RayPartitionedTLAS;     break;
-			case EOptExtensions_PushDescriptor:             on = featEx & EVkGraphicsFeatures_PerformantPushDescriptor; break;
-			case EOptExtensions_ConditionalRendering:       on = feat2 & EGraphicsFeatures2_Predication;            break;
+			case EOptExtensions_AtomicF32:                    on = types & EGraphicsDataTypes_AtomicF32;                  break;
+			case EOptExtensions_DeferredHostOperations:       on = feat & EGraphicsFeatures_Raytracing;                   break;
+			case EOptExtensions_RaytracingValidation:         on = feat & EGraphicsFeatures_RayValidation;                break;
+			case EOptExtensions_ComputeDeriv:                 on = feat & EGraphicsFeatures_ComputeDeriv;                 break;
+			case EOptExtensions_Maintenance4:                 on = featEx & EVkGraphicsFeatures_Maintenance4;             break;
+			case EOptExtensions_BufferDeviceAddress:          on = featEx & EVkGraphicsFeatures_BufferDeviceAddress;      break;
+			case EOptExtensions_Bindless:                     on = feat & EGraphicsFeatures_Bindless;                     break;
+			case EOptExtensions_DriverProperties:             on = featEx & EVkGraphicsFeatures_DriverProperties;         break;
+			case EOptExtensions_AtomicI64:                    on = types & EGraphicsDataTypes_AtomicI64;                  break;
+			case EOptExtensions_F16:                          on = types & EGraphicsDataTypes_F16;                        break;
+			case EOptExtensions_MultiDrawIndirectCount:       on = feat & EGraphicsFeatures_MultiDrawIndirectCount;       break;
+			case EOptExtensions_MemoryBudget:                 on = featEx & EVkGraphicsFeatures_MemoryBudget;             break;
+			case EOptExtensions_CooperativeVector:            on = feat & EGraphicsFeatures_CoopVec;                      break;
+			case EOptExtensions_CooperativeMatrix:            on = feat & EGraphicsFeatures_CoopMat;                      break;
+			case EOptExtensions_ShaderFloat8:                 on = feat & EGraphicsFeatures_CoopFP8;                      break;
+			case EOptExtensions_RayTriPosition:               on = feat & EGraphicsFeatures_RayTriPosition;               break;
+			case EOptExtensions_Barycentrics:                 on = feat & EGraphicsFeatures_Barycentrics;                 break;
+			case EOptExtensions_DescriptorHeap:               on = feat2 & EGraphicsFeatures2_DescriptorHeap;             break;
+			case EOptExtensions_RayClusterAS:                 on = feat2 & EGraphicsFeatures2_RayClusterAS;               break;
+			case EOptExtensions_RayPartitionedTLAS:           on = feat2 & EGraphicsFeatures2_RayPartitionedTLAS;         break;
+			case EOptExtensions_PipelineExecutableProperties: on = feat2 & EGraphicsFeatures2_PipelineExecutableInfo;     break;
+			case EOptExtensions_PushDescriptor:               on = featEx & EVkGraphicsFeatures_PerformantPushDescriptor; break;
+			case EOptExtensions_ConditionalRendering:         on = feat2 & EGraphicsFeatures2_Predication;                break;
 
 			//Dependencies, requested alongside whichever feature needs them
 
@@ -564,14 +574,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 				on = feat & (EGraphicsFeatures_VariableRateShading | EGraphicsFeatures_DirectRendering);
 				break;
 
-			//Mesh shaders require SPIR-V 1.4 as much as raytracing does, and the instance asks for Vulkan 1.1,
-			// where neither this nor the float controls it depends on is core yet. Both have to be listed.
+			//VK_EXT_mesh_shader depends on VK_KHR_spirv_1_4 the same way the raytracing extensions do, and
+			// spirv_1_4 is only core from Vulkan 1.2 while the instance asks for 1.1, so it stays an
+			// extension that has to be listed explicitly.
+			//Leaving mesh shaders out here enables VK_EXT_mesh_shader without its dependency, which fails
+			// vkCreateDevice with VUID-vkCreateDevice-ppEnabledExtensionNames-01387.
 
 			case EOptExtensions_Spirv14:
 			case EOptExtensions_ShaderFloatControls:
-				on = feat & (
-					EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery | EGraphicsFeatures_MeshShader
-				);
+				on = feat & (EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery | EGraphicsFeatures_MeshShader);
 				break;
 
 			default:
@@ -857,6 +868,14 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		getVkFunctionDevice(clean, vkCmdEndRenderingKHR, deviceExt->cmdEndRendering);
 	}
 
+	if(feat2 & EGraphicsFeatures2_PipelineExecutableInfo) {
+		getVkFunctionDevice(clean, vkGetPipelineExecutablePropertiesKHR, deviceExt->getPipelineExecutableProperties);
+		getVkFunctionDevice(clean, vkGetPipelineExecutableStatisticsKHR, deviceExt->getPipelineExecutableStatistics);
+		getVkFunctionDevice(
+			clean, vkGetPipelineExecutableInternalRepresentationsKHR, deviceExt->getPipelineExecutableInternalRepresentations
+		);
+	}
+
 	if(featEx & EVkGraphicsFeatures_BufferDeviceAddress)
 		getVkFunctionDevice(clean, vkGetBufferDeviceAddressKHR, deviceExt->getBufferDeviceAddress);
 
@@ -1060,6 +1079,18 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	gotoIfError3(clean, VkGraphicsDevice_findAllMemory(deviceExt, e_rr));
 
+	//The empty set layout every pipeline layout can fill its unused set indices with (see vk_device.h)
+
+	{
+		const VkDescriptorSetLayoutCreateInfo emptyInfo = (VkDescriptorSetLayoutCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+		};
+
+		gotoIfError3(clean, checkVkError(deviceExt->createDescriptorSetLayout(
+			deviceExt->device, &emptyInfo, NULL, &deviceExt->emptySetLayout
+		), e_rr));
+	}
+
 clean:
 
 	if(!s_uccess)
@@ -1205,10 +1236,22 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 		for(U64 i = 0; i < deviceExt->compactionPools.length; ++i)
 			deviceExt->destroyQueryPool(deviceExt->device, deviceExt->compactionPools.ptr[i], NULL);
 
+		//The structures a compaction replaced outlive the frame that retired them, so a device torn down
+		// before their fence came back still owns them.
+		//They go here rather than with the lists below: destroying them is a DEVICE level entry point, and
+		// leaving them alive across vkDestroyDevice trips VUID-vkDestroyDevice-device-05137.
+
+		for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+			for(U64 j = 0; j < deviceExt->retiredAs[i].length; ++j)
+				deviceExt->destroyAccelerationStructure(deviceExt->device, deviceExt->retiredAs[i].ptr[j], NULL);
+
 		//Only set when push descriptors were emulated; destroying the pool frees the sets with it.
 
 		if(deviceExt->cbufferPool)
 			deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->cbufferPool, NULL);
+
+		if(deviceExt->emptySetLayout)
+			deviceExt->destroyDescriptorSetLayout(deviceExt->device, deviceExt->emptySetLayout, NULL);
 
 		instanceExt->destroyDevice(deviceExt->device, NULL);
 	}
@@ -1220,13 +1263,8 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 	ListVkPipelineStageFlags_free(&deviceExt->waitStages, alloc);
 	ListVkSemaphore_free(&deviceExt->waitSemaphoresList, alloc);
-	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-
-		for(U64 j = 0; j < deviceExt->retiredAs[i].length; ++j)
-			deviceExt->destroyAccelerationStructure(deviceExt->device, deviceExt->retiredAs[i].ptr[j], NULL);
-
+	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 		ListVkAccelerationStructureKHR_free(&deviceExt->retiredAs[i], alloc);
-	}
 
 	ListVkQueryPool_free(&deviceExt->compactionPools, alloc);
 	ListVkResult_free(&deviceExt->results, alloc);
@@ -1459,13 +1497,21 @@ Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 
 		//The emulated path binds the set that was already written for this frame, so it costs one bind either way.
 
+		//The globals set index is the space the device's cbuffer layout declares (see resources.hlsli's
+		// vk::binding for the globals), which on SPIR-V is the set index itself.
+
+		const VkDescriptorLayout *cbufferLayoutExt =
+			DescriptorLayout_ext(DescriptorLayoutRef_ptr(device->defaultCBufferLayout), Vk);
+
+		const U32 globalsSet = cbufferLayoutExt->setIds[0];
+
 		if (!deviceExt->cmdPushDescriptorSet) {
 
 			deviceExt->cmdBindDescriptorSets(
 				commandBuffer,
 				bindPoint,
 				*defaultLayoutExt,
-				2, 1, &deviceExt->cbufferSets[device->fifId],
+				globalsSet, 1, &deviceExt->cbufferSets[device->fifId],
 				0, NULL
 			);
 
@@ -1494,7 +1540,7 @@ Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 			commandBuffer,
 			bindPoint,
 			*defaultLayoutExt,
-			2,
+			globalsSet,
 			1,
 			&cbv
 		);
@@ -1854,7 +1900,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				.queryCount = newCap
 			};
 
-			if(deviceExt->createQueryPool(deviceExt->device, &growInfo, NULL, &deviceExt->timestampPool[device->fifId]) == VK_SUCCESS)
+			if(deviceExt->createQueryPool(
+				deviceExt->device, &growInfo, NULL, &deviceExt->timestampPool[device->fifId]
+			) == VK_SUCCESS)
 				deviceExt->timestampCapacity[device->fifId] = newCap;
 
 			else {

@@ -222,13 +222,40 @@ def main():
 			filter(None, [ os.environ.get("LSAN_OPTIONS"), f"suppressions={suppressions}" ])
 		)
 
+	# MSBuild keeps its worker nodes alive after a build so the next one can reuse them, and they hold
+	# handles on the .tlog files of every project they touched.
+	# A build that aborts leaves them behind, and the next build then cannot delete a tlog it owns
+	# (MSB3061: being used by another process) until they time out on their own.
+	# Each build here configures and builds afresh, so reuse saves nothing worth that.
+
+	if system == "Windows":
+		buildEnv = dict(os.environ) if buildEnv is None else buildEnv
+		buildEnv["MSBUILDDISABLENODEREUSE"] = "1"
+
+	# A previous install's generator files for other build types are still globbed in by CMakeDeps, and
+	# they outlive the packages they name.
+
+	common.pruneDeadGenerators(build_dir)
+
 	for mode in build_modes:
+
+		# --build=missing the way build_android.py and buildHostPackage do.
+		# conanCreateIfChanged only creates a dependency when its recipe or profile changed,
+		# which says what this script built and not what survived in the conan cache,
+		# so a cache clean leaves a binary the create skips and the graph then refuses to resolve.
+		# Letting conan rebuild what it finds missing is what keeps an evicted dependency from ending the build.
+		# DXC is excluded because only the create above passes user.dxc:tablegen_dir,
+		# so a rebuild from here would compile its own ASan instrumented tablegens and abort running them.
+		# Missing DXC stays an error, which is the whole point: it has to come from the path that feeds it
+		# tablegens.
+
 		common.run(
 			f"conan {conanVerb} . "
 			f"-of {build_dir} "
 			f"{common.hostProfileArgs(mode, compiler)} "
 			f"-s build_type={mode} "
-			f"{options}",
+			f"{options} "
+			f"--build=missing --build=\"!dxc/*\"",
 			env = buildEnv
 		)
 

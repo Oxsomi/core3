@@ -93,7 +93,7 @@
 
 		if(!(args->parameters & EOperationHasParameter_ShaderOutputMode)) {
 			*multipleModes = true;
-			*maskBinaryType = (1 << ESHBinaryType_Count) - 1;
+			*maskBinaryType = (1 << EGfxBinaryType_Count) - 1;
 			return true;
 		}
 
@@ -124,7 +124,7 @@
 				if (CharString_equalsCStringInsensitive(&splits.ptr[i], modes[j])) {
 
 					if(j == modeCount - 1) {
-						compileModeU64 = (1 << ESHBinaryType_Count) - 1;
+						compileModeU64 = (1 << EGfxBinaryType_Count) - 1;
 						*multipleModes = true;
 					}
 
@@ -292,7 +292,8 @@
 		ListCharString_freeUnderlying(&allFiles, Platform_instance->alloc);
 		ListCharString_freeUnderlying(&allShaderText, Platform_instance->alloc);
 		ListCharString_freeUnderlying(&allOutputs, Platform_instance->alloc);
-		ListCharString_free(&includeDirs, Platform_instance->alloc);        //Elements are refs into includeDir; free the list only
+		//Elements are refs into includeDir; free the list only
+		ListCharString_free(&includeDirs, Platform_instance->alloc);
 		ListU8_free(&allCompileModes, Platform_instance->alloc);
 
 		return s_uccess;

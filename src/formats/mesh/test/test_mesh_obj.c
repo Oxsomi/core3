@@ -509,7 +509,9 @@ void Test_OBJValidation(Test *t) {
 		MeshInfo info;
 		U64 off = 0;
 
-		Test_assert(t, "positionsRequired", !OBJ_read((StreamRef*) src, &off, EMeshReadFlags_None, &info, &output, t->alloc, NULL));
+		Test_assert(t, "positionsRequired", !OBJ_read(
+			(StreamRef*) src, &off, EMeshReadFlags_None, &info, &output, t->alloc, NULL
+		));
 		Test_assert(t, "nullOutput", !OBJ_read((StreamRef*) src, &off, EMeshReadFlags_None, &info, NULL, t->alloc, NULL));
 	}
 

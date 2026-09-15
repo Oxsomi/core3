@@ -220,25 +220,25 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 
 		const C8 *name = funcDesc.Name;
 
-		ESHPipelineStage stage = ESHPipelineStage_Count;        //Lib
+		EGfxPipelineStage stage = EGfxPipelineStage_Count;        //Lib
 
 		switch (funcDesc1.ShaderType) {
 
-			case D3D12_SHVER_RAY_GENERATION_SHADER: stage = ESHPipelineStage_RaygenExt;        break;
-			case D3D12_SHVER_INTERSECTION_SHADER:   stage = ESHPipelineStage_IntersectionExt;  break;
-			case D3D12_SHVER_ANY_HIT_SHADER:        stage = ESHPipelineStage_AnyHitExt;        break;
-			case D3D12_SHVER_CLOSEST_HIT_SHADER:    stage = ESHPipelineStage_ClosestHitExt;    break;
-			case D3D12_SHVER_MISS_SHADER:           stage = ESHPipelineStage_MissExt;          break;
-			case D3D12_SHVER_CALLABLE_SHADER:       stage = ESHPipelineStage_CallableExt;      break;
+			case D3D12_SHVER_RAY_GENERATION_SHADER: stage = EGfxPipelineStage_RaygenExt;        break;
+			case D3D12_SHVER_INTERSECTION_SHADER:   stage = EGfxPipelineStage_IntersectionExt;  break;
+			case D3D12_SHVER_ANY_HIT_SHADER:        stage = EGfxPipelineStage_AnyHitExt;        break;
+			case D3D12_SHVER_CLOSEST_HIT_SHADER:    stage = EGfxPipelineStage_ClosestHitExt;    break;
+			case D3D12_SHVER_MISS_SHADER:           stage = EGfxPipelineStage_MissExt;          break;
+			case D3D12_SHVER_CALLABLE_SHADER:       stage = EGfxPipelineStage_CallableExt;      break;
 
-			case D3D12_SHVER_PIXEL_SHADER:          stage = ESHPipelineStage_Pixel;            break;
-			case D3D12_SHVER_VERTEX_SHADER:         stage = ESHPipelineStage_Vertex;           break;
-			case D3D12_SHVER_GEOMETRY_SHADER:       stage = ESHPipelineStage_GeometryExt;      break;
-			case D3D12_SHVER_HULL_SHADER:           stage = ESHPipelineStage_Hull;             break;
-			case D3D12_SHVER_DOMAIN_SHADER:         stage = ESHPipelineStage_Domain;           break;
-			case D3D12_SHVER_COMPUTE_SHADER:        stage = ESHPipelineStage_Compute;          break;
-			case D3D12_SHVER_MESH_SHADER:           stage = ESHPipelineStage_MeshExt;          break;
-			case D3D12_SHVER_AMPLIFICATION_SHADER:  stage = ESHPipelineStage_TaskExt;          break;
+			case D3D12_SHVER_PIXEL_SHADER:          stage = EGfxPipelineStage_Pixel;            break;
+			case D3D12_SHVER_VERTEX_SHADER:         stage = EGfxPipelineStage_Vertex;           break;
+			case D3D12_SHVER_GEOMETRY_SHADER:       stage = EGfxPipelineStage_GeometryExt;      break;
+			case D3D12_SHVER_HULL_SHADER:           stage = EGfxPipelineStage_Hull;             break;
+			case D3D12_SHVER_DOMAIN_SHADER:         stage = EGfxPipelineStage_Domain;           break;
+			case D3D12_SHVER_COMPUTE_SHADER:        stage = EGfxPipelineStage_Compute;          break;
+			case D3D12_SHVER_MESH_SHADER:           stage = EGfxPipelineStage_MeshExt;          break;
+			case D3D12_SHVER_AMPLIFICATION_SHADER:  stage = EGfxPipelineStage_TaskExt;          break;
 
 			default:
 				retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() had an invalid shader type"));
@@ -251,11 +251,11 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 
 		else {
 
-			if(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) {
+			if(stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt) {
 
 				if(!alreadyContainsLib)
 					gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
-						uniqueEntrypoints, CompilerEntrypoint{ .stage = ESHPipelineStage_Count }, alloc, e_rr));
+						uniqueEntrypoints, CompilerEntrypoint{ .stage = EGfxPipelineStage_Count }, alloc, e_rr));
 
 				alreadyContainsLib = true;
 			}
@@ -305,7 +305,7 @@ extern "C" Bool Compiler_linkDXIL(
 	Buffer uniformData,
 	const CharString *entrypoint,
 	U16 shaderVersion,
-	ESHPipelineStage stageType,
+	EGfxPipelineStage stageType,
 	ESHExtension exts,
 	ListCompileError *errors,
 	Buffer *finalResult,
@@ -339,8 +339,8 @@ extern "C" Bool Compiler_linkDXIL(
 	#endif
 
 	Bool isShaderAnnotation =
-		(stageType >= ESHPipelineStage_RtStartExt && stageType >= ESHPipelineStage_RtEndExt) ||
-		stageType >= ESHPipelineStage_Count;            //Maintain lib linking
+		(stageType >= EGfxPipelineStage_RtStartExt && stageType >= EGfxPipelineStage_RtEndExt) ||
+		stageType >= EGfxPipelineStage_Count;            //Maintain lib linking
 
 	Bool hasErrors = false;
 
@@ -532,7 +532,7 @@ extern "C" Bool Compiler_linkDXIL(
 	}
 
 	else gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "%s_%" PRIu8 "_%" PRIu8,
-		ESHPipelineStage_getStagePrefix(stageType),
+		EGfxPipelineStage_getStagePrefix(stageType),
 		(U8)(shaderVersion >> 8), (U8)shaderVersion
 	));
 

@@ -35,6 +35,9 @@ BUFFER_OP_IMPL(F32x4);
 #if _SIMD == SIMD_SSE
 	#define VEC4F_SSE_GUARD
 	#include "types/math/vec4f_sse.inc.h"
+#elif _SIMD == SIMD_WASM
+	#define VEC4F_WASM_GUARD
+	#include "types/math/vec4f_wasm.inc.h"
 #elif _SIMD == SIMD_NEON
 	#define VEC4F_NEON_GUARD
 	#include "types/math/vec4f_neon.inc.h"
@@ -53,7 +56,7 @@ static inline F32 F32x4_get(F32x4 a, U8 i) {
 		case 0:        return F32x4_x(a);
 		case 1:        return F32x4_y(a);
 		case 2:        return F32x4_z(a);
-		default:    return F32x4_w(a);
+		default:       return F32x4_w(a);
 	}
 }
 
@@ -71,7 +74,7 @@ static inline F32 F32x4_get(F32x4 a, U8 i) {
 			case 0:        return F32x4_setXCopy(a, v);
 			case 1:        return F32x4_setYCopy(a, v);
 			case 2:        return F32x4_setZCopy(a, v);
-			default:    return F32x4_setWCopy(a, v);
+			default:       return F32x4_setWCopy(a, v);
 		}
 	}
 
@@ -80,7 +83,7 @@ static inline F32 F32x4_get(F32x4 a, U8 i) {
 			case 0:        F32x4_setXRef(a, v);    break;
 			case 1:        F32x4_setYRef(a, v);    break;
 			case 2:        F32x4_setZRef(a, v);    break;
-			default:    F32x4_setWRef(a, v);
+			default:       F32x4_setWRef(a, v);
 		}
 	}
 
@@ -129,7 +132,7 @@ static inline F32x4 F32x4_mod(F32x4 v, F32x4 d) { return F32x4_mul(F32x4_fract(F
 static inline F32x4 F32x4_complement(F32x4 a) { return F32x4_sub(F32x4_one(), a); }
 static inline F32x4 F32x4_inverse(F32x4 a) { return F32x4_div(F32x4_one(), a); }
 
-#if _SIMD != SIMD_SSE
+#if _SIMD != SIMD_SSE && _SIMD != SIMD_WASM
 	static inline F32x4 F32x4_negate(F32x4 a) { return F32x4_sub(F32x4_zero(), a); }
 #endif
 

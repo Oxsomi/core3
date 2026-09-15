@@ -91,6 +91,16 @@ TList(VkPipelineStageFlags);
 TList(VkQueryPool);
 TList(VkAccelerationStructureKHR);
 
+//The highest descriptor set index OxC3 will bind on Vulkan, and so the highest register space a layout may
+//name there: on SPIR-V a space IS a set index, and a pipeline layout has to describe EVERY index up to the
+//highest one it uses, so a lone binding at set 99 would need 100 set layouts and a device that can bind them.
+//maxBoundDescriptorSets is only guaranteed to be 4.
+//Devices commonly report 8 or 32, but binding up to what
+//the CURRENT device allows would let a shader validate on a desktop and fail on a phone, so this stays at the
+//floor every device is required to support and a layout that builds anywhere builds everywhere.
+
+#define OXC3_VK_MAX_BOUND_SETS 4
+
 typedef struct VkGraphicsDevice {
 
 	VkDevice device;
@@ -149,6 +159,13 @@ typedef struct VkGraphicsDevice {
 	VkDescriptorPool cbufferPool;
 	VkDescriptorSet cbufferSets[MAX_FRAMES_IN_FLIGHT];
 
+	//A set layout with no bindings, which fills the gaps in a pipeline layout's set list.
+	//On SPIR-V a binding's space IS its descriptor set index, so a pipeline layout has to place each
+	// DescriptorLayout set at the index its space names rather than packing them from 0; a layout whose
+	// bindings live in spaces 0 and 2 then needs something at index 1, and this is it.
+
+	VkDescriptorSetLayout emptySetLayout;
+
 	VkPhysicalDeviceMemoryProperties memoryProperties;
 
 	//Temporary storage for submit time stuff
@@ -205,6 +222,12 @@ typedef struct VkGraphicsDevice {
 	PFN_vkCmdBeginConditionalRenderingEXT cmdBeginConditionalRendering;   //NULL without Predication
 	PFN_vkCmdEndConditionalRenderingEXT cmdEndConditionalRendering;
 	PFN_vkGetQueryPoolResults getQueryPoolResults;
+
+	//Pipeline executable introspection (VK_KHR_pipeline_executable_properties); only loaded when the capability is on.
+
+	PFN_vkGetPipelineExecutablePropertiesKHR getPipelineExecutableProperties;
+	PFN_vkGetPipelineExecutableStatisticsKHR getPipelineExecutableStatistics;
+	PFN_vkGetPipelineExecutableInternalRepresentationsKHR getPipelineExecutableInternalRepresentations;
 
 	//These functions are manually loaded because the runtime will load them anyways.
 	//However, some of these might not be present when statically linked or on the device itself.

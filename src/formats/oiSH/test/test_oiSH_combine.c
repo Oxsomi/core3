@@ -88,8 +88,8 @@ void Test_SHFileCombineEntryGroupMismatch(Test *t) {
 	Test_assert(t, "create A", Test_SHFileCreate(t, &shA));
 	Test_assert(t, "create B", Test_SHFileCreate(t, &shB));
 
-	SHBinaryInfo csA = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
-	SHBinaryInfo csB = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo csA = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
+	SHBinaryInfo csB = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "A addBin", SHFile_addBinary(&shA, &csA, t->alloc, &t->err));
 	Test_assert(t, "B addBin", SHFile_addBinary(&shB, &csB, t->alloc, &t->err));
 
@@ -119,14 +119,14 @@ void Test_SHFileCombineMergesSPIRVAndDXIL(Test *t) {
 		.identifier = {
 			.entrypoint    = CharString_createRefCStrConst("main"),
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
-			.stageType     = ESHPipelineStage_Compute
+			.stageType     = EGfxPipelineStage_Compute
 		},
 		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
 	};
 
 	U16 binId = 0;
 
-	infoA.binaries[ESHBinaryType_SPIRV] = Buffer_createRefConst(kDummySPIRV, sizeof(kDummySPIRV));
+	infoA.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(kDummySPIRV, sizeof(kDummySPIRV));
 	Test_assert(t, "A addBin",   SHFile_addBinary(&shA, &infoA, t->alloc, &t->err));
 	Test_assert(t, "A addEntry", addComputeEntry(&shA, "main", 8, 8, 1, t, false, &binId));
 
@@ -137,11 +137,11 @@ void Test_SHFileCombineMergesSPIRVAndDXIL(Test *t) {
 		.identifier = {
 			.entrypoint    = CharString_createRefCStrConst("main"),
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
-			.stageType     = ESHPipelineStage_Compute
+			.stageType     = EGfxPipelineStage_Compute
 		},
 		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
 	};
-	infoB.binaries[ESHBinaryType_DXIL] = Buffer_createRefConst(dxil, sizeof(dxil));
+	infoB.binaries[EGfxBinaryType_DXIL] = Buffer_createRefConst(dxil, sizeof(dxil));
 
 	Test_assert(t, "B addBin",   SHFile_addBinary(&shB, &infoB, t->alloc, &t->err));
 
@@ -149,8 +149,8 @@ void Test_SHFileCombineMergesSPIRVAndDXIL(Test *t) {
 
 	Test_assert(t, "combine ok",      SHFile_combine(&shA, &shB, t->alloc, &out, &t->err));
 	Test_assert(t, "1 merged binary", out.binaries.length == 1);
-	Test_assert(t, "SPIRV present", Buffer_length(out.binaries.ptr[0].binaries[ESHBinaryType_SPIRV]) == sizeof(kDummySPIRV));
-	Test_assert(t, "DXIL present", Buffer_length(out.binaries.ptr[0].binaries[ESHBinaryType_DXIL]) == sizeof(dxil));
+	Test_assert(t, "SPIRV present", Buffer_length(out.binaries.ptr[0].binaries[EGfxBinaryType_SPIRV]) == sizeof(kDummySPIRV));
+	Test_assert(t, "DXIL present", Buffer_length(out.binaries.ptr[0].binaries[EGfxBinaryType_DXIL]) == sizeof(dxil));
 
 	SHFile_free(&shA, t->alloc);
 	SHFile_free(&shB, t->alloc);
@@ -171,8 +171,8 @@ void Test_SHFileCombineEquivalentToSequential(Test *t) {
 	Test_assert(t, "create seq", Test_SHFileCreate(t, &seq));
 
 	U16 binId = 0;
-	SHBinaryInfo csSeq = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
-	SHBinaryInfo vsSeq = makeBinaryInfo(ESHPipelineStage_Vertex,  "vsMain", false);
+	SHBinaryInfo csSeq = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo vsSeq = makeBinaryInfo(EGfxPipelineStage_Vertex,  "vsMain", false);
 	Test_assert(t, "seq add cs", SHFile_addBinary(&seq, &csSeq, t->alloc, &t->err));
 	Test_assert(t, "seq add vs", SHFile_addBinary(&seq, &vsSeq, t->alloc, &t->err));
 	Test_assert(t, "seq entry cs", addComputeEntry(&seq, "csMain", 8, 8, 1, t, false, &binId));
@@ -180,7 +180,7 @@ void Test_SHFileCombineEquivalentToSequential(Test *t) {
 	{
 		SHEntry ev = (SHEntry) { 0 };
 		ev.name  = CharString_createRefCStrConst("vsMain");
-		ev.stage = ESHPipelineStage_Vertex;
+		ev.stage = EGfxPipelineStage_Vertex;
 		U16 bid = 1;
 		Test_assert(t, "createRef", ListU16_createRefConst(&bid, 1, &ev.binaryIds, &t->err));
 		Test_assert(t, "seq entry vs", SHFile_addEntrypoint(&seq, &ev, t->alloc, &t->err));
@@ -192,16 +192,16 @@ void Test_SHFileCombineEquivalentToSequential(Test *t) {
 	Test_assert(t, "create A", Test_SHFileCreate(t, &shA));
 	Test_assert(t, "create B", Test_SHFileCreate(t, &shB));
 
-	SHBinaryInfo csA = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo csA = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	Test_assert(t, "A addBin",   SHFile_addBinary(&shA, &csA, t->alloc, &t->err));
 	Test_assert(t, "A addEntry", addComputeEntry(&shA, "csMain", 8, 8, 1, t, false, &binId));
 
-	SHBinaryInfo vsB = makeBinaryInfo(ESHPipelineStage_Vertex, "vsMain", false);
+	SHBinaryInfo vsB = makeBinaryInfo(EGfxPipelineStage_Vertex, "vsMain", false);
 	Test_assert(t, "B addBin", SHFile_addBinary(&shB, &vsB, t->alloc, &t->err));
 	{
 		SHEntry ev = (SHEntry) { 0 };
 		ev.name  = CharString_createRefCStrConst("vsMain");
-		ev.stage = ESHPipelineStage_Vertex;
+		ev.stage = EGfxPipelineStage_Vertex;
 		U16 bid = 0;
 		Test_assert(t, "createRef", ListU16_createRefConst(&bid, 1, &ev.binaryIds, &t->err));
 		Test_assert(t, "B addEntry", SHFile_addEntrypoint(&shB, &ev, t->alloc, &t->err));
@@ -220,11 +220,11 @@ void Test_SHFileCombineEquivalentToSequential(Test *t) {
 
 	if (seq.binaries.length == 2 && combined.binaries.length == 2) {
 
-		Test_assert(t, "seq bin[0] stage cs", seq.binaries.ptr[0].identifier.stageType == ESHPipelineStage_Compute);
-		Test_assert(t, "combined bin[0] stage cs", combined.binaries.ptr[0].identifier.stageType == ESHPipelineStage_Compute);
+		Test_assert(t, "seq bin[0] stage cs", seq.binaries.ptr[0].identifier.stageType == EGfxPipelineStage_Compute);
+		Test_assert(t, "combined bin[0] stage cs", combined.binaries.ptr[0].identifier.stageType == EGfxPipelineStage_Compute);
 
-		Test_assert(t, "seq bin[1] stage vs", seq.binaries.ptr[1].identifier.stageType == ESHPipelineStage_Vertex);
-		Test_assert(t, "combined bin[1] stage vs", combined.binaries.ptr[1].identifier.stageType == ESHPipelineStage_Vertex);
+		Test_assert(t, "seq bin[1] stage vs", seq.binaries.ptr[1].identifier.stageType == EGfxPipelineStage_Vertex);
+		Test_assert(t, "combined bin[1] stage vs", combined.binaries.ptr[1].identifier.stageType == EGfxPipelineStage_Vertex);
 
 		Test_assert(t, "cs entrypoint eq",
 			cmpstr(seq.binaries.ptr[0].identifier.entrypoint.ptr, "csMain") &&
@@ -244,11 +244,11 @@ void Test_SHFileCombineEquivalentToSequential(Test *t) {
 
 	if (seq.entries.length == 2 && combined.entries.length == 2) {
 
-		Test_assert(t, "seq entry[0] stage cs", seq.entries.ptr[0].stage == ESHPipelineStage_Compute);
-		Test_assert(t, "combined entry[0] stage cs", combined.entries.ptr[0].stage == ESHPipelineStage_Compute);
+		Test_assert(t, "seq entry[0] stage cs", seq.entries.ptr[0].stage == EGfxPipelineStage_Compute);
+		Test_assert(t, "combined entry[0] stage cs", combined.entries.ptr[0].stage == EGfxPipelineStage_Compute);
 
-		Test_assert(t, "seq entry[1] stage vs", seq.entries.ptr[1].stage == ESHPipelineStage_Vertex);
-		Test_assert(t, "combined entry[1] stage vs", combined.entries.ptr[1].stage == ESHPipelineStage_Vertex);
+		Test_assert(t, "seq entry[1] stage vs", seq.entries.ptr[1].stage == EGfxPipelineStage_Vertex);
+		Test_assert(t, "combined entry[1] stage vs", combined.entries.ptr[1].stage == EGfxPipelineStage_Vertex);
 
 		Test_assert(t, "cs group eq",
 			combined.entries.ptr[0].groupX == seq.entries.ptr[0].groupX &&
@@ -264,13 +264,13 @@ void Test_SHFileCombineEquivalentToSequential(Test *t) {
 		if (combined.entries.ptr[0].binaryIds.length == 1)
 			Test_assert(t, "cs binaryId points to cs binary",
 				combined.binaries.ptr[combined.entries.ptr[0].binaryIds.ptr[0]].identifier.stageType ==
-				ESHPipelineStage_Compute
+				EGfxPipelineStage_Compute
 			);
 
 		if (combined.entries.ptr[1].binaryIds.length == 1)
 			Test_assert(t, "vs binaryId points to vs binary",
 				combined.binaries.ptr[combined.entries.ptr[1].binaryIds.ptr[0]].identifier.stageType ==
-				ESHPipelineStage_Vertex
+				EGfxPipelineStage_Vertex
 			);
 	}
 
@@ -287,7 +287,7 @@ void Test_SHFileCombineIncludesMatchSequential(Test *t) {
 	U16 binId = 0;
 	SHFile seq = (SHFile) { 0 };
 	Test_assert(t, "create seq", Test_SHFileCreate(t, &seq));
-	SHBinaryInfo seqBin = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo seqBin = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "seq addBin",   SHFile_addBinary(&seq, &seqBin, t->alloc, &t->err));
 	Test_assert(t, "seq addEntry", addComputeEntry(&seq, "cs", 4, 4, 1, t, false, &binId));
 	SHInclude iA = { .relativePath = CharString_createRefCStrConst("a.hlsli"), .crc32c = 0x0001 };
@@ -299,8 +299,8 @@ void Test_SHFileCombineIncludesMatchSequential(Test *t) {
 	Test_assert(t, "create A", Test_SHFileCreate(t, &shA));
 	Test_assert(t, "create B", Test_SHFileCreate(t, &shB));
 
-	SHBinaryInfo csA = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
-	SHBinaryInfo csB = makeBinaryInfo(ESHPipelineStage_Compute, "cs", false);
+	SHBinaryInfo csA = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
+	SHBinaryInfo csB = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "A addBin",   SHFile_addBinary(&shA, &csA, t->alloc, &t->err));
 	Test_assert(t, "A addEntry", addComputeEntry(&shA, "cs", 4, 4, 1, t, false, &binId));
 	Test_assert(t, "B addBin",   SHFile_addBinary(&shB, &csB, t->alloc, &t->err));
@@ -354,29 +354,29 @@ void Test_SHFileCombineRegistersMerged(Test *t) {
 		.identifier = {
 			.entrypoint    = CharString_createRefCStrConst("cs"),
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
-			.stageType     = ESHPipelineStage_Compute
+			.stageType     = EGfxPipelineStage_Compute
 		},
 		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
 	};
 
-	infoA.binaries[ESHBinaryType_SPIRV] = Buffer_createRefConst(kDummySPIRV, sizeof(kDummySPIRV));
+	infoA.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(kDummySPIRV, sizeof(kDummySPIRV));
 
 	CharString sampNameA = CharString_createRefCStrConst("gSampler");
-	SHBindings sampBA    = (SHBindings) { 0 };
-	sampBA.arr[ESHBinaryType_SPIRV] = (SHBinding) { .binding = 0, .space = 0 };
-	sampBA.arr[ESHBinaryType_DXIL]  = (SHBinding) { .binding = U32_MAX, .space = U32_MAX };
+	GfxBindings sampBA    = (GfxBindings) { 0 };
+	sampBA.arr[EGfxBinaryType_SPIRV] = (GfxBinding) { .binding = 0, .space = 0 };
+	sampBA.arr[EGfxBinaryType_DXIL]  = (GfxBinding) { .binding = U32_MAX, .space = U32_MAX };
 	Test_assert(t, "A add sampler",
 		ListSHRegisterRuntime_addSampler(&infoA.registers, 0x1, false, &sampNameA, NULL, sampBA, t->alloc, &t->err)
 	);
 
 	CharString texNameA = CharString_createRefCStrConst("gTexture");
-	SHBindings texBA    = (SHBindings) { 0 };
-	texBA.arr[ESHBinaryType_SPIRV] = (SHBinding) { .binding = 1, .space = 0 };
-	texBA.arr[ESHBinaryType_DXIL]  = (SHBinding) { .binding = U32_MAX, .space = U32_MAX };
+	GfxBindings texBA    = (GfxBindings) { 0 };
+	texBA.arr[EGfxBinaryType_SPIRV] = (GfxBinding) { .binding = 1, .space = 0 };
+	texBA.arr[EGfxBinaryType_DXIL]  = (GfxBinding) { .binding = U32_MAX, .space = U32_MAX };
 	Test_assert(t, "A add texture",
 		ListSHRegisterRuntime_addTexture(
 			&infoA.registers, ESHTextureType_Texture2D, false, false, 0x1,
-			ESHTexturePrimitive_Float | ESHTexturePrimitive_Component4,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
 			&texNameA, NULL, texBA, t->alloc, &t->err
 		)
 	);
@@ -392,31 +392,31 @@ void Test_SHFileCombineRegistersMerged(Test *t) {
 		.identifier = {
 			.entrypoint    = CharString_createRefCStrConst("cs"),
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
-			.stageType     = ESHPipelineStage_Compute
+			.stageType     = EGfxPipelineStage_Compute
 		},
 		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
 	};
 
 	static const U8 dxil[5] = { 0x44, 0x58, 0x42, 0x43, 0x00 };
 
-	infoB.binaries[ESHBinaryType_DXIL] = Buffer_createRefConst(dxil, sizeof(dxil));
+	infoB.binaries[EGfxBinaryType_DXIL] = Buffer_createRefConst(dxil, sizeof(dxil));
 
 	CharString sampNameB = CharString_createRefCStrConst("gSampler");
-	SHBindings sampBB    = (SHBindings) { 0 };
-	sampBB.arr[ESHBinaryType_SPIRV] = (SHBinding) { .binding = U32_MAX, .space = U32_MAX };
-	sampBB.arr[ESHBinaryType_DXIL]  = (SHBinding) { .binding = 0, .space = 0 };
+	GfxBindings sampBB    = (GfxBindings) { 0 };
+	sampBB.arr[EGfxBinaryType_SPIRV] = (GfxBinding) { .binding = U32_MAX, .space = U32_MAX };
+	sampBB.arr[EGfxBinaryType_DXIL]  = (GfxBinding) { .binding = 0, .space = 0 };
 	Test_assert(t, "B add sampler",
 		ListSHRegisterRuntime_addSampler(&infoB.registers, 0x2, false, &sampNameB, NULL, sampBB, t->alloc, &t->err)
 	);
 
 	CharString texNameB = CharString_createRefCStrConst("gTexture");
-	SHBindings texBB    = (SHBindings) { 0 };
-	texBB.arr[ESHBinaryType_SPIRV] = (SHBinding) { .binding = U32_MAX, .space = U32_MAX };
-	texBB.arr[ESHBinaryType_DXIL]  = (SHBinding) { .binding = 0, .space = 0 };
+	GfxBindings texBB    = (GfxBindings) { 0 };
+	texBB.arr[EGfxBinaryType_SPIRV] = (GfxBinding) { .binding = U32_MAX, .space = U32_MAX };
+	texBB.arr[EGfxBinaryType_DXIL]  = (GfxBinding) { .binding = 0, .space = 0 };
 	Test_assert(t, "B add texture",
 		ListSHRegisterRuntime_addTexture(
 			&infoB.registers, ESHTextureType_Texture2D, false, false, 0x2,
-			ESHTexturePrimitive_Float | ESHTexturePrimitive_Component4,
+			EGfxTexturePrimitive_Float | EGfxTexturePrimitive_Component4,
 			&texNameB, NULL, texBB, t->alloc, &t->err
 		)
 	);
@@ -436,13 +436,13 @@ void Test_SHFileCombineRegistersMerged(Test *t) {
 
 			//Both SPIRV and DXIL bindings must be present in each merged register
 
-			SHBinding sampSPV = regs.ptr[0].reg.bindings.arr[ESHBinaryType_SPIRV];
-			SHBinding sampDXL = regs.ptr[0].reg.bindings.arr[ESHBinaryType_DXIL];
+			GfxBinding sampSPV = regs.ptr[0].reg.bindings.arr[EGfxBinaryType_SPIRV];
+			GfxBinding sampDXL = regs.ptr[0].reg.bindings.arr[EGfxBinaryType_DXIL];
 			Test_assert(t, "sampler SPIRV binding present", sampSPV.binding != U32_MAX);
 			Test_assert(t, "sampler DXIL binding present",  sampDXL.binding != U32_MAX);
 
-			SHBinding texSPV = regs.ptr[1].reg.bindings.arr[ESHBinaryType_SPIRV];
-			SHBinding texDXL = regs.ptr[1].reg.bindings.arr[ESHBinaryType_DXIL];
+			GfxBinding texSPV = regs.ptr[1].reg.bindings.arr[EGfxBinaryType_SPIRV];
+			GfxBinding texDXL = regs.ptr[1].reg.bindings.arr[EGfxBinaryType_DXIL];
 			Test_assert(t, "texture SPIRV binding present", texSPV.binding != U32_MAX);
 			Test_assert(t, "texture DXIL binding present",  texDXL.binding != U32_MAX);
 
@@ -468,7 +468,7 @@ void Test_SHFileCombineBinaryIdRemapping(Test *t) {
 
 	//A has one compute shader
 
-	SHBinaryInfo csA = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo csA = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	Test_assert(t, "A addBin", SHFile_addBinary(&shA, &csA, t->alloc, &t->err));
 
 	U16 id = 0;
@@ -476,15 +476,15 @@ void Test_SHFileCombineBinaryIdRemapping(Test *t) {
 
 	//B has two shaders: a pixel shader at index 0 and a vertex shader at index 1
 
-	SHBinaryInfo psB = makeBinaryInfo(ESHPipelineStage_Pixel,  "psMain", false);
-	SHBinaryInfo vsB = makeBinaryInfo(ESHPipelineStage_Vertex, "vsMain", false);
+	SHBinaryInfo psB = makeBinaryInfo(EGfxPipelineStage_Pixel,  "psMain", false);
+	SHBinaryInfo vsB = makeBinaryInfo(EGfxPipelineStage_Vertex, "vsMain", false);
 	Test_assert(t, "B addBin ps", SHFile_addBinary(&shB, &psB, t->alloc, &t->err));
 	Test_assert(t, "B addBin vs", SHFile_addBinary(&shB, &vsB, t->alloc, &t->err));
 
 	{
 		SHEntry ep = (SHEntry) { 0 };
 		ep.name  = CharString_createRefCStrConst("psMain");
-		ep.stage = ESHPipelineStage_Pixel;
+		ep.stage = EGfxPipelineStage_Pixel;
 		U16 bid = 0;
 		Test_assert(t, "B createRef ps", ListU16_createRefConst(&bid, 1, &ep.binaryIds, &t->err));
 		Test_assert(t, "B addEntry ps",  SHFile_addEntrypoint(&shB, &ep, t->alloc, &t->err));
@@ -493,7 +493,7 @@ void Test_SHFileCombineBinaryIdRemapping(Test *t) {
 	{
 		SHEntry ev = (SHEntry) { 0 };
 		ev.name  = CharString_createRefCStrConst("vsMain");
-		ev.stage = ESHPipelineStage_Vertex;
+		ev.stage = EGfxPipelineStage_Vertex;
 		U16 bid = 1;
 		Test_assert(t, "B createRef vs", ListU16_createRefConst(&bid, 1, &ev.binaryIds, &t->err));
 		Test_assert(t, "B addEntry vs",  SHFile_addEntrypoint(&shB, &ev, t->alloc, &t->err));
@@ -505,9 +505,9 @@ void Test_SHFileCombineBinaryIdRemapping(Test *t) {
 
 	if (out.binaries.length == 3 && out.entries.length == 3) {
 
-		Test_assert(t, "entry[0] is cs", out.entries.ptr[0].stage == ESHPipelineStage_Compute);
-		Test_assert(t, "entry[1] is ps", out.entries.ptr[1].stage == ESHPipelineStage_Pixel);
-		Test_assert(t, "entry[2] is vs", out.entries.ptr[2].stage == ESHPipelineStage_Vertex);
+		Test_assert(t, "entry[0] is cs", out.entries.ptr[0].stage == EGfxPipelineStage_Compute);
+		Test_assert(t, "entry[1] is ps", out.entries.ptr[1].stage == EGfxPipelineStage_Pixel);
+		Test_assert(t, "entry[2] is vs", out.entries.ptr[2].stage == EGfxPipelineStage_Vertex);
 
 		Test_assert(t, "entry[0] binaryIds.length == 1", out.entries.ptr[0].binaryIds.length == 1);
 		Test_assert(t, "entry[1] binaryIds.length == 1", out.entries.ptr[1].binaryIds.length == 1);
@@ -515,17 +515,17 @@ void Test_SHFileCombineBinaryIdRemapping(Test *t) {
 
 		if (out.entries.ptr[0].binaryIds.length == 1) {
 			U16 csBid = out.entries.ptr[0].binaryIds.ptr[0];
-			Test_assert(t, "cs binary stage", out.binaries.ptr[csBid].identifier.stageType == ESHPipelineStage_Compute);
+			Test_assert(t, "cs binary stage", out.binaries.ptr[csBid].identifier.stageType == EGfxPipelineStage_Compute);
 		}
 
 		if (out.entries.ptr[1].binaryIds.length == 1) {
 			U16 psBid = out.entries.ptr[1].binaryIds.ptr[0];
-			Test_assert(t, "ps binary stage", out.binaries.ptr[psBid].identifier.stageType == ESHPipelineStage_Pixel);
+			Test_assert(t, "ps binary stage", out.binaries.ptr[psBid].identifier.stageType == EGfxPipelineStage_Pixel);
 		}
 
 		if (out.entries.ptr[2].binaryIds.length == 1) {
 			U16 vsBid = out.entries.ptr[2].binaryIds.ptr[0];
-			Test_assert(t, "vs binary stage", out.binaries.ptr[vsBid].identifier.stageType == ESHPipelineStage_Vertex);
+			Test_assert(t, "vs binary stage", out.binaries.ptr[vsBid].identifier.stageType == EGfxPipelineStage_Vertex);
 		}
 	}
 
@@ -549,12 +549,12 @@ void Test_SHFileCombineConflictingBinaryContents(Test *t) {
 		.identifier = {
 			.entrypoint    = CharString_createRefCStrConst("cs"),
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
-			.stageType     = ESHPipelineStage_Compute
+			.stageType     = EGfxPipelineStage_Compute
 		},
 		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
 	};
 
-	infoA.binaries[ESHBinaryType_SPIRV] = Buffer_createRefConst(spirvA, sizeof(spirvA));
+	infoA.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(spirvA, sizeof(spirvA));
 	Test_assert(t, "A addBin",   SHFile_addBinary(&shA, &infoA, t->alloc, &t->err));
 
 	U16 id = 0;
@@ -564,11 +564,11 @@ void Test_SHFileCombineConflictingBinaryContents(Test *t) {
 		.identifier = {
 			.entrypoint    = CharString_createRefCStrConst("cs"),
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
-			.stageType     = ESHPipelineStage_Compute
+			.stageType     = EGfxPipelineStage_Compute
 		},
 		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
 	};
-	infoB.binaries[ESHBinaryType_SPIRV] = Buffer_createRefConst(spirvB, sizeof(spirvB));
+	infoB.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(spirvB, sizeof(spirvB));
 	Test_assert(t, "B addBin",   SHFile_addBinary(&shB, &infoB, t->alloc, &t->err));
 
 	Test_assert(t, "B addEntry", addComputeEntry(&shB, "cs", 8, 8, 1, t, false, &id));

@@ -411,8 +411,8 @@ Bool HDR_read(
 
 		if (adaptive) {
 
-			//New style: four separate RLE'd planes, each covering the full width. A run either repeats one byte (count > 128) or
-			// copies count literals.
+			//New style: four separate RLE'd planes, each covering the full width.
+			//A run either repeats one byte (count > 128) or copies count literals.
 
 			for (U32 ch = 0; ch < 4; ++ch) {
 
@@ -462,8 +462,8 @@ Bool HDR_read(
 
 		else {
 
-			//Old style: interleaved RGBE, where an (1,1,1,n) triple repeats the previous texel. The four bytes already consumed are
-			// this scanline's first texel.
+			//Old style: interleaved RGBE, where an (1,1,1,n) triple repeats the previous texel.
+			//The four bytes already consumed are this scanline's first texel.
 
 			raw[0] = r; raw[1] = g; raw[2] = b; raw[3] = e;
 

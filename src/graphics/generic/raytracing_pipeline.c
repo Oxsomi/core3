@@ -130,22 +130,22 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 		const SHEntry *entry = &file->entries.ptr[entrypointId];
 
-		if(entry->stage < ESHPipelineStage_RtStartExt || entry->stage > ESHPipelineStage_RtEndExt)
+		if(entry->stage < EGfxPipelineStage_RtStartExt || entry->stage > EGfxPipelineStage_RtEndExt)
 			retError(clean, Error_invalidParameter(
 				1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::stageType is not RT capable"
 			));
 
 		switch (entry->stage) {
-			case ESHPipelineStage_AnyHitExt:        stagePtr->stageType = EPipelineStage_AnyHitExt;          break;
-			case ESHPipelineStage_ClosestHitExt:    stagePtr->stageType = EPipelineStage_ClosestHitExt;      break;
-			case ESHPipelineStage_MissExt:          stagePtr->stageType = EPipelineStage_MissExt;            break;
-			case ESHPipelineStage_IntersectionExt:  stagePtr->stageType = EPipelineStage_IntersectionExt;    break;
-			case ESHPipelineStage_CallableExt:      stagePtr->stageType = EPipelineStage_CallableExt;        break;
-			default:                                stagePtr->stageType = EPipelineStage_RaygenExt;          break;
+			case EGfxPipelineStage_AnyHitExt:        stagePtr->stageType = EPipelineStage_AnyHitExt;          break;
+			case EGfxPipelineStage_ClosestHitExt:    stagePtr->stageType = EPipelineStage_ClosestHitExt;      break;
+			case EGfxPipelineStage_MissExt:          stagePtr->stageType = EPipelineStage_MissExt;            break;
+			case EGfxPipelineStage_IntersectionExt:  stagePtr->stageType = EPipelineStage_IntersectionExt;    break;
+			case EGfxPipelineStage_CallableExt:      stagePtr->stageType = EPipelineStage_CallableExt;        break;
+			default:                                 stagePtr->stageType = EPipelineStage_RaygenExt;          break;
 		}
 
 		if(
-			stage.binaryId == U32_MAX && entry->stage == ESHPipelineStage_MissExt &&
+			stage.binaryId == U32_MAX && entry->stage == EGfxPipelineStage_MissExt &&
 			!(info->flags & EPipelineRaytracingFlags_NoNullMiss)
 		)
 			continue;

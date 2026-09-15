@@ -89,7 +89,9 @@ namespace oxc {
 			return c::Error_NaN(subId, errorStr);
 		}
 
-		[[nodiscard]] inline c::Error invalidEnum(c::U32 paramId, c::U64 value, c::U64 maxValue, const c::C8 *errorStr) noexcept {
+		[[nodiscard]] inline c::Error invalidEnum(
+			c::U32 paramId, c::U64 value, c::U64 maxValue, const c::C8 *errorStr
+		) noexcept {
 			return c::Error_invalidEnum(paramId, value, maxValue, errorStr);
 		}
 
@@ -101,7 +103,9 @@ namespace oxc {
 			return c::Error_invalidOperation(subId, errorStr);
 		}
 
-		[[nodiscard]] inline c::Error invalidCast(c::U32 subId, c::U32 typeId, c::U32 castTypeId, const c::C8 *errorStr) noexcept {
+		[[nodiscard]] inline c::Error invalidCast(
+			c::U32 subId, c::U32 typeId, c::U32 castTypeId, const c::C8 *errorStr
+		) noexcept {
 			return c::Error_invalidCast(subId, typeId, castTypeId, errorStr);
 		}
 

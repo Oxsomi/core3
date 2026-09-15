@@ -164,6 +164,19 @@ impl void *Platform_getDataImpl(void *ptr);
 	#else
 		#define Platform_return(x) return
 	#endif
+#elif _PLATFORM_TYPE == PLATFORM_WEB && defined(_OXC3_TEST_BUNDLED)
+
+	//A bundled web suite is entered through OXC3_TEST_ENTRY's (void *state) signature, not through main, so
+	// argc/argv are genuinely not in scope and state is the parameter - the same situation android's bundle
+	// is in, which is why these three agree with the branch above.
+	//Platform_defineEntrypoint is deliberately NOT defined: unlike android there is no single platform entry
+	// to generate, because test/web/wtest_main.c owns main() and calls the suites itself. Leaving it
+	// undefined turns any attempt to use it here into a compile error rather than a wrong entry point.
+
+	#define Platform_getData() (state)
+	#define Platform_argc (0)
+	#define Platform_argv (NULL)
+	#define Platform_return(...) return __VA_ARGS__
 #else
 	#define Platform_defineEntrypoint() int main(int argc, const char *argv[])
 	#define Platform_getData() Platform_getDataImpl(NULL)

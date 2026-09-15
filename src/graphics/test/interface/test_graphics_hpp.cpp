@@ -87,10 +87,10 @@ extern "C" void Test_graphicsHppTypeCheck(oxc::c::GraphicsDeviceRef *deviceRef, 
 	(void) table.alloc(0, arrayId, descriptor, false, e_rr);
 	(void) table.allocByName("output", arrayId, descriptor, false, e_rr);
 	(void) table.allocBindless(
-		c::ESHRegisterType_ByteAddressBuffer, 0, bindId, bindlessTypeId, arrayId, descriptor, false, e_rr
+		c::EGfxRegisterType_ByteAddressBuffer, 0, bindId, bindlessTypeId, arrayId, descriptor, false, e_rr
 	);
 	(void) table.findBindlessRegister(
-		c::ESHRegisterType_ByteAddressBuffer, 0, bindId, bindlessTypeId, nullptr, 0, e_rr
+		c::EGfxRegisterType_ByteAddressBuffer, 0, bindId, bindlessTypeId, nullptr, 0, e_rr
 	);
 	(void) table.resolveRegisterName("output");
 

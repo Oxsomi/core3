@@ -235,11 +235,13 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 	// rival the structures themselves in peak footprint.
 
 	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+
 		blas->base.device,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		NULL,
 		&tmp,
+
 		//One scratch buffer serves both, since the same object now does the full build and every refit after
 		// it; the update size is not required to be the smaller of the two, so neither is assumed.
 
@@ -291,10 +293,21 @@ Bool DX_WRAP_FUNC(BLASRef_prepareCompact)(GraphicsDeviceRef *deviceRef, BLASRef 
 	blas->base.compactionQuery = U32_MAX;
 	GraphicsDevice_releaseCompactionQuery(device, query, alloc);
 
-	//A driver is allowed to report no saving. Leaving recorded false keeps a pointless copy out of the
+	//A driver that declines to compact reports the ORIGINAL size 1:1 (confirmed for WARP and lavapipe);
+	// ZERO is not a size a conformant driver can produce, so reading one means the readback was consumed
+	// before the copy that fills it ran, and silently treating it as "no saving" would bury a sync bug.
+
+	if(!compactedSize)
+		retError(clean, Error_invalidState(
+			1,
+			"D3D12BLASRef_prepareCompact() the compacted size read back as 0, which no conformant driver "
+			"returns; the postbuild info copy has not executed yet and reading it raced the GPU"
+		));
+
+	//No saving is a legitimate driver answer. Leaving recorded false keeps a pointless copy out of the
 	// command buffer entirely.
 
-	if(!compactedSize || compactedSize >= DeviceBufferRef_ptr(blas->base.asBuffer)->resource.size) {
+	if(compactedSize >= DeviceBufferRef_ptr(blas->base.asBuffer)->resource.size) {
 		blas->base.isCompacted = true;
 		goto clean;
 	}
@@ -354,6 +367,11 @@ Bool DX_WRAP_FUNC(BLASRef_compact)(
 
 	blas->base.pendingCompactBuffer = NULL;
 
+	//The address REALLY changes here, so dependents are marked again: a pending TLAS build riding this same
+	// submit may have resolved the old address and cleared the record time mark already.
+
+	gotoIfError3(clean, GraphicsDeviceRef_markTlasesStaleForBLAS(deviceRef, blasRef, true, e_rr));
+
 clean:
 	return s_uccess;
 }
@@ -366,6 +384,7 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
@@ -375,7 +394,8 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
 		return s_uccess;
 
-	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(blas->base.asBuffer)->resource.deviceAddress;
+	DeviceBuffer *asBuffer = DeviceBufferRef_ptr(blas->base.asBuffer);
+	D3D12_GPU_VIRTUAL_ADDRESS dstAS = asBuffer->resource.deviceAddress;
 
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildAs = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC) {
 		.DestAccelerationStructureData = dstAS,
@@ -420,8 +440,12 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 			CharString emitName = CharString_createRefCStrConst("BLAS compacted sizes");
 			DeviceBufferRef *emitPool = NULL;
 
+			//InternalWeakDeviceRef, because the DEVICE owns these pools: a strong ref here would be a
+			// cycle (pool holds device, device holds pool) that keeps both alive forever, and the pools are
+			// already released in the device's own teardown.
+
 			gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
-				blas->base.device, EDeviceBufferUsage_ScratchExt, EGraphicsResourceFlag_None,
+				blas->base.device, EDeviceBufferUsage_ScratchExt, EGraphicsResourceFlag_InternalWeakDeviceRef,
 				NULL, &emitName, poolBytes, &emitPool, e_rr
 			));
 
@@ -432,7 +456,8 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 
 			gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 				blas->base.device, EDeviceBufferUsage_None,
-				EGraphicsResourceFlag_CPUAllocatedBit | EGraphicsResourceFlag_CPUReadBit,
+				EGraphicsResourceFlag_CPUAllocatedBit | EGraphicsResourceFlag_CPUReadBit |
+				EGraphicsResourceFlag_InternalWeakDeviceRef,
 				NULL, &readbackName, poolBytes, &readbackPool, e_rr
 			));
 
@@ -455,8 +480,15 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		// writes as a UAV, so it has to come back before the write and go again before the copy.
 
 		gotoIfError3(clean, DxDeviceBuffer_transition(
-			emitExt, D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
+			emitExt, D3D12_BARRIER_SYNC_EMIT_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO,
 			D3D12_BARRIER_ACCESS_UNORDERED_ACCESS, &deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		gotoIfError3(clean, DxDeviceBuffer_transition(
+			DeviceBuffer_ext(asBuffer, Dx),
+			D3D12_BARRIER_SYNC_EMIT_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO,
+			D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
 		));
 
 		if(dependency.NumBarriers) {

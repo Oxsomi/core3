@@ -19,12 +19,15 @@ jobs:
       name: macOS ARM64 Vulkan static (ASan + UBSan)
       runner: macos-15
       os: macos
-      build_flags: '-o cliGraphics=False -asan True -ubsan True'
+      build_flags: '-asan True -ubsan True'
       # Its own cache group: sanitized dependencies are distinct conan packages from the plain macOS job's.
       cache_name: sanitizers
       python_cmd: python
       setup_python: true
       python_version: '3.10'
+      # A sanitizer run without a driver skips every device test and still goes green, which is the
+      # worst outcome: graphics is where the allocators, descriptor tables and command buffers live.
+      vulkan_icd: true
       sanitizers: true
       hook_name: macOS-arm64-static-sanitizers
     secrets:

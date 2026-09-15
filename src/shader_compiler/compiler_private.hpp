@@ -36,39 +36,39 @@ struct D3D12_HLSL_ANNOTATION;
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 
-	#define Compiler_defineStrings                                                                        \
+	#define Compiler_defineStrings                                                                       \
 		ListU16 tempStrUTF16 = ListU16{};                                                                \
 		ListListU16 stringsUTF16 = ListListU16{};                                                        \
 		ListU16PtrConst strings = ListU16PtrConst{}
 
-	#define Compiler_freeStrings                                                                        \
+	#define Compiler_freeStrings                                                                           \
 		ListU16_free(&tempStrUTF16, alloc);                                                                \
-		ListListU16_freeUnderlying(&stringsUTF16, alloc);                                                \
+		ListListU16_freeUnderlying(&stringsUTF16, alloc);                                                  \
 		ListU16PtrConst_free(&strings, alloc)
 
-	#define Compiler_convertToWString(strs, label)                                                         \
+	#define Compiler_convertToWString(strs, label)                                                       \
 		for(U64 ii = 0; ii < strs.length; ++ii) {                                                        \
-			gotoIfError3(label, CharString_toUTF16(strs.ptr[ii], alloc, &tempStrUTF16, e_rr));                    \
-			gotoIfError3(label, ListU16PtrConst_pushBack(&strings, tempStrUTF16.ptr, alloc, e_rr));            \
-			gotoIfError3(label, ListListU16_pushBack(&stringsUTF16, tempStrUTF16, alloc, e_rr));                \
+			gotoIfError3(label, CharString_toUTF16(strs.ptr[ii], alloc, &tempStrUTF16, e_rr));           \
+			gotoIfError3(label, ListU16PtrConst_pushBack(&strings, tempStrUTF16.ptr, alloc, e_rr));      \
+			gotoIfError3(label, ListListU16_pushBack(&stringsUTF16, tempStrUTF16, alloc, e_rr));         \
 			tempStrUTF16 = ListU16{};                                                                    \
 		}
 #else
-	#define Compiler_defineStrings                                                                        \
+	#define Compiler_defineStrings                                                                       \
 		ListU32 tempStrUTF32 = ListU32{};                                                                \
 		ListListU32 stringsUTF32 = ListListU32{};                                                        \
 		ListU32PtrConst strings = ListU32PtrConst{}
 
-	#define Compiler_freeStrings                                                                        \
+	#define Compiler_freeStrings                                                                           \
 		ListU32_free(&tempStrUTF32, alloc);                                                                \
-		ListListU32_freeUnderlying(&stringsUTF32, alloc);                                                \
+		ListListU32_freeUnderlying(&stringsUTF32, alloc);                                                  \
 		ListU32PtrConst_free(&strings, alloc)
 
-	#define Compiler_convertToWString(strs, label)                                                         \
+	#define Compiler_convertToWString(strs, label)                                                       \
 		for(U64 ii = 0; ii < strs.length; ++ii) {                                                        \
-			gotoIfError3(label, CharString_toUTF32(strs.ptr[ii], alloc, &tempStrUTF32, e_rr));                    \
-			gotoIfError3(label, ListU32PtrConst_pushBack(&strings, tempStrUTF32.ptr, alloc, e_rr));            \
-			gotoIfError3(label, ListListU32_pushBack(&stringsUTF32, tempStrUTF32, alloc, e_rr));                \
+			gotoIfError3(label, CharString_toUTF32(strs.ptr[ii], alloc, &tempStrUTF32, e_rr));           \
+			gotoIfError3(label, ListU32PtrConst_pushBack(&strings, tempStrUTF32.ptr, alloc, e_rr));      \
+			gotoIfError3(label, ListListU32_pushBack(&stringsUTF32, tempStrUTF32, alloc, e_rr));         \
 			tempStrUTF32 = ListU32{};                                                                    \
 		}
 #endif

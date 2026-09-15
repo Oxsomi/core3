@@ -33,7 +33,7 @@ TListImpl(SHEntry);
 TListImpl(SHEntryRuntime);
 TListImpl(SHUniformRuntime);
 
-const C8 *SHEntry_stageNames[ESHPipelineStage_Count] = {
+const C8 *SHEntry_stageNames[EGfxPipelineStage_Count] = {
 
 	"vertex",
 	"pixel",
@@ -59,20 +59,20 @@ const C8 *SHEntry_stageName(const SHEntry *entry) {
 	return entry ? SHEntry_stageNames[entry->stage] : NULL;
 }
 
-const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage) {
+const C8 *EGfxPipelineStage_getStagePrefix(EGfxPipelineStage stage) {
 
 	const C8 *targetPrefix = "lib";
 
 	switch (stage) {
-		default:                                                    break;
-		case ESHPipelineStage_Vertex:        targetPrefix = "vs";    break;
-		case ESHPipelineStage_Pixel:        targetPrefix = "ps";    break;
-		case ESHPipelineStage_Compute:        targetPrefix = "cs";    break;
-		case ESHPipelineStage_GeometryExt:    targetPrefix = "gs";    break;
-		case ESHPipelineStage_Hull:            targetPrefix = "hs";    break;
-		case ESHPipelineStage_Domain:        targetPrefix = "ds";    break;
-		case ESHPipelineStage_MeshExt:        targetPrefix = "ms";    break;
-		case ESHPipelineStage_TaskExt:        targetPrefix = "as";    break;
+		default:                                                        break;
+		case EGfxPipelineStage_Vertex:          targetPrefix = "vs";    break;
+		case EGfxPipelineStage_Pixel:           targetPrefix = "ps";    break;
+		case EGfxPipelineStage_Compute:         targetPrefix = "cs";    break;
+		case EGfxPipelineStage_GeometryExt:     targetPrefix = "gs";    break;
+		case EGfxPipelineStage_Hull:            targetPrefix = "hs";    break;
+		case EGfxPipelineStage_Domain:          targetPrefix = "ds";    break;
+		case EGfxPipelineStage_MeshExt:         targetPrefix = "ms";    break;
+		case EGfxPipelineStage_TaskExt:         targetPrefix = "as";    break;
 	}
 
 	return targetPrefix;
@@ -102,9 +102,9 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 	if(!CharString_length(entry->name))
 		retError(clean, Error_nullPointer(1, "SHFile_addEntrypoint()::entry->name is required"));
 
-	if(entry->stage >= ESHPipelineStage_Count)
+	if(entry->stage >= EGfxPipelineStage_Count)
 		retError(clean, Error_invalidEnum(
-			1, entry->stage, ESHPipelineStage_Count, "SHFile_addEntrypoint()::entry->stage invalid enum"
+			1, entry->stage, EGfxPipelineStage_Count, "SHFile_addEntrypoint()::entry->stage invalid enum"
 		));
 
 	if(!entry->binaryIds.length)
@@ -127,23 +127,23 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 				0, (entry->waveSize >> (i << 2)) & 0xF, 9, "SHFile_addEntrypoint() waveSize out of bounds"
 			));
 
-	if(entry->waveSize && entry->stage != ESHPipelineStage_Compute)
+	if(entry->waveSize && entry->stage != EGfxPipelineStage_Compute)
 		retError(clean, Error_invalidOperation(
 			0, "SHFile_addEntrypoint() defined WaveSize, but wasn't compute"
 		));
 
-	Bool hasRt = entry->stage >= ESHPipelineStage_RtStartExt && entry->stage <= ESHPipelineStage_RtEndExt;
+	Bool hasRt = entry->stage >= EGfxPipelineStage_RtStartExt && entry->stage <= EGfxPipelineStage_RtEndExt;
 	Bool hasCompute = false;
 	Bool hasGraphics = false;
 
 	switch (entry->stage) {
 
-		case ESHPipelineStage_MeshExt:
-		case ESHPipelineStage_TaskExt:
+		case EGfxPipelineStage_MeshExt:
+		case EGfxPipelineStage_TaskExt:
 			hasGraphics = true;
 			// fallthrough
 
-		case ESHPipelineStage_Compute:
+		case EGfxPipelineStage_Compute:
 			hasCompute = true;
 			break;
 	}
@@ -172,10 +172,10 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 	//never an incoming ray payload, so a non-zero payloadSize is invalid for them (checked by the else-if below).
 
 	if(
-		entry->stage == ESHPipelineStage_ClosestHitExt ||
-		entry->stage == ESHPipelineStage_AnyHitExt ||
-		entry->stage == ESHPipelineStage_MissExt ||
-		entry->stage == ESHPipelineStage_CallableExt
+		entry->stage == EGfxPipelineStage_ClosestHitExt ||
+		entry->stage == EGfxPipelineStage_AnyHitExt ||
+		entry->stage == EGfxPipelineStage_MissExt ||
+		entry->stage == EGfxPipelineStage_CallableExt
 	) {
 
 		if(!entry->payloadSize)
@@ -200,8 +200,8 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 	if(!entry->intersectionSize) {
 
 		if(
-			entry->stage == ESHPipelineStage_ClosestHitExt ||
-			entry->stage == ESHPipelineStage_AnyHitExt
+			entry->stage == EGfxPipelineStage_ClosestHitExt ||
+			entry->stage == EGfxPipelineStage_AnyHitExt
 		)
 			retError(clean, Error_invalidOperation(
 				2, "SHFile_addEntrypoint() intersectionSize is required for hit shaders"
@@ -209,9 +209,9 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 	}
 
 	else if(
-		entry->stage != ESHPipelineStage_IntersectionExt &&
-		entry->stage != ESHPipelineStage_ClosestHitExt &&
-		entry->stage != ESHPipelineStage_AnyHitExt
+		entry->stage != EGfxPipelineStage_IntersectionExt &&
+		entry->stage != EGfxPipelineStage_ClosestHitExt &&
+		entry->stage != EGfxPipelineStage_AnyHitExt
 	) {
 		retError(clean, Error_invalidOperation(
 			2, "SHFile_addEntrypoint() intersectionSize is only allowed for intersection/hit shaders"
@@ -409,7 +409,7 @@ U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime) {
 	//This depends only on stage + extensions, both of which are part of the SHBinaryIdentifier, so every
 	//entrypoint sharing a compile agrees on it - which is what makes it safe to skip a whole compile with.
 
-	U8 mask = (U8)((1 << ESHBinaryType_Count) - 1);
+	U8 mask = (U8)((1 << EGfxBinaryType_Count) - 1);
 
 	//Extension compile support: a feature restricts to one backend only when the other has no path at all,
 	// per the ESHExtension_NoDxilCompile / ESHExtension_NoSpirvCompile sets in sh_binaries.h.
@@ -423,10 +423,10 @@ U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime) {
 		used = (ESHExtension)(used | runtime->extensions.ptr[i]);
 
 	if (used & ESHExtension_NoDxilCompile)
-		mask &= (U8)(1 << ESHBinaryType_SPIRV);
+		mask &= (U8)(1 << EGfxBinaryType_SPIRV);
 
 	if (used & ESHExtension_NoSpirvCompile)
-		mask &= (U8)(1 << ESHBinaryType_DXIL);
+		mask &= (U8)(1 << EGfxBinaryType_DXIL);
 
 	return mask;
 }
@@ -440,7 +440,7 @@ U8 SHEntryRuntime_getBinaryTypes(const SHEntryRuntime *runtime) {
 	// AND the backends the stage + extensions support.
 	//Applied per-entrypoint at link time.
 
-	U8 all = (U8)((1 << ESHBinaryType_Count) - 1);
+	U8 all = (U8)((1 << EGfxBinaryType_Count) - 1);
 	U8 annotated = runtime->binaryTypes ? runtime->binaryTypes : all;
 
 	return (U8)(annotated & SHEntryRuntime_getSupportedBinaryTypes(runtime));
@@ -532,15 +532,15 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 
 		.extensions = extensionSet,
 		.shaderVersion = U16_max(declaredVersion, ESHExtension_minShaderModel(extensionSet)),
-		.stageType = runtime->isShaderAnnotation ? ESHPipelineStage_Count : runtime->entry.stage    //Turn into lib if possible
+		.stageType = runtime->isShaderAnnotation ? EGfxPipelineStage_Count : runtime->entry.stage    //Turn into lib if possible
 	};
 
 	//Only combine raytracing shaders, since they don't have different configs
 	if(
-		runtime->entry.stage >= ESHPipelineStage_RtStartExt &&
-		runtime->entry.stage <= ESHPipelineStage_RtEndExt
+		runtime->entry.stage >= EGfxPipelineStage_RtStartExt &&
+		runtime->entry.stage <= EGfxPipelineStage_RtEndExt
 	)
-		binaryIdentifier->stageType = ESHPipelineStage_RtStartExt;
+		binaryIdentifier->stageType = EGfxPipelineStage_RtStartExt;
 
 	if(runtime->definesPerCompilation.length) {
 
@@ -576,7 +576,7 @@ clean:
 Bool SHEntryRuntime_asBinaryInfo(
 	const SHEntryRuntime *runtime,
 	const SHBinaryIdentifier *identifier,
-	ESHBinaryType binaryType,
+	EGfxBinaryType binaryType,
 	Buffer buf,
 	ESHExtension dormantExtensions,
 	SHBinaryInfo *binaryInfo,
@@ -585,9 +585,9 @@ Bool SHEntryRuntime_asBinaryInfo(
 
 	Bool s_uccess = true;
 
-	if (binaryType >= ESHBinaryType_Count)
+	if (binaryType >= EGfxBinaryType_Count)
 		retError(clean, Error_invalidEnum(
-			2, binaryType, ESHBinaryType_Count, "SHEntryRuntime_asBinaryInfo()::binaryType out of bounds"
+			2, binaryType, EGfxBinaryType_Count, "SHEntryRuntime_asBinaryInfo()::binaryType out of bounds"
 		));
 
 	if(!binaryInfo)
@@ -685,7 +685,7 @@ void SHEntry_print(const SHEntry *shEntry, Bool isVerbose, const Allocator *allo
 
 							CharString semantic =
 								semanticNameId ? shEntry->semanticNames.ptr[semanticNameId - 1 + semanticOff] : (
-									j && shEntry->stage == ESHPipelineStage_Pixel ?
+									j && shEntry->stage == EGfxPipelineStage_Pixel ?
 									CharString_createRefCStrConst("SV_TARGET") : CharString_createRefCStrConst("TEXCOORD")
 								);
 
@@ -701,13 +701,13 @@ void SHEntry_print(const SHEntry *shEntry, Bool isVerbose, const Allocator *allo
 						}
 					}
 
-				if(shEntry->stage != ESHPipelineStage_MeshExt && shEntry->stage != ESHPipelineStage_TaskExt)
+				if(shEntry->stage != EGfxPipelineStage_MeshExt && shEntry->stage != EGfxPipelineStage_TaskExt)
 					break;
 			}
 
 			// fallthrough
 
-			case ESHPipelineStage_Compute:
+			case EGfxPipelineStage_Compute:
 
 				Log_debugLn(
 					alloc,
@@ -732,17 +732,17 @@ void SHEntry_print(const SHEntry *shEntry, Bool isVerbose, const Allocator *allo
 
 				break;
 
-			case ESHPipelineStage_RaygenExt:
+			case EGfxPipelineStage_RaygenExt:
 				break;
 
-			case ESHPipelineStage_ClosestHitExt:
-			case ESHPipelineStage_AnyHitExt:
-			case ESHPipelineStage_IntersectionExt:
+			case EGfxPipelineStage_ClosestHitExt:
+			case EGfxPipelineStage_AnyHitExt:
+			case EGfxPipelineStage_IntersectionExt:
 				Log_debugLn(alloc, "\tIntersection size: %"PRIu8, shEntry->intersectionSize);
 				// fall through
 
-			case ESHPipelineStage_MissExt:
-			case ESHPipelineStage_CallableExt:
+			case EGfxPipelineStage_MissExt:
+			case EGfxPipelineStage_CallableExt:
 				Log_debugLn(alloc, "\tPayload size: %"PRIu8, shEntry->payloadSize);
 				break;
 		}

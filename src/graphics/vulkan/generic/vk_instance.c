@@ -124,6 +124,9 @@ static_assert(
 			.pipelineCreateCompute = VkGraphicsDevice_createPipelineCompute,
 			.pipelineCreateRt = VkGraphicsDevice_createPipelineRaytracingInternal,
 			.pipelineFree = VkPipeline_free,
+			.pipelineGetExecutables = VkPipeline_getExecutables,
+			.deviceListShaderTargets = VK_WRAP_FUNC(GraphicsDeviceRef_listShaderTargets),
+			.deviceSelectShaderTarget = VK_WRAP_FUNC(GraphicsDeviceRef_selectShaderTarget),
 
 			.samplerCreate = VkGraphicsDeviceRef_createSampler,
 			.samplerFree = VkSampler_free,
@@ -435,27 +438,25 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 	if(isMoltenVk)
 		instanceInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 
-	if(hasDebugLayer & 1) {
+	//Maximum validation.
+	//The chained structs live at function scope because vkCreateInstance reads the pNext chain during the call;
+	// a layer copies the chain there, long after a block scoped struct would have died.
 
-		//Maximum validation
+	VkValidationFeatureEnableEXT enables[] = {
+		VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT
+	};
 
-		VkValidationFeatureEnableEXT enables[] = {
-			VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT
-		};
+	VkValidationFeaturesEXT features = (VkValidationFeaturesEXT) {
+		.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+		.enabledValidationFeatureCount = instance->flags & EGraphicsInstanceFlags_DisableGPUBV ? 2 : 4,
+		.pEnabledValidationFeatures = enables
+	};
 
-		U32 count = instance->flags & EGraphicsInstanceFlags_DisableGPUBV ? 2 : 4;
-
-		VkValidationFeaturesEXT features = (VkValidationFeaturesEXT) {
-			.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
-			.enabledValidationFeatureCount = count,
-			.pEnabledValidationFeatures = enables
-		};
-
+	if(hasDebugLayer & 1)
 		instanceInfo.pNext = &features;
-	}
 
 	if(instance->flags & EGraphicsInstanceFlags_IsVerbose) {
 
@@ -620,11 +621,11 @@ const C8 *optExtensionsName[] = {
 
 	"VK_KHR_maintenance4",        "VK_KHR_buffer_device_address", "VK_EXT_descriptor_indexing", "VK_KHR_driver_properties",
 	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8",   "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget",
-	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",      "VK_KHR_ray_tracing_position_fetch",
+	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",   "VK_KHR_ray_tracing_position_fetch",
 
 	"VK_EXT_descriptor_heap", "VK_NV_cluster_acceleration_structure", "VK_NV_partitioned_acceleration_structure",
 
-	"VK_KHR_push_descriptor",
+	"VK_KHR_pipeline_executable_properties", "VK_KHR_push_descriptor",
 
 	"VK_KHR_create_renderpass2", "VK_KHR_depth_stencil_resolve", "VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls",
 	"VK_KHR_maintenance5",
@@ -735,7 +736,9 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			// the enumeration ends up empty with nothing in the log to explain it.
 
 			if (CharString_startsWithStringSensitive(&deviceName, &d3d12Warp, 0)) {
-				Log_debugLnx("Vulkan: Skipping device %"PRIu32", it is the Direct3D12 passthrough rather than a real device", i);
+				Log_debugLnx(
+					"Vulkan: Skipping device %"PRIu32", it is the Direct3D12 passthrough rather than a real device", i
+				);
 				continue;
 			}
 		}
@@ -1150,6 +1153,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR
 		);
 
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_PipelineExecutableProperties],
+			VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR,
+			pipelineExecutableProps,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR
+		);
+
 		instanceExt->getPhysicalDeviceFeatures2(dev, &features2);
 
 		VkPhysicalDeviceProperties properties = properties2.properties;
@@ -1224,7 +1234,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		requireLimit(maxImageDimension3D, 256);
 		requireLimit(maxImageArrayLayers, 256);
 		requireLimit(maxPushConstantsSize, 128);
-		requireLimit(maxSamplerAllocationCount, 1024);
+		requireLimit(maxSamplerAllocationCount, 996);
 		requireLimitF(maxSamplerAnisotropy, 16);
 		requireLimit(maxStorageBufferRange, 128 * MEGA);
 		requireLimitF(maxSamplerLodBias, 4);
@@ -1516,6 +1526,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		))
 			capabilities.features |= EGraphicsFeatures_MeshShader;
 
+		//Mesh shaders are compiled against SPIRV 1.4, which brings the two below with it, same as raytracing.
+		//Without them the device would advertise mesh shaders and then fail creation on an extension it never
+		// offered, so the feature is dropped instead.
+
+		if(!optExtensions[EOptExtensions_Spirv14] || !optExtensions[EOptExtensions_ShaderFloatControls])
+			capabilities.features &= ~(EGraphicsFeatures)EGraphicsFeatures_MeshShader;
+
 		//The preference and hint properties gate nothing above: prefersCompactPrimitiveOutput and the
 		// maxPreferred* invocation counts are scheduling advice, and the output granularities only say how
 		// coarsely output allocations round (ANV rounds by 8 where NV rounds by 32; smaller is finer).
@@ -1772,13 +1789,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			optExtensions[EOptExtensions_Bindless] &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindInputAttachments >= 8 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindSampledImages >= 1000000 &&
-			bindlessProp.maxDescriptorSetUpdateAfterBindSamplers >= 1024 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindSamplers >= 996 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindStorageBuffers >= 1000000 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindStorageImages >= 1000000 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindUniformBuffers >= 90 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindInputAttachments >= 8 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindSampledImages >= 1000000 &&
-			bindlessProp.maxPerStageDescriptorUpdateAfterBindSamplers >= 1024 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindSamplers >= 996 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageBuffers >= 1000000 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageImages >= 1000000 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindUniformBuffers >= 15 &&
@@ -1809,6 +1826,11 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			descriptorHeapFeat.descriptorHeap
 		)
 			capabilities.features2 |= EGraphicsFeatures2_DescriptorHeap;
+
+		//Pipeline executable introspection (live ISA disassembly + VGPR/SGPR statistics)
+
+		if(optExtensions[EOptExtensions_PipelineExecutableProperties] && pipelineExecutableProps.pipelineExecutableInfo)
+			capabilities.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
 
 		//Push descriptors are a fast path, not a requirement, so a device without them is emulated rather than rejected.
 		//Only the globals constant buffer is ever pushed, so the 32 minimum is far more than OxC3 asks for;

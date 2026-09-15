@@ -22,6 +22,7 @@
 
 #include "types/container/list_impl.h"
 #include "graphics/generic/descriptor_layout.h"
+#include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
@@ -42,33 +43,33 @@ void VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, const Allocat
 			deviceExt->destroyDescriptorSetLayout(deviceExt->device, layoutExt->layouts[i], NULL);
 }
 
-VkDescriptorType vkGetDescriptorType(ESHRegisterType regType) {
+VkDescriptorType vkGetDescriptorType(EGfxRegisterType regType) {
 
-	switch (regType & ESHRegisterType_TypeMask) {
+	switch (regType & EGfxRegisterType_TypeMask) {
 
-		case ESHRegisterType_Sampler:
-		case ESHRegisterType_SamplerComparisonState:
-			return regType & ESHRegisterType_IsCombinedSampler ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER :
+		case EGfxRegisterType_Sampler:
+		case EGfxRegisterType_SamplerComparisonState:
+			return regType & EGfxRegisterType_IsCombinedSampler ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER :
 				VK_DESCRIPTOR_TYPE_SAMPLER;
 
-		case ESHRegisterType_ByteAddressBuffer:
-		case ESHRegisterType_StructuredBuffer:
-		case ESHRegisterType_StructuredBufferAtomic:
-		case ESHRegisterType_StorageBuffer:
-		case ESHRegisterType_StorageBufferAtomic:
+		case EGfxRegisterType_ByteAddressBuffer:
+		case EGfxRegisterType_StructuredBuffer:
+		case EGfxRegisterType_StructuredBufferAtomic:
+		case EGfxRegisterType_StorageBuffer:
+		case EGfxRegisterType_StorageBufferAtomic:
 			return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
-		case ESHRegisterType_ConstantBuffer:            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		case ESHRegisterType_AccelerationStructure:     return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-		case ESHRegisterType_SubpassInput:              return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		case EGfxRegisterType_ConstantBuffer:            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		case EGfxRegisterType_AccelerationStructure:     return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+		case EGfxRegisterType_SubpassInput:              return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
 
 		default:
-		case ESHRegisterType_Texture1D:
-		case ESHRegisterType_Texture2D:
-		case ESHRegisterType_Texture3D:
-		case ESHRegisterType_TextureCube:
-		case ESHRegisterType_Texture2DMS:
-			return regType & ESHRegisterType_IsWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		case EGfxRegisterType_Texture1D:
+		case EGfxRegisterType_Texture2D:
+		case EGfxRegisterType_Texture3D:
+		case EGfxRegisterType_TextureCube:
+		case EGfxRegisterType_Texture2DMS:
+			return regType & EGfxRegisterType_IsWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	}
 }
 
@@ -76,46 +77,46 @@ VkShaderStageFlags vkGetShaderStages(U32 vis) {
 
 	VkShaderStageFlags stageFlags = 0;
 
-	if((vis >> ESHPipelineStage_Vertex) & 1)
+	if((vis >> EGfxPipelineStage_Vertex) & 1)
 		stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
 
-	if((vis >> ESHPipelineStage_Pixel) & 1)
+	if((vis >> EGfxPipelineStage_Pixel) & 1)
 		stageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	if((vis >> ESHPipelineStage_Compute) & 1)
+	if((vis >> EGfxPipelineStage_Compute) & 1)
 		stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
 
-	if((vis >> ESHPipelineStage_GeometryExt) & 1)
+	if((vis >> EGfxPipelineStage_GeometryExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
 
-	if((vis >> ESHPipelineStage_Hull) & 1)
+	if((vis >> EGfxPipelineStage_Hull) & 1)
 		stageFlags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
 
-	if((vis >> ESHPipelineStage_Domain) & 1)
+	if((vis >> EGfxPipelineStage_Domain) & 1)
 		stageFlags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 
-	if((vis >> ESHPipelineStage_RaygenExt) & 1)
+	if((vis >> EGfxPipelineStage_RaygenExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_CallableExt) & 1)
+	if((vis >> EGfxPipelineStage_CallableExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_CALLABLE_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_MissExt) & 1)
+	if((vis >> EGfxPipelineStage_MissExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_MISS_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_ClosestHitExt) & 1)
+	if((vis >> EGfxPipelineStage_ClosestHitExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_AnyHitExt) & 1)
+	if((vis >> EGfxPipelineStage_AnyHitExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_IntersectionExt) & 1)
+	if((vis >> EGfxPipelineStage_IntersectionExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
 
-	if((vis >> ESHPipelineStage_MeshExt) & 1)
+	if((vis >> EGfxPipelineStage_MeshExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_MESH_BIT_EXT;
 
-	if((vis >> ESHPipelineStage_TaskExt) & 1)
+	if((vis >> EGfxPipelineStage_TaskExt) & 1)
 		stageFlags |= VK_SHADER_STAGE_TASK_BIT_EXT;
 
 	return stageFlags;
@@ -199,15 +200,54 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	U8 uniqueSetCounter = 0, isBindlessSet = 0;
 	U32 sets[4];
 
-	//Sort by set and merge shaders that allow it and check we only have 4 sets bound
+	//On SPIR-V a binding's space IS its descriptor set index: reflection reports the set as the space, and
+	// the pipeline layout places every set at the index its space names.
+	//So the space a binding may name is
+	// bounded by OXC3_VK_MAX_BOUND_SETS, the floor every Vulkan device is required to support (see its note:
+	// binding up to the current device's limit instead would let a layout build here and fail on a phone).
+	//Collected in ASCENDING space order before anything else, so setIds[i], layouts[i] and a table's sets[i]
+	// all run in the same order a bind command walks them; first appearance order did not, and a layout whose
+	// spaces first appeared out of order bound each set's descriptors one slot off.
+
+	for(U32 i = 0; i < (U32) info.bindings.length; ++i) {
+
+		const U32 space = info.bindings.ptr[i].binding.space;
+
+		if(space >= OXC3_VK_MAX_BOUND_SETS)
+			retError(clean, Error_outOfBounds(
+				0, space, OXC3_VK_MAX_BOUND_SETS,
+				"GraphicsDeviceRef_createDescriptorLayout() on Vulkan a binding's register space is its descriptor "
+				"set index, and only the sets every device is guaranteed to bind are allowed"
+			));
+
+		U8 j = 0;
+
+		for(; j < uniqueSetCounter; ++j)
+			if(sets[j] == space)
+				break;
+
+		if(j < uniqueSetCounter)
+			continue;
+
+		//Insert sorted; there are at most 4, so this stays trivial
+
+		for(j = uniqueSetCounter; j && sets[j - 1] > space; --j)
+			sets[j] = sets[j - 1];
+
+		sets[j] = space;
+		++uniqueSetCounter;
+	}
+
+	for(U8 i = 0; i < uniqueSetCounter; ++i)
+		layoutExt->setIds[i] = sets[i];
+
+	//Sort by set and merge shaders that allow it
 
 	for(U32 i = 0; i < (U32) info.bindings.length; ++i) {
 
 		gotoIfError3(clean, ListU64_pushBack(
 			&sortedList, ((U64)info.bindings.ptr[i].binding.space << 32) | i, NULL, e_rr
 		));
-
-		//Make sure the set is registered to avoid going over 4 sets
 
 		DescriptorBinding binding = info.bindings.ptr[i];
 
@@ -216,18 +256,6 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		for(; j < uniqueSetCounter; ++j)
 			if(sets[j] == binding.binding.space)
 				break;
-
-		if (j == uniqueSetCounter) {
-
-			if(uniqueSetCounter == 4)
-				retError(clean, Error_outOfBounds(
-					0, 4, 4, "GraphicsDeviceRef_createDescriptorLayout can only have 4 unique descriptor sets bound at once"
-				));
-
-			layoutExt->setIds[uniqueSetCounter] = binding.binding.space;
-			sets[uniqueSetCounter] = binding.binding.space;
-			++uniqueSetCounter;
-		}
 
 		if(
 			(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) ||
@@ -270,11 +298,28 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		VkShaderStageFlags stageFlags = vkGetShaderStagesDevice(device, binding->visibility);
 		VkDescriptorType type = vkGetDescriptorType(binding->registerType);
 
+		//An immutable sampler is baked into the set layout, so the set never has to be written for it.
+		//The VkSampler comes from the app's own Sampler object rather than one made here, which is the point
+		// of holding a ref: several layouts naming the same sampler share the one driver object.
+		//The pointer has to outlive the create call only, and layout->info owns the ref for as long as the
+		// layout does.
+
+		const VkSampler *immutable = NULL;
+
+		const U32 immutableId = DescriptorBinding_immutableSamplerId(*binding);
+
+		if (immutableId) {
+
+			SamplerRef *samplerRef = info.immutableSamplers.ptr[immutableId - 1];
+			immutable = Sampler_ext(SamplerRef_ptr(samplerRef), Vk);
+		}
+
 		bindings.ptrNonConst[i] = (VkDescriptorSetLayoutBinding) {
 			.binding = binding->binding.binding,
 			.descriptorCount = count,
 			.descriptorType = type,
-			.stageFlags = stageFlags
+			.stageFlags = stageFlags,
+			.pImmutableSamplers = immutable
 		};
 
 		VkDescriptorBindingFlags bindFlags =

@@ -50,11 +50,15 @@ ATEST_SUITE(types_math);
 ATEST_SUITE(types_container);
 ATEST_SUITE(formats_bmp);
 ATEST_SUITE(formats_dds);
+ATEST_SUITE(formats_hdr);
 ATEST_SUITE(formats_oiBC);
 ATEST_SUITE(formats_oiCA);
 ATEST_SUITE(formats_oiDL);
 ATEST_SUITE(formats_oiSB);
 ATEST_SUITE(formats_oiSH);
+ATEST_SUITE(formats_oiPL);
+ATEST_SUITE(formats_oiSP);
+ATEST_SUITE(formats_oiSR);
 ATEST_SUITE(formats_wav);
 ATEST_SUITE(audio_interface);
 ATEST_SUITE(platforms_interface);
@@ -91,11 +95,15 @@ static const ATestSuite ATest_suites[] = {
 
 	{ "formats_bmp",          OxC3_test_formats_bmp,          false, false },
 	{ "formats_dds",          OxC3_test_formats_dds,          false, false },
+	{ "formats_hdr",          OxC3_test_formats_hdr,          false, false },
 	{ "formats_oiBC",         OxC3_test_formats_oiBC,         false, false },
 	{ "formats_oiCA",         OxC3_test_formats_oiCA,         false, false },
 	{ "formats_oiDL",         OxC3_test_formats_oiDL,         false, false },
 	{ "formats_oiSB",         OxC3_test_formats_oiSB,         false, false },
 	{ "formats_oiSH",         OxC3_test_formats_oiSH,         false, false },
+	{ "formats_oiPL",         OxC3_test_formats_oiPL,         false, false },
+	{ "formats_oiSP",         OxC3_test_formats_oiSP,         false, false },
+	{ "formats_oiSR",         OxC3_test_formats_oiSR,         false, false },
 	{ "formats_wav",          OxC3_test_formats_wav,          false, false },
 
 	{ "audio_interface",      OxC3_test_audio_interface,      false, false },

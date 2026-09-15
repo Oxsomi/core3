@@ -306,7 +306,13 @@ typedef enum EGraphicsFeatures2 {
 	// full 64 bits. Without the capability a predicated scope simply runs, which is the correct
 	// degradation for the skip-empty-work uses the feature exists for.
 
-	EGraphicsFeatures2_Predication              = 1 << 8
+	EGraphicsFeatures2_Predication              = 1 << 8,
+
+	//Pipeline executable introspection: the driver can hand back per-pipeline ISA disassembly + VGPR/SGPR statistics.
+	//Vulkan: VK_KHR_pipeline_executable_properties (pipelineExecutableInfo).
+	//Used for live shader disassembly, not rendering; device+driver dependent so it isn't golden-pinnable.
+
+	EGraphicsFeatures2_PipelineExecutableInfo   = 1 << 9
 
 } EGraphicsFeatures2;
 

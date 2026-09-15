@@ -244,7 +244,7 @@ static const U8 MD5_offsets[][16] = {
 	{ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15 },        //i
 	{ 1,  6, 11,  0,  5, 10, 15,  4,  9, 14,  3,  8, 13,  2,  7, 12 },        //(1 + 5 * i) & 15
 	{ 5,  8, 11, 14,  1,  4,  7, 10, 13,  0,  3,  6,  9, 12, 15,  2 },        //(5 + 3 * i) & 15
-	{ 0,  7, 14,  5, 12,  3, 10,  1,  8, 15,  6, 13,  4, 11,  2,  9 }        //(0 + 7 * i) & 15
+	{ 0,  7, 14,  5, 12,  3, 10,  1,  8, 15,  6, 13,  4, 11,  2,  9 }         //(0 + 7 * i) & 15
 };
 
 typedef union MD5State {
@@ -276,10 +276,10 @@ static inline void MD5State_update(MD5State *stateOut, const Buffer buf) {
 			U32 e;
 
 			switch (j) {
-				case 0:        e = (b & c) | ((~b) & d);    break;
-				case 1:        e = (b & d) | ((~d) & c);    break;
+				case 0:        e = (b & c) | ((~b) & d);     break;
+				case 1:        e = (b & d) | ((~d) & c);     break;
 				case 2:        e = b ^ c ^ d;                break;
-				default:    e = c ^ (b | (~d));            break;
+				default:       e = c ^ (b | (~d));           break;
 			}
 
 			a = a + e + f;

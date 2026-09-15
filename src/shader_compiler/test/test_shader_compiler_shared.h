@@ -32,6 +32,7 @@ typedef struct SHFile SHFile;
 //Declared in invocation order (see test_shader_compiler_main.c).
 
 void Test_shaderCompilerParse(Test *t);           //Parse annotations -> SHEntryRuntime reflection
+void Test_shaderCompilerReflectSR(Test *t);       //Frontend symbol AST -> SRFile (oiSR) + round-trip
 void Test_shaderCompilerBuiltInIncludes(Test *t); //The enumerable @-prefixed built-in include table
 void Test_shaderCompilerAnnotations(Test *t);     //oxc:: extensions / model / vendor / defines / uniforms / stages / binary
 void Test_shaderCompilerFeatures(Test *t);        //Shaders *using* extension features -> compiled + reflected
@@ -54,7 +55,7 @@ Bool compileInlineShaders(
 	const Allocator *alloc,
 	const C8 *const *srcs,
 	U64 count,
-	U8 mode,                //ESHBinaryType
+	U8 mode,                //EGfxBinaryType
 	U64 threadCount,
 	const C8 *namePrefix,   //Names each shader "<prefix>N.hlsl" so logs/errors are identifiable
 	Bool enableLogging,
@@ -84,7 +85,7 @@ Bool compileInlineShaders(
 Bool compileFileShader(
 	const Allocator *alloc,
 	const C8 *path,
-	U8 mode,                //ESHBinaryType
+	U8 mode,                //EGfxBinaryType
 	Bool enableLogging,
 	Bool keepRegisters,
 	ListBuffer *out,

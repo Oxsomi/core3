@@ -48,9 +48,20 @@ static inline GenericList ListVoid_toList(const ListVoid v, U64 stride) {
 
 Bool ListVoid_fromList(const GenericList list, U64 stride, ListVoid *result, Error *e_rr);
 
+//A translation unit generally uses only a few of a generated list's accessors, and clang reports every
+// static inline it doesn't use when the list is generated in a .c rather than a header, so the generated ones
+// state that going unused is fine.
+//gcc and MSVC don't warn here, so the attribute is only spelled where it exists.
+
+#if defined(__clang__) || defined(__GNUC__)
+	#define TListFn static inline __attribute__((unused))
+#else
+	#define TListFn static inline
+#endif
+
 #define TListNamedBase(Name)                                                                                                \
 																															\
-static inline GenericList Name##_toList(Name t) {                                                                           \
+TListFn GenericList Name##_toList(Name t) {                                                                                 \
 	ListVoid lvoid = { { 0 } };                                                                                             \
 	lvoid.ptr = (const void*) t.ptr;                                                                                        \
 	lvoid.length = t.length;                                                                                                \
@@ -58,64 +69,64 @@ static inline GenericList Name##_toList(Name t) {                               
 	return ListVoid_toList(lvoid, sizeof(Name##_Type));                                                                     \
 }                                                                                                                           \
 																															\
-static inline Bool Name##_fromList(GenericList list, Name *result, Error *e_rr) {                                           \
+TListFn Bool Name##_fromList(GenericList list, Name *result, Error *e_rr) {                                                 \
 	return ListVoid_fromList(list, sizeof(Name##_Type), (ListVoid*)result, e_rr);                                           \
 }                                                                                                                           \
 																															\
-static inline Bool Name##_isConstRef(const Name l) { return GenericList_isConstRef(Name##_toList(l)); }                     \
-static inline Bool Name##_isRef(const Name l) { return GenericList_isRef(Name##_toList(l)); }                               \
-static inline Bool Name##_empty(const Name l) { return GenericList_empty(Name##_toList(l)); }                               \
-static inline Bool Name##_any(const Name l) { return GenericList_any(Name##_toList(l)); }                                   \
-static inline U64  Name##_bytes(const Name l) { return GenericList_bytes(Name##_toList(l)); }                               \
-static inline U64  Name##_allocatedBytes(const Name l) { return GenericList_allocatedBytes(Name##_toList(l)); }             \
-static inline U64  Name##_stride() { return sizeof(Name##_Type); }                                                          \
+TListFn Bool Name##_isConstRef(const Name l) { return GenericList_isConstRef(Name##_toList(l)); }                           \
+TListFn Bool Name##_isRef(const Name l) { return GenericList_isRef(Name##_toList(l)); }                                     \
+TListFn Bool Name##_empty(const Name l) { return GenericList_empty(Name##_toList(l)); }                                     \
+TListFn Bool Name##_any(const Name l) { return GenericList_any(Name##_toList(l)); }                                         \
+TListFn U64  Name##_bytes(const Name l) { return GenericList_bytes(Name##_toList(l)); }                                     \
+TListFn U64  Name##_allocatedBytes(const Name l) { return GenericList_allocatedBytes(Name##_toList(l)); }                   \
+TListFn U64  Name##_stride() { return sizeof(Name##_Type); }                                                                \
 																															\
-static inline Buffer Name##_buffer(const Name l) { return GenericList_buffer(Name##_toList(l)); }                           \
-static inline Buffer Name##_bufferConst(const Name l) { return GenericList_bufferConst(Name##_toList(l)); }                 \
-static inline Buffer Name##_allocatedBuffer(const Name l) { return GenericList_allocatedBuffer(Name##_toList(l)); }         \
-static inline Buffer Name##_allocatedBufferConst(const Name l) {                                                            \
+TListFn Buffer Name##_buffer(const Name l) { return GenericList_buffer(Name##_toList(l)); }                                 \
+TListFn Buffer Name##_bufferConst(const Name l) { return GenericList_bufferConst(Name##_toList(l)); }                       \
+TListFn Buffer Name##_allocatedBuffer(const Name l) { return GenericList_allocatedBuffer(Name##_toList(l)); }               \
+TListFn Buffer Name##_allocatedBufferConst(const Name l) {                                                                  \
 	return GenericList_allocatedBufferConst(Name##_toList(l));                                                              \
 }                                                                                                                           \
 																															\
-static inline Name##_Type *Name##_begin(const Name l) { return (Name##_Type*) GenericList_begin(Name##_toList(l)); }        \
-static inline Name##_Type *Name##_end(const Name l) { return (Name##_Type*) GenericList_end(Name##_toList(l)); }            \
-static inline Name##_Type *Name##_last(const Name l) { return (Name##_Type*) GenericList_last(Name##_toList(l)); }          \
+TListFn Name##_Type *Name##_begin(const Name l) { return (Name##_Type*) GenericList_begin(Name##_toList(l)); }              \
+TListFn Name##_Type *Name##_end(const Name l) { return (Name##_Type*) GenericList_end(Name##_toList(l)); }                  \
+TListFn Name##_Type *Name##_last(const Name l) { return (Name##_Type*) GenericList_last(Name##_toList(l)); }                \
 																															\
-static inline Name##_Type *Name##_ptr(const Name l, U64 i) {                                                                \
+TListFn Name##_Type *Name##_ptr(const Name l, U64 i) {                                                                      \
 	return (Name##_Type*) GenericList_ptr(Name##_toList(l), i);                                                             \
 }                                                                                                                           \
 																															\
-static inline Name##_Type Name##_at(const Name l, U64 i) {                                                                  \
+TListFn Name##_Type Name##_at(const Name l, U64 i) {                                                                        \
 	return *(Name##_Type*) GenericList_ptr(Name##_toList(l), i);                                                            \
 }                                                                                                                           \
 																															\
-static inline const Name##_Type *Name##_beginConst(const Name l) {                                                          \
+TListFn const Name##_Type *Name##_beginConst(const Name l) {                                                                \
 	return (Name##_Type*) GenericList_beginConst(Name##_toList(l));                                                         \
 }                                                                                                                           \
 																															\
-static inline const Name##_Type *Name##_endConst(const Name l) {                                                            \
+TListFn const Name##_Type *Name##_endConst(const Name l) {                                                                  \
 	return (Name##_Type*) GenericList_endConst(Name##_toList(l));                                                           \
 }                                                                                                                           \
 																															\
-static inline const Name##_Type *Name##_lastConst(const Name l) {                                                           \
+TListFn const Name##_Type *Name##_lastConst(const Name l) {                                                                 \
 	return (Name##_Type*) GenericList_lastConst(Name##_toList(l));                                                          \
 }                                                                                                                           \
 																															\
-static inline const Name##_Type *Name##_ptrConst(const Name l, U64 i) {                                                     \
+TListFn const Name##_Type *Name##_ptrConst(const Name l, U64 i) {                                                           \
 		return (Name##_Type*) GenericList_ptrConst(Name##_toList(l), i);                                                    \
 }                                                                                                                           \
 																															\
-static inline Name##_Type Name##_atConst(const Name l, U64 i) {                                                             \
+TListFn Name##_Type Name##_atConst(const Name l, U64 i) {                                                                   \
 			return *(Name##_Type*) GenericList_ptrConst(Name##_toList(l), i);                                               \
 }                                                                                                                           \
 																															\
-static inline Bool Name##_eq(const Name a, const Name b) {                                                                  \
+TListFn Bool Name##_eq(const Name a, const Name b) {                                                                        \
 	GenericList agl = Name##_toList(a);                                                                                     \
 	GenericList bgl = Name##_toList(b);                                                                                     \
 	return GenericList_eq(&agl, &bgl);                                                                                      \
 }                                                                                                                           \
 																															\
-static inline Bool Name##_neq(const Name a, const Name b) { return !Name##_eq(a, b); }                                      \
+TListFn Bool Name##_neq(const Name a, const Name b) { return !Name##_eq(a, b); }                                            \
 																															\
 Bool Name##_swap(Name l, U64 i, U64 j, Error *e_rr);                                                                        \
 Bool Name##_reverse(Name l);                                                                                                \
@@ -131,7 +142,7 @@ Bool Name##_createReverse(const Name l, const Allocator *alloc, Name *result, Er
 Bool Name##_createRef(Name##_Type *ptr, U64 length, Name *result, Error *e_rr);                                             \
 Bool Name##_createRefConst(const Name##_Type *ptr, U64 length, Name *result, Error *e_rr);                                  \
 																															\
-static inline Name Name##_createRefFromList(Name t) {                                                                       \
+TListFn Name Name##_createRefFromList(Name t) {                                                                             \
 	t.capacityAndRefInfo = U64_MAX;                                                                                         \
 	return t;                                                                                                               \
 }                                                                                                                           \

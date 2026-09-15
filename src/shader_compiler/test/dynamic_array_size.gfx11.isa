@@ -1,0 +1,35 @@
+; gfx1100  SGPRs 8  VGPRs 13  code 176 B  instrs 33  scratch 0  lds 0
+_amdgpu_ps_main:
+	s_mov_b32 s0, s1                                           // 000000000000
+	s_mov_b32 m0, s3                                           // 000000000004
+	s_mov_b64 s[2:3], exec                                     // 000000000008
+	s_wqm_b64 exec, exec                                       // 00000000000C
+	lds_param_load v6, attr0.x wait_vdst:15                    // 000000000010
+	lds_param_load v7, attr0.y wait_vdst:15                    // 000000000014
+	lds_param_load v8, attr0.z wait_vdst:15                    // 000000000018
+	lds_param_load v9, attr0.w wait_vdst:15                    // 00000000001C
+	s_getpc_b64 s[4:5]                                         // 000000000020
+	s_delay_alu instid0(SALU_CYCLE_1)                          // 000000000024
+	s_mov_b32 s1, s5                                           // 000000000028
+	s_mov_b64 exec, s[2:3]                                     // 00000000002C
+	s_load_b256 s[0:7], s[0:1], 0x0                            // 000000000030
+	v_mov_b32_e32 v2, 0                                        // 000000000038
+	v_interp_p10_f32 v10, v6, v0, v6 wait_exp:3                // 00000000003C
+	v_interp_p10_f32 v11, v7, v0, v7 wait_exp:2                // 000000000044
+	v_interp_p10_f32 v12, v8, v0, v8 wait_exp:1                // 00000000004C
+	v_interp_p10_f32 v0, v9, v0, v9 wait_exp:0                 // 000000000054
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 00000000005C
+	v_interp_p2_f32 v6, v6, v1, v10 wait_exp:7                 // 000000000060
+	v_interp_p2_f32 v7, v7, v1, v11 wait_exp:7                 // 000000000068
+	s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)// 000000000070
+	v_interp_p2_f32 v8, v8, v1, v12 wait_exp:7                 // 000000000074
+	v_interp_p2_f32 v0, v9, v1, v0 wait_exp:7                  // 00000000007C
+	s_waitcnt lgkmcnt(0)                                       // 000000000084
+	image_load v[2:5], v2, s[0:7] dmask:0xf dim:SQ_RSRC_IMG_2D unorm a16// 000000000088
+	s_waitcnt vmcnt(0)                                         // 000000000090
+	v_mul_f32_e32 v1, v2, v6                                   // 000000000094
+	v_mul_f32_e32 v2, v3, v7                                   // 000000000098
+	v_mul_f32_e32 v3, v4, v8                                   // 00000000009C
+	v_mul_f32_e32 v0, v5, v0                                   // 0000000000A0
+	exp mrt0 v1, v2, v3, v0 done                               // 0000000000A4
+	s_endpgm                                                   // 0000000000AC

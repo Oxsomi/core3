@@ -29,8 +29,11 @@ typedef void *DynamicLibrary;
 //These functions are optional on systems that don't support dynamic linking,
 //In which case, only isValidPath will be defined.
 //It can be checked via SUPPORTS_DYNAMIC_LINKING.
+//web: wasm dlopen needs MAIN_MODULE (which taxes every module), so the web target opts out.
 
-#define SUPPORTS_DYNAMIC_LINKING
+#if _PLATFORM_TYPE != PLATFORM_WEB
+	#define SUPPORTS_DYNAMIC_LINKING
+#endif
 
 impl Bool DynamicLibrary_isValidPath(CharString str);
 

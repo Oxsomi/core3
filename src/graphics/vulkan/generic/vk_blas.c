@@ -314,10 +314,18 @@ void VK_WRAP_FUNC(BLAS_free)(BLAS *blas) {
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	const VkAccelerationStructureKHR as = BLAS_ext(blas, Vk)->as;
+	const VkBLAS *blasExt = BLAS_ext(blas, Vk);
 
-	if(as)
-		deviceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
+	if(blasExt->as)
+		deviceExt->destroyAccelerationStructure(deviceExt->device, blasExt->as, NULL);
+
+	//A compaction whose copy was prepared but never recorded owns a destination structure that nothing
+	// else will ever adopt, since only BLASRef_compact moves it into as.
+	//The buffer it sits in is released by BLAS_free, which calls this before dropping that reference, so
+	// the structure always goes before its memory.
+
+	if(blasExt->pendingAs)
+		deviceExt->destroyAccelerationStructure(deviceExt->device, blasExt->pendingAs, NULL);
 }
 
 Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr) {
@@ -519,7 +527,21 @@ Bool VK_WRAP_FUNC(BLASRef_prepareCompact)(GraphicsDeviceRef *deviceRef, BLASRef 
 	//A driver is allowed to report no saving. Leaving recorded false keeps a pointless copy out of the
 	// command buffer entirely.
 
-	if(!compactedSize || compactedSize >= DeviceBufferRef_ptr(blas->base.asBuffer)->resource.size) {
+	//A driver that declines to compact reports the ORIGINAL size 1:1 (confirmed for WARP and lavapipe);
+	// ZERO is not a size a conformant driver can produce, so reading one means the query was consumed
+	// before the copy that fills it ran, and silently treating it as "no saving" would bury a sync bug.
+
+	if(!compactedSize)
+		retError(clean, Error_invalidState(
+			1,
+			"VkBLASRef_prepareCompact() the compacted size read back as 0, which no conformant driver "
+			"returns; the query result has not been written yet and reading it raced the GPU"
+		));
+
+	//No saving is a legitimate driver answer. Leaving recorded false keeps a pointless copy out of the
+	// command buffer entirely.
+
+	if(compactedSize >= DeviceBufferRef_ptr(blas->base.asBuffer)->resource.size) {
 		blas->base.isCompacted = true;
 		goto clean;
 	}
@@ -612,6 +634,11 @@ Bool VK_WRAP_FUNC(BLASRef_compact)(
 
 	blasExt->pendingAs = NULL;
 	blas->base.pendingCompactBuffer = NULL;
+
+	//The address REALLY changes here, so dependents are marked again: a pending TLAS build riding this same
+	// submit may have resolved the old address and cleared the record time mark already.
+
+	gotoIfError3(clean, GraphicsDeviceRef_markTlasesStaleForBLAS(deviceRef, blasRef, true, e_rr));
 
 clean:
 	return s_uccess;

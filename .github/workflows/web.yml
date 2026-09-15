@@ -1,0 +1,17 @@
+name: Web wasm64 (Linux host)
+on: [push]
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: Web wasm64 (Linux host)
+      runner: ubuntu-latest
+      os: web
+      build_flags: ''
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      hook_name: Web-wasm64-Linux
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

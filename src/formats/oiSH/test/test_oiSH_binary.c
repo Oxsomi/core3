@@ -30,7 +30,7 @@ void Test_SHFileAddBinNullGuards(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	Test_assert(t, "null shFile",    !SHFile_addBinary(NULL, &info, t->alloc, NULL));
 	Test_assert(t, "null binaries",  !SHFile_addBinary(&sh,  NULL,  t->alloc, NULL));
 
@@ -48,7 +48,7 @@ void Test_SHFileAddBinNoBinaryData(Test *t) {
 		.identifier = {
 			.entrypoint    = CharString_createRefCStrConst("main"),
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
-			.stageType     = ESHPipelineStage_Compute
+			.stageType     = EGfxPipelineStage_Compute
 		},
 		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
 		//binaries[] all empty
@@ -64,7 +64,7 @@ void Test_SHFileAddBinZeroVendorMask(Test *t) {
 
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
-	SHBinaryInfo info  = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info  = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	info.vendorMask    = 0;
 	Test_assert(t, "vendorMask = 0 rejected", !SHFile_addBinary(&sh, &info, t->alloc, NULL));
 	SHFile_free(&sh, t->alloc);
@@ -76,7 +76,7 @@ void Test_SHFileAddBinVendorMaskNormalized(Test *t) {
 
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	info.vendorMask   = U16_MAX;
 	Test_assert(t, "U16_MAX accepted", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 	SHFile_free(&sh, t->alloc);
@@ -88,7 +88,7 @@ void Test_SHFileAddBinVendorMaskOutOfBounds(Test *t) {
 
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 
 	//Set a bit beyond the valid vendor range but not the U16_MAX special case
 	info.vendorMask = (U16)(1u << ESHVendor_Count);
@@ -136,7 +136,7 @@ void Test_SHFileAddBinInvalidExtensions(Test *t) {
 
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	info.identifier.extensions = (ESHExtension)(1u << ESHExtension_Count);
 	Test_assert(t, "bad extensions rejected", !SHFile_addBinary(&sh, &info, t->alloc, NULL));
 	SHFile_free(&sh, t->alloc);
@@ -148,8 +148,8 @@ void Test_SHFileAddBinInvalidStageType(Test *t) {
 
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
-	info.identifier.stageType = ESHPipelineStage_Count;
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
+	info.identifier.stageType = EGfxPipelineStage_Count;
 	Test_assert(t, "bad stageType rejected", !SHFile_addBinary(&sh, &info, t->alloc, NULL));
 	SHFile_free(&sh, t->alloc);
 }
@@ -161,8 +161,8 @@ void Test_SHFileAddBinShaderVersionOutOfRange(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo low  = makeBinaryInfo(ESHPipelineStage_Compute, "lo", false);
-	SHBinaryInfo high = makeBinaryInfo(ESHPipelineStage_Compute, "hi", false);
+	SHBinaryInfo low  = makeBinaryInfo(EGfxPipelineStage_Compute, "lo", false);
+	SHBinaryInfo high = makeBinaryInfo(EGfxPipelineStage_Compute, "hi", false);
 	low.identifier.shaderVersion  = OISH_SHADER_MODEL(5, 0);    //below MIN
 	high.identifier.shaderVersion = OISH_SHADER_MODEL(7, 0);    //above MAX
 
@@ -178,8 +178,8 @@ void Test_SHFileAddBinShaderVersionAtBoundaries(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo mn = makeBinaryInfo(ESHPipelineStage_Compute, "mainMin", false);
-	SHBinaryInfo mx = makeBinaryInfo(ESHPipelineStage_Pixel,   "mainMax", false);
+	SHBinaryInfo mn = makeBinaryInfo(EGfxPipelineStage_Compute, "mainMin", false);
+	SHBinaryInfo mx = makeBinaryInfo(EGfxPipelineStage_Pixel,   "mainMax", false);
 	mn.identifier.shaderVersion = OISH_SHADER_MODEL_MIN;
 	mx.identifier.shaderVersion = OISH_SHADER_MODEL_MAX;
 
@@ -200,12 +200,12 @@ void Test_SHFileAddBinSPIRVMisaligned(Test *t) {
 		.identifier = {
 			.entrypoint    = CharString_createRefCStrConst("main"),
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
-			.stageType     = ESHPipelineStage_Compute
+			.stageType     = EGfxPipelineStage_Compute
 		},
 		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
 	};
 
-	info.binaries[ESHBinaryType_SPIRV] = Buffer_createRefConst(oddSPIRV, 5);
+	info.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(oddSPIRV, 5);
 	Test_assert(t, "misaligned SPIRV rejected", !SHFile_addBinary(&sh, &info, t->alloc, NULL));
 	SHFile_free(&sh, t->alloc);
 }
@@ -218,15 +218,15 @@ void Test_SHFileAddBinEntrypointAnnotationMutuallyExclusive(Test *t) {
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
 	//annotation = true but entrypoint non-empty -> reject
-	SHBinaryInfo bad1 = makeBinaryInfo(ESHPipelineStage_Compute, "main", true);
+	SHBinaryInfo bad1 = makeBinaryInfo(EGfxPipelineStage_Compute, "main", true);
 	Test_assert(t, "annotation+entrypoint rejected", !SHFile_addBinary(&sh, &bad1, t->alloc, NULL));
 
 	//annotation = false but entrypoint empty -> reject
-	SHBinaryInfo bad2 = makeBinaryInfo(ESHPipelineStage_Compute, NULL, false);
+	SHBinaryInfo bad2 = makeBinaryInfo(EGfxPipelineStage_Compute, NULL, false);
 	Test_assert(t, "no-annot+no-entry rejected",     !SHFile_addBinary(&sh, &bad2, t->alloc, NULL));
 
 	//lib binary: annotation = true + empty entrypoint -> accept
-	SHBinaryInfo lib = makeBinaryInfo(ESHPipelineStage_Compute, NULL, true);
+	SHBinaryInfo lib = makeBinaryInfo(EGfxPipelineStage_Compute, NULL, true);
 	Test_assert(t, "lib binary accepted",             SHFile_addBinary(&sh, &lib, t->alloc, &t->err));
 
 	SHFile_free(&sh, t->alloc);
@@ -239,7 +239,7 @@ void Test_SHFileAddBinOddDefinesRejected(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	CharString strs[3] = {
 		CharString_createRefCStrConst("FOO"),
 		CharString_createRefCStrConst("1"),
@@ -258,7 +258,7 @@ void Test_SHFileAddBinDuplicateDefineNameRejected(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	CharString strs[4] = {
 		CharString_createRefCStrConst("FOO"), CharString_createRefCStrConst("1"),
 		CharString_createRefCStrConst("FOO"), CharString_createRefCStrConst("2")
@@ -276,7 +276,7 @@ void Test_SHFileAddBinValidDefines(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	CharString strs[4] = {
 		CharString_createRefCStrConst("FOO"), CharString_createRefCStrConst("1"),
 		CharString_createRefCStrConst("BAR"), CharString_createRefCStrConst("2")
@@ -294,7 +294,7 @@ void Test_SHFileAddBinUniformEmptyName(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	SHUniformRuntime uni = { .name = CharString_createNull(), .typeIdShort = 0, .dataOffset = 0 };
 	static U8 udata[4] = { 0 };
 	Test_assert(t, "createRef", ListU8_createRefConst(udata, 4, &info.identifier.uniformData, &t->err));
@@ -310,7 +310,7 @@ void Test_SHFileAddBinUniformDigitFirstChar(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	SHUniformRuntime uni = { .name = CharString_createRefCStrConst("9bad"), .typeIdShort = 0, .dataOffset = 0 };
 	static U8 udata[4] = { 0 };
 	Test_assert(t, "createRef", ListU8_createRefConst(udata, 4, &info.identifier.uniformData, &t->err));
@@ -326,7 +326,7 @@ void Test_SHFileAddBinUniformUnderscoreStart(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	SHUniformRuntime uni = { .name = CharString_createRefCStrConst("_myUni"), .typeIdShort = 0, .dataOffset = 0 };
 	static U8 udata[4] = { 0 };
 	Test_assert(t, "createRef", ListU8_createRefConst(udata, 4, &info.identifier.uniformData, &t->err));
@@ -342,7 +342,7 @@ void Test_SHFileAddBinUniformInvalidBodyChar(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 
 	//Space inside name is invalid
 	SHUniformRuntime uni = { .name = CharString_createRefCStrConst("my Uni"), .typeIdShort = 0, .dataOffset = 0 };
@@ -361,7 +361,7 @@ void Test_SHFileAddBinUniformDuplicateName(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	SHUniformRuntime unis[2] = {
 		{ .name = CharString_createRefCStrConst("myVal"), .typeIdShort = 0, .dataOffset = 0 },
 		{ .name = CharString_createRefCStrConst("myVal"), .typeIdShort = 0, .dataOffset = 0 }
@@ -381,7 +381,7 @@ void Test_SHFileAddBinValid(Test *t) {
 
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	Test_assert(t, "addBinary ok",       SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 	Test_assert(t, "binaries count = 1", sh.binaries.length == 1);
 	SHFile_free(&sh, t->alloc);
@@ -394,8 +394,8 @@ void Test_SHFileAddBinDuplicateIdentifierRejected(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo i1 = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
-	SHBinaryInfo i2 = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo i1 = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
+	SHBinaryInfo i2 = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	Test_assert(t, "first accepted",      SHFile_addBinary(&sh, &i1, t->alloc, &t->err));
 	Test_assert(t, "duplicate rejected", !SHFile_addBinary(&sh, &i2, t->alloc, NULL));
 	Test_assert(t, "still 1 binary",      sh.binaries.length == 1);
@@ -411,9 +411,9 @@ void Test_SHFileAddBinMultipleDistinct(Test *t) {
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
 	//Same entrypoint but different stages are distinct identifiers
-	SHBinaryInfo cs = makeBinaryInfo(ESHPipelineStage_Compute, "main",    false);
-	SHBinaryInfo vs = makeBinaryInfo(ESHPipelineStage_Vertex,  "vsMain",  false);
-	SHBinaryInfo ps = makeBinaryInfo(ESHPipelineStage_Pixel,   "psMain",  false);
+	SHBinaryInfo cs = makeBinaryInfo(EGfxPipelineStage_Compute, "main",    false);
+	SHBinaryInfo vs = makeBinaryInfo(EGfxPipelineStage_Vertex,  "vsMain",  false);
+	SHBinaryInfo ps = makeBinaryInfo(EGfxPipelineStage_Pixel,   "psMain",  false);
 
 	Test_assert(t, "compute accepted", SHFile_addBinary(&sh, &cs, t->alloc, &t->err));
 	Test_assert(t, "vertex accepted",  SHFile_addBinary(&sh, &vs, t->alloc, &t->err));
@@ -430,7 +430,7 @@ void Test_SHFileAddBinExtensionFlagsStored(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "main", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	info.identifier.extensions = ESHExtension_F64 | ESHExtension_I64;
 	Test_assert(t, "addBinary ok", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 	Test_assert(t, "F64 flag stored", (sh.binaries.ptr[0].identifier.extensions & ESHExtension_F64) != 0);

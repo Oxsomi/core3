@@ -149,7 +149,8 @@ static void TestShaders_ommSpecialIndexWithFormat(
 	//Packed into a U32 and sliced to the element width, which reads out the low bytes on the little endian
 	// targets OxC3 runs on; one triangle, so the buffer is exactly one element.
 
-	const c::U8 ommStride = ommIndexFormat == c::ETextureFormatId_R32u ? 4 : (ommIndexFormat == c::ETextureFormatId_R16u ? 2 : 1);
+	const c::U8 ommStride =
+		ommIndexFormat == c::ETextureFormatId_R32u ? 4 : (ommIndexFormat == c::ETextureFormatId_R16u ? 2 : 1);
 
 	const c::U32 opaqueIndex = c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyOpaque, ommIndexFormat);
 	const c::U32 transparentIndex = c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyTransparent, ommIndexFormat);

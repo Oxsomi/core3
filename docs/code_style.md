@@ -42,6 +42,9 @@ _malloc_ and _free_ shouldn't be used if the goal is a cross platform applicatio
 
 ## Functions
 
+Empty parameter lists are written `f()`, never `f(void)`.
+
+
 No inline should be used; aside from short two/four liners. This is useful to provide a clean overview of the functionality and reduce compile time.
 
 C "Member functions" should be using ClassName_functionName. This makes it clear that it's either a helper function or a member function. Using direct structs `T t` instead of `const T *t` is recommended only if the struct isn't too big (16+ bytes) to be copied, though the compiler might inline. Data passed that is const should be marked as such. The only exception is for example string (24-byte or <=32 bytes) where extremely simple helper functions are allowed to pass by value.
@@ -120,6 +123,12 @@ If an error isn't returned but a function will fail, document clearly what value
 
 Lines should be a maximum of 128.
 
+Width is measured in COLUMNS, not characters: a tab advances to the next multiple of the tab width, so a
+line indented with two tabs is already at column 8. Any tool that enforces or emits within the limit has to
+measure the same way; `len(line)` understates an indented line by three columns per leading tab and lets it
+past. This has bitten twice, first in check_style itself and then in generate_hpp.py, which emitted wrapped
+signatures that check_style then rejected and that no edit to the generated file could fix.
+
 Curly braces align to the end of a line.
 
 Pointers align to the right (unfortunately C declares they belong to the variable to the right, not the type itself). The only exception being casts, where it does belong to the type.
@@ -172,6 +181,31 @@ Macros should try to align the `\` required to do multi-line macros on the same 
 
 ## Comments
 
+American English throughout (color, not colour), in comments, identifiers and docs alike. Docs use real
+punctuation rather than em dashes.
+
+
 If using code snippets from other places, make sure to reference the link to ensure the original source can be compared or an explanation can be found if needed in the future and to provide credits to the original author.
 
 `//` should be preferred when dealing with small comments, unless a large section is commented out or for documentation; in that case `/*` and `*/` should be used. Another reason for `/**/` is if the current formatting doesn't support it or if in a macro definition (since these don't support normal comments).
+
+Comments are laid out one sentence per line. A line that starts a new sentence begins flush (`//Word`), while a line that continues an unfinished sentence from the line above begins with a single space (`// word`). This keeps a paragraph diffable per sentence: changing one word rewraps one line instead of every line after it. A sentence that fits within the line limit stays on one line; only wrap when it doesn't. The 128 character limit is a ceiling and not a target: break at a natural clause boundary well before it, because a comment is read as prose rather than as a filled paragraph.
+
+```c
+//Callbacks always receive fully qualified paths: absolute for physical entries, //-prefixed for virtual ones.
+//Either form is itself a valid input for the other File_* functions,
+// so foreach output can be fed straight back in (read, getInfo, ...) without the caller re-rooting anything.
+```
+
+`#` comments in CMake and python follow the same one sentence per line rule, but have no continuation marker; a sentence too long for one line is broken at a clause boundary and every line starts with `# `.
+
+```cmake
+# Android has no exec, so the per-suite executables ctest runs elsewhere are useless here.
+# This target compiles the same test sources a second time with _OXC3_TEST_BUNDLED,
+# which turns each suite's main() into a named entry (see OXC3_TEST_MAIN / OXC3_TEST_ENTRY in types/test/test.h)
+# that atest_main.c calls in turn.
+```
+
+Comments belong above the thing they explain, never inside an argument list; a `target_link_options` call keeps its rationale in one block above the command rather than interleaved between the flags.
+
+Generated headers are exempt from the sentence-per-line rule: `src/tools/generate_hpp.py` emits doc lines as `\t//{docLine}` with no continuation form, and the `check_generated_hpp` target rejects hand edits to them.

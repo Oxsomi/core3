@@ -18,7 +18,16 @@
 # This is called dual licensing.
 
 message("-- Targeting audio API: OpenAL")
-find_package(openal_soft REQUIRED)
+
+# emscripten ships its own OpenAL implementation (WebAudio-backed): the AL client code below
+# compiles against the sysroot's AL/*.h and links with -lopenal, no openal_soft package needed.
+
+if(EMSCRIPTEN)
+	set(OxC3AudioBackend openal)
+else()
+	find_package(openal_soft REQUIRED)
+	set(OxC3AudioBackend openal_soft::openal_soft)
+endif()
 
 file(GLOB_RECURSE graphicsHeaders CONFIGURE_DEPENDS "../../include/audio/*.h")
 file(GLOB graphicsSources CONFIGURE_DEPENDS "*.c")
@@ -40,7 +49,7 @@ source_group("Source Files (openal_soft)" FILES ${apiPlatformSources})
 source_group("Header Files (openal_soft)" FILES ${apiPlatformIncludes})
 
 set_target_properties(OxC3_audio PROPERTIES FOLDER Oxsomi)
-target_link_libraries(OxC3_audio PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container openal_soft::openal_soft OxC3_formats_wav)
+target_link_libraries(OxC3_audio PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container ${OxC3AudioBackend} OxC3_formats_wav)
 
 set(AUDIO_TEST_DEBUG OFF)
 

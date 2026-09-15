@@ -488,7 +488,8 @@ extern "C" void Test_graphicsCommandValidation(oxc::c::Test *t, oxc::c::Graphics
 	));
 
 	Test_assert(t, "createIndirect", dev.createBuffer(
-		c::EDeviceBufferUsage_Indirect, c::EGraphicsResourceFlag_None, "Validation indirect buffer", 256, indirect, nullptr, e_rr
+		c::EDeviceBufferUsage_Indirect, c::EGraphicsResourceFlag_None, "Validation indirect buffer", 256, indirect, nullptr,
+		e_rr
 	));
 
 	if(target2.valid() && fmtOther.valid() && depth.valid())

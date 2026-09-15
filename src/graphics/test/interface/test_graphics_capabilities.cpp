@@ -54,7 +54,7 @@ namespace {
 	//graphics.hpp already has the guard this was: OwnedList frees its list on every exit path, error
 	//returns included.
 
-	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo, oxc::c::DescriptorLayoutInfo_free>;
+	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo>;
 
 	//Names are only for the coverage log, so a run says which bits this adapter actually exercised rather than
 	// leaving "it passed" ambiguous between "tested" and "skipped".
@@ -302,7 +302,8 @@ extern "C" void Test_graphicsCapabilities(oxc::c::Test *t, oxc::c::GraphicsDevic
 		RenderTexture rt;
 
 		Test_assert(t, "msaaOffAlwaysWorks", dev.createRenderTexture(
-			4, 4, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Capability probe", rt, c::EMSAASamples_Off, nullptr, e_rr
+			4, 4, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Capability probe", rt, c::EMSAASamples_Off,
+			nullptr, e_rr
 		));
 	}
 

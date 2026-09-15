@@ -398,7 +398,7 @@ static void LWindow_pointerButtonBar(
 		case BTN_MIDDLE:  mb = EMouseButton_Middle;  break;
 		case BTN_FORWARD: mb = EMouseButton_Forward; break;
 		case BTN_BACK:    mb = EMouseButton_Back;    break;
-		default:         return;
+		default:          return;
 	}
 
 	InputHandle handle = InputDevice_createHandle(mouse, (U16)(mb - EMouseAxis_End), EInputType_Button);

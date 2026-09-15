@@ -100,7 +100,9 @@ Bool Keyboard_create(Keyboard *result, const Allocator *alloc, Error *e_rr);
 //Remap key to unicode codepoint using current language.
 //This is only for debugging keyboard mappings and GUI elements.
 //For text boxes, use the typeChar callback of Window; this handles OS-level input such as IME (Japanese) and emojis.
-//If there's no remap available it will return an empty string.
+//If there's no remap available the key's own name is returned as a placeholder ("EKey_Q"), which a
+// caller can tell apart from a real label. Web does this whenever the browser has no keyboard layout
+// API (everything outside Chromium), so a label there is localized only when one was actually found.
 //The resulting string is only valid while the Keyboard is alive.
 impl Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, CharString *result, Error *e_rr);
 

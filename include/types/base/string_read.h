@@ -107,21 +107,21 @@ Bool CharString_parseU64(const CharString s, U64 *result);
 	U64 strl = CharString_length(s);                                            \
 	__VA_ARGS__;                                                                \
 																				\
-	for(U64 i = start; i < strl; ++i)                                            \
-		if(!testFunc(s.ptr[i]))                                                    \
-			return false;                                                        \
+	for(U64 i = start; i < strl; ++i)                                           \
+		if(!testFunc(s.ptr[i]))                                                 \
+			return false;                                                       \
 																				\
 	return strl > start;
 
-#define CharString_matchesPatternNum(testFunc, num)                                \
+#define CharString_matchesPatternNum(testFunc, num)                               \
 																				\
 	CharString other = CharString_createRefCStrConst(num);                        \
 	CharString_matchesPattern(                                                    \
-		testFunc,                                                                \
+		testFunc,                                                                 \
 		CharStringSensOff strSensOff = { &s, EStringCase_Insensitive, 0 };        \
-		U64 start = CharString_startsWithString(                                \
-			&strSensOff, &other                                                    \
-		) ? CharString_length(other) : 0                                        \
+		U64 start = CharString_startsWithString(                                  \
+			&strSensOff, &other                                                   \
+		) ? CharString_length(other) : 0                                          \
 	)
 
 //[0-9A-Za-z_$]+

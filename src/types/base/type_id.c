@@ -33,10 +33,10 @@ TypeIdShort ETypeId_toShortId(TypeId typeId) {
 		case EDataType_Char:
 		default:                                return 0;
 
-		case EDataType_Bool:    offsetId = 0;    break;
+		case EDataType_Bool:       offsetId = 0;    break;
 		case EDataType_Int:        offsetId = 1;    break;
-		case EDataType_UInt:    offsetId = 5;    break;
-		case EDataType_Float:    offsetId = 9;    break;
+		case EDataType_UInt:       offsetId = 5;    break;
+		case EDataType_Float:      offsetId = 9;    break;
 	}
 
 	EDataTypeStride strid = ETypeId_getDataTypeStride(typeId);
@@ -55,9 +55,9 @@ TypeIdShort ETypeId_toShortId(TypeId typeId) {
 				default:
 				case EDataTypeStride_8:        return (TypeIdShort) -1;
 
-				case EDataTypeStride_16:                    break;
+				case EDataTypeStride_16:                       break;
 				case EDataTypeStride_32:    ++localOff;        break;
-				case EDataTypeStride_64:    localOff += 2;    break;
+				case EDataTypeStride_64:    localOff += 2;     break;
 			}
 
 			localStride = 3;
@@ -67,11 +67,11 @@ TypeIdShort ETypeId_toShortId(TypeId typeId) {
 		case EDataType_Int:
 
 			switch (strid) {
-				default:                return (TypeIdShort)-1;
-				case EDataTypeStride_8:                    break;
-				case EDataTypeStride_16:    ++localOff;        break;
-				case EDataTypeStride_32:    localOff += 2;    break;
-				case EDataTypeStride_64:    localOff += 3;    break;
+				default:                    return (TypeIdShort)-1;
+				case EDataTypeStride_8:                             break;
+				case EDataTypeStride_16:    ++localOff;             break;
+				case EDataTypeStride_32:    localOff += 2;          break;
+				case EDataTypeStride_64:    localOff += 3;          break;
 			}
 
 			localStride = 4;

@@ -465,18 +465,18 @@ extern "C" Bool Compiler_processDXIL(
 		U64 reqFlags = dxilRefl->GetRequiresFlags();
 		gotoIfError3(clean, DxilMapToESHExtension(reqFlags, &exts, demotions, e_rr));
 
-		Bool isPixelShader = toCompile->stageType == ESHPipelineStage_Pixel;
+		Bool isPixelShader = toCompile->stageType == EGfxPipelineStage_Pixel;
 
 		if (
-			toCompile->stageType == ESHPipelineStage_Compute ||
-			toCompile->stageType == ESHPipelineStage_MeshExt ||
-			toCompile->stageType == ESHPipelineStage_TaskExt
+			toCompile->stageType == EGfxPipelineStage_Compute ||
+			toCompile->stageType == EGfxPipelineStage_MeshExt ||
+			toCompile->stageType == EGfxPipelineStage_TaskExt
 		) {
 			dxilRefl->GetThreadGroupSize(&groupSize[0], &groupSize[1], &groupSize[2]);
 			gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr));
 		}
 
-		if (toCompile->stageType == ESHPipelineStage_Compute) {
+		if (toCompile->stageType == EGfxPipelineStage_Compute) {
 
 			U32 waveSizeRecommended, waveSizeMin, waveSizeMax;
 			dxilRefl->GetWaveSize(&waveSizeRecommended, &waveSizeMin, &waveSizeMax);

@@ -1,0 +1,37 @@
+{#- OxC3 host profile: Emscripten wasm64 via a locally installed emsdk.
+    Reads $EMSDK (default ~/emsdk). Conan 2.11-compatible: no arch=wasm64 /
+    compiler=emcc in old settings.yml, so arch=wasm + explicit -m64 flags.
+    emcc has NO ABI stability between versions - rebuild all packages when
+    bumping emsdk. EH mode (-fwasm-exceptions) and -m64 must match in every
+    consumer link. -#}
+{% set emsdk = os.getenv("EMSDK", os.path.join(os.getenv("HOME", "/root"), "emsdk")) %}
+{% set em = emsdk + "/upstream/emscripten" %}
+
+[settings]
+os=Emscripten
+arch=wasm
+compiler=clang
+compiler.version=19
+compiler.cppstd=gnu17
+compiler.cstd=gnu17
+compiler.libcxx=libc++
+
+[conf]
+# Emscripten's EH mode, -m64 and -pthread are ABI, but they live in conf, which does NOT feed
+# package_id by default: switching one silently reuses a package built the other way and only
+# fails at link with an undefined __resumeException. Listing them here makes the id track them.
+tools.info.package_id:confs=["tools.build:cflags", "tools.build:cxxflags", "tools.build:exelinkflags"]
+tools.cmake.cmaketoolchain:generator=Ninja
+tools.cmake.cmaketoolchain:user_toolchain=["{{ em }}/cmake/Modules/Platform/Emscripten.cmake"]
+tools.build:compiler_executables={"c": "{{ em }}/emcc", "cpp": "{{ em }}/em++"}
+tools.build:cflags=["-fwasm-exceptions", "-m64"]
+tools.build:cxxflags=["-fwasm-exceptions", "-m64"]
+tools.build:exelinkflags=["-fwasm-exceptions", "-m64", "-sALLOW_MEMORY_GROWTH=1", "-sSTACK_SIZE=8MB", "-sMAXIMUM_MEMORY=16GB"]
+
+[buildenv]
+CC={{ em }}/emcc
+CXX={{ em }}/em++
+AR={{ em }}/emar
+RANLIB={{ em }}/emranlib
+STRIP={{ em }}/emstrip
+EMSDK={{ emsdk }}

@@ -59,10 +59,11 @@ namespace {
 		oxc::c::U64 length;
 	};
 
-	void onPulled(oxc::c::RefPtr *resource, oxc::c::Buffer *data, void *context) {
+	void onPulled(void *resource, void *dataPtr, void *context) {
 
 		(void) resource;
 
+		const oxc::c::Buffer *data = (const oxc::c::Buffer*) dataPtr;
 		PullResult *result = (PullResult*) context;
 		++result->count;
 

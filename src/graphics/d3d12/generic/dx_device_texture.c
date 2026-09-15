@@ -502,7 +502,8 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_pull)(
 	const EDepthStencilFormat dsFormat = (EDepthStencilFormat) utex.depthFormat;
 	const U8 pullPlane = (U8) range->planeId;
 	const Bool pullsStencil = utex.depthFormat && pullPlane == 1;
-	const Bool isCombined = utex.depthFormat && EDepthStencilFormat_hasStencil(dsFormat) && EDepthStencilFormat_hasDepth(dsFormat);
+	const Bool isCombined = utex.depthFormat && EDepthStencilFormat_hasStencil(dsFormat) &&
+		EDepthStencilFormat_hasDepth(dsFormat);
 
 	//The barrier covers every plane the image has, matching the engine's single tracked layout: a stencil
 	// pull copies plane 1, and a barrier naming only plane 0 would leave it in its old layout, which the

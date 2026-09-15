@@ -22,6 +22,7 @@
 
 #include "graphics/generic/interface.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/tlas.h"
 #include "graphics/generic/opacity_micromap.h"
 #include "platforms/logx.h"
 #include "graphics/generic/device_buffer.h"
@@ -41,8 +42,25 @@ void BLAS_free(void *blasGeneric, const Allocator *alloc) {
 	BLAS_freeExt(blas);
 	CharString_free(&blas->base.name, alloc);
 
+	//The build claims a slot and prepareCompactBLAS hands it back, so a structure destroyed between the two,
+	// or one whose compaction is never prepared at all, is the one path left that can return it.
+	//Without this the slot stays claimed for the rest of the session and the pools grow by one every time.
+
+	if(blas->base.compactionQuery != U32_MAX) {
+
+		GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
+
+		GraphicsDevice_releaseCompactionQuery(device, blas->base.compactionQuery, alloc);
+		blas->base.compactionQuery = U32_MAX;
+	}
+
 	RefPtr_dec(&blas->base.asBuffer);
 	RefPtr_dec(&blas->base.tempScratchBuffer);
+
+	//The destination of a compaction that was prepared but never recorded; BLAS_freeExt above has already
+	// destroyed whatever the backend put in it.
+
+	RefPtr_dec(&blas->base.pendingCompactBuffer);
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
 		Buffer_free(&blas->cpuData, alloc);
@@ -212,7 +230,9 @@ Bool GraphicsDeviceRef_createBLAS(
 			}
 
 			default:
-				retError(clean, Error_unsupportedOperation(2, "GraphicsDeviceRef_createBLAS()::indexFormat must be R32u or R16u"));
+				retError(clean, Error_unsupportedOperation(
+					2, "GraphicsDeviceRef_createBLAS()::indexFormat must be R32u or R16u"
+				));
 		}
 
 		//Validate opacity micromaps (stage 1, special indices only)
@@ -359,6 +379,13 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	*blasPtr = *blas;
 	blasPtr->base.name = CharString_createNull();
+
+	//U32_MAX means no compacted size slot is claimed, which is what the free path reads to decide whether it
+	// has one to hand back.
+	//Set from the copied struct here rather than in a backend's init, so the sentinel holds for both backends
+	// and for a creation that fails before the backend ever ran.
+
+	blasPtr->base.compactionQuery = U32_MAX;
 
 	//Set as soon as the object exists rather than once it is fully built.
 	//A failure below frees the half built BLAS, and BLAS_freeExt reaches the backend through base.device,
@@ -733,6 +760,64 @@ void GraphicsDevice_releaseCompactionQuery(GraphicsDevice *device, U32 query, co
 //
 //Runs while the copy is being RECORDED, so a rejection reaches the caller there rather than from inside a
 //submit. See CommandListRef_compactBLASExt for what the rules mean to a caller.
+
+Bool GraphicsDeviceRef_markTlasesStaleForBLAS(GraphicsDeviceRef *deviceRef, BLASRef *blasRef, Bool duringSubmit, Error *e_rr) {
+
+	Bool s_uccess = true;
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	//liveTlases is device state a create or a free on another thread can be mutating.
+	//Reentrant by the lock's own convention: only an Acquired result unlocks, so a caller already holding
+	// the device lock (submit processing) passes straight through.
+
+	const ELockAcquire liveAcq = SpinLock_lock(&device->lock, U64_MAX);
+
+	if(liveAcq < ELockAcquire_Success)
+		retError(clean, Error_invalidState(
+			2, "GraphicsDeviceRef_markTlasesStaleForBLAS() couldn't acquire device lock"
+		));
+
+	for (U64 i = 0; i < device->liveTlases.length; ++i) {
+
+		TLAS *tlas = TLASRef_ptr((TLASRef*) device->liveTlases.ptr[i]);
+
+		//A device memory TLAS writes its own instance addresses, so whether it references this structure
+		// cannot be read from here and its addresses could not be re-resolved anyway. Skipped, and the
+		// caller owns it; see CommandListRef_compactBLASExt.
+
+		if(TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory))
+			continue;
+
+		for (U64 j = 0; j < tlas->cpuInstances.length; ++j) {
+
+			TLASInstanceData dat = (TLASInstanceData) { 0 };
+			TLAS_getInstanceDataCpu(tlas, j, &dat);
+
+			if (dat.blasCpu == blasRef) {
+
+				//InstancesDirty is what makes the next build actually re-resolve: an update on its own
+				// refits without refilling, so the TLAS would otherwise rebuild around the old address.
+
+				tlas->base.flagsExt |= (U8) (ETLASFlag_AddressesStale | ETLASFlag_InstancesDirty);
+
+				//staleAtSubmitId names the LAST submit the old address is valid for, which the refusal
+				// grace compares against (staleAtSubmitId >= submitId passes).
+				//At record time that is the upcoming submit (submitId); during submit processing the
+				// counter already advanced past the submit being processed, so it is submitId - 1: stamping
+				// the raw counter there would gift the NEXT submit the grace and let a stale trace through.
+
+				tlas->staleAtSubmitId = device->submitId - (duringSubmit ? 1 : 0);
+				break;
+			}
+		}
+	}
+
+	if(liveAcq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->lock);
+
+clean:
+	return s_uccess;
+}
 
 Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef *blasRef, Bool *recorded, Error *e_rr) {
 

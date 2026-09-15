@@ -110,17 +110,7 @@ extern "C" void Test_graphicsBindfulRays(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	//The table holds no reference of its own, so its descriptors go back before the resources they name do.
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table) {
-				(void) table.unset(0, 0, 1, nullptr);
-				(void) table.unset(1, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	//The same one triangle scene the bindless rays module uses
 
@@ -501,7 +491,8 @@ static void TestBindful_ommWithFormat(
 
 	//One triangle, so each micromap index buffer is exactly one element wide
 
-	const c::U8 ommStride = ommIndexFormat == c::ETextureFormatId_R32u ? 4 : (ommIndexFormat == c::ETextureFormatId_R16u ? 2 : 1);
+	const c::U8 ommStride =
+		ommIndexFormat == c::ETextureFormatId_R32u ? 4 : (ommIndexFormat == c::ETextureFormatId_R16u ? 2 : 1);
 
 	const c::U32 opaqueIndex = c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyOpaque, ommIndexFormat);
 	const c::U32 transparentIndex = c::EOMMSpecialIndex_pack(c::EOMMSpecialIndex_FullyTransparent, ommIndexFormat);
@@ -689,17 +680,7 @@ extern "C" void Test_graphicsBindfulOmm(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	gfx::DeviceBuffer positions, output;
 	gfx::CommandList emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table) {
-				(void) table.unset(0, 0, 1, nullptr);
-				(void) table.unset(1, 0, 1, nullptr);
-			}
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	const c::F32 triangle[12] = {
 		0, 0, 0, 1,
@@ -742,7 +723,9 @@ extern "C" void Test_graphicsBindfulOmm(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Bindful OMM heap", heap, e_rr)))
 		return;
 
-	if(!Test_assert(t, "tableCreate", heap.createTable(layout, "Bindful OMM table", table, c::EDescriptorTableFlags_None, e_rr)))
+	if(!Test_assert(t, "tableCreate", heap.createTable(
+		layout, "Bindful OMM table", table, c::EDescriptorTableFlags_None, e_rr
+	)))
 		return;
 
 	if(!Test_assert(t, "outputCreate", dev.createBuffer(
@@ -842,15 +825,7 @@ extern "C" void Test_graphicsBindfulRayQueryGraphics(oxc::c::Test *t, oxc::c::Gr
 	gfx::RenderTexture target;
 	gfx::CommandList commandList, emptyList;
 
-	struct TableGuard {
-
-		gfx::DescriptorTable &table;
-
-		~TableGuard() {
-			if(table)
-				(void) table.unset(0, 0, 1, nullptr);
-		}
-	} tableGuard{ table };
+	gfxtest::TableGuard tableGuard{ { &table } };
 
 	//The same one triangle scene the other raytracing modules use
 
