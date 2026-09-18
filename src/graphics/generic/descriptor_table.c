@@ -447,6 +447,12 @@ Bool DescriptorTableRef_unsetDescriptors(
 	if(layoutPtr->info.flags & EDescriptorLayoutFlags_HasPushDescriptors)
 		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_unsetDescriptors() called on a push descriptor"));
 
+	if(DescriptorBinding_immutableSamplerId(bindings.ptr[bindId]))
+		retError(clean, Error_invalidOperation(
+			0,
+			"DescriptorTableRef_unsetDescriptors() a baked sampler binding holds no descriptor to clear"
+		));
+
 	if(!count)
 		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_unsetDescriptors() needs count of >0"));
 
@@ -591,6 +597,20 @@ Bool DescriptorTableRef_setDescriptors(
 		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_setDescriptors() called on a push descriptor"));
 
 	const DescriptorBinding *b = &bindings.ptr[bindId];
+
+	//A baked sampler is in the layout itself and owns no slot in the table, so it has no offset to write at.
+	//D3D12 leaves such a binding out of the descriptor ranges entirely, which leaves its binding offset zero,
+	// so a write aimed here would land on the table's FIRST sampler and overwrite an unrelated one; Vulkan
+	// ignores the sampler a write names on an immutable binding.
+	//Refused rather than dropped, since reaching this at all means the caller thinks it bound something.
+
+	if(DescriptorBinding_immutableSamplerId(*b))
+		retError(clean, Error_invalidOperation(
+			0,
+			"DescriptorTableRef_setDescriptors() a baked sampler binding takes no descriptor; it is named by "
+			"the layout, not written to the table"
+		));
+
 	EGfxRegisterType type = b->registerType & EGfxRegisterType_TypeMask;
 
 	if(arrayId >= b->count)

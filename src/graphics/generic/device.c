@@ -345,6 +345,24 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 	if(!device)
 		return;
 
+	//Nothing below may run while the GPU works: the decs can destroy what a recorded command buffer names, and
+	//destroying a device wants every queue idle whatever the reference counts say. Counting keeps objects alive,
+	//it cannot stop the GPU. The PUBLIC wait is the one to call: it also drains the frames in flight, which has
+	//to happen here rather than below, since below is past the backend device those references destroy against.
+	//RefPtr_data puts the data after the header, so the ref precedes it.
+	//
+	//A device that never finished being created has nothing to wait for and no backend to ask.
+
+	GraphicsDeviceRef *deviceRef = ((RefPtr*) deviceGeneric) - 1;
+
+	if(device->framesInFlight) {
+
+		Error err = Error_none();
+
+		if(!GraphicsDeviceRef_wait(deviceRef, &err))
+			Log_errorLnx("GraphicsDevice_free() couldn't wait for the device, freeing regardless");
+	}
+
 	for(U64 i = 0; i < 4; ++i)
 		RefPtr_dec(&device->copyShaders[i]);
 
@@ -433,6 +451,9 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 	ListDeviceMemoryBlock_free(&device->allocator.blocks, alloc);
 	ListSpinLockPtr_free(&device->currentLocks, alloc);
+
+	//Empty by now, since the wait at the top drained them. A dec HERE would be past the backend device these
+	//references destroy against, so the warning is the right shape and is now unreachable rather than advisory.
 
 	for(U64 i = 0; i < device->framesInFlight; ++i) {
 
@@ -746,7 +767,10 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			!info ? 0 : 2, "GraphicsDevice_defaultBindlessLayout()::info and result are required"
 		));
 
-	if(result->bindings.ptr || result->bindingNames.ptr)
+	//Samplers too, since this overwrites the whole info: the sampler forms share storage, so the one term covers
+	// either of them, and a list left behind here is both leaked and mislabelled by the flags that come with it.
+
+	if(result->bindings.ptr || result->bindingNames.ptr || result->immutableSamplers.ptr)
 		retError(clean, Error_invalidParameter(
 			2, 0, "GraphicsDevice_defaultBindlessLayout()::result wasn't empty, probably indicates memleak"
 		));
@@ -1136,6 +1160,23 @@ Bool GraphicsDeviceRef_create(
 			gotoIfError3(clean, ListCharString_createCopyUnderlying(
 				&bindlessLayout->bindingNames, alloc, &descLayoutInfo.bindingNames, e_rr
 			));
+
+			//No sampler exists before the device does, so a sampler this layout bakes is only ever given by value.
+
+			if(
+				!(bindlessLayout->flags & EDescriptorLayoutFlags_InternalStaticSamplers) &&
+				bindlessLayout->immutableSamplers.length
+			)
+				retError(clean, Error_invalidParameter(
+					4, 0,
+					"GraphicsDeviceRef_create()::bindlessLayout names sampler refs; a sampler it bakes has to be added "
+					"by value through DescriptorLayoutInfo_addStaticSampler"
+				));
+
+			if(bindlessLayout->flags & EDescriptorLayoutFlags_InternalStaticSamplers)
+				gotoIfError3(clean, ListPLSamplerInfo_createCopy(
+					bindlessLayout->staticSamplers, alloc, &descLayoutInfo.staticSamplers, e_rr
+				));
 		}
 
 		else gotoIfError3(clean, GraphicsDevice_defaultBindlessLayout(

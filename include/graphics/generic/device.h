@@ -296,6 +296,8 @@ Bool GraphicsDevice_defaultBindlessLayout(
 // in which case there is no default table or pipeline layout and every pipeline has to bring its own.
 //The device copies it, so the caller keeps ownership and can free it right after.
 //Its flags are taken as given, so EDescriptorLayoutFlags_AllowBindlessOnArrays has to be set to allocate bindlessly.
+//A sampler it bakes is given by value (DescriptorLayoutInfo_addStaticSampler), since no sampler exists before the
+// device does; a layout naming sampler refs is refused.
 //reservedDescriptors is optional extra heap capacity added ON TOP of what the bindless set consumes, so
 // bindful descriptor tables can be created from the device's own heap (Device defaultHeap) and live beside
 // the bindless set without a second heap and the heap switch a second heap costs.

@@ -45,7 +45,7 @@ file(GLOB_RECURSE androidExtraSources CONFIGURE_DEPENDS
 	"${testRoot}/graphics/test/interface/*.cpp"
 )
 
-set(androidExtraLibs OxC3_graphics OxC3_formats_mesh)
+set(androidExtraLibs OxC3_graphics)
 
 if(EnableShaderCompiler)
 

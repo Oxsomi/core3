@@ -113,7 +113,7 @@ typedef enum ESHExtension {
 	//An ARRAY of samplers, which is only servable by the bindless _samplers[] array and so needs
 	// EGraphicsDeviceFlags_EnableDynamicSamplers on the device.
 	//A singular sampler is a plain binding or a static sampler and requires none of this.
-	//Reflection derived like Bindless, never annotation settable.
+	//Set by the annotation, and reflection also infers it for a binary declaring a sampler array of its own.
 
 	ESHExtension_DynamicSamplers             = 1 << 27,
 

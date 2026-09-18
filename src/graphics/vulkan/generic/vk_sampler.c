@@ -45,12 +45,12 @@ VkSamplerAddressMode mapVkAddressMode(ESamplerAddressMode addressMode) {
 	}
 }
 
+//Vulkan has the integer borders, but OxC3 reserves them so a sampler describes the same thing on both backends.
+
 VkBorderColor mapVkBorderColor(ESamplerBorderColor borderColor) {
 	switch (borderColor) {
 		case ESamplerBorderColor_OpaqueBlackFloat:   return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-		case ESamplerBorderColor_OpaqueBlackInt:     return VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 		case ESamplerBorderColor_OpaqueWhiteFloat:   return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-		case ESamplerBorderColor_OpaqueWhiteInt:     return VK_BORDER_COLOR_INT_OPAQUE_WHITE;
 		default:                                     return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 	}
 }

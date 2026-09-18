@@ -781,7 +781,7 @@ If the sampler is used on the GPU, it should be passed as a transition; stage is
   - filter: determining how the sampler filters the input image. A bitset of three properties: Mag, Min and Mip. If the respective bit is true it represents linear filtering rather than nearest filtering. This means there's 7 combinations ranging from nearest min/mag/mip all the way to linear min/mag/mip.
   - addressU, addressV, addressW: determining how out of bounds access for each texture is treated: Repeat, MirrorRepeat, ClampToEdge, ClampToBorder. ClampToBorder uses the borderColor to be filtered.
   - aniso: is anisotropy is applied and how much. 0 means no anisotropy and 1-16 means anistropy of that level.
-  - borderColor: what border color is used if one of the address modes (uvw) is ClampToBorder. TransparentBlack (0.xxxx), OpaqueBlackFloat (0.xxx, 1.f), OpaqueBlackInt (0.xxx, 1), OpaqueWhiteFloat(1.f.xxxx), OpaqueWhiteInt (1.xxxx).
+  - borderColor: what border color is used if one of the address modes (uvw) is ClampToBorder. TransparentBlack (0.xxxx), OpaqueBlackFloat (0.xxx, 1.f), OpaqueWhiteFloat (1.f.xxxx). The two integer entries beside them are reserved and refused at sampler creation; see the immutable sampler section for why.
   - comparisonFunction: comparison function for SamplerComparisonState. Same type (ECompareOp) as depth stencil state. One of Gt, Geq, Eq, Neq, Leq, Lt, Always, Never.
   - enableComparison: whether or not the comparison function is used.
   - mipBias, minLod, maxLod:
@@ -1926,13 +1926,13 @@ All of them are written at once rather than one at a time, because a partial set
 
 An immutable sampler is baked into the layout rather than bound:
 
-- **D3D12** puts it in the root signature as a `D3D12_STATIC_SAMPLER_DESC`, which costs none of the 64 DWORDs and needs no descriptor range or heap slot.
+- **D3D12** puts it in the root signature as a `D3D12_STATIC_SAMPLER_DESC`, which costs none of the 64 DWORDs and needs no descriptor range.
 - **Vulkan** puts it in the set layout as `pImmutableSamplers`.
-- It takes a binding but **no descriptor**, so nothing is written for it.
-- Held by ref rather than by value so several layouts naming the same sampler share one `VkSampler`; D3D12 never makes an object of one and only reads its `SamplerInfo`.
+- It takes a binding but **no descriptor**, so nothing is written for it. Writing one through `DescriptorTableRef_setDescriptors` is refused rather than dropped, since the binding owns no slot in the table for the write to land in. The binding does still count toward the heap's `maxSamplers` on both backends: Vulkan allocates the descriptor its set layout declares, and D3D12 reserves one it never writes.
+- Given either by ref, with `DescriptorLayoutInfo_addImmutableSampler`, so several layouts naming the same sampler share one `VkSampler`; or by value, with `DescriptorLayoutInfo_addStaticSampler`, which takes a `SamplerInfo` and has the layout create the sampler itself, owning it like a ref. By value is the only form the bindless layout `GraphicsDeviceRef_create` is given can carry, since that layout exists before any sampler does. D3D12 never makes an object of either and only reads the `SamplerInfo`.
 - It cannot be an array. A dynamically indexed sampler array needs real descriptors.
 
-`ESamplerBorderColor` is already the enumerated set a static sampler allows (transparent black, opaque black, opaque white), so every sampler OxC3 can express is expressible as an immutable one.
+`ESamplerBorderColor` is the enumerated set a static sampler allows, so every sampler OxC3 can express is expressible as an immutable one. Its two integer entries are **reserved**, named `ESamplerBorderColor_ReservedOpaqueBlackInt` and `_ReservedOpaqueWhiteInt`. Neither D3D12 path can describe one at the floor OxC3 builds against: a heap sampler's `D3D12_SAMPLER_DESC` holds the border as `FLOAT[4]` and the integer form needs `D3D12_SAMPLER_DESC2` through `ID3D12Device11::CreateSampler2`, while a root signature static sampler needs version 1.2 and `D3D12_STATIC_SAMPLER_DESC1`. Vulkan has both, so honouring them would mean one thing on one backend and another on the other. `GraphicsDeviceRef_createSampler` refuses them instead, and they keep their numbering because oiPL and oiSP store the value as it stands.
 
 #### Dynamic samplers are opt in
 
@@ -1947,6 +1947,8 @@ Without the flag:
 `ESHExtension_DynamicSamplers` is set by the annotation, and reflection also infers it for any binary declaring a sampler **array** of its own, the same way `ESHExtension_Bindless` is derived. `GraphicsDeviceRef_checkShaderFeatures` refuses such a binary on a device whose layout has no sampler array, naming the flag, instead of letting it resolve against a binding that was never declared. A singular sampler is unaffected: it is a plain binding, or better, an immutable one.
 
 Prefer immutable samplers. Dynamic samplers only pay for themselves when the sampler is genuinely selected by an index the shader computes.
+
+A bindless device gets its static samplers by starting from `GraphicsDevice_defaultBindlessLayout`, adding one sampler binding per sampler, each naming a by-value sampler added with `DescriptorLayoutInfo_addStaticSampler` and each carrying its own name in `bindingNames`, and passing the result as `bindlessLayout` to `GraphicsDeviceRef_create`. There is a binding per sampler rather than one array, so an aniso, a trilinear, a nearest and a border sampler are four bindings in the one layout every pipeline on the device shares, raytracing included, and they cost no root DWORD on D3D12. On Vulkan each is a binding in whichever set its register space names, so a space nothing else uses spends one of the four `OXC3_VK_MAX_BOUND_SETS` allows however many samplers sit in it. Number them on SPIR-V from set 0 binding 1 up, beside the slot the dynamic array would take, and on DXIL from `s0` in `space0` up, so the numbering holds whether or not the device also enables dynamic samplers. That leaves set 1 for the resource arrays and set 2 for the globals, one spare, and it costs the same set either way since the dynamic array already owns set 0 when it is enabled. The shaders declare plain `SamplerState`s at those bindings and carry no `DynamicSamplers` extension.
 
 The resources are kept alive by the command list, like a bound table's are, and per resource scope transitions remain the caller's job until auto transitions land.
 

@@ -478,6 +478,7 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsBindfulPushDescriptors(t, deviceRef);
 	c::Test_graphicsBindfulPushTexture(t, deviceRef);
 	c::Test_graphicsBindfulStaticSampler(t, deviceRef);
+	c::Test_graphicsBindfulStaticSamplerByValue(t, deviceRef);
 	c::Test_graphicsBindfulReservedSpace(t, deviceRef);
 	c::Test_graphicsBindfulPushClass(t, deviceRef);
 	c::Test_graphicsGpuExecute(t, deviceRef);

@@ -36,6 +36,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
@@ -652,22 +653,29 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 //Executing commands
 
-Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+//Waits ONE fence value rather than everything submitted, so a caller that only needs its own frame back does
+//not stall the rest. A value already passed, 0 included, returns without waiting.
+
+Bool DxGraphicsDevice_waitFence(GraphicsDeviceRef *deviceRef, U64 fenceId, Error *e_rr) {
 
 	Bool s_uccess = true;
+	HANDLE eventHandle = NULL;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	U64 completedValue = deviceExt->commitSemaphore->lpVtbl->GetCompletedValue(deviceExt->commitSemaphore);
+	//Creation failed before there was anything to wait on
 
-	if (completedValue >= deviceExt->fenceId)
-		return s_uccess;
+	if(!deviceExt->commitSemaphore)
+		goto clean;
 
-	const HANDLE eventHandle = CreateEventExA(NULL, NULL, 0, EVENT_ALL_ACCESS);
+	if(deviceExt->commitSemaphore->lpVtbl->GetCompletedValue(deviceExt->commitSemaphore) >= fenceId)
+		goto clean;
+
+	eventHandle = CreateEventExA(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
 	gotoIfError3(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
-		deviceExt->commitSemaphore, deviceExt->fenceId, eventHandle
+		deviceExt->commitSemaphore, fenceId, eventHandle
 	), e_rr));
 
 	//An INFINITE wait would inherit a wedged submit as a silent forever-hang, and a hard deadline would
@@ -682,7 +690,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 			break;
 
 		if(waitRes != WAIT_TIMEOUT)
-			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_wait() event wait failed"));
+			retError(clean, Error_invalidState(0, "DxGraphicsDevice_waitFence() event wait failed"));
 
 		gotoIfError3(clean, dxCheck(
 			deviceExt->device->lpVtbl->GetDeviceRemovedReason(deviceExt->device), e_rr
@@ -692,14 +700,22 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 
 		if(!(waited % 5))
 			Log_performanceLnx(
-				"GraphicsDeviceRef_wait() still waiting on the commit fence after %"PRIu64"s, "
+				"DxGraphicsDevice_waitFence() still waiting on the commit fence after %"PRIu64"s, "
 				"the device may be wedged", waited
 			);
 	}
 
 clean:
-	CloseHandle(eventHandle);
+
+	if(eventHandle)
+		CloseHandle(eventHandle);
+
 	return s_uccess;
+}
+
+Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(deviceRef), Dx);
+	return DxGraphicsDevice_waitFence(deviceRef, deviceExt->fenceId, e_rr);
 }
 
 DxCommandAllocator *DxGraphicsDevice_getCommandAllocator(
@@ -744,15 +760,17 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 	//So the sampler offset has to scale by the sampler heap's stride.
 	//Using the resource heap's happens to work only where the two coincide,
 	// and lands somewhere else entirely on hardware where they don't.
-	//Without EnableDynamicSamplers the device has NO sampler heap and the root signature no sampler table,
-	// so both lists carry exactly what exists: the sampler table at root param 0 when present (it is the
-	// first binding of the default layout), resources at the next.
+	//The root signature only declares a sampler table for a sampler binding that took real descriptors, which
+	// is what anySampler means; a baked sampler is in the signature itself and takes none, while still sizing
+	// a sampler heap. So the lists are keyed on the LAYOUT rather than on that heap, and carry exactly what
+	// exists: the sampler table at root param 0 when present (it is the first binding of the default layout),
+	// resources at the next.
 
 	ID3D12DescriptorHeap *descriptorHeaps[2];
 	D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[2];
 	U32 descriptorCount = 0;
 
-	if (heap->samplerHeap.heap) {
+	if (DescriptorLayoutRef_ptr(device->defaultDescLayout)->anySampler && heap->samplerHeap.heap) {
 
 		descriptorHeaps[descriptorCount] = heap->samplerHeap.heap;
 
@@ -1330,7 +1348,11 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		unifiedTexture->currentImageId %= unifiedTexture->images;
 	}
 
-	//Fence value after present
+	//Fence value after present. Each swapchain remembers it, so a resize can wait on the frame that used THAT
+	//swapchain instead of on everything submitted since.
+
+	for(U64 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i)
+		TextureRef_getImplExtT(DxSwapchain, swapchains->ptr[i])->lastFenceId = deviceExt->fenceId;
 
 	gotoIfError3(clean, dxCheck(
 		queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId),

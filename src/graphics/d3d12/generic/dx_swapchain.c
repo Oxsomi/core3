@@ -126,6 +126,13 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 
 	else {
 
+		//ResizeBuffers recreates the back buffers IN PLACE, so there is nothing to retire and the resources
+		//released below may still be executing. The wait is the API's requirement, paid here rather than by
+		//every caller, and only on the frame that last presented THIS swapchain: a value already passed, or
+		//a swapchain that never presented, returns without waiting.
+
+		gotoIfError3(clean, DxGraphicsDevice_waitFence(deviceRef, swapchainExt->lastFenceId, e_rr));
+
 		for(U8 i = 0; i < swapchain->base.images; ++i) {
 
 			UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchainRef, NULL);

@@ -1245,6 +1245,12 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 			for(U64 j = 0; j < deviceExt->retiredAs[i].length; ++j)
 				deviceExt->destroyAccelerationStructure(deviceExt->device, deviceExt->retiredAs[i].ptr[j], NULL);
 
+		//Same for a retired swapchain the device outlived: destroying one is a device level entry point.
+
+		for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+			for(U64 j = 0; j < deviceExt->retiredSwapchains[i].length; ++j)
+				deviceExt->destroySwapchain(deviceExt->device, deviceExt->retiredSwapchains[i].ptr[j], NULL);
+
 		//Only set when push descriptors were emulated; destroying the pool frees the sets with it.
 
 		if(deviceExt->cbufferPool)
@@ -1263,8 +1269,10 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 	ListVkPipelineStageFlags_free(&deviceExt->waitStages, alloc);
 	ListVkSemaphore_free(&deviceExt->waitSemaphoresList, alloc);
-	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 		ListVkAccelerationStructureKHR_free(&deviceExt->retiredAs[i], alloc);
+		ListVkSwapchainKHR_free(&deviceExt->retiredSwapchains[i], alloc);
+	}
 
 	ListVkQueryPool_free(&deviceExt->compactionPools, alloc);
 	ListVkResult_free(&deviceExt->results, alloc);
@@ -1290,6 +1298,14 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
+	VkFence pending[MAX_FRAMES_IN_FLIGHT];
+	U32 pendingCount = 0;
+
+	//Creation failed before there was anything to wait on
+
+	if(!deviceExt->device)
+		goto clean;
+
 	//vkDeviceWaitIdle has no timeout, so a wedged submit turns the caller into a SILENT forever-hang.
 	//A hard deadline would be dishonest in both directions: a slow but correct workload would be failed
 	// by a number, and a real wedge would come back as an ordinary error a caller might swallow with the
@@ -1298,9 +1314,6 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 	// name the exact wait, and it fails only on what the driver actually reports, device loss included.
 	//VK_TIMEOUT is tested by name, since checkVkError treats every non-negative result as success.
 	//Deadline policy stays with the harness that owns the run, not with the runtime.
-
-	VkFence pending[MAX_FRAMES_IN_FLIGHT];
-	U32 pendingCount = 0;
 
 	for(U8 i = 0; i < device->framesInFlight; ++i)
 		if(deviceExt->commitFencePending[i])
@@ -1623,6 +1636,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			deviceExt->destroyAccelerationStructure(deviceExt->device, retired->ptr[i], NULL);
 
 		gotoIfError3(clean, ListVkAccelerationStructureKHR_clear(retired, e_rr));
+
+		//And the swapchains a resize replaced: the same fence proves nothing still uses their images.
+
+		ListVkSwapchainKHR *retiredChains = &deviceExt->retiredSwapchains[device->fifId];
+
+		for(U64 i = 0; i < retiredChains->length; ++i)
+			deviceExt->destroySwapchain(deviceExt->device, retiredChains->ptr[i], NULL);
+
+		gotoIfError3(clean, ListVkSwapchainKHR_clear(retiredChains, e_rr));
 	}
 
 	//Read back and resolve the timestamps of the frame that used this slot framesInFlight submits ago, now that its
@@ -1678,6 +1700,11 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		}
 
 		VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchains->ptr[i]);
+
+		//Which submit a later resize has to wait out. Stamped at ACQUIRE, because a frame may carry swapchains
+		//and no command lists at all, and such a frame still acquires and presents.
+
+		swapchainExt->lastSubmitId = device->submitId;
 
 		VkSemaphore semaphore = swapchainExt->semaphores.ptr[device->fifId];
 

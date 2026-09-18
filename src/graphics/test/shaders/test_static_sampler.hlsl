@@ -18,29 +18,30 @@
 *  This is called dual licensing.
 */
 
-//The BINDLESS sampler array, which nothing else in the suite touches.
-//_samplers is the one bindless array that owns a whole descriptor set to itself on Vulkan (set 0, while every
-// resource array sits at set 1), and it is the array EGraphicsDeviceFlags_EnableDynamicSamplers turns off.
-//Without a test that indexes it dynamically, dropping it by default would look like it cost nothing.
+//STATIC samplers beside the bindless set: the device's layout was created from
+// GraphicsDevice_defaultBindlessLayout plus a sampler binding per sampler, each naming a by-value sampler, so the
+// shader reaches them as plain bindings and needs no DynamicSamplers extension and no sampler index.
+//SPIRV set 0 bindings 1 and up, beside the slot the dynamic array would take; DXIL s0 and up in space 0, outside
+// the reserved space.
+//Two of them, differing only in address mode, so a layout that resolved a binding to the wrong sampler shows up as
+// a wrong texel rather than as a sampler that merely works.
 //One entrypoint per file, as in the other test shaders.
 
 #include "@resources.hlsli"
 #include "@pack.hlsli"
 
-struct SamplerPush {
+struct StaticSamplerPush {
 	U32 texture;         //Bindless read handle of the source texture
-	U32 samplerId;       //Sampler's samplerLocation, its index into _samplers
 	U32 output;          //Bindless write handle of the output buffer
-	U32 padding;
+	U32 padding0;
+	U32 padding1;
 };
 
-PUSH_CONSTANT SamplerPush _push;
+PUSH_CONSTANT StaticSamplerPush _push;
 
-//The annotation is what declares _samplers and the sampler() accessor at all: it sets
-//__OXC_EXT_DYNAMICSAMPLERS, resources.hlsli declares the array behind it, and the binary carries
-//ESHExtension_DynamicSamplers so a device without EnableDynamicSamplers refuses it by name.
+_vkBinding(1, 0) SamplerState _staticSampler : register(s0, space0);
+_vkBinding(2, 0) SamplerState _staticSamplerRepeat : register(s1, space0);
 
-[[oxc::extension("DynamicSamplers")]]
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(U32x3 id : SV_DispatchThreadID) {
@@ -49,8 +50,20 @@ void main(U32x3 id : SV_DispatchThreadID) {
 	// readback compares against the source rather than against an interpolation of it.
 
 	F32x2 uv = (F32x2(id.xy) + 0.5f) / 8.0f;
+	U32 i = id.y * 8 + id.x;
 
-	F32x4 texel = texture2D(_push.texture).SampleLevel(sampler(_push.samplerId), uv, 0);
+	rwBuffer(_push.output).Store(i * 4, packUnorm4x8(
+		texture2D(_push.texture).SampleLevel(_staticSampler, uv, 0)
+	));
 
-	rwBuffer(_push.output).Store((id.y * 8 + id.x) * 4, packUnorm4x8(texel));
+	//A whole texture out of range through each sampler tells them apart: the clamping one holds the far corner
+	// for every thread, the repeating one wraps back to the texel it started from.
+
+	rwBuffer(_push.output).Store((64 + i) * 4, packUnorm4x8(
+		texture2D(_push.texture).SampleLevel(_staticSampler, uv + 1.0f, 0)
+	));
+
+	rwBuffer(_push.output).Store((128 + i) * 4, packUnorm4x8(
+		texture2D(_push.texture).SampleLevel(_staticSamplerRepeat, uv + 1.0f, 0)
+	));
 }

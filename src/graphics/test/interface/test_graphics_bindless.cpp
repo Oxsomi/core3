@@ -877,3 +877,118 @@ extern "C" void Test_graphicsBindlessSampler(oxc::c::Test *t, oxc::c::GraphicsDe
 			Test_assert(t, "bindlessSamplerResults", match);
 		}
 }
+
+//STATIC samplers on a bindless device: the device was created with a bindless layout carrying a sampler binding
+// per sampler, each naming a by-value sampler, so the shader reaches them as plain bindings beside the bindless set.
+//Nothing is bound or pushed for them, so a correct result is only possible if the device's layout baked them.
+//The two differ only in address mode, so the pair also proves each binding resolved to its OWN sampler rather than
+// both landing on the first one.
+//Run by the config module on a device it creates for the purpose.
+
+extern "C" void Test_graphicsStaticSamplerDevice(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
+
+	using namespace oxc;
+	using namespace oxc::gfx;
+
+	c::Error *e_rr = &t->err;
+	const c::Allocator *alloc = c::Platform_instance->alloc;
+
+	Test_setModule(t, "Bindless/staticSamplerDevice");
+
+	Device dev = Device::share(deviceRef);
+
+	gfxtest::OwnedSHFile shader(alloc);
+
+	if (!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_static_sampler.oiSH", &shader.list)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping static sampler device tests");
+		return;
+	}
+
+	//R = x and G = y, so a texel fetched from the wrong place reads as the wrong coordinate
+
+	c::U32 texels[64];
+
+	for(c::U32 y = 0; y < 8; ++y)
+		for(c::U32 x = 0; x < 8; ++x)
+			texels[y * 8 + x] = 0xFF000000u | (y << 8) | x;
+
+	c::Buffer texelRef = c::Buffer_createRefConst(texels, sizeof(texels));
+
+	DeviceTexture pattern;
+	DeviceBuffer output;
+
+	if(!Test_assert(t, "patternCreate", dev.createTexture(
+		c::ETextureType_2D, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_ShaderReadBindless, 8, 8, 1,
+		"Static sampler pattern", &texelRef, pattern, nullptr, e_rr
+	)))
+		return;
+
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag)(c::EGraphicsResourceFlag_ShaderWriteBindless | c::EGraphicsResourceFlag_CPUBacked),
+		"Static sampler output", 192 * sizeof(c::U32), output, nullptr, e_rr
+	)))
+		return;
+
+	Pipeline pipeline;
+	PipelineLayout bindlessLayout;
+
+	if(!gfxtest::computePipelinePush(t, dev, shader.list, pipeline, bindlessLayout))
+		return;
+
+	CommandList commandList, emptyList;
+
+	if(
+		!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)) ||
+		!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
+	)
+		return;
+
+	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
+	Test_assert(t, "endEmpty", emptyList.end(e_rr));
+
+	const c::U32 pushData[4] = { pattern.readHandle(), output.writeHandle(), 0, 0 };
+
+	const c::Transition transitions[2] = {
+		{ .resource = pattern.handle(), .stage = c::EPipelineStage_Compute },
+		{ .resource = output.handle(),  .stage = c::EPipelineStage_Compute, .isWrite = true }
+	};
+
+	Test_assert(t, "begin", commandList.begin(true, e_rr));
+
+	{
+		CommandScope scope = commandList.scope({ transitions[0], transitions[1] }, 1, {}, e_rr);
+		Test_assert(t, "scope", (c::Bool) scope);
+		Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr));
+		Test_assert(t, "push", scope.setPushConstants(pushData, e_rr));
+		Test_assert(t, "dispatch", scope.dispatch2D(1, 1, e_rr));
+		Test_assert(t, "scopeEnd", scope.end(e_rr));
+	}
+
+	Test_assert(t, "end", commandList.end(e_rr));
+
+	if (gfxtest::submitAndWait(t, dev, commandList))
+		if (gfxtest::pullBuffer(t, dev, emptyList, output)) {
+
+			const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
+
+			c::Bool match = true, matchClamp = true, matchRepeat = true;
+
+			//In range through the clamping sampler, so every texel comes back as it went in
+
+			for(c::U32 i = 0; i < 64; ++i)
+				match &= values[i] == texels[i];
+
+			//A whole texture out of range: clamping holds the far corner, repeating wraps to where it started
+
+			for(c::U32 i = 0; i < 64; ++i)
+				matchClamp &= values[64 + i] == texels[63];
+
+			for(c::U32 i = 0; i < 64; ++i)
+				matchRepeat &= values[128 + i] == texels[i];
+
+			Test_assert(t, "staticSamplerDeviceResults", match);
+			Test_assert(t, "staticSamplerDeviceClamp", matchClamp);
+			Test_assert(t, "staticSamplerDeviceRepeat", matchRepeat);
+		}
+}

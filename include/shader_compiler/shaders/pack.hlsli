@@ -46,6 +46,22 @@ U32 packF16(F32 v)              { return f32tof16(v); }
 F32x2 unpackF16x2(U32 v)        { return F32x2(f16tof32(v & 0xFFFF), f16tof32(v >> 16)); }
 U32 packF16x2(F32x2 v)          { return f32tof16(v.x) | (f32tof16(v.y) << 16); }
 
+//---------------------------------------------------------------- unorm8
+
+//Four unorm8 channels as x | y<<8 | z<<16 | w<<24, the byte order an RGBA8 texel is laid out in.
+//Out of range channels SATURATE rather than wrap: every format this packs into clamps, and a wrap would put
+// an overshoot at the opposite end of the range instead of at the end it overshot.
+//The lanes are summed with a dot against ones rather than or'd together, since the shifts leave them disjoint
+// and the vector form keeps all four in one operation.
+
+U32 packUnorm4x8(F32x4 v) {
+	return dot(U32x4(saturate(v) * 255 + 0.5) << U32x4(0, 8, 16, 24), 1.xxxx);
+}
+
+F32x4 unpackUnorm4x8(U32 p) {
+	return F32x4((p.xxxx >> U32x4(0, 8, 16, 24)) & 0xFF) / 255;
+}
+
 //---------------------------------------------------------------- F21, unsigned
 
 //21 bits:
