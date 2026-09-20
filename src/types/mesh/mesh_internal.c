@@ -443,23 +443,16 @@ static Bool MeshTriangles_growSums(MeshTriangles *t, U32 vertexCount, const Allo
 	Bool s_uccess = true;
 
 	const U64 needed = (U64) vertexCount * 3;
-	const U64 had = t->normalSums.length;
 
-	if(needed <= had)
+	if(needed <= t->normalSums.length)
 		goto clean;
 
-	//Doubled rather than grown to fit, since this is called per triangle.
+	//A resize is the whole of it, since the list grows its capacity geometrically and zeroes what it adds.
+	//Reserving a doubled LENGTH first is what must not happen here: the length is the highest vertex index any
+	// triangle has named so far and it grows a few elements at a time, so the doubled figure lands just above
+	// what is already allocated on almost every triangle, and each of those asks copies the whole array.
 
-	U64 capacity = had ? had : 3 * 1024;
-
-	while(capacity < needed)
-		capacity *= 2;
-
-	gotoIfError3(clean, ListF32_reserve(&t->normalSums, capacity, alloc, e_rr));
 	gotoIfError3(clean, ListF32_resize(&t->normalSums, needed, alloc, e_rr));
-
-	for(U64 i = had; i < needed; ++i)
-		t->normalSums.ptrNonConst[i] = 0;
 
 clean:
 	return s_uccess;
