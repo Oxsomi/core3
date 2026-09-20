@@ -44,6 +44,13 @@ void Test_vec2f(Test *test) {
 	Test_assert(test, "F32x2_xx",         F32x2_x(xx) == 3 && F32x2_y(xx) == 3);
 	Test_assert(test, "F32x2_yy",         F32x2_x(yy) == 4 && F32x2_y(yy) == 4);
 
+	F32 dst2[2] = { -1, -1 };
+	F32x2_store1(dst2, v2);
+	Test_assert(test, "F32x2_store1",     dst2[0] == 3 && dst2[1] == -1);
+
+	F32x2_store2(dst2, v2);
+	Test_assert(test, "F32x2_store2",     dst2[0] == 3 && dst2[1] == 4);
+
 	//Comparisons
 
 	F32x2 a = F32x2_create2(2, 3);

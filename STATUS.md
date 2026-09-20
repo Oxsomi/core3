@@ -3,7 +3,7 @@
 Honest, per-feature maturity so nobody designs against something that doesn't exist yet.
 Legend: ✅ implemented + tested · 🟡 implemented, caveats · 🚧 in progress · 📄 spec/design only · ❌ not planned near-term
 
-Last updated: 2026-08-04 (v3.2.105). Update this table in the same PR as the feature.
+Last updated: 2026-09-20 (v3.2.106). Update this table in the same PR as the feature.
 
 ## Core (types_*)
 
@@ -36,8 +36,17 @@ Last updated: 2026-08-04 (v3.2.105). Update this table in the same PR as the fea
 | DDS | 🟡 | 🟡 | – | Modern DXGI subset; no YUV/depth/legacy |
 | HDR | ✅ | ✅ | – | RGBE (Radiance); -Y +X orientation; RLE and flat |
 | WAV | ✅ | ✅ | – | |
-| OBJ | ✅ | ❌ | – | Read-only; fills the shared mesh output (formats/mesh) |
-| PLY | ✅ | ❌ | – | Read-only; ASCII and binary, little and big endian |
+| OBJ | ✅ | ✅ | – | The flat mesh form (`types/mesh`) both ways. See the note below on what it carries |
+| PLY | ✅ | ✅ | – | ASCII and binary, little and big endian, read and written. Same flat mesh form as OBJ |
+
+**Known issue, both mesh readers:** a read fills one fixed flat form, which carries a position, one packed
+normal, one uv pair and the indices. Every other per-vertex property a file declares is parsed, so the widths
+between the wanted ones are known, and then dropped. A gaussian splat is the case that makes this visible: its
+62 vertex channels (3 f_dc, 45 f_rest, opacity, scale, rot) read without error and only the position survives.
+Carrying arbitrary properties needs a richer in-memory mesh and is not planned. The writers emit this same flat
+form rather than reproducing the file they came from, so `write(read(f)) != f` for any file richer than the
+form: a splat reads and writes back as bare geometry. Round trips are tested per format, big endian included,
+and compare triangles rather than vertices, since a read renumbers vertices into first use order.
 
 ## Platforms
 

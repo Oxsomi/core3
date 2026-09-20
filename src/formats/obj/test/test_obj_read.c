@@ -18,9 +18,9 @@
 *  This is called dual licensing.
 */
 
-//formats/mesh/test/test_mesh_obj.c
+//formats/obj/test/test_obj_read.c
 
-#include "test_mesh_shared.h"
+#include "test_obj_shared.h"
 #include "formats/obj/obj_file.h"
 #include "types/math/pack.h"
 #include "types/math/flp.h"
@@ -29,14 +29,8 @@
 #include "types/container/memory_stream.h"
 #include "types/container/ref_ptr.h"
 
-static MeshResult readObj(Test *t, const C8 *text, EMeshReadFlags flags, Bool attrs, Bool words) {
-
-	U64 len = 0;
-
-	while(text[len])
-		++len;
-
-	return Test_meshRead(t, OBJ_read, text, len, flags, attrs, words);
+static MeshResult readObj(Test *t, const C8 *text, EMeshFlags flags, Bool attrs, Bool words) {
+	return Test_meshRead(t, Obj_read, text, CharString_calcStrLen(text, U64_MAX), flags, attrs, words, &t->err);
 }
 
 static F32x4 wordNormal(const MeshResult *r, U32 i) {
@@ -62,11 +56,11 @@ static const C8 *const cubeObj =
 	"f 1/1/5 2/2/5 6/3/5 5/4/5\n"
 	"f 4/1/6 8/2/6 7/3/6 3/4/6\n";
 
-void Test_OBJCubeWithEverything(Test *t) {
+void Test_objCubeWithEverything(Test *t) {
 
 	Test_setModule(t, "OBJ/cube");
 
-	MeshResult r = readObj(t, cubeObj, EMeshReadFlags_None, true, true);
+	MeshResult r = readObj(t, cubeObj, EMeshFlags_None, true, true);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -106,7 +100,7 @@ void Test_OBJCubeWithEverything(Test *t) {
 	MeshResult_free(t, &r);
 }
 
-void Test_OBJDedup(Test *t) {
+void Test_objDedup(Test *t) {
 
 	Test_setModule(t, "OBJ/dedup");
 
@@ -118,7 +112,7 @@ void Test_OBJDedup(Test *t) {
 		"f 1//1 2//1 3//1\n"
 		"f 2//1 4//1 3//1\n";
 
-	MeshResult r = readObj(t, obj, EMeshReadFlags_None, true, false);
+	MeshResult r = readObj(t, obj, EMeshFlags_None, true, false);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -140,7 +134,7 @@ void Test_OBJDedup(Test *t) {
 		"f 1//1 2//1 3//1\n"
 		"f 2//2 4//2 3//2\n";
 
-	r = readObj(t, split, EMeshReadFlags_None, true, false);
+	r = readObj(t, split, EMeshFlags_None, true, false);
 
 	if(!Test_assert(t, "readSplit", r.ok))
 		return;
@@ -150,7 +144,7 @@ void Test_OBJDedup(Test *t) {
 	MeshResult_free(t, &r);
 }
 
-void Test_OBJNegativeIndices(Test *t) {
+void Test_objNegativeIndices(Test *t) {
 
 	Test_setModule(t, "OBJ/negativeIndices");
 
@@ -162,7 +156,7 @@ void Test_OBJNegativeIndices(Test *t) {
 		"v 1 1 0\n"
 		"f -3 -1 -2\n";
 
-	MeshResult r = readObj(t, obj, EMeshReadFlags_None, false, false);
+	MeshResult r = readObj(t, obj, EMeshFlags_None, false, false);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -179,14 +173,14 @@ void Test_OBJNegativeIndices(Test *t) {
 	MeshResult_free(t, &r);
 }
 
-void Test_OBJCornerForms(Test *t) {
+void Test_objCornerForms(Test *t) {
 
 	Test_setModule(t, "OBJ/cornerForms");
 
 	//v/vt without a normal, v//vn without a uv and plain v, each reporting only what it named.
 
 	const C8 *withUv = "v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nf 1/1 2/2 3/3\n";
-	MeshResult r = readObj(t, withUv, EMeshReadFlags_None, true, false);
+	MeshResult r = readObj(t, withUv, EMeshFlags_None, true, false);
 
 	if(Test_assert(t, "readUv", r.ok)) {
 		Test_assert(t, "uvOnlyHasUvs", r.info.hasUvs && !r.info.hasNormals);
@@ -197,7 +191,7 @@ void Test_OBJCornerForms(Test *t) {
 	MeshResult_free(t, &r);
 
 	const C8 *withNormal = "v 0 0 0\nv 1 0 0\nv 0 1 0\nvn 0 0 1\nf 1//1 2//1 3//1\n";
-	r = readObj(t, withNormal, EMeshReadFlags_None, true, false);
+	r = readObj(t, withNormal, EMeshFlags_None, true, false);
 
 	if(Test_assert(t, "readNormal", r.ok)) {
 		Test_assert(t, "normalOnlyHasNormals", r.info.hasNormals && !r.info.hasUvs);
@@ -207,7 +201,7 @@ void Test_OBJCornerForms(Test *t) {
 	MeshResult_free(t, &r);
 
 	const C8 *plain = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
-	r = readObj(t, plain, EMeshReadFlags_None, true, false);
+	r = readObj(t, plain, EMeshFlags_None, true, false);
 
 	if(Test_assert(t, "readPlain", r.ok))
 		Test_assert(t, "plainHasNeither", !r.info.hasNormals && !r.info.hasUvs);
@@ -218,7 +212,7 @@ void Test_OBJCornerForms(Test *t) {
 	// thousand has no F16 encoding at all.
 
 	const C8 *wide = "v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0.33333334 70000\nf 1/1 2/1 3/1\n";
-	r = readObj(t, wide, EMeshReadFlags_WideUvs, true, false);
+	r = readObj(t, wide, EMeshFlags_WideUvs, true, false);
 
 	if(Test_assert(t, "readWide", r.ok)) {
 		Test_assert(t, "wideBytes", Buffer_length(r.attributes) == 3 * sizeof(MeshAttributeWide));
@@ -229,7 +223,7 @@ void Test_OBJCornerForms(Test *t) {
 	MeshResult_free(t, &r);
 }
 
-void Test_OBJTextTolerance(Test *t) {
+void Test_objTextTolerance(Test *t) {
 
 	Test_setModule(t, "OBJ/textTolerance");
 
@@ -246,7 +240,7 @@ void Test_OBJTextTolerance(Test *t) {
 		"g group\r\n"
 		"f 1/1 2/1 3/1\r\n";
 
-	MeshResult r = readObj(t, obj, EMeshReadFlags_None, true, false);
+	MeshResult r = readObj(t, obj, EMeshFlags_None, true, false);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -259,14 +253,14 @@ void Test_OBJTextTolerance(Test *t) {
 	MeshResult_free(t, &r);
 }
 
-void Test_OBJComputeNormals(Test *t) {
+void Test_objComputeNormals(Test *t) {
 
 	Test_setModule(t, "OBJ/computeNormals");
 
 	//One triangle in the xy plane wound counter clockwise: every corner gets exactly +z.
 
 	const C8 *tri = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
-	MeshResult r = readObj(t, tri, EMeshReadFlags_ComputeNormals, true, false);
+	MeshResult r = readObj(t, tri, EMeshFlags_ComputeNormals, true, false);
 
 	if(Test_assert(t, "readTri", r.ok)) {
 
@@ -286,7 +280,7 @@ void Test_OBJComputeNormals(Test *t) {
 		"f 1 2 3\n"
 		"f 1 2 4\n";
 
-	r = readObj(t, fold, EMeshReadFlags_ComputeNormals, true, false);
+	r = readObj(t, fold, EMeshFlags_ComputeNormals, true, false);
 
 	if(Test_assert(t, "readFold", r.ok)) {
 
@@ -301,7 +295,7 @@ void Test_OBJComputeNormals(Test *t) {
 	//A file that supplies its own normals has them replaced under the flag, and still reports having supplied them.
 
 	const C8 *supplied = "v 0 0 0\nv 1 0 0\nv 0 1 0\nvn 1 0 0\nf 1//1 2//1 3//1\n";
-	r = readObj(t, supplied, EMeshReadFlags_ComputeNormals, true, false);
+	r = readObj(t, supplied, EMeshFlags_ComputeNormals, true, false);
 
 	if(Test_assert(t, "readSupplied", r.ok)) {
 		Test_assert(t, "reportsSupplied", r.info.hasNormals);
@@ -311,7 +305,7 @@ void Test_OBJComputeNormals(Test *t) {
 	MeshResult_free(t, &r);
 }
 
-void Test_OBJTriangleWords(Test *t) {
+void Test_objTriangleWords(Test *t) {
 
 	Test_setModule(t, "OBJ/triangleWords");
 
@@ -324,7 +318,7 @@ void Test_OBJTriangleWords(Test *t) {
 		"f 1 2 5\n"
 		"f 2 4 6\n";
 
-	MeshResult r = readObj(t, obj, EMeshReadFlags_None, false, true);
+	MeshResult r = readObj(t, obj, EMeshFlags_None, false, true);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -340,9 +334,7 @@ void Test_OBJTriangleWords(Test *t) {
 	const F32x4 tilted = wordNormal(&r, 3);
 	const F32 s = 0.57735f;
 
-	Test_assert(t, "tilted",
-		F32_abs(F32x4_x(tilted) - s) < 0.01f && F32_abs(F32x4_y(tilted) - s) < 0.01f && F32_abs(F32x4_z(tilted) - s) < 0.01f
-	);
+	Test_assert(t, "tilted", F32x4_eqApproxAdv3(tilted, F32x4_xxxx4(s), 0, 0.01f));
 
 	//The material bits are clear on a file that names no material.
 
@@ -351,7 +343,7 @@ void Test_OBJTriangleWords(Test *t) {
 	MeshResult_free(t, &r);
 }
 
-void Test_OBJMaterials(Test *t) {
+void Test_objMaterials(Test *t) {
 
 	Test_setModule(t, "OBJ/materials");
 
@@ -368,7 +360,7 @@ void Test_OBJMaterials(Test *t) {
 		"usemtl red\n"
 		"f 1 2 3\n";
 
-	MeshResult r = readObj(t, obj, EMeshReadFlags_None, false, true);
+	MeshResult r = readObj(t, obj, EMeshFlags_None, false, true);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -384,7 +376,7 @@ void Test_OBJMaterials(Test *t) {
 	//With a usemtl before the first face there is no default, and the first name is 0.
 
 	const C8 *named = "v 0 0 0\nv 1 0 0\nv 0 1 0\nusemtl a\nf 1 2 3\nusemtl b\nf 1 2 3\n";
-	r = readObj(t, named, EMeshReadFlags_None, false, true);
+	r = readObj(t, named, EMeshFlags_None, false, true);
 
 	if(Test_assert(t, "readNamed", r.ok)) {
 		Test_assert(t, "namedCount", r.info.materialCount == 2);
@@ -395,7 +387,7 @@ void Test_OBJMaterials(Test *t) {
 	MeshResult_free(t, &r);
 }
 
-void Test_OBJQuantizedPositions(Test *t) {
+void Test_objQuantizedPositions(Test *t) {
 
 	Test_setModule(t, "OBJ/quantizedPositions");
 
@@ -406,7 +398,7 @@ void Test_OBJQuantizedPositions(Test *t) {
 		"v -1 -2 -3\nv 3 2 1\nv 1 0 -1\n"
 		"f 1 2 3\n";
 
-	MeshResult r = readObj(t, obj, EMeshReadFlags_QuantizePositions, false, false);
+	MeshResult r = readObj(t, obj, EMeshFlags_QuantizePositions, false, false);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -424,7 +416,7 @@ void Test_OBJQuantizedPositions(Test *t) {
 	MeshResult_free(t, &r);
 
 	const C8 *flat = "v 0 0 5\nv 1 0 5\nv 0 1 5\nf 1 2 3\n";
-	r = readObj(t, flat, EMeshReadFlags_QuantizePositions, false, false);
+	r = readObj(t, flat, EMeshFlags_QuantizePositions, false, false);
 
 	if(Test_assert(t, "readFlat", r.ok)) {
 		Test_assert(t, "flatAabb", r.info.aabbMin[2] == 5 && r.info.aabbMax[2] == 5);
@@ -435,7 +427,7 @@ void Test_OBJQuantizedPositions(Test *t) {
 
 	//Without the flag the bounds are still reported and the positions are still three F32s.
 
-	r = readObj(t, obj, EMeshReadFlags_None, false, false);
+	r = readObj(t, obj, EMeshFlags_None, false, false);
 
 	if(Test_assert(t, "readPlain", r.ok)) {
 		Test_assert(t, "plainBytes", Buffer_length(r.positions) == 3 * 3 * sizeof(F32));
@@ -445,14 +437,14 @@ void Test_OBJQuantizedPositions(Test *t) {
 	MeshResult_free(t, &r);
 }
 
-void Test_OBJGeometryOnly(Test *t) {
+void Test_objGeometryOnly(Test *t) {
 
 	Test_setModule(t, "OBJ/geometryOnly");
 
 	//Neither attributes nor face normals asked for: the normals in the file are read and dropped, and nothing
 	// is computed that no sink wants.
 
-	MeshResult r = readObj(t, cubeObj, EMeshReadFlags_None, false, false);
+	MeshResult r = readObj(t, cubeObj, EMeshFlags_None, false, false);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -468,19 +460,17 @@ void Test_OBJGeometryOnly(Test *t) {
 
 static void expectRefused(Test *t, const C8 *name, const C8 *obj) {
 
-	MeshResult r = readObj(t, obj, EMeshReadFlags_None, true, true);
+	//The read reports into NULL: a refusal is the expected outcome, not an error to leave pending
 
-	//A refusal leaves the error set, and an assert made with one pending counts as failed, so it is cleared
-	// first and the refusal itself is what gets asserted.
+	MeshResult r = Test_meshRead(
+		t, Obj_read, obj, CharString_calcStrLen(obj, U64_MAX), EMeshFlags_None, true, true, NULL
+	);
 
-	const Bool refused = !r.ok;
-	t->err = Error_none();
-
-	Test_assert(t, name, refused);
+	Test_assert(t, name, !r.ok);
 	MeshResult_free(t, &r);
 }
 
-void Test_OBJValidation(Test *t) {
+void Test_objValidation(Test *t) {
 
 	Test_setModule(t, "OBJ/validation");
 
@@ -509,11 +499,147 @@ void Test_OBJValidation(Test *t) {
 		MeshInfo info;
 		U64 off = 0;
 
-		Test_assert(t, "positionsRequired", !OBJ_read(
-			(StreamRef*) src, &off, EMeshReadFlags_None, &info, &output, t->alloc, NULL
+		Test_assert(t, "positionsRequired", !Obj_read(
+			(StreamRef*) src, &off, EMeshFlags_None, &info, &output, t->alloc, NULL
 		));
-		Test_assert(t, "nullOutput", !OBJ_read((StreamRef*) src, &off, EMeshReadFlags_None, &info, NULL, t->alloc, NULL));
+		
+		Test_assert(t, "nullOutput", !Obj_read((StreamRef*) src, &off, EMeshFlags_None, &info, NULL, t->alloc, NULL));
 	}
 
 	RefPtr_dec((RefPtr**) &src);
+}
+
+//hasNormals/hasUvs say what the FILE carried, allNormals/allUvs say whether anything written is a placeholder.
+//They differ exactly where a consumer would be misled: partial coverage, total absence, and a computed normal
+//that had no triangle with area to accumulate.
+
+void Test_objCoverageFlags(Test *t) {
+
+	Test_setModule(t, "OBJ/coverage");
+
+	//Every corner names both, so nothing written is a placeholder.
+
+	const C8 *full =
+		"v 0 0 0\nv 1 0 0\nv 0 1 0\n"
+		"vt 0 0\nvt 1 0\nvt 0 1\n"
+		"vn 0 0 1\n"
+		"f 1/1/1 2/2/1 3/3/1\n";
+
+	MeshResult r = readObj(t, full, EMeshFlags_None, true, false);
+
+	if(Test_assert(t, "full", r.ok)) {
+		Test_assert(t, "fullHas", r.info.hasNormals && r.info.hasUvs);
+		Test_assert(t, "fullAll", r.info.allNormals && r.info.allUvs);
+	}
+
+	MeshResult_free(t, &r);
+
+	//One corner of three names neither, which is the case the file level flags cannot report.
+
+	const C8 *partial =
+		"v 0 0 0\nv 1 0 0\nv 0 1 0\n"
+		"vt 0 0\nvt 1 0\n"
+		"vn 0 0 1\n"
+		"f 1/1/1 2/2/1 3\n";
+
+	r = readObj(t, partial, EMeshFlags_None, true, false);
+
+	if(Test_assert(t, "partial", r.ok)) {
+		Test_assert(t, "partialHas", r.info.hasNormals && r.info.hasUvs);
+		Test_assert(t, "partialAllNormals", !r.info.allNormals);
+		Test_assert(t, "partialAllUvs", !r.info.allUvs);
+	}
+
+	MeshResult_free(t, &r);
+
+	//Nothing named at all is strictly false rather than vacuously true.
+
+	const C8 *none = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+	r = readObj(t, none, EMeshFlags_None, true, false);
+
+	if(Test_assert(t, "none", r.ok)) {
+		Test_assert(t, "noneHas", !r.info.hasNormals && !r.info.hasUvs);
+		Test_assert(t, "noneAll", !r.info.allNormals && !r.info.allUvs);
+	}
+
+	MeshResult_free(t, &r);
+
+	//ComputeNormals fills every vertex a triangle with area touched, so allNormals goes true even though the
+	//file named none. hasNormals still reports the file, which is what it is for.
+
+	r = readObj(t, none, EMeshFlags_ComputeNormals, true, false);
+
+	if(Test_assert(t, "computed", r.ok)) {
+		Test_assert(t, "computedHas", !r.info.hasNormals);
+		Test_assert(t, "computedAll", r.info.allNormals);
+		Test_assert(t, "computedUvsStillFalse", !r.info.allUvs);
+	}
+
+	MeshResult_free(t, &r);
+
+	//A degenerate face has no area, so its vertices accumulate nothing and keep the placeholder even under
+	//ComputeNormals. This is the case that makes allNormals worth more than "did the file supply them".
+
+	const C8 *degenerate = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\nv 5 5 5\nf 4 4 4\n";
+	r = readObj(t, degenerate, EMeshFlags_ComputeNormals, true, false);
+
+	if(Test_assert(t, "degenerate", r.ok))
+		Test_assert(t, "degenerateAll", !r.info.allNormals);
+
+	MeshResult_free(t, &r);
+}
+
+//An F16 uv is exact near zero and coarse once it wraps, so the reported error is about how FAR the uvs go, not
+//how fine they are. A caller compares it against its own texel: 1/4096 for a 4k texture is about 0.000244.
+
+void Test_objUvPrecision(Test *t) {
+
+	Test_setModule(t, "OBJ/uvPrecision");
+
+	const C8 *small =
+		"v 0 0 0\nv 1 0 0\nv 0 1 0\n"
+		"vt 0 0\nvt 0.000244140625 0\nvt 0 0.5\n"
+		"f 1/1 2/2 3/3\n";
+
+	MeshResult r = readObj(t, small, EMeshFlags_None, true, false);
+
+	if(Test_assert(t, "small", r.ok))
+		Test_assert(t, "smallExact", r.info.maxUvError == 0);
+
+	MeshResult_free(t, &r);
+
+	//The same fraction offset from a uv that has wrapped a thousand times is past what an F16 can hold.
+
+	const C8 *wrapped =
+		"v 0 0 0\nv 1 0 0\nv 0 1 0\n"
+		"vt 1000.25 0\nvt 1 0\nvt 0 1\n"
+		"f 1/1 2/2 3/3\n";
+
+	r = readObj(t, wrapped, EMeshFlags_None, true, false);
+
+	//At 1000 the F16 grid steps by 0.5, so a quarter offset sits exactly between two representable values and is
+	//lost whole. That is 1024 texels of a 4k texture, from a uv that only wrapped a thousand times.
+
+	if(Test_assert(t, "wrapped", r.ok))
+		Test_assert(t, "wrappedLossy", r.info.maxUvError >= 0.25f);
+
+	MeshResult_free(t, &r);
+
+	//WideUvs keeps the file's F32 exactly, so the same file reports nothing lost.
+
+	r = readObj(t, wrapped, EMeshFlags_WideUvs, true, false);
+
+	if(Test_assert(t, "wide", r.ok))
+		Test_assert(t, "wideExact", r.info.maxUvError == 0);
+
+	MeshResult_free(t, &r);
+
+	//A file naming no uv writes the (0, 0) placeholder, which round trips, so there is nothing to report.
+
+	r = readObj(t, "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", EMeshFlags_None, true, false);
+
+	if(Test_assert(t, "noUvs", r.ok))
+		Test_assert(t, "noUvsExact", r.info.maxUvError == 0);
+
+	MeshResult_free(t, &r);
 }

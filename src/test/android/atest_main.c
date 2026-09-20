@@ -51,7 +51,9 @@ ATEST_SUITE(types_container);
 ATEST_SUITE(formats_bmp);
 ATEST_SUITE(formats_dds);
 ATEST_SUITE(formats_hdr);
-ATEST_SUITE(formats_mesh);
+ATEST_SUITE(types_mesh);
+ATEST_SUITE(formats_obj);
+ATEST_SUITE(formats_ply);
 ATEST_SUITE(formats_oiBC);
 ATEST_SUITE(formats_oiCA);
 ATEST_SUITE(formats_oiDL);
@@ -97,7 +99,9 @@ static const ATestSuite ATest_suites[] = {
 	{ "formats_bmp",          OxC3_test_formats_bmp,          false, false },
 	{ "formats_dds",          OxC3_test_formats_dds,          false, false },
 	{ "formats_hdr",          OxC3_test_formats_hdr,          false, false },
-	{ "formats_mesh",         OxC3_test_formats_mesh,         false, false },
+	{ "types_mesh",           OxC3_test_types_mesh,           false, false },
+	{ "formats_obj",          OxC3_test_formats_obj,          false, false },
+	{ "formats_ply",          OxC3_test_formats_ply,          false, false },
 	{ "formats_oiBC",         OxC3_test_formats_oiBC,         false, false },
 	{ "formats_oiCA",         OxC3_test_formats_oiCA,         false, false },
 	{ "formats_oiDL",         OxC3_test_formats_oiDL,         false, false },

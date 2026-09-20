@@ -141,6 +141,34 @@ static inline C8 CharString_getAt(const CharString str, U64 i) {
 	return i < CharString_length(str) ? str.ptr[i] : C8_MAX;
 }
 
+//The next whitespace separated token at or after *pos, as a ref into s, with *pos left just past it.
+//A run of whitespace is one separator, so an empty token never comes back; false means none is left.
+//Whitespace is what C8_isWhitespace says, so a line terminator inside s separates like a space does.
+
+static inline Bool CharString_nextToken(const CharString s, U64 *pos, CharString *token) {
+
+	if(!pos || !token)
+		return false;
+
+	const U64 len = CharString_length(s);
+	U64 i = *pos;
+
+	while(i < len && C8_isWhitespace(s.ptr[i]))
+		++i;
+
+	if(i >= len)
+		return false;
+
+	const U64 start = i;
+
+	while(i < len && !C8_isWhitespace(s.ptr[i]))
+		++i;
+
+	*token = CharString_createRefSizedConst(s.ptr + start, i - start, false);
+	*pos = i;
+	return true;
+}
+
 static inline Bool CharString_setAt(const CharString str, U64 i, C8 c) {
 
 	if (i >= CharString_length(str) || CharString_isConstRef(str) || !c)

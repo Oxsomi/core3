@@ -198,6 +198,25 @@ static inline I32x4 I32x4_load4(const void *arr) {
 	return result;
 }
 
+//Writes the low components to possibly misaligned memory, leaving whatever follows them untouched.
+//NULL is a write that does nothing, which mirrors the loads above returning zero for it.
+
+static inline void I32x4_store1(void *arr, I32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(I32)), Buffer_createRefConst(&a, sizeof(I32)));
+}
+
+static inline void I32x4_store2(void *arr, I32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(I32) * 2), Buffer_createRefConst(&a, sizeof(I32) * 2));
+}
+
+static inline void I32x4_store3(void *arr, I32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(I32) * 3), Buffer_createRefConst(&a, sizeof(I32) * 3));
+}
+
+static inline void I32x4_store4(void *arr, I32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(I32) * 4), Buffer_createRefConst(&a, sizeof(I32) * 4));
+}
+
 #ifdef __cplusplus
 	}
 #endif

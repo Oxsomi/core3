@@ -17,36 +17,32 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-# One library for every mesh reader rather than one per format: the readers share the window, the sink and
-# what a triangle becomes, and that shared half is internal, so it lives here beside them instead of in include/.
-
-file(GLOB formatsMeshHeaders CONFIGURE_DEPENDS
-	"../../../include/formats/mesh/*.h"
-	"../../../include/formats/obj/*.h"
-	"../../../include/formats/ply/*.h"
-)
-
-file(GLOB formatsMeshSources CONFIGURE_DEPENDS "*.c" "*.h")
+file(GLOB formatsPLYHeaders CONFIGURE_DEPENDS "../../../include/formats/ply/*.h")
+file(GLOB formatsPLYSources CONFIGURE_DEPENDS "*.c")
 
 add_library(
-	OxC3_formats_mesh
+	OxC3_formats_ply
 	STATIC
-	${formatsMeshHeaders}
-	${formatsMeshSources}
+	${formatsPLYHeaders}
+	${formatsPLYSources}
 	CMakeLists.txt
 )
 
-set_target_properties(OxC3_formats_mesh PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_mesh PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container)
+set_target_properties(OxC3_formats_ply PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_ply PUBLIC OxC3_types_mesh)
+
+# See the note in ../obj/CMakeLists.txt: the shared half is internal and is reached by path.
+
+target_include_directories(OxC3_formats_ply PRIVATE ../../types/mesh)
 
 if(EnableTests AND OxC3TestExecutables)
 
 	include(../../../cmake/oxc3.cmake)
 
 	oxc3_add_test(
-		NAME     OxC3_formats_mesh_test
+		NAME     OxC3_formats_ply_test
 		FOLDER   Oxsomi/test/formats
-		LIBS     OxC3_types_container_test_util OxC3_formats_mesh
+		LIBS     OxC3_types_container_test_util OxC3_types_mesh_test_util OxC3_formats_ply
 		INCLUDES "../../../include"
 	)
 

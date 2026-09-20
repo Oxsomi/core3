@@ -21,7 +21,7 @@
 //formats/ply/ply_file.h
 
 #pragma once
-#include "formats/mesh/mesh.h"
+#include "types/mesh/mesh.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -45,12 +45,37 @@ typedef struct Error Error;
 // without x, y and z, a face list of fewer than three corners, an index past the vertex count, a scalar type the
 // specification does not name and a body shorter than the header promised.
 
-Bool PLY_read(
+Bool Ply_read(
 	StreamRef *stream,
 	U64 *off,                     //Left after the last byte consumed
-	EMeshReadFlags flags,
+	EMeshFlags flags,
 	MeshInfo *info,
 	const MeshOutput *output,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+typedef enum EPlyWriteFormat {
+	EPlyWriteFormat_Ascii,
+	EPlyWriteFormat_BinaryLittleEndian,
+	EPlyWriteFormat_BinaryBigEndian,
+	EPlyWriteFormat_Count
+} EPlyWriteFormat;
+
+//Writing the flat mesh form back out as a PLY.
+//What comes out is the form, not the file it was read from: a vertex element carrying a position and, where the
+// info says they are meaningful, a normal and a uv, then a face element of triangles. Any other property a
+// source file declared is already gone by the time a writer sees the form.
+//Positions are written at full F32 precision whether or not they were quantized on the way in.
+//The binary forms cost no formatting and are the ones for large meshes; ascii pays a format call per line.
+
+Bool Ply_write(
+	const MeshInput *input,
+	const MeshInfo *info,
+	EMeshFlags layout,        //The flags the read used, which describe the input's layout
+	EPlyWriteFormat format,
+	StreamRef *stream,
+	U64 *off,                     //Left after the last byte written
 	const Allocator *alloc,
 	Error *e_rr
 );

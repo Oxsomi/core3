@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "formats/mesh.hpp"
+#include "types/mesh.hpp"
 
 namespace oxc {
 
@@ -40,9 +40,9 @@ namespace oxc {
 		[[nodiscard]] inline c::Bool read(
 			const c::Buffer &fileBytes, const file::Types &types, const c::MeshOutput &output,
 			c::MeshInfo &info, const c::Allocator *alloc,
-			c::EMeshReadFlags flags = c::EMeshReadFlags_None, c::Error *e_rr = nullptr
+			c::EMeshFlags flags = c::EMeshFlags_None, c::Error *e_rr = nullptr
 		) noexcept {
-			return mesh::read(c::OBJ_read, fileBytes, types, output, info, alloc, flags, e_rr);
+			return mesh::read(c::Obj_read, fileBytes, types, output, info, alloc, flags, e_rr);
 		}
 
 		//Into owned Buffers, which materializes the whole mesh. See mesh::read for when that is the wrong call.
@@ -51,10 +51,10 @@ namespace oxc {
 			const c::Buffer &fileBytes, const file::Types &types,
 			Buffer &positions, Buffer &indices, Buffer *attributes, Buffer *triangles,
 			c::MeshInfo &info, const c::Allocator *alloc,
-			c::EMeshReadFlags flags = c::EMeshReadFlags_None, c::Error *e_rr = nullptr
+			c::EMeshFlags flags = c::EMeshFlags_None, c::Error *e_rr = nullptr
 		) noexcept {
 			return mesh::read(
-				c::OBJ_read, fileBytes, types, positions, indices, attributes, triangles, info, alloc, flags, e_rr
+				c::Obj_read, fileBytes, types, positions, indices, attributes, triangles, info, alloc, flags, e_rr
 			);
 		}
 	}

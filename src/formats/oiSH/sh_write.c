@@ -254,7 +254,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 				U64 shaderBufferId = 0;
 
 				for (; shaderBufferId < shaderBufferList.length; ++shaderBufferId)
-					if(shaderBufferList.ptr[shaderBufferId].hash == reg.shaderBuffer.hash)
+					if(SBFile_equals(shaderBufferList.ptr + shaderBufferId, &reg.shaderBuffer))
 						break;
 
 				if (shaderBufferId >= (U16)(U16_MAX - 1))
@@ -640,7 +640,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 				U64 k = 0;
 
 				for (; k < shaderBufferList.length; ++k)
-					if(shaderBufferList.ptr[k].hash == reg.shaderBuffer.hash)
+					if(SBFile_equals(shaderBufferList.ptr + k, &reg.shaderBuffer))
 						break;
 
 				reg.reg.shaderBufferId = (U16) k;

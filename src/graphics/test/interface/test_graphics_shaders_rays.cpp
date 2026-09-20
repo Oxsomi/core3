@@ -173,16 +173,22 @@ static void TestShaders_ommSpecialIndexWithFormat(
 	const c::DeviceData positionData = positions.region();
 	const c::DeviceData indexBufferData = indices.region();
 
-	const c::BLASCreateInfo opaqueInfo = c::BLASCreateInfo_indexedWithOmmIndicesExt(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData,
+	const c::BLASGeometry opaqueInfoGeometry = c::BLASGeometry_indexedWithOmmIndicesExt(
+		c::ETextureFormatId_RGBA32f, 0, 16, positionData,
 		c::ETextureFormatId_R16u, indexBufferData,
 		ommIndexFormat, ommOpaque.region()
 	);
 
-	const c::BLASCreateInfo transparentInfo = c::BLASCreateInfo_indexedWithOmmIndicesExt(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData,
+	const c::BLASCreateInfo opaqueInfo = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &opaqueInfoGeometry
+	);
+
+	const c::BLASGeometry transparentInfoGeometry = c::BLASGeometry_indexedWithOmmIndicesExt(
+		c::ETextureFormatId_RGBA32f, 0, 16, positionData,
 		c::ETextureFormatId_R16u, indexBufferData,
 		ommIndexFormat, ommTransparent.region()
+	);
+
+	const c::BLASCreateInfo transparentInfo = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &transparentInfoGeometry
 	);
 
 	if(!Test_assert(t, "ommCreateBlasOpaque", dev.createBlas(opaqueInfo, "OMM BLAS, fully opaque", blasOpaque, e_rr)))
@@ -498,12 +504,14 @@ static void TestShaders_ommMicromapArray(
 		if(!traced)
 			break;
 
-		const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_indexedWithOmmExt(
-			c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16,
-			positions.region(),
+		const c::BLASGeometry blasInfoGeometry = c::BLASGeometry_indexedWithOmmExt(
+			c::ETextureFormatId_RGBA32f, 0, 16, positions.region(),
 			c::ETextureFormatId_R16u, indices.region(),
 			c::ETextureFormatId_R16u, ommIndex[k].region(),
 			micromap.handle()
+		);
+
+		const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &blasInfoGeometry
 		);
 
 		traced &= Test_assert(t, "ommArrayCreateBlas", dev.createBlas(blasInfo, "OMM array BLAS", blas[k], e_rr));
@@ -722,8 +730,9 @@ static void TestShaders_raysWithFile(
 	// of an update to have been built with it.
 	//Our own validation only checks the refit's flags, so leaving it off here fails in the driver instead.
 
-	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_unindexed(
-		c::ERTASBuildFlags_AllowUpdate, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positions.region()
+	const c::BLASGeometry blasInfoGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 16, positions.region());
+
+	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_single(c::ERTASBuildFlags_AllowUpdate, &blasInfoGeometry
 	);
 
 	if(!Test_assert(t, "createBlas", dev.createBlas(blasInfo, "Ray trace BLAS", blas, e_rr)))

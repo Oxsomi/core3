@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//formats/mesh.hpp
+//types/mesh.hpp
 //
 //The glue every mesh reader's C++ layer shares: the bytes a consumer already holds become a stream, and the
 // records come back either through sinks the caller owns or as owned Buffers. obj.hpp and ply.hpp are each a
@@ -32,7 +32,7 @@
 namespace oxc {
 
 	namespace c {
-		#include "formats/mesh/mesh.h"
+		#include "types/mesh/mesh.h"
 		#include "types/container/memory_stream.h"
 	}
 
@@ -41,7 +41,7 @@ namespace oxc {
 		//Both C readers have this signature, which is what lets one wrapper serve either.
 
 		using ReadFunc = c::Bool (*)(
-			c::StreamRef*, c::U64*, c::EMeshReadFlags, c::MeshInfo*, const c::MeshOutput*, const c::Allocator*, c::Error*
+			c::StreamRef*, c::U64*, c::EMeshFlags, c::MeshInfo*, const c::MeshOutput*, const c::Allocator*, c::Error*
 		);
 
 		//The caller's bytes behind a readable stream. BORROWED: the stream takes a ref over them, so they must
@@ -68,7 +68,7 @@ namespace oxc {
 		[[nodiscard]] inline c::Bool read(
 			ReadFunc fn, const c::Buffer &fileBytes, const file::Types &types, const c::MeshOutput &output,
 			c::MeshInfo &info, const c::Allocator *alloc,
-			c::EMeshReadFlags flags = c::EMeshReadFlags_None, c::Error *e_rr = nullptr
+			c::EMeshFlags flags = c::EMeshFlags_None, c::Error *e_rr = nullptr
 		) noexcept {
 
 			const RefPtr<c::OxStream> in = sourceStream(fileBytes, types, e_rr);
@@ -90,7 +90,7 @@ namespace oxc {
 			ReadFunc fn, const c::Buffer &fileBytes, const file::Types &types,
 			Buffer &positions, Buffer &indices, Buffer *attributes, Buffer *triangles,
 			c::MeshInfo &info, const c::Allocator *alloc,
-			c::EMeshReadFlags flags = c::EMeshReadFlags_None, c::Error *e_rr = nullptr
+			c::EMeshFlags flags = c::EMeshFlags_None, c::Error *e_rr = nullptr
 		) noexcept {
 
 			positions.release();

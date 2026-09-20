@@ -18,20 +18,24 @@
 *  This is called dual licensing.
 */
 
-//formats/mesh/mesh_internal.c
+//types/mesh/mesh_internal.c
 
 #include "mesh_internal.h"
 #include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/string.h"
+#include "types/math/vec4f.h"
+#include "types/math/vec4i.h"
+#include "types/math/vec4f_swizzle.h"
+#include "types/math/pack.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/base/c8.h"
 #include "types/base/mathf.h"
+#include "types/base/mathi.h"
 #include "types/base/string_read.h"
-#include "types/math/vec4f.h"
-#include "types/math/vec4f_swizzle.h"
-#include "types/math/pack.h"
+
+#include <stdarg.h>
 
 //---------------------------------------------------------------- Source
 
@@ -42,17 +46,18 @@ Bool MeshSource_create(StreamRef *stream, U64 off, const Allocator *alloc, MeshS
 	if(!stream || !src)
 		retError(clean, Error_nullPointer(0, "MeshSource_create()::stream and src are required"));
 
-	*src = (MeshSource) { .stream = RefPtr_data(stream, OxStream), .alloc = alloc, .base = off };
+	*src = (MeshSource) { .alloc = alloc, .pos = off };
 
-	if(!src->stream->read)
+	const OxStream *s = RefPtr_data(stream, OxStream);
+
+	if(!s->read)
 		retError(clean, Error_unsupportedOperation(0, "MeshSource_create()::stream is not readable"));
 
-	if(off > src->stream->size)
-		retError(clean, Error_outOfBounds(1, off, src->stream->size, "MeshSource_create()::off is past the stream"));
+	if(off > s->size)
+		retError(clean, Error_outOfBounds(1, off, s->size, "MeshSource_create()::off is past the stream"));
 
-	Buffer window = Buffer_createNull();
-	gotoIfError3(clean, Buffer_createUninitializedBytes(MESH_WINDOW, alloc, &window, e_rr));
-	src->buf = window.ptrNonConst;
+	src->size = s->size;
+	gotoIfError3(clean, StreamCursor_create(stream, MESH_WINDOW, false, alloc, &src->cursor, e_rr));
 
 clean:
 	return s_uccess;
@@ -60,11 +65,10 @@ clean:
 
 void MeshSource_free(MeshSource *src) {
 
-	if(!src || !src->buf)
+	if(!src || !src->cursor.stream)
 		return;
 
-	Buffer window = Buffer_createManagedPtr(src->buf, MESH_WINDOW);
-	Buffer_free(&window, src->alloc);
+	StreamCursor_close(&src->cursor, src->alloc);
 	*src = (MeshSource) { 0 };
 }
 
@@ -72,24 +76,26 @@ Bool MeshSource_available(MeshSource *src, U64 *available, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(src->pos >= src->fill) {
+	if(!src || !available)
+		retError(clean, Error_nullPointer(0, "MeshSource_available()::src and available are required"));
 
-		src->base += src->fill;
-		src->pos = 0;
-		src->fill = 0;
-
-		if(src->base < src->stream->size) {
-
-			const U64 remaining = src->stream->size - src->base;
-			src->fill = remaining < MESH_WINDOW ? remaining : MESH_WINDOW;
-
-			gotoIfError3(clean, src->stream->read(
-				src->stream, src->base, src->fill, Buffer_createRef(src->buf, src->fill), src->alloc, e_rr
-			));
-		}
+	if(src->pos >= src->size) {
+		*available = 0;
+		goto clean;
 	}
 
-	*available = src->fill - src->pos;
+	const U64 window = Buffer_length(src->cursor.cacheData);
+	const U64 start = src->cursor.lastLocation;
+
+	//Outside the window, so it moves to the cursor: an empty destination is the load only form of a read
+
+	if(start == U64_MAX || src->pos < start || src->pos >= start + window)
+		gotoIfError3(clean, StreamCursor_read(
+			&src->cursor, Buffer_createNull(), src->pos, 0, U64_min(window, src->size - src->pos), false,
+			src->alloc, e_rr
+		));
+
+	*available = U64_min(src->cursor.lastLocation + window, src->size) - src->pos;
 
 clean:
 	return s_uccess;
@@ -98,32 +104,32 @@ clean:
 Bool MeshSource_readBytes(MeshSource *src, void *dst, U64 n, Error *e_rr) {
 
 	Bool s_uccess = true;
-	U8 *out = (U8*) dst;
 
-	while(n) {
+	if(!src)
+		retError(clean, Error_nullPointer(0, "MeshSource_readBytes()::src is required"));
 
-		U64 available = 0;
-		gotoIfError3(clean, MeshSource_available(src, &available, e_rr));
+	if(!n)
+		goto clean;
 
-		if(!available)
-			retError(clean, Error_outOfBounds(
-				0, MeshSource_offset(src), src->stream->size, "MeshSource_readBytes() ran past the end of the stream"
-			));
+	if(n > src->size - src->pos)
+		retError(clean, Error_outOfBounds(
+			0, src->pos + n, src->size, "MeshSource_readBytes() ran past the end of the stream"
+		));
 
-		const U64 take = available < n ? available : n;
+	//The cursor copies what its window holds, reads the rest straight through and moves the window to the tail
 
-		if(out) {
-			Buffer_memcpy(Buffer_createRef(out, take), Buffer_createRefConst(MeshSource_ptr(src), take));
-			out += take;
-		}
+	if(dst)
+		gotoIfError3(clean, StreamCursor_read(
+			&src->cursor, Buffer_createRef(dst, n), src->pos, 0, n, false, src->alloc, e_rr
+		));
 
-		src->pos += take;
-		n -= take;
-	}
+	src->pos += n;
 
 clean:
 	return s_uccess;
 }
+
+//A skip never touches the stream: only the offset moves
 
 Bool MeshSource_skip(MeshSource *src, U64 n, Error *e_rr) {
 	return MeshSource_readBytes(src, NULL, n, e_rr);
@@ -133,6 +139,9 @@ Bool MeshSource_readLine(MeshSource *src, C8 *line, U64 cap, U64 *len, Bool *got
 
 	Bool s_uccess = true;
 	U64 n = 0;
+
+	if(!src || !line || !len || !got || !cap)
+		retError(clean, Error_nullPointer(0, "MeshSource_readLine()::src, line, cap, len and got are required"));
 
 	*got = false;
 
@@ -183,21 +192,18 @@ Bool MeshSink_create(StreamRef *stream, U64 off, const Allocator *alloc, MeshSin
 
 	Bool s_uccess = true;
 
+	if(!sink)
+		retError(clean, Error_nullPointer(3, "MeshSink_create()::sink is required"));
+
 	*sink = (MeshSink) { .alloc = alloc, .base = off };
 
 	if(!stream)
 		goto clean;
 
-	OxStream *s = RefPtr_data(stream, OxStream);
-
-	if(!s->write)
+	if(!RefPtr_data(stream, OxStream)->write)
 		retError(clean, Error_unsupportedOperation(0, "MeshSink_create()::stream is not writable"));
 
-	Buffer chunk = Buffer_createNull();
-	gotoIfError3(clean, Buffer_createUninitializedBytes(MESH_CHUNK, alloc, &chunk, e_rr));
-
-	sink->stream = s;
-	sink->buf = chunk.ptrNonConst;
+	gotoIfError3(clean, StreamCursor_create(stream, MESH_CHUNK, true, alloc, &sink->cursor, e_rr));
 
 clean:
 	return s_uccess;
@@ -210,9 +216,10 @@ static Bool MeshSink_reserveFor(MeshSink *sink, U64 bytes, Error *e_rr) {
 
 	Bool s_uccess = true;
 
+	OxStream *stream = RefPtr_data(sink->cursor.stream, OxStream);
 	const U64 needed = sink->written + bytes;
 
-	if(!sink->stream->reserve || needed <= sink->reserved)
+	if(!stream->reserve || needed <= sink->reserved)
 		goto clean;
 
 	U64 next = sink->reserved ? sink->reserved : MESH_CHUNK;
@@ -220,38 +227,8 @@ static Bool MeshSink_reserveFor(MeshSink *sink, U64 bytes, Error *e_rr) {
 	while(next < needed)
 		next *= 2;
 
-	gotoIfError3(clean, sink->stream->reserve(sink->stream, sink->base + next, sink->alloc, e_rr));
+	gotoIfError3(clean, stream->reserve(stream, sink->base + next, sink->alloc, e_rr));
 	sink->reserved = next;
-
-clean:
-	return s_uccess;
-}
-
-static Bool MeshSink_push(MeshSink *sink, const void *data, U64 bytes, Error *e_rr) {
-
-	Bool s_uccess = true;
-
-	gotoIfError3(clean, MeshSink_reserveFor(sink, bytes, e_rr));
-
-	gotoIfError3(clean, sink->stream->write(
-		sink->stream, sink->base + sink->written, bytes, Buffer_createRefConst(data, bytes), sink->alloc, e_rr
-	));
-
-	sink->written += bytes;
-
-clean:
-	return s_uccess;
-}
-
-Bool MeshSink_flush(MeshSink *sink, Error *e_rr) {
-
-	Bool s_uccess = true;
-
-	if(!sink->stream || !sink->fill)
-		goto clean;
-
-	gotoIfError3(clean, MeshSink_push(sink, sink->buf, sink->fill, e_rr));
-	sink->fill = 0;
 
 clean:
 	return s_uccess;
@@ -261,22 +238,61 @@ Bool MeshSink_write(MeshSink *sink, const void *data, U64 bytes, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(!sink->stream)
+	if(!MeshSink_active(sink) || !bytes)
 		goto clean;
 
-	//A write bigger than the chunk goes straight through rather than being cut into chunk sized pieces.
+	if(!data)
+		retError(clean, Error_nullPointer(1, "MeshSink_write()::data is required"));
 
-	if(bytes >= MESH_CHUNK) {
-		gotoIfError3(clean, MeshSink_flush(sink, e_rr));
-		gotoIfError3(clean, MeshSink_push(sink, data, bytes, e_rr));
+	gotoIfError3(clean, MeshSink_reserveFor(sink, bytes, e_rr));
+
+	//The cursor fills its chunk, writes a chunk through once it is full and passes anything larger than a chunk
+	// straight on, which is all the chunking there is
+
+	gotoIfError3(clean, StreamCursor_write(
+		&sink->cursor, Buffer_createRefConst(data, bytes), 0, sink->base + sink->written, bytes, false,
+		sink->alloc, e_rr
+	));
+
+	sink->written += bytes;
+
+clean:
+	return s_uccess;
+}
+
+Bool MeshSink_writeFormatted(MeshSink *sink, Error *e_rr, const C8 *format, ...) {
+
+	Bool s_uccess = true;
+
+	const Allocator *alloc = sink ? sink->alloc : NULL;
+	CharString line = CharString_createNull();
+
+	if(!MeshSink_active(sink))
 		goto clean;
-	}
 
-	if(sink->fill + bytes > MESH_CHUNK)
-		gotoIfError3(clean, MeshSink_flush(sink, e_rr));
+	va_list args;
+	va_start(args, format);
+	const Bool formatted = CharString_formatVariadic(alloc, &line, e_rr, format, args);
+	va_end(args);
 
-	Buffer_memcpy(Buffer_createRef(sink->buf + sink->fill, bytes), Buffer_createRefConst(data, bytes));
-	sink->fill += bytes;
+	if(!formatted)
+		retError(clean, Error_invalidState(0, "MeshSink_writeFormatted() couldn't format"));
+
+	gotoIfError3(clean, MeshSink_write(sink, line.ptr, CharString_length(line), e_rr));
+
+clean:
+	CharString_free(&line, alloc);
+	return s_uccess;
+}
+
+Bool MeshSink_flush(MeshSink *sink, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!MeshSink_active(sink))
+		goto clean;
+
+	gotoIfError3(clean, StreamCursor_flush(&sink->cursor, sink->alloc, e_rr));
 
 clean:
 	return s_uccess;
@@ -284,11 +300,10 @@ clean:
 
 void MeshSink_free(MeshSink *sink) {
 
-	if(!sink || !sink->buf)
+	if(!MeshSink_active(sink))
 		return;
 
-	Buffer chunk = Buffer_createManagedPtr(sink->buf, MESH_CHUNK);
-	Buffer_free(&chunk, sink->alloc);
+	StreamCursor_close(&sink->cursor, sink->alloc);
 	*sink = (MeshSink) { 0 };
 }
 
@@ -323,13 +338,12 @@ static F32x4 Mesh_normalize3(F32x4 v) {
 
 //---------------------------------------------------------------- Positions
 
-void MeshPositions_create(EMeshReadFlags flags, MeshSink *sink, MeshPositions *positions) {
-
+void MeshPositions_create(EMeshFlags flags, MeshSink *sink, MeshPositions *positions) {
 	*positions = (MeshPositions) {
 		.sink = sink,
-		.hold = !!(flags & EMeshReadFlags_QuantizePositions),
-		.aabbMin = { F32_MAX, F32_MAX, F32_MAX },
-		.aabbMax = { -F32_MAX, -F32_MAX, -F32_MAX }
+		.hold = !!(flags & EMeshFlags_QuantizePositions),
+		.aabbMin = F32x4_xxxx4(F32_MAX),
+		.aabbMax = F32x4_xxxx4(-F32_MAX)
 	};
 }
 
@@ -337,12 +351,11 @@ Bool MeshPositions_push(MeshPositions *p, const F32 *position, const Allocator *
 
 	Bool s_uccess = true;
 
-	for(U8 i = 0; i < 3; ++i) {
-		p->aabbMin[i] = position[i] < p->aabbMin[i] ? position[i] : p->aabbMin[i];
-		p->aabbMax[i] = position[i] > p->aabbMax[i] ? position[i] : p->aabbMax[i];
-	}
+	const F32x4 pos = F32x4_load3(position);
 
 	++p->count;
+	p->aabbMin = F32x4_min(p->aabbMin, pos);
+	p->aabbMax = F32x4_max(p->aabbMax, pos);
 
 	if(!p->hold) {
 		gotoIfError3(clean, MeshSink_write(p->sink, position, 3 * sizeof(F32), e_rr));
@@ -364,38 +377,46 @@ Bool MeshPositions_finish(MeshPositions *p, MeshInfo *info, Error *e_rr) {
 
 	//No positions at all leaves the bounds at a point rather than at the sentinels.
 
-	for(U8 i = 0; i < 3; ++i) {
-		info->aabbMin[i] = p->count ? p->aabbMin[i] : 0;
-		info->aabbMax[i] = p->count ? p->aabbMax[i] : 0;
-	}
+	const F32x4 mi = p->count ? p->aabbMin : F32x4_zero();
+	const F32x4 ma = p->count ? p->aabbMax : F32x4_zero();
+
+	F32x4_store3(info->aabbMin, mi);
+	F32x4_store3(info->aabbMax, ma);
 
 	if(!p->hold)
 		goto clean;
 
 	//center + s / 32767 * halfExtent per axis, so -1 and 1 are the bounds exactly.
-	//A flat axis has no extent to divide by and quantizes to the center, which is the only value it holds.
+	//A flat axis has no extent to divide by and quantizes to the center, which is the only value it holds: the
+	// mask zeroes its scale, and adding the mask's complement to the divisor keeps that divide finite without an
+	// epsilon that would have to be smaller than any real extent.
 
-	F32 center[3], inv[3];
+	//The midpoint is reached from the low corner rather than as half of the sum, which would overflow to an
+	// infinite centre on bounds past half of F32_MAX and quantize every vertex to one corner.
 
-	for(U8 i = 0; i < 3; ++i) {
-		center[i] = (info->aabbMin[i] + info->aabbMax[i]) * 0.5f;
-		const F32 half = (info->aabbMax[i] - info->aabbMin[i]) * 0.5f;
-		inv[i] = half > 0 ? 32767.f / half : 0;
-	}
+	const F32x4 half = F32x4_mul(F32x4_sub(ma, mi), F32x4_xxxx4(0.5f));
+	const F32x4 center = F32x4_add(mi, half);
+	const F32x4 hasExtent = F32x4_gt(half, F32x4_zero());
+	const F32x4 divisor = F32x4_add(half, F32x4_sub(F32x4_one(), hasExtent));
+	const F32x4 limit = F32x4_xxxx4(32767);
+	const F32x4 inv = F32x4_mul(hasExtent, F32x4_div(limit, divisor));
 
 	for(U32 v = 0; v < p->count; ++v) {
 
 		const F32 *pos = p->held.ptr + (U64) v * 3;
-		I16 q[4] = { 0, 0, 0, 0 };
+
+		const F32x4 s = F32x4_clamp(
+			F32x4_mul(F32x4_sub(F32x4_load3(pos), center), inv), F32x4_negate(limit), limit
+		);
 
 		//Rounded half away from zero on both sides, so the bounds land on -32767 and 32767 and not one step past.
+		//Integral by then, so the truncating conversion is exact.
 
-		for(U8 i = 0; i < 3; ++i) {
-			const F32 s = F32_clamp((pos[i] - center[i]) * inv[i], -32767, 32767);
-			q[i] = (I16) (s >= 0 ? F32_floor(s + 0.5f) : -F32_floor(-s + 0.5f));
-		}
+		const F32x4 rounded = F32x4_mul(F32x4_sign(s), F32x4_floor(F32x4_add(F32x4_abs(s), F32x4_xxxx4(0.5f))));
+		const I32x4 q = I32x4_fromF32x4(rounded);
+		const I16 out[4] = { (I16) I32x4_x(q), (I16) I32x4_y(q), (I16) I32x4_z(q), 0 };
 
-		gotoIfError3(clean, MeshSink_write(p->sink, q, sizeof(q), e_rr));
+		gotoIfError3(clean, MeshSink_write(p->sink, out, sizeof(out), e_rr));
 	}
 
 clean:
@@ -408,11 +429,12 @@ void MeshPositions_free(MeshPositions *p, const Allocator *alloc) {
 
 //---------------------------------------------------------------- Triangles
 
-void MeshTriangles_create(EMeshReadFlags flags, MeshSink *indices, MeshSink *words, MeshTriangles *triangles) {
+void MeshTriangles_create(EMeshFlags flags, MeshSink *indices, MeshSink *words, MeshTriangles *triangles) {
 	*triangles = (MeshTriangles) {
 		.indices = indices,
 		.words = words,
-		.computeNormals = !!(flags & EMeshReadFlags_ComputeNormals)
+		.computeNormals = !!(flags & EMeshFlags_ComputeNormals),
+		.narrowIndices = !!(flags & EMeshFlags_NarrowIndices)
 	};
 }
 
@@ -459,16 +481,32 @@ Bool MeshTriangles_emit(
 		));
 
 	const U32 tri[3] = { i0, i1, i2 };
-	gotoIfError3(clean, MeshSink_write(t->indices, tri, sizeof(tri), e_rr));
+
+	//Refused at the index that does not fit rather than widened, so what a caller asked for is what it gets.
+
+	if(t->narrowIndices) {
+
+		const U32 highest = U32_max(U32_max(i0, i1), i2);
+
+		if(highest > U16_MAX)
+			retError(clean, Error_outOfBounds(
+				0, highest, U16_MAX, "MeshTriangles_emit() index past U16 under EMeshFlags_NarrowIndices"
+			));
+
+		const U16 narrow[3] = { (U16) i0, (U16) i1, (U16) i2 };
+		gotoIfError3(clean, MeshSink_write(t->indices, narrow, sizeof(narrow), e_rr));
+	}
+
+	else gotoIfError3(clean, MeshSink_write(t->indices, tri, sizeof(tri), e_rr));
 
 	if(MeshTriangles_needsPositions(t)) {
 
 		//Unnormalized, so its length is twice the area: exactly the weight a smooth normal wants, and a sliver
 		// of a triangle contributes as little as it deserves to.
 
-		const F32x4 a = F32x4_create3(p0[0], p0[1], p0[2]);
-		const F32x4 e1 = F32x4_sub(F32x4_create3(p1[0], p1[1], p1[2]), a);
-		const F32x4 e2 = F32x4_sub(F32x4_create3(p2[0], p2[1], p2[2]), a);
+		const F32x4 a = F32x4_load3(p0);
+		const F32x4 e1 = F32x4_sub(F32x4_load3(p1), a);
+		const F32x4 e2 = F32x4_sub(F32x4_load3(p2), a);
 		const F32x4 n = F32x4_cross3(e1, e2);
 		const F32 len2 = F32x4_sqLen3(n);
 
@@ -485,8 +523,7 @@ Bool MeshTriangles_emit(
 
 		if(t->computeNormals && len2 > 0) {
 
-			U32 highest = i0 > i1 ? i0 : i1;
-			highest = highest > i2 ? highest : i2;
+			const U32 highest = U32_max(U32_max(i0, i1), i2);
 
 			gotoIfError3(clean, MeshTriangles_growSums(t, highest + 1, alloc, e_rr));
 
@@ -494,9 +531,7 @@ Bool MeshTriangles_emit(
 
 				F32 *sum = t->normalSums.ptrNonConst + (U64) tri[c] * 3;
 
-				sum[0] += F32x4_x(n);
-				sum[1] += F32x4_y(n);
-				sum[2] += F32x4_z(n);
+				F32x4_store3(sum, F32x4_add(F32x4_load3(sum), n));
 			}
 		}
 	}
@@ -513,11 +548,11 @@ void MeshTriangles_free(MeshTriangles *t, const Allocator *alloc) {
 
 //---------------------------------------------------------------- Attributes
 
-void MeshAttributes_create(EMeshReadFlags flags, MeshSink *sink, MeshAttributes *attributes) {
+void MeshAttributes_create(EMeshFlags flags, MeshSink *sink, MeshAttributes *attributes) {
 	*attributes = (MeshAttributes) {
 		.sink = sink,
-		.hold = !!(flags & EMeshReadFlags_ComputeNormals),
-		.wide = !!(flags & EMeshReadFlags_WideUvs)
+		.hold = !!(flags & EMeshFlags_ComputeNormals),
+		.wide = !!(flags & EMeshFlags_WideUvs)
 	};
 }
 
@@ -530,6 +565,16 @@ static Bool MeshAttributes_writeRecord(MeshAttributes *a, U32 normal, const F32 
 		return MeshSink_write(a->sink, &attr, sizeof(attr), e_rr);
 	}
 
+	//Measured here because this is the only place a uv narrows, and both the streaming and the held path reach it.
+
+	for(U8 i = 0; i < 2; ++i) {
+
+		const F32 err = F32_abs(F16_castF32(F32_castF16(uv[i])) - uv[i]);
+
+		if(err > a->maxUvError)
+			a->maxUvError = err;
+	}
+
 	const MeshAttribute attr = { .normal = normal, .uv = U32_packF16x2(uv[0], uv[1]) };
 	return MeshSink_write(a->sink, &attr, sizeof(attr), e_rr);
 }
@@ -538,7 +583,7 @@ static Bool MeshAttributes_writeRecord(MeshAttributes *a, U32 normal, const F32 
 
 static U32 Mesh_packNormal(const F32 *n) {
 
-	const F32x4 v = F32x4_create3(n[0], n[1], n[2]);
+	const F32x4 v = F32x4_load3(n);
 
 	if(F32x4_sqLen3(v) <= 0)
 		return U32_packOct32(F32x4_create3(0, 0, 1));
@@ -595,6 +640,9 @@ Bool MeshAttributes_finish(MeshAttributes *a, const MeshTriangles *t, U32 vertex
 			n[0] = sum[0]; n[1] = sum[1]; n[2] = sum[2];
 		}
 
+		if(!n[0] && !n[1] && !n[2])
+			a->placeholderNormal = true;
+
 		gotoIfError3(clean, MeshAttributes_writeRecord(a, Mesh_packNormal(n), held + 3, e_rr));
 	}
 
@@ -604,34 +652,4 @@ clean:
 
 void MeshAttributes_free(MeshAttributes *a, const Allocator *alloc) {
 	ListF32_free(&a->held, alloc);
-}
-
-//---------------------------------------------------------------- Text
-
-Bool Mesh_nextToken(const C8 *line, U64 len, U64 *pos, CharString *token) {
-
-	U64 i = *pos;
-
-	while(i < len && C8_isWhitespace(line[i]))
-		++i;
-
-	if(i >= len)
-		return false;
-
-	const U64 start = i;
-
-	while(i < len && !C8_isWhitespace(line[i]))
-		++i;
-
-	*token = CharString_createRefSizedConst(line + start, i - start, false);
-	*pos = i;
-	return true;
-}
-
-Bool Mesh_parseF32(CharString token, F32 *result) {
-	return CharString_parseFloat(token, result);
-}
-
-Bool Mesh_parseI64(CharString token, I64 *result) {
-	return CharString_parseDecSigned(token, result);
 }

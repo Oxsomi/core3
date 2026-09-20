@@ -21,7 +21,7 @@
 //formats/obj/obj_file.h
 
 #pragma once
-#include "formats/mesh/mesh.h"
+#include "types/mesh/mesh.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -51,12 +51,29 @@ typedef struct Error Error;
 // a corner with more than two slashes and a number that does not parse. Each of those is a file that is broken,
 // and a reader that guessed would hand the guess to a BLAS build.
 
-Bool OBJ_read(
+Bool Obj_read(
 	StreamRef *stream,
 	U64 *off,                     //Left after the last byte consumed
-	EMeshReadFlags flags,
+	EMeshFlags flags,
 	MeshInfo *info,
 	const MeshOutput *output,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+//Writing the flat mesh form back out as an OBJ.
+//What comes out is the form, not the file it was read from: one v per vertex and, where the info says they are
+// meaningful, one vn and one vt beside it, so the three arrays are parallel and a corner names the same index
+// three times. Materials, groups, smoothing and n-gons have no spelling here, since nothing survives a read.
+//Positions are written at full F32 precision whether or not they were quantized on the way in.
+//Text costs a format call per line, which is what OBJ is; PLY's binary form is the one for large meshes.
+
+Bool Obj_write(
+	const MeshInput *input,
+	const MeshInfo *info,
+	EMeshFlags layout,        //The flags the read used, which describe the input's layout
+	StreamRef *stream,
+	U64 *off,                     //Left after the last byte written
 	const Allocator *alloc,
 	Error *e_rr
 );

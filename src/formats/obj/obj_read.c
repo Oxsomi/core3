@@ -18,16 +18,17 @@
 *  This is called dual licensing.
 */
 
-//formats/mesh/obj_read.c
+//formats/obj/obj_read.c
 
-#include "formats/obj/obj_file.h"
 #include "mesh_internal.h"
+#include "formats/obj/obj_file.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/base/c8.h"
 #include "types/base/string_read.h"
+#include "types/base/string_read_helper.h"
 
 //The dedup table. A corner is a position, uv and normal index, 1 based the way the file counts and 0 where the
 // corner named none, and the table maps each distinct triple to the output vertex it became.
@@ -36,21 +37,22 @@
 // than a chase through a chained structure. The keys sit in their own list indexed by output vertex, which is
 // also what a triangle later needs to find its positions by.
 
-typedef struct OBJDedup {
+typedef struct ObjDedup {
 	ListU32 slots;                //Output vertex + 1, or 0 for empty
 	ListU32 keys;                 //v, vt, vn per output vertex
 	U64 mask;
 	U32 count;
-} OBJDedup;
+} ObjDedup;
 
-static U64 OBJDedup_hash(U32 v, U32 vt, U32 vn) {
+static U64 ObjDedup_hash(U32 v, U32 vt, U32 vn) {
 
-	//Three odd constants, so the three indices land apart even when they equal each other,
-	// which they do for every corner of a file with matched vt and vn counts.
+	//The tree's own hash rather than a private one. v and vt ride one word so the chain is two steps for three
+	// indices, and they cannot collapse into each other the way three equal indices would under an xor.
 
-	U64 h = (U64) v * 0x9E3779B97F4A7C15ull;
-	h ^= (U64) vt * 0xC2B2AE3D27D4EB4Full;
-	h ^= (U64) vn * 0x165667B19E3779F9ull;
+	U64 h = Buffer_fnv1a64Single(v | ((U64) vt << 32), Buffer_fnv1a64Offset);
+	h = Buffer_fnv1a64Single(vn, h);
+
+	//FNV1a avalanches weakly in its LOW bits and the table masks exactly those, so the finalizer stays.
 
 	h ^= h >> 32;
 	h *= 0xD6E8FEB86659FD93ull;
@@ -59,17 +61,17 @@ static U64 OBJDedup_hash(U32 v, U32 vt, U32 vn) {
 	return h;
 }
 
-static Bool OBJDedup_grow(OBJDedup *d, const Allocator *alloc, Error *e_rr) {
+static Bool ObjDedup_grow(ObjDedup *d, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	const U64 capacity = d->slots.length ? d->slots.length * 2 : 4096;
 	ListU32 slots = (ListU32) { 0 };
 
-	gotoIfError3(clean, ListU32_resize(&slots, capacity, alloc, e_rr));
+	//resize rather than reserve: the table is indexed straight away and its LENGTH is the capacity, and the
+	// empty sentinel is 0, which resize has already written.
 
-	for(U64 i = 0; i < capacity; ++i)
-		slots.ptrNonConst[i] = 0;
+	gotoIfError3(clean, ListU32_resize(&slots, capacity, alloc, e_rr));
 
 	const U64 mask = capacity - 1;
 
@@ -78,7 +80,7 @@ static Bool OBJDedup_grow(OBJDedup *d, const Allocator *alloc, Error *e_rr) {
 	for(U32 i = 0; i < d->count; ++i) {
 
 		const U32 *key = d->keys.ptr + (U64) i * 3;
-		U64 slot = OBJDedup_hash(key[0], key[1], key[2]) & mask;
+		U64 slot = ObjDedup_hash(key[0], key[1], key[2]) & mask;
 
 		while(slots.ptr[slot])
 			slot = (slot + 1) & mask;
@@ -100,16 +102,16 @@ clean:
 
 //The output vertex for a corner, made on first sight. isNew tells the caller the vertex has to be written.
 
-static Bool OBJDedup_find(
-	OBJDedup *d, U32 v, U32 vt, U32 vn, U32 *result, Bool *isNew, const Allocator *alloc, Error *e_rr
+static Bool ObjDedup_find(
+	ObjDedup *d, U32 v, U32 vt, U32 vn, U32 *result, Bool *isNew, const Allocator *alloc, Error *e_rr
 ) {
 
 	Bool s_uccess = true;
 
 	if((U64) d->count * 2 >= d->slots.length)
-		gotoIfError3(clean, OBJDedup_grow(d, alloc, e_rr));
+		gotoIfError3(clean, ObjDedup_grow(d, alloc, e_rr));
 
-	U64 slot = OBJDedup_hash(v, vt, vn) & d->mask;
+	U64 slot = ObjDedup_hash(v, vt, vn) & d->mask;
 
 	while(d->slots.ptr[slot]) {
 
@@ -125,11 +127,15 @@ static Bool OBJDedup_find(
 	}
 
 	if(d->count == U32_MAX)
-		retError(clean, Error_overflow(0, d->count, U32_MAX, "OBJ_read() more distinct vertices than U32 indices"));
+		retError(clean, Error_overflow(0, d->count, U32_MAX, "Obj_read() more distinct vertices than U32 indices"));
 
-	gotoIfError3(clean, ListU32_pushBack(&d->keys, v, alloc, e_rr));
-	gotoIfError3(clean, ListU32_pushBack(&d->keys, vt, alloc, e_rr));
-	gotoIfError3(clean, ListU32_pushBack(&d->keys, vn, alloc, e_rr));
+	//One append, so a failure halfway cannot leave a partial key behind for the rehash to read.
+
+	const U32 key[3] = { v, vt, vn };
+	ListU32 keyRef = (ListU32) { 0 };
+
+	gotoIfError3(clean, ListU32_createRefConst(key, 3, &keyRef, e_rr));
+	gotoIfError3(clean, ListU32_pushAll(&d->keys, keyRef, alloc, e_rr));
 
 	d->slots.ptrNonConst[slot] = d->count + 1;
 	*result = d->count++;
@@ -139,7 +145,7 @@ clean:
 	return s_uccess;
 }
 
-static void OBJDedup_free(OBJDedup *d, const Allocator *alloc) {
+static void ObjDedup_free(ObjDedup *d, const Allocator *alloc) {
 	ListU32_free(&d->slots, alloc);
 	ListU32_free(&d->keys, alloc);
 }
@@ -148,14 +154,14 @@ static void OBJDedup_free(OBJDedup *d, const Allocator *alloc) {
 // holds. The names themselves go nowhere: what a name means is the .mtl file's business and a consumer's, and this
 // reader has neither.
 
-typedef struct OBJMaterials {
+typedef struct ObjMaterials {
 	ListCharString names;
 	U32 current;                  //What the faces since the last usemtl belong to
 	Bool usedDefault;             //A face was emitted before any usemtl
 	U8 padding[3];
-} OBJMaterials;
+} ObjMaterials;
 
-static Bool OBJMaterials_use(OBJMaterials *m, CharString name, const Allocator *alloc, Error *e_rr) {
+static Bool ObjMaterials_use(ObjMaterials *m, CharString name, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -164,25 +170,21 @@ static Bool OBJMaterials_use(OBJMaterials *m, CharString name, const Allocator *
 
 	if(!m->names.length && m->usedDefault) {
 
-		CharString empty = CharString_createNull();
-		gotoIfError3(clean, CharString_createCopy(CharString_createRefSizedConst("", 0, true), alloc, &empty, e_rr));
+		//A null string, not a copy of one: copying an empty source allocates nothing and returns exactly this,
+		// so the entry is the placeholder itself. It is load bearing, since it is what index 0 names.
 
-		if(!ListCharString_pushBack(&m->names, empty, alloc, e_rr)) {
-			CharString_free(&empty, alloc);
-			s_uccess = false;
-			goto clean;
-		}
+		gotoIfError3(clean, ListCharString_pushBack(&m->names, CharString_createNull(), alloc, e_rr));
 	}
 
 	for(U64 i = 0; i < m->names.length; ++i)
-		if(CharString_equalsString(&m->names.ptr[i], &name, EStringCase_Sensitive)) {
+		if(CharString_equalsStringSensitive(&m->names.ptr[i], &name)) {
 			m->current = (U32) i;
 			goto clean;
 		}
 
 	if(m->names.length >= MeshTriangle_maxMaterials)
 		retError(clean, Error_outOfBounds(
-			0, m->names.length, MeshTriangle_maxMaterials, "OBJ_read() more materials than the triangle word holds"
+			0, m->names.length, MeshTriangle_maxMaterials, "Obj_read() more materials than the triangle word holds"
 		));
 
 	CharString copy = CharString_createNull();
@@ -200,19 +202,19 @@ clean:
 	return s_uccess;
 }
 
-static void OBJMaterials_free(OBJMaterials *m, const Allocator *alloc) {
+static void ObjMaterials_free(ObjMaterials *m, const Allocator *alloc) {
 	ListCharString_freeUnderlying(&m->names, alloc);
 }
 
 //A file index into an array with count entries, resolved to 1 based or refused.
 //Negative counts back from the end, which is what a file written incrementally uses.
 
-static Bool OBJ_resolveIndex(I64 raw, U64 count, U32 *result, const C8 *what, Error *e_rr) {
+static Bool Obj_resolveIndex(I64 raw, U64 count, U32 *result, const C8 *what, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	if(!raw)
-		retError(clean, Error_invalidParameter(0, 0, "OBJ_read() a face index of 0 names nothing"));
+		retError(clean, Error_invalidParameter(0, 0, "Obj_read() a face index of 0 names nothing"));
 
 	const I64 resolved = raw < 0 ? (I64) count + 1 + raw : raw;
 
@@ -227,7 +229,7 @@ clean:
 
 //v, v/vt, v//vn or v/vt/vn. Anything else is a broken corner.
 
-static Bool OBJ_parseCorner(
+static Bool Obj_parseCorner(
 	CharString token, U64 vCount, U64 vtCount, U64 vnCount, U32 *v, U32 *vt, U32 *vn, Error *e_rr
 ) {
 
@@ -243,7 +245,7 @@ static Bool OBJ_parseCorner(
 		if(s[i] == '/') {
 
 			if(slashes == 2)
-				retError(clean, Error_invalidParameter(0, 1, "OBJ_read() a face corner has more than two slashes"));
+				retError(clean, Error_invalidParameter(0, 1, "Obj_read() a face corner has more than two slashes"));
 
 			slash[slashes++] = i;
 		}
@@ -252,10 +254,10 @@ static Bool OBJ_parseCorner(
 
 	I64 raw = 0;
 
-	if(!Mesh_parseI64(vStr, &raw))
-		retError(clean, Error_invalidParameter(0, 2, "OBJ_read() a face corner's position index doesn't parse"));
+	if(!CharString_parseDecSigned(vStr, &raw))
+		retError(clean, Error_invalidParameter(0, 2, "Obj_read() a face corner's position index doesn't parse"));
 
-	gotoIfError3(clean, OBJ_resolveIndex(raw, vCount, v, "OBJ_read() a face names a position that doesn't exist", e_rr));
+	gotoIfError3(clean, Obj_resolveIndex(raw, vCount, v, "Obj_read() a face names a position that doesn't exist", e_rr));
 
 	*vt = *vn = 0;
 
@@ -263,20 +265,20 @@ static Bool OBJ_parseCorner(
 
 		const CharString vtStr = CharString_createRefSizedConst(s + slash[0] + 1, slash[1] - slash[0] - 1, false);
 
-		if(!Mesh_parseI64(vtStr, &raw))
-			retError(clean, Error_invalidParameter(0, 3, "OBJ_read() a face corner's uv index doesn't parse"));
+		if(!CharString_parseDecSigned(vtStr, &raw))
+			retError(clean, Error_invalidParameter(0, 3, "Obj_read() a face corner's uv index doesn't parse"));
 
-		gotoIfError3(clean, OBJ_resolveIndex(raw, vtCount, vt, "OBJ_read() a face names a uv that doesn't exist", e_rr));
+		gotoIfError3(clean, Obj_resolveIndex(raw, vtCount, vt, "Obj_read() a face names a uv that doesn't exist", e_rr));
 	}
 
 	if(slashes == 2 && len > slash[1] + 1) {
 
 		const CharString vnStr = CharString_createRefSizedConst(s + slash[1] + 1, len - slash[1] - 1, false);
 
-		if(!Mesh_parseI64(vnStr, &raw))
-			retError(clean, Error_invalidParameter(0, 4, "OBJ_read() a face corner's normal index doesn't parse"));
+		if(!CharString_parseDecSigned(vnStr, &raw))
+			retError(clean, Error_invalidParameter(0, 4, "Obj_read() a face corner's normal index doesn't parse"));
 
-		gotoIfError3(clean, OBJ_resolveIndex(raw, vnCount, vn, "OBJ_read() a face names a normal that doesn't exist", e_rr));
+		gotoIfError3(clean, Obj_resolveIndex(raw, vnCount, vn, "Obj_read() a face names a normal that doesn't exist", e_rr));
 	}
 
 clean:
@@ -286,7 +288,7 @@ clean:
 //n floats off a line, refusing fewer than required. Extra tokens are ignored: v takes an optional w and vt an
 // optional third.
 
-static Bool OBJ_parseFloats(const C8 *line, U64 len, U64 *pos, F32 *out, U8 n, U8 required, Error *e_rr) {
+static Bool Obj_parseFloats(CharString line, U64 *pos, F32 *out, U8 n, U8 required, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString token;
@@ -295,30 +297,30 @@ static Bool OBJ_parseFloats(const C8 *line, U64 len, U64 *pos, F32 *out, U8 n, U
 
 		out[i] = 0;
 
-		if(!Mesh_nextToken(line, len, pos, &token)) {
+		if(!CharString_nextToken(line, pos, &token)) {
 
 			if(i < required)
-				retError(clean, Error_invalidParameter(0, 5, "OBJ_read() a vertex line has too few components"));
+				retError(clean, Error_invalidParameter(0, 5, "Obj_read() a vertex line has too few components"));
 
 			break;
 		}
 
-		if(!Mesh_parseF32(token, out + i))
-			retError(clean, Error_invalidParameter(0, 6, "OBJ_read() a vertex component doesn't parse"));
+		if(!CharString_parseFloat(token, out + i))
+			retError(clean, Error_invalidParameter(0, 6, "Obj_read() a vertex component doesn't parse"));
 	}
 
 clean:
 	return s_uccess;
 }
 
-static Bool OBJ_keywordIs(CharString keyword, const C8 *literal) {
-	return CharString_equalsCString(&keyword, literal, EStringCase_Sensitive);
+static Bool Obj_keywordIs(CharString keyword, const C8 *literal) {
+	return CharString_equalsCStringSensitive(&keyword, literal);
 }
 
-Bool OBJ_read(
+Bool Obj_read(
 	StreamRef *stream,
 	U64 *off,
-	EMeshReadFlags flags,
+	EMeshFlags flags,
 	MeshInfo *info,
 	const MeshOutput *output,
 	const Allocator *alloc,
@@ -333,8 +335,8 @@ Bool OBJ_read(
 	MeshPositions positions = (MeshPositions) { 0 };
 	MeshTriangles triangles = (MeshTriangles) { 0 };
 	MeshAttributes attrs = (MeshAttributes) { 0 };
-	OBJDedup dedup = (OBJDedup) { 0 };
-	OBJMaterials materials = (OBJMaterials) { 0 };
+	ObjDedup dedup = (ObjDedup) { 0 };
+	ObjMaterials materials = (ObjMaterials) { 0 };
 
 	//The file's own arrays, which a face may name from anywhere and so have to be whole before it is resolved.
 
@@ -344,12 +346,17 @@ Bool OBJ_read(
 	Buffer lineBuf = Buffer_createNull();
 
 	if(!stream || !off || !info || !output)
-		retError(clean, Error_nullPointer(0, "OBJ_read()::stream, off, info and output are required"));
+		retError(clean, Error_nullPointer(0, "Obj_read()::stream, off, info and output are required"));
 
 	if(!output->positions || !output->indices)
-		retError(clean, Error_nullPointer(4, "OBJ_read()::output->positions and indices are required"));
+		retError(clean, Error_nullPointer(4, "Obj_read()::output->positions and indices are required"));
 
 	*info = (MeshInfo) { 0 };
+
+	//Cleared by the first vertex that names none, so a file with no vn at all ends up false rather than vacuous.
+
+	info->allNormals = true;
+	info->allUvs = true;
 
 	gotoIfError3(clean, MeshSource_create(stream, *off, alloc, &src, e_rr));
 	gotoIfError3(clean, MeshSink_create(output->positions, output->positionOffset, alloc, &positionSink, e_rr));
@@ -374,69 +381,70 @@ Bool OBJ_read(
 		if(!got)
 			break;
 
+		const CharString lineStr = CharString_createRefSizedConst(line, len, false);
 		U64 pos = 0;
 		CharString keyword;
 
-		if(!Mesh_nextToken(line, len, &pos, &keyword) || keyword.ptr[0] == '#')
+		if(!CharString_nextToken(lineStr, &pos, &keyword) || keyword.ptr[0] == '#')
 			continue;
 
-		if(OBJ_keywordIs(keyword, "v")) {
+		if(Obj_keywordIs(keyword, "v")) {
 
 			F32 p[3];
-			gotoIfError3(clean, OBJ_parseFloats(line, len, &pos, p, 3, 3, e_rr));
+			gotoIfError3(clean, Obj_parseFloats(lineStr, &pos, p, 3, 3, e_rr));
 
 			for(U8 i = 0; i < 3; ++i)
 				gotoIfError3(clean, ListF32_pushBack(&v, p[i], alloc, e_rr));
 		}
 
-		else if(OBJ_keywordIs(keyword, "vn")) {
+		else if(Obj_keywordIs(keyword, "vn")) {
 
 			F32 n[3];
-			gotoIfError3(clean, OBJ_parseFloats(line, len, &pos, n, 3, 3, e_rr));
+			gotoIfError3(clean, Obj_parseFloats(lineStr, &pos, n, 3, 3, e_rr));
 
 			for(U8 i = 0; i < 3; ++i)
 				gotoIfError3(clean, ListF32_pushBack(&vn, n[i], alloc, e_rr));
 		}
 
-		else if(OBJ_keywordIs(keyword, "vt")) {
+		else if(Obj_keywordIs(keyword, "vt")) {
 
 			F32 uv[2];
-			gotoIfError3(clean, OBJ_parseFloats(line, len, &pos, uv, 2, 1, e_rr));
+			gotoIfError3(clean, Obj_parseFloats(lineStr, &pos, uv, 2, 1, e_rr));
 
 			for(U8 i = 0; i < 2; ++i)
 				gotoIfError3(clean, ListF32_pushBack(&vt, uv[i], alloc, e_rr));
 		}
 
-		else if(OBJ_keywordIs(keyword, "usemtl")) {
+		else if(Obj_keywordIs(keyword, "usemtl")) {
 
 			CharString name;
 
 			//A usemtl with no name is treated as naming the empty string rather than refused.
 
-			if(!Mesh_nextToken(line, len, &pos, &name))
+			if(!CharString_nextToken(lineStr, &pos, &name))
 				name = CharString_createRefSizedConst("", 0, true);
 
-			gotoIfError3(clean, OBJMaterials_use(&materials, name, alloc, e_rr));
+			gotoIfError3(clean, ObjMaterials_use(&materials, name, alloc, e_rr));
 		}
 
-		else if(OBJ_keywordIs(keyword, "f")) {
+		else if(Obj_keywordIs(keyword, "f")) {
 
 			gotoIfError3(clean, ListU32_clear(&face, e_rr));
 
 			CharString corner;
 
-			while(Mesh_nextToken(line, len, &pos, &corner)) {
+			while(CharString_nextToken(lineStr, &pos, &corner)) {
 
 				U32 iv, ivt, ivn;
 
-				gotoIfError3(clean, OBJ_parseCorner(
+				gotoIfError3(clean, Obj_parseCorner(
 					corner, v.length / 3, vt.length / 2, vn.length / 3, &iv, &ivt, &ivn, e_rr
 				));
 
 				U32 vertex = 0;
 				Bool isNew = false;
 
-				gotoIfError3(clean, OBJDedup_find(&dedup, iv, ivt, ivn, &vertex, &isNew, alloc, e_rr));
+				gotoIfError3(clean, ObjDedup_find(&dedup, iv, ivt, ivn, &vertex, &isNew, alloc, e_rr));
 
 				if(isNew) {
 
@@ -453,10 +461,14 @@ Bool OBJ_read(
 						info->hasNormals = true;
 					}
 
+					else info->allNormals = false;
+
 					if(ivt) {
 						uv = vt.ptr + (U64) (ivt - 1) * 2;
 						info->hasUvs = true;
 					}
+
+					else info->allUvs = false;
 
 					gotoIfError3(clean, MeshAttributes_push(&attrs, n, uv, alloc, e_rr));
 				}
@@ -465,7 +477,7 @@ Bool OBJ_read(
 			}
 
 			if(face.length < 3)
-				retError(clean, Error_invalidParameter(0, 7, "OBJ_read() a face has fewer than three corners"));
+				retError(clean, Error_invalidParameter(0, 7, "Obj_read() a face has fewer than three corners"));
 
 			if(face.length > 3)
 				++info->fannedFaces;
@@ -495,6 +507,14 @@ Bool OBJ_read(
 	gotoIfError3(clean, MeshPositions_finish(&positions, info, e_rr));
 	gotoIfError3(clean, MeshAttributes_finish(&attrs, &triangles, dedup.count, e_rr));
 
+	//A computed normal replaces every one the file named, so what the file covered stops deciding this and the
+	// only placeholders left are the vertices no triangle with area touched.
+
+	if(flags & EMeshFlags_ComputeNormals)
+		info->allNormals = !attrs.placeholderNormal;
+
+	info->maxUvError = attrs.maxUvError;
+
 	gotoIfError3(clean, MeshSink_flush(&positionSink, e_rr));
 	gotoIfError3(clean, MeshSink_flush(&attributeSink, e_rr));
 	gotoIfError3(clean, MeshSink_flush(&indexSink, e_rr));
@@ -512,8 +532,8 @@ clean:
 	ListF32_free(&vt, alloc);
 	ListF32_free(&vn, alloc);
 	ListU32_free(&face, alloc);
-	OBJDedup_free(&dedup, alloc);
-	OBJMaterials_free(&materials, alloc);
+	ObjDedup_free(&dedup, alloc);
+	ObjMaterials_free(&materials, alloc);
 	MeshAttributes_free(&attrs, alloc);
 	MeshTriangles_free(&triangles, alloc);
 	MeshPositions_free(&positions, alloc);

@@ -18,61 +18,46 @@
 *  This is called dual licensing.
 */
 
-//formats/mesh/test/test_mesh_hpp.cpp
+//formats/obj/test/test_obj_hpp.cpp
 //
-//Type check for the C++ mesh layers, in the shape test_bmp_hpp.cpp established: including the headers is what
+//Type check for the C++ obj layer, in the shape test_bmp_hpp.cpp established: including the header is what
 // compiles the inline bodies, and naming the overloads inside an unevaluated sizeof adds the caller's half
 // without odr-using anything the platforms layer would have to be linked for.
 //
-//It is not registered in test_mesh_main.c on purpose: a compile time check has nothing to assert at runtime.
+//It is not registered in the suite's main on purpose: a compile time check has nothing to assert at runtime.
 
 #include "formats/obj.hpp"
-#include "formats/ply.hpp"
 
 //NEVER defined, and they do not need to be: an unevaluated operand does not odr-use what it names.
 
-const oxc::c::Buffer &meshTypeCheckBytes();
-const oxc::file::Types &meshTypeCheckTypes();
-const oxc::c::Allocator *meshTypeCheckAlloc();
-oxc::c::Error *meshTypeCheckError();
-oxc::Buffer &meshTypeCheckBuffer();
-oxc::c::MeshInfo &meshTypeCheckInfo();
-const oxc::c::MeshOutput &meshTypeCheckOutput();
+const oxc::c::Buffer &objTypeCheckBytes();
+const oxc::file::Types &objTypeCheckTypes();
+const oxc::c::Allocator *objTypeCheckAlloc();
+oxc::c::Error *objTypeCheckError();
+oxc::Buffer &objTypeCheckBuffer();
+oxc::c::MeshInfo &objTypeCheckInfo();
+const oxc::c::MeshOutput &objTypeCheckOutput();
 
 //Never invoked.
 
-extern "C" void Test_meshHppTypeCheck() {
+extern "C" void Test_objHppTypeCheck() {
 
 	using namespace oxc;
 
 	static_assert(
 		sizeof(obj::read(
-			meshTypeCheckBytes(), meshTypeCheckTypes(), meshTypeCheckOutput(), meshTypeCheckInfo(), meshTypeCheckAlloc()
+			objTypeCheckBytes(), objTypeCheckTypes(), objTypeCheckOutput(), objTypeCheckInfo(),
+			objTypeCheckAlloc()
 		)) == sizeof(c::Bool),
 		"obj::read into sinks must stay callable on its defaults alone and must return c::Bool"
 	);
 
 	static_assert(
 		sizeof(obj::read(
-			meshTypeCheckBytes(), meshTypeCheckTypes(), meshTypeCheckBuffer(), meshTypeCheckBuffer(),
-			&meshTypeCheckBuffer(), nullptr, meshTypeCheckInfo(), meshTypeCheckAlloc(),
-			c::EMeshReadFlags_ComputeNormals, meshTypeCheckError()
+			objTypeCheckBytes(), objTypeCheckTypes(), objTypeCheckBuffer(), objTypeCheckBuffer(),
+			&objTypeCheckBuffer(), nullptr, objTypeCheckInfo(), objTypeCheckAlloc(),
+			c::EMeshFlags_ComputeNormals, objTypeCheckError()
 		)) == sizeof(c::Bool),
 		"obj::read into Buffers must stay callable with every argument spelled out and must return c::Bool"
-	);
-
-	static_assert(
-		sizeof(ply::read(
-			meshTypeCheckBytes(), meshTypeCheckTypes(), meshTypeCheckOutput(), meshTypeCheckInfo(), meshTypeCheckAlloc()
-		)) == sizeof(c::Bool),
-		"ply::read into sinks must stay callable on its defaults alone and must return c::Bool"
-	);
-
-	static_assert(
-		sizeof(ply::read(
-			meshTypeCheckBytes(), meshTypeCheckTypes(), meshTypeCheckBuffer(), meshTypeCheckBuffer(),
-			nullptr, &meshTypeCheckBuffer(), meshTypeCheckInfo(), meshTypeCheckAlloc()
-		)) == sizeof(c::Bool),
-		"ply::read into Buffers must stay callable and must return c::Bool"
 	);
 }

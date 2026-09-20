@@ -18,19 +18,18 @@
 *  This is called dual licensing.
 */
 
-//formats/mesh/test/test_mesh_main.c
+//types/mesh/test/shared/mesh_test.c
 
-#include "test_mesh_shared.h"
+#include "types/mesh/test/mesh_test.h"
 #include "types/container/memory_stream.h"
 #include "types/container/ref_ptr.h"
-#include "types/container/test/basic_alloc.h"
-#include "types/base/mathf.h"
 #include "types/math/pack.h"
 #include "types/math/flp.h"
+#include "types/base/mathf.h"
 
 MeshResult Test_meshRead(
-	Test *t, MeshReadFunc fn, const void *bytes, U64 length, EMeshReadFlags flags,
-	Bool withAttributes, Bool withTriangles
+	Test *t, MeshReadFunc fn, const void *bytes, U64 length, EMeshFlags flags,
+	Bool withAttributes, Bool withTriangles, Error *readError
 ) {
 
 	MeshResult r = (MeshResult) { 0 };
@@ -66,7 +65,7 @@ MeshResult Test_meshRead(
 
 	U64 off = 0;
 
-	if(!fn((StreamRef*) src, &off, flags, &r.info, &output, t->alloc, &t->err))
+	if(!fn((StreamRef*) src, &off, flags, &r.info, &output, t->alloc, readError))
 		goto clean;
 
 	if(!MemoryStream_move(&positions, &r.positions, &t->err) || !MemoryStream_move(&indices, &r.indices, &t->err))
@@ -120,7 +119,7 @@ U32 MeshResult_word(const MeshResult *r, U32 i) {
 }
 
 Bool Test_near(F32 a, F32 b) {
-	return F32_abs(a - b) <= 1e-5f;
+	return F32_approxEq(a, b, 1e-5f);
 }
 
 //The attribute unpacked, so a test compares against what the file said rather than against an encoding.
@@ -134,38 +133,86 @@ F32 MeshResult_uv(const MeshResult *r, U32 i, U8 axis) {
 	return F16_castF32((F16) (axis ? packed >> 16 : packed & 0xFFFF));
 }
 
-//Oct32 lands an axis exactly and everything else to a few hundredths of a degree.
+//Oct32 lands an axis exactly and everything else to a few hundredths of a degree, so the comparison is
+// absolute rather than relative. unpackOct32 leaves w at zero, which create3 matches.
 
 Bool Test_nearNormal(F32x4 n, F32 x, F32 y, F32 z) {
-	return F32_abs(F32x4_x(n) - x) < 1e-4f && F32_abs(F32x4_y(n) - y) < 1e-4f && F32_abs(F32x4_z(n) - z) < 1e-4f;
+	return F32x4_eqApproxAdv4(n, F32x4_create3(x, y, z), 0, 1e-4f);
 }
 
-OXC3_TEST_MAIN(formats_mesh) {
+Buffer Test_meshWrite(Test *t, MeshWriteFunc fn, const MeshResult *r, EMeshFlags layout) {
 
-	const Allocator alloc = BasicAllocator_instance;
-	Test t = (Test){ 0 };
-	t.alloc = &alloc;
+	Buffer out = Buffer_createNull();
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
-	Test_OBJCubeWithEverything(&t);
-	Test_OBJDedup(&t);
-	Test_OBJNegativeIndices(&t);
-	Test_OBJCornerForms(&t);
-	Test_OBJTextTolerance(&t);
-	Test_OBJComputeNormals(&t);
-	Test_OBJTriangleWords(&t);
-	Test_OBJMaterials(&t);
-	Test_OBJQuantizedPositions(&t);
-	Test_OBJGeometryOnly(&t);
-	Test_OBJValidation(&t);
+	MemoryStreamRef *positions = NULL, *attributes = NULL, *indices = NULL, *dst = NULL;
 
-	Test_PLYAscii(&t);
-	Test_PLYBinaryLittleEndian(&t);
-	Test_PLYBinaryBigEndian(&t);
-	Test_PLYSkipsWhatItDoesNotKnow(&t);
-	Test_PLYComputeNormals(&t);
-	Test_PLYQuantizedPositions(&t);
-	Test_PLYValidation(&t);
+	if(!MemoryStream_createFromBufferRegion(
+		Buffer_createRefConst(r->positions.ptr, Buffer_length(r->positions)), 0, Buffer_length(r->positions),
+		EMemoryStreamFlags_None, &type, &positions, &t->err
+	))
+		goto clean;
 
-	BasicAllocator_checkLeakedMem(&t);
-	return Test_end(&t);
+	if(!MemoryStream_createFromBufferRegion(
+		Buffer_createRefConst(r->indices.ptr, Buffer_length(r->indices)), 0, Buffer_length(r->indices),
+		EMemoryStreamFlags_None, &type, &indices, &t->err
+	))
+		goto clean;
+
+	if(Buffer_length(r->attributes) && !MemoryStream_createFromBufferRegion(
+		Buffer_createRefConst(r->attributes.ptr, Buffer_length(r->attributes)), 0, Buffer_length(r->attributes),
+		EMemoryStreamFlags_None, &type, &attributes, &t->err
+	))
+		goto clean;
+
+	if(!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &dst, &t->err))
+		goto clean;
+
+	const MeshInput input = (MeshInput) {
+		.positions = (StreamRef*) positions,
+		.attributes = (StreamRef*) attributes,
+		.indices = (StreamRef*) indices
+	};
+
+	U64 off = 0;
+
+	if(!fn(&input, &r->info, layout, (StreamRef*) dst, &off, t->alloc, &t->err))
+		goto clean;
+
+	if(!MemoryStream_move(&dst, &out, &t->err))
+		out = Buffer_createNull();
+
+clean:
+
+	RefPtr_dec((RefPtr**) &positions);
+	RefPtr_dec((RefPtr**) &attributes);
+	RefPtr_dec((RefPtr**) &indices);
+	RefPtr_dec((RefPtr**) &dst);
+
+	return out;
+}
+
+void Test_meshTrianglesMatch(Test *t, const C8 *name, const MeshResult *a, const MeshResult *b) {
+
+	if(!Test_assert(t, name, a->info.indexCount == b->info.indexCount))
+		return;
+
+	Bool same = true;
+
+	for(U32 tri = 0; tri < a->info.indexCount / 3 && same; ++tri) {
+
+		const U32 *ia = MeshResult_triangle(a, tri);
+		const U32 *ib = MeshResult_triangle(b, tri);
+
+		for(U8 c = 0; c < 3 && same; ++c) {
+
+			const F32 *pa = MeshResult_position(a, ia[c]);
+			const F32 *pb = MeshResult_position(b, ib[c]);
+
+			for(U8 axis = 0; axis < 3; ++axis)
+				same = same && Test_near(pa[axis], pb[axis]);
+		}
+	}
+
+	Test_assert(t, name, same);
 }

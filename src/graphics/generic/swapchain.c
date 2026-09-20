@@ -47,8 +47,13 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 	if(acqSwapchain != ELockAcquire_Acquired)
 		retError(clean, Error_invalidState(0, "Swapchain_resize() couldn't lock swapchain"));
 
-	//Check if swapchain was in flight.
-	//If yes, warn that the user has to flush manually
+	//A resize tears down the per image views, and on a swapchain that owns its images the images and their
+	// memory with them, all from here where no fence is reachable. So a swapchain still in flight is waited out
+	// rather than refused: the device is the only thing that can check whether it is in flight, so the rule
+	// lives here rather than in every caller's onResize.
+	//The wait is device wide for that reason and is skipped entirely when this swapchain is in no slot, which
+	// is the common case. The backends narrow it further where they can, and the Vulkan path additionally
+	// retires the swapchain handle, since the presentation engine can hold images past any fence.
 
 	const ELockAcquire acq = SpinLock_lock(&device->lock, U64_MAX);
 
@@ -67,9 +72,7 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 		SpinLock_unlock(&device->lock);
 
 	if (any)
-		retError(clean, Error_invalidState(
-			0, "Swapchain_resize() can't be called on a Swapchain that's in flight. Use GraphicsDeviceRef_wait in onResize"
-		));
+		gotoIfError3(clean, GraphicsDeviceRef_wait(swapchain->base.resource.device, e_rr));
 
 	//Resize with same format and same size is a NOP
 

@@ -18,21 +18,24 @@
 *  This is called dual licensing.
 */
 
-//formats/mesh/test/test_mesh_shared.h
+//types/mesh/test/mesh_test.h
+//
+//The harness every mesh reader suite reads through. A reader's own suite lives beside that reader; what they
+// share is the sink plumbing and the accessors that turn a written record back into what the file said.
 
 #pragma once
 #include "types/test/test.h"
 #include "types/container/buffer.h"
-#include "formats/mesh/mesh.h"
+#include "types/mesh/mesh.h"
 #include "types/math/vec4f.h"
 
 typedef struct RefPtr RefPtr;
 typedef RefPtr StreamRef;
 
-//Both readers have the same signature, so one harness reads through either.
+//Every reader has the same signature, so one harness reads through any of them.
 
 typedef Bool (*MeshReadFunc)(
-	StreamRef *stream, U64 *off, EMeshReadFlags flags, MeshInfo *info, const MeshOutput *output,
+	StreamRef *stream, U64 *off, EMeshFlags flags, MeshInfo *info, const MeshOutput *output,
 	const Allocator *alloc, Error *e_rr
 );
 
@@ -47,10 +50,12 @@ typedef struct MeshResult {
 
 //Reads bytes through fn into resizable sinks. withAttributes and withTriangles leave those outputs NULL
 // when false, which is what a consumer reading only geometry does.
+//readError is where the READ reports; the harness's own failures go to t->err regardless. NULL is for a read
+// that is expected to be refused, so an assert made afterwards has no error pending to count against it.
 
 MeshResult Test_meshRead(
-	Test *t, MeshReadFunc fn, const void *bytes, U64 length, EMeshReadFlags flags,
-	Bool withAttributes, Bool withTriangles
+	Test *t, MeshReadFunc fn, const void *bytes, U64 length, EMeshFlags flags,
+	Bool withAttributes, Bool withTriangles, Error *readError
 );
 
 void MeshResult_free(Test *t, MeshResult *r);
@@ -60,28 +65,28 @@ const I16 *MeshResult_quantized(const MeshResult *r, U32 i);
 const MeshAttribute *MeshResult_attribute(const MeshResult *r, U32 i);
 F32x4 MeshResult_normal(const MeshResult *r, U32 i);
 F32 MeshResult_uv(const MeshResult *r, U32 i, U8 axis);
-Bool Test_nearNormal(F32x4 n, F32 x, F32 y, F32 z);
 const U32 *MeshResult_triangle(const MeshResult *r, U32 i);
 U32 MeshResult_word(const MeshResult *r, U32 i);
 
+//Every writer has the same signature bar its format argument, so a suite wraps that away and the round trip
+// below drives any of them.
+
+typedef Bool (*MeshWriteFunc)(
+	const MeshInput *input, const MeshInfo *info, EMeshFlags layout,
+	StreamRef *stream, U64 *off, const Allocator *alloc, Error *e_rr
+);
+
+//Writes a result back out through fn and hands back the bytes it produced, owned by the caller.
+//An empty buffer means the write failed, which the caller asserts on.
+
+Buffer Test_meshWrite(Test *t, MeshWriteFunc fn, const MeshResult *r, EMeshFlags layout);
+
+//A round trip compares TRIANGLE by triangle rather than vertex by vertex: a reader shares vertices in first use
+// order, so writing and reading back is free to renumber them even though the surface is identical.
+
+void Test_meshTrianglesMatch(Test *t, const C8 *name, const MeshResult *a, const MeshResult *b);
+
+//The tolerances a decoded record is compared at, so every suite agrees on what near means.
+
 Bool Test_near(F32 a, F32 b);
-
-void Test_OBJCubeWithEverything(Test *t);
-void Test_OBJDedup(Test *t);
-void Test_OBJNegativeIndices(Test *t);
-void Test_OBJCornerForms(Test *t);
-void Test_OBJTextTolerance(Test *t);
-void Test_OBJComputeNormals(Test *t);
-void Test_OBJTriangleWords(Test *t);
-void Test_OBJMaterials(Test *t);
-void Test_OBJQuantizedPositions(Test *t);
-void Test_OBJGeometryOnly(Test *t);
-void Test_OBJValidation(Test *t);
-
-void Test_PLYAscii(Test *t);
-void Test_PLYBinaryLittleEndian(Test *t);
-void Test_PLYBinaryBigEndian(Test *t);
-void Test_PLYSkipsWhatItDoesNotKnow(Test *t);
-void Test_PLYComputeNormals(Test *t);
-void Test_PLYQuantizedPositions(Test *t);
-void Test_PLYValidation(Test *t);
+Bool Test_nearNormal(F32x4 n, F32 x, F32 y, F32 z);

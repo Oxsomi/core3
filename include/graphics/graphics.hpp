@@ -2252,7 +2252,7 @@ namespace oxc {
 			//every TLAS referencing it must be created after, because compaction moves the structure.
 
 			[[nodiscard]] c::Bool createBlasProcedural(
-				c::ERTASBuildFlags buildFlags, c::EBLASFlag blasFlags,
+				c::ERTASBuildFlags buildFlags, c::EBLASGeometryFlag geometryFlags,
 				c::U32 aabbStride, c::U32 aabbOffset, c::DeviceData buffer,
 				const c::C8 *debugName, Blas &result, c::Error *e_rr = nullptr
 			) noexcept {
@@ -2261,7 +2261,7 @@ namespace oxc {
 				c::BLASRef *raw = nullptr;
 
 				if(!c::GraphicsDeviceRef_createBLASProceduralExt(
-					handle(), buildFlags, blasFlags, aabbStride, aabbOffset, buffer, &n, &raw, e_rr
+					handle(), buildFlags, geometryFlags, aabbStride, aabbOffset, buffer, &n, &raw, e_rr
 				))
 					return false;
 

@@ -226,6 +226,14 @@ static inline F32x4 F32x4_reflect3(F32x4 i, F32x4 n) {
 static inline Bool F32x4_all(F32x4 a) { return F32x4_reduce(F32x4_neqExact(a, F32x4_zero())) == 4; }
 static inline Bool F32x4_any(F32x4 a) { return F32x4_reduce(F32x4_neqExact(a, F32x4_zero())); }
 
+//The same over xyz and over xy alone, for the vectors that carry three or two components and pad the rest.
+//The family stops at two. One lane is a scalar, and F32_approxEq in types/base/mathf.h is that compare.
+
+static inline Bool F32x4_all3(F32x4 a) { return F32x4_reduce(F32x4_trunc3(F32x4_neqExact(a, F32x4_zero()))) == 3; }
+static inline Bool F32x4_any3(F32x4 a) { return F32x4_reduce(F32x4_trunc3(F32x4_neqExact(a, F32x4_zero()))); }
+static inline Bool F32x4_all2(F32x4 a) { return F32x4_reduce(F32x4_trunc2(F32x4_neqExact(a, F32x4_zero()))) == 2; }
+static inline Bool F32x4_any2(F32x4 a) { return F32x4_reduce(F32x4_trunc2(F32x4_neqExact(a, F32x4_zero()))); }
+
 //For diffs that aren't exact with floats (reasonable relEpsilon = 1e-5, absEpsilon = 1e-6)
 static inline F32x4 F32x4_epsilonDiff(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
 	return F32x4_max(F32x4_mul(F32x4_max(F32x4_abs(a), F32x4_abs(b)), F32x4_xxxx4(relEpsilon)), F32x4_xxxx4(absEpsilon));
@@ -245,9 +253,17 @@ static inline F32x4 F32x4_neqApprox(F32x4 a, F32x4 b) { return F32x4_neqApproxAd
 
 static inline Bool F32x4_eqExact4(F32x4 a, F32x4 b) { return F32x4_all(F32x4_eqExact(a, b)); }
 static inline Bool F32x4_neqExact4(F32x4 a, F32x4 b) { return !F32x4_eqExact4(a, b); }
+static inline Bool F32x4_eqExact3(F32x4 a, F32x4 b) { return F32x4_all3(F32x4_eqExact(a, b)); }
+static inline Bool F32x4_neqExact3(F32x4 a, F32x4 b) { return !F32x4_eqExact3(a, b); }
+static inline Bool F32x4_eqExact2(F32x4 a, F32x4 b) { return F32x4_all2(F32x4_eqExact(a, b)); }
+static inline Bool F32x4_neqExact2(F32x4 a, F32x4 b) { return !F32x4_eqExact2(a, b); }
 
 static inline Bool F32x4_eqApprox4(F32x4 a, F32x4 b) { return F32x4_all(F32x4_eqApprox(a, b)); }
 static inline Bool F32x4_neqApprox4(F32x4 a, F32x4 b) { return !F32x4_eqApprox4(a, b); }
+static inline Bool F32x4_eqApprox3(F32x4 a, F32x4 b) { return F32x4_all3(F32x4_eqApprox(a, b)); }
+static inline Bool F32x4_neqApprox3(F32x4 a, F32x4 b) { return !F32x4_eqApprox3(a, b); }
+static inline Bool F32x4_eqApprox2(F32x4 a, F32x4 b) { return F32x4_all2(F32x4_eqApprox(a, b)); }
+static inline Bool F32x4_neqApprox2(F32x4 a, F32x4 b) { return !F32x4_eqApprox2(a, b); }
 
 static inline Bool F32x4_eqApproxAdv4(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
 	return F32x4_all(F32x4_eqApproxAdv(a, b, relEpsilon, absEpsilon));
@@ -255,6 +271,22 @@ static inline Bool F32x4_eqApproxAdv4(F32x4 a, F32x4 b, F32 relEpsilon, F32 absE
 
 static inline Bool F32x4_neqApproxAdv4(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
 	return !F32x4_eqApproxAdv4(a, b, relEpsilon, absEpsilon);
+}
+
+static inline Bool F32x4_eqApproxAdv3(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
+	return F32x4_all3(F32x4_eqApproxAdv(a, b, relEpsilon, absEpsilon));
+}
+
+static inline Bool F32x4_neqApproxAdv3(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
+	return !F32x4_eqApproxAdv3(a, b, relEpsilon, absEpsilon);
+}
+
+static inline Bool F32x4_eqApproxAdv2(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
+	return F32x4_all2(F32x4_eqApproxAdv(a, b, relEpsilon, absEpsilon));
+}
+
+static inline Bool F32x4_neqApproxAdv2(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
+	return !F32x4_eqApproxAdv2(a, b, relEpsilon, absEpsilon);
 }
 
 //Construction
@@ -281,6 +313,25 @@ static inline F32x4 F32x4_load4(const void *arr) {
 	F32x4 result = F32x4_zero();
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 4), Buffer_createRefConst(arr, sizeof(F32) * 4));
 	return result;
+}
+
+//Writes the low components to possibly misaligned memory, leaving whatever follows them untouched.
+//NULL is a write that does nothing, which mirrors the loads above returning zero for it.
+
+static inline void F32x4_store1(void *arr, F32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(F32)), Buffer_createRefConst(&a, sizeof(F32)));
+}
+
+static inline void F32x4_store2(void *arr, F32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(F32) * 2), Buffer_createRefConst(&a, sizeof(F32) * 2));
+}
+
+static inline void F32x4_store3(void *arr, F32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(F32) * 3), Buffer_createRefConst(&a, sizeof(F32) * 3));
+}
+
+static inline void F32x4_store4(void *arr, F32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(F32) * 4), Buffer_createRefConst(&a, sizeof(F32) * 4));
 }
 
 #ifdef __cplusplus

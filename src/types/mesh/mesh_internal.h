@@ -18,15 +18,16 @@
 *  This is called dual licensing.
 */
 
-//formats/mesh/mesh_internal.h
+//types/mesh/mesh_internal.h
 //
 //What the mesh readers share and nothing else needs: the input window, the chunked sink, and what every
 // reader does with a vertex and a triangle once it has them. Internal, so it lives beside the readers rather than
 // in include/.
 
 #pragma once
-#include "formats/mesh/mesh.h"
+#include "types/mesh/mesh.h"
 #include "types/container/stream.h"
+#include "types/math/vec4.h"
 #include "types/container/list_basic_types.h"
 #include "types/base/string_base.h"
 
@@ -50,28 +51,32 @@ typedef struct Error Error;
 
 typedef struct MeshSource {
 
-	OxStream *stream;
+	StreamCursor cursor;          //Its cache is the window, MESH_WINDOW bytes
 	const Allocator *alloc;
 
-	U64 base;                     //Stream offset buf[0] sits at
-	U64 fill;                     //Valid bytes in buf
-	U64 pos;                      //Cursor within buf
-
-	U8 *buf;                      //MESH_WINDOW bytes
+	U64 size;                     //Of the stream, so the end is known without a read
+	U64 pos;                      //Absolute stream offset the reader is at
 
 } MeshSource;
 
 Bool MeshSource_create(StreamRef *stream, U64 off, const Allocator *alloc, MeshSource *src, Error *e_rr);
 void MeshSource_free(MeshSource *src);
 
-//How many bytes sit contiguously at the cursor, refilling the window when it ran dry. Zero at the end of the
-// stream, which is not an error here: whether the end was expected is the reader's to decide.
+//How many bytes sit contiguously at the cursor, moving the window when the cursor has left it. Zero at the
+// end of the stream, which is not an error here: whether the end was expected is the reader's to decide.
+//A scanner keeps this check for itself rather than reading through the cursor each time, since the cursor's own
+// read relocates the window whenever the request does not start at its first byte.
 
 Bool MeshSource_available(MeshSource *src, U64 *available, Error *e_rr);
 
-static inline const U8 *MeshSource_ptr(const MeshSource *src) { return src->buf + src->pos; }
-static inline void MeshSource_advance(MeshSource *src, U64 n) { src->pos += n; }
-static inline U64 MeshSource_offset(const MeshSource *src) { return src->base + src->pos; }
+//Only meaningful right after MeshSource_available reported at least one byte
+
+static inline const U8 *MeshSource_ptr(const MeshSource *src) {
+	return src ? src->cursor.cacheData.ptr + (src->pos - src->cursor.lastLocation) : NULL;
+}
+
+static inline void MeshSource_advance(MeshSource *src, U64 n) { if(src) src->pos += n; }
+static inline U64 MeshSource_offset(const MeshSource *src) { return src ? src->pos : 0; }
 
 //Exactly n bytes, across window boundaries. Fewer than n left is an error: a binary body is sized by its header.
 
@@ -83,30 +88,33 @@ Bool MeshSource_skip(MeshSource *src, U64 n, Error *e_rr);
 
 Bool MeshSource_readLine(MeshSource *src, C8 *line, U64 cap, U64 *len, Bool *got, Error *e_rr);
 
-//The chunked sink. A NULL stream is a sink that discards, which is what an output the caller left NULL is,
-// so a reader writes unconditionally and the check lives here once.
+//The chunked sink: a write cursor whose cache is the chunk, so records leave once per MESH_CHUNK bytes rather
+// than once each. A NULL stream is a sink that discards, which is what an output the caller left NULL is, so a
+// reader writes unconditionally and the check lives here once.
 //
 //Capacity is reserved geometrically ahead of the writes on a stream that can reserve, and never on one that
 // cannot: a file simply grows, and a memory stream that was handed a fixed buffer refuses at the write itself.
 
 typedef struct MeshSink {
 
-	OxStream *stream;
+	StreamCursor cursor;          //Unset for the sink that discards
 	const Allocator *alloc;
 
 	U64 base;                     //Stream offset the first record sits at
-	U64 written;                  //Bytes flushed past base
+	U64 written;                  //Bytes handed to the cursor past base
 	U64 reserved;                 //Capacity asked for past base, on streams that can reserve
-
-	U64 fill;                     //Bytes waiting in buf
-	U8 *buf;                      //MESH_CHUNK bytes, only when stream is set
 
 } MeshSink;
 
 Bool MeshSink_create(StreamRef *stream, U64 off, const Allocator *alloc, MeshSink *sink, Error *e_rr);
-static inline Bool MeshSink_active(const MeshSink *sink) { return sink->stream != NULL; }
+static inline Bool MeshSink_active(const MeshSink *sink) { return sink && sink->cursor.stream; }
 
 Bool MeshSink_write(MeshSink *sink, const void *data, U64 bytes, Error *e_rr);
+
+//One formatted piece, which is what the text forms of a mesh are built out of. The sink's own allocator is
+// used, and a sink that discards formats nothing at all rather than formatting and throwing it away.
+
+Bool MeshSink_writeFormatted(MeshSink *sink, Error *e_rr, const C8 *format, ...);
 Bool MeshSink_flush(MeshSink *sink, Error *e_rr);
 void MeshSink_free(MeshSink *sink);
 
@@ -117,16 +125,17 @@ typedef struct MeshPositions {
 
 	MeshSink *sink;
 	ListF32 held;                 //3 per vertex while holding
-	U64 heldCapacity;
+	
+	F32x4 aabbMin, aabbMax;       //Three lanes used, the fourth stays at zero
 
-	F32 aabbMin[3], aabbMax[3];
+	U64 heldCapacity;
 	U32 count;
 	Bool hold;
 	U8 padding[3];
 
 } MeshPositions;
 
-void MeshPositions_create(EMeshReadFlags flags, MeshSink *sink, MeshPositions *positions);
+void MeshPositions_create(EMeshFlags flags, MeshSink *sink, MeshPositions *positions);
 Bool MeshPositions_push(MeshPositions *p, const F32 *position, const Allocator *alloc, Error *e_rr);
 Bool MeshPositions_finish(MeshPositions *p, MeshInfo *info, Error *e_rr);
 void MeshPositions_free(MeshPositions *p, const Allocator *alloc);
@@ -142,18 +151,19 @@ typedef struct MeshTriangles {
 
 	ListF32 normalSums;           //3 per vertex while computing normals, otherwise empty
 	Bool computeNormals;
-	U8 padding[3];
+	Bool narrowIndices;           //U16 per index instead of U32
+	U8 padding[2];
 
 	U32 count;                    //Triangles emitted
 
 } MeshTriangles;
 
-void MeshTriangles_create(EMeshReadFlags flags, MeshSink *indices, MeshSink *words, MeshTriangles *triangles);
+void MeshTriangles_create(EMeshFlags flags, MeshSink *indices, MeshSink *words, MeshTriangles *triangles);
 
 //Whether a reader has to be able to hand positions to emit, which is what decides if it keeps them.
 
 static inline Bool MeshTriangles_needsPositions(const MeshTriangles *t) {
-	return t->computeNormals || MeshSink_active(t->words);
+	return t && (t->computeNormals || MeshSink_active(t->words));
 }
 
 Bool MeshTriangles_emit(
@@ -177,19 +187,16 @@ typedef struct MeshAttributes {
 
 	Bool hold;
 	Bool wide;                    //MeshAttributeWide records rather than MeshAttribute
-	U8 padding[6];
+	Bool placeholderNormal;       //A computed normal fell back to +z, so some vertex had no triangle with area
+	U8 padding;
+
+	F32 maxUvError;               //Worst F16 round trip over every uv written, 0 when wide
 
 } MeshAttributes;
 
 //normal and uv as the file gave them; the record leaves packed. A file that named no normal passes a zero one.
 
-void MeshAttributes_create(EMeshReadFlags flags, MeshSink *sink, MeshAttributes *attributes);
+void MeshAttributes_create(EMeshFlags flags, MeshSink *sink, MeshAttributes *attributes);
 Bool MeshAttributes_push(MeshAttributes *a, const F32 *normal, const F32 *uv, const Allocator *alloc, Error *e_rr);
 Bool MeshAttributes_finish(MeshAttributes *a, const MeshTriangles *t, U32 vertexCount, Error *e_rr);
 void MeshAttributes_free(MeshAttributes *a, const Allocator *alloc);
-
-//Text. A token is a run of non whitespace; false when the line has none left.
-
-Bool Mesh_nextToken(const C8 *line, U64 len, U64 *pos, CharString *token);
-Bool Mesh_parseF32(CharString token, F32 *result);
-Bool Mesh_parseI64(CharString token, I64 *result);

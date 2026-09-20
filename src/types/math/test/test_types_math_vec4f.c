@@ -46,6 +46,26 @@ void Test_vec4f(Test *test) {
 	F32x4 wzyx = F32x4_wzyx(v4);
 	Test_assert(test, "F32x4_wzyx",    F32x4_x(wzyx) == 10 && F32x4_y(wzyx) == 9 && F32x4_z(wzyx) == 2 && F32x4_w(wzyx) == 1);
 
+	//Load and store round trip, and that a store writes only the lanes it names
+
+	const F32 src4[4] = { 11, 12, 13, 14 };
+	F32x4 loaded = F32x4_load3(src4);
+	Test_assert(test, "F32x4_load3", F32x4_x(loaded) == 11 && F32x4_y(loaded) == 12 && F32x4_z(loaded) == 13 &&
+		F32x4_w(loaded) == 0);
+
+	F32 dst4[4] = { -1, -1, -1, -1 };
+	F32x4_store3(dst4, F32x4_load4(src4));
+	Test_assert(test, "F32x4_store3", dst4[0] == 11 && dst4[1] == 12 && dst4[2] == 13 && dst4[3] == -1);
+
+	F32x4_store1(dst4, F32x4_create1(7));
+	Test_assert(test, "F32x4_store1", dst4[0] == 7 && dst4[1] == 12);
+
+	F32x4_store4(dst4, F32x4_load4(src4));
+	Test_assert(test, "F32x4_store4", dst4[0] == 11 && dst4[3] == 14);
+
+	F32x4_store2(NULL, loaded);        //A NULL destination writes nothing rather than faulting
+	Test_assert(test, "F32x4_storeNull", dst4[0] == 11);
+
 	//Comparisons
 
 	F32x4 a = F32x4_create4(1, 2, 3, 4);

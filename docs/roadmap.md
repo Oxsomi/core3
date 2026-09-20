@@ -52,12 +52,6 @@ Roughly ordered by how often the gap bites.
 - **Mesh/task shaders have no runtime path** while the feature bit reads true: stages compile and reflect,
   the VK extension is enabled, but there is no dispatchMesh on either backend (explicit TODO in
   graphics_pipeline.c). Widely adopted, both APIs, deprecated by nobody: a gap to fill, not weight to cut.
-- **Multi-geometry BLAS.** Both backends hardcode one geometry per BLAS, so EBLASFlag (DisableAnyHit etc.)
-  is per-BLAS when both APIs allow per-geometry. Real use cases: car with glass, clothed character, plant
-  pot with foliage; today the options are whole-BLAS non-opaque (opaque parts pay anyHit for nothing) or
-  splitting into instances (traversal cost, instance slots). Expect the BLAS create surface to change:
-  geometry becomes a list and EBLASFlag moves per-geometry; BLASCreateInfo is the place to grow. Overlaps
-  with special-index OMM, which stops being the only way to vary opacity within one BLAS once this lands.
 - **Frame capture/replay, v1.** A debugging/replay layer on top of OxC3's own abstractions: virtual command
   lists are already API-neutral opcodes plus a resource table, scopes declare their transitions, and oiSH
   ships DXIL+SPIRV so a capture on VK replays on D3D12 (something no below-API tool can do). v1 sequence:
@@ -80,6 +74,34 @@ Roughly ordered by how often the gap bites.
   allocation while D3D12's CBV/SRV/UAV heap is flat, so a type-mismatched reservedDescriptors "works" on
   D3D12 and fails on Vulkan at table create. Generic per-type tracking would make both refuse identically
   at record time.
+- **Nothing reads the .mtl an obj names.** `Obj_read` numbers materials by first use of `usemtl` and puts
+  the index in the triangle word, and that is the whole of it: `mtllib` is skipped and the names are dropped,
+  so a consumer can tell the runs apart and cannot tell what any of them is. What a renderer would actually
+  shade with lives in the .mtl: `Kd`, `Ks`, `Ns`, `Ni`, `d`, `illum` and the `map_*` texture references. The
+  gap is a second parser plus a list of named material records the indices point into, which is also what
+  makes keeping the names worth anything. Textures can lag behind the scalars. The scalars alone are the
+  difference between a consumer inventing a material and the file stating one.
+- **A reader does not sort triangles into material runs.** A mesh with several materials therefore cannot go
+  straight into a BLAS. One geometry per run is what `GeometryIndex()` resolves against, and a BLAS now takes
+  a list of geometries each carrying its own flags, so the consuming half is in place. The producing half is
+  not: triangles come out in file order, a run is contiguous only where the file happened to be written that
+  way, and the material stays hidden in the per-triangle word. What is missing is a stable sort by material
+  index with the index stream permuted to match, and a first/count per material that a consumer hands
+  straight to the BLAS geometry list. It belongs in the reader, since it is the same work for every consumer
+  and the cache-order pass below has to run after it. The ranges have nowhere to live in the flat form today,
+  so the form grows a submesh table before the sort has anywhere to put its result.
+- **Cache-order the flat mesh.** A pass over a reader's flat output, in types/mesh beside the readers, that
+  reorders triangles for the post-transform reuse cache and then renumbers vertices in first-use order. The
+  cache is a small FIFO on both vendors, AMD's the narrower, so the order is found by simulating one: Forsyth's
+  linear-time scoring (a vertex scores high near the front of the simulated cache and high when few of its
+  triangles remain, the three newest slots score flat so the greedy pick does not degenerate into a strip) or
+  Tipsify; meshoptimizer's optimizeVertexCache followed by optimizeVertexFetch is the reference. A random order
+  transforms two to three vertices per triangle, an ordered one about 0.65, and a vertex-bound pass
+  follows that ratio. The order also decides how coherent per-triangle hit records are for coherent rays and
+  how well AMD's BLAS builder pairs edge-sharing triangles. Sort into material runs first, stably, so a raster
+  twin's one draw per run keeps its ranges. Needs the whole index list, so it is a pass after the read and not
+  a read flag. Ships with a test that reports the simulated miss ratio before and after on a known mesh and has
+  been seen to fail on an unordered input.
 
 ## Test and CI state
 

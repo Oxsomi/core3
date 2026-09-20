@@ -18,26 +18,19 @@
 *  This is called dual licensing.
 */
 
-//formats/mesh/test/test_mesh_ply.c
+//formats/ply/test/test_ply_read.c
 
-#include "test_mesh_shared.h"
+#include "test_ply_shared.h"
 #include "formats/ply/ply_file.h"
 #include "types/math/pack.h"
 #include "types/math/flp.h"
+#include "types/container/string.h"
 #include "types/base/error.h"
 
-static U64 textLength(const C8 *text) {
+#include <stdarg.h>
 
-	U64 len = 0;
-
-	while(text[len])
-		++len;
-
-	return len;
-}
-
-static MeshResult readPly(Test *t, const void *bytes, U64 len, EMeshReadFlags flags, Bool attrs, Bool words) {
-	return Test_meshRead(t, PLY_read, bytes, len, flags, attrs, words);
+static MeshResult readPly(Test *t, const void *bytes, U64 len, EMeshFlags flags, Bool attrs, Bool words) {
+	return Test_meshRead(t, Ply_read, bytes, len, flags, attrs, words, &t->err);
 }
 
 //A quad and a triangle over four vertices carrying normals and uvs, in the ascii form.
@@ -65,11 +58,11 @@ static const C8 *const asciiPly =
 	"4 0 1 2 3\n"
 	"3 0 2 3\n";
 
-void Test_PLYAscii(Test *t) {
+void Test_plyAscii(Test *t) {
 
 	Test_setModule(t, "PLY/ascii");
 
-	MeshResult r = readPly(t, asciiPly, textLength(asciiPly), EMeshReadFlags_None, true, true);
+	MeshResult r = readPly(t, asciiPly, CharString_calcStrLen(asciiPly, U64_MAX), EMeshFlags_None, true, true);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -162,7 +155,7 @@ static void checkBinary(Test *t, Bool bigEndian) {
 	U8 bytes[512];
 	const U64 len = buildBinaryPly(bytes, bigEndian);
 
-	MeshResult r = readPly(t, bytes, len, EMeshReadFlags_None, true, false);
+	MeshResult r = readPly(t, bytes, len, EMeshFlags_None, true, false);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -181,17 +174,17 @@ static void checkBinary(Test *t, Bool bigEndian) {
 	MeshResult_free(t, &r);
 }
 
-void Test_PLYBinaryLittleEndian(Test *t) {
+void Test_plyBinaryLittleEndian(Test *t) {
 	Test_setModule(t, "PLY/binaryLittleEndian");
 	checkBinary(t, false);
 }
 
-void Test_PLYBinaryBigEndian(Test *t) {
+void Test_plyBinaryBigEndian(Test *t) {
 	Test_setModule(t, "PLY/binaryBigEndian");
 	checkBinary(t, true);
 }
 
-void Test_PLYSkipsWhatItDoesNotKnow(Test *t) {
+void Test_plySkipsWhatItDoesNotKnow(Test *t) {
 
 	Test_setModule(t, "PLY/skips");
 
@@ -221,7 +214,7 @@ void Test_PLYSkipsWhatItDoesNotKnow(Test *t) {
 		"0 1\n"
 		"1 2\n";
 
-	MeshResult r = readPly(t, ply, textLength(ply), EMeshReadFlags_None, true, false);
+	MeshResult r = readPly(t, ply, CharString_calcStrLen(ply, U64_MAX), EMeshFlags_None, true, false);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -235,11 +228,11 @@ void Test_PLYSkipsWhatItDoesNotKnow(Test *t) {
 	MeshResult_free(t, &r);
 }
 
-void Test_PLYComputeNormals(Test *t) {
+void Test_plyComputeNormals(Test *t) {
 
 	Test_setModule(t, "PLY/computeNormals");
 
-	MeshResult r = readPly(t, asciiPly, textLength(asciiPly), EMeshReadFlags_ComputeNormals, true, false);
+	MeshResult r = readPly(t, asciiPly, CharString_calcStrLen(asciiPly, U64_MAX), EMeshFlags_ComputeNormals, true, false);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -254,13 +247,13 @@ void Test_PLYComputeNormals(Test *t) {
 	MeshResult_free(t, &r);
 }
 
-void Test_PLYQuantizedPositions(Test *t) {
+void Test_plyQuantizedPositions(Test *t) {
 
 	Test_setModule(t, "PLY/quantizedPositions");
 
 	//The ascii quad spans the unit square in xy and is flat in z: corners land on the ends of the range and z on 0.
 
-	MeshResult r = readPly(t, asciiPly, textLength(asciiPly), EMeshReadFlags_QuantizePositions, true, true);
+	MeshResult r = readPly(t, asciiPly, CharString_calcStrLen(asciiPly, U64_MAX), EMeshFlags_QuantizePositions, true, true);
 
 	if(!Test_assert(t, "read", r.ok))
 		return;
@@ -282,18 +275,104 @@ void Test_PLYQuantizedPositions(Test *t) {
 
 static void expectRefused(Test *t, const C8 *name, const C8 *ply) {
 
-	MeshResult r = readPly(t, ply, textLength(ply), EMeshReadFlags_None, true, true);
+	//The read reports into NULL: a refusal is the expected outcome, not an error to leave pending
 
-	//Cleared before the assert: one made with an error pending counts as failed.
+	MeshResult r = Test_meshRead(
+		t, Ply_read, ply, CharString_calcStrLen(ply, U64_MAX), EMeshFlags_None, true, true, NULL
+	);
 
-	const Bool refused = !r.ok;
-	t->err = Error_none();
-
-	Test_assert(t, name, refused);
+	Test_assert(t, name, !r.ok);
 	MeshResult_free(t, &r);
 }
 
-void Test_PLYValidation(Test *t) {
+//Appends a formatted piece to the text being built. CharString_format refuses a result that is not empty, so
+// the piece is freed between calls.
+
+static Bool Test_plyAppend(Test *t, CharString *text, const C8 *format, ...) {
+
+	CharString part = CharString_createNull();
+
+	va_list args;
+	va_start(args, format);
+	const Bool formatted = CharString_formatVariadic(t->alloc, &part, &t->err, format, args);
+	va_end(args);
+
+	const Bool appended = formatted && CharString_appendString(text, &part, t->alloc, &t->err);
+	CharString_free(&part, t->alloc);
+	return appended;
+}
+
+//A gaussian splat's vertex element carries 62 properties: xyz, a normal, 3 f_dc, 45 f_rest for spherical
+// harmonics of degree 3, opacity, 3 scale and 4 rot. Degree 2 still needs 41.
+//Every one of them has to be kept, both to find the positions among them and to know the widths to step over,
+// so this is the case that decides how the header stores them.
+
+void Test_plyManyProperties(Test *t) {
+
+	Test_setModule(t, "PLY/manyProperties");
+
+	CharString text = CharString_createNull();
+
+	Bool built =
+		Test_plyAppend(t, &text, "ply\nformat ascii 1.0\nelement vertex 3\n") &&
+		Test_plyAppend(t, &text, "property float x\nproperty float y\nproperty float z\n") &&
+		Test_plyAppend(t, &text, "property float nx\nproperty float ny\nproperty float nz\n");
+
+	for(U8 i = 0; i < 3 && built; ++i)
+		built = Test_plyAppend(t, &text, "property float f_dc_%u\n", (U32) i);
+
+	for(U8 i = 0; i < 45 && built; ++i)
+		built = Test_plyAppend(t, &text, "property float f_rest_%u\n", (U32) i);
+
+	built = built && Test_plyAppend(t, &text, "property float opacity\n");
+
+	for(U8 i = 0; i < 3 && built; ++i)
+		built = Test_plyAppend(t, &text, "property float scale_%u\n", (U32) i);
+
+	for(U8 i = 0; i < 4 && built; ++i)
+		built = Test_plyAppend(t, &text, "property float rot_%u\n", (U32) i);
+
+	built = built && Test_plyAppend(
+		t, &text, "element face 1\nproperty list uchar int vertex_indices\nend_header\n"
+	);
+
+	//The first three values of a vertex are its position; the other 59 are carried and dropped
+
+	const U32 positions[3][3] = { { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 } };
+
+	for(U8 v = 0; v < 3 && built; ++v) {
+
+		built = Test_plyAppend(t, &text, "%u %u %u", positions[v][0], positions[v][1], positions[v][2]);
+
+		for(U8 i = 0; i < 59 && built; ++i)
+			built = Test_plyAppend(t, &text, " 0.5");
+
+		built = built && Test_plyAppend(t, &text, "\n");
+	}
+
+	built = built && Test_plyAppend(t, &text, "3 0 1 2\n");
+
+	if(!Test_assert(t, "built", built)) {
+		CharString_free(&text, t->alloc);
+		return;
+	}
+
+	MeshResult r = readPly(t, text.ptr, CharString_length(text), EMeshFlags_None, true, false);
+	CharString_free(&text, t->alloc);
+
+	if(!Test_assert(t, "read", r.ok))
+		return;
+
+	Test_assert(t, "vertexCount", r.info.vertexCount == 3);
+	Test_assert(t, "indexCount", r.info.indexCount == 3);
+
+	const F32 *p = MeshResult_position(&r, 2);
+	Test_assert(t, "position", Test_near(p[0], 0) && Test_near(p[1], 1) && Test_near(p[2], 0));
+
+	MeshResult_free(t, &r);
+}
+
+void Test_plyValidation(Test *t) {
 
 	Test_setModule(t, "PLY/validation");
 
@@ -352,9 +431,7 @@ void Test_PLYValidation(Test *t) {
 			bytes[len++] = 0;
 	}
 
-	MeshResult r = readPly(t, bytes, len, EMeshReadFlags_None, false, false);
-	const Bool refused = !r.ok;
-	t->err = Error_none();
-	Test_assert(t, "truncatedBinary", refused);
+	MeshResult r = Test_meshRead(t, Ply_read, bytes, len, EMeshFlags_None, false, false, NULL);
+	Test_assert(t, "truncatedBinary", !r.ok);
 	MeshResult_free(t, &r);
 }

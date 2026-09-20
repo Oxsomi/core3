@@ -446,8 +446,7 @@ Bool EncryptionStream_create(
 	es->dataStream = dataStream;
 	es->startOffset = streamOffset;
 
-	for(U8 i = 0; i < 3; ++i)
-		es->rootIv[i] = I32x4_get(rootIV, i);
+	I32x4_store3(es->rootIv, rootIV);
 
 	es->chunkSize = (U32)chunkSize;
 	es->chunkSizeShift = chunkSizeShift;
