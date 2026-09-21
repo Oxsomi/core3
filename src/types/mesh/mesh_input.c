@@ -196,7 +196,7 @@ Bool MeshInputReader_vertex(MeshInputReader *reader, U32 i, F32 position[3], F32
 			F32x4_store3(normal, F32x4_unpackOct32(packed));
 		}
 
-		else if(ch) MeshAttribute_decode(record + ch->offset, ch->format, normal, 3);
+		else if(ch) ETextureFormatId_decode(record + ch->offset, ch->format, normal, 3);
 	}
 
 	if(uv) {
@@ -206,7 +206,7 @@ Bool MeshInputReader_vertex(MeshInputReader *reader, U32 i, F32 position[3], F32
 		uv[0] = uv[1] = 0;
 
 		if(ch)
-			MeshAttribute_decode(record + ch->offset, ch->format, uv, 2);
+			ETextureFormatId_decode(record + ch->offset, ch->format, uv, 2);
 	}
 
 clean:

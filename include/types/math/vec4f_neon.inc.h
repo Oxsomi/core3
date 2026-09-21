@@ -77,6 +77,7 @@ static inline F32x4 F32x4_round(F32x4 a) { return vrndnq_f32(a); }
 //Transcendentals
 
 static inline F32x4 F32x4_sqrt(F32x4 a) { return vsqrtq_f32(a); }
+static inline F32x4 F32x4_abs(F32x4 a) { return vabsq_f32(a); }
 
 static inline F32x4 F32x4_rsqrt(F32x4 a) { return vdivq_f32(vdupq_n_f32(1), vsqrtq_f32(a)); }
 
@@ -89,6 +90,13 @@ static inline F32x4 F32x4_rsqrtFast(F32x4 a) {
 	const F32x4 estimate = vrsqrteq_f32(a);
 	return vmulq_f32(estimate, vrsqrtsq_f32(vmulq_f32(a, estimate), estimate));
 }
+
+//The FULL width only, where the caller's sixteen bytes are in bounds by the contract and the instruction is
+//the explicitly unaligned one, so nothing here assumes an alignment the interface does not promise. The
+// partial widths stay a byte copy in vec4f.h: there is no partial load that is both in bounds and unaligned.
+
+static inline F32x4 F32x4_load4(const void *arr) { return arr ? vld1q_f32((const F32*) arr) : vdupq_n_f32(0); }
+static inline void F32x4_store4(void *arr, F32x4 a) { if(arr) vst1q_f32((F32*) arr, a); }
 
 //Boolean
 		

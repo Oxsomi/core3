@@ -87,6 +87,13 @@ static inline F32x4 F32x4_round(F32x4 a) { return _mm_round_ps(a, _MM_FROUND_TO_
 
 static inline F32x4 F32x4_sqrt(F32x4 a) { return _mm_sqrt_ps(a); }
 
+//Clearing the sign bit, which gets -0 right where multiplying by a sign does not.
+//AND against a positive mask rather than ANDNOT against the sign bit: ANDNOT is not commutative, so the mask
+// has to be its first operand and the value gets moved out of the way first. Same cost in a loop, where the
+// constant hoists and folds as a memory operand either way, one instruction fewer everywhere else.
+
+static inline F32x4 F32x4_abs(F32x4 a) { return _mm_and_ps(a, _mm_castsi128_ps(_mm_set1_epi32(0x7FFFFFFF))); }
+
 //_mm_rsqrt_ps is a ~12 bit estimate, so it hands back 0.99987793 for the reciprocal root of one. Correctly
 //rounded is what every other backend gives and what a value written to a file has to be, so the plain name
 // is the divide and the estimate is named for what it is. See F32x4_rsqrtFast in vec4f.h for when to take it.
@@ -118,13 +125,25 @@ static inline F32x4 F32x4_rsqrtFast(F32x4 a) { return _mm_rsqrt_ps(a); }
 	static inline F32x4 F32x4_atan2(F32x4 y, F32x4 x) { return _mm_atan2_ps(y, x); }
 	static inline F32x4 F32x4_tan(F32x4 v) { return _mm_tan_ps(v); }
 
-	static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return _mm_fmadd_ps(a, b, c); } //a * b + c (FMA required)
-
 #else
+
+	//The BUILTIN, deliberately: _mm_fmadd_ps is declared in immintrin.h, and including that header costs
+	//enough compile time to be worth avoiding wherever it is not already pulled in for SVML above. The
+	// builtin is the same instruction with no header at all.
+	//_SIMD_HAS_SVML is 0 exactly when the compiler is gcc or clang, both of which have it, so this branch
+	// never reaches a compiler that does not. It does need -mfma, which this build passes.
+
 	static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) {    //a * b + c (FMA required)
 		return (__m128) __builtin_ia32_vfmaddps((__v4sf)a, (__v4sf)b, (__v4sf)c);
 	}
 #endif
+
+//The FULL width only, where the caller's sixteen bytes are in bounds by the contract and the instruction is
+//the explicitly unaligned one, so nothing here assumes an alignment the interface does not promise. The
+// partial widths stay a byte copy in vec4f.h: there is no partial load that is both in bounds and unaligned.
+
+static inline F32x4 F32x4_load4(const void *arr) { return arr ? _mm_loadu_ps((const F32*) arr) : _mm_setzero_ps(); }
+static inline void F32x4_store4(void *arr, F32x4 a) { if(arr) _mm_storeu_ps((F32*) arr, a); }
 
 //Boolean
 		

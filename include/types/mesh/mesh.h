@@ -87,27 +87,6 @@ typedef enum EMeshAttributeEncoding {
 
 } EMeshAttributeEncoding;
 
-//An attribute takes the uncompressed texture formats whose records are a whole number of bytes, which is
-//every vertex format a GPU takes as an input and nothing else. A compressed block has no per vertex meaning.
-
-static inline Bool MeshAttribute_formatSupported(ETextureFormatId id) {
-
-	if(!id || id >= ETextureFormatId_Count)
-		return false;
-
-	const ETextureFormat f = ETextureFormatId_unpack[id];
-
-	if(ETextureFormat_getIsCompressed(f))
-		return false;
-
-	const U64 bits = ETextureFormat_getBits(f);
-	return bits && !(bits & 7) && bits <= 128;
-}
-
-static inline U8 MeshAttribute_formatSize(ETextureFormatId id) {
-	return (U8) (ETextureFormat_getBits(ETextureFormatId_unpack[id]) >> 3);
-}
-
 //One row of the table that describes a record: which attribute it is, how it is stored, where it sits.
 
 typedef struct MeshAttributeEntry {
@@ -144,14 +123,6 @@ static inline const MeshAttributeEntry *MeshAttributeLayout_find(const MeshAttri
 
 	return NULL;
 }
-
-//Every attribute and every position stream is one of these few primitives at one of a few widths, so the
-//codec is written once over primitive and bit depth rather than once per format.
-//Components past what the caller supplies write zero, and past what the format holds are dropped, which is what
-//lets an RGBA format carry a three component attribute without the caller knowing.
-
-void MeshAttribute_encode(U8 *dst, ETextureFormatId id, const F32 *src, U8 srcCount);
-void MeshAttribute_decode(const U8 *src, ETextureFormatId id, F32 *dst, U8 dstCount);
 
 //One U32 per TRIANGLE: an 18 bit octahedral geometric normal in the low bits (U32_packOct18 in
 // types/math/pack.h, unpackOct18 in @pack.hlsli) and the material index in the 14 above.
@@ -287,7 +258,7 @@ static inline MeshAttributeLayout MeshAttributeLayout_create(const MeshAttribute
 		if(e.encoding == EMeshAttributeEncoding_Oct)
 			e.format = ETextureFormatId_R32u;
 
-		if(!MeshAttribute_formatSupported((ETextureFormatId) e.format))
+		if(!ETextureFormatId_canCodec((ETextureFormatId) e.format))
 			return (MeshAttributeLayout) { 0 };
 
 		for(U8 k = 0; k < i; ++k)
@@ -295,7 +266,7 @@ static inline MeshAttributeLayout MeshAttributeLayout_create(const MeshAttribute
 				return (MeshAttributeLayout) { 0 };
 
 		e.offset = (U8) at;
-		at += MeshAttribute_formatSize((ETextureFormatId) e.format);
+		at += ETextureFormatId_texelBytes((ETextureFormatId) e.format);
 
 		if(at > 0xFF)
 			return (MeshAttributeLayout) { 0 };

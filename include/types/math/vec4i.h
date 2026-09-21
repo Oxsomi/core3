@@ -128,14 +128,13 @@ static inline I32x4 I32x4_mod(I32x4 v, I32x4 d) {                //UB for any d[
 
 static inline I32x4 I32x4_clamp(I32x4 a, I32x4 mi, I32x4 ma) { return I32x4_max(mi, I32x4_min(ma, a)); }
 
+//Zero has no sign here either, and abs is the difference rather than a multiply by one.
+
 static inline I32x4 I32x4_sign(I32x4 v) {
-	return I32x4_add(
-		I32x4_mul(I32x4_lt(v, I32x4_zero()), I32x4_negTwo()),
-		I32x4_one()
-	);
+	return I32x4_sub(I32x4_gt(v, I32x4_zero()), I32x4_lt(v, I32x4_zero()));
 }
 
-static inline I32x4 I32x4_abs(I32x4 v) { return I32x4_mul(I32x4_sign(v), v); }
+static inline I32x4 I32x4_abs(I32x4 v) { return I32x4_max(v, I32x4_sub(I32x4_zero(), v)); }
 
 //Boolean
 

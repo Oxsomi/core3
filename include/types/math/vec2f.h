@@ -178,7 +178,7 @@ static inline Bool F32x2_eq2(F32x2 a, F32x2 b) { return F32x2_all(F32x2_eq(a, b)
 static inline Bool F32x2_neq2(F32x2 a, F32x2 b) { return !F32x2_eq2(a, b); }
 
 //Obtain sign (-1 if <0, otherwise 1)
-static inline F32x2 F32x2_sign(F32x2 v) { return F32x2_add(F32x2_mul(F32x2_lt(v, F32x2_zero), F32x2_negTwo), F32x2_one); }
+static inline F32x2 F32x2_sign(F32x2 v) { return F32x2_sub(F32x2_gt(v, F32x2_zero), F32x2_lt(v, F32x2_zero)); }
 
 //Misc functions, used for shading for example
 
@@ -188,7 +188,7 @@ static inline F32x2 F32x2_reflect(F32x2 i, F32x2 n) {
 	return F32x2_sub(i, F32x2_mul(n, F32x2_xx2(2 * F32x2_dot(n, i))));
 }
 
-static inline F32x2 F32x2_abs(F32x2 v) { return F32x2_mul(F32x2_sign(v), v); }
+static inline F32x2 F32x2_abs(F32x2 v) { NONE_OP2F(F32_abs(v.v[i])); }
 
 //Matrix
 

@@ -168,11 +168,13 @@ static inline F32x4 F32x4_normalize4Fast(F32x4 v) {
 	return F32x4_mul(v, F32x4_rsqrtFast(F32x4_xxxx4(F32x4_sqLen4(v))));
 }
 
-static inline F32x4 F32x4_sign(F32x4 v) {
-	return F32x4_fma(F32x4_lt(v, F32x4_zero()), F32x4_negTwo(), F32x4_one());
-}
+//ZERO has no sign, which is what the scalar F32_sign says and what this used to disagree with: the compares
+//hand back 0 or 1, so their difference is -1, 0 or 1 directly. F32x4_abs is a backend instruction now and no
+// longer built on this, so the two cannot drift apart again.
 
-static inline F32x4 F32x4_abs(F32x4 v) { return F32x4_mul(F32x4_sign(v), v); }
+static inline F32x4 F32x4_sign(F32x4 v) {
+	return F32x4_sub(F32x4_gt(v, F32x4_zero()), F32x4_lt(v, F32x4_zero()));
+}
 
 static inline F32 F32x4_satDot2(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot2(x, y)); }
 static inline F32 F32x4_satDot3(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot3(x, y)); }
@@ -308,7 +310,6 @@ static inline Bool F32x4_neqApproxAdv2(F32x4 a, F32x4 b, F32 relEpsilon, F32 abs
 }
 
 //Construction
-
 static inline F32x4 F32x4_load1(const void *arr) {
 	F32x4 result = F32x4_zero();
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32)), Buffer_createRefConst(arr, sizeof(F32)));
@@ -327,11 +328,15 @@ static inline F32x4 F32x4_load3(const void *arr) {
 	return result;
 }
 
-static inline F32x4 F32x4_load4(const void *arr) {
-	F32x4 result = F32x4_zero();
-	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 4), Buffer_createRefConst(arr, sizeof(F32) * 4));
-	return result;
-}
+#if _SIMD == SIMD_NONE
+
+	static inline F32x4 F32x4_load4(const void *arr) {
+		F32x4 result = F32x4_zero();
+		if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 4), Buffer_createRefConst(arr, sizeof(F32) * 4));
+		return result;
+	}
+
+#endif
 
 //Writes the low components to possibly misaligned memory, leaving whatever follows them untouched.
 //NULL is a write that does nothing, which mirrors the loads above returning zero for it.
@@ -348,9 +353,13 @@ static inline void F32x4_store3(void *arr, F32x4 a) {
 	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(F32) * 3), Buffer_createRefConst(&a, sizeof(F32) * 3));
 }
 
-static inline void F32x4_store4(void *arr, F32x4 a) {
-	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(F32) * 4), Buffer_createRefConst(&a, sizeof(F32) * 4));
-}
+#if _SIMD == SIMD_NONE
+
+	static inline void F32x4_store4(void *arr, F32x4 a) {
+		if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(F32) * 4), Buffer_createRefConst(&a, sizeof(F32) * 4));
+	}
+
+#endif
 
 #ifdef __cplusplus
 	}

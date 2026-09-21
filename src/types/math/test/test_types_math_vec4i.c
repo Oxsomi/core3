@@ -79,7 +79,7 @@ void Test_vec4i(Test *test) {
 	Test_assert(test, "I32x4_mul",   !I32x4_neq4(I32x4_mul(a, b), I32x4_create4(5, 12, 21, 32)));
 
 	Test_assert(test, "I32x4_abs",   !I32x4_neq4(I32x4_abs(I32x4_create4(-3, 4, -1, 0)),  I32x4_create4(3, 4, 1, 0)));
-	Test_assert(test, "I32x4_sign",  !I32x4_neq4(I32x4_sign(I32x4_create4(-3, 4, 0, 1)),  I32x4_create4(-1, 1, 1, 1)));
+	Test_assert(test, "I32x4_sign",  !I32x4_neq4(I32x4_sign(I32x4_create4(-3, 4, 0, 1)),  I32x4_create4(-1, 1, 0, 1)));
 	Test_assert(test, "I32x4_pow2",  I32x4_eq4(I32x4_pow2(I32x4_create4(2, -3, 4, -5)),  I32x4_create4(4, 9, 16, 25)));
 
 	//min/max/clamp

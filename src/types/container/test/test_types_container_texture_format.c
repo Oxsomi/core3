@@ -22,6 +22,8 @@
 
 #include "test_types_container_shared.h"
 #include "types/container/texture_format.h"
+#include "types/math/type_cast.h"
+#include "types/base/mathf.h"
 
 void Test_textureFormat(Test *t) {
 
@@ -167,4 +169,167 @@ void Test_textureFormat(Test *t) {
 
 		Test_assert(t, "RGB9E5 sole exponential", exponential == 1);
 	}
+}
+
+typedef struct CodecCase {
+	ETextureFormatId format;
+	const C8 *name;
+	U8 count;
+	F32 value[4];
+} CodecCase;
+
+static const CodecCase codecCases[] = {
+
+	//SIGNED integers, which are what a sign extension bug hides in: the stored bits are two's complement and
+	// a decode that reads them as unsigned turns every negative into a large positive.
+
+	{ ETextureFormatId_R8i,     "R8i",     1, { -5, 0, 0, 0 } },
+	{ ETextureFormatId_R8i,     "R8i min", 1, { -128, 0, 0, 0 } },
+	{ ETextureFormatId_RG16i,   "RG16i",   2, { -32768, 32767, 0, 0 } },
+	{ ETextureFormatId_RGBA32i, "RGBA32i", 4, { -8388608, -1, 0, 8388607 } },
+
+	//UNSIGNED integers, so the same arm with no extension at all
+
+	{ ETextureFormatId_R8u,     "R8u",     1, { 255, 0, 0, 0 } },
+	{ ETextureFormatId_RG16u,   "RG16u",   2, { 0, 65535, 0, 0 } },
+	{ ETextureFormatId_RGBA32u, "RGBA32u", 4, { 0, 1, 16777215, 42 } },
+
+	//Floats, exact at both widths for values an F16 holds
+
+	{ ETextureFormatId_R16f,    "R16f",    1, { 0.5f, 0, 0, 0 } },
+	{ ETextureFormatId_RGBA32f, "RGBA32f", 4, { -1.25f, 0, 1e18f, 3.5f } }
+};
+
+static void Test_textureCodecRoundTrip(Test *t) {
+
+	Test_setModule(t, "texture/codec round trip");
+
+	for(U64 i = 0; i < sizeof(codecCases) / sizeof(codecCases[0]); ++i) {
+
+		const CodecCase c = codecCases[i];
+
+		U8 record[16] = { 0 };
+		F32 back[4] = { 0, 0, 0, 0 };
+
+		ETextureFormatId_encode(record, c.format, c.value, c.count);
+		ETextureFormatId_decode(record, c.format, back, c.count);
+
+		Bool same = true;
+
+		for(U8 k = 0; k < c.count; ++k)
+			same &= back[k] == c.value[k];
+
+		Test_assert(t, c.name, same);
+	}
+}
+
+static void Test_textureCodecNormalized(Test *t) {
+
+	Test_setModule(t, "texture/codec normalized");
+
+	U8 record[16] = { 0 };
+	F32 back[4] = { 0, 0, 0, 0 };
+
+	const F32 snorm[4] = { -1, -0.5f, 0, 1 };
+	ETextureFormatId_encode(record, ETextureFormatId_RGBA8s, snorm, 4);
+	ETextureFormatId_decode(record, ETextureFormatId_RGBA8s, back, 4);
+
+	Bool near = true;
+
+	for(U8 k = 0; k < 4; ++k)
+		near &= F32_abs(back[k] - snorm[k]) < 0.01f;
+
+	Test_assert(t, "RGBA8s round trip", near);
+	Test_assert(t, "SNorm endpoints exact", back[0] == -1 && back[3] == 1);
+
+	const F32 unorm[4] = { 0, 0.25f, 0.75f, 1 };
+	ETextureFormatId_encode(record, ETextureFormatId_RGBA8, unorm, 4);
+	ETextureFormatId_decode(record, ETextureFormatId_RGBA8, back, 4);
+
+	near = true;
+
+	for(U8 k = 0; k < 4; ++k)
+		near &= F32_abs(back[k] - unorm[k]) < 0.01f;
+
+	Test_assert(t, "RGBA8 round trip", near);
+	Test_assert(t, "UNorm endpoints exact", back[0] == 0 && back[3] == 1);
+}
+
+static void Test_textureCodecRange(Test *t) {
+
+	Test_setModule(t, "texture/codec range");
+
+	U8 record[16] = { 0 };
+	F32 back[4] = { 0, 0, 0, 0 };
+
+	const F32 overSigned[2] = { 1e9f, -1e9f };
+	ETextureFormatId_encode(record, ETextureFormatId_RG16i, overSigned, 2);
+	ETextureFormatId_decode(record, ETextureFormatId_RG16i, back, 2);
+
+	Test_assert(t, "SInt saturates high", back[0] == 32767);
+	Test_assert(t, "SInt saturates low", back[1] == -32768);
+
+	const F32 overUnsigned[2] = { 1e9f, -1e9f };
+	ETextureFormatId_encode(record, ETextureFormatId_RG16u, overUnsigned, 2);
+	ETextureFormatId_decode(record, ETextureFormatId_RG16u, back, 2);
+
+	Test_assert(t, "UInt saturates high", back[0] == 65535);
+	Test_assert(t, "UInt saturates low", back[1] == 0);
+
+	//A NaN has no integer to convert to and converting one is undefined, so every arm but the float one
+	// treats it as zero rather than as whatever the hardware happened to produce.
+
+	const F32 q = F32_fromU32Bits(0x7FC00000);
+	const F32 nan[4] = { q, q, q, q };
+
+	ETextureFormatId_encode(record, ETextureFormatId_RGBA8, nan, 4);
+	ETextureFormatId_decode(record, ETextureFormatId_RGBA8, back, 4);
+	Test_assert(t, "UNorm NaN is zero", !back[0] && !back[1] && !back[2] && !back[3]);
+
+	ETextureFormatId_encode(record, ETextureFormatId_RGBA32i, nan, 4);
+	ETextureFormatId_decode(record, ETextureFormatId_RGBA32i, back, 4);
+	Test_assert(t, "SInt NaN is zero", !back[0] && !back[1] && !back[2] && !back[3]);
+}
+
+static void Test_textureCodecComponents(Test *t) {
+
+	Test_setModule(t, "texture/codec components");
+
+	U8 record[16] = { 0xFF };
+	F32 back[4] = { 1, 1, 1, 1 };
+
+	for(U8 i = 0; i < 16; ++i)
+		record[i] = 0xFF;
+
+	const F32 three[3] = { 1, 2, 3 };
+	ETextureFormatId_encode(record, ETextureFormatId_RGBA32i, three, 3);
+	ETextureFormatId_decode(record, ETextureFormatId_RGBA32i, back, 4);
+
+	Test_assert(t, "supplied components kept", back[0] == 1 && back[1] == 2 && back[2] == 3);
+	Test_assert(t, "unsupplied component is zero", back[3] == 0);
+
+	const F32 four[4] = { 7, 8, 9, 10 };
+	F32 two[2] = { 0, 0 };
+
+	ETextureFormatId_encode(record, ETextureFormatId_RG16i, four, 4);
+	ETextureFormatId_decode(record, ETextureFormatId_RG16i, two, 2);
+
+	Test_assert(t, "components past the format dropped", two[0] == 7 && two[1] == 8);
+
+	//A decode asked for more than the format holds zeroes what it cannot fill rather than reading past it.
+
+	for(U8 i = 0; i < 4; ++i)
+		back[i] = 1;
+
+	ETextureFormatId_decode(record, ETextureFormatId_RG16i, back, 4);
+	Test_assert(t, "decode past the format is zero", back[2] == 0 && back[3] == 0);
+}
+
+//The texel codec: one round trip per primitive at every width, since that is what it is written over.
+
+void Test_textureCodec(Test *t) {
+	Test_textureCodecRoundTrip(t);
+	Test_textureCodecNormalized(t);
+	Test_textureCodecRange(t);
+	Test_textureCodecComponents(t);
 }

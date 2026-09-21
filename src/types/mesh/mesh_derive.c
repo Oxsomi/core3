@@ -48,10 +48,10 @@ static U32 MeshFlat_index(const MeshFlat *mesh, U64 at) {
 static F32x4 MeshFlat_position(const MeshFlat *mesh, U32 vertex) {
 
 	const ETextureFormatId id = (ETextureFormatId) mesh->positionFormat;
-	const U8 size = MeshAttribute_formatSize(id);
+	const U8 size = ETextureFormatId_texelBytes(id);
 
 	F32 out[3] = { 0, 0, 0 };
-	MeshAttribute_decode(mesh->positions.ptr + (U64) vertex * size, id, out, 3);
+	ETextureFormatId_decode(mesh->positions.ptr + (U64) vertex * size, id, out, 3);
 
 	//Quantized positions are the snorm extent of the bounds. Scalar and in this order because the result is
 	// packed into a word another pass compares against, so the rounding has to stay the one it was.
@@ -117,7 +117,7 @@ Bool MeshFlat_fromInfo(
 
 	//Checked here so a pass that derives from this never reads past a stream that was shorter than its count.
 
-	const U64 positionBytes = (U64) flat->vertexCount * MeshAttribute_formatSize((ETextureFormatId) flat->positionFormat);
+	const U64 positionBytes = (U64) flat->vertexCount * ETextureFormatId_texelBytes((ETextureFormatId) flat->positionFormat);
 	const U64 indexBytes = (U64) flat->triangleCount * 3 * (flat->narrowIndices ? sizeof(U16) : sizeof(U32));
 
 	if(Buffer_length(positions) < positionBytes)
@@ -212,7 +212,7 @@ Bool MeshFlat_computeNormals(const MeshFlat *mesh, const Allocator *alloc, Error
 		if(F32x4_sqLen3(F32x4_load3(sum)) > 0)
 			F32x4_store3(unit, F32x4_normalize3(F32x4_load3(sum)));
 
-		MeshAttribute_encode(record, (ETextureFormatId) entry->format, unit, 3);
+		ETextureFormatId_encode(record, (ETextureFormatId) entry->format, unit, 3);
 	}
 
 clean:

@@ -691,7 +691,7 @@ static Bool MeshAttributes_writeRecord(MeshAttributes *a, const F32 *normal, con
 			continue;
 		}
 
-		MeshAttribute_encode(at, ch.format, src, count);
+		ETextureFormatId_encode(at, ch.format, src, count);
 
 		//What a lossy attribute cost, read back from what was written so it holds for any format. Only the uv
 		// is reported, since that is the one a consumer addresses a texture with.
@@ -699,7 +699,7 @@ static Bool MeshAttributes_writeRecord(MeshAttributes *a, const F32 *normal, con
 		if(ch.attribute == EMeshAttribute_Uv0 && ch.format != ETextureFormatId_RG32f) {
 
 			F32 back[2] = { 0, 0 };
-			MeshAttribute_decode(at, ch.format, back, 2);
+			ETextureFormatId_decode(at, ch.format, back, 2);
 
 			for(U8 c = 0; c < 2; ++c) {
 

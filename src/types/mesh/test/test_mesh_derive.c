@@ -67,7 +67,7 @@ static void DeriveMesh_create(DeriveMesh *m) {
 		F32 uv[2] = { deriveUvs[v][0], deriveUvs[v][1] };
 
 		m->attributes[v].normal = U32_packOct32(F32x4_load3(deriveNormals[v]));
-		MeshAttribute_encode((U8*) &m->attributes[v].uv, ETextureFormatId_RG16f, uv, 2);
+		ETextureFormatId_encode((U8*) &m->attributes[v].uv, ETextureFormatId_RG16f, uv, 2);
 	}
 
 	m->info = (MeshInfo) {
@@ -122,7 +122,7 @@ static void Test_meshDeriveNormals(Test *t) {
 	for(U8 v = 0; v < DERIVE_VERTICES; ++v) {
 
 		F32 uv[2];
-		MeshAttribute_decode((const U8*) &m.attributes[v].uv, ETextureFormatId_RG16f, uv, 2);
+		ETextureFormatId_decode((const U8*) &m.attributes[v].uv, ETextureFormatId_RG16f, uv, 2);
 
 		Test_assert(t, "uv kept", Test_near(uv[0], deriveUvs[v][0]) && Test_near(uv[1], deriveUvs[v][1]));
 	}

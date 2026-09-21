@@ -39,6 +39,32 @@ void Test_quatBasic(Test *test) {
 	const QuatF32 norm = QuatF32_create(1 * invLen, 2 * invLen, 3 * invLen, 4 * invLen);
 
 	Test_assert(test, "QuatF32_normalize", !QuatF32_neq(QuatF32_normalize(q), norm));
+
+	//The inverse holds for ANY quaternion, so q times its inverse is the identity whatever the length.
+	//A quaternion of length 2 is the case that used to come back scaled by 2.
+
+	const QuatF32 identity = QuatF32_identity();
+	const QuatF32 unit = QuatF32_create(0, 0, 0.6f, 0.8f);
+	const QuatF32 scaled = F32x4_mul(unit, F32x4_xxxx4(2));
+
+	Test_assert(test, "QuatF32_inverse of a unit", !QuatF32_neq(QuatF32_mul(unit, QuatF32_inverse(unit)), identity));
+
+	Test_assert(
+		test, "QuatF32_inverse of a non unit",
+		!QuatF32_neq(QuatF32_mul(scaled, QuatF32_inverse(scaled)), identity)
+	);
+
+	//inverseNormalized takes the unit case only, and there it has to agree with the general one.
+
+	Test_assert(
+		test, "QuatF32_inverseNormalized matches",
+		!QuatF32_neq(QuatF32_inverseNormalized(unit), QuatF32_inverse(unit))
+	);
+
+	Test_assert(
+		test, "QuatF32_inverseNormalized inverts",
+		!QuatF32_neq(QuatF32_mul(unit, QuatF32_inverseNormalized(unit)), identity)
+	);
 }
 
 void Test_quatAngleAxis(Test *test) {

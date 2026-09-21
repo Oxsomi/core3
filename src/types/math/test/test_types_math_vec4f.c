@@ -148,8 +148,20 @@ void Test_vec4f(Test *test) {
 	Test_assert(test, "F32x4_min",        !F32x4_neqExact4(F32x4_min(a, F32x4_zero()),  F32x4_create4(-2, 0, 0, 0)));
 	Test_assert(test, "F32x4_max",        !F32x4_neqExact4(F32x4_max(a, F32x4_one()),   F32x4_create4(1, 1, 2, 10)));
 	Test_assert(test, "F32x4_saturate",   !F32x4_neqExact4(F32x4_saturate(a),            F32x4_create4(0, 0.5f, 1, 1)));
-	Test_assert(test, "F32x4_sign",       !F32x4_neqExact4(F32x4_sign(F32x4_create4(-3, 4, 0, 1)), F32x4_create4(-1, 1, 1, 1)));
+	//ZERO has no sign, which is what the scalar says, and the pair below is what keeps the two agreeing.
+
+	Test_assert(test, "F32x4_sign",       !F32x4_neqExact4(F32x4_sign(F32x4_create4(-3, 4, 0, 1)), F32x4_create4(-1, 1, 0, 1)));
+	Test_assert(
+		test, "F32x4_sign agrees with F32_sign",
+		F32x4_x(F32x4_sign(F32x4_create1(0))) == F32_sign(0) &&
+		F32x4_x(F32x4_sign(F32x4_create1(-0.f))) == F32_sign(-0.f)
+	);
+
 	Test_assert(test, "F32x4_abs",        !F32x4_neqExact4(F32x4_abs(F32x4_create4(-3, 4, -1, 0)), F32x4_create4(3, 4, 1, 0)));
+
+	//abs CLEARS the sign bit, so -0 comes back as +0 rather than staying negative zero.
+
+	Test_assert(test, "F32x4_abs of -0", !(U32_fromF32Bits(F32x4_x(F32x4_abs(F32x4_create1(-0.f)))) >> 31));
 
 	c = F32x4_clamp(F32x4_create4(-1, 5, 1, 2), F32x4_zero(), F32x4_two());
 	Test_assert(test, "F32x4_clamp",      !F32x4_neqExact4(c, F32x4_create4(0, 2, 1, 2)));

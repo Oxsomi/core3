@@ -54,8 +54,11 @@ Bool T##_isValid(T v);                                                          
 																										\
 T T##_pow(T v, T exp);                                                                                  \
 																										\
-static inline T T##_expe(T v) { return T##_pow(T##_E, v); }                                             \
-static inline T T##_exp2(T v) { return T##_pow(2, v); }                                                 \
+/* exp and exp2 are their own libm calls; a third cheaper than raising a base to a power. exp10 */      \
+/* has no standard C spelling (it is a POSIX extension MSVC lacks), so that one stays a pow.    */      \
+																										\
+T T##_expe(T v);                                                                                        \
+T T##_exp2(T v);                                                                                        \
 static inline T T##_exp10(T v) { return T##_pow(10, v); }                                               \
 																										\
 T T##_log10(T v);                                                                                       \
