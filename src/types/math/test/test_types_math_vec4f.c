@@ -111,8 +111,33 @@ void Test_vec4f(Test *test) {
 	F32x4 c = F32x4_create4(6, 5, 4, 3);
 	Test_assert(test, "F32x4_sqrt",       !F32x4_neqExact4(F32x4_sqrt(F32x4_create4(36, 25, 16, 9)),  c));
 
+	//EXACT, not approximate: rsqrt is the correctly rounded divide on every backend now, so a loose tolerance
+	//here would be the thing that lets one of them drift again. rsqrtFast is the one with a backend's accuracy,
+	// and the only claim worth making about it is that it is close.
+
 	c = F32x4_create4(1 / 6.f, 0.2f, 0.25f, 1 / 3.f);
-	Test_assert(test, "F32x4_rsqrt",      !F32x4_neqApproxAdv4(F32x4_rsqrt(F32x4_create4(36, 25, 16, 9)), c, 1e-3f, 1e-3f));
+	Test_assert(test, "F32x4_rsqrt",      !F32x4_neqExact4(F32x4_rsqrt(F32x4_create4(36, 25, 16, 9)), c));
+	Test_assert(
+		test, "F32x4_rsqrtFast",
+		!F32x4_neqApproxAdv4(F32x4_rsqrtFast(F32x4_create4(36, 25, 16, 9)), c, 1e-3f, 1e-3f)
+	);
+
+	//The whole point of the split: one axis normalizes to exactly one, on every backend and at every width.
+
+	Test_assert(
+		test, "F32x4_normalize3 exact",
+		!F32x4_neqExact4(F32x4_normalize3(F32x4_create3(2, 0, 0)), F32x4_create3(1, 0, 0))
+	);
+
+	Test_assert(
+		test, "F32x4_normalize4 exact",
+		!F32x4_neqExact4(F32x4_normalize4(F32x4_create4(0, 0, 0, 4)), F32x4_create4(0, 0, 0, 1))
+	);
+
+	Test_assert(
+		test, "F32x4_normalize2 exact",
+		!F32x4_neqExact4(F32x4_normalize2(F32x4_create2(0, 3)), F32x4_create2(0, 1))
+	);
 
 	c = F32x4_create4(6, 6.5f, 8, 5.5f);
 	Test_assert(test, "F32x4_lerp",       !F32x4_neqExact4(F32x4_lerp(v4, F32x4_xxxx4(10), 0.5f), c));

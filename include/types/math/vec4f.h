@@ -146,9 +146,27 @@ static inline F32 F32x4_len2(F32x4 v) { return F32_sqrt(F32x4_sqLen2(v)); }
 static inline F32 F32x4_len3(F32x4 v) { return F32_sqrt(F32x4_sqLen3(v)); }
 static inline F32 F32x4_len4(F32x4 v) { return F32_sqrt(F32x4_sqLen4(v)); }
 
-static inline F32x4 F32x4_normalize2(F32x4 v) { return F32x4_mul(v, F32x4_rsqrt(F32x4_xxxx4(F32x4_sqLen2(v)))); }
-static inline F32x4 F32x4_normalize3(F32x4 v) { return F32x4_mul(v, F32x4_rsqrt(F32x4_xxxx4(F32x4_sqLen3(v)))); }
-static inline F32x4 F32x4_normalize4(F32x4 v) { return F32x4_mul(v, F32x4_rsqrt(F32x4_xxxx4(F32x4_sqLen4(v)))); }
+//DIVIDED by the real length, which is correctly rounded on every backend, so one axis normalizes to exactly
+//one everywhere and a normal written on one target matches the same normal written on another. Dividing also
+// rounds twice where multiplying by a reciprocal rounds three times.
+//Take the Fast twins only where a profile says to: they are built on F32x4_rsqrtFast, whose accuracy is the
+// backend's and not the same on any two of them.
+
+static inline F32x4 F32x4_normalize2(F32x4 v) { return F32x4_div(v, F32x4_xxxx4(F32x4_len2(v))); }
+static inline F32x4 F32x4_normalize3(F32x4 v) { return F32x4_div(v, F32x4_xxxx4(F32x4_len3(v))); }
+static inline F32x4 F32x4_normalize4(F32x4 v) { return F32x4_div(v, F32x4_xxxx4(F32x4_len4(v))); }
+
+static inline F32x4 F32x4_normalize2Fast(F32x4 v) {
+	return F32x4_mul(v, F32x4_rsqrtFast(F32x4_xxxx4(F32x4_sqLen2(v))));
+}
+
+static inline F32x4 F32x4_normalize3Fast(F32x4 v) {
+	return F32x4_mul(v, F32x4_rsqrtFast(F32x4_xxxx4(F32x4_sqLen3(v))));
+}
+
+static inline F32x4 F32x4_normalize4Fast(F32x4 v) {
+	return F32x4_mul(v, F32x4_rsqrtFast(F32x4_xxxx4(F32x4_sqLen4(v))));
+}
 
 static inline F32x4 F32x4_sign(F32x4 v) {
 	return F32x4_fma(F32x4_lt(v, F32x4_zero()), F32x4_negTwo(), F32x4_one());

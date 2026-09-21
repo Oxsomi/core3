@@ -84,13 +84,13 @@ Bool MeshInputReader_create(
 		.vertexCount = info->vertexCount,
 		.indexCount = info->indexCount,
 
+		.attributeLayout = MeshAttributeLayout_fromFlags(layout),
 		.hasAttributes = input->attributes != NULL,
-		.quantized = !!(layout & EMeshFlags_QuantizePositions),
-		.wideUvs = !!(layout & EMeshFlags_WideUvs)
+		.quantized = !!(layout & EMeshFlags_QuantizePositions)
 	};
 
 	reader->positionStride = reader->quantized ? (U8)(sizeof(I16) * 4) : (U8)(sizeof(F32) * 3);
-	reader->attributeStride = reader->wideUvs ? (U8) sizeof(MeshAttributeWide) : (U8) sizeof(MeshAttribute);
+	reader->attributeStride = reader->attributeLayout.stride;
 	reader->indexStride = (layout & EMeshFlags_NarrowIndices) ? (U8) sizeof(U16) : (U8) sizeof(U32);
 
 	//The bounds are the space a quantized position lives in, so they are decoded once here rather than per vertex
@@ -167,35 +167,46 @@ Bool MeshInputReader_vertex(MeshInputReader *reader, U32 i, F32 position[3], F32
 	if(!reader->hasAttributes)
 		goto clean;
 
-	//Each record is read into a variable of its own type. A pointer cast from one to the other is an aliasing
-	// violation, which the optimizer is free to act on however it likes.
+	//The record comes in as bytes and the layout says what is where, so no struct is reinterpreted as another
+	//and an attribute the layout does not name simply never gets read.
 
-	MeshAttribute narrow = (MeshAttribute) { 0 };
-	MeshAttributeWide wide = (MeshAttributeWide) { 0 };
-
-	const Buffer dst =
-		reader->wideUvs ? Buffer_createRef(&wide, sizeof(wide)) : Buffer_createRef(&narrow, sizeof(narrow));
+	U8 record[MeshAttributeLayout_maxEntries * 8] = { 0 };
 
 	gotoIfError3(clean, StreamCursor_read(
-		&reader->attributes, dst,
+		&reader->attributes, Buffer_createRef(record, reader->attributeStride),
 		reader->attributeBase + (U64) i * reader->attributeStride, 0, reader->attributeStride, false,
 		reader->alloc, e_rr
 	));
 
-	if(normal)
-		F32x4_store3(normal, F32x4_unpackOct32(reader->wideUvs ? wide.normal : narrow.normal));
+	if(normal) {
+
+		const MeshAttributeEntry *ch = MeshAttributeLayout_find(&reader->attributeLayout, EMeshAttribute_Normal);
+
+		normal[0] = normal[1] = normal[2] = 0;
+
+		if(ch && ch->encoding == EMeshAttributeEncoding_Oct) {
+
+			U32 packed = 0;
+
+			Buffer_memcpy(
+				Buffer_createRef(&packed, sizeof(packed)),
+				Buffer_createRefConst(record + ch->offset, sizeof(packed))
+			);
+
+			F32x4_store3(normal, F32x4_unpackOct32(packed));
+		}
+
+		else if(ch) MeshAttribute_decode(record + ch->offset, ch->format, normal, 3);
+	}
 
 	if(uv) {
 
-		if(reader->wideUvs) {
-			uv[0] = wide.uv[0];
-			uv[1] = wide.uv[1];
-		}
+		const MeshAttributeEntry *ch = MeshAttributeLayout_find(&reader->attributeLayout, EMeshAttribute_Uv0);
 
-		else {
-			uv[0] = F16_castF32((F16)(narrow.uv & 0xFFFF));
-			uv[1] = F16_castF32((F16)(narrow.uv >> 16));
-		}
+		uv[0] = uv[1] = 0;
+
+		if(ch)
+			MeshAttribute_decode(record + ch->offset, ch->format, uv, 2);
 	}
 
 clean:

@@ -86,7 +86,13 @@ static inline F32x4 F32x4_round(F32x4 a) { return _mm_round_ps(a, _MM_FROUND_TO_
 //Transcendentals
 
 static inline F32x4 F32x4_sqrt(F32x4 a) { return _mm_sqrt_ps(a); }
-static inline F32x4 F32x4_rsqrt(F32x4 a) { return _mm_rsqrt_ps(a); }
+
+//_mm_rsqrt_ps is a ~12 bit estimate, so it hands back 0.99987793 for the reciprocal root of one. Correctly
+//rounded is what every other backend gives and what a value written to a file has to be, so the plain name
+// is the divide and the estimate is named for what it is. See F32x4_rsqrtFast in vec4f.h for when to take it.
+
+static inline F32x4 F32x4_rsqrt(F32x4 a) { return _mm_div_ps(_mm_set1_ps(1), _mm_sqrt_ps(a)); }
+static inline F32x4 F32x4_rsqrtFast(F32x4 a) { return _mm_rsqrt_ps(a); }
 
 //These are intel extended instructions
 // TODO: Should add a proper SIMD fallback, for now this is actually handled later with naive fallback

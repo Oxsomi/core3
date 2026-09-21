@@ -88,12 +88,22 @@ typedef struct PlyProperty {
 #define PLY_MAX_PROPERTIES 65536
 #define PLY_MAX_ELEMENTS 1024
 
+//An element whose properties are all fixed width has a fixed record, so a whole record comes off the stream in
+//one read and its properties decode out of it by offset. stride is 0 when the element declares a list, whose
+// width is not known until the count itself is read, or when the record is wider than the buffer.
+
+#define PLY_RECORD_CAP 256
+
+//A face with more corners than this falls to the general path, which has a resizable list for it.
+
+#define PLY_FAN_CAP 32
+
 typedef struct PlyElement {
 	U32 count;
 	U32 firstProperty;            //Into the header's flat property table
 	U32 propertyCount;
+	U16 stride;                   //0 when the record is not fixed width
 	Bool isVertex, isFace;
-	U8 padding[2];
 } PlyElement;
 
 TList(PlyProperty);
@@ -350,37 +360,62 @@ clean:
 	return s_uccess;
 }
 
-//One scalar off the body, as a double since that holds every type the format has.
-//Binary values are assembled from bytes in the file's own order rather than loaded and swapped,
-// so the host's byte order never enters into it.
+//One scalar out of bytes already in hand, as a double since that holds every type the format has.
+//Assembled from the bytes in the FILE's order rather than loaded and swapped, so the host's byte order never
+// enters into it. Unrolled per width because the width is not a constant here and a byte at a time loop
+// around a branch is most of what reading a binary body used to cost.
 
-static Bool Ply_readScalar(MeshSource *src, U8 type, U8 format, F64 *result, Error *e_rr) {
+static F64 Ply_decodeScalar(const U8 *bytes, U8 type, U8 format) {
 
-	Bool s_uccess = true;
-
-	const U8 size = Ply_typeSize[type];
-	U8 bytes[8];
-
-	gotoIfError3(clean, MeshSource_readBytes(src, bytes, size, e_rr));
-
+	const Bool be = format == EPlyFormat_BigEndian;
 	U64 raw = 0;
 
-	for(U8 i = 0; i < size; ++i) {
-		const U8 b = format == EPlyFormat_BigEndian ? bytes[i] : bytes[size - 1 - i];
-		raw = (raw << 8) | b;
+	switch(Ply_typeSize[type]) {
+
+		case 1:
+			raw = bytes[0];
+			break;
+
+		case 2:
+			raw = be
+				? ((U64) bytes[0] << 8) | bytes[1]
+				: ((U64) bytes[1] << 8) | bytes[0];
+			break;
+
+		case 4:
+			raw = be
+				? ((U64) bytes[0] << 24) | ((U64) bytes[1] << 16) | ((U64) bytes[2] << 8) | bytes[3]
+				: ((U64) bytes[3] << 24) | ((U64) bytes[2] << 16) | ((U64) bytes[1] << 8) | bytes[0];
+			break;
+
+		default:
+
+			for(U8 i = 0; i < 8; ++i)
+				raw = (raw << 8) | bytes[be ? i : 7 - i];
+
+			break;
 	}
 
 	switch(type) {
 
-		case EPlyType_Char: *result = (F64) (I8) raw; break;
-		case EPlyType_UChar: *result = (F64) (U8) raw; break;
-		case EPlyType_Short: *result = (F64) (I16) raw; break;
-		case EPlyType_UShort: *result = (F64) (U16) raw; break;
-		case EPlyType_Int: *result = (F64) (I32) raw; break;
-		case EPlyType_UInt: *result = (F64) (U32) raw; break;
-		case EPlyType_Float: *result = (F64) F32_fromU32Bits((U32) raw); break;
-		default: *result = F64_fromU64Bits(raw); break;
+		case EPlyType_Char: return (F64) (I8) raw;
+		case EPlyType_UChar: return (F64) (U8) raw;
+		case EPlyType_Short: return (F64) (I16) raw;
+		case EPlyType_UShort: return (F64) (U16) raw;
+		case EPlyType_Int: return (F64) (I32) raw;
+		case EPlyType_UInt: return (F64) (U32) raw;
+		case EPlyType_Float: return (F64) F32_fromU32Bits((U32) raw);
+		default: return F64_fromU64Bits(raw);
 	}
+}
+
+static Bool Ply_readScalar(MeshSource *src, U8 type, U8 format, F64 *result, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U8 bytes[8];
+
+	gotoIfError3(clean, MeshSource_readBytes(src, bytes, Ply_typeSize[type], e_rr));
+	*result = Ply_decodeScalar(bytes, type, format);
 
 clean:
 	return s_uccess;
@@ -389,12 +424,25 @@ clean:
 //Text and binary meet here: a property's values come out as doubles either way, so the element loop below
 // has one body. For ascii the line was already read and pos walks its tokens.
 
+//What one property of a fixed width record contributes, worked out once for the element rather than dispatched
+//per scalar. The destination is a pointer into the caller's own locals, so decoding a record is a walk down
+//this table with no switch in it at all.
+
+typedef struct PlyPlanEntry {
+	U16 offset;                   //Bytes into the record
+	U8 type;                      //EPlyType
+	U8 padding;
+	F32 *dst;
+} PlyPlanEntry;
+
 typedef struct PlyCursor {
 	MeshSource *src;
 	U8 format;
 	U8 padding[7];
 	CharString line;
 	U64 pos;
+	const U8 *rec;                //When set, binary values come out of this record rather than off the stream
+	U64 recPos;
 } PlyCursor;
 
 static Bool PlyCursor_value(PlyCursor *c, U8 type, F64 *result, Error *e_rr) {
@@ -402,6 +450,13 @@ static Bool PlyCursor_value(PlyCursor *c, U8 type, F64 *result, Error *e_rr) {
 	Bool s_uccess = true;
 
 	if(c->format != EPlyFormat_Ascii) {
+
+		if(c->rec) {
+			*result = Ply_decodeScalar(c->rec + c->recPos, type, c->format);
+			c->recPos += Ply_typeSize[type];
+			goto clean;
+		}
+
 		gotoIfError3(clean, Ply_readScalar(c->src, type, c->format, result, e_rr));
 		goto clean;
 	}
@@ -463,6 +518,9 @@ Bool Ply_read(
 	Buffer lineBuf = Buffer_createNull();
 	PlyHeader headerData = (PlyHeader) { 0 };
 
+	U8 recBuf[PLY_RECORD_CAP];
+	U8 listBuf[PLY_RECORD_CAP];
+
 	if(!stream || !off || !info || !output)
 		retError(clean, Error_nullPointer(0, "Ply_read()::stream, off, info and output are required"));
 
@@ -477,10 +535,6 @@ Bool Ply_read(
 	gotoIfError3(clean, MeshSink_create(output->indices, output->indexOffset, alloc, &indexSink, e_rr));
 	gotoIfError3(clean, MeshSink_create(output->triangles, output->triangleOffset, alloc, &wordSink, e_rr));
 
-	MeshPositions_create(flags, &positionSink, &positions);
-	MeshTriangles_create(flags, &indexSink, &wordSink, &triangles);
-	MeshAttributes_create(flags, &attributeSink, &attrs);
-
 	gotoIfError3(clean, Buffer_createUninitializedBytes(MESH_LINE_CAP, alloc, &lineBuf, e_rr));
 	C8 *line = (C8*) lineBuf.ptrNonConst;
 
@@ -492,6 +546,42 @@ Bool Ply_read(
 
 	info->allNormals = info->hasNormals;
 	info->allUvs = info->hasUvs;
+
+	//A header naming normals leaves nothing to compute, and it says so before a single vertex is read. Dropping
+	//the flag here is what keeps a consumer from having to read the file twice to find out: it can ask for
+	// computed normals unconditionally and a file that has them pays neither the holding nor the sums.
+	//The three below are created from this rather than from the caller's flags for that reason.
+
+	const EMeshFlags bodyFlags = info->hasNormals
+		? (EMeshFlags) (flags & ~(EMeshFlags) EMeshFlags_ComputeNormals)
+		: flags;
+
+	MeshPositions_create(bodyFlags, &positionSink, &positions);
+	MeshTriangles_create(bodyFlags, &indexSink, &wordSink, &triangles);
+	MeshAttributes_create(bodyFlags, &attributeSink, &attrs);
+
+	//A fixed width record is the common binary case and the only one worth a bulk read, so the width is worked
+	//out once here rather than per element.
+
+	for(U64 e = 0; e < header->elements.length; ++e) {
+
+		PlyElement *el = header->elements.ptrNonConst + e;
+		U64 stride = 0;
+
+		for(U32 pi = 0; pi < el->propertyCount && stride <= PLY_RECORD_CAP; ++pi) {
+
+			const PlyProperty *prop = header->properties.ptr + el->firstProperty + pi;
+
+			if(prop->isList) {
+				stride = 0;
+				break;
+			}
+
+			stride += Ply_typeSize[prop->type];
+		}
+
+		el->stride = (U16) (stride && stride <= PLY_RECORD_CAP ? stride : 0);
+	}
 
 	const Bool keepPositions = MeshTriangles_needsPositions(&triangles);
 
@@ -505,7 +595,183 @@ Bool Ply_read(
 
 		const PlyElement *el = header->elements.ptr + e;
 
-		for(U32 elId = 0; elId < el->count; ++elId) {
+		//A fixed width binary vertex record decodes IN PLACE out of the cursor's window, with the properties
+		//this reader wants resolved once for the element. Only a record straddling the window's end is copied,
+		// and everything this does not cover falls to the loop below, which starts wherever this left off.
+
+		U32 done = 0;
+
+		if(header->format != EPlyFormat_Ascii && el->stride && el->isVertex) {
+
+			F32 p[3] = { 0, 0, 0 }, n[3] = { 0, 0, 0 }, uv[2] = { 0, 0 };
+
+			PlyPlanEntry plan[8];
+			U8 planCount = 0;
+			U16 at = 0;
+
+			for(U32 pi = 0; pi < el->propertyCount; ++pi) {
+
+				const PlyProperty *prop = header->properties.ptr + el->firstProperty + pi;
+				F32 *dst = NULL;
+
+				switch(prop->semantic) {
+					case EPlySemantic_X: dst = p + 0; break;
+					case EPlySemantic_Y: dst = p + 1; break;
+					case EPlySemantic_Z: dst = p + 2; break;
+					case EPlySemantic_NX: dst = n + 0; break;
+					case EPlySemantic_NY: dst = n + 1; break;
+					case EPlySemantic_NZ: dst = n + 2; break;
+					case EPlySemantic_U: dst = uv + 0; break;
+					case EPlySemantic_V: dst = uv + 1; break;
+					default: break;
+				}
+
+				if(dst && planCount < (U8)(sizeof(plan) / sizeof(plan[0])))
+					plan[planCount++] = (PlyPlanEntry) { .offset = at, .type = prop->type, .dst = dst };
+
+				at = (U16) (at + Ply_typeSize[prop->type]);
+			}
+
+			while(done < el->count) {
+
+				U64 avail = 0;
+				gotoIfError3(clean, MeshSource_available(&src, &avail, e_rr));
+
+				U64 batch = avail / el->stride;
+
+				if(batch > el->count - done)
+					batch = el->count - done;
+
+				const U8 *rec = batch ? MeshSource_ptr(&src) : recBuf;
+
+				if(!batch) {
+					gotoIfError3(clean, MeshSource_readBytes(&src, recBuf, el->stride, e_rr));
+					batch = 1;
+				}
+
+				else MeshSource_advance(&src, batch * el->stride);
+
+				for(U64 r = 0; r < batch; ++r, rec += el->stride) {
+
+					for(U8 k = 0; k < planCount; ++k)
+						*plan[k].dst = (F32) Ply_decodeScalar(rec + plan[k].offset, plan[k].type, header->format);
+
+					gotoIfError3(clean, MeshPositions_push(&positions, p, alloc, e_rr));
+					gotoIfError3(clean, MeshAttributes_push(&attrs, n, uv, alloc, e_rr));
+
+					if(keepPositions)
+						gotoIfError3(clean, Mesh_appendF32(&held, p, 3, alloc, e_rr));
+				}
+
+				done += (U32) batch;
+				verticesRead += (U32) batch;
+			}
+		}
+
+		//The face element's width is not fixed, since its list's length is the first thing in the record, but a
+		//record whose corner count has been read IS of known width, so it too decodes in place. A count this
+		// does not cover stops it and the loop below reports whatever was wrong.
+
+		else if(header->format != EPlyFormat_Ascii && el->isFace && el->propertyCount == 1) {
+
+			const PlyProperty *prop = header->properties.ptr + el->firstProperty;
+
+			const U8 countSize = Ply_typeSize[prop->countType];
+			const U8 valueSize = Ply_typeSize[prop->type];
+
+			U32 idx[PLY_FAN_CAP];
+
+			while(prop->isList && prop->semantic == EPlySemantic_Indices && done < el->count) {
+
+				U64 avail = 0;
+				gotoIfError3(clean, MeshSource_available(&src, &avail, e_rr));
+
+				//The record is read out of the window when it sits there whole, and copied across the boundary
+				//when it does not, which is once a window rather than once a record. Nothing here gives up and
+				// hands the element back, since bailing at the first boundary would leave the path unused.
+
+				const U8 *rec = NULL;
+				U64 corners = 0;
+
+				if(avail >= countSize) {
+
+					rec = MeshSource_ptr(&src);
+					corners = (U64) Ply_decodeScalar(rec, prop->countType, header->format);
+
+					if(corners > PLY_FAN_CAP || avail < (U64) countSize + corners * valueSize)
+						rec = NULL;
+				}
+
+				if(!rec) {
+
+					//Across a boundary, or a polygon with more corners than the stack array holds. The list the
+					//general path uses takes both, and neither is common enough to be worth more than this.
+
+					gotoIfError3(clean, MeshSource_readBytes(&src, recBuf, countSize, e_rr));
+					corners = (U64) Ply_decodeScalar(recBuf, prop->countType, header->format);
+
+					if(corners < 3)
+						retError(clean, Error_invalidParameter(0, 18, "Ply_read() a face has fewer than three corners"));
+
+					gotoIfError3(clean, ListU32_clear(&face, e_rr));
+
+					for(U64 i = 0; i < corners; ++i) {
+
+						U8 one[8];
+						gotoIfError3(clean, MeshSource_readBytes(&src, one, valueSize, e_rr));
+
+						const F64 v = Ply_decodeScalar(one, prop->type, header->format);
+
+						if(v < 0 || v >= (F64) verticesRead)
+							retError(clean, Error_outOfBounds(
+								0, (U64) v, verticesRead, "Ply_read() a face names a vertex that doesn't exist"
+							));
+
+						gotoIfError3(clean, ListU32_pushBack(&face, (U32) v, alloc, e_rr));
+					}
+				}
+
+				else {
+
+					if(corners < 3)
+						retError(clean, Error_invalidParameter(0, 18, "Ply_read() a face has fewer than three corners"));
+
+					for(U64 i = 0; i < corners; ++i) {
+
+						const F64 v = Ply_decodeScalar(rec + countSize + i * valueSize, prop->type, header->format);
+
+						if(v < 0 || v >= (F64) verticesRead)
+							retError(clean, Error_outOfBounds(
+								0, (U64) v, verticesRead, "Ply_read() a face names a vertex that doesn't exist"
+							));
+
+						idx[i] = (U32) v;
+					}
+
+					MeshSource_advance(&src, (U64) countSize + corners * valueSize);
+				}
+
+				const U32 *corner = rec ? idx : face.ptr;
+
+				if(corners > 3)
+					++info->fannedFaces;
+
+				for(U64 k = 1; k + 1 < corners; ++k) {
+
+					const U32 i0 = corner[0], i1 = corner[k], i2 = corner[k + 1];
+
+					const F32 *p0 = keepPositions ? held.ptr + (U64) i0 * 3 : NULL;
+					const F32 *p1 = keepPositions ? held.ptr + (U64) i1 * 3 : NULL;
+					const F32 *p2 = keepPositions ? held.ptr + (U64) i2 * 3 : NULL;
+
+					gotoIfError3(clean, MeshTriangles_emit(&triangles, i0, i1, i2, 0, p0, p1, p2, alloc, e_rr));
+				}
+
+				++done;
+			}
+		}
+
+		for(U32 elId = done; elId < el->count; ++elId) {
 
 			if(header->format == EPlyFormat_Ascii) {
 
@@ -520,6 +786,16 @@ Bool Ply_read(
 
 				cursor.pos = 0;
 				cursor.line = CharString_createRefSizedConst(line, len, false);
+			}
+
+			//One read a record rather than one a scalar, which is what the fixed width buys.
+
+			cursor.rec = NULL;
+			cursor.recPos = 0;
+
+			if(header->format != EPlyFormat_Ascii && el->stride) {
+				gotoIfError3(clean, MeshSource_readBytes(&src, recBuf, el->stride, e_rr));
+				cursor.rec = recBuf;
 			}
 
 			F32 p[3] = { 0, 0, 0 }, n[3] = { 0, 0, 0 }, uv[2] = { 0, 0 };
@@ -571,10 +847,24 @@ Bool Ply_read(
 
 				gotoIfError3(clean, ListU32_clear(&face, e_rr));
 
+				//A binary list's width is known the moment its count is, so its values come off the stream in
+				//one read and decode out of the buffer. Ascii keeps the token at a time path, since a text
+				// value has no width until it is parsed, and so does a list too long for the buffer.
+
+				const U64 valueSize = Ply_typeSize[prop->type];
+				const Bool bulk = header->format != EPlyFormat_Ascii && count <= PLY_RECORD_CAP / valueSize;
+
+				if(bulk)
+					gotoIfError3(clean, MeshSource_readBytes(&src, listBuf, count * valueSize, e_rr));
+
 				for(U64 i = 0; i < count; ++i) {
 
 					F64 indexValue = 0;
-					gotoIfError3(clean, PlyCursor_value(&cursor, prop->type, &indexValue, e_rr));
+
+					if(bulk)
+						indexValue = Ply_decodeScalar(listBuf + i * valueSize, prop->type, header->format);
+
+					else gotoIfError3(clean, PlyCursor_value(&cursor, prop->type, &indexValue, e_rr));
 
 					if(indexValue < 0 || indexValue >= (F64) verticesRead)
 						retError(clean, Error_outOfBounds(
@@ -606,8 +896,7 @@ Bool Ply_read(
 			gotoIfError3(clean, MeshAttributes_push(&attrs, n, uv, alloc, e_rr));
 
 			if(keepPositions)
-				for(U8 i = 0; i < 3; ++i)
-					gotoIfError3(clean, ListF32_pushBack(&held, p[i], alloc, e_rr));
+				gotoIfError3(clean, Mesh_appendF32(&held, p, 3, alloc, e_rr));
 
 			++verticesRead;
 		}

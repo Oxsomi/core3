@@ -124,7 +124,7 @@ static inline F32 F32x2_satDot(F32x2 a, F32x2 b) { return F32_saturate(F32x2_dot
 
 static inline F32 F32x2_sqLen(F32x2 v) { return F32x2_dot(v, v); }
 static inline F32 F32x2_len(F32x2 v) { return F32_sqrt(F32x2_sqLen(v)); }
-static inline F32x2 F32x2_normalize(F32x2 v) { return F32x2_mul(v, F32x2_xx2(1 / F32x2_len(v))); }
+static inline F32x2 F32x2_normalize(F32x2 v) { return F32x2_div(v, F32x2_xx2(F32x2_len(v))); }
 
 //Clamp
 
@@ -145,6 +145,12 @@ static inline F32x2 F32x2_atan2(F32x2 y, F32x2 x) { NONE_OP2F(F32_atan2(y.v[i], 
 static inline F32x2 F32x2_tan(F32x2 v) { NONE_OP2F(F32_tan(v.v[i])); }
 static inline F32x2 F32x2_sqrt(F32x2 v) { NONE_OP2F(F32_sqrt(v.v[i])); }
 static inline F32x2 F32x2_rsqrt(F32x2 v) { NONE_OP2F(1 / F32_sqrt(v.v[i])); }
+
+//There is no estimate to take here: F32x2 has no SIMD form, so the fast twins exist for the name and not for
+// the speed. See F32x4_rsqrtFast, which is the one that differs.
+
+static inline F32x2 F32x2_rsqrtFast(F32x2 v) { return F32x2_rsqrt(v); }
+static inline F32x2 F32x2_normalizeFast(F32x2 v) { return F32x2_normalize(v); }
 
 static inline F32x2 F32x2_pow(F32x2 v, F32x2 e) { NONE_OP2F(F32_pow(v.v[i], e.v[i])); }
 

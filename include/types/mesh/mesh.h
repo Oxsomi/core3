@@ -25,7 +25,12 @@
 // format only decides how to fill these.
 
 #pragma once
+#include "types/container/buffer.h"
+#include "types/container/texture_format.h"
+#include "types/math/flp.h"
 #include "types/base/types.h"
+#include "types/base/c8.h"
+#include "types/base/mathf.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -54,6 +59,99 @@ typedef struct MeshAttributeWide {
 	U32 normal;
 	F32 uv[2];
 } MeshAttributeWide;
+
+//What an attribute MEANS, separate from how it is stored. A reader fills the ones it recognizes and a
+//consumer reads the ones it wants, and neither has to agree on a record shape to do it.
+
+typedef enum EMeshAttribute {
+
+	EMeshAttribute_Normal,
+	EMeshAttribute_Tangent,
+	EMeshAttribute_Uv0,
+	EMeshAttribute_Uv1,             //A lightmap's second set, which a raster pipeline still wants
+	EMeshAttribute_Color,
+
+	EMeshAttribute_Count
+
+} EMeshAttribute;
+
+//How the bits are read beyond what the format says. A unit vector fits in one 32 bit word octahedrally, which
+//no texture format can express on its own, so the encoding expresses it instead.
+
+typedef enum EMeshAttributeEncoding {
+
+	EMeshAttributeEncoding_Raw,     //The format's components, in order
+	EMeshAttributeEncoding_Oct,     //A unit vector in one unsigned 32 bit word, through U32_packOct32
+
+	EMeshAttributeEncoding_Count
+
+} EMeshAttributeEncoding;
+
+//An attribute takes the uncompressed texture formats whose records are a whole number of bytes, which is
+//every vertex format a GPU takes as an input and nothing else. A compressed block has no per vertex meaning.
+
+static inline Bool MeshAttribute_formatSupported(ETextureFormatId id) {
+
+	if(!id || id >= ETextureFormatId_Count)
+		return false;
+
+	const ETextureFormat f = ETextureFormatId_unpack[id];
+
+	if(ETextureFormat_getIsCompressed(f))
+		return false;
+
+	const U64 bits = ETextureFormat_getBits(f);
+	return bits && !(bits & 7) && bits <= 128;
+}
+
+static inline U8 MeshAttribute_formatSize(ETextureFormatId id) {
+	return (U8) (ETextureFormat_getBits(ETextureFormatId_unpack[id]) >> 3);
+}
+
+//One row of the table that describes a record: which attribute it is, how it is stored, where it sits.
+
+typedef struct MeshAttributeEntry {
+	U8 attribute;                 //EMeshAttribute
+	U8 encoding;                  //EMeshAttributeEncoding
+	U8 format;                    //ETextureFormatId, Count is under 0xF0 so it fits
+	U8 offset;                    //Bytes into the record
+} MeshAttributeEntry;
+
+#define MeshAttributeLayout_maxEntries 8
+
+//The shape of an attribute record, described rather than compiled in. The record shapes EMeshFlags selects are
+//constants of this type, so the flags are sugar over the table and not a switch the writer contains.
+//Adding a tangent, a vertex color or a second uv is a row here. It is not a new struct, a new flag bit and a
+//new arm in every function that touches a record.
+
+typedef struct MeshAttributeLayout {
+	MeshAttributeEntry entries[MeshAttributeLayout_maxEntries];
+	U8 entryCount;
+	U8 stride;
+	U8 padding[6];
+} MeshAttributeLayout;
+
+//Where an attribute sits in a layout, or NULL when the layout does not carry it.
+
+static inline const MeshAttributeEntry *MeshAttributeLayout_find(const MeshAttributeLayout *l, EMeshAttribute c) {
+
+	if(!l)
+		return NULL;
+
+	for(U8 i = 0; i < l->entryCount; ++i)
+		if(l->entries[i].attribute == (U8) c)
+			return l->entries + i;
+
+	return NULL;
+}
+
+//Every attribute and every position stream is one of these few primitives at one of a few widths, so the
+//codec is written once over primitive and bit depth rather than once per format.
+//Components past what the caller supplies write zero, and past what the format holds are dropped, which is what
+//lets an RGBA format carry a three component attribute without the caller knowing.
+
+void MeshAttribute_encode(U8 *dst, ETextureFormatId id, const F32 *src, U8 srcCount);
+void MeshAttribute_decode(const U8 *src, ETextureFormatId id, F32 *dst, U8 dstCount);
 
 //One U32 per TRIANGLE: an 18 bit octahedral geometric normal in the low bits (U32_packOct18 in
 // types/math/pack.h, unpackOct18 in @pack.hlsli) and the material index in the 14 above.
@@ -133,12 +231,12 @@ typedef enum EMeshFlags {
 
 	EMeshFlags_None            = 0,
 
-	//Replace every normal with one accumulated from the faces around the vertex, weighted by face area, whether
-	// or not the file supplied any.
-	//A normal sums over every face touching the vertex, so attributes are HELD until the last face and written at
-	// the end; positions and indices still leave as the file yields them.
-	//Vertices are shared only where the file shares them: an OBJ corner named with a distinct uv is a distinct
-	// vertex here and gets its own sum, which is what vn is for.
+	//FILL a vertex's normal from the faces around it, weighted by face area, where the file supplied none.
+	//One the file DID supply is KEPT, so a consumer can ask for this unconditionally and pay nothing on a file
+	// that already has them.
+	//A sum spans every face touching the vertex, so attributes are HELD until the last face; positions and
+	// indices still leave as the file yields them, and a header that already names normals skips the holding.
+	//Vertices are shared only where the FILE shares them, so an OBJ corner with a distinct uv gets its own sum.
 
 	EMeshFlags_ComputeNormals  = 1 << 0,
 
@@ -161,6 +259,90 @@ typedef enum EMeshFlags {
 	EMeshFlags_NarrowIndices     = 1 << 3
 
 } EMeshFlags;
+
+//A layout from the attributes it carries: they land in the order given, each after the last, and the stride is
+//what that comes to. Packed tight and never padded, since the codec goes through memcpy and a byte address
+// buffer has no alignment to satisfy. An offset the caller filled in is recomputed, and anything the walk
+// below refuses takes the whole layout with it rather than half building one.
+
+static inline MeshAttributeLayout MeshAttributeLayout_create(const MeshAttributeEntry *entries, U8 count) {
+
+	MeshAttributeLayout layout = (MeshAttributeLayout) { 0 };
+
+	if(!entries || !count || count > MeshAttributeLayout_maxEntries)
+		return layout;
+
+	U32 at = 0;
+
+	for(U8 i = 0; i < count; ++i) {
+
+		MeshAttributeEntry e = entries[i];
+
+		if(e.attribute >= EMeshAttribute_Count || e.encoding >= EMeshAttributeEncoding_Count)
+			return (MeshAttributeLayout) { 0 };
+
+		//An oct encoded attribute is one U32 whatever format the caller named, because the width is the
+		// ENCODING's and not the format's.
+
+		if(e.encoding == EMeshAttributeEncoding_Oct)
+			e.format = ETextureFormatId_R32u;
+
+		if(!MeshAttribute_formatSupported((ETextureFormatId) e.format))
+			return (MeshAttributeLayout) { 0 };
+
+		for(U8 k = 0; k < i; ++k)
+			if(layout.entries[k].attribute == e.attribute)
+				return (MeshAttributeLayout) { 0 };
+
+		e.offset = (U8) at;
+		at += MeshAttribute_formatSize((ETextureFormatId) e.format);
+
+		if(at > 0xFF)
+			return (MeshAttributeLayout) { 0 };
+
+		layout.entries[i] = e;
+	}
+
+	layout.entryCount = count;
+	layout.stride = (U8) at;
+
+	return layout;
+}
+
+//The layout EMeshFlags asks for, which is one shape of the many above. A consumer wanting a normal with no uv,
+//a tangent or a second uv builds its own; the flags stay what a READER is told, since no file format spells
+// the rest.
+
+static inline MeshAttributeLayout MeshAttributeLayout_fromFlags(EMeshFlags flags) {
+
+	const MeshAttributeEntry entries[2] = {
+		{
+			.attribute = EMeshAttribute_Normal,
+			.encoding = EMeshAttributeEncoding_Oct,
+			.format = ETextureFormatId_R32u
+		},
+		{
+			.attribute = EMeshAttribute_Uv0,
+			.encoding = EMeshAttributeEncoding_Raw,
+			.format = (U8) ((flags & EMeshFlags_WideUvs) ? ETextureFormatId_RG32f : ETextureFormatId_RG16f)
+		}
+	};
+
+	return MeshAttributeLayout_create(entries, 2);
+}
+
+//The position stream's format, which the flags select between today and a descriptor can name outright.
+//An SNorm or UNorm format is the quantized case: the values are the extent the MeshInfo bounds describe, so a
+//consumer decodes them through those bounds. A float format carries positions as they were read.
+
+static inline ETextureFormatId MeshPositionFormat_fromFlags(EMeshFlags flags) {
+	return (flags & EMeshFlags_QuantizePositions) ? ETextureFormatId_RGBA16s : ETextureFormatId_RGB32f;
+}
+
+static inline Bool MeshPositionFormat_isQuantized(ETextureFormatId id) {
+	const ETexturePrimitive p = ETextureFormat_getPrimitive(ETextureFormatId_unpack[id]);
+	return p == ETexturePrimitive_SNorm || p == ETexturePrimitive_UNorm;
+}
 
 //Where a reader puts what it read. Two of the four are optional, and a reader asked for neither never computes
 // what they would have held.
@@ -201,6 +383,74 @@ typedef struct MeshInput {
 	U64 indexOffset;
 
 } MeshInput;
+
+//The flat form a read produced, as ONE value: the streams plus what shape they are in. Everything derived from
+//a mesh takes this rather than a dozen parameters that can disagree about what they describe, and a caller
+//builds it from what the reader handed back with MeshFlat_fromInfo.
+//
+//The buffers are REFERENCED, not owned. Deriving never resizes them, so a caller's own allocations stay its own.
+//
+//This form is RESIDENT, where the reader's own output is streams throughout, and only POSITIONS make it so: a
+//triangle names three arbitrary vertices. The other three are sequential, so the residency is a
+// simplification rather than a requirement, and docs/roadmap.md carries what it would take to lift.
+//A caller handing a mesh to a device builds none of this and derives there instead.
+
+typedef struct MeshFlat {
+
+	Buffer positions;             //F32[3] per vertex, or the positionFormat's record
+	Buffer indices;               //U32 per index, or U16 under narrowIndices
+	Buffer attributes;            //attributeLayout.stride per vertex, empty where the mesh has none
+	Buffer triangles;             //One U32 word per triangle, empty where the mesh has none
+
+	MeshAttributeLayout attributeLayout;
+
+	U8 positionFormat;            //ETextureFormatId
+	Bool narrowIndices;
+	U8 padding[6];
+
+	U32 vertexCount;
+	U32 triangleCount;
+
+	//The space quantized positions are in, and what a consumer needs to decode them. Copied from the MeshInfo.
+
+	F32 aabbMin[3];
+	F32 aabbMax[3];
+
+} MeshFlat;
+
+//The flat form from what a reader returned. The FLAGS the read was given are what say which shape the streams
+//are in, so passing the same flags is what makes the description true rather than a second place to keep right.
+//Lengths are checked against the counts: a stream shorter than its count is refused here rather than read past
+// by whatever derives from it.
+
+Bool MeshFlat_fromInfo(
+	const MeshInfo *info,
+	EMeshFlags flags,
+	Buffer positions,
+	Buffer indices,
+	Buffer attributes,
+	Buffer triangles,
+	MeshFlat *flat,
+	Error *e_rr
+);
+
+//FILL every vertex normal from the faces around it, weighted by face area, over a mesh that has already been
+//read. Exactly what EMeshFlags_ComputeNormals does inside a reader, as a pass a caller can run instead, or
+// hand to a GPU and run this only to check that one.
+//Asking a reader for the flag makes it HOLD every attribute until the last face; running this instead lets the
+// read stream straight out and costs one more pass over an array that is already in memory.
+//Unlike the reader's, this REPLACES what the attributes hold, since a pass over a finished mesh cannot know
+// which normals a file supplied. Run it when MeshInfo said the file named none.
+//The attributes buffer is written in place and must not be a const reference.
+
+Bool MeshFlat_computeNormals(const MeshFlat *mesh, const Allocator *alloc, Error *e_rr);
+
+//Fill the per triangle word: an oct18 of the geometric normal and the material above it, for every triangle.
+//The same relationship to a reader as MeshFlat_computeNormals: asking a reader for a triangle stream makes it
+// hold every POSITION until the last face, where this reads the positions back out of the finished mesh.
+//The triangles buffer is written in place and must not be a const reference.
+
+Bool MeshFlat_computeWords(const MeshFlat *mesh, U32 material, Error *e_rr);
 
 #ifdef __cplusplus
 	}

@@ -1043,7 +1043,8 @@ Bool GraphicsDeviceRef_create(
 			EGraphicsFeatures2_RayMicromapOpacityU8     |
 			EGraphicsFeatures2_RayClusterAS             |
 			EGraphicsFeatures2_RayPartitionedTLAS       |
-			EGraphicsFeatures2_RayIndirectASBuild
+			EGraphicsFeatures2_RayIndirectASBuild       |
+			EGraphicsFeatures2_SoftwareRT
 		);
 	}
 

@@ -292,14 +292,16 @@ void Test_objComputeNormals(Test *t) {
 
 	MeshResult_free(t, &r);
 
-	//A file that supplies its own normals has them replaced under the flag, and still reports having supplied them.
+	//A file that supplies its own normals KEEPS them under the flag, which asks for what is missing to be
+	//filled and not for what is there to be replaced. The triangle lies in xy, so a computed normal would be
+	// +z and the supplied +x is what proves the file won.
 
 	const C8 *supplied = "v 0 0 0\nv 1 0 0\nv 0 1 0\nvn 1 0 0\nf 1//1 2//1 3//1\n";
 	r = readObj(t, supplied, EMeshFlags_ComputeNormals, true, false);
 
 	if(Test_assert(t, "readSupplied", r.ok)) {
 		Test_assert(t, "reportsSupplied", r.info.hasNormals);
-		Test_assert(t, "replaced", Test_nearNormal(MeshResult_normal(&r, 0), 0, 0, 1));
+		Test_assert(t, "kept", Test_nearNormal(MeshResult_normal(&r, 0), 1, 0, 0));
 	}
 
 	MeshResult_free(t, &r);

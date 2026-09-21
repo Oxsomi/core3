@@ -27,8 +27,8 @@
 #pragma once
 #include "types/mesh/mesh.h"
 #include "types/container/stream.h"
-#include "types/math/vec4.h"
 #include "types/container/list_basic_types.h"
+#include "types/math/vec4.h"
 #include "types/base/string_base.h"
 
 typedef struct Allocator Allocator;
@@ -58,6 +58,14 @@ typedef struct MeshSource {
 	U64 pos;                      //Absolute stream offset the reader is at
 
 } MeshSource;
+
+//A whole record's floats appended in one move rather than one call each.
+
+Bool Mesh_appendF32(ListF32 *list, const F32 *src, U8 n, const Allocator *alloc, Error *e_rr);
+
+//A normal that is the zero vector packs as +z rather than as itself, which has no octahedral encoding.
+
+U32 Mesh_packNormal(const F32 *n);
 
 Bool MeshSource_create(StreamRef *stream, U64 off, const Allocator *alloc, MeshSource *src, Error *e_rr);
 void MeshSource_free(MeshSource *src);
@@ -95,14 +103,25 @@ Bool MeshSource_readLine(MeshSource *src, C8 *line, U64 cap, U64 *len, Bool *got
 //Capacity is reserved geometrically ahead of the writes on a stream that can reserve, and never on one that
 // cannot: a file simply grows, and a memory stream that was handed a fixed buffer refuses at the write itself.
 
+//Records are STAGED in the block and leave once it is full, because a reader produces one at a time and the
+//cursor costs the same call whether it is handed eight bytes or a thousand. So a reader still writes a vertex
+// at a time and pays one cursor write per block. A write at least as large as the block skips the staging.
+
+#define MESH_SINK_BLOCK 1024
+
 typedef struct MeshSink {
 
 	StreamCursor cursor;          //Unset for the sink that discards
 	const Allocator *alloc;
 
 	U64 base;                     //Stream offset the first record sits at
-	U64 written;                  //Bytes handed to the cursor past base
+	U64 written;                  //Bytes handed to the cursor past base, staged bytes NOT counted
 	U64 reserved;                 //Capacity asked for past base, on streams that can reserve
+
+	U32 filled;                   //Bytes staged in block, not yet handed to the cursor
+	U8 padding[4];
+
+	U8 block[MESH_SINK_BLOCK];
 
 } MeshSink;
 
@@ -110,6 +129,10 @@ Bool MeshSink_create(StreamRef *stream, U64 off, const Allocator *alloc, MeshSin
 static inline Bool MeshSink_active(const MeshSink *sink) { return sink && sink->cursor.stream; }
 
 Bool MeshSink_write(MeshSink *sink, const void *data, U64 bytes, Error *e_rr);
+
+//Everything staged, handed to the cursor. A caller that needs the sink's stream offset flushes first.
+
+Bool MeshSink_drain(MeshSink *sink, Error *e_rr);
 
 //One formatted piece, which is what the text forms of a mesh are built out of. The sink's own allocator is
 // used, and a sink that discards formats nothing at all rather than formatting and throwing it away.
@@ -185,9 +208,17 @@ typedef struct MeshAttributes {
 	ListF32 held;                 //5 per vertex while holding
 	U64 heldCapacity;             //What was reserved, so the doubling never asks the list
 
+	MeshAttributeLayout layout;   //The record's shape, walked per record rather than switched on
+
 	Bool hold;
-	Bool wide;                    //MeshAttributeWide records rather than MeshAttribute
 	Bool placeholderNormal;       //A computed normal fell back to +z, so some vertex had no triangle with area
+
+	//Whether the layout is the ONE both readers ask for by far the most often: an oct32 normal at 0 and an
+	//F16x2 uv at 4, with no gap. Matched once here because a record is eight bytes and a mesh is millions of
+	// them, so the walk, the codec dispatch and zeroing the gaps are the whole cost of writing one.
+	//The table stays the truth: a layout that does not match walks it.
+
+	Bool simple;
 	U8 padding;
 
 	F32 maxUvError;               //Worst F16 round trip over every uv written, 0 when wide

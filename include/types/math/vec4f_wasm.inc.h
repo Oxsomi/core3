@@ -91,9 +91,10 @@ static inline F32x4 F32x4_round(F32x4 a) { return wasm_f32x4_nearest(a); }
 
 static inline F32x4 F32x4_sqrt(F32x4 a) { return wasm_f32x4_sqrt(a); }
 
-//No reciprocal square root estimate in SIMD128; the exact form is the only option.
+//No reciprocal square root estimate in SIMD128, so the fast form IS the exact one here.
 
 static inline F32x4 F32x4_rsqrt(F32x4 a) { return wasm_f32x4_div(wasm_f32x4_splat(1), wasm_f32x4_sqrt(a)); }
+static inline F32x4 F32x4_rsqrtFast(F32x4 a) { return F32x4_rsqrt(a); }
 
 //No fused multiply add in the SIMD128 MVP either, so this is a multiply then an add.
 //That is not a true FMA: it rounds twice. OxC3's callers use it for throughput rather than for the extra

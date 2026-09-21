@@ -32,6 +32,8 @@ OXC3_TEST_MAIN(types_mesh) {
 	Test_meshSourceWindow(&t);
 	Test_meshSink(&t);
 	Test_meshPositions(&t);
+	Test_meshAttribute(&t);
+	Test_meshDerive(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

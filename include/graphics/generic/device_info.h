@@ -214,8 +214,6 @@ typedef enum EGraphicsFeatures {
 
 	EGraphicsFeatures_SubgroupOperations        = 1 << 25,
 
-	//(bit 26 is EGraphicsFeatures_RayTriPosition, grouped with the raytracing features above)
-
 	//SM6.10 linalg, split to mirror the oiSH extensions (CoopVec/CoopMat/CoopFP8).
 	//FP16 + INT8 are the base tier of CoopVec/CoopMat; CoopFP8 is the additive FP8 tier.
 	//CoopVecTraining exposes the Tier-1.1 outer-product/reduce-sum ops.
@@ -312,7 +310,18 @@ typedef enum EGraphicsFeatures2 {
 	//Vulkan: VK_KHR_pipeline_executable_properties (pipelineExecutableInfo).
 	//Used for live shader disassembly, not rendering; device+driver dependent so it isn't golden-pinnable.
 
-	EGraphicsFeatures2_PipelineExecutableInfo   = 1 << 9
+	EGraphicsFeatures2_PipelineExecutableInfo   = 1 << 9,
+
+	//Ray traversal runs on the shader cores rather than on dedicated units. Never refuses work: it picks
+	// between arms that are both correct, such as rasterized primaries against traced ones.
+	//A HEURISTIC like RayMicromapOpacityActual, since neither API reports how traversal is implemented.
+	//Set for NVIDIA ONLY: it is the one vendor shipping raytracing on parts without the units, and it gates
+	// ray query on having them while the ray pipeline goes back to Pascal, so on NV a ray pipeline without a
+	// ray query names that set. D3D12 draws the same line at raytracing tier 1.0.
+	//An NV driver too old to expose ray query reads as a false positive, which costs that install the faster
+	// arm and nothing else.
+
+	EGraphicsFeatures2_SoftwareRT               = 1 << 10
 
 } EGraphicsFeatures2;
 

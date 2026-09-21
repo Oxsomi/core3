@@ -29,3 +29,11 @@
 void Test_meshSourceWindow(Test *t);
 void Test_meshSink(Test *t);
 void Test_meshPositions(Test *t);
+
+//The attribute codec: one round trip per primitive at every width, since that is what it is written over.
+
+void Test_meshAttribute(Test *t);
+
+//What runs OVER a finished mesh rather than inside a read: normals and the per triangle word.
+
+void Test_meshDerive(Test *t);

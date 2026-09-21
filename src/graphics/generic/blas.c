@@ -176,7 +176,10 @@ Bool GraphicsDeviceRef_createBLAS(
 
 			U8 reqMultiple = 2;
 
-			if(positionFormat == ETextureFormatId_RGBA32f || positionFormat == ETextureFormatId_RG32f)
+			if(
+				positionFormat == ETextureFormatId_RGBA32f || positionFormat == ETextureFormatId_RG32f ||
+				positionFormat == ETextureFormatId_RGB32f
+			)
 				reqMultiple = 4;
 
 			if(stride & (reqMultiple - 1))
@@ -190,6 +193,13 @@ Bool GraphicsDeviceRef_createBLAS(
 				gotoIfError3(clean, RTAS_validateDeviceBuffer(&geometry.indexBuffer, e_rr));
 
 			switch (positionFormat) {
+
+				//RGB32f is the format both APIs actually take for an acceleration structure, and the only one
+				//they mandate. The four component twin is accepted beside it and translated to this one by
+				//both backends, which is what lets a caller whose stride is 16 pass either; a caller whose
+				//stride is 12 has to name this one, since nothing may read the w that is not there.
+
+				case ETextureFormatId_RGB32f:
 
 				case ETextureFormatId_RGBA16f:
 				case ETextureFormatId_RGBA16s:
@@ -219,7 +229,7 @@ Bool GraphicsDeviceRef_createBLAS(
 
 				default:
 					retError(clean, Error_unsupportedOperation(
-						1, "GraphicsDeviceRef_createBLAS()::positionFormat must be RGBA(16f/32f/16)"
+						1, "GraphicsDeviceRef_createBLAS()::positionFormat must be RGB32f, RGBA(16f/32f/16s) or RG(16f/16s/32f)"
 					));
 			}
 

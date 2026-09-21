@@ -45,10 +45,12 @@ typedef struct MeshInputReader {
 
 	U32 vertexCount, indexCount;
 
+	MeshAttributeLayout attributeLayout;   //What an attribute record holds, read from the table not the flags
+
 	U8 positionStride, attributeStride, indexStride;
 
-	Bool hasAttributes, quantized, wideUvs;
-	U8 padding[4];
+	Bool hasAttributes, quantized;
+	U8 padding[5];
 
 } MeshInputReader;
 

@@ -393,8 +393,7 @@ Bool Obj_read(
 			F32 p[3];
 			gotoIfError3(clean, Obj_parseFloats(lineStr, &pos, p, 3, 3, e_rr));
 
-			for(U8 i = 0; i < 3; ++i)
-				gotoIfError3(clean, ListF32_pushBack(&v, p[i], alloc, e_rr));
+			gotoIfError3(clean, Mesh_appendF32(&v, p, 3, alloc, e_rr));
 		}
 
 		else if(Obj_keywordIs(keyword, "vn")) {
@@ -402,8 +401,7 @@ Bool Obj_read(
 			F32 n[3];
 			gotoIfError3(clean, Obj_parseFloats(lineStr, &pos, n, 3, 3, e_rr));
 
-			for(U8 i = 0; i < 3; ++i)
-				gotoIfError3(clean, ListF32_pushBack(&vn, n[i], alloc, e_rr));
+			gotoIfError3(clean, Mesh_appendF32(&vn, n, 3, alloc, e_rr));
 		}
 
 		else if(Obj_keywordIs(keyword, "vt")) {
@@ -411,8 +409,7 @@ Bool Obj_read(
 			F32 uv[2];
 			gotoIfError3(clean, Obj_parseFloats(lineStr, &pos, uv, 2, 1, e_rr));
 
-			for(U8 i = 0; i < 2; ++i)
-				gotoIfError3(clean, ListF32_pushBack(&vt, uv[i], alloc, e_rr));
+			gotoIfError3(clean, Mesh_appendF32(&vt, uv, 2, alloc, e_rr));
 		}
 
 		else if(Obj_keywordIs(keyword, "usemtl")) {

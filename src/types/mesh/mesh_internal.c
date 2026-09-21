@@ -234,15 +234,14 @@ clean:
 	return s_uccess;
 }
 
-Bool MeshSink_write(MeshSink *sink, const void *data, U64 bytes, Error *e_rr) {
+//The one path to the cursor. Everything else stages into the block and comes through here.
+
+static Bool MeshSink_passThrough(MeshSink *sink, const void *data, U64 bytes, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(!MeshSink_active(sink) || !bytes)
+	if(!bytes)
 		goto clean;
-
-	if(!data)
-		retError(clean, Error_nullPointer(1, "MeshSink_write()::data is required"));
 
 	gotoIfError3(clean, MeshSink_reserveFor(sink, bytes, e_rr));
 
@@ -255,6 +254,49 @@ Bool MeshSink_write(MeshSink *sink, const void *data, U64 bytes, Error *e_rr) {
 	));
 
 	sink->written += bytes;
+
+clean:
+	return s_uccess;
+}
+
+Bool MeshSink_drain(MeshSink *sink, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!MeshSink_active(sink) || !sink->filled)
+		goto clean;
+
+	gotoIfError3(clean, MeshSink_passThrough(sink, sink->block, sink->filled, e_rr));
+	sink->filled = 0;
+
+clean:
+	return s_uccess;
+}
+
+Bool MeshSink_write(MeshSink *sink, const void *data, U64 bytes, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!MeshSink_active(sink) || !bytes)
+		goto clean;
+
+	if(!data)
+		retError(clean, Error_nullPointer(1, "MeshSink_write()::data is required"));
+
+	if(bytes >= MESH_SINK_BLOCK) {
+		gotoIfError3(clean, MeshSink_drain(sink, e_rr));
+		gotoIfError3(clean, MeshSink_passThrough(sink, data, bytes, e_rr));
+		goto clean;
+	}
+
+	if(sink->filled + bytes > MESH_SINK_BLOCK)
+		gotoIfError3(clean, MeshSink_drain(sink, e_rr));
+
+	Buffer_memcpy(
+		Buffer_createRef(sink->block + sink->filled, bytes), Buffer_createRefConst(data, bytes)
+	);
+
+	sink->filled += (U32) bytes;
 
 clean:
 	return s_uccess;
@@ -292,6 +334,7 @@ Bool MeshSink_flush(MeshSink *sink, Error *e_rr) {
 	if(!MeshSink_active(sink))
 		goto clean;
 
+	gotoIfError3(clean, MeshSink_drain(sink, e_rr));
 	gotoIfError3(clean, StreamCursor_flush(&sink->cursor, sink->alloc, e_rr));
 
 clean:
@@ -329,11 +372,24 @@ clean:
 	return s_uccess;
 }
 
-//Divided by the real length rather than F32x4_normalize3, which is the approximate rsqrt on SSE and turns an axis
-// into 0.9998 of one. A normal written to a file is compared against by whatever reads it, so it has to be exact.
+Bool Mesh_appendF32(ListF32 *list, const F32 *src, U8 n, const Allocator *alloc, Error *e_rr) {
 
-static F32x4 Mesh_normalize3(F32x4 v) {
-	return F32x4_div(v, F32x4_xxxx4(F32x4_len3(v)));
+	Bool s_uccess = true;
+
+	if(!list || !src)
+		retError(clean, Error_nullPointer(0, "Mesh_appendF32()::list and src are required"));
+
+	const U64 at = list->length;
+
+	gotoIfError3(clean, ListF32_resize(list, at + n, alloc, e_rr));
+
+	Buffer_memcpy(
+		Buffer_createRef(list->ptrNonConst + at, (U64) n * sizeof(F32)),
+		Buffer_createRefConst(src, (U64) n * sizeof(F32))
+	);
+
+clean:
+	return s_uccess;
 }
 
 //---------------------------------------------------------------- Positions
@@ -363,9 +419,7 @@ Bool MeshPositions_push(MeshPositions *p, const F32 *position, const Allocator *
 	}
 
 	gotoIfError3(clean, Mesh_growF32(&p->held, &p->heldCapacity, p->held.length + 3, 3 * 1024, alloc, e_rr));
-
-	for(U8 i = 0; i < 3; ++i)
-		gotoIfError3(clean, ListF32_pushBack(&p->held, position[i], alloc, e_rr));
+	gotoIfError3(clean, Mesh_appendF32(&p->held, position, 3, alloc, e_rr));
 
 clean:
 	return s_uccess;
@@ -508,7 +562,7 @@ Bool MeshTriangles_emit(
 			//A degenerate triangle has no side to be on. Its normal packs to the +z encoding of a zero vector,
 			// which is what unpacking a zero word yields, and the material still rides above it.
 
-			const U32 oct = len2 > 0 ? U32_packOct18(Mesh_normalize3(n)) : U32_packOct18(F32x4_create3(0, 0, 1));
+			const U32 oct = len2 > 0 ? U32_packOct18(F32x4_normalize3(n)) : U32_packOct18(F32x4_create3(0, 0, 1));
 			const U32 word = MeshTriangle_pack(oct, material);
 
 			gotoIfError3(clean, MeshSink_write(t->words, &word, sizeof(word), e_rr));
@@ -541,47 +595,126 @@ void MeshTriangles_free(MeshTriangles *t, const Allocator *alloc) {
 
 //---------------------------------------------------------------- Attributes
 
+//The recognized shape, spelled once. Everything about it has to hold for the fast path to be the same bytes as
+//the walk: both attributes, both encodings, both offsets and a stride with nothing left over to zero.
+
+static Bool MeshAttributeLayout_isSimple(MeshAttributeLayout l) {
+	return
+		l.entryCount == 2 && l.stride == sizeof(MeshAttribute) &&
+		l.entries[0].attribute == EMeshAttribute_Normal &&
+		l.entries[0].encoding == EMeshAttributeEncoding_Oct &&
+		l.entries[0].format == ETextureFormatId_R32u &&
+		!l.entries[0].offset &&
+		l.entries[1].attribute == EMeshAttribute_Uv0 &&
+		l.entries[1].encoding == EMeshAttributeEncoding_Raw &&
+		l.entries[1].format == ETextureFormatId_RG16f &&
+		l.entries[1].offset == sizeof(U32);
+}
+
 void MeshAttributes_create(EMeshFlags flags, MeshSink *sink, MeshAttributes *attributes) {
+
+	const MeshAttributeLayout layout = MeshAttributeLayout_fromFlags(flags);
+
 	*attributes = (MeshAttributes) {
 		.sink = sink,
+		.layout = layout,
 		.hold = !!(flags & EMeshFlags_ComputeNormals),
-		.wide = !!(flags & EMeshFlags_WideUvs)
+		.simple = MeshAttributeLayout_isSimple(layout)
 	};
 }
 
 //Either record shape, from the same normal and uv.
 
-static Bool MeshAttributes_writeRecord(MeshAttributes *a, U32 normal, const F32 *uv, Error *e_rr) {
-
-	if(a->wide) {
-		const MeshAttributeWide attr = { .normal = normal, .uv = { uv[0], uv[1] } };
-		return MeshSink_write(a->sink, &attr, sizeof(attr), e_rr);
-	}
-
-	//Measured here because this is the only place a uv narrows, and both the streaming and the held path reach it.
-
-	for(U8 i = 0; i < 2; ++i) {
-
-		const F32 err = F32_abs(F16_castF32(F32_castF16(uv[i])) - uv[i]);
-
-		if(err > a->maxUvError)
-			a->maxUvError = err;
-	}
-
-	const MeshAttribute attr = { .normal = normal, .uv = U32_packF16x2(uv[0], uv[1]) };
-	return MeshSink_write(a->sink, &attr, sizeof(attr), e_rr);
-}
-
 //A normal the file did not supply packs as +z rather than as the zero vector, which has no octahedral encoding.
 
-static U32 Mesh_packNormal(const F32 *n) {
+U32 Mesh_packNormal(const F32 *n) {
 
 	const F32x4 v = F32x4_load3(n);
 
 	if(F32x4_sqLen3(v) <= 0)
 		return U32_packOct32(F32x4_create3(0, 0, 1));
 
-	return U32_packOct32(Mesh_normalize3(v));
+	return U32_packOct32(F32x4_normalize3(v));
+}
+
+static Bool MeshAttributes_writeRecord(MeshAttributes *a, const F32 *normal, const F32 *uv, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	//Assembled into a local of the layout's stride and written once, so where an attribute sits is the table's
+	//business and not the sink's. One the reader has no value for is left at zero rather than refused: a
+	// layout naming it is a consumer's request, not a claim the file carried it.
+
+	if(a->simple) {
+
+		const F16 u = F32_castF16(uv[0]), v = F32_castF16(uv[1]);
+		const MeshAttribute simple = { .normal = Mesh_packNormal(normal), .uv = (U32) u | ((U32) v << 16) };
+
+		const F32 back[2] = { F16_castF32(u), F16_castF32(v) };
+
+		for(U8 c = 0; c < 2; ++c) {
+
+			const F32 err = F32_abs(back[c] - uv[c]);
+
+			if(err > a->maxUvError)
+				a->maxUvError = err;
+		}
+
+		return MeshSink_write(a->sink, &simple, sizeof(simple), e_rr);
+	}
+
+	//Only the stride is zeroed, not the local: an attribute writes over its own bytes and what is left is the
+	// layout's gaps, which is what a consumer is entitled to read as zero.
+
+	U8 record[MeshAttributeLayout_maxEntries * 16];
+
+	Buffer_unsetAllBits(Buffer_createRef(record, a->layout.stride), NULL);
+
+	for(U8 i = 0; i < a->layout.entryCount; ++i) {
+
+		const MeshAttributeEntry ch = a->layout.entries[i];
+		U8 *at = record + ch.offset;
+
+		const F32 *src = NULL;
+		U8 count = 0;
+
+		switch(ch.attribute) {
+			case EMeshAttribute_Normal:  src = normal; count = 3; break;
+			case EMeshAttribute_Uv0:     src = uv;     count = 2; break;
+			default:                     continue;
+		}
+
+		if(ch.encoding == EMeshAttributeEncoding_Oct) {
+
+			const U32 packed = Mesh_packNormal(src);
+			Buffer_memcpy(Buffer_createRef(at, sizeof(packed)), Buffer_createRefConst(&packed, sizeof(packed)));
+			continue;
+		}
+
+		MeshAttribute_encode(at, ch.format, src, count);
+
+		//What a lossy attribute cost, read back from what was written so it holds for any format. Only the uv
+		// is reported, since that is the one a consumer addresses a texture with.
+
+		if(ch.attribute == EMeshAttribute_Uv0 && ch.format != ETextureFormatId_RG32f) {
+
+			F32 back[2] = { 0, 0 };
+			MeshAttribute_decode(at, ch.format, back, 2);
+
+			for(U8 c = 0; c < 2; ++c) {
+
+				const F32 err = F32_abs(back[c] - src[c]);
+
+				if(err > a->maxUvError)
+					a->maxUvError = err;
+			}
+		}
+	}
+
+	gotoIfError3(clean, MeshSink_write(a->sink, record, a->layout.stride, e_rr));
+
+clean:
+	return s_uccess;
 }
 
 Bool MeshAttributes_push(MeshAttributes *a, const F32 *normal, const F32 *uv, const Allocator *alloc, Error *e_rr) {
@@ -592,18 +725,17 @@ Bool MeshAttributes_push(MeshAttributes *a, const F32 *normal, const F32 *uv, co
 		goto clean;
 
 	if(!a->hold) {
-		gotoIfError3(clean, MeshAttributes_writeRecord(a, Mesh_packNormal(normal), uv, e_rr));
+		gotoIfError3(clean, MeshAttributes_writeRecord(a, normal, uv, e_rr));
 		goto clean;
 	}
 
-	//Held as five floats a vertex, the uv and room for the normal the finish fills in.
+	//Held as five floats a vertex: the normal the file gave, which may be nothing, and the uv. What the file
+	//left out is what the finish fills in from the accumulated sums.
 
-	const F32 held[5] = { 0, 0, 0, uv[0], uv[1] };
+	const F32 held[5] = { normal[0], normal[1], normal[2], uv[0], uv[1] };
 
 	gotoIfError3(clean, Mesh_growF32(&a->held, &a->heldCapacity, a->held.length + 5, 5 * 1024, alloc, e_rr));
-
-	for(U8 i = 0; i < 5; ++i)
-		gotoIfError3(clean, ListF32_pushBack(&a->held, held[i], alloc, e_rr));
+	gotoIfError3(clean, Mesh_appendF32(&a->held, held, 5, alloc, e_rr));
 
 clean:
 	return s_uccess;
@@ -623,12 +755,12 @@ Bool MeshAttributes_finish(MeshAttributes *a, const MeshTriangles *t, U32 vertex
 
 		const F32 *held = a->held.ptr + (U64) i * 5;
 
-		//A vertex no triangle touched, or only degenerate ones, has no normal to speak of and gets the +z a
-		// missing one packs as.
+		//The file's own normal wins. Only where it named none does the accumulated sum fill in, and a vertex no
+		// triangle touched, or only degenerate ones, has neither and gets the +z a missing one packs as.
 
-		F32 n[3] = { 0, 0, 0 };
+		F32 n[3] = { held[0], held[1], held[2] };
 
-		if((U64) i * 3 + 3 <= t->normalSums.length) {
+		if(!n[0] && !n[1] && !n[2] && (U64) i * 3 + 3 <= t->normalSums.length) {
 			const F32 *sum = t->normalSums.ptr + (U64) i * 3;
 			n[0] = sum[0]; n[1] = sum[1]; n[2] = sum[2];
 		}
@@ -636,7 +768,7 @@ Bool MeshAttributes_finish(MeshAttributes *a, const MeshTriangles *t, U32 vertex
 		if(!n[0] && !n[1] && !n[2])
 			a->placeholderNormal = true;
 
-		gotoIfError3(clean, MeshAttributes_writeRecord(a, Mesh_packNormal(n), held + 3, e_rr));
+		gotoIfError3(clean, MeshAttributes_writeRecord(a, n, held + 3, e_rr));
 	}
 
 clean:
