@@ -238,7 +238,7 @@ typedef enum EMeshFlags {
 
 static inline MeshAttributeLayout MeshAttributeLayout_create(const MeshAttributeEntry *entries, U8 count) {
 
-	MeshAttributeLayout layout = (MeshAttributeLayout) { 0 };
+	MeshAttributeLayout layout = (MeshAttributeLayout) { { { 0 } } };
 
 	if(!entries || !count || count > MeshAttributeLayout_maxEntries)
 		return layout;
@@ -250,7 +250,7 @@ static inline MeshAttributeLayout MeshAttributeLayout_create(const MeshAttribute
 		MeshAttributeEntry e = entries[i];
 
 		if(e.attribute >= EMeshAttribute_Count || e.encoding >= EMeshAttributeEncoding_Count)
-			return (MeshAttributeLayout) { 0 };
+			return (MeshAttributeLayout) { { { 0 } } };
 
 		//An oct encoded attribute is one U32 whatever format the caller named, because the width is the
 		// ENCODING's and not the format's.
@@ -259,17 +259,17 @@ static inline MeshAttributeLayout MeshAttributeLayout_create(const MeshAttribute
 			e.format = ETextureFormatId_R32u;
 
 		if(!ETextureFormatId_canCodec((ETextureFormatId) e.format))
-			return (MeshAttributeLayout) { 0 };
+			return (MeshAttributeLayout) { { { 0 } } };
 
 		for(U8 k = 0; k < i; ++k)
 			if(layout.entries[k].attribute == e.attribute)
-				return (MeshAttributeLayout) { 0 };
+				return (MeshAttributeLayout) { { { 0 } } };
 
 		e.offset = (U8) at;
 		at += ETextureFormatId_texelBytes((ETextureFormatId) e.format);
 
 		if(at > 0xFF)
-			return (MeshAttributeLayout) { 0 };
+			return (MeshAttributeLayout) { { { 0 } } };
 
 		layout.entries[i] = e;
 	}
