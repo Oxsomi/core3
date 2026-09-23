@@ -483,6 +483,7 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsBindfulReservedSpace(t, deviceRef);
 	c::Test_graphicsBindfulPushClass(t, deviceRef);
 	c::Test_graphicsGpuExecute(t, deviceRef);
+	c::Test_graphicsBufferStream(t, deviceRef);
 	c::Test_graphicsAccelerationStructures(t, deviceRef);
 
 	//31-33. Shader execution: real dispatches, draws and traces with verified results, plus the pipelines

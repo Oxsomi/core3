@@ -315,6 +315,119 @@ static inline Bool MeshPositionFormat_isQuantized(ETextureFormatId id) {
 	return p == ETexturePrimitive_SNorm || p == ETexturePrimitive_UNorm;
 }
 
+//---------------------------------------------------------------- What a file DECLARES
+
+//A binary vertex body is a fixed stride array of records, and this is one field of one record: which of the
+//reader's outputs it feeds, which component of that output, how it is stored and where it sits.
+//Only what is WANTED gets a row. A file may declare sixty properties a reader has no use for, and those cost
+// nothing here beyond the stride they occupy.
+
+typedef enum EMeshVertexSemantic {
+
+	EMeshVertexSemantic_Position,
+	EMeshVertexSemantic_Normal,
+	EMeshVertexSemantic_Uv0,
+
+	EMeshVertexSemantic_Count
+
+} EMeshVertexSemantic;
+
+//Every scalar a vertex body can store one of these, which is what lets the plan be walked rather than switched
+// on per format. Named apart from ETextureFormatId because a source field is a SCALAR and not a texel: a
+// position is three of these at three offsets, where a texel format would make it one RGB32f.
+
+typedef enum EMeshScalarType {
+
+	EMeshScalarType_I8,  EMeshScalarType_U8,
+	EMeshScalarType_I16, EMeshScalarType_U16,
+	EMeshScalarType_I32, EMeshScalarType_U32,
+	EMeshScalarType_F32, EMeshScalarType_F64,
+
+	EMeshScalarType_Count
+
+} EMeshScalarType;
+
+static inline U8 EMeshScalarType_bytes(EMeshScalarType t) {
+	const U8 sizes[EMeshScalarType_Count] = { 1, 1, 2, 2, 4, 4, 4, 8 };
+	return t < EMeshScalarType_Count ? sizes[t] : 0;
+}
+
+#define MeshHeader_maxPlan 16
+
+typedef struct MeshPlanEntry {
+	U8 semantic;                  //EMeshVertexSemantic
+	U8 component;                 //Which component of it, 0 based
+	U8 type;                      //EMeshScalarType
+	U8 padding;
+	U16 offset;                   //Bytes into one record
+	U8 padding2[2];
+} MeshPlanEntry;
+
+//What a file declares, WITHOUT the data: enough to size a destination, to decide whether the body can be read
+//out of order, and to seek straight to a record.
+//
+//vertexStride is nonzero only where the body is FIXED STRIDE, and that is the flag everything keys on: vertex
+//v then sits at bodyOffset + v * vertexStride, so a range read, a partial update and a device parse are all
+// possible. A text body, or one whose vertex element declares a list, reports zero and has to be read in
+// order from the start.
+//
+//The plan is the same table a device kernel wants as push constants, which is why it is here rather than left
+// inside the reader that resolved it.
+
+typedef struct MeshHeader {
+
+	U64 bodyOffset;               //Stream offset the first vertex record sits at
+
+	U32 vertexCount;
+	U32 faceCount;
+
+	//Where the FACE records start, and what one is made of. A face is a list, so its records are not a fixed
+	//stride in general: the count comes first and the indices follow it, and a file may mix arities freely.
+	//What this reports is where they begin and how wide each part is, which is enough for a consumer to read
+	// the first count and, if it decides to assume that arity, compute every record's offset from it.
+	//Zero where nothing before the faces was fixed stride, so the offset could not be computed without
+	// reading the body.
+
+	U64 faceOffset;
+
+	U16 vertexStride;             //0 where the body is not fixed stride
+	U8 planCount;
+	Bool bigEndian;               //Whether a scalar's bytes are in the file's order rather than the host's
+
+	U8 faceCountType;             //EMeshScalarType of a face's corner count
+	U8 faceIndexType;             //EMeshScalarType of one of its indices
+	U8 padding[2];
+
+	MeshPlanEntry plan[MeshHeader_maxPlan];
+
+} MeshHeader;
+
+//What one face record occupies IF every face has this many corners. Zero where the header could not describe
+// the face element at all, which is a file whose faces cannot be addressed without reading them in order.
+
+static inline U64 MeshHeader_faceStride(const MeshHeader *h, U32 corners) {
+
+	if(!h || !h->faceOffset || !corners)
+		return 0;
+
+	return EMeshScalarType_bytes((EMeshScalarType) h->faceCountType) +
+		(U64) corners * EMeshScalarType_bytes((EMeshScalarType) h->faceIndexType);
+}
+
+//Where an entry of the plan writes to, or NULL when the plan does not carry that component.
+
+static inline const MeshPlanEntry *MeshHeader_find(const MeshHeader *h, EMeshVertexSemantic c, U8 component) {
+
+	if(!h)
+		return NULL;
+
+	for(U8 i = 0; i < h->planCount; ++i)
+		if(h->plan[i].semantic == (U8) c && h->plan[i].component == component)
+			return h->plan + i;
+
+	return NULL;
+}
+
 //Where a reader puts what it read. Two of the four are optional, and a reader asked for neither never computes
 // what they would have held.
 //The counts are not known until the end, so a resizable sink grows geometrically as it fills and one that cannot

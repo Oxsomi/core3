@@ -1413,11 +1413,15 @@ Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *
 
 	//The Vulkan twin hints the same way; see EGraphicsDeviceMessage_SubmitFlushed
 
-	if(GraphicsDevice_logOnce(GraphicsDeviceRef_ptr(deviceRef), EGraphicsDeviceMessage_SubmitFlushed))
+	const U64 splits = GraphicsDevice_logThrottled(
+		GraphicsDeviceRef_ptr(deviceRef), EGraphicsDeviceMessage_SubmitFlushed, 1 * SECOND
+	);
+
+	if(splits)
 		Log_performanceLnx(
 			"D3D12: submit was split mid recording because pending copies or AS builds crossed the flush "
 			"threshold, which adds a GPU sync point; raise flushThreshold or batch smaller uploads "
-			"(only logged once)"
+			"(%u since the last report)", (U32) splits
 		);
 
 	Bool s_uccess = true;

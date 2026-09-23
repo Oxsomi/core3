@@ -102,6 +102,10 @@ void Test_graphicsVirtualSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsPhysicalSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef);
+
+//A buffer whose upload source is a stream rather than a host buffer.
+
+void Test_graphicsBufferStream(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsShaderCompute(Test *t, GraphicsDeviceRef *deviceRef);

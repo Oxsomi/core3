@@ -55,6 +55,37 @@ Bool Ply_read(
 	Error *e_rr
 );
 
+//The header ALONE: counts, the body offset and whether the body is fixed stride, without touching the data.
+//What it fills is described in types/mesh/mesh.h. Left at the first byte of the body, so a caller can hand the
+// same stream and offset to Ply_read and lose nothing by having asked.
+
+Bool Ply_readHeader(
+	StreamRef *stream,
+	U64 *off,                     //Left at the body, which is MeshHeader::bodyOffset
+	MeshInfo *info,
+	MeshHeader *header,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+//One span of the vertex element, for a body Ply_readHeader reported a stride for. Positions and attributes
+//only: a face names arbitrary vertices, so there is no span of them that means anything on its own.
+//
+//MERGES into info, so zero it before the first span and read the totals after the last.
+//Refuses ComputeNormals and QuantizePositions, both of which need the whole mesh; derive them afterwards.
+
+Bool Ply_readRange(
+	StreamRef *stream,
+	const MeshHeader *header,
+	EMeshFlags flags,
+	U32 firstVertex,
+	U32 vertexCount,
+	MeshInfo *info,
+	const MeshOutput *output,     //positions required, attributes optional, indices and triangles unused
+	const Allocator *alloc,
+	Error *e_rr
+);
+
 typedef enum EPlyWriteFormat {
 	EPlyWriteFormat_Ascii,
 	EPlyWriteFormat_BinaryLittleEndian,

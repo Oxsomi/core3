@@ -151,7 +151,7 @@ static U8 Ply_vertexSemantic(CharString name, Bool *sawU, Bool *sawV) {
 	return EPlySemantic_None;
 }
 
-static Bool Ply_readHeader(
+static Bool Ply_parseHeader(
 	MeshSource *src, C8 *line, PlyHeader *header, MeshInfo *info, const Allocator *alloc, Error *e_rr
 ) {
 
@@ -490,6 +490,330 @@ clean:
 	return s_uccess;
 }
 
+//A fixed width record is the common binary case and the only one worth a bulk read, so the width is worked
+//out once per element rather than per record. Zero where the element declares a list, whose width is not known
+// until the count itself is read, or where the record is wider than the buffer that would hold it.
+
+static void Ply_resolveStrides(PlyHeader *header) {
+
+	for(U64 e = 0; e < header->elements.length; ++e) {
+
+		PlyElement *el = header->elements.ptrNonConst + e;
+		U64 stride = 0;
+
+		for(U32 pi = 0; pi < el->propertyCount && stride <= PLY_RECORD_CAP; ++pi) {
+
+			const PlyProperty *prop = header->properties.ptr + el->firstProperty + pi;
+
+			if(prop->isList) {
+				stride = 0;
+				break;
+			}
+
+			stride += Ply_typeSize[prop->type];
+		}
+
+		el->stride = (U16) (stride && stride <= PLY_RECORD_CAP ? stride : 0);
+	}
+}
+
+//EPlyType and EMeshScalarType name the same eight scalars in the same order, so the map is a cast. Spelled as
+// a table anyway, because two enums agreeing by coincidence is exactly what a later edit breaks silently.
+
+static const U8 Ply_toScalarType[EPlyType_Count] = {
+	EMeshScalarType_I8,  EMeshScalarType_U8,
+	EMeshScalarType_I16, EMeshScalarType_U16,
+	EMeshScalarType_I32, EMeshScalarType_U32,
+	EMeshScalarType_F32, EMeshScalarType_F64
+};
+
+static const U8 Ply_fromScalarType[EMeshScalarType_Count] = {
+	EPlyType_Char,  EPlyType_UChar,
+	EPlyType_Short, EPlyType_UShort,
+	EPlyType_Int,   EPlyType_UInt,
+	EPlyType_Float, EPlyType_Double
+};
+
+//What the PLY header says, as the format independent description in types/mesh. Only the properties a reader
+//has a use for get a row: a gaussian splat declares 62 of them and 54 are spherical harmonics nothing here
+// reads, which cost only the stride they occupy.
+
+static Bool Ply_fillMeshHeader(const PlyHeader *header, U64 bodyOffset, MeshHeader *out, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	*out = (MeshHeader) { .bodyOffset = bodyOffset, .bigEndian = header->format == EPlyFormat_BigEndian };
+
+	//Walked in DECLARATION order with the offset accumulating, because that is the order the body is in: an
+	//element of unknown width makes every offset after it unknown too, which is what `at` going stale means.
+
+	U64 at = bodyOffset;
+	Bool offsetKnown = header->format != EPlyFormat_Ascii;
+
+	for(U64 e = 0; e < header->elements.length; ++e) {
+
+		const PlyElement *el = header->elements.ptr + e;
+
+		if(el->isFace) {
+
+			out->faceCount = el->count;
+
+			//One list property is the shape a face has to be for any of this to mean anything.
+
+			if(offsetKnown && el->propertyCount == 1) {
+
+				const PlyProperty *prop = header->properties.ptr + el->firstProperty;
+
+				if(prop->isList && prop->semantic == EPlySemantic_Indices) {
+					out->faceOffset = at;
+					out->faceCountType = Ply_toScalarType[prop->countType];
+					out->faceIndexType = Ply_toScalarType[prop->type];
+				}
+			}
+
+			//A face element's width depends on every count in it, so nothing after it can be addressed.
+
+			offsetKnown = false;
+			continue;
+		}
+
+		if(!el->isVertex) {
+
+			//Skipped, but its bytes still shift everything after it.
+
+			if(!el->stride)
+				offsetKnown = false;
+
+			else at += (U64) el->count * el->stride;
+
+			continue;
+		}
+
+		out->vertexCount = el->count;
+
+		//Ascii has no record to seek to, whatever the properties say, so the stride stays zero there.
+
+		out->vertexStride = header->format == EPlyFormat_Ascii ? 0 : el->stride;
+
+		if(out->vertexStride)
+			at += (U64) el->count * out->vertexStride;
+
+		else offsetKnown = false;
+
+		U16 fieldAt = 0;
+
+		for(U32 pi = 0; pi < el->propertyCount; ++pi) {
+
+			const PlyProperty *prop = header->properties.ptr + el->firstProperty + pi;
+			U8 semantic = EMeshVertexSemantic_Count, component = 0;
+
+			switch(prop->semantic) {
+
+				case EPlySemantic_X: case EPlySemantic_Y: case EPlySemantic_Z:
+					semantic = EMeshVertexSemantic_Position;
+					component = (U8) (prop->semantic - EPlySemantic_X);
+					break;
+
+				case EPlySemantic_NX: case EPlySemantic_NY: case EPlySemantic_NZ:
+					semantic = EMeshVertexSemantic_Normal;
+					component = (U8) (prop->semantic - EPlySemantic_NX);
+					break;
+
+				case EPlySemantic_U: case EPlySemantic_V:
+					semantic = EMeshVertexSemantic_Uv0;
+					component = (U8) (prop->semantic - EPlySemantic_U);
+					break;
+
+				default: break;
+			}
+
+			if(semantic != EMeshVertexSemantic_Count) {
+
+				if(out->planCount >= MeshHeader_maxPlan)
+					retError(clean, Error_outOfBounds(
+						0, out->planCount, MeshHeader_maxPlan, "Ply_readHeader() more wanted properties than the plan holds"
+					));
+
+				out->plan[out->planCount++] = (MeshPlanEntry) {
+					.semantic = semantic,
+					.component = component,
+					.type = Ply_toScalarType[prop->type],
+					.offset = fieldAt
+				};
+			}
+
+			fieldAt = (U16) (fieldAt + Ply_typeSize[prop->type]);
+		}
+	}
+
+clean:
+	return s_uccess;
+}
+
+//---------------------------------------------------------------- Header and range
+
+Bool Ply_readHeader(
+	StreamRef *stream, U64 *off, MeshInfo *info, MeshHeader *header, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	MeshSource src = (MeshSource) { 0 };
+	Buffer lineBuf = Buffer_createNull();
+	PlyHeader headerData = (PlyHeader) { 0 };
+
+	if(!stream || !off || !info || !header)
+		retError(clean, Error_nullPointer(0, "Ply_readHeader()::stream, off, info and header are required"));
+
+	*info = (MeshInfo) { 0 };
+	*header = (MeshHeader) { 0 };
+
+	gotoIfError3(clean, MeshSource_create(stream, *off, alloc, &src, e_rr));
+	gotoIfError3(clean, Buffer_createUninitializedBytes(MESH_LINE_CAP, alloc, &lineBuf, e_rr));
+
+	gotoIfError3(clean, Ply_parseHeader(&src, (C8*) lineBuf.ptrNonConst, &headerData, info, alloc, e_rr));
+
+	Ply_resolveStrides(&headerData);
+	gotoIfError3(clean, Ply_fillMeshHeader(&headerData, MeshSource_offset(&src), header, e_rr));
+
+	info->allNormals = info->hasNormals;
+	info->allUvs = info->hasUvs;
+
+	*off = header->bodyOffset;
+
+clean:
+	ListPlyElement_free(&headerData.elements, alloc);
+	ListPlyProperty_free(&headerData.properties, alloc);
+	Buffer_free(&lineBuf, alloc);
+	MeshSource_free(&src);
+	return s_uccess;
+}
+
+//One span of the VERTEX element, decoded through the plan the header resolved. Faces are not spanned: a face
+//names arbitrary vertices, so a range of them is only meaningful once every vertex it could name is in hand,
+// which is the whole file.
+//
+//MERGES into info rather than overwriting it, so a caller zeroes it before the first span and reads the
+// totals after the last. vertexCount is what says whether a bound has been seen yet.
+//
+//ComputeNormals and QuantizePositions are refused: a normal sums over faces this span cannot see, and a
+// quantized position needs bounds no span knows before the last one is read. Derive both afterwards.
+
+Bool Ply_readRange(
+	StreamRef *stream,
+	const MeshHeader *header,
+	EMeshFlags flags,
+	U32 firstVertex,
+	U32 vertexCount,
+	MeshInfo *info,
+	const MeshOutput *output,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	MeshSource src = (MeshSource) { 0 };
+	MeshSink positionSink = (MeshSink) { 0 }, attributeSink = (MeshSink) { 0 };
+	MeshPositions positions = (MeshPositions) { 0 };
+	MeshAttributes attrs = (MeshAttributes) { 0 };
+
+	U8 recBuf[PLY_RECORD_CAP];
+
+	if(!stream || !header || !info || !output)
+		retError(clean, Error_nullPointer(0, "Ply_readRange()::stream, header, info and output are required"));
+
+	if(!output->positions)
+		retError(clean, Error_nullPointer(6, "Ply_readRange()::output->positions is required"));
+
+	if(!header->vertexStride)
+		retError(clean, Error_invalidState(
+			0, "Ply_readRange() the body is not fixed stride, so no record can be seeked to"
+		));
+
+	if(flags & (EMeshFlags_ComputeNormals | EMeshFlags_QuantizePositions))
+		retError(clean, Error_unsupportedOperation(
+			2, "Ply_readRange() ComputeNormals and QuantizePositions both need the whole mesh"
+		));
+
+	if((U64) firstVertex + vertexCount > header->vertexCount)
+		retError(clean, Error_outOfBounds(
+			3, (U64) firstVertex + vertexCount, header->vertexCount, "Ply_readRange() span past the vertex count"
+		));
+
+	gotoIfError3(clean, MeshSource_create(
+		stream, header->bodyOffset + (U64) firstVertex * header->vertexStride, alloc, &src, e_rr
+	));
+
+	gotoIfError3(clean, MeshSink_create(output->positions, output->positionOffset, alloc, &positionSink, e_rr));
+	gotoIfError3(clean, MeshSink_create(output->attributes, output->attributeOffset, alloc, &attributeSink, e_rr));
+
+	MeshPositions_create(flags, &positionSink, &positions);
+	MeshAttributes_create(flags, &attributeSink, &attrs);
+
+	const U8 format = header->bigEndian ? EPlyFormat_BigEndian : EPlyFormat_LittleEndian;
+
+	for(U32 v = 0; v < vertexCount; ++v) {
+
+		//In the window where the whole record sits there, copied across the boundary where it does not, which
+		// is once a window rather than once a record.
+
+		U64 avail = 0;
+		gotoIfError3(clean, MeshSource_available(&src, &avail, e_rr));
+
+		const U8 *rec;
+
+		if(avail >= header->vertexStride) {
+			rec = MeshSource_ptr(&src);
+			MeshSource_advance(&src, header->vertexStride);
+		}
+
+		else {
+			gotoIfError3(clean, MeshSource_readBytes(&src, recBuf, header->vertexStride, e_rr));
+			rec = recBuf;
+		}
+
+		F32 p[3] = { 0, 0, 0 }, n[3] = { 0, 0, 0 }, uv[2] = { 0, 0 };
+		F32 *const dst[EMeshVertexSemantic_Count] = { p, n, uv };
+
+		for(U8 k = 0; k < header->planCount; ++k) {
+
+			const MeshPlanEntry e = header->plan[k];
+
+			dst[e.semantic][e.component] =
+				(F32) Ply_decodeScalar(rec + e.offset, (U8) Ply_fromScalarType[e.type], format);
+		}
+
+		gotoIfError3(clean, MeshPositions_push(&positions, p, alloc, e_rr));
+		gotoIfError3(clean, MeshAttributes_push(&attrs, n, uv, alloc, e_rr));
+	}
+
+	//The span's own bounds, folded into whatever the caller already had.
+
+	MeshInfo span = (MeshInfo) { 0 };
+	gotoIfError3(clean, MeshPositions_finish(&positions, &span, e_rr));
+	gotoIfError3(clean, MeshAttributes_finish(&attrs, NULL, vertexCount, e_rr));
+
+	for(U8 i = 0; i < 3; ++i) {
+		info->aabbMin[i] = !info->vertexCount ? span.aabbMin[i] : F32_min(info->aabbMin[i], span.aabbMin[i]);
+		info->aabbMax[i] = !info->vertexCount ? span.aabbMax[i] : F32_max(info->aabbMax[i], span.aabbMax[i]);
+	}
+
+	info->vertexCount += vertexCount;
+	info->maxUvError = F32_max(info->maxUvError, attrs.maxUvError);
+
+	gotoIfError3(clean, MeshSink_flush(&positionSink, e_rr));
+	gotoIfError3(clean, MeshSink_flush(&attributeSink, e_rr));
+
+clean:
+	MeshAttributes_free(&attrs, alloc);
+	MeshPositions_free(&positions, alloc);
+	MeshSink_free(&attributeSink);
+	MeshSink_free(&positionSink);
+	MeshSource_free(&src);
+	return s_uccess;
+}
+
 Bool Ply_read(
 	StreamRef *stream,
 	U64 *off,
@@ -538,7 +862,7 @@ Bool Ply_read(
 	gotoIfError3(clean, Buffer_createUninitializedBytes(MESH_LINE_CAP, alloc, &lineBuf, e_rr));
 	C8 *line = (C8*) lineBuf.ptrNonConst;
 
-	gotoIfError3(clean, Ply_readHeader(&src, line, &headerData, info, alloc, e_rr));
+	gotoIfError3(clean, Ply_parseHeader(&src, line, &headerData, info, alloc, e_rr));
 	PlyHeader *header = &headerData;
 
 	//A PLY property is declared on the ELEMENT, so either every vertex carries one or none does. Partial
@@ -560,28 +884,7 @@ Bool Ply_read(
 	MeshTriangles_create(bodyFlags, &indexSink, &wordSink, &triangles);
 	MeshAttributes_create(bodyFlags, &attributeSink, &attrs);
 
-	//A fixed width record is the common binary case and the only one worth a bulk read, so the width is worked
-	//out once here rather than per element.
-
-	for(U64 e = 0; e < header->elements.length; ++e) {
-
-		PlyElement *el = header->elements.ptrNonConst + e;
-		U64 stride = 0;
-
-		for(U32 pi = 0; pi < el->propertyCount && stride <= PLY_RECORD_CAP; ++pi) {
-
-			const PlyProperty *prop = header->properties.ptr + el->firstProperty + pi;
-
-			if(prop->isList) {
-				stride = 0;
-				break;
-			}
-
-			stride += Ply_typeSize[prop->type];
-		}
-
-		el->stride = (U16) (stride && stride <= PLY_RECORD_CAP ? stride : 0);
-	}
+	Ply_resolveStrides(header);
 
 	const Bool keepPositions = MeshTriangles_needsPositions(&triangles);
 

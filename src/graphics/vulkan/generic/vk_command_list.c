@@ -311,7 +311,7 @@ static void VkCommandBufferState_bindDescriptors(
 				buffers[writeCount] = (VkDescriptorBufferInfo) {
 					.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Vk)->buffer,
 					.offset = Descriptor_startBuffer(&d),
-					.range = Descriptor_bufferLength(&d)
+					.range = Descriptor_bufferViewLength(&d, type)
 				};
 
 				writes[writeCount].descriptorType =

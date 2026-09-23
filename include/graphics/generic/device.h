@@ -23,6 +23,7 @@
 #pragma once
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/device_allocator.h"
+#include "types/container/job_queue.h"
 #include "graphics/generic/resource.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
@@ -115,6 +116,11 @@ typedef enum EGraphicsDeviceMessage {
 
 } EGraphicsDeviceMessage;
 
+//How many distinct messages the enum above carries, which is what the per message throttle state is sized by.
+//Kept out of the enum itself so a count can never be OR'd into a bit set by accident.
+
+#define EGraphicsDeviceMessage_Bits 4
+
 //The GPU time of one timestamp result, keyed by both a caller id and a name so a hot path reads it back by id
 // without comparing strings while a casual caller uses the name. gpuNs is a region's delta or a point's absolute
 // tick time, and is 0 when the query did not resolve.
@@ -159,6 +165,12 @@ typedef struct GraphicsDevice {
 	U8 fifId;                //(submitId - 1) % FRAMES_IN_FLIGHT
 
 	AtomicI64 runtimeMessages;                              //EGraphicsDeviceMessage bits that already logged
+
+	//Throttle state for the messages that report LOAD rather than a fact, indexed by the message's bit
+	//position: when that message last logged, and how many occurrences have been folded in since.
+
+	AtomicI64 logLast[EGraphicsDeviceMessage_Bits];
+	AtomicI64 logFolded[EGraphicsDeviceMessage_Bits];
 
 	Ns lastSubmit;
 
@@ -247,6 +259,12 @@ typedef struct GraphicsDevice {
 	DescriptorTableRef *defaultDescriptorTable;
 
 	DescriptorHeapRef *defaultDescriptorHeaps;
+
+	//BORROWED for the length of one submit, never owned and never outliving that call, which is why it is
+	//passed to the submit rather than handed to the device: the upload work begins and ends inside it.
+	//NULL means every source read runs on the calling thread, which is what every existing submit does.
+
+	JobQueue *uploadJobQueue;
 
 } GraphicsDevice;
 
@@ -344,6 +362,23 @@ U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDevic
 //Submit commands to device.
 //Per dispatch data a shader needs travels as a push constant, which the shader declares and the pipeline
 //layout validates, rather than through a block of untyped bytes that every shader shared.
+//The same submit with a JobQueue LENT to it, so source reads worth splitting are fanned across it. The queue
+//is borrowed for exactly this call and cleared on the way out, failure included, so it never outlives it.
+//Lent rather than owned because the work begins and ends inside the call: an engine hands over the same queue
+// it already runs instead of core3 keeping one of its own and competing with it for the same cores.
+//A stream is only ever read concurrently where it DECLARES EStreamType_ConcurrentRead; one that does not is
+// serialized against itself and still runs beside other work on the queue.
+
+Bool GraphicsDeviceRef_submitCommandsJob(
+	GraphicsDeviceRef *deviceRef,
+	const ListCommandListRef *commandLists,
+	const ListSwapchainRef *swapchains,
+	F32 deltaTime,
+	F32 time,
+	JobQueue *uploadQueue,
+	Error *e_rr
+);
+
 Bool GraphicsDeviceRef_submitCommands(
 
 	GraphicsDeviceRef *deviceRef,
@@ -386,6 +421,17 @@ Bool GraphicsDevice_resolveTimings(
 //True exactly once per device per message, so the caller logs on true and stays silent forever after.
 
 Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message);
+
+//The twin for a message that reports current LOAD rather than a fact about the device. logOnce is right where
+//the first line already says everything and the condition will never change; it is wrong where the useful
+// signal is how OFTEN, since a run that trips the condition every frame then reports it once and looks fine.
+//
+//Returns 0 to suppress, otherwise how many occurrences have happened since it last reported, this one
+//included, so the line can carry the count rather than implying it happened once.
+//Two threads crossing the interval together can report twice or fold an occurrence into the next line, which
+// is a tolerance a log can afford and a lock here would not be worth.
+
+U64 GraphicsDevice_logThrottled(GraphicsDevice *device, EGraphicsDeviceMessage message, Ns interval);
 
 //Create the pullRegion readback buffers ahead of time, sized for sizePerFrame bytes of pulls per frame.
 //The readback memory is otherwise created at the first pull, which on D3D12 can bring in a whole new memory

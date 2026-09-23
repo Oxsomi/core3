@@ -45,7 +45,11 @@ ARIT_OP(T);                                                                     
 static inline T T##_saturate(T v) { return T##_clamp(v, 0, 1); }                                        \
 																										\
 static inline T T##_lerp(T a, T b, T perc) { return a + (b - a) * perc; }                               \
-static inline T T##_abs(T v) { return v < 0 ? -v : v; }                                                 \
+																										\
+/* ZERO is compared, not branched past: -0 < 0 is FALSE, v < 0 ? -v : v hands -0 straight back  */      \
+/* with its sign set, where abs has to clear. The SIMD backends mask the bit and agree by doing so. */  \
+																										\
+static inline T T##_abs(T v) { return v == 0 ? (T) 0 : (v < 0 ? -v : v); }                              \
 T T##_sqrt(T v);                                                                                        \
 																										\
 Bool T##_isNaN(T v);                                                                                    \

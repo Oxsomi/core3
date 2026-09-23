@@ -108,6 +108,12 @@ static inline F32x4 F32x4_rsqrtFast(F32x4 a) { return _mm_rsqrt_ps(a); }
 
 	#include <immintrin.h>
 
+	//The header is already in, so the intrinsic costs nothing here that the SVML calls below have not paid.
+	//It is defined in BOTH halves of this branch: fma is not an SVML function and a compiler that has SVML
+	// still needs it.
+
+	static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return _mm_fmadd_ps(a, b, c); }    //a * b + c
+
 	static inline F32x4 F32x4_pow(F32x4 v, F32x4 e) { return _mm_pow_ps(v, e); }
 	static inline F32x4 F32x4_loge(F32x4 v) { return _mm_log_ps(v); }
 	static inline F32x4 F32x4_log10(F32x4 v) { return _mm_log10_ps(v); }

@@ -37,6 +37,10 @@ OXC3_TEST_MAIN(formats_ply) {
 	Test_plyQuantizedPositions(&t);
 	Test_plyManyProperties(&t);
 	Test_plyValidation(&t);
+	Test_plyHeader(&t);
+	Test_plyHeaderNotFixedStride(&t);
+	Test_plyHeaderAsciiNoStride(&t);
+	Test_plyRange(&t);
 	Test_plyWrite(&t);
 	Test_plyWriteByteOrder(&t);
 	Test_plyWriteGeometryOnly(&t);

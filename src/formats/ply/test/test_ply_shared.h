@@ -33,6 +33,13 @@ void Test_plyQuantizedPositions(Test *t);
 void Test_plyManyProperties(Test *t);
 void Test_plyValidation(Test *t);
 
+//The header alone, and the body read as spans of it.
+
+void Test_plyHeader(Test *t);
+void Test_plyHeaderNotFixedStride(Test *t);
+void Test_plyHeaderAsciiNoStride(Test *t);
+void Test_plyRange(Test *t);
+
 void Test_plyWrite(Test *t);
 void Test_plyWriteByteOrder(Test *t);
 void Test_plyWriteGeometryOnly(Test *t);

@@ -571,7 +571,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
 						.Buffer = (D3D12_BUFFER_UAV) {
 							.FirstElement = Descriptor_startBuffer(&d) / 4,
-							.NumElements = (U32)(Descriptor_bufferLength(&d) / 4),
+							.NumElements = (U32)(Descriptor_bufferViewLength(&d, type) / 4),
 							.Flags = D3D12_BUFFER_UAV_FLAG_RAW
 						}
 					};
@@ -593,7 +593,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 						.Buffer = (D3D12_BUFFER_SRV) {
 							.FirstElement = Descriptor_startBuffer(&d) / 4,
-							.NumElements = (U32)(Descriptor_bufferLength(&d) / 4),
+							.NumElements = (U32)(Descriptor_bufferViewLength(&d, type) / 4),
 							.Flags = D3D12_BUFFER_SRV_FLAG_RAW
 						}
 					};

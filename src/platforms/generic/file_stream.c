@@ -122,13 +122,18 @@ Bool FileHandle_openStream(
 	Bool isWrite = EFileOpenType_isWrite(type);
 	U64 fileSize = FileHandle_fileSize(fh);
 
+	//A read only file stream declares CONCURRENT reads. FileStream_read is a positional pread, which neither
+	//uses nor moves the handle's shared offset, so two threads reading disjoint ranges of one handle cannot
+	// disturb each other. A WRITABLE stream declares nothing: its size moves under a reader, and the write
+	// path updates that size without synchronizing against one.
+
 	gotoIfError3(clean, Stream_create(
 		isRead  ? FileStream_read  : NULL,
 		isWrite ? FileStream_write : NULL,
 		NULL,                        //reserve
 		FileStream_close,
 		fileSize,
-		EStreamType_File | (isWrite ? EStreamType_Resizable : 0),
+		EStreamType_File | (isWrite ? EStreamType_Resizable : EStreamType_ConcurrentRead),
 		streamType,
 		stream,
 		e_rr

@@ -2310,6 +2310,36 @@ clean:
 	return s_uccess;
 }
 
+//Every exit path clears the queue, the failing ones included: a borrowed queue that outlived this call would
+// be read by a flush after the lender had freed it.
+
+Bool GraphicsDeviceRef_submitCommandsJob(
+	GraphicsDeviceRef *deviceRef,
+	const ListCommandListRef *commandLists,
+	const ListSwapchainRef *swapchains,
+	F32 deltaTime,
+	F32 time,
+	JobQueue *uploadQueue,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!deviceRef)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_submitCommandsJob()::deviceRef is required"));
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	device->uploadJobQueue = uploadQueue;
+
+	s_uccess = GraphicsDeviceRef_submitCommands(deviceRef, commandLists, swapchains, deltaTime, time, e_rr);
+
+	device->uploadJobQueue = NULL;
+
+clean:
+	return s_uccess;
+}
+
 Bool GraphicsDeviceRef_submitCommands(
 	GraphicsDeviceRef *deviceRef,
 	const ListCommandListRef *commandLists,
@@ -2615,6 +2645,45 @@ Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage messa
 	//Fetch or returns the PREVIOUS bits, so the first caller sees the bit clear and everyone after sees it set
 
 	return !(AtomicI64_or(&device->runtimeMessages, (I64) message) & (I64) message);
+}
+
+U64 GraphicsDevice_logThrottled(GraphicsDevice *device, EGraphicsDeviceMessage message, Ns interval) {
+
+	if(!device)
+		return 0;
+
+	//The state is indexed by the message's BIT POSITION, so anything that is not a single known bit has no
+	// slot and is reported every time rather than silently never.
+
+	U64 bit = (U64) message;
+
+	if(!bit || (bit & (bit - 1)))
+		return 1;
+
+	U8 slot = 0;
+
+	while(bit > 1) {
+		bit >>= 1;
+		++slot;
+	}
+
+	if(slot >= EGraphicsDeviceMessage_Bits)
+		return 1;
+
+	AtomicI64_inc(&device->logFolded[slot]);
+
+	const Ns now = Time_now();
+	const I64 last = AtomicI64_load(&device->logLast[slot]);
+
+	if(last && (Ns) last + interval > now)
+		return 0;
+
+	//Whoever claims the window reports; everyone else folds into the next one.
+
+	if(AtomicI64_cmpStore(&device->logLast[slot], last, (I64) now) != last)
+		return 0;
+
+	return (U64) AtomicI64_store(&device->logFolded[slot], 0);
 }
 
 Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {

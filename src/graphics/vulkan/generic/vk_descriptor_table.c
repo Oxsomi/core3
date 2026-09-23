@@ -453,7 +453,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 					buf[i] = (VkDescriptorBufferInfo) {
 						.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Vk)->buffer,
 						.offset = Descriptor_startBuffer(&d),
-						.range = Descriptor_bufferLength(&d)
+						.range = Descriptor_bufferViewLength(&d, type)
 					};
 
 				else buf[i] = (VkDescriptorBufferInfo) { 0 };

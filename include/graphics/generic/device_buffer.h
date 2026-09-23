@@ -21,8 +21,9 @@
 //graphics/generic/device_buffer.h
 
 #pragma once
-#include "types/base/lock.h"
 #include "graphics/generic/resource.h"
+#include "types/container/stream.h"
+#include "types/base/lock.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -67,11 +68,23 @@ typedef struct DeviceBuffer {
 
 	EDeviceBufferUsage usage;
 	Bool isPendingFullCopy, isPending, isFirstFrame;
-	U8 padding0;
+
+	//Whether cpuStream survives the upload that consumed it. Off, it is dropped the way cpuData is.
+
+	Bool keepStream;
 
 	DescriptorTableRef *bindlessDescriptorTable;
 
 	Buffer cpuData;                           //Null if not cpu backed & uploaded. If not cpu backed this will free post upload
+
+	//The upload SOURCE, when it is not cpuData. A dirty range is read straight out of this into mapped memory
+	//or into staging, so the bytes never exist on the host as a whole: a file backed buffer is uploaded
+	// without the file being resident, and an archive or encryption stream decodes into the destination
+	// rather than into a buffer that is then copied.
+	//NULL leaves cpuData as the source, which is what every existing caller gets.
+	//Owned: a reference is taken at create and dropped with the buffer.
+
+	StreamRef *cpuStream;
 
 	ListDevicePendingRange pendingChanges;
 
@@ -86,6 +99,43 @@ typedef struct DeviceBuffer {
 
 #define DeviceBuffer_ext(ptr, T) (!ptr ? NULL : (T##DeviceBuffer*)(ptr + 1))        //impl
 #define DeviceBufferRef_ptr(ptr) RefPtr_data(ptr, DeviceBuffer)
+
+//How many pieces a source read of this length would be split into, which is 1 for everything that is not worth
+//splitting or not safe to split. Exposed so the RULE can be asserted rather than inferred from a timing:
+//a stream that does not declare EStreamType_ConcurrentRead has to come back as 1 however large the range is.
+
+U8 DeviceBuffer_readPieces(const DeviceBuffer *buffer, const OxStream *stream, U64 length);
+
+//What an upload consumed, released once it has: cpuData unless CPUBacked, and the stream unless keepSource.
+//Both backends call this rather than freeing cpuData themselves, so the rule lives in one place.
+
+void DeviceBuffer_releaseUploadSource(DeviceBuffer *buffer, const Allocator *alloc);
+
+//What a pending range reads from, which is the stream where there is one and cpuData where there is not.
+//Both backends go through this rather than indexing cpuData, so a source that is not resident works the same
+// on either of them.
+
+Bool DeviceBuffer_readUploadSource(
+	DeviceBuffer *buffer, U64 offset, U64 length, Buffer dst, const Allocator *alloc, Error *e_rr
+);
+
+//A buffer whose upload SOURCE is a stream rather than bytes the caller holds, so the bytes never exist on the
+//host as a whole. size is what the resource will be; this does not read the stream to find out.
+//A reference is taken on the stream and dropped with the buffer. CPUBacked is refused, since that flag is a
+// host copy to read BACK into, which is the opposite of what a stream source is for.
+
+Bool GraphicsDeviceRef_createBufferStream(
+	GraphicsDeviceRef *dev,
+	EDeviceBufferUsage usage,
+	EGraphicsResourceFlag flags,
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	StreamRef *stream,
+	U64 size,
+	Bool keepSource,              //Hold the stream past the upload, for a later partial update of a range
+	DeviceBufferRef **buf,
+	Error *e_rr
+);
 
 //Create empty buffer or initialized with data.
 //Initializing to non-zero isn't free due to copies.
@@ -113,11 +163,22 @@ Bool GraphicsDeviceRef_createBufferData(
 	Error *e_rr
 );
 
+//A raw buffer is WORD addressed: a D3D12 raw view takes its first element and its count in 4 byte units, so a
+//resource whose size stops inside a word would leave that word unreachable by any shader. The BACKEND
+//allocation is padded up to a whole word for that reason, and a view reaching the end of the resource rounds
+// up to match, which is what keeps the last bytes of a file or a record readable.
+//
+//resource.size stays exactly what the caller asked for: it is the length of the upload and of every region
+// derived from the resource, and rounding it would change how many elements those describe.
+
+static inline U64 DeviceBuffer_allocSize(U64 size) { return (size + 3) &~ (U64)3; }
+
 //Mark the underlying data for the DeviceBuffer as dirty.
 //Count 0 indicates rest of the buffer starting at offset.
 //Each region that doesn't intersect will be considered as 1 copy (otherwise it will be merged).
 //Call this as little as possible while still not copying too much data.
-//Only possible if buffer has a backed CPU buffer.
+//A range needs a source that can still be read: a CPU backed buffer, a stream backed one, or a CPUAllocated
+// one whose memory the caller wrote into directly. Anything else can only be marked for its first upload.
 
 Bool DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count, Error *e_rr);
 

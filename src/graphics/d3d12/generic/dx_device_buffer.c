@@ -108,7 +108,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	D3D12_RESOURCE_DESC1 resourceDesc = (D3D12_RESOURCE_DESC1) {
 		.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
 		.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
-		.Width = buf->resource.size,
+		.Width = DeviceBuffer_allocSize(buf->resource.size),
 		.Height = 1,
 		.DepthOrArraySize = 1,
 		.MipLevels = 1,
@@ -433,9 +433,7 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 			U64 len = range.buffer.endRange - range.buffer.startRange;
 
 			Buffer dst = Buffer_createRef((U8*)buffer->resource.mappedMemoryExt + start, len);
-			Buffer src = Buffer_createRefConst(buffer->cpuData.ptr + start, len);
-
-			Buffer_memcpy(dst, src);
+			gotoIfError3(clean, DeviceBuffer_readUploadSource(buffer, start, len, dst, alloc, e_rr));
 
 			if (tracking) {
 				D3D12_RANGE rangeD3D12 = (D3D12_RANGE) { .Begin = start, .End = start + len };
@@ -487,10 +485,9 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
-				Buffer_memcpy(
-					Buffer_createRef(location + allocRange, len),
-					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
-				);
+				gotoIfError3(clean, DeviceBuffer_readUploadSource(
+					buffer, bufferj.startRange, len, Buffer_createRef(location + allocRange, len), alloc, e_rr
+				));
 
 				if (tracking) {
 					D3D12_RANGE rangeD3D12 = (D3D12_RANGE) { .Begin = allocRange, .End = allocRange + len };
@@ -599,10 +596,9 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
-				Buffer_memcpy(
-					Buffer_createRef(location + allocRange, len),
-					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
-				);
+				gotoIfError3(clean, DeviceBuffer_readUploadSource(
+					buffer, bufferj.startRange, len, Buffer_createRef(location + allocRange, len), alloc, e_rr
+				));
 
 				if (tracking) {
 					D3D12_RANGE rangeD3D12 = (D3D12_RANGE) { .Begin = allocRange, .End = allocRange + len };
@@ -651,8 +647,7 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 		}
 	}
 
-	if(!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked))
-		Buffer_free(&buffer->cpuData, alloc);
+	DeviceBuffer_releaseUploadSource(buffer, alloc);
 
 	buffer->isFirstFrame = buffer->isPending = buffer->isPendingFullCopy = false;
 	gotoIfError3(clean, ListDevicePendingRange_clear(&buffer->pendingChanges, e_rr));

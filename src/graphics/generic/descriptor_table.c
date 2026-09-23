@@ -333,6 +333,26 @@ U64 Descriptor_bufferLength(const Descriptor *d) {
 	return Descriptor_endBuffer(d) - Descriptor_startBuffer(d);
 }
 
+U64 Descriptor_bufferViewLength(const Descriptor *d, EGfxRegisterType type) {
+
+	if(!d || !d->resource)
+		return 0;
+
+	const U64 size = DeviceBufferRef_ptr(d->resource)->resource.size;
+	const U64 start = Descriptor_startBuffer(d);
+	const U64 end = Descriptor_endBuffer(d) ? Descriptor_endBuffer(d) : size;
+
+	if(end < start)
+		return 0;
+
+	const U64 len = end - start;
+
+	if((type & EGfxRegisterType_TypeMask) != EGfxRegisterType_ByteAddressBuffer || end != size)
+		return len;
+
+	return DeviceBuffer_allocSize(len);
+}
+
 U32 Descriptor_counterOffset(const Descriptor *d) {
 	return !d ? 0 :
 		d->buffer.startRegionAndCounterOffset.counter16.counterOffset16 |
@@ -786,7 +806,10 @@ Bool DescriptorTableRef_setDescriptors(
 
 				if (type == EGfxRegisterType_ByteAddressBuffer) {
 
-					if(descLen % 4)
+					//A view that reaches the END of the resource rounds up to a whole word instead, since the
+					// backend allocation is padded to one and the alternative is a tail no shader can reach.
+
+					if((descLen % 4) && start + descLen != len)
 						retError(clean, Error_invalidParameter(
 							3, 0, "DescriptorTableRef_setDescriptors() byte address buffer length should be aligned to 4"
 						));
