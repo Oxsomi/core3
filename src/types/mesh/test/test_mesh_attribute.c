@@ -81,7 +81,9 @@ static void Test_meshAttributeLayout(Test *t) {
 		{ .attribute = EMeshAttribute_Normal, .encoding = EMeshAttributeEncoding_Oct, .offset = 64 }
 	};
 
-	Test_assert(t, "offset is recomputed", !MeshAttributeLayout_create(lying, 1).entries[0].offset);
+	const MeshAttributeLayout recomputed = MeshAttributeLayout_create(lying, 1);
+
+	Test_assert(t, "offset is recomputed", !recomputed.entries[0].offset);
 
 	//Refused outright rather than half built.
 

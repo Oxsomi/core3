@@ -268,6 +268,7 @@ typedef struct DeviceBufferReadJob {
 	const Allocator *alloc;
 	U64 offset, length;
 	Buffer dst;
+	JobGroup *group;
 	Bool ok;
 	U8 padding[7];
 } DeviceBufferReadJob;
@@ -279,8 +280,14 @@ static Bool DeviceBuffer_readJob(void *data, U64 threadId, JobQueue *queue) {
 	DeviceBufferReadJob *job = (DeviceBufferReadJob*) data;
 	Error err = Error_none();
 
-	job->ok = job->stream->read(job->stream, job->offset, job->length, job->dst, job->alloc, &err);
-	return job->ok;
+	const Bool ok = job->stream->read(job->stream, job->offset, job->length, job->dst, job->alloc, &err);
+	job->ok = ok;
+
+	//Releasing the token is the last thing done with job: the fan-out returns the moment the latch drops,
+	//and its jobs live on that stack frame.
+
+	(void) JobGroup_leave(job->group, NULL);
+	return ok;
 }
 
 //The pieces are block aligned and disjoint, so no two of them touch the same chunk of the source or the same
@@ -297,20 +304,30 @@ static Bool DeviceBuffer_readFanOut(
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
 	DeviceBufferReadJob jobs[255];
+	JobGroup group = (JobGroup) { 0 };
 
 	const U64 block = stream->blockSize ? stream->blockSize : 1;
 	const U64 blocks = (length + block - 1) / block;
 	const U64 perPiece = (blocks + pieces - 1) / pieces * block;
 
-	U8 pushed = 0;
+	U8 count = 0, entered = 0, pushed = 0;
 
-	for(U8 i = 0; i < pieces; ++i) {
+	while(count < pieces && (U64) count * perPiece < length)
+		++count;
+
+	//The queue is the caller's, and this runs with the device locked, so the wait is scoped to a group.
+	//Waiting on the QUEUE would run whatever else the caller put on it, under that lock, and a job of
+	// theirs that touches the device would then deadlock against the thread waiting for it.
+	//Scoped to a group this thread only ever runs its own reads, so it still drains them and unlocks even
+	// when every worker is stuck behind the device.
+
+	gotoIfError3(clean, JobGroup_create(&group, device->uploadJobQueue, NULL, NULL, NULL, e_rr));
+	gotoIfError3(clean, JobGroup_enter(&group, count, e_rr));
+	entered = count;
+
+	for(U8 i = 0; i < count; ++i) {
 
 		const U64 at = (U64) i * perPiece;
-
-		if(at >= length)
-			break;
-
 		const U64 len = U64_min(perPiece, length - at);
 
 		jobs[i] = (DeviceBufferReadJob) {
@@ -318,14 +335,18 @@ static Bool DeviceBuffer_readFanOut(
 			.alloc = alloc,
 			.offset = offset + at,
 			.length = len,
-			.dst = Buffer_createRef(dst.ptrNonConst + at, len)
+			.dst = Buffer_createRef(dst.ptrNonConst + at, len),
+			.group = &group
 		};
 
-		gotoIfError3(clean, JobQueue_push(device->uploadJobQueue, DeviceBuffer_readJob, jobs + i, e_rr));
+		gotoIfError3(clean, JobQueue_pushGroup(
+			device->uploadJobQueue, DeviceBuffer_readJob, jobs + i, NULL, &group, e_rr
+		));
+
 		++pushed;
 	}
 
-	gotoIfError3(clean, JobQueue_wait(device->uploadJobQueue, e_rr));
+	gotoIfError3(clean, JobGroup_wait(&group, e_rr));
 	waited = true;
 
 	for(U8 i = 0; i < pushed; ++i)
@@ -334,10 +355,15 @@ static Bool DeviceBuffer_readFanOut(
 
 clean:
 
+	//A token taken for a job that a failed push never queued has nothing left to release it.
+
+	for(U8 i = pushed; i < entered; ++i)
+		(void) JobGroup_leave(&group, NULL);
+
 	//A push that failed leaves earlier jobs running, and they write into dst, so they are waited for either way.
 
 	if(!waited && pushed)
-		(void) JobQueue_wait(device->uploadJobQueue, NULL);
+		(void) JobGroup_wait(&group, NULL);
 
 	return s_uccess;
 }

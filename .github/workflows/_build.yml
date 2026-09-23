@@ -300,9 +300,29 @@ jobs:
 
           if [ -z "$SDKMANAGER" ]; then echo "No sdkmanager under $SDK"; ls -R "$SDK" | head -50; exit 1; fi
 
-          "$SDKMANAGER" "platforms;android-${{ inputs.android_api }}" "ndk;${{ inputs.android_ndk }}"
+          NDK_DIR="$SDK/ndk/${{ inputs.android_ndk }}"
+          PKGS=( "platforms;android-${{ inputs.android_api }}" "ndk;${{ inputs.android_ndk }}" )
+
+          # --sdk_root pins where the packages land. Left off, sdkmanager takes the grandparent of its own
+          # bin directory, which is the cmdline-tools folder rather than the SDK, and an install that goes
+          # there is not where ANDROID_NDK below points.
+          # The failure path prints what sdkmanager can actually see, because "failed to find package" says
+          # nothing about whether the repository was reachable, the root was wrong, or the pin is gone.
+          if ! "$SDKMANAGER" --sdk_root="$SDK" "${PKGS[@]}"; then
+            echo "sdkmanager could not install ${PKGS[*]}; what it sees:"
+            "$SDKMANAGER" --sdk_root="$SDK" --version || true
+            "$SDKMANAGER" --sdk_root="$SDK" --list | head -60 || true
+            exit 1
+          fi
+
+          # An install that reported success but landed elsewhere is caught here, by name, rather than much
+          # later as a compiler nothing can find.
+          if [ ! -d "$NDK_DIR" ]; then
+            echo "ndk;${{ inputs.android_ndk }} is not at $NDK_DIR after install"; ls "$SDK" || true; exit 1
+          fi
+
           echo "ANDROID_SDK=$SDK" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK=$SDK/ndk/${{ inputs.android_ndk }}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK=$NDK_DIR" >> "$GITHUB_ENV"
 
       # ── Conan package cache ────────────────────────────────────────────────
       # cache_name keeps toolchains apart.

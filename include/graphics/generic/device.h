@@ -263,6 +263,10 @@ typedef struct GraphicsDevice {
 	//BORROWED for the length of one submit, never owned and never outliving that call, which is why it is
 	//passed to the submit rather than handed to the device: the upload work begins and ends inside it.
 	//NULL means every source read runs on the calling thread, which is what every existing submit does.
+	//The submit runs jobs on it as execution context 0, so it has to be handed over by the thread that
+	// created it, the same rule JobQueue_wait carries.
+	//Only the reads the submit itself pushed are ever run here, so unrelated jobs on the queue are left to
+	// its workers.
 
 	JobQueue *uploadJobQueue;
 

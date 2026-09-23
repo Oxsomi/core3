@@ -1,4 +1,6 @@
 {% set _detected, detectedVersion, _exe = detect_api.detect_clang_compiler("clang-cl") %}
+{% set _msvcDetected, msvcDetectedVersion, _msvcExe = detect_api.detect_msvc_compiler() %}
+{% set msvc = detect_api.default_compiler_version("msvc", msvcDetectedVersion) | int %}
 # clang-cl: clang's frontend with MSVC's driver, ABI and CRT. Same runtime/cppstd as the msvc profiles so
 # the two share prebuilt dependencies where conan allows it.
 [settings]
@@ -6,9 +8,11 @@ build_type=Debug
 compiler=clang
 compiler.cppstd=20
 compiler.runtime=static
-# Which MSVC runtime to link against. conan requires this for clang on Windows and has no
-# default; v144 is the toolset behind msvc compiler.version=194, so both profiles link the same CRT.
-compiler.runtime_version=v144
+# Which MSVC runtime to link against. conan requires this for clang on Windows and has no default.
+# It follows the INSTALLED MSVC rather than naming one, so this profile links the same CRT as the
+# msvc profiles wherever it runs: the toolset's last digit tracks compiler.version, 194 to v144 and
+# 195 to v145.
+compiler.runtime_version=v14{{ msvc % 10 }}
 compiler.runtime_type=Debug
 compiler.version={{ detect_api.default_compiler_version("clang", detectedVersion) }}
 os=Windows
@@ -20,4 +24,6 @@ tools.build:compiler_executables={"c": "clang-cl", "cpp": "clang-cl"}
 # then needs a working vcvars environment to locate the CRT. The Visual Studio generator is what the
 # msvc profiles get implicitly; it drives clang-cl through the ClangCL toolset and sets up its own
 # environment, so the build no longer depends on vcvars_ver matching the installed toolset.
-tools.cmake.cmaketoolchain:generator=Visual Studio 17 2022
+# Which Visual Studio is detected rather than named, for the same reason the runtime is: a hardcoded
+# year stops resolving the moment a runner image moves on, and CMake has no generator by that name.
+tools.cmake.cmaketoolchain:generator={{ "Visual Studio 18 2026" if msvc >= 195 else "Visual Studio 17 2022" }}

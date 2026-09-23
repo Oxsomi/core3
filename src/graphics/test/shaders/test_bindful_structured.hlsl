@@ -35,7 +35,6 @@ RWStructuredBuffer<U32x4> output : register(u1, space0);
 [shader("compute")]
 [numthreads(64, 1, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
-
 	const U32x4 e = input[id.x];
 	output[id.x] = U32x4(e.x * 2, e.y + 100, e.z ^ 0xFFu, e.w + id.x);
 }

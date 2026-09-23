@@ -349,4 +349,42 @@ void Test_jobQueue(Test *t) {
 
 		JobQueue_free(&q);
 	}
+
+	//9. JobGroup_wait runs the group and nothing else, which is what lets it be called under a lock the
+	//queue's other jobs take.
+	//Single threaded, so the waiting thread is the only execution context there is: whatever ran, it ran.
+	//The outsider is queued AHEAD of the group, so a wait that took the front of the queue would run it.
+
+	{
+		JobQueue q = (JobQueue) { 0 };
+
+		if (Test_assert(t, "create for JobGroup wait", JobQueue_create(1, alloc, &q, e_rr))) {
+
+			AtomicI64 workDone = (AtomicI64) { 0 };
+			AtomicI64 outsideRan = (AtomicI64) { 0 };
+			const U64 N = 8;
+
+			JobGroup group = (JobGroup) { 0 };
+			Test_assert(t, "JobGroup(wait): create", JobGroup_create(&group, &q, NULL, NULL, NULL, e_rr));
+			Test_assert(t, "JobGroup(wait): enter", JobGroup_enter(&group, N, e_rr));
+			Test_assert(t, "JobGroup(wait): push outsider", JobQueue_push(&q, jobIncrement, &outsideRan, e_rr));
+
+			GroupWork works[8];
+			Bool ok = true;
+
+			for (U64 i = 0; i < N; ++i) {
+				works[i] = (GroupWork) { .group = &group, .workDone = &workDone };
+				ok &= JobQueue_pushGroup(&q, jobGroupWorker, &works[i], NULL, &group, e_rr);
+			}
+
+			Test_assert(t, "JobGroup(wait): pushed members", ok);
+			Test_assert(t, "JobGroup(wait): wait", JobGroup_wait(&group, e_rr));
+			Test_assert(t, "JobGroup(wait): the group ran", AtomicI64_load(&workDone) == (I64) N);
+			Test_assert(t, "JobGroup(wait): the outsider did not", AtomicI64_load(&outsideRan) == 0);
+			Test_assert(t, "JobGroup(wait): queue drains after", JobQueue_wait(&q, e_rr));
+			Test_assert(t, "JobGroup(wait): the outsider ran then", AtomicI64_load(&outsideRan) == 1);
+		}
+
+		JobQueue_free(&q);
+	}
 }
