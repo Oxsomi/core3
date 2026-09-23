@@ -275,15 +275,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # v4 or newer: Google removed the legacy 'tools' package from the SDK repository, and every version
+      # before v4.0.2 still asks for it, which fails the whole step with "failed to find package".
       - name: Setup Android SDK
         if: inputs.os == 'android'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       # setup-android exports ANDROID_SDK_ROOT for whichever runner we're on; derive ours from that
       # instead of hardcoding a Windows path, so the same job works on linux/macos/windows.
       # sdkmanager is resolved by path rather than by name: on the windows runner it's only on PATH as
       # sdkmanager.bat, which bash won't find (no PATHEXT resolution), and the cmdline-tools directory
       # is versioned rather than always being "latest".
+      # Only cmdline-tools is searched; the tools/bin that used to hold a copy belonged to the 'tools'
+      # package, which no longer exists in the repository and so cannot be installed.
       - name: Setup Android NDK
         if: inputs.os == 'android'
         shell: bash
@@ -292,7 +296,7 @@ jobs:
           if [ -z "$SDK" ]; then echo "Neither ANDROID_SDK_ROOT nor ANDROID_HOME is set"; exit 1; fi
 
           SDKMANAGER=""
-          for d in "$SDK"/cmdline-tools/*/bin "$SDK"/tools/bin; do
+          for d in "$SDK"/cmdline-tools/*/bin; do
             for exe in "$d/sdkmanager" "$d/sdkmanager.bat"; do
               if [ -f "$exe" ]; then SDKMANAGER="$exe"; break 2; fi
             done
