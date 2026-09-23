@@ -1,6 +1,9 @@
 {% set _detected, detectedVersion, _exe = detect_api.detect_clang_compiler("clang-cl") %}
 {% set _msvcDetected, msvcDetectedVersion, _msvcExe = detect_api.detect_msvc_compiler() %}
-{% set msvc = detect_api.default_compiler_version("msvc", msvcDetectedVersion) | int %}
+# Through string: default_compiler_version hands back a version component rather than a number, and
+# Jinja's int filter turns anything it cannot convert into 0 without saying so, which silently picks
+# the oldest branch of both rules below.
+{% set msvc = detect_api.default_compiler_version("msvc", msvcDetectedVersion) | string | int %}
 # clang-cl: clang's frontend with MSVC's driver, ABI and CRT. Same runtime/cppstd as the msvc profiles so
 # the two share prebuilt dependencies where conan allows it.
 [settings]
