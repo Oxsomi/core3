@@ -639,7 +639,45 @@ if(MSVC)
 	# Excluding those targets up front beats overriding with /GL- afterwards,
 	# which works but makes MSVC warn D9025 on every TU, since it sees both on the command line.
 
-	set(wholeProgram "$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:$<TARGET_PROPERTY:OXC3_NO_WHOLE_PROGRAM>>>>")
+	# MSVC's ARM64 backend is not sound below toolset 14.52.36615 (compiler 19.52.36615): Microsoft lists both
+	# a link time compilation failure (C1001 with LNK1257) and wrong codegen against it, and whole program
+	# optimization is what feeds that path, so ARM64 goes without it on an older toolset and takes it up again
+	# on its own once the compiler carries the fix.
+	#
+	# Three names are asked for the architecture rather than one. CMAKE_SYSTEM_PROCESSOR, which is what ARM
+	# reads, reports the HOST on Windows, and an arm64 host driving the build through an emulated x64 process
+	# reports AMD64 there; CMAKE_VS_PLATFORM_NAME and the compiler's own architecture id describe what is
+	# being built for and do not.
+
+	set(msvcArm64 OFF)
+
+	if(
+		ARM OR
+		"${CMAKE_VS_PLATFORM_NAME}" MATCHES "ARM64|arm64" OR
+		"${CMAKE_C_COMPILER_ARCHITECTURE_ID}" MATCHES "ARM64|arm64"
+	)
+		set(msvcArm64 ON)
+	endif()
+
+	set(wholeProgramSupported ON)
+
+	if(msvcArm64 AND NOT isClangCl AND CMAKE_C_COMPILER_VERSION VERSION_LESS 19.52.36615)
+		set(wholeProgramSupported OFF)
+	endif()
+
+	# Printed whatever the outcome, since which way this went is the first thing a failing ARM64 build needs.
+
+	if(NOT isClangCl)
+		message(
+			"-- MSVC ${CMAKE_C_COMPILER_VERSION}: systemProcessor=${CMAKE_SYSTEM_PROCESSOR} "
+			"vsPlatform=${CMAKE_VS_PLATFORM_NAME} archId=${CMAKE_C_COMPILER_ARCHITECTURE_ID} "
+			"arm64=${msvcArm64} wholeProgram=${wholeProgramSupported}"
+		)
+	endif()
+
+	set(wholeProgram
+		"$<AND:$<CONFIG:Release>,$<BOOL:${wholeProgramSupported}>,$<NOT:$<BOOL:$<TARGET_PROPERTY:OXC3_NO_WHOLE_PROGRAM>>>>"
+	)
 
 	if(isClangCl)
 
