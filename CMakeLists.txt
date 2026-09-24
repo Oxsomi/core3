@@ -639,7 +639,25 @@ if(MSVC)
 	# Excluding those targets up front beats overriding with /GL- afterwards,
 	# which works but makes MSVC warn D9025 on every TU, since it sees both on the command line.
 
-	set(wholeProgram "$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:$<TARGET_PROPERTY:OXC3_NO_WHOLE_PROGRAM>>>>")
+	# MSVC's ARM64 link time compilation fails with C1001 and LNK1257 before toolset 14.52.36615 (compiler
+	# 19.52.36615), which Microsoft fixed rather than something the source can express differently.
+	# Whole program optimization is the only thing that feeds that path, so ARM64 goes without it until the
+	# toolset carries the fix and picks it back up on its own once it does, rather than a target at a time:
+	# the bug is in the backend and reaches whichever target happens to inline into the wrong shape.
+
+	set(wholeProgramSupported ON)
+
+	if(ARM AND NOT isClangCl AND CMAKE_C_COMPILER_VERSION VERSION_LESS 19.52.36615)
+		set(wholeProgramSupported OFF)
+		message(
+			"-- Whole program optimization off: MSVC ${CMAKE_C_COMPILER_VERSION} on ARM64 fails LTCG, "
+			"fixed in 19.52.36615"
+		)
+	endif()
+
+	set(wholeProgram
+		"$<AND:$<CONFIG:Release>,$<BOOL:${wholeProgramSupported}>,$<NOT:$<BOOL:$<TARGET_PROPERTY:OXC3_NO_WHOLE_PROGRAM>>>>"
+	)
 
 	if(isClangCl)
 
