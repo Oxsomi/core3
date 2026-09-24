@@ -639,29 +639,7 @@ if(MSVC)
 	# Excluding those targets up front beats overriding with /GL- afterwards,
 	# which works but makes MSVC warn D9025 on every TU, since it sees both on the command line.
 
-	# MSVC's ARM64 link time compilation fails with C1001 and LNK1257, a backend bug with nothing the source
-	# can express differently. Whole program optimization is the only thing that feeds that path, so ARM64
-	# goes without it; the bug reaches whichever target happens to inline into the wrong shape, so this is not
-	# something to switch off a target at a time.
-	# Not gated on a toolset version: which build of MSVC carries the fix cannot be read off a machine that
-	# only reports its Visual Studio version, and guessing that wrong silently leaves the flag on.
-	# The message prints the compiler so a build log says which one this was, and the whole block can go once
-	# a version known to be fixed is what the builders run.
-
-	set(wholeProgramSupported ON)
-
-	if(ARM AND NOT isClangCl)
-		set(wholeProgramSupported OFF)
-		message("-- Whole program optimization off: MSVC ${CMAKE_C_COMPILER_VERSION} on ARM64 fails LTCG")
-	endif()
-
-	if(NOT isClangCl)
-		message("-- MSVC ${CMAKE_C_COMPILER_VERSION}, target ${target}, whole program ${wholeProgramSupported}")
-	endif()
-
-	set(wholeProgram
-		"$<AND:$<CONFIG:Release>,$<BOOL:${wholeProgramSupported}>,$<NOT:$<BOOL:$<TARGET_PROPERTY:OXC3_NO_WHOLE_PROGRAM>>>>"
-	)
+	set(wholeProgram "$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:$<TARGET_PROPERTY:OXC3_NO_WHOLE_PROGRAM>>>>")
 
 	if(isClangCl)
 
