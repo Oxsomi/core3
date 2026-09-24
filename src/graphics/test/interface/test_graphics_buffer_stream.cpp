@@ -543,6 +543,114 @@ static void Test_streamSourceReleased(c::Test *t, const StreamFixture &fx, const
 	}
 }
 
+typedef struct PullResult {
+	c::U32 fired;
+	c::Bool ok;
+} PullResult;
+
+static void Test_streamPullDone(void *resource, c::Bool ok, void *context) {
+	(void) resource;
+	PullResult *r = (PullResult*) context;
+	++r->fired;
+	r->ok = ok;
+}
+
+//A readback whose destination is a STREAM. The buffer is deliberately not CPUBacked, since skipping the host
+//copy the size of the resource is the reason the entry point exists.
+
+static void Test_streamPullRegion(c::Test *t, const StreamFixture &fx, gfx::DeviceBuffer &input, c::U64 elemsSize) {
+
+	c::Error *e_rr = &t->err;
+
+	gfx::DeviceBuffer sink;
+
+	if(!Test_assert(t, "sinkCreate", fx.dev.createBuffer(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderWrite,
+		"Pull sink", elemsSize, sink, nullptr, e_rr
+	)))
+		return;
+
+	Test_assert(t, "sinkHasNoHostCopy", !c::Buffer_length(sink.data()->cpuData));
+
+	//maintainRef: the sink is scoped to this call while the table outlives it.
+
+	const c::Descriptor sinkDesc = c::Descriptor_buffer(sink.handle(), 0, 0, NULL, 0);
+
+	if(!Test_assert(t, "setSinkOutput", fx.table.setByName("output", sinkDesc, 0, true, e_rr)))
+		return;
+
+	gfx::CommandList list;
+
+	if(!Test_assert(t, "sinkListCreate", fx.dev.createCommandList(2 * c::KIBI, 32, 16, list, true, e_rr)))
+		return;
+
+	Test_assert(t, "sinkBegin", list.begin(true, e_rr));
+
+	{
+		gfx::CommandScope scope = list.scope(
+			{
+				{ .resource = input.handle(), .stage = c::EPipelineStage_Compute },
+				{ .resource = sink.handle(), .stage = c::EPipelineStage_Compute, .isWrite = true }
+			},
+			1, {}, e_rr
+		);
+
+		Test_assert(t, "sinkScope", (c::Bool) scope);
+		Test_assert(t, "sinkBindHeap", scope.bindDescriptorHeap(fx.heap, e_rr));
+		Test_assert(t, "sinkBindTable", scope.bindDescriptorTable(fx.table, e_rr));
+		Test_assert(t, "sinkBindPipeline", scope.setComputePipeline(fx.pipeline, e_rr));
+		Test_assert(t, "sinkDispatch", scope.dispatch1D(1, e_rr));
+		Test_assert(t, "sinkScopeEnd", scope.end(e_rr));
+	}
+
+	Test_assert(t, "sinkEnd", list.end(e_rr));
+
+	if(!Test_assert(t, "sinkSubmit", gfxtest::submitAndWait(t, fx.dev, list)))
+		return;
+
+	c::MemoryStreamRef *dst = nullptr;
+
+	if(Test_assert(t, "pullStream", c::MemoryStream_create(
+		elemsSize, c::EMemoryStreamFlags_IsWritable, &fx.streamType, &dst, e_rr
+	))) {
+
+		PullResult res = {};
+
+		Test_assert(t, "pullQueued", c::DeviceBufferRef_pullRegionStream(
+			sink.handle(), 0, elemsSize, (c::StreamRef*) dst, 0, Test_streamPullDone, &res, e_rr
+		));
+
+		//The copy is recorded after the next submit's lists and completes once that frame finished
+
+		Test_assert(t, "pullSubmit", gfxtest::submitAndWait(t, fx.dev, fx.emptyList));
+		Test_assert(t, "pullFiredOnce", res.fired == 1);
+		Test_assert(t, "pullLanded", res.ok);
+
+		//What the shader wrote, read back out of the stream rather than out of a cpuData that never existed
+
+		TestStreamElem got[64];
+		c::OxStream *str = RefPtr_data((c::StreamRef*) dst, c::OxStream);
+
+		if(Test_assert(t, "pullStreamRead", str->read(
+			str, 0, sizeof(got), c::Buffer_createRef(got, sizeof(got)), fx.dev.alloc(), e_rr
+		))) {
+
+			c::Bool allMatch = true;
+
+			for(c::U32 i = 0; i < 64; ++i)
+				allMatch &= got[i].a == i * 2 && got[i].b == i * 7 + 100;
+
+			Test_assert(t, "pullStreamContents", allMatch);
+		}
+
+		c::RefPtr_dec((c::RefPtr**) &dst);
+	}
+
+	//The submits put the sink in flight, so it is handed back before this frame's stack goes
+
+	Test_assert(t, "pullDrained", fx.dev.wait(e_rr));
+}
+
 //What decides a split, asserted as a rule rather than inferred from a timing.
 static void Test_streamFanOutPolicy(c::Test *t, const StreamFixture &fx) {
 
@@ -779,6 +887,7 @@ extern "C" void Test_graphicsBufferStream(oxc::c::Test *t, oxc::c::GraphicsDevic
 	Test_streamDedicatedStaging(t, fx);
 	Test_streamOddLength(t, fx, sizeof(elems));
 	Test_streamSourceReleased(t, fx, elems, sizeof(elems));
+	Test_streamPullRegion(t, fx, input, sizeof(elems));
 
 	//The input above was created WITH keepSource, which is why its partial update worked at all.
 

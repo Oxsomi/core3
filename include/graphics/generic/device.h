@@ -112,14 +112,19 @@ typedef enum EGraphicsDeviceMessage {
 	//An allocation preferring a dedicated block fell back to shared because the device already holds >= 2000
 	// memory blocks (the cap guards the API limit of 4096 allocations).
 
-	EGraphicsDeviceMessage_TooManyMemoryBlocks  = 1 << 3
+	EGraphicsDeviceMessage_TooManyMemoryBlocks  = 1 << 3,
+
+	//A pull whose destination is a stream could not write it. The bytes reached the host, so this is the
+	// stream refusing them; a pull with no callback has no other way to say so.
+
+	EGraphicsDeviceMessage_PullStreamFailed     = 1 << 4,
+
+	//How many distinct messages the enum carries, which is what the per message throttle state is sized by.
+	//A count rather than another bit, so it names a size and never a message.
+
+	EGraphicsDeviceMessage_Bits                 = 5
 
 } EGraphicsDeviceMessage;
-
-//How many distinct messages the enum above carries, which is what the per message throttle state is sized by.
-//Kept out of the enum itself so a count can never be OR'd into a bit set by accident.
-
-#define EGraphicsDeviceMessage_Bits 4
 
 //The GPU time of one timestamp result, keyed by both a caller id and a name so a hot path reads it back by id
 // without comparing strings while a casual caller uses the name. gpuNs is a region's delta or a point's absolute

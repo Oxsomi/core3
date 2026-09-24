@@ -386,6 +386,7 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 	for(U64 i = 0; i < device->pendingPulls.length; ++i) {
 		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].resource);
+		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].stream);
 		Buffer_free(&device->pendingPulls.ptrNonConst[i].textureData, alloc);
 	}
 
@@ -396,6 +397,7 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 		for(U64 i = 0; i < device->pullsInFlight[j].length; ++i) {
 			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].resource);
 			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].stagingReadback);
+			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].stream);
 			Buffer_free(&device->pullsInFlight[j].ptrNonConst[i].textureData, alloc);
 		}
 
@@ -2087,8 +2089,10 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 	for (U64 i = 0; i < pulls->length; ++i) {
 
 		DevicePendingPull *pull = &pulls->ptrNonConst[i];
+		Bool ok = true;
 
-		//The union member that's live follows from this: cpuData owners use callback, the rest textureCallback
+		//The union member that's live follows from the destination: a pull with a stream uses streamCallback,
+		//otherwise cpuData owners use callback and the rest textureCallback
 
 		const TypeId typeId = pull->resource->refPtrType->typeId;
 
@@ -2106,7 +2110,37 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 			const U64 start = pull->range.buffer.startRange;
 			const U64 len = pull->range.buffer.endRange - start;
 
-			Buffer_memcpy(
+			//A stream destination takes the region straight out of the readback, so nothing the size of the
+			//resource has to be resident. The write is the only step here that can fail, which is why a
+			// stream pull reports whether it landed and a cpuData pull has nothing to report.
+
+			if (pull->stream) {
+
+				OxStream *stream = RefPtr_data(pull->stream, OxStream);
+				Error err = Error_none();
+
+				ok = stream->write(
+					stream, pull->streamOffset, len, Buffer_createRefConst(src, len),
+					GraphicsDevice_getAlloc(device), &err
+				);
+
+				//Reported here as well as through the callback, since the callback is optional and a readback
+				// that quietly wrote nothing is worse than a loud one.
+
+				if(!ok) {
+
+					const U64 folded = GraphicsDevice_logThrottled(
+						device, EGraphicsDeviceMessage_PullStreamFailed, 1 * SECOND
+					);
+
+					if(folded)
+						Log_errorLnx(
+							"A pull could not write to its stream (%"PRIu64" since the last report)", folded
+						);
+				}
+			}
+
+			else Buffer_memcpy(
 				Buffer_createRef(buffer->cpuData.ptrNonConst + start, len),
 				Buffer_createRefConst(src, len)
 			);
@@ -2161,11 +2195,17 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 
 		//textureCallback shares the union and already fired inside the render target branch above
 
-		if(ownsCpuData && pull->callback)
+		if(pull->stream) {
+			if(pull->streamCallback)
+				pull->streamCallback(pull->resource, ok, pull->context);
+		}
+
+		else if(ownsCpuData && pull->callback)
 			pull->callback(pull->resource, pull->context);
 
 		RefPtr_dec(&pull->resource);
 		RefPtr_dec(&pull->stagingReadback);
+		RefPtr_dec(&pull->stream);
 	}
 
 	ListDevicePendingPull_clear(pulls, NULL);
@@ -2291,9 +2331,11 @@ Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *com
 		gotoIfError3(clean, ListDevicePendingPull_pushBack(&device->pullsInFlight[device->fifId], pull, alloc, e_rr));
 		RefPtr_inc(device->stagingReadback);        //Owned by the in flight entry just pushed
 
-		//Ownership of the ref and the destination buffer moved to the in flight list
+		//Ownership of the refs and the destination buffer moved to the in flight list.
+		//Everything released by the loop under clean has to be cleared here, or it is released twice.
 
 		device->pendingPulls.ptrNonConst[i].resource = NULL;
+		device->pendingPulls.ptrNonConst[i].stream = NULL;
 		device->pendingPulls.ptrNonConst[i].textureData = Buffer_createNull();
 	}
 
@@ -2303,6 +2345,7 @@ clean:
 
 	for(U64 i = 0; i < device->pendingPulls.length; ++i) {
 		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].resource);
+		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].stream);
 		Buffer_free(&device->pendingPulls.ptrNonConst[i].textureData, alloc);
 	}
 

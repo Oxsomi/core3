@@ -190,6 +190,16 @@ Bool DeviceBufferRef_pullRegion(
 	DeviceBufferRef *buf, U64 offset, U64 len, DevicePullCallback callback, void *context, Error *e_rr
 );
 
+//Same timing, but the region is written to a STREAM at streamOffset instead of into cpuData, so a readback
+// never has to exist as a host copy the size of the resource and the buffer needs no CPUBacked.
+//The stream is referenced until the pull completes and has to be writable.
+//callback reports whether the write landed; the bytes reached the host either way, so a false only ever
+// means the stream refused them.
+Bool DeviceBufferRef_pullRegionStream(
+	DeviceBufferRef *buf, U64 offset, U64 len, StreamRef *stream, U64 streamOffset,
+	DeviceStreamPullCallback callback, void *context, Error *e_rr
+);
+
 #ifdef __cplusplus
 	}
 #endif

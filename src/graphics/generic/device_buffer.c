@@ -718,8 +718,12 @@ clean:
 	return s_uccess;
 }
 
-Bool DeviceBufferRef_pullRegion(
-	DeviceBufferRef *buf, U64 offset, U64 len, DevicePullCallback callback, void *context, Error *e_rr
+//Queue a pull on the device. A stream makes the region land there instead of in cpuData, which is also what
+//decides which of the two callbacks the pull carries; exactly one of them is ever set.
+
+static Bool DeviceBufferRef_queuePull(
+	DeviceBufferRef *buf, U64 offset, U64 len, StreamRef *stream, U64 streamOffset,
+	DevicePullCallback callback, DeviceStreamPullCallback streamCallback, void *context, Error *e_rr
 ) {
 
 	Bool s_uccess = true;
@@ -728,6 +732,7 @@ Bool DeviceBufferRef_pullRegion(
 	GraphicsDevice *device = NULL;
 	ELockAcquire acq = ELockAcquire_Invalid;
 	Bool owned = false;
+	Bool ownedStream = false;
 
 	//Validated before the pointer is reinterpreted, since a wrong type would read a garbage device
 
@@ -738,10 +743,25 @@ Bool DeviceBufferRef_pullRegion(
 	alloc = GraphicsDeviceRef_getAlloc(buffer->resource.device);
 	const U64 bufLen = buffer->resource.size;
 
-	//The result lands in cpuData, so there has to be one to land in
+	//Without a stream the result lands in cpuData, so there has to be one to land in
 
-	if(!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked))
+	if(!stream && !(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked))
 		retError(clean, Error_invalidOperation(0, "DeviceBufferRef_pullRegion() requires a CPUBacked buffer"));
+
+	if (stream) {
+
+		const OxStream *str = RefPtr_data(stream, OxStream);
+
+		if(!str->write)
+			retError(clean, Error_invalidOperation(
+				1, "DeviceBufferRef_pullRegionStream()::stream is not writable"
+			));
+
+		if(streamOffset > U64_MAX - len)
+			retError(clean, Error_overflow(
+				4, streamOffset, U64_MAX - len, "DeviceBufferRef_pullRegionStream()::streamOffset + len overflows"
+			));
+	}
 
 	if(offset >= bufLen)
 		retError(clean, Error_outOfBounds(1, offset, bufLen, "DeviceBufferRef_pullRegion()::offset out of bounds"));
@@ -764,23 +784,61 @@ Bool DeviceBufferRef_pullRegion(
 	RefPtr_inc(buf);
 	owned = true;
 
-	const DevicePendingPull pull = (DevicePendingPull) {
+	if (stream) {
+		RefPtr_inc(stream);
+		ownedStream = true;
+	}
+
+	DevicePendingPull pull = (DevicePendingPull) {
 		.resource = buf,
-		.callback = callback,
 		.context = context,
+		.stream = stream,
+		.streamOffset = streamOffset,
 		.range = (DevicePendingRange) { .buffer = (BufferRange) { .startRange = offset, .endRange = offset + len } }
 	};
 
+	if(stream)
+		pull.streamCallback = streamCallback;
+
+	else pull.callback = callback;
+
 	gotoIfError3(clean, ListDevicePendingPull_pushBack(&device->pendingPulls, pull, alloc, e_rr));
-	owned = false;
+	owned = ownedStream = false;
 
 clean:
 
 	if(owned)
 		RefPtr_dec(&buf);
 
+	if(ownedStream)
+		RefPtr_dec(&stream);
+
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->lock);
 
+	return s_uccess;
+}
+
+Bool DeviceBufferRef_pullRegion(
+	DeviceBufferRef *buf, U64 offset, U64 len, DevicePullCallback callback, void *context, Error *e_rr
+) {
+	return DeviceBufferRef_queuePull(buf, offset, len, NULL, 0, callback, NULL, context, e_rr);
+}
+
+Bool DeviceBufferRef_pullRegionStream(
+	DeviceBufferRef *buf, U64 offset, U64 len, StreamRef *stream, U64 streamOffset,
+	DeviceStreamPullCallback callback, void *context, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!stream)
+		retError(clean, Error_nullPointer(3, "DeviceBufferRef_pullRegionStream()::stream is required"));
+
+	gotoIfError3(clean, DeviceBufferRef_queuePull(
+		buf, offset, len, stream, streamOffset, NULL, callback, context, e_rr
+	));
+
+clean:
 	return s_uccess;
 }
