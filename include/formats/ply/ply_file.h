@@ -39,7 +39,7 @@ typedef struct Error Error;
 //What is read: from the vertex element x, y and z, nx, ny and nz when present, and the first of s/t, u/v or
 // texture_u/texture_v when present. From the face element the first list property, whatever it is named,
 // which every writer calls vertex_indices or vertex_index. Every other property and every other element is
-// skipped by its declared size, colours and confidences included, so a file carrying them still loads.
+// skipped by its declared size, colors and confidences included, so a file carrying them still loads.
 //
 //Refused rather than repaired: a format line other than the three the specification defines, a vertex element
 // without x, y and z, a face list of fewer than three corners, an index past the vertex count, a scalar type the

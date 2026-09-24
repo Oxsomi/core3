@@ -770,7 +770,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 		));
 
 	//Samplers too, since this overwrites the whole info: the sampler forms share storage, so the one term covers
-	// either of them, and a list left behind here is both leaked and mislabelled by the flags that come with it.
+	// either of them, and a list left behind here is both leaked and mislabeled by the flags that come with it.
 
 	if(result->bindings.ptr || result->bindingNames.ptr || result->immutableSamplers.ptr)
 		retError(clean, Error_invalidParameter(
@@ -2123,21 +2123,6 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 					stream, pull->streamOffset, len, Buffer_createRefConst(src, len),
 					GraphicsDevice_getAlloc(device), &err
 				);
-
-				//Reported here as well as through the callback, since the callback is optional and a readback
-				// that quietly wrote nothing is worse than a loud one.
-
-				if(!ok) {
-
-					const U64 folded = GraphicsDevice_logThrottled(
-						device, EGraphicsDeviceMessage_PullStreamFailed, 1 * SECOND
-					);
-
-					if(folded)
-						Log_errorLnx(
-							"A pull could not write to its stream (%"PRIu64" since the last report)", folded
-						);
-				}
 			}
 
 			else Buffer_memcpy(
@@ -2158,7 +2143,26 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 			//De-pitch the backend's row stride back into the tight full texture rows cpuData uses,
 			// at the region's offsets; all row measures are block rows for compressed formats
 
-			if (ownsCpuData) {
+			if (pull->stream) {
+
+				OxStream *stream = RefPtr_data(pull->stream, OxStream);
+				Error err = Error_none();
+				U64 at = pull->streamOffset;
+
+				for(U64 k = 0; k < TextureRange_length(range) && ok; ++k)
+					for(U64 j = 0; j < rows && ok; ++j) {
+
+						ok = stream->write(
+							stream, at, regionRow,
+							Buffer_createRefConst(src + pull->rowPitch * (j + k * rows), regionRow),
+							GraphicsDevice_getAlloc(device), &err
+						);
+
+						at += regionRow;
+					}
+			}
+
+			else if (ownsCpuData) {
 
 				DeviceTexture *texture = DeviceTextureRef_ptr(pull->resource);
 
@@ -2191,6 +2195,19 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 
 				Buffer_free(&pull->textureData, GraphicsDevice_getAlloc(device));
 			}
+		}
+
+		//Reported alongside the callback, which is optional, since a readback that quietly wrote nothing is
+		//worse than a loud one.
+
+		if(pull->stream && !ok) {
+
+			const U64 folded = GraphicsDevice_logThrottled(
+				device, EGraphicsDeviceMessage_PullStreamFailed, 1 * SECOND
+			);
+
+			if(folded)
+				Log_errorLnx("A pull could not write to its stream (%"PRIu64" since the last report)", folded);
 		}
 
 		//textureCallback shares the union and already fired inside the render target branch above

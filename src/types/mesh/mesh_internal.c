@@ -446,7 +446,7 @@ Bool MeshPositions_finish(MeshPositions *p, MeshInfo *info, Error *e_rr) {
 	// epsilon that would have to be smaller than any real extent.
 
 	//The midpoint is reached from the low corner rather than as half of the sum, which would overflow to an
-	// infinite centre on bounds past half of F32_MAX and quantize every vertex to one corner.
+	// infinite center on bounds past half of F32_MAX and quantize every vertex to one corner.
 
 	const F32x4 half = F32x4_mul(F32x4_sub(ma, mi), F32x4_xxxx4(0.5f));
 	const F32x4 center = F32x4_add(mi, half);

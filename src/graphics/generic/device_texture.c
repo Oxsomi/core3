@@ -349,11 +349,15 @@ clean:
 	return s_uccess;
 }
 
-Bool DeviceTextureRef_pullRegion(
+//Queue a pull on the device. A stream makes the region land there instead of in cpuData, which is also what
+//decides which of the two callbacks the pull carries; exactly one of them is ever set.
+
+static Bool DeviceTextureRef_queuePull(
 	DeviceTextureRef *tex,
 	U16 x, U16 y, U16 z,
 	U16 w, U16 h, U16 l,
-	DevicePullCallback callback, void *context, Error *e_rr
+	StreamRef *stream, U64 streamOffset,
+	DevicePullCallback callback, DeviceStreamPullCallback streamCallback, void *context, Error *e_rr
 ) {
 
 	Bool s_uccess = true;
@@ -362,6 +366,7 @@ Bool DeviceTextureRef_pullRegion(
 	GraphicsDevice *device = NULL;
 	ELockAcquire acq = ELockAcquire_Invalid;
 	Bool owned = false;
+	Bool ownedStream = false;
 
 	//Validated before the pointer is reinterpreted, since a wrong type would read a garbage device
 
@@ -371,8 +376,15 @@ Bool DeviceTextureRef_pullRegion(
 	DeviceTexture *texture = DeviceTextureRef_ptr(tex);
 	alloc = GraphicsDeviceRef_getAlloc(texture->base.resource.device);
 
-	if(!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked))
+	//Without a stream the result lands in cpuData, so there has to be one to land in
+
+	if(!stream && !(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked))
 		retError(clean, Error_invalidOperation(0, "DeviceTextureRef_pullRegion() requires a CPUBacked texture"));
+
+	if(stream && !RefPtr_data(stream, OxStream)->write)
+		retError(clean, Error_invalidOperation(
+			1, "DeviceTextureRef_pullRegionStream()::stream is not writable"
+		));
 
 	//Same region semantics as markDirty: zero means the rest of that axis and the region snaps outward
 	// to whole blocks for compressed formats, so pulling can refresh slightly more than was asked
@@ -417,26 +429,70 @@ Bool DeviceTextureRef_pullRegion(
 	RefPtr_inc(tex);
 	owned = true;
 
-	const DevicePendingPull pull = (DevicePendingPull) {
+	if (stream) {
+		RefPtr_inc(stream);
+		ownedStream = true;
+	}
+
+	DevicePendingPull pull = (DevicePendingPull) {
 		.resource = tex,
-		.callback = callback,
 		.context = context,
+		.stream = stream,
+		.streamOffset = streamOffset,
 		.range = (DevicePendingRange) { .texture = (TextureRange) {
 			.startRange = { startX, startY, z },
 			.endRange = { endX, endY, (U16)(z + l) }
 		} }
 	};
 
+	if(stream)
+		pull.streamCallback = streamCallback;
+
+	else pull.callback = callback;
+
 	gotoIfError3(clean, ListDevicePendingPull_pushBack(&device->pendingPulls, pull, alloc, e_rr));
-	owned = false;
+	owned = ownedStream = false;
 
 clean:
 
 	if(owned)
 		RefPtr_dec(&tex);
 
+	if(ownedStream)
+		RefPtr_dec(&stream);
+
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->lock);
 
+	return s_uccess;
+}
+
+Bool DeviceTextureRef_pullRegion(
+	DeviceTextureRef *tex,
+	U16 x, U16 y, U16 z,
+	U16 w, U16 h, U16 l,
+	DevicePullCallback callback, void *context, Error *e_rr
+) {
+	return DeviceTextureRef_queuePull(tex, x, y, z, w, h, l, NULL, 0, callback, NULL, context, e_rr);
+}
+
+Bool DeviceTextureRef_pullRegionStream(
+	DeviceTextureRef *tex,
+	U16 x, U16 y, U16 z,
+	U16 w, U16 h, U16 l,
+	StreamRef *stream, U64 streamOffset,
+	DeviceStreamPullCallback callback, void *context, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!stream)
+		retError(clean, Error_nullPointer(6, "DeviceTextureRef_pullRegionStream()::stream is required"));
+
+	gotoIfError3(clean, DeviceTextureRef_queuePull(
+		tex, x, y, z, w, h, l, stream, streamOffset, NULL, callback, context, e_rr
+	));
+
+clean:
 	return s_uccess;
 }

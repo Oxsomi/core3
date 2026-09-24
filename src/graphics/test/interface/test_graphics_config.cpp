@@ -192,7 +192,7 @@ extern "C" void Test_graphicsConfigVariants(
 		const c::Bool isSpirv = RefPtr_data(instRef, c::GraphicsInstance)->api == c::EGraphicsApi_Vulkan;
 		const c::EGfxBinaryType binaryType = isSpirv ? c::EGfxBinaryType_SPIRV : c::EGfxBinaryType_DXIL;
 
-		//Point sampling with clamped addressing, so the shader's texel centre samples come back exact.
+		//Point sampling with clamped addressing, so the shader's texel center samples come back exact.
 
 		c::SamplerInfo samplerInfo{};
 		samplerInfo.filter = c::ESamplerFilterMode_Nearest;

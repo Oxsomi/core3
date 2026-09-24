@@ -26,7 +26,7 @@
 //
 //The structured shader is reused for that, with its input created from a MemoryStream. Every field of every
 // element is transformed differently there, so an input that arrived shifted or short shows up as a specific
-// field landing on a neighbour's value rather than as a wholesale failure.
+// field landing on a neighbor's value rather than as a wholesale failure.
 
 #include "test_graphics_shared.hpp"
 #include "types/container/log.hpp"
@@ -194,7 +194,7 @@ static void Test_streamUpload(c::Test *t, const StreamFixture &fx) {
 					values[i].d == i * 11 + i;
 
 			//Every element right means the whole stream arrived at the right offset: a short or shifted read
-			// lands a neighbour's value in at least one field.
+			// lands a neighbor's value in at least one field.
 
 			Test_assert(t, "streamUploadResults", allMatch);
 		}

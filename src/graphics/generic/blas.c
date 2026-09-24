@@ -458,7 +458,7 @@ Bool GraphicsDeviceRef_createBLAS(
 			*geometry = (BLASGeometry) { 0 };
 
 			//The index buffer is optional (indexFormat Undefined), and inc'ing a NULL one reports failure without an
-			// error, so an index free BLAS used to fail creation silently here.
+			// error, so an index free BLAS has to be recognized rather than inc'd blindly.
 			//The same holds for the OMM index buffer and the micromap.
 			//Each reference is stored the moment it is taken, so a failure further down still releases it.
 

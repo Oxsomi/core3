@@ -41,7 +41,7 @@ void Test_quatBasic(Test *test) {
 	Test_assert(test, "QuatF32_normalize", !QuatF32_neq(QuatF32_normalize(q), norm));
 
 	//The inverse holds for ANY quaternion, so q times its inverse is the identity whatever the length.
-	//A quaternion of length 2 is the case that used to come back scaled by 2.
+	//A quaternion of length 2 is what separates that from the conjugate, which only agrees on a unit one.
 
 	const QuatF32 identity = QuatF32_identity();
 	const QuatF32 unit = QuatF32_create(0, 0, 0.6f, 0.8f);

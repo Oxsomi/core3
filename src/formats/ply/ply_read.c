@@ -362,8 +362,8 @@ clean:
 
 //One scalar out of bytes already in hand, as a double since that holds every type the format has.
 //Assembled from the bytes in the FILE's order rather than loaded and swapped, so the host's byte order never
-// enters into it. Unrolled per width because the width is not a constant here and a byte at a time loop
-// around a branch is most of what reading a binary body used to cost.
+// enters into it. Unrolled per width because the width is not a constant here, and a byte at a time loop
+// around a branch is what a binary body would otherwise pay on every scalar.
 
 static F64 Ply_decodeScalar(const U8 *bytes, U8 type, U8 format) {
 

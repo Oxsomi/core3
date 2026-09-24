@@ -108,7 +108,7 @@ void Test_objWriteQuantized(Test *t) {
 
 		Test_assert(t, "vertexCountBack", second.info.vertexCount == first.info.vertexCount);
 
-		//The quad spans 0..1 on x and y and is flat on z, so every corner lands on a bound or the centre and
+		//The quad spans 0..1 on x and y and is flat on z, so every corner lands on a bound or the center and
 		// comes back exactly; a flat axis quantizes to its only value.
 
 		Bool exact = true;

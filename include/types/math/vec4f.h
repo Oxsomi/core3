@@ -168,9 +168,8 @@ static inline F32x4 F32x4_normalize4Fast(F32x4 v) {
 	return F32x4_mul(v, F32x4_rsqrtFast(F32x4_xxxx4(F32x4_sqLen4(v))));
 }
 
-//ZERO has no sign, which is what the scalar F32_sign says and what this used to disagree with: the compares
-//hand back 0 or 1, so their difference is -1, 0 or 1 directly. F32x4_abs is a backend instruction now and no
-// longer built on this, so the two cannot drift apart again.
+//ZERO has no sign here, which is the answer the scalar F32_sign gives: the compares hand back 0 or 1, so
+//their difference is -1, 0 or 1 directly.
 
 static inline F32x4 F32x4_sign(F32x4 v) {
 	return F32x4_sub(F32x4_gt(v, F32x4_zero()), F32x4_lt(v, F32x4_zero()));

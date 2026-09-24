@@ -34,7 +34,7 @@ typedef struct Error Error;
 //
 //What comes out is what a GPU takes: one vertex per DISTINCT position, normal and uv triple a face names,
 // and a triangle list of U32 indices into those. The file itself indexes position, normal and uv separately,
-// so a corner sharing a position with its neighbour but not a normal is two vertices here and one there.
+// so a corner sharing a position with its neighbor but not a normal is two vertices here and one there.
 //That deduplication is the whole job; the arithmetic of the format is trivial.
 //
 //Only the geometry is read. Groups, objects, smoothing groups and material assignments are skipped rather

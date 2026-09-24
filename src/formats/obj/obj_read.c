@@ -482,7 +482,7 @@ Bool Obj_read(
 			if(!materials.names.length)
 				materials.usedDefault = true;
 
-			//Fanned from the first corner, which is right for the convex polygons a modeller emits.
+			//Fanned from the first corner, which is right for the convex polygons a modeler emits.
 
 			for(U64 k = 1; k + 1 < face.length; ++k) {
 

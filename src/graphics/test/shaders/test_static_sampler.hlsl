@@ -46,7 +46,7 @@ _vkBinding(2, 0) SamplerState _staticSamplerRepeat : register(s1, space0);
 [numthreads(8, 8, 1)]
 void main(U32x3 id : SV_DispatchThreadID) {
 
-	//Sampled at texel centres of an 8x8 target, so a point sampler returns each texel exactly and the
+	//Sampled at texel centers of an 8x8 target, so a point sampler returns each texel exactly and the
 	// readback compares against the source rather than against an interpolation of it.
 
 	F32x2 uv = (F32x2(id.xy) + 0.5f) / 8.0f;
