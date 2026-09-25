@@ -77,6 +77,8 @@
 //Both C++ headers come BEFORE the block below: a standard header included after the C headers landed in
 //oxc::c finds its guard already tripped and leaves its symbols in that namespace.
 
+#include <stdlib.h>
+
 #include "test_graphics_shared.hpp"
 
 //Log::debugLn is the C++ front for Log_debugLnx; the x macros name ELogOptions_NewLine unqualified and so
@@ -121,6 +123,17 @@ namespace oxc { namespace c {
 //its entry points, and they all reach c:: the same way.
 
 using namespace oxc;
+
+//Whether this run asks the API to validate itself, off unless OXC3_TEST_VALIDATION says otherwise.
+//Read per call rather than cached, since nothing here runs often enough for that to matter.
+
+static c::Bool Test_wantsValidation() {
+	const c::C8 *validation = getenv("OXC3_TEST_VALIDATION");
+
+	//An EMPTY value counts as off, since that is what a workflow hands over for a switch it left alone.
+
+	return validation && validation[0] && validation[0] != '0';
+}
 
 // -- 1. GraphicsInterface ------------------------------------------------------
 
@@ -371,8 +384,11 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 
 	c::GraphicsDeviceRef *created = NULL;
 
+	const c::EGraphicsDeviceFlags deviceFlags =
+		Test_wantsValidation() ? c::EGraphicsDeviceFlags_IsDebug : c::EGraphicsDeviceFlags_None;
+
 	if(!Test_assert(t, "deviceCreate", c::GraphicsDeviceRef_create(
-		instRef, info, c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, NULL, NULL, &created, &t->err
+		instRef, info, deviceFlags, c::EGraphicsBufferingMode_Default, NULL, NULL, &created, &t->err
 	)))
 		return;
 
@@ -540,7 +556,17 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 	c::GraphicsInstanceRef *instRef = NULL;
 	c::ListGraphicsDeviceInfo infos {};
 
-	if (!c::GraphicsInstance_create(&appInfo, api, c::EGraphicsInstanceFlags_None, alloc, &type, &instRef, &t->err)) {
+	//OPT IN, through OXC3_TEST_VALIDATION=1. The debug layers cost a lot of run time, so they are not what a
+	//normal run pays for; what they buy is the API's own account of a misuse, which is the only thing that
+	// speaks when a process dies in a way no handler inside it can see.
+	//GPU based validation stays off: it reports what a shader does, and nothing it watches has run yet at the
+	// point a create fails.
+
+	const c::EGraphicsInstanceFlags instanceFlags = Test_wantsValidation()
+		? (c::EGraphicsInstanceFlags) (c::EGraphicsInstanceFlags_IsDebug | c::EGraphicsInstanceFlags_DisableGPUBV)
+		: c::EGraphicsInstanceFlags_None;
+
+	if (!c::GraphicsInstance_create(&appInfo, api, instanceFlags, alloc, &type, &instRef, &t->err)) {
 		c::Test_print(t, "No compatible graphics driver, skipping device tests");
 		t->err = c::Error_none();
 		return;

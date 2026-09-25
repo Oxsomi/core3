@@ -85,6 +85,13 @@ on:
         type: string
         required: false
         default: default
+      # Asks the graphics suite to create its instance and device with the API's own validation on.
+      # Off by default because the debug layers cost real run time; on where a configuration is being
+      # diagnosed, since a crash the process cannot report is only ever described from outside it.
+      graphics_validation:
+        type: boolean
+        required: false
+        default: false
       hook_name:
         type: string
         required: true
@@ -115,6 +122,10 @@ jobs:
     name: ${{ inputs.name }}
     runs-on: ${{ inputs.runner }}
     container: ${{ inputs.container }}
+
+    env:
+      # Spelled to a literal either way: an empty value is a switch nobody set, and the suite reads it as off.
+      OXC3_TEST_VALIDATION: ${{ inputs.graphics_validation && '1' || '0' }}
 
     # github.workflow resolves to the caller's name inside a reusable workflow, which the webhook step at the
     # bottom already relies on, so this one block gives each of the 30 configurations its own group.
