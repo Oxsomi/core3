@@ -384,8 +384,14 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 
 	c::GraphicsDeviceRef *created = NULL;
 
+	//Asked of the INSTANCE rather than of the request: IsDebug there is a wish the instance may turn down
+	//when the machine has no debug layer, and a debug device on an instance without one is refused outright.
+
+	const c::GraphicsInstance *instance = RefPtr_data(instRef, c::GraphicsInstance);
+
 	const c::EGraphicsDeviceFlags deviceFlags =
-		Test_wantsValidation() ? c::EGraphicsDeviceFlags_IsDebug : c::EGraphicsDeviceFlags_None;
+		(instance->flags & c::EGraphicsInstanceFlags_IsDebug) ? c::EGraphicsDeviceFlags_IsDebug :
+		c::EGraphicsDeviceFlags_None;
 
 	if(!Test_assert(t, "deviceCreate", c::GraphicsDeviceRef_create(
 		instRef, info, deviceFlags, c::EGraphicsBufferingMode_Default, NULL, NULL, &created, &t->err
