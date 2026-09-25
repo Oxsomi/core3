@@ -202,14 +202,29 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	ID3DBlob *errBlob = NULL, *rootSigBlob = NULL;
 
+	//Device creation is a long run of calls into the driver, and one that takes the process down does it in a
+	//way no handler in it can report. Verbose names each step as it is reached, so a log that simply stops
+	// says which call stopped it.
+	//The Windows sink writes through WriteConsole/WriteFile rather than stdio, so each line is out before the
+	// call after it runs.
+
+	#define dxVerbose(...) do {                                     \
+		if(device->flags & EGraphicsDeviceFlags_IsVerbose)          \
+			Log_debugLnx(__VA_ARGS__);                              \
+	} while(false)
+
 	//Create device
 
 	const DxGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Dx);
+
+	dxVerbose("D3D12: enumerating the adapter by LUID");
 
 	gotoIfError3(clean, dxCheck(instanceExt->factory->lpVtbl->EnumAdapterByLuid(
 		instanceExt->factory, *(const LUID*)&physicalDevice->luid,
 		&IID_IDXGIAdapter4, (void**)&deviceExt->adapter4
 	), e_rr));
+
+	dxVerbose("D3D12: creating the device");
 
 	if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_IndependentDevices)
 	{
@@ -228,6 +243,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		),
 		e_rr
 	));
+
+	dxVerbose("D3D12: querying the device configuration");
 
 	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->QueryInterface(
 		deviceExt->device, &IID_ID3D12DeviceConfiguration1, (void**) &deviceExt->deviceConfig
@@ -248,6 +265,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	#endif
 
+	dxVerbose("D3D12: probing the AMD shader analyzer (isAmd %s)", isAmd ? "true" : "false");
+
 	if(isAmd && DxAmdShaderAnalyzer_init((ID3D12Device*) deviceExt->device, &deviceExt->amdAnalyzer))
 		device->info.capabilities.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
 
@@ -258,6 +277,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 	//be refused there. Asking for it is how this finds out, so a refusal leaves the device without debug
 	// features rather than leaving the caller without a device, and clears the flag so nothing below assumes
 	// them. Everything downstream already tests debugDevice for NULL or reads this flag.
+
+	dxVerbose("D3D12: querying the debug device");
 
 	if(
 		(device->flags & EGraphicsDeviceFlags_IsDebug) &&
@@ -369,6 +390,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		#endif
 	}
 
+	dxVerbose("D3D12: creating the command queues");
+
 	//Get queues
 
 	deviceExt->queues[EDxCommandQueue_Copy] = (DxCommandQueue) {
@@ -419,6 +442,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 	U64 threads = Platform_getThreads();
 	gotoIfError3(clean, ListDxCommandAllocator_resize(&deviceExt->commandPools, 3 * threads * 3, alloc, e_rr));
 
+	dxVerbose("D3D12: creating the fence");
+
 	//Create fence
 
 	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateFence(
@@ -463,6 +488,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 			deviceExt->timestampCapacity[i] = GRAPHICS_TIMESTAMP_QUERIES;
 		}
 	}
+
+	dxVerbose("D3D12: creating the depth stencil views");
 
 	//Create DSVs
 
@@ -540,6 +567,8 @@ clean:
 
 	if(!s_uccess)
 		RefPtr_dec(deviceRef);
+
+	#undef dxVerbose
 
 	return s_uccess;
 }

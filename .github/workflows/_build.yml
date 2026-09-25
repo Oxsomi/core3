@@ -550,6 +550,34 @@ jobs:
           Write-Host "Sanitizer runtime : $runtime"
           Add-Content -Path $env:GITHUB_PATH -Value $runtime
 
+      # The D3D12 debug layer and DXGI's debug factory both come from the Graphics Tools feature, which a runner
+      # image does not carry. Without it a request for validation is refused and the run says nothing about why
+      # it then dies, so the configurations that ask for validation install it first.
+      # Reported either way and never fatal: verbose logging still works without it, and losing the layer is
+      # worth knowing about rather than worth stopping for.
+
+      - name: Enable Graphics Tools (the D3D12 debug layer lives there)
+        if: runner.os == 'Windows' && inputs.graphics_validation
+        shell: pwsh
+        run: |
+          $cap = Get-WindowsCapability -Online |
+            Where-Object { $_.Name -like "Tools.Graphics.DirectX*" } |
+            Select-Object -First 1
+
+          if (-not $cap) {
+            Write-Warning "This image offers no Graphics Tools capability; the debug layer will stay unavailable"
+            exit 0
+          }
+
+          Write-Host "Graphics Tools: $($cap.Name) is $($cap.State)"
+
+          if ($cap.State -ne "Installed") {
+            try { Add-WindowsCapability -Online -Name $cap.Name | Out-Null }
+            catch { Write-Warning "Add-WindowsCapability failed: $_" }
+          }
+
+          Write-Host "Graphics Tools now: $((Get-WindowsCapability -Online -Name $cap.Name).State)"
+
       - name: Enable Developer Mode (the preview Agility SDK requires it)
         if: runner.os == 'Windows'
         shell: pwsh
