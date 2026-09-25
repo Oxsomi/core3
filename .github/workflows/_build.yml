@@ -123,10 +123,6 @@ jobs:
     runs-on: ${{ inputs.runner }}
     container: ${{ inputs.container }}
 
-    env:
-      # Spelled to a literal either way: an empty value is a switch nobody set, and the suite reads it as off.
-      OXC3_TEST_VALIDATION: ${{ inputs.graphics_validation && '1' || '0' }}
-
     # github.workflow resolves to the caller's name inside a reusable workflow, which the webhook step at the
     # bottom already relies on, so this one block gives each of the 30 configurations its own group.
     # Without it a superseded push leaves 30 jobs running to completion, each writing a cache entry, which is
@@ -148,6 +144,10 @@ jobs:
     env:
       ASAN_OPTIONS: ${{ inputs.sanitizers && 'detect_leaks=0:abort_on_error=1:detect_odr_violation=0' || '' }}
       UBSAN_OPTIONS: ${{ inputs.sanitizers && 'print_stacktrace=1:halt_on_error=1' || '' }}
+
+      # Spelled to a literal either way: an empty value is a switch nobody set, and the suite reads it as off.
+
+      OXC3_TEST_VALIDATION: ${{ inputs.graphics_validation && '1' || '0' }}
 
     steps:
       - uses: actions/checkout@v4
