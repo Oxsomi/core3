@@ -238,11 +238,10 @@ Bool DX_WRAP_FUNC(GraphicsInstance_create)(
 		instance->flags &=~ EGraphicsInstanceFlags_IsDebug;
 	}
 
-	//DXGI's debug factory and the D3D12 debug layer are separate facilities with separate homes. DXGI's comes
-	//from the graphics tools feature, which a machine may not have; the D3D12 layer ships with the Agility SDK
-	// as d3d12SDKLayers.dll beside the core, so it is there whenever the core is.
-	//Losing the first therefore says nothing about the second, and the flag stays on so the layer below is
-	// still enabled rather than being switched off by an unrelated absence.
+	//DXGI's debug factory and the D3D12 debug layer are separate interfaces and either can be refused on its
+	//own, so losing this one does not decide the other and the flag stays on for the layer below to try.
+	//Both are commonly absent together, since a machine without the graphics tools feature tends to have
+	// neither, and each site says which one it was rather than reporting debugging as a single thing.
 
 	if (instance->flags & EGraphicsInstanceFlags_IsDebug) {
 

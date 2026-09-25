@@ -254,12 +254,23 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
 	(void) isNv;
 
-	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
+	//The debug device only exists once the layer is actually on, which is settled at instance creation and can
+	//be refused there. Asking for it is how this finds out, so a refusal leaves the device without debug
+	// features rather than leaving the caller without a device, and clears the flag so nothing below assumes
+	// them. Everything downstream already tests debugDevice for NULL or reads this flag.
 
-		gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->QueryInterface(
+	if(
+		(device->flags & EGraphicsDeviceFlags_IsDebug) &&
+		FAILED(deviceExt->device->lpVtbl->QueryInterface(
 			deviceExt->device,
 			&IID_ID3D12DebugDevice, (void**) &deviceExt->debugDevice
-		), e_rr));
+		))
+	) {
+		Log_warnLnx("D3D12: the debug layer is not enabled, so this device carries no debug features");
+		device->flags &=~ EGraphicsDeviceFlags_IsDebug;
+	}
+
+	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
 		//Get infoQueue0 to disable some bogus validation messages
 
