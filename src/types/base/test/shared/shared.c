@@ -128,6 +128,14 @@ Bool Test_assert2(Test *test, const C8 *section, Bool value, const C8 *file, U64
 			test->err.errorStr ? test->err.errorStr : "???"
 		);
 
+	//Tracing names each assert as it COMPLETES, so a module that takes the process down leaves its last finished
+	//step as the final line and the fault is in whatever runs between that assert and the next.
+
+	if (Test_tracesModules()) {
+		printf("-- done %s: %s\n", Test_prefix(test), !section ? "???" : section);
+		fflush(stdout);
+	}
+
 	test->err = Error_none();
 	return value;
 }
