@@ -128,14 +128,13 @@ static inline I32x4 I32x4_mod(I32x4 v, I32x4 d) {                //UB for any d[
 
 static inline I32x4 I32x4_clamp(I32x4 a, I32x4 mi, I32x4 ma) { return I32x4_max(mi, I32x4_min(ma, a)); }
 
+//Zero has no sign here either, and abs is the difference rather than a multiply by one.
+
 static inline I32x4 I32x4_sign(I32x4 v) {
-	return I32x4_add(
-		I32x4_mul(I32x4_lt(v, I32x4_zero()), I32x4_negTwo()),
-		I32x4_one()
-	);
+	return I32x4_sub(I32x4_gt(v, I32x4_zero()), I32x4_lt(v, I32x4_zero()));
 }
 
-static inline I32x4 I32x4_abs(I32x4 v) { return I32x4_mul(I32x4_sign(v), v); }
+static inline I32x4 I32x4_abs(I32x4 v) { return I32x4_max(v, I32x4_sub(I32x4_zero(), v)); }
 
 //Boolean
 
@@ -196,6 +195,25 @@ static inline I32x4 I32x4_load4(const void *arr) {
 	I32x4 result = I32x4_zero();
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 4), Buffer_createRefConst(arr, sizeof(I32) * 4));
 	return result;
+}
+
+//Writes the low components to possibly misaligned memory, leaving whatever follows them untouched.
+//NULL is a write that does nothing, which mirrors the loads above returning zero for it.
+
+static inline void I32x4_store1(void *arr, I32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(I32)), Buffer_createRefConst(&a, sizeof(I32)));
+}
+
+static inline void I32x4_store2(void *arr, I32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(I32) * 2), Buffer_createRefConst(&a, sizeof(I32) * 2));
+}
+
+static inline void I32x4_store3(void *arr, I32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(I32) * 3), Buffer_createRefConst(&a, sizeof(I32) * 3));
+}
+
+static inline void I32x4_store4(void *arr, I32x4 a) {
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(I32) * 4), Buffer_createRefConst(&a, sizeof(I32) * 4));
 }
 
 #ifdef __cplusplus

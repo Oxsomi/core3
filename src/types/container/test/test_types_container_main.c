@@ -42,6 +42,7 @@ OXC3_TEST_MAIN(types_container) {
 	#endif
 
 	Test_textureFormat(&t);
+	Test_textureCodec(&t);
 
 	Test_allocationBuffer(&t);
 	Test_bigInt(&t);

@@ -19,6 +19,7 @@
 */
 
 #include "@types.hlsli"
+#include "@pack.hlsli"
 
 //A texture as a push descriptor, which is the case a root descriptor cannot express.
 //A root descriptor is a raw GPU address with nowhere to carry a format, a mip or a swizzle, so D3D12 gives
@@ -36,17 +37,6 @@ RWByteAddressBuffer output;
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(U32x3 id : SV_DispatchThreadID) {
-
 	F32x4 texel = _input[id.xy];
-
-	//Repacked into the same 0xAABBGGRR the texture was uploaded as, so the readback compares against the
-	// source texels directly rather than against a second decoding of them.
-
-	U32 packed =
-		((U32)(texel.x * 255.0f + 0.5f)) |
-		((U32)(texel.y * 255.0f + 0.5f) << 8) |
-		((U32)(texel.z * 255.0f + 0.5f) << 16) |
-		((U32)(texel.w * 255.0f + 0.5f) << 24);
-
-	output.Store((id.y * 8 + id.x) * 4, packed);
+	output.Store((id.y * 8 + id.x) * 4, packUnorm4x8(texel));
 }

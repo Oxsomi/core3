@@ -345,6 +345,24 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 	if(!device)
 		return;
 
+	//Nothing below may run while the GPU works: the decs can destroy what a recorded command buffer names, and
+	//destroying a device wants every queue idle whatever the reference counts say. Counting keeps objects alive,
+	//it cannot stop the GPU. The PUBLIC wait is the one to call: it also drains the frames in flight, which has
+	//to happen here rather than below, since below is past the backend device those references destroy against.
+	//RefPtr_data puts the data after the header, so the ref precedes it.
+	//
+	//A device that never finished being created has nothing to wait for and no backend to ask.
+
+	GraphicsDeviceRef *deviceRef = ((RefPtr*) deviceGeneric) - 1;
+
+	if(device->framesInFlight) {
+
+		Error err = Error_none();
+
+		if(!GraphicsDeviceRef_wait(deviceRef, &err))
+			Log_errorLnx("GraphicsDevice_free() couldn't wait for the device, freeing regardless");
+	}
+
 	for(U64 i = 0; i < 4; ++i)
 		RefPtr_dec(&device->copyShaders[i]);
 
@@ -368,6 +386,7 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 	for(U64 i = 0; i < device->pendingPulls.length; ++i) {
 		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].resource);
+		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].stream);
 		Buffer_free(&device->pendingPulls.ptrNonConst[i].textureData, alloc);
 	}
 
@@ -378,6 +397,7 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 		for(U64 i = 0; i < device->pullsInFlight[j].length; ++i) {
 			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].resource);
 			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].stagingReadback);
+			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].stream);
 			Buffer_free(&device->pullsInFlight[j].ptrNonConst[i].textureData, alloc);
 		}
 
@@ -433,6 +453,9 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 	ListDeviceMemoryBlock_free(&device->allocator.blocks, alloc);
 	ListSpinLockPtr_free(&device->currentLocks, alloc);
+
+	//Empty by now, since the wait at the top drained them. A dec HERE would be past the backend device these
+	//references destroy against, so the warning is the right shape and is now unreachable rather than advisory.
 
 	for(U64 i = 0; i < device->framesInFlight; ++i) {
 
@@ -746,7 +769,10 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			!info ? 0 : 2, "GraphicsDevice_defaultBindlessLayout()::info and result are required"
 		));
 
-	if(result->bindings.ptr || result->bindingNames.ptr)
+	//Samplers too, since this overwrites the whole info: the sampler forms share storage, so the one term covers
+	// either of them, and a list left behind here is both leaked and mislabeled by the flags that come with it.
+
+	if(result->bindings.ptr || result->bindingNames.ptr || result->immutableSamplers.ptr)
 		retError(clean, Error_invalidParameter(
 			2, 0, "GraphicsDevice_defaultBindlessLayout()::result wasn't empty, probably indicates memleak"
 		));
@@ -1019,7 +1045,8 @@ Bool GraphicsDeviceRef_create(
 			EGraphicsFeatures2_RayMicromapOpacityU8     |
 			EGraphicsFeatures2_RayClusterAS             |
 			EGraphicsFeatures2_RayPartitionedTLAS       |
-			EGraphicsFeatures2_RayIndirectASBuild
+			EGraphicsFeatures2_RayIndirectASBuild       |
+			EGraphicsFeatures2_SoftwareRT
 		);
 	}
 
@@ -1136,6 +1163,23 @@ Bool GraphicsDeviceRef_create(
 			gotoIfError3(clean, ListCharString_createCopyUnderlying(
 				&bindlessLayout->bindingNames, alloc, &descLayoutInfo.bindingNames, e_rr
 			));
+
+			//No sampler exists before the device does, so a sampler this layout bakes is only ever given by value.
+
+			if(
+				!(bindlessLayout->flags & EDescriptorLayoutFlags_InternalStaticSamplers) &&
+				bindlessLayout->immutableSamplers.length
+			)
+				retError(clean, Error_invalidParameter(
+					4, 0,
+					"GraphicsDeviceRef_create()::bindlessLayout names sampler refs; a sampler it bakes has to be added "
+					"by value through DescriptorLayoutInfo_addStaticSampler"
+				));
+
+			if(bindlessLayout->flags & EDescriptorLayoutFlags_InternalStaticSamplers)
+				gotoIfError3(clean, ListPLSamplerInfo_createCopy(
+					bindlessLayout->staticSamplers, alloc, &descLayoutInfo.staticSamplers, e_rr
+				));
 		}
 
 		else gotoIfError3(clean, GraphicsDevice_defaultBindlessLayout(
@@ -2045,8 +2089,10 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 	for (U64 i = 0; i < pulls->length; ++i) {
 
 		DevicePendingPull *pull = &pulls->ptrNonConst[i];
+		Bool ok = true;
 
-		//The union member that's live follows from this: cpuData owners use callback, the rest textureCallback
+		//The union member that's live follows from the destination: a pull with a stream uses streamCallback,
+		//otherwise cpuData owners use callback and the rest textureCallback
 
 		const TypeId typeId = pull->resource->refPtrType->typeId;
 
@@ -2064,7 +2110,22 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 			const U64 start = pull->range.buffer.startRange;
 			const U64 len = pull->range.buffer.endRange - start;
 
-			Buffer_memcpy(
+			//A stream destination takes the region straight out of the readback, so nothing the size of the
+			//resource has to be resident. The write is the only step here that can fail, which is why a
+			// stream pull reports whether it landed and a cpuData pull has nothing to report.
+
+			if (pull->stream) {
+
+				OxStream *stream = RefPtr_data(pull->stream, OxStream);
+				Error err = Error_none();
+
+				ok = stream->write(
+					stream, pull->streamOffset, len, Buffer_createRefConst(src, len),
+					GraphicsDevice_getAlloc(device), &err
+				);
+			}
+
+			else Buffer_memcpy(
 				Buffer_createRef(buffer->cpuData.ptrNonConst + start, len),
 				Buffer_createRefConst(src, len)
 			);
@@ -2082,7 +2143,26 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 			//De-pitch the backend's row stride back into the tight full texture rows cpuData uses,
 			// at the region's offsets; all row measures are block rows for compressed formats
 
-			if (ownsCpuData) {
+			if (pull->stream) {
+
+				OxStream *stream = RefPtr_data(pull->stream, OxStream);
+				Error err = Error_none();
+				U64 at = pull->streamOffset;
+
+				for(U64 k = 0; k < TextureRange_length(range) && ok; ++k)
+					for(U64 j = 0; j < rows && ok; ++j) {
+
+						ok = stream->write(
+							stream, at, regionRow,
+							Buffer_createRefConst(src + pull->rowPitch * (j + k * rows), regionRow),
+							GraphicsDevice_getAlloc(device), &err
+						);
+
+						at += regionRow;
+					}
+			}
+
+			else if (ownsCpuData) {
 
 				DeviceTexture *texture = DeviceTextureRef_ptr(pull->resource);
 
@@ -2117,13 +2197,32 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 			}
 		}
 
+		//Reported alongside the callback, which is optional, since a readback that quietly wrote nothing is
+		//worse than a loud one.
+
+		if(pull->stream && !ok) {
+
+			const U64 folded = GraphicsDevice_logThrottled(
+				device, EGraphicsDeviceMessage_PullStreamFailed, 1 * SECOND
+			);
+
+			if(folded)
+				Log_errorLnx("A pull could not write to its stream (%"PRIu64" since the last report)", folded);
+		}
+
 		//textureCallback shares the union and already fired inside the render target branch above
 
-		if(ownsCpuData && pull->callback)
+		if(pull->stream) {
+			if(pull->streamCallback)
+				pull->streamCallback(pull->resource, ok, pull->context);
+		}
+
+		else if(ownsCpuData && pull->callback)
 			pull->callback(pull->resource, pull->context);
 
 		RefPtr_dec(&pull->resource);
 		RefPtr_dec(&pull->stagingReadback);
+		RefPtr_dec(&pull->stream);
 	}
 
 	ListDevicePendingPull_clear(pulls, NULL);
@@ -2249,9 +2348,11 @@ Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *com
 		gotoIfError3(clean, ListDevicePendingPull_pushBack(&device->pullsInFlight[device->fifId], pull, alloc, e_rr));
 		RefPtr_inc(device->stagingReadback);        //Owned by the in flight entry just pushed
 
-		//Ownership of the ref and the destination buffer moved to the in flight list
+		//Ownership of the refs and the destination buffer moved to the in flight list.
+		//Everything released by the loop under clean has to be cleared here, or it is released twice.
 
 		device->pendingPulls.ptrNonConst[i].resource = NULL;
+		device->pendingPulls.ptrNonConst[i].stream = NULL;
 		device->pendingPulls.ptrNonConst[i].textureData = Buffer_createNull();
 	}
 
@@ -2261,10 +2362,41 @@ clean:
 
 	for(U64 i = 0; i < device->pendingPulls.length; ++i) {
 		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].resource);
+		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].stream);
 		Buffer_free(&device->pendingPulls.ptrNonConst[i].textureData, alloc);
 	}
 
 	ListDevicePendingPull_clear(&device->pendingPulls, NULL);
+	return s_uccess;
+}
+
+//Every exit path clears the queue, the failing ones included: a borrowed queue that outlived this call would
+// be read by a flush after the lender had freed it.
+
+Bool GraphicsDeviceRef_submitCommandsJob(
+	GraphicsDeviceRef *deviceRef,
+	const ListCommandListRef *commandLists,
+	const ListSwapchainRef *swapchains,
+	F32 deltaTime,
+	F32 time,
+	JobQueue *uploadQueue,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!deviceRef)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_submitCommandsJob()::deviceRef is required"));
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	device->uploadJobQueue = uploadQueue;
+
+	s_uccess = GraphicsDeviceRef_submitCommands(deviceRef, commandLists, swapchains, deltaTime, time, e_rr);
+
+	device->uploadJobQueue = NULL;
+
+clean:
 	return s_uccess;
 }
 
@@ -2573,6 +2705,45 @@ Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage messa
 	//Fetch or returns the PREVIOUS bits, so the first caller sees the bit clear and everyone after sees it set
 
 	return !(AtomicI64_or(&device->runtimeMessages, (I64) message) & (I64) message);
+}
+
+U64 GraphicsDevice_logThrottled(GraphicsDevice *device, EGraphicsDeviceMessage message, Ns interval) {
+
+	if(!device)
+		return 0;
+
+	//The state is indexed by the message's BIT POSITION, so anything that is not a single known bit has no
+	// slot and is reported every time rather than silently never.
+
+	U64 bit = (U64) message;
+
+	if(!bit || (bit & (bit - 1)))
+		return 1;
+
+	U8 slot = 0;
+
+	while(bit > 1) {
+		bit >>= 1;
+		++slot;
+	}
+
+	if(slot >= EGraphicsDeviceMessage_Bits)
+		return 1;
+
+	AtomicI64_inc(&device->logFolded[slot]);
+
+	const Ns now = Time_now();
+	const I64 last = AtomicI64_load(&device->logLast[slot]);
+
+	if(last && (Ns) last + interval > now)
+		return 0;
+
+	//Whoever claims the window reports; everyone else folds into the next one.
+
+	if(AtomicI64_cmpStore(&device->logLast[slot], last, (I64) now) != last)
+		return 0;
+
+	return (U64) AtomicI64_store(&device->logFolded[slot], 0);
 }
 
 Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {

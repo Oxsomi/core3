@@ -66,25 +66,54 @@ Bool DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count, Erro
 	if(buffer->isPendingFullCopy)        //Already has a full pending change, so no need to check anything.
 		goto clean;
 
-	//The first-frame exception only permits the internal initial upload of a not-CPU-backed buffer.
-	//That upload always has staged data in cpuData, so require it here.
-	//Otherwise a freshly-created, not-backed buffer with no data would be wrongly accepted.
+	//Three ways a range can be legal.
+	//CPUBacked keeps its host copy for the life of the resource, so any range of it can be re-read at any time.
+	//A STREAM source is the same situation reached differently: the stream outlives the buffer, so a range can
+	// be re-read from it whenever, which is what makes a partial update possible without a host copy.
+	//Everything else has only the staged cpuData, which is freed once the first upload has consumed it, so the
+	// exception is exactly that upload: the first frame, the whole resource, with something to read.
 
-	if(
-		!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked) &&
-		!(buffer->isFirstFrame && !offset && !count && Buffer_length(buffer->cpuData))
-	)
+	//CPUAllocatedBit puts the resource in host visible memory that stays MAPPED, so the caller writes into it
+	//directly and the bytes are already where the device reads them. There is nothing to copy from, and the
+	// range only has to be recorded so an incoherent heap gets its flush.
+
+	const Bool anyRange =
+		(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked) ||
+		(buffer->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit) ||
+		buffer->cpuStream;
+
+	const Bool firstFullUpload =
+		buffer->isFirstFrame && !offset && !count && Buffer_length(buffer->cpuData);
+
+	if(!anyRange && !firstFullUpload)
 		retError(clean, Error_invalidOperation(
 			2,
 			"DeviceBufferRef_markDirty() can only be called on first frame for the entire resource "
-			"with staged CPU data, or if it's CPU backed"
+			"with staged CPU data, or if it's CPU backed or stream backed"
 		));
 
 	if(!count)
 		count = bufLen - offset;
 
-	U64 start = offset &~ 255;
-	U64 end = U64_min((offset + count + 255) &~ 255, bufLen);
+	//256 bytes on either side keeps a run of small marks from becoming a run of tiny copies. A stream source
+	//may need MORE than that: one that decrypts or decompresses per chunk cannot serve half a chunk, so a range
+	// that ends inside one would decode it anyway and then throw the tail away.
+
+	U64 block = 256;
+
+	if(buffer->cpuStream) {
+
+		const U32 streamBlock = RefPtr_data(buffer->cpuStream, OxStream)->blockSize;
+
+		if(streamBlock > block)
+			block = streamBlock;
+	}
+
+	//Divided rather than masked: a stream's block is whatever that stream's chunk is and nothing promises it is
+	// a power of two, where the 256 default happens to be one.
+
+	U64 start = offset / block * block;
+	U64 end = U64_min((offset + count + block - 1) / block * block, bufLen);
 
 	Bool fullRange = start == 0 && end == bufLen;
 
@@ -195,7 +224,232 @@ void DeviceBuffer_free(void *bufferGeneric, const Allocator *alloc) {
 	DeviceBuffer_freeExt(buffer);
 	GraphicsResource_free(&buffer->resource, refPtr);
 	Buffer_free(&buffer->cpuData, alloc);
+	RefPtr_dec(&buffer->cpuStream);
 	ListDevicePendingRange_free(&buffer->pendingChanges, alloc);
+}
+
+//Three things all have to hold. There has to be a queue, which only a submit that was handed one provides.
+//The stream has to DECLARE concurrent reads: the interface allows a safe implementation but does not require
+// one, and a stream that seeks a shared handle would tear. And the work has to be worth the split, which is
+// bytes times cost: a memcpy of a megabyte is not, a block cipher over the same megabyte is.
+//
+//Pieces land on the stream's block, since a source that decodes per chunk cannot be cut inside one.
+
+#define DeviceBuffer_fanOutCost (1 * MIBI)
+
+U8 DeviceBuffer_readPieces(const DeviceBuffer *buffer, const OxStream *stream, U64 length) {
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
+
+	if(!device->uploadJobQueue || !(stream->streamType & EStreamType_ConcurrentRead))
+		return 1;
+
+	const U64 cost = length * (stream->readCost ? stream->readCost : 1);
+
+	if(cost < DeviceBuffer_fanOutCost)
+		return 1;
+
+	const U64 block = stream->blockSize ? stream->blockSize : 1;
+	const U64 blocks = (length + block - 1) / block;
+
+	U64 pieces = cost / DeviceBuffer_fanOutCost;
+
+	if(pieces > blocks)
+		pieces = blocks;
+
+	if(pieces > JobQueue_threadCount(device->uploadJobQueue))
+		pieces = JobQueue_threadCount(device->uploadJobQueue);
+
+	return pieces > 255 ? 255 : (U8) (pieces < 1 ? 1 : pieces);
+}
+
+typedef struct DeviceBufferReadJob {
+	OxStream *stream;
+	const Allocator *alloc;
+	U64 offset, length;
+	Buffer dst;
+	JobGroup *group;
+	Bool ok;
+	U8 padding[7];
+} DeviceBufferReadJob;
+
+static Bool DeviceBuffer_readJob(void *data, U64 threadId, JobQueue *queue) {
+
+	(void) threadId; (void) queue;
+
+	DeviceBufferReadJob *job = (DeviceBufferReadJob*) data;
+	Error err = Error_none();
+
+	const Bool ok = job->stream->read(job->stream, job->offset, job->length, job->dst, job->alloc, &err);
+	job->ok = ok;
+
+	//Releasing the token is the last thing done with job: the fan-out returns the moment the latch drops,
+	//and its jobs live on that stack frame.
+
+	(void) JobGroup_leave(job->group, NULL);
+	return ok;
+}
+
+//The pieces are block aligned and disjoint, so no two of them touch the same chunk of the source or the same
+//bytes of the destination. The LAST one takes the remainder, which is what keeps the split exact.
+//Every piece is waited for before this returns, so a failure in one is reported rather than outliving the call.
+
+static Bool DeviceBuffer_readFanOut(
+	const DeviceBuffer *buffer, OxStream *stream, U64 offset, U64 length, Buffer dst, U8 pieces,
+	const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Bool waited = false;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
+	DeviceBufferReadJob jobs[255];
+	JobGroup group = (JobGroup) { 0 };
+
+	const U64 block = stream->blockSize ? stream->blockSize : 1;
+	const U64 blocks = (length + block - 1) / block;
+	const U64 perPiece = (blocks + pieces - 1) / pieces * block;
+
+	U8 count = 0, entered = 0, pushed = 0;
+
+	while(count < pieces && (U64) count * perPiece < length)
+		++count;
+
+	//The queue is the caller's, and this runs with the device locked, so the wait is scoped to a group.
+	//Waiting on the QUEUE would run whatever else the caller put on it, under that lock, and a job of
+	// theirs that touches the device would then deadlock against the thread waiting for it.
+	//Scoped to a group this thread only ever runs its own reads, so it still drains them and unlocks even
+	// when every worker is stuck behind the device.
+
+	gotoIfError3(clean, JobGroup_create(&group, device->uploadJobQueue, NULL, NULL, NULL, e_rr));
+	gotoIfError3(clean, JobGroup_enter(&group, count, e_rr));
+	entered = count;
+
+	for(U8 i = 0; i < count; ++i) {
+
+		const U64 at = (U64) i * perPiece;
+		const U64 len = U64_min(perPiece, length - at);
+
+		jobs[i] = (DeviceBufferReadJob) {
+			.stream = stream,
+			.alloc = alloc,
+			.offset = offset + at,
+			.length = len,
+			.dst = Buffer_createRef(dst.ptrNonConst + at, len),
+			.group = &group
+		};
+
+		gotoIfError3(clean, JobQueue_pushGroup(
+			device->uploadJobQueue, DeviceBuffer_readJob, jobs + i, NULL, &group, e_rr
+		));
+
+		++pushed;
+	}
+
+	gotoIfError3(clean, JobGroup_wait(&group, e_rr));
+	waited = true;
+
+	for(U8 i = 0; i < pushed; ++i)
+		if(!jobs[i].ok)
+			retError(clean, Error_invalidState(0, "DeviceBuffer_readUploadSource() a fanned out source read failed"));
+
+clean:
+
+	//A token taken for a job that a failed push never queued has nothing left to release it.
+
+	for(U8 i = pushed; i < entered; ++i)
+		(void) JobGroup_leave(&group, NULL);
+
+	//A push that failed leaves earlier jobs running, and they write into dst, so they are waited for either way.
+
+	if(!waited && pushed)
+		(void) JobGroup_wait(&group, NULL);
+
+	return s_uccess;
+}
+
+//Keeping a source is a property of the SOURCE and not of the resource, which is why keepSource is asked for at
+//create rather than read off a resource flag: CPUAllocatedBit means the memory is host visible and mapped, so
+// such a buffer needs the stream LESS, not more, and the device local one is what still needs a source to
+// update through.
+
+void DeviceBuffer_releaseUploadSource(DeviceBuffer *buffer, const Allocator *alloc) {
+
+	if(!buffer)
+		return;
+
+	if(!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked))
+		Buffer_free(&buffer->cpuData, alloc);
+
+	if(!buffer->keepStream)
+		RefPtr_dec(&buffer->cpuStream);
+}
+
+//The stream read is POSITIONAL, so a range reaches the destination without the bytes before it being read.
+//A stream reporting fewer bytes than asked for is an error rather than a short upload: the caller committed
+// the range to a command list before this ran.
+
+Bool DeviceBuffer_readUploadSource(
+	DeviceBuffer *buffer, U64 offset, U64 length, Buffer dst, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!buffer || !length)
+		retError(clean, Error_nullPointer(0, "DeviceBuffer_readUploadSource()::buffer and length are required"));
+
+	if(Buffer_length(dst) < length)
+		retError(clean, Error_outOfBounds(
+			3, length, Buffer_length(dst), "DeviceBuffer_readUploadSource()::dst is smaller than length"
+		));
+
+	//No source at all is legal in exactly ONE situation: a CPUAllocatedBit resource lives in host visible
+	//memory that stays mapped, so the caller wrote straight into it and the bytes are already at the
+	// destination. Copying them onto themselves is the only thing to avoid there.
+	//
+	//Anywhere ELSE, no source means a source went missing between the range being marked and the flush
+	//reading it, and skipping quietly leaves the resource holding whatever it was allocated with. That is a
+	// silent wrong upload, which is worse than any failure: it reads as data.
+
+	if(!buffer->cpuStream && !Buffer_length(buffer->cpuData)) {
+
+		if(buffer->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit)
+			goto clean;
+
+		retError(clean, Error_invalidState(
+			0, "DeviceBuffer_readUploadSource() a pending range has no source left to read from"
+		));
+	}
+
+	if(buffer->cpuStream) {
+
+		OxStream *stream = RefPtr_data(buffer->cpuStream, OxStream);
+
+		if(!stream->read)
+			retError(clean, Error_unsupportedOperation(
+				0, "DeviceBuffer_readUploadSource()::cpuStream is not readable"
+			));
+
+		const U8 pieces = DeviceBuffer_readPieces(buffer, stream, length);
+
+		if(pieces < 2) {
+			gotoIfError3(clean, stream->read(stream, offset, length, dst, alloc, e_rr));
+			goto clean;
+		}
+
+		gotoIfError3(clean, DeviceBuffer_readFanOut(buffer, stream, offset, length, dst, pieces, alloc, e_rr));
+		goto clean;
+	}
+
+	if(Buffer_length(buffer->cpuData) < offset + length)
+		retError(clean, Error_outOfBounds(
+			1, offset + length, Buffer_length(buffer->cpuData), "DeviceBuffer_readUploadSource()::range past cpuData"
+		));
+
+	Buffer_memcpy(dst, Buffer_createRefConst(buffer->cpuData.ptr + offset, length));
+
+clean:
+	return s_uccess;
 }
 
 Bool GraphicsDeviceRef_createBufferIntern(
@@ -313,9 +567,12 @@ Bool GraphicsDeviceRef_createBufferIntern(
 
 	Descriptor bufferDesc = Descriptor_buffer(*ref, 0, 0, NULL, 0);
 
-	if(
-		(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) &&
-		!GraphicsDeviceRef_allocateDescriptorBindless(
+	//A descriptor that could not be allocated leaves its handle at zero, and zero is the handle a shader reads
+	//an UNRELATED resource through, so a create that shrugged this off would hand back a buffer that binds and
+	// dispatches and reads someone else's bytes. It fails instead, carrying the reason the allocation gave.
+
+	if(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessRead)
+		gotoIfError3(clean, GraphicsDeviceRef_allocateDescriptorBindless(
 			dev,
 			bindlessDescriptorTable,
 			EGfxRegisterType_ByteAddressBuffer,
@@ -324,13 +581,10 @@ Bool GraphicsDeviceRef_createBufferIntern(
 			&bufferDesc,
 			&buf->readHandle,
 			e_rr
-		)
-	)
-		goto clean;
+		));
 
-	if(
-		(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) &&
-		!GraphicsDeviceRef_allocateDescriptorBindless(
+	if(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite)
+		gotoIfError3(clean, GraphicsDeviceRef_allocateDescriptorBindless(
 			dev,
 			bindlessDescriptorTable,
 			EGfxRegisterType_ByteAddressBuffer | EGfxRegisterType_IsWrite,
@@ -339,9 +593,7 @@ Bool GraphicsDeviceRef_createBufferIntern(
 			&bufferDesc,
 			&buf->writeHandle,
 			e_rr
-		)
-	)
-		goto clean;
+		));
 
 clean:
 
@@ -412,8 +664,66 @@ clean:
 	return s_uccess;
 }
 
-Bool DeviceBufferRef_pullRegion(
-	DeviceBufferRef *buf, U64 offset, U64 len, DevicePullCallback callback, void *context, Error *e_rr
+Bool GraphicsDeviceRef_createBufferStream(
+	GraphicsDeviceRef *dev,
+	EDeviceBufferUsage usage,
+	EGraphicsResourceFlag flags,
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	StreamRef *stream,
+	U64 size,
+	Bool keepSource,
+	DeviceBufferRef **buf,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Bool created = false;
+
+	if(!stream || !buf)
+		retError(clean, Error_nullPointer(5, "GraphicsDeviceRef_createBufferStream()::stream and buf are required"));
+
+	if(!RefPtr_data(stream, OxStream)->read)
+		retError(clean, Error_unsupportedOperation(
+			0, "GraphicsDeviceRef_createBufferStream()::stream is not readable"
+		));
+
+	if(flags & EGraphicsResourceFlag_CPUBacked)
+		retError(clean, Error_unsupportedOperation(
+			1, "GraphicsDeviceRef_createBufferStream() a stream source and CPUBacked are exclusive"
+		));
+
+	if(!size)
+		retError(clean, Error_invalidParameter(6, 0, "GraphicsDeviceRef_createBufferStream()::size is required"));
+
+	gotoIfError3(clean, GraphicsDeviceRef_createBufferIntern(
+		dev, usage, flags, bindlessDescriptorTable, name, size, false, buf, e_rr
+	));
+
+	created = true;
+
+	DeviceBuffer *buffer = DeviceBufferRef_ptr(*buf);
+
+	gotoIfError3(clean, RefPtr_inc(stream));
+	buffer->cpuStream = stream;
+	buffer->keepStream = keepSource;
+
+	gotoIfError3(clean, DeviceBufferRef_markDirty(*buf, 0, 0, e_rr));
+
+clean:
+
+	if(!s_uccess && created)
+		RefPtr_dec(buf);
+
+	return s_uccess;
+}
+
+//Queue a pull on the device. A stream makes the region land there instead of in cpuData, which is also what
+//decides which of the two callbacks the pull carries; exactly one of them is ever set.
+
+static Bool DeviceBufferRef_queuePull(
+	DeviceBufferRef *buf, U64 offset, U64 len, StreamRef *stream, U64 streamOffset,
+	DevicePullCallback callback, DeviceStreamPullCallback streamCallback, void *context, Error *e_rr
 ) {
 
 	Bool s_uccess = true;
@@ -422,6 +732,7 @@ Bool DeviceBufferRef_pullRegion(
 	GraphicsDevice *device = NULL;
 	ELockAcquire acq = ELockAcquire_Invalid;
 	Bool owned = false;
+	Bool ownedStream = false;
 
 	//Validated before the pointer is reinterpreted, since a wrong type would read a garbage device
 
@@ -432,10 +743,25 @@ Bool DeviceBufferRef_pullRegion(
 	alloc = GraphicsDeviceRef_getAlloc(buffer->resource.device);
 	const U64 bufLen = buffer->resource.size;
 
-	//The result lands in cpuData, so there has to be one to land in
+	//Without a stream the result lands in cpuData, so there has to be one to land in
 
-	if(!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked))
+	if(!stream && !(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked))
 		retError(clean, Error_invalidOperation(0, "DeviceBufferRef_pullRegion() requires a CPUBacked buffer"));
+
+	if (stream) {
+
+		const OxStream *str = RefPtr_data(stream, OxStream);
+
+		if(!str->write)
+			retError(clean, Error_invalidOperation(
+				1, "DeviceBufferRef_pullRegionStream()::stream is not writable"
+			));
+
+		if(streamOffset > U64_MAX - len)
+			retError(clean, Error_overflow(
+				4, streamOffset, U64_MAX - len, "DeviceBufferRef_pullRegionStream()::streamOffset + len overflows"
+			));
+	}
 
 	if(offset >= bufLen)
 		retError(clean, Error_outOfBounds(1, offset, bufLen, "DeviceBufferRef_pullRegion()::offset out of bounds"));
@@ -458,23 +784,61 @@ Bool DeviceBufferRef_pullRegion(
 	RefPtr_inc(buf);
 	owned = true;
 
-	const DevicePendingPull pull = (DevicePendingPull) {
+	if (stream) {
+		RefPtr_inc(stream);
+		ownedStream = true;
+	}
+
+	DevicePendingPull pull = (DevicePendingPull) {
 		.resource = buf,
-		.callback = callback,
 		.context = context,
+		.stream = stream,
+		.streamOffset = streamOffset,
 		.range = (DevicePendingRange) { .buffer = (BufferRange) { .startRange = offset, .endRange = offset + len } }
 	};
 
+	if(stream)
+		pull.streamCallback = streamCallback;
+
+	else pull.callback = callback;
+
 	gotoIfError3(clean, ListDevicePendingPull_pushBack(&device->pendingPulls, pull, alloc, e_rr));
-	owned = false;
+	owned = ownedStream = false;
 
 clean:
 
 	if(owned)
 		RefPtr_dec(&buf);
 
+	if(ownedStream)
+		RefPtr_dec(&stream);
+
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->lock);
 
+	return s_uccess;
+}
+
+Bool DeviceBufferRef_pullRegion(
+	DeviceBufferRef *buf, U64 offset, U64 len, DevicePullCallback callback, void *context, Error *e_rr
+) {
+	return DeviceBufferRef_queuePull(buf, offset, len, NULL, 0, callback, NULL, context, e_rr);
+}
+
+Bool DeviceBufferRef_pullRegionStream(
+	DeviceBufferRef *buf, U64 offset, U64 len, StreamRef *stream, U64 streamOffset,
+	DeviceStreamPullCallback callback, void *context, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!stream)
+		retError(clean, Error_nullPointer(3, "DeviceBufferRef_pullRegionStream()::stream is required"));
+
+	gotoIfError3(clean, DeviceBufferRef_queuePull(
+		buf, offset, len, stream, streamOffset, NULL, callback, context, e_rr
+	));
+
+clean:
 	return s_uccess;
 }

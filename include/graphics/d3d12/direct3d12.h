@@ -136,19 +136,34 @@ typedef struct DxPipeline {
 
 } DxPipeline;
 
+//OmmTriangles holds POINTERS to these two rather than the structs themselves, so both have to outlive the
+// geometry desc and therefore live in the BLAS rather than on the stack at build time.
+//Only used when the geometry type is OMM_TRIANGLES; the plain triangle path writes geometry.Triangles.
+
+typedef struct DxBLASOmmTriangles {
+	D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC triangleData;
+	D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC linkage;
+} DxBLASOmmTriangles;
+
+TListNamed(D3D12_RAYTRACING_GEOMETRY_DESC, ListD3D12_RAYTRACING_GEOMETRY_DESC);
+TListNamed(DxBLASOmmTriangles, ListDxBLASOmmTriangles);
+
 typedef struct DxBLAS {
 
-	D3D12_RAYTRACING_GEOMETRY_DESC geometry;
+	//One entry per BLASGeometry and in the same order, since that index is what a shader reads back as
+	// GeometryIndex().
+	//inputs POINTS into geometries and every OMM desc is addressed out of ommTriangles, and the build
+	// re-reads both at every flush, so they are sized once at init and the pointers are taken after that.
+	//ommTriangles is only allocated when some geometry carries an OMM index buffer.
+
+	ListD3D12_RAYTRACING_GEOMETRY_DESC geometries;
+	ListDxBLASOmmTriangles ommTriangles;
+
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
 
-	//OmmTriangles holds POINTERS to these two rather than the structs themselves, so both have to outlive the
-	// geometry desc and therefore live here rather than on the stack at build time.
-	//Only used when the geometry type is OMM_TRIANGLES; the plain triangle path writes geometry.Triangles.
+	//Summed over the geometries once, which is what a build contributes to the device's pending work.
 
-	D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC ommTriangleData;
-	D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC ommLinkage;
-
-	U32 primitives, padding[3];
+	U64 primitives;
 
 } DxBLAS;
 

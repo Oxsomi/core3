@@ -86,12 +86,16 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 	}
 }
 
-Bool TextureRef_pullRegion(
+//Queue a pull on the device. A stream makes the region land there instead of in a buffer handed to the
+//callback, which is also what decides which of the two callbacks the pull carries.
+
+static Bool TextureRef_queuePull(
 	TextureRef *tex,
 	U16 x, U16 y, U16 z,
 	U16 w, U16 h, U16 l,
 	U8 plane,
-	TexturePullCallback callback, void *context, Error *e_rr
+	StreamRef *stream, U64 streamOffset,
+	TexturePullCallback callback, DeviceStreamPullCallback streamCallback, void *context, Error *e_rr
 ) {
 
 	Bool s_uccess = true;
@@ -100,6 +104,7 @@ Bool TextureRef_pullRegion(
 	GraphicsDevice *device = NULL;
 	ELockAcquire acq = ELockAcquire_Invalid;
 	Bool owned = false;
+	Bool ownedStream = false;
 
 	//Validated before anything is dereferenced, since a wrong type would read a garbage device
 
@@ -113,10 +118,15 @@ Bool TextureRef_pullRegion(
 			0, "TextureRef_pullRegion()::tex needs to be a RenderTexture, DepthStencil or Swapchain"
 		));
 
-	if(!callback)
+	//A stream is somewhere for the data to land, so only the callback form has to have one
+
+	if(!stream && !callback)
 		retError(clean, Error_nullPointer(
 			7, "TextureRef_pullRegion()::callback is required, since the data has nowhere else to land"
 		));
+
+	if(stream && !RefPtr_data(stream, OxStream)->write)
+		retError(clean, Error_invalidOperation(7, "TextureRef_pullRegionStream()::stream is not writable"));
 
 	const UnifiedTexture utex = TextureRef_getUnifiedTexture(tex, NULL);
 
@@ -153,8 +163,9 @@ Bool TextureRef_pullRegion(
 		retError(clean, Error_outOfBounds(4, x + w, utex.width, "TextureRef_pullRegion() region out of bounds"));
 
 	//Render targets are never block compressed, so no block snapping is needed here.
-	//The destination is allocated now so a failed allocation surfaces here instead of at completion,
-	// which lets the callback promise it always carries data.
+	//The callback form allocates its destination now so a failed allocation surfaces here instead of at
+	// completion, which lets the callback promise it always carries data.
+	//A stream needs no destination of its own, which is the allocation a pull headed for one saves.
 
 	alloc = GraphicsDeviceRef_getAlloc(utex.resource.device);
 	device = GraphicsDeviceRef_ptr(utex.resource.device);
@@ -164,7 +175,9 @@ Bool TextureRef_pullRegion(
 		ETextureFormat_getSize(ETextureFormatId_unpack[utex.textureFormatId], 1, 1, 1);
 
 	Buffer data = Buffer_createNull();
-	gotoIfError3(clean, Buffer_createUninitializedBytes(texel * w * h * l, alloc, &data, e_rr));
+
+	if(!stream)
+		gotoIfError3(clean, Buffer_createUninitializedBytes(texel * w * h * l, alloc, &data, e_rr));
 
 	acq = SpinLock_lock(&device->lock, U64_MAX);
 
@@ -176,10 +189,16 @@ Bool TextureRef_pullRegion(
 	RefPtr_inc(tex);
 	owned = true;
 
-	const DevicePendingPull pull = (DevicePendingPull) {
+	if (stream) {
+		RefPtr_inc(stream);
+		ownedStream = true;
+	}
+
+	DevicePendingPull pull = (DevicePendingPull) {
 		.resource = tex,
-		.textureCallback = callback,
 		.context = context,
+		.stream = stream,
+		.streamOffset = streamOffset,
 		.range = (DevicePendingRange) { .texture = (TextureRange) {
 			.startRange = { x, y, z },
 			.endRange = { (U16)(x + w), (U16)(y + h), (U16)(z + l) },
@@ -188,22 +207,62 @@ Bool TextureRef_pullRegion(
 		.textureData = data
 	};
 
+	if(stream)
+		pull.streamCallback = streamCallback;
+
+	else pull.textureCallback = callback;
+
 	if(!ListDevicePendingPull_pushBack(&device->pendingPulls, pull, alloc, e_rr)) {
 		Buffer_free(&data, alloc);
 		s_uccess = false;
 		goto clean;
 	}
 
-	owned = false;
+	owned = ownedStream = false;
 
 clean:
 
 	if(owned)
 		RefPtr_dec(&tex);
 
+	if(ownedStream)
+		RefPtr_dec(&stream);
+
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->lock);
 
+	return s_uccess;
+}
+
+Bool TextureRef_pullRegion(
+	TextureRef *tex,
+	U16 x, U16 y, U16 z,
+	U16 w, U16 h, U16 l,
+	U8 plane,
+	TexturePullCallback callback, void *context, Error *e_rr
+) {
+	return TextureRef_queuePull(tex, x, y, z, w, h, l, plane, NULL, 0, callback, NULL, context, e_rr);
+}
+
+Bool TextureRef_pullRegionStream(
+	TextureRef *tex,
+	U16 x, U16 y, U16 z,
+	U16 w, U16 h, U16 l,
+	U8 plane,
+	StreamRef *stream, U64 streamOffset,
+	DeviceStreamPullCallback callback, void *context, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!stream)
+		retError(clean, Error_nullPointer(7, "TextureRef_pullRegionStream()::stream is required"));
+
+	gotoIfError3(clean, TextureRef_queuePull(
+		tex, x, y, z, w, h, l, plane, stream, streamOffset, NULL, callback, context, e_rr
+	));
+
+clean:
 	return s_uccess;
 }
 

@@ -315,6 +315,20 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 			&info, c::EGfxBinaryType_SPIRV, c::EGraphicsDeviceFlags_EnableDynamicSamplers, &result, alloc, NULL
 		));
 
+		//Baked samplers alone are enough, since this overwrites the flags that say which form they are in
+
+		c::DescriptorLayoutInfo samplerOnly{};
+		c::U32 samplerOnlyId = 0;
+
+		if (Test_assert(t, "samplerOnlyAdd", c::DescriptorLayoutInfo_addStaticSampler(
+			&samplerOnly, c::SamplerInfo{}, &samplerOnlyId, alloc, &t->err
+		)))
+			Test_assert(t, "samplerOnlyRefused", !c::GraphicsDevice_defaultBindlessLayout(
+				&info, c::EGfxBinaryType_SPIRV, c::EGraphicsDeviceFlags_None, &samplerOnly, alloc, NULL
+			));
+
+		c::DescriptorLayoutInfo_free(&samplerOnly, alloc);
+
 		const c::DescriptorBinding *b = result.bindings.ptr;
 
 		Test_assert(t, "spirvSampler",

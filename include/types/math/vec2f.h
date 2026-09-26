@@ -59,6 +59,14 @@ static inline F32x2 F32x2_load2(const void *arr) {        //Misaligned load 2 F3
 	return result;
 }
 
+static inline void F32x2_store1(void *arr, F32x2 a) {        //Misaligned store 1 F32
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(F32)), Buffer_createRefConst(&a, sizeof(F32)));
+}
+
+static inline void F32x2_store2(void *arr, F32x2 a) {        //Misaligned store 2 F32s
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(F32) * 2), Buffer_createRefConst(&a, sizeof(F32) * 2));
+}
+
 //Swizzles
 
 static inline F32 F32x2_x(F32x2 a) { return a.v[0]; }
@@ -116,7 +124,7 @@ static inline F32 F32x2_satDot(F32x2 a, F32x2 b) { return F32_saturate(F32x2_dot
 
 static inline F32 F32x2_sqLen(F32x2 v) { return F32x2_dot(v, v); }
 static inline F32 F32x2_len(F32x2 v) { return F32_sqrt(F32x2_sqLen(v)); }
-static inline F32x2 F32x2_normalize(F32x2 v) { return F32x2_mul(v, F32x2_xx2(1 / F32x2_len(v))); }
+static inline F32x2 F32x2_normalize(F32x2 v) { return F32x2_div(v, F32x2_xx2(F32x2_len(v))); }
 
 //Clamp
 
@@ -137,6 +145,12 @@ static inline F32x2 F32x2_atan2(F32x2 y, F32x2 x) { NONE_OP2F(F32_atan2(y.v[i], 
 static inline F32x2 F32x2_tan(F32x2 v) { NONE_OP2F(F32_tan(v.v[i])); }
 static inline F32x2 F32x2_sqrt(F32x2 v) { NONE_OP2F(F32_sqrt(v.v[i])); }
 static inline F32x2 F32x2_rsqrt(F32x2 v) { NONE_OP2F(1 / F32_sqrt(v.v[i])); }
+
+//There is no estimate to take here: F32x2 has no SIMD form, so the fast twins exist for the name and not for
+// the speed. See F32x4_rsqrtFast, which is the one that differs.
+
+static inline F32x2 F32x2_rsqrtFast(F32x2 v) { return F32x2_rsqrt(v); }
+static inline F32x2 F32x2_normalizeFast(F32x2 v) { return F32x2_normalize(v); }
 
 static inline F32x2 F32x2_pow(F32x2 v, F32x2 e) { NONE_OP2F(F32_pow(v.v[i], e.v[i])); }
 
@@ -164,7 +178,7 @@ static inline Bool F32x2_eq2(F32x2 a, F32x2 b) { return F32x2_all(F32x2_eq(a, b)
 static inline Bool F32x2_neq2(F32x2 a, F32x2 b) { return !F32x2_eq2(a, b); }
 
 //Obtain sign (-1 if <0, otherwise 1)
-static inline F32x2 F32x2_sign(F32x2 v) { return F32x2_add(F32x2_mul(F32x2_lt(v, F32x2_zero), F32x2_negTwo), F32x2_one); }
+static inline F32x2 F32x2_sign(F32x2 v) { return F32x2_sub(F32x2_gt(v, F32x2_zero), F32x2_lt(v, F32x2_zero)); }
 
 //Misc functions, used for shading for example
 
@@ -174,7 +188,7 @@ static inline F32x2 F32x2_reflect(F32x2 i, F32x2 n) {
 	return F32x2_sub(i, F32x2_mul(n, F32x2_xx2(2 * F32x2_dot(n, i))));
 }
 
-static inline F32x2 F32x2_abs(F32x2 v) { return F32x2_mul(F32x2_sign(v), v); }
+static inline F32x2 F32x2_abs(F32x2 v) { NONE_OP2F(F32_abs(v.v[i])); }
 
 //Matrix
 

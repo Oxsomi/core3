@@ -1,0 +1,25 @@
+# Unit cube, one material per face, already grouped: six runs of two triangles.
+# Exercises the simple case, where grouping by material needs no reordering.
+# Winding is counter clockwise seen from outside, so every face's geometric normal points outward.
+
+v 0 0 0
+v 1 0 0
+v 1 1 0
+v 0 1 0
+v 0 0 1
+v 1 0 1
+v 1 1 1
+v 0 1 1
+
+usemtl front
+f 5 6 7 8
+usemtl back
+f 1 4 3 2
+usemtl right
+f 2 3 7 6
+usemtl left
+f 1 5 8 4
+usemtl top
+f 4 8 7 3
+usemtl bottom
+f 1 2 6 5

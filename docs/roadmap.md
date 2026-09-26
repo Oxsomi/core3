@@ -52,12 +52,6 @@ Roughly ordered by how often the gap bites.
 - **Mesh/task shaders have no runtime path** while the feature bit reads true: stages compile and reflect,
   the VK extension is enabled, but there is no dispatchMesh on either backend (explicit TODO in
   graphics_pipeline.c). Widely adopted, both APIs, deprecated by nobody: a gap to fill, not weight to cut.
-- **Multi-geometry BLAS.** Both backends hardcode one geometry per BLAS, so EBLASFlag (DisableAnyHit etc.)
-  is per-BLAS when both APIs allow per-geometry. Real use cases: car with glass, clothed character, plant
-  pot with foliage; today the options are whole-BLAS non-opaque (opaque parts pay anyHit for nothing) or
-  splitting into instances (traversal cost, instance slots). Expect the BLAS create surface to change:
-  geometry becomes a list and EBLASFlag moves per-geometry; BLASCreateInfo is the place to grow. Overlaps
-  with special-index OMM, which stops being the only way to vary opacity within one BLAS once this lands.
 - **Frame capture/replay, v1.** A debugging/replay layer on top of OxC3's own abstractions: virtual command
   lists are already API-neutral opcodes plus a resource table, scopes declare their transitions, and oiSH
   ships DXIL+SPIRV so a capture on VK replays on D3D12 (something no below-API tool can do). v1 sequence:
@@ -80,6 +74,139 @@ Roughly ordered by how often the gap bites.
   allocation while D3D12's CBV/SRV/UAV heap is flat, so a type-mismatched reservedDescriptors "works" on
   D3D12 and fails on Vulkan at table create. Generic per-type tracking would make both refuse identically
   at record time.
+- **Nothing reads the .mtl an obj names.** `Obj_read` numbers materials by first use of `usemtl` and puts
+  the index in the triangle word, and that is the whole of it: `mtllib` is skipped and the names are dropped,
+  so a consumer can tell the runs apart and cannot tell what any of them is. What a renderer would actually
+  shade with lives in the .mtl: `Kd`, `Ks`, `Ns`, `Ni`, `d`, `illum` and the `map_*` texture references. The
+  gap is a second parser plus a list of named material records the indices point into, which is also what
+  makes keeping the names worth anything. Textures can lag behind the scalars. The scalars alone are the
+  difference between a consumer inventing a material and the file stating one.
+- **A reader does not sort triangles into material runs.** A mesh with several materials therefore cannot go
+  straight into a BLAS. One geometry per run is what `GeometryIndex()` resolves against, and a BLAS now takes
+  a list of geometries each carrying its own flags, so the consuming half is in place. The producing half is
+  not: triangles come out in file order, a run is contiguous only where the file happened to be written that
+  way, and the material stays hidden in the per-triangle word. What is missing is a stable sort by material
+  index with the index stream permuted to match, and a first/count per material that a consumer hands
+  straight to the BLAS geometry list. It belongs in the reader, since it is the same work for every consumer
+  and the cache-order pass below has to run after it. The ranges have nowhere to live in the flat form today,
+  so the form grows a submesh table before the sort has anywhere to put its result.
+- **The mesh readers still pay per record where they could pay per block.** The binary PLY path now decodes
+  in place out of the cursor's window against a plan resolved once per element, and the sink stages records
+  into a block rather than handing each one to the cursor. What is left is measured rather than assumed:
+  on Lucy's 28M triangles a read of positions and indices alone is 1.39 s, attributes add 0.35 s, and both of
+  the expensive parts have moved OUT of the reader, since `MeshFlat_computeWords` and `MeshFlat_computeNormals`
+  let a caller derive them afterwards (1.19 s and 1.23 s of reader time respectively, and 117 ms together on a
+  3070). What remains inside is the parse itself.
+  Ascii is untouched and cannot use any of this, since a text value has no width until it is parsed.
+- **A device resource's upload source is a BUFFER, so every upload materializes on the host first.**
+  `DeviceBuffer` and `DeviceTexture` both hold a `cpuData` Buffer, and a flush copies out of it into mapped
+  memory. So the bytes exist twice on the host before they exist on the device, and a resource cannot be
+  larger than what the host is willing to hold. Measured on a 533 MB mesh: the flush runs at 7.2 GB/s on a
+  link that does 24, because what it is timing is a single threaded `Buffer_memcpy`, not a transfer.
+
+  The fix is to make the SOURCE a stream rather than a buffer, and it needs no change to `OxStream` at all:
+  `StreamFunc` is already `(stream, offset, length, Buffer dst)`, so a flush can read a dirty range straight
+  out of the source into mapped memory, and `EStreamType_DisableSeek` already marks the sources that cannot
+  serve a range. Dirty marking does not change either: `markDirty(offset, count)` keeps its meaning, its
+  interval merge and its 256 byte rounding, and only what it pulls from changes.
+
+  What that buys, in order:
+
+  - **Nothing materializes.** A file backed source reads the range it needs into GPU visible memory and the
+    resource never exists on the host. The same holds for an archive entry or an encryption stream, which
+    then decompress or decrypt into mapped memory rather than into a buffer that is then copied.
+  - **An update stops being a recreate.** Mark the range that changed and only those bytes are read and
+    transferred. Today a not CPU backed resource only accepts a first frame whole resource mark, which is
+    what forces a recreate.
+  - **`CPUBacked` becomes one case of the general one**, a source that happens to be a MemoryStream, rather
+    than a separate path through the same function.
+
+  Three things it has to be honest about:
+
+  - **The read moves onto the submit path.** Today the I/O has already happened by the time a flush runs; with
+    a stream source it happens during it, so a slow source stalls where it used to stall at create. That makes
+    an async or prefetching variant the follow up rather than an optional extra, and it is the reason to do
+    the buffer case before the texture one.
+  - **Textures keep their staging copy, until host image copy lands.** An optimally tiled image has a layout
+    the driver owns, so a source cannot be read into it directly today; the stream fills the staging buffer
+    and the copy does the tiling. `VK_EXT_host_image_copy`, core in Vulkan 1.4, is the feature that removes
+    even that: `vkCopyMemoryToImageEXT` writes host memory into an optimally tiled image with the driver
+    swizzling on the CPU, it reports whether doing so is actually a good idea on the device
+    (`optimalDeviceAccess`) and which layouts it will take, and D3D12's `WriteToSubresource` is the UMA twin.
+    Neither is wired in core3 yet. Wiring it makes the texture path symmetric with the buffer one and turns
+    the tiling into CPU work, which is the next entry's problem rather than this one's.
+  - **A compressed or encrypted source has its own block size**, so a dirty range has to round out to it the
+    way it already rounds out to 256 bytes. That is a property the stream should report rather than something
+    the graphics layer should guess, and `encryption_stream` already chunks.
+
+  Readback is unaffected and still needs `CPUBacked`: a stream source describes the upload direction only.
+
+- **A submit that reads its sources on the host has no way to use more than one core.** Once the source is a
+  stream, a flush stops being a memcpy and becomes whatever the source costs: an encryption stream is a block
+  cipher per chunk, a compressed entry is a decode, and a host image copy is a swizzle the driver runs on the
+  CPU. All of it is per block and independent, and all of it currently happens on one thread inside submit.
+
+  So submit should TAKE a `JobQueue *`, optional, and fan the pending ranges across it when the work is worth
+  it. Passing it to the submit rather than holding it on the device is the right end for two reasons: the work
+  begins and ends inside that call, so a borrowed queue needs no ownership and cannot outlive anything, and an
+  engine that already runs a job system hands over the SAME one, so core3's threads interleave with its rather
+  than competing with a second pool for the same cores. `JobQueue_push` and `JobQueue_wait` in
+  types/container are already the whole API this needs.
+
+  Four things it has to get right:
+
+  - **The threshold is not bytes.** A MemoryStream flush is a memcpy and wants a high one; an encryption
+    stream costs tens of times more per byte and wants a much lower one. So the STREAM reports a cost hint
+    beside the block size the entry above already wants from it, and the rule is bytes times cost, which
+    stops the graphics layer guessing about sources it does not understand.
+  - **Splitting across pending ranges is not enough.** The common case is ONE range, a whole resource on its
+    first frame, so a range has to split into block aligned pieces or the parallelism never applies to the
+    upload that actually hurts.
+  - **Concurrent reads have to be DECLARED, not assumed.** `StreamFunc` takes an explicit offset, so the
+    interface is positional and an implementation can be safe; whether one is depends on whether it seeks
+    before it reads. A stream without the flag is serialized against itself and still runs in parallel with
+    other streams. Getting this wrong tears a read, and a torn read looks like data rather than like a crash.
+  - **The join is before the command lists go.** Fan out, wait, then submit. That is a sync point where one
+    already exists, so it costs nothing structurally.
+
+- **The derived passes have no GPU twin in core3, by design, and no test proves the two agree.**
+  `MeshFlat_computeNormals` and `MeshFlat_computeWords` are the reference: a device
+  runs its own compute version of each, because a big mesh wants the parallel one and OxC3 gfx ships a shader
+  only when the shader implements an OxC3 command. What is missing is the bridge that makes the pair
+  trustworthy: a test fixture that takes a mesh, both results and reports where they differ, so an engine can
+  check its shader against this without writing the comparison itself. Without one, a caller can only compare
+  what the two passes RENDER to, which averages a per vertex disagreement away and is the weaker statement.
+
+- **`MeshFlat` is resident where three of its four streams do not need to be.** A reader's output is streams
+  throughout, and then the derive layer takes `Buffer`s, so a caller that wants `computeNormals` or
+  `computeWords` has to materialize the whole mesh. That is not inherent. Of the four, only POSITIONS are
+  random access, and only because a triangle names three arbitrary vertices; indices are read in order and the
+  attribute and triangle outputs are written in order.
+
+  Even the positions are seekable where the body is FIXED STRIDE, which a binary PLY's is and a text PLY's or
+  an OBJ's is not, so the split is by source rather than by pass. `StreamFunc` already takes an explicit
+  offset and `StreamCursor` already holds a window, so a seeking read of a position is a cursor read and not a
+  new mechanism; what is missing is the header that reports the stride, which is the same prerequisite the
+  range read below wants.
+
+  So: the two sequential outputs become `StreamRef` like every other reader output, the indices become a
+  cursor read, and the positions take a cursor whose window is large enough that a coherent index list hits it
+  (which is what the cache-order pass below is for). A source that cannot seek materializes positions alone
+  and says so, rather than the caller materializing all four. The win is that a 28M triangle mesh can have its
+  normals and words derived without 670 MB of host residency, on the path where the device is not doing it.
+
+- **Cache-order the flat mesh.** A pass over a reader's flat output, in types/mesh beside the readers, that
+  reorders triangles for the post-transform reuse cache and then renumbers vertices in first-use order. The
+  cache is a small FIFO on both vendors, AMD's the narrower, so the order is found by simulating one: Forsyth's
+  linear-time scoring (a vertex scores high near the front of the simulated cache and high when few of its
+  triangles remain, the three newest slots score flat so the greedy pick does not degenerate into a strip) or
+  Tipsify; meshoptimizer's optimizeVertexCache followed by optimizeVertexFetch is the reference. A random order
+  transforms two to three vertices per triangle, an ordered one about 0.65, and a vertex-bound pass
+  follows that ratio. The order also decides how coherent per-triangle hit records are for coherent rays and
+  how well AMD's BLAS builder pairs edge-sharing triangles. Sort into material runs first, stably, so a raster
+  twin's one draw per run keeps its ranges. Needs the whole index list, so it is a pass after the read and not
+  a read flag. Ships with a test that reports the simulated miss ratio before and after on a known mesh and has
+  been seen to fail on an unordered input.
 
 ## Test and CI state
 

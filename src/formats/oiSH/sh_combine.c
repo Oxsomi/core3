@@ -179,7 +179,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 
 				//Not found
 
-				if (l == bi.registers.length || rega.hash == bi.registers.ptr[l].hash) {
+				if (l == bi.registers.length || SHRegisterRuntime_equals(&rega, bi.registers.ptr + l)) {
 					gotoIfError3(clean, SHRegisterRuntime_createCopy(&c.registers.ptr[k], alloc, &tmpReg, e_rr));
 					gotoIfError3(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc, e_rr));
 					tmpReg = (SHRegisterRuntime) { 0 };

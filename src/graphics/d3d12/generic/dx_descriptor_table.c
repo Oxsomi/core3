@@ -323,8 +323,10 @@ D3D12_FILTER DxSampler_toFilter(SamplerInfo sinfo) {
 
 //A static sampler costs none of the root signature's 64 DWORDs: it is described by value in the signature
 // itself rather than being a root parameter.
-//Border color is an enum here rather than a float4, which is exactly what OxC3's ESamplerBorderColor
-// already is, so every sampler it can express is expressible as a static one.
+//Border color is an enum here rather than a float4, and root signature 1.1 gives that enum three values:
+// transparent black, opaque black and opaque white, all of them float.
+//The integer borders OxC3 reserves would first need root signature 1.2, so no sampler carries one at all and
+// this set is the whole of what a baked sampler can say.
 
 D3D12_STATIC_SAMPLER_DESC DxSampler_toStaticDesc(SamplerInfo sinfo, GfxBinding binding, U32 visibility) {
 
@@ -333,12 +335,10 @@ D3D12_STATIC_SAMPLER_DESC DxSampler_toStaticDesc(SamplerInfo sinfo, GfxBinding b
 	switch (sinfo.borderColor) {
 
 		case ESamplerBorderColor_OpaqueBlackFloat:
-		case ESamplerBorderColor_OpaqueBlackInt:
 			border = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
 			break;
 
 		case ESamplerBorderColor_OpaqueWhiteFloat:
-		case ESamplerBorderColor_OpaqueWhiteInt:
 			border = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
 			break;
 
@@ -487,7 +487,8 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						.MaxLOD = F16_castF32(sinfo.maxLod)
 					};
 
-					const U32 one = 1;
+					//The integer borders are reserved and refused at sampler creation, so the float ones are
+					// the whole set a descriptor here ever carries.
 
 					switch(sinfo.borderColor) {
 
@@ -498,18 +499,6 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						case ESamplerBorderColor_OpaqueWhiteFloat:
 							samplerView.BorderColor[0] = samplerView.BorderColor[1] = samplerView.BorderColor[2] = 1.f;
 							samplerView.BorderColor[3] = 1.f;
-							break;
-
-						case ESamplerBorderColor_OpaqueWhiteInt:
-
-							samplerView.BorderColor[0] = samplerView.BorderColor[1] = samplerView.BorderColor[2] =
-								*(const F32*)&one;
-
-							samplerView.BorderColor[3] = *(const F32*)&one;
-							break;
-
-						case ESamplerBorderColor_OpaqueBlackInt:
-							samplerView.BorderColor[3] = *(const F32*)&one;
 							break;
 
 						default:
@@ -582,7 +571,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
 						.Buffer = (D3D12_BUFFER_UAV) {
 							.FirstElement = Descriptor_startBuffer(&d) / 4,
-							.NumElements = (U32)(Descriptor_bufferLength(&d) / 4),
+							.NumElements = (U32)(Descriptor_bufferViewLength(&d, type) / 4),
 							.Flags = D3D12_BUFFER_UAV_FLAG_RAW
 						}
 					};
@@ -604,7 +593,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 						.Buffer = (D3D12_BUFFER_SRV) {
 							.FirstElement = Descriptor_startBuffer(&d) / 4,
-							.NumElements = (U32)(Descriptor_bufferLength(&d) / 4),
+							.NumElements = (U32)(Descriptor_bufferViewLength(&d, type) / 4),
 							.Flags = D3D12_BUFFER_SRV_FLAG_RAW
 						}
 					};

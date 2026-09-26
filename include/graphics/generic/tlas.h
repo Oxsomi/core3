@@ -41,7 +41,7 @@ typedef enum ETLASInstanceFlag {
 	ETLASInstanceFlag_Default                   = ETLASInstanceFlag_DisableCulling | ETLASInstanceFlag_ForceDisableAnyHit
 } ETLASInstanceFlag;
 
-//TLAS specific state, which lives in RTAS::flagsExt the way EBLASFlag does for a BLAS.
+//TLAS specific state, which is what RTAS::flagsExt carries; a BLAS keeps its flags per geometry instead.
 //A byte of flags rather than a run of Bools because four Bools packed with the bindless handle into exactly 8
 // bytes, and a fifth would have cost another 8 to carry one bit.
 //UseDeviceMemory and DisallowBindlessDescriptor come from the caller through the create functions, the rest is

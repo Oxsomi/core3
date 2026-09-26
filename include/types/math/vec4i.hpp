@@ -76,6 +76,7 @@ namespace oxc {
 		[[nodiscard]] static I32x4 one() noexcept { return c::I32x4_one(); }
 
 		[[nodiscard]] static I32x4 load(const void *ptr) noexcept { return c::I32x4_load4(ptr); }
+		void store(void *ptr) const noexcept { c::I32x4_store4(ptr, v); }
 
 		//Components
 

@@ -90,10 +90,12 @@ static inline F32x4 F32x4_round(F32x4 a) { return wasm_f32x4_nearest(a); }
 //Transcendentals
 
 static inline F32x4 F32x4_sqrt(F32x4 a) { return wasm_f32x4_sqrt(a); }
+static inline F32x4 F32x4_abs(F32x4 a) { return wasm_f32x4_abs(a); }
 
-//No reciprocal square root estimate in SIMD128; the exact form is the only option.
+//No reciprocal square root estimate in SIMD128, so the fast form IS the exact one here.
 
 static inline F32x4 F32x4_rsqrt(F32x4 a) { return wasm_f32x4_div(wasm_f32x4_splat(1), wasm_f32x4_sqrt(a)); }
+static inline F32x4 F32x4_rsqrtFast(F32x4 a) { return F32x4_rsqrt(a); }
 
 //No fused multiply add in the SIMD128 MVP either, so this is a multiply then an add.
 //That is not a true FMA: it rounds twice. OxC3's callers use it for throughput rather than for the extra
@@ -119,6 +121,13 @@ static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInte
 static inline F32x4 F32x4_lt(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(wasm_f32x4_lt(a, b)); }
 
 //4x4 transpose.
+//The FULL width only, where the caller's sixteen bytes are in bounds by the contract and the instruction is
+//the explicitly unaligned one, so nothing here assumes an alignment the interface does not promise. The
+// partial widths stay a byte copy in vec4f.h: there is no partial load that is both in bounds and unaligned.
+
+static inline F32x4 F32x4_load4(const void *arr) { return arr ? wasm_v128_load(arr) : wasm_f32x4_splat(0); }
+static inline void F32x4_store4(void *arr, F32x4 a) { if(arr) wasm_v128_store(arr, a); }
+
 //Sits here rather than in mat.h because it's the one matrix operation with a genuine per-SIMD
 // implementation, and per-SIMD code belongs in these files.
 //Safe when in == out.

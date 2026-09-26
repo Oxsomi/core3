@@ -243,11 +243,8 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 
 	//Store output
 
-	for(U8 i = 0; i < 4; ++i)
-		output[i] = (U32) I32x4_get(state0, i);
-
-	for(U8 i = 0; i < 4; ++i)
-		output[4 + i] = (U32) I32x4_get(state1, i);
+	I32x4_store4(output, state0);
+	I32x4_store4(output + 4, state1);
 
 	Buffer_clearAllSecure(Buffer_createRef(block, sizeof(block)));
 }

@@ -24,6 +24,7 @@
 #include "types/base/types.h"
 #include "types/math/flp.h"
 #include "formats/oiPL/pl_file.h"
+#include "types/container/list.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -39,6 +40,13 @@ typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr SamplerRef;
 typedef RefPtr DescriptorTableRef;
 
+//Internal: a layout the device owns bakes samplers of its own, and those must not keep the device alive.
+
+typedef enum ESamplerFlags {
+	ESamplerFlags_None                      = 0,
+	ESamplerFlags_InternalWeakDeviceRef     = 1 << 0
+} ESamplerFlags;
+
 typedef struct Sampler {
 
 	GraphicsDeviceRef *device;
@@ -46,7 +54,8 @@ typedef struct Sampler {
 	DescriptorTableRef *bindlessDescriptorTable;
 
 	SamplerInfo info;
-	U16 padding[7];
+	U16 flags;              //ESamplerFlags
+	U16 padding[6];
 
 	U32 samplerLocation;
 
@@ -59,6 +68,19 @@ Bool GraphicsDeviceRef_createSampler(
 	GraphicsDeviceRef *dev,
 	SamplerInfo info,
 	Bool disallowBindlessDescriptor,                //Won't try to allocate into bindlessDescriptorTable or device's default
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	SamplerRef **sampler,
+	Error *e_rr
+);
+
+//Internal: createSampler with ESamplerFlags, which the public entry point never sets.
+
+Bool GraphicsDeviceRef_createSamplerInternal(
+	GraphicsDeviceRef *dev,
+	SamplerInfo info,
+	ESamplerFlags flags,
+	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
 	const CharString *name,
 	SamplerRef **sampler,

@@ -13,5 +13,8 @@ jobs:
       setup_python: true
       python_version: '3.13'
       hook_name: Windows-arm64-d3d12-static
+      # This configuration dies inside device creation with a fast fail, which no handler in the process can
+      # see, so the API's own validation is what describes it.
+      graphics_validation: true
     secrets:
       WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

@@ -298,6 +298,11 @@ typedef struct DxCommandBufferState {
 
 Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer, Error *e_rr);
 
+//One fence value rather than everything submitted, so a caller needing only its own frame back does not stall
+//the rest. A value already passed, 0 included, returns without waiting.
+
+Bool DxGraphicsDevice_waitFence(GraphicsDeviceRef *deviceRef, U64 fenceId, Error *e_rr);
+
 //Builds a texture's SRV or UAV at dst.
 //Shared so a descriptor table and a texture push descriptor's single entry table cannot end up disagreeing
 // about a dimension, a mip range or a depth plane's format.

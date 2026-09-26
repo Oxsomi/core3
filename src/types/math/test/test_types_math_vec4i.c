@@ -40,6 +40,20 @@ void Test_vec4i(Test *test) {
 	I32x4_setWRef(&v4, 10);
 	Test_assert(test, "I32x4_setRef/get", I32x4_get(v4, 2) == 9 && I32x4_get(v4, 3) == 10);
 
+	//Load and store round trip, and that a store writes only the lanes it names
+
+	const I32 src4[4] = { 11, 12, 13, 14 };
+	I32 dst4[4] = { -1, -1, -1, -1 };
+
+	I32x4_store3(dst4, I32x4_load4(src4));
+	Test_assert(test, "I32x4_store3", dst4[0] == 11 && dst4[1] == 12 && dst4[2] == 13 && dst4[3] == -1);
+
+	I32x4_store4(dst4, I32x4_load4(src4));
+	Test_assert(test, "I32x4_store4", dst4[3] == 14);
+
+	I32x4_store1(NULL, I32x4_load4(src4));
+	Test_assert(test, "I32x4_storeNull", dst4[0] == 11);
+
 	//Comparisons and masks
 
 	I32x4 a = I32x4_create4(1, 2, 3, 4);
@@ -65,7 +79,7 @@ void Test_vec4i(Test *test) {
 	Test_assert(test, "I32x4_mul",   !I32x4_neq4(I32x4_mul(a, b), I32x4_create4(5, 12, 21, 32)));
 
 	Test_assert(test, "I32x4_abs",   !I32x4_neq4(I32x4_abs(I32x4_create4(-3, 4, -1, 0)),  I32x4_create4(3, 4, 1, 0)));
-	Test_assert(test, "I32x4_sign",  !I32x4_neq4(I32x4_sign(I32x4_create4(-3, 4, 0, 1)),  I32x4_create4(-1, 1, 1, 1)));
+	Test_assert(test, "I32x4_sign",  !I32x4_neq4(I32x4_sign(I32x4_create4(-3, 4, 0, 1)),  I32x4_create4(-1, 1, 0, 1)));
 	Test_assert(test, "I32x4_pow2",  I32x4_eq4(I32x4_pow2(I32x4_create4(2, -3, 4, -5)),  I32x4_create4(4, 9, 16, 25)));
 
 	//min/max/clamp

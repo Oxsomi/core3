@@ -149,7 +149,10 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "DescriptorLayoutInfo_detect()::dev is required"));
 
-	if(info->bindings.ptr)
+	//The sampler forms share storage, so one term catches an info that already bakes either of them; detect
+	// replaces flags wholesale below, which would strand the list and lie about which form it holds.
+
+	if(info->bindings.ptr || info->immutableSamplers.ptr)
 		retError(clean, Error_invalidParameter(
 			4, 0, "DescriptorLayoutInfo_detect()::info was already defined, possible memleak"
 		));
@@ -180,11 +183,20 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			"DescriptorLayoutInfo_detect() hasPushDescriptors is not an input value"
 		));
 
+	//Which sampler form the union holds is decided by the add functions, never by the caller: taken on trust it
+	// would send every later read at the wrong element size.
+
+	if(flags & EDescriptorLayoutFlags_InternalStaticSamplers)
+		retError(clean, Error_invalidParameter(
+			4, 0,
+			"DescriptorLayoutInfo_detect() internalStaticSamplers is not an input value"
+		));
+
 	if(pushDescriptorInfo)
 		pushDescriptorInfo->flags =
 			(flags &~ EDescriptorLayoutFlags_AllowBindlessAny) | EDescriptorLayoutFlags_HasPushDescriptors;
 
-	if(pushDescriptorInfo && pushDescriptorInfo->bindings.length)
+	if(pushDescriptorInfo && (pushDescriptorInfo->bindings.length || pushDescriptorInfo->immutableSamplers.ptr))
 		retError(clean, Error_invalidParameter(
 			4, 0, "DescriptorLayoutInfo_detect()::pushDescriptorInfo must be empty"
 		));
@@ -525,11 +537,18 @@ Bool DescriptorLayoutInfo_addImmutableSampler(
 			1, 0, "DescriptorLayoutInfo_addImmutableSampler()::sampler has to be a Sampler"
 		));
 
+	if(info->flags & EDescriptorLayoutFlags_InternalStaticSamplers)
+		retError(clean, Error_invalidOperation(
+			0,
+			"DescriptorLayoutInfo_addImmutableSampler()::info already bakes samplers by value; a layout bakes "
+			"one form or the other"
+		));
+
 	//The id is 1 based so a binding that names none can leave the union zeroed
 
-	if(info->immutableSamplers.length >= U32_MAX - 1)
+	if(info->immutableSamplers.length >= DescriptorLayoutInfo_staticSamplerBit - 1)
 		retError(clean, Error_outOfBounds(
-			0, info->immutableSamplers.length, U32_MAX - 1,
+			0, info->immutableSamplers.length, DescriptorLayoutInfo_staticSamplerBit - 1,
 			"DescriptorLayoutInfo_addImmutableSampler()::info has too many immutable samplers"
 		));
 
@@ -544,15 +563,62 @@ clean:
 	return s_uccess;
 }
 
+Bool DescriptorLayoutInfo_addStaticSampler(
+	DescriptorLayoutInfo *info,
+	SamplerInfo sampler,
+	U32 *id,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!info || !id)
+		retError(clean, Error_nullPointer(
+			!info ? 0 : 2, "DescriptorLayoutInfo_addStaticSampler()::info and id are required"
+		));
+
+	if(!(info->flags & EDescriptorLayoutFlags_InternalStaticSamplers) && info->staticSamplers.length)
+		retError(clean, Error_invalidOperation(
+			0,
+			"DescriptorLayoutInfo_addStaticSampler()::info already bakes samplers by ref; a layout bakes one "
+			"form or the other"
+		));
+
+	//The id is 1 based like an immutable one, and the bit that marks it static has to stay clear of the index
+
+	if(info->staticSamplers.length >= DescriptorLayoutInfo_staticSamplerBit - 1)
+		retError(clean, Error_outOfBounds(
+			0, info->staticSamplers.length, DescriptorLayoutInfo_staticSamplerBit - 1,
+			"DescriptorLayoutInfo_addStaticSampler()::info has too many static samplers"
+		));
+
+	gotoIfError3(clean, ListPLSamplerInfo_pushBack(&info->staticSamplers, sampler, alloc, e_rr));
+
+	info->flags |= EDescriptorLayoutFlags_InternalStaticSamplers;
+
+	*id = DescriptorLayoutInfo_staticSamplerBit | (U32) info->staticSamplers.length;
+
+clean:
+	return s_uccess;
+}
+
 void DescriptorLayoutInfo_free(DescriptorLayoutInfo *info, const Allocator *alloc) {
 
 	if(!info)
 		return;
 
-	for(U64 i = 0; i < info->immutableSamplers.length; ++i)
-		RefPtr_dec(&info->immutableSamplers.ptrNonConst[i]);
+	if (info->flags & EDescriptorLayoutFlags_InternalStaticSamplers)
+		ListPLSamplerInfo_free(&info->staticSamplers, alloc);
 
-	ListRefPtr_free(&info->immutableSamplers, alloc);
+	else {
+
+		for(U64 i = 0; i < info->immutableSamplers.length; ++i)
+			RefPtr_dec(&info->immutableSamplers.ptrNonConst[i]);
+
+		ListRefPtr_free(&info->immutableSamplers, alloc);
+	}
+
 	ListDescriptorBinding_free(&info->bindings, alloc);
 	ListCharString_freeUnderlying(&info->bindingNames, alloc);
 }
@@ -628,6 +694,7 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
 	Bool allocated = false;
+	ListRefPtr samplers = (ListRefPtr) { 0 };
 
 	if(!dev || dev->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createDescriptorLayout()::dev is required"));
@@ -684,11 +751,23 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 
 		if (isSamplerBinding && b.immutableSamplerId) {
 
-			if(b.immutableSamplerId > info->immutableSamplers.length)
+			const Bool isStatic = b.immutableSamplerId & DescriptorLayoutInfo_staticSamplerBit;
+			const U32 samplerIndex = b.immutableSamplerId & ~DescriptorLayoutInfo_staticSamplerBit;
+
+			//One union, so one length; the id's static bit has to name the form the info actually holds.
+
+			if(isStatic != !!(info->flags & EDescriptorLayoutFlags_InternalStaticSamplers))
+				retError(clean, Error_invalidOperation(
+					0,
+					"GraphicsDeviceRef_createDescriptorLayout()::info.bindings[i].immutableSamplerId names a "
+					"sampler in the form info doesn't bake"
+				));
+
+			if(!samplerIndex || samplerIndex > info->immutableSamplers.length)
 				retError(clean, Error_outOfBounds(
-					0, b.immutableSamplerId, info->immutableSamplers.length,
+					0, samplerIndex, info->immutableSamplers.length,
 					"GraphicsDeviceRef_createDescriptorLayout()::info.bindings[i].immutableSamplerId is out of "
-					"bounds of info.immutableSamplers"
+					"bounds of the samplers info bakes"
 				));
 
 			//A static sampler is one descriptor, not an array of them.
@@ -717,8 +796,12 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 				"ordinary sampler binding)"
 			));
 
+		//A baked sampler lives in the layout itself, so it takes no descriptor and no root table. It must not
+		// make the layout look like one a bindless sampler can be allocated into, nor cost a root signature
+		// DWORD, nor make a backend bind a sampler table the signature never declared.
+
 		if(b.registerType == EGfxRegisterType_Sampler || b.registerType == EGfxRegisterType_SamplerComparisonState)
-			anySampler = true;
+			anySampler |= !DescriptorBinding_immutableSamplerId(b);
 
 		else anyResource = true;
 
@@ -780,6 +863,51 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 
 	*info = (DescriptorLayoutInfo) { 0 };
 
+	//Static samplers become samplers now that there is a device to make them on, and every binding naming one
+	// drops the bit that marked it, so the backends only ever see immutableSamplers.
+	//They hold the device the way the layout does: weakly when the layout is the device's own.
+	//Built beside the union and swapped in whole, since the refs replace the values they were made from: until
+	// the swap the layout still owns the values, so a failure part way frees exactly what exists.
+
+	if (layout->info.flags & EDescriptorLayoutFlags_InternalStaticSamplers) {
+
+		const ESamplerFlags samplerFlags =
+			layout->info.flags & EDescriptorLayoutFlags_InternalWeakDeviceRef ?
+			ESamplerFlags_InternalWeakDeviceRef : ESamplerFlags_None;
+
+		gotoIfError3(clean, ListRefPtr_reserve(&samplers, layout->info.staticSamplers.length, alloc, e_rr));
+
+		for (U64 i = 0; i < layout->info.staticSamplers.length; ++i) {
+
+			SamplerRef *sampler = NULL;
+
+			gotoIfError3(clean, GraphicsDeviceRef_createSamplerInternal(
+				dev, layout->info.staticSamplers.ptr[i], samplerFlags, true, NULL, name, &sampler, e_rr
+			));
+
+			if(!ListRefPtr_pushBack(&samplers, sampler, alloc, e_rr)) {
+				RefPtr_dec(&sampler);
+				s_uccess = false;
+				goto clean;
+			}
+		}
+
+		for (U64 i = 0; i < layout->info.bindings.length; ++i) {
+
+			DescriptorBinding *b = &layout->info.bindings.ptrNonConst[i];
+			const U32 id = DescriptorBinding_immutableSamplerId(*b);
+
+			if(id & DescriptorLayoutInfo_staticSamplerBit)
+				b->immutableSamplerId = id & ~DescriptorLayoutInfo_staticSamplerBit;
+		}
+
+		ListPLSamplerInfo_free(&layout->info.staticSamplers, alloc);
+
+		layout->info.immutableSamplers = samplers;
+		layout->info.flags &= ~EDescriptorLayoutFlags_InternalStaticSamplers;
+		samplers = (ListRefPtr) { 0 };
+	}
+
 	if (bindlessTypes) {
 
 		gotoIfError3(clean, ListU16_reserve(&layout->bindlessTypeToBinding, bindlessTypes, alloc, e_rr));
@@ -806,6 +934,13 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 	gotoIfError3(clean, GraphicsDeviceRef_createDescriptorLayoutExt(dev, layout, name, e_rr));
 
 clean:
+
+	//Only ever non empty when the swap above didn't happen, so these are samplers nothing took ownership of.
+
+	for(U64 i = 0; i < samplers.length; ++i)
+		RefPtr_dec(&samplers.ptrNonConst[i]);
+
+	ListRefPtr_free(&samplers, alloc);
 
 	if(!s_uccess && allocated)
 		RefPtr_dec(layoutRef);

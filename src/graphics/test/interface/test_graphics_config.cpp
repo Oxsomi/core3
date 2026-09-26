@@ -181,7 +181,149 @@ extern "C" void Test_graphicsConfigVariants(
 			Test_graphicsBindlessSampler(t, dynamicSamplers.handle());
 	}
 
-	//39c. reservedDescriptors: extra heap capacity on top of the bindless set, so bindful tables can be
+	//39c. Static samplers in the bindless layout, given by value: the layout exists before any sampler does, so
+	// this is the only form it can carry, and the device creates the samplers itself when it builds the layout.
+	//Two of them, so the binding to sampler mapping is exercised past the first entry.
+	//The negative first: a layout naming a sampler REF (one of the base device's) is refused, since no sampler of
+	// the device being created can exist yet.
+
+	if (base.features & c::EGraphicsFeatures_Bindless) {
+
+		const c::Bool isSpirv = RefPtr_data(instRef, c::GraphicsInstance)->api == c::EGraphicsApi_Vulkan;
+		const c::EGfxBinaryType binaryType = isSpirv ? c::EGfxBinaryType_SPIRV : c::EGfxBinaryType_DXIL;
+
+		//Point sampling with clamped addressing, so the shader's texel center samples come back exact.
+
+		c::SamplerInfo samplerInfo{};
+		samplerInfo.filter = c::ESamplerFilterMode_Nearest;
+		samplerInfo.addressU = samplerInfo.addressV = samplerInfo.addressW = c::ESamplerAddressMode_ClampToEdge;
+
+		//SPIRV set 0 binding 1, beside the slot the dynamic array would take; DXIL s0 in space 0, outside the
+		// reserved space, so neither collides with anything OxC3 declares whatever the device flags are.
+
+		c::DescriptorBinding samplerBinding{};
+		samplerBinding.registerType = c::EGfxRegisterType_Sampler;
+		samplerBinding.count = 1;
+		samplerBinding.binding = { .space = 0, .binding = isSpirv ? 1u : 0u };
+		samplerBinding.visibility = c::U32_MAX;
+
+		const c::CharString samplerName = c::CharString_createRefCStrConst("_staticSampler");
+
+		//The second differs only in address mode, so an out of range sample tells the two apart: this one wraps
+		// where the first clamps.
+
+		c::SamplerInfo samplerInfoRepeat = samplerInfo;
+		samplerInfoRepeat.addressU = samplerInfoRepeat.addressV = samplerInfoRepeat.addressW =
+			c::ESamplerAddressMode_Repeat;
+
+		c::DescriptorBinding samplerBindingRepeat = samplerBinding;
+		samplerBindingRepeat.binding = { .space = 0, .binding = isSpirv ? 2u : 1u };
+
+		const c::CharString samplerNameRepeat = c::CharString_createRefCStrConst("_staticSamplerRepeat");
+
+		{
+			gfxtest::OwnedLayoutInfo refLayout(alloc);
+			Sampler baseSampler;
+
+			if(
+				Test_assert(t, "staticSamplerRefLayout", c::GraphicsDevice_defaultBindlessLayout(
+					info, binaryType, c::EGraphicsDeviceFlags_None, &refLayout.list, alloc, &t->err
+				)) &&
+				Test_assert(t, "staticSamplerBaseSampler", baseDev.createSampler(
+					samplerInfo, "Base sampler", baseSampler, nullptr, true, &t->err
+				))
+			) {
+				c::U32 refId = 0;
+
+				if (Test_assert(t, "staticSamplerAddRef", c::DescriptorLayoutInfo_addImmutableSampler(
+					&refLayout.list, baseSampler.handle(), &refId, alloc, &t->err
+				))) {
+					c::DescriptorBinding refBinding = samplerBinding;
+					refBinding.immutableSamplerId = refId;
+
+					Test_assert(t, "staticSamplerRefPush", c::ListDescriptorBinding_pushBack(
+						&refLayout.list.bindings, refBinding, alloc, &t->err
+					));
+
+					Test_assert(t, "staticSamplerRefName", c::ListCharString_pushBack(
+						&refLayout.list.bindingNames, samplerName, alloc, &t->err
+					));
+
+					c::GraphicsDeviceRef *refused = nullptr;
+
+					Test_assert(t, "staticSamplerRefRefused", !c::GraphicsDeviceRef_create(
+						instRef, info, c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default,
+						&refLayout.list, nullptr, &refused, nullptr
+					));
+
+					Test_assert(t, "staticSamplerRefNoDevice", !refused);
+
+					if(refused)
+						c::RefPtr_dec(&refused);
+				}
+			}
+		}
+
+		gfxtest::OwnedLayoutInfo staticLayout(alloc);
+		c::U32 staticId = 0, staticIdRepeat = 0;
+
+		if(
+			Test_assert(t, "staticSamplerLayout", c::GraphicsDevice_defaultBindlessLayout(
+				info, binaryType, c::EGraphicsDeviceFlags_None, &staticLayout.list, alloc, &t->err
+			)) &&
+			Test_assert(t, "staticSamplerAdd", c::DescriptorLayoutInfo_addStaticSampler(
+				&staticLayout.list, samplerInfo, &staticId, alloc, &t->err
+			)) &&
+			Test_assert(t, "staticSamplerAddRepeat", c::DescriptorLayoutInfo_addStaticSampler(
+				&staticLayout.list, samplerInfoRepeat, &staticIdRepeat, alloc, &t->err
+			))
+		) {
+			//Ids are one based within the static list and carry the bit that marks them static, so the second
+			// is the first plus one.
+
+			Test_assert(t, "staticSamplerIds",
+				staticId == (c::DescriptorLayoutInfo_staticSamplerBit | 1) &&
+				staticIdRepeat == (c::DescriptorLayoutInfo_staticSamplerBit | 2)
+			);
+
+			samplerBinding.immutableSamplerId = staticId;
+			samplerBindingRepeat.immutableSamplerId = staticIdRepeat;
+
+			Test_assert(t, "staticSamplerPush", c::ListDescriptorBinding_pushBack(
+				&staticLayout.list.bindings, samplerBinding, alloc, &t->err
+			));
+
+			Test_assert(t, "staticSamplerName", c::ListCharString_pushBack(
+				&staticLayout.list.bindingNames, samplerName, alloc, &t->err
+			));
+
+			Test_assert(t, "staticSamplerPushRepeat", c::ListDescriptorBinding_pushBack(
+				&staticLayout.list.bindings, samplerBindingRepeat, alloc, &t->err
+			));
+
+			Test_assert(t, "staticSamplerNameRepeat", c::ListCharString_pushBack(
+				&staticLayout.list.bindingNames, samplerNameRepeat, alloc, &t->err
+			));
+
+			c::GraphicsDeviceRef *staticRef = nullptr;
+
+			if (Test_assert(t, "configStaticSamplerCreate", c::GraphicsDeviceRef_create(
+				instRef, info, c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default,
+				&staticLayout.list, nullptr, &staticRef, &t->err
+			))) {
+				Device staticDev = Device::share(staticRef);
+				c::RefPtr_dec(&staticRef);
+				Test_graphicsStaticSamplerDevice(t, staticDev.handle());
+				(void) staticDev.wait();
+
+				//That module set its own name, so every assert below belongs to this one again.
+
+				Test_setModule(t, "GraphicsDevice/configVariants");
+			}
+		}
+	}
+
+	//39d. reservedDescriptors: extra heap capacity on top of the bindless set, so bindful tables can be
 	// created from the device's own heap and live beside it, without a second heap and the heap switch a
 	// second heap costs.
 	//The negative runs on the base device: without a reserve, the default table consumed the heap's single
@@ -265,7 +407,7 @@ extern "C" void Test_graphicsConfigVariants(
 		}
 	}
 
-	//39d. DisableBindless clears Bindless and, with it, DescriptorHeap.
+	//39e. DisableBindless clears Bindless and, with it, DescriptorHeap.
 	//DescriptorHeap is the interesting half: it is a features2 bit that implies bindless, so a flag that only
 	// cleared the obvious bit would leave a device claiming heap indexing it can no longer set up.
 
@@ -337,7 +479,7 @@ extern "C" void Test_graphicsConfigVariants(
 		}
 	}
 
-	//39e. Both flags at once, to catch one flag's clearing undoing the other's.
+	//39f. Both flags at once, to catch one flag's clearing undoing the other's.
 
 	{
 		Device both = Test_createConfigDevice(
@@ -359,7 +501,7 @@ extern "C" void Test_graphicsConfigVariants(
 		}
 	}
 
-	//39f. Buffering modes land on the frame counts they name.
+	//39g. Buffering modes land on the frame counts they name.
 	//Default is deliberately not pinned to a number, since it is device preferred.
 	//It only has to be one of the counts the enum offers.
 

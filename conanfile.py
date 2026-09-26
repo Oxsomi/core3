@@ -38,7 +38,7 @@ HOST_TOOL_OPTIONS = {
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "3.2.105"
+	version = "3.2.106"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -232,7 +232,7 @@ class oxc3(ConanFile):
 
 		# agility_sdk ships d3d12shader.h, which DXC's dxcreflect.h includes.
 		if hasD3D12 or self.options.enableShaderCompiler:
-			self.requires("agility_sdk/2026.07.29")
+			self.requires("agility_sdk/2026.09.25")
 
 		if hasD3D12 and self.settings.arch == "x86_64":
 			self.requires("ags/2024.09.21")
@@ -410,7 +410,7 @@ class oxc3(ConanFile):
 		else:
 			self.cpp_info.system_libs = [ "m", "xkbcommon", "wayland-cursor" ]
 
-		self.cpp_info.libs = [ "OxC3_formats_bmp", "OxC3_formats_oiBC", "OxC3_formats_hdr" ]
+		self.cpp_info.libs = [ "OxC3_formats_bmp", "OxC3_formats_oiBC", "OxC3_formats_hdr", "OxC3_formats_obj", "OxC3_formats_ply", "OxC3_types_mesh" ]
 
 		# Headless: no graphics module on the web target (no WebGPU backend yet)
 		if self.settings.os != "Emscripten":

@@ -32,10 +32,12 @@ TListNamedImpl(ListThreadHandle);
 
 static const Ns JobQueue_idleSleep = 100000;        //100 * MU
 
-//Pop the next job.
-//Returns false if the queue is currently empty.
+//Pop the next job, or when filtered, the next one tagged with 'group'.
+//A filtered pop skips jobs it doesn't match rather than waiting for them, so a caller draining its own
+// group never takes on work that could want a lock it is already holding.
+//Returns false if the queue currently holds no such job.
 
-static Bool JobQueue_pop(JobQueue *queue, Job *job) {
+static Bool JobQueue_pop(JobQueue *queue, Bool filtered, const JobGroup *group, Job *job) {
 
 	Bool popped = false;
 
@@ -44,8 +46,16 @@ static Bool JobQueue_pop(JobQueue *queue, Job *job) {
 	if(acq < ELockAcquire_Success)
 		return false;
 
-	if(queue->jobs.length)
-		popped = ListJob_popFront(&queue->jobs, job, NULL);
+	if(!filtered) {
+		if(queue->jobs.length)
+			popped = ListJob_popFront(&queue->jobs, job, NULL);
+	}
+
+	else for(U64 i = 0; i < queue->jobs.length; ++i)
+		if (queue->jobs.ptr[i].group == group) {
+			popped = ListJob_popLocation(&queue->jobs, i, job, NULL);
+			break;
+		}
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&queue->lock);
@@ -56,11 +66,11 @@ static Bool JobQueue_pop(JobQueue *queue, Job *job) {
 //Run one job and update bookkeeping.
 //Returns false if no job was available.
 
-static Bool JobQueue_runOne(JobQueue *queue, U64 threadId) {
+static Bool JobQueue_runOne(JobQueue *queue, U64 threadId, Bool filtered, const JobGroup *group) {
 
 	Job job = (Job) { 0 };
 
-	if(!JobQueue_pop(queue, &job))
+	if(!JobQueue_pop(queue, filtered, group, &job))
 		return false;
 
 	if(!job.callback || !job.callback(job.data, threadId, queue))
@@ -83,7 +93,7 @@ static void JobQueue_workerLoop(void *queuePtr) {
 
 	while(true) {
 
-		if(JobQueue_runOne(queue, threadId))
+		if(JobQueue_runOne(queue, threadId, false, NULL))
 			continue;
 
 		if(AtomicI64_load(&queue->shutdown))
@@ -137,8 +147,8 @@ clean:
 	return s_uccess;
 }
 
-Bool JobQueue_pushDestructor(
-	JobQueue *queue, JobCallback callback, void *data, JobDestructor destructor, Error *e_rr
+Bool JobQueue_pushGroup(
+	JobQueue *queue, JobCallback callback, void *data, JobDestructor destructor, JobGroup *group, Error *e_rr
 ) {
 
 	Bool s_uccess = true;
@@ -158,7 +168,7 @@ Bool JobQueue_pushDestructor(
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "JobQueue_push() couldn't acquire lock"));
 
-	const Job job = (Job) { .callback = callback, .data = data, .destructor = destructor };
+	const Job job = (Job) { .callback = callback, .data = data, .destructor = destructor, .group = group };
 	gotoIfError3(clean, ListJob_pushBack(&queue->jobs, job, queue->alloc, e_rr));
 
 	AtomicI64_inc(&queue->pending);
@@ -171,8 +181,14 @@ clean:
 	return s_uccess;
 }
 
+Bool JobQueue_pushDestructor(
+	JobQueue *queue, JobCallback callback, void *data, JobDestructor destructor, Error *e_rr
+) {
+	return JobQueue_pushGroup(queue, callback, data, destructor, NULL, e_rr);
+}
+
 Bool JobQueue_push(JobQueue *queue, JobCallback callback, void *data, Error *e_rr) {
-	return JobQueue_pushDestructor(queue, callback, data, NULL, e_rr);
+	return JobQueue_pushGroup(queue, callback, data, NULL, NULL, e_rr);
 }
 
 //See JobInvoke in the header for why a wrapper's callback goes through here rather than being handed to the
@@ -207,7 +223,7 @@ Bool JobQueue_wait(JobQueue *queue, Error *e_rr) {
 
 	while (AtomicI64_load(&queue->pending)) {
 
-		if(JobQueue_runOne(queue, 0))
+		if(JobQueue_runOne(queue, 0, false, NULL))
 			continue;
 
 		//Nothing queued, but jobs are still running on workers and might spawn more.
@@ -311,6 +327,30 @@ Bool JobGroup_fail(JobGroup *group, Error *e_rr) {
 		retError(clean, Error_nullPointer(0, "JobGroup_fail()::group is required"));
 
 	AtomicI64_store(&group->failed, 1);
+
+clean:
+	return s_uccess;
+}
+
+Bool JobGroup_wait(JobGroup *group, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!group)
+		retError(clean, Error_nullPointer(0, "JobGroup_wait()::group is required"));
+
+	if(!group->queue)
+		retError(clean, Error_nullPointer(0, "JobGroup_wait()::group->queue is required"));
+
+	while (AtomicI64_load(&group->outstanding)) {
+
+		if(JobQueue_runOne(group->queue, 0, true, group))
+			continue;
+
+		//Tokens are still held, but by jobs already running on workers or not pushed yet.
+
+		Thread_sleep(JobQueue_idleSleep);
+	}
 
 clean:
 	return s_uccess;

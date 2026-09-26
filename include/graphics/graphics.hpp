@@ -1785,6 +1785,32 @@ namespace oxc {
 				return true;
 			}
 
+			//The upload SOURCE is the stream, read one dirty range at a time at flush, so the bytes never
+			//exist on the host as a whole. size is what the resource will be; this does not read the stream
+			// to find it.
+			//The stream is RELEASED once the upload has consumed it, the way cpuData is, since holding one
+			// holds a file descriptor or a cipher context. keepSource holds it for a later partial update.
+
+			[[nodiscard]] c::Bool createBufferStream(
+				c::EDeviceBufferUsage usage, c::EGraphicsResourceFlag flags,
+				const c::C8 *debugName, c::StreamRef *stream, c::U64 size, DeviceBuffer &result,
+				c::Bool keepSource = false,
+				const DescriptorTable *bindlessTable = nullptr, c::Error *e_rr = nullptr
+			) noexcept {
+
+				const c::CharString n = name(debugName);
+				c::DeviceBufferRef *raw = nullptr;
+
+				if(!c::GraphicsDeviceRef_createBufferStream(
+					handle(), usage, flags, bindlessTable ? bindlessTable->handle() : nullptr,
+					&n, stream, size, keepSource, &raw, e_rr
+				))
+					return false;
+
+				result = DeviceBuffer(RefPtr<c::DeviceBuffer>::adopt(raw));
+				return true;
+			}
+
 			//msaa bakes into the texture exactly as it does into the pipeline that draws to it, so a
 			//multisampled target and its pipeline have to name the same count.
 			//Type and length are pinned to a plain 2D image: UnifiedTexture_create refuses everything else
@@ -2252,7 +2278,7 @@ namespace oxc {
 			//every TLAS referencing it must be created after, because compaction moves the structure.
 
 			[[nodiscard]] c::Bool createBlasProcedural(
-				c::ERTASBuildFlags buildFlags, c::EBLASFlag blasFlags,
+				c::ERTASBuildFlags buildFlags, c::EBLASGeometryFlag geometryFlags,
 				c::U32 aabbStride, c::U32 aabbOffset, c::DeviceData buffer,
 				const c::C8 *debugName, Blas &result, c::Error *e_rr = nullptr
 			) noexcept {
@@ -2261,7 +2287,7 @@ namespace oxc {
 				c::BLASRef *raw = nullptr;
 
 				if(!c::GraphicsDeviceRef_createBLASProceduralExt(
-					handle(), buildFlags, blasFlags, aabbStride, aabbOffset, buffer, &n, &raw, e_rr
+					handle(), buildFlags, geometryFlags, aabbStride, aabbOffset, buffer, &n, &raw, e_rr
 				))
 					return false;
 
@@ -2473,6 +2499,42 @@ namespace oxc {
 				if(ns) (void) c::ListSwapchainRef_createRefConst(rawChains, ns, &chainRefs, nullptr);
 
 				return c::GraphicsDeviceRef_submitCommands(handle(), &listRefs, &chainRefs, deltaTime, time, e_rr);
+			}
+
+			//The same submit with a job queue LENT to it, for the duration of the call only. A dirty range
+			//whose source is a stream declaring concurrent reads is then read in pieces across that queue
+			// rather than on the calling thread, which is what a large file backed upload wants.
+
+			[[nodiscard]] c::Bool submitJob(
+				std::initializer_list<const CommandList*> lists,
+				std::initializer_list<const Swapchain*> swapchains,
+				c::JobQueue *uploadQueue,
+				c::F32 deltaTime = -1, c::F32 time = 0,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				c::CommandListRef *rawLists[16];
+				c::SwapchainRef *rawChains[16];
+
+				if(lists.size() > 16 || swapchains.size() > 16) {
+					if(e_rr)
+						*e_rr = c::Error_outOfBounds(0, lists.size(), 16, "submitJob() supports up to 16 lists/swapchains");
+					return false;
+				}
+
+				c::U64 nl = 0, ns = 0;
+				for(const CommandList *l : lists) rawLists[nl++] = l->handle();
+				for(const Swapchain *s : swapchains) rawChains[ns++] = s->handle();
+
+				c::ListCommandListRef listRefs{};
+				c::ListSwapchainRef chainRefs{};
+
+				if(nl) (void) c::ListCommandListRef_createRefConst(rawLists, nl, &listRefs, nullptr);
+				if(ns) (void) c::ListSwapchainRef_createRefConst(rawChains, ns, &chainRefs, nullptr);
+
+				return c::GraphicsDeviceRef_submitCommandsJob(
+					handle(), &listRefs, &chainRefs, deltaTime, time, uploadQueue, e_rr
+				);
 			}
 		};
 	}

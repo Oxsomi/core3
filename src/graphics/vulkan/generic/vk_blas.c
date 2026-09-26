@@ -30,6 +30,26 @@
 #include "graphics/vulkan/vulkan.h"
 #include "types/container/string.h"
 #include "types/base/constants.h"
+#include "types/container/list_impl.h"
+
+TListNamedImpl(ListVkAccelerationStructureGeometryKHR);
+TListNamedImpl(ListVkAccelerationStructureBuildRangeInfoKHR);
+TListNamedImpl(ListVkBLASOmmTriangles);
+
+//EBLASGeometryFlag is per geometry on both APIs, so this runs once per geometry rather than once per BLAS.
+
+static VkGeometryFlagsKHR mapVkGeometryFlags(U8 flags) {
+
+	VkGeometryFlagsKHR result = 0;
+
+	if(flags & EBLASGeometryFlag_DisableAnyHit)
+		result |= VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+	if(flags & EBLASGeometryFlag_AvoidDuplicateAnyHit)
+		result |= VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
+
+	return result;
+}
 
 Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 
@@ -47,152 +67,190 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		retError(clean, Error_unsupportedOperation(0, "VkBLAS_init()::serialized not supported yet"));        //TODO:
 
 	U64 primitives = 0;
-	EBLASConstructionType type = (EBLASConstructionType) blas->base.asConstructionType;
+	const EBLASConstructionType type = (EBLASConstructionType) blas->base.asConstructionType;
 
-	U64 vertexCount = 0;
+	//One geometry desc per BLASGeometry, in that order, because a shader reads the index back as
+	// GeometryIndex(); AABBs stay a single desc.
+	//Sized before anything points into them, since the build info keeps those pointers for its lifetime.
 
-	switch (type) {
+	const U64 geometryCount = type == EBLASConstructionType_Geometry ? blas->geometries.length : 1;
 
-		case EBLASConstructionType_Serialized:
-			primitives = Buffer_length(blas->cpuData) / 12;        //Conservative estimate
-			break;
+	gotoIfError3(clean, ListVkAccelerationStructureGeometryKHR_resize(
+		&blasExt->geometries, geometryCount, alloc, e_rr
+	));
 
-		case EBLASConstructionType_Procedural:
-			primitives = blas->aabbBuffer.len / (sizeof(F32) * 3 * 2);
-			break;
+	gotoIfError3(clean, ListVkAccelerationStructureBuildRangeInfoKHR_resize(
+		&blasExt->ranges, geometryCount, alloc, e_rr
+	));
 
-		default: {
-
-			vertexCount = blas->positionBuffer.len / blas->positionBufferStride;
-			U8 stride = blas->indexFormatId == ETextureFormatId_R32u ? 4 : 2;
-
-			if(blas->indexFormatId != ETextureFormatId_Undefined)
-				primitives = blas->indexBuffer.len / stride / 3;
-
-			else primitives = vertexCount / 3;
-
-			break;
-		}
-	}
-
-	if(primitives >> 32)
-		retError(clean, Error_outOfBounds(
-			0, primitives, U32_MAX, "VkBLAS_init() only primitive count of <U32_MAX is supported"
-		));
-
-	blasExt->range = (VkAccelerationStructureBuildRangeInfoKHR) { .primitiveCount = (U32) primitives };
+	gotoIfError3(clean, ListU32_resize(&blasExt->maxPrimitiveCounts, geometryCount, alloc, e_rr));
 
 	//Convert to Vulkan dependent version
 
-	VkAccelerationStructureGeometryKHR geometry = (VkAccelerationStructureGeometryKHR) {
-		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR
-	};
+	if(type == EBLASConstructionType_Geometry) {
 
-	if(blas->base.flagsExt & EBLASFlag_DisableAnyHit)
-		geometry.flags |= VK_GEOMETRY_OPAQUE_BIT_KHR;
+		//Allocated for every geometry as soon as one of them carries a micromap, so the chained addresses
+		// taken below stay valid for the BLAS's lifetime.
 
-	if(blas->base.flagsExt & EBLASFlag_AvoidDuplicateAnyHit)
-		geometry.flags |= VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
+		Bool anyOmm = false;
 
-	if(blas->base.asConstructionType == EBLASConstructionType_Geometry) {
+		for(U64 i = 0; i < geometryCount; ++i)
+			if(blas->geometries.ptr[i].ommIndexFormatId)
+				anyOmm = true;
 
-		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+		if(anyOmm)
+			gotoIfError3(clean, ListVkBLASOmmTriangles_resize(&blasExt->ommTriangles, geometryCount, alloc, e_rr));
 
-		//RGBA32f is only optionally supported as an AS vertex format, RGB32f support is mandatory;
-		// the w is padding the stride already covers, so the three component format reads the same memory.
+		for(U64 i = 0; i < geometryCount; ++i) {
 
-		VkFormat vertexFormat = mapVkFormat(ETextureFormatId_unpack[blas->positionFormatId]);
+			const BLASGeometry geom = blas->geometries.ptr[i];
 
-		if(blas->positionFormatId == ETextureFormatId_RGBA32f)
-			vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+			const U64 vertexCount = geom.positionBuffer.len / geom.positionBufferStride;
+			const U8 indexStride = geom.indexFormatId == ETextureFormatId_R32u ? 4 : 2;
 
-		VkAccelerationStructureGeometryTrianglesDataKHR *tri = &geometry.geometry.triangles;
-		*tri = (VkAccelerationStructureGeometryTrianglesDataKHR) {
-			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
-			.vertexFormat = vertexFormat,
-			.vertexData = getVkLocation(blas->positionBuffer, blas->positionOffset),
-			.vertexStride = blas->positionBufferStride,
-			.maxVertex = (U32) vertexCount,
-			.indexType = VK_INDEX_TYPE_NONE_KHR        //Zero initialized would read as UINT16 without an index buffer
-		};
+			const U64 geometryPrimitives =
+				geom.indexFormatId != ETextureFormatId_Undefined ? geom.indexBuffer.len / indexStride / 3 :
+				vertexCount / 3;
 
-		if (blas->indexFormatId) {
-			tri->indexType = blas->indexFormatId == ETextureFormatId_R32u ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
-			tri->indexData = getVkLocation(blas->indexBuffer, 0);
-		}
+			if(geometryPrimitives >> 32)
+				retError(clean, Error_outOfBounds(
+					0, geometryPrimitives, U32_MAX, "VkBLAS_init() only primitive count of <U32_MAX is supported"
+				));
 
-		//Opacity micromaps, stage 1.
-		//The micromap handle stays null on purpose: that is what tells the driver the index buffer holds only
-		// special indices (fully opaque or fully transparent) rather than referencing a built micromap.
-		//usageCounts stays empty for the same reason, since there are no micromap entries to describe.
+			primitives += geometryPrimitives;
 
-		//It lives on the ext object rather than on this stack: the geometry desc only CHAINS it, and the build
-		// that reads it runs at flush time, long after this function returned.
+			//RGBA32f is only optionally supported as an AS vertex format, RGB32f support is mandatory;
+			// the w is padding the stride already covers, so the three component format reads the same memory.
 
-		if (blas->ommIndexFormatId) {
+			VkFormat vertexFormat = mapVkFormat(ETextureFormatId_unpack[geom.positionFormatId]);
 
-			VkIndexType indexType = VK_INDEX_TYPE_UINT16;
-			U8 indexStride = 2;
+			if(geom.positionFormatId == ETextureFormatId_RGBA32f)
+				vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
 
-			switch (blas->ommIndexFormatId) {
-				case ETextureFormatId_R32u:    indexType = VK_INDEX_TYPE_UINT32;    indexStride = 4;    break;
-				case ETextureFormatId_R8u:     indexType = VK_INDEX_TYPE_UINT8;     indexStride = 1;    break;
-				default:                                                                                break;
+			VkAccelerationStructureGeometryKHR *geometry = &blasExt->geometries.ptrNonConst[i];
+
+			*geometry = (VkAccelerationStructureGeometryKHR) {
+				.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+				.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR,
+				.flags = mapVkGeometryFlags(geom.flags)
+			};
+
+			VkAccelerationStructureGeometryTrianglesDataKHR *tri = &geometry->geometry.triangles;
+			*tri = (VkAccelerationStructureGeometryTrianglesDataKHR) {
+				.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+				.vertexFormat = vertexFormat,
+				.vertexData = getVkLocation(geom.positionBuffer, geom.positionOffset),
+				.vertexStride = geom.positionBufferStride,
+				.maxVertex = (U32) (vertexCount - 1),        //The highest index a triangle may name, not the count
+				.indexType = VK_INDEX_TYPE_NONE_KHR        //Zero initialized would read as UINT16 without an index buffer
+			};
+
+			if (geom.indexFormatId) {
+				tri->indexType = geom.indexFormatId == ETextureFormatId_R32u ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
+				tri->indexData = getVkLocation(geom.indexBuffer, 0);
 			}
 
-			//Which of the two extensions the device runs decides the struct: they are not layout compatible and
-			// the driver only accepts its own.
-			//R8u can't get here at all today: no Vulkan device claims RayMicromapOpacityU8 (that waits on the
-			// KHR path being implemented) and BLAS create validation rejects R8u without it.
+			blasExt->ranges.ptrNonConst[i] = (VkAccelerationStructureBuildRangeInfoKHR) {
+				.primitiveCount = (U32) geometryPrimitives
+			};
 
-			if(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR) {
+			blasExt->maxPrimitiveCounts.ptrNonConst[i] = (U32) geometryPrimitives;
 
-				blasExt->ommTrianglesKhr = (VkAccelerationStructureTrianglesOpacityMicromapKHR) {
-					.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_KHR,
-					.indexType = indexType,
-					.indexBuffer = getVkDeviceAddress(blas->ommIndexBuffer),
-					.indexStride = indexStride
-				};
+			//Opacity micromaps, stage 1.
+			//The micromap handle stays null on purpose: that is what tells the driver the index buffer holds only
+			// special indices (fully opaque or fully transparent) rather than referencing a built micromap.
+			//usageCounts stays empty for the same reason, since there are no micromap entries to describe.
 
-				tri->pNext = &blasExt->ommTrianglesKhr;
-			}
+			//It lives on the ext object rather than on this stack: the geometry desc only CHAINS it, and the build
+			// that reads it runs at flush time, long after this function returned.
 
-			else {
+			if (geom.ommIndexFormatId) {
 
-				blasExt->ommTrianglesExt = (VkAccelerationStructureTrianglesOpacityMicromapEXT) {
-					.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT,
-					.indexType = indexType,
-					.indexBuffer = getVkLocation(blas->ommIndexBuffer, 0),
-					.indexStride = indexStride
-				};
+				VkBLASOmmTriangles *ommTriangles = &blasExt->ommTriangles.ptrNonConst[i];
 
-				//A linked micromap brings its handle and its usage counts; the EXT extension wants the same
-				// counts the array was built with restated in every BLAS that links it.
+				VkIndexType indexType = VK_INDEX_TYPE_UINT16;
+				U8 ommIndexStride = 2;
 
-				if (blas->ommMicromap) {
-
-					VkOpacityMicromap *micromapExt = OpacityMicromap_ext(OpacityMicromapRef_ptr(blas->ommMicromap), Vk);
-
-					blasExt->ommTrianglesExt.micromap = micromapExt->micromap;
-					blasExt->ommTrianglesExt.usageCountsCount = (U32) micromapExt->usages.length;
-					blasExt->ommTrianglesExt.pUsageCounts = micromapExt->usages.ptr;
+				switch (geom.ommIndexFormatId) {
+					case ETextureFormatId_R32u:    indexType = VK_INDEX_TYPE_UINT32;    ommIndexStride = 4;    break;
+					case ETextureFormatId_R8u:     indexType = VK_INDEX_TYPE_UINT8;     ommIndexStride = 1;    break;
+					default:                                                                                   break;
 				}
 
-				tri->pNext = &blasExt->ommTrianglesExt;
+				//Which of the two extensions the device runs decides the struct: they are not layout compatible and
+				// the driver only accepts its own.
+				//R8u can't get here at all today: no Vulkan device claims RayMicromapOpacityU8 (that waits on the
+				// KHR path being implemented) and BLAS create validation rejects R8u without it.
+
+				if(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR) {
+
+					ommTriangles->khr = (VkAccelerationStructureTrianglesOpacityMicromapKHR) {
+						.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_KHR,
+						.indexType = indexType,
+						.indexBuffer = getVkDeviceAddress(geom.ommIndexBuffer),
+						.indexStride = ommIndexStride
+					};
+
+					tri->pNext = &ommTriangles->khr;
+				}
+
+				else {
+
+					ommTriangles->ext = (VkAccelerationStructureTrianglesOpacityMicromapEXT) {
+						.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT,
+						.indexType = indexType,
+						.indexBuffer = getVkLocation(geom.ommIndexBuffer, 0),
+						.indexStride = ommIndexStride
+					};
+
+					//A linked micromap brings its handle and its usage counts; the EXT extension wants the same
+					// counts the array was built with restated in every BLAS that links it.
+
+					if (geom.ommMicromap) {
+
+						VkOpacityMicromap *micromapExt = OpacityMicromap_ext(OpacityMicromapRef_ptr(geom.ommMicromap), Vk);
+
+						ommTriangles->ext.micromap = micromapExt->micromap;
+						ommTriangles->ext.usageCountsCount = (U32) micromapExt->usages.length;
+						ommTriangles->ext.pUsageCounts = micromapExt->usages.ptr;
+					}
+
+					tri->pNext = &ommTriangles->ext;
+				}
 			}
 		}
 	}
 
 	else {
-		geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
-		geometry.geometry.aabbs = (VkAccelerationStructureGeometryAabbsDataKHR) {
-			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR,
-			.data = getVkLocation(blas->aabbBuffer, blas->aabbOffset),
-			.stride = blas->aabbStride
+
+		primitives = blas->aabbBuffer.len / blas->aabbStride;        //One per stride, which may exceed the 24 byte box
+
+		if(primitives >> 32)
+			retError(clean, Error_outOfBounds(
+				0, primitives, U32_MAX, "VkBLAS_init() only primitive count of <U32_MAX is supported"
+			));
+
+		blasExt->geometries.ptrNonConst[0] = (VkAccelerationStructureGeometryKHR) {
+			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+			.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR,
+			.flags = mapVkGeometryFlags(blas->aabbFlags),
+			.geometry = {
+				.aabbs = (VkAccelerationStructureGeometryAabbsDataKHR) {
+					.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR,
+					.data = getVkLocation(blas->aabbBuffer, blas->aabbOffset),
+					.stride = blas->aabbStride
+				}
+			}
 		};
+
+		blasExt->ranges.ptrNonConst[0] = (VkAccelerationStructureBuildRangeInfoKHR) {
+			.primitiveCount = (U32) primitives
+		};
+
+		blasExt->maxPrimitiveCounts.ptrNonConst[0] = (U32) primitives;
 	}
 
-	blasExt->geometry = geometry;
+	blasExt->primitives = primitives;
 
 	VkBuildAccelerationStructureFlagsKHR flags = (VkBuildAccelerationStructureFlagsKHR) 0;
 
@@ -214,12 +272,12 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 	if(blas->base.flags & ERTASBuildFlags_AllowDataAccessExt)
 		flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DATA_ACCESS_BIT_KHR;
 
-	blasExt->geometries = (VkAccelerationStructureBuildGeometryInfoKHR) {
+	blasExt->build = (VkAccelerationStructureBuildGeometryInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
 		.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
 		.flags = flags,
-		.geometryCount = 1,
-		.pGeometries = &blasExt->geometry
+		.geometryCount = (U32) geometryCount,
+		.pGeometries = blasExt->geometries.ptr
 	};
 
 	//mode and srcAccelerationStructure are left at build here and decided per build in flush instead, since
@@ -227,7 +285,6 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 
 	//Get build size to allocate scratch and final buffer
 
-	U32 primitivesU32 = (U32) primitives;
 	VkAccelerationStructureBuildSizesInfoKHR sizes = (VkAccelerationStructureBuildSizesInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR
 	};
@@ -235,8 +292,8 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 	deviceExt->getAccelerationStructureBuildSizes(
 		deviceExt->device,
 		VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-		&blasExt->geometries,
-		&primitivesU32,
+		&blasExt->build,
+		blasExt->maxPrimitiveCounts.ptr,
 		&sizes
 	);
 
@@ -298,9 +355,9 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		e_rr
 	));
 
-	blasExt->geometries.dstAccelerationStructure = blasExt->as;
+	blasExt->build.dstAccelerationStructure = blasExt->as;
 
-	blasExt->geometries.scratchData = (VkDeviceOrHostAddressKHR) {
+	blasExt->build.scratchData = (VkDeviceOrHostAddressKHR) {
 		.deviceAddress = DeviceBufferRef_ptr(blas->base.tempScratchBuffer)->resource.deviceAddress
 	};
 
@@ -314,7 +371,7 @@ void VK_WRAP_FUNC(BLAS_free)(BLAS *blas) {
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	const VkBLAS *blasExt = BLAS_ext(blas, Vk);
+	VkBLAS *blasExt = BLAS_ext(blas, Vk);
 
 	if(blasExt->as)
 		deviceExt->destroyAccelerationStructure(deviceExt->device, blasExt->as, NULL);
@@ -326,6 +383,13 @@ void VK_WRAP_FUNC(BLAS_free)(BLAS *blas) {
 
 	if(blasExt->pendingAs)
 		deviceExt->destroyAccelerationStructure(deviceExt->device, blasExt->pendingAs, NULL);
+
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(blas->base.device);
+
+	ListVkAccelerationStructureGeometryKHR_free(&blasExt->geometries, alloc);
+	ListVkAccelerationStructureBuildRangeInfoKHR_free(&blasExt->ranges, alloc);
+	ListU32_free(&blasExt->maxPrimitiveCounts, alloc);
+	ListVkBLASOmmTriangles_free(&blasExt->ommTriangles, alloc);
 }
 
 Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr) {
@@ -346,20 +410,20 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
 		return s_uccess;
 
-	const VkAccelerationStructureBuildRangeInfoKHR *range = &blasExt->range;
+	const VkAccelerationStructureBuildRangeInfoKHR *range = blasExt->ranges.ptr;
 
 	//A structure that was already built refits itself in place, which both APIs allow and which is what keeps
 	// its device address and every instance descriptor pointing at it valid across an update.
 
 	if (blas->base.isCompleted) {
-		blasExt->geometries.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
-		blasExt->geometries.srcAccelerationStructure = blasExt->as;
+		blasExt->build.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+		blasExt->build.srcAccelerationStructure = blasExt->as;
 	}
 
 	deviceExt->cmdBuildAccelerationStructures(
 		commandBuffer->buffer,
 		1,
-		&blasExt->geometries,
+		&blasExt->build,
 		&range
 	);
 
@@ -444,7 +508,7 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 
 	//Add as flight and ensure flushes are done if too many ASes are queued this frame
 
-	device->pendingPrimitives += blasExt->range.primitiveCount;
+	device->pendingPrimitives += blasExt->primitives;
 
 	if(!ListRefPtr_contains(*currentFlight, pending, 0, NULL)) {
 		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
@@ -628,7 +692,7 @@ Bool VK_WRAP_FUNC(BLASRef_compact)(
 	ListRefPtr_pushBack(currentFlight, blas->base.asBuffer, alloc, NULL);
 
 	blasExt->as = blasExt->pendingAs;
-	blasExt->geometries.dstAccelerationStructure = blasExt->pendingAs;
+	blasExt->build.dstAccelerationStructure = blasExt->pendingAs;
 	blas->base.asBuffer = blas->base.pendingCompactBuffer;
 	blas->base.isCompacted = true;
 

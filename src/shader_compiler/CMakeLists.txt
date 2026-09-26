@@ -79,9 +79,22 @@ if(DynamicLinkingShaderCompiler)
 
 	# The public API is ~40 free functions and no exported data, so letting CMake write the .def is enough
 	# and keeps __declspec out of the headers.
-	# Everything else already defaults to visible; nothing here sets -fvisibility=hidden.
 
 	set_target_properties(OxC3_shader_compiler PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
+	# ELF exports everything by default, including whatever the static libraries below bring with them, so the
+	# same global ends up defined in this library AND in an executable that links those archives directly.
+	# Identical constants make that harmless in practice, but it is a genuine ODR violation and a sanitized
+	# build aborts on it as soon as one runtime can see both modules. --exclude-libs hides what came out of the
+	# archives and leaves this library's own API exported, which is what the comment above always claimed.
+	#
+	# The option is GNU ld and lld only: MSVC (clang-cl included, which CMake reports as MSVC) has no such
+	# flag, Apple's ld64 has none either, and wasm-ld does not take it. Android's lld does, and ELF is what
+	# needs it, so android stays in even though the shared build is coerced off there.
+
+	if(NOT MSVC AND NOT APPLE AND NOT EMSCRIPTEN)
+		target_link_options(OxC3_shader_compiler PRIVATE "-Wl,--exclude-libs,ALL")
+	endif()
 	target_compile_definitions(OxC3_shader_compiler PUBLIC -DSHADER_COMPILER_DYNAMIC)
 
 	if(MSVC)

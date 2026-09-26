@@ -77,6 +77,8 @@
 //Both C++ headers come BEFORE the block below: a standard header included after the C headers landed in
 //oxc::c finds its guard already tripped and leaves its symbols in that namespace.
 
+#include <stdlib.h>
+
 #include "test_graphics_shared.hpp"
 
 //Log::debugLn is the C++ front for Log_debugLnx; the x macros name ELogOptions_NewLine unqualified and so
@@ -121,6 +123,17 @@ namespace oxc { namespace c {
 //its entry points, and they all reach c:: the same way.
 
 using namespace oxc;
+
+//Whether this run asks the API to validate itself, off unless OXC3_TEST_VALIDATION says otherwise.
+//Read per call rather than cached, since nothing here runs often enough for that to matter.
+
+static c::Bool Test_wantsValidation() {
+	const c::C8 *validation = getenv("OXC3_TEST_VALIDATION");
+
+	//An EMPTY value counts as off, since that is what a workflow hands over for a switch it left alone.
+
+	return validation && validation[0] && validation[0] != '0';
+}
 
 // -- 1. GraphicsInterface ------------------------------------------------------
 
@@ -371,8 +384,22 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 
 	c::GraphicsDeviceRef *created = NULL;
 
+	//Asked of the INSTANCE rather than of the request: IsDebug there is a wish the instance may turn down
+	//when the machine has no debug layer, and a debug device on an instance without one is refused outright.
+
+	const c::GraphicsInstance *instance = RefPtr_data(instRef, c::GraphicsInstance);
+
+	//Verbose is asked for on its own: it is only logging, so unlike the debug layer it needs nothing installed,
+	//and it is what names the step a run stops on when it stops in a way nothing can report.
+
+	c::EGraphicsDeviceFlags deviceFlags =
+		Test_wantsValidation() ? c::EGraphicsDeviceFlags_IsVerbose : c::EGraphicsDeviceFlags_None;
+
+	if(instance->flags & c::EGraphicsInstanceFlags_IsDebug)
+		deviceFlags = (c::EGraphicsDeviceFlags) (deviceFlags | c::EGraphicsDeviceFlags_IsDebug);
+
 	if(!Test_assert(t, "deviceCreate", c::GraphicsDeviceRef_create(
-		instRef, info, c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, NULL, NULL, &created, &t->err
+		instRef, info, deviceFlags, c::EGraphicsBufferingMode_Default, NULL, NULL, &created, &t->err
 	)))
 		return;
 
@@ -471,6 +498,7 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsFrameGlobals(t, deviceRef);
 	c::Test_graphicsBindfulRays(t, deviceRef);
 	c::Test_graphicsBlasCompaction(t, deviceRef);
+	c::Test_graphicsBlasGeometry(t, deviceRef);
 	c::Test_graphicsBindfulOmm(t, deviceRef);
 	c::Test_graphicsBindfulRayQueryGraphics(t, deviceRef);
 	c::Test_graphicsBindfulAtomicFloat(t, deviceRef);
@@ -478,9 +506,11 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsBindfulPushDescriptors(t, deviceRef);
 	c::Test_graphicsBindfulPushTexture(t, deviceRef);
 	c::Test_graphicsBindfulStaticSampler(t, deviceRef);
+	c::Test_graphicsBindfulStaticSamplerByValue(t, deviceRef);
 	c::Test_graphicsBindfulReservedSpace(t, deviceRef);
 	c::Test_graphicsBindfulPushClass(t, deviceRef);
 	c::Test_graphicsGpuExecute(t, deviceRef);
+	c::Test_graphicsBufferStream(t, deviceRef);
 	c::Test_graphicsAccelerationStructures(t, deviceRef);
 
 	//31-33. Shader execution: real dispatches, draws and traces with verified results, plus the pipelines
@@ -537,7 +567,17 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 	c::GraphicsInstanceRef *instRef = NULL;
 	c::ListGraphicsDeviceInfo infos {};
 
-	if (!c::GraphicsInstance_create(&appInfo, api, c::EGraphicsInstanceFlags_None, alloc, &type, &instRef, &t->err)) {
+	//OPT IN, through OXC3_TEST_VALIDATION=1. The debug layers cost a lot of run time, so they are not what a
+	//normal run pays for; what they buy is the API's own account of a misuse, which is the only thing that
+	// speaks when a process dies in a way no handler inside it can see.
+	//GPU based validation stays off: it reports what a shader does, and nothing it watches has run yet at the
+	// point a create fails.
+
+	const c::EGraphicsInstanceFlags instanceFlags = Test_wantsValidation()
+		? (c::EGraphicsInstanceFlags) (c::EGraphicsInstanceFlags_IsDebug | c::EGraphicsInstanceFlags_DisableGPUBV)
+		: c::EGraphicsInstanceFlags_None;
+
+	if (!c::GraphicsInstance_create(&appInfo, api, instanceFlags, alloc, &type, &instRef, &t->err)) {
 		c::Test_print(t, "No compatible graphics driver, skipping device tests");
 		t->err = c::Error_none();
 		return;

@@ -22,6 +22,7 @@
 
 #include "types/test/test.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <inttypes.h>
 
 static inline const C8 *Test_prefix(Test *test) {
@@ -47,6 +48,13 @@ void Test_printPlatformCreateFail(const Error *e) {
 	);
 }
 
+//Whether entering a module is announced as well as leaving one, off unless OXC3_TEST_TRACE says otherwise.
+
+static Bool Test_tracesModules() {
+	const C8 *trace = getenv("OXC3_TEST_TRACE");
+	return trace && trace[0] && trace[0] != '0';
+}
+
 void Test_setModule(Test *test, const C8 *moduleName) {
 
 	if (test->currentModule) {
@@ -60,6 +68,18 @@ void Test_setModule(Test *test, const C8 *moduleName) {
 	test->currentModule = moduleName;
 	test->tests = 0;
 	test->succeeded = 0;
+
+	//The line above only appears once a module has FINISHED, so a module that takes the process down with it
+	//is never named. Tracing announces the one being entered instead, which is what a log that simply stops
+	// then points at.
+
+	if (moduleName && Test_tracesModules())
+		printf("-- entering %s\n", Test_prefix(test));
+
+	//Flushed because stdio buffers a redirected stream and a process killed outright gets no chance to, which
+	// is exactly when these lines are the only thing left to read.
+
+	fflush(stdout);
 }
 
 int Test_end(Test *test) {
@@ -107,6 +127,14 @@ Bool Test_assert2(Test *test, const C8 *section, Bool value, const C8 *file, U64
 				EGenericError_TO_STRING[test->err.genericError] : "???",
 			test->err.errorStr ? test->err.errorStr : "???"
 		);
+
+	//Tracing names each assert as it COMPLETES, so a module that takes the process down leaves its last finished
+	//step as the final line and the fault is in whatever runs between that assert and the next.
+
+	if (Test_tracesModules()) {
+		printf("-- done %s: %s\n", Test_prefix(test), !section ? "???" : section);
+		fflush(stdout);
+	}
 
 	test->err = Error_none();
 	return value;

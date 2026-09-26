@@ -38,25 +38,62 @@ typedef Bool (*StreamReserveFunc)(OxStream *stream, U64 length, const Allocator 
 typedef void (*StreamCloseFunc)(OxStream *stream, const Allocator *alloc);
 
 typedef enum EStreamType {
+	
 	EStreamType_Memory            = 1 << 0,
 	EStreamType_File            = 1 << 1,
 	EStreamType_ArchiveEntry    = 1 << 2,
 	EStreamType_Compressed        = 1 << 3,        //Unsupported
 	EStreamType_Encrypted        = 1 << 4,
 	EStreamType_Resizable        = 1 << 5,
-	EStreamType_DisableSeek        = 1 << 6        //It's impossible to restart this stream (e.g. network stream)
+	EStreamType_DisableSeek        = 1 << 6,       //It's impossible to restart this stream (e.g. network stream)
+
+	//Whether two reads of DIFFERENT ranges may run at the same time. Declared, never assumed: StreamFunc takes
+	//the offset it reads from, so the interface allows a safe implementation, but whether one seeks a shared
+	// handle first is the implementation's business and invisible from here.
+	//Absent, a consumer serializes this stream against ITSELF and still runs it beside others. Getting this
+	// wrong tears a read, and a torn read looks like data rather than like a crash.
+
+	EStreamType_ConcurrentRead     = 1 << 7
+
 } EStreamType;
 
+//A memcpy is 1. Everything above it is what a byte costs RELATIVE to that, which is the only thing a consumer
+//needs to decide whether splitting a read across threads pays for the split. A consumer cannot work these out
+// for itself: a source it was handed may decrypt, decompress or fault a page per block, and none of that is
+// visible from the interface.
+
+typedef enum EStreamReadCost {
+	EStreamReadCost_Memcpy        = 1,        //Memory: the read IS the copy
+	EStreamReadCost_File          = 8,        //A syscall, and a page fault on a cold range
+	EStreamReadCost_Decode        = 64        //A block cipher or a decompressor, per block
+} EStreamReadCost;
+
 typedef struct OxStream {
+
 	StreamFunc read;
 	StreamFunc write;
 	StreamReserveFunc reserve;
 	StreamCloseFunc close;
 	U64 size;
 	U64 streamType;            //EStreamType, except extendible
+
+	//What ONE indivisible unit of this stream is. A range rounds OUT to it, because a source that decrypts or
+	//decompresses per chunk cannot serve half of one, and a consumer splitting work has to split on it.
+	//1 where any byte can be read on its own, which is memory and a plain file.
+
+	U32 blockSize;
+
+	U16 readCost;              //EStreamReadCost, or anything on that scale
+	U16 padding;
+
 } OxStream;
 
 typedef RefPtr StreamRef;
+
+//Both default from the stream TYPE at create, which is right for memory and for a file. A stream that knows
+//better says so: an encryption stream's block is its cipher chunk, and nothing else can know that.
+
+void Stream_setBlock(StreamRef *stream, U32 blockSize, U16 readCost);
 
 typedef struct StreamCursor {
 

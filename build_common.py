@@ -438,8 +438,8 @@ def visualStudioNinjaConf(compiler):
 
 	  - vswhere lives in the VS Installer folder and is usually not on PATH, so vcvars cannot find the
 	    install. Pointing conan straight at the installation removes the need for it.
-	  - conan derives -vcvars_ver from the profile's pinned toolset (v144 -> 14.4). If that toolset is not
-	    installed, vcvars fails with a message that says nothing about profiles, so it is checked here.
+	  - conan derives -vcvars_ver from the toolset the profile resolves to (v144 -> 14.4). If that toolset is
+	    not installed, vcvars fails with a message that says nothing about profiles, so it is checked here.
 	"""
 
 	if hostSystem() != "Windows":
@@ -460,9 +460,15 @@ def visualStudioNinjaConf(compiler):
 		print("-- Error: -generator ninja needs Visual Studio; vswhere reported no installation", file=sys.stderr)
 		sys.exit(1)
 
-	# The profiles pin a runtime_version, and conan turns that into the toolset vcvars is asked for.
+	# The profiles derive a runtime_version from the installed Visual Studio, and conan turns that into the
+	# toolset vcvars is asked for, so the version wanted here follows the same install rather than naming one.
+	# The split inside VS 17 is conan's: an update of 10 or later is msvc 194 and anything before it is 193.
 
-	wanted = "14.4"                              #v144, what both windows profiles pin
+	ide = capture(f'"{vswhere}" -latest -products * -property installationVersion').strip().split(".")
+	major = int(ide[0]) if ide and ide[0].isdigit() else 0
+	minor = int(ide[1]) if len(ide) > 1 and ide[1].isdigit() else 0
+
+	wanted = "14.5" if major >= 18 else ("14.4" if minor >= 10 else "14.3")
 	toolsets = os.path.join(install, "VC", "Tools", "MSVC")
 	have = sorted(os.listdir(toolsets)) if os.path.isdir(toolsets) else []
 

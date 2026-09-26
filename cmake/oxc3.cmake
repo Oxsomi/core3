@@ -171,6 +171,8 @@ function(oxc3_add_bundled_test)
 		"${T_ROOT}/types/math/test/*.cpp"
 		"${T_ROOT}/types/container/test/*.c"
 		"${T_ROOT}/types/container/test/*.cpp"
+		"${T_ROOT}/types/mesh/test/*.c"
+		"${T_ROOT}/types/mesh/test/*.cpp"
 		"${T_ROOT}/formats/*/test/*.c"
 		"${T_ROOT}/formats/*/test/*.cpp"
 		"${T_ROOT}/audio/test/interface/*.c"
@@ -202,11 +204,16 @@ function(oxc3_add_bundled_test)
 	target_link_libraries(${T_TARGET} PUBLIC
 		OxC3_platforms
 		OxC3_audio
-		OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr
+		OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr OxC3_types_mesh OxC3_formats_obj OxC3_formats_ply
 		OxC3_formats_oiBC OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_oiSB
 		OxC3_formats_oiSH OxC3_formats_oiPL OxC3_formats_oiSP OxC3_formats_oiSR OxC3_formats_wav
 		OxC3_types_test
-		OxC3_types_container_test_util
+
+		# A suite's shared helpers are globbed in with its sources, so these archives usually contribute
+		# nothing. They are linked anyway so the bundle keeps resolving if the glob ever stops reaching a
+		# module's test/shared, which would otherwise surface only here and only on a bundling platform.
+
+		OxC3_types_container_test_util OxC3_types_mesh_test_util
 		${T_LIBS}
 	)
 
@@ -533,13 +540,39 @@ macro(add_virtual_files)
 		set(RuntimeOutputDir "${_ARGS_SELF}/build/$<CONFIG>/${platform}")
 	endif()
 
+	# The packager drives DXC, whose Windows compatibility layer leaks a locale per string conversion and never
+	# frees it. That is third party, cmake/lsan_suppressions.txt already names it at the leaf, and a sanitized
+	# build simply never reached the file: the test harness attaches it through oxc3SanitizerDeviceTestEnv and a
+	# build step has no harness. Attached to the command itself instead, and empty everywhere else.
+	#
+	# cmake -E env execs without a shell, which forces two things: the program has to be a path rather than a
+	# target name, and the arguments are quoted by CMake rather than carrying escaped quotes a shell would strip.
+
+	set(packagerEnv "")
+	set(packagerExe "${OXC3_PACKAGE}")
+	set(packagerCLI "${OXC3}")
+
+	if(EnableASAN AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+
+		set(packagerEnv ${CMAKE_COMMAND} -E env
+			"LSAN_OPTIONS=suppressions=${CMAKE_SOURCE_DIR}/cmake/lsan_suppressions.txt")
+
+		if(OXC3_PACKAGE AND TARGET ${OXC3_PACKAGE})
+			set(packagerExe "$<TARGET_FILE:${OXC3_PACKAGE}>")
+		endif()
+
+		if(OXC3 AND TARGET ${OXC3})
+			set(packagerCLI "$<TARGET_FILE:${OXC3}>")
+		endif()
+	endif()
+
 	if(_ARGS_FORCE_PACKAGER)
 
 		set(OxC3_command "${OXC3_PACKAGE} \"${_ARGS_ROOT}\" \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"")
 	
 		add_custom_target(
 			${_ARGS_TARGET}_package_${_ARGS_NAME}
-			COMMAND ${OXC3_PACKAGE} \"${_ARGS_ROOT}\" \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${_ARGS_ARGS}
+			COMMAND ${packagerEnv} ${packagerExe} "${_ARGS_ROOT}" "${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
 			WORKING_DIRECTORY ${_ARGS_SELF}
 		)
 
@@ -549,7 +582,7 @@ macro(add_virtual_files)
 	
 		add_custom_target(
 			${_ARGS_TARGET}_package_${_ARGS_NAME}
-			COMMAND ${OXC3} file package -input \"${_ARGS_ROOT}\" -output \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${_ARGS_ARGS}
+			COMMAND ${packagerEnv} ${packagerCLI} file package -input "${_ARGS_ROOT}" -output "${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
 			WORKING_DIRECTORY ${_ARGS_SELF}
 		)
 
