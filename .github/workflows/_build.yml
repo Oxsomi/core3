@@ -149,6 +149,11 @@ jobs:
 
       OXC3_TEST_VALIDATION: ${{ inputs.graphics_validation && '1' || '0' }}
 
+      # Names the module being entered, so a suite that dies mid module says which one rather than only
+      # reporting the modules that finished.
+
+      OXC3_TEST_TRACE: ${{ inputs.graphics_validation && '1' || '0' }}
+
     steps:
       - uses: actions/checkout@v4
         with:
