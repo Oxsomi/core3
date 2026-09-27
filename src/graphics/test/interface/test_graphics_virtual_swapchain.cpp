@@ -37,6 +37,8 @@ namespace oxc { namespace c {
 	#include "types/base/string_base.h"
 	#include "types/container/buffer.h"
 	#include "types/container/texture_format.h"
+	#include "types/container/memory_stream.h"
+	#include "types/container/ref_ptr.h"
 	#include "types/test/test.h"
 	#include "platforms/platform.h"
 	#include "platforms/window.h"
@@ -58,6 +60,21 @@ namespace {
 		oxc::c::U32 first;
 		oxc::c::U64 length;
 	};
+
+	//The stream twin reports whether the write landed instead of handing a buffer over, since a stream write
+	//runs after the GPU is done and can fail where a copy into a buffer cannot.
+
+	struct StreamPullResult {
+		oxc::c::U32 count;
+		oxc::c::Bool ok;
+	};
+
+	void onStreamPulled(void *resource, oxc::c::Bool ok, void *context) {
+		(void) resource;
+		StreamPullResult *result = (StreamPullResult*) context;
+		++result->count;
+		result->ok = ok;
+	}
 
 	void onPulled(void *resource, void *dataPtr, void *context) {
 
@@ -204,6 +221,49 @@ extern "C" void Test_graphicsVirtualSwapchain(oxc::c::Test *t, oxc::c::GraphicsD
 			// no longer accepted, which is what owning the format rather than taking a surface's buys.
 
 			c::Test_assert(t, "pullIsClearColor", pulled.first == 0xFF0000FFu);
+
+			//The same frame again, taken through a STREAM rather than a buffer the runtime allocates to hand
+			//over. That is the shape an encoder or an image sequence wants: the pixels go straight to where
+			// they are kept, and nothing the size of a frame is allocated to pass them along.
+
+			const c::U64 frameBytes = (c::U64) c::I32x2_x(size) * c::I32x2_y(size) * 4;
+			const c::RefPtrType streamType = c::MemoryStream_makeType(dev.alloc());
+			c::MemoryStreamRef *sink = NULL;
+
+			if(c::Test_assert(t, "streamCreate", c::MemoryStream_create(
+				frameBytes, c::EMemoryStreamFlags_IsWritable, &streamType, &sink, e_rr
+			))) {
+
+				StreamPullResult streamed = {};
+
+				//Queued before the submit it observes, for the reason the buffer pull above is
+
+				c::Test_assert(t, "queueStreamPull", c::TextureRef_pullRegionStream(
+					swapchain.handle(), 0, 0, 0, 0, 0, 0, 0,
+					(c::StreamRef*) sink, 0, onStreamPulled, &streamed, e_rr
+				));
+
+				c::Test_assert(t, "submitStreamPull", dev.submit({ &commandList }, { &swapchain }, 0, 0, e_rr));
+				c::Test_assert(t, "waitStreamPull", dev.wait(e_rr));
+
+				c::Test_assert(t, "streamPullCompleted", streamed.count == 1);
+				c::Test_assert(t, "streamPullLanded", streamed.ok);
+
+				//Read back out of the stream and held to the same clear the buffer pull was
+
+				c::U32 firstTexel = 0;
+				c::OxStream *str = RefPtr_data((c::StreamRef*) sink, c::OxStream);
+
+				if(c::Test_assert(t, "streamPullRead", str->read(
+					str, 0, sizeof(firstTexel), c::Buffer_createRef(&firstTexel, sizeof(firstTexel)),
+					dev.alloc(), e_rr
+				)))
+					c::Test_assert(t, "streamPullIsClearColor", firstTexel == 0xFF0000FFu);
+
+				//Freed while streamType, which it points at, is still on this stack
+
+				c::RefPtr_dec((c::RefPtr**) &sink);
+			}
 		}
 
 		//Before the window, since the swapchain holds a WEAK reference to it.

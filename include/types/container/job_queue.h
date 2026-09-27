@@ -33,6 +33,7 @@
 typedef struct Error Error;
 typedef struct Thread Thread;
 typedef struct JobQueue JobQueue;
+typedef struct JobGroup JobGroup;
 
 //A job callback executes on one of the queue's execution contexts.
 //threadId is stable per executing thread and in [0, JobQueue_threadCount(queue)>,
@@ -76,6 +77,7 @@ typedef struct Job {
 	JobCallback callback;
 	void *data;
 	JobDestructor destructor;       //May be NULL; only used for jobs discarded on shutdown
+	JobGroup *group;                //May be NULL; the group JobGroup_wait runs this job for
 } Job;
 
 TList(Job);
@@ -127,11 +129,35 @@ Bool JobQueue_pushDestructor(
 	JobQueue *queue, JobCallback callback, void *data, JobDestructor destructor, Error *e_rr
 );
 
+//Like JobQueue_pushDestructor, but tags the job as belonging to 'group' (may be NULL), which is what
+// JobGroup_wait picks jobs by.
+//Tagging only selects the job; the token still has to be taken with JobGroup_enter before pushing and
+// released with JobGroup_leave by the callback, exactly as for an untagged group.
+Bool JobQueue_pushGroup(
+	JobQueue *queue, JobCallback callback, void *data, JobDestructor destructor, JobGroup *group, Error *e_rr
+);
+
 //Run/help run jobs until the queue is fully drained (including jobs pushed by other jobs).
 //Must be called by the thread that created the queue (it becomes execution context 0).
 //Returns false (with e_rr untouched) only on invalid usage;
 // job failures are reported through JobQueue_isSuccess instead so all jobs still run.
 Bool JobQueue_wait(JobQueue *queue, Error *e_rr);
+
+//Wait for one group instead of the whole queue, running that group's jobs on the calling thread.
+//Returns once the group's last token drops, leaving the rest of the queue to the workers.
+//
+//Only jobs tagged with this group (JobQueue_pushGroup) are run here, and that is what makes the call safe
+// under a lock the queue's other jobs may also take: the caller keeps draining its own work even when
+// every worker is blocked on that lock, and releases it when the group completes.
+//Running the queue instead would hand the calling thread an unrelated job that wants the same lock, with
+// the lock held, and neither side could proceed.
+//Work the group waits on that is NOT tagged with it (a nested sub-group) still completes, but only on the
+// workers, so a caller holding such a lock has to tag every job it means to drain itself, and in single
+// threaded mode, where there are no workers at all, it has to tag all of them.
+//
+//Like JobQueue_wait this runs jobs as execution context 0, so the queue's owner thread is the one that
+// may call it.
+Bool JobGroup_wait(JobGroup *group, Error *e_rr);
 
 //False if any job callback returned false since create.
 Bool JobQueue_isSuccess(const JobQueue *queue);
@@ -155,6 +181,11 @@ void JobQueue_free(JobQueue *queue);
 //If any unit called JobGroup_fail, finalize is skipped instead.
 //Groups nest: a group's finalize (or a plain job) can JobGroup_leave a parent group,
 // giving the SHFile-latch -> output-group-latch hierarchy.
+//
+//A group is not required to be transient. One that lives as long as a subsystem does, entered and left by
+// every job that subsystem pushes, is how a caller sharing a queue waits for its OWN work and not the
+// queue's: JobGroup_wait on it drains that subsystem on shutdown while other work on the same queue keeps
+// running.
 //
 //Counts are often not known up front (a precompile discovers how many compiles to spawn),
 // so hold one token yourself while spawning: JobGroup_enter(g, 1) up front,
@@ -181,7 +212,8 @@ typedef struct JobGroup {
 //finalize (may be NULL) runs once when the last token is released and nothing failed.
 //dataDestructor (may be NULL) frees data when finalize won't run.
 //group must be zero initialized.
-//queue must be valid when finalize is set (that is where finalize is pushed).
+//queue must be valid when finalize is set (that is where finalize is pushed) or when JobGroup_wait is used
+// (that is where its jobs are run from).
 Bool JobGroup_create(
 	JobGroup *group, JobQueue *queue, JobCallback finalize, void *data, JobDestructor dataDestructor, Error *e_rr
 );

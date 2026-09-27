@@ -763,8 +763,36 @@ else()
 	# Here the compiler driver does the link, so the same flag goes to both halves and pulls in its runtime.
 
 	if(EnableASAN)
+
 		add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
 		add_link_options(-fsanitize=address)
+
+		# The runtime has to be the SHARED one. Linked statically it lands in the executable, which the dynamic
+		# linker searches before anything in LD_PRELOAD, so the DEEPBIND shim below can never win the dlopen
+		# interception and a driver keeps the private symbol scope a sanitizer cannot see through. The shim then
+		# looks wired up and does nothing. gcc links it shared already, so this is clang's alone.
+		# clang adds no rpath for it, and -print-runtime-dir names a directory the runtimes are not in on every
+		# layout, so the path is taken from the runtime itself.
+
+		if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+
+			execute_process(
+				COMMAND ${CMAKE_C_COMPILER} -print-file-name=libclang_rt.asan-${CMAKE_SYSTEM_PROCESSOR}.so
+				OUTPUT_VARIABLE asanRuntime
+				OUTPUT_STRIP_TRAILING_WHITESPACE
+			)
+
+			if(NOT IS_ABSOLUTE "${asanRuntime}" OR NOT EXISTS "${asanRuntime}")
+				message(FATAL_ERROR
+					"EnableASAN needs the shared runtime libclang_rt.asan-${CMAKE_SYSTEM_PROCESSOR}.so, which "
+					"this toolchain doesn't ship. Without it the RTLD_DEEPBIND shim is inert and a sanitized "
+					"run silently covers only the software adapters."
+				)
+			endif()
+
+			get_filename_component(asanRuntimeDir "${asanRuntime}" DIRECTORY)
+			add_link_options(-shared-libasan "-Wl,-rpath,${asanRuntimeDir}")
+		endif()
 	endif()
 
 	# A proprietary driver has two quarrels with a sanitized process, and both surface only as

@@ -46,12 +46,15 @@ void Sampler_free(void *samplerGeneric, const Allocator *alloc) {
 	}
 
 	Sampler_freeExt(sampler);
-	RefPtr_dec(&sampler->device);
+
+	if(!(sampler->flags & ESamplerFlags_InternalWeakDeviceRef))
+		RefPtr_dec(&sampler->device);
 }
 
-Bool GraphicsDeviceRef_createSampler(
+Bool GraphicsDeviceRef_createSamplerInternal(
 	GraphicsDeviceRef *dev,
 	SamplerInfo info,
+	ESamplerFlags flags,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
 	const CharString *name,
@@ -117,6 +120,16 @@ Bool GraphicsDeviceRef_createSampler(
 			1, 5, "GraphicsDeviceRef_createSampler()::info.borderColor is out of bounds"
 		));
 
+	//The integer borders are reserved, so no sampler carries one and neither backend has to describe it.
+
+	if(
+		info.borderColor == ESamplerBorderColor_ReservedOpaqueBlackInt ||
+		info.borderColor == ESamplerBorderColor_ReservedOpaqueWhiteInt
+	)
+		retError(clean, Error_unsupportedOperation(
+			0, "GraphicsDeviceRef_createSampler()::info.borderColor names a reserved integer border color"
+		));
+
 	if(info.comparisonFunction >= ECompareOp_Count)
 		retError(clean, Error_invalidParameter(
 			1, 6, "GraphicsDeviceRef_createSampler()::info.comparisonFunction is out of bounds"
@@ -136,11 +149,12 @@ Bool GraphicsDeviceRef_createSampler(
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->sampler, sampler, e_rr));
 
-	gotoIfError3(clean, RefPtr_inc(dev));
+	if(!(flags & ESamplerFlags_InternalWeakDeviceRef))
+		gotoIfError3(clean, RefPtr_inc(dev));
 
 	Sampler *samp = SamplerRef_ptr(*sampler);
 
-	*samp = (Sampler) { .device = dev, .info = info };
+	*samp = (Sampler) { .device = dev, .info = info, .flags = (U16) flags };
 
 	if(bindlessDescriptorTable) {
 		gotoIfError3(clean, RefPtr_inc(bindlessDescriptorTable));
@@ -171,4 +185,18 @@ clean:
 		RefPtr_dec(sampler);
 
 	return s_uccess;
+}
+
+Bool GraphicsDeviceRef_createSampler(
+	GraphicsDeviceRef *dev,
+	SamplerInfo info,
+	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
+	const CharString *name,
+	SamplerRef **sampler,
+	Error *e_rr
+) {
+	return GraphicsDeviceRef_createSamplerInternal(
+		dev, info, ESamplerFlags_None, disallowBindlessDescriptor, bindlessDescriptorTable, name, sampler, e_rr
+	);
 }

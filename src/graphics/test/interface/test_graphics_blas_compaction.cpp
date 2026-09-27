@@ -210,9 +210,11 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 	)))
 		return;
 
-	const c::BLASCreateInfo compactable = c::BLASCreateInfo_unindexed(
-		c::ERTASBuildFlags_AllowCompaction, c::EBLASFlag_None,
+	const c::BLASGeometry compactableGeometry = c::BLASGeometry_unindexed(
 		c::ETextureFormatId_RGBA32f, 0, 16, positions.region()
+	);
+
+	const c::BLASCreateInfo compactable = c::BLASCreateInfo_single(c::ERTASBuildFlags_AllowCompaction, &compactableGeometry
 	);
 
 	// -- The happy path, which is also the ONLY ordering that works ----------
@@ -488,10 +490,9 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 		gfx::Blas blas;
 		gfx::CommandList list;
 
-		const c::BLASCreateInfo plain = c::BLASCreateInfo_unindexed(
-			c::ERTASBuildFlags_None, c::EBLASFlag_None,
-			c::ETextureFormatId_RGBA32f, 0, 16, positions.region()
-		);
+		const c::BLASGeometry plainGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 16, positions.region());
+
+		const c::BLASCreateInfo plain = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &plainGeometry);
 
 		if (
 			c::Test_assert(t, "createBlasPlain", dev.createBlas(plain, "Plain BLAS", blas, e_rr)) &&
@@ -620,9 +621,9 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 			"Compaction tri", &triData, tri, nullptr, e_rr
 		));
 
-		const c::BLASCreateInfo small = c::BLASCreateInfo_unindexed(
-			c::ERTASBuildFlags_AllowCompaction, c::EBLASFlag_None,
-			c::ETextureFormatId_RGBA32f, 0, 16, tri.region()
+		const c::BLASGeometry smallGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 16, tri.region());
+
+		const c::BLASCreateInfo small = c::BLASCreateInfo_single(c::ERTASBuildFlags_AllowCompaction, &smallGeometry
 		);
 
 		ok = ok &&

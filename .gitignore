@@ -11,6 +11,11 @@ CMakeFiles/*
 *.obj
 *.elf
 
+# A mesh reader's test corpus IS .obj files, so the rule above has to make room for them; without this a
+# fixture is invisible to git and the suite passes locally while failing for everyone else.
+
+!src/formats/obj/test/*.obj
+
 # Linker output
 *.ilk
 *.map

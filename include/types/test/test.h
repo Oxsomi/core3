@@ -52,9 +52,10 @@ void Test_setModule(Test *test, const C8 *moduleName);
 
 int Test_end(Test *test);
 
-//Every suite is its own executable on desktop, but android has no exec: the whole set runs as one .so inside an APK.
-//Under _OXC3_TEST_BUNDLED each "main" becomes a named int (*)(void*) that the bundle's android_main calls in turn;
-// otherwise it's the entry point it has always been.
+//Every suite is its own executable on desktop. Android has no exec, so the whole set runs as one .so inside an
+// APK, and the web build bundles the same way rather than shipping a wasm module per suite.
+//Under _OXC3_TEST_BUNDLED each "main" becomes a named int (*)(void*) that the bundle's own entry point calls in
+// turn; otherwise it's the entry point it has always been.
 //OXC3_TEST_MAIN is for suites that only need an allocator,
 //OXC3_TEST_ENTRY for the ones that bring up a Platform and therefore need the entry argument android_native_app_glue hands us.
 
@@ -66,9 +67,9 @@ int Test_end(Test *test);
 	// Platform_cleanup, so one running after another has no platform left, and on android Platform_getData() is the
 	// entry argument - it's the only way back to the android_app.
 	//Marked unused because most suites never look at it, and the bundle builds with -Wextra -Werror.
-	//This branch is android only (only src/test/android defines _OXC3_TEST_BUNDLED), so the attribute is safe.
+	//Every target that defines _OXC3_TEST_BUNDLED is clang or gcc, which is what makes the attribute safe.
 
-	//The suite table in src/test/android/atest_main.c is C and holds these as plain int (*)(void*), so the
+	//Each bundle's suite table is C and holds these as plain int (*)(void*), so the
 	//definition has to keep C linkage even when the suite itself is a C++ translation unit: the macro expands
 	//at global scope in the suite's own file, outside the extern "C" this header wraps its declarations in,
 	//so a .cpp would otherwise define a mangled symbol the table can never resolve.

@@ -365,6 +365,156 @@ extern "C" void Test_graphicsBindfulPushClass(oxc::c::Test *t, oxc::c::GraphicsD
 		}
 	}
 
+	//The integer border colors are reserved: no sampler carries one, so neither backend has to describe a border
+	// the other spells differently.
+
+	c::SamplerInfo borderInfo = {
+		.filter = c::ESamplerFilterMode_Nearest,
+		.addressU = c::ESamplerAddressMode_ClampToBorder,
+		.addressV = c::ESamplerAddressMode_ClampToBorder,
+		.addressW = c::ESamplerAddressMode_ClampToBorder,
+		.borderColor = c::ESamplerBorderColor_ReservedOpaqueWhiteInt
+	};
+
+	Sampler borderSampler;
+
+	c::Test_assert(t, "reservedBorderRefused", !dev.createSampler(
+		borderInfo, "Int border sampler", borderSampler, nullptr, true, nullptr
+	));
+
+	c::Test_assert(t, "reservedBorderNoSampler", !borderSampler.valid());
+
+	//A layout baking one by value is refused too, since the layout is what creates that sampler.
+
+	{
+		gfxtest::OwnedLayoutInfo intValueInfo(dev.alloc());
+		c::U32 intValueId = 0;
+
+		if (c::Test_assert(t, "reservedBorderAddStatic", c::DescriptorLayoutInfo_addStaticSampler(
+			&intValueInfo.list, borderInfo, &intValueId, dev.alloc(), &t->err
+		))) {
+
+			c::DescriptorBinding bakedInt = push;
+			bakedInt.immutableSamplerId = intValueId;
+
+			c::ListDescriptorBinding_createRefConst(&bakedInt, 1, &intValueInfo.list.bindings, nullptr);
+			c::ListCharString_createRefConst(&pushName, 1, &intValueInfo.list.bindingNames, nullptr);
+
+			c::Test_assert(t, "reservedBorderValueRefused", !dev.createDescriptorLayout(
+				intValueInfo.list, "Int border layout", layout, nullptr
+			));
+		}
+	}
+
+	//The same sampler with the float border it stands in for builds, which is what proves the reserved value is
+	// the objection rather than a bordered sampler.
+
+	borderInfo.borderColor = c::ESamplerBorderColor_OpaqueWhiteFloat;
+
+	c::Test_assert(t, "floatBorderSamplerCreate", dev.createSampler(
+		borderInfo, "Float border sampler", borderSampler, nullptr, true, &t->err
+	));
+
+	//One layout bakes samplers by ref or by value, never both: the two share storage, so the first form added
+	// decides which the layout holds and the other is refused.
+
+	if (borderSampler.valid()) {
+
+		{
+			gfxtest::OwnedLayoutInfo mixedInfo(dev.alloc());
+			c::U32 mixedId = 0;
+
+			if (c::Test_assert(t, "mixAddValue", c::DescriptorLayoutInfo_addStaticSampler(
+				&mixedInfo.list, borderInfo, &mixedId, dev.alloc(), &t->err
+			)))
+				c::Test_assert(t, "mixRefAfterValueRefused", !c::DescriptorLayoutInfo_addImmutableSampler(
+					&mixedInfo.list, borderSampler.handle(), &mixedId, dev.alloc(), nullptr
+				));
+		}
+
+		{
+			gfxtest::OwnedLayoutInfo mixedInfo(dev.alloc());
+			c::U32 mixedId = 0;
+
+			if (c::Test_assert(t, "mixAddRef", c::DescriptorLayoutInfo_addImmutableSampler(
+				&mixedInfo.list, borderSampler.handle(), &mixedId, dev.alloc(), &t->err
+			)))
+				c::Test_assert(t, "mixValueAfterRefRefused", !c::DescriptorLayoutInfo_addStaticSampler(
+					&mixedInfo.list, borderInfo, &mixedId, dev.alloc(), nullptr
+				));
+		}
+	}
+
+	//A binding's id says which form it names through the static bit, and the layout holds only one form, so an
+	// id whose bit disagrees indexes the wrong list at the wrong element size. Both directions are refused, and
+	// so is an id whose index is 0, since the index is 1 based.
+
+	if (borderSampler.valid()) {
+
+		{
+			gfxtest::OwnedLayoutInfo valueInfo(dev.alloc());
+			c::U32 valueId = 0;
+
+			if (c::Test_assert(t, "formAddValue", c::DescriptorLayoutInfo_addStaticSampler(
+				&valueInfo.list, borderInfo, &valueId, dev.alloc(), &t->err
+			))) {
+
+				c::DescriptorBinding bare = push;
+				bare.immutableSamplerId = valueId & ~c::DescriptorLayoutInfo_staticSamplerBit;
+
+				c::ListDescriptorBinding_createRefConst(&bare, 1, &valueInfo.list.bindings, nullptr);
+				c::ListCharString_createRefConst(&pushName, 1, &valueInfo.list.bindingNames, nullptr);
+
+				c::Test_assert(t, "formBareIdOnValueRefused", !dev.createDescriptorLayout(
+					valueInfo.list, "Form layout", layout, nullptr
+				));
+			}
+		}
+
+		//Index 0 with the bit set names nothing at all. Its own info, since a layout that builds consumes the
+		// one it was given and the next call would then be asserting against an empty one.
+
+		{
+			gfxtest::OwnedLayoutInfo zeroInfo(dev.alloc());
+			c::U32 zeroId = 0;
+
+			if (c::Test_assert(t, "formAddZero", c::DescriptorLayoutInfo_addStaticSampler(
+				&zeroInfo.list, borderInfo, &zeroId, dev.alloc(), &t->err
+			))) {
+
+				c::DescriptorBinding zero = push;
+				zero.immutableSamplerId = c::DescriptorLayoutInfo_staticSamplerBit;
+
+				c::ListDescriptorBinding_createRefConst(&zero, 1, &zeroInfo.list.bindings, nullptr);
+				c::ListCharString_createRefConst(&pushName, 1, &zeroInfo.list.bindingNames, nullptr);
+
+				c::Test_assert(t, "formZeroIndexRefused", !dev.createDescriptorLayout(
+					zeroInfo.list, "Form layout", layout, nullptr
+				));
+			}
+		}
+
+		{
+			gfxtest::OwnedLayoutInfo refInfo(dev.alloc());
+			c::U32 refId = 0;
+
+			if (c::Test_assert(t, "formAddRef", c::DescriptorLayoutInfo_addImmutableSampler(
+				&refInfo.list, borderSampler.handle(), &refId, dev.alloc(), &t->err
+			))) {
+
+				c::DescriptorBinding marked = push;
+				marked.immutableSamplerId = refId | c::DescriptorLayoutInfo_staticSamplerBit;
+
+				c::ListDescriptorBinding_createRefConst(&marked, 1, &refInfo.list.bindings, nullptr);
+				c::ListCharString_createRefConst(&pushName, 1, &refInfo.list.bindingNames, nullptr);
+
+				c::Test_assert(t, "formStaticBitOnRefRefused", !dev.createDescriptorLayout(
+					refInfo.list, "Form layout", layout, nullptr
+				));
+			}
+		}
+	}
+
 	//A texture push builds, which is what the device's own copy layout depends on
 
 	push.registerType = c::EGfxRegisterType_Texture2D;

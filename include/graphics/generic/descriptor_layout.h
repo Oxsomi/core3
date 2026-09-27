@@ -24,6 +24,7 @@
 #include "formats/oiSH/sh_file.h"
 #include "types/container/list.h"
 #include "types/container/ref_ptr.h"
+#include "graphics/generic/sampler.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -48,6 +49,7 @@ typedef enum EDescriptorLayoutFlags {
 	EDescriptorLayoutFlags_AllowBindlessEverywhere  = 1 << 1,        //Potentially slower, will assume all registers are dynamic
 	EDescriptorLayoutFlags_InternalWeakDeviceRef    = 1 << 2,
 	EDescriptorLayoutFlags_HasPushDescriptors       = 1 << 3,        //Push descriptor set, no other descriptors allowed
+	EDescriptorLayoutFlags_InternalStaticSamplers   = 1 << 4,        //Which member of DescriptorLayoutInfo's union is live
 
 	EDescriptorLayoutFlags_AllowBindlessAny         =
 		EDescriptorLayoutFlags_AllowBindlessOnArrays | EDescriptorLayoutFlags_AllowBindlessEverywhere
@@ -71,10 +73,11 @@ typedef struct DescriptorBinding {
 		U32 constantBufferSize;
 		GfxTextureFormat textureFormat;
 
-		//Sampler bindings only: 1 + an index into DescriptorLayoutInfo::immutableSamplers, 0 for none.
-		//An immutable sampler is baked into the layout rather than bound, so it needs no heap slot and no
-		// write: D3D12 puts it in the root signature as a static sampler and Vulkan in the set layout as
-		// pImmutableSamplers.
+		//Sampler bindings only: 1 + an index into DescriptorLayoutInfo::immutableSamplers, 0 for none, or with
+		// DescriptorLayoutInfo_staticSamplerBit set, 1 + an index into staticSamplers.
+		//An immutable sampler is baked into the layout rather than bound, so nothing is ever written for it:
+		// D3D12 puts it in the root signature as a static sampler and Vulkan in the set layout as
+		// pImmutableSamplers. The binding still counts toward the heap's maxSamplers on both backends.
 		//An index rather than the ref itself, because a pointer does not fit in this union and widening it
 		// would grow every binding.
 
@@ -116,6 +119,11 @@ TList(DescriptorBinding);
 
 typedef RefPtr SamplerRef;
 
+//A static sampler id carries this bit and indexes DescriptorLayoutInfo::staticSamplers; the layout turns it
+// into an immutableSamplers entry when it is created, so the backends only ever see refs.
+
+static const U32 DescriptorLayoutInfo_staticSamplerBit = (U32)1 << 31;
+
 typedef struct DescriptorLayoutInfo {
 
 	EDescriptorLayoutFlags flags;
@@ -124,10 +132,25 @@ typedef struct DescriptorLayoutInfo {
 	ListDescriptorBinding bindings;
 	ListCharString bindingNames;
 
-	//Owned: DescriptorLayoutInfo_free releases a ref on each, and createDescriptorLayout moves the list into
-	// the layout along with everything else here.
+	//The samplers this layout bakes, held in one of two forms. One layout uses ONE of them: the add functions
+	// refuse the second form, EDescriptorLayoutFlags_InternalStaticSamplers says which is live, and a binding
+	// says the same through the static bit on its immutableSamplerId.
+	//Owned either way. DescriptorLayoutInfo_free releases what is held, and createDescriptorLayout moves it into
+	// the layout along with everything else here, replacing values with the refs it made for them so a created
+	// layout only ever holds refs.
 
-	ListRefPtr immutableSamplers;
+	union {
+
+		//By ref, so several layouts naming the same sampler share one. Named through
+		// DescriptorLayoutInfo_addImmutableSampler.
+
+		ListRefPtr immutableSamplers;
+
+		//By value, for a layout that has to exist before any sampler can: the bindless layout
+		// GraphicsDeviceRef_create is given. Named through DescriptorLayoutInfo_addStaticSampler.
+
+		ListPLSamplerInfo staticSamplers;
+	};
 
 } DescriptorLayoutInfo;
 
@@ -136,6 +159,18 @@ typedef struct DescriptorLayoutInfo {
 Bool DescriptorLayoutInfo_addImmutableSampler(
 	DescriptorLayoutInfo *info,
 	SamplerRef *sampler,
+	U32 *id,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+//Takes a sampler by value and hands back the id to put in a sampler binding's immutableSamplerId (carries
+// DescriptorLayoutInfo_staticSamplerBit, never 0). The layout creates the sampler itself, so this is the form
+// a layout that exists before any sampler does has to use.
+
+Bool DescriptorLayoutInfo_addStaticSampler(
+	DescriptorLayoutInfo *info,
+	SamplerInfo sampler,
 	U32 *id,
 	const Allocator *alloc,
 	Error *e_rr

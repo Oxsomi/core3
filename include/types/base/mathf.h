@@ -45,7 +45,11 @@ ARIT_OP(T);                                                                     
 static inline T T##_saturate(T v) { return T##_clamp(v, 0, 1); }                                        \
 																										\
 static inline T T##_lerp(T a, T b, T perc) { return a + (b - a) * perc; }                               \
-static inline T T##_abs(T v) { return v < 0 ? -v : v; }                                                 \
+																										\
+/* ZERO is compared, not branched past: -0 < 0 is FALSE, v < 0 ? -v : v hands -0 straight back  */      \
+/* with its sign set, where abs has to clear. The SIMD backends mask the bit and agree by doing so. */  \
+																										\
+static inline T T##_abs(T v) { return v == 0 ? (T) 0 : (v < 0 ? -v : v); }                              \
 T T##_sqrt(T v);                                                                                        \
 																										\
 Bool T##_isNaN(T v);                                                                                    \
@@ -54,8 +58,11 @@ Bool T##_isValid(T v);                                                          
 																										\
 T T##_pow(T v, T exp);                                                                                  \
 																										\
-static inline T T##_expe(T v) { return T##_pow(T##_E, v); }                                             \
-static inline T T##_exp2(T v) { return T##_pow(2, v); }                                                 \
+/* exp and exp2 are their own libm calls; a third cheaper than raising a base to a power. exp10 */      \
+/* has no standard C spelling (it is a POSIX extension MSVC lacks), so that one stays a pow.    */      \
+																										\
+T T##_expe(T v);                                                                                        \
+T T##_exp2(T v);                                                                                        \
 static inline T T##_exp10(T v) { return T##_pow(10, v); }                                               \
 																										\
 T T##_log10(T v);                                                                                       \

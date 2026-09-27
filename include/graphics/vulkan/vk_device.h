@@ -145,6 +145,11 @@ typedef struct VkGraphicsDevice {
 	//frame that recorded the copy proves that copy done.
 
 	ListVkAccelerationStructureKHR retiredAs[MAX_FRAMES_IN_FLIGHT];
+
+	//A resize retires the swapchain it replaced: images acquired from it can still be outstanding, and
+	//recreating one may not cost the caller a device idle. Destroyed when its slot's fence comes back.
+
+	ListVkSwapchainKHR retiredSwapchains[MAX_FRAMES_IN_FLIGHT];
 	U32 timestampCapacity[MAX_FRAMES_IN_FLIGHT];
 	F32 timestampPeriod;
 	U32 timestampValidBits;

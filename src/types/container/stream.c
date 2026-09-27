@@ -90,17 +90,40 @@ Bool Stream_create(
 
 	gotoIfError3(clean, RefPtr_create(type, streamRef, e_rr));
 
+	//Defaulted from the TYPE, so a stream that has nothing special to say says nothing. One that does overrides
+	// with Stream_setBlock, which is how an encryption stream reports its cipher chunk.
+
+	const Bool decodes = !!(streamType & (EStreamType_Compressed | EStreamType_Encrypted));
+
 	*RefPtr_data(*streamRef, OxStream) = (OxStream) {
 		.read = read,
 		.write = write,
 		.reserve = reserve,
 		.close = close,
 		.size = streamSize,
-		.streamType = streamType
+		.streamType = streamType,
+		.blockSize = 1,
+		.readCost = (U16) (
+			decodes ? EStreamReadCost_Decode :
+			(streamType & EStreamType_Memory ? EStreamReadCost_Memcpy : EStreamReadCost_File)
+		)
 	};
 
 clean:
 	return s_uccess;
+}
+
+void Stream_setBlock(StreamRef *stream, U32 blockSize, U16 readCost) {
+
+	if(!stream)
+		return;
+
+	OxStream *str = RefPtr_data(stream, OxStream);
+
+	//A zero block would make a range round out to nothing, so it reads as the one byte default instead.
+
+	str->blockSize = blockSize ? blockSize : 1;
+	str->readCost = readCost ? readCost : EStreamReadCost_Memcpy;
 }
 
 Bool StreamCursor_create(

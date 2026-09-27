@@ -247,15 +247,17 @@ static void DxCommandBufferState_bindDescriptors(
 
 			//Sampler descriptors are not the same size as CBV/SRV/UAV ones on every adapter, so each offset
 			// scales by its own heap's increment.
-			//Without EnableDynamicSamplers there is no sampler heap and the root signature has no sampler
-			// table, so both lists carry exactly what exists: the sampler table at root param 0 when present
-			// (it is the first binding of the default layout), resources at the next.
+			//The root signature only declares a sampler table for a sampler binding that took real descriptors,
+			// which is what anySampler means; a baked sampler is in the signature itself and takes none, while
+			// still sizing a sampler heap. So the lists are keyed on the LAYOUT rather than on that heap, and
+			// carry exactly what exists: the sampler table at root param 0 when present (it is the first
+			// binding of the default layout), resources at the next.
 
 			ID3D12DescriptorHeap *heaps[2];
 			D3D12_GPU_DESCRIPTOR_HANDLE tables[2];
 			U32 tableCount = 0;
 
-			if (bindlessHeap->samplerHeap.heap) {
+			if (DescriptorLayoutRef_ptr(device->defaultDescLayout)->anySampler && bindlessHeap->samplerHeap.heap) {
 
 				heaps[tableCount] = bindlessHeap->samplerHeap.heap;
 

@@ -299,7 +299,12 @@ def main():
 		# Anything reaching the cap is still wedged rather than slow, which is the point: without it a
 		# deadlocked JobQueue burns the whole job's time budget before anyone finds out.
 
-		test_timeout = 900
+		# A sanitized run is a different workload against that cap: the device half of a suite that used to
+		# fail fast now actually executes, under two sanitizers, on a real GPU rather than on a rasterizer.
+		# Measured on a 3070: the CLI suite passes in 1413s where it fits well under 900 without them.
+		# Raised only for that case, so an unsanitized wedge is still caught in fifteen minutes.
+
+		test_timeout = 2400 if args.asan == "True" or args.ubsan == "True" else 900
 
 		flags = f"-C {test_mode} --output-on-failure --timeout {test_timeout}"
 

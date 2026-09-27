@@ -36,6 +36,13 @@ void Test_vec2i(Test *test) {
 	I32x2_setRefY(&v2, -4);
 	Test_assert(test, "I32x2_setRef/get", I32x2_get(v2, 0) == 3 && I32x2_get(v2, 1) == -4);
 
+	I32 dst2[2] = { -1, -1 };
+	I32x2_store1(dst2, v2);
+	Test_assert(test, "I32x2_store1",     dst2[0] == 3 && dst2[1] == -1);
+
+	I32x2_store2(dst2, v2);
+	Test_assert(test, "I32x2_store2",     dst2[0] == 3 && dst2[1] == -4);
+
 	I32x2 yx = I32x2_yx(v2);
 	Test_assert(test, "I32x2_yx",         I32x2_x(yx) == -4 && I32x2_y(yx) == 3);
 

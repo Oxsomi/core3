@@ -763,12 +763,18 @@ clean:
 #define F18_INIT_COLOR 0x80u   //Grey channel value
 
 typedef struct F18State {
-	volatile Bool buttonHeld;
-	I32x2         points[1024];   //Recorded cursor positions while dragging
-	U32           pointCount;
+	I32x2 points[1024];           //Recorded cursor positions while dragging
+	U32   pointCount;
+	U32   padding;
 } F18State;
 
 static F18State f18;
+
+//Kept out of F18State because the struct is assigned as a whole to reset it, and an aggregate assignment
+//has no defined access ordering for a volatile member, so the qualifier would promise something the copy
+// does not give. Reset alongside the struct at every site that clears one.
+
+static volatile Bool f18ButtonHeld;
 
 static void F18_onDraw(Window *w) {
 
@@ -777,7 +783,7 @@ static void F18_onDraw(Window *w) {
 
 	I32 W = I32x2_x(w->size), H = I32x2_y(w->size);
 
-	if (f18.buttonHeld && f18.pointCount < (U32)(sizeof(f18.points) / sizeof(f18.points[0]))) {
+	if (f18ButtonHeld && f18.pointCount < (U32)(sizeof(f18.points) / sizeof(f18.points[0]))) {
 
 		I32x2 p = w->cursor;
 		Bool dup = f18.pointCount && I32x2_eq2(f18.points[f18.pointCount - 1], p);
@@ -827,7 +833,7 @@ static void F18_onButton(Window *w, InputDevice *dev, InputHandle h, Bool down) 
 
 	U16 local = InputDevice_getLocalHandle(dev, h);
 	if (local == (U16)(EMouseButton_Left - EMouseAxis_End))
-		f18.buttonHeld = down;
+		f18ButtonHeld = down;
 }
 
 //Drive the window manager for 'ns', presenting on every step while the button
@@ -842,7 +848,7 @@ static void F18_pumpAndPaint(Window *w, Ns ns) {
 		if(!windowManager.windows.length)
 			break;
 
-		if (f18.buttonHeld)
+		if (f18ButtonHeld)
 			presentQuiet(w);
 
 		Thread_sleep(16 * MS);
@@ -855,6 +861,7 @@ static void Test_mouseDraw(Test *t) {
 	Test_setModule(t, "F18/MouseDraw");
 
 	f18 = (F18State) { 0 };
+	f18ButtonHeld = false;
 
 	WindowCallbacks cbs = (WindowCallbacks){ 0 };
 	cbs.onDeviceButton = F18_onButton;
@@ -912,7 +919,7 @@ static void Test_mouseDraw(Test *t) {
 				if(!windowManager.windows.length)
 					break;
 
-				if (f18.buttonHeld)
+				if (f18ButtonHeld)
 					presentQuiet(w);
 			}
 
@@ -948,7 +955,7 @@ static void Test_mouseDraw(Test *t) {
 				if(!windowManager.windows.length)
 					break;
 
-				if (f18.buttonHeld)
+				if (f18ButtonHeld)
 					presentQuiet(w);
 			}
 
@@ -1007,6 +1014,7 @@ static void Test_mouseDraw(Test *t) {
 
 clean:
 	f18 = (F18State) { 0 };
+	f18ButtonHeld = false;
 	RefPtr_dec(&wRef);
 }
 

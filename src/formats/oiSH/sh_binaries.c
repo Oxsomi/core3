@@ -674,7 +674,7 @@ Bool SHBinaryInfo_equalsExact(const SHBinaryInfo *a, const SHBinaryInfo *b) {
 		return false;
 
 	for (U64 i = 0; i < a->registers.length; ++i)
-		if (a->registers.ptr[i].hash != b->registers.ptr[i].hash)
+		if (!SHRegisterRuntime_equals(a->registers.ptr + i, b->registers.ptr + i))
 			return false;
 
 	for (U8 i = 0; i < EGfxBinaryType_Count; ++i)

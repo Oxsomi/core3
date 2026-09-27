@@ -102,9 +102,9 @@ typedef enum ESamplerAddressMode {
 typedef enum ESamplerBorderColor {
 	ESamplerBorderColor_TransparentBlack,		//0.xxxx
 	ESamplerBorderColor_OpaqueBlackFloat,		//0.xxx, 1.f
-	ESamplerBorderColor_OpaqueBlackInt,			//0.xxx, 1
+	ESamplerBorderColor_ReservedOpaqueBlackInt,	//0.xxx, 1 (reserved, refused at sampler creation)
 	ESamplerBorderColor_OpaqueWhiteFloat,		//1.f.xxxx
-	ESamplerBorderColor_OpaqueWhiteInt			//1.xxxx
+	ESamplerBorderColor_ReservedOpaqueWhiteInt	//1.xxxx (reserved, refused at sampler creation)
 } ESamplerBorderColor;
 
 //Final file format; please manually parse the members.

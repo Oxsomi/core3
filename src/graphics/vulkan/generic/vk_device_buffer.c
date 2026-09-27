@@ -170,7 +170,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	VkBufferCreateInfo bufferInfo = (VkBufferCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = buf->resource.size,
+		.size = DeviceBuffer_allocSize(buf->resource.size),
 		.usage = usage,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
 	};
@@ -339,9 +339,7 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 			U64 len = range.buffer.endRange - range.buffer.startRange;
 
 			Buffer dst = Buffer_createRef((U8*)buffer->resource.mappedMemoryExt + start, len);
-			Buffer src = Buffer_createRefConst(buffer->cpuData.ptr + start, len);
-
-			Buffer_memcpy(dst, src);
+			gotoIfError3(clean, DeviceBuffer_readUploadSource(buffer, start, len, dst, alloc, e_rr));
 
 			if(incoherent)
 				deviceExt->mappedMemoryRange.ptrNonConst[j] = (VkMappedMemoryRange) {
@@ -417,10 +415,9 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
-				Buffer_memcpy(
-					Buffer_createRef(location + allocRange, len),
-					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
-				);
+				gotoIfError3(clean, DeviceBuffer_readUploadSource(
+					buffer, bufferj.startRange, len, Buffer_createRef(location + allocRange, len), alloc, e_rr
+				));
 
 				gotoIfError3(clean, VkDeviceBuffer_transition(
 					bufferExt,
@@ -552,10 +549,9 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
-				Buffer_memcpy(
-					Buffer_createRef(location + allocRange, len),
-					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
-				);
+				gotoIfError3(clean, DeviceBuffer_readUploadSource(
+					buffer, bufferj.startRange, len, Buffer_createRef(location + allocRange, len), alloc, e_rr
+				));
 
 				deviceExt->bufferCopies.ptrNonConst[j] = (VkBufferCopy) {
 					//Relative to the staging resource rather than the frame region, since the copy offset is resource based
@@ -620,8 +616,7 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 		}
 	}
 
-	if(!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked))
-		Buffer_free(&buffer->cpuData, alloc);
+	DeviceBuffer_releaseUploadSource(buffer, alloc);
 
 	buffer->isFirstFrame = buffer->isPending = buffer->isPendingFullCopy = false;
 	gotoIfError3(clean, ListDevicePendingRange_clear(&buffer->pendingChanges, e_rr));

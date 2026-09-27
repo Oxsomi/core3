@@ -222,7 +222,11 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		if(!didAllocate)
 			continue;
 
-		if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
+		//Verbose rather than debug: one line per allocation buries everything else a run has to say, and a
+		//validation message is exactly what gets lost. Debug keeps the rare new block line and the stack
+		// traces; tracing every allocation is asked for separately.
+
+		if(allocator->device->flags & EGraphicsDeviceFlags_IsVerbose)
 			Log_debugLnx(
 				"-- Graphics: Allocating into existing memory block "
 				"(%"PRIu64" from allocation of size %"PRIu64" at offset %"PRIx64" and alignment %"PRIu32")",

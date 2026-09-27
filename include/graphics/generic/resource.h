@@ -26,6 +26,7 @@
 #include "types/math/vec2.h"
 #include "types/container/list.h"
 #include "types/container/texture_format.h"
+#include "types/container/stream.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -145,21 +146,36 @@ typedef void (*DevicePullCallback)(void *resource, void *context);
 
 typedef void (*TexturePullCallback)(void *resource, void *data, void *context);
 
+//A pull whose destination is a stream rather than the resource's cpuData.
+//Carries whether the bytes landed, because a stream write happens after the GPU is done and can still fail
+// (a full disk, an IO error) where a copy into cpuData cannot.
+//Bool rather than a pointer for the same reason the others take void*: a builtin names one type in both
+// languages, so the identity -fsanitize=function compares stays a match across the wrapper boundary.
+
+typedef void (*DeviceStreamPullCallback)(void *resource, Bool ok, void *context);
+
 typedef struct DevicePendingPull {
 
 	RefPtr *resource;                //Strong ref, released after the callback ran
 
-	//Which member is live follows from the resource's type: resources that land in their own cpuData
-	// (DeviceBuffer, DeviceTexture) use callback, the rest hand their data over through textureCallback.
+	//Which member is live follows from stream and from the resource's type: a pull with a stream uses
+	// streamCallback, otherwise resources that land in their own cpuData (DeviceBuffer, DeviceTexture) use
+	// callback and the rest hand their data over through textureCallback.
 
 	union {
 		DevicePullCallback callback;             //Optional
 		TexturePullCallback textureCallback;
+		DeviceStreamPullCallback streamCallback;
 	};
 
 	void *context;
 
 	DevicePendingRange range;
+
+	//Where the region goes instead of cpuData. Strong ref, released with resource; NULL for a cpuData pull.
+
+	StreamRef *stream;
+	U64 streamOffset;
 
 	U64 stagingOffset;               //Into stagingReadback, only valid once recorded
 	U64 rowPitch;                    //Row stride in readback memory for textures, byte count for buffers

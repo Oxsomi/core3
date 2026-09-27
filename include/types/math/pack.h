@@ -268,11 +268,7 @@ static inline F32x4 F32x4_unpackOct18(U32 packed) {
 		y = (1 - F32_abs(ex)) * (ey >= 0 ? 1 : -1);
 	}
 
-	//Divided by the real length rather than F32x4_normalize3, which is the approximate rsqrt on SSE and hands back
-	// 0.9998 for an axis. A pack helper is read back by a shader that did the exact thing, so it has to be exact.
-
-	const F32x4 n = F32x4_create3(x, y, z);
-	return F32x4_div(n, F32x4_xxxx4(F32x4_len3(n)));
+	return F32x4_normalize3(F32x4_create3(x, y, z));
 }
 
 //Oct32

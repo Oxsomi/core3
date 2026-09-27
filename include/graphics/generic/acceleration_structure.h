@@ -91,7 +91,7 @@ typedef struct RTAS {
 
 	U8 padding1;
 	U8 flags;                                  //ERTASBuildFlags
-	U8 flagsExt;                               //For BLAS; EBLASFlag
+	U8 flagsExt;                               //TLAS only; ETLASFlag. A BLAS keeps its flags per geometry
 	U8 asConstructionType;                     //ETLASConstructionType or EBlasConstructionType
 
 	//Compaction bookkeeping; see CommandListRef_compactBLASExt for what any of it means to a caller.

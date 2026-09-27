@@ -93,6 +93,9 @@ namespace oxc {
 		//Reads 4 contiguous floats
 		[[nodiscard]] static F32x4 load(const void *ptr) noexcept { return c::F32x4_load4(ptr); }
 
+		//Writes 4 contiguous floats
+		void store(void *ptr) const noexcept { c::F32x4_store4(ptr, v); }
+
 		//Components
 
 		[[nodiscard]] c::F32 x() const noexcept { return c::F32x4_x(v); }
@@ -197,12 +200,30 @@ namespace oxc {
 			return c::F32x4_eqApproxAdv4(v, o.v, relEps, absEps);
 		}
 
+		//The xyz and xy twins, for the vectors whose remaining components are padding.
+
+		[[nodiscard]] bool eqApprox3(const F32x4 &o) const noexcept { return c::F32x4_eqApprox3(v, o.v); }
+
+		[[nodiscard]] bool eqApprox3(const F32x4 &o, c::F32 relEps, c::F32 absEps) const noexcept {
+			return c::F32x4_eqApproxAdv3(v, o.v, relEps, absEps);
+		}
+
+		[[nodiscard]] bool eqApprox2(const F32x4 &o) const noexcept { return c::F32x4_eqApprox2(v, o.v); }
+
+		[[nodiscard]] bool eqApprox2(const F32x4 &o, c::F32 relEps, c::F32 absEps) const noexcept {
+			return c::F32x4_eqApproxAdv2(v, o.v, relEps, absEps);
+		}
+
 		//Per-lane compares produce a 0/1 mask vector, matching the C behaviour
 		[[nodiscard]] F32x4 lt(const F32x4 &o) const noexcept { return c::F32x4_lt(v, o.v); }
 		[[nodiscard]] F32x4 gt(const F32x4 &o) const noexcept { return c::F32x4_gt(v, o.v); }
 
 		[[nodiscard]] bool all() const noexcept { return c::F32x4_all(v); }
 		[[nodiscard]] bool any() const noexcept { return c::F32x4_any(v); }
+		[[nodiscard]] bool all3() const noexcept { return c::F32x4_all3(v); }
+		[[nodiscard]] bool any3() const noexcept { return c::F32x4_any3(v); }
+		[[nodiscard]] bool all2() const noexcept { return c::F32x4_all2(v); }
+		[[nodiscard]] bool any2() const noexcept { return c::F32x4_any2(v); }
 
 		//Interop
 

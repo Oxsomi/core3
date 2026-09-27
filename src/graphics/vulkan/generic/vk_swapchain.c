@@ -341,8 +341,39 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 		e_rr
 	));
 
-	if(prevSwapchain)
-		deviceExt->destroySwapchain(deviceExt->device, prevSwapchain, NULL);
+	//oldSwapchain hands over the surface, it does not license freeing the old one: images acquired from it can
+	//still be outstanding. It is retired against the submit that last PRESENTED it, into that submit's slot,
+	//whose fence is what releases them. A swapchain never presented, or one whose submit is already known
+	//done, needs no retirement at all.
+
+	if(prevSwapchain) {
+
+		const U64 last = swapchainExt->lastSubmitId;
+
+		const Bool done =
+			!last ||
+			device->completedSubmitId >= last ||
+			device->submitId >= last + device->framesInFlight;
+
+		if(done)
+			deviceExt->destroySwapchain(deviceExt->device, prevSwapchain, NULL);
+
+		//submitId is advanced before the backend submit runs, so the id stamped during submit N is N + 1 and the
+		//slot that submit used is one below it. Filing by the stamp would pick the slot of the NEXT submit, whose
+		//fence says nothing about this one.
+
+		else {
+
+			//Reserved first so the push cannot fail: a failed push has nowhere to put the handle and would leak
+			//it past vkDestroyDevice, where the leftover loop can no longer find it.
+
+			const U64 slot = (last - 1) % device->framesInFlight;
+			ListVkSwapchainKHR *retired = &deviceExt->retiredSwapchains[slot];
+
+			gotoIfError3(clean, ListVkSwapchainKHR_reserve(retired, retired->length + 1, alloc, e_rr));
+			ListVkSwapchainKHR_pushBack(retired, prevSwapchain, alloc, NULL);
+		}
+	}
 
 	//Acquire images
 

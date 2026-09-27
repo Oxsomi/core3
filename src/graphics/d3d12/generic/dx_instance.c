@@ -238,18 +238,22 @@ Bool DX_WRAP_FUNC(GraphicsInstance_create)(
 		instance->flags &=~ EGraphicsInstanceFlags_IsDebug;
 	}
 
+	//DXGI's debug factory and the D3D12 debug layer are separate interfaces and either can be refused on its
+	//own, so losing this one does not decide the other and the flag stays on for the layer below to try.
+	//Both are commonly absent together, since a machine without the graphics tools feature tends to have
+	// neither, and each site says which one it was rather than reporting debugging as a single thing.
+
 	if (instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
-		if (FAILED(CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory6, (void**)&instanceExt->factory))) {
-			Log_warnLnx(
-				"Tried to enable debugging on DxGraphicsInstance but couldn't, "
-				"please setup the developer environment for this functionality"
-			);
+		if (SUCCEEDED(CreateDXGIFactory2(
+			DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory6, (void**)&instanceExt->factory
+		)))
+			goto setup;
 
-			instance->flags &= ~EGraphicsInstanceFlags_IsDebug;
-		}
-
-		else goto setup;
+		Log_warnLnx(
+			"D3D12: DXGI's debug factory isn't available (the graphics tools feature is not installed), "
+			"continuing with the D3D12 debug layer alone"
+		);
 	}
 
 	gotoIfError3(clean, dxCheck(CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->factory), e_rr));
@@ -353,27 +357,46 @@ setup:
 
 	#endif
 
+	//The layer ships with the Agility SDK as d3d12SDKLayers.dll beside the core, so it is normally there
+	//whenever the core loaded at all, and a failure here means the deployment is missing it rather than the
+	// machine being unable to validate.
+	//IsDebug is a request rather than a requirement either way, so it gives way with a warning instead of
+	// taking instance creation down with it.
+	//Both factories are asked before either is enabled, so the flag describes what is actually on.
+
 	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
-		gotoIfError3(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->GetConfigurationInterface(
-			instanceExt->deviceFactoryNoSingleton, &CLSID_D3D12Debug,
-			&IID_ID3D12Debug1, (void**) &instanceExt->debug1NoSingleton
-		), e_rr));
+		const Bool hasDebugLayer =
+			SUCCEEDED(instanceExt->deviceFactoryNoSingleton->lpVtbl->GetConfigurationInterface(
+				instanceExt->deviceFactoryNoSingleton, &CLSID_D3D12Debug,
+				&IID_ID3D12Debug1, (void**) &instanceExt->debug1NoSingleton
+			)) &&
+			SUCCEEDED(instanceExt->deviceFactorySingleton->lpVtbl->GetConfigurationInterface(
+				instanceExt->deviceFactorySingleton, &CLSID_D3D12Debug,
+				&IID_ID3D12Debug1, (void**) &instanceExt->debug1Singleton
+			));
 
-		instanceExt->debug1NoSingleton->lpVtbl->EnableDebugLayer(instanceExt->debug1NoSingleton);
+		if (!hasDebugLayer) {
 
-		if(!(instance->flags & EGraphicsInstanceFlags_DisableGPUBV))
-			instanceExt->debug1NoSingleton->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1NoSingleton, true);
+			Log_warnLnx(
+				"D3D12: the debug layer isn't available (d3d12SDKLayers.dll), continuing without validation"
+			);
 
-		gotoIfError3(clean, dxCheck(instanceExt->deviceFactorySingleton->lpVtbl->GetConfigurationInterface(
-			instanceExt->deviceFactorySingleton, &CLSID_D3D12Debug,
-			&IID_ID3D12Debug1, (void**) &instanceExt->debug1Singleton
-		), e_rr));
+			instance->flags &=~ EGraphicsInstanceFlags_IsDebug;
+		}
 
-		instanceExt->debug1Singleton->lpVtbl->EnableDebugLayer(instanceExt->debug1Singleton);
+		else {
 
-		if(!(instance->flags & EGraphicsInstanceFlags_DisableGPUBV))
-			instanceExt->debug1Singleton->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1Singleton, true);
+			ID3D12Debug1 *debugs[2] = { instanceExt->debug1NoSingleton, instanceExt->debug1Singleton };
+
+			for(U64 i = 0; i < 2; ++i) {
+
+				debugs[i]->lpVtbl->EnableDebugLayer(debugs[i]);
+
+				if(!(instance->flags & EGraphicsInstanceFlags_DisableGPUBV))
+					debugs[i]->lpVtbl->SetEnableGPUBasedValidation(debugs[i], true);
+			}
+		}
 	}
 
 	//Check for NVApi

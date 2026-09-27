@@ -7,12 +7,12 @@ required_conan_version = ">=2.0"
 class agility_sdk(ConanFile):
 
 	name = "agility_sdk"
-	version = "2026.07.29"
+	version = "2026.09.25"
 
 	license = "Microsoft DirectX, Direct3D WARP and MIT licenses"
 	author = "Microsoft"
 	url = "https://www.nuget.org/profiles/Direct3D"
-	description = "Library that contains both d3d10warp.dll (1.0.20) and the agility sdk (1.721.2-preview)"
+	description = "Library that contains both d3d10warp.dll (1.65535.20-preview) and the agility sdk (1.721.3-preview)"
 	topics = ("microsoft", "d3d12", "agility", "directx", "warp", "pre-built")
 
 	exports_sources = [ "agility/build/native/include/*.h", "agility/LICENSE.txt", "agility/LICENSE-CODE.txt", "warp/LICENSE.txt" ]
@@ -21,10 +21,17 @@ class agility_sdk(ConanFile):
 
 	def source(self):
 
-		download(self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.20", "warp.zip")
+		#WARP is taken from the PREVIEW line because the agility SDK below is a preview one, and the two are
+		#released as a pair: the preview core is what dx_instance prefers when developer mode allows it, and
+		# the stable WARP line does not implement what a preview core exposes.
+
+		download(
+			self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.65535.20-preview", "warp.zip"
+		)
+
 		unzip(self, "warp.zip", "warp")
 
-		download(self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.721.2-preview", "d3d12.zip")
+		download(self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.721.3-preview", "d3d12.zip")
 		unzip(self, "d3d12.zip", "agility")
 
 	#Find a LICENSE.txt case-insensitively under `folder` and stage it into the package as `dstName`.

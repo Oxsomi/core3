@@ -553,3 +553,37 @@ void Test_stringRead(Test *test) {
 
 	#endif
 }
+
+//The tokenizer: whitespace of any kind separates, a run of it is one separator, and nothing comes back empty.
+
+static Bool Test_tokenIs(CharString token, const C8 *expected) {
+	const CharString ref = CharString_createRefCStrConst(expected);
+	return CharString_equalsStringSensitive(&token, &ref);
+}
+
+void Test_stringToken(Test *test) {
+
+	Test_setModule(test, "String token");
+
+	const CharString line = CharString_createRefCStrConst("  v\t 1.5   -2 \t");
+	U64 pos = 0;
+	CharString token = CharString_createNull();
+
+	Test_assert(test, "first", CharString_nextToken(line, &pos, &token) && Test_tokenIs(token, "v"));
+	Test_assert(test, "second", CharString_nextToken(line, &pos, &token) && Test_tokenIs(token, "1.5"));
+	Test_assert(test, "third", CharString_nextToken(line, &pos, &token) && Test_tokenIs(token, "-2"));
+	Test_assert(test, "exhausted", !CharString_nextToken(line, &pos, &token));
+
+	//A line that is only whitespace has no token at all, and neither has an empty one
+
+	pos = 0;
+	Test_assert(test, "blank", !CharString_nextToken(CharString_createRefCStrConst("   \t "), &pos, &token));
+
+	pos = 0;
+	Test_assert(test, "empty", !CharString_nextToken(CharString_createNull(), &pos, &token));
+
+	//Missing outputs are refused rather than dereferenced
+
+	Test_assert(test, "nullPos", !CharString_nextToken(line, NULL, &token));
+	Test_assert(test, "nullToken", !CharString_nextToken(line, &pos, NULL));
+}

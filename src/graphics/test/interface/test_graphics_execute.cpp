@@ -795,15 +795,19 @@ extern "C" void Test_graphicsAccelerationStructures(oxc::c::Test *t, oxc::c::Gra
 
 	if (plain) {
 
-		const c::BLASCreateInfo wrongUsage = c::BLASCreateInfo_unindexed(
-			c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, plain.region()
+		const c::BLASGeometry wrongUsageGeometry = c::BLASGeometry_unindexed(
+			c::ETextureFormatId_RGBA32f, 0, 16, plain.region()
+		);
+
+		const c::BLASCreateInfo wrongUsage = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &wrongUsageGeometry
 		);
 
 		Test_assert(t, "blasWrongUsage", !dev.createBlas(wrongUsage, "Test BLAS", badBlas, nullptr));
 	}
 
-	const c::BLASCreateInfo zeroStride = c::BLASCreateInfo_unindexed(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 0, positionData
+	const c::BLASGeometry zeroStrideGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 0, positionData);
+
+	const c::BLASCreateInfo zeroStride = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &zeroStrideGeometry
 	);
 
 	Test_assert(t, "blasZeroStride", !dev.createBlas(zeroStride, "Test BLAS", badBlas, nullptr));
@@ -811,10 +815,13 @@ extern "C" void Test_graphicsAccelerationStructures(oxc::c::Test *t, oxc::c::Gra
 	//An OMM index is per triangle, so asking for one without triangle indices has nothing to index against.
 	//Rejected regardless of device support, since it is malformed rather than unsupported.
 
-	const c::BLASCreateInfo ommWithoutIndices = c::BLASCreateInfo_indexedWithOmmIndicesExt(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData,
+	const c::BLASGeometry ommWithoutIndicesGeometry = c::BLASGeometry_indexedWithOmmIndicesExt(
+		c::ETextureFormatId_RGBA32f, 0, 16, positionData,
 		c::ETextureFormatId_Undefined, { 0 },
 		c::ETextureFormatId_R16u, positionData
+	);
+
+	const c::BLASCreateInfo ommWithoutIndices = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &ommWithoutIndicesGeometry
 	);
 
 	Test_assert(t, "blasOmmWithoutIndices", !dev.createBlas(ommWithoutIndices, "Test BLAS", badBlas, nullptr));
@@ -822,22 +829,30 @@ extern "C" void Test_graphicsAccelerationStructures(oxc::c::Test *t, oxc::c::Gra
 	//A micromap without an index buffer has nothing to link it to the triangles
 
 	{
-		c::BLASCreateInfo ommNoIndices = c::BLASCreateInfo_unindexed(
-			c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData
+		c::BLASGeometry ommNoIndicesGeometry = c::BLASGeometry_unindexed(
+			c::ETextureFormatId_RGBA32f, 0, 16, positionData
 		);
 
-		ommNoIndices.ommMicromap = (c::OpacityMicromapRef*) positionData.buffer;        //Wrong type too, format first
+		//Wrong type too, format first
+
+		ommNoIndicesGeometry.ommMicromap = (c::OpacityMicromapRef*) positionData.buffer;
+
+		const c::BLASCreateInfo ommNoIndices = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &ommNoIndicesGeometry
+		);
 
 		Test_assert(t, "blasOmmMicromapWithoutFormat", !dev.createBlas(ommNoIndices, "Test BLAS", badBlas, nullptr));
 	}
 
 	//An OMM index format of Undefined means no OMM at all, so carrying a buffer anyway is contradictory.
 
-	c::BLASCreateInfo ommBufferNoFormat = c::BLASCreateInfo_unindexed(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData
+	c::BLASGeometry ommBufferNoFormatGeometry = c::BLASGeometry_unindexed(
+		c::ETextureFormatId_RGBA32f, 0, 16, positionData
 	);
 
-	ommBufferNoFormat.ommIndexBuffer = positionData;
+	ommBufferNoFormatGeometry.ommIndexBuffer = positionData;
+
+	const c::BLASCreateInfo ommBufferNoFormat = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &ommBufferNoFormatGeometry
+	);
 
 	Test_assert(t, "blasOmmBufferWithoutFormat", !dev.createBlas(ommBufferNoFormat, "Test BLAS", badBlas, nullptr));
 
@@ -917,9 +932,9 @@ extern "C" void Test_graphicsAccelerationStructures(oxc::c::Test *t, oxc::c::Gra
 		Test_assert(t, "ommRejectedNothing", !badOmm && !rawOmm);
 	}
 
-	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_unindexed(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData
-	);
+	const c::BLASGeometry blasInfoGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 16, positionData);
+
+	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &blasInfoGeometry);
 
 	if(!Test_assert(t, "createBlas", dev.createBlas(blasInfo, "Test BLAS", blas, e_rr)))
 		return;

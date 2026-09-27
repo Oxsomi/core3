@@ -484,14 +484,18 @@ Bool CommandListRef_transitionRTAS(
 				));
 			}
 
-			else {
+			//Every geometry the build walks, since they may sit in different buffers entirely
+
+			else for(U64 i = 0; i < blas->geometries.length; ++i) {
+
+				const BLASGeometry geometry = blas->geometries.ptr[i];
 
 				gotoIfError3(clean, CommandListRef_transitionBuffer(
 					commandList,
-					blas->indexBuffer.buffer,
+					geometry.indexBuffer.buffer,
 					(BufferRange) {
-						.startRange = blas->indexBuffer.offset,
-						.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
+						.startRange = geometry.indexBuffer.offset,
+						.endRange = geometry.indexBuffer.offset + geometry.indexBuffer.len
 					},
 					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
 				));
@@ -501,10 +505,10 @@ Bool CommandListRef_transitionRTAS(
 
 				gotoIfError3(clean, CommandListRef_transitionBuffer(
 					commandList,
-					blas->positionBuffer.buffer,
+					geometry.positionBuffer.buffer,
 					(BufferRange) {
-						.startRange = blas->positionBuffer.offset + blas->positionOffset,
-						.endRange = blas->positionBuffer.offset + blas->positionBuffer.len
+						.startRange = geometry.positionBuffer.offset + geometry.positionOffset,
+						.endRange = geometry.positionBuffer.offset + geometry.positionBuffer.len
 					},
 					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
 				));
@@ -514,10 +518,10 @@ Bool CommandListRef_transitionRTAS(
 
 				gotoIfError3(clean, CommandListRef_transitionBuffer(
 					commandList,
-					blas->ommIndexBuffer.buffer,
+					geometry.ommIndexBuffer.buffer,
 					(BufferRange) {
-						.startRange = blas->ommIndexBuffer.offset,
-						.endRange = blas->ommIndexBuffer.offset + blas->ommIndexBuffer.len
+						.startRange = geometry.ommIndexBuffer.offset,
+						.endRange = geometry.ommIndexBuffer.offset + geometry.ommIndexBuffer.len
 					},
 					ETransitionType_ShaderRead, EPipelineStage_RTASBuild, e_rr
 				));
@@ -528,14 +532,18 @@ Bool CommandListRef_transitionRTAS(
 	//A BLAS that links a micromap reads it during its build and traversal keeps reading it afterwards, so the
 	// micromap follows the BLAS into whatever scope the BLAS entered, in read state either way.
 
-	if(
-		!isTLAS && !isOMM &&
-		BLASRef_ptr(rtasPtr)->base.asConstructionType == EBLASConstructionType_Geometry &&
-		BLASRef_ptr(rtasPtr)->ommMicromap
-	)
-		gotoIfError3(clean, CommandListRef_transitionRTAS(
-			commandList, BLASRef_ptr(rtasPtr)->ommMicromap, ETransitionType_ShaderRead, stage, e_rr
-		));
+	if(!isTLAS && !isOMM && BLASRef_ptr(rtasPtr)->base.asConstructionType == EBLASConstructionType_Geometry) {
+
+		const ListBLASGeometry geometries = BLASRef_ptr(rtasPtr)->geometries;
+
+		//Geometries are free to share one micromap, and transitioning it twice to the same state is a no-op
+
+		for(U64 i = 0; i < geometries.length; ++i)
+			if(geometries.ptr[i].ommMicromap)
+				gotoIfError3(clean, CommandListRef_transitionRTAS(
+					commandList, geometries.ptr[i].ommMicromap, ETransitionType_ShaderRead, stage, e_rr
+				));
+	}
 
 	TransitionInternal *oldState = NULL;
 	if(CommandListRef_isBound(commandList, rtasPtr, (ResourceRange) { 0 }, &oldState)) {

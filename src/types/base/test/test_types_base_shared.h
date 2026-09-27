@@ -30,6 +30,7 @@ void Test_fixedPoint(Test *test);
 void Test_baseString(Test *test);
 void Test_stringMut(Test *test);
 void Test_stringRead(Test *test);
+void Test_stringToken(Test *test);
 void Test_buffer(Test *test);
 void Test_mathi(Test *test);
 void Test_mathu(Test *test);

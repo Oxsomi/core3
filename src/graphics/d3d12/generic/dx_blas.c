@@ -30,8 +30,37 @@
 #include "graphics/d3d12/direct3d12.h"
 #include "types/container/string.h"
 #include "types/base/constants.h"
+#include "types/container/list_impl.h"
 
-void DX_WRAP_FUNC(BLAS_free)(BLAS *blas) { (void) blas; }        //No-op
+TListNamedImpl(ListD3D12_RAYTRACING_GEOMETRY_DESC);
+TListNamedImpl(ListDxBLASOmmTriangles);
+
+//EBLASGeometryFlag is per geometry on both APIs, so this runs once per geometry rather than once per BLAS.
+
+static D3D12_RAYTRACING_GEOMETRY_FLAGS mapDxGeometryFlags(U8 flags) {
+
+	D3D12_RAYTRACING_GEOMETRY_FLAGS result = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+
+	if(flags & EBLASGeometryFlag_DisableAnyHit)
+		result |= D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+
+	if(flags & EBLASGeometryFlag_AvoidDuplicateAnyHit)
+		result |= D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
+
+	return result;
+}
+
+void DX_WRAP_FUNC(BLAS_free)(BLAS *blas) {
+
+	//The acceleration structure itself lives in the AS buffer, which BLAS_free releases; what is owned here
+	// is the API shaped geometry the inputs point at.
+
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(blas->base.device);
+	DxBLAS *blasExt = BLAS_ext(blas, Dx);
+
+	ListD3D12_RAYTRACING_GEOMETRY_DESC_free(&blasExt->geometries, alloc);
+	ListDxBLASOmmTriangles_free(&blasExt->ommTriangles, alloc);
+}
 
 Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 
@@ -49,40 +78,15 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		retError(clean, Error_unsupportedOperation(0, "D3D12BLAS_init()::serialized not supported yet"));        //TODO:
 
 	U64 primitives = 0;
-	EBLASConstructionType type = (EBLASConstructionType) blas->base.asConstructionType;
+	const EBLASConstructionType type = (EBLASConstructionType) blas->base.asConstructionType;
 
-	U64 vertexCount = 0;
+	//One geometry desc per BLASGeometry, in that order, because a shader reads the index back as
+	// GeometryIndex(); AABBs stay a single desc.
+	//Sized before anything points into them, since the inputs keep those pointers for its lifetime.
 
-	switch (type) {
+	const U64 geometryCount = type == EBLASConstructionType_Geometry ? blas->geometries.length : 1;
 
-		case EBLASConstructionType_Serialized:
-			primitives = Buffer_length(blas->cpuData) / 12;        //Conservative estimate
-			break;
-
-		case EBLASConstructionType_Procedural:
-			primitives = blas->aabbBuffer.len / (sizeof(F32) * 3 * 2);
-			break;
-
-		default: {
-
-			vertexCount = blas->positionBuffer.len / blas->positionBufferStride;
-			U8 stride = blas->indexFormatId == ETextureFormatId_R32u ? 12 : 6;
-
-			if(blas->indexFormatId != ETextureFormatId_Undefined)
-				primitives = blas->indexBuffer.len / stride;
-
-			else primitives = vertexCount / 3;
-
-			break;
-		}
-	}
-
-	if(primitives >> 32)
-		retError(clean, Error_outOfBounds(
-			0, primitives, U32_MAX, "D3D12BLAS_init() only primitive count of <U32_MAX is supported"
-		));
-
-	blasExt->primitives = (U32) primitives;
+	gotoIfError3(clean, ListD3D12_RAYTRACING_GEOMETRY_DESC_resize(&blasExt->geometries, geometryCount, alloc, e_rr));
 
 	//Convert to DXR dependent version
 
@@ -106,95 +110,137 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 	if(blas->base.flags & ERTASBuildFlags_AllowDataAccessExt)
 		flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_DATA_ACCESS;
 
-	D3D12_RAYTRACING_GEOMETRY_DESC *geometry = &blasExt->geometry;
-	*geometry = (D3D12_RAYTRACING_GEOMETRY_DESC) { 0 };
+	if(type == EBLASConstructionType_Geometry) {
 
-	if(blas->base.flagsExt & EBLASFlag_DisableAnyHit)
-		geometry->Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+		//Allocated for every geometry as soon as one of them carries a micromap, so the addresses taken
+		// below stay valid for the BLAS's lifetime.
 
-	if(blas->base.flagsExt & EBLASFlag_AvoidDuplicateAnyHit)
-		geometry->Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
+		Bool anyOmm = false;
 
-	if(blas->base.asConstructionType == EBLASConstructionType_Geometry) {
+		for(U64 i = 0; i < geometryCount; ++i)
+			if(blas->geometries.ptr[i].ommIndexFormatId)
+				anyOmm = true;
 
-		geometry->Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+		if(anyOmm)
+			gotoIfError3(clean, ListDxBLASOmmTriangles_resize(&blasExt->ommTriangles, geometryCount, alloc, e_rr));
 
-		//D3D12 has no four component 32 bit vertex position format; the w is padding the stride already covers,
-		// so the three component DXGI format reads the same memory (Vulkan does the same, RGBA32f is optional there).
+		for(U64 i = 0; i < geometryCount; ++i) {
 
-		DXGI_FORMAT vertexFormat = ETextureFormatId_toDXFormat(blas->positionFormatId);
+			const BLASGeometry geom = blas->geometries.ptr[i];
 
-		if(blas->positionFormatId == ETextureFormatId_RGBA32f)
-			vertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+			const U64 vertexCount = geom.positionBuffer.len / geom.positionBufferStride;
+			const U8 triangleStride = geom.indexFormatId == ETextureFormatId_R32u ? 12 : 6;
 
-		D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC *tri = &geometry->Triangles;
-		*tri = (D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC) {
-			.VertexFormat = vertexFormat,
-			.VertexBuffer = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
-				.StartAddress = getDxLocation(blas->positionBuffer, blas->positionOffset),
-				.StrideInBytes = blas->positionBufferStride
-			},
-			.VertexCount = (U32) vertexCount
-		};
+			const U64 geometryPrimitives =
+				geom.indexFormatId != ETextureFormatId_Undefined ? geom.indexBuffer.len / triangleStride :
+				vertexCount / 3;
 
-		if (blas->indexFormatId) {
-			tri->IndexFormat = ETextureFormatId_toDXFormat(blas->indexFormatId);
-			tri->IndexBuffer = getDxLocation(blas->indexBuffer, 0);
-			tri->IndexCount = (U32)(blas->indexBuffer.len / (blas->indexFormatId == ETextureFormatId_R32u ? 4 : 2));
-		}
+			if(geometryPrimitives >> 32)
+				retError(clean, Error_outOfBounds(
+					0, geometryPrimitives, U32_MAX, "D3D12BLAS_init() only primitive count of <U32_MAX is supported"
+				));
 
-		//Opacity micromaps, stage 1.
-		//D3D12 swaps the whole geometry type rather than chaining, so the triangle desc written above moves
-		// into its own storage and the union member becomes the OMM pair pointing at it.
-		//OpacityMicromapArray stays null on purpose: that is what says the index buffer holds only special
-		// indices instead of referencing a built micromap array.
+			primitives += geometryPrimitives;
 
-		if (blas->ommIndexFormatId) {
+			D3D12_RAYTRACING_GEOMETRY_DESC *geometry = &blasExt->geometries.ptrNonConst[i];
 
-			blasExt->ommTriangleData = *tri;
+			*geometry = (D3D12_RAYTRACING_GEOMETRY_DESC) {
+				.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
+				.Flags = mapDxGeometryFlags(geom.flags)
+			};
 
-			blasExt->ommLinkage = (D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC) {
-				.OpacityMicromapIndexBuffer = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
-					.StartAddress = getDxLocation(blas->ommIndexBuffer, 0),
-					.StrideInBytes =
-						blas->ommIndexFormatId == ETextureFormatId_R32u ? 4 :
-						(blas->ommIndexFormatId == ETextureFormatId_R8u ? 1 : 2)
+			//D3D12 has no four component 32 bit vertex position format; the w is padding the stride already covers,
+			// so the three component DXGI format reads the same memory (Vulkan does the same, RGBA32f is optional there).
+
+			DXGI_FORMAT vertexFormat = ETextureFormatId_toDXFormat(geom.positionFormatId);
+
+			if(geom.positionFormatId == ETextureFormatId_RGBA32f)
+				vertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+
+			D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC *tri = &geometry->Triangles;
+			*tri = (D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC) {
+				.VertexFormat = vertexFormat,
+				.VertexBuffer = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
+					.StartAddress = getDxLocation(geom.positionBuffer, geom.positionOffset),
+					.StrideInBytes = geom.positionBufferStride
 				},
-				.OpacityMicromapIndexFormat = ETextureFormatId_toDXFormat(blas->ommIndexFormatId),
-
-				//The built OMM array's address when one is linked; 0 keeps the special index only form
-
-				.OpacityMicromapArray = !blas->ommMicromap ? 0 : DeviceBufferRef_ptr(
-					OpacityMicromapRef_ptr(blas->ommMicromap)->base.asBuffer
-				)->resource.deviceAddress
+				.VertexCount = (U32) vertexCount
 			};
 
-			geometry->Type = D3D12_RAYTRACING_GEOMETRY_TYPE_OMM_TRIANGLES;
+			if (geom.indexFormatId) {
+				tri->IndexFormat = ETextureFormatId_toDXFormat(geom.indexFormatId);
+				tri->IndexBuffer = getDxLocation(geom.indexBuffer, 0);
+				tri->IndexCount = (U32)(geom.indexBuffer.len / (geom.indexFormatId == ETextureFormatId_R32u ? 4 : 2));
+			}
 
-			geometry->OmmTriangles = (D3D12_RAYTRACING_GEOMETRY_OMM_TRIANGLES_DESC) {
-				.pTriangles = &blasExt->ommTriangleData,
-				.pOmmLinkage = &blasExt->ommLinkage
-			};
+			//Opacity micromaps, stage 1.
+			//D3D12 swaps the whole geometry type rather than chaining, so the triangle desc written above moves
+			// into its own storage and the union member becomes the OMM pair pointing at it.
+			//OpacityMicromapArray stays null on purpose: that is what says the index buffer holds only special
+			// indices instead of referencing a built micromap array.
+
+			if (geom.ommIndexFormatId) {
+
+				DxBLASOmmTriangles *ommTriangles = &blasExt->ommTriangles.ptrNonConst[i];
+
+				ommTriangles->triangleData = *tri;
+
+				ommTriangles->linkage = (D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC) {
+					.OpacityMicromapIndexBuffer = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
+						.StartAddress = getDxLocation(geom.ommIndexBuffer, 0),
+						.StrideInBytes =
+							geom.ommIndexFormatId == ETextureFormatId_R32u ? 4 :
+							(geom.ommIndexFormatId == ETextureFormatId_R8u ? 1 : 2)
+					},
+					.OpacityMicromapIndexFormat = ETextureFormatId_toDXFormat(geom.ommIndexFormatId),
+
+					//The built OMM array's address when one is linked; 0 keeps the special index only form
+
+					.OpacityMicromapArray = !geom.ommMicromap ? 0 : DeviceBufferRef_ptr(
+						OpacityMicromapRef_ptr(geom.ommMicromap)->base.asBuffer
+					)->resource.deviceAddress
+				};
+
+				geometry->Type = D3D12_RAYTRACING_GEOMETRY_TYPE_OMM_TRIANGLES;
+
+				geometry->OmmTriangles = (D3D12_RAYTRACING_GEOMETRY_OMM_TRIANGLES_DESC) {
+					.pTriangles = &ommTriangles->triangleData,
+					.pOmmLinkage = &ommTriangles->linkage
+				};
+			}
 		}
 	}
 
 	else {
-		geometry->Type = D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS;
-		geometry->AABBs = (D3D12_RAYTRACING_GEOMETRY_AABBS_DESC) {
-			.AABBs = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
-				.StartAddress = getDxLocation(blas->aabbBuffer, blas->aabbOffset),
-				.StrideInBytes = blas->aabbStride
-			},
-			.AABBCount = (U32) primitives
+
+		primitives = blas->aabbBuffer.len / blas->aabbStride;        //One per stride, which may exceed the 24 byte box
+
+		if(primitives >> 32)
+			retError(clean, Error_outOfBounds(
+				0, primitives, U32_MAX, "D3D12BLAS_init() only primitive count of <U32_MAX is supported"
+			));
+
+		blasExt->geometries.ptrNonConst[0] = (D3D12_RAYTRACING_GEOMETRY_DESC) {
+			.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS,
+			.Flags = mapDxGeometryFlags(blas->aabbFlags),
+			.AABBs = (D3D12_RAYTRACING_GEOMETRY_AABBS_DESC) {
+				.AABBs = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
+					.StartAddress = getDxLocation(blas->aabbBuffer, blas->aabbOffset),
+					.StrideInBytes = blas->aabbStride
+				},
+				.AABBCount = (U32) primitives
+			}
 		};
 	}
+
+	blasExt->primitives = primitives;
 
 	blasExt->inputs = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS) {
 		.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
 		.Flags = flags,
-		.NumDescs = (U32) 1,
+		.NumDescs = (U32) geometryCount,
 		.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-		.pGeometryDescs = geometry
+		.pGeometryDescs = blasExt->geometries.ptr
 	};
 
 	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO sizes =

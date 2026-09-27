@@ -42,6 +42,8 @@ Bool createShaderModule(
 
 	Bool s_uccess = true;
 
+	CharString temp = CharString_createNull();
+
 	(void)stage;
 
 	if(Buffer_length(buf) >> 32)
@@ -59,8 +61,6 @@ Bool createShaderModule(
 		.codeSize = (U32) Buffer_length(buf),
 		.pCode = (const U32*) buf.ptr
 	};
-
-	CharString temp = CharString_createNull();
 
 	gotoIfError3(clean, checkVkError(device->createShaderModule(device->device, &info, NULL, mod), e_rr));
 

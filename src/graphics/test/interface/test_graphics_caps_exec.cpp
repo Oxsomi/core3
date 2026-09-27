@@ -327,9 +327,9 @@ static void Test_buildCapabilityTlas(
 		!forceNoDataAccess
 		? c::ERTASBuildFlags_AllowDataAccessExt : c::ERTASBuildFlags_None;
 
-	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_unindexed(
-		blasFlags, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData
-	);
+	const c::BLASGeometry blasInfoGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 16, positionData);
+
+	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_single(blasFlags, &blasInfoGeometry);
 
 	if(!Test_assert(t, "capBlas", dev.createBlas(blasInfo, "Capability trace BLAS", blas, e_rr)))
 		return;

@@ -56,6 +56,7 @@ void Test_graphicsBindlessDescriptor(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBufferBindless(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessSampler(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsStaticSamplerDevice(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsDescriptorAlloc(Test *t, GraphicsDeviceRef *deviceRef);
@@ -84,10 +85,12 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulPushDescriptors(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulPushTexture(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulStaticSampler(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulStaticSamplerByValue(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulReservedSpace(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulPushClass(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBlasCompaction(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBlasGeometry(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsSamplerAndData(Test *t, GraphicsDeviceRef *deviceRef);
@@ -99,6 +102,10 @@ void Test_graphicsVirtualSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsPhysicalSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef);
+
+//A buffer whose upload source is a stream rather than a host buffer.
+
+void Test_graphicsBufferStream(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsShaderCompute(Test *t, GraphicsDeviceRef *deviceRef);

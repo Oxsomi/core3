@@ -107,6 +107,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_RayQuery)
 			Log_debugLnx("\t\tRay query");
 
+		if(cap.features2 & EGraphicsFeatures2_SoftwareRT)
+			Log_debugLnx("\t\tRay traversal in software (no dedicated traversal units)");
+
 		if(feat & EGraphicsFeatures_RayMicromapOpacity)
 			Log_debugLnx(
 				cap.features2 & EGraphicsFeatures2_RayMicromapOpacityActual ?
@@ -359,7 +362,19 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 void GraphicsDeviceInfo_deriveCapabilities(GraphicsDeviceInfo *deviceInfo) {
 
-	if(!deviceInfo || !(deviceInfo->capabilities.features & EGraphicsFeatures_RayMicromapOpacity))
+	if(!deviceInfo)
+		return;
+
+	//See the header for why a ray pipeline without a ray query is NVIDIA's software traversal set.
+
+	if(
+		deviceInfo->vendor == EGraphicsVendorId_NV &&
+		(deviceInfo->capabilities.features & EGraphicsFeatures_RayPipeline) &&
+		!(deviceInfo->capabilities.features & EGraphicsFeatures_RayQuery)
+	)
+		deviceInfo->capabilities.features2 |= EGraphicsFeatures2_SoftwareRT;
+
+	if(!(deviceInfo->capabilities.features & EGraphicsFeatures_RayMicromapOpacity))
 		return;
 
 	//NVIDIA is the only vendor we have evidence of reporting OMM on hardware without the units (Ampere), so it

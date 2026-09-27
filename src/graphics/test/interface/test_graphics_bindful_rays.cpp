@@ -130,8 +130,9 @@ extern "C" void Test_graphicsBindfulRays(oxc::c::Test *t, oxc::c::GraphicsDevice
 	)))
 		return;
 
-	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_unindexed(
-		c::ERTASBuildFlags_AllowUpdate, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positions.region()
+	const c::BLASGeometry blasInfoGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 16, positions.region());
+
+	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_single(c::ERTASBuildFlags_AllowUpdate, &blasInfoGeometry
 	);
 
 	if(!Test_assert(t, "createBlas", dev.createBlas(blasInfo, "Bindful rays BLAS", blas, e_rr)))
@@ -515,16 +516,22 @@ static void TestBindful_ommWithFormat(
 	const c::DeviceData positionData = positions.region();
 	const c::DeviceData indexBufferData = indices.region();
 
-	const c::BLASCreateInfo opaqueInfo = c::BLASCreateInfo_indexedWithOmmIndicesExt(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData,
+	const c::BLASGeometry opaqueInfoGeometry = c::BLASGeometry_indexedWithOmmIndicesExt(
+		c::ETextureFormatId_RGBA32f, 0, 16, positionData,
 		c::ETextureFormatId_R16u, indexBufferData,
 		ommIndexFormat, ommOpaque.region()
 	);
 
-	const c::BLASCreateInfo transparentInfo = c::BLASCreateInfo_indexedWithOmmIndicesExt(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData,
+	const c::BLASCreateInfo opaqueInfo = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &opaqueInfoGeometry
+	);
+
+	const c::BLASGeometry transparentInfoGeometry = c::BLASGeometry_indexedWithOmmIndicesExt(
+		c::ETextureFormatId_RGBA32f, 0, 16, positionData,
 		c::ETextureFormatId_R16u, indexBufferData,
 		ommIndexFormat, ommTransparent.region()
+	);
+
+	const c::BLASCreateInfo transparentInfo = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &transparentInfoGeometry
 	);
 
 	if(!Test_assert(t, "ommCreateBlasOpaque", dev.createBlas(
@@ -843,9 +850,9 @@ extern "C" void Test_graphicsBindfulRayQueryGraphics(oxc::c::Test *t, oxc::c::Gr
 	)))
 		return;
 
-	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_unindexed(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positions.region()
-	);
+	const c::BLASGeometry blasInfoGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 16, positions.region());
+
+	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &blasInfoGeometry);
 
 	if(!Test_assert(t, "createBlas", dev.createBlas(blasInfo, "Ray query graphics BLAS", blas, e_rr)))
 		return;

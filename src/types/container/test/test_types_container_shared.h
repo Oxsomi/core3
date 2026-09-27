@@ -41,6 +41,7 @@ void Test_md5(Test *test);
 void Test_memoryStream(Test *test);
 void Test_encryptionStream(Test *test);
 void Test_textureFormat(Test *test);
+void Test_textureCodec(Test *test);
 void Test_allocationBuffer(Test *test);
 void Test_logOOM(Test *test);
 

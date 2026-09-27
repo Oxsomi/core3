@@ -435,6 +435,11 @@ Bool EncryptionStream_create(
 
 	hasStream = true;
 
+	//The cipher chunk IS the block: a range that ends mid chunk still costs the whole chunk to decrypt, so a
+	// consumer that rounds to it does no extra work and one that does not decrypts a chunk twice.
+
+	Stream_setBlock(*encStream, (U32) chunkSize, EStreamReadCost_Decode);
+
 	//EncryptionStream specific
 
 	EncryptionStream *es = RefPtr_data(*encStream, EncryptionStream);
@@ -446,8 +451,7 @@ Bool EncryptionStream_create(
 	es->dataStream = dataStream;
 	es->startOffset = streamOffset;
 
-	for(U8 i = 0; i < 3; ++i)
-		es->rootIv[i] = I32x4_get(rootIV, i);
+	I32x4_store3(es->rootIv, rootIV);
 
 	es->chunkSize = (U32)chunkSize;
 	es->chunkSizeShift = chunkSizeShift;

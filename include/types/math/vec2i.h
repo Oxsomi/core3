@@ -60,6 +60,14 @@ static inline I32x2 I32x2_load2(const void *arr) {        //Misaligned load 2 I3
 	return result;
 }
 
+static inline void I32x2_store1(void *arr, I32x2 a) {        //Misaligned store 1 I32
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(I32)), Buffer_createRefConst(&a, sizeof(I32)));
+}
+
+static inline void I32x2_store2(void *arr, I32x2 a) {        //Misaligned store 2 I32s
+	if (arr) Buffer_memcpy(Buffer_createRef(arr, sizeof(I32) * 2), Buffer_createRefConst(&a, sizeof(I32) * 2));
+}
+
 //Swizzles
 
 static inline I32 I32x2_x(I32x2 a) { return a.v[0]; }
