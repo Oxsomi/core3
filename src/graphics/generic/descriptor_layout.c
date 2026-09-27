@@ -140,6 +140,8 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 	Bool init = false;
 
+	CharString tmp = CharString_createNull();
+
 	if(!info || !entrypoints || !binary || !entrypoints->length)
 		retError(clean, Error_nullPointer(
 			!entrypoints || !entrypoints->length ? 2 : (!binary ? 1 : 4),
@@ -210,8 +212,6 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 	EGfxBinaryType binaryType =
 		GraphicsInstanceRef_ptr(GraphicsDeviceRef_ptr(dev)->instance)->api == EGraphicsApi_Direct3D12 ?
 		EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
-
-	CharString tmp = CharString_createNull();
 
 	for (U64 i = 0; i < entrypoints->length; ++i) {
 

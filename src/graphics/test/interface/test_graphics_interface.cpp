@@ -389,14 +389,9 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 
 	const c::GraphicsInstance *instance = RefPtr_data(instRef, c::GraphicsInstance);
 
-	//Verbose is asked for on its own: it is only logging, so unlike the debug layer it needs nothing installed,
-	//and it is what names the step a run stops on when it stops in a way nothing can report.
-
-	c::EGraphicsDeviceFlags deviceFlags =
-		Test_wantsValidation() ? c::EGraphicsDeviceFlags_IsVerbose : c::EGraphicsDeviceFlags_None;
-
-	if(instance->flags & c::EGraphicsInstanceFlags_IsDebug)
-		deviceFlags = (c::EGraphicsDeviceFlags) (deviceFlags | c::EGraphicsDeviceFlags_IsDebug);
+	const c::EGraphicsDeviceFlags deviceFlags =
+		(instance->flags & c::EGraphicsInstanceFlags_IsDebug) ? c::EGraphicsDeviceFlags_IsDebug :
+		c::EGraphicsDeviceFlags_None;
 
 	if(!Test_assert(t, "deviceCreate", c::GraphicsDeviceRef_create(
 		instRef, info, deviceFlags, c::EGraphicsBufferingMode_Default, NULL, NULL, &created, &t->err
