@@ -56,7 +56,7 @@ typedef enum ECompilerWarning {                            //Present here in cas
 	ECompilerWarning_BufferPadding      = 1 << 2
 } ECompilerWarning;
 
-//Check docs/oiSH.md for the file spec
+//Check docs/file/oiSH.md for the file spec
 
 typedef struct SHInclude {
 
@@ -150,7 +150,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 //A reflection only oiSH has no code to select binaries on, since which backend a binary was for is written as
 // which of its buffers carry code, so there it keeps every binary and entrypoint and splits the registers alone.
 //It is not a lossless inverse; a register that survives keeps the reflection it gained from being merged, so two
-// splits of one file keep agreeing with eachother (see docs/oiSH.md).
+// splits of one file keep agreeing with eachother (see docs/file/oiSH.md).
 Bool SHFile_split(const SHFile *a, EGfxBinaryType type, const Allocator *alloc, SHFile *split, Error *e_rr);
 
 void SHFile_print(const SHFile *a, Bool isVerbose, const Allocator *alloc);

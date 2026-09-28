@@ -66,7 +66,7 @@ typedef struct DLSettings {
 
 } DLSettings;
 
-//Check docs/oiDL.md for the file spec
+//Check docs/file/oiDL.md for the file spec
 
 typedef struct DLEntryStream {    //So that we don't have to add a lot of refs to the same stream
 	StreamRef *stream;

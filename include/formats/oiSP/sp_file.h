@@ -509,7 +509,7 @@ Bool SPFile_write(
 
 Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Allocator *alloc, SPFile *spFile, Error *e_rr);
 
-//File headers (file spec: docs/oiSP.md)
+//File headers (file spec: docs/file/oiSP.md)
 
 typedef enum ESPVersion {
 	ESPVersion_Undefined,

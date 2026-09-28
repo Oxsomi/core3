@@ -156,9 +156,50 @@ void Test_packQuat(Test *test) {
 	}
 }
 
+void Test_packRGB10A2(Test *test) {
+
+	Test_setModule(test, "RGB10A2 pack/unpack");
+
+	//The ends are exact, and the channels land where the format puts them.
+
+	const U32 one = U32_packRGB10A2(F32x4_create4(1, 1, 1, 1));
+	Test_assert(test, "ones", one == U32_MAX);
+	Test_assert(test, "zeros", U32_packRGB10A2(F32x4_zero()) == 0);
+
+	const U32 layout = U32_packRGB10A2(F32x4_create4(1, 0, 0, 0)) | U32_packRGB10A2(F32x4_create4(0, 0, 1, 0));
+	Test_assert(test, "layout", layout == (0x3FFu | (0x3FFu << 20)));
+	Test_assert(test, "alpha", U32_packRGB10A2(F32x4_create4(0, 0, 0, 2.f / 3)) == 2u << 30);
+
+	const F32x4 back = F32x4_unpackRGB10A2(one);
+	Test_assert(
+		test, "ones round trip",
+		F32x4_x(back) == 1 && F32x4_y(back) == 1 && F32x4_z(back) == 1 && F32x4_w(back) == 1
+	);
+
+	//Out of range clamps rather than wrapping into the neighboring channel.
+
+	Test_assert(
+		test, "clamps",
+		U32_packRGB10A2(F32x4_create4(-1, 2, 0.5f, 7)) == ((0x3FFu << 10) | (512u << 20) | (3u << 30))
+	);
+
+	//Rounded to nearest: every value comes back within half a step.
+
+	Bool within = true;
+
+	for(U32 i = 0; i <= 1000; ++i) {
+		const F32 v = (F32) i / 1000;
+		const F32 r = F32x4_x(F32x4_unpackRGB10A2(U32_packRGB10A2(F32x4_create4(v, 0, 0, 0))));
+		within &= F32_abs(r - v) <= 0.5f / 1023 + 1e-6f;
+	}
+
+	Test_assert(test, "half step", within);
+}
+
 void Test_pack(Test *test) {
 	Test_pack21x3(test);
 	Test_pack20x3u4(test);
 	Test_packBit(test);
 	Test_packQuat(test);
+	Test_packRGB10A2(test);
 }

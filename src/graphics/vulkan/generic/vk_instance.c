@@ -679,6 +679,54 @@ U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsNam
 TList(VkPhysicalDevice);
 TListImpl(VkPhysicalDevice);
 
+//The Mesa version a Mesa driver reports at the start of driverInfo ("Mesa 24.2.8-1ubuntu1 (LLVM 19.1.1)"), as
+// major * 100 + minor, or 0 when driverInfo doesn't start that way.
+//driverInfo rather than driverVersion, because lavapipe reports a driverVersion of 0.0.1.
+
+static U32 VkDriver_mesaVersion(const VkPhysicalDeviceDriverProperties *driver) {
+
+	const C8 *info = driver->driverInfo;
+	const C8 *prefix = "Mesa ";
+
+	U64 i = 0;
+
+	for(; prefix[i]; ++i)
+		if(info[i] != prefix[i])
+			return 0;
+
+	U32 part[2] = { 0, 0 };
+
+	for(U32 p = 0; p < 2; ++p, ++i) {
+
+		if(!C8_isDec(info[i]))
+			return 0;
+
+		for(; C8_isDec(info[i]); ++i)
+			part[p] = part[p] * 10 + (U32) (info[i] - '0');
+
+		if(p == 0 && info[i] != '.')
+			return 0;
+	}
+
+	return part[0] * 100 + part[1];
+}
+
+//Position fetch on a hit in any geometry but the BLAS's first returned the FIRST geometry's triangle at that
+// primitive index, on RADV before Mesa 25.1 and lavapipe before 25.2 (Mesa MRs 34460 and 34496).
+//It's withheld there rather than claimed, so a caller takes the path that doesn't need it instead of shading with
+// another triangle's positions; the rayTriPosition capability test is what catches a driver like this.
+
+static Bool VkDriver_hasBrokenPositionFetch(const VkPhysicalDeviceDriverProperties *driver) {
+
+	const U32 mesa = VkDriver_mesaVersion(driver);
+
+	switch (driver->driverID) {
+		case VK_DRIVER_ID_MESA_RADV:        return mesa && mesa < 2501;
+		case VK_DRIVER_ID_MESA_LLVMPIPE:    return mesa && mesa < 2502;
+		default:                            return false;
+	}
+}
+
 Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -1629,10 +1677,12 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					optExtensions[EOptExtensions_RayQuery] = false;
 
 				//Disable if invalid state
+				//The dispatch floor is OxC3's own minimum rather than Vulkan's 1Gi: RADV and lavapipe report 64Mi, and
+				// dispatchRays is validated against 64Mi on every device (see docs/graphics_spec.md).
 
 				if (
 					optExtensions[EOptExtensions_RayPipeline] && (
-						rtpProp.maxRayDispatchInvocationCount < GIBI ||
+						rtpProp.maxRayDispatchInvocationCount < 64 * MIBI ||
 						rtpProp.maxRayHitAttributeSize < 32 ||
 						rtpProp.maxRayRecursionDepth < 1 ||
 						rtpProp.maxShaderGroupStride < 4096 ||
@@ -1706,7 +1756,10 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					if(rayOpacityMicroFeatKhr.micromap)
 						capabilities.featuresExt |= EVkGraphicsFeatures_OpacityMicromapKHR;
 
-					if(rayPositionFetchFeat.rayTracingPositionFetch)
+					if(
+						rayPositionFetchFeat.rayTracingPositionFetch &&
+						!(optExtensions[EOptExtensions_DriverProperties] && VkDriver_hasBrokenPositionFetch(&driver))
+					)
 						capabilities.features |= EGraphicsFeatures_RayTriPosition;
 
 					//Mega geometry (RTXMG); Vulkan splits it into cluster acceleration structures and partitioned TLAS

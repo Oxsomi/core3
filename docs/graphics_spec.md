@@ -250,7 +250,9 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
   - maxPerStageDescriptorAccelerationStructures, maxPerStageDescriptorUpdateAfterBindAccelerationStructures, maxDescriptorSetAccelerationStructures, maxDescriptorSetUpdateAfterBindAccelerationStructures of >= 16.
   - maxPrimitiveCount of >= 0.5Gi - 1.
 - VK_KHR_ray_tracing_pipeline:
-  - maxRayDispatchInvocationCount >= 1 Gi.
+  - maxRayDispatchInvocationCount >= 64 Mi. Below Vulkan's own 1 Gi minimum because RADV and lavapipe report 64 Mi;
+    one dispatchRays is limited to 64 Mi rays on every device and API, D3D12 included, so a dispatch that
+    validates runs everywhere. 64 Mi is 8 rays a pixel at 4K.
   - maxRayHitAttributeSize >= 32.
   - maxRayRecursionDepth >= 1.
   - maxShaderGroupStride >= 4096.
@@ -258,6 +260,9 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
 - shaderGroupBaseAlignment should be a power of two of at most 64; the alignment is a divisor
   requirement, so the shader binding table laid out at 64 satisfies any of them (ANV reports 16).
   - rayTraversalPrimitiveCulling and rayTracingPipelineTraceRaysIndirect should be enabled.
+- VK_KHR_ray_tracing_position_fetch is claimed as RayTriPosition except on RADV before Mesa 25.1 and lavapipe
+  before Mesa 25.2 (the version read from driverInfo): there a hit on any geometry but a BLAS's first fetched the
+  first geometry's triangle.
 
 #### Mesh shaders
 

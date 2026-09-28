@@ -27,7 +27,7 @@
 	extern "C" {
 #endif
 
-//Check docs/oiSB.md for the file spec
+//Check docs/file/oiSB.md for the file spec
 
 typedef enum ESBPrimitive {
 	ESBPrimitive_Invalid,

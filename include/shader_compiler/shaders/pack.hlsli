@@ -158,6 +158,20 @@ F32x3 unpackRGB9E5(U32 p) {
 	return F32x3(p & 0x1FF, (p >> 9) & 0x1FF, (p >> 18) & 0x1FF) * scale;
 }
 
+//---------------------------------------------------------------- RGB10A2
+
+//DXGI_FORMAT_R10G10B10A2_UNORM: r | g<<10 | b<<20 | a<<30, unorm10 channels and a unorm2 alpha.
+//Mirrors U32_packRGB10A2 in types/math/pack.h. 0 and 1 are exact.
+
+U32 packRGB10A2(F32x4 v) {
+	const U32x4 q = (U32x4) floor(saturate(v) * F32x4(1023, 1023, 1023, 3) + 0.5);
+	return q.r | (q.g << 10) | (q.b << 20) | (q.a << 30);
+}
+
+F32x4 unpackRGB10A2(U32 p) {
+	return F32x4((p.xxxx >> U32x4(0, 10, 20, 30)) & U32x4(0x3FF, 0x3FF, 0x3FF, 3)) / F32x4(1023, 1023, 1023, 3);
+}
+
 //---------------------------------------------------------------- oct18
 
 //A unit vector as an 18 bit octahedral in the low 18 bits, 9 an axis, the top 14 left to the caller.

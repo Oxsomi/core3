@@ -776,8 +776,10 @@ Bool CommandListRef_dispatchRaysExt(CommandListRef *commandListRef, DispatchRays
 
 	total *= dispatch.z;
 
-	if(total > 1 * GIBI)
-		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() is limited to 1Gibi rays"));
+	//The minimum every supported device guarantees, not the device's own limit (docs/graphics_spec.md).
+
+	if(total > 64 * MIBI)
+		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() is limited to 64Mi rays"));
 
 	if(!total)
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() can't be executed with 0 count"));

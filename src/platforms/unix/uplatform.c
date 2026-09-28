@@ -275,3 +275,16 @@ Bool Platform_initExt(Error *e_rr) {
 clean:
 	return s_uccess;
 }
+
+//getenv hands back the process's own storage, which the next setenv may free, so the value is copied out.
+//Copying an empty string yields null, which is what makes an empty variable read as unset.
+
+Bool Platform_getEnvExt(CharString name, const Allocator *alloc, CharString *result, Error *e_rr) {
+
+	const C8 *value = getenv(name.ptr);
+
+	if(!value)
+		return true;
+
+	return CharString_createCopy(CharString_createRefCStrConst(value), alloc, result, e_rr);
+}

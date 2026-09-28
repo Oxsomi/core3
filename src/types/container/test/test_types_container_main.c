@@ -56,6 +56,7 @@ OXC3_TEST_MAIN(types_container) {
 	Test_hpp(&t);
 	Test_hppWrappers(&t);
 	Test_memoryStream(&t);
+	Test_rangeStream(&t);
 	Test_encryptionStream(&t);
 	Test_logOOM(&t);
 

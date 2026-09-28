@@ -41,7 +41,7 @@ typedef struct BCSettings {
 	U32 encryptionKey[8];
 } BCSettings;
 
-//Check docs/oiBC.md for the file spec
+//Check docs/file/oiBC_chimera.md for the file spec
 
 typedef struct BCFile {
 	ListU8 fidiA, fidiB;
@@ -59,7 +59,7 @@ Bool BCFile_read(const Buffer *file, const U32 encryptionKey[8], const Allocator
 
 //File headers
 
-//File spec (docs/oiCA.md)
+//File spec (docs/file/oiBC_chimera.md)
 
 typedef enum EBCFlags {
 

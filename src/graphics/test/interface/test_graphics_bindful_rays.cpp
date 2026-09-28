@@ -255,6 +255,31 @@ extern "C" void Test_graphicsBindfulRays(oxc::c::Test *t, oxc::c::GraphicsDevice
 		Test_assert(t, "scopeTraceEnd", scope.end(e_rr));
 	}
 
+	//One ray past the 64Mi every device guarantees is refused while recording, whatever this device reports.
+	//In a scope of its own: a refused command invalidates its scope, which is then dropped whole, trace included.
+
+	{
+		gfx::CommandScope scope = commandList.scopeSpan(traceTransitions, 2, 4, nullptr, 0, e_rr);
+		Test_assert(t, "scopeOverLimit", (c::Bool) scope);
+		Test_assert(t, "bindHeapOverLimit", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindTableOverLimit", scope.bindDescriptorTable(table, e_rr));
+		Test_assert(t, "bindPipelineOverLimit", scope.setRaytracingPipeline(pipeline, e_rr));
+
+		//Everything else about the dispatch is valid, so the only thing it can be refused for is the count.
+
+		c::Error overLimit = c::Error_none();
+		const c::U32 overLimitRays = (c::U32) (64 * c::MIBI + 1);
+
+		Test_assert(
+			t, "traceOverLimit",
+			!scope.dispatch1DRays(0, overLimitRays, &overLimit) && overLimit.errorStr &&
+			StringView(overLimit.errorStr) == "CommandListRef_dispatchRaysExt() is limited to 64Mi rays"
+		);
+
+		c::Error dropped = c::Error_none();
+		(void) scope.end(&dropped);
+	}
+
 	Test_assert(t, "end", commandList.end(e_rr));
 
 	if (gfxtest::submitAndWait(t, dev, commandList))

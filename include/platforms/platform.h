@@ -127,6 +127,40 @@ impl U64 Platform_getPhysicalRAM();     //Total installed physical memory in byt
 impl U64 Platform_getAvailableRAM();    //Currently free/available physical memory in bytes (0 if unknown)
 impl void Platform_detectCPUInfo(PlatformCPUInfo *out);   //Fills topology (called once at Platform_create)
 
+//Reads an environment variable as UTF-8 on every platform; Windows converts from its UTF-16 block.
+//An unset variable is not an error: *result is left null and the call succeeds.
+//An empty one reads as unset too, because Windows cannot hold one ("set X=" removes the variable), and a
+// script has to mean the same thing everywhere.
+//The name must be non-empty and hold no '='.
+//POSIX leaves a read racing a setenv on another thread undefined; OxC3 never writes the environment.
+Bool Platform_getEnv(CharString name, const Allocator *alloc, CharString *result, Error *e_rr);
+
+//The backend of Platform_getEnv, handed a validated, null terminated name. Empty or unset, it returns null.
+impl Bool Platform_getEnvExt(CharString name, const Allocator *alloc, CharString *result, Error *e_rr);
+
+//Typed readers over Platform_getEnv.
+//Each leaves *result untouched when the variable is unset, so the caller stores its default first.
+//A variable that is set but does not parse is an error rather than the default: a typo must not pass for
+// the value it failed to set.
+//  Bool  0, 1, true, false, case insensitive
+//  U64   decimal, or hex behind 0x (a leading 0 is NOT octal)
+//  I64   decimal with an optional minus
+//  F64   decimal with an optional minus, fraction and exponent
+
+//The grammar the typed readers apply, for a caller parsing part of a variable itself, such as one entry of a list.
+//False when the value doesn't parse; *result is then untouched.
+
+Bool Platform_parseEnvBool(CharString value, Bool *result);
+Bool Platform_parseEnvU64(CharString value, U64 *result);
+Bool Platform_parseEnvI64(CharString value, I64 *result);
+Bool Platform_parseEnvF64(CharString value, F64 *result);
+
+Bool Platform_hasEnv(CharString name, const Allocator *alloc, Bool *result, Error *e_rr);
+Bool Platform_getEnvBool(CharString name, const Allocator *alloc, Bool *result, Error *e_rr);
+Bool Platform_getEnvU64(CharString name, const Allocator *alloc, U64 *result, Error *e_rr);
+Bool Platform_getEnvI64(CharString name, const Allocator *alloc, I64 *result, Error *e_rr);
+Bool Platform_getEnvF64(CharString name, const Allocator *alloc, F64 *result, Error *e_rr);
+
 //Whether the user has a hardware keyboard they can type on right now.
 //True on platforms that have no on screen keyboard at all, since then there's nothing to weigh it against.
 //Query it per use rather than caching: a bluetooth keyboard can appear or disappear mid session.
