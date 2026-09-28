@@ -515,14 +515,15 @@ Bool Compiler_compile(
 		if(FAILED(hr))
 			retError(clean, Error_invalidState(2, "Compiler_compile() fetch hlsl failed"));
 
-			//Fail loudly rather than silently emitting an empty binary
-			// that only trips a confusing SHFile_read error much later.
-			//DXC can produce no object without a reported error (e.g. a DXIL validation reject of a still-experimental op),
-			// so guard against a zero-length blob explicitly.
-			if(!resultBlob || !resultBlob->GetBufferSize())
-				retError(clean, Error_invalidState(
-					3, "Compiler_compile() DXC produced an empty binary (compile or validation failed silently)"
-				));
+		//Fail loudly rather than silently emitting an empty binary
+		// that only trips a confusing SHFile_read error much later.
+		//DXC can produce no object without a reported error (e.g. a DXIL validation reject of a still-experimental op),
+		// so guard against a zero-length blob explicitly.
+
+		if(!resultBlob || !resultBlob->GetBufferSize())
+			retError(clean, Error_invalidState(
+				3, "Compiler_compile() DXC produced an empty binary (compile or validation failed silently)"
+			));
 
 		gotoIfError3(clean, Buffer_createCopy(
 			Buffer_createRefConst(resultBlob->GetBufferPointer(), resultBlob->GetBufferSize()),

@@ -1487,6 +1487,7 @@ In the example above, two AABBs are created from a buffer.
     - positionBufferStride: >0 and <=2048. The stride between each vertex. It is more optimal to only have positions in this buffer, so building won't waste time looking at other data. This is generally the case for normal mobile rendering as well (or visibility buffer approaches). This stride needs to be a multiple of 2 (if 16-bit formats are used) or 4 (if 32-bit formats are used).
     - positionOffset: offset in the vertex to point to the position. Needs to be less than positionBufferStride (including the position itself).
     - indexBuffer, positionBuffer: DeviceData pointing to the vertex and index buffers.
+- One BLAS holds at most BLAS_MAX_PRIMITIVES (16Mi - 1) triangles or AABBs, summed over all its geometries, on every device and API: the minimum OxC3 requires of a device (see graphics_spec.md), so a BLAS that creates on one device creates on all of them. A larger mesh is split into several BLASes, each its own TLAS instance; more geometries in one BLAS don't lift the limit.
 
 ##### Used functions and obtained
 

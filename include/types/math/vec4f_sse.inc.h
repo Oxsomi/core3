@@ -162,6 +162,10 @@ static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { return F32x4_negateRecastiInter
 static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmple_ps(a, b)); }
 static inline F32x4 F32x4_lt(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmplt_ps(a, b)); }
 
+static inline F32x4 F32x4_select(F32x4 cond, F32x4 a, F32x4 b) {
+	return _mm_blendv_ps(b, a, _mm_cmpneq_ps(cond, F32x4_zero()));
+}
+
 //4x4 transpose.
 //Sits here rather than in mat.h because it's the one matrix operation with a genuine per-SIMD implementation,
 // and per-SIMD code belongs in these files.

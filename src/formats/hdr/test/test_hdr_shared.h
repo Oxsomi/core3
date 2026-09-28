@@ -31,6 +31,7 @@ void Test_HDRRoundTripWideScanline(Test *t);
 void Test_HDRRoundTripRunLength(Test *t);
 void Test_HDRRoundTripExactZero(Test *t);
 void Test_HDRRoundTripDynamicRange(Test *t);
+void Test_HDRRoundTripExposure(Test *t);
 
 void Test_HDRWriteZeroDimensions(Test *t);
 void Test_HDRWriteOversizedDimensions(Test *t);

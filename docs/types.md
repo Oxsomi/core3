@@ -62,7 +62,8 @@ Vectors (`F32x2`, `F32x4`, `I32x2`, `I32x4`, and wider integer ones on SSE) with
 and a scalar one for targets without; matrices and quaternions; conversions between float formats
 (`flp.h`), including the cast only ones above; checked and unchecked integer casts; a small non cryptographic PRNG;
 and `pack.h`, the CPU twins of the packing functions shaders use (RGB9E5, RGB10A2, oct normals, F21 triples), kept
-bit identical to `@pack.hlsli` so data packed on either side reads back the same on the other.
+bit identical to `@pack.hlsli` so data packed on either side reads back the same on the other. `tonemap.h` holds the
+display transforms (Reinhard, ACES, AgX, PBR Neutral) and the sRGB transfer function, with twins in `@tonemap.hlsli`.
 
 ## types/mesh
 

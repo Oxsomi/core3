@@ -39,7 +39,7 @@ typedef enum EGenericError {
 	EGenericError_OutOfMemory,
 	EGenericError_OutOfBounds,
 	EGenericError_NullPointer,
-	EGenericError_Unauthorized,            //For example if the local permissions or remote server disallow it
+	EGenericError_Unauthorized,             //For example if the local permissions or remote server disallow it
 	EGenericError_NotFound,
 	EGenericError_DivideByZero,
 	EGenericError_Overflow,
@@ -55,7 +55,7 @@ typedef enum EGenericError {
 	EGenericError_AlreadyDefined,
 	EGenericError_UnsupportedOperation,
 	EGenericError_TimedOut,
-	EGenericError_ConstData,            //If an operation is done on data that is supposed to be const
+	EGenericError_ConstData,                //If an operation is done on data that is supposed to be const
 	EGenericError_PlatformError,
 	EGenericError_Unimplemented,
 	EGenericError_Stderr
@@ -103,20 +103,21 @@ typedef struct Error {
 } Error;
 
 //Error handling; functions return Bool success and set an optional Error.
-//(void) 0 is a trick to require a ; after the statement
+//do while (0) makes each one a single statement that needs its ;, so it also stands alone as the body of an if with
+// an else after it.
 
-#define gotoIfError3(x, ...) {       \
+#define gotoIfError3(x, ...) do {    \
 	if(!(__VA_ARGS__)) {             \
 		s_uccess = false;            \
 		goto x;                      \
 	}                                \
-} (void) 0
+} while(0)
 
-#define retError(x, ...) {           \
+#define retError(x, ...) do {        \
 	if(e_rr) *e_rr = __VA_ARGS__;    \
 	s_uccess = false;                \
 	goto x;                          \
-} (void) 0
+} while(0)
 
 impl void Error_captureStackTrace(void **stackTrace, U8 stackSize, U8 skip);    //May fail if (stackSize + skip + 1 > 128)
 

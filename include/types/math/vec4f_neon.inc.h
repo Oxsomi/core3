@@ -108,6 +108,10 @@ static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { return F32x4_recastI32x4Interna
 static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vcleq_f32(a, b)); }
 static inline F32x4 F32x4_lt(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vcltq_f32(a, b)); }
 
+static inline F32x4 F32x4_select(F32x4 cond, F32x4 a, F32x4 b) {
+	return vbslq_f32(vmvnq_u32(vceqq_f32(cond, F32x4_zero())), a, b);
+}
+
 //4x4 transpose.
 //Sits here rather than in mat.h because it's the one matrix operation with a genuine per-SIMD implementation,
 // and per-SIMD code belongs in these files.

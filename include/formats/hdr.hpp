@@ -147,11 +147,13 @@ namespace oxc {
 		//
 		//The buffer is BORROWED, since a readback callback still owns it, so the memory stream takes a ref rather than the
 		// allocation the way createFromBuffer otherwise would.
+		//
+		//exposure is the multiplier the pixels already carry, recorded as the EXPOSURE header (see HDR_writeExposed).
 
 		[[nodiscard]] inline c::Bool write(
 			const StringView &loc, const c::Buffer &pixels, c::U32 width, c::U32 height,
 			const file::Types &types, const c::Allocator *alloc,
-			c::EHDRWriteFlags flags = c::EHDRWriteFlags_None, c::Error *e_rr = nullptr
+			c::EHDRWriteFlags flags = c::EHDRWriteFlags_None, c::F32 exposure = 1, c::Error *e_rr = nullptr
 		) noexcept {
 
 			const c::RefPtrType streamType = c::FileStream_makeType(alloc);
@@ -177,7 +179,7 @@ namespace oxc {
 			const RefPtr<c::OxStream> out = RefPtr<c::OxStream>::adopt(outRaw);
 			c::U64 off = 0;
 
-			return c::HDR_write(out.handle(), &off, flags, width, height, alloc, in.handle(), 0, e_rr);
+			return c::HDR_writeExposed(out.handle(), &off, flags, width, height, exposure, alloc, in.handle(), 0, e_rr);
 
 		}
 	}

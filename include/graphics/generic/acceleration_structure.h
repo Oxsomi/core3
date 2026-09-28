@@ -98,7 +98,7 @@ typedef struct RTAS {
 	//
 	//compactionQuery is the slot holding this structure's compacted size, U32_MAX when none was claimed.
 	//compactionSubmitId is the submit that RECORDED it, since the size does not exist until that submit
-	//has completed.
+	//has completed. On a backend that can't query the size, it's the build's submit, which marked it compacted.
 
 	U64 compactionSubmitId;
 

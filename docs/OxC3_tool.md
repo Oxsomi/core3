@@ -65,6 +65,24 @@ To unpackage this (losing the file names of course):
 
 `OxC3 file from -format oiDL -input myFolder.oiDL -output myFolder`
 
+### Convert (images)
+
+`OxC3 file convert -input render.hdr -output render.bmp -tonemap agx -exposure -1` converts between `.hdr`, `.bmp` and `.dds`, each picked by its extension. A DDS is read and written uncompressed: RGBA32f, RGBA8 or BGRA8, the first mip of the first layer; block compressed formats are refused rather than decoded.
+
+An image is linear RGBA32f (HDR, a float DDS) or sRGB encoded 8 bit (BMP, an 8 bit DDS). Converting linear to 8 bit applies an exposure and then `-tonemap`, the display transform. The exposure is, in order:
+
+- `-exposure <stops>`, absolute (`-1` halves the image).
+- A `.hdr`'s `EXPOSURE=` header. In Radiance it records a multiplier already applied to the samples, so a file carrying one is shown as stored: that is how a renderer that metered its own image hands the exposure over. Converting to `.hdr` keeps the header.
+- Otherwise automatic: the log average luminance lands on mid grey (0.18), so a capture displays sensibly at whatever scale it was stored, and the chosen stops are printed. Metering on pixels alone can't tell a white room from a brightly lit grey one, so treat it as a preview; a renderer knows the light and can do better.
+
+- `neutral` (the default): Khronos PBR Neutral. Base colors below its compression start are left where they were authored, so a material reads as it was made.
+- `agx`: AgX's base look. Brights desaturate toward white without their hue skewing.
+- `aces`: Stephen Hill's fit of the ACES film look. Filmic contrast, with hue shifts in saturated brights.
+- `reinhard`: `x / (1 + x)` per channel. Never clips, and flattens contrast.
+- `none`: a clamp, for images already in range.
+
+Converting 8 bit to linear decodes sRGB. A DDS keeps the form it was read in, float as float and 8 bit as 8 bit. The curves are `types/math/tonemap.h`, with HLSL twins in `@tonemap.hlsli`.
+
 ### Common arguments
 
 The following flags are commonly used in any format:

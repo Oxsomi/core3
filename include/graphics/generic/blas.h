@@ -54,6 +54,12 @@ typedef RefPtr OpacityMicromapRef;
 //Every geometry carries its own buffers, so one mesh's streams can be sliced into runs with DeviceData offsets
 // instead of being copied apart.
 
+//The most triangles (or AABBs) one BLAS may hold, over all its geometries, on every device and API: the minimum
+// OxC3 requires (lavapipe reports exactly this), rather than each device's own limit, so a BLAS that validates on
+// one device builds on all of them. A larger mesh is split into several BLASes, one instance each.
+
+#define BLAS_MAX_PRIMITIVES 16777215ull            //16Mi - 1
+
 typedef struct BLASGeometry {
 
 	U8 positionFormatId;                            //ETextureFormatId: RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s

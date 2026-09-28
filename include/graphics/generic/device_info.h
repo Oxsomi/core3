@@ -153,7 +153,14 @@ typedef enum EVkGraphicsFeatures {
 	//The EXT extension is promoted to KHR rather than deprecated, and current drivers commonly still expose
 	// only EXT, so the backend prefers KHR and falls back; this bit records which one the device runs.
 
-	EVkGraphicsFeatures_OpacityMicromapKHR       = 1 << 6
+	EVkGraphicsFeatures_OpacityMicromapKHR       = 1 << 6,
+
+	//The driver can't be asked for a compacted size, so a BLAS built with ERTASBuildFlags_AllowCompaction is marked
+	// compacted by its build, with no query and no copy, as a driver reporting no saving is.
+	//lavapipe before Mesa 24.3.4: it crashes resetting an acceleration structure query from a command buffer (Mesa
+	// issue 12289), and reports the full size as the compacted one, so nothing is lost.
+
+	EVkGraphicsFeatures_NoCompactionQuery        = 1 << 7
 
 } EVkGraphicsFeatures;
 

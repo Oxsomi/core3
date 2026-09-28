@@ -231,6 +231,17 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 
 			const c::U64 before = asSize(blas);
 
+			//A driver that can't be asked for the size gets no query at all, and its build is the compaction.
+
+			if (
+				dev.api() == c::EGraphicsApi_Vulkan &&
+				(dev.info().capabilities.featuresExt & c::EVkGraphicsFeatures_NoCompactionQuery)
+			) {
+				c::Test_print(t, "Device can't query compacted sizes, its builds are marked compacted instead");
+				c::Test_assert(t, "noQueryClaimed", blas.data()->base.compactionQuery == c::U32_MAX);
+				c::Test_assert(t, "noQueryBuildMarksCompacted", blas.data()->base.isCompacted);
+			}
+
 			if (compactAndRun(t, dev, blas, "compact")) {
 
 				const c::U64 after = asSize(blas);

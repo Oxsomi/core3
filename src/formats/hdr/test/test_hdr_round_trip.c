@@ -517,3 +517,58 @@ clean:
 	Buffer_free(&result, t->alloc);
 	RefPtr_dec(&src);
 }
+
+//The EXPOSURE header: written when it isn't 1, read back as exactly the value written, absent from a plain write, and
+// refused when it isn't a multiplier at all.
+
+void Test_HDRRoundTripExposure(Test *t) {
+
+	Test_setModule(t, "HDR EXPOSURE header");
+
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+
+	StreamRef *src = NULL, *exposed = NULL, *plain = NULL, *refused = NULL;
+	Buffer pixels = Buffer_createNull();
+	HDRInfo info = { 0 };
+	U64 off = 0;
+
+	if(
+		!makeFloatStream(t, 8, 4, &src, &type) || !makeSink(t, &exposed, &type) || !makeSink(t, &plain, &type) ||
+		!makeSink(t, &refused, &type)
+	) {
+		Test_assert(t, "make streams", false);
+		goto clean;
+	}
+
+	Test_assert(
+		t, "write exposed", HDR_writeExposed(exposed, &off, EHDRWriteFlags_None, 8, 4, 2.5f, t->alloc, src, 0, &t->err)
+	);
+
+	off = 0;
+	Test_assert(t, "read exposed", readAll(t, exposed, &off, EHDRReadFlags_None, &info, &pixels, &type));
+	Test_assert(t, "exposure read back", info.exposure == 2.5f);
+	Buffer_free(&pixels, t->alloc);
+
+	off = 0;
+	Test_assert(t, "write plain", HDR_write(plain, &off, EHDRWriteFlags_None, 8, 4, t->alloc, src, 0, &t->err));
+
+	off = 0;
+	info = (HDRInfo) { 0 };
+	Test_assert(t, "read plain", readAll(t, plain, &off, EHDRReadFlags_None, &info, &pixels, &type));
+	Test_assert(t, "plain exposure is 1", info.exposure == 1);
+
+	for(U32 i = 0; i < 2; ++i) {
+		off = 0;
+		Test_assert(
+			t, "exposure refused",
+			!HDR_writeExposed(refused, &off, EHDRWriteFlags_None, 8, 4, i ? -1.f : 0.f, t->alloc, src, 0, NULL)
+		);
+	}
+
+clean:
+	Buffer_free(&pixels, t->alloc);
+	RefPtr_dec(&refused);
+	RefPtr_dec(&plain);
+	RefPtr_dec(&exposed);
+	RefPtr_dec(&src);
+}

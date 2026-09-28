@@ -22,6 +22,7 @@
 
 #include "test_types_math_shared.h"
 #include "types/math/pack.h"
+#include "types/math/tonemap.h"
 #include "types/math/quat.h"
 
 void Test_pack21x3(Test *test) {
@@ -196,10 +197,72 @@ void Test_packRGB10A2(Test *test) {
 	Test_assert(test, "half step", within);
 }
 
+void Test_tonemap(Test *test) {
+
+	Test_setModule(test, "Tonemap");
+
+	//Grey at 0, mid grey and a hot 4, against values computed independently from each curve's published formula.
+
+	static const F32 grey[3] = { 0, 0.18f, 4 };
+
+	static const F32 expected[ETonemap_Count][3] = {
+		{ 0, 0.461356f, 1 },
+		{ 0, 0.426946f, 0.906332f },
+		{ 0, 0.358457f, 0.958888f },
+		{ 0, 0.496676f, 0.934048f },
+		{ 0, 0.410021f, 0.992603f }
+	};
+
+	Bool matches = true, neutral = true, monotonic = true, bounded = true;
+
+	for(U32 op = 0; op < ETonemap_Count; ++op) {
+
+		for(U32 i = 0; i < 3; ++i) {
+			const F32x4 v = F32x4_tonemap(F32x4_create4(grey[i], grey[i], grey[i], 1), (ETonemap) op);
+			matches &= F32_abs(F32x4_x(v) - expected[op][i]) <= 1e-4f;
+
+			//Grey stays grey to a quarter of an 8 bit step: AgX's published matrices drift it by 2.3e-4 at most.
+
+			neutral &= F32_abs(F32x4_x(v) - F32x4_z(v)) <= 1e-3f;
+		}
+
+		//Brighter never displays darker, and nothing leaves [0, 1], down to negative input and up past the sun.
+
+		F32 prev = -1;
+
+		for(F32 x = -1; x < 1e5f; x = x < 0.01f ? x + 0.01f : x * 1.25f) {
+
+			const F32 y = F32x4_y(F32x4_tonemap(F32x4_create4(x, x, x, 1), (ETonemap) op));
+
+			monotonic &= y >= prev - 1e-6f;
+			bounded &= y >= 0 && y <= 1;
+			prev = y;
+		}
+	}
+
+	Test_assert(test, "reference values", matches);
+	Test_assert(test, "grey stays neutral", neutral);
+	Test_assert(test, "monotonic in grey", monotonic);
+	Test_assert(test, "bounded to [0, 1]", bounded);
+
+	//The sRGB pair inverts itself.
+
+	Bool roundTrip = true;
+
+	for(U32 i = 0; i <= 255; ++i) {
+		const F32 v = (F32) i / 255;
+		const F32x4 back = F32x4_srgbEncode(F32x4_srgbDecode(F32x4_xxxx4(v)));
+		roundTrip &= F32_abs(F32x4_x(back) - v) <= 1e-5f && F32x4_w(back) == v;
+	}
+
+	Test_assert(test, "srgb round trip", roundTrip);
+}
+
 void Test_pack(Test *test) {
 	Test_pack21x3(test);
 	Test_pack20x3u4(test);
 	Test_packBit(test);
 	Test_packQuat(test);
 	Test_packRGB10A2(test);
+	Test_tonemap(test);
 }

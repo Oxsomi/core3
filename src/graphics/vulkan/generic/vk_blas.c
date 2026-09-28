@@ -430,9 +430,16 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	//The compacted size is a property of the BUILT structure, so the query is recorded right behind the
 	//build and read back once the submit containing both has completed.
 
+	const Bool compactable = (blas->base.flags & ERTASBuildFlags_AllowCompaction) && !blas->base.isCompacted;
+	const Bool noQuery = device->info.capabilities.featuresExt & EVkGraphicsFeatures_NoCompactionQuery;
+
+	if(compactable && noQuery) {
+		blas->base.isCompacted = true;
+		blas->base.compactionSubmitId = device->submitId;
+	}
+
 	const Bool wantsCompaction =
-		(blas->base.flags & ERTASBuildFlags_AllowCompaction) &&
-		!blas->base.isCompacted &&
+		compactable && !noQuery &&
 		blas->base.compactionQuery == U32_MAX &&
 		deviceExt->writeAccelerationStructuresProperties;
 

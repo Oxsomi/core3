@@ -99,6 +99,7 @@ static inline F32x4 F32x4_geq(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] >= b.v[
 static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] > b.v[i])); }
 static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] <= b.v[i])); }
 static inline F32x4 F32x4_lt(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] < b.v[i])); }
+static inline F32x4 F32x4_select(F32x4 cond, F32x4 a, F32x4 b) { NONE_OP4F(cond.v[i] ? a.v[i] : b.v[i]); }
 
 //Trunc & reduce
 

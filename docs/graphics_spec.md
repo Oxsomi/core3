@@ -248,7 +248,9 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
 - VK_KHR_acceleration_structure:
   - maxGeometryCount, maxInstanceCount >= U24_MAX (16777215).
   - maxPerStageDescriptorAccelerationStructures, maxPerStageDescriptorUpdateAfterBindAccelerationStructures, maxDescriptorSetAccelerationStructures, maxDescriptorSetUpdateAfterBindAccelerationStructures of >= 16.
-  - maxPrimitiveCount of >= 0.5Gi - 1.
+  - maxPrimitiveCount of >= 16Mi - 1 (BLAS_MAX_PRIMITIVES), what lavapipe reports. One BLAS is limited to that many
+    triangles or AABBs over all its geometries on every device and API, D3D12 included; a larger mesh is split into
+    several BLASes, one TLAS instance each.
 - VK_KHR_ray_tracing_pipeline:
   - maxRayDispatchInvocationCount >= 64 Mi. Below Vulkan's own 1 Gi minimum because RADV and lavapipe report 64 Mi;
     one dispatchRays is limited to 64 Mi rays on every device and API, D3D12 included, so a dispatch that
@@ -263,6 +265,9 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
 - VK_KHR_ray_tracing_position_fetch is claimed as RayTriPosition except on RADV before Mesa 25.1 and lavapipe
   before Mesa 25.2 (the version read from driverInfo): there a hit on any geometry but a BLAS's first fetched the
   first geometry's triangle.
+- Compaction is a no-op on lavapipe before Mesa 24.3.4 (EVkGraphicsFeatures_NoCompactionQuery): resetting an
+  acceleration structure query from a command buffer crashes it (Mesa issue 12289), so a compactable build records no
+  query and is marked compacted. That lavapipe reports the full size as the compacted one, so nothing is lost.
 
 #### Mesh shaders
 

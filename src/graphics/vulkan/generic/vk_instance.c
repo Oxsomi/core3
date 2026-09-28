@@ -22,6 +22,7 @@
 
 #include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
+#include "graphics/generic/blas.h"
 #include "graphics/vulkan/vk_interface.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_device.h"
@@ -680,7 +681,7 @@ TList(VkPhysicalDevice);
 TListImpl(VkPhysicalDevice);
 
 //The Mesa version a Mesa driver reports at the start of driverInfo ("Mesa 24.2.8-1ubuntu1 (LLVM 19.1.1)"), as
-// major * 100 + minor, or 0 when driverInfo doesn't start that way.
+// major * 10000 + minor * 100 + patch, or 0 when driverInfo doesn't start that way. A missing patch reads as 0.
 //driverInfo rather than driverVersion, because lavapipe reports a driverVersion of 0.0.1.
 
 static U32 VkDriver_mesaVersion(const VkPhysicalDeviceDriverProperties *driver) {
@@ -694,21 +695,24 @@ static U32 VkDriver_mesaVersion(const VkPhysicalDeviceDriverProperties *driver) 
 		if(info[i] != prefix[i])
 			return 0;
 
-	U32 part[2] = { 0, 0 };
+	U32 part[3] = { 0, 0, 0 };
 
-	for(U32 p = 0; p < 2; ++p, ++i) {
+	for(U32 p = 0; p < 3; ++p, ++i) {
 
 		if(!C8_isDec(info[i]))
-			return 0;
+			return p == 2 ? part[0] * 10000 + part[1] * 100 : 0;
 
 		for(; C8_isDec(info[i]); ++i)
 			part[p] = part[p] * 10 + (U32) (info[i] - '0');
 
 		if(p == 0 && info[i] != '.')
 			return 0;
+
+		if(p == 1 && info[i] != '.')
+			break;
 	}
 
-	return part[0] * 100 + part[1];
+	return part[0] * 10000 + part[1] * 100 + part[2];
 }
 
 //Position fetch on a hit in any geometry but the BLAS's first returned the FIRST geometry's triangle at that
@@ -721,10 +725,18 @@ static Bool VkDriver_hasBrokenPositionFetch(const VkPhysicalDeviceDriverProperti
 	const U32 mesa = VkDriver_mesaVersion(driver);
 
 	switch (driver->driverID) {
-		case VK_DRIVER_ID_MESA_RADV:        return mesa && mesa < 2501;
-		case VK_DRIVER_ID_MESA_LLVMPIPE:    return mesa && mesa < 2502;
+		case VK_DRIVER_ID_MESA_RADV:        return mesa && mesa < 250100;
+		case VK_DRIVER_ID_MESA_LLVMPIPE:    return mesa && mesa < 250200;
 		default:                            return false;
 	}
+}
+
+//lavapipe before Mesa 24.3.4 treats the results of an acceleration structure query as query objects when a command
+// buffer resets them, and crashes (Mesa issue 12289, MR 33113). See EVkGraphicsFeatures_NoCompactionQuery.
+
+static Bool VkDriver_hasBrokenASQueryReset(const VkPhysicalDeviceDriverProperties *driver) {
+	const U32 mesa = VkDriver_mesaVersion(driver);
+	return driver->driverID == VK_DRIVER_ID_MESA_LLVMPIPE && mesa && mesa < 240304;
 }
 
 Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result, Error *e_rr) {
@@ -1650,7 +1662,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 							rtasProp.maxDescriptorSetUpdateAfterBindAccelerationStructures
 						) >= 16 &&
 						U64_min(rtasProp.maxGeometryCount, rtasProp.maxInstanceCount) >= 16777215 &&
-						rtasProp.maxPrimitiveCount >= GIBI / 2 - 1
+						rtasProp.maxPrimitiveCount >= BLAS_MAX_PRIMITIVES
 					)
 				)
 					rtasFeat.accelerationStructure = false;
@@ -1720,6 +1732,9 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				if(optExtensions[EOptExtensions_RayQuery] || optExtensions[EOptExtensions_RayPipeline]) {
 
 					capabilities.features |= EGraphicsFeatures_Raytracing;
+
+					if(optExtensions[EOptExtensions_DriverProperties] && VkDriver_hasBrokenASQueryReset(&driver))
+						capabilities.featuresExt |= EVkGraphicsFeatures_NoCompactionQuery;
 
 					//RayReorder = the SER API is available (valid to call, possibly a no-op).
 					//RayReorderActual = the driver hints it actually reorders, so it's worth restructuring shaders for.

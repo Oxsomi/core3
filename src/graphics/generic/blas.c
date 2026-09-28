@@ -364,6 +364,26 @@ Bool GraphicsDeviceRef_createBLAS(
 
 			geometries.ptrNonConst[i] = geometry;
 		}
+
+		//The minimum every supported device guarantees, not this device's own limit (docs/graphics_spec.md),
+		// counted over the whole BLAS: splitting a mesh into more geometries doesn't lift it, more BLASes do.
+
+		U64 triangles = 0;
+
+		for(U64 i = 0; i < blas->geometries.length; ++i) {
+
+			const BLASGeometry geometry = blas->geometries.ptr[i];
+
+			triangles +=
+				geometry.indexFormatId ?
+				geometry.indexBuffer.len / (geometry.indexFormatId == ETextureFormatId_R32u ? 4 : 2) / 3 :
+				geometry.positionBuffer.len / geometry.positionBufferStride / 3;
+		}
+
+		if(triangles > BLAS_MAX_PRIMITIVES)
+			retError(clean, Error_outOfBounds(
+				1, triangles, BLAS_MAX_PRIMITIVES, "GraphicsDeviceRef_createBLAS() is limited to 16Mi - 1 triangles"
+			));
 	}
 
 	//Validate AABBs
@@ -389,6 +409,11 @@ Bool GraphicsDeviceRef_createBLAS(
 		if(aabbBuffer.len < stride || (aabbBuffer.len % stride))
 			retError(clean, Error_unsupportedOperation(
 				1, "GraphicsDeviceRef_createBLAS()::aabbBuffer should be multiple of stride"
+			));
+
+		if(aabbBuffer.len / stride > BLAS_MAX_PRIMITIVES)
+			retError(clean, Error_outOfBounds(
+				1, aabbBuffer.len / stride, BLAS_MAX_PRIMITIVES, "GraphicsDeviceRef_createBLAS() is limited to 16Mi - 1 AABBs"
 			));
 	}
 
@@ -879,9 +904,9 @@ Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef 
 	blas = BLASRef_ptr(blasRef);
 
 	//Nothing to do rather than an error, so a caller can sweep everything it owns without first sorting out
-	// what was built compactable, and recording twice is harmless.
+	// what was built compactable.
 
-	if(blas->base.isCompacted || !(blas->base.flags & ERTASBuildFlags_AllowCompaction))
+	if(!(blas->base.flags & ERTASBuildFlags_AllowCompaction))
 		goto clean;
 
 	if(!blas->base.isCompleted)
@@ -890,13 +915,6 @@ Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef 
 		));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-
-	if(blas->base.compactionQuery == U32_MAX)
-		retError(clean, Error_invalidState(
-			2,
-			"GraphicsDeviceRef_prepareCompactBLAS() no compacted size was recorded for this structure, "
-			"its build predates the compaction path or the backend doesn't support it"
-		));
 
 	//The size is produced BY the build, so it does not exist until that build's submit has run. A submit is
 	// done if the device was waited since, or if framesInFlight submits have been queued behind it, which
@@ -911,6 +929,19 @@ Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef 
 			3,
 			"GraphicsDeviceRef_prepareCompactBLAS() the build's submit hasn't completed, so the compacted "
 			"size isn't readable yet, record the compaction in a later submit than the build"
+		));
+
+	//Recording twice is harmless, and so is a structure whose build already decided it (a backend that can't
+	// query the size); both only once the submit that decided it has completed, like any other.
+
+	if(blas->base.isCompacted)
+		goto clean;
+
+	if(blas->base.compactionQuery == U32_MAX)
+		retError(clean, Error_invalidState(
+			2,
+			"GraphicsDeviceRef_prepareCompactBLAS() no compacted size was recorded for this structure, "
+			"its build predates the compaction path or the backend doesn't support it"
 		));
 
 	if((acq = SpinLock_lock(&blas->base.lock, U64_MAX)) < ELockAcquire_Success)

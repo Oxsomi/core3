@@ -148,6 +148,45 @@ extern "C" void Test_graphicsBlasGeometry(oxc::c::Test *t, oxc::c::GraphicsDevic
 	if (!Test_assert(t, "geometryBlas", dev.createBlas(blasInfo, "Multi geometry BLAS", blas, e_rr)))
 		return;
 
+	//The BLAS_MAX_PRIMITIVES limit counts the whole BLAS, not a geometry: two geometries sharing one index range
+	// of half the limit, rounded up, sum to one past it and are refused before anything is allocated. The indices
+	// are never read, since nothing past validation runs.
+
+	{
+		const c::U64 half = (BLAS_MAX_PRIMITIVES + 1) / 2;
+
+		gfx::DeviceBuffer indices;
+
+		if (Test_assert(t, "limitIndices", dev.createBuffer(
+			c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
+			"BLAS limit indices", half * 3 * sizeof(c::U16), indices, nullptr, e_rr
+		))) {
+
+			c::BLASGeometry overLimit[2];
+
+			for (c::U32 i = 0; i < 2; ++i)
+				overLimit[i] = c::BLASGeometry_indexed(
+					c::ETextureFormatId_RGBA32f, 0, 16, positions.region(0, GEOMETRY_BYTES),
+					c::ETextureFormatId_R16u, indices.region(0, half * 3 * sizeof(c::U16))
+				);
+
+			c::ListBLASGeometry overLimitList = {};
+			gfx::Blas overLimitBlas;
+			c::Error refused = c::Error_none();
+
+			Test_assert(t, "limitList", c::ListBLASGeometry_createRefConst(overLimit, 2, &overLimitList, e_rr));
+
+			Test_assert(
+				t, "limitRefused",
+				!dev.createBlas(
+					c::BLASCreateInfo_geometries(c::ERTASBuildFlags_DefaultBLAS, overLimitList),
+					"Over limit BLAS", overLimitBlas, &refused
+				) && refused.errorStr &&
+				StringView(refused.errorStr) == "GraphicsDeviceRef_createBLAS() is limited to 16Mi - 1 triangles"
+			);
+		}
+	}
+
 	const c::TLASInstance instance = {
 		.transform = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
 		.data = {

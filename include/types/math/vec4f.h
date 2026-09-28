@@ -253,6 +253,10 @@ static inline Bool F32x4_any3(F32x4 a) { return F32x4_reduce(F32x4_trunc3(F32x4_
 static inline Bool F32x4_all2(F32x4 a) { return F32x4_reduce(F32x4_trunc2(F32x4_neqExact(a, F32x4_zero()))) == 2; }
 static inline Bool F32x4_any2(F32x4 a) { return F32x4_reduce(F32x4_trunc2(F32x4_neqExact(a, F32x4_zero()))); }
 
+//F32x4_select(cond, a, b), per backend: a where cond is set (a comparison's 1) and b where it isn't, as a bitwise
+// blend on a mask rather than arithmetic, so a lane of the side not taken can hold inf or NaN, which a branch computed
+// for every lane often does.
+
 //For diffs that aren't exact with floats (reasonable relEpsilon = 1e-5, absEpsilon = 1e-6)
 static inline F32x4 F32x4_epsilonDiff(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
 	return F32x4_max(F32x4_mul(F32x4_max(F32x4_abs(a), F32x4_abs(b)), F32x4_xxxx4(relEpsilon)), F32x4_xxxx4(absEpsilon));

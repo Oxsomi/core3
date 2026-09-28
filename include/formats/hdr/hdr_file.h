@@ -166,6 +166,23 @@ Bool HDR_write(
 	Error *e_rr
 );
 
+//HDR_write for samples that were scaled by exposure before they got here, which the header records as EXPOSURE= when it
+// isn't 1. That is Radiance's meaning: a multiplier already APPLIED, so the file displays as stored and a reader after
+// absolute radiance divides by it (HDRInfo::exposure). The samples aren't scaled here; exposure has to be above 0.
+
+Bool HDR_writeExposed(
+	StreamRef *stream,
+	U64 *off,
+	EHDRWriteFlags flags,
+	U32 w,
+	U32 h,
+	F32 exposure,
+	const Allocator *alloc,
+	StreamRef *inputStream,
+	U64 inputOffset,
+	Error *e_rr
+);
+
 #ifdef __cplusplus
 	}
 #endif
