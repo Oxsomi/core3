@@ -103,6 +103,15 @@ Roughly ordered by how often the gap bites.
   memory. So the bytes exist twice on the host before they exist on the device, and a resource cannot be
   larger than what the host is willing to hold. Measured on a 533 MB mesh: the flush runs at 7.2 GB/s on a
   link that does 24, because what it is timing is a single threaded `Buffer_memcpy`, not a transfer.
+- **oiDL compresses its data as one stream, so no entry can be read alone.** The spec compresses (and hashes)
+  every entry together, and its own text marks chunking as a TODO; no compression is implemented at all yet.
+  Wanted: each entry compressed on its own in fixed blocks (at most 256 KiB, which DirectStorage's GPU zstd
+  shader is tuned for), a per block table of stored sizes and CRC32Cs of the uncompressed bytes, AES256-GCM
+  per block with the tables as additional data, and an entry alignment option (up to 4 KiB, for unbuffered
+  reads straight into a device buffer). Zstandard as the method, a new `EXXCompressionType` value: Brotli,
+  which oiXX names, decodes slower on the CPU, and its GPU form (AMD's Brotli-G) is a separate format that
+  DirectStorage doesn't decode. oiCA gains random access compressed files from this
+  for free, its content being an oiDL, and oiRM (docs/file/oiRM.md, a draft) stores its payload as one.
 
   The fix is to make the SOURCE a stream rather than a buffer, and it needs no change to `OxStream` at all:
   `StreamFunc` is already `(stream, offset, length, Buffer dst)`, so a flush can read a dirty range straight

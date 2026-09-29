@@ -25,6 +25,7 @@
 #include "platforms/logx.h"
 #include "platforms/keyboard.h"
 #include "types/container/string_unicode.h"
+#include "types/container/list_basic_types.h"
 #include "types/base/string_read_helper.h"
 #include "types/container/file_base.h"
 #include "types/base/string_read_helper.h"
