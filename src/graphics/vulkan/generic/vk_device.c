@@ -1618,12 +1618,28 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	if (device->submitId > device->framesInFlight && deviceExt->commitFencePending[device->fifId]) {
 
-		gotoIfError3(clean, checkVkError(deviceExt->waitForFences(
-			deviceExt->device,
-			1, fence,
-			true,
-			1 * SECOND
-		), e_rr));
+		//Until it signals, however long that takes: the fence and the slot's command pool are reset right after, and
+		// resetting either while the submit still runs is undefined. VK_TIMEOUT is tested by name, since checkVkError
+		// treats every non-negative result as success. A CPU device executing a backlog of slow frames is where a
+		// single bounded wait runs out.
+
+		for(U64 waited = 0; ; ) {
+
+			const VkResult res = deviceExt->waitForFences(deviceExt->device, 1, fence, true, 1 * SECOND);
+
+			if(res != VK_TIMEOUT) {
+				gotoIfError3(clean, checkVkError(res, e_rr));
+				break;
+			}
+
+			++waited;
+
+			if(!(waited % 5))
+				Log_performanceLnx(
+					"GraphicsDevice_submitCommands() still waiting on the frame's commit fence after %"PRIu64"s, "
+					"the device may be wedged", waited
+				);
+		}
 
 		gotoIfError3(clean, checkVkError(deviceExt->resetFences(deviceExt->device, 1, fence), e_rr));
 
