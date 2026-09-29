@@ -51,6 +51,7 @@
 #include "types/base/error.h"
 #include "types/base/thread.h"
 #include "types/container/string_unicode.h"
+#include "types/container/list_basic_types.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define WIN32_LEAN_AND_MEAN
