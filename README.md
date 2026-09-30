@@ -131,6 +131,14 @@ python build.py -mode Release -tests True
     Use `-mode RelWithDebInfo`: they want optimized code with frame pointers and symbols, not a Debug build.
     On Windows (clang-cl) UBSan traps into OxC3's crash handler instead of relying on its own reporting
     runtime, which is the least dependable part of UBSan there.
+  - `mesa`: Linux only. Run the suites against a pinned Mesa (RADV and lavapipe) instead of the system's
+    Vulkan drivers, so a driver bug or fix can be tested against the exact version it concerns.
+    `python tools/mesa.py build 26.2.3` builds one first: any upstream version, or any tag, branch or commit of
+    another repository with `-repo`, plus extra meson options with `-D key=value`. Each lands in its own
+    prefix under `~/.cache/oxc3/mesa` (or `OXC3_MESA_ROOT`) with a `mesa.json` naming the commit it came from.
+    `-mesa 26.2.3` then selects it, and implies `-ctest True`: the suites only rerun when something they were
+    built from changed, and a driver is not one of those things. `tools/mesa.py env` and `run` do the same
+    for anything else, a single test binary included.
 - Extra flags via `-o flag=Bool`:
   - `forceVulkan`: prefer Vulkan over the native API (e.g. over D3D12 on Windows). Off by default.
   - `enableOxC3CLI`: build the OxC3 CLI. On by default.
