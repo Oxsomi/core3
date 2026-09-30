@@ -416,8 +416,8 @@ endif()
 # Instruction sets the x64 SIMD paths assume.
 # MSVC declares every intrinsic regardless and only wants a codegen baseline (/d2archSSE42),
 # but clang and gcc gate each one behind its own -m flag.
-# Without these, flp.c's _mm_cvtph_ps/_mm_cvtps_ph (F16C) and vec4f_sse.inc.h's __builtin_ia32_vfmaddps
-# (FMA) don't exist as far as the compiler is concerned.
+# Without these, flp.c's _mm_cvtph_ps/_mm_cvtps_ph (F16C) and vec4f_sse.inc.h's FMA builtin
+# don't exist as far as the compiler is concerned.
 # Shared so the clang-cl and gcc/clang branches can't drift apart.
 #
 # Only spellings every driver accepts belong here.

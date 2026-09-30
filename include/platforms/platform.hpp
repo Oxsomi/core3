@@ -40,13 +40,18 @@
 #include <type_traits>
 #include <limits>
 
-//Pre-include system headers used by the C headers below at global scope; see file.hpp for why <atomic> is here.
+//Pre-include system headers used by the C headers below at global scope; see file.hpp for why <atomic> is here
+// and lock.hpp for <intrin0.h>.
 
 #include <atomic>
 #include <stdalign.h>
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef _MSC_VER
+	#include <intrin0.h>
+#endif
 
 namespace oxc {
 

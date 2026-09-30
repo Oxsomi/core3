@@ -24,12 +24,16 @@
 #include <utility>
 
 //Pre-include system headers used by the C headers below at global scope;
-//they must not be pulled in for the first time inside a namespace.
+//they must not be pulled in for the first time inside a namespace (see lock.hpp for <intrin0.h>).
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <assert.h>
 #include <atomic>
+
+#ifdef _MSC_VER
+	#include <intrin0.h>
+#endif
 
 //RAII wrapper around the C RefPtr.
 //The refcount, the allocation and the free callback all stay in the C side; this only automates the

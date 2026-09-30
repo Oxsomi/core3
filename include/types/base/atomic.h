@@ -32,7 +32,7 @@
 		#define _Atomic(X) std::atomic<X>
 	#endif
 #else
-	#include <intrin.h>
+	#include <intrin0.h>        //The _Interlocked* and barrier subset of intrin.h, without its SIMD headers
 	#define _Atomic(T) T
 #endif
 

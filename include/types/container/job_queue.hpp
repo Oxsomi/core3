@@ -26,13 +26,17 @@
 #include <type_traits>
 
 //Pre-include system headers used by the C headers below at global scope;
-//they must not be pulled in for the first time inside a namespace.
+//they must not be pulled in for the first time inside a namespace (see lock.hpp for <intrin0.h>).
 
 #include <atomic>
 #include <stdalign.h>
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef _MSC_VER
+	#include <intrin0.h>
+#endif
 
 namespace oxc {
 

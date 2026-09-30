@@ -136,11 +136,17 @@ static inline F32x4 F32x4_rsqrtFast(F32x4 a) { return _mm_rsqrt_ps(a); }
 	//The BUILTIN, deliberately: _mm_fmadd_ps is declared in immintrin.h, and including that header costs
 	//enough compile time to be worth avoiding wherever it is not already pulled in for SVML above. The
 	// builtin is the same instruction with no header at all.
-	//_SIMD_HAS_SVML is 0 exactly when the compiler is gcc or clang, both of which have it, so this branch
-	// never reaches a compiler that does not. It does need -mfma, which this build passes.
+	//_SIMD_HAS_SVML is 0 exactly when the compiler is gcc or clang, so this branch never reaches a compiler
+	// without one of the two builtins below. It does need -mfma, which this build passes.
+	//clang 22 removed __builtin_ia32_vfmaddps; its own _mm_fmadd_ps is the generic elementwise builtin, which gcc
+	// lacks, so the generic one is used wherever it exists and gcc keeps the x86 one.
 
 	static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) {    //a * b + c (FMA required)
-		return (__m128) __builtin_ia32_vfmaddps((__v4sf)a, (__v4sf)b, (__v4sf)c);
+		#if __has_builtin(__builtin_elementwise_fma)
+			return (__m128) __builtin_elementwise_fma((__v4sf)a, (__v4sf)b, (__v4sf)c);
+		#else
+			return (__m128) __builtin_ia32_vfmaddps((__v4sf)a, (__v4sf)b, (__v4sf)c);
+		#endif
 	}
 #endif
 

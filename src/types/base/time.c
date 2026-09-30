@@ -30,12 +30,20 @@
 #include <time.h>
 
 #ifdef _WIN32
-	#include <intrin.h>
 	#define timegm _mkgmtime
 	#define localtime_r(a, b) (!localtime_s(b, a))
 	#define gmtime_r(a, b) (!gmtime_s(b, a))
-#elif _ARCH == ARCH_X86_64 && !defined(__clang__)
-	#include <x86intrin.h>        //Only x86 GCC needs this (for __rdtsc); ARM uses cntvct_el0, clang uses a builtin
+#endif
+
+//Only x86 MSVC and GCC need __rdtsc declared; ARM uses cntvct_el0, clang uses a builtin.
+//MSVC declares it in intrin.h alone, which is too heavy for one intrinsic, so it is declared as intrin.h does.
+
+#if _ARCH == ARCH_X86_64 && !defined(__clang__)
+	#ifdef _MSC_VER
+		unsigned __int64 __rdtsc();
+	#else
+		#include <x86intrin.h>
+	#endif
 #endif
 
 Ns Time_now() {
