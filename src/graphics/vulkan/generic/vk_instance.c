@@ -633,7 +633,9 @@ const C8 *optExtensionsName[] = {
 
 	"VK_KHR_opacity_micromap", "VK_KHR_device_address_commands",
 
-	"VK_EXT_conditional_rendering"
+	"VK_EXT_conditional_rendering",
+
+	"VK_EXT_extended_dynamic_state"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -717,6 +719,9 @@ static U32 VkDriver_mesaVersion(const VkPhysicalDeviceDriverProperties *driver) 
 
 //Position fetch on a hit in any geometry but the BLAS's first returned the FIRST geometry's triangle at that
 // primitive index, on RADV before Mesa 25.1 and lavapipe before 25.2 (Mesa MRs 34460 and 34496).
+//AMD's proprietary Windows driver returns wrong positions too (26.9.2 on a Raphael iGPU: a Cornell box with two meshes
+// per BLAS rendered 2.8% dark against WARP, while the same scene without position fetch matched it). Whether it is the
+// same first-geometry bug is unconfirmed and no fixed version is known, so it's withheld on every version for now.
 //It's withheld there rather than claimed, so a caller takes the path that doesn't need it instead of shading with
 // another triangle's positions; the rayTriPosition capability test is what catches a driver like this.
 
@@ -727,6 +732,7 @@ static Bool VkDriver_hasBrokenPositionFetch(const VkPhysicalDeviceDriverProperti
 	switch (driver->driverID) {
 		case VK_DRIVER_ID_MESA_RADV:        return mesa && mesa < 250100;
 		case VK_DRIVER_ID_MESA_LLVMPIPE:    return mesa && mesa < 250200;
+		case VK_DRIVER_ID_AMD_PROPRIETARY:  return true;
 		default:                            return false;
 	}
 }
@@ -1109,9 +1115,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//The KHR promotion is queried independently: a device may expose either or both, and which one answers
 		// decides the struct vk_blas.c chains and whether 8-bit OMM indices are legal.
+		//Gated on device_address_commands' own dependencies as well, here rather than at the claim: a device
+		// lacking them must look as if it had no KHR micromap at all, so the EXT path is the one enabled. Gating
+		// only the claim would still claim the generic feature through KHR and then enable the EXT extension.
 
 		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayMicromapOpacityKHR] && optExtensions[EOptExtensions_DeviceAddressCommands],
+			optExtensions[EOptExtensions_RayMicromapOpacityKHR] && optExtensions[EOptExtensions_DeviceAddressCommands] &&
+			optExtensions[EOptExtensions_ExtendedDynamicState] && optExtensions[EOptExtensions_BufferDeviceAddress],
 			VkPhysicalDeviceOpacityMicromapFeaturesKHR,
 			rayOpacityMicroFeatKhr,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_KHR

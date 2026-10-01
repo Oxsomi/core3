@@ -92,7 +92,12 @@ typedef enum EOptExtensions {
 	EOptExtensions_RayMicromapOpacityKHR,
 	EOptExtensions_DeviceAddressCommands,
 
-	EOptExtensions_ConditionalRendering
+	EOptExtensions_ConditionalRendering,
+
+	//A dependency of DeviceAddressCommands above. That extension requires Vulkan 1.3, or below it
+	// synchronization2 (required, so always on), buffer device address and this one; the instance asks for 1.1.
+
+	EOptExtensions_ExtendedDynamicState
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];

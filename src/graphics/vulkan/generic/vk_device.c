@@ -539,6 +539,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 			case EOptExtensions_RayMicromapOpacityKHR:
 			case EOptExtensions_DeviceAddressCommands:
+			case EOptExtensions_ExtendedDynamicState:        //device_address_commands' dependency below Vulkan 1.3
 				on = featEx & EVkGraphicsFeatures_OpacityMicromapKHR;
 				break;
 			case EOptExtensions_AtomicF32:                    on = types & EGraphicsDataTypes_AtomicF32;                  break;

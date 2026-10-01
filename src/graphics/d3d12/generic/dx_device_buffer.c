@@ -178,6 +178,16 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	)
 		allocInfo.Alignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
 
+	//Raw views (ByteAddressBuffer) address their buffer in 16 byte units (D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT), and tight
+	// alignment can place a buffer at less (AMD hands out 8): a raw view on it is invalid and gets the device removed.
+	//Any buffer a shader reads or writes can be bound as a ByteAddressBuffer, so the floor covers all of them.
+
+	if(
+		(buf->resource.flags & (EGraphicsResourceFlag_ShaderRead | EGraphicsResourceFlag_ShaderWrite)) &&
+		allocInfo.Alignment < D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT
+	)
+		allocInfo.Alignment = D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT;
+
 	//Any ASRead buffer may feed a micromap array build, whose input has an alignment floor of its own:
 	// 128 (D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_BYTE_ALIGNMENT).
 	//Debug layers before stable 620 and preview 722 enforce 256 while citing that constant (fixed in the

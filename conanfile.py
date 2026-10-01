@@ -416,6 +416,12 @@ class oxc3(ConanFile):
 		if self.settings.os != "Emscripten":
 			self.cpp_info.libs += [ "OxC3_graphics" ]
 
+		# OxC3_graphics carries this as a PUBLIC define and the graphics headers branch on it, so a consumer has to
+		# see the same declarations the library was built with.
+		# The backends themselves are DLLs in bin, which apply_dependencies copies next to the executable.
+		if self.options.dynamicLinkingGraphics:
+			self.cpp_info.defines = [ "GRAPHICS_API_DYNAMIC" ]
+
 		self.cpp_info.libs += [ "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_formats_oiSP", "OxC3_formats_oiPL", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
 
 		# The Vulkan loader is loaded dynamically at runtime (see vk_instance.c) and its headers come from the

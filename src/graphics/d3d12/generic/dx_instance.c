@@ -702,10 +702,32 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		caps.features |= EGraphicsFeatures_DirectRendering;
 
-		//Timestamps: D3D12 supports timestamp queries on the direct and compute queues on every device. The period
-		// needs a live command queue, so it is filled at device create rather than here.
+		//Timestamps: D3D12 supports timestamp queries on the direct and compute queues on every device.
+		//The period is only reported by a live command queue, so a direct queue is created on the temporary device
+		// for the query and released straight after; device_info.h promises the period wherever the feature is set.
+		//A queue that fails to create leaves it 0 here, and device create fills it from its own graphics queue.
 
 		caps.features2 |= EGraphicsFeatures2_Timestamps;
+
+		{
+			D3D12_COMMAND_QUEUE_DESC queueInfo = (D3D12_COMMAND_QUEUE_DESC) {
+				.Type = D3D12_COMMAND_LIST_TYPE_DIRECT
+			};
+
+			ID3D12CommandQueue *queue = NULL;
+
+			if(SUCCEEDED(device->lpVtbl->CreateCommandQueue(
+				device, &queueInfo, &IID_ID3D12CommandQueue, (void**) &queue
+			))) {
+
+				U64 timestampFreq = 0;
+
+				if(SUCCEEDED(queue->lpVtbl->GetTimestampFrequency(queue, &timestampFreq)) && timestampFreq)
+					caps.timestampPeriod = (F32) (1.0e9 / (F64) timestampFreq);
+
+				queue->lpVtbl->Release(queue);
+			}
+		}
 
 		if(independentDevices)
 			caps.featuresExt |= EDxGraphicsFeatures_IndependentDevices;
