@@ -268,6 +268,10 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
 - Compaction is a no-op on lavapipe before Mesa 24.3.4 (EVkGraphicsFeatures_NoCompactionQuery): resetting an
   acceleration structure query from a command buffer crashes it (Mesa issue 12289), so a compactable build records no
   query and is marked compacted. That lavapipe reports the full size as the compacted one, so nothing is lost.
+- Raytracing is withheld as a whole on lavapipe from Mesa 25.1 up to 26.3 when its subgroup size isn't 8, which is
+  whenever llvmpipe runs at 128 bit vectors: every arm64 device, and x86 without AVX. Those versions compile the radix
+  sort of every acceleration structure build for a subgroup size of 8 regardless, and the build segfaults inside the
+  driver.
 
 #### Mesh shaders
 

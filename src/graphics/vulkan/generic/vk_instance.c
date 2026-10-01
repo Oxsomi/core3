@@ -745,6 +745,19 @@ static Bool VkDriver_hasBrokenASQueryReset(const VkPhysicalDeviceDriverPropertie
 	return driver->driverID == VK_DRIVER_ID_MESA_LLVMPIPE && mesa && mesa < 240304;
 }
 
+//lavapipe from Mesa 25.1 up to 26.3 sorts every acceleration structure build with radix sort shaders it compiles for a
+// required subgroup size of 8, whatever the device's own is. Its subgroup size is the vector width in lanes, so that
+// only holds at 256 bit vectors: at 128 bit (every arm64 device, x86 without AVX) the size is 4 and the build runs
+// shaders compiled for a width the JIT doesn't have. A one triangle BLAS is enough to segfault a release driver, and a
+// debug one asserts in vk_set_subgroup_size.
+//Mesa 26.3 deleted that radix sort. Raytracing is withheld as a whole before it, since nothing of it works without an
+// acceleration structure.
+
+static Bool VkDriver_hasBrokenASBuild(const VkPhysicalDeviceDriverProperties *driver, U32 subgroupSize) {
+	const U32 mesa = VkDriver_mesaVersion(driver);
+	return driver->driverID == VK_DRIVER_ID_MESA_LLVMPIPE && mesa >= 250100 && mesa < 260300 && subgroupSize != 8;
+}
+
 Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -1651,6 +1664,12 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			optExtensions[EOptExtensions_RayAcceleration] = false;
 
 		if(!rtasFeat.descriptorBindingAccelerationStructureUpdateAfterBind)
+			optExtensions[EOptExtensions_RayAcceleration] = false;
+
+		if(
+			optExtensions[EOptExtensions_RayAcceleration] && optExtensions[EOptExtensions_DriverProperties] &&
+			VkDriver_hasBrokenASBuild(&driver, subgroup.subgroupSize)
+		)
 			optExtensions[EOptExtensions_RayAcceleration] = false;
 
 		if(optExtensions[EOptExtensions_RayAcceleration]) {
