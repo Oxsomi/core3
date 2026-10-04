@@ -24,6 +24,7 @@
 #include "graphics/generic/interface.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/device_allocator.h"
 #include "platforms/window.h"
 #include "types/container/ref_ptr.h"
@@ -123,6 +124,7 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 			DeviceMemoryAllocator_freeAllocation(
 				&device->allocator, swapchain->base.resource.blockId, swapchain->base.resource.blockOffset
 			);
+
 			swapchain->base.resource.allocated = false;
 		}
 	}
@@ -260,6 +262,11 @@ Bool GraphicsDeviceRef_createSwapchain(
 		gotoIfError3(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef, e_rr));
 
 	gotoIfError3(clean, UnifiedTexture_create(*scRef, bindlessDescriptorTable, &window->title, e_rr));
+
+	//Registered for the memory stats only: with no API object or address, a lost device can't name it by either,
+	// which is right, since a resize replaces its images without freeing the resource
+
+	gotoIfError3(clean, GraphicsDevice_registerResource(GraphicsDeviceRef_ptr(dev), *scRef, 0, &window->title, e_rr));
 
 clean:
 

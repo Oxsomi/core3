@@ -131,6 +131,7 @@ typedef struct DxDescriptorLayout {
 	ListU32 bindingOffsets;
 	ListU8 rootParamOffsets;
 	ListD3D12_ROOT_PARAMETER1 rootParams;
+	U8 padding[8];
 } DxDescriptorLayout;
 
 typedef struct DxPipelineLayout {
@@ -196,7 +197,13 @@ typedef struct DxGraphicsDevice {
 	ListD3D12_BUFFER_BARRIER bufferTransitions;
 	ListD3D12_TEXTURE_BARRIER imageTransitions;
 
+	//Values of commitSemaphore, one per execute, so a submit split by a flush takes several.
+	//fenceId is the last value queued to signal; it only advances once the queue accepted the Signal, so a wait on it
+	// always ends.
+	//slotFenceValue[i] is the value whose completion frees frame in flight i, 0 while nothing ran there.
+
 	U64 fenceId;
+	U64 slotFenceValue[MAX_FRAMES_IN_FLIGHT];
 
 	//Timing (EGraphicsFeatures2_Timestamps): one query heap and one readback buffer per frame in flight, read a
 	// frame later once its fence has signalled. timestampPeriod is nanoseconds per tick, timestampCursor the
@@ -217,6 +224,21 @@ typedef struct DxGraphicsDevice {
 
 	DxAmdShaderAnalyzer amdAnalyzer;
 
+	//Breadcrumbs (GraphicsDevice::breadcrumbs): memory the process allocated (VirtualAlloc), opened as a heap with
+	// OpenExistingHeapFromAddress so it stays readable after the device is gone, and a buffer over it the scopes write.
+
+	void *breadcrumbMemory;
+	ID3D12Heap *breadcrumbHeap;
+	ID3D12Resource *breadcrumbBuffer;
+	D3D12_GPU_VIRTUAL_ADDRESS breadcrumbAddress;
+
+	//Pipeline cache: the library every PSO is stored in under its key, and the blob it was opened from, which it reads
+	// for as long as it lives. NULL where the driver has no pipeline libraries.
+
+	ID3D12PipelineLibrary *pipelineLibrary;
+	U64 pipelineLibraryStored;                      //PSOs stored this run; a loaded blob would discard them
+	Buffer pipelineLibraryData;
+
 } DxGraphicsDevice;
 
 typedef struct GraphicsInstance GraphicsInstance;
@@ -230,12 +252,10 @@ void DxGraphicsDevice_logDebugMessages(
 
 typedef struct DxCommandBufferState {
 
+	DxCommandBuffer *buffer;
+
 	RefPtr *tempPipelines[EPipelineType_Count];       //Pipelines that were set via command, but not bound yet
 	RefPtr *pipeline;
-
-	//Bindful: table state set by BindDescriptorTable, emitted lazily at the work ops.
-	//defaultDescriptorsDirty means a custom root signature switch dropped the default root arguments, so the
-	// next work op on a default layout pipeline has to rebind them.
 
 	//Bindful: heap and table state set by the bind commands, emitted lazily at the work ops.
 	//The heap bind is EXPLICIT because switching heaps can stall the GPU on some hardware; lastBoundHeap
@@ -249,45 +269,43 @@ typedef struct DxCommandBufferState {
 	RefPtr *lastBoundTable[2];                        //Per bind point: [0] = graphics, [1] = compute
 	ID3D12RootSignature *lastRootSig[2];
 
-	Bool defaultDescriptorsBound;
-	U8 padding1[7];
-
-	//Push constants are root arguments, so a root signature switch drops them and each bind point needs its
-	// own re-emit; that is what pushConstantsEmitted tracks.
+	//Push constants and push descriptors are root arguments, so a root signature switch drops them and each
+	// bind point needs its own re-emit; that is what the Emitted pairs track.
 
 	U8 pushConstantData[128];
+
 	U8 pushConstantSize;
 	U8 pushConstantsEmitted[2];                       //Per bind point: [0] = graphics, [1] = compute
-	U8 padding2[13];
-
-	//Push descriptors are root descriptors, so the same root signature switch drops them.
-
-	Descriptor pushDescriptors[OXC3_MAX_PUSH_DESCRIPTORS];
 	U8 pushDescriptorCount;
 	U8 pushDescriptorsEmitted[2];                     //Per bind point: [0] = graphics, [1] = compute
-	U8 padding3[13];
+	Bool defaultDescriptorsBound;
+	U8 padding0;
+
+	Descriptor pushDescriptors[OXC3_MAX_PUSH_DESCRIPTORS];
+
+	//Scopes
+
+	U32 breadcrumbSlot;                               //Of the open scope, U32_MAX without one
+	U16 scopeCounter;
+	U8 curScopeFlags;                                 //ECommandScopeInternalFlags of the open scope
+	U8 padding1;
+
+	//Render state
 
 	ImageAndRange boundTargets[9];                    //All 8 RTVs and DSV
 	ImageAndRange resolveTargets[9];                  //Dst MSAA targets
 	U8 resolveModes[9];                               //EMSAAResolveMode each of the above resolves with
-	U8 padding4[7];
+	U8 anyResolve;
+	U8 inRender;
+	U8 colorCount;                                    //If inRender, how many colors are bound (upper mask = has depth)
+	U8 stencilRef, tempStencilRef;
+	U8 boundPrimitiveTopology;
+	U8 padding2;
 
 	F32x4 blendConstants, tempBlendConstants;
 
-	U8 stencilRef, tempStencilRef;
-	U8 boundPrimitiveTopology;
-	U8 inRender;
-
-	U16 scopeCounter;
-	U8 curScopeFlags;                                  //ECommandScopeInternalFlags of the open scope, StartScope -> EndScope
-	U8 colorCount;                                     //If inRender, how many colors are bound (upper mask = has depth)
-	U8 anyResolve;
-	U8 padding5[3];
-
 	I32x2 size;                                       //If inRender,    defines current size
 	I32x2 offset;                                     //^               defines offset
-
-	DxCommandBuffer *buffer;
 
 	SetPrimitiveBuffersCmd boundBuffers, tempBoundBuffers;
 
@@ -302,6 +320,46 @@ Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *
 //the rest. A value already passed, 0 included, returns without waiting.
 
 Bool DxGraphicsDevice_waitFence(GraphicsDeviceRef *deviceRef, U64 fenceId, Error *e_rr);
+
+//Until the submit with this id (GraphicsDevice::submitId as it was during that submit) is done; 0 returns at once.
+//It may also wait for a later submit that reused the same frame in flight.
+
+Bool DxGraphicsDevice_waitSubmit(GraphicsDeviceRef *deviceRef, U64 submitId, Error *e_rr);
+
+//Bytes in use in the local or the non local segment, and the OS budget for it (U64_MAX when either is unknown).
+U64 DxGraphicsDevice_getMemoryUsage(GraphicsDevice *device, Bool isDeviceLocal, U64 *budget);
+
+//Counts a PSO's code in the memory stats: the driver's cached blob, else the bytecode it was created from as an estimate
+typedef struct Pipeline Pipeline;
+void DxPipeline_trackMemory(Pipeline *pipeline, ID3D12PipelineState *pso, U64 bytecodeLength);
+
+//Builds a compute or graphics PSO through the device's pipeline library: loaded under key when the library has it,
+// else created and stored there. Counts its code in the memory stats (DxPipeline_trackMemory).
+
+Bool DxGraphicsDevice_buildPipeline(
+	GraphicsDevice *device,
+	Pipeline *pipeline,
+	const void *desc,                    //D3D12_COMPUTE or D3D12_GRAPHICS_PIPELINE_STATE_DESC, by pipeline->type
+	U64 key,
+	U64 irBytes,
+	ID3D12PipelineState **result,
+	Error *e_rr
+);
+
+//Residency priority of a heap or committed resource: CPU side memory (staging) is paged out first, high last.
+void DxGraphicsDevice_setResidencyPriority(DxGraphicsDevice *deviceExt, ID3D12Pageable *object, Bool cpuSide, Bool high);
+
+//A breadcrumb (GraphicsDevice::breadcrumbs): a slot set to value once the GPU began (MARKER_IN) or finished (MARKER_OUT)
+// what it covers. Nothing for U32_MAX.
+
+void DxGraphicsDevice_breadcrumb(
+	const GraphicsDevice *device,
+	const DxGraphicsDevice *deviceExt,
+	DxCommandBuffer *buffer,
+	U32 slot,
+	U32 value,
+	D3D12_WRITEBUFFERIMMEDIATE_MODE mode
+);
 
 //Builds a texture's SRV or UAV at dst.
 //Shared so a descriptor table and a texture push descriptor's single entry table cannot end up disagreeing

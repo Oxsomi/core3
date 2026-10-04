@@ -32,7 +32,7 @@
 		#define _Atomic(X) std::atomic<X>
 	#endif
 #else
-	#include <intrin.h>
+	#include <intrin0.h>        //The _Interlocked* and barrier subset of intrin.h, without its SIMD headers
 	#define _Atomic(T) T
 #endif
 
@@ -118,7 +118,14 @@ impl static inline I64 AtomicI64_dec(AtomicI64 *ptr);
 		#if defined(_M_ARM64)
 			//A plain volatile load is NOT ordered on ARM64 under MSVC /volatile:iso.
 			//Emit a load-acquire barrier after the load (inner shareable, load side).
-			__dmb(_ARM64_BARRIER_ISHLD);
+			//0x9 is _ARM64_BARRIER_ISHLD, spelled out because that enum lives in arm64intr.h, which only the full
+			// intrin.h brings in; intrin0.h declares __dmb itself but not its operands.
+			//clang-cl's intrin0.h declares neither, so there the barrier is the compiler builtin, which needs no header.
+			#ifdef __clang__
+				__builtin_arm_dmb(0x9);
+			#else
+				__dmb(0x9);
+			#endif
 		#else
 			//x86/x64 volatile load is already acquire under TSO; only block compiler reordering.
 			_ReadWriteBarrier();

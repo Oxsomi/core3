@@ -164,6 +164,7 @@ extern "C" void Test_bindlessDescriptorPacking(oxc::c::Test *t) {
 	const c::U64 none = c::BindlessDescriptor_pack3(
 		c::BindlessDescriptor_None, c::BindlessDescriptor_None, c::BindlessDescriptor_None
 	);
+
 	Test_assert(t, "pack3None", none == 0);
 
 	const c::I32x4 unpackedNone = c::BindlessDescriptor_unpack3(none);
@@ -288,6 +289,7 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 	Test_assert(t, "nullInfo", !c::GraphicsDevice_defaultBindlessLayout(
 		NULL, c::EGfxBinaryType_DXIL, c::EGraphicsDeviceFlags_None, &result, alloc, NULL
 	));
+
 	Test_assert(t, "nullResult", !c::GraphicsDevice_defaultBindlessLayout(
 		&info, c::EGfxBinaryType_DXIL, c::EGraphicsDeviceFlags_None, NULL, alloc, NULL
 	));

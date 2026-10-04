@@ -98,6 +98,7 @@ Bool Perf_aesThroughput(const Allocator *alloc, const CharString *outputCsv, Boo
 							cryptoState[l],
 							m ? "Instant encrypt" : "Streaming"
 						);
+
 						printedHeader = true;
 					}
 
@@ -118,6 +119,7 @@ Bool Perf_aesThroughput(const Allocator *alloc, const CharString *outputCsv, Boo
 							Buffer dat = Buffer_createRef(
 								full.ptrNonConst + ((count + j) % elems) * siz, siz
 							);
+
 							Buffer_aesExpertEncUpdate(&ctx, dat, 0, blockSizeMax, use256Or512);
 
 							if (m)

@@ -243,9 +243,11 @@ typedef struct DescriptorLayout {
 	ListU8 bindingToBindlessType;        //U8_MAX indicates "none"
 
 	Bool anySampler, anyResource;
-	U8 padding[14];
+	U8 padding[54];
 
 } DescriptorLayout;
+
+static_assert(sizeof(DescriptorLayout) % 64 == 0, "DescriptorLayout must be a 64 byte multiple, its backend ext follows it");
 
 #define DescriptorLayout_ext(ptr, T) (!ptr ? NULL : (T##DescriptorLayout*)(ptr + 1))        //impl
 #define DescriptorLayoutRef_ptr(ptr) RefPtr_data(ptr, DescriptorLayout)

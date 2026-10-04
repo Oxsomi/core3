@@ -72,9 +72,10 @@ typedef struct AudioDevice {
 
 	//Pending updates
 
-	SpinLock pendingUpdateLock;
 	ListWeakRefPtr streams;
 	ListWeakRefPtr pendingSources;
+
+	SpinLock pendingUpdateLock;
 
 } AudioDevice;
 

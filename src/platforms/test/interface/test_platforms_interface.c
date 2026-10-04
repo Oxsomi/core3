@@ -32,6 +32,8 @@
 //                       has / getInfo / read / foreach / unload
 //  6. DynamicLibrary  - path validation (+ load/free when SUPPORTS_DYNAMIC_LINKING)
 //  7. Allocator       - the platform allocator meets OxC3's own alignment requirement
+//  8. Environment     - UTF-8 round trip, unset and empty, name validation, typed readers, the C++ layer
+//  9. Interrupts      - Platform_deferInterrupts nests, checked with a real SIGINT
 //
 //Run in CI, no display, no human interaction required.
 
@@ -49,6 +51,18 @@
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 #include "types/base/thread.h"
+#include "types/container/string_unicode.h"
+#include "types/container/list_basic_types.h"
+
+#include <signal.h>
+
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
+	#include <Windows.h>
+#else
+	#include <stdlib.h>
+#endif
 
 //Tmp physical path used for File tests (relative to working dir)
 static const char *testDir         = "platform_test_tmp";
@@ -1258,6 +1272,181 @@ static void Test_windowNullguards(Test *t) {
 
 #endif
 
+//OxC3 only reads the environment, so the test writes it through the OS: SetEnvironmentVariableW is the block
+// Platform_getEnv reads on Windows, and a NULL value removes the variable.
+//Not static: the C++ wrapper's test in test_platforms_hpp.cpp sets its variables through it too.
+
+Bool Test_setEnv(const Test *t, const C8 *name, const C8 *value) {
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+
+		ListU16 nameW = (ListU16) { 0 }, valueW = (ListU16) { 0 };
+		Bool ok = CharString_toUTF16(CharString_createRefCStrConst(name), t->alloc, &nameW, NULL);
+
+		if(ok && value)
+			ok = CharString_toUTF16(CharString_createRefCStrConst(value), t->alloc, &valueW, NULL);
+
+		ok = ok && SetEnvironmentVariableW((const wchar_t*) nameW.ptr, value ? (const wchar_t*) valueW.ptr : NULL);
+
+		ListU16_free(&nameW, t->alloc);
+		ListU16_free(&valueW, t->alloc);
+		return ok;
+
+	#else
+		(void) t;
+		return value ? !setenv(name, value, 1) : !unsetenv(name);
+	#endif
+}
+
+static Bool Test_envEquals(Test *t, const C8 *name, const C8 *expected) {
+
+	CharString value = CharString_createNull();
+	Bool ok = Platform_getEnv(CharString_createRefCStrConst(name), t->alloc, &value, NULL);
+
+	if(ok)
+		ok = expected ? value.ptr && CharString_equalsCStringSensitive(&value, expected) : !value.ptr;
+
+	CharString_free(&value, t->alloc);
+	return ok;
+}
+
+static void Test_platformEnv(Test *t) {
+
+	Test_setModule(t, "Environment");
+
+	const C8 *name = "OXC3_TEST_ENV";
+	const CharString nameStr = CharString_createRefCStrConst(name);
+
+	Test_assert(t, "unset reads null", Test_setEnv(t, name, NULL) && Test_envEquals(t, name, NULL));
+	Test_assert(t, "ascii", Test_setEnv(t, name, "hello") && Test_envEquals(t, name, "hello"));
+
+	//Two byte, three byte and four byte UTF-8, the last one a surrogate pair on the Windows side.
+
+	const C8 *utf8 = "h\xC3\xA9llo \xE2\x9C\x93 \xF0\x9F\x8C\x8D";
+	Test_assert(t, "utf8 round trip", Test_setEnv(t, name, utf8) && Test_envEquals(t, name, utf8));
+
+	//Longer than any first guess a backend could size for.
+
+	C8 longValue[4097];
+
+	for(U64 i = 0; i < sizeof(longValue) - 1; ++i)
+		longValue[i] = (C8) ('a' + i % 26);
+
+	longValue[sizeof(longValue) - 1] = '\0';
+	Test_assert(t, "long value", Test_setEnv(t, name, longValue) && Test_envEquals(t, name, longValue));
+
+	//Windows cannot hold an empty variable, so the rule is tested where one can exist.
+
+	#if _PLATFORM_TYPE != PLATFORM_WINDOWS
+		Test_assert(t, "empty reads null", Test_setEnv(t, name, "") && Test_envEquals(t, name, NULL));
+	#endif
+
+	//A name that is a sized ref into a longer string must be looked up by its own length.
+
+	Test_setEnv(t, name, "sized");
+	const C8 *padded = "OXC3_TEST_ENVIRONMENT";
+	const CharString sizedName = CharString_createRefSizedConst(padded, 13, false);
+
+	CharString value = CharString_createNull();
+	Test_assert(
+		t, "sized name",
+		Platform_getEnv(sizedName, t->alloc, &value, NULL) && value.ptr &&
+		CharString_equalsCStringSensitive(&value, "sized")
+	);
+
+	CharString_free(&value, t->alloc);
+
+	Test_assert(t, "empty name refused", !Platform_getEnv(CharString_createNull(), t->alloc, &value, NULL));
+	Test_assert(
+		t, "name with = refused", !Platform_getEnv(CharString_createRefCStrConst("A=B"), t->alloc, &value, NULL)
+	);
+
+	Test_assert(
+		t, "name with NUL refused",
+		!Platform_getEnv(CharString_createRefSizedConst("A\0B", 3, false), t->alloc, &value, NULL)
+	);
+
+	Bool has = false;
+	Test_assert(t, "has set", Platform_hasEnv(nameStr, t->alloc, &has, NULL) && has);
+	Test_assert(t, "has unset", Test_setEnv(t, name, NULL) && Platform_hasEnv(nameStr, t->alloc, &has, NULL) && !has);
+
+	//Unset leaves the caller's default in place.
+
+	Bool b = true;
+	U64 u = 7;
+	I64 i = -7;
+	F64 f = 0.25;
+
+	Test_assert(
+		t, "unset keeps defaults",
+		Platform_getEnvBool(nameStr, t->alloc, &b, NULL) && b &&
+		Platform_getEnvU64(nameStr, t->alloc, &u, NULL) && u == 7 &&
+		Platform_getEnvI64(nameStr, t->alloc, &i, NULL) && i == -7 &&
+		Platform_getEnvF64(nameStr, t->alloc, &f, NULL) && f == 0.25
+	);
+
+	typedef struct EnvCase { const C8 *value; Bool ok; F64 expected; } EnvCase;
+
+	const EnvCase bools[] = {
+		{ "1", true, 1 }, { "0", true, 0 }, { "true", true, 1 }, { "FALSE", true, 0 },
+		{ "yes", false, 0 }, { "2", false, 0 }, { " 1", false, 0 }
+	};
+
+	const EnvCase u64s[] = {
+		{ "42", true, 42 }, { "0x2A", true, 42 }, { "010", true, 10 }, { "0", true, 0 },
+		{ "0x", false, 0 }, { "-1", false, 0 }, { "12a", false, 0 }, { "1.5", false, 0 }
+	};
+
+	const EnvCase i64s[] = {
+		{ "-42", true, -42 }, { "42", true, 42 }, { "-", false, 0 }, { "4-2", false, 0 }, { "0x10", false, 0 }
+	};
+
+	const EnvCase f64s[] = {
+		{ "1.5", true, 1.5 }, { "-2.5", true, -2.5 }, { "3", true, 3 }, { "2.5e3", true, 2500 },
+		{ "abc", false, 0 }, { "1.5x", false, 0 }
+	};
+
+	Bool allOk = true;
+
+	for(U64 j = 0; j < sizeof(bools) / sizeof(bools[0]); ++j) {
+		const Bool expected = bools[j].expected != 0;
+		b = !expected;
+		const Bool ok = Test_setEnv(t, name, bools[j].value) && Platform_getEnvBool(nameStr, t->alloc, &b, NULL);
+		allOk &= ok == bools[j].ok && b == (ok ? expected : !expected);
+	}
+
+	Test_assert(t, "bool", allOk);
+	allOk = true;
+
+	for(U64 j = 0; j < sizeof(u64s) / sizeof(u64s[0]); ++j) {
+		u = 7;
+		const Bool ok = Test_setEnv(t, name, u64s[j].value) && Platform_getEnvU64(nameStr, t->alloc, &u, NULL);
+		allOk &= ok == u64s[j].ok && (!ok ? u == 7 : u == (U64) u64s[j].expected);
+	}
+
+	Test_assert(t, "u64", allOk);
+	allOk = true;
+
+	for(U64 j = 0; j < sizeof(i64s) / sizeof(i64s[0]); ++j) {
+		i = 7;
+		const Bool ok = Test_setEnv(t, name, i64s[j].value) && Platform_getEnvI64(nameStr, t->alloc, &i, NULL);
+		allOk &= ok == i64s[j].ok && (!ok ? i == 7 : i == (I64) i64s[j].expected);
+	}
+
+	Test_assert(t, "i64", allOk);
+	allOk = true;
+
+	for(U64 j = 0; j < sizeof(f64s) / sizeof(f64s[0]); ++j) {
+		f = 7;
+		const Bool ok = Test_setEnv(t, name, f64s[j].value) && Platform_getEnvF64(nameStr, t->alloc, &f, NULL);
+		allOk &= ok == f64s[j].ok && (!ok ? f == 7 : f == f64s[j].expected);
+	}
+
+	Test_assert(t, "f64", allOk);
+
+	Test_setEnv(t, name, NULL);
+}
+
 static void Test_allocatorAlignment(Test *t) {
 
 	Test_setModule(t, "Platform/Allocator");
@@ -1287,6 +1476,40 @@ static void Test_allocatorAlignment(Test *t) {
 	Test_assert(t, "allocSucceeds", allAllocated);
 	Test_assert(t, "alignedTo16", allAligned);
 }
+
+//Deferrals nest: an unmatched undefer leaves none rather than fewer than none, and an inner pair leaves the outer one.
+//The count is only observable through the handler, so a real SIGINT checks it: deferred, the handler only raises the
+// flag; not deferred, it ends the process, which fails the run.
+//Nothing lowers the flag again, so this runs last, and not where later suites share the process (a bundled run).
+
+static void Test_deferInterrupts(Test *t) {
+
+	Test_setModule(t, "Platform/DeferInterrupts");
+
+	#if defined(_NO_SIGNAL_HANDLING) || defined(_OXC3_TEST_BUNDLED) || _PLATFORM_TYPE == PLATFORM_WEB
+
+		Test_print(t, "Interrupts aren't handled by this process alone here, skipping the deferral check");
+
+	#else
+
+		Test_assert(t, "notYetRequested", !Platform_interruptRequested());
+
+		Platform_deferInterrupts(false);
+		Platform_deferInterrupts(true);
+		Platform_deferInterrupts(true);
+		Platform_deferInterrupts(false);
+
+		Test_assert(t, "raised", !raise(SIGINT));
+		Test_assert(t, "deferredToFlag", Platform_interruptRequested());
+
+		Platform_deferInterrupts(false);
+
+	#endif
+}
+
+//Defined in the C++ TU test_platforms_hpp.cpp.
+
+void Test_platformsEnvHpp(Test *t);
 
 // -- entry point ---------------------------------------------------------------
 
@@ -1326,10 +1549,16 @@ OXC3_TEST_ENTRY(platforms_interface) {
 	Test_resolution(&t);
 	Test_windowNullguards(&t);
 	Test_allocatorAlignment(&t);
+	Test_platformEnv(&t);
+	Test_platformsEnvHpp(&t);
 
 	#if _PLATFORM_TYPE == PLATFORM_WEB
 		Test_webStackTraceGeneration(&t);
 	#endif
+
+	//Last, since the interrupt it raises can't be lowered again
+
+	Test_deferInterrupts(&t);
 
 	//We might have instantiated a list with some capacity, make sure we get rid of it so the counter doesn't false positive.
 

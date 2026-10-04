@@ -126,7 +126,7 @@ void ListSBFile_freeUnderlying(ListSBFile *files, const Allocator *alloc);
 
 //File headers
 
-//File spec (docs/oiSB.md)
+//File spec (docs/file/oiSB.md)
 
 typedef enum ESBVersion {
 	ESBVersion_Undefined,

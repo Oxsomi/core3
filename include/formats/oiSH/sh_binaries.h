@@ -182,8 +182,12 @@ typedef enum ESHExtension {
 		ESHExtension_AtomicF32 |
 		ESHExtension_AtomicF64,
 
-	ESHExtension_NoSpirvCompile =                             //DXIL-only to compile: no SPIR-V intrinsic or inline op
-		ESHExtension_MeshTaskTexDeriv,
+	//DXIL-only to compile. PAQ and WriteMSTexture have SPIR-V forms, but DXC's SPIR-V backend refuses both.
+
+	ESHExtension_NoSpirvCompile =
+		ESHExtension_MeshTaskTexDeriv |
+		ESHExtension_PAQ |
+		ESHExtension_WriteMSTexture,
 
 	ESHExtension_Count                       = 28,
 

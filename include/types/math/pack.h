@@ -213,6 +213,29 @@ static inline F32x4 F32x4_unpackRGB9E5(U32 packed) {
 	);
 }
 
+//RGB10A2
+
+//DXGI_FORMAT_R10G10B10A2_UNORM, the layout @pack.hlsli reads: r | g<<10 | b<<20 | a<<30.
+//Three unorm10 channels and a unorm2, clamped to [0, 1] and rounded to nearest. 0 and 1 are exact, which is what an
+// albedo of exactly 1 (a furnace surface that loses nothing) needs.
+
+static inline U32 U32_packRGB10A2(F32x4 v) {
+	return
+		(U32) F32_floor(F32_clamp(F32x4_x(v), 0, 1) * 1023 + 0.5f) |
+		((U32) F32_floor(F32_clamp(F32x4_y(v), 0, 1) * 1023 + 0.5f) << 10) |
+		((U32) F32_floor(F32_clamp(F32x4_z(v), 0, 1) * 1023 + 0.5f) << 20) |
+		((U32) F32_floor(F32_clamp(F32x4_w(v), 0, 1) * 3 + 0.5f) << 30);
+}
+
+static inline F32x4 F32x4_unpackRGB10A2(U32 packed) {
+	return F32x4_create4(
+		(F32) ( packed        & 0x3FF) / 1023,
+		(F32) ((packed >> 10) & 0x3FF) / 1023,
+		(F32) ((packed >> 20) & 0x3FF) / 1023,
+		(F32) ( packed >> 30)          / 3
+	);
+}
+
 //Oct18
 
 //A unit vector as an 18 bit octahedral, 9 bits an axis in the low 18 bits, the top 14 left ZERO for the caller.

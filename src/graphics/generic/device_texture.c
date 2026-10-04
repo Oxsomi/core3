@@ -218,14 +218,15 @@ Bool DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 
 	if(texture->isPending)
 		goto clean;
 
-	texture->isPending = true;
-
 	acq1 = SpinLock_lock(&device->lock, U64_MAX);
 
 	if(acq1 < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "DeviceTextureRef_markDirty() couldn't lock device"));
 
+	//Pending only once the device holds it, as for DeviceBufferRef_markDirty
+
 	gotoIfError3(clean, ListWeakRefPtr_pushBack(&device->pendingResources, tex, alloc, e_rr));
+	texture->isPending = true;
 
 clean:
 

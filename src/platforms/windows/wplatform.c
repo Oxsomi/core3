@@ -25,6 +25,7 @@
 #include "platforms/logx.h"
 #include "platforms/keyboard.h"
 #include "types/container/string_unicode.h"
+#include "types/container/list_basic_types.h"
 #include "types/base/string_read_helper.h"
 #include "types/container/file_base.h"
 #include "types/base/string_read_helper.h"
@@ -36,6 +37,18 @@
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #define NOMINMAX
 #include <Windows.h>
+
+void *Platform_allocPages(U64 size) {
+	return VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+}
+
+void Platform_freePages(void *ptr, U64 size) {
+
+	(void) size;
+
+	if(ptr)
+		VirtualFree(ptr, 0, MEM_RELEASE);
+}
 
 #include <stdlib.h>
 
@@ -84,6 +97,58 @@ U64 Platform_getAvailableRAM() {
 	MEMORYSTATUSEX status = (MEMORYSTATUSEX) { 0 };
 	status.dwLength = sizeof(status);
 	return GlobalMemoryStatusEx(&status) ? status.ullAvailPhys : 0;
+}
+
+//The wide call reads the process block itself, which SetEnvironmentVariableW writes; the CRT's getenv reads
+// its own ANSI copy, where anything outside the active code page is already lost.
+//Sizing and reading are two calls, so a variable that grew in between is simply sized again.
+
+Bool Platform_getEnvExt(CharString name, const Allocator *alloc, CharString *result, Error *e_rr) {
+
+	Bool s_uccess = true;
+	ListU16 nameW = (ListU16) { 0 };
+	ListU16 valueW = (ListU16) { 0 };
+
+	gotoIfError3(clean, CharString_toUTF16(name, alloc, &nameW, e_rr));
+
+	for(U32 attempt = 0; attempt < 8; ++attempt) {
+
+		const DWORD capacity = (DWORD) valueW.length;
+
+		SetLastError(ERROR_SUCCESS);
+
+		const DWORD len = GetEnvironmentVariableW(
+			(const wchar_t*) nameW.ptr, capacity ? (wchar_t*) valueW.ptrNonConst : NULL, capacity
+		);
+
+		//Zero with no error is an empty variable, which Platform_getEnv reads as unset anyway.
+
+		if(!len) {
+
+			const DWORD err = GetLastError();
+
+			if(err != ERROR_SUCCESS && err != ERROR_ENVVAR_NOT_FOUND)
+				retError(clean, Error_platformError(0, err, "Platform_getEnvExt() GetEnvironmentVariableW failed"));
+
+			goto clean;
+		}
+
+		//Within capacity, len is the character count without the terminator; otherwise it is the size required.
+
+		if(len < capacity) {
+			gotoIfError3(clean, CharString_createFromUTF16(valueW.ptr, len, alloc, result, e_rr));
+			goto clean;
+		}
+
+		gotoIfError3(clean, ListU16_resize(&valueW, len, alloc, e_rr));
+	}
+
+	retError(clean, Error_loopLimit(0, 8, "Platform_getEnvExt() variable kept growing while being read"));
+
+clean:
+	ListU16_free(&nameW, alloc);
+	ListU16_free(&valueW, alloc);
+	return s_uccess;
 }
 
 void Platform_detectCPUInfo(PlatformCPUInfo *out) {

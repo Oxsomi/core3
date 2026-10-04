@@ -59,6 +59,47 @@ typedef struct FeatureCase {
 #define B_DXIL (1 << EGfxBinaryType_DXIL)
 #define B_BOTH (B_SPV | B_DXIL)
 
+//Whether the entry point named entry carries an OpExecutionModeId of mode in SPIRV disassembly.
+//The disassembly names entries by id (OpEntryPoint GLCompute %1 "mainTrace"), so the id is read from that line first.
+
+static Bool Test_spirvEntryHasMode(const CharString *disasm, const C8 *entry, const C8 *mode, const Allocator *alloc) {
+
+	CharString quoted = CharString_createNull(), needle = CharString_createNull();
+	Bool found = false;
+
+	if (!CharString_format(alloc, &quoted, NULL, "\"%s\"", entry))
+		goto clean;
+
+	const U64 at = CharString_findFirstStringSensitive(disasm, &quoted, 0, 0);
+
+	if (at == U64_MAX)
+		goto clean;
+
+	const U64 lineEnd = CharString_findLastSensitive(disasm, '\n', 0, at);
+	const U64 lineStart = lineEnd == U64_MAX ? 0 : lineEnd + 1;
+	const U64 id = CharString_findFirstSensitive(disasm, '%', lineStart, at - lineStart);
+
+	if (id == U64_MAX)
+		goto clean;
+
+	const U64 idEnd = CharString_findFirstSensitive(disasm, ' ', id, at - id);
+
+	if (idEnd == U64_MAX)
+		goto clean;
+
+	if (!CharString_format(
+		alloc, &needle, NULL, "OpExecutionModeId %.*s %s", (int) (idEnd - id), disasm->ptr + id, mode
+	))
+		goto clean;
+
+	found = CharString_containsStringSensitive(disasm, &needle, 0, 0);
+
+clean:
+	CharString_free(&quoted, alloc);
+	CharString_free(&needle, alloc);
+	return found;
+}
+
 void Test_shaderCompilerFeatures(Test *t) {
 
 	Test_setModule(t, "Compiler features");
@@ -106,6 +147,13 @@ void Test_shaderCompilerFeatures(Test *t) {
 		//SM6.9 OMM: native intrinsic on DXIL; on SPIRV the ray query stays native HLSL and only the opacity-micromap
 		//capability is added via inline SPIR-V, so it works on both behind #ifdef __spirv__.
 		{ "features/ray_micromap_opacity.hlsl", ESHExtension_RayMicromapOpacity, B_BOTH },
+
+		//The same flag from a raytracing library's TraceRay.
+		{ "features/ray_micromap_opacity_pipeline.hlsl", ESHExtension_RayMicromapOpacity, B_BOTH },
+
+		//Libraries where only some entries run a ray query.
+		{ "features/ray_micromap_opacity_modes_rt.hlsl", ESHExtension_RayMicromapOpacity, B_BOTH },
+		{ "features/ray_micromap_opacity_modes_compute.hlsl", ESHExtension_RayMicromapOpacity, B_BOTH },
 
 		//SM6.9 SER: native dx::HitObject on DXIL; on SPIRV the hit object + reorder are inline SPIR-V
 		//(SPV_EXT_shader_invocation_reorder, opaque OpTypeHitObjectEXT via vk::SpirvOpaqueType), so it works on both.
@@ -323,6 +371,63 @@ void Test_shaderCompilerFeatures(Test *t) {
 			err = Error_none();
 		}
 
+	//--- A register only a uniform-dead branch reads is unused for that backend, though it may stay listed ---
+
+	for (U64 b = 0; b < sizeof(backends) / sizeof(backends[0]); ++b) {
+
+		ListBuffer out = (ListBuffer) { 0 };
+		SHFile shFile = (SHFile) { 0 };
+		CharString label = CharString_createNull();
+
+		Bool ok =
+			compileFileShader(alloc, "features/dead_uniform_register.hlsl", backends[b].mode, true, false, &out, &err) &&
+			out.length == 1 && Buffer_length(out.ptr[0]) &&
+			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length == 2;
+
+		//Each binary is one READ_EXTRA value: deadRead is used exactly where it is true.
+
+		for (U64 j = 0; ok && j < shFile.binaries.length; ++j) {
+
+			const SHBinaryIdentifier *id = &shFile.binaries.ptr[j].identifier;
+
+			if (id->uniforms.length != 1) {
+				ok = false;
+				break;
+			}
+
+			Bool readExtra = id->uniformData.ptr[id->uniforms.ptr[0].dataOffset] != 0;
+
+			const ListSHRegisterRuntime *regs = &shFile.binaries.ptr[j].registers;
+			Bool usedOutUsed = false, deadReadUsed = false;
+
+			for (U64 i = 0; i < regs->length; ++i) {
+
+				Bool used = (regs->ptr[i].reg.isUsedFlag >> backends[b].mode) & 1;
+
+				if (CharString_equalsCStringSensitive(&regs->ptr[i].name, "usedOut"))
+					usedOutUsed = used;
+
+				if (CharString_equalsCStringSensitive(&regs->ptr[i].name, "deadRead"))
+					deadReadUsed = used;
+			}
+
+			ok &= usedOutUsed && deadReadUsed == readExtra;
+		}
+
+		if (!ok)
+			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+		if (!CharString_format(alloc, &label, &err, "uniform-dead register reads as unused (%s)", backends[b].name))
+			label = CharString_createRefCStrConst("uniform-dead register reads as unused");
+
+		Test_assert(t, label.ptr, ok);
+
+		CharString_free(&label, alloc);
+		SHFile_free(&shFile, alloc);
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
 	//--- Disassembly: a compiled SPIRV binary round-trips to non-empty, plausible SPIRV text ---
 
 	{
@@ -359,6 +464,48 @@ void Test_shaderCompilerFeatures(Test *t) {
 		CharString_free(&disasm, alloc);
 		if (created)
 			Compiler_free(&comp, alloc);
+		SHFile_free(&shFile, alloc);
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
+	//--- The micromap execution mode lands on the entry that asks for it, not on the library's last entry ---
+	//DXC used to attach an execution mode set from a helper to the last entry of a library; mainClear is that entry.
+
+	{
+		ListBuffer out = (ListBuffer) { 0 };
+		SHFile shFile = (SHFile) { 0 };
+		Compiler comp = (Compiler) { 0 };
+		CharString disasm = CharString_createNull();
+		Bool created = false;
+
+		Bool ok =
+			compileFileShader(
+				alloc, "features/ray_micromap_opacity_modes_compute.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err
+			) &&
+			out.length == 1 && Buffer_length(out.ptr[0]) &&
+			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length >= 1 &&
+			Compiler_create(alloc, &comp, &err);
+
+		created = ok;
+
+		for (U64 j = 0; ok && j < shFile.binaries.length; ++j) {
+
+			ok =
+				Compiler_disassemble(
+					&comp, EGfxBinaryType_SPIRV, shFile.binaries.ptr[j].binaries[EGfxBinaryType_SPIRV], alloc, &disasm, &err
+				) &&
+				Test_spirvEntryHasMode(&disasm, "mainTrace", "OpacityMicromapIdKHR", alloc) &&
+				!Test_spirvEntryHasMode(&disasm, "mainClear", "OpacityMicromapIdKHR", alloc);
+
+			CharString_free(&disasm, alloc);
+		}
+
+		Test_assert(t, "micromap execution mode on its own entry (spirv)", ok);
+
+		if (created)
+			Compiler_free(&comp, alloc);
+
 		SHFile_free(&shFile, alloc);
 		ListBuffer_freeUnderlying(&out, alloc);
 		err = Error_none();

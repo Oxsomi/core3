@@ -113,6 +113,99 @@ clean:
 	return s_uccess;
 }
 
+typedef struct RangeStream {
+	OxStream parent;
+	StreamRef *source;
+	U64 offset;
+} RangeStream;
+
+static Bool RangeStream_read(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	RangeStream *range = (RangeStream*) stream;
+
+	if (!length && offset <= stream->size)
+		length = stream->size - offset;
+
+	if (offset > stream->size || stream->size - offset < length)
+		retError(clean, Error_outOfBounds(1, offset, stream->size, "RangeStream_read() out of bounds"));
+
+	OxStream *source = RefPtr_data(range->source, OxStream);
+	gotoIfError3(clean, source->read(source, range->offset + offset, length, buf, alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+static void RangeStream_close(OxStream *stream, const Allocator *alloc) {
+	(void) alloc;
+	RefPtr_dec(&((RangeStream*) stream)->source);
+}
+
+RefPtrType Stream_rangeType(const Allocator *alloc) {
+	return Stream_inheritType(alloc, sizeof(RangeStream) - sizeof(OxStream));
+}
+
+Bool Stream_createRange(
+	StreamRef *source,
+	U64 offset,
+	U64 length,
+	const RefPtrType *type,
+	StreamRef **stream,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if (!source || !stream)
+		retError(clean, Error_nullPointer(!source ? 0 : 4, "Stream_createRange()::source and stream are required"));
+
+	const OxStream *src = RefPtr_data(source, OxStream);
+
+	if (!src->read)
+		retError(clean, Error_unsupportedOperation(0, "Stream_createRange()::source isn't readable"));
+
+	//A window reads at offsets of its own choosing, which a stream that cannot restart has no way to serve.
+
+	if (src->streamType & EStreamType_DisableSeek)
+		retError(clean, Error_unsupportedOperation(1, "Stream_createRange()::source can't seek"));
+
+	if (offset > src->size)
+		retError(clean, Error_outOfBounds(1, offset, src->size, "Stream_createRange()::offset out of bounds"));
+
+	if (!length)
+		length = src->size - offset;
+
+	if (src->size - offset < length)
+		retError(clean, Error_outOfBounds(2, length, src->size - offset, "Stream_createRange()::length out of bounds"));
+
+	if (offset % src->blockSize)
+		retError(clean, Error_invalidParameter(1, 0, "Stream_createRange()::offset isn't on a block of the source"));
+
+	if (!RefPtr_inc(source))
+		retError(clean, Error_invalidState(0, "Stream_createRange()::source couldn't be referenced"));
+
+	//Resizable is the source's to report; the window's own size is fixed.
+
+	if (!Stream_create(
+		RangeStream_read, NULL, NULL, RangeStream_close, length,
+		(EStreamType) (src->streamType & ~(U64) EStreamType_Resizable), type, stream, e_rr
+	)) {
+		RefPtr_dec(&source);
+		s_uccess = false;
+		goto clean;
+	}
+
+	RangeStream *range = RefPtr_data(*stream, RangeStream);
+	range->source = source;
+	range->offset = offset;
+	range->parent.blockSize = src->blockSize;
+	range->parent.readCost = src->readCost;
+
+clean:
+	return s_uccess;
+}
+
 void Stream_setBlock(StreamRef *stream, U32 blockSize, U16 readCost) {
 
 	if(!stream)

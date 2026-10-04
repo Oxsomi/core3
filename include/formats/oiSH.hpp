@@ -28,6 +28,7 @@
 #pragma once
 
 #include "types/container/memory_stream.hpp"
+#include "types/base/bool_arg.hpp"
 
 namespace oxc {
 
@@ -79,7 +80,7 @@ namespace oxc {
 		// leaving the stream usable for whatever follows it.
 
 		[[nodiscard]] c::Bool read(
-			const MemoryStream &stream, c::U64 *offset, c::Bool isSubFile = false, c::Error *e_rr = nullptr
+			const MemoryStream &stream, c::U64 *offset, BoolArg isSubFile = false, c::Error *e_rr = nullptr
 		) noexcept {
 			release();
 			return c::SHFile_read(stream.handle(), offset, isSubFile, alloc, &self, e_rr);

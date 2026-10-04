@@ -120,6 +120,10 @@ static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { return F32x4_negateRecastiInter
 static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(wasm_f32x4_le(a, b)); }
 static inline F32x4 F32x4_lt(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(wasm_f32x4_lt(a, b)); }
 
+static inline F32x4 F32x4_select(F32x4 cond, F32x4 a, F32x4 b) {
+	return wasm_v128_bitselect(a, b, wasm_f32x4_ne(cond, F32x4_zero()));
+}
+
 //4x4 transpose.
 //The FULL width only, where the caller's sixteen bytes are in bounds by the contract and the instruction is
 //the explicitly unaligned one, so nothing here assumes an alignment the interface does not promise. The

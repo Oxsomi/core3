@@ -23,6 +23,7 @@
 #include "graphics/generic/device_allocator.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_interface.h"
 #include "platforms/logx.h"
@@ -126,6 +127,15 @@ D3D12_HEAP_DESC getDxHeapDesc(
 	return heapDesc;
 }
 
+void DxGraphicsDevice_setResidencyPriority(DxGraphicsDevice *deviceExt, ID3D12Pageable *object, Bool cpuSide, Bool high) {
+
+	if(!cpuSide && !high)        //NORMAL is what every object starts at
+		return;
+
+	D3D12_RESIDENCY_PRIORITY priority = cpuSide ? D3D12_RESIDENCY_PRIORITY_LOW : D3D12_RESIDENCY_PRIORITY_HIGH;
+	(void) deviceExt->device->lpVtbl->SetResidencyPriority(deviceExt->device, 1, &object, &priority);        //A hint
+}
+
 Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	DeviceMemoryAllocator *allocator,
 	void *requirementsExt,
@@ -162,6 +172,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	DxBlockRequirements req = *(DxBlockRequirements*) requirementsExt;
 	const Bool readback = req.flags & EDxBlockFlags_Readback;
 	const Bool asHeap = req.flags & EDxBlockFlags_ASHeap;
+	const Bool requestedCpu = cpuSided;        //Before the device type can force it
 	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment, resourceType, readback, asHeap);
 
 	U64 maxAllocationSize = device->info.capabilities.maxAllocationSize;
@@ -192,9 +203,31 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	if(asHeap)
 		heapType |= 0x20;
 
+	//A resource over half a block gets a heap of exactly its own size (rounded to the heap's alignment).
+	//A shared block could hold at most one more like it, and sizing one to twice the request instead reserves
+	// slack that a few large resources (acceleration structures, big meshes) turn into gigabytes of nothing.
+	//Below that it shares a standard block, which keeps the number of heaps down.
+
+	//Where the heap lives, which cpuSided doesn't say: ReBAR marks every heap CPU sided but puts it in video memory (L1)
+
+	const Bool inVideoMemory =
+		device->info.type == EGraphicsDeviceType_Dedicated && !readback && (asHeap || hasReBAR || !requestedCpu);
+
+	const U64 blockSize = inVideoMemory ? device->blockSizeGpu : device->blockSizeCpu;
+	const Bool isDedicated = req.length > blockSize / 2;
+
+	//Blocks share any alignment up to the heap's own, but render targets, depth stencils and swapchain images keep
+	// blocks of their own: on some drivers, memory one of them used gave a buffer placed there later wrong results, and
+	// the other way around, even with the earlier resource released and its frame complete.
+
+	const U32 isRenderTarget =
+		resourceType == EResourceType_RenderTargetOrDepthStencil || resourceType == EResourceType_Swapchain;
+
 	//Find an existing allocation
 
-	for(U64 i = 0; i < allocator->blocks.length; ++i) {
+	U32 blocksOfKind = 0;
+
+	for(U64 i = 0; i < allocator->blocks.length && !isDedicated; ++i) {
 
 		DeviceMemoryBlock *blocki = &allocator->blocks.ptrNonConst[i];
 
@@ -203,9 +236,12 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			blocki->isDedicated ||
 			!!(blocki->allocationTypeExt & 1) != !cpuSided ||
 			(blocki->allocationTypeExt >> 1) != heapType ||
-			blocki->typeExt != req.alignment                        //Alignment is baked into heap
+			(blocki->typeExt &~ 1) < heapDesc.Alignment ||          //Only the heap's own alignment is baked in
+			(blocki->typeExt & 1) != isRenderTarget
 		)
 			continue;
+
+		++blocksOfKind;
 
 		const U8 *allocated = NULL;
 		Error err1 = Error_none();
@@ -244,18 +280,39 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	//Allocate memory
 
-	U64 blockSize = cpuSided ? device->blockSizeCpu : device->blockSizeGpu;
-	U64 realBlockSize = U64_min(
-		(U64_max(blockSize, req.length * 2) + blockSize - 1) / blockSize * blockSize,
-		maxAllocationSize
-	);
+	const U64 heapAlignment = heapDesc.Alignment;
+
+	U64 realBlockSize = isDedicated ?
+		(req.length + heapAlignment - 1) / heapAlignment * heapAlignment :
+		DeviceMemoryAllocator_newBlockSize(U64_min(blockSize, maxAllocationSize), blocksOfKind, req.length);
+
+	U64 budget = U64_MAX;
+	U64 usedMem = DxGraphicsDevice_getMemoryUsage(allocator->device, inVideoMemory, &budget);
+	U64 maxAlloc =
+		inVideoMemory ? allocator->device->info.capabilities.dedicatedMemory :
+		allocator->device->info.capabilities.sharedMemory;
+
+	//A shared block is halved while it would go past the OS budget, down to what the request needs
+
+	const Bool known = usedMem != U64_MAX && budget != U64_MAX;
+
+	while(
+		known && !isDedicated &&
+		usedMem + realBlockSize > budget && (realBlockSize >> 1) >= req.length &&
+		(realBlockSize >> 1) >= heapAlignment
+	)
+		realBlockSize >>= 1;
 
 	heapDesc.SizeInBytes = realBlockSize;
 
-	U64 usedMem = DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(allocator->device, !cpuSided);
-	U64 maxAlloc =
-		cpuSided ? allocator->device->info.capabilities.sharedMemory :
-		allocator->device->info.capabilities.dedicatedMemory;
+	if(
+		known && usedMem + realBlockSize > budget &&
+		GraphicsDevice_logOnce(allocator->device, EGraphicsDeviceMessage_OverBudget)
+	)
+		Log_performanceLnx(
+			"D3D12DeviceMemoryAllocator_allocate() a memory block goes past the OS budget for its segment, "
+			"so the OS may page memory out (only logged once)"
+		);
 
 	if(usedMem != U64_MAX && usedMem + heapDesc.SizeInBytes > maxAlloc)
 		retError(clean, Error_outOfMemory(0, "Memory block allocation would exceed available memory"));
@@ -275,14 +332,26 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		deviceExt->device, &heapDesc, &IID_ID3D12Heap, (void**) &heap
 	), e_rr));
 
+	//A shared heap holds whatever lands in it, so it is only lowered where staging can't share it with device data:
+	// readback heaps, and upload heaps on a dedicated GPU without ReBAR (elsewhere both are forced CPU side).
+
+	if(isDedicated)
+		DxGraphicsDevice_setResidencyPriority(
+			deviceExt, (ID3D12Pageable*) heap, requestedCpu || readback,
+			asHeap || resourceType == EResourceType_RenderTargetOrDepthStencil
+		);
+
+	else if(readback || (requestedCpu && device->info.type == EGraphicsDeviceType_Dedicated && !hasReBAR))
+		DxGraphicsDevice_setResidencyPriority(deviceExt, (ID3D12Pageable*) heap, true, false);
+
 	//Initialize block
 
 	block = (DeviceMemoryBlock) {
 		.isActive = true,
-		.typeExt = req.alignment,                                  //Only place things with the same alignment in this block
+		.typeExt = (U32) heapAlignment | isRenderTarget,           //The heap's own alignment (64 KiB or 4 MiB), render targets
 		//Don't share GPU mem and CPU mem or heap sharing if no support
 		.allocationTypeExt = (!cpuSided) | (heapType << 1),
-		.isDedicated = false,
+		.isDedicated = isDedicated,
 		.ext = heap
 	};
 
@@ -316,19 +385,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	const U8 *allocLoc = NULL;
 	gotoIfError3(clean, AllocationBuffer_allocateBlock(&allocation, req.length, &allocLoc, e_rr));
 
-	if(i == allocator->blocks.length) {
-
-		if(i == U32_MAX)
-			retError(clean, Error_outOfBounds(0, i, U32_MAX, "D3D12DeviceMemoryAllocator_allocate() block out of bounds"));
-
-		gotoIfError3(clean, ListDeviceMemoryBlock_pushBack(&allocator->blocks, block, alloc, e_rr));
-	}
-
-	else allocator->blocks.ptrNonConst[i] = block;
-
-	*blockId = (U32) i;
-	*blockOffset = (U64) allocLoc;
-	*resultBlock = block;
+	//Named before the block is listed, so a failure here leaves nothing pointing at the heap clean releases
 
 	if(objectName && CharString_length(*objectName) && (device->flags & EGraphicsDeviceFlags_IsDebug)) {
 
@@ -345,6 +402,20 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		gotoIfError3(clean, dxCheck(heap->lpVtbl->SetName(heap, temp16.ptr), e_rr));
 		CharString_free(&temp, alloc);
 	}
+
+	if(i == allocator->blocks.length) {
+
+		if(i == U32_MAX)
+			retError(clean, Error_outOfBounds(0, i, U32_MAX, "D3D12DeviceMemoryAllocator_allocate() block out of bounds"));
+
+		gotoIfError3(clean, ListDeviceMemoryBlock_pushBack(&allocator->blocks, block, alloc, e_rr));
+	}
+
+	else allocator->blocks.ptrNonConst[i] = block;
+
+	*blockId = (U32) i;
+	*blockOffset = (U64) allocLoc;
+	*resultBlock = block;
 
 clean:
 

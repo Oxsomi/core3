@@ -465,6 +465,88 @@ def main():
 		else:
 			skip("audio", "audio not in this build")
 
+		# ---- file convert (images) -----------------------------------------------------------------
+		# A 4x3 BGRA8 BMP written here, so nothing depends on a checked in image. The 8 bit to linear and back trip
+		# is within RGBE's precision with -tonemap none and -exposure 0 (sRGB decode, then encode); a DDS keeps the
+		# form it was read in, so an 8 bit DDS round trips a BMP bit for bit.
+		section("image")
+		import struct
+		w, h = 4, 3
+		bgra = b"".join(bytes([(x * 60) % 256, (y * 90) % 256, (x * 20 + y * 40) % 256, 255]) for y in range(h) for x in range(w))
+		header = struct.pack("<2sIHHI", b"BM", 54 + len(bgra), 0, 0, 54)
+		info = struct.pack("<IiiHHIIiiII", 40, w, -h, 1, 32, 0, len(bgra), 0, 0, 0, 0)
+		bmp = p("image.bmp")
+		with open(bmp, "wb") as f:
+			f.write(header + info + bgra)
+
+		hdr, back, dds, back2, hdrdds, hdrback = (
+			p("image.hdr"), p("image_back.bmp"), p("image.dds"), p("image_back2.bmp"), p("image_f.dds"), p("image_back.hdr")
+		)
+
+		run(exe, ["file", "convert", "-input", bmp, "-output", hdr], contains=["linear"])
+		run(exe, ["file", "convert", "-input", hdr, "-output", back, "-tonemap", "none", "-exposure", "0"])
+
+		def bmp_pixels(path):
+			d = read_bytes(path)
+			return d[struct.unpack_from("<I", d, 10)[0]:] if len(d) > 54 else b""
+
+		# RGBE shares one exponent per pixel and decodes a mantissa at its center, so a channel is only as exact as
+		# 1/256 of the pixel's brightest; a dark channel next to a bright one moves several 8 bit steps through sRGB's
+		# toe. Compared in linear light against that bound, plus the half step of the 8 bit rounding.
+
+		def linear(v):
+			v /= 255
+			return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+
+		def rgbe_close(a, b):
+			for i in range(0, len(a), 4):
+				la, lb = [linear(c) for c in a[i:i + 3]], [linear(c) for c in b[i:i + 3]]
+				bound = max(la) / 256 + 0.5 / 255
+				if any(abs(x - y) > bound for x, y in zip(la, lb)) or a[i + 3] != b[i + 3]:
+					return False
+			return True
+
+		a, b = bmp_pixels(bmp), bmp_pixels(back)
+		check(len(a) == len(b) and len(a) > 0 and rgbe_close(a, b), "image bmp -> hdr -> bmp within RGBE's precision")
+
+		run(exe, ["file", "convert", "-input", bmp, "-output", dds])
+		run(exe, ["file", "convert", "-input", dds, "-output", back2])
+		check(bmp_pixels(bmp) == bmp_pixels(back2), "image bmp -> dds -> bmp exact")
+
+		run(exe, ["file", "convert", "-input", hdr, "-output", hdrdds])
+		run(exe, ["file", "convert", "-input", hdrdds, "-output", hdrback])
+		check(read_bytes(hdr) == read_bytes(hdrback), "image hdr -> dds -> hdr exact")
+
+		for op in ("none", "reinhard", "aces", "agx", "neutral"):
+			run(exe, ["file", "convert", "-input", hdr, "-output", p(f"image_{op}.bmp"), "-tonemap", op, "-exposure", "1"])
+
+		# Without -exposure the exposure is automatic, so an image and the same image 1024x brighter (every RGBE
+		# exponent 10 higher, which is exact) must display the same.
+		def write_rgbe(path, shift):
+			texels = b"".join(bytes([128, 64 + x * 20, 32 + y * 40, 128 + shift]) for y in range(h) for x in range(w))
+			with open(path, "wb") as f:
+				f.write(f"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y {h} +X {w}\n".encode() + texels)
+
+		hdr1, hdr1024 = p("image_x1.hdr"), p("image_x1024.hdr")
+		write_rgbe(hdr1, 0)
+		write_rgbe(hdr1024, 10)
+		run(exe, ["file", "convert", "-input", hdr1, "-output", p("image_x1.bmp")], contains=["automatic"])
+		run(exe, ["file", "convert", "-input", hdr1024, "-output", p("image_x1024.bmp")], contains=["automatic"])
+		e1, e1024 = bmp_pixels(p("image_x1.bmp")), bmp_pixels(p("image_x1024.bmp"))
+		check(len(e1) > 0 and len(e1) == len(e1024) and max(abs(x - y) for x, y in zip(e1, e1024)) <= 1,
+			"file convert automatic exposure is scale invariant")
+
+		# An EXPOSURE header means the samples are already exposed, so they're shown as stored rather than metered.
+		exposedHdr = p("image_exposed.hdr")
+		with open(hdr1, "rb") as f:
+			raw = f.read()
+		with open(exposedHdr, "wb") as f:
+			f.write(raw.replace(b"FORMAT=32-bit_rle_rgbe\n", b"FORMAT=32-bit_rle_rgbe\nEXPOSURE=4\n", 1))
+		run(exe, ["file", "convert", "-input", exposedHdr, "-output", p("image_exposed.bmp")], contains=["from the file"])
+
+		run(exe, ["file", "convert", "-input", hdr, "-output", p("image_bad.bmp"), "-tonemap", "filmic"], want_fail=True)
+		run(exe, ["file", "convert", "-input", hdr, "-output", p("image_bad.png")], want_fail=True)
+
 		# ---- virtual "//" files (probed) ----------------------------------------------------------
 		section("virtual files")
 		vcode, vout = call(exe, ["file", "tree", "-input", "//OxC3_graphics"])

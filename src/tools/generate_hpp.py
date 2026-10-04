@@ -327,6 +327,14 @@ def emitParams(params, spec, skipSelf, allocName, resultIndex=-1, bindAlloc=True
 			call.append("e_rr")
 			continue
 
+		# A Bool by value takes BoolArg (types/base/bool_arg.hpp), so a pointer passed into it fails to compile.
+		# The case that matters is a Bool directly before the defaulted e_rr above,
+		# where leaving the Bool out would bind the Error* to it.
+		if p.type == "Bool" and not p.array:
+			decl.append(f"BoolArg {p.name}")
+			call.append(p.name)
+			continue
+
 		decl.append(f"{qualify(p.type)}{p.name}{p.array}")
 		call.append(p.name)
 
@@ -528,6 +536,9 @@ def generate(spec):
 
 	for inc in spec.get("cppIncludes", []):
 		out.append(f"#include \"{inc}\"")
+
+	if any("BoolArg " in line for line in body):
+		out.append("#include \"types/base/bool_arg.hpp\"")
 
 	out.append("")
 	out.append("namespace oxc {")

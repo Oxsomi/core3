@@ -24,8 +24,14 @@
 
 #if _ARCH == ARCH_X86_64
 
-	#ifdef _MSC_VER
-		#include <intrin.h>        //__cpuid; MSVC resolves it without this, clang-cl needs the declaration
+	//MSVC declares __cpuid(ex) and _xgetbv only in intrin.h and immintrin.h, which are too heavy for three
+	// intrinsics, so they are declared as those headers do.
+	//clang-cl takes the gcc path: it ships cpuid.h and understands the inline asm.
+
+	#if defined(_MSC_VER) && !defined(__clang__)
+		void __cpuid(int[4], int);
+		void __cpuidex(int[4], int, int);
+		unsigned __int64 __cdecl _xgetbv(unsigned int);
 	#else
 		#include <cpuid.h>
 	#endif
@@ -35,7 +41,7 @@
 		if(!result)
 			return;
 
-		#ifdef _MSC_VER
+		#if defined(_MSC_VER) && !defined(__clang__)
 			__cpuid((int*) result, leaf);        //Takes int[4]; the leaves we read are bit fields either way
 		#else
 			if(leaf == 7)
@@ -48,8 +54,7 @@
 	//Reads the extended control register (XCR0) to see which SIMD state the OS actually enabled.
 	//Only valid after checking OSXSAVE (leaf1 ECX bit 27), else xgetbv raises #UD.
 
-	#ifdef _MSC_VER
-		#include <intrin.h>
+	#if defined(_MSC_VER) && !defined(__clang__)
 		U64 Platform_getXCR0() { return _xgetbv(0); }
 	#else
 		U64 Platform_getXCR0() {
@@ -90,7 +95,7 @@
 		//Leaf 7 sub-leaf 1 for AVX-VNNI (the AVX2-width int8 dot-product, no AVX512 needed)
 
 		U32 leaf7_1[4] = { 0 };
-		#ifdef _MSC_VER
+		#if defined(_MSC_VER) && !defined(__clang__)
 			__cpuidex((int*) leaf7_1, 7, 1);
 		#else
 			__get_cpuid_count(7, 1, &leaf7_1[0], &leaf7_1[1], &leaf7_1[2], &leaf7_1[3]);

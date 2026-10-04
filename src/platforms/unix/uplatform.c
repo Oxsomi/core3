@@ -31,11 +31,22 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
+#include <sys/mman.h>
 #include <string.h>
 
 #if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
 	#include <mach/mach.h>
 #endif
+
+void *Platform_allocPages(U64 size) {
+	void *ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	return ptr == MAP_FAILED ? NULL : ptr;
+}
+
+void Platform_freePages(void *ptr, U64 size) {
+	if(ptr)
+		munmap(ptr, size);
+}
 
 //OxC3's widest type is I32x4, which is alignas(16) on every backend including the scalar one
 // (see types/math/vec4_{sse,neon,wasm,none}.inc.h), so anything the platform allocator hands out has
@@ -274,4 +285,17 @@ Bool Platform_initExt(Error *e_rr) {
 
 clean:
 	return s_uccess;
+}
+
+//getenv hands back the process's own storage, which the next setenv may free, so the value is copied out.
+//Copying an empty string yields null, which is what makes an empty variable read as unset.
+
+Bool Platform_getEnvExt(CharString name, const Allocator *alloc, CharString *result, Error *e_rr) {
+
+	const C8 *value = getenv(name.ptr);
+
+	if(!value)
+		return true;
+
+	return CharString_createCopy(CharString_createRefCStrConst(value), alloc, result, e_rr);
 }

@@ -77,6 +77,15 @@ void Test_vec4f(Test *test) {
 	Test_assert(test, "F32x4_lt",         F32x4_eqExact4(F32x4_lt(a, b),  F32x4_create4(0, 1, 0, 1)));
 	Test_assert(test, "F32x4_geq",        F32x4_eqExact4(F32x4_geq(a, b), F32x4_create4(1, 0, 1, 0)));
 
+	//The side not taken may hold a NaN, so select is checked with one in every lane it must not pick
+
+	const U32 nanBits = 0x7FC00000;
+	F32 nan;
+	Buffer_memcpy(Buffer_createRef(&nan, sizeof(nan)), Buffer_createRefConst(&nanBits, sizeof(nanBits)));
+
+	const F32x4 picked = F32x4_select(F32x4_leq(a, b), a, F32x4_create4(nan, nan, 9, nan));
+	Test_assert(test, "F32x4_select",     F32x4_eqExact4(picked, F32x4_create4(1, 2, 9, 4)));
+
 	//Arithmetic
 
 	a = F32x4_create4(1, 2, 3, 4);

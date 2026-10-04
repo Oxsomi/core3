@@ -27,7 +27,7 @@
 	extern "C" {
 #endif
 
-//File spec (docs/oiSH.md)
+//File spec (docs/file/oiSH.md)
 
 typedef enum ESHVersion {
 	ESHVersion_Undefined,

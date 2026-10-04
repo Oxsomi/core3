@@ -22,6 +22,8 @@
 
 #include "test_types_container_shared.h"
 #include "types/container/allocation_buffer.h"
+#include "types/container/string.h"
+#include "types/math/rand.h"
 
 static Bool Test_createAllocBuffer(Test *t, U64 size, U64 nonLinearAlignment, AllocationBuffer *ab) {
 
@@ -750,7 +752,178 @@ void Test_allocationBufferSplitThreshold(Test *t) {
 	AllocationBuffer_free(&ab, t->alloc);
 }
 
+//Random allocations and frees at mixed alignments and linearities, as a D3D12 heap or Vulkan memory block holding
+// buffers and textures sees them: no two live allocations may overlap, and a linear and a non linear one may never
+// share a page of nonLinearAlignment (Vulkan's bufferImageGranularity).
+
+typedef struct TestAllocation { U64 off, size; Bool nonLinear; U8 padding[7]; } TestAllocation;
+
+//The entries are sorted and disjoint, and every live allocation is inside an allocated entry that a free would find
+
+static const C8 *Test_allocationBufferInvariant(const AllocationBuffer *ab, const TestAllocation *live, U64 liveCount) {
+
+	const ListAllocationBufferBlock *e = &ab->allocations;
+
+	for (U64 k = 0; k < e->length; ++k) {
+
+		if (Block_start(e->ptr[k]) >= e->ptr[k].end)
+			return "empty or inverted entry";
+
+		if (k + 1 < e->length && e->ptr[k].end > Block_start(e->ptr[k + 1]))
+			return "entries overlap";
+	}
+
+	//Sorted and disjoint, so the only entry that can hold an allocation is the last one starting at or before it
+
+	for (U64 i = 0; i < liveCount; ++i) {
+
+		U64 lo = 0, hi = e->length;
+
+		while (lo < hi) {
+			const U64 mid = (lo + hi) / 2;
+			if (Block_start(e->ptr[mid]) <= live[i].off) lo = mid + 1;
+			else hi = mid;
+		}
+
+		Bool found = false;
+
+		if (lo) {
+
+			const AllocationBufferBlock b = e->ptr[lo - 1];
+			const U64 start = Block_start(b);
+			const U64 aligned = b.alignment ? (start + b.alignment - 1) / b.alignment * b.alignment : start;
+
+			found =
+				!Block_isFree(b) && live[i].off + live[i].size <= b.end &&
+				(live[i].off == start || live[i].off == aligned);
+		}
+
+		if (!found)
+			return "live allocation not held by an entry a free would find";
+	}
+
+	return NULL;
+}
+
+static void Test_allocationBufferReport(Test *t, U64 op, const C8 *kind, const C8 *broken) {
+
+	CharString msg = CharString_createNull();
+
+	if (CharString_format(
+		t->alloc, &msg, NULL, "AllocationBuffer fuzz op %llu (%s): %s", (unsigned long long) op, kind, broken
+	))
+		Test_print(t, msg.ptr);
+
+	CharString_free(&msg, t->alloc);
+}
+
+static void Test_allocationBufferFuzzMixedSeed(Test *t, U32 seed, U64 granularity) {
+
+	enum { Live = 256, Ops = 10000 };
+
+	static const U64 alignments[] = { 16, 256, 4096, 65536 };
+	const U64 size = 64 * MIBI;
+
+	AllocationBuffer ab = (AllocationBuffer) { 0 };
+
+	if (!Test_createAllocBuffer(t, size, granularity, &ab))
+		return;
+
+	TestAllocation live[Live];
+	U64 liveCount = 0;
+	Bool ok = true;
+
+	for (U64 op = 0; op < Ops && ok; ++op) {
+
+		if (liveCount && (liveCount == Live || !Random_nextInt(&seed, 4))) {        //Free a random one
+
+			const U64 i = Random_nextInt(&seed, (U32) liveCount);
+			AllocationBuffer_freeBlock(&ab, ab.buffer.ptr + live[i].off);
+			live[i] = live[--liveCount];
+
+			const C8 *broken = Test_allocationBufferInvariant(&ab, live, liveCount);
+
+			if (broken) {
+				Test_allocationBufferReport(t, op, "free", broken);
+				ok = false;
+			}
+
+			continue;
+		}
+
+		const U64 alignment = alignments[Random_nextInt(&seed, 4)];
+		const Bool nonLinear = (Bool) Random_nextInt(&seed, 2);
+		const U64 bytes = 1 + Random_nextInt(&seed, (U32) (256 * KIBI));
+
+		const AllocationBufferAllocate spec = {
+			.allocationBuffer = &ab, .alignment = alignment, .isNonLinearResource = nonLinear, .alloc = t->alloc
+		};
+
+		const U8 *result = NULL;
+		Error err = Error_none();
+
+		if (!AllocationBuffer_allocateBlock(&spec, bytes, &result, &err) || !result)
+			continue;        //Full or fragmented: fine, only placement is under test
+
+		const TestAllocation a = (TestAllocation) {
+			.off = (U64)(result - ab.buffer.ptr), .size = bytes, .nonLinear = nonLinear
+		};
+
+		ok &= !(a.off % alignment) && a.off + a.size <= size;
+
+		for (U64 i = 0; i < liveCount && ok; ++i) {
+
+			const TestAllocation b = live[i];
+
+			ok &= a.off + a.size <= b.off || b.off + b.size <= a.off;
+
+			if (granularity && a.nonLinear != b.nonLinear) {
+				const U64 aFirst = a.off / granularity, aLast = (a.off + a.size - 1) / granularity;
+				const U64 bFirst = b.off / granularity, bLast = (b.off + b.size - 1) / granularity;
+				ok &= aLast < bFirst || bLast < aFirst;
+			}
+
+			if (!ok) {
+
+				CharString msg = CharString_createNull();
+
+				if (CharString_format(
+					t->alloc, &msg, NULL,
+					"AllocationBuffer fuzz op %llu: [%llu, +%llu) %s against [%llu, +%llu) %s",
+					(unsigned long long) op, (unsigned long long) a.off, (unsigned long long) a.size,
+					a.nonLinear ? "non linear" : "linear",
+					(unsigned long long) b.off, (unsigned long long) b.size, b.nonLinear ? "non linear" : "linear"
+				))
+					Test_print(t, msg.ptr);
+
+				CharString_free(&msg, t->alloc);
+			}
+		}
+
+		live[liveCount++] = a;
+
+		const C8 *broken = ok ? Test_allocationBufferInvariant(&ab, live, liveCount) : NULL;
+
+		if (broken) {
+			Test_allocationBufferReport(t, op, "allocate", broken);
+			ok = false;
+		}
+	}
+
+	Test_assert(t, "fuzzMixedNoOverlapOrSharedPage", ok);
+	AllocationBuffer_free(&ab, t->alloc);
+}
+
+void Test_allocationBufferFuzzMixed(Test *t) {
+
+	for (U32 i = 0; i < 4; ++i) {
+		Test_allocationBufferFuzzMixedSeed(t, Random_seed(i, 0), 65536);
+		Test_allocationBufferFuzzMixedSeed(t, Random_seed(i, 1), 0);
+	}
+}
+
 void Test_allocationBuffer(Test *t) {
+	Test_allocationBufferFuzzMixed(t);
 	Test_allocationBufferCreate(t);
 	Test_allocationBufferSingleAlloc(t);
 	Test_allocationBufferMultipleAllocs(t);

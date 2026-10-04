@@ -297,17 +297,6 @@ Bool GraphicsDeviceRef_createBLAS(
 						2, "GraphicsDeviceRef_createBLAS()::ommIndexFormat must be R32u, R16u or R8u"
 					));
 
-				//D3D12 always takes 8-bit OMM indices, Vulkan only under the KHR extension, which is what the
-				// qualifier bit reports; rejected here so the mistake surfaces at create rather than in the driver.
-
-				if(
-					ommIndexFormat == ETextureFormatId_R8u &&
-					!(GraphicsDeviceRef_ptr(dev)->info.capabilities.features2 & EGraphicsFeatures2_RayMicromapOpacityU8)
-				)
-					retError(clean, Error_unsupportedOperation(
-						2, "GraphicsDeviceRef_createBLAS()::ommIndexFormat R8u needs RayMicromapOpacityU8"
-					));
-
 				//Validated before the length checks below, because RTAS_validateDeviceBuffer normalizes a len of 0
 				// to "rest of the buffer"; checking lengths first would reject that spelling instead of resolving it.
 
@@ -364,6 +353,26 @@ Bool GraphicsDeviceRef_createBLAS(
 
 			geometries.ptrNonConst[i] = geometry;
 		}
+
+		//The minimum every supported device guarantees, not this device's own limit (docs/graphics_spec.md),
+		// counted over the whole BLAS: splitting a mesh into more geometries doesn't lift it, more BLASes do.
+
+		U64 triangles = 0;
+
+		for(U64 i = 0; i < blas->geometries.length; ++i) {
+
+			const BLASGeometry geometry = blas->geometries.ptr[i];
+
+			triangles +=
+				geometry.indexFormatId ?
+				geometry.indexBuffer.len / (geometry.indexFormatId == ETextureFormatId_R32u ? 4 : 2) / 3 :
+				geometry.positionBuffer.len / geometry.positionBufferStride / 3;
+		}
+
+		if(triangles > BLAS_MAX_PRIMITIVES)
+			retError(clean, Error_outOfBounds(
+				1, triangles, BLAS_MAX_PRIMITIVES, "GraphicsDeviceRef_createBLAS() is limited to 16Mi - 1 triangles"
+			));
 	}
 
 	//Validate AABBs
@@ -390,6 +399,11 @@ Bool GraphicsDeviceRef_createBLAS(
 			retError(clean, Error_unsupportedOperation(
 				1, "GraphicsDeviceRef_createBLAS()::aabbBuffer should be multiple of stride"
 			));
+
+		if(aabbBuffer.len / stride > BLAS_MAX_PRIMITIVES)
+			retError(clean, Error_outOfBounds(
+				1, aabbBuffer.len / stride, BLAS_MAX_PRIMITIVES, "GraphicsDeviceRef_createBLAS() is limited to 16Mi - 1 AABBs"
+			));
 	}
 
 	//Validate serialized
@@ -398,6 +412,38 @@ Bool GraphicsDeviceRef_createBLAS(
 		retError(clean, Error_unsupportedOperation(
 			1, "GraphicsDeviceRef_createBLAS()::cpuData should be valid if serialized construction is used"
 		));
+
+	//A caller provided scratch buffer (BLASCreateInfo::scratchBuffer); its size is checked by the backend, which is
+	// the one that knows what the build needs.
+	//256 bytes is the strictest scratch address alignment either API asks for, and what a ScratchExt buffer is
+	// always placed at, so a misaligned one is not a scratch buffer this device created.
+
+	const DeviceBufferRef *scratchRef = blas->base.tempScratchBuffer;
+
+	if (scratchRef) {
+
+		if(scratchRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer)
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer isn't a DeviceBuffer"
+			));
+
+		const DeviceBuffer *scratch = DeviceBufferRef_ptr(scratchRef);
+
+		if(scratch->resource.device != dev)
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer needs to share the BLAS's device"
+			));
+
+		if(!(scratch->usage & EDeviceBufferUsage_ScratchExt))
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer needs EDeviceBufferUsage_ScratchExt"
+			));
+
+		if(scratch->resource.deviceAddress & 255)
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer needs a 256 byte aligned address"
+			));
+	}
 
 	//Allocate refPtr
 
@@ -409,6 +455,11 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	*blasPtr = *blas;
 	blasPtr->base.name = CharString_createNull();
+
+	//Like the geometries below, the caller's scratch buffer is only referenced once the device is, so a failure
+	// before that never decs a reference that was never taken.
+
+	blasPtr->base.tempScratchBuffer = NULL;
 
 	//The copy above carries the CALLER's geometries, which this BLAS has not referenced yet.
 	//Cleared before anything can fail, so a free on the way out never decs a reference it never took.
@@ -429,6 +480,11 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	gotoIfError3(clean, RefPtr_inc(dev));
 	blasPtr->base.device = dev;
+
+	if (blas->base.tempScratchBuffer) {
+		gotoIfError3(clean, RefPtr_inc(blas->base.tempScratchBuffer));
+		blasPtr->base.tempScratchBuffer = blas->base.tempScratchBuffer;
+	}
 
 	if (blas->base.asConstructionType == EBLASConstructionType_Serialized) {
 		blasPtr->cpuData = Buffer_createNull();
@@ -671,7 +727,8 @@ Bool GraphicsDeviceRef_createBLASExt(
 	const BLAS blasInfo = (BLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) EBLASConstructionType_Geometry,
-			.flags = (U8) info->buildFlags
+			.flags = (U8) info->buildFlags,
+			.tempScratchBuffer = info->scratchBuffer
 		},
 		.geometries = info->geometries
 	};
@@ -679,6 +736,44 @@ Bool GraphicsDeviceRef_createBLASExt(
 	gotoIfError3(clean, GraphicsDeviceRef_createBLAS(dev, &blasInfo, name, blas, e_rr));
 
 clean:
+	return s_uccess;
+}
+
+//A BLAS created only as far as the driver's sizes (sizeQueryOnly), then dropped. Going through the create path is
+// what keeps the answer honest: the same validation and the same geometry descriptions a real build uses.
+
+Bool GraphicsDeviceRef_getBLASSizesExt(
+	GraphicsDeviceRef *dev,
+	const BLASCreateInfo *info,
+	U64 *asSize,
+	U64 *scratchSize,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	BLASRef *blasRef = NULL;
+
+	if(!info || !asSize || !scratchSize)
+		retError(clean, Error_nullPointer(
+			!info ? 1 : (!asSize ? 2 : 3), "GraphicsDeviceRef_getBLASSizesExt()::info, asSize and scratchSize are required"
+		));
+
+	const BLAS blasInfo = (BLAS) {
+		.base = (RTAS) {
+			.asConstructionType = (U8) EBLASConstructionType_Geometry,
+			.flags = (U8) info->buildFlags,
+			.sizeQueryOnly = true
+		},
+		.geometries = info->geometries
+	};
+
+	gotoIfError3(clean, GraphicsDeviceRef_createBLAS(dev, &blasInfo, NULL, &blasRef, e_rr));
+
+	*asSize = BLASRef_ptr(blasRef)->base.queriedSize;
+	*scratchSize = BLASRef_ptr(blasRef)->base.queriedScratchSize;
+
+clean:
+	RefPtr_dec(&blasRef);
 	return s_uccess;
 }
 
@@ -879,9 +974,9 @@ Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef 
 	blas = BLASRef_ptr(blasRef);
 
 	//Nothing to do rather than an error, so a caller can sweep everything it owns without first sorting out
-	// what was built compactable, and recording twice is harmless.
+	// what was built compactable.
 
-	if(blas->base.isCompacted || !(blas->base.flags & ERTASBuildFlags_AllowCompaction))
+	if(!(blas->base.flags & ERTASBuildFlags_AllowCompaction))
 		goto clean;
 
 	if(!blas->base.isCompleted)
@@ -890,13 +985,6 @@ Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef 
 		));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-
-	if(blas->base.compactionQuery == U32_MAX)
-		retError(clean, Error_invalidState(
-			2,
-			"GraphicsDeviceRef_prepareCompactBLAS() no compacted size was recorded for this structure, "
-			"its build predates the compaction path or the backend doesn't support it"
-		));
 
 	//The size is produced BY the build, so it does not exist until that build's submit has run. A submit is
 	// done if the device was waited since, or if framesInFlight submits have been queued behind it, which
@@ -911,6 +999,19 @@ Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef 
 			3,
 			"GraphicsDeviceRef_prepareCompactBLAS() the build's submit hasn't completed, so the compacted "
 			"size isn't readable yet, record the compaction in a later submit than the build"
+		));
+
+	//Recording twice is harmless, and so is a structure whose build already decided it (a backend that can't
+	// query the size); both only once the submit that decided it has completed, like any other.
+
+	if(blas->base.isCompacted)
+		goto clean;
+
+	if(blas->base.compactionQuery == U32_MAX)
+		retError(clean, Error_invalidState(
+			2,
+			"GraphicsDeviceRef_prepareCompactBLAS() no compacted size was recorded for this structure, "
+			"its build predates the compaction path or the backend doesn't support it"
 		));
 
 	if((acq = SpinLock_lock(&blas->base.lock, U64_MAX)) < ELockAcquire_Success)

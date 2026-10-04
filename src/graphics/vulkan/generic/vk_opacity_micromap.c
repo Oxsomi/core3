@@ -31,14 +31,14 @@
 #include "types/container/string.h"
 #include "types/base/error.h"
 
-TListNamedImpl(ListVkMicromapUsageEXT);
+TListNamedImpl(ListVkMicromapUsageKHR);
+
+//VK_KHR_opacity_micromap makes a micromap array an acceleration structure of its own type: sized, built and
+// destroyed through the ordinary AS calls, with one micromap geometry describing the input and entry buffers.
 
 Bool VK_WRAP_FUNC(OpacityMicromap_init)(OpacityMicromap *micromap, Error *e_rr) {
 
 	Bool s_uccess = true;
-
-	//The usages are translated once here rather than per BLAS, because every BLAS that links this micromap
-	// has to hand the same set back to the driver.
 
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(micromap->base.device);
 	VkOpacityMicromap *micromapExt = OpacityMicromap_ext(micromap, Vk);
@@ -47,18 +47,7 @@ Bool VK_WRAP_FUNC(OpacityMicromap_init)(OpacityMicromap *micromap, Error *e_rr) 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(micromap->base.device);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	//The KHR promotion builds micromap arrays as acceleration structures through entry points this backend
-	// has no driver to test against yet, so rather than shipping an untestable build it refuses clearly.
-	//Special index OMM keeps working on such a device; only micromap OBJECTS are affected.
-
-	if(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR)
-		retError(clean, Error_unsupportedOperation(
-			0,
-			"VkOpacityMicromap_init() micromap arrays aren't implemented on the KHR path yet, only special "
-			"index OMM works there"
-		));
-
-	gotoIfError3(clean, ListVkMicromapUsageEXT_resize(
+	gotoIfError3(clean, ListVkMicromapUsageKHR_resize(
 		&micromapExt->usages, micromap->usages.length, alloc, e_rr
 	));
 
@@ -69,70 +58,89 @@ Bool VK_WRAP_FUNC(OpacityMicromap_init)(OpacityMicromap *micromap, Error *e_rr) 
 		//Mapped through a switch rather than cast, so a header renumbering breaks the build instead of the
 		// opacity data.
 
-		VkOpacityMicromapFormatEXT format = VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT;
+		VkOpacityMicromapFormatKHR format = VK_OPACITY_MICROMAP_FORMAT_2_STATE_KHR;
 
 		switch ((EOpacityMicromapFormat) usage.format) {
 
 			case EOpacityMicromapFormat_Opacity2State:
-				format = VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT;
+				format = VK_OPACITY_MICROMAP_FORMAT_2_STATE_KHR;
 				break;
 
 			case EOpacityMicromapFormat_Opacity4State:
-				format = VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT;
+				format = VK_OPACITY_MICROMAP_FORMAT_4_STATE_KHR;
 				break;
 
 			default:
 				retError(clean, Error_unsupportedOperation(0, "VkOpacityMicromap_init() unsupported format"));
 		}
 
-		micromapExt->usages.ptrNonConst[i] = (VkMicromapUsageEXT) {
+		micromapExt->usages.ptrNonConst[i] = (VkMicromapUsageKHR) {
 			.count = usage.count,
 			.subdivisionLevel = usage.subdivisionLevel,
-			.format = (U32) format
+			.format = format
 		};
 	}
 
-	//The build inputs must sit at 256 aligned device addresses (VUID-vkCmdBuildMicromapsEXT-pInfos-07515).
-	//OxC3's own ASRead buffers are allocated 256 aligned when micromaps are on, so only a caller supplied
+	//The build inputs must sit at 128 aligned device addresses
+	// (VUID-vkCmdBuildAccelerationStructuresKHR-micromap-11552).
+	//OxC3's own ASRead buffers are allocated that aligned when micromaps are on, so only a caller supplied
 	// OFFSET can break this, which is why it is checked here where the mistake is visible.
 
 	const U64 inputAddr = getVkDeviceAddress(micromap->inputBuffer);
 	const U64 entryAddr = getVkDeviceAddress(micromap->entryBuffer);
 
-	if((inputAddr & 255) || (entryAddr & 255))
+	if((inputAddr & 127) || (entryAddr & 127))
 		retError(clean, Error_invalidParameter(
-			1, 0, "VkOpacityMicromap_init() input and entry buffers must sit at 256 byte aligned addresses"
+			1, 0, "VkOpacityMicromap_init() input and entry buffers must sit at 128 byte aligned addresses"
 		));
 
-	VkBuildMicromapFlagsEXT buildFlags = 0;
+	VkBuildAccelerationStructureFlagsKHR buildFlags = 0;
 
 	if(micromap->base.flags & ERTASBuildFlags_AllowCompaction)
-		buildFlags |= VK_BUILD_MICROMAP_ALLOW_COMPACTION_BIT_EXT;
+		buildFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
 
 	if(micromap->base.flags & ERTASBuildFlags_FastTrace)
-		buildFlags |= VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
+		buildFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
 
 	if(micromap->base.flags & ERTASBuildFlags_FastBuild)
-		buildFlags |= VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
+		buildFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
 
-	micromapExt->build = (VkMicromapBuildInfoEXT) {
-		.sType = VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT,
-		.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT,
-		.flags = buildFlags,
-		.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT,
+	micromapExt->micromapData = (VkAccelerationStructureGeometryMicromapDataKHR) {
+		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_MICROMAP_DATA_KHR,
 		.usageCountsCount = (U32) micromapExt->usages.length,
 		.pUsageCounts = micromapExt->usages.ptr,
-		.data = (VkDeviceOrHostAddressConstKHR) { .deviceAddress = inputAddr },
-		.triangleArray = (VkDeviceOrHostAddressConstKHR) { .deviceAddress = entryAddr },
+		.data = inputAddr,
+		.triangleArray = entryAddr,
 		.triangleArrayStride = micromap->entryStride
 	};
 
-	VkMicromapBuildSizesInfoEXT sizes = (VkMicromapBuildSizesInfoEXT) {
-		.sType = VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT
+	//The geometry union stays zeroed: a micromap geometry carries everything in its chained data, and its
+	// flags have to be 0 (VUID-VkAccelerationStructureGeometryKHR-flags-11569).
+
+	micromapExt->geometry = (VkAccelerationStructureGeometryKHR) {
+		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+		.pNext = &micromapExt->micromapData,
+		.geometryType = VK_GEOMETRY_TYPE_MICROMAP_KHR
 	};
 
-	deviceExt->getMicromapBuildSizes(
-		deviceExt->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &micromapExt->build, &sizes
+	micromapExt->build = (VkAccelerationStructureBuildGeometryInfoKHR) {
+		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+		.type = VK_ACCELERATION_STRUCTURE_TYPE_OPACITY_MICROMAP_KHR,
+		.flags = buildFlags,
+		.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
+		.geometryCount = 1,
+		.pGeometries = &micromapExt->geometry
+	};
+
+	//A micromap has no primitive counts: its size follows from the usages alone
+	// (VUID-vkGetAccelerationStructureBuildSizesKHR-pMaxPrimitiveCounts-11613).
+
+	VkAccelerationStructureBuildSizesInfoKHR sizes = (VkAccelerationStructureBuildSizesInfoKHR) {
+		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR
+	};
+
+	deviceExt->getAccelerationStructureBuildSizes(
+		deviceExt->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &micromapExt->build, NULL, &sizes
 	);
 
 	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
@@ -141,7 +149,7 @@ Bool VK_WRAP_FUNC(OpacityMicromap_init)(OpacityMicromap *micromap, Error *e_rr) 
 		EGraphicsResourceFlag_None,
 		NULL,
 		&micromap->base.name,
-		sizes.micromapSize,
+		sizes.accelerationStructureSize,
 		&micromap->base.asBuffer, e_rr
 	));
 
@@ -165,18 +173,26 @@ Bool VK_WRAP_FUNC(OpacityMicromap_init)(OpacityMicromap *micromap, Error *e_rr) 
 		));
 	}
 
-	const VkMicromapCreateInfoEXT createInfo = (VkMicromapCreateInfoEXT) {
-		.sType = VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT,
-		.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(micromap->base.asBuffer), Vk)->buffer,
-		.size = sizes.micromapSize,
-		.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT
+	//Created by address, since VkAccelerationStructureCreateInfoKHR can't take the micromap type
+	// (VUID-VkAccelerationStructureCreateInfoKHR-type-11600).
+	//The address has to be 256 aligned (VUID-VkAccelerationStructureCreateInfo2KHR-addressRange-11605),
+	// which every ASExt allocation is.
+	//No address flags: an ASExt buffer is never a storage buffer, so none of the usage bits apply.
+
+	const VkAccelerationStructureCreateInfo2KHR createInfo = (VkAccelerationStructureCreateInfo2KHR) {
+		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_2_KHR,
+		.addressRange = (VkDeviceAddressRangeKHR) {
+			.address = DeviceBufferRef_ptr(micromap->base.asBuffer)->resource.deviceAddress,
+			.size = sizes.accelerationStructureSize
+		},
+		.type = VK_ACCELERATION_STRUCTURE_TYPE_OPACITY_MICROMAP_KHR
 	};
 
 	gotoIfError3(clean, checkVkError(
-		deviceExt->createMicromap(deviceExt->device, &createInfo, NULL, &micromapExt->micromap), e_rr
+		deviceExt->createAccelerationStructure2(deviceExt->device, &createInfo, NULL, &micromapExt->as), e_rr
 	));
 
-	micromapExt->build.dstMicromap = micromapExt->micromap;
+	micromapExt->build.dstAccelerationStructure = micromapExt->as;
 
 	if(micromap->base.tempScratchBuffer)
 		micromapExt->build.scratchData = (VkDeviceOrHostAddressKHR) {
@@ -196,10 +212,10 @@ void VK_WRAP_FUNC(OpacityMicromap_free)(OpacityMicromap *micromap) {
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(micromap->base.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	if(micromapExt->micromap)
-		deviceExt->destroyMicromap(deviceExt->device, micromapExt->micromap, NULL);
+	if(micromapExt->as)
+		deviceExt->destroyAccelerationStructure(deviceExt->device, micromapExt->as, NULL);
 
-	ListVkMicromapUsageEXT_free(&micromapExt->usages, alloc);
+	ListVkMicromapUsageKHR_free(&micromapExt->usages, alloc);
 }
 
 Bool VK_WRAP_FUNC(OpacityMicromapRef_flush)(
@@ -224,10 +240,14 @@ Bool VK_WRAP_FUNC(OpacityMicromapRef_flush)(
 	if(micromap->base.isCompleted)
 		return s_uccess;
 
-	deviceExt->cmdBuildMicromaps(commandBuffer->buffer, 1, &micromapExt->build);
+	//A micromap geometry takes no build range, so its slot holds NULL
+	// (VUID-vkCmdBuildAccelerationStructuresKHR-ppBuildRangeInfos-11544).
+
+	const VkAccelerationStructureBuildRangeInfoKHR *noRange = NULL;
+	deviceExt->cmdBuildAccelerationStructures(commandBuffer->buffer, 1, &micromapExt->build, &noRange);
 
 	//Keep the object alive for the frame; the scratch is never needed again after the build, so the flight
-	// takes the reference the object held, exactly like a non updatable BLAS.
+	// takes the reference the object held.
 
 	if(!ListRefPtr_contains(*currentFlight, pending, 0, NULL)) {
 		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));

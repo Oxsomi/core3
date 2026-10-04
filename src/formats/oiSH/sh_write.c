@@ -706,6 +706,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 					gotoIfError3(clean, StreamCursor_append(
 						&cursor, offset, entry.inputSemanticNames, inputs * sizeof(U8), alloc, e_rr
 					));
+
 					gotoIfError3(clean, StreamCursor_append(
 						&cursor, offset, entry.outputSemanticNames, outputs * sizeof(U8), alloc, e_rr
 					));

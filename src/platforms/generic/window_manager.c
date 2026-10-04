@@ -505,16 +505,30 @@ clean:
 Bool WindowManager_wait(WindowManager *manager, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Bool deferred = false;
 
 	if(!WindowManager_isAccessible(manager))
 		retError(clean, Error_invalidOperation(
 			0, "WindowManager_wait() manager is NULL or inaccessible to current thread"
 		));
 
-	while(manager->windows.length)
+	//An interrupt ends the wait with the windows still open; the caller's own shutdown closes them.
+	//Deferrals nest, so only the one taken here is given back.
+
+	Platform_deferInterrupts(true);
+	deferred = true;
+
+	while(manager->windows.length && !Platform_interruptRequested())
 		gotoIfError3(clean, WindowManager_step(manager, NULL, e_rr));
 
+	if(Platform_interruptRequested())
+		Log_warnLnx("Interrupt received, stopping; interrupt again to force");
+
 clean:
+
+	if(deferred)
+		Platform_deferInterrupts(false);
+
 	return s_uccess;
 }
 

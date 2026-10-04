@@ -91,13 +91,20 @@ void Test_graphicsBindfulPushClass(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBlasCompaction(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBlasGeometry(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBlasScratch(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsOmmRayQuery(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsResourceRegistry(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsPipelineCache(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsSamplerAndData(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsPipelineLayout(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderReflection(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsSubmit(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsSubmitSwapchainOnly(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsSubmitFlush(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsSubmitFailure(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsVirtualSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsPhysicalSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef);
@@ -152,6 +159,7 @@ Bool TestShaders_computePipelinePush(
 	Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, PipelineRef **pipeline,
 	PipelineLayoutRef **layoutOut
 );
+
 Bool TestShaders_submitAndWait(Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *commandList);
 Bool TestShaders_pullBuffer(Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *emptyList, DeviceBufferRef *buffer);
 

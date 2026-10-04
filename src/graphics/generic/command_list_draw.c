@@ -43,7 +43,7 @@
 #include "types/base/string_base.h"
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
-#include "command_list_internal.h"
+#include "graphics/generic/command_list_internal.h"
 
 //Ray triangle position fetch requires every BLAS it reads to be built with ERTASBuildFlags_AllowDataAccessExt,
 // but the shader picks its TLAS descriptor at runtime, so the exact target is unknowable at record time.
@@ -776,8 +776,10 @@ Bool CommandListRef_dispatchRaysExt(CommandListRef *commandListRef, DispatchRays
 
 	total *= dispatch.z;
 
-	if(total > 1 * GIBI)
-		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() is limited to 1Gibi rays"));
+	//The minimum every supported device guarantees, not the device's own limit (docs/graphics_spec.md).
+
+	if(total > 64 * MIBI)
+		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() is limited to 64Mi rays"));
 
 	if(!total)
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() can't be executed with 0 count"));

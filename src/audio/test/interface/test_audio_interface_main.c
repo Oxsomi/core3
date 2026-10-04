@@ -280,6 +280,7 @@ void Test_audioDeviceInvalidType(Test *t) {
 	Test_assert(t, "create fails on bad typeId",
 		!AudioDeviceRef_create(interf, &info, false, t->alloc, &devType, &device, &err)
 	);
+
 	Test_assert(t, "no allocation on failure", device == NULL);
  
 	RefPtr_dec(&interf);

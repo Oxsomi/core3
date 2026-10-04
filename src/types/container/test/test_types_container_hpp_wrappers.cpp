@@ -161,6 +161,7 @@ extern "C" void Test_hppWrappers(oxc::c::Test *t) {
 		Test_assert(t, "String: make for adopt", c::CharString_createCopy(
 			StringView("adopted").handle(), &alloc, &adopted, e_rr
 		));
+
 		target.adopt(adopted);
 		Test_assert(t, "String: adopt owns", target == StringView("adopted") && !adopted.ptr);
 	}
@@ -184,6 +185,7 @@ extern "C" void Test_hppWrappers(oxc::c::Test *t) {
 		Test_assert(t, "SmallString: assign too long rejected", !small.assign(
 			StringView("01234567890123456789012345678901234567890")
 		));
+
 		Test_assert(t, "SmallString: rejected assign kept old value", small.length() == 31);
 		Test_assert(t, "SmallString: append past capacity rejected", !small.append('x'));
 

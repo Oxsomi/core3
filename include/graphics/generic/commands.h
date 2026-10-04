@@ -202,6 +202,7 @@ Bool CommandListRef_dispatchRaysExt(CommandListRef *commandList, DispatchRaysExt
 Bool CommandListRef_dispatchRaysIndirectExt(
 	CommandListRef *commandList, DeviceBufferRef *buffer, U64 offset, U32 raygenLocalId, Error *e_rr
 );
+
 Bool CommandListRef_dispatch1DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, Error *e_rr);
 Bool CommandListRef_dispatch2DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, U32 raysY, Error *e_rr);
 Bool CommandListRef_dispatch3DRaysExt(

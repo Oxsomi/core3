@@ -26,6 +26,7 @@
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/instance.h"
 #include "platforms/logx.h"
@@ -178,6 +179,16 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	)
 		allocInfo.Alignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
 
+	//Raw views (ByteAddressBuffer) address their buffer in 16 byte units (D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT), and tight
+	// alignment can place a buffer at less (AMD hands out 8): a raw view on it is invalid and gets the device removed.
+	//Any buffer a shader reads or writes can be bound as a ByteAddressBuffer, so the floor covers all of them.
+
+	if(
+		(buf->resource.flags & (EGraphicsResourceFlag_ShaderRead | EGraphicsResourceFlag_ShaderWrite)) &&
+		allocInfo.Alignment < D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT
+	)
+		allocInfo.Alignment = D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT;
+
 	//Any ASRead buffer may feed a micromap array build, whose input has an alignment floor of its own:
 	// 128 (D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_BYTE_ALIGNMENT).
 	//Debug layers before stable 620 and preview 722 enforce 256 while citing that constant (fixed in the
@@ -185,6 +196,15 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	// ever requests its header's stable/preview constants, so the line is gated per SDK version instead; see
 	// build/reports/d3d12_debug_layer_omm_input_alignment.md). Those runtimes get a 256 floor to stay
 	// validation clean, which only costs alignment.
+
+	//Any ASRead buffer may hold a TLAS's instance descs, which have to be 16 byte aligned
+	// (D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT); tight alignment can place one at 8.
+
+	if(
+		(buf->usage & EDeviceBufferUsage_ASReadExt) &&
+		allocInfo.Alignment < D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT
+	)
+		allocInfo.Alignment = D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT;
 
 	if(
 		(buf->usage & EDeviceBufferUsage_ASReadExt) &&
@@ -295,6 +315,12 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 			(void**)&bufExt->buffer
 		), e_rr));
 
+		DxGraphicsDevice_setResidencyPriority(
+			deviceExt, (ID3D12Pageable*) bufExt->buffer,
+			!!(buf->resource.flags & (EGraphicsResourceFlag_CPUAllocatedBit | EGraphicsResourceFlag_CPUReadBit)),
+			!!(buf->usage & EDeviceBufferUsage_ASExt)
+		);
+
 		buf->resource.allocated = true;
 		buf->resource.blockId = blockId;
 		buf->resource.blockOffset = 0;
@@ -379,6 +405,13 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->allocator.lock);
 
+	//After the allocator lock, which device teardown takes the other way around with the device's lock.
+
+	if(s_uccess)
+		s_uccess = GraphicsDevice_registerResource(
+			device, (RefPtr*) buf - 1, DxObject_identity((IUnknown*) bufExt->buffer), name, e_rr
+		);
+
 	ListU16_free(&name16, alloc);
 	return s_uccess;
 }
@@ -458,6 +491,8 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 		D3D12_BARRIER_GROUP dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
 		if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
+
+			GraphicsDevice_noteStagingBypass(device, allocRange);
 
 			CharString dedicatedStaging = CharString_createRefCStrConst("Dedicated staging buffer");
 

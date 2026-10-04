@@ -26,6 +26,7 @@
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/pipeline.h"
@@ -613,6 +614,28 @@ static void dxTimestampWrite(DxGraphicsDevice *deviceExt, U8 fifId, DxCommandBuf
 		);
 
 	++deviceExt->timestampCursor;
+}
+
+//No barrier: a buffer's first access in an ExecuteCommandLists needs none, and nothing on the GPU reads this one.
+
+void DxGraphicsDevice_breadcrumb(
+	const GraphicsDevice *device,
+	const DxGraphicsDevice *deviceExt,
+	DxCommandBuffer *buffer,
+	U32 slot,
+	U32 value,
+	D3D12_WRITEBUFFERIMMEDIATE_MODE mode
+) {
+
+	if(slot == U32_MAX)
+		return;
+
+	const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER param = (D3D12_WRITEBUFFERIMMEDIATE_PARAMETER) {
+		.Dest = deviceExt->breadcrumbAddress + ((U64) device->fifId * GRAPHICS_BREADCRUMBS + slot) * sizeof(U32),
+		.Value = value
+	};
+
+	buffer->lpVtbl->WriteBufferImmediate(buffer, 1, &param, &mode);
 }
 
 void DX_WRAP_FUNC(CommandList_process)(
@@ -1784,7 +1807,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 					++deviceExt->dispatchRaysIndirectCursor;
 
 					const U64 argOffset = (U64) slot * stride;
-					const Bool wbi = !!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_WriteBufferImmediate);
+					const Bool wbi = !!(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate);
 
 					DxDeviceBuffer *argsBuf = DeviceBuffer_ext(DeviceBufferRef_ptr(argsRef), Dx);
 					DxDeviceBuffer *callerBuf = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Dx);
@@ -1936,6 +1959,11 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			if((temp->curScopeFlags & ECommandScopeInternalFlags_Timed))
 				dxTimestampWrite(deviceExt, device->fifId, buffer);
+
+			temp->breadcrumbSlot = GraphicsDevice_claimBreadcrumb(device, scope.scopeId);
+			DxGraphicsDevice_breadcrumb(
+				device, deviceExt, buffer, temp->breadcrumbSlot, 1, D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN
+			);
 
 			for (U64 i = scope.transitionOffset; i < scope.transitionOffset + scope.transitionCount; ++i) {
 
@@ -2229,6 +2257,11 @@ void DX_WRAP_FUNC(CommandList_process)(
 			if((temp->curScopeFlags & ECommandScopeInternalFlags_DebugRegion))
 				buffer->lpVtbl->EndEvent(buffer);
 
+			DxGraphicsDevice_breadcrumb(
+				device, deviceExt, buffer, temp->breadcrumbSlot, 2, D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_OUT
+			);
+
+			temp->breadcrumbSlot = U32_MAX;
 			break;
 
 		//Unsupported

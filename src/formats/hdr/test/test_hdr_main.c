@@ -38,6 +38,7 @@ OXC3_TEST_MAIN(formats_hdr) {
 	Test_HDRRoundTripRunLength(&t);
 	Test_HDRRoundTripExactZero(&t);
 	Test_HDRRoundTripDynamicRange(&t);
+	Test_HDRRoundTripExposure(&t);
 
 	Test_HDRWriteZeroDimensions(&t);
 	Test_HDRWriteOversizedDimensions(&t);

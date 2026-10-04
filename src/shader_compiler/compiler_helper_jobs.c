@@ -128,12 +128,13 @@ typedef struct CompilerFileCtx {
 
 	SHFile shFile;                          //Shared; mutated by leaves under lock
 	ListU32 binaryIndices;                  //Shared; mutated by leaves under lock
-	SpinLock lock;                          //Guards shFile + binaryIndices (and the processSingle reflection pass)
 
 	JobGroup group;                         //File latch; finalize = Compiler_finalizeShaderFile
 
 	EGfxBinaryType binaryType;
-	U8 padding[4];
+	U8 padding[36];
+
+	SpinLock lock;                          //Guards shFile + binaryIndices (and the processSingle reflection pass)
 
 } CompilerFileCtx;
 
@@ -341,9 +342,8 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 		e_rr
 	));
 
-	//A lib with no named entrypoint used to mean raytracing OR a workgraph; workgraphs are gone, so the only
-	// remaining non-RT case falls back to the Count sentinel that dxil_link already treats as "maintain lib
-	// linking" rather than to a concrete stage.
+	//A non-RT lib with no named entrypoint falls back to the Count sentinel, which dxil_link treats as "maintain lib
+	// linking".
 
 	if (linkEntry.entrypointId == U16_MAX)
 		binaryIdentifier.stageType = combo->isRt ? EGfxPipelineStage_RtStartExt : EGfxPipelineStage_Count;
@@ -874,7 +874,7 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 		combinationId  &= (U16) I16_MAX;
 
 		//Skip compiling this combination entirely if the entry's stage / extensions can't be expressed
-		// on the backend we're compiling for (e.g. a workgraph on SPIRV, or an inline-SPIRV atomic on DXIL).
+		// on the backend we're compiling for (e.g. an inline-SPIRV atomic on DXIL).
 		//This prevents a guaranteed compile failure.
 		//Only the stage/extension support is checked here (not the [[oxc::binary(...)]] annotation),
 		// because it's identical for every entrypoint sharing this compile.

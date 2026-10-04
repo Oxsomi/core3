@@ -23,6 +23,7 @@
 #include "graphics/generic/device_allocator.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
@@ -35,10 +36,12 @@
 static const VkMemoryPropertyFlags host = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 static const VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 static const VkMemoryPropertyFlags local = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+static const VkMemoryPropertyFlags cached = VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 
-Bool VkDeviceMemoryAllocator_findMemory(
+static Bool VkDeviceMemoryAllocator_findMemory(
 	VkGraphicsDevice *deviceExt,
 	Bool cpuSided,
+	Bool readback,
 	U32 memoryBits,
 	U32 *outMemoryId,
 	VkMemoryPropertyFlags *outPropertyFlags,
@@ -60,6 +63,15 @@ Bool VkDeviceMemoryAllocator_findMemory(
 		host,
 		0
 	};
+
+	//CPU reads from uncached (write combined) memory are many times slower, so readback looks for cached first.
+	//Coherent only: readback never invalidates, so a non coherent cached type would read stale data.
+
+	if (readback) {
+		all |= cached;
+		properties[0] = host | coherent | cached;
+		properties[1] = host | coherent;
+	}
 
 	if (
 		(!cpuSided && deviceExt->hasLocalMemory) ||
@@ -136,9 +148,10 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(allocator->device->instance), Vk);
 
-	VkMemoryRequirements2 req = *(VkMemoryRequirements2*) requirementsExt;
-	VkMemoryRequirements memReq = req.memoryRequirements;
-	VkMemoryDedicatedRequirements dedicated = *(VkMemoryDedicatedRequirements*) req.pNext;
+	const VkBlockRequirements req = *(const VkBlockRequirements*) requirementsExt;
+	const VkMemoryRequirements memReq = req.memory;
+	const Bool requiresDedicated = !!(req.flags & EVkBlockFlags_RequiresDedicated);
+	const Bool prefersDedicated = !!(req.flags & EVkBlockFlags_PrefersDedicated);
 	U64 maxAllocationSize = allocator->device->info.capabilities.maxAllocationSize;
 
 	if(memReq.size > maxAllocationSize)
@@ -159,16 +172,26 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	//After that, the allocator should be more conservative for dedicating separate memory blocks.
 	//Most devices only support up to 4000 memory objects.
 
-	Bool isDedicated = dedicated.requiresDedicatedAllocation;
-	isDedicated |= dedicated.prefersDedicatedAllocation && allocator->blocks.length < 2000;
+	Bool isDedicated = requiresDedicated;
+	isDedicated |= prefersDedicated && allocator->blocks.length < 2000;
+
+	const Bool requestedCpu = cpuSided;                                  //Before the device type can force it
 
 	if(allocator->device->info.type != EGraphicsDeviceType_Dedicated)    //Ensure everything gets placed in cpu space
 		cpuSided = true;
 
+	//A resource over half a block gets a block of exactly its own size.
+	//A shared block could hold at most one more like it, and sizing one to twice the request instead reserves
+	// slack that a few large resources (acceleration structures, big meshes) turn into gigabytes of nothing.
+	//Below that it shares a standard block, which keeps the number of memory objects down.
+
+	const U64 blockSize = cpuSided ? allocator->device->blockSizeCpu : allocator->device->blockSizeGpu;
+	isDedicated |= memReq.size > blockSize / 2;
+
 	if(
 		(allocator->device->flags & EGraphicsDeviceFlags_IsDebug) &&
-		dedicated.prefersDedicatedAllocation &&
-		!dedicated.requiresDedicatedAllocation &&
+		prefersDedicated &&
+		!requiresDedicated &&
 		allocator->blocks.length >= 2000 &&
 		GraphicsDevice_logOnce(allocator->device, EGraphicsDeviceMessage_TooManyMemoryBlocks)
 	)
@@ -178,15 +201,36 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			"reaching 4096 (only logged once)"
 		);
 
-	//Find an existing allocation
+	//Find an existing allocation, or create a block. A device local block past the OS budget is retried once in host
+	// memory before going over it: the OS would page something out from under the device to make room.
 
-	gotoIfError3(clean, VkDeviceMemoryAllocator_findMemory(
-		deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, e_rr
-	));
+	const Bool readback = !!(req.flags & EVkBlockFlags_Readback);
+	const Bool canFallBack = !cpuSided && allocator->device->info.type == EGraphicsDeviceType_Dedicated;
 
-	if (!isDedicated) {
+	U64 usedMem = U64_MAX, budget = U64_MAX, maxAlloc = 0;
 
-		for(U64 i = 0; i < allocator->blocks.length; ++i) {
+	VkMemoryAllocateFlagsInfo next = (VkMemoryAllocateFlagsInfo) {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+		.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
+	};
+
+	VkMemoryDedicatedAllocateInfo dedicatedInfo = (VkMemoryDedicatedAllocateInfo) {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
+		.image = req.image,
+		.buffer = req.buffer
+	};
+
+	VkMemoryAllocateInfo memAlloc = (VkMemoryAllocateInfo) { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+
+	for(U8 attempt = 0; attempt < 2; ++attempt) {        //The device local pick, then at most one host memory retry
+
+		gotoIfError3(clean, VkDeviceMemoryAllocator_findMemory(
+			deviceExt, cpuSided, readback, memReq.memoryTypeBits, &memoryId, &prop, e_rr
+		));
+
+		U32 blocksOfKind = 0;
+
+		for(U64 i = 0; i < allocator->blocks.length && !isDedicated; ++i) {
 
 			DeviceMemoryBlock *blocki = &allocator->blocks.ptrNonConst[i];
 
@@ -197,6 +241,8 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 				!!(blocki->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided
 			)
 				continue;
+
+			++blocksOfKind;
 
 			U64 tempAlignment = memReq.alignment;
 
@@ -238,34 +284,89 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 			goto clean;
 		}
+
+		//A shared block is halved while it would go past the budget, down to what the request needs
+
+		const U64 newBlockSize = cpuSided ? allocator->device->blockSizeCpu : allocator->device->blockSizeGpu;
+		memAlloc.allocationSize = isDedicated ? memReq.size :
+			DeviceMemoryAllocator_newBlockSize(U64_min(newBlockSize, maxAllocationSize), blocksOfKind, memReq.size);
+		memAlloc.memoryTypeIndex = memoryId;
+
+		usedMem = VkGraphicsDevice_getMemoryUsage(allocator->device, !cpuSided, &budget);
+		maxAlloc = cpuSided ?
+			allocator->device->info.capabilities.sharedMemory : allocator->device->info.capabilities.dedicatedMemory;
+
+		const Bool known = usedMem != U64_MAX && budget != U64_MAX;
+
+		while(
+			known && !isDedicated &&
+			usedMem + memAlloc.allocationSize > budget && (memAlloc.allocationSize >> 1) >= memReq.size
+		)
+			memAlloc.allocationSize >>= 1;
+
+		const Bool overBudget = known && usedMem + memAlloc.allocationSize > budget;
+
+		if(overBudget && canFallBack && !attempt) {
+
+			U32 hostId = 0;
+			VkMemoryPropertyFlags hostProp = 0;
+			Error err1 = Error_none();
+
+			if(VkDeviceMemoryAllocator_findMemory(
+				deviceExt, true, readback, memReq.memoryTypeBits, &hostId, &hostProp, &err1
+			)) {
+
+				if(GraphicsDevice_logOnce(allocator->device, EGraphicsDeviceMessage_OverBudget))
+					Log_performanceLnx(
+						"VkDeviceMemoryAllocator_allocate() device local memory is over the OS budget, "
+						"so new blocks are placed in host memory (only logged once)"
+					);
+
+				//Host blocks can be smaller than device local ones, so what was shared there may need its own here
+
+				cpuSided = true;
+				isDedicated |= memReq.size > allocator->device->blockSizeCpu / 2;
+				continue;
+			}
+		}
+
+		if(overBudget && GraphicsDevice_logOnce(allocator->device, EGraphicsDeviceMessage_OverBudget))
+			Log_performanceLnx(
+				"VkDeviceMemoryAllocator_allocate() a memory block goes past the OS budget for its heap, "
+				"so the OS may page memory out (only logged once)"
+			);
+
+		break;
 	}
-
-	//Allocate memory
-
-	U64 blockSize = cpuSided ? allocator->device->blockSizeCpu : allocator->device->blockSizeGpu;
-	U64 realBlockSize = U64_min(
-		(U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize,
-		maxAllocationSize
-	);
-
-	VkMemoryAllocateFlagsInfo next = (VkMemoryAllocateFlagsInfo) {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
-		.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
-	};
-
-	VkMemoryAllocateInfo memAlloc = (VkMemoryAllocateInfo) {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.pNext = allocator->device->info.capabilities.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress ? &next : NULL,
-		.allocationSize = isDedicated ? memReq.size : realBlockSize,
-		.memoryTypeIndex = memoryId
-	};
-
-	U64 usedMem = VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(allocator->device, !cpuSided);
-	U64 maxAlloc =
-		cpuSided ? allocator->device->info.capabilities.sharedMemory : allocator->device->info.capabilities.dedicatedMemory;
 
 	if(usedMem != U64_MAX && usedMem + memAlloc.allocationSize > maxAlloc)
 		retError(clean, Error_outOfMemory(0, "Memory block allocation would exceed available memory"));
+
+	//Tell the driver which resource a dedicated block is for; it asked for one so it can optimize for it
+
+	if(isDedicated && (req.image || req.buffer))
+		memAlloc.pNext = &dedicatedInfo;
+
+	//CPU side memory (staging) is paged out first and dedicated high priority blocks last.
+	//A shared block holds whatever lands in it, so it stays normal unless staging can't share it: on an integrated
+	// GPU everything is CPU side, so staging and device data use the same memory type there.
+
+	const Bool lowPriority =
+		requestedCpu && (isDedicated || allocator->device->info.type == EGraphicsDeviceType_Dedicated);
+
+	VkMemoryPriorityAllocateInfoEXT priority = (VkMemoryPriorityAllocateInfoEXT) {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_PRIORITY_ALLOCATE_INFO_EXT,
+		.pNext = memAlloc.pNext,
+		.priority = lowPriority ? 0.25f : (isDedicated && (req.flags & EVkBlockFlags_HighPriority) ? 0.75f : 0.5f)
+	};
+
+	if(allocator->device->info.capabilities.featuresExt & EVkGraphicsFeatures_MemoryPriority)
+		memAlloc.pNext = &priority;
+
+	if(allocator->device->info.capabilities.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress) {
+		next.pNext = memAlloc.pNext;
+		memAlloc.pNext = &next;
+	}
 
 	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
 		Log_debugLnx(
@@ -332,19 +433,7 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	const U8 *allocLoc = NULL;
 	gotoIfError3(clean, AllocationBuffer_allocateBlock(&allocation, memReq.size, &allocLoc, e_rr));
 
-	if(i == allocator->blocks.length) {
-
-		if(i == U32_MAX)
-			retError(clean, Error_outOfBounds(0, i, U32_MAX, "VkDeviceMemoryAllocator_allocate() block out of bounds"));
-
-		gotoIfError3(clean, ListDeviceMemoryBlock_pushBack(&allocator->blocks, block, alloc, e_rr));
-	}
-
-	else allocator->blocks.ptrNonConst[i] = block;
-
-	*blockId = (U32) i;
-	*blockOffset = (U64) allocLoc;
-	*resultBlock = block;
+	//Named before the block is listed, so a failure here leaves nothing pointing at the memory clean frees
 
 	if(
 		(allocator->device->flags & EGraphicsDeviceFlags_IsDebug) &&
@@ -373,6 +462,20 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
 		CharString_free(&temp, alloc);
 	}
+
+	if(i == allocator->blocks.length) {
+
+		if(i == U32_MAX)
+			retError(clean, Error_outOfBounds(0, i, U32_MAX, "VkDeviceMemoryAllocator_allocate() block out of bounds"));
+
+		gotoIfError3(clean, ListDeviceMemoryBlock_pushBack(&allocator->blocks, block, alloc, e_rr));
+	}
+
+	else allocator->blocks.ptrNonConst[i] = block;
+
+	*blockId = (U32) i;
+	*blockOffset = (U64) allocLoc;
+	*resultBlock = block;
 
 clean:
 

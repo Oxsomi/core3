@@ -449,12 +449,28 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		);
 	}
 
+	Bool GraphicsDevice_loadPipelineCacheExt(GraphicsDevice *device, Buffer driverData, Bool *accepted, Error *e_rr) {
+		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(device->instance)->api].deviceLoadPipelineCache(
+			device, driverData, accepted, e_rr
+		);
+	}
+
+	Bool GraphicsDevice_savePipelineCacheExt(GraphicsDevice *device, const Allocator *alloc, Buffer *driverData, Error *e_rr) {
+		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(device->instance)->api].deviceSavePipelineCache(
+			device, alloc, driverData, e_rr
+		);
+	}
+
 	void GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 		GraphicsInterface_instance->tables[instance->api].deviceFree(instance, ext);
 	}
 
 	Bool GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 		return WrapperFunction(deviceRef, deviceWait)(deviceRef, e_rr);
+	}
+
+	Bool GraphicsDeviceRef_reportLossExt(GraphicsDeviceRef *deviceRef) {
+		return WrapperFunction(deviceRef, deviceReportLoss)(deviceRef);
 	}
 
 	Bool GraphicsDevice_submitCommandsExt(

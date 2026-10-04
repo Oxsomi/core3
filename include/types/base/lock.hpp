@@ -24,12 +24,19 @@
 
 //Pre-include system headers used by the C headers below at global scope;
 //they must not be pulled in for the first time inside a namespace.
+//On Windows atomic.h includes <intrin0.h>, which intrin.h also includes.
+//Were intrin0.h first seen inside oxc::c, its guard would hide those declarations from the global scope,
+// and the next intrin.h user there (the UCRT's wchar.h inlines wmemchr with them) fails to compile.
 
 #include <atomic>
 #include <stdalign.h>
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef _MSC_VER
+	#include <intrin0.h>
+#endif
 
 namespace oxc {
 

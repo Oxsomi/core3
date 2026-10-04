@@ -255,6 +255,31 @@ extern "C" void Test_graphicsBindfulRays(oxc::c::Test *t, oxc::c::GraphicsDevice
 		Test_assert(t, "scopeTraceEnd", scope.end(e_rr));
 	}
 
+	//One ray past the 64Mi every device guarantees is refused while recording, whatever this device reports.
+	//In a scope of its own: a refused command invalidates its scope, which is then dropped whole, trace included.
+
+	{
+		gfx::CommandScope scope = commandList.scopeSpan(traceTransitions, 2, 4, nullptr, 0, e_rr);
+		Test_assert(t, "scopeOverLimit", (c::Bool) scope);
+		Test_assert(t, "bindHeapOverLimit", scope.bindDescriptorHeap(heap, e_rr));
+		Test_assert(t, "bindTableOverLimit", scope.bindDescriptorTable(table, e_rr));
+		Test_assert(t, "bindPipelineOverLimit", scope.setRaytracingPipeline(pipeline, e_rr));
+
+		//Everything else about the dispatch is valid, so the only thing it can be refused for is the count.
+
+		c::Error overLimit = c::Error_none();
+		const c::U32 overLimitRays = (c::U32) (64 * c::MIBI + 1);
+
+		Test_assert(
+			t, "traceOverLimit",
+			!scope.dispatch1DRays(0, overLimitRays, &overLimit) && overLimit.errorStr &&
+			StringView(overLimit.errorStr) == "CommandListRef_dispatchRaysExt() is limited to 64Mi rays"
+		);
+
+		c::Error dropped = c::Error_none();
+		(void) scope.end(&dropped);
+	}
+
 	Test_assert(t, "end", commandList.end(e_rr));
 
 	if (gfxtest::submitAndWait(t, dev, commandList))
@@ -659,7 +684,10 @@ extern "C" void Test_graphicsBindfulOmm(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	}
 
 	if (!(caps.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
-		c::Test_print(t, "Device lacks opacity micromaps, skipping bindful micromap tests");
+		c::Test_print(
+			t, "Device lacks opacity micromaps (Vulkan needs VK_KHR_opacity_micromap), skipping bindful micromap tests"
+		);
+
 		return;
 	}
 
@@ -759,21 +787,15 @@ extern "C" void Test_graphicsBindfulOmm(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
 	Test_assert(t, "endEmpty", emptyList.end(e_rr));
 
-	TestBindful_ommWithFormat(
-		t, dev, file.list, positions, heap, table, pipelineLayout, output, emptyList, c::ETextureFormatId_R16u
-	);
+	//Every index width is legal wherever micromaps are, and the narrow ones are where the special index packing
+	// truncates
 
-	//R8u indices need their own capability, since Vulkan's EXT extension forbids them and only the KHR
-	// promotion or D3D12 accepts them
+	const c::ETextureFormatId formats[3] = { c::ETextureFormatId_R8u, c::ETextureFormatId_R16u, c::ETextureFormatId_R32u };
 
-	if (caps.features2 & c::EGraphicsFeatures2_RayMicromapOpacityU8) {
-
-		c::Test_print(t, "Repeating the bindful micromap pair with R8u indices");
-
+	for (c::U8 i = 0; i < 3; ++i)
 		TestBindful_ommWithFormat(
-			t, dev, file.list, positions, heap, table, pipelineLayout, output, emptyList, c::ETextureFormatId_R8u
+			t, dev, file.list, positions, heap, table, pipelineLayout, output, emptyList, formats[i]
 		);
-	}
 }
 
 // -- 61. Inline raytracing from a graphics stage --------------------------------

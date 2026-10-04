@@ -127,12 +127,29 @@ using namespace oxc;
 //Whether this run asks the API to validate itself, off unless OXC3_TEST_VALIDATION says otherwise.
 //Read per call rather than cached, since nothing here runs often enough for that to matter.
 
-static c::Bool Test_wantsValidation() {
-	const c::C8 *validation = getenv("OXC3_TEST_VALIDATION");
+static c::Bool Test_wantsValidation(const c::Allocator *alloc) {
 
-	//An EMPTY value counts as off, since that is what a workflow hands over for a switch it left alone.
+	//An EMPTY value counts as off (Platform_getEnv treats it as unset), since that is what a workflow hands over for a
+	// switch it left alone.
 
-	return validation && validation[0] && validation[0] != '0';
+	c::Bool validation = false;
+	c::Platform_getEnvBool(c::CharString_createRefCStrConst("OXC3_TEST_VALIDATION"), alloc, &validation, NULL);
+	return validation;
+}
+
+//Whether an adapter is tested: all of them, unless OXC3_TEST_GPU names part of the ones to test (case insensitive),
+// for leaving out an adapter that is unstable on this machine.
+
+static c::Bool Test_wantsAdapter(const c::GraphicsDeviceInfo *info, const c::Allocator *alloc) {
+
+	c::CharString filter = c::CharString_createNull();
+	c::Platform_getEnv(c::CharString_createRefCStrConst("OXC3_TEST_GPU"), alloc, &filter, NULL);
+
+	const c::CharString name = c::CharString_createRefCStrConst(info->name);
+	const c::Bool wanted = !c::CharString_length(filter) || c::CharString_containsStringInsensitive(&name, &filter, 0, 0);
+
+	c::CharString_free(&filter, alloc);
+	return wanted;
 }
 
 // -- 1. GraphicsInterface ------------------------------------------------------
@@ -198,9 +215,11 @@ static void Test_graphicsInstance(c::Test *t) {
 	Test_assert(t, "createNullApp", !c::GraphicsInstance_create(
 		NULL, c::EGraphicsApi_Count, c::EGraphicsInstanceFlags_None, alloc, &type, &instRef, &err
 	));
+
 	Test_assert(t, "createNullInst", !c::GraphicsInstance_create(
 		&appInfo, c::EGraphicsApi_Count, c::EGraphicsInstanceFlags_None, alloc, &type, NULL, &err
 	));
+
 	Test_assert(t, "createNullType", !c::GraphicsInstance_create(
 		&appInfo, c::EGraphicsApi_Count, c::EGraphicsInstanceFlags_None, alloc, NULL, NULL, &err
 	));
@@ -234,6 +253,7 @@ static void Test_graphicsInstance(c::Test *t) {
 		Test_checkObjectType(
 			t, "device", &types->device, (c::TypeId)c::EGraphicsTypeId_GraphicsDevice, sizeof(c::GraphicsDevice), alloc
 		);
+
 		Test_checkObjectType(
 			t, "buffer", &types->buffer, (c::TypeId)c::EGraphicsTypeId_DeviceBuffer, sizeof(c::DeviceBuffer), alloc
 		);
@@ -459,10 +479,14 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsCommandValidation(t, deviceRef);
 	c::Test_graphicsRenderPass(t, deviceRef);
 	c::Test_graphicsTextureRef(t, deviceRef);
+	c::Test_graphicsResourceRegistry(t, deviceRef);
 	c::Test_graphicsSamplerAndData(t, deviceRef);
 	c::Test_graphicsPipelineLayout(t, deviceRef);
 	c::Test_graphicsShaderReflection(t, deviceRef);
 	c::Test_graphicsSubmit(t, deviceRef);
+	c::Test_graphicsSubmitSwapchainOnly(t, deviceRef);
+	c::Test_graphicsSubmitFlush(t, deviceRef);
+	c::Test_graphicsSubmitFailure(t, deviceRef);
 
 	//40. Runs after submit because half of it needs a resource the device is still holding.
 
@@ -494,10 +518,13 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsBindfulRays(t, deviceRef);
 	c::Test_graphicsBlasCompaction(t, deviceRef);
 	c::Test_graphicsBlasGeometry(t, deviceRef);
+	c::Test_graphicsBlasScratch(t, deviceRef);
+	c::Test_graphicsOmmRayQuery(t, deviceRef);
 	c::Test_graphicsBindfulOmm(t, deviceRef);
 	c::Test_graphicsBindfulRayQueryGraphics(t, deviceRef);
 	c::Test_graphicsBindfulAtomicFloat(t, deviceRef);
 	c::Test_graphicsBindfulPushConstants(t, deviceRef);
+	c::Test_graphicsPipelineCache(t, deviceRef);
 	c::Test_graphicsBindfulPushDescriptors(t, deviceRef);
 	c::Test_graphicsBindfulPushTexture(t, deviceRef);
 	c::Test_graphicsBindfulStaticSampler(t, deviceRef);
@@ -568,7 +595,7 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 	//GPU based validation stays off: it reports what a shader does, and nothing it watches has run yet at the
 	// point a create fails.
 
-	const c::EGraphicsInstanceFlags instanceFlags = Test_wantsValidation()
+	const c::EGraphicsInstanceFlags instanceFlags = Test_wantsValidation(t->alloc)
 		? (c::EGraphicsInstanceFlags) (c::EGraphicsInstanceFlags_IsDebug | c::EGraphicsInstanceFlags_DisableGPUBV)
 		: c::EGraphicsInstanceFlags_None;
 
@@ -661,8 +688,15 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 	//8-14. Every enumerated adapter gets the full battery, so integrated and software devices are exercised
 	// on machines that have them rather than only the preferred device
 
-	for(c::U64 i = 0; i < infos.length; ++i)
+	for(c::U64 i = 0; i < infos.length; ++i) {
+
+		if(!Test_wantsAdapter(&infos.ptr[i], t->alloc)) {
+			c::Test_print(t, "OXC3_TEST_GPU leaves this adapter out");
+			continue;
+		}
+
 		Test_graphicsDeviceSingle(t, instRef, &infos.ptr[i]);
+	}
 
 clean:
 

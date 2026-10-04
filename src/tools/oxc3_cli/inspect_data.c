@@ -601,6 +601,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 						Log_errorLnx(
 							"Index out of bounds, max is %"PRIu64".", CAFile_fileObjectCount(&file, CAHandle_Root, false)
 						);
+
 						goto cleanCa;
 					}
 				}
@@ -1010,6 +1011,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 									Log_errorLnx(
 										"%s disassembly failed at index %"PRIu64, EGfxBinaryType_names[binaryType], entryI
 									);
+
 									goto cleanSh;
 								}
 

@@ -27,7 +27,7 @@
 	extern "C" {
 #endif
 
-//File spec (docs/oiCA.md)
+//File spec (docs/file/oiCA.md)
 
 typedef enum ECAFlags {
 

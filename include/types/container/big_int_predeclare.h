@@ -25,7 +25,7 @@
 #include "types/base/constants.h"
 
 #ifdef _MSC_VER
-	#include <intrin.h>        //_BitScan*64; MSVC resolves those without this, clang-cl needs the declaration
+	#include <intrin0.h>        //_BitScan*64; MSVC resolves those without this, clang-cl needs the declaration
 #endif
 
 #ifdef __cplusplus

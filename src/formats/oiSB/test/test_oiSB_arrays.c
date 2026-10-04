@@ -268,6 +268,7 @@ void Test_SBFileArrayDeduplication(Test *t) {
 		Test_assert(t, "add arrA",
 			SBFile_addVariableAsType(&sb, &nameA, 0,      U16_MAX, ESBType_F32, ESBVarFlag_None, &arrA, t->alloc, &t->err)
 		);
+
 		Test_assert(t, "add arrB",
 			SBFile_addVariableAsType(&sb, &nameB, 131072, U16_MAX, ESBType_F32, ESBVarFlag_None, &arrB, t->alloc, &t->err)
 		);

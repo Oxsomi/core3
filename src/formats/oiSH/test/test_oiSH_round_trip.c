@@ -415,6 +415,7 @@ void Test_SHFileRoundTripUniforms(Test *t) {
 		Buffer_createRef(info.identifier.uniformData.ptrNonConst,     4),
 		Buffer_createRefConst(&scale, 4)
 	);
+
 	Buffer_memcpy(
 		Buffer_createRef(info.identifier.uniformData.ptrNonConst + 4, 4),
 		Buffer_createRefConst(&count, 4)

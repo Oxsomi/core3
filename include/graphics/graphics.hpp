@@ -64,6 +64,7 @@
 #include "types/container/string.hpp"
 #include "types/container/buffer.hpp"
 #include "types/container/texture_format.hpp"
+#include "types/base/bool_arg.hpp"
 
 //For the basic element lists (ListU32 among them), which it declares inside oxc::c with the right
 //pre-include discipline; detectLayoutFromEntries takes one.
@@ -167,7 +168,7 @@ namespace oxc {
 
 		//Device capability dump to the log; api only labels the output.
 
-		inline void print(const c::GraphicsDeviceInfo &info, c::EGraphicsApi api, c::Bool capabilities = true) noexcept {
+		inline void print(const c::GraphicsDeviceInfo &info, c::EGraphicsApi api, BoolArg capabilities = true) noexcept {
 			c::GraphicsDeviceInfo_print(api, &info, capabilities);
 		}
 
@@ -516,7 +517,7 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool set(
 				c::U64 bindId, c::U64 arrayId, const c::Descriptor &d,
-				c::Bool maintainRef = false, c::Error *e_rr = nullptr
+				BoolArg maintainRef = false, c::Error *e_rr = nullptr
 			) noexcept {
 				return c::DescriptorTableRef_setDescriptor(handle(), bindId, arrayId, maintainRef, &d, e_rr);
 			}
@@ -526,7 +527,7 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool setByName(
 				const c::C8 *registerName, const c::Descriptor &d,
-				c::U64 arrayId = 0, c::Bool maintainRef = false, c::Error *e_rr = nullptr
+				c::U64 arrayId = 0, BoolArg maintainRef = false, c::Error *e_rr = nullptr
 			) noexcept {
 				const c::CharString n = name(registerName);
 				return c::DescriptorTableRef_setDescriptorByName(handle(), &n, arrayId, maintainRef, &d, e_rr);
@@ -538,7 +539,7 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool setRange(
 				c::U64 bindId, c::U64 arrayId, std::initializer_list<c::Descriptor> d,
-				c::Bool maintainRef = false, c::Error *e_rr = nullptr
+				BoolArg maintainRef = false, c::Error *e_rr = nullptr
 			) noexcept {
 
 				c::ListDescriptor list{};
@@ -559,7 +560,7 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool setRangeByName(
 				const c::C8 *registerName, std::initializer_list<c::Descriptor> d,
-				c::U64 arrayId = 0, c::Bool maintainRef = false, c::Error *e_rr = nullptr
+				c::U64 arrayId = 0, BoolArg maintainRef = false, c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::CharString n = name(registerName);
@@ -583,14 +584,14 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool alloc(
 				c::U64 bindId, c::U64 &arrayId, const c::Descriptor &d,
-				c::Bool maintainRef = false, c::Error *e_rr = nullptr
+				BoolArg maintainRef = false, c::Error *e_rr = nullptr
 			) noexcept {
 				return c::DescriptorTableRef_allocDescriptor(handle(), bindId, &arrayId, maintainRef, &d, e_rr);
 			}
 
 			[[nodiscard]] c::Bool allocByName(
 				const c::C8 *registerName, c::U64 &arrayId, const c::Descriptor &d,
-				c::Bool maintainRef = false, c::Error *e_rr = nullptr
+				BoolArg maintainRef = false, c::Error *e_rr = nullptr
 			) noexcept {
 				const c::CharString n = name(registerName);
 				return c::DescriptorTableRef_allocDescriptorByName(handle(), &n, &arrayId, maintainRef, &d, e_rr);
@@ -611,7 +612,7 @@ namespace oxc {
 			[[nodiscard]] c::Bool allocBindless(
 				c::EGfxRegisterType type, c::U32 strideOrLength,
 				c::U16 &bindId, c::U8 &bindlessTypeId, c::U64 &arrayId, const c::Descriptor &d,
-				c::Bool maintainRef = false, c::Error *e_rr = nullptr
+				BoolArg maintainRef = false, c::Error *e_rr = nullptr
 			) noexcept {
 				return c::DescriptorTableRef_allocDescriptorBindless(
 					handle(), type, strideOrLength, &bindId, &bindlessTypeId, &arrayId, maintainRef, &d, e_rr
@@ -807,7 +808,7 @@ namespace oxc {
 			//buffer holds drawCalls DrawCallIndexed/DrawCallUnindexed records (per `indexed`) at bufferOffset.
 
 			[[nodiscard]] c::Bool drawIndirect(
-				const DeviceBuffer &buffer, c::U64 bufferOffset, c::U32 drawCalls, c::Bool indexed,
+				const DeviceBuffer &buffer, c::U64 bufferOffset, c::U32 drawCalls, BoolArg indexed,
 				c::Error *e_rr = nullptr
 			) noexcept {
 				return c::CommandListRef_drawIndirect(list, buffer.handle(), bufferOffset, drawCalls, indexed, e_rr);
@@ -818,7 +819,7 @@ namespace oxc {
 			[[nodiscard]] c::Bool drawIndirectCount(
 				const DeviceBuffer &buffer, c::U64 bufferOffset,
 				const DeviceBuffer &countBuffer, c::U64 countOffset,
-				c::U32 maxDrawCalls, c::Bool indexed,
+				c::U32 maxDrawCalls, BoolArg indexed,
 				c::Error *e_rr = nullptr
 			) noexcept {
 				return c::CommandListRef_drawIndirectCountExt(
@@ -1256,7 +1257,7 @@ namespace oxc {
 		public:
 			using Handle::Handle;
 
-			[[nodiscard]] c::Bool begin(c::Bool doClear = true, c::Error *e_rr = nullptr) noexcept {
+			[[nodiscard]] c::Bool begin(BoolArg doClear = true, c::Error *e_rr = nullptr) noexcept {
 				return c::CommandListRef_begin(handle(), doClear, c::U64_MAX, e_rr);
 			}
 
@@ -1270,14 +1271,14 @@ namespace oxc {
 			//Timestamps feature: turn per scope GPU timing on/off for this list before recording. Once on, every
 			// scope gets a begin and end timestamp keyed by its id unless it passes ECommandScopeFlags_DisableTimestamp.
 
-			[[nodiscard]] c::Bool setScopeTiming(c::Bool enable, c::Error *e_rr = nullptr) noexcept {
+			[[nodiscard]] c::Bool setScopeTiming(BoolArg enable, c::Error *e_rr = nullptr) noexcept {
 				return c::CommandListRef_setScopeTimingExt(handle(), enable, e_rr);
 			}
 
 			//Timestamps/DebugMarkers: turn per scope auto debug regions on/off before recording. Once on, every scope
 			// given a name (see scope()) emits a labelled begin/end debug region, unless it disables it.
 
-			[[nodiscard]] c::Bool setScopeDebug(c::Bool enable, c::Error *e_rr = nullptr) noexcept {
+			[[nodiscard]] c::Bool setScopeDebug(BoolArg enable, c::Error *e_rr = nullptr) noexcept {
 				return c::CommandListRef_setScopeDebugExt(handle(), enable, e_rr);
 			}
 
@@ -1688,6 +1689,9 @@ namespace oxc {
 				return c::GraphicsDeviceRef_wait(handle(), e_rr);
 			}
 
+			//Whether a submit or wait found the device lost; see GraphicsDeviceRef_isLost.
+			[[nodiscard]] c::Bool isLost() const noexcept { return c::GraphicsDeviceRef_isLost(handle()); }
+
 			//Timestamps feature: copies the most recently completed frame's GPU timings into out, keyed by id and
 			// name, latent by framesInFlight submits. out is caller-owned; free it with c::ListGraphicsTiming_freeUnderlying.
 
@@ -1702,7 +1706,7 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool createCommandList(
 				c::U64 bufferLen, c::U64 estCommands, c::U64 estResources,
-				CommandList &result, c::Bool allowResize = true, c::Error *e_rr = nullptr
+				CommandList &result, BoolArg allowResize = true, c::Error *e_rr = nullptr
 			) noexcept {
 
 				c::CommandListRef *raw = nullptr;
@@ -1724,7 +1728,7 @@ namespace oxc {
 			//Fifo caps presentation at the refresh rate.
 
 			[[nodiscard]] c::Bool createSwapchain(
-				void *window, c::Bool allowComputeWrite, Swapchain &result,
+				void *window, BoolArg allowComputeWrite, Swapchain &result,
 				std::initializer_list<c::U8> presentModes = {}, c::Error *e_rr = nullptr
 			) noexcept {
 
@@ -1794,7 +1798,7 @@ namespace oxc {
 			[[nodiscard]] c::Bool createBufferStream(
 				c::EDeviceBufferUsage usage, c::EGraphicsResourceFlag flags,
 				const c::C8 *debugName, c::StreamRef *stream, c::U64 size, DeviceBuffer &result,
-				c::Bool keepSource = false,
+				BoolArg keepSource = false,
 				const DescriptorTable *bindlessTable = nullptr, c::Error *e_rr = nullptr
 			) noexcept {
 
@@ -1850,6 +1854,31 @@ namespace oxc {
 				return true;
 			}
 
+			//createBlas building into a caller provided scratch buffer; see BLASCreateInfo::scratchBuffer.
+			//Size it with getBlasSizes; any number of structures can share one.
+
+			[[nodiscard]] c::Bool createBlas(
+				c::BLASCreateInfo info, const DeviceBuffer &scratch, const c::C8 *debugName, Blas &result,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				if(!scratch) {        //Would quietly allocate a scratch of its own instead
+					if(e_rr) *e_rr = c::Error_nullPointer(1, "createBlas()::scratch is required");
+					return false;
+				}
+
+				info.scratchBuffer = scratch.handle();
+				return createBlas(info, debugName, result, e_rr);
+			}
+
+			//What createBlas(info) would allocate, without creating it; see GraphicsDeviceRef_getBLASSizesExt.
+
+			[[nodiscard]] c::Bool getBlasSizes(
+				const c::BLASCreateInfo &info, c::U64 &asSize, c::U64 &scratchSize, c::Error *e_rr = nullptr
+			) noexcept {
+				return c::GraphicsDeviceRef_getBLASSizesExt(handle(), &info, &asSize, &scratchSize, e_rr);
+			}
+
 			//disallowBindlessDescriptor keeps the TLAS out of the device's default bindless table entirely, for a
 			//structure only ever reached through a bindful binding; the default takes a descriptor like every
 			//other factory here.
@@ -1858,7 +1887,7 @@ namespace oxc {
 				c::ERTASBuildFlags buildFlags,
 				const c::TLASInstance *instances, c::U64 instanceCount,
 				const c::C8 *debugName, Tlas &result,
-				c::Bool disallowBindlessDescriptor = false, c::Error *e_rr = nullptr
+				BoolArg disallowBindlessDescriptor = false, c::Error *e_rr = nullptr
 			) noexcept {
 
 				const c::CharString n = name(debugName);
@@ -2056,7 +2085,7 @@ namespace oxc {
 			//Bytes in use; returns U64_MAX on error instead of Bool + e_rr (see GraphicsDeviceRef_getMemoryBudget).
 			//On dGPU deviceLocal = VRAM and !deviceLocal = shared memory; iGPU/CPU report 0 for device local.
 
-			[[nodiscard]] c::U64 getMemoryBudget(c::Bool isDeviceLocal) const noexcept {
+			[[nodiscard]] c::U64 getMemoryBudget(BoolArg isDeviceLocal) const noexcept {
 				return c::GraphicsDeviceRef_getMemoryBudget(handle(), isDeviceLocal);
 			}
 
@@ -2106,7 +2135,7 @@ namespace oxc {
 			//same count as the color target and the pipeline.
 
 			[[nodiscard]] c::Bool createDepthStencil(
-				c::U16 width, c::U16 height, c::EDepthStencilFormat format, c::Bool allowShaderRead,
+				c::U16 width, c::U16 height, c::EDepthStencilFormat format, BoolArg allowShaderRead,
 				const c::C8 *debugName, DepthStencil &result,
 				c::EMSAASamples msaa = c::EMSAASamples_Off, c::Error *e_rr = nullptr
 			) noexcept {
@@ -2251,7 +2280,7 @@ namespace oxc {
 
 			[[nodiscard]] c::Bool createSampler(
 				const c::SamplerInfo &info, const c::C8 *debugName, Sampler &result,
-				const DescriptorTable *bindlessTable = nullptr, c::Bool disallowBindlessDescriptor = false,
+				const DescriptorTable *bindlessTable = nullptr, BoolArg disallowBindlessDescriptor = false,
 				c::Error *e_rr = nullptr
 			) noexcept {
 
@@ -2376,6 +2405,7 @@ namespace oxc {
 						if(e_rr) *e_rr = c::Error_outOfBounds(
 							2, stage.fileId, fileCount, "createGraphicsPipeline() stage names a file that isn't there"
 						);
+
 						return false;
 					}
 

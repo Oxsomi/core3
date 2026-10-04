@@ -216,7 +216,7 @@ jobs:
 
       - name: Install Conan
         if: inputs.os != 'steamos' && runner.os != 'Linux'
-        uses: turtlebrowser/get-conan@main
+        uses: turtlebrowser/get-conan@e41c1e039be765c0ed9d9d38cc2a287566e1d8b3 # = main on 2026-10-02 (unchanged since its last commit, 2023-02-28)
 
       # ── Host platform deps ─────────────────────────────────────────────────
       # Needed by every build that produces host binaries, including the android job's OxC3_package.
@@ -607,6 +607,29 @@ jobs:
       - name: Build Release (SIMD fallback)
         if: inputs.os != 'android' && inputs.os != 'web'
         run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True -ctest True ${{ inputs.build_flags }}
+
+      # ── Backtraces ─────────────────────────────────────────────────────────
+      # A segfault only reaches the log through the engine's own signal handler, which can't symbolize a frame
+      # inside a driver (lavapipe's JIT on the arm64 runners printed one bare address and nothing else).
+      # On failure, every test ctest recorded as failed is rerun once under gdb, which names the frames in the
+      # driver's own libraries as well. Diagnostic only: it runs after the job has already failed, from the
+      # binary's own directory so it finds its packages, and it never changes the job's result.
+
+      - name: Backtrace failed tests (Linux)
+        if: failure() && runner.os == 'Linux' && inputs.os != 'android' && inputs.os != 'web'
+        continue-on-error: true
+        shell: bash
+        run: |
+          sudo apt-get install -y gdb >/dev/null || exit 0
+          for failed in $(find build -name LastTestsFailed.log 2>/dev/null); do
+            cut -d: -f2 "$failed" | while read -r test; do
+              exe=$(find build -type f -name "$test" -perm -u+x 2>/dev/null | head -1)
+              [ -n "$exe" ] || continue
+              echo "::group::gdb backtrace: $test"
+              (cd "$(dirname "$exe")" && timeout 1800 gdb -batch -ex run -ex "thread apply all bt 30" --args "./$test")
+              echo "::endgroup::"
+            done
+          done
 
       # ── Prebuilts ──────────────────────────────────────────────────────────
       # Last, and only on success(): every build and every test of this job has to have passed before a

@@ -150,6 +150,8 @@ typedef struct TLAS {
 
 } TLAS;
 
+static_assert(sizeof(TLAS) % 64 == 0, "TLAS must be a 64 byte multiple, its backend ext follows it");
+
 typedef RefPtr TLASRef;
 
 #define TLAS_ext(ptr, T) (!ptr ? NULL : (T##TLAS*)(ptr + 1))        //impl

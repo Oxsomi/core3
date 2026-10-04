@@ -257,16 +257,18 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 		false, true
 	},
 
-	//Triangle vertex position fetch: both threads must read back the exact object space vertices the BLAS was built from.
+	//Triangle vertex position fetch: every thread must read back the exact object space vertices the BLAS was built from.
 	//Bit exact comparison is legitimate for once, since this is stored data rather than a computed quantity.
 	//Thread 1 traces the TRANSLATED instance and still has to see the untranslated positions, which is what
 	// separates object space from world space.
+	//Thread 2 hits the BLAS's second geometry, which has to hand back its own triangle (see
+	// Test_buildCapabilityTlas).
 	{
 		"//OxC3_gtest/test_shaders/test_caps_raytriposition.oiSH", "rayTriPosition",
 		(c::EGraphicsFeatures) (c::EGraphicsFeatures_RayQuery | c::EGraphicsFeatures_RayTriPosition),
 		(c::EGraphicsDataTypes) (0),
 		c::ESHExtension_RayTriPosition,
-		{ { 0, 1 }, { 4, 1 } }, 2,
+		{ { 0, 1 }, { 4, 1 }, { 8, 1 } }, 3,
 		false, true
 	}
 
@@ -284,9 +286,14 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 //Runs one capability shader and compares the first U32 it wrote.
 //Returns whether the shader ran at all, so the caller can tell "verified" apart from "device lacks it".
 
-//Builds the single triangle the tracing entries aim at, and the acceleration structures over it.
-//The geometry matches test_graphics_shaders.c's ray pipeline test on purpose, so an inline trace and a
-// pipeline trace are aiming at the same thing and a disagreement between them means something.
+//Builds the triangles the tracing entries aim at, and the acceleration structures over them.
+//Triangle 0 matches test_graphics_shaders.c's ray pipeline test on purpose, so an inline trace and a pipeline
+// trace are aiming at the same thing and a disagreement between them means something.
+//
+//The BLAS holds TWO geometries, indexed ranges of one shared vertex and index buffer at their own offsets,
+// which is how a mesh split into material runs is built. Position fetch has to return the geometry's own
+// triangle for a hit on geometry 1; returning geometry 0's triangle at the same primitive index, or reading
+// the shared buffers from their start, passes every single geometry test there is.
 //Everything is left NULL on failure, which the caller reads as "no tracing this run".
 
 static void Test_buildCapabilityTlas(
@@ -294,27 +301,43 @@ static void Test_buildCapabilityTlas(
 	gfx::Device &dev,
 	c::Bool forceNoDataAccess,        //Deliberately unflagged BLAS, for the negative RayTriPosition guard test
 	gfx::DeviceBuffer &positions,
+	gfx::DeviceBuffer &indices,
 	gfx::Blas &blas,
 	gfx::Tlas &tlas
 ) {
 
 	c::Error *e_rr = &t->err;
 
-	const c::F32 triangle[12] = {
+	//Triangle 1 sits 2 above triangle 0, clear of every ray the other entries trace.
+
+	const c::F32 vertices[24] = {
 		0, 0, 0, 1,
 		1, 0, 0, 1,
-		0, 1, 0, 1
+		0, 1, 0, 1,
+		0, 2, 0, 1,
+		1, 2, 0, 1,
+		0, 3, 0, 1
 	};
 
-	c::Buffer triData = c::Buffer_createRefConst(triangle, sizeof(triangle));
+	const c::U16 triangleIndices[6] = { 0, 1, 2, 3, 4, 5 };
+
+	c::Buffer vertexData = c::Buffer_createRefConst(vertices, sizeof(vertices));
+	c::Buffer indexData = c::Buffer_createRefConst(triangleIndices, sizeof(triangleIndices));
 
 	if(!Test_assert(t, "capPositions", dev.createBufferData(
 		c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
-		"Capability trace positions", &triData, positions, nullptr, e_rr
+		"Capability trace positions", &vertexData, positions, nullptr, e_rr
+	)))
+		return;
+
+	if(!Test_assert(t, "capIndices", dev.createBufferData(
+		c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
+		"Capability trace indices", &indexData, indices, nullptr, e_rr
 	)))
 		return;
 
 	const c::DeviceData positionData = { .buffer = positions.handle() };
+	const c::U64 triangleBytes = 3 * sizeof(c::U16);
 
 	//Position fetch is a build time opt in: without AllowDataAccess the vertex data simply isn't kept in the
 	// acceleration structure, so the flag rides along whenever the device claims the capability.
@@ -327,9 +350,20 @@ static void Test_buildCapabilityTlas(
 		!forceNoDataAccess
 		? c::ERTASBuildFlags_AllowDataAccessExt : c::ERTASBuildFlags_None;
 
-	const c::BLASGeometry blasInfoGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 16, positionData);
+	c::BLASGeometry geometries[2];
 
-	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_single(blasFlags, &blasInfoGeometry);
+	for(c::U64 g = 0; g < 2; ++g)
+		geometries[g] = c::BLASGeometry_indexed(
+			c::ETextureFormatId_RGBA32f, 0, 4 * sizeof(c::F32), positionData, c::ETextureFormatId_R16u,
+			c::DeviceData { .buffer = indices.handle(), .offset = g * triangleBytes, .len = triangleBytes }
+		);
+
+	c::ListBLASGeometry geometryList{};
+
+	if(!Test_assert(t, "capGeometries", c::ListBLASGeometry_createRefConst(geometries, 2, &geometryList, e_rr)))
+		return;
+
+	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_geometries(blasFlags, geometryList);
 
 	if(!Test_assert(t, "capBlas", dev.createBlas(blasInfo, "Capability trace BLAS", blas, e_rr)))
 		return;
@@ -440,6 +474,7 @@ static c::Bool Test_runCapabilityShader(
 		Log::debugLn(
 			*dev.alloc(), "-- capabilityExec: %s claimed but experimental on this backend, skipped", cap->name
 		);
+
 		return true;
 	}
 
@@ -606,11 +641,11 @@ static void Test_capabilityRayTriPositionGuard(c::Test *t, gfx::Device &dev) {
 	if((caps.features & needed) != needed || (caps.experimentalFeatures & c::EGraphicsFeatures_RayTriPosition))
 		return;
 
-	gfx::DeviceBuffer positions, output;
+	gfx::DeviceBuffer positions, indices, output;
 	gfx::Blas blas;
 	gfx::Tlas tlas;
 
-	Test_buildCapabilityTlas(t, dev, true, positions, blas, tlas);
+	Test_buildCapabilityTlas(t, dev, true, positions, indices, blas, tlas);
 
 	if(!Test_assert(t, "rtpGuardTlas", tlas.valid()))
 		return;
@@ -698,12 +733,12 @@ extern "C" void Test_graphicsCapabilityExecution(oxc::c::Test *t, oxc::c::Graphi
 	//It only exists where the device claims RayQuery.
 	//Entries that need it are skipped otherwise.
 
-	gfx::DeviceBuffer positions;
+	gfx::DeviceBuffer positions, indices;
 	gfx::Blas blas;
 	gfx::Tlas tlas;
 
 	if(dev.info().capabilities.features & c::EGraphicsFeatures_RayQuery)
-		Test_buildCapabilityTlas(t, dev, false, positions, blas, tlas);
+		Test_buildCapabilityTlas(t, dev, false, positions, indices, blas, tlas);
 
 	c::U32 verified = 0, skipped = 0;
 

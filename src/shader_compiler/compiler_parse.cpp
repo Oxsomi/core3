@@ -1923,6 +1923,7 @@ Bool Compiler_reflect(
 			features,
 			alloc, reflection, e_rr
 		));
+
 		allocatedSR = true;
 
 		for (U32 i = 0; i < reflDesc.NodeCount; ++i)

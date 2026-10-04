@@ -41,6 +41,7 @@ typedef struct DeviceTexture {
 	Buffer cpuData;                         //If not cpu backed this will free post upload
 
 	ListDevicePendingRange pendingChanges;
+	U8 pad2[8];
 
 	SpinLock lock;
 

@@ -89,10 +89,13 @@ typedef struct DeviceBuffer {
 	ListDevicePendingRange pendingChanges;
 
 	U32 readHandle, writeHandle;
+	U8 padding[56];
 
 	SpinLock lock;
 
 } DeviceBuffer;
+
+static_assert(sizeof(DeviceBuffer) % 64 == 0, "DeviceBuffer must be a 64 byte multiple, its backend ext follows it");
 
 //TODO: Ability to query allocation size (inc alignment)
 //TODO: Ability to say resource won't need upload / or only clear.

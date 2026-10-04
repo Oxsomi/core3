@@ -38,6 +38,19 @@ Last full revision: 2026-09-02.
   on most runs and reports no saving on others. The compaction test's staleness asserts are gated on the
   structure actually having moved for exactly this reason; any assert downstream of "compaction shrank" is
   a coin flip without that gate.
+- **Command scopes: every command has to register its own accesses.** A scope derives its barriers from the
+  transitions declared for it and from what its commands add (a clear adds its image). Acceleration structure
+  builds, compaction copies and the compacted size query did NOT, on either backend: the BLAS's tracked state
+  never saw the build, so the next barrier on it waited for nothing. It cost two device losses to find (2026-10,
+  see the lore below) and was patched in the backends' flush and compact paths, not in the scope system. The
+  design fix: each command registers what it reads and writes when recorded, so a backend never has to remember;
+  reads the recorder cannot see per buffer (a TLAS build reads every BLAS its instances name, bindless access) get
+  one explicit, documented rule (a global barrier) instead of being left out.
+- **Command scopes: a dependency must synchronize, or not exist.** `ECommandScopeDependencyType_Unconditional`
+  declares "scope B after scope A", and callers read it as an execution and memory dependency (a TLAS update
+  declared after a compaction copy is expected not to start before the copy lands). Nothing turns it into a barrier,
+  which is exactly the race behind the 2026-10 AMD Vulkan fault. Either a dependency emits the barrier between
+  the two scopes' accesses, or it is removed so it cannot promise what it does not do.
 - **-fvk-invert-y double flip (latent).** The compiler applies the y flip to vertex AND domain AND geometry
   AND lib compiles, so a VS->GS Vulkan pipeline flips twice. Only decidable at PSO create time (whichever
   stage feeds the rasterizer flips once). Latent until GS/tessellation content exists.
@@ -49,6 +62,16 @@ Last full revision: 2026-09-02.
 
 Roughly ordered by how often the gap bites.
 
+- **Command scopes: handles instead of caller ids, and names kept on the CPU.** Callers pick U32 scope ids and
+  refer to earlier scopes by id arithmetic, which is easy to get wrong (`scope(..., ++id, { id - 1 })` reads `id`
+  in unspecified order), and timings and breadcrumbs report bare ids only an app's own
+  conventions decode. `scope()` returning a handle that later scopes depend on, ids assigned by the recorder, and
+  a name kept in OxC3's memory whether or not the device is a debug one (never handed to the API) fix both.
+- **Command scopes: splitting a frame across submits.** A submit has to stay under the OS's timeout (a TDR is
+  per submit, measured 2026-10), so a slow device needs a recorded frame cut into several submits; scope
+  boundaries are where that can happen, and nothing can split a list there today. Wanted by anything that has to keep a submit under the OS timeout.
+- **Command scopes: more than one queue.** Async compute needs a queue per scope and dependencies across queues,
+  which assumes the dependency issue above is settled first.
 - **Mesh/task shaders have no runtime path** while the feature bit reads true: stages compile and reflect,
   the VK extension is enabled, but there is no dispatchMesh on either backend (explicit TODO in
   graphics_pipeline.c). Widely adopted, both APIs, deprecated by nobody: a gap to fill, not weight to cut.
@@ -60,9 +83,18 @@ Roughly ordered by how often the gap bites.
   regression tests. Known fiddly parts: bindless handles baked into captured data (needs stable table
   allocation order or remapping), GPU-written inputs (indirect args, AS builds), swapchain images
   substituted with RenderTextures. Not a profiler; PIX keeps ISA/waves/timing.
-- **Gaps behind green feature bits** (detected and reported but not implemented): WBI on D3D12 (VK exists),
-  PerfQuery (Vulkan-only, should generalize cross-API), VRS, BatchedAsyncCommandList, BDA not exposed in
-  oiSH.
+- **Gaps behind green feature bits** (detected and reported but not implemented): PerfQuery
+  (Vulkan-only, should generalize cross-API), VRS, BatchedAsyncCommandList, BDA not exposed in oiSH.
+- **Our DXC fork writes an invalid shader flag into standalone DXIL stages.** The fork stores
+  `-fhlsl-unused-resource-bindings` in `ShaderFlags::m_UnusedResourceBinding` (bits 41-43), so it is
+  serialized into the entry's DXIL shader flags; OxC3 passes `reserve-all`, so every `[[oxc::stage]]` binary
+  carries bit 41. NVIDIA's driver rejects any flag bit at 41 or above with E_OUTOFMEMORY (WARP ignores it),
+  and the official validator rejects the module ("Flags must match usage"). Library entries escape because
+  IDxcLinker recomputes the flags. Fix in the fork: keep the setting out of the serialized flags (its own
+  metadata for reflection). Graphics stages declared with `[[oxc::stage]]` are affected too.
+- **DXC attaches `vk::ext_execution_mode_id` from a helper function to the wrong entry point** of a library
+  (seen with DXC 1.9.5399); named in the entry's own body it lands right, which is why
+  `OXC_ENABLE_OPACITY_MICROMAP()` is a macro. Worth reporting upstream.
 - **Readback follow-ups:** pulls for mips/arrays/stencil; decide whether CPUReadBit becomes publicly
   creatable.
 - **Copy shader multi-region batching** (mainMultiple in image_copy.hlsl is a stubbed TODO): deliberately
@@ -93,7 +125,7 @@ Roughly ordered by how often the gap bites.
 - **The mesh readers still pay per record where they could pay per block.** The binary PLY path now decodes
   in place out of the cursor's window against a plan resolved once per element, and the sink stages records
   into a block rather than handing each one to the cursor. What is left is measured rather than assumed:
-  on Lucy's 28M triangles a read of positions and indices alone is 1.39 s, attributes add 0.35 s, and both of
+  on a 28M triangle mesh a read of positions and indices alone is 1.39 s, attributes add 0.35 s, and both of
   the expensive parts have moved OUT of the reader, since `MeshFlat_computeWords` and `MeshFlat_computeNormals`
   let a caller derive them afterwards (1.19 s and 1.23 s of reader time respectively, and 117 ms together on a
   3070). What remains inside is the parse itself.
@@ -103,6 +135,15 @@ Roughly ordered by how often the gap bites.
   memory. So the bytes exist twice on the host before they exist on the device, and a resource cannot be
   larger than what the host is willing to hold. Measured on a 533 MB mesh: the flush runs at 7.2 GB/s on a
   link that does 24, because what it is timing is a single threaded `Buffer_memcpy`, not a transfer.
+- **oiDL compresses its data as one stream, so no entry can be read alone.** The spec compresses (and hashes)
+  every entry together, and its own text marks chunking as a TODO; no compression is implemented at all yet.
+  Wanted: each entry compressed on its own in fixed blocks (at most 256 KiB, which DirectStorage's GPU zstd
+  shader is tuned for), a per block table of stored sizes and CRC32Cs of the uncompressed bytes, AES256-GCM
+  per block with the tables as additional data, and an entry alignment option (up to 4 KiB, for unbuffered
+  reads straight into a device buffer). Zstandard as the method, a new `EXXCompressionType` value: Brotli,
+  which oiXX names, decodes slower on the CPU, and its GPU form (AMD's Brotli-G) is a separate format that
+  DirectStorage doesn't decode. oiCA gains random access compressed files from this
+  for free, its content being an oiDL, and oiRM (docs/file/oiRM.md, a draft) stores its payload as one.
 
   The fix is to make the SOURCE a stream rather than a buffer, and it needs no change to `OxStream` at all:
   `StreamFunc` is already `(stream, offset, length, Buffer dst)`, so a flush can read a dirty range straight
@@ -202,11 +243,86 @@ Roughly ordered by how often the gap bites.
   triangles remain, the three newest slots score flat so the greedy pick does not degenerate into a strip) or
   Tipsify; meshoptimizer's optimizeVertexCache followed by optimizeVertexFetch is the reference. A random order
   transforms two to three vertices per triangle, an ordered one about 0.65, and a vertex-bound pass
-  follows that ratio. The order also decides how coherent per-triangle hit records are for coherent rays and
+  follows that ratio. The order also decides how coherent per-triangle data is for coherent rays and
   how well AMD's BLAS builder pairs edge-sharing triangles. Sort into material runs first, stably, so a raster
   twin's one draw per run keeps its ranges. Needs the whole index list, so it is a pass after the read and not
   a read flag. Ships with a test that reports the simulated miss ratio before and after on a known mesh and has
   been seen to fail on an unordered input.
+
+- **Multi thread command recording.** Scope recording is thread independent but encoding is not: the thread id is
+  hardcoded to 0 and every list is encoded into one API command buffer per submit (`//TODO: Multi thread command
+  recording` in dx_device.c / vk_device.c). Walk the scopes and their barriers first to resolve state, then encode
+  the scopes whose dependencies are met as jobs (needs the dependency item above settled).
+
+### Usability (review 2 Oct 2026, detail in `docs/proposals/gfx_usability_review.md`)
+
+- **Dynamic graphics linking as the default**, static as an opt-in (performance, Android). Document which
+  backends the static path carries per platform; CI keeps both link modes.
+- **Integration papercuts:** a missing `//OxC3_graphics` virtual dependency fails only at runtime (make it a
+  configure error or implicit); `find_program(OxC3)` is case sensitive; an editable / local path conan mode so
+  local core3 edits reach consumers without a push.
+- **C++ wrapper gaps:** missing wrappers (static/immutable samplers and the default bindless layout,
+  `pullRegionStream`, `supports*Format`, pipeline serialization, `getPipelineExecutables`, AS from cache, shader
+  targets, `GraphicsDeviceRef_findResourceByAddress`); weaker than C (`getFirstShaderEntry` without defines and
+  uniforms, `createSwapchain` and `createDepthStencil` options, the 16 list / 16 swapchain cap on submit); a stale
+  header comment listing wrapped things as unwrapped.
+- **Accessors so applications stop reaching into internals:** `Device::submitId()` / `completedSubmitId()`,
+  `Blas::bufferSize()` / `Tlas::bufferSize()`, a typed DeviceBuffer with `cpuData()` in pull callbacks, a
+  skip-null option on `scope()`; and stop exposing `Handle::data()` publicly.
+- **Hot reload:** reload changed pipelines from a package in the background and swap them at a frame boundary,
+  old ones freed through refcounting; pairs with the disk pipeline cache.
+- **Samples:** a `samples/` folder of small CI-built programs (clear, triangle, compute plus readback, BLAS/TLAS
+  plus dispatchRays, headless render to file, bindful plus static sampler), each with its own CMake and conan
+  integration, one per link mode at least; doc snippets pulled from them.
+
+### Memory and resources
+
+- **Placed and aliased (transient) resources; fixed block sizes** (`blockSizeCpu` / `blockSizeGpu` in device.c ~1130).
+- **Textures: mips, cube and 3D.** texture.c refuses levels > 1 and non 2D, and caps at 16384. BC texture
+  streaming depends on this.
+- **Residency management.** `//TODO` in dx_command_list.c / vk_command_list.c; there is no MakeResident/Evict
+  anywhere, while graphics_api.md promises a resource in flight is not evicted. Blocks do carry a residency
+  priority now (SetResidencyPriority, VK_EXT_memory_priority), so the OS pages staging out first.
+- **Allocator: empty blocks are freed at once** (device_allocator.c ~57-66). A resource created and freed per frame
+  or per resize allocates and releases a whole block each time. Keep one spare block per memory type / heap kind,
+  as VMA does, or free with hysteresis.
+- **Allocator: the spinlock is held across vkAllocateMemory / vkMapMemory / CreateHeap**, which can take
+  milliseconds, so every other allocating thread spins meanwhile. Create the block outside the lock and insert it
+  under the lock (another thread may have made room meanwhile, so search again before inserting).
+- **Allocator: linear sub-allocation.** AllocationBuffer is first fit over a sorted array: allocate scans,
+  insert/erase memmove and free searches linearly, and the "take the whole range if the request is >= 75% of it"
+  rule wastes up to 25%. Fine at hundreds of resources, not at the thousands a large scene brings. TLSF (what VMA
+  and D3D12MA moved to) gives O(1) allocate and free with less fragmentation.
+- **Upload batching.** One barrier + one copy (+ one flush on incoherent memory) per pending resource
+  (vk_device_buffer.c ~560-640, textures likewise): merge per submit.
+- **Read to read buffer transitions still emit barriers** (vk_device_buffer.c ~55); state is tracked per whole
+  buffer, not per range.
+- **Linear `ListRefPtr_contains`** per submit, per pending resource and per transition (command_list.c ~161-170,
+  device.c ~2670-2685, vk_device_buffer.c ~300-312): O(n^2) in resource count, as are the always on resource
+  registry's find and pop on every free and the Vulkan address binding list on every bind. Waits on a hash set
+  (GitHub #40).
+- **TLAS scratch is per TLAS** (vk_tlas.c ~272-286): follow-up to a caller provided BLAS scratch.
+- **Defrag, promotion and demotion of GFX memory** (GitHub #155).
+
+### Locking, threads and robustness
+
+- **One device wide SpinLock** guards submit, wait (fence waits included), create/free, markDirty and the registry.
+  About 70 acquires spin with U64_MAX and no timeout. The lock order (command list, swapchain, pending resources
+  under the device lock; markDirty takes buffer then device) is undocumented: document it and consider a blocking
+  lock for long holds.
+- **Submit orchestration is duplicated per backend** (~400 lines each in dx_device.c / vk_device.c, and
+  getCommandAllocator diverges). Proposal: [proposals/submit_skeleton.md](proposals/submit_skeleton.md).
+- **D3D12 / Vulkan surface loss:** `VK_ERROR_OUT_OF_DATE_KHR` and monitor reconnects have no recreate logic
+  (vulkan.c ~71 maps it to Error_invalidState; GitHub #167). Vulkan flicker when dragging a window on Windows (#168).
+  #171 is partly fixed (LoadImageW/LoadCursorW fallbacks done); CS_HREDRAW | CS_VREDRAW is still set at
+  wwindow_manager.c ~123.
+
+### Tracked upstream, not yet local (Oxsomi/core3)
+
+- #129 printf in shaders. #165 device thermals and clock speeds (NVAPI) so benches can be interpreted. #146 DXIL PDB
+  output (compiler_dxil.cpp ~695 only strips DXC_PART_PDB). #172 compile time error levels.
+- Stale issue candidates for the owner to close: #4, #11, #17, #18, #37, #40 (once the hash set lands), #113, #115,
+  #116, #124, #128, #88, #90.
 
 ## Test and CI state
 
@@ -222,6 +338,39 @@ Roughly ordered by how often the gap bites.
   rig-ready; per-format and per-capability modules benefit most.
 - **Adding a test file needs a CMake reconfigure**: test/interface globs *.c(pp), so a new file without
   reconfiguring fails the link on missing symbols.
+
+## Testing
+
+- **Parser corpus / fuzzing** beyond oiCA/oiDL/oiSH/DDS: PLY, OBJ, WAV, oiSP (sp_file.c, 1922 lines), oiPL, oiBC.
+  oiSP and oiPL have a single thin test file each.
+- **Sanitizers and analysis:** a ThreadSanitizer job (JobQueue, SpinLock, atomics, the graphics locking contracts),
+  a coverage report, static analysis (clang-tidy / MSVC /analyze). LeakSanitizer is off (detect_leaks=0), so paths
+  that bypass Platform_instance->alloc (process/argv code in uprocess.c ~54,108, wplatform.c ~221) are unchecked.
+- **Graphics tests missing:** VRS, dispatchMesh on either backend. Device loss and multi queue are
+  only lightly covered. The MoltenVK pass rate has never been measured.
+- **Unit tests for the command recorder / validator** (API independent, so testable without a device).
+- **Integrity:** oiSH/oiSB use CRC32C (corruption, not tampering) and have no encryption. State the trust boundary:
+  a shader loaded from disk is unauthenticated unless it sits inside an encrypted oiCA.
+
+## Documentation TODO
+
+- **graphics_api.md drift and structure** (`docs/proposals/gfx_usability_review.md` §6): about 20 signature errors in examples (device create,
+  startScope, TLAS, names by value, getFirstShaderEntry, startRenderExt, PipelineRaytracingInfo /
+  PipelineGraphicsInfo / PipelineStage fields, flag names); stale claims (MSL/WGSL, compile.bat, include paths,
+  "resources require bindless", buffering, Unconditional dependencies, the sampler array); placeholder examples.
+  Split into a C++-first user guide and a maintainer reference, and generate function listings from the headers.
+  Missing topics: graphics.hpp, the HLSL side, scope rules and why reads and writes split, the readback
+  lifecycle, a full frame loop, virtual windows, CMake/conan integration, a device lost guide.
+
+Outlines only; each becomes a section in graphics_api.md (or its own page).
+
+- **Scopes and barriers:** transitions and what a scope may contain; dependencies (they do not synchronize yet, see
+  Open issues); predicate scopes; BLAS and TLAS builds needing separate scopes; how breadcrumb ids relate to scope ids.
+- **Adding a backend feature end to end:** the EGraphicsFeatures bit; capability derivation and spec minimums; the
+  Ext/Impl pairs; the graphics.hpp wrapper; registering the interface test.
+- **Memory model:** blocks and the 2000 block limit; dedicated vs shared; staging; mappedMemoryExt; the memory
+  budget API; the freed resource ring.
+- **Thread safety:** a table of which calls are thread safe (to be written, from the locking item above).
 
 ## Debugging lore (expensive lessons, do not relearn)
 
@@ -244,6 +393,16 @@ Roughly ordered by how often the gap bites.
   implicated. The `windows_hook_rtl_allocators=0` and `windows_hook_legacy_allocators=0` ASAN_OPTIONS do
   not help. A newer LLVM is the fix; meanwhile clang-cl without `-asan` still gives the compiler coverage
   that is the reason to run it on Windows, and the sanitizer legs are Linux's anyway.
+- **A work item the scope system does not see gets no barrier, and a forgiving driver hides it.** Acceleration structure
+  builds, compaction copies and the compacted size query left their buffers' tracked barrier state alone, so the
+  next barrier went out with no source stage (D3D12 SyncBefore NONE, debug layer error 1417; Vulkan srcStage 0)
+  and waited for nothing. Some drivers serialize acceleration structure work anyway, so nothing showed there; on AMD's
+  Windows Vulkan driver a TLAS refit raced the compaction copy and traversal later read through garbage: a GPU
+  page fault at an address in nothing OxC3 allocated, about one run in three, only with compaction on. What found
+  it: `VK_EXT_device_fault` saying fault rather than timeout, breadcrumbs putting it in the frame after
+  compaction, and turning compaction off isolating it in one run. Lesson: a fault "in driver memory" that only one
+  vendor shows is a missing barrier until proven otherwise, and every command that touches a resource outside a
+  scope's declared transitions needs one (see the command scope items above).
 - **A lost device makes GPU-AV report nonsense, and the nonsense looks like the bug.** An unaligned shader
   binding table (the SBT base was not aligned to shaderGroupBaseAlignment) lost the device mid-suite on
   NVIDIA. What the log showed was not that: it was GPU-AV claiming `(set = 1, binding = 4) Descriptor index
@@ -299,7 +458,7 @@ Roughly ordered by how often the gap bites.
   oiCA entry has to handle both shapes an archive holds data in, loaded buffer or still stream-backed.
   file_util.c and convert_oiCA.c each grew their own correct copy; inspect_data.c grew neither and just
   called CAFile_getDataConst, ignoring the isValid it wrote into, so `file data -entry N -output` wrote a
-  0-byte file and exited 0 for any stream-backed entry (found on a 1.25 MB pathtrace.oiSH; every smaller
+  0-byte file and exited 0 for any stream-backed entry (found on a 1.25 MB oiSH; every smaller
   entry in the same archive extracted fine). Now one CLI_openArchiveEntry in cli.h, used by all of them,
   handing back a stream for both shapes rather than a materialized copy.
 
@@ -322,6 +481,8 @@ Roughly ordered by how often the gap bites.
   fine). Wrap the element in parentheses to say the concatenation is deliberate, which is also what the
   compiler's own note suggests. Splitting a string to satisfy the 128 column limit is what walks into this,
   so it only shows up on the clang leg of CI, long after the MSVC build looked clean.
+- **Re-signalling a D3D12 fence value that already completed makes every wait on it pass at once.** A submit split by a
+  flush signalled the flush's value again at its end, so waits ran ahead of the last chunk and some drivers lost data.
 
 ## Upstream / external
 

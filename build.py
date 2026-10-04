@@ -84,6 +84,12 @@ def main():
 	parser.add_argument("--force_deps", action="store_true", help="Ignore hash cache and rebuild all dependencies")
 
 	parser.add_argument(
+		"-mesa", type=str, default=None,
+		help="Run the suites against a Mesa built by tools/mesa.py (a version such as 26.2.3, or the ref it was "
+		     "built from) instead of the system's Vulkan drivers. Linux only. Implies -ctest True with -tests True"
+	)
+
+	parser.add_argument(
 		"-deploy", type=str, default=None,
 		help="After building, export the conan package and lay it out in this folder. Use it to produce a "
 		     "prebuilt without restating what belongs in one: the contents come from conanfile.py's "
@@ -95,6 +101,26 @@ def main():
 	system        = common.hostSystem()
 	arch          = common.hostArch()[0]
 	platform_name = common.hostPlatformName()
+
+	# The Vulkan loader takes the pinned Mesa's drivers and no others, for this build and anything it runs.
+	# The suites only rerun when something they were built from changed, and a different driver is not such a
+	# thing, so the whole suite runs through ctest instead.
+
+	if args.mesa is not None:
+
+		sys.path.insert(0, os.path.join(common.ROOT, "tools"))
+		import mesa
+
+		try:
+			os.environ.update(mesa.environment(args.mesa))
+		except RuntimeError as e:
+			print(f"-- Error: {e}", file=sys.stderr)
+			sys.exit(1)
+
+		print(f"-- Vulkan drivers from Mesa {args.mesa}: {os.environ['VK_ICD_FILENAMES']}")
+
+		if args.tests == "True":
+			args.ctest = "True"
 
 	# On non-Windows, mode is required
 

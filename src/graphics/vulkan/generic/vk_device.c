@@ -28,6 +28,7 @@
 #include "graphics/vulkan/vk_buffer.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
@@ -62,6 +63,11 @@ TList(VkDeviceQueueCreateInfo);
 TList(VkQueueFamilyProperties);
 TListImpl(VkDeviceQueueCreateInfo);
 TListImpl(VkQueueFamilyProperties);
+
+TList(VkDeviceFaultAddressInfoEXT);
+TList(VkDeviceFaultVendorInfoEXT);
+TListImpl(VkDeviceFaultAddressInfoEXT);
+TListImpl(VkDeviceFaultVendorInfoEXT);
 
 //Declared only, since vk_instance.c in the same library provides the implementation.
 
@@ -123,6 +129,97 @@ static Bool VkGraphicsDevice_logMissingExtensions(
 clean:
 	ListVkExtensionProperties_free(&supported, alloc);
 	return s_uccess;
+}
+
+static void VkGraphicsDevice_createBreadcrumbs(GraphicsDevice *device, VkGraphicsDevice *deviceExt) {
+
+	const U64 size = GRAPHICS_BREADCRUMB_BYTES;          //Whole pages from the OS, so any driver can import them
+	const VkExternalMemoryHandleTypeFlagBits handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
+
+	deviceExt->breadcrumbHost = Platform_allocPages(size);
+
+	VkMemoryHostPointerPropertiesEXT hostProps = (VkMemoryHostPointerPropertiesEXT) {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT
+	};
+
+	const VkExternalMemoryBufferCreateInfo external = (VkExternalMemoryBufferCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO,
+		.handleTypes = handleType
+	};
+
+	const VkBufferCreateInfo bufferInfo = (VkBufferCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.pNext = &external,
+		.size = size,
+		.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+	};
+
+	if(
+		!deviceExt->breadcrumbHost ||
+		deviceExt->getMemoryHostPointerProperties(
+			deviceExt->device, handleType, deviceExt->breadcrumbHost, &hostProps
+		) != VK_SUCCESS ||
+		deviceExt->createBuffer(deviceExt->device, &bufferInfo, NULL, &deviceExt->breadcrumbBuffer) != VK_SUCCESS
+	) {
+		Log_warnLnx("Vulkan: breadcrumbs couldn't be set up, a lost device won't say which scope it was in");
+		return;
+	}
+
+	VkBufferMemoryRequirementsInfo2 reqInfo = (VkBufferMemoryRequirementsInfo2) {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2,
+		.buffer = deviceExt->breadcrumbBuffer
+	};
+
+	VkMemoryRequirements2 req = (VkMemoryRequirements2) { .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
+	deviceExt->getBufferMemoryRequirements2(deviceExt->device, &reqInfo, &req);
+
+	const U32 types = hostProps.memoryTypeBits & req.memoryRequirements.memoryTypeBits;
+
+	const VkImportMemoryHostPointerInfoEXT import = (VkImportMemoryHostPointerInfoEXT) {
+		.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT,
+		.handleType = handleType,
+		.pHostPointer = deviceExt->breadcrumbHost
+	};
+
+	//Host coherent, or the GPU's writes may sit in a cache nobody can flush once the device is lost; not device local
+	// where there is a choice, since these are read by the CPU.
+
+	const VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+	U32 typeIndex = U32_MAX;
+
+	for(U32 i = 0; i < deviceExt->memoryProperties.memoryTypeCount; ++i) {
+
+		const VkMemoryPropertyFlags flags = deviceExt->memoryProperties.memoryTypes[i].propertyFlags;
+
+		if(!(types >> i & 1) || (flags & coherent) != coherent)
+			continue;
+
+		if(typeIndex == U32_MAX || !(flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+			typeIndex = i;
+
+		if(!(flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+			break;
+	}
+
+	const VkMemoryAllocateInfo allocInfo = (VkMemoryAllocateInfo) {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.pNext = &import,
+		.allocationSize = size,
+		.memoryTypeIndex = typeIndex
+	};
+
+	if(
+		typeIndex == U32_MAX ||
+		deviceExt->allocateMemory(deviceExt->device, &allocInfo, NULL, &deviceExt->breadcrumbMemory) != VK_SUCCESS ||
+		deviceExt->bindBufferMemory(deviceExt->device, deviceExt->breadcrumbBuffer, deviceExt->breadcrumbMemory, 0) !=
+		VK_SUCCESS
+	) {
+		Log_warnLnx("Vulkan: breadcrumbs couldn't be set up, a lost device won't say which scope it was in");
+		return;
+	}
+
+	device->breadcrumbs = (U32*) deviceExt->breadcrumbHost;
 }
 
 Bool VK_WRAP_FUNC(GraphicsDevice_init)(
@@ -241,6 +338,33 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
+		VkPhysicalDeviceFaultFeaturesEXT,
+		feat2 & EGraphicsFeatures2_DeviceFault,
+		(VkPhysicalDeviceFaultFeaturesEXT) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT,
+			.deviceFault = true
+		}
+	)
+
+	bindNextVkStruct(
+		VkPhysicalDeviceMemoryPriorityFeaturesEXT,
+		featEx & EVkGraphicsFeatures_MemoryPriority,
+		(VkPhysicalDeviceMemoryPriorityFeaturesEXT) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PRIORITY_FEATURES_EXT,
+			.memoryPriority = true
+		}
+	)
+
+	bindNextVkStruct(
+		VkPhysicalDeviceAddressBindingReportFeaturesEXT,
+		featEx & EVkGraphicsFeatures_AddressBindingReport,
+		(VkPhysicalDeviceAddressBindingReportFeaturesEXT) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ADDRESS_BINDING_REPORT_FEATURES_EXT,
+			.reportAddressBinding = true
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceSynchronization2Features,
 		true,
 		(VkPhysicalDeviceSynchronization2Features) {
@@ -342,11 +466,33 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	#endif
 
 	bindNextVkStruct(
-		VkPhysicalDeviceOpacityMicromapFeaturesEXT,
+		VkPhysicalDeviceOpacityMicromapFeaturesKHR,
 		feat & EGraphicsFeatures_RayMicromapOpacity,
 		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT,
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_KHR,
 			.micromap = true
+		}
+	)
+
+	//8-bit OMM indices are legal wherever micromaps are, which needs VK_INDEX_TYPE_UINT8
+
+	bindNextVkStruct(
+		VkPhysicalDeviceIndexTypeUint8FeaturesKHR,
+		feat & EGraphicsFeatures_RayMicromapOpacity,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES_KHR,
+			.indexTypeUint8 = true
+		}
+	)
+
+	//A micromap array is created through vkCreateAccelerationStructure2KHR, which this feature gates
+
+	bindNextVkStruct(
+		VkPhysicalDeviceDeviceAddressCommandsFeaturesKHR,
+		feat & EGraphicsFeatures_RayMicromapOpacity,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEVICE_ADDRESS_COMMANDS_FEATURES_KHR,
+			.deviceAddressCommands = true
 		}
 	)
 
@@ -531,16 +677,14 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_MeshShader:                 on = feat & EGraphicsFeatures_MeshShader;               break;
 			case EOptExtensions_VariableRateShading:        on = feat & EGraphicsFeatures_VariableRateShading;      break;
 			case EOptExtensions_DynamicRendering:           on = feat & EGraphicsFeatures_DirectRendering;          break;
-			//EXT is the fallback: a device that got the KHR promotion runs that instead, see vk_instance.c
 
 			case EOptExtensions_RayMicromapOpacity:
-				on = (feat & EGraphicsFeatures_RayMicromapOpacity) && !(featEx & EVkGraphicsFeatures_OpacityMicromapKHR);
+			case EOptExtensions_DeviceAddressCommands:
+			case EOptExtensions_ExtendedDynamicState:        //device_address_commands' dependency below Vulkan 1.3
+			case EOptExtensions_IndexTypeUint8:              //8-bit OMM indices
+				on = feat & EGraphicsFeatures_RayMicromapOpacity;
 				break;
 
-			case EOptExtensions_RayMicromapOpacityKHR:
-			case EOptExtensions_DeviceAddressCommands:
-				on = featEx & EVkGraphicsFeatures_OpacityMicromapKHR;
-				break;
 			case EOptExtensions_AtomicF32:                    on = types & EGraphicsDataTypes_AtomicF32;                  break;
 			case EOptExtensions_DeferredHostOperations:       on = feat & EGraphicsFeatures_Raytracing;                   break;
 			case EOptExtensions_RaytracingValidation:         on = feat & EGraphicsFeatures_RayValidation;                break;
@@ -564,6 +708,19 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_PipelineExecutableProperties: on = feat2 & EGraphicsFeatures2_PipelineExecutableInfo;     break;
 			case EOptExtensions_PushDescriptor:               on = featEx & EVkGraphicsFeatures_PerformantPushDescriptor; break;
 			case EOptExtensions_ConditionalRendering:         on = feat2 & EGraphicsFeatures2_Predication;                break;
+			case EOptExtensions_DeviceFault:                  on = feat2 & EGraphicsFeatures2_DeviceFault;                break;
+			case EOptExtensions_DeviceAddressBindingReport:   on = featEx & EVkGraphicsFeatures_AddressBindingReport;     break;
+			case EOptExtensions_MemoryPriority:               on = featEx & EVkGraphicsFeatures_MemoryPriority;           break;
+
+			case EOptExtensions_BufferMarker:                 on = feat2 & EGraphicsFeatures2_WriteBufferImmediate;       break;
+
+			//Only for breadcrumbs, which also need the buffer marker
+
+			case EOptExtensions_ExternalMemoryHost:
+				on = (featEx & EVkGraphicsFeatures_ExternalHostMemory) &&
+					(feat2 & EGraphicsFeatures2_WriteBufferImmediate) &&
+					(device->flags & (EGraphicsDeviceFlags_Breadcrumbs | EGraphicsDeviceFlags_IsDebug));
+				break;
 
 			//Dependencies, requested alongside whichever feature needs them
 
@@ -747,6 +904,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkCmdDispatch, deviceExt->cmdDispatch);
 	getVkFunctionDevice(clean, vkCmdDispatchIndirect, deviceExt->cmdDispatchIndirect);
 	getVkFunctionDevice(clean, vkCreateComputePipelines, deviceExt->createComputePipelines);
+	getVkFunctionDevice(clean, vkCreatePipelineCache, deviceExt->createPipelineCache);
+	getVkFunctionDevice(clean, vkDestroyPipelineCache, deviceExt->destroyPipelineCache);
+	getVkFunctionDevice(clean, vkGetPipelineCacheData, deviceExt->getPipelineCacheData);
+	getVkFunctionDevice(clean, vkMergePipelineCaches, deviceExt->mergePipelineCaches);
 	getVkFunctionDevice(clean, vkDestroyPipeline, deviceExt->destroyPipeline);
 	getVkFunctionDevice(clean, vkDestroyShaderModule, deviceExt->destroyShaderModule);
 	getVkFunctionDevice(clean, vkDestroyBuffer, deviceExt->destroyBuffer);
@@ -793,6 +954,20 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		getVkFunctionDevice(clean, vkCmdBeginConditionalRenderingEXT, deviceExt->cmdBeginConditionalRendering);
 		getVkFunctionDevice(clean, vkCmdEndConditionalRenderingEXT, deviceExt->cmdEndConditionalRendering);
 	}
+
+	if(device->info.capabilities.features2 & EGraphicsFeatures2_DeviceFault)
+		getVkFunctionDevice(clean, vkGetDeviceFaultInfoEXT, deviceExt->getDeviceFaultInfo);
+
+	if(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate)
+		getVkFunctionDevice(clean, vkCmdWriteBufferMarker2AMD, deviceExt->cmdWriteBufferMarker2);
+
+	if(
+		(device->info.capabilities.featuresExt & EVkGraphicsFeatures_ExternalHostMemory) &&
+		(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate) &&
+		(device->flags & (EGraphicsDeviceFlags_Breadcrumbs | EGraphicsDeviceFlags_IsDebug))
+	)
+		getVkFunctionDevice(clean, vkGetMemoryHostPointerPropertiesEXT, deviceExt->getMemoryHostPointerProperties);
+
 	getVkFunctionDevice(clean, vkGetQueryPoolResults, deviceExt->getQueryPoolResults);
 	getVkFunctionDevice(clean, vkQueuePresentKHR, deviceExt->queuePresentKHR);
 	getVkFunctionDevice(clean, vkCreateGraphicsPipelines, deviceExt->createGraphicsPipelines);
@@ -830,6 +1005,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		getVkFunctionDevice(
 			clean, vkCmdWriteAccelerationStructuresPropertiesKHR, deviceExt->writeAccelerationStructuresProperties
 		);
+
 		getVkFunctionDevice(clean, vkDestroyAccelerationStructureKHR, deviceExt->destroyAccelerationStructure);
 		getVkFunctionDevice(clean, vkGetAccelerationStructureBuildSizesKHR, deviceExt->getAccelerationStructureBuildSizes);
 		getVkFunctionDevice(
@@ -837,23 +1013,18 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			vkGetAccelerationStructureDeviceAddressKHR,
 			deviceExt->getAccelerationStructureDeviceAddress
 		);
+
 		getVkFunctionDevice(
 			clean,
 			vkGetDeviceAccelerationStructureCompatibilityKHR,
 			deviceExt->getAccelerationStructureCompatibility
 		);
 
-		//The EXT micromap entry points; the KHR promotion has none, its arrays build through the AS calls above
+		//A micromap array builds, sizes and destroys through the AS calls above; only its creation needs the
+		// address based entry point, since VkAccelerationStructureCreateInfoKHR can't name the micromap type.
 
-		if(
-			(feat & EGraphicsFeatures_RayMicromapOpacity) &&
-			!(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR)
-		) {
-			getVkFunctionDevice(clean, vkCreateMicromapEXT, deviceExt->createMicromap);
-			getVkFunctionDevice(clean, vkDestroyMicromapEXT, deviceExt->destroyMicromap);
-			getVkFunctionDevice(clean, vkCmdBuildMicromapsEXT, deviceExt->cmdBuildMicromaps);
-			getVkFunctionDevice(clean, vkGetMicromapBuildSizesEXT, deviceExt->getMicromapBuildSizes);
-		}
+		if(feat & EGraphicsFeatures_RayMicromapOpacity)
+			getVkFunctionDevice(clean, vkCreateAccelerationStructure2KHR, deviceExt->createAccelerationStructure2);
 	}
 
 	if (feat & EGraphicsFeatures_RayPipeline) {
@@ -1029,13 +1200,33 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	//Alignment rules
 
+	deviceExt->descriptorHeapProperties = (VkPhysicalDeviceDescriptorHeapPropertiesEXT) {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT
+	};
+
 	VkPhysicalDeviceProperties2 properties2 = (VkPhysicalDeviceProperties2) {
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+		.pNext = device->info.capabilities.features2 & EGraphicsFeatures2_DescriptorHeap ?
+			&deviceExt->descriptorHeapProperties : NULL
 	};
 
 	instanceExt->getPhysicalDeviceProperties2((VkPhysicalDevice) device->info.ext, &properties2);
+	deviceExt->descriptorHeapProperties.pNext = NULL;
 
 	deviceExt->atomSize = (U8) properties2.properties.limits.nonCoherentAtomSize;
+
+	deviceExt->pipelineCacheHeader = (VkPipelineCacheHeaderVersionOne) {
+		.headerSize = sizeof(VkPipelineCacheHeaderVersionOne),
+		.headerVersion = VK_PIPELINE_CACHE_HEADER_VERSION_ONE,
+		.vendorID = properties2.properties.vendorID,
+		.deviceID = properties2.properties.deviceID
+	};
+
+	Buffer_memcpy(
+		Buffer_createRef(deviceExt->pipelineCacheHeader.pipelineCacheUUID, VK_UUID_SIZE),
+		Buffer_createRefConst(properties2.properties.pipelineCacheUUID, VK_UUID_SIZE)
+	);
+
 	deviceExt->nonLinearAlignment = (U32) properties2.properties.limits.bufferImageGranularity;
 	deviceExt->timestampPeriod = properties2.properties.limits.timestampPeriod;
 
@@ -1054,6 +1245,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 				deviceExt->createQueryPool(deviceExt->device, &queryInfo, NULL, &deviceExt->timestampPool[i]),
 				e_rr
 			));
+
 			deviceExt->timestampCapacity[i] = GRAPHICS_TIMESTAMP_QUERIES;
 		}
 	}
@@ -1090,6 +1282,24 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			deviceExt->device, &emptyInfo, NULL, &deviceExt->emptySetLayout
 		), e_rr));
 	}
+
+	//The pipeline cache every pipeline merges into; without it pipelines still build, only uncached and estimated
+
+	const VkPipelineCacheCreateInfo pipelineCacheInfo = (VkPipelineCacheCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO
+	};
+
+	if(deviceExt->createPipelineCache(deviceExt->device, &pipelineCacheInfo, NULL, &deviceExt->pipelineCache) != VK_SUCCESS)
+		deviceExt->pipelineCache = VK_NULL_HANDLE;
+
+	//Breadcrumbs, in memory the process owns so they outlive a lost device. Anything missing only costs a loss its
+	// breadcrumbs, so a failure warns rather than failing the device.
+
+	if(deviceExt->getMemoryHostPointerProperties)
+		VkGraphicsDevice_createBreadcrumbs(device, deviceExt);
+
+	else if(device->flags & EGraphicsDeviceFlags_Breadcrumbs)
+		Log_warnLnx("Vulkan: breadcrumbs need VK_EXT_external_memory_host and VK_AMD_buffer_marker, which are missing");
 
 clean:
 
@@ -1148,8 +1358,15 @@ clean:
 }
 
 U64 VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool isDeviceLocal) {
+	return VkGraphicsDevice_getMemoryUsage(device, isDeviceLocal, NULL);
+}
+
+U64 VkGraphicsDevice_getMemoryUsage(GraphicsDevice *device, Bool isDeviceLocal, U64 *budget) {
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	if(budget)
+		*budget = U64_MAX;
 
 	if(device->info.capabilities.featuresExt & EVkGraphicsFeatures_MemoryBudget) {
 
@@ -1165,6 +1382,9 @@ U64 VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool is
 		VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 		instanceExt->getPhysicalDeviceMemoryProperties2((VkPhysicalDevice) device->info.ext, &properties);
 
+		if(budget)
+			*budget = propertiesMemoryBudget.heapBudget[deviceExt->heapIds[isDeviceLocal]];
+
 		return propertiesMemoryBudget.heapUsage[deviceExt->heapIds[isDeviceLocal]];
 	}
 
@@ -1179,12 +1399,16 @@ U64 VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool is
 			HRESULT hr = deviceExt->dxgiAdapter->lpVtbl->QueryVideoMemoryInfo(
 				deviceExt->dxgiAdapter,
 				0,
-				isDeviceLocal ? DXGI_MEMORY_SEGMENT_GROUP_LOCAL : DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,
+				isDeviceLocal || device->info.type != EGraphicsDeviceType_Dedicated ?
+					DXGI_MEMORY_SEGMENT_GROUP_LOCAL : DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,
 				&vidMem
 			);
 
 			if(FAILED(hr))
 				return U64_MAX;
+
+			if(budget)
+				*budget = vidMem.Budget;
 
 			return vidMem.CurrentUsage;
 		}
@@ -1259,8 +1483,21 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 		if(deviceExt->emptySetLayout)
 			deviceExt->destroyDescriptorSetLayout(deviceExt->device, deviceExt->emptySetLayout, NULL);
 
+		if(deviceExt->breadcrumbBuffer)
+			deviceExt->destroyBuffer(deviceExt->device, deviceExt->breadcrumbBuffer, NULL);
+
+		if(deviceExt->pipelineCache)
+			deviceExt->destroyPipelineCache(deviceExt->device, deviceExt->pipelineCache, NULL);
+
+		if(deviceExt->breadcrumbMemory)
+			deviceExt->freeMemory(deviceExt->device, deviceExt->breadcrumbMemory, NULL);
+
 		instanceExt->destroyDevice(deviceExt->device, NULL);
 	}
+
+	//The memory itself is the process's, freed once nothing on the device can still name it.
+
+	Platform_freePages(deviceExt->breadcrumbHost, GRAPHICS_BREADCRUMB_BYTES);
 
 	ListVkCommandAllocator_free(&deviceExt->commandPools, alloc);
 	ListVkSemaphore_free(&deviceExt->submitSemaphores, alloc);
@@ -1292,6 +1529,183 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 //Executing commands
 
+Bool VkGraphicsDevice_check(VkGraphicsDevice *deviceExt, VkResult res, Error *e_rr) {
+
+	if(res == VK_ERROR_DEVICE_LOST)
+		AtomicI64_store(&deviceExt->lost, 1);
+
+	return checkVkError(res, e_rr);
+}
+
+static const C8 *VkDeviceFault_addressType(VkDeviceFaultAddressTypeEXT type) {
+
+	switch(type) {
+		case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT:                  return "invalid read";
+		case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT:                 return "invalid write";
+		case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT:               return "invalid execute";
+		case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT:   return "instruction pointer";
+		case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT:   return "invalid instruction pointer";
+		case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT:     return "faulting instruction";
+		default:                                                             return "address";
+	}
+}
+
+//Names a fault address: a buffer by its own device address, an image (or a buffer without one) by the binding the
+// instance's messenger reported for it.
+
+static void VkGraphicsDevice_logFaultAddress(
+	GraphicsDevice *device, VkGraphicsInstance *instanceExt, const VkDeviceFaultAddressInfoEXT *info,
+	const Allocator *alloc
+) {
+
+	CharString str = CharString_createNull();
+	U64 offset = 0;
+	const U64 address = info->reportedAddress;
+	const C8 *type = VkDeviceFault_addressType(info->addressType);
+
+	Bool named = GraphicsDevice_describeResource(device, address, 0, &str, alloc, NULL);
+
+	if(!named) {
+
+		const U64 handle = VkGraphicsInstance_findBinding(instanceExt, address, &offset);
+
+		if(handle && GraphicsDevice_describeResource(device, 0, handle, &str, alloc, NULL)) {
+			Log_errorLnx(
+				"\t%s at 0x%" PRIx64 " (precision 0x%" PRIx64 "), in %.*s, +0x%" PRIx64 " into its binding",
+				type, address, (U64) info->addressPrecision, (int) CharString_length(str), str.ptr, offset
+			);
+
+			CharString_free(&str, alloc);
+			return;
+		}
+	}
+
+	if(named)
+		Log_errorLnx(
+			"\t%s at 0x%" PRIx64 " (precision 0x%" PRIx64 "), in %.*s",
+			type, address, (U64) info->addressPrecision, (int) CharString_length(str), str.ptr
+		);
+
+	else {
+
+		Log_errorLnx(
+			"\t%s at 0x%" PRIx64 " (precision 0x%" PRIx64 "), in nothing this device registered",
+			type, address, (U64) info->addressPrecision
+		);
+
+		//What lies around it, since a read past a buffer's end lands right after it: the registered ranges, then the
+		// bound ones (which also cover images and anything the registry has no address for).
+
+		if(GraphicsDevice_describeNearest(device, address, &str, alloc, NULL))
+			Log_errorLnx("\t\tnearest registered: %.*s", (int) CharString_length(str), str.ptr);
+
+		CharString_free(&str, alloc);
+
+		VkAddressBinding below, above;
+		const U64 count = VkGraphicsInstance_nearestBindings(instanceExt, address, &below, &above);
+
+		Log_errorLnx("\t\t%" PRIu64 " bindings reported", count);
+
+		const VkAddressBinding sides[2] = { below, above };
+
+		for(U32 i = 0; i < 2; ++i) {
+
+			if(!sides[i].handle)
+				continue;
+
+			const Bool sideNamed = GraphicsDevice_describeResource(device, 0, sides[i].handle, &str, alloc, NULL);
+			const C8 *what = sideNamed ? str.ptr : "not a registered object";
+
+			Log_errorLnx(
+				"\t\tnearest binding %s: 0x%" PRIx64 " to 0x%" PRIx64 " (0x%" PRIx64 " away), %s",
+				i ? "above" : "below", sides[i].address, sides[i].address + sides[i].size,
+				i ? sides[i].address - address : address - (sides[i].address + sides[i].size), what
+			);
+
+			CharString_free(&str, alloc);
+		}
+	}
+
+	CharString_free(&str, alloc);
+}
+
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_reportLoss)(GraphicsDeviceRef *deviceRef) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	if(!deviceExt || !deviceExt->device || !AtomicI64_load(&deviceExt->lost))
+		return false;
+
+	Log_errorLnx("Vulkan: device \"%s\" was lost", device->info.name);
+
+	if(!deviceExt->getDeviceFaultInfo) {
+		Log_errorLnx("\tVK_EXT_device_fault isn't available, so nothing is known about what it faulted on");
+		return true;
+	}
+
+	//The counts first, then every entry they announce; the vendor binary is left out, being opaque.
+
+	VkDeviceFaultCountsEXT counts = (VkDeviceFaultCountsEXT) { .sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT };
+	ListVkDeviceFaultAddressInfoEXT addresses = (ListVkDeviceFaultAddressInfoEXT) { 0 };
+	ListVkDeviceFaultVendorInfoEXT vendors = (ListVkDeviceFaultVendorInfoEXT) { 0 };
+
+	if(deviceExt->getDeviceFaultInfo(deviceExt->device, &counts, NULL) < 0) {
+		Log_errorLnx("\tvkGetDeviceFaultInfoEXT failed, so nothing is known about what it faulted on");
+		return true;
+	}
+
+	counts.vendorBinarySize = 0;
+
+	if(
+		!ListVkDeviceFaultAddressInfoEXT_resize(&addresses, counts.addressInfoCount, alloc, NULL) ||
+		!ListVkDeviceFaultVendorInfoEXT_resize(&vendors, counts.vendorInfoCount, alloc, NULL)
+	) {
+		Log_errorLnx("\tcouldn't allocate the fault report's %" PRIu32 " addresses", counts.addressInfoCount);
+		goto clean;
+	}
+
+	VkDeviceFaultInfoEXT info = (VkDeviceFaultInfoEXT) {
+		.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT,
+		.pAddressInfos = addresses.ptrNonConst,
+		.pVendorInfos = vendors.ptrNonConst
+	};
+
+	if(deviceExt->getDeviceFaultInfo(deviceExt->device, &counts, &info) < 0) {
+		Log_errorLnx("\tvkGetDeviceFaultInfoEXT failed, so nothing is known about what it faulted on");
+		goto clean;
+	}
+
+	Log_errorLnx("\t%s", info.description[0] ? info.description : "no description");
+
+	if(!counts.addressInfoCount)
+		Log_errorLnx("\tno fault address reported (a timeout faults nothing)");
+
+	for(U32 i = 0; i < counts.addressInfoCount; ++i)
+		VkGraphicsDevice_logFaultAddress(device, instanceExt, &addresses.ptr[i], alloc);
+
+	for(U32 i = 0; i < counts.vendorInfoCount; ++i)
+		Log_errorLnx(
+			"\tvendor: %s (code 0x%" PRIx64 ", data 0x%" PRIx64 ")",
+			vendors.ptr[i].description, (U64) vendors.ptr[i].vendorFaultCode, (U64) vendors.ptr[i].vendorFaultData
+		);
+
+clean:
+	ListVkDeviceFaultAddressInfoEXT_free(&addresses, alloc);
+	ListVkDeviceFaultVendorInfoEXT_free(&vendors, alloc);
+	return true;
+}
+
+static Bool VkGraphicsDevice_isFencePending(const VkGraphicsDevice *deviceExt, U8 fifId) {
+	return (deviceExt->commitFencePending >> fifId) & 1;
+}
+
+static void VkGraphicsDevice_setFencePending(VkGraphicsDevice *deviceExt, U8 fifId, Bool pending) {
+	deviceExt->commitFencePending = (U8) ((deviceExt->commitFencePending & ~(1 << fifId)) | (!!pending << fifId));
+}
+
 Bool VK_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -1316,7 +1730,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 	//Deadline policy stays with the harness that owns the run, not with the runtime.
 
 	for(U8 i = 0; i < device->framesInFlight; ++i)
-		if(deviceExt->commitFencePending[i])
+		if(VkGraphicsDevice_isFencePending(deviceExt, i))
 			pending[pendingCount++] = deviceExt->commitFence[i];
 
 	for(U64 waited = 0; pendingCount; ) {
@@ -1324,7 +1738,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 		const VkResult res = deviceExt->waitForFences(deviceExt->device, pendingCount, pending, true, 1 * SECOND);
 
 		if(res != VK_TIMEOUT) {
-			gotoIfError3(clean, checkVkError(res, e_rr));
+			gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, res, e_rr));
 			break;
 		}
 
@@ -1337,7 +1751,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 			);
 	}
 
-	gotoIfError3(clean, checkVkError(deviceExt->deviceWaitIdle(deviceExt->device), e_rr));
+	gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->deviceWaitIdle(deviceExt->device), e_rr));
 
 clean:
 	return s_uccess;
@@ -1583,6 +1997,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
 	CharString temp = CharString_createNull();
+	U32 acquiredImages = 0;                     //Entries of waitSemaphoresList this submit acquired into
 
 	//Reserve temp storage
 
@@ -1611,21 +2026,38 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	VkFence *fence = &deviceExt->commitFence[device->fifId];
 
-	//Only wait when a submit is actually pending on this fence.
-	//If the previous submit at this fifId failed the fence was left unsignaled, see commitFencePending.
-	//Waiting would then just burn the full timeout on something nothing will signal.
-	//So skip straight to reusing the unsignaled fence.
+	//Only wait when a submit is actually pending on this fence; see commitFencePending.
+	//Whether one was is kept for the timestamp read below, since the flag is cleared as soon as the fence is reset.
 
-	if (device->submitId > device->framesInFlight && deviceExt->commitFencePending[device->fifId]) {
+	const Bool slotWasPending = VkGraphicsDevice_isFencePending(deviceExt, device->fifId);
 
-		gotoIfError3(clean, checkVkError(deviceExt->waitForFences(
-			deviceExt->device,
-			1, fence,
-			true,
-			1 * SECOND
-		), e_rr));
+	if (device->submitId > device->framesInFlight && slotWasPending) {
 
-		gotoIfError3(clean, checkVkError(deviceExt->resetFences(deviceExt->device, 1, fence), e_rr));
+		//Until it signals, however long that takes: the fence and the slot's command pool are reset right after, and
+		// resetting either while the submit still runs is undefined. VK_TIMEOUT is tested by name, since checkVkError
+		// treats every non-negative result as success. A CPU device executing a backlog of slow frames is where a
+		// single bounded wait runs out.
+
+		for(U64 waited = 0; ; ) {
+
+			const VkResult res = deviceExt->waitForFences(deviceExt->device, 1, fence, true, 1 * SECOND);
+
+			if(res != VK_TIMEOUT) {
+				gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, res, e_rr));
+				break;
+			}
+
+			++waited;
+
+			if(!(waited % 5))
+				Log_performanceLnx(
+					"GraphicsDevice_submitCommands() still waiting on the frame's commit fence after %"PRIu64"s, "
+					"the device may be wedged", waited
+				);
+		}
+
+		gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->resetFences(deviceExt->device, 1, fence), e_rr));
+		VkGraphicsDevice_setFencePending(deviceExt, device->fifId, false);
 
 		//That fence also proves any compaction copy recorded in this slot has run, so the structures it
 		// replaced can go. Their buffers ride resourcesInFlight; only the handles are left to us.
@@ -1653,8 +2085,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	if(
 		(device->info.capabilities.features2 & EGraphicsFeatures2_Timestamps) &&
-		device->submitId > device->framesInFlight && deviceExt->commitFencePending[device->fifId] &&
-		device->timingSlots[device->fifId]
+		device->submitId > device->framesInFlight && slotWasPending && device->timingSlots[device->fifId]
 	) {
 		const U32 slots = device->timingSlots[device->fifId];
 		Buffer ticks = Buffer_createNull();
@@ -1665,6 +2096,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				deviceExt->device, deviceExt->timestampPool[device->fifId], 0, slots,
 				slots * sizeof(U64), ticks.ptrNonConst, sizeof(U64), VK_QUERY_RESULT_64_BIT
 			);
+
+			if(qr == VK_ERROR_DEVICE_LOST)
+				AtomicI64_store(&deviceExt->lost, 1);
 
 			if(qr == VK_SUCCESS) {
 
@@ -1710,21 +2144,26 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		U32 currImg = 0;
 
-		gotoIfError3(clean, checkVkError(deviceExt->acquireNextImage(
+		const VkResult acquired = deviceExt->acquireNextImage(
 			deviceExt->device,
 			swapchainExt->swapchain,
 			1 * SECOND,
 			semaphore,
 			VK_NULL_HANDLE,
 			&currImg
-		), e_rr));
+		);
 
-		unifiedTexture->currentImageId = (U8) currImg;
+		//Tested by name, since checkVkError passes every non-negative result: with no image acquired the semaphore
+		// is never signalled, and a submit waiting on it would never complete.
 
-		//Pushed rather than written at i, since the virtual ones above leave gaps the present lists must not carry.
+		if(acquired == VK_TIMEOUT || acquired == VK_NOT_READY)
+			retError(clean, Error_timedOut(
+				0, 1 * SECOND, "VkGraphicsDevice_submitCommands() no swapchain image became available"
+			));
 
-		gotoIfError3(clean, ListVkSwapchainKHR_pushBack(&deviceExt->swapchainHandles, swapchainExt->swapchain, alloc, e_rr));
-		gotoIfError3(clean, ListU32_pushBack(&deviceExt->swapchainIndices, unifiedTexture->currentImageId, alloc, e_rr));
+		gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, acquired, e_rr));
+
+		//The semaphore first, and counted, since from here on a failed frame still has to wait on it (see clean).
 
 		VkPipelineStageFlagBits pipelineStage =
 			(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : 0) |
@@ -1734,6 +2173,14 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		gotoIfError3(clean, ListVkSemaphore_pushBack(&deviceExt->waitSemaphoresList, semaphore, alloc, e_rr));
 		gotoIfError3(clean, ListVkPipelineStageFlags_pushBack(&deviceExt->waitStages, pipelineStage, alloc, e_rr));
+		++acquiredImages;
+
+		unifiedTexture->currentImageId = (U8) currImg;
+
+		//Pushed rather than written at i, since the virtual ones above leave gaps the present lists must not carry.
+
+		gotoIfError3(clean, ListVkSwapchainKHR_pushBack(&deviceExt->swapchainHandles, swapchainExt->swapchain, alloc, e_rr));
+		gotoIfError3(clean, ListU32_pushBack(&deviceExt->swapchainIndices, unifiedTexture->currentImageId, alloc, e_rr));
 	}
 
 	//Prepare per frame cbuffer
@@ -1771,7 +2218,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				.size = sizeof(CBufferData)
 			};
 
-			gotoIfError3(clean, checkVkError(deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &range), e_rr));
+			gotoIfError3(clean, VkGraphicsDevice_check(
+				deviceExt, deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &range), e_rr
+			));
 		}
 	}
 
@@ -1839,7 +2288,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			}
 		}
 
-		else gotoIfError3(clean, checkVkError(deviceExt->resetCommandPool(
+		else gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->resetCommandPool(
 				deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
 			), e_rr
 		));
@@ -1892,12 +2341,22 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
 		};
 
-		gotoIfError3(clean, checkVkError(deviceExt->beginCommandBuffer(commandBuffer, &beginInfo), e_rr));
+		gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->beginCommandBuffer(commandBuffer, &beginInfo), e_rr));
 
 		//Start copies
 
 		VkCommandBufferState state = (VkCommandBufferState) { .buffer = commandBuffer };
+
+		//The uploads handleNextFrame records get a breadcrumb of their own, as everything else outside a scope does
+
+		GraphicsDevice_startBreadcrumbs(device);
+
+		const U32 uploads = GraphicsDevice_claimBreadcrumb(device, GRAPHICS_BREADCRUMB_UPLOADS);
+		VkGraphicsDevice_breadcrumb(device, deviceExt, commandBuffer, uploads, 1, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
+
 		gotoIfError3(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, &state, e_rr));
+
+		VkGraphicsDevice_breadcrumb(device, deviceExt, commandBuffer, uploads, 2, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
 
 		//Build this frame's timing entries and reset the pool it will write into. buildTimings clears the previous
 		// frame's entries at this slot, so it must run after the resolve above has read them.
@@ -1974,6 +2433,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		for (U64 i = 0; i < (!commandLists ? 0 : commandLists->length); ++i) {
 
 			state.scopeCounter = 0;
+			state.breadcrumbSlot = U32_MAX;
 			CommandList *commandList = CommandListRef_ptr(commandLists->ptr[i]);
 			const U8 *ptr = commandList->data.ptr;
 
@@ -1986,7 +2446,12 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		//Readbacks are recorded after the frame's commands so they observe this frame's results
 
+		const U32 readbacks = GraphicsDevice_claimBreadcrumb(device, GRAPHICS_BREADCRUMB_READBACKS);
+		VkGraphicsDevice_breadcrumb(device, deviceExt, commandBuffer, readbacks, 1, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
+
 		gotoIfError3(clean, GraphicsDeviceRef_flushPendingPulls(deviceRef, &state, e_rr));
+
+		VkGraphicsDevice_breadcrumb(device, deviceExt, commandBuffer, readbacks, 2, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
 
 		//Transition back swapchains to present
 
@@ -2038,7 +2503,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		//End buffer
 
-		gotoIfError3(clean, checkVkError(deviceExt->endCommandBuffer(commandBuffer), e_rr));
+		gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->endCommandBuffer(commandBuffer), e_rr));
 	}
 
 	//Submit queue
@@ -2062,12 +2527,11 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		.pWaitDstStageMask = deviceExt->waitStages.ptr
 	};
 
-	//Record whether the fence now has a submit pending on it BEFORE propagating any error: a failed submit
-	//leaves it unsignaled, and the next frame at this fifId must know not to wait on it.
+	//Recorded BEFORE propagating any error, since clean submits empty only while the fence has nothing pending.
 
 	VkResult submitRes = deviceExt->queueSubmit(queue.queue, 1, &submitInfo, *fence);
-	deviceExt->commitFencePending[device->fifId] = submitRes == VK_SUCCESS;
-	gotoIfError3(clean, checkVkError(submitRes, e_rr));
+	VkGraphicsDevice_setFencePending(deviceExt, device->fifId, submitRes == VK_SUCCESS);
+	gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, submitRes, e_rr));
 
 	//Presents
 
@@ -2086,7 +2550,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			.pResults = deviceExt->results.ptrNonConst
 		};
 
-		gotoIfError3(clean, checkVkError(deviceExt->queuePresentKHR(queue.queue, &presentInfo), e_rr));
+		gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->queuePresentKHR(queue.queue, &presentInfo), e_rr));
 
 		//The results follow the PUSHED order, so walking the caller's list needs the same skip to stay in step.
 
@@ -2101,7 +2565,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			const VkResult res = deviceExt->results.ptr[j];
 			++j;
 
-			gotoIfError3(clean, checkVkError(res, e_rr));
+			gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, res, e_rr));
 
 			if(res == VK_SUBOPTIMAL_KHR) {
 
@@ -2114,6 +2578,39 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	}
 
 clean:
+
+	//A frame that failed before its vkQueueSubmit still submits, empty, so its slot ends the way a successful one does.
+	//The fence gets a signal pending, which is what the next submit at this slot and every device wait rely on: a
+	// fence left reset with the flag still set would be waited on forever.
+	//The acquire semaphores get their wait, since acquiring into one whose signal nobody consumed is invalid.
+	//What is left is the acquired images, which stay unpresented until the swapchain is recreated.
+	//The slot's recording state needs nothing: its pool is reset before the next use, and a pool may be reset
+	// with a buffer still recording.
+	//Its timings were never written, so the slot's next reuse must not resolve them.
+
+	if(!s_uccess) {
+
+		if(!VkGraphicsDevice_isFencePending(deviceExt, device->fifId)) {
+
+			const VkSubmitInfo emptySubmit = (VkSubmitInfo) {
+				.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+				.waitSemaphoreCount = acquiredImages,
+				.pWaitSemaphores = acquiredImages ? deviceExt->waitSemaphoresList.ptr : NULL,
+				.pWaitDstStageMask = acquiredImages ? deviceExt->waitStages.ptr : NULL
+			};
+
+			const VkResult emptyRes = deviceExt->queueSubmit(
+				deviceExt->queues[EVkCommandQueue_Graphics].queue, 1, &emptySubmit, deviceExt->commitFence[device->fifId]
+			);
+
+			VkGraphicsDevice_setFencePending(deviceExt, device->fifId, emptyRes == VK_SUCCESS);
+
+			if(emptyRes == VK_ERROR_DEVICE_LOST)        //Where a frame failing for another reason finds the loss
+				AtomicI64_store(&deviceExt->lost, 1);
+		}
+
+		device->timingSlots[device->fifId] = 0;
+	}
 
 	ListVkImageCopy_clear(&deviceExt->imageCopyRanges, e_rr);
 	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
@@ -2143,7 +2640,7 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 
 	//End current command list
 
-	gotoIfError3(clean, checkVkError(deviceExt->endCommandBuffer(commandBuffer->buffer), e_rr));
+	gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->endCommandBuffer(commandBuffer->buffer), e_rr));
 
 	//Submit only the copy command list
 
@@ -2153,25 +2650,27 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 		.commandBufferCount = 1
 	};
 
+	//Pending as soon as the submit is accepted, so a failure before the reset below leaves the fence marked as
+	// carrying a signal, and the frame's own failure path won't submit on it a second time.
+
 	const VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
-	gotoIfError3(clean, checkVkError(deviceExt->queueSubmit(
-		queue.queue,
-		1, &submitInfo,
-		deviceExt->commitFence[device->fifId]
-	), e_rr));
+	const VkResult submitRes = deviceExt->queueSubmit(queue.queue, 1, &submitInfo, deviceExt->commitFence[device->fifId]);
+	VkGraphicsDevice_setFencePending(deviceExt, device->fifId, submitRes == VK_SUCCESS);
+	gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, submitRes, e_rr));
 
-	//Wait for the device
+	//Wait for the device; the submit this flush splits is still being recorded, so it isn't complete yet
 
-	gotoIfError3(clean, GraphicsDeviceRef_wait(deviceRef, e_rr));
+	gotoIfError3(clean, GraphicsDeviceRef_waitFlush(deviceRef, e_rr));
 
 	//The flush borrowed this frame's commit fence and waited on it through deviceWaitIdle, so it is now signaled.
 	//Reset it, otherwise the frame's own vkQueueSubmit below would be handed an already-signaled fence, which is invalid.
 	//The pending flag stays false until that real submit sets it.
 
-	gotoIfError3(clean, checkVkError(
-		deviceExt->resetFences(deviceExt->device, 1, &deviceExt->commitFence[device->fifId]), e_rr
+	gotoIfError3(clean, VkGraphicsDevice_check(
+		deviceExt, deviceExt->resetFences(deviceExt->device, 1, &deviceExt->commitFence[device->fifId]), e_rr
 	));
-	deviceExt->commitFencePending[device->fifId] = false;
+
+	VkGraphicsDevice_setFencePending(deviceExt, device->fifId, false);
 
 	//Reset command list
 
@@ -2181,7 +2680,7 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 		deviceExt, queue.resolvedQueueId, threadId, device->fifId, device->framesInFlight
 	);
 
-	gotoIfError3(clean, checkVkError(deviceExt->resetCommandPool(
+	gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->resetCommandPool(
 		deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
 	), e_rr));
 
@@ -2191,7 +2690,9 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
 	};
 
-	gotoIfError3(clean, checkVkError(deviceExt->beginCommandBuffer(commandBuffer->buffer, &beginInfo), e_rr));
+	gotoIfError3(clean, VkGraphicsDevice_check(
+		deviceExt, deviceExt->beginCommandBuffer(commandBuffer->buffer, &beginInfo), e_rr
+	));
 
 	//The fresh buffer has no descriptor state, so the emitted state trackers reset and the next work op's
 	// lazy bind re-emits whatever was last bound (default or custom), rather than eagerly binding defaults

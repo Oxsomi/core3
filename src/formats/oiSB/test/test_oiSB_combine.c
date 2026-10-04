@@ -44,6 +44,7 @@ void Test_SBFileAddDuplicateVarName(Test *t) {
 		Test_assert(t, "first add succeeds",
 			SBFile_addVariableAsType(&sb, &nameA, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, NULL)
 		);
+
 		Test_assert(t, "duplicate add fails",
 			!SBFile_addVariableAsType(&sb, &nameB, 4, U16_MAX, ESBType_I32, ESBVarFlag_None, NULL, t->alloc, NULL)
 		);
@@ -74,6 +75,7 @@ void Test_SBFileAddVarOutOfBounds(Test *t) {
 		Test_assert(t, "out of bounds var fails",
 			!SBFile_addVariableAsType(&sb, &name, 4, U16_MAX, ESBType_F32x4, ESBVarFlag_None, NULL, t->alloc, NULL)
 		);
+
 		Test_assert(t, "vars count still 0", sb.vars.length == 0);
 
 	doneOOB:
@@ -238,6 +240,7 @@ void Test_SBFileNameLengthBoundary(Test *t) {
 		Test_assert(t, "128-byte name accepted",
 			SBFile_addVariableAsType(&sb, &name128, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, NULL)
 		);
+
 		Test_assert(t, "129-byte name rejected",
 			!SBFile_addVariableAsType(&sb, &name129, 4, U16_MAX, ESBType_I32, ESBVarFlag_None, NULL, t->alloc, NULL)
 		);

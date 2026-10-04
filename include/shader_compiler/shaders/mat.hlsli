@@ -127,11 +127,10 @@ F32x4x4 F32x4x4_lookAt(F32x3 eye, F32x3 center, F32x3 up) {
 	return F32x4x4_construct(x, y, z, eye);
 }
 
-//Quick conversion
+//Included here rather than at the top: its constants' position decides the generated SPIR-V ids, which the compiler
+// corpus pins.
 
-static const F32 F32_pi = 3.1415926535;
-static const F32 F32_degToRad = F32_pi / 180;
-static const F32 F32_radToDeg = 180 / F32_pi;
+#include "@math.hlsli"
 
 //Inverting a 4x4 matrix
 //https://gist.github.com/mattatz/86fff4b32d198d0928d0fa4ff32cf6fa

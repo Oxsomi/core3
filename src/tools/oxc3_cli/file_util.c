@@ -344,6 +344,7 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 	gotoIfError3(clean, File_openStream(
 		&caPath, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &readStream, e_rr
 	));
+
 	gotoIfError3(clean, CAFile_read(readStream, &encType, 0, hasKey ? keyV : NULL, alloc, &caFile, e_rr));
 
 	switch(op) {
@@ -353,6 +354,7 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 			gotoIfError3(clean, CAFile_foreach(
 				&caFile, CAHandle_Root, CLI_filePrintEntry, NULL, op == EFileArchiveOp_Tree, alloc, e_rr
 			));
+
 			break;
 
 		case EFileArchiveOp_Count: {
@@ -362,6 +364,7 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 				"%.*s: %"PRIu64" files, %"PRIu64" folders",
 				(int) CharString_length(caPath), caPath.ptr, files, folders
 			);
+
 			break;
 		}
 
@@ -471,6 +474,7 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 			gotoIfError3(clean, File_openStream(
 				dest, 1 * SECOND, EFileOpenType_Write, true, &fileHandleType, &streamType, &writeStream, e_rr
 			));
+
 			gotoIfError3(clean, CAFile_write(&caFile, &encType, writeStream, &writeOff, alloc, e_rr));
 		}
 
@@ -704,6 +708,7 @@ Bool CLI_fileCopy(const ParsedArgs *args) {
 	gotoIfError3(clean, File_openStream(
 		&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &inStream, e_rr
 	));
+
 	gotoIfError3(clean, File_openStream(
 		&output, 1 * SECOND, EFileOpenType_Write, true, &fileHandleType, &streamType, &outStream, e_rr
 	));
@@ -1104,6 +1109,7 @@ static Bool CLI_diffEntryAB(const FileInfo *info, void *userData, const Allocato
 			"  ~ %.*s (%"PRIu64" -> %"PRIu64" bytes)",
 			(int) CharString_length(info->path), info->path.ptr, info->fileSize, infoB.fileSize
 		);
+
 		++st->modified;
 		goto clean;
 	}
@@ -1122,6 +1128,7 @@ static Bool CLI_diffEntryAB(const FileInfo *info, void *userData, const Allocato
 			"  ~ %.*s (%"PRIu64" bytes, content differs)",
 			(int) CharString_length(info->path), info->path.ptr, info->fileSize
 		);
+
 		++st->modified;
 	}
 
@@ -1320,6 +1327,7 @@ Bool CLI_fileWipe(const ParsedArgs *args) {
 		gotoIfError3(clean, File_openStream(
 			&input, 1 * SECOND, EFileOpenType_ReadWrite, false, &fileHandleType, &streamType, &stream, e_rr
 		));
+
 		gotoIfError3(clean, StreamCursor_create(stream, CLI_STREAM_CACHE, true, alloc, &cur, e_rr));
 
 		for(U64 off = 0; off < size; off += CLI_FILE_CHUNK) {
@@ -1407,6 +1415,7 @@ Bool CLI_fileHexdump(const ParsedArgs *args) {
 	gotoIfError3(clean, File_openStream(
 		&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &stream, e_rr
 	));
+
 	gotoIfError3(clean, StreamCursor_create(stream, CLI_STREAM_CACHE, false, alloc, &cur, e_rr));
 	gotoIfError3(clean, Buffer_createUninitializedBytes(CLI_FILE_CHUNK, alloc, &buf, e_rr));
 
@@ -1531,6 +1540,7 @@ Bool CLI_fileGmac(const ParsedArgs *args) {
 		gotoIfError3(clean, File_openStream(
 			&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &stream, e_rr
 		));
+
 		gotoIfError3(clean, StreamCursor_create(stream, CLI_STREAM_CACHE, false, alloc, &cur, e_rr));
 
 		for(U64 pos = 0; pos < size; pos += effectiveChunk) {

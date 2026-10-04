@@ -22,6 +22,12 @@
 
 #include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
+#include "graphics/generic/blas.h"
+#include "graphics/generic/tlas.h"
+#include "graphics/generic/opacity_micromap.h"
+#include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/vulkan/vk_interface.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_device.h"
@@ -89,6 +95,24 @@ static_assert(
 	alignof(VkSwapchain) <= 64 && alignof(VkUnifiedTexture) <= 64,
 	"A Vulkan texture extension struct needs more than the cache line TextureRef_getImplExt rounds to"
 );
+
+_GraphicsObjectSize_assertExt(BLAS, VkBLAS, sizeof(VkBLAS));
+_GraphicsObjectSize_assertExt(TLAS, VkTLAS, sizeof(VkTLAS));
+_GraphicsObjectSize_assertExt(OpacityMicromap, VkOpacityMicromap, sizeof(VkOpacityMicromap));
+_GraphicsObjectSize_assertExt(Pipeline, VkPipeline, sizeof(VkPipeline) + 8);
+_GraphicsObjectSize_assertExt(Sampler, VkSampler, sizeof(VkSampler) + 8);
+_GraphicsObjectSize_assertExt(DeviceBuffer, VkDeviceBuffer, sizeof(VkDeviceBuffer));
+_GraphicsObjectSize_assertExt(GraphicsDevice, VkGraphicsDevice, sizeof(VkGraphicsDevice));
+_GraphicsObjectSize_assertExt(GraphicsInstance, VkGraphicsInstance, sizeof(VkGraphicsInstance));
+_GraphicsObjectSize_assertExt(DescriptorLayout, VkDescriptorLayout, sizeof(VkDescriptorLayout));
+_GraphicsObjectSize_assertExt(DescriptorTable, VkDescriptorTable, sizeof(VkDescriptorTable));
+_GraphicsObjectSize_assertExt(DescriptorHeap, VkDescriptorHeap, sizeof(VkDescriptorHeap));
+_GraphicsObjectSize_assertExt(PipelineLayout, VkPipelineLayout, sizeof(VkPipelineLayout) + 8);
+
+//The texture exts are placed by UnifiedTexture_imageExtBase and TextureRef_getImplExt, which align them.
+
+static_assert(sizeof(VkUnifiedTexture) % 16 == 0, "VkUnifiedTexture has to be a multiple of 16 bytes");
+static_assert(sizeof(VkSwapchain) % 16 == 0, "VkSwapchain has to be a multiple of 16 bytes");
 
 #ifndef GRAPHICS_API_DYNAMIC
 	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api) {
@@ -161,9 +185,12 @@ static_assert(
 
 			.deviceInit = VkGraphicsDevice_init,
 			.deviceWait = VkGraphicsDeviceRef_wait,
+			.deviceReportLoss = VkGraphicsDeviceRef_reportLoss,
 			.deviceFree = VkGraphicsDevice_free,
 			.deviceSubmitCommands = VkGraphicsDevice_submitCommands,
 			.deviceGetMemoryBudget = VkGraphicsDevice_getMemoryBudget,
+			.deviceLoadPipelineCache = VkGraphicsDevice_loadPipelineCache,
+			.deviceSavePipelineCache = VkGraphicsDevice_savePipelineCache,
 
 			.commandListProcess = VkCommandList_process,
 
@@ -244,6 +271,127 @@ VkBool32 onDebugReport(
 TList(VkExtensionProperties);
 TList(VkLayerProperties);
 TListImpl(VkExtensionProperties);
+TListImpl(VkAddressBinding);
+
+//VK_EXT_device_address_binding_report: keeps where each buffer and image is bound, for a lost device's fault
+// addresses. A rebind replaces, an unbind removes.
+
+static VkBool32 VKAPI_PTR onAddressBinding(
+	VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+	VkDebugUtilsMessageTypeFlagsEXT types,
+	const VkDebugUtilsMessengerCallbackDataEXT *data,
+	void *userData
+) {
+
+	(void) severity;
+
+	if(!(types & VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT) || !data || !data->objectCount)
+		return VK_FALSE;
+
+	const VkDeviceAddressBindingCallbackDataEXT *binding = (const VkDeviceAddressBindingCallbackDataEXT*) data->pNext;
+
+	while(binding && binding->sType != VK_STRUCTURE_TYPE_DEVICE_ADDRESS_BINDING_CALLBACK_DATA_EXT)
+		binding = (const VkDeviceAddressBindingCallbackDataEXT*) binding->pNext;
+
+	if(!binding)
+		return VK_FALSE;
+
+	GraphicsInstance *instance = (GraphicsInstance*) userData;
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	const U64 handle = data->pObjects[0].objectHandle;
+	const U64 type = (U64) data->pObjects[0].objectType;
+
+	//A memory object spans every buffer and image bound into it, so it would only hide them
+	if(type == (U64) VK_OBJECT_TYPE_DEVICE_MEMORY)
+		return VK_FALSE;
+
+	const ELockAcquire acq = SpinLock_lock(&instanceExt->bindingLock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		return VK_FALSE;
+
+	//TODO: a linear scan and popLocation on every bind and unbind, so N bindings are O(N^2).
+	//Should become a hash map keyed by handle and type once core3 has one (GitHub #40).
+
+	for(U64 i = 0; i < instanceExt->bindings.length; ++i)
+		if(instanceExt->bindings.ptr[i].handle == handle && instanceExt->bindings.ptr[i].type == type) {
+			ListVkAddressBinding_popLocation(&instanceExt->bindings, i, NULL, NULL);
+			break;
+		}
+
+	if(binding->bindingType == VK_DEVICE_ADDRESS_BINDING_TYPE_BIND_EXT)
+		ListVkAddressBinding_pushBack(
+			&instanceExt->bindings,
+			(VkAddressBinding) { .handle = handle, .address = binding->baseAddress, .size = binding->size, .type = type },
+			instance->alloc, NULL
+		);
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&instanceExt->bindingLock);
+
+	return VK_FALSE;
+}
+
+U64 VkGraphicsInstance_nearestBindings(
+	VkGraphicsInstance *instanceExt, U64 address, VkAddressBinding *below, VkAddressBinding *above
+) {
+
+	*below = *above = (VkAddressBinding) { 0 };
+
+	const ELockAcquire acq = SpinLock_lock(&instanceExt->bindingLock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		return 0;
+
+	const U64 count = instanceExt->bindings.length;
+
+	for(U64 i = 0; i < count; ++i) {
+
+		const VkAddressBinding b = instanceExt->bindings.ptr[i];
+
+		if(b.address + b.size <= address && (!below->handle || b.address + b.size > below->address + below->size))
+			*below = b;
+
+		else if(b.address > address && (!above->handle || b.address < above->address))
+			*above = b;
+	}
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&instanceExt->bindingLock);
+
+	return count;
+}
+
+U64 VkGraphicsInstance_findBinding(VkGraphicsInstance *instanceExt, U64 address, U64 *offset) {
+
+	const ELockAcquire acq = SpinLock_lock(&instanceExt->bindingLock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		return 0;
+
+	U64 handle = 0, size = U64_MAX;
+
+	//The smallest range holding it, since an object may be bound inside another's range (a structure in its buffer)
+
+	for(U64 i = 0; i < instanceExt->bindings.length; ++i) {
+
+		const VkAddressBinding b = instanceExt->bindings.ptr[i];
+
+		if(address >= b.address && address - b.address < b.size && b.size < size) {
+
+			handle = b.handle;
+			size = b.size;
+
+			if(offset)
+				*offset = address - b.address;
+		}
+	}
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&instanceExt->bindingLock);
+
+	return handle;
+}
 TListImpl(VkLayerProperties);
 
 //#define _GRAPHICS_VERBOSE_DEBUGGING
@@ -305,6 +453,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 	));
 
 	Bool supportsDebug[2] = { 0 };
+	Bool supportsDebugUtils = false;
 
 	if(instance->flags & EGraphicsInstanceFlags_IsVerbose)
 		Log_debugLnx("Supported extensions:");
@@ -323,7 +472,10 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 		if(CharString_equalsStringSensitive(&nameStr, &swapchainColorspace))
 			supportsColorSpace = true;
 
-		else if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
+		else if(CharString_equalsStringSensitive(&nameStr, &debugUtils))
+			supportsDebugUtils = true;
+
+		if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
 			if(CharString_equalsStringSensitive(&nameStr, &debugReport))
 				supportsDebug[0] = true;
@@ -347,7 +499,10 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 	if(supportsDebug[0])
 		gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, debugReport.ptr, alloc, e_rr));
 
-	if(supportsDebug[1])
+	//Debug utils is enabled whenever it's there, for the address binding messenger below; naming and labels still
+	// only load on a debug instance.
+
+	if(supportsDebugUtils)
 		gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, debugUtils.ptr, alloc, e_rr));
 
 	//Force physical device properties and external memory
@@ -538,6 +693,32 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 		), e_rr));
 	}
 
+	//Listens for address bindings only, which a device reports once it enabled VK_EXT_device_address_binding_report.
+	//A failure only costs a lost device the names of the images its fault addresses fall in.
+
+	if(supportsDebugUtils) {
+
+		PFN_vkCreateDebugUtilsMessengerEXT createMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)
+			instanceExt->getInstanceProcAddr(instanceExt->instance, "vkCreateDebugUtilsMessengerEXT");
+
+		instanceExt->destroyMessenger = (PFN_vkDestroyDebugUtilsMessengerEXT)
+			instanceExt->getInstanceProcAddr(instanceExt->instance, "vkDestroyDebugUtilsMessengerEXT");
+
+		const VkDebugUtilsMessengerCreateInfoEXT messengerInfo = (VkDebugUtilsMessengerCreateInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+			.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
+			.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT,
+			.pfnUserCallback = onAddressBinding,
+			.pUserData = instance
+		};
+
+		if(
+			!createMessenger || !instanceExt->destroyMessenger ||
+			createMessenger(instanceExt->instance, &messengerInfo, NULL, &instanceExt->bindingMessenger) != VK_SUCCESS
+		)
+			instanceExt->bindingMessenger = VK_NULL_HANDLE;
+	}
+
 	instance->api = EGraphicsApi_Vulkan;
 	instance->apiVersion = application.apiVersion;
 
@@ -573,6 +754,11 @@ void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, const Allocator
 	if(instanceExt->debugDestroyReportCallback && instanceExt->debugReportCallback)
 		instanceExt->debugDestroyReportCallback(instanceExt->instance, instanceExt->debugReportCallback, NULL);
 
+	if(instanceExt->destroyMessenger && instanceExt->bindingMessenger)
+		instanceExt->destroyMessenger(instanceExt->instance, instanceExt->bindingMessenger, NULL);
+
+	ListVkAddressBinding_free((ListVkAddressBinding*) &instanceExt->bindings, inst->alloc);
+
 	//Instance creation can fail partway (e.g. no compatible driver);
 	// in that case the RefPtr is still dec'd, so the ext might not be initialized yet.
 
@@ -606,7 +792,7 @@ const C8 *optExtensionsName[] = {
 	"VK_EXT_ray_tracing_invocation_reorder",
 
 	"VK_EXT_mesh_shader",            "VK_KHR_fragment_shading_rate",  "VK_KHR_dynamic_rendering",
-	"VK_EXT_opacity_micromap",       "VK_EXT_shader_atomic_float",    "VK_KHR_deferred_host_operations",
+	"VK_KHR_opacity_micromap",       "VK_EXT_shader_atomic_float",    "VK_KHR_deferred_host_operations",
 	"VK_NV_ray_tracing_validation",
 
 	//Deliberately the NV extension even where the SDK has the KHR one.
@@ -630,9 +816,19 @@ const C8 *optExtensionsName[] = {
 	"VK_KHR_create_renderpass2", "VK_KHR_depth_stencil_resolve", "VK_KHR_spirv_1_4", "VK_KHR_shader_float_controls",
 	"VK_KHR_maintenance5",
 
-	"VK_KHR_opacity_micromap", "VK_KHR_device_address_commands",
+	"VK_KHR_device_address_commands",
 
-	"VK_EXT_conditional_rendering"
+	"VK_EXT_conditional_rendering",
+
+	"VK_EXT_extended_dynamic_state",
+
+	"VK_EXT_device_fault", "VK_EXT_device_address_binding_report",
+
+	"VK_EXT_external_memory_host", "VK_AMD_buffer_marker",
+
+	"VK_KHR_index_type_uint8",
+
+	"VK_EXT_memory_priority"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -678,6 +874,82 @@ U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsNam
 
 TList(VkPhysicalDevice);
 TListImpl(VkPhysicalDevice);
+
+//The Mesa version a Mesa driver reports at the start of driverInfo ("Mesa 24.2.8-1ubuntu1 (LLVM 19.1.1)"), as
+// major * 10000 + minor * 100 + patch, or 0 when driverInfo doesn't start that way. A missing patch reads as 0.
+//driverInfo rather than driverVersion, because lavapipe reports a driverVersion of 0.0.1.
+
+static U32 VkDriver_mesaVersion(const VkPhysicalDeviceDriverProperties *driver) {
+
+	const C8 *info = driver->driverInfo;
+	const C8 *prefix = "Mesa ";
+
+	U64 i = 0;
+
+	for(; prefix[i]; ++i)
+		if(info[i] != prefix[i])
+			return 0;
+
+	U32 part[3] = { 0, 0, 0 };
+
+	for(U32 p = 0; p < 3; ++p, ++i) {
+
+		if(!C8_isDec(info[i]))
+			return p == 2 ? part[0] * 10000 + part[1] * 100 : 0;
+
+		for(; C8_isDec(info[i]); ++i)
+			part[p] = part[p] * 10 + (U32) (info[i] - '0');
+
+		if(p == 0 && info[i] != '.')
+			return 0;
+
+		if(p == 1 && info[i] != '.')
+			break;
+	}
+
+	return part[0] * 10000 + part[1] * 100 + part[2];
+}
+
+//Position fetch on a hit in any geometry but the BLAS's first returned the FIRST geometry's triangle at that
+// primitive index, on RADV before Mesa 25.1 and lavapipe before 25.2 (Mesa MRs 34460 and 34496).
+//AMD's proprietary Windows driver returns wrong positions too (26.9.2 on a Raphael iGPU: a Cornell box with two meshes
+// per BLAS rendered 2.8% dark against WARP, while the same scene without position fetch matched it). Whether it is the
+// same first-geometry bug is unconfirmed and no fixed version is known, so it's withheld on every version for now.
+//It's withheld there rather than claimed, so a caller takes the path that doesn't need it instead of shading with
+// another triangle's positions; the rayTriPosition capability test is what catches a driver like this.
+
+static Bool VkDriver_hasBrokenPositionFetch(const VkPhysicalDeviceDriverProperties *driver) {
+
+	const U32 mesa = VkDriver_mesaVersion(driver);
+
+	switch (driver->driverID) {
+		case VK_DRIVER_ID_MESA_RADV:        return mesa && mesa < 250100;
+		case VK_DRIVER_ID_MESA_LLVMPIPE:    return mesa && mesa < 250200;
+		case VK_DRIVER_ID_AMD_PROPRIETARY:  return true;
+		default:                            return false;
+	}
+}
+
+//lavapipe before Mesa 24.3.4 treats the results of an acceleration structure query as query objects when a command
+// buffer resets them, and crashes (Mesa issue 12289, MR 33113). See EVkGraphicsFeatures_NoCompactionQuery.
+
+static Bool VkDriver_hasBrokenASQueryReset(const VkPhysicalDeviceDriverProperties *driver) {
+	const U32 mesa = VkDriver_mesaVersion(driver);
+	return driver->driverID == VK_DRIVER_ID_MESA_LLVMPIPE && mesa && mesa < 240304;
+}
+
+//lavapipe from Mesa 25.1 up to 26.3 sorts every acceleration structure build with radix sort shaders it compiles for a
+// required subgroup size of 8, whatever the device's own is. Its subgroup size is the vector width in lanes, so that
+// only holds at 256 bit vectors: at 128 bit (every arm64 device, x86 without AVX) the size is 4 and the build runs
+// shaders compiled for a width the JIT doesn't have. A one triangle BLAS is enough to segfault a release driver, and a
+// debug one asserts in vk_set_subgroup_size.
+//Mesa 26.3 deleted that radix sort. Raytracing is withheld as a whole before it, since nothing of it works without an
+// acceleration structure.
+
+static Bool VkDriver_hasBrokenASBuild(const VkPhysicalDeviceDriverProperties *driver, U32 subgroupSize) {
+	const U32 mesa = VkDriver_mesaVersion(driver);
+	return driver->driverID == VK_DRIVER_ID_MESA_LLVMPIPE && mesa >= 250100 && mesa < 260300 && subgroupSize != 8;
+}
 
 Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result, Error *e_rr) {
 
@@ -739,6 +1011,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				Log_debugLnx(
 					"Vulkan: Skipping device %"PRIu32", it is the Direct3D12 passthrough rather than a real device", i
 				);
+
 				continue;
 			}
 		}
@@ -1040,21 +1313,37 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			);
 		#endif
 
+		//Opacity micromaps are VK_KHR_opacity_micromap only; a device offering just the EXT original gets none.
+		//Gated on device_address_commands and its own dependencies as well, since the extension can't be enabled
+		// without them, and that extension's feature is queried alongside: a micromap array is created through
+		// vkCreateAccelerationStructure2KHR, which needs it.
+		//index_type_uint8 too, since R8u OMM indices are legal wherever micromaps are and VK_INDEX_TYPE_UINT8
+		// is not a valid index type without it.
+
+		const Bool ommExtensions =
+			optExtensions[EOptExtensions_RayMicromapOpacity] && optExtensions[EOptExtensions_DeviceAddressCommands] &&
+			optExtensions[EOptExtensions_ExtendedDynamicState] && optExtensions[EOptExtensions_BufferDeviceAddress] &&
+			optExtensions[EOptExtensions_IndexTypeUint8];
+
 		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayMicromapOpacity],
-			VkPhysicalDeviceOpacityMicromapFeaturesEXT,
+			ommExtensions,
+			VkPhysicalDeviceOpacityMicromapFeaturesKHR,
 			rayOpacityMicroFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_KHR
 		);
 
-		//The KHR promotion is queried independently: a device may expose either or both, and which one answers
-		// decides the struct vk_blas.c chains and whether 8-bit OMM indices are legal.
+		getDeviceFeatures(
+			ommExtensions,
+			VkPhysicalDeviceDeviceAddressCommandsFeaturesKHR,
+			deviceAddressCommandsFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEVICE_ADDRESS_COMMANDS_FEATURES_KHR
+		);
 
 		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayMicromapOpacityKHR] && optExtensions[EOptExtensions_DeviceAddressCommands],
-			VkPhysicalDeviceOpacityMicromapFeaturesKHR,
-			rayOpacityMicroFeatKhr,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_KHR
+			ommExtensions,
+			VkPhysicalDeviceIndexTypeUint8FeaturesKHR,
+			indexTypeUint8Feat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES_KHR
 		);
 
 		getDeviceFeatures(
@@ -1083,6 +1372,27 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VkPhysicalDeviceConditionalRenderingFeaturesEXT,
 			condRenderFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_DeviceFault],
+			VkPhysicalDeviceFaultFeaturesEXT,
+			faultFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_DeviceAddressBindingReport],
+			VkPhysicalDeviceAddressBindingReportFeaturesEXT,
+			bindingReportFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ADDRESS_BINDING_REPORT_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_MemoryPriority],
+			VkPhysicalDeviceMemoryPriorityFeaturesEXT,
+			memPriorityFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PRIORITY_FEATURES_EXT
 		);
 
 		getDeviceFeatures(
@@ -1340,6 +1650,26 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(optExtensions[EOptExtensions_ConditionalRendering] && condRenderFeat.conditionalRendering)
 			capabilities.features2 |= EGraphicsFeatures2_Predication;
 
+		//Device loss diagnostics. The binding report needs the instance's messenger to arrive anywhere.
+
+		if(optExtensions[EOptExtensions_DeviceFault] && faultFeat.deviceFault)
+			capabilities.features2 |= EGraphicsFeatures2_DeviceFault;
+
+		if(optExtensions[EOptExtensions_BufferMarker])
+			capabilities.features2 |= EGraphicsFeatures2_WriteBufferImmediate;
+
+		if(optExtensions[EOptExtensions_ExternalMemoryHost])
+			capabilities.featuresExt |= EVkGraphicsFeatures_ExternalHostMemory;
+
+		if(optExtensions[EOptExtensions_MemoryPriority] && memPriorityFeat.memoryPriority)
+			capabilities.featuresExt |= EVkGraphicsFeatures_MemoryPriority;
+
+		if(
+			optExtensions[EOptExtensions_DeviceAddressBindingReport] && bindingReportFeat.reportAddressBinding &&
+			instanceExt->bindingMessenger
+		)
+			capabilities.featuresExt |= EVkGraphicsFeatures_AddressBindingReport;
+
 		//Query features
 
 		if(features.logicOp)
@@ -1583,6 +1913,12 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(!rtasFeat.descriptorBindingAccelerationStructureUpdateAfterBind)
 			optExtensions[EOptExtensions_RayAcceleration] = false;
 
+		if(
+			optExtensions[EOptExtensions_RayAcceleration] && optExtensions[EOptExtensions_DriverProperties] &&
+			VkDriver_hasBrokenASBuild(&driver, subgroup.subgroupSize)
+		)
+			optExtensions[EOptExtensions_RayAcceleration] = false;
+
 		if(optExtensions[EOptExtensions_RayAcceleration]) {
 
 			//Disable raytracing if minimum limits aren't reached
@@ -1602,7 +1938,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 							rtasProp.maxDescriptorSetUpdateAfterBindAccelerationStructures
 						) >= 16 &&
 						U64_min(rtasProp.maxGeometryCount, rtasProp.maxInstanceCount) >= 16777215 &&
-						rtasProp.maxPrimitiveCount >= GIBI / 2 - 1
+						rtasProp.maxPrimitiveCount >= BLAS_MAX_PRIMITIVES
 					)
 				)
 					rtasFeat.accelerationStructure = false;
@@ -1629,10 +1965,12 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					optExtensions[EOptExtensions_RayQuery] = false;
 
 				//Disable if invalid state
+				//The dispatch floor is OxC3's own minimum rather than Vulkan's 1Gi: RADV and lavapipe report 64Mi, and
+				// dispatchRays is validated against 64Mi on every device (see docs/graphics_spec.md).
 
 				if (
 					optExtensions[EOptExtensions_RayPipeline] && (
-						rtpProp.maxRayDispatchInvocationCount < GIBI ||
+						rtpProp.maxRayDispatchInvocationCount < 64 * MIBI ||
 						rtpProp.maxRayHitAttributeSize < 32 ||
 						rtpProp.maxRayRecursionDepth < 1 ||
 						rtpProp.maxShaderGroupStride < 4096 ||
@@ -1671,6 +2009,9 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 					capabilities.features |= EGraphicsFeatures_Raytracing;
 
+					if(optExtensions[EOptExtensions_DriverProperties] && VkDriver_hasBrokenASQueryReset(&driver))
+						capabilities.featuresExt |= EVkGraphicsFeatures_NoCompactionQuery;
+
 					//RayReorder = the SER API is available (valid to call, possibly a no-op).
 					//RayReorderActual = the driver hints it actually reorders, so it's worth restructuring shaders for.
 
@@ -1694,19 +2035,16 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 						}
 					#endif
 
-					if(rayOpacityMicroFeat.micromap || rayOpacityMicroFeatKhr.micromap)
+					if(
+						rayOpacityMicroFeat.micromap && deviceAddressCommandsFeat.deviceAddressCommands &&
+						indexTypeUint8Feat.indexTypeUint8
+					)
 						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
 
-					//KHR is preferred when the device offers it.
-					//It would also be the only VK path where 8-bit OMM indices are legal (VUID 11570 vs the EXT
-					// VUID 10719), but RayMicromapOpacityU8 deliberately stays UNCLAIMED here: the KHR side isn't
-					// implemented yet (micromap arrays refuse, the attach never ran on a real driver), and a
-					// capability must not outrun its implementation.
-
-					if(rayOpacityMicroFeatKhr.micromap)
-						capabilities.featuresExt |= EVkGraphicsFeatures_OpacityMicromapKHR;
-
-					if(rayPositionFetchFeat.rayTracingPositionFetch)
+					if(
+						rayPositionFetchFeat.rayTracingPositionFetch &&
+						!(optExtensions[EOptExtensions_DriverProperties] && VkDriver_hasBrokenPositionFetch(&driver))
+					)
 						capabilities.features |= EGraphicsFeatures_RayTriPosition;
 
 					//Mega geometry (RTXMG); Vulkan splits it into cluster acceleration structures and partitioned TLAS

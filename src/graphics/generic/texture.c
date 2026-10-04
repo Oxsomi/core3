@@ -22,6 +22,7 @@
 
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/render_texture.h"
@@ -434,6 +435,10 @@ void UnifiedTexture_free(TextureRef *textureRef) {
 				RefPtr_dec(&texture->bindlessDescriptorTable);
 			}
 	}
+
+	//Out of the registry before its API objects go, so a recycled handle is never named as this live texture
+
+	GraphicsDevice_unregisterResource(GraphicsDeviceRef_ptr(device), textureRef);
 
 	UnifiedTexture_freeExt(textureRef);
 	GraphicsResource_free(&texture->resource, textureRef);

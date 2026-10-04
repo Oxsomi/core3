@@ -392,6 +392,7 @@ void Test_SBFileAllowSameNameInDifferentScopes(Test *t) {
 		Test_assert(t, "add varA root",
 			SBFile_addVariableAsStruct(&sb, &vNameA, 0,  U16_MAX, 0, ESBVarFlag_None, NULL, t->alloc, &t->err)
 		);
+
 		Test_assert(t, "add varB root",
 			SBFile_addVariableAsStruct(&sb, &vNameB, 32, U16_MAX, 1, ESBVarFlag_None, NULL, t->alloc, &t->err)
 		);
@@ -402,6 +403,7 @@ void Test_SBFileAllowSameNameInDifferentScopes(Test *t) {
 		Test_assert(t, "child x under varA",
 			SBFile_addVariableAsType(&sb, &xA, 0, 0, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err)
 		);
+
 		Test_assert(t, "child x under varB",
 			SBFile_addVariableAsType(&sb, &xB, 0, 1, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err)
 		);

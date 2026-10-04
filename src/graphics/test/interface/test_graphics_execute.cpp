@@ -176,6 +176,37 @@ extern "C" void Test_graphicsDeviceMemory(oxc::c::Test *t, oxc::c::GraphicsDevic
 		device->staging && c::bufferOf(device->staging)->resource.size == oldSize
 	);
 
+	//A resource over half a block gets a memory block sized to itself rather than one of twice its size, and that
+	// block goes as soon as the resource does.
+	//Sized past half of the LARGER block size, since which one applies depends on where the backend places it.
+
+	{
+		const c::U64 blockSize = device->blockSizeCpu > device->blockSizeGpu ? device->blockSizeCpu : device->blockSizeGpu;
+		const c::U64 largeSize = blockSize / 2 + 64 * c::KIBI;
+
+		gfx::DeviceBuffer large;
+
+		if (Test_assert(t, "largeCreate", dev.createBuffer(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_None, "Large buffer", largeSize, large, nullptr, &t->err
+		))) {
+
+			const c::U32 blockId = large.data()->resource.blockId;
+			const c::DeviceMemoryBlock *block = &device->allocator.blocks.ptr[blockId];
+			const c::U64 blockBytes = c::Buffer_length(block->allocations.buffer);
+
+			//Rounded up to the allocation's alignment at most, which is far below a block on every API
+
+			Test_assert(t, "largeOwnBlock", block->isDedicated);
+			Test_assert(t, "largeExactBlock", blockBytes >= largeSize && blockBytes < largeSize + 4 * c::MIBI);
+
+			large.release();
+
+			Test_assert(t, "largeBlockFreed",
+				blockId >= device->allocator.blocks.length || !device->allocator.blocks.ptr[blockId].isActive
+			);
+		}
+	}
+
 	//handleNextFrame is a frame step the submit path drives, so it demands the device lock is already held
 
 	Test_assert(t, "frameNullDevice", !c::GraphicsDeviceRef_handleNextFrame(NULL, NULL, NULL));

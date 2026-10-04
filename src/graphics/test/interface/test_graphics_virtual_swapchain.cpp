@@ -300,9 +300,10 @@ extern "C" void Test_graphicsPhysicalSwapchain(oxc::c::Test *t, oxc::c::Graphics
 
 	c::Test_setModule(t, "GraphicsDevice/physicalSwapchain");
 
-	const c::C8 *present = getenv("OXC3_TEST_PRESENT");
+	c::Bool present = false;
+	c::Platform_getEnvBool(c::CharString_createRefCStrConst("OXC3_TEST_PRESENT"), t->alloc, &present, NULL);
 
-	if(!present || present[0] == '0') {
+	if(!present) {
 		c::Test_print(t, "OXC3_TEST_PRESENT is unset, skipping the leg that opens a window and presents");
 		return;
 	}

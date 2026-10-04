@@ -37,6 +37,7 @@ namespace oxc { namespace c {
 	#include "platforms/platform.h"
 	#include "types/container/memory_stream.h"
 	#include "platforms/file.h"
+	#include "graphics/generic/device_internal.h"
 }}
 
 //SHFile and DescriptorLayoutInfo are plain C structs with no wrapper, so they get a local guard rather than a
@@ -49,6 +50,174 @@ namespace {
 
 	using OwnedSHFile = oxc::gfx::OwnedList<oxc::c::SHFile>;
 	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo>;
+}
+
+// -- Resource registry ------------------------------------------------------------
+
+//What a lost device names a fault with (docs/graphics_api.md, "Device loss"): an address inside a buffer resolves to
+// that buffer and the offset into it, a neighbour's address never to the wrong one, and a freed buffer is still named,
+// as freed, since a fault in its old memory is what the registry is for.
+//A Vulkan buffer only has a device address with buffer device address, so without one the address checks skip.
+
+extern "C" void Test_graphicsResourceRegistry(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
+
+	using namespace oxc;
+	using namespace oxc::gfx;
+
+	c::Error *e_rr = &t->err;
+
+	Test_setModule(t, "Resource registry");
+
+	Device dev = Device::share(deviceRef);
+	DeviceBuffer a, b;
+
+	Test_assert(t, "createA", dev.createBuffer(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRWBindful, "Registry A", 4096, a, nullptr, e_rr
+	));
+
+	Test_assert(t, "createB", dev.createBuffer(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRWBindful, "Registry B", 4096, b, nullptr, e_rr
+	));
+
+	if(!a || !b)
+		return;
+
+	const c::U64 addressA = a.data()->resource.deviceAddress;
+	const c::U64 addressB = b.data()->resource.deviceAddress;
+
+	const c::Allocator *alloc = c::GraphicsDeviceRef_getAlloc(deviceRef);
+	c::CharString str = c::CharString_createNull();
+
+	//The address checks need both addresses; the stats and breadcrumbs below run either way
+
+	const c::Bool hasAddresses = addressA && addressB;
+
+	if(!hasAddresses)
+		c::Test_print(t, "Resource registry: no device addresses, the address lookups are skipped");
+
+	//Non owning: compared only against a and b, which this test keeps alive.
+
+	c::WeakRefPtr *found = nullptr;
+	c::U64 offset = 0;
+
+	if (hasAddresses) {
+
+		Test_assert(t, "findA", c::GraphicsDeviceRef_findResourceByAddress(deviceRef, addressA + 64, &found, &offset));
+		Test_assert(t, "findAIsA", found == a.handle() && offset == 64);
+
+		Test_assert(t, "findB", c::GraphicsDeviceRef_findResourceByAddress(deviceRef, addressB + 4095, &found, &offset));
+		Test_assert(t, "findBIsB", found == b.handle() && offset == 4095);
+
+		//The byte past A's end is not A, whatever else may live there.
+
+		found = nullptr;
+		c::GraphicsDeviceRef_findResourceByAddress(deviceRef, addressA + 4096, &found, &offset);
+		Test_assert(t, "pastAIsNotA", found != a.handle());
+	}
+
+	b.release();
+
+	//Freed: no longer found as live, but still named for a fault in its old memory.
+
+	if (hasAddresses) {
+
+		found = nullptr;
+		c::GraphicsDeviceRef_findResourceByAddress(deviceRef, addressB + 16, &found, &offset);
+		Test_assert(t, "freedNotLive", found == nullptr || found == a.handle());
+
+		Test_assert(t, "freedDescribed", c::GraphicsDevice_describeResource(
+			RefPtr_data(deviceRef, c::GraphicsDevice), addressB + 16, 0, &str, alloc, e_rr
+		));
+
+		const c::CharString expectFreed = c::CharString_createRefCStrConst("freed");
+		const c::CharString expectName = c::CharString_createRefCStrConst("Registry B");
+
+		Test_assert(t, "freedNamed",
+			c::CharString_containsStringSensitive(&str, &expectFreed, 0, c::CharString_length(str)) &&
+			c::CharString_containsStringSensitive(&str, &expectName, 0, c::CharString_length(str))
+		);
+
+		c::CharString_free(&str, alloc);
+	}
+
+	//Memory stats name the live buffer, and not the freed one
+
+	Test_assert(t, "memoryStats", c::GraphicsDeviceRef_getMemoryStats(deviceRef, alloc, &str, e_rr));
+
+	const c::CharString expectLive = c::CharString_createRefCStrConst("\"Registry A\"");
+	const c::CharString expectGone = c::CharString_createRefCStrConst("\"Registry B\"");
+
+	Test_assert(t, "memoryStatsNamed",
+		c::CharString_containsStringSensitive(&str, &expectLive, 0, c::CharString_length(str)) &&
+		!c::CharString_containsStringSensitive(&str, &expectGone, 0, c::CharString_length(str))
+	);
+
+	c::CharString_free(&str, alloc);
+
+	//Breadcrumbs, where the device has them (a debug device does): each scope of a submit is recorded under its id,
+	// and once the submit completed its slot reads 2, ended. A lost device would leave the scope it was in at 1.
+
+	c::GraphicsDevice *device = RefPtr_data(deviceRef, c::GraphicsDevice);
+
+	if(!device->breadcrumbs) {
+		c::Test_print(t, "Resource registry: no breadcrumbs on this device, their checks are skipped");
+		return;
+	}
+
+	const c::ImageRange all{ c::U32_MAX, c::U32_MAX };
+	RenderTexture target;
+	CommandList list;
+
+	if(!Test_assert(t, "breadcrumbTarget", dev.createRenderTexture(
+		16, 16, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_None, "Breadcrumb target", target,
+		c::EMSAASamples_Off, nullptr, e_rr
+	)))
+		return;
+
+	if(!Test_assert(t, "breadcrumbList", dev.createCommandList(4 * c::KIBI, 16, 8, list, true, e_rr)))
+		return;
+
+	Test_assert(t, "breadcrumbBegin", list.begin(true, e_rr));
+
+	for(c::U32 id = 71; id <= 72; ++id) {
+		CommandScope scope = list.scope({}, id, {}, e_rr);
+		Test_assert(t, "breadcrumbScope", (c::Bool) scope);
+		Test_assert(t, "breadcrumbClear", scope.clearImagef(c::F32x4_zero(), all, target.handle(), e_rr));
+		Test_assert(t, "breadcrumbScopeEnd", scope.end(e_rr));
+	}
+
+	Test_assert(t, "breadcrumbEnd", list.end(e_rr));
+
+	if(!Test_assert(t, "breadcrumbSubmit", dev.submit({ &list }, {}, 0, 0, e_rr)))
+		return;
+
+	if(!Test_assert(t, "breadcrumbWait", dev.wait(e_rr)))
+		return;
+
+	//The frame this submit used holds 71 and 72 next to each other, between the uploads (first) and the readbacks
+	// (last) every submit records. Every slot of it, those two included, has to read ended.
+
+	c::Bool recorded = false, ended = true;
+
+	for(c::U32 f = 0; f < device->framesInFlight && !recorded; ++f) {
+
+		const c::ListU32 scopes = device->breadcrumbScopes[f];
+
+		for(c::U64 j = 0; j + 1 < scopes.length && !recorded; ++j)
+			recorded = scopes.ptr[j] == 71 && scopes.ptr[j + 1] == 72;
+
+		if(!recorded)
+			continue;
+
+		recorded =
+			scopes.ptr[0] == GRAPHICS_BREADCRUMB_UPLOADS && scopes.ptr[scopes.length - 1] == GRAPHICS_BREADCRUMB_READBACKS;
+
+		for(c::U64 j = 0; j < scopes.length; ++j)
+			ended &= device->breadcrumbs[(c::U64) f * GRAPHICS_BREADCRUMBS + j] == 2;
+	}
+
+	Test_assert(t, "breadcrumbScopesRecorded", recorded);
+	Test_assert(t, "breadcrumbScopesEnded", recorded && ended);
 }
 
 // -- 23. TextureRef predicates and accessors -------------------------------------

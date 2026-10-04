@@ -313,9 +313,25 @@ typedef struct GraphicsObjectSizes {
 
 	typedef U64 (*GraphicsDevice_getMemoryBudgetImpl)(GraphicsDevice *device, Bool isDeviceLocal);
 
+	typedef Bool (*GraphicsDevice_loadPipelineCacheImpl)(
+		GraphicsDevice *device,
+		Buffer driverData,
+		Bool *accepted,
+		Error *e_rr
+	);
+
+	typedef Bool (*GraphicsDevice_savePipelineCacheImpl)(
+		GraphicsDevice *device,
+		const Allocator *alloc,
+		Buffer *driverData,
+		Error *e_rr
+	);
+
 	typedef void (*GraphicsDevice_freeImpl)(const GraphicsInstance *instance, void *ext);
 
 	typedef Bool (*GraphicsDeviceRef_waitImpl)(GraphicsDeviceRef *deviceRef, Error *e_rr);
+
+	typedef Bool (*GraphicsDeviceRef_reportLossImpl)(GraphicsDeviceRef *deviceRef);
 
 	typedef Bool (*GraphicsDevice_submitCommandsImpl)(
 		GraphicsDeviceRef *deviceRef,
@@ -338,6 +354,7 @@ typedef struct GraphicsObjectSizes {
 	typedef Bool (*GraphicsInstance_createImpl)(
 		const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr
 	);
+
 	typedef void (*GraphicsInstance_freeImpl)(GraphicsInstance *inst, const Allocator *alloc);
 	typedef Bool (*GraphicsInstance_getDeviceInfosImpl)(
 		const GraphicsInstance *inst,
@@ -411,9 +428,12 @@ typedef struct GraphicsObjectSizes {
 
 		GraphicsDevice_initImpl                          deviceInit;
 		GraphicsDeviceRef_waitImpl                       deviceWait;
+		GraphicsDeviceRef_reportLossImpl                 deviceReportLoss;
 		GraphicsDevice_freeImpl                          deviceFree;
 		GraphicsDevice_submitCommandsImpl                deviceSubmitCommands;
 		GraphicsDevice_getMemoryBudgetImpl               deviceGetMemoryBudget;
+		GraphicsDevice_loadPipelineCacheImpl             deviceLoadPipelineCache;
+		GraphicsDevice_savePipelineCacheImpl             deviceSavePipelineCache;
 
 		CommandList_processImpl                          commandListProcess;
 
@@ -617,9 +637,18 @@ Bool GraphicsDevice_initExt(
 
 U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal);
 
+//The driver's half of a pipeline cache (GraphicsDeviceRef_setPipelineCache): load merges driverData into the device's
+// cache and ignores data from another device or driver; save hands out a copy of what the device's cache holds.
+
+Bool GraphicsDevice_loadPipelineCacheExt(GraphicsDevice *device, Buffer driverData, Bool *accepted, Error *e_rr);
+Bool GraphicsDevice_savePipelineCacheExt(GraphicsDevice *device, const Allocator *alloc, Buffer *driverData, Error *e_rr);
+
 void GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
 
 Bool GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef, Error *e_rr);
+
+//Returns whether the device is lost, and if so logs why; see GraphicsDeviceRef_reportLoss.
+Bool GraphicsDeviceRef_reportLossExt(GraphicsDeviceRef *deviceRef);
 
 Bool GraphicsDevice_submitCommandsExt(
 	GraphicsDeviceRef *deviceRef,

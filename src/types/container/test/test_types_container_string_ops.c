@@ -344,6 +344,7 @@ static void Test_stringCut(Test *t) {
 	Test_assert(
 		t, "cutBeforeFirst keeps the tail", CharString_cutBeforeFirstSensitive(&s, '/', &out) && Test_strEq(out, "b/c")
 	);
+
 	Test_assert(t, "cutBeforeLast keeps the tail", CharString_cutBeforeLastSensitive(&s, '/', &out) && Test_strEq(out, "c"));
 
 	//A separator that isn't there

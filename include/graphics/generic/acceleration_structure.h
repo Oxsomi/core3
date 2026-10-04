@@ -56,10 +56,6 @@ typedef enum ERTASBuildFlags {
 	ERTASBuildFlags_FastBuild                  = 1 << 3,        //Prefer fast builds over longer builds (might be worse RT perf)
 	ERTASBuildFlags_MinimizeMemory             = 1 << 4,        //Ensure both scratch and output mem is reduced (slower builds)
 
-	//Reserved, free to reuse.
-	//Used to mean "this build is a refit", which is no longer something the caller asks for: whether a
-	// build refits is decided by whether the AS has been built before.
-
 	ERTASBuildFlags_Reserved5                  = 1 << 5,
 
 	//Keep triangle vertex positions readable from a hit (RayTriPosition / position fetch).
@@ -73,8 +69,8 @@ typedef enum ERTASBuildFlags {
 	ERTASBuildFlags_DefaultBLAS                = ERTASBuildFlags_FastTrace | ERTASBuildFlags_AllowCompaction,
 
 	//Every flag an opacity micromap build accepts.
-	//Micromaps have no update mode at all (VkBuildMicromapModeEXT only has BUILD), so AllowUpdate is an error
-	// rather than a no-op, and there is no micromap counterpart to MinimizeMemory.
+	//Micromaps have no update mode at all (Vulkan only allows them VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR),
+	// so AllowUpdate is an error rather than a no-op, and there is no micromap counterpart to MinimizeMemory.
 
 	ERTASBuildFlags_SupportedOpacityMicromapExt =
 		ERTASBuildFlags_FastTrace | ERTASBuildFlags_FastBuild | ERTASBuildFlags_AllowCompaction
@@ -86,7 +82,7 @@ typedef struct RTAS {
 	GraphicsDeviceRef *device;
 
 	U8 padding0[2];
-	Bool padding2;
+	Bool sizeQueryOnly;                        //GraphicsDeviceRef_getBLASSizesExt: init stops at the driver's sizes
 	Bool isCompleted;                          //If this is active, we know the RTAS is already done
 
 	U8 padding1;
@@ -98,7 +94,7 @@ typedef struct RTAS {
 	//
 	//compactionQuery is the slot holding this structure's compacted size, U32_MAX when none was claimed.
 	//compactionSubmitId is the submit that RECORDED it, since the size does not exist until that submit
-	//has completed.
+	//has completed. On a backend that can't query the size, it's the build's submit, which marked it compacted.
 
 	U64 compactionSubmitId;
 
@@ -114,7 +110,12 @@ typedef struct RTAS {
 	DeviceBufferRef *asBuffer;                 //The acceleration structure as a buffer
 	DeviceBufferRef *tempScratchBuffer;        //Not required, but might include scratch buffer for temp build memory
 
+	//What the driver asked for, filled by a sizeQueryOnly init in place of allocating asBuffer and tempScratchBuffer.
+
+	U64 queriedSize, queriedScratchSize;
+
 	CharString name;                           //Debug name
+	U8 padding4[32];
 
 	SpinLock lock;                             //Before reading on CPU; for example for refitting
 

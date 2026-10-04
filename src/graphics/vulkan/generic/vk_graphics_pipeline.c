@@ -24,6 +24,7 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
 #include "graphics/vulkan/vk_device.h"
@@ -183,6 +184,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 	VkPipeline pipelineHandle = NULL;
+	U64 key = Pipeline_hash(Buffer_fnv1a64Offset, &pipeline->type, sizeof(pipeline->type));
 	CharString temp = CharString_createNull();
 	ListVkPipelineShaderStageCreateInfo stages = (ListVkPipelineShaderStageCreateInfo) { 0 };
 	VkGraphicsPipelineCreateInfo currentInfo = (VkGraphicsPipelineCreateInfo) { 0 };
@@ -359,7 +361,12 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		// HLSL name either way; the module is the only place that knows which name each stage really binds.
 
 		const Buffer stageSpirv = buf->binaries[EGfxBinaryType_SPIRV];
+		pipeline->irBytes += (U32) Buffer_length(stageSpirv);        //Counted once the pipeline exists
 		const C8 *entryPoint = VkGraphicsPipeline_spirvEntrypoint(stageSpirv, entry->name, executionModel);
+
+		key = Pipeline_hash(key, &stage.stageType, sizeof(stage.stageType));
+		key = Pipeline_hash(key, stageSpirv.ptr, Buffer_length(stageSpirv));
+		key = Pipeline_hashString(key, entryPoint);
 
 		VkShaderModule module = NULL;
 
@@ -648,14 +655,18 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		.layout = *PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Vk)
 	};
 
-	gotoIfError3(clean, checkVkError(deviceExt->createGraphicsPipelines(
-		deviceExt->device,
-		NULL,
-		1,
-		&currentInfo,
-		NULL,
-		&pipelineHandle
-	), e_rr));
+	//The fixed function state as the caller described it; the render pass only by being used or not
+
+	PipelineGraphicsInfo state = *info;
+	state.renderPass = (RefPtr*) (U64) !!state.renderPass;
+
+	key = Pipeline_hash(key, &state, sizeof(state));
+	key = Pipeline_hash(key, &createFlags, sizeof(createFlags));
+	key = Pipeline_hashLayout(key, pipeline->layout);
+
+	gotoIfError3(clean, VkGraphicsDevice_buildPipeline(
+		device, pipeline, &currentInfo, key, pipeline->irBytes, &pipelineHandle, e_rr
+	));
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && name && CharString_length(*name)) {
 

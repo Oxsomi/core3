@@ -512,9 +512,11 @@ Bool SpvISA_disassemble(
 	gotoIfError3(clean, CharString_format(
 		alloc, &tmpSpv, e_rr, "%.*s/shader.spv", (int) CharString_length(tmpDir), tmpDir.ptr
 	));
+
 	gotoIfError3(clean, CharString_format(
 		alloc, &tmpAsm, e_rr, "%.*s/shader.s", (int) CharString_length(tmpDir), tmpDir.ptr
 	));
+
 	gotoIfError3(clean, File_write(&spirv, &tmpSpv, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
 
 	const Bool isWin = _PLATFORM_TYPE == PLATFORM_WINDOWS;
@@ -561,6 +563,7 @@ Bool SpvISA_disassemble(
 			alloc, &inputArg, e_rr, "%.*s,%.*s",
 			(int) CharString_length(tmpSpv), tmpSpv.ptr, (int) CharString_length(entrypoint), entrypoint.ptr
 		));
+
 		gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, inputArg, alloc, e_rr));
 	}
 
@@ -657,6 +660,7 @@ Bool SpvISA_listSupportedTargets(const Allocator *alloc, ListCharString *out, Er
 		gotoIfError3(clean, CharString_format(
 			alloc, &gfxipArg, e_rr, "-gfxip=%.*s", (int) CharString_length(gfxip), gfxip.ptr
 		));
+
 		gotoIfError3(clean, ListCharString_pushBack(&args, gfxipArg, alloc, e_rr));
 
 		I32 exitCode = 0;

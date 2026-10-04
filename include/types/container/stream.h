@@ -138,6 +138,22 @@ Bool Stream_create(
 	Error *e_rr
 );
 
+//A read only window onto [offset, offset + length) of another stream, holding a reference on it. Reads are
+//relative to the window, so a consumer that wants only what follows a header reads it from 0.
+//offset has to sit on a block of the source: the window's blocks are then the source's, and a source that
+// decodes per block is never asked for a read that starts inside one.
+
+RefPtrType Stream_rangeType(const Allocator *alloc);
+
+Bool Stream_createRange(
+	StreamRef *source,
+	U64 offset,
+	U64 length,                    //0 is everything past offset
+	const RefPtrType *type,        //Stream_rangeType(alloc)
+	StreamRef **stream,
+	Error *e_rr
+);
+
 Bool StreamCursor_create(
 	StreamRef *stream,
 	U64 cacheSize,

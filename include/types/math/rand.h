@@ -56,6 +56,17 @@ static inline F32 Random_sample(U32 *seed) {
 	return (F32)(*seed & 0x00FFFFFF) / (F32)(0x01000000);
 }
 
+//Generate 'random' value [0, max>; from the high bits, since an LCG's low bits repeat quickly
+
+static inline U32 Random_nextInt(U32 *seed, U32 max) {
+
+	if (!seed || !max)
+		return 0;
+
+	*seed = (1664525 * *seed + 1013904223);
+	return (U32)(((U64)(*seed >> 8) * max) >> 24);
+}
+
 #ifdef __cplusplus
 	}
 #endif

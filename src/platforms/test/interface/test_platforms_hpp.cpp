@@ -26,7 +26,7 @@
 //This TU exists so both headers are built by every configuration the tests are,
 // which is what stops them drifting from the C API they wrap.
 //
-//The body below is deliberately never CALLED.
+//The type check below is deliberately never CALLED.
 //It names each wrapper so the compiler has to instantiate and typecheck it against the current C headers;
 // running it would touch the filesystem and open a real window, which the modules that do run already cover.
 //A link time reference is enough to keep it honest.
@@ -36,6 +36,14 @@
 
 #include "platforms/file.hpp"
 #include "platforms/window.hpp"
+#include "platforms/platform.hpp"
+
+//The C test framework carries an extern "C" guard, so it is included inside oxc::c after the wrappers, as
+// test_types_container_hpp.cpp does.
+
+namespace oxc { namespace c {
+	#include "types/test/test.h"
+}}
 
 //File_foreach's callback type is declared inside extern "C",
 // so the callback handed to it is defined with C linkage rather than written as a captureless lambda.
@@ -242,4 +250,102 @@ extern "C" void Test_platformsHppTypeCheck(const oxc::c::Allocator *alloc, const
 
 	(void) manager.wait(e_rr);
 	manager.release();
+}
+
+//The environment layer is the exception: reading variables touches nothing, so it is run, not just compiled.
+//Variables are set through the C suite's Test_setEnv, which writes them the way each OS stores them.
+
+extern "C" oxc::c::Bool Test_setEnv(const oxc::c::Test *t, const oxc::c::C8 *name, const oxc::c::C8 *value);
+
+extern "C" void Test_platformsEnvHpp(oxc::c::Test *t) {
+
+	using namespace oxc;
+
+	const c::Allocator &alloc = *t->alloc;
+	const c::C8 *name = "OXC3_TEST_ENV_HPP";
+
+	Test_setModule(t, "Environment (C++)");
+
+	//get and has.
+
+	String str(alloc);
+	Test_setEnv(t, name, NULL);
+	Test_assert(t, "unset gets nothing", env::get(name, str, alloc) && !str.handle().ptr && !env::has(name, alloc));
+
+	Test_setEnv(t, name, "hello");
+	Test_assert(
+		t, "get",
+		env::get(name, str, alloc) && str.handle().ptr && c::CharString_equalsCStringSensitive(&str.handle(), "hello")
+	);
+
+	Test_assert(t, "has", env::has(name, alloc));
+
+	//readOr: the value, the default when unset, the default when it doesn't fit the type.
+
+	struct Case { const c::C8 *value; c::Bool ok; };
+
+	Test_setEnv(t, name, NULL);
+	Test_assert(t, "unset reads the default", env::readOr<c::U32>(name, 7, alloc) == 7);
+
+	Test_setEnv(t, name, "42");
+	Test_assert(t, "u32", env::readOr<c::U32>(name, 7, alloc) == 42);
+
+	Test_setEnv(t, name, "0x10");
+	Test_assert(t, "u32 hex", env::readOr<c::U32>(name, 7, alloc) == 16);
+
+	Test_setEnv(t, name, "4294967296");
+	Test_assert(t, "u32 out of range", env::readOr<c::U32>(name, 7, alloc) == 7);
+
+	Test_setEnv(t, name, "256");
+	Test_assert(t, "u8 out of range", env::readOr<c::U8>(name, 7, alloc) == 7);
+
+	Test_setEnv(t, name, "-1");
+	Test_assert(t, "unsigned refuses a sign", env::readOr<c::U32>(name, 7, alloc) == 7);
+	Test_assert(t, "i32", env::readOr<c::I32>(name, 7, alloc) == -1);
+
+	Test_setEnv(t, name, "-3000000000");
+	Test_assert(t, "i32 out of range", env::readOr<c::I32>(name, 7, alloc) == 7);
+	Test_assert(t, "i64", env::readOr<c::I64>(name, 7, alloc) == -3000000000ll);
+
+	Test_setEnv(t, name, "1.5");
+	Test_assert(t, "f32", env::readOr<c::F32>(name, 7, alloc) == 1.5f);
+
+	Test_setEnv(t, name, "1e39");
+	Test_assert(t, "f32 out of range", env::readOr<c::F32>(name, 7, alloc) == 7);
+	Test_assert(t, "f64", env::readOr<c::F64>(name, 7, alloc) == 1e39);
+
+	Test_setEnv(t, name, "true");
+	Test_assert(t, "bool", env::readOr<bool>(name, false, alloc));
+
+	//read: a malformed value fails through e_rr and leaves the value alone.
+
+	Test_setEnv(t, name, "12a");
+	c::U32 u = 7;
+	c::Error err = c::Error_none();
+	Test_assert(t, "read refuses", !env::read(name, u, alloc, &err) && u == 7 && err.genericError);
+
+	//Lists: exactly count values, or nothing written.
+
+	c::F32 v[3] = { 9, 9, 9 };
+
+	Test_setEnv(t, name, NULL);
+	Test_assert(t, "unset list", env::readList(name, v, 3, alloc) && v[0] == 9 && !env::readListOr(name, v, 3, alloc));
+
+	Test_setEnv(t, name, "1,-2.5,3e2");
+	Test_assert(
+		t, "list", env::readListOr(name, v, 3, alloc) && v[0] == 1 && v[1] == -2.5f && v[2] == 300
+	);
+
+	static const Case lists[] = { { "1,2", false }, { "1,2,3,4", false }, { "1,,3", false }, { "1,2,x", false } };
+	c::Bool allRefused = true;
+
+	for(const Case &l : lists) {
+		c::F32 w[3] = { 9, 9, 9 };
+		Test_setEnv(t, name, l.value);
+		allRefused &= !env::readList(name, w, 3, alloc) && w[0] == 9 && w[1] == 9 && w[2] == 9;
+	}
+
+	Test_assert(t, "malformed lists refused whole", allRefused);
+
+	Test_setEnv(t, name, NULL);
 }

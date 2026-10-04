@@ -48,6 +48,7 @@ void Test_SBFileCombineFlags(Test *t) {
 		Test_assert(t, "add to a",
 			SBFile_addVariableAsType(&a, &nameA, 0, U16_MAX, ESBType_F32, ESBVarFlag_IsUsedVarSPIRV, NULL, t->alloc, &t->err)
 		);
+
 		Test_assert(t, "add to b",
 			SBFile_addVariableAsType(&b, &nameB, 0, U16_MAX, ESBType_F32, ESBVarFlag_IsUsedVarDXIL, NULL, t->alloc, &t->err)
 		);
