@@ -74,6 +74,11 @@ if(EnableShaderCompiler)
 	target_compile_definitions(OxC3_atest PRIVATE _OXC3_TEST_SHADER_COMPILER)
 endif()
 
+# The graphics tests reach the library's internal headers (graphics/generic/device_internal.h) through src/, as their
+# own target does.
+
+target_include_directories(OxC3_atest PRIVATE ${testRoot})
+
 # audio_functional reads its wavs through the virtual file system here, since an apk has no working directory to fopen out of.
 # Only the short_* clips are bundled, the long_* ones are 79 of the 88 MB and would turn a ~11 MB test apk into a ~99 MB one.
 # The sweeps fall back to a looping short clip, only the tests that genuinely need a long one are skipped (and say so).
