@@ -28,6 +28,7 @@
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "types/base/buffer_base.h"
 #include "types/base/mathi.h"
@@ -136,29 +137,13 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(buf->usage & EDeviceBufferUsage_ScratchExt)
 		usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
-	//The EXT micromap path has its own storage and build input usage bits; a micromap array under the KHR
-	// promotion is an acceleration structure, so there the AS bits below already cover it.
-	//Only legal to request when the EXT extension is actually enabled.
+	//A micromap array is an acceleration structure, so these bits cover its storage and build inputs too
 
-	const Bool ommExt =
-		(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity) &&
-		!(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR);
-
-	if(buf->usage & EDeviceBufferUsage_ASExt) {
-
+	if(buf->usage & EDeviceBufferUsage_ASExt)
 		usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
 
-		if(ommExt)
-			usage |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
-	}
-
-	if(buf->usage & EDeviceBufferUsage_ASReadExt) {
-
+	if(buf->usage & EDeviceBufferUsage_ASReadExt)
 		usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-
-		if(ommExt)
-			usage |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;
-	}
 
 	if(buf->usage & EDeviceBufferUsage_SBTExt)
 		usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
@@ -199,14 +184,21 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if (buf->usage & EDeviceBufferUsage_ScratchExt)
 		requirements.memoryRequirements.alignment = U64_max(256, requirements.memoryRequirements.alignment);
 
-	//256 rather than 16 when micromaps are on: a micromap build's data and triangleArray addresses must be
-	// 256 aligned (VUID-vkCmdBuildMicromapsEXT-pInfos-07515) and any ASRead buffer may feed one.
+	//128 rather than 16 when micromaps are on: a micromap build's data and triangleArray addresses must be
+	// 128 aligned (VUID-vkCmdBuildAccelerationStructuresKHR-micromap-11552) and any ASRead buffer may feed one.
 
 	if (buf->usage & EDeviceBufferUsage_ASReadExt)
 		requirements.memoryRequirements.alignment = U64_max(
-			(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity) ? 256 : 16,
+			(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity) ? 128 : 16,
 			requirements.memoryRequirements.alignment
 		);
+
+	//An acceleration structure created by address needs that address 256 aligned
+	// (VUID-VkAccelerationStructureCreateInfo2KHR-addressRange-11605), which is how micromap arrays are created.
+	//The reported requirement isn't promised to say so, since a buffer created structure only constrains its offset.
+
+	if (buf->usage & EDeviceBufferUsage_ASExt)
+		requirements.memoryRequirements.alignment = U64_max(256, requirements.memoryRequirements.alignment);
 
 	//A shader binding table's regions are addressed by device address, and each one has to be a multiple of
 	// shaderGroupBaseAlignment (VUID-vkCmdTraceRaysKHR-pRayGenShaderBindingTable-03682 and its miss and hit
@@ -218,10 +210,20 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if (buf->usage & EDeviceBufferUsage_SBTExt)
 		requirements.memoryRequirements.alignment = U64_max(64, requirements.memoryRequirements.alignment);
 
+	const VkBlockRequirements blockReq = (VkBlockRequirements) {
+		.memory = requirements.memoryRequirements,
+		.buffer = bufExt->buffer,
+		.flags =
+			(buf->resource.flags & EGraphicsResourceFlag_CPUReadBit ? EVkBlockFlags_Readback : EVkBlockFlags_None) |
+			(dedicatedReq.requiresDedicatedAllocation ? EVkBlockFlags_RequiresDedicated : EVkBlockFlags_None) |
+			(dedicatedReq.prefersDedicatedAllocation ? EVkBlockFlags_PrefersDedicated : EVkBlockFlags_None) |
+			(buf->usage & EDeviceBufferUsage_ASExt ? EVkBlockFlags_HighPriority : EVkBlockFlags_None)
+	};
+
 	DeviceMemoryBlock block;
 	gotoIfError3(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		&device->allocator,
-		&requirements,
+		(void*) &blockReq,
 		buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
 		&buf->resource.blockId,
 		&buf->resource.blockOffset,
@@ -269,6 +271,12 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
 	}
+
+	//For a lost device to name: by its address where it has one, by its handle where only a binding report does
+
+	gotoIfError3(clean, GraphicsDevice_registerResource(
+		device, (RefPtr*) buf - 1, (U64) bufExt->buffer, name, e_rr
+	));
 
 clean:
 	return s_uccess;
@@ -380,6 +388,8 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 		));
 
 		if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
+
+			GraphicsDevice_noteStagingBypass(device, allocRange);
 
 			CharString dedicatedStagingName = CharString_createRefCStrConst("Dedicated staging buffer");
 

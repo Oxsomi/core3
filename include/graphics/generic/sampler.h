@@ -55,11 +55,13 @@ typedef struct Sampler {
 
 	SamplerInfo info;
 	U16 flags;              //ESamplerFlags
-	U16 padding[6];
+	U16 padding[10];
 
 	U32 samplerLocation;
 
 } Sampler;
+
+static_assert(sizeof(Sampler) % 64 == 0, "Sampler must be a 64 byte multiple, its backend ext follows it");
 
 #define Sampler_ext(ptr, T) (!ptr ? NULL : (T##Sampler*)(ptr + 1))        //impl
 #define SamplerRef_ptr(ptr) RefPtr_data(ptr, Sampler)

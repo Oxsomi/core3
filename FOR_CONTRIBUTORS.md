@@ -8,7 +8,7 @@ Pull requests must follow the code style of this repository and may be rejected 
 
 ## Before you start
 
-- Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), especially the **error-handling idiom** section. PRs that use raw `return`s on failure paths, skip input validation, or invent a third error convention will be bounced on style alone.
+- Read [ARCHITECTURE.md](ARCHITECTURE.md), especially the **error-handling idiom** section. PRs that use raw `return`s on failure paths, skip input validation, or invent a third error convention will be bounced on style alone.
 - Read [docs/code_style.md](docs/code_style.md) for formatting (tabs, brace style, naming: `Module_functionName`, `EEnumName_Value`, `s_uccess`/`e_rr` are intentional).
 - Check [STATUS.md](STATUS.md) so you're not building on a 📄-status feature, and update it in the same PR when your change moves a cell.
 

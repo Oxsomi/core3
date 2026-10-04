@@ -54,6 +54,17 @@ void Pipeline_free(void *pipelineGeneric, const Allocator *alloc) {
 
 	Pipeline_freeExt(pipeline, alloc);
 
+	if(pipeline->statsTracked) {
+		GraphicsDevice *device = GraphicsDeviceRef_ptr(pipeline->device);
+		const Bool estimate = pipeline->gpuBytesEstimated;
+
+		if(!estimate)
+			AtomicI64_add(&device->pipelineKnownIRBytes, -(I64) pipeline->irBytes);
+
+		AtomicI64_add(estimate ? &device->pipelineEstimateBytes : &device->pipelineBytes, -(I64) pipeline->gpuBytes);
+		AtomicI64_dec(estimate ? &device->pipelineEstimateCount : &device->pipelineCount);
+	}
+
 	if (pipeline->type == EPipelineType_RaytracingExt) {
 		PipelineRaytracingInfo *info = Pipeline_info(pipeline, PipelineRaytracingInfo);
 		ListPipelineRaytracingGroup_free(&info->groups, alloc);

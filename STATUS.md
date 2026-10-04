@@ -71,8 +71,8 @@ and compare triangles rather than vertices, since a read renumbers vertices into
 | Buffers/textures + suballocation | ✅ | ✅ | |
 | Descriptor heap/layout/table + bindless | ✅ | ✅ | Android: bindful path missing |
 | Compute/graphics pipelines | ✅ | ✅ | Android: render passes missing |
-| Raytracing (pipeline + query, BLAS/TLAS) | ✅ | ✅ | Micromap/reorder behind extension flags |
-| Mesh shaders / VRS | ✅ | ✅ | |
+| Raytracing (pipeline + query, BLAS/TLAS) | ✅ | ✅ | Micromap/reorder behind extension flags; Vulkan micromaps need VK_KHR_opacity_micromap; ray queries reach them from every stage whose entry names `OXC_ENABLE_OPACITY_MICROMAP()` |
+| Mesh shaders / VRS | 🟡 | 🟡 | Capabilities exposed, nothing exercised: no `dispatchMesh` runtime path on either backend, no VRS test (see roadmap) |
 | Metal | 📄 | — | Enum reserved; needs SPIRV-Cross MSL path |
 | WebGPU | 📄 | — | |
 | Android swapchain pre-rotation | ✅ | — |  |
@@ -86,7 +86,7 @@ and compare triangles rather than vertices, since a read renumbers vertices into
 | `[[oxc::...]]` annotations | ✅ | stage/model/vendor/extension/uniforms/binary masks; parsed via DXC reflection |
 | Multithreaded batch compile | ✅ | JobQueue, per-thread Compiler |
 | Include tracking / sourceHash | ✅ | Hot-reload & incremental-build ready |
-| Lib specialization + link (RT/workgraphs) | ✅ | Under active review |
+| Lib specialization + link (RT) | ✅ | |
 | GLSL / Slang input | ❌ | HLSL-only by design (state in docs) |
 | MSL output | 📄 | Blocked on SPIRV-Cross/Shader translator integration |
 | CLI: convert/encrypt/hash/inspect/rand/profile/devices/package | ✅ | `-aes` key via argv only, stdin/env/file input wanted |

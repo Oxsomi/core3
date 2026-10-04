@@ -273,6 +273,7 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 				gotoIfError3(clean, File_openStream(
 					&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &inputStream, e_rr
 				));
+
 				gotoIfError3(clean, WAV_read(inputStream, 0, 0, alloc, &wav, e_rr));
 
 				Bool hasBitPreference = bitPreferenceCount == 0;

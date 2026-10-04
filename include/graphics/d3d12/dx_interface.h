@@ -112,6 +112,7 @@
 		void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *resource,
 		const TextureRange *range, U64 stagingOffset, U64 *rowPitch, Error *e_rr
 	);
+
 	void  D3D12UnifiedTexture_free(TextureRef *textureRef);
 
 	//Swapchain
@@ -138,6 +139,7 @@
 		const CharString *name,
 		Error *e_rr
 	);
+
 	void D3D12DescriptorTable_free(DescriptorTable *table, const Allocator *alloc);
 
 	Bool D3D12DescriptorTable_setDescriptors(
@@ -164,6 +166,7 @@
 		const CharString *name,
 		Error *e_rr
 	);
+
 	void D3D12DescriptorLayout_free(DescriptorLayout *layout, const Allocator *alloc);
 
 	//PipelineLayout
@@ -174,6 +177,7 @@
 		const CharString *name,
 		Error *e_rr
 	);
+
 	void D3D12PipelineLayout_free(PipelineLayout *layout, const Allocator *alloc);
 
 	//Allocator
@@ -204,9 +208,15 @@
 
 	U64 D3D12GraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
 
+	Bool D3D12GraphicsDevice_loadPipelineCache(GraphicsDevice *device, Buffer driverData, Bool *accepted, Error *e_rr);
+	Bool D3D12GraphicsDevice_savePipelineCache(
+		GraphicsDevice *device, const Allocator *alloc, Buffer *driverData, Error *e_rr
+	);
+
 	void D3D12GraphicsDevice_free(const GraphicsInstance *instance, void *ext);
 
 	Bool D3D12GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr);
+	Bool D3D12GraphicsDeviceRef_reportLoss(GraphicsDeviceRef *deviceRef);
 
 	Bool D3D12GraphicsDevice_submitCommands(
 		GraphicsDeviceRef *deviceRef,

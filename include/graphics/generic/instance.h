@@ -76,7 +76,7 @@ typedef struct GraphicsInstance {
 	U32 apiVersion;
 
 	EGraphicsInstanceFlags flags;
-	U32 padding;
+	U32 padding[15];
 
 	//Validation messages the api's debug layers reported, so CI can hard fail when any slip through.
 	//They live on the instance because the backends run as their own DLLs and share it through this memory.
@@ -89,6 +89,8 @@ typedef struct GraphicsInstance {
 	GraphicsObjectTypes types;
 
 } GraphicsInstance;
+
+static_assert(sizeof(GraphicsInstance) % 64 == 0, "GraphicsInstance must be a 64 byte multiple, its backend ext follows it");
 
 typedef RefPtr GraphicsInstanceRef;
 typedef struct ListGraphicsDeviceInfo ListGraphicsDeviceInfo;

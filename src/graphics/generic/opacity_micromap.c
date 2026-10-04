@@ -141,7 +141,7 @@ Bool GraphicsDeviceRef_createOpacityMicromapExt(
 		));
 
 	//Rejected rather than ignored, so a caller can't believe an update happened.
-	//Micromaps have no update mode at all: VkBuildMicromapModeEXT only has BUILD.
+	//Micromaps have no update mode at all: Vulkan only allows VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR.
 
 	if(info->buildFlags & ~(ERTASBuildFlags) ERTASBuildFlags_SupportedOpacityMicromapExt)
 		retError(clean, Error_unsupportedOperation(
@@ -226,8 +226,7 @@ Bool GraphicsDeviceRef_createOpacityMicromapExt(
 	gotoIfError3(clean, RefPtr_inc(entryBuffer.buffer));
 	micromap->entryBuffer = entryBuffer;
 
-	//Copied rather than referenced: Vulkan needs the usages again in every BLAS that links this micromap, so
-	// they have to survive as long as the object does and not just as long as the create call.
+	//Copied rather than referenced, since the caller's list is only borrowed for the duration of this call.
 
 	gotoIfError3(clean, ListOpacityMicromapUsage_createCopy(info->usages, alloc, &micromap->usages, e_rr));
 

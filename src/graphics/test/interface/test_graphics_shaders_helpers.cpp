@@ -470,6 +470,7 @@ namespace oxc { namespace c {
 						*ownInstanceRef, &deviceInfos.ptr[i], EGraphicsDeviceFlags_None,
 						EGraphicsBufferingMode_Default, NULL, NULL, ownDeviceRef, &t->err
 					));
+
 					break;
 				}
 		}

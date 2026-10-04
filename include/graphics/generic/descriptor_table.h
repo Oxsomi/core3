@@ -142,6 +142,8 @@ typedef struct DescriptorTableBinding {
 		DescriptorTableBindingSingle single;
 	};
 
+	U8 padding[8];
+
 } DescriptorTableBinding;
 
 typedef struct DescriptorTableResourceRef {
@@ -159,14 +161,17 @@ typedef struct DescriptorTable {
 
 	DescriptorTableFlags flags;
 	Bool acquiredAtomic;
-	U8 padding[3];
+	U8 padding[6];
 
 	ListDescriptorTableResourceRef resources;        //All resources that are bound by the table
 	ListDescriptorTableBinding bindings;
+	U8 padding1[56];
 
 	SpinLock lock;                                   //To access resources
 
 } DescriptorTable;
+
+static_assert(sizeof(DescriptorTable) % 64 == 0, "DescriptorTable must be a 64 byte multiple, its backend ext follows it");
 
 #define DescriptorTable_ext(ptr, T) (!ptr ? NULL : (T##DescriptorTable*)(ptr + 1))        //impl
 #define DescriptorTableRef_ptr(ptr) RefPtr_data(ptr, DescriptorTable)

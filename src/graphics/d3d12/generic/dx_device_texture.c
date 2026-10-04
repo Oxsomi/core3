@@ -23,6 +23,7 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
@@ -86,6 +87,8 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 	D3D12_BARRIER_GROUP imgDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE };
 
 	if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
+
+		GraphicsDevice_noteStagingBypass(device, allocRange);
 
 		CharString dedicatedStaging = CharString_createRefCStrConst("Dedicated staging buffer");
 

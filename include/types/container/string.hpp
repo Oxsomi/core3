@@ -23,6 +23,7 @@
 #pragma once
 #include <utility>
 #include <type_traits>
+#include "types/base/bool_arg.hpp"
 
 //Pre-include system headers used by the C headers below at global scope;
 //they must not be pulled in for the first time inside a namespace.
@@ -78,7 +79,7 @@ namespace oxc {
 		//From a C string literal or any null terminated buffer
 		StringView(const c::C8 *cstr) noexcept : str(c::CharString_createRefCStrConst(cstr)) {}
 
-		StringView(const c::C8 *ptr, c::U64 len, bool nullTerminated = false) noexcept :
+		StringView(const c::C8 *ptr, c::U64 len, BoolArg nullTerminated = false) noexcept :
 			str(c::CharString_createRefSizedConst(ptr, len, nullTerminated)) {}
 
 		//From an existing C CharString of any flavour; the view is always const-ref regardless of the source
@@ -109,7 +110,7 @@ namespace oxc {
 		[[nodiscard]] bool operator==(const StringView &o) const noexcept { return equals(o); }
 		[[nodiscard]] bool operator!=(const StringView &o) const noexcept { return !equals(o); }
 
-		[[nodiscard]] c::ECompareResult compare(const StringView &o, bool sensitive = true) const noexcept {
+		[[nodiscard]] c::ECompareResult compare(const StringView &o, BoolArg sensitive = true) const noexcept {
 			return c::CharString_compare(&str, &o.str, sensitive ? c::EStringCase_Sensitive : c::EStringCase_Insensitive);
 		}
 

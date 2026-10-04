@@ -33,8 +33,37 @@
 
 #include <utility>
 
+#include <cstddef>
+#include <type_traits>
+
 #include "types/base/lock.hpp"
 #include "types/base/thread.hpp"
+#include "types/base/bool_arg.hpp"
+
+//BoolArg takes a bool and nothing else, so a misplaced pointer can't silently become a flag.
+//Checked here rather than at a call site because the point is that the bad call doesn't compile.
+
+namespace {
+
+	using oxc::BoolArg;
+
+	enum class EBoolArgTest { A };
+
+	static_assert(std::is_convertible_v<bool, BoolArg> && std::is_convertible_v<const bool&, BoolArg>);
+	static_assert(std::is_convertible_v<oxc::c::Bool, BoolArg> && std::is_convertible_v<BoolArg, bool>);
+
+	static_assert(!std::is_constructible_v<BoolArg, oxc::c::Error*>);
+	static_assert(!std::is_constructible_v<BoolArg, const oxc::c::Error*>);
+	static_assert(!std::is_constructible_v<BoolArg, void*>);
+	static_assert(!std::is_constructible_v<BoolArg, const char*>);
+	static_assert(!std::is_constructible_v<BoolArg, std::nullptr_t>);
+	static_assert(!std::is_constructible_v<BoolArg, int>);
+	static_assert(!std::is_constructible_v<BoolArg, oxc::c::U64>);
+	static_assert(!std::is_constructible_v<BoolArg, float>);
+	static_assert(!std::is_constructible_v<BoolArg, EBoolArgTest>);
+
+	static_assert(BoolArg(true) && !BoolArg(false));
+}
 
 //Never invoked. See the file comment: this is a compile time check, not a test module.
 

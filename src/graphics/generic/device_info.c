@@ -132,9 +132,6 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_Barycentrics)
 			Log_debugLnx("\t\tFragment shader barycentrics");
 
-		if(cap.features2 & EGraphicsFeatures2_RayMicromapOpacityU8)
-			Log_debugLnx("\t\tRaytracing opacity micromap 8-bit indices");
-
 		if(cap.features2 & EGraphicsFeatures2_RayClusterAS)
 			Log_debugLnx("\t\tRaytracing cluster acceleration structures (mega geometry)");
 
@@ -149,6 +146,12 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(cap.features2 & EGraphicsFeatures2_Predication)
 			Log_debugLnx("\t\tPredicated scopes");
+
+		if(cap.features2 & EGraphicsFeatures2_DeviceFault)
+			Log_debugLnx("\t\tDevice fault reporting");
+
+		if(cap.features2 & EGraphicsFeatures2_WriteBufferImmediate)
+			Log_debugLnx("\t\tWrite buffer immediate");
 
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
@@ -272,9 +275,6 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.featuresExt)
 				Log_debugLnx("\tD3D12 Extensions:");
 
-			if(cap.featuresExt & EDxGraphicsFeatures_WriteBufferImmediate)
-				Log_debugLnx("\t\tWriteBufferImmediate");
-
 			if(cap.featuresExt & EDxGraphicsFeatures_ReBAR)
 				Log_debugLnx("\t\tReBAR");
 
@@ -310,6 +310,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EDxGraphicsFeatures_CacheCoherentUMA)
 				Log_debugLnx("\t\tCache coherent UMA");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_AllowTearing)
+				Log_debugLnx("\t\tAllow tearing");
 
 			if(cap.featuresExt & EDxGraphicsFeatures_RGBX32fMSAA)
 				Log_debugLnx("\t\tRGB(A)32f supports MSAA");
@@ -352,6 +355,15 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EVkGraphicsFeatures_PerformantPushDescriptor)
 				Log_debugLnx("\t\tPush descriptors");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_AddressBindingReport)
+				Log_debugLnx("\t\tAddress binding report");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_ExternalHostMemory)
+				Log_debugLnx("\t\tExternal host memory");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_MemoryPriority)
+				Log_debugLnx("\t\tMemory priority");
 		}
 	}
 }

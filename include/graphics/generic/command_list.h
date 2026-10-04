@@ -128,13 +128,16 @@ typedef struct CommandList {
 	// record time, so requested and predicated are the same fact.
 
 	Bool lastScopePredicated;
-	U8 padding4[2];
+	U8 padding4[6];
 
 	ListTransitionInternal pendingTransitions;
 
 	ListDeviceResourceVersion activeSwapchains;        //Locks swapchain when it's first inserted
+	U8 padding5[56];
 
 } CommandList;
+
+static_assert(sizeof(CommandList) % 64 == 0, "CommandList must be a 64 byte multiple, its backend ext follows it");
 
 typedef RefPtr CommandListRef;
 

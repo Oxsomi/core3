@@ -81,11 +81,14 @@ typedef struct DescriptorHeap {
 	GraphicsDeviceRef *device;
 
 	DescriptorHeapInfo info;
-	U32 padding[3];
+	U32 statsTracked;                   //Counted in the device's memory stats
+	U64 gpuBytes;                       //Its descriptors on the device, 0 where the API doesn't say
 
 	AtomicI64 descriptorTableCount;
 
 } DescriptorHeap;
+
+static_assert(sizeof(DescriptorHeap) % 64 == 0, "DescriptorHeap must be a 64 byte multiple, its backend ext follows it");
 
 #define DescriptorHeap_ext(ptr, T) (!ptr ? NULL : (T##DescriptorHeap*)(ptr + 1))        //impl
 #define DescriptorHeapRef_ptr(ptr) RefPtr_data(ptr, DescriptorHeap)

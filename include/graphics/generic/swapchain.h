@@ -85,6 +85,7 @@ typedef struct Swapchain {
 	U16 orientation;              //Orientation the swapchain was previously created with
 
 	U64 versionId;                //Everytime this swapchain changes format or is resized this will increase.
+	U8 padding1[32];
 
 	SpinLock lock;
 

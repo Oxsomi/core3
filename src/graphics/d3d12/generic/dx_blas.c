@@ -252,6 +252,32 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		&sizes
 	);
 
+	//One scratch buffer serves both, since the same object does the full build and every refit after it; the
+	// update size is not required to be the smaller of the two, so neither is assumed.
+
+	const U64 scratchSize = blas->base.flags & ERTASBuildFlags_AllowUpdate ?
+		U64_max(sizes.ScratchDataSizeInBytes, sizes.UpdateScratchDataSizeInBytes) : sizes.ScratchDataSizeInBytes;
+
+	if(blas->base.sizeQueryOnly) {
+		blas->base.queriedSize = sizes.ResultDataMaxSizeInBytes;
+		blas->base.queriedScratchSize = scratchSize;
+		goto clean;
+	}
+
+	//A scratch buffer the caller provided (BLASCreateInfo::scratchBuffer) only has to be large enough, which is
+	// checked before anything is allocated; otherwise the structure gets one of its own below.
+
+	if(blas->base.tempScratchBuffer) {
+
+		const U64 providedSize = DeviceBufferRef_ptr(blas->base.tempScratchBuffer)->resource.size;
+
+		if(providedSize < scratchSize)
+			retError(clean, Error_outOfBounds(
+				1, scratchSize, providedSize,
+				"D3D12BLAS_init()::scratchBuffer is smaller than the build needs (see GraphicsDeviceRef_getBLASSizesExt)"
+			));
+	}
+
 	//Allocate scratch and final buffer
 
 	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
@@ -265,37 +291,28 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		e_rr
 	));
 
-	gotoIfError3(clean, CharString_format(
-		alloc,
-		&tmp,
-		e_rr,
-		"%.*s scratch buffer",
-		CharString_length(blas->base.name),
-		blas->base.name.ptr
-	));
+	if(!blas->base.tempScratchBuffer) {
 
-	//TODO: cache the scratch buffer on the device rather than allocating one per structure.
-	// Scratch is only live between a build and the submit that runs it, so structures built in the same
-	// submit could share one buffer sized to the largest of them, and a build that is not a refit could
-	// hand it straight back. That is a real saving on a scene of many structures, where the scratch can
-	// rival the structures themselves in peak footprint.
+		gotoIfError3(clean, CharString_format(
+			alloc,
+			&tmp,
+			e_rr,
+			"%.*s scratch buffer",
+			CharString_length(blas->base.name),
+			blas->base.name.ptr
+		));
 
-	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
-
-		blas->base.device,
-		EDeviceBufferUsage_ScratchExt,
-		EGraphicsResourceFlag_None,
-		NULL,
-		&tmp,
-
-		//One scratch buffer serves both, since the same object now does the full build and every refit after
-		// it; the update size is not required to be the smaller of the two, so neither is assumed.
-
-		blas->base.flags & ERTASBuildFlags_AllowUpdate ?
-			U64_max(sizes.ScratchDataSizeInBytes, sizes.UpdateScratchDataSizeInBytes) : sizes.ScratchDataSizeInBytes,
-		&blas->base.tempScratchBuffer,
-		e_rr
-	));
+		gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+			blas->base.device,
+			EDeviceBufferUsage_ScratchExt,
+			EGraphicsResourceFlag_None,
+			NULL,
+			&tmp,
+			scratchSize,
+			&blas->base.tempScratchBuffer,
+			e_rr
+		));
+	}
 
 clean:
 	CharString_free(&tmp, alloc);
@@ -396,6 +413,33 @@ Bool DX_WRAP_FUNC(BLASRef_compact)(
 
 	gotoIfError3(clean, ListRefPtr_reserve(currentFlight, currentFlight->length + 1, alloc, e_rr));
 
+	//The copy reads the built structure and writes the new one outside any scope's transitions, so both are
+	// transitioned here: the read waits for the build, and whatever uses the compacted structure waits for the copy.
+
+	{
+		DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+		D3D12_BARRIER_GROUP dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+
+		gotoIfError3(clean, DxDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Dx),
+			D3D12_BARRIER_SYNC_COPY_RAYTRACING_ACCELERATION_STRUCTURE,
+			D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		gotoIfError3(clean, DxDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.pendingCompactBuffer), Dx),
+			D3D12_BARRIER_SYNC_COPY_RAYTRACING_ACCELERATION_STRUCTURE,
+			D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		if(dependency.NumBarriers) {
+			commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dependency);
+			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+		}
+	}
+
 	commandBuffer->buffer->lpVtbl->CopyRaytracingAccelerationStructure(
 		commandBuffer->buffer,
 		DeviceBufferRef_ptr(blas->base.pendingCompactBuffer)->resource.deviceAddress,
@@ -457,6 +501,33 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	if (blas->base.isCompleted) {
 		buildAs.Inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
 		buildAs.SourceAccelerationStructureData = dstAS;
+	}
+
+	//The build writes the structure and its scratch outside any scope's transitions. Transitioned here, a rebuild
+	// waits for the last read of the structure, and the postbuild info below waits for this build instead of
+	// reading a structure that may still be building.
+
+	{
+		D3D12_BARRIER_GROUP dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+
+		gotoIfError3(clean, DxDeviceBuffer_transition(
+			DeviceBuffer_ext(asBuffer, Dx),
+			D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
+			D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE |
+				(blas->base.isCompleted ? D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ : 0),
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		gotoIfError3(clean, DxDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.tempScratchBuffer), Dx),
+			D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE, D3D12_BARRIER_ACCESS_UNORDERED_ACCESS,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		if(dependency.NumBarriers) {
+			commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dependency);
+			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+		}
 	}
 
 	commandBuffer->buffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer->buffer, &buildAs, 0, NULL);
@@ -586,24 +657,23 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		RefPtr_inc(pending);
 	}
 
-	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource,
-	// and losing the reference from our object.
-	//However that's only if allow update is false.
+	//The frame in flight keeps the scratch buffer alive until the build has run.
+	//Without AllowUpdate nothing builds this structure again, so it lets go of its own reference, including when the
+	// buffer is shared and an earlier build already put it in flight.
 
 	if(!ListRefPtr_contains(*currentFlight, blas->base.tempScratchBuffer, 0, NULL)) {
-
 		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, blas->base.tempScratchBuffer, alloc, e_rr));
-
-		if(!(blas->base.flags & ERTASBuildFlags_AllowUpdate))
-			blas->base.tempScratchBuffer = NULL;
-
-		else RefPtr_inc(blas->base.tempScratchBuffer);
+		RefPtr_inc(blas->base.tempScratchBuffer);
 	}
 
-	//Ensure we don't exceed a maximum amount of time spent on the GPU
+	//Ensure we don't exceed a maximum amount of time spent on the GPU.
+	//Before letting go of the scratch, so a failed flush leaves the structure unbuilt but still able to build.
 
 	if (device->pendingPrimitives >= device->flushThresholdPrimitives)
 		gotoIfError3(clean, DxGraphicsDevice_flush(deviceRef, commandBuffer, e_rr));
+
+	if(!(blas->base.flags & ERTASBuildFlags_AllowUpdate))
+		RefPtr_dec(&blas->base.tempScratchBuffer);
 
 	blas->base.isCompleted = true;
 

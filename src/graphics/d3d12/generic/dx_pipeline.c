@@ -23,8 +23,22 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/d3d12/dx_device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/d3d12/dx_amd_shader_analyzer.h"
 #include "types/base/string_read_helper.h"
+
+void DxPipeline_trackMemory(Pipeline *pipeline, ID3D12PipelineState *pso, U64 bytecodeLength) {
+
+	ID3DBlob *blob = NULL;
+
+	if(!pso || FAILED(pso->lpVtbl->GetCachedBlob(pso, &blob)) || !blob) {
+		Pipeline_trackMemory(pipeline, bytecodeLength, bytecodeLength, true);
+		return;
+	}
+
+	Pipeline_trackMemory(pipeline, blob->lpVtbl->GetBufferSize(blob), bytecodeLength, false);
+	blob->lpVtbl->Release(blob);
+}
 
 void DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 

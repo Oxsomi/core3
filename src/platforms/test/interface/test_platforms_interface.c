@@ -33,6 +33,7 @@
 //  6. DynamicLibrary  - path validation (+ load/free when SUPPORTS_DYNAMIC_LINKING)
 //  7. Allocator       - the platform allocator meets OxC3's own alignment requirement
 //  8. Environment     - UTF-8 round trip, unset and empty, name validation, typed readers, the C++ layer
+//  9. Interrupts      - Platform_deferInterrupts nests, checked with a real SIGINT
 //
 //Run in CI, no display, no human interaction required.
 
@@ -52,6 +53,8 @@
 #include "types/base/thread.h"
 #include "types/container/string_unicode.h"
 #include "types/container/list_basic_types.h"
+
+#include <signal.h>
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define WIN32_LEAN_AND_MEAN
@@ -1350,12 +1353,14 @@ static void Test_platformEnv(Test *t) {
 		Platform_getEnv(sizedName, t->alloc, &value, NULL) && value.ptr &&
 		CharString_equalsCStringSensitive(&value, "sized")
 	);
+
 	CharString_free(&value, t->alloc);
 
 	Test_assert(t, "empty name refused", !Platform_getEnv(CharString_createNull(), t->alloc, &value, NULL));
 	Test_assert(
 		t, "name with = refused", !Platform_getEnv(CharString_createRefCStrConst("A=B"), t->alloc, &value, NULL)
 	);
+
 	Test_assert(
 		t, "name with NUL refused",
 		!Platform_getEnv(CharString_createRefSizedConst("A\0B", 3, false), t->alloc, &value, NULL)
@@ -1472,6 +1477,36 @@ static void Test_allocatorAlignment(Test *t) {
 	Test_assert(t, "alignedTo16", allAligned);
 }
 
+//Deferrals nest: an unmatched undefer leaves none rather than fewer than none, and an inner pair leaves the outer one.
+//The count is only observable through the handler, so a real SIGINT checks it: deferred, the handler only raises the
+// flag; not deferred, it ends the process, which fails the run.
+//Nothing lowers the flag again, so this runs last, and not where later suites share the process (a bundled run).
+
+static void Test_deferInterrupts(Test *t) {
+
+	Test_setModule(t, "Platform/DeferInterrupts");
+
+	#if defined(_NO_SIGNAL_HANDLING) || defined(_OXC3_TEST_BUNDLED) || _PLATFORM_TYPE == PLATFORM_WEB
+
+		Test_print(t, "Interrupts aren't handled by this process alone here, skipping the deferral check");
+
+	#else
+
+		Test_assert(t, "notYetRequested", !Platform_interruptRequested());
+
+		Platform_deferInterrupts(false);
+		Platform_deferInterrupts(true);
+		Platform_deferInterrupts(true);
+		Platform_deferInterrupts(false);
+
+		Test_assert(t, "raised", !raise(SIGINT));
+		Test_assert(t, "deferredToFlag", Platform_interruptRequested());
+
+		Platform_deferInterrupts(false);
+
+	#endif
+}
+
 //Defined in the C++ TU test_platforms_hpp.cpp.
 
 void Test_platformsEnvHpp(Test *t);
@@ -1520,6 +1555,10 @@ OXC3_TEST_ENTRY(platforms_interface) {
 	#if _PLATFORM_TYPE == PLATFORM_WEB
 		Test_webStackTraceGeneration(&t);
 	#endif
+
+	//Last, since the interrupt it raises can't be lowered again
+
+	Test_deferInterrupts(&t);
 
 	//We might have instantiated a list with some capacity, make sure we get rid of it so the counter doesn't false positive.
 

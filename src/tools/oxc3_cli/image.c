@@ -336,6 +336,7 @@ static Bool CLI_imageWrite(CharString path, EImageFile type, const CLIImage *ima
 			gotoIfError3(clean, HDR_writeExposed(
 				out, &off, EHDRWriteFlags_None, image->w, image->h, image->fileExposure, alloc, in, 0, e_rr
 			));
+
 			break;
 
 		case EImageFile_BMP: {

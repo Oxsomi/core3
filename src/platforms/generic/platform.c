@@ -35,17 +35,69 @@ TListImpl(VirtualSection);
 
 //Error handling
 
-void sigFunc(int signal) {
+//Set by the first SIGINT or SIGTERM, read by Platform_interruptRequested.
+//sig_atomic_t because a handler may only store to that; on Windows the CRT runs SIGINT on a thread of its own.
+
+static volatile sig_atomic_t Platform_interrupted = 0;
+
+//How many callers defer interrupts right now, since two loops on two threads can each defer and the first to finish
+// must not undo the other's.
+//An AtomicI64 rather than a sig_atomic_t because threads change it concurrently; the handler only loads it, which is
+// allowed there since AtomicI64 is lock free on every supported target.
+
+static AtomicI64 Platform_interruptsDeferred = { 0 };
+
+Bool Platform_interruptRequested() {
+	return Platform_interrupted != 0;
+}
+
+void Platform_deferInterrupts(Bool defer) {
+
+	if(defer) {
+		AtomicI64_inc(&Platform_interruptsDeferred);
+		return;
+	}
+
+	//Never below zero, so an unmatched call can't cancel the next caller's defer
+
+	for(I64 count = AtomicI64_load(&Platform_interruptsDeferred); count > 0; ) {
+
+		const I64 prev = AtomicI64_cmpStore(&Platform_interruptsDeferred, count, count - 1);
+
+		if(prev == count)
+			break;
+
+		count = prev;
+	}
+}
+
+void sigFunc(int sig) {
+
+	//An interrupt is a request, not a crash: exit() here would run atexit handlers and static destructors while the
+	// main thread is still using what they free, which is how a Ctrl+C turned into a segfault on the way out.
+	//While a loop defers interrupts, the first one only raises the flag (WindowManager_wait returns at its next step)
+	// and re-arms the handler, since the CRT resets it to the default after a call: a store and nothing else, since
+	// a handler may not allocate or lock, so the loop logs it. A second one, or one nothing defers, ends the process
+	// at once without running either, for an application that is stuck or has no loop to unwind.
+
+	if((sig == SIGINT || sig == SIGTERM) && AtomicI64_load(&Platform_interruptsDeferred) > 0 && !Platform_interrupted) {
+		Platform_interrupted = 1;
+		signal(sig, sigFunc);
+		return;
+	}
+
+	//Forced: no stack trace or log, both allocate and lock, and the thread this interrupted may hold either
+
+	if(sig == SIGINT || sig == SIGTERM)
+		_Exit(sig);
 
 	const C8 *msg = "Undefined instruction";
 
-	switch (signal) {
+	switch (sig) {
 		case SIGABRT:    msg = "Abort was called";                    break;
 		case SIGFPE:     msg = "Floating point error occurred";       break;
 		case SIGILL:     msg = "Illegal instruction";                 break;
-		case SIGINT:     msg = "Interrupt was called";                break;
 		case SIGSEGV:    msg = "Segfault";                            break;
-		case SIGTERM:    msg = "Terminate was called";                break;
 	}
 
 	//Outputting to console is not technically allowed by the Windows docs
@@ -58,7 +110,7 @@ void sigFunc(int signal) {
 
 	Log_printStackTrace(Platform_instance->alloc, 1, ELogLevel_Error, ELogOptions_Default);
 	Log_log(Platform_instance->alloc, ELogLevel_Error, ELogOptions_Default, &msgStr);
-	exit(signal);
+	exit(sig);
 }
 
 //Allocator keeps track of allocations on debug mode (and only about size/count on release)

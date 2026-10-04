@@ -24,6 +24,7 @@
 #include "types/base/platform_types.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "types/container/memory_stream.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/interface.h"
@@ -138,6 +139,7 @@ U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListComm
 			"Timestamps: %"PRIu64" query slots this frame exceed the %u ceiling, timing skipped for the frame",
 			total, (U32) GRAPHICS_TIMESTAMP_QUERIES_MAX
 		);
+
 		return 0;
 	}
 
@@ -468,6 +470,8 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 		ListRefPtr_free(&device->resourcesInFlight[i], alloc);
 	}
 
+	GraphicsDevice_freeResourceRegistry(device, alloc);
+	ListU64_free(&device->pipelineSizes, alloc);
 	RefPtr_dec(&device->instance);
 }
 
@@ -1039,10 +1043,10 @@ Bool GraphicsDeviceRef_create(
 			EGraphicsFeatures_RayValidation      |
 			EGraphicsFeatures_RayTriPosition
 		);
+
 		device->info.capabilities.features2 &=~ (
 			EGraphicsFeatures2_RayReorderActual         |
 			EGraphicsFeatures2_RayMicromapOpacityActual |
-			EGraphicsFeatures2_RayMicromapOpacityU8     |
 			EGraphicsFeatures2_RayClusterAS             |
 			EGraphicsFeatures2_RayPartitionedTLAS       |
 			EGraphicsFeatures2_RayIndirectASBuild       |
@@ -1066,10 +1070,12 @@ Bool GraphicsDeviceRef_create(
 			0, "GraphicsDeviceRef_create() tried to create debug device but the instance had it disabled"
 		));
 
-	#ifndef NDEBUG
-		if(!(device->flags & EGraphicsDeviceFlags_DisableDebug) && isDebugInstance)
-			device->flags |= EGraphicsDeviceFlags_IsDebug;
-	#endif
+	//A debug instance makes a debug device in every build, not only without NDEBUG: in a release build the instance
+	// is only debug when the caller asked for it, and a device that ignored the request validated without ever
+	// reporting, since D3D12 forwards its messages to the log through the DEVICE's info queue.
+
+	if(!(device->flags & EGraphicsDeviceFlags_DisableDebug) && isDebugInstance)
+		device->flags |= EGraphicsDeviceFlags_IsDebug;
 
 	if(!(device->flags & EGraphicsDeviceFlags_IsDebug))
 		device->info.capabilities.features &=~ EGraphicsFeatures_RayValidation;
@@ -1115,17 +1121,17 @@ Bool GraphicsDeviceRef_create(
 	//Block sizes based on memory of each device (CPU or GPU):
 	// 0 -  6GB ("4GB"):   64MB
 	// 6 - 12GB ("8GB"):  128MB
-	//12 - 24GB ("16GB"): 256MB
-	//24GB+     ("32GB"): 512MB
-	//E.g. Memory allocated CPU visible with a dGPU with 32GB available would use 512MB chunks
+	//12 GB+    ("16GB"): 256MB
+	//Capped there, as VMA does: a bigger block only holds more that may never be used, and the first blocks of each
+	// kind are smaller still (see the allocators).
 
 	if (!isDistinct) {        //Assume 50/50 split to take a conservative block size approach
 		cpuHeapSize >>= 1;
 		gpuHeapSize >>= 1;
 	}
 
-	device->blockSizeCpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)cpuHeapSize)) - 32, 0, 3);
-	device->blockSizeGpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)gpuHeapSize)) - 32, 0, 3);
+	device->blockSizeCpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)cpuHeapSize)) - 32, 0, 2);
+	device->blockSizeGpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)gpuHeapSize)) - 32, 0, 2);
 
 	//Create in flight resource refs
 
@@ -1767,6 +1773,8 @@ clean:
 	return s_uccess;
 }
 
+static void GraphicsDevice_shrinkStaging(GraphicsDeviceRef *deviceRef);
+
 Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -1792,9 +1800,23 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 
 	gotoIfError3(clean, ListRefPtr_clear(inFlight, e_rr));
 
-	//Release all allocations of buffer that was in flight
+	//Release all allocations of buffer that was in flight, after noting how much of it the frame used
+
+	{
+		const ListAllocationBufferBlock *entries = &device->stagingAllocations[device->fifId].allocations;
+		U64 used = 0;
+
+		for(U64 i = 0; i < entries->length; ++i)
+			if(!(entries->ptr[i].startAndNonLinearAndFree >> 63))
+				used += entries->ptr[i].end - (entries->ptr[i].startAndNonLinearAndFree & (((U64)1 << 62) - 1));
+
+		device->stagingPeakKiB = (U32) U64_max(device->stagingPeakKiB, (used + KIBI - 1) / KIBI);
+		++device->stagingQuietFrames;
+	}
 
 	AllocationBuffer_freeAll(&device->stagingAllocations[device->fifId]);
+
+	GraphicsDevice_shrinkStaging(deviceRef);
 
 	//This frame in flight provably completed, so its readbacks can land in cpuData and report
 
@@ -1829,6 +1851,40 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 
 clean:
 	return s_uccess;
+}
+
+void GraphicsDevice_noteStagingBypass(GraphicsDevice *device, U64 bytes) {
+	device->stagingPeakKiB = (U32) U64_min(U32_MAX, U64_max(device->stagingPeakKiB, (bytes + KIBI - 1) / KIBI));
+}
+
+//Loading fills the staging buffer, after which a frame only uploads a little. Once that has held for 64 frames, it
+// shrinks to three regions (one per frame in flight) of 4 MiB doubled until they hold twice the peak, which counts
+// uploads that went through a temporary buffer too. A frame that copied from the old buffer holds it in flight until
+// it completes. Optional, so a failure keeps the old buffer.
+
+static void GraphicsDevice_shrinkStaging(GraphicsDeviceRef *deviceRef) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(device->stagingQuietFrames < 64 || !device->staging)
+		return;
+
+	const U64 region = DeviceBufferRef_ptr(device->staging)->resource.size / 3;
+	const U64 peak = (U64) device->stagingPeakKiB * KIBI;
+
+	device->stagingQuietFrames = 0;
+	device->stagingPeakKiB = 0;
+
+	U64 target = 4 * MIBI;
+
+	while(target < peak * 2)
+		target <<= 1;
+
+	if(peak * 4 > region || target >= region)
+		return;
+
+	if(!GraphicsDeviceRef_resizeStagingBuffer(deviceRef, target * 3, NULL))
+		Log_warnLnx("GraphicsDevice_shrinkStaging() couldn't shrink the staging buffer, it keeps its size");
 }
 
 Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize, Error *e_rr) {
@@ -2090,6 +2146,21 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 
 		DevicePendingPull *pull = &pulls->ptrNonConst[i];
 		Bool ok = true;
+
+		//A lost device wrote nothing, so the pull is dropped rather than handing on whatever the readback held: a
+		// stream hears that it failed, the other callbacks never fire.
+
+		if(AtomicI64_load(&device->lossReported)) {
+
+			if(pull->stream && pull->streamCallback)
+				pull->streamCallback(pull->resource, false, pull->context);
+
+			Buffer_free(&pull->textureData, GraphicsDevice_getAlloc(device));
+			RefPtr_dec(&pull->resource);
+			RefPtr_dec(&pull->stagingReadback);
+			RefPtr_dec(&pull->stream);
+			continue;
+		}
 
 		//The union member that's live follows from the destination: a pull with a stream uses streamCallback,
 		//otherwise cpuData owners use callback and the rest textureCallback
@@ -2414,6 +2485,7 @@ Bool GraphicsDeviceRef_submitCommands(
 
 	GraphicsDevice *device = NULL;
 	SpinLock *lockPtr = NULL;
+	Bool frameStarted = false;
 
 	//Validation
 
@@ -2431,6 +2503,12 @@ Bool GraphicsDeviceRef_submitCommands(
 		));
 
 	device = GraphicsDeviceRef_ptr(deviceRef);
+
+	//A lost device runs nothing more, and a driver may not say so again (a lost device's waits can succeed), so the
+	// loss already seen is what refuses the submit.
+
+	if(AtomicI64_load(&device->lossReported))
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_submitCommands() the device was lost"));
 
 	lockPtr = &device->lock;
 	ELockAcquire acq = SpinLock_lock(lockPtr, U64_MAX);
@@ -2556,7 +2634,7 @@ Bool GraphicsDeviceRef_submitCommands(
 
 		for (U64 j = 0; j < (!commandLists ? 0 : commandLists->length); ++j) {
 
-			CommandListRef *cmdRef = commandLists->ptr[i];
+			CommandListRef *cmdRef = commandLists->ptr[j];
 			CommandList *cmd = CommandListRef_ptr(cmdRef);
 
 			for(U64 k = 0; k < cmd->activeSwapchains.length; ++k) {
@@ -2616,6 +2694,7 @@ Bool GraphicsDeviceRef_submitCommands(
 
 	device->fifId = device->submitId % device->framesInFlight;
 	++device->submitId;
+	frameStarted = true;
 
 	//Fill in the per frame globals
 
@@ -2667,8 +2746,25 @@ Bool GraphicsDeviceRef_submitCommands(
 		device->firstSubmit = device->lastSubmit;
 
 	device->pendingBytes = 0;
+	device->pendingPrimitives = 0;
 
 clean:
+
+	//Any failure, since a loss can surface at any of the waits and calls above; a device that is not lost reports
+	// nothing.
+
+	if(!s_uccess && device)
+		GraphicsDeviceRef_reportLoss(deviceRef);
+
+	//A frame that failed without a loss after its breadcrumbs started is never the one a later loss is blamed on.
+	//breadcrumbSubmit says whether they started: it only names this submit once the backend began the frame.
+
+	if(
+		!s_uccess && frameStarted && device->breadcrumbs &&
+		device->breadcrumbSubmit[device->fifId] == device->submitId &&
+		!AtomicI64_load(&device->lossReported)
+	)
+		device->breadcrumbFailedFrames |= (U64) 1 << device->fifId;
 
 	if(lockPtr)
 		SpinLock_unlock(lockPtr);
@@ -2746,7 +2842,10 @@ U64 GraphicsDevice_logThrottled(GraphicsDevice *device, EGraphicsDeviceMessage m
 	return (U64) AtomicI64_store(&device->logFolded[slot], 0);
 }
 
-Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+//midSubmit is the flush that splits a submit still being recorded: submitId already counts that submit, so it is
+// not complete, and its frame in flight (fifId) keeps what it holds until the submit's own fence proves it done.
+
+static Bool GraphicsDeviceRef_waitIntern(GraphicsDeviceRef *deviceRef, Bool midSubmit, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -2763,19 +2862,66 @@ Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_wait() device's lock couldn't be acquired"));
 
-	gotoIfError3(clean, GraphicsDeviceRef_waitExt(deviceRef, e_rr));
+	//A lost device runs nothing more, so what it had in flight is released as if it completed; otherwise every
+	// resource a submit held at the loss leaks at device free. The wait still fails.
 
-	//The device is idle, so every submit recorded so far has finished.
+	if(!GraphicsDeviceRef_waitExt(deviceRef, e_rr)) {
 
-	device->completedSubmitId = device->submitId;
+		s_uccess = false;
+		GraphicsDeviceRef_reportLoss(deviceRef);
+
+		if(!AtomicI64_load(&device->lossReported))
+			goto clean;
+	}
+
+	//The device is idle (or lost), so every submit recorded so far has finished.
+	//Mid submit that excludes the submit being recorded, which only had its commands up to the flush executed.
+
+	device->completedSubmitId = midSubmit && device->submitId ? device->submitId - 1 : device->submitId;
+
+	//What the flush thresholds counted has executed, so they count from zero again; otherwise every upload or build
+	// after the first flush of a submit would flush again.
+
+	if(midSubmit) {
+		device->pendingBytes = 0;
+		device->pendingPrimitives = 0;
+	}
 
 	for (U64 i = 0; i < device->framesInFlight; ++i) {
+
+		ListRefPtr *inFlight = &device->resourcesInFlight[i];
+
+		//The submit being recorded keeps its references: what it holds can still be in use on the CPU by the caller
+		// that triggered the flush (a pending buffer whose last reference is this list, a BLAS mid build).
+		//Only internal buffers nothing else references can go, which are the temporary staging buffers.
+		//The commands that read them have run, and releasing them is what bounds memory over a long upload.
+		//Its staging ring is reset for the same reason: the copies out of it have executed.
+		//Its readbacks are recorded after every command, so a flush never has any of this submit's to complete.
+
+		if(midSubmit && i == device->fifId) {
+
+			for (U64 j = inFlight->length; j > 0; --j) {
+
+				RefPtr *res = inFlight->ptrNonConst[j - 1];
+
+				if(
+					res->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer ||
+					!(DeviceBufferRef_ptr(res)->resource.flags & EGraphicsResourceFlag_InternalWeakDeviceRef) ||
+					AtomicI64_load(&res->refCount) != 1
+				)
+					continue;
+
+				gotoIfError3(clean, ListRefPtr_erase(inFlight, j - 1, e_rr));
+				RefPtr_dec(&res);
+			}
+
+			AllocationBuffer_freeAll(&device->stagingAllocations[i]);
+			continue;
+		}
 
 		//Release resources that were in flight.
 		//This might cause resource deletions because we might be the last one releasing them.
 		//For example temporary staging resources are released this way.
-
-		ListRefPtr *inFlight = &device->resourcesInFlight[i];
 
 		for (U64 j = 0; j < inFlight->length; ++j)
 			RefPtr_dec(inFlight->ptrNonConst + j);
@@ -2793,10 +2939,21 @@ Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 
 clean:
 
+	if(!s_uccess && device)
+		GraphicsDeviceRef_reportLoss(deviceRef);
+
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->lock);
 
 	return s_uccess;
+}
+
+Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+	return GraphicsDeviceRef_waitIntern(deviceRef, false, e_rr);
+}
+
+Bool GraphicsDeviceRef_waitFlush(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+	return GraphicsDeviceRef_waitIntern(deviceRef, true, e_rr);
 }
 
 const Allocator *GraphicsDevice_getAlloc(const GraphicsDevice *device) {

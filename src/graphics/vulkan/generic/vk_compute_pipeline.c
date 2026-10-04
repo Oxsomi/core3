@@ -24,10 +24,12 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "formats/oiSH/sh_file.h"
+#include "types/container/buffer.h"
 #include "types/base/error.h"
 
 Bool createShaderModule(
@@ -114,13 +116,17 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 		.layout = *PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Vk)
 	};
 
-	gotoIfError3(clean, checkVkError(deviceExt->createComputePipelines(
-		deviceExt->device,
-		NULL,
-		1, &pipelineInfo,
-		NULL,
-		&pipelineHandle
-	), e_rr));
+	const Buffer spirv = buf->binaries[EGfxBinaryType_SPIRV];
+
+	U64 key = Pipeline_hash(Buffer_fnv1a64Offset, &pipeline->type, sizeof(pipeline->type));
+	key = Pipeline_hash(key, spirv.ptr, Buffer_length(spirv));
+	key = Pipeline_hashString(key, entryPoint);
+	key = Pipeline_hash(key, &createFlags, sizeof(createFlags));
+	key = Pipeline_hashLayout(key, pipeline->layout);
+
+	gotoIfError3(clean, VkGraphicsDevice_buildPipeline(
+		device, pipeline, &pipelineInfo, key, Buffer_length(spirv), &pipelineHandle, e_rr
+	));
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && name && CharString_length(*name)) {
 

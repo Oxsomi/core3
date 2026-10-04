@@ -109,6 +109,7 @@
 		void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *resource,
 		const TextureRange *range, U64 stagingOffset, U64 *rowPitch, Error *e_rr
 	);
+
 	void  VkUnifiedTexture_free(TextureRef *textureRef);
 
 	//Swapchain
@@ -195,9 +196,15 @@
 
 	U64 VkGraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
 
+	Bool VkGraphicsDevice_loadPipelineCache(GraphicsDevice *device, Buffer driverData, Bool *accepted, Error *e_rr);
+	Bool VkGraphicsDevice_savePipelineCache(
+		GraphicsDevice *device, const Allocator *alloc, Buffer *driverData, Error *e_rr
+	);
+
 	void VkGraphicsDevice_free(const GraphicsInstance *instance, void *ext);
 
 	Bool VkGraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr);
+	Bool VkGraphicsDeviceRef_reportLoss(GraphicsDeviceRef *deviceRef);
 
 	Bool VkGraphicsDevice_submitCommands(
 		GraphicsDeviceRef *deviceRef,

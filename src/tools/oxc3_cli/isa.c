@@ -300,6 +300,7 @@ clean:
 				alloc, &line, e_rr, "; %.*s  subgroup %"PRIu32"\n",
 				(int) CharString_length(e->name), e->name.ptr, e->subgroupSize
 			));
+
 			gotoIfError3(clean, CharString_appendString(out, &line, alloc, e_rr));
 
 			for(U64 j = 0; j < e->statistics.length; ++j) {
@@ -315,12 +316,14 @@ clean:
 						gotoIfError3(clean, CharString_format(
 							alloc, &line, e_rr, ";   %.*s = %s\n", nl, s->name.ptr, s->value ? "true" : "false"
 						));
+
 						break;
 
 					case EPipelineStatisticFormat_I64:
 						gotoIfError3(clean, CharString_format(
 							alloc, &line, e_rr, ";   %.*s = %"PRIi64"\n", nl, s->name.ptr, (I64) s->value
 						));
+
 						break;
 
 					case EPipelineStatisticFormat_F64: {
@@ -333,6 +336,7 @@ clean:
 						gotoIfError3(clean, CharString_format(
 							alloc, &line, e_rr, ";   %.*s = %"PRIu64"\n", nl, s->name.ptr, s->value
 						));
+
 						break;
 				}
 
@@ -684,6 +688,7 @@ clean:
 				Log_errorLnx(
 					"-pso-set: '%.*s' isn't a field this pipeline reports (see the report's paths)", (int) eq, seg.ptr
 				);
+
 				retError(clean, Error_invalidParameter(0, 0, "CLI_isaDisassemble() -pso-set has an unknown field path"));
 			}
 
@@ -1903,6 +1908,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 				shFile, liveType, deviceId, liveTarget, hasOutput, outputStr, &fileHandleType, assumeDefaults,
 				hasPipelineOutput, pipelineOutputStr, psoSetStr, psoInputStr, inputStr, alloc, e_rr
 			));
+
 			goto clean;
 		}
 

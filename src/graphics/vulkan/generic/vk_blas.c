@@ -157,19 +157,19 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 			blasExt->maxPrimitiveCounts.ptrNonConst[i] = (U32) geometryPrimitives;
 
 			//Opacity micromaps, stage 1.
-			//The micromap handle stays null on purpose: that is what tells the driver the index buffer holds only
-			// special indices (fully opaque or fully transparent) rather than referencing a built micromap.
-			//usageCounts stays empty for the same reason, since there are no micromap entries to describe.
+			//Without a linked micromap the handle stays null on purpose: that is what tells the driver the index
+			// buffer holds only special indices (fully opaque or fully transparent) rather than entry indices.
+			//A linked micromap is referenced by handle alone, since its usage counts went to its own build.
 
 			//It lives on the ext object rather than on this stack: the geometry desc only CHAINS it, and the build
 			// that reads it runs at flush time, long after this function returned.
 
 			if (geom.ommIndexFormatId) {
 
-				VkBLASOmmTriangles *ommTriangles = &blasExt->ommTriangles.ptrNonConst[i];
-
 				VkIndexType indexType = VK_INDEX_TYPE_UINT16;
 				U8 ommIndexStride = 2;
+
+				//8-bit indices are legal here (VUID-VkAccelerationStructureTrianglesOpacityMicromapKHR-indexType-11570)
 
 				switch (geom.ommIndexFormatId) {
 					case ETextureFormatId_R32u:    indexType = VK_INDEX_TYPE_UINT32;    ommIndexStride = 4;    break;
@@ -177,46 +177,18 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 					default:                                                                                   break;
 				}
 
-				//Which of the two extensions the device runs decides the struct: they are not layout compatible and
-				// the driver only accepts its own.
-				//R8u can't get here at all today: no Vulkan device claims RayMicromapOpacityU8 (that waits on the
-				// KHR path being implemented) and BLAS create validation rejects R8u without it.
+				VkBLASOmmTriangles *ommTriangles = &blasExt->ommTriangles.ptrNonConst[i];
 
-				if(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR) {
+				*ommTriangles = (VkBLASOmmTriangles) {
+					.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_KHR,
+					.indexType = indexType,
+					.indexBuffer = getVkDeviceAddress(geom.ommIndexBuffer),
+					.indexStride = ommIndexStride,
+					.micromap = !geom.ommMicromap ? VK_NULL_HANDLE :
+						OpacityMicromap_ext(OpacityMicromapRef_ptr(geom.ommMicromap), Vk)->as
+				};
 
-					ommTriangles->khr = (VkAccelerationStructureTrianglesOpacityMicromapKHR) {
-						.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_KHR,
-						.indexType = indexType,
-						.indexBuffer = getVkDeviceAddress(geom.ommIndexBuffer),
-						.indexStride = ommIndexStride
-					};
-
-					tri->pNext = &ommTriangles->khr;
-				}
-
-				else {
-
-					ommTriangles->ext = (VkAccelerationStructureTrianglesOpacityMicromapEXT) {
-						.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT,
-						.indexType = indexType,
-						.indexBuffer = getVkLocation(geom.ommIndexBuffer, 0),
-						.indexStride = ommIndexStride
-					};
-
-					//A linked micromap brings its handle and its usage counts; the EXT extension wants the same
-					// counts the array was built with restated in every BLAS that links it.
-
-					if (geom.ommMicromap) {
-
-						VkOpacityMicromap *micromapExt = OpacityMicromap_ext(OpacityMicromapRef_ptr(geom.ommMicromap), Vk);
-
-						ommTriangles->ext.micromap = micromapExt->micromap;
-						ommTriangles->ext.usageCountsCount = (U32) micromapExt->usages.length;
-						ommTriangles->ext.pUsageCounts = micromapExt->usages.ptr;
-					}
-
-					tri->pNext = &ommTriangles->ext;
-				}
+				tri->pNext = ommTriangles;
 			}
 		}
 	}
@@ -297,6 +269,32 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		&sizes
 	);
 
+	//One scratch buffer serves both, since the same object does the full build and every refit after it; the
+	// update size is not required to be the smaller of the two, so neither is assumed.
+
+	const U64 scratchSize = blas->base.flags & ERTASBuildFlags_AllowUpdate ?
+		U64_max(sizes.buildScratchSize, sizes.updateScratchSize) : sizes.buildScratchSize;
+
+	if(blas->base.sizeQueryOnly) {
+		blas->base.queriedSize = sizes.accelerationStructureSize;
+		blas->base.queriedScratchSize = scratchSize;
+		goto clean;
+	}
+
+	//A scratch buffer the caller provided (BLASCreateInfo::scratchBuffer) only has to be large enough, which is
+	// checked before anything is allocated; otherwise the structure gets one of its own below.
+
+	if(blas->base.tempScratchBuffer) {
+
+		const U64 providedSize = DeviceBufferRef_ptr(blas->base.tempScratchBuffer)->resource.size;
+
+		if(providedSize < scratchSize)
+			retError(clean, Error_outOfBounds(
+				1, scratchSize, providedSize,
+				"VkBLAS_init()::scratchBuffer is smaller than the build needs (see GraphicsDeviceRef_getBLASSizesExt)"
+			));
+	}
+
 	//Allocate scratch and final buffer
 
 	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
@@ -309,34 +307,27 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		&blas->base.asBuffer, e_rr
 	));
 
-	gotoIfError3(clean, CharString_format(
-		alloc,
-		&tmp,
-		e_rr,
-		"%.*s scratch buffer",
-		CharString_length(blas->base.name),
-		blas->base.name.ptr
-	));
+	if(!blas->base.tempScratchBuffer) {
 
-	//TODO: cache the scratch buffer on the device rather than allocating one per structure.
-	// Scratch is only live between a build and the submit that runs it, so structures built in the same
-	// submit could share one buffer sized to the largest of them, and a build that is not a refit could
-	// hand it straight back. That is a real saving on a scene of many structures, where the scratch can
-	// rival the structures themselves in peak footprint.
+		gotoIfError3(clean, CharString_format(
+			alloc,
+			&tmp,
+			e_rr,
+			"%.*s scratch buffer",
+			CharString_length(blas->base.name),
+			blas->base.name.ptr
+		));
 
-	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
-		deviceRef,
-		EDeviceBufferUsage_ScratchExt,
-		EGraphicsResourceFlag_None,
-		NULL,
-		&tmp,
-		//One scratch buffer serves both, since the same object now does the full build and every refit after
-		// it; the update size is not required to be the smaller of the two, so neither is assumed.
-
-		blas->base.flags & ERTASBuildFlags_AllowUpdate ?
-			U64_max(sizes.buildScratchSize, sizes.updateScratchSize) : sizes.buildScratchSize,
-		&blas->base.tempScratchBuffer, e_rr
-	));
+		gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
+			deviceRef,
+			EDeviceBufferUsage_ScratchExt,
+			EGraphicsResourceFlag_None,
+			NULL,
+			&tmp,
+			scratchSize,
+			&blas->base.tempScratchBuffer, e_rr
+		));
+	}
 
 	//No query claimed yet; the build claims one only if this structure may be compacted.
 
@@ -418,6 +409,36 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	if (blas->base.isCompleted) {
 		blasExt->build.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
 		blasExt->build.srcAccelerationStructure = blasExt->as;
+	}
+
+	//The build writes the structure and its scratch outside any scope's transitions. Transitioned here, a rebuild
+	// waits for the last read of the structure, and the compacted size query below waits for this build instead of
+	// reading a structure that may still be building.
+
+	{
+		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+
+		gotoIfError3(clean, VkDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
+			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+			VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR |
+				(blas->base.isCompleted ? VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR : 0),
+			deviceExt->queues[EVkCommandQueue_Graphics].queueId, 0, 0,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		gotoIfError3(clean, VkDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.tempScratchBuffer), Vk),
+			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+			VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+			deviceExt->queues[EVkCommandQueue_Graphics].queueId, 0, 0,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		if(dependency.bufferMemoryBarrierCount)
+			deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
+
+		gotoIfError3(clean, ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr));
 	}
 
 	deviceExt->cmdBuildAccelerationStructures(
@@ -522,24 +543,23 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		RefPtr_inc(pending);
 	}
 
-	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource,
-	// and losing the reference from our object.
-	//However that's only if allow update is false.
+	//The frame in flight keeps the scratch buffer alive until the build has run.
+	//Without AllowUpdate nothing builds this structure again, so it lets go of its own reference, including when the
+	// buffer is shared and an earlier build already put it in flight.
 
 	if(!ListRefPtr_contains(*currentFlight, blas->base.tempScratchBuffer, 0, NULL)) {
-
 		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, blas->base.tempScratchBuffer, alloc, e_rr));
-
-		if(!(blas->base.flags & ERTASBuildFlags_AllowUpdate))
-			blas->base.tempScratchBuffer = NULL;
-
-		else RefPtr_inc(blas->base.tempScratchBuffer);
+		RefPtr_inc(blas->base.tempScratchBuffer);
 	}
 
-	//Ensure we don't exceed a maximum amount of time spent on the GPU
+	//Ensure we don't exceed a maximum amount of time spent on the GPU.
+	//Before letting go of the scratch, so a failed flush leaves the structure unbuilt but still able to build.
 
 	if (device->pendingPrimitives >= device->flushThresholdPrimitives)
 		gotoIfError3(clean, VkGraphicsDevice_flush(deviceRef, commandBuffer, e_rr));
+
+	if(!(blas->base.flags & ERTASBuildFlags_AllowUpdate))
+		RefPtr_dec(&blas->base.tempScratchBuffer);
 
 	blas->base.isCompleted = true;
 
@@ -587,7 +607,7 @@ Bool VK_WRAP_FUNC(BLASRef_prepareCompact)(GraphicsDeviceRef *deviceRef, BLASRef 
 			0, "VkBLASRef_prepareCompact() the compacted size isn't available yet, the build's submit has to complete first"
 		));
 
-	gotoIfError3(clean, checkVkError(queryRes, e_rr));
+	gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, queryRes, e_rr));
 
 	//The query has been consumed either way, so the slot goes back before any early out below can take it
 	// out of circulation.
@@ -689,6 +709,33 @@ Bool VK_WRAP_FUNC(BLASRef_compact)(
 
 	gotoIfError3(clean, ListRefPtr_reserve(currentFlight, currentFlight->length + 1, alloc, e_rr));
 	gotoIfError3(clean, ListVkAccelerationStructureKHR_reserve(retired, retired->length + 1, alloc, e_rr));
+
+	//The copy reads the built structure and writes the new one outside any scope's transitions, so both are
+	// transitioned here: the read waits for the build, and whatever uses the compacted structure waits for the copy
+	// (a copy runs in the build stage).
+
+	{
+		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+
+		gotoIfError3(clean, VkDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
+			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+			deviceExt->queues[EVkCommandQueue_Graphics].queueId, 0, 0,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		gotoIfError3(clean, VkDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.pendingCompactBuffer), Vk),
+			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+			deviceExt->queues[EVkCommandQueue_Graphics].queueId, 0, 0,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		if(dependency.bufferMemoryBarrierCount)
+			deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
+
+		gotoIfError3(clean, ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr));
+	}
 
 	deviceExt->copyAccelerationStructure(commandBuffer->buffer, &copyInfo);
 

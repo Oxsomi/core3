@@ -23,6 +23,7 @@
 #include "types/container/list_impl.h"
 #include "graphics/generic/bindless_descriptor.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/descriptor_table.h"
@@ -30,6 +31,7 @@
 #include "formats/oiSH/sh_registers.h"
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
+#include "platforms/logx.h"
 
 TListImpl(DevicePendingRange);
 
@@ -183,14 +185,16 @@ Bool DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count, Erro
 	if(buffer->isPending)
 		goto clean;
 
-	buffer->isPending = true;
-
 	acq1 = SpinLock_lock(&device->lock, U64_MAX);
 
 	if(acq1 < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "DeviceBufferRef_markDirty() couldn't lock device"));
 
+	//Pending only once the device holds it: a buffer flagged pending but missing from the list would never upload,
+	// and every later markDirty would skip the push on the flag.
+
 	gotoIfError3(clean, ListWeakRefPtr_pushBack(&device->pendingResources, buf, alloc, e_rr));
+	buffer->isPending = true;
 
 clean:
 
@@ -220,6 +224,11 @@ void DeviceBuffer_free(void *bufferGeneric, const Allocator *alloc) {
 		GraphicsDeviceRef_freeDescriptorBindless(device, buffer->bindlessDescriptorTable, buffer->writeHandle, NULL);
 		RefPtr_dec(&buffer->bindlessDescriptorTable);
 	}
+
+	//Out of the registry before its API object goes, so a recycled handle is never named as this live buffer
+
+	if(device)
+		GraphicsDevice_unregisterResource(GraphicsDeviceRef_ptr(device), refPtr);
 
 	DeviceBuffer_freeExt(buffer);
 	GraphicsResource_free(&buffer->resource, refPtr);
@@ -520,10 +529,22 @@ Bool GraphicsDeviceRef_createBufferIntern(
 	if(!(resourceFlags & EGraphicsResourceFlag_InternalWeakDeviceRef))
 		gotoIfError3(clean, RefPtr_inc(dev));
 
-	if(len > device->info.capabilities.maxBufferSize)
-		retError(clean, Error_invalidState(
-			2, "GraphicsDeviceRef_createBufferIntern() buffer length exceeds maxBufferSize"
+	//Which buffer and by how much: drivers differ by 2x on this limit (AMD's Windows driver reports 2 GiB where RADV
+	// reports 4), and an acceleration structure's size is the driver's own choice, so the caller can't predict it.
+
+	if(len > device->info.capabilities.maxBufferSize) {
+
+		Log_debugLnx(
+			"GraphicsDeviceRef_createBufferIntern() \"%.*s\" is %"PRIu64" bytes, over maxBufferSize %"PRIu64,
+			name ? (int) CharString_length(*name) : 0, name ? name->ptr : "",
+			len, device->info.capabilities.maxBufferSize
+		);
+
+		retError(clean, Error_outOfBounds(
+			5, len, device->info.capabilities.maxBufferSize,
+			"GraphicsDeviceRef_createBufferIntern()::len exceeds maxBufferSize"
 		));
+	}
 
 	//Allocated only now that every argument has been accepted.
 	//Creating the ref first meant a rejected argument freed a buffer whose resource.device was still NULL,

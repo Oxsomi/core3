@@ -437,6 +437,7 @@ void Test_SRFileStructuralRoundTrips(Test *t) {
 				t, "anonymous node stays anonymous",
 				ok && result.nodes.length == 1 && result.nodes.ptr[0].nameId == U32_MAX
 			);
+
 			SRFile_print(&result, 0, true, true, t->alloc);        //verbose must not crash on (anonymous)
 		}
 		else Test_assert(t, "create anon", false);

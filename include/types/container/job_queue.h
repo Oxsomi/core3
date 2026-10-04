@@ -98,6 +98,7 @@ typedef struct JobQueue {
 
 	ListJob jobs;                   //FIFO, guarded by lock
 	ListThreadHandle threads;       //threadCount - 1 workers, empty in single threaded mode
+	U8 padding0[16];
 
 	SpinLock lock;
 
@@ -109,6 +110,7 @@ typedef struct JobQueue {
 	const Allocator *alloc;         //Must outlive the queue (same contract as RefPtr etc.)
 
 	U64 threadCount;                //Execution contexts (>= 1)
+	U8 padding1[16];
 
 } JobQueue;
 

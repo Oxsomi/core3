@@ -474,6 +474,7 @@ static c::Bool Test_runCapabilityShader(
 		Log::debugLn(
 			*dev.alloc(), "-- capabilityExec: %s claimed but experimental on this backend, skipped", cap->name
 		);
+
 		return true;
 	}
 

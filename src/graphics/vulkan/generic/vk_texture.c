@@ -28,6 +28,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "types/container/string.h"
 #include "types/container/texture_format.h"
@@ -177,11 +178,20 @@ Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 			requirements.memoryRequirements.size = stride * imageCount;
 		}
 
+		const VkBlockRequirements blockReq = (VkBlockRequirements) {
+			.memory = requirements.memoryRequirements,
+			.image = imageCount == 1 ? managedImageExt->image : VK_NULL_HANDLE,
+			.flags =
+				(dedicatedReq.requiresDedicatedAllocation ? EVkBlockFlags_RequiresDedicated : EVkBlockFlags_None) |
+				(dedicatedReq.prefersDedicatedAllocation ? EVkBlockFlags_PrefersDedicated : EVkBlockFlags_None) |
+				(texture->resource.type != EResourceType_DeviceTexture ? EVkBlockFlags_HighPriority : EVkBlockFlags_None)
+		};
+
 		DeviceMemoryBlock block;
 
 		gotoIfError3(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			&device->allocator,
-			&requirements,
+			(void*) &blockReq,
 			texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
 			&texture->resource.blockId,
 			&texture->resource.blockOffset,
@@ -218,6 +228,14 @@ Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 			gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
 		}
+
+		//By its handle, since an image has no address of its own; a binding report gives it one. Swapchains are left
+		// out: a resize replaces their images without freeing the resource.
+
+		if(texture->resource.type != EResourceType_Swapchain)
+			gotoIfError3(clean, GraphicsDevice_registerResource(
+				device, textureRef, (U64) managedImageExt->image, name, e_rr
+			));
 	}
 
 clean:

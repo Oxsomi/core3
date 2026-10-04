@@ -28,8 +28,20 @@
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "types/container/ref_ptr.h"
+#include "platforms/logx.h"
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
+
+//dxCheck reports only the HRESULT, and the three DXGI calls below fail with the same one (DXGI_ERROR_INVALID_CALL)
+// for unrelated reasons, so a failure also names the call that returned it.
+
+static Bool dxCheckSwapchain(HRESULT hr, const C8 *call, Error *e_rr) {
+
+	if(FAILED(hr))
+		Log_errorLnx("D3D12GraphicsDeviceRef_createSwapchain() %s failed with 0x%08" PRIX32, call, (U32) hr);
+
+	return dxCheck(hr, e_rr);
+}
 
 Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef, Error *e_rr) {
 
@@ -45,7 +57,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	DxGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Dx);
 
-	const Window *window = info->window ? (const Window*)(info->window + 1) : NULL;
+	const Window *window = info->window;
 
 	ESwapchainPresentMode mode = ESwapchainPresentMode_Count;
 
@@ -62,8 +74,16 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 				break;
 
 			case ESwapchainPresentMode_Fifo:
-			case ESwapchainPresentMode_Immediate:
 				mode = modei;
+				break;
+
+			//Tearing, which DXGI refuses with DXGI_ERROR_INVALID_CALL where it isn't supported
+
+			case ESwapchainPresentMode_Immediate:
+
+				if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_AllowTearing)
+					mode = modei;
+
 				break;
 		}
 
@@ -78,6 +98,11 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 	if(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite)
 		retError(clean, Error_unsupportedOperation(
 			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support writable swapchains"));
+
+	//A resize keeps the mode the swapchain was CREATED with, since ResizeBuffers must get the creation flags back
+
+	if(swapchainExt->swapchain)
+		mode = swapchain->presentMode;
 
 	DXGI_SWAP_CHAIN_FLAG flags = mode == ESwapchainPresentMode_Immediate ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
@@ -110,7 +135,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 			.Flags = flags
 		};
 
-		gotoIfError3(clean, dxCheck(instance->factory->lpVtbl->CreateSwapChainForHwnd(
+		gotoIfError3(clean, dxCheckSwapchain(instance->factory->lpVtbl->CreateSwapChainForHwnd(
 			instance->factory,
 			(IUnknown*) deviceExt->queues[EDxCommandQueue_Graphics].queue,
 			window->nativeHandle,
@@ -118,7 +143,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 			NULL,
 			NULL,
 			&swapchainExt->swapchain
-		), e_rr));
+		), "CreateSwapChainForHwnd", e_rr));
 
 		swapchain->requiresManualComposite = false;
 		swapchain->presentMode = mode;
@@ -128,10 +153,10 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 
 		//ResizeBuffers recreates the back buffers IN PLACE, so there is nothing to retire and the resources
 		//released below may still be executing. The wait is the API's requirement, paid here rather than by
-		//every caller, and only on the frame that last presented THIS swapchain: a value already passed, or
-		//a swapchain that never presented, returns without waiting.
+		//every caller, and only on the frame that last presented THIS swapchain: a submit already known done,
+		//or a swapchain that never presented, returns without waiting.
 
-		gotoIfError3(clean, DxGraphicsDevice_waitFence(deviceRef, swapchainExt->lastFenceId, e_rr));
+		gotoIfError3(clean, DxGraphicsDevice_waitSubmit(deviceRef, swapchainExt->lastSubmitId, e_rr));
 
 		for(U8 i = 0; i < swapchain->base.images; ++i) {
 
@@ -149,20 +174,20 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 				img->lpVtbl->Release(img);
 		}
 
-		gotoIfError3(clean, dxCheck(swapchainExt->swapchain->lpVtbl->ResizeBuffers(
+		gotoIfError3(clean, dxCheckSwapchain(swapchainExt->swapchain->lpVtbl->ResizeBuffers(
 			swapchainExt->swapchain,
 			3, 0, 0, DXGI_FORMAT_UNKNOWN,
 			flags
-		), e_rr));
+		), "ResizeBuffers", e_rr));
 	}
 
 	//Acquire images
 
 	for(U8 i = 0; i < swapchain->base.images; ++i)
-		gotoIfError3(clean, dxCheck(swapchainExt->swapchain->lpVtbl->GetBuffer(
+		gotoIfError3(clean, dxCheckSwapchain(swapchainExt->swapchain->lpVtbl->GetBuffer(
 			swapchainExt->swapchain, i,
 			&IID_ID3D12Resource, (void**) &TextureRef_getImgExtT(swapchainRef, Dx, 0, i)->image
-		), e_rr));
+		), "GetBuffer", e_rr));
 
 clean:
 	return s_uccess;

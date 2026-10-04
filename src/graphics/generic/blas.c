@@ -297,17 +297,6 @@ Bool GraphicsDeviceRef_createBLAS(
 						2, "GraphicsDeviceRef_createBLAS()::ommIndexFormat must be R32u, R16u or R8u"
 					));
 
-				//D3D12 always takes 8-bit OMM indices, Vulkan only under the KHR extension, which is what the
-				// qualifier bit reports; rejected here so the mistake surfaces at create rather than in the driver.
-
-				if(
-					ommIndexFormat == ETextureFormatId_R8u &&
-					!(GraphicsDeviceRef_ptr(dev)->info.capabilities.features2 & EGraphicsFeatures2_RayMicromapOpacityU8)
-				)
-					retError(clean, Error_unsupportedOperation(
-						2, "GraphicsDeviceRef_createBLAS()::ommIndexFormat R8u needs RayMicromapOpacityU8"
-					));
-
 				//Validated before the length checks below, because RTAS_validateDeviceBuffer normalizes a len of 0
 				// to "rest of the buffer"; checking lengths first would reject that spelling instead of resolving it.
 
@@ -424,6 +413,38 @@ Bool GraphicsDeviceRef_createBLAS(
 			1, "GraphicsDeviceRef_createBLAS()::cpuData should be valid if serialized construction is used"
 		));
 
+	//A caller provided scratch buffer (BLASCreateInfo::scratchBuffer); its size is checked by the backend, which is
+	// the one that knows what the build needs.
+	//256 bytes is the strictest scratch address alignment either API asks for, and what a ScratchExt buffer is
+	// always placed at, so a misaligned one is not a scratch buffer this device created.
+
+	const DeviceBufferRef *scratchRef = blas->base.tempScratchBuffer;
+
+	if (scratchRef) {
+
+		if(scratchRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer)
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer isn't a DeviceBuffer"
+			));
+
+		const DeviceBuffer *scratch = DeviceBufferRef_ptr(scratchRef);
+
+		if(scratch->resource.device != dev)
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer needs to share the BLAS's device"
+			));
+
+		if(!(scratch->usage & EDeviceBufferUsage_ScratchExt))
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer needs EDeviceBufferUsage_ScratchExt"
+			));
+
+		if(scratch->resource.deviceAddress & 255)
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer needs a 256 byte aligned address"
+			));
+	}
+
 	//Allocate refPtr
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->blas, blasRef, e_rr));
@@ -434,6 +455,11 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	*blasPtr = *blas;
 	blasPtr->base.name = CharString_createNull();
+
+	//Like the geometries below, the caller's scratch buffer is only referenced once the device is, so a failure
+	// before that never decs a reference that was never taken.
+
+	blasPtr->base.tempScratchBuffer = NULL;
 
 	//The copy above carries the CALLER's geometries, which this BLAS has not referenced yet.
 	//Cleared before anything can fail, so a free on the way out never decs a reference it never took.
@@ -454,6 +480,11 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	gotoIfError3(clean, RefPtr_inc(dev));
 	blasPtr->base.device = dev;
+
+	if (blas->base.tempScratchBuffer) {
+		gotoIfError3(clean, RefPtr_inc(blas->base.tempScratchBuffer));
+		blasPtr->base.tempScratchBuffer = blas->base.tempScratchBuffer;
+	}
 
 	if (blas->base.asConstructionType == EBLASConstructionType_Serialized) {
 		blasPtr->cpuData = Buffer_createNull();
@@ -696,7 +727,8 @@ Bool GraphicsDeviceRef_createBLASExt(
 	const BLAS blasInfo = (BLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) EBLASConstructionType_Geometry,
-			.flags = (U8) info->buildFlags
+			.flags = (U8) info->buildFlags,
+			.tempScratchBuffer = info->scratchBuffer
 		},
 		.geometries = info->geometries
 	};
@@ -704,6 +736,44 @@ Bool GraphicsDeviceRef_createBLASExt(
 	gotoIfError3(clean, GraphicsDeviceRef_createBLAS(dev, &blasInfo, name, blas, e_rr));
 
 clean:
+	return s_uccess;
+}
+
+//A BLAS created only as far as the driver's sizes (sizeQueryOnly), then dropped. Going through the create path is
+// what keeps the answer honest: the same validation and the same geometry descriptions a real build uses.
+
+Bool GraphicsDeviceRef_getBLASSizesExt(
+	GraphicsDeviceRef *dev,
+	const BLASCreateInfo *info,
+	U64 *asSize,
+	U64 *scratchSize,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	BLASRef *blasRef = NULL;
+
+	if(!info || !asSize || !scratchSize)
+		retError(clean, Error_nullPointer(
+			!info ? 1 : (!asSize ? 2 : 3), "GraphicsDeviceRef_getBLASSizesExt()::info, asSize and scratchSize are required"
+		));
+
+	const BLAS blasInfo = (BLAS) {
+		.base = (RTAS) {
+			.asConstructionType = (U8) EBLASConstructionType_Geometry,
+			.flags = (U8) info->buildFlags,
+			.sizeQueryOnly = true
+		},
+		.geometries = info->geometries
+	};
+
+	gotoIfError3(clean, GraphicsDeviceRef_createBLAS(dev, &blasInfo, NULL, &blasRef, e_rr));
+
+	*asSize = BLASRef_ptr(blasRef)->base.queriedSize;
+	*scratchSize = BLASRef_ptr(blasRef)->base.queriedScratchSize;
+
+clean:
+	RefPtr_dec(&blasRef);
 	return s_uccess;
 }
 

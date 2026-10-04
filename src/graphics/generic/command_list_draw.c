@@ -43,7 +43,7 @@
 #include "types/base/string_base.h"
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
-#include "command_list_internal.h"
+#include "graphics/generic/command_list_internal.h"
 
 //Ray triangle position fetch requires every BLAS it reads to be built with ERTASBuildFlags_AllowDataAccessExt,
 // but the shader picks its TLAS descriptor at runtime, so the exact target is unknowable at record time.

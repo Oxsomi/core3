@@ -172,17 +172,12 @@ extern "C" void Test_graphicsCapabilities(oxc::c::Test *t, oxc::c::GraphicsDevic
 	if(f2 & c::EGraphicsFeatures2_RayMicromapOpacityActual)
 		Test_assert(t, "ommActualImpliesOmm", (f & c::EGraphicsFeatures_RayMicromapOpacity) != 0);
 
-	//8-bit OMM indices only mean anything on a device that takes micromaps at all
-
-	if(f2 & c::EGraphicsFeatures2_RayMicromapOpacityU8)
-		Test_assert(t, "ommU8ImpliesOmm", (f & c::EGraphicsFeatures_RayMicromapOpacity) != 0);
-
 	//The RT specific features2 bits are equally meaningless without raytracing itself.
 
 	const c::EGraphicsFeatures2 rayFeatures2 = (c::EGraphicsFeatures2)(
 		c::EGraphicsFeatures2_RayClusterAS | c::EGraphicsFeatures2_RayPartitionedTLAS |
 		c::EGraphicsFeatures2_RayIndirectASBuild | c::EGraphicsFeatures2_RayReorderActual |
-		c::EGraphicsFeatures2_RayMicromapOpacityActual | c::EGraphicsFeatures2_RayMicromapOpacityU8
+		c::EGraphicsFeatures2_RayMicromapOpacityActual
 	);
 
 	if(f2 & rayFeatures2)

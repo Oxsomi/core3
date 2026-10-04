@@ -172,7 +172,7 @@ namespace oxc {
 			const RefPtr<c::OxStream> in = RefPtr<c::OxStream>::adopt(inRaw);
 
 			if(!c::File_openStream(
-				&loc.handle(), c::U64_MAX, c::EFileOpenType_Write, true, &types.fileHandle, &streamType, &outRaw, e_rr
+				&loc.handle(), 0, c::EFileOpenType_Write, true, &types.fileHandle, &streamType, &outRaw, e_rr
 			))
 				return false;
 

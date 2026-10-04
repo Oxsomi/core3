@@ -684,7 +684,10 @@ extern "C" void Test_graphicsBindfulOmm(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	}
 
 	if (!(caps.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
-		c::Test_print(t, "Device lacks opacity micromaps, skipping bindful micromap tests");
+		c::Test_print(
+			t, "Device lacks opacity micromaps (Vulkan needs VK_KHR_opacity_micromap), skipping bindful micromap tests"
+		);
+
 		return;
 	}
 
@@ -784,21 +787,15 @@ extern "C" void Test_graphicsBindfulOmm(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr));
 	Test_assert(t, "endEmpty", emptyList.end(e_rr));
 
-	TestBindful_ommWithFormat(
-		t, dev, file.list, positions, heap, table, pipelineLayout, output, emptyList, c::ETextureFormatId_R16u
-	);
+	//Every index width is legal wherever micromaps are, and the narrow ones are where the special index packing
+	// truncates
 
-	//R8u indices need their own capability, since Vulkan's EXT extension forbids them and only the KHR
-	// promotion or D3D12 accepts them
+	const c::ETextureFormatId formats[3] = { c::ETextureFormatId_R8u, c::ETextureFormatId_R16u, c::ETextureFormatId_R32u };
 
-	if (caps.features2 & c::EGraphicsFeatures2_RayMicromapOpacityU8) {
-
-		c::Test_print(t, "Repeating the bindful micromap pair with R8u indices");
-
+	for (c::U8 i = 0; i < 3; ++i)
 		TestBindful_ommWithFormat(
-			t, dev, file.list, positions, heap, table, pipelineLayout, output, emptyList, c::ETextureFormatId_R8u
+			t, dev, file.list, positions, heap, table, pipelineLayout, output, emptyList, formats[i]
 		);
-	}
 }
 
 // -- 61. Inline raytracing from a graphics stage --------------------------------

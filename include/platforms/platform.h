@@ -102,8 +102,6 @@ typedef struct Platform {
 
 	const Allocator *alloc;
 
-	SpinLock virtualSectionsLock;
-
 	ListVirtualSection virtualSections;
 	ListCAFile archives;
 
@@ -111,12 +109,26 @@ typedef struct Platform {
 
 	void *data1;                        //If present can contain the executable file
 	U64 size1;
+	U8 pad2[32];
+
+	SpinLock virtualSectionsLock;
 
 } Platform;
 
 extern Platform *Platform_instance;     //DLLs that call this need to also call Platform_create or get the same pointer passed.
 
 Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir, Error *e_rr);
+
+//True once an interrupt (Ctrl+C, SIGINT) or SIGTERM arrived. The first only sets this, so the application stops at a
+// point of its choosing: WindowManager_wait returns at its next step. A second ends the process at once.
+Bool Platform_interruptRequested();
+
+//While deferred, the first SIGINT or SIGTERM only raises the flag above (a loop that checks it then unwinds); otherwise
+// an interrupt ends the process as before. WindowManager_wait defers for as long as it runs.
+//Calls nest and must come in pairs: true adds a deferral, false removes one (never going below none), and interrupts
+// stay deferred while any caller holds one, so two waiting loops on two threads don't undo each other.
+
+void Platform_deferInterrupts(Bool defer);
 
 impl void Platform_cleanupExt();
 impl Bool Platform_initExt(Error *e_rr);
@@ -179,6 +191,12 @@ static inline Bool Platform_setKeyboardVisible(Bool isVisible) {
 }
 
 void Platform_cleanup();                //Call on exit
+
+//Whole pages from the OS, page aligned and outside the allocator: for memory a driver imports or maps (a graphics
+// device's breadcrumbs) rather than memory the app works in. NULL on failure; free with the size that was asked.
+
+void *Platform_allocPages(U64 size);
+void Platform_freePages(void *ptr, U64 size);
 
 impl void *Platform_getDataImpl(void *ptr);
 

@@ -336,7 +336,8 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 		.oldSwapchain = prevSwapchain
 	};
 
-	gotoIfError3(clean, checkVkError(
+	gotoIfError3(clean, VkGraphicsDevice_check(
+		deviceExt,
 		deviceExt->createSwapchain(deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain),
 		e_rr
 	));

@@ -86,7 +86,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_cooperative_matrix as CoopMat (cooperative matrix / GEMM)
   - VK_EXT_shader_float8 as CoopFP8 (.shaderFloat8 - the additive FP8 e4m3/e5m2 cooperative tier)
   - VK_EXT_mesh_shader as MeshShader
-  - VK_EXT_opacity_micromap OR VK_KHR_opacity_micromap (+ its VK_KHR_device_address_commands dependency) as RayMicromapOpacity. The KHR promotion is preferred when the device offers it (EVkGraphicsFeatures_OpacityMicromapKHR in featuresExt records which one runs). KHR would also be the only VK path where RayMicromapOpacityU8 (features2, 8-bit OMM indices) could be set, since it permits VK_INDEX_TYPE_UINT8 (VUID-VkAccelerationStructureTrianglesOpacityMicromapKHR-indexType-11570) while EXT forbids it (VUID-...EXT-indexType-10719), but the bit stays unclaimed on Vulkan until the KHR path is implemented. RayMicromapOpacityActual (features2) is NOT read from Vulkan at all; it is derived, see below.
+  - VK_KHR_opacity_micromap (.micromap) + its VK_KHR_device_address_commands dependency (.deviceAddressCommands, which micromap array creation needs) + VK_KHR_index_type_uint8 (.indexTypeUint8) as RayMicromapOpacity. VK_EXT_opacity_micromap is not used: a device offering only EXT gets no opacity micromaps. 8-bit OMM indices need no separate capability, since KHR permits VK_INDEX_TYPE_UINT8 (VUID-VkAccelerationStructureTrianglesOpacityMicromapKHR-indexType-11570); index_type_uint8 is required because that index type is only valid with it below Vulkan 1.4. RayMicromapOpacityActual (features2) is NOT read from Vulkan at all; it is derived, see below.
   - VK_KHR_dynamic_rendering as DirectRendering
   - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
   - VK_KHR_multiview as Multiview.
@@ -95,6 +95,13 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_maintenance4 as Vk extension Maintainance4. Without this extension, max buffer size and allocation size is 256 MiB.
   - VK_KHR_buffer_device_address as Vk extension BufferDeviceAddress. Without this extension the device buffer addresses are 0.
   - VK_KHR_driver_properties as GraphicsDeviceInfo::driverInfo; empty if unsupported.
+  - VK_EXT_conditional_rendering (.conditionalRendering) as Predication (features2).
+  - VK_KHR_pipeline_executable_properties (.pipelineExecutableInfo) as PipelineExecutableInfo (features2).
+  - VK_EXT_device_fault (.deviceFault) as DeviceFault (features2).
+  - VK_AMD_buffer_marker as WriteBufferImmediate (features2).
+  - VK_EXT_external_memory_host as Vk extension ExternalHostMemory.
+  - VK_EXT_memory_priority (.memoryPriority) as Vk extension MemoryPriority.
+  - VK_EXT_device_address_binding_report (.reportAddressBinding), when the instance has a debug utils messenger, as Vk extension AddressBindingReport.
 - sampleRateShading of true.
 - maxMemoryAllocationSize and maxBufferSize of a minimum of 256MiB (ideally should use <=128MiB).
 - SubgroupOperations extension: subgroupSize of 4 - 128. subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
@@ -403,7 +410,6 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 - Direct3D12 Feature level 11_0.
   - This also means the adapter should support DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES.
-  - DXGI feature PRESENT_ALLOW_TEARING.
 - The following features:
   - Tiled resource tier 1 (Bindful) or 3 (Bindless).
   - waveSize of 4 to 128.
@@ -437,7 +443,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - VariableShadingRateTier as EGraphicsFeatures_VariableRateShading.
 - RaytracingTier>1_0 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline
 - RaytracingTier>1_1 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline + EGraphicsFeatures_RayQuery.
-- RaytracingTier>=1_2 (DXR 1.2) as EGraphicsFeatures_RayMicromapOpacity + EGraphicsFeatures_RayReorder + RayMicromapOpacityU8 (features2; DXR accepts DXGI_FORMAT_R8_UINT OMM index buffers wherever it accepts micromaps). Additionally OPTIONS22.ShaderExecutionReorderingActuallyReorders as RayReorderActual (features2) - RayReorder only means the SER API is available (can be a no-op), RayReorderActual means the device really reorders. RayMicromapOpacityActual (features2) has no equivalent query on either API and is derived instead, see below.
+- RaytracingTier>=1_2 (DXR 1.2) as EGraphicsFeatures_RayMicromapOpacity + EGraphicsFeatures_RayReorder (DXR accepts DXGI_FORMAT_R8_UINT OMM index buffers wherever it accepts micromaps, as Vulkan's KHR extension does). Additionally OPTIONS22.ShaderExecutionReorderingActuallyReorders as RayReorderActual (features2) - RayReorder only means the SER API is available (can be a no-op), RayReorderActual means the device really reorders. RayMicromapOpacityActual (features2) has no equivalent query on either API and is derived instead, see below.
 - Native16BitShaderOpsSupported as EGraphicsDataTypes_F16 and EGraphicsDataTypes_I16.
 - DoublePrecisionFloatShaderOps as EGraphicsDataTypes_F64.
 - EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally), D32S8 is always available.
@@ -452,6 +458,10 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - NVAPI NvAPI_D3D12_GetRaytracingCaps cluster operations as RayClusterAS and partitioned TLAS as RayPartitionedTLAS (features2, mega geometry; NVAPI only until a vendor-neutral query exists). Either one also implies RayIndirectASBuild (features2): the mega geometry builds (BUILD_BLAS_FROM_CLAS cluster op, NvAPI_D3D12_BuildRaytracingPartitionedTlasIndirect) are GPU-driven by design, while classic BuildRaytracingAccelerationStructure(Ex) has no indirect variant on D3D12.
 - ShaderModel 6.10 support as EGraphicsFeatures_CoopVec + CoopMat + CoopFP8 + CoopVecTraining + RayTriPosition (D3D12 has no separate caps query; SM6.10 is the proxy - the cooperative-vector TIER_1_0 Minimum Support Set already includes FP16/INT8/FP8; TIER_1_1 not yet a real query). These are gated on enabling D3D12ExperimentalShaderModels on both device factories at instance creation (best-effort: needs the preview Agility SDK + Windows Developer Mode; on failure they're simply not reported). Because they're preview, they're also flagged in GraphicsDeviceCapabilities.experimentalFeatures (a subset of `features` that isn't final); on Vulkan they're real extensions so experimentalFeatures stays empty.
 - D3D12_FEATURE_ASYNC_COMMANDS Supported (Agility 1.720-preview) as EDxGraphicsFeatures_BatchedAsyncCommandList.
+- Predication (features2) is always set: SetPredication is core D3D12.
+- PipelineExecutableInfo (features2) on AMD, when AGS initialized and the driver's shader analyzer could be opened.
+- DRED page fault reporting (ID3D12DeviceRemovedExtendedDataSettings1 on both device factories) as DeviceFault (features2).
+- WriteBufferImmediateSupportFlags with D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT as WriteBufferImmediate (features2). Every command list is recorded for the direct queue today, so that is the only flag checked.
 - D3D12_FEATURE_ARCHITECTURE1 CacheCoherentUMA as EDxGraphicsFeatures_CacheCoherentUMA, which switches upload heaps to WRITE_BACK (snooping is free there, and WRITE_COMBINE would make CPU reads disastrous for no gain).
 
 #### Direct3D12 specific extensions
@@ -459,7 +469,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 There are specific extensions that are not relevant to other extensions, hence they've not been added to the standard extensions and have instead become API specific extensions.
 
 - GPUUploadHeapSupported as ReBAR.
-- WriteBufferImmediateSupportFlags as WriteBufferIntermediate.
+- DXGI_FEATURE_PRESENT_ALLOW_TEARING as AllowTearing, which is what makes the Immediate present mode available; without it a swapchain skips Immediate in its priority list, as it does Mailbox (which D3D12 never offers).
 - D3D12_FEATURE_DATA_HARDWARE_COPY.Supported as HardwareCopyQueue.
 - ShaderModel 6.6 support as WaveSize and PAQ.
 - ShaderModel 6.8 support as WaveSizeMinMax.
@@ -469,7 +479,8 @@ There are specific extensions that are not relevant to other extensions, hence t
 
 Most capability bits map onto something an API reports. These do not: no API exposes them, so OxC3 works them out from bits that are reported. `GraphicsDeviceInfo_deriveCapabilities` fills them in for every device the instance hands out, which is what lets `GraphicsInstance_getPreferredDevice` filter on them like on any other bit; a device created with `EGraphicsDeviceFlags_DisableRt` has the raytracing ones cleared along with the rest.
 
-- **RayMicromapOpacityActual** (features2): whether opacity micromaps are worth building a real micromap object for, as opposed to being accepted by the API and emulated. D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's VkPhysicalDeviceOpacityMicromapFeaturesEXT is a single bool, and the subdivision level properties are no help either (an Ampere 3080 reports the spec maximum of 12/12, the same as hardware that has the units). Derivation: on NVIDIA the bit requires RayReorderActual, since the SER reordering hardware and the OMM engines shipped in the same generation; every other vendor is taken at its word. Deliberately not a device ID table, so an unknown future GPU that reports reordering is treated as capable rather than falling off the end of a lookup, and it needs no vendor SDK. It is a HEURISTIC: treat a set bit as "worth it", not as a guarantee, and note that special-index-only OMM costs nothing either way so it is always fine to use.
+- **RayMicromapOpacityActual** (features2): whether opacity micromaps are worth building a real micromap object for, as opposed to being accepted by the API and emulated. D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's VkPhysicalDeviceOpacityMicromapFeaturesKHR is a single bool, and the subdivision level properties are no help either (an Ampere 3080 reports the spec maximum of 12/12, the same as hardware that has the units). Derivation: on NVIDIA the bit requires RayReorderActual, since the SER reordering hardware and the OMM engines shipped in the same generation; every other vendor is taken at its word. Deliberately not a device ID table, so an unknown future GPU that reports reordering is treated as capable rather than falling off the end of a lookup, and it needs no vendor SDK. It is a HEURISTIC: treat a set bit as "worth it", not as a guarantee, and note that special-index-only OMM costs nothing either way so it is always fine to use.
+- **SoftwareRT** (features2): ray traversal runs on the shader cores rather than dedicated units. Derivation: NVIDIA with a ray pipeline but no ray query, the set NVIDIA ships on parts without RT cores (D3D12 draws the same line at raytracing tier 1.0). A HEURISTIC too: an NVIDIA driver too old to expose ray query reads as a false positive.
 
 ## List of Metal requirements
 

@@ -299,6 +299,7 @@ Platform_defineEntrypoint() {
 				ANDROID_LOG_INFO, ATEST_TAG,
 				"SKIP %s (no adapter meeting the OxC3 graphics spec; SwiftShader is not supported)", suite->name
 			);
+
 			continue;
 		}
 

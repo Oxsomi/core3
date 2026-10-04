@@ -1,4 +1,4 @@
-# OxC3 formats (id: 0x1C31)
+# OxC3 formats (id: 0x1C33)
 
 OxC3 formats reads and writes files: the third party formats an application meets (images, meshes, audio) and
 OxC3's own binary formats, which the runtime, the shader compiler and the CLI are built on.
@@ -43,6 +43,7 @@ compression field that is reserved but not yet implemented.
 | [oiSR](file/oiSR.md) | A shader's source level symbols (functions, types, resources, locations), for editor tooling |
 | [oiPL](file/oiPL.md) | A pipeline layout without a device: bindings, the push constant range and baked samplers |
 | [oiSP](file/oiSP.md) | Pipelines: the state around a shader, recording for each field whether it was proven, supplied or assumed |
+| [oiPC](file/oiPC.md) | A device's pipeline cache: the driver's compiled pipelines and their code sizes, for the application to store between runs |
 | [oiBC](file/oiBC_chimera.md) | Chimera, a compiled intermediate format. Specification only, not implemented |
 
 `gfx_util` holds the graphics vocabulary several of these store (register types, spaces, bindings), so no format

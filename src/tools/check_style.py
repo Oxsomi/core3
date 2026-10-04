@@ -22,6 +22,10 @@
 #   16. Aligned case tables stay aligned: once any line of a contiguous `case X: stmt` run pads
 #       with 2+ spaces, every statement (and every trailing break;) in the run must share one
 #       column; single-space runs are the unaligned style and stay exempt
+#   17. No Bool parameter directly before an Error* in a C++ header (take BoolArg)
+#   18. A multi-line statement whose closer is alone on its line (`));`), or a multi-line if/for/while condition
+#       (closed by a lone `)`) with an unbraced body, is followed by a blank line before the next statement
+#       (a closing brace, else and preprocessor lines are exempt)
 #
 # Banned symbols (with per-path allow-lists):
 #   B1.  malloc / free / realloc / calloc
@@ -553,6 +557,95 @@ def check_case_alignment(lines: list[str]) -> list[str]:
     return issues
 
 
+# ---------------------------------------------------------------------------
+# Rule 18: a blank line after a multi-line statement's own closing line
+# ---------------------------------------------------------------------------
+# A statement that spans lines and ends on a line holding only its closer (`));`, `);`) reads as a block of its own,
+# so whatever follows starts after a blank line, as it would after a closing brace.
+
+_CLOSER_LINE = re.compile(r'^\s*\)+;\s*$')
+_CONDITION_CLOSER = re.compile(r'^\s*\)\s*$')
+_CONDITION_OPENER = re.compile(r'^\s*(else\s+)?(if|for|while)\s*\($')
+_CLOSER_EXEMPT = re.compile(r'^(\}|#|else\b)')
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip('\t'))
+
+def check_blank_after_closer(lines: list[str]) -> list[str]:
+    issues: list[str] = []
+    for i in range(len(lines) - 1):
+
+        if _CLOSER_LINE.match(lines[i]):
+            nxt = lines[i + 1].strip()
+            if nxt and not _CLOSER_EXEMPT.match(nxt):
+                issues.append(f"  line {i + 2}: needs a blank line after the multi-line statement ending on line {i + 1}")
+            continue
+
+        #A lone ')' closing a multi-line condition: its unbraced body, then whatever follows it
+
+        if not _CONDITION_CLOSER.match(lines[i]):
+            continue
+
+        k = i - 1
+        while k >= 0 and (not lines[k].strip() or _indent(lines[k]) > _indent(lines[i])):
+            k -= 1
+
+        body = lines[i + 1]
+        if k < 0 or not _CONDITION_OPENER.match(lines[k]) or not body.strip() or body.strip().startswith('{'):
+            continue
+
+        j = i + 1
+        while j < len(lines) and lines[j].strip() and _indent(lines[j]) > _indent(lines[i]):
+            j += 1
+
+        if j < len(lines) and lines[j].strip() and not _CLOSER_EXEMPT.match(lines[j].strip()):
+            issues.append(f"  line {j + 1}: needs a blank line after the multi-line condition's body ending on line {j}")
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Rule 17: no bool parameter directly before an Error* in the C++ wrappers
+# ---------------------------------------------------------------------------
+
+# A pointer converts to bool without a warning, so f(..., e_rr) with the Bool left out binds e_rr to the Bool,
+# flips it to true and drops the error channel, while the Error* parameter falls back to its default.
+# The wrappers take BoolArg there (types/base/bool_arg.hpp), which refuses a pointer at compile time.
+# Only C++ headers: C has no default arguments, so leaving the Bool out is already an arity error there.
+# The public wrappers under include/ are held to it outright, so a default added later can't reopen it.
+# Elsewhere only an Error* with a default is flagged, since without one the Bool can't be left out either.
+
+_BOOL_BEFORE_ERROR = re.compile(
+    r'[(,]\s*(?:const\s+)?(?:c::)?(?:Bool|bool)\s+(\w+)(?:\s*=\s*[^,()]+)?\s*,'
+    r'\s*(?:const\s+)?(?:c::)?Error\s*\*\s*\w+\s*(=)?'
+)
+
+_LINE_COMMENT = re.compile(r'//[^\n]*')
+_BLOCK_COMMENT = re.compile(r'/\*.*?\*/', re.DOTALL)
+
+
+def check_bool_before_error(text: str, public_header: bool) -> list[str]:
+
+    # Comments are blanked rather than removed, so offsets still map to the original line numbers
+    def blank(m: re.Match) -> str:
+        return re.sub(r'[^\n]', ' ', m.group(0))
+
+    code = _LINE_COMMENT.sub(blank, _BLOCK_COMMENT.sub(blank, text))
+    issues: list[str] = []
+
+    for m in _BOOL_BEFORE_ERROR.finditer(code):
+
+        if not public_header and not m.group(2):
+            continue
+
+        lineno = code.count('\n', 0, m.start(1)) + 1
+        issues.append(
+            f"  line {lineno}: Bool parameter '{m.group(1)}' directly before an Error*, "
+            f"a pointer argument would bind to it; take BoolArg (types/base/bool_arg.hpp)"
+        )
+
+    return issues
+
 
 def check_file(
     path: str,
@@ -783,6 +876,17 @@ def check_file(
 
     # ── 16. Aligned case tables ─────────────────────────────────────────
     for msg in check_case_alignment(lines):
+        if add(msg):
+            return violations, todos
+
+    # ── 17. Bool directly before Error* in C++ headers ───────────────────
+    if rel.endswith('.hpp'):
+        for msg in check_bool_before_error(text, rel.startswith('include/')):
+            if add(msg):
+                return violations, todos
+
+    # ── 18. Blank line after a multi-line statement's closer ─────────────
+    for msg in check_blank_after_closer(lines):
         if add(msg):
             return violations, todos
 

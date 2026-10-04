@@ -152,6 +152,7 @@ static inline I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {
 		(xyzw & 4) ? -1 : 0,
 		(xyzw & 8) ? -1 : 0
 	);
+
 	return wasm_v128_bitselect(b, a, mask);
 }
 

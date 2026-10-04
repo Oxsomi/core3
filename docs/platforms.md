@@ -45,6 +45,10 @@ There are two file systems behind one API:
 The library names `access`, `function` and `network` are reserved: for files the user picks outside the root, for
 file systems an application mounts itself, and for network paths.
 
+Every call that opens a file takes a timeout: how long a failed open is retried before it fails. It defaults to 0
+everywhere, `FileHandle::open` and `FileStream::open` included, so a missing file fails at once. Pass a timeout only
+to wait out another process holding the file; `U64_MAX` retries a file that never appears forever.
+
 In CMake, a section is added with `add_virtual_files(TARGET t NAME section ROOT folder SELF dir)`, a dependency on
 another target's sections with `add_virtual_dependencies`, and both are applied by `apply_dependencies`.
 Dependencies may not overlap: two dependencies that both include a third cannot be combined.

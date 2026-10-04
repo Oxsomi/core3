@@ -92,8 +92,6 @@ typedef enum EGfxPipelineStage {
 	EGfxPipelineStage_MeshExt,
 	EGfxPipelineStage_TaskExt,
 
-	//Reserved, free to reuse (was the workgraph stage)
-
 	EGfxPipelineStage_Reserved
 
 } EGfxPipelineStage;

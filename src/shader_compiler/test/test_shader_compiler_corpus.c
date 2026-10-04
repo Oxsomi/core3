@@ -253,6 +253,7 @@ static void shCrossCheckReflection(Test *t, const Allocator *alloc, Buffer spvBu
 		Test_assert(t, "cross-check: same input types", Buffer_eq(
 			Buffer_createRefConst(se->inputs, sizeof(se->inputs)), Buffer_createRefConst(de->inputs, sizeof(de->inputs))
 		));
+
 		Test_assert(t, "cross-check: same output types", Buffer_eq(
 			Buffer_createRefConst(se->outputs, sizeof(se->outputs)), Buffer_createRefConst(de->outputs, sizeof(de->outputs))
 		));
@@ -541,6 +542,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 					alloc, "\toiSH differs from %.*s only in version/include metadata, content is identical",
 					(int) CharString_length(ref), ref.ptr
 				);
+
 				matches = true;
 			}
 
@@ -710,6 +712,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 					alloc, "oiSR reference %.*s is missing from the bundled corpus",
 					(int) CharString_length(ref), ref.ptr
 				);
+
 				Test_assert(t, ref.ptr, false);         //Can't regenerate from a read only bundle; fix on desktop
 			}
 
@@ -719,6 +722,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 				Log_warnLn(
 					alloc, "Generated missing oiSR reference %.*s (review & commit)", (int) CharString_length(ref), ref.ptr
 				);
+
 				Test_assert(t, ref.ptr, false);
 			}
 
@@ -834,6 +838,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 							alloc, "ISA disassembly failed for %.*s binary %"PRIu64" @ %s",
 							(int) baseLen, out.ptr, b, isaTargets[tI]
 						);
+
 						Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 						err = Error_none();
 						Test_assert(t, "ISA disassembly", false);
@@ -883,6 +888,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 							alloc, "ISA reference %.*s is missing from the bundled corpus",
 							(int) CharString_length(ref), ref.ptr
 						);
+
 						Test_assert(t, ref.ptr, false);     //Can't regenerate from a read only bundle; fix on desktop
 					}
 
@@ -893,6 +899,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 							alloc, "Generated missing ISA reference %.*s (review & commit)",
 							(int) CharString_length(ref), ref.ptr
 						);
+
 						Test_assert(t, ref.ptr, false);
 					}
 

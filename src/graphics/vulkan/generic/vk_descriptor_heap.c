@@ -22,6 +22,7 @@
 
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
@@ -99,6 +100,22 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(
 		deviceExt->createDescriptorPool(deviceExt->device, &poolInfo, NULL, &heapExt->pool),
 		e_rr
 	));
+
+	//A pool's memory isn't queryable; the descriptor heap extension's sizes estimate it where the device has them
+
+	if(device->info.capabilities.features2 & EGraphicsFeatures2_DescriptorHeap) {
+
+		const VkPhysicalDeviceDescriptorHeapPropertiesEXT *sizes = &deviceExt->descriptorHeapProperties;
+
+		DescriptorHeap_trackMemory(
+			heap,
+			(U64) info.maxSamplers * sizes->samplerDescriptorSize +
+			((U64) info.maxTextures + info.maxTexturesRW + info.maxCombinedSamplers + info.maxInputAttachments) *
+				sizes->imageDescriptorSize +
+			((U64) info.maxBuffersRW + info.maxConstantBuffers + info.maxAccelerationStructures) *
+				sizes->bufferDescriptorSize
+		);
+	}
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name) && instanceExt->debugSetName) {
 

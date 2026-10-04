@@ -71,7 +71,7 @@ typedef struct BLASGeometry {
 	//Element type only; without ommMicromap the values are EOMMSpecialIndex (see above), with one they
 	// index the micromap's entries, with the special values still allowed per triangle.
 
-	U8 ommIndexFormatId;                            //ETextureFormatId: R16u, R32u, R8u (ext) or Undefined for no OMM
+	U8 ommIndexFormatId;                            //ETextureFormatId: R8u, R16u, R32u or Undefined for no OMM
 	U8 flags;                                       //EBLASGeometryFlag
 
 	DeviceData positionBuffer;
@@ -115,6 +115,8 @@ typedef struct BLAS {
 
 } BLAS;
 
+static_assert(sizeof(BLAS) % 64 == 0, "BLAS must be a 64 byte multiple, its backend ext follows it");
+
 typedef RefPtr BLASRef;
 
 #define BLAS_ext(ptr, T) (!ptr ? NULL : (T##BLAS*)(ptr + 1))        //impl
@@ -138,7 +140,7 @@ typedef RefPtr BLASRef;
 // with R32u 0xFFFFFFFF. The helpers below do that truncation so a caller never has to.
 //A hit resolves as: FullyTransparent is ignored entirely, FullyOpaque skips anyHit, and both Unknown values
 // are treated as non opaque so anyHit still runs.
-//Values match VkOpacityMicromapSpecialIndexEXT and D3D12_RAYTRACING_OPACITY_MICROMAP_SPECIAL_INDEX.
+//Values match VkOpacityMicromapSpecialIndexKHR and D3D12_RAYTRACING_OPACITY_MICROMAP_SPECIAL_INDEX.
 
 typedef enum EOMMSpecialIndex {
 	EOMMSpecialIndex_FullyTransparent        = -1,
@@ -177,6 +179,16 @@ typedef struct BLASCreateInfo {
 	//REFERENCED, not owned: it only has to outlive the create call, which copies what it needs.
 
 	ListBLASGeometry geometries;
+
+	//Optional build scratch the caller provides; NULL allocates one per BLAS.
+	//It needs EDeviceBufferUsage_ScratchExt on the same device and at least the scratch size
+	// GraphicsDeviceRef_getBLASSizesExt reports for the same info (which covers refits with AllowUpdate).
+	//The whole buffer is used from its start, with no offset: builds that share one run one after the other.
+	//The BLAS references it for as long as it can build: until its build has run, or for its lifetime with
+	// AllowUpdate, since every refit reuses it. It never frees it.
+	//Any number of BLASes can share one, in one scope or across submits; their builds are serialized on it.
+
+	DeviceBufferRef *scratchBuffer;
 
 } BLASCreateInfo;
 
@@ -276,6 +288,21 @@ Bool GraphicsDeviceRef_createBLASExt(
 	const BLASCreateInfo *info,
 	const CharString *name,
 	BLASRef **blas,
+	Error *e_rr
+);
+
+//What a BLAS built from info would allocate, asked of the driver without creating one: the acceleration structure
+// and its build scratch (the larger of build and refit scratch when the flags allow updates). Validated exactly as
+// GraphicsDeviceRef_createBLASExt validates, so the geometry's buffers have to exist, but nothing is allocated.
+//What this is for: drivers lay out and size acceleration structures very differently (the same triangles can
+// differ several times over between vendors) and cap one buffer at maxBufferSize, so only the driver can say
+// whether a mesh fits in one BLAS.
+
+Bool GraphicsDeviceRef_getBLASSizesExt(
+	GraphicsDeviceRef *dev,
+	const BLASCreateInfo *info,
+	U64 *asSize,
+	U64 *scratchSize,
 	Error *e_rr
 );
 

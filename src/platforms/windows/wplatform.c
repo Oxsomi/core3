@@ -38,6 +38,18 @@
 #define NOMINMAX
 #include <Windows.h>
 
+void *Platform_allocPages(U64 size) {
+	return VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+}
+
+void Platform_freePages(void *ptr, U64 size) {
+
+	(void) size;
+
+	if(ptr)
+		VirtualFree(ptr, 0, MEM_RELEASE);
+}
+
 #include <stdlib.h>
 
 #if _ARCH == ARCH_ARM64

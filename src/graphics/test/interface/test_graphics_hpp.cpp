@@ -35,6 +35,46 @@ namespace oxc { namespace c {
 	#include "test_graphics_shared.h"
 }}
 
+//A Bool directly before e_rr has to refuse the Error* that lands in it when the Bool is left out.
+//Each pair names one such wrapper: the bool form has to compile, so the Error* form failing is down to BoolArg
+// and not to the call being malformed in some other way.
+//A requires expression only turns an ill-formed call into false inside a template, hence the parameter.
+
+namespace {
+
+	using namespace oxc;
+	using namespace oxc::gfx;
+
+	template<typename T>
+	constexpr bool TABLE_SET = requires(DescriptorTable t, const c::Descriptor &d, T v) { t.set(0, 0, d, v); };
+
+	template<typename T>
+	constexpr bool TABLE_ALLOC = requires(DescriptorTable t, c::U64 &id, const c::Descriptor &d, T v) {
+		t.alloc(0, id, d, v);
+	};
+
+	template<typename T>
+	constexpr bool LIST_BEGIN = requires(CommandList l, T v) { l.begin(v); };
+
+	template<typename T>
+	constexpr bool CREATE_LIST = requires(Device d, CommandList &l, T v) { d.createCommandList(1, 1, 1, l, v); };
+
+	template<typename T>
+	constexpr bool CREATE_TLAS = requires(Device d, const c::TLASInstance *i, Tlas &t, T v) {
+		d.createTlas(c::ERTASBuildFlags_DefaultTLAS, i, 1, "tlas", t, v);
+	};
+
+	template<typename T>
+	constexpr bool CREATE_BITS = requires(Buffer b, T v) { b.createBits(8, v); };
+
+	static_assert(TABLE_SET<bool> && !TABLE_SET<c::Error*>);
+	static_assert(TABLE_ALLOC<bool> && !TABLE_ALLOC<c::Error*>);
+	static_assert(LIST_BEGIN<bool> && !LIST_BEGIN<c::Error*>);
+	static_assert(CREATE_LIST<bool> && !CREATE_LIST<c::Error*>);
+	static_assert(CREATE_TLAS<bool> && !CREATE_TLAS<c::Error*>);
+	static_assert(CREATE_BITS<bool> && !CREATE_BITS<c::Error*>);
+}
+
 //Never invoked. See the file comment: this is a compile time check, not a test module.
 
 extern "C" void Test_graphicsHppTypeCheck(oxc::c::GraphicsDeviceRef *deviceRef, const oxc::c::SHFile *shFile) {
@@ -89,9 +129,11 @@ extern "C" void Test_graphicsHppTypeCheck(oxc::c::GraphicsDeviceRef *deviceRef, 
 	(void) table.allocBindless(
 		c::EGfxRegisterType_ByteAddressBuffer, 0, bindId, bindlessTypeId, arrayId, descriptor, false, e_rr
 	);
+
 	(void) table.findBindlessRegister(
 		c::EGfxRegisterType_ByteAddressBuffer, 0, bindId, bindlessTypeId, nullptr, 0, e_rr
 	);
+
 	(void) table.resolveRegisterName("output");
 
 	//Pipeline layout carrying all three kinds at once.

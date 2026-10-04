@@ -99,11 +99,9 @@ static c::Bool TestShaders_pushRays(c::Test *t, gfx::CommandScope &scope) {
 //Both halves are needed. "Everything missed" on its own is also what a BLAS that quietly failed to build
 // looks like, so the opaque half is what proves the geometry survived the OMM path at all, and only the pair
 // together says the micromap was consulted.
-//Narrow formats rather than R32u on purpose: the special indices are signed constants matched against an
-// unsigned element, so the truncated widths (0xFFFF for R16u, 0xFF for R8u) are where a driver would
-// disagree with our packing.
-//The wrapper below runs R16u everywhere and repeats the pair with R8u where RayMicromapOpacityU8 is set,
-// which on Vulkan doubles as the only execution coverage the KHR extension path can get.
+//Every index width runs (see TestShaders_omm), the narrow ones mattering most: the special indices are signed
+// constants matched against an unsigned element, so the truncated widths (0xFFFF for R16u, 0xFF for R8u) are
+// where a driver would disagree with our packing.
 
 static void TestShaders_ommSpecialIndexWithFormat(
 	c::Test *t,
@@ -116,18 +114,6 @@ static void TestShaders_ommSpecialIndexWithFormat(
 ) {
 
 	c::Error *e_rr = &t->err;
-
-	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
-
-	if (!(caps.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
-		c::Test_print(t, "Device lacks opacity micromaps, skipping OMM trace test");
-		return;
-	}
-
-	if (caps.experimentalFeatures & c::EGraphicsFeatures_RayMicromapOpacity) {
-		c::Test_print(t, "Opacity micromaps claimed but experimental on this backend, skipping OMM trace test");
-		return;
-	}
 
 	gfx::DeviceBuffer indices, ommOpaque, ommTransparent;
 	gfx::Blas blasOpaque, blasTransparent;
@@ -357,40 +343,21 @@ static void TestShaders_ommSpecialIndexWithFormat(
 // (miss, hit), exactly one (hit, miss) and two (hit, hit) for rays 0 and 1.
 //That is only satisfiable if each probe culled a DIFFERENT sub triangle, which is per micro triangle
 // addressing proven without a single assumption about the curve; entry 4 proving all miss pins the decode.
+//ommIndexFormat is the width of the per triangle entry index linking each BLAS to the micromap.
 
-static void TestShaders_ommMicromapArray(
+static void TestShaders_ommMicromapArrayWithFormat(
 	c::Test *t,
 	gfx::Device &dev,
 	const c::SHFile &file,
 	const gfx::DeviceBuffer &positions,
 	const gfx::DeviceBuffer &output,
-	const gfx::CommandList &emptyList
+	const gfx::CommandList &emptyList,
+	c::ETextureFormatId ommIndexFormat
 ) {
 
 	c::Error *e_rr = &t->err;
 
 	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
-
-	if (!(caps.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
-		c::Test_print(t, "Device lacks opacity micromaps, skipping micromap array test");
-		return;
-	}
-
-	if (caps.experimentalFeatures & c::EGraphicsFeatures_RayMicromapOpacity) {
-		c::Test_print(t, "Opacity micromaps claimed but experimental on this backend, skipping micromap array test");
-		return;
-	}
-
-	//The KHR path builds micromap arrays as acceleration structures, which isn't implemented until a driver
-	// exists to test it against; special index OMM covers such a device above.
-
-	if (
-		dev.api() == c::EGraphicsApi_Vulkan &&
-		(caps.featuresExt & c::EVkGraphicsFeatures_OpacityMicromapKHR)
-	) {
-		c::Test_print(t, "Micromap arrays aren't implemented on the Vulkan KHR path yet, skipping");
-		return;
-	}
 
 	gfx::DeviceBuffer indices, inputBits, entries;
 	gfx::OpacityMicromap micromap;
@@ -488,13 +455,19 @@ static void TestShaders_ommMicromapArray(
 
 	//How rays 0 and 1 resolved per probe, packed as (ray0Hit << 1) | ray1Hit
 
+	const c::U8 ommStride =
+		ommIndexFormat == c::ETextureFormatId_R32u ? 4 : (ommIndexFormat == c::ETextureFormatId_R16u ? 2 : 1);
+
 	c::U8 outcomes[4] = { 0 };
 	c::Bool traced = true;
 
 	for (c::U8 k = 0; k < 5 && traced; ++k) {
 
-		const c::U16 entryIndex = k;
-		c::Buffer ommIndexData = c::Buffer_createRefConst(&entryIndex, sizeof(entryIndex));
+		//Packed into a U32 and sliced to the element width, which reads out the low bytes on the little endian
+		// targets OxC3 runs on; one triangle, so the buffer is exactly one element.
+
+		const c::U32 entryIndex = k;
+		c::Buffer ommIndexData = c::Buffer_createRefConst(&entryIndex, ommStride);
 
 		traced &= Test_assert(t, "ommArrayCreateIndexBuf", dev.createBufferData(
 			c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
@@ -507,7 +480,7 @@ static void TestShaders_ommMicromapArray(
 		const c::BLASGeometry blasInfoGeometry = c::BLASGeometry_indexedWithOmmExt(
 			c::ETextureFormatId_RGBA32f, 0, 16, positions.region(),
 			c::ETextureFormatId_R16u, indices.region(),
-			c::ETextureFormatId_R16u, ommIndex[k].region(),
+			ommIndexFormat, ommIndex[k].region(),
 			micromap.handle()
 		);
 
@@ -636,7 +609,9 @@ static void TestShaders_ommMicromapArray(
 	}
 }
 
-static void TestShaders_ommSpecialIndex(
+//Both OMM forms through every index width, since R8u, R16u and R32u are all legal wherever micromaps are.
+
+static void TestShaders_omm(
 	c::Test *t,
 	gfx::Device &dev,
 	const c::SHFile &file,
@@ -645,18 +620,44 @@ static void TestShaders_ommSpecialIndex(
 	const gfx::CommandList &emptyList
 ) {
 
-	TestShaders_ommSpecialIndexWithFormat(t, dev, file, positions, output, emptyList, c::ETextureFormatId_R16u);
-
-	//The 8-bit pair is the same scene through a 1 byte element, where the special index truncates to 0xFF.
-
 	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
 
-	if (caps.features2 & c::EGraphicsFeatures2_RayMicromapOpacityU8) {
-		c::Test_print(t, "Repeating the OMM special index pair with R8u indices");
-		TestShaders_ommSpecialIndexWithFormat(t, dev, file, positions, output, emptyList, c::ETextureFormatId_R8u);
+	if (!(caps.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
+		c::Test_print(
+			t, "Device lacks opacity micromaps (Vulkan needs VK_KHR_opacity_micromap), skipping OMM trace tests"
+		);
+
+		return;
 	}
 
-	else c::Test_print(t, "Device lacks 8-bit OMM indices, R8u trace pair skipped");
+	if (caps.experimentalFeatures & c::EGraphicsFeatures_RayMicromapOpacity) {
+		c::Test_print(t, "Opacity micromaps claimed but experimental on this backend, skipping OMM trace tests");
+		return;
+	}
+
+	const c::ETextureFormatId formats[3] = { c::ETextureFormatId_R8u, c::ETextureFormatId_R16u, c::ETextureFormatId_R32u };
+
+	const c::C8 *specialIndexNames[3] = {
+		"OMM special index pair with R8u indices",
+		"OMM special index pair with R16u indices",
+		"OMM special index pair with R32u indices"
+	};
+
+	const c::C8 *micromapArrayNames[3] = {
+		"OMM micromap array with R8u indices",
+		"OMM micromap array with R16u indices",
+		"OMM micromap array with R32u indices"
+	};
+
+	for (c::U8 i = 0; i < 3; ++i) {
+		c::Test_print(t, specialIndexNames[i]);
+		TestShaders_ommSpecialIndexWithFormat(t, dev, file, positions, output, emptyList, formats[i]);
+	}
+
+	for (c::U8 i = 0; i < 3; ++i) {
+		c::Test_print(t, micromapArrayNames[i]);
+		TestShaders_ommMicromapArrayWithFormat(t, dev, file, positions, output, emptyList, formats[i]);
+	}
 }
 
 //The whole ray pipeline vehicle (scene, SBT, dispatch and readback) shared by the plain and the SER
@@ -936,8 +937,7 @@ static void TestShaders_raysWithFile(
 		//Opacity micromaps run here rather than at the end, because the BLAS refit below rewrites the position
 		// buffer these BLASes are built over and would leave them tracing a triangle that moved away.
 
-		TestShaders_ommSpecialIndex(t, dev, file.list, positions, output, emptyList);
-		TestShaders_ommMicromapArray(t, dev, file.list, positions, output, emptyList);
+		TestShaders_omm(t, dev, file.list, positions, output, emptyList);
 
 		//The same idea one level down, so the BLAS update path gets the same treatment.
 		//Here the triangle itself moves rather than the instance, by rewriting the position buffer the BLAS

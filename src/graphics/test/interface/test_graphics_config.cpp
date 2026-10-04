@@ -63,7 +63,6 @@ namespace oxc { namespace c {
 #define TEST_CONFIG_RT_FEATURES2 (                       \
 	c::EGraphicsFeatures2_RayReorderActual   |           \
 	c::EGraphicsFeatures2_RayMicromapOpacityActual |     \
-	c::EGraphicsFeatures2_RayMicromapOpacityU8 |         \
 	c::EGraphicsFeatures2_RayClusterAS       |           \
 	c::EGraphicsFeatures2_RayPartitionedTLAS |           \
 	c::EGraphicsFeatures2_RayIndirectASBuild             \

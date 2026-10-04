@@ -32,6 +32,7 @@
 
 typedef struct SpinLock {
 	alignas(64) AtomicI64 lockedThreadId;
+	U8 padding[56];
 } SpinLock;
 
 typedef struct Error Error;

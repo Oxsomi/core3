@@ -31,11 +31,22 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
+#include <sys/mman.h>
 #include <string.h>
 
 #if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
 	#include <mach/mach.h>
 #endif
+
+void *Platform_allocPages(U64 size) {
+	void *ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	return ptr == MAP_FAILED ? NULL : ptr;
+}
+
+void Platform_freePages(void *ptr, U64 size) {
+	if(ptr)
+		munmap(ptr, size);
+}
 
 //OxC3's widest type is I32x4, which is alignas(16) on every backend including the scalar one
 // (see types/math/vec4_{sse,neon,wasm,none}.inc.h), so anything the platform allocator hands out has

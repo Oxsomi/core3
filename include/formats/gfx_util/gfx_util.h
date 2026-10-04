@@ -57,7 +57,6 @@ typedef enum EGfxPipelineStage {
 	EGfxPipelineStage_MeshExt,
 	EGfxPipelineStage_TaskExt,
 
-	//Reserved, free to reuse.
 	//The slot stays because the stage id is serialized in oiSH and indexes SHEntry_stageNames.
 
 	EGfxPipelineStage_Reserved,

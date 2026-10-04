@@ -158,7 +158,12 @@ static inline Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, con
 	const U64 blockStart = AllocationBufferBlock_getStart(block);
 	const U64 aligned = AllocationBufferBlock_getAligned(block);
 	const U64 base = AllocationBuffer_addr(start), loc = AllocationBuffer_addr(ptr);
-	return loc == base + blockStart || loc == base + aligned;
+
+	//Only a held block, and only where it holds: rounded up past its end, the start of the NEXT block is reached
+
+	return
+		!AllocationBufferBlock_isFree(block) &&
+		(loc == base + blockStart || (loc == base + aligned && aligned < block.end));
 }
 
 Bool AllocationBuffer_allocateAndFillBlock(
@@ -305,9 +310,11 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 
 		if (size <= AllocationBufferBlock_size(v)) {
 
-			//See if the buffer can hold this aligned as well
+			//See if the buffer can hold this aligned as well.
+			//Linearity is the neighbour's: a free range's own flag is whatever was freed there last.
 
-			mismatchAlignment = AllocationBufferBlock_isNonLinear(v) != isNonLinearResource;
+			mismatchAlignment =
+				i && AllocationBufferBlock_isNonLinear(allocationBuffer->allocations.ptr[i - 1]) != isNonLinearResource;
 			nextAlignment = mismatchAlignment ? nonLinearAlignment : alignment;
 			U64 aligned = AllocationBufferBlock_alignTo(vstart, nextAlignment);
 
@@ -364,7 +371,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 				v.startAndNonLinearAndFree &= ~((U64)3 << 62);
 				v.startAndNonLinearAndFree |= (U64) isNonLinearResource << 62;
 				v.end = aligned + size;
-				v.alignment = alignment;
+				v.alignment = nextAlignment;        //What aligned came from, so a free finds it again
 
 				allocationBuffer->allocations.ptrNonConst[i] = v;
 				*result = AllocationBuffer_at(allocationBuffer->buffer.ptr, aligned);
@@ -375,6 +382,13 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 
 			if(aligned < AllocationBufferBlock_getStart(v))
 				continue;
+
+			//Room for both inserts first: one failing after the other succeeded would leave entries overlapping v
+
+			if(aligned != AllocationBufferBlock_getStart(v) && aligned + size != v.end)
+				gotoIfError3(clean, ListAllocationBufferBlock_reserve(
+					&allocationBuffer->allocations, allocationBuffer->allocations.length + 2, alloc, e_rr
+				));
 
 			if(aligned != AllocationBufferBlock_getStart(v)) {
 
@@ -391,8 +405,26 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 
 			const Bool spaceLeft = aligned != AllocationBufferBlock_getStart(v);
 
+			//Rounding down can leave a tail behind it, which stays free rather than lost
+
+			if(aligned + size != v.end) {
+
+				const AllocationBufferBlock tail = (AllocationBufferBlock) {
+					.startAndNonLinearAndFree = ((U64)1 << 63) | (aligned + size),
+					.end = v.end,
+					.alignment = 1
+				};
+
+				gotoIfError3(clean, ListAllocationBufferBlock_insert(
+					&allocationBuffer->allocations, i + spaceLeft + 1, tail, alloc, e_rr
+				));
+			}
+
+			//The free range's alignment is whoever lived there last, so it's replaced; start is exact here
+
 			v.startAndNonLinearAndFree = aligned | ((U64) isNonLinearResource << 62);
 			v.end = aligned + size;
+			v.alignment = 1;
 
 			allocationBuffer->allocations.ptrNonConst[i + spaceLeft] = v;
 			*result = AllocationBuffer_at(allocationBuffer->buffer.ptr, aligned);

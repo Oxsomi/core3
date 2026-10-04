@@ -183,6 +183,7 @@ Bool readOiSH(const Allocator *alloc, Buffer buf, SHFile *out, Error *e_rr) {
 	gotoIfError3(clean, MemoryStream_createFromBufferRegion(
 		ref, 0, Buffer_length(ref), EMemoryStreamFlags_None, &msType, &ms, e_rr
 	));
+
 	gotoIfError3(clean, SHFile_read((StreamRef*) ms, &off, false, alloc, out, e_rr));
 
 clean:

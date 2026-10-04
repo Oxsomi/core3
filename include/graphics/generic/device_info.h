@@ -96,7 +96,7 @@ typedef enum EDxGraphicsFeatures {
 
 	EDxGraphicsFeatures_None                    = 0,
 
-	EDxGraphicsFeatures_WriteBufferImmediate    = 1 << 0,
+	EDxGraphicsFeatures_Reserved0               = 1 << 0,
 	EDxGraphicsFeatures_ReBAR                   = 1 << 1,
 	EDxGraphicsFeatures_HardwareCopyQueue       = 1 << 2,
 	EDxGraphicsFeatures_WaveSize                = 1 << 3,
@@ -114,6 +114,8 @@ typedef enum EDxGraphicsFeatures {
 	EDxGraphicsFeatures_BatchedAsyncCommandList = 1 << 11,        //ExecuteCommandLists batching across async queues
 
 	EDxGraphicsFeatures_CacheCoherentUMA        = 1 << 12,        //UMA that snoops CPU caches, upload wants WRITE_BACK
+
+	EDxGraphicsFeatures_AllowTearing            = 1 << 13,        //DXGI_FEATURE_PRESENT_ALLOW_TEARING: Immediate present mode
 
 	EDxGraphicsFeatures_ReallyReportReBARWrites = EDxGraphicsFeatures_ReportReBARWrites | EDxGraphicsFeatures_ReBAR,
 
@@ -148,19 +150,27 @@ typedef enum EVkGraphicsFeatures {
 
 	EVkGraphicsFeatures_PerformantPushDescriptor = 1 << 5,
 
-	//VK_KHR_opacity_micromap (plus its VK_KHR_device_address_commands dependency) is what got enabled rather
-	// than VK_EXT_opacity_micromap.
-	//The EXT extension is promoted to KHR rather than deprecated, and current drivers commonly still expose
-	// only EXT, so the backend prefers KHR and falls back; this bit records which one the device runs.
-
-	EVkGraphicsFeatures_OpacityMicromapKHR       = 1 << 6,
+	EVkGraphicsFeatures_Reserved6                = 1 << 6,
 
 	//The driver can't be asked for a compacted size, so a BLAS built with ERTASBuildFlags_AllowCompaction is marked
 	// compacted by its build, with no query and no copy, as a driver reporting no saving is.
 	//lavapipe before Mesa 24.3.4: it crashes resetting an acceleration structure query from a command buffer (Mesa
 	// issue 12289), and reports the full size as the compacted one, so nothing is lost.
 
-	EVkGraphicsFeatures_NoCompactionQuery        = 1 << 7
+	EVkGraphicsFeatures_NoCompactionQuery        = 1 << 7,
+
+	//VK_EXT_device_address_binding_report: the address range each buffer and image is bound at, so a fault address
+	// can name an image too. It reports through a debug utils messenger, which the instance then has.
+
+	EVkGraphicsFeatures_AddressBindingReport     = 1 << 8,
+
+	//VK_EXT_external_memory_host: memory the process allocated can be imported as device memory.
+
+	EVkGraphicsFeatures_ExternalHostMemory       = 1 << 9,
+
+	//VK_EXT_memory_priority: blocks carry a priority, so the OS pages staging out before acceleration structures.
+
+	EVkGraphicsFeatures_MemoryPriority           = 1 << 10
 
 } EVkGraphicsFeatures;
 
@@ -278,7 +288,7 @@ typedef enum EGraphicsFeatures2 {
 	//Whether opacity micromaps (EGraphicsFeatures_RayMicromapOpacity) are likely backed by dedicated hardware
 	// rather than emulated, in the same shape as RayReorderActual above.
 	//Neither API exposes this: D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's
-	// VkPhysicalDeviceOpacityMicromapFeaturesEXT is a single bool, and the subdivision level properties are no
+	// VkPhysicalDeviceOpacityMicromapFeaturesKHR is a single bool, and the subdivision level properties are no
 	// help either (an Ampere 3080 reports the spec maximum of 12/12, same as hardware that has the units).
 	//So this bit is a HEURISTIC rather than a query, which is why it is derived once per device instead of
 	// being reported by a backend.
@@ -293,11 +303,7 @@ typedef enum EGraphicsFeatures2 {
 
 	EGraphicsFeatures2_RayMicromapOpacityActual = 1 << 5,
 
-	//8-bit (R8u) OMM index buffers are legal on this device.
-	//D3D12 ships this with opacity micromaps themselves. On Vulkan only VK_KHR_opacity_micromap permits
-	// VK_INDEX_TYPE_UINT8 (VUID 11570; the EXT extension forbids it, VUID 10719), but the KHR path isn't
-	// implemented yet, so no Vulkan device claims this bit today and R8u is rejected at BLAS create there.
-	EGraphicsFeatures2_RayMicromapOpacityU8     = 1 << 6,
+	EGraphicsFeatures2_Reserved6                = 1 << 6,
 
 	//GPU timestamp queries: the device can write pipeline timestamps and reports a period to turn ticks into
 	// nanoseconds. Vulkan gates this on timestampComputeAndGraphics with a non zero timestampValidBits on the
@@ -328,7 +334,17 @@ typedef enum EGraphicsFeatures2 {
 	//An NV driver too old to expose ray query reads as a false positive, which costs that install the faster
 	// arm and nothing else.
 
-	EGraphicsFeatures2_SoftwareRT               = 1 << 10
+	EGraphicsFeatures2_SoftwareRT               = 1 << 10,
+
+	//A lost device reports what it faulted on, addresses included (docs/graphics_api.md, "Device loss").
+	//DRED on D3D12, VK_EXT_device_fault on Vulkan.
+
+	EGraphicsFeatures2_DeviceFault              = 1 << 11,
+
+	//The graphics queue can write a 32 bit value to a buffer address, ordered before or after the work around it.
+	//WriteBufferImmediate on D3D12 (direct queue support), VK_AMD_buffer_marker on Vulkan.
+
+	EGraphicsFeatures2_WriteBufferImmediate     = 1 << 12
 
 } EGraphicsFeatures2;
 

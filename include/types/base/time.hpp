@@ -27,6 +27,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <assert.h>
+#include "types/base/bool_arg.hpp"
 
 namespace oxc {
 
@@ -48,11 +49,11 @@ namespace oxc {
 			return c::Time_clocks();
 		}
 
-		[[nodiscard]] inline c::Ns date(const c::Date *date, c::Bool isLocalTime) noexcept {
+		[[nodiscard]] inline c::Ns date(const c::Date *date, BoolArg isLocalTime) noexcept {
 			return c::Time_date(date, isLocalTime);
 		}
 
-		[[nodiscard]] inline c::Bool getDate(c::Ns timestamp, c::Date *date, c::Bool isLocalTime) noexcept {
+		[[nodiscard]] inline c::Bool getDate(c::Ns timestamp, c::Date *date, BoolArg isLocalTime) noexcept {
 			return c::Time_getDate(timestamp, date, isLocalTime);
 		}
 
@@ -72,11 +73,11 @@ namespace oxc {
 			return c::Time_elapsed(prev);
 		}
 
-		inline void format(c::Ns time, c::TimeFormat timeString, c::Bool isLocalTime) noexcept {
+		inline void format(c::Ns time, c::TimeFormat timeString, BoolArg isLocalTime) noexcept {
 			c::Time_format(time, timeString, isLocalTime);
 		}
 
-		[[nodiscard]] inline c::Bool parseFormat(c::Ns *time, c::TimeFormat format, c::Bool isLocalTime) noexcept {
+		[[nodiscard]] inline c::Bool parseFormat(c::Ns *time, c::TimeFormat format, BoolArg isLocalTime) noexcept {
 			return c::Time_parseFormat(time, format, isLocalTime);
 		}
 

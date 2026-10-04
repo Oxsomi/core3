@@ -378,7 +378,15 @@ function(apply_dependencies target)
 			set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS "${file}")
 
 		elseif(UNIX AND NOT ANDROID AND NOT EMSCRIPTEN)
+
 			list(APPEND _objcopySections --add-section "packages/${RELATIVE_PATH}=${file}")
+
+			# The objcopy below is POST_BUILD, so it only runs when the target relinks,
+			# and the .oiCA it appends is no link input of its own.
+			# Without this a package rebuilt on its own, such as after a shader only edit, never reaches the binary.
+
+			set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS "${file}")
+
 		endif()
 
 	endforeach()
@@ -397,20 +405,34 @@ function(apply_dependencies target)
 	if(WIN32)
 		get_property(res2 TARGET ${target} PROPERTY RESOURCE_LIST_RC)
 		if(NOT "${res2}" STREQUAL "")
+			# The .rc only names the .oiCA files, so its own text is identical no matter what's inside them.
+			# Without a dependency on them the resource compiler isn't rerun when a package is rebuilt and the binary
+			#  silently keeps embedding the previous archive, surfacing much later as a missing shader binary.
+			# So file(GENERATE) only writes a template, and the .rc the target compiles is a copy of it made by a custom
+			#  command that depends on the template and on every .oiCA: a rebuilt package recopies and touches the .rc,
+			#  which reruns the resource compiler and relinks.
+			# A custom command because its OUTPUT and DEPENDS evaluate $<CONFIG> (OUTPUT since CMake 3.20), which the
+			#  .oiCA paths of a multi config generator contain; OBJECT_DEPENDS doesn't, so Ninja Multi-Config would
+			#  depend on a literal $<CONFIG> path.
+			# macOS and ELF get the same from LINK_DEPENDS on the .oiCA files above.
+
+			set(_rc_template "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/${target}.rc.in")
 			set(_rc_file "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/${target}.rc")
+
 			file(GENERATE
-				OUTPUT "${_rc_file}"
+				OUTPUT "${_rc_template}"
 				CONTENT "${res2}"
 			)
+
+			add_custom_command(
+				OUTPUT "${_rc_file}"
+				COMMAND ${CMAKE_COMMAND} -E copy "${_rc_template}" "${_rc_file}"
+				COMMAND ${CMAKE_COMMAND} -E touch "${_rc_file}"
+				DEPENDS "${_rc_template}" ${res}
+				VERBATIM
+			)
+
 			set_source_files_properties("${_rc_file}" PROPERTIES GENERATED TRUE)
-
-			# The .rc only names the .oiCA files, so its own text is identical no matter what's inside them.
-			# Without this the resource compiler isn't rerun when a package is rebuilt and the binary silently keeps
-			#  embedding the previous archive, surfacing much later as a missing shader binary nowhere near the build.
-			# The other platforms don't need it, they embed through a POST_BUILD objcopy that runs every build.
-
-			set_source_files_properties("${_rc_file}" PROPERTIES OBJECT_DEPENDS "${res}")
-
 			target_sources(${target} PRIVATE "${_rc_file}")
 		endif()
 	endif()
@@ -566,6 +588,12 @@ macro(add_virtual_files)
 		endif()
 	endif()
 
+	# The .oiCA is declared as a byproduct because apply_dependencies makes it a dependency of the target's link
+	# (LINK_DEPENDS, on Windows the custom command that produces the .rc).
+	# Ninja refuses to start a build with an input that is missing and that no rule produces,
+	# which a fresh tree's .oiCA is, even though the package target is ordered before the link.
+	# The packager leaves an unchanged package untouched, so the link only reruns when its contents change.
+
 	if(_ARGS_FORCE_PACKAGER)
 
 		set(OxC3_command "${OXC3_PACKAGE} \"${_ARGS_ROOT}\" \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"")
@@ -574,6 +602,7 @@ macro(add_virtual_files)
 			${_ARGS_TARGET}_package_${_ARGS_NAME}
 			COMMAND ${packagerEnv} ${packagerExe} "${_ARGS_ROOT}" "${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
 			WORKING_DIRECTORY ${_ARGS_SELF}
+			BYPRODUCTS "${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"
 		)
 
 	else()
@@ -584,6 +613,7 @@ macro(add_virtual_files)
 			${_ARGS_TARGET}_package_${_ARGS_NAME}
 			COMMAND ${packagerEnv} ${packagerCLI} file package -input "${_ARGS_ROOT}" -output "${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
 			WORKING_DIRECTORY ${_ARGS_SELF}
+			BYPRODUCTS "${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"
 		)
 
 	endif()

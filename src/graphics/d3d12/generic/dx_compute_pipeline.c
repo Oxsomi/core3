@@ -23,6 +23,8 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
+#include "types/container/buffer.h"
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
 #include "formats/oiSH/sh_file.h"
@@ -72,15 +74,19 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 		gotoIfError3(clean, DxAmdShaderAnalyzer_createComputePipeline(
 			&deviceExt->amdAnalyzer, &compute, pipelinei, &dxPipeline->amdAnalyzerHandle, e_rr
 		));
+
+		DxPipeline_trackMemory(pipeline, *pipelinei, compute.CS.BytecodeLength);
 	}
 
 	else {
-		gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateComputePipelineState(
-			deviceExt->device,
-			&compute,
-			&IID_ID3D12PipelineState,
-			(void**) pipelinei
-		), e_rr));
+
+		U64 key = Pipeline_hash(Buffer_fnv1a64Offset, &pipeline->type, sizeof(pipeline->type));
+		key = Pipeline_hash(key, dxil.ptr, Buffer_length(dxil));
+		key = Pipeline_hashLayout(key, pipeline->layout);
+
+		gotoIfError3(clean, DxGraphicsDevice_buildPipeline(
+			device, pipeline, &compute, key, compute.CS.BytecodeLength, pipelinei, e_rr
+		));
 	}
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name)) {

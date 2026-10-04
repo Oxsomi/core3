@@ -21,7 +21,7 @@
 //types/mesh/mesh_derive.c
 //
 //The passes that run OVER a finished flat mesh rather than inside a read: vertex normals, triangle words and
-//hit records. Each of them exists twice by design, here and on a GPU, because a big mesh wants the parallel
+//per-triangle data. Each of them exists twice by design, here and on a GPU, because a big mesh wants the parallel
 //one and a converter with no device wants this one. These are the reference: a GPU pass is checked against
 //what this writes, which is why every value here is derived the same way a reader derives it.
 

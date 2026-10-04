@@ -66,7 +66,8 @@ typedef struct DxUnifiedTexture {
 
 typedef enum EDxGraphicsInstanceFlags {
 	EDxGraphicsInstanceFlags_HasNVApi         = 1 << 0,
-	EDxGraphicsInstanceFlags_HasAMDAgs        = 1 << 1
+	EDxGraphicsInstanceFlags_HasAMDAgs        = 1 << 1,
+	EDxGraphicsInstanceFlags_HasDRED          = 1 << 2        //Page fault reporting is on for both device factories
 } EDxGraphicsInstanceFlags;
 
 typedef struct AGSContext AGSContext;
@@ -87,14 +88,12 @@ typedef struct DxGraphicsInstance {
 	// gated workarounds know which runtime line they are on.
 
 	U32 agilitySdkVersion;
-	U32 padding0;
+	U32 flags;                          //EDxGraphicsInstanceFlags
 
 	AGSContext *agsContext;
 
 	CharString nvDriverVersion;
 	CharString amdDriverVersion;
-
-	U32 flags, padding;
 
 } DxGraphicsInstance;
 
@@ -133,6 +132,7 @@ typedef struct DxPipeline {
 	// back; NULL on every pipeline that took the normal path.
 
 	void *amdAnalyzerHandle;                               //AmdExtD3DPipelineHandle
+	U8 padding[8];
 
 } DxPipeline;
 
@@ -173,6 +173,7 @@ typedef struct DxOpacityMicromap {
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
 	D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC array;
 	ListDxOMMHistogram histogram;
+	U8 padding[8];
 } DxOpacityMicromap;
 
 typedef struct DxTLAS {
@@ -190,6 +191,11 @@ TList(D3D12_BUFFER_BARRIER);
 TList(ID3D12PipelineState);
 
 Bool dxCheck(HRESULT result, Error *e_rr);
+
+//An object's identity as COM compares it: its IUnknown, which is also the pointer DRED reports an allocation by.
+//0 for NULL. The interface pointer itself can differ from it, so it is never compared directly.
+
+U64 DxObject_identity(IUnknown *object);
 
 D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op);
 

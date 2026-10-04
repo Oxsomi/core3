@@ -58,7 +58,11 @@ if(DynamicLinkingGraphics)
 endif()
 
 set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi/graphics)
-target_link_libraries(OxC3_graphics PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_formats_oiSP)
+target_link_libraries(OxC3_graphics PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_formats_oiSP OxC3_formats_json)
+
+# Internal headers (graphics/generic/*_internal.h) live under src and are never packaged
+
+target_include_directories(OxC3_graphics PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 
 include(../../cmake/oxc3.cmake)
 add_virtual_files(
@@ -121,6 +125,7 @@ if(EnableTests AND OxC3TestExecutables)
 	)
 
 	target_link_libraries(OxC3_graphics_interface_test PUBLIC OxC3_graphics_target OxC3_platforms OxC3_types_test)
+	target_include_directories(OxC3_graphics_interface_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 	set_target_properties(OxC3_graphics_interface_test PROPERTIES FOLDER Oxsomi/test/graphics)
 
 	add_virtual_dependencies(TARGET OxC3_graphics_interface_test DEPENDENCIES OxC3_graphics OxC3_gtest)

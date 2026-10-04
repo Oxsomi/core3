@@ -26,6 +26,7 @@
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/instance.h"
 #include "platforms/logx.h"
@@ -196,6 +197,15 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	// build/reports/d3d12_debug_layer_omm_input_alignment.md). Those runtimes get a 256 floor to stay
 	// validation clean, which only costs alignment.
 
+	//Any ASRead buffer may hold a TLAS's instance descs, which have to be 16 byte aligned
+	// (D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT); tight alignment can place one at 8.
+
+	if(
+		(buf->usage & EDeviceBufferUsage_ASReadExt) &&
+		allocInfo.Alignment < D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT
+	)
+		allocInfo.Alignment = D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT;
+
 	if(
 		(buf->usage & EDeviceBufferUsage_ASReadExt) &&
 		(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity)
@@ -305,6 +315,12 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 			(void**)&bufExt->buffer
 		), e_rr));
 
+		DxGraphicsDevice_setResidencyPriority(
+			deviceExt, (ID3D12Pageable*) bufExt->buffer,
+			!!(buf->resource.flags & (EGraphicsResourceFlag_CPUAllocatedBit | EGraphicsResourceFlag_CPUReadBit)),
+			!!(buf->usage & EDeviceBufferUsage_ASExt)
+		);
+
 		buf->resource.allocated = true;
 		buf->resource.blockId = blockId;
 		buf->resource.blockOffset = 0;
@@ -389,6 +405,13 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->allocator.lock);
 
+	//After the allocator lock, which device teardown takes the other way around with the device's lock.
+
+	if(s_uccess)
+		s_uccess = GraphicsDevice_registerResource(
+			device, (RefPtr*) buf - 1, DxObject_identity((IUnknown*) bufExt->buffer), name, e_rr
+		);
+
 	ListU16_free(&name16, alloc);
 	return s_uccess;
 }
@@ -468,6 +491,8 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 		D3D12_BARRIER_GROUP dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
 		if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
+
+			GraphicsDevice_noteStagingBypass(device, allocRange);
 
 			CharString dedicatedStaging = CharString_createRefCStrConst("Dedicated staging buffer");
 

@@ -23,6 +23,8 @@
 #pragma once
 #include "graphics/vulkan/vulkan.h"
 #include "types/base/platform_types.h"
+#include "types/base/lock.h"
+#include "types/container/list.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
@@ -52,7 +54,7 @@ typedef enum EOptExtensions {
 	EOptExtensions_MeshShader,
 	EOptExtensions_VariableRateShading,
 	EOptExtensions_DynamicRendering,
-	EOptExtensions_RayMicromapOpacity,
+	EOptExtensions_RayMicromapOpacity,          //VK_KHR_opacity_micromap; the EXT original is not used
 	EOptExtensions_AtomicF32,
 	EOptExtensions_DeferredHostOperations,
 	EOptExtensions_RaytracingValidation,
@@ -85,11 +87,8 @@ typedef enum EOptExtensions {
 	EOptExtensions_ShaderFloatControls,
 	EOptExtensions_Maintenance5,
 
-	//The KHR promotion of RayMicromapOpacity above and the extension it hard depends on.
-	//Appended rather than placed next to their sibling because this enum indexes the positional extension
-	// name table in vk_instance.c.
+	//The extension RayMicromapOpacity (VK_KHR_opacity_micromap) hard depends on.
 
-	EOptExtensions_RayMicromapOpacityKHR,
 	EOptExtensions_DeviceAddressCommands,
 
 	EOptExtensions_ConditionalRendering,
@@ -97,11 +96,39 @@ typedef enum EOptExtensions {
 	//A dependency of DeviceAddressCommands above. That extension requires Vulkan 1.3, or below it
 	// synchronization2 (required, so always on), buffer device address and this one; the instance asks for 1.1.
 
-	EOptExtensions_ExtendedDynamicState
+	EOptExtensions_ExtendedDynamicState,
+
+	//Device loss diagnostics (EGraphicsFeatures2_DeviceFault and EVkGraphicsFeatures_AddressBindingReport)
+
+	EOptExtensions_DeviceFault,
+	EOptExtensions_DeviceAddressBindingReport,
+
+	//EVkGraphicsFeatures_ExternalHostMemory and EGraphicsFeatures2_WriteBufferImmediate
+
+	EOptExtensions_ExternalMemoryHost,
+	EOptExtensions_BufferMarker,
+
+	//A dependency of RayMicromapOpacity: VK_INDEX_TYPE_UINT8 is only a valid index type with it (or Vulkan 1.4,
+	// above the 1.1 the instance asks for), and 8-bit OMM indices are legal wherever micromaps are.
+
+	EOptExtensions_IndexTypeUint8,
+
+	EOptExtensions_MemoryPriority          //EVkGraphicsFeatures_MemoryPriority
+
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];
 extern U64 optExtensionsNameCount;
+
+//Where VK_EXT_device_address_binding_report says a buffer or image's memory is bound, by its handle and object type.
+//A handle is only unique per device, so with two devices an entry can still be the other device's: the names a loss
+// report gives assume one device per instance.
+
+typedef struct VkAddressBinding {
+	U64 handle, address, size, type;
+} VkAddressBinding;
+
+TList(VkAddressBinding);
 
 typedef struct VkGraphicsInstance {
 
@@ -151,7 +178,6 @@ typedef struct VkGraphicsInstance {
 	PFN_vkDestroySurfaceKHR destroySurface;
 
 	PFN_vkGetPhysicalDeviceMemoryProperties2 getPhysicalDeviceMemoryProperties2;
-	U64 padding0;
 
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 		IDXGIFactory6 *dxgiFactory;
@@ -159,6 +185,23 @@ typedef struct VkGraphicsInstance {
 		U64 padding;
 	#endif
 
-	U64 padding1;
+	//The messenger VK_EXT_device_address_binding_report reports through, and what it reported, for a lost device to
+	// name an image by a fault address. Instance wide, since a report does not say which device it came from.
+	//Created whenever VK_EXT_debug_utils is there; it only listens for bindings, so nothing is named or validated.
+
+	VkDebugUtilsMessengerEXT bindingMessenger;
+	PFN_vkDestroyDebugUtilsMessengerEXT destroyMessenger;
+	ListVkAddressBinding bindings;
+	U8 padding0[16];
+
+	SpinLock bindingLock;
 
 } VkGraphicsInstance;
+
+//The handle whose reported binding holds address, and where in it; 0 when no binding report covers it.
+U64 VkGraphicsInstance_findBinding(VkGraphicsInstance *instanceExt, U64 address, U64 *offset);
+
+//The reported bindings nearest below and above address (0 handles where there is none), and how many there are.
+U64 VkGraphicsInstance_nearestBindings(
+	VkGraphicsInstance *instanceExt, U64 address, VkAddressBinding *below, VkAddressBinding *above
+);

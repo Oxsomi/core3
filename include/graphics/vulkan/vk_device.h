@@ -117,12 +117,28 @@ typedef struct VkGraphicsDevice {
 
 	VkFence commitFence[MAX_FRAMES_IN_FLIGHT];
 
-	//Whether a submit is actually pending on commitFence[i].
-	//A failed vkQueueSubmit leaves the fence reset-but-unsignaled, while submitId still advanced.
-	//Without this the next frame at that fifId would wait the full timeout on a fence nothing will ever signal.
-	//When false that wait, and its reset, is skipped and the still-unsignaled fence is reused directly.
-	//This self-heals once submits succeed again.
-	Bool commitFencePending[MAX_FRAMES_IN_FLIGHT];
+	//A submit, wait or present saw VK_ERROR_DEVICE_LOST. Remembered rather than asked again: AMD's driver answers a
+	// later vkDeviceWaitIdle on a lost device with VK_SUCCESS, so the loss is only known from the call that saw it.
+	//Atomic, since a compaction query recorded into a command list sets it without the device lock.
+
+	AtomicI64 lost;
+
+	//Breadcrumbs (GraphicsDevice::breadcrumbs): memory the process allocated, imported as device memory with
+	// VK_EXT_external_memory_host so it stays readable after the device is lost, and a buffer over it the scopes'
+	// VK_AMD_buffer_marker writes land in.
+
+	void *breadcrumbHost;
+	VkDeviceMemory breadcrumbMemory;
+	VkBuffer breadcrumbBuffer;
+
+	//Bit i: whether commitFence[i] has a signal queued, from a successful vkQueueSubmit until the fence is reset.
+	//While clear the fence is unsignaled with nothing pending, so the next submit at that slot skips the wait and the
+	// reset and uses it directly; a device wait skips it as well.
+	//A frame that fails still submits empty to keep it set (see VkGraphicsDevice_submitCommands); only a
+	// vkQueueSubmit that itself fails leaves it clear.
+
+	U8 commitFencePending;
+	U8 padding0[7];
 
 	//Timing (EGraphicsFeatures2_Timestamps): one query pool per frame in flight, host-read at the fence-gated
 	// recycle a frame later. timestampPeriod is nanoseconds per tick, timestampValidBits the meaningful low bits on
@@ -173,6 +189,10 @@ typedef struct VkGraphicsDevice {
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
 
+	//VK_EXT_descriptor_heap's limits and descriptor sizes, queried once; zero without EGraphicsFeatures2_DescriptorHeap
+
+	VkPhysicalDeviceDescriptorHeapPropertiesEXT descriptorHeapProperties;
+
 	//Temporary storage for submit time stuff
 
 	ListVkSemaphore waitSemaphoresList;
@@ -205,13 +225,10 @@ typedef struct VkGraphicsDevice {
 	PFN_vkGetAccelerationStructureDeviceAddressKHR getAccelerationStructureDeviceAddress;
 	PFN_vkGetDeviceAccelerationStructureCompatibilityKHR getAccelerationStructureCompatibility;
 
-	//Only loaded on the EXT opacity micromap path; the KHR promotion builds micromap arrays through the
-	// ordinary acceleration structure entry points above and has no micromap functions of its own.
+	//Only loaded with EGraphicsFeatures_RayMicromapOpacity: it creates micromap arrays, which build, size and
+	// destroy through the ordinary acceleration structure entry points above.
 
-	PFN_vkCreateMicromapEXT createMicromap;
-	PFN_vkDestroyMicromapEXT destroyMicromap;
-	PFN_vkCmdBuildMicromapsEXT cmdBuildMicromaps;
-	PFN_vkGetMicromapBuildSizesEXT getMicromapBuildSizes;
+	PFN_vkCreateAccelerationStructure2KHR createAccelerationStructure2;
 
 	PFN_vkCmdTraceRaysKHR traceRays;
 	PFN_vkCmdTraceRaysIndirectKHR traceRaysIndirect;
@@ -306,9 +323,21 @@ typedef struct VkGraphicsDevice {
 	PFN_vkDestroyImage destroyImage;
 	PFN_vkCreateFence createFence;
 	PFN_vkWaitForFences waitForFences;
+	PFN_vkGetDeviceFaultInfoEXT getDeviceFaultInfo;                             //EGraphicsFeatures2_DeviceFault
+	PFN_vkGetMemoryHostPointerPropertiesEXT getMemoryHostPointerProperties;     //Breadcrumbs only
+	PFN_vkCmdWriteBufferMarker2AMD cmdWriteBufferMarker2;                       //EGraphicsFeatures2_WriteBufferImmediate
 	PFN_vkResetFences resetFences;
 	PFN_vkDestroyFence destroyFence;
 	PFN_vkFreeDescriptorSets freeDescriptorSets;
+	PFN_vkCreatePipelineCache createPipelineCache;
+	PFN_vkDestroyPipelineCache destroyPipelineCache;
+	PFN_vkGetPipelineCacheData getPipelineCacheData;
+	PFN_vkMergePipelineCaches mergePipelineCaches;
+
+	VkPipelineCache pipelineCache;        //Every pipeline built merges into it (GraphicsDeviceRef_getPipelineCache)
+	U64 padding3;
+
+	VkPipelineCacheHeaderVersionOne pipelineCacheHeader;        //What this device's cache data starts with
 
 	U32 nonLinearAlignment;
 	U8 framesInFlight; Bool hasLocalMemory;
@@ -328,9 +357,19 @@ typedef struct VkGraphicsDevice {
 		U64 padding2;
 	#endif
 
-	U64 padding3;
-
 } VkGraphicsDevice;
+
+//A breadcrumb (GraphicsDevice::breadcrumbs): a slot set to value once every earlier command passed stage. Nothing for
+// U32_MAX.
+
+void VkGraphicsDevice_breadcrumb(
+	const GraphicsDevice *device,
+	const VkGraphicsDevice *deviceExt,
+	VkCommandBuffer buffer,
+	U32 slot,
+	U32 value,
+	VkPipelineStageFlags2 stage
+);
 
 typedef struct VkCommandBufferState {
 
@@ -384,6 +423,8 @@ typedef struct VkCommandBufferState {
 	U32 scopeCounter;
 	U8 curScopeFlags;                                  //ECommandScopeInternalFlags of the open scope, StartScope -> EndScope
 	U8 padding5[3];
+	U32 breadcrumbSlot;                                //Of the open scope, U32_MAX without one
+	U32 padding6;
 
 	VkCommandBuffer buffer;
 
@@ -443,3 +484,27 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 Bool VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt, Error *e_rr);
 
 Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *commandBuffer, Error *e_rr);
+
+//checkVkError that also remembers VK_ERROR_DEVICE_LOST in VkGraphicsDevice::lost for GraphicsDeviceRef_reportLoss.
+//Every result that can report a loss (queue, fence, command buffer, present and query paths) goes through it.
+
+Bool VkGraphicsDevice_check(VkGraphicsDevice *deviceExt, VkResult res, Error *e_rr);
+
+//Builds a pipeline through the device's pipeline cache and counts its code in the memory stats: the size recorded for
+// key when it was built before, else what the driver added to a cache of its own (merged into the device's after),
+// else irBytes as an estimate. key hashes everything that went into createInfo (Pipeline_hash).
+
+typedef struct Pipeline Pipeline;
+
+Bool VkGraphicsDevice_buildPipeline(
+	GraphicsDevice *device,
+	Pipeline *pipeline,
+	const void *createInfo,                    //Vk*PipelineCreateInfo of pipeline->type
+	U64 key,
+	U64 irBytes,
+	VkPipeline *result,
+	Error *e_rr
+);
+
+//Bytes in use in the device local or the host heap, and the OS budget for it (U64_MAX when either is unknown).
+U64 VkGraphicsDevice_getMemoryUsage(GraphicsDevice *device, Bool isDeviceLocal, U64 *budget);

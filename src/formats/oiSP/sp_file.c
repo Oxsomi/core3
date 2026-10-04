@@ -1492,6 +1492,7 @@ Bool SPFile_validate(
 				issues, alloc, e_rr, "blend.targetMask enables target %"PRIu32" but only %"PRIu32" are declared",
 				i, gfx->renderTargetCount
 			));
+
 			break;
 		}
 

@@ -38,7 +38,7 @@
 #include "types/base/string_base.h"
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
-#include "command_list_internal.h"
+#include "graphics/generic/command_list_internal.h"
 
 //Standard commands
 

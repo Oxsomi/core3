@@ -184,6 +184,7 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 	gotoIfError3(clean, Buffer_createUninitializedBytes(
 		sizeof(VkPipelineExecutablePropertiesKHR) * execCount, alloc, &propsBuf, e_rr
 	));
+
 	VkPipelineExecutablePropertiesKHR *props = (VkPipelineExecutablePropertiesKHR*) propsBuf.ptrNonConst;
 
 	for(U32 i = 0; i < execCount; ++i)
@@ -223,6 +224,7 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 			gotoIfError3(clean, Buffer_createUninitializedBytes(
 				sizeof(VkPipelineExecutableStatisticKHR) * statCount, alloc, &statsBuf, e_rr
 			));
+
 			VkPipelineExecutableStatisticKHR *stats = (VkPipelineExecutableStatisticKHR*) statsBuf.ptrNonConst;
 
 			for(U32 j = 0; j < statCount; ++j)
@@ -240,6 +242,7 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 				gotoIfError3(clean, CharString_createCopy(
 					CharString_createRefCStrConst(stats[j].name), alloc, &st->name, e_rr
 				));
+
 				gotoIfError3(clean, CharString_createCopy(
 					CharString_createRefCStrConst(stats[j].description), alloc, &st->description, e_rr
 				));
@@ -282,6 +285,7 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 			gotoIfError3(clean, Buffer_createUninitializedBytes(
 				sizeof(VkPipelineExecutableInternalRepresentationKHR) * irCount, alloc, &irsBuf, e_rr
 			));
+
 			VkPipelineExecutableInternalRepresentationKHR *irs =
 				(VkPipelineExecutableInternalRepresentationKHR*) irsBuf.ptrNonConst;
 

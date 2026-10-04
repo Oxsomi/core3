@@ -277,6 +277,7 @@ extern "C" void Test_platformsEnvHpp(oxc::c::Test *t) {
 		t, "get",
 		env::get(name, str, alloc) && str.handle().ptr && c::CharString_equalsCStringSensitive(&str.handle(), "hello")
 	);
+
 	Test_assert(t, "has", env::has(name, alloc));
 
 	//readOr: the value, the default when unset, the default when it doesn't fit the type.
