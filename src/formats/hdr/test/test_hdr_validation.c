@@ -102,7 +102,7 @@ static void expectReadRefused(Test *t, const C8 *name, const C8 *bytes, U64 len)
 
 	if(
 		!Buffer_createEmptyBytes(4096, t->alloc, &output, &t->err) ||
-		!JobQueue_create(2, t->alloc, &jobs, &t->err)
+		!JobQueue_create(HDR_TEST_THREADS, t->alloc, &jobs, &t->err)
 	) {
 		Test_assert(t, name, false);
 		goto clean;

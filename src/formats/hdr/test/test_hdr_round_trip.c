@@ -95,8 +95,8 @@ clean:
 	return ok;
 }
 
-//Every read is also decoded on 4 threads, which has to give the same bytes, the same info and the same end offset
-// (scanlines decoded in parallel, or the serial fallback for a file with old style ones).
+//Every read is also decoded on a job queue (HDR_TEST_THREADS), which has to give the same bytes, the same info and the
+// same end offset (scanlines decoded in parallel, or the serial fallback for a file with old style ones).
 
 static Bool readAll(
 	Test *t, StreamRef *src, U64 *off, EHDRReadFlags flags, HDRInfo *info, Buffer *result,
@@ -113,7 +113,7 @@ static Bool readAll(
 	U64 parallelOff = start;
 
 	const Bool decoded =
-		JobQueue_create(4, t->alloc, &jobs, &t->err) &&
+		JobQueue_create(HDR_TEST_THREADS, t->alloc, &jobs, &t->err) &&
 		readWith(t, src, &parallelOff, flags, &parallelInfo, &parallel, type, &jobs);
 
 	Test_assert(t, "parallel decode", decoded);
