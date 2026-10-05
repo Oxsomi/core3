@@ -204,6 +204,13 @@ void Test_graphicsCapabilityExecution(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsConfigVariants(Test *t, GraphicsInstanceRef *instRef, const GraphicsDeviceInfo *info);
 
+//An upload source that refuses every read and counts them (test_graphics_refusing_stream.c)
+
+typedef struct OxStream OxStream;
+extern U32 TestGraphics_refusedReads;
+
+Bool TestGraphics_refusingRead(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr);
+
 #ifdef __cplusplus
 	}
 #endif

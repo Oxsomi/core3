@@ -18,39 +18,30 @@
 *  This is called dual licensing.
 */
 
-//formats/hdr/test/test_hdr_main.c
+//graphics/test/interface/test_graphics_refusing_stream.c
 
-#include "types/test/test.h"
-#include "test_hdr_shared.h"
-#include "types/container/test/basic_alloc.h"
+#include "test_graphics_shared.h"
+#include "types/container/stream.h"
+#include "types/base/error.h"
 
-OXC3_TEST_MAIN(formats_hdr) {
+//In C rather than next to the test that uses it: the device calls a stream's read from C, and UBSan's function check
+// only accepts a callee whose type is the C one, which a C++ definition never is.
 
-	const Allocator alloc = BasicAllocator_instance;
-	Test t = (Test){ 0 };
-	t.alloc = &alloc;
+U32 TestGraphics_refusedReads = 0;
 
-	Test_HDRRoundTripBasic(&t);
-	Test_HDRRoundTripKeepRGBEMatchesDecoded(&t);
-	Test_HDRRoundTripSourceIsRGBE(&t);
-	Test_HDRRoundTripFlatScanline(&t);
-	Test_HDRRoundTripWideScanline(&t);
-	Test_HDRRoundTripRunLength(&t);
-	Test_HDRRoundTripExactZero(&t);
-	Test_HDRRoundTripDynamicRange(&t);
-	Test_HDRRoundTripExposure(&t);
+Bool TestGraphics_refusingRead(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr) {
 
-	Test_HDRWriteZeroDimensions(&t);
-	Test_HDRWriteOversizedDimensions(&t);
-	Test_HDRWriteShortInput(&t);
+	Bool s_uccess = true;
 
-	Test_HDRReadInvalidMagic(&t);
-	Test_HDRReadMissingFormat(&t);
-	Test_HDRReadUnsupportedFormat(&t);
-	Test_HDRReadZeroRepeat(&t);
-	Test_HDRReadBeginRefusesOutput(&t);
-	Test_HDRReadUnwritableSink(&t);
+	(void) stream;
+	(void) offset;
+	(void) length;
+	(void) buf;
+	(void) alloc;
 
-	BasicAllocator_checkLeakedMem(&t);
-	return Test_end(&t);
+	++TestGraphics_refusedReads;
+	retError(clean, Error_invalidState(0, "TestGraphics_refusingRead() refuses on purpose, to fail a recording"));
+
+clean:
+	return s_uccess;
 }

@@ -22,6 +22,16 @@
 
 #pragma once
 #include "types/test/test.h"
+#include "types/base/platform_types.h"
+
+//The queue the parallel decode is tested on. Web without pthreads can't spawn threads, so it runs JobQueue's inline
+// mode there (1 context), which still goes through every job.
+
+#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(__EMSCRIPTEN_PTHREADS__)
+	#define HDR_TEST_THREADS 1
+#else
+	#define HDR_TEST_THREADS 4
+#endif
 
 void Test_HDRRoundTripBasic(Test *t);
 void Test_HDRRoundTripKeepRGBEMatchesDecoded(Test *t);
@@ -41,4 +51,5 @@ void Test_HDRReadInvalidMagic(Test *t);
 void Test_HDRReadMissingFormat(Test *t);
 void Test_HDRReadUnsupportedFormat(Test *t);
 void Test_HDRReadZeroRepeat(Test *t);
+void Test_HDRReadBeginRefusesOutput(Test *t);
 void Test_HDRReadUnwritableSink(Test *t);

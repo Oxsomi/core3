@@ -2178,6 +2178,8 @@ startScope		//Transitions resources
 
 Because a scope hoists the transitions of operations such as clearImages, copyImages, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same (sub)resource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
 
+A scope's barriers all run at its start, and none between the work inside it: its dispatches, draws and ray dispatches may run concurrently and in any order, on both APIs. Putting work in one scope is how a caller says it belongs together, so it is also how a caller lets it overlap. Anything that has to see another command's writes, or has to finish before another command writes what it reads, goes in a later scope. OxC3 can't check this: shaders reach resources through bindless handles, so it never sees which bytes a dispatch reads or writes. Two dispatches in one scope may write the same resource only where their writes can't collide (disjoint elements, or atomics where order doesn't matter).
+
 All startRenderExts in a scope should be ended and all startRegionDebugExts as well. Since a scope should be self contained.
 
 A scope that never records one of the "keeps scope alive" operations is rewound at endScope as if it never happened: its commands, transitions and scope id are all discarded and it won't appear in activeScopes or execute at submit. State setters (pipelines, viewport, primitive buffers, debug markers) never keep a scope alive on their own. A render pass counts as alive when any of its attachments uses a Clear load, since the clear is a side effect all by itself; a pass that only loads/preserves and never draws is dead weight and gets rewound with the rest.

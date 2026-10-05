@@ -773,8 +773,10 @@ else()
 		# looks wired up and does nothing. gcc links it shared already, so this is clang's alone.
 		# clang adds no rpath for it, and -print-runtime-dir names a directory the runtimes are not in on every
 		# layout, so the path is taken from the runtime itself.
+		# Linux only, where the shim is built: macOS's ASan runtime is always the dynamic one, and Android and
+		# Emscripten name theirs differently, so on those this .so never exists and there is nothing to force.
 
-		if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+		if(CMAKE_C_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 			execute_process(
 				COMMAND ${CMAKE_C_COMPILER} -print-file-name=libclang_rt.asan-${CMAKE_SYSTEM_PROCESSOR}.so

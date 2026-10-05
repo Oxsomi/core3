@@ -219,6 +219,32 @@ void Stream_setBlock(StreamRef *stream, U32 blockSize, U16 readCost) {
 	str->readCost = readCost ? readCost : EStreamReadCost_Memcpy;
 }
 
+Bool Stream_read(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!stream || !stream->read)
+		retError(clean, Error_nullPointer(0, "Stream_read()::stream has to be readable"));
+
+	gotoIfError3(clean, stream->read(stream, offset, length, buf, alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+Bool Stream_write(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!stream || !stream->write)
+		retError(clean, Error_nullPointer(0, "Stream_write()::stream has to be writable"));
+
+	gotoIfError3(clean, stream->write(stream, offset, length, buf, alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
+
 Bool StreamCursor_create(
 	StreamRef *stream,
 	U64 cacheSize,

@@ -631,7 +631,7 @@ static void Test_streamPullRegion(c::Test *t, const StreamFixture &fx, gfx::Devi
 		TestStreamElem got[64];
 		c::OxStream *str = RefPtr_data((c::StreamRef*) dst, c::OxStream);
 
-		if(Test_assert(t, "pullStreamRead", str->read(
+		if(Test_assert(t, "pullStreamRead", c::Stream_read(
 			str, 0, sizeof(got), c::Buffer_createRef(got, sizeof(got)), fx.dev.alloc(), e_rr
 		))) {
 

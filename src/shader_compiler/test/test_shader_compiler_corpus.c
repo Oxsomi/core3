@@ -869,7 +869,15 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 						if (File_read(&ref, 1 * SECOND, 0, 0, &fileHandleType, &golden, &err)) {
 
-							const Bool matches = Buffer_eq(isa, golden);
+							//As text: a golden checked out on Windows may carry CRLF, which says nothing about the ISA
+
+							const CharString isaText =
+								CharString_createRefSizedConst((const C8*) isa.ptr, Buffer_length(isa), false);
+
+							const CharString goldenText =
+								CharString_createRefSizedConst((const C8*) golden.ptr, Buffer_length(golden), false);
+
+							const Bool matches = CharString_equalsStringIgnoreEolSensitive(&isaText, &goldenText);
 
 							if (!matches)
 								Log_errorLn(alloc, "ISA mismatch vs reference %.*s", (int) CharString_length(ref), ref.ptr);

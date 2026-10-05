@@ -536,6 +536,34 @@ Bool CharString_equalsString(const CharString *s, const CharString *other, EStri
 	return true;
 }
 
+Bool CharString_equalsStringIgnoreEol(const CharString *s, const CharString *other, EStringCase caseSensitive) {
+
+	if (!s || !other)
+		return false;
+
+	const U64 na = CharString_length(*s), nb = CharString_length(*other);
+	U64 i = 0, j = 0;
+
+	while (i < na && j < nb) {
+
+		if(s->ptr[i] == '\r' && i + 1 < na && s->ptr[i + 1] == '\n')
+			++i;
+
+		if(other->ptr[j] == '\r' && j + 1 < nb && other->ptr[j + 1] == '\n')
+			++j;
+
+		const C8 a = s->ptr[i], b = other->ptr[j];
+
+		if(caseSensitive == EStringCase_Sensitive ? a != b : C8_toLower(a) != C8_toLower(b))
+			return false;
+
+		++i;
+		++j;
+	}
+
+	return i == na && j == nb;
+}
+
 Bool CharString_equalsCString(const CharString *s, const C8 *literal, EStringCase caseSensitive) {
 
 	CharString lit = CharString_createNull();
