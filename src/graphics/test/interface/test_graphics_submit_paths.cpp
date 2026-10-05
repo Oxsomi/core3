@@ -137,29 +137,6 @@ namespace {
 			c::Thread_sleep(50 * c::MS);
 		}
 	}
-
-	//An upload source that refuses, which is what makes a recording fail after the frame slot was waited on and
-	// reset: the uploads are read while the frame records.
-
-	c::U32 refusedReads = 0;
-
-	c::Bool refusingRead(
-		c::OxStream *stream, c::U64 offset, c::U64 length, c::Buffer buf, const c::Allocator *alloc, c::Error *e_rr
-	) {
-
-		(void) stream;
-		(void) offset;
-		(void) length;
-		(void) buf;
-		(void) alloc;
-
-		++refusedReads;
-
-		if(e_rr)
-			*e_rr = c::Error_invalidState(0, "refusingRead() refuses on purpose, to fail a recording");
-
-		return false;
-	}
 }
 
 //A frame of only swapchains is accepted by GraphicsDeviceRef_submitCommands, so it has to work on every backend:
@@ -456,13 +433,13 @@ extern "C" void Test_graphicsSubmitFailure(oxc::c::Test *t, oxc::c::GraphicsDevi
 			c::OxStream *str = RefPtr_data((c::StreamRef*) stream, c::OxStream);
 			const c::StreamFunc read = str->read;
 
-			str->read = refusingRead;
-			refusedReads = 0;
+			str->read = c::TestGraphics_refusingRead;
+			c::TestGraphics_refusedReads = 0;
 
 			c::Error refused = c::Error_none();
 
 			c::Test_assert(t, "failedFrameFails", !dev.submit({ &emptyList }, {}, 0, 0, &refused));
-			c::Test_assert(t, "failedInRecording", refusedReads != 0);
+			c::Test_assert(t, "failedInRecording", c::TestGraphics_refusedReads != 0);
 			c::Test_assert(t, "failedNotLost", !dev.isLost());
 
 			str->read = read;
@@ -510,7 +487,7 @@ extern "C" void Test_graphicsSubmitFailure(oxc::c::Test *t, oxc::c::GraphicsDevi
 			c::U32 got[elems] = {};
 			c::OxStream *out = RefPtr_data((c::StreamRef*) sink, c::OxStream);
 
-			if(c::Test_assert(t, "sinkRead", out->read(
+			if(c::Test_assert(t, "sinkRead", c::Stream_read(
 				out, 0, sizeof(got), c::Buffer_createRef(got, sizeof(got)), alloc, &t->err
 			))) {
 

@@ -95,6 +95,12 @@ typedef RefPtr StreamRef;
 
 void Stream_setBlock(StreamRef *stream, U32 blockSize, U16 readCost);
 
+//stream->read and stream->write, called from C. What C++ calls instead: the C headers sit in a namespace there, so a
+// callback's type differs between the two sides and calling it from C++ fails UBSan's function check.
+
+Bool Stream_read(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr);
+Bool Stream_write(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr);
+
 typedef struct StreamCursor {
 
 	StreamRef *stream;

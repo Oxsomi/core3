@@ -254,7 +254,7 @@ extern "C" void Test_graphicsVirtualSwapchain(oxc::c::Test *t, oxc::c::GraphicsD
 				c::U32 firstTexel = 0;
 				c::OxStream *str = RefPtr_data((c::StreamRef*) sink, c::OxStream);
 
-				if(c::Test_assert(t, "streamPullRead", str->read(
+				if(c::Test_assert(t, "streamPullRead", c::Stream_read(
 					str, 0, sizeof(firstTexel), c::Buffer_createRef(&firstTexel, sizeof(firstTexel)),
 					dev.alloc(), e_rr
 				)))

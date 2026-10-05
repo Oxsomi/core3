@@ -1554,9 +1554,8 @@ namespace oxc {
 				return instance ? ((const c::GraphicsInstance*) (instance + 1))->api : c::EGraphicsApi_Count;
 			}
 
-		private:
-
-			//Single entry-resolution path for every pipeline kind.
+			//The entry a pipeline factory picks under this variant (defines, uniforms, prefer then fall back), packed
+			// as getFirstShaderEntry returns it; every pipeline kind resolves through it.
 			//U32_MAX means no binary of that entry can run here, which each factory turns into its own error.
 
 			[[nodiscard]] c::U32 resolveEntry(
@@ -1609,8 +1608,6 @@ namespace oxc {
 					handle(), &shFile, &en, dp, up, variant.disallow, c::ESHExtension_None
 				);
 			}
-
-		public:
 
 			//bindlessLayout:
 			// NULL = OxC3's default bindless layout (see GraphicsDeviceRef_create's bindlessLayout);
