@@ -41,4 +41,5 @@ void Test_HDRReadInvalidMagic(Test *t);
 void Test_HDRReadMissingFormat(Test *t);
 void Test_HDRReadUnsupportedFormat(Test *t);
 void Test_HDRReadZeroRepeat(Test *t);
+void Test_HDRReadBeginRefusesOutput(Test *t);
 void Test_HDRReadUnwritableSink(Test *t);

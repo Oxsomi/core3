@@ -72,6 +72,38 @@ namespace oxc {
 			return c::HDR_readHeader(in.handle(), &dataOffset, flags, &info, alloc, e_rr);
 		}
 
+		//A decode running on a job queue (HDR_readBegin), finished by end() or, discarding its errors, the destructor.
+		//Both have to run on the thread that owns the queue.
+
+		class PendingRead {
+
+			c::HDRReadPending *pending = nullptr;
+
+		public:
+
+			PendingRead() noexcept = default;
+			~PendingRead() noexcept { (void) end(); }
+
+			PendingRead(const PendingRead&) = delete;
+			PendingRead &operator=(const PendingRead&) = delete;
+
+			//fileBytes and output are borrowed until end; output may be any writable memory (see HDR_readBegin).
+
+			[[nodiscard]] c::Bool begin(
+				const c::Buffer &fileBytes, c::Buffer output, c::HDRInfo &info, const c::Allocator *alloc,
+				c::JobQueue *jobs, c::EHDRReadFlags flags = c::EHDRReadFlags_None, c::Error *e_rr = nullptr
+			) noexcept {
+				(void) end();
+				return c::HDR_readBegin(fileBytes, flags, &info, output, jobs, alloc, &pending, e_rr);
+			}
+
+			[[nodiscard]] c::Bool end(c::Error *e_rr = nullptr) noexcept {
+				return !pending || c::HDR_readEnd(&pending, nullptr, e_rr);
+			}
+
+			[[nodiscard]] c::Bool active() const noexcept { return pending != nullptr; }
+		};
+
 		//Decodes into a sink the caller owns, which is the shape the decoder is actually built for: rows arrive one at
 		// a time and nothing here holds the image. A consumer uploading bands to the GPU, or re-compressing them, wants
 		// this one rather than the allocating overload below.
@@ -105,13 +137,39 @@ namespace oxc {
 		//The source bytes are BORROWED: the stream takes a ref over them, so they must outlive the call and are
 		// never freed by it.
 
+		//jobs decodes the scanlines on that queue straight into result (HDR_readBegin), from the thread that owns it;
+		// NULL decodes serially.
+
 		[[nodiscard]] inline c::Bool read(
 			const c::Buffer &fileBytes, const file::Types &types, Buffer &result, c::HDRInfo &info,
-			const c::Allocator *alloc, c::EHDRReadFlags flags = c::EHDRReadFlags_None,
+			const c::Allocator *alloc, c::JobQueue *jobs, c::EHDRReadFlags flags = c::EHDRReadFlags_None,
 			c::Error *e_rr = nullptr
 		) noexcept {
 
 			result.release();
+
+			if(jobs) {
+
+				c::HDRInfo head{};
+				c::U64 dataOffset = 0;
+
+				if(!readHeader(fileBytes, types, head, dataOffset, alloc, flags, e_rr))
+					return false;
+
+				const c::U64 rowBytes = (c::U64) head.w * 4 * (flags & c::EHDRReadFlags_KeepRGBE ? 1 : sizeof(c::F32));
+
+				if(!result.createUninitializedBytes(rowBytes * head.h, e_rr))
+					return false;
+
+				PendingRead read;
+
+				if(!read.begin(fileBytes, result.handle(), info, alloc, jobs, flags, e_rr) || !read.end(e_rr)) {
+					result.release();
+					return false;
+				}
+
+				return true;
+			}
 
 			const RefPtr<c::OxStream> in = sourceStream(fileBytes, types, e_rr);
 
@@ -135,7 +193,14 @@ namespace oxc {
 
 			c::MemoryStreamRef *moved = (c::MemoryStreamRef*) sink.steal();
 			return c::MemoryStream_move(&moved, &result.handle(), e_rr);
+		}
 
+		[[nodiscard]] inline c::Bool read(
+			const c::Buffer &fileBytes, const file::Types &types, Buffer &result, c::HDRInfo &info,
+			const c::Allocator *alloc, c::EHDRReadFlags flags = c::EHDRReadFlags_None,
+			c::Error *e_rr = nullptr
+		) noexcept {
+			return read(fileBytes, types, result, info, alloc, nullptr, flags, e_rr);
 		}
 
 		//Writes linear radiance straight to a file.

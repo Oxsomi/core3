@@ -24,6 +24,7 @@
 #include "formats/hdr/hdr_file.h"
 #include "types/container/memory_stream.h"
 #include "types/container/buffer.h"
+#include "types/container/job_queue.h"
 
 //Every case here must FAIL, so the refusal is passed a NULL Error rather than the test's own:
 //a refusal is the expected outcome here, and routing it into t->err would report the right behaviour as a failure.
@@ -79,6 +80,8 @@ static void expectReadRefused(Test *t, const C8 *name, const C8 *bytes, U64 len)
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 	StreamRef *src = NULL;
 	MemoryStreamRef *sink = NULL;
+	Buffer output = Buffer_createNull();
+	JobQueue jobs = (JobQueue) { 0 };
 	HDRInfo info = { 0 };
 	U64 off = 0;
 
@@ -95,7 +98,32 @@ static void expectReadRefused(Test *t, const C8 *name, const C8 *bytes, U64 len)
 
 	Test_assert(t, name, !HDR_read(src, &off, EHDRReadFlags_None, &info, (StreamRef*) sink, 0, t->alloc, NULL));
 
+	//Refused by HDR_readBegin as well, or by HDR_readEnd once the jobs found it, with and without a queue
+
+	if(
+		!Buffer_createEmptyBytes(4096, t->alloc, &output, &t->err) ||
+		!JobQueue_create(2, t->alloc, &jobs, &t->err)
+	) {
+		Test_assert(t, name, false);
+		goto clean;
+	}
+
+	for (U32 withJobs = 0; withJobs < 2; ++withJobs) {
+
+		HDRReadPending *pending = NULL;
+
+		const Bool begun = HDR_readBegin(
+			Buffer_createRefConst(bytes, len), EHDRReadFlags_None, &info, output, withJobs ? &jobs : NULL,
+			t->alloc, &pending, NULL
+		);
+
+		Test_assert(t, name, !begun || !HDR_readEnd(&pending, NULL, NULL));
+		Test_assert(t, "pending freed", !pending);
+	}
+
 clean:
+	JobQueue_free(&jobs);
+	Buffer_free(&output, t->alloc);
 	RefPtr_dec((RefPtr**) &sink);
 	RefPtr_dec(&src);
 }
@@ -140,6 +168,29 @@ void Test_HDRReadZeroRepeat(Test *t) {
 		"\x01\x01\x01\x00";
 
 	expectReadRefused(t, "zero repeat", spin, sizeof(spin) - 1);
+}
+
+void Test_HDRReadBeginRefusesOutput(Test *t) {
+
+	Test_setModule(t, "HDR read begin refuses an output it can't decode into");
+
+	static const C8 hdr[] = "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 1 +X 1\n";
+	const Buffer encoded = Buffer_createRefConst(hdr, sizeof(hdr) - 1);
+
+	U8 small[2] = { 0 };
+	U32 texel = 0;
+	HDRInfo info = (HDRInfo) { 0 };
+	HDRReadPending *pending = NULL;
+
+	Test_assert(t, "const output refused", !HDR_readBegin(
+		encoded, EHDRReadFlags_KeepRGBE, &info, Buffer_createRefConst(&texel, 4), NULL, t->alloc, &pending, NULL
+	));
+
+	Test_assert(t, "small output refused", !HDR_readBegin(
+		encoded, EHDRReadFlags_KeepRGBE, &info, Buffer_createRef(small, sizeof(small)), NULL, t->alloc, &pending, NULL
+	));
+
+	Test_assert(t, "nothing pending", !pending);
 }
 
 void Test_HDRReadUnwritableSink(Test *t) {

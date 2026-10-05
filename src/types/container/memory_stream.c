@@ -272,6 +272,9 @@ Bool MemoryStream_createFromBufferRegion(
 
 	U64 bufl = Buffer_length(buffer);
 
+	if(!length)
+		length = bufl;
+
 	if (length > bufl)
 		retError(clean, Error_outOfBounds(
 			1, length, bufl,

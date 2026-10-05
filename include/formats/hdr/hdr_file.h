@@ -30,6 +30,7 @@
 typedef struct Allocator Allocator;
 typedef struct Error Error;
 typedef struct Buffer Buffer;
+typedef struct JobQueue JobQueue;
 typedef struct RefPtr RefPtr;
 typedef RefPtr StreamRef;
 
@@ -103,8 +104,7 @@ typedef enum EHDRReadFlags {
 // the unpacking happens there.
 //
 //Scanlines are variable length, so knowing where the DATA starts is not the same as knowing where any particular
-// scanline starts. Decoding them in parallel needs an offset table, built by one serial pass that reads the run counts
-// without writing pixels, which is far cheaper than a decode and is the piece such a path would add.
+// scanline starts. HDR_readBegin finds them with one serial pass over the run counts, far cheaper than a decode.
 
 Bool HDR_readHeader(
 	StreamRef *stream,
@@ -122,6 +122,52 @@ Bool HDR_read(
 	HDRInfo *info,
 	StreamRef *outputStream,   //Receives h rows of w * 4 F32s, or of U8s under KeepRGBE
 	U64 outputOffset,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+//A decode HDR_readBegin started on a job queue, finished by HDR_readEnd.
+
+typedef struct HDRReadPending HDRReadPending;
+
+//Starts decoding encoded, a whole Radiance file in memory, into output and returns once the header is parsed: info is
+// valid on return, output only after HDR_readEnd. Both buffers are borrowed until then.
+//output holds h rows of w * 4 F32s, or of U8s under KeepRGBE (HDR_readHeader gives w and h to size it by), and may
+// be any writable memory, such as a mapped upload range.
+//The scan for scanline starts and the decode are jobs on jobs, called from the thread that owns it or from one of its
+// jobs. New style (adaptive RLE) scanlines decode in parallel; a file with any old style scanline decodes serially, in
+// one job. NULL jobs decodes here, before returning.
+//Every successful begin needs an HDR_readEnd, which is what frees pending.
+
+Bool HDR_readBegin(
+	Buffer encoded,
+	EHDRReadFlags flags,
+	HDRInfo *info,
+	Buffer output,
+	JobQueue *jobs,            //NULL decodes in here
+	const Allocator *alloc,
+	HDRReadPending **pending,  //Has to be NULL, receives the read
+	Error *e_rr
+);
+
+//Waits for the decode and frees pending, on the thread that owns the queue (JobGroup_wait runs jobs as its execution
+// context 0). end, if not NULL, receives where the pixel data ended in encoded.
+//A wait that fails (a misuse, such as the wrong thread) leaves pending as it was, since its jobs may still run.
+
+Bool HDR_readEnd(HDRReadPending **pending, U64 *end, Error *e_rr);
+
+//HDR_read through HDR_readBegin and HDR_readEnd, into one allocation handed to outputStream in a single write.
+//It holds the encoded file and the decoded image at once, which HDR_read avoids, and has to be called by the thread
+// that owns jobs. NULL jobs is HDR_read.
+
+Bool HDR_readParallel(
+	StreamRef *stream,
+	U64 *off,
+	EHDRReadFlags flags,
+	HDRInfo *info,
+	StreamRef *outputStream,
+	U64 outputOffset,
+	JobQueue *jobs,            //NULL decodes serially
 	const Allocator *alloc,
 	Error *e_rr
 );

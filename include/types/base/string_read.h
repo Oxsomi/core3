@@ -89,6 +89,11 @@ static inline Bool CharString_containsString(const CharStringSensOffLen *strSens
 }
 
 Bool CharString_equalsString(const CharString *s, const CharString *other, EStringCase caseSensitive);
+
+//Equal as text: a CRLF line ending matches an LF one, so a file checked out with either line ending compares the same.
+//A lone CR is an ordinary character.
+
+Bool CharString_equalsStringIgnoreEol(const CharString *s, const CharString *other, EStringCase caseSensitive);
 Bool CharString_equalsCString(const CharString *s, const C8 *literal, EStringCase caseSensitive);
 Bool CharString_equals(const CharString s, C8 c, EStringCase caseSensitive);
 

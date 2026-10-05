@@ -25,6 +25,8 @@
 #include "types/container/memory_stream.h"
 #include "types/container/buffer.h"
 #include "types/container/texture_format.h"
+#include "types/container/job_queue.h"
+#include "types/container/stream.h"
 #include "types/base/mathf.h"
 
 //A writable, resizable sink for the encoder. HDR_write reserves against it once the size is known,
@@ -68,10 +70,11 @@ static Bool makeFloatStream(Test *t, U32 w, U32 h, StreamRef **out, const RefPtr
 
 //The decoder streams rows out, so every read here goes through a resizable sink and moves the buffer out of it afterwards.
 //That is the same shape oxc::hdr::read has, so the tests exercise the real path.
+//jobs decodes through HDR_readParallel instead.
 
-static Bool readAll(
+static Bool readWith(
 	Test *t, StreamRef *src, U64 *off, EHDRReadFlags flags, HDRInfo *info, Buffer *result,
-	const RefPtrType *type
+	const RefPtrType *type, JobQueue *jobs
 ) {
 	MemoryStreamRef *sink = NULL;
 	Bool ok = false;
@@ -79,7 +82,10 @@ static Bool readAll(
 	if(!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, type, &sink, &t->err))
 		goto clean;
 
-	if(!HDR_read(src, off, flags, info, (StreamRef*) sink, 0, t->alloc, &t->err))
+	if(!(jobs ?
+		HDR_readParallel(src, off, flags, info, (StreamRef*) sink, 0, jobs, t->alloc, &t->err) :
+		HDR_read(src, off, flags, info, (StreamRef*) sink, 0, t->alloc, &t->err)
+	))
 		goto clean;
 
 	ok = MemoryStream_move(&sink, result, &t->err);
@@ -87,6 +93,77 @@ static Bool readAll(
 clean:
 	RefPtr_dec((RefPtr**) &sink);
 	return ok;
+}
+
+//Every read is also decoded on 4 threads, which has to give the same bytes, the same info and the same end offset
+// (scanlines decoded in parallel, or the serial fallback for a file with old style ones).
+
+static Bool readAll(
+	Test *t, StreamRef *src, U64 *off, EHDRReadFlags flags, HDRInfo *info, Buffer *result,
+	const RefPtrType *type
+) {
+	const U64 start = *off;
+
+	if(!readWith(t, src, off, flags, info, result, type, NULL))
+		return false;
+
+	JobQueue jobs = (JobQueue) { 0 };
+	Buffer parallel = Buffer_createNull();
+	HDRInfo parallelInfo = (HDRInfo) { 0 };
+	U64 parallelOff = start;
+
+	const Bool decoded =
+		JobQueue_create(4, t->alloc, &jobs, &t->err) &&
+		readWith(t, src, &parallelOff, flags, &parallelInfo, &parallel, type, &jobs);
+
+	Test_assert(t, "parallel decode", decoded);
+
+	if (decoded) {
+		Test_assert(t, "parallel same pixels", Buffer_eq(parallel, *result));
+		Test_assert(t, "parallel same end", parallelOff == *off);
+		Test_assert(
+			t, "parallel same info",
+			parallelInfo.w == info->w && parallelInfo.h == info->h && parallelInfo.exposure == info->exposure &&
+			parallelInfo.textureFormatId == info->textureFormatId
+		);
+	}
+
+	//Begin and End from memory into memory, on the queue and without one
+
+	OxStream *stream = RefPtr_data(src, OxStream);
+	const U64 encodedLen = stream->size - start;
+	Buffer encoded = Buffer_createNull(), direct = Buffer_createNull();
+
+	Bool copied =
+		decoded &&
+		Buffer_createUninitializedBytes(encodedLen, t->alloc, &encoded, &t->err) &&
+		Stream_read(stream, start, encodedLen, encoded, t->alloc, &t->err) &&
+		Buffer_createUninitializedBytes(Buffer_length(*result), t->alloc, &direct, &t->err);
+
+	for (U32 withJobs = 0; copied && withJobs < 2; ++withJobs) {
+
+		HDRReadPending *pending = NULL;
+		HDRInfo directInfo = (HDRInfo) { 0 };
+		U64 end = 0;
+
+		const Bool ok =
+			HDR_readBegin(encoded, flags, &directInfo, direct, withJobs ? &jobs : NULL, t->alloc, &pending, &t->err) &&
+			HDR_readEnd(&pending, &end, &t->err);
+
+		Test_assert(t, "begin and end decode", ok);
+
+		if (ok) {
+			Test_assert(t, "begin and end same pixels", Buffer_eq(direct, *result));
+			Test_assert(t, "begin and end same end", start + end == *off);
+			Test_assert(t, "begin and end same size", directInfo.w == info->w && directInfo.h == info->h);
+		}
+	}
+
+	Buffer_free(&direct, t->alloc);
+	Buffer_free(&encoded, t->alloc);
+	Buffer_free(&parallel, t->alloc);
+	JobQueue_free(&jobs);
+	return true;
 }
 
 //Encode then decode, handing back whatever the reader produced.

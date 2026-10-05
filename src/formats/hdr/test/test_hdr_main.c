@@ -48,6 +48,7 @@ OXC3_TEST_MAIN(formats_hdr) {
 	Test_HDRReadMissingFormat(&t);
 	Test_HDRReadUnsupportedFormat(&t);
 	Test_HDRReadZeroRepeat(&t);
+	Test_HDRReadBeginRefusesOutput(&t);
 	Test_HDRReadUnwritableSink(&t);
 
 	BasicAllocator_checkLeakedMem(&t);

@@ -320,6 +320,25 @@ static void Test_stringSearch(Test *t) {
 
 //========================= cut =========================
 
+//Equal as text: CRLF matches LF, a lone CR doesn't, and nothing else is forgiven
+
+static void Test_stringEqualsIgnoreEol(Test *t) {
+
+	Test_setModule(t, "CharString equals ignoring line endings");
+
+	const CharString lf = S("a\nb\n"), crlf = S("a\r\nb\r\n"), mixed = S("a\r\nb\n"), upper = S("A\r\nB\n");
+	const CharString loneCr = S("a\rb\n"), shorter = S("a\nb"), other = S("a\nc\n");
+
+	Test_assert(t, "crlf matches lf", CharString_equalsStringIgnoreEolSensitive(&lf, &crlf));
+	Test_assert(t, "lf matches crlf", CharString_equalsStringIgnoreEolSensitive(&crlf, &lf));
+	Test_assert(t, "mixed matches lf", CharString_equalsStringIgnoreEolSensitive(&mixed, &lf));
+	Test_assert(t, "lone cr is a character", !CharString_equalsStringIgnoreEolSensitive(&loneCr, &lf));
+	Test_assert(t, "length still counts", !CharString_equalsStringIgnoreEolSensitive(&shorter, &lf));
+	Test_assert(t, "content still counts", !CharString_equalsStringIgnoreEolSensitive(&other, &lf));
+	Test_assert(t, "case sensitive", !CharString_equalsStringIgnoreEolSensitive(&upper, &crlf));
+	Test_assert(t, "case insensitive", CharString_equalsStringIgnoreEolInsensitive(&upper, &crlf));
+}
+
 static void Test_stringCut(Test *t) {
 
 	Test_setModule(t, "CharString cut");
@@ -509,6 +528,7 @@ void Test_stringOps(Test *t) {
 	Test_stringMutate(t);
 	Test_stringReplace(t);
 	Test_stringSearch(t);
+	Test_stringEqualsIgnoreEol(t);
 	Test_stringCut(t);
 	Test_stringSplit(t);
 	Test_stringList(t);
