@@ -179,6 +179,33 @@ clean:
 	return ok;
 }
 
+//True when two texts are the same, with a CRLF line ending counting as LF: a golden checked out on Windows can carry
+// either, which says nothing about the text.
+
+static Bool textMatches(Buffer a, Buffer b) {
+
+	const U8 *pa = a.ptr, *pb = b.ptr;
+	const U64 na = Buffer_length(a), nb = Buffer_length(b);
+	U64 i = 0, j = 0;
+
+	while(i < na && j < nb) {
+
+		if(pa[i] == '\r' && i + 1 < na && pa[i + 1] == '\n')
+			++i;
+
+		if(pb[j] == '\r' && j + 1 < nb && pb[j + 1] == '\n')
+			++j;
+
+		if(pa[i] != pb[j])
+			return false;
+
+		++i;
+		++j;
+	}
+
+	return i == na && j == nb;
+}
+
 //True when two oiSH carry the same compiled output, ignoring only the churn shNormalize blanks.
 
 static Bool shContentMatches(const Allocator *alloc, Buffer a, Buffer b) {
@@ -869,7 +896,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 						if (File_read(&ref, 1 * SECOND, 0, 0, &fileHandleType, &golden, &err)) {
 
-							const Bool matches = Buffer_eq(isa, golden);
+							const Bool matches = textMatches(isa, golden);
 
 							if (!matches)
 								Log_errorLn(alloc, "ISA mismatch vs reference %.*s", (int) CharString_length(ref), ref.ptr);
