@@ -819,6 +819,33 @@ void VK_WRAP_FUNC(CommandList_process)(
 			break;
 		}
 
+		case ECommandOp_CopyBuffer: {
+
+			const CopyBufferCmd copyBuffer = *(const CopyBufferCmd*) data;
+			const CopyBufferRegion *regions = (const CopyBufferRegion*) (data + sizeof(copyBuffer));
+
+			//VkBufferCopy is the same three U64s in the same order, but spelled out rather than cast
+
+			VkBufferCopy copies[128];
+
+			for(U32 i = 0; i < copyBuffer.regionCount; ++i)
+				copies[i] = (VkBufferCopy) {
+					.srcOffset = regions[i].srcOffset,
+					.dstOffset = regions[i].dstOffset,
+					.size = regions[i].length
+				};
+
+			deviceExt->cmdCopyBuffer(
+				buffer,
+				DeviceBuffer_ext(DeviceBufferRef_ptr(copyBuffer.src), Vk)->buffer,
+				DeviceBuffer_ext(DeviceBufferRef_ptr(copyBuffer.dst), Vk)->buffer,
+				copyBuffer.regionCount,
+				copies
+			);
+
+			break;
+		}
+
 		//Dynamic rendering / direct rendering
 
 		case ECommandOp_StartRenderingExt: {

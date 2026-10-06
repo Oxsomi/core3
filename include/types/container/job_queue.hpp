@@ -142,6 +142,16 @@ namespace oxc {
 			return initialized;
 		}
 
+		//Workers placed by core class, with lanes (see JobQueueInfo in job_queue.h)
+
+		[[nodiscard]] c::Bool init(
+			const c::JobQueueInfo &info, const c::Allocator &alloc, c::Error *e_rr = nullptr
+		) noexcept {
+			release();
+			initialized = c::JobQueue_createInfo(&info, &alloc, &queue, e_rr);
+			return initialized;
+		}
+
 		//Raw C style push; data is owned by the caller
 
 		[[nodiscard]] c::Bool push(c::JobCallback callback, void *data, c::Error *e_rr = nullptr) noexcept {
@@ -153,6 +163,11 @@ namespace oxc {
 
 		template<typename F>
 		[[nodiscard]] c::Bool push(F &&f, c::Error *e_rr = nullptr) noexcept {
+			return push(c::EJobLane_Normal, std::forward<F>(f), e_rr);
+		}
+
+		template<typename F>
+		[[nodiscard]] c::Bool push(c::EJobLane lane, F &&f, c::Error *e_rr = nullptr) noexcept {
 
 			using Storage = JobStorage<typename std::decay<F>::type>;
 
@@ -176,8 +191,8 @@ namespace oxc {
 			//The callback is the C forwarder rather than Storage::invoke, so the pointer the queue calls was
 			// defined with the same types the queue calls it through.
 
-			if (!c::JobQueue_pushDestructor(
-				&queue, &c::JobQueue_wrapperCallback, storage, &Storage::destroy, e_rr
+			if (!c::JobQueue_pushLane(
+				&queue, lane, &c::JobQueue_wrapperCallback, storage, &Storage::destroy, nullptr, e_rr
 			)) {
 				Storage::destroy(storage);
 				return false;

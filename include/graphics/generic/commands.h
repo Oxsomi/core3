@@ -70,6 +70,22 @@ Bool CommandListRef_copyImage(
 	CommandListRef *commandList, RefPtr *src, RefPtr *dst, CopyImageRegion region, Error *e_rr
 );
 
+//Copy buffer
+//Two different DeviceBuffers of the command list's device; acceleration structure buffers are refused (they are
+// compacted or rebuilt, never copied). Every region is in bounds of both, a multiple of 4 in offset and length, and
+// no two regions overlap in dst. src is transitioned for a copy read and dst for a copy write, whole buffer, so
+// neither can be used for anything else in the same scope.
+
+TList(CopyBufferRegion);
+
+Bool CommandListRef_copyBufferRegions(
+	CommandListRef *commandList, DeviceBufferRef *src, DeviceBufferRef *dst, ListCopyBufferRegion regions, Error *e_rr
+);
+
+Bool CommandListRef_copyBuffer(
+	CommandListRef *commandList, DeviceBufferRef *src, DeviceBufferRef *dst, CopyBufferRegion region, Error *e_rr
+);
+
 //Draw calls and dispatches
 
 TList(Transition);

@@ -390,3 +390,109 @@ void Test_jobQueue(Test *t) {
 		JobQueue_free(&q);
 	}
 }
+
+//--- Lanes -------------------------------------------------------------------
+
+//Counts the jobs that ran on the one thread their lane may not run on.
+
+typedef struct LanePayload {
+	AtomicI64 *violations;
+	U64 forbiddenThread;
+} LanePayload;
+
+static Bool jobLaneCheck(void *data, U64 threadId, JobQueue *queue) {
+
+	(void) queue;
+	LanePayload *p = (LanePayload*) data;
+
+	if(threadId == p->forbiddenThread)
+		AtomicI64_inc(p->violations);
+
+	return true;
+}
+
+void Test_jobQueueLanes(Test *t) {
+
+	const Allocator *alloc = t->alloc;
+	Error *e_rr = &t->err;
+
+	Test_setModule(t, "JobQueue lanes");
+
+	//1. The owner takes Critical, then Normal, then Background, each in push order
+
+	{
+		JobQueue q = (JobQueue) { 0 };
+		ListU8 order = (ListU8) { 0 };
+		OrderPayload payloads[5];
+		const EJobLane lanes[5] = {
+			EJobLane_Normal, EJobLane_Background, EJobLane_Critical, EJobLane_Normal, EJobLane_Critical
+		};
+
+		if (Test_assert(t, "create single threaded", JobQueue_create(1, alloc, &q, e_rr))) {
+
+			Bool ok = true;
+
+			for (U8 i = 0; i < 5; ++i) {
+				payloads[i] = (OrderPayload) { .out = &order, .alloc = alloc, .id = i };
+				ok &= JobQueue_pushLane(&q, lanes[i], jobRecordOrder, &payloads[i], NULL, NULL, e_rr);
+			}
+
+			Test_assert(t, "pushed into lanes", ok);
+			Test_assert(t, "wait", JobQueue_wait(&q, e_rr));
+
+			const U8 expected[5] = { 2, 4, 0, 3, 1 };
+			Bool inOrder = order.length == 5;
+
+			for (U8 i = 0; inOrder && i < 5; ++i)
+				inOrder = order.ptr[i] == expected[i];
+
+			Test_assert(t, "critical, normal, then background", inOrder);
+		}
+
+		ListU8_free(&order, alloc);
+		JobQueue_free(&q);
+	}
+
+	//2. More reserved and efficiency workers than workers is refused (the error is expected, so it isn't reported)
+
+	{
+		JobQueue q = (JobQueue) { 0 };
+		const JobQueueInfo info = (JobQueueInfo) { .threadCount = 2, .reservedWorkers = 1, .efficiencyWorkers = 1 };
+
+		Test_assert(t, "too many classed workers refused", !JobQueue_createInfo(&info, alloc, &q, NULL));
+		JobQueue_free(&q);
+	}
+
+	//3. The reserved worker (1) never runs Background, the efficiency worker (the last) never runs Critical
+
+	if (JOBQUEUE_TEST_THREADS > 2) {
+
+		JobQueue q = (JobQueue) { 0 };
+		AtomicI64 violations = (AtomicI64) { 0 };
+
+		const JobQueueInfo info = (JobQueueInfo) {
+			.threadCount = JOBQUEUE_TEST_THREADS, .reservedWorkers = 1, .efficiencyWorkers = 1
+		};
+
+		const LanePayload background = (LanePayload) { .violations = &violations, .forbiddenThread = 1 };
+		const LanePayload critical = (LanePayload) {
+			.violations = &violations, .forbiddenThread = JOBQUEUE_TEST_THREADS - 1
+		};
+
+		if (Test_assert(t, "create classed", JobQueue_createInfo(&info, alloc, &q, e_rr))) {
+
+			Bool ok = true;
+
+			for (U64 i = 0; i < 500; ++i) {
+				ok &= JobQueue_pushLane(&q, EJobLane_Background, jobLaneCheck, (void*) &background, NULL, NULL, e_rr);
+				ok &= JobQueue_pushLane(&q, EJobLane_Critical, jobLaneCheck, (void*) &critical, NULL, NULL, e_rr);
+			}
+
+			Test_assert(t, "pushed classed jobs", ok);
+			Test_assert(t, "wait classed", JobQueue_wait(&q, e_rr));
+			Test_assert(t, "no lane ran where it may not", AtomicI64_load(&violations) == 0);
+		}
+
+		JobQueue_free(&q);
+	}
+}

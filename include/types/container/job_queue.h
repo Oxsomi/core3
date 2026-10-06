@@ -25,6 +25,7 @@
 #include "types/base/lock.h"
 #include "types/base/atomic.h"
 #include "types/base/allocator.h"
+#include "types/container/list_basic_types.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -73,17 +74,28 @@ typedef struct JobWrapperJob {
 
 Bool JobQueue_wrapperCallback(void *data, U64 threadId, JobQueue *queue);
 
+//Which work a job is, which decides who runs it and in what order (see JobQueue).
+
+typedef enum EJobLane {
+	EJobLane_Normal,
+	EJobLane_Critical,              //Work a frame waits on: taken first, and never by an efficiency worker
+	EJobLane_Background,            //Work that can wait: taken last, and never by a reserved worker
+	EJobLane_Count
+} EJobLane;
+
 typedef struct Job {
 	JobCallback callback;
 	void *data;
 	JobDestructor destructor;       //May be NULL; only used for jobs discarded on shutdown
 	JobGroup *group;                //May be NULL; the group JobGroup_wait runs this job for
+	EJobLane lane;
+	U32 padding;
 } Job;
 
 TList(Job);
 TListNamed(Thread*, ListThreadHandle);
 
-//JobQueue is a simple FIFO work queue built on SpinLock + Thread + AtomicI64.
+//JobQueue is a FIFO work queue per lane, built on SpinLock + Thread + AtomicI64.
 //It has two modes, selected at create time:
 //- threadCount <= 1: single threaded mode.
 //  No worker threads are created.
@@ -93,12 +105,20 @@ TListNamed(Thread*, ListThreadHandle);
 //  and the thread calling JobQueue_wait participates as the final execution context,
 //  so there are exactly threadCount contexts.
 //The struct is address stable after create (workers hold a pointer to it); don't move or copy it.
+//
+//One pool, so lanes share the cores instead of separate queues competing for them. A running job is never
+// interrupted; what keeps Critical work from waiting is who takes what (JobQueueInfo):
+//- Reserved workers take Critical, then Normal, never Background, so one is free or nearly so when Critical
+//  work arrives. That only holds while Background jobs are short, so split them (about a millisecond each).
+//- Other performance workers take Critical, Normal, then Background, at Normal priority throughout.
+//- Efficiency workers take Normal, then Background, never Critical, at Background priority throughout.
+//- The owner thread, in JobQueue_wait, takes Critical, Normal, then Background.
 
 typedef struct JobQueue {
 
-	ListJob jobs;                   //FIFO, guarded by lock
+	ListJob jobs[EJobLane_Count];   //FIFO per lane, guarded by lock
 	ListThreadHandle threads;       //threadCount - 1 workers, empty in single threaded mode
-	U8 padding0[16];
+	U8 padding0[32];
 
 	SpinLock lock;
 
@@ -110,7 +130,12 @@ typedef struct JobQueue {
 	const Allocator *alloc;         //Must outlive the queue (same contract as RefPtr etc.)
 
 	U64 threadCount;                //Execution contexts (>= 1)
-	U8 padding1[16];
+
+	U32 reservedWorkers;            //Workers 1 .. reservedWorkers
+	U32 efficiencyWorkers;          //The last efficiencyWorkers workers
+	ListU32 performanceCpus;        //Where the performance workers run (Thread_setAffinity), empty for anywhere
+	ListU32 efficiencyCpus;
+	U8 padding1[24];
 
 } JobQueue;
 
@@ -118,6 +143,22 @@ typedef struct JobQueue {
 //The caller decides the count; e.g. pass Platform_getThreads() from a higher level lib.
 //queue must be zero initialized or a previously freed queue.
 Bool JobQueue_create(U64 threadCount, const Allocator *alloc, JobQueue *queue, Error *e_rr);
+
+//A queue whose workers are placed by core class (see the JobQueue struct docs). The cpu lists are what Platform
+// detected (Platform_instance->cpuInfo.performance.cpus, efficiency.cpus) and are copied; empty ones leave the workers
+// unplaced, which still keeps the lanes and the priorities.
+
+typedef struct JobQueueInfo {
+	U64 threadCount;                //Execution contexts, the owner included, as JobQueue_create takes it
+	U32 reservedWorkers;            //Performance workers that never take Background
+	U32 efficiencyWorkers;          //Workers on efficiencyCpus at Background priority, never taking Critical
+	const U32 *performanceCpus;
+	const U32 *efficiencyCpus;
+	U64 performanceCpuCount;
+	U64 efficiencyCpuCount;
+} JobQueueInfo;
+
+Bool JobQueue_createInfo(const JobQueueInfo *info, const Allocator *alloc, JobQueue *queue, Error *e_rr);
 
 //Enqueue a job.
 //Safe to call from the owner thread and from within running jobs.
@@ -137,6 +178,18 @@ Bool JobQueue_pushDestructor(
 // released with JobGroup_leave by the callback, exactly as for an untagged group.
 Bool JobQueue_pushGroup(
 	JobQueue *queue, JobCallback callback, void *data, JobDestructor destructor, JobGroup *group, Error *e_rr
+);
+
+//Like JobQueue_pushGroup, into a lane; every other push is EJobLane_Normal.
+
+Bool JobQueue_pushLane(
+	JobQueue *queue,
+	EJobLane lane,
+	JobCallback callback,
+	void *data,
+	JobDestructor destructor,
+	JobGroup *group,
+	Error *e_rr
 );
 
 //Run/help run jobs until the queue is fully drained (including jobs pushed by other jobs).

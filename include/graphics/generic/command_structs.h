@@ -72,10 +72,11 @@ typedef enum ECommandOp {
 	ECommandOp_Dispatch,
 	ECommandOp_DispatchIndirect,
 
-	//Clearing and copying images
+	//Clearing and copying images, copying buffers
 
 	ECommandOp_ClearImages,
 	ECommandOp_CopyImage,
+	ECommandOp_CopyBuffer,
 
 	//Debugging
 
@@ -479,6 +480,23 @@ typedef struct CopyImageCmd {
 	//CopyImageRegion regions[regionCount];
 
 } CopyImageCmd;
+
+//Bytes, each a multiple of 4 (WebGPU's copyBufferToBuffer requires it, so it is required everywhere).
+
+typedef struct CopyBufferRegion {
+	U64 srcOffset, dstOffset, length;
+} CopyBufferRegion;
+
+typedef struct CopyBufferCmd {
+
+	DeviceBufferRef *src, *dst;
+
+	U32 regionCount;
+	U32 padding;
+
+	//CopyBufferRegion regions[regionCount];
+
+} CopyBufferCmd;
 
 //Commands
 

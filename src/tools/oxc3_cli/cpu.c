@@ -31,6 +31,45 @@
 //This lets you see, at a glance, which operations have a hardware / wide-SIMD "full speed" path on this machine
 // (mirrors "OxC3 graphics devices" for the CPU side).
 
+//The cpus a class's workers are placed on, as ranges ("256-263, 272"); nothing where they can't be placed
+
+static Bool CLI_logCpus(const C8 *name, ListU32 cpus, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = Platform_instance->alloc;
+	CharString line = CharString_createNull(), part = CharString_createNull();
+
+	if(!cpus.length)
+		goto clean;
+
+	for(U64 i = 0; i < cpus.length; ) {
+
+		U64 last = i;
+
+		while(last + 1 < cpus.length && cpus.ptr[last + 1] == cpus.ptr[last] + 1)
+			++last;
+
+		CharString_free(&part, alloc);
+		gotoIfError3(clean, CharString_format(
+			alloc, &part, e_rr, i == last ? "%s%"PRIu32 : "%s%"PRIu32"-%"PRIu32,
+			i ? ", " : "", cpus.ptr[i], cpus.ptr[last]
+		));
+
+		gotoIfError3(clean, CharString_appendString(&line, &part, alloc, e_rr));
+		i = last + 1;
+	}
+
+	Log_debugLnx(
+		"\t%s CPUs%s: %.*s", name, _PLATFORM_TYPE == PLATFORM_WINDOWS ? " (CPU set ids)" : "",
+		(int) CharString_length(line), line.ptr
+	);
+
+clean:
+	CharString_free(&part, alloc);
+	CharString_free(&line, alloc);
+	return s_uccess;
+}
+
 Bool CLI_cpuDevices(const ParsedArgs *args) {
 
 	if(!args)
@@ -55,11 +94,21 @@ Bool CLI_cpuDevices(const ParsedArgs *args) {
 	else
 		Log_debugLnx("\tLogical cores: %"PRIu32, info->logicalCores);
 
-	if(info->performanceCores || info->efficiencyCores)
+	if(info->performance.logicalCores || info->efficiency.logicalCores) {
+
 		Log_debugLnx(
-			"\tHybrid: %"PRIu32" performance + %"PRIu32" efficiency cores",
-			info->performanceCores, info->efficiencyCores
+			"\tHybrid: %"PRIu32" performance cores (%"PRIu32" threads) + "
+			"%"PRIu32" efficiency cores (%"PRIu32" threads)",
+			info->performance.physicalCores, info->performance.logicalCores,
+			info->efficiency.physicalCores, info->efficiency.logicalCores
 		);
+
+		if(
+			!CLI_logCpus("Performance", info->performance.cpus, NULL) ||
+			!CLI_logCpus("Efficiency", info->efficiency.cpus, NULL)
+		)
+			return false;
+	}
 
 	if(info->numaNodes > 1)
 		Log_debugLnx("\tNUMA nodes: %"PRIu32, info->numaNodes);

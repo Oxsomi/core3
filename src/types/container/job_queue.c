@@ -26,18 +26,48 @@
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 #include "types/base/constants.h"
+#include "types/container/list_basic_types.h"
 
 TListImpl(Job);
 TListNamedImpl(ListThreadHandle);
 
 static const Ns JobQueue_idleSleep = 100000;        //100 * MU
 
-//Pop the next job, or when filtered, the next one tagged with 'group'.
+//Which workers a thread id is (see the JobQueue struct docs); 0 is the owner
+
+typedef enum EJobWorker {
+	EJobWorker_Owner,
+	EJobWorker_Reserved,
+	EJobWorker_Performance,
+	EJobWorker_Efficiency
+} EJobWorker;
+
+static EJobWorker JobQueue_worker(const JobQueue *queue, U64 threadId) {
+
+	if(!threadId)
+		return EJobWorker_Owner;
+
+	if(threadId <= queue->reservedWorkers)
+		return EJobWorker_Reserved;
+
+	return threadId + queue->efficiencyWorkers >= queue->threadCount ? EJobWorker_Efficiency : EJobWorker_Performance;
+}
+
+//The lanes a worker takes, in the order it takes them
+
+static const EJobLane JobQueue_order[4][EJobLane_Count] = {
+	{ EJobLane_Critical, EJobLane_Normal, EJobLane_Background },     //Owner
+	{ EJobLane_Critical, EJobLane_Normal, EJobLane_Count },          //Reserved
+	{ EJobLane_Critical, EJobLane_Normal, EJobLane_Background },     //Performance
+	{ EJobLane_Normal, EJobLane_Background, EJobLane_Count }         //Efficiency
+};
+
+//Pop the next job this thread takes, or when filtered, the next one tagged with 'group' in any lane.
 //A filtered pop skips jobs it doesn't match rather than waiting for them, so a caller draining its own
 // group never takes on work that could want a lock it is already holding.
 //Returns false if the queue currently holds no such job.
 
-static Bool JobQueue_pop(JobQueue *queue, Bool filtered, const JobGroup *group, Job *job) {
+static Bool JobQueue_pop(JobQueue *queue, U64 threadId, Bool filtered, const JobGroup *group, Job *job) {
 
 	Bool popped = false;
 
@@ -46,16 +76,23 @@ static Bool JobQueue_pop(JobQueue *queue, Bool filtered, const JobGroup *group, 
 	if(acq < ELockAcquire_Success)
 		return false;
 
-	if(!filtered) {
-		if(queue->jobs.length)
-			popped = ListJob_popFront(&queue->jobs, job, NULL);
-	}
+	const EJobLane *order = JobQueue_order[filtered ? EJobWorker_Owner : JobQueue_worker(queue, threadId)];
 
-	else for(U64 i = 0; i < queue->jobs.length; ++i)
-		if (queue->jobs.ptr[i].group == group) {
-			popped = ListJob_popLocation(&queue->jobs, i, job, NULL);
-			break;
+	for(U64 k = 0; !popped && k < EJobLane_Count && order[k] != EJobLane_Count; ++k) {
+
+		ListJob *jobs = &queue->jobs[order[k]];
+
+		if(!filtered) {
+			if(jobs->length)
+				popped = ListJob_popFront(jobs, job, NULL);
 		}
+
+		else for(U64 i = 0; i < jobs->length; ++i)
+			if (jobs->ptr[i].group == group) {
+				popped = ListJob_popLocation(jobs, i, job, NULL);
+				break;
+			}
+	}
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&queue->lock);
@@ -70,7 +107,7 @@ static Bool JobQueue_runOne(JobQueue *queue, U64 threadId, Bool filtered, const 
 
 	Job job = (Job) { 0 };
 
-	if(!JobQueue_pop(queue, filtered, group, &job))
+	if(!JobQueue_pop(queue, threadId, filtered, group, &job))
 		return false;
 
 	if(!job.callback || !job.callback(job.data, threadId, queue))
@@ -91,6 +128,20 @@ static void JobQueue_workerLoop(void *queuePtr) {
 
 	const U64 threadId = (U64) AtomicI64_inc(&queue->nextThreadId);     //Claim stable id (1 .. threadCount - 1)
 
+	//Placed by class; best effort, since a worker that couldn't be placed still runs its lanes
+
+	const EJobWorker worker = JobQueue_worker(queue, threadId);
+	const ListU32 cpus = worker == EJobWorker_Efficiency ? queue->efficiencyCpus : queue->performanceCpus;
+
+	if(cpus.length)
+		Thread_setAffinity(cpus.ptr, cpus.length, NULL);
+
+	if(worker == EJobWorker_Efficiency)
+		Thread_setPriority(EThreadPriority_Background, NULL);
+
+	else if(worker == EJobWorker_Reserved)
+		Thread_setPriority(EThreadPriority_Critical, NULL);
+
 	while(true) {
 
 		if(JobQueue_runOne(queue, threadId, false, NULL))
@@ -104,27 +155,60 @@ static void JobQueue_workerLoop(void *queuePtr) {
 }
 
 Bool JobQueue_create(U64 threadCount, const Allocator *alloc, JobQueue *queue, Error *e_rr) {
+	const JobQueueInfo info = (JobQueueInfo) { .threadCount = threadCount };
+	return JobQueue_createInfo(&info, alloc, queue, e_rr);
+}
+
+Bool JobQueue_createInfo(const JobQueueInfo *info, const Allocator *alloc, JobQueue *queue, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(!queue)
-		retError(clean, Error_nullPointer(2, "JobQueue_create()::queue is required"));
+	if(!queue || !info)
+		retError(clean, Error_nullPointer(!queue ? 2 : 0, "JobQueue_createInfo()::info and queue are required"));
 
 	if(!alloc)
-		retError(clean, Error_nullPointer(1, "JobQueue_create()::alloc is required"));
+		retError(clean, Error_nullPointer(1, "JobQueue_createInfo()::alloc is required"));
 
-	if(queue->jobs.ptr || queue->threads.ptr)
+	for(U64 i = 0; i < EJobLane_Count; ++i)
+		if(queue->jobs[i].ptr)
+			retError(clean, Error_invalidParameter(
+				2, 0, "JobQueue_createInfo()::queue wasn't zero initialized, might indicate memleak"
+			));
+
+	if(queue->threads.ptr)
 		retError(clean, Error_invalidParameter(
-			2, 0, "JobQueue_create()::queue wasn't zero initialized, might indicate memleak"
+			2, 0, "JobQueue_createInfo()::queue wasn't zero initialized, might indicate memleak"
 		));
 
-	if(!threadCount)
-		threadCount = 1;
+	const U64 threadCount = info->threadCount ? info->threadCount : 1;
+
+	if((U64) info->reservedWorkers + info->efficiencyWorkers > threadCount - 1)
+		retError(clean, Error_outOfBounds(
+			0, (U64) info->reservedWorkers + info->efficiencyWorkers, threadCount - 1,
+			"JobQueue_createInfo()::info has more reserved and efficiency workers than workers"
+		));
+
+	if((info->performanceCpuCount && !info->performanceCpus) || (info->efficiencyCpuCount && !info->efficiencyCpus))
+		retError(clean, Error_nullPointer(0, "JobQueue_createInfo()::info's cpu lists are required for a count"));
 
 	*queue = (JobQueue) {
 		.alloc = alloc,
-		.threadCount = threadCount
+		.threadCount = threadCount,
+		.reservedWorkers = info->reservedWorkers,
+		.efficiencyWorkers = info->efficiencyWorkers
 	};
+
+	ListU32 cpus = (ListU32) { 0 };
+
+	if(info->performanceCpuCount) {
+		gotoIfError3(clean, ListU32_createRefConst(info->performanceCpus, info->performanceCpuCount, &cpus, e_rr));
+		gotoIfError3(clean, ListU32_createCopy(cpus, alloc, &queue->performanceCpus, e_rr));
+	}
+
+	if(info->efficiencyCpuCount) {
+		gotoIfError3(clean, ListU32_createRefConst(info->efficiencyCpus, info->efficiencyCpuCount, &cpus, e_rr));
+		gotoIfError3(clean, ListU32_createCopy(cpus, alloc, &queue->efficiencyCpus, e_rr));
+	}
 
 	//The owner thread (which calls JobQueue_wait) is context 0, so only spawn threadCount - 1 workers.
 	//In single threaded mode this spawns nothing and everything runs inline in JobQueue_wait.
@@ -150,12 +234,27 @@ clean:
 Bool JobQueue_pushGroup(
 	JobQueue *queue, JobCallback callback, void *data, JobDestructor destructor, JobGroup *group, Error *e_rr
 ) {
+	return JobQueue_pushLane(queue, EJobLane_Normal, callback, data, destructor, group, e_rr);
+}
+
+Bool JobQueue_pushLane(
+	JobQueue *queue,
+	EJobLane lane,
+	JobCallback callback,
+	void *data,
+	JobDestructor destructor,
+	JobGroup *group,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
 	ELockAcquire acq = ELockAcquire_Invalid;
 
 	if(!queue)
 		retError(clean, Error_nullPointer(0, "JobQueue_push()::queue is required"));
+
+	if(lane >= EJobLane_Count)
+		retError(clean, Error_invalidEnum(1, (U64) lane, EJobLane_Count, "JobQueue_pushLane()::lane"));
 
 	if(!callback)
 		retError(clean, Error_nullPointer(1, "JobQueue_push()::callback is required"));
@@ -168,8 +267,11 @@ Bool JobQueue_pushGroup(
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "JobQueue_push() couldn't acquire lock"));
 
-	const Job job = (Job) { .callback = callback, .data = data, .destructor = destructor, .group = group };
-	gotoIfError3(clean, ListJob_pushBack(&queue->jobs, job, queue->alloc, e_rr));
+	const Job job = (Job) {
+		.callback = callback, .data = data, .destructor = destructor, .group = group, .lane = lane
+	};
+
+	gotoIfError3(clean, ListJob_pushBack(&queue->jobs[lane], job, queue->alloc, e_rr));
 
 	AtomicI64_inc(&queue->pending);
 
@@ -253,17 +355,21 @@ void JobQueue_free(JobQueue *queue) {
 
 	const ELockAcquire acq = SpinLock_lock(&queue->lock, U64_MAX);
 
-	AtomicI64_sub(&queue->pending, (I64) queue->jobs.length);
-
 	//Destroy jobs that never ran so allocator-backed job data (e.g. C++ callables) isn't leaked.
 
-	for(U64 i = 0; i < queue->jobs.length; ++i) {
-		const Job discarded = queue->jobs.ptr[i];
-		if(discarded.destructor)
-			discarded.destructor(discarded.data);
-	}
+	for(U64 lane = 0; lane < EJobLane_Count; ++lane) {
 
-	ListJob_clear(&queue->jobs, NULL);
+		ListJob *jobs = &queue->jobs[lane];
+		AtomicI64_sub(&queue->pending, (I64) jobs->length);
+
+		for(U64 i = 0; i < jobs->length; ++i) {
+			const Job discarded = jobs->ptr[i];
+			if(discarded.destructor)
+				discarded.destructor(discarded.data);
+		}
+
+		ListJob_clear(jobs, NULL);
+	}
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&queue->lock);
@@ -275,7 +381,11 @@ void JobQueue_free(JobQueue *queue) {
 			Thread_waitAndCleanup(queue->alloc, &queue->threads.ptrNonConst[i], NULL);
 
 	ListThreadHandle_free(&queue->threads, queue->alloc);
-	ListJob_free(&queue->jobs, queue->alloc);
+	ListU32_free(&queue->performanceCpus, queue->alloc);
+	ListU32_free(&queue->efficiencyCpus, queue->alloc);
+
+	for(U64 lane = 0; lane < EJobLane_Count; ++lane)
+		ListJob_free(&queue->jobs[lane], queue->alloc);
 
 	*queue = (JobQueue) { 0 };
 }

@@ -53,6 +53,7 @@ OXC3_TEST_MAIN(types_container) {
 	Test_filePaths(&t);
 	Test_list(&t);
 	Test_jobQueue(&t);
+	Test_jobQueueLanes(&t);
 	Test_hpp(&t);
 	Test_hppWrappers(&t);
 	Test_memoryStream(&t);

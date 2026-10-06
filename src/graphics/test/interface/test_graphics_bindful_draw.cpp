@@ -270,6 +270,10 @@ extern "C" void Test_graphicsBindfulDraw(oxc::c::Test *t, oxc::c::GraphicsDevice
 		Test_assert(t, "bindHeap", scope.bindDescriptorHeap(heap, e_rr));
 		Test_assert(t, "bindTable", scope.bindDescriptorTable(table, e_rr));
 
+		//The test's own handle goes before the draw and before end(): a bound table stays alive from the bind on
+
+		table.release();
+
 		{
 			gfx::CommandRender render = scope.render(
 				c::I32x2_zero, c::I32x2_create2(8, 8),

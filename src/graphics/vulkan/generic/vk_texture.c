@@ -347,14 +347,16 @@ Bool VkUnifiedTexture_getView(Descriptor d, EGfxRegisterType type, VkImageView *
 	ELockAcquire acq = SpinLock_lock(lock, 1 * SECOND);
 
 	if(acq < ELockAcquire_Success)
-		goto clean;
+		retError(clean, Error_invalidState(0, "VkUnifiedTexture_getView() couldn't acquire lock"));
 
 	U32 viewId = 0;
 	U32 firstEmptyViewId = U32_MAX;
 
+	//A released slot keeps its range but not its view, so only a live view may match
+
 	for (; viewId < texExt->views.length; ++viewId)
 
-		if (texExt->views.ptr[viewId].textureDescU64 == d.data[0]) {
+		if (texExt->views.ptr[viewId].view && texExt->views.ptr[viewId].textureDescU64 == d.data[0]) {
 
 			*view = texExt->views.ptr[viewId].view;
 			*viewIdOutput = viewId;

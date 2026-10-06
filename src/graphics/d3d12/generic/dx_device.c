@@ -1069,8 +1069,9 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 	commandBuffer->lpVtbl->SetGraphicsRootSignature(commandBuffer, defaultLayoutExt->rootSig);
 
 	for(U32 i = 0; i < descriptorCount; ++i) {
-		commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
-		commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
+		const U32 rootParam = defaultLayoutExt->rootParamBindings + i;
+		commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, rootParam, descriptorTable[i]);
+		commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, rootParam, descriptorTable[i]);
 	}
 
 	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);

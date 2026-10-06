@@ -282,10 +282,12 @@ static void DxCommandBufferState_bindDescriptors(
 
 			for(U32 i = 0; i < tableCount; ++i) {
 
-				if(isCompute)
-					buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, i, tables[i]);
+				const U32 rootParam = layoutExt->rootParamBindings + i;
 
-				else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, i, tables[i]);
+				if(isCompute)
+					buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, rootParam, tables[i]);
+
+				else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, rootParam, tables[i]);
 			}
 		}
 
@@ -523,10 +525,12 @@ static void DxCommandBufferState_bindDescriptors(
 			.ptr = heap->resourcesHeap.gpuHandle.ptr + tableExt->allocationLocations[0] * heap->resourcesHeap.gpuIncrement
 		};
 
-		if(isCompute)
-			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, resourceParam, handle);
+		const U32 rootParam = layoutExt->rootParamBindings + resourceParam;
 
-		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, resourceParam, handle);
+		if(isCompute)
+			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, rootParam, handle);
+
+		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, rootParam, handle);
 	}
 
 	if (samplerParam != U8_MAX) {
@@ -535,10 +539,12 @@ static void DxCommandBufferState_bindDescriptors(
 			.ptr = heap->samplerHeap.gpuHandle.ptr + tableExt->allocationLocations[1] * heap->samplerHeap.gpuIncrement
 		};
 
-		if(isCompute)
-			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, samplerParam, handle);
+		const U32 rootParam = layoutExt->rootParamBindings + samplerParam;
 
-		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, samplerParam, handle);
+		if(isCompute)
+			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, rootParam, handle);
+
+		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, rootParam, handle);
 	}
 }
 
@@ -976,6 +982,22 @@ void DX_WRAP_FUNC(CommandList_process)(
 					);
 				}
 			}
+
+			break;
+		}
+
+		case ECommandOp_CopyBuffer: {
+
+			const CopyBufferCmd copyBuffer = *(const CopyBufferCmd*) data;
+			const CopyBufferRegion *regions = (const CopyBufferRegion*) (data + sizeof(copyBuffer));
+
+			ID3D12Resource *srcRes = DeviceBuffer_ext(DeviceBufferRef_ptr(copyBuffer.src), Dx)->buffer;
+			ID3D12Resource *dstRes = DeviceBuffer_ext(DeviceBufferRef_ptr(copyBuffer.dst), Dx)->buffer;
+
+			for(U32 i = 0; i < copyBuffer.regionCount; ++i)
+				buffer->lpVtbl->CopyBufferRegion(
+					buffer, dstRes, regions[i].dstOffset, srcRes, regions[i].srcOffset, regions[i].length
+				);
 
 			break;
 		}

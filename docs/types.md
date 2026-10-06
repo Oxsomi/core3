@@ -49,6 +49,10 @@ formatting), endianness, integer and float math that does not need vectors, sort
   another stream all share the interface; the codecs in formats read and write through it.
 - **RefPtr**: a reference counted handle with a type, which the graphics and file objects are.
 - **JobQueue**: a pool running jobs over a fixed set of threads, each with a stable id for per thread resources.
+  Jobs go into a lane (Critical, Normal, Background), and the workers can be placed by core class: reserved
+  performance workers never take Background work, and efficiency workers never take Critical work and run at
+  Background priority. `Thread_setPriority` and `Thread_setAffinity` are the per thread calls underneath, and
+  `Platform_instance->cpuInfo.performance` and `.efficiency` say where a hybrid CPU's cores are and how many.
 - **AllocationBuffer**: a ring buffer that falls back to a block allocator when it cannot allocate in order.
 - **Cryptography**: AES-256-GCM, SHA-256, CRC32C and a CSPRNG, on the CPU's instructions where it has them (a
   scalar fallback where not), and routed to the host's crypto on the web, where wasm has no AES or SHA.

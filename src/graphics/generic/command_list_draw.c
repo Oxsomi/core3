@@ -1457,6 +1457,24 @@ Bool CommandListRef_bindDescriptorTable(CommandListRef *commandListRef, Descript
 		gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
 	}
 
+	//The list holds the table from the bind on rather than from end(), where its transitions take their references:
+	// a table made for one dispatch can be let go by the caller as soon as it is bound, and the work ops of this
+	// recording still read it. end() skips what is already held.
+
+	//Reserved first, so the push after the reference is taken can't fail and leak it
+
+	if (!ListRefPtr_contains(commandList->resources, table, 0, NULL)) {
+
+		gotoIfError3(clean, ListRefPtr_reserve(
+			&commandList->resources, commandList->resources.length + 1, alloc, e_rr
+		));
+
+		if(!RefPtr_inc(table))
+			retError(clean, Error_invalidState(0, "CommandListRef_bindDescriptorTable() couldn't hold the table"));
+
+		gotoIfError3(clean, ListRefPtr_pushBack(&commandList->resources, table, alloc, e_rr));
+	}
+
 	DescriptorTableRef *args[2] = { table, NULL };
 
 	gotoIfError3(clean, CommandList_append(

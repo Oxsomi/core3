@@ -23,6 +23,7 @@
 #pragma once
 #include "formats/oiCA/ca_file.h"
 #include "types/container/string.h"
+#include "types/container/list_basic_types.h"
 #include "types/base/platform_types.h"
 #include "types/base/string_base.h"
 #include "types/base/lock.h"
@@ -62,9 +63,19 @@ typedef enum ECPUVendor {
 	ECPUVendor_Count
 } ECPUVendor;
 
+//One class of a hybrid CPU's cores. cpus are its logical CPUs as Thread_setAffinity takes them (CPU set ids on
+// Windows, cpu indices on Linux and Android), empty where a thread can't pick its cores (Apple, the web).
+
+typedef struct PlatformCPUClass {
+	ListU32 cpus;
+	U32 physicalCores;
+	U32 logicalCores;
+} PlatformCPUClass;
+
 //Richer CPU topology, gathered once at Platform_create (see Platform_detectCPUInfo).
 //Fields that couldn't be determined on the current OS/arch are left 0.
-//Cache sizes are in bytes; hybrid P/E counts are 0 when the CPU isn't hybrid (or the split is unknown).
+//Cache sizes are in bytes. Both classes are empty when the CPU isn't hybrid or the split is unknown; a CPU with more
+// than two classes counts its fastest as performance and the rest as efficiency.
 
 typedef struct PlatformCPUInfo {
 
@@ -74,8 +85,8 @@ typedef struct PlatformCPUInfo {
 	U32 logicalCores;                   //Hardware threads (== Platform_getThreads)
 	U32 physicalCores;                  //Physical cores (0 if unknown)
 
-	U32 performanceCores;               //Hybrid P-cores (0 if not hybrid / unknown)
-	U32 efficiencyCores;                //Hybrid E-cores
+	PlatformCPUClass performance;
+	PlatformCPUClass efficiency;
 
 	U64 l1DataCacheBytes;               //Per physical core L1 data cache
 	U64 l2CacheBytes;                   //Per physical core / per cluster L2 cache
@@ -109,7 +120,7 @@ typedef struct Platform {
 
 	void *data1;                        //If present can contain the executable file
 	U64 size1;
-	U8 pad2[32];
+	U8 pad2[40];
 
 	SpinLock virtualSectionsLock;
 
@@ -137,7 +148,7 @@ impl Bool Platform_checkCPUSupport();   //SIMD dependent: SSE, None, NEON
 impl U64 Platform_getThreads();
 impl U64 Platform_getPhysicalRAM();     //Total installed physical memory in bytes (0 if unknown)
 impl U64 Platform_getAvailableRAM();    //Currently free/available physical memory in bytes (0 if unknown)
-impl void Platform_detectCPUInfo(PlatformCPUInfo *out);   //Fills topology (called once at Platform_create)
+impl Bool Platform_detectCPUInfo(PlatformCPUInfo *out, const Allocator *alloc, Error *e_rr);   //Called once at Platform_create
 
 //Reads an environment variable as UTF-8 on every platform; Windows converts from its UTF-16 block.
 //An unset variable is not an error: *result is left null and the call succeeds.

@@ -447,6 +447,150 @@ clean:
 	return s_uccess;
 }
 
+Bool CommandListRef_copyBufferRegions(
+	CommandListRef *commandListRef,
+	DeviceBufferRef *srcRef,
+	DeviceBufferRef *dstRef,
+	ListCopyBufferRegion regions,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = commandListRef ? GraphicsDeviceRef_getAlloc(CommandListRef_ptr(commandListRef)->device) : NULL;
+
+	Buffer buf = Buffer_createNull();
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!regions.length)
+		retError(clean, Error_nullPointer(3, "CommandListRef_copyBuffer()::regions.length is 0"));
+
+	if(regions.length > 128)
+		retError(clean, Error_outOfBounds(
+			3, regions.length, 128, "CommandListRef_copyBuffer()::regions.length should be at most 128"
+		));
+
+	//Two distinct device buffers: one buffer can't be a copy source and destination in one scope, since a scope
+	// holds one transition per resource
+
+	for (U64 i = 0; i < 2; ++i) {
+
+		DeviceBufferRef *ref = i ? dstRef : srcRef;
+
+		if(!ref || ref->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer)
+			retError(clean, Error_invalidParameter(
+				1 + (U32) i, 0, "CommandListRef_copyBuffer()::src and dst should be DeviceBuffers"
+			));
+	}
+
+	if(srcRef == dstRef)
+		retError(clean, Error_invalidParameter(
+			2, 1, "CommandListRef_copyBuffer()::src and dst should be different buffers"
+		));
+
+	const DeviceBuffer *src = DeviceBufferRef_ptr(srcRef);
+	const DeviceBuffer *dst = DeviceBufferRef_ptr(dstRef);
+
+	if(src->resource.device != commandList->device || dst->resource.device != commandList->device)
+		retError(clean, Error_invalidParameter(
+			1, 2, "CommandListRef_copyBuffer()::src and dst require the same device as the CommandList"
+		));
+
+	if((src->usage | dst->usage) & EDeviceBufferUsage_ASExt)
+		retError(clean, Error_invalidParameter(
+			1, 3, "CommandListRef_copyBuffer()::acceleration structure buffers can't be copied"
+		));
+
+	for(U64 i = 0; i < regions.length; ++i) {
+
+		const CopyBufferRegion r = regions.ptr[i];
+
+		if(!r.length)
+			retError(clean, Error_invalidParameter(3, 0, "CommandListRef_copyBuffer()::regions[i].length is 0"));
+
+		if((r.srcOffset | r.dstOffset | r.length) & 3)
+			retError(clean, Error_invalidParameter(
+				3, 1, "CommandListRef_copyBuffer()::regions[i] offsets and length should be multiples of 4"
+			));
+
+		if(r.srcOffset > src->resource.size || r.length > src->resource.size - r.srcOffset)
+			retError(clean, Error_outOfBounds(
+				3, r.srcOffset + r.length, src->resource.size, "CommandListRef_copyBuffer()::regions[i] exceeds src"
+			));
+
+		if(r.dstOffset > dst->resource.size || r.length > dst->resource.size - r.dstOffset)
+			retError(clean, Error_outOfBounds(
+				3, r.dstOffset + r.length, dst->resource.size, "CommandListRef_copyBuffer()::regions[i] exceeds dst"
+			));
+
+		//Vulkan leaves overlapping destinations undefined, so the order regions land in can't be relied on
+
+		for(U64 k = 0; k < i; ++k) {
+
+			const CopyBufferRegion o = regions.ptr[k];
+
+			if(r.dstOffset < o.dstOffset + o.length && o.dstOffset < r.dstOffset + r.length)
+				retError(clean, Error_invalidParameter(
+					3, 2, "CommandListRef_copyBuffer()::regions overlap in dst"
+				));
+		}
+	}
+
+	gotoIfError3(clean, CommandListRef_transitionBuffer(
+		commandList, srcRef, (BufferRange) { 0 }, ETransitionType_CopyRead, EPipelineStage_Count, e_rr
+	));
+
+	gotoIfError3(clean, CommandListRef_transitionBuffer(
+		commandList, dstRef, (BufferRange) { 0 }, ETransitionType_CopyWrite, EPipelineStage_Count, e_rr
+	));
+
+	gotoIfError3(clean, Buffer_createEmptyBytes(
+		ListCopyBufferRegion_bytes(regions) + sizeof(CopyBufferCmd), alloc, &buf, e_rr
+	));
+
+	*(CopyBufferCmd*)buf.ptr = (CopyBufferCmd) {
+		.src = srcRef,
+		.dst = dstRef,
+		.regionCount = (U32) regions.length
+	};
+
+	Buffer_memcpy(
+		Buffer_createRef(buf.ptrNonConst + sizeof(CopyBufferCmd), ListCopyBufferRegion_bytes(regions)),
+		ListCopyBufferRegion_bufferConst(regions)
+	);
+
+	gotoIfError3(clean, CommandList_append(commandList, ECommandOp_CopyBuffer, buf, 0, e_rr));
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	Buffer_free(&buf, alloc);
+	return s_uccess;
+}
+
+Bool CommandListRef_copyBuffer(
+	CommandListRef *commandListRef, DeviceBufferRef *src, DeviceBufferRef *dst, CopyBufferRegion region, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	CommandListRef_validateScope(commandListRef, clean)
+
+	ListCopyBufferRegion regions = (ListCopyBufferRegion) { 0 };
+	gotoIfError3(clean, ListCopyBufferRegion_createRefConst(&region, 1, &regions, e_rr));
+
+	gotoIfError3(clean, CommandListRef_copyBufferRegions(commandListRef, src, dst, regions, e_rr));
+
+clean:
+
+	if(!s_uccess && commandList)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return s_uccess;
+}
+
 Bool CommandListRef_clearImageu(
 	CommandListRef *commandListRef,
 	const U32 coloru[4],

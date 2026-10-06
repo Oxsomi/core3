@@ -151,10 +151,76 @@ clean:
 	return s_uccess;
 }
 
-void Platform_detectCPUInfo(PlatformCPUInfo *out) {
+//A hybrid CPU's cores by class, the fastest being performance; a CPU with one class leaves both empty
+
+static Bool Platform_detectCoreClasses(PlatformCPUInfo *out, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Buffer buf = Buffer_createNull();
+	ULONG len = 0;
+
+	GetSystemCpuSetInformation(NULL, 0, &len, GetCurrentProcess(), 0);
+
+	if(!len)
+		goto clean;
+
+	gotoIfError3(clean, Buffer_createUninitializedBytes(len, alloc, &buf, e_rr));
+
+	if(!GetSystemCpuSetInformation((PSYSTEM_CPU_SET_INFORMATION) buf.ptrNonConst, len, &len, GetCurrentProcess(), 0))
+		retError(clean, Error_platformError(0, GetLastError(), "Platform_detectCoreClasses() couldn't list the CPU sets"));
+
+	BYTE lowest = U8_MAX, highest = 0;
+
+	for(const U8 *at = buf.ptr; at < buf.ptr + len; at += ((const SYSTEM_CPU_SET_INFORMATION*) at)->Size) {
+
+		const SYSTEM_CPU_SET_INFORMATION *info = (const SYSTEM_CPU_SET_INFORMATION*) at;
+
+		if(info->Type != CpuSetInformation)
+			continue;
+
+		lowest = info->CpuSet.EfficiencyClass < lowest ? info->CpuSet.EfficiencyClass : lowest;
+		highest = info->CpuSet.EfficiencyClass > highest ? info->CpuSet.EfficiencyClass : highest;
+	}
+
+	if(lowest >= highest)
+		goto clean;
+
+	for(const U8 *at = buf.ptr; at < buf.ptr + len; at += ((const SYSTEM_CPU_SET_INFORMATION*) at)->Size) {
+
+		const SYSTEM_CPU_SET_INFORMATION *info = (const SYSTEM_CPU_SET_INFORMATION*) at;
+
+		if(info->Type != CpuSetInformation)
+			continue;
+
+		PlatformCPUClass *c = info->CpuSet.EfficiencyClass == highest ? &out->performance : &out->efficiency;
+		gotoIfError3(clean, ListU32_pushBack(&c->cpus, (U32) info->CpuSet.Id, alloc, e_rr));
+		++c->logicalCores;
+
+		//SMT siblings share a core index within their group; the first of them counts the core
+
+		Bool sibling = false;
+
+		for(const U8 *prev = buf.ptr; prev < at && !sibling; prev += ((const SYSTEM_CPU_SET_INFORMATION*) prev)->Size) {
+			const SYSTEM_CPU_SET_INFORMATION *p = (const SYSTEM_CPU_SET_INFORMATION*) prev;
+			sibling =
+				p->Type == CpuSetInformation &&
+				p->CpuSet.Group == info->CpuSet.Group && p->CpuSet.CoreIndex == info->CpuSet.CoreIndex;
+		}
+
+		c->physicalCores += !sibling;
+	}
+
+clean:
+	Buffer_free(&buf, alloc);
+	return s_uccess;
+}
+
+Bool Platform_detectCPUInfo(PlatformCPUInfo *out, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!out)
-		return;
+		retError(clean, Error_nullPointer(0, "Platform_detectCPUInfo()::out is required"));
 
 	*out = (PlatformCPUInfo) { 0 };
 	out->logicalCores = (U32) Platform_getThreads();
@@ -211,7 +277,7 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 
 	#endif
 
-	//Topology (physical cores, hybrid P/E split, cache sizes, NUMA nodes) via GetLogicalProcessorInformationEx
+	//Topology (physical cores, cache sizes, NUMA nodes) via GetLogicalProcessorInformationEx
 
 	DWORD len = 0;
 	GetLogicalProcessorInformationEx(RelationAll, NULL, &len);
@@ -222,8 +288,6 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 
 		if(buffer && GetLogicalProcessorInformationEx(RelationAll, (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) buffer, &len)) {
 
-			U32 perfCores = 0;
-
 			for(U8 *ptr = buffer; ptr < buffer + len; ) {
 
 				const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *info = (const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*) ptr;
@@ -232,8 +296,6 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 
 					case RelationProcessorCore:
 						++out->physicalCores;
-						if(info->Processor.EfficiencyClass > 0)        //Higher class = performance core
-							++perfCores;
 						break;
 
 					case RelationCache: {
@@ -257,13 +319,6 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 
 				ptr += info->Size;
 			}
-
-			//Only report a hybrid split when there genuinely is one (P-cores present but not all cores)
-
-			if(perfCores > 0 && perfCores < out->physicalCores) {
-				out->performanceCores = perfCores;
-				out->efficiencyCores  = out->physicalCores - perfCores;
-			}
 		}
 
 		free(buffer);
@@ -271,6 +326,11 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 
 	if(!out->numaNodes)
 		out->numaNodes = 1;
+
+	gotoIfError3(clean, Platform_detectCoreClasses(out, alloc, e_rr));
+
+clean:
+	return s_uccess;
 }
 
 //No on screen keyboard here, so there's nothing a hardware one would have to be weighed against.

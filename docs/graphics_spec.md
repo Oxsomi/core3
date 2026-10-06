@@ -45,6 +45,9 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_EXT_swapchain_colorspace
 - Required device extensions:
   - VK_KHR_synchronization2
+  - VK_EXT_scalar_block_layout (core in 1.2) with scalarBlockLayout: shaders are compiled with DXIL's buffer layout
+    (`-fvk-use-dx-layout`), which places a structured element or cbuffer member the way D3D12 does, and only the scalar
+    layout rules allow that on Vulkan (a 12 byte element, for one).
   - VK_KHR_swapchain
     - Requires at least 1 image layer.
     - Requires ability to make 3 images.

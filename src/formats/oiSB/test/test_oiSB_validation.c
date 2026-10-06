@@ -70,6 +70,54 @@ void Test_SBFileCombineFlags(Test *t) {
 	}
 }
 
+//SBFile_combine with structs: names hold the structs first, so every variable sits past them in the name table.
+//What a structured buffer of a struct reflects as, on SPIR-V and DXIL alike: two structs, a variable of one, its members.
+
+void Test_SBFileCombineStructs(Test *t) {
+
+	Test_setModule(t, "SBFile combine: layouts with structs");
+
+	SBFile files[2] = { 0 };
+	SBFile combined = { 0 };
+
+	for (U32 f = 0; f < 2; ++f) {
+
+		const ESBVarFlag used = f ? ESBVarFlag_IsUsedVarDXIL : ESBVarFlag_IsUsedVarSPIRV;
+		SBFile *file = &files[f];
+
+		CharString rec = CharString_createRefCStrConst("Rec");
+		CharString ray = CharString_createRefCStrConst("Ray");
+		CharString core = CharString_createRefCStrConst("core");
+		CharString x = CharString_createRefCStrConst("x");
+		CharString y = CharString_createRefCStrConst("y");
+
+		Test_assert(t, "create", SBFile_create(ESBSettingsFlags_None, 32, t->alloc, file, &t->err));
+		Test_assert(t, "addStructRec", SBFile_addStruct(file, &rec, (SBStruct) { .stride = 32 }, t->alloc, &t->err));
+		Test_assert(t, "addStructRay", SBFile_addStruct(file, &ray, (SBStruct) { .stride = 16 }, t->alloc, &t->err));
+
+		Test_assert(t, "addCore", SBFile_addVariableAsStruct(
+			file, &core, 0, U16_MAX, 0, used, NULL, t->alloc, &t->err
+		));
+
+		Test_assert(t, "addX", SBFile_addVariableAsType(file, &x, 0, 0, ESBType_F32, used, NULL, t->alloc, &t->err));
+		Test_assert(t, "addY", SBFile_addVariableAsType(file, &y, 4, 0, ESBType_F32, used, NULL, t->alloc, &t->err));
+	}
+
+	Test_assert(t, "combine", SBFile_combine(&files[0], &files[1], t->alloc, &combined, &t->err));
+	Test_assert(t, "combinedVars", combined.vars.length == 3);
+	Test_assert(t, "combinedStructs", combined.structs.length == 2);
+
+	for (U64 i = 0; i < combined.vars.length; ++i) {
+		const ESBVarFlag flags = combined.vars.ptr[i].flags;
+		Test_assert(t, "bothFlags", (flags & ESBVarFlag_IsUsedVarSPIRV) && (flags & ESBVarFlag_IsUsedVarDXIL));
+	}
+
+	for (U32 f = 0; f < 2; ++f)
+		SBFile_free(&files[f], t->alloc);
+
+	SBFile_free(&combined, t->alloc);
+}
+
 //SBFile_combine rejects files with mismatched buffer sizes.
 void Test_SBFileCombineBufferSizeMismatch(Test *t) {
 

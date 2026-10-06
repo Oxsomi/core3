@@ -59,7 +59,7 @@ void VkDescriptor_loseRef(RefPtr *resource, TextureDescriptorRange texture) {
 	Buffer_memcpy(Buffer_createRef(&dat, sizeof(dat)), Buffer_createRefConst(&texture, sizeof(texture)));
 
 	for (U64 viewId = 0; viewId < texExt->views.length; ++viewId)
-		if (texExt->views.ptr[viewId].textureDescU64 == dat) {
+		if (texExt->views.ptr[viewId].view && texExt->views.ptr[viewId].textureDescU64 == dat) {
 
 			U64 refCnt = --texExt->views.ptrNonConst[viewId].refCount;
 

@@ -1846,6 +1846,22 @@ Copy image is only allowed on images which aren't currently bound as a render ta
 
 Copy image (ranges) can currently only be called on a Swapchain, DepthStencil or RenderTexture object.
 
+### copyBuffer/copyBufferRegions
+
+Copies byte ranges from one DeviceBuffer into another, one region or up to 128 at once. A `CopyBufferRegion` is `srcOffset`, `dstOffset` and `length`, all multiples of 4 (WebGPU requires it, so every backend does), every region inside both buffers, and no two regions overlapping in dst.
+
+```c
+gotoIfError3(clean, CommandListRef_copyBuffer(
+    commandList,
+    staging,                                        //src
+    pool,                                           //dst
+    (CopyBufferRegion) { .srcOffset = 0, .dstOffset = at, .length = bytes },
+    e_rr
+));
+```
+
+src and dst must be different buffers of the command list's device: the command transitions the whole of src for a copy read and the whole of dst for a copy write, and a scope holds one transition per resource, so neither can be used for anything else in that scope (copy within one buffer by way of a second). Acceleration structure buffers are refused; they are compacted or rebuilt, not copied. Like every copy it is refused in a predicated scope.
+
 ### setComputePipeline/setGraphicsPipeline/setRaytracingPipeline
 
 The set pipeline command does one of the following; bind a graphics pipeline, raytracing pipeline or a compute pipeline. These pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or dispatchRaysExt to ensure the shader is used.
@@ -2059,7 +2075,7 @@ Binds a descriptor heap: any descriptor table bound after this has to belong to 
 
 #### bindDescriptorTable
 
-Bindful: binds the descriptor table that pipelines with a CUSTOM pipeline layout read from. This only sets state; the work ops (draw/dispatch/dispatchRays) are the validators, so bind order never matters: at work time the bound pipeline's layout must reference the exact DescriptorLayout the table was created from, push descriptor layouts are refused until their writes exist, and a pipeline whose layout does not reference the table's DescriptorLayout ignores the bound table entirely rather than emitting it. That covers the device's default (bindless) layout and any custom layout built from the runtime bindless set, which is what lets a bindful dispatch and a bindless one interleave inside one scope. To be precise about what "stays bound" means there: the RECORDER keeps boundDescriptorTable across the pipeline switch, so the caller does not rebind it; the GPU-side state does not survive. The bindful table lives in the user's heap and the bindless set in the device's own, two different heaps, and each work op that crosses between the two classes lazily re-emits everything for its side, a SetDescriptorHeaps included (D3D12 allows one CBV/SRV/UAV heap bound at a time, so every crossing swaps it). The layout check is what keeps the held table from being emitted against the bindless pipeline in between: doing so would bind sets Vulkan rejects and write root parameters D3D12's signature does not have, so a table whose layout the pipeline does not reference is simply not emitted. Interleaving therefore works, but each direction change costs a heap switch, so batching by pipeline class is still worth it. Backends emit the actual binds lazily right before the work, which also re-emits the default bindings after a custom root signature dropped them on D3D12. Custom layout pipelines are opted out of the globals/frame data unless their layout declares that slot. There is no table index: a pipeline layout references exactly ONE bindings DescriptorLayout (which itself spans up to 4 spaces on Vulkan, each bound at the set index its space names, and up to 2 root tables on D3D12), so set indices and root parameters are baked into the layout/table pair; a slot index gets added if pipeline layouts ever grow multiple table slots. The table is kept alive by the command list; per resource scope transitions remain the caller's job until auto transitions land. Scope end resets the bind like it does bound pipelines.
+Bindful: binds the descriptor table that pipelines with a CUSTOM pipeline layout read from. This only sets state; the work ops (draw/dispatch/dispatchRays) are the validators, so bind order never matters: at work time the bound pipeline's layout must reference the exact DescriptorLayout the table was created from, push descriptor layouts are refused until their writes exist, and a pipeline whose layout does not reference the table's DescriptorLayout ignores the bound table entirely rather than emitting it. That covers the device's default (bindless) layout and any custom layout built from the runtime bindless set, which is what lets a bindful dispatch and a bindless one interleave inside one scope. To be precise about what "stays bound" means there: the RECORDER keeps boundDescriptorTable across the pipeline switch, so the caller does not rebind it; the GPU-side state does not survive. The bindful table lives in the user's heap and the bindless set in the device's own, two different heaps, and each work op that crosses between the two classes lazily re-emits everything for its side, a SetDescriptorHeaps included (D3D12 allows one CBV/SRV/UAV heap bound at a time, so every crossing swaps it). The layout check is what keeps the held table from being emitted against the bindless pipeline in between: doing so would bind sets Vulkan rejects and write root parameters D3D12's signature does not have, so a table whose layout the pipeline does not reference is simply not emitted. Interleaving therefore works, but each direction change costs a heap switch, so batching by pipeline class is still worth it. Backends emit the actual binds lazily right before the work, which also re-emits the default bindings after a custom root signature dropped them on D3D12. Custom layout pipelines are opted out of the globals/frame data unless their layout declares that slot. There is no table index: a pipeline layout references exactly ONE bindings DescriptorLayout (which itself spans up to 4 spaces on Vulkan, each bound at the set index its space names, and up to 2 root tables on D3D12), so set indices and root parameters are baked into the layout/table pair; a slot index gets added if pipeline layouts ever grow multiple table slots. The table is kept alive by the command list from the bind on, not only from `end()`, so a table made for one dispatch can be released by the caller right after binding it; per resource scope transitions remain the caller's job until auto transitions land. Scope end resets the bind like it does bound pipelines.
 
 #### setPushConstants
 
@@ -2075,7 +2091,7 @@ Writes every push descriptor the bound pipeline's layout declares, in that layou
 
 All of them are written at once rather than one at a time, because a partial set would leave the rest pointing at whatever the previous pipeline bound, and both backends emit the whole set anyway. The work op validates the written count against the layout, refuses a count that doesn't match it, and refuses writes against a layout that declares none: the same three rules push constants follow, and for the same reason they sit ahead of the bind state cache. Scope end resets the write.
 
-**Buffer class** push descriptors (a constant buffer, a byte address or structured buffer, or an acceleration structure) are root descriptors on both backends: one raw GPU virtual address, costing 2 of a D3D12 root signature's 64 DWORDs each, which is why at most `OXC3_MAX_PUSH_DESCRIPTORS` can be recorded.
+**Buffer class** push descriptors (a constant buffer, a byte address or structured buffer, or an acceleration structure) are root descriptors on both backends: one raw GPU virtual address, costing 2 of a D3D12 root signature's 64 DWORDs each, which is why at most `OXC3_MAX_PUSH_DESCRIPTORS` can be recorded. On D3D12 a pipeline layout's root parameters come in the order push constants, push descriptors, then the binding tables, so what changes per draw or dispatch lands in the first 13 DWORDs, the ones drivers keep in fast memory.
 
 **Textures** can be pushed too, but not as a root descriptor, because an address has nowhere to carry a format, a mip range or a swizzle. D3D12 gives the binding a single entry descriptor table instead and fills it at the work op; Vulkan pushes an image descriptor straight into the set and needs nothing further. That table needs a shader visible slot, and it has to come from a heap the CALLER put in play: a heap the runtime picked itself would need a `SetDescriptorHeaps` behind the caller's back, and that switch is heavy (it can drain the GPU on NV), which is the entire reason heap binds are explicit. So a heap carries a ring of its own for them, sized by `DescriptorHeapInfo::maxPushDescriptors`:
 
@@ -2090,7 +2106,7 @@ An immutable sampler is baked into the layout rather than bound:
 
 - **D3D12** puts it in the root signature as a `D3D12_STATIC_SAMPLER_DESC`, which costs none of the 64 DWORDs and needs no descriptor range.
 - **Vulkan** puts it in the set layout as `pImmutableSamplers`.
-- It takes a binding but **no descriptor**, so nothing is written for it. Writing one through `DescriptorTableRef_setDescriptors` is refused rather than dropped, since the binding owns no slot in the table for the write to land in. The binding does still count toward the heap's `maxSamplers` on both backends: Vulkan allocates the descriptor its set layout declares, and D3D12 reserves one it never writes.
+- It takes a binding but **no descriptor**, so nothing is written for it. Writing one through `DescriptorTableRef_setDescriptors` is refused rather than dropped, since the binding owns no slot in the table for the write to land in. The binding does still count toward the heap's `maxSamplers` on both backends: Vulkan allocates the descriptor its set layout declares, and D3D12 reserves one it never writes. That is per table, so a heap needs one per static sampler binding for every table of the layout that can be alive at once. Short of that, D3D12 refuses the table with an error naming `maxSamplers`, while a Vulkan driver may refuse it or quietly allocate past the pool (validation reports it either way).
 - Given either by ref, with `DescriptorLayoutInfo_addImmutableSampler`, so several layouts naming the same sampler share one `VkSampler`; or by value, with `DescriptorLayoutInfo_addStaticSampler`, which takes a `SamplerInfo` and has the layout create the sampler itself, owning it like a ref. By value is the only form the bindless layout `GraphicsDeviceRef_create` is given can carry, since that layout exists before any sampler does. D3D12 never makes an object of either and only reads the `SamplerInfo`.
 - It cannot be an array. A dynamically indexed sampler array needs real descriptors.
 
@@ -2149,6 +2165,7 @@ startScope		//Transitions resources
 
 	clearImages								//Keeps scope alive
     copyImageRegions						//Keeps scope alive
+    copyBufferRegions						//Keeps scope alive
 	setGraphicsPipeline
     setComputePipeline
     	dispatch(Indirect)					//Keeps scope alive
@@ -2176,7 +2193,7 @@ startScope		//Transitions resources
     endScope
 ```
 
-Because a scope hoists the transitions of operations such as clearImages, copyImages, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same (sub)resource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
+Because a scope hoists the transitions of operations such as clearImages, copyImages, copyBuffers, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same (sub)resource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
 
 A scope's barriers all run at its start, and none between the work inside it: its dispatches, draws and ray dispatches may run concurrently and in any order, on both APIs. Putting work in one scope is how a caller says it belongs together, so it is also how a caller lets it overlap. Anything that has to see another command's writes, or has to finish before another command writes what it reads, goes in a later scope. OxC3 can't check this: shaders reach resources through bindless handles, so it never sees which bytes a dispatch reads or writes. Two dispatches in one scope may write the same resource only where their writes can't collide (disjoint elements, or atomics where order doesn't matter).
 
