@@ -745,10 +745,12 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 	}
 
 	//Indexed and instanced draw through real buffers: instance 0 covers the left half, instance 1 the right,
-	// so full coverage proves the index buffer, the vertex fetch and both instances all worked
+	// so full coverage proves the index buffer, the vertex fetch and both instances all worked.
+	//Both streams sit past zeros and are bound at an offset: one that was ignored fetches zero vertices or indices,
+	// whose triangles cover nothing.
 
-	const c::F32 quad[8] = { -1, -1, 1, -1, -1, 1, 1, 1 };
-	const c::U16 quadIndices[6] = { 0, 1, 2, 2, 1, 3 };
+	const c::F32 quad[12] = { 0, 0, 0, 0, -1, -1, 1, -1, -1, 1, 1, 1 };
+	const c::U16 quadIndices[8] = { 0, 0, 0, 1, 2, 2, 1, 3 };
 
 	c::Buffer dataRef = c::Buffer_createRefConst(quad, sizeof(quad));
 
@@ -773,6 +775,37 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 		TestBindful_graphicsPipeline(t, dev, files, 7, 4, 1, "main", "main", vertexInfo, pipelineLayout, vertexPipeline)
 	) {
 
+		//A refused call invalidates its recording, so each runs on a list of its own that isn't reused
+
+		auto refused = [&](const c::C8 *name, c::U64 indexOffset, c::U64 emptySlotOffset) {
+
+			gfx::CommandList list;
+
+			if(!Test_assert(t, "refusedListCreate", dev.createCommandList(c::KIBI, 16, 8, list, true, e_rr)))
+				return;
+
+			Test_assert(t, "refusedBegin", list.begin(true, e_rr));
+
+			{
+				gfxtest::DrawPass pass = TestBindful_openDraw(t, list, 1, target.handle(), vertexPipeline);
+
+				c::SetPrimitiveBuffersCmd primitives {};
+				primitives.vertexBuffers[0] = vertexBuffer.handle();
+				primitives.indexBuffer = indexBuffer.handle();
+				primitives.indexOffset = indexOffset;
+				primitives.vertexOffsets[1] = emptySlotOffset;
+
+				if(pass)
+					Test_assert(t, name, !pass.render.setPrimitiveBuffers(primitives, nullptr));
+			}
+
+			(void) list.end(nullptr);
+		};
+
+		refused("unalignedOffsetRefused", 2, 0);
+		refused("offsetWithoutBufferRefused", 0, 4);
+		refused("offsetPastBufferRefused", sizeof(quadIndices), 0);
+
 		Test_assert(t, "beginVertex", commandList.begin(true, e_rr));
 
 		gfxtest::DrawPass pass = TestBindful_openDraw(t, commandList, 1, target.handle(), vertexPipeline);
@@ -783,6 +816,8 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 			primitives.vertexBuffers[0] = vertexBuffer.handle();
 			primitives.indexBuffer = indexBuffer.handle();
 			primitives.isIndex32Bit = false;
+			primitives.vertexOffsets[0] = 4 * sizeof(c::F32);
+			primitives.indexOffset = 4;
 
 			Test_assert(t, "setPrimitiveBuffers", pass.render.setPrimitiveBuffers(primitives, e_rr));
 			Test_assert(t, "drawIndexed", pass.render.drawIndexed(6, 2, e_rr));

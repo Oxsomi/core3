@@ -463,9 +463,11 @@ void Test_jobQueueLanes(Test *t) {
 		JobQueue_free(&q);
 	}
 
-	//3. The reserved worker (1) never runs Background, the efficiency worker (the last) never runs Critical
+	//3. The reserved worker (1) never runs Background, the efficiency worker (the last) never runs Critical.
+	//The preprocessor decides, since a condition on the macro is constant and MSVC's /W4 refuses that (C4127).
 
-	if (JOBQUEUE_TEST_THREADS > 2) {
+	#if JOBQUEUE_TEST_THREADS > 2
+	{
 
 		JobQueue q = (JobQueue) { 0 };
 		AtomicI64 violations = (AtomicI64) { 0 };
@@ -495,4 +497,5 @@ void Test_jobQueueLanes(Test *t) {
 
 		JobQueue_free(&q);
 	}
+	#endif
 }

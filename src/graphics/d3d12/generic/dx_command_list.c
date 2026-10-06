@@ -1452,18 +1452,23 @@ void DX_WRAP_FUNC(CommandList_process)(
 				temp->tempBoundBuffers.indexBuffer &&
 				(
 					temp->boundBuffers.indexBuffer != temp->tempBoundBuffers.indexBuffer ||
+					temp->boundBuffers.indexOffset != temp->tempBoundBuffers.indexOffset ||
 					temp->boundBuffers.isIndex32Bit != temp->tempBoundBuffers.isIndex32Bit
 				)
 			) {
 
 				temp->boundBuffers.indexBuffer = temp->tempBoundBuffers.indexBuffer;
+				temp->boundBuffers.indexOffset = temp->tempBoundBuffers.indexOffset;
 				temp->boundBuffers.isIndex32Bit = temp->tempBoundBuffers.isIndex32Bit;
 
 				DeviceBuffer *indexBuffer = DeviceBufferRef_ptr(temp->boundBuffers.indexBuffer);
+				const U64 indexOffset = temp->boundBuffers.indexOffset;
 
 				D3D12_INDEX_BUFFER_VIEW ibo = (D3D12_INDEX_BUFFER_VIEW) {
-					.BufferLocation = getDxDeviceAddress((DeviceData) { .buffer = temp->boundBuffers.indexBuffer }),
-					.SizeInBytes = (U32) indexBuffer->resource.size,
+					.BufferLocation = getDxDeviceAddress(
+						(DeviceData) { .buffer = temp->boundBuffers.indexBuffer, .offset = indexOffset }
+					),
+					.SizeInBytes = (U32) (indexBuffer->resource.size - indexOffset),
 					.Format = temp->boundBuffers.isIndex32Bit ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT
 				};
 
@@ -1483,11 +1488,12 @@ void DX_WRAP_FUNC(CommandList_process)(
 				for(U32 i = 0; i < 16; ++i) {
 
 					DeviceBufferRef *bufferRef = temp->tempBoundBuffers.vertexBuffers[i];
+					const U64 offset = temp->tempBoundBuffers.vertexOffsets[i];
 
 					if (!bufferRef)
 						continue;
 
-					if(temp->boundBuffers.vertexBuffers[i] != bufferRef) {
+					if(temp->boundBuffers.vertexBuffers[i] != bufferRef || temp->boundBuffers.vertexOffsets[i] != offset) {
 
 						if(start == 16)
 							start = i;
@@ -1495,13 +1501,14 @@ void DX_WRAP_FUNC(CommandList_process)(
 						end = i + 1;
 
 						temp->boundBuffers.vertexBuffers[i] = bufferRef;
+						temp->boundBuffers.vertexOffsets[i] = offset;
 					}
 
 					DeviceBuffer *buf = DeviceBufferRef_ptr(bufferRef);
 
 					vertexBuffers[i] = (D3D12_VERTEX_BUFFER_VIEW) {
-						.BufferLocation = getDxDeviceAddress((DeviceData) { .buffer = bufferRef }),
-						.SizeInBytes = (U32) buf->resource.size,
+						.BufferLocation = getDxDeviceAddress((DeviceData) { .buffer = bufferRef, .offset = offset }),
+						.SizeInBytes = (U32) (buf->resource.size - offset),
 						.StrideInBytes = graphicsShader->vertexLayout.bufferStrides12_isInstance1[i] & 4095
 					};
 				}

@@ -1944,10 +1944,13 @@ drawIndirect transitions the input buffer to IndirectDraw. This means that the b
 
 Sets the primitive buffers (vertex + index buffer(s)) for use by draw commands such as draw, drawIndirect and drawIndirectCountExt. The buffers need the Vertex and/or Index usage set if they're used for that purpose. In the same scope of the setPrimitiveBuffers it is illegal to transition the subresource(s) back to a different state or to write/read from other sources that use it (check the Scope section of this document). The vertex buffer(s) need to have the same layout as specified in the pipeline and the ranges specified by the draw calls (such as count and offset) need to match up as well.
 
+`vertexOffsets` and `indexOffset` bind each buffer from a byte offset, so several streams or meshes can live in one buffer (a vertex stream per offset, the indices at another). An offset has to be a multiple of 4, the floor WebGPU and Metal hold vertex and index offsets to, and inside its buffer; a slot without a buffer keeps offset 0. All 16 vertex slots are validated and transitioned.
+
 ```c
 SetPrimitiveBuffersCmd primitiveBuffers = (SetPrimitiveBuffersCmd) {
     .vertexBuffers = { vertexBuffers[0], vertexBuffers[1] },
     .indexBuffer = indexBuffer,
+    .vertexOffsets = { 0, 256 },
     .isIndex32Bit = false
 };
 

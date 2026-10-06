@@ -281,13 +281,19 @@ typedef struct ClearImageCmd {
 	RefPtr *image;
 } ClearImageCmd;
 
+//Offsets are bytes into each buffer, multiples of 4 (the floor WebGPU and Metal hold them to), so several meshes or
+// streams can share one buffer. A slot without a buffer keeps offset 0.
+
 typedef struct SetPrimitiveBuffersCmd {
 
 	DeviceBufferRef *vertexBuffers[16];
 	DeviceBufferRef *indexBuffer;
 
+	U64 vertexOffsets[16];
+	U64 indexOffset;
+
 	Bool isIndex32Bit;
-	U8 padding[7];
+	U8 padding[15];
 
 } SetPrimitiveBuffersCmd;
 
