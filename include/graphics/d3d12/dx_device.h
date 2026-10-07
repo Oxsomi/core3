@@ -134,10 +134,15 @@ typedef struct DxDescriptorLayout {
 	U8 padding[8];
 } DxDescriptorLayout;
 
+//Root parameters in this order: push constants, push descriptors, then the binding tables, so what changes per draw or
+// dispatch lands in the first DWORDs, the ones drivers keep in fast memory. Each field is where its group starts.
+
 typedef struct DxPipelineLayout {
 	ID3D12RootSignature *rootSig;
 	U32 rootParamPushDescriptors;
 	U32 rootParamPushConstants;
+	U32 rootParamBindings;
+	U32 padding[3];
 } DxPipelineLayout;
 
 typedef struct DxDescriptorTable {

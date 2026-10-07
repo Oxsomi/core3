@@ -770,7 +770,7 @@ void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, const Allocator
 }
 
 const C8 *reqExtensionsName[] = {
-	"VK_KHR_synchronization2", "VK_KHR_swapchain"
+	"VK_KHR_synchronization2", "VK_KHR_swapchain", "VK_EXT_scalar_block_layout"
 };
 
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
@@ -1238,6 +1238,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		);
 
 		getDeviceFeatures(
+			reqExtensions[EReqExtensions_ScalarBlockLayout],
+			VkPhysicalDeviceScalarBlockLayoutFeatures,
+			scalarBlock,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES
+		);
+
+		getDeviceFeatures(
 			optExtensions[EOptExtensions_MeshShader],
 			VkPhysicalDeviceMeshShaderFeaturesEXT,
 			meshShader,
@@ -1697,6 +1704,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if (!sync2.synchronization2)
 			deviceUnsupported("Vulkan: Unsupported device %"PRIu32", Synchronization 2 unsupported!", i);
+
+		//Shaders are compiled with DXIL's buffer layout (-fvk-use-dx-layout), so a structured element or a cbuffer
+		// member is placed the way D3D12 places it, which only the scalar layout rules permit on Vulkan: a 12 byte
+		// U32x3 element would otherwise be invalid SPIR-V that drivers happen to accept.
+
+		if (!scalarBlock.scalarBlockLayout)
+			deviceUnsupported("Vulkan: Unsupported device %"PRIu32", scalar block layout unsupported!", i);
 
 		//Check if indexing is properly supported
 

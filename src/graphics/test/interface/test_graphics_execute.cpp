@@ -773,6 +773,199 @@ extern "C" void Test_graphicsGpuExecute(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 			}
 		}
 	}
+
+	//copyBuffer: two regions of a pattern into a zeroed buffer, pulled back after its cpuData is scribbled over, so
+	// only the GPU copy can put the right bytes there; what no region covers has to stay zero.
+
+	{
+		c::U32 srcData[16], dstZero[16] = {};
+
+		for(c::U32 i = 0; i < 16; ++i)
+			srcData[i] = 0xA0000000u | i;
+
+		c::Buffer srcRef = c::Buffer_createRefConst(srcData, sizeof(srcData));
+		c::Buffer dstRef = c::Buffer_createRefConst(dstZero, sizeof(dstZero));
+
+		gfx::DeviceBuffer copySrc, copyDst, copyOther;
+		gfx::CommandList copyList;
+
+		Test_assert(t, "copyBufferSrc", dev.createBufferData(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_CPUBacked, "Copy src", &srcRef, copySrc, nullptr, e_rr
+		));
+
+		Test_assert(t, "copyBufferDst", dev.createBufferData(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_CPUBacked, "Copy dst", &dstRef, copyDst, nullptr, e_rr
+		));
+
+		Test_assert(t, "copyBufferOther", dev.createBufferData(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_None, "Copy other", &dstRef, copyOther, nullptr, e_rr
+		));
+
+		if(
+			copySrc && copyDst && copyOther &&
+			Test_assert(t, "copyBufferList", dev.createCommandList(4 * c::KIBI, 16, 16, copyList, true, e_rr))
+		) {
+
+			//A refused copy invalidates its recording, which can then be neither ended nor begun again, so every
+			// refusal gets a command list of its own. Outside a scope is refused before anything else is checked.
+
+			{
+				gfx::CommandList noScope;
+
+				const c::Bool listMade = dev.createCommandList(4 * c::KIBI, 16, 16, noScope, true, e_rr);
+
+				if (Test_assert(t, "copyBufferNoScopeList", listMade)) {
+
+					Test_assert(t, "copyBufferNoScopeBegin", noScope.begin(true, e_rr));
+
+					Test_assert(t, "copyBufferNoScope", !c::CommandListRef_copyBuffer(
+						noScope.handle(), copySrc.handle(), copyDst.handle(), { 0, 0, 4 }, nullptr
+					));
+
+					(void) noScope.end(nullptr);
+				}
+			}
+
+			const struct { const c::C8 *name; bool same; c::CopyBufferRegion a, b; c::U32 n; } refused[] = {
+				{ "copyBufferEmpty",      false, { 0, 0, 0 },   {}, 1 },
+				{ "copyBufferUnaligned",  false, { 2, 0, 4 },   {}, 1 },
+				{ "copyBufferLength",     false, { 0, 0, 6 },   {}, 1 },
+				{ "copyBufferSrcOOB",     false, { 60, 0, 8 },  {}, 1 },
+				{ "copyBufferDstOOB",     false, { 0, 64, 4 },  {}, 1 },
+				{ "copyBufferSame",       true,  { 0, 32, 16 }, {}, 1 },
+				{ "copyBufferOverlap",    false, { 0, 8, 16 },  { 32, 16, 8 }, 2 }
+			};
+
+			for (const auto &r : refused) {
+
+				gfx::CommandList refusedList;
+
+				const c::Bool listMade = dev.createCommandList(4 * c::KIBI, 16, 16, refusedList, true, e_rr);
+
+				if(!Test_assert(t, "copyBufferRefusedList", listMade))
+					continue;
+
+				Test_assert(t, "copyBufferRefusedBegin", refusedList.begin(true, e_rr));
+
+				{
+					gfx::CommandScope scope = refusedList.scope({}, 1, {}, e_rr);
+
+					const gfx::DeviceBuffer &dst = r.same ? copySrc : copyDst;
+
+					Test_assert(t, r.name, r.n == 1 ?
+						!scope.copyBuffer(copySrc, dst, r.a, nullptr) :
+						!scope.copyBufferRegions(copySrc, dst, { r.a, r.b }, nullptr)
+					);
+				}
+
+				(void) refusedList.end(nullptr);
+			}
+
+			//The real one, with a second copy in its own scope so the copy write is followed by a copy read
+
+			Test_assert(t, "copyBufferRecord", copyList.begin(true, e_rr));
+
+			{
+				gfx::CommandScope scope = copyList.scope({}, 1, {}, e_rr);
+				Test_assert(t, "copyBufferScope", (c::Bool) scope);
+
+				Test_assert(t, "copyBufferRegions", scope.copyBufferRegions(
+					copySrc, copyDst, { { 0, 16, 16 }, { 40, 48, 8 } }, e_rr
+				));
+			}
+
+			{
+				gfx::CommandScope scope = copyList.scope({}, 2, {}, e_rr);
+				Test_assert(t, "copyBufferScope2", (c::Bool) scope);
+				Test_assert(t, "copyBufferChain", scope.copyBuffer(copyDst, copyOther, { 16, 0, 16 }, e_rr));
+			}
+
+			Test_assert(t, "copyBufferEnd", copyList.end(e_rr));
+			Test_assert(t, "copyBufferSubmit", dev.submit({ &copyList }, {}, 0, 0, e_rr));
+			Test_assert(t, "copyBufferWait", dev.wait(e_rr));
+
+			c::DeviceBuffer *dstPtr = copyDst.data();
+
+			for(c::U64 i = 0; i < sizeof(dstZero); ++i)
+				dstPtr->cpuData.ptrNonConst[i] = 0xCC;
+
+			c::U32 pulled = 0;
+			Test_assert(t, "copyBufferPull", copyDst.pullRegion(0, 0, Test_pullCallback, &pulled, e_rr));
+
+			gfx::CommandList pullList;
+
+			const c::Bool pullListMade = dev.createCommandList(4 * c::KIBI, 16, 16, pullList, true, e_rr);
+
+			if (Test_assert(t, "copyBufferPullList", pullListMade)) {
+				Test_assert(t, "copyBufferPullBegin", pullList.begin(true, e_rr));
+				Test_assert(t, "copyBufferPullEnd", pullList.end(e_rr));
+				Test_assert(t, "copyBufferPullSubmit", dev.submit({ &pullList }, {}, 0, 0, e_rr));
+			}
+
+			Test_assert(t, "copyBufferPullWait", dev.wait(e_rr));
+			Test_assert(t, "copyBufferPulled", pulled == 1);
+
+			//Words 4..7 from 0..3, words 12..13 from 10..11, zero everywhere else
+
+			const c::U32 *words = (const c::U32*) dstPtr->cpuData.ptr;
+			c::Bool matches = c::Buffer_length(dstPtr->cpuData) == sizeof(dstZero);
+
+			for(c::U32 i = 0; i < 16 && matches; ++i) {
+
+				const c::U32 expected =
+					i >= 4 && i < 8 ? srcData[i - 4] :
+					i >= 12 && i < 14 ? srcData[i - 2] : 0;
+
+				matches &= words[i] == expected;
+			}
+
+			Test_assert(t, "copyBufferContents", matches);
+		}
+	}
+
+	//An RGB9E5 texture, which every device has to sample: created with data, pulled back after its cpuData is
+	// scribbled over. Any U32 is a valid RGB9E5 texel, so the round trip has to be bit exact.
+
+	{
+		const c::U32 texels[4] = { 0x00000000u, 0x8401FF00u, 0xF8000001u, 0x47D3A2B1u };
+		c::Buffer texRef = c::Buffer_createRefConst(texels, sizeof(texels));
+
+		gfx::DeviceTexture shared;
+
+		Test_assert(t, "rgb9e5Create", dev.createTexture(
+			c::ETextureType_2D, c::ETextureFormatId_RGB9E5, c::EGraphicsResourceFlag_CPUBacked, 2, 2, 1,
+			"Execute RGB9E5", &texRef, shared, nullptr, e_rr
+		));
+
+		gfx::CommandList pullList;
+		const c::Bool listMade = dev.createCommandList(4 * c::KIBI, 16, 16, pullList, true, e_rr);
+
+		if (shared && Test_assert(t, "rgb9e5List", listMade)) {
+
+			c::DeviceTexture *texPtr = shared.data();
+
+			Test_assert(t, "rgb9e5Begin", pullList.begin(true, e_rr));
+			Test_assert(t, "rgb9e5End", pullList.end(e_rr));
+			Test_assert(t, "rgb9e5Upload", dev.submit({ &pullList }, {}, 0, 0, e_rr));
+			Test_assert(t, "rgb9e5UploadWait", dev.wait(e_rr));
+
+			for(c::U64 i = 0; i < c::Buffer_length(texPtr->cpuData); ++i)
+				texPtr->cpuData.ptrNonConst[i] = 0xCC;
+
+			c::U32 pulled = 0;
+			Test_assert(t, "rgb9e5Pull", shared.pullRegion(0, 0, 0, 0, 0, 0, Test_pullCallback, &pulled, e_rr));
+			Test_assert(t, "rgb9e5PullSubmit", dev.submit({ &pullList }, {}, 0, 0, e_rr));
+			Test_assert(t, "rgb9e5PullWait", dev.wait(e_rr));
+			Test_assert(t, "rgb9e5Pulled", pulled == 1);
+
+			c::Bool matches = c::Buffer_length(texPtr->cpuData) == sizeof(texels);
+
+			for(c::U32 i = 0; i < 4 && matches; ++i)
+				matches &= ((const c::U32*) texPtr->cpuData.ptr)[i] == texels[i];
+
+			Test_assert(t, "rgb9e5RoundTrip", matches);
+		}
+	}
 }
 
 // -- 30. Acceleration structures -------------------------------------------------

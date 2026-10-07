@@ -27,7 +27,6 @@
 #include "@types.hlsli"
 
 static const U32 ResourceId_mask = (1 << 17) - 1;
-static const U32 U32_MAX = 0xFFFFFFFFu;
 
 //Even though DXIL bindings could use setId == spaceId and default registerId on 0,
 //It'd be inefficient, because the root signature can't simplify this to 3 ranges.
@@ -37,10 +36,8 @@ static const U32 U32_MAX = 0xFFFFFFFFu;
 
 #ifdef __spirv__
 	#define _binding(bindingId, setId, a, ...) [[vk::binding(bindingId, setId)]] __VA_ARGS__
-	#define _vkBinding(a, b) [[vk::binding(a, b)]]
 #else
 	#define _binding(a, b, registerId, ...) __VA_ARGS__ : register(registerId, OXC3_RESERVED_SPACE)
-	#define _vkBinding(a, b)
 #endif
 
 //The bindless sampler array is opt in, because it owns a whole descriptor set on SPIRV (set 0, while every

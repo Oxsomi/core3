@@ -72,10 +72,11 @@ typedef enum ECommandOp {
 	ECommandOp_Dispatch,
 	ECommandOp_DispatchIndirect,
 
-	//Clearing and copying images
+	//Clearing and copying images, copying buffers
 
 	ECommandOp_ClearImages,
 	ECommandOp_CopyImage,
+	ECommandOp_CopyBuffer,
 
 	//Debugging
 
@@ -280,13 +281,19 @@ typedef struct ClearImageCmd {
 	RefPtr *image;
 } ClearImageCmd;
 
+//Offsets are bytes into each buffer, multiples of 4 (the floor WebGPU and Metal hold them to), so several meshes or
+// streams can share one buffer. A slot without a buffer keeps offset 0.
+
 typedef struct SetPrimitiveBuffersCmd {
 
 	DeviceBufferRef *vertexBuffers[16];
 	DeviceBufferRef *indexBuffer;
 
+	U64 vertexOffsets[16];
+	U64 indexOffset;
+
 	Bool isIndex32Bit;
-	U8 padding[7];
+	U8 padding[15];
 
 } SetPrimitiveBuffersCmd;
 
@@ -479,6 +486,23 @@ typedef struct CopyImageCmd {
 	//CopyImageRegion regions[regionCount];
 
 } CopyImageCmd;
+
+//Bytes, each a multiple of 4 (WebGPU's copyBufferToBuffer requires it, so it is required everywhere).
+
+typedef struct CopyBufferRegion {
+	U64 srcOffset, dstOffset, length;
+} CopyBufferRegion;
+
+typedef struct CopyBufferCmd {
+
+	DeviceBufferRef *src, *dst;
+
+	U32 regionCount;
+	U32 padding;
+
+	//CopyBufferRegion regions[regionCount];
+
+} CopyBufferCmd;
 
 //Commands
 

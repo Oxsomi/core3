@@ -239,6 +239,15 @@ Bool DxDescriptorHeap_allocTable(DxDescriptorHeap *heapExt, DxDescriptorTable *t
 	for(U8 i = 0; i < 2; ++i)
 		if(ranges[i]) {
 
+			if(ranges[i] > Buffer_length(heapExt->allocators[i].buffer))
+				retError(clean, Error_outOfBounds(
+					0, ranges[i], Buffer_length(heapExt->allocators[i].buffer),
+					i ?
+						"DxDescriptorHeap_allocTable() the heap has too few samplers for the table; a static sampler "
+						"counts toward DescriptorHeapInfo::maxSamplers too" :
+						"DxDescriptorHeap_allocTable() the heap has too few CBV/SRV/UAV descriptors for the table"
+				));
+
 			lock = &heapExt->locks[i];
 			acq = SpinLock_lock(lock, 1 * SECOND);
 

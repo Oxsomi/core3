@@ -153,10 +153,220 @@ U64 Platform_getAvailableRAM() {
 	#endif
 }
 
-void Platform_detectCPUInfo(PlatformCPUInfo *out) {
+#if _PLATFORM_TYPE == PLATFORM_LINUX || _PLATFORM_TYPE == PLATFORM_ANDROID
+
+	//A small sysfs file whole, null terminated, or false when it isn't there
+
+	static Bool Platform_readSysfs(const C8 *path, C8 *text, U64 cap) {
+
+		const int file = open(path, O_RDONLY);
+
+		if(file < 0)
+			return false;
+
+		const ssize_t got = read(file, text, cap - 1);
+		close(file);
+
+		if(got <= 0)
+			return false;
+
+		text[got] = 0;
+		return true;
+	}
+
+	//A cpu list as sysfs writes one, "0-7,16-23"
+
+	static Bool Platform_readCpuList(const C8 *path, ListU32 *out, const Allocator *alloc, Error *e_rr) {
+
+		Bool s_uccess = true;
+		C8 text[1024];
+
+		if(!Platform_readSysfs(path, text, sizeof(text)))
+			goto clean;
+
+		for(const C8 *at = text; *at; ) {
+
+			C8 *end = NULL;
+			const unsigned long first = strtoul(at, &end, 10);
+
+			if(end == at)
+				break;
+
+			unsigned long last = first;
+			at = end;
+
+			if(*at == '-') {
+				last = strtoul(at + 1, &end, 10);
+				at = end;
+			}
+
+			for(unsigned long cpu = first; cpu <= last; ++cpu)
+				gotoIfError3(clean, ListU32_pushBack(out, (U32) cpu, alloc, e_rr));
+
+			while(*at == ',' || *at == '\n' || *at == ' ')
+				++at;
+		}
+
+	clean:
+		return s_uccess;
+	}
+
+	//A file under one cpu's sysfs directory, such as "/cpu_capacity"
+
+	static Bool Platform_readCpuSysfs(U64 cpu, const C8 *suffix, C8 *text, U64 cap) {
+
+		static const C8 prefix[] = "/sys/devices/system/cpu/cpu";
+
+		C8 path[sizeof(prefix) + 20 + 64], digits[20];
+		U64 n = 0, d = 0, v = cpu;
+
+		for(U64 i = 0; i + 1 < sizeof(prefix); ++i)
+			path[n++] = prefix[i];
+
+		do { digits[d++] = (C8) ('0' + v % 10); v /= 10; } while(v);
+
+		while(d)
+			path[n++] = digits[--d];
+
+		for(U64 i = 0; suffix[i] && n + 1 < sizeof(path); ++i)
+			path[n++] = suffix[i];
+
+		path[n] = 0;
+		return Platform_readSysfs(path, text, cap);
+	}
+
+	//Arm's big.LITTLE gives each cpu a capacity relative to the fastest (1024); a quarter below that counts as
+	// efficiency, which puts a mid core with the little ones
+
+	static Bool Platform_classesByCapacity(ListU32 *performance, ListU32 *efficiency, const Allocator *alloc, Error *e_rr) {
+
+		Bool s_uccess = true;
+		const U64 cpus = Platform_getThreads();
+		U32 highest = 0, lowest = U32_MAX;
+
+		for(U64 pass = 0; pass < 2; ++pass)
+			for(U64 cpu = 0; cpu < cpus; ++cpu) {
+
+				C8 text[32];
+
+				if(!Platform_readCpuSysfs(cpu, "/cpu_capacity", text, sizeof(text)))
+					goto clean;
+
+				const U32 capacity = (U32) strtoul(text, NULL, 10);
+
+				if(!pass) {
+					highest = capacity > highest ? capacity : highest;
+					lowest = capacity < lowest ? capacity : lowest;
+					continue;
+				}
+
+				if(lowest >= highest)
+					goto clean;
+
+				ListU32 *list = (U64) capacity * 4 >= (U64) highest * 3 ? performance : efficiency;
+				gotoIfError3(clean, ListU32_pushBack(list, (U32) cpu, alloc, e_rr));
+			}
+
+	clean:
+		return s_uccess;
+	}
+
+	//SMT siblings list the same cpus; the first of them counts the core, and a cpu without the file is one
+
+	static U32 Platform_countCores(ListU32 cpus) {
+
+		U32 cores = 0;
+
+		for(U64 i = 0; i < cpus.length; ++i) {
+			C8 text[64];
+			cores +=
+				!Platform_readCpuSysfs(cpus.ptr[i], "/topology/thread_siblings_list", text, sizeof(text)) ||
+				strtoul(text, NULL, 10) == cpus.ptr[i];
+		}
+
+		return cores;
+	}
+
+	//A hybrid CPU's cores by class; a CPU with one class leaves both empty
+
+	static Bool Platform_detectCoreClasses(PlatformCPUInfo *out, const Allocator *alloc, Error *e_rr) {
+
+		Bool s_uccess = true;
+		ListU32 *performance = &out->performance.cpus, *efficiency = &out->efficiency.cpus;
+
+		//Intel's hybrid parts have a PMU per core type, each listing its cpus
+
+		gotoIfError3(clean, Platform_readCpuList("/sys/devices/cpu_core/cpus", performance, alloc, e_rr));
+		gotoIfError3(clean, Platform_readCpuList("/sys/devices/cpu_atom/cpus", efficiency, alloc, e_rr));
+
+		if(!performance->length || !efficiency->length) {
+			ListU32_clear(performance, NULL);
+			ListU32_clear(efficiency, NULL);
+			gotoIfError3(clean, Platform_classesByCapacity(performance, efficiency, alloc, e_rr));
+		}
+
+		if(!performance->length || !efficiency->length) {
+			ListU32_clear(performance, NULL);
+			ListU32_clear(efficiency, NULL);
+			goto clean;
+		}
+
+		out->performance.logicalCores = (U32) performance->length;
+		out->efficiency.logicalCores = (U32) efficiency->length;
+		out->performance.physicalCores = Platform_countCores(*performance);
+		out->efficiency.physicalCores = Platform_countCores(*efficiency);
+
+	clean:
+		return s_uccess;
+	}
+
+#elif _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+
+	static U32 Platform_sysctlU32(const C8 *name) {
+		int v = 0;
+		size_t size = sizeof(v);
+		return sysctlbyname(name, &v, &size, NULL, 0) || v < 0 ? 0 : (U32) v;
+	}
+
+	//Apple's core classes are perf levels, 0 the fastest. A thread can't be placed, so only the counts are known.
+
+	static Bool Platform_detectCoreClasses(PlatformCPUInfo *out, const Allocator *alloc, Error *e_rr) {
+
+		(void) alloc;
+		(void) e_rr;
+
+		const U32 levels = Platform_sysctlU32("hw.nperflevels");
+
+		for(U32 i = 0; levels > 1 && i < levels && i < 10; ++i) {
+
+			C8 physical[] = "hw.perflevel0.physicalcpu", logical[] = "hw.perflevel0.logicalcpu";
+			physical[12] = logical[12] = (C8) ('0' + i);
+
+			PlatformCPUClass *c = i ? &out->efficiency : &out->performance;
+			c->physicalCores += Platform_sysctlU32(physical);
+			c->logicalCores += Platform_sysctlU32(logical);
+		}
+
+		return true;
+	}
+
+#else
+
+	static Bool Platform_detectCoreClasses(PlatformCPUInfo *out, const Allocator *alloc, Error *e_rr) {
+		(void) out;
+		(void) alloc;
+		(void) e_rr;
+		return true;
+	}
+
+#endif
+
+Bool Platform_detectCPUInfo(PlatformCPUInfo *out, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!out)
-		return;
+		retError(clean, Error_nullPointer(0, "Platform_detectCPUInfo()::out is required"));
 
 	*out = (PlatformCPUInfo) { 0 };
 	out->logicalCores = (U32) Platform_getThreads();
@@ -249,6 +459,11 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 	#endif
 
 	out->numaNodes = 1;
+
+	gotoIfError3(clean, Platform_detectCoreClasses(out, alloc, e_rr));
+
+clean:
+	return s_uccess;
 }
 
 Bool Platform_initExt(Error *e_rr) {

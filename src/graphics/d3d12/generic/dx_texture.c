@@ -125,6 +125,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 			break;
 
 		case ETextureFormatId_BGR10A2:                             dxFormat = DXGI_FORMAT_R10G10B10A2_TYPELESS;  break;
+		case ETextureFormatId_RGB9E5:                              dxFormat = DXGI_FORMAT_R9G9B9E5_SHAREDEXP;    break;
 		case ETextureFormatId_BC6H:                                dxFormat = DXGI_FORMAT_BC6H_TYPELESS;         break;
 
 		case ETextureFormatId_BC4:    case ETextureFormatId_BC4s:  dxFormat = DXGI_FORMAT_BC4_TYPELESS;          break;

@@ -119,9 +119,7 @@ extern "C" void Test_graphicsBindfulSampler(oxc::c::Test *t, oxc::c::GraphicsDev
 	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(layoutInfo.list, "Bindful sampler layout", layout, e_rr)))
 		return;
 
-	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 1,
-		.maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
-	};
+	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 1, .maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1 };
 
 	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Bindful sampler heap", heap, e_rr)))
 		return;
@@ -1017,9 +1015,7 @@ extern "C" void Test_graphicsBindfulSamplerCmp(oxc::c::Test *t, oxc::c::Graphics
 	)))
 		return;
 
-	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 1,
-		.maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
-	};
+	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 1, .maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1 };
 
 	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Comparison sampler heap", heap, e_rr)))
 		return;
@@ -1763,9 +1759,9 @@ static void Test_bindfulStaticSamplerImpl(oxc::c::Test *t, oxc::c::GraphicsDevic
 	// written to it, Vulkan because the pool has to cover the descriptor its set layout declares and D3D12
 	// because the table counts every sampler binding.
 
-	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 1,
-		.maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
-	};
+	//Room for a second table, which holds the texture first and lets it go (below)
+
+	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 2, .maxTextures = 2, .maxBuffersRW = 2, .maxDescriptorTables = 2 };
 
 	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Static sampler heap", heap, e_rr)))
 		return;
@@ -1821,6 +1817,18 @@ static void Test_bindfulStaticSamplerImpl(oxc::c::Test *t, oxc::c::GraphicsDevic
 
 		Test_assert(t, "bakedSamplerSetRefused", !table.setByName("samp", strayDesc, 0, false, nullptr));
 		Test_assert(t, "bakedSamplerUnsetRefused", !table.unsetByName("samp", 0, 1, nullptr));
+	}
+
+	//A table that held the texture and let it go released the texture's last view on Vulkan, and the next table
+	// asking for the same range was handed that released slot's null view.
+
+	{
+		gfx::DescriptorTable scratch;
+
+		if (Test_assert(t, "scratchTableCreate", heap.createTable(
+			layout, "Static sampler scratch table", scratch, c::EDescriptorTableFlags_None, e_rr
+		)))
+			Test_assert(t, "scratchSetTex", scratch.setByName("tex", texDesc, 0, false, e_rr));
 	}
 
 	Test_assert(t, "setTex", table.setByName("tex", texDesc, 0, false, e_rr));

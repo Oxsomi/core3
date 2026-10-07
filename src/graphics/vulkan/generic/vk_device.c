@@ -373,6 +373,17 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
+	//Required (vk_instance.c): DXIL's buffer layout, which every OxC3 shader is compiled with
+
+	bindNextVkStruct(
+		VkPhysicalDeviceScalarBlockLayoutFeatures,
+		true,
+		(VkPhysicalDeviceScalarBlockLayoutFeatures) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES,
+			.scalarBlockLayout = true
+		}
+	)
+
 	bindNextVkStruct(
 		VkPhysicalDeviceDynamicRenderingFeatures,
 		feat & EGraphicsFeatures_DirectRendering,

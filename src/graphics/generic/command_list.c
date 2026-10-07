@@ -49,6 +49,7 @@ TListImpl(CommandScopeDependency);
 TListImpl(ClearImageCmd);
 TListImpl(AttachmentInfo);
 TListImpl(CopyImageRegion);
+TListImpl(CopyBufferRegion);
 
 //Clear, append, begin and end
 
@@ -293,6 +294,7 @@ Bool CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U32
 
 			case ECommandOp_ClearImages:
 			case ECommandOp_CopyImage:
+			case ECommandOp_CopyBuffer:
 			case ECommandOp_UpdateBLASExt:
 			case ECommandOp_CompactBLASExt:
 			case ECommandOp_UpdateTLASExt:

@@ -1056,6 +1056,24 @@ namespace oxc {
 				return c::CommandListRef_copyImage(list, src, dst, region, e_rr);
 			}
 
+			[[nodiscard]] c::Bool copyBuffer(
+				const DeviceBuffer &src, const DeviceBuffer &dst, c::CopyBufferRegion region, c::Error *e_rr = nullptr
+			) noexcept {
+				return c::CommandListRef_copyBuffer(list, src.handle(), dst.handle(), region, e_rr);
+			}
+
+			[[nodiscard]] c::Bool copyBufferRegions(
+				const DeviceBuffer &src, const DeviceBuffer &dst, std::initializer_list<c::CopyBufferRegion> regions,
+				c::Error *e_rr = nullptr
+			) noexcept {
+
+				c::ListCopyBufferRegion regionList{};
+				if(regions.size())
+					(void) c::ListCopyBufferRegion_createRefConst(regions.begin(), regions.size(), &regionList, nullptr);
+
+				return c::CommandListRef_copyBufferRegions(list, src.handle(), dst.handle(), regionList, e_rr);
+			}
+
 			//Dynamic graphics state.
 			//The C API accepts these in ANY scope (they only bind against a pipeline at draw time),
 			// so the singles live here; render() keeps the combined form too since that is where it is set in practice.

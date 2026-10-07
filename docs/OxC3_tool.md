@@ -459,7 +459,9 @@ Generates an encrypted oiCA file (`encr`) or restores the original (`decr`). Wor
 
 The `devices` category reports this machine's hardware (distinct from the `graphics` category, which enumerates graphics APIs and adapters):
 
-- `OxC3 devices cpu`: Shows this machine's CPU: logical cores, physical memory and hardware capability flags.
+- `OxC3 devices cpu`: Shows this machine's CPU: logical cores, physical memory and hardware capability flags. On a
+  hybrid CPU also its performance and efficiency cores, and on Windows, Linux and Android the CPUs each class's job
+  queue workers are placed on.
 - `OxC3 devices all`: Dumps CPU + graphics devices + audio devices in one go (handy for support / bug reports).
 
 ## Float

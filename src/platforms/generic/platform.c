@@ -584,7 +584,7 @@ Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocat
 		.alloc = &Allocator_trackedAllocator
 	};
 
-	Platform_detectCPUInfo(&Platform_instance->cpuInfo);
+	gotoIfError3(clean, Platform_detectCPUInfo(&Platform_instance->cpuInfo, Platform_instance->alloc, e_rr));
 
 	//After the instance exists on purpose: the SIMD backends diagnose a rejection through Log, which needs the
 	// platform allocator, and nothing done above this point depends on the verdict (the failure path cleans it all up).
@@ -628,6 +628,8 @@ void Platform_cleanup() {
 	CharString_free(&Platform_instance->workDirectory, Platform_instance->alloc);
 	CharString_free(&Platform_instance->appDirectory, Platform_instance->alloc);
 	ListCharString_free(&Platform_instance->args, Platform_instance->alloc);
+	ListU32_free(&Platform_instance->cpuInfo.performance.cpus, Platform_instance->alloc);
+	ListU32_free(&Platform_instance->cpuInfo.efficiency.cpus, Platform_instance->alloc);
 
 	SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
 

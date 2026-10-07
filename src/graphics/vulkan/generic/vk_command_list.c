@@ -819,6 +819,33 @@ void VK_WRAP_FUNC(CommandList_process)(
 			break;
 		}
 
+		case ECommandOp_CopyBuffer: {
+
+			const CopyBufferCmd copyBuffer = *(const CopyBufferCmd*) data;
+			const CopyBufferRegion *regions = (const CopyBufferRegion*) (data + sizeof(copyBuffer));
+
+			//VkBufferCopy is the same three U64s in the same order, but spelled out rather than cast
+
+			VkBufferCopy copies[128];
+
+			for(U32 i = 0; i < copyBuffer.regionCount; ++i)
+				copies[i] = (VkBufferCopy) {
+					.srcOffset = regions[i].srcOffset,
+					.dstOffset = regions[i].dstOffset,
+					.size = regions[i].length
+				};
+
+			deviceExt->cmdCopyBuffer(
+				buffer,
+				DeviceBuffer_ext(DeviceBufferRef_ptr(copyBuffer.src), Vk)->buffer,
+				DeviceBuffer_ext(DeviceBufferRef_ptr(copyBuffer.dst), Vk)->buffer,
+				copyBuffer.regionCount,
+				copies
+			);
+
+			break;
+		}
+
 		//Dynamic rendering / direct rendering
 
 		case ECommandOp_StartRenderingExt: {
@@ -1133,17 +1160,19 @@ void VK_WRAP_FUNC(CommandList_process)(
 				temp->tempBoundBuffers.indexBuffer &&
 				(
 					temp->boundBuffers.indexBuffer != temp->tempBoundBuffers.indexBuffer ||
+					temp->boundBuffers.indexOffset != temp->tempBoundBuffers.indexOffset ||
 					temp->boundBuffers.isIndex32Bit != temp->tempBoundBuffers.isIndex32Bit
 				)
 			) {
 
 				temp->boundBuffers.indexBuffer = temp->tempBoundBuffers.indexBuffer;
+				temp->boundBuffers.indexOffset = temp->tempBoundBuffers.indexOffset;
 				temp->boundBuffers.isIndex32Bit = temp->tempBoundBuffers.isIndex32Bit;
 
 				deviceExt->cmdBindIndexBuffer(
 					temp->buffer,
 					DeviceBuffer_ext(DeviceBufferRef_ptr(temp->boundBuffers.indexBuffer), Vk)->buffer,
-					0,
+					temp->boundBuffers.indexOffset,
 					temp->boundBuffers.isIndex32Bit ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16
 				);
 			}
@@ -1162,11 +1191,12 @@ void VK_WRAP_FUNC(CommandList_process)(
 				for(U32 i = 0; i < 16; ++i) {
 
 					DeviceBufferRef *bufferRef = temp->tempBoundBuffers.vertexBuffers[i];
+					const U64 offset = temp->tempBoundBuffers.vertexOffsets[i];
 
 					if (!bufferRef)
 						continue;
 
-					if(temp->boundBuffers.vertexBuffers[i] != bufferRef) {
+					if(temp->boundBuffers.vertexBuffers[i] != bufferRef || temp->boundBuffers.vertexOffsets[i] != offset) {
 
 						if(start == 16)
 							start = i;
@@ -1174,9 +1204,11 @@ void VK_WRAP_FUNC(CommandList_process)(
 						end = i + 1;
 
 						temp->boundBuffers.vertexBuffers[i] = bufferRef;
+						temp->boundBuffers.vertexOffsets[i] = offset;
 					}
 
 					vertexBuffers[i] = DeviceBuffer_ext(DeviceBufferRef_ptr(bufferRef), Vk)->buffer;
+					vertexBufferOffsets[i] = offset;
 				}
 
 				if(end > start)

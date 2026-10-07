@@ -528,6 +528,36 @@ clean:
 	return s_uccess;
 }
 
+static Bool CommandListRef_validatePrimitiveOffset(DeviceBufferRef *buffer, U64 offset, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!buffer) {
+
+		if(offset)
+			retError(clean, Error_invalidParameter(
+				1, 0, "CommandListRef_setPrimitiveBuffers()::buffers has an offset for a slot without a buffer"
+			));
+
+		goto clean;
+	}
+
+	if(offset & 3)
+		retError(clean, Error_invalidParameter(
+			1, 1, "CommandListRef_setPrimitiveBuffers()::buffers offsets have to be multiples of 4"
+		));
+
+	const U64 size = DeviceBufferRef_ptr(buffer)->resource.size;
+
+	if(offset >= size)
+		retError(clean, Error_outOfBounds(
+			1, offset, size, "CommandListRef_setPrimitiveBuffers()::buffers has an offset past its buffer"
+		));
+
+clean:
+	return s_uccess;
+}
+
 Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, const SetPrimitiveBuffersCmd *buffers, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -553,13 +583,22 @@ Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, const Se
 		e_rr
 	));
 
-	if(!s_uccess)
-		return s_uccess;
+	gotoIfError3(clean, CommandListRef_validatePrimitiveOffset(buffers->indexBuffer, buffers->indexOffset, e_rr));
 
-	for(U8 i = 0; i < 8; ++i)
+	//Every slot the command holds; the backends bind all of them
+
+	const U8 slots = (U8) (sizeof(buffers->vertexBuffers) / sizeof(buffers->vertexBuffers[0]));
+
+	for(U8 i = 0; i < slots; ++i) {
+
 		gotoIfError3(clean, CommandListRef_validateBufferDesc(
 			device, buffers->vertexBuffers[i], EDeviceBufferUsage_Vertex, U32_MAX, e_rr
 		));
+
+		gotoIfError3(clean, CommandListRef_validatePrimitiveOffset(
+			buffers->vertexBuffers[i], buffers->vertexOffsets[i], e_rr
+		));
+	}
 
 	//Transition
 
@@ -567,7 +606,7 @@ Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, const Se
 		commandList, buffers->indexBuffer, (BufferRange) { 0 }, ETransitionType_Index, EPipelineStage_Count, e_rr
 	));
 
-	for(U8 i = 0; i < 8; ++i)
+	for(U8 i = 0; i < slots; ++i)
 		gotoIfError3(clean, CommandListRef_transitionBuffer(
 			commandList, buffers->vertexBuffers[i], (BufferRange) { 0 }, ETransitionType_Vertex, EPipelineStage_Count, e_rr
 		));
@@ -1455,6 +1494,24 @@ Bool CommandListRef_bindDescriptorTable(CommandListRef *commandListRef, Descript
 		};
 
 		gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
+	}
+
+	//The list holds the table from the bind on rather than from end(), where its transitions take their references:
+	// a table made for one dispatch can be let go by the caller as soon as it is bound, and the work ops of this
+	// recording still read it. end() skips what is already held.
+
+	//Reserved first, so the push after the reference is taken can't fail and leak it
+
+	if (!ListRefPtr_contains(commandList->resources, table, 0, NULL)) {
+
+		gotoIfError3(clean, ListRefPtr_reserve(
+			&commandList->resources, commandList->resources.length + 1, alloc, e_rr
+		));
+
+		if(!RefPtr_inc(table))
+			retError(clean, Error_invalidState(0, "CommandListRef_bindDescriptorTable() couldn't hold the table"));
+
+		gotoIfError3(clean, ListRefPtr_pushBack(&commandList->resources, table, alloc, e_rr));
 	}
 
 	DescriptorTableRef *args[2] = { table, NULL };

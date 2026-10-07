@@ -54,6 +54,25 @@ void Thread_free(const Allocator *alloc, Thread **thread);
 impl Bool Thread_wait(Thread *thread, Error *e_rr);
 Bool Thread_waitAndCleanup(const Allocator *alloc, Thread **thread, Error *e_rr);
 
+//How the OS should weigh the CALLING thread against the rest: Critical for work a frame waits on, Background for work
+// that can wait. On a hybrid CPU Background also asks for the efficiency cores (EcoQoS on Windows, QoS classes on
+// Apple). Best effort: what the OS refuses an unprivileged process (raising a priority on Linux) is left as it was.
+
+typedef enum EThreadPriority {
+	EThreadPriority_Normal,
+	EThreadPriority_Critical,
+	EThreadPriority_Background,
+	EThreadPriority_Count
+} EThreadPriority;
+
+impl Bool Thread_setPriority(EThreadPriority priority, Error *e_rr);
+
+//Restricts the CALLING thread to cpus, as PlatformCPUInfo's lists name them (CPU set ids on Windows, cpu indices on
+// Linux and Android). A count of 0 lifts the restriction. Apple and the web don't let a thread pick its cores, so there
+// it does nothing and succeeds.
+
+impl Bool Thread_setAffinity(const U32 *cpus, U64 count, Error *e_rr);
+
 #ifdef __cplusplus
 	}
 #endif

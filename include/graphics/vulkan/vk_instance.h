@@ -40,7 +40,8 @@ extern U64 reqExtensionsNameCount;
 
 typedef enum EReqExtensions {
 	EReqExtensions_Synchronization2,
-	EReqExtensions_Swapchain
+	EReqExtensions_Swapchain,
+	EReqExtensions_ScalarBlockLayout
 } EReqExtensions;
 
 typedef enum EOptExtensions {
