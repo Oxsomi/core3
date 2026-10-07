@@ -476,6 +476,7 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	*blockId = (U32) i;
 	*blockOffset = (U64) allocLoc;
 	*resultBlock = block;
+	((VkBlockRequirements*) requirementsExt)->newMemory = true;
 
 clean:
 

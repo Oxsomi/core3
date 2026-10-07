@@ -114,7 +114,8 @@ typedef enum EOptExtensions {
 
 	EOptExtensions_IndexTypeUint8,
 
-	EOptExtensions_MemoryPriority          //EVkGraphicsFeatures_MemoryPriority
+	EOptExtensions_MemoryPriority,         //EVkGraphicsFeatures_MemoryPriority
+	EOptExtensions_PageableMemory          //EVkGraphicsFeatures_PageableMemory, needs MemoryPriority
 
 } EOptExtensions;
 

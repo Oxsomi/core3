@@ -104,6 +104,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_AMD_buffer_marker as WriteBufferImmediate (features2).
   - VK_EXT_external_memory_host as Vk extension ExternalHostMemory.
   - VK_EXT_memory_priority (.memoryPriority) as Vk extension MemoryPriority.
+  - VK_EXT_pageable_device_local_memory (.pageableDeviceLocalMemory), with MemoryPriority, as Vk extension PageableMemory.
   - VK_EXT_device_address_binding_report (.reportAddressBinding), when the instance has a debug utils messenger, as Vk extension AddressBindingReport.
 - sampleRateShading of true.
 - maxMemoryAllocationSize and maxBufferSize of a minimum of 256MiB (ideally should use <=128MiB).

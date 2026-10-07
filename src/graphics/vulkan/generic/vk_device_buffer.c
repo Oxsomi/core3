@@ -210,7 +210,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if (buf->usage & EDeviceBufferUsage_SBTExt)
 		requirements.memoryRequirements.alignment = U64_max(64, requirements.memoryRequirements.alignment);
 
-	const VkBlockRequirements blockReq = (VkBlockRequirements) {
+	VkBlockRequirements blockReq = (VkBlockRequirements) {
 		.memory = requirements.memoryRequirements,
 		.buffer = bufExt->buffer,
 		.flags =
@@ -242,6 +242,13 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	if (block.mappedMemoryExt)
 		buf->resource.mappedMemoryExt = block.mappedMemoryExt + buf->resource.blockOffset;
+
+	//New device local memory is committed here, where D3D12 commits a heap, rather than in the first frame that uses
+	// it. Mapping doesn't commit it: ReBAR memory is mapped and still paid in its first frame. Host memory (staging,
+	// every block of an integrated GPU) is left to the CPU writes that fill it.
+
+	if(blockReq.newMemory && (block.allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+		gotoIfError3(clean, VkGraphicsDevice_commitMemory(device, bufExt->buffer, e_rr));
 
 	//Grab GPU location
 

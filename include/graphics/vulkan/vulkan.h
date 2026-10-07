@@ -111,13 +111,15 @@ typedef enum EVkBlockFlags {
 //What VkDeviceMemoryAllocator_allocate takes as requirementsExt.
 //buffer or image names the resource a dedicated allocation is for (VkMemoryDedicatedAllocateInfo); both are null when
 // the allocation holds several.
+//newMemory is written back: the allocation made a new VkDeviceMemory rather than landing in an existing block.
 
 typedef struct VkBlockRequirements {
 	VkMemoryRequirements memory;
 	VkBuffer buffer;
 	VkImage image;
 	EVkBlockFlags flags;
-	U32 padding;
+	Bool newMemory;
+	U8 padding[3];
 } VkBlockRequirements;
 
 typedef enum ECompareOp ECompareOp;

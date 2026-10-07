@@ -335,7 +335,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkMergePipelineCaches mergePipelineCaches;
 
 	VkPipelineCache pipelineCache;        //Every pipeline built merges into it (GraphicsDeviceRef_getPipelineCache)
-	U64 padding3;
+	PFN_vkCmdFillBuffer cmdFillBuffer;    //VkGraphicsDevice_commitMemory's fill
 
 	VkPipelineCacheHeaderVersionOne pipelineCacheHeader;        //What this device's cache data starts with
 
@@ -484,6 +484,12 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 Bool VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt, Error *e_rr);
 
 Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *commandBuffer, Error *e_rr);
+
+//Has the device commit a new allocation now, as D3D12 does when it creates a heap: Vulkan commits memory on the first
+// submit that references it, which put the cost of a big resize into its first frame (340 ms for 1.1 GB at 4K on an
+// RTX 3070). A 4 byte fill of buffer, a resource in that allocation, submitted and waited on.
+
+Bool VkGraphicsDevice_commitMemory(GraphicsDevice *device, VkBuffer buffer, Error *e_rr);
 
 //checkVkError that also remembers VK_ERROR_DEVICE_LOST in VkGraphicsDevice::lost for GraphicsDeviceRef_reportLoss.
 //Every result that can report a loss (queue, fence, command buffer, present and query paths) goes through it.
