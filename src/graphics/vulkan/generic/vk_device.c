@@ -356,6 +356,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
+		VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT,
+		featEx & EVkGraphicsFeatures_PageableMemory,
+		(VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PAGEABLE_DEVICE_LOCAL_MEMORY_FEATURES_EXT,
+			.pageableDeviceLocalMemory = true
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceAddressBindingReportFeaturesEXT,
 		featEx & EVkGraphicsFeatures_AddressBindingReport,
 		(VkPhysicalDeviceAddressBindingReportFeaturesEXT) {
@@ -722,6 +731,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_DeviceFault:                  on = feat2 & EGraphicsFeatures2_DeviceFault;                break;
 			case EOptExtensions_DeviceAddressBindingReport:   on = featEx & EVkGraphicsFeatures_AddressBindingReport;     break;
 			case EOptExtensions_MemoryPriority:               on = featEx & EVkGraphicsFeatures_MemoryPriority;           break;
+			case EOptExtensions_PageableMemory:               on = featEx & EVkGraphicsFeatures_PageableMemory;           break;
 
 			case EOptExtensions_BufferMarker:                 on = feat2 & EGraphicsFeatures2_WriteBufferImmediate;       break;
 
@@ -929,6 +939,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkCmdCopyImageToBuffer, deviceExt->cmdCopyImageToBuffer);
 	getVkFunctionDevice(clean, vkFlushMappedMemoryRanges, deviceExt->flushMappedMemoryRanges);
 	getVkFunctionDevice(clean, vkCmdCopyBuffer, deviceExt->cmdCopyBuffer);
+	getVkFunctionDevice(clean, vkCmdFillBuffer, deviceExt->cmdFillBuffer);
 	getVkFunctionDevice(clean, vkCmdCopyBufferToImage, deviceExt->cmdCopyBufferToImage);
 	getVkFunctionDevice(clean, vkGetDeviceQueue, deviceExt->getDeviceQueue);
 	getVkFunctionDevice(clean, vkCreateSemaphore, deviceExt->createSemaphore);
@@ -2627,6 +2638,137 @@ clean:
 	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
 	ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions, e_rr);
 	CharString_free(&temp, alloc);
+
+	return s_uccess;
+}
+
+Bool VkGraphicsDevice_commitMemory(GraphicsDevice *device, VkBuffer buffer, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	const VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
+
+	VkCommandPool pool = NULL;
+	VkFence fence = NULL;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	Bool submitted = false;
+
+	if(AtomicI64_load(&deviceExt->lost))        //A lost device runs nothing, so there is nothing to commit
+		goto clean;
+
+	//Its own pool, buffer and fence: no state is shared with a frame or another commit, so only the queue needs a lock
+
+	const VkCommandPoolCreateInfo poolInfo = (VkCommandPoolCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+		.queueFamilyIndex = queue.queueId
+	};
+
+	gotoIfError3(clean, VkGraphicsDevice_check(
+		deviceExt, deviceExt->createCommandPool(deviceExt->device, &poolInfo, NULL, &pool), e_rr
+	));
+
+	const VkCommandBufferAllocateInfo bufferInfo = (VkCommandBufferAllocateInfo) {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.commandPool = pool,
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		.commandBufferCount = 1
+	};
+
+	VkCommandBuffer cmd = NULL;
+	gotoIfError3(clean, VkGraphicsDevice_check(
+		deviceExt, deviceExt->allocateCommandBuffers(deviceExt->device, &bufferInfo, &cmd), e_rr
+	));
+
+	const VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+	};
+
+	gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->beginCommandBuffer(cmd, &beginInfo), e_rr));
+
+	deviceExt->cmdFillBuffer(cmd, buffer, 0, 4, 0);
+
+	//Every later command on the queue, in any later submit, is ordered after the fill
+
+	const VkMemoryBarrier2 barrier = (VkMemoryBarrier2) {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+		.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+		.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT
+	};
+
+	const VkDependencyInfo dependency = (VkDependencyInfo) {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.memoryBarrierCount = 1,
+		.pMemoryBarriers = &barrier
+	};
+
+	deviceExt->cmdPipelineBarrier2(cmd, &dependency);
+
+	gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->endCommandBuffer(cmd), e_rr));
+
+	const VkFenceCreateInfo fenceInfo = (VkFenceCreateInfo) { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+	gotoIfError3(clean, VkGraphicsDevice_check(
+		deviceExt, deviceExt->createFence(deviceExt->device, &fenceInfo, NULL, &fence), e_rr
+	));
+
+	//The device lock is what every vkQueueSubmit holds, so it is held for the submit alone: the wait below would
+	// otherwise stall the next frame's submit for as long as the commit takes. Already held when a resource is
+	// created inside a submit, where submitting first is legal and lands ahead of that frame.
+
+	const VkSubmitInfo submitInfo = (VkSubmitInfo) {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &cmd
+	};
+
+	acq = SpinLock_lock(&device->lock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		retError(clean, Error_invalidState(0, "VkGraphicsDevice_commitMemory() couldn't acquire the device lock"));
+
+	const VkResult submitRes = deviceExt->queueSubmit(queue.queue, 1, &submitInfo, fence);
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->lock);
+
+	acq = ELockAcquire_Invalid;
+	gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, submitRes, e_rr));
+	submitted = true;
+
+	//Until it signals, however long the commit takes; the pool can't be destroyed while the buffer runs
+
+	for(;;) {
+
+		const VkResult res = deviceExt->waitForFences(deviceExt->device, 1, &fence, true, 1 * SECOND);
+
+		if(res != VK_TIMEOUT) {
+			gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, res, e_rr));
+			break;
+		}
+	}
+
+	submitted = false;
+
+clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->lock);
+
+	//A failed wait leaves the buffer possibly running: the device is lost then, so idling it is what makes the
+	// destruction below legal
+
+	if(submitted)
+		deviceExt->deviceWaitIdle(deviceExt->device);
+
+	if(fence)
+		deviceExt->destroyFence(deviceExt->device, fence, NULL);
+
+	if(pool)
+		deviceExt->destroyCommandPool(deviceExt->device, pool, NULL);
 
 	return s_uccess;
 }

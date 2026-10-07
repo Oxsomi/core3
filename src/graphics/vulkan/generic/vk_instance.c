@@ -828,7 +828,7 @@ const C8 *optExtensionsName[] = {
 
 	"VK_KHR_index_type_uint8",
 
-	"VK_EXT_memory_priority"
+	"VK_EXT_memory_priority", "VK_EXT_pageable_device_local_memory"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1403,6 +1403,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		);
 
 		getDeviceFeatures(
+			optExtensions[EOptExtensions_PageableMemory],
+			VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT,
+			pageableFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PAGEABLE_DEVICE_LOCAL_MEMORY_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
 			optExtensions[EOptExtensions_RayTriPosition],
 			VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR,
 			rayPositionFetchFeat,
@@ -1670,6 +1677,12 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(optExtensions[EOptExtensions_MemoryPriority] && memPriorityFeat.memoryPriority)
 			capabilities.featuresExt |= EVkGraphicsFeatures_MemoryPriority;
+
+		if(
+			(capabilities.featuresExt & EVkGraphicsFeatures_MemoryPriority) &&
+			optExtensions[EOptExtensions_PageableMemory] && pageableFeat.pageableDeviceLocalMemory
+		)
+			capabilities.featuresExt |= EVkGraphicsFeatures_PageableMemory;
 
 		if(
 			optExtensions[EOptExtensions_DeviceAddressBindingReport] && bindingReportFeat.reportAddressBinding &&

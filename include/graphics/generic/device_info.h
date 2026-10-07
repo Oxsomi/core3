@@ -170,7 +170,12 @@ typedef enum EVkGraphicsFeatures {
 
 	//VK_EXT_memory_priority: blocks carry a priority, so the OS pages staging out before acceleration structures.
 
-	EVkGraphicsFeatures_MemoryPriority           = 1 << 10
+	EVkGraphicsFeatures_MemoryPriority           = 1 << 10,
+
+	//VK_EXT_pageable_device_local_memory: device local memory pages out to host memory under pressure instead of
+	// failing, as every D3D12 heap does, in the order the blocks' priorities give.
+
+	EVkGraphicsFeatures_PageableMemory           = 1 << 11
 
 } EVkGraphicsFeatures;
 

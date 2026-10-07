@@ -364,6 +364,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EVkGraphicsFeatures_MemoryPriority)
 				Log_debugLnx("\t\tMemory priority");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_PageableMemory)
+				Log_debugLnx("\t\tPageable device local memory");
 		}
 	}
 }
